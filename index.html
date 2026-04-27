@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Musician AI Studio (MVP)</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <div>
+          <h1>Musician AI Studio</h1>
+          <p class="subtitle">
+            Real-audio composition + arrangement (no MIDI export). Oud · Violin · Tabla/Rablah · Piano.
+          </p>
+        </div>
+        <div class="badge">MVP</div>
+      </header>
+
+      <main class="grid">
+        <section class="card">
+          <h2>1) Generate arrangement</h2>
+
+          <div class="row">
+            <label class="field grow">
+              <div class="label">Lyrics (optional, influences composition)</div>
+              <input id="lyrics" type="text" placeholder="Type lyrics first (Arabic / English) …" />
+            </label>
+          </div>
+
+          <div class="row">
+            <label class="field">
+              <div class="label">Style</div>
+              <select id="style">
+                <option value="arabic-pop" selected>Arabic Pop</option>
+                <option value="maqam-jam">Maqam Jam</option>
+                <option value="cinematic">Cinematic</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <div class="label">Tempo (BPM)</div>
+              <input id="bpm" type="number" min="60" max="180" value="96" />
+            </label>
+
+            <label class="field">
+              <div class="label">Bars</div>
+              <input id="bars" type="number" min="8" max="128" value="32" />
+            </label>
+          </div>
+
+          <div class="row">
+            <label class="field">
+              <div class="label">Key center</div>
+              <select id="keyCenter">
+                <option value="D" selected>D</option>
+                <option value="C">C</option>
+                <option value="E">E</option>
+                <option value="F">F</option>
+                <option value="G">G</option>
+                <option value="A">A</option>
+                <option value="B">B</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <div class="label">Scale / Maqam (approx)</div>
+              <select id="scale">
+                <option value="harmonic_minor" selected>Harmonic minor (Hijaz-ish)</option>
+                <option value="natural_minor">Natural minor</option>
+                <option value="major">Major</option>
+                <option value="phrygian">Phrygian (Bayati-ish)</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <div class="label">Meter</div>
+              <select id="meter">
+                <option value="4/4" selected>4/4</option>
+                <option value="6/8">6/8</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="row">
+            <button id="btnGenerate" class="primary">Generate</button>
+            <button id="btnRandomize" class="ghost">Randomize</button>
+          </div>
+
+          <div class="hint">
+            Tip: This MVP uses local “AI-like” generation. Later we’ll connect your preferred AI (composition + voice)
+            via Vercel serverless endpoints without exposing keys.
+          </div>
+
+          <details class="details">
+            <summary>Arrangement JSON</summary>
+            <pre id="arrangementOut" class="code"></pre>
+          </details>
+        </section>
+
+        <section class="card">
+          <h2>2) Render real audio</h2>
+
+          <div class="row">
+            <label class="field">
+              <div class="label">Instruments</div>
+              <div class="checks">
+                <label><input id="instOud" type="checkbox" checked /> Oud</label>
+                <label><input id="instViolin" type="checkbox" checked /> Violin</label>
+                <label><input id="instPiano" type="checkbox" checked /> Piano</label>
+                <label><input id="instTabla" type="checkbox" checked /> Tabla/Rablah</label>
+              </div>
+            </label>
+          </div>
+
+          <div class="row">
+            <button id="btnRender" class="primary">Render WAV</button>
+            <button id="btnPlay" class="ghost" disabled>Play</button>
+            <a id="downloadLink" class="ghost disabled" href="#" download="composition.wav">Download</a>
+          </div>
+
+          <div class="progress">
+            <div id="progressBar" class="bar" style="width: 0%"></div>
+          </div>
+          <div id="status" class="status">Ready.</div>
+
+          <details class="details">
+            <summary>What “no MIDI” means here</summary>
+            <p class="small">
+              We generate an arrangement internally (notes + rhythm), but the output is rendered into an actual audio
+              buffer and exported as WAV. Nothing outputs a MIDI file.
+            </p>
+          </details>
+        </section>
+
+        <section class="card wide">
+          <h2>3) Voice AI (placeholder)</h2>
+          <p class="small">
+            Voice AI needs a server-side key. This MVP keeps you safe by not shipping keys to the browser.
+            When you’re ready, we’ll add Vercel serverless functions (e.g. ElevenLabs / OpenAI) and a “Generate vocal”
+            button.
+          </p>
+          <div class="row">
+            <button id="btnVoice" class="ghost" disabled>Generate voice (next)</button>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <span>Built for GitHub + Vercel. Static deploy, zero dependencies.</span>
+      </footer>
+    </div>
+
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>
+

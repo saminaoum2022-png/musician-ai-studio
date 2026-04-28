@@ -8,7 +8,8 @@
  *   keyCenter: string,
  *   scale: string,
  *   meter: Meter,
- *   lyrics?: string
+ *   lyrics?: string,
+ *   variationSeed?: string
  * }} ArrangeParams
  *
  * @typedef {{

@@ -3,7 +3,7 @@ import { keyToMidi, scaleIntervals } from "./theory.js";
 
 /** @param {import("./types.js").ArrangeParams} params */
 export function generateArrangement(params) {
-  const seedStr = `${params.style}|${params.bpm}|${params.bars}|${params.keyCenter}|${params.scale}|${params.meter}|${(params.lyrics || "").trim()}`;
+  const seedStr = `${params.style}|${params.bpm}|${params.bars}|${params.keyCenter}|${params.scale}|${params.meter}|${(params.lyrics || "").trim()}|${params.variationSeed || ""}`;
   const rng = mulberry32(hashString(seedStr));
 
   const beatsPerBar = params.meter === "6/8" ? 6 : 4;

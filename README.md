@@ -1,4 +1,4 @@
-# Musician AI Studio (MVP)
+# NabadAi Music (MVP)
 
 A **web-based app for musicians** that generates compositions/arrangements and exports **real audio (WAV)** — **no MIDI output**.
 
@@ -31,9 +31,13 @@ Then open `http://localhost:5173`.
 
 ## Next steps (when you’re ready)
 
-- Add serverless endpoints:
-  - `/api/compose` for **AI composition/arrangement** (OpenAI / other)
-  - `/api/voice` for **Voice AI** (ElevenLabs / other)
+- Add serverless endpoints (included in this repo):
+  - `/api/compose` for **AI composition/arrangement** (OpenAI)
+  - `/api/voice` for **Voice AI** (ElevenLabs)
+- Add Vercel Environment Variables:
+  - `OPENAI_API_KEY`
+  - `ELEVENLABS_API_KEY`
+  - `ELEVENLABS_VOICE_ID` (optional)
 - Add **real instrument sample packs** (oud/violin/etc.) with user upload or curated libraries
 - Export **MP3** (client-side) in addition to WAV
 

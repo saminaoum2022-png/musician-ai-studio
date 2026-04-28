@@ -30,7 +30,7 @@ export async function renderArrangementToWav(arrangement, opts) {
   // Global ambience (tiny room)
   const reverb = createTinyReverb(offline, 1.5);
   const revSend = offline.createGain();
-  revSend.gain.value = 0.18;
+  revSend.gain.value = 0.12;
   revSend.connect(reverb.input);
   reverb.output.connect(master);
 
@@ -42,7 +42,8 @@ export async function renderArrangementToWav(arrangement, opts) {
   const busOud = instrumentBus(offline, { hp: 90, lp: 9000, gain: 0.55 });
   const busViolin = instrumentBus(offline, { hp: 140, lp: 11000, gain: 0.50 });
   const busPiano = instrumentBus(offline, { hp: 60, lp: 12000, gain: 0.42 });
-  const busTabla = instrumentBus(offline, { hp: 70, lp: 12000, gain: 0.65 });
+  // Tabla / frame: perc should read clearly in the mix
+  const busTabla = instrumentBus(offline, { hp: 45, lp: 12000, gain: 1.05, pan: 0.12 });
 
   for (const bus of [busOud, busViolin, busPiano, busTabla]) {
     bus.out.connect(dry);
@@ -93,7 +94,7 @@ export async function renderArrangementToWav(arrangement, opts) {
   return { wavBlob, durationSec };
 }
 
-function instrumentBus(ctx, { hp, lp, gain }) {
+function instrumentBus(ctx, { hp, lp, gain, pan = 0 }) {
   const input = ctx.createGain();
   const hpF = ctx.createBiquadFilter();
   hpF.type = "highpass";
@@ -110,7 +111,16 @@ function instrumentBus(ctx, { hp, lp, gain }) {
   input.connect(hpF);
   hpF.connect(lpF);
   lpF.connect(g);
-  return { in: input, out: g };
+
+  let out = /** @type {GainNode | StereoPannerNode} */ (g);
+  if (typeof ctx.createStereoPanner === "function" && Math.abs(pan) > 1e-6) {
+    const pn = ctx.createStereoPanner();
+    pn.pan.value = clampNum(pan, -1, 1);
+    g.connect(pn);
+    out = pn;
+  }
+
+  return { in: input, out };
 }
 
 function scheduleOud(ctx, dest, t0, dur, freq, vel) {
@@ -233,17 +243,21 @@ function schedulePiano(ctx, dest, t0, dur, freq, vel) {
   o2.stop(stopT);
 }
 
+/** Boost tabla hits vs melodic synth (still synthetic). */
+const TABLA_HIT_MUL = 1.35;
+
 function scheduleTablaDum(ctx, dest, t0, vel) {
+  const v = clampNum(vel * TABLA_HIT_MUL, 0.05, 1);
   // Low "dum": sine drop + subtle noise
   const osc = ctx.createOscillator();
   osc.type = "sine";
-  osc.frequency.setValueAtTime(160, t0);
-  osc.frequency.exponentialRampToValueAtTime(70, t0 + 0.08);
+  osc.frequency.setValueAtTime(165, t0);
+  osc.frequency.exponentialRampToValueAtTime(62, t0 + 0.09);
 
   const g = ctx.createGain();
   g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(0.95 * vel, t0 + 0.004);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
+  g.gain.exponentialRampToValueAtTime(1.05 * v, t0 + 0.004);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.26);
 
   const f = ctx.createBiquadFilter();
   f.type = "lowpass";
@@ -256,7 +270,7 @@ function scheduleTablaDum(ctx, dest, t0, vel) {
   const n = noiseSource(ctx, t0, 0.03);
   const ng = ctx.createGain();
   ng.gain.setValueAtTime(0.0001, t0);
-  ng.gain.exponentialRampToValueAtTime(0.12 * vel, t0 + 0.002);
+  ng.gain.exponentialRampToValueAtTime(0.22 * v, t0 + 0.002);
   ng.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.04);
   const nf = ctx.createBiquadFilter();
   nf.type = "bandpass";
@@ -271,6 +285,7 @@ function scheduleTablaDum(ctx, dest, t0, vel) {
 }
 
 function scheduleTablaTek(ctx, dest, t0, vel) {
+  const v = clampNum(vel * TABLA_HIT_MUL, 0.05, 1);
   // High "tek": bandpassed noise + short click
   const n = noiseSource(ctx, t0, 0.05);
   const bp = ctx.createBiquadFilter();
@@ -279,7 +294,7 @@ function scheduleTablaTek(ctx, dest, t0, vel) {
   bp.Q.value = 6;
   const g = ctx.createGain();
   g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(0.55 * vel, t0 + 0.002);
+  g.gain.exponentialRampToValueAtTime(0.72 * v, t0 + 0.002);
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.06);
   n.connect(bp);
   bp.connect(g);
@@ -290,7 +305,7 @@ function scheduleTablaTek(ctx, dest, t0, vel) {
   click.frequency.setValueAtTime(1800, t0);
   const cg = ctx.createGain();
   cg.gain.setValueAtTime(0.0001, t0);
-  cg.gain.exponentialRampToValueAtTime(0.18 * vel, t0 + 0.001);
+  cg.gain.exponentialRampToValueAtTime(0.26 * v, t0 + 0.001);
   cg.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.015);
   click.connect(cg);
   cg.connect(dest);
@@ -318,6 +333,11 @@ function makeSoftClipCurve(amount) {
     curve[i] = Math.tanh(x * (1 + amount * 8));
   }
   return curve;
+}
+
+function clampNum(n, min, max) {
+  const x = Number.isFinite(Number(n)) ? Number(n) : min;
+  return Math.max(min, Math.min(max, x));
 }
 
 function createTinyReverb(ctx, seconds) {

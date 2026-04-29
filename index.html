@@ -23,6 +23,11 @@
           <p class="subtitle">
             Real-audio composition + arrangement (no MIDI export). Oud · Violin · Tabla/Rablah · Piano.
           </p>
+          <div class="flowBar">
+            <a href="#/generate" class="flowStep">1. Generate Song</a>
+            <a href="#/stems" class="flowStep">2. Prepare Stems</a>
+            <a href="#/vocal" class="flowStep">3. Record & Export</a>
+          </div>
           <nav class="nav">
             <a href="#/generate" data-route-link="generate">Generate</a>
             <a href="#/player" data-route-link="player">Player</a>
@@ -74,7 +79,7 @@
         </section>
 
         <section class="card wide" data-route="generate">
-          <h2>0) Generate full song (Suno)</h2>
+          <h2>Step 1: Generate Full Song</h2>
 
           <div class="wizardTop" style="margin-top:0">
             <button id="genModeSimple" class="chip active" type="button">Simple</button>
@@ -263,7 +268,7 @@
         </section>
 
         <section class="card wide" data-route="vocal">
-          <h2>2) Vocal Room (Multitrack)</h2>
+          <h2>Step 3: Vocal Room (Multitrack)</h2>
           <div class="hint" style="margin-top:0">
             Load stems as separate tracks, record vocal takes as a track, align start offsets, then export the full session.
           </div>
@@ -325,7 +330,7 @@
         </section>
 
         <section class="card wide" data-route="stems">
-          <h2>1) Stems & Studio</h2>
+          <h2>Step 2: Stems & Studio</h2>
           <div class="hint">
             After you generate a song, use “Get vocals + instrumental” or “Get multi-stems”. Then load stems into the
             studio and export your own mix.
@@ -541,9 +546,15 @@
       <footer class="footer">
         <span>Built for GitHub + Vercel. Static deploy, zero dependencies.</span>
       </footer>
+
+      <nav class="mobileTabbar" aria-label="Primary navigation">
+        <a href="#/generate" data-route-link="generate">Generate</a>
+        <a href="#/stems" data-route-link="stems">Stems</a>
+        <a href="#/vocal" data-route-link="vocal">Vocal</a>
+        <a href="#/player" data-route-link="player">Player</a>
+      </nav>
     </div>
 
     <script type="module" src="./src/app.js"></script>
   </body>
 </html>
-

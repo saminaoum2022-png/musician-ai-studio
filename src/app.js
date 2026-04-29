@@ -110,13 +110,25 @@ const els = {
   btnEnterApp: document.getElementById("btnEnterApp"),
   btnStartHelp: document.getElementById("btnStartHelp"),
   startHelp: document.getElementById("startHelp"),
+
+  // Intro
+  introTap: document.getElementById("introTap"),
+
+  // Generate mode switch + agent
+  genModeSimple: document.getElementById("genModeSimple"),
+  genModeAgent: document.getElementById("genModeAgent"),
+  agentBox: document.getElementById("agentBox"),
+  agentChat: document.getElementById("agentChat"),
+  agentInput: document.getElementById("agentInput"),
+  agentSend: document.getElementById("agentSend"),
+  simpleBox: document.getElementById("simpleBox"),
 };
 
 function applyRoute() {
   const hash = String(location.hash || "");
   const route = hash.startsWith("#/") ? hash.slice(2) : "generate";
-  const wanted = route || "generate";
-  document.body.classList.toggle("isStart", wanted === "start");
+  const wanted = route === "start" ? "intro" : route || "home";
+  document.body.classList.toggle("isIntro", wanted === "intro");
 
   document.querySelectorAll("[data-route]").forEach((el) => {
     el.style.display = el.getAttribute("data-route") === wanted ? "" : "none";
@@ -127,7 +139,7 @@ function applyRoute() {
 }
 
 window.addEventListener("hashchange", applyRoute);
-if (!location.hash) location.hash = "#/start";
+if (!location.hash) location.hash = "#/intro";
 applyRoute();
 
 function normalizeMaqamValue(v) {
@@ -1077,6 +1089,7 @@ function setLoading(on, { title, sub } = {}) {
   busyCount = Math.max(0, busyCount + (on ? 1 : -1));
   const show = busyCount > 0;
   if (els.globalLoading) els.globalLoading.style.display = show ? "" : "none";
+  document.body.classList.toggle("isBusy", show);
   if (show) {
     if (els.loadingTitle && title) els.loadingTitle.textContent = title;
     if (els.loadingSub && sub) els.loadingSub.textContent = sub;
@@ -1967,17 +1980,147 @@ if (els.vocalMonitor) {
 renderVocalTakes();
 renderSessionTracks();
 
-// Start / Splash screen
-if (els.btnEnterApp) {
-  els.btnEnterApp.addEventListener("click", () => {
-    location.hash = "#/generate";
+// Generate mode switch (Simple vs Agent)
+function setGenerateMode(mode) {
+  const m = mode === "agent" ? "agent" : "simple";
+  if (els.simpleBox) els.simpleBox.style.display = m === "simple" ? "" : "none";
+  if (els.agentBox) els.agentBox.style.display = m === "agent" ? "" : "none";
+  if (els.genModeSimple) els.genModeSimple.classList.toggle("active", m === "simple");
+  if (els.genModeAgent) els.genModeAgent.classList.toggle("active", m === "agent");
+}
+if (els.genModeSimple) els.genModeSimple.addEventListener("click", () => setGenerateMode("simple"));
+if (els.genModeAgent) els.genModeAgent.addEventListener("click", () => setGenerateMode("agent"));
+setGenerateMode("simple");
+
+// NabadAi Agent (MVP guided flow, local logic)
+let agentState = { step: 0, answers: {} };
+function addAgentMsg(role, text) {
+  if (!els.agentChat) return;
+  const div = document.createElement("div");
+  div.className = `agentMsg ${role === "user" ? "user" : "bot"}`;
+  div.textContent = text;
+  els.agentChat.appendChild(div);
+  els.agentChat.scrollTop = els.agentChat.scrollHeight;
+}
+
+function agentPromptForStep(step) {
+  switch (step) {
+    case 0:
+      return "Tell me what you want to create (1 sentence). مثال: أغنية حب حزينة بلهجة شامية.";
+    case 1:
+      return "Choose a vibe (one word): romantic / sad / happy / energetic / dark";
+    case 2:
+      return "Pick a style (examples): Arabic pop / Dabke / Tarab / Trap / Cinematic";
+    case 3:
+      return "Do you want vocals? (yes/no) and gender (f/m/any). Example: yes f";
+    case 4:
+      return "Optional: Maqam? (Rast/Bayati/Hijaz/Nahawand/Saba/Kurd/Ajam or 'none')";
+    case 5:
+      return "Give it a short title (or type 'auto').";
+    default:
+      return "";
+  }
+}
+
+function agentApplyToForm() {
+  const a = agentState.answers;
+  if (els.sunoPrompt && a.idea) els.sunoPrompt.value = String(a.idea).trim();
+  const tags = [];
+  if (a.vibe) tags.push(a.vibe);
+  if (a.style) tags.push(a.style);
+  if (a.maqam && a.maqam !== "none") tags.push(`Maqam: ${a.maqam}`);
+  if (els.sunoStyle && tags.length) {
+    els.sunoStyle.value = tags.join(", ");
+  }
+  if (els.sunoInstrumental) els.sunoInstrumental.checked = a.instrumental === true;
+  if (els.sunoVocalGender) els.sunoVocalGender.value = a.vocalGender || "";
+  if (els.sunoTitle) {
+    const t = a.title && a.title !== "auto" ? a.title : "";
+    if (t) els.sunoTitle.value = t;
+  }
+}
+
+function agentReset() {
+  agentState = { step: 0, answers: {} };
+  if (els.agentChat) els.agentChat.innerHTML = "";
+  addAgentMsg("bot", "Hi — I’m NabadAi Agent. I’ll ask a few quick questions and fill the Generate settings for you.");
+  addAgentMsg("bot", agentPromptForStep(0));
+}
+
+function normalizeWord(s) {
+  return String(s || "").trim().toLowerCase();
+}
+
+function agentConsume(text) {
+  const t = String(text || "").trim();
+  const low = normalizeWord(t);
+  const step = agentState.step;
+
+  if (low === "/reset") {
+    agentReset();
+    return;
+  }
+
+  if (step === 0) {
+    agentState.answers.idea = t;
+  } else if (step === 1) {
+    agentState.answers.vibe = t;
+  } else if (step === 2) {
+    agentState.answers.style = t;
+  } else if (step === 3) {
+    // "yes f" / "no" / "yes any"
+    const parts = low.split(/\s+/).filter(Boolean);
+    const yes = parts[0] === "yes" || parts[0] === "y";
+    agentState.answers.instrumental = !yes;
+    const g = parts[1] || (yes ? "any" : "any");
+    agentState.answers.vocalGender = g === "f" ? "f" : g === "m" ? "m" : "";
+  } else if (step === 4) {
+    agentState.answers.maqam = t && low !== "none" ? t : "none";
+    if (els.sunoMaqam) {
+      // best-effort match
+      const opts = Array.from(els.sunoMaqam.options || []);
+      const match = opts.find((o) => normalizeWord(o.value) === normalizeWord(agentState.answers.maqam));
+      if (match) els.sunoMaqam.value = match.value;
+    }
+  } else if (step === 5) {
+    agentState.answers.title = t || "auto";
+  }
+
+  agentApplyToForm();
+  agentState.step = step + 1;
+
+  if (agentState.step <= 5) {
+    addAgentMsg("bot", agentPromptForStep(agentState.step));
+  } else {
+    addAgentMsg("bot", "Done. I filled the settings. Switch to Simple to review, then press “Generate song”. Type /reset to start over.");
+  }
+}
+
+if (els.agentSend && els.agentInput) {
+  els.agentSend.addEventListener("click", () => {
+    const v = String(els.agentInput.value || "").trim();
+    if (!v) return;
+    els.agentInput.value = "";
+    addAgentMsg("user", v);
+    agentConsume(v);
+  });
+  els.agentInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") els.agentSend.click();
   });
 }
-if (els.btnStartHelp && els.startHelp) {
-  els.btnStartHelp.addEventListener("click", () => {
-    const show = els.startHelp.style.display === "none";
-    els.startHelp.style.display = show ? "" : "none";
-  });
+
+// Initialize agent chat lazily
+agentReset();
+
+// Intro screen (logo-only)
+function enterApp() {
+  location.hash = "#/home";
+}
+if (els.introTap) {
+  els.introTap.addEventListener("click", () => enterApp());
+  setTimeout(() => {
+    if (location.hash === "#/intro") enterApp();
+  }, 900);
 }
 
 if (els.btnCreditsHistoryRefresh) {

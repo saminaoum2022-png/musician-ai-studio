@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NabadAi Music (MVP)</title>
+    <meta name="theme-color" content="#0b0d12" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="NabadAi" />
+
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./assets/icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="./assets/icons/favicon-16.png" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -35,26 +44,55 @@
       </div>
 
       <main class="grid">
-        <section class="card wide startScreen" data-route="start">
-          <div class="startInner">
-            <div class="startLogoWrap">
-              <img class="startLogoImg" src="./assets/nabadai-logo.png" alt="NabadAi Music logo" />
-            </div>
-            <div class="startTitle">NabadAi Music</div>
-            <div class="startSub">AI music studio for Arabic pop, maqamat, stems, and vocals.</div>
-            <div class="row" style="justify-content:center; margin-top:16px">
-              <button id="btnEnterApp" class="primary" type="button">Enter Studio</button>
-              <button id="btnStartHelp" class="ghost" type="button">How it works</button>
-            </div>
-            <div id="startHelp" class="hint" style="display:none; max-width:720px; margin-left:auto; margin-right:auto">
-              Generate a song → get stems → mix in Studio → record vocals in Vocal Room → export the final WAV.
-            </div>
+        <section class="card wide introScreen" data-route="intro">
+          <div class="introInner" id="introTap">
+            <img class="introLogo" src="./assets/nabadai-logo.png" alt="NabadAi Music" />
+          </div>
+        </section>
+
+        <section class="card wide" data-route="home">
+          <h2>Home</h2>
+          <div class="hint" style="margin-top:0">Choose what you want to do.</div>
+          <div class="homeGrid">
+            <a class="homeCard" href="#/generate">
+              <div class="homeTitle">Generate song</div>
+              <div class="homeSub">Create a full song with AI</div>
+            </a>
+            <a class="homeCard" href="#/player">
+              <div class="homeTitle">Player</div>
+              <div class="homeSub">Listen like Apple Music</div>
+            </a>
+            <a class="homeCard" href="#/vocal">
+              <div class="homeTitle">Vocal Room</div>
+              <div class="homeSub">Record vocals + export</div>
+            </a>
+            <a class="homeCard" href="#/more">
+              <div class="homeTitle">Studio & More</div>
+              <div class="homeSub">Stems, mixer, settings</div>
+            </a>
           </div>
         </section>
 
         <section class="card wide" data-route="generate">
           <h2>0) Generate full song (Suno)</h2>
 
+          <div class="wizardTop" style="margin-top:0">
+            <button id="genModeSimple" class="chip active" type="button">Simple</button>
+            <button id="genModeAgent" class="chip" type="button">NabadAi Agent</button>
+          </div>
+
+          <div id="agentBox" class="agentBox" style="display:none">
+            <div id="agentChat" class="agentChat"></div>
+            <div class="row" style="margin-top:10px">
+              <input id="agentInput" class="grow" type="text" placeholder="Type your answer…" />
+              <button id="agentSend" class="primary" type="button">Send</button>
+            </div>
+            <div class="hint" style="margin-top:8px">
+              The agent will fill the Generate form for you. You can still tweak settings in Simple mode.
+            </div>
+          </div>
+
+          <div id="simpleBox">
           <div class="hint" style="margin-top:0">
             After the song is ready, click <strong>Play full</strong> (or vocals/instrumental) to open the Player tab and
             start playback.
@@ -173,6 +211,17 @@
             <summary>Multi-stems (drums/bass/…)</summary>
             <pre id="sunoStemsOut" class="code"></pre>
           </details>
+          </div>
+        </section>
+
+        <section class="card wide" data-route="more">
+          <h2>Studio & More</h2>
+          <div class="row">
+            <a class="ghost" href="#/stems">Stems & Studio</a>
+            <a class="ghost" href="#/settings">Settings</a>
+            <a class="ghost" href="#/advanced">Advanced</a>
+          </div>
+          <div class="hint">Everything stays here so Home stays clean on mobile.</div>
         </section>
 
         <section class="card wide" data-route="player">

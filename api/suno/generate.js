@@ -16,6 +16,9 @@ module.exports = async function handler(req, res) {
     const {
       prompt = "",
       style = "",
+      instruments = "",
+      songKey = "",
+      voiceTimbre = "",
       title = "",
       customMode = true,
       instrumental = false,
@@ -24,10 +27,17 @@ module.exports = async function handler(req, res) {
       vocalGender,
       styleWeight,
       weirdnessConstraint,
+      personaId,
     } = body || {};
 
     const { host, proto } = getHostProto(req);
     const callBackUrl = `${proto}://${host}/api/suno/callback`;
+
+    const styleBits = [String(style || "").trim()];
+    if (songKey) styleBits.push(`Key: ${String(songKey).trim()}`);
+    if (instruments) styleBits.push(`Instruments: ${String(instruments).trim()}`);
+    if (voiceTimbre) styleBits.push(`Voice timbre: ${String(voiceTimbre).trim()}`);
+    const mergedStyle = styleBits.filter(Boolean).join(", ");
 
     const payload = {
       customMode: Boolean(customMode),
@@ -35,10 +45,11 @@ module.exports = async function handler(req, res) {
       callBackUrl,
       model: String(model || "V4_5ALL"),
       ...(prompt ? { prompt: String(prompt) } : {}),
-      ...(style ? { style: String(style) } : {}),
+      ...(mergedStyle ? { style: mergedStyle } : {}),
       ...(title ? { title: String(title) } : {}),
       ...(negativeTags ? { negativeTags: String(negativeTags) } : {}),
       ...(vocalGender === "m" || vocalGender === "f" ? { vocalGender } : {}),
+      ...(personaId ? { personaId: String(personaId).trim() } : {}),
       ...(Number.isFinite(Number(styleWeight)) ? { styleWeight: clamp01(Number(styleWeight)) } : {}),
       ...(Number.isFinite(Number(weirdnessConstraint))
         ? { weirdnessConstraint: clamp01(Number(weirdnessConstraint)) }
@@ -98,4 +109,3 @@ function safeJson(txt) {
 function clamp01(x) {
   return Math.max(0, Math.min(1, x));
 }
-

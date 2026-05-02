@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>NabadAi Music (MVP)</title>
     <meta name="theme-color" content="#0b0d12" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -15,29 +15,26 @@
     <link rel="icon" type="image/png" sizes="16x16" href="./assets/icons/favicon-16.png" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body>
+  <body class="booting">
     <div class="app">
       <header class="header">
-        <div>
-          <h1>NabadAi Music</h1>
-          <p class="subtitle">
-            Real-audio composition + arrangement (no MIDI export). Oud · Violin · Tabla/Rablah · Piano.
-          </p>
-          <div class="flowBar">
-            <a href="#/generate" class="flowStep">1. Generate Song</a>
-            <a href="#/stems" class="flowStep">2. Prepare Stems</a>
-            <a href="#/vocal" class="flowStep">3. Record & Export</a>
+        <div class="headerMain">
+          <h1 class="brandTitle"><span class="brandPrimary">NabadAi</span><span class="brandSecondary">Music</span></h1>
+          <div class="journeyBar">
+            <a href="#/generate" class="journeyStep" data-route-link="generate">Generate</a>
+            <a href="#/library" class="journeyStep" data-route-link="library">Library</a>
+            <a href="#/stems" class="journeyStep" data-route-link="stems">Stems</a>
+            <a href="#/vocal" class="journeyStep" data-route-link="vocal">Vocal</a>
+            <a href="#/player" class="journeyStep" data-route-link="player">Player</a>
           </div>
-          <nav class="nav">
-            <a href="#/generate" data-route-link="generate">Generate</a>
-            <a href="#/player" data-route-link="player">Player</a>
-            <a href="#/vocal" data-route-link="vocal">Vocal Room</a>
-            <a href="#/stems" data-route-link="stems">Stems & Studio</a>
-            <a href="#/advanced" data-route-link="advanced">Advanced</a>
-            <a href="#/settings" data-route-link="settings">Settings</a>
-          </nav>
         </div>
-        <div class="badge">MVP</div>
+        <div class="headerRight">
+          <a class="creditsPill" href="#/profile" title="Open profile">
+            <span>Credits</span> <strong id="sunoCredits">—</strong><span id="sunoCreditsNote" class="small"></span>
+            <span class="pillSep"></span>
+            <span>Profile</span>
+          </a>
+        </div>
       </header>
 
       <div id="globalLoading" class="loadingBar" style="display:none">
@@ -51,8 +48,22 @@
       <main class="grid">
         <section class="card wide introScreen" data-route="intro">
           <div class="introInner" id="introTap">
-            <img class="introLogo" src="./assets/nabadai-logo.png" alt="NabadAi Music" />
+            <div class="introHero">
+              <img class="introLogo" src="./assets/nabadai-logo.png" alt="NabadAi Music" />
+            </div>
           </div>
+        </section>
+
+        <section class="card wide" data-route="library">
+          <h2>Library</h2>
+          <div class="hint" style="margin-top:0">Your generated songs are saved on this device.</div>
+          <div id="libraryList" class="code" style="max-height:none"></div>
+        </section>
+
+        <section class="card wide" data-route="hub">
+          <h2>Hub</h2>
+          <div class="hint" style="margin-top:0">Shared creations from musicians will appear here.</div>
+          <div class="code" style="max-height:none">Coming soon: public feed, likes, comments, and remix ideas.</div>
         </section>
 
         <section class="card wide" data-route="home">
@@ -79,52 +90,57 @@
         </section>
 
         <section class="card wide" data-route="generate">
-          <h2>Step 1: Generate Full Song</h2>
-
-          <div class="wizardTop" style="margin-top:0">
-            <button id="genModeSimple" class="chip active" type="button">Simple</button>
-            <button id="genModeAgent" class="chip" type="button">NabadAi Agent</button>
-          </div>
-
-          <div id="agentBox" class="agentBox" style="display:none">
-            <div id="agentChat" class="agentChat"></div>
-            <div class="row" style="margin-top:10px">
-              <input id="agentInput" class="grow" type="text" placeholder="Type your answer…" />
-              <button id="agentSend" class="primary" type="button">Send</button>
-            </div>
-            <div class="hint" style="margin-top:8px">
-              The agent will fill the Generate form for you. You can still tweak settings in Simple mode.
-            </div>
-          </div>
-
           <div id="simpleBox">
-          <div class="hint" style="margin-top:0">
-            After the song is ready, click <strong>Play full</strong> (or vocals/instrumental) to open the Player tab and
-            start playback.
-          </div>
-
-          <div class="row" style="justify-content: space-between; align-items: center">
-            <div class="small">
-              Credits: <strong id="sunoCredits">—</strong>
-              <span id="sunoCreditsNote" class="small"></span>
+          <div id="resultCard" class="resultCard" style="display:none">
+            <img id="resultArt" class="resultArt" alt="cover" />
+            <div class="resultMeta">
+              <div id="resultTitle" class="resultTitle">Generated song</div>
+              <div class="row generateActions">
+                <button id="btnResultPlay" class="primary" type="button">Play</button>
+                <a id="resultDownload" class="primary disabled" href="#" download="generated_song.mp3" rel="noreferrer">Download</a>
+              </div>
             </div>
-            <button id="btnSunoCredits" class="ghost" type="button">Refresh credits</button>
+          </div>
+          <div id="resultCard2" class="resultCard" style="display:none">
+            <img id="resultArt2" class="resultArt" alt="cover" />
+            <div class="resultMeta">
+              <div id="resultTitle2" class="resultTitle">Generated song B</div>
+              <div class="row generateActions">
+                <button id="btnResultPlay2" class="primary" type="button">Play B</button>
+                <a id="resultDownload2" class="primary disabled" href="#" download="generated_song_b.mp3" rel="noreferrer">Download</a>
+              </div>
+            </div>
           </div>
 
-          <div class="row">
-            <label class="field grow">
-              <div class="label">Lyrics / Prompt</div>
-              <input id="sunoPrompt" type="text" placeholder="Arabic lyrics or a prompt (mood + story) …" />
+          <div class="createSectionStack">
+            <label class="field grow inputPanel">
+              <div class="label inPanelLabel">Lyrics</div>
+              <label class="ghost lyricsAttachBtn" title="Attach vocal reference">
+                Insert vocal
+                <input id="sunoVocalUpload" type="file" accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.webm" />
+              </label>
+              <div class="row lyricsRecordRow">
+                <button id="btnVocalRefRec" class="ghost" type="button">Record voice</button>
+                <button id="btnVocalRefStop" class="ghost" type="button" disabled>Stop</button>
+              </div>
+              <div class="lyricsBox">
+                <textarea id="sunoPrompt" rows="4" placeholder="Write your lyrics here..."></textarea>
+                <button id="btnLyricsMagic" class="lyricsMagicBtn" type="button" title="AI lyrics assist">✦</button>
+              </div>
+              <div id="sunoVocalUploadName" class="hint uploadVocalsName">No vocal reference attached.</div>
             </label>
-          </div>
 
-          <div class="row">
-            <label class="field grow">
-              <div class="label">Style / Tags</div>
-              <input id="sunoStyle" type="text" placeholder="Arabic pop, Hijaz, darbuka, oud, romantic, 6/8 …" />
+            <label class="field grow inputPanel inputPanel--style">
+              <div class="label inPanelLabel">Style / Tags</div>
+              <input id="sunoStyle" type="text" placeholder="Hijaz, darbuka, 6/8" />
             </label>
+
           </div>
 
+          <details class="details stepDetails" id="advancedSheet">
+            <summary>Advanced settings <button id="btnCloseAdvancedSheet" type="button" class="ghost">Close</button></summary>
+            <div class="stepCard">
+            <div class="stepHead">Sound Setup</div>
           <div class="row">
             <label class="field">
               <div class="label">Maqam</div>
@@ -163,6 +179,43 @@
               <div class="label">Title</div>
               <input id="sunoTitle" type="text" placeholder="Song title…" />
             </label>
+            <label class="field grow">
+              <div class="label">Timing</div>
+              <input id="sunoTiming" type="text" placeholder="96 BPM • 4/4 • balanced groove" />
+            </label>
+            <label class="field">
+              <div class="label">Song key</div>
+              <select id="sunoSongKey">
+                <option value="" selected>Auto</option>
+                <option value="C Major">C Major</option>
+                <option value="C Minor">C Minor</option>
+                <option value="C# Major">C# Major</option>
+                <option value="C# Minor">C# Minor</option>
+                <option value="D Major">D Major</option>
+                <option value="D Minor">D Minor</option>
+                <option value="D# Major">D# Major</option>
+                <option value="D# Minor">D# Minor</option>
+                <option value="E Major">E Major</option>
+                <option value="E Minor">E Minor</option>
+                <option value="F Major">F Major</option>
+                <option value="F Minor">F Minor</option>
+                <option value="F# Major">F# Major</option>
+                <option value="F# Minor">F# Minor</option>
+                <option value="G Major">G Major</option>
+                <option value="G Minor">G Minor</option>
+                <option value="G# Major">G# Major</option>
+                <option value="G# Minor">G# Minor</option>
+                <option value="A Major">A Major</option>
+                <option value="A Minor">A Minor</option>
+                <option value="A# Major">A# Major</option>
+                <option value="A# Minor">A# Minor</option>
+                <option value="B Major">B Major</option>
+                <option value="B Minor">B Minor</option>
+              </select>
+            </label>
+            <div id="sunoKeyHint" class="hint" style="margin-top:0">
+              Tip: with Maqam selected, Song key is treated as tonic/root note only.
+            </div>
             <label class="field">
               <div class="label">Model</div>
               <select id="sunoModel">
@@ -182,6 +235,25 @@
                 <option value="m">Male</option>
               </select>
             </label>
+            <label class="field">
+              <div class="label">Voice timbre</div>
+              <select id="sunoVoiceTimbre">
+                <option value="" selected>Auto</option>
+                <option value="Bass">Bass</option>
+                <option value="Baritone">Baritone</option>
+                <option value="Tenor">Tenor</option>
+                <option value="Alto">Alto</option>
+                <option value="Mezzo-Soprano">Mezzo-Soprano</option>
+                <option value="Soprano">Soprano</option>
+              </select>
+            </label>
+            <label class="field grow">
+              <div class="label">Persona</div>
+              <select id="sunoPersonaId">
+                <option value="">None (default voice)</option>
+              </select>
+            </label>
+            <button id="btnCreatePersona" class="ghost" type="button">Create persona from last song</button>
           </div>
 
           <div class="row">
@@ -190,32 +262,15 @@
               <label><input id="sunoInstrumental" type="checkbox" /> Instrumental only</label>
             </label>
           </div>
-
-          <div class="row">
-            <button id="btnSunoGenerate" class="primary">Generate song</button>
-            <button id="btnSunoRefresh" class="ghost" disabled>Refresh status</button>
-            <button id="btnSunoStems" class="ghost" disabled>Get vocals + instrumental</button>
-            <button id="btnSunoMultiStems" class="ghost" disabled>Get multi-stems</button>
           </div>
-
-          <details class="details">
-            <summary>Suno task/result</summary>
-            <pre id="sunoOut" class="code"></pre>
           </details>
 
-          <div class="row">
-            <button id="btnPlayFull" class="primary" disabled>Play full</button>
-            <button id="btnPlayVocals" class="ghost" disabled>Play vocals</button>
-            <button id="btnPlayInstrumental" class="ghost" disabled>Play instrumental</button>
-            <a id="sunoFullLink" class="ghost disabled" href="#" target="_blank" rel="noreferrer">Download full</a>
-            <a id="sunoVocalLink" class="ghost disabled" href="#" target="_blank" rel="noreferrer">Download vocals</a>
-            <a id="sunoInstLink" class="ghost disabled" href="#" target="_blank" rel="noreferrer">Download instrumental</a>
+          <div class="stepCard">
+          <div class="row generateRow">
+            <button id="btnSunoGenerate" class="primary aiGenerate">Generate song</button>
+            <button id="btnOpenAdvancedSheet" class="ghost" type="button">Advanced</button>
           </div>
-
-          <details class="details">
-            <summary>Multi-stems (drums/bass/…)</summary>
-            <pre id="sunoStemsOut" class="code"></pre>
-          </details>
+          </div>
           </div>
         </section>
 
@@ -230,7 +285,10 @@
         </section>
 
         <section class="card wide" data-route="player">
-          <h2>Player</h2>
+          <div class="row" style="justify-content:space-between;align-items:center">
+            <h2 style="margin:0">Player</h2>
+            <button id="btnPlayerBack" class="ghost" type="button">Back</button>
+          </div>
           <div class="playerShell">
             <div class="playerArtWrap">
               <img id="playerArt" class="playerArt" alt="cover" />
@@ -260,11 +318,101 @@
 
               <div class="row">
                 <button id="btnLoadFull" class="ghost" disabled>Load full</button>
-                <button id="btnLoadVocals" class="ghost" disabled>Load vocals</button>
                 <button id="btnLoadInstrumental" class="ghost" disabled>Load instrumental</button>
               </div>
             </div>
           </div>
+        </section>
+
+        <section class="card wide" data-route="profile">
+          <h2>Profile</h2>
+          <div class="profilePreview" id="profilePreviewCard">
+            <div class="profilePreviewTop">
+              <img id="profilePreviewAvatar" class="profilePreviewAvatar" alt="avatar" />
+              <div class="profilePreviewMeta">
+                <div class="profilePreviewUserRow">
+                  <div id="profilePreviewUsername" class="profilePreviewUsername">@guest</div>
+                  <span id="profilePreviewGenderIcon" class="profilePreviewGenderIcon" style="display:none"></span>
+                </div>
+                <div id="profilePreviewTimbre" class="profilePreviewTimbre">Voice: Not set</div>
+              </div>
+              <div id="profilePreviewVisibility" class="profilePreviewVisibility">Public</div>
+            </div>
+            <div id="profilePreviewBio" class="profilePreviewBio">Add a short bio to introduce your music style.</div>
+            <div id="profilePreviewGenres" class="profilePreviewGenres"></div>
+            <div id="profilePreviewLinks" class="profilePreviewLinks"></div>
+          </div>
+          <div class="row">
+            <label class="field grow">
+              <div class="label">Username</div>
+              <input id="profileUsername" type="text" placeholder="@yourname" />
+            </label>
+            <label class="field grow">
+              <div class="label">Email</div>
+              <input id="profileEmail" type="email" placeholder="you@email.com" />
+            </label>
+            <label class="field grow">
+              <div class="label">Gender</div>
+              <select id="profileGender">
+                <option value="" selected>Prefer not to say</option>
+                <option value="female">Female</option>
+                <option value="male">Male</option>
+                <option value="non_binary">Non-binary</option>
+              </select>
+            </label>
+            <label class="field grow">
+              <div class="label">Voice timbre</div>
+              <select id="profileVoiceTimbre">
+                <option value="" selected>Not set</option>
+                <option value="bass">Bass</option>
+                <option value="baritone">Baritone</option>
+                <option value="tenor">Tenor</option>
+                <option value="alto">Alto</option>
+                <option value="mezzo_soprano">Mezzo-Soprano</option>
+                <option value="soprano">Soprano</option>
+              </select>
+            </label>
+          </div>
+          <div class="row">
+            <label class="field grow">
+              <div class="label">Bio</div>
+              <textarea id="profileBio" rows="3" placeholder="Singer-songwriter from Dubai, love Arabic pop and orchestral vibes."></textarea>
+            </label>
+          </div>
+          <div class="row">
+            <label class="field grow">
+              <div class="label">Avatar URL</div>
+              <input id="profileAvatar" type="url" placeholder="https://..." />
+            </label>
+            <label class="field grow">
+              <div class="label">Favorite genres / tags</div>
+              <input id="profileGenres" type="text" placeholder="Arabic pop, khaliji, trap" />
+            </label>
+          </div>
+          <div class="row">
+            <label class="field grow">
+              <div class="label">Instagram</div>
+              <input id="profileInstagram" type="url" placeholder="https://instagram.com/..." />
+            </label>
+            <label class="field grow">
+              <div class="label">YouTube</div>
+              <input id="profileYouTube" type="url" placeholder="https://youtube.com/..." />
+            </label>
+            <label class="field grow">
+              <div class="label">TikTok</div>
+              <input id="profileTikTok" type="url" placeholder="https://tiktok.com/@..." />
+            </label>
+          </div>
+          <div class="row">
+            <label class="checks">
+              <label><input id="profileIsPublic" type="checkbox" checked /> Public profile</label>
+            </label>
+          </div>
+          <div class="row">
+            <button id="btnProfileSave" class="primary" type="button">Save profile</button>
+          </div>
+          <div id="profileSavedMsg" class="hint" style="margin-top:8px; display:none"></div>
+          <div class="hint">Songs in Library are stored per profile on this device for now.</div>
         </section>
 
         <section class="card wide" data-route="vocal">
@@ -332,13 +480,14 @@
         <section class="card wide" data-route="stems">
           <h2>Step 2: Stems & Studio</h2>
           <div class="hint">
-            After you generate a song, use “Get vocals + instrumental” or “Get multi-stems”. Then load stems into the
-            studio and export your own mix.
+            After you generate a song, get instrumental version or multi-stems, then load stems into the studio and export your own mix.
           </div>
 
           <details class="details">
             <summary>Studio (basic mixer)</summary>
             <div class="row" style="margin-top:10px">
+              <button id="btnSunoStems" class="ghost" disabled>Get instrumental version</button>
+              <button id="btnSunoMultiStems" class="ghost" disabled>Get multi-stems</button>
               <button id="btnMixerLoad" class="ghost" disabled>Load stems into mixer</button>
               <button id="btnMixerPlay" class="primary" disabled>Play mix</button>
               <button id="btnMixerStop" class="ghost" disabled>Stop</button>
@@ -348,6 +497,10 @@
             <div class="hint" style="margin-top:8px">
               Play happens in-browser (no export needed). Adjust volumes while it plays.
             </div>
+            <details class="details">
+              <summary>Stems result</summary>
+              <pre id="sunoStemsOut" class="code" style="max-height:260px"></pre>
+            </details>
             <div id="mixerList" class="code" style="max-height:none"></div>
           </details>
         </section>
@@ -534,6 +687,7 @@
             <div class="row" style="margin-top:10px">
               <button id="btnCreditsHistoryRefresh" class="ghost" type="button">Refresh</button>
               <button id="btnCreditsHistoryClear" class="ghost" type="button">Clear history</button>
+              <button id="btnCreditRecovery" class="ghost" type="button">Request credit recovery</button>
             </div>
             <pre id="creditsHistoryOut" class="code" style="max-height:380px"></pre>
             <div class="hint">
@@ -543,15 +697,14 @@
         </section>
       </main>
 
-      <footer class="footer">
-        <span>Built for GitHub + Vercel. Static deploy, zero dependencies.</span>
-      </footer>
+      <footer class="footer"></footer>
 
       <nav class="mobileTabbar" aria-label="Primary navigation">
-        <a href="#/generate" data-route-link="generate">Generate</a>
+        <a href="#/generate" data-route-link="generate">Create</a>
+        <a href="#/library" data-route-link="library">Library</a>
+        <a href="#/hub" data-route-link="hub" class="hubTab" aria-label="Hub" title="Hub">#</a>
         <a href="#/stems" data-route-link="stems">Stems</a>
-        <a href="#/vocal" data-route-link="vocal">Vocal</a>
-        <a href="#/player" data-route-link="player">Player</a>
+        <a href="#/settings" data-route-link="settings">Settings</a>
       </nav>
     </div>
 

@@ -9,11 +9,22 @@ const els = {
   sunoStyle: document.getElementById("sunoStyle"),
   sunoMaqam: document.getElementById("sunoMaqam"),
   sunoTitle: document.getElementById("sunoTitle"),
+  sunoTiming: document.getElementById("sunoTiming"),
+  sunoSongKey: document.getElementById("sunoSongKey"),
+  sunoKeyHint: document.getElementById("sunoKeyHint"),
   sunoModel: document.getElementById("sunoModel"),
   sunoVocalGender: document.getElementById("sunoVocalGender"),
+  sunoVoiceTimbre: document.getElementById("sunoVoiceTimbre"),
+  sunoPersonaId: document.getElementById("sunoPersonaId"),
+  btnCreatePersona: document.getElementById("btnCreatePersona"),
   sunoCustomMode: document.getElementById("sunoCustomMode"),
   sunoInstrumental: document.getElementById("sunoInstrumental"),
+  sunoVocalUpload: document.getElementById("sunoVocalUpload"),
+  sunoVocalUploadName: document.getElementById("sunoVocalUploadName"),
+  btnVocalRefRec: document.getElementById("btnVocalRefRec"),
+  btnVocalRefStop: document.getElementById("btnVocalRefStop"),
   btnSunoGenerate: document.getElementById("btnSunoGenerate"),
+  btnLyricsMagic: document.getElementById("btnLyricsMagic"),
   btnSunoRefresh: document.getElementById("btnSunoRefresh"),
   btnSunoStems: document.getElementById("btnSunoStems"),
   btnSunoMultiStems: document.getElementById("btnSunoMultiStems"),
@@ -38,10 +49,12 @@ const els = {
   btnOpenBilling: document.getElementById("btnOpenBilling"),
   btnCreditsHistoryRefresh: document.getElementById("btnCreditsHistoryRefresh"),
   btnCreditsHistoryClear: document.getElementById("btnCreditsHistoryClear"),
+  btnCreditRecovery: document.getElementById("btnCreditRecovery"),
   creditsHistoryOut: document.getElementById("creditsHistoryOut"),
   btnPlayerPlay: document.getElementById("btnPlayerPlay"),
   btnPlayerPause: document.getElementById("btnPlayerPause"),
   btnPlayerStop: document.getElementById("btnPlayerStop"),
+  btnPlayerBack: document.getElementById("btnPlayerBack"),
   playerSeek: document.getElementById("playerSeek"),
   playerVol: document.getElementById("playerVol"),
   playerTime: document.getElementById("playerTime"),
@@ -122,6 +135,43 @@ const els = {
   agentInput: document.getElementById("agentInput"),
   agentSend: document.getElementById("agentSend"),
   simpleBox: document.getElementById("simpleBox"),
+  resultCard: document.getElementById("resultCard"),
+  resultArt: document.getElementById("resultArt"),
+  resultTitle: document.getElementById("resultTitle"),
+  btnResultPlay: document.getElementById("btnResultPlay"),
+  btnResultOpenDirect: document.getElementById("btnResultOpenDirect"),
+  resultDownload: document.getElementById("resultDownload"),
+  resultCard2: document.getElementById("resultCard2"),
+  resultArt2: document.getElementById("resultArt2"),
+  resultTitle2: document.getElementById("resultTitle2"),
+  btnResultPlay2: document.getElementById("btnResultPlay2"),
+  btnResultOpenDirect2: document.getElementById("btnResultOpenDirect2"),
+  resultDownload2: document.getElementById("resultDownload2"),
+  btnOpenAdvancedSheet: document.getElementById("btnOpenAdvancedSheet"),
+  btnCloseAdvancedSheet: document.getElementById("btnCloseAdvancedSheet"),
+  advancedSheet: document.getElementById("advancedSheet"),
+  libraryList: document.getElementById("libraryList"),
+  profileUsername: document.getElementById("profileUsername"),
+  profileEmail: document.getElementById("profileEmail"),
+  profileGender: document.getElementById("profileGender"),
+  profileVoiceTimbre: document.getElementById("profileVoiceTimbre"),
+  profileBio: document.getElementById("profileBio"),
+  profileAvatar: document.getElementById("profileAvatar"),
+  profileGenres: document.getElementById("profileGenres"),
+  profileInstagram: document.getElementById("profileInstagram"),
+  profileYouTube: document.getElementById("profileYouTube"),
+  profileTikTok: document.getElementById("profileTikTok"),
+  profileIsPublic: document.getElementById("profileIsPublic"),
+  btnProfileSave: document.getElementById("btnProfileSave"),
+  profileSavedMsg: document.getElementById("profileSavedMsg"),
+  profilePreviewAvatar: document.getElementById("profilePreviewAvatar"),
+  profilePreviewUsername: document.getElementById("profilePreviewUsername"),
+  profilePreviewGenderIcon: document.getElementById("profilePreviewGenderIcon"),
+  profilePreviewTimbre: document.getElementById("profilePreviewTimbre"),
+  profilePreviewVisibility: document.getElementById("profilePreviewVisibility"),
+  profilePreviewBio: document.getElementById("profilePreviewBio"),
+  profilePreviewGenres: document.getElementById("profilePreviewGenres"),
+  profilePreviewLinks: document.getElementById("profilePreviewLinks"),
 };
 
 function applyRoute() {
@@ -136,11 +186,17 @@ function applyRoute() {
   document.querySelectorAll("[data-route-link]").forEach((a) => {
     a.classList.toggle("active", a.getAttribute("data-route-link") === wanted);
   });
+  const main = document.querySelector("main.grid");
+  if (main) {
+    main.classList.remove("routeSwap");
+    requestAnimationFrame(() => main.classList.add("routeSwap"));
+  }
 }
 
 window.addEventListener("hashchange", applyRoute);
 if (!location.hash) location.hash = "#/intro";
 applyRoute();
+document.body.classList.remove("booting");
 
 function normalizeMaqamValue(v) {
   return String(v || "")
@@ -162,6 +218,16 @@ function applyMaqamToStyleInput() {
     .join(", ");
   const next = maqam ? [cleaned, `Maqam: ${maqam}`].filter(Boolean).join(", ") : cleaned;
   els.sunoStyle.value = next;
+  if (els.sunoSongKey && els.sunoKeyHint) {
+    if (maqam) {
+      const current = String(els.sunoSongKey.value || "").trim();
+      const rootOnly = current.replace(/\s+(Major|Minor)$/i, "").trim();
+      if (rootOnly && rootOnly !== current) els.sunoSongKey.value = rootOnly;
+      els.sunoKeyHint.textContent = "Maqam active: Song key acts as tonic/root note only.";
+    } else {
+      els.sunoKeyHint.textContent = "Tip: with Maqam selected, Song key is treated as tonic/root note only.";
+    }
+  }
 }
 
 function openBilling() {
@@ -188,6 +254,43 @@ let sunoTaskId = null;
 let sunoAudioId = null;
 let sunoStemsTaskId = null;
 let sunoMultiStemsTaskId = null;
+let generatePollTimer = null;
+let stemsPollTimer = null;
+let multiStemsPollTimer = null;
+let multiStemsInFlight = false;
+let vocalRefRecorder = null;
+let vocalRefStream = null;
+let vocalRefBlob = null;
+
+function getVocalReferenceFile() {
+  if (vocalRefBlob) {
+    return new File([vocalRefBlob], "vocal-reference.webm", { type: vocalRefBlob.type || "audio/webm" });
+  }
+  const f = els.sunoVocalUpload?.files?.[0];
+  return f || null;
+}
+function extractTaskIdLoose(data) {
+  return (
+    data?.data?.taskId ||
+    data?.data?.task_id ||
+    data?.taskId ||
+    data?.task_id ||
+    data?.data?.id ||
+    data?.id ||
+    deepFindFirstStringByKeys(data, ["taskId", "task_id", "id"]) ||
+    null
+  );
+}
+async function fileToBase64(file) {
+  const buf = await file.arrayBuffer();
+  let binary = "";
+  const bytes = new Uint8Array(buf);
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
 /** @type {Array<{ name:string, url:string, gain:number, pan?:number, muted?:boolean }>} */
 let mixerStems = [];
 /** @type {HTMLAudioElement[]} */
@@ -200,10 +303,345 @@ let playerEl = null;
 let playerLoadedLabel = "";
 let playerSeekDragging = false;
 let lastSunoFullUrl = "";
+let lastSunoProxyUrl = "";
+let lastSunoCachedUrl = "";
 let lastSunoVocalUrl = "";
 let lastSunoInstUrl = "";
+let lastSunoInstProxyUrl = "";
 let lastSunoArtUrl = "";
 let lastSunoTitle = "";
+let lastSunoFullUrl2 = "";
+let lastSunoProxyUrl2 = "";
+let lastSunoCachedUrl2 = "";
+let lastSunoArtUrl2 = "";
+let lastSunoTitle2 = "";
+let lastSunoAudioId2 = "";
+const PROFILE_KEY = "mas:profile:v1";
+const PROFILE_PERSONAS_KEY = "mas:personas:v1";
+let activeProfile = { id: "guest", username: "guest", email: "" };
+function loadProfile() {
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    const p = raw ? JSON.parse(raw) : null;
+    if (p && p.id) activeProfile = p;
+  } catch {}
+}
+function saveProfile(p) {
+  activeProfile = p;
+  try { localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); } catch {}
+}
+function profileLibraryKey() {
+  return `mas:library:v1:${activeProfile.id || "guest"}`;
+}
+function profilePersonasKey() {
+  return `${PROFILE_PERSONAS_KEY}:${activeProfile.id || "guest"}`;
+}
+function loadPersonas() {
+  try {
+    const raw = localStorage.getItem(profilePersonasKey());
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+function savePersonas(items) {
+  try {
+    localStorage.setItem(profilePersonasKey(), JSON.stringify(items || []));
+  } catch {}
+}
+function renderPersonaSelect() {
+  if (!els.sunoPersonaId) return;
+  const list = loadPersonas();
+  const current = String(els.sunoPersonaId.value || "");
+  const opts = ['<option value="">None (default voice)</option>']
+    .concat(
+      list.map(
+        (p) =>
+          `<option value="${escapeHtml(String(p.personaId || ""))}">${escapeHtml(
+            String(p.label || p.personaId || "Persona")
+          )}</option>`
+      )
+    )
+    .join("");
+  els.sunoPersonaId.innerHTML = opts;
+  if (current && list.some((x) => String(x.personaId) === current)) els.sunoPersonaId.value = current;
+}
+function addPersona(personaId, label) {
+  const items = loadPersonas();
+  if (items.some((x) => String(x.personaId) === String(personaId))) return;
+  items.unshift({
+    personaId: String(personaId),
+    label: label || `Persona ${items.length + 1}`,
+    ts: Date.now(),
+  });
+  savePersonas(items.slice(0, 20));
+  renderPersonaSelect();
+}
+
+function renderProfilePreviewFromInputs() {
+  const usernameRaw = String(els.profileUsername?.value || "").trim().toLowerCase();
+  const username = usernameRaw ? `@${usernameRaw.replace(/^@/, "")}` : "@guest";
+  const gender = String(els.profileGender?.value || "").trim();
+  const voiceTimbre = String(els.profileVoiceTimbre?.value || "").trim();
+  const bio = String(els.profileBio?.value || "").trim() || "Add a short bio to introduce your music style.";
+  const avatar = String(els.profileAvatar?.value || "").trim();
+  const genres = String(els.profileGenres?.value || "").trim();
+  const isPublic = Boolean(els.profileIsPublic?.checked);
+  const instagram = String(els.profileInstagram?.value || "").trim();
+  const youtube = String(els.profileYouTube?.value || "").trim();
+  const tiktok = String(els.profileTikTok?.value || "").trim();
+
+  if (els.profilePreviewUsername) els.profilePreviewUsername.textContent = username;
+  if (els.profilePreviewGenderIcon) {
+    els.profilePreviewGenderIcon.classList.remove("male", "female");
+    if (gender === "male") {
+      els.profilePreviewGenderIcon.style.display = "";
+      els.profilePreviewGenderIcon.textContent = "";
+      els.profilePreviewGenderIcon.classList.add("male");
+    } else if (gender === "female") {
+      els.profilePreviewGenderIcon.style.display = "";
+      els.profilePreviewGenderIcon.textContent = "";
+      els.profilePreviewGenderIcon.classList.add("female");
+    } else {
+      els.profilePreviewGenderIcon.style.display = "none";
+      els.profilePreviewGenderIcon.textContent = "";
+    }
+  }
+  if (els.profilePreviewTimbre) {
+    const labelMap = {
+      bass: "Bass",
+      baritone: "Baritone",
+      tenor: "Tenor",
+      alto: "Alto",
+      mezzo_soprano: "Mezzo-Soprano",
+      soprano: "Soprano",
+    };
+    els.profilePreviewTimbre.textContent = `Voice: ${labelMap[voiceTimbre] || "Not set"}`;
+  }
+  if (els.profilePreviewVisibility) els.profilePreviewVisibility.textContent = isPublic ? "Public" : "Private";
+  if (els.profilePreviewBio) els.profilePreviewBio.textContent = bio;
+  if (els.profilePreviewGenres) els.profilePreviewGenres.textContent = genres ? `Genres: ${genres}` : "";
+  if (els.profilePreviewAvatar) {
+    els.profilePreviewAvatar.src = avatar || "./assets/nabadai-logo.png";
+  }
+  if (els.profilePreviewLinks) {
+    const links = [
+      { label: "Instagram", url: instagram },
+      { label: "YouTube", url: youtube },
+      { label: "TikTok", url: tiktok },
+    ].filter((x) => x.url);
+    els.profilePreviewLinks.innerHTML = "";
+    for (const l of links) {
+      const a = document.createElement("a");
+      a.className = "ghost";
+      a.href = l.url;
+      a.target = "_blank";
+      a.rel = "noreferrer";
+      a.textContent = l.label;
+      els.profilePreviewLinks.appendChild(a);
+    }
+  }
+}
+
+function loadLibrary() {
+  try {
+    const raw = localStorage.getItem(profileLibraryKey());
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+function saveLibrary(items) {
+  try {
+    localStorage.setItem(profileLibraryKey(), JSON.stringify(items || []));
+  } catch {}
+}
+function addToLibrary(track) {
+  const items = loadLibrary();
+  items.unshift({
+    id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    ts: Date.now(),
+    title: track.title || "Generated song",
+    artUrl: track.artUrl || "",
+    url: track.url || "",
+    taskId: track.taskId || "",
+    audioId: track.audioId || "",
+    kind: track.kind || "full",
+  });
+  saveLibrary(items.slice(0, 100));
+  renderLibrary();
+}
+function removeFromLibrary(id) {
+  const items = loadLibrary().filter((x) => x.id !== id);
+  saveLibrary(items);
+  renderLibrary();
+}
+async function pollLibraryStemsUntilDone(taskId, kind) {
+  let tries = 0;
+  const maxTries = kind === "multi" ? 80 : 60;
+  const delayMs = kind === "multi" ? 5000 : 4500;
+  while (tries < maxTries) {
+    tries += 1;
+    await new Promise((r) => setTimeout(r, delayMs));
+    try {
+      const r = await fetch(`/api/suno/stems_status?taskId=${encodeURIComponent(taskId)}`);
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) continue;
+      const flag =
+        data?.data?.successFlag ||
+        data?.data?.status ||
+        data?.successFlag ||
+        data?.status ||
+        "";
+      const resp = data?.data?.response || data?.response || data || {};
+      if (String(flag).toUpperCase() === "SUCCESS") {
+        if (kind === "multi") {
+          printSunoStems(resp);
+          if (els.btnMixerLoad) els.btnMixerLoad.disabled = false;
+          setStatus("Multi-stems are ready. Load stems into mixer.");
+        } else {
+          lastSunoVocalUrl = resp.vocalUrl || "";
+          lastSunoInstUrl = resp.instrumentalUrl || "";
+          lastSunoInstProxyUrl = lastSunoInstUrl ? toAudioProxyUrl(lastSunoInstUrl) : "";
+          setLink(els.sunoVocalLink, lastSunoVocalUrl || null);
+          setLink(els.sunoInstLink, lastSunoInstProxyUrl || lastSunoInstUrl || null);
+          if (els.btnLoadInstrumental) els.btnLoadInstrumental.disabled = !lastSunoInstUrl;
+          if (els.btnPlayInstrumental) els.btnPlayInstrumental.disabled = !lastSunoInstUrl;
+          setStatus("Instrumental version is ready.");
+          if (lastSunoInstUrl) {
+            addToLibrary({
+              title: `${lastSunoTitle || "Generated song"} • Instrumental`,
+              artUrl: lastSunoArtUrl || "",
+              url: lastSunoInstProxyUrl || lastSunoInstUrl,
+              kind: "instrumental",
+            });
+          }
+        }
+        setLoading(false);
+        return;
+      }
+      if (String(flag).toUpperCase() === "FAILED") {
+        setStatus(`${kind === "multi" ? "Multi-stems" : "Instrumental"} failed.`);
+        setLoading(false);
+        return;
+      }
+    } catch {}
+  }
+  setStatus(`${kind === "multi" ? "Multi-stems" : "Instrumental"} is delayed. Please try again.`);
+  setLoading(false);
+}
+function renderLibrary() {
+  if (!els.libraryList) return;
+  const items = loadLibrary();
+  if (!items.length) {
+    els.libraryList.textContent = "No songs yet. Generate a song and it will appear here.";
+    return;
+  }
+  els.libraryList.innerHTML = items
+    .map(
+      (t) => `
+      <div class="trackRow libRow" data-lib-row="${t.id}">
+        <div style="flex:1; min-width:0;">
+          <div class="trackName">${escapeHtml(t.title)}</div>
+          <div class="trackTiny">${new Date(t.ts).toLocaleString()}</div>
+        </div>
+        <button class="ghost libMenuBtn" data-lib-menu="${t.id}" aria-label="Song options">⋯</button>
+        <div class="libMenu" id="libMenu_${t.id}" style="display:none">
+          <a class="ghost" href="${t.url}" target="_blank" rel="noreferrer">Download</a>
+          ${t.kind === "instrumental" ? "" : `<button class="ghost" data-lib-inst="${t.id}">Get instrumental</button>`}
+          ${t.kind === "instrumental" ? "" : `<button class="ghost" data-lib-stems="${t.id}">Get stems</button>`}
+          <button class="ghost" data-lib-del="${t.id}">Delete</button>
+        </div>
+      </div>`
+    )
+    .join("");
+  els.libraryList.querySelectorAll("[data-lib-row]").forEach((row) => {
+    row.addEventListener("click", async (e) => {
+      const tgt = e.target;
+      if (tgt && (tgt.closest("[data-lib-menu]") || tgt.closest(".libMenu"))) return;
+      const id = row.getAttribute("data-lib-row");
+      const t = loadLibrary().find((x) => x.id === id);
+      if (!t?.url) return;
+      await playOnPlayerPage(t.url, "Full song");
+    });
+  });
+  els.libraryList.querySelectorAll("[data-lib-menu]").forEach((b) => {
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = b.getAttribute("data-lib-menu");
+      const menu = document.getElementById(`libMenu_${id}`);
+      const open = menu && menu.style.display !== "none";
+      els.libraryList.querySelectorAll(".libMenu").forEach((m) => (m.style.display = "none"));
+      if (menu) menu.style.display = open ? "none" : "";
+    });
+  });
+  els.libraryList.querySelectorAll("[data-lib-del]").forEach((b) => {
+    b.addEventListener("click", (e) => e.stopPropagation());
+    b.addEventListener("click", () => removeFromLibrary(b.getAttribute("data-lib-del")));
+  });
+  els.libraryList.querySelectorAll("[data-lib-inst]").forEach((b) => {
+    b.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const id = b.getAttribute("data-lib-inst");
+      const t = loadLibrary().find((x) => x.id === id);
+      if (!t?.taskId || !t?.audioId) {
+        setStatus("This song is missing generation ids for instrumental request.");
+        return;
+      }
+      try {
+        setStatus("Getting instrumental for selected song…");
+        setLoading(true, { title: "Getting your instrumental version…", sub: "Processing selected library song." });
+        const r = await fetch("/api/suno/stems", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ taskId: t.taskId, audioId: t.audioId, type: "separate_vocal" }),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d?.error || "Instrumental request failed");
+        sunoStemsTaskId = d?.data?.taskId || d?.data?.task_id || d?.taskId || null;
+        if (!sunoStemsTaskId) throw new Error("Missing stems task id");
+        setStatus("Instrumental requested from library song. Processing now…");
+        void pollLibraryStemsUntilDone(sunoStemsTaskId, "inst");
+      } catch (err) {
+        setStatus(`Library instrumental failed: ${err?.message || String(err)}`);
+        setLoading(false);
+      }
+    });
+  });
+  els.libraryList.querySelectorAll("[data-lib-stems]").forEach((b) => {
+    b.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const ok = window.confirm("Get stems may consume around 50 credits. Do you want to continue?");
+      if (!ok) return;
+      const id = b.getAttribute("data-lib-stems");
+      const t = loadLibrary().find((x) => x.id === id);
+      if (!t?.taskId || !t?.audioId) {
+        setStatus("This song is missing generation ids for stems request.");
+        return;
+      }
+      try {
+        setStatus("Getting multi-stems for selected song…");
+        setLoading(true, { title: "Extracting multi-stems…", sub: "Processing selected library song." });
+        const r = await fetch("/api/suno/stems", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ taskId: t.taskId, audioId: t.audioId, type: "split_stem" }),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d?.error || "Multi-stems request failed");
+        sunoMultiStemsTaskId = d?.data?.taskId || d?.data?.task_id || d?.taskId || null;
+        if (!sunoMultiStemsTaskId) throw new Error("Missing multi-stems task id");
+        setStatus("Multi-stems requested from library song. Processing now…");
+        void pollLibraryStemsUntilDone(sunoMultiStemsTaskId, "multi");
+      } catch (err) {
+        setStatus(`Library multi-stems failed: ${err?.message || String(err)}`);
+        setLoading(false);
+      }
+    });
+  });
+}
 
 // Vocal Room state
 /** @type {AudioContext | null} */
@@ -961,30 +1399,7 @@ function ensurePlayer() {
 }
 
 function placeholderCoverDataUrl() {
-  const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800">
-  <defs>
-    <radialGradient id="g1" cx="25%" cy="10%" r="85%">
-      <stop offset="0%" stop-color="#7c5cff" stop-opacity="0.55"/>
-      <stop offset="55%" stop-color="#0b0d12" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="g2" cx="85%" cy="15%" r="85%">
-      <stop offset="0%" stop-color="#23d5ab" stop-opacity="0.40"/>
-      <stop offset="60%" stop-color="#0b0d12" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#121722"/>
-      <stop offset="100%" stop-color="#0f1420"/>
-    </linearGradient>
-  </defs>
-  <rect width="800" height="800" fill="url(#bg)"/>
-  <rect width="800" height="800" fill="url(#g1)"/>
-  <rect width="800" height="800" fill="url(#g2)"/>
-  <g opacity="0.9">
-    <text x="50" y="735" fill="#e7edf7" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" font-size="40" font-weight="900">NabadAi Music</text>
-  </g>
-</svg>`;
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg.trim())}`;
+  return "./assets/nabadai-logo.png";
 }
 
 function setPlayerMeta({ title, subtitle, artUrl } = {}) {
@@ -1006,12 +1421,45 @@ function setPlayerSource(url, label) {
   syncPlayerUI();
 }
 
+async function cacheGeneratedAudio(url) {
+  if (!url || url === "#") return null;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    const blob = await r.blob();
+    if (!blob || blob.size < 1024) return null;
+    if (lastSunoCachedUrl) safeRevokeObjectUrl(lastSunoCachedUrl);
+    lastSunoCachedUrl = URL.createObjectURL(blob);
+    return lastSunoCachedUrl;
+  } catch {
+    return null;
+  }
+}
+async function cacheGeneratedAudio2(url) {
+  if (!url || url === "#") return null;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    const blob = await r.blob();
+    if (!blob || blob.size < 1024) return null;
+    if (lastSunoCachedUrl2) safeRevokeObjectUrl(lastSunoCachedUrl2);
+    lastSunoCachedUrl2 = URL.createObjectURL(blob);
+    return lastSunoCachedUrl2;
+  } catch {
+    return null;
+  }
+}
+function toAudioProxyUrl(url) {
+  if (!url || url === "#") return "";
+  return `/api/suno/audio?url=${encodeURIComponent(url)}`;
+}
+
 async function playOnPlayerPage(url, label) {
   if (!url) return;
   setPlayerSource(url, label);
   setPlayerMeta({
     title: lastSunoTitle || "Generated song",
-    subtitle: label ? `Suno • ${label}` : "Suno",
+    subtitle: label ? `Generated • ${label}` : "Generated",
     artUrl: lastSunoArtUrl,
   });
   location.hash = "#/player";
@@ -1021,8 +1469,8 @@ async function playOnPlayerPage(url, label) {
     await a.play();
     if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = true;
     if (els.btnPlayerPause) els.btnPlayerPause.disabled = false;
-  } catch {
-    setStatus("Playback blocked by the browser. Press Play once in the Player tab.");
+  } catch (e) {
+    setStatus(`In-app playback failed (${e?.name || "error"}). Tap Open Direct.`);
   }
 }
 
@@ -1078,6 +1526,16 @@ function getInstrumentFlags() {
 
 function setStatus(text) {
   els.status.textContent = text;
+  const s = String(text || "").toLowerCase();
+  if (s.includes("failed") || s.includes("error")) {
+    setAiBgState("error");
+  } else if (s.includes("ready") || s.includes("generated") || s.includes("complete")) {
+    setAiBgState("ready");
+  }
+  if (aiBgResetTimer) clearTimeout(aiBgResetTimer);
+  aiBgResetTimer = setTimeout(() => {
+    if (busyCount <= 0) setAiBgState("idle");
+  }, 2600);
 }
 
 function setProgress(pct) {
@@ -1085,11 +1543,24 @@ function setProgress(pct) {
 }
 
 let busyCount = 0;
+let aiBgResetTimer = null;
+let aiBgApplyTimer = null;
+function setAiBgState(state) {
+  // Background is intentionally stable (non-reactive) for a cleaner UI.
+  return state;
+}
 function setLoading(on, { title, sub } = {}) {
   busyCount = Math.max(0, busyCount + (on ? 1 : -1));
   const show = busyCount > 0;
   if (els.globalLoading) els.globalLoading.style.display = show ? "" : "none";
   document.body.classList.toggle("isBusy", show);
+  if (show) {
+    if (aiBgResetTimer) {
+      clearTimeout(aiBgResetTimer);
+      aiBgResetTimer = null;
+    }
+    setAiBgState("processing");
+  }
   if (show) {
     if (els.loadingTitle && title) els.loadingTitle.textContent = title;
     if (els.loadingSub && sub) els.loadingSub.textContent = sub;
@@ -1113,6 +1584,23 @@ function printSuno(obj) {
 function printSunoStems(obj) {
   if (!els.sunoStemsOut) return;
   els.sunoStemsOut.textContent = obj ? JSON.stringify(obj, null, 2) : "";
+}
+
+function deepFindFirstStringByKeys(obj, keys) {
+  const wanted = new Set((keys || []).map((k) => String(k).toLowerCase()));
+  const seen = new Set();
+  const stack = [obj];
+  while (stack.length) {
+    const cur = stack.pop();
+    if (!cur || typeof cur !== "object") continue;
+    if (seen.has(cur)) continue;
+    seen.add(cur);
+    for (const [k, v] of Object.entries(cur)) {
+      if (wanted.has(String(k).toLowerCase()) && typeof v === "string" && v.startsWith("http")) return v;
+      if (v && typeof v === "object") stack.push(v);
+    }
+  }
+  return "";
 }
 
 function renderMixerList() {
@@ -1246,6 +1734,31 @@ function renderCreditsHistory() {
       return `${dt} | ${e.action} | credits ${before} → ${after} (${delta})${extra}`;
     })
     .join("\n");
+}
+
+function buildCreditRecoveryPayload() {
+  const items = loadCreditsHistory();
+  const latest = items[0] || null;
+  const ts = latest?.ts ? new Date(latest.ts).toISOString() : new Date().toISOString();
+  const action = latest?.action || "Suno: generate song";
+  const before = latest?.before ?? "unknown";
+  const after = latest?.after ?? "unknown";
+  const delta = latest?.delta ?? "unknown";
+  const extra = latest?.extra || "";
+  const task = sunoTaskId || "unknown";
+  const model = els.sunoModel?.value || "unknown";
+  return [
+    "Credit Recovery Request",
+    `Time (UTC): ${ts}`,
+    `Action: ${action}`,
+    `Task ID: ${task}`,
+    `Model: ${model}`,
+    `Credits before: ${before}`,
+    `Credits after: ${after}`,
+    `Credits delta: ${delta}`,
+    `Details: ${extra}`,
+    "Issue: Generation failed/timeout or playback failure after charge.",
+  ].join("\n");
 }
 
 async function trackCreditsAround(action, fn, extra = "") {
@@ -1542,44 +2055,519 @@ els.btnVoicePlay.addEventListener("click", async () => {
 });
 
 // Suno full-song generation
-if (els.btnSunoGenerate && els.btnSunoRefresh && els.btnSunoStems) {
-  els.btnSunoGenerate.addEventListener("click", async () => {
+if (els.btnSunoGenerate && els.btnSunoStems) {
+  if (els.sunoVocalUpload) {
+    els.sunoVocalUpload.addEventListener("change", () => {
+      const f = els.sunoVocalUpload?.files?.[0];
+      vocalRefBlob = null;
+      if (els.sunoVocalUploadName) {
+        els.sunoVocalUploadName.textContent = f ? `Voice reference attached: ${f.name}` : "No vocal reference attached.";
+      }
+    });
+  }
+  if (els.btnVocalRefRec && els.btnVocalRefStop) {
+    els.btnVocalRefRec.addEventListener("click", async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        const rec = new MediaRecorder(stream);
+        const chunks = [];
+        rec.ondataavailable = (e) => {
+          if (e.data && e.data.size) chunks.push(e.data);
+        };
+        rec.onstop = () => {
+          vocalRefBlob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+          if (els.sunoVocalUploadName) {
+            els.sunoVocalUploadName.textContent = "Voice reference recorded and attached.";
+          }
+        };
+        vocalRefStream = stream;
+        vocalRefRecorder = rec;
+        rec.start();
+        els.btnVocalRefRec.disabled = true;
+        els.btnVocalRefStop.disabled = false;
+        setStatus("Recording voice reference…");
+      } catch (e) {
+        setStatus(`Microphone access failed: ${e?.message || String(e)}`);
+      }
+    });
+    els.btnVocalRefStop.addEventListener("click", () => {
+      try {
+        if (vocalRefRecorder && vocalRefRecorder.state !== "inactive") vocalRefRecorder.stop();
+      } catch {}
+      try {
+        if (vocalRefStream) vocalRefStream.getTracks().forEach((t) => t.stop());
+      } catch {}
+      vocalRefRecorder = null;
+      vocalRefStream = null;
+      els.btnVocalRefRec.disabled = false;
+      els.btnVocalRefStop.disabled = true;
+      setStatus("Voice reference ready.");
+    });
+  }
+  const setGenerateFieldsLocked = (locked) => {
+    if (els.sunoPrompt) els.sunoPrompt.disabled = locked;
+    if (els.sunoStyle) els.sunoStyle.disabled = locked;
+    if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = locked;
+  };
+
+  const countSentences = (text) => {
+    const t = String(text || "").trim();
+    if (!t) return 0;
+    const parts = t.split(/[.!?\n]+/).map((p) => p.trim()).filter(Boolean);
+    return parts.length;
+  };
+  const detectLyricsMode = (text) => {
+    const t = String(text || "");
+    const count = countSentences(t);
+    const hasSections = /\[(verse|chorus|bridge|outro|intro|final chorus|pre-chorus|hook|refrain)/i.test(t);
+    if (hasSections && count >= 8) return "arrange";
+    if (count >= 3) return "continue";
+    return "full";
+  };
+
+  const generateLyricsWithMagic = async () => {
+    if (!els.sunoPrompt) return;
+    const lyricsBoxEl = els.sunoPrompt.closest(".lyricsBox");
+    const seed = String(els.sunoPrompt.value || "").trim();
+    const mode = detectLyricsMode(seed);
+    const style = String(els.sunoStyle?.value || "").trim();
     try {
-      els.btnSunoGenerate.disabled = true;
-      els.btnSunoRefresh.disabled = true;
+      if (els.btnLyricsMagic) {
+        els.btnLyricsMagic.disabled = true;
+        els.btnLyricsMagic.textContent = "…";
+      }
+      if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
+      if (els.sunoPrompt) els.sunoPrompt.disabled = true;
+      if (els.sunoStyle) els.sunoStyle.disabled = true;
+      setStatus(mode === "continue" ? "AI is continuing your lyrics…" : mode === "arrange" ? "AI is arranging your lyrics for singing…" : "AI is writing structured lyrics…");
+      const r = await fetch("/api/lyrics", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seed, style, mode }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data?.error || "Lyrics generation failed");
+      const nextLyrics = String(data?.lyrics || "").trim();
+      if (!nextLyrics) throw new Error("No lyrics returned");
+      if (mode === "continue" && seed) {
+        els.sunoPrompt.value = `${seed}\n\n${nextLyrics}`.trim();
+      } else {
+        els.sunoPrompt.value = nextLyrics;
+      }
+      const provider = String(data?.provider || "").trim();
+      const debugSuno = String(data?.debug?.suno || "").trim();
+      const debugGemini = String(data?.debug?.gemini || "").trim();
+      const providerNote = provider === "fallback" ? " (fallback mode)" : provider ? ` (${provider})` : "";
+      const debugNote = debugSuno || debugGemini ? ` [suno:${debugSuno || "-"} gemini:${debugGemini || "-"}]` : "";
+      setStatus(`Lyrics ready${providerNote}${debugNote}. Review and then generate song.`);
+    } catch (e) {
+      setStatus(`Lyrics assist failed: ${e?.message || String(e)}`);
+    } finally {
+      if (els.sunoPrompt) els.sunoPrompt.disabled = false;
+      if (els.sunoStyle) els.sunoStyle.disabled = false;
+      if (lyricsBoxEl) lyricsBoxEl.classList.remove("generating");
+      if (els.btnLyricsMagic) {
+        els.btnLyricsMagic.disabled = false;
+        els.btnLyricsMagic.textContent = "✦";
+      }
+    }
+  };
+
+  if (els.btnLyricsMagic) {
+    els.btnLyricsMagic.addEventListener("click", () => {
+      void generateLyricsWithMagic();
+    });
+  }
+  const showResultCard = (show) => {
+    if (!els.resultCard) return;
+    els.resultCard.style.display = show ? "" : "none";
+    if (els.resultCard2) els.resultCard2.style.display = show && (lastSunoFullUrl2 || lastSunoProxyUrl2) ? "" : "none";
+    if (!show) return;
+    if (els.resultTitle) els.resultTitle.textContent = lastSunoTitle || "Generated song";
+    if (els.resultArt) {
+      els.resultArt.src = lastSunoArtUrl || "";
+      els.resultArt.style.display = lastSunoArtUrl ? "" : "none";
+    }
+    if (els.resultDownload) {
+      const downloadUrl = lastSunoCachedUrl || lastSunoProxyUrl || lastSunoFullUrl;
+      if (downloadUrl) {
+        els.resultDownload.href = downloadUrl;
+        els.resultDownload.classList.remove("disabled");
+      } else {
+        els.resultDownload.href = "#";
+        els.resultDownload.classList.add("disabled");
+      }
+    }
+    if (els.btnResultOpenDirect) {
+      if (lastSunoProxyUrl || lastSunoFullUrl) {
+        els.btnResultOpenDirect.href = lastSunoProxyUrl || lastSunoFullUrl;
+        els.btnResultOpenDirect.classList.remove("disabled");
+      } else {
+        els.btnResultOpenDirect.href = "#";
+        els.btnResultOpenDirect.classList.add("disabled");
+      }
+    }
+    if (els.resultTitle2) els.resultTitle2.textContent = lastSunoTitle2 || "Generated song B";
+    if (els.resultArt2) {
+      els.resultArt2.src = lastSunoArtUrl2 || lastSunoArtUrl || "";
+      els.resultArt2.style.display = (lastSunoArtUrl2 || lastSunoArtUrl) ? "" : "none";
+    }
+    if (els.resultDownload2) {
+      const downloadUrl2 = lastSunoCachedUrl2 || lastSunoProxyUrl2 || lastSunoFullUrl2;
+      if (downloadUrl2) {
+        els.resultDownload2.href = downloadUrl2;
+        els.resultDownload2.classList.remove("disabled");
+      } else {
+        els.resultDownload2.href = "#";
+        els.resultDownload2.classList.add("disabled");
+      }
+    }
+    if (els.btnResultOpenDirect2) {
+      if (lastSunoProxyUrl2 || lastSunoFullUrl2) {
+        els.btnResultOpenDirect2.href = lastSunoProxyUrl2 || lastSunoFullUrl2;
+        els.btnResultOpenDirect2.classList.remove("disabled");
+      } else {
+        els.btnResultOpenDirect2.href = "#";
+        els.btnResultOpenDirect2.classList.add("disabled");
+      }
+    }
+  };
+  const setGenerateBtn = (label, disabled, mode) => {
+    els.btnSunoGenerate.textContent = label;
+    els.btnSunoGenerate.disabled = disabled;
+    els.btnSunoGenerate.dataset.mode = mode;
+  };
+
+  const fetchGenerationStatus = async () => {
+    if (!sunoTaskId) return null;
+    const r = await fetch(`/api/suno/status?taskId=${encodeURIComponent(sunoTaskId)}`);
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data?.error || "Status failed");
+    const status = data?.data?.status || data?.status;
+    const genData = data?.data?.response?.sunoData || data?.data?.response?.suno_data || [];
+    const first = Array.isArray(genData) ? genData[0] : null;
+    const second = Array.isArray(genData) ? genData[1] : null;
+    const audioUrl = first?.audioUrl || first?.audio_url || first?.streamAudioUrl || first?.stream_audio_url || "";
+    const imageUrl = first?.imageUrl || first?.image_url || first?.coverUrl || first?.cover_url || null;
+    const title = first?.title || first?.songTitle || first?.song_title || "";
+    sunoAudioId =
+      first?.id ||
+      first?.audioId ||
+      first?.audio_id ||
+      first?.songId ||
+      first?.song_id ||
+      null;
+    printSuno({ status, taskId: sunoTaskId, first });
+    if (audioUrl) {
+      lastSunoFullUrl = audioUrl;
+      lastSunoProxyUrl = toAudioProxyUrl(audioUrl);
+      lastSunoArtUrl = imageUrl || lastSunoArtUrl;
+      lastSunoTitle = String(title || "").trim() || lastSunoTitle;
+      setLink(els.sunoFullLink, lastSunoProxyUrl || audioUrl);
+      await cacheGeneratedAudio(lastSunoProxyUrl || audioUrl);
+      if (els.btnLoadFull) els.btnLoadFull.disabled = false;
+    }
+    const audioUrl2 = second?.audioUrl || second?.audio_url || second?.streamAudioUrl || second?.stream_audio_url || "";
+    const imageUrl2 = second?.imageUrl || second?.image_url || second?.coverUrl || second?.cover_url || null;
+    const title2 = second?.title || second?.songTitle || second?.song_title || "";
+    lastSunoAudioId2 =
+      second?.id ||
+      second?.audioId ||
+      second?.audio_id ||
+      second?.songId ||
+      second?.song_id ||
+      "";
+    if (audioUrl2) {
+      lastSunoFullUrl2 = audioUrl2;
+      lastSunoProxyUrl2 = toAudioProxyUrl(audioUrl2);
+      lastSunoArtUrl2 = imageUrl2 || "";
+      lastSunoTitle2 = String(title2 || "").trim() || "Generated song B";
+      await cacheGeneratedAudio2(lastSunoProxyUrl2 || audioUrl2);
+    }
+    return { status, hasAudio: Boolean(lastSunoFullUrl) };
+  };
+
+  const startGeneratePolling = () => {
+    if (generatePollTimer) clearInterval(generatePollTimer);
+    let tries = 0;
+    const maxTries = 80; // ~6 minutes at 4.5s interval
+    generatePollTimer = setInterval(async () => {
+      tries += 1;
+      try {
+        const state = await fetchGenerationStatus();
+        if (!state) return;
+        if (state.status === "SUCCESS" && state.hasAudio) {
+          clearInterval(generatePollTimer);
+          generatePollTimer = null;
+          setGenerateBtn("Regenerate", false, "generate");
+          showResultCard(true);
+          addToLibrary({
+            title: lastSunoTitle,
+            artUrl: lastSunoArtUrl,
+            url: lastSunoProxyUrl || lastSunoFullUrl,
+            taskId: sunoTaskId || "",
+            audioId: sunoAudioId || "",
+            kind: "full",
+          });
+          if (lastSunoProxyUrl2 || lastSunoFullUrl2) {
+            addToLibrary({
+              title: lastSunoTitle2 || "Generated song B",
+              artUrl: lastSunoArtUrl2 || lastSunoArtUrl || "",
+              url: lastSunoProxyUrl2 || lastSunoFullUrl2,
+              taskId: sunoTaskId || "",
+              audioId: lastSunoAudioId2 || "",
+              kind: "full",
+            });
+          }
+          els.btnSunoStems.disabled = !(sunoAudioId);
+          if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = !(sunoAudioId);
+          setStatus("Song is ready. Press Play full.");
+          setGenerateFieldsLocked(false);
+          setLoading(false);
+          return;
+        }
+        if (state.status === "FAILED") {
+          clearInterval(generatePollTimer);
+          generatePollTimer = null;
+          setGenerateBtn("Generate song", false, "generate");
+          setStatus("Generation failed. Please try again.");
+          setGenerateFieldsLocked(false);
+          setLoading(false);
+        }
+        if (tries >= maxTries) {
+          clearInterval(generatePollTimer);
+          generatePollTimer = null;
+          setGenerateBtn("Generate song", false, "generate");
+          setStatus("Generation is taking longer than expected. Please try again.");
+          setGenerateFieldsLocked(false);
+          setLoading(false);
+        }
+      } catch {}
+    }, 4500);
+  };
+
+  const stopStemsPolling = () => {
+    if (stemsPollTimer) clearInterval(stemsPollTimer);
+    stemsPollTimer = null;
+  };
+  const setStemsBtn = (label, disabled) => {
+    if (!els.btnSunoStems) return;
+    els.btnSunoStems.textContent = label;
+    els.btnSunoStems.disabled = disabled;
+  };
+  const setMultiStemsBtn = (label, disabled) => {
+    if (!els.btnSunoMultiStems) return;
+    els.btnSunoMultiStems.textContent = label;
+    els.btnSunoMultiStems.disabled = disabled;
+  };
+  const stopMultiStemsPolling = () => {
+    if (multiStemsPollTimer) clearInterval(multiStemsPollTimer);
+    multiStemsPollTimer = null;
+  };
+  const startStemsPolling = () => {
+    if (!sunoStemsTaskId) return;
+    stopStemsPolling();
+    let tries = 0;
+    const maxTries = 60; // ~4.5 min
+    stemsPollTimer = setInterval(async () => {
+      tries += 1;
+      try {
+        const r = await fetch(`/api/suno/stems_status?taskId=${encodeURIComponent(sunoStemsTaskId)}`);
+        const data = await r.json().catch(() => ({}));
+        printSunoStems({ poll: "instrumental", taskId: sunoStemsTaskId, tries, data });
+        if (!r.ok) return;
+        const flag =
+          data?.data?.successFlag ||
+          data?.data?.status ||
+          data?.successFlag ||
+          data?.status ||
+          "";
+        const resp = data?.data?.response || data?.response || data || {};
+        const vocalUrl =
+          deepFindFirstStringByKeys(resp, ["vocalUrl", "vocal_url"]) ||
+          deepFindFirstStringByKeys(data, ["vocalUrl", "vocal_url"]);
+        const instrumentalUrl =
+          deepFindFirstStringByKeys(resp, ["instrumentalUrl", "instrumental_url", "accompanimentUrl"]) ||
+          deepFindFirstStringByKeys(data, ["instrumentalUrl", "instrumental_url", "accompanimentUrl"]);
+        const doneByUrls = Boolean(vocalUrl || instrumentalUrl);
+        if (String(flag).toUpperCase() === "SUCCESS" || doneByUrls) {
+          stopStemsPolling();
+          lastSunoVocalUrl = vocalUrl || "";
+          lastSunoInstUrl = instrumentalUrl || "";
+          lastSunoInstProxyUrl = lastSunoInstUrl ? toAudioProxyUrl(lastSunoInstUrl) : "";
+          setLink(els.sunoVocalLink, lastSunoVocalUrl || null);
+          setLink(els.sunoInstLink, lastSunoInstProxyUrl || lastSunoInstUrl || null);
+          if (els.btnLoadVocals) els.btnLoadVocals.disabled = !lastSunoVocalUrl;
+          if (els.btnLoadInstrumental) els.btnLoadInstrumental.disabled = !lastSunoInstUrl;
+          if (els.btnPlayVocals) els.btnPlayVocals.disabled = !lastSunoVocalUrl;
+          if (els.btnPlayInstrumental) els.btnPlayInstrumental.disabled = !lastSunoInstUrl;
+          setStatus("Instrumental version is ready.");
+          if (lastSunoInstUrl) {
+            addToLibrary({
+              title: `${lastSunoTitle || "Generated song"} • Instrumental`,
+              artUrl: lastSunoArtUrl || "",
+              url: lastSunoInstProxyUrl || lastSunoInstUrl,
+              kind: "instrumental",
+            });
+          }
+          setLoading(false);
+          setStemsBtn("Get instrumental version", false);
+          void refreshSunoCredits();
+          return;
+        }
+        const failed = String(flag).toUpperCase() === "FAILED";
+        if (failed || tries >= maxTries) {
+          stopStemsPolling();
+          const reason =
+            data?.data?.message ||
+            data?.message ||
+            data?.error ||
+            "Instrumental processing failed or timed out.";
+          setStatus(`Instrumental failed: ${reason}`);
+          setLoading(false);
+          setStemsBtn("Get instrumental version", false);
+        }
+      } catch {}
+    }, 4500);
+  };
+  const startMultiStemsPolling = () => {
+    if (!sunoMultiStemsTaskId) return;
+    stopMultiStemsPolling();
+    let tries = 0;
+    const maxTries = 80; // ~6 min
+    multiStemsPollTimer = setInterval(async () => {
+      tries += 1;
+      try {
+        const r = await fetch(`/api/suno/stems_status?taskId=${encodeURIComponent(sunoMultiStemsTaskId)}`);
+        const data = await r.json().catch(() => ({}));
+        printSunoStems({ poll: "multi", taskId: sunoMultiStemsTaskId, tries, data });
+        if (!r.ok) return;
+        const flag =
+          data?.data?.successFlag ||
+          data?.data?.status ||
+          data?.successFlag ||
+          data?.status ||
+          "";
+        const resp = data?.data?.response || data?.response || data || {};
+        const anyStemUrl = deepFindFirstStringByKeys(resp, [
+          "drumsUrl",
+          "bassUrl",
+          "guitarUrl",
+          "keyboardUrl",
+          "percussionUrl",
+          "stringsUrl",
+          "synthUrl",
+          "fxUrl",
+          "brassUrl",
+          "woodwindsUrl",
+          "vocalUrl",
+          "instrumentalUrl",
+        ]);
+        if (String(flag).toUpperCase() === "SUCCESS" || Boolean(anyStemUrl)) {
+          stopMultiStemsPolling();
+          printSunoStems(resp);
+          if (els.btnMixerLoad) els.btnMixerLoad.disabled = false;
+          setStatus("Multi-stems are ready. Load stems into mixer.");
+          setLoading(false);
+          setMultiStemsBtn("Get multi-stems", false);
+          void refreshSunoCredits();
+          return;
+        }
+        const failed = String(flag).toUpperCase() === "FAILED";
+        if (failed || tries >= maxTries) {
+          stopMultiStemsPolling();
+          const reason =
+            data?.data?.message ||
+            data?.message ||
+            data?.error ||
+            "Multi-stems processing failed or timed out.";
+          setStatus(`Multi-stems failed: ${reason}`);
+          setLoading(false);
+          setMultiStemsBtn("Get multi-stems", false);
+        }
+      } catch {}
+    }, 5000);
+  };
+
+  const HIDDEN_NEGATIVE_PROMPT =
+    "Avoid tempo drift, off-beat phrasing, rushed syllables, dragging syllables, clipped words, early vocal entry, late vocal entry, unstable groove, over-crowded lines, and spoken meta text.";
+  const HIDDEN_PROSODY_GUARDRAILS =
+    "Prosody guardrails: keep natural singable phrasing; align syllable density to bar length; place stressed syllables on strong beats; keep line lengths balanced across repeated sections; avoid tongue-twister consonant clusters; keep chorus hook concise and rhythmically repeatable.";
+
+  els.btnSunoGenerate.addEventListener("click", async () => {
+    const promptText = String(els.sunoPrompt?.value || "").trim();
+    if (!promptText) {
+      window.alert("Please write lyrics first before generating.");
+      return;
+    }
+    try {
+      setGenerateBtn("Generating…", true, "generate");
+      setGenerateFieldsLocked(true);
+      showResultCard(false);
       els.btnSunoStems.disabled = true;
       if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = true;
-      setStatus("Submitting Suno generation…");
+      setStatus("Submitting generation…");
       setProgress(5);
       setLoading(true, { title: "Generating song with AI…", sub: "This can take 30–120 seconds." });
 
       applyMaqamToStyleInput();
+      const userPrompt = (els.sunoPrompt?.value || "").trim();
+      const userStyle = (els.sunoStyle?.value || "").trim();
+      const timing = String(els.sunoTiming?.value || "").trim();
+      const timingClause = timing
+        ? `Timing lock: ${timing}. Keep this timing stable across all sections and vocal entries.`
+        : "Timing lock: keep stable tempo and aligned vocal phrasing throughout the song.";
       const payload = {
-        prompt: (els.sunoPrompt?.value || "").trim(),
-        style: (els.sunoStyle?.value || "").trim(),
+        prompt: `${userPrompt}\n\n[Internal rhythm/prosody rules]\n${timingClause}\n${HIDDEN_PROSODY_GUARDRAILS}\n${HIDDEN_NEGATIVE_PROMPT}`,
+        style: `${userStyle}${userStyle ? " | " : ""}${timing ? `${timing}, ` : ""}tight rhythm, stable timing, clean phrasing`,
+        songKey: (els.sunoSongKey?.value || "").trim(),
+        voiceTimbre: (els.sunoVoiceTimbre?.value || "").trim(),
         title: (els.sunoTitle?.value || "").trim(),
         customMode: Boolean(els.sunoCustomMode?.checked),
         instrumental: Boolean(els.sunoInstrumental?.checked),
         model: els.sunoModel?.value || "V4_5ALL",
         vocalGender: els.sunoVocalGender?.value || undefined,
+        personaId: (els.sunoPersonaId?.value || "").trim() || undefined,
       };
+      const vocalRefFile = getVocalReferenceFile();
 
       const data = await trackCreditsAround(
-        "Suno: generate song",
+        vocalRefFile ? "Suno: generate from vocal reference" : "Suno: generate song",
         async () => {
-          const r = await fetch("/api/suno/generate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
+          let r;
+          if (vocalRefFile) {
+            const fileBase64 = await fileToBase64(vocalRefFile);
+            r = await fetch("/api/suno/stems", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "add_instrumental",
+                fileBase64,
+                fileName: vocalRefFile.name || "vocal-reference.webm",
+                fileType: vocalRefFile.type || "audio/webm",
+                style: payload.style || "",
+                title: payload.title || "",
+                model: payload.model || "V4_5ALL",
+              }),
+            });
+          } else {
+            r = await fetch("/api/suno/generate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+          }
           const d = await r.json().catch(() => ({}));
-          if (!r.ok) throw new Error(d?.error || "Suno generate failed");
+          if (!r.ok) {
+            const more = d?.detailMessage || d?.details?.message || d?.details?.error || "";
+            throw new Error(`${d?.error || "Suno generate failed"}${more ? `: ${more}` : ""}`);
+          }
           return d;
         },
         payload?.model ? `model=${payload.model}` : ""
       );
 
-      sunoTaskId = data?.data?.taskId || data?.data?.task_id || data?.taskId || null;
+      sunoTaskId = extractTaskIdLoose(data);
       sunoAudioId = null;
       sunoStemsTaskId = null;
       sunoMultiStemsTaskId = null;
@@ -1590,85 +2578,79 @@ if (els.btnSunoGenerate && els.btnSunoRefresh && els.btnSunoStems) {
       setLink(els.sunoVocalLink, null);
       setLink(els.sunoInstLink, null);
       lastSunoFullUrl = "";
+      lastSunoProxyUrl = "";
+      if (lastSunoCachedUrl) safeRevokeObjectUrl(lastSunoCachedUrl);
+      lastSunoCachedUrl = "";
       lastSunoVocalUrl = "";
       lastSunoInstUrl = "";
       lastSunoArtUrl = "";
       lastSunoTitle = "";
+      lastSunoFullUrl2 = "";
+      lastSunoProxyUrl2 = "";
+      if (lastSunoCachedUrl2) safeRevokeObjectUrl(lastSunoCachedUrl2);
+      lastSunoCachedUrl2 = "";
+      lastSunoArtUrl2 = "";
+      lastSunoTitle2 = "";
       if (els.btnLoadFull) els.btnLoadFull.disabled = true;
       if (els.btnLoadVocals) els.btnLoadVocals.disabled = true;
       if (els.btnLoadInstrumental) els.btnLoadInstrumental.disabled = true;
-      if (els.btnPlayFull) els.btnPlayFull.disabled = true;
       if (els.btnPlayVocals) els.btnPlayVocals.disabled = true;
       if (els.btnPlayInstrumental) els.btnPlayInstrumental.disabled = true;
 
-      els.btnSunoRefresh.disabled = !sunoTaskId;
-      setStatus(sunoTaskId ? `Suno task created. Refresh status in ~30-60s.` : "Suno task created.");
+      if (!sunoTaskId) {
+        setStatus(
+          `Generation request accepted but missing task id. Please refresh status manually.`
+        );
+        setGenerateBtn("Generate song", false, "generate");
+        setGenerateFieldsLocked(false);
+        setLoading(false);
+        setProgress(0);
+        return;
+      }
+      setStatus(vocalRefFile ? "Generating from your vocal reference…" : "Generating… we will update automatically.");
+      setGenerateBtn("Generating…", true, "generate");
+      startGeneratePolling();
       setProgress(0);
     } catch (e) {
       console.error(e);
-      setStatus(`Suno generate failed: ${e?.message || String(e)}`);
+      setStatus(`Generation failed: ${e?.message || String(e)}`);
+      setGenerateBtn("Generate song", false, "generate");
+      setGenerateFieldsLocked(false);
       setProgress(0);
-    } finally {
-      els.btnSunoGenerate.disabled = false;
       setLoading(false);
-    }
+    } finally {}
   });
 
-  els.btnSunoRefresh.addEventListener("click", async () => {
-    if (!sunoTaskId) return;
-    try {
-      els.btnSunoRefresh.disabled = true;
-      setStatus("Fetching Suno status…");
-      setProgress(10);
-      setLoading(true, { title: "Checking generation status…", sub: "Waiting for audio URLs…" });
-
-      const r = await fetch(`/api/suno/status?taskId=${encodeURIComponent(sunoTaskId)}`);
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data?.error || "Suno status failed");
-
-      const status = data?.data?.status || data?.status;
-      const sunoData = data?.data?.response?.sunoData || data?.data?.response?.suno_data || [];
-      const first = Array.isArray(sunoData) ? sunoData[0] : null;
-      // API returns either camelCase or snake_case depending on endpoint
-      const audioUrl = first?.audioUrl || first?.audio_url || null;
-      const streamUrl = first?.streamAudioUrl || first?.stream_audio_url || null;
-      const imageUrl = first?.imageUrl || first?.image_url || first?.coverUrl || first?.cover_url || null;
-      const title = first?.title || first?.songTitle || first?.song_title || "";
-      sunoAudioId = first?.id || null;
-
-      printSuno({ status, taskId: sunoTaskId, first });
-      const fullUrl = audioUrl || streamUrl || "";
-      lastSunoFullUrl = fullUrl;
-      lastSunoArtUrl = imageUrl || lastSunoArtUrl;
-      lastSunoTitle = String(title || "").trim() || lastSunoTitle;
-      setLink(els.sunoFullLink, fullUrl || null);
-      if (els.btnLoadFull) els.btnLoadFull.disabled = !fullUrl;
-      if (els.btnPlayFull) els.btnPlayFull.disabled = !fullUrl;
-      els.btnSunoStems.disabled = !(status === "SUCCESS" && sunoAudioId);
-      if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = !(status === "SUCCESS" && sunoAudioId);
-      setStatus(`Suno status: ${status || "unknown"}`);
-      setProgress(0);
-      void refreshSunoCredits();
-    } catch (e) {
-      console.error(e);
-      setStatus(`Suno status failed: ${e?.message || String(e)}`);
-      setProgress(0);
-    } finally {
-      els.btnSunoRefresh.disabled = false;
-      setLoading(false);
-    }
-  });
+  if (els.btnResultPlay) {
+    els.btnResultPlay.addEventListener("click", async () => {
+      const url =
+        lastSunoCachedUrl ||
+        lastSunoProxyUrl ||
+        lastSunoFullUrl ||
+        (els.sunoFullLink?.classList.contains("disabled") ? "" : els.sunoFullLink?.href);
+      await playOnPlayerPage(url && url !== "#" ? url : "", "Full song");
+    });
+  }
+  if (els.btnResultPlay2) {
+    els.btnResultPlay2.addEventListener("click", async () => {
+      const url = lastSunoCachedUrl2 || lastSunoProxyUrl2 || lastSunoFullUrl2;
+      await playOnPlayerPage(url && url !== "#" ? url : "", "Full song B");
+    });
+  }
 
   els.btnSunoStems.addEventListener("click", async () => {
-    if (!sunoTaskId || !sunoAudioId) return;
+    if (!sunoTaskId || !sunoAudioId) {
+      setStatus("Stems unavailable yet: song id is missing. Wait for full SUCCESS and try Refresh once.");
+      return;
+    }
     try {
-      els.btnSunoStems.disabled = true;
-      setStatus("Requesting stems (vocals + instrumental)…");
+      setStemsBtn("Getting instrumental…", true);
+      setStatus("Getting your instrumental version…");
       setProgress(15);
-      setLoading(true, { title: "Separating vocals…", sub: "Creating vocal + instrumental stems…" });
+      setLoading(true, { title: "Getting your instrumental version…", sub: "Processing your track now." });
 
       const data = await trackCreditsAround(
-        "Suno: separate vocals",
+        "Suno: instrumental version",
         async () => {
           const r = await fetch("/api/suno/stems", {
             method: "POST",
@@ -1683,24 +2665,36 @@ if (els.btnSunoGenerate && els.btnSunoRefresh && els.btnSunoStems) {
       );
       printSunoStems(data);
       sunoStemsTaskId = data?.data?.taskId || data?.data?.task_id || data?.taskId || null;
-      printSuno({ stemsTaskId: sunoStemsTaskId, requested: "separate_vocal" });
-      setStatus("Stem task created. Refresh status in ~30-90s.");
+      printSuno({ stemsTaskId: sunoStemsTaskId, requested: "instrumental_version" });
+      setStatus("Instrumental version requested. Processing now…");
+      startStemsPolling();
       setProgress(0);
     } catch (e) {
       console.error(e);
       setStatus(`Stem request failed: ${e?.message || String(e)}`);
       setProgress(0);
-    } finally {
-      els.btnSunoStems.disabled = false;
       setLoading(false);
+      setStemsBtn("Get instrumental version", false);
+    } finally {
+      // Keep loading visible until polling resolves (success/fail/timeout).
     }
   });
 
   if (els.btnSunoMultiStems) {
     els.btnSunoMultiStems.addEventListener("click", async () => {
-      if (!sunoTaskId || !sunoAudioId) return;
+      const ok = window.confirm("Get stems may consume around 50 credits. Do you want to continue?");
+      if (!ok) return;
+      if (!sunoTaskId || !sunoAudioId) {
+        setStatus("Multi-stems unavailable yet: missing song ids. Generate and wait until song is fully ready.");
+        return;
+      }
+      if (multiStemsInFlight) {
+        setStatus("Multi-stems request already in progress. Please wait.");
+        return;
+      }
       try {
-        els.btnSunoMultiStems.disabled = true;
+        multiStemsInFlight = true;
+        setMultiStemsBtn("Getting multi-stems…", true);
         setStatus("Requesting multi-stems (drums/bass/… )…");
         setProgress(18);
         setLoading(true, { title: "Extracting multi-stems…", sub: "Drums, bass, strings… This can take longer." });
@@ -1721,74 +2715,33 @@ if (els.btnSunoGenerate && els.btnSunoRefresh && els.btnSunoStems) {
         );
         printSunoStems(data);
         sunoMultiStemsTaskId = data?.data?.taskId || data?.data?.task_id || data?.taskId || null;
+        if (!sunoMultiStemsTaskId) {
+          throw new Error("Provider did not return a multi-stems task id.");
+        }
         printSunoStems({ ...data, _ui: { stemsTaskId: sunoMultiStemsTaskId, requested: "split_stem" } });
-        setStatus("Multi-stems task created. Refresh status in ~60-180s.");
+        setStatus("Multi-stems task created. Processing now…");
+        startMultiStemsPolling();
         setProgress(0);
       } catch (e) {
         console.error(e);
         setStatus(`Multi-stems request failed: ${e?.message || String(e)}`);
         setProgress(0);
-      } finally {
-        els.btnSunoMultiStems.disabled = false;
         setLoading(false);
+        setMultiStemsBtn("Get multi-stems", false);
+      } finally {
+        multiStemsInFlight = false;
+        // Keep loading visible until polling resolves (success/fail/timeout).
       }
     });
   }
 }
 
-// If we have a stems task id, reusing Suno refresh also fetches stems status when available.
-if (els.btnSunoRefresh) {
-  els.btnSunoRefresh.addEventListener("click", async () => {
-    if (!sunoStemsTaskId) return;
-    try {
-      const r = await fetch(`/api/suno/stems_status?taskId=${encodeURIComponent(sunoStemsTaskId)}`);
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) return;
-      const flag = data?.data?.successFlag;
-      const resp = data?.data?.response || {};
-      if (flag === "SUCCESS") {
-        lastSunoVocalUrl = resp.vocalUrl || "";
-        lastSunoInstUrl = resp.instrumentalUrl || "";
-        setLink(els.sunoVocalLink, lastSunoVocalUrl || null);
-        setLink(els.sunoInstLink, lastSunoInstUrl || null);
-        if (els.btnLoadVocals) els.btnLoadVocals.disabled = !lastSunoVocalUrl;
-        if (els.btnLoadInstrumental) els.btnLoadInstrumental.disabled = !lastSunoInstUrl;
-        if (els.btnPlayVocals) els.btnPlayVocals.disabled = !lastSunoVocalUrl;
-        if (els.btnPlayInstrumental) els.btnPlayInstrumental.disabled = !lastSunoInstUrl;
-        void refreshSunoCredits();
-      }
-    } catch {
-      // ignore stems refresh errors
-    }
-  });
-}
-
-// Multi-stems polling: once SUCCESS, show URLs in the stems JSON panel.
-if (els.btnSunoRefresh) {
-  els.btnSunoRefresh.addEventListener("click", async () => {
-    if (!sunoMultiStemsTaskId) return;
-    try {
-      const r = await fetch(`/api/suno/stems_status?taskId=${encodeURIComponent(sunoMultiStemsTaskId)}`);
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) return;
-      const flag = data?.data?.successFlag;
-      const resp = data?.data?.response || {};
-      if (flag === "SUCCESS") {
-        // resp contains drumsUrl, bassUrl, etc.
-        printSunoStems(resp);
-        // Enable studio load when we have at least 2 stems
-        if (els.btnMixerLoad) els.btnMixerLoad.disabled = false;
-        void refreshSunoCredits();
-      }
-    } catch {
-      // ignore
-    }
-  });
-}
+// Stems status is auto-polled now (no manual refresh needed on Studio page).
 
 if (els.btnSunoCredits) {
   els.btnSunoCredits.addEventListener("click", () => void refreshSunoCredits());
 }
+renderLibrary();
 
 // In-app player controls
 if (els.btnPlayerPlay) {
@@ -1821,6 +2774,11 @@ if (els.btnPlayerStop) {
     syncPlayerUI();
   });
 }
+if (els.btnPlayerBack) {
+  els.btnPlayerBack.addEventListener("click", () => {
+    history.back();
+  });
+}
 if (els.playerVol) {
   els.playerVol.addEventListener("input", () => {
     const a = ensurePlayer();
@@ -1847,10 +2805,14 @@ if (els.playerSeek) {
 }
 if (els.btnLoadFull) {
   els.btnLoadFull.addEventListener("click", () => {
-    const url = lastSunoFullUrl || (els.sunoFullLink?.classList.contains("disabled") ? "" : els.sunoFullLink?.href);
+    const url =
+      lastSunoCachedUrl ||
+      lastSunoProxyUrl ||
+      lastSunoFullUrl ||
+      (els.sunoFullLink?.classList.contains("disabled") ? "" : els.sunoFullLink?.href);
     if (url && url !== "#") {
       setPlayerSource(url, "Full song");
-      setPlayerMeta({ title: lastSunoTitle || "Generated song", subtitle: "Suno • Full song", artUrl: lastSunoArtUrl });
+      setPlayerMeta({ title: lastSunoTitle || "Generated song", subtitle: "Generated • Full song", artUrl: lastSunoArtUrl });
       location.hash = "#/player";
     }
   });
@@ -1878,7 +2840,11 @@ if (els.btnLoadInstrumental) {
 
 if (els.btnPlayFull) {
   els.btnPlayFull.addEventListener("click", async () => {
-    const url = lastSunoFullUrl || (els.sunoFullLink?.classList.contains("disabled") ? "" : els.sunoFullLink?.href);
+    const url =
+      lastSunoCachedUrl ||
+      lastSunoProxyUrl ||
+      lastSunoFullUrl ||
+      (els.sunoFullLink?.classList.contains("disabled") ? "" : els.sunoFullLink?.href);
     await playOnPlayerPage(url && url !== "#" ? url : "", "Full song");
   });
 }
@@ -2114,14 +3080,24 @@ agentReset();
 
 // Intro screen (logo-only)
 function enterApp() {
-  location.hash = "#/home";
+  if (document.body.classList.contains("pageTransitioning")) return;
+  const hero = document.querySelector(".introHero");
+  if (hero) hero.classList.add("entering");
+  document.body.classList.add("pageTransitioning");
+  setTimeout(() => {
+    location.hash = "#/generate";
+    requestAnimationFrame(() => {
+      document.body.classList.remove("pageTransitioning");
+      if (hero) hero.classList.remove("entering");
+    });
+  }, 260);
 }
 if (els.introTap) {
   els.introTap.addEventListener("click", () => enterApp());
-  setTimeout(() => {
-    if (location.hash === "#/intro") enterApp();
-  }, 900);
 }
+setTimeout(() => {
+  if (location.hash === "#/intro") enterApp();
+}, 1900);
 
 if (els.btnCreditsHistoryRefresh) {
   els.btnCreditsHistoryRefresh.addEventListener("click", () => renderCreditsHistory());
@@ -2131,6 +3107,19 @@ if (els.btnCreditsHistoryClear) {
     saveCreditsHistory([]);
     renderCreditsHistory();
     setStatus("Cleared credits history.");
+  });
+}
+if (els.btnCreditRecovery) {
+  els.btnCreditRecovery.addEventListener("click", async () => {
+    const payload = buildCreditRecoveryPayload();
+    try {
+      await navigator.clipboard.writeText(payload);
+      setStatus("Recovery request details copied. Paste into provider support.");
+      alert(`Copied to clipboard:\n\n${payload}`);
+    } catch {
+      alert(payload);
+      setStatus("Recovery details ready. Copy and send to provider support.");
+    }
   });
 }
 
@@ -2143,6 +3132,105 @@ if (els.btnBetaTopup) {
 }
 if (els.btnOpenBilling) {
   els.btnOpenBilling.addEventListener("click", () => openBilling());
+}
+if (els.btnOpenAdvancedSheet && els.advancedSheet) {
+  els.btnOpenAdvancedSheet.addEventListener("click", () => {
+    els.advancedSheet.open = true;
+    const first = els.advancedSheet.querySelector("select, input");
+    if (first) setTimeout(() => first.focus(), 120);
+  });
+}
+if (els.btnCreatePersona) {
+  els.btnCreatePersona.addEventListener("click", async () => {
+    if (!sunoTaskId) {
+      setStatus("Generate a song first, then create persona from that song.");
+      return;
+    }
+    try {
+      els.btnCreatePersona.disabled = true;
+      setLoading(true, { title: "Creating persona…", sub: "Building persona from your last generated song." });
+      const r = await fetch("/api/suno/persona", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskId: sunoTaskId }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d?.error || "Persona creation failed");
+      const personaId = String(d?.personaId || "").trim();
+      if (!personaId) throw new Error("Persona created but ID was missing.");
+      addPersona(personaId, `${lastSunoTitle || "Generated"} persona`);
+      if (els.sunoPersonaId) els.sunoPersonaId.value = personaId;
+      setStatus("Persona created and selected for next generations.");
+    } catch (e) {
+      setStatus(`Persona failed: ${e?.message || String(e)}`);
+    } finally {
+      els.btnCreatePersona.disabled = false;
+      setLoading(false);
+    }
+  });
+}
+if (els.btnProfileSave) {
+  els.btnProfileSave.addEventListener("click", () => {
+    const usernameRaw = String(els.profileUsername?.value || "").trim().toLowerCase();
+    const username = usernameRaw.replace(/[^a-z0-9_.]/g, "").slice(0, 32) || "guest";
+    const email = String(els.profileEmail?.value || "").trim().toLowerCase();
+    const gender = String(els.profileGender?.value || "").trim();
+    const voiceTimbre = String(els.profileVoiceTimbre?.value || "").trim();
+    const bio = String(els.profileBio?.value || "").trim().slice(0, 280);
+    const avatar = String(els.profileAvatar?.value || "").trim();
+    const genres = String(els.profileGenres?.value || "").trim();
+    const instagram = String(els.profileInstagram?.value || "").trim();
+    const youtube = String(els.profileYouTube?.value || "").trim();
+    const tiktok = String(els.profileTikTok?.value || "").trim();
+    const isPublic = Boolean(els.profileIsPublic?.checked);
+    const id = email || `user:${username}`;
+    saveProfile({
+      id,
+      username,
+      email,
+      gender,
+      voiceTimbre,
+      bio,
+      avatar,
+      genres,
+      links: { instagram, youtube, tiktok },
+      isPublic,
+    });
+  renderLibrary();
+  renderPersonaSelect();
+    setStatus(`Profile saved: @${username}`);
+    if (els.profileSavedMsg) {
+      els.profileSavedMsg.style.display = "";
+      const publicLabel = isPublic ? "Public" : "Private";
+      els.profileSavedMsg.textContent = `Saved as @${username}${email ? ` (${email})` : ""} • ${publicLabel}`;
+      setTimeout(() => {
+        if (els.profileSavedMsg) els.profileSavedMsg.style.display = "none";
+      }, 2200);
+    }
+    renderProfilePreviewFromInputs();
+  });
+}
+[
+  els.profileUsername,
+  els.profileEmail,
+  els.profileGender,
+  els.profileVoiceTimbre,
+  els.profileBio,
+  els.profileAvatar,
+  els.profileGenres,
+  els.profileInstagram,
+  els.profileYouTube,
+  els.profileTikTok,
+  els.profileIsPublic,
+].forEach((el) => {
+  if (!el) return;
+  el.addEventListener("input", renderProfilePreviewFromInputs);
+  el.addEventListener("change", renderProfilePreviewFromInputs);
+});
+if (els.btnCloseAdvancedSheet && els.advancedSheet) {
+  els.btnCloseAdvancedSheet.addEventListener("click", () => {
+    els.advancedSheet.open = false;
+  });
 }
 
 // Studio mixer
@@ -2291,6 +3379,19 @@ function clampNum(n, min, max) {
 // Initial credits fetch (best effort)
 void refreshSunoCredits();
 renderCreditsHistory();
+loadProfile();
+if (els.profileUsername) els.profileUsername.value = activeProfile.username || "";
+if (els.profileEmail) els.profileEmail.value = activeProfile.email || "";
+if (els.profileGender) els.profileGender.value = activeProfile.gender || "";
+if (els.profileVoiceTimbre) els.profileVoiceTimbre.value = activeProfile.voiceTimbre || "";
+if (els.profileBio) els.profileBio.value = activeProfile.bio || "";
+if (els.profileAvatar) els.profileAvatar.value = activeProfile.avatar || "";
+if (els.profileGenres) els.profileGenres.value = activeProfile.genres || "";
+if (els.profileInstagram) els.profileInstagram.value = activeProfile.links?.instagram || "";
+if (els.profileYouTube) els.profileYouTube.value = activeProfile.links?.youtube || "";
+if (els.profileTikTok) els.profileTikTok.value = activeProfile.links?.tiktok || "";
+if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !== false;
+renderProfilePreviewFromInputs();
 
 // Hum → melody (MVP)
 if (els.btnHumStart && els.btnHumStop && els.btnHumClear) {
@@ -2385,4 +3486,3 @@ setStatus("Ready. Generate a new arrangement or render to WAV.");
 function clampInt(n, min, max) {
   return Math.max(min, Math.min(max, Math.round(n)));
 }
-

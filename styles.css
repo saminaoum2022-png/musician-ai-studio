@@ -454,25 +454,34 @@ body.isIntro .footer{ display:none; }
 }
 .hubFilters{
   display:flex;
-  gap:8px;
+  gap:6px;
   flex-wrap:nowrap;
   align-items:flex-end;
   overflow-x:auto;
   margin-top:0;
   margin-bottom:10px;
 }
+.hubFilterField{
+  margin:0;
+}
+.hubFilterField select{
+  min-height:34px;
+  border-radius:12px;
+  font-size:12px;
+  padding:6px 30px 6px 10px;
+}
 .hubFilters .ghost{
   border-radius:999px;
-  padding:7px 12px;
-  font-size:12px;
+  padding:6px 10px;
+  font-size:11px;
 }
 .hubDot{
-  width:8px;
-  height:8px;
+  width:6px;
+  height:6px;
   border-radius:999px;
   background:#ff4d6d;
-  box-shadow: 0 0 0 2px rgba(255,77,109,0.2);
-  margin-left:6px;
+  box-shadow: 0 0 0 1px rgba(255,77,109,0.22);
+  margin-left:4px;
   vertical-align:middle;
 }
 .hubTab{

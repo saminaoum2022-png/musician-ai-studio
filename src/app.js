@@ -980,7 +980,7 @@ async function refreshHubFromSupabase() {
       meta: r.meta || null,
     }));
     saveHubFeed(mapped);
-    lastHubUpdateAt = Date.now();
+    lastHubUpdateAt = mapped.length ? Math.max(...mapped.map((x) => Number(x.ts || 0))) : 0;
     renderHub();
     renderHubDots();
   } catch {}
@@ -3693,7 +3693,7 @@ if (els.hubAddDemo) {
     const feed = loadHubFeed();
     feed.unshift(p);
     saveHubFeed(feed.slice(0, 200));
-    lastHubUpdateAt = Date.now();
+    lastHubUpdateAt = feed.length ? Math.max(...feed.map((x) => Number(x.ts || 0))) : Number(p.ts || 0);
     try {
       await supabaseInsertHub(p);
       setStatus("Demo post added to Hub.");

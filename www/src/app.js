@@ -159,6 +159,7 @@ const els = {
   advancedSheet: document.getElementById("advancedSheet"),
   libraryList: document.getElementById("libraryList"),
   hubList: document.getElementById("hubList"),
+  hubUpdatedAt: document.getElementById("hubUpdatedAt"),
   hubFilterLatest: document.getElementById("hubFilterLatest"),
   hubFilterArabic: document.getElementById("hubFilterArabic"),
   hubFilterInstrumental: document.getElementById("hubFilterInstrumental"),
@@ -214,6 +215,7 @@ const els = {
   btnCloseProof: document.getElementById("btnCloseProof"),
   btnDownloadProof: document.getElementById("btnDownloadProof"),
   proofCard: document.getElementById("proofCard"),
+  envBadge: document.getElementById("envBadge"),
 };
 let currentProofPost = null;
 const LATEST_SUNO_MODEL = "V5_5";
@@ -221,6 +223,38 @@ const API_BASE = (window.__API_BASE__ || "").replace(/\/$/, "");
 const apiUrl = (p) => API_BASE ? `${API_BASE}${p}` : p;
 let SUPABASE_URL = "";
 let SUPABASE_ANON_KEY = "";
+let lastHubUpdateAt = 0;
+function relativeTime(ts) {
+  if (!ts) return "—";
+  const diff = Date.now() - Number(ts || 0);
+  if (diff < 10_000) return "just now";
+  const min = Math.floor(diff / 60_000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const d = Math.floor(hr / 24);
+  return `${d}d ago`;
+}
+function renderHubUpdatedAt() {
+  if (!els.hubUpdatedAt) return;
+  const relative = relativeTime(lastHubUpdateAt);
+  els.hubUpdatedAt.textContent = `Updated: ${relative}`;
+}
+function updateEnvironmentBadge() {
+  if (!els.envBadge) return;
+  const isNative = Boolean(window?.Capacitor?.isNativePlatform?.());
+  const host = (() => {
+    try {
+      return new URL(API_BASE || window.location.origin).host;
+    } catch {
+      return "unknown";
+    }
+  })();
+  const mode = isNative ? "Native iOS" : "Web";
+  const target = API_BASE ? `Remote (${host})` : "Same-origin";
+  els.envBadge.textContent = `Environment: ${mode} • ${target}`;
+}
 async function loadPublicConfig() {
   try {
     const r = await fetch(apiUrl("/api/public-config"));
@@ -289,6 +323,7 @@ function applyRoute() {
   if (wanted === "hub") {
     markAllHubSeen();
     renderHubDots();
+    renderHubUpdatedAt();
   }
   syncGenerateOrbVisibility();
 }
@@ -318,6 +353,7 @@ function resetCreateDraft() {
 window.addEventListener("hashchange", applyRoute);
 if (!location.hash) location.hash = "#/intro";
 applyRoute();
+updateEnvironmentBadge();
 document.body.classList.remove("booting");
 document.querySelectorAll("[data-route-link]").forEach((a) => {
   a.addEventListener("click", () => haptic("light"));
@@ -752,6 +788,7 @@ function renderHub() {
   if (hubFilter === "remix") items = items.filter((x) => /remix/i.test(String(x.title || "")));
   if (!items.length) {
     els.hubList.textContent = "No posts yet. Share songs from Library to Hub.";
+    renderHubUpdatedAt();
     return;
   }
   els.hubList.innerHTML = items.map((p) => `
@@ -793,6 +830,7 @@ function renderHub() {
     </div>
   `).join("");
   renderHubDots();
+  renderHubUpdatedAt();
   els.hubList.querySelectorAll("[data-hub-play]").forEach((b) => b.addEventListener("click", async (e) => {
     e.stopPropagation();
     const id = b.getAttribute("data-hub-play");
@@ -941,6 +979,7 @@ async function refreshHubFromSupabase() {
       meta: r.meta || null,
     }));
     saveHubFeed(mapped);
+    lastHubUpdateAt = Date.now();
     renderHub();
     renderHubDots();
   } catch {}
@@ -3653,6 +3692,7 @@ if (els.hubAddDemo) {
     const feed = loadHubFeed();
     feed.unshift(p);
     saveHubFeed(feed.slice(0, 200));
+    lastHubUpdateAt = Date.now();
     try {
       await supabaseInsertHub(p);
       setStatus("Demo post added to Hub.");

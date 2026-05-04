@@ -17,16 +17,15 @@
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/icons/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="./assets/icons/favicon-16.png" />
     <link rel="stylesheet" href="./styles.css" />
-  
+
 <script>
 window.__API_BASE__ = "https://musician-ai-studio.vercel.app";
 (function () {
   const _fetch = window.fetch.bind(window);
   window.fetch = (input, init) => {
     try {
-      if (typeof input === "string" && input.startsWith("/api/")) {
-        input = window.__API_BASE__ + input;
-      } else if (input instanceof Request && input.url.startsWith(location.origin + "/api/")) {
+      if (typeof input === "string" && input.startsWith("/api/")) input = window.__API_BASE__ + input;
+      else if (input instanceof Request && input.url.startsWith(location.origin + "/api/")) {
         input = new Request(window.__API_BASE__ + input.url.slice(location.origin.length), input);
       }
     } catch {}
@@ -84,6 +83,7 @@ window.__API_BASE__ = "https://musician-ai-studio.vercel.app";
 
         <section class="card wide" data-route="hub">
           <h2>Hub</h2>
+          <div id="hubUpdatedAt" class="hint" style="margin-top:-4px; margin-bottom:8px">Updated: —</div>
           <div class="row hubFilters" style="margin-top:0">
             <label class="field" style="min-width:180px">
               <div class="label" style="display:flex;align-items:center;gap:6px">Hub feed <span id="hubDotLatest" class="hubDot" style="display:none"></span></div>
@@ -721,6 +721,7 @@ window.__API_BASE__ = "https://musician-ai-studio.vercel.app";
 
         <section class="card wide" data-route="settings">
           <h2>Settings</h2>
+          <div id="envBadge" class="hint" style="margin-bottom:8px">Environment: detecting…</div>
           <p class="small">
             This is a beta/testing settings area. Later we’ll add user profiles, subscriptions, and your own in-app
             credits system.

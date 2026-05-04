@@ -172,6 +172,7 @@ const els = {
   hubTabDot: document.getElementById("hubTabDot"),
   likeBurst: document.getElementById("likeBurst"),
   hubAddDemo: document.getElementById("hubAddDemo"),
+  hubRefreshNow: document.getElementById("hubRefreshNow"),
   profileUsername: document.getElementById("profileUsername"),
   profileEmail: document.getElementById("profileEmail"),
   profileGender: document.getElementById("profileGender"),
@@ -3701,6 +3702,15 @@ if (els.hubAddDemo) {
       setStatus("Demo post added locally (Supabase sync failed).");
       renderHub();
     }
+    // Force one more pull so iPhone view reflects latest cloud state immediately.
+    setTimeout(() => { void refreshHubFromSupabase(); }, 350);
+  });
+}
+if (els.hubRefreshNow) {
+  els.hubRefreshNow.addEventListener("click", async () => {
+    setStatus("Refreshing Hub…");
+    await refreshHubFromSupabase();
+    setStatus("Hub refreshed.");
   });
 }
 if (els.shareLiveBackdrop) els.shareLiveBackdrop.addEventListener("click", closeShareLiveModal);

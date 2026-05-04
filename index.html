@@ -17,6 +17,23 @@
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/icons/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="./assets/icons/favicon-16.png" />
     <link rel="stylesheet" href="./styles.css" />
+
+<script>
+window.__API_BASE__ = "https://musician-ai-studio.vercel.app";
+(function () {
+  const _fetch = window.fetch.bind(window);
+  window.fetch = (input, init) => {
+    try {
+      if (typeof input === "string" && input.startsWith("/api/")) input = window.__API_BASE__ + input;
+      else if (input instanceof Request && input.url.startsWith(location.origin + "/api/")) {
+        input = new Request(window.__API_BASE__ + input.url.slice(location.origin.length), input);
+      }
+    } catch {}
+    return _fetch(input, init);
+  };
+})();
+</script>
+
 </head>
   <body class="booting">
     <div class="app">
@@ -81,6 +98,7 @@
             <span id="hubDotInstrumental" class="hubDot" style="display:none"></span>
             <span id="hubDotRemix" class="hubDot" style="display:none"></span>
             <button id="hubAddDemo" class="ghost">Add Demo Post</button>
+            <button id="hubRefreshNow" class="ghost" type="button">Refresh Hub</button>
           </div>
           <div id="hubList" class="code" style="max-height:none"></div>
         </section>

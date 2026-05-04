@@ -220,6 +220,8 @@ const els = {
   envBadge: document.getElementById("envBadge"),
 };
 let currentProofPost = null;
+let hubAudio = null;
+let hubAudioPostId = null;
 const LATEST_SUNO_MODEL = "V5_5";
 const API_BASE = (window.__API_BASE__ || "").replace(/\/$/, "");
 const apiUrl = (p) => API_BASE ? `${API_BASE}${p}` : p;
@@ -801,6 +803,7 @@ function renderHub() {
       <div class="hubCoverWrap" data-hub-cover="${p.id}">
         <img class="hubCover" src="${escapeHtml(p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png")}" alt="cover" />
         <button class="hubPlayOverlay" data-hub-play="${p.id}" aria-label="Play">▶</button>
+        <div class="hubPlayProgress"><span id="hubProg_${p.id}" style="width:0%"></span></div>
         <button class="hubMoreCorner" data-hub-more="${p.id}" aria-label="More">⋯</button>
       </div>
       <div style="flex:1;min-width:0">
@@ -836,45 +839,42 @@ function renderHub() {
   `).join("");
   renderHubDots();
   renderHubUpdatedAt();
+  const stopHubAudio = () => {
+    try { if (hubAudio) hubAudio.pause(); } catch {}
+    hubAudio = null;
+    hubAudioPostId = null;
+    els.hubList.querySelectorAll("[data-hub-play]").forEach((btn) => { btn.textContent = "▶"; });
+    els.hubList.querySelectorAll(".hubPlayProgress > span").forEach((bar) => { bar.style.width = "0%"; });
+  };
   els.hubList.querySelectorAll("[data-hub-play]").forEach((b) => b.addEventListener("click", async (e) => {
     e.stopPropagation();
     const id = b.getAttribute("data-hub-play");
     const p = loadHubFeed().find((x) => x.id === id);
     if (!p?.url) return;
-    await playOnPlayerPage(p.url, "Hub song");
+    if (hubAudio && hubAudioPostId === id) {
+      stopHubAudio();
+      return;
+    }
+    stopHubAudio();
+    try {
+      hubAudio = new Audio(p.url);
+      hubAudioPostId = id;
+      b.textContent = "■";
+      hubAudio.addEventListener("ended", stopHubAudio);
+      hubAudio.addEventListener("timeupdate", () => {
+        const prog = document.getElementById(`hubProg_${id}`);
+        if (!prog || !hubAudio?.duration) return;
+        const pct = Math.max(0, Math.min(100, (hubAudio.currentTime / hubAudio.duration) * 100));
+        prog.style.width = `${pct}%`;
+      });
+      await hubAudio.play();
+    } catch {
+      stopHubAudio();
+      setStatus("Playback failed.");
+    }
   }));
   els.hubList.querySelectorAll("[data-hub-cover]").forEach((el) => {
-    let lastTap = 0;
-    let singleTapTimer = null;
-    el.addEventListener("click", async () => {
-      const id = el.getAttribute("data-hub-cover");
-      const now = Date.now();
-      if (now - lastTap < 320) {
-        if (singleTapTimer) {
-          clearTimeout(singleTapTimer);
-          singleTapTimer = null;
-        }
-        const feed = loadHubFeed();
-        const p = feed.find((x) => x.id === id);
-        if (p) {
-          haptic("impact");
-          showLikeBurst();
-          p.likes = Number(p.likes || 0) + 1;
-          saveHubFeed(feed);
-          void supabasePatchHub(id, { likes: p.likes }).catch(() => {});
-          renderHub();
-          setStatus("Liked");
-        }
-        lastTap = 0;
-        return;
-      }
-      lastTap = now;
-      singleTapTimer = setTimeout(async () => {
-        const p = loadHubFeed().find((x) => x.id === id);
-        if (!p?.url) return;
-        await playOnPlayerPage(p.url, "Hub song");
-      }, 330);
-    });
+    el.addEventListener("click", (e) => e.stopPropagation());
   });
   els.hubList.querySelectorAll("[data-hub-like]").forEach((b) => b.addEventListener("click", (e) => {
     e.stopPropagation();

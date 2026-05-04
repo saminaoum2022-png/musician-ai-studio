@@ -9,6 +9,8 @@
 
 module.exports = async function handler(req, res) {
   try {
+    setCors(res);
+    if (req.method === "OPTIONS") return res.end();
     if (req.method !== "GET") return json(res, 405, { error: "Method not allowed" });
 
     const apiKey = process.env.SUNO_API_KEY;
@@ -34,6 +36,12 @@ function json(res, status, obj) {
   res.end(JSON.stringify(obj));
 }
 
+function setCors(res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, apikey, x-client-info");
+}
+
 function safeJson(txt) {
   try {
     return JSON.parse(txt);
@@ -41,4 +49,3 @@ function safeJson(txt) {
     return null;
   }
 }
-

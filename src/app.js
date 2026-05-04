@@ -845,6 +845,7 @@ function renderHub() {
     hubAudioPostId = null;
     els.hubList.querySelectorAll("[data-hub-play]").forEach((btn) => { btn.textContent = "▶"; });
     els.hubList.querySelectorAll(".hubPlayProgress > span").forEach((bar) => { bar.style.width = "0%"; });
+    els.hubList.querySelectorAll(".hubCoverWrap").forEach((w) => w.classList.remove("isPlaying"));
   };
   els.hubList.querySelectorAll("[data-hub-play]").forEach((b) => b.addEventListener("click", async (e) => {
     e.stopPropagation();
@@ -860,6 +861,7 @@ function renderHub() {
       hubAudio = new Audio(p.url);
       hubAudioPostId = id;
       b.textContent = "■";
+      b.closest(".hubCoverWrap")?.classList.add("isPlaying");
       hubAudio.addEventListener("ended", stopHubAudio);
       hubAudio.addEventListener("timeupdate", () => {
         const prog = document.getElementById(`hubProg_${id}`);

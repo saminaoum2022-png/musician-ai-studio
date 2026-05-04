@@ -395,7 +395,9 @@ body.isIntro .footer{ display:none; }
   border-radius:999px;
   background: rgba(255,255,255,0.22);
   overflow:hidden;
+  display:none;
 }
+.hubCoverWrap.isPlaying .hubPlayProgress{ display:block; }
 .hubPlayProgress span{
   display:block;
   height:100%;

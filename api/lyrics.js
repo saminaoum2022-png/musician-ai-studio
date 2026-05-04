@@ -6,6 +6,8 @@
  * 1) Gemini only
  */
 module.exports = async function handler(req, res) {
+  setCors(res);
+  if (req.method === 'OPTIONS') return res.status(200).end();
   try {
     if (req.method !== "POST") return json(res, 405, { error: "Method not allowed" });
 
@@ -430,4 +432,11 @@ function safeJson(txt) {
   } catch {
     return null;
   }
+}
+
+
+function setCors(res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, apikey, x-client-info');
 }

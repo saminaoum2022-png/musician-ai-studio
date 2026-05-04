@@ -1,0 +1,6 @@
+{
+  "appId": "com.nabadai.music",
+  "appName": "NabadAi Music",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}

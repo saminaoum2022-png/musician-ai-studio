@@ -200,6 +200,7 @@ const els = {
   btnCloseSongDetails: document.getElementById("btnCloseSongDetails"),
   songDetailsContent: document.getElementById("songDetailsContent"),
   brandTitle: document.getElementById("brandTitle"),
+  brandSecondary: document.getElementById("brandSecondary"),
   vocalRecorderModal: document.getElementById("vocalRecorderModal"),
   vocalRecorderBackdrop: document.getElementById("vocalRecorderBackdrop"),
   btnCloseVocalRecorder: document.getElementById("btnCloseVocalRecorder"),
@@ -309,6 +310,9 @@ function applyRoute() {
   const wanted = route === "start" ? "intro" : route || "home";
   document.body.classList.toggle("isIntro", wanted === "intro");
   document.body.setAttribute("data-route", wanted);
+  if (els.brandSecondary) {
+    els.brandSecondary.textContent = wanted === "hub" ? "Hub" : "Music";
+  }
 
   document.querySelectorAll("[data-route]").forEach((el) => {
     el.style.display = el.getAttribute("data-route") === wanted ? "" : "none";

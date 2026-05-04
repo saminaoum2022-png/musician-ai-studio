@@ -23,7 +23,7 @@
     <div class="app">
       <header class="header">
         <div class="headerMain">
-          <h1 id="brandTitle" class="brandTitle" title="Start new"><span class="brandPrimary">NabadAi</span><span class="brandSecondary">Music</span></h1>
+          <h1 id="brandTitle" class="brandTitle" title="Start new"><span class="brandPrimary">NabadAi</span><span id="brandSecondary" class="brandSecondary">Music</span></h1>
           <div class="journeyBar">
             <a href="#/generate" class="journeyStep" data-route-link="generate">Generate</a>
             <a href="#/library" class="journeyStep" data-route-link="library">Library</a>
@@ -66,8 +66,7 @@
         </section>
 
         <section class="card wide" data-route="hub">
-          <h2>Hub</h2>
-          <div id="hubUpdatedAt" class="hint" style="margin-top:-4px; margin-bottom:8px">Updated: —</div>
+          <div class="hubTop">
           <div class="row hubFilters" style="margin-top:0">
             <label class="field hubFilterField" style="min-width:160px">
               <div style="display:flex;align-items:center;gap:6px"><span id="hubDotLatest" class="hubDot" style="display:none"></span></div>
@@ -82,6 +81,8 @@
             <span id="hubDotInstrumental" class="hubDot" style="display:none"></span>
             <span id="hubDotRemix" class="hubDot" style="display:none"></span>
             <button id="hubAddDemo" class="ghost">Add Demo Post</button>
+          </div>
+          <div id="hubUpdatedAt" class="hint hubUpdatedAt">Updated: —</div>
           </div>
           <div id="hubList" class="code" style="max-height:none"></div>
         </section>

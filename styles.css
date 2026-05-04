@@ -456,10 +456,20 @@ body.isIntro .footer{ display:none; }
   display:flex;
   gap:6px;
   flex-wrap:nowrap;
-  align-items:flex-end;
+  align-items:center;
+  justify-content:center;
   overflow-x:auto;
   margin-top:0;
-  margin-bottom:10px;
+  margin-bottom:6px;
+}
+.hubTop{
+  padding-top: 4px;
+  margin-bottom: 10px;
+}
+.hubUpdatedAt{
+  text-align:center;
+  margin-top: 4px;
+  margin-bottom: 8px;
 }
 .hubFilterField{
   margin:0;
@@ -1440,6 +1450,10 @@ input[type="range"]::-moz-range-thumb{
   }
   body[data-route="hub"] .headerRight{
     display:none;
+  }
+  body[data-route="hub"] .hubTop{
+    padding-top: 8px;
+    margin-bottom: 12px;
   }
   .headerRight .creditsPill{
     width: fit-content;

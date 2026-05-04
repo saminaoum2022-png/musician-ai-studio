@@ -385,22 +385,6 @@ body.isIntro .footer{ display:none; }
   font-size:14px;
   pointer-events:none;
 }
-.hubRemixCorner{
-  position:absolute;
-  right:48px;
-  top:10px;
-  width:34px;
-  height:34px;
-  border-radius:999px;
-  border:1px solid rgba(255,255,255,0.24);
-  background: rgba(8,12,20,0.62);
-  color:#dfe7fb;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-size:14px;
-  cursor:pointer;
-}
 .hubMoreCorner{
   position:absolute;
   right:10px;
@@ -1454,6 +1438,22 @@ input[type="range"]::-moz-range-thumb{
   body[data-route="hub"] .hubTop{
     padding-top: 8px;
     margin-bottom: 12px;
+  }
+  .card.wide[data-route="hub"]{
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    border-radius: 0;
+    padding: 2px 0 0;
+  }
+  body[data-route="hub"] .app{
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  body[data-route="hub"] #hubList .hubRow{
+    border-left: 0;
+    border-right: 0;
+    border-radius: 16px;
   }
   .headerRight .creditsPill{
     width: fit-content;

@@ -801,7 +801,6 @@ function renderHub() {
       <div class="hubCoverWrap" data-hub-cover="${p.id}">
         <img class="hubCover" src="${escapeHtml(p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png")}" alt="cover" />
         <button class="hubPlayOverlay" data-hub-play="${p.id}" aria-label="Play">▶</button>
-        <button class="hubRemixCorner" data-hub-remix="${p.id}" aria-label="Remix">⟳</button>
         <button class="hubMoreCorner" data-hub-more="${p.id}" aria-label="More">⋯</button>
       </div>
       <div style="flex:1;min-width:0">
@@ -830,6 +829,7 @@ function renderHub() {
         </button>
       </div>
       <div class="libMenu hubMoreMenu" id="hubMore_${p.id}" style="display:none">
+        <button class="ghost" data-hub-remix="${p.id}">Remix</button>
         <button class="ghost" data-hub-del="${p.id}">Remove</button>
       </div>
     </div>

@@ -214,6 +214,7 @@ const els = {
   btnCloseProof: document.getElementById("btnCloseProof"),
   btnDownloadProof: document.getElementById("btnDownloadProof"),
   proofCard: document.getElementById("proofCard"),
+  envBadge: document.getElementById("envBadge"),
 };
 let currentProofPost = null;
 const LATEST_SUNO_MODEL = "V5_5";
@@ -221,6 +222,20 @@ const API_BASE = (window.__API_BASE__ || "").replace(/\/$/, "");
 const apiUrl = (p) => API_BASE ? `${API_BASE}${p}` : p;
 let SUPABASE_URL = "";
 let SUPABASE_ANON_KEY = "";
+function updateEnvironmentBadge() {
+  if (!els.envBadge) return;
+  const isNative = Boolean(window?.Capacitor?.isNativePlatform?.());
+  const host = (() => {
+    try {
+      return new URL(API_BASE || window.location.origin).host;
+    } catch {
+      return "unknown";
+    }
+  })();
+  const mode = isNative ? "Native iOS" : "Web";
+  const target = API_BASE ? `Remote (${host})` : "Same-origin";
+  els.envBadge.textContent = `Environment: ${mode} • ${target}`;
+}
 async function loadPublicConfig() {
   try {
     const r = await fetch(apiUrl("/api/public-config"));
@@ -318,6 +333,7 @@ function resetCreateDraft() {
 window.addEventListener("hashchange", applyRoute);
 if (!location.hash) location.hash = "#/intro";
 applyRoute();
+updateEnvironmentBadge();
 document.body.classList.remove("booting");
 document.querySelectorAll("[data-route-link]").forEach((a) => {
   a.addEventListener("click", () => haptic("light"));

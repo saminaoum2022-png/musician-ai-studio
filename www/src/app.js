@@ -170,6 +170,7 @@ const els = {
   hubDotInstrumental: document.getElementById("hubDotInstrumental"),
   hubDotRemix: document.getElementById("hubDotRemix"),
   hubTabDot: document.getElementById("hubTabDot"),
+  hubTabLink: document.querySelector('.mobileTabbar [data-route-link="hub"]'),
   likeBurst: document.getElementById("likeBurst"),
   hubAddDemo: document.getElementById("hubAddDemo"),
   profileUsername: document.getElementById("profileUsername"),
@@ -3701,6 +3702,36 @@ if (els.hubAddDemo) {
       setStatus("Demo post added locally (Supabase sync failed).");
       renderHub();
     }
+    // Force one more pull so iPhone view reflects latest cloud state immediately.
+    setTimeout(() => { void refreshHubFromSupabase(); }, 350);
+  });
+}
+if (els.hubTabLink) {
+  let hubTapAt = 0;
+  let hubTapCount = 0;
+  let hubSingleTimer = null;
+  els.hubTabLink.addEventListener("click", (e) => {
+    const onHub = (document.body.getAttribute("data-route") || "") === "hub";
+    if (!onHub) return;
+    e.preventDefault();
+    hubTapCount += 1;
+    const now = Date.now();
+    if (now - hubTapAt > 420) hubTapCount = 1;
+    hubTapAt = now;
+    if (hubSingleTimer) {
+      clearTimeout(hubSingleTimer);
+      hubSingleTimer = null;
+    }
+    hubSingleTimer = setTimeout(async () => {
+      if (hubTapCount >= 2) {
+        setStatus("Refreshing Hub…");
+        await refreshHubFromSupabase();
+        setStatus("Hub refreshed.");
+      } else {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+      hubTapCount = 0;
+    }, 250);
   });
 }
 if (els.shareLiveBackdrop) els.shareLiveBackdrop.addEventListener("click", closeShareLiveModal);

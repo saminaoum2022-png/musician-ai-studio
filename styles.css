@@ -1429,6 +1429,9 @@ input[type="range"]::-moz-range-thumb{
     align-items:center;
     width:100%;
   }
+  body[data-route="hub"] .headerRight{
+    display:none;
+  }
   .headerRight .creditsPill{
     width: fit-content;
     min-width: 210px;

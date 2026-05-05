@@ -183,9 +183,6 @@ const els = {
   profileBio: document.getElementById("profileBio"),
   profileAvatarFile: document.getElementById("profileAvatarFile"),
   profileGenres: document.getElementById("profileGenres"),
-  profileInstagram: document.getElementById("profileInstagram"),
-  profileYouTube: document.getElementById("profileYouTube"),
-  profileTikTok: document.getElementById("profileTikTok"),
   profileIsPublic: document.getElementById("profileIsPublic"),
   btnProfileSave: document.getElementById("btnProfileSave"),
   profileSavedMsg: document.getElementById("profileSavedMsg"),
@@ -204,6 +201,8 @@ const els = {
   profilePreviewBio: document.getElementById("profilePreviewBio"),
   profilePreviewGenres: document.getElementById("profilePreviewGenres"),
   profilePreviewLinks: document.getElementById("profilePreviewLinks"),
+  profileHubSharedList: document.getElementById("profileHubSharedList"),
+  btnProfileCardEdit: document.getElementById("btnProfileCardEdit"),
   songDetailsModal: document.getElementById("songDetailsModal"),
   songDetailsBackdrop: document.getElementById("songDetailsBackdrop"),
   btnCloseSongDetails: document.getElementById("btnCloseSongDetails"),
@@ -1104,6 +1103,7 @@ function shareToHub(track) {
   saveHubFeed(feed.slice(0, 200));
   void supabaseInsertHub(feed[0]).catch(() => {});
   renderHub();
+  renderProfileHubShared();
 }
 function makeDemoHubPost() {
   const creator = String(activeProfile.username || "guest");
@@ -1404,9 +1404,6 @@ function renderProfilePreviewFromInputs() {
   const bio = String(els.profileBio?.value || "").trim() || "Add a short bio to introduce your music style.";
   const genres = String(els.profileGenres?.value || "").trim();
   const isPublic = Boolean(els.profileIsPublic?.checked);
-  const instagram = String(els.profileInstagram?.value || "").trim();
-  const youtube = String(els.profileYouTube?.value || "").trim();
-  const tiktok = String(els.profileTikTok?.value || "").trim();
 
   if (els.profilePreviewUsername) els.profilePreviewUsername.textContent = username;
   if (els.profilePreviewGenderIcon) els.profilePreviewGenderIcon.style.display = "none";
@@ -1427,23 +1424,23 @@ function renderProfilePreviewFromInputs() {
   if (els.profilePreviewAvatar) {
     els.profilePreviewAvatar.src = activeProfile.avatar || "./assets/nabadai-logo.png";
   }
-  if (els.profilePreviewLinks) {
-    const links = [
-      { label: "Instagram", url: instagram },
-      { label: "YouTube", url: youtube },
-      { label: "TikTok", url: tiktok },
-    ].filter((x) => x.url);
-    els.profilePreviewLinks.innerHTML = "";
-    for (const l of links) {
-      const a = document.createElement("a");
-      a.className = "ghost";
-      a.href = l.url;
-      a.target = "_blank";
-      a.rel = "noreferrer";
-      a.textContent = l.label;
-      els.profilePreviewLinks.appendChild(a);
-    }
+  if (els.profilePreviewLinks) els.profilePreviewLinks.innerHTML = "";
+}
+
+function renderProfileHubShared() {
+  if (!els.profileHubSharedList) return;
+  const creator = String(activeProfile.username || "guest");
+  const items = loadHubFeed().filter((p) => String(p?.creator || "") === creator).slice(0, 30);
+  if (!items.length) {
+    els.profileHubSharedList.textContent = "No shared songs yet.";
+    return;
   }
+  els.profileHubSharedList.innerHTML = items.map((p) => `
+    <div class="profileHubSharedItem">
+      <div class="name">${escapeHtml(String(p.title || "Untitled"))}</div>
+      <div class="time">${new Date(p.ts).toLocaleString()}</div>
+    </div>
+  `).join("");
 }
 
 function loadLibrary() {
@@ -4653,9 +4650,6 @@ if (els.btnProfileSave) {
     const voiceTimbre = String(els.profileVoiceTimbre?.value || "").trim();
     const bio = String(els.profileBio?.value || "").trim().slice(0, 280);
     const genres = String(els.profileGenres?.value || "").trim();
-    const instagram = String(els.profileInstagram?.value || "").trim();
-    const youtube = String(els.profileYouTube?.value || "").trim();
-    const tiktok = String(els.profileTikTok?.value || "").trim();
     const isPublic = Boolean(els.profileIsPublic?.checked);
     const id = email || `user:${username}`;
     saveProfile({
@@ -4666,7 +4660,7 @@ if (els.btnProfileSave) {
       bio,
       avatar: activeProfile.avatar || "",
       genres,
-      links: { instagram, youtube, tiktok },
+      links: {},
       isPublic,
     });
     try {
@@ -4678,7 +4672,7 @@ if (els.btnProfileSave) {
         bio,
         avatar: activeProfile.avatar || "",
         genres,
-        links: { instagram, youtube, tiktok },
+        links: {},
         isPublic,
       });
     } catch (e) {
@@ -4702,6 +4696,13 @@ if (els.btnProfileSave) {
       }, 1800);
     }
     renderProfilePreviewFromInputs();
+    renderProfileHubShared();
+  });
+}
+if (els.btnProfileCardEdit) {
+  els.btnProfileCardEdit.addEventListener("click", () => {
+    if (els.profileUsername) els.profileUsername.focus();
+    setStatus("Edit profile fields, then save.");
   });
 }
 if (els.btnAuthGoogle) {
@@ -4742,9 +4743,6 @@ if (els.profilePreviewVisibility && els.profileIsPublic) {
   els.profileUsername,
   els.profileVoiceTimbre,
   els.profileBio,  els.profileGenres,
-  els.profileInstagram,
-  els.profileYouTube,
-  els.profileTikTok,
   els.profileIsPublic,
 ].forEach((el) => {
   if (!el) return;
@@ -4920,22 +4918,18 @@ void (async () => {
     if (els.profileVoiceTimbre) els.profileVoiceTimbre.value = activeProfile.voiceTimbre || "";
     if (els.profileBio) els.profileBio.value = activeProfile.bio || "";
     if (els.profileGenres) els.profileGenres.value = activeProfile.genres || "";
-    if (els.profileInstagram) els.profileInstagram.value = activeProfile.links?.instagram || "";
-    if (els.profileYouTube) els.profileYouTube.value = activeProfile.links?.youtube || "";
-    if (els.profileTikTok) els.profileTikTok.value = activeProfile.links?.tiktok || "";
     if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !== false;
     renderProfilePreviewFromInputs();
+    renderProfileHubShared();
   }
 })();
 if (els.profileUsername) els.profileUsername.value = activeProfile.username || "";
 if (els.profileVoiceTimbre) els.profileVoiceTimbre.value = activeProfile.voiceTimbre || "";
 if (els.profileBio) els.profileBio.value = activeProfile.bio || "";
 if (els.profileGenres) els.profileGenres.value = activeProfile.genres || "";
-if (els.profileInstagram) els.profileInstagram.value = activeProfile.links?.instagram || "";
-if (els.profileYouTube) els.profileYouTube.value = activeProfile.links?.youtube || "";
-if (els.profileTikTok) els.profileTikTok.value = activeProfile.links?.tiktok || "";
 if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !== false;
 renderProfilePreviewFromInputs();
+renderProfileHubShared();
 
 // Hum → melody (MVP)
 if (els.btnHumStart && els.btnHumStop && els.btnHumClear) {

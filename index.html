@@ -34,11 +34,9 @@
           </div>
         </div>
         <div class="headerRight">
-          <a class="creditsPill" href="#/profile" title="Open profile">
+          <div class="creditsPill" title="Credits">
             <span>Credits</span> <strong id="sunoCredits">—</strong><span id="sunoCreditsNote" class="small"></span>
-            <span class="pillSep"></span>
-            <span>Profile</span>
-          </a>
+          </div>
         </div>
       </header>
 
@@ -359,6 +357,7 @@
 
         <section class="card wide" data-route="profile">
           <h2>Profile</h2>
+          <button id="btnProfileCardEdit" class="ghost" type="button" style="margin-bottom:8px">Edit</button>
           <div class="profilePreview" id="profilePreviewCard">
             <div class="profilePreviewTop">
               <img id="profilePreviewAvatar" class="profilePreviewAvatar" alt="avatar" title="Tap to change photo" />
@@ -373,7 +372,6 @@
             </div>
             <div id="profilePreviewBio" class="profilePreviewBio">Add a short bio to introduce your music style.</div>
             <div id="profilePreviewGenres" class="profilePreviewGenres"></div>
-            <div id="profilePreviewLinks" class="profilePreviewLinks"></div>
           </div>
           <div id="authLoginControls" class="row">
             <button id="btnAuthGoogle" class="ghost" type="button">Continue with Google</button>
@@ -417,26 +415,14 @@
               <input id="profileGenres" type="text" placeholder="Arabic pop, khaliji, trap" />
             </label>
           </div>
-          <div class="row">
-            <label class="field grow">
-              <div class="label">Instagram</div>
-              <input id="profileInstagram" type="url" placeholder="https://instagram.com/..." />
-            </label>
-            <label class="field grow">
-              <div class="label">YouTube</div>
-              <input id="profileYouTube" type="url" placeholder="https://youtube.com/..." />
-            </label>
-            <label class="field grow">
-              <div class="label">TikTok</div>
-              <input id="profileTikTok" type="url" placeholder="https://tiktok.com/@..." />
-            </label>
-          </div>
           <input id="profileIsPublic" type="checkbox" checked style="display:none" />
           <div class="row">
             <button id="btnProfileSave" class="primary" type="button">Save profile</button>
           </div>
           <div id="profileSavedMsg" class="hint" style="margin-top:8px; display:none"></div>
           <div id="profileSaveToast" class="profileSaveToast" style="display:none">Profile updated.</div>
+          <div class="stepHead" style="margin-top:14px">Shared To Hub</div>
+          <div id="profileHubSharedList" class="code" style="max-height:none"></div>
           <div class="hint">Songs in Library are stored per profile on this device for now.</div>
         </section>
 

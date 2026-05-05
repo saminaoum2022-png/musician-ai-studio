@@ -231,6 +231,7 @@ let currentProofPost = null;
 let hubAudio = null;
 let hubAudioPostId = null;
 let hubNowMeta = null;
+let miniSource = null;
 function isPlayingHubPostVisible() {
   if (!hubAudioPostId) return false;
   const route = document.body.getAttribute("data-route") || "";
@@ -243,9 +244,29 @@ function isPlayingHubPostVisible() {
   const ratio = r.height > 0 ? visiblePx / r.height : 0;
   return ratio >= 0.35;
 }
+function isPlayingLibraryRowVisible() {
+  const route = document.body.getAttribute("data-route") || "";
+  if (route !== "library") return false;
+  if (!playerLoadedLabel) return false;
+  const key = String(playerLoadedLabel).toLowerCase();
+  const rows = Array.from(document.querySelectorAll("[data-lib-row]"));
+  const target = rows.find((row) => {
+    const txt = String(row.querySelector(".trackName")?.textContent || "").toLowerCase();
+    return txt && key && txt.includes(key.replace(/^full song\s*/i, "").trim());
+  });
+  if (!target) return true;
+  const r = target.getBoundingClientRect();
+  const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+  const visiblePx = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+  const ratio = r.height > 0 ? visiblePx / r.height : 0;
+  return ratio >= 0.35;
+}
 function renderHubNowPlaying() {
   if (!els.hubNowPlaying) return;
-  const active = Boolean(hubAudio && hubNowMeta) && !isPlayingHubPostVisible();
+  const route = document.body.getAttribute("data-route") || "";
+  const hideOnHubVisible = isPlayingHubPostVisible();
+  const hideOnLibrary = route === "library";
+  const active = Boolean(hubAudio && hubNowMeta) && !hideOnHubVisible && !hideOnLibrary;
   if (!active) {
     els.hubNowPlaying.classList.remove("isVisible", "isPlaying");
     setTimeout(() => {
@@ -1164,6 +1185,7 @@ function renderHub() {
     hubAudio = null;
     hubAudioPostId = null;
     hubNowMeta = null;
+    miniSource = null;
     els.hubList.querySelectorAll("[data-hub-play]").forEach((btn) => { btn.textContent = "▶"; });
     els.hubList.querySelectorAll(".hubPlayProgress > span").forEach((bar) => { bar.style.width = "0%"; });
     els.hubList.querySelectorAll(".hubCoverWrap").forEach((w) => w.classList.remove("isPlaying"));
@@ -1183,6 +1205,7 @@ function renderHub() {
     try {
       hubAudio = new Audio(p.url);
       hubAudioPostId = id;
+      miniSource = { type: "hub", id };
       hubNowMeta = { title: p.title || "Hub song", art: p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png" };
       b.textContent = "■";
       b.closest(".hubCoverWrap")?.classList.add("isPlaying");
@@ -1544,7 +1567,12 @@ function renderLibrary() {
       const id = row.getAttribute("data-lib-row");
       const t = loadLibrary().find((x) => x.id === id);
       if (!t?.url) return;
-      await playOnPlayerPage(t.url, "Full song");
+      setPlayerMeta({
+        title: t.title || "Library song",
+        subtitle: "Library • Full song",
+        artUrl: (t.meta && t.meta.imageUrl) || placeholderCoverDataUrl(),
+      });
+      await playInline(t.url, "Full song", { type: "library", id });
     });
   });
   els.libraryList.querySelectorAll("[data-lib-menu]").forEach((b) => {
@@ -2448,6 +2476,7 @@ function setPlayerSource(url, label) {
   if (els.btnPlayerStop) els.btnPlayerStop.disabled = false;
   hubAudio = a;
   hubAudioPostId = null;
+  if (!miniSource) miniSource = { type: "player" };
   syncPlayerUI();
   renderHubNowPlaying();
 }
@@ -2495,6 +2524,20 @@ async function playOnPlayerPage(url, label) {
   });
   location.hash = "#/player";
   // Give the route a moment to render, then play.
+  const a = ensurePlayer();
+  try {
+    await a.play();
+    if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = true;
+    if (els.btnPlayerPause) els.btnPlayerPause.disabled = false;
+  } catch (e) {
+    setStatus(`In-app playback failed (${e?.name || "error"}). Tap Open Direct.`);
+  }
+}
+
+async function playInline(url, label, source) {
+  if (!url) return;
+  miniSource = source || { type: "player" };
+  setPlayerSource(url, label);
   const a = ensurePlayer();
   try {
     await a.play();
@@ -4015,29 +4058,27 @@ void (async () => {
 if (els.hubFilterLatest) els.hubFilterLatest.addEventListener("click", () => { hubFilter = "latest"; markHubCategorySeen("latest"); renderHub(); });
 if (els.hubFilterSelect) {
   els.hubFilterSelect.value = "latest";
-  els.hubFilterSelect.addEventListener("change", () => {
-    hubFilter = String(els.hubFilterSelect?.value || "latest");
+  els.hubFilterSelect.addEventListener("change", async () => {
+    const selected = String(els.hubFilterSelect?.value || "latest");
+    if (selected === "__demo__") {
+      const p = makeDemoHubPost();
+      const feed = loadHubFeed();
+      feed.unshift(p);
+      saveHubFeed(feed.slice(0, 200));
+      try {
+        await supabaseInsertHub(p);
+        setStatus("Demo post added to Hub.");
+        await refreshHubFromSupabase();
+      } catch {
+        setStatus("Demo post added locally (Supabase sync failed).");
+        renderHub();
+      }
+      if (els.hubFilterSelect) els.hubFilterSelect.value = hubFilter;
+      return;
+    }
+    hubFilter = selected;
     markHubCategorySeen(hubFilter);
     renderHub();
-  });
-}
-if (els.hubAddDemo) {
-  els.hubAddDemo.addEventListener("click", async () => {
-    const p = makeDemoHubPost();
-    const feed = loadHubFeed();
-    feed.unshift(p);
-    saveHubFeed(feed.slice(0, 200));
-    lastHubUpdateAt = feed.length ? Math.max(...feed.map((x) => Number(x.ts || 0))) : Number(p.ts || 0);
-    try {
-      await supabaseInsertHub(p);
-      setStatus("Demo post added to Hub.");
-      await refreshHubFromSupabase();
-    } catch {
-      setStatus("Demo post added locally (Supabase sync failed).");
-      renderHub();
-    }
-    // Force one more pull so iPhone view reflects latest cloud state immediately.
-    setTimeout(() => { void refreshHubFromSupabase(); }, 350);
   });
 }
 if (els.hubTabLink) {
@@ -4074,6 +4115,7 @@ if (els.hubNowClose) {
     hubAudio = null;
     hubAudioPostId = null;
     hubNowMeta = null;
+    miniSource = null;
     if (els.hubNowProgBar) els.hubNowProgBar.style.width = "0%";
     renderHubNowPlaying();
     document.querySelectorAll("[data-hub-play]").forEach((btn) => { btn.textContent = "▶"; });
@@ -4085,13 +4127,27 @@ if (els.hubNowPlaying) {
   els.hubNowPlaying.addEventListener("click", (e) => {
     const isClose = e.target?.closest?.("#hubNowClose");
     if (isClose) return;
-    if (!hubAudioPostId) return;
-    if ((location.hash || "") !== "#/hub") location.hash = "#/hub";
-    setTimeout(() => {
-      const row = document.querySelector(`[data-hub-row="${hubAudioPostId}"]`);
-      if (!row) return;
-      row.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 120);
+    if (miniSource?.type === "hub" && hubAudioPostId) {
+      if ((location.hash || "") !== "#/hub") location.hash = "#/hub";
+      setTimeout(() => {
+        const row = document.querySelector(`[data-hub-row="${hubAudioPostId}"]`);
+        if (!row) return;
+        row.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 120);
+      return;
+    }
+    if (miniSource?.type === "library" && miniSource?.id) {
+      if ((location.hash || "") !== "#/library") location.hash = "#/library";
+      setTimeout(() => {
+        const row = document.querySelector(`[data-lib-row="${miniSource.id}"]`);
+        if (!row) return;
+        row.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 120);
+      return;
+    }
+    if (playerEl && !playerEl.paused) {
+      location.hash = "#/player";
+    }
   });
 }
 window.addEventListener("scroll", () => {

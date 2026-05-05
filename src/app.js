@@ -72,6 +72,9 @@ const els = {
   btnLoadFull: document.getElementById("btnLoadFull"),
   btnLoadVocals: document.getElementById("btnLoadVocals"),
   btnLoadInstrumental: document.getElementById("btnLoadInstrumental"),
+  clipStartSec: document.getElementById("clipStartSec"),
+  clipEndSec: document.getElementById("clipEndSec"),
+  btnShareClipHub: document.getElementById("btnShareClipHub"),
 
   // Multitrack session (Vocal Room)
   btnSessionLoadSuno: document.getElementById("btnSessionLoadSuno"),
@@ -571,6 +574,7 @@ let mixerIsPlaying = false;
 let playerEl = null;
 let playerLoadedLabel = "";
 let playerSeekDragging = false;
+let currentPlayerTrackRef = null;
 let lastSunoFullUrl = "";
 let lastSunoProxyUrl = "";
 let lastSunoCachedUrl = "";
@@ -1212,6 +1216,16 @@ function renderHub() {
       b.closest(".hubCoverWrap")?.classList.add("isPlaying");
       hubAudio.addEventListener("ended", stopHubAudio);
       hubAudio.addEventListener("timeupdate", () => {
+        const clip = p?.meta?.clip;
+        if (clip && Number.isFinite(Number(clip.startSec)) && Number.isFinite(Number(clip.endSec))) {
+          const s = Number(clip.startSec);
+          const en = Number(clip.endSec);
+          if (hubAudio.currentTime < s) hubAudio.currentTime = s;
+          if (hubAudio.currentTime >= en) {
+            stopHubAudio();
+            return;
+          }
+        }
         const prog = document.getElementById(`hubProg_${id}`);
         if (!prog || !hubAudio?.duration) return;
         const pct = Math.max(0, Math.min(100, (hubAudio.currentTime / hubAudio.duration) * 100));
@@ -1220,6 +1234,9 @@ function renderHub() {
         renderHubNowPlaying();
       });
       await hubAudio.play();
+      if (p?.meta?.clip && Number.isFinite(Number(p.meta.clip.startSec))) {
+        hubAudio.currentTime = Math.max(0, Number(p.meta.clip.startSec));
+      }
       renderHubNowPlaying();
     } catch {
       stopHubAudio();
@@ -1574,6 +1591,7 @@ function renderLibrary() {
       const id = row.getAttribute("data-lib-row");
       const t = loadLibrary().find((x) => x.id === id);
       if (!t?.url) return;
+      currentPlayerTrackRef = t;
       setPlayerMeta({
         title: t.title || "Library song",
         subtitle: "Library • Full song",
@@ -2572,6 +2590,18 @@ function syncPlayerUI() {
     els.playerSeek.value = dur > 0 ? String(Math.round((cur / dur) * max)) : "0";
   }
   renderHubNowPlaying();
+}
+
+function clampClipRange(startSec, endSec, durationSec) {
+  const dur = Math.max(0, Number(durationSec || 0));
+  let s = Math.max(0, Math.floor(Number(startSec || 0)));
+  let e = Math.max(0, Math.floor(Number(endSec || 0)));
+  if (dur > 0) {
+    s = Math.min(s, Math.max(0, Math.floor(dur) - 1));
+    e = Math.min(e, Math.floor(dur));
+  }
+  if (e <= s) e = Math.min((dur || s + 1), s + 1);
+  return { startSec: s, endSec: e };
 }
 
 function getParams() {
@@ -4248,6 +4278,30 @@ if (els.playerVol) {
   els.playerVol.addEventListener("input", () => {
     const a = ensurePlayer();
     a.volume = clampNum(Number(els.playerVol.value), 0, 1);
+  });
+}
+if (els.btnShareClipHub) {
+  els.btnShareClipHub.addEventListener("click", () => {
+    if (!currentPlayerTrackRef?.url) {
+      setStatus("Open a library song first, then share a clip.");
+      return;
+    }
+    const a = ensurePlayer();
+    const range = clampClipRange(
+      Number(els.clipStartSec?.value || 0),
+      Number(els.clipEndSec?.value || 0),
+      Number(a?.duration || 0)
+    );
+    const clipTrack = {
+      ...currentPlayerTrackRef,
+      title: `${currentPlayerTrackRef.title || "Song"} [${range.startSec}s-${range.endSec}s]`,
+      meta: {
+        ...(currentPlayerTrackRef.meta || {}),
+        clip: range,
+      },
+    };
+    shareToHub(clipTrack);
+    setStatus(`Clip shared to Hub (${range.startSec}s → ${range.endSec}s).`);
   });
 }
 if (els.playerSeek) {

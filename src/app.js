@@ -704,11 +704,32 @@ async function supabaseSendOtp(email) {
     body: JSON.stringify({
       email,
       create_user: true,
+      email_redirect_to: `${window.location.origin}${window.location.pathname}#/profile`,
     }),
   });
   if (!r.ok) {
     const txt = await r.text().catch(() => "");
     throw new Error(`OTP send failed (${r.status}): ${txt.slice(0, 120)}`);
+  }
+}
+function maybeHandleMagicLinkFromHash() {
+  try {
+    const hash = String(window.location.hash || "");
+    if (!hash.includes("access_token=")) return false;
+    const qp = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
+    const access_token = qp.get("access_token");
+    const refresh_token = qp.get("refresh_token");
+    const expires_in = Number(qp.get("expires_in") || 3600);
+    const token_type = qp.get("token_type") || "bearer";
+    if (!access_token) return false;
+    const email = qp.get("email") || "";
+    const user = { id: qp.get("user_id") || "", email };
+    saveAuthSession({ access_token, refresh_token, expires_in, token_type, user });
+    window.location.hash = "#/profile";
+    setStatus("Logged in via magic link.");
+    return true;
+  } catch {
+    return false;
   }
 }
 async function supabaseVerifyOtp(email, token) {
@@ -4489,7 +4510,7 @@ if (els.btnAuthSendOtp) {
     if (!email) return setStatus("Enter email first.");
     try {
       await supabaseSendOtp(email);
-      setStatus("OTP sent. Check your email.");
+      setStatus("Magic link sent. Check your email.");
     } catch (e) {
       setStatus(`OTP failed: ${e?.message || String(e)}`);
     }
@@ -4715,6 +4736,24 @@ renderCreditsHistory();
 loadProfile();
 loadAuthSession();
 renderAuthStatus();
+if (maybeHandleMagicLinkFromHash()) {
+  void supabaseLoadProfile().then((cloud) => {
+    if (!cloud) return;
+    saveProfile(cloud);
+    if (els.profileUsername) els.profileUsername.value = activeProfile.username || "";
+    if (els.profileEmail) els.profileEmail.value = activeProfile.email || "";
+    if (els.profileGender) els.profileGender.value = activeProfile.gender || "";
+    if (els.profileVoiceTimbre) els.profileVoiceTimbre.value = activeProfile.voiceTimbre || "";
+    if (els.profileBio) els.profileBio.value = activeProfile.bio || "";
+    if (els.profileAvatar) els.profileAvatar.value = activeProfile.avatar || "";
+    if (els.profileGenres) els.profileGenres.value = activeProfile.genres || "";
+    if (els.profileInstagram) els.profileInstagram.value = activeProfile.links?.instagram || "";
+    if (els.profileYouTube) els.profileYouTube.value = activeProfile.links?.youtube || "";
+    if (els.profileTikTok) els.profileTikTok.value = activeProfile.links?.tiktok || "";
+    if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !== false;
+    renderProfilePreviewFromInputs();
+  });
+}
 if (els.profileUsername) els.profileUsername.value = activeProfile.username || "";
 if (els.profileEmail) els.profileEmail.value = activeProfile.email || "";
 if (els.profileGender) els.profileGender.value = activeProfile.gender || "";

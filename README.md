@@ -2,7 +2,7 @@
 
 A **web-based app for musicians** that generates compositions/arrangements and exports **real audio (WAV)** — **no MIDI output**.
 
-This MVP is **zero-dependency static** (no build step), so it deploys cleanly to **Vercel** and works well in **GitHub**.
+This MVP is **zero-dependency static** (no build step), so it deploys cleanly to **Vercel** and works well in **GitHub**. 
 
 ## What you get (today)
 

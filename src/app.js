@@ -4831,11 +4831,12 @@ renderCreditsHistory();
 loadProfile();
 loadAuthSession();
 renderAuthStatus();
-void refreshAuthStateFromSupabase();
-void maybeHandleAuthCodeFromQuery();
-if (maybeHandleMagicLinkFromHash()) {
-  void (async () => {
-    await refreshAuthStateFromSupabase();
+void (async () => {
+  await loadPublicConfig();
+  const usedCodeFlow = await maybeHandleAuthCodeFromQuery();
+  const usedTokenFlow = !usedCodeFlow && maybeHandleMagicLinkFromHash();
+  await refreshAuthStateFromSupabase();
+  if (usedCodeFlow || usedTokenFlow) {
     window.location.hash = "#/profile";
     const cloud = await supabaseLoadProfile();
     if (!cloud) return;
@@ -4852,8 +4853,8 @@ if (maybeHandleMagicLinkFromHash()) {
     if (els.profileTikTok) els.profileTikTok.value = activeProfile.links?.tiktok || "";
     if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !== false;
     renderProfilePreviewFromInputs();
-  })();
-}
+  }
+})();
 if (els.profileUsername) els.profileUsername.value = activeProfile.username || "";
 if (els.profileEmail) els.profileEmail.value = activeProfile.email || "";
 if (els.profileGender) els.profileGender.value = activeProfile.gender || "";

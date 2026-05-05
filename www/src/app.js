@@ -171,6 +171,11 @@ const els = {
   hubDotRemix: document.getElementById("hubDotRemix"),
   hubTabDot: document.getElementById("hubTabDot"),
   hubTabLink: document.querySelector('.mobileTabbar [data-route-link="hub"]'),
+  hubNowPlaying: document.getElementById("hubNowPlaying"),
+  hubNowArt: document.getElementById("hubNowArt"),
+  hubNowTitle: document.getElementById("hubNowTitle"),
+  hubNowProgBar: document.getElementById("hubNowProgBar"),
+  hubNowClose: document.getElementById("hubNowClose"),
   likeBurst: document.getElementById("likeBurst"),
   hubAddDemo: document.getElementById("hubAddDemo"),
   profileUsername: document.getElementById("profileUsername"),
@@ -200,6 +205,7 @@ const els = {
   btnCloseSongDetails: document.getElementById("btnCloseSongDetails"),
   songDetailsContent: document.getElementById("songDetailsContent"),
   brandTitle: document.getElementById("brandTitle"),
+  brandSecondary: document.getElementById("brandSecondary"),
   vocalRecorderModal: document.getElementById("vocalRecorderModal"),
   vocalRecorderBackdrop: document.getElementById("vocalRecorderBackdrop"),
   btnCloseVocalRecorder: document.getElementById("btnCloseVocalRecorder"),
@@ -219,6 +225,42 @@ const els = {
   envBadge: document.getElementById("envBadge"),
 };
 let currentProofPost = null;
+let hubAudio = null;
+let hubAudioPostId = null;
+let hubNowMeta = null;
+function isPlayingHubPostVisible() {
+  if (!hubAudioPostId) return false;
+  const route = document.body.getAttribute("data-route") || "";
+  if (route !== "hub") return false;
+  const row = document.querySelector(`[data-hub-row="${hubAudioPostId}"]`);
+  if (!row) return false;
+  const r = row.getBoundingClientRect();
+  const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+  const visiblePx = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+  const ratio = r.height > 0 ? visiblePx / r.height : 0;
+  return ratio >= 0.35;
+}
+function renderHubNowPlaying() {
+  if (!els.hubNowPlaying) return;
+  const active = Boolean(hubAudio && hubNowMeta) && !isPlayingHubPostVisible();
+  if (!active) {
+    els.hubNowPlaying.classList.remove("isVisible", "isPlaying");
+    setTimeout(() => {
+      if (!hubAudio && els.hubNowPlaying) els.hubNowPlaying.style.display = "none";
+    }, 220);
+    return;
+  }
+  els.hubNowPlaying.style.display = "";
+  requestAnimationFrame(() => {
+    els.hubNowPlaying.classList.add("isVisible", "isPlaying");
+  });
+  if (els.hubNowArt) els.hubNowArt.src = hubNowMeta.art || "./assets/nabadai-logo.png";
+  if (els.hubNowTitle) els.hubNowTitle.textContent = hubNowMeta.title || "Now playing";
+  if (els.hubNowProgBar && hubAudio?.duration) {
+    const pct = Math.max(0, Math.min(100, (hubAudio.currentTime / hubAudio.duration) * 100));
+    els.hubNowProgBar.style.width = `${pct}%`;
+  }
+}
 const LATEST_SUNO_MODEL = "V5_5";
 const API_BASE = (window.__API_BASE__ || "").replace(/\/$/, "");
 const apiUrl = (p) => API_BASE ? `${API_BASE}${p}` : p;
@@ -309,6 +351,9 @@ function applyRoute() {
   const wanted = route === "start" ? "intro" : route || "home";
   document.body.classList.toggle("isIntro", wanted === "intro");
   document.body.setAttribute("data-route", wanted);
+  if (els.brandSecondary) {
+    els.brandSecondary.textContent = wanted === "hub" ? "Hub" : "Music";
+  }
 
   document.querySelectorAll("[data-route]").forEach((el) => {
     el.style.display = el.getAttribute("data-route") === wanted ? "" : "none";
@@ -797,7 +842,7 @@ function renderHub() {
       <div class="hubCoverWrap" data-hub-cover="${p.id}">
         <img class="hubCover" src="${escapeHtml(p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png")}" alt="cover" />
         <button class="hubPlayOverlay" data-hub-play="${p.id}" aria-label="Play">▶</button>
-        <button class="hubRemixCorner" data-hub-remix="${p.id}" aria-label="Remix">⟳</button>
+        <div class="hubPlayProgress"><span id="hubProg_${p.id}" style="width:0%"></span></div>
         <button class="hubMoreCorner" data-hub-more="${p.id}" aria-label="More">⋯</button>
       </div>
       <div style="flex:1;min-width:0">
@@ -826,51 +871,58 @@ function renderHub() {
         </button>
       </div>
       <div class="libMenu hubMoreMenu" id="hubMore_${p.id}" style="display:none">
+        <button class="ghost" data-hub-remix="${p.id}">Remix</button>
         <button class="ghost" data-hub-del="${p.id}">Remove</button>
       </div>
     </div>
   `).join("");
   renderHubDots();
   renderHubUpdatedAt();
+  const stopHubAudio = () => {
+    try { if (hubAudio) hubAudio.pause(); } catch {}
+    hubAudio = null;
+    hubAudioPostId = null;
+    hubNowMeta = null;
+    els.hubList.querySelectorAll("[data-hub-play]").forEach((btn) => { btn.textContent = "▶"; });
+    els.hubList.querySelectorAll(".hubPlayProgress > span").forEach((bar) => { bar.style.width = "0%"; });
+    els.hubList.querySelectorAll(".hubCoverWrap").forEach((w) => w.classList.remove("isPlaying"));
+    if (els.hubNowProgBar) els.hubNowProgBar.style.width = "0%";
+    renderHubNowPlaying();
+  };
   els.hubList.querySelectorAll("[data-hub-play]").forEach((b) => b.addEventListener("click", async (e) => {
     e.stopPropagation();
     const id = b.getAttribute("data-hub-play");
     const p = loadHubFeed().find((x) => x.id === id);
     if (!p?.url) return;
-    await playOnPlayerPage(p.url, "Hub song");
+    if (hubAudio && hubAudioPostId === id) {
+      stopHubAudio();
+      return;
+    }
+    stopHubAudio();
+    try {
+      hubAudio = new Audio(p.url);
+      hubAudioPostId = id;
+      hubNowMeta = { title: p.title || "Hub song", art: p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png" };
+      b.textContent = "■";
+      b.closest(".hubCoverWrap")?.classList.add("isPlaying");
+      hubAudio.addEventListener("ended", stopHubAudio);
+      hubAudio.addEventListener("timeupdate", () => {
+        const prog = document.getElementById(`hubProg_${id}`);
+        if (!prog || !hubAudio?.duration) return;
+        const pct = Math.max(0, Math.min(100, (hubAudio.currentTime / hubAudio.duration) * 100));
+        prog.style.width = `${pct}%`;
+        if (els.hubNowProgBar) els.hubNowProgBar.style.width = `${pct}%`;
+        renderHubNowPlaying();
+      });
+      await hubAudio.play();
+      renderHubNowPlaying();
+    } catch {
+      stopHubAudio();
+      setStatus("Playback failed.");
+    }
   }));
   els.hubList.querySelectorAll("[data-hub-cover]").forEach((el) => {
-    let lastTap = 0;
-    let singleTapTimer = null;
-    el.addEventListener("click", async () => {
-      const id = el.getAttribute("data-hub-cover");
-      const now = Date.now();
-      if (now - lastTap < 320) {
-        if (singleTapTimer) {
-          clearTimeout(singleTapTimer);
-          singleTapTimer = null;
-        }
-        const feed = loadHubFeed();
-        const p = feed.find((x) => x.id === id);
-        if (p) {
-          haptic("impact");
-          showLikeBurst();
-          p.likes = Number(p.likes || 0) + 1;
-          saveHubFeed(feed);
-          void supabasePatchHub(id, { likes: p.likes }).catch(() => {});
-          renderHub();
-          setStatus("Liked");
-        }
-        lastTap = 0;
-        return;
-      }
-      lastTap = now;
-      singleTapTimer = setTimeout(async () => {
-        const p = loadHubFeed().find((x) => x.id === id);
-        if (!p?.url) return;
-        await playOnPlayerPage(p.url, "Hub song");
-      }, 330);
-    });
+    el.addEventListener("click", (e) => e.stopPropagation());
   });
   els.hubList.querySelectorAll("[data-hub-like]").forEach((b) => b.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -980,7 +1032,7 @@ async function refreshHubFromSupabase() {
       meta: r.meta || null,
     }));
     saveHubFeed(mapped);
-    lastHubUpdateAt = Date.now();
+    lastHubUpdateAt = mapped.length ? Math.max(...mapped.map((x) => Number(x.ts || 0))) : 0;
     renderHub();
     renderHubDots();
   } catch {}
@@ -3693,7 +3745,7 @@ if (els.hubAddDemo) {
     const feed = loadHubFeed();
     feed.unshift(p);
     saveHubFeed(feed.slice(0, 200));
-    lastHubUpdateAt = Date.now();
+    lastHubUpdateAt = feed.length ? Math.max(...feed.map((x) => Number(x.ts || 0))) : Number(p.ts || 0);
     try {
       await supabaseInsertHub(p);
       setStatus("Demo post added to Hub.");
@@ -3734,6 +3786,40 @@ if (els.hubTabLink) {
     }, 250);
   });
 }
+if (els.hubNowClose) {
+  els.hubNowClose.addEventListener("click", () => {
+    try { if (hubAudio) hubAudio.pause(); } catch {}
+    hubAudio = null;
+    hubAudioPostId = null;
+    hubNowMeta = null;
+    if (els.hubNowProgBar) els.hubNowProgBar.style.width = "0%";
+    renderHubNowPlaying();
+    document.querySelectorAll("[data-hub-play]").forEach((btn) => { btn.textContent = "▶"; });
+    document.querySelectorAll(".hubPlayProgress > span").forEach((bar) => { bar.style.width = "0%"; });
+    document.querySelectorAll(".hubCoverWrap").forEach((w) => w.classList.remove("isPlaying"));
+  });
+}
+if (els.hubNowPlaying) {
+  els.hubNowPlaying.addEventListener("click", (e) => {
+    const isClose = e.target?.closest?.("#hubNowClose");
+    if (isClose) return;
+    if (!hubAudioPostId) return;
+    if ((location.hash || "") !== "#/hub") location.hash = "#/hub";
+    setTimeout(() => {
+      const row = document.querySelector(`[data-hub-row="${hubAudioPostId}"]`);
+      if (!row) return;
+      row.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
+  });
+}
+window.addEventListener("scroll", () => {
+  if (!hubAudio) return;
+  renderHubNowPlaying();
+}, { passive: true });
+window.addEventListener("hashchange", () => {
+  if (!hubAudio) return;
+  setTimeout(() => renderHubNowPlaying(), 0);
+});
 if (els.shareLiveBackdrop) els.shareLiveBackdrop.addEventListener("click", closeShareLiveModal);
 if (els.btnCloseShareLive) els.btnCloseShareLive.addEventListener("click", closeShareLiveModal);
 if (els.btnGoHub) els.btnGoHub.addEventListener("click", () => {

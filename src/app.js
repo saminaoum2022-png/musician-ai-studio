@@ -192,6 +192,12 @@ const els = {
   profileIsPublic: document.getElementById("profileIsPublic"),
   btnProfileSave: document.getElementById("btnProfileSave"),
   profileSavedMsg: document.getElementById("profileSavedMsg"),
+  authEmail: document.getElementById("authEmail"),
+  authOtp: document.getElementById("authOtp"),
+  btnAuthSendOtp: document.getElementById("btnAuthSendOtp"),
+  btnAuthVerifyOtp: document.getElementById("btnAuthVerifyOtp"),
+  btnAuthLogout: document.getElementById("btnAuthLogout"),
+  authStatus: document.getElementById("authStatus"),
   profilePreviewAvatar: document.getElementById("profilePreviewAvatar"),
   profilePreviewUsername: document.getElementById("profilePreviewUsername"),
   profilePreviewGenderIcon: document.getElementById("profilePreviewGenderIcon"),
@@ -558,7 +564,9 @@ let lastSunoAudioId2 = "";
 let lastGenerationMeta = null;
 const PROFILE_KEY = "mas:profile:v1";
 const PROFILE_PERSONAS_KEY = "mas:personas:v1";
+const AUTH_SESSION_KEY = "mas:supabase:session:v1";
 let activeProfile = { id: "guest", username: "guest", email: "" };
+let authSession = null;
 function loadProfile() {
   try {
     const raw = localStorage.getItem(PROFILE_KEY);
@@ -660,6 +668,130 @@ async function supabaseSelectHub() {
   });
   if (!r.ok) throw new Error("supabase select failed");
   return await r.json().catch(() => []);
+}
+function loadAuthSession() {
+  try {
+    const raw = localStorage.getItem(AUTH_SESSION_KEY);
+    authSession = raw ? JSON.parse(raw) : null;
+  } catch {
+    authSession = null;
+  }
+}
+function saveAuthSession(sess) {
+  authSession = sess || null;
+  try {
+    if (authSession) localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(authSession));
+    else localStorage.removeItem(AUTH_SESSION_KEY);
+  } catch {}
+  renderAuthStatus();
+}
+function getSupabaseAuthToken() {
+  return authSession?.access_token || "";
+}
+function renderAuthStatus() {
+  if (!els.authStatus) return;
+  const email = authSession?.user?.email || "";
+  els.authStatus.textContent = email ? `Logged in as ${email}` : "Not logged in.";
+}
+async function supabaseSendOtp(email) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase config missing");
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/otp`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({
+      email,
+      create_user: true,
+    }),
+  });
+  if (!r.ok) {
+    const txt = await r.text().catch(() => "");
+    throw new Error(`OTP send failed (${r.status}): ${txt.slice(0, 120)}`);
+  }
+}
+async function supabaseVerifyOtp(email, token) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase config missing");
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({
+      email,
+      token,
+      type: "email",
+    }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d?.msg || `OTP verify failed (${r.status})`);
+  return d;
+}
+async function supabaseUpsertProfile(profile) {
+  const token = getSupabaseAuthToken();
+  if (!token) throw new Error("Login required");
+  const payload = {
+    user_id: authSession?.user?.id,
+    username: profile.username || "guest",
+    email: profile.email || "",
+    gender: profile.gender || "",
+    voice_timbre: profile.voiceTimbre || "",
+    bio: profile.bio || "",
+    avatar: profile.avatar || "",
+    genres: profile.genres || "",
+    instagram: profile.links?.instagram || "",
+    youtube: profile.links?.youtube || "",
+    tiktok: profile.links?.tiktok || "",
+    is_public: profile.isPublic !== false,
+    updated_at: new Date().toISOString(),
+  };
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      Prefer: "resolution=merge-duplicates,return=representation",
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!r.ok) {
+    const txt = await r.text().catch(() => "");
+    throw new Error(`Cloud save failed (${r.status}): ${txt.slice(0, 140)}`);
+  }
+}
+async function supabaseLoadProfile() {
+  const token = getSupabaseAuthToken();
+  if (!token || !authSession?.user?.id) return null;
+  const uid = encodeURIComponent(authSession.user.id);
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${uid}&select=*`, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!r.ok) return null;
+  const arr = await r.json().catch(() => []);
+  if (!Array.isArray(arr) || !arr.length) return null;
+  const p = arr[0];
+  return {
+    id: p.user_id || activeProfile.id,
+    username: p.username || "guest",
+    email: p.email || "",
+    gender: p.gender || "",
+    voiceTimbre: p.voice_timbre || "",
+    bio: p.bio || "",
+    avatar: p.avatar || "",
+    genres: p.genres || "",
+    links: {
+      instagram: p.instagram || "",
+      youtube: p.youtube || "",
+      tiktok: p.tiktok || "",
+    },
+    isPublic: p.is_public !== false,
+  };
 }
 async function supabaseInsertHub(post) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
@@ -4295,7 +4427,7 @@ if (els.btnCreatePersona) {
   });
 }
 if (els.btnProfileSave) {
-  els.btnProfileSave.addEventListener("click", () => {
+  els.btnProfileSave.addEventListener("click", async () => {
     const usernameRaw = String(els.profileUsername?.value || "").trim().toLowerCase();
     const username = usernameRaw.replace(/[^a-z0-9_.]/g, "").slice(0, 32) || "guest";
     const email = String(els.profileEmail?.value || "").trim().toLowerCase();
@@ -4321,8 +4453,24 @@ if (els.btnProfileSave) {
       links: { instagram, youtube, tiktok },
       isPublic,
     });
-  renderLibrary();
-  renderPersonaSelect();
+    try {
+      await supabaseUpsertProfile({
+        id,
+        username,
+        email,
+        gender,
+        voiceTimbre,
+        bio,
+        avatar,
+        genres,
+        links: { instagram, youtube, tiktok },
+        isPublic,
+      });
+    } catch (e) {
+      setStatus(`Local save done. Cloud save skipped: ${e?.message || String(e)}`);
+    }
+    renderLibrary();
+    renderPersonaSelect();
     setStatus(`Profile saved: @${username}`);
     if (els.profileSavedMsg) {
       els.profileSavedMsg.style.display = "";
@@ -4333,6 +4481,54 @@ if (els.btnProfileSave) {
       }, 2200);
     }
     renderProfilePreviewFromInputs();
+  });
+}
+if (els.btnAuthSendOtp) {
+  els.btnAuthSendOtp.addEventListener("click", async () => {
+    const email = String(els.authEmail?.value || "").trim().toLowerCase();
+    if (!email) return setStatus("Enter email first.");
+    try {
+      await supabaseSendOtp(email);
+      setStatus("OTP sent. Check your email.");
+    } catch (e) {
+      setStatus(`OTP failed: ${e?.message || String(e)}`);
+    }
+  });
+}
+if (els.btnAuthVerifyOtp) {
+  els.btnAuthVerifyOtp.addEventListener("click", async () => {
+    const email = String(els.authEmail?.value || "").trim().toLowerCase();
+    const otp = String(els.authOtp?.value || "").trim();
+    if (!email || !otp) return setStatus("Enter email and OTP.");
+    try {
+      const d = await supabaseVerifyOtp(email, otp);
+      saveAuthSession(d);
+      const cloud = await supabaseLoadProfile();
+      if (cloud) {
+        saveProfile(cloud);
+        if (els.profileUsername) els.profileUsername.value = activeProfile.username || "";
+        if (els.profileEmail) els.profileEmail.value = activeProfile.email || "";
+        if (els.profileGender) els.profileGender.value = activeProfile.gender || "";
+        if (els.profileVoiceTimbre) els.profileVoiceTimbre.value = activeProfile.voiceTimbre || "";
+        if (els.profileBio) els.profileBio.value = activeProfile.bio || "";
+        if (els.profileAvatar) els.profileAvatar.value = activeProfile.avatar || "";
+        if (els.profileGenres) els.profileGenres.value = activeProfile.genres || "";
+        if (els.profileInstagram) els.profileInstagram.value = activeProfile.links?.instagram || "";
+        if (els.profileYouTube) els.profileYouTube.value = activeProfile.links?.youtube || "";
+        if (els.profileTikTok) els.profileTikTok.value = activeProfile.links?.tiktok || "";
+        if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !== false;
+        renderProfilePreviewFromInputs();
+      }
+      setStatus("Logged in with Supabase.");
+    } catch (e) {
+      setStatus(`Login failed: ${e?.message || String(e)}`);
+    }
+  });
+}
+if (els.btnAuthLogout) {
+  els.btnAuthLogout.addEventListener("click", () => {
+    saveAuthSession(null);
+    setStatus("Logged out.");
   });
 }
 if (els.profileAvatarFile) {
@@ -4517,6 +4713,8 @@ function clampNum(n, min, max) {
 void refreshSunoCredits();
 renderCreditsHistory();
 loadProfile();
+loadAuthSession();
+renderAuthStatus();
 if (els.profileUsername) els.profileUsername.value = activeProfile.username || "";
 if (els.profileEmail) els.profileEmail.value = activeProfile.email || "";
 if (els.profileGender) els.profileGender.value = activeProfile.gender || "";

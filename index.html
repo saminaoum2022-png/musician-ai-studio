@@ -359,6 +359,22 @@
 
         <section class="card wide" data-route="profile">
           <h2>Profile</h2>
+          <div class="row">
+            <label class="field grow">
+              <div class="label">Account email (Supabase login)</div>
+              <input id="authEmail" type="email" placeholder="you@email.com" />
+            </label>
+            <button id="btnAuthSendOtp" class="ghost" type="button">Send code</button>
+          </div>
+          <div class="row">
+            <label class="field grow">
+              <div class="label">OTP code</div>
+              <input id="authOtp" type="text" placeholder="123456" />
+            </label>
+            <button id="btnAuthVerifyOtp" class="primary" type="button">Verify & login</button>
+            <button id="btnAuthLogout" class="ghost" type="button">Logout</button>
+          </div>
+          <div id="authStatus" class="hint" style="margin-top:4px">Not logged in.</div>
           <div class="profilePreview" id="profilePreviewCard">
             <div class="profilePreviewTop">
               <img id="profilePreviewAvatar" class="profilePreviewAvatar" alt="avatar" />

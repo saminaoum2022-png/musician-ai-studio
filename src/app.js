@@ -571,6 +571,7 @@ let lastGenerationMeta = null;
 const PROFILE_KEY = "mas:profile:v1";
 const PROFILE_PERSONAS_KEY = "mas:personas:v1";
 const AUTH_SESSION_KEY = "mas:supabase:session:v1";
+const AUTH_PKCE_KEY = "mas:supabase:pkce:v1";
 let activeProfile = { id: "guest", username: "guest", email: "" };
 let authSession = null;
 let lastAuthDebug = "";
@@ -695,6 +696,21 @@ function saveAuthSession(sess) {
 function getSupabaseAuthToken() {
   return authSession?.access_token || "";
 }
+function b64urlFromBytes(bytes) {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 1) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+async function sha256Base64Url(input) {
+  const enc = new TextEncoder().encode(input);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  return b64urlFromBytes(new Uint8Array(buf));
+}
+function randomVerifier(len = 64) {
+  const bytes = new Uint8Array(len);
+  crypto.getRandomValues(bytes);
+  return b64urlFromBytes(bytes).slice(0, len);
+}
 async function supabaseFetchUser(token) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !token) return null;
   const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
@@ -799,6 +815,46 @@ function maybeHandleMagicLinkFromHash() {
     return false;
   }
 }
+async function maybeHandleAuthCodeFromQuery() {
+  try {
+    const sp = new URLSearchParams(window.location.search || "");
+    const code = sp.get("code");
+    if (!code) return false;
+    const verifier = localStorage.getItem(AUTH_PKCE_KEY) || "";
+    if (!verifier) {
+      lastAuthDebug = "missing pkce verifier";
+      return false;
+    }
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=pkce`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ auth_code: code, code_verifier: verifier }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d?.access_token) {
+      lastAuthDebug = `code exchange ${r.status}: ${String(JSON.stringify(d)).slice(0, 120)}`;
+      return false;
+    }
+    localStorage.removeItem(AUTH_PKCE_KEY);
+    const user = d?.user || { id: "", email: "" };
+    saveAuthSession({
+      access_token: d.access_token,
+      refresh_token: d.refresh_token || "",
+      expires_in: Number(d.expires_in || 3600),
+      token_type: d.token_type || "bearer",
+      user,
+    });
+    window.history.replaceState({}, document.title, window.location.pathname + "#/profile");
+    setStatus("Logged in via Google.");
+    return true;
+  } catch (e) {
+    lastAuthDebug = `code flow error: ${e?.message || String(e)}`;
+    return false;
+  }
+}
 async function supabaseVerifyOtp(email, token) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase config missing");
   const r = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
@@ -817,9 +873,12 @@ async function supabaseVerifyOtp(email, token) {
   if (!r.ok) throw new Error(d?.msg || `OTP verify failed (${r.status})`);
   return d;
 }
-function supabaseGoogleLoginUrl() {
+async function supabaseGoogleLoginUrl() {
+  const verifier = randomVerifier(64);
+  localStorage.setItem(AUTH_PKCE_KEY, verifier);
+  const challenge = await sha256Base64Url(verifier);
   const redirectTo = encodeURIComponent(`${window.location.origin}${window.location.pathname}`);
-  return `${SUPABASE_URL}/auth/v1/authorize?provider=google&response_type=token&scope=email%20profile&redirect_to=${redirectTo}`;
+  return `${SUPABASE_URL}/auth/v1/authorize?provider=google&response_type=code&scope=email%20profile&code_challenge=${encodeURIComponent(challenge)}&code_challenge_method=S256&redirect_to=${redirectTo}`;
 }
 async function supabaseUpsertProfile(profile) {
   const token = getSupabaseAuthToken();
@@ -4576,9 +4635,10 @@ if (els.btnProfileSave) {
   });
 }
 if (els.btnAuthGoogle) {
-  els.btnAuthGoogle.addEventListener("click", () => {
+  els.btnAuthGoogle.addEventListener("click", async () => {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return setStatus("Supabase config missing.");
-    window.location.href = supabaseGoogleLoginUrl();
+    const url = await supabaseGoogleLoginUrl();
+    window.location.href = url;
   });
 }
 if (els.btnAuthLogout) {
@@ -4772,6 +4832,7 @@ loadProfile();
 loadAuthSession();
 renderAuthStatus();
 void refreshAuthStateFromSupabase();
+void maybeHandleAuthCodeFromQuery();
 if (maybeHandleMagicLinkFromHash()) {
   void (async () => {
     await refreshAuthStateFromSupabase();

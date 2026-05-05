@@ -573,6 +573,7 @@ const PROFILE_PERSONAS_KEY = "mas:personas:v1";
 const AUTH_SESSION_KEY = "mas:supabase:session:v1";
 let activeProfile = { id: "guest", username: "guest", email: "" };
 let authSession = null;
+let lastAuthDebug = "";
 function loadProfile() {
   try {
     const raw = localStorage.getItem(PROFILE_KEY);
@@ -702,7 +703,12 @@ async function supabaseFetchUser(token) {
       Authorization: `Bearer ${token}`,
     },
   });
-  if (!r.ok) return null;
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    lastAuthDebug = `user fetch ${r.status}: ${String(t || "").slice(0, 120)}`;
+    return null;
+  }
+  lastAuthDebug = "";
   return await r.json().catch(() => null);
 }
 async function refreshAuthStateFromSupabase() {
@@ -723,11 +729,13 @@ function renderAuthStatus() {
   if (!els.authStatus) return;
   const email = authSession?.user?.email || "";
   const hasToken = Boolean(getSupabaseAuthToken());
-  els.authStatus.textContent = email
+  let msg = email
     ? `Logged in as ${email}`
     : hasToken
       ? "Session found, validating account..."
       : "Not logged in.";
+  if (!email && hasToken && lastAuthDebug) msg += ` • ${lastAuthDebug}`;
+  els.authStatus.textContent = msg;
   if (els.authLoginControls) els.authLoginControls.style.display = email ? "none" : "";
   if (els.authLoggedInRow) els.authLoggedInRow.style.display = email ? "flex" : "none";
   if (els.authLoggedInEmail) els.authLoggedInEmail.textContent = email ? `Logged in with ${email}` : "Logged in.";

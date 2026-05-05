@@ -194,6 +194,9 @@ const els = {
   profileSavedMsg: document.getElementById("profileSavedMsg"),
   authEmail: document.getElementById("authEmail"),
   authOtp: document.getElementById("authOtp"),
+  authLoginControls: document.getElementById("authLoginControls"),
+  authLoggedInRow: document.getElementById("authLoggedInRow"),
+  authLoggedInEmail: document.getElementById("authLoggedInEmail"),
   btnAuthSendOtp: document.getElementById("btnAuthSendOtp"),
   btnAuthGoogle: document.getElementById("btnAuthGoogle"),
   btnAuthVerifyOtp: document.getElementById("btnAuthVerifyOtp"),
@@ -354,8 +357,11 @@ function showLikeBurst() {
 
 function applyRoute() {
   const hash = String(location.hash || "");
-  const route = hash.startsWith("#/") ? hash.slice(2) : "generate";
-  const wanted = route === "start" ? "intro" : route || "home";
+  const rawRoute = hash.startsWith("#/") ? hash.slice(2) : "generate";
+  const route = rawRoute.split(/[?#&]/)[0].trim();
+  const allowedRoutes = new Set(["intro", "start", "generate", "library", "hub", "stems", "settings", "profile", "player"]);
+  const normalized = route === "start" ? "intro" : route;
+  const wanted = allowedRoutes.has(normalized) ? normalized : "generate";
   document.body.classList.toggle("isIntro", wanted === "intro");
   document.body.setAttribute("data-route", wanted);
   if (els.brandSecondary) {
@@ -693,6 +699,9 @@ function renderAuthStatus() {
   if (!els.authStatus) return;
   const email = authSession?.user?.email || "";
   els.authStatus.textContent = email ? `Logged in as ${email}` : "Not logged in.";
+  if (els.authLoginControls) els.authLoginControls.style.display = email ? "none" : "";
+  if (els.authLoggedInRow) els.authLoggedInRow.style.display = email ? "flex" : "none";
+  if (els.authLoggedInEmail) els.authLoggedInEmail.textContent = email ? `Logged in with ${email}` : "Logged in.";
 }
 async function supabaseSendOtp(email) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase config missing");

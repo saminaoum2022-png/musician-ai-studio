@@ -359,6 +359,7 @@
 
         <section class="card wide" data-route="profile">
           <h2>Profile</h2>
+          <div id="authLoginControls">
           <div class="row">
             <label class="field grow">
               <div class="label">Account email (Supabase login)</div>
@@ -373,6 +374,10 @@
               <input id="authOtp" type="text" placeholder="123456" />
             </label>
             <button id="btnAuthVerifyOtp" class="primary" type="button">Verify code</button>
+          </div>
+          </div>
+          <div id="authLoggedInRow" class="row" style="display:none;align-items:center;justify-content:space-between">
+            <div id="authLoggedInEmail" class="hint">Logged in.</div>
             <button id="btnAuthLogout" class="ghost" type="button">Logout</button>
           </div>
           <div id="authStatus" class="hint" style="margin-top:4px">Not logged in.</div>

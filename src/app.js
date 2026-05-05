@@ -228,11 +228,32 @@ let currentProofPost = null;
 let hubAudio = null;
 let hubAudioPostId = null;
 let hubNowMeta = null;
+function isPlayingHubPostVisible() {
+  if (!hubAudioPostId) return false;
+  const route = document.body.getAttribute("data-route") || "";
+  if (route !== "hub") return false;
+  const row = document.querySelector(`[data-hub-row="${hubAudioPostId}"]`);
+  if (!row) return false;
+  const r = row.getBoundingClientRect();
+  const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+  const visiblePx = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+  const ratio = r.height > 0 ? visiblePx / r.height : 0;
+  return ratio >= 0.35;
+}
 function renderHubNowPlaying() {
   if (!els.hubNowPlaying) return;
-  const active = Boolean(hubAudio && hubNowMeta);
-  els.hubNowPlaying.style.display = active ? "" : "none";
-  if (!active) return;
+  const active = Boolean(hubAudio && hubNowMeta) && !isPlayingHubPostVisible();
+  if (!active) {
+    els.hubNowPlaying.classList.remove("isVisible", "isPlaying");
+    setTimeout(() => {
+      if (!hubAudio && els.hubNowPlaying) els.hubNowPlaying.style.display = "none";
+    }, 220);
+    return;
+  }
+  els.hubNowPlaying.style.display = "";
+  requestAnimationFrame(() => {
+    els.hubNowPlaying.classList.add("isVisible", "isPlaying");
+  });
   if (els.hubNowArt) els.hubNowArt.src = hubNowMeta.art || "./assets/nabadai-logo.png";
   if (els.hubNowTitle) els.hubNowTitle.textContent = hubNowMeta.title || "Now playing";
   if (els.hubNowProgBar && hubAudio?.duration) {
@@ -891,6 +912,7 @@ function renderHub() {
         const pct = Math.max(0, Math.min(100, (hubAudio.currentTime / hubAudio.duration) * 100));
         prog.style.width = `${pct}%`;
         if (els.hubNowProgBar) els.hubNowProgBar.style.width = `${pct}%`;
+        renderHubNowPlaying();
       });
       await hubAudio.play();
       renderHubNowPlaying();
@@ -3777,6 +3799,27 @@ if (els.hubNowClose) {
     document.querySelectorAll(".hubCoverWrap").forEach((w) => w.classList.remove("isPlaying"));
   });
 }
+if (els.hubNowPlaying) {
+  els.hubNowPlaying.addEventListener("click", (e) => {
+    const isClose = e.target?.closest?.("#hubNowClose");
+    if (isClose) return;
+    if (!hubAudioPostId) return;
+    if ((location.hash || "") !== "#/hub") location.hash = "#/hub";
+    setTimeout(() => {
+      const row = document.querySelector(`[data-hub-row="${hubAudioPostId}"]`);
+      if (!row) return;
+      row.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
+  });
+}
+window.addEventListener("scroll", () => {
+  if (!hubAudio) return;
+  renderHubNowPlaying();
+}, { passive: true });
+window.addEventListener("hashchange", () => {
+  if (!hubAudio) return;
+  setTimeout(() => renderHubNowPlaying(), 0);
+});
 if (els.shareLiveBackdrop) els.shareLiveBackdrop.addEventListener("click", closeShareLiveModal);
 if (els.btnCloseShareLive) els.btnCloseShareLive.addEventListener("click", closeShareLiveModal);
 if (els.btnGoHub) els.btnGoHub.addEventListener("click", () => {

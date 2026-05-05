@@ -380,6 +380,9 @@ function applyRoute() {
     renderHubDots();
     renderHubUpdatedAt();
   }
+  if (wanted === "profile") {
+    void refreshAuthStateFromSupabase();
+  }
   syncGenerateOrbVisibility();
 }
 
@@ -702,10 +705,29 @@ async function supabaseFetchUser(token) {
   if (!r.ok) return null;
   return await r.json().catch(() => null);
 }
+async function refreshAuthStateFromSupabase() {
+  const token = getSupabaseAuthToken();
+  if (!token) {
+    renderAuthStatus();
+    return null;
+  }
+  const remoteUser = await supabaseFetchUser(token);
+  if (remoteUser) {
+    saveAuthSession({ ...(authSession || {}), access_token: token, user: remoteUser });
+    return remoteUser;
+  }
+  renderAuthStatus();
+  return null;
+}
 function renderAuthStatus() {
   if (!els.authStatus) return;
   const email = authSession?.user?.email || "";
-  els.authStatus.textContent = email ? `Logged in as ${email}` : "Not logged in.";
+  const hasToken = Boolean(getSupabaseAuthToken());
+  els.authStatus.textContent = email
+    ? `Logged in as ${email}`
+    : hasToken
+      ? "Session found, validating account..."
+      : "Not logged in.";
   if (els.authLoginControls) els.authLoginControls.style.display = email ? "none" : "";
   if (els.authLoggedInRow) els.authLoggedInRow.style.display = email ? "flex" : "none";
   if (els.authLoggedInEmail) els.authLoggedInEmail.textContent = email ? `Logged in with ${email}` : "Logged in.";
@@ -772,7 +794,7 @@ async function supabaseVerifyOtp(email, token) {
   return d;
 }
 function supabaseGoogleLoginUrl() {
-  const redirectTo = encodeURIComponent(`${window.location.origin}${window.location.pathname}#/profile`);
+  const redirectTo = encodeURIComponent(`${window.location.origin}${window.location.pathname}`);
   return `${SUPABASE_URL}/auth/v1/authorize?provider=google&response_type=token&scope=email%20profile&redirect_to=${redirectTo}`;
 }
 async function supabaseUpsertProfile(profile) {
@@ -4725,20 +4747,11 @@ renderCreditsHistory();
 loadProfile();
 loadAuthSession();
 renderAuthStatus();
-void (async () => {
-  const token = getSupabaseAuthToken();
-  if (!token) return;
-  const remoteUser = await supabaseFetchUser(token);
-  if (!remoteUser) return;
-  saveAuthSession({ ...(authSession || {}), access_token: token, user: remoteUser });
-})();
+void refreshAuthStateFromSupabase();
 if (maybeHandleMagicLinkFromHash()) {
   void (async () => {
-    const token = getSupabaseAuthToken();
-    if (token) {
-      const remoteUser = await supabaseFetchUser(token);
-      if (remoteUser) saveAuthSession({ ...(authSession || {}), access_token: token, user: remoteUser });
-    }
+    await refreshAuthStateFromSupabase();
+    window.location.hash = "#/profile";
     const cloud = await supabaseLoadProfile();
     if (!cloud) return;
     saveProfile(cloud);

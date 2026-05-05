@@ -695,6 +695,17 @@ function saveAuthSession(sess) {
 function getSupabaseAuthToken() {
   return authSession?.access_token || "";
 }
+async function supabaseFetchUser(token) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !token) return null;
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!r.ok) return null;
+  return await r.json().catch(() => null);
+}
 function renderAuthStatus() {
   if (!els.authStatus) return;
   const email = authSession?.user?.email || "";
@@ -4756,8 +4767,21 @@ renderCreditsHistory();
 loadProfile();
 loadAuthSession();
 renderAuthStatus();
+void (async () => {
+  const token = getSupabaseAuthToken();
+  if (!token) return;
+  const remoteUser = await supabaseFetchUser(token);
+  if (!remoteUser) return;
+  saveAuthSession({ ...(authSession || {}), access_token: token, user: remoteUser });
+})();
 if (maybeHandleMagicLinkFromHash()) {
-  void supabaseLoadProfile().then((cloud) => {
+  void (async () => {
+    const token = getSupabaseAuthToken();
+    if (token) {
+      const remoteUser = await supabaseFetchUser(token);
+      if (remoteUser) saveAuthSession({ ...(authSession || {}), access_token: token, user: remoteUser });
+    }
+    const cloud = await supabaseLoadProfile();
     if (!cloud) return;
     saveProfile(cloud);
     if (els.profileUsername) els.profileUsername.value = activeProfile.username || "";
@@ -4772,7 +4796,7 @@ if (maybeHandleMagicLinkFromHash()) {
     if (els.profileTikTok) els.profileTikTok.value = activeProfile.links?.tiktok || "";
     if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !== false;
     renderProfilePreviewFromInputs();
-  });
+  })();
 }
 if (els.profileUsername) els.profileUsername.value = activeProfile.username || "";
 if (els.profileEmail) els.profileEmail.value = activeProfile.email || "";

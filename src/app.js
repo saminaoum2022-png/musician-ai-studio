@@ -171,6 +171,11 @@ const els = {
   hubDotRemix: document.getElementById("hubDotRemix"),
   hubTabDot: document.getElementById("hubTabDot"),
   hubTabLink: document.querySelector('.mobileTabbar [data-route-link="hub"]'),
+  hubNowPlaying: document.getElementById("hubNowPlaying"),
+  hubNowArt: document.getElementById("hubNowArt"),
+  hubNowTitle: document.getElementById("hubNowTitle"),
+  hubNowProgBar: document.getElementById("hubNowProgBar"),
+  hubNowClose: document.getElementById("hubNowClose"),
   likeBurst: document.getElementById("likeBurst"),
   hubAddDemo: document.getElementById("hubAddDemo"),
   profileUsername: document.getElementById("profileUsername"),
@@ -222,6 +227,19 @@ const els = {
 let currentProofPost = null;
 let hubAudio = null;
 let hubAudioPostId = null;
+let hubNowMeta = null;
+function renderHubNowPlaying() {
+  if (!els.hubNowPlaying) return;
+  const active = Boolean(hubAudio && hubNowMeta);
+  els.hubNowPlaying.style.display = active ? "" : "none";
+  if (!active) return;
+  if (els.hubNowArt) els.hubNowArt.src = hubNowMeta.art || "./assets/nabadai-logo.png";
+  if (els.hubNowTitle) els.hubNowTitle.textContent = hubNowMeta.title || "Now playing";
+  if (els.hubNowProgBar && hubAudio?.duration) {
+    const pct = Math.max(0, Math.min(100, (hubAudio.currentTime / hubAudio.duration) * 100));
+    els.hubNowProgBar.style.width = `${pct}%`;
+  }
+}
 const LATEST_SUNO_MODEL = "V5_5";
 const API_BASE = (window.__API_BASE__ || "").replace(/\/$/, "");
 const apiUrl = (p) => API_BASE ? `${API_BASE}${p}` : p;
@@ -843,9 +861,12 @@ function renderHub() {
     try { if (hubAudio) hubAudio.pause(); } catch {}
     hubAudio = null;
     hubAudioPostId = null;
+    hubNowMeta = null;
     els.hubList.querySelectorAll("[data-hub-play]").forEach((btn) => { btn.textContent = "▶"; });
     els.hubList.querySelectorAll(".hubPlayProgress > span").forEach((bar) => { bar.style.width = "0%"; });
     els.hubList.querySelectorAll(".hubCoverWrap").forEach((w) => w.classList.remove("isPlaying"));
+    if (els.hubNowProgBar) els.hubNowProgBar.style.width = "0%";
+    renderHubNowPlaying();
   };
   els.hubList.querySelectorAll("[data-hub-play]").forEach((b) => b.addEventListener("click", async (e) => {
     e.stopPropagation();
@@ -860,6 +881,7 @@ function renderHub() {
     try {
       hubAudio = new Audio(p.url);
       hubAudioPostId = id;
+      hubNowMeta = { title: p.title || "Hub song", art: p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png" };
       b.textContent = "■";
       b.closest(".hubCoverWrap")?.classList.add("isPlaying");
       hubAudio.addEventListener("ended", stopHubAudio);
@@ -868,8 +890,10 @@ function renderHub() {
         if (!prog || !hubAudio?.duration) return;
         const pct = Math.max(0, Math.min(100, (hubAudio.currentTime / hubAudio.duration) * 100));
         prog.style.width = `${pct}%`;
+        if (els.hubNowProgBar) els.hubNowProgBar.style.width = `${pct}%`;
       });
       await hubAudio.play();
+      renderHubNowPlaying();
     } catch {
       stopHubAudio();
       setStatus("Playback failed.");
@@ -3738,6 +3762,19 @@ if (els.hubTabLink) {
       }
       hubTapCount = 0;
     }, 250);
+  });
+}
+if (els.hubNowClose) {
+  els.hubNowClose.addEventListener("click", () => {
+    try { if (hubAudio) hubAudio.pause(); } catch {}
+    hubAudio = null;
+    hubAudioPostId = null;
+    hubNowMeta = null;
+    if (els.hubNowProgBar) els.hubNowProgBar.style.width = "0%";
+    renderHubNowPlaying();
+    document.querySelectorAll("[data-hub-play]").forEach((btn) => { btn.textContent = "▶"; });
+    document.querySelectorAll(".hubPlayProgress > span").forEach((bar) => { bar.style.width = "0%"; });
+    document.querySelectorAll(".hubCoverWrap").forEach((w) => w.classList.remove("isPlaying"));
   });
 }
 if (els.shareLiveBackdrop) els.shareLiveBackdrop.addEventListener("click", closeShareLiveModal);

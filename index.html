@@ -359,22 +359,8 @@
 
         <section class="card wide" data-route="profile">
           <h2>Profile</h2>
-          <div id="authLoginControls">
-          <div class="row">
-            <label class="field grow">
-              <div class="label">Account email (Supabase login)</div>
-              <input id="authEmail" type="email" placeholder="you@email.com" />
-            </label>
-            <button id="btnAuthSendOtp" class="ghost" type="button">Send magic link</button>
+          <div id="authLoginControls" class="row">
             <button id="btnAuthGoogle" class="ghost" type="button">Continue with Google</button>
-          </div>
-          <div class="row">
-            <label class="field grow">
-              <div class="label">OTP code (optional)</div>
-              <input id="authOtp" type="text" placeholder="123456" />
-            </label>
-            <button id="btnAuthVerifyOtp" class="primary" type="button">Verify code</button>
-          </div>
           </div>
           <div id="authLoggedInRow" class="row" style="display:none;align-items:center;justify-content:space-between">
             <div id="authLoggedInEmail" class="hint">Logged in.</div>

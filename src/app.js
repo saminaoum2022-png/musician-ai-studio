@@ -192,14 +192,10 @@ const els = {
   profileIsPublic: document.getElementById("profileIsPublic"),
   btnProfileSave: document.getElementById("btnProfileSave"),
   profileSavedMsg: document.getElementById("profileSavedMsg"),
-  authEmail: document.getElementById("authEmail"),
-  authOtp: document.getElementById("authOtp"),
   authLoginControls: document.getElementById("authLoginControls"),
   authLoggedInRow: document.getElementById("authLoggedInRow"),
   authLoggedInEmail: document.getElementById("authLoggedInEmail"),
-  btnAuthSendOtp: document.getElementById("btnAuthSendOtp"),
   btnAuthGoogle: document.getElementById("btnAuthGoogle"),
-  btnAuthVerifyOtp: document.getElementById("btnAuthVerifyOtp"),
   btnAuthLogout: document.getElementById("btnAuthLogout"),
   authStatus: document.getElementById("authStatus"),
   profilePreviewAvatar: document.getElementById("profilePreviewAvatar"),
@@ -4533,52 +4529,10 @@ if (els.btnProfileSave) {
     renderProfilePreviewFromInputs();
   });
 }
-if (els.btnAuthSendOtp) {
-  els.btnAuthSendOtp.addEventListener("click", async () => {
-    const email = String(els.authEmail?.value || "").trim().toLowerCase();
-    if (!email) return setStatus("Enter email first.");
-    try {
-      await supabaseSendOtp(email);
-      setStatus("Magic link sent. Check your email.");
-    } catch (e) {
-      setStatus(`OTP failed: ${e?.message || String(e)}`);
-    }
-  });
-}
 if (els.btnAuthGoogle) {
   els.btnAuthGoogle.addEventListener("click", () => {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return setStatus("Supabase config missing.");
     window.location.href = supabaseGoogleLoginUrl();
-  });
-}
-if (els.btnAuthVerifyOtp) {
-  els.btnAuthVerifyOtp.addEventListener("click", async () => {
-    const email = String(els.authEmail?.value || "").trim().toLowerCase();
-    const otp = String(els.authOtp?.value || "").trim();
-    if (!email || !otp) return setStatus("Enter email and OTP.");
-    try {
-      const d = await supabaseVerifyOtp(email, otp);
-      saveAuthSession(d);
-      const cloud = await supabaseLoadProfile();
-      if (cloud) {
-        saveProfile(cloud);
-        if (els.profileUsername) els.profileUsername.value = activeProfile.username || "";
-        if (els.profileEmail) els.profileEmail.value = activeProfile.email || "";
-        if (els.profileGender) els.profileGender.value = activeProfile.gender || "";
-        if (els.profileVoiceTimbre) els.profileVoiceTimbre.value = activeProfile.voiceTimbre || "";
-        if (els.profileBio) els.profileBio.value = activeProfile.bio || "";
-        if (els.profileAvatar) els.profileAvatar.value = activeProfile.avatar || "";
-        if (els.profileGenres) els.profileGenres.value = activeProfile.genres || "";
-        if (els.profileInstagram) els.profileInstagram.value = activeProfile.links?.instagram || "";
-        if (els.profileYouTube) els.profileYouTube.value = activeProfile.links?.youtube || "";
-        if (els.profileTikTok) els.profileTikTok.value = activeProfile.links?.tiktok || "";
-        if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !== false;
-        renderProfilePreviewFromInputs();
-      }
-      setStatus("Logged in with Supabase.");
-    } catch (e) {
-      setStatus(`Login failed: ${e?.message || String(e)}`);
-    }
   });
 }
 if (els.btnAuthLogout) {

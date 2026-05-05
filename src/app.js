@@ -706,6 +706,12 @@ async function supabaseFetchUser(token) {
   if (!r.ok) {
     const t = await r.text().catch(() => "");
     lastAuthDebug = `user fetch ${r.status}: ${String(t || "").slice(0, 120)}`;
+    if (r.status === 401 || r.status === 403) {
+      const lower = String(t || "").toLowerCase();
+      if (lower.includes("token") || lower.includes("jwt")) {
+        saveAuthSession(null);
+      }
+    }
     return null;
   }
   lastAuthDebug = "";
@@ -763,10 +769,15 @@ function maybeHandleMagicLinkFromHash() {
   try {
     const hash = String(window.location.hash || "");
     const search = String(window.location.search || "");
-    const raw = [hash.replace(/^#\/?/, ""), search.replace(/^\?/, "")]
-      .filter(Boolean)
-      .join("&");
-    if (!raw.includes("access_token=")) return false;
+    const rawHash = hash.startsWith("#") ? hash.slice(1) : hash;
+    const tokenPartHash = rawHash.includes("access_token=")
+      ? rawHash.slice(rawHash.indexOf("access_token="))
+      : "";
+    const tokenPartSearch = search.includes("access_token=")
+      ? search.slice(search.indexOf("access_token=") + 1)
+      : "";
+    const raw = tokenPartHash || tokenPartSearch;
+    if (!raw) return false;
     const qp = new URLSearchParams(raw);
     const access_token = qp.get("access_token");
     const refresh_token = qp.get("refresh_token");
@@ -775,6 +786,11 @@ function maybeHandleMagicLinkFromHash() {
     if (!access_token) return false;
     const email = qp.get("email") || "";
     const user = { id: qp.get("user_id") || "", email };
+    if (!access_token || access_token.split(".").length < 3) {
+      lastAuthDebug = "callback token invalid format";
+      saveAuthSession(null);
+      return false;
+    }
     saveAuthSession({ access_token, refresh_token, expires_in, token_type, user });
     window.location.hash = "#/profile";
     setStatus("Logged in via magic link.");

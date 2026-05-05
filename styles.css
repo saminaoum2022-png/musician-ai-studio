@@ -1655,7 +1655,7 @@ input::placeholder, textarea::placeholder{
     transition: transform 120ms ease, background 160ms ease, border-color 160ms ease;
   }
   .mobileTabbar a.hubTab{
-    font-size:21px;
+    font-size:24px;
     font-weight:900;
     line-height:1;
     padding:4px 0;
@@ -1669,6 +1669,7 @@ input::placeholder, textarea::placeholder{
     -webkit-background-clip: text;
     background-clip: text;
     opacity: 0.88;
+    text-shadow: 0 0 12px rgba(124,92,255,0.32), 0 0 12px rgba(35,213,171,0.24);
   }
   .mobileTabbar a.active{
     color:var(--text);

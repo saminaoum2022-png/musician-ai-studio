@@ -1429,6 +1429,14 @@ function saveLibrary(items) {
 }
 function addToLibrary(track) {
   const items = loadLibrary();
+  const url = String(track.url || "").trim();
+  const audioId = String(track.audioId || "").trim();
+  const kind = String(track.kind || "full").trim();
+  const duplicate = items.some((x) =>
+    (url && String(x.url || "").trim() === url) ||
+    (audioId && String(x.audioId || "").trim() === audioId && String(x.kind || "full").trim() === kind)
+  );
+  if (duplicate) return;
   items.unshift({
     id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     ts: Date.now(),
@@ -2421,6 +2429,11 @@ function setPlayerMeta({ title, subtitle, artUrl } = {}) {
   if (els.playerTitle) els.playerTitle.textContent = title || "Now Playing";
   if (els.playerSubtitle) els.playerSubtitle.textContent = subtitle || "";
   if (els.playerArt) els.playerArt.src = artUrl || placeholderCoverDataUrl();
+  hubNowMeta = {
+    title: title || "Now playing",
+    art: artUrl || placeholderCoverDataUrl(),
+  };
+  renderHubNowPlaying();
 }
 
 function setPlayerSource(url, label) {
@@ -2433,7 +2446,10 @@ function setPlayerSource(url, label) {
   if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = false;
   if (els.btnPlayerPause) els.btnPlayerPause.disabled = true;
   if (els.btnPlayerStop) els.btnPlayerStop.disabled = false;
+  hubAudio = a;
+  hubAudioPostId = null;
   syncPlayerUI();
+  renderHubNowPlaying();
 }
 
 async function cacheGeneratedAudio(url) {
@@ -2505,6 +2521,7 @@ function syncPlayerUI() {
     const max = Number(els.playerSeek.max || 1000);
     els.playerSeek.value = dur > 0 ? String(Math.round((cur / dur) * max)) : "0";
   }
+  renderHubNowPlaying();
 }
 
 function getParams() {

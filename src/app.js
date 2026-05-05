@@ -181,11 +181,10 @@ const els = {
   hubNowClose: document.getElementById("hubNowClose"),
   likeBurst: document.getElementById("likeBurst"),
   hubAddDemo: document.getElementById("hubAddDemo"),
-  profileUsername: document.getElementById("profileUsername"),
-  profileVoiceTimbre: document.getElementById("profileVoiceTimbre"),
-  profileBio: document.getElementById("profileBio"),
+  profilePreviewUsernameInput: document.getElementById("profilePreviewUsernameInput"),
+  profilePreviewTimbreInput: document.getElementById("profilePreviewTimbreInput"),
+  profilePreviewBioInput: document.getElementById("profilePreviewBioInput"),
   profileAvatarFile: document.getElementById("profileAvatarFile"),
-  profileGenres: document.getElementById("profileGenres"),
   profileIsPublic: document.getElementById("profileIsPublic"),
   btnProfileSave: document.getElementById("btnProfileSave"),
   profileSavedMsg: document.getElementById("profileSavedMsg"),
@@ -1415,28 +1414,18 @@ function addPersona(personaId, label) {
 }
 
 function renderProfilePreviewFromInputs() {
-  const usernameRaw = String(els.profileUsername?.value || "").trim().toLowerCase();
+  const usernameRaw = String(els.profilePreviewUsernameInput?.value || "").trim().toLowerCase();
   const username = usernameRaw ? `@${usernameRaw.replace(/^@/, "")}` : "@guest";
-  const voiceTimbre = String(els.profileVoiceTimbre?.value || "").trim();
-  const bio = String(els.profileBio?.value || "").trim() || "Add a short bio to introduce your music style.";
-  const genres = String(els.profileGenres?.value || "").trim();
+  const voiceTimbre = String(els.profilePreviewTimbreInput?.value || "").trim();
+  const bio = String(els.profilePreviewBioInput?.value || "").trim() || "Add a short bio to introduce your music style.";
+  const genres = String(activeProfile.genres || "").trim();
   const isPublic = Boolean(els.profileIsPublic?.checked);
 
-  if (els.profilePreviewUsername) els.profilePreviewUsername.textContent = username;
+  if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = username;
   if (els.profilePreviewGenderIcon) els.profilePreviewGenderIcon.style.display = "none";
-  if (els.profilePreviewTimbre) {
-    const labelMap = {
-      bass: "Bass",
-      baritone: "Baritone",
-      tenor: "Tenor",
-      alto: "Alto",
-      mezzo_soprano: "Mezzo-Soprano",
-      soprano: "Soprano",
-    };
-    els.profilePreviewTimbre.textContent = `Voice: ${labelMap[voiceTimbre] || "Not set"}`;
-  }
+  if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = voiceTimbre;
   if (els.profilePreviewVisibility) els.profilePreviewVisibility.textContent = isPublic ? "Public" : "Private";
-  if (els.profilePreviewBio) els.profilePreviewBio.textContent = bio;
+  if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = bio;
   if (els.profilePreviewGenres) els.profilePreviewGenres.textContent = genres ? `Genres: ${genres}` : "";
   if (els.profilePreviewAvatar) {
     els.profilePreviewAvatar.src = activeProfile.avatar || "./assets/nabadai-logo.png";
@@ -4698,12 +4687,12 @@ if (els.btnCreatePersona) {
 }
 if (els.btnProfileSave) {
   els.btnProfileSave.addEventListener("click", async () => {
-    const usernameRaw = String(els.profileUsername?.value || "").trim().toLowerCase();
+    const usernameRaw = String(els.profilePreviewUsernameInput?.value || "").trim().toLowerCase();
     const username = usernameRaw.replace(/[^a-z0-9_.]/g, "").slice(0, 32) || "guest";
     const email = String(authSession?.user?.email || activeProfile.email || "").trim().toLowerCase();
-    const voiceTimbre = String(els.profileVoiceTimbre?.value || "").trim();
-    const bio = String(els.profileBio?.value || "").trim().slice(0, 280);
-    const genres = String(els.profileGenres?.value || "").trim();
+    const voiceTimbre = String(els.profilePreviewTimbreInput?.value || "").trim();
+    const bio = String(els.profilePreviewBioInput?.value || "").trim().slice(0, 280);
+    const genres = String(activeProfile.genres || "").trim();
     const isPublic = Boolean(els.profileIsPublic?.checked);
     const id = email || `user:${username}`;
     saveProfile({
@@ -4755,8 +4744,14 @@ if (els.btnProfileSave) {
 }
 if (els.btnProfileCardEdit) {
   els.btnProfileCardEdit.addEventListener("click", () => {
-    if (els.profileUsername) els.profileUsername.focus();
-    setStatus("Edit profile fields, then save.");
+    const editing = els.profilePreviewUsernameInput?.disabled !== false;
+    if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.disabled = !editing;
+    if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.disabled = !editing;
+    if (els.profilePreviewBioInput) els.profilePreviewBioInput.disabled = !editing;
+    if (els.btnProfileSave) els.btnProfileSave.style.display = editing ? "" : "none";
+    if (els.btnProfileCardEdit) els.btnProfileCardEdit.textContent = editing ? "Done editing" : "Edit";
+    if (editing && els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.focus();
+    setStatus(editing ? "Edit directly in the card, then save." : "Edit mode closed.");
   });
 }
 if (els.btnAuthGoogle) {
@@ -4794,9 +4789,9 @@ if (els.profilePreviewVisibility && els.profileIsPublic) {
   });
 }
 [
-  els.profileUsername,
-  els.profileVoiceTimbre,
-  els.profileBio,  els.profileGenres,
+  els.profilePreviewUsernameInput,
+  els.profilePreviewTimbreInput,
+  els.profilePreviewBioInput,
   els.profileIsPublic,
 ].forEach((el) => {
   if (!el) return;
@@ -4968,19 +4963,17 @@ void (async () => {
     const cloud = await supabaseLoadProfile();
     if (!cloud) return;
     saveProfile(cloud);
-    if (els.profileUsername) els.profileUsername.value = activeProfile.username || "";
-    if (els.profileVoiceTimbre) els.profileVoiceTimbre.value = activeProfile.voiceTimbre || "";
-    if (els.profileBio) els.profileBio.value = activeProfile.bio || "";
-    if (els.profileGenres) els.profileGenres.value = activeProfile.genres || "";
+    if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = activeProfile.username ? `@${activeProfile.username}` : "@guest";
+    if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = activeProfile.voiceTimbre || "";
+    if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = activeProfile.bio || "";
     if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !== false;
     renderProfilePreviewFromInputs();
     renderProfileHubShared();
   }
 })();
-if (els.profileUsername) els.profileUsername.value = activeProfile.username || "";
-if (els.profileVoiceTimbre) els.profileVoiceTimbre.value = activeProfile.voiceTimbre || "";
-if (els.profileBio) els.profileBio.value = activeProfile.bio || "";
-if (els.profileGenres) els.profileGenres.value = activeProfile.genres || "";
+if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = activeProfile.username ? `@${activeProfile.username}` : "@guest";
+if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = activeProfile.voiceTimbre || "";
+if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = activeProfile.bio || "";
 if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !== false;
 renderProfilePreviewFromInputs();
 renderProfileHubShared();

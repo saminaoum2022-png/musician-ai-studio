@@ -362,14 +362,22 @@
               <img id="profilePreviewAvatar" class="profilePreviewAvatar" alt="avatar" title="Tap to change photo" />
               <div class="profilePreviewMeta">
                 <div class="profilePreviewUserRow">
-                  <div id="profilePreviewUsername" class="profilePreviewUsername">@guest</div>
+                  <input id="profilePreviewUsernameInput" class="profileInlineInput profileInlineUsername" type="text" value="@guest" maxlength="24" disabled />
                   <span id="profilePreviewGenderIcon" class="profilePreviewGenderIcon" style="display:none"></span>
                 </div>
-                <div id="profilePreviewTimbre" class="profilePreviewTimbre">Voice: Not set</div>
+                <select id="profilePreviewTimbreInput" class="profileInlineSelect" disabled>
+                  <option value="" selected>Voice: Not set</option>
+                  <option value="bass">Voice: Bass</option>
+                  <option value="baritone">Voice: Baritone</option>
+                  <option value="tenor">Voice: Tenor</option>
+                  <option value="alto">Voice: Alto</option>
+                  <option value="mezzo_soprano">Voice: Mezzo-Soprano</option>
+                  <option value="soprano">Voice: Soprano</option>
+                </select>
               </div>
               <button id="profilePreviewVisibility" class="profilePreviewVisibility" type="button">Public</button>
             </div>
-            <div id="profilePreviewBio" class="profilePreviewBio">Add a short bio to introduce your music style.</div>
+            <textarea id="profilePreviewBioInput" class="profileInlineBio" rows="3" maxlength="120" disabled>Add a short bio to introduce your music style.</textarea>
             <div id="profilePreviewGenres" class="profilePreviewGenres"></div>
           </div>
           <div id="authLoginControls" class="row">
@@ -380,43 +388,10 @@
             <button id="btnAuthLogout" class="ghost" type="button">Logout</button>
           </div>
           <div id="authStatus" class="hint" style="margin-top:4px">Not logged in.</div>
-          <div class="row">
-            <label class="field grow">
-              <div class="label">Username</div>
-              <input id="profileUsername" type="text" placeholder="@yourname" />
-            </label>
-            <label class="field grow">
-              <div class="label">Voice timbre</div>
-              <select id="profileVoiceTimbre">
-                <option value="" selected>Not set</option>
-                <option value="bass">Bass</option>
-                <option value="baritone">Baritone</option>
-                <option value="tenor">Tenor</option>
-                <option value="alto">Alto</option>
-                <option value="mezzo_soprano">Mezzo-Soprano</option>
-                <option value="soprano">Soprano</option>
-              </select>
-            </label>
-          </div>
-          <div class="row">
-            <label class="field grow">
-              <div class="label">Bio</div>
-              <textarea id="profileBio" rows="2" maxlength="120" placeholder="Short intro about your music style."></textarea>
-            </label>
-          </div>
-          <div class="row">
-            <label class="field grow" style="display:none">
-              <div class="label">Profile photo</div>
-              <input id="profileAvatarFile" type="file" accept="image/*" />
-            </label>
-            <label class="field grow">
-              <div class="label">Favorite genres / tags</div>
-              <input id="profileGenres" type="text" placeholder="Arabic pop, khaliji, trap" />
-            </label>
-          </div>
+          <input id="profileAvatarFile" type="file" accept="image/*" style="display:none" />
           <input id="profileIsPublic" type="checkbox" checked style="display:none" />
           <div class="row">
-            <button id="btnProfileSave" class="primary" type="button">Save profile</button>
+            <button id="btnProfileSave" class="primary" type="button" style="display:none">Save profile</button>
           </div>
           <div id="profileSavedMsg" class="hint" style="margin-top:8px; display:none"></div>
           <div id="profileSaveToast" class="profileSaveToast" style="display:none">Profile updated.</div>

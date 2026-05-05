@@ -179,11 +179,8 @@ const els = {
   likeBurst: document.getElementById("likeBurst"),
   hubAddDemo: document.getElementById("hubAddDemo"),
   profileUsername: document.getElementById("profileUsername"),
-  profileEmail: document.getElementById("profileEmail"),
-  profileGender: document.getElementById("profileGender"),
   profileVoiceTimbre: document.getElementById("profileVoiceTimbre"),
   profileBio: document.getElementById("profileBio"),
-  profileAvatar: document.getElementById("profileAvatar"),
   profileAvatarFile: document.getElementById("profileAvatarFile"),
   profileGenres: document.getElementById("profileGenres"),
   profileInstagram: document.getElementById("profileInstagram"),
@@ -848,6 +845,7 @@ async function maybeHandleAuthCodeFromQuery() {
       user,
     });
     window.history.replaceState({}, document.title, window.location.pathname + "#/profile");
+    applyRoute();
     setStatus("Logged in via Google.");
     return true;
   } catch (e) {
@@ -1369,10 +1367,8 @@ function addPersona(personaId, label) {
 function renderProfilePreviewFromInputs() {
   const usernameRaw = String(els.profileUsername?.value || "").trim().toLowerCase();
   const username = usernameRaw ? `@${usernameRaw.replace(/^@/, "")}` : "@guest";
-  const gender = String(els.profileGender?.value || "").trim();
   const voiceTimbre = String(els.profileVoiceTimbre?.value || "").trim();
   const bio = String(els.profileBio?.value || "").trim() || "Add a short bio to introduce your music style.";
-  const avatar = String(els.profileAvatar?.value || "").trim();
   const genres = String(els.profileGenres?.value || "").trim();
   const isPublic = Boolean(els.profileIsPublic?.checked);
   const instagram = String(els.profileInstagram?.value || "").trim();
@@ -1380,21 +1376,7 @@ function renderProfilePreviewFromInputs() {
   const tiktok = String(els.profileTikTok?.value || "").trim();
 
   if (els.profilePreviewUsername) els.profilePreviewUsername.textContent = username;
-  if (els.profilePreviewGenderIcon) {
-    els.profilePreviewGenderIcon.classList.remove("male", "female");
-    if (gender === "male") {
-      els.profilePreviewGenderIcon.style.display = "";
-      els.profilePreviewGenderIcon.textContent = "";
-      els.profilePreviewGenderIcon.classList.add("male");
-    } else if (gender === "female") {
-      els.profilePreviewGenderIcon.style.display = "";
-      els.profilePreviewGenderIcon.textContent = "";
-      els.profilePreviewGenderIcon.classList.add("female");
-    } else {
-      els.profilePreviewGenderIcon.style.display = "none";
-      els.profilePreviewGenderIcon.textContent = "";
-    }
-  }
+  if (els.profilePreviewGenderIcon) els.profilePreviewGenderIcon.style.display = "none";
   if (els.profilePreviewTimbre) {
     const labelMap = {
       bass: "Bass",
@@ -1410,7 +1392,7 @@ function renderProfilePreviewFromInputs() {
   if (els.profilePreviewBio) els.profilePreviewBio.textContent = bio;
   if (els.profilePreviewGenres) els.profilePreviewGenres.textContent = genres ? `Genres: ${genres}` : "";
   if (els.profilePreviewAvatar) {
-    els.profilePreviewAvatar.src = avatar || "./assets/nabadai-logo.png";
+    els.profilePreviewAvatar.src = activeProfile.avatar || "./assets/nabadai-logo.png";
   }
   if (els.profilePreviewLinks) {
     const links = [
@@ -4581,12 +4563,10 @@ if (els.btnProfileSave) {
   els.btnProfileSave.addEventListener("click", async () => {
     const usernameRaw = String(els.profileUsername?.value || "").trim().toLowerCase();
     const username = usernameRaw.replace(/[^a-z0-9_.]/g, "").slice(0, 32) || "guest";
-    const email = String(els.profileEmail?.value || "").trim().toLowerCase();
-    const gender = String(els.profileGender?.value || "").trim();
-    const voiceTimbre = String(els.profileVoiceTimbre?.value || "").trim();
+    const email = String(authSession?.user?.email || activeProfile.email || "").trim().toLowerCase();
+        const voiceTimbre = String(els.profileVoiceTimbre?.value || "").trim();
     const bio = String(els.profileBio?.value || "").trim().slice(0, 280);
-    const avatar = String(els.profileAvatar?.value || "").trim();
-    const genres = String(els.profileGenres?.value || "").trim();
+        const genres = String(els.profileGenres?.value || "").trim();
     const instagram = String(els.profileInstagram?.value || "").trim();
     const youtube = String(els.profileYouTube?.value || "").trim();
     const tiktok = String(els.profileTikTok?.value || "").trim();
@@ -4653,20 +4633,25 @@ if (els.profileAvatarFile) {
     if (!f) return;
     const reader = new FileReader();
     reader.onload = () => {
-      if (els.profileAvatar) els.profileAvatar.value = String(reader.result || "");
+      activeProfile.avatar = String(reader.result || "");
       renderProfilePreviewFromInputs();
     };
     reader.readAsDataURL(f);
   });
 }
+if (els.profilePreviewAvatar && els.profileAvatarFile) {
+  els.profilePreviewAvatar.addEventListener("click", () => els.profileAvatarFile.click());
+}
+if (els.profilePreviewVisibility && els.profileIsPublic) {
+  els.profilePreviewVisibility.addEventListener("click", () => {
+    els.profileIsPublic.checked = !els.profileIsPublic.checked;
+    renderProfilePreviewFromInputs();
+  });
+}
 [
   els.profileUsername,
-  els.profileEmail,
-  els.profileGender,
   els.profileVoiceTimbre,
-  els.profileBio,
-  els.profileAvatar,
-  els.profileGenres,
+  els.profileBio,  els.profileGenres,
   els.profileInstagram,
   els.profileYouTube,
   els.profileTikTok,
@@ -4842,11 +4827,8 @@ void (async () => {
     if (!cloud) return;
     saveProfile(cloud);
     if (els.profileUsername) els.profileUsername.value = activeProfile.username || "";
-    if (els.profileEmail) els.profileEmail.value = activeProfile.email || "";
-    if (els.profileGender) els.profileGender.value = activeProfile.gender || "";
     if (els.profileVoiceTimbre) els.profileVoiceTimbre.value = activeProfile.voiceTimbre || "";
     if (els.profileBio) els.profileBio.value = activeProfile.bio || "";
-    if (els.profileAvatar) els.profileAvatar.value = activeProfile.avatar || "";
     if (els.profileGenres) els.profileGenres.value = activeProfile.genres || "";
     if (els.profileInstagram) els.profileInstagram.value = activeProfile.links?.instagram || "";
     if (els.profileYouTube) els.profileYouTube.value = activeProfile.links?.youtube || "";
@@ -4856,11 +4838,8 @@ void (async () => {
   }
 })();
 if (els.profileUsername) els.profileUsername.value = activeProfile.username || "";
-if (els.profileEmail) els.profileEmail.value = activeProfile.email || "";
-if (els.profileGender) els.profileGender.value = activeProfile.gender || "";
 if (els.profileVoiceTimbre) els.profileVoiceTimbre.value = activeProfile.voiceTimbre || "";
 if (els.profileBio) els.profileBio.value = activeProfile.bio || "";
-if (els.profileAvatar) els.profileAvatar.value = activeProfile.avatar || "";
 if (els.profileGenres) els.profileGenres.value = activeProfile.genres || "";
 if (els.profileInstagram) els.profileInstagram.value = activeProfile.links?.instagram || "";
 if (els.profileYouTube) els.profileYouTube.value = activeProfile.links?.youtube || "";

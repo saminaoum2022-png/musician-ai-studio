@@ -359,6 +359,22 @@
 
         <section class="card wide" data-route="profile">
           <h2>Profile</h2>
+          <div class="profilePreview" id="profilePreviewCard">
+            <div class="profilePreviewTop">
+              <img id="profilePreviewAvatar" class="profilePreviewAvatar" alt="avatar" title="Tap to change photo" />
+              <div class="profilePreviewMeta">
+                <div class="profilePreviewUserRow">
+                  <div id="profilePreviewUsername" class="profilePreviewUsername">@guest</div>
+                  <span id="profilePreviewGenderIcon" class="profilePreviewGenderIcon" style="display:none"></span>
+                </div>
+                <div id="profilePreviewTimbre" class="profilePreviewTimbre">Voice: Not set</div>
+              </div>
+              <button id="profilePreviewVisibility" class="profilePreviewVisibility" type="button">Public</button>
+            </div>
+            <div id="profilePreviewBio" class="profilePreviewBio">Add a short bio to introduce your music style.</div>
+            <div id="profilePreviewGenres" class="profilePreviewGenres"></div>
+            <div id="profilePreviewLinks" class="profilePreviewLinks"></div>
+          </div>
           <div id="authLoginControls" class="row">
             <button id="btnAuthGoogle" class="ghost" type="button">Continue with Google</button>
           </div>
@@ -367,39 +383,10 @@
             <button id="btnAuthLogout" class="ghost" type="button">Logout</button>
           </div>
           <div id="authStatus" class="hint" style="margin-top:4px">Not logged in.</div>
-          <div class="profilePreview" id="profilePreviewCard">
-            <div class="profilePreviewTop">
-              <img id="profilePreviewAvatar" class="profilePreviewAvatar" alt="avatar" />
-              <div class="profilePreviewMeta">
-                <div class="profilePreviewUserRow">
-                  <div id="profilePreviewUsername" class="profilePreviewUsername">@guest</div>
-                  <span id="profilePreviewGenderIcon" class="profilePreviewGenderIcon" style="display:none"></span>
-                </div>
-                <div id="profilePreviewTimbre" class="profilePreviewTimbre">Voice: Not set</div>
-              </div>
-              <div id="profilePreviewVisibility" class="profilePreviewVisibility">Public</div>
-            </div>
-            <div id="profilePreviewBio" class="profilePreviewBio">Add a short bio to introduce your music style.</div>
-            <div id="profilePreviewGenres" class="profilePreviewGenres"></div>
-            <div id="profilePreviewLinks" class="profilePreviewLinks"></div>
-          </div>
           <div class="row">
             <label class="field grow">
               <div class="label">Username</div>
               <input id="profileUsername" type="text" placeholder="@yourname" />
-            </label>
-            <label class="field grow">
-              <div class="label">Email</div>
-              <input id="profileEmail" type="email" placeholder="you@email.com" />
-            </label>
-            <label class="field grow">
-              <div class="label">Gender</div>
-              <select id="profileGender">
-                <option value="" selected>Prefer not to say</option>
-                <option value="female">Female</option>
-                <option value="male">Male</option>
-                <option value="non_binary">Non-binary</option>
-              </select>
             </label>
             <label class="field grow">
               <div class="label">Voice timbre</div>
@@ -417,17 +404,13 @@
           <div class="row">
             <label class="field grow">
               <div class="label">Bio</div>
-              <textarea id="profileBio" rows="3" placeholder="Singer-songwriter from Dubai, love Arabic pop and orchestral vibes."></textarea>
+              <textarea id="profileBio" rows="2" maxlength="120" placeholder="Short intro about your music style."></textarea>
             </label>
           </div>
           <div class="row">
             <label class="field grow">
               <div class="label">Profile photo</div>
               <input id="profileAvatarFile" type="file" accept="image/*" />
-            </label>
-            <label class="field grow">
-              <div class="label">Avatar URL</div>
-              <input id="profileAvatar" type="url" placeholder="https://..." />
             </label>
             <label class="field grow">
               <div class="label">Favorite genres / tags</div>
@@ -448,11 +431,7 @@
               <input id="profileTikTok" type="url" placeholder="https://tiktok.com/@..." />
             </label>
           </div>
-          <div class="row">
-            <label class="checks">
-              <label><input id="profileIsPublic" type="checkbox" checked /> Public profile</label>
-            </label>
-          </div>
+          <input id="profileIsPublic" type="checkbox" checked style="display:none" />
           <div class="row">
             <button id="btnProfileSave" class="primary" type="button">Save profile</button>
           </div>

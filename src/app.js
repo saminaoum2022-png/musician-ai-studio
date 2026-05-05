@@ -195,6 +195,7 @@ const els = {
   authEmail: document.getElementById("authEmail"),
   authOtp: document.getElementById("authOtp"),
   btnAuthSendOtp: document.getElementById("btnAuthSendOtp"),
+  btnAuthGoogle: document.getElementById("btnAuthGoogle"),
   btnAuthVerifyOtp: document.getElementById("btnAuthVerifyOtp"),
   btnAuthLogout: document.getElementById("btnAuthLogout"),
   authStatus: document.getElementById("authStatus"),
@@ -749,6 +750,10 @@ async function supabaseVerifyOtp(email, token) {
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d?.msg || `OTP verify failed (${r.status})`);
   return d;
+}
+function supabaseGoogleLoginUrl() {
+  const redirectTo = encodeURIComponent(`${window.location.origin}${window.location.pathname}#/profile`);
+  return `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${redirectTo}`;
 }
 async function supabaseUpsertProfile(profile) {
   const token = getSupabaseAuthToken();
@@ -4514,6 +4519,12 @@ if (els.btnAuthSendOtp) {
     } catch (e) {
       setStatus(`OTP failed: ${e?.message || String(e)}`);
     }
+  });
+}
+if (els.btnAuthGoogle) {
+  els.btnAuthGoogle.addEventListener("click", () => {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return setStatus("Supabase config missing.");
+    window.location.href = supabaseGoogleLoginUrl();
   });
 }
 if (els.btnAuthVerifyOtp) {

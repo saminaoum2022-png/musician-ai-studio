@@ -1074,6 +1074,20 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   border-radius:999px;
   font-size:11px;
 }
+.profileSaveToast{
+  position: fixed;
+  left: 50%;
+  bottom: calc(88px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 130;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: linear-gradient(180deg, rgba(22,36,58,0.95), rgba(10,16,30,0.95));
+  color: rgba(245,248,255,0.96);
+  font-size: 13px;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.35);
+}
 .stepHead{
   font-weight:900;
   letter-spacing:-0.01em;
@@ -1538,6 +1552,11 @@ input[type="range"]::-moz-range-thumb{
   .advancedPersonaBtn{
     width: 100%;
     justify-content: center;
+  }
+  #btnProfileSave{
+    width: 100%;
+    margin-top: 8px;
+    margin-bottom: 8px;
   }
   .label{
     color: rgba(232,238,247,0.72);

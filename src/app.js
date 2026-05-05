@@ -189,6 +189,7 @@ const els = {
   profileIsPublic: document.getElementById("profileIsPublic"),
   btnProfileSave: document.getElementById("btnProfileSave"),
   profileSavedMsg: document.getElementById("profileSavedMsg"),
+  profileSaveToast: document.getElementById("profileSaveToast"),
   authLoginControls: document.getElementById("authLoginControls"),
   authLoggedInRow: document.getElementById("authLoggedInRow"),
   authLoggedInEmail: document.getElementById("authLoggedInEmail"),
@@ -1149,8 +1150,8 @@ function renderHub() {
       </div>
       <div style="flex:1;min-width:0">
         <div class="hubMetaTop">
-          <img src="${escapeHtml(p.creatorAvatar || "./assets/nabadai-logo.png")}" alt="avatar" style="width:26px;height:26px;border-radius:999px;object-fit:cover;border:1px solid rgba(255,255,255,0.14)" />
-          <div class="trackTiny">@${escapeHtml(p.creator)}</div>
+          <img src="${escapeHtml(p.creatorAvatar || "./assets/nabadai-logo.png")}" alt="avatar" data-hub-user="${p.id}" style="width:26px;height:26px;border-radius:999px;object-fit:cover;border:1px solid rgba(255,255,255,0.14);cursor:pointer" />
+          <div class="trackTiny" data-hub-user="${p.id}" style="cursor:pointer">@${escapeHtml(p.creator)}</div>
           <span class="hubProofChip">Proof ${escapeHtml(String(p?.proof?.model || LATEST_SUNO_MODEL))} · #${escapeHtml(String(p?.proof?.promptHash || ""))}</span>
         </div>
         <div class="trackName">${escapeHtml(p.title)}</div>
@@ -1275,6 +1276,15 @@ function renderHub() {
     location.hash = "#/generate";
     setStatus(`Remix seed loaded from Hub: ${p.title}`);
     syncGenerateOrbVisibility();
+  }));
+  els.hubList.querySelectorAll("[data-hub-user]").forEach((u) => u.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const id = u.getAttribute("data-hub-user");
+    const p = loadHubFeed().find((x) => x.id === id);
+    if (!p) return;
+    const voice = String(p?.meta?.voiceTimbre || "Not set");
+    const bio = String(p?.meta?.bio || "No bio yet.");
+    alert(`@${p.creator}\nVoice: ${voice}\n\n${bio}`);
   }));
   els.hubList.querySelectorAll(".hubProofChip").forEach((chip) => chip.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -4073,7 +4083,10 @@ if (els.hubFilterSelect) {
         setStatus("Demo post added locally (Supabase sync failed).");
         renderHub();
       }
-      if (els.hubFilterSelect) els.hubFilterSelect.value = hubFilter;
+      hubFilter = "latest";
+      markHubCategorySeen("latest");
+      if (els.hubFilterSelect) els.hubFilterSelect.value = "latest";
+      renderHub();
       return;
     }
     hubFilter = selected;
@@ -4637,9 +4650,9 @@ if (els.btnProfileSave) {
     const usernameRaw = String(els.profileUsername?.value || "").trim().toLowerCase();
     const username = usernameRaw.replace(/[^a-z0-9_.]/g, "").slice(0, 32) || "guest";
     const email = String(authSession?.user?.email || activeProfile.email || "").trim().toLowerCase();
-        const voiceTimbre = String(els.profileVoiceTimbre?.value || "").trim();
+    const voiceTimbre = String(els.profileVoiceTimbre?.value || "").trim();
     const bio = String(els.profileBio?.value || "").trim().slice(0, 280);
-        const genres = String(els.profileGenres?.value || "").trim();
+    const genres = String(els.profileGenres?.value || "").trim();
     const instagram = String(els.profileInstagram?.value || "").trim();
     const youtube = String(els.profileYouTube?.value || "").trim();
     const tiktok = String(els.profileTikTok?.value || "").trim();
@@ -4649,10 +4662,9 @@ if (els.btnProfileSave) {
       id,
       username,
       email,
-      gender,
       voiceTimbre,
       bio,
-      avatar,
+      avatar: activeProfile.avatar || "",
       genres,
       links: { instagram, youtube, tiktok },
       isPublic,
@@ -4662,10 +4674,9 @@ if (els.btnProfileSave) {
         id,
         username,
         email,
-        gender,
         voiceTimbre,
         bio,
-        avatar,
+        avatar: activeProfile.avatar || "",
         genres,
         links: { instagram, youtube, tiktok },
         isPublic,
@@ -4678,11 +4689,17 @@ if (els.btnProfileSave) {
     setStatus(`Profile saved: @${username}`);
     if (els.profileSavedMsg) {
       els.profileSavedMsg.style.display = "";
-      const publicLabel = isPublic ? "Public" : "Private";
-      els.profileSavedMsg.textContent = `Saved as @${username}${email ? ` (${email})` : ""} • ${publicLabel}`;
+      els.profileSavedMsg.textContent = `Saved @${username}`;
       setTimeout(() => {
         if (els.profileSavedMsg) els.profileSavedMsg.style.display = "none";
       }, 2200);
+    }
+    if (els.profileSaveToast) {
+      els.profileSaveToast.textContent = "Profile updated.";
+      els.profileSaveToast.style.display = "";
+      setTimeout(() => {
+        if (els.profileSaveToast) els.profileSaveToast.style.display = "none";
+      }, 1800);
     }
     renderProfilePreviewFromInputs();
   });

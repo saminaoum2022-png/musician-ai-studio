@@ -736,8 +736,12 @@ async function supabaseSendOtp(email) {
 function maybeHandleMagicLinkFromHash() {
   try {
     const hash = String(window.location.hash || "");
-    if (!hash.includes("access_token=")) return false;
-    const qp = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
+    const search = String(window.location.search || "");
+    const raw = [hash.replace(/^#\/?/, ""), search.replace(/^\?/, "")]
+      .filter(Boolean)
+      .join("&");
+    if (!raw.includes("access_token=")) return false;
+    const qp = new URLSearchParams(raw);
     const access_token = qp.get("access_token");
     const refresh_token = qp.get("refresh_token");
     const expires_in = Number(qp.get("expires_in") || 3600);
@@ -773,7 +777,7 @@ async function supabaseVerifyOtp(email, token) {
 }
 function supabaseGoogleLoginUrl() {
   const redirectTo = encodeURIComponent(`${window.location.origin}${window.location.pathname}#/profile`);
-  return `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${redirectTo}`;
+  return `${SUPABASE_URL}/auth/v1/authorize?provider=google&response_type=token&scope=email%20profile&redirect_to=${redirectTo}`;
 }
 async function supabaseUpsertProfile(profile) {
   const token = getSupabaseAuthToken();

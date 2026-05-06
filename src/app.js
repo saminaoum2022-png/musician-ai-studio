@@ -23,6 +23,7 @@ const els = {
   sunoVocalUpload: document.getElementById("sunoVocalUpload"),
   sunoVocalUploadName: document.getElementById("sunoVocalUploadName"),
   sunoReferenceMode: document.getElementById("sunoReferenceMode"),
+  sunoReferenceHint: document.getElementById("sunoReferenceHint"),
   btnVocalRefRec: document.getElementById("btnVocalRefRec"),
   btnVocalRefStop: document.getElementById("btnVocalRefStop"),
   btnSunoGenerate: document.getElementById("btnSunoGenerate"),
@@ -440,6 +441,7 @@ function resetCreateDraft() {
   if (els.sunoVocalUpload) els.sunoVocalUpload.value = "";
   vocalRefBlob = null;
   if (els.sunoVocalUploadName) els.sunoVocalUploadName.textContent = "No vocal reference attached.";
+  renderReferenceHints();
   if (els.resultCard) els.resultCard.style.display = "none";
   if (els.resultCard2) els.resultCard2.style.display = "none";
   setStatus("New draft started.");
@@ -3432,6 +3434,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (els.sunoVocalUploadName) {
         els.sunoVocalUploadName.textContent = f ? `Voice reference attached: ${f.name}` : "No vocal reference attached.";
       }
+      renderReferenceHints();
       updateVocalRefPreviewState();
     });
   }
@@ -3451,6 +3454,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           if (els.sunoVocalUploadName) {
             els.sunoVocalUploadName.textContent = "Voice reference recorded and attached.";
           }
+          renderReferenceHints();
           updateVocalRefPreviewState();
           if (els.btnRecorderUse) els.btnRecorderUse.disabled = !vocalRefBlob;
           if (els.recorderStatus) els.recorderStatus.textContent = "Recording ready";
@@ -3477,6 +3481,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       els.btnVocalRefRec.disabled = false;
       els.btnVocalRefStop.disabled = true;
       setStatus("Voice reference ready.");
+      renderReferenceHints();
     });
   }
   const setGenerateFieldsLocked = (locked) => {
@@ -3634,6 +3639,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     els.btnRecorderUse.addEventListener("click", () => {
       if (!vocalRefBlob) return;
       if (els.sunoVocalUploadName) els.sunoVocalUploadName.textContent = "Voice reference recorded and attached.";
+      renderReferenceHints();
       updateVocalRefPreviewState();
       closeVocalRecorderModal();
     });
@@ -4397,6 +4403,71 @@ function syncGenerateOrbVisibility() {
   const visible = route === "generate" && hasInput && !generating && !hasResult;
   els.btnGenerateOrb.style.display = visible ? "inline-flex" : "none";
 }
+
+function parseBpmFromTimingText(txt) {
+  const s = String(txt || "").toLowerCase();
+  const m = s.match(/(\d{2,3})\s*bpm/);
+  if (m) return Number(m[1]);
+  const m2 = s.match(/\b(\d{2,3})\b/);
+  return m2 ? Number(m2[1]) : null;
+}
+
+function getReferenceHints() {
+  const hints = [];
+  const lyrics = String(els.sunoPrompt?.value || "").trim();
+  const style = String(els.sunoStyle?.value || "").trim();
+  const timing = String(els.sunoTiming?.value || "").trim();
+  const dialect = String(els.sunoDialect?.value || "").trim();
+  const dialectHint = String(els.sunoDialectHint?.value || "").trim();
+  const vp = String(els.sunoVoiceProfile?.value || "").trim().toLowerCase();
+  const persona = String(els.sunoPersonaId?.value || "").trim();
+  let referenceMode = String(els.sunoReferenceMode?.value || "none");
+  const hasRef = Boolean(getVocalReferenceFile());
+  if (hasRef && referenceMode === "none") referenceMode = "vocal_full";
+  const refOn = hasRef && referenceMode !== "none";
+
+  if (hasRef && !lyrics) {
+    hints.push("For better accuracy, add at least 2–4 lyric lines.");
+  }
+  if (refOn && (dialect || vp || String(els.sunoSongKey?.value || "").trim() || persona)) {
+    hints.push("For cleaner melody follow, keep Accent, Voice Profile, Song Key, and Persona on Auto first.");
+  }
+  if (dialect && !dialectHint) {
+    hints.push("Add one short example line in this dialect to improve pronunciation.");
+  }
+  if ((vp.includes("baritone") || vp.includes("bass")) && timing) {
+    const bpm = parseBpmFromTimingText(timing);
+    const fastWords = /\b(fast|upbeat|dance|energetic|club)\b/i.test(timing);
+    if ((Number.isFinite(bpm) && bpm >= 100) || fastWords) {
+      hints.push("High BPM can push brighter pitch. For warmer baritone/bass tone, use slower timing.");
+    }
+  }
+  if (referenceMode === "humming_music" && lyrics.length > 220) {
+    hints.push("Humming mode works better with short guidance. Keep lyrics minimal.");
+  }
+  if (referenceMode === "song_remix" && !style) {
+    hints.push("Add style tags so remix direction is clear (example: cinematic, chill, acoustic).");
+  }
+  if (refOn && persona) {
+    hints.push("Persona may change tone away from your reference. Turn Persona off for stricter melody match.");
+  }
+  if (refOn && hints.length === 0) {
+    hints.push("Best first attempt: keep options Auto, add clear lyrics, then increase controls step by step.");
+  }
+  return hints.slice(0, 2);
+}
+
+function renderReferenceHints() {
+  if (!els.sunoReferenceHint) return;
+  const hints = getReferenceHints();
+  if (!hints.length) {
+    els.sunoReferenceHint.style.display = "none";
+    els.sunoReferenceHint.textContent = "";
+    return;
+  }
+  els.sunoReferenceHint.style.display = "";
+  els.sunoReferenceHint.textContent = hints.map((h, i) => `${i + 1}. ${h}`).join(" ");
+}
 ["input", "change"].forEach((ev) => {
   els.sunoPrompt?.addEventListener(ev, syncGenerateOrbVisibility);
   els.sunoStyle?.addEventListener(ev, syncGenerateOrbVisibility);
@@ -4992,6 +5063,21 @@ if (els.sunoProMode) {
   els.sunoProMode.addEventListener("change", syncPro);
   syncPro();
 }
+[
+  els.sunoPrompt,
+  els.sunoStyle,
+  els.sunoTiming,
+  els.sunoDialect,
+  els.sunoDialectHint,
+  els.sunoVoiceProfile,
+  els.sunoSongKey,
+  els.sunoPersonaId,
+  els.sunoReferenceMode,
+].forEach((el) => {
+  if (!el) return;
+  el.addEventListener("input", renderReferenceHints);
+  el.addEventListener("change", renderReferenceHints);
+});
 
 if (els.btnBetaTopup) {
   els.btnBetaTopup.addEventListener("click", () => openBilling());

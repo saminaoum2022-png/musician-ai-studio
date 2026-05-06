@@ -804,15 +804,16 @@ function renderAuthStatus() {
   const email = authSession?.user?.email || "";
   const hasToken = Boolean(getSupabaseAuthToken());
   let msg = email
-    ? `Logged in as ${email}`
+    ? ""
     : hasToken
       ? "Session found, validating account..."
       : "Not logged in.";
   if (!email && hasToken && lastAuthDebug) msg += ` • ${lastAuthDebug}`;
   els.authStatus.textContent = msg;
+  els.authStatus.style.display = msg ? "" : "none";
   if (els.authLoginControls) els.authLoginControls.style.display = email ? "none" : "";
   if (els.authLoggedInRow) els.authLoggedInRow.style.display = email ? "flex" : "none";
-  if (els.authLoggedInEmail) els.authLoggedInEmail.textContent = email ? `Logged in with ${email}` : "Logged in.";
+  if (els.authLoggedInEmail) els.authLoggedInEmail.textContent = email ? email : "Logged in.";
 }
 function resetProfileUiToGuest() {
   activeProfile = {

@@ -1836,12 +1836,12 @@ input[type="range"]::-moz-range-thumb{
 .mobileTabbar{ display:none; }
 @media (max-width: 720px){
   .app{
-    padding: calc(14px + env(safe-area-inset-top)) 12px calc(92px + env(safe-area-inset-bottom));
+    padding: calc(12px + env(safe-area-inset-top)) 12px calc(92px + env(safe-area-inset-bottom));
     max-width: 100%;
   }
   .header{
     gap: 8px;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
     flex-direction: column;
     align-items: center;
   }
@@ -1870,7 +1870,7 @@ input[type="range"]::-moz-range-thumb{
     border-color: rgba(255,255,255,0.10);
     background: rgba(8,12,20,0.58);
     backdrop-filter: blur(6px);
-    min-height: 38px;
+    min-height: 34px;
   }
   .headerRight{
     align-items:center;
@@ -1912,20 +1912,20 @@ input[type="range"]::-moz-range-thumb{
     background: transparent;
     box-shadow: none;
     border-radius:0;
-    padding: 4px 0;
+    padding: 2px 0;
   }
   .createSectionStack{
-    gap: 18px;
+    gap: 10px;
     margin-bottom: var(--space-3);
   }
   .inputPanel{
-    padding: 11px 12px;
-    border-radius: 18px;
+    padding: 9px 10px;
+    border-radius: 16px;
     border-color: rgba(255,255,255,0.09);
     background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.02));
   }
   .inputPanel--style{
-    padding-bottom: var(--space-2);
+    padding-bottom: 8px;
   }
   .card.wide[data-route="generate"] h2{
     margin-bottom: 8px;
@@ -1945,8 +1945,8 @@ input[type="range"]::-moz-range-thumb{
     color: rgba(232,238,247,0.52);
   }
   .stepHead{
-    margin-bottom: 6px;
-    font-size: 12.5px;
+    margin-bottom: 4px;
+    font-size: 12px;
     color: rgba(232,238,247,0.86);
   }
   .advancedGrid{
@@ -1974,15 +1974,38 @@ input[type="range"]::-moz-range-thumb{
   input, select, textarea{
     background: rgba(26, 42, 64, 0.28);
     border-color: rgba(255,255,255,0.07);
-    border-radius: 14px;
+    border-radius: 12px;
   }
   textarea{
-    min-height: 150px;
+    min-height: 124px;
   }
   .card.wide[data-route="generate"] .inputPanel .lyricsBox textarea{
-    min-height: 132px;
-    max-height: 340px;
+    min-height: 104px;
+    max-height: 260px;
     overflow-y: auto;
+  }
+  .card.wide[data-route="generate"] .inputPanel--style input{
+    min-height: 36px;
+    padding-top: 4px;
+  }
+  .vocalQuickRow{
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .vocalQuickRow .ghost{
+    min-height: 32px;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  .uploadVocalsName{
+    margin-top: 2px;
+    font-size: 12px;
+  }
+  .mobileAdvancedBtn{
+    margin-top: 4px;
+    margin-bottom: 6px;
+    min-height: 34px;
+    font-size: 12.5px;
   }
 input::placeholder, textarea::placeholder{
   color: rgba(232,238,247,0.36);

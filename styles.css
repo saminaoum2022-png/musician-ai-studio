@@ -1055,6 +1055,16 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
 .card[data-route="profile"] h2{
   margin-bottom: 6px;
 }
+.card[data-route="profile"]{
+  padding-top: 10px !important;
+}
+.card[data-route="profile"] h2{
+  margin: 0 0 2px 0 !important;
+}
+.card[data-route="profile"] .profilePreview{
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
 .profilePreviewHead{
   display:flex;
   justify-content:flex-end;

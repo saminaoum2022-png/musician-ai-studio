@@ -334,6 +334,83 @@ body.isIntro .footer{ display:none; }
   background: transparent;
   padding:10px 0;
 }
+.libraryGrid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+}
+.libTile{
+  position:relative;
+  border:1px solid rgba(255,255,255,0.10);
+  border-radius:12px;
+  overflow:hidden;
+  background: linear-gradient(180deg, rgba(20,26,40,0.88), rgba(10,14,22,0.86));
+  aspect-ratio: 1 / 1;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.22);
+}
+.libTileArt{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+.libTileShade{
+  position:absolute;
+  left:0; right:0; bottom:0;
+  background:linear-gradient(180deg, rgba(6,8,14,0), rgba(6,8,14,0.82));
+  padding:30px 8px 8px;
+}
+.libTileTitle{
+  font-size:11px;
+  font-weight:800;
+  color:rgba(245,249,255,0.96);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.libTileMeta{
+  font-size:10px;
+  color:rgba(185,196,214,0.92);
+}
+.libTilePlay{
+  position:absolute;
+  left:8px;
+  top:8px;
+  width:28px;
+  height:28px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,0.16);
+  background:rgba(7,10,16,0.58);
+  color:#fff;
+  font-size:12px;
+  font-weight:800;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  z-index:2;
+}
+.libTileMenuBtn{
+  position:absolute;
+  right:8px;
+  top:8px;
+  width:28px;
+  height:28px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,0.16);
+  background:rgba(7,10,16,0.58);
+  color:#fff;
+  font-size:15px;
+  line-height:1;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  z-index:2;
+}
+.libTile .libMenu{
+  right:8px;
+  top:40px;
+  min-width:134px;
+}
 .hubRow{
   border:1px solid rgba(255,255,255,0.10);
   border-radius:14px;
@@ -975,6 +1052,17 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   box-shadow: 0 12px 30px rgba(0,0,0,0.25);
   margin-bottom: 12px;
 }
+.profilePreviewHead{
+  display:flex;
+  justify-content:flex-end;
+  margin-bottom:8px;
+}
+.profileEditBtn{
+  border-radius:999px;
+  padding:6px 10px;
+  min-height:30px;
+  font-size:12px;
+}
 .profilePreviewTop{
   display:flex;
   align-items:center;
@@ -1035,6 +1123,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   border: 1px solid transparent;
   border-radius: 10px;
   padding: 6px 8px;
+  min-height: 54px;
 }
 .profileInlineBio:disabled{
   opacity: 1;

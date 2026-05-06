@@ -1529,6 +1529,11 @@ function renderProfilePreviewFromInputs() {
   if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = voiceTimbre;
   if (els.profilePreviewVisibility) els.profilePreviewVisibility.textContent = isPublic ? "Public" : "Private";
   if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = bio;
+  if (els.profilePreviewBioInput) {
+    els.profilePreviewBioInput.style.height = "auto";
+    const h = Math.max(54, Math.min(132, els.profilePreviewBioInput.scrollHeight || 54));
+    els.profilePreviewBioInput.style.height = `${h}px`;
+  }
   if (els.profilePreviewGenres) els.profilePreviewGenres.textContent = genres ? `Genres: ${genres}` : "";
   if (els.profilePreviewAvatar) {
     els.profilePreviewAvatar.src = activeProfile.avatar || "./assets/nabadai-logo.png";
@@ -1711,26 +1716,45 @@ function renderLibrary() {
     els.libraryList.textContent = "No songs yet. Generate a song and it will appear here.";
     return;
   }
-  els.libraryList.innerHTML = items
-    .map(
-      (t) => `
-      <div class="trackRow libRow" data-lib-row="${t.id}">
-        <div style="flex:1; min-width:0;">
-          <div class="trackName">${escapeHtml(t.title)}</div>
-          <div class="trackTiny">${new Date(t.ts).toLocaleString()}</div>
+  els.libraryList.innerHTML = `
+    <div class="libraryGrid">
+      ${items.map((t) => `
+        <div class="libTile libRow" data-lib-row="${t.id}">
+          <img class="libTileArt" src="${escapeHtml(String((t.meta && t.meta.imageUrl) || t.artUrl || "./assets/nabadai-logo.png"))}" alt="${escapeHtml(t.title || "Song artwork")}" />
+          <button class="libTilePlay" data-lib-play="${t.id}" aria-label="Play">▶</button>
+          <button class="libTileMenuBtn" data-lib-menu="${t.id}" aria-label="Song options">⋯</button>
+          <div class="libTileShade">
+            <div class="libTileTitle">${escapeHtml(t.title || "Generated song")}</div>
+            <div class="libTileMeta">${new Date(t.ts).toLocaleDateString()}</div>
+          </div>
+          <div class="libMenu" id="libMenu_${t.id}" style="display:none">
+            <a class="ghost" href="${t.url}" target="_blank" rel="noreferrer">Download</a>
+            <button class="ghost" data-lib-share="${t.id}">Share to Hub</button>
+            <button class="ghost" data-lib-details="${t.id}">Song details</button>
+            ${t.kind === "instrumental" ? "" : `<button class="ghost" data-lib-inst="${t.id}">Get instrumental</button>`}
+            ${t.kind === "instrumental" ? "" : `<button class="ghost" data-lib-stems="${t.id}">Get stems</button>`}
+            <button class="ghost" data-lib-del="${t.id}">Delete</button>
+          </div>
         </div>
-        <button class="ghost libMenuBtn" data-lib-menu="${t.id}" aria-label="Song options">⋯</button>
-        <div class="libMenu" id="libMenu_${t.id}" style="display:none">
-          <a class="ghost" href="${t.url}" target="_blank" rel="noreferrer">Download</a>
-          <button class="ghost" data-lib-share="${t.id}">Share to Hub</button>
-          <button class="ghost" data-lib-details="${t.id}">Song details</button>
-          ${t.kind === "instrumental" ? "" : `<button class="ghost" data-lib-inst="${t.id}">Get instrumental</button>`}
-          ${t.kind === "instrumental" ? "" : `<button class="ghost" data-lib-stems="${t.id}">Get stems</button>`}
-          <button class="ghost" data-lib-del="${t.id}">Delete</button>
-        </div>
-      </div>`
-    )
-    .join("");
+      `).join("")}
+    </div>
+  `;
+  els.libraryList.querySelectorAll("[data-lib-play]").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute("data-lib-play");
+      const t = loadLibrary().find((x) => x.id === id);
+      if (!t?.url) return;
+      currentPlayerTrackRef = t;
+      setPlayerMeta({
+        title: t.title || "Library song",
+        subtitle: "Library • Full song",
+        artUrl: (t.meta && t.meta.imageUrl) || placeholderCoverDataUrl(),
+      });
+      miniSource = { type: "library", id };
+      await playOnPlayerPage(t.url, "Full song");
+    });
+  });
   els.libraryList.querySelectorAll("[data-lib-row]").forEach((row) => {
     row.addEventListener("click", async (e) => {
       const tgt = e.target;

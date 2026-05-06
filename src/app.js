@@ -163,6 +163,7 @@ const els = {
   libraryList: document.getElementById("libraryList"),
   hubList: document.getElementById("hubList"),
   hubUpdatedAt: document.getElementById("hubUpdatedAt"),
+  hubSyncInfo: document.getElementById("hubSyncInfo"),
   hubFilterLatest: document.getElementById("hubFilterLatest"),
   hubFilterArabic: document.getElementById("hubFilterArabic"),
   hubFilterInstrumental: document.getElementById("hubFilterInstrumental"),
@@ -309,6 +310,15 @@ function renderHubUpdatedAt() {
   if (!els.hubUpdatedAt) return;
   const relative = relativeTime(lastHubUpdateAt);
   els.hubUpdatedAt.textContent = `Updated: ${relative}`;
+  if (els.hubSyncInfo) {
+    if (hubLastSyncOk) {
+      els.hubSyncInfo.textContent = `Hub: connected • rows ${hubLastSyncRows}`;
+    } else if (hubLastSyncError) {
+      els.hubSyncInfo.textContent = `Hub: sync issue • ${hubLastSyncError}`;
+    } else {
+      els.hubSyncInfo.textContent = "Hub: waiting…";
+    }
+  }
 }
 function updateEnvironmentBadge() {
   if (!els.envBadge) return;
@@ -638,6 +648,9 @@ function getLocalDeviceId() {
 }
 let hubFilter = "latest";
 let hubSyncTimer = null;
+let hubLastSyncOk = false;
+let hubLastSyncRows = 0;
+let hubLastSyncError = "";
 function loadHubSeen() {
   try {
     const raw = localStorage.getItem(hubSeenKey());
@@ -700,7 +713,10 @@ async function supabaseSelectHub() {
       apikey: SUPABASE_ANON_KEY,
     },
   });
-  if (!r.ok) throw new Error("supabase select failed");
+  if (!r.ok) {
+    const txt = await r.text().catch(() => "");
+    throw new Error(`supabase select failed (${r.status}) ${String(txt).slice(0, 100)}`);
+  }
   return await r.json().catch(() => []);
 }
 function loadAuthSession() {
@@ -1348,6 +1364,9 @@ async function refreshHubFromSupabase() {
   try {
     const rows = await supabaseSelectHub();
     if (!rows || !Array.isArray(rows)) return;
+    hubLastSyncOk = true;
+    hubLastSyncError = "";
+    hubLastSyncRows = rows.length;
     const prev = loadHubFeed();
     const mapped = rows.map((r) => ({
       id: String(r.id),
@@ -1378,7 +1397,11 @@ async function refreshHubFromSupabase() {
     lastHubUpdateAt = merged.length ? Math.max(...merged.map((x) => Number(x.ts || 0))) : 0;
     renderHub();
     renderHubDots();
-  } catch {}
+  } catch (e) {
+    hubLastSyncOk = false;
+    hubLastSyncError = e?.message ? String(e.message).slice(0, 100) : "unknown";
+    renderHubUpdatedAt();
+  }
 }
 function startHubLiveSync() {
   if (hubSyncTimer) clearInterval(hubSyncTimer);

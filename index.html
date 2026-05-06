@@ -359,7 +359,10 @@
           <h2>Profile</h2>
           <div class="profilePreview" id="profilePreviewCard">
             <div class="profilePreviewHead">
-              <button id="btnProfileCardEdit" class="ghost profileEditBtn" type="button">Edit</button>
+              <button id="btnProfileCardEdit" class="ghost profileEditBtn" type="button" aria-label="Profile actions">⋯</button>
+              <div id="profileEditMenu" class="libMenu profileEditMenu" style="display:none">
+                <button class="ghost" id="btnProfileMenuEdit" type="button">Edit profile</button>
+              </div>
             </div>
             <div class="profilePreviewTop">
               <img id="profilePreviewAvatar" class="profilePreviewAvatar" alt="avatar" title="Tap to change photo" />

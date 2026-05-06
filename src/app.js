@@ -206,6 +206,8 @@ const els = {
   profilePreviewLinks: document.getElementById("profilePreviewLinks"),
   profileHubSharedList: document.getElementById("profileHubSharedList"),
   btnProfileCardEdit: document.getElementById("btnProfileCardEdit"),
+  profileEditMenu: document.getElementById("profileEditMenu"),
+  btnProfileMenuEdit: document.getElementById("btnProfileMenuEdit"),
   songDetailsModal: document.getElementById("songDetailsModal"),
   songDetailsBackdrop: document.getElementById("songDetailsBackdrop"),
   btnCloseSongDetails: document.getElementById("btnCloseSongDetails"),
@@ -807,6 +809,28 @@ function renderAuthStatus() {
   if (els.authLoginControls) els.authLoginControls.style.display = email ? "none" : "";
   if (els.authLoggedInRow) els.authLoggedInRow.style.display = email ? "flex" : "none";
   if (els.authLoggedInEmail) els.authLoggedInEmail.textContent = email ? `Logged in with ${email}` : "Logged in.";
+}
+function resetProfileUiToGuest() {
+  activeProfile = {
+    id: "guest",
+    username: "guest",
+    email: "",
+    voiceTimbre: "",
+    bio: "Add a short bio to introduce your music style.",
+    avatar: "",
+    genres: "",
+    links: {},
+    isPublic: true,
+  };
+  try { localStorage.setItem(PROFILE_KEY, JSON.stringify(activeProfile)); } catch {}
+  if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = "@guest";
+  if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = "";
+  if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = "Add a short bio to introduce your music style.";
+  if (els.profileIsPublic) els.profileIsPublic.checked = true;
+  if (els.profileAvatarFile) els.profileAvatarFile.value = "";
+  renderProfilePreviewFromInputs();
+  renderProfileHubShared();
+  renderLibrary();
 }
 async function supabaseSendOtp(email) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase config missing");
@@ -4938,12 +4962,20 @@ if (els.btnProfileSave) {
 }
 if (els.btnProfileCardEdit) {
   els.btnProfileCardEdit.addEventListener("click", () => {
+    const menu = els.profileEditMenu;
+    if (!menu) return;
+    const open = menu.style.display !== "none";
+    menu.style.display = open ? "none" : "";
+  });
+}
+if (els.btnProfileMenuEdit) {
+  els.btnProfileMenuEdit.addEventListener("click", () => {
     const editing = els.profilePreviewUsernameInput?.disabled !== false;
     if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.disabled = !editing;
     if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.disabled = !editing;
     if (els.profilePreviewBioInput) els.profilePreviewBioInput.disabled = !editing;
     if (els.btnProfileSave) els.btnProfileSave.style.display = editing ? "" : "none";
-    if (els.btnProfileCardEdit) els.btnProfileCardEdit.textContent = editing ? "Done editing" : "Edit";
+    if (els.profileEditMenu) els.profileEditMenu.style.display = "none";
     if (editing && els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.focus();
     setStatus(editing ? "Edit directly in the card, then save." : "Edit mode closed.");
   });
@@ -4951,13 +4983,28 @@ if (els.btnProfileCardEdit) {
 if (els.btnAuthGoogle) {
   els.btnAuthGoogle.addEventListener("click", async () => {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return setStatus("Supabase config missing.");
+    if (els.btnAuthGoogle) {
+      els.btnAuthGoogle.disabled = true;
+      els.btnAuthGoogle.textContent = "Opening Google…";
+    }
+    setStatus("Opening Google login…");
     const url = await supabaseGoogleLoginUrl();
-    window.location.href = url;
+    window.location.assign(url);
   });
 }
 if (els.btnAuthLogout) {
   els.btnAuthLogout.addEventListener("click", () => {
     saveAuthSession(null);
+    resetProfileUiToGuest();
+    if (els.profileEditMenu) els.profileEditMenu.style.display = "none";
+    if (els.btnProfileSave) els.btnProfileSave.style.display = "none";
+    if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.disabled = true;
+    if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.disabled = true;
+    if (els.profilePreviewBioInput) els.profilePreviewBioInput.disabled = true;
+    if (els.btnAuthGoogle) {
+      els.btnAuthGoogle.disabled = false;
+      els.btnAuthGoogle.textContent = "Continue with Google";
+    }
     setStatus("Logged out.");
   });
 }

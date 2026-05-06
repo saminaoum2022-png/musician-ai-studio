@@ -2061,9 +2061,9 @@ input::placeholder, textarea::placeholder{
     grid-template-columns: repeat(5, 1fr);
     gap:8px;
     position:fixed;
-    left:10px;
-    right:10px;
-    bottom:10px;
+    left:12px;
+    right:12px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
     z-index:40;
     border:1px solid var(--border);
     border-radius:16px;
@@ -2121,9 +2121,9 @@ input::placeholder, textarea::placeholder{
 @media (max-width: 720px){
   .hubNowPlaying{
     position: fixed;
-    left: 10px;
-    right: 10px;
-    bottom: calc(70px + env(safe-area-inset-bottom));
+    left: 12px;
+    right: 12px;
+    bottom: calc(78px + env(safe-area-inset-bottom));
     z-index: 66;
     display:flex;
     align-items:center;

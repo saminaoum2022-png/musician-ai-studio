@@ -3720,6 +3720,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
     closeImageMoodModal();
     setStatus("Image mood applied. If no lyrics are provided, generation will be instrumental.");
+    syncGenerateOrbVisibility();
   };
 
   if (els.btnLyricsMagic) {
@@ -4255,8 +4256,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       window.alert("Please upload or record audio reference first.");
       return;
     }
-    if (!promptText && !vocalRefFile) {
-      window.alert("Please write lyrics first before generating.");
+    const allowImageOnlyFlow = Boolean(imageMoodAppliedForNextGen);
+    if (!promptText && !vocalRefFile && !allowImageOnlyFlow) {
+      window.alert("Please write lyrics or apply image mood before generating.");
       return;
     }
     try {
@@ -4660,7 +4662,11 @@ if (els.btnGenerateOrb && els.btnSunoGenerate) {
 function syncGenerateOrbVisibility() {
   if (!els.btnGenerateOrb) return;
   const route = document.body.getAttribute("data-route");
-  const hasInput = Boolean(String(els.sunoPrompt?.value || "").trim() || String(els.sunoStyle?.value || "").trim());
+  const hasInput = Boolean(
+    String(els.sunoPrompt?.value || "").trim() ||
+    String(els.sunoStyle?.value || "").trim() ||
+    imageMoodAppliedForNextGen
+  );
   const generating = Boolean(els.btnSunoGenerate?.disabled);
   const hasResult = (els.resultCard?.style.display || "none") !== "none";
   const visible = route === "generate" && hasInput && !generating && !hasResult;

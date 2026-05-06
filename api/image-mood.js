@@ -8,9 +8,7 @@ module.exports = async function handler(req, res) {
     if (!dataUrl.startsWith("data:image/")) return json(res, 400, { error: "Invalid image payload" });
 
     const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
-    if (!geminiKey) {
-      return json(res, 200, fallbackMood());
-    }
+    if (!geminiKey) return json(res, 200, fallbackMood(dataUrl, "no_gemini_key"));
 
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(geminiKey)}`, {
       method: "POST",
@@ -20,7 +18,13 @@ module.exports = async function handler(req, res) {
           {
             role: "user",
             parts: [
-              { text: "Analyze this image for music generation. Return strict JSON only: {\"concept\":\"...\",\"tags\":[\"...\"],\"lyricSeed\":\"...\",\"artworkHint\":\"...\"}" },
+              { text: [
+                "Analyze this image for music generation.",
+                "Do not refuse normal photos of people; just describe visual mood and musical direction.",
+                "Return JSON object only with keys:",
+                "{\"concept\":\"...\",\"tags\":[\"...\"],\"lyricSeed\":\"...\",\"artworkHint\":\"...\"}",
+                "No markdown fences."
+              ].join(" ") },
               { inline_data: toInlineData(dataUrl) },
             ],
           },
@@ -30,23 +34,39 @@ module.exports = async function handler(req, res) {
     });
     const text = await r.text().catch(() => "");
     const payload = safeJson(text) || {};
-    if (!r.ok) return json(res, 200, fallbackMood());
+    if (!r.ok) return json(res, 200, fallbackMood(dataUrl, `gemini_http_${r.status}`));
     const out = extractText(payload);
-    const parsed = safeJson(out);
-    if (!parsed || typeof parsed !== "object") return json(res, 200, fallbackMood());
-    return json(res, 200, sanitizeMood(parsed));
+    const parsed = tryParseGeminiObject(out);
+    if (!parsed || typeof parsed !== "object") return json(res, 200, fallbackMood(dataUrl, "parse_failed"));
+    return json(res, 200, { ...sanitizeMood(parsed), source: "gemini" });
   } catch (e) {
-    return json(res, 200, fallbackMood());
+    return json(res, 200, fallbackMood("", "server_error"));
   }
 };
 
-function fallbackMood() {
-  return {
-    concept: "Moody cinematic atmosphere",
-    tags: ["cinematic", "emotional", "warm pads", "clean groove"],
-    lyricSeed: "A cinematic emotional moment with warm tone and clear chorus.",
-    artworkHint: "soft cinematic cover art, moody light, clean contrast",
-  };
+function fallbackMood(dataUrl, reason) {
+  const presets = [
+    {
+      concept: "Warm human portrait mood",
+      tags: ["intimate", "acoustic pop", "warm vocal", "mid-tempo"],
+      lyricSeed: "A warm personal story with close emotional tone and clear hook.",
+      artworkHint: "portrait-focused cover, warm highlights, clean framing",
+    },
+    {
+      concept: "Urban energetic visual mood",
+      tags: ["modern pop", "tight groove", "rhythmic", "confident"],
+      lyricSeed: "Confident urban mood with strong rhythm and catchy chorus.",
+      artworkHint: "bold contrast, city vibe, dynamic crop",
+    },
+    {
+      concept: "Dreamy cinematic atmosphere",
+      tags: ["cinematic", "emotional", "wide pads", "soft drums"],
+      lyricSeed: "Dreamy cinematic lyrics with emotional arc and smooth chorus.",
+      artworkHint: "soft cinematic cover art, moody light, gentle grain",
+    },
+  ];
+  const idx = pickFromDataUrl(dataUrl, presets.length);
+  return { ...presets[idx], source: `fallback:${reason || "unknown"}` };
 }
 
 function sanitizeMood(raw) {
@@ -67,6 +87,32 @@ function toInlineData(dataUrl) {
 
 function extractText(payload) {
   return String(payload?.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
+}
+
+function tryParseGeminiObject(text) {
+  if (!text) return null;
+  const direct = safeJson(text);
+  if (direct && typeof direct === "object") return direct;
+  const cleaned = text.replace(/```json|```/gi, "").trim();
+  const cleanedParsed = safeJson(cleaned);
+  if (cleanedParsed && typeof cleanedParsed === "object") return cleanedParsed;
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start >= 0 && end > start) {
+    return safeJson(cleaned.slice(start, end + 1));
+  }
+  return null;
+}
+
+function pickFromDataUrl(dataUrl, modulo) {
+  const b64 = String(dataUrl || "").split(",")[1] || "";
+  if (!b64) return 0;
+  let hash = 0;
+  const limit = Math.min(180, b64.length);
+  for (let i = 0; i < limit; i += 1) {
+    hash = (hash * 33 + b64.charCodeAt(i)) >>> 0;
+  }
+  return hash % Math.max(1, modulo);
 }
 
 async function readJson(req) {

@@ -4189,17 +4189,15 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             fd.set("file", vocalRefFile, vocalRefFile.name || "vocal-reference.webm");
             fd.set("fileName", vocalRefFile.name || "vocal-reference.webm");
             fd.set("fileType", vocalRefFile.type || "audio/webm");
-            fd.set("style", payload.style || "");
+            // Keep reference flow payload minimal for compatibility/reliability.
+            const refStyle = [userStyle, GROOVE_MAP[groovePace] || "", PROSODY_MAP[prosodyStrictness] || "", BEAT_STABILITY_MAP[beatStability] || ""]
+              .filter(Boolean)
+              .join(", ");
+            fd.set("style", refStyle || userStyle || "");
             fd.set("prompt", finalPrompt || "");
             fd.set("title", payload.title || "");
             fd.set("model", payload.model || "V4_5ALL");
             fd.set("vocalGender", payload.vocalGender || "");
-            fd.set("voiceTimbre", payload.voiceTimbre || "");
-            fd.set("songKey", payload.songKey || "");
-            fd.set("timing", timing || "");
-            fd.set("dialect", dialect || "");
-            fd.set("dialectHint", dialectHint || "");
-            fd.set("personaId", payload.personaId || "");
             r = await fetch(apiUrl("/api/suno/stems"), {
               method: "POST",
               body: fd,

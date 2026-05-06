@@ -1675,6 +1675,26 @@ function patchLibraryTrack(id, patch) {
   saveLibrary(items);
   renderLibrary();
 }
+async function syncHubCoverForTrack(track, coverUrl) {
+  const title = String(track?.title || "").trim();
+  const url = String(track?.url || "").trim();
+  if (!coverUrl || (!title && !url)) return;
+  const feed = loadHubFeed();
+  const matches = feed.filter((p) => {
+    const sameUrl = url && String(p?.url || "").trim() === url;
+    const sameTitle = title && String(p?.title || "").trim() === title;
+    return sameUrl || sameTitle;
+  });
+  if (!matches.length) return;
+  matches.forEach((p) => { p.artUrl = coverUrl; });
+  saveHubFeed(feed);
+  if ((document.body.getAttribute("data-route") || "") === "hub") renderHub();
+  await Promise.all(
+    matches.map((p) =>
+      supabasePatchHub(p.id, { cover_url: coverUrl }).catch(() => null)
+    )
+  );
+}
 function saveLibraryFor(id, items) {
   try {
     localStorage.setItem(profileLibraryKeyFor(id), JSON.stringify(items || []));
@@ -4864,6 +4884,7 @@ if (els.playerCoverUpload) {
       artUrl: url,
     });
     setStatus("Cover updated.");
+    void syncHubCoverForTrack(currentPlayerTrackRef, url);
   });
 }
 if (els.playerSeek) {

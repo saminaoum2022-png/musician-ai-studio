@@ -80,14 +80,14 @@ module.exports = async function handler(req, res) {
       const allowedModels = new Set(["V4_5PLUS", "V5", "V5_5", "V4_5ALL", "V4_5", "V4"]);
       const safeModel = allowedModels.has(requestedModel) ? requestedModel : "V4_5PLUS";
       const melodyLockInstruction =
-        "MELODY LOCK (HIGH): preserve uploaded vocal/humming melodic contour, phrase timing, note movement direction, and cadence points. Do not replace with a new topline. Allow only minimal ornamental variation.";
+        "preserve uploaded vocal/humming melodic contour and phrase timing; keep topline and cadence points";
 
       // Vocal -> Full song OR Song -> Remix use upload-extend (full-song flow).
       if (referenceMode === "vocal_full" || referenceMode === "song_remix") {
-        const fullPrompt =
-          referenceMode === "song_remix"
-            ? `${melodyLockInstruction}\nKeep the original topline melody and vocal phrasing. Change arrangement, groove, harmony color, and instrumentation only.\n${prompt || ""}`.trim()
-            : `${melodyLockInstruction}\nBuild a full song around this vocal reference while retaining its core melody and entry points.\n${prompt || ""}`.trim();
+        // Keep prompt strictly lyrical/content-only (no control instructions),
+        // otherwise provider can sing meta instructions as lyrics.
+        const cleanPrompt = String(prompt || "").trim();
+        const fullPrompt = cleanPrompt;
         const voiceHint =
           vocalGender === "m" ? "male lead vocal" : vocalGender === "f" ? "female lead vocal" : "";
         const lockedStyle = [
@@ -98,8 +98,10 @@ module.exports = async function handler(req, res) {
           timing ? `timing: ${timing}` : "",
           dialect ? `dialect: ${dialect}` : "",
           dialectHint ? `dialect hint: ${dialectHint}` : "",
-          "melody-preserving arrangement",
-          "respect vocal phrasing timing",
+          melodyLockInstruction,
+          referenceMode === "song_remix"
+            ? "keep original topline; change arrangement/groove/harmony/instrumentation"
+            : "build full arrangement around uploaded reference",
         ]
           .filter(Boolean)
           .join(", ");
@@ -109,7 +111,7 @@ module.exports = async function handler(req, res) {
           model: safeModel,
           callBackUrl,
           instrumental: false,
-          prompt: fullPrompt || "Create full song from uploaded reference and preserve melody.",
+          prompt: fullPrompt || "",
           style: lockedStyle || "melody-preserving arrangement",
           title: title || "Reference full song",
           continueAt: 1,

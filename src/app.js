@@ -3953,6 +3953,31 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     "Avoid off-beat phrasing, clipped words, unstable groove, and spoken meta text. Respect user line breaks and phrase boundaries.";
   const HIDDEN_PROSODY_GUARDRAILS =
     "Follow-prompt behavior: keep user structure and mood first; preserve sentence cuts as singable phrases; use expressive timing when style implies romantic/ballad; avoid forcing fast percussion unless requested.";
+  const REFERENCE_MELODY_LOCK =
+    "strict melody lock, follow uploaded vocal contour and phrase timing, keep topline and cadence points, no spoken instructions";
+
+  function sanitizeLyricsPrompt(raw) {
+    const txt = String(raw || "").replace(/\r/g, "");
+    if (!txt.trim()) return "";
+    const banned = [
+      "internal rhythm/prosody rules",
+      "timing lock:",
+      "follow-prompt behavior:",
+      "avoid off-beat phrasing",
+      "melody lock",
+      "do not",
+      "keep this timing stable",
+    ];
+    const lines = txt
+      .split("\n")
+      .map((l) => l.trimEnd())
+      .filter((l) => {
+        const low = l.trim().toLowerCase();
+        if (!low) return false;
+        return !banned.some((b) => low.includes(b));
+      });
+    return lines.join("\n").trim();
+  }
 
   els.btnSunoGenerate.addEventListener("click", async () => {
     haptic("impact");
@@ -3992,7 +4017,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const timingClause = timing
         ? `Timing lock: ${timing}. Keep this timing stable across all sections and vocal entries.`
         : "Timing lock: keep stable tempo and aligned vocal phrasing throughout the song.";
-      let finalPrompt = userPrompt;
+      let finalPrompt = sanitizeLyricsPrompt(userPrompt);
       if (!hasReference) {
         try {
           setStatus("Preparing prompt with Gemini… (Engine: Gemini assisted + Suno render)");
@@ -4002,12 +4027,27 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             body: JSON.stringify({ seed: userPrompt, style: userStyle, mode: "arrange", dialect, dialectHint }),
           });
           const dd = await rr.json().catch(() => ({}));
-          if (rr.ok && dd?.lyrics) finalPrompt = String(dd.lyrics).trim();
+          if (rr.ok && dd?.lyrics) finalPrompt = sanitizeLyricsPrompt(dd.lyrics);
         } catch {}
       }
+      // In vocal-reference flow, never leak hidden instructions into singable lyrics.
+      // If user didn't provide lyrics, keep prompt empty so model follows the uploaded vocal.
+      if (hasReference && !userPrompt.trim()) finalPrompt = "";
+
+      const styleExtras = [
+        dialect ? `Dialect: ${dialect}` : "",
+        dialectHint ? `Hint: ${dialectHint}` : "",
+        timing ? timing : "",
+        HIDDEN_PROSODY_GUARDRAILS,
+        HIDDEN_NEGATIVE_PROMPT,
+        hasReference ? REFERENCE_MELODY_LOCK : "",
+      ]
+        .filter(Boolean)
+        .join(", ");
+
       const payload = {
-        prompt: `${finalPrompt}\n\n[Internal rhythm/prosody rules]\n${timingClause}\n${HIDDEN_PROSODY_GUARDRAILS}\n${HIDDEN_NEGATIVE_PROMPT}`,
-        style: `${userStyle}${userStyle ? " | " : ""}${dialect ? `Dialect: ${dialect}, ` : ""}${dialectHint ? `Hint: ${dialectHint}, ` : ""}${timing ? `${timing}, ` : ""}`,
+        prompt: finalPrompt,
+        style: `${userStyle}${userStyle ? " | " : ""}${timingClause}, ${styleExtras}`,
         songKey: mapSolfegeToLetterKey((els.sunoSongKey?.value || "").trim()),
         title: (els.sunoTitle?.value || "").trim(),
         customMode: true,

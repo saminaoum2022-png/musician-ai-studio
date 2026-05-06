@@ -988,6 +988,70 @@ async function supabaseLoadProfile() {
     isPublic: p.is_public !== false,
   };
 }
+async function supabaseLoadUserSongs() {
+  const token = getSupabaseAuthToken();
+  if (!token || !authSession?.user?.id) return [];
+  const uid = encodeURIComponent(authSession.user.id);
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${uid}&select=*&order=created_at.desc`, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!r.ok) return [];
+  const rows = await r.json().catch(() => []);
+  if (!Array.isArray(rows)) return [];
+  return rows.map((s) => ({
+    id: String(s.id || `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
+    ts: new Date(s.created_at || Date.now()).getTime(),
+    title: s.title || "Generated song",
+    artUrl: s.art_url || "",
+    url: s.song_url || "",
+    taskId: s.task_id || "",
+    audioId: s.audio_id || "",
+    kind: s.kind || "full",
+    meta: s.meta || null,
+  }));
+}
+async function supabaseInsertUserSong(track) {
+  const token = getSupabaseAuthToken();
+  if (!token || !authSession?.user?.id) return;
+  const payload = {
+    user_id: authSession.user.id,
+    title: track.title || "Generated song",
+    art_url: track.artUrl || "",
+    song_url: track.url || "",
+    task_id: track.taskId || "",
+    audio_id: track.audioId || "",
+    kind: track.kind || "full",
+    meta: track.meta || null,
+  };
+  await fetch(`${SUPABASE_URL}/rest/v1/user_songs`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify(payload),
+  }).catch(() => null);
+}
+async function supabaseDeleteUserSong(track) {
+  const token = getSupabaseAuthToken();
+  if (!token || !authSession?.user?.id) return;
+  const title = encodeURIComponent(String(track?.title || ""));
+  const songUrl = encodeURIComponent(String(track?.url || ""));
+  if (!title || !songUrl) return;
+  await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${encodeURIComponent(authSession.user.id)}&title=eq.${title}&song_url=eq.${songUrl}`, {
+    method: "DELETE",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      Prefer: "return=minimal",
+    },
+  }).catch(() => null);
+}
 async function supabaseInsertHub(post) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   const payload = {
@@ -1509,7 +1573,7 @@ function addToLibrary(track) {
     (audioId && String(x.audioId || "").trim() === audioId && String(x.kind || "full").trim() === kind)
   );
   if (duplicate) return;
-  items.unshift({
+  const newTrack = {
     id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     ts: Date.now(),
     title: track.title || "Generated song",
@@ -1519,14 +1583,19 @@ function addToLibrary(track) {
     audioId: track.audioId || "",
     kind: track.kind || "full",
     meta: track.meta || null,
-  });
+  };
+  items.unshift(newTrack);
   saveLibrary(items.slice(0, 100));
   renderLibrary();
+  void supabaseInsertUserSong(newTrack);
 }
 function removeFromLibrary(id) {
-  const items = loadLibrary().filter((x) => x.id !== id);
+  const prev = loadLibrary();
+  const removed = prev.find((x) => x.id === id);
+  const items = prev.filter((x) => x.id !== id);
   saveLibrary(items);
   renderLibrary();
+  if (removed) void supabaseDeleteUserSong(removed);
 }
 async function pollLibraryStemsUntilDone(taskId, kind) {
   let tries = 0;
@@ -5016,6 +5085,11 @@ void (async () => {
     if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !== false;
     renderProfilePreviewFromInputs();
     renderProfileHubShared();
+    const cloudSongs = await supabaseLoadUserSongs();
+    if (cloudSongs.length) {
+      saveLibrary(cloudSongs);
+      renderLibrary();
+    }
   }
 })();
 if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = activeProfile.username ? `@${activeProfile.username}` : "@guest";

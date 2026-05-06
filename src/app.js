@@ -328,7 +328,12 @@ async function loadPublicConfig() {
   try {
     const r = await fetch(apiUrl("/api/public-config"));
     const d = await r.json().catch(() => ({}));
-    SUPABASE_URL = String(d?.supabaseUrl || "");
+    let rawUrl = String(d?.supabaseUrl || "").trim();
+    // Accept either project root URL or mistakenly pasted REST URL.
+    rawUrl = rawUrl.replace(/\/+$/, "");
+    rawUrl = rawUrl.replace(/\/rest\/v1$/i, "");
+    rawUrl = rawUrl.replace(/\/auth\/v1$/i, "");
+    SUPABASE_URL = rawUrl;
     SUPABASE_ANON_KEY = String(d?.supabaseAnonKey || "");
   } catch {}
 }
@@ -1347,6 +1352,7 @@ async function refreshHubFromSupabase() {
   try {
     const rows = await supabaseSelectHub();
     if (!rows || !Array.isArray(rows)) return;
+    const prev = loadHubFeed();
     const mapped = rows.map((r) => ({
       id: String(r.id),
       ts: new Date(r.created_at).getTime(),
@@ -1362,8 +1368,18 @@ async function refreshHubFromSupabase() {
       proof: r.proof || null,
       meta: r.meta || null,
     }));
-    saveHubFeed(mapped);
-    lastHubUpdateAt = mapped.length ? Math.max(...mapped.map((x) => Number(x.ts || 0))) : 0;
+    // Never wipe feed on empty cloud response.
+    if (!mapped.length && prev.length) {
+      renderHub();
+      renderHubDots();
+      return;
+    }
+    const byId = new Map();
+    prev.forEach((p) => byId.set(String(p.id), p));
+    mapped.forEach((p) => byId.set(String(p.id), p));
+    const merged = Array.from(byId.values()).sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0)).slice(0, 300);
+    saveHubFeed(merged);
+    lastHubUpdateAt = merged.length ? Math.max(...merged.map((x) => Number(x.ts || 0))) : 0;
     renderHub();
     renderHubDots();
   } catch {}

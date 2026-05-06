@@ -1805,6 +1805,74 @@ function removeFromLibrary(id) {
   renderLibrary();
   if (removed) void supabaseDeleteUserSong(removed);
 }
+async function downloadLibraryVideoTrack(track) {
+  const url = String(track?.url || "").trim();
+  if (!url) throw new Error("Missing audio URL");
+  const artSrc = String((track?.meta && track.meta.imageUrl) || track?.artUrl || "./assets/nabadai-logo.png");
+  const audio = new Audio(url);
+  audio.crossOrigin = "anonymous";
+  await new Promise((resolve, reject) => {
+    audio.addEventListener("loadedmetadata", resolve, { once: true });
+    audio.addEventListener("error", () => reject(new Error("Audio load failed")), { once: true });
+  });
+  const duration = Math.max(1, Math.min(600, Number(audio.duration) || 1));
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  await new Promise((resolve, reject) => {
+    img.onload = resolve;
+    img.onerror = () => reject(new Error("Artwork load failed"));
+    img.src = artSrc;
+  });
+  const canvas = document.createElement("canvas");
+  canvas.width = 720;
+  canvas.height = 720;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas unavailable");
+  const draw = () => {
+    ctx.fillStyle = "#0b0d12";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const ratio = Math.max(canvas.width / img.width, canvas.height / img.height);
+    const w = img.width * ratio;
+    const h = img.height * ratio;
+    const x = (canvas.width - w) / 2;
+    const y = (canvas.height - h) / 2;
+    ctx.drawImage(img, x, y, w, h);
+  };
+  draw();
+  const vStream = canvas.captureStream(30);
+  const ac = new (window.AudioContext || window.webkitAudioContext)();
+  const src = ac.createMediaElementSource(audio);
+  const dest = ac.createMediaStreamDestination();
+  src.connect(dest);
+  src.connect(ac.destination);
+  const out = new MediaStream([...vStream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+  const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
+    ? "video/webm;codecs=vp9,opus"
+    : "video/webm;codecs=vp8,opus";
+  const rec = new MediaRecorder(out, { mimeType: mime });
+  const chunks = [];
+  rec.ondataavailable = (e) => { if (e.data?.size) chunks.push(e.data); };
+  await ac.resume().catch(() => {});
+  rec.start(500);
+  await audio.play();
+  await new Promise((resolve) => {
+    audio.addEventListener("ended", resolve, { once: true });
+    setTimeout(resolve, duration * 1000 + 1200);
+  });
+  if (rec.state !== "inactive") rec.stop();
+  await new Promise((resolve) => rec.addEventListener("stop", resolve, { once: true }));
+  src.disconnect();
+  dest.disconnect();
+  ac.close().catch(() => {});
+  const blob = new Blob(chunks, { type: "video/webm" });
+  const dl = document.createElement("a");
+  dl.href = URL.createObjectURL(blob);
+  dl.download = `${String(track?.title || "song").replace(/[^\w\- ]+/g, "").trim() || "song"}.webm`;
+  document.body.appendChild(dl);
+  dl.click();
+  dl.remove();
+  setTimeout(() => URL.revokeObjectURL(dl.href), 4000);
+}
 async function pollLibraryStemsUntilDone(taskId, kind) {
   let tries = 0;
   const maxTries = kind === "multi" ? 80 : 60;
@@ -1878,7 +1946,8 @@ function renderLibrary() {
             <div class="libTileMeta">${new Date(t.ts).toLocaleDateString()}</div>
           </div>
           <div class="libMenu" id="libMenu_${t.id}" style="display:none">
-            <a class="ghost" href="${t.url}" target="_blank" rel="noreferrer">Download</a>
+            <a class="ghost" href="${t.url}" target="_blank" rel="noreferrer" data-lib-dlaudio="${t.id}">Download audio</a>
+            <button class="ghost" data-lib-dlvideo="${t.id}">Download video</button>
             <button class="ghost" data-lib-share="${t.id}">Share to Hub</button>
             <button class="ghost" data-lib-details="${t.id}">Song details</button>
             ${t.kind === "instrumental" ? "" : `<button class="ghost" data-lib-inst="${t.id}">Get instrumental</button>`}
@@ -1974,6 +2043,21 @@ function renderLibrary() {
       shareToHub(t);
       openShareLiveModal(t.title || "Your song");
       setStatus("Shared to Hub.");
+    });
+  });
+  els.libraryList.querySelectorAll("[data-lib-dlvideo]").forEach((b) => {
+    b.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const id = b.getAttribute("data-lib-dlvideo");
+      const t = loadLibrary().find((x) => x.id === id);
+      if (!t) return;
+      try {
+        setStatus("Preparing video download…");
+        await downloadLibraryVideoTrack(t);
+        setStatus("Video download is ready.");
+      } catch (err) {
+        setStatus(`Video download failed: ${err?.message || String(err)}`);
+      }
     });
   });
   els.libraryList.querySelectorAll("[data-lib-inst]").forEach((b) => {

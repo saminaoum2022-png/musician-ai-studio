@@ -343,7 +343,7 @@ body.isIntro .footer{ display:none; }
   position:relative;
   border:1px solid rgba(255,255,255,0.10);
   border-radius:12px;
-  overflow:hidden;
+  overflow:visible;
   background: linear-gradient(180deg, rgba(20,26,40,0.88), rgba(10,14,22,0.86));
   aspect-ratio: 1 / 1;
   box-shadow: 0 8px 22px rgba(0,0,0,0.22);
@@ -353,6 +353,7 @@ body.isIntro .footer{ display:none; }
   height:100%;
   object-fit:cover;
   display:block;
+  border-radius:12px;
 }
 .libTilePlaying{
   border-color: rgba(124,92,255,0.55);
@@ -424,6 +425,7 @@ body.isIntro .footer{ display:none; }
   right:8px;
   top:40px;
   min-width:134px;
+  z-index:80;
 }
 .hubRow{
   border:1px solid rgba(255,255,255,0.10);

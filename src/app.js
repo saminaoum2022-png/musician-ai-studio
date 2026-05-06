@@ -3715,6 +3715,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       } else {
         els.sunoPrompt.value = nextLyrics;
       }
+      if (lyricsBoxEl) lyricsBoxEl.classList.add("wandGenerated");
       const provider = String(data?.provider || "").trim();
       const debugSuno = String(data?.debug?.suno || "").trim();
       const debugGemini = String(data?.debug?.gemini || "").trim();
@@ -4790,13 +4791,12 @@ function autoResizeLyricsBox() {
   const next = Math.max(base, Math.min(max, el.scrollHeight));
   el.style.height = `${next}px`;
 }
-function setLyricsFocusMode(active) {
+function setGenerateInputFocus(activePanel) {
   const stack = document.querySelector('.createSectionStack');
-  const lyricsPanel = els.sunoPrompt?.closest?.(".inputPanel");
-  if (!stack || !lyricsPanel) return;
-  stack.classList.toggle("focusLyrics", Boolean(active));
+  if (!stack) return;
+  stack.classList.toggle("focusInput", Boolean(activePanel));
   document.querySelectorAll(".createSectionStack .inputPanel").forEach((p) => {
-    p.classList.toggle("isLyricsFocus", p === lyricsPanel && Boolean(active));
+    p.classList.toggle("isFocusCard", p === activePanel && Boolean(activePanel));
   });
 }
 
@@ -4891,18 +4891,33 @@ if (els.brandTitle) {
 }
 els.sunoPrompt?.addEventListener("input", autoResizeLyricsBox);
 els.sunoPrompt?.addEventListener("focus", autoResizeLyricsBox);
-els.sunoPrompt?.addEventListener("focus", () => setLyricsFocusMode(true));
-els.sunoPrompt?.addEventListener("blur", () => {
-  setTimeout(() => {
-    const stillFocused = document.activeElement === els.sunoPrompt;
-    if (!stillFocused) setLyricsFocusMode(false);
-  }, 80);
-});
+const generateStackEl = document.querySelector(".createSectionStack");
+if (generateStackEl) {
+  generateStackEl.addEventListener("focusin", (e) => {
+    const target = e?.target;
+    if (!target || !(target instanceof Element)) return;
+    const panel = target.closest(".inputPanel");
+    setGenerateInputFocus(panel || null);
+  });
+  generateStackEl.addEventListener("focusout", () => {
+    setTimeout(() => {
+      const active = document.activeElement;
+      const panel = active instanceof Element ? active.closest(".createSectionStack .inputPanel") : null;
+      setGenerateInputFocus(panel || null);
+    }, 40);
+  });
+}
 setTimeout(autoResizeLyricsBox, 0);
 renderLibrary();
 renderHub();
 els.sunoPrompt?.addEventListener("focus", showReferenceHintsPopupOnce, { once: true });
 els.sunoStyle?.addEventListener("focus", showReferenceHintsPopupOnce, { once: true });
+els.sunoPrompt?.addEventListener("input", () => {
+  const lyricsBoxEl = els.sunoPrompt?.closest?.(".lyricsBox");
+  if (lyricsBoxEl?.classList.contains("wandGenerated")) {
+    lyricsBoxEl.classList.remove("wandGenerated");
+  }
+});
 void (async () => {
   await loadPublicConfig();
   await refreshHubFromSupabase();

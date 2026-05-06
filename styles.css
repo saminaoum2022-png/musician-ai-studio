@@ -1915,7 +1915,7 @@ input[type="range"]::-moz-range-thumb{
     padding: 4px 0;
   }
   .createSectionStack{
-    gap: 14px;
+    gap: 18px;
     margin-bottom: var(--space-3);
   }
   .inputPanel{
@@ -1977,7 +1977,12 @@ input[type="range"]::-moz-range-thumb{
     border-radius: 14px;
   }
   textarea{
-    min-height: 210px;
+    min-height: 150px;
+  }
+  .card.wide[data-route="generate"] .inputPanel .lyricsBox textarea{
+    min-height: 132px;
+    max-height: 340px;
+    overflow-y: auto;
   }
 input::placeholder, textarea::placeholder{
   color: rgba(232,238,247,0.36);

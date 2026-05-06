@@ -4781,6 +4781,15 @@ function syncGenerateOrbVisibility() {
   const visible = route === "generate" && hasInput && !generating && !hasResult;
   els.btnGenerateOrb.style.display = visible ? "inline-flex" : "none";
 }
+function autoResizeLyricsBox() {
+  if (!els.sunoPrompt) return;
+  const el = els.sunoPrompt;
+  el.style.height = "auto";
+  const base = 132;
+  const max = 340;
+  const next = Math.max(base, Math.min(max, el.scrollHeight));
+  el.style.height = `${next}px`;
+}
 
 function parseBpmFromTimingText(txt) {
   const s = String(txt || "").toLowerCase();
@@ -4871,6 +4880,9 @@ if (els.brandTitle) {
     resetCreateDraft();
   });
 }
+els.sunoPrompt?.addEventListener("input", autoResizeLyricsBox);
+els.sunoPrompt?.addEventListener("focus", autoResizeLyricsBox);
+setTimeout(autoResizeLyricsBox, 0);
 renderLibrary();
 renderHub();
 els.sunoPrompt?.addEventListener("focus", showReferenceHintsPopupOnce, { once: true });

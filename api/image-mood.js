@@ -20,7 +20,9 @@ module.exports = async function handler(req, res) {
             parts: [
               { text: [
                 "Analyze this image for music generation.",
-                "Do not refuse normal photos of people; just describe visual mood and musical direction.",
+                "Identify the true subject first (person, object/product, jewelry, landscape, city, abstract, etc).",
+                "Do not default to human portrait unless a person is clearly dominant in the image.",
+                "For product/object shots (like jewelry), return object-focused mood/tags, not portrait mood.",
                 "Return JSON object only with keys:",
                 "{\"concept\":\"...\",\"tags\":[\"...\"],\"lyricSeed\":\"...\",\"artworkHint\":\"...\"}",
                 "No markdown fences."
@@ -51,6 +53,12 @@ function fallbackMood(dataUrl, reason) {
       tags: ["intimate", "acoustic pop", "warm vocal", "mid-tempo"],
       lyricSeed: "A warm personal story with close emotional tone and clear hook.",
       artworkHint: "portrait-focused cover, warm highlights, clean framing",
+    },
+    {
+      concept: "Luminous jewelry showcase mood",
+      tags: ["elegant", "minimal", "luxury pop", "soft pulse"],
+      lyricSeed: "A delicate sparkling mood with refined tone and graceful hook.",
+      artworkHint: "jewelry-focused cover, macro sparkle, premium dark backdrop",
     },
     {
       concept: "Urban energetic visual mood",

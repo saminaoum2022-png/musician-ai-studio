@@ -26,6 +26,7 @@ const els = {
   sunoProMode: document.getElementById("sunoProMode"),
   sunoVocalUpload: document.getElementById("sunoVocalUpload"),
   sunoVocalUploadName: document.getElementById("sunoVocalUploadName"),
+  vocalRefHint: document.getElementById("vocalRefHint"),
   sunoReferenceMode: document.getElementById("sunoReferenceMode"),
   sunoReferenceHint: document.getElementById("sunoReferenceHint"),
   btnVocalRefRec: document.getElementById("btnVocalRefRec"),
@@ -3669,6 +3670,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     try {
       if (els.btnAnalyzeImageMood) els.btnAnalyzeImageMood.disabled = true;
       if (els.btnApplyImageMood) els.btnApplyImageMood.disabled = true;
+      const card = els.imageMoodOutput?.closest?.(".imageMoodCard");
+      if (card) card.classList.add("analyzing");
       const dataUrl = await fileToDataUrl(file);
       const r = await fetch(apiUrl("/api/image-mood"), {
         method: "POST",
@@ -3689,6 +3692,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       setStatus(`Image mood failed: ${e?.message || String(e)}`);
     } finally {
       if (els.btnAnalyzeImageMood) els.btnAnalyzeImageMood.disabled = false;
+      const card = els.imageMoodOutput?.closest?.(".imageMoodCard");
+      if (card) card.classList.remove("analyzing");
     }
   };
   const applyImageMood = () => {
@@ -4712,6 +4717,8 @@ function getReferenceHints() {
 }
 
 function renderReferenceHints() {
+  const hasRef = Boolean(getVocalReferenceFile() || vocalRefBlob);
+  if (els.vocalRefHint) els.vocalRefHint.style.display = hasRef ? "" : "none";
   if (!els.sunoReferenceHint) return;
   const hints = getReferenceHints();
   if (!hints.length) {

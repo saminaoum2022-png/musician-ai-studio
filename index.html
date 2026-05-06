@@ -149,7 +149,7 @@
                 </button>
               </div>
               <div class="row imageMoodRow">
-                <span id="imageMoodSummary" class="hint imageMoodSummary">Upload a photo to extract mood and style hints.</span>
+                <span id="imageMoodSummary" class="hint imageMoodSummary"></span>
               </div>
               <div class="row vocalQuickRow">
                 <button id="btnMagicUploadVocal" class="ghost" type="button">+ Audio</button>
@@ -158,7 +158,7 @@
                 <button id="btnVocalRefStop" class="ghost" type="button" disabled>Stop</button>
               </div>
               <div id="sunoVocalUploadName" class="hint uploadVocalsName">No vocal reference attached.</div>
-              <div class="hint" style="margin-top:6px">If you add audio reference, NabadAi generates instrumental directly.</div>
+              <div id="vocalRefHint" class="hint" style="margin-top:6px; display:none">Audio reference attached: NabadAi generates instrumental directly.</div>
             </label>
 
             <label class="field grow inputPanel inputPanel--style">

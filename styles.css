@@ -853,8 +853,8 @@ textarea{
   background: transparent;
 }
 .card.wide[data-route="generate"] .inputPanel .lyricsBox .lyricsMagicBtn{
-  top: -22px;
-  right: 0;
+  top: 12px;
+  right: 10px;
 }
 .card.wide[data-route="generate"] .inputPanel .lyricsBox::before,
 .card.wide[data-route="generate"] .inputPanel .lyricsBox::after{
@@ -872,7 +872,7 @@ textarea{
   transition: box-shadow 240ms ease, filter 240ms ease;
 }
 .lyricsBox textarea{
-  padding-right: 48px;
+  padding-right: 84px;
 }
 .lyricsBox::before{
   content:"";
@@ -941,6 +941,9 @@ textarea{
   color: rgba(205,214,230,0.72);
   padding-left: 2px;
 }
+.imageMoodSummary:empty{
+  display:none;
+}
 .imageMoodModal .modalCard{
   max-width: 560px;
 }
@@ -971,6 +974,20 @@ textarea{
   display:flex;
   flex-direction:column;
   gap:10px;
+}
+.imageMoodCard.analyzing{
+  position:relative;
+  box-shadow: 0 0 0 1px rgba(124,92,255,0.30), 0 20px 52px rgba(12,18,34,0.55);
+}
+.imageMoodCard.analyzing::before{
+  content:"";
+  position:absolute;
+  inset:-2px;
+  border-radius:18px;
+  pointer-events:none;
+  background: linear-gradient(120deg, rgba(124,92,255,0.30), rgba(35,213,171,0.22), rgba(124,92,255,0.24));
+  filter: blur(10px);
+  animation: lyricAura 2.6s ease-in-out infinite;
 }
 .imageMoodHead{
   justify-content:space-between;
@@ -1105,7 +1122,7 @@ body.generateLocked [data-route="generate"] button{
 }
 .lyricsImageMoodBtn{
   position:absolute;
-  top:10px;
+  top:12px;
   right:46px;
   width:30px;
   height:30px;
@@ -1121,6 +1138,11 @@ body.generateLocked [data-route="generate"] button{
   background: linear-gradient(180deg, rgba(124,92,255,0.34), rgba(35,213,171,0.18));
   box-shadow: 0 6px 18px rgba(124,92,255,0.25);
   z-index: 3;
+}
+.lyricsImageMoodBtn svg{
+  width:14px;
+  height:14px;
+  display:block;
 }
 .lyricsImageMoodBtn:disabled{
   opacity:0.55;

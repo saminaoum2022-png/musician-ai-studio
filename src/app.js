@@ -4790,6 +4790,15 @@ function autoResizeLyricsBox() {
   const next = Math.max(base, Math.min(max, el.scrollHeight));
   el.style.height = `${next}px`;
 }
+function setLyricsFocusMode(active) {
+  const stack = document.querySelector('.createSectionStack');
+  const lyricsPanel = els.sunoPrompt?.closest?.(".inputPanel");
+  if (!stack || !lyricsPanel) return;
+  stack.classList.toggle("focusLyrics", Boolean(active));
+  document.querySelectorAll(".createSectionStack .inputPanel").forEach((p) => {
+    p.classList.toggle("isLyricsFocus", p === lyricsPanel && Boolean(active));
+  });
+}
 
 function parseBpmFromTimingText(txt) {
   const s = String(txt || "").toLowerCase();
@@ -4882,6 +4891,13 @@ if (els.brandTitle) {
 }
 els.sunoPrompt?.addEventListener("input", autoResizeLyricsBox);
 els.sunoPrompt?.addEventListener("focus", autoResizeLyricsBox);
+els.sunoPrompt?.addEventListener("focus", () => setLyricsFocusMode(true));
+els.sunoPrompt?.addEventListener("blur", () => {
+  setTimeout(() => {
+    const stillFocused = document.activeElement === els.sunoPrompt;
+    if (!stillFocused) setLyricsFocusMode(false);
+  }, 80);
+});
 setTimeout(autoResizeLyricsBox, 0);
 renderLibrary();
 renderHub();

@@ -1091,7 +1091,9 @@ body.generateLocked [data-route="generate"] button{
   animation: lyricShimmer 2.8s linear infinite;
 }
 .lyricsBox.generating textarea{
-  filter: saturate(0.95) brightness(0.96);
+  filter: saturate(1.02) brightness(0.98);
+  color: rgba(241, 247, 255, 0.98);
+  text-shadow: 0 0 12px rgba(124,92,255,0.18), 0 0 10px rgba(35,213,171,0.12);
 }
 .lyricsBox.generating .lyricsMagicBtn{
   box-shadow: 0 0 0 1px rgba(124,92,255,0.35), 0 10px 20px rgba(124,92,255,0.28);
@@ -1140,6 +1142,27 @@ body.generateLocked [data-route="generate"] button{
   background: linear-gradient(180deg, rgba(124,92,255,0.34), rgba(35,213,171,0.18));
   box-shadow: 0 6px 18px rgba(124,92,255,0.25);
   z-index: 3;
+}
+
+/* Generate focus mode: keep identity, reduce noise while writing lyrics */
+body[data-route="generate"] .createSectionStack.focusLyrics{
+  gap: 12px;
+}
+body[data-route="generate"] .createSectionStack.focusLyrics .inputPanel{
+  transition: transform 180ms ease, opacity 180ms ease, filter 180ms ease;
+}
+body[data-route="generate"] .createSectionStack.focusLyrics .inputPanel:not(.isLyricsFocus){
+  opacity: 0.48;
+  filter: saturate(0.88) blur(0.15px);
+  transform: scale(0.992);
+}
+body[data-route="generate"] .createSectionStack.focusLyrics .inputPanel.isLyricsFocus{
+  opacity: 1;
+  transform: scale(1.01);
+  border-color: rgba(124,92,255,0.36);
+  box-shadow:
+    0 0 0 1px rgba(124,92,255,0.22) inset,
+    0 20px 42px rgba(14,18,30,0.38);
 }
 .lyricsImageMoodBtn svg{
   width:14px;

@@ -1265,6 +1265,23 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   white-space: nowrap;
   background: rgba(255,255,255,0.03);
 }
+.profileAccountActions{
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+.profileAccountEmail{
+  margin: 0;
+}
+.profileActionBtn{
+  width: 100%;
+  justify-content: center;
+  min-height: 38px;
+}
+.profileActionBtnDanger{
+  border-color: rgba(255,120,140,0.35);
+  color: rgba(255,198,205,0.95);
+}
 .profileSaveToast{
   position: fixed;
   left: 50%;

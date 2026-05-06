@@ -387,10 +387,6 @@
           <div id="authLoginControls" class="row">
             <button id="btnAuthGoogle" class="ghost" type="button">Continue with Google</button>
           </div>
-          <div id="authLoggedInRow" class="row" style="display:none;align-items:center;justify-content:space-between">
-            <div id="authLoggedInEmail" class="hint">Logged in.</div>
-            <button id="btnAuthLogout" class="ghost" type="button">Logout</button>
-          </div>
           <div id="authStatus" class="hint" style="margin-top:4px">Not logged in.</div>
           <input id="profileAvatarFile" type="file" accept="image/*" style="display:none" />
           <input id="profileIsPublic" type="checkbox" checked style="display:none" />
@@ -402,6 +398,11 @@
           <div class="stepHead" style="margin-top:14px">Shared To Hub</div>
           <div id="profileHubSharedList" class="profileHubSharedList" style="max-height:none"></div>
           <div class="hint">Songs in Library are stored per profile on this device for now.</div>
+          <div id="authLoggedInRow" class="profileAccountActions" style="display:none">
+            <div id="authLoggedInEmail" class="hint profileAccountEmail">Logged in.</div>
+            <button id="btnAuthLogout" class="ghost profileActionBtn" type="button">Logout</button>
+            <button id="btnProfileDelete" class="ghost profileActionBtn profileActionBtnDanger" type="button">Delete profile data</button>
+          </div>
         </section>
 
         <section class="card wide" data-route="vocal">

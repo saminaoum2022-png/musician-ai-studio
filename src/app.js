@@ -195,6 +195,7 @@ const els = {
   authLoggedInEmail: document.getElementById("authLoggedInEmail"),
   btnAuthGoogle: document.getElementById("btnAuthGoogle"),
   btnAuthLogout: document.getElementById("btnAuthLogout"),
+  btnProfileDelete: document.getElementById("btnProfileDelete"),
   authStatus: document.getElementById("authStatus"),
   profilePreviewAvatar: document.getElementById("profilePreviewAvatar"),
   profilePreviewUsername: document.getElementById("profilePreviewUsername"),
@@ -5100,6 +5101,26 @@ if (els.btnAuthLogout) {
       els.btnAuthGoogle.textContent = "Continue with Google";
     }
     setStatus("Logged out.");
+  });
+}
+if (els.btnProfileDelete) {
+  els.btnProfileDelete.addEventListener("click", () => {
+    if (!window.confirm("Delete local profile data on this device?")) return;
+    activeProfile = {
+      id: "guest",
+      username: "guest",
+      email: "",
+      gender: "",
+      voiceTimbre: "",
+      bio: "",
+      avatar: "",
+      genres: "",
+      links: {},
+      isPublic: true,
+    };
+    saveProfile(activeProfile);
+    resetProfileUiToGuest();
+    setStatus("Local profile data deleted.");
   });
 }
 if (els.profileAvatarFile) {

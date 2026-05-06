@@ -949,6 +949,29 @@ textarea{
 .imageMoodModal .modalCard{
   max-width: 560px;
 }
+.imageMoodModal{
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+  padding: 14px;
+  background: rgba(2,6,14,0.58);
+  backdrop-filter: blur(4px);
+}
+.modalCard{
+  width: min(560px, 100%);
+  border:1px solid rgba(255,255,255,0.12);
+  border-radius:16px;
+  background:
+    linear-gradient(180deg, rgba(18,28,44,0.88), rgba(8,12,20,0.92)),
+    radial-gradient(120% 130% at 15% 0%, rgba(124,92,255,0.16), transparent 60%),
+    radial-gradient(120% 130% at 100% 0%, rgba(35,213,171,0.12), transparent 62%);
+  box-shadow: 0 22px 56px rgba(0,0,0,0.45);
+  backdrop-filter: blur(10px);
+  padding: 12px;
+}
 .imageMoodCard{
   display:flex;
   flex-direction:column;

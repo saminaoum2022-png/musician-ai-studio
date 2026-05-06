@@ -3660,6 +3660,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       tags ? `Suggested tags: ${tags}` : "",
       m.lyricSeed ? `Lyric seed: ${m.lyricSeed}` : "",
       m.artworkHint ? `Artwork hint: ${m.artworkHint}` : "",
+      m.source ? `Source: ${m.source}` : "",
     ].filter(Boolean);
     els.imageMoodOutput.textContent = lines.join("\n\n") || "No analysis yet.";
   };

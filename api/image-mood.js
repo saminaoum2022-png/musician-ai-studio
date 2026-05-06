@@ -49,22 +49,16 @@ module.exports = async function handler(req, res) {
 function fallbackMood(dataUrl, reason) {
   const presets = [
     {
-      concept: "Warm human portrait mood",
-      tags: ["intimate", "acoustic pop", "warm vocal", "mid-tempo"],
-      lyricSeed: "A warm personal story with close emotional tone and clear hook.",
-      artworkHint: "portrait-focused cover, warm highlights, clean framing",
+      concept: "Open-air coastal mood",
+      tags: ["chill", "ambient pop", "gentle groove", "sunset vibe"],
+      lyricSeed: "A light, breezy mood with calm flow and easy singable hook.",
+      artworkHint: "coastal cover art, airy tones, natural light, clean horizon",
     },
     {
-      concept: "Luminous jewelry showcase mood",
-      tags: ["elegant", "minimal", "luxury pop", "soft pulse"],
-      lyricSeed: "A delicate sparkling mood with refined tone and graceful hook.",
-      artworkHint: "jewelry-focused cover, macro sparkle, premium dark backdrop",
-    },
-    {
-      concept: "Urban energetic visual mood",
-      tags: ["modern pop", "tight groove", "rhythmic", "confident"],
-      lyricSeed: "Confident urban mood with strong rhythm and catchy chorus.",
-      artworkHint: "bold contrast, city vibe, dynamic crop",
+      concept: "Clean natural visual mood",
+      tags: ["organic", "mid-tempo", "balanced", "warm textures"],
+      lyricSeed: "Natural, grounded emotion with simple lines and smooth chorus.",
+      artworkHint: "nature-forward cover, soft contrast, minimal composition",
     },
     {
       concept: "Dreamy cinematic atmosphere",

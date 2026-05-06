@@ -4426,6 +4426,7 @@ function parseBpmFromTimingText(txt) {
 
 function getReferenceHints() {
   const hints = [];
+  const pushHint = (text, severity = "warning") => hints.push({ text, severity });
   const lyrics = String(els.sunoPrompt?.value || "").trim();
   const style = String(els.sunoStyle?.value || "").trim();
   const timing = String(els.sunoTiming?.value || "").trim();
@@ -4439,32 +4440,32 @@ function getReferenceHints() {
   const refOn = hasRef && referenceMode !== "none";
 
   if (hasRef && !lyrics) {
-    hints.push("For better accuracy, add at least 2–4 lyric lines.");
+    pushHint("For better accuracy, add at least 2–4 lyric lines.", "critical");
   }
   if (refOn && (dialect || vp || String(els.sunoSongKey?.value || "").trim() || persona)) {
-    hints.push("For cleaner melody follow, keep Accent, Voice Profile, Song Key, and Persona on Auto first.");
+    pushHint("For cleaner melody follow, keep Accent, Voice Profile, Song Key, and Persona on Auto first.", "critical");
   }
   if (dialect && !dialectHint) {
-    hints.push("Add one short example line in this dialect to improve pronunciation.");
+    pushHint("Add one short example line in this dialect to improve pronunciation.");
   }
   if ((vp.includes("baritone") || vp.includes("bass")) && timing) {
     const bpm = parseBpmFromTimingText(timing);
     const fastWords = /\b(fast|upbeat|dance|energetic|club)\b/i.test(timing);
     if ((Number.isFinite(bpm) && bpm >= 100) || fastWords) {
-      hints.push("High BPM can push brighter pitch. For warmer baritone/bass tone, use slower timing.");
+      pushHint("High BPM can push brighter pitch. For warmer baritone/bass tone, use slower timing.");
     }
   }
   if (referenceMode === "humming_music" && lyrics.length > 220) {
-    hints.push("Humming mode works better with short guidance. Keep lyrics minimal.");
+    pushHint("Humming mode works better with short guidance. Keep lyrics minimal.");
   }
   if (referenceMode === "song_remix" && !style) {
-    hints.push("Add style tags so remix direction is clear (example: cinematic, chill, acoustic).");
+    pushHint("Add style tags so remix direction is clear (example: cinematic, chill, acoustic).");
   }
   if (refOn && persona) {
-    hints.push("Persona may change tone away from your reference. Turn Persona off for stricter melody match.");
+    pushHint("Persona may change tone away from your reference. Turn Persona off for stricter melody match.", "critical");
   }
   if (refOn && hints.length === 0) {
-    hints.push("Best first attempt: keep options Auto, add clear lyrics, then increase controls step by step.");
+    pushHint("Best first attempt: keep options Auto, add clear lyrics, then increase controls step by step.");
   }
   return hints.slice(0, 2);
 }
@@ -4475,10 +4476,13 @@ function renderReferenceHints() {
   if (!hints.length) {
     els.sunoReferenceHint.style.display = "none";
     els.sunoReferenceHint.textContent = "";
+    els.sunoReferenceHint.classList.remove("isCritical");
     return;
   }
+  const hasCritical = hints.some((h) => h?.severity === "critical");
+  els.sunoReferenceHint.classList.toggle("isCritical", hasCritical);
   els.sunoReferenceHint.style.display = "";
-  els.sunoReferenceHint.textContent = hints.map((h, i) => `${i + 1}. ${h}`).join(" ");
+  els.sunoReferenceHint.textContent = hints.map((h, i) => `${i + 1}. ${h.text}`).join(" ");
 }
 ["input", "change"].forEach((ev) => {
   els.sunoPrompt?.addEventListener(ev, syncGenerateOrbVisibility);

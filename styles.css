@@ -966,6 +966,11 @@ body.generateLocked [data-route="generate"] button{
   font-size: 12px;
   line-height: 1.35;
 }
+.refHintAlert.isCritical{
+  border-color: rgba(255, 99, 132, 0.58);
+  background: linear-gradient(180deg, rgba(255, 99, 132, 0.18), rgba(255, 99, 132, 0.07));
+  color: rgba(255, 222, 232, 0.97);
+}
 .lyricsBox.generating{
   box-shadow: 0 0 0 1px rgba(124,92,255,0.28), 0 14px 36px rgba(14,18,30,0.42);
 }

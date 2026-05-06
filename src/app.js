@@ -625,6 +625,9 @@ function saveProfile(p) {
 function profileLibraryKey() {
   return `mas:library:v1:${activeProfile.id || "guest"}`;
 }
+function profileLibraryKeyFor(id) {
+  return `mas:library:v1:${id || "guest"}`;
+}
 function hubFeedKey() {
   return "mas:hub:v1";
 }
@@ -1558,10 +1561,60 @@ function loadLibrary() {
     return [];
   }
 }
+function loadLibraryFor(id) {
+  try {
+    const raw = localStorage.getItem(profileLibraryKeyFor(id));
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
 function saveLibrary(items) {
   try {
     localStorage.setItem(profileLibraryKey(), JSON.stringify(items || []));
   } catch {}
+}
+function saveLibraryFor(id, items) {
+  try {
+    localStorage.setItem(profileLibraryKeyFor(id), JSON.stringify(items || []));
+  } catch {}
+}
+
+async function ensureUserLibraryHydrated() {
+  if (!authSession?.user?.id) return;
+  const uid = String(authSession.user.id);
+
+  // 1) Try cloud first.
+  const cloudSongs = await supabaseLoadUserSongs();
+  if (cloudSongs.length) {
+    saveLibraryFor(uid, cloudSongs);
+    if (String(activeProfile.id) === uid) {
+      saveLibrary(cloudSongs);
+      renderLibrary();
+    }
+    return;
+  }
+
+  // 2) Cloud empty: migrate guest songs once (best effort), then reload cloud.
+  const guestSongs = loadLibraryFor("guest");
+  if (!guestSongs.length) {
+    if (String(activeProfile.id) === uid) renderLibrary();
+    return;
+  }
+
+  for (const t of guestSongs) {
+    // Best effort; ignore individual failures.
+    // eslint-disable-next-line no-await-in-loop
+    await supabaseInsertUserSong(t);
+  }
+  const cloudAfter = await supabaseLoadUserSongs();
+  const finalSongs = cloudAfter.length ? cloudAfter : guestSongs;
+  saveLibraryFor(uid, finalSongs);
+  if (String(activeProfile.id) === uid) {
+    saveLibrary(finalSongs);
+    renderLibrary();
+  }
 }
 function addToLibrary(track) {
   const items = loadLibrary();
@@ -5075,22 +5128,25 @@ void (async () => {
   const usedCodeFlow = await maybeHandleAuthCodeFromQuery();
   const usedTokenFlow = !usedCodeFlow && maybeHandleMagicLinkFromHash();
   await refreshAuthStateFromSupabase();
-  if (usedCodeFlow || usedTokenFlow) {
-    window.location.hash = "#/profile";
+  if (usedCodeFlow || usedTokenFlow) window.location.hash = "#/profile";
+
+  // Always hydrate from cloud when a valid session exists (not only callback flows).
+  if (authSession?.user?.id) {
     const cloud = await supabaseLoadProfile();
-    if (!cloud) return;
-    saveProfile(cloud);
+    if (cloud) saveProfile(cloud);
+    else {
+      // Ensure profile id tracks logged-in user for per-user storage keys.
+      saveProfile({ ...activeProfile, id: String(authSession.user.id), email: authSession.user.email || activeProfile.email || "" });
+    }
+
     if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = activeProfile.username ? `@${activeProfile.username}` : "@guest";
     if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = activeProfile.voiceTimbre || "";
     if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = activeProfile.bio || "";
     if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !== false;
     renderProfilePreviewFromInputs();
     renderProfileHubShared();
-    const cloudSongs = await supabaseLoadUserSongs();
-    if (cloudSongs.length) {
-      saveLibrary(cloudSongs);
-      renderLibrary();
-    }
+
+    await ensureUserLibraryHydrated();
   }
 })();
 if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = activeProfile.username ? `@${activeProfile.username}` : "@guest";

@@ -564,6 +564,7 @@ let vocalRefChunks = [];
 let vocalRefPreviewUrl = "";
 let imageMoodData = null;
 let imageMoodCoverDataUrl = "";
+let imageMoodAppliedForNextGen = false;
 let pendingGeneratedCoverDataUrl = "";
 
 function getVocalReferenceFile() {
@@ -3699,10 +3700,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const merged = [...new Set([...current, ...tags])].slice(0, 12);
       els.sunoStyle.value = merged.join(", ");
     }
-    if (els.sunoPrompt && imageMoodData.lyricSeed) {
-      const cur = String(els.sunoPrompt.value || "").trim();
-      if (!cur) els.sunoPrompt.value = String(imageMoodData.lyricSeed).trim();
-    }
+    // Do not auto-fill lyric seed into the main lyrics box.
+    // This can be sung literally by the model and sounds like prompt leakage.
+    imageMoodAppliedForNextGen = true;
     if (els.sunoArtworkStyle && imageMoodData.artworkHint) {
       const cur = String(els.sunoArtworkStyle.value || "").trim();
       if (!cur) els.sunoArtworkStyle.value = String(imageMoodData.artworkHint).trim();
@@ -3714,7 +3714,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       pendingGeneratedCoverDataUrl = "";
     }
     closeImageMoodModal();
-    setStatus("Image mood applied to style and generate fields.");
+    setStatus("Image mood applied. If no lyrics are provided, generation will be instrumental.");
   };
 
   if (els.btnLyricsMagic) {
@@ -4281,6 +4281,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const prosodyStrictness = String(els.sunoProsody?.value || "tight").trim();
       const beatStability = String(els.sunoBeatStability?.value || "stable").trim();
       let finalPrompt = sanitizeLyricsPrompt(userPrompt);
+      const imageOnlyInstrumental = Boolean(imageMoodAppliedForNextGen && !finalPrompt && !hasReference);
       if (!hasReference) {
         try {
           setStatus("Preparing prompt with Gemini… (Engine: Gemini assisted + Suno render)");
@@ -4319,7 +4320,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         songKey: mapSolfegeToLetterKey((els.sunoSongKey?.value || "").trim()),
         title: (els.sunoTitle?.value || "").trim(),
         customMode: true,
-        instrumental: false,
+        instrumental: imageOnlyInstrumental,
         model: LATEST_SUNO_MODEL,
         personaId: (els.sunoPersonaId?.value || "").trim() || undefined,
       };
@@ -4366,7 +4367,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         maqam: (els.sunoMaqam?.value || "").trim(),
         voiceProfile: (els.sunoVoiceProfile?.value || "").trim(),
         model: payload.model,
+        imageOnlyInstrumental,
       };
+      if (imageOnlyInstrumental) {
+        setStatus("Image-inspired mode with no lyrics detected: generating instrumental.");
+      }
       const data = await trackCreditsAround(
         hasReference ? "Suno: generate instrumental from audio reference" : "Suno: generate song",
         async () => {
@@ -4456,6 +4461,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           setLoading(false);
           setProgress(100);
           showResultCard(true);
+          imageMoodAppliedForNextGen = false;
           void refreshSunoCredits();
           return;
         }
@@ -4466,6 +4472,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         setGenerateFieldsLocked(false);
         setLoading(false);
         setProgress(0);
+        imageMoodAppliedForNextGen = false;
         return;
       }
       setStatus(
@@ -4481,6 +4488,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       setStatus(`Generation failed: ${e?.message || String(e)}`);
       setGenerateBtn("Generate song", false, "generate");
       setGenerateFieldsLocked(false);
+      imageMoodAppliedForNextGen = false;
       setProgress(0);
       setLoading(false);
     } finally {}

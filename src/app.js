@@ -1197,6 +1197,7 @@ function closeProofModal() {
 function shareToHub(track) {
   const feed = loadHubFeed();
   const creator = String(activeProfile.username || "guest");
+  const creatorUserId = String(authSession?.user?.id || "");
   const proof = {
     createdAt: Date.now(),
     mode: track?.meta?.mode || track?.kind || "full",
@@ -1218,7 +1219,7 @@ function shareToHub(track) {
     reacts: { melody: 0, lyrics: 0, mix: 0, groove: 0 },
     remixOf: track?.remixOf || "",
     proof,
-    meta: track.meta || null,
+    meta: { ...(track.meta || {}), creatorUserId },
   });
   saveHubFeed(feed.slice(0, 200));
   void supabaseInsertHub(feed[0]).catch(() => {});
@@ -1496,6 +1497,7 @@ async function refreshHubFromSupabase() {
     lastHubUpdateAt = merged.length ? Math.max(...merged.map((x) => Number(x.ts || 0))) : 0;
     renderHub();
     renderHubDots();
+    renderProfileHubShared();
   } catch (e) {
     hubLastSyncOk = false;
     hubLastSyncError = e?.name === "AbortError"
@@ -1529,6 +1531,7 @@ async function refreshHubFromSupabase() {
         lastHubUpdateAt = Math.max(...mapped.map((x) => Number(x.ts || 0)));
         renderHub();
         renderHubDots();
+        renderProfileHubShared();
       } catch {}
     }, 1400);
   }
@@ -1613,7 +1616,10 @@ function renderProfilePreviewFromInputs() {
 function renderProfileHubShared() {
   if (!els.profileHubSharedList) return;
   const creator = String(activeProfile.username || "guest");
-  const items = loadHubFeed().filter((p) => String(p?.creator || "") === creator).slice(0, 30);
+  const uid = String(authSession?.user?.id || "");
+  const items = loadHubFeed()
+    .filter((p) => (uid ? String(p?.meta?.creatorUserId || "") === uid : String(p?.creator || "") === creator))
+    .slice(0, 30);
   if (!items.length) {
     els.profileHubSharedList.textContent = "No shared songs yet.";
     return;
@@ -5534,6 +5540,9 @@ void (async () => {
     renderProfileHubShared();
 
     await ensureUserLibraryHydrated();
+  } else {
+    // Never leak previous user visuals when session is not valid.
+    resetProfileUiToGuest();
   }
 })();
 if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = activeProfile.username ? `@${activeProfile.username}` : "@guest";

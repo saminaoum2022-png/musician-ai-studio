@@ -632,6 +632,7 @@ function getLocalDeviceId() {
   }
 }
 let hubFilter = "latest";
+let hubSyncTimer = null;
 function loadHubSeen() {
   try {
     const raw = localStorage.getItem(hubSeenKey());
@@ -1366,6 +1367,13 @@ async function refreshHubFromSupabase() {
     renderHub();
     renderHubDots();
   } catch {}
+}
+function startHubLiveSync() {
+  if (hubSyncTimer) clearInterval(hubSyncTimer);
+  // Always keep Hub fresh for guest + logged users.
+  hubSyncTimer = setInterval(() => {
+    void refreshHubFromSupabase();
+  }, 12000);
 }
 function profilePersonasKey() {
   return `${PROFILE_PERSONAS_KEY}:${activeProfile.id || "guest"}`;
@@ -4080,7 +4088,14 @@ renderHub();
 void (async () => {
   await loadPublicConfig();
   await refreshHubFromSupabase();
+  startHubLiveSync();
 })();
+window.addEventListener("focus", () => {
+  void refreshHubFromSupabase();
+});
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) void refreshHubFromSupabase();
+});
 if (els.hubFilterLatest) els.hubFilterLatest.addEventListener("click", () => { hubFilter = "latest"; markHubCategorySeen("latest"); renderHub(); });
 if (els.hubFilterSelect) {
   els.hubFilterSelect.value = "latest";
@@ -4186,6 +4201,10 @@ window.addEventListener("scroll", () => {
 window.addEventListener("hashchange", () => {
   if (!hubAudio) return;
   setTimeout(() => renderHubNowPlaying(), 0);
+});
+window.addEventListener("hashchange", () => {
+  const route = document.body.getAttribute("data-route") || "";
+  if (route === "hub") void refreshHubFromSupabase();
 });
 if (els.shareLiveBackdrop) els.shareLiveBackdrop.addEventListener("click", closeShareLiveModal);
 if (els.btnCloseShareLive) els.btnCloseShareLive.addEventListener("click", closeShareLiveModal);

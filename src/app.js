@@ -606,6 +606,7 @@ let lastSunoCachedUrl2 = "";
 let lastSunoArtUrl2 = "";
 let lastSunoTitle2 = "";
 let lastSunoAudioId2 = "";
+let libraryNowPlayingId = null;
 let lastGenerationMeta = null;
 const PROFILE_KEY = "mas:profile:v1";
 const PROFILE_PERSONAS_KEY = "mas:personas:v1";
@@ -1782,7 +1783,7 @@ function renderLibrary() {
   els.libraryList.innerHTML = `
     <div class="libraryGrid">
       ${items.map((t) => `
-        <div class="libTile libRow" data-lib-row="${t.id}">
+        <div class="libTile libRow ${libraryNowPlayingId === t.id ? "libTilePlaying" : ""}" data-lib-row="${t.id}">
           <img class="libTileArt" src="${escapeHtml(String((t.meta && t.meta.imageUrl) || t.artUrl || "./assets/nabadai-logo.png"))}" alt="${escapeHtml(t.title || "Song artwork")}" />
           <button class="libTilePlay" data-lib-play="${t.id}" aria-label="Play">▶</button>
           <button class="libTileMenuBtn" data-lib-menu="${t.id}" aria-label="Song options">⋯</button>
@@ -1815,6 +1816,8 @@ function renderLibrary() {
         artUrl: (t.meta && t.meta.imageUrl) || placeholderCoverDataUrl(),
       });
       miniSource = { type: "library", id };
+      libraryNowPlayingId = id;
+      renderLibrary();
       await playOnPlayerPage(t.url, "Full song", {
         title: t.title || "Library song",
         subtitle: "Library • Full song",
@@ -1836,6 +1839,8 @@ function renderLibrary() {
         artUrl: (t.meta && t.meta.imageUrl) || placeholderCoverDataUrl(),
       });
       miniSource = { type: "library", id };
+      libraryNowPlayingId = id;
+      renderLibrary();
       await playOnPlayerPage(t.url, "Full song", {
         title: t.title || "Library song",
         subtitle: "Library • Full song",
@@ -2745,6 +2750,10 @@ function setPlayerSource(url, label) {
   hubAudio = a;
   hubAudioPostId = null;
   if (!miniSource) miniSource = { type: "player" };
+  if (!miniSource || miniSource.type !== "library") {
+    libraryNowPlayingId = null;
+    if ((document.body.getAttribute("data-route") || "") === "library") renderLibrary();
+  }
   syncPlayerUI();
   renderHubNowPlaying();
 }

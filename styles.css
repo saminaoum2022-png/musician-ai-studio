@@ -354,6 +354,20 @@ body.isIntro .footer{ display:none; }
   object-fit:cover;
   display:block;
 }
+.libTilePlaying{
+  border-color: rgba(124,92,255,0.55);
+  box-shadow:
+    0 0 0 1px rgba(124,92,255,0.24) inset,
+    0 0 22px rgba(124,92,255,0.28),
+    0 0 34px rgba(35,213,171,0.16);
+}
+.libTilePlaying .libTileArt{
+  filter: saturate(1.08) brightness(1.03);
+}
+.libTilePlaying .libTilePlay{
+  border-color: rgba(124,92,255,0.62);
+  box-shadow: 0 0 14px rgba(124,92,255,0.34);
+}
 .libTileShade{
   position:absolute;
   left:0; right:0; bottom:0;

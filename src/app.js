@@ -698,7 +698,6 @@ async function supabaseSelectHub() {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/hub_posts?select=*&order=created_at.desc`, {
     headers: {
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
     },
   });
   if (!r.ok) throw new Error("supabase select failed");
@@ -991,7 +990,6 @@ async function supabaseInsertHub(post) {
     method: "POST",
     headers: {
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       "Content-Type": "application/json",
       Prefer: "return=representation",
     },
@@ -1006,7 +1004,6 @@ async function supabasePatchHub(id, patch) {
     method: "PATCH",
     headers: {
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       "Content-Type": "application/json",
       Prefer: "return=representation",
     },
@@ -1021,7 +1018,6 @@ async function supabaseDeleteHub(id) {
     method: "DELETE",
     headers: {
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       Prefer: "return=representation",
     },
   });

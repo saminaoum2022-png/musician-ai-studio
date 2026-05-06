@@ -1177,15 +1177,11 @@ body[data-route="generate"] .createSectionStack.focusInput .inputPanel.isFocusCa
     0 20px 42px rgba(14,18,30,0.38);
 }
 .lyricsBox.wandGenerated textarea{
-  color: rgba(200,184,255,0.98);
-  -webkit-text-fill-color: rgba(200,184,255,0.98);
-  background-image:
-    linear-gradient(180deg, rgba(124,92,255,0.06), rgba(35,213,171,0.04));
-  background-clip: padding-box;
+  color: var(--text);
+  -webkit-text-fill-color: var(--text);
+  background-image: none;
   caret-color: #e7edf7;
-  text-shadow:
-    0 0 10px rgba(124,92,255,0.18),
-    0 0 16px rgba(35,213,171,0.10);
+  text-shadow: none;
 }
 .lyricsImageMoodBtn svg{
   width:14px;

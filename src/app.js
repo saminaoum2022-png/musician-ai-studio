@@ -82,6 +82,10 @@ const els = {
   clipStartSec: document.getElementById("clipStartSec"),
   clipEndSec: document.getElementById("clipEndSec"),
   btnShareClipHub: document.getElementById("btnShareClipHub"),
+  btnOpenTrimSheet: document.getElementById("btnOpenTrimSheet"),
+  btnCloseTrimSheet: document.getElementById("btnCloseTrimSheet"),
+  btnShareFullHub: document.getElementById("btnShareFullHub"),
+  trimSheet: document.getElementById("trimSheet"),
 
   // Multitrack session (Vocal Room)
   btnSessionLoadSuno: document.getElementById("btnSessionLoadSuno"),
@@ -4791,6 +4795,37 @@ if (els.btnShareClipHub) {
     };
     shareToHub(clipTrack);
     setStatus(`Clip shared to Hub (${range.startSec}s → ${range.endSec}s).`);
+  });
+}
+if (els.btnOpenTrimSheet) {
+  els.btnOpenTrimSheet.addEventListener("click", () => {
+    if (els.trimSheet) els.trimSheet.style.display = "";
+  });
+}
+if (els.btnCloseTrimSheet) {
+  els.btnCloseTrimSheet.addEventListener("click", () => {
+    if (els.trimSheet) els.trimSheet.style.display = "none";
+  });
+}
+if (els.btnShareFullHub) {
+  els.btnShareFullHub.addEventListener("click", () => {
+    const id = currentPlayerTrackRef || playerLoadedLabel || `player_${Date.now()}`;
+    const url = playerEl?.src || lastSunoFullUrl || "";
+    if (!url) {
+      setStatus("No loaded song to share.");
+      return;
+    }
+    const title = (els.playerTitle?.textContent || "Shared song").trim();
+    const item = {
+      id: String(id),
+      title,
+      fullUrl: url,
+      artUrl: els.playerArt?.src || "",
+      kind: /instrumental/i.test(title) ? "instrumental" : "full",
+      ts: Date.now(),
+    };
+    shareLibraryTrackToHub(item, { clip: null });
+    setStatus("Shared full version to Hub.");
   });
 }
 if (els.playerSeek) {

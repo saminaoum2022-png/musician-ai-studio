@@ -352,23 +352,28 @@
               <div id="playerTitle" class="playerTitle">No track loaded</div>
               <div id="playerSubtitle" class="playerSubtitle">Generate a song, then press Play.</div>
 
-              <div class="playerControls">
-                <button id="btnPlayerPlay" class="primary" disabled>Play</button>
-                <button id="btnPlayerPause" class="ghost" disabled>Pause</button>
-                <button id="btnPlayerStop" class="ghost" disabled>Stop</button>
-              </div>
-
               <div class="playerTimeline">
                 <span id="playerTime" class="small">00:00 / 00:00</span>
                 <input id="playerSeek" type="range" min="0" max="1000" value="0" style="flex:1; min-width:260px" />
               </div>
 
-              <div class="row" style="align-items:center; gap:10px">
-                <label class="small">Clip start (sec)</label>
-                <input id="clipStartSec" type="number" min="0" step="1" value="0" style="max-width:92px" />
-                <label class="small">Clip end (sec)</label>
-                <input id="clipEndSec" type="number" min="0" step="1" value="30" style="max-width:92px" />
-                <button id="btnShareClipHub" class="ghost" type="button">Share Clip to Hub</button>
+              <div class="playerControls">
+                <button id="btnPlayerPlay" class="primary iconBtn" disabled aria-label="Play">▶</button>
+                <button id="btnPlayerPause" class="ghost iconBtn" disabled aria-label="Pause">⏸</button>
+                <button id="btnPlayerStop" class="ghost iconBtn" disabled aria-label="Stop">■</button>
+                <button id="btnOpenTrimSheet" class="ghost" type="button">Trim for Hub</button>
+                <button id="btnShareFullHub" class="ghost" type="button">Share full to Hub</button>
+              </div>
+
+              <div id="trimSheet" class="stepCard" style="display:none; margin-top:10px;">
+                <div class="row" style="align-items:center; gap:10px; flex-wrap:wrap;">
+                  <label class="small">In</label>
+                  <input id="clipStartSec" type="number" min="0" step="1" value="0" style="max-width:92px" />
+                  <label class="small">Out</label>
+                  <input id="clipEndSec" type="number" min="0" step="1" value="30" style="max-width:92px" />
+                  <button id="btnShareClipHub" class="primary" type="button">Use clip + Share</button>
+                  <button id="btnCloseTrimSheet" class="ghost" type="button">Cancel</button>
+                </div>
               </div>
 
               <div class="row">

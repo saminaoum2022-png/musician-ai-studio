@@ -10,6 +10,9 @@ const els = {
   sunoMaqam: document.getElementById("sunoMaqam"),
   sunoTitle: document.getElementById("sunoTitle"),
   sunoTiming: document.getElementById("sunoTiming"),
+  sunoGroovePace: document.getElementById("sunoGroovePace"),
+  sunoProsody: document.getElementById("sunoProsody"),
+  sunoBeatStability: document.getElementById("sunoBeatStability"),
   sunoSongKey: document.getElementById("sunoSongKey"),
   sunoKeyHint: document.getElementById("sunoKeyHint"),
   sunoModel: document.getElementById("sunoModel"),
@@ -27,6 +30,9 @@ const els = {
   btnVocalRefRec: document.getElementById("btnVocalRefRec"),
   btnVocalRefStop: document.getElementById("btnVocalRefStop"),
   btnSunoGenerate: document.getElementById("btnSunoGenerate"),
+  presetPopClean: document.getElementById("presetPopClean"),
+  presetBalladWarm: document.getElementById("presetBalladWarm"),
+  presetClubPunch: document.getElementById("presetClubPunch"),
   btnGenerateOrb: document.getElementById("btnGenerateOrb"),
   btnLyricsMagic: document.getElementById("btnLyricsMagic"),
   lyricsMagicMenu: document.getElementById("lyricsMagicMenu"),
@@ -3987,6 +3993,21 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     "accent lock: sing in requested dialect/language only; avoid switching to another dialect unless user asks";
   const VOICE_STABILITY_GUARDRAILS =
     "voice stability: keep smooth tone, controlled dynamics, avoid shouting, avoid sharp high-pitched belt, keep natural phrasing and warm timbre";
+  const GROOVE_MAP = {
+    slow: "tempo target 68-78 bpm, softer groove emphasis",
+    balanced: "tempo target 84-96 bpm, balanced groove emphasis",
+    energetic: "tempo target 104-122 bpm, energetic groove emphasis",
+  };
+  const PROSODY_MAP = {
+    natural: "prosody mode natural: keep lyrical flow with light timing freedom",
+    tight: "prosody mode tight: keep clear syllable-to-beat alignment",
+    ultra: "prosody mode ultra tight: strict syllable alignment and concise phrase lengths",
+  };
+  const BEAT_STABILITY_MAP = {
+    flexible: "beat stability flexible: allow subtle push-pull feel",
+    stable: "beat stability stable: keep steady pulse and section consistency",
+    locked: "beat stability locked: strict tempo and entry consistency",
+  };
 
   function syncDefaultSelectVisual(selectEl) {
     if (!selectEl) return;
@@ -4072,6 +4093,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const timingClause = timing
         ? `Timing lock: ${timing}. Keep this timing stable across all sections and vocal entries.`
         : "Timing lock: keep stable tempo and aligned vocal phrasing throughout the song.";
+      const groovePace = String(els.sunoGroovePace?.value || "balanced").trim();
+      const prosodyStrictness = String(els.sunoProsody?.value || "tight").trim();
+      const beatStability = String(els.sunoBeatStability?.value || "stable").trim();
       let finalPrompt = sanitizeLyricsPrompt(userPrompt);
       if (!hasReference) {
         try {
@@ -4093,6 +4117,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         dialect ? `Dialect: ${dialect}` : "",
         dialectHint ? `Hint: ${dialectHint}` : "",
         timing ? timing : "",
+        GROOVE_MAP[groovePace] || GROOVE_MAP.balanced,
+        PROSODY_MAP[prosodyStrictness] || PROSODY_MAP.tight,
+        BEAT_STABILITY_MAP[beatStability] || BEAT_STABILITY_MAP.stable,
         HIDDEN_PROSODY_GUARDRAILS,
         HIDDEN_NEGATIVE_PROMPT,
         hasReference ? REFERENCE_MELODY_LOCK : "",
@@ -4143,6 +4170,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         dialect,
         dialectHint,
         timing,
+        groovePace,
+        prosodyStrictness,
+        beatStability,
         songKey: (els.sunoSongKey?.value || "").trim(),
         maqam: (els.sunoMaqam?.value || "").trim(),
         voiceProfile: (els.sunoVoiceProfile?.value || "").trim(),
@@ -4393,6 +4423,30 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
 
 if (els.btnSunoCredits) {
   els.btnSunoCredits.addEventListener("click", () => void refreshSunoCredits());
+}
+if (els.presetPopClean) {
+  els.presetPopClean.addEventListener("click", () => {
+    if (els.sunoGroovePace) els.sunoGroovePace.value = "balanced";
+    if (els.sunoProsody) els.sunoProsody.value = "tight";
+    if (els.sunoBeatStability) els.sunoBeatStability.value = "stable";
+    setStatus("Preset applied: Pop Clean");
+  });
+}
+if (els.presetBalladWarm) {
+  els.presetBalladWarm.addEventListener("click", () => {
+    if (els.sunoGroovePace) els.sunoGroovePace.value = "slow";
+    if (els.sunoProsody) els.sunoProsody.value = "tight";
+    if (els.sunoBeatStability) els.sunoBeatStability.value = "stable";
+    setStatus("Preset applied: Ballad Warm");
+  });
+}
+if (els.presetClubPunch) {
+  els.presetClubPunch.addEventListener("click", () => {
+    if (els.sunoGroovePace) els.sunoGroovePace.value = "energetic";
+    if (els.sunoProsody) els.sunoProsody.value = "tight";
+    if (els.sunoBeatStability) els.sunoBeatStability.value = "locked";
+    setStatus("Preset applied: Club Punch");
+  });
 }
 
 if (els.btnGenerateOrb && els.btnSunoGenerate) {

@@ -182,6 +182,40 @@
             <summary>More options <button id="btnCloseAdvancedSheet" type="button" class="ghost">Close</button></summary>
             <div class="stepCard">
           <div class="stepHead">Sound</div>
+          <div class="row advancedGrid">
+            <label class="field">
+              <div class="label">Groove pace</div>
+              <select id="sunoGroovePace">
+                <option value="balanced" selected>Balanced (recommended)</option>
+                <option value="slow">Slow</option>
+                <option value="energetic">Energetic</option>
+              </select>
+              <div class="hint">Slow: warm. Balanced: all-round. Energetic: more drive.</div>
+            </label>
+            <label class="field">
+              <div class="label">Prosody strictness</div>
+              <select id="sunoProsody">
+                <option value="tight" selected>Tight (recommended)</option>
+                <option value="natural">Natural</option>
+                <option value="ultra">Ultra Tight</option>
+              </select>
+              <div class="hint">How strictly lyrics align to beat and syllables.</div>
+            </label>
+            <label class="field">
+              <div class="label">Beat stability</div>
+              <select id="sunoBeatStability">
+                <option value="stable" selected>Stable (recommended)</option>
+                <option value="flexible">Flexible</option>
+                <option value="locked">Locked</option>
+              </select>
+              <div class="hint">Stable beat without losing musical feel.</div>
+            </label>
+          </div>
+          <div class="row" style="gap:8px; margin-top:6px;">
+            <button id="presetPopClean" class="ghost" type="button">Pop Clean</button>
+            <button id="presetBalladWarm" class="ghost" type="button">Ballad Warm</button>
+            <button id="presetClubPunch" class="ghost" type="button">Club Punch</button>
+          </div>
           <div class="row">
             <label class="proToggleRow" for="sunoProMode">
               <input id="sunoProMode" type="checkbox" />

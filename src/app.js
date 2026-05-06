@@ -4065,10 +4065,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     haptic("impact");
     const promptText = String(els.sunoPrompt?.value || "").trim();
     const vocalRefFile = getVocalReferenceFile();
-    let referenceMode = String(els.sunoReferenceMode?.value || "none");
     const hasUploadedReference = Boolean(vocalRefFile);
-    if (hasUploadedReference && referenceMode === "none") referenceMode = "vocal_full";
-    const hasReference = referenceMode !== "none";
+    const referenceMode = hasUploadedReference ? "humming_music" : "none";
+    const hasReference = hasUploadedReference;
     if (hasReference && !vocalRefFile) {
       window.alert("Please upload or record audio reference first.");
       return;
@@ -4079,7 +4078,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
     try {
       const engine = "gemini_assisted";
-      const modeLabel = hasReference ? `Reference: ${referenceMode}` : "Normal";
+      const modeLabel = hasReference ? "Reference: Direct instrumental" : "Normal";
       const engineLabel = "Suno + Gemini lyrics assist";
       setGenerateBtn("Generating…", true, "generate");
       setGenerateFieldsLocked(true);
@@ -4189,13 +4188,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         model: payload.model,
       };
       const data = await trackCreditsAround(
-        hasReference ? `Suno: generate from ${referenceMode} reference` : "Suno: generate song",
+        hasReference ? "Suno: generate instrumental from audio reference" : "Suno: generate song",
         async () => {
           let r;
           if (hasReference && vocalRefFile) {
             const fd = new FormData();
             fd.set("action", "add_instrumental");
-            fd.set("referenceMode", referenceMode);
+            fd.set("referenceMode", "humming_music");
             fd.set("file", vocalRefFile, vocalRefFile.name || "vocal-reference.webm");
             fd.set("fileName", vocalRefFile.name || "vocal-reference.webm");
             fd.set("fileType", vocalRefFile.type || "audio/webm");
@@ -4493,10 +4492,8 @@ function getReferenceHints() {
   const dialectHint = String(els.sunoDialectHint?.value || "").trim();
   const vp = String(els.sunoVoiceProfile?.value || "").trim().toLowerCase();
   const persona = String(els.sunoPersonaId?.value || "").trim();
-  let referenceMode = String(els.sunoReferenceMode?.value || "none");
   const hasRef = Boolean(getVocalReferenceFile());
-  if (hasRef && referenceMode === "none") referenceMode = "vocal_full";
-  const refOn = hasRef && referenceMode !== "none";
+  const refOn = hasRef;
 
   if (hasRef && !lyrics) {
     pushHint("For better accuracy, add at least 2–4 lyric lines.", "critical");
@@ -4514,11 +4511,8 @@ function getReferenceHints() {
       pushHint("High BPM can push brighter pitch. For warmer baritone/bass tone, use slower timing.");
     }
   }
-  if (referenceMode === "humming_music" && lyrics.length > 220) {
+  if (refOn && lyrics.length > 220) {
     pushHint("Humming mode works better with short guidance. Keep lyrics minimal.");
-  }
-  if (referenceMode === "song_remix" && !style) {
-    pushHint("Add style tags so remix direction is clear (example: cinematic, chill, acoustic).");
   }
   if (refOn && persona) {
     pushHint("Persona may change tone away from your reference. Turn Persona off for stricter melody match.", "critical");
@@ -4543,6 +4537,13 @@ function renderReferenceHints() {
   els.sunoReferenceHint.style.display = "";
   els.sunoReferenceHint.textContent = hints.map((h, i) => `${i + 1}. ${h.text}`).join(" ");
 }
+
+function showReferenceHintsPopupOnce() {
+  const hints = getReferenceHints();
+  if (!hints.length) return;
+  const msg = hints.map((h, i) => `${i + 1}. ${h.text}`).join("\n");
+  window.alert(msg);
+}
 ["input", "change"].forEach((ev) => {
   els.sunoPrompt?.addEventListener(ev, syncGenerateOrbVisibility);
   els.sunoStyle?.addEventListener(ev, syncGenerateOrbVisibility);
@@ -4562,6 +4563,8 @@ if (els.brandTitle) {
 }
 renderLibrary();
 renderHub();
+els.sunoPrompt?.addEventListener("focus", showReferenceHintsPopupOnce, { once: true });
+els.sunoStyle?.addEventListener("focus", showReferenceHintsPopupOnce, { once: true });
 void (async () => {
   await loadPublicConfig();
   await refreshHubFromSupabase();

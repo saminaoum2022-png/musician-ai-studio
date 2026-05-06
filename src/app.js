@@ -651,6 +651,7 @@ let hubSyncTimer = null;
 let hubLastSyncOk = false;
 let hubLastSyncRows = 0;
 let hubLastSyncError = "";
+let hubFeedMemory = [];
 function loadHubSeen() {
   try {
     const raw = localStorage.getItem(hubSeenKey());
@@ -1041,18 +1042,10 @@ async function supabaseDeleteHub(id) {
   return await r.json().catch(() => []);
 }
 function loadHubFeed() {
-  try {
-    const raw = localStorage.getItem(hubFeedKey());
-    const arr = raw ? JSON.parse(raw) : [];
-    return Array.isArray(arr) ? arr : [];
-  } catch {
-    return [];
-  }
+  return Array.isArray(hubFeedMemory) ? hubFeedMemory : [];
 }
 function saveHubFeed(items) {
-  try {
-    localStorage.setItem(hubFeedKey(), JSON.stringify(items || []));
-  } catch {}
+  hubFeedMemory = Array.isArray(items) ? items : [];
 }
 function openShareLiveModal(title) {
   if (!els.shareLiveModal) return;

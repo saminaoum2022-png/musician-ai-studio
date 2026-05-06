@@ -79,40 +79,18 @@ module.exports = async function handler(req, res) {
       const requestedModel = String(model || "").trim().toUpperCase();
       const allowedModels = new Set(["V4_5PLUS", "V5", "V5_5", "V4_5ALL", "V4_5", "V4"]);
       const safeModel = allowedModels.has(requestedModel) ? requestedModel : "V4_5PLUS";
-      const melodyLockInstruction =
-        "preserve uploaded vocal/humming melodic contour and phrase timing; keep topline and cadence points";
-
       // Vocal -> Full song OR Song -> Remix use upload-extend (full-song flow).
       if (referenceMode === "vocal_full" || referenceMode === "song_remix") {
-        // Keep prompt strictly lyrical/content-only (no control instructions),
-        // otherwise provider can sing meta instructions as lyrics.
-        const cleanPrompt = String(prompt || "").trim();
-        const fullPrompt = cleanPrompt;
-        const voiceHint =
-          vocalGender === "m" ? "male lead vocal" : vocalGender === "f" ? "female lead vocal" : "";
-        const lockedStyle = [
-          style,
-          voiceHint,
-          voiceTimbre ? `voice timbre: ${voiceTimbre}` : "",
-          songKey ? `key: ${songKey}` : "",
-          timing ? `timing: ${timing}` : "",
-          dialect ? `dialect: ${dialect}` : "",
-          dialectHint ? `dialect hint: ${dialectHint}` : "",
-          melodyLockInstruction,
-          referenceMode === "song_remix"
-            ? "keep original topline; change arrangement/groove/harmony/instrumentation"
-            : "build full arrangement around uploaded reference",
-        ]
-          .filter(Boolean)
-          .join(", ");
+        // Clean native Suno reference mode:
+        // keep payload minimal and avoid app-injected prompt/style instructions.
         const extPayload = {
           uploadUrl,
           defaultParamFlag: true,
           model: safeModel,
           callBackUrl,
           instrumental: false,
-          prompt: fullPrompt || "",
-          style: lockedStyle || "melody-preserving arrangement",
+          prompt: "",
+          style: style || "",
           title: title || "Reference full song",
           continueAt: 1,
           ...(vocalGender === "m" || vocalGender === "f" ? { vocalGender } : {}),

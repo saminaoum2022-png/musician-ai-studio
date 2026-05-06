@@ -4115,27 +4115,29 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           if (rr.ok && dd?.lyrics) finalPrompt = sanitizeLyricsPrompt(dd.lyrics);
         } catch {}
       }
-      // In vocal-reference flow, never leak hidden instructions into singable lyrics.
-      // If user didn't provide lyrics, keep prompt empty so model follows the uploaded vocal.
-      if (hasReference && !userPrompt.trim()) finalPrompt = "";
+      // In vocal-reference flow, use clean native reference handling:
+      // do not pass textual prompt guidance from app internals.
+      if (hasReference) finalPrompt = "";
 
-      const styleExtras = [
-        dialect ? `Dialect: ${dialect}` : "",
-        dialectHint ? `Hint: ${dialectHint}` : "",
-        timing ? timing : "",
-        GROOVE_MAP[groovePace] || GROOVE_MAP.balanced,
-        PROSODY_MAP[prosodyStrictness] || PROSODY_MAP.tight,
-        BEAT_STABILITY_MAP[beatStability] || BEAT_STABILITY_MAP.stable,
-        HIDDEN_PROSODY_GUARDRAILS,
-        HIDDEN_NEGATIVE_PROMPT,
-        hasReference ? REFERENCE_MELODY_LOCK : "",
-      ]
-        .filter(Boolean)
-        .join(", ");
+      const styleExtras = hasReference
+        ? ""
+        : [
+            dialect ? `Dialect: ${dialect}` : "",
+            dialectHint ? `Hint: ${dialectHint}` : "",
+            timing ? timing : "",
+            GROOVE_MAP[groovePace] || GROOVE_MAP.balanced,
+            PROSODY_MAP[prosodyStrictness] || PROSODY_MAP.tight,
+            BEAT_STABILITY_MAP[beatStability] || BEAT_STABILITY_MAP.stable,
+            HIDDEN_PROSODY_GUARDRAILS,
+            HIDDEN_NEGATIVE_PROMPT,
+            hasReference ? REFERENCE_MELODY_LOCK : "",
+          ]
+            .filter(Boolean)
+            .join(", ");
 
       const payload = {
         prompt: finalPrompt,
-        style: `${userStyle}${userStyle ? " | " : ""}${timingClause}, ${styleExtras}`,
+        style: hasReference ? String(userStyle || "").trim() : `${userStyle}${userStyle ? " | " : ""}${timingClause}, ${styleExtras}`,
         songKey: mapSolfegeToLetterKey((els.sunoSongKey?.value || "").trim()),
         title: (els.sunoTitle?.value || "").trim(),
         customMode: true,
@@ -4164,8 +4166,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             "female lead, smooth controlled phrasing, avoid harsh or shouty delivery";
         }
       }
-      if (vocalProfileClause) payload.style = `${payload.style}, ${vocalProfileClause}`;
-      payload.style = `${payload.style}, ${VOICE_STABILITY_GUARDRAILS}, ${DIALECT_LOCK}`;
+      if (!hasReference) {
+        if (vocalProfileClause) payload.style = `${payload.style}, ${vocalProfileClause}`;
+        payload.style = `${payload.style}, ${VOICE_STABILITY_GUARDRAILS}, ${DIALECT_LOCK}`;
+      }
       lastGenerationMeta = {
         engine,
         mode: modeLabel,
@@ -4196,11 +4200,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             fd.set("fileName", vocalRefFile.name || "vocal-reference.webm");
             fd.set("fileType", vocalRefFile.type || "audio/webm");
             // Keep reference flow payload minimal for compatibility/reliability.
-            const refStyle = [userStyle, GROOVE_MAP[groovePace] || "", PROSODY_MAP[prosodyStrictness] || "", BEAT_STABILITY_MAP[beatStability] || ""]
-              .filter(Boolean)
-              .join(", ");
-            fd.set("style", refStyle || userStyle || "");
-            fd.set("prompt", finalPrompt || "");
+            fd.set("style", hasReference ? String(userStyle || "").trim() : userStyle || "");
+            fd.set("prompt", hasReference ? "" : finalPrompt || "");
             fd.set("title", payload.title || "");
             fd.set("model", payload.model || "V4_5ALL");
             fd.set("vocalGender", payload.vocalGender || "");

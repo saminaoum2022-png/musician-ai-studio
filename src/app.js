@@ -279,7 +279,8 @@ function renderHubNowPlaying() {
   const route = document.body.getAttribute("data-route") || "";
   const hideOnHubVisible = isPlayingHubPostVisible();
   const hideOnLibrary = route === "library";
-  const active = Boolean(hubAudio && hubNowMeta) && !hideOnHubVisible && !hideOnLibrary;
+  const hideOnPlayer = route === "player" && miniSource?.type === "library";
+  const active = Boolean(hubAudio && hubNowMeta) && !hideOnHubVisible && !hideOnLibrary && !hideOnPlayer;
   if (!active) {
     els.hubNowPlaying.classList.remove("isVisible", "isPlaying");
     setTimeout(() => {

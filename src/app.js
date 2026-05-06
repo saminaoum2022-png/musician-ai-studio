@@ -4430,38 +4430,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         setStatus("Image-inspired mode with no lyrics detected: generating instrumental.");
       }
       const data = await trackCreditsAround(
-        hasReference ? "Suno: generate instrumental from audio reference" : "Suno: generate song",
+        "Suno: generate song",
         async () => {
-          let r;
-          if (hasReference && vocalRefFile) {
-            const fd = new FormData();
-            fd.set("action", "add_instrumental");
-            fd.set("referenceMode", "humming_music");
-            fd.set("file", vocalRefFile, vocalRefFile.name || "vocal-reference.webm");
-            fd.set("fileName", vocalRefFile.name || "vocal-reference.webm");
-            fd.set("fileType", vocalRefFile.type || "audio/webm");
-            // Keep reference flow payload minimal for compatibility/reliability.
-            fd.set("style", hasReference ? String(userStyle || "").trim() : userStyle || "");
-            fd.set("prompt", hasReference ? "" : finalPrompt || "");
-            fd.set("title", payload.title || "");
-            fd.set("model", payload.model || "V4_5ALL");
-            fd.set("vocalGender", payload.vocalGender || "");
-            r = await fetch(apiUrl("/api/suno/stems"), {
-              method: "POST",
-              body: fd,
-            });
-            const refErr = await r.clone().json().catch(() => ({}));
-            if (!r.ok) {
-              const reason = refErr?.error || refErr?.details?.error || "Reference generation failed";
-              throw new Error(reason);
-            }
-          } else {
-            r = await fetch(apiUrl("/api/suno/generate"), {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            });
-          }
+          const r = await fetch(apiUrl("/api/suno/generate"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
           const d = await r.json().catch(() => ({}));
           if (!r.ok) {
             const more = d?.detailMessage || d?.details?.message || d?.details?.error || "";

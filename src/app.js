@@ -417,7 +417,7 @@ function applyRoute() {
   const hash = String(location.hash || "");
   const rawRoute = hash.startsWith("#/") ? hash.slice(2) : "generate";
   const route = rawRoute.split(/[?#&]/)[0].trim();
-  const allowedRoutes = new Set(["intro", "start", "generate", "library", "hub", "stems", "settings", "profile", "player"]);
+  const allowedRoutes = new Set(["intro", "start", "generate", "library", "hub", "settings", "profile", "player"]);
   const normalized = route === "start" ? "intro" : route;
   const wanted = allowedRoutes.has(normalized) ? normalized : "generate";
   document.body.classList.toggle("isIntro", wanted === "intro");

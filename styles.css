@@ -1177,12 +1177,15 @@ body[data-route="generate"] .createSectionStack.focusInput .inputPanel.isFocusCa
     0 20px 42px rgba(14,18,30,0.38);
 }
 .lyricsBox.wandGenerated textarea{
-  color: transparent;
-  background-image: linear-gradient(135deg, rgba(155,130,255,0.98), rgba(112,244,211,0.98));
-  -webkit-background-clip: text;
-  background-clip: text;
+  color: rgba(200,184,255,0.98);
+  -webkit-text-fill-color: rgba(200,184,255,0.98);
+  background-image:
+    linear-gradient(180deg, rgba(124,92,255,0.06), rgba(35,213,171,0.04));
+  background-clip: padding-box;
   caret-color: #e7edf7;
-  text-shadow: 0 0 16px rgba(124,92,255,0.18);
+  text-shadow:
+    0 0 10px rgba(124,92,255,0.18),
+    0 0 16px rgba(35,213,171,0.10);
 }
 .lyricsImageMoodBtn svg{
   width:14px;
@@ -2296,7 +2299,7 @@ input::placeholder, textarea::placeholder{
     position:fixed;
     left:50%;
     transform:translateX(-50%);
-    bottom:92px;
+    bottom:104px;
     z-index:45;
     min-width:138px;
     min-height:44px;

@@ -10,7 +10,24 @@ module.exports = async function handler(req, res) {
     const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
     if (!geminiKey) return json(res, 200, fallbackMood(dataUrl, "no_gemini_key"));
 
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(geminiKey)}`, {
+    const gem = await tryGeminiImageMood({ geminiKey, dataUrl });
+    if (!gem?.ok) return json(res, 200, fallbackMood(dataUrl, gem?.error || "gemini_failed"));
+    const parsed = tryParseGeminiObject(gem.text);
+    if (!parsed || typeof parsed !== "object") return json(res, 200, fallbackMood(dataUrl, "parse_failed"));
+    return json(res, 200, { ...sanitizeMood(parsed), source: `gemini:${gem.model || "unknown"}` });
+  } catch (e) {
+    return json(res, 200, fallbackMood("", "server_error"));
+  }
+};
+
+async function tryGeminiImageMood({ geminiKey, dataUrl }) {
+  const discovered = await listGeminiGenerateModels(geminiKey);
+  const preferred = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"];
+  const models = [...preferred, ...discovered].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+  let lastError = discovered.length ? "unknown" : "no generateContent models discovered";
+
+  for (const model of models) {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(geminiKey)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -31,20 +48,41 @@ module.exports = async function handler(req, res) {
             ],
           },
         ],
-        generationConfig: { temperature: 0.4 },
+        generationConfig: { temperature: 0.35 },
       }),
     });
     const text = await r.text().catch(() => "");
     const payload = safeJson(text) || {};
-    if (!r.ok) return json(res, 200, fallbackMood(dataUrl, `gemini_http_${r.status}`));
+    if (!r.ok) {
+      lastError = `gemini_http_${r.status}`;
+      continue;
+    }
     const out = extractText(payload);
-    const parsed = tryParseGeminiObject(out);
-    if (!parsed || typeof parsed !== "object") return json(res, 200, fallbackMood(dataUrl, "parse_failed"));
-    return json(res, 200, { ...sanitizeMood(parsed), source: "gemini" });
-  } catch (e) {
-    return json(res, 200, fallbackMood("", "server_error"));
+    if (!out) {
+      lastError = "empty_response";
+      continue;
+    }
+    return { ok: true, text: out, model };
   }
-};
+  return { ok: false, error: lastError };
+}
+
+async function listGeminiGenerateModels(geminiKey) {
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(geminiKey)}`;
+    const r = await fetch(url);
+    const text = await r.text().catch(() => "");
+    const data = safeJson(text) || {};
+    if (!r.ok) return [];
+    const models = Array.isArray(data?.models) ? data.models : [];
+    return models
+      .filter((m) => Array.isArray(m?.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
+      .map((m) => String(m?.name || "").replace(/^models\//, "").trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
 
 function fallbackMood(dataUrl, reason) {
   const presets = [

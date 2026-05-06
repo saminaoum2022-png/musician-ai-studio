@@ -5090,6 +5090,7 @@ if (els.sunoProMode) {
   el.addEventListener("input", renderReferenceHints);
   el.addEventListener("change", renderReferenceHints);
 });
+renderReferenceHints();
 
 if (els.btnBetaTopup) {
   els.btnBetaTopup.addEventListener("click", () => openBilling());

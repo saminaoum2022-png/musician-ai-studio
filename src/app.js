@@ -613,6 +613,24 @@ function extractTaskIdLoose(data) {
     null
   );
 }
+function compactStyleForProvider(input, maxLen = 980) {
+  let s = String(input || "")
+    .replace(/\s+/g, " ")
+    .replace(/\s*,\s*/g, ", ")
+    .replace(/\s*\|\s*/g, " | ")
+    .trim();
+  if (!s) return "";
+  if (s.length <= maxLen) return s;
+  const parts = s.split(",").map((p) => p.trim()).filter(Boolean);
+  let out = "";
+  for (const p of parts) {
+    const next = out ? `${out}, ${p}` : p;
+    if (next.length > maxLen) break;
+    out = next;
+  }
+  if (!out) out = s.slice(0, maxLen).trim();
+  return out;
+}
 /** @type {Array<{ name:string, url:string, gain:number, pan?:number, muted?:boolean }>} */
 let mixerStems = [];
 /** @type {HTMLAudioElement[]} */
@@ -3648,6 +3666,29 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     fr.onerror = () => reject(new Error("Could not read image file"));
     fr.readAsDataURL(file);
   });
+  const downscaleImageDataUrl = async (dataUrl, maxSide = 1600, quality = 0.82) => {
+    if (!String(dataUrl).startsWith("data:image/")) return dataUrl;
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error("Could not decode image"));
+      i.src = dataUrl;
+    });
+    const w = Number(img.width || 0);
+    const h = Number(img.height || 0);
+    if (!w || !h) return dataUrl;
+    const scale = Math.min(1, maxSide / Math.max(w, h));
+    const tw = Math.max(1, Math.round(w * scale));
+    const th = Math.max(1, Math.round(h * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = tw;
+    canvas.height = th;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return dataUrl;
+    ctx.drawImage(img, 0, 0, tw, th);
+    // Force jpeg for much smaller payloads.
+    return canvas.toDataURL("image/jpeg", quality);
+  };
   const renderImageMood = (m) => {
     if (!els.imageMoodOutput) return;
     if (!m) {
@@ -3675,7 +3716,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (els.btnApplyImageMood) els.btnApplyImageMood.disabled = true;
       const card = els.imageMoodOutput?.closest?.(".imageMoodCard");
       if (card) card.classList.add("analyzing");
-      const dataUrl = await fileToDataUrl(file);
+      let dataUrl = await fileToDataUrl(file);
+      dataUrl = await downscaleImageDataUrl(dataUrl, 1600, 0.82);
+      // Safety cap: keep request under Vercel payload limits.
+      if (dataUrl.length > 1_800_000) {
+        dataUrl = await downscaleImageDataUrl(dataUrl, 1280, 0.72);
+      }
       const r = await fetch(apiUrl("/api/image-mood"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -4359,6 +4405,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         if (vocalProfileClause) payload.style = `${payload.style}, ${vocalProfileClause}`;
         payload.style = `${payload.style}, ${VOICE_STABILITY_GUARDRAILS}, ${DIALECT_LOCK}`;
       }
+      payload.style = compactStyleForProvider(payload.style, 980);
       lastGenerationMeta = {
         engine,
         mode: modeLabel,

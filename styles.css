@@ -708,6 +708,18 @@ body.isIntro .footer{ display:none; }
   display:block;
   background: rgba(0,0,0,0.25);
 }
+.playerArtWrap.isEmpty{
+  background:
+    radial-gradient(120% 120% at 20% 10%, rgba(124,92,255,0.12), transparent 60%),
+    radial-gradient(120% 120% at 90% 0%, rgba(35,213,171,0.10), transparent 62%),
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+}
+.playerArt.isPlaceholder{
+  object-fit: contain;
+  padding: 14%;
+  opacity: 0.34;
+  filter: saturate(0.85) brightness(0.95);
+}
 .playerTitle{ font-size:20px; font-weight:950; letter-spacing:-0.02em; }
 .playerSubtitle{ color: var(--muted); margin-top: 6px; line-height:1.35; }
 .playerControls{ display:flex; gap:10px; margin-top: 14px; flex-wrap:wrap; align-items:center; }

@@ -2897,9 +2897,13 @@ function placeholderCoverDataUrl() {
 }
 
 function setPlayerMeta({ title, subtitle, artUrl } = {}) {
+  const hasTrack = Boolean(artUrl);
   if (els.playerTitle) els.playerTitle.textContent = title || "Now Playing";
   if (els.playerSubtitle) els.playerSubtitle.textContent = subtitle || "";
   if (els.playerArt) els.playerArt.src = artUrl || placeholderCoverDataUrl();
+  const artWrap = document.querySelector(".playerArtWrap");
+  if (artWrap) artWrap.classList.toggle("isEmpty", !hasTrack);
+  if (els.playerArt) els.playerArt.classList.toggle("isPlaceholder", !hasTrack);
   hubNowMeta = {
     title: title || "Now playing",
     art: artUrl || placeholderCoverDataUrl(),

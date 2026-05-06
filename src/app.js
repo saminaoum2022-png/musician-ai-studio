@@ -1815,7 +1815,11 @@ function renderLibrary() {
         artUrl: (t.meta && t.meta.imageUrl) || placeholderCoverDataUrl(),
       });
       miniSource = { type: "library", id };
-      await playOnPlayerPage(t.url, "Full song");
+      await playOnPlayerPage(t.url, "Full song", {
+        title: t.title || "Library song",
+        subtitle: "Library • Full song",
+        artUrl: (t.meta && t.meta.imageUrl) || t.artUrl || placeholderCoverDataUrl(),
+      });
     });
   });
   els.libraryList.querySelectorAll("[data-lib-row]").forEach((row) => {
@@ -1832,7 +1836,11 @@ function renderLibrary() {
         artUrl: (t.meta && t.meta.imageUrl) || placeholderCoverDataUrl(),
       });
       miniSource = { type: "library", id };
-      await playOnPlayerPage(t.url, "Full song");
+      await playOnPlayerPage(t.url, "Full song", {
+        title: t.title || "Library song",
+        subtitle: "Library • Full song",
+        artUrl: (t.meta && t.meta.imageUrl) || t.artUrl || placeholderCoverDataUrl(),
+      });
     });
   });
   els.libraryList.querySelectorAll("[data-lib-menu]").forEach((b) => {
@@ -2774,14 +2782,18 @@ function toAudioProxyUrl(url) {
   return `/api/suno/audio?url=${encodeURIComponent(url)}`;
 }
 
-async function playOnPlayerPage(url, label) {
+async function playOnPlayerPage(url, label, meta = null) {
   if (!url) return;
   setPlayerSource(url, label);
-  setPlayerMeta({
-    title: lastSunoTitle || "Generated song",
-    subtitle: label ? `Generated • ${label}` : "Generated",
-    artUrl: lastSunoArtUrl,
-  });
+  if (meta && (meta.title || meta.subtitle || meta.artUrl)) {
+    setPlayerMeta(meta);
+  } else {
+    setPlayerMeta({
+      title: lastSunoTitle || "Generated song",
+      subtitle: label ? `Generated • ${label}` : "Generated",
+      artUrl: lastSunoArtUrl,
+    });
+  }
   location.hash = "#/player";
   // Give the route a moment to render, then play.
   const a = ensurePlayer();

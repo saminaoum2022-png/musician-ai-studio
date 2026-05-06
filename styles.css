@@ -1047,10 +1047,13 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
 .profilePreview{
   border:0;
   border-radius:0;
-  padding:2px 0 8px;
+  padding:0 0 8px;
   background: transparent;
   box-shadow:none;
   margin-bottom: 8px;
+}
+.card[data-route="profile"] h2{
+  margin-bottom: 6px;
 }
 .profilePreviewHead{
   display:flex;

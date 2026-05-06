@@ -1051,6 +1051,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   background: transparent;
   box-shadow:none;
   margin-bottom: 8px;
+  position: relative;
 }
 .card[data-route="profile"] h2{
   margin-bottom: 6px;
@@ -1066,10 +1067,11 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   padding-top: 0 !important;
 }
 .profilePreviewHead{
-  display:flex;
-  justify-content:flex-end;
-  position:relative;
-  margin-bottom:8px;
+  position:absolute;
+  top:0;
+  right:0;
+  margin:0;
+  z-index:5;
 }
 .profileEditBtn{
   border-radius:999px;

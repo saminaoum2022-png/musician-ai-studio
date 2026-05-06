@@ -87,6 +87,8 @@ const els = {
   btnCloseTrimSheet: document.getElementById("btnCloseTrimSheet"),
   btnShareFullHub: document.getElementById("btnShareFullHub"),
   trimSheet: document.getElementById("trimSheet"),
+  btnPlayerChangeCover: document.getElementById("btnPlayerChangeCover"),
+  playerCoverUpload: document.getElementById("playerCoverUpload"),
 
   // Multitrack session (Vocal Room)
   btnSessionLoadSuno: document.getElementById("btnSessionLoadSuno"),
@@ -1663,6 +1665,15 @@ function saveLibrary(items) {
   try {
     localStorage.setItem(profileLibraryKey(), JSON.stringify(items || []));
   } catch {}
+}
+function patchLibraryTrack(id, patch) {
+  if (!id) return;
+  const items = loadLibrary();
+  const idx = items.findIndex((x) => String(x.id) === String(id));
+  if (idx < 0) return;
+  items[idx] = { ...items[idx], ...patch, ts: Date.now() };
+  saveLibrary(items);
+  renderLibrary();
 }
 function saveLibraryFor(id, items) {
   try {
@@ -4829,6 +4840,30 @@ if (els.btnShareFullHub) {
     };
     shareLibraryTrackToHub(item, { clip: null });
     setStatus("Shared full version to Hub.");
+  });
+}
+if (els.btnPlayerChangeCover) {
+  els.btnPlayerChangeCover.addEventListener("click", () => {
+    if (!currentPlayerTrackRef?.id) {
+      setStatus("Open a library song first.");
+      return;
+    }
+    els.playerCoverUpload?.click();
+  });
+}
+if (els.playerCoverUpload) {
+  els.playerCoverUpload.addEventListener("change", () => {
+    const f = els.playerCoverUpload?.files?.[0];
+    if (!f || !currentPlayerTrackRef?.id) return;
+    const url = URL.createObjectURL(f);
+    patchLibraryTrack(currentPlayerTrackRef.id, { artUrl: url, meta: { ...(currentPlayerTrackRef.meta || {}), imageUrl: url } });
+    currentPlayerTrackRef = { ...currentPlayerTrackRef, artUrl: url, meta: { ...(currentPlayerTrackRef.meta || {}), imageUrl: url } };
+    setPlayerMeta({
+      title: els.playerTitle?.textContent || currentPlayerTrackRef.title || "Library song",
+      subtitle: els.playerSubtitle?.textContent || "Library • Full song",
+      artUrl: url,
+    });
+    setStatus("Cover updated.");
   });
 }
 if (els.playerSeek) {

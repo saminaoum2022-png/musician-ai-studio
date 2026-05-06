@@ -1587,7 +1587,6 @@ function renderProfilePreviewFromInputs() {
   if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = username;
   if (els.profilePreviewGenderIcon) els.profilePreviewGenderIcon.style.display = "none";
   if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = voiceTimbre;
-  if (els.profilePreviewVisibility) els.profilePreviewVisibility.textContent = isPublic ? "Public" : "Private";
   if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = bio;
   if (els.profilePreviewBioInput) {
     els.profilePreviewBioInput.style.height = "auto";
@@ -1611,8 +1610,11 @@ function renderProfileHubShared() {
   }
   els.profileHubSharedList.innerHTML = items.map((p) => `
     <div class="profileHubSharedItem">
-      <div class="name">${escapeHtml(String(p.title || "Untitled"))}</div>
-      <div class="time">${new Date(p.ts).toLocaleString()}</div>
+      <div class="profileHubSharedMeta">
+        <div class="name">${escapeHtml(String(p.title || "Untitled"))}</div>
+        <div class="hint">${escapeHtml(String(p.genre || "Shared to Hub"))}</div>
+      </div>
+      <div class="time">${new Date(p.ts).toLocaleDateString()}</div>
     </div>
   `).join("");
 }
@@ -5075,17 +5077,10 @@ if (els.profileAvatarFile) {
 if (els.profilePreviewAvatar && els.profileAvatarFile) {
   els.profilePreviewAvatar.addEventListener("click", () => els.profileAvatarFile.click());
 }
-if (els.profilePreviewVisibility && els.profileIsPublic) {
-  els.profilePreviewVisibility.addEventListener("click", () => {
-    els.profileIsPublic.checked = !els.profileIsPublic.checked;
-    renderProfilePreviewFromInputs();
-  });
-}
 [
   els.profilePreviewUsernameInput,
   els.profilePreviewTimbreInput,
   els.profilePreviewBioInput,
-  els.profileIsPublic,
 ].forEach((el) => {
   if (!el) return;
   el.addEventListener("input", renderProfilePreviewFromInputs);

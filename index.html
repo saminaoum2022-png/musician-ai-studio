@@ -356,7 +356,6 @@
         </section>
 
         <section class="card wide" data-route="profile">
-          <h2>Profile</h2>
           <div class="profilePreview" id="profilePreviewCard">
             <div class="profilePreviewHead">
               <button id="btnProfileCardEdit" class="ghost profileEditBtn" type="button" aria-label="Profile actions">⋯</button>
@@ -381,7 +380,6 @@
                   <option value="soprano">Voice: Soprano</option>
                 </select>
               </div>
-              <button id="profilePreviewVisibility" class="profilePreviewVisibility" type="button">Public</button>
             </div>
             <textarea id="profilePreviewBioInput" class="profileInlineBio" rows="3" maxlength="120" disabled>Add a short bio to introduce your music style.</textarea>
             <div id="profilePreviewGenres" class="profilePreviewGenres"></div>
@@ -396,13 +394,13 @@
           <div id="authStatus" class="hint" style="margin-top:4px">Not logged in.</div>
           <input id="profileAvatarFile" type="file" accept="image/*" style="display:none" />
           <input id="profileIsPublic" type="checkbox" checked style="display:none" />
-          <div class="row">
-            <button id="btnProfileSave" class="primary" type="button" style="display:none">Save profile</button>
+          <div class="row profileSaveRow">
+            <button id="btnProfileSave" class="primary profileSaveBtn" type="button" style="display:none">Save profile</button>
           </div>
           <div id="profileSavedMsg" class="hint" style="margin-top:8px; display:none"></div>
           <div id="profileSaveToast" class="profileSaveToast" style="display:none">Profile updated.</div>
           <div class="stepHead" style="margin-top:14px">Shared To Hub</div>
-          <div id="profileHubSharedList" class="code" style="max-height:none"></div>
+          <div id="profileHubSharedList" class="profileHubSharedList" style="max-height:none"></div>
           <div class="hint">Songs in Library are stored per profile on this device for now.</div>
         </section>
 

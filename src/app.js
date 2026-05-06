@@ -3977,6 +3977,21 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     "Follow-prompt behavior: keep user structure and mood first; preserve sentence cuts as singable phrases; use expressive timing when style implies romantic/ballad; avoid forcing fast percussion unless requested.";
   const REFERENCE_MELODY_LOCK =
     "strict melody lock, follow uploaded vocal contour and phrase timing, keep topline and cadence points, no spoken instructions";
+  const DIALECT_LOCK =
+    "accent lock: sing in requested dialect/language only; avoid switching to another dialect unless user asks";
+  const VOICE_STABILITY_GUARDRAILS =
+    "voice stability: keep smooth tone, controlled dynamics, avoid shouting, avoid sharp high-pitched belt, keep natural phrasing and warm timbre";
+
+  function syncDefaultSelectVisual(selectEl) {
+    if (!selectEl) return;
+    const isDefault = String(selectEl.value || "").trim() === "";
+    selectEl.classList.toggle("isDefaultOption", isDefault);
+  }
+  [els.sunoSongKey, els.sunoMaqam, els.sunoVoiceProfile, els.sunoDialect, els.sunoPersonaId].forEach((sel) => {
+    if (!sel) return;
+    syncDefaultSelectVisual(sel);
+    sel.addEventListener("change", () => syncDefaultSelectVisual(sel));
+  });
 
   function sanitizeLyricsPrompt(raw) {
     const txt = String(raw || "").replace(/\r/g, "");
@@ -4078,11 +4093,28 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         personaId: (els.sunoPersonaId?.value || "").trim() || undefined,
       };
       const vp = String(els.sunoVoiceProfile?.value || "").trim();
+      let vocalProfileClause = "";
       if (vp.includes("|")) {
         const [gender, timbre] = vp.split("|");
         payload.vocalGender = gender || undefined;
         payload.voiceTimbre = timbre || undefined;
+        const timbreLower = String(timbre || "").toLowerCase();
+        if (timbreLower.includes("baritone")) {
+          vocalProfileClause =
+            "male baritone lead, lower tessitura, warm chest resonance, controlled dynamics, avoid shouting/high belt";
+        } else if (timbreLower.includes("bass")) {
+          vocalProfileClause =
+            "male bass lead, deep low register, dark warm tone, no high-pitched delivery, avoid shouting";
+        } else if (timbreLower.includes("tenor")) {
+          vocalProfileClause =
+            "male tenor lead with smooth upper range, keep tone lyrical, avoid harsh or shouty attacks";
+        } else if (timbreLower.includes("alto") || timbreLower.includes("mezzo") || timbreLower.includes("soprano")) {
+          vocalProfileClause =
+            "female lead, smooth controlled phrasing, avoid harsh or shouty delivery";
+        }
       }
+      if (vocalProfileClause) payload.style = `${payload.style}, ${vocalProfileClause}`;
+      payload.style = `${payload.style}, ${VOICE_STABILITY_GUARDRAILS}, ${DIALECT_LOCK}`;
       lastGenerationMeta = {
         engine,
         mode: modeLabel,

@@ -258,6 +258,9 @@ const els = {
   proofCard: document.getElementById("proofCard"),
   envBadge: document.getElementById("envBadge"),
 };
+
+// Must be initialized before any startup route/render calls.
+var imageMoodAppliedForNextGen = false;
 let currentProofPost = null;
 let hubAudio = null;
 let hubAudioPostId = null;
@@ -565,7 +568,6 @@ let vocalRefChunks = [];
 let vocalRefPreviewUrl = "";
 let imageMoodData = null;
 let imageMoodCoverDataUrl = "";
-let imageMoodAppliedForNextGen = false;
 let pendingGeneratedCoverDataUrl = "";
 
 function getVocalReferenceFile() {

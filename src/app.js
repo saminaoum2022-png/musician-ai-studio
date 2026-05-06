@@ -43,6 +43,7 @@ const els = {
   imageMoodUpload: document.getElementById("imageMoodUpload"),
   imageMoodPreview: document.getElementById("imageMoodPreview"),
   imageMoodOutput: document.getElementById("imageMoodOutput"),
+  imageMoodUseAsCover: document.getElementById("imageMoodUseAsCover"),
   btnAnalyzeImageMood: document.getElementById("btnAnalyzeImageMood"),
   btnApplyImageMood: document.getElementById("btnApplyImageMood"),
   lyricsMagicMenu: document.getElementById("lyricsMagicMenu"),
@@ -562,6 +563,8 @@ let vocalRefBlob = null;
 let vocalRefChunks = [];
 let vocalRefPreviewUrl = "";
 let imageMoodData = null;
+let imageMoodCoverDataUrl = "";
+let pendingGeneratedCoverDataUrl = "";
 
 function getVocalReferenceFile() {
   if (vocalRefBlob) {
@@ -3704,6 +3707,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const cur = String(els.sunoArtworkStyle.value || "").trim();
       if (!cur) els.sunoArtworkStyle.value = String(imageMoodData.artworkHint).trim();
     }
+    if (els.imageMoodUseAsCover?.checked && imageMoodCoverDataUrl) {
+      pendingGeneratedCoverDataUrl = imageMoodCoverDataUrl;
+      if (els.imageMoodSummary) els.imageMoodSummary.textContent = "Image mood ready • cover will be used for next generation.";
+    } else {
+      pendingGeneratedCoverDataUrl = "";
+    }
     closeImageMoodModal();
     setStatus("Image mood applied to style and generate fields.");
   };
@@ -3780,6 +3789,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         els.imageMoodPreview.src = preview;
         els.imageMoodPreview.style.display = "";
       }
+      fileToDataUrl(file).then((v) => { imageMoodCoverDataUrl = v; }).catch(() => { imageMoodCoverDataUrl = ""; });
     });
   }
   if (els.btnAnalyzeImageMood) {
@@ -3921,6 +3931,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       lastSunoFullUrl = audioUrl;
       lastSunoProxyUrl = toAudioProxyUrl(audioUrl);
       lastSunoArtUrl = imageUrl || lastSunoArtUrl;
+      if (pendingGeneratedCoverDataUrl) {
+        lastSunoArtUrl = pendingGeneratedCoverDataUrl;
+      }
       lastSunoTitle = String(title || "").trim() || lastSunoTitle;
       setLink(els.sunoFullLink, lastSunoProxyUrl || audioUrl);
       await cacheGeneratedAudio(lastSunoProxyUrl || audioUrl);
@@ -3940,6 +3953,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       lastSunoFullUrl2 = audioUrl2;
       lastSunoProxyUrl2 = toAudioProxyUrl(audioUrl2);
       lastSunoArtUrl2 = imageUrl2 || "";
+      if (pendingGeneratedCoverDataUrl) {
+        lastSunoArtUrl2 = pendingGeneratedCoverDataUrl;
+      }
       lastSunoTitle2 = String(title2 || "").trim() || "Generated song B";
       await cacheGeneratedAudio2(lastSunoProxyUrl2 || audioUrl2);
     }
@@ -3980,6 +3996,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               meta: lastGenerationMeta,
             });
           }
+          pendingGeneratedCoverDataUrl = "";
           els.btnSunoStems.disabled = !(sunoAudioId);
           if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = !(sunoAudioId);
           setStatus("Song is ready. Press Play full.");

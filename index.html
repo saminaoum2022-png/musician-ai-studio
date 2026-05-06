@@ -28,7 +28,6 @@
             <a href="#/generate" class="journeyStep" data-route-link="generate">Generate</a>
             <a href="#/library" class="journeyStep" data-route-link="library">Library</a>
             <a href="#/hub" class="journeyStep" data-route-link="hub">Hub</a>
-            <a href="#/stems" class="journeyStep" data-route-link="stems">Stems</a>
             <a href="#/vocal" class="journeyStep" data-route-link="vocal">Vocal</a>
             <a href="#/player" class="journeyStep" data-route-link="player">Player</a>
           </div>
@@ -143,6 +142,10 @@
               <div class="lyricsBox">
                 <textarea id="sunoPrompt" rows="4" placeholder="Write your lyrics here..."></textarea>
                 <button id="btnLyricsMagic" class="lyricsMagicBtn" type="button" title="AI lyrics assist">✦</button>
+              </div>
+              <div class="row imageMoodRow">
+                <button id="btnImageMood" class="ghost" type="button">Inspire from image</button>
+                <span id="imageMoodSummary" class="hint imageMoodSummary">Upload a photo to extract mood and style hints.</span>
               </div>
               <div class="row vocalQuickRow">
                 <button id="btnMagicUploadVocal" class="ghost" type="button">+ Audio</button>
@@ -336,7 +339,6 @@
         <section class="card wide" data-route="more">
           <h2>Studio & More</h2>
           <div class="row">
-            <a class="ghost" href="#/stems">Stems & Studio</a>
             <a class="ghost" href="#/settings">Settings</a>
             <a class="ghost" href="#/advanced">Advanced</a>
           </div>
@@ -721,6 +723,26 @@
           </details>
         </section>
       </main>
+      <div id="imageMoodModal" class="modal imageMoodModal" style="display:none" aria-hidden="true">
+        <div class="modalCard imageMoodCard">
+          <div class="row imageMoodHead">
+            <div class="modalTitle">Image Mood Assistant</div>
+            <button id="btnCloseImageMood" class="ghost" type="button">Close</button>
+          </div>
+          <div class="hint">Upload cover/art/photo and NabadAi suggests mood, tags, and optional lyric seed.</div>
+          <label class="field imageMoodField">
+            <input id="imageMoodUpload" type="file" accept="image/*" />
+          </label>
+          <div class="imageMoodPreviewWrap">
+            <img id="imageMoodPreview" alt="Mood preview" style="display:none" />
+          </div>
+          <div id="imageMoodOutput" class="imageMoodOutput">No analysis yet.</div>
+          <div class="row imageMoodActions">
+            <button id="btnAnalyzeImageMood" class="primary" type="button">Analyze</button>
+            <button id="btnApplyImageMood" class="ghost" type="button" disabled>Apply to song</button>
+          </div>
+        </div>
+      </div>
 
       <footer class="footer"></footer>
       <div id="songDetailsModal" class="songDetailsModal" style="display:none">
@@ -780,7 +802,6 @@
         <a href="#/generate" data-route-link="generate">Create</a>
         <a href="#/library" data-route-link="library">Library</a>
         <a href="#/hub" data-route-link="hub" class="hubTab" aria-label="Hub" title="Hub"><span>#</span><span id="hubTabDot" class="hubDot hubTabDot" style="display:none"></span></a>
-        <a href="#/stems" data-route-link="stems">Stems</a>
         <a href="#/profile" data-route-link="profile">Profile</a>
       </nav>
       <div id="hubNowPlaying" class="hubNowPlaying" style="display:none">

@@ -930,6 +930,70 @@ textarea{
   gap:8px;
   margin-top:8px;
 }
+.imageMoodRow{
+  align-items:center;
+  gap:10px;
+  margin-top:8px;
+}
+.imageMoodRow .ghost{
+  min-height:34px;
+  border-radius:10px;
+  padding:6px 10px;
+  font-size:12px;
+}
+.imageMoodSummary{
+  margin-top:0;
+  font-size:12px;
+  color: rgba(205,214,230,0.72);
+}
+.imageMoodModal .modalCard{
+  max-width: 560px;
+}
+.imageMoodCard{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.imageMoodHead{
+  justify-content:space-between;
+  align-items:center;
+}
+.imageMoodField input[type="file"]{
+  width:100%;
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.16);
+  background: rgba(8,12,20,0.62);
+}
+.imageMoodPreviewWrap{
+  min-height:140px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.12);
+  background: linear-gradient(180deg, rgba(9,14,24,0.7), rgba(9,14,24,0.3));
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+}
+#imageMoodPreview{
+  width:100%;
+  max-height:220px;
+  object-fit:cover;
+}
+.imageMoodOutput{
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.12);
+  background: rgba(8,12,20,0.54);
+  padding:10px 12px;
+  font-size:13px;
+  color: rgba(225,235,248,0.9);
+  line-height:1.45;
+  min-height:88px;
+  white-space:pre-wrap;
+}
+.imageMoodActions{
+  gap:10px;
+}
 .vocalQuickRow .ghost{
   min-height:34px;
   border-radius:10px;

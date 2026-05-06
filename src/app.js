@@ -36,6 +36,15 @@ const els = {
   presetClubPunch: document.getElementById("presetClubPunch"),
   btnGenerateOrb: document.getElementById("btnGenerateOrb"),
   btnLyricsMagic: document.getElementById("btnLyricsMagic"),
+  btnImageMood: document.getElementById("btnImageMood"),
+  imageMoodSummary: document.getElementById("imageMoodSummary"),
+  imageMoodModal: document.getElementById("imageMoodModal"),
+  btnCloseImageMood: document.getElementById("btnCloseImageMood"),
+  imageMoodUpload: document.getElementById("imageMoodUpload"),
+  imageMoodPreview: document.getElementById("imageMoodPreview"),
+  imageMoodOutput: document.getElementById("imageMoodOutput"),
+  btnAnalyzeImageMood: document.getElementById("btnAnalyzeImageMood"),
+  btnApplyImageMood: document.getElementById("btnApplyImageMood"),
   lyricsMagicMenu: document.getElementById("lyricsMagicMenu"),
   btnMagicUploadVocal: document.getElementById("btnMagicUploadVocal"),
   btnMagicRecordVocal: document.getElementById("btnMagicRecordVocal"),
@@ -552,6 +561,7 @@ let vocalRefStream = null;
 let vocalRefBlob = null;
 let vocalRefChunks = [];
 let vocalRefPreviewUrl = "";
+let imageMoodData = null;
 
 function getVocalReferenceFile() {
   if (vocalRefBlob) {
@@ -3615,6 +3625,89 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
   };
 
+  const openImageMoodModal = () => {
+    if (!els.imageMoodModal) return;
+    els.imageMoodModal.style.display = "";
+    els.imageMoodModal.setAttribute("aria-hidden", "false");
+  };
+  const closeImageMoodModal = () => {
+    if (!els.imageMoodModal) return;
+    els.imageMoodModal.style.display = "none";
+    els.imageMoodModal.setAttribute("aria-hidden", "true");
+  };
+  const fileToDataUrl = (file) => new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result || ""));
+    fr.onerror = () => reject(new Error("Could not read image file"));
+    fr.readAsDataURL(file);
+  });
+  const renderImageMood = (m) => {
+    if (!els.imageMoodOutput) return;
+    if (!m) {
+      els.imageMoodOutput.textContent = "No analysis yet.";
+      return;
+    }
+    const tags = Array.isArray(m.tags) ? m.tags.join(", ") : "";
+    const lines = [
+      m.concept ? `Mood: ${m.concept}` : "",
+      tags ? `Suggested tags: ${tags}` : "",
+      m.lyricSeed ? `Lyric seed: ${m.lyricSeed}` : "",
+      m.artworkHint ? `Artwork hint: ${m.artworkHint}` : "",
+    ].filter(Boolean);
+    els.imageMoodOutput.textContent = lines.join("\n\n") || "No analysis yet.";
+  };
+  const analyzeImageMood = async () => {
+    const file = els.imageMoodUpload?.files?.[0];
+    if (!file) {
+      setStatus("Please upload an image first.");
+      return;
+    }
+    try {
+      if (els.btnAnalyzeImageMood) els.btnAnalyzeImageMood.disabled = true;
+      if (els.btnApplyImageMood) els.btnApplyImageMood.disabled = true;
+      const dataUrl = await fileToDataUrl(file);
+      const r = await fetch(apiUrl("/api/image-mood"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: dataUrl }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d?.error || "Image analysis failed");
+      imageMoodData = d || null;
+      renderImageMood(imageMoodData);
+      if (els.btnApplyImageMood) els.btnApplyImageMood.disabled = !imageMoodData;
+      if (els.imageMoodSummary) {
+        const tags = Array.isArray(d?.tags) ? d.tags.slice(0, 4).join(", ") : "";
+        els.imageMoodSummary.textContent = tags || String(d?.concept || "Image mood ready.");
+      }
+      setStatus("Image mood ready. Tap apply to use it.");
+    } catch (e) {
+      setStatus(`Image mood failed: ${e?.message || String(e)}`);
+    } finally {
+      if (els.btnAnalyzeImageMood) els.btnAnalyzeImageMood.disabled = false;
+    }
+  };
+  const applyImageMood = () => {
+    if (!imageMoodData) return;
+    const tags = Array.isArray(imageMoodData.tags) ? imageMoodData.tags.filter(Boolean) : [];
+    if (els.sunoStyle && tags.length) {
+      const existing = String(els.sunoStyle.value || "").trim();
+      const current = existing ? existing.split(",").map((s) => s.trim()).filter(Boolean) : [];
+      const merged = [...new Set([...current, ...tags])].slice(0, 12);
+      els.sunoStyle.value = merged.join(", ");
+    }
+    if (els.sunoPrompt && imageMoodData.lyricSeed) {
+      const cur = String(els.sunoPrompt.value || "").trim();
+      if (!cur) els.sunoPrompt.value = String(imageMoodData.lyricSeed).trim();
+    }
+    if (els.sunoArtworkStyle && imageMoodData.artworkHint) {
+      const cur = String(els.sunoArtworkStyle.value || "").trim();
+      if (!cur) els.sunoArtworkStyle.value = String(imageMoodData.artworkHint).trim();
+    }
+    closeImageMoodModal();
+    setStatus("Image mood applied to style and generate fields.");
+  };
+
   if (els.btnLyricsMagic) {
     let longPressTimer = null;
     let longPressTriggered = false;
@@ -3663,6 +3756,37 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (t === els.btnLyricsMagic || t.closest?.("#lyricsMagicMenu")) return;
       closeMagicMenu();
     });
+  }
+  if (els.btnImageMood) {
+    els.btnImageMood.addEventListener("click", openImageMoodModal);
+  }
+  if (els.btnCloseImageMood) {
+    els.btnCloseImageMood.addEventListener("click", closeImageMoodModal);
+  }
+  if (els.imageMoodModal) {
+    els.imageMoodModal.addEventListener("click", (e) => {
+      if (e.target === els.imageMoodModal) closeImageMoodModal();
+    });
+  }
+  if (els.imageMoodUpload) {
+    els.imageMoodUpload.addEventListener("change", () => {
+      const file = els.imageMoodUpload.files?.[0];
+      if (!file) return;
+      imageMoodData = null;
+      renderImageMood(null);
+      if (els.btnApplyImageMood) els.btnApplyImageMood.disabled = true;
+      const preview = URL.createObjectURL(file);
+      if (els.imageMoodPreview) {
+        els.imageMoodPreview.src = preview;
+        els.imageMoodPreview.style.display = "";
+      }
+    });
+  }
+  if (els.btnAnalyzeImageMood) {
+    els.btnAnalyzeImageMood.addEventListener("click", () => void analyzeImageMood());
+  }
+  if (els.btnApplyImageMood) {
+    els.btnApplyImageMood.addEventListener("click", applyImageMood);
   }
   if (els.btnCloseVocalRecorder) {
     els.btnCloseVocalRecorder.addEventListener("click", closeVocalRecorderModal);

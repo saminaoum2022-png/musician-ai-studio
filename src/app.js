@@ -1691,7 +1691,8 @@ function renderLibrary() {
         subtitle: "Library • Full song",
         artUrl: (t.meta && t.meta.imageUrl) || placeholderCoverDataUrl(),
       });
-      await playInline(t.url, "Full song", { type: "library", id });
+      miniSource = { type: "library", id };
+      await playOnPlayerPage(t.url, "Full song");
     });
   });
   els.libraryList.querySelectorAll("[data-lib-menu]").forEach((b) => {

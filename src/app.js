@@ -474,7 +474,7 @@ function resetCreateDraft() {
 }
 
 window.addEventListener("hashchange", applyRoute);
-if (!location.hash) location.hash = "#/intro";
+if (!location.hash) location.hash = "#/generate";
 applyRoute();
 updateEnvironmentBadge();
 document.body.classList.remove("booting");

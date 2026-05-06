@@ -714,11 +714,15 @@ function renderHubDots() {
 }
 async function supabaseSelectHub() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/hub_posts?select=*&order=created_at.desc`, {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/hub_posts?select=*&order=created_at.desc&limit=60`, {
     headers: {
       apikey: SUPABASE_ANON_KEY,
     },
+    signal: ctrl.signal,
   });
+  clearTimeout(timer);
   if (!r.ok) {
     const txt = await r.text().catch(() => "");
     throw new Error(`supabase select failed (${r.status}) ${String(txt).slice(0, 100)}`);
@@ -1483,8 +1487,39 @@ async function refreshHubFromSupabase() {
     renderHubDots();
   } catch (e) {
     hubLastSyncOk = false;
-    hubLastSyncError = e?.message ? String(e.message).slice(0, 100) : "unknown";
+    hubLastSyncError = e?.name === "AbortError"
+      ? "timeout, retrying…"
+      : (e?.message ? String(e.message).slice(0, 100) : "unknown");
     renderHubUpdatedAt();
+    setTimeout(async () => {
+      try {
+        const rows = await supabaseSelectHub();
+        if (!rows || !Array.isArray(rows)) return;
+        const mapped = rows.map((r) => ({
+          id: String(r.id),
+          ts: new Date(r.created_at).getTime(),
+          title: r.title || "Untitled",
+          artUrl: r.cover_url || "",
+          url: r.song_url || "",
+          kind: r.kind || "full",
+          creator: r.creator_username || "guest",
+          creatorAvatar: r.creator_avatar || "./assets/nabadai-logo.png",
+          likes: Number(r.likes || 0),
+          reacts: r.reacts || { melody: 0, lyrics: 0, mix: 0, groove: 0 },
+          remixOf: r.remix_of || "",
+          proof: r.proof || null,
+          meta: r.meta || null,
+        }));
+        if (!mapped.length) return;
+        hubLastSyncOk = true;
+        hubLastSyncError = "";
+        hubLastSyncRows = rows.length;
+        saveHubFeed(mapped);
+        lastHubUpdateAt = Math.max(...mapped.map((x) => Number(x.ts || 0)));
+        renderHub();
+        renderHubDots();
+      } catch {}
+    }, 1400);
   }
 }
 function startHubLiveSync() {
@@ -4983,13 +5018,29 @@ if (els.btnProfileMenuEdit) {
 if (els.btnAuthGoogle) {
   els.btnAuthGoogle.addEventListener("click", async () => {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return setStatus("Supabase config missing.");
-    if (els.btnAuthGoogle) {
-      els.btnAuthGoogle.disabled = true;
-      els.btnAuthGoogle.textContent = "Opening Google…";
+    try {
+      if (els.btnAuthGoogle) {
+        els.btnAuthGoogle.disabled = true;
+        els.btnAuthGoogle.textContent = "Opening Google…";
+      }
+      setStatus("Opening Google login…");
+      const url = await supabaseGoogleLoginUrl();
+      if (!url) throw new Error("Could not create Google auth URL");
+      window.location.assign(url);
+      // If redirect is blocked, recover button state.
+      setTimeout(() => {
+        if (els.btnAuthGoogle) {
+          els.btnAuthGoogle.disabled = false;
+          els.btnAuthGoogle.textContent = "Continue with Google";
+        }
+      }, 3500);
+    } catch (e) {
+      if (els.btnAuthGoogle) {
+        els.btnAuthGoogle.disabled = false;
+        els.btnAuthGoogle.textContent = "Continue with Google";
+      }
+      setStatus(`Google login failed to start: ${e?.message || String(e)}`);
     }
-    setStatus("Opening Google login…");
-    const url = await supabaseGoogleLoginUrl();
-    window.location.assign(url);
   });
 }
 if (els.btnAuthLogout) {

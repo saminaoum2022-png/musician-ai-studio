@@ -7,6 +7,7 @@ import { encodeWav16 } from "./wav.js";
 const els = {
   sunoPrompt: document.getElementById("sunoPrompt"),
   sunoStyle: document.getElementById("sunoStyle"),
+  sunoArtworkStyle: document.getElementById("sunoArtworkStyle"),
   sunoMaqam: document.getElementById("sunoMaqam"),
   sunoTitle: document.getElementById("sunoTitle"),
   sunoTiming: document.getElementById("sunoTiming"),
@@ -4097,6 +4098,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       applyMaqamToStyleInput();
       const userPrompt = (els.sunoPrompt?.value || "").trim();
       const userStyle = (els.sunoStyle?.value || "").trim();
+      const artworkStyle = (els.sunoArtworkStyle?.value || "").trim();
       const dialect = String(els.sunoDialect?.value || "").trim();
       const dialectHint = String(els.sunoDialectHint?.value || "").trim();
       const timing = String(els.sunoTiming?.value || "").trim();
@@ -4141,7 +4143,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
 
       const payload = {
         prompt: finalPrompt,
-        style: hasReference ? String(userStyle || "").trim() : `${userStyle}${userStyle ? " | " : ""}${timingClause}, ${styleExtras}`,
+        style: hasReference ? String(userStyle || "").trim() : `${userStyle}${userStyle ? " | " : ""}${timingClause}, ${styleExtras}${artworkStyle ? `, cover art: ${artworkStyle}` : ""}`,
         songKey: mapSolfegeToLetterKey((els.sunoSongKey?.value || "").trim()),
         title: (els.sunoTitle?.value || "").trim(),
         customMode: true,
@@ -4180,6 +4182,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         lyricsInput: userPrompt,
         finalPrompt,
         styleInput: userStyle,
+        artworkStyle,
         styleSent: payload.style,
         dialect,
         dialectHint,

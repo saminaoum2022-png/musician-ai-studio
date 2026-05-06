@@ -935,16 +935,11 @@ textarea{
   gap:10px;
   margin-top:8px;
 }
-.imageMoodRow .ghost{
-  min-height:34px;
-  border-radius:10px;
-  padding:6px 10px;
-  font-size:12px;
-}
 .imageMoodSummary{
   margin-top:0;
   font-size:12px;
   color: rgba(205,214,230,0.72);
+  padding-left: 2px;
 }
 .imageMoodModal .modalCard{
   max-width: 560px;
@@ -1106,6 +1101,27 @@ body.generateLocked [data-route="generate"] button{
   border:1px solid rgba(124,92,255,0.45);
   background: linear-gradient(180deg, rgba(124,92,255,0.34), rgba(35,213,171,0.18));
   box-shadow: 0 6px 18px rgba(124,92,255,0.25);
+}
+.lyricsImageMoodBtn{
+  position:absolute;
+  top:46px;
+  right:10px;
+  width:30px;
+  height:30px;
+  border-radius:999px;
+  padding:0;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  font-size:14px;
+  line-height:1;
+  color: rgba(255,255,255,0.96);
+  border:1px solid rgba(124,92,255,0.45);
+  background: linear-gradient(180deg, rgba(124,92,255,0.34), rgba(35,213,171,0.18));
+  box-shadow: 0 6px 18px rgba(124,92,255,0.25);
+}
+.lyricsImageMoodBtn:disabled{
+  opacity:0.55;
 }
 .lyricsMagicBtn:disabled{
   opacity:0.55;

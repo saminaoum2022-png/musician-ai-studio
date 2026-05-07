@@ -4561,6 +4561,15 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             const more = d?.detailMessage || d?.details?.message || d?.details?.error || "";
             throw new Error(`${d?.error || "Suno generate failed"}${more ? `: ${more}` : ""}`);
           }
+          // Some provider paths return HTTP 200 with failure in body (e.g. { code: 400, msg: "..." }).
+          if (typeof d?.code !== "undefined" && Number(d.code) !== 200) {
+            const bodyErr = d?.msg || d?.message || d?.error || "Suno generate failed";
+            throw new Error(`Suno rejected request: ${bodyErr}`);
+          }
+          if (d?.data && typeof d.data?.code !== "undefined" && Number(d.data.code) !== 200) {
+            const nestedErr = d?.data?.msg || d?.data?.message || d?.data?.error || "Suno generate failed";
+            throw new Error(`Suno rejected request: ${nestedErr}`);
+          }
           return d;
         },
         payload?.model ? `model=${payload.model}` : ""
@@ -4597,6 +4606,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (els.btnPlayInstrumental) els.btnPlayInstrumental.disabled = true;
 
       if (!sunoTaskId) {
+        const providerMsg =
+          data?.msg ||
+          data?.message ||
+          data?.error ||
+          data?.data?.msg ||
+          data?.data?.message ||
+          "";
         const immediateFullUrl =
           deepFindFirstStringByKeys(data, ["audioUrl", "audio_url", "streamAudioUrl", "stream_audio_url"]) ||
           deepFindFirstStringByKeys(data?.data, ["audioUrl", "audio_url", "streamAudioUrl", "stream_audio_url"]) ||
@@ -4617,7 +4633,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           return;
         }
         setStatus(
-          `Generation failed to start: provider returned no task id.`
+          `Generation failed to start: provider returned no task id.${providerMsg ? ` ${providerMsg}` : ""}`
         );
         setGenerateBtn("Generate song", false, "generate");
         setGenerateFieldsLocked(false);

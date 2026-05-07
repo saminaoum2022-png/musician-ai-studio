@@ -685,24 +685,48 @@ function markGenerationReadyNotice() {
   showResultCard(true);
 }
 
+// Single source of truth for the active vocal reference. Updated whenever the
+// user picks a file or finishes a recording, and cleared as soon as a Generate
+// request fires. Avoids stale selections leaking from previous runs.
+var currentVocalRefFile = null;
+
+function setVocalRefFile(file, label) {
+  currentVocalRefFile = file || null;
+  vocalRefBlob = null;
+  if (els.sunoVocalUploadName) {
+    els.sunoVocalUploadName.textContent = currentVocalRefFile
+      ? (label || `Voice reference attached: ${currentVocalRefFile.name || "vocal-reference"}`)
+      : "No vocal reference attached.";
+  }
+  updateVocalRefPreviewState();
+  renderReferenceHints();
+}
+
 function getVocalReferenceFile() {
-  // Always prefer explicitly uploaded file over cached recorded blob.
-  // This prevents stale recorder audio from being reused accidentally.
-  const uploaded = els.sunoVocalUpload?.files?.[0];
-  if (uploaded) return uploaded;
+  if (currentVocalRefFile) return currentVocalRefFile;
   if (vocalRefBlob) {
-    return new File([vocalRefBlob], "vocal-reference.webm", { type: vocalRefBlob.type || "audio/webm" });
+    return new File([vocalRefBlob], "vocal-reference.webm", {
+      type: vocalRefBlob.type || "audio/webm",
+    });
   }
   return null;
 }
 
 function clearVocalReferenceSelection() {
+  currentVocalRefFile = null;
   vocalRefBlob = null;
   if (els.sunoVocalUpload) els.sunoVocalUpload.value = "";
   clearVocalRefPreviewUrl();
   if (els.sunoVocalUploadName) els.sunoVocalUploadName.textContent = "No vocal reference attached.";
   updateVocalRefPreviewState();
   renderReferenceHints();
+}
+
+function openVocalReferencePicker() {
+  if (!els.sunoVocalUpload) return;
+  // Force a fresh `change` event even when the user re-picks the same file path.
+  try { els.sunoVocalUpload.value = ""; } catch {}
+  els.sunoVocalUpload.click();
 }
 function clearVocalRefPreviewUrl() {
   if (vocalRefPreviewUrl) URL.revokeObjectURL(vocalRefPreviewUrl);
@@ -3957,6 +3981,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   if (els.sunoVocalUpload) {
     els.sunoVocalUpload.addEventListener("change", () => {
       const f = els.sunoVocalUpload?.files?.[0];
+      currentVocalRefFile = f || null;
       vocalRefBlob = null;
       clearVocalRefPreviewUrl();
       if (els.sunoVocalUploadName) {
@@ -4236,7 +4261,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (els.btnMagicUploadVocal) {
       els.btnMagicUploadVocal.addEventListener("click", () => {
         closeMagicMenu();
-        els.sunoVocalUpload?.click();
+        openVocalReferencePicker();
       });
     }
     if (els.btnMagicRecordVocal) {
@@ -4312,9 +4337,15 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   if (els.btnRecorderUse) {
     els.btnRecorderUse.addEventListener("click", () => {
       if (!vocalRefBlob) return;
-      if (els.sunoVocalUploadName) els.sunoVocalUploadName.textContent = "Voice reference recorded and attached.";
-      renderReferenceHints();
-      updateVocalRefPreviewState();
+      // Promote the recorded blob to the active reference and clear any
+      // previously uploaded file so the recording isn't shadowed.
+      const recordedFile = new File(
+        [vocalRefBlob],
+        "vocal-reference.webm",
+        { type: vocalRefBlob.type || "audio/webm" }
+      );
+      if (els.sunoVocalUpload) els.sunoVocalUpload.value = "";
+      setVocalRefFile(recordedFile, "Voice reference recorded and attached.");
       closeVocalRecorderModal();
     });
   }
@@ -4934,6 +4965,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             if (dialect) fd.append("dialect", String(dialect));
             if (dialectHint) fd.append("dialectHint", String(dialectHint));
             if (payload?.personaId) fd.append("personaId", String(payload.personaId));
+            // Drop the local reference state the moment the request is in flight.
+            // The server already has its own copy in the multipart body, so any
+            // residual state here can only cause stale-reuse on the next run.
+            try { clearVocalReferenceSelection(); } catch {}
             const rr = await fetch(apiUrl("/api/suno/stems"), { method: "POST", body: fd });
             const dd = await rr.json().catch(() => ({}));
             if (!rr.ok) {

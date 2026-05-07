@@ -490,13 +490,51 @@ function resetCreateDraft() {
   if (els.sunoPrompt) els.sunoPrompt.value = "";
   if (els.sunoStyle) els.sunoStyle.value = "";
   if (els.sunoTitle) els.sunoTitle.value = "";
+  if (els.sunoArtworkStyle) els.sunoArtworkStyle.value = "";
   if (els.sunoReferenceMode) els.sunoReferenceMode.value = "none";
   if (els.sunoVocalUpload) els.sunoVocalUpload.value = "";
+  if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
+  if (els.sunoReferenceHint) {
+    els.sunoReferenceHint.style.display = "none";
+    els.sunoReferenceHint.textContent = "";
+    els.sunoReferenceHint.classList.remove("isCritical");
+  }
   vocalRefBlob = null;
   if (els.sunoVocalUploadName) els.sunoVocalUploadName.textContent = "No vocal reference attached.";
-  renderReferenceHints();
+  if (vocalRefPreviewUrl) {
+    safeRevokeObjectUrl(vocalRefPreviewUrl);
+    vocalRefPreviewUrl = "";
+  }
+  if (els.btnSunoGenerate) {
+    els.btnSunoGenerate.textContent = "Generate song";
+    els.btnSunoGenerate.disabled = false;
+    els.btnSunoGenerate.dataset.mode = "generate";
+  }
   if (els.resultCard) els.resultCard.style.display = "none";
   if (els.resultCard2) els.resultCard2.style.display = "none";
+  if (generatePollTimer) {
+    clearInterval(generatePollTimer);
+    generatePollTimer = null;
+  }
+  savePendingBackendTask("");
+  pendingGeneratedCoverDataUrl = "";
+  pendingBackendTaskId = "";
+  imageMoodAppliedForNextGen = false;
+  imageMoodData = null;
+  imageMoodCoverDataUrl = "";
+  sunoTaskId = null;
+  sunoAudioId = null;
+  lastSunoFullUrl = "";
+  lastSunoProxyUrl = "";
+  lastSunoArtUrl = "";
+  lastSunoTitle = "";
+  lastSunoFullUrl2 = "";
+  lastSunoProxyUrl2 = "";
+  lastSunoArtUrl2 = "";
+  lastSunoTitle2 = "";
+  renderReferenceHints();
+  setGenerateFieldsLocked(false);
+  setLoading(false);
   setStatus("New draft started.");
   syncGenerateOrbVisibility();
 }

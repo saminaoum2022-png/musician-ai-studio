@@ -580,8 +580,10 @@ let vocalRefChunks = [];
 let vocalRefPreviewUrl = "";
 let imageMoodData = null;
 let imageMoodCoverDataUrl = "";
-let pendingGeneratedCoverDataUrl = "";
 var generationReadyNotice = false;
+let pendingGeneratedCoverDataUrl = "";
+let pendingBackendTaskId = "";
+const PENDING_TASK_KEY = "mas:pending_backend_task_v1";
 var lastGenerationReadyAt = 0;
 
 function renderGenerateReadyDot() {
@@ -3299,6 +3301,22 @@ function setLoading(on, { title, sub } = {}) {
   }
 }
 
+function savePendingBackendTask(taskId) {
+  pendingBackendTaskId = String(taskId || "").trim();
+  try {
+    if (pendingBackendTaskId) localStorage.setItem(PENDING_TASK_KEY, pendingBackendTaskId);
+    else localStorage.removeItem(PENDING_TASK_KEY);
+  } catch {}
+}
+
+function loadPendingBackendTask() {
+  try {
+    return String(localStorage.getItem(PENDING_TASK_KEY) || "").trim();
+  } catch {
+    return "";
+  }
+}
+
 function printArrangement(a) {
   els.arrangementOut.textContent = JSON.stringify(a, null, 2);
 }
@@ -4299,7 +4317,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   const startGeneratePolling = () => {
     if (generatePollTimer) clearInterval(generatePollTimer);
     let tries = 0;
-    const maxTries = 80; // ~6 minutes at 4.5s interval
+    const maxTries = 160; // ~12 minutes at 4.5s interval
     generatePollTimer = setInterval(async () => {
       tries += 1;
       try {
@@ -4334,6 +4352,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           els.btnSunoStems.disabled = !(sunoAudioId);
           if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = !(sunoAudioId);
           setStatus("Song is ready. Press Play full.");
+          savePendingBackendTask("");
           markGenerationReadyNotice();
           setGenerateFieldsLocked(false);
           return;
@@ -4343,16 +4362,17 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           generatePollTimer = null;
           setGenerateBtn("Generate song", false, "generate");
           setStatus("Generation failed. Please try again.");
+          savePendingBackendTask("");
           setGenerateFieldsLocked(false);
           setLoading(false);
         }
         if (tries >= maxTries) {
           clearInterval(generatePollTimer);
           generatePollTimer = null;
-          setGenerateBtn("Generate song", false, "generate");
-          setStatus("Generation is taking longer than expected. Please try again.");
+          setGenerateBtn("Check status", false, "resume");
+          setStatus("Still processing in backend. Tap Check status.");
           setGenerateFieldsLocked(false);
-          setLoading(false);
+          setLoading(true, { title: "Processing in backend...", sub: "You can keep using the app. Tap Check status anytime." });
         }
       } catch {}
     }, 4500);
@@ -4575,6 +4595,23 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
 
   els.btnSunoGenerate.addEventListener("click", async () => {
     haptic("impact");
+    const actionMode = String(els.btnSunoGenerate?.dataset?.mode || "generate");
+    if (actionMode === "resume") {
+      const resumeTask = sunoTaskId || loadPendingBackendTask();
+      if (!resumeTask) {
+        setStatus("No pending backend task found.");
+        setGenerateBtn("Generate song", false, "generate");
+        setLoading(false);
+        return;
+      }
+      sunoTaskId = resumeTask;
+      savePendingBackendTask(resumeTask);
+      setStatus("Checking backend status...");
+      setLoading(true, { title: "Processing in backend...", sub: "Checking latest status..." });
+      setGenerateBtn("Checking...", true, "resume");
+      startGeneratePolling();
+      return;
+    }
     const promptText = String(els.sunoPrompt?.value || "").trim();
     const vocalRefFile = getVocalReferenceFile();
     const hasUploadedReference = Boolean(vocalRefFile);
@@ -4600,7 +4637,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = true;
       setStatus(`Submitting generation… (Mode: ${modeLabel} | Engine: ${engineLabel})`);
       setProgress(5);
-      setLoading(true, { title: "Generating song with AI…", sub: "This can take 30–120 seconds." });
+      setLoading(true, { title: "Processing in backend...", sub: "This can take 30–120 seconds." });
 
       applyMaqamToStyleInput();
       const userPrompt = (els.sunoPrompt?.value || "").trim();
@@ -4769,6 +4806,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       );
 
       sunoTaskId = extractTaskIdLoose(data);
+      savePendingBackendTask(sunoTaskId || "");
       sunoAudioId = null;
       sunoStemsTaskId = null;
       sunoMultiStemsTaskId = null;
@@ -4837,8 +4875,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
       setStatus(
         hasReference
-          ? `Generating from your audio reference… (Mode: ${referenceMode} | Engine: ${engineLabel})`
-          : `Generating… we will update automatically. (Mode: Normal | Engine: ${engineLabel})`
+          ? `Processing your audio reference in backend… (Mode: ${referenceMode} | Engine: ${engineLabel})`
+          : `Processing in backend… we will update automatically. (Mode: Normal | Engine: ${engineLabel})`
       );
       setGenerateBtn("Generating…", true, "generate");
       startGeneratePolling();
@@ -4847,6 +4885,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       console.error(e);
       setStatus(`Generation failed: ${e?.message || String(e)}`);
       setGenerateBtn("Generate song", false, "generate");
+      savePendingBackendTask("");
       setGenerateFieldsLocked(false);
       imageMoodAppliedForNextGen = false;
       setProgress(0);
@@ -4871,6 +4910,15 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const url = lastSunoCachedUrl2 || lastSunoProxyUrl2 || lastSunoFullUrl2;
       await playOnPlayerPage(url && url !== "#" ? url : "", "Full song B");
     });
+  }
+
+  // Auto-resume pending backend generation on reopen/reload.
+  const bootPendingTask = loadPendingBackendTask();
+  if (bootPendingTask && !generatePollTimer) {
+    sunoTaskId = bootPendingTask;
+    setGenerateBtn("Check status", false, "resume");
+    setStatus("Pending backend task found. Tap Check status.");
+    setLoading(true, { title: "Processing in backend...", sub: "Pending task detected from last session." });
   }
 
   els.btnSunoStems.addEventListener("click", async () => {

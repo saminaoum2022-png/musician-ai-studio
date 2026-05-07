@@ -35,6 +35,9 @@ const els = {
   presetPopClean: document.getElementById("presetPopClean"),
   presetBalladWarm: document.getElementById("presetBalladWarm"),
   presetClubPunch: document.getElementById("presetClubPunch"),
+  btnAdvancedReset: document.getElementById("btnAdvancedReset"),
+  btnAdvancedApply: document.getElementById("btnAdvancedApply"),
+  fineTuneDetails: document.getElementById("fineTuneDetails"),
   btnGenerateOrb: document.getElementById("btnGenerateOrb"),
   btnLyricsMagic: document.getElementById("btnLyricsMagic"),
   btnImageMood: document.getElementById("btnImageMood"),
@@ -5046,6 +5049,29 @@ if (els.presetClubPunch) {
     if (els.sunoProsody) els.sunoProsody.value = "tight";
     if (els.sunoBeatStability) els.sunoBeatStability.value = "locked";
     setStatus("Preset applied: Club Punch");
+  });
+}
+if (els.btnAdvancedReset) {
+  els.btnAdvancedReset.addEventListener("click", () => {
+    if (els.sunoGroovePace) els.sunoGroovePace.value = "balanced";
+    if (els.sunoProsody) els.sunoProsody.value = "tight";
+    if (els.sunoBeatStability) els.sunoBeatStability.value = "stable";
+    if (els.sunoProMode) els.sunoProMode.checked = false;
+    if (els.sunoTiming) els.sunoTiming.value = "";
+    if (els.sunoSongKey) els.sunoSongKey.value = "";
+    if (els.sunoMaqam) els.sunoMaqam.value = "";
+    if (els.sunoVoiceProfile) els.sunoVoiceProfile.value = "";
+    if (els.sunoDialect) els.sunoDialect.value = "";
+    if (els.sunoDialectHint) els.sunoDialectHint.value = "";
+    if (els.sunoPersonaId) els.sunoPersonaId.value = "";
+    updateProFieldVisibility();
+    setStatus("More options reset to defaults.");
+  });
+}
+if (els.btnAdvancedApply) {
+  els.btnAdvancedApply.addEventListener("click", () => {
+    if (els.advancedSheet) els.advancedSheet.open = false;
+    setStatus("More options applied.");
   });
 }
 

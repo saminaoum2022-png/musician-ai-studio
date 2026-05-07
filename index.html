@@ -179,56 +179,62 @@
 
           <details class="details stepDetails miniMoreOptions" id="advancedSheet">
             <summary>More options <button id="btnCloseAdvancedSheet" type="button" class="ghost">Close</button></summary>
-            <div class="stepCard">
-          <div class="stepHead">Sound</div>
-          <div class="row advancedGrid">
-            <label class="field">
-              <div class="label">Groove pace</div>
-              <select id="sunoGroovePace">
-                <option value="balanced" selected>Balanced (recommended)</option>
-                <option value="slow">Slow</option>
-                <option value="energetic">Energetic</option>
-              </select>
-              <div class="hint">Slow: warm. Balanced: all-round. Energetic: more drive.</div>
-            </label>
-            <label class="field">
-              <div class="label">Prosody strictness</div>
-              <select id="sunoProsody">
-                <option value="tight" selected>Tight (recommended)</option>
-                <option value="natural">Natural</option>
-                <option value="ultra">Ultra Tight</option>
-              </select>
-              <div class="hint">How strictly lyrics align to beat and syllables.</div>
-            </label>
-            <label class="field">
-              <div class="label">Beat stability</div>
-              <select id="sunoBeatStability">
-                <option value="stable" selected>Stable (recommended)</option>
-                <option value="flexible">Flexible</option>
-                <option value="locked">Locked</option>
-              </select>
-              <div class="hint">Stable beat without losing musical feel.</div>
-            </label>
+            <div class="stepCard compactOptions">
+          <div class="row optionsHeadRow">
+            <div class="hint optionsRecommended">Recommended profile active</div>
           </div>
-          <div class="row" style="gap:8px; margin-top:6px;">
+          <div class="row optionsPresetRow">
             <button id="presetPopClean" class="ghost" type="button">Pop Clean</button>
             <button id="presetBalladWarm" class="ghost" type="button">Ballad Warm</button>
             <button id="presetClubPunch" class="ghost" type="button">Club Punch</button>
           </div>
-          <div class="row">
-            <label class="proToggleRow" for="sunoProMode">
-              <input id="sunoProMode" type="checkbox" />
-              <span>Pro key & maqam</span>
-            </label>
-          </div>
-          <div class="row advancedGrid">
-            <label class="field grow">
-              <div class="label">Timing</div>
-              <input id="sunoTiming" type="text" placeholder="96 BPM • 4/4 • balanced groove" />
-            </label>
-            <label class="field proField">
-              <div class="label">Song key</div>
-              <select id="sunoSongKey">
+          <details class="details fineTuneDetails" id="fineTuneDetails">
+            <summary>Fine tune</summary>
+
+            <div class="stepHead">Feel</div>
+            <div class="row advancedGrid compactGrid">
+              <label class="field">
+                <div class="label">Groove pace</div>
+                <select id="sunoGroovePace">
+                  <option value="balanced" selected>Balanced</option>
+                  <option value="slow">Slow</option>
+                  <option value="energetic">Energetic</option>
+                </select>
+              </label>
+              <label class="field">
+                <div class="label">Prosody strictness</div>
+                <select id="sunoProsody">
+                  <option value="tight" selected>Tight</option>
+                  <option value="natural">Natural</option>
+                  <option value="ultra">Ultra Tight</option>
+                </select>
+              </label>
+              <label class="field">
+                <div class="label">Beat stability</div>
+                <select id="sunoBeatStability">
+                  <option value="stable" selected>Stable</option>
+                  <option value="flexible">Flexible</option>
+                  <option value="locked">Locked</option>
+                </select>
+              </label>
+            </div>
+            <div class="hint compactHint">Feel controls timing tightness and groove behavior.</div>
+
+            <div class="stepHead">Theory</div>
+            <div class="row">
+              <label class="proToggleRow" for="sunoProMode">
+                <input id="sunoProMode" type="checkbox" />
+                <span>Pro key & maqam</span>
+              </label>
+            </div>
+            <div class="row advancedGrid compactGrid">
+              <label class="field grow">
+                <div class="label">Timing</div>
+                <input id="sunoTiming" type="text" placeholder="96 BPM • 4/4 • balanced groove" />
+              </label>
+              <label class="field proField">
+                <div class="label">Song key</div>
+                <select id="sunoSongKey">
                 <option value="" selected>Auto</option>
                 <option value="Do Major">Do Major</option>
                 <option value="Do Minor">Do Minor</option>
@@ -254,11 +260,11 @@
                 <option value="La# Minor">La# Minor</option>
                 <option value="Si Major">Si Major</option>
                 <option value="Si Minor">Si Minor</option>
-              </select>
-            </label>
-            <label class="field proField">
-              <div class="label">Maqam</div>
-              <select id="sunoMaqam">
+                </select>
+              </label>
+              <label class="field proField">
+                <div class="label">Maqam</div>
+                <select id="sunoMaqam">
                 <option value="" selected>Auto / none</option>
                 <option value="Rast">Rast</option>
                 <option value="Bayati">Bayati</option>
@@ -281,30 +287,30 @@
                 <option value="Muhayyar">Muhayyar</option>
                 <option value="Rahat_Arwah">Rahat al-Arwah</option>
                 <option value="Nawruz">Nawruz</option>
-              </select>
-            </label>
-            <label class="field">
-              <div class="label">Voice profile</div>
-              <select id="sunoVoiceProfile">
-                <option value="" selected>Auto</option>
-                <option value="f|Soprano">Female • Soprano</option>
-                <option value="f|Mezzo-Soprano">Female • Mezzo-Soprano</option>
-                <option value="f|Alto">Female • Alto</option>
-                <option value="m|Tenor">Male • Tenor</option>
-                <option value="m|Baritone">Male • Baritone</option>
-                <option value="m|Bass">Male • Bass</option>
-              </select>
-            </label>
-          </div>
-          <div id="sunoKeyHint" class="hint advancedHint" style="margin-top:0">
+                </select>
+              </label>
+            </div>
+            <div id="sunoKeyHint" class="hint advancedHint" style="margin-top:0">
               Tip: selecting a maqam will be added to Style/Tags automatically.
-          </div>
+            </div>
 
-          <div class="stepHead">AI</div>
-          <div class="row advancedGrid">
-            <label class="field">
-              <div class="label">Accent / Dialect</div>
-              <select id="sunoDialect">
+            <div class="stepHead">Voice</div>
+            <div class="row advancedGrid compactGrid">
+              <label class="field">
+                <div class="label">Voice profile</div>
+                <select id="sunoVoiceProfile">
+                  <option value="" selected>Auto</option>
+                  <option value="f|Soprano">Female • Soprano</option>
+                  <option value="f|Mezzo-Soprano">Female • Mezzo-Soprano</option>
+                  <option value="f|Alto">Female • Alto</option>
+                  <option value="m|Tenor">Male • Tenor</option>
+                  <option value="m|Baritone">Male • Baritone</option>
+                  <option value="m|Bass">Male • Bass</option>
+                </select>
+              </label>
+              <label class="field">
+                <div class="label">Accent / Dialect</div>
+                <select id="sunoDialect">
                 <option value="" selected>Auto</option>
                 <option value="Levantine Arabic">Levantine</option>
                 <option value="Egyptian Arabic">Egyptian</option>
@@ -312,19 +318,26 @@
                 <option value="Iraqi Arabic">Iraqi</option>
                 <option value="Maghrebi Arabic">Maghrebi</option>
                 <option value="Modern Standard Arabic">MSA</option>
-              </select>
-            </label>
-            <label class="field grow">
-              <div class="label">Dialect hint (optional)</div>
-              <input id="sunoDialectHint" type="text" placeholder="Example line in desired dialect..." />
-            </label>
-            <label class="field grow">
-              <div class="label">Persona</div>
-              <select id="sunoPersonaId">
+                </select>
+              </label>
+              <label class="field grow">
+                <div class="label">Dialect hint (optional)</div>
+                <input id="sunoDialectHint" type="text" placeholder="Example line in desired dialect..." />
+              </label>
+              <label class="field grow">
+                <div class="label">Persona</div>
+                <select id="sunoPersonaId">
                 <option value="">None (default voice)</option>
-              </select>
-            </label>
-            <button id="btnCreatePersona" class="ghost advancedPersonaBtn" type="button">Create persona from last song</button>
+                </select>
+              </label>
+              <button id="btnCreatePersona" class="ghost advancedPersonaBtn" type="button">Create persona from last song</button>
+            </div>
+            <div class="hint compactHint">Voice controls tone and dialect behavior.</div>
+          </details>
+
+          <div class="row optionsActions">
+            <button id="btnAdvancedReset" class="ghost" type="button">Reset</button>
+            <button id="btnAdvancedApply" class="primary" type="button">Apply</button>
           </div>
 
           </div>

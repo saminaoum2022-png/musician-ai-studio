@@ -2160,9 +2160,66 @@ input::placeholder, textarea::placeholder{
   .stepDetails summary::-webkit-details-marker{
     display:none;
   }
-  .stepDetails .stepCard{
-    margin-top: 8px;
-  }
+.stepDetails .stepCard{
+  margin-top: 8px;
+}
+.compactOptions{
+  padding-bottom: 8px;
+}
+.optionsHeadRow{
+  justify-content: flex-start;
+  margin-bottom: 6px;
+}
+.optionsRecommended{
+  font-size: 11px;
+  letter-spacing: .01em;
+  color: rgba(232,238,247,0.72);
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+}
+.optionsPresetRow{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.optionsPresetRow .ghost{
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.fineTuneDetails{
+  margin-top: 6px;
+}
+.fineTuneDetails > summary{
+  font-weight: 800;
+}
+.compactGrid{
+  row-gap: 6px;
+}
+.compactHint{
+  margin-top: 4px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: rgba(232,238,247,0.56);
+}
+.optionsActions{
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  background: linear-gradient(180deg, rgba(8,12,20,0), rgba(8,12,20,0.92) 42%);
+}
+.optionsActions button{
+  min-height: 36px;
+}
   #status{
     position: sticky;
     bottom: calc(70px + env(safe-area-inset-bottom));

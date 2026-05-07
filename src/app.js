@@ -452,9 +452,12 @@ function applyRoute() {
   }
   if (wanted === "generate" && generationReadyNotice) {
     generationReadyNotice = false;
+    renderGenerateReadyDot();
     setLoading(false);
+    showResultCard(true);
   }
   syncGenerateOrbVisibility();
+  renderGenerateReadyDot();
 }
 
 function updateBrandPulse() {
@@ -574,6 +577,28 @@ let imageMoodData = null;
 let imageMoodCoverDataUrl = "";
 let pendingGeneratedCoverDataUrl = "";
 let generationReadyNotice = false;
+let lastGenerationReadyAt = 0;
+
+function renderGenerateReadyDot() {
+  document.querySelectorAll('[data-route-link="generate"]').forEach((a) => {
+    a.classList.toggle("hasNotice", Boolean(generationReadyNotice));
+  });
+}
+
+function markGenerationReadyNotice() {
+  generationReadyNotice = true;
+  lastGenerationReadyAt = Date.now();
+  renderGenerateReadyDot();
+  const route = (document.body.getAttribute("data-route") || "").trim();
+  if (route === "generate") {
+    generationReadyNotice = false;
+    renderGenerateReadyDot();
+    setLoading(false);
+    showResultCard(true);
+    return;
+  }
+  setLoading(true, { title: "Your songs are ready", sub: "Open Generate tab to review the results." });
+}
 
 function getVocalReferenceFile() {
   if (vocalRefBlob) {
@@ -4149,8 +4174,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           els.btnSunoStems.disabled = !(sunoAudioId);
           if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = !(sunoAudioId);
           setStatus("Song is ready. Press Play full.");
-          generationReadyNotice = true;
-          setLoading(true, { title: "Your songs are ready", sub: "Open Generate tab to review the results." });
+          markGenerationReadyNotice();
           setGenerateFieldsLocked(false);
           return;
         }
@@ -4583,8 +4607,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           if (els.sunoFullLink) setLink(els.sunoFullLink, lastSunoProxyUrl || immediateFullUrl);
           if (els.btnLoadFull) els.btnLoadFull.disabled = false;
           setStatus("Song ready.");
-          generationReadyNotice = true;
-          setLoading(true, { title: "Your songs are ready", sub: "Open Generate tab to review the results." });
+          markGenerationReadyNotice();
           setGenerateBtn("Regenerate", false, "regenerate");
           setGenerateFieldsLocked(false);
           setProgress(100);

@@ -139,6 +139,20 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
   border-color: rgba(124,92,255,0.55);
   background: linear-gradient(180deg, rgba(124,92,255,0.30), rgba(124,92,255,0.13));
 }
+.journeyStep.hasNotice{
+  position: relative;
+}
+.journeyStep.hasNotice::after{
+  content:"";
+  position:absolute;
+  top:6px;
+  right:8px;
+  width:7px;
+  height:7px;
+  border-radius:999px;
+  background:#35d5ab;
+  box-shadow:0 0 8px rgba(53,213,171,0.85);
+}
 .badge{
   border:1px solid var(--border);
   background:linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
@@ -2188,6 +2202,20 @@ input::placeholder, textarea::placeholder{
     border-color: rgba(124,92,255,0.55);
     box-shadow: 0 8px 18px rgba(124,92,255,0.22);
     opacity: 1;
+  }
+  .mobileTabbar a.hasNotice{
+    position: relative;
+  }
+  .mobileTabbar a.hasNotice::after{
+    content:"";
+    position:absolute;
+    top:6px;
+    right:8px;
+    width:7px;
+    height:7px;
+    border-radius:999px;
+    background:#35d5ab;
+    box-shadow:0 0 8px rgba(53,213,171,0.85);
   }
 .mobileTabbar a:active{
   transform: scale(0.97);

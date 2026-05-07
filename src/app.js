@@ -763,12 +763,23 @@ async function startVocalReferenceRecording() {
   };
   rec.onstop = () => {
     vocalRefChunks = chunks.slice();
-    vocalRefBlob = new Blob(chunks, { type: rec.mimeType || "audio/webm;codecs=opus" });
-    if (els.sunoVocalUploadName) {
-      els.sunoVocalUploadName.textContent = "Voice reference recorded and attached.";
+    const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm;codecs=opus" });
+    vocalRefBlob = blob;
+    // Immediately promote the recording to the active reference and drop any
+    // previously uploaded file. Otherwise an earlier upload still wins because
+    // currentVocalRefFile takes priority over vocalRefBlob in the picker.
+    if (blob && blob.size > 0) {
+      const recordedFile = new File([blob], "vocal-reference.webm", {
+        type: blob.type || "audio/webm",
+      });
+      if (els.sunoVocalUpload) {
+        try { els.sunoVocalUpload.value = ""; } catch {}
+      }
+      setVocalRefFile(recordedFile, "Voice reference recorded and attached.");
+    } else {
+      renderReferenceHints();
+      updateVocalRefPreviewState();
     }
-    renderReferenceHints();
-    updateVocalRefPreviewState();
     if (els.btnRecorderUse) els.btnRecorderUse.disabled = !vocalRefBlob;
     if (els.recorderStatus) els.recorderStatus.textContent = "Recording ready";
   };

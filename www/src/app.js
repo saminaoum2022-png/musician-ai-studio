@@ -7,9 +7,13 @@ import { encodeWav16 } from "./wav.js";
 const els = {
   sunoPrompt: document.getElementById("sunoPrompt"),
   sunoStyle: document.getElementById("sunoStyle"),
+  sunoArtworkStyle: document.getElementById("sunoArtworkStyle"),
   sunoMaqam: document.getElementById("sunoMaqam"),
   sunoTitle: document.getElementById("sunoTitle"),
   sunoTiming: document.getElementById("sunoTiming"),
+  sunoGroovePace: document.getElementById("sunoGroovePace"),
+  sunoProsody: document.getElementById("sunoProsody"),
+  sunoBeatStability: document.getElementById("sunoBeatStability"),
   sunoSongKey: document.getElementById("sunoSongKey"),
   sunoKeyHint: document.getElementById("sunoKeyHint"),
   sunoModel: document.getElementById("sunoModel"),
@@ -20,14 +24,35 @@ const els = {
   sunoPersonaId: document.getElementById("sunoPersonaId"),
   btnCreatePersona: document.getElementById("btnCreatePersona"),
   sunoProMode: document.getElementById("sunoProMode"),
+  vocalInstrumentalOnly: document.getElementById("vocalInstrumentalOnly"),
+  vocalModeFull: document.getElementById("vocalModeFull"),
+  vocalModeInstrumental: document.getElementById("vocalModeInstrumental"),
   sunoVocalUpload: document.getElementById("sunoVocalUpload"),
   sunoVocalUploadName: document.getElementById("sunoVocalUploadName"),
+  vocalRefHint: document.getElementById("vocalRefHint"),
   sunoReferenceMode: document.getElementById("sunoReferenceMode"),
+  sunoReferenceHint: document.getElementById("sunoReferenceHint"),
   btnVocalRefRec: document.getElementById("btnVocalRefRec"),
   btnVocalRefStop: document.getElementById("btnVocalRefStop"),
   btnSunoGenerate: document.getElementById("btnSunoGenerate"),
+  presetPopClean: document.getElementById("presetPopClean"),
+  presetBalladWarm: document.getElementById("presetBalladWarm"),
+  presetClubPunch: document.getElementById("presetClubPunch"),
+  btnAdvancedReset: document.getElementById("btnAdvancedReset"),
+  btnAdvancedApply: document.getElementById("btnAdvancedApply"),
+  fineTuneDetails: document.getElementById("fineTuneDetails"),
   btnGenerateOrb: document.getElementById("btnGenerateOrb"),
   btnLyricsMagic: document.getElementById("btnLyricsMagic"),
+  btnImageMood: document.getElementById("btnImageMood"),
+  imageMoodSummary: document.getElementById("imageMoodSummary"),
+  imageMoodModal: document.getElementById("imageMoodModal"),
+  btnCloseImageMood: document.getElementById("btnCloseImageMood"),
+  imageMoodUpload: document.getElementById("imageMoodUpload"),
+  imageMoodPreview: document.getElementById("imageMoodPreview"),
+  imageMoodOutput: document.getElementById("imageMoodOutput"),
+  imageMoodUseAsCover: document.getElementById("imageMoodUseAsCover"),
+  btnAnalyzeImageMood: document.getElementById("btnAnalyzeImageMood"),
+  btnApplyImageMood: document.getElementById("btnApplyImageMood"),
   lyricsMagicMenu: document.getElementById("lyricsMagicMenu"),
   btnMagicUploadVocal: document.getElementById("btnMagicUploadVocal"),
   btnMagicRecordVocal: document.getElementById("btnMagicRecordVocal"),
@@ -72,6 +97,15 @@ const els = {
   btnLoadFull: document.getElementById("btnLoadFull"),
   btnLoadVocals: document.getElementById("btnLoadVocals"),
   btnLoadInstrumental: document.getElementById("btnLoadInstrumental"),
+  clipStartSec: document.getElementById("clipStartSec"),
+  clipEndSec: document.getElementById("clipEndSec"),
+  btnShareClipHub: document.getElementById("btnShareClipHub"),
+  btnOpenTrimSheet: document.getElementById("btnOpenTrimSheet"),
+  btnCloseTrimSheet: document.getElementById("btnCloseTrimSheet"),
+  btnShareFullHub: document.getElementById("btnShareFullHub"),
+  trimSheet: document.getElementById("trimSheet"),
+  btnPlayerChangeCover: document.getElementById("btnPlayerChangeCover"),
+  playerCoverUpload: document.getElementById("playerCoverUpload"),
 
   // Multitrack session (Vocal Room)
   btnSessionLoadSuno: document.getElementById("btnSessionLoadSuno"),
@@ -160,6 +194,7 @@ const els = {
   libraryList: document.getElementById("libraryList"),
   hubList: document.getElementById("hubList"),
   hubUpdatedAt: document.getElementById("hubUpdatedAt"),
+  hubSyncInfo: document.getElementById("hubSyncInfo"),
   hubFilterLatest: document.getElementById("hubFilterLatest"),
   hubFilterArabic: document.getElementById("hubFilterArabic"),
   hubFilterInstrumental: document.getElementById("hubFilterInstrumental"),
@@ -178,20 +213,24 @@ const els = {
   hubNowClose: document.getElementById("hubNowClose"),
   likeBurst: document.getElementById("likeBurst"),
   hubAddDemo: document.getElementById("hubAddDemo"),
-  profileUsername: document.getElementById("profileUsername"),
-  profileEmail: document.getElementById("profileEmail"),
-  profileGender: document.getElementById("profileGender"),
-  profileVoiceTimbre: document.getElementById("profileVoiceTimbre"),
-  profileBio: document.getElementById("profileBio"),
-  profileAvatar: document.getElementById("profileAvatar"),
+  profilePreviewUsernameInput: document.getElementById("profilePreviewUsernameInput"),
+  profilePreviewTimbreInput: document.getElementById("profilePreviewTimbreInput"),
+  profilePreviewBioInput: document.getElementById("profilePreviewBioInput"),
   profileAvatarFile: document.getElementById("profileAvatarFile"),
-  profileGenres: document.getElementById("profileGenres"),
-  profileInstagram: document.getElementById("profileInstagram"),
-  profileYouTube: document.getElementById("profileYouTube"),
-  profileTikTok: document.getElementById("profileTikTok"),
   profileIsPublic: document.getElementById("profileIsPublic"),
   btnProfileSave: document.getElementById("btnProfileSave"),
   profileSavedMsg: document.getElementById("profileSavedMsg"),
+  profileSaveToast: document.getElementById("profileSaveToast"),
+  authLoginControls: document.getElementById("authLoginControls"),
+  authLoggedInRow: document.getElementById("authLoggedInRow"),
+  authLoggedInEmail: document.getElementById("authLoggedInEmail"),
+  authLoggedInEmailInline: document.getElementById("authLoggedInEmailInline"),
+  btnAuthGoogle: document.getElementById("btnAuthGoogle"),
+  btnAuthGateGoogle: document.getElementById("btnAuthGateGoogle"),
+  btnAuthGateGuest: document.getElementById("btnAuthGateGuest"),
+  btnAuthLogout: document.getElementById("btnAuthLogout"),
+  btnProfileDelete: document.getElementById("btnProfileDelete"),
+  authStatus: document.getElementById("authStatus"),
   profilePreviewAvatar: document.getElementById("profilePreviewAvatar"),
   profilePreviewUsername: document.getElementById("profilePreviewUsername"),
   profilePreviewGenderIcon: document.getElementById("profilePreviewGenderIcon"),
@@ -200,6 +239,10 @@ const els = {
   profilePreviewBio: document.getElementById("profilePreviewBio"),
   profilePreviewGenres: document.getElementById("profilePreviewGenres"),
   profilePreviewLinks: document.getElementById("profilePreviewLinks"),
+  profileHubSharedList: document.getElementById("profileHubSharedList"),
+  btnProfileCardEdit: document.getElementById("btnProfileCardEdit"),
+  profileEditMenu: document.getElementById("profileEditMenu"),
+  btnProfileMenuEdit: document.getElementById("btnProfileMenuEdit"),
   songDetailsModal: document.getElementById("songDetailsModal"),
   songDetailsBackdrop: document.getElementById("songDetailsBackdrop"),
   btnCloseSongDetails: document.getElementById("btnCloseSongDetails"),
@@ -224,10 +267,14 @@ const els = {
   proofCard: document.getElementById("proofCard"),
   envBadge: document.getElementById("envBadge"),
 };
+
+// Must be initialized before any startup route/render calls.
+var imageMoodAppliedForNextGen = false;
 let currentProofPost = null;
 let hubAudio = null;
 let hubAudioPostId = null;
 let hubNowMeta = null;
+let miniSource = null;
 function isPlayingHubPostVisible() {
   if (!hubAudioPostId) return false;
   const route = document.body.getAttribute("data-route") || "";
@@ -240,9 +287,30 @@ function isPlayingHubPostVisible() {
   const ratio = r.height > 0 ? visiblePx / r.height : 0;
   return ratio >= 0.35;
 }
+function isPlayingLibraryRowVisible() {
+  const route = document.body.getAttribute("data-route") || "";
+  if (route !== "library") return false;
+  if (!playerLoadedLabel) return false;
+  const key = String(playerLoadedLabel).toLowerCase();
+  const rows = Array.from(document.querySelectorAll("[data-lib-row]"));
+  const target = rows.find((row) => {
+    const txt = String(row.querySelector(".trackName")?.textContent || "").toLowerCase();
+    return txt && key && txt.includes(key.replace(/^full song\s*/i, "").trim());
+  });
+  if (!target) return true;
+  const r = target.getBoundingClientRect();
+  const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+  const visiblePx = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+  const ratio = r.height > 0 ? visiblePx / r.height : 0;
+  return ratio >= 0.35;
+}
 function renderHubNowPlaying() {
   if (!els.hubNowPlaying) return;
-  const active = Boolean(hubAudio && hubNowMeta) && !isPlayingHubPostVisible();
+  const route = document.body.getAttribute("data-route") || "";
+  const hideOnHubVisible = isPlayingHubPostVisible();
+  const hideOnLibrary = route === "library";
+  const hideOnPlayer = route === "player" && miniSource?.type === "library";
+  const active = Boolean(hubAudio && hubNowMeta) && !hideOnHubVisible && !hideOnLibrary && !hideOnPlayer;
   if (!active) {
     els.hubNowPlaying.classList.remove("isVisible", "isPlaying");
     setTimeout(() => {
@@ -283,6 +351,19 @@ function renderHubUpdatedAt() {
   if (!els.hubUpdatedAt) return;
   const relative = relativeTime(lastHubUpdateAt);
   els.hubUpdatedAt.textContent = `Updated: ${relative}`;
+  if (els.hubSyncInfo) {
+    els.hubSyncInfo.classList.remove("ok", "warn", "wait");
+    if (hubLastSyncOk) {
+      els.hubSyncInfo.classList.add("ok");
+      els.hubSyncInfo.textContent = `● Live • rows ${hubLastSyncRows}`;
+    } else if (hubLastSyncError) {
+      els.hubSyncInfo.classList.add("warn");
+      els.hubSyncInfo.textContent = `● Retrying • ${hubLastSyncError}`;
+    } else {
+      els.hubSyncInfo.classList.add("wait");
+      els.hubSyncInfo.textContent = "● Waiting…";
+    }
+  }
 }
 function updateEnvironmentBadge() {
   if (!els.envBadge) return;
@@ -302,7 +383,12 @@ async function loadPublicConfig() {
   try {
     const r = await fetch(apiUrl("/api/public-config"));
     const d = await r.json().catch(() => ({}));
-    SUPABASE_URL = String(d?.supabaseUrl || "");
+    let rawUrl = String(d?.supabaseUrl || "").trim();
+    // Accept either project root URL or mistakenly pasted REST URL.
+    rawUrl = rawUrl.replace(/\/+$/, "");
+    rawUrl = rawUrl.replace(/\/rest\/v1$/i, "");
+    rawUrl = rawUrl.replace(/\/auth\/v1$/i, "");
+    SUPABASE_URL = rawUrl;
     SUPABASE_ANON_KEY = String(d?.supabaseAnonKey || "");
   } catch {}
 }
@@ -345,10 +431,19 @@ function showLikeBurst() {
   }, 620);
 }
 
+var authSession = null;
+var generationReadyNotice = false;
+
 function applyRoute() {
   const hash = String(location.hash || "");
-  const route = hash.startsWith("#/") ? hash.slice(2) : "generate";
-  const wanted = route === "start" ? "intro" : route || "home";
+  const rawRoute = hash.startsWith("#/") ? hash.slice(2) : "generate";
+  const route = rawRoute.split(/[?#&]/)[0].trim();
+  const allowedRoutes = new Set(["intro", "start", "auth", "generate", "library", "hub", "settings", "profile", "player", "vocal", "stems", "advanced"]);
+  const normalized = route === "start" ? "intro" : route;
+  let wanted = allowedRoutes.has(normalized) ? normalized : "generate";
+  const protectedRoutes = new Set(["generate", "library", "profile", "player", "vocal", "stems", "advanced"]);
+  const isLoggedIn = Boolean(authSession?.user?.id);
+  if (!isLoggedIn && protectedRoutes.has(wanted)) wanted = "auth";
   document.body.classList.toggle("isIntro", wanted === "intro");
   document.body.setAttribute("data-route", wanted);
   if (els.brandSecondary) {
@@ -371,7 +466,17 @@ function applyRoute() {
     renderHubDots();
     renderHubUpdatedAt();
   }
+  if (wanted === "profile") {
+    void refreshAuthStateFromSupabase();
+  }
+  if (wanted === "generate" && generationReadyNotice) {
+    generationReadyNotice = false;
+    renderGenerateReadyDot();
+    setLoading(false);
+    showResultCard(true);
+  }
   syncGenerateOrbVisibility();
+  renderGenerateReadyDot();
 }
 
 function updateBrandPulse() {
@@ -382,16 +487,89 @@ function updateBrandPulse() {
   els.brandTitle.classList.toggle("isPlaying", isPlaying);
 }
 
+function resetAdvancedOptionsToDefaults() {
+  if (els.sunoGroovePace) els.sunoGroovePace.value = "";
+  if (els.sunoProsody) els.sunoProsody.value = "";
+  if (els.sunoBeatStability) els.sunoBeatStability.value = "";
+  if (els.sunoProMode) els.sunoProMode.checked = false;
+  if (els.sunoTiming) els.sunoTiming.value = "";
+  if (els.sunoSongKey) els.sunoSongKey.value = "";
+  if (els.sunoMaqam) els.sunoMaqam.value = "";
+  if (els.sunoVoiceProfile) els.sunoVoiceProfile.value = "";
+  if (els.sunoDialect) els.sunoDialect.value = "";
+  if (els.sunoDialectHint) els.sunoDialectHint.value = "";
+  if (els.sunoPersonaId) els.sunoPersonaId.value = "";
+  document.body.classList.remove("proMode");
+  if (els.advancedSheet) els.advancedSheet.open = false;
+}
+
 function resetCreateDraft() {
+  busyCount = 0;
+  generationReadyNotice = false;
   if (els.sunoPrompt) els.sunoPrompt.value = "";
   if (els.sunoStyle) els.sunoStyle.value = "";
   if (els.sunoTitle) els.sunoTitle.value = "";
+  if (els.sunoArtworkStyle) els.sunoArtworkStyle.value = "";
   if (els.sunoReferenceMode) els.sunoReferenceMode.value = "none";
   if (els.sunoVocalUpload) els.sunoVocalUpload.value = "";
+  if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
+  resetAdvancedOptionsToDefaults();
+  if (els.vocalModeFull) els.vocalModeFull.classList.add("active");
+  if (els.vocalModeInstrumental) els.vocalModeInstrumental.classList.remove("active");
+  if (els.sunoReferenceHint) {
+    els.sunoReferenceHint.style.display = "none";
+    els.sunoReferenceHint.textContent = "";
+    els.sunoReferenceHint.classList.remove("isCritical");
+  }
   vocalRefBlob = null;
   if (els.sunoVocalUploadName) els.sunoVocalUploadName.textContent = "No vocal reference attached.";
+  if (vocalRefPreviewUrl) {
+    safeRevokeObjectUrl(vocalRefPreviewUrl);
+    vocalRefPreviewUrl = "";
+  }
+  if (els.btnSunoGenerate) {
+    els.btnSunoGenerate.textContent = "Generate song";
+    els.btnSunoGenerate.disabled = false;
+    els.btnSunoGenerate.dataset.mode = "generate";
+  }
   if (els.resultCard) els.resultCard.style.display = "none";
   if (els.resultCard2) els.resultCard2.style.display = "none";
+  if (generatePollTimer) {
+    clearInterval(generatePollTimer);
+    generatePollTimer = null;
+  }
+  savePendingBackendTask("");
+  pendingGeneratedCoverDataUrl = "";
+  pendingBackendTaskId = "";
+  imageMoodAppliedForNextGen = false;
+  imageMoodData = null;
+  imageMoodCoverDataUrl = "";
+  sunoTaskId = null;
+  sunoAudioId = null;
+  lastSunoAudioId2 = "";
+  if (lastSunoCachedUrl) safeRevokeObjectUrl(lastSunoCachedUrl);
+  if (lastSunoCachedUrl2) safeRevokeObjectUrl(lastSunoCachedUrl2);
+  lastSunoCachedUrl = "";
+  lastSunoCachedUrl2 = "";
+  lastSunoFullUrl = "";
+  lastSunoProxyUrl = "";
+  lastSunoArtUrl = "";
+  lastSunoTitle = "";
+  lastSunoFullUrl2 = "";
+  lastSunoProxyUrl2 = "";
+  lastSunoArtUrl2 = "";
+  lastSunoTitle2 = "";
+  if (playerEl) {
+    try {
+      playerEl.pause();
+      playerEl.currentTime = 0;
+    } catch {}
+  }
+  if (els.btnSunoStems) els.btnSunoStems.disabled = true;
+  if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = true;
+  renderReferenceHints();
+  setGenerateFieldsLocked(false);
+  setLoading(false);
   setStatus("New draft started.");
   syncGenerateOrbVisibility();
 }
@@ -486,13 +664,69 @@ let vocalRefStream = null;
 let vocalRefBlob = null;
 let vocalRefChunks = [];
 let vocalRefPreviewUrl = "";
+let imageMoodData = null;
+let imageMoodCoverDataUrl = "";
+let pendingGeneratedCoverDataUrl = "";
+let pendingBackendTaskId = "";
+const PENDING_TASK_KEY = "mas:pending_backend_task_v1";
+var lastGenerationReadyAt = 0;
+
+function renderGenerateReadyDot() {
+  // Intentionally no tab-dot on Generate (user requested removal).
+}
+
+function markGenerationReadyNotice() {
+  // User requested removing "songs ready" notice card completely.
+  busyCount = 0;
+  generationReadyNotice = false;
+  lastGenerationReadyAt = Date.now();
+  renderGenerateReadyDot();
+  setLoading(false);
+  showResultCard(true);
+}
+
+// Single source of truth for the active vocal reference. Updated whenever the
+// user picks a file or finishes a recording, and cleared as soon as a Generate
+// request fires. Avoids stale selections leaking from previous runs.
+var currentVocalRefFile = null;
+
+function setVocalRefFile(file, label) {
+  currentVocalRefFile = file || null;
+  vocalRefBlob = null;
+  if (els.sunoVocalUploadName) {
+    els.sunoVocalUploadName.textContent = currentVocalRefFile
+      ? (label || `Voice reference attached: ${currentVocalRefFile.name || "vocal-reference"}`)
+      : "No vocal reference attached.";
+  }
+  updateVocalRefPreviewState();
+  renderReferenceHints();
+}
 
 function getVocalReferenceFile() {
+  if (currentVocalRefFile) return currentVocalRefFile;
   if (vocalRefBlob) {
-    return new File([vocalRefBlob], "vocal-reference.webm", { type: vocalRefBlob.type || "audio/webm" });
+    return new File([vocalRefBlob], "vocal-reference.webm", {
+      type: vocalRefBlob.type || "audio/webm",
+    });
   }
-  const f = els.sunoVocalUpload?.files?.[0];
-  return f || null;
+  return null;
+}
+
+function clearVocalReferenceSelection() {
+  currentVocalRefFile = null;
+  vocalRefBlob = null;
+  if (els.sunoVocalUpload) els.sunoVocalUpload.value = "";
+  clearVocalRefPreviewUrl();
+  if (els.sunoVocalUploadName) els.sunoVocalUploadName.textContent = "No vocal reference attached.";
+  updateVocalRefPreviewState();
+  renderReferenceHints();
+}
+
+function openVocalReferencePicker() {
+  if (!els.sunoVocalUpload) return;
+  // Force a fresh `change` event even when the user re-picks the same file path.
+  try { els.sunoVocalUpload.value = ""; } catch {}
+  els.sunoVocalUpload.click();
 }
 function clearVocalRefPreviewUrl() {
   if (vocalRefPreviewUrl) URL.revokeObjectURL(vocalRefPreviewUrl);
@@ -518,6 +752,59 @@ function pickRecorderMimeType() {
   }
   return "";
 }
+
+async function startVocalReferenceRecording() {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  const mimeType = pickRecorderMimeType();
+  const rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+  const chunks = [];
+  rec.ondataavailable = (e) => {
+    if (e.data && e.data.size) chunks.push(e.data);
+  };
+  rec.onstop = () => {
+    vocalRefChunks = chunks.slice();
+    const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm;codecs=opus" });
+    vocalRefBlob = blob;
+    // Immediately promote the recording to the active reference and drop any
+    // previously uploaded file. Otherwise an earlier upload still wins because
+    // currentVocalRefFile takes priority over vocalRefBlob in the picker.
+    if (blob && blob.size > 0) {
+      const recordedFile = new File([blob], "vocal-reference.webm", {
+        type: blob.type || "audio/webm",
+      });
+      if (els.sunoVocalUpload) {
+        try { els.sunoVocalUpload.value = ""; } catch {}
+      }
+      setVocalRefFile(recordedFile, "Voice reference recorded and attached.");
+    } else {
+      renderReferenceHints();
+      updateVocalRefPreviewState();
+    }
+    if (els.btnRecorderUse) els.btnRecorderUse.disabled = !vocalRefBlob;
+    if (els.recorderStatus) els.recorderStatus.textContent = "Recording ready";
+  };
+  vocalRefStream = stream;
+  vocalRefRecorder = rec;
+  rec.start();
+  if (els.btnVocalRefRec) els.btnVocalRefRec.disabled = true;
+  if (els.btnVocalRefStop) els.btnVocalRefStop.disabled = false;
+  setStatus("Recording voice reference…");
+}
+
+function stopVocalReferenceRecording() {
+  try {
+    if (vocalRefRecorder && vocalRefRecorder.state !== "inactive") vocalRefRecorder.stop();
+  } catch {}
+  try {
+    if (vocalRefStream) vocalRefStream.getTracks().forEach((t) => t.stop());
+  } catch {}
+  vocalRefRecorder = null;
+  vocalRefStream = null;
+  if (els.btnVocalRefRec) els.btnVocalRefRec.disabled = false;
+  if (els.btnVocalRefStop) els.btnVocalRefStop.disabled = true;
+  setStatus("Voice reference ready.");
+  renderReferenceHints();
+}
 function extractTaskIdLoose(data) {
   return (
     data?.data?.taskId ||
@@ -530,6 +817,24 @@ function extractTaskIdLoose(data) {
     null
   );
 }
+function compactStyleForProvider(input, maxLen = 980) {
+  let s = String(input || "")
+    .replace(/\s+/g, " ")
+    .replace(/\s*,\s*/g, ", ")
+    .replace(/\s*\|\s*/g, " | ")
+    .trim();
+  if (!s) return "";
+  if (s.length <= maxLen) return s;
+  const parts = s.split(",").map((p) => p.trim()).filter(Boolean);
+  let out = "";
+  for (const p of parts) {
+    const next = out ? `${out}, ${p}` : p;
+    if (next.length > maxLen) break;
+    out = next;
+  }
+  if (!out) out = s.slice(0, maxLen).trim();
+  return out;
+}
 /** @type {Array<{ name:string, url:string, gain:number, pan?:number, muted?:boolean }>} */
 let mixerStems = [];
 /** @type {HTMLAudioElement[]} */
@@ -541,6 +846,7 @@ let mixerIsPlaying = false;
 let playerEl = null;
 let playerLoadedLabel = "";
 let playerSeekDragging = false;
+let currentPlayerTrackRef = null;
 let lastSunoFullUrl = "";
 let lastSunoProxyUrl = "";
 let lastSunoCachedUrl = "";
@@ -555,10 +861,15 @@ let lastSunoCachedUrl2 = "";
 let lastSunoArtUrl2 = "";
 let lastSunoTitle2 = "";
 let lastSunoAudioId2 = "";
+let libraryNowPlayingId = null;
 let lastGenerationMeta = null;
 const PROFILE_KEY = "mas:profile:v1";
 const PROFILE_PERSONAS_KEY = "mas:personas:v1";
+const AUTH_SESSION_KEY = "mas:supabase:session:v1";
+const AUTH_PKCE_KEY = "mas:supabase:pkce:v1";
 let activeProfile = { id: "guest", username: "guest", email: "" };
+authSession = null;
+let lastAuthDebug = "";
 function loadProfile() {
   try {
     const raw = localStorage.getItem(PROFILE_KEY);
@@ -572,6 +883,9 @@ function saveProfile(p) {
 }
 function profileLibraryKey() {
   return `mas:library:v1:${activeProfile.id || "guest"}`;
+}
+function profileLibraryKeyFor(id) {
+  return `mas:library:v1:${id || "guest"}`;
 }
 function hubFeedKey() {
   return "mas:hub:v1";
@@ -595,6 +909,13 @@ function getLocalDeviceId() {
   }
 }
 let hubFilter = "latest";
+let hubSyncTimer = null;
+let hubLastSyncOk = false;
+let hubLastSyncRows = 0;
+let hubLastSyncError = "";
+let hubSyncInFlight = false;
+let hubRetryCount = 0;
+let hubFeedMemory = [];
 function loadHubSeen() {
   try {
     const raw = localStorage.getItem(hubSeenKey());
@@ -652,14 +973,400 @@ function renderHubDots() {
 }
 async function supabaseSelectHub() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/hub_posts?select=*&order=created_at.desc`, {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 12000);
+  const selectCols = [
+    "id",
+    "created_at",
+    "title",
+    "cover_url",
+    "song_url",
+    "kind",
+    "creator_username",
+    "creator_avatar",
+    "likes",
+    "reacts",
+    "remix_of",
+    "proof",
+    "meta",
+  ].join(",");
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(selectCols)}&order=created_at.desc&limit=60`, {
     headers: {
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    },
+    signal: ctrl.signal,
+  });
+  clearTimeout(timer);
+  if (!r.ok) {
+    const txt = await r.text().catch(() => "");
+    throw new Error(`supabase select failed (${r.status}) ${String(txt).slice(0, 100)}`);
+  }
+  return await r.json().catch(() => []);
+}
+function loadAuthSession() {
+  try {
+    const raw = localStorage.getItem(AUTH_SESSION_KEY);
+    authSession = raw ? JSON.parse(raw) : null;
+  } catch {
+    authSession = null;
+  }
+}
+function saveAuthSession(sess) {
+  authSession = sess || null;
+  try {
+    if (authSession) localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(authSession));
+    else localStorage.removeItem(AUTH_SESSION_KEY);
+  } catch {}
+  renderAuthStatus();
+}
+function getSupabaseAuthToken() {
+  return authSession?.access_token || "";
+}
+function b64urlFromBytes(bytes) {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 1) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+async function sha256Base64Url(input) {
+  const enc = new TextEncoder().encode(input);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  return b64urlFromBytes(new Uint8Array(buf));
+}
+function randomVerifier(len = 64) {
+  const bytes = new Uint8Array(len);
+  crypto.getRandomValues(bytes);
+  return b64urlFromBytes(bytes).slice(0, len);
+}
+async function supabaseFetchUser(token) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !token) return null;
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
     },
   });
-  if (!r.ok) throw new Error("supabase select failed");
-  return await r.json().catch(() => []);
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    lastAuthDebug = `user fetch ${r.status}: ${String(t || "").slice(0, 120)}`;
+    if (r.status === 401 || r.status === 403) {
+      const lower = String(t || "").toLowerCase();
+      if (lower.includes("token") || lower.includes("jwt")) {
+        saveAuthSession(null);
+      }
+    }
+    return null;
+  }
+  lastAuthDebug = "";
+  return await r.json().catch(() => null);
+}
+async function refreshAuthStateFromSupabase() {
+  const token = getSupabaseAuthToken();
+  if (!token) {
+    renderAuthStatus();
+    return null;
+  }
+  const remoteUser = await supabaseFetchUser(token);
+  if (remoteUser) {
+    saveAuthSession({ ...(authSession || {}), access_token: token, user: remoteUser });
+    return remoteUser;
+  }
+  renderAuthStatus();
+  return null;
+}
+function renderAuthStatus() {
+  if (!els.authStatus) return;
+  const email = authSession?.user?.email || "";
+  const hasToken = Boolean(getSupabaseAuthToken());
+  let msg = email
+    ? ""
+    : hasToken
+      ? "Session found, validating account..."
+      : "Not logged in.";
+  if (!email && hasToken && lastAuthDebug) msg += ` • ${lastAuthDebug}`;
+  els.authStatus.textContent = msg;
+  els.authStatus.style.display = msg ? "" : "none";
+  if (els.authLoginControls) els.authLoginControls.style.display = email ? "none" : "";
+  if (els.authLoggedInRow) els.authLoggedInRow.style.display = email ? "flex" : "none";
+  if (els.authLoggedInEmail) els.authLoggedInEmail.textContent = email ? email : "Logged in.";
+  if (els.authLoggedInEmailInline) {
+    els.authLoggedInEmailInline.textContent = email ? email : "";
+    els.authLoggedInEmailInline.style.display = email ? "" : "none";
+  }
+}
+function resetProfileUiToGuest() {
+  activeProfile = {
+    id: "guest",
+    username: "guest",
+    email: "",
+    voiceTimbre: "",
+    bio: "Add a short bio to introduce your music style.",
+    avatar: "",
+    genres: "",
+    links: {},
+    isPublic: true,
+  };
+  try { localStorage.setItem(PROFILE_KEY, JSON.stringify(activeProfile)); } catch {}
+  if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = "@guest";
+  if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = "";
+  if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = "Add a short bio to introduce your music style.";
+  if (els.profileIsPublic) els.profileIsPublic.checked = true;
+  if (els.profileAvatarFile) els.profileAvatarFile.value = "";
+  renderProfilePreviewFromInputs();
+  renderProfileHubShared();
+  renderLibrary();
+}
+async function supabaseSendOtp(email) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase config missing");
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/otp`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({
+      email,
+      create_user: true,
+      email_redirect_to: `${window.location.origin}${window.location.pathname}#/profile`,
+    }),
+  });
+  if (!r.ok) {
+    const txt = await r.text().catch(() => "");
+    throw new Error(`OTP send failed (${r.status}): ${txt.slice(0, 120)}`);
+  }
+}
+function maybeHandleMagicLinkFromHash() {
+  try {
+    const hash = String(window.location.hash || "");
+    const search = String(window.location.search || "");
+    const rawHash = hash.startsWith("#") ? hash.slice(1) : hash;
+    const tokenPartHash = rawHash.includes("access_token=")
+      ? rawHash.slice(rawHash.indexOf("access_token="))
+      : "";
+    const tokenPartSearch = search.includes("access_token=")
+      ? search.slice(search.indexOf("access_token=") + 1)
+      : "";
+    const raw = tokenPartHash || tokenPartSearch;
+    if (!raw) return false;
+    const qp = new URLSearchParams(raw);
+    const access_token = qp.get("access_token");
+    const refresh_token = qp.get("refresh_token");
+    const expires_in = Number(qp.get("expires_in") || 3600);
+    const token_type = qp.get("token_type") || "bearer";
+    if (!access_token) return false;
+    const email = qp.get("email") || "";
+    const user = { id: qp.get("user_id") || "", email };
+    if (!access_token || access_token.split(".").length < 3) {
+      lastAuthDebug = "callback token invalid format";
+      saveAuthSession(null);
+      return false;
+    }
+    saveAuthSession({ access_token, refresh_token, expires_in, token_type, user });
+    window.location.hash = "#/profile";
+    setStatus("Logged in via magic link.");
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function maybeHandleAuthCodeFromQuery() {
+  try {
+    const sp = new URLSearchParams(window.location.search || "");
+    const code = sp.get("code");
+    if (!code) return false;
+    const verifier = localStorage.getItem(AUTH_PKCE_KEY) || "";
+    if (!verifier) {
+      lastAuthDebug = "missing pkce verifier";
+      return false;
+    }
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=pkce`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ auth_code: code, code_verifier: verifier }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d?.access_token) {
+      lastAuthDebug = `code exchange ${r.status}: ${String(JSON.stringify(d)).slice(0, 120)}`;
+      return false;
+    }
+    localStorage.removeItem(AUTH_PKCE_KEY);
+    const user = d?.user || { id: "", email: "" };
+    saveAuthSession({
+      access_token: d.access_token,
+      refresh_token: d.refresh_token || "",
+      expires_in: Number(d.expires_in || 3600),
+      token_type: d.token_type || "bearer",
+      user,
+    });
+    window.history.replaceState({}, document.title, window.location.pathname + "#/profile");
+    applyRoute();
+    setStatus("Logged in via Google.");
+    return true;
+  } catch (e) {
+    lastAuthDebug = `code flow error: ${e?.message || String(e)}`;
+    return false;
+  }
+}
+async function supabaseVerifyOtp(email, token) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase config missing");
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({
+      email,
+      token,
+      type: "email",
+    }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d?.msg || `OTP verify failed (${r.status})`);
+  return d;
+}
+async function supabaseGoogleLoginUrl() {
+  const verifier = randomVerifier(64);
+  localStorage.setItem(AUTH_PKCE_KEY, verifier);
+  const challenge = await sha256Base64Url(verifier);
+  const redirectTo = encodeURIComponent(`${window.location.origin}${window.location.pathname}`);
+  return `${SUPABASE_URL}/auth/v1/authorize?provider=google&response_type=code&scope=email%20profile&code_challenge=${encodeURIComponent(challenge)}&code_challenge_method=S256&redirect_to=${redirectTo}`;
+}
+async function supabaseUpsertProfile(profile) {
+  const token = getSupabaseAuthToken();
+  if (!token) throw new Error("Login required");
+  const payload = {
+    user_id: authSession?.user?.id,
+    username: profile.username || "guest",
+    email: profile.email || "",
+    gender: profile.gender || "",
+    voice_timbre: profile.voiceTimbre || "",
+    bio: profile.bio || "",
+    avatar: profile.avatar || "",
+    genres: profile.genres || "",
+    instagram: profile.links?.instagram || "",
+    youtube: profile.links?.youtube || "",
+    tiktok: profile.links?.tiktok || "",
+    is_public: profile.isPublic !== false,
+    updated_at: new Date().toISOString(),
+  };
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      Prefer: "resolution=merge-duplicates,return=representation",
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!r.ok) {
+    const txt = await r.text().catch(() => "");
+    throw new Error(`Cloud save failed (${r.status}): ${txt.slice(0, 140)}`);
+  }
+}
+async function supabaseLoadProfile() {
+  const token = getSupabaseAuthToken();
+  if (!token || !authSession?.user?.id) return null;
+  const uid = encodeURIComponent(authSession.user.id);
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${uid}&select=*`, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!r.ok) return null;
+  const arr = await r.json().catch(() => []);
+  if (!Array.isArray(arr) || !arr.length) return null;
+  const p = arr[0];
+  return {
+    id: p.user_id || activeProfile.id,
+    username: p.username || "guest",
+    email: p.email || "",
+    gender: p.gender || "",
+    voiceTimbre: p.voice_timbre || "",
+    bio: p.bio || "",
+    avatar: p.avatar || "",
+    genres: p.genres || "",
+    links: {
+      instagram: p.instagram || "",
+      youtube: p.youtube || "",
+      tiktok: p.tiktok || "",
+    },
+    isPublic: p.is_public !== false,
+  };
+}
+async function supabaseLoadUserSongs() {
+  const token = getSupabaseAuthToken();
+  if (!token || !authSession?.user?.id) return [];
+  const uid = encodeURIComponent(authSession.user.id);
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${uid}&select=*&order=created_at.desc`, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!r.ok) return [];
+  const rows = await r.json().catch(() => []);
+  if (!Array.isArray(rows)) return [];
+  return rows.map((s) => ({
+    id: String(s.id || `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
+    ts: new Date(s.created_at || Date.now()).getTime(),
+    title: s.title || "Generated song",
+    artUrl: s.art_url || "",
+    url: s.song_url || "",
+    taskId: s.task_id || "",
+    audioId: s.audio_id || "",
+    kind: s.kind || "full",
+    meta: s.meta || null,
+  }));
+}
+async function supabaseInsertUserSong(track) {
+  const token = getSupabaseAuthToken();
+  if (!token || !authSession?.user?.id) return { ok: false, reason: "no_auth" };
+  const payload = {
+    user_id: authSession.user.id,
+    title: track.title || "Generated song",
+    art_url: track.artUrl || "",
+    song_url: track.url || "",
+    task_id: track.taskId || "",
+    audio_id: track.audioId || "",
+    kind: track.kind || "full",
+    meta: track.meta || null,
+  };
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/user_songs`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify(payload),
+  }).catch(() => null);
+  if (!r) return { ok: false, reason: "network" };
+  if (!r.ok) {
+    const txt = await r.text().catch(() => "");
+    return { ok: false, reason: `http_${r.status}`, details: String(txt).slice(0, 180) };
+  }
+  return { ok: true };
+}
+async function supabaseDeleteUserSong(track) {
+  const token = getSupabaseAuthToken();
+  if (!token || !authSession?.user?.id) return;
+  const title = encodeURIComponent(String(track?.title || ""));
+  const songUrl = encodeURIComponent(String(track?.url || ""));
+  if (!title || !songUrl) return;
+  await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${encodeURIComponent(authSession.user.id)}&title=eq.${title}&song_url=eq.${songUrl}`, {
+    method: "DELETE",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      Prefer: "return=minimal",
+    },
+  }).catch(() => null);
 }
 async function supabaseInsertHub(post) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
@@ -680,7 +1387,6 @@ async function supabaseInsertHub(post) {
     method: "POST",
     headers: {
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       "Content-Type": "application/json",
       Prefer: "return=representation",
     },
@@ -695,7 +1401,6 @@ async function supabasePatchHub(id, patch) {
     method: "PATCH",
     headers: {
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       "Content-Type": "application/json",
       Prefer: "return=representation",
     },
@@ -710,7 +1415,6 @@ async function supabaseDeleteHub(id) {
     method: "DELETE",
     headers: {
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       Prefer: "return=representation",
     },
   });
@@ -718,18 +1422,10 @@ async function supabaseDeleteHub(id) {
   return await r.json().catch(() => []);
 }
 function loadHubFeed() {
-  try {
-    const raw = localStorage.getItem(hubFeedKey());
-    const arr = raw ? JSON.parse(raw) : [];
-    return Array.isArray(arr) ? arr : [];
-  } catch {
-    return [];
-  }
+  return Array.isArray(hubFeedMemory) ? hubFeedMemory : [];
 }
 function saveHubFeed(items) {
-  try {
-    localStorage.setItem(hubFeedKey(), JSON.stringify(items || []));
-  } catch {}
+  hubFeedMemory = Array.isArray(items) ? items : [];
 }
 function openShareLiveModal(title) {
   if (!els.shareLiveModal) return;
@@ -775,6 +1471,7 @@ function closeProofModal() {
 function shareToHub(track) {
   const feed = loadHubFeed();
   const creator = String(activeProfile.username || "guest");
+  const creatorUserId = String(authSession?.user?.id || "");
   const proof = {
     createdAt: Date.now(),
     mode: track?.meta?.mode || track?.kind || "full",
@@ -796,11 +1493,12 @@ function shareToHub(track) {
     reacts: { melody: 0, lyrics: 0, mix: 0, groove: 0 },
     remixOf: track?.remixOf || "",
     proof,
-    meta: track.meta || null,
+    meta: { ...(track.meta || {}), creatorUserId },
   });
   saveHubFeed(feed.slice(0, 200));
   void supabaseInsertHub(feed[0]).catch(() => {});
   renderHub();
+  renderProfileHubShared();
 }
 function makeDemoHubPost() {
   const creator = String(activeProfile.username || "guest");
@@ -847,8 +1545,8 @@ function renderHub() {
       </div>
       <div style="flex:1;min-width:0">
         <div class="hubMetaTop">
-          <img src="${escapeHtml(p.creatorAvatar || "./assets/nabadai-logo.png")}" alt="avatar" style="width:26px;height:26px;border-radius:999px;object-fit:cover;border:1px solid rgba(255,255,255,0.14)" />
-          <div class="trackTiny">@${escapeHtml(p.creator)}</div>
+          <img src="${escapeHtml(p.creatorAvatar || "./assets/nabadai-logo.png")}" alt="avatar" data-hub-user="${p.id}" style="width:26px;height:26px;border-radius:999px;object-fit:cover;border:1px solid rgba(255,255,255,0.14);cursor:pointer" />
+          <div class="trackTiny" data-hub-user="${p.id}" style="cursor:pointer">@${escapeHtml(p.creator)}</div>
           <span class="hubProofChip">Proof ${escapeHtml(String(p?.proof?.model || LATEST_SUNO_MODEL))} · #${escapeHtml(String(p?.proof?.promptHash || ""))}</span>
         </div>
         <div class="trackName">${escapeHtml(p.title)}</div>
@@ -883,6 +1581,7 @@ function renderHub() {
     hubAudio = null;
     hubAudioPostId = null;
     hubNowMeta = null;
+    miniSource = null;
     els.hubList.querySelectorAll("[data-hub-play]").forEach((btn) => { btn.textContent = "▶"; });
     els.hubList.querySelectorAll(".hubPlayProgress > span").forEach((bar) => { bar.style.width = "0%"; });
     els.hubList.querySelectorAll(".hubCoverWrap").forEach((w) => w.classList.remove("isPlaying"));
@@ -902,11 +1601,22 @@ function renderHub() {
     try {
       hubAudio = new Audio(p.url);
       hubAudioPostId = id;
+      miniSource = { type: "hub", id };
       hubNowMeta = { title: p.title || "Hub song", art: p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png" };
       b.textContent = "■";
       b.closest(".hubCoverWrap")?.classList.add("isPlaying");
       hubAudio.addEventListener("ended", stopHubAudio);
       hubAudio.addEventListener("timeupdate", () => {
+        const clip = p?.meta?.clip;
+        if (clip && Number.isFinite(Number(clip.startSec)) && Number.isFinite(Number(clip.endSec))) {
+          const s = Number(clip.startSec);
+          const en = Number(clip.endSec);
+          if (hubAudio.currentTime < s) hubAudio.currentTime = s;
+          if (hubAudio.currentTime >= en) {
+            stopHubAudio();
+            return;
+          }
+        }
         const prog = document.getElementById(`hubProg_${id}`);
         if (!prog || !hubAudio?.duration) return;
         const pct = Math.max(0, Math.min(100, (hubAudio.currentTime / hubAudio.duration) * 100));
@@ -915,6 +1625,9 @@ function renderHub() {
         renderHubNowPlaying();
       });
       await hubAudio.play();
+      if (p?.meta?.clip && Number.isFinite(Number(p.meta.clip.startSec))) {
+        hubAudio.currentTime = Math.max(0, Number(p.meta.clip.startSec));
+      }
       renderHubNowPlaying();
     } catch {
       stopHubAudio();
@@ -972,6 +1685,15 @@ function renderHub() {
     setStatus(`Remix seed loaded from Hub: ${p.title}`);
     syncGenerateOrbVisibility();
   }));
+  els.hubList.querySelectorAll("[data-hub-user]").forEach((u) => u.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const id = u.getAttribute("data-hub-user");
+    const p = loadHubFeed().find((x) => x.id === id);
+    if (!p) return;
+    const voice = String(p?.meta?.voiceTimbre || "Not set");
+    const bio = String(p?.meta?.bio || "No bio yet.");
+    alert(`@${p.creator}\nVoice: ${voice}\n\n${bio}`);
+  }));
   els.hubList.querySelectorAll(".hubProofChip").forEach((chip) => chip.addEventListener("click", (e) => {
     e.stopPropagation();
     const row = chip.closest("[data-hub-row]");
@@ -1013,9 +1735,16 @@ if (els.hubList) {
   });
 }
 async function refreshHubFromSupabase() {
+  if (hubSyncInFlight) return;
+  hubSyncInFlight = true;
   try {
     const rows = await supabaseSelectHub();
     if (!rows || !Array.isArray(rows)) return;
+    hubLastSyncOk = true;
+    hubLastSyncError = "";
+    hubLastSyncRows = rows.length;
+    hubRetryCount = 0;
+    const prev = loadHubFeed();
     const mapped = rows.map((r) => ({
       id: String(r.id),
       ts: new Date(r.created_at).getTime(),
@@ -1031,11 +1760,76 @@ async function refreshHubFromSupabase() {
       proof: r.proof || null,
       meta: r.meta || null,
     }));
-    saveHubFeed(mapped);
-    lastHubUpdateAt = mapped.length ? Math.max(...mapped.map((x) => Number(x.ts || 0))) : 0;
+    // Never wipe feed on empty cloud response.
+    if (!mapped.length && prev.length) {
+      renderHub();
+      renderHubDots();
+      return;
+    }
+    const byId = new Map();
+    prev.forEach((p) => byId.set(String(p.id), p));
+    mapped.forEach((p) => byId.set(String(p.id), p));
+    const merged = Array.from(byId.values()).sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0)).slice(0, 300);
+    saveHubFeed(merged);
+    lastHubUpdateAt = merged.length ? Math.max(...merged.map((x) => Number(x.ts || 0))) : 0;
     renderHub();
     renderHubDots();
-  } catch {}
+    renderProfileHubShared();
+  } catch (e) {
+    hubLastSyncOk = false;
+    hubRetryCount += 1;
+    hubLastSyncError = e?.name === "AbortError"
+      ? "timeout, retrying…"
+      : (e?.message ? String(e.message).slice(0, 100) : "unknown");
+    renderHubUpdatedAt();
+    const backoff = Math.min(8000, 1500 * Math.max(1, hubRetryCount));
+    setTimeout(async () => {
+      try {
+        if (hubSyncInFlight) return;
+        hubSyncInFlight = true;
+        const rows = await supabaseSelectHub();
+        if (!rows || !Array.isArray(rows)) return;
+        const mapped = rows.map((r) => ({
+          id: String(r.id),
+          ts: new Date(r.created_at).getTime(),
+          title: r.title || "Untitled",
+          artUrl: r.cover_url || "",
+          url: r.song_url || "",
+          kind: r.kind || "full",
+          creator: r.creator_username || "guest",
+          creatorAvatar: r.creator_avatar || "./assets/nabadai-logo.png",
+          likes: Number(r.likes || 0),
+          reacts: r.reacts || { melody: 0, lyrics: 0, mix: 0, groove: 0 },
+          remixOf: r.remix_of || "",
+          proof: r.proof || null,
+          meta: r.meta || null,
+        }));
+        if (!mapped.length) return;
+        hubLastSyncOk = true;
+        hubLastSyncError = "";
+        hubLastSyncRows = rows.length;
+        hubRetryCount = 0;
+        saveHubFeed(mapped);
+        lastHubUpdateAt = Math.max(...mapped.map((x) => Number(x.ts || 0)));
+        renderHub();
+        renderHubDots();
+        renderProfileHubShared();
+      } catch {} finally {
+        hubSyncInFlight = false;
+      }
+    }, backoff);
+  } finally {
+    hubSyncInFlight = false;
+  }
+}
+function startHubLiveSync() {
+  if (hubSyncTimer) clearInterval(hubSyncTimer);
+  // Always keep Hub fresh for guest + logged users.
+  const isMobile = window.matchMedia?.("(max-width: 720px)")?.matches;
+  const interval = isMobile ? 28000 : 15000;
+  hubSyncTimer = setInterval(() => {
+    void refreshHubFromSupabase();
+  }, interval);
 }
 function profilePersonasKey() {
   return `${PROFILE_PERSONAS_KEY}:${activeProfile.id || "guest"}`;
@@ -1084,68 +1878,49 @@ function addPersona(personaId, label) {
 }
 
 function renderProfilePreviewFromInputs() {
-  const usernameRaw = String(els.profileUsername?.value || "").trim().toLowerCase();
+  const usernameRaw = String(els.profilePreviewUsernameInput?.value || "").trim().toLowerCase();
   const username = usernameRaw ? `@${usernameRaw.replace(/^@/, "")}` : "@guest";
-  const gender = String(els.profileGender?.value || "").trim();
-  const voiceTimbre = String(els.profileVoiceTimbre?.value || "").trim();
-  const bio = String(els.profileBio?.value || "").trim() || "Add a short bio to introduce your music style.";
-  const avatar = String(els.profileAvatar?.value || "").trim();
-  const genres = String(els.profileGenres?.value || "").trim();
+  const voiceTimbre = String(els.profilePreviewTimbreInput?.value || "").trim();
+  const bio = String(els.profilePreviewBioInput?.value || "").trim() || "Add a short bio to introduce your music style.";
+  const genres = String(activeProfile.genres || "").trim();
   const isPublic = Boolean(els.profileIsPublic?.checked);
-  const instagram = String(els.profileInstagram?.value || "").trim();
-  const youtube = String(els.profileYouTube?.value || "").trim();
-  const tiktok = String(els.profileTikTok?.value || "").trim();
 
-  if (els.profilePreviewUsername) els.profilePreviewUsername.textContent = username;
-  if (els.profilePreviewGenderIcon) {
-    els.profilePreviewGenderIcon.classList.remove("male", "female");
-    if (gender === "male") {
-      els.profilePreviewGenderIcon.style.display = "";
-      els.profilePreviewGenderIcon.textContent = "";
-      els.profilePreviewGenderIcon.classList.add("male");
-    } else if (gender === "female") {
-      els.profilePreviewGenderIcon.style.display = "";
-      els.profilePreviewGenderIcon.textContent = "";
-      els.profilePreviewGenderIcon.classList.add("female");
-    } else {
-      els.profilePreviewGenderIcon.style.display = "none";
-      els.profilePreviewGenderIcon.textContent = "";
-    }
+  if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = username;
+  if (els.profilePreviewGenderIcon) els.profilePreviewGenderIcon.style.display = "none";
+  if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = voiceTimbre;
+  if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = bio;
+  if (els.profilePreviewBioInput) {
+    els.profilePreviewBioInput.style.height = "auto";
+    const h = Math.max(54, Math.min(132, els.profilePreviewBioInput.scrollHeight || 54));
+    els.profilePreviewBioInput.style.height = `${h}px`;
   }
-  if (els.profilePreviewTimbre) {
-    const labelMap = {
-      bass: "Bass",
-      baritone: "Baritone",
-      tenor: "Tenor",
-      alto: "Alto",
-      mezzo_soprano: "Mezzo-Soprano",
-      soprano: "Soprano",
-    };
-    els.profilePreviewTimbre.textContent = `Voice: ${labelMap[voiceTimbre] || "Not set"}`;
-  }
-  if (els.profilePreviewVisibility) els.profilePreviewVisibility.textContent = isPublic ? "Public" : "Private";
-  if (els.profilePreviewBio) els.profilePreviewBio.textContent = bio;
   if (els.profilePreviewGenres) els.profilePreviewGenres.textContent = genres ? `Genres: ${genres}` : "";
   if (els.profilePreviewAvatar) {
-    els.profilePreviewAvatar.src = avatar || "./assets/nabadai-logo.png";
+    els.profilePreviewAvatar.src = activeProfile.avatar || "./assets/nabadai-logo.png";
   }
-  if (els.profilePreviewLinks) {
-    const links = [
-      { label: "Instagram", url: instagram },
-      { label: "YouTube", url: youtube },
-      { label: "TikTok", url: tiktok },
-    ].filter((x) => x.url);
-    els.profilePreviewLinks.innerHTML = "";
-    for (const l of links) {
-      const a = document.createElement("a");
-      a.className = "ghost";
-      a.href = l.url;
-      a.target = "_blank";
-      a.rel = "noreferrer";
-      a.textContent = l.label;
-      els.profilePreviewLinks.appendChild(a);
-    }
+  if (els.profilePreviewLinks) els.profilePreviewLinks.innerHTML = "";
+}
+
+function renderProfileHubShared() {
+  if (!els.profileHubSharedList) return;
+  const creator = String(activeProfile.username || "guest");
+  const uid = String(authSession?.user?.id || "");
+  const items = loadHubFeed()
+    .filter((p) => (uid ? String(p?.meta?.creatorUserId || "") === uid : String(p?.creator || "") === creator))
+    .slice(0, 30);
+  if (!items.length) {
+    els.profileHubSharedList.textContent = "No shared songs yet.";
+    return;
   }
+  els.profileHubSharedList.innerHTML = items.map((p) => `
+    <div class="profileHubSharedItem">
+      <div class="profileHubSharedMeta">
+        <div class="name">${escapeHtml(String(p.title || "Untitled"))}</div>
+        <div class="hint">${escapeHtml(String(p.genre || "Shared to Hub"))}</div>
+      </div>
+      <div class="time">${new Date(p.ts).toLocaleDateString()}</div>
+    </div>
+  `).join("");
 }
 
 function loadLibrary() {
@@ -1157,14 +1932,210 @@ function loadLibrary() {
     return [];
   }
 }
+function loadLibraryFor(id) {
+  try {
+    const raw = localStorage.getItem(profileLibraryKeyFor(id));
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+function listAllLocalLibraryKeys() {
+  const out = [];
+  try {
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const k = String(localStorage.key(i) || "");
+      if (
+        k.startsWith("mas:library:v1:") ||
+        k.startsWith("mas:library:") ||
+        k === "mas:library" ||
+        k === "library" ||
+        k === "songs" ||
+        k.toLowerCase().includes("library")
+      ) out.push(k);
+    }
+  } catch {}
+  return out;
+}
+function looksLikeTrackRow(row) {
+  if (!row || typeof row !== "object") return false;
+  const hasTitle = typeof row.title === "string" && row.title.trim().length > 0;
+  const hasUrl = typeof row.url === "string" && row.url.trim().length > 0;
+  const hasSongUrl = typeof row.song_url === "string" && row.song_url.trim().length > 0;
+  const hasArt = typeof row.artUrl === "string" || typeof row.art_url === "string";
+  return (hasTitle && (hasUrl || hasSongUrl)) || (hasUrl && hasArt) || (hasSongUrl && hasArt);
+}
+function normalizeTrackRow(row) {
+  const url = String(row?.url || row?.song_url || "").trim();
+  return {
+    id: String(row?.id || `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
+    ts: Number(row?.ts || (row?.created_at ? new Date(row.created_at).getTime() : Date.now())),
+    title: String(row?.title || "Generated song"),
+    artUrl: String(row?.artUrl || row?.art_url || ""),
+    url,
+    taskId: String(row?.taskId || row?.task_id || ""),
+    audioId: String(row?.audioId || row?.audio_id || ""),
+    kind: String(row?.kind || "full"),
+    meta: row?.meta || null,
+  };
+}
+function loadAllLocalSongsDeduped() {
+  const merged = [];
+  const seen = new Set();
+  const keys = listAllLocalLibraryKeys();
+  for (const key of keys) {
+    let rows = [];
+    try {
+      const raw = localStorage.getItem(key);
+      const arr = raw ? JSON.parse(raw) : [];
+      rows = Array.isArray(arr) ? arr : [];
+    } catch {}
+    for (const rawRow of rows) {
+      if (!looksLikeTrackRow(rawRow)) continue;
+      const row = normalizeTrackRow(rawRow);
+      const url = String(row?.url || "").trim();
+      const aid = String(row?.audioId || "").trim();
+      const kind = String(row?.kind || "full").trim();
+      const sig = `${url}|${aid}|${kind}`;
+      if (seen.has(sig)) continue;
+      seen.add(sig);
+      merged.push(row);
+    }
+  }
+  // Deep fallback: inspect every localStorage value for track-like arrays.
+  try {
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = String(localStorage.key(i) || "");
+      if (keys.includes(key)) continue;
+      const raw = localStorage.getItem(key);
+      if (!raw || raw[0] !== "[") continue;
+      let arr = [];
+      try { arr = JSON.parse(raw); } catch {}
+      if (!Array.isArray(arr) || !arr.length) continue;
+      for (const rawRow of arr) {
+        if (!looksLikeTrackRow(rawRow)) continue;
+        const row = normalizeTrackRow(rawRow);
+        const url = String(row?.url || "").trim();
+        const aid = String(row?.audioId || "").trim();
+        const kind = String(row?.kind || "full").trim();
+        const sig = `${url}|${aid}|${kind}`;
+        if (seen.has(sig)) continue;
+        seen.add(sig);
+        merged.push(row);
+      }
+    }
+  } catch {}
+  return merged.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
+}
 function saveLibrary(items) {
   try {
     localStorage.setItem(profileLibraryKey(), JSON.stringify(items || []));
   } catch {}
 }
+function patchLibraryTrack(id, patch) {
+  if (!id) return;
+  const items = loadLibrary();
+  const idx = items.findIndex((x) => String(x.id) === String(id));
+  if (idx < 0) return;
+  items[idx] = { ...items[idx], ...patch, ts: Date.now() };
+  saveLibrary(items);
+  renderLibrary();
+}
+async function syncHubCoverForTrack(track, coverUrl) {
+  const title = String(track?.title || "").trim();
+  const url = String(track?.url || "").trim();
+  if (!coverUrl || (!title && !url)) return;
+  const feed = loadHubFeed();
+  const matches = feed.filter((p) => {
+    const sameUrl = url && String(p?.url || "").trim() === url;
+    const sameTitle = title && String(p?.title || "").trim() === title;
+    return sameUrl || sameTitle;
+  });
+  if (!matches.length) return;
+  matches.forEach((p) => { p.artUrl = coverUrl; });
+  saveHubFeed(feed);
+  if ((document.body.getAttribute("data-route") || "") === "hub") renderHub();
+  await Promise.all(
+    matches.map((p) =>
+      supabasePatchHub(p.id, { cover_url: coverUrl }).catch(() => null)
+    )
+  );
+}
+function saveLibraryFor(id, items) {
+  try {
+    localStorage.setItem(profileLibraryKeyFor(id), JSON.stringify(items || []));
+  } catch {}
+}
+
+async function ensureUserLibraryHydrated() {
+  if (!authSession?.user?.id) return;
+  const uid = String(authSession.user.id);
+
+  // 1) Load cloud + local candidates and merge-dedupe.
+  const cloudSongs = await supabaseLoadUserSongs();
+  const guestSongs = loadLibraryFor("guest");
+  const allLocalSongs = loadAllLocalSongsDeduped();
+  const localCandidates = guestSongs.length ? guestSongs : allLocalSongs;
+
+  const merged = [];
+  const seen = new Set();
+  const addMerged = (row) => {
+    const url = String(row?.url || "").trim();
+    const aid = String(row?.audioId || "").trim();
+    const kind = String(row?.kind || "full").trim();
+    const sig = `${url}|${aid}|${kind}`;
+    if (seen.has(sig)) return;
+    seen.add(sig);
+    merged.push(row);
+  };
+  cloudSongs.forEach(addMerged);
+  localCandidates.forEach(addMerged);
+  merged.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
+
+  if (!merged.length) {
+    if (String(activeProfile.id) === uid) renderLibrary();
+    return;
+  }
+
+  // 2) Upsert merged local tracks to cloud (best effort), then reload cloud.
+  let okCount = 0;
+  let failCount = 0;
+  let firstFail = "";
+  for (const t of merged) {
+    // Best effort; ignore individual failures.
+    // eslint-disable-next-line no-await-in-loop
+    const ins = await supabaseInsertUserSong(t);
+    if (ins?.ok) okCount += 1;
+    else {
+      failCount += 1;
+      if (!firstFail) firstFail = `${ins?.reason || "insert_failed"}${ins?.details ? `: ${ins.details}` : ""}`;
+    }
+  }
+  const cloudAfter = await supabaseLoadUserSongs();
+  const finalSongs = cloudAfter.length ? cloudAfter : merged;
+  saveLibraryFor(uid, finalSongs);
+  if (String(activeProfile.id) === uid) {
+    saveLibrary(finalSongs);
+    renderLibrary();
+    if (failCount > 0) {
+      setStatus(`Library sync partial: ${okCount} saved, ${failCount} failed (${firstFail.slice(0, 90)})`);
+    } else {
+      setStatus(`Library sync complete: ${okCount} saved to cloud.`);
+    }
+  }
+}
 function addToLibrary(track) {
   const items = loadLibrary();
-  items.unshift({
+  const url = String(track.url || "").trim();
+  const audioId = String(track.audioId || "").trim();
+  const kind = String(track.kind || "full").trim();
+  const duplicate = items.some((x) =>
+    (url && String(x.url || "").trim() === url) ||
+    (audioId && String(x.audioId || "").trim() === audioId && String(x.kind || "full").trim() === kind)
+  );
+  if (duplicate) return;
+  const newTrack = {
     id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     ts: Date.now(),
     title: track.title || "Generated song",
@@ -1174,14 +2145,87 @@ function addToLibrary(track) {
     audioId: track.audioId || "",
     kind: track.kind || "full",
     meta: track.meta || null,
-  });
+  };
+  items.unshift(newTrack);
   saveLibrary(items.slice(0, 100));
   renderLibrary();
+  void supabaseInsertUserSong(newTrack);
 }
 function removeFromLibrary(id) {
-  const items = loadLibrary().filter((x) => x.id !== id);
+  const prev = loadLibrary();
+  const removed = prev.find((x) => x.id === id);
+  const items = prev.filter((x) => x.id !== id);
   saveLibrary(items);
   renderLibrary();
+  if (removed) void supabaseDeleteUserSong(removed);
+}
+async function downloadLibraryVideoTrack(track) {
+  const url = String(track?.url || "").trim();
+  if (!url) throw new Error("Missing audio URL");
+  const artSrc = String((track?.meta && track.meta.imageUrl) || track?.artUrl || "./assets/nabadai-logo.png");
+  const audio = new Audio(url);
+  audio.crossOrigin = "anonymous";
+  await new Promise((resolve, reject) => {
+    audio.addEventListener("loadedmetadata", resolve, { once: true });
+    audio.addEventListener("error", () => reject(new Error("Audio load failed")), { once: true });
+  });
+  const duration = Math.max(1, Math.min(600, Number(audio.duration) || 1));
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  await new Promise((resolve, reject) => {
+    img.onload = resolve;
+    img.onerror = () => reject(new Error("Artwork load failed"));
+    img.src = artSrc;
+  });
+  const canvas = document.createElement("canvas");
+  canvas.width = 720;
+  canvas.height = 720;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas unavailable");
+  const draw = () => {
+    ctx.fillStyle = "#0b0d12";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const ratio = Math.max(canvas.width / img.width, canvas.height / img.height);
+    const w = img.width * ratio;
+    const h = img.height * ratio;
+    const x = (canvas.width - w) / 2;
+    const y = (canvas.height - h) / 2;
+    ctx.drawImage(img, x, y, w, h);
+  };
+  draw();
+  const vStream = canvas.captureStream(30);
+  const ac = new (window.AudioContext || window.webkitAudioContext)();
+  const src = ac.createMediaElementSource(audio);
+  const dest = ac.createMediaStreamDestination();
+  src.connect(dest);
+  src.connect(ac.destination);
+  const out = new MediaStream([...vStream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+  const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
+    ? "video/webm;codecs=vp9,opus"
+    : "video/webm;codecs=vp8,opus";
+  const rec = new MediaRecorder(out, { mimeType: mime });
+  const chunks = [];
+  rec.ondataavailable = (e) => { if (e.data?.size) chunks.push(e.data); };
+  await ac.resume().catch(() => {});
+  rec.start(500);
+  await audio.play();
+  await new Promise((resolve) => {
+    audio.addEventListener("ended", resolve, { once: true });
+    setTimeout(resolve, duration * 1000 + 1200);
+  });
+  if (rec.state !== "inactive") rec.stop();
+  await new Promise((resolve) => rec.addEventListener("stop", resolve, { once: true }));
+  src.disconnect();
+  dest.disconnect();
+  ac.close().catch(() => {});
+  const blob = new Blob(chunks, { type: "video/webm" });
+  const dl = document.createElement("a");
+  dl.href = URL.createObjectURL(blob);
+  dl.download = `${String(track?.title || "song").replace(/[^\w\- ]+/g, "").trim() || "song"}.webm`;
+  document.body.appendChild(dl);
+  dl.click();
+  dl.remove();
+  setTimeout(() => URL.revokeObjectURL(dl.href), 4000);
 }
 async function pollLibraryStemsUntilDone(taskId, kind) {
   let tries = 0;
@@ -1244,26 +2288,52 @@ function renderLibrary() {
     els.libraryList.textContent = "No songs yet. Generate a song and it will appear here.";
     return;
   }
-  els.libraryList.innerHTML = items
-    .map(
-      (t) => `
-      <div class="trackRow libRow" data-lib-row="${t.id}">
-        <div style="flex:1; min-width:0;">
-          <div class="trackName">${escapeHtml(t.title)}</div>
-          <div class="trackTiny">${new Date(t.ts).toLocaleString()}</div>
+  els.libraryList.innerHTML = `
+    <div class="libraryGrid">
+      ${items.map((t) => `
+        <div class="libTile libRow ${libraryNowPlayingId === t.id ? "libTilePlaying" : ""}" data-lib-row="${t.id}">
+          <img class="libTileArt" src="${escapeHtml(String((t.meta && t.meta.imageUrl) || t.artUrl || "./assets/nabadai-logo.png"))}" alt="${escapeHtml(t.title || "Song artwork")}" />
+          <button class="libTilePlay" data-lib-play="${t.id}" aria-label="Play">▶</button>
+          <button class="libTileMenuBtn" data-lib-menu="${t.id}" aria-label="Song options">⋯</button>
+          <div class="libTileShade">
+            <div class="libTileTitle">${escapeHtml(t.title || "Generated song")}</div>
+            <div class="libTileMeta">${new Date(t.ts).toLocaleDateString()}</div>
+          </div>
+          <div class="libMenu" id="libMenu_${t.id}" style="display:none">
+            <a class="ghost" href="${t.url}" target="_blank" rel="noreferrer" data-lib-dlaudio="${t.id}">Download audio</a>
+            <button class="ghost" data-lib-dlvideo="${t.id}">Download video</button>
+            <button class="ghost" data-lib-share="${t.id}">Share to Hub</button>
+            <button class="ghost" data-lib-details="${t.id}">Song details</button>
+            ${t.kind === "instrumental" ? "" : `<button class="ghost" data-lib-inst="${t.id}">Get instrumental</button>`}
+            ${t.kind === "instrumental" ? "" : `<button class="ghost" data-lib-stems="${t.id}">Get stems</button>`}
+            <button class="ghost" data-lib-del="${t.id}">Delete</button>
+          </div>
         </div>
-        <button class="ghost libMenuBtn" data-lib-menu="${t.id}" aria-label="Song options">⋯</button>
-        <div class="libMenu" id="libMenu_${t.id}" style="display:none">
-          <a class="ghost" href="${t.url}" target="_blank" rel="noreferrer">Download</a>
-          <button class="ghost" data-lib-share="${t.id}">Share to Hub</button>
-          <button class="ghost" data-lib-details="${t.id}">Song details</button>
-          ${t.kind === "instrumental" ? "" : `<button class="ghost" data-lib-inst="${t.id}">Get instrumental</button>`}
-          ${t.kind === "instrumental" ? "" : `<button class="ghost" data-lib-stems="${t.id}">Get stems</button>`}
-          <button class="ghost" data-lib-del="${t.id}">Delete</button>
-        </div>
-      </div>`
-    )
-    .join("");
+      `).join("")}
+    </div>
+  `;
+  els.libraryList.querySelectorAll("[data-lib-play]").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute("data-lib-play");
+      const t = loadLibrary().find((x) => x.id === id);
+      if (!t?.url) return;
+      currentPlayerTrackRef = t;
+      setPlayerMeta({
+        title: t.title || "Library song",
+        subtitle: "Library • Full song",
+        artUrl: (t.meta && t.meta.imageUrl) || placeholderCoverDataUrl(),
+      });
+      miniSource = { type: "library", id };
+      libraryNowPlayingId = id;
+      renderLibrary();
+      await playOnPlayerPage(t.url, "Full song", {
+        title: t.title || "Library song",
+        subtitle: "Library • Full song",
+        artUrl: (t.meta && t.meta.imageUrl) || t.artUrl || placeholderCoverDataUrl(),
+      });
+    });
+  });
   els.libraryList.querySelectorAll("[data-lib-row]").forEach((row) => {
     row.addEventListener("click", async (e) => {
       const tgt = e.target;
@@ -1271,7 +2341,20 @@ function renderLibrary() {
       const id = row.getAttribute("data-lib-row");
       const t = loadLibrary().find((x) => x.id === id);
       if (!t?.url) return;
-      await playOnPlayerPage(t.url, "Full song");
+      currentPlayerTrackRef = t;
+      setPlayerMeta({
+        title: t.title || "Library song",
+        subtitle: "Library • Full song",
+        artUrl: (t.meta && t.meta.imageUrl) || placeholderCoverDataUrl(),
+      });
+      miniSource = { type: "library", id };
+      libraryNowPlayingId = id;
+      renderLibrary();
+      await playOnPlayerPage(t.url, "Full song", {
+        title: t.title || "Library song",
+        subtitle: "Library • Full song",
+        artUrl: (t.meta && t.meta.imageUrl) || t.artUrl || placeholderCoverDataUrl(),
+      });
     });
   });
   els.libraryList.querySelectorAll("[data-lib-menu]").forEach((b) => {
@@ -1314,6 +2397,21 @@ function renderLibrary() {
       shareToHub(t);
       openShareLiveModal(t.title || "Your song");
       setStatus("Shared to Hub.");
+    });
+  });
+  els.libraryList.querySelectorAll("[data-lib-dlvideo]").forEach((b) => {
+    b.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const id = b.getAttribute("data-lib-dlvideo");
+      const t = loadLibrary().find((x) => x.id === id);
+      if (!t) return;
+      try {
+        setStatus("Preparing video download…");
+        await downloadLibraryVideoTrack(t);
+        setStatus("Video download is ready.");
+      } catch (err) {
+        setStatus(`Video download failed: ${err?.message || String(err)}`);
+      }
     });
   });
   els.libraryList.querySelectorAll("[data-lib-inst]").forEach((b) => {
@@ -2138,7 +3236,6 @@ function ensurePlayer() {
   if (playerEl) return playerEl;
   playerEl = new Audio();
   playerEl.preload = "auto";
-  playerEl.crossOrigin = "anonymous";
   playerEl.addEventListener("timeupdate", syncPlayerUI);
   playerEl.addEventListener("loadedmetadata", syncPlayerUI);
   playerEl.addEventListener("ended", () => {
@@ -2153,14 +3250,40 @@ function placeholderCoverDataUrl() {
 }
 
 function setPlayerMeta({ title, subtitle, artUrl } = {}) {
+  const hasTrack = Boolean(artUrl);
   if (els.playerTitle) els.playerTitle.textContent = title || "Now Playing";
   if (els.playerSubtitle) els.playerSubtitle.textContent = subtitle || "";
   if (els.playerArt) els.playerArt.src = artUrl || placeholderCoverDataUrl();
+  const artWrap = document.querySelector(".playerArtWrap");
+  if (artWrap) artWrap.classList.toggle("isEmpty", !hasTrack);
+  if (els.playerArt) els.playerArt.classList.toggle("isPlaceholder", !hasTrack);
+  hubNowMeta = {
+    title: title || "Now playing",
+    art: artUrl || placeholderCoverDataUrl(),
+  };
+  renderHubNowPlaying();
 }
 
 function setPlayerSource(url, label) {
   const a = ensurePlayer();
   a.pause();
+  // Only same-origin or blob URLs need crossOrigin for WebAudio/spectrum; forcing
+  // "anonymous" on arbitrary Suno CDN URLs breaks playback when ACAO is absent.
+  try {
+    const u = String(url || "");
+    if (!u || u.startsWith("blob:")) {
+      a.crossOrigin = "anonymous";
+    } else {
+      const parsed = new URL(u, location.href);
+      if (parsed.origin === location.origin) {
+        a.crossOrigin = "anonymous";
+      } else {
+        a.removeAttribute("crossOrigin");
+      }
+    }
+  } catch {
+    a.removeAttribute("crossOrigin");
+  }
   a.src = url;
   a.currentTime = 0;
   playerLoadedLabel = label || "";
@@ -2168,7 +3291,15 @@ function setPlayerSource(url, label) {
   if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = false;
   if (els.btnPlayerPause) els.btnPlayerPause.disabled = true;
   if (els.btnPlayerStop) els.btnPlayerStop.disabled = false;
+  hubAudio = a;
+  hubAudioPostId = null;
+  if (!miniSource) miniSource = { type: "player" };
+  if (!miniSource || miniSource.type !== "library") {
+    libraryNowPlayingId = null;
+    if ((document.body.getAttribute("data-route") || "") === "library") renderLibrary();
+  }
   syncPlayerUI();
+  renderHubNowPlaying();
 }
 
 async function cacheGeneratedAudio(url) {
@@ -2204,16 +3335,34 @@ function toAudioProxyUrl(url) {
   return `/api/suno/audio?url=${encodeURIComponent(url)}`;
 }
 
-async function playOnPlayerPage(url, label) {
+async function playOnPlayerPage(url, label, meta = null) {
   if (!url) return;
   setPlayerSource(url, label);
-  setPlayerMeta({
-    title: lastSunoTitle || "Generated song",
-    subtitle: label ? `Generated • ${label}` : "Generated",
-    artUrl: lastSunoArtUrl,
-  });
+  if (meta && (meta.title || meta.subtitle || meta.artUrl)) {
+    setPlayerMeta(meta);
+  } else {
+    setPlayerMeta({
+      title: lastSunoTitle || "Generated song",
+      subtitle: label ? `Generated • ${label}` : "Generated",
+      artUrl: lastSunoArtUrl,
+    });
+  }
   location.hash = "#/player";
   // Give the route a moment to render, then play.
+  const a = ensurePlayer();
+  try {
+    await a.play();
+    if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = true;
+    if (els.btnPlayerPause) els.btnPlayerPause.disabled = false;
+  } catch (e) {
+    setStatus(`In-app playback failed (${e?.name || "error"}). Tap Open Direct.`);
+  }
+}
+
+async function playInline(url, label, source) {
+  if (!url) return;
+  miniSource = source || { type: "player" };
+  setPlayerSource(url, label);
   const a = ensurePlayer();
   try {
     await a.play();
@@ -2235,11 +3384,27 @@ function syncPlayerUI() {
   if (!playerEl) return;
   const dur = Number.isFinite(playerEl.duration) ? playerEl.duration : 0;
   const cur = Number.isFinite(playerEl.currentTime) ? playerEl.currentTime : 0;
+  const artWrap = document.querySelector(".playerArtWrap");
+  const playing = !playerEl.paused && !playerEl.ended && (dur > 0 || cur > 0);
+  if (artWrap) artWrap.classList.toggle("isNowPlaying", playing);
   if (els.playerTime) els.playerTime.textContent = `${formatTime(cur)} / ${formatTime(dur)}`;
   if (els.playerSeek && !playerSeekDragging) {
     const max = Number(els.playerSeek.max || 1000);
     els.playerSeek.value = dur > 0 ? String(Math.round((cur / dur) * max)) : "0";
   }
+  renderHubNowPlaying();
+}
+
+function clampClipRange(startSec, endSec, durationSec) {
+  const dur = Math.max(0, Number(durationSec || 0));
+  let s = Math.max(0, Math.floor(Number(startSec || 0)));
+  let e = Math.max(0, Math.floor(Number(endSec || 0)));
+  if (dur > 0) {
+    s = Math.min(s, Math.max(0, Math.floor(dur) - 1));
+    e = Math.min(e, Math.floor(dur));
+  }
+  if (e <= s) e = Math.min((dur || s + 1), s + 1);
+  return { startSec: s, endSec: e };
 }
 
 function getParams() {
@@ -2302,9 +3467,11 @@ function setAiBgState(state) {
 function setLoading(on, { title, sub } = {}) {
   busyCount = Math.max(0, busyCount + (on ? 1 : -1));
   const show = busyCount > 0;
+  const readyMode = false;
   if (els.globalLoading) els.globalLoading.style.display = show ? "" : "none";
   document.body.classList.toggle("isBusy", show);
-  if (show) {
+  if (els.globalLoading) els.globalLoading.classList.toggle("isReadyNotice", readyMode);
+  if (show && busyCount > 0) {
     if (aiBgResetTimer) {
       clearTimeout(aiBgResetTimer);
       aiBgResetTimer = null;
@@ -2314,6 +3481,22 @@ function setLoading(on, { title, sub } = {}) {
   if (show) {
     if (els.loadingTitle && title) els.loadingTitle.textContent = title;
     if (els.loadingSub && sub) els.loadingSub.textContent = sub;
+  }
+}
+
+function savePendingBackendTask(taskId) {
+  pendingBackendTaskId = String(taskId || "").trim();
+  try {
+    if (pendingBackendTaskId) localStorage.setItem(PENDING_TASK_KEY, pendingBackendTaskId);
+    else localStorage.removeItem(PENDING_TASK_KEY);
+  } catch {}
+}
+
+function loadPendingBackendTask() {
+  try {
+    return String(localStorage.getItem(PENDING_TASK_KEY) || "").trim();
+  } catch {
+    return "";
   }
 }
 
@@ -2809,58 +3992,46 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   if (els.sunoVocalUpload) {
     els.sunoVocalUpload.addEventListener("change", () => {
       const f = els.sunoVocalUpload?.files?.[0];
+      currentVocalRefFile = f || null;
       vocalRefBlob = null;
       clearVocalRefPreviewUrl();
       if (els.sunoVocalUploadName) {
         els.sunoVocalUploadName.textContent = f ? `Voice reference attached: ${f.name}` : "No vocal reference attached.";
       }
+      renderReferenceHints();
       updateVocalRefPreviewState();
     });
   }
   if (els.btnVocalRefRec && els.btnVocalRefStop) {
     els.btnVocalRefRec.addEventListener("click", async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        const mimeType = pickRecorderMimeType();
-        const rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-        const chunks = [];
-        rec.ondataavailable = (e) => {
-          if (e.data && e.data.size) chunks.push(e.data);
-        };
-        rec.onstop = () => {
-          vocalRefChunks = chunks.slice();
-          vocalRefBlob = new Blob(chunks, { type: rec.mimeType || "audio/webm;codecs=opus" });
-          if (els.sunoVocalUploadName) {
-            els.sunoVocalUploadName.textContent = "Voice reference recorded and attached.";
-          }
-          updateVocalRefPreviewState();
-          if (els.btnRecorderUse) els.btnRecorderUse.disabled = !vocalRefBlob;
-          if (els.recorderStatus) els.recorderStatus.textContent = "Recording ready";
-        };
-        vocalRefStream = stream;
-        vocalRefRecorder = rec;
-        rec.start();
-        els.btnVocalRefRec.disabled = true;
-        els.btnVocalRefStop.disabled = false;
-        setStatus("Recording voice reference…");
+        await startVocalReferenceRecording();
       } catch (e) {
         setStatus(`Microphone access failed: ${e?.message || String(e)}`);
       }
     });
     els.btnVocalRefStop.addEventListener("click", () => {
-      try {
-        if (vocalRefRecorder && vocalRefRecorder.state !== "inactive") vocalRefRecorder.stop();
-      } catch {}
-      try {
-        if (vocalRefStream) vocalRefStream.getTracks().forEach((t) => t.stop());
-      } catch {}
-      vocalRefRecorder = null;
-      vocalRefStream = null;
-      els.btnVocalRefRec.disabled = false;
-      els.btnVocalRefStop.disabled = true;
-      setStatus("Voice reference ready.");
+      stopVocalReferenceRecording();
     });
   }
+  const syncVocalModeUi = () => {
+    const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+    if (els.vocalModeFull) els.vocalModeFull.classList.toggle("active", !instrumental);
+    if (els.vocalModeInstrumental) els.vocalModeInstrumental.classList.toggle("active", instrumental);
+  };
+  if (els.vocalModeFull) {
+    els.vocalModeFull.addEventListener("click", () => {
+      if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
+      syncVocalModeUi();
+    });
+  }
+  if (els.vocalModeInstrumental) {
+    els.vocalModeInstrumental.addEventListener("click", () => {
+      if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "1";
+      syncVocalModeUi();
+    });
+  }
+  syncVocalModeUi();
   const setGenerateFieldsLocked = (locked) => {
     const lockPreviewAllowed = !locked && Boolean(getVocalReferenceFile());
     if (els.sunoPrompt) els.sunoPrompt.disabled = locked;
@@ -2871,6 +4042,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = locked;
     if (els.btnMagicUploadVocal) els.btnMagicUploadVocal.disabled = locked;
     if (els.btnMagicRecordVocal) els.btnMagicRecordVocal.disabled = locked;
+    if (els.vocalModeFull) els.vocalModeFull.disabled = locked;
+    if (els.vocalModeInstrumental) els.vocalModeInstrumental.disabled = locked;
     if (els.btnPreviewVocalRef) els.btnPreviewVocalRef.disabled = locked ? true : !lockPreviewAllowed;
     if (els.btnVocalRefStop) els.btnVocalRefStop.disabled = true;
     if (els.btnOpenAdvancedSheet) els.btnOpenAdvancedSheet.disabled = locked;
@@ -2924,6 +4097,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       } else {
         els.sunoPrompt.value = nextLyrics;
       }
+      if (lyricsBoxEl) lyricsBoxEl.classList.add("wandGenerated");
       const provider = String(data?.provider || "").trim();
       const debugSuno = String(data?.debug?.suno || "").trim();
       const debugGemini = String(data?.debug?.gemini || "").trim();
@@ -2941,6 +4115,128 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         els.btnLyricsMagic.textContent = "✦";
       }
     }
+  };
+
+  const openImageMoodModal = () => {
+    if (!els.imageMoodModal) return;
+    els.imageMoodModal.style.display = "";
+    els.imageMoodModal.setAttribute("aria-hidden", "false");
+  };
+  const closeImageMoodModal = () => {
+    if (!els.imageMoodModal) return;
+    els.imageMoodModal.style.display = "none";
+    els.imageMoodModal.setAttribute("aria-hidden", "true");
+  };
+  const fileToDataUrl = (file) => new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result || ""));
+    fr.onerror = () => reject(new Error("Could not read image file"));
+    fr.readAsDataURL(file);
+  });
+  const downscaleImageDataUrl = async (dataUrl, maxSide = 1600, quality = 0.82) => {
+    if (!String(dataUrl).startsWith("data:image/")) return dataUrl;
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error("Could not decode image"));
+      i.src = dataUrl;
+    });
+    const w = Number(img.width || 0);
+    const h = Number(img.height || 0);
+    if (!w || !h) return dataUrl;
+    const scale = Math.min(1, maxSide / Math.max(w, h));
+    const tw = Math.max(1, Math.round(w * scale));
+    const th = Math.max(1, Math.round(h * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = tw;
+    canvas.height = th;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return dataUrl;
+    ctx.drawImage(img, 0, 0, tw, th);
+    // Force jpeg for much smaller payloads.
+    return canvas.toDataURL("image/jpeg", quality);
+  };
+  const renderImageMood = (m) => {
+    if (!els.imageMoodOutput) return;
+    if (!m) {
+      els.imageMoodOutput.textContent = "No analysis yet.";
+      return;
+    }
+    const tags = Array.isArray(m.tags) ? m.tags.join(", ") : "";
+    const lines = [
+      m.concept ? `Mood: ${m.concept}` : "",
+      tags ? `Suggested tags: ${tags}` : "",
+      m.lyricSeed ? `Lyric seed: ${m.lyricSeed}` : "",
+      m.artworkHint ? `Artwork hint: ${m.artworkHint}` : "",
+      m.source ? `Source: ${m.source}` : "",
+    ].filter(Boolean);
+    els.imageMoodOutput.textContent = lines.join("\n\n") || "No analysis yet.";
+  };
+  const analyzeImageMood = async () => {
+    const file = els.imageMoodUpload?.files?.[0];
+    if (!file) {
+      setStatus("Please upload an image first.");
+      return;
+    }
+    try {
+      if (els.btnAnalyzeImageMood) els.btnAnalyzeImageMood.disabled = true;
+      if (els.btnApplyImageMood) els.btnApplyImageMood.disabled = true;
+      const card = els.imageMoodOutput?.closest?.(".imageMoodCard");
+      if (card) card.classList.add("analyzing");
+      let dataUrl = await fileToDataUrl(file);
+      dataUrl = await downscaleImageDataUrl(dataUrl, 1600, 0.82);
+      // Safety cap: keep request under Vercel payload limits.
+      if (dataUrl.length > 1_800_000) {
+        dataUrl = await downscaleImageDataUrl(dataUrl, 1280, 0.72);
+      }
+      const r = await fetch(apiUrl("/api/image-mood"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: dataUrl }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d?.error || "Image analysis failed");
+      imageMoodData = d || null;
+      renderImageMood(imageMoodData);
+      if (els.btnApplyImageMood) els.btnApplyImageMood.disabled = !imageMoodData;
+      if (els.imageMoodSummary) {
+        const tags = Array.isArray(d?.tags) ? d.tags.slice(0, 4).join(", ") : "";
+        els.imageMoodSummary.textContent = tags || String(d?.concept || "Image mood ready.");
+      }
+      setStatus("Image mood ready. Tap apply to use it.");
+    } catch (e) {
+      setStatus(`Image mood failed: ${e?.message || String(e)}`);
+    } finally {
+      if (els.btnAnalyzeImageMood) els.btnAnalyzeImageMood.disabled = false;
+      const card = els.imageMoodOutput?.closest?.(".imageMoodCard");
+      if (card) card.classList.remove("analyzing");
+    }
+  };
+  const applyImageMood = () => {
+    if (!imageMoodData) return;
+    const tags = Array.isArray(imageMoodData.tags) ? imageMoodData.tags.filter(Boolean) : [];
+    if (els.sunoStyle && tags.length) {
+      const existing = String(els.sunoStyle.value || "").trim();
+      const current = existing ? existing.split(",").map((s) => s.trim()).filter(Boolean) : [];
+      const merged = [...new Set([...current, ...tags])].slice(0, 12);
+      els.sunoStyle.value = merged.join(", ");
+    }
+    // Do not auto-fill lyric seed into the main lyrics box.
+    // This can be sung literally by the model and sounds like prompt leakage.
+    imageMoodAppliedForNextGen = true;
+    if (els.sunoArtworkStyle && imageMoodData.artworkHint) {
+      const cur = String(els.sunoArtworkStyle.value || "").trim();
+      if (!cur) els.sunoArtworkStyle.value = String(imageMoodData.artworkHint).trim();
+    }
+    if (els.imageMoodUseAsCover?.checked && imageMoodCoverDataUrl) {
+      pendingGeneratedCoverDataUrl = imageMoodCoverDataUrl;
+      if (els.imageMoodSummary) els.imageMoodSummary.textContent = "Image mood ready • cover will be used for next generation.";
+    } else {
+      pendingGeneratedCoverDataUrl = "";
+    }
+    closeImageMoodModal();
+    setStatus("Image mood applied. If no lyrics are provided, generation will be instrumental.");
+    syncGenerateOrbVisibility();
   };
 
   if (els.btnLyricsMagic) {
@@ -2976,7 +4272,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (els.btnMagicUploadVocal) {
       els.btnMagicUploadVocal.addEventListener("click", () => {
         closeMagicMenu();
-        els.sunoVocalUpload?.click();
+        openVocalReferencePicker();
       });
     }
     if (els.btnMagicRecordVocal) {
@@ -2992,6 +4288,38 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       closeMagicMenu();
     });
   }
+  if (els.btnImageMood) {
+    els.btnImageMood.addEventListener("click", openImageMoodModal);
+  }
+  if (els.btnCloseImageMood) {
+    els.btnCloseImageMood.addEventListener("click", closeImageMoodModal);
+  }
+  if (els.imageMoodModal) {
+    els.imageMoodModal.addEventListener("click", (e) => {
+      if (e.target === els.imageMoodModal) closeImageMoodModal();
+    });
+  }
+  if (els.imageMoodUpload) {
+    els.imageMoodUpload.addEventListener("change", () => {
+      const file = els.imageMoodUpload.files?.[0];
+      if (!file) return;
+      imageMoodData = null;
+      renderImageMood(null);
+      if (els.btnApplyImageMood) els.btnApplyImageMood.disabled = true;
+      const preview = URL.createObjectURL(file);
+      if (els.imageMoodPreview) {
+        els.imageMoodPreview.src = preview;
+        els.imageMoodPreview.style.display = "";
+      }
+      fileToDataUrl(file).then((v) => { imageMoodCoverDataUrl = v; }).catch(() => { imageMoodCoverDataUrl = ""; });
+    });
+  }
+  if (els.btnAnalyzeImageMood) {
+    els.btnAnalyzeImageMood.addEventListener("click", () => void analyzeImageMood());
+  }
+  if (els.btnApplyImageMood) {
+    els.btnApplyImageMood.addEventListener("click", applyImageMood);
+  }
   if (els.btnCloseVocalRecorder) {
     els.btnCloseVocalRecorder.addEventListener("click", closeVocalRecorderModal);
   }
@@ -2999,14 +4327,19 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     els.vocalRecorderBackdrop.addEventListener("click", closeVocalRecorderModal);
   }
   if (els.btnRecorderToggle) {
-    els.btnRecorderToggle.addEventListener("click", () => {
+    els.btnRecorderToggle.addEventListener("click", async () => {
       const isRecording = Boolean(vocalRefRecorder && vocalRefRecorder.state === "recording");
       if (!isRecording) {
-        els.btnVocalRefRec?.click();
+        try {
+          await startVocalReferenceRecording();
+        } catch (e) {
+          setStatus(`Microphone access failed: ${e?.message || String(e)}`);
+          return;
+        }
         if (els.btnRecorderToggle) els.btnRecorderToggle.classList.add("isRecording");
         if (els.recorderStatus) els.recorderStatus.textContent = "Recording… tap again to stop";
       } else {
-        els.btnVocalRefStop?.click();
+        stopVocalReferenceRecording();
         if (els.btnRecorderToggle) els.btnRecorderToggle.classList.remove("isRecording");
         if (els.recorderStatus) els.recorderStatus.textContent = "Recorded. Tap Use recording.";
       }
@@ -3015,8 +4348,15 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   if (els.btnRecorderUse) {
     els.btnRecorderUse.addEventListener("click", () => {
       if (!vocalRefBlob) return;
-      if (els.sunoVocalUploadName) els.sunoVocalUploadName.textContent = "Voice reference recorded and attached.";
-      updateVocalRefPreviewState();
+      // Promote the recorded blob to the active reference and clear any
+      // previously uploaded file so the recording isn't shadowed.
+      const recordedFile = new File(
+        [vocalRefBlob],
+        "vocal-reference.webm",
+        { type: vocalRefBlob.type || "audio/webm" }
+      );
+      if (els.sunoVocalUpload) els.sunoVocalUpload.value = "";
+      setVocalRefFile(recordedFile, "Voice reference recorded and attached.");
       closeVocalRecorderModal();
     });
   }
@@ -3044,8 +4384,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
     if (els.resultTitle) els.resultTitle.textContent = lastSunoTitle || "Generated song";
     if (els.resultArt) {
-      els.resultArt.src = lastSunoArtUrl || "";
-      els.resultArt.style.display = lastSunoArtUrl ? "" : "none";
+      const fallbackCover = "/assets/nabadai-logo.png";
+      els.resultArt.src = lastSunoArtUrl || fallbackCover;
+      els.resultArt.style.display = "";
     }
     if (els.resultDownload) {
       const downloadUrl = lastSunoCachedUrl || lastSunoProxyUrl || lastSunoFullUrl;
@@ -3068,8 +4409,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
     if (els.resultTitle2) els.resultTitle2.textContent = lastSunoTitle2 || "Generated song B";
     if (els.resultArt2) {
-      els.resultArt2.src = lastSunoArtUrl2 || lastSunoArtUrl || "";
-      els.resultArt2.style.display = (lastSunoArtUrl2 || lastSunoArtUrl) ? "" : "none";
+      const fallbackCover = "/assets/nabadai-logo.png";
+      els.resultArt2.src = lastSunoArtUrl2 || lastSunoArtUrl || fallbackCover;
+      els.resultArt2.style.display = "";
     }
     if (els.resultDownload2) {
       const downloadUrl2 = lastSunoCachedUrl2 || lastSunoProxyUrl2 || lastSunoFullUrl2;
@@ -3109,8 +4451,24 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const genData = data?.data?.response?.sunoData || data?.data?.response?.suno_data || [];
     const first = Array.isArray(genData) ? genData[0] : null;
     const second = Array.isArray(genData) ? genData[1] : null;
-    const audioUrl = first?.audioUrl || first?.audio_url || first?.streamAudioUrl || first?.stream_audio_url || "";
-    const imageUrl = first?.imageUrl || first?.image_url || first?.coverUrl || first?.cover_url || null;
+    const audioUrl =
+      first?.sourceAudioUrl ||
+      first?.source_audio_url ||
+      first?.sourceStreamAudioUrl ||
+      first?.source_stream_audio_url ||
+      first?.audioUrl ||
+      first?.audio_url ||
+      first?.streamAudioUrl ||
+      first?.stream_audio_url ||
+      "";
+    const imageUrl =
+      first?.sourceImageUrl ||
+      first?.source_image_url ||
+      first?.imageUrl ||
+      first?.image_url ||
+      first?.coverUrl ||
+      first?.cover_url ||
+      null;
     const title = first?.title || first?.songTitle || first?.song_title || "";
     sunoAudioId =
       first?.id ||
@@ -3124,13 +4482,32 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       lastSunoFullUrl = audioUrl;
       lastSunoProxyUrl = toAudioProxyUrl(audioUrl);
       lastSunoArtUrl = imageUrl || lastSunoArtUrl;
+      if (pendingGeneratedCoverDataUrl) {
+        lastSunoArtUrl = pendingGeneratedCoverDataUrl;
+      }
       lastSunoTitle = String(title || "").trim() || lastSunoTitle;
       setLink(els.sunoFullLink, lastSunoProxyUrl || audioUrl);
       await cacheGeneratedAudio(lastSunoProxyUrl || audioUrl);
       if (els.btnLoadFull) els.btnLoadFull.disabled = false;
     }
-    const audioUrl2 = second?.audioUrl || second?.audio_url || second?.streamAudioUrl || second?.stream_audio_url || "";
-    const imageUrl2 = second?.imageUrl || second?.image_url || second?.coverUrl || second?.cover_url || null;
+    const audioUrl2 =
+      second?.sourceAudioUrl ||
+      second?.source_audio_url ||
+      second?.sourceStreamAudioUrl ||
+      second?.source_stream_audio_url ||
+      second?.audioUrl ||
+      second?.audio_url ||
+      second?.streamAudioUrl ||
+      second?.stream_audio_url ||
+      "";
+    const imageUrl2 =
+      second?.sourceImageUrl ||
+      second?.source_image_url ||
+      second?.imageUrl ||
+      second?.image_url ||
+      second?.coverUrl ||
+      second?.cover_url ||
+      null;
     const title2 = second?.title || second?.songTitle || second?.song_title || "";
     lastSunoAudioId2 =
       second?.id ||
@@ -3143,6 +4520,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       lastSunoFullUrl2 = audioUrl2;
       lastSunoProxyUrl2 = toAudioProxyUrl(audioUrl2);
       lastSunoArtUrl2 = imageUrl2 || "";
+      if (pendingGeneratedCoverDataUrl) {
+        lastSunoArtUrl2 = pendingGeneratedCoverDataUrl;
+      }
       lastSunoTitle2 = String(title2 || "").trim() || "Generated song B";
       await cacheGeneratedAudio2(lastSunoProxyUrl2 || audioUrl2);
     }
@@ -3152,7 +4532,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   const startGeneratePolling = () => {
     if (generatePollTimer) clearInterval(generatePollTimer);
     let tries = 0;
-    const maxTries = 80; // ~6 minutes at 4.5s interval
+    const maxTries = 160; // ~12 minutes at 4.5s interval
     generatePollTimer = setInterval(async () => {
       tries += 1;
       try {
@@ -3183,11 +4563,15 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               meta: lastGenerationMeta,
             });
           }
+          pendingGeneratedCoverDataUrl = "";
           els.btnSunoStems.disabled = !(sunoAudioId);
           if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = !(sunoAudioId);
           setStatus("Song is ready. Press Play full.");
+          savePendingBackendTask("");
+          markGenerationReadyNotice();
+          // Avoid stale vocal reference leaking into the next generation.
+          clearVocalReferenceSelection();
           setGenerateFieldsLocked(false);
-          setLoading(false);
           return;
         }
         if (state.status === "FAILED") {
@@ -3195,16 +4579,18 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           generatePollTimer = null;
           setGenerateBtn("Generate song", false, "generate");
           setStatus("Generation failed. Please try again.");
+          savePendingBackendTask("");
+          clearVocalReferenceSelection();
           setGenerateFieldsLocked(false);
           setLoading(false);
         }
         if (tries >= maxTries) {
           clearInterval(generatePollTimer);
           generatePollTimer = null;
-          setGenerateBtn("Generate song", false, "generate");
-          setStatus("Generation is taking longer than expected. Please try again.");
+          setGenerateBtn("Check status", false, "resume");
+          setStatus("Still processing in backend. Tap Check status.");
           setGenerateFieldsLocked(false);
-          setLoading(false);
+          setLoading(true, { title: "Processing in backend...", sub: "You can keep using the app. Tap Check status anytime." });
         }
       } catch {}
     }, 4500);
@@ -3353,30 +4739,111 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }, 5000);
   };
 
-  const HIDDEN_NEGATIVE_PROMPT =
-    "Avoid off-beat phrasing, clipped words, unstable groove, and spoken meta text. Respect user line breaks and phrase boundaries.";
-  const HIDDEN_PROSODY_GUARDRAILS =
-    "Follow-prompt behavior: keep user structure and mood first; preserve sentence cuts as singable phrases; use expressive timing when style implies romantic/ballad; avoid forcing fast percussion unless requested.";
+  const REFERENCE_MELODY_LOCK =
+    "strict melody lock, follow uploaded vocal contour and phrase timing, keep topline and cadence points, no spoken instructions";
+  const GROOVE_MAP = {
+    slow: "tempo target 68-78 bpm, softer groove emphasis",
+    balanced: "tempo target 84-96 bpm, balanced groove emphasis",
+    energetic: "tempo target 104-122 bpm, energetic groove emphasis",
+  };
+  const PROSODY_MAP = {
+    natural: "prosody mode natural: keep lyrical flow with light timing freedom",
+    tight: "prosody mode tight: keep clear syllable-to-beat alignment",
+    ultra: "prosody mode ultra tight: strict syllable alignment and concise phrase lengths",
+  };
+  const BEAT_STABILITY_MAP = {
+    flexible: "beat stability flexible: allow subtle push-pull feel",
+    stable: "beat stability stable: keep steady pulse and section consistency",
+    locked: "beat stability locked: strict tempo and entry consistency",
+  };
+
+  function syncDefaultSelectVisual(selectEl) {
+    if (!selectEl) return;
+    const isDefault = String(selectEl.value || "").trim() === "";
+    selectEl.classList.toggle("isDefaultOption", isDefault);
+  }
+[els.sunoSongKey, els.sunoMaqam, els.sunoVoiceProfile, els.sunoDialect, els.sunoPersonaId, els.sunoGroovePace, els.sunoProsody, els.sunoBeatStability].forEach((sel) => {
+    if (!sel) return;
+    syncDefaultSelectVisual(sel);
+    sel.addEventListener("change", () => syncDefaultSelectVisual(sel));
+  });
+
+  function sanitizeLyricsPrompt(raw) {
+    const txt = String(raw || "").replace(/\r/g, "");
+    if (!txt.trim()) return "";
+    const banned = [
+      "internal rhythm/prosody rules",
+      "timing lock:",
+      "timing:",
+      "follow-prompt behavior:",
+      "follow uploaded melody",
+      "avoid off-beat phrasing",
+      "clipped words",
+      "unstable groove",
+      "spoken meta text",
+      "melody lock",
+      "strict melody lock",
+      "keep topline and cadence points",
+      "respect vocal phrasing timing",
+      "melody-preserving arrangement",
+      "voice stability:",
+      "accent lock:",
+      "build a full song around this vocal reference",
+      "do not",
+      "keep this timing stable",
+    ];
+    const lines = txt
+      .split("\n")
+      .map((l) => l.trimEnd())
+      .filter((l) => {
+        const low = l.trim().toLowerCase();
+        if (!low) return false;
+        return !banned.some((b) => low.includes(b));
+      });
+    return lines.join("\n").trim();
+  }
 
   els.btnSunoGenerate.addEventListener("click", async () => {
     haptic("impact");
+    const actionMode = String(els.btnSunoGenerate?.dataset?.mode || "generate");
+    if (actionMode === "resume") {
+      const resumeTask = sunoTaskId || loadPendingBackendTask();
+      if (!resumeTask) {
+        setStatus("No pending backend task found.");
+        setGenerateBtn("Generate song", false, "generate");
+        setLoading(false);
+        return;
+      }
+      sunoTaskId = resumeTask;
+      savePendingBackendTask(resumeTask);
+      setStatus("Checking backend status...");
+      setLoading(true, { title: "Processing in backend...", sub: "Checking latest status..." });
+      setGenerateBtn("Checking...", true, "resume");
+      startGeneratePolling();
+      return;
+    }
     const promptText = String(els.sunoPrompt?.value || "").trim();
     const vocalRefFile = getVocalReferenceFile();
-    let referenceMode = String(els.sunoReferenceMode?.value || "none");
     const hasUploadedReference = Boolean(vocalRefFile);
-    if (hasUploadedReference && referenceMode === "none") referenceMode = "vocal_full";
-    const hasReference = referenceMode !== "none";
+    const referenceMode = hasUploadedReference ? "humming_music" : "none";
+    const hasReference = hasUploadedReference;
     if (hasReference && !vocalRefFile) {
       window.alert("Please upload or record audio reference first.");
       return;
     }
-    if (!promptText && !vocalRefFile) {
-      window.alert("Please write lyrics first before generating.");
+    const allowImageOnlyFlow = Boolean(imageMoodAppliedForNextGen);
+    if (!promptText && !vocalRefFile && !allowImageOnlyFlow) {
+      window.alert("Please write lyrics or apply image mood before generating.");
       return;
     }
     try {
       const engine = "gemini_assisted";
-      const modeLabel = hasReference ? `Reference: ${referenceMode}` : "Normal";
+      const referenceInstrumentalOnly = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+      const modeLabel = hasReference
+        ? referenceInstrumentalOnly
+          ? "Reference: Instrumental only"
+          : "Reference: Full song"
+        : "Normal";
       const engineLabel = "Suno + Gemini lyrics assist";
       setGenerateBtn("Generating…", true, "generate");
       setGenerateFieldsLocked(true);
@@ -3385,18 +4852,23 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = true;
       setStatus(`Submitting generation… (Mode: ${modeLabel} | Engine: ${engineLabel})`);
       setProgress(5);
-      setLoading(true, { title: "Generating song with AI…", sub: "This can take 30–120 seconds." });
+      setLoading(true, { title: "Processing in backend...", sub: "This can take 30–120 seconds." });
 
       applyMaqamToStyleInput();
       const userPrompt = (els.sunoPrompt?.value || "").trim();
       const userStyle = (els.sunoStyle?.value || "").trim();
+      const artworkStyle = (els.sunoArtworkStyle?.value || "").trim();
       const dialect = String(els.sunoDialect?.value || "").trim();
       const dialectHint = String(els.sunoDialectHint?.value || "").trim();
       const timing = String(els.sunoTiming?.value || "").trim();
       const timingClause = timing
         ? `Timing lock: ${timing}. Keep this timing stable across all sections and vocal entries.`
-        : "Timing lock: keep stable tempo and aligned vocal phrasing throughout the song.";
-      let finalPrompt = userPrompt;
+        : "";
+      const groovePace = String(els.sunoGroovePace?.value || "").trim();
+      const prosodyStrictness = String(els.sunoProsody?.value || "").trim();
+      const beatStability = String(els.sunoBeatStability?.value || "").trim();
+      let finalPrompt = sanitizeLyricsPrompt(userPrompt);
+      const imageOnlyInstrumental = Boolean(imageMoodAppliedForNextGen && !finalPrompt && !hasReference);
       if (!hasReference) {
         try {
           setStatus("Preparing prompt with Gemini… (Engine: Gemini assisted + Suno render)");
@@ -3406,82 +4878,142 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             body: JSON.stringify({ seed: userPrompt, style: userStyle, mode: "arrange", dialect, dialectHint }),
           });
           const dd = await rr.json().catch(() => ({}));
-          if (rr.ok && dd?.lyrics) finalPrompt = String(dd.lyrics).trim();
+          if (rr.ok && dd?.lyrics) finalPrompt = sanitizeLyricsPrompt(dd.lyrics);
         } catch {}
       }
+      // In vocal-reference flow, use clean native reference handling:
+      // do not pass textual prompt guidance from app internals.
+      if (hasReference && referenceInstrumentalOnly) finalPrompt = "";
+
+      const styleExtras = hasReference
+        ? ""
+        : [
+            dialect ? `Dialect: ${dialect}` : "",
+            dialectHint ? `Hint: ${dialectHint}` : "",
+            timing ? timing : "",
+            groovePace ? (GROOVE_MAP[groovePace] || "") : "",
+            prosodyStrictness ? (PROSODY_MAP[prosodyStrictness] || "") : "",
+            beatStability ? (BEAT_STABILITY_MAP[beatStability] || "") : "",
+            hasReference ? REFERENCE_MELODY_LOCK : "",
+          ]
+            .filter(Boolean)
+            .join(", ");
+
       const payload = {
-        prompt: `${finalPrompt}\n\n[Internal rhythm/prosody rules]\n${timingClause}\n${HIDDEN_PROSODY_GUARDRAILS}\n${HIDDEN_NEGATIVE_PROMPT}`,
-        style: `${userStyle}${userStyle ? " | " : ""}${dialect ? `Dialect: ${dialect}, ` : ""}${dialectHint ? `Hint: ${dialectHint}, ` : ""}${timing ? `${timing}, ` : ""}`,
+        prompt: finalPrompt,
+        style: hasReference ? String(userStyle || "").trim() : `${userStyle}${userStyle ? " | " : ""}${timingClause}, ${styleExtras}${artworkStyle ? `, cover art: ${artworkStyle}` : ""}`,
         songKey: mapSolfegeToLetterKey((els.sunoSongKey?.value || "").trim()),
         title: (els.sunoTitle?.value || "").trim(),
         customMode: true,
-        instrumental: false,
+        instrumental: imageOnlyInstrumental,
         model: LATEST_SUNO_MODEL,
         personaId: (els.sunoPersonaId?.value || "").trim() || undefined,
       };
       const vp = String(els.sunoVoiceProfile?.value || "").trim();
+      let vocalProfileClause = "";
       if (vp.includes("|")) {
         const [gender, timbre] = vp.split("|");
         payload.vocalGender = gender || undefined;
         payload.voiceTimbre = timbre || undefined;
+        const timbreLower = String(timbre || "").toLowerCase();
+        if (timbreLower.includes("baritone")) {
+          vocalProfileClause =
+            "male baritone lead, lower tessitura, warm chest resonance, controlled dynamics, avoid shouting/high belt";
+        } else if (timbreLower.includes("bass")) {
+          vocalProfileClause =
+            "male bass lead, deep low register, dark warm tone, no high-pitched delivery, avoid shouting";
+        } else if (timbreLower.includes("tenor")) {
+          vocalProfileClause =
+            "male tenor lead with smooth upper range, keep tone lyrical, avoid harsh or shouty attacks";
+        } else if (timbreLower.includes("alto") || timbreLower.includes("mezzo") || timbreLower.includes("soprano")) {
+          vocalProfileClause =
+            "female lead, smooth controlled phrasing, avoid harsh or shouty delivery";
+        }
       }
+      if (!hasReference && vocalProfileClause) payload.style = `${payload.style}, ${vocalProfileClause}`;
+      payload.style = compactStyleForProvider(payload.style, 980);
       lastGenerationMeta = {
         engine,
         mode: modeLabel,
         lyricsInput: userPrompt,
         finalPrompt,
         styleInput: userStyle,
+        artworkStyle,
         styleSent: payload.style,
         dialect,
         dialectHint,
         timing,
+        groovePace,
+        prosodyStrictness,
+        beatStability,
         songKey: (els.sunoSongKey?.value || "").trim(),
         maqam: (els.sunoMaqam?.value || "").trim(),
         voiceProfile: (els.sunoVoiceProfile?.value || "").trim(),
         model: payload.model,
+        imageOnlyInstrumental,
       };
+      if (imageOnlyInstrumental) {
+        setStatus("Image-inspired mode with no lyrics detected: generating instrumental.");
+      }
       const data = await trackCreditsAround(
-        hasReference ? `Suno: generate from ${referenceMode} reference` : "Suno: generate song",
+        hasReference ? "Suno: upload reference song" : "Suno: generate song",
         async () => {
-          let r;
-          if (hasReference && vocalRefFile) {
+          if (hasReference) {
             const fd = new FormData();
-            fd.set("action", "add_instrumental");
-            fd.set("referenceMode", referenceMode);
-            fd.set("file", vocalRefFile, vocalRefFile.name || "vocal-reference.webm");
-            fd.set("fileName", vocalRefFile.name || "vocal-reference.webm");
-            fd.set("fileType", vocalRefFile.type || "audio/webm");
-            fd.set("style", payload.style || "");
-            fd.set("prompt", finalPrompt || "");
-            fd.set("title", payload.title || "");
-            fd.set("model", payload.model || "V4_5ALL");
-            fd.set("vocalGender", payload.vocalGender || "");
-            fd.set("voiceTimbre", payload.voiceTimbre || "");
-            fd.set("songKey", payload.songKey || "");
-            fd.set("timing", timing || "");
-            fd.set("dialect", dialect || "");
-            fd.set("dialectHint", dialectHint || "");
-            fd.set("personaId", payload.personaId || "");
-            r = await fetch(apiUrl("/api/suno/stems"), {
-              method: "POST",
-              body: fd,
-            });
-            const refErr = await r.clone().json().catch(() => ({}));
-            if (!r.ok) {
-              const reason = refErr?.error || refErr?.details?.error || "Reference generation failed";
-              throw new Error(reason);
+            fd.append("action", "add_instrumental");
+            fd.append("referenceMode", referenceInstrumentalOnly ? "humming_music" : "vocal_full");
+            fd.append("file", vocalRefFile, vocalRefFile?.name || "vocal-reference.webm");
+            fd.append("fileName", vocalRefFile?.name || "vocal-reference.webm");
+            fd.append("fileType", vocalRefFile?.type || "audio/webm");
+            fd.append("style", String(userStyle || "").trim());
+            if (finalPrompt) fd.append("prompt", String(finalPrompt));
+            fd.append("title", String((els.sunoTitle?.value || "").trim() || "Reference full song"));
+            fd.append("model", LATEST_SUNO_MODEL);
+            if (payload?.vocalGender) fd.append("vocalGender", String(payload.vocalGender));
+            if (payload?.voiceTimbre) fd.append("voiceTimbre", String(payload.voiceTimbre));
+            if (payload?.songKey) fd.append("songKey", String(payload.songKey));
+            if (timing) fd.append("timing", String(timing));
+            if (dialect) fd.append("dialect", String(dialect));
+            if (dialectHint) fd.append("dialectHint", String(dialectHint));
+            if (payload?.personaId) fd.append("personaId", String(payload.personaId));
+            // Drop the local reference state the moment the request is in flight.
+            // The server already has its own copy in the multipart body, so any
+            // residual state here can only cause stale-reuse on the next run.
+            try { clearVocalReferenceSelection(); } catch {}
+            const rr = await fetch(apiUrl("/api/suno/stems"), { method: "POST", body: fd });
+            const dd = await rr.json().catch(() => ({}));
+            if (!rr.ok) {
+              const more = dd?.detailMessage || dd?.details?.message || dd?.details?.error || "";
+              throw new Error(`${dd?.error || "Reference upload failed"}${more ? `: ${more}` : ""}`);
             }
-          } else {
-            r = await fetch(apiUrl("/api/suno/generate"), {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            });
+            if (typeof dd?.code !== "undefined" && Number(dd.code) !== 200) {
+              const bodyErr = dd?.msg || dd?.message || dd?.error || "Reference upload failed";
+              throw new Error(`Suno rejected reference upload: ${bodyErr}`);
+            }
+            if (dd?.data && typeof dd.data?.code !== "undefined" && Number(dd.data.code) !== 200) {
+              const nestedErr = dd?.data?.msg || dd?.data?.message || dd?.data?.error || "Reference upload failed";
+              throw new Error(`Suno rejected reference upload: ${nestedErr}`);
+            }
+            return dd;
           }
+
+          const r = await fetch(apiUrl("/api/suno/generate"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
           const d = await r.json().catch(() => ({}));
           if (!r.ok) {
             const more = d?.detailMessage || d?.details?.message || d?.details?.error || "";
             throw new Error(`${d?.error || "Suno generate failed"}${more ? `: ${more}` : ""}`);
+          }
+          if (typeof d?.code !== "undefined" && Number(d.code) !== 200) {
+            const bodyErr = d?.msg || d?.message || d?.error || "Suno generate failed";
+            throw new Error(`Suno rejected request: ${bodyErr}`);
+          }
+          if (d?.data && typeof d.data?.code !== "undefined" && Number(d.data.code) !== 200) {
+            const nestedErr = d?.data?.msg || d?.data?.message || d?.data?.error || "Suno generate failed";
+            throw new Error(`Suno rejected request: ${nestedErr}`);
           }
           return d;
         },
@@ -3489,6 +5021,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       );
 
       sunoTaskId = extractTaskIdLoose(data);
+      savePendingBackendTask(sunoTaskId || "");
       sunoAudioId = null;
       sunoStemsTaskId = null;
       sunoMultiStemsTaskId = null;
@@ -3519,6 +5052,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (els.btnPlayInstrumental) els.btnPlayInstrumental.disabled = true;
 
       if (!sunoTaskId) {
+        const providerMsg =
+          data?.msg ||
+          data?.message ||
+          data?.error ||
+          data?.data?.msg ||
+          data?.data?.message ||
+          "";
         const immediateFullUrl =
           deepFindFirstStringByKeys(data, ["audioUrl", "audio_url", "streamAudioUrl", "stream_audio_url"]) ||
           deepFindFirstStringByKeys(data?.data, ["audioUrl", "audio_url", "streamAudioUrl", "stream_audio_url"]) ||
@@ -3529,27 +5069,29 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           if (els.sunoFullLink) setLink(els.sunoFullLink, lastSunoProxyUrl || immediateFullUrl);
           if (els.btnLoadFull) els.btnLoadFull.disabled = false;
           setStatus("Song ready.");
+          markGenerationReadyNotice();
           setGenerateBtn("Regenerate", false, "regenerate");
           setGenerateFieldsLocked(false);
-          setLoading(false);
           setProgress(100);
           showResultCard(true);
+          imageMoodAppliedForNextGen = false;
           void refreshSunoCredits();
           return;
         }
         setStatus(
-          `Generation failed to start: provider returned no task id.`
+          `Generation failed to start: provider returned no task id.${providerMsg ? ` ${providerMsg}` : ""}`
         );
         setGenerateBtn("Generate song", false, "generate");
         setGenerateFieldsLocked(false);
         setLoading(false);
         setProgress(0);
+        imageMoodAppliedForNextGen = false;
         return;
       }
       setStatus(
         hasReference
-          ? `Generating from your audio reference… (Mode: ${referenceMode} | Engine: ${engineLabel})`
-          : `Generating… we will update automatically. (Mode: Normal | Engine: ${engineLabel})`
+          ? `Processing your audio reference in backend… (Mode: ${referenceMode} | Engine: ${engineLabel})`
+          : `Processing in backend… we will update automatically. (Mode: Normal | Engine: ${engineLabel})`
       );
       setGenerateBtn("Generating…", true, "generate");
       startGeneratePolling();
@@ -3558,7 +5100,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       console.error(e);
       setStatus(`Generation failed: ${e?.message || String(e)}`);
       setGenerateBtn("Generate song", false, "generate");
+      savePendingBackendTask("");
       setGenerateFieldsLocked(false);
+      imageMoodAppliedForNextGen = false;
       setProgress(0);
       setLoading(false);
     } finally {}
@@ -3572,6 +5116,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         lastSunoProxyUrl ||
         lastSunoFullUrl ||
         (els.sunoFullLink?.classList.contains("disabled") ? "" : els.sunoFullLink?.href);
+      if (!url || url === "#") {
+        setStatus("No playable result URL yet. Please wait a moment and try again.");
+        return;
+      }
       await playOnPlayerPage(url && url !== "#" ? url : "", "Full song");
     });
   }
@@ -3579,8 +5127,48 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     els.btnResultPlay2.addEventListener("click", async () => {
       haptic("light");
       const url = lastSunoCachedUrl2 || lastSunoProxyUrl2 || lastSunoFullUrl2;
-      await playOnPlayerPage(url && url !== "#" ? url : "", "Full song B");
+      if (!url || url === "#") {
+        setStatus("Second track is not ready for playback yet.");
+        return;
+      }
+      await playOnPlayerPage(url && url !== "#" ? url : "", "Full song B", {
+        title: lastSunoTitle2 || "Generated song B",
+        subtitle: "Generated • Full song B",
+        artUrl: lastSunoArtUrl2 || lastSunoArtUrl,
+      });
     });
+  }
+  // Delegation: clicking artwork/title opens player (same as Play); buttons/links handle themselves.
+  if (els.resultCard) {
+    els.resultCard.addEventListener(
+      "click",
+      (e) => {
+        if (!e.target || !(e.target instanceof Element)) return;
+        if (e.target.closest("button") || e.target.closest("a")) return;
+        els.btnResultPlay?.click();
+      },
+      { capture: true }
+    );
+  }
+  if (els.resultCard2) {
+    els.resultCard2.addEventListener(
+      "click",
+      (e) => {
+        if (!e.target || !(e.target instanceof Element)) return;
+        if (e.target.closest("button") || e.target.closest("a")) return;
+        els.btnResultPlay2?.click();
+      },
+      { capture: true }
+    );
+  }
+
+  // Auto-resume pending backend generation on reopen/reload.
+  const bootPendingTask = loadPendingBackendTask();
+  if (bootPendingTask && !generatePollTimer) {
+    sunoTaskId = bootPendingTask;
+    setGenerateBtn("Check status", false, "resume");
+    setStatus("Pending backend task found. Tap Check status.");
+    setLoading(true, { title: "Processing in backend...", sub: "Pending task detected from last session." });
   }
 
   els.btnSunoStems.addEventListener("click", async () => {
@@ -3686,6 +5274,42 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
 if (els.btnSunoCredits) {
   els.btnSunoCredits.addEventListener("click", () => void refreshSunoCredits());
 }
+if (els.presetPopClean) {
+  els.presetPopClean.addEventListener("click", () => {
+    if (els.sunoGroovePace) els.sunoGroovePace.value = "balanced";
+    if (els.sunoProsody) els.sunoProsody.value = "tight";
+    if (els.sunoBeatStability) els.sunoBeatStability.value = "stable";
+    setStatus("Preset applied: Pop Clean");
+  });
+}
+if (els.presetBalladWarm) {
+  els.presetBalladWarm.addEventListener("click", () => {
+    if (els.sunoGroovePace) els.sunoGroovePace.value = "slow";
+    if (els.sunoProsody) els.sunoProsody.value = "tight";
+    if (els.sunoBeatStability) els.sunoBeatStability.value = "stable";
+    setStatus("Preset applied: Ballad Warm");
+  });
+}
+if (els.presetClubPunch) {
+  els.presetClubPunch.addEventListener("click", () => {
+    if (els.sunoGroovePace) els.sunoGroovePace.value = "energetic";
+    if (els.sunoProsody) els.sunoProsody.value = "tight";
+    if (els.sunoBeatStability) els.sunoBeatStability.value = "locked";
+    setStatus("Preset applied: Club Punch");
+  });
+}
+if (els.btnAdvancedReset) {
+  els.btnAdvancedReset.addEventListener("click", () => {
+    resetAdvancedOptionsToDefaults();
+    setStatus("More options reset to defaults.");
+  });
+}
+if (els.btnAdvancedApply) {
+  els.btnAdvancedApply.addEventListener("click", () => {
+    if (els.advancedSheet) els.advancedSheet.open = false;
+    setStatus("More options applied.");
+  });
+}
 
 if (els.btnGenerateOrb && els.btnSunoGenerate) {
   els.btnGenerateOrb.addEventListener("click", () => {
@@ -3701,11 +5325,105 @@ if (els.btnGenerateOrb && els.btnSunoGenerate) {
 function syncGenerateOrbVisibility() {
   if (!els.btnGenerateOrb) return;
   const route = document.body.getAttribute("data-route");
-  const hasInput = Boolean(String(els.sunoPrompt?.value || "").trim() || String(els.sunoStyle?.value || "").trim());
+  const hasInput = Boolean(
+    String(els.sunoPrompt?.value || "").trim() ||
+    String(els.sunoStyle?.value || "").trim() ||
+    imageMoodAppliedForNextGen
+  );
   const generating = Boolean(els.btnSunoGenerate?.disabled);
   const hasResult = (els.resultCard?.style.display || "none") !== "none";
   const visible = route === "generate" && hasInput && !generating && !hasResult;
   els.btnGenerateOrb.style.display = visible ? "inline-flex" : "none";
+}
+function autoResizeLyricsBox() {
+  if (!els.sunoPrompt) return;
+  const el = els.sunoPrompt;
+  el.style.height = "auto";
+  const base = 132;
+  const max = 340;
+  const next = Math.max(base, Math.min(max, el.scrollHeight));
+  el.style.height = `${next}px`;
+}
+function setGenerateInputFocus(activePanel) {
+  const stack = document.querySelector('.createSectionStack');
+  if (!stack) return;
+  stack.classList.toggle("focusInput", Boolean(activePanel));
+  document.querySelectorAll(".createSectionStack .inputPanel").forEach((p) => {
+    p.classList.toggle("isFocusCard", p === activePanel && Boolean(activePanel));
+  });
+}
+
+function parseBpmFromTimingText(txt) {
+  const s = String(txt || "").toLowerCase();
+  const m = s.match(/(\d{2,3})\s*bpm/);
+  if (m) return Number(m[1]);
+  const m2 = s.match(/\b(\d{2,3})\b/);
+  return m2 ? Number(m2[1]) : null;
+}
+
+function getReferenceHints() {
+  const hints = [];
+  const pushHint = (text, severity = "warning") => hints.push({ text, severity });
+  const lyrics = String(els.sunoPrompt?.value || "").trim();
+  const style = String(els.sunoStyle?.value || "").trim();
+  const timing = String(els.sunoTiming?.value || "").trim();
+  const dialect = String(els.sunoDialect?.value || "").trim();
+  const dialectHint = String(els.sunoDialectHint?.value || "").trim();
+  const vp = String(els.sunoVoiceProfile?.value || "").trim().toLowerCase();
+  const persona = String(els.sunoPersonaId?.value || "").trim();
+  const hasRef = Boolean(getVocalReferenceFile());
+  const refOn = hasRef;
+
+  if (hasRef && !lyrics) {
+    pushHint("For better accuracy, add at least 2–4 lyric lines.", "critical");
+  }
+  if (refOn && (dialect || vp || String(els.sunoSongKey?.value || "").trim() || persona)) {
+    pushHint("For cleaner melody follow, keep Accent, Voice Profile, Song Key, and Persona on Auto first.", "critical");
+  }
+  if (dialect && !dialectHint) {
+    pushHint("Add one short example line in this dialect to improve pronunciation.");
+  }
+  if ((vp.includes("baritone") || vp.includes("bass")) && timing) {
+    const bpm = parseBpmFromTimingText(timing);
+    const fastWords = /\b(fast|upbeat|dance|energetic|club)\b/i.test(timing);
+    if ((Number.isFinite(bpm) && bpm >= 100) || fastWords) {
+      pushHint("High BPM can push brighter pitch. For warmer baritone/bass tone, use slower timing.");
+    }
+  }
+  if (refOn && lyrics.length > 220) {
+    pushHint("Humming mode works better with short guidance. Keep lyrics minimal.");
+  }
+  if (refOn && persona) {
+    pushHint("Persona may change tone away from your reference. Turn Persona off for stricter melody match.", "critical");
+  }
+  if (refOn && hints.length === 0) {
+    pushHint("Best first attempt: keep options Auto, add clear lyrics, then increase controls step by step.");
+  }
+  return hints.slice(0, 2);
+}
+
+function renderReferenceHints() {
+  const hasRef = Boolean(getVocalReferenceFile() || vocalRefBlob);
+  if (els.vocalRefHint) els.vocalRefHint.style.display = hasRef ? "" : "none";
+  if (!els.sunoReferenceHint) return;
+  const hints = getReferenceHints();
+  if (!hints.length) {
+    els.sunoReferenceHint.style.display = "none";
+    els.sunoReferenceHint.textContent = "";
+    els.sunoReferenceHint.classList.remove("isCritical");
+    return;
+  }
+  const hasCritical = hints.some((h) => h?.severity === "critical");
+  els.sunoReferenceHint.classList.toggle("isCritical", hasCritical);
+  els.sunoReferenceHint.style.display = "";
+  els.sunoReferenceHint.textContent = hints.map((h, i) => `${i + 1}. ${h.text}`).join(" ");
+}
+
+function showReferenceHintsPopupOnce() {
+  const hints = getReferenceHints();
+  if (!hints.length) return;
+  const msg = hints.map((h, i) => `${i + 1}. ${h.text}`).join("\n");
+  window.alert(msg);
 }
 ["input", "change"].forEach((ev) => {
   els.sunoPrompt?.addEventListener(ev, syncGenerateOrbVisibility);
@@ -3724,38 +5442,73 @@ if (els.brandTitle) {
     resetCreateDraft();
   });
 }
+els.sunoPrompt?.addEventListener("input", autoResizeLyricsBox);
+els.sunoPrompt?.addEventListener("focus", autoResizeLyricsBox);
+const generateStackEl = document.querySelector(".createSectionStack");
+if (generateStackEl) {
+  generateStackEl.addEventListener("focusin", (e) => {
+    const target = e?.target;
+    if (!target || !(target instanceof Element)) return;
+    const panel = target.closest(".inputPanel");
+    setGenerateInputFocus(panel || null);
+  });
+  generateStackEl.addEventListener("focusout", () => {
+    setTimeout(() => {
+      const active = document.activeElement;
+      const panel = active instanceof Element ? active.closest(".createSectionStack .inputPanel") : null;
+      setGenerateInputFocus(panel || null);
+    }, 40);
+  });
+}
+setTimeout(autoResizeLyricsBox, 0);
 renderLibrary();
 renderHub();
+els.sunoPrompt?.addEventListener("focus", showReferenceHintsPopupOnce, { once: true });
+els.sunoStyle?.addEventListener("focus", showReferenceHintsPopupOnce, { once: true });
+els.sunoPrompt?.addEventListener("input", () => {
+  const lyricsBoxEl = els.sunoPrompt?.closest?.(".lyricsBox");
+  if (lyricsBoxEl?.classList.contains("wandGenerated")) {
+    lyricsBoxEl.classList.remove("wandGenerated");
+  }
+});
 void (async () => {
   await loadPublicConfig();
   await refreshHubFromSupabase();
+  startHubLiveSync();
 })();
+window.addEventListener("focus", () => {
+  void refreshHubFromSupabase();
+});
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) void refreshHubFromSupabase();
+});
 if (els.hubFilterLatest) els.hubFilterLatest.addEventListener("click", () => { hubFilter = "latest"; markHubCategorySeen("latest"); renderHub(); });
 if (els.hubFilterSelect) {
   els.hubFilterSelect.value = "latest";
-  els.hubFilterSelect.addEventListener("change", () => {
-    hubFilter = String(els.hubFilterSelect?.value || "latest");
+  els.hubFilterSelect.addEventListener("change", async () => {
+    const selected = String(els.hubFilterSelect?.value || "latest");
+    if (selected === "__demo__") {
+      const p = makeDemoHubPost();
+      const feed = loadHubFeed();
+      feed.unshift(p);
+      saveHubFeed(feed.slice(0, 200));
+      try {
+        await supabaseInsertHub(p);
+        setStatus("Demo post added to Hub.");
+        await refreshHubFromSupabase();
+      } catch {
+        setStatus("Demo post added locally (Supabase sync failed).");
+        renderHub();
+      }
+      hubFilter = "latest";
+      markHubCategorySeen("latest");
+      if (els.hubFilterSelect) els.hubFilterSelect.value = "latest";
+      renderHub();
+      return;
+    }
+    hubFilter = selected;
     markHubCategorySeen(hubFilter);
     renderHub();
-  });
-}
-if (els.hubAddDemo) {
-  els.hubAddDemo.addEventListener("click", async () => {
-    const p = makeDemoHubPost();
-    const feed = loadHubFeed();
-    feed.unshift(p);
-    saveHubFeed(feed.slice(0, 200));
-    lastHubUpdateAt = feed.length ? Math.max(...feed.map((x) => Number(x.ts || 0))) : Number(p.ts || 0);
-    try {
-      await supabaseInsertHub(p);
-      setStatus("Demo post added to Hub.");
-      await refreshHubFromSupabase();
-    } catch {
-      setStatus("Demo post added locally (Supabase sync failed).");
-      renderHub();
-    }
-    // Force one more pull so iPhone view reflects latest cloud state immediately.
-    setTimeout(() => { void refreshHubFromSupabase(); }, 350);
   });
 }
 if (els.hubTabLink) {
@@ -3792,6 +5545,7 @@ if (els.hubNowClose) {
     hubAudio = null;
     hubAudioPostId = null;
     hubNowMeta = null;
+    miniSource = null;
     if (els.hubNowProgBar) els.hubNowProgBar.style.width = "0%";
     renderHubNowPlaying();
     document.querySelectorAll("[data-hub-play]").forEach((btn) => { btn.textContent = "▶"; });
@@ -3803,13 +5557,27 @@ if (els.hubNowPlaying) {
   els.hubNowPlaying.addEventListener("click", (e) => {
     const isClose = e.target?.closest?.("#hubNowClose");
     if (isClose) return;
-    if (!hubAudioPostId) return;
-    if ((location.hash || "") !== "#/hub") location.hash = "#/hub";
-    setTimeout(() => {
-      const row = document.querySelector(`[data-hub-row="${hubAudioPostId}"]`);
-      if (!row) return;
-      row.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 120);
+    if (miniSource?.type === "hub" && hubAudioPostId) {
+      if ((location.hash || "") !== "#/hub") location.hash = "#/hub";
+      setTimeout(() => {
+        const row = document.querySelector(`[data-hub-row="${hubAudioPostId}"]`);
+        if (!row) return;
+        row.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 120);
+      return;
+    }
+    if (miniSource?.type === "library" && miniSource?.id) {
+      if ((location.hash || "") !== "#/library") location.hash = "#/library";
+      setTimeout(() => {
+        const row = document.querySelector(`[data-lib-row="${miniSource.id}"]`);
+        if (!row) return;
+        row.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 120);
+      return;
+    }
+    if (playerEl && !playerEl.paused) {
+      location.hash = "#/player";
+    }
   });
 }
 window.addEventListener("scroll", () => {
@@ -3819,6 +5587,10 @@ window.addEventListener("scroll", () => {
 window.addEventListener("hashchange", () => {
   if (!hubAudio) return;
   setTimeout(() => renderHubNowPlaying(), 0);
+});
+window.addEventListener("hashchange", () => {
+  const route = document.body.getAttribute("data-route") || "";
+  if (route === "hub") void refreshHubFromSupabase();
 });
 if (els.shareLiveBackdrop) els.shareLiveBackdrop.addEventListener("click", closeShareLiveModal);
 if (els.btnCloseShareLive) els.btnCloseShareLive.addEventListener("click", closeShareLiveModal);
@@ -3900,6 +5672,86 @@ if (els.playerVol) {
   els.playerVol.addEventListener("input", () => {
     const a = ensurePlayer();
     a.volume = clampNum(Number(els.playerVol.value), 0, 1);
+  });
+}
+if (els.btnShareClipHub) {
+  els.btnShareClipHub.addEventListener("click", () => {
+    if (!currentPlayerTrackRef?.url) {
+      setStatus("Open a library song first, then share a clip.");
+      return;
+    }
+    const a = ensurePlayer();
+    const range = clampClipRange(
+      Number(els.clipStartSec?.value || 0),
+      Number(els.clipEndSec?.value || 0),
+      Number(a?.duration || 0)
+    );
+    const clipTrack = {
+      ...currentPlayerTrackRef,
+      title: `${currentPlayerTrackRef.title || "Song"} [${range.startSec}s-${range.endSec}s]`,
+      meta: {
+        ...(currentPlayerTrackRef.meta || {}),
+        clip: range,
+      },
+    };
+    shareToHub(clipTrack);
+    setStatus(`Clip shared to Hub (${range.startSec}s → ${range.endSec}s).`);
+  });
+}
+if (els.btnOpenTrimSheet) {
+  els.btnOpenTrimSheet.addEventListener("click", () => {
+    if (els.trimSheet) els.trimSheet.style.display = "";
+  });
+}
+if (els.btnCloseTrimSheet) {
+  els.btnCloseTrimSheet.addEventListener("click", () => {
+    if (els.trimSheet) els.trimSheet.style.display = "none";
+  });
+}
+if (els.btnShareFullHub) {
+  els.btnShareFullHub.addEventListener("click", () => {
+    const id = currentPlayerTrackRef || playerLoadedLabel || `player_${Date.now()}`;
+    const url = playerEl?.src || lastSunoFullUrl || "";
+    if (!url) {
+      setStatus("No loaded song to share.");
+      return;
+    }
+    const title = (els.playerTitle?.textContent || "Shared song").trim();
+    const item = {
+      id: String(id),
+      title,
+      fullUrl: url,
+      artUrl: els.playerArt?.src || "",
+      kind: /instrumental/i.test(title) ? "instrumental" : "full",
+      ts: Date.now(),
+    };
+    shareLibraryTrackToHub(item, { clip: null });
+    setStatus("Shared full version to Hub.");
+  });
+}
+if (els.btnPlayerChangeCover) {
+  els.btnPlayerChangeCover.addEventListener("click", () => {
+    if (!currentPlayerTrackRef?.id) {
+      setStatus("Open a library song first.");
+      return;
+    }
+    els.playerCoverUpload?.click();
+  });
+}
+if (els.playerCoverUpload) {
+  els.playerCoverUpload.addEventListener("change", () => {
+    const f = els.playerCoverUpload?.files?.[0];
+    if (!f || !currentPlayerTrackRef?.id) return;
+    const url = URL.createObjectURL(f);
+    patchLibraryTrack(currentPlayerTrackRef.id, { artUrl: url, meta: { ...(currentPlayerTrackRef.meta || {}), imageUrl: url } });
+    currentPlayerTrackRef = { ...currentPlayerTrackRef, artUrl: url, meta: { ...(currentPlayerTrackRef.meta || {}), imageUrl: url } };
+    setPlayerMeta({
+      title: els.playerTitle?.textContent || currentPlayerTrackRef.title || "Library song",
+      subtitle: els.playerSubtitle?.textContent || "Library • Full song",
+      artUrl: url,
+    });
+    setStatus("Cover updated.");
+    void syncHubCoverForTrack(currentPlayerTrackRef, url);
   });
 }
 if (els.playerSeek) {
@@ -4251,6 +6103,22 @@ if (els.sunoProMode) {
   els.sunoProMode.addEventListener("change", syncPro);
   syncPro();
 }
+[
+  els.sunoPrompt,
+  els.sunoStyle,
+  els.sunoTiming,
+  els.sunoDialect,
+  els.sunoDialectHint,
+  els.sunoVoiceProfile,
+  els.sunoSongKey,
+  els.sunoPersonaId,
+  els.sunoReferenceMode,
+].forEach((el) => {
+  if (!el) return;
+  el.addEventListener("input", renderReferenceHints);
+  el.addEventListener("change", renderReferenceHints);
+});
+renderReferenceHints();
 
 if (els.btnBetaTopup) {
   els.btnBetaTopup.addEventListener("click", () => openBilling());
@@ -4261,6 +6129,8 @@ if (els.btnOpenBilling) {
 if (els.btnOpenAdvancedSheet && els.advancedSheet) {
   els.btnOpenAdvancedSheet.addEventListener("click", () => {
     els.advancedSheet.open = true;
+    if (els.fineTuneDetails) els.fineTuneDetails.open = true;
+    els.advancedSheet.scrollTop = 0;
     const first = els.advancedSheet.querySelector("select, input");
     if (first) setTimeout(() => first.focus(), 120);
   });
@@ -4295,44 +6165,155 @@ if (els.btnCreatePersona) {
   });
 }
 if (els.btnProfileSave) {
-  els.btnProfileSave.addEventListener("click", () => {
-    const usernameRaw = String(els.profileUsername?.value || "").trim().toLowerCase();
+  els.btnProfileSave.addEventListener("click", async () => {
+    const usernameRaw = String(els.profilePreviewUsernameInput?.value || "").trim().toLowerCase();
     const username = usernameRaw.replace(/[^a-z0-9_.]/g, "").slice(0, 32) || "guest";
-    const email = String(els.profileEmail?.value || "").trim().toLowerCase();
-    const gender = String(els.profileGender?.value || "").trim();
-    const voiceTimbre = String(els.profileVoiceTimbre?.value || "").trim();
-    const bio = String(els.profileBio?.value || "").trim().slice(0, 280);
-    const avatar = String(els.profileAvatar?.value || "").trim();
-    const genres = String(els.profileGenres?.value || "").trim();
-    const instagram = String(els.profileInstagram?.value || "").trim();
-    const youtube = String(els.profileYouTube?.value || "").trim();
-    const tiktok = String(els.profileTikTok?.value || "").trim();
+    const email = String(authSession?.user?.email || activeProfile.email || "").trim().toLowerCase();
+    const voiceTimbre = String(els.profilePreviewTimbreInput?.value || "").trim();
+    const bio = String(els.profilePreviewBioInput?.value || "").trim().slice(0, 280);
+    const genres = String(activeProfile.genres || "").trim();
     const isPublic = Boolean(els.profileIsPublic?.checked);
     const id = email || `user:${username}`;
     saveProfile({
       id,
       username,
       email,
-      gender,
       voiceTimbre,
       bio,
-      avatar,
+      avatar: activeProfile.avatar || "",
       genres,
-      links: { instagram, youtube, tiktok },
+      links: {},
       isPublic,
     });
-  renderLibrary();
-  renderPersonaSelect();
+    try {
+      await supabaseUpsertProfile({
+        id,
+        username,
+        email,
+        voiceTimbre,
+        bio,
+        avatar: activeProfile.avatar || "",
+        genres,
+        links: {},
+        isPublic,
+      });
+    } catch (e) {
+      setStatus(`Local save done. Cloud save skipped: ${e?.message || String(e)}`);
+    }
+    renderLibrary();
+    renderPersonaSelect();
     setStatus(`Profile saved: @${username}`);
     if (els.profileSavedMsg) {
       els.profileSavedMsg.style.display = "";
-      const publicLabel = isPublic ? "Public" : "Private";
-      els.profileSavedMsg.textContent = `Saved as @${username}${email ? ` (${email})` : ""} • ${publicLabel}`;
+      els.profileSavedMsg.textContent = `Saved @${username}`;
       setTimeout(() => {
         if (els.profileSavedMsg) els.profileSavedMsg.style.display = "none";
       }, 2200);
     }
+    if (els.profileSaveToast) {
+      els.profileSaveToast.textContent = "Profile updated.";
+      els.profileSaveToast.style.display = "";
+      setTimeout(() => {
+        if (els.profileSaveToast) els.profileSaveToast.style.display = "none";
+      }, 1800);
+    }
     renderProfilePreviewFromInputs();
+    renderProfileHubShared();
+  });
+}
+if (els.btnProfileCardEdit) {
+  els.btnProfileCardEdit.addEventListener("click", () => {
+    const menu = els.profileEditMenu;
+    if (!menu) return;
+    const open = menu.style.display !== "none";
+    menu.style.display = open ? "none" : "";
+  });
+}
+if (els.btnProfileMenuEdit) {
+  els.btnProfileMenuEdit.addEventListener("click", () => {
+    const editing = els.profilePreviewUsernameInput?.disabled !== false;
+    if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.disabled = !editing;
+    if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.disabled = !editing;
+    if (els.profilePreviewBioInput) els.profilePreviewBioInput.disabled = !editing;
+    if (els.btnProfileSave) els.btnProfileSave.style.display = editing ? "" : "none";
+    if (els.profileEditMenu) els.profileEditMenu.style.display = "none";
+    if (editing && els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.focus();
+    setStatus(editing ? "Edit directly in the card, then save." : "Edit mode closed.");
+  });
+}
+if (els.btnAuthGoogle) {
+  els.btnAuthGoogle.addEventListener("click", async () => {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return setStatus("Supabase config missing.");
+    try {
+      if (els.btnAuthGoogle) {
+        els.btnAuthGoogle.disabled = true;
+        els.btnAuthGoogle.textContent = "Opening Google…";
+      }
+      setStatus("Opening Google login…");
+      const url = await supabaseGoogleLoginUrl();
+      if (!url) throw new Error("Could not create Google auth URL");
+      window.location.assign(url);
+      // If redirect is blocked, recover button state.
+      setTimeout(() => {
+        if (els.btnAuthGoogle) {
+          els.btnAuthGoogle.disabled = false;
+          els.btnAuthGoogle.textContent = "Continue with Google";
+        }
+      }, 3500);
+    } catch (e) {
+      if (els.btnAuthGoogle) {
+        els.btnAuthGoogle.disabled = false;
+        els.btnAuthGoogle.textContent = "Continue with Google";
+      }
+      setStatus(`Google login failed to start: ${e?.message || String(e)}`);
+    }
+  });
+}
+if (els.btnAuthGateGoogle) {
+  els.btnAuthGateGoogle.addEventListener("click", () => {
+    if (els.btnAuthGoogle) els.btnAuthGoogle.click();
+  });
+}
+if (els.btnAuthGateGuest) {
+  els.btnAuthGateGuest.addEventListener("click", () => {
+    location.hash = "#/hub";
+    setStatus("Guest mode enabled. Login anytime from Profile.");
+  });
+}
+if (els.btnAuthLogout) {
+  els.btnAuthLogout.addEventListener("click", () => {
+    saveAuthSession(null);
+    resetProfileUiToGuest();
+    if (els.profileEditMenu) els.profileEditMenu.style.display = "none";
+    if (els.btnProfileSave) els.btnProfileSave.style.display = "none";
+    if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.disabled = true;
+    if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.disabled = true;
+    if (els.profilePreviewBioInput) els.profilePreviewBioInput.disabled = true;
+    if (els.btnAuthGoogle) {
+      els.btnAuthGoogle.disabled = false;
+      els.btnAuthGoogle.textContent = "Continue with Google";
+    }
+    setStatus("Logged out.");
+  });
+}
+if (els.btnProfileDelete) {
+  els.btnProfileDelete.addEventListener("click", () => {
+    if (!window.confirm("Delete local profile data on this device?")) return;
+    activeProfile = {
+      id: "guest",
+      username: "guest",
+      email: "",
+      gender: "",
+      voiceTimbre: "",
+      bio: "",
+      avatar: "",
+      genres: "",
+      links: {},
+      isPublic: true,
+    };
+    saveProfile(activeProfile);
+    resetProfileUiToGuest();
+    setStatus("Local profile data deleted.");
   });
 }
 if (els.profileAvatarFile) {
@@ -4341,24 +6322,19 @@ if (els.profileAvatarFile) {
     if (!f) return;
     const reader = new FileReader();
     reader.onload = () => {
-      if (els.profileAvatar) els.profileAvatar.value = String(reader.result || "");
+      activeProfile.avatar = String(reader.result || "");
       renderProfilePreviewFromInputs();
     };
     reader.readAsDataURL(f);
   });
 }
+if (els.profilePreviewAvatar && els.profileAvatarFile) {
+  els.profilePreviewAvatar.addEventListener("click", () => els.profileAvatarFile.click());
+}
 [
-  els.profileUsername,
-  els.profileEmail,
-  els.profileGender,
-  els.profileVoiceTimbre,
-  els.profileBio,
-  els.profileAvatar,
-  els.profileGenres,
-  els.profileInstagram,
-  els.profileYouTube,
-  els.profileTikTok,
-  els.profileIsPublic,
+  els.profilePreviewUsernameInput,
+  els.profilePreviewTimbreInput,
+  els.profilePreviewBioInput,
 ].forEach((el) => {
   if (!el) return;
   el.addEventListener("input", renderProfilePreviewFromInputs);
@@ -4517,18 +6493,44 @@ function clampNum(n, min, max) {
 void refreshSunoCredits();
 renderCreditsHistory();
 loadProfile();
-if (els.profileUsername) els.profileUsername.value = activeProfile.username || "";
-if (els.profileEmail) els.profileEmail.value = activeProfile.email || "";
-if (els.profileGender) els.profileGender.value = activeProfile.gender || "";
-if (els.profileVoiceTimbre) els.profileVoiceTimbre.value = activeProfile.voiceTimbre || "";
-if (els.profileBio) els.profileBio.value = activeProfile.bio || "";
-if (els.profileAvatar) els.profileAvatar.value = activeProfile.avatar || "";
-if (els.profileGenres) els.profileGenres.value = activeProfile.genres || "";
-if (els.profileInstagram) els.profileInstagram.value = activeProfile.links?.instagram || "";
-if (els.profileYouTube) els.profileYouTube.value = activeProfile.links?.youtube || "";
-if (els.profileTikTok) els.profileTikTok.value = activeProfile.links?.tiktok || "";
+loadAuthSession();
+renderAuthStatus();
+void (async () => {
+  await loadPublicConfig();
+  const usedCodeFlow = await maybeHandleAuthCodeFromQuery();
+  const usedTokenFlow = !usedCodeFlow && maybeHandleMagicLinkFromHash();
+  await refreshAuthStateFromSupabase();
+  if (usedCodeFlow || usedTokenFlow) window.location.hash = "#/generate";
+
+  // Always hydrate from cloud when a valid session exists (not only callback flows).
+  if (authSession?.user?.id) {
+    const cloud = await supabaseLoadProfile();
+    if (cloud) saveProfile(cloud);
+    else {
+      // Ensure profile id tracks logged-in user for per-user storage keys.
+      saveProfile({ ...activeProfile, id: String(authSession.user.id), email: authSession.user.email || activeProfile.email || "" });
+    }
+
+    if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = activeProfile.username ? `@${activeProfile.username}` : "@guest";
+    if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = activeProfile.voiceTimbre || "";
+    if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = activeProfile.bio || "";
+    if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !== false;
+    renderProfilePreviewFromInputs();
+    renderProfileHubShared();
+
+    await ensureUserLibraryHydrated();
+  } else {
+    // Never leak previous user visuals when session is not valid.
+    resetProfileUiToGuest();
+    if ((location.hash || "") === "#/intro") location.hash = "#/auth";
+  }
+})();
+if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = activeProfile.username ? `@${activeProfile.username}` : "@guest";
+if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = activeProfile.voiceTimbre || "";
+if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = activeProfile.bio || "";
 if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !== false;
 renderProfilePreviewFromInputs();
+renderProfileHubShared();
 
 // Hum → melody (MVP)
 if (els.btnHumStart && els.btnHumStop && els.btnHumClear) {

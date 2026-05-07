@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in Settings → Environment badge as `Build <stamp>`.
-const APP_BUILD = "20260508c";
+const APP_BUILD = "20260508d";
 
 const els = {
   sunoPrompt: document.getElementById("sunoPrompt"),
@@ -5173,21 +5173,26 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     });
   }
   if (els.btnResultListenRef) {
-    // Plays the exact temporary file Suno received as the vocal reference for
-    // this generation. Lets the user verify, in one tap, that their latest
-    // recording was the input — not a stale upload from an earlier session.
-    els.btnResultListenRef.addEventListener("click", async () => {
+    // Opens the exact temporary file Suno received as the vocal reference in a
+    // new tab so the system audio player handles it. We deliberately avoid the
+    // in-app <audio> element here: when the generated song is already loaded
+    // on the same element, iOS Safari sometimes refuses to swap src cleanly
+    // and keeps playing the previous track, defeating the verification.
+    els.btnResultListenRef.addEventListener("click", () => {
       haptic("light");
       if (!lastSunoReferenceUrl) {
         setStatus("No reference audio recorded for this generation.");
         return;
       }
-      const playUrl = toAudioProxyUrl(lastSunoReferenceUrl) || lastSunoReferenceUrl;
-      await playOnPlayerPage(playUrl, "Reference Suno received", {
-        title: "Reference uploaded to Suno",
-        subtitle: "The exact audio Suno used for melody analysis",
-        artUrl: lastSunoArtUrl,
-      });
+      const directUrl = lastSunoReferenceUrl;
+      const proxiedUrl = toAudioProxyUrl(directUrl) || directUrl;
+      setStatus("Opening reference audio Suno used…");
+      const a = document.createElement("a");
+      a.href = proxiedUrl;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      document.body.appendChild(a);
+      try { a.click(); } finally { setTimeout(() => a.remove(), 100); }
     });
   }
   // Delegation: clicking artwork/title opens player (same as Play); buttons/links handle themselves.

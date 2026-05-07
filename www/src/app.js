@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260508f";
+const APP_BUILD = "20260508g";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -318,6 +318,8 @@ function isPlayingLibraryRowVisible() {
 /** Hub feed: auto-play the post whose vertical center is closest to the viewport center. */
 let hubAutoplayMutedPostId = null;
 let hubViewportAutoplayScheduled = false;
+let hubViewportTailTimer = null;
+let hubPlaybackSeq = 0;
 
 function getHubRowClosestToViewportCenter() {
   const root = els.hubList;
@@ -326,19 +328,27 @@ function getHubRowClosestToViewportCenter() {
   if (!rows.length) return null;
   const vh = window.innerHeight || document.documentElement.clientHeight || 0;
   const cy = vh / 2;
-  let bestId = null;
-  let bestDist = Infinity;
+  let bestIntersectId = null;
+  let bestIntersectDist = Infinity;
+  let bestAnyId = null;
+  let bestAnyDist = Infinity;
   rows.forEach((row) => {
     const r = row.getBoundingClientRect();
-    if (r.bottom < 0 || r.top > vh) return;
     const mid = r.top + r.height / 2;
     const d = Math.abs(mid - cy);
-    if (d < bestDist) {
-      bestDist = d;
-      bestId = row.getAttribute("data-hub-row");
+    const id = row.getAttribute("data-hub-row");
+    if (!id) return;
+    if (d < bestAnyDist) {
+      bestAnyDist = d;
+      bestAnyId = id;
+    }
+    const intersects = r.bottom > 0 && r.top < vh;
+    if (intersects && d < bestIntersectDist) {
+      bestIntersectDist = d;
+      bestIntersectId = id;
     }
   });
-  return bestId;
+  return bestIntersectId || bestAnyId;
 }
 
 function scheduleHubViewportAutoplay() {
@@ -348,6 +358,28 @@ function scheduleHubViewportAutoplay() {
     hubViewportAutoplayScheduled = false;
     tryHubViewportAutoplay();
   });
+  try {
+    clearTimeout(hubViewportTailTimer);
+  } catch {}
+  hubViewportTailTimer = setTimeout(() => {
+    hubViewportTailTimer = null;
+    tryHubViewportAutoplay();
+  }, 160);
+}
+
+async function hubAudioPlayWithRetry(audio) {
+  try {
+    await audio.play();
+    return true;
+  } catch {
+    await new Promise((r) => setTimeout(r, 90));
+    try {
+      await audio.play();
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }
 
 function tryHubViewportAutoplay() {
@@ -389,12 +421,14 @@ function stopHubPlayback() {
 }
 
 async function startHubPlayback(postId) {
+  const mySeq = ++hubPlaybackSeq;
   const p = loadHubFeed().find((x) => x.id === postId);
   if (!p?.url) return;
   const playBtn =
     els.hubList?.querySelector?.(`[data-hub-play="${postId}"]`) ||
     document.querySelector(`[data-hub-play="${postId}"]`);
   stopHubPlayback();
+  if (mySeq !== hubPlaybackSeq) return;
   hubAudio = new Audio(p.url);
   hubAudioPostId = postId;
   miniSource = { type: "hub", id: postId };
@@ -408,6 +442,7 @@ async function startHubPlayback(postId) {
   }
   hubAudio.addEventListener("ended", stopHubPlayback);
   hubAudio.addEventListener("timeupdate", () => {
+    if (mySeq !== hubPlaybackSeq) return;
     const clip = p?.meta?.clip;
     if (clip && Number.isFinite(Number(clip.startSec)) && Number.isFinite(Number(clip.endSec))) {
       const s = Number(clip.startSec);
@@ -425,16 +460,17 @@ async function startHubPlayback(postId) {
     if (els.hubNowProgBar) els.hubNowProgBar.style.width = `${pct}%`;
     renderHubNowPlaying();
   });
-  try {
-    await hubAudio.play();
-    if (p?.meta?.clip && Number.isFinite(Number(p.meta.clip.startSec))) {
-      hubAudio.currentTime = Math.max(0, Number(p.meta.clip.startSec));
-    }
-    renderHubNowPlaying();
-  } catch {
+  const ok = await hubAudioPlayWithRetry(hubAudio);
+  if (mySeq !== hubPlaybackSeq) return;
+  if (!ok) {
     stopHubPlayback();
-    setStatus("Playback failed.");
+    setStatus("Playback blocked — tap Play once.");
+    return;
   }
+  if (p?.meta?.clip && Number.isFinite(Number(p.meta.clip.startSec))) {
+    hubAudio.currentTime = Math.max(0, Number(p.meta.clip.startSec));
+  }
+  renderHubNowPlaying();
 }
 
 function renderHubNowPlaying() {

@@ -1838,33 +1838,40 @@ async function ensureUserLibraryHydrated() {
   if (!authSession?.user?.id) return;
   const uid = String(authSession.user.id);
 
-  // 1) Try cloud first.
+  // 1) Load cloud + local candidates and merge-dedupe.
   const cloudSongs = await supabaseLoadUserSongs();
-  if (cloudSongs.length) {
-    saveLibraryFor(uid, cloudSongs);
-    if (String(activeProfile.id) === uid) {
-      saveLibrary(cloudSongs);
-      renderLibrary();
-    }
-    return;
-  }
-
-  // 2) Cloud empty: migrate guest songs once (best effort), then reload cloud.
   const guestSongs = loadLibraryFor("guest");
   const allLocalSongs = loadAllLocalSongsDeduped();
-  const migrationPool = guestSongs.length ? guestSongs : allLocalSongs;
-  if (!migrationPool.length) {
+  const localCandidates = guestSongs.length ? guestSongs : allLocalSongs;
+
+  const merged = [];
+  const seen = new Set();
+  const addMerged = (row) => {
+    const url = String(row?.url || "").trim();
+    const aid = String(row?.audioId || "").trim();
+    const kind = String(row?.kind || "full").trim();
+    const sig = `${url}|${aid}|${kind}`;
+    if (seen.has(sig)) return;
+    seen.add(sig);
+    merged.push(row);
+  };
+  cloudSongs.forEach(addMerged);
+  localCandidates.forEach(addMerged);
+  merged.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
+
+  if (!merged.length) {
     if (String(activeProfile.id) === uid) renderLibrary();
     return;
   }
 
-  for (const t of migrationPool) {
+  // 2) Upsert merged local tracks to cloud (best effort), then reload cloud.
+  for (const t of merged) {
     // Best effort; ignore individual failures.
     // eslint-disable-next-line no-await-in-loop
     await supabaseInsertUserSong(t);
   }
   const cloudAfter = await supabaseLoadUserSongs();
-  const finalSongs = cloudAfter.length ? cloudAfter : migrationPool;
+  const finalSongs = cloudAfter.length ? cloudAfter : merged;
   saveLibraryFor(uid, finalSongs);
   if (String(activeProfile.id) === uid) {
     saveLibrary(finalSongs);

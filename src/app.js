@@ -24,6 +24,7 @@ const els = {
   sunoPersonaId: document.getElementById("sunoPersonaId"),
   btnCreatePersona: document.getElementById("btnCreatePersona"),
   sunoProMode: document.getElementById("sunoProMode"),
+  vocalInstrumentalOnly: document.getElementById("vocalInstrumentalOnly"),
   sunoVocalUpload: document.getElementById("sunoVocalUpload"),
   sunoVocalUploadName: document.getElementById("sunoVocalUploadName"),
   vocalRefHint: document.getElementById("vocalRefHint"),
@@ -4631,7 +4632,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
     try {
       const engine = "gemini_assisted";
-      const modeLabel = hasReference ? "Reference: Direct instrumental" : "Normal";
+      const referenceInstrumentalOnly = Boolean(els.vocalInstrumentalOnly?.checked);
+      const modeLabel = hasReference
+        ? referenceInstrumentalOnly
+          ? "Reference: Instrumental only"
+          : "Reference: Full song"
+        : "Normal";
       const engineLabel = "Suno + Gemini lyrics assist";
       setGenerateBtn("Generating…", true, "generate");
       setGenerateFieldsLocked(true);
@@ -4754,7 +4760,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           if (hasReference) {
             const fd = new FormData();
             fd.append("action", "add_instrumental");
-            fd.append("referenceMode", "vocal_full");
+            fd.append("referenceMode", referenceInstrumentalOnly ? "humming_music" : "vocal_full");
             fd.append("file", vocalRefFile, vocalRefFile?.name || "vocal-reference.webm");
             fd.append("fileName", vocalRefFile?.name || "vocal-reference.webm");
             fd.append("fileType", vocalRefFile?.type || "audio/webm");

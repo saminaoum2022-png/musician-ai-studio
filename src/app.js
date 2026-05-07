@@ -226,6 +226,8 @@ const els = {
   authLoggedInEmail: document.getElementById("authLoggedInEmail"),
   authLoggedInEmailInline: document.getElementById("authLoggedInEmailInline"),
   btnAuthGoogle: document.getElementById("btnAuthGoogle"),
+  btnAuthGateGoogle: document.getElementById("btnAuthGateGoogle"),
+  btnAuthGateGuest: document.getElementById("btnAuthGateGuest"),
   btnAuthLogout: document.getElementById("btnAuthLogout"),
   btnProfileDelete: document.getElementById("btnProfileDelete"),
   authStatus: document.getElementById("authStatus"),
@@ -433,9 +435,12 @@ function applyRoute() {
   const hash = String(location.hash || "");
   const rawRoute = hash.startsWith("#/") ? hash.slice(2) : "generate";
   const route = rawRoute.split(/[?#&]/)[0].trim();
-  const allowedRoutes = new Set(["intro", "start", "generate", "library", "hub", "settings", "profile", "player"]);
+  const allowedRoutes = new Set(["intro", "start", "auth", "generate", "library", "hub", "settings", "profile", "player", "vocal", "stems", "advanced"]);
   const normalized = route === "start" ? "intro" : route;
-  const wanted = allowedRoutes.has(normalized) ? normalized : "generate";
+  let wanted = allowedRoutes.has(normalized) ? normalized : "generate";
+  const protectedRoutes = new Set(["generate", "library", "profile", "player", "vocal", "stems", "advanced"]);
+  const isLoggedIn = Boolean(authSession?.user?.id);
+  if (!isLoggedIn && protectedRoutes.has(wanted)) wanted = "auth";
   document.body.classList.toggle("isIntro", wanted === "intro");
   document.body.setAttribute("data-route", wanted);
   if (els.brandSecondary) {
@@ -495,7 +500,7 @@ function resetCreateDraft() {
 }
 
 window.addEventListener("hashchange", applyRoute);
-if (!location.hash) location.hash = "#/generate";
+if (!location.hash) location.hash = "#/intro";
 applyRoute();
 updateEnvironmentBadge();
 document.body.classList.remove("booting");
@@ -6085,6 +6090,17 @@ if (els.btnAuthGoogle) {
     }
   });
 }
+if (els.btnAuthGateGoogle) {
+  els.btnAuthGateGoogle.addEventListener("click", () => {
+    if (els.btnAuthGoogle) els.btnAuthGoogle.click();
+  });
+}
+if (els.btnAuthGateGuest) {
+  els.btnAuthGateGuest.addEventListener("click", () => {
+    location.hash = "#/hub";
+    setStatus("Guest mode enabled. Login anytime from Profile.");
+  });
+}
 if (els.btnAuthLogout) {
   els.btnAuthLogout.addEventListener("click", () => {
     saveAuthSession(null);
@@ -6305,7 +6321,7 @@ void (async () => {
   const usedCodeFlow = await maybeHandleAuthCodeFromQuery();
   const usedTokenFlow = !usedCodeFlow && maybeHandleMagicLinkFromHash();
   await refreshAuthStateFromSupabase();
-  if (usedCodeFlow || usedTokenFlow) window.location.hash = "#/profile";
+  if (usedCodeFlow || usedTokenFlow) window.location.hash = "#/generate";
 
   // Always hydrate from cloud when a valid session exists (not only callback flows).
   if (authSession?.user?.id) {
@@ -6327,6 +6343,7 @@ void (async () => {
   } else {
     // Never leak previous user visuals when session is not valid.
     resetProfileUiToGuest();
+    if ((location.hash || "") === "#/intro") location.hash = "#/auth";
   }
 })();
 if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = activeProfile.username ? `@${activeProfile.username}` : "@guest";

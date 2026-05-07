@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
-    <title>NabadAi Music (MVP)</title>
+    <title>NabadAi Music</title>
     <meta name="theme-color" content="#0b0d12" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -28,17 +28,14 @@
             <a href="#/generate" class="journeyStep" data-route-link="generate">Generate</a>
             <a href="#/library" class="journeyStep" data-route-link="library">Library</a>
             <a href="#/hub" class="journeyStep" data-route-link="hub">Hub</a>
-            <a href="#/stems" class="journeyStep" data-route-link="stems">Stems</a>
             <a href="#/vocal" class="journeyStep" data-route-link="vocal">Vocal</a>
             <a href="#/player" class="journeyStep" data-route-link="player">Player</a>
           </div>
         </div>
         <div class="headerRight">
-          <a class="creditsPill" href="#/profile" title="Open profile">
+          <div class="creditsPill" title="Credits">
             <span>Credits</span> <strong id="sunoCredits">—</strong><span id="sunoCreditsNote" class="small"></span>
-            <span class="pillSep"></span>
-            <span>Profile</span>
-          </a>
+          </div>
         </div>
       </header>
 
@@ -59,6 +56,16 @@
           </div>
         </section>
 
+        <section class="card wide" data-route="auth">
+          <h2>Welcome</h2>
+          <div class="hint" style="margin-top:0">Login first to keep your songs and profile synced.</div>
+          <div class="row" style="margin-top:12px">
+            <button id="btnAuthGateGoogle" class="primary" type="button">Continue with Google</button>
+            <button id="btnAuthGateGuest" class="ghost" type="button">Continue as guest</button>
+          </div>
+          <div class="hint" style="margin-top:8px">Guest mode can browse Hub, but songs stay local only.</div>
+        </section>
+
         <section class="card wide" data-route="library">
           <h2>Library</h2>
           <div class="hint" style="margin-top:0">Your generated songs are saved on this device.</div>
@@ -75,14 +82,15 @@
                 <option value="arabic">Arabic</option>
                 <option value="instrumental">Instrumental</option>
                 <option value="remix">Remix</option>
+                <option value="__demo__">Add Demo Post</option>
               </select>
             </label>
             <span id="hubDotArabic" class="hubDot" style="display:none"></span>
             <span id="hubDotInstrumental" class="hubDot" style="display:none"></span>
             <span id="hubDotRemix" class="hubDot" style="display:none"></span>
-            <button id="hubAddDemo" class="ghost">Add Demo Post</button>
           </div>
           <div id="hubUpdatedAt" class="hint hubUpdatedAt">Updated: —</div>
+          <div id="hubSyncInfo" class="hint hubUpdatedAt">Hub: waiting…</div>
           </div>
           <div id="hubList" class="code" style="max-height:none"></div>
         </section>
@@ -144,31 +152,41 @@
               <div class="lyricsBox">
                 <textarea id="sunoPrompt" rows="4" placeholder="Write your lyrics here..."></textarea>
                 <button id="btnLyricsMagic" class="lyricsMagicBtn" type="button" title="AI lyrics assist">✦</button>
+                <button id="btnImageMood" class="lyricsImageMoodBtn" type="button" title="Inspire from image" aria-label="Inspire from image">
+                  <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
+                    <path fill="currentColor" d="M5 4.5A2.5 2.5 0 0 0 2.5 7v10A2.5 2.5 0 0 0 5 19.5h14a2.5 2.5 0 0 0 2.5-2.5V7A2.5 2.5 0 0 0 19 4.5H5Zm0 1.5h14c.55 0 1 .45 1 1v7.2l-3.33-3.32a1.8 1.8 0 0 0-2.54 0L10 15.01l-1.63-1.63a1.8 1.8 0 0 0-2.54 0L4 15.21V7c0-.55.45-1 1-1Zm12.5 2.2a1.7 1.7 0 1 0 0 3.4 1.7 1.7 0 0 0 0-3.4ZM7.1 14.44a.3.3 0 0 1 .43 0L10 16.9l5.19-5.18a.3.3 0 0 1 .42 0L20 16.1V17c0 .55-.45 1-1 1H5c-.55 0-1-.45-1-1v-.26l3.1-2.3Z"/>
+                  </svg>
+                </button>
               </div>
-              <div class="row vocalQuickRow">
-                <button id="btnMagicUploadVocal" class="ghost" type="button">+ Audio</button>
-                <button id="btnMagicRecordVocal" class="ghost" type="button">Record</button>
-                <button id="btnPreviewVocalRef" class="ghost" type="button" disabled>Listen</button>
-                <button id="btnVocalRefStop" class="ghost" type="button" disabled>Stop</button>
+              <div class="row imageMoodRow">
+                <span id="imageMoodSummary" class="hint imageMoodSummary"></span>
               </div>
-              <div id="sunoVocalUploadName" class="hint uploadVocalsName">No vocal reference attached.</div>
-              <details class="referenceModeWrap">
-                <summary>Reference mode</summary>
-                <label class="field grow inlineField">
-                  <select id="sunoReferenceMode">
-                    <option value="none" selected>None</option>
-                    <option value="vocal_full">Vocal → Full song</option>
-                    <option value="humming_music">Humming → Music</option>
-                    <option value="song_remix">Song → Remix</option>
-                  </select>
-                </label>
-                <div class="hint" style="margin-top:6px">When audio reference is used, NabadAi runs in Strict Melody mode.</div>
-              </details>
             </label>
+            <details class="details vocalRefDetails" id="vocalRefDetails">
+              <summary>Use vocal reference</summary>
+              <div class="vocalRefCard">
+                <div class="row vocalQuickRow">
+                  <button id="btnMagicUploadVocal" class="ghost" type="button">+ Audio</button>
+                  <button id="btnMagicRecordVocal" class="ghost" type="button">Record</button>
+                  <button id="btnPreviewVocalRef" class="ghost" type="button" disabled>Listen</button>
+                </div>
+                <div class="segPill vocalModePill" role="group" aria-label="Vocal output mode">
+                  <button id="vocalModeFull" type="button" class="ghost active">Full song</button>
+                  <button id="vocalModeInstrumental" type="button" class="ghost">Instrumental</button>
+                </div>
+                <input id="vocalInstrumentalOnly" type="hidden" value="0" />
+                <div id="sunoVocalUploadName" class="hint uploadVocalsName">No vocal reference attached.</div>
+                <div id="vocalRefHint" class="hint" style="margin-top:6px; display:none">Audio reference attached. You can choose full song or instrumental-only.</div>
+              </div>
+            </details>
 
             <label class="field grow inputPanel inputPanel--style">
               <div class="label inPanelLabel">Style / Tags</div>
               <input id="sunoStyle" type="text" placeholder="Hijaz, darbuka, 6/8" />
+            </label>
+            <label class="field grow inputPanel inputPanel--style">
+              <div class="label inPanelLabel">Artwork style (optional)</div>
+              <input id="sunoArtworkStyle" type="text" placeholder="Neon desert, cinematic portrait, minimal cover art..." />
             </label>
 
             <label class="field grow inputPanel inputPanel--style">
@@ -180,22 +198,65 @@
 
           <details class="details stepDetails miniMoreOptions" id="advancedSheet">
             <summary>More options <button id="btnCloseAdvancedSheet" type="button" class="ghost">Close</button></summary>
-            <div class="stepCard">
-          <div class="stepHead">Sound</div>
-          <div class="row">
-            <label class="proToggleRow" for="sunoProMode">
-              <input id="sunoProMode" type="checkbox" />
-              <span>Pro key & maqam</span>
-            </label>
+            <div class="stepCard compactOptions">
+          <div class="row optionsHeadRow">
+            <div class="hint optionsRecommended">Optional controls (off by default)</div>
           </div>
-          <div class="row advancedGrid">
-            <label class="field grow">
-              <div class="label">Timing</div>
-              <input id="sunoTiming" type="text" placeholder="96 BPM • 4/4 • balanced groove" />
-            </label>
-            <label class="field proField">
-              <div class="label">Song key</div>
-              <select id="sunoSongKey">
+          <div class="row optionsPresetRow">
+            <button id="presetPopClean" class="ghost" type="button">Pop Clean</button>
+            <button id="presetBalladWarm" class="ghost" type="button">Ballad Warm</button>
+            <button id="presetClubPunch" class="ghost" type="button">Club Punch</button>
+          </div>
+          <details class="details fineTuneDetails" id="fineTuneDetails" open>
+            <summary>Fine tune</summary>
+
+            <div class="stepHead">Feel</div>
+            <div class="row advancedGrid compactGrid">
+              <label class="field">
+                <div class="label">Groove pace</div>
+                <select id="sunoGroovePace">
+                  <option value="" selected>Off (auto)</option>
+                  <option value="balanced">Balanced</option>
+                  <option value="slow">Slow</option>
+                  <option value="energetic">Energetic</option>
+                </select>
+              </label>
+              <label class="field">
+                <div class="label">Prosody strictness</div>
+                <select id="sunoProsody">
+                  <option value="" selected>Off (auto)</option>
+                  <option value="tight">Tight</option>
+                  <option value="natural">Natural</option>
+                  <option value="ultra">Ultra Tight</option>
+                </select>
+              </label>
+              <label class="field">
+                <div class="label">Beat stability</div>
+                <select id="sunoBeatStability">
+                  <option value="" selected>Off (auto)</option>
+                  <option value="stable">Stable</option>
+                  <option value="flexible">Flexible</option>
+                  <option value="locked">Locked</option>
+                </select>
+              </label>
+            </div>
+            <div class="hint compactHint">Feel controls timing tightness and groove behavior.</div>
+
+            <div class="stepHead">Theory</div>
+            <div class="row">
+              <label class="proToggleRow" for="sunoProMode">
+                <input id="sunoProMode" type="checkbox" />
+                <span>Pro key & maqam</span>
+              </label>
+            </div>
+            <div class="row advancedGrid compactGrid">
+              <label class="field grow">
+                <div class="label">Timing</div>
+                <input id="sunoTiming" type="text" placeholder="96 BPM • 4/4 • balanced groove" />
+              </label>
+              <label class="field proField">
+                <div class="label">Song key</div>
+                <select id="sunoSongKey">
                 <option value="" selected>Auto</option>
                 <option value="Do Major">Do Major</option>
                 <option value="Do Minor">Do Minor</option>
@@ -221,11 +282,11 @@
                 <option value="La# Minor">La# Minor</option>
                 <option value="Si Major">Si Major</option>
                 <option value="Si Minor">Si Minor</option>
-              </select>
-            </label>
-            <label class="field proField">
-              <div class="label">Maqam</div>
-              <select id="sunoMaqam">
+                </select>
+              </label>
+              <label class="field proField">
+                <div class="label">Maqam</div>
+                <select id="sunoMaqam">
                 <option value="" selected>Auto / none</option>
                 <option value="Rast">Rast</option>
                 <option value="Bayati">Bayati</option>
@@ -248,30 +309,30 @@
                 <option value="Muhayyar">Muhayyar</option>
                 <option value="Rahat_Arwah">Rahat al-Arwah</option>
                 <option value="Nawruz">Nawruz</option>
-              </select>
-            </label>
-            <label class="field">
-              <div class="label">Voice profile</div>
-              <select id="sunoVoiceProfile">
-                <option value="" selected>Auto</option>
-                <option value="f|Soprano">Female • Soprano</option>
-                <option value="f|Mezzo-Soprano">Female • Mezzo-Soprano</option>
-                <option value="f|Alto">Female • Alto</option>
-                <option value="m|Tenor">Male • Tenor</option>
-                <option value="m|Baritone">Male • Baritone</option>
-                <option value="m|Bass">Male • Bass</option>
-              </select>
-            </label>
-          </div>
-          <div id="sunoKeyHint" class="hint advancedHint" style="margin-top:0">
+                </select>
+              </label>
+            </div>
+            <div id="sunoKeyHint" class="hint advancedHint" style="margin-top:0">
               Tip: selecting a maqam will be added to Style/Tags automatically.
-          </div>
+            </div>
 
-          <div class="stepHead">AI</div>
-          <div class="row advancedGrid">
-            <label class="field">
-              <div class="label">Accent / Dialect</div>
-              <select id="sunoDialect">
+            <div class="stepHead">Voice</div>
+            <div class="row advancedGrid compactGrid">
+              <label class="field">
+                <div class="label">Voice profile</div>
+                <select id="sunoVoiceProfile">
+                  <option value="" selected>Auto</option>
+                  <option value="f|Soprano">Female • Soprano</option>
+                  <option value="f|Mezzo-Soprano">Female • Mezzo-Soprano</option>
+                  <option value="f|Alto">Female • Alto</option>
+                  <option value="m|Tenor">Male • Tenor</option>
+                  <option value="m|Baritone">Male • Baritone</option>
+                  <option value="m|Bass">Male • Bass</option>
+                </select>
+              </label>
+              <label class="field">
+                <div class="label">Accent / Dialect</div>
+                <select id="sunoDialect">
                 <option value="" selected>Auto</option>
                 <option value="Levantine Arabic">Levantine</option>
                 <option value="Egyptian Arabic">Egyptian</option>
@@ -279,19 +340,26 @@
                 <option value="Iraqi Arabic">Iraqi</option>
                 <option value="Maghrebi Arabic">Maghrebi</option>
                 <option value="Modern Standard Arabic">MSA</option>
-              </select>
-            </label>
-            <label class="field grow">
-              <div class="label">Dialect hint (optional)</div>
-              <input id="sunoDialectHint" type="text" placeholder="Example line in desired dialect..." />
-            </label>
-            <label class="field grow">
-              <div class="label">Persona</div>
-              <select id="sunoPersonaId">
+                </select>
+              </label>
+              <label class="field grow">
+                <div class="label">Dialect hint (optional)</div>
+                <input id="sunoDialectHint" type="text" placeholder="Example line in desired dialect..." />
+              </label>
+              <label class="field grow">
+                <div class="label">Persona</div>
+                <select id="sunoPersonaId">
                 <option value="">None (default voice)</option>
-              </select>
-            </label>
-            <button id="btnCreatePersona" class="ghost advancedPersonaBtn" type="button">Create persona from last song</button>
+                </select>
+              </label>
+              <button id="btnCreatePersona" class="ghost advancedPersonaBtn" type="button">Create persona from last song</button>
+            </div>
+            <div class="hint compactHint">Voice controls tone and dialect behavior.</div>
+          </details>
+
+          <div class="row optionsActions">
+            <button id="btnAdvancedReset" class="ghost" type="button">Reset</button>
+            <button id="btnAdvancedApply" class="primary" type="button">Apply</button>
           </div>
 
           </div>
@@ -310,7 +378,6 @@
         <section class="card wide" data-route="more">
           <h2>Studio & More</h2>
           <div class="row">
-            <a class="ghost" href="#/stems">Stems & Studio</a>
             <a class="ghost" href="#/settings">Settings</a>
             <a class="ghost" href="#/advanced">Advanced</a>
           </div>
@@ -323,133 +390,94 @@
             <button id="btnPlayerBack" class="ghost" type="button">Back</button>
           </div>
           <div class="playerShell">
-            <div class="playerArtWrap">
-              <img id="playerArt" class="playerArt" alt="cover" />
+            <div class="playerArtWrap isEmpty">
+              <img id="playerArt" class="playerArt isPlaceholder" src="./assets/nabadai-logo.png" alt="cover" />
             </div>
             <div class="playerMeta">
               <div id="playerTitle" class="playerTitle">No track loaded</div>
               <div id="playerSubtitle" class="playerSubtitle">Generate a song, then press Play.</div>
-
-              <div class="playerControls">
-                <button id="btnPlayerPlay" class="primary" disabled>Play</button>
-                <button id="btnPlayerPause" class="ghost" disabled>Pause</button>
-                <button id="btnPlayerStop" class="ghost" disabled>Stop</button>
-              </div>
 
               <div class="playerTimeline">
                 <span id="playerTime" class="small">00:00 / 00:00</span>
                 <input id="playerSeek" type="range" min="0" max="1000" value="0" style="flex:1; min-width:260px" />
               </div>
 
-              <div class="row" style="align-items:center">
-                <label class="small" style="display:flex; gap:8px; align-items:center">
-                  Volume
-                  <input id="playerVol" type="range" min="0" max="1" step="0.01" value="1" />
-                </label>
-                <span id="playerSource" class="small" style="color:var(--muted)"></span>
+              <div class="playerControls">
+                <button id="btnPlayerPlay" class="primary iconBtn" disabled aria-label="Play">▶</button>
+                <button id="btnPlayerPause" class="ghost iconBtn" disabled aria-label="Pause">⏸</button>
+                <button id="btnPlayerStop" class="ghost iconBtn" disabled aria-label="Stop">■</button>
+                <button id="btnPlayerChangeCover" class="ghost" type="button">Change cover</button>
+                <button id="btnOpenTrimSheet" class="ghost" type="button">Trim for Hub</button>
+                <button id="btnShareFullHub" class="ghost" type="button">Share full to Hub</button>
+              </div>
+              <input id="playerCoverUpload" type="file" accept="image/*" style="display:none" />
+
+              <div id="trimSheet" class="stepCard" style="display:none; margin-top:10px;">
+                <div class="row" style="align-items:center; gap:10px; flex-wrap:wrap;">
+                  <label class="small">In</label>
+                  <input id="clipStartSec" type="number" min="0" step="1" value="0" style="max-width:92px" />
+                  <label class="small">Out</label>
+                  <input id="clipEndSec" type="number" min="0" step="1" value="30" style="max-width:92px" />
+                  <button id="btnShareClipHub" class="primary" type="button">Use clip + Share</button>
+                  <button id="btnCloseTrimSheet" class="ghost" type="button">Cancel</button>
+                </div>
               </div>
 
               <div class="row">
-                <button id="btnLoadFull" class="ghost" disabled>Load full</button>
-                <button id="btnLoadInstrumental" class="ghost" disabled>Load instrumental</button>
+                <span id="playerSource" class="small" style="color:var(--muted)"></span>
               </div>
             </div>
           </div>
         </section>
 
         <section class="card wide" data-route="profile">
-          <h2>Profile</h2>
           <div class="profilePreview" id="profilePreviewCard">
+            <div class="profilePreviewHead">
+              <button id="btnProfileCardEdit" class="ghost profileEditBtn" type="button" aria-label="Profile actions">⋯</button>
+              <div id="profileEditMenu" class="libMenu profileEditMenu" style="display:none">
+                <button class="ghost" id="btnProfileMenuEdit" type="button">Edit profile</button>
+              </div>
+            </div>
             <div class="profilePreviewTop">
-              <img id="profilePreviewAvatar" class="profilePreviewAvatar" alt="avatar" />
+              <img id="profilePreviewAvatar" class="profilePreviewAvatar" alt="avatar" title="Tap to change photo" />
               <div class="profilePreviewMeta">
                 <div class="profilePreviewUserRow">
-                  <div id="profilePreviewUsername" class="profilePreviewUsername">@guest</div>
+                  <input id="profilePreviewUsernameInput" class="profileInlineInput profileInlineUsername" type="text" value="@guest" maxlength="24" disabled />
                   <span id="profilePreviewGenderIcon" class="profilePreviewGenderIcon" style="display:none"></span>
                 </div>
-                <div id="profilePreviewTimbre" class="profilePreviewTimbre">Voice: Not set</div>
+                <select id="profilePreviewTimbreInput" class="profileInlineSelect" disabled>
+                  <option value="" selected>Voice: Not set</option>
+                  <option value="bass">Voice: Bass</option>
+                  <option value="baritone">Voice: Baritone</option>
+                  <option value="tenor">Voice: Tenor</option>
+                  <option value="alto">Voice: Alto</option>
+                  <option value="mezzo_soprano">Voice: Mezzo-Soprano</option>
+                  <option value="soprano">Voice: Soprano</option>
+                </select>
+                <div id="authLoggedInEmailInline" class="hint profileAccountEmailInline"></div>
               </div>
-              <div id="profilePreviewVisibility" class="profilePreviewVisibility">Public</div>
             </div>
-            <div id="profilePreviewBio" class="profilePreviewBio">Add a short bio to introduce your music style.</div>
+            <textarea id="profilePreviewBioInput" class="profileInlineBio" rows="3" maxlength="120" disabled>Add a short bio to introduce your music style.</textarea>
             <div id="profilePreviewGenres" class="profilePreviewGenres"></div>
-            <div id="profilePreviewLinks" class="profilePreviewLinks"></div>
           </div>
-          <div class="row">
-            <label class="field grow">
-              <div class="label">Username</div>
-              <input id="profileUsername" type="text" placeholder="@yourname" />
-            </label>
-            <label class="field grow">
-              <div class="label">Email</div>
-              <input id="profileEmail" type="email" placeholder="you@email.com" />
-            </label>
-            <label class="field grow">
-              <div class="label">Gender</div>
-              <select id="profileGender">
-                <option value="" selected>Prefer not to say</option>
-                <option value="female">Female</option>
-                <option value="male">Male</option>
-                <option value="non_binary">Non-binary</option>
-              </select>
-            </label>
-            <label class="field grow">
-              <div class="label">Voice timbre</div>
-              <select id="profileVoiceTimbre">
-                <option value="" selected>Not set</option>
-                <option value="bass">Bass</option>
-                <option value="baritone">Baritone</option>
-                <option value="tenor">Tenor</option>
-                <option value="alto">Alto</option>
-                <option value="mezzo_soprano">Mezzo-Soprano</option>
-                <option value="soprano">Soprano</option>
-              </select>
-            </label>
+          <div id="authLoginControls" class="row">
+            <button id="btnAuthGoogle" class="ghost" type="button">Continue with Google</button>
           </div>
-          <div class="row">
-            <label class="field grow">
-              <div class="label">Bio</div>
-              <textarea id="profileBio" rows="3" placeholder="Singer-songwriter from Dubai, love Arabic pop and orchestral vibes."></textarea>
-            </label>
-          </div>
-          <div class="row">
-            <label class="field grow">
-              <div class="label">Profile photo</div>
-              <input id="profileAvatarFile" type="file" accept="image/*" />
-            </label>
-            <label class="field grow">
-              <div class="label">Avatar URL</div>
-              <input id="profileAvatar" type="url" placeholder="https://..." />
-            </label>
-            <label class="field grow">
-              <div class="label">Favorite genres / tags</div>
-              <input id="profileGenres" type="text" placeholder="Arabic pop, khaliji, trap" />
-            </label>
-          </div>
-          <div class="row">
-            <label class="field grow">
-              <div class="label">Instagram</div>
-              <input id="profileInstagram" type="url" placeholder="https://instagram.com/..." />
-            </label>
-            <label class="field grow">
-              <div class="label">YouTube</div>
-              <input id="profileYouTube" type="url" placeholder="https://youtube.com/..." />
-            </label>
-            <label class="field grow">
-              <div class="label">TikTok</div>
-              <input id="profileTikTok" type="url" placeholder="https://tiktok.com/@..." />
-            </label>
-          </div>
-          <div class="row">
-            <label class="checks">
-              <label><input id="profileIsPublic" type="checkbox" checked /> Public profile</label>
-            </label>
-          </div>
-          <div class="row">
-            <button id="btnProfileSave" class="primary" type="button">Save profile</button>
+          <div id="authStatus" class="hint" style="margin-top:4px">Not logged in.</div>
+          <input id="profileAvatarFile" type="file" accept="image/*" style="display:none" />
+          <input id="profileIsPublic" type="checkbox" checked style="display:none" />
+          <div class="row profileSaveRow">
+            <button id="btnProfileSave" class="primary profileSaveBtn" type="button" style="display:none">Save profile</button>
           </div>
           <div id="profileSavedMsg" class="hint" style="margin-top:8px; display:none"></div>
+          <div id="profileSaveToast" class="profileSaveToast" style="display:none">Profile updated.</div>
+          <div class="stepHead" style="margin-top:14px">Shared To Hub</div>
+          <div id="profileHubSharedList" class="profileHubSharedList" style="max-height:none"></div>
           <div class="hint">Songs in Library are stored per profile on this device for now.</div>
+          <div id="authLoggedInRow" class="profileAccountActions" style="display:none">
+            <button id="btnAuthLogout" class="ghost profileActionBtn" type="button">Logout</button>
+            <button id="btnProfileDelete" class="ghost profileActionBtn profileActionBtnDanger" type="button">Delete profile data</button>
+          </div>
         </section>
 
         <section class="card wide" data-route="vocal">
@@ -734,6 +762,30 @@
           </details>
         </section>
       </main>
+      <div id="imageMoodModal" class="modal imageMoodModal" style="display:none" aria-hidden="true">
+        <div class="modalCard imageMoodCard">
+          <div class="row imageMoodHead">
+            <div class="modalTitle">Image Mood Assistant</div>
+            <button id="btnCloseImageMood" class="ghost" type="button">Close</button>
+          </div>
+          <div class="hint">Upload cover/art/photo and NabadAi suggests mood, tags, and optional lyric seed.</div>
+          <label class="field imageMoodField">
+            <input id="imageMoodUpload" type="file" accept="image/*" />
+          </label>
+          <div class="imageMoodPreviewWrap">
+            <img id="imageMoodPreview" alt="Mood preview" style="display:none" />
+          </div>
+          <div id="imageMoodOutput" class="imageMoodOutput">No analysis yet.</div>
+          <label class="proToggleRow" for="imageMoodUseAsCover" style="margin-top:2px">
+            <input id="imageMoodUseAsCover" type="checkbox" checked />
+            <span>Use uploaded image as generated song cover</span>
+          </label>
+          <div class="row imageMoodActions">
+            <button id="btnAnalyzeImageMood" class="primary" type="button">Analyze</button>
+            <button id="btnApplyImageMood" class="ghost" type="button" disabled>Apply to song</button>
+          </div>
+        </div>
+      </div>
 
       <footer class="footer"></footer>
       <div id="songDetailsModal" class="songDetailsModal" style="display:none">
@@ -793,8 +845,8 @@
         <a href="#/generate" data-route-link="generate">Create</a>
         <a href="#/library" data-route-link="library">Library</a>
         <a href="#/hub" data-route-link="hub" class="hubTab" aria-label="Hub" title="Hub"><span>#</span><span id="hubTabDot" class="hubDot hubTabDot" style="display:none"></span></a>
-        <a href="#/stems" data-route-link="stems">Stems</a>
-        <a href="#/settings" data-route-link="settings">Settings</a>
+        <a href="#/player" data-route-link="player">Player</a>
+        <a href="#/profile" data-route-link="profile">Profile</a>
       </nav>
       <div id="hubNowPlaying" class="hubNowPlaying" style="display:none">
         <img id="hubNowArt" src="./assets/nabadai-logo.png" alt="Now playing" />
@@ -808,6 +860,6 @@
       <div id="likeBurst" class="likeBurst" style="display:none">❤</div>
     </div>
 
-    <script type="module" src="./src/app.js"></script>
+    <script type="module" src="./src/app.js?v=20260508a"></script>
   </body>
 </html>

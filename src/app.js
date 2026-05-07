@@ -450,6 +450,10 @@ function applyRoute() {
   if (wanted === "profile") {
     void refreshAuthStateFromSupabase();
   }
+  if (wanted === "generate" && generationReadyNotice) {
+    generationReadyNotice = false;
+    setLoading(false);
+  }
   syncGenerateOrbVisibility();
 }
 
@@ -569,6 +573,7 @@ let vocalRefPreviewUrl = "";
 let imageMoodData = null;
 let imageMoodCoverDataUrl = "";
 let pendingGeneratedCoverDataUrl = "";
+let generationReadyNotice = false;
 
 function getVocalReferenceFile() {
   if (vocalRefBlob) {
@@ -3093,10 +3098,10 @@ function setAiBgState(state) {
 }
 function setLoading(on, { title, sub } = {}) {
   busyCount = Math.max(0, busyCount + (on ? 1 : -1));
-  const show = busyCount > 0;
+  const show = busyCount > 0 || generationReadyNotice;
   if (els.globalLoading) els.globalLoading.style.display = show ? "" : "none";
   document.body.classList.toggle("isBusy", show);
-  if (show) {
+  if (show && busyCount > 0) {
     if (aiBgResetTimer) {
       clearTimeout(aiBgResetTimer);
       aiBgResetTimer = null;
@@ -4144,8 +4149,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           els.btnSunoStems.disabled = !(sunoAudioId);
           if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = !(sunoAudioId);
           setStatus("Song is ready. Press Play full.");
+          generationReadyNotice = true;
+          setLoading(true, { title: "Your songs are ready", sub: "Open Generate tab to review the results." });
           setGenerateFieldsLocked(false);
-          setLoading(false);
           return;
         }
         if (state.status === "FAILED") {
@@ -4577,9 +4583,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           if (els.sunoFullLink) setLink(els.sunoFullLink, lastSunoProxyUrl || immediateFullUrl);
           if (els.btnLoadFull) els.btnLoadFull.disabled = false;
           setStatus("Song ready.");
+          generationReadyNotice = true;
+          setLoading(true, { title: "Your songs are ready", sub: "Open Generate tab to review the results." });
           setGenerateBtn("Regenerate", false, "regenerate");
           setGenerateFieldsLocked(false);
-          setLoading(false);
           setProgress(100);
           showResultCard(true);
           imageMoodAppliedForNextGen = false;

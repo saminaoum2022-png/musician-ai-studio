@@ -432,6 +432,7 @@ function showLikeBurst() {
 }
 
 var authSession = null;
+var generationReadyNotice = false;
 
 function applyRoute() {
   const hash = String(location.hash || "");
@@ -487,6 +488,7 @@ function updateBrandPulse() {
 }
 
 function resetCreateDraft() {
+  busyCount = 0;
   if (els.sunoPrompt) els.sunoPrompt.value = "";
   if (els.sunoStyle) els.sunoStyle.value = "";
   if (els.sunoTitle) els.sunoTitle.value = "";
@@ -631,7 +633,6 @@ let vocalRefChunks = [];
 let vocalRefPreviewUrl = "";
 let imageMoodData = null;
 let imageMoodCoverDataUrl = "";
-var generationReadyNotice = false;
 let pendingGeneratedCoverDataUrl = "";
 let pendingBackendTaskId = "";
 const PENDING_TASK_KEY = "mas:pending_backend_task_v1";

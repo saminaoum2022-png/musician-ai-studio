@@ -4555,8 +4555,42 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         setStatus("Image-inspired mode with no lyrics detected: generating instrumental.");
       }
       const data = await trackCreditsAround(
-        "Suno: generate song",
+        hasReference ? "Suno: upload reference song" : "Suno: generate song",
         async () => {
+          if (hasReference) {
+            const fd = new FormData();
+            fd.append("action", "add_instrumental");
+            fd.append("referenceMode", "vocal_full");
+            fd.append("file", vocalRefFile, vocalRefFile?.name || "vocal-reference.webm");
+            fd.append("fileName", vocalRefFile?.name || "vocal-reference.webm");
+            fd.append("fileType", vocalRefFile?.type || "audio/webm");
+            fd.append("style", String(userStyle || "").trim());
+            fd.append("title", String((els.sunoTitle?.value || "").trim() || "Reference full song"));
+            fd.append("model", LATEST_SUNO_MODEL);
+            if (payload?.vocalGender) fd.append("vocalGender", String(payload.vocalGender));
+            if (payload?.voiceTimbre) fd.append("voiceTimbre", String(payload.voiceTimbre));
+            if (payload?.songKey) fd.append("songKey", String(payload.songKey));
+            if (timing) fd.append("timing", String(timing));
+            if (dialect) fd.append("dialect", String(dialect));
+            if (dialectHint) fd.append("dialectHint", String(dialectHint));
+            if (payload?.personaId) fd.append("personaId", String(payload.personaId));
+            const rr = await fetch(apiUrl("/api/suno/stems"), { method: "POST", body: fd });
+            const dd = await rr.json().catch(() => ({}));
+            if (!rr.ok) {
+              const more = dd?.detailMessage || dd?.details?.message || dd?.details?.error || "";
+              throw new Error(`${dd?.error || "Reference upload failed"}${more ? `: ${more}` : ""}`);
+            }
+            if (typeof dd?.code !== "undefined" && Number(dd.code) !== 200) {
+              const bodyErr = dd?.msg || dd?.message || dd?.error || "Reference upload failed";
+              throw new Error(`Suno rejected reference upload: ${bodyErr}`);
+            }
+            if (dd?.data && typeof dd.data?.code !== "undefined" && Number(dd.data.code) !== 200) {
+              const nestedErr = dd?.data?.msg || dd?.data?.message || dd?.data?.error || "Reference upload failed";
+              throw new Error(`Suno rejected reference upload: ${nestedErr}`);
+            }
+            return dd;
+          }
+
           const r = await fetch(apiUrl("/api/suno/generate"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -4567,7 +4601,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             const more = d?.detailMessage || d?.details?.message || d?.details?.error || "";
             throw new Error(`${d?.error || "Suno generate failed"}${more ? `: ${more}` : ""}`);
           }
-          // Some provider paths return HTTP 200 with failure in body (e.g. { code: 400, msg: "..." }).
           if (typeof d?.code !== "undefined" && Number(d.code) !== 200) {
             const bodyErr = d?.msg || d?.message || d?.error || "Suno generate failed";
             throw new Error(`Suno rejected request: ${bodyErr}`);

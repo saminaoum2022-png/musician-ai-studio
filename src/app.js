@@ -576,8 +576,8 @@ let vocalRefPreviewUrl = "";
 let imageMoodData = null;
 let imageMoodCoverDataUrl = "";
 let pendingGeneratedCoverDataUrl = "";
-let generationReadyNotice = false;
-let lastGenerationReadyAt = 0;
+var generationReadyNotice = false;
+var lastGenerationReadyAt = 0;
 
 function renderGenerateReadyDot() {
   document.querySelectorAll('[data-route-link="generate"]').forEach((a) => {

@@ -586,6 +586,8 @@ function renderGenerateReadyDot() {
 }
 
 function markGenerationReadyNotice() {
+  // Generation finished: clear any stale in-flight loading state first.
+  busyCount = 0;
   generationReadyNotice = true;
   lastGenerationReadyAt = Date.now();
   renderGenerateReadyDot();
@@ -3124,8 +3126,10 @@ function setAiBgState(state) {
 function setLoading(on, { title, sub } = {}) {
   busyCount = Math.max(0, busyCount + (on ? 1 : -1));
   const show = busyCount > 0 || generationReadyNotice;
+  const readyMode = generationReadyNotice && busyCount === 0;
   if (els.globalLoading) els.globalLoading.style.display = show ? "" : "none";
   document.body.classList.toggle("isBusy", show);
+  if (els.globalLoading) els.globalLoading.classList.toggle("isReadyNotice", readyMode);
   if (show && busyCount > 0) {
     if (aiBgResetTimer) {
       clearTimeout(aiBgResetTimer);

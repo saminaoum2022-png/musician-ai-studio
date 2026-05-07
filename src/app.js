@@ -4779,7 +4779,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const timing = String(els.sunoTiming?.value || "").trim();
       const timingClause = timing
         ? `Timing lock: ${timing}. Keep this timing stable across all sections and vocal entries.`
-        : "Timing lock: keep stable tempo and aligned vocal phrasing throughout the song.";
+        : "";
       const groovePace = String(els.sunoGroovePace?.value || "").trim();
       const prosodyStrictness = String(els.sunoProsody?.value || "").trim();
       const beatStability = String(els.sunoBeatStability?.value || "").trim();
@@ -4810,8 +4810,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             groovePace ? (GROOVE_MAP[groovePace] || "") : "",
             prosodyStrictness ? (PROSODY_MAP[prosodyStrictness] || "") : "",
             beatStability ? (BEAT_STABILITY_MAP[beatStability] || "") : "",
-            HIDDEN_PROSODY_GUARDRAILS,
-            HIDDEN_NEGATIVE_PROMPT,
             hasReference ? REFERENCE_MELODY_LOCK : "",
           ]
             .filter(Boolean)

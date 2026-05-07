@@ -151,19 +151,24 @@
               <div class="row imageMoodRow">
                 <span id="imageMoodSummary" class="hint imageMoodSummary"></span>
               </div>
-              <div class="row vocalQuickRow">
-                <button id="btnMagicUploadVocal" class="ghost" type="button">+ Audio</button>
-                <button id="btnMagicRecordVocal" class="ghost" type="button">Record</button>
-                <button id="btnPreviewVocalRef" class="ghost" type="button" disabled>Listen</button>
-                <button id="btnVocalRefStop" class="ghost" type="button" disabled>Stop</button>
-              </div>
-              <label class="proToggleRow" for="vocalInstrumentalOnly" style="margin-top:8px">
-                <input id="vocalInstrumentalOnly" type="checkbox" />
-                <span>Instrumental only (for uploaded/recorded vocal)</span>
-              </label>
-              <div id="sunoVocalUploadName" class="hint uploadVocalsName">No vocal reference attached.</div>
-              <div id="vocalRefHint" class="hint" style="margin-top:6px; display:none">Audio reference attached. You can choose full song or instrumental-only.</div>
             </label>
+            <details class="details vocalRefDetails" id="vocalRefDetails">
+              <summary>Use vocal reference</summary>
+              <div class="vocalRefCard">
+                <div class="row vocalQuickRow">
+                  <button id="btnMagicUploadVocal" class="ghost" type="button">+ Audio</button>
+                  <button id="btnMagicRecordVocal" class="ghost" type="button">Record</button>
+                  <button id="btnPreviewVocalRef" class="ghost" type="button" disabled>Listen</button>
+                </div>
+                <div class="segPill vocalModePill" role="group" aria-label="Vocal output mode">
+                  <button id="vocalModeFull" type="button" class="ghost active">Full song</button>
+                  <button id="vocalModeInstrumental" type="button" class="ghost">Instrumental</button>
+                </div>
+                <input id="vocalInstrumentalOnly" type="hidden" value="0" />
+                <div id="sunoVocalUploadName" class="hint uploadVocalsName">No vocal reference attached.</div>
+                <div id="vocalRefHint" class="hint" style="margin-top:6px; display:none">Audio reference attached. You can choose full song or instrumental-only.</div>
+              </div>
+            </details>
 
             <label class="field grow inputPanel inputPanel--style">
               <div class="label inPanelLabel">Style / Tags</div>

@@ -25,6 +25,8 @@ const els = {
   btnCreatePersona: document.getElementById("btnCreatePersona"),
   sunoProMode: document.getElementById("sunoProMode"),
   vocalInstrumentalOnly: document.getElementById("vocalInstrumentalOnly"),
+  vocalModeFull: document.getElementById("vocalModeFull"),
+  vocalModeInstrumental: document.getElementById("vocalModeInstrumental"),
   sunoVocalUpload: document.getElementById("sunoVocalUpload"),
   sunoVocalUploadName: document.getElementById("sunoVocalUploadName"),
   vocalRefHint: document.getElementById("vocalRefHint"),
@@ -3868,6 +3870,24 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       renderReferenceHints();
     });
   }
+  const syncVocalModeUi = () => {
+    const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+    if (els.vocalModeFull) els.vocalModeFull.classList.toggle("active", !instrumental);
+    if (els.vocalModeInstrumental) els.vocalModeInstrumental.classList.toggle("active", instrumental);
+  };
+  if (els.vocalModeFull) {
+    els.vocalModeFull.addEventListener("click", () => {
+      if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
+      syncVocalModeUi();
+    });
+  }
+  if (els.vocalModeInstrumental) {
+    els.vocalModeInstrumental.addEventListener("click", () => {
+      if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "1";
+      syncVocalModeUi();
+    });
+  }
+  syncVocalModeUi();
   const setGenerateFieldsLocked = (locked) => {
     const lockPreviewAllowed = !locked && Boolean(getVocalReferenceFile());
     if (els.sunoPrompt) els.sunoPrompt.disabled = locked;
@@ -3878,6 +3898,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = locked;
     if (els.btnMagicUploadVocal) els.btnMagicUploadVocal.disabled = locked;
     if (els.btnMagicRecordVocal) els.btnMagicRecordVocal.disabled = locked;
+    if (els.vocalModeFull) els.vocalModeFull.disabled = locked;
+    if (els.vocalModeInstrumental) els.vocalModeInstrumental.disabled = locked;
     if (els.btnPreviewVocalRef) els.btnPreviewVocalRef.disabled = locked ? true : !lockPreviewAllowed;
     if (els.btnVocalRefStop) els.btnVocalRefStop.disabled = true;
     if (els.btnOpenAdvancedSheet) els.btnOpenAdvancedSheet.disabled = locked;
@@ -4632,7 +4654,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
     try {
       const engine = "gemini_assisted";
-      const referenceInstrumentalOnly = Boolean(els.vocalInstrumentalOnly?.checked);
+      const referenceInstrumentalOnly = String(els.vocalInstrumentalOnly?.value || "0") === "1";
       const modeLabel = hasReference
         ? referenceInstrumentalOnly
           ? "Reference: Instrumental only"

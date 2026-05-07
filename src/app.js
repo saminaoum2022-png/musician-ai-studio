@@ -1151,7 +1151,7 @@ async function supabaseLoadUserSongs() {
 }
 async function supabaseInsertUserSong(track) {
   const token = getSupabaseAuthToken();
-  if (!token || !authSession?.user?.id) return;
+  if (!token || !authSession?.user?.id) return { ok: false, reason: "no_auth" };
   const payload = {
     user_id: authSession.user.id,
     title: track.title || "Generated song",
@@ -1162,7 +1162,7 @@ async function supabaseInsertUserSong(track) {
     kind: track.kind || "full",
     meta: track.meta || null,
   };
-  await fetch(`${SUPABASE_URL}/rest/v1/user_songs`, {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/user_songs`, {
     method: "POST",
     headers: {
       apikey: SUPABASE_ANON_KEY,
@@ -1172,6 +1172,12 @@ async function supabaseInsertUserSong(track) {
     },
     body: JSON.stringify(payload),
   }).catch(() => null);
+  if (!r) return { ok: false, reason: "network" };
+  if (!r.ok) {
+    const txt = await r.text().catch(() => "");
+    return { ok: false, reason: `http_${r.status}`, details: String(txt).slice(0, 180) };
+  }
+  return { ok: true };
 }
 async function supabaseDeleteUserSong(track) {
   const token = getSupabaseAuthToken();
@@ -1865,10 +1871,18 @@ async function ensureUserLibraryHydrated() {
   }
 
   // 2) Upsert merged local tracks to cloud (best effort), then reload cloud.
+  let okCount = 0;
+  let failCount = 0;
+  let firstFail = "";
   for (const t of merged) {
     // Best effort; ignore individual failures.
     // eslint-disable-next-line no-await-in-loop
-    await supabaseInsertUserSong(t);
+    const ins = await supabaseInsertUserSong(t);
+    if (ins?.ok) okCount += 1;
+    else {
+      failCount += 1;
+      if (!firstFail) firstFail = `${ins?.reason || "insert_failed"}${ins?.details ? `: ${ins.details}` : ""}`;
+    }
   }
   const cloudAfter = await supabaseLoadUserSongs();
   const finalSongs = cloudAfter.length ? cloudAfter : merged;
@@ -1876,6 +1890,11 @@ async function ensureUserLibraryHydrated() {
   if (String(activeProfile.id) === uid) {
     saveLibrary(finalSongs);
     renderLibrary();
+    if (failCount > 0) {
+      setStatus(`Library sync partial: ${okCount} saved, ${failCount} failed (${firstFail.slice(0, 90)})`);
+    } else {
+      setStatus(`Library sync complete: ${okCount} saved to cloud.`);
+    }
   }
 }
 function addToLibrary(track) {

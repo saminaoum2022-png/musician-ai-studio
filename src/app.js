@@ -1761,6 +1761,39 @@ function loadLibraryFor(id) {
     return [];
   }
 }
+function listAllLocalLibraryKeys() {
+  const out = [];
+  try {
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const k = String(localStorage.key(i) || "");
+      if (k.startsWith("mas:library:v1:")) out.push(k);
+    }
+  } catch {}
+  return out;
+}
+function loadAllLocalSongsDeduped() {
+  const merged = [];
+  const seen = new Set();
+  const keys = listAllLocalLibraryKeys();
+  for (const key of keys) {
+    let rows = [];
+    try {
+      const raw = localStorage.getItem(key);
+      const arr = raw ? JSON.parse(raw) : [];
+      rows = Array.isArray(arr) ? arr : [];
+    } catch {}
+    for (const row of rows) {
+      const url = String(row?.url || "").trim();
+      const aid = String(row?.audioId || "").trim();
+      const kind = String(row?.kind || "full").trim();
+      const sig = `${url}|${aid}|${kind}`;
+      if (seen.has(sig)) continue;
+      seen.add(sig);
+      merged.push(row);
+    }
+  }
+  return merged.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
+}
 function saveLibrary(items) {
   try {
     localStorage.setItem(profileLibraryKey(), JSON.stringify(items || []));
@@ -1818,18 +1851,20 @@ async function ensureUserLibraryHydrated() {
 
   // 2) Cloud empty: migrate guest songs once (best effort), then reload cloud.
   const guestSongs = loadLibraryFor("guest");
-  if (!guestSongs.length) {
+  const allLocalSongs = loadAllLocalSongsDeduped();
+  const migrationPool = guestSongs.length ? guestSongs : allLocalSongs;
+  if (!migrationPool.length) {
     if (String(activeProfile.id) === uid) renderLibrary();
     return;
   }
 
-  for (const t of guestSongs) {
+  for (const t of migrationPool) {
     // Best effort; ignore individual failures.
     // eslint-disable-next-line no-await-in-loop
     await supabaseInsertUserSong(t);
   }
   const cloudAfter = await supabaseLoadUserSongs();
-  const finalSongs = cloudAfter.length ? cloudAfter : guestSongs;
+  const finalSongs = cloudAfter.length ? cloudAfter : migrationPool;
   saveLibraryFor(uid, finalSongs);
   if (String(activeProfile.id) === uid) {
     saveLibrary(finalSongs);

@@ -595,6 +595,15 @@ body.isIntro .footer{ display:none; }
   margin-top: 4px;
   margin-bottom: 6px;
 }
+.hubUpdatedAt.ok{
+  color:#6ff0c8;
+}
+.hubUpdatedAt.warn{
+  color:#f4c26f;
+}
+.hubUpdatedAt.wait{
+  color:rgba(231,237,247,0.66);
+}
 .hubFilterField{
   margin:0;
 }

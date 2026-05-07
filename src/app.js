@@ -343,12 +343,16 @@ function renderHubUpdatedAt() {
   const relative = relativeTime(lastHubUpdateAt);
   els.hubUpdatedAt.textContent = `Updated: ${relative}`;
   if (els.hubSyncInfo) {
+    els.hubSyncInfo.classList.remove("ok", "warn", "wait");
     if (hubLastSyncOk) {
-      els.hubSyncInfo.textContent = `Hub: connected • rows ${hubLastSyncRows}`;
+      els.hubSyncInfo.classList.add("ok");
+      els.hubSyncInfo.textContent = `● Live • rows ${hubLastSyncRows}`;
     } else if (hubLastSyncError) {
-      els.hubSyncInfo.textContent = `Hub: sync issue • ${hubLastSyncError}`;
+      els.hubSyncInfo.classList.add("warn");
+      els.hubSyncInfo.textContent = `● Retrying • ${hubLastSyncError}`;
     } else {
-      els.hubSyncInfo.textContent = "Hub: waiting…";
+      els.hubSyncInfo.classList.add("wait");
+      els.hubSyncInfo.textContent = "● Waiting…";
     }
   }
 }
@@ -580,9 +584,7 @@ var generationReadyNotice = false;
 var lastGenerationReadyAt = 0;
 
 function renderGenerateReadyDot() {
-  document.querySelectorAll('[data-route-link="generate"]').forEach((a) => {
-    a.classList.toggle("hasNotice", Boolean(generationReadyNotice));
-  });
+  // Intentionally no tab-dot on Generate (user requested removal).
 }
 
 function markGenerationReadyNotice() {

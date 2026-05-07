@@ -111,6 +111,22 @@ module.exports = async function handler(req, res) {
       }
       const uploadUrl = String(upData.data.downloadUrl);
 
+      // Diagnostic log so we can verify, in Vercel logs, exactly what audio
+      // Suno received per request. Logged once per generation, no PII.
+      try {
+        const head = Buffer.isBuffer(fileBytes) ? fileBytes.slice(0, 8).toString("hex") : "";
+        const tail = Buffer.isBuffer(fileBytes) ? fileBytes.slice(-8).toString("hex") : "";
+        console.log("[suno/stems] reference uploaded", {
+          referenceMode,
+          fileName,
+          fileType,
+          bytes: Buffer.isBuffer(fileBytes) ? fileBytes.length : null,
+          head8: head,
+          tail8: tail,
+          uploadUrl,
+        });
+      } catch {}
+
       // 2) Route by reference mode
       const requestedModel = String(model || "").trim().toUpperCase();
       const allowedModels = new Set(["V4_5PLUS", "V5", "V5_5", "V4_5ALL", "V4_5", "V4"]);
@@ -169,7 +185,7 @@ module.exports = async function handler(req, res) {
             uploadUrl,
           });
         }
-        return json(res, 200, coverData || { raw: coverText, uploadUrl });
+        return json(res, 200, { ...(coverData || { raw: coverText }), uploadUrl });
       }
 
       // === Extend mode: explicit "use upload as intro, continue from continueAt" ===
@@ -205,7 +221,7 @@ module.exports = async function handler(req, res) {
             uploadUrl,
           });
         }
-        return json(res, 200, extData || { raw: extText, uploadUrl });
+        return json(res, 200, { ...(extData || { raw: extText }), uploadUrl });
       }
 
       // === Backing mode (humming_music / humming_backing / default): keep upload as lead, add band ===
@@ -250,7 +266,7 @@ module.exports = async function handler(req, res) {
           uploadUrl,
         });
       }
-      return json(res, 200, addData || { raw: addText, uploadUrl });
+      return json(res, 200, { ...(addData || { raw: addText }), uploadUrl });
     }
 
     const taskId = String(body?.taskId || "").trim();

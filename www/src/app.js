@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in Settings → Environment badge as `Build <stamp>`.
-const APP_BUILD = "20260508b";
+const APP_BUILD = "20260508c";
 
 const els = {
   sunoPrompt: document.getElementById("sunoPrompt"),
@@ -185,6 +185,7 @@ const els = {
   resultTitle: document.getElementById("resultTitle"),
   btnResultPlay: document.getElementById("btnResultPlay"),
   btnResultOpenDirect: document.getElementById("btnResultOpenDirect"),
+  btnResultListenRef: document.getElementById("btnResultListenRef"),
   resultDownload: document.getElementById("resultDownload"),
   resultCard2: document.getElementById("resultCard2"),
   resultArt2: document.getElementById("resultArt2"),
@@ -563,6 +564,8 @@ function resetCreateDraft() {
   lastSunoProxyUrl2 = "";
   lastSunoArtUrl2 = "";
   lastSunoTitle2 = "";
+  lastSunoReferenceUrl = "";
+  updateListenRefButton();
   if (playerEl) {
     try {
       playerEl.pause();
@@ -875,6 +878,10 @@ let lastSunoCachedUrl2 = "";
 let lastSunoArtUrl2 = "";
 let lastSunoTitle2 = "";
 let lastSunoAudioId2 = "";
+// Suno's temporary reference URL (3-day TTL) for the most recent reference
+// upload. Surfaced as a "Listen to reference" button on the result card so
+// the user can confirm the exact bytes Suno received as their vocal melody.
+let lastSunoReferenceUrl = "";
 let libraryNowPlayingId = null;
 let lastGenerationMeta = null;
 const PROFILE_KEY = "mas:profile:v1";
@@ -3349,6 +3356,11 @@ function toAudioProxyUrl(url) {
   return `/api/suno/audio?url=${encodeURIComponent(url)}`;
 }
 
+function updateListenRefButton() {
+  if (!els.btnResultListenRef) return;
+  els.btnResultListenRef.style.display = lastSunoReferenceUrl ? "" : "none";
+}
+
 async function playOnPlayerPage(url, label, meta = null) {
   if (!url) return;
   setPlayerSource(url, label);
@@ -5042,6 +5054,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       sunoAudioId = null;
       sunoStemsTaskId = null;
       sunoMultiStemsTaskId = null;
+      // The backend echoes the temporary Suno upload URL on reference flows,
+      // so we can offer "Listen to reference" on the result card and prove
+      // exactly which audio Suno received for melody analysis.
+      lastSunoReferenceUrl = hasReference ? String(data?.uploadUrl || "") : "";
+      updateListenRefButton();
       printSuno(data);
       printSunoStems(null);
 
@@ -5152,6 +5169,24 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         title: lastSunoTitle2 || "Generated song B",
         subtitle: "Generated • Full song B",
         artUrl: lastSunoArtUrl2 || lastSunoArtUrl,
+      });
+    });
+  }
+  if (els.btnResultListenRef) {
+    // Plays the exact temporary file Suno received as the vocal reference for
+    // this generation. Lets the user verify, in one tap, that their latest
+    // recording was the input — not a stale upload from an earlier session.
+    els.btnResultListenRef.addEventListener("click", async () => {
+      haptic("light");
+      if (!lastSunoReferenceUrl) {
+        setStatus("No reference audio recorded for this generation.");
+        return;
+      }
+      const playUrl = toAudioProxyUrl(lastSunoReferenceUrl) || lastSunoReferenceUrl;
+      await playOnPlayerPage(playUrl, "Reference Suno received", {
+        title: "Reference uploaded to Suno",
+        subtitle: "The exact audio Suno used for melody analysis",
+        artUrl: lastSunoArtUrl,
       });
     });
   }

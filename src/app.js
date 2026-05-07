@@ -1772,10 +1772,39 @@ function listAllLocalLibraryKeys() {
   try {
     for (let i = 0; i < localStorage.length; i += 1) {
       const k = String(localStorage.key(i) || "");
-      if (k.startsWith("mas:library:v1:")) out.push(k);
+      if (
+        k.startsWith("mas:library:v1:") ||
+        k.startsWith("mas:library:") ||
+        k === "mas:library" ||
+        k === "library" ||
+        k === "songs" ||
+        k.toLowerCase().includes("library")
+      ) out.push(k);
     }
   } catch {}
   return out;
+}
+function looksLikeTrackRow(row) {
+  if (!row || typeof row !== "object") return false;
+  const hasTitle = typeof row.title === "string" && row.title.trim().length > 0;
+  const hasUrl = typeof row.url === "string" && row.url.trim().length > 0;
+  const hasSongUrl = typeof row.song_url === "string" && row.song_url.trim().length > 0;
+  const hasArt = typeof row.artUrl === "string" || typeof row.art_url === "string";
+  return (hasTitle && (hasUrl || hasSongUrl)) || (hasUrl && hasArt) || (hasSongUrl && hasArt);
+}
+function normalizeTrackRow(row) {
+  const url = String(row?.url || row?.song_url || "").trim();
+  return {
+    id: String(row?.id || `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
+    ts: Number(row?.ts || (row?.created_at ? new Date(row.created_at).getTime() : Date.now())),
+    title: String(row?.title || "Generated song"),
+    artUrl: String(row?.artUrl || row?.art_url || ""),
+    url,
+    taskId: String(row?.taskId || row?.task_id || ""),
+    audioId: String(row?.audioId || row?.audio_id || ""),
+    kind: String(row?.kind || "full"),
+    meta: row?.meta || null,
+  };
 }
 function loadAllLocalSongsDeduped() {
   const merged = [];
@@ -1788,7 +1817,9 @@ function loadAllLocalSongsDeduped() {
       const arr = raw ? JSON.parse(raw) : [];
       rows = Array.isArray(arr) ? arr : [];
     } catch {}
-    for (const row of rows) {
+    for (const rawRow of rows) {
+      if (!looksLikeTrackRow(rawRow)) continue;
+      const row = normalizeTrackRow(rawRow);
       const url = String(row?.url || "").trim();
       const aid = String(row?.audioId || "").trim();
       const kind = String(row?.kind || "full").trim();
@@ -1798,6 +1829,29 @@ function loadAllLocalSongsDeduped() {
       merged.push(row);
     }
   }
+  // Deep fallback: inspect every localStorage value for track-like arrays.
+  try {
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = String(localStorage.key(i) || "");
+      if (keys.includes(key)) continue;
+      const raw = localStorage.getItem(key);
+      if (!raw || raw[0] !== "[") continue;
+      let arr = [];
+      try { arr = JSON.parse(raw); } catch {}
+      if (!Array.isArray(arr) || !arr.length) continue;
+      for (const rawRow of arr) {
+        if (!looksLikeTrackRow(rawRow)) continue;
+        const row = normalizeTrackRow(rawRow);
+        const url = String(row?.url || "").trim();
+        const aid = String(row?.audioId || "").trim();
+        const kind = String(row?.kind || "full").trim();
+        const sig = `${url}|${aid}|${kind}`;
+        if (seen.has(sig)) continue;
+        seen.add(sig);
+        merged.push(row);
+      }
+    }
+  } catch {}
   return merged.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
 }
 function saveLibrary(items) {

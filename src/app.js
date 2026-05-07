@@ -431,6 +431,8 @@ function showLikeBurst() {
   }, 620);
 }
 
+var authSession = null;
+
 function applyRoute() {
   const hash = String(location.hash || "");
   const rawRoute = hash.startsWith("#/") ? hash.slice(2) : "generate";
@@ -759,7 +761,7 @@ const PROFILE_PERSONAS_KEY = "mas:personas:v1";
 const AUTH_SESSION_KEY = "mas:supabase:session:v1";
 const AUTH_PKCE_KEY = "mas:supabase:pkce:v1";
 let activeProfile = { id: "guest", username: "guest", email: "" };
-let authSession = null;
+authSession = null;
 let lastAuthDebug = "";
 function loadProfile() {
   try {

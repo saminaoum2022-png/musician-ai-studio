@@ -736,6 +736,12 @@ body.isIntro .footer{ display:none; }
   background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
   padding: 10px;
 }
+.playerArtWrap.isNowPlaying{
+  box-shadow:
+    0 0 0 1px rgba(124,92,255,0.34),
+    0 0 18px rgba(124,92,255,0.25),
+    0 0 28px rgba(35,213,171,0.18);
+}
 .playerArt{
   width:100%;
   aspect-ratio: 1 / 1;
@@ -1527,6 +1533,15 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   align-items: center;
   gap: 10px;
 }
+.profileAccountEmailInline{
+  margin-top: 4px;
+  font-size: 11px;
+  color: rgba(168,180,199,0.82);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
 .profileAccountEmail{
   margin: 0;
   text-align: center;
@@ -1539,9 +1554,14 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   border-radius: 999px;
 }
 .profileActionBtnDanger{
-  border-color: rgba(255,92,119,0.65);
-  color: #fff;
-  background: linear-gradient(180deg, rgba(255,92,119,0.92), rgba(195,26,66,0.9));
+  border-color: rgba(255,92,119,0.45);
+  color: rgba(255,122,145,0.96);
+  background: rgba(255,92,119,0.06);
+}
+.profileActionBtnDanger:hover{
+  border-color: rgba(255,92,119,0.62);
+  background: rgba(255,92,119,0.11);
+  color: #ffd7df;
 }
 .profileSaveToast{
   position: fixed;

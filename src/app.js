@@ -218,6 +218,7 @@ const els = {
   authLoginControls: document.getElementById("authLoginControls"),
   authLoggedInRow: document.getElementById("authLoggedInRow"),
   authLoggedInEmail: document.getElementById("authLoggedInEmail"),
+  authLoggedInEmailInline: document.getElementById("authLoggedInEmailInline"),
   btnAuthGoogle: document.getElementById("btnAuthGoogle"),
   btnAuthLogout: document.getElementById("btnAuthLogout"),
   btnProfileDelete: document.getElementById("btnProfileDelete"),
@@ -918,6 +919,10 @@ function renderAuthStatus() {
   if (els.authLoginControls) els.authLoginControls.style.display = email ? "none" : "";
   if (els.authLoggedInRow) els.authLoggedInRow.style.display = email ? "flex" : "none";
   if (els.authLoggedInEmail) els.authLoggedInEmail.textContent = email ? email : "Logged in.";
+  if (els.authLoggedInEmailInline) {
+    els.authLoggedInEmailInline.textContent = email ? email : "";
+    els.authLoggedInEmailInline.style.display = email ? "" : "none";
+  }
 }
 function resetProfileUiToGuest() {
   activeProfile = {
@@ -3194,6 +3199,9 @@ function syncPlayerUI() {
   if (!playerEl) return;
   const dur = Number.isFinite(playerEl.duration) ? playerEl.duration : 0;
   const cur = Number.isFinite(playerEl.currentTime) ? playerEl.currentTime : 0;
+  const artWrap = document.querySelector(".playerArtWrap");
+  const playing = !playerEl.paused && !playerEl.ended && (dur > 0 || cur > 0);
+  if (artWrap) artWrap.classList.toggle("isNowPlaying", playing);
   if (els.playerTime) els.playerTime.textContent = `${formatTime(cur)} / ${formatTime(dur)}`;
   if (els.playerSeek && !playerSeekDragging) {
     const max = Number(els.playerSeek.max || 1000);

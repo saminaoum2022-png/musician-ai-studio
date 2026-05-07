@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260508e";
+const APP_BUILD = "20260508f";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -314,6 +314,129 @@ function isPlayingLibraryRowVisible() {
   const ratio = r.height > 0 ? visiblePx / r.height : 0;
   return ratio >= 0.35;
 }
+
+/** Hub feed: auto-play the post whose vertical center is closest to the viewport center. */
+let hubAutoplayMutedPostId = null;
+let hubViewportAutoplayScheduled = false;
+
+function getHubRowClosestToViewportCenter() {
+  const root = els.hubList;
+  if (!root) return null;
+  const rows = root.querySelectorAll("[data-hub-row]");
+  if (!rows.length) return null;
+  const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+  const cy = vh / 2;
+  let bestId = null;
+  let bestDist = Infinity;
+  rows.forEach((row) => {
+    const r = row.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > vh) return;
+    const mid = r.top + r.height / 2;
+    const d = Math.abs(mid - cy);
+    if (d < bestDist) {
+      bestDist = d;
+      bestId = row.getAttribute("data-hub-row");
+    }
+  });
+  return bestId;
+}
+
+function scheduleHubViewportAutoplay() {
+  if (hubViewportAutoplayScheduled) return;
+  hubViewportAutoplayScheduled = true;
+  requestAnimationFrame(() => {
+    hubViewportAutoplayScheduled = false;
+    tryHubViewportAutoplay();
+  });
+}
+
+function tryHubViewportAutoplay() {
+  if ((document.body.getAttribute("data-route") || "") !== "hub") return;
+  if (!els.hubList) return;
+  const centerId = getHubRowClosestToViewportCenter();
+  if (!centerId) return;
+  if (hubAutoplayMutedPostId && centerId !== hubAutoplayMutedPostId) {
+    hubAutoplayMutedPostId = null;
+  }
+  if (centerId === hubAutoplayMutedPostId) return;
+  const feed = loadHubFeed();
+  const p = feed.find((x) => x.id === centerId);
+  if (!p?.url) return;
+  if (hubAudioPostId === centerId && hubAudio && !hubAudio.paused) return;
+  void startHubPlayback(centerId);
+}
+
+function stopHubPlayback() {
+  try {
+    if (hubAudio) hubAudio.pause();
+  } catch {}
+  hubAudio = null;
+  hubAudioPostId = null;
+  hubNowMeta = null;
+  miniSource = null;
+  const root = els.hubList;
+  if (root) {
+    root.querySelectorAll("[data-hub-play]").forEach((btn) => {
+      btn.textContent = "▶";
+    });
+    root.querySelectorAll(".hubPlayProgress > span").forEach((bar) => {
+      bar.style.width = "0%";
+    });
+    root.querySelectorAll(".hubCoverWrap").forEach((w) => w.classList.remove("isPlaying"));
+  }
+  if (els.hubNowProgBar) els.hubNowProgBar.style.width = "0%";
+  renderHubNowPlaying();
+}
+
+async function startHubPlayback(postId) {
+  const p = loadHubFeed().find((x) => x.id === postId);
+  if (!p?.url) return;
+  const playBtn =
+    els.hubList?.querySelector?.(`[data-hub-play="${postId}"]`) ||
+    document.querySelector(`[data-hub-play="${postId}"]`);
+  stopHubPlayback();
+  hubAudio = new Audio(p.url);
+  hubAudioPostId = postId;
+  miniSource = { type: "hub", id: postId };
+  hubNowMeta = {
+    title: p.title || "Hub song",
+    art: p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png",
+  };
+  if (playBtn) {
+    playBtn.textContent = "■";
+    playBtn.closest(".hubCoverWrap")?.classList.add("isPlaying");
+  }
+  hubAudio.addEventListener("ended", stopHubPlayback);
+  hubAudio.addEventListener("timeupdate", () => {
+    const clip = p?.meta?.clip;
+    if (clip && Number.isFinite(Number(clip.startSec)) && Number.isFinite(Number(clip.endSec))) {
+      const s = Number(clip.startSec);
+      const en = Number(clip.endSec);
+      if (hubAudio.currentTime < s) hubAudio.currentTime = s;
+      if (hubAudio.currentTime >= en) {
+        stopHubPlayback();
+        return;
+      }
+    }
+    const prog = document.getElementById(`hubProg_${postId}`);
+    if (!prog || !hubAudio?.duration) return;
+    const pct = Math.max(0, Math.min(100, (hubAudio.currentTime / hubAudio.duration) * 100));
+    prog.style.width = `${pct}%`;
+    if (els.hubNowProgBar) els.hubNowProgBar.style.width = `${pct}%`;
+    renderHubNowPlaying();
+  });
+  try {
+    await hubAudio.play();
+    if (p?.meta?.clip && Number.isFinite(Number(p.meta.clip.startSec))) {
+      hubAudio.currentTime = Math.max(0, Number(p.meta.clip.startSec));
+    }
+    renderHubNowPlaying();
+  } catch {
+    stopHubPlayback();
+    setStatus("Playback failed.");
+  }
+}
+
 function renderHubNowPlaying() {
   if (!els.hubNowPlaying) return;
   const route = document.body.getAttribute("data-route") || "";
@@ -475,6 +598,7 @@ function applyRoute() {
     markAllHubSeen();
     renderHubDots();
     renderHubUpdatedAt();
+    setTimeout(() => scheduleHubViewportAutoplay(), 60);
   }
   if (wanted === "profile") {
     void refreshAuthStateFromSupabase();
@@ -1602,64 +1726,21 @@ function renderHub() {
   `).join("");
   renderHubDots();
   renderHubUpdatedAt();
-  const stopHubAudio = () => {
-    try { if (hubAudio) hubAudio.pause(); } catch {}
-    hubAudio = null;
-    hubAudioPostId = null;
-    hubNowMeta = null;
-    miniSource = null;
-    els.hubList.querySelectorAll("[data-hub-play]").forEach((btn) => { btn.textContent = "▶"; });
-    els.hubList.querySelectorAll(".hubPlayProgress > span").forEach((bar) => { bar.style.width = "0%"; });
-    els.hubList.querySelectorAll(".hubCoverWrap").forEach((w) => w.classList.remove("isPlaying"));
-    if (els.hubNowProgBar) els.hubNowProgBar.style.width = "0%";
-    renderHubNowPlaying();
-  };
-  els.hubList.querySelectorAll("[data-hub-play]").forEach((b) => b.addEventListener("click", async (e) => {
-    e.stopPropagation();
-    const id = b.getAttribute("data-hub-play");
-    const p = loadHubFeed().find((x) => x.id === id);
-    if (!p?.url) return;
-    if (hubAudio && hubAudioPostId === id) {
-      stopHubAudio();
-      return;
-    }
-    stopHubAudio();
-    try {
-      hubAudio = new Audio(p.url);
-      hubAudioPostId = id;
-      miniSource = { type: "hub", id };
-      hubNowMeta = { title: p.title || "Hub song", art: p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png" };
-      b.textContent = "■";
-      b.closest(".hubCoverWrap")?.classList.add("isPlaying");
-      hubAudio.addEventListener("ended", stopHubAudio);
-      hubAudio.addEventListener("timeupdate", () => {
-        const clip = p?.meta?.clip;
-        if (clip && Number.isFinite(Number(clip.startSec)) && Number.isFinite(Number(clip.endSec))) {
-          const s = Number(clip.startSec);
-          const en = Number(clip.endSec);
-          if (hubAudio.currentTime < s) hubAudio.currentTime = s;
-          if (hubAudio.currentTime >= en) {
-            stopHubAudio();
-            return;
-          }
-        }
-        const prog = document.getElementById(`hubProg_${id}`);
-        if (!prog || !hubAudio?.duration) return;
-        const pct = Math.max(0, Math.min(100, (hubAudio.currentTime / hubAudio.duration) * 100));
-        prog.style.width = `${pct}%`;
-        if (els.hubNowProgBar) els.hubNowProgBar.style.width = `${pct}%`;
-        renderHubNowPlaying();
-      });
-      await hubAudio.play();
-      if (p?.meta?.clip && Number.isFinite(Number(p.meta.clip.startSec))) {
-        hubAudio.currentTime = Math.max(0, Number(p.meta.clip.startSec));
+  els.hubList.querySelectorAll("[data-hub-play]").forEach((b) =>
+    b.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const id = b.getAttribute("data-hub-play");
+      const p = loadHubFeed().find((x) => x.id === id);
+      if (!p?.url) return;
+      if (hubAudio && hubAudioPostId === id) {
+        stopHubPlayback();
+        hubAutoplayMutedPostId = id;
+        return;
       }
-      renderHubNowPlaying();
-    } catch {
-      stopHubAudio();
-      setStatus("Playback failed.");
-    }
-  }));
+      hubAutoplayMutedPostId = null;
+      await startHubPlayback(id);
+    })
+  );
   els.hubList.querySelectorAll("[data-hub-cover]").forEach((el) => {
     el.addEventListener("click", (e) => e.stopPropagation());
   });
@@ -1736,6 +1817,14 @@ function renderHub() {
     els.hubList.querySelectorAll(".hubMoreMenu").forEach((m) => (m.style.display = "none"));
     if (menu) menu.style.display = open ? "none" : "";
   }));
+  if (hubAudioPostId && hubAudio && !hubAudio.paused) {
+    const btn = els.hubList.querySelector(`[data-hub-play="${hubAudioPostId}"]`);
+    if (btn) {
+      btn.textContent = "■";
+      btn.closest(".hubCoverWrap")?.classList.add("isPlaying");
+    }
+  }
+  setTimeout(() => scheduleHubViewportAutoplay(), 40);
 }
 if (els.hubList) {
   els.hubList.addEventListener("click", async (e) => {
@@ -5603,16 +5692,9 @@ if (els.hubTabLink) {
 }
 if (els.hubNowClose) {
   els.hubNowClose.addEventListener("click", () => {
-    try { if (hubAudio) hubAudio.pause(); } catch {}
-    hubAudio = null;
-    hubAudioPostId = null;
-    hubNowMeta = null;
-    miniSource = null;
-    if (els.hubNowProgBar) els.hubNowProgBar.style.width = "0%";
-    renderHubNowPlaying();
-    document.querySelectorAll("[data-hub-play]").forEach((btn) => { btn.textContent = "▶"; });
-    document.querySelectorAll(".hubPlayProgress > span").forEach((bar) => { bar.style.width = "0%"; });
-    document.querySelectorAll(".hubCoverWrap").forEach((w) => w.classList.remove("isPlaying"));
+    const mutedId = hubAudioPostId;
+    stopHubPlayback();
+    if (mutedId) hubAutoplayMutedPostId = mutedId;
   });
 }
 if (els.hubNowPlaying) {
@@ -5643,8 +5725,11 @@ if (els.hubNowPlaying) {
   });
 }
 window.addEventListener("scroll", () => {
-  if (!hubAudio) return;
-  renderHubNowPlaying();
+  if ((document.body.getAttribute("data-route") || "") === "hub") scheduleHubViewportAutoplay();
+  if (hubAudio) renderHubNowPlaying();
+}, { passive: true });
+window.addEventListener("resize", () => {
+  if ((document.body.getAttribute("data-route") || "") === "hub") scheduleHubViewportAutoplay();
 }, { passive: true });
 window.addEventListener("hashchange", () => {
   if (!hubAudio) return;

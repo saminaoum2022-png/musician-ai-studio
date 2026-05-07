@@ -4648,16 +4648,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }, 5000);
   };
 
-  const HIDDEN_NEGATIVE_PROMPT =
-    "Avoid off-beat phrasing, clipped words, unstable groove, and spoken meta text. Respect user line breaks and phrase boundaries.";
-  const HIDDEN_PROSODY_GUARDRAILS =
-    "Follow-prompt behavior: keep user structure and mood first; preserve sentence cuts as singable phrases; use expressive timing when style implies romantic/ballad; avoid forcing fast percussion unless requested.";
   const REFERENCE_MELODY_LOCK =
     "strict melody lock, follow uploaded vocal contour and phrase timing, keep topline and cadence points, no spoken instructions";
-  const DIALECT_LOCK =
-    "accent lock: sing in requested dialect/language only; avoid switching to another dialect unless user asks";
-  const VOICE_STABILITY_GUARDRAILS =
-    "voice stability: keep smooth tone, controlled dynamics, avoid shouting, avoid sharp high-pitched belt, keep natural phrasing and warm timbre";
   const GROOVE_MAP = {
     slow: "tempo target 68-78 bpm, softer groove emphasis",
     balanced: "tempo target 84-96 bpm, balanced groove emphasis",
@@ -4847,10 +4839,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             "female lead, smooth controlled phrasing, avoid harsh or shouty delivery";
         }
       }
-      if (!hasReference) {
-        if (vocalProfileClause) payload.style = `${payload.style}, ${vocalProfileClause}`;
-        payload.style = `${payload.style}, ${VOICE_STABILITY_GUARDRAILS}, ${DIALECT_LOCK}`;
-      }
+      if (!hasReference && vocalProfileClause) payload.style = `${payload.style}, ${vocalProfileClause}`;
       payload.style = compactStyleForProvider(payload.style, 980);
       lastGenerationMeta = {
         engine,

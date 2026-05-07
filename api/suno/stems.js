@@ -89,7 +89,7 @@ module.exports = async function handler(req, res) {
           model: safeModel,
           callBackUrl,
           instrumental: false,
-          prompt: "",
+          prompt: String(prompt || "").trim(),
           style: style || "",
           title: title || "Reference full song",
           continueAt: 1,

@@ -4235,8 +4235,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
     if (els.resultTitle) els.resultTitle.textContent = lastSunoTitle || "Generated song";
     if (els.resultArt) {
-      els.resultArt.src = lastSunoArtUrl || "";
-      els.resultArt.style.display = lastSunoArtUrl ? "" : "none";
+      const fallbackCover = "/assets/nabadai-logo.png";
+      els.resultArt.src = lastSunoArtUrl || fallbackCover;
+      els.resultArt.style.display = "";
     }
     if (els.resultDownload) {
       const downloadUrl = lastSunoCachedUrl || lastSunoProxyUrl || lastSunoFullUrl;
@@ -4259,8 +4260,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
     if (els.resultTitle2) els.resultTitle2.textContent = lastSunoTitle2 || "Generated song B";
     if (els.resultArt2) {
-      els.resultArt2.src = lastSunoArtUrl2 || lastSunoArtUrl || "";
-      els.resultArt2.style.display = (lastSunoArtUrl2 || lastSunoArtUrl) ? "" : "none";
+      const fallbackCover = "/assets/nabadai-logo.png";
+      els.resultArt2.src = lastSunoArtUrl2 || lastSunoArtUrl || fallbackCover;
+      els.resultArt2.style.display = "";
     }
     if (els.resultDownload2) {
       const downloadUrl2 = lastSunoCachedUrl2 || lastSunoProxyUrl2 || lastSunoFullUrl2;
@@ -4705,7 +4707,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
       // In vocal-reference flow, use clean native reference handling:
       // do not pass textual prompt guidance from app internals.
-      if (hasReference) finalPrompt = "";
+      if (hasReference && referenceInstrumentalOnly) finalPrompt = "";
 
       const styleExtras = hasReference
         ? ""
@@ -4793,6 +4795,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             fd.append("fileName", vocalRefFile?.name || "vocal-reference.webm");
             fd.append("fileType", vocalRefFile?.type || "audio/webm");
             fd.append("style", String(userStyle || "").trim());
+            if (finalPrompt) fd.append("prompt", String(finalPrompt));
             fd.append("title", String((els.sunoTitle?.value || "").trim() || "Reference full song"));
             fd.append("model", LATEST_SUNO_MODEL);
             if (payload?.vocalGender) fd.append("vocalGender", String(payload.vocalGender));

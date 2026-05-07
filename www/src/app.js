@@ -5,8 +5,13 @@ import { mixStemsToWav } from "./studio/mixer.js";
 import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
-// Surfaces in Settings → Environment badge as `Build <stamp>`.
+// Surfaces in the page footer (always visible) and Settings → Environment.
 const APP_BUILD = "20260508d";
+
+(() => {
+  const f = document.getElementById("footerBuild");
+  if (f) f.textContent = `Build ${APP_BUILD}`;
+})();
 
 const els = {
   sunoPrompt: document.getElementById("sunoPrompt"),

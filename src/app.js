@@ -637,6 +637,48 @@ function pickRecorderMimeType() {
   }
   return "";
 }
+
+async function startVocalReferenceRecording() {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  const mimeType = pickRecorderMimeType();
+  const rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+  const chunks = [];
+  rec.ondataavailable = (e) => {
+    if (e.data && e.data.size) chunks.push(e.data);
+  };
+  rec.onstop = () => {
+    vocalRefChunks = chunks.slice();
+    vocalRefBlob = new Blob(chunks, { type: rec.mimeType || "audio/webm;codecs=opus" });
+    if (els.sunoVocalUploadName) {
+      els.sunoVocalUploadName.textContent = "Voice reference recorded and attached.";
+    }
+    renderReferenceHints();
+    updateVocalRefPreviewState();
+    if (els.btnRecorderUse) els.btnRecorderUse.disabled = !vocalRefBlob;
+    if (els.recorderStatus) els.recorderStatus.textContent = "Recording ready";
+  };
+  vocalRefStream = stream;
+  vocalRefRecorder = rec;
+  rec.start();
+  if (els.btnVocalRefRec) els.btnVocalRefRec.disabled = true;
+  if (els.btnVocalRefStop) els.btnVocalRefStop.disabled = false;
+  setStatus("Recording voice reference…");
+}
+
+function stopVocalReferenceRecording() {
+  try {
+    if (vocalRefRecorder && vocalRefRecorder.state !== "inactive") vocalRefRecorder.stop();
+  } catch {}
+  try {
+    if (vocalRefStream) vocalRefStream.getTracks().forEach((t) => t.stop());
+  } catch {}
+  vocalRefRecorder = null;
+  vocalRefStream = null;
+  if (els.btnVocalRefRec) els.btnVocalRefRec.disabled = false;
+  if (els.btnVocalRefStop) els.btnVocalRefStop.disabled = true;
+  setStatus("Voice reference ready.");
+  renderReferenceHints();
+}
 function extractTaskIdLoose(data) {
   return (
     data?.data?.taskId ||
@@ -3820,47 +3862,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   if (els.btnVocalRefRec && els.btnVocalRefStop) {
     els.btnVocalRefRec.addEventListener("click", async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        const mimeType = pickRecorderMimeType();
-        const rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-        const chunks = [];
-        rec.ondataavailable = (e) => {
-          if (e.data && e.data.size) chunks.push(e.data);
-        };
-        rec.onstop = () => {
-          vocalRefChunks = chunks.slice();
-          vocalRefBlob = new Blob(chunks, { type: rec.mimeType || "audio/webm;codecs=opus" });
-          if (els.sunoVocalUploadName) {
-            els.sunoVocalUploadName.textContent = "Voice reference recorded and attached.";
-          }
-          renderReferenceHints();
-          updateVocalRefPreviewState();
-          if (els.btnRecorderUse) els.btnRecorderUse.disabled = !vocalRefBlob;
-          if (els.recorderStatus) els.recorderStatus.textContent = "Recording ready";
-        };
-        vocalRefStream = stream;
-        vocalRefRecorder = rec;
-        rec.start();
-        els.btnVocalRefRec.disabled = true;
-        els.btnVocalRefStop.disabled = false;
-        setStatus("Recording voice reference…");
+        await startVocalReferenceRecording();
       } catch (e) {
         setStatus(`Microphone access failed: ${e?.message || String(e)}`);
       }
     });
     els.btnVocalRefStop.addEventListener("click", () => {
-      try {
-        if (vocalRefRecorder && vocalRefRecorder.state !== "inactive") vocalRefRecorder.stop();
-      } catch {}
-      try {
-        if (vocalRefStream) vocalRefStream.getTracks().forEach((t) => t.stop());
-      } catch {}
-      vocalRefRecorder = null;
-      vocalRefStream = null;
-      els.btnVocalRefRec.disabled = false;
-      els.btnVocalRefStop.disabled = true;
-      setStatus("Voice reference ready.");
-      renderReferenceHints();
+      stopVocalReferenceRecording();
     });
   }
   const syncVocalModeUi = () => {
@@ -4176,14 +4184,19 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     els.vocalRecorderBackdrop.addEventListener("click", closeVocalRecorderModal);
   }
   if (els.btnRecorderToggle) {
-    els.btnRecorderToggle.addEventListener("click", () => {
+    els.btnRecorderToggle.addEventListener("click", async () => {
       const isRecording = Boolean(vocalRefRecorder && vocalRefRecorder.state === "recording");
       if (!isRecording) {
-        els.btnVocalRefRec?.click();
+        try {
+          await startVocalReferenceRecording();
+        } catch (e) {
+          setStatus(`Microphone access failed: ${e?.message || String(e)}`);
+          return;
+        }
         if (els.btnRecorderToggle) els.btnRecorderToggle.classList.add("isRecording");
         if (els.recorderStatus) els.recorderStatus.textContent = "Recording… tap again to stop";
       } else {
-        els.btnVocalRefStop?.click();
+        stopVocalReferenceRecording();
         if (els.btnRecorderToggle) els.btnRecorderToggle.classList.remove("isRecording");
         if (els.recorderStatus) els.recorderStatus.textContent = "Recorded. Tap Use recording.";
       }

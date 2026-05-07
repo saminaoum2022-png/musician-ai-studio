@@ -4,6 +4,10 @@ import { recordHumToMelody } from "./melody/extract.js";
 import { mixStemsToWav } from "./studio/mixer.js";
 import { encodeWav16 } from "./wav.js";
 
+// Bumped on every deploy so we can verify, on-device, which JS version is live.
+// Surfaces in Settings → Environment badge as `Build <stamp>`.
+const APP_BUILD = "20260508b";
+
 const els = {
   sunoPrompt: document.getElementById("sunoPrompt"),
   sunoStyle: document.getElementById("sunoStyle"),
@@ -377,7 +381,7 @@ function updateEnvironmentBadge() {
   })();
   const mode = isNative ? "Native iOS" : "Web";
   const target = API_BASE ? `Remote (${host})` : "Same-origin";
-  els.envBadge.textContent = `Environment: ${mode} • ${target}`;
+  els.envBadge.textContent = `Environment: ${mode} • ${target} • Build ${APP_BUILD}`;
 }
 async function loadPublicConfig() {
   try {

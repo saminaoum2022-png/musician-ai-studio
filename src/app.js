@@ -4319,8 +4319,24 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const genData = data?.data?.response?.sunoData || data?.data?.response?.suno_data || [];
     const first = Array.isArray(genData) ? genData[0] : null;
     const second = Array.isArray(genData) ? genData[1] : null;
-    const audioUrl = first?.audioUrl || first?.audio_url || first?.streamAudioUrl || first?.stream_audio_url || "";
-    const imageUrl = first?.imageUrl || first?.image_url || first?.coverUrl || first?.cover_url || null;
+    const audioUrl =
+      first?.sourceAudioUrl ||
+      first?.source_audio_url ||
+      first?.sourceStreamAudioUrl ||
+      first?.source_stream_audio_url ||
+      first?.audioUrl ||
+      first?.audio_url ||
+      first?.streamAudioUrl ||
+      first?.stream_audio_url ||
+      "";
+    const imageUrl =
+      first?.sourceImageUrl ||
+      first?.source_image_url ||
+      first?.imageUrl ||
+      first?.image_url ||
+      first?.coverUrl ||
+      first?.cover_url ||
+      null;
     const title = first?.title || first?.songTitle || first?.song_title || "";
     sunoAudioId =
       first?.id ||
@@ -4342,8 +4358,24 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       await cacheGeneratedAudio(lastSunoProxyUrl || audioUrl);
       if (els.btnLoadFull) els.btnLoadFull.disabled = false;
     }
-    const audioUrl2 = second?.audioUrl || second?.audio_url || second?.streamAudioUrl || second?.stream_audio_url || "";
-    const imageUrl2 = second?.imageUrl || second?.image_url || second?.coverUrl || second?.cover_url || null;
+    const audioUrl2 =
+      second?.sourceAudioUrl ||
+      second?.source_audio_url ||
+      second?.sourceStreamAudioUrl ||
+      second?.source_stream_audio_url ||
+      second?.audioUrl ||
+      second?.audio_url ||
+      second?.streamAudioUrl ||
+      second?.stream_audio_url ||
+      "";
+    const imageUrl2 =
+      second?.sourceImageUrl ||
+      second?.source_image_url ||
+      second?.imageUrl ||
+      second?.image_url ||
+      second?.coverUrl ||
+      second?.cover_url ||
+      null;
     const title2 = second?.title || second?.songTitle || second?.song_title || "";
     lastSunoAudioId2 =
       second?.id ||

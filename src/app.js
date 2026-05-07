@@ -743,6 +743,8 @@ let hubSyncTimer = null;
 let hubLastSyncOk = false;
 let hubLastSyncRows = 0;
 let hubLastSyncError = "";
+let hubSyncInFlight = false;
+let hubRetryCount = 0;
 let hubFeedMemory = [];
 function loadHubSeen() {
   try {
@@ -802,8 +804,23 @@ function renderHubDots() {
 async function supabaseSelectHub() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 8000);
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/hub_posts?select=*&order=created_at.desc&limit=60`, {
+  const timer = setTimeout(() => ctrl.abort(), 12000);
+  const selectCols = [
+    "id",
+    "created_at",
+    "title",
+    "cover_url",
+    "song_url",
+    "kind",
+    "creator_username",
+    "creator_avatar",
+    "likes",
+    "reacts",
+    "remix_of",
+    "proof",
+    "meta",
+  ].join(",");
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(selectCols)}&order=created_at.desc&limit=60`, {
     headers: {
       apikey: SUPABASE_ANON_KEY,
     },
@@ -1538,12 +1555,15 @@ if (els.hubList) {
   });
 }
 async function refreshHubFromSupabase() {
+  if (hubSyncInFlight) return;
+  hubSyncInFlight = true;
   try {
     const rows = await supabaseSelectHub();
     if (!rows || !Array.isArray(rows)) return;
     hubLastSyncOk = true;
     hubLastSyncError = "";
     hubLastSyncRows = rows.length;
+    hubRetryCount = 0;
     const prev = loadHubFeed();
     const mapped = rows.map((r) => ({
       id: String(r.id),
@@ -1577,12 +1597,16 @@ async function refreshHubFromSupabase() {
     renderProfileHubShared();
   } catch (e) {
     hubLastSyncOk = false;
+    hubRetryCount += 1;
     hubLastSyncError = e?.name === "AbortError"
       ? "timeout, retrying…"
       : (e?.message ? String(e.message).slice(0, 100) : "unknown");
     renderHubUpdatedAt();
+    const backoff = Math.min(8000, 1500 * Math.max(1, hubRetryCount));
     setTimeout(async () => {
       try {
+        if (hubSyncInFlight) return;
+        hubSyncInFlight = true;
         const rows = await supabaseSelectHub();
         if (!rows || !Array.isArray(rows)) return;
         const mapped = rows.map((r) => ({
@@ -1604,21 +1628,28 @@ async function refreshHubFromSupabase() {
         hubLastSyncOk = true;
         hubLastSyncError = "";
         hubLastSyncRows = rows.length;
+        hubRetryCount = 0;
         saveHubFeed(mapped);
         lastHubUpdateAt = Math.max(...mapped.map((x) => Number(x.ts || 0)));
         renderHub();
         renderHubDots();
         renderProfileHubShared();
-      } catch {}
-    }, 1400);
+      } catch {} finally {
+        hubSyncInFlight = false;
+      }
+    }, backoff);
+  } finally {
+    hubSyncInFlight = false;
   }
 }
 function startHubLiveSync() {
   if (hubSyncTimer) clearInterval(hubSyncTimer);
   // Always keep Hub fresh for guest + logged users.
+  const isMobile = window.matchMedia?.("(max-width: 720px)")?.matches;
+  const interval = isMobile ? 28000 : 15000;
   hubSyncTimer = setInterval(() => {
     void refreshHubFromSupabase();
-  }, 12000);
+  }, interval);
 }
 function profilePersonasKey() {
   return `${PROFILE_PERSONAS_KEY}:${activeProfile.id || "guest"}`;

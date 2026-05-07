@@ -765,6 +765,7 @@ async function startVocalReferenceRecording() {
     vocalRefChunks = chunks.slice();
     const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm;codecs=opus" });
     vocalRefBlob = blob;
+    let promoted = false;
     // Immediately promote the recording to the active reference and drop any
     // previously uploaded file. Otherwise an earlier upload still wins because
     // currentVocalRefFile takes priority over vocalRefBlob in the picker.
@@ -776,12 +777,21 @@ async function startVocalReferenceRecording() {
         try { els.sunoVocalUpload.value = ""; } catch {}
       }
       setVocalRefFile(recordedFile, "Voice reference recorded and attached.");
+      promoted = true;
     } else {
       renderReferenceHints();
       updateVocalRefPreviewState();
     }
-    if (els.btnRecorderUse) els.btnRecorderUse.disabled = !vocalRefBlob;
-    if (els.recorderStatus) els.recorderStatus.textContent = "Recording ready";
+    // Use recording stays enabled whenever we actually have a reference;
+    // setVocalRefFile clears vocalRefBlob, so we cannot rely on it here.
+    if (els.btnRecorderUse) {
+      els.btnRecorderUse.disabled = !(promoted || getVocalReferenceFile());
+    }
+    if (els.recorderStatus) {
+      els.recorderStatus.textContent = promoted
+        ? "Recording ready. Tap Use recording or close."
+        : "Recording empty. Try again.";
+    }
   };
   vocalRefStream = stream;
   vocalRefRecorder = rec;
@@ -4347,16 +4357,19 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   }
   if (els.btnRecorderUse) {
     els.btnRecorderUse.addEventListener("click", () => {
-      if (!vocalRefBlob) return;
-      // Promote the recorded blob to the active reference and clear any
-      // previously uploaded file so the recording isn't shadowed.
-      const recordedFile = new File(
-        [vocalRefBlob],
-        "vocal-reference.webm",
-        { type: vocalRefBlob.type || "audio/webm" }
-      );
-      if (els.sunoVocalUpload) els.sunoVocalUpload.value = "";
-      setVocalRefFile(recordedFile, "Voice reference recorded and attached.");
+      // The recording is already promoted to currentVocalRefFile in
+      // MediaRecorder.onstop. If a stale blob is still around, promote it now
+      // as a safety net. Either way, just close the modal.
+      if (vocalRefBlob && !currentVocalRefFile) {
+        const recordedFile = new File(
+          [vocalRefBlob],
+          "vocal-reference.webm",
+          { type: vocalRefBlob.type || "audio/webm" }
+        );
+        if (els.sunoVocalUpload) els.sunoVocalUpload.value = "";
+        setVocalRefFile(recordedFile, "Voice reference recorded and attached.");
+      }
+      if (!getVocalReferenceFile()) return;
       closeVocalRecorderModal();
     });
   }

@@ -4992,16 +4992,24 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       haptic("light");
       const url =
         lastSunoCachedUrl ||
-        lastSunoProxyUrl ||
         lastSunoFullUrl ||
+        lastSunoProxyUrl ||
         (els.sunoFullLink?.classList.contains("disabled") ? "" : els.sunoFullLink?.href);
+      if (!url || url === "#") {
+        setStatus("No playable result URL yet. Please wait a moment and try again.");
+        return;
+      }
       await playOnPlayerPage(url && url !== "#" ? url : "", "Full song");
     });
   }
   if (els.btnResultPlay2) {
     els.btnResultPlay2.addEventListener("click", async () => {
       haptic("light");
-      const url = lastSunoCachedUrl2 || lastSunoProxyUrl2 || lastSunoFullUrl2;
+      const url = lastSunoCachedUrl2 || lastSunoFullUrl2 || lastSunoProxyUrl2;
+      if (!url || url === "#") {
+        setStatus("Second track is not ready for playback yet.");
+        return;
+      }
       await playOnPlayerPage(url && url !== "#" ? url : "", "Full song B");
     });
   }

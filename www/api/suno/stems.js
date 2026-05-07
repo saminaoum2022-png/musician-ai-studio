@@ -266,6 +266,55 @@ module.exports = async function handler(req, res) {
 
 // === helpers ===
 
+/** Pick a filename extension ffmpeg can probe reliably. */
+function guessInputExt(lowerMime, lowerName) {
+  const fromName =
+    lowerName.includes(".") && !lowerName.endsWith(".")
+      ? lowerName.slice(lowerName.lastIndexOf(".") + 1)
+      : "";
+  if (["mp3", "wav", "m4a", "aac", "flac", "webm", "ogg", "opus", "mp4"].includes(fromName)) return fromName;
+  if (/webm/.test(lowerMime)) return "webm";
+  if (/ogg|opus/.test(lowerMime)) return "ogg";
+  if (/mpeg|mp3/.test(lowerMime)) return "mp3";
+  if (/wav|wave|x-wav/.test(lowerMime)) return "wav";
+  if (/m4a|mp4|aac/.test(lowerMime)) return "m4a";
+  if (/flac/.test(lowerMime)) return "flac";
+  return "webm";
+}
+
+/**
+ * Vocal reference cleanup for Suno pitch/melody analysis:
+ * - High-pass ~80 Hz (phone rumble, breath LF)
+ * - Trim leading/trailing silence (align melody to bar 1)
+ * - EBU R128 loudness normalize (quiet recordings)
+ * All references are re-encoded to mono MP3 44.1 kHz.
+ */
+function buildVocalEnhanceFilters({ withLoudnorm }) {
+  const trim =
+    "silenceremove=start_periods=1:start_duration=0.2:start_threshold=-38dB:detection=peak," +
+    "areverse," +
+    "silenceremove=start_periods=1:start_duration=0.2:start_threshold=-38dB:detection=peak," +
+    "areverse";
+  const core = `highpass=f=80,${trim}`;
+  return withLoudnorm ? `${core},loudnorm=I=-16:LRA=11:TP=-1.5` : core;
+}
+
+function runFfmpeg(ffmpegPath, args) {
+  const { spawn } = require("child_process");
+  return new Promise((resolve, reject) => {
+    const p = spawn(ffmpegPath, args);
+    let stderr = "";
+    p.stderr.on("data", (d) => {
+      stderr += d.toString();
+    });
+    p.on("error", reject);
+    p.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`ffmpeg exit ${code}: ${stderr.slice(0, 400)}`));
+    });
+  });
+}
+
 async function maybeTranscodeToMp3({ bytes, mime, name }) {
   let ffmpegPath = null;
   try {
@@ -275,53 +324,117 @@ async function maybeTranscodeToMp3({ bytes, mime, name }) {
   }
   if (!ffmpegPath) return { bytes, mime, name };
 
-  const lowerMime = String(mime || "").toLowerCase();
-  const lowerName = String(name || "").toLowerCase();
-  const ext = lowerName.includes(".") ? lowerName.split(".").pop() : "";
-  const acceptableMime = /^audio\/(mpeg|mp3|wav|x-wav|wave|mp4|m4a|aac|flac|x-flac)$/.test(lowerMime);
-  const acceptableExt = ["mp3", "wav", "m4a", "aac", "flac"].includes(ext);
-  // Suno's pitch/melody analysis is most reliable on mp3/wav/m4a/aac/flac.
-  // Anything else (notably webm/opus from MediaRecorder) is transcoded.
-  if (acceptableMime || acceptableExt) return { bytes, mime, name };
-
-  const { spawn } = require("child_process");
   const fs = require("fs");
   const os = require("os");
   const path = require("path");
+
+  const lowerMime = String(mime || "").toLowerCase();
+  const lowerName = String(name || "").toLowerCase();
+  const ext = guessInputExt(lowerMime, lowerName);
+
   const tmpDir = os.tmpdir();
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const inPath = path.join(tmpDir, `nabad-in-${stamp}.${ext || "webm"}`);
+  const inPath = path.join(tmpDir, `nabad-in-${stamp}.${ext}`);
   const outPath = path.join(tmpDir, `nabad-out-${stamp}.mp3`);
+
+  const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+  const mp3Name = `${String(name || "vocal").replace(/\.[^.]+$/, "")}.mp3`;
+
+  async function encodePlain() {
+    await runFfmpeg(ffmpegPath, [
+      "-y",
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-i",
+      inPath,
+      "-vn",
+      "-ac",
+      "1",
+      "-ar",
+      "44100",
+      "-c:a",
+      "libmp3lame",
+      "-b:a",
+      "256k",
+      outPath,
+    ]);
+  }
+
   try {
-    fs.writeFileSync(inPath, Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes));
-    await new Promise((resolve, reject) => {
-      const p = spawn(ffmpegPath, [
+    fs.writeFileSync(inPath, buf);
+
+    // 1) Full chain: HP + trim + loudnorm
+    try {
+      await runFfmpeg(ffmpegPath, [
         "-y",
-        "-i", inPath,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        inPath,
         "-vn",
-        "-ac", "1",
-        "-ar", "44100",
-        "-b:a", "192k",
+        "-af",
+        buildVocalEnhanceFilters({ withLoudnorm: true }),
+        "-ac",
+        "1",
+        "-ar",
+        "44100",
+        "-c:a",
+        "libmp3lame",
+        "-b:a",
+        "256k",
         outPath,
       ]);
-      let stderr = "";
-      p.stderr.on("data", (d) => (stderr += d.toString()));
-      p.on("error", reject);
-      p.on("close", (code) =>
-        code === 0
-          ? resolve()
-          : reject(new Error(`ffmpeg exit ${code}: ${stderr.slice(0, 240)}`))
-      );
-    });
-    const out = fs.readFileSync(outPath);
-    const newName = (name || "vocal").replace(/\.[^.]+$/, "") + ".mp3";
-    return { bytes: out, mime: "audio/mpeg", name: newName };
+    } catch {
+      // 2) Some builds choke on loudnorm for very short clips — retry without loudnorm
+      await runFfmpeg(ffmpegPath, [
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        inPath,
+        "-vn",
+        "-af",
+        buildVocalEnhanceFilters({ withLoudnorm: false }),
+        "-ac",
+        "1",
+        "-ar",
+        "44100",
+        "-c:a",
+        "libmp3lame",
+        "-b:a",
+        "256k",
+        outPath,
+      ]);
+    }
+
+    let out = fs.readFileSync(outPath);
+    const minBytes = 2048;
+    if (!out || out.length < minBytes) {
+      throw new Error("enhanced output too short");
+    }
+    return { bytes: out, mime: "audio/mpeg", name: mp3Name };
   } catch {
-    // Graceful fallback: send original bytes; Suno may still accept them.
+    try {
+      fs.writeFileSync(inPath, buf);
+      await encodePlain();
+      const out = fs.readFileSync(outPath);
+      if (out && out.length >= 2048) {
+        return { bytes: out, mime: "audio/mpeg", name: mp3Name };
+      }
+    } catch {
+      // ignore
+    }
     return { bytes, mime, name };
   } finally {
-    try { fs.unlinkSync(inPath); } catch {}
-    try { fs.unlinkSync(outPath); } catch {}
+    try {
+      fs.unlinkSync(inPath);
+    } catch {}
+    try {
+      fs.unlinkSync(outPath);
+    } catch {}
   }
 }
 

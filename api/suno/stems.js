@@ -81,8 +81,7 @@ module.exports = async function handler(req, res) {
       const safeModel = allowedModels.has(requestedModel) ? requestedModel : "V4_5PLUS";
       // Vocal -> Full song OR Song -> Remix use upload-extend (full-song flow).
       if (referenceMode === "vocal_full" || referenceMode === "song_remix") {
-        // Clean native Suno reference mode:
-        // keep payload minimal and avoid app-injected prompt/style instructions.
+        // Clean native Suno reference mode with explicit current inputs.
         const extPayload = {
           uploadUrl,
           defaultParamFlag: true,

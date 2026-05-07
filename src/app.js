@@ -607,11 +607,23 @@ function markGenerationReadyNotice() {
 }
 
 function getVocalReferenceFile() {
+  // Always prefer explicitly uploaded file over cached recorded blob.
+  // This prevents stale recorder audio from being reused accidentally.
+  const uploaded = els.sunoVocalUpload?.files?.[0];
+  if (uploaded) return uploaded;
   if (vocalRefBlob) {
     return new File([vocalRefBlob], "vocal-reference.webm", { type: vocalRefBlob.type || "audio/webm" });
   }
-  const f = els.sunoVocalUpload?.files?.[0];
-  return f || null;
+  return null;
+}
+
+function clearVocalReferenceSelection() {
+  vocalRefBlob = null;
+  if (els.sunoVocalUpload) els.sunoVocalUpload.value = "";
+  clearVocalRefPreviewUrl();
+  if (els.sunoVocalUploadName) els.sunoVocalUploadName.textContent = "No vocal reference attached.";
+  updateVocalRefPreviewState();
+  renderReferenceHints();
 }
 function clearVocalRefPreviewUrl() {
   if (vocalRefPreviewUrl) URL.revokeObjectURL(vocalRefPreviewUrl);
@@ -4388,6 +4400,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           setStatus("Song is ready. Press Play full.");
           savePendingBackendTask("");
           markGenerationReadyNotice();
+          // Avoid stale vocal reference leaking into the next generation.
+          clearVocalReferenceSelection();
           setGenerateFieldsLocked(false);
           return;
         }
@@ -4397,6 +4411,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           setGenerateBtn("Generate song", false, "generate");
           setStatus("Generation failed. Please try again.");
           savePendingBackendTask("");
+          clearVocalReferenceSelection();
           setGenerateFieldsLocked(false);
           setLoading(false);
         }

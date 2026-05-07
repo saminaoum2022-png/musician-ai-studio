@@ -4640,7 +4640,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const isDefault = String(selectEl.value || "").trim() === "";
     selectEl.classList.toggle("isDefaultOption", isDefault);
   }
-  [els.sunoSongKey, els.sunoMaqam, els.sunoVoiceProfile, els.sunoDialect, els.sunoPersonaId].forEach((sel) => {
+[els.sunoSongKey, els.sunoMaqam, els.sunoVoiceProfile, els.sunoDialect, els.sunoPersonaId, els.sunoGroovePace, els.sunoProsody, els.sunoBeatStability].forEach((sel) => {
     if (!sel) return;
     syncDefaultSelectVisual(sel);
     sel.addEventListener("change", () => syncDefaultSelectVisual(sel));
@@ -4742,9 +4742,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const timingClause = timing
         ? `Timing lock: ${timing}. Keep this timing stable across all sections and vocal entries.`
         : "Timing lock: keep stable tempo and aligned vocal phrasing throughout the song.";
-      const groovePace = String(els.sunoGroovePace?.value || "balanced").trim();
-      const prosodyStrictness = String(els.sunoProsody?.value || "tight").trim();
-      const beatStability = String(els.sunoBeatStability?.value || "stable").trim();
+      const groovePace = String(els.sunoGroovePace?.value || "").trim();
+      const prosodyStrictness = String(els.sunoProsody?.value || "").trim();
+      const beatStability = String(els.sunoBeatStability?.value || "").trim();
       let finalPrompt = sanitizeLyricsPrompt(userPrompt);
       const imageOnlyInstrumental = Boolean(imageMoodAppliedForNextGen && !finalPrompt && !hasReference);
       if (!hasReference) {
@@ -4769,9 +4769,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             dialect ? `Dialect: ${dialect}` : "",
             dialectHint ? `Hint: ${dialectHint}` : "",
             timing ? timing : "",
-            GROOVE_MAP[groovePace] || GROOVE_MAP.balanced,
-            PROSODY_MAP[prosodyStrictness] || PROSODY_MAP.tight,
-            BEAT_STABILITY_MAP[beatStability] || BEAT_STABILITY_MAP.stable,
+            groovePace ? (GROOVE_MAP[groovePace] || "") : "",
+            prosodyStrictness ? (PROSODY_MAP[prosodyStrictness] || "") : "",
+            beatStability ? (BEAT_STABILITY_MAP[beatStability] || "") : "",
             HIDDEN_PROSODY_GUARDRAILS,
             HIDDEN_NEGATIVE_PROMPT,
             hasReference ? REFERENCE_MELODY_LOCK : "",
@@ -5152,9 +5152,9 @@ if (els.presetClubPunch) {
 }
 if (els.btnAdvancedReset) {
   els.btnAdvancedReset.addEventListener("click", () => {
-    if (els.sunoGroovePace) els.sunoGroovePace.value = "balanced";
-    if (els.sunoProsody) els.sunoProsody.value = "tight";
-    if (els.sunoBeatStability) els.sunoBeatStability.value = "stable";
+    if (els.sunoGroovePace) els.sunoGroovePace.value = "";
+    if (els.sunoProsody) els.sunoProsody.value = "";
+    if (els.sunoBeatStability) els.sunoBeatStability.value = "";
     if (els.sunoProMode) els.sunoProMode.checked = false;
     if (els.sunoTiming) els.sunoTiming.value = "";
     if (els.sunoSongKey) els.sunoSongKey.value = "";

@@ -200,7 +200,7 @@
             <summary>More options <button id="btnCloseAdvancedSheet" type="button" class="ghost">Close</button></summary>
             <div class="stepCard compactOptions">
           <div class="row optionsHeadRow">
-            <div class="hint optionsRecommended">Recommended profile active</div>
+            <div class="hint optionsRecommended">Optional controls (off by default)</div>
           </div>
           <div class="row optionsPresetRow">
             <button id="presetPopClean" class="ghost" type="button">Pop Clean</button>
@@ -215,7 +215,8 @@
               <label class="field">
                 <div class="label">Groove pace</div>
                 <select id="sunoGroovePace">
-                  <option value="balanced" selected>Balanced</option>
+                  <option value="" selected>Off (auto)</option>
+                  <option value="balanced">Balanced</option>
                   <option value="slow">Slow</option>
                   <option value="energetic">Energetic</option>
                 </select>
@@ -223,7 +224,8 @@
               <label class="field">
                 <div class="label">Prosody strictness</div>
                 <select id="sunoProsody">
-                  <option value="tight" selected>Tight</option>
+                  <option value="" selected>Off (auto)</option>
+                  <option value="tight">Tight</option>
                   <option value="natural">Natural</option>
                   <option value="ultra">Ultra Tight</option>
                 </select>
@@ -231,7 +233,8 @@
               <label class="field">
                 <div class="label">Beat stability</div>
                 <select id="sunoBeatStability">
-                  <option value="stable" selected>Stable</option>
+                  <option value="" selected>Off (auto)</option>
+                  <option value="stable">Stable</option>
                   <option value="flexible">Flexible</option>
                   <option value="locked">Locked</option>
                 </select>

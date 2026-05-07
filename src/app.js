@@ -5893,6 +5893,8 @@ if (els.btnOpenBilling) {
 if (els.btnOpenAdvancedSheet && els.advancedSheet) {
   els.btnOpenAdvancedSheet.addEventListener("click", () => {
     els.advancedSheet.open = true;
+    if (els.fineTuneDetails) els.fineTuneDetails.open = true;
+    els.advancedSheet.scrollTop = 0;
     const first = els.advancedSheet.querySelector("select, input");
     if (first) setTimeout(() => first.focus(), 120);
   });

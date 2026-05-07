@@ -487,8 +487,25 @@ function updateBrandPulse() {
   els.brandTitle.classList.toggle("isPlaying", isPlaying);
 }
 
+function resetAdvancedOptionsToDefaults() {
+  if (els.sunoGroovePace) els.sunoGroovePace.value = "";
+  if (els.sunoProsody) els.sunoProsody.value = "";
+  if (els.sunoBeatStability) els.sunoBeatStability.value = "";
+  if (els.sunoProMode) els.sunoProMode.checked = false;
+  if (els.sunoTiming) els.sunoTiming.value = "";
+  if (els.sunoSongKey) els.sunoSongKey.value = "";
+  if (els.sunoMaqam) els.sunoMaqam.value = "";
+  if (els.sunoVoiceProfile) els.sunoVoiceProfile.value = "";
+  if (els.sunoDialect) els.sunoDialect.value = "";
+  if (els.sunoDialectHint) els.sunoDialectHint.value = "";
+  if (els.sunoPersonaId) els.sunoPersonaId.value = "";
+  document.body.classList.remove("proMode");
+  if (els.advancedSheet) els.advancedSheet.open = false;
+}
+
 function resetCreateDraft() {
   busyCount = 0;
+  generationReadyNotice = false;
   if (els.sunoPrompt) els.sunoPrompt.value = "";
   if (els.sunoStyle) els.sunoStyle.value = "";
   if (els.sunoTitle) els.sunoTitle.value = "";
@@ -496,6 +513,9 @@ function resetCreateDraft() {
   if (els.sunoReferenceMode) els.sunoReferenceMode.value = "none";
   if (els.sunoVocalUpload) els.sunoVocalUpload.value = "";
   if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
+  resetAdvancedOptionsToDefaults();
+  if (els.vocalModeFull) els.vocalModeFull.classList.add("active");
+  if (els.vocalModeInstrumental) els.vocalModeInstrumental.classList.remove("active");
   if (els.sunoReferenceHint) {
     els.sunoReferenceHint.style.display = "none";
     els.sunoReferenceHint.textContent = "";
@@ -526,6 +546,11 @@ function resetCreateDraft() {
   imageMoodCoverDataUrl = "";
   sunoTaskId = null;
   sunoAudioId = null;
+  lastSunoAudioId2 = "";
+  if (lastSunoCachedUrl) safeRevokeObjectUrl(lastSunoCachedUrl);
+  if (lastSunoCachedUrl2) safeRevokeObjectUrl(lastSunoCachedUrl2);
+  lastSunoCachedUrl = "";
+  lastSunoCachedUrl2 = "";
   lastSunoFullUrl = "";
   lastSunoProxyUrl = "";
   lastSunoArtUrl = "";
@@ -534,6 +559,14 @@ function resetCreateDraft() {
   lastSunoProxyUrl2 = "";
   lastSunoArtUrl2 = "";
   lastSunoTitle2 = "";
+  if (playerEl) {
+    try {
+      playerEl.pause();
+      playerEl.currentTime = 0;
+    } catch {}
+  }
+  if (els.btnSunoStems) els.btnSunoStems.disabled = true;
+  if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = true;
   renderReferenceHints();
   setGenerateFieldsLocked(false);
   setLoading(false);
@@ -3168,7 +3201,6 @@ function ensurePlayer() {
   if (playerEl) return playerEl;
   playerEl = new Audio();
   playerEl.preload = "auto";
-  playerEl.crossOrigin = "anonymous";
   playerEl.addEventListener("timeupdate", syncPlayerUI);
   playerEl.addEventListener("loadedmetadata", syncPlayerUI);
   playerEl.addEventListener("ended", () => {
@@ -3200,6 +3232,23 @@ function setPlayerMeta({ title, subtitle, artUrl } = {}) {
 function setPlayerSource(url, label) {
   const a = ensurePlayer();
   a.pause();
+  // Only same-origin or blob URLs need crossOrigin for WebAudio/spectrum; forcing
+  // "anonymous" on arbitrary Suno CDN URLs breaks playback when ACAO is absent.
+  try {
+    const u = String(url || "");
+    if (!u || u.startsWith("blob:")) {
+      a.crossOrigin = "anonymous";
+    } else {
+      const parsed = new URL(u, location.href);
+      if (parsed.origin === location.origin) {
+        a.crossOrigin = "anonymous";
+      } else {
+        a.removeAttribute("crossOrigin");
+      }
+    }
+  } catch {
+    a.removeAttribute("crossOrigin");
+  }
   a.src = url;
   a.currentTime = 0;
   playerLoadedLabel = label || "";
@@ -5018,8 +5067,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       haptic("light");
       const url =
         lastSunoCachedUrl ||
-        lastSunoFullUrl ||
         lastSunoProxyUrl ||
+        lastSunoFullUrl ||
         (els.sunoFullLink?.classList.contains("disabled") ? "" : els.sunoFullLink?.href);
       if (!url || url === "#") {
         setStatus("No playable result URL yet. Please wait a moment and try again.");
@@ -5031,13 +5080,40 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   if (els.btnResultPlay2) {
     els.btnResultPlay2.addEventListener("click", async () => {
       haptic("light");
-      const url = lastSunoCachedUrl2 || lastSunoFullUrl2 || lastSunoProxyUrl2;
+      const url = lastSunoCachedUrl2 || lastSunoProxyUrl2 || lastSunoFullUrl2;
       if (!url || url === "#") {
         setStatus("Second track is not ready for playback yet.");
         return;
       }
-      await playOnPlayerPage(url && url !== "#" ? url : "", "Full song B");
+      await playOnPlayerPage(url && url !== "#" ? url : "", "Full song B", {
+        title: lastSunoTitle2 || "Generated song B",
+        subtitle: "Generated • Full song B",
+        artUrl: lastSunoArtUrl2 || lastSunoArtUrl,
+      });
     });
+  }
+  // Delegation: clicking artwork/title opens player (same as Play); buttons/links handle themselves.
+  if (els.resultCard) {
+    els.resultCard.addEventListener(
+      "click",
+      (e) => {
+        if (!e.target || !(e.target instanceof Element)) return;
+        if (e.target.closest("button") || e.target.closest("a")) return;
+        els.btnResultPlay?.click();
+      },
+      { capture: true }
+    );
+  }
+  if (els.resultCard2) {
+    els.resultCard2.addEventListener(
+      "click",
+      (e) => {
+        if (!e.target || !(e.target instanceof Element)) return;
+        if (e.target.closest("button") || e.target.closest("a")) return;
+        els.btnResultPlay2?.click();
+      },
+      { capture: true }
+    );
   }
 
   // Auto-resume pending backend generation on reopen/reload.
@@ -5178,18 +5254,7 @@ if (els.presetClubPunch) {
 }
 if (els.btnAdvancedReset) {
   els.btnAdvancedReset.addEventListener("click", () => {
-    if (els.sunoGroovePace) els.sunoGroovePace.value = "";
-    if (els.sunoProsody) els.sunoProsody.value = "";
-    if (els.sunoBeatStability) els.sunoBeatStability.value = "";
-    if (els.sunoProMode) els.sunoProMode.checked = false;
-    if (els.sunoTiming) els.sunoTiming.value = "";
-    if (els.sunoSongKey) els.sunoSongKey.value = "";
-    if (els.sunoMaqam) els.sunoMaqam.value = "";
-    if (els.sunoVoiceProfile) els.sunoVoiceProfile.value = "";
-    if (els.sunoDialect) els.sunoDialect.value = "";
-    if (els.sunoDialectHint) els.sunoDialectHint.value = "";
-    if (els.sunoPersonaId) els.sunoPersonaId.value = "";
-    updateProFieldVisibility();
+    resetAdvancedOptionsToDefaults();
     setStatus("More options reset to defaults.");
   });
 }

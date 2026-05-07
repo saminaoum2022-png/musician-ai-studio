@@ -119,6 +119,24 @@ module.exports = async function handler(req, res) {
       // === Cover mode: melody-following re-sing with new lyrics & arrangement ===
       const coverModes = new Set(["vocal_full", "vocal_cover", "song_remix", "song_cover"]);
       if (coverModes.has(referenceMode)) {
+        // Enrich style with delivery hints that don't fight the melody:
+        // dialect, timbre, persona color. Skip rigid timing/key locks so Suno
+        // can match the natural feel of the uploaded melody.
+        const coverStyle = buildCoverStyle({
+          baseStyle: style,
+          dialect,
+          dialectHint,
+          voiceTimbre,
+          vocalGender,
+        });
+        const coverNegative = mergeNegativeTags(negativeTags, [
+          "out-of-tune",
+          "autotune artifact",
+          "robotic vocal",
+          "off-beat",
+          "muddy mix",
+          "harsh sibilance",
+        ]);
         const coverPayload = {
           uploadUrl,
           customMode: true,
@@ -126,9 +144,10 @@ module.exports = async function handler(req, res) {
           model: safeModel,
           callBackUrl,
           prompt: prompt || "",
-          style: style || "",
+          style: coverStyle,
           title: title || "Cover from reference",
-          ...(negativeTags ? { negativeTags } : {}),
+          negativeTags: coverNegative,
+          styleWeight: 0.5,
           ...(vocalGender === "m" || vocalGender === "f" ? { vocalGender } : {}),
           ...(personaId ? { personaId } : {}),
         };
@@ -265,6 +284,63 @@ module.exports = async function handler(req, res) {
 };
 
 // === helpers ===
+
+/**
+ * For cover mode, fold delivery hints (dialect, timbre, vocal gender) into
+ * the `style` field. We deliberately avoid rigid timing/key/groove locks so
+ * Suno's melody analysis can drive the feel.
+ */
+function buildCoverStyle({ baseStyle, dialect, dialectHint, voiceTimbre, vocalGender }) {
+  const parts = [];
+  const base = String(baseStyle || "").trim();
+  if (base) parts.push(base);
+
+  const dialectClean = String(dialect || "").trim();
+  if (dialectClean) parts.push(`dialect: ${dialectClean}`);
+
+  const dialectHintClean = String(dialectHint || "").trim();
+  if (dialectHintClean) parts.push(`dialect hint: ${dialectHintClean}`);
+
+  const timbreClean = String(voiceTimbre || "").trim();
+  const timbreLower = timbreClean.toLowerCase();
+  const gender = String(vocalGender || "").trim().toLowerCase();
+  let timbreClause = "";
+  if (timbreLower.includes("baritone")) {
+    timbreClause = "male baritone lead, warm chest resonance, controlled dynamics";
+  } else if (timbreLower.includes("bass")) {
+    timbreClause = "male bass lead, deep low register, dark warm tone";
+  } else if (timbreLower.includes("tenor")) {
+    timbreClause = "male tenor lead, smooth lyrical upper range";
+  } else if (timbreLower.includes("alto")) {
+    timbreClause = "female alto lead, smoky chest tone";
+  } else if (timbreLower.includes("mezzo")) {
+    timbreClause = "female mezzo-soprano lead, balanced warm tone";
+  } else if (timbreLower.includes("soprano")) {
+    timbreClause = "female soprano lead, bright clear upper range";
+  }
+  if (timbreClause) parts.push(timbreClause);
+  else if (gender === "m") parts.push("male lead vocal");
+  else if (gender === "f") parts.push("female lead vocal");
+
+  parts.push("expressive melodic phrasing");
+
+  let merged = parts.filter(Boolean).join(", ");
+  if (merged.length > 980) merged = merged.slice(0, 977) + "...";
+  return merged;
+}
+
+function mergeNegativeTags(userNegative, defaults) {
+  const set = new Set();
+  for (const arr of [defaults || [], String(userNegative || "").split(",")]) {
+    for (const raw of arr) {
+      const v = String(raw || "").trim().toLowerCase();
+      if (v) set.add(v);
+    }
+  }
+  let merged = [...set].join(", ");
+  if (merged.length > 240) merged = merged.slice(0, 237) + "...";
+  return merged;
+}
 
 /** Pick a filename extension ffmpeg can probe reliably. */
 function guessInputExt(lowerMime, lowerName) {

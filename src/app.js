@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260508s";
+const APP_BUILD = "20260508t";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1978,16 +1978,6 @@ function renderHub() {
             <span class="hubReactLabel">Lyrics</span>
             <span class="hubReactCount">${Number(p?.reacts?.lyrics || 0)}</span>
           </button>
-          <button class="hubReact" data-hub-react="${p.id}:mix" aria-label="Mix clean">
-            <span class="hubReactIcon" aria-hidden="true">◌</span>
-            <span class="hubReactLabel">Mix</span>
-            <span class="hubReactCount">${Number(p?.reacts?.mix || 0)}</span>
-          </button>
-          <button class="hubReact" data-hub-react="${p.id}:groove" aria-label="Needs groove">
-            <span class="hubReactIcon" aria-hidden="true">≈</span>
-            <span class="hubReactLabel">Groove</span>
-            <span class="hubReactCount">${Number(p?.reacts?.groove || 0)}</span>
-          </button>
         </div>
       </div>
       <div class="libMenu hubMoreMenu" id="hubMore_${p.id}" style="display:none">
@@ -2055,8 +2045,6 @@ function renderHub() {
     const labels = {
       melody: "Melody strong",
       lyrics: "Lyrics strong",
-      mix: "Mix clean",
-      groove: "Needs groove",
     };
     setStatus(`${labels[key] || "Reaction"} +1`);
   }));

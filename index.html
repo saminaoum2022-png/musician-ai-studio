@@ -530,22 +530,43 @@
           </div>
         </section>
 
-        <section class="card wide" data-route="profile">
-          <div class="profilePreview" id="profilePreviewCard">
-            <div class="profilePreviewHead">
-              <button id="btnProfileCardEdit" class="ghost profileEditBtn" type="button" aria-label="Profile actions">⋯</button>
-              <div id="profileEditMenu" class="libMenu profileEditMenu" style="display:none">
-                <button class="ghost" id="btnProfileMenuEdit" type="button">Edit profile</button>
-              </div>
+        <section class="card wide profileOwnCard" data-route="profile">
+          <div class="profileOwnHead">
+            <h2 class="profileOwnTitle">Profile</h2>
+            <div class="profileOwnToolbar">
+              <button type="button" id="btnProfileEdit" class="profileOwnBtnEdit" aria-label="Edit profile">Edit</button>
+              <button type="button" id="btnProfileCancel" class="profileOwnBtnCancel" style="display:none" aria-label="Cancel editing">Cancel</button>
+              <button type="button" id="btnProfileSave" class="primary profileOwnBtnSave" style="display:none" aria-label="Save profile">Save</button>
             </div>
-            <div class="profilePreviewTop">
-              <img id="profilePreviewAvatar" class="profilePreviewAvatar" alt="avatar" title="Tap to change photo" />
-              <div class="profilePreviewMeta">
+          </div>
+
+          <div class="profileOwnBody">
+            <div class="profileOwnHero">
+              <div class="profileOwnAvatarWrap">
+                <img
+                  id="profilePreviewAvatar"
+                  class="profileOwnAvatar"
+                  src="./assets/nabadai-logo.png"
+                  alt="Your avatar"
+                />
+                <span id="profileAvatarEditHint" class="profileOwnAvatarHint" style="display:none">Photo</span>
+              </div>
+              <div class="profileOwnMeta">
                 <div class="profilePreviewUserRow">
-                  <input id="profilePreviewUsernameInput" class="profileInlineInput profileInlineUsername" type="text" value="@guest" maxlength="24" disabled />
+                  <input
+                    id="profilePreviewUsernameInput"
+                    class="profileInlineInput profileInlineUsername"
+                    type="text"
+                    value="@guest"
+                    maxlength="24"
+                    disabled
+                    spellcheck="false"
+                    autocomplete="username"
+                    aria-label="Username"
+                  />
                   <span id="profilePreviewGenderIcon" class="profilePreviewGenderIcon" style="display:none"></span>
                 </div>
-                <select id="profilePreviewTimbreInput" class="profileInlineSelect" disabled>
+                <select id="profilePreviewTimbreInput" class="profileInlineSelect" disabled aria-label="Voice range">
                   <option value="" selected>Voice: Not set</option>
                   <option value="bass">Voice: Bass</option>
                   <option value="baritone">Voice: Baritone</option>
@@ -557,27 +578,46 @@
                 <div id="authLoggedInEmailInline" class="hint profileAccountEmailInline"></div>
               </div>
             </div>
-            <textarea id="profilePreviewBioInput" class="profileInlineBio" rows="3" maxlength="120" disabled>Add a short bio to introduce your music style.</textarea>
-            <div id="profilePreviewGenres" class="profilePreviewGenres"></div>
+
+            <textarea
+              id="profilePreviewBioInput"
+              class="profileInlineBio"
+              rows="3"
+              maxlength="120"
+              disabled
+              spellcheck="true"
+              aria-label="Bio"
+            >Add a short bio to introduce your music style.</textarea>
+
+            <div id="profilePreviewGenres" class="profilePreviewGenres" style="display:none"></div>
+
+            <div id="profileOwnStats" class="profileOwnStats" style="display:none" aria-live="polite"></div>
           </div>
-          <div id="authLoginControls" class="row">
-            <button id="btnAuthGoogle" class="ghost" type="button">Continue with Google</button>
+
+          <div class="profileOwnSongs">
+            <div class="profileOwnSongsHead">
+              <span class="profileOwnSongsTitle">Songs</span>
+              <span id="profileOwnSongCount" class="profileOwnSongsCount"></span>
+            </div>
+            <div id="profileHubSharedList" class="profileHubSharedList"></div>
           </div>
-          <div id="authStatus" class="hint" style="margin-top:4px">Not logged in.</div>
-          <input id="profileAvatarFile" type="file" accept="image/*" style="display:none" />
-          <input id="profileIsPublic" type="checkbox" checked style="display:none" />
-          <div class="row profileSaveRow">
-            <button id="btnProfileSave" class="primary profileSaveBtn" type="button" style="display:none">Save profile</button>
+
+          <div class="profileOwnAccount">
+            <div class="profileOwnAccountTitle">Account</div>
+            <div id="authLoginControls" class="profileOwnAuthRow">
+              <button id="btnAuthGoogle" class="ghost" type="button">Continue with Google</button>
+            </div>
+            <div id="authStatus" class="hint profileOwnAuthStatus" style="margin-top:4px">Not logged in.</div>
+            <input id="profileAvatarFile" type="file" accept="image/*" style="display:none" />
+            <input id="profileIsPublic" type="checkbox" checked style="display:none" />
+            <div id="authLoggedInRow" class="profileAccountActions profileOwnAccountActions" style="display:none">
+              <button id="btnAuthLogout" class="ghost profileActionBtn" type="button">Logout</button>
+              <button id="btnProfileDelete" class="ghost profileActionBtn profileActionBtnDanger" type="button">Delete profile data</button>
+            </div>
           </div>
+
           <div id="profileSavedMsg" class="hint" style="margin-top:8px; display:none"></div>
           <div id="profileSaveToast" class="profileSaveToast" style="display:none">Profile updated.</div>
-          <div class="stepHead" style="margin-top:14px">Shared To Hub</div>
-          <div id="profileHubSharedList" class="profileHubSharedList" style="max-height:none"></div>
-          <div class="hint">Songs in Library are stored per profile on this device for now.</div>
-          <div id="authLoggedInRow" class="profileAccountActions" style="display:none">
-            <button id="btnAuthLogout" class="ghost profileActionBtn" type="button">Logout</button>
-            <button id="btnProfileDelete" class="ghost profileActionBtn profileActionBtnDanger" type="button">Delete profile data</button>
-          </div>
         </section>
 
         <section class="card wide" data-route="vocal">
@@ -1002,6 +1042,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260509s"></script>
+    <script type="module" src="./src/app.js?v=20260509u"></script>
   </body>
 </html>

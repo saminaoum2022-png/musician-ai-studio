@@ -2454,59 +2454,161 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   background: rgba(0,0,0,0.16);
   margin-top:10px;
 }
-.profilePreview{
-  border:0;
-  border-radius:0;
-  padding:0 0 6px;
-  background: transparent;
-  box-shadow:none;
-  margin-bottom: 8px;
-  position: relative;
+.profileOwnCard{
+  display:flex;
+  flex-direction:column;
+  gap:18px;
+  padding-bottom: 6px;
 }
 .card[data-route="profile"]{
   padding-top: 8px !important;
 }
-.card[data-route="profile"] .profilePreview{
+.card[data-route="profile"] .profileOwnCard{
   margin-top: 0 !important;
   padding-top: 0 !important;
 }
-.profilePreviewHead{
-  position:absolute;
-  top:0;
-  right:0;
+.profileOwnHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+}
+.profileOwnTitle{
   margin:0;
-  z-index:5;
-}
-.profileEditBtn{
-  border-radius:999px;
-  padding:4px 9px;
-  min-height:30px;
   font-size:18px;
-  line-height:1;
+  font-weight:800;
+  letter-spacing:-0.3px;
 }
-.profileEditMenu{
-  position:absolute;
-  right:0;
-  top:34px;
-  z-index:15;
-  min-width:140px;
+.profileOwnToolbar{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
 }
-.profilePreviewTop{
+.profileOwnBtnEdit,
+.profileOwnBtnCancel{
+  border-radius:999px;
+  padding:6px 14px;
+  min-height:34px;
+  font-size:13px;
+  font-weight:600;
+}
+.profileOwnBtnSave{
+  border-radius:999px;
+  padding:6px 16px;
+  min-height:34px;
+  font-size:13px;
+}
+.profileOwnBody{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+.profileOwnHero{
   display:flex;
   align-items:flex-start;
-  gap:10px;
-  padding-right: 44px;
-  margin-top: 0;
+  gap:14px;
 }
-.profilePreviewAvatar{
-  width:60px;
-  height:60px;
+.profileOwnAvatarWrap{
+  position:relative;
+  flex:0 0 auto;
+}
+.profileOwnAvatar{
+  width:72px;
+  height:72px;
   border-radius:999px;
-  border:1px solid rgba(255,255,255,0.16);
   object-fit:cover;
+  border:2px solid rgba(255,255,255,0.14);
   background: rgba(255,255,255,0.06);
+  display:block;
 }
-.profilePreviewMeta{ min-width:0; }
+.profileOwnAvatarHint{
+  position:absolute;
+  bottom:-2px;
+  right:-2px;
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:0.4px;
+  text-transform:uppercase;
+  padding:3px 7px;
+  border-radius:999px;
+  background: rgba(124,92,255,0.95);
+  color:#fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+}
+.profileOwnMeta{
+  flex:1 1 auto;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+.profileOwnStats{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+  font-size:13px;
+  color: rgba(223, 231, 251, 0.85);
+  padding:8px 12px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.08);
+  background: linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0.008));
+}
+.profileOwnStats strong{
+  color:#fff;
+  font-weight:800;
+}
+.profileOwnSongs{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.profileOwnSongsHead{
+  display:flex;
+  align-items:baseline;
+  gap:8px;
+}
+.profileOwnSongsTitle{
+  font-size:13px;
+  font-weight:700;
+  letter-spacing:0.6px;
+  text-transform:uppercase;
+  color: rgba(223, 231, 251, 0.78);
+}
+.profileOwnSongsCount{
+  font-size:12px;
+  color: rgba(223, 231, 251, 0.55);
+  font-variant-numeric: tabular-nums;
+}
+.profileOwnAccount{
+  padding-top:14px;
+  margin-top:4px;
+  border-top:1px solid rgba(255,255,255,0.08);
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.profileOwnAccountTitle{
+  font-size:13px;
+  font-weight:700;
+  letter-spacing:0.5px;
+  text-transform:uppercase;
+  color: rgba(223, 231, 251, 0.72);
+}
+.profileOwnAuthRow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:center;
+}
+.profileOwnAuthStatus{
+  margin-top:0 !important;
+}
+.profileOwnAccountActions{
+  margin-top:2px;
+}
 .profilePreviewUserRow{
   display:flex;
   align-items:center;
@@ -2643,45 +2745,70 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   font-size: 13px;
 }
 .profileHubSharedList{
-  display: grid;
-  gap: 8px;
+  display:grid;
+  gap:8px;
 }
-.profileHubSharedItem{
+.profileOwnEmpty{
+  font-size:13px;
+  color: rgba(168,180,199,0.85);
+  padding:14px 12px;
+  border-radius:12px;
+  border:1px dashed rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.02);
+  text-align:center;
+}
+.profileOwnSong{
   display:flex;
   align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  padding:10px 11px;
-  border:1px solid rgba(255,255,255,0.10);
+  gap:12px;
+  padding:8px 10px 8px 8px;
   border-radius:12px;
-  margin-top:0;
+  border:1px solid rgba(255,255,255,0.10);
   background: linear-gradient(180deg, rgba(18,25,39,0.70), rgba(10,14,22,0.62));
+  text-align:left;
+  cursor:pointer;
+  color:#f0f4ff;
+  font:inherit;
+  width:100%;
+  transition: transform 140ms ease, border-color 200ms ease, background 200ms ease;
+  -webkit-tap-highlight-color: transparent;
 }
-.profileHubSharedMeta{
-  min-width: 0;
-  display: grid;
-  gap: 3px;
+.profileOwnSong:hover{
+  border-color: rgba(124, 92, 255, 0.42);
+  background: linear-gradient(180deg, rgba(28,33,52,0.88), rgba(14,18,30,0.76));
 }
-.profileHubSharedItem .name{
-  font-weight:800;
-  font-size:13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.profileOwnSong:active{ transform: scale(0.985); }
+.profileOwnSongCover{
+  width:54px;
+  height:54px;
+  border-radius:8px;
+  object-fit:cover;
+  flex:0 0 auto;
+  background: rgba(255,255,255,0.04);
 }
-.profileHubSharedItem .hint{
-  font-size:11px;
-  color: var(--muted);
-  margin: 0;
+.profileOwnSongMeta{
+  flex:1 1 auto;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:3px;
 }
-.profileHubSharedItem .time{
-  font-size:11px;
-  color: var(--muted);
-  border:1px solid rgba(255,255,255,0.14);
-  border-radius:999px;
-  padding:4px 8px;
-  white-space: nowrap;
-  background: rgba(255,255,255,0.03);
+.profileOwnSongTitle{
+  font-size:14px;
+  font-weight:700;
+  letter-spacing:-0.1px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.profileOwnSongTiny{
+  font-size:11.5px;
+  color: rgba(223, 231, 251, 0.65);
+}
+.profileOwnSongChev{
+  flex:0 0 auto;
+  font-size:18px;
+  opacity:0.45;
 }
 
 /* -------- Public creator profile (#/u/USERNAME) -------- */

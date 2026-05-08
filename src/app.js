@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509s";
+const APP_BUILD = "20260509u";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -238,6 +238,10 @@ const els = {
   profileAvatarFile: document.getElementById("profileAvatarFile"),
   profileIsPublic: document.getElementById("profileIsPublic"),
   btnProfileSave: document.getElementById("btnProfileSave"),
+  btnProfileEdit: document.getElementById("btnProfileEdit"),
+  btnProfileCancel: document.getElementById("btnProfileCancel"),
+  profileOwnStats: document.getElementById("profileOwnStats"),
+  profileOwnSongCount: document.getElementById("profileOwnSongCount"),
   profileSavedMsg: document.getElementById("profileSavedMsg"),
   profileSaveToast: document.getElementById("profileSaveToast"),
   authLoginControls: document.getElementById("authLoginControls"),
@@ -268,9 +272,6 @@ const els = {
   userPublicSongs: document.getElementById("userPublicSongs"),
   userPublicEmpty: document.getElementById("userPublicEmpty"),
   btnUserPublicBack: document.getElementById("btnUserPublicBack"),
-  btnProfileCardEdit: document.getElementById("btnProfileCardEdit"),
-  profileEditMenu: document.getElementById("profileEditMenu"),
-  btnProfileMenuEdit: document.getElementById("btnProfileMenuEdit"),
   songDetailsModal: document.getElementById("songDetailsModal"),
   songDetailsBackdrop: document.getElementById("songDetailsBackdrop"),
   btnCloseSongDetails: document.getElementById("btnCloseSongDetails"),
@@ -964,6 +965,7 @@ function applyRoute() {
   }
   if (wanted === "profile") {
     void refreshAuthStateFromSupabase();
+    setProfileEditing(false);
   }
   if (wanted === "user") {
     renderUserProfile(pendingPublicUsername);
@@ -1633,6 +1635,7 @@ function resetProfileUiToGuest() {
   if (els.profileAvatarFile) els.profileAvatarFile.value = "";
   renderProfilePreviewFromInputs();
   renderProfileHubShared();
+  setProfileEditing(false);
   renderLibrary();
 }
 async function supabaseSendOtp(email) {
@@ -2432,6 +2435,49 @@ function addPersona(personaId, label) {
   renderPersonaSelect();
 }
 
+let profileEditing = false;
+
+function setProfileEditing(on) {
+  profileEditing = Boolean(on);
+  if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.disabled = !profileEditing;
+  if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.disabled = !profileEditing;
+  if (els.profilePreviewBioInput) els.profilePreviewBioInput.disabled = !profileEditing;
+  if (els.btnProfileEdit) els.btnProfileEdit.style.display = profileEditing ? "none" : "";
+  if (els.btnProfileCancel) els.btnProfileCancel.style.display = profileEditing ? "" : "none";
+  if (els.btnProfileSave) els.btnProfileSave.style.display = profileEditing ? "" : "none";
+  const hint = document.getElementById("profileAvatarEditHint");
+  if (hint) hint.style.display = profileEditing ? "" : "none";
+}
+
+function restoreProfileInputsFromActive() {
+  if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = activeProfile.username ? `@${activeProfile.username}` : "@guest";
+  if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = activeProfile.voiceTimbre || "";
+  if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = activeProfile.bio || "";
+  renderProfilePreviewFromInputs();
+}
+
+function renderProfileOwnStats() {
+  if (!els.profileOwnStats) return;
+  const creator = String(activeProfile.username || "guest");
+  const uid = String(authSession?.user?.id || "");
+  const items = loadHubFeed().filter((p) =>
+    uid ? String(p?.meta?.creatorUserId || "") === uid : String(p?.creator || "") === creator,
+  );
+  const totalLikes = items.reduce((sum, p) => sum + Number(p.likes || 0), 0);
+  if (els.profileOwnSongCount) els.profileOwnSongCount.textContent = items.length ? String(items.length) : "";
+  if (!items.length) {
+    els.profileOwnStats.innerHTML = "";
+    els.profileOwnStats.style.display = "none";
+    return;
+  }
+  els.profileOwnStats.style.display = "";
+  els.profileOwnStats.innerHTML = `
+    <span><strong>${items.length}</strong> song${items.length === 1 ? "" : "s"}</span>
+    <span aria-hidden="true">·</span>
+    <span><strong>${totalLikes}</strong> like${totalLikes === 1 ? "" : "s"}</span>
+  `;
+}
+
 function renderProfilePreviewFromInputs() {
   const usernameRaw = String(els.profilePreviewUsernameInput?.value || "").trim().toLowerCase();
   const username = usernameRaw ? `@${usernameRaw.replace(/^@/, "")}` : "@guest";
@@ -2449,11 +2495,19 @@ function renderProfilePreviewFromInputs() {
     const h = Math.max(54, Math.min(132, els.profilePreviewBioInput.scrollHeight || 54));
     els.profilePreviewBioInput.style.height = `${h}px`;
   }
-  if (els.profilePreviewGenres) els.profilePreviewGenres.textContent = genres ? `Genres: ${genres}` : "";
+  if (els.profilePreviewGenres) {
+    if (genres) {
+      els.profilePreviewGenres.textContent = `Genres: ${genres}`;
+      els.profilePreviewGenres.style.display = "";
+    } else {
+      els.profilePreviewGenres.textContent = "";
+      els.profilePreviewGenres.style.display = "none";
+    }
+  }
   if (els.profilePreviewAvatar) {
     els.profilePreviewAvatar.src = activeProfile.avatar || "./assets/nabadai-logo.png";
   }
-  if (els.profilePreviewLinks) els.profilePreviewLinks.innerHTML = "";
+  renderProfileOwnStats();
 }
 
 /** Public-facing profile aggregated from this user's Hub posts. We use the
@@ -2558,19 +2612,28 @@ function renderProfileHubShared() {
   const items = loadHubFeed()
     .filter((p) => (uid ? String(p?.meta?.creatorUserId || "") === uid : String(p?.creator || "") === creator))
     .slice(0, 30);
+  renderProfileOwnStats();
   if (!items.length) {
-    els.profileHubSharedList.textContent = "No shared songs yet.";
+    els.profileHubSharedList.innerHTML = `<div class="profileOwnEmpty">No songs on Hub yet. Share from Library or Player.</div>`;
     return;
   }
   els.profileHubSharedList.innerHTML = items.map((p) => `
-    <div class="profileHubSharedItem">
-      <div class="profileHubSharedMeta">
-        <div class="name">${escapeHtml(String(p.title || "Untitled"))}</div>
-        <div class="hint">${escapeHtml(String(p.genre || "Shared to Hub"))}</div>
+    <button type="button" class="profileOwnSong" data-profile-hub-open="${escapeHtml(String(p.id))}">
+      <img class="profileOwnSongCover" src="${escapeHtml(p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png")}" alt="" />
+      <div class="profileOwnSongMeta">
+        <div class="profileOwnSongTitle">${escapeHtml(String(p.title || "Untitled"))}</div>
+        <div class="profileOwnSongTiny">${escapeHtml(relativeTime(p.ts))} · ❤ ${Number(p.likes || 0)}</div>
       </div>
-      <div class="time">${new Date(p.ts).toLocaleDateString()}</div>
-    </div>
+      <span class="profileOwnSongChev" aria-hidden="true">›</span>
+    </button>
   `).join("");
+  els.profileHubSharedList.querySelectorAll("[data-profile-hub-open]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const sid = b.getAttribute("data-profile-hub-open");
+      if (!sid) return;
+      location.hash = `#/hub?post=${encodeURIComponent(sid)}`;
+    });
+  });
 }
 
 function loadLibrary() {
@@ -7487,42 +7550,24 @@ if (els.btnProfileSave) {
     renderLibrary();
     renderPersonaSelect();
     setStatus(`Profile saved: @${username}`);
-    if (els.profileSavedMsg) {
-      els.profileSavedMsg.style.display = "";
-      els.profileSavedMsg.textContent = `Saved @${username}`;
-      setTimeout(() => {
-        if (els.profileSavedMsg) els.profileSavedMsg.style.display = "none";
-      }, 2200);
-    }
-    if (els.profileSaveToast) {
-      els.profileSaveToast.textContent = "Profile updated.";
-      els.profileSaveToast.style.display = "";
-      setTimeout(() => {
-        if (els.profileSaveToast) els.profileSaveToast.style.display = "none";
-      }, 1800);
-    }
     renderProfilePreviewFromInputs();
     renderProfileHubShared();
+    setProfileEditing(false);
+    showToast("Profile saved.");
   });
 }
-if (els.btnProfileCardEdit) {
-  els.btnProfileCardEdit.addEventListener("click", () => {
-    const menu = els.profileEditMenu;
-    if (!menu) return;
-    const open = menu.style.display !== "none";
-    menu.style.display = open ? "none" : "";
+if (els.btnProfileEdit) {
+  els.btnProfileEdit.addEventListener("click", () => {
+    setProfileEditing(true);
+    if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.focus();
+    setStatus("Editing profile — adjust fields, then Save.");
   });
 }
-if (els.btnProfileMenuEdit) {
-  els.btnProfileMenuEdit.addEventListener("click", () => {
-    const editing = els.profilePreviewUsernameInput?.disabled !== false;
-    if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.disabled = !editing;
-    if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.disabled = !editing;
-    if (els.profilePreviewBioInput) els.profilePreviewBioInput.disabled = !editing;
-    if (els.btnProfileSave) els.btnProfileSave.style.display = editing ? "" : "none";
-    if (els.profileEditMenu) els.profileEditMenu.style.display = "none";
-    if (editing && els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.focus();
-    setStatus(editing ? "Edit directly in the card, then save." : "Edit mode closed.");
+if (els.btnProfileCancel) {
+  els.btnProfileCancel.addEventListener("click", () => {
+    restoreProfileInputsFromActive();
+    setProfileEditing(false);
+    setStatus("Edits cancelled.");
   });
 }
 if (els.btnAuthGoogle) {
@@ -7568,11 +7613,7 @@ if (els.btnAuthLogout) {
   els.btnAuthLogout.addEventListener("click", () => {
     saveAuthSession(null);
     resetProfileUiToGuest();
-    if (els.profileEditMenu) els.profileEditMenu.style.display = "none";
-    if (els.btnProfileSave) els.btnProfileSave.style.display = "none";
-    if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.disabled = true;
-    if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.disabled = true;
-    if (els.profilePreviewBioInput) els.profilePreviewBioInput.disabled = true;
+    setProfileEditing(false);
     if (els.btnAuthGoogle) {
       els.btnAuthGoogle.disabled = false;
       els.btnAuthGoogle.textContent = "Continue with Google";
@@ -7613,7 +7654,10 @@ if (els.profileAvatarFile) {
   });
 }
 if (els.profilePreviewAvatar && els.profileAvatarFile) {
-  els.profilePreviewAvatar.addEventListener("click", () => els.profileAvatarFile.click());
+  els.profilePreviewAvatar.addEventListener("click", () => {
+    if (!profileEditing) return;
+    els.profileAvatarFile.click();
+  });
 }
 [
   els.profilePreviewUsernameInput,
@@ -7815,6 +7859,7 @@ if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = activeProfile
 if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !== false;
 renderProfilePreviewFromInputs();
 renderProfileHubShared();
+setProfileEditing(false);
 
 // Hum → melody (MVP)
 if (els.btnHumStart && els.btnHumStop && els.btnHumClear) {

@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510s";
+const APP_BUILD = "20260510t";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -6467,8 +6467,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
 
   const btnResultShare = document.getElementById("btnResultShare");
   const btnResultShare2 = document.getElementById("btnResultShare2");
-  const btnResultSaveLib = document.getElementById("btnResultSaveLib");
-  const btnResultSaveLib2 = document.getElementById("btnResultSaveLib2");
   if (btnResultShare) {
     btnResultShare.addEventListener("click", async (ev) => {
       ev.stopPropagation();
@@ -6483,14 +6481,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       await shareGeneratedTrack("b");
     });
   }
-  const openLibraryFromResult = (ev) => {
-    ev.stopPropagation();
-    haptic("light");
-    location.hash = "#/library";
-    showToast("Find your tracks at the top of Library.");
-  };
-  if (btnResultSaveLib) btnResultSaveLib.addEventListener("click", openLibraryFromResult);
-  if (btnResultSaveLib2) btnResultSaveLib2.addEventListener("click", openLibraryFromResult);
   if (els.btnResultListenRef) {
     // Opens the exact temporary file Suno received as the vocal reference in a
     // new tab so the system audio player handles it. We deliberately avoid the
@@ -6514,42 +6504,74 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       try { a.click(); } finally { setTimeout(() => a.remove(), 100); }
     });
   }
-  // Delegation: clicking artwork/title opens play (same as cover button); real controls handle themselves.
-  if (els.resultCard) {
-    els.resultCard.addEventListener(
-      "click",
-      (e) => {
-        if (!e.target || !(e.target instanceof Element)) return;
-        if (
-          e.target.closest("button") ||
-          e.target.closest("a") ||
-          e.target.closest("details") ||
-          e.target.closest("summary")
-        ) {
-          return;
-        }
-        els.btnResultPlay?.click();
-      },
-      { capture: true }
+  // Click delegation on the result card body (anywhere except the inner
+  // controls) opens the full-screen Now Playing for that variant.
+  // The cover's ▶ button still triggers inline preview so users who just
+  // want to listen don't get pulled off Create.
+  const openResultInPlayer = async (variant) => {
+    haptic("light");
+    const candidates = variant === "b"
+      ? [lastSunoCachedUrl2, lastSunoProxyUrl2, lastSunoFullUrl2].filter(Boolean)
+      : [
+          lastSunoCachedUrl,
+          lastSunoProxyUrl,
+          lastSunoFullUrl,
+          els.sunoFullLink?.classList.contains("disabled") ? "" : els.sunoFullLink?.href,
+        ].filter((u) => u && u !== "#");
+    const url = candidates[0] || "";
+    if (!url) {
+      setStatus(variant === "b"
+        ? "Second track is not ready for playback yet."
+        : "No playable result URL yet. Please wait a moment and try again.");
+      return;
+    }
+    // If the player already has this variant loaded (e.g. user pressed the
+    // cover ▶ a moment ago), just expand to full-screen instead of seeking
+    // back to 0 and re-buffering.
+    const currentSrc = String(playerEl?.src || "");
+    const alreadyLoaded = candidates.some((u) => u && currentSrc === u);
+    miniSource = { type: "player" };
+    if (alreadyLoaded) {
+      location.hash = "#/player";
+      try {
+        if (playerEl?.paused) await playerEl.play();
+      } catch {}
+      return;
+    }
+    if (variant === "b") {
+      if (lastSunoFullUrl2) lastPlayerHttpUrl = lastSunoFullUrl2;
+      await playOnPlayerPage(url, "Full song B", {
+        title: lastSunoTitle2 || "Generated song B",
+        subtitle: "Generated • Version B",
+        artUrl: lastSunoArtUrl2 || lastSunoArtUrl,
+      });
+      return;
+    }
+    if (lastSunoFullUrl) lastPlayerHttpUrl = lastSunoFullUrl;
+    await playOnPlayerPage(url, "Full song", {
+      title: lastSunoTitle || "Generated song",
+      subtitle: "Generated • Version A",
+      artUrl: lastSunoArtUrl,
+    });
+  };
+  const isInteractive = (target) =>
+    target && target instanceof Element && (
+      target.closest("button") ||
+      target.closest("a") ||
+      target.closest("details") ||
+      target.closest("summary")
     );
+  if (els.resultCard) {
+    els.resultCard.addEventListener("click", (e) => {
+      if (isInteractive(e.target)) return;
+      void openResultInPlayer("a");
+    });
   }
   if (els.resultCard2) {
-    els.resultCard2.addEventListener(
-      "click",
-      (e) => {
-        if (!e.target || !(e.target instanceof Element)) return;
-        if (
-          e.target.closest("button") ||
-          e.target.closest("a") ||
-          e.target.closest("details") ||
-          e.target.closest("summary")
-        ) {
-          return;
-        }
-        els.btnResultPlay2?.click();
-      },
-      { capture: true }
-    );
+    els.resultCard2.addEventListener("click", (e) => {
+      if (isInteractive(e.target)) return;
+      void openResultInPlayer("b");
+    });
   }
 
   // Auto-resume pending backend generation on reopen/reload.

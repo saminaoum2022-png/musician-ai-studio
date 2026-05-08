@@ -3505,16 +3505,25 @@ body.proMode .proField{
 .resultCard{
   border: 1px solid rgba(255,255,255,0.10);
   border-radius: 16px;
-  padding: 14px;
+  padding: 12px;
   background: linear-gradient(180deg, rgba(22,28,42,0.94), rgba(10,14,22,0.90));
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   animation: resultReveal 260ms ease;
   box-shadow: 0 14px 36px rgba(0,0,0,0.28);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 200ms ease, transform 140ms ease, background 220ms ease;
+}
+.resultCard:hover{
+  border-color: rgba(124, 92, 255, 0.30);
+}
+.resultCard:active{
+  transform: scale(0.998);
 }
 .resultCardInner{
   display: grid;
-  grid-template-columns: 112px 1fr;
-  gap: 14px;
+  grid-template-columns: 96px 1fr;
+  gap: 12px;
   align-items: start;
 }
 .resultArtCol{
@@ -3525,9 +3534,9 @@ body.proMode .proField{
 }
 .resultArtWrap{
   position: relative;
-  width: 112px;
-  height: 112px;
-  border-radius: 16px;
+  width: 96px;
+  height: 96px;
+  border-radius: 14px;
   overflow: hidden;
   background: rgba(0,0,0,0.35);
   border: 1px solid rgba(255,255,255,0.12);
@@ -3623,21 +3632,56 @@ body.proMode .proField{
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 .resultHead{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
   padding-right: 4px;
 }
 .resultTitle{
   font-weight: 800;
   margin: 0;
-  font-size: 17px;
+  font-size: 16px;
   line-height: 1.25;
   letter-spacing: -0.02em;
   color: rgba(244,247,255,0.98);
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Auto-saved indicator — replaces the old "Library" CTA. Songs are
+ * persisted to Library on success automatically; this chip simply makes
+ * that visible so users know the track is safe and reachable. */
+.resultSavedChip{
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: rgba(155, 245, 211, 0.95);
+  background: rgba(35, 213, 171, 0.12);
+  border: 1px solid rgba(35, 213, 171, 0.30);
+  flex: 0 0 auto;
+}
+.resultSavedIco{
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .resultMetaLine{
-  margin: 0;
+  margin: 2px 0 0;
   font-size: 12.5px;
   line-height: 1.4;
   color: rgba(232,238,247,0.62);
@@ -3648,16 +3692,15 @@ body.proMode .proField{
 }
 .resultActionsRow{
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 .resultActionBtn{
   border-radius: 999px;
   font-size: 13px;
   font-weight: 700;
-  min-height: 40px;
+  min-height: 36px;
   padding: 0 16px;
   cursor: pointer;
   border: 1px solid transparent;
@@ -3668,18 +3711,14 @@ body.proMode .proField{
   transform: scale(0.98);
 }
 .resultActionBtn--share{
-  flex: 1 1 120px;
+  flex: 1 1 auto;
   color: #fff;
   border-color: rgba(124,92,255,0.55);
   background: linear-gradient(180deg, rgba(124,92,255,0.88), rgba(35,213,171,0.58));
-  box-shadow: 0 10px 22px rgba(124,92,255,0.28);
+  box-shadow: 0 8px 18px rgba(124,92,255,0.24);
 }
-.resultActionBtn--save{
-  flex: 1 1 88px;
-  color: rgba(244,247,255,0.92);
-  border-color: rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.06);
-}
+/* The ⋯ menu sits as a tiny inline glyph (no pill chrome) so the row
+ * reads as: primary action + quiet secondary affordance. */
 .resultMoreMenu{
   position: relative;
   flex: 0 0 auto;
@@ -3690,17 +3729,30 @@ body.proMode .proField{
 .resultMoreMenu > summary::-webkit-details-marker{
   display: none;
 }
-.resultActionBtn--more{
-  width: 44px;
-  min-width: 44px;
-  padding: 0;
-  flex: 0 0 44px;
-  font-size: 20px;
-  line-height: 1;
-  font-weight: 800;
-  color: rgba(244,247,255,0.88);
-  border-color: rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.06);
+.resultMoreToggle{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  cursor: pointer;
+  color: rgba(232, 238, 247, 0.55);
+  background: transparent;
+  border: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+.resultMoreToggle:hover,
+.resultMoreMenu[open] > .resultMoreToggle{
+  color: rgba(244, 247, 255, 0.95);
+  background: rgba(255, 255, 255, 0.05);
+}
+.resultMoreIco{
+  width: 18px;
+  height: 18px;
+  display: block;
+  fill: currentColor;
 }
 .resultMorePanel{
   position: absolute;
@@ -3734,18 +3786,21 @@ body.proMode .proField{
 }
 @media (max-width: 420px){
   .resultCardInner{
-    grid-template-columns: 96px 1fr;
+    grid-template-columns: 88px 1fr;
     gap: 10px;
   }
   .resultArtWrap{
-    width: 96px;
-    height: 96px;
+    width: 88px;
+    height: 88px;
     border-radius: 14px;
   }
   .resultArtPlay{
-    width: 40px;
-    height: 40px;
+    width: 38px;
+    height: 38px;
     font-size: 16px;
+  }
+  .resultTitle{
+    font-size: 15.5px;
   }
 }
 .generateActions{

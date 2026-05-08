@@ -190,13 +190,24 @@
               <div class="resultMainCol">
                 <div class="resultHead">
                   <h3 id="resultTitle" class="resultTitle">Generated song</h3>
+                  <span class="resultSavedChip" aria-label="Saved to Library">
+                    <svg class="resultSavedIco" viewBox="0 0 24 24" aria-hidden="true">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    <span>Saved</span>
+                  </span>
                 </div>
                 <p id="resultMetaLine" class="resultMetaLine"></p>
                 <div class="resultActionsRow">
                   <button id="btnResultShare" class="resultActionBtn resultActionBtn--share" type="button">Share</button>
-                  <button id="btnResultSaveLib" class="resultActionBtn resultActionBtn--save" type="button">Library</button>
                   <details class="resultMoreMenu">
-                    <summary class="resultActionBtn resultActionBtn--more" aria-label="More">⋯</summary>
+                    <summary class="resultMoreToggle" aria-label="More options">
+                      <svg class="resultMoreIco" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="5" cy="12" r="1.6"/>
+                        <circle cx="12" cy="12" r="1.6"/>
+                        <circle cx="19" cy="12" r="1.6"/>
+                      </svg>
+                    </summary>
                     <div class="resultMorePanel">
                       <a id="resultDownload" class="resultMoreLink disabled" href="#" download="generated_song.mp3" rel="noreferrer">Download</a>
                       <a id="btnResultOpenDirect" class="resultMoreLink disabled" href="#" rel="noreferrer" target="_blank">Open in browser</a>
@@ -227,13 +238,24 @@
               <div class="resultMainCol">
                 <div class="resultHead">
                   <h3 id="resultTitle2" class="resultTitle">Generated song B</h3>
+                  <span class="resultSavedChip" aria-label="Saved to Library">
+                    <svg class="resultSavedIco" viewBox="0 0 24 24" aria-hidden="true">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    <span>Saved</span>
+                  </span>
                 </div>
                 <p id="resultMetaLine2" class="resultMetaLine"></p>
                 <div class="resultActionsRow">
                   <button id="btnResultShare2" class="resultActionBtn resultActionBtn--share" type="button">Share</button>
-                  <button id="btnResultSaveLib2" class="resultActionBtn resultActionBtn--save" type="button">Library</button>
                   <details class="resultMoreMenu">
-                    <summary class="resultActionBtn resultActionBtn--more" aria-label="More">⋯</summary>
+                    <summary class="resultMoreToggle" aria-label="More options">
+                      <svg class="resultMoreIco" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="5" cy="12" r="1.6"/>
+                        <circle cx="12" cy="12" r="1.6"/>
+                        <circle cx="19" cy="12" r="1.6"/>
+                      </svg>
+                    </summary>
                     <div class="resultMorePanel">
                       <a id="resultDownload2" class="resultMoreLink disabled" href="#" download="generated_song_b.mp3" rel="noreferrer">Download</a>
                       <a id="btnResultOpenDirect2" class="resultMoreLink disabled" href="#" rel="noreferrer" target="_blank">Open in browser</a>
@@ -1183,6 +1205,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260510s"></script>
+    <script type="module" src="./src/app.js?v=20260510t"></script>
   </body>
 </html>

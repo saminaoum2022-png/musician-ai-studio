@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509e";
+const APP_BUILD = "20260509f";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -3863,9 +3863,17 @@ function setPlayerMeta({ title, subtitle, artUrl } = {}) {
   renderHubNowPlaying();
 }
 
+// Most recent http(s) URL handed to the player. Used by Download Video
+// and Share so they don't depend on which entry point loaded the song
+// (Library sets `currentPlayerTrackRef`, but Generate result cards and
+// other paths don't).
+let lastPlayerHttpUrl = "";
 function setPlayerSource(url, label) {
   const a = ensurePlayer();
   a.pause();
+  if (typeof url === "string" && /^https?:\/\//i.test(url)) {
+    lastPlayerHttpUrl = url;
+  }
   // Only same-origin or blob URLs need crossOrigin for WebAudio/spectrum; forcing
   // "anonymous" on arbitrary Suno CDN URLs breaks playback when ACAO is absent.
   try {
@@ -6018,6 +6026,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         setStatus("No playable result URL yet. Please wait a moment and try again.");
         return;
       }
+      // Capture the canonical http URL for downstream Share/Download.
+      // The played URL might be a blob: cache or a relative proxy path,
+      // neither of which the server can fetch.
+      if (lastSunoFullUrl) lastPlayerHttpUrl = lastSunoFullUrl;
       await playOnPlayerPage(url && url !== "#" ? url : "", "Full song");
     });
   }
@@ -6029,6 +6041,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         setStatus("Second track is not ready for playback yet.");
         return;
       }
+      if (lastSunoFullUrl2) lastPlayerHttpUrl = lastSunoFullUrl2;
       await playOnPlayerPage(url && url !== "#" ? url : "", "Full song B", {
         title: lastSunoTitle2 || "Generated song B",
         subtitle: "Generated • Full song B",
@@ -6659,16 +6672,47 @@ if (els.btnPlayerShare) {
 if (els.btnPlayerDownloadVideo) {
   els.btnPlayerDownloadVideo.addEventListener("click", async () => {
     haptic("light");
-    const trackUrl = String(currentPlayerTrackRef?.url || playerEl?.src || "").trim();
-    const trackTitle = String(currentPlayerTrackRef?.title || els.playerTitle?.textContent || "song").trim();
-    const trackArt = String(
-      currentPlayerTrackRef?.artUrl
-        || currentPlayerTrackRef?.coverUrl
-        || els.playerCover?.src
-        || ""
+    // The server needs a real http(s) URL it can fetch from. blob:/data:
+    // URLs (which we sometimes use for in-app caching) are unfetchable from
+    // Node, so prefer the track ref's persisted URL and only fall back to
+    // playerEl.src when it's a plain remote URL.
+    const isHttpUrl = (s) => /^https?:\/\//i.test(String(s || "").trim());
+    // Try in this order:
+    //   1. The library/profile track ref (Library entry point)
+    //   2. The captured "last http url handed to the player" (covers
+    //      Generate result cards which don't set the track ref)
+    //   3. The most recent generated song URLs (raw CDN, then proxy)
+    //   4. playerEl.src as a last resort (skipped if it's a blob: URL,
+    //      which happens after a Hub playback shares the audio element)
+    const candidates = [
+      currentPlayerTrackRef?.url,
+      currentPlayerTrackRef?.audioUrl,
+      currentPlayerTrackRef?.song_url,
+      lastPlayerHttpUrl,
+      lastSunoFullUrl,
+      lastSunoProxyUrl,
+      lastSunoFullUrl2,
+      lastSunoProxyUrl2,
+      playerEl?.src,
+    ];
+    const trackUrl = (candidates.find((s) => isHttpUrl(s)) || "").trim();
+    const trackTitle = String(
+      currentPlayerTrackRef?.title
+        || els.playerTitle?.textContent
+        || lastSunoTitle
+        || "song"
     ).trim();
+    const artCandidates = [
+      currentPlayerTrackRef?.artUrl,
+      currentPlayerTrackRef?.coverUrl,
+      currentPlayerTrackRef?.cover_url,
+      lastSunoArtUrl,
+      lastSunoArtUrl2,
+      els.playerCover?.src,
+    ];
+    const trackArt = (artCandidates.find((s) => isHttpUrl(s)) || "").trim();
     if (!trackUrl) {
-      showToast("Open a song first, then download.");
+      showToast("This song isn't downloadable. Re-open it from Library and try again.");
       return;
     }
     const btn = els.btnPlayerDownloadVideo;

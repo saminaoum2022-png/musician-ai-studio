@@ -135,6 +135,19 @@ module.exports = async function handler(req, res) {
       res.end(JSON.stringify({ error: "Missing audioUrl" }));
       return;
     }
+    // Node's fetch only handles http/https. A blob:, data:, or relative URL
+    // would otherwise crash with a vague "Failed to parse URL" message.
+    if (!/^https?:\/\//i.test(audioUrl)) {
+      res.statusCode = 400;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({
+        error: `audioUrl must be http(s). Got: ${audioUrl.slice(0, 40)}…`,
+      }));
+      return;
+    }
+    // Image is optional. Drop any non-http(s) imageUrl so the render
+    // falls back to a black background instead of failing the whole job.
+    const safeImageUrl = imageUrl && /^https?:\/\//i.test(imageUrl) ? imageUrl : "";
 
     let ffmpegPath = null;
     try { ffmpegPath = require("ffmpeg-static"); } catch {}
@@ -148,8 +161,8 @@ module.exports = async function handler(req, res) {
     // Pull both assets in parallel. Image is optional — if it fails or
     // the URL is empty, we render with a solid black background instead.
     const audioPromise = fetchToBuffer(audioUrl, MAX_AUDIO_BYTES);
-    const imagePromise = imageUrl
-      ? fetchToBuffer(imageUrl, MAX_IMAGE_BYTES).catch(() => null)
+    const imagePromise = safeImageUrl
+      ? fetchToBuffer(safeImageUrl, MAX_IMAGE_BYTES).catch(() => null)
       : Promise.resolve(null);
     const [audio, image] = await Promise.all([audioPromise, imagePromise]);
 
@@ -163,7 +176,7 @@ module.exports = async function handler(req, res) {
 
     let imagePath = "";
     if (image) {
-      const imgExt = imageExtFromContentType(image.contentType, imageUrl);
+      const imgExt = imageExtFromContentType(image.contentType, safeImageUrl);
       imagePath = path.join(tmpDir, `nabad-vid-${stamp}.${imgExt}`);
       fs.writeFileSync(imagePath, image.buffer);
       cleanup.push(imagePath);
@@ -224,6 +237,7 @@ module.exports = async function handler(req, res) {
     res.end(out);
   } catch (e) {
     const msg = e?.message ? String(e.message) : "render failed";
+    console.error("[render-video] failed:", msg, e?.stack || "");
     res.statusCode = 500;
     res.setHeader("Content-Type", "application/json");
     res.setHeader("Cache-Control", "no-store");

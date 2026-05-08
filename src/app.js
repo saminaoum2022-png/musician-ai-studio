@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260508z";
+const APP_BUILD = "20260509a";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -413,11 +413,16 @@ function getHubRowClosestToViewportCenter() {
   return bestIntersectId || bestAnyId;
 }
 
-// Don't run on every scroll frame — that was the cause of "rapid play/stop":
-// while the user dragged, every frame `getHubRowClosestToViewportCenter` could
-// pick a different row and we'd start/abandon playback in a loop. Now we only
-// trigger autoplay once the scroll has been quiet for ~220ms (or instantly on
-// `scrollend`, see the listener below).
+// Don't run *audio* on every scroll frame — that was the cause of "rapid
+// play/stop": while the user dragged, every frame
+// `getHubRowClosestToViewportCenter` could pick a different row and we'd
+// start/abandon playback in a loop. So audio waits for the scroll to be
+// quiet for ~140ms (or instantly on `scrollend`).
+//
+// VISUAL focus is a separate path (`updateHubFocusedRow`) that DOES run on
+// every scroll frame, raf-throttled. Just toggling a class is cheap and
+// makes the lift/dim/title-resize feel immediate instead of arriving late
+// after the audio finally loads.
 function scheduleHubViewportAutoplay() {
   if (hubViewportTailTimer) {
     try { clearTimeout(hubViewportTailTimer); } catch {}
@@ -425,7 +430,34 @@ function scheduleHubViewportAutoplay() {
   hubViewportTailTimer = setTimeout(() => {
     hubViewportTailTimer = null;
     tryHubViewportAutoplay();
-  }, 220);
+  }, 140);
+}
+
+// Visual focus tracking — separate from audio playback. Sets `.isActive`
+// on the row whose center is closest to the viewport center, so all the
+// "this is the focused card" CSS (lift, dim others, hero title, bigger
+// action chips) snaps in the instant the user finishes a swipe instead of
+// waiting for `startHubPlayback` to add `.isPlaying` after audio loads.
+let hubFocusedPostId = null;
+let hubFocusUpdateRaf = 0;
+function updateHubFocusedRow() {
+  if ((document.body.getAttribute("data-route") || "") !== "hub") return;
+  if (!els.hubList) return;
+  const centerId = getHubRowClosestToViewportCenter();
+  if (centerId === hubFocusedPostId) return;
+  hubFocusedPostId = centerId;
+  const root = els.hubList;
+  root.querySelectorAll(".hubRow").forEach((r) => {
+    const isActive = centerId && r.getAttribute("data-hub-row") === centerId;
+    r.classList.toggle("isActive", Boolean(isActive));
+  });
+}
+function scheduleHubFocusUpdate() {
+  if (hubFocusUpdateRaf) return;
+  hubFocusUpdateRaf = requestAnimationFrame(() => {
+    hubFocusUpdateRaf = 0;
+    updateHubFocusedRow();
+  });
 }
 function flushHubViewportAutoplay() {
   if (hubViewportTailTimer) {
@@ -638,6 +670,18 @@ async function startHubPlayback(postId) {
   // the audio element is buffering. Cleared as soon as play() resolves
   // (success or failure), so it never lingers on a finished/dead row.
   coverWrap?.classList.add("isLoading");
+  // Force focus visuals onto the playing row immediately. Useful when the
+  // user taps ▶ on a card that isn't centered — without this, the row
+  // would play audio without growing the title or chips.
+  const playingRow = coverWrap?.closest?.(".hubRow")
+    || document.querySelector(`[data-hub-row="${postId}"]`);
+  if (playingRow && root) {
+    root.querySelectorAll(".hubRow.isActive").forEach((r) => {
+      if (r !== playingRow) r.classList.remove("isActive");
+    });
+    playingRow.classList.add("isActive");
+    hubFocusedPostId = postId;
+  }
 
   const targetSrc = hubPlaybackSrcForPost(postId, p);
   if (!targetSrc) {
@@ -870,6 +914,9 @@ function applyRoute() {
     renderHubDots();
     renderHubUpdatedAt();
     updateHubAudioHint();
+    // Fire focus once on the next frame so the closest-to-center card
+    // already shows the lift / hero title before any scroll event.
+    requestAnimationFrame(() => updateHubFocusedRow());
     setTimeout(() => scheduleHubViewportAutoplay(), 60);
     // Honor a `?post=ID` query in the hash: scroll the post into view and,
     // if audio is already unlocked, kick off playback. Don't auto-play
@@ -2144,6 +2191,11 @@ function renderHub() {
       btn.closest(".hubCoverWrap")?.classList.add("isPlaying");
     }
   }
+  // Reset cached focused id so updateHubFocusedRow re-evaluates against the
+  // freshly rendered DOM (otherwise a stale id == previous id check would
+  // skip toggling on the new elements).
+  hubFocusedPostId = null;
+  requestAnimationFrame(() => updateHubFocusedRow());
   setTimeout(() => scheduleHubViewportAutoplay(), 40);
   preloadInitialHubTracks();
   updateHubAudioHint();
@@ -6408,19 +6460,26 @@ if (els.hubNowPlaying) {
   });
 }
 window.addEventListener("scroll", () => {
-  if ((document.body.getAttribute("data-route") || "") === "hub") scheduleHubViewportAutoplay();
+  if ((document.body.getAttribute("data-route") || "") === "hub") {
+    scheduleHubFocusUpdate();
+    scheduleHubViewportAutoplay();
+  }
   if (hubAudio) renderHubNowPlaying();
 }, { passive: true });
 // `scrollend` fires once the page (or a programmatic smooth scroll) actually
 // stops — much more reliable than waiting for `scroll` events to taper off.
 // Supported on iOS Safari 16+, Chrome 114+, and Firefox 109+. Where it isn't
-// supported the 220ms debounce above still covers us.
+// supported the 140ms debounce above still covers us.
 window.addEventListener("scrollend", () => {
   if ((document.body.getAttribute("data-route") || "") !== "hub") return;
+  updateHubFocusedRow();
   flushHubViewportAutoplay();
 }, { passive: true });
 window.addEventListener("resize", () => {
-  if ((document.body.getAttribute("data-route") || "") === "hub") scheduleHubViewportAutoplay();
+  if ((document.body.getAttribute("data-route") || "") === "hub") {
+    scheduleHubFocusUpdate();
+    scheduleHubViewportAutoplay();
+  }
 }, { passive: true });
 window.addEventListener("hashchange", () => {
   if (!hubAudio) return;

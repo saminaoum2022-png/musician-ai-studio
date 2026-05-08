@@ -617,20 +617,20 @@ body.isIntro .footer{ display:none; }
 }
 
 /*
- * Focus mode: when any Hub post is playing, gently dim the others so the
- * active card visually owns the screen. Uses :has() to react to whichever
- * row the JS marked `.isPlaying`. Where :has() isn't supported (older
- * browsers) the fade simply doesn't apply — the rest of the alive cues
- * (EQ bars, glow, breathing) still make the active card readable.
+ * Focus mode: dim non-focused rows so the centered card visually owns the
+ * screen. Driven by `.isActive` which JS toggles on the row whose center
+ * is closest to the viewport center (raf-throttled during scroll). This
+ * decouples the *visual* focus from audio loading — focus snaps in the
+ * instant a swipe lands, instead of waiting for `startHubPlayback` to
+ * finish loading and add `.isPlaying`.
  */
 #hubList .hubRow{
   transition:
-    opacity 360ms cubic-bezier(0.22, 1, 0.36, 1),
-    filter 360ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-#hubList:has(.hubCoverWrap.isPlaying)
-  .hubRow:not(:has(.hubCoverWrap.isPlaying)){
+#hubList:has(.hubRow.isActive) .hubRow:not(.isActive){
   opacity: 0.5;
   filter: saturate(0.7);
 }
@@ -644,8 +644,9 @@ body.isIntro .footer{ display:none; }
  *  feels deliberately designed instead of "default ghost chips".
  * ----------------------------------------------------------------- */
 
-/* Subtle lift on the playing card to give it real depth. */
-#hubList .hubRow:has(.hubCoverWrap.isPlaying){
+/* Subtle lift on the focused card to give it real depth. Driven by
+ * `.isActive` so it lands the moment the swipe settles, not after audio. */
+#hubList .hubRow.isActive{
   transform: translateY(-2px) scale(1.012);
 }
 
@@ -733,11 +734,11 @@ body.isIntro .footer{ display:none; }
   overflow:hidden;
   text-overflow:ellipsis;
   transition:
-    font-size 360ms cubic-bezier(0.22, 1, 0.36, 1),
-    font-weight 360ms cubic-bezier(0.22, 1, 0.36, 1),
-    letter-spacing 360ms cubic-bezier(0.22, 1, 0.36, 1);
+    font-size 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    font-weight 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    letter-spacing 280ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.hubRow:has(.hubCoverWrap.isPlaying) .hubTitle{
+.hubRow.isActive .hubTitle{
   font-size:18px;
   font-weight:800;
   letter-spacing:-0.3px;
@@ -780,10 +781,10 @@ body.isIntro .footer{ display:none; }
    * change, while transform/border/background still react quickly to
    * hover/press feedback. Eased with ease-out-quart for a soft landing. */
   transition:
-    height 360ms cubic-bezier(0.22, 1, 0.36, 1),
-    padding 360ms cubic-bezier(0.22, 1, 0.36, 1),
-    gap 360ms cubic-bezier(0.22, 1, 0.36, 1),
-    font-size 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    padding 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    gap 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    font-size 280ms cubic-bezier(0.22, 1, 0.36, 1),
     transform 140ms ease,
     border-color 200ms ease,
     background 200ms ease;
@@ -801,7 +802,7 @@ body.isIntro .footer{ display:none; }
     0 0 14px rgba(255, 80, 110, 0.20);
   transition:
     transform 220ms cubic-bezier(.2,1.4,.4,1),
-    font-size 360ms cubic-bezier(0.22, 1, 0.36, 1);
+    font-size 280ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 /* Brief pulse on tap. JS sets data-burst="1" momentarily. */
 .hubLike[data-burst="1"] .hubLikeHeart{
@@ -846,10 +847,10 @@ body.isIntro .footer{ display:none; }
   font-weight:500;
   cursor:pointer;
   transition:
-    height 360ms cubic-bezier(0.22, 1, 0.36, 1),
-    padding 360ms cubic-bezier(0.22, 1, 0.36, 1),
-    gap 360ms cubic-bezier(0.22, 1, 0.36, 1),
-    font-size 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    padding 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    gap 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    font-size 280ms cubic-bezier(0.22, 1, 0.36, 1),
     transform 120ms ease,
     border-color 200ms ease,
     color 200ms ease,
@@ -866,7 +867,7 @@ body.isIntro .footer{ display:none; }
   font-size:13px;
   line-height:1;
   opacity:0.85;
-  transition: font-size 360ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: font-size 280ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .hubReactLabel{
   letter-spacing:0.1px;
@@ -926,7 +927,7 @@ body.isIntro .footer{ display:none; }
   .hubReact[data-burst="1"]{
     animation: none !important;
   }
-  #hubList .hubRow:has(.hubCoverWrap.isPlaying){
+  #hubList .hubRow.isActive{
     transform: none;
   }
   .hubTitle{ transition: none; }
@@ -935,11 +936,11 @@ body.isIntro .footer{ display:none; }
 /* Labels strategy:
  *   - Default (mobile): hide the text label. Compact icon + count chip
  *     keeps four reactions on one line with the like button.
- *   - Playing/focus card: show the label so the user reading that card
+ *   - Focused card: show the label so the user reading that card
  *     gets the meaning of each icon at a glance.
  *   - Tablet+ (≥ 600px): always show labels — there's plenty of room. */
 .hubReact .hubReactLabel{ display:none; }
-.hubRow:has(.hubCoverWrap.isPlaying) .hubReact .hubReactLabel{
+.hubRow.isActive .hubReact .hubReactLabel{
   display:inline;
 }
 @media (min-width: 600px){
@@ -950,11 +951,11 @@ body.isIntro .footer{ display:none; }
  * hidden on phones (even on the focused card, where Like/Melody/Lyrics
  * get their words) so all four chips fit on one row. Tablet+ has room
  * to show "Share" as text. */
-.hubRow:has(.hubCoverWrap.isPlaying) .hubShare .hubReactLabel{
+.hubRow.isActive .hubShare .hubReactLabel{
   display:none;
 }
 @media (min-width: 600px){
-  .hubRow:has(.hubCoverWrap.isPlaying) .hubShare .hubReactLabel{
+  .hubRow.isActive .hubShare .hubReactLabel{
     display:inline;
   }
 }
@@ -998,28 +999,28 @@ body.isIntro .footer{ display:none; }
   }
   .hubReactIcon{ font-size:12px; }
 
-  /* Focused / playing: noticeably larger so the eye knows where to go.
+  /* Focused: noticeably larger so the eye knows where to go.
    * Labels stay hidden — the icons + lift + glow + title gradient already
    * make this card feel primary. */
-  .hubRow:has(.hubCoverWrap.isPlaying) .hubReact .hubReactLabel{
+  .hubRow.isActive .hubReact .hubReactLabel{
     display:none !important;
   }
-  .hubRow:has(.hubCoverWrap.isPlaying) .hubLike{
+  .hubRow.isActive .hubLike{
     height:38px;
     padding:0 14px 0 12px;
     gap:7px;
     font-size:13.5px;
   }
-  .hubRow:has(.hubCoverWrap.isPlaying) .hubLikeHeart{
+  .hubRow.isActive .hubLikeHeart{
     font-size:19px;
   }
-  .hubRow:has(.hubCoverWrap.isPlaying) .hubReact{
+  .hubRow.isActive .hubReact{
     height:32px;
     padding:0 11px;
     gap:5px;
     font-size:12.5px;
   }
-  .hubRow:has(.hubCoverWrap.isPlaying) .hubReactIcon{
+  .hubRow.isActive .hubReactIcon{
     font-size:14px;
   }
 }

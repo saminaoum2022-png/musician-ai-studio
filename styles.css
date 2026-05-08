@@ -2161,7 +2161,7 @@ textarea{
   font-size: 12.5px;
   font-weight: 700;
   letter-spacing: 0.01em;
-  color: rgba(232,238,247,0.90);
+  color: rgba(232,238,247,0.72);
   cursor: pointer;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -2176,8 +2176,8 @@ textarea{
   background-repeat: no-repeat;
   background-position: center;
   background-size: 14px 14px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23bdc7dd' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='3' width='6' height='12' rx='3'/%3E%3Cpath d='M5 11a7 7 0 0 0 14 0'/%3E%3Cpath d='M12 18v3'/%3E%3C/svg%3E");
-  opacity: 0.85;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a8b4c7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='3' width='6' height='12' rx='3'/%3E%3Cpath d='M5 11a7 7 0 0 0 14 0'/%3E%3Cpath d='M12 18v3'/%3E%3C/svg%3E");
+  opacity: 0.7;
 }
 .vocalRefDetails > summary::after{
   content: "";
@@ -2188,16 +2188,16 @@ textarea{
   background-repeat: no-repeat;
   background-position: center;
   background-size: 12px 12px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23bdc7dd' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-  opacity: 0.7;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a8b4c7' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  opacity: 0.6;
   transition: transform 220ms ease, opacity 200ms ease;
 }
 .vocalRefDetails[open] > summary::after{
   transform: rotate(180deg);
-  opacity: 0.95;
+  opacity: 0.85;
 }
 .vocalRefDetails > summary:hover{
-  color: rgba(244,247,255,0.96);
+  color: rgba(232,238,247,0.92);
 }
 .vocalRefCard{
   margin: 0;

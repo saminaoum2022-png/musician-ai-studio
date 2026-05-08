@@ -931,6 +931,44 @@ body.isIntro .footer{ display:none; }
     display:inline;
   }
 }
+
+/* Narrow phones: keep Melody/Lyrics icon+count only even on the focused
+ * card — words + Like + Share still overflow after Share landed. Title +
+ * glow + EQ already flag the active post. */
+@media (max-width: 520px){
+  .hubRow:has(.hubCoverWrap.isPlaying) .hubReact:not(.hubShare) .hubReactLabel{
+    display:none !important;
+  }
+  .hubRow:has(.hubCoverWrap.isPlaying) .hubActionRow{
+    gap:6px;
+    flex-wrap:nowrap;
+  }
+  .hubRow:has(.hubCoverWrap.isPlaying) .hubLike{
+    height:32px;
+    padding:0 10px 0 8px;
+    gap:5px;
+    font-size:12.5px;
+    flex:0 0 auto;
+  }
+  .hubRow:has(.hubCoverWrap.isPlaying) .hubLikeHeart{
+    font-size:16px;
+  }
+  .hubRow:has(.hubCoverWrap.isPlaying) .hubReacts{
+    gap:4px;
+    flex:1 1 auto;
+    min-width:0;
+    justify-content:flex-end;
+    flex-wrap:nowrap;
+  }
+  .hubRow:has(.hubCoverWrap.isPlaying) .hubReact{
+    height:28px;
+    padding:0 7px;
+    gap:3px;
+    font-size:11px;
+    flex:0 1 auto;
+    min-width:0;
+  }
+}
 .hubMoreCorner{
   position:absolute;
   right:10px;
@@ -962,14 +1000,10 @@ body.isIntro .footer{ display:none; }
   padding:3px 7px;
   background: rgba(8,12,20,0.45);
 }
-.hubReactIcon{
-  min-height:30px;
-  border-radius:10px;
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  padding:5px 9px;
-}
+/* NOTE: do NOT add a second `.hubReactIcon { padding / min-height … }` rule
+ * here — icon spans live *inside* `.hubReact` pills that already have their
+ * own padding. Duplicating box sizing on the inner span doubles chip width
+ * and forces Melody/Lyrics/Like/Share to wrap on phones. */
 .hubSvg{
   font-size:14px;
   opacity:0.92;

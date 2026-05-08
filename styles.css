@@ -812,6 +812,16 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   background-clip: text;
   color: transparent;
 }
+/* When the empty-state icon slot uses an inline SVG (e.g. Search), drop the
+ * text-clipping treatment and let the SVG paint its own gradient stroke. */
+.emptyStateIcon.emptyStateIconSvg{
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  color: inherit;
+  margin-bottom: 12px;
+}
+.emptyStateIcon.emptyStateIconSvg svg{ display: block; margin: 0 auto; }
 .emptyStateTitle{
   margin: 0 0 6px;
   font-size: 16px;
@@ -4081,12 +4091,35 @@ input[type="range"]::-moz-range-thumb{
     border-right: 0;
     border-radius: 16px;
   }
-  /* Player controls sit at the bottom of the section, so they need extra
-   * clearance above the fixed mobile tab bar. !important here is intentional:
-   * the global mobile `.app` rule at the same specificity wins source order
-   * and would otherwise clip Cover/Trim/Publish on Dynamic Island devices. */
+  /* Player route is a full-screen Now Playing modal on mobile: the bottom
+   * tab bar, the brand header, and the page padding all step out of the way
+   * so the artwork + transport own the whole viewport (Apple Music style).
+   * Users return via the back chevron in the player header or by tapping
+   * the persistent mini-player from another route. */
+  body[data-route="player"] .mobileTabbar{
+    display: none !important;
+  }
+  body[data-route="player"] .header{
+    display: none !important;
+  }
+  body[data-route="player"] .hubNowPlaying{
+    display: none !important;
+  }
   body[data-route="player"] .app{
-    padding-bottom: calc(132px + env(safe-area-inset-bottom)) !important;
+    padding: calc(env(safe-area-inset-top) + 6px) 14px calc(env(safe-area-inset-bottom) + 14px) !important;
+    min-height: 100vh;
+    min-height: 100svh;
+  }
+  body[data-route="player"] .playerCard{
+    padding: 0;
+    min-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 20px);
+    min-height: calc(100svh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 20px);
+    display: flex;
+    flex-direction: column;
+  }
+  body[data-route="player"] .playerShell{
+    flex: 1;
+    align-content: start;
   }
   body[data-route="player"] .playerSecondaryRow{
     margin-bottom: 4px;

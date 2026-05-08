@@ -506,6 +506,30 @@
           <div class="hint">Everything stays here so Home stays clean on mobile.</div>
         </section>
 
+        <section class="card wide librarySection" data-route="search">
+          <header class="libraryHeader">
+            <h2>Search</h2>
+            <p class="libraryLead">Find songs in your Library, on the Hub, and creators you've discovered — all from one place.</p>
+          </header>
+          <div class="emptyState searchEmpty">
+            <div class="emptyStateIcon emptyStateIconSvg" aria-hidden="true">
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <defs>
+                  <linearGradient id="searchEmptyGrad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color="#7c5cff"/>
+                    <stop offset="100%" stop-color="#23d5ab"/>
+                  </linearGradient>
+                </defs>
+                <circle cx="11" cy="11" r="7" stroke="url(#searchEmptyGrad)"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="url(#searchEmptyGrad)"/>
+              </svg>
+            </div>
+            <p class="emptyStateTitle">Search is coming soon</p>
+            <p class="emptyStateHint">In the next update you'll be able to search across your Library, Hub posts, and creators — right from this tab.</p>
+            <a href="#/hub" class="emptyStateCta" data-route-link="hub">Browse the Hub for now</a>
+          </div>
+        </section>
+
         <section class="card wide playerCard" data-route="player">
           <div class="playerHeader">
             <button id="btnPlayerBack" class="playerBack" type="button" aria-label="Back">
@@ -1123,12 +1147,12 @@
           <span class="tabLabel hubTabLabel">Hub</span>
           <span id="hubTabDot" class="hubDot hubTabDot" style="display:none"></span>
         </a>
-        <a href="#/player" data-route-link="player">
+        <a href="#/search" data-route-link="search">
           <svg class="tabIco" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="10"/>
-            <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"/>
+            <circle cx="11" cy="11" r="7"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
-          <span class="tabLabel">Player</span>
+          <span class="tabLabel">Search</span>
         </a>
         <a href="#/profile" data-route-link="profile">
           <svg class="tabIco" viewBox="0 0 24 24" aria-hidden="true">
@@ -1151,6 +1175,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260510q"></script>
+    <script type="module" src="./src/app.js?v=20260510r"></script>
   </body>
 </html>

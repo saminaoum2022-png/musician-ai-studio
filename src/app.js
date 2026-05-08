@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510q";
+const APP_BUILD = "20260510r";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -765,18 +765,29 @@ async function startHubPlayback(postId) {
 function renderHubNowPlaying() {
   if (!els.hubNowPlaying) return;
   const route = document.body.getAttribute("data-route") || "";
+  // The mini-player is now a global persistent surface — it shows for any
+  // active source (Hub post, Library track, generated result) and hides
+  // contextually so it never duplicates a richer "now playing" UI:
+  //  - hidden on /player (the full-screen Now Playing replaces it);
+  //  - hidden on Hub when the playing post is on-screen;
+  //  - hidden on Library (the row already shows the EQ + dot indicator);
+  //  - hidden on Generate when a result card is mid-playback (the card
+  //    shows its own progress + play/pause already).
   const hideOnHubVisible = isPlayingHubPostVisible();
   const hideOnLibrary = route === "library";
-  const hideOnPlayer = route === "player" && miniSource?.type === "library";
-  // hubAudio is now a persistent element (paused between tracks instead of
-  // nulled), so use the active post id as the source of truth for whether
-  // any track is currently playing.
-  const isPlaying = Boolean(hubAudioPostId && hubAudio && !hubAudio.paused);
-  const active = Boolean(hubNowMeta && isPlaying) && !hideOnHubVisible && !hideOnLibrary && !hideOnPlayer;
+  const hideOnPlayer = route === "player";
+  const hideOnGenerate = route === "generate" && miniSource?.type === "generateResult";
+  // hubAudio is the active audio element (either the internal hub audio or
+  // playerEl when streaming Library/Generated tracks), so its paused state
+  // is the single source of truth for "is anything playing right now".
+  const isPlaying = Boolean(hubAudio && !hubAudio.paused && !hubAudio.ended);
+  const active = Boolean(hubNowMeta && isPlaying) && !hideOnHubVisible && !hideOnLibrary && !hideOnPlayer && !hideOnGenerate;
   if (!active) {
     els.hubNowPlaying.classList.remove("isVisible", "isPlaying");
     setTimeout(() => {
-      if (!hubAudioPostId && els.hubNowPlaying) els.hubNowPlaying.style.display = "none";
+      if (els.hubNowPlaying && !els.hubNowPlaying.classList.contains("isVisible")) {
+        els.hubNowPlaying.style.display = "none";
+      }
     }, 220);
     return;
   }
@@ -786,7 +797,7 @@ function renderHubNowPlaying() {
   });
   if (els.hubNowArt) els.hubNowArt.src = hubNowMeta.art || "./assets/nabadai-logo.png";
   if (els.hubNowTitle) els.hubNowTitle.textContent = hubNowMeta.title || "Now playing";
-  if (els.hubNowProgBar && hubAudio?.duration) {
+  if (els.hubNowProgBar && hubAudio?.duration && Number.isFinite(hubAudio.duration)) {
     const pct = Math.max(0, Math.min(100, (hubAudio.currentTime / hubAudio.duration) * 100));
     els.hubNowProgBar.style.width = `${pct}%`;
   }
@@ -907,7 +918,7 @@ function applyRoute() {
   if (/^u\//.test(route)) {
     pendingPublicUsername = decodeURIComponent(route.slice(2)).trim();
   }
-  const allowedRoutes = new Set(["intro", "start", "auth", "generate", "library", "hub", "settings", "profile", "player", "vocal", "stems", "advanced", "user"]);
+  const allowedRoutes = new Set(["intro", "start", "auth", "generate", "library", "hub", "settings", "profile", "player", "search", "vocal", "stems", "advanced", "user"]);
   const normalized = pendingPublicUsername ? "user" : (route === "start" ? "intro" : route);
   let wanted = allowedRoutes.has(normalized) ? normalized : "generate";
   // Public profile is intentionally readable without auth so share-link
@@ -4008,6 +4019,8 @@ function ensurePlayer() {
   playerEl.addEventListener("durationchange", syncPlayerUI);
   playerEl.addEventListener("canplay", syncPlayerUI);
   playerEl.addEventListener("progress", syncPlayerUI);
+  playerEl.addEventListener("play", syncPlayerUI);
+  playerEl.addEventListener("pause", syncPlayerUI);
   playerEl.addEventListener("ended", () => {
     if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = false;
     if (els.btnPlayerPause) els.btnPlayerPause.disabled = true;
@@ -7092,6 +7105,9 @@ if (els.hubNowPlaying) {
   els.hubNowPlaying.addEventListener("click", (e) => {
     const isClose = e.target?.closest?.("#hubNowClose");
     if (isClose) return;
+    // Hub posts get special treatment: the post itself is the richer
+    // "now playing" surface (cover art, full controls, comments, share),
+    // so we jump back to the post in the feed instead of the player.
     if (miniSource?.type === "hub" && hubAudioPostId) {
       if ((location.hash || "") !== "#/hub") location.hash = "#/hub";
       setTimeout(() => {
@@ -7101,16 +7117,10 @@ if (els.hubNowPlaying) {
       }, 120);
       return;
     }
-    if (miniSource?.type === "library" && miniSource?.id) {
-      if ((location.hash || "") !== "#/library") location.hash = "#/library";
-      setTimeout(() => {
-        const row = document.querySelector(`[data-lib-row="${miniSource.id}"]`);
-        if (!row) return;
-        row.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 120);
-      return;
-    }
-    if (playerEl && !playerEl.paused) {
+    // Everything else (Library tracks, generated result cards, vocal
+    // takes, …) expands into the full-screen Now Playing modal — same
+    // pattern as Apple Music's mini-player tap.
+    if (playerEl && playerEl.src) {
       location.hash = "#/player";
     }
   });
@@ -7257,7 +7267,15 @@ if (els.btnPlayerToggle) {
 }
 if (els.btnPlayerBack) {
   els.btnPlayerBack.addEventListener("click", () => {
-    history.back();
+    // The mobile tab bar is hidden on /player (full-screen Now Playing),
+    // so the back chevron is the user's only way out. If we have history
+    // we honor it (preserves Library/Hub scroll position); otherwise we
+    // land them somewhere safe instead of exiting the app.
+    if (history.length > 1) {
+      history.back();
+    } else {
+      location.hash = "#/library";
+    }
   });
 }
 if (els.btnUserPublicBack) {

@@ -188,47 +188,67 @@
           </div>
 
           <div class="createSectionStack">
-            <label class="field grow inputPanel">
-              <div class="label inPanelLabel">Lyrics</div>
-              <label class="ghost lyricsAttachBtn srOnly" title="Attach vocal reference">
-                Insert vocal
-                <input id="sunoVocalUpload" type="file" accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.webm" />
-              </label>
-              <button id="btnVocalRefRec" class="ghost srOnly" type="button">Record voice</button>
-              <div class="lyricsBox">
-                <div class="lyricsBoxMain">
-                  <textarea id="sunoPrompt" rows="4" placeholder="Write your lyrics here..."></textarea>
-                </div>
-                <div class="lyricsAssistBar" role="toolbar" aria-label="Lyrics assist">
-                  <button id="btnLyricsMagic" class="lyricsMagicBtn" type="button" title="AI lyrics assist">✦</button>
-                  <button id="btnImageMood" class="lyricsImageMoodBtn" type="button" title="Inspire from image" aria-label="Inspire from image">
-                    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
+            <div class="createPanes" data-mode="lyrics">
+              <div class="createPane createPane--photo" data-mode="photo" hidden>
+                <button id="createPhotoCta" class="createPaneCta" type="button" aria-label="Add a photo">
+                  <span class="createPaneCtaIcon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="28" height="28" focusable="false">
                       <path fill="currentColor" d="M5 4.5A2.5 2.5 0 0 0 2.5 7v10A2.5 2.5 0 0 0 5 19.5h14a2.5 2.5 0 0 0 2.5-2.5V7A2.5 2.5 0 0 0 19 4.5H5Zm0 1.5h14c.55 0 1 .45 1 1v7.2l-3.33-3.32a1.8 1.8 0 0 0-2.54 0L10 15.01l-1.63-1.63a1.8 1.8 0 0 0-2.54 0L4 15.21V7c0-.55.45-1 1-1Zm12.5 2.2a1.7 1.7 0 1 0 0 3.4 1.7 1.7 0 0 0 0-3.4ZM7.1 14.44a.3.3 0 0 1 .43 0L10 16.9l5.19-5.18a.3.3 0 0 1 .42 0L20 16.1V17c0 .55-.45 1-1 1H5c-.55 0-1-.45-1-1v-.26l3.1-2.3Z"/>
                     </svg>
-                  </button>
-                </div>
+                  </span>
+                  <span class="createPaneCtaTitle">Add a photo</span>
+                  <span class="createPaneCtaSub">We'll catch the mood and feed it into your song.</span>
+                </button>
+                <p class="hint createPaneFoot">Great for stories and posts — your music for this moment.</p>
               </div>
-              <div class="row imageMoodRow">
-                <span id="imageMoodSummary" class="hint imageMoodSummary"></span>
+
+              <div class="createPane createPane--hum" data-mode="hum" hidden>
+                <details class="details vocalRefDetails" id="vocalRefDetails" open>
+                  <summary>Use your voice as a guide</summary>
+                  <div class="vocalRefCard">
+                    <div class="row vocalQuickRow">
+                      <button id="btnMagicUploadVocal" class="ghost" type="button">+ Audio</button>
+                      <button id="btnMagicRecordVocal" class="ghost" type="button">Record</button>
+                      <button id="btnPreviewVocalRef" class="ghost" type="button" disabled>Listen</button>
+                    </div>
+                    <div class="segPill vocalModePill" role="group" aria-label="Vocal output mode">
+                      <button id="vocalModeFull" type="button" class="ghost active">Full song</button>
+                      <button id="vocalModeInstrumental" type="button" class="ghost">Instrumental</button>
+                    </div>
+                    <input id="vocalInstrumentalOnly" type="hidden" value="0" />
+                    <div id="sunoVocalUploadName" class="hint uploadVocalsName">No vocal reference attached.</div>
+                    <div id="vocalRefHint" class="hint" style="margin-top:6px; display:none">Audio reference attached. You can choose full song or instrumental-only.</div>
+                  </div>
+                </details>
               </div>
-            </label>
-            <details class="details vocalRefDetails" id="vocalRefDetails">
-              <summary>Use your voice as a guide</summary>
-              <div class="vocalRefCard">
-                <div class="row vocalQuickRow">
-                  <button id="btnMagicUploadVocal" class="ghost" type="button">+ Audio</button>
-                  <button id="btnMagicRecordVocal" class="ghost" type="button">Record</button>
-                  <button id="btnPreviewVocalRef" class="ghost" type="button" disabled>Listen</button>
-                </div>
-                <div class="segPill vocalModePill" role="group" aria-label="Vocal output mode">
-                  <button id="vocalModeFull" type="button" class="ghost active">Full song</button>
-                  <button id="vocalModeInstrumental" type="button" class="ghost">Instrumental</button>
-                </div>
-                <input id="vocalInstrumentalOnly" type="hidden" value="0" />
-                <div id="sunoVocalUploadName" class="hint uploadVocalsName">No vocal reference attached.</div>
-                <div id="vocalRefHint" class="hint" style="margin-top:6px; display:none">Audio reference attached. You can choose full song or instrumental-only.</div>
+
+              <div class="createPane createPane--lyrics" data-mode="lyrics">
+                <label class="field grow inputPanel">
+                  <div class="label inPanelLabel">Lyrics</div>
+                  <label class="ghost lyricsAttachBtn srOnly" title="Attach vocal reference">
+                    Insert vocal
+                    <input id="sunoVocalUpload" type="file" accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.webm" />
+                  </label>
+                  <button id="btnVocalRefRec" class="ghost srOnly" type="button">Record voice</button>
+                  <div class="lyricsBox">
+                    <div class="lyricsBoxMain">
+                      <textarea id="sunoPrompt" rows="4" placeholder="Write your lyrics here..."></textarea>
+                    </div>
+                    <div class="lyricsAssistBar" role="toolbar" aria-label="Lyrics assist">
+                      <button id="btnLyricsMagic" class="lyricsMagicBtn" type="button" title="AI lyrics assist">✦</button>
+                      <button id="btnImageMood" class="lyricsImageMoodBtn" type="button" title="Inspire from image" aria-label="Inspire from image">
+                        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
+                          <path fill="currentColor" d="M5 4.5A2.5 2.5 0 0 0 2.5 7v10A2.5 2.5 0 0 0 5 19.5h14a2.5 2.5 0 0 0 2.5-2.5V7A2.5 2.5 0 0 0 19 4.5H5Zm0 1.5h14c.55 0 1 .45 1 1v7.2l-3.33-3.32a1.8 1.8 0 0 0-2.54 0L10 15.01l-1.63-1.63a1.8 1.8 0 0 0-2.54 0L4 15.21V7c0-.55.45-1 1-1Zm12.5 2.2a1.7 1.7 0 1 0 0 3.4 1.7 1.7 0 0 0 0-3.4ZM7.1 14.44a.3.3 0 0 1 .43 0L10 16.9l5.19-5.18a.3.3 0 0 1 .42 0L20 16.1V17c0 .55-.45 1-1 1H5c-.55 0-1-.45-1-1v-.26l3.1-2.3Z"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="row imageMoodRow">
+                    <span id="imageMoodSummary" class="hint imageMoodSummary"></span>
+                  </div>
+                </label>
               </div>
-            </details>
+            </div>
 
             <label class="field grow inputPanel inputPanel--style">
               <div class="label inPanelLabel">Style / Tags</div>
@@ -1073,6 +1093,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260510a"></script>
+    <script type="module" src="./src/app.js?v=20260510b"></script>
   </body>
 </html>

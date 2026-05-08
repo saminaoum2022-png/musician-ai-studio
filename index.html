@@ -1033,13 +1033,19 @@
       </div>
 
       <nav class="mobileTabbar" aria-label="Primary navigation">
-        <a href="#/generate" data-route-link="generate">
-          <svg class="tabIco" viewBox="0 0 24 24" aria-hidden="true">
+        <a href="#/generate" data-route-link="generate" id="tabCreate" class="tabCreate">
+          <span class="tabIcoSpinner" aria-hidden="true"></span>
+          <svg class="tabIco tabIcoCreate" viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="12" cy="12" r="9"/>
             <line x1="12" y1="8" x2="12" y2="16"/>
             <line x1="8" y1="12" x2="16" y2="12"/>
           </svg>
+          <svg class="tabIco tabIcoPlay" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"/>
+            <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"/>
+          </svg>
           <span class="tabLabel">Create</span>
+          <span class="tabTooltip" id="tabCreateTooltip" hidden>Tap to generate ▶</span>
         </a>
         <a href="#/library" data-route-link="library">
           <svg class="tabIco" viewBox="0 0 24 24" aria-hidden="true">
@@ -1091,14 +1097,8 @@
       <button id="btnGenerateOrb" class="generateOrb" type="button">Generate</button>
       <div id="likeBurst" class="likeBurst" style="display:none">❤</div>
     </div>
-    <div id="createStickyBar" class="createStickyBar" data-state="idle" hidden aria-live="polite">
-      <div class="createStickyBarInner">
-        <div class="createStickyLeft" id="createStickyLeft"></div>
-        <div class="createStickyRight" id="createStickyRight"></div>
-      </div>
-    </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260510f"></script>
+    <script type="module" src="./src/app.js?v=20260510g"></script>
   </body>
 </html>

@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510f";
+const APP_BUILD = "20260510g";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -6395,94 +6395,87 @@ function syncGenerateOrbVisibility() {
     const visible = route === "generate" && hasInput && !generating && !hasResult;
     els.btnGenerateOrb.style.display = visible ? "inline-flex" : "none";
   }
-  syncCreateStickyBar();
+  syncCreateTabMorph();
 }
 
-var STICKY_TIPS = [
-  "We pull mood and tags into your prompt.",
-  "Tip: vocal reference adds character.",
-  "Photo mode is great for stories and reels.",
-];
-var _stickyTipTimer = null;
-var _stickyTipIdx = 0;
-function escapeHtmlForSticky(s) {
-  return String(s || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;");
-}
-function syncCreateStickyBar() {
-  const bar = document.getElementById("createStickyBar");
-  if (!bar) return;
-  const left = document.getElementById("createStickyLeft");
-  const right = document.getElementById("createStickyRight");
-  if (!left || !right) return;
+// Subtle morph of the bottom Create tab into a Generate / Listen button when
+// the user is on the Create page and inputs are ready. The tab's underlying
+// route navigation is preserved on every other page.
+var _tabListenTimer = null;
+var _tabListenFlashedForRun = false;
+var _tabLastHasResult = false;
+var TAB_TIP_KEY = "nabadai_tab_generate_tip_v1";
+var _tabTipTimer = null;
+function syncCreateTabMorph() {
+  const tab = document.getElementById("tabCreate");
+  if (!tab) return;
+  const tooltip = document.getElementById("tabCreateTooltip");
   const route = document.body.getAttribute("data-route");
-  if (route !== "generate") {
-    bar.hidden = true;
-    if (_stickyTipTimer) { clearInterval(_stickyTipTimer); _stickyTipTimer = null; }
-    return;
-  }
+  const onCreate = route === "generate";
+
+  const hasInput = Boolean(
+    String(els.sunoPrompt?.value || "").trim() ||
+    String(els.sunoStyle?.value || "").trim() ||
+    imageMoodAppliedForNextGen
+  );
   const generating = Boolean(els.btnSunoGenerate?.disabled);
   const hasResult = (els.resultCard?.style.display || "none") !== "none";
 
-  let state = "idle";
-  if (generating) state = "generating";
-  else if (hasResult) state = "done";
+  // Reset listen-flash bookkeeping when the user starts a fresh run.
+  if (generating) _tabListenFlashedForRun = false;
 
-  bar.dataset.state = state;
+  // Detect rising edge: result just became visible while on Create.
+  const justFinished = onCreate && hasResult && !_tabLastHasResult && !_tabListenFlashedForRun;
+  _tabLastHasResult = hasResult;
 
-  if (state !== "generating" && _stickyTipTimer) {
-    clearInterval(_stickyTipTimer);
-    _stickyTipTimer = null;
-  }
-
-  if (state === "idle") {
-    bar.hidden = true;
-    left.innerHTML = "";
-    right.innerHTML = "";
+  if (justFinished) {
+    _tabListenFlashedForRun = true;
+    tab.classList.remove("tabIsReady", "tabIsGenerating");
+    tab.classList.add("tabIsListen");
+    if (_tabListenTimer) clearTimeout(_tabListenTimer);
+    _tabListenTimer = setTimeout(() => {
+      tab.classList.remove("tabIsListen");
+      _tabListenTimer = null;
+      try { syncCreateTabMorph(); } catch {}
+    }, 2400);
     return;
   }
 
-  bar.hidden = false;
+  // While the listen flash timer is running, leave it alone.
+  if (_tabListenTimer) return;
 
-  if (state === "generating") {
-    const tip = STICKY_TIPS[_stickyTipIdx % STICKY_TIPS.length];
-    left.innerHTML = `
-      <div class="createStickyTipsWrap">
-        <div class="createStickyTitle">Composing your track…</div>
-        <div class="createStickyTip">${escapeHtmlForSticky(tip)}</div>
-      </div>
-      <div class="createStickyShimmer" aria-hidden="true"></div>
-    `;
-    right.innerHTML = "";
-    if (!_stickyTipTimer) {
-      _stickyTipTimer = setInterval(() => {
-        _stickyTipIdx = (_stickyTipIdx + 1) % STICKY_TIPS.length;
-        const tipEl = bar.querySelector(".createStickyTip");
-        if (tipEl) tipEl.textContent = STICKY_TIPS[_stickyTipIdx];
-      }, 2400);
-    }
+  // Off the Create page → no morph at all.
+  if (!onCreate) {
+    tab.classList.remove("tabIsReady", "tabIsGenerating", "tabIsListen");
+    if (tooltip) tooltip.hidden = true;
     return;
   }
 
-  if (state === "done") {
-    left.innerHTML = '<span class="createStickyTitle">Track ready</span>';
-    right.innerHTML = `
-      <button id="createStickyListenBtn" type="button" class="createStickyAction"><span aria-hidden="true">▶</span><span>Listen</span></button>
-    `;
-    const listenBtn = document.getElementById("createStickyListenBtn");
-    if (listenBtn) listenBtn.addEventListener("click", () => {
-      try { haptic("impact"); } catch {}
-      const playA = document.getElementById("btnResultPlay");
-      if (playA) {
-        playA.click();
-        try { playA.scrollIntoView({ behavior: "smooth", block: "center" }); } catch {}
+  if (generating) {
+    tab.classList.add("tabIsGenerating");
+    tab.classList.remove("tabIsReady", "tabIsListen");
+    if (tooltip) tooltip.hidden = true;
+    return;
+  }
+
+  const ready = hasInput && !hasResult;
+  const wasReady = tab.classList.contains("tabIsReady");
+  tab.classList.toggle("tabIsReady", ready);
+  tab.classList.remove("tabIsGenerating");
+
+  if (ready && !wasReady) {
+    try {
+      if (tooltip && !localStorage.getItem(TAB_TIP_KEY)) {
+        tooltip.hidden = false;
+        if (_tabTipTimer) clearTimeout(_tabTipTimer);
+        _tabTipTimer = setTimeout(() => {
+          tooltip.hidden = true;
+          try { localStorage.setItem(TAB_TIP_KEY, "1"); } catch {}
+        }, 2400);
       }
-    });
-    return;
+    } catch {}
   }
+  if (!ready && tooltip) tooltip.hidden = true;
 }
 function autoResizeLyricsBox() {
   if (!els.sunoPrompt) return;
@@ -6580,15 +6573,48 @@ function showReferenceHintsPopupOnce() {
 });
 window.addEventListener("hashchange", syncGenerateOrbVisibility);
 
-const _stickyMo = new MutationObserver(() => {
-  try { syncCreateStickyBar(); } catch {}
+const _tabMo = new MutationObserver(() => {
+  try { syncCreateTabMorph(); } catch {}
 });
 try {
-  _stickyMo.observe(document.body, { attributes: true, attributeFilter: ["data-route", "class"] });
-  if (els.resultCard) _stickyMo.observe(els.resultCard, { attributes: true, attributeFilter: ["style"] });
-  if (els.btnSunoGenerate) _stickyMo.observe(els.btnSunoGenerate, { attributes: true, attributeFilter: ["disabled"] });
+  _tabMo.observe(document.body, { attributes: true, attributeFilter: ["data-route", "class"] });
+  if (els.resultCard) _tabMo.observe(els.resultCard, { attributes: true, attributeFilter: ["style"] });
+  if (els.btnSunoGenerate) _tabMo.observe(els.btnSunoGenerate, { attributes: true, attributeFilter: ["disabled"] });
 } catch {}
-syncCreateStickyBar();
+syncCreateTabMorph();
+
+(function wireCreateTabMorphClick() {
+  const tab = document.getElementById("tabCreate");
+  if (!tab) return;
+  tab.addEventListener("click", (ev) => {
+    const route = document.body.getAttribute("data-route");
+    if (route !== "generate") return; // let normal navigation happen
+    if (tab.classList.contains("tabIsGenerating")) {
+      ev.preventDefault();
+      return;
+    }
+    if (tab.classList.contains("tabIsListen")) {
+      ev.preventDefault();
+      try { haptic("impact"); } catch {}
+      const playA = document.getElementById("btnResultPlay");
+      if (playA) {
+        playA.click();
+        try { playA.scrollIntoView({ behavior: "smooth", block: "center" }); } catch {}
+      }
+      return;
+    }
+    if (tab.classList.contains("tabIsReady")) {
+      ev.preventDefault();
+      try { haptic("impact"); } catch {}
+      try { localStorage.setItem(TAB_TIP_KEY, "1"); } catch {}
+      const tooltip = document.getElementById("tabCreateTooltip");
+      if (tooltip) tooltip.hidden = true;
+      if (els.btnSunoGenerate && !els.btnSunoGenerate.disabled) {
+        els.btnSunoGenerate.click();
+      }
+    }
+  }, true);
+})();
 
 if (els.brandTitle) {
   els.brandTitle.addEventListener("click", () => {

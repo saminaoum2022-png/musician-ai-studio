@@ -399,7 +399,10 @@
 
         <section class="card wide playerCard" data-route="player">
           <div class="playerHeader">
-            <button id="btnPlayerBack" class="playerBack" type="button" aria-label="Back">← Back</button>
+            <button id="btnPlayerBack" class="playerBack" type="button" aria-label="Back">
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+              <span>Back</span>
+            </button>
           </div>
           <div class="playerShell">
             <div class="playerArtWrap isEmpty">
@@ -410,38 +413,66 @@
               <div id="playerSubtitle" class="playerSubtitle">Generate a song, then press Play.</div>
 
               <div class="playerTimeline">
-                <span id="playerTimeCurrent" class="playerTimeNum">0:00</span>
                 <input id="playerSeek" type="range" min="0" max="1000" value="0" />
-                <span id="playerTimeTotal" class="playerTimeNum">0:00</span>
+                <div class="playerTimeRow">
+                  <span id="playerTimeCurrent" class="playerTimeNum">0:00</span>
+                  <span id="playerTimeTotal" class="playerTimeNum">0:00</span>
+                </div>
               </div>
               <span id="playerTime" class="srOnly" aria-live="polite">00:00 / 00:00</span>
 
-              <div class="playerPrimaryRow">
+              <!-- Primary transport: Share | Big Play | Download (Apple Music layout) -->
+              <div class="playerTransport">
+                <button id="btnPlayerShare" class="playerSideBtn" type="button" aria-label="Share this song">
+                  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/>
+                    <polyline points="16 6 12 2 8 6"/>
+                    <line x1="12" y1="2" x2="12" y2="15"/>
+                  </svg>
+                </button>
                 <button id="btnPlayerToggle" class="playerToggleBtn" type="button" disabled aria-label="Play">
-                  <span class="playerToggleIcon" aria-hidden="true">▶</span>
+                  <span class="playerToggleIcon" aria-hidden="true">
+                    <svg class="ico" viewBox="0 0 24 24"><polygon points="6 3 21 12 6 21 6 3" fill="currentColor" stroke="none"/></svg>
+                  </span>
+                </button>
+                <button id="btnPlayerDownloadVideo" class="playerSideBtn" type="button" aria-label="Download as video">
+                  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
                 </button>
               </div>
 
-              <div class="playerActionRow">
-                <button id="btnPlayerShare" class="playerActionChip" type="button" aria-label="Share this song">
-                  <span class="playerActionIcon" aria-hidden="true">➤</span>
-                  <span class="playerActionLabel">Share</span>
+              <!-- Secondary mini row: Cover · Trim · Publish -->
+              <div class="playerSecondaryRow">
+                <button id="btnPlayerChangeCover" class="playerMiniBtn" type="button" aria-label="Change cover">
+                  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21 15 16 10 5 21"/>
+                  </svg>
+                  <span>Cover</span>
                 </button>
-                <button id="btnPlayerDownloadVideo" class="playerActionChip" type="button" aria-label="Download as video">
-                  <span class="playerActionIcon" aria-hidden="true">⬇</span>
-                  <span class="playerActionLabel">Video</span>
+                <span class="playerMiniDot" aria-hidden="true"></span>
+                <button id="btnOpenTrimSheet" class="playerMiniBtn" type="button" aria-label="Trim for Hub">
+                  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="6" cy="6" r="3"/>
+                    <circle cx="6" cy="18" r="3"/>
+                    <line x1="20" y1="4" x2="8.12" y2="15.88"/>
+                    <line x1="14.47" y1="14.48" x2="20" y2="20"/>
+                    <line x1="8.12" y1="8.12" x2="12" y2="12"/>
+                  </svg>
+                  <span>Trim</span>
                 </button>
-                <button id="btnPlayerChangeCover" class="playerActionChip" type="button">
-                  <span class="playerActionIcon" aria-hidden="true">⌖</span>
-                  <span class="playerActionLabel">Cover</span>
-                </button>
-                <button id="btnOpenTrimSheet" class="playerActionChip" type="button">
-                  <span class="playerActionIcon" aria-hidden="true">✂</span>
-                  <span class="playerActionLabel">Trim</span>
-                </button>
-                <button id="btnShareFullHub" class="playerActionChip" type="button">
-                  <span class="playerActionIcon" aria-hidden="true">↗</span>
-                  <span class="playerActionLabel">Publish</span>
+                <span class="playerMiniDot" aria-hidden="true"></span>
+                <button id="btnShareFullHub" class="playerMiniBtn" type="button" aria-label="Publish to Hub">
+                  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                  </svg>
+                  <span>Publish</span>
                 </button>
               </div>
               <input id="playerCoverUpload" type="file" accept="image/*" style="display:none" />
@@ -464,9 +495,10 @@
               <button id="btnPlayerPause" class="playerLegacyBtn" disabled aria-hidden="true" tabindex="-1">⏸</button>
               <button id="btnPlayerStop" class="playerLegacyBtn" disabled aria-hidden="true" tabindex="-1">■</button>
 
-              <div class="playerFooter">
-                <span id="playerSource" class="playerSourceText"></span>
-              </div>
+              <!-- Hidden source-label node: kept so existing setPlayerSource()
+                   calls don't error; the visible subtitle already conveys the
+                   loaded source. -->
+              <span id="playerSource" class="srOnly"></span>
             </div>
           </div>
         </section>
@@ -923,6 +955,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260509g"></script>
+    <script type="module" src="./src/app.js?v=20260509h"></script>
   </body>
 </html>

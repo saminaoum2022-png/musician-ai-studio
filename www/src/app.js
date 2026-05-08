@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509g";
+const APP_BUILD = "20260509h";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -6626,6 +6626,8 @@ if (els.btnPlayerStop) {
 // Single circular toggle that drives play/pause through the legacy
 // hidden buttons. State is read from `playerEl` directly so it stays
 // correct regardless of which path loaded the source.
+const PLAYER_TOGGLE_PLAY_SVG = '<svg class="ico" viewBox="0 0 24 24"><polygon points="6 3 21 12 6 21 6 3" fill="currentColor" stroke="none"/></svg>';
+const PLAYER_TOGGLE_PAUSE_SVG = '<svg class="ico" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none"/><rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none"/></svg>';
 function syncPlayerToggleUI() {
   const btn = els.btnPlayerToggle;
   if (!btn) return;
@@ -6635,7 +6637,10 @@ function syncPlayerToggleUI() {
   btn.disabled = !hasSrc;
   btn.classList.toggle("isPlaying", isPlaying);
   const icon = btn.querySelector(".playerToggleIcon");
-  if (icon) icon.textContent = isPlaying ? "⏸" : "▶";
+  if (icon) {
+    const next = isPlaying ? PLAYER_TOGGLE_PAUSE_SVG : PLAYER_TOGGLE_PLAY_SVG;
+    if (icon.innerHTML !== next) icon.innerHTML = next;
+  }
   btn.setAttribute("aria-label", isPlaying ? "Pause" : "Play");
 }
 if (els.btnPlayerToggle) {
@@ -6767,7 +6772,8 @@ if (els.btnPlayerDownloadVideo) {
     const btn = els.btnPlayerDownloadVideo;
     const originalHtml = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = `<span class="dlSpin" aria-hidden="true"></span><span>Rendering…</span>`;
+    btn.innerHTML = `<span class="dlSpin" aria-hidden="true"></span>`;
+    btn.setAttribute("aria-label", "Rendering video…");
     showToast("Rendering video — this takes a few seconds…", { durationMs: 4000 });
     try {
       const u = new URL("/api/render-video", location.origin);
@@ -6800,6 +6806,7 @@ if (els.btnPlayerDownloadVideo) {
     } finally {
       btn.disabled = false;
       btn.innerHTML = originalHtml;
+      btn.setAttribute("aria-label", "Download as video");
     }
   });
 }

@@ -1297,26 +1297,26 @@ body[data-route="hub"] .hubRow{
   background: rgba(35,213,171,0.14);
 }
 
-/* ----- Player redesign (matches Hub focused-card aesthetic) ---------- */
+/* ----- Player redesign (Apple Music style transport) ----------------- */
 
 .playerCard{
-  padding: 18px 18px 22px;
+  padding: 16px 16px 18px;
 }
 .playerHeader{
   display:flex;
   align-items:center;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 .playerBack{
   display:inline-flex;
   align-items:center;
   gap:4px;
-  height:32px;
-  padding:0 12px;
+  height:30px;
+  padding:0 10px 0 8px;
   border-radius:999px;
-  border:1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.03);
-  color: rgba(223, 231, 251, 0.85);
+  border:1px solid rgba(255,255,255,0.10);
+  background: transparent;
+  color: rgba(223, 231, 251, 0.78);
   font-size:12.5px;
   font-weight:600;
   letter-spacing:0.1px;
@@ -1324,12 +1324,27 @@ body[data-route="hub"] .hubRow{
   transition: border-color 200ms ease, background 200ms ease, color 200ms ease;
   -webkit-tap-highlight-color: transparent;
 }
+.playerBack .ico{ width:14px; height:14px; }
 .playerBack:hover{
   color:#fff;
-  border-color: rgba(255,255,255,0.22);
-  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.20);
+  background: rgba(255,255,255,0.05);
 }
 .playerBack:active{ transform: scale(0.97); }
+
+/* Lucide-style monochrome stroke icons used everywhere in the player. */
+.playerCard .ico{
+  display:inline-block;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
 
 .playerShell{
   display:grid;
@@ -1394,17 +1409,18 @@ body[data-route="hub"] .hubRow{
 .playerMeta{
   display:flex;
   flex-direction:column;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 .playerTitle{
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 800;
   letter-spacing: -0.4px;
   line-height: 1.18;
   color: #f0f4ff;
   word-wrap: break-word;
   transition: color 280ms ease;
+  margin-top: 2px;
 }
 .playerCard.isPlaying .playerTitle{
   background: linear-gradient(95deg, #f7f4ff 0%, #e0d6ff 50%, #d3f0ec 100%);
@@ -1413,28 +1429,31 @@ body[data-route="hub"] .hubRow{
   -webkit-text-fill-color: transparent;
 }
 .playerSubtitle{
-  color: rgba(223, 231, 251, 0.62);
-  font-size: 13px;
+  color: rgba(223, 231, 251, 0.55);
+  font-size: 12.5px;
   letter-spacing: 0.1px;
   line-height: 1.4;
   margin: 0;
 }
 
-/* ---- Timeline -------------------------------------------------------- */
+/* ---- Timeline (seek bar with times below) --------------------------- */
 .playerTimeline{
   display:flex;
-  align-items:center;
-  gap: 10px;
-  margin-top: 18px;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 14px;
+}
+.playerTimeRow{
+  display:flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 2px;
 }
 .playerTimeNum{
   font-variant-numeric: tabular-nums;
-  font-size: 11.5px;
+  font-size: 11px;
   letter-spacing: 0.3px;
-  color: rgba(223, 231, 251, 0.55);
-  min-width: 36px;
-  text-align: center;
-  flex: 0 0 auto;
+  color: rgba(223, 231, 251, 0.50);
 }
 .srOnly{
   position:absolute;
@@ -1450,8 +1469,8 @@ body[data-route="hub"] .hubRow{
  * thumb feels like a small purple node, not a default blue square. */
 #playerSeek{
   --playerSeekPct: 0%;
-  flex: 1 1 auto;
-  height: 22px;
+  width: 100%;
+  height: 18px;
   -webkit-appearance: none;
   appearance: none;
   background: transparent;
@@ -1503,15 +1522,47 @@ body[data-route="hub"] .hubRow{
 }
 #playerSeek:active::-webkit-slider-thumb{ transform: scale(1.15); }
 
-/* ---- Primary play/pause toggle -------------------------------------- */
-.playerPrimaryRow{
-  display:flex;
-  justify-content:center;
-  margin-top: 22px;
+/* ---- Primary transport: Share | Big Play | Download ----------------- */
+.playerTransport{
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  justify-items: center;
+  margin-top: 14px;
+  gap: 0;
 }
+.playerSideBtn{
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: rgba(223, 231, 251, 0.78);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    color 180ms ease,
+    background 180ms ease,
+    transform 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+  padding: 0;
+}
+.playerSideBtn .ico{ width: 20px; height: 20px; }
+.playerSideBtn:hover{
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+.playerSideBtn:active{ transform: scale(0.92); }
+.playerSideBtn[disabled]{
+  opacity: 0.45;
+  cursor: wait;
+}
+
 .playerToggleBtn{
-  width: 64px;
-  height: 64px;
+  width: 60px;
+  height: 60px;
   border-radius: 999px;
   border: 1px solid rgba(124, 92, 255, 0.55);
   background: linear-gradient(135deg, rgba(124, 92, 255, 0.95), rgba(35, 213, 171, 0.92));
@@ -1531,14 +1582,14 @@ body[data-route="hub"] .hubRow{
   padding: 0;
 }
 .playerToggleBtn .playerToggleIcon{
-  font-size: 24px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width: 24px;
+  height: 24px;
   line-height: 1;
-  display:inline-block;
-  transform: translateX(1px); /* optical center for ▶ */
 }
-.playerToggleBtn.isPlaying .playerToggleIcon{
-  transform: translateX(0); /* ⏸ doesn't need offset */
-}
+.playerToggleBtn .playerToggleIcon .ico{ width: 22px; height: 22px; }
 .playerToggleBtn:hover{
   box-shadow:
     0 14px 40px -8px rgba(124, 92, 255, 0.7),
@@ -1569,51 +1620,50 @@ body[data-route="hub"] .hubRow{
   .playerToggleBtn.isPlaying{ animation: none; }
 }
 
-/* ---- Secondary action row (Share / Video / Cover / Trim / Publish) -- */
-.playerActionRow{
+/* ---- Secondary mini row (Cover · Trim · Publish) -------------------- */
+.playerSecondaryRow{
   display:flex;
-  flex-wrap: wrap;
-  gap: 7px;
+  align-items:center;
   justify-content: center;
-  margin-top: 18px;
+  gap: 4px;
+  margin-top: 14px;
+  flex-wrap: wrap;
 }
-.playerActionChip{
+.playerMiniBtn{
   display:inline-flex;
   align-items:center;
-  gap: 5px;
-  height: 30px;
-  padding: 0 11px;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  background: rgba(255, 255, 255, 0.025);
-  color: rgba(223, 231, 251, 0.82);
+  border: none;
+  background: transparent;
+  color: rgba(223, 231, 251, 0.62);
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.1px;
+  letter-spacing: 0.15px;
   cursor: pointer;
   transition:
-    border-color 200ms ease,
-    background 200ms ease,
-    color 200ms ease,
+    color 180ms ease,
+    background 180ms ease,
     transform 120ms ease;
   -webkit-tap-highlight-color: transparent;
 }
-.playerActionChip:hover{
+.playerMiniBtn .ico{ width: 14px; height: 14px; opacity: 0.85; }
+.playerMiniBtn:hover{
   color: #fff;
-  border-color: rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.04);
 }
-.playerActionChip:active{ transform: scale(0.96); }
-.playerActionChip[disabled]{
-  opacity: 0.6;
-  cursor: wait;
+.playerMiniBtn:hover .ico{ opacity: 1; }
+.playerMiniBtn:active{ transform: scale(0.96); }
+/* Thin vertical separator between the mini buttons. */
+.playerMiniDot{
+  display:inline-block;
+  width: 1px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.10);
+  margin: 0 2px;
 }
-.playerActionIcon{
-  font-size: 12.5px;
-  line-height: 1;
-  opacity: 0.85;
-}
-.playerActionLabel{ letter-spacing: 0.15px; }
 
 /* ---- Trim sheet ------------------------------------------------------ */
 .playerTrimSheet{
@@ -1630,20 +1680,6 @@ body[data-route="hub"] .hubRow{
   flex-wrap: wrap;
 }
 .playerTrimRow input[type="number"]{ max-width: 86px; }
-
-/* ---- Footer ---------------------------------------------------------- */
-.playerFooter{
-  display:flex;
-  justify-content: center;
-  margin-top: 14px;
-  min-height: 16px;
-}
-.playerSourceText{
-  font-size: 11.5px;
-  letter-spacing: 0.3px;
-  color: rgba(223, 231, 251, 0.42);
-  text-transform: uppercase;
-}
 
 /* ---- Hidden compatibility nodes ------------------------------------- */
 /* Old play/pause/stop buttons stay in the DOM so existing JS can still

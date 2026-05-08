@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260508y";
+const APP_BUILD = "20260508z";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -252,6 +252,15 @@ const els = {
   profilePreviewGenres: document.getElementById("profilePreviewGenres"),
   profilePreviewLinks: document.getElementById("profilePreviewLinks"),
   profileHubSharedList: document.getElementById("profileHubSharedList"),
+  userPublicAvatar: document.getElementById("userPublicAvatar"),
+  userPublicName: document.getElementById("userPublicName"),
+  userPublicVoice: document.getElementById("userPublicVoice"),
+  userPublicBio: document.getElementById("userPublicBio"),
+  userPublicStats: document.getElementById("userPublicStats"),
+  userPublicSongsCount: document.getElementById("userPublicSongsCount"),
+  userPublicSongs: document.getElementById("userPublicSongs"),
+  userPublicEmpty: document.getElementById("userPublicEmpty"),
+  btnUserPublicBack: document.getElementById("btnUserPublicBack"),
   btnProfileCardEdit: document.getElementById("btnProfileCardEdit"),
   profileEditMenu: document.getElementById("profileEditMenu"),
   btnProfileMenuEdit: document.getElementById("btnProfileMenuEdit"),
@@ -824,9 +833,18 @@ function applyRoute() {
   const hash = String(location.hash || "");
   const rawRoute = hash.startsWith("#/") ? hash.slice(2) : "generate";
   const route = rawRoute.split(/[?#&]/)[0].trim();
-  const allowedRoutes = new Set(["intro", "start", "auth", "generate", "library", "hub", "settings", "profile", "player", "vocal", "stems", "advanced"]);
-  const normalized = route === "start" ? "intro" : route;
+  // Public profile route: `#/u/USERNAME`. Treat as the dedicated `user`
+  // route so it gets its own section + nav state. Username is preserved
+  // separately so the renderer can pick it up after the route swap.
+  let pendingPublicUsername = "";
+  if (/^u\//.test(route)) {
+    pendingPublicUsername = decodeURIComponent(route.slice(2)).trim();
+  }
+  const allowedRoutes = new Set(["intro", "start", "auth", "generate", "library", "hub", "settings", "profile", "player", "vocal", "stems", "advanced", "user"]);
+  const normalized = pendingPublicUsername ? "user" : (route === "start" ? "intro" : route);
   let wanted = allowedRoutes.has(normalized) ? normalized : "generate";
+  // Public profile is intentionally readable without auth so share-link
+  // visitors don't hit a wall before discovering the rest of the product.
   const protectedRoutes = new Set(["generate", "library", "profile", "player", "vocal", "stems", "advanced"]);
   const isLoggedIn = Boolean(authSession?.user?.id);
   if (!isLoggedIn && protectedRoutes.has(wanted)) wanted = "auth";
@@ -869,6 +887,14 @@ function applyRoute() {
   }
   if (wanted === "profile") {
     void refreshAuthStateFromSupabase();
+  }
+  if (wanted === "user") {
+    renderUserProfile(pendingPublicUsername);
+    // Hub posts arrive via Supabase sync; on a cold visit (someone landing
+    // straight on `#/u/USERNAME` from a share) we may need to wait for
+    // them to populate. refreshHubFromSupabase is idempotent and re-renders
+    // automatically when rows arrive.
+    void refreshHubFromSupabase();
   }
   if (wanted === "generate" && generationReadyNotice) {
     generationReadyNotice = false;
@@ -2091,10 +2117,9 @@ function renderHub() {
     e.stopPropagation();
     const id = u.getAttribute("data-hub-user");
     const p = loadHubFeed().find((x) => x.id === id);
-    if (!p) return;
-    const voice = String(p?.meta?.voiceTimbre || "Not set");
-    const bio = String(p?.meta?.bio || "No bio yet.");
-    alert(`@${p.creator}\nVoice: ${voice}\n\n${bio}`);
+    const username = String(p?.creator || "").trim();
+    if (!username) return;
+    location.hash = `#/u/${encodeURIComponent(username)}`;
   }));
   els.hubList.querySelectorAll(".hubProofChip").forEach((chip) => chip.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -2187,6 +2212,13 @@ async function refreshHubFromSupabase() {
     renderHub();
     renderHubDots();
     renderProfileHubShared();
+    // If we're currently viewing a public profile, re-render so freshly
+    // synced posts (or a cold-load via share link) show up immediately.
+    if (document.body.getAttribute("data-route") === "user") {
+      const h = String(location.hash || "");
+      const m = h.match(/^#\/u\/([^?#]+)/);
+      if (m) renderUserProfile(decodeURIComponent(m[1]));
+    }
   } catch (e) {
     hubLastSyncOk = false;
     hubRetryCount += 1;
@@ -2311,6 +2343,101 @@ function renderProfilePreviewFromInputs() {
     els.profilePreviewAvatar.src = activeProfile.avatar || "./assets/nabadai-logo.png";
   }
   if (els.profilePreviewLinks) els.profilePreviewLinks.innerHTML = "";
+}
+
+/** Public-facing profile aggregated from this user's Hub posts. We use the
+ * Hub feed as the source of truth (no separate "users" table yet) — this
+ * keeps the route purely client-side and means a creator's bio / voice /
+ * avatar reflects whatever was in their most recent post's meta. */
+function renderUserProfile(rawUsername) {
+  const username = String(rawUsername || "").replace(/^@/, "").trim();
+  if (!els.userPublicName) return;
+  const feed = loadHubFeed();
+  // Compare case-insensitively but render the username with the casing
+  // from the actual posts so it looks like the creator's chosen handle.
+  const matches = feed.filter((p) =>
+    String(p?.creator || "").toLowerCase() === username.toLowerCase());
+  matches.sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
+  const latest = matches[0];
+  const displayName = latest?.creator || username || "user";
+
+  if (els.userPublicName) els.userPublicName.textContent = `@${displayName}`;
+  if (els.userPublicAvatar) {
+    els.userPublicAvatar.src = latest?.creatorAvatar || "./assets/nabadai-logo.png";
+    els.userPublicAvatar.alt = `${displayName} avatar`;
+  }
+  if (els.userPublicVoice) {
+    const voice = String(latest?.meta?.voiceTimbre || "").trim();
+    if (voice) {
+      const pretty = voice
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+      els.userPublicVoice.textContent = `Voice · ${pretty}`;
+      els.userPublicVoice.style.display = "";
+    } else {
+      els.userPublicVoice.textContent = "";
+      els.userPublicVoice.style.display = "none";
+    }
+  }
+  if (els.userPublicBio) {
+    const bio = String(latest?.meta?.bio || "").trim();
+    if (bio) {
+      els.userPublicBio.textContent = bio;
+      els.userPublicBio.style.display = "";
+    } else {
+      els.userPublicBio.textContent = "";
+      els.userPublicBio.style.display = "none";
+    }
+  }
+
+  const totalLikes = matches.reduce((sum, p) => sum + Number(p.likes || 0), 0);
+  if (els.userPublicStats) {
+    if (matches.length) {
+      els.userPublicStats.innerHTML = `
+        <span><strong>${matches.length}</strong> song${matches.length === 1 ? "" : "s"}</span>
+        <span aria-hidden="true">·</span>
+        <span><strong>${totalLikes}</strong> like${totalLikes === 1 ? "" : "s"}</span>
+      `;
+      els.userPublicStats.style.display = "";
+    } else {
+      els.userPublicStats.style.display = "none";
+    }
+  }
+  if (els.userPublicSongsCount) {
+    els.userPublicSongsCount.textContent = matches.length ? String(matches.length) : "";
+  }
+
+  if (!matches.length) {
+    if (els.userPublicSongs) els.userPublicSongs.innerHTML = "";
+    if (els.userPublicEmpty) {
+      els.userPublicEmpty.textContent = username
+        ? `No public songs from @${displayName} yet.`
+        : "User not found.";
+      els.userPublicEmpty.style.display = "";
+    }
+    return;
+  }
+  if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
+
+  if (els.userPublicSongs) {
+    els.userPublicSongs.innerHTML = matches.slice(0, 60).map((p) => `
+      <button class="userPublicSong" data-user-song="${escapeHtml(p.id)}" type="button">
+        <img class="userPublicSongCover" src="${escapeHtml(p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png")}" alt="" />
+        <div class="userPublicSongMeta">
+          <div class="userPublicSongTitle">${escapeHtml(p.title || "Untitled")}</div>
+          <div class="userPublicSongTiny">${escapeHtml(relativeTime(p.ts))} · ❤ ${Number(p.likes || 0)}</div>
+        </div>
+        <span class="userPublicSongPlay" aria-hidden="true">▶</span>
+      </button>
+    `).join("");
+    els.userPublicSongs.querySelectorAll("[data-user-song]").forEach((b) => {
+      b.addEventListener("click", () => {
+        const sid = b.getAttribute("data-user-song");
+        if (!sid) return;
+        location.hash = `#/hub?post=${encodeURIComponent(sid)}`;
+      });
+    });
+  }
 }
 
 function renderProfileHubShared() {
@@ -6377,6 +6504,17 @@ if (els.btnPlayerStop) {
 if (els.btnPlayerBack) {
   els.btnPlayerBack.addEventListener("click", () => {
     history.back();
+  });
+}
+if (els.btnUserPublicBack) {
+  els.btnUserPublicBack.addEventListener("click", () => {
+    // If we have history (came from Hub), prefer back so the scroll
+    // position is preserved. Otherwise land in Hub fresh.
+    if (history.length > 1) {
+      history.back();
+    } else {
+      location.hash = "#/hub";
+    }
   });
 }
 if (els.btnPlayerShare) {

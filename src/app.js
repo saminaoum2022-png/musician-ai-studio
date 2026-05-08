@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509i";
+const APP_BUILD = "20260509j";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -898,6 +898,7 @@ function applyRoute() {
   const isLoggedIn = Boolean(authSession?.user?.id);
   if (!isLoggedIn && protectedRoutes.has(wanted)) wanted = "auth";
   document.body.classList.toggle("isIntro", wanted === "intro");
+  document.body.classList.toggle("isAuth", wanted === "auth");
   document.body.setAttribute("data-route", wanted);
   if (els.brandSecondary) {
     els.brandSecondary.textContent = wanted === "hub" ? "Hub" : "Music";

@@ -230,34 +230,219 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
   background: transparent !important;
   box-shadow: none !important;
 }
-.introInner{ text-align:center; width:100%; height:100%; display:flex; align-items:center; justify-content:center; padding: 0; }
+.introInner{
+  text-align:center;
+  width:100%;
+  height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding: 0;
+  cursor: pointer;
+}
 .introHero{
   display:flex;
   flex-direction:column;
   align-items:center;
-  gap:0;
+  gap: 22px;
   transition: transform 280ms ease, opacity 280ms ease;
 }
 .introHero.entering{
   transform: scale(1.045);
-  opacity: 0.1;
+  opacity: 0.05;
 }
-.introLogo{
-  width: 210px;
-  height: 210px;
-  object-fit: contain;
-  box-shadow: none;
-  animation: none;
+/* The wordmark reuses the .brandPrimary gradient defined in the header so
+ * the splash is visually identical to the title users will see throughout
+ * the app — same family, same gradient, just much bigger. */
+.introWordmark{
+  margin: 0;
+  font-size: 72px;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  animation: introBreath 2.6s ease-in-out infinite;
+  filter: drop-shadow(0 0 40px rgba(124,92,255,0.18));
+}
+.introWordmark .brandPrimary{
+  text-shadow: 0 0 32px rgba(124,92,255,0.20), 0 0 48px rgba(35,213,171,0.12);
+}
+@keyframes introBreath{
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.012); }
+}
+@media (prefers-reduced-motion: reduce){
+  .introWordmark{ animation: none; }
+}
+
+/* Three small dots that pulse one after the other — soft "loading" cue
+ * that doesn't look like a spinner. */
+.introDots{
+  display:inline-flex;
+  gap: 8px;
+  align-items:center;
+  justify-content:center;
+}
+.introDots i{
+  display:inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(223, 231, 251, 0.35);
+  animation: introDot 1.4s ease-in-out infinite;
+}
+.introDots i:nth-child(2){ animation-delay: 0.18s; }
+.introDots i:nth-child(3){ animation-delay: 0.36s; }
+@keyframes introDot{
+  0%, 100% { opacity: 0.25; transform: translateY(0); }
+  50%      { opacity: 1;    transform: translateY(-2px); }
+}
+@media (prefers-reduced-motion: reduce){
+  .introDots i{ animation: none; opacity: 0.5; }
 }
 
 @media (max-width: 720px){
-  .introLogo{ width: 200px; height: 200px; }
+  .introWordmark{ font-size: 56px; }
 }
 
 body.isIntro .header{ display:none; }
 body.isIntro .loadingBar{ margin-top: 0; }
 body.isIntro .mobileTabbar{ display:none !important; }
 body.isIntro .footer{ display:none; }
+
+/* ---- Welcome / login screen ---------------------------------------- */
+
+.authScreen{
+  padding: 0;
+  min-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.authInner{
+  width: 100%;
+  max-width: 380px;
+  margin: 0 auto;
+  padding: 32px 24px;
+  display:flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 18px;
+}
+.authBrand{
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.authBrandText{
+  text-shadow: 0 0 18px rgba(124,92,255,0.16);
+}
+.authHero{
+  margin: 16px 0 0;
+  font-size: 28px;
+  line-height: 1.18;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #f0f4ff;
+  max-width: 320px;
+}
+.authSub{
+  margin: 0;
+  color: rgba(223, 231, 251, 0.62);
+  font-size: 14px;
+  line-height: 1.45;
+  max-width: 300px;
+}
+.authActions{
+  display:flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-top: 12px;
+}
+.authPrimaryBtn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap: 10px;
+  width: 100%;
+  height: 52px;
+  padding: 0 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.92);
+  background: #fff;
+  color: #0b1320;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.1px;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 220ms ease, opacity 200ms ease;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 12px 32px -14px rgba(255,255,255,0.30);
+}
+.authPrimaryBtn:hover{
+  box-shadow: 0 14px 36px -10px rgba(255,255,255,0.40);
+}
+.authPrimaryBtn:active{ transform: scale(0.98); }
+.authPrimaryBtn[disabled]{
+  opacity: 0.6;
+  cursor: wait;
+}
+.authGoogleIcon{
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+.authGhostBtn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width: 100%;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: none;
+  background: transparent;
+  color: rgba(223, 231, 251, 0.62);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.15px;
+  cursor: pointer;
+  transition: color 180ms ease, background 180ms ease, transform 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.authGhostBtn:hover{
+  color: #fff;
+  background: rgba(255,255,255,0.04);
+}
+.authGhostBtn:active{ transform: scale(0.98); }
+.authLegal{
+  margin: 14px 0 0;
+  font-size: 11.5px;
+  letter-spacing: 0.15px;
+  color: rgba(223, 231, 251, 0.38);
+  line-height: 1.5;
+}
+.authLegal a{
+  color: rgba(223, 231, 251, 0.62);
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(223,231,251,0.20);
+}
+.authLegal a:hover{
+  color: #fff;
+  border-bottom-color: rgba(255,255,255,0.40);
+}
+
+body.isAuth .header{ display:none; }
+body.isAuth .loadingBar{ margin-top: 0; }
+body.isAuth .mobileTabbar{ display:none !important; }
+body.isAuth .footer{ display:none; }
+body.isAuth .generateOrb{ display:none !important; }
+body.isAuth .hubNowPlaying{ display:none !important; }
 
 .homeGrid{
   display:grid;

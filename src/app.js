@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260508p";
+const APP_BUILD = "20260508q";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -556,7 +556,10 @@ function stopHubPlayback() {
     root.querySelectorAll(".hubPlayProgress > span").forEach((bar) => {
       bar.style.width = "0%";
     });
-    root.querySelectorAll(".hubCoverWrap").forEach((w) => w.classList.remove("isPlaying"));
+    root.querySelectorAll(".hubCoverWrap").forEach((w) => {
+      w.classList.remove("isPlaying");
+      w.classList.remove("isLoading");
+    });
   }
   if (els.hubNowProgBar) els.hubNowProgBar.style.width = "0%";
   renderHubNowPlaying();
@@ -615,13 +618,20 @@ async function startHubPlayback(postId) {
   const playBtn =
     root?.querySelector?.(`[data-hub-play="${postId}"]`) ||
     document.querySelector(`[data-hub-play="${postId}"]`);
+  const coverWrap = playBtn?.closest?.(".hubCoverWrap")
+    || document.querySelector(`.hubCoverWrap[data-hub-cover="${postId}"]`);
   if (playBtn) {
     playBtn.textContent = "■";
-    playBtn.closest(".hubCoverWrap")?.classList.add("isPlaying");
+    coverWrap?.classList.add("isPlaying");
   }
+  // Loading shimmer on the progress bar — confirms "we heard you tap" while
+  // the audio element is buffering. Cleared as soon as play() resolves
+  // (success or failure), so it never lingers on a finished/dead row.
+  coverWrap?.classList.add("isLoading");
 
   const targetSrc = hubPlaybackSrcForPost(postId, p);
   if (!targetSrc) {
+    coverWrap?.classList.remove("isLoading");
     stopHubPlayback();
     return;
   }
@@ -658,10 +668,12 @@ async function startHubPlayback(postId) {
     }
   }
   if (!ok) {
+    coverWrap?.classList.remove("isLoading");
     stopHubPlayback();
     setStatus("Tap a track once to start playback.");
     return;
   }
+  coverWrap?.classList.remove("isLoading");
   if (p?.meta?.clip && Number.isFinite(Number(p.meta.clip.startSec))) {
     try {
       a.currentTime = Math.max(0, Number(p.meta.clip.startSec));
@@ -1931,6 +1943,7 @@ function renderHub() {
     <div class="trackRow hubRow" data-hub-row="${p.id}">
       <div class="hubCoverWrap" data-hub-cover="${p.id}">
         <img class="hubCover" src="${escapeHtml(p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png")}" alt="cover" />
+        <div class="hubEq" aria-hidden="true"><i></i><i></i><i></i></div>
         <button class="hubPlayOverlay" data-hub-play="${p.id}" aria-label="Play">▶</button>
         <div class="hubPlayProgress"><span id="hubProg_${p.id}" style="width:0%"></span></div>
         <button class="hubMoreCorner" data-hub-more="${p.id}" aria-label="More">⋯</button>

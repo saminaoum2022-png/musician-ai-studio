@@ -525,6 +525,96 @@ body.isIntro .footer{ display:none; }
   background: linear-gradient(90deg, rgba(124,92,255,0.95), rgba(35,213,171,0.95));
   transition: width 120ms linear;
 }
+
+/*
+ * "Alive" cues for the playing post — purely CSS so there's no JS animation
+ * loop running. Each rule keys off classes the JS already toggles
+ * (`isPlaying` on the cover wrap, plus a new `isLoading` class while audio
+ * is buffering between src-set and the play() promise resolving).
+ */
+
+/* Soft glow ring on the playing card to draw the eye in a long feed. */
+.hubCoverWrap.isPlaying{
+  box-shadow:
+    0 0 0 1px rgba(124,92,255,0.42),
+    0 6px 22px -8px rgba(124,92,255,0.55),
+    0 4px 14px -10px rgba(35,213,171,0.40);
+  transition: box-shadow 240ms ease;
+}
+
+/* Subtle "breathing" pulse on the cover image so it feels live without
+ * shifting layout. Stays well under the threshold of being distracting. */
+.hubCoverWrap.isPlaying .hubCover{
+  animation: hubCoverBreath 3.6s ease-in-out infinite;
+  will-change: transform, filter;
+}
+@keyframes hubCoverBreath{
+  0%, 100% { transform: scale(1); filter: brightness(1) saturate(1); }
+  50% { transform: scale(1.012); filter: brightness(1.04) saturate(1.06); }
+}
+
+/* 3-bar equalizer overlay. Hidden by default, fades in only while playing. */
+.hubEq{
+  position:absolute;
+  top:10px;
+  left:10px;
+  display:flex;
+  align-items:flex-end;
+  gap:3px;
+  height:14px;
+  padding:5px 7px;
+  border-radius:8px;
+  background: rgba(8,12,20,0.55);
+  border: 1px solid rgba(255,255,255,0.10);
+  pointer-events:none;
+  opacity:0;
+  transition: opacity 220ms ease;
+}
+.hubCoverWrap.isPlaying .hubEq{ opacity:1; }
+.hubEq i{
+  display:block;
+  width:3px;
+  height:100%;
+  background: linear-gradient(180deg, rgba(35,213,171,1), rgba(124,92,255,1));
+  border-radius:2px;
+  transform-origin: bottom center;
+  animation: hubEqBar 900ms ease-in-out infinite;
+  will-change: transform;
+}
+.hubEq i:nth-child(2){ animation-duration: 1100ms; animation-delay: 120ms; }
+.hubEq i:nth-child(3){ animation-duration: 800ms; animation-delay: 60ms; }
+@keyframes hubEqBar{
+  0%, 100% { transform: scaleY(0.35); }
+  30% { transform: scaleY(0.85); }
+  50% { transform: scaleY(0.55); }
+  70% { transform: scaleY(1); }
+}
+
+/* Loading shimmer on the progress bar while audio is buffering. The progress
+ * bar otherwise only shows during playback — `isLoading` reuses the slot to
+ * confirm "we heard you tap, audio is on the way" before play() resolves. */
+.hubCoverWrap.isLoading .hubPlayProgress{
+  display:block;
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.10) 0%,
+    rgba(255,255,255,0.40) 50%,
+    rgba(255,255,255,0.10) 100%);
+  background-size: 220% 100%;
+  animation: hubLoadingShimmer 1100ms linear infinite;
+}
+.hubCoverWrap.isLoading .hubPlayProgress span{ opacity:0; }
+@keyframes hubLoadingShimmer{
+  0% { background-position: 110% 0; }
+  100% { background-position: -110% 0; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .hubCoverWrap.isPlaying .hubCover,
+  .hubEq i,
+  .hubCoverWrap.isLoading .hubPlayProgress{
+    animation: none !important;
+  }
+}
 .hubMoreCorner{
   position:absolute;
   right:10px;

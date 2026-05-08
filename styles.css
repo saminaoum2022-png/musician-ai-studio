@@ -4206,9 +4206,11 @@ input::placeholder, textarea::placeholder{
   display:none;
 }
 @media (max-width: 720px){
-  /* Was hidden when floating orb was primary; orb + sticky-bar changes left mobile with no Generate — show in-form dock */
+  /* On mobile, the Create tab in the bottom bar morphs into Generate / Composing / Listen
+   * once inputs are ready, so the in-form Generate+Options dock is redundant here.
+   * It stays visible on desktop (where the bottom tabbar is hidden). */
   .card.wide[data-route="generate"] .generateDock{
-    display:block;
+    display: none !important;
   }
   #btnGenerateOrb{
     display: none !important;

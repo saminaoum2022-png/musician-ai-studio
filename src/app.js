@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260508m";
+const APP_BUILD = "20260508n";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -325,6 +325,14 @@ let hubPlaybackSeq = 0;
 // shared audio element. Read by the timeupdate listener so we don't have to
 // re-bind a closure (and another listener) every time the track changes.
 let hubAudioCurrentPost = null;
+// Fetched in advance for the next post: `fetch` → Blob → object URL. The
+// audio proxy also streams now, but a fully-buffered local URL still makes
+// track-to-track switches feel instant. postId -> object URL.
+const HUB_BLOB_CACHE_MAX = 5;
+let hubAudioBlobByPostId = new Map();
+let hubBlobLru = [];
+let hubPreloadInflight = new Map();
+let hubPreloadTimer = null;
 
 /** iOS/Safari allow programmatic audio only after a user gesture. Until then,
  * scroll-autoplay would call play(), fail, flash the UI — hence no autoplay
@@ -427,58 +435,9 @@ async function hubAudioPlayWithRetry(audio) {
   }
 }
 
-// Hidden audio element used purely to warm the browser HTTP cache for the
-// next post in scroll order. It is never connected to output, never played —
-// just `src = url; load()` so that when the user scrolls and we swap the real
-// playback element to that URL, the bytes are already cached.
-let hubPreloadAudio = null;
-let hubPreloadUrl = null;
-let hubPreloadTimer = null;
-function ensureHubPreloadAudio() {
-  if (hubPreloadAudio) return hubPreloadAudio;
-  const a = new Audio();
-  a.preload = "auto";
-  a.muted = true;
-  hubPreloadAudio = a;
-  return a;
-}
-function preloadNextHubTrack(currentPostId) {
-  if (!currentPostId) return;
-  const root = els.hubList;
-  if (!root) return;
-  const currentRow = root.querySelector(`[data-hub-row="${currentPostId}"]`);
-  if (!currentRow) return;
-  let nextRow = currentRow.nextElementSibling;
-  while (nextRow && !nextRow.matches?.("[data-hub-row]")) {
-    nextRow = nextRow.nextElementSibling;
-  }
-  if (!nextRow) return;
-  const nextId = nextRow.getAttribute("data-hub-row");
-  if (!nextId) return;
-  const nextPost = loadHubFeed().find((p) => p.id === nextId);
-  const url = String(nextPost?.url || "").trim();
-  if (!url) return;
-  if (hubPreloadUrl === url) return;
-  const a = ensureHubPreloadAudio();
-  hubPreloadUrl = url;
-  try {
-    a.src = url;
-    a.load();
-  } catch {}
-}
-function scheduleHubPreloadNext(currentPostId) {
-  if (hubPreloadTimer) {
-    clearTimeout(hubPreloadTimer);
-    hubPreloadTimer = null;
-  }
-  // Delay so the current track's network fetch finishes before we start
-  // pulling bytes for the next one — otherwise on slow connections both
-  // would compete and the current track could stutter.
-  hubPreloadTimer = setTimeout(() => {
-    hubPreloadTimer = null;
-    preloadNextHubTrack(currentPostId);
-  }, 1200);
-}
+// Hub next-track preload (`preloadNextHubTrack`, `hubPlaybackSrcForPost`, …)
+// lives next to `toAudioProxyUrl` — it needs the proxy helper for same-origin
+// `fetch()` while feed URLs are often remote Suno CDN links.
 
 // Returns the single shared audio element used for all Hub playback. Creating
 // one element and just swapping its src (instead of `new Audio()` per track)
@@ -615,6 +574,14 @@ async function startHubPlayback(postId) {
   const p = loadHubFeed().find((x) => x.id === postId);
   if (!p?.url) return;
 
+  const waitPreload = hubPreloadInflight.get(postId);
+  if (waitPreload) {
+    try {
+      await waitPreload;
+    } catch {}
+  }
+  if (mySeq !== hubPlaybackSeq) return;
+
   const a = ensureHubAudio();
   try {
     a.pause();
@@ -644,10 +611,17 @@ async function startHubPlayback(postId) {
     playBtn.closest(".hubCoverWrap")?.classList.add("isPlaying");
   }
 
-  // Only assign the src when it actually changes; reassigning the same URL
-  // forces a fresh fetch on Safari and noticeably stutters scroll autoplay.
-  if (a.src !== p.url) {
-    a.src = p.url;
+  const targetSrc = hubPlaybackSrcForPost(postId, p);
+  if (!targetSrc) {
+    stopHubPlayback();
+    return;
+  }
+  try {
+    const wantAbs = new URL(targetSrc, location.href).href;
+    const haveAbs = String(a.src || "").trim();
+    if (haveAbs !== wantAbs) a.src = targetSrc;
+  } catch {
+    if (a.src !== targetSrc) a.src = targetSrc;
   }
   try {
     a.currentTime = 0;
@@ -3693,6 +3667,112 @@ async function cacheGeneratedAudio2(url) {
 function toAudioProxyUrl(url) {
   if (!url || url === "#") return "";
   return `/api/suno/audio?url=${encodeURIComponent(url)}`;
+}
+
+function hubAbsoluteUrl(pathOrUrl) {
+  const s = String(pathOrUrl || "").trim();
+  if (!s) return "";
+  if (/^https?:\/\//i.test(s)) return s;
+  try {
+    return new URL(s, location.origin).toString();
+  } catch {
+    return s;
+  }
+}
+
+/** Remote feed URLs use same-origin proxy so `fetch` works; blob stays blob. */
+function hubPreloadFetchUrl(rawUrl) {
+  const u = String(rawUrl || "").trim();
+  if (!u || u === "#") return "";
+  if (u.startsWith("blob:")) return u;
+  if (u.includes("/api/suno/audio")) return hubAbsoluteUrl(u);
+  if (/^https?:\/\//i.test(u)) return hubAbsoluteUrl(toAudioProxyUrl(u));
+  return hubAbsoluteUrl(u);
+}
+
+function trimHubBlobCache() {
+  while (hubBlobLru.length > HUB_BLOB_CACHE_MAX) {
+    const id = hubBlobLru.shift();
+    const ou = hubAudioBlobByPostId.get(id);
+    if (ou) {
+      try {
+        URL.revokeObjectURL(ou);
+      } catch {}
+      hubAudioBlobByPostId.delete(id);
+    }
+  }
+}
+
+function rememberHubBlob(postId, objectUrl) {
+  const prev = hubAudioBlobByPostId.get(postId);
+  if (prev) {
+    try {
+      URL.revokeObjectURL(prev);
+    } catch {}
+  }
+  hubAudioBlobByPostId.set(postId, objectUrl);
+  hubBlobLru = hubBlobLru.filter((x) => x !== postId);
+  hubBlobLru.push(postId);
+  trimHubBlobCache();
+}
+
+function hubPlaybackSrcForPost(postId, p) {
+  const cached = hubAudioBlobByPostId.get(postId);
+  if (cached) return cached;
+  return String(p?.url || "").trim();
+}
+
+async function fetchHubTrackIntoBlob(postId, rawUrl) {
+  if (!postId || !rawUrl) return;
+  if (hubAudioBlobByPostId.has(postId)) return;
+  const inflight = hubPreloadInflight.get(postId);
+  if (inflight) return inflight;
+  const fetchUrl = hubPreloadFetchUrl(rawUrl);
+  if (!fetchUrl) return;
+  const job = (async () => {
+    try {
+      const r = await fetch(fetchUrl);
+      if (!r.ok) return;
+      const blob = await r.blob();
+      if (!blob || blob.size < 1024) return;
+      rememberHubBlob(postId, URL.createObjectURL(blob));
+    } catch {}
+  })();
+  hubPreloadInflight.set(postId, job);
+  job.finally(() => {
+    hubPreloadInflight.delete(postId);
+  });
+  return job;
+}
+
+function preloadNextHubTrack(currentPostId) {
+  if (!currentPostId) return;
+  const root = els.hubList;
+  if (!root) return;
+  const currentRow = root.querySelector(`[data-hub-row="${currentPostId}"]`);
+  if (!currentRow) return;
+  let nextRow = currentRow.nextElementSibling;
+  while (nextRow && !nextRow.matches?.("[data-hub-row]")) {
+    nextRow = nextRow.nextElementSibling;
+  }
+  if (!nextRow) return;
+  const nextId = nextRow.getAttribute("data-hub-row");
+  if (!nextId) return;
+  const nextPost = loadHubFeed().find((p) => p.id === nextId);
+  const raw = String(nextPost?.url || "").trim();
+  if (!raw) return;
+  void fetchHubTrackIntoBlob(nextId, raw);
+}
+
+function scheduleHubPreloadNext(currentPostId) {
+  if (hubPreloadTimer) {
+    clearTimeout(hubPreloadTimer);
+    hubPreloadTimer = null;
+  }
+  hubPreloadTimer = setTimeout(() => {
+    hubPreloadTimer = null;
+    preloadNextHubTrack(currentPostId);
+  }, 400);
 }
 
 function updateListenRefButton() {

@@ -4,6 +4,8 @@
  * GET /api/suno/audio?url=<encoded remote audio url>
  */
 
+const { Readable } = require("stream");
+
 module.exports = async function handler(req, res) {
   try {
     if (req.method !== "GET") return json(res, 405, { error: "Method not allowed" });
@@ -32,8 +34,26 @@ module.exports = async function handler(req, res) {
     const cd = upstream.headers.get("content-disposition");
     if (cd) res.setHeader("Content-Disposition", cd);
 
-    const ab = await upstream.arrayBuffer();
-    res.end(Buffer.from(ab));
+    // Stream through instead of buffering the whole file first — the old
+    // arrayBuffer() path delayed *every* byte until Vercel had the full song,
+    // which felt like a 1–2s stall before playback could start.
+    try {
+      const nodeStream = Readable.fromWeb(upstream.body);
+      nodeStream.on("error", () => {
+        try {
+          if (!res.writableEnded) res.end();
+        } catch {}
+      });
+      res.on("close", () => {
+        try {
+          nodeStream.destroy();
+        } catch {}
+      });
+      nodeStream.pipe(res);
+    } catch {
+      const ab = await upstream.arrayBuffer();
+      res.end(Buffer.from(ab));
+    }
   } catch (e) {
     return json(res, 500, { error: e?.message || String(e) });
   }

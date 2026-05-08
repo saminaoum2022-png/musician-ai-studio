@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510n";
+const APP_BUILD = "20260510o";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -2082,7 +2082,14 @@ function renderHub() {
   // 20260509k — they were title regex, not real categories. The sort
   // segment is now Latest | Trending only.
   if (!items.length) {
-    els.hubList.textContent = "No posts yet. Share songs from Library to Hub.";
+    els.hubList.innerHTML = `
+      <div class="emptyState">
+        <div class="emptyStateIcon" aria-hidden="true">♫</div>
+        <p class="emptyStateTitle">The Hub is quiet</p>
+        <p class="emptyStateHint">Songs you publish from your Library will land here. Be the first to share something today.</p>
+        <a href="#/library" class="emptyStateCta" data-route-link="library">Open Library</a>
+      </div>
+    `;
     renderHubUpdatedAt();
     updateHubAudioHint();
     return;
@@ -3021,11 +3028,11 @@ function renderLibrary() {
   }
   if (!items.length) {
     els.libraryList.innerHTML = `
-      <div class="libraryEmpty">
-        <div class="libraryEmptyIcon" aria-hidden="true">♪</div>
-        <p class="libraryEmptyTitle">Nothing here yet</p>
-        <p class="libraryEmptyHint">Create a song — it lands here automatically so you can replay or share it anytime.</p>
-        <a href="#/generate" class="libraryEmptyCta" data-route-link="generate">Go to Create</a>
+      <div class="emptyState">
+        <div class="emptyStateIcon" aria-hidden="true">♪</div>
+        <p class="emptyStateTitle">Nothing here yet</p>
+        <p class="emptyStateHint">Create a song — it lands here automatically so you can replay or share it anytime.</p>
+        <a href="#/generate" class="emptyStateCta" data-route-link="generate">Go to Create</a>
       </div>
     `;
     return;

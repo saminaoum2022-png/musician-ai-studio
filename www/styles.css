@@ -2118,36 +2118,41 @@ textarea{
 /* -------- Sticky Generate bar (Create lifecycle) -------- */
 .createStickyBar{
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 95;
-  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
-  background:
-    linear-gradient(180deg, rgba(8,12,20,0.0), rgba(8,12,20,0.78) 38%, rgba(8,12,20,0.94)),
-    linear-gradient(180deg, rgba(124,92,255,0.08), rgba(35,213,171,0.04));
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  left: 12px;
+  right: 12px;
+  bottom: calc(80px + env(safe-area-inset-bottom));
+  z-index: 80;
+  padding: 0;
   pointer-events: auto;
-  transition: opacity 200ms ease, transform 220ms ease;
+  transition: opacity 220ms ease, transform 240ms ease;
 }
 .createStickyBar[hidden]{
   display: none !important;
+}
+@media (min-width: 760px){
+  .createStickyBar{
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: min(680px, calc(100% - 24px));
+    bottom: calc(88px + env(safe-area-inset-bottom));
+  }
 }
 .createStickyBarInner{
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
-  max-width: 760px;
   margin: 0 auto;
   padding: 8px 12px;
   border: 1px solid rgba(255,255,255,0.10);
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(18,24,38,0.84), rgba(10,14,22,0.78));
-  box-shadow: 0 18px 36px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.05);
-  min-height: 56px;
+  background: linear-gradient(180deg, rgba(18,24,38,0.92), rgba(10,14,22,0.92));
+  box-shadow: 0 14px 32px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.05);
+  min-height: 52px;
   box-sizing: border-box;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 .createStickyLeft{
   display: flex;
@@ -2282,13 +2287,6 @@ textarea{
   box-shadow: 0 18px 38px rgba(35,213,171,0.18), inset 0 0 0 1px rgba(35,213,171,0.18);
 }
 
-body[data-route="generate"]{
-  padding-bottom: calc(96px + env(safe-area-inset-bottom));
-}
-
-body[data-route="generate"] .generateDock{
-  display: none !important;
-}
 #btnGenerateOrb{
   display: none !important;
 }

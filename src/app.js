@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510d";
+const APP_BUILD = "20260510e";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -6424,49 +6424,28 @@ function syncCreateStickyBar() {
     if (_stickyTipTimer) { clearInterval(_stickyTipTimer); _stickyTipTimer = null; }
     return;
   }
-  bar.hidden = false;
-
-  const lyrics = String(els.sunoPrompt?.value || "").trim();
-  const lineCount = lyrics ? lyrics.split(/\n+/).map((l) => l.trim()).filter(Boolean).length : 0;
-  const photoOn = Boolean(imageMoodAppliedForNextGen);
-  let vocalOn = false;
-  try { vocalOn = Boolean((typeof getVocalReferenceFile === "function" && getVocalReferenceFile()) || (typeof vocalRefBlob !== "undefined" && vocalRefBlob)); } catch {}
   const generating = Boolean(els.btnSunoGenerate?.disabled);
   const hasResult = (els.resultCard?.style.display || "none") !== "none";
-  const hasInput = Boolean(lyrics || photoOn || vocalOn || String(els.sunoStyle?.value || "").trim());
 
   let state = "idle";
   if (generating) state = "generating";
   else if (hasResult) state = "done";
-  else if (hasInput) state = "ready";
 
   bar.dataset.state = state;
+
   if (state !== "generating" && _stickyTipTimer) {
     clearInterval(_stickyTipTimer);
     _stickyTipTimer = null;
   }
 
   if (state === "idle") {
-    left.innerHTML = '<span class="createStickyHint">Add a photo, hum, or write lyrics to start</span>';
+    bar.hidden = true;
+    left.innerHTML = "";
     right.innerHTML = "";
     return;
   }
 
-  if (state === "ready") {
-    const chips = [];
-    if (photoOn) chips.push('<span class="createStickyChip">Photo</span>');
-    if (vocalOn) chips.push('<span class="createStickyChip">Vocal</span>');
-    if (lineCount > 0) chips.push(`<span class="createStickyChip">${lineCount} ${lineCount === 1 ? "line" : "lines"}</span>`);
-    left.innerHTML = `<div class="createStickyChips" aria-label="Inputs ready">${chips.join("")}</div>`;
-    const label = (vocalOn && !lyrics) ? "Generate (instrumental)" : "Generate song";
-    right.innerHTML = `<button id="createStickyGenerateBtn" type="button" class="createStickyAction"><span>${escapeHtmlForSticky(label)}</span><span aria-hidden="true">▶</span></button>`;
-    const goBtn = document.getElementById("createStickyGenerateBtn");
-    if (goBtn) goBtn.addEventListener("click", () => {
-      try { haptic("impact"); } catch {}
-      els.btnSunoGenerate?.click();
-    });
-    return;
-  }
+  bar.hidden = false;
 
   if (state === "generating") {
     const tip = STICKY_TIPS[_stickyTipIdx % STICKY_TIPS.length];

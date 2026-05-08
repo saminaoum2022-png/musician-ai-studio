@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260508r";
+const APP_BUILD = "20260508s";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1943,35 +1943,52 @@ function renderHub() {
     <div class="trackRow hubRow" data-hub-row="${p.id}">
       <div class="hubCoverWrap" data-hub-cover="${p.id}">
         <img class="hubCover" src="${escapeHtml(p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png")}" alt="cover" />
+        <div class="hubCoverScrim" aria-hidden="true"></div>
         <div class="hubEq" aria-hidden="true"><i></i><i></i><i></i></div>
         <button class="hubPlayOverlay" data-hub-play="${p.id}" aria-label="Play">▶</button>
         <div class="hubPlayProgress"><span id="hubProg_${p.id}" style="width:0%"></span></div>
         <button class="hubMoreCorner" data-hub-more="${p.id}" aria-label="More">⋯</button>
       </div>
-      <div style="flex:1;min-width:0">
+      <div class="hubBody">
         <div class="hubMetaTop">
-          <img src="${escapeHtml(p.creatorAvatar || "./assets/nabadai-logo.png")}" alt="avatar" data-hub-user="${p.id}" style="width:26px;height:26px;border-radius:999px;object-fit:cover;border:1px solid rgba(255,255,255,0.14);cursor:pointer" />
-          <div class="trackTiny" data-hub-user="${p.id}" style="cursor:pointer">@${escapeHtml(p.creator)}</div>
-          <span class="hubProofChip">Proof ${escapeHtml(String(p?.proof?.model || LATEST_SUNO_MODEL))} · #${escapeHtml(String(p?.proof?.promptHash || ""))}</span>
+          <img class="hubAvatar" src="${escapeHtml(p.creatorAvatar || "./assets/nabadai-logo.png")}" alt="avatar" data-hub-user="${p.id}" />
+          <div class="hubMetaText">
+            <span class="hubCreator" data-hub-user="${p.id}">@${escapeHtml(p.creator)}</span>
+            <span class="hubMetaDot">·</span>
+            <span class="hubTimeAgo">${escapeHtml(relativeTime(p.ts))}</span>
+          </div>
+          <span class="hubProofChip" title="Proof ${escapeHtml(String(p?.proof?.model || LATEST_SUNO_MODEL))} · #${escapeHtml(String(p?.proof?.promptHash || ""))}">Proof</span>
         </div>
-        <div class="trackName">${escapeHtml(p.title)}</div>
-        <div class="trackTiny">${new Date(p.ts).toLocaleString()}</div>
-        ${p.remixOf ? `<div class="trackTiny">Remix of: ${escapeHtml(p.remixOf)}</div>` : ""}
+        <div class="trackName hubTitle">${escapeHtml(p.title)}</div>
+        ${p.remixOf ? `<div class="hubRemixOf">Remix of: ${escapeHtml(p.remixOf)}</div>` : ""}
       </div>
       <div class="hubActionRow">
-        <button class="ghost hubLikeBtn" data-hub-like="${p.id}">❤ ${Number(p.likes || 0)}</button>
-        <button class="ghost hubReactIcon" title="Melody strong" data-hub-react="${p.id}:melody">
-          <span class="hubSvg">♪</span><span>${Number(p?.reacts?.melody || 0)}</span>
+        <button class="hubLike" data-hub-like="${p.id}" aria-label="Like" data-count="${Number(p.likes || 0)}">
+          <span class="hubLikeHeart" aria-hidden="true">♥</span>
+          <span class="hubLikeCount">${Number(p.likes || 0)}</span>
         </button>
-        <button class="ghost hubReactIcon" title="Lyrics strong" data-hub-react="${p.id}:lyrics">
-          <span class="hubSvg">✎</span><span>${Number(p?.reacts?.lyrics || 0)}</span>
-        </button>
-        <button class="ghost hubReactIcon" title="Mix clean" data-hub-react="${p.id}:mix">
-          <span class="hubSvg">◌</span><span>${Number(p?.reacts?.mix || 0)}</span>
-        </button>
-        <button class="ghost hubReactIcon" title="Needs groove" data-hub-react="${p.id}:groove">
-          <span class="hubSvg">≈</span><span>${Number(p?.reacts?.groove || 0)}</span>
-        </button>
+        <div class="hubReacts">
+          <button class="hubReact" data-hub-react="${p.id}:melody" aria-label="Melody strong">
+            <span class="hubReactIcon" aria-hidden="true">♪</span>
+            <span class="hubReactLabel">Melody</span>
+            <span class="hubReactCount">${Number(p?.reacts?.melody || 0)}</span>
+          </button>
+          <button class="hubReact" data-hub-react="${p.id}:lyrics" aria-label="Lyrics strong">
+            <span class="hubReactIcon" aria-hidden="true">✎</span>
+            <span class="hubReactLabel">Lyrics</span>
+            <span class="hubReactCount">${Number(p?.reacts?.lyrics || 0)}</span>
+          </button>
+          <button class="hubReact" data-hub-react="${p.id}:mix" aria-label="Mix clean">
+            <span class="hubReactIcon" aria-hidden="true">◌</span>
+            <span class="hubReactLabel">Mix</span>
+            <span class="hubReactCount">${Number(p?.reacts?.mix || 0)}</span>
+          </button>
+          <button class="hubReact" data-hub-react="${p.id}:groove" aria-label="Needs groove">
+            <span class="hubReactIcon" aria-hidden="true">≈</span>
+            <span class="hubReactLabel">Groove</span>
+            <span class="hubReactCount">${Number(p?.reacts?.groove || 0)}</span>
+          </button>
+        </div>
       </div>
       <div class="libMenu hubMoreMenu" id="hubMore_${p.id}" style="display:none">
         <button class="ghost" data-hub-remix="${p.id}">Remix</button>
@@ -2010,7 +2027,13 @@ function renderHub() {
     p.likes = Number(p.likes || 0) + 1;
     saveHubFeed(feed);
     void supabasePatchHub(id, { likes: p.likes }).catch(() => {});
-    renderHub();
+    // Update the count in place so the burst animation has somewhere to
+    // live — re-rendering the entire feed would destroy this button before
+    // the heart can pulse.
+    const countEl = b.querySelector(".hubLikeCount");
+    if (countEl) countEl.textContent = String(p.likes);
+    b.setAttribute("data-count", String(p.likes));
+    triggerHubPulse(b);
     setStatus("Liked");
   }));
   els.hubList.querySelectorAll("[data-hub-react]").forEach((b) => b.addEventListener("click", (e) => {
@@ -2026,7 +2049,9 @@ function renderHub() {
     p.reacts[key] = Number(p.reacts[key] || 0) + 1;
     saveHubFeed(feed);
     void supabasePatchHub(id, { reacts: p.reacts }).catch(() => {});
-    renderHub();
+    const countEl = b.querySelector(".hubReactCount");
+    if (countEl) countEl.textContent = String(p.reacts[key]);
+    triggerHubPulse(b);
     const labels = {
       melody: "Melody strong",
       lyrics: "Lyrics strong",
@@ -3839,6 +3864,20 @@ function scheduleHubPreloadNext(currentPostId) {
 /** Preload the first row in the rendered Hub feed. Most users tap ▶ on the
  * top post, so having that file already buffered makes the very first play
  * feel instant — without committing bandwidth for the entire feed. */
+/** Toggle `data-burst="1"` on a button to trigger its CSS keyframe pulse,
+ * then clear it so a future click can re-trigger. The reflow read forces
+ * the browser to commit the cleared state before re-setting — without it
+ * the same animation wouldn't restart on rapid taps. */
+function triggerHubPulse(el) {
+  if (!el) return;
+  el.removeAttribute("data-burst");
+  void el.offsetWidth;
+  el.setAttribute("data-burst", "1");
+  setTimeout(() => {
+    if (el.getAttribute("data-burst") === "1") el.removeAttribute("data-burst");
+  }, 720);
+}
+
 function preloadInitialHubTracks() {
   if (!els.hubList) return;
   const firstRow = els.hubList.querySelector("[data-hub-row]");

@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260508l";
+const APP_BUILD = "20260508m";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -484,12 +484,40 @@ function scheduleHubPreloadNext(currentPostId) {
 // one element and just swapping its src (instead of `new Audio()` per track)
 // is the only way to guarantee one stream at a time on iOS — pause() on a
 // freshly-created element is racy until its play() promise has settled.
+// When a track finishes naturally (NOT when the user paused), smoothly bring
+// the next post in DOM order into the viewport center. The existing
+// scroll-driven autoplay then takes over and plays it. If the user has
+// navigated away from Hub, we just let it stop — scrolling Hub from the
+// background would jolt their position when they return.
+function onHubTrackEnded(endedPostId) {
+  if (!endedPostId) return;
+  if ((document.body.getAttribute("data-route") || "") !== "hub") return;
+  const root = els.hubList;
+  if (!root) return;
+  const currentRow = root.querySelector(`[data-hub-row="${endedPostId}"]`);
+  if (!currentRow) return;
+  let nextRow = currentRow.nextElementSibling;
+  while (nextRow && !nextRow.matches?.("[data-hub-row]")) {
+    nextRow = nextRow.nextElementSibling;
+  }
+  if (!nextRow) return;
+  try {
+    nextRow.scrollIntoView({ behavior: "smooth", block: "center" });
+  } catch {
+    try {
+      nextRow.scrollIntoView();
+    } catch {}
+  }
+}
+
 function ensureHubAudio() {
   if (hubAudio) return hubAudio;
   const a = new Audio();
   a.preload = "auto";
   a.addEventListener("ended", () => {
+    const endedPostId = hubAudioPostId;
     stopHubPlayback();
+    onHubTrackEnded(endedPostId);
   });
   a.addEventListener("timeupdate", () => {
     const postId = hubAudioPostId;
@@ -501,7 +529,9 @@ function ensureHubAudio() {
       const en = Number(clip.endSec);
       if (a.currentTime < s) a.currentTime = s;
       if (a.currentTime >= en) {
+        const endedPostId = hubAudioPostId;
         stopHubPlayback();
+        onHubTrackEnded(endedPostId);
         return;
       }
     }

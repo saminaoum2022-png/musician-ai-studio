@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510c";
+const APP_BUILD = "20260510d";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -6398,13 +6398,13 @@ function syncGenerateOrbVisibility() {
   syncCreateStickyBar();
 }
 
-const STICKY_TIPS = [
+var STICKY_TIPS = [
   "We pull mood and tags into your prompt.",
   "Tip: vocal reference adds character.",
   "Photo mode is great for stories and reels.",
 ];
-let _stickyTipTimer = null;
-let _stickyTipIdx = 0;
+var _stickyTipTimer = null;
+var _stickyTipIdx = 0;
 function escapeHtmlForSticky(s) {
   return String(s || "")
     .replace(/&/g, "&amp;")

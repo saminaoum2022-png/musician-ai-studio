@@ -167,22 +167,76 @@
             </button>
           </div>
           <div id="resultCard" class="resultCard" style="display:none">
-            <img id="resultArt" class="resultArt" alt="cover" />
-            <div class="resultMeta">
-              <div id="resultTitle" class="resultTitle">Generated song</div>
-              <div class="row generateActions">
-                <button id="btnResultPlay" class="primary" type="button">Play</button>
-                <a id="resultDownload" class="primary disabled" href="#" download="generated_song.mp3" rel="noreferrer">Download</a>
+            <div class="resultCardInner">
+              <div class="resultArtCol">
+                <div class="resultArtWrap" id="resultArtWrap">
+                  <img id="resultArt" class="resultArt" alt="" />
+                  <button id="btnResultPlay" class="resultArtPlay" type="button" aria-label="Play">
+                    <span class="resultArtPlayIco resultArtPlayIco--play" aria-hidden="true">▶</span>
+                    <span class="resultArtPlayIco resultArtPlayIco--pause" hidden aria-hidden="true">⏸</span>
+                  </button>
+                  <span class="resultVariantBadge" aria-hidden="true">A</span>
+                </div>
+                <div id="resultProgressRow" class="resultProgressRow" hidden>
+                  <div class="resultProgressTrack" aria-hidden="true">
+                    <span id="resultProgressFill" class="resultProgressFill"></span>
+                  </div>
+                  <span id="resultTimeLabel" class="resultTimeLabel"></span>
+                </div>
+              </div>
+              <div class="resultMainCol">
+                <div class="resultHead">
+                  <h3 id="resultTitle" class="resultTitle">Generated song</h3>
+                </div>
+                <p id="resultMetaLine" class="resultMetaLine"></p>
+                <div class="resultActionsRow">
+                  <button id="btnResultShare" class="resultActionBtn resultActionBtn--share" type="button">Share</button>
+                  <button id="btnResultSaveLib" class="resultActionBtn resultActionBtn--save" type="button">Library</button>
+                  <details class="resultMoreMenu">
+                    <summary class="resultActionBtn resultActionBtn--more" aria-label="More">⋯</summary>
+                    <div class="resultMorePanel">
+                      <a id="resultDownload" class="resultMoreLink disabled" href="#" download="generated_song.mp3" rel="noreferrer">Download</a>
+                      <a id="btnResultOpenDirect" class="resultMoreLink disabled" href="#" rel="noreferrer" target="_blank">Open in browser</a>
+                    </div>
+                  </details>
+                </div>
               </div>
             </div>
           </div>
           <div id="resultCard2" class="resultCard" style="display:none">
-            <img id="resultArt2" class="resultArt" alt="cover" />
-            <div class="resultMeta">
-              <div id="resultTitle2" class="resultTitle">Generated song B</div>
-              <div class="row generateActions">
-                <button id="btnResultPlay2" class="primary" type="button">Play B</button>
-                <a id="resultDownload2" class="primary disabled" href="#" download="generated_song_b.mp3" rel="noreferrer">Download</a>
+            <div class="resultCardInner">
+              <div class="resultArtCol">
+                <div class="resultArtWrap" id="resultArtWrap2">
+                  <img id="resultArt2" class="resultArt" alt="" />
+                  <button id="btnResultPlay2" class="resultArtPlay" type="button" aria-label="Play version B">
+                    <span class="resultArtPlayIco resultArtPlayIco--play" aria-hidden="true">▶</span>
+                    <span class="resultArtPlayIco resultArtPlayIco--pause" hidden aria-hidden="true">⏸</span>
+                  </button>
+                  <span class="resultVariantBadge" aria-hidden="true">B</span>
+                </div>
+                <div id="resultProgressRow2" class="resultProgressRow" hidden>
+                  <div class="resultProgressTrack" aria-hidden="true">
+                    <span id="resultProgressFill2" class="resultProgressFill"></span>
+                  </div>
+                  <span id="resultTimeLabel2" class="resultTimeLabel"></span>
+                </div>
+              </div>
+              <div class="resultMainCol">
+                <div class="resultHead">
+                  <h3 id="resultTitle2" class="resultTitle">Generated song B</h3>
+                </div>
+                <p id="resultMetaLine2" class="resultMetaLine"></p>
+                <div class="resultActionsRow">
+                  <button id="btnResultShare2" class="resultActionBtn resultActionBtn--share" type="button">Share</button>
+                  <button id="btnResultSaveLib2" class="resultActionBtn resultActionBtn--save" type="button">Library</button>
+                  <details class="resultMoreMenu">
+                    <summary class="resultActionBtn resultActionBtn--more" aria-label="More">⋯</summary>
+                    <div class="resultMorePanel">
+                      <a id="resultDownload2" class="resultMoreLink disabled" href="#" download="generated_song_b.mp3" rel="noreferrer">Download</a>
+                      <a id="btnResultOpenDirect2" class="resultMoreLink disabled" href="#" rel="noreferrer" target="_blank">Open in browser</a>
+                    </div>
+                  </details>
+                </div>
               </div>
             </div>
           </div>
@@ -1094,6 +1148,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260510j"></script>
+    <script type="module" src="./src/app.js?v=20260510k"></script>
   </body>
 </html>

@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510j";
+const APP_BUILD = "20260510k";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -4394,6 +4394,114 @@ function formatTime(sec) {
   return `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
 }
 
+/** Style/timing chips under generated-result titles (Create page). */
+function buildGeneratedResultMetaLine() {
+  const style = String(els.sunoStyle?.value || "").trim();
+  const timingEl = document.getElementById("sunoTiming");
+  const timing = timingEl ? String(timingEl.value || "").trim() : "";
+  const bits = [];
+  if (style) {
+    const tags = style.split(/[,，]/).map((x) => x.trim()).filter(Boolean).slice(0, 5);
+    if (tags.length) bits.push(tags.join(" · "));
+  }
+  if (timing) bits.push(timing);
+  const line = bits.slice(0, 2).join(" · ");
+  return line || "Ready — tap the cover to listen";
+}
+
+/** Share sheet / copy-link for a freshly generated variant (no Hub post required). */
+async function shareGeneratedTrack(variant) {
+  const title =
+    variant === "b"
+      ? String(lastSunoTitle2 || "").trim() || "Generated song B"
+      : String(lastSunoTitle || "").trim() || "Generated song";
+  const rawUrl =
+    variant === "b"
+      ? lastSunoFullUrl2 || lastSunoProxyUrl2 || ""
+      : lastSunoFullUrl || lastSunoProxyUrl || "";
+  const trimmed = String(rawUrl || "").trim();
+  const url =
+    trimmed && /^https?:\/\//i.test(trimmed)
+      ? trimmed
+      : String(lastPlayerHttpUrl || "").trim() || window.location.href;
+  const ver = variant === "b" ? "Version B" : "Version A";
+  await shareHubLink({
+    title: `${title} — Nabadai`,
+    text: `Made with NabadAi (${ver})`,
+    url,
+  });
+}
+
+/** Progress + play/pause affordances on Create-page result cards while audio plays inline. */
+function syncResultCardsFromPlayer() {
+  const route = document.body.getAttribute("data-route") || "";
+  const onGenerate = route === "generate";
+  const a = playerEl;
+  const dur = a && Number.isFinite(a.duration) ? a.duration : 0;
+  const cur = a && Number.isFinite(a.currentTime) ? a.currentTime : 0;
+  const playing = Boolean(a && !a.paused && !a.ended && (dur > 0 || cur > 0));
+  const mini =
+    miniSource && miniSource.type === "generateResult" ? miniSource.variant : null;
+
+  const playingA = onGenerate && mini === "a" && playing;
+  const playingB = onGenerate && mini === "b" && playing;
+  const progressA = onGenerate && mini === "a" && dur > 0;
+  const progressB = onGenerate && mini === "b" && dur > 0;
+
+  const wrapA = document.getElementById("resultArtWrap");
+  const wrapB = document.getElementById("resultArtWrap2");
+  if (wrapA) wrapA.classList.toggle("isPlaying", playingA);
+  if (wrapB) wrapB.classList.toggle("isPlaying", playingB);
+
+  const btnA = document.getElementById("btnResultPlay");
+  const btnB = document.getElementById("btnResultPlay2");
+  const toggIco = (btn, on) => {
+    if (!btn) return;
+    const pPlay = btn.querySelector(".resultArtPlayIco--play");
+    const pPause = btn.querySelector(".resultArtPlayIco--pause");
+    if (pPlay && pPause) {
+      pPlay.hidden = Boolean(on);
+      pPause.hidden = !on;
+    }
+    const idleLabel = btn.id === "btnResultPlay2" ? "Play version B" : "Play";
+    btn.setAttribute("aria-label", on ? "Pause" : idleLabel);
+  };
+  toggIco(btnA, playingA);
+  toggIco(btnB, playingB);
+
+  const rowA = document.getElementById("resultProgressRow");
+  const rowB = document.getElementById("resultProgressRow2");
+  const fillA = document.getElementById("resultProgressFill");
+  const fillB = document.getElementById("resultProgressFill2");
+  const labA = document.getElementById("resultTimeLabel");
+  const labB = document.getElementById("resultTimeLabel2");
+
+  if (rowA && fillA && labA) {
+    if (progressA) {
+      rowA.hidden = false;
+      const pct = dur > 0 ? Math.min(100, (cur / dur) * 100) : 0;
+      fillA.style.width = `${pct}%`;
+      labA.textContent = `${formatTime(cur)} / ${formatTime(dur)}`;
+    } else {
+      rowA.hidden = true;
+      fillA.style.width = "0%";
+      labA.textContent = "";
+    }
+  }
+  if (rowB && fillB && labB) {
+    if (progressB) {
+      rowB.hidden = false;
+      const pct = dur > 0 ? Math.min(100, (cur / dur) * 100) : 0;
+      fillB.style.width = `${pct}%`;
+      labB.textContent = `${formatTime(cur)} / ${formatTime(dur)}`;
+    } else {
+      rowB.hidden = true;
+      fillB.style.width = "0%";
+      labB.textContent = "";
+    }
+  }
+}
+
 function syncPlayerUI() {
   if (!playerEl) return;
   const dur = Number.isFinite(playerEl.duration) ? playerEl.duration : 0;
@@ -4416,6 +4524,7 @@ function syncPlayerUI() {
     els.playerSeek.style.setProperty("--playerSeekPct", `${pct}%`);
   }
   renderHubNowPlaying();
+  syncResultCardsFromPlayer();
 }
 
 function clampClipRange(startSec, endSec, durationSec) {
@@ -5406,9 +5515,15 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       return;
     }
     if (els.resultTitle) els.resultTitle.textContent = lastSunoTitle || "Generated song";
+    const metaLine = buildGeneratedResultMetaLine();
+    const rm = document.getElementById("resultMetaLine");
+    const rm2 = document.getElementById("resultMetaLine2");
+    if (rm) rm.textContent = metaLine;
+    if (rm2) rm2.textContent = metaLine;
     if (els.resultArt) {
       const fallbackCover = "/assets/nabadai-logo.png";
       els.resultArt.src = lastSunoArtUrl || fallbackCover;
+      els.resultArt.alt = lastSunoTitle ? `Cover: ${lastSunoTitle}` : "Song cover";
       els.resultArt.style.display = "";
     }
     if (els.resultDownload) {
@@ -5434,6 +5549,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (els.resultArt2) {
       const fallbackCover = "/assets/nabadai-logo.png";
       els.resultArt2.src = lastSunoArtUrl2 || lastSunoArtUrl || fallbackCover;
+      els.resultArt2.alt = lastSunoTitle2 ? `Cover: ${lastSunoTitle2}` : "Song cover B";
       els.resultArt2.style.display = "";
     }
     if (els.resultDownload2) {
@@ -6137,7 +6253,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   });
 
   if (els.btnResultPlay) {
-    els.btnResultPlay.addEventListener("click", async () => {
+    els.btnResultPlay.addEventListener("click", async (ev) => {
+      ev.stopPropagation();
       haptic("light");
       const url =
         lastSunoCachedUrl ||
@@ -6148,29 +6265,85 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         setStatus("No playable result URL yet. Please wait a moment and try again.");
         return;
       }
-      // Capture the canonical http URL for downstream Share/Download.
-      // The played URL might be a blob: cache or a relative proxy path,
-      // neither of which the server can fetch.
+      if (
+        miniSource?.type === "generateResult" &&
+        miniSource?.variant === "a" &&
+        playerEl &&
+        !playerEl.paused
+      ) {
+        playerEl.pause();
+        if (typeof syncPlayerToggleUI === "function") syncPlayerToggleUI();
+        syncPlayerUI();
+        return;
+      }
       if (lastSunoFullUrl) lastPlayerHttpUrl = lastSunoFullUrl;
-      await playOnPlayerPage(url && url !== "#" ? url : "", "Full song");
+      setPlayerMeta({
+        title: lastSunoTitle || "Generated song",
+        subtitle: "Generated • Version A",
+        artUrl: lastSunoArtUrl,
+      });
+      await playInline(url && url !== "#" ? url : "", "Full song", { type: "generateResult", variant: "a" });
     });
   }
   if (els.btnResultPlay2) {
-    els.btnResultPlay2.addEventListener("click", async () => {
+    els.btnResultPlay2.addEventListener("click", async (ev) => {
+      ev.stopPropagation();
       haptic("light");
       const url = lastSunoCachedUrl2 || lastSunoProxyUrl2 || lastSunoFullUrl2;
       if (!url || url === "#") {
         setStatus("Second track is not ready for playback yet.");
         return;
       }
+      if (
+        miniSource?.type === "generateResult" &&
+        miniSource?.variant === "b" &&
+        playerEl &&
+        !playerEl.paused
+      ) {
+        playerEl.pause();
+        if (typeof syncPlayerToggleUI === "function") syncPlayerToggleUI();
+        syncPlayerUI();
+        return;
+      }
       if (lastSunoFullUrl2) lastPlayerHttpUrl = lastSunoFullUrl2;
-      await playOnPlayerPage(url && url !== "#" ? url : "", "Full song B", {
+      setPlayerMeta({
         title: lastSunoTitle2 || "Generated song B",
-        subtitle: "Generated • Full song B",
+        subtitle: "Generated • Version B",
         artUrl: lastSunoArtUrl2 || lastSunoArtUrl,
+      });
+      await playInline(url && url !== "#" ? url : "", "Full song B", {
+        type: "generateResult",
+        variant: "b",
       });
     });
   }
+
+  const btnResultShare = document.getElementById("btnResultShare");
+  const btnResultShare2 = document.getElementById("btnResultShare2");
+  const btnResultSaveLib = document.getElementById("btnResultSaveLib");
+  const btnResultSaveLib2 = document.getElementById("btnResultSaveLib2");
+  if (btnResultShare) {
+    btnResultShare.addEventListener("click", async (ev) => {
+      ev.stopPropagation();
+      haptic("light");
+      await shareGeneratedTrack("a");
+    });
+  }
+  if (btnResultShare2) {
+    btnResultShare2.addEventListener("click", async (ev) => {
+      ev.stopPropagation();
+      haptic("light");
+      await shareGeneratedTrack("b");
+    });
+  }
+  const openLibraryFromResult = (ev) => {
+    ev.stopPropagation();
+    haptic("light");
+    location.hash = "#/library";
+    showToast("Find your tracks at the top of Library.");
+  };
+  if (btnResultSaveLib) btnResultSaveLib.addEventListener("click", openLibraryFromResult);
+  if (btnResultSaveLib2) btnResultSaveLib2.addEventListener("click", openLibraryFromResult);
   if (els.btnResultListenRef) {
     // Opens the exact temporary file Suno received as the vocal reference in a
     // new tab so the system audio player handles it. We deliberately avoid the
@@ -6194,13 +6367,20 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       try { a.click(); } finally { setTimeout(() => a.remove(), 100); }
     });
   }
-  // Delegation: clicking artwork/title opens player (same as Play); buttons/links handle themselves.
+  // Delegation: clicking artwork/title opens play (same as cover button); real controls handle themselves.
   if (els.resultCard) {
     els.resultCard.addEventListener(
       "click",
       (e) => {
         if (!e.target || !(e.target instanceof Element)) return;
-        if (e.target.closest("button") || e.target.closest("a")) return;
+        if (
+          e.target.closest("button") ||
+          e.target.closest("a") ||
+          e.target.closest("details") ||
+          e.target.closest("summary")
+        ) {
+          return;
+        }
         els.btnResultPlay?.click();
       },
       { capture: true }
@@ -6211,7 +6391,14 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       "click",
       (e) => {
         if (!e.target || !(e.target instanceof Element)) return;
-        if (e.target.closest("button") || e.target.closest("a")) return;
+        if (
+          e.target.closest("button") ||
+          e.target.closest("a") ||
+          e.target.closest("details") ||
+          e.target.closest("summary")
+        ) {
+          return;
+        }
         els.btnResultPlay2?.click();
       },
       { capture: true }

@@ -918,6 +918,19 @@ body.isIntro .footer{ display:none; }
 @media (min-width: 600px){
   .hubReact .hubReactLabel{ display:inline; }
 }
+
+/* Share is universally understood from the arrow alone — keep its label
+ * hidden on phones (even on the focused card, where Like/Melody/Lyrics
+ * get their words) so all four chips fit on one row. Tablet+ has room
+ * to show "Share" as text. */
+.hubRow:has(.hubCoverWrap.isPlaying) .hubShare .hubReactLabel{
+  display:none;
+}
+@media (min-width: 600px){
+  .hubRow:has(.hubCoverWrap.isPlaying) .hubShare .hubReactLabel{
+    display:inline;
+  }
+}
 .hubMoreCorner{
   position:absolute;
   right:10px;

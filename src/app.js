@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260508i";
+const APP_BUILD = "20260508j";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -438,7 +438,12 @@ function tryHubViewportAutoplay() {
   const feed = loadHubFeed();
   const p = feed.find((x) => x.id === centerId);
   if (!p?.url) return;
-  if (hubAudioPostId === centerId && hubAudio && !hubAudio.paused) return;
+  // If we already targeted this post — even if play() hasn't resolved yet,
+  // even if the element is momentarily paused mid-load — never kick off a
+  // second startHubPlayback for the same id. Scroll-snap fires scroll events
+  // while it animates the card into place, and re-triggering during that
+  // window was racing the first call and producing rapid play/stop glitches.
+  if (hubAudioPostId === centerId) return;
   void startHubPlayback(centerId);
 }
 
@@ -465,13 +470,24 @@ function stopHubPlayback() {
 }
 
 async function startHubPlayback(postId) {
+  // Idempotent: if we're already targeting this post, just make sure it's
+  // playing again (in case the user tapped pause earlier or the load was
+  // interrupted). Don't re-allocate state — that's what produced the
+  // play/stop glitch when scroll-snap fired during a fresh load.
+  if (hubAudioPostId === postId && hubAudio) {
+    if (hubAudio.paused) {
+      try {
+        await hubAudio.play();
+      } catch {}
+    }
+    return;
+  }
+
   const mySeq = ++hubPlaybackSeq;
   const p = loadHubFeed().find((x) => x.id === postId);
   if (!p?.url) return;
 
   const a = ensureHubAudio();
-  // Always pause + reset before re-targeting. Pausing first prevents two
-  // streams from overlapping while the new src loads.
   try {
     a.pause();
   } catch {}
@@ -511,10 +527,8 @@ async function startHubPlayback(postId) {
 
   const ok = await hubAudioPlayWithRetry(a);
   if (mySeq !== hubPlaybackSeq) {
-    // A newer call has taken over; make sure this attempt isn't left audible.
-    try {
-      a.pause();
-    } catch {}
+    // A newer call already owns the shared audio element. Bail without
+    // touching it — pausing here would stomp on the new owner's load.
     return;
   }
   if (!ok) {

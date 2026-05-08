@@ -624,7 +624,10 @@ body.isIntro .footer{ display:none; }
  * (EQ bars, glow, breathing) still make the active card readable.
  */
 #hubList .hubRow{
-  transition: opacity 320ms ease, filter 320ms ease, transform 320ms ease;
+  transition:
+    opacity 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 #hubList:has(.hubCoverWrap.isPlaying)
   .hubRow:not(:has(.hubCoverWrap.isPlaying)){
@@ -729,7 +732,10 @@ body.isIntro .footer{ display:none; }
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
-  transition: font-size 240ms ease, font-weight 240ms ease, letter-spacing 240ms ease;
+  transition:
+    font-size 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    font-weight 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    letter-spacing 360ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .hubRow:has(.hubCoverWrap.isPlaying) .hubTitle{
   font-size:18px;
@@ -770,7 +776,17 @@ body.isIntro .footer{ display:none; }
   font-weight:700;
   font-size:13.5px;
   cursor:pointer;
-  transition: transform 140ms ease, border-color 200ms ease, background 200ms ease;
+  /* Coordinated focus transitions: size/padding/font glide on focus
+   * change, while transform/border/background still react quickly to
+   * hover/press feedback. Eased with ease-out-quart for a soft landing. */
+  transition:
+    height 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    padding 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    gap 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    font-size 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 140ms ease,
+    border-color 200ms ease,
+    background 200ms ease;
   -webkit-tap-highlight-color: transparent;
 }
 .hubLike:hover{ border-color: rgba(255,255,255,0.24); }
@@ -783,7 +799,9 @@ body.isIntro .footer{ display:none; }
   text-shadow:
     0 0 6px rgba(255, 107, 136, 0.45),
     0 0 14px rgba(255, 80, 110, 0.20);
-  transition: transform 220ms cubic-bezier(.2,1.4,.4,1);
+  transition:
+    transform 220ms cubic-bezier(.2,1.4,.4,1),
+    font-size 360ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 /* Brief pulse on tap. JS sets data-burst="1" momentarily. */
 .hubLike[data-burst="1"] .hubLikeHeart{
@@ -827,7 +845,15 @@ body.isIntro .footer{ display:none; }
   font-size:12px;
   font-weight:500;
   cursor:pointer;
-  transition: transform 120ms ease, border-color 200ms ease, color 200ms ease, background 200ms ease;
+  transition:
+    height 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    padding 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    gap 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    font-size 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 120ms ease,
+    border-color 200ms ease,
+    color 200ms ease,
+    background 200ms ease;
   -webkit-tap-highlight-color: transparent;
 }
 .hubReact:hover{
@@ -840,6 +866,7 @@ body.isIntro .footer{ display:none; }
   font-size:13px;
   line-height:1;
   opacity:0.85;
+  transition: font-size 360ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .hubReactLabel{
   letter-spacing:0.1px;

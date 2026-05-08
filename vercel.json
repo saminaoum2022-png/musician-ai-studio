@@ -6,6 +6,9 @@
       "includeFiles": "node_modules/ffmpeg-static/**"
     }
   },
+  "rewrites": [
+    { "source": "/s/:id", "destination": "/api/share?id=:id" }
+  ],
   "headers": [
     {
       "source": "/index.html",

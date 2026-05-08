@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509b";
+const APP_BUILD = "20260509c";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -224,6 +224,7 @@ const els = {
   hubNowProgBar: document.getElementById("hubNowProgBar"),
   hubNowClose: document.getElementById("hubNowClose"),
   likeBurst: document.getElementById("likeBurst"),
+  toast: document.getElementById("toast"),
   hubAddDemo: document.getElementById("hubAddDemo"),
   profilePreviewUsernameInput: document.getElementById("profilePreviewUsernameInput"),
   profilePreviewTimbreInput: document.getElementById("profilePreviewTimbreInput"),
@@ -4072,24 +4073,48 @@ function triggerHubPulse(el) {
   }, 720);
 }
 
-/** Build the public link for a Hub post. Until we add a dedicated public
- * play page, this points at the SPA with `?post=ID`, which the app honors
- * on load by switching to Hub, scrolling to that post, and starting it. */
+/** Build the public link for a Hub post. Points at the dynamic share
+ * page (`/s/POST_ID`) so chat apps + social platforms unfurl a real
+ * preview card with cover art, title, and creator. The share page
+ * client-side-redirects real users to `#/hub?post=ID` so the actual
+ * playback experience works the same as before. */
 function buildHubShareUrl(postId) {
   if (!postId) return "";
   try {
-    const u = new URL(location.origin);
-    u.hash = `#/hub?post=${encodeURIComponent(postId)}`;
-    return u.toString();
+    return `${location.origin}/s/${encodeURIComponent(postId)}`;
   } catch {
-    return `${location.origin}/#/hub?post=${encodeURIComponent(postId)}`;
+    return `/s/${encodeURIComponent(postId)}`;
   }
 }
 
-/** Show a small toast above the bottom tab bar. Falls back to setStatus
- * if the dedicated toast element doesn't exist (older builds). */
+/** Show a small floating toast above the bottom tab bar. Auto-dismisses
+ * after a short pause. Falls back to setStatus if the toast element
+ * isn't present (older shells). */
+let toastDismissTimer = null;
+function showToast(message, opts) {
+  const text = String(message || "").trim();
+  if (!text) return;
+  const el = els.toast;
+  if (!el) {
+    setStatus(text);
+    return;
+  }
+  const icon = String(opts?.icon || "").trim();
+  el.innerHTML = icon
+    ? `<span class="toastIcon" aria-hidden="true">${escapeHtml(icon)}</span>${escapeHtml(text)}`
+    : escapeHtml(text);
+  el.classList.add("show");
+  if (toastDismissTimer) {
+    try { clearTimeout(toastDismissTimer); } catch {}
+  }
+  const ms = Math.max(1200, Math.min(5000, Number(opts?.durationMs) || 2200));
+  toastDismissTimer = setTimeout(() => {
+    el.classList.remove("show");
+    toastDismissTimer = null;
+  }, ms);
+}
 function showShareToast(message) {
-  setStatus(message);
+  showToast(message, { icon: "✓" });
 }
 
 /** Native share via Web Share API; falls back to copying the link to the
@@ -6581,10 +6606,12 @@ if (els.btnPlayerShare) {
     haptic("light");
     const trackUrl = String(currentPlayerTrackRef?.url || playerEl?.src || "").trim();
     const trackTitle = String(currentPlayerTrackRef?.title || els.playerTitle?.textContent || "").trim();
-    // Prefer a matching Hub post — that's a real, scrollable destination.
-    // If the user opened a Library song that hasn't been shared yet, fall
-    // back to the song's own URL so the share is still useful (recipient
-    // can listen to the audio directly even without an account).
+    if (!trackUrl) {
+      showToast("Open a song first, then share.");
+      return;
+    }
+    // Prefer a matching Hub post — that's a real, scrollable destination
+    // with a proper preview card.
     const hubMatch = loadHubFeed().find((p) => {
       const sameUrl = trackUrl && String(p?.url || "").trim() === trackUrl;
       const sameTitle = trackTitle && String(p?.title || "").trim().toLowerCase() === trackTitle.toLowerCase();
@@ -6594,16 +6621,29 @@ if (els.btnPlayerShare) {
       await shareHubPost(hubMatch);
       return;
     }
-    if (!trackUrl) {
-      setStatus("Open a song first, then share.");
+    // Library song not yet on Hub — offer to publish first so the share
+    // gets a real preview card instead of leaking a raw audio URL.
+    const ok = window.confirm(
+      "Publish this song to Hub first?\n\nThis gives the share a preview card (cover, title, your handle) instead of a bare audio link."
+    );
+    if (!ok) return;
+    if (!currentPlayerTrackRef) {
+      showToast("Couldn't find this track to publish.");
       return;
     }
-    // No Hub copy — share the raw playable URL with a hint to publish.
-    await shareHubLink({
-      title: trackTitle ? `${trackTitle} — Nabadai` : "Listen on Nabadai",
-      text: trackTitle ? `“${trackTitle}” on Nabadai` : "Listen on Nabadai",
-      url: trackUrl,
-    });
+    try {
+      shareToHub(currentPlayerTrackRef);
+    } catch {
+      showToast("Couldn't publish to Hub. Try again.");
+      return;
+    }
+    // Find the freshly-published post (it's at index 0 of the feed).
+    const fresh = loadHubFeed()[0];
+    if (!fresh) {
+      showToast("Couldn't publish to Hub. Try again.");
+      return;
+    }
+    await shareHubPost(fresh);
   });
 }
 if (els.playerVol) {

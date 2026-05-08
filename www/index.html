@@ -18,6 +18,16 @@
     <link rel="icon" type="image/png" sizes="16x16" href="./assets/icons/favicon-16.png" />
     <link rel="stylesheet" href="./styles.css" />
 
+    <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Nabadai" />
+    <meta property="og:title" content="Nabadai — AI Music Studio" />
+    <meta property="og:description" content="Hum a melody. Write lyrics. Ship a song. Listen to what people are making in the Hub." />
+    <meta property="og:image" content="./assets/nabadai-logo.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Nabadai — AI Music Studio" />
+    <meta name="twitter:description" content="Hum a melody. Write lyrics. Ship a song." />
+    <meta name="twitter:image" content="./assets/nabadai-logo.png" />
 </head>
   <body class="booting">
     <div class="app">
@@ -886,7 +896,8 @@
       <button id="btnGenerateOrb" class="generateOrb" type="button">Generate</button>
       <div id="likeBurst" class="likeBurst" style="display:none">❤</div>
     </div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260509b"></script>
+    <script type="module" src="./src/app.js?v=20260509c"></script>
   </body>
 </html>

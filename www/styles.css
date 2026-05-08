@@ -554,6 +554,10 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   border: 0;
   border-radius: 12px;
   background: transparent;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   transition: background-color 160ms ease, transform 140ms ease;
 }
 .libRow + .libRow::before{
@@ -574,7 +578,10 @@ body.isAuth .hubNowPlaying{ display:none !important; }
 }
 .libRowMain{
   flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -586,6 +593,7 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
 }
 .libRowArt{
   position: relative;
@@ -633,9 +641,11 @@ body.isAuth .hubNowPlaying{ display:none !important; }
 .libRowInfo{
   flex: 1 1 auto;
   min-width: 0;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   gap: 3px;
+  overflow: hidden;
 }
 .libRowTitle{
   font-size: 15px;
@@ -745,8 +755,19 @@ body.isAuth .hubNowPlaying{ display:none !important; }
 .libRowPlaying + .libRow::before{
   opacity: 0;
 }
+/* Library section lives directly on the page (no inner card chrome) so
+ * rows go full-bleed within the .app gutter, like Apple Music. */
+.card.wide.librarySection[data-route="library"]{
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  animation: sectionFadeIn 260ms ease;
+}
 .librarySection .libraryHeader{
-  margin-bottom: 14px;
+  margin: 0 0 14px;
+  padding: 4px 4px 0;
 }
 .librarySection .libraryHeader h2{
   margin: 0 0 6px;

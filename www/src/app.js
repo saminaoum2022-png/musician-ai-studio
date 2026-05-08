@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509f";
+const APP_BUILD = "20260509g";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -95,6 +95,9 @@ const els = {
   btnPlayerPlay: document.getElementById("btnPlayerPlay"),
   btnPlayerPause: document.getElementById("btnPlayerPause"),
   btnPlayerStop: document.getElementById("btnPlayerStop"),
+  btnPlayerToggle: document.getElementById("btnPlayerToggle"),
+  playerTimeCurrent: document.getElementById("playerTimeCurrent"),
+  playerTimeTotal: document.getElementById("playerTimeTotal"),
   btnPlayerShare: document.getElementById("btnPlayerShare"),
   btnPlayerDownloadVideo: document.getElementById("btnPlayerDownloadVideo"),
   btnPlayerBack: document.getElementById("btnPlayerBack"),
@@ -3898,6 +3901,9 @@ function setPlayerSource(url, label) {
   if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = false;
   if (els.btnPlayerPause) els.btnPlayerPause.disabled = true;
   if (els.btnPlayerStop) els.btnPlayerStop.disabled = false;
+  // Refresh the visible toggle button immediately; loadedmetadata fires
+  // a moment later but we don't want a flash of "disabled".
+  if (typeof syncPlayerToggleUI === "function") syncPlayerToggleUI();
   hubAudio = a;
   hubAudioPostId = null;
   if (!miniSource) miniSource = { type: "player" };
@@ -4285,10 +4291,19 @@ function syncPlayerUI() {
   const artWrap = document.querySelector(".playerArtWrap");
   const playing = !playerEl.paused && !playerEl.ended && (dur > 0 || cur > 0);
   if (artWrap) artWrap.classList.toggle("isNowPlaying", playing);
+  // Player card class for global focus styling (gradient title etc.)
+  const playerCard = document.querySelector(".playerCard");
+  if (playerCard) playerCard.classList.toggle("isPlaying", playing);
   if (els.playerTime) els.playerTime.textContent = `${formatTime(cur)} / ${formatTime(dur)}`;
+  if (els.playerTimeCurrent) els.playerTimeCurrent.textContent = formatTime(cur);
+  if (els.playerTimeTotal) els.playerTimeTotal.textContent = formatTime(dur);
   if (els.playerSeek && !playerSeekDragging) {
     const max = Number(els.playerSeek.max || 1000);
+    const pct = dur > 0 ? (cur / dur) * 100 : 0;
     els.playerSeek.value = dur > 0 ? String(Math.round((cur / dur) * max)) : "0";
+    // Drive the gradient fill via a custom property so the slider track
+    // can show how far we are without needing a separate element.
+    els.playerSeek.style.setProperty("--playerSeekPct", `${pct}%`);
   }
   renderHubNowPlaying();
 }
@@ -6608,6 +6623,40 @@ if (els.btnPlayerStop) {
     updateBrandPulse();
   });
 }
+// Single circular toggle that drives play/pause through the legacy
+// hidden buttons. State is read from `playerEl` directly so it stays
+// correct regardless of which path loaded the source.
+function syncPlayerToggleUI() {
+  const btn = els.btnPlayerToggle;
+  if (!btn) return;
+  const a = playerEl;
+  const hasSrc = Boolean(a && (a.src || a.currentSrc));
+  const isPlaying = Boolean(a && !a.paused && !a.ended && hasSrc);
+  btn.disabled = !hasSrc;
+  btn.classList.toggle("isPlaying", isPlaying);
+  const icon = btn.querySelector(".playerToggleIcon");
+  if (icon) icon.textContent = isPlaying ? "⏸" : "▶";
+  btn.setAttribute("aria-label", isPlaying ? "Pause" : "Play");
+}
+if (els.btnPlayerToggle) {
+  els.btnPlayerToggle.addEventListener("click", () => {
+    if (!playerEl) return;
+    haptic("light");
+    if (playerEl.paused) {
+      els.btnPlayerPlay?.click();
+    } else {
+      els.btnPlayerPause?.click();
+    }
+    requestAnimationFrame(syncPlayerToggleUI);
+  });
+  const a = ensurePlayer();
+  if (a) {
+    ["play", "pause", "ended", "loadedmetadata", "emptied"].forEach((evt) => {
+      a.addEventListener(evt, syncPlayerToggleUI);
+    });
+  }
+  syncPlayerToggleUI();
+}
 if (els.btnPlayerBack) {
   els.btnPlayerBack.addEventListener("click", () => {
     history.back();
@@ -6856,6 +6905,9 @@ if (els.playerSeek) {
     const max = Number(els.playerSeek.max || 1000);
     const v = Number(els.playerSeek.value || 0);
     if (els.playerTime && dur > 0) els.playerTime.textContent = `${formatTime((v / max) * dur)} / ${formatTime(dur)}`;
+    if (els.playerTimeCurrent && dur > 0) els.playerTimeCurrent.textContent = formatTime((v / max) * dur);
+    const pct = max > 0 ? (v / max) * 100 : 0;
+    els.playerSeek.style.setProperty("--playerSeekPct", `${pct}%`);
   });
 }
 if (els.btnLoadFull) {

@@ -397,10 +397,9 @@
           <div class="hint">Everything stays here so Home stays clean on mobile.</div>
         </section>
 
-        <section class="card wide" data-route="player">
-          <div class="row" style="justify-content:space-between;align-items:center">
-            <h2 style="margin:0">Player</h2>
-            <button id="btnPlayerBack" class="ghost" type="button">Back</button>
+        <section class="card wide playerCard" data-route="player">
+          <div class="playerHeader">
+            <button id="btnPlayerBack" class="playerBack" type="button" aria-label="Back">← Back</button>
           </div>
           <div class="playerShell">
             <div class="playerArtWrap isEmpty">
@@ -411,39 +410,62 @@
               <div id="playerSubtitle" class="playerSubtitle">Generate a song, then press Play.</div>
 
               <div class="playerTimeline">
-                <span id="playerTime" class="small">00:00 / 00:00</span>
-                <input id="playerSeek" type="range" min="0" max="1000" value="0" style="flex:1; min-width:260px" />
+                <span id="playerTimeCurrent" class="playerTimeNum">0:00</span>
+                <input id="playerSeek" type="range" min="0" max="1000" value="0" />
+                <span id="playerTimeTotal" class="playerTimeNum">0:00</span>
+              </div>
+              <span id="playerTime" class="srOnly" aria-live="polite">00:00 / 00:00</span>
+
+              <div class="playerPrimaryRow">
+                <button id="btnPlayerToggle" class="playerToggleBtn" type="button" disabled aria-label="Play">
+                  <span class="playerToggleIcon" aria-hidden="true">▶</span>
+                </button>
               </div>
 
-              <div class="playerControls">
-                <button id="btnPlayerPlay" class="primary iconBtn" disabled aria-label="Play">▶</button>
-                <button id="btnPlayerPause" class="ghost iconBtn" disabled aria-label="Pause">⏸</button>
-                <button id="btnPlayerStop" class="ghost iconBtn" disabled aria-label="Stop">■</button>
-                <button id="btnPlayerShare" class="ghost playerShareBtn" type="button" aria-label="Share this song">
-                  <span aria-hidden="true">➤</span><span class="playerShareLabel">Share</span>
+              <div class="playerActionRow">
+                <button id="btnPlayerShare" class="playerActionChip" type="button" aria-label="Share this song">
+                  <span class="playerActionIcon" aria-hidden="true">➤</span>
+                  <span class="playerActionLabel">Share</span>
                 </button>
-                <button id="btnPlayerDownloadVideo" class="ghost playerDownloadVideoBtn" type="button" aria-label="Download as video">
-                  <span aria-hidden="true">⬇</span><span class="playerDownloadVideoLabel">Video</span>
+                <button id="btnPlayerDownloadVideo" class="playerActionChip" type="button" aria-label="Download as video">
+                  <span class="playerActionIcon" aria-hidden="true">⬇</span>
+                  <span class="playerActionLabel">Video</span>
                 </button>
-                <button id="btnPlayerChangeCover" class="ghost" type="button">Change cover</button>
-                <button id="btnOpenTrimSheet" class="ghost" type="button">Trim for Hub</button>
-                <button id="btnShareFullHub" class="ghost" type="button">Share full to Hub</button>
+                <button id="btnPlayerChangeCover" class="playerActionChip" type="button">
+                  <span class="playerActionIcon" aria-hidden="true">⌖</span>
+                  <span class="playerActionLabel">Cover</span>
+                </button>
+                <button id="btnOpenTrimSheet" class="playerActionChip" type="button">
+                  <span class="playerActionIcon" aria-hidden="true">✂</span>
+                  <span class="playerActionLabel">Trim</span>
+                </button>
+                <button id="btnShareFullHub" class="playerActionChip" type="button">
+                  <span class="playerActionIcon" aria-hidden="true">↗</span>
+                  <span class="playerActionLabel">Publish</span>
+                </button>
               </div>
               <input id="playerCoverUpload" type="file" accept="image/*" style="display:none" />
 
-              <div id="trimSheet" class="stepCard" style="display:none; margin-top:10px;">
-                <div class="row" style="align-items:center; gap:10px; flex-wrap:wrap;">
+              <div id="trimSheet" class="playerTrimSheet" style="display:none">
+                <div class="playerTrimRow">
                   <label class="small">In</label>
-                  <input id="clipStartSec" type="number" min="0" step="1" value="0" style="max-width:92px" />
+                  <input id="clipStartSec" type="number" min="0" step="1" value="0" />
                   <label class="small">Out</label>
-                  <input id="clipEndSec" type="number" min="0" step="1" value="30" style="max-width:92px" />
+                  <input id="clipEndSec" type="number" min="0" step="1" value="30" />
                   <button id="btnShareClipHub" class="primary" type="button">Use clip + Share</button>
                   <button id="btnCloseTrimSheet" class="ghost" type="button">Cancel</button>
                 </div>
               </div>
 
-              <div class="row">
-                <span id="playerSource" class="small" style="color:var(--muted)"></span>
+              <!-- Hidden compatibility nodes: existing JS toggles disabled state on
+                   these to track player state. The new btnPlayerToggle delegates
+                   clicks to the appropriate one based on current playback state. -->
+              <button id="btnPlayerPlay" class="playerLegacyBtn" disabled aria-hidden="true" tabindex="-1">▶</button>
+              <button id="btnPlayerPause" class="playerLegacyBtn" disabled aria-hidden="true" tabindex="-1">⏸</button>
+              <button id="btnPlayerStop" class="playerLegacyBtn" disabled aria-hidden="true" tabindex="-1">■</button>
+
+              <div class="playerFooter">
+                <span id="playerSource" class="playerSourceText"></span>
               </div>
             </div>
           </div>
@@ -901,6 +923,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260509f"></script>
+    <script type="module" src="./src/app.js?v=20260509g"></script>
   </body>
 </html>

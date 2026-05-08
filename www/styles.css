@@ -533,15 +533,6 @@ body.isIntro .footer{ display:none; }
  * is buffering between src-set and the play() promise resolving).
  */
 
-/* Soft glow ring on the playing card to draw the eye in a long feed. */
-.hubCoverWrap.isPlaying{
-  box-shadow:
-    0 0 0 1px rgba(124,92,255,0.42),
-    0 6px 22px -8px rgba(124,92,255,0.55),
-    0 4px 14px -10px rgba(35,213,171,0.40);
-  transition: box-shadow 240ms ease;
-}
-
 /* Subtle "breathing" pulse on the cover image so it feels live without
  * shifting layout. Stays well under the threshold of being distracting. */
 .hubCoverWrap.isPlaying .hubCover{
@@ -628,7 +619,9 @@ body.isIntro .footer{ display:none; }
   transition:
     opacity 280ms cubic-bezier(0.22, 1, 0.36, 1),
     filter 280ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    background 280ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 #hubList:has(.hubRow.isActive) .hubRow:not(.isActive){
   opacity: 0.5;
@@ -644,10 +637,49 @@ body.isIntro .footer{ display:none; }
  *  feels deliberately designed instead of "default ghost chips".
  * ----------------------------------------------------------------- */
 
-/* Subtle lift on the focused card to give it real depth. Driven by
- * `.isActive` so it lands the moment the swipe settles, not after audio. */
+/* Focused card: lift, brighten, and tint the whole container so the
+ * cover image and the body underneath read as one unit instead of a
+ * glowing picture sitting on top of an invisible card. The glow pulses
+ * strong on entry and settles into a soft steady state. */
 #hubList .hubRow.isActive{
   transform: translateY(-2px) scale(1.012);
+  border-color: rgba(124, 92, 255, 0.42);
+  background: linear-gradient(180deg,
+    rgba(124, 92, 255, 0.10) 0%,
+    rgba(124, 92, 255, 0.04) 60%,
+    rgba(124, 92, 255, 0.025) 100%);
+  animation: hubFocusPulse 720ms cubic-bezier(.2, 1.4, .4, 1) both;
+}
+
+/* One-shot pulse: lands strong (peak ~28%) then eases into the steady
+ * glow that holds while the card stays focused. Animation `both` keeps
+ * the final keyframe applied so the steady glow persists. */
+@keyframes hubFocusPulse{
+  0% {
+    box-shadow:
+      0 0 0 1px rgba(124, 92, 255, 0.10),
+      0 0 0 0 rgba(124, 92, 255, 0);
+  }
+  28% {
+    box-shadow:
+      0 0 0 1.5px rgba(124, 92, 255, 0.85),
+      0 14px 56px -10px rgba(124, 92, 255, 0.85),
+      0 8px 28px -8px rgba(35, 213, 171, 0.45);
+  }
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(124, 92, 255, 0.32),
+      0 10px 36px -12px rgba(124, 92, 255, 0.45),
+      0 4px 14px -10px rgba(35, 213, 171, 0.22);
+  }
+}
+@media (prefers-reduced-motion: reduce){
+  #hubList .hubRow.isActive{
+    animation: none;
+    box-shadow:
+      0 0 0 1px rgba(124, 92, 255, 0.32),
+      0 10px 36px -12px rgba(124, 92, 255, 0.45);
+  }
 }
 
 /* Cover bottom-gradient scrim so the play button + progress bar stay
@@ -739,9 +771,9 @@ body.isIntro .footer{ display:none; }
     letter-spacing 280ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .hubRow.isActive .hubTitle{
-  font-size:18px;
+  font-size:17px;
   font-weight:800;
-  letter-spacing:-0.3px;
+  letter-spacing:-0.2px;
   background: linear-gradient(95deg, #f7f4ff 0%, #e0d6ff 50%, #d3f0ec 100%);
   -webkit-background-clip:text;
           background-clip:text;
@@ -886,39 +918,22 @@ body.isIntro .footer{ display:none; }
   100% { transform: scale(1); }
 }
 
-/* Share — same pill shape as the reactions, but a subtle teal accent so
- * the eye finds it without competing with the warm Like chip. No count,
- * just an arrow + label. */
-.hubShare{
-  border-color: rgba(35, 213, 171, 0.28);
-  background: linear-gradient(180deg, rgba(35, 213, 171, 0.08), rgba(35, 213, 171, 0.02));
-  color: #cdebe1;
-}
-.hubShare:hover{
-  color: #fff;
-  border-color: rgba(35, 213, 171, 0.55);
-  background: linear-gradient(180deg, rgba(35, 213, 171, 0.16), rgba(35, 213, 171, 0.05));
-}
+/* Share — same neutral chip as the other reactions. Color was distracting
+ * against the existing palette (purple brand + warm Like + cover art);
+ * the arrow icon + label is unambiguous on its own. */
 .hubShare .hubReactIcon{
   transform: translateX(0.5px);
   font-size:12px;
   letter-spacing:0;
 }
 
-/* Player Share button — same teal accent as the Hub share chip, but
- * sized for the existing player control row. Inherits .ghost padding. */
+/* Player Share button — neutral ghost styling, in line with the rest of
+ * the player controls. Slight gap tweak for the icon. */
 .playerShareBtn{
   display:inline-flex;
   align-items:center;
   gap:6px;
-  border-color: rgba(35, 213, 171, 0.32) !important;
-  background: linear-gradient(180deg, rgba(35, 213, 171, 0.10), rgba(35, 213, 171, 0.025)) !important;
-  color: #cdebe1 !important;
   font-weight:600;
-}
-.playerShareBtn:hover{
-  border-color: rgba(35, 213, 171, 0.55) !important;
-  color:#fff !important;
 }
 .playerShareLabel{ letter-spacing:0.1px; }
 
@@ -960,14 +975,11 @@ body.isIntro .footer{ display:none; }
   }
 }
 
-/* Hierarchy on phones: non-focused cards get *smaller* chips so the
- * focused card visibly outsizes them — same idea as the title going
- * 15.5px → 18px on focus. Labels stay hidden on phones in both states
- * (Melody / Lyrics still read clearly from the icon + count); the
- * focused card's growth is the cue. Tablet+ already has room for
- * full-size chips and labels everywhere. */
+/* Phones: keep one consistent chip size in both focused and unfocused
+ * states. The lift, glow ring, title gradient, and dim-others already
+ * carry the focused card visually — chip resizing on top read as
+ * "buttons jumping around" instead of polish. */
 @media (max-width: 520px){
-  /* Action row never wraps to two lines on phones. */
   .hubActionRow{
     gap:6px;
     flex-wrap:nowrap;
@@ -979,49 +991,26 @@ body.isIntro .footer{ display:none; }
     justify-content:flex-end;
     flex-wrap:nowrap;
   }
-
-  /* Non-focused: compact, restrained. */
   .hubLike{
-    height:30px;
-    padding:0 10px 0 8px;
-    gap:5px;
-    font-size:12px;
+    height:32px;
+    padding:0 11px 0 10px;
+    gap:6px;
+    font-size:12.5px;
     flex:0 0 auto;
   }
-  .hubLikeHeart{ font-size:15px; }
+  .hubLikeHeart{ font-size:16px; }
   .hubReact{
-    height:26px;
-    padding:0 7px;
-    gap:3px;
-    font-size:11px;
+    height:28px;
+    padding:0 9px;
+    gap:4px;
+    font-size:11.5px;
     flex:0 1 auto;
     min-width:0;
   }
-  .hubReactIcon{ font-size:12px; }
-
-  /* Focused: noticeably larger so the eye knows where to go.
-   * Labels stay hidden — the icons + lift + glow + title gradient already
-   * make this card feel primary. */
+  .hubReactIcon{ font-size:13px; }
+  /* Hide labels on phones in both states — icons + count carry meaning. */
   .hubRow.isActive .hubReact .hubReactLabel{
     display:none !important;
-  }
-  .hubRow.isActive .hubLike{
-    height:38px;
-    padding:0 14px 0 12px;
-    gap:7px;
-    font-size:13.5px;
-  }
-  .hubRow.isActive .hubLikeHeart{
-    font-size:19px;
-  }
-  .hubRow.isActive .hubReact{
-    height:32px;
-    padding:0 11px;
-    gap:5px;
-    font-size:12.5px;
-  }
-  .hubRow.isActive .hubReactIcon{
-    font-size:14px;
   }
 }
 .hubMoreCorner{

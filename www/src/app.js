@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509k";
+const APP_BUILD = "20260509l";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -2029,7 +2029,8 @@ function makeDemoHubPost() {
   };
 }
 // Trending score: engagement weighted by recency.
-//   engagement = likes + sum(reacts.*)
+//   engagement = likes + melody + lyrics   (mix/groove removed from UI
+//   and excluded here so old DB values don't skew ranking)
 //   score      = (engagement + 1) * 0.5^(ageHours / 36)
 // 36-hour half-life means a post's weight halves every ~1.5 days, so a
 // fresh post with a few reactions can overtake an older popular one.
@@ -2042,11 +2043,7 @@ function hubTrendingScore(post, nowMs) {
   const ageMs = Math.max(0, (nowMs || Date.now()) - ts);
   const ageHours = ageMs / 3600000;
   const reacts = post.reacts || {};
-  const reactsTotal =
-    Number(reacts.melody || 0) +
-    Number(reacts.lyrics || 0) +
-    Number(reacts.mix || 0) +
-    Number(reacts.groove || 0);
+  const reactsTotal = Number(reacts.melody || 0) + Number(reacts.lyrics || 0);
   const engagement = Number(post.likes || 0) + reactsTotal;
   const decay = Math.pow(0.5, ageHours / HUB_TRENDING_HALF_LIFE_HOURS);
   return (engagement + 1) * decay;

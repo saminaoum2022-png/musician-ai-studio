@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510b";
+const APP_BUILD = "20260510c";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -6383,17 +6383,127 @@ if (els.btnGenerateOrb && els.btnSunoGenerate) {
 }
 
 function syncGenerateOrbVisibility() {
-  if (!els.btnGenerateOrb) return;
+  if (els.btnGenerateOrb) {
+    const route = document.body.getAttribute("data-route");
+    const hasInput = Boolean(
+      String(els.sunoPrompt?.value || "").trim() ||
+      String(els.sunoStyle?.value || "").trim() ||
+      imageMoodAppliedForNextGen
+    );
+    const generating = Boolean(els.btnSunoGenerate?.disabled);
+    const hasResult = (els.resultCard?.style.display || "none") !== "none";
+    const visible = route === "generate" && hasInput && !generating && !hasResult;
+    els.btnGenerateOrb.style.display = visible ? "inline-flex" : "none";
+  }
+  syncCreateStickyBar();
+}
+
+const STICKY_TIPS = [
+  "We pull mood and tags into your prompt.",
+  "Tip: vocal reference adds character.",
+  "Photo mode is great for stories and reels.",
+];
+let _stickyTipTimer = null;
+let _stickyTipIdx = 0;
+function escapeHtmlForSticky(s) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;");
+}
+function syncCreateStickyBar() {
+  const bar = document.getElementById("createStickyBar");
+  if (!bar) return;
+  const left = document.getElementById("createStickyLeft");
+  const right = document.getElementById("createStickyRight");
+  if (!left || !right) return;
   const route = document.body.getAttribute("data-route");
-  const hasInput = Boolean(
-    String(els.sunoPrompt?.value || "").trim() ||
-    String(els.sunoStyle?.value || "").trim() ||
-    imageMoodAppliedForNextGen
-  );
+  if (route !== "generate") {
+    bar.hidden = true;
+    if (_stickyTipTimer) { clearInterval(_stickyTipTimer); _stickyTipTimer = null; }
+    return;
+  }
+  bar.hidden = false;
+
+  const lyrics = String(els.sunoPrompt?.value || "").trim();
+  const lineCount = lyrics ? lyrics.split(/\n+/).map((l) => l.trim()).filter(Boolean).length : 0;
+  const photoOn = Boolean(imageMoodAppliedForNextGen);
+  let vocalOn = false;
+  try { vocalOn = Boolean((typeof getVocalReferenceFile === "function" && getVocalReferenceFile()) || (typeof vocalRefBlob !== "undefined" && vocalRefBlob)); } catch {}
   const generating = Boolean(els.btnSunoGenerate?.disabled);
   const hasResult = (els.resultCard?.style.display || "none") !== "none";
-  const visible = route === "generate" && hasInput && !generating && !hasResult;
-  els.btnGenerateOrb.style.display = visible ? "inline-flex" : "none";
+  const hasInput = Boolean(lyrics || photoOn || vocalOn || String(els.sunoStyle?.value || "").trim());
+
+  let state = "idle";
+  if (generating) state = "generating";
+  else if (hasResult) state = "done";
+  else if (hasInput) state = "ready";
+
+  bar.dataset.state = state;
+  if (state !== "generating" && _stickyTipTimer) {
+    clearInterval(_stickyTipTimer);
+    _stickyTipTimer = null;
+  }
+
+  if (state === "idle") {
+    left.innerHTML = '<span class="createStickyHint">Add a photo, hum, or write lyrics to start</span>';
+    right.innerHTML = "";
+    return;
+  }
+
+  if (state === "ready") {
+    const chips = [];
+    if (photoOn) chips.push('<span class="createStickyChip">Photo</span>');
+    if (vocalOn) chips.push('<span class="createStickyChip">Vocal</span>');
+    if (lineCount > 0) chips.push(`<span class="createStickyChip">${lineCount} ${lineCount === 1 ? "line" : "lines"}</span>`);
+    left.innerHTML = `<div class="createStickyChips" aria-label="Inputs ready">${chips.join("")}</div>`;
+    const label = (vocalOn && !lyrics) ? "Generate (instrumental)" : "Generate song";
+    right.innerHTML = `<button id="createStickyGenerateBtn" type="button" class="createStickyAction"><span>${escapeHtmlForSticky(label)}</span><span aria-hidden="true">▶</span></button>`;
+    const goBtn = document.getElementById("createStickyGenerateBtn");
+    if (goBtn) goBtn.addEventListener("click", () => {
+      try { haptic("impact"); } catch {}
+      els.btnSunoGenerate?.click();
+    });
+    return;
+  }
+
+  if (state === "generating") {
+    const tip = STICKY_TIPS[_stickyTipIdx % STICKY_TIPS.length];
+    left.innerHTML = `
+      <div class="createStickyTipsWrap">
+        <div class="createStickyTitle">Composing your track…</div>
+        <div class="createStickyTip">${escapeHtmlForSticky(tip)}</div>
+      </div>
+      <div class="createStickyShimmer" aria-hidden="true"></div>
+    `;
+    right.innerHTML = "";
+    if (!_stickyTipTimer) {
+      _stickyTipTimer = setInterval(() => {
+        _stickyTipIdx = (_stickyTipIdx + 1) % STICKY_TIPS.length;
+        const tipEl = bar.querySelector(".createStickyTip");
+        if (tipEl) tipEl.textContent = STICKY_TIPS[_stickyTipIdx];
+      }, 2400);
+    }
+    return;
+  }
+
+  if (state === "done") {
+    left.innerHTML = '<span class="createStickyTitle">Track ready</span>';
+    right.innerHTML = `
+      <button id="createStickyListenBtn" type="button" class="createStickyAction"><span aria-hidden="true">▶</span><span>Listen</span></button>
+    `;
+    const listenBtn = document.getElementById("createStickyListenBtn");
+    if (listenBtn) listenBtn.addEventListener("click", () => {
+      try { haptic("impact"); } catch {}
+      const playA = document.getElementById("btnResultPlay");
+      if (playA) {
+        playA.click();
+        try { playA.scrollIntoView({ behavior: "smooth", block: "center" }); } catch {}
+      }
+    });
+    return;
+  }
 }
 function autoResizeLyricsBox() {
   if (!els.sunoPrompt) return;
@@ -6490,6 +6600,16 @@ function showReferenceHintsPopupOnce() {
   els.sunoStyle?.addEventListener(ev, syncGenerateOrbVisibility);
 });
 window.addEventListener("hashchange", syncGenerateOrbVisibility);
+
+const _stickyMo = new MutationObserver(() => {
+  try { syncCreateStickyBar(); } catch {}
+});
+try {
+  _stickyMo.observe(document.body, { attributes: true, attributeFilter: ["data-route", "class"] });
+  if (els.resultCard) _stickyMo.observe(els.resultCard, { attributes: true, attributeFilter: ["style"] });
+  if (els.btnSunoGenerate) _stickyMo.observe(els.btnSunoGenerate, { attributes: true, attributeFilter: ["disabled"] });
+} catch {}
+syncCreateStickyBar();
 
 if (els.brandTitle) {
   els.brandTitle.addEventListener("click", () => {

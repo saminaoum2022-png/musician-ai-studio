@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260508g";
+const APP_BUILD = "20260508h";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -320,6 +320,10 @@ let hubAutoplayMutedPostId = null;
 let hubViewportAutoplayScheduled = false;
 let hubViewportTailTimer = null;
 let hubPlaybackSeq = 0;
+// Persistent post metadata for whichever track is currently loaded into the
+// shared audio element. Read by the timeupdate listener so we don't have to
+// re-bind a closure (and another listener) every time the track changes.
+let hubAudioCurrentPost = null;
 
 function getHubRowClosestToViewportCenter() {
   const root = els.hubList;
@@ -382,6 +386,42 @@ async function hubAudioPlayWithRetry(audio) {
   }
 }
 
+// Returns the single shared audio element used for all Hub playback. Creating
+// one element and just swapping its src (instead of `new Audio()` per track)
+// is the only way to guarantee one stream at a time on iOS — pause() on a
+// freshly-created element is racy until its play() promise has settled.
+function ensureHubAudio() {
+  if (hubAudio) return hubAudio;
+  const a = new Audio();
+  a.preload = "auto";
+  a.addEventListener("ended", () => {
+    stopHubPlayback();
+  });
+  a.addEventListener("timeupdate", () => {
+    const postId = hubAudioPostId;
+    const post = hubAudioCurrentPost;
+    if (!postId || !post) return;
+    const clip = post?.meta?.clip;
+    if (clip && Number.isFinite(Number(clip.startSec)) && Number.isFinite(Number(clip.endSec))) {
+      const s = Number(clip.startSec);
+      const en = Number(clip.endSec);
+      if (a.currentTime < s) a.currentTime = s;
+      if (a.currentTime >= en) {
+        stopHubPlayback();
+        return;
+      }
+    }
+    const prog = document.getElementById(`hubProg_${postId}`);
+    if (!prog || !a?.duration) return;
+    const pct = Math.max(0, Math.min(100, (a.currentTime / a.duration) * 100));
+    prog.style.width = `${pct}%`;
+    if (els.hubNowProgBar) els.hubNowProgBar.style.width = `${pct}%`;
+    renderHubNowPlaying();
+  });
+  hubAudio = a;
+  return a;
+}
+
 function tryHubViewportAutoplay() {
   if ((document.body.getAttribute("data-route") || "") !== "hub") return;
   if (!els.hubList) return;
@@ -402,8 +442,8 @@ function stopHubPlayback() {
   try {
     if (hubAudio) hubAudio.pause();
   } catch {}
-  hubAudio = null;
   hubAudioPostId = null;
+  hubAudioCurrentPost = null;
   hubNowMeta = null;
   miniSource = null;
   const root = els.hubList;
@@ -424,51 +464,64 @@ async function startHubPlayback(postId) {
   const mySeq = ++hubPlaybackSeq;
   const p = loadHubFeed().find((x) => x.id === postId);
   if (!p?.url) return;
-  const playBtn =
-    els.hubList?.querySelector?.(`[data-hub-play="${postId}"]`) ||
-    document.querySelector(`[data-hub-play="${postId}"]`);
-  stopHubPlayback();
-  if (mySeq !== hubPlaybackSeq) return;
-  hubAudio = new Audio(p.url);
+
+  const a = ensureHubAudio();
+  // Always pause + reset before re-targeting. Pausing first prevents two
+  // streams from overlapping while the new src loads.
+  try {
+    a.pause();
+  } catch {}
+
   hubAudioPostId = postId;
+  hubAudioCurrentPost = p;
   miniSource = { type: "hub", id: postId };
   hubNowMeta = {
     title: p.title || "Hub song",
     art: p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png",
   };
+
+  // Reset all per-row visuals and mark the new active row.
+  const root = els.hubList;
+  if (root) {
+    root.querySelectorAll("[data-hub-play]").forEach((btn) => {
+      btn.textContent = "▶";
+    });
+    root.querySelectorAll(".hubCoverWrap").forEach((w) => w.classList.remove("isPlaying"));
+  }
+  const playBtn =
+    root?.querySelector?.(`[data-hub-play="${postId}"]`) ||
+    document.querySelector(`[data-hub-play="${postId}"]`);
   if (playBtn) {
     playBtn.textContent = "■";
     playBtn.closest(".hubCoverWrap")?.classList.add("isPlaying");
   }
-  hubAudio.addEventListener("ended", stopHubPlayback);
-  hubAudio.addEventListener("timeupdate", () => {
-    if (mySeq !== hubPlaybackSeq) return;
-    const clip = p?.meta?.clip;
-    if (clip && Number.isFinite(Number(clip.startSec)) && Number.isFinite(Number(clip.endSec))) {
-      const s = Number(clip.startSec);
-      const en = Number(clip.endSec);
-      if (hubAudio.currentTime < s) hubAudio.currentTime = s;
-      if (hubAudio.currentTime >= en) {
-        stopHubPlayback();
-        return;
-      }
-    }
-    const prog = document.getElementById(`hubProg_${postId}`);
-    if (!prog || !hubAudio?.duration) return;
-    const pct = Math.max(0, Math.min(100, (hubAudio.currentTime / hubAudio.duration) * 100));
-    prog.style.width = `${pct}%`;
-    if (els.hubNowProgBar) els.hubNowProgBar.style.width = `${pct}%`;
-    renderHubNowPlaying();
-  });
-  const ok = await hubAudioPlayWithRetry(hubAudio);
-  if (mySeq !== hubPlaybackSeq) return;
+
+  // Only assign the src when it actually changes; reassigning the same URL
+  // forces a fresh fetch on Safari and noticeably stutters scroll autoplay.
+  if (a.src !== p.url) {
+    a.src = p.url;
+  }
+  try {
+    a.currentTime = 0;
+  } catch {}
+
+  const ok = await hubAudioPlayWithRetry(a);
+  if (mySeq !== hubPlaybackSeq) {
+    // A newer call has taken over; make sure this attempt isn't left audible.
+    try {
+      a.pause();
+    } catch {}
+    return;
+  }
   if (!ok) {
     stopHubPlayback();
-    setStatus("Playback blocked — tap Play once.");
+    setStatus("Tap a track once to start playback.");
     return;
   }
   if (p?.meta?.clip && Number.isFinite(Number(p.meta.clip.startSec))) {
-    hubAudio.currentTime = Math.max(0, Number(p.meta.clip.startSec));
+    try {
+      a.currentTime = Math.max(0, Number(p.meta.clip.startSec));
+    } catch {}
   }
   renderHubNowPlaying();
 }
@@ -479,11 +532,15 @@ function renderHubNowPlaying() {
   const hideOnHubVisible = isPlayingHubPostVisible();
   const hideOnLibrary = route === "library";
   const hideOnPlayer = route === "player" && miniSource?.type === "library";
-  const active = Boolean(hubAudio && hubNowMeta) && !hideOnHubVisible && !hideOnLibrary && !hideOnPlayer;
+  // hubAudio is now a persistent element (paused between tracks instead of
+  // nulled), so use the active post id as the source of truth for whether
+  // any track is currently playing.
+  const isPlaying = Boolean(hubAudioPostId && hubAudio && !hubAudio.paused);
+  const active = Boolean(hubNowMeta && isPlaying) && !hideOnHubVisible && !hideOnLibrary && !hideOnPlayer;
   if (!active) {
     els.hubNowPlaying.classList.remove("isVisible", "isPlaying");
     setTimeout(() => {
-      if (!hubAudio && els.hubNowPlaying) els.hubNowPlaying.style.display = "none";
+      if (!hubAudioPostId && els.hubNowPlaying) els.hubNowPlaying.style.display = "none";
     }, 220);
     return;
   }
@@ -1768,7 +1825,7 @@ function renderHub() {
       const id = b.getAttribute("data-hub-play");
       const p = loadHubFeed().find((x) => x.id === id);
       if (!p?.url) return;
-      if (hubAudio && hubAudioPostId === id) {
+      if (hubAudioPostId === id && hubAudio && !hubAudio.paused) {
         stopHubPlayback();
         hubAutoplayMutedPostId = id;
         return;

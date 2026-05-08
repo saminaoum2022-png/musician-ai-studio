@@ -615,6 +615,25 @@ body.isIntro .footer{ display:none; }
     animation: none !important;
   }
 }
+
+/*
+ * Focus mode: when any Hub post is playing, gently dim the others so the
+ * active card visually owns the screen. Uses :has() to react to whichever
+ * row the JS marked `.isPlaying`. Where :has() isn't supported (older
+ * browsers) the fade simply doesn't apply — the rest of the alive cues
+ * (EQ bars, glow, breathing) still make the active card readable.
+ */
+#hubList .hubRow{
+  transition: opacity 320ms ease, filter 320ms ease;
+}
+#hubList:has(.hubCoverWrap.isPlaying)
+  .hubRow:not(:has(.hubCoverWrap.isPlaying)){
+  opacity: 0.5;
+  filter: saturate(0.7);
+}
+@media (prefers-reduced-motion: reduce){
+  #hubList .hubRow{ transition: none; }
+}
 .hubMoreCorner{
   position:absolute;
   right:10px;

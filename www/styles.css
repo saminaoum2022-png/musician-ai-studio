@@ -932,41 +932,68 @@ body.isIntro .footer{ display:none; }
   }
 }
 
-/* Narrow phones: keep Melody/Lyrics icon+count only even on the focused
- * card — words + Like + Share still overflow after Share landed. Title +
- * glow + EQ already flag the active post. */
+/* Hierarchy on phones: non-focused cards get *smaller* chips so the
+ * focused card visibly outsizes them — same idea as the title going
+ * 15.5px → 18px on focus. Labels stay hidden on phones in both states
+ * (Melody / Lyrics still read clearly from the icon + count); the
+ * focused card's growth is the cue. Tablet+ already has room for
+ * full-size chips and labels everywhere. */
 @media (max-width: 520px){
-  .hubRow:has(.hubCoverWrap.isPlaying) .hubReact:not(.hubShare) .hubReactLabel{
-    display:none !important;
-  }
-  .hubRow:has(.hubCoverWrap.isPlaying) .hubActionRow{
+  /* Action row never wraps to two lines on phones. */
+  .hubActionRow{
     gap:6px;
     flex-wrap:nowrap;
   }
-  .hubRow:has(.hubCoverWrap.isPlaying) .hubLike{
-    height:32px;
-    padding:0 10px 0 8px;
+  .hubReacts{
     gap:5px;
-    font-size:12.5px;
-    flex:0 0 auto;
-  }
-  .hubRow:has(.hubCoverWrap.isPlaying) .hubLikeHeart{
-    font-size:16px;
-  }
-  .hubRow:has(.hubCoverWrap.isPlaying) .hubReacts{
-    gap:4px;
     flex:1 1 auto;
     min-width:0;
     justify-content:flex-end;
     flex-wrap:nowrap;
   }
-  .hubRow:has(.hubCoverWrap.isPlaying) .hubReact{
-    height:28px;
+
+  /* Non-focused: compact, restrained. */
+  .hubLike{
+    height:30px;
+    padding:0 10px 0 8px;
+    gap:5px;
+    font-size:12px;
+    flex:0 0 auto;
+  }
+  .hubLikeHeart{ font-size:15px; }
+  .hubReact{
+    height:26px;
     padding:0 7px;
     gap:3px;
     font-size:11px;
     flex:0 1 auto;
     min-width:0;
+  }
+  .hubReactIcon{ font-size:12px; }
+
+  /* Focused / playing: noticeably larger so the eye knows where to go.
+   * Labels stay hidden — the icons + lift + glow + title gradient already
+   * make this card feel primary. */
+  .hubRow:has(.hubCoverWrap.isPlaying) .hubReact .hubReactLabel{
+    display:none !important;
+  }
+  .hubRow:has(.hubCoverWrap.isPlaying) .hubLike{
+    height:38px;
+    padding:0 14px 0 12px;
+    gap:7px;
+    font-size:13.5px;
+  }
+  .hubRow:has(.hubCoverWrap.isPlaying) .hubLikeHeart{
+    font-size:19px;
+  }
+  .hubRow:has(.hubCoverWrap.isPlaying) .hubReact{
+    height:32px;
+    padding:0 11px;
+    gap:5px;
+    font-size:12.5px;
+  }
+  .hubRow:has(.hubCoverWrap.isPlaying) .hubReactIcon{
+    font-size:14px;
   }
 }
 .hubMoreCorner{

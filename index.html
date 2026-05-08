@@ -90,10 +90,13 @@
           </div>
         </section>
 
-        <section class="card wide" data-route="library">
-          <h2>Library</h2>
-          <div class="hint" style="margin-top:0">Your generated songs are saved on this device.</div>
-          <div id="libraryList" class="code" style="max-height:none"></div>
+        <section class="card wide librarySection" data-route="library">
+          <header class="libraryHeader">
+            <h2>Library</h2>
+            <p class="libraryLead">Your songs stay on this device until you delete them.</p>
+            <p id="libraryCount" class="libraryCount" hidden aria-live="polite"></p>
+          </header>
+          <div id="libraryList" class="libraryList"></div>
         </section>
 
         <section class="card wide hubCard" data-route="hub">
@@ -1148,6 +1151,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260510k"></script>
+    <script type="module" src="./src/app.js?v=20260510l"></script>
   </body>
 </html>

@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510k";
+const APP_BUILD = "20260510l";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -2993,11 +2993,41 @@ async function pollLibraryStemsUntilDone(taskId, kind) {
   setStatus(`${kind === "multi" ? "Multi-stems" : "Instrumental"} is delayed. Please try again.`);
   setLoading(false);
 }
+function formatLibraryDate(ts) {
+  const d = new Date(Number(ts) || 0);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startThat = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((startToday - startThat) / 86400000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays > 1 && diffDays < 7) return `${diffDays} days ago`;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
+}
+
 function renderLibrary() {
   if (!els.libraryList) return;
   const items = loadLibrary();
+  const countEl = document.getElementById("libraryCount");
+  if (countEl) {
+    if (!items.length) {
+      countEl.textContent = "";
+      countEl.hidden = true;
+    } else {
+      countEl.textContent = `${items.length} saved`;
+      countEl.hidden = false;
+    }
+  }
   if (!items.length) {
-    els.libraryList.textContent = "No songs yet. Generate a song and it will appear here.";
+    els.libraryList.innerHTML = `
+      <div class="libraryEmpty">
+        <div class="libraryEmptyIcon" aria-hidden="true">♪</div>
+        <p class="libraryEmptyTitle">Nothing here yet</p>
+        <p class="libraryEmptyHint">Create a song — it lands here automatically so you can replay or share it anytime.</p>
+        <a href="#/generate" class="libraryEmptyCta" data-route-link="generate">Go to Create</a>
+      </div>
+    `;
     return;
   }
   els.libraryList.innerHTML = `
@@ -3009,7 +3039,7 @@ function renderLibrary() {
           <button class="libTileMenuBtn" data-lib-menu="${t.id}" aria-label="Song options">⋯</button>
           <div class="libTileShade">
             <div class="libTileTitle">${escapeHtml(t.title || "Generated song")}</div>
-            <div class="libTileMeta">${new Date(t.ts).toLocaleDateString()}</div>
+            <div class="libTileMeta">${escapeHtml(formatLibraryDate(t.ts))}</div>
           </div>
           <div class="libMenu" id="libMenu_${t.id}" style="display:none">
             <a class="ghost" href="${t.url}" target="_blank" rel="noreferrer" data-lib-dlaudio="${t.id}">Download audio</a>

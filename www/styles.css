@@ -1976,9 +1976,71 @@ textarea{
 }
 .card[data-route="generate"] .createPageLead{
   margin-top: 0;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   max-width: 42em;
   line-height: 1.45;
+}
+.createTabs{
+  display:flex;
+  gap:4px;
+  padding:4px;
+  margin: 0 0 14px;
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:999px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.012));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 6px 18px rgba(0,0,0,0.18);
+  width:100%;
+  box-sizing:border-box;
+}
+.createTab{
+  flex:1 1 0;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  min-height:36px;
+  padding:6px 10px;
+  border:0;
+  border-radius:999px;
+  background:transparent;
+  color: rgba(232,238,247,0.72);
+  font-size:12.5px;
+  font-weight:700;
+  letter-spacing:0.01em;
+  cursor:pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 200ms ease, color 200ms ease, transform 140ms ease, box-shadow 200ms ease;
+}
+.createTab:hover{
+  color: rgba(244,247,255,0.95);
+}
+.createTab:active{
+  transform: scale(0.985);
+}
+.createTab.isActive{
+  background: linear-gradient(180deg, rgba(124,92,255,0.34), rgba(35,213,171,0.18));
+  color: rgba(244,247,255,0.98);
+  box-shadow: inset 0 0 0 1px rgba(124,92,255,0.36), 0 6px 18px rgba(124,92,255,0.18);
+}
+.createTabIcon{
+  width:14px;
+  height:14px;
+  flex:0 0 auto;
+  display:block;
+}
+.createTabLabel{
+  white-space:nowrap;
+}
+.createSpotlight{
+  animation: createSpotlightPulse 1100ms ease-out;
+}
+@keyframes createSpotlightPulse{
+  0%{ box-shadow: 0 0 0 0 rgba(124,92,255,0); }
+  30%{ box-shadow: 0 0 0 4px rgba(124,92,255,0.34), 0 18px 36px rgba(124,92,255,0.18); }
+  100%{ box-shadow: 0 0 0 0 rgba(124,92,255,0); }
+}
+.headerRight .creditsPill{
+  display:none !important;
 }
 .inputPanel{
   width:100%;

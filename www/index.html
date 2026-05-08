@@ -141,8 +141,31 @@
           <div id="simpleBox">
           <h2>Create</h2>
           <p class="hint createPageLead">
-            Write lyrics, set a style, then generate. Optional: inspire from a photo or use a vocal reference below.
+            Three ways to start: a photo, your voice, or words. Set a style, then generate.
           </p>
+          <div class="createTabs" role="tablist" aria-label="How to start">
+            <button id="createTabPhoto" class="createTab" type="button" role="tab" aria-selected="false" data-mode="photo">
+              <svg class="createTabIcon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path fill="currentColor" d="M5 4.5A2.5 2.5 0 0 0 2.5 7v10A2.5 2.5 0 0 0 5 19.5h14a2.5 2.5 0 0 0 2.5-2.5V7A2.5 2.5 0 0 0 19 4.5H5Zm0 1.5h14c.55 0 1 .45 1 1v7.2l-3.33-3.32a1.8 1.8 0 0 0-2.54 0L10 15.01l-1.63-1.63a1.8 1.8 0 0 0-2.54 0L4 15.21V7c0-.55.45-1 1-1Zm12.5 2.2a1.7 1.7 0 1 0 0 3.4 1.7 1.7 0 0 0 0-3.4ZM7.1 14.44a.3.3 0 0 1 .43 0L10 16.9l5.19-5.18a.3.3 0 0 1 .42 0L20 16.1V17c0 .55-.45 1-1 1H5c-.55 0-1-.45-1-1v-.26l3.1-2.3Z"/>
+              </svg>
+              <span class="createTabLabel">Photo</span>
+            </button>
+            <button id="createTabHum" class="createTab" type="button" role="tab" aria-selected="false" data-mode="hum">
+              <svg class="createTabIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <rect x="9" y="3" width="6" height="12" rx="3"/>
+                <path d="M5 11a7 7 0 0 0 14 0"/>
+                <path d="M12 18v3"/>
+              </svg>
+              <span class="createTabLabel">Hum</span>
+            </button>
+            <button id="createTabLyrics" class="createTab isActive" type="button" role="tab" aria-selected="true" data-mode="lyrics">
+              <svg class="createTabIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <path d="M12 20h9"/>
+                <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"/>
+              </svg>
+              <span class="createTabLabel">Lyrics</span>
+            </button>
+          </div>
           <div id="resultCard" class="resultCard" style="display:none">
             <img id="resultArt" class="resultArt" alt="cover" />
             <div class="resultMeta">
@@ -1050,6 +1073,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260509z2"></script>
+    <script type="module" src="./src/app.js?v=20260510a"></script>
   </body>
 </html>

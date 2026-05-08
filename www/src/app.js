@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509z2";
+const APP_BUILD = "20260510a";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -7942,6 +7942,57 @@ if (els.btnHumStart && els.btnHumStop && els.btnHumClear) {
     printMelody(null);
     els.btnHumClear.disabled = true;
     setStatus("Cleared melody.");
+  });
+}
+
+// Create page mode tabs (UI scaffolding only — triggers existing flows)
+const createTabEls = {
+  photo: document.getElementById("createTabPhoto"),
+  hum: document.getElementById("createTabHum"),
+  lyrics: document.getElementById("createTabLyrics"),
+};
+function setActiveCreateTab(mode) {
+  ["photo", "hum", "lyrics"].forEach((k) => {
+    const el = createTabEls[k];
+    if (!el) return;
+    const active = k === mode;
+    el.classList.toggle("isActive", active);
+    el.setAttribute("aria-selected", active ? "true" : "false");
+  });
+}
+function spotlightTargetEl(el) {
+  if (!el) return;
+  el.classList.remove("createSpotlight");
+  void el.offsetWidth;
+  el.classList.add("createSpotlight");
+  try { el.scrollIntoView({ behavior: "smooth", block: "center" }); } catch {}
+  setTimeout(() => el.classList.remove("createSpotlight"), 1300);
+}
+if (createTabEls.lyrics) {
+  createTabEls.lyrics.addEventListener("click", () => {
+    setActiveCreateTab("lyrics");
+    const box = els.sunoPrompt?.closest?.(".lyricsBox");
+    spotlightTargetEl(box);
+    setTimeout(() => {
+      try { els.sunoPrompt?.focus({ preventScroll: true }); } catch {}
+    }, 320);
+  });
+}
+if (createTabEls.photo) {
+  createTabEls.photo.addEventListener("click", () => {
+    setActiveCreateTab("photo");
+    const btn = document.getElementById("btnImageMood");
+    if (btn) btn.click();
+  });
+}
+if (createTabEls.hum) {
+  createTabEls.hum.addEventListener("click", () => {
+    setActiveCreateTab("hum");
+    const det = document.getElementById("vocalRefDetails");
+    if (det) {
+      det.open = true;
+      spotlightTargetEl(det);
+    }
   });
 }
 

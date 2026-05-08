@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260508o";
+const APP_BUILD = "20260508p";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -636,11 +636,26 @@ async function startHubPlayback(postId) {
     a.currentTime = 0;
   } catch {}
 
-  const ok = await hubAudioPlayWithRetry(a);
+  let ok = await hubAudioPlayWithRetry(a);
   if (mySeq !== hubPlaybackSeq) {
     // A newer call already owns the shared audio element. Bail without
     // touching it — pausing here would stomp on the new owner's load.
     return;
+  }
+  // If the direct CDN URL failed (rare — e.g. expired token, blocked by
+  // origin, brief network glitch), retry once through the /api/suno/audio
+  // proxy. We only ever need this for plain http(s) URLs; blob:/data: URLs
+  // skip the fallback because there is no proxy equivalent.
+  if (!ok && typeof targetSrc === "string" && /^https?:\/\//i.test(targetSrc)) {
+    const fallbackSrc = toAudioProxyUrl(targetSrc);
+    if (fallbackSrc && fallbackSrc !== targetSrc) {
+      try {
+        a.src = fallbackSrc;
+        a.currentTime = 0;
+      } catch {}
+      ok = await hubAudioPlayWithRetry(a);
+      if (mySeq !== hubPlaybackSeq) return;
+    }
   }
   if (!ok) {
     stopHubPlayback();
@@ -3726,10 +3741,33 @@ function rememberHubBlob(postId, objectUrl) {
   trimHubBlobCache();
 }
 
+/** If `url` is a `/api/suno/audio?url=…` wrapper, return the underlying CDN
+ * URL so the browser can fetch from the origin and skip our serverless
+ * function entirely. Anything else (raw https URL, blob:, data:) passes
+ * through unchanged. */
+function preferDirectAudioUrl(url) {
+  const s = String(url || "").trim();
+  if (!s || s === "#") return "";
+  if (s.startsWith("blob:") || s.startsWith("data:")) return s;
+  try {
+    const u = new URL(s, location.origin);
+    if (u.pathname.endsWith("/api/suno/audio")) {
+      const raw = u.searchParams.get("url");
+      if (raw) return raw;
+    }
+  } catch {}
+  return s;
+}
+
 function hubPlaybackSrcForPost(postId, p) {
   const cached = hubAudioBlobByPostId.get(postId);
   if (cached) return cached;
-  return String(p?.url || "").trim();
+  // Use the direct CDN URL when possible to avoid streaming the file through
+  // our /api/suno/audio proxy (where every byte counts twice on Vercel
+  // bandwidth). The HTML5 <audio> element happily plays cross-origin URLs
+  // without a CORS preflight; if direct play fails we fall back to the
+  // proxy URL inside startHubPlayback.
+  return preferDirectAudioUrl(String(p?.url || "").trim());
 }
 
 async function fetchHubTrackIntoBlob(postId, rawUrl) {

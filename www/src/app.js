@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510t";
+const APP_BUILD = "20260510u";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -7227,6 +7227,13 @@ window.addEventListener("hashchange", () => {
 window.addEventListener("hashchange", () => {
   const route = document.body.getAttribute("data-route") || "";
   if (route === "hub") void refreshHubFromSupabase();
+});
+// Refresh Suno credits whenever the Profile route opens — keeps the
+// number on the hero card in sync with what the backend actually has,
+// without nagging the API on every route change.
+window.addEventListener("hashchange", () => {
+  const route = document.body.getAttribute("data-route") || "";
+  if (route === "profile") void refreshSunoCredits();
 });
 if (els.shareLiveBackdrop) els.shareLiveBackdrop.addEventListener("click", closeShareLiveModal);
 if (els.btnCloseShareLive) els.btnCloseShareLive.addEventListener("click", closeShareLiveModal);

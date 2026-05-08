@@ -539,6 +539,21 @@ body.isIntro .footer{ display:none; }
   padding:0;
   background: transparent;
 }
+/*
+ * Hub: nudge each scroll to settle on a post so audio autoplay has an
+ * unambiguous "centered" target. `proximity` is gentle — the page only
+ * snaps when you're already close to a card, so it doesn't fight the user
+ * scrolling fast. Targets both html and body so it lights up on whichever
+ * element is actually the page scroller.
+ */
+html:has(body[data-route="hub"]),
+body[data-route="hub"]{
+  scroll-snap-type: y proximity;
+  scroll-padding-top: 80px;
+}
+body[data-route="hub"] .hubRow{
+  scroll-snap-align: center;
+}
 [data-route="hub"] .trackName{
   font-size:15px;
 }

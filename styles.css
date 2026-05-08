@@ -858,6 +858,42 @@ body.isIntro .footer{ display:none; }
   100% { transform: scale(1); }
 }
 
+/* Share — same pill shape as the reactions, but a subtle teal accent so
+ * the eye finds it without competing with the warm Like chip. No count,
+ * just an arrow + label. */
+.hubShare{
+  border-color: rgba(35, 213, 171, 0.28);
+  background: linear-gradient(180deg, rgba(35, 213, 171, 0.08), rgba(35, 213, 171, 0.02));
+  color: #cdebe1;
+}
+.hubShare:hover{
+  color: #fff;
+  border-color: rgba(35, 213, 171, 0.55);
+  background: linear-gradient(180deg, rgba(35, 213, 171, 0.16), rgba(35, 213, 171, 0.05));
+}
+.hubShare .hubReactIcon{
+  transform: translateX(0.5px);
+  font-size:12px;
+  letter-spacing:0;
+}
+
+/* Player Share button — same teal accent as the Hub share chip, but
+ * sized for the existing player control row. Inherits .ghost padding. */
+.playerShareBtn{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  border-color: rgba(35, 213, 171, 0.32) !important;
+  background: linear-gradient(180deg, rgba(35, 213, 171, 0.10), rgba(35, 213, 171, 0.025)) !important;
+  color: #cdebe1 !important;
+  font-weight:600;
+}
+.playerShareBtn:hover{
+  border-color: rgba(35, 213, 171, 0.55) !important;
+  color:#fff !important;
+}
+.playerShareLabel{ letter-spacing:0.1px; }
+
 @media (prefers-reduced-motion: reduce){
   .hubLike[data-burst="1"] .hubLikeHeart,
   .hubReact[data-burst="1"]{

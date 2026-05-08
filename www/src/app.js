@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260508t";
+const APP_BUILD = "20260508u";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -95,6 +95,7 @@ const els = {
   btnPlayerPlay: document.getElementById("btnPlayerPlay"),
   btnPlayerPause: document.getElementById("btnPlayerPause"),
   btnPlayerStop: document.getElementById("btnPlayerStop"),
+  btnPlayerShare: document.getElementById("btnPlayerShare"),
   btnPlayerBack: document.getElementById("btnPlayerBack"),
   playerSeek: document.getElementById("playerSeek"),
   playerVol: document.getElementById("playerVol"),
@@ -852,6 +853,19 @@ function applyRoute() {
     renderHubUpdatedAt();
     updateHubAudioHint();
     setTimeout(() => scheduleHubViewportAutoplay(), 60);
+    // Honor a `?post=ID` query in the hash: scroll the post into view and,
+    // if audio is already unlocked, kick off playback. Don't auto-play
+    // before the user has tapped once — iOS/Safari would block it and
+    // we'd just flash the play button. The Hub already handles the rest
+    // via its scroll-driven autoplay.
+    try {
+      const q = String(hash).split("?")[1] || "";
+      const sp = new URLSearchParams(q);
+      const targetId = String(sp.get("post") || "").trim();
+      if (targetId) {
+        focusHubPostFromShare(targetId);
+      }
+    } catch {}
   }
   if (wanted === "profile") {
     void refreshAuthStateFromSupabase();
@@ -1978,6 +1992,10 @@ function renderHub() {
             <span class="hubReactLabel">Lyrics</span>
             <span class="hubReactCount">${Number(p?.reacts?.lyrics || 0)}</span>
           </button>
+          <button class="hubReact hubShare" data-hub-share="${p.id}" aria-label="Share this song">
+            <span class="hubReactIcon" aria-hidden="true">➤</span>
+            <span class="hubReactLabel">Share</span>
+          </button>
         </div>
       </div>
       <div class="libMenu hubMoreMenu" id="hubMore_${p.id}" style="display:none">
@@ -2047,6 +2065,15 @@ function renderHub() {
       lyrics: "Lyrics strong",
     };
     setStatus(`${labels[key] || "Reaction"} +1`);
+  }));
+  els.hubList.querySelectorAll("[data-hub-share]").forEach((b) => b.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    haptic("light");
+    triggerHubPulse(b);
+    const id = b.getAttribute("data-hub-share");
+    const p = loadHubFeed().find((x) => x.id === id);
+    if (!p) return;
+    await shareHubPost(p);
   }));
   els.hubList.querySelectorAll("[data-hub-remix]").forEach((b) => b.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -3864,6 +3891,106 @@ function triggerHubPulse(el) {
   setTimeout(() => {
     if (el.getAttribute("data-burst") === "1") el.removeAttribute("data-burst");
   }, 720);
+}
+
+/** Build the public link for a Hub post. Until we add a dedicated public
+ * play page, this points at the SPA with `?post=ID`, which the app honors
+ * on load by switching to Hub, scrolling to that post, and starting it. */
+function buildHubShareUrl(postId) {
+  if (!postId) return "";
+  try {
+    const u = new URL(location.origin);
+    u.hash = `#/hub?post=${encodeURIComponent(postId)}`;
+    return u.toString();
+  } catch {
+    return `${location.origin}/#/hub?post=${encodeURIComponent(postId)}`;
+  }
+}
+
+/** Show a small toast above the bottom tab bar. Falls back to setStatus
+ * if the dedicated toast element doesn't exist (older builds). */
+function showShareToast(message) {
+  setStatus(message);
+}
+
+/** Native share via Web Share API; falls back to copying the link to the
+ * clipboard with a toast. Used by Hub posts and the Player page. */
+async function shareHubLink({ title, text, url }) {
+  const safeUrl = String(url || "").trim();
+  if (!safeUrl) return false;
+  const payload = {
+    title: title || "Listen on Nabadai",
+    text: text || "Made on Nabadai. Take a listen.",
+    url: safeUrl,
+  };
+  if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+    try {
+      await navigator.share(payload);
+      return true;
+    } catch (e) {
+      const name = e?.name || "";
+      // User dismissed the share sheet — not an error, don't show a toast.
+      if (name === "AbortError" || name === "NotAllowedError") return false;
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(safeUrl);
+    showShareToast("Link copied");
+    return true;
+  } catch {
+    showShareToast("Couldn't copy. Long-press the URL bar to share manually.");
+    return false;
+  }
+}
+
+async function shareHubPost(post) {
+  if (!post?.id) return;
+  const url = buildHubShareUrl(post.id);
+  const title = post.title ? `${post.title} — Nabadai` : "Listen on Nabadai";
+  const text = post.creator
+    ? `“${post.title || "this song"}” by @${post.creator} on Nabadai`
+    : `“${post.title || "this song"}” on Nabadai`;
+  await shareHubLink({ title, text, url });
+}
+
+/** When landing on `#/hub?post=ID`, scroll the post into view and start it
+ * (subject to iOS audio-unlock). Polls a short while to wait for the cloud
+ * sync to land the post in the feed if this is a cold visit. */
+let pendingShareFocusId = "";
+function focusHubPostFromShare(postId) {
+  const targetId = String(postId || "").trim();
+  if (!targetId) return;
+  pendingShareFocusId = targetId;
+  const tryNow = () => {
+    if (pendingShareFocusId !== targetId) return false;
+    const row = document.querySelector(`[data-hub-row="${targetId}"]`);
+    if (!row) return false;
+    pendingShareFocusId = "";
+    try {
+      row.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch {
+      try { row.scrollIntoView(); } catch {}
+    }
+    if (getHubAudioUnlocked()) {
+      void startHubPlayback(targetId);
+    } else {
+      setStatus("Tap ▶ on the highlighted song to play.");
+    }
+    return true;
+  };
+  if (tryNow()) return;
+  // Cold visit — Supabase fetch may still be in flight. Poll up to ~6s.
+  const start = Date.now();
+  const poll = () => {
+    if (pendingShareFocusId !== targetId) return;
+    if (tryNow()) return;
+    if (Date.now() - start > 6000) {
+      pendingShareFocusId = "";
+      return;
+    }
+    setTimeout(poll, 250);
+  };
+  setTimeout(poll, 200);
 }
 
 function preloadInitialHubTracks() {
@@ -6250,6 +6377,36 @@ if (els.btnPlayerStop) {
 if (els.btnPlayerBack) {
   els.btnPlayerBack.addEventListener("click", () => {
     history.back();
+  });
+}
+if (els.btnPlayerShare) {
+  els.btnPlayerShare.addEventListener("click", async () => {
+    haptic("light");
+    const trackUrl = String(currentPlayerTrackRef?.url || playerEl?.src || "").trim();
+    const trackTitle = String(currentPlayerTrackRef?.title || els.playerTitle?.textContent || "").trim();
+    // Prefer a matching Hub post — that's a real, scrollable destination.
+    // If the user opened a Library song that hasn't been shared yet, fall
+    // back to the song's own URL so the share is still useful (recipient
+    // can listen to the audio directly even without an account).
+    const hubMatch = loadHubFeed().find((p) => {
+      const sameUrl = trackUrl && String(p?.url || "").trim() === trackUrl;
+      const sameTitle = trackTitle && String(p?.title || "").trim().toLowerCase() === trackTitle.toLowerCase();
+      return sameUrl || sameTitle;
+    });
+    if (hubMatch) {
+      await shareHubPost(hubMatch);
+      return;
+    }
+    if (!trackUrl) {
+      setStatus("Open a song first, then share.");
+      return;
+    }
+    // No Hub copy — share the raw playable URL with a hint to publish.
+    await shareHubLink({
+      title: trackTitle ? `${trackTitle} — Nabadai` : "Listen on Nabadai",
+      text: trackTitle ? `“${trackTitle}” on Nabadai` : "Listen on Nabadai",
+      url: trackUrl,
+    });
   });
 }
 if (els.playerVol) {

@@ -1443,6 +1443,16 @@ body[data-route="hub"]{
 body[data-route="hub"] .hubRow{
   scroll-snap-align: center;
 }
+/* While jumping to the top of the Hub feed, disable scroll-snap so iOS
+ * doesn't pull the viewport back to the previously-centered row. The body
+ * class is added before scrollTo(0) and removed ~360ms later. */
+html:has(body.hubJumpingToTop),
+body.hubJumpingToTop{
+  scroll-snap-type: none !important;
+}
+body.hubJumpingToTop .hubRow{
+  scroll-snap-align: none !important;
+}
 [data-route="hub"] .trackName{
   font-size:15px;
 }

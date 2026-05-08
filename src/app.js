@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509o";
+const APP_BUILD = "20260509p";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -406,15 +406,6 @@ function getHubRowClosestToViewportCenter() {
   if (!root) return null;
   const rows = root.querySelectorAll("[data-hub-row]");
   if (!rows.length) return null;
-  const scrollTop = window.scrollY ?? document.documentElement.scrollTop ?? 0;
-  // Near the top of the page the viewport centre often sits in the Hub chrome
-  // (filters, hints), not inside a card — then "closest midpoint among ALL
-  // rows" could wrongly pick a row deep in the feed. Pin to the first row.
-  if (scrollTop < 140) {
-    const first = root.querySelector("[data-hub-row]");
-    const fid = first?.getAttribute("data-hub-row");
-    return fid || null;
-  }
   const vh = window.innerHeight || document.documentElement.clientHeight || 0;
   const cy = vh / 2;
   let bestIntersectId = null;
@@ -6510,15 +6501,35 @@ function setHubSort(next) {
 }
 if (els.hubSortLatest) els.hubSortLatest.addEventListener("click", () => setHubSort("latest"));
 if (els.hubSortTrending) els.hubSortTrending.addEventListener("click", () => setHubSort("trending"));
-/** Jump to feed top: instant scroll avoids a long smooth-scroll window where
- * scroll-snap + stale autoplay timers race; suppression clears the debounce
- * tail from the previous scroll position. */
-function scrollHubFeedToFirstPost() {
+/** Jump to the top of the Hub feed.
+ *
+ * Why this is more than `scrollTo(0)`:
+ *   - Hub uses `scroll-snap-align: center` on every row plus
+ *     `scroll-snap-type: y proximity` on html/body. iOS Safari resists
+ *     a programmatic scroll while a snap point is settled, so calling
+ *     `window.scrollTo(0)` while a row is centered tends to bounce the
+ *     viewport right back to that row.
+ *   - A pending 140ms `tryHubViewportAutoplay` debounce can fire AFTER
+ *     `stopHubPlayback()` and re-target the previous row.
+ *
+ * Fix:
+ *   - Temporarily kill snap with a body class — actual scroll is now free.
+ *   - Suppress viewport autoplay for a couple of seconds.
+ *   - Scroll instantly. Restore snap after the layout has settled.
+ */
+function scrollHubFeedToTop() {
   suppressHubViewportAutoplayFor(2200);
+  document.body.classList.add("hubJumpingToTop");
+  // Two-step scroll: an immediate jump, plus another on the next frame so
+  // late-arriving snap recalculations also land at 0 instead of pulling back.
   window.scrollTo({ top: 0, behavior: "auto" });
   requestAnimationFrame(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
     updateHubFocusedRow();
   });
+  setTimeout(() => {
+    document.body.classList.remove("hubJumpingToTop");
+  }, 360);
 }
 if (els.hubTabLink) {
   let hubTapAt = 0;
@@ -6528,19 +6539,8 @@ if (els.hubTabLink) {
     const onHub = (document.body.getAttribute("data-route") || "") === "hub";
     if (!onHub) return;
     e.preventDefault();
-    // Kill any pending viewport-autoplay callback immediately — critical:
-    // otherwise it fires after stopHubPlayback() and re-targets the old row.
-    suppressHubViewportAutoplayFor(2200);
-    try {
-      stopHubPlayback();
-    } catch {}
-    // Don't wait for the single/double-tap debounce — stay at the old
-    // scroll position for 250ms kept the viewport center on the previous
-    // post so snap / stale autoplay could yank the page back.
-    window.scrollTo({ top: 0, behavior: "auto" });
-    requestAnimationFrame(() => {
-      updateHubFocusedRow();
-    });
+    try { stopHubPlayback(); } catch {}
+    scrollHubFeedToTop();
     hubTapCount += 1;
     const now = Date.now();
     if (now - hubTapAt > 420) hubTapCount = 1;
@@ -6554,7 +6554,8 @@ if (els.hubTabLink) {
         setStatus("Refreshing Hub…");
         await refreshHubFromSupabase();
         setStatus("Hub refreshed.");
-        requestAnimationFrame(() => scrollHubFeedToFirstPost());
+        // After refresh, the feed re-rendered — re-pin to the top.
+        requestAnimationFrame(() => scrollHubFeedToTop());
       }
       hubTapCount = 0;
     }, 250);

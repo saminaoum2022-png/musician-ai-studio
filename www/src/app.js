@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260508n";
+const APP_BUILD = "20260508o";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -318,7 +318,6 @@ function isPlayingLibraryRowVisible() {
 
 /** Hub feed: auto-play the post whose vertical center is closest to the viewport center. */
 let hubAutoplayMutedPostId = null;
-let hubViewportAutoplayScheduled = false;
 let hubViewportTailTimer = null;
 let hubPlaybackSeq = 0;
 // Persistent post metadata for whichever track is currently loaded into the
@@ -404,20 +403,26 @@ function getHubRowClosestToViewportCenter() {
   return bestIntersectId || bestAnyId;
 }
 
+// Don't run on every scroll frame — that was the cause of "rapid play/stop":
+// while the user dragged, every frame `getHubRowClosestToViewportCenter` could
+// pick a different row and we'd start/abandon playback in a loop. Now we only
+// trigger autoplay once the scroll has been quiet for ~220ms (or instantly on
+// `scrollend`, see the listener below).
 function scheduleHubViewportAutoplay() {
-  if (hubViewportAutoplayScheduled) return;
-  hubViewportAutoplayScheduled = true;
-  requestAnimationFrame(() => {
-    hubViewportAutoplayScheduled = false;
-    tryHubViewportAutoplay();
-  });
-  try {
-    clearTimeout(hubViewportTailTimer);
-  } catch {}
+  if (hubViewportTailTimer) {
+    try { clearTimeout(hubViewportTailTimer); } catch {}
+  }
   hubViewportTailTimer = setTimeout(() => {
     hubViewportTailTimer = null;
     tryHubViewportAutoplay();
-  }, 160);
+  }, 220);
+}
+function flushHubViewportAutoplay() {
+  if (hubViewportTailTimer) {
+    try { clearTimeout(hubViewportTailTimer); } catch {}
+    hubViewportTailTimer = null;
+  }
+  tryHubViewportAutoplay();
 }
 
 async function hubAudioPlayWithRetry(audio) {
@@ -460,6 +465,7 @@ function onHubTrackEnded(endedPostId) {
     nextRow = nextRow.nextElementSibling;
   }
   if (!nextRow) return;
+  const nextId = nextRow.getAttribute("data-hub-row");
   try {
     nextRow.scrollIntoView({ behavior: "smooth", block: "center" });
   } catch {
@@ -467,6 +473,11 @@ function onHubTrackEnded(endedPostId) {
       nextRow.scrollIntoView();
     } catch {}
   }
+  // Don't rely on scroll-driven autoplay catching up — `scroll` events during
+  // a programmatic smooth scroll are unreliable on iOS, so an explicit play
+  // call here makes the hand-off seamless. The smooth scroll just supplies
+  // the visual cue; this guarantees the audio.
+  if (nextId) void startHubPlayback(nextId);
 }
 
 function ensureHubAudio() {
@@ -574,13 +585,11 @@ async function startHubPlayback(postId) {
   const p = loadHubFeed().find((x) => x.id === postId);
   if (!p?.url) return;
 
-  const waitPreload = hubPreloadInflight.get(postId);
-  if (waitPreload) {
-    try {
-      await waitPreload;
-    } catch {}
-  }
-  if (mySeq !== hubPlaybackSeq) return;
+  // Don't await the in-flight preload — that was actually slower than just
+  // streaming, because preload buffers the *whole* file before resolving.
+  // If the blob already finished loading we use it (instant). Otherwise we
+  // start playback against the streaming proxy URL right now and let the
+  // background fetch finish for next time the user comes back to this post.
 
   const a = ensureHubAudio();
   try {
@@ -2043,6 +2052,7 @@ function renderHub() {
     }
   }
   setTimeout(() => scheduleHubViewportAutoplay(), 40);
+  preloadInitialHubTracks();
   updateHubAudioHint();
 }
 if (els.hubList) {
@@ -3773,6 +3783,22 @@ function scheduleHubPreloadNext(currentPostId) {
     hubPreloadTimer = null;
     preloadNextHubTrack(currentPostId);
   }, 400);
+}
+
+/** Preload the first row in the rendered Hub feed. Most users tap ▶ on the
+ * top post, so having that file already buffered makes the very first play
+ * feel instant — without committing bandwidth for the entire feed. */
+function preloadInitialHubTracks() {
+  if (!els.hubList) return;
+  const firstRow = els.hubList.querySelector("[data-hub-row]");
+  if (!firstRow) return;
+  const id = firstRow.getAttribute("data-hub-row");
+  if (!id) return;
+  if (hubAudioBlobByPostId.has(id) || hubPreloadInflight.has(id)) return;
+  const p = loadHubFeed().find((x) => x.id === id);
+  const raw = String(p?.url || "").trim();
+  if (!raw) return;
+  void fetchHubTrackIntoBlob(id, raw);
 }
 
 function updateListenRefButton() {
@@ -6052,6 +6078,14 @@ if (els.hubNowPlaying) {
 window.addEventListener("scroll", () => {
   if ((document.body.getAttribute("data-route") || "") === "hub") scheduleHubViewportAutoplay();
   if (hubAudio) renderHubNowPlaying();
+}, { passive: true });
+// `scrollend` fires once the page (or a programmatic smooth scroll) actually
+// stops — much more reliable than waiting for `scroll` events to taper off.
+// Supported on iOS Safari 16+, Chrome 114+, and Firefox 109+. Where it isn't
+// supported the 220ms debounce above still covers us.
+window.addEventListener("scrollend", () => {
+  if ((document.body.getAttribute("data-route") || "") !== "hub") return;
+  flushHubViewportAutoplay();
 }, { passive: true });
 window.addEventListener("resize", () => {
   if ((document.body.getAttribute("data-route") || "") === "hub") scheduleHubViewportAutoplay();

@@ -2287,9 +2287,6 @@ textarea{
   box-shadow: 0 18px 38px rgba(35,213,171,0.18), inset 0 0 0 1px rgba(35,213,171,0.18);
 }
 
-#btnGenerateOrb{
-  display: none !important;
-}
 .inputPanel{
   width:100%;
   padding: 11px 12px;
@@ -4283,8 +4280,12 @@ input::placeholder, textarea::placeholder{
   display:none;
 }
 @media (max-width: 720px){
+  /* Was hidden when floating orb was primary; orb + sticky-bar changes left mobile with no Generate — show in-form dock */
   .card.wide[data-route="generate"] .generateDock{
-    display:none;
+    display:block;
+  }
+  #btnGenerateOrb{
+    display: none !important;
   }
   .mobileAdvancedBtn{
     width:100%;

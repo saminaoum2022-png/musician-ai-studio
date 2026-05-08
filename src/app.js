@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509q";
+const APP_BUILD = "20260509r";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -6503,54 +6503,87 @@ if (els.hubSortLatest) els.hubSortLatest.addEventListener("click", () => setHubS
 if (els.hubSortTrending) els.hubSortTrending.addEventListener("click", () => setHubSort("trending"));
 /** Jump to the top of the Hub feed.
  *
- * Why this is more than `scrollTo(0)`:
- *   - Hub uses `scroll-snap-align: center` on every row plus
- *     `scroll-snap-type: y proximity` on html/body. iOS Safari resists
- *     a programmatic scroll while a snap point is settled, so calling
- *     `window.scrollTo(0)` while a row is centered tends to bounce the
- *     viewport right back to that row.
- *   - A pending 140ms `tryHubViewportAutoplay` debounce can fire AFTER
- *     `stopHubPlayback()` and re-target the previous row.
+ * Hub uses `scroll-snap-align: center` on every row + `scroll-snap-type: y
+ * proximity` on html/body. iOS Safari resists `scrollTo(0)` while a snap
+ * point is settled and *remembers* the previous snap target — re-enabling
+ * snap right at the end of our animation made it pull back to the post the
+ * user just left. So we (a) animate the scroll while snap is disabled via
+ * `body.hubJumpingToTop`, and (b) keep snap disabled for an extra buffer
+ * window after we land at 0, re-pinning to 0 if anything else (snap memory,
+ * stray events) tries to drag us elsewhere during that window.
  *
- * Fix:
- *   - Temporarily kill snap with `body.hubJumpingToTop`.
- *   - Suppress viewport autoplay for a couple of seconds.
- *   - Animate scroll with a short fixed-duration ease-out (~320ms) so it
- *     feels like a fast whip to the top — not a slow crawl through every
- *     post, but visibly moving.
+ * Suppressing `tryHubViewportAutoplay` for the whole window also prevents
+ * a pending 140ms debounce from re-targeting the previous row.
  */
 let hubJumpToTopRaf = 0;
+let hubJumpToTopGuardTimer = 0;
+let hubJumpToTopReleaseTimer = 0;
 function scrollHubFeedToTop() {
-  suppressHubViewportAutoplayFor(2800);
   if (hubJumpToTopRaf) {
     try {
       cancelAnimationFrame(hubJumpToTopRaf);
     } catch {}
     hubJumpToTopRaf = 0;
   }
+  if (hubJumpToTopGuardTimer) {
+    try { clearInterval(hubJumpToTopGuardTimer); } catch {}
+    hubJumpToTopGuardTimer = 0;
+  }
+  if (hubJumpToTopReleaseTimer) {
+    try { clearTimeout(hubJumpToTopReleaseTimer); } catch {}
+    hubJumpToTopReleaseTimer = 0;
+  }
+
   document.body.classList.add("hubJumpingToTop");
   const start = window.scrollY ?? document.documentElement.scrollTop ?? 0;
+  const animDurationMs = 320;
+  // After we land at 0, hold snap off for this long so iOS forgets the
+  // previously-centered row. While this guard is active we also re-pin to 0
+  // every frame, defeating any snap "memory" / momentum that fires.
+  const guardDurationMs = 1100;
+  // Long enough to cover anim + guard + safety margin.
+  suppressHubViewportAutoplayFor(animDurationMs + guardDurationMs + 600);
+
   let reducedMotion = false;
   try {
     reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   } catch {}
-  if (start <= 2) {
-    document.body.classList.remove("hubJumpingToTop");
-    updateHubFocusedRow();
-    return;
-  }
-  if (reducedMotion) {
+
+  const enterGuard = () => {
+    // Pin scrollY to 0 for the whole guard window; remove the snap-off
+    // class only at the end so re-enabling snap can no longer rubber-band
+    // us back to the previous post.
+    const guardStart = performance.now();
+    const pin = () => {
+      if (performance.now() - guardStart >= guardDurationMs) {
+        try { clearInterval(hubJumpToTopGuardTimer); } catch {}
+        hubJumpToTopGuardTimer = 0;
+        return;
+      }
+      const y = window.scrollY ?? document.documentElement.scrollTop ?? 0;
+      if (y > 1) window.scrollTo(0, 0);
+    };
+    hubJumpToTopGuardTimer = setInterval(pin, 32);
+    hubJumpToTopReleaseTimer = setTimeout(() => {
+      hubJumpToTopReleaseTimer = 0;
+      // One last pin then turn snap back on.
+      window.scrollTo(0, 0);
+      document.body.classList.remove("hubJumpingToTop");
+      updateHubFocusedRow();
+    }, guardDurationMs);
+  };
+
+  if (start <= 2 || reducedMotion) {
     window.scrollTo(0, 0);
-    document.body.classList.remove("hubJumpingToTop");
-    updateHubFocusedRow();
+    enterGuard();
     return;
   }
-  const durationMs = 320;
+
   const t0 = performance.now();
   const easeOutCubic = (u) => 1 - (1 - u) ** 3;
   const tick = (now) => {
     const elapsed = now - t0;
-    const u = Math.min(1, elapsed / durationMs);
+    const u = Math.min(1, elapsed / animDurationMs);
     const y = Math.round(start * (1 - easeOutCubic(u)));
     window.scrollTo(0, y);
     if (u < 1) {
@@ -6558,8 +6591,7 @@ function scrollHubFeedToTop() {
     } else {
       hubJumpToTopRaf = 0;
       window.scrollTo(0, 0);
-      document.body.classList.remove("hubJumpingToTop");
-      updateHubFocusedRow();
+      enterGuard();
     }
   };
   hubJumpToTopRaf = requestAnimationFrame(tick);

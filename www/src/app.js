@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260508k";
+const APP_BUILD = "20260508l";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -389,6 +389,10 @@ function getHubRowClosestToViewportCenter() {
       bestIntersectId = id;
     }
   });
+  // Prefer a row that actually intersects the viewport (finger on a card).
+  // When you scroll between two posts the viewport center can sit in the gap
+  // between rows — then no row "intersects" and autoplay used to go silent.
+  // Fall back to whichever row center is closest overall (still on the feed).
   return bestIntersectId || bestAnyId;
 }
 
@@ -421,6 +425,59 @@ async function hubAudioPlayWithRetry(audio) {
       return false;
     }
   }
+}
+
+// Hidden audio element used purely to warm the browser HTTP cache for the
+// next post in scroll order. It is never connected to output, never played —
+// just `src = url; load()` so that when the user scrolls and we swap the real
+// playback element to that URL, the bytes are already cached.
+let hubPreloadAudio = null;
+let hubPreloadUrl = null;
+let hubPreloadTimer = null;
+function ensureHubPreloadAudio() {
+  if (hubPreloadAudio) return hubPreloadAudio;
+  const a = new Audio();
+  a.preload = "auto";
+  a.muted = true;
+  hubPreloadAudio = a;
+  return a;
+}
+function preloadNextHubTrack(currentPostId) {
+  if (!currentPostId) return;
+  const root = els.hubList;
+  if (!root) return;
+  const currentRow = root.querySelector(`[data-hub-row="${currentPostId}"]`);
+  if (!currentRow) return;
+  let nextRow = currentRow.nextElementSibling;
+  while (nextRow && !nextRow.matches?.("[data-hub-row]")) {
+    nextRow = nextRow.nextElementSibling;
+  }
+  if (!nextRow) return;
+  const nextId = nextRow.getAttribute("data-hub-row");
+  if (!nextId) return;
+  const nextPost = loadHubFeed().find((p) => p.id === nextId);
+  const url = String(nextPost?.url || "").trim();
+  if (!url) return;
+  if (hubPreloadUrl === url) return;
+  const a = ensureHubPreloadAudio();
+  hubPreloadUrl = url;
+  try {
+    a.src = url;
+    a.load();
+  } catch {}
+}
+function scheduleHubPreloadNext(currentPostId) {
+  if (hubPreloadTimer) {
+    clearTimeout(hubPreloadTimer);
+    hubPreloadTimer = null;
+  }
+  // Delay so the current track's network fetch finishes before we start
+  // pulling bytes for the next one — otherwise on slow connections both
+  // would compete and the current track could stutter.
+  hubPreloadTimer = setTimeout(() => {
+    hubPreloadTimer = null;
+    preloadNextHubTrack(currentPostId);
+  }, 1200);
 }
 
 // Returns the single shared audio element used for all Hub playback. Creating
@@ -519,6 +576,7 @@ async function startHubPlayback(postId) {
     if (!hubAudio.paused) {
       setHubAudioUnlocked();
       updateHubAudioHint();
+      scheduleHubPreloadNext(postId);
     }
     return;
   }
@@ -583,6 +641,7 @@ async function startHubPlayback(postId) {
   }
   setHubAudioUnlocked();
   updateHubAudioHint();
+  scheduleHubPreloadNext(postId);
   renderHubNowPlaying();
 }
 

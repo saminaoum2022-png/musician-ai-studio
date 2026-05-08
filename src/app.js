@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509d";
+const APP_BUILD = "20260509e";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -96,6 +96,7 @@ const els = {
   btnPlayerPause: document.getElementById("btnPlayerPause"),
   btnPlayerStop: document.getElementById("btnPlayerStop"),
   btnPlayerShare: document.getElementById("btnPlayerShare"),
+  btnPlayerDownloadVideo: document.getElementById("btnPlayerDownloadVideo"),
   btnPlayerBack: document.getElementById("btnPlayerBack"),
   playerSeek: document.getElementById("playerSeek"),
   playerVol: document.getElementById("playerVol"),
@@ -6653,6 +6654,60 @@ if (els.btnPlayerShare) {
       return;
     }
     await shareHubPost(fresh);
+  });
+}
+if (els.btnPlayerDownloadVideo) {
+  els.btnPlayerDownloadVideo.addEventListener("click", async () => {
+    haptic("light");
+    const trackUrl = String(currentPlayerTrackRef?.url || playerEl?.src || "").trim();
+    const trackTitle = String(currentPlayerTrackRef?.title || els.playerTitle?.textContent || "song").trim();
+    const trackArt = String(
+      currentPlayerTrackRef?.artUrl
+        || currentPlayerTrackRef?.coverUrl
+        || els.playerCover?.src
+        || ""
+    ).trim();
+    if (!trackUrl) {
+      showToast("Open a song first, then download.");
+      return;
+    }
+    const btn = els.btnPlayerDownloadVideo;
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `<span class="dlSpin" aria-hidden="true"></span><span>Rendering…</span>`;
+    showToast("Rendering video — this takes a few seconds…", { durationMs: 4000 });
+    try {
+      const u = new URL("/api/render-video", location.origin);
+      u.searchParams.set("audioUrl", trackUrl);
+      if (trackArt && /^https?:\/\//i.test(trackArt)) {
+        u.searchParams.set("imageUrl", trackArt);
+      }
+      u.searchParams.set("title", trackTitle);
+      const r = await fetch(u.toString(), { method: "GET" });
+      if (!r.ok) {
+        let detail = "";
+        try { detail = (await r.json())?.error || ""; } catch {}
+        throw new Error(detail || `HTTP ${r.status}`);
+      }
+      const blob = await r.blob();
+      const filename = `${trackTitle.replace(/[\\/:*?"<>|]/g, "").trim() || "song"}.mp4`;
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Free the blob after the click has had time to take effect.
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
+      showToast("Video saved", { durationMs: 1800 });
+    } catch (e) {
+      const msg = e?.message ? String(e.message).slice(0, 80) : "Render failed";
+      showToast(`Couldn't render: ${msg}`, { durationMs: 3500 });
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
   });
 }
 if (els.playerVol) {

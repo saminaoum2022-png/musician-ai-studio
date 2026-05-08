@@ -927,15 +927,39 @@ body.isIntro .footer{ display:none; }
   letter-spacing:0;
 }
 
-/* Player Share button — neutral ghost styling, in line with the rest of
- * the player controls. Slight gap tweak for the icon. */
-.playerShareBtn{
+/* Player Share + Download Video — neutral ghost buttons in line with the
+ * rest of the player controls. */
+.playerShareBtn,
+.playerDownloadVideoBtn{
   display:inline-flex;
   align-items:center;
   gap:6px;
   font-weight:600;
 }
-.playerShareLabel{ letter-spacing:0.1px; }
+.playerShareLabel,
+.playerDownloadVideoLabel{ letter-spacing:0.1px; }
+.playerDownloadVideoBtn[disabled]{
+  opacity:0.7;
+  cursor:wait;
+}
+/* Tiny spinner shown while the server is encoding the mp4. */
+.dlSpin{
+  display:inline-block;
+  width:11px;
+  height:11px;
+  border-radius:999px;
+  border:2px solid rgba(255,255,255,0.22);
+  border-top-color: rgba(255,255,255,0.85);
+  animation: dlSpin 700ms linear infinite;
+  margin-right:2px;
+}
+@keyframes dlSpin{
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce){
+  .dlSpin{ animation: none; }
+}
 
 @media (prefers-reduced-motion: reduce){
   .hubLike[data-burst="1"] .hubLikeHeart,

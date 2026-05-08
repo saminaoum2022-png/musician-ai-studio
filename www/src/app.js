@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509c";
+const APP_BUILD = "20260509d";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -919,6 +919,12 @@ function applyRoute() {
     // already shows the lift / hero title before any scroll event.
     requestAnimationFrame(() => updateHubFocusedRow());
     setTimeout(() => scheduleHubViewportAutoplay(), 60);
+    // Always trigger a Supabase refresh on entering Hub. Boot already does
+    // this once, but a cold visitor landing directly on `#/hub?post=ID`
+    // (from a shared link) may render before boot's refresh resolves —
+    // and that left them staring at an empty feed. This call is
+    // idempotent (`hubSyncInFlight` guards re-entry).
+    void refreshHubFromSupabase();
     // Honor a `?post=ID` query in the hash: scroll the post into view and,
     // if audio is already unlocked, kick off playback. Don't auto-play
     // before the user has tapped once — iOS/Safari would block it and
@@ -4183,13 +4189,16 @@ function focusHubPostFromShare(postId) {
     return true;
   };
   if (tryNow()) return;
-  // Cold visit — Supabase fetch may still be in flight. Poll up to ~6s.
+  // Cold visit — Supabase fetch may still be in flight. Nudge another
+  // refresh in case the boot one already errored, then poll up to ~12s.
+  void refreshHubFromSupabase();
   const start = Date.now();
   const poll = () => {
     if (pendingShareFocusId !== targetId) return;
     if (tryNow()) return;
-    if (Date.now() - start > 6000) {
+    if (Date.now() - start > 12000) {
       pendingShareFocusId = "";
+      showToast("Couldn't find that song. Browse the Hub below.");
       return;
     }
     setTimeout(poll, 250);

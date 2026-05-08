@@ -58,7 +58,7 @@ async function fetchPost(id) {
     const r = await fetch(
       `${supaUrl}/rest/v1/hub_posts?select=${encodeURIComponent(cols)}&id=eq.${encodeURIComponent(id)}&limit=1`,
       {
-        headers: { apikey: supaKey, Authorization: `Bearer ${supaKey}` },
+        headers: { apikey: supaKey },
         signal: ctrl.signal,
       }
     );
@@ -113,20 +113,27 @@ ${audioTag}
   .cover{width:min(90vw,420px);aspect-ratio:1/1;border-radius:18px;object-fit:cover;border:1px solid rgba(255,255,255,0.10);box-shadow:0 18px 60px -20px rgba(124,92,255,0.55);}
   .title{font-size:24px;font-weight:800;letter-spacing:-0.3px;background:linear-gradient(95deg,#f7f4ff 0%,#e0d6ff 50%,#d3f0ec 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
   .creator{font-size:14px;color:rgba(223,231,251,0.78);}
-  .cta{display:inline-block;margin-top:6px;padding:12px 22px;border-radius:999px;border:1px solid rgba(124,92,255,0.45);background:linear-gradient(135deg,rgba(124,92,255,0.95),rgba(35,213,171,0.92));color:#fff;font-weight:700;text-decoration:none;}
-  .hint{font-size:12px;color:rgba(223,231,251,0.55);}
+  .cta{display:inline-block;margin-top:6px;padding:14px 28px;border-radius:999px;border:1px solid rgba(124,92,255,0.55);background:linear-gradient(135deg,rgba(124,92,255,0.95),rgba(35,213,171,0.92));color:#fff;font-weight:800;font-size:15px;letter-spacing:0.2px;text-decoration:none;box-shadow:0 14px 36px -10px rgba(124,92,255,0.6);}
+  .hint{font-size:12px;color:rgba(223,231,251,0.55);max-width:300px;line-height:1.4;}
 </style>
 <script>
+  // Always redirect on the client. Bots don't execute JavaScript, so they
+  // stop at the meta tags above (which is the whole point — that's how
+  // they generate the preview card). Sniffing the UA to "skip the bot"
+  // was actively harmful: WhatsApp/Telegram/etc in-app browsers can have
+  // their app name in the UA string, and we'd refuse to redirect a real
+  // user who tapped a link from chat.
   (function(){
-    try {
-      var ua = (navigator.userAgent || "").toLowerCase();
-      // Don't redirect known crawler/preview UAs — they need the meta tags.
-      var isBot = /bot|crawler|spider|preview|facebookexternalhit|twitterbot|slackbot|discordbot|whatsapp|telegram|skype|linkedin|embedly|pinterest|google|bing|yandex|duckduckgo/.test(ua);
-      if (!isBot) {
-        // Replace the URL so back button doesn't trap them on the share page.
-        location.replace(${JSON.stringify(redirectTo)});
-      }
-    } catch(e){}
+    var url = ${JSON.stringify(redirectTo)};
+    try { location.replace(url); }
+    catch (e) {
+      try { location.href = url; } catch (e2) {}
+    }
+    // Fallback: if for any reason `replace` doesn't navigate (very old
+    // WebView quirks), force the navigation after a short tick.
+    setTimeout(function(){
+      try { if (location.pathname !== "/") location.href = url; } catch (e) {}
+    }, 600);
   })();
 </script>
 </head>
@@ -135,8 +142,8 @@ ${audioTag}
     <img class="cover" src="${safeImg}" alt="${safeTitle}" />
     <div class="title">${escapeHtml(title)}</div>
     ${safeCreator ? `<div class="creator">by @${safeCreator}</div>` : ""}
-    <a class="cta" href="${safeRedirect}">Open in Nabadai</a>
-    <div class="hint">Loading the player…</div>
+    <a class="cta" href="${safeRedirect}">▶ Open in Nabadai</a>
+    <div class="hint">If the player doesn't open automatically, tap the button above.</div>
   </div>
 </body>
 </html>`;

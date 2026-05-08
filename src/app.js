@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509n";
+const APP_BUILD = "20260509o";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -336,6 +336,11 @@ function isPlayingLibraryRowVisible() {
 /** Hub feed: auto-play the post whose vertical center is closest to the viewport center. */
 let hubAutoplayMutedPostId = null;
 let hubViewportTailTimer = null;
+/** After Hub-tab “jump to top”, kill stale debounce timers and silence viewport
+ * autoplay briefly — otherwise a pending `tryHubViewportAutoplay` from *before*
+ * the tap fires ~140ms later, calls `startHubPlayback(oldPostId)`, and scroll-
+ * snap fights bring the viewport back to that row. */
+let hubSuppressViewportAutoplayUntil = 0;
 let hubPlaybackSeq = 0;
 // Persistent post metadata for whichever track is currently loaded into the
 // shared audio element. Read by the timeupdate listener so we don't have to
@@ -386,11 +391,30 @@ function updateHubAudioHint() {
   els.hubAudioHint.style.display = hasAudio ? "" : "none";
 }
 
+function suppressHubViewportAutoplayFor(ms) {
+  if (hubViewportTailTimer) {
+    try {
+      clearTimeout(hubViewportTailTimer);
+    } catch {}
+    hubViewportTailTimer = null;
+  }
+  hubSuppressViewportAutoplayUntil = Date.now() + ms;
+}
+
 function getHubRowClosestToViewportCenter() {
   const root = els.hubList;
   if (!root) return null;
   const rows = root.querySelectorAll("[data-hub-row]");
   if (!rows.length) return null;
+  const scrollTop = window.scrollY ?? document.documentElement.scrollTop ?? 0;
+  // Near the top of the page the viewport centre often sits in the Hub chrome
+  // (filters, hints), not inside a card — then "closest midpoint among ALL
+  // rows" could wrongly pick a row deep in the feed. Pin to the first row.
+  if (scrollTop < 140) {
+    const first = root.querySelector("[data-hub-row]");
+    const fid = first?.getAttribute("data-hub-row");
+    return fid || null;
+  }
   const vh = window.innerHeight || document.documentElement.clientHeight || 0;
   const cy = vh / 2;
   let bestIntersectId = null;
@@ -568,6 +592,7 @@ function ensureHubAudio() {
 function tryHubViewportAutoplay() {
   if ((document.body.getAttribute("data-route") || "") !== "hub") return;
   if (!els.hubList) return;
+  if (Date.now() < hubSuppressViewportAutoplayUntil) return;
   // Never attempt scroll-driven play until the browser has accepted audio once
   // (user tapped ▶). Otherwise play() fails repeatedly and the button flickers.
   if (!getHubAudioUnlocked()) return;
@@ -6485,17 +6510,15 @@ function setHubSort(next) {
 }
 if (els.hubSortLatest) els.hubSortLatest.addEventListener("click", () => setHubSort("latest"));
 if (els.hubSortTrending) els.hubSortTrending.addEventListener("click", () => setHubSort("trending"));
-/** Scroll the page to the very top so the first Hub post settles in.
- *
- * We deliberately use `window.scrollTo({ top: 0 })` rather than
- * `firstRow.scrollIntoView()` because Hub uses `scroll-snap-align: center`
- * on every row — `scrollIntoView({ block: "start" })` triggers a tug-of-
- * war where scroll-snap re-centers a nearby row mid-animation, which
- * looked like "scrolls to top, then jumps back to where I was". Scrolling
- * straight to 0 lets snap softly settle on the first row instead.
- */
+/** Jump to feed top: instant scroll avoids a long smooth-scroll window where
+ * scroll-snap + stale autoplay timers race; suppression clears the debounce
+ * tail from the previous scroll position. */
 function scrollHubFeedToFirstPost() {
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  suppressHubViewportAutoplayFor(2200);
+  window.scrollTo({ top: 0, behavior: "auto" });
+  requestAnimationFrame(() => {
+    updateHubFocusedRow();
+  });
 }
 if (els.hubTabLink) {
   let hubTapAt = 0;
@@ -6505,10 +6528,19 @@ if (els.hubTabLink) {
     const onHub = (document.body.getAttribute("data-route") || "") === "hub";
     if (!onHub) return;
     e.preventDefault();
-    // Immediate feedback: stop any playing post the moment the user taps
-    // Hub. Autoplay will pick the first post back up once the smooth
-    // scroll settles, matching how Hub behaves on a fresh open.
-    try { stopHubPlayback(); } catch {}
+    // Kill any pending viewport-autoplay callback immediately — critical:
+    // otherwise it fires after stopHubPlayback() and re-targets the old row.
+    suppressHubViewportAutoplayFor(2200);
+    try {
+      stopHubPlayback();
+    } catch {}
+    // Don't wait for the single/double-tap debounce — stay at the old
+    // scroll position for 250ms kept the viewport center on the previous
+    // post so snap / stale autoplay could yank the page back.
+    window.scrollTo({ top: 0, behavior: "auto" });
+    requestAnimationFrame(() => {
+      updateHubFocusedRow();
+    });
     hubTapCount += 1;
     const now = Date.now();
     if (now - hubTapAt > 420) hubTapCount = 1;
@@ -6523,8 +6555,6 @@ if (els.hubTabLink) {
         await refreshHubFromSupabase();
         setStatus("Hub refreshed.");
         requestAnimationFrame(() => scrollHubFeedToFirstPost());
-      } else {
-        scrollHubFeedToFirstPost();
       }
       hubTapCount = 0;
     }, 250);

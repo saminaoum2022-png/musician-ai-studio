@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509m";
+const APP_BUILD = "20260509n";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -6485,15 +6485,17 @@ function setHubSort(next) {
 }
 if (els.hubSortLatest) els.hubSortLatest.addEventListener("click", () => setHubSort("latest"));
 if (els.hubSortTrending) els.hubSortTrending.addEventListener("click", () => setHubSort("trending"));
-/** Scroll so the first Hub post is at the top of the viewport (respects
- * `scroll-padding-top` on the hub route). Falls back to page top if empty. */
+/** Scroll the page to the very top so the first Hub post settles in.
+ *
+ * We deliberately use `window.scrollTo({ top: 0 })` rather than
+ * `firstRow.scrollIntoView()` because Hub uses `scroll-snap-align: center`
+ * on every row — `scrollIntoView({ block: "start" })` triggers a tug-of-
+ * war where scroll-snap re-centers a nearby row mid-animation, which
+ * looked like "scrolls to top, then jumps back to where I was". Scrolling
+ * straight to 0 lets snap softly settle on the first row instead.
+ */
 function scrollHubFeedToFirstPost() {
-  const first = els.hubList?.querySelector?.(".hubRow");
-  if (first) {
-    first.scrollIntoView({ behavior: "smooth", block: "start" });
-  } else {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 if (els.hubTabLink) {
   let hubTapAt = 0;
@@ -6503,6 +6505,10 @@ if (els.hubTabLink) {
     const onHub = (document.body.getAttribute("data-route") || "") === "hub";
     if (!onHub) return;
     e.preventDefault();
+    // Immediate feedback: stop any playing post the moment the user taps
+    // Hub. Autoplay will pick the first post back up once the smooth
+    // scroll settles, matching how Hub behaves on a fresh open.
+    try { stopHubPlayback(); } catch {}
     hubTapCount += 1;
     const now = Date.now();
     if (now - hubTapAt > 420) hubTapCount = 1;
@@ -6516,7 +6522,6 @@ if (els.hubTabLink) {
         setStatus("Refreshing Hub…");
         await refreshHubFromSupabase();
         setStatus("Hub refreshed.");
-        // After new data, land on the first row like a fresh open.
         requestAnimationFrame(() => scrollHubFeedToFirstPost());
       } else {
         scrollHubFeedToFirstPost();

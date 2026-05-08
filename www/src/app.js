@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509p";
+const APP_BUILD = "20260509q";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -6513,23 +6513,56 @@ if (els.hubSortTrending) els.hubSortTrending.addEventListener("click", () => set
  *     `stopHubPlayback()` and re-target the previous row.
  *
  * Fix:
- *   - Temporarily kill snap with a body class — actual scroll is now free.
+ *   - Temporarily kill snap with `body.hubJumpingToTop`.
  *   - Suppress viewport autoplay for a couple of seconds.
- *   - Scroll instantly. Restore snap after the layout has settled.
+ *   - Animate scroll with a short fixed-duration ease-out (~320ms) so it
+ *     feels like a fast whip to the top — not a slow crawl through every
+ *     post, but visibly moving.
  */
+let hubJumpToTopRaf = 0;
 function scrollHubFeedToTop() {
-  suppressHubViewportAutoplayFor(2200);
+  suppressHubViewportAutoplayFor(2800);
+  if (hubJumpToTopRaf) {
+    try {
+      cancelAnimationFrame(hubJumpToTopRaf);
+    } catch {}
+    hubJumpToTopRaf = 0;
+  }
   document.body.classList.add("hubJumpingToTop");
-  // Two-step scroll: an immediate jump, plus another on the next frame so
-  // late-arriving snap recalculations also land at 0 instead of pulling back.
-  window.scrollTo({ top: 0, behavior: "auto" });
-  requestAnimationFrame(() => {
-    window.scrollTo({ top: 0, behavior: "auto" });
-    updateHubFocusedRow();
-  });
-  setTimeout(() => {
+  const start = window.scrollY ?? document.documentElement.scrollTop ?? 0;
+  let reducedMotion = false;
+  try {
+    reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch {}
+  if (start <= 2) {
     document.body.classList.remove("hubJumpingToTop");
-  }, 360);
+    updateHubFocusedRow();
+    return;
+  }
+  if (reducedMotion) {
+    window.scrollTo(0, 0);
+    document.body.classList.remove("hubJumpingToTop");
+    updateHubFocusedRow();
+    return;
+  }
+  const durationMs = 320;
+  const t0 = performance.now();
+  const easeOutCubic = (u) => 1 - (1 - u) ** 3;
+  const tick = (now) => {
+    const elapsed = now - t0;
+    const u = Math.min(1, elapsed / durationMs);
+    const y = Math.round(start * (1 - easeOutCubic(u)));
+    window.scrollTo(0, y);
+    if (u < 1) {
+      hubJumpToTopRaf = requestAnimationFrame(tick);
+    } else {
+      hubJumpToTopRaf = 0;
+      window.scrollTo(0, 0);
+      document.body.classList.remove("hubJumpingToTop");
+      updateHubFocusedRow();
+    }
+  };
+  hubJumpToTopRaf = requestAnimationFrame(tick);
 }
 if (els.hubTabLink) {
   let hubTapAt = 0;

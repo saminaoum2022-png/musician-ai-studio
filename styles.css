@@ -1718,6 +1718,15 @@ body.hubJumpingToTop .hubRow{
 
 /* ----- Player redesign (Apple Music style transport) ----------------- */
 
+/* Full-bleed shell — no nested .card frame (matches Library / Hub on mobile). */
+.card.wide[data-route="player"]{
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
+}
+
 .playerCard{
   padding: 16px 16px 18px;
 }
@@ -4071,6 +4080,25 @@ input[type="range"]::-moz-range-thumb{
     border-left: 0;
     border-right: 0;
     border-radius: 16px;
+  }
+  body[data-route="player"] .app{
+    /* Extra clearance above the fixed tab bar — player controls sit low on the screen. */
+    padding-bottom: calc(104px + env(safe-area-inset-bottom));
+  }
+  .playerShell{
+    gap: 14px;
+  }
+  .playerArtWrap{
+    border: none;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .playerArt{
+    border-radius: 18px;
+  }
+  .playerHeader{
+    margin-bottom: 8px;
   }
   .headerRight .creditsPill{
     width: fit-content;

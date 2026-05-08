@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510l";
+const APP_BUILD = "20260510m";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -3031,28 +3031,43 @@ function renderLibrary() {
     return;
   }
   els.libraryList.innerHTML = `
-    <div class="libraryGrid">
-      ${items.map((t) => `
-        <div class="libTile libRow ${libraryNowPlayingId === t.id ? "libTilePlaying" : ""}" data-lib-row="${t.id}">
-          <img class="libTileArt" src="${escapeHtml(String((t.meta && t.meta.imageUrl) || t.artUrl || "./assets/nabadai-logo.png"))}" alt="${escapeHtml(t.title || "Song artwork")}" />
-          <button class="libTilePlay" data-lib-play="${t.id}" aria-label="Play">▶</button>
-          <button class="libTileMenuBtn" data-lib-menu="${t.id}" aria-label="Song options">⋯</button>
-          <div class="libTileShade">
-            <div class="libTileTitle">${escapeHtml(t.title || "Generated song")}</div>
-            <div class="libTileMeta">${escapeHtml(formatLibraryDate(t.ts))}</div>
-          </div>
-          <div class="libMenu" id="libMenu_${t.id}" style="display:none">
-            <a class="ghost" href="${t.url}" target="_blank" rel="noreferrer" data-lib-dlaudio="${t.id}">Download audio</a>
-            <button class="ghost" data-lib-dlvideo="${t.id}">Download video</button>
-            <button class="ghost" data-lib-share="${t.id}">Share to Hub</button>
-            <button class="ghost" data-lib-details="${t.id}">Song details</button>
-            ${t.kind === "instrumental" ? "" : `<button class="ghost" data-lib-inst="${t.id}">Get instrumental</button>`}
-            ${t.kind === "instrumental" ? "" : `<button class="ghost" data-lib-stems="${t.id}">Get stems</button>`}
-            <button class="ghost" data-lib-del="${t.id}">Delete</button>
-          </div>
-        </div>
-      `).join("")}
-    </div>
+    <ul class="libraryRows" role="list">
+      ${items.map((t) => {
+        const art = String((t.meta && t.meta.imageUrl) || t.artUrl || "./assets/nabadai-logo.png");
+        const playing = libraryNowPlayingId === t.id;
+        const dateLabel = formatLibraryDate(t.ts);
+        const isInstrumental = t.kind === "instrumental";
+        const safeTitle = escapeHtml(t.title || "Generated song");
+        const subBits = [];
+        if (dateLabel) subBits.push(`<span class="libRowDot">${escapeHtml(dateLabel)}</span>`);
+        if (isInstrumental) subBits.push(`<span class="libRowChip">Instrumental</span>`);
+        return `
+          <li class="libRow ${playing ? "libRowPlaying" : ""}" data-lib-row="${t.id}">
+            <button class="libRowMain" type="button" data-lib-play="${t.id}" aria-label="Play ${safeTitle}">
+              <span class="libRowArt">
+                <img src="${escapeHtml(art)}" alt="" />
+                <span class="libRowArtBadge" aria-hidden="true">${playing ? "❚❚" : "▶"}</span>
+              </span>
+              <span class="libRowInfo">
+                <span class="libRowTitle">${safeTitle}</span>
+                <span class="libRowSub">${subBits.join("")}</span>
+              </span>
+              ${playing ? `<span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>` : ""}
+            </button>
+            <button class="libRowMore" type="button" data-lib-menu="${t.id}" aria-label="More options for ${safeTitle}">⋯</button>
+            <div class="libMenu" id="libMenu_${t.id}" style="display:none">
+              <a class="ghost" href="${t.url}" target="_blank" rel="noreferrer" data-lib-dlaudio="${t.id}">Download audio</a>
+              <button class="ghost" data-lib-dlvideo="${t.id}">Download video</button>
+              <button class="ghost" data-lib-share="${t.id}">Share to Hub</button>
+              <button class="ghost" data-lib-details="${t.id}">Song details</button>
+              ${isInstrumental ? "" : `<button class="ghost" data-lib-inst="${t.id}">Get instrumental</button>`}
+              ${isInstrumental ? "" : `<button class="ghost" data-lib-stems="${t.id}">Get stems</button>`}
+              <button class="ghost libRowDelete" data-lib-del="${t.id}">Delete</button>
+            </div>
+          </li>
+        `;
+      }).join("")}
+    </ul>
   `;
   els.libraryList.querySelectorAll("[data-lib-play]").forEach((btn) => {
     btn.addEventListener("click", async (e) => {

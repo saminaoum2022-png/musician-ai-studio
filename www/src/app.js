@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509j";
+const APP_BUILD = "20260509k";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -216,6 +216,8 @@ const els = {
   hubFilterInstrumental: document.getElementById("hubFilterInstrumental"),
   hubFilterRemix: document.getElementById("hubFilterRemix"),
   hubFilterSelect: document.getElementById("hubFilterSelect"),
+  hubSortLatest: document.getElementById("hubSortLatest"),
+  hubSortTrending: document.getElementById("hubSortTrending"),
   hubDotLatest: document.getElementById("hubDotLatest"),
   hubDotArabic: document.getElementById("hubDotArabic"),
   hubDotInstrumental: document.getElementById("hubDotInstrumental"),
@@ -2026,12 +2028,44 @@ function makeDemoHubPost() {
     meta: { demo: true, styleInput: "demo style", lyricsInput: "demo lyrics" },
   };
 }
+// Trending score: engagement weighted by recency.
+//   engagement = likes + sum(reacts.*)
+//   score      = (engagement + 1) * 0.5^(ageHours / 36)
+// 36-hour half-life means a post's weight halves every ~1.5 days, so a
+// fresh post with a few reactions can overtake an older popular one.
+// Tunable via HUB_TRENDING_HALF_LIFE_HOURS.
+const HUB_TRENDING_HALF_LIFE_HOURS = 36;
+function hubTrendingScore(post, nowMs) {
+  if (!post) return 0;
+  const ts = Number(post.ts || 0);
+  if (!ts) return 0;
+  const ageMs = Math.max(0, (nowMs || Date.now()) - ts);
+  const ageHours = ageMs / 3600000;
+  const reacts = post.reacts || {};
+  const reactsTotal =
+    Number(reacts.melody || 0) +
+    Number(reacts.lyrics || 0) +
+    Number(reacts.mix || 0) +
+    Number(reacts.groove || 0);
+  const engagement = Number(post.likes || 0) + reactsTotal;
+  const decay = Math.pow(0.5, ageHours / HUB_TRENDING_HALF_LIFE_HOURS);
+  return (engagement + 1) * decay;
+}
 function renderHub() {
   if (!els.hubList) return;
   let items = loadHubFeed();
-  if (hubFilter === "arabic") items = items.filter((x) => /arab|خليج|مقام|oud|darbuka|hijaz/i.test(JSON.stringify(x.meta || {}) + " " + (x.title || "")));
-  if (hubFilter === "instrumental") items = items.filter((x) => String(x.kind || "").includes("instrumental"));
-  if (hubFilter === "remix") items = items.filter((x) => /remix/i.test(String(x.title || "")));
+  if (hubFilter === "trending") {
+    const now = Date.now();
+    items = [...items].sort((a, b) => {
+      const sa = hubTrendingScore(a, now);
+      const sb = hubTrendingScore(b, now);
+      if (sb !== sa) return sb - sa;
+      return Number(b.ts || 0) - Number(a.ts || 0);
+    });
+  }
+  // Legacy genre filters (arabic/instrumental/remix) were removed in
+  // 20260509k — they were title regex, not real categories. The sort
+  // segment is now Latest | Trending only.
   if (!items.length) {
     els.hubList.textContent = "No posts yet. Share songs from Library to Hub.";
     renderHubUpdatedAt();
@@ -6432,35 +6466,28 @@ window.addEventListener("focus", () => {
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) void refreshHubFromSupabase();
 });
-if (els.hubFilterLatest) els.hubFilterLatest.addEventListener("click", () => { hubFilter = "latest"; markHubCategorySeen("latest"); renderHub(); });
-if (els.hubFilterSelect) {
-  els.hubFilterSelect.value = "latest";
-  els.hubFilterSelect.addEventListener("change", async () => {
-    const selected = String(els.hubFilterSelect?.value || "latest");
-    if (selected === "__demo__") {
-      const p = makeDemoHubPost();
-      const feed = loadHubFeed();
-      feed.unshift(p);
-      saveHubFeed(feed.slice(0, 200));
-      try {
-        await supabaseInsertHub(p);
-        setStatus("Demo post added to Hub.");
-        await refreshHubFromSupabase();
-      } catch {
-        setStatus("Demo post added locally (Supabase sync failed).");
-        renderHub();
-      }
-      hubFilter = "latest";
-      markHubCategorySeen("latest");
-      if (els.hubFilterSelect) els.hubFilterSelect.value = "latest";
-      renderHub();
-      return;
-    }
-    hubFilter = selected;
-    markHubCategorySeen(hubFilter);
-    renderHub();
-  });
+// Hub feed sort segment: Latest | Trending. The genre dropdown
+// (Arabic / Instrumental / Remix / Demo) was removed in 20260509k —
+// those filters were title regex, not real categories. If proper genre
+// tags are added later, we'll bring them back as a separate UI surface.
+function setHubSort(next) {
+  const value = next === "trending" ? "trending" : "latest";
+  hubFilter = value;
+  if (els.hubSortLatest) {
+    const isLatest = value === "latest";
+    els.hubSortLatest.classList.toggle("isActive", isLatest);
+    els.hubSortLatest.setAttribute("aria-selected", isLatest ? "true" : "false");
+  }
+  if (els.hubSortTrending) {
+    const isTrending = value === "trending";
+    els.hubSortTrending.classList.toggle("isActive", isTrending);
+    els.hubSortTrending.setAttribute("aria-selected", isTrending ? "true" : "false");
+  }
+  if (value === "latest") markHubCategorySeen("latest");
+  renderHub();
 }
+if (els.hubSortLatest) els.hubSortLatest.addEventListener("click", () => setHubSort("latest"));
+if (els.hubSortTrending) els.hubSortTrending.addEventListener("click", () => setHubSort("trending"));
 if (els.hubTabLink) {
   let hubTapAt = 0;
   let hubTapCount = 0;

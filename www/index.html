@@ -96,25 +96,17 @@
           <div id="libraryList" class="code" style="max-height:none"></div>
         </section>
 
-        <section class="card wide" data-route="hub">
+        <section class="card wide hubCard" data-route="hub">
           <div class="hubTop">
-          <div class="row hubFilters" style="margin-top:0">
-            <label class="field hubFilterField" style="min-width:160px">
-              <div style="display:flex;align-items:center;gap:6px"><span id="hubDotLatest" class="hubDot" style="display:none"></span></div>
-              <select id="hubFilterSelect">
-                <option value="latest">Latest</option>
-                <option value="arabic">Arabic</option>
-                <option value="instrumental">Instrumental</option>
-                <option value="remix">Remix</option>
-                <option value="__demo__">Add Demo Post</option>
-              </select>
-            </label>
-            <span id="hubDotArabic" class="hubDot" style="display:none"></span>
-            <span id="hubDotInstrumental" class="hubDot" style="display:none"></span>
-            <span id="hubDotRemix" class="hubDot" style="display:none"></span>
-          </div>
-          <div id="hubUpdatedAt" class="hint hubUpdatedAt">Updated: —</div>
-          <div id="hubSyncInfo" class="hint hubUpdatedAt">Hub: waiting…</div>
+            <div class="hubSegment" role="tablist" aria-label="Hub feed sort">
+              <button class="hubSegmentBtn isActive" id="hubSortLatest" type="button" role="tab" aria-selected="true">
+                <span>Latest</span>
+                <span id="hubDotLatest" class="hubDot hubSegmentDot" style="display:none"></span>
+              </button>
+              <button class="hubSegmentBtn" id="hubSortTrending" type="button" role="tab" aria-selected="false">
+                <span>Trending</span>
+              </button>
+            </div>
           </div>
           <div id="hubAudioHint" class="hint hubAudioHint" style="display:none" role="status">
             Tap <strong class="hubHintPlay">▶</strong> on any post once to start audio — then scroll and songs switch automatically.
@@ -1010,6 +1002,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260509j"></script>
+    <script type="module" src="./src/app.js?v=20260509k"></script>
   </body>
 </html>

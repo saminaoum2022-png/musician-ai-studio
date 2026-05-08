@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260508j";
+const APP_BUILD = "20260508k";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -203,6 +203,7 @@ const els = {
   advancedSheet: document.getElementById("advancedSheet"),
   libraryList: document.getElementById("libraryList"),
   hubList: document.getElementById("hubList"),
+  hubAudioHint: document.getElementById("hubAudioHint"),
   hubUpdatedAt: document.getElementById("hubUpdatedAt"),
   hubSyncInfo: document.getElementById("hubSyncInfo"),
   hubFilterLatest: document.getElementById("hubFilterLatest"),
@@ -325,6 +326,42 @@ let hubPlaybackSeq = 0;
 // re-bind a closure (and another listener) every time the track changes.
 let hubAudioCurrentPost = null;
 
+/** iOS/Safari allow programmatic audio only after a user gesture. Until then,
+ * scroll-autoplay would call play(), fail, flash the UI — hence no autoplay
+ * until the user taps ▶ once. Persist unlock for this tab via sessionStorage. */
+const HUB_AUDIO_UNLOCK_KEY = "mas:hub:audioUnlock:v1";
+function getHubAudioUnlocked() {
+  try {
+    return sessionStorage.getItem(HUB_AUDIO_UNLOCK_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function setHubAudioUnlocked() {
+  try {
+    sessionStorage.setItem(HUB_AUDIO_UNLOCK_KEY, "1");
+  } catch {}
+}
+function updateHubAudioHint() {
+  if (!els.hubAudioHint) return;
+  if (getHubAudioUnlocked()) {
+    els.hubAudioHint.style.display = "none";
+    return;
+  }
+  const route = document.body.getAttribute("data-route") || "";
+  if (route !== "hub") {
+    els.hubAudioHint.style.display = "none";
+    return;
+  }
+  let hasAudio = false;
+  try {
+    hasAudio = loadHubFeed().some((p) => String(p?.url || "").trim());
+  } catch {
+    hasAudio = false;
+  }
+  els.hubAudioHint.style.display = hasAudio ? "" : "none";
+}
+
 function getHubRowClosestToViewportCenter() {
   const root = els.hubList;
   if (!root) return null;
@@ -425,6 +462,9 @@ function ensureHubAudio() {
 function tryHubViewportAutoplay() {
   if ((document.body.getAttribute("data-route") || "") !== "hub") return;
   if (!els.hubList) return;
+  // Never attempt scroll-driven play until the browser has accepted audio once
+  // (user tapped ▶). Otherwise play() fails repeatedly and the button flickers.
+  if (!getHubAudioUnlocked()) return;
   const centerId = getHubRowClosestToViewportCenter();
   if (!centerId) return;
   if (hubAutoplayMutedPostId && centerId !== hubAutoplayMutedPostId) {
@@ -475,6 +515,10 @@ async function startHubPlayback(postId) {
       try {
         await hubAudio.play();
       } catch {}
+    }
+    if (!hubAudio.paused) {
+      setHubAudioUnlocked();
+      updateHubAudioHint();
     }
     return;
   }
@@ -537,6 +581,8 @@ async function startHubPlayback(postId) {
       a.currentTime = Math.max(0, Number(p.meta.clip.startSec));
     } catch {}
   }
+  setHubAudioUnlocked();
+  updateHubAudioHint();
   renderHubNowPlaying();
 }
 
@@ -705,6 +751,7 @@ function applyRoute() {
     markAllHubSeen();
     renderHubDots();
     renderHubUpdatedAt();
+    updateHubAudioHint();
     setTimeout(() => scheduleHubViewportAutoplay(), 60);
   }
   if (wanted === "profile") {
@@ -1790,6 +1837,7 @@ function renderHub() {
   if (!items.length) {
     els.hubList.textContent = "No posts yet. Share songs from Library to Hub.";
     renderHubUpdatedAt();
+    updateHubAudioHint();
     return;
   }
   els.hubList.innerHTML = items.map((p) => `
@@ -1932,6 +1980,7 @@ function renderHub() {
     }
   }
   setTimeout(() => scheduleHubViewportAutoplay(), 40);
+  updateHubAudioHint();
 }
 if (els.hubList) {
   els.hubList.addEventListener("click", async (e) => {

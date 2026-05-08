@@ -4081,9 +4081,15 @@ input[type="range"]::-moz-range-thumb{
     border-right: 0;
     border-radius: 16px;
   }
+  /* Player controls sit at the bottom of the section, so they need extra
+   * clearance above the fixed mobile tab bar. !important here is intentional:
+   * the global mobile `.app` rule at the same specificity wins source order
+   * and would otherwise clip Cover/Trim/Publish on Dynamic Island devices. */
   body[data-route="player"] .app{
-    /* Extra clearance above the fixed tab bar — player controls sit low on the screen. */
-    padding-bottom: calc(104px + env(safe-area-inset-bottom));
+    padding-bottom: calc(132px + env(safe-area-inset-bottom)) !important;
+  }
+  body[data-route="player"] .playerSecondaryRow{
+    margin-bottom: 4px;
   }
   .playerShell{
     gap: 14px;

@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510p";
+const APP_BUILD = "20260510q";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -4002,11 +4002,42 @@ function ensurePlayer() {
   playerEl.preload = "auto";
   playerEl.addEventListener("timeupdate", syncPlayerUI);
   playerEl.addEventListener("loadedmetadata", syncPlayerUI);
+  // iOS Safari often reports `duration === Infinity` on Suno-proxied audio
+  // until enough is buffered. `durationchange` and `canplay` are the events
+  // that actually fire when a real duration becomes available.
+  playerEl.addEventListener("durationchange", syncPlayerUI);
+  playerEl.addEventListener("canplay", syncPlayerUI);
+  playerEl.addEventListener("progress", syncPlayerUI);
   playerEl.addEventListener("ended", () => {
     if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = false;
     if (els.btnPlayerPause) els.btnPlayerPause.disabled = true;
   });
   return playerEl;
+}
+
+/** Best-effort track duration — works even when `audio.duration` is Infinity
+ *  (common on streamed Suno proxy URLs in iOS Safari). Falls back to the last
+ *  seekable timestamp, then to the buffered end. Returns 0 when nothing is
+ *  known yet so callers can still treat it as "unknown". */
+function getPlayerDuration() {
+  if (!playerEl) return 0;
+  const raw = Number(playerEl.duration);
+  if (Number.isFinite(raw) && raw > 0) return raw;
+  try {
+    const sk = playerEl.seekable;
+    if (sk && sk.length) {
+      const end = Number(sk.end(sk.length - 1));
+      if (Number.isFinite(end) && end > 0) return end;
+    }
+  } catch {}
+  try {
+    const bf = playerEl.buffered;
+    if (bf && bf.length) {
+      const end = Number(bf.end(bf.length - 1));
+      if (Number.isFinite(end) && end > 0) return end;
+    }
+  } catch {}
+  return 0;
 }
 
 function placeholderCoverDataUrl() {
@@ -4556,7 +4587,7 @@ function syncResultCardsFromPlayer() {
 
 function syncPlayerUI() {
   if (!playerEl) return;
-  const dur = Number.isFinite(playerEl.duration) ? playerEl.duration : 0;
+  const dur = getPlayerDuration();
   const cur = Number.isFinite(playerEl.currentTime) ? playerEl.currentTime : 0;
   const artWrap = document.querySelector(".playerArtWrap");
   const playing = !playerEl.paused && !playerEl.ended && (dur > 0 || cur > 0);
@@ -7463,14 +7494,14 @@ if (els.playerSeek) {
   els.playerSeek.addEventListener("pointerup", () => {
     playerSeekDragging = false;
     if (!playerEl) return;
-    const dur = Number.isFinite(playerEl.duration) ? playerEl.duration : 0;
+    const dur = getPlayerDuration();
     const max = Number(els.playerSeek.max || 1000);
     const v = Number(els.playerSeek.value || 0);
     if (dur > 0) playerEl.currentTime = (v / max) * dur;
   });
   els.playerSeek.addEventListener("input", () => {
     if (!playerSeekDragging || !playerEl) return;
-    const dur = Number.isFinite(playerEl.duration) ? playerEl.duration : 0;
+    const dur = getPlayerDuration();
     const max = Number(els.playerSeek.max || 1000);
     const v = Number(els.playerSeek.value || 0);
     if (els.playerTime && dur > 0) els.playerTime.textContent = `${formatTime((v / max) * dur)} / ${formatTime(dur)}`;

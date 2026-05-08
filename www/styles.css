@@ -2029,11 +2029,11 @@ textarea{
   clip:rect(0,0,0,0) !important;
   border:0 !important;
 }
-.card.wide[data-route="generate"] .inputPanel .lyricsBox textarea{
+.card.wide[data-route="generate"] .inputPanel .lyricsBoxMain textarea{
   border: 0;
   background: transparent;
   box-shadow: none;
-  padding: 12px 44px 12px 0;
+  padding: 12px;
   border-radius: 0;
 }
 .card.wide[data-route="generate"] .inputPanel--style input{
@@ -2047,29 +2047,30 @@ textarea{
   border: 0;
   background: transparent;
 }
-.card.wide[data-route="generate"] .inputPanel .lyricsBox .lyricsMagicBtn{
-  top: 12px;
-  right: 10px;
-}
-.card.wide[data-route="generate"] .inputPanel .lyricsBox::before,
-.card.wide[data-route="generate"] .inputPanel .lyricsBox::after{
+.card.wide[data-route="generate"] .inputPanel .lyricsBoxMain::before,
+.card.wide[data-route="generate"] .inputPanel .lyricsBoxMain::after{
   inset: 0;
   border-radius: 12px;
 }
-.card.wide[data-route="generate"] .inputPanel .lyricsBox textarea:focus,
+.card.wide[data-route="generate"] .inputPanel .lyricsBoxMain textarea:focus,
 .card.wide[data-route="generate"] .inputPanel--style input:focus{
   box-shadow: none;
 }
 .lyricsBox{
-  position: relative;
-  width: 100%;
-  border-radius: 14px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  position:relative;
+  width:100%;
   transition: box-shadow 240ms ease, filter 240ms ease;
 }
-.lyricsBox textarea{
-  padding-right: 84px;
+.lyricsBoxMain{
+  position:relative;
+  width:100%;
+  border-radius:14px;
+  transition: box-shadow 240ms ease, filter 240ms ease;
 }
-.lyricsBox::before{
+.lyricsBoxMain::before{
   content:"";
   position:absolute;
   inset:-2px;
@@ -2081,7 +2082,7 @@ textarea{
   transition: opacity 220ms ease;
   z-index: 0;
 }
-.lyricsBox::after{
+.lyricsBoxMain::after{
   content:"";
   position:absolute;
   inset:2px;
@@ -2094,15 +2095,28 @@ textarea{
   transition: opacity 220ms ease;
   z-index: 1;
 }
-.lyricsBox textarea,
-.lyricsMagicBtn{
-  position: relative;
-  z-index: 2;
+.lyricsBoxMain textarea{
+  position:relative;
+  z-index:2;
+  width:100%;
+  box-sizing:border-box;
+  padding:12px;
+  border-radius:12px;
+}
+.lyricsAssistBar{
+  display:flex;
+  justify-content:flex-end;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  position:relative;
+  padding:0 2px;
 }
 .lyricsMagicMenu{
   position:absolute;
   right:0;
-  top:14px;
+  bottom:calc(100% + 8px);
+  top:auto;
   z-index:5;
   display:flex;
   flex-direction:column;
@@ -2307,15 +2321,15 @@ body.generateLocked [data-route="generate"] button{
 .lyricsBox.generating{
   box-shadow: 0 0 0 1px rgba(124,92,255,0.28), 0 14px 36px rgba(14,18,30,0.42);
 }
-.lyricsBox.generating::before{
+.lyricsBox.generating .lyricsBoxMain::before{
   opacity:0.95;
   animation: lyricAura 2.6s ease-in-out infinite;
 }
-.lyricsBox.generating::after{
+.lyricsBox.generating .lyricsBoxMain::after{
   opacity:0.88;
   animation: lyricShimmer 2.8s linear infinite;
 }
-.lyricsBox.generating textarea{
+.lyricsBox.generating .lyricsBoxMain textarea{
   filter: saturate(1.02) brightness(0.98);
   color: rgba(241, 247, 255, 0.98);
   text-shadow: 0 0 12px rgba(124,92,255,0.18), 0 0 10px rgba(35,213,171,0.12);
@@ -2332,9 +2346,8 @@ body.generateLocked [data-route="generate"] button{
   100%{ background-position: 180% 0; }
 }
 .lyricsMagicBtn{
-  position:absolute;
-  top:10px;
-  right:10px;
+  position:relative;
+  flex-shrink:0;
   width:30px;
   height:30px;
   border-radius:999px;
@@ -2350,9 +2363,8 @@ body.generateLocked [data-route="generate"] button{
   z-index: 3;
 }
 .lyricsImageMoodBtn{
-  position:absolute;
-  top:12px;
-  right:46px;
+  position:relative;
+  flex-shrink:0;
   width:30px;
   height:30px;
   border-radius:999px;
@@ -2389,7 +2401,7 @@ body[data-route="generate"] .createSectionStack.focusInput .inputPanel.isFocusCa
     0 0 0 1px rgba(124,92,255,0.22) inset,
     0 20px 42px rgba(14,18,30,0.38);
 }
-.lyricsBox.wandGenerated textarea{
+.lyricsBox.wandGenerated .lyricsBoxMain textarea{
   color: var(--text);
   -webkit-text-fill-color: var(--text);
   background-image: none;
@@ -3552,7 +3564,7 @@ input[type="range"]::-moz-range-thumb{
   textarea{
     min-height: 124px;
   }
-  .card.wide[data-route="generate"] .inputPanel .lyricsBox textarea{
+  .card.wide[data-route="generate"] .inputPanel .lyricsBoxMain textarea{
     min-height: 104px;
     max-height: 260px;
     overflow-y: auto;

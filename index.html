@@ -173,13 +173,17 @@
               </label>
               <button id="btnVocalRefRec" class="ghost srOnly" type="button">Record voice</button>
               <div class="lyricsBox">
-                <textarea id="sunoPrompt" rows="4" placeholder="Write your lyrics here..."></textarea>
-                <button id="btnLyricsMagic" class="lyricsMagicBtn" type="button" title="AI lyrics assist">✦</button>
-                <button id="btnImageMood" class="lyricsImageMoodBtn" type="button" title="Inspire from image" aria-label="Inspire from image">
-                  <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
-                    <path fill="currentColor" d="M5 4.5A2.5 2.5 0 0 0 2.5 7v10A2.5 2.5 0 0 0 5 19.5h14a2.5 2.5 0 0 0 2.5-2.5V7A2.5 2.5 0 0 0 19 4.5H5Zm0 1.5h14c.55 0 1 .45 1 1v7.2l-3.33-3.32a1.8 1.8 0 0 0-2.54 0L10 15.01l-1.63-1.63a1.8 1.8 0 0 0-2.54 0L4 15.21V7c0-.55.45-1 1-1Zm12.5 2.2a1.7 1.7 0 1 0 0 3.4 1.7 1.7 0 0 0 0-3.4ZM7.1 14.44a.3.3 0 0 1 .43 0L10 16.9l5.19-5.18a.3.3 0 0 1 .42 0L20 16.1V17c0 .55-.45 1-1 1H5c-.55 0-1-.45-1-1v-.26l3.1-2.3Z"/>
-                  </svg>
-                </button>
+                <div class="lyricsBoxMain">
+                  <textarea id="sunoPrompt" rows="4" placeholder="Write your lyrics here..."></textarea>
+                </div>
+                <div class="lyricsAssistBar" role="toolbar" aria-label="Lyrics assist">
+                  <button id="btnLyricsMagic" class="lyricsMagicBtn" type="button" title="AI lyrics assist">✦</button>
+                  <button id="btnImageMood" class="lyricsImageMoodBtn" type="button" title="Inspire from image" aria-label="Inspire from image">
+                    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
+                      <path fill="currentColor" d="M5 4.5A2.5 2.5 0 0 0 2.5 7v10A2.5 2.5 0 0 0 5 19.5h14a2.5 2.5 0 0 0 2.5-2.5V7A2.5 2.5 0 0 0 19 4.5H5Zm0 1.5h14c.55 0 1 .45 1 1v7.2l-3.33-3.32a1.8 1.8 0 0 0-2.54 0L10 15.01l-1.63-1.63a1.8 1.8 0 0 0-2.54 0L4 15.21V7c0-.55.45-1 1-1Zm12.5 2.2a1.7 1.7 0 1 0 0 3.4 1.7 1.7 0 0 0 0-3.4ZM7.1 14.44a.3.3 0 0 1 .43 0L10 16.9l5.19-5.18a.3.3 0 0 1 .42 0L20 16.1V17c0 .55-.45 1-1 1H5c-.55 0-1-.45-1-1v-.26l3.1-2.3Z"/>
+                    </svg>
+                  </button>
+                </div>
               </div>
               <div class="row imageMoodRow">
                 <span id="imageMoodSummary" class="hint imageMoodSummary"></span>
@@ -1046,6 +1050,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260509w"></script>
+    <script type="module" src="./src/app.js?v=20260509x"></script>
   </body>
 </html>

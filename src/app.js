@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510r";
+const APP_BUILD = "20260510s";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -2481,7 +2481,18 @@ function renderProfileOwnStats() {
     uid ? String(p?.meta?.creatorUserId || "") === uid : String(p?.creator || "") === creator,
   );
   const totalLikes = items.reduce((sum, p) => sum + Number(p.likes || 0), 0);
-  if (els.profileOwnSongCount) els.profileOwnSongCount.textContent = items.length ? String(items.length) : "";
+  // Songs count chip (sits in the Songs header, Library-style). The renderer
+  // for the Songs list also keeps this in sync; this branch covers stat
+  // refreshes triggered without a full re-render.
+  if (els.profileOwnSongCount) {
+    if (items.length) {
+      els.profileOwnSongCount.textContent = `${items.length} ${items.length === 1 ? "song" : "songs"}`;
+      els.profileOwnSongCount.hidden = false;
+    } else {
+      els.profileOwnSongCount.textContent = "";
+      els.profileOwnSongCount.hidden = true;
+    }
+  }
   if (!items.length) {
     els.profileOwnStats.innerHTML = "";
     els.profileOwnStats.style.display = "none";
@@ -2630,20 +2641,60 @@ function renderProfileHubShared() {
     .filter((p) => (uid ? String(p?.meta?.creatorUserId || "") === uid : String(p?.creator || "") === creator))
     .slice(0, 30);
   renderProfileOwnStats();
+  // Mirror the Library count chip when there is something to count, hide it
+  // otherwise so the empty state owns the visual weight.
+  const countEl = document.getElementById("profileOwnSongCount");
+  if (countEl) {
+    if (items.length) {
+      countEl.textContent = `${items.length} ${items.length === 1 ? "song" : "songs"}`;
+      countEl.hidden = false;
+    } else {
+      countEl.textContent = "";
+      countEl.hidden = true;
+    }
+  }
   if (!items.length) {
-    els.profileHubSharedList.innerHTML = `<div class="profileOwnEmpty">No songs on Hub yet. Share from Library or Player.</div>`;
+    els.profileHubSharedList.innerHTML = `
+      <div class="emptyState">
+        <div class="emptyStateIcon" aria-hidden="true">♪</div>
+        <p class="emptyStateTitle">No songs on Hub yet</p>
+        <p class="emptyStateHint">Share a track from your Library or Player and it'll show up here for everyone who lands on your profile.</p>
+        <a href="#/library" class="emptyStateCta" data-route-link="library">Open Library</a>
+      </div>
+    `;
     return;
   }
-  els.profileHubSharedList.innerHTML = items.map((p) => `
-    <button type="button" class="profileOwnSong" data-profile-hub-open="${escapeHtml(String(p.id))}">
-      <img class="profileOwnSongCover" src="${escapeHtml(p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png")}" alt="" />
-      <div class="profileOwnSongMeta">
-        <div class="profileOwnSongTitle">${escapeHtml(String(p.title || "Untitled"))}</div>
-        <div class="profileOwnSongTiny">${escapeHtml(relativeTime(p.ts))} · ❤ ${Number(p.likes || 0)}</div>
-      </div>
-      <span class="profileOwnSongChev" aria-hidden="true">›</span>
-    </button>
-  `).join("");
+  // Reuse the Library row markup so the visual language stays consistent
+  // (cover · title · meta · ▶ badge on hover). Profile rows don't need a
+  // ⋯ menu — the click target is the whole row and it deep-links to the
+  // post in the Hub feed.
+  els.profileHubSharedList.innerHTML = `
+    <ul class="libraryRows" role="list">
+      ${items.map((p) => {
+        const safeTitle = escapeHtml(String(p.title || "Untitled"));
+        const art = String(p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png");
+        const dateLabel = relativeTime(p.ts);
+        const likes = Number(p.likes || 0);
+        const subBits = [];
+        if (dateLabel) subBits.push(`<span class="libRowDot">${escapeHtml(dateLabel)}</span>`);
+        if (likes > 0) subBits.push(`<span class="libRowChip libRowChipLikes">❤ ${likes}</span>`);
+        return `
+          <li class="libRow" data-profile-hub-row="${escapeHtml(String(p.id))}">
+            <button class="libRowMain" type="button" data-profile-hub-open="${escapeHtml(String(p.id))}" aria-label="Open ${safeTitle} on Hub">
+              <span class="libRowArt">
+                <img src="${escapeHtml(art)}" alt="" />
+                <span class="libRowArtBadge" aria-hidden="true">▶</span>
+              </span>
+              <span class="libRowInfo">
+                <span class="libRowTitle">${safeTitle}</span>
+                <span class="libRowSub">${subBits.join("")}</span>
+              </span>
+            </button>
+          </li>
+        `;
+      }).join("")}
+    </ul>
+  `;
   els.profileHubSharedList.querySelectorAll("[data-profile-hub-open]").forEach((b) => {
     b.addEventListener("click", () => {
       const sid = b.getAttribute("data-profile-hub-open");

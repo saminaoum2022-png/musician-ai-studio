@@ -657,80 +657,88 @@
           </div>
         </section>
 
-        <section class="card wide profileOwnCard" data-route="profile">
-          <div class="profileOwnHead">
-            <h2 class="profileOwnTitle">Profile</h2>
-            <div class="profileOwnToolbar">
-              <button type="button" id="btnProfileEdit" class="profileOwnBtnEdit" aria-label="Edit profile">Edit</button>
-              <button type="button" id="btnProfileCancel" class="profileOwnBtnCancel" style="display:none" aria-label="Cancel editing">Cancel</button>
-              <button type="button" id="btnProfileSave" class="primary profileOwnBtnSave" style="display:none" aria-label="Save profile">Save</button>
-            </div>
-          </div>
-
-          <div class="profileOwnBody">
-            <div class="profileOwnHero">
-              <div class="profileOwnAvatarWrap">
-                <img
-                  id="profilePreviewAvatar"
-                  class="profileOwnAvatar"
-                  src="./assets/nabadai-logo.png"
-                  alt="Your avatar"
-                />
-                <span id="profileAvatarEditHint" class="profileOwnAvatarHint" style="display:none">Photo</span>
+        <section class="wide profileSection" data-route="profile">
+          <!-- Hero card — keeps a focused container around just the user
+               info so identity has visual weight, while everything below
+               flows full-bleed like Library. -->
+          <div class="profileHeroCard">
+            <div class="profileOwnHead">
+              <h2 class="profileOwnTitle">Profile</h2>
+              <div class="profileOwnToolbar">
+                <button type="button" id="btnProfileEdit" class="profileOwnBtnEdit" aria-label="Edit profile">Edit</button>
+                <button type="button" id="btnProfileCancel" class="profileOwnBtnCancel" style="display:none" aria-label="Cancel editing">Cancel</button>
+                <button type="button" id="btnProfileSave" class="primary profileOwnBtnSave" style="display:none" aria-label="Save profile">Save</button>
               </div>
-              <div class="profileOwnMeta">
-                <div class="profilePreviewUserRow">
-                  <input
-                    id="profilePreviewUsernameInput"
-                    class="profileInlineInput profileInlineUsername"
-                    type="text"
-                    value="@guest"
-                    maxlength="24"
-                    disabled
-                    spellcheck="false"
-                    autocomplete="username"
-                    aria-label="Username"
+            </div>
+
+            <div class="profileOwnBody">
+              <div class="profileOwnHero">
+                <div class="profileOwnAvatarWrap">
+                  <img
+                    id="profilePreviewAvatar"
+                    class="profileOwnAvatar"
+                    src="./assets/nabadai-logo.png"
+                    alt="Your avatar"
                   />
-                  <span id="profilePreviewGenderIcon" class="profilePreviewGenderIcon" style="display:none"></span>
+                  <span id="profileAvatarEditHint" class="profileOwnAvatarHint" style="display:none">Photo</span>
                 </div>
-                <select id="profilePreviewTimbreInput" class="profileInlineSelect" disabled aria-label="Voice range">
-                  <option value="" selected>Voice: Not set</option>
-                  <option value="bass">Voice: Bass</option>
-                  <option value="baritone">Voice: Baritone</option>
-                  <option value="tenor">Voice: Tenor</option>
-                  <option value="alto">Voice: Alto</option>
-                  <option value="mezzo_soprano">Voice: Mezzo-Soprano</option>
-                  <option value="soprano">Voice: Soprano</option>
-                </select>
-                <div id="authLoggedInEmailInline" class="hint profileAccountEmailInline"></div>
+                <div class="profileOwnMeta">
+                  <div class="profilePreviewUserRow">
+                    <input
+                      id="profilePreviewUsernameInput"
+                      class="profileInlineInput profileInlineUsername"
+                      type="text"
+                      value="@guest"
+                      maxlength="24"
+                      disabled
+                      spellcheck="false"
+                      autocomplete="username"
+                      aria-label="Username"
+                    />
+                    <span id="profilePreviewGenderIcon" class="profilePreviewGenderIcon" style="display:none"></span>
+                  </div>
+                  <select id="profilePreviewTimbreInput" class="profileInlineSelect" disabled aria-label="Voice range">
+                    <option value="" selected>Voice: Not set</option>
+                    <option value="bass">Voice: Bass</option>
+                    <option value="baritone">Voice: Baritone</option>
+                    <option value="tenor">Voice: Tenor</option>
+                    <option value="alto">Voice: Alto</option>
+                    <option value="mezzo_soprano">Voice: Mezzo-Soprano</option>
+                    <option value="soprano">Voice: Soprano</option>
+                  </select>
+                  <div id="authLoggedInEmailInline" class="hint profileAccountEmailInline"></div>
+                </div>
               </div>
+
+              <textarea
+                id="profilePreviewBioInput"
+                class="profileInlineBio"
+                rows="3"
+                maxlength="120"
+                disabled
+                spellcheck="true"
+                aria-label="Bio"
+              >Add a short bio to introduce your music style.</textarea>
+
+              <div id="profilePreviewGenres" class="profilePreviewGenres" style="display:none"></div>
+
+              <div id="profileOwnStats" class="profileOwnStats" style="display:none" aria-live="polite"></div>
             </div>
-
-            <textarea
-              id="profilePreviewBioInput"
-              class="profileInlineBio"
-              rows="3"
-              maxlength="120"
-              disabled
-              spellcheck="true"
-              aria-label="Bio"
-            >Add a short bio to introduce your music style.</textarea>
-
-            <div id="profilePreviewGenres" class="profilePreviewGenres" style="display:none"></div>
-
-            <div id="profileOwnStats" class="profileOwnStats" style="display:none" aria-live="polite"></div>
           </div>
 
-          <div class="profileOwnSongs">
-            <div class="profileOwnSongsHead">
-              <span class="profileOwnSongsTitle">Songs</span>
-              <span id="profileOwnSongCount" class="profileOwnSongsCount"></span>
-            </div>
-            <div id="profileHubSharedList" class="profileHubSharedList"></div>
+          <!-- Songs — same Apple-Music-style row design as Library, no card chrome -->
+          <div class="profileSongsBlock">
+            <header class="libraryHeader profileSongsHeader">
+              <h2>Songs</h2>
+              <p class="libraryLead">Your shares on the Hub.</p>
+              <p id="profileOwnSongCount" class="libraryCount" hidden></p>
+            </header>
+            <div id="profileHubSharedList" class="libraryList profileHubSharedList"></div>
           </div>
 
-          <div class="profileOwnAccount">
-            <div class="profileOwnAccountTitle">Account</div>
+          <!-- Account — quiet, borderless block matching the rest of the page -->
+          <div class="profileAccountBlock">
+            <h3 class="profileAccountSectionTitle">Account</h3>
             <div id="authLoginControls" class="profileOwnAuthRow">
               <button id="btnAuthGoogle" class="ghost" type="button">Continue with Google</button>
             </div>
@@ -1175,6 +1183,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260510r"></script>
+    <script type="module" src="./src/app.js?v=20260510s"></script>
   </body>
 </html>

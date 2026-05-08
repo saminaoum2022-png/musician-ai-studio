@@ -1971,6 +1971,15 @@ textarea{
   gap: 14px;
   margin-bottom: 10px;
 }
+.card[data-route="generate"] #simpleBox > h2{
+  margin-bottom: 6px;
+}
+.card[data-route="generate"] .createPageLead{
+  margin-top: 0;
+  margin-bottom: 14px;
+  max-width: 42em;
+  line-height: 1.45;
+}
 .inputPanel{
   width:100%;
   padding: 11px 12px;

@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510i";
+const APP_BUILD = "20260510j";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -52,7 +52,6 @@ const els = {
   fineTuneDetails: document.getElementById("fineTuneDetails"),
   btnGenerateOrb: document.getElementById("btnGenerateOrb"),
   btnLyricsMagic: document.getElementById("btnLyricsMagic"),
-  btnImageMood: document.getElementById("btnImageMood"),
   imageMoodSummary: document.getElementById("imageMoodSummary"),
   imageMoodModal: document.getElementById("imageMoodModal"),
   btnCloseImageMood: document.getElementById("btnCloseImageMood"),
@@ -5312,9 +5311,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       closeMagicMenu();
     });
   }
-  if (els.btnImageMood) {
-    els.btnImageMood.addEventListener("click", openImageMoodModal);
-  }
   if (els.btnCloseImageMood) {
     els.btnCloseImageMood.addEventListener("click", closeImageMoodModal);
   }
@@ -8111,7 +8107,10 @@ if (createTabEls.hum) {
 const createPhotoCtaBtn = document.getElementById("createPhotoCta");
 if (createPhotoCtaBtn) {
   createPhotoCtaBtn.addEventListener("click", () => {
-    document.getElementById("btnImageMood")?.click();
+    const modal = document.getElementById("imageMoodModal");
+    if (!modal) return;
+    modal.style.display = "";
+    modal.setAttribute("aria-hidden", "false");
   });
 }
 

@@ -2137,23 +2137,75 @@ textarea{
 .vocalQuickRow{
   display:flex;
   gap:8px;
-  margin-top:8px;
+  margin-top:0;
 }
 .vocalRefDetails{
-  margin-top: 2px;
+  margin-top: 4px;
   border-top: 0;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0.008));
+  overflow: hidden;
+  transition: border-color 200ms ease, background 200ms ease;
+}
+.vocalRefDetails[open]{
+  border-color: rgba(124,92,255,0.32);
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.014));
 }
 .vocalRefDetails > summary{
-  font-size: 12px;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  font-size: 13px;
   font-weight: 700;
-  color: rgba(214,224,241,0.74);
+  letter-spacing: 0.01em;
+  color: rgba(225,232,245,0.92);
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.vocalRefDetails > summary::-webkit-details-marker{ display: none; }
+.vocalRefDetails > summary::marker{ content: ""; }
+.vocalRefDetails > summary::before{
+  content: "";
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 14px 14px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23bdc7dd' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='3' width='6' height='12' rx='3'/%3E%3Cpath d='M5 11a7 7 0 0 0 14 0'/%3E%3Cpath d='M12 18v3'/%3E%3C/svg%3E");
+  opacity: 0.85;
+}
+.vocalRefDetails > summary::after{
+  content: "";
+  margin-left: auto;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 12px 12px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23bdc7dd' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  opacity: 0.7;
+  transition: transform 220ms ease, opacity 200ms ease;
+}
+.vocalRefDetails[open] > summary::after{
+  transform: rotate(180deg);
+  opacity: 0.95;
+}
+.vocalRefDetails > summary:hover{
+  color: rgba(244,247,255,0.98);
 }
 .vocalRefCard{
-  margin-top: 8px;
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 12px;
-  background: linear-gradient(180deg, rgba(9,14,24,0.52), rgba(9,14,24,0.34));
-  padding: 10px;
+  margin: 0;
+  border: 0;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  border-radius: 0;
+  background: transparent;
+  padding: 12px;
 }
 .vocalModePill{
   margin-top: 8px;

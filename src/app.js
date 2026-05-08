@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509l";
+const APP_BUILD = "20260509m";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -6485,6 +6485,16 @@ function setHubSort(next) {
 }
 if (els.hubSortLatest) els.hubSortLatest.addEventListener("click", () => setHubSort("latest"));
 if (els.hubSortTrending) els.hubSortTrending.addEventListener("click", () => setHubSort("trending"));
+/** Scroll so the first Hub post is at the top of the viewport (respects
+ * `scroll-padding-top` on the hub route). Falls back to page top if empty. */
+function scrollHubFeedToFirstPost() {
+  const first = els.hubList?.querySelector?.(".hubRow");
+  if (first) {
+    first.scrollIntoView({ behavior: "smooth", block: "start" });
+  } else {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+}
 if (els.hubTabLink) {
   let hubTapAt = 0;
   let hubTapCount = 0;
@@ -6506,8 +6516,10 @@ if (els.hubTabLink) {
         setStatus("Refreshing Hub…");
         await refreshHubFromSupabase();
         setStatus("Hub refreshed.");
+        // After new data, land on the first row like a fresh open.
+        requestAnimationFrame(() => scrollHubFeedToFirstPost());
       } else {
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        scrollHubFeedToFirstPost();
       }
       hubTapCount = 0;
     }, 250);

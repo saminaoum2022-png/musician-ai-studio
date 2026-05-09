@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509credits";
+const APP_BUILD = "20260509persona";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -95,6 +95,8 @@ const els = {
   profileCreditsNote: document.getElementById("profileCreditsNote"),
   profileCreditsLink: document.getElementById("profileCreditsLink"),
   profileQuickLinkCreditsSub: document.getElementById("profileQuickLinkCreditsSub"),
+  profilePersonaRow: document.getElementById("profilePersonaRow"),
+  profilePersonaLabel: document.getElementById("profilePersonaLabel"),
   creditsBalanceBig: document.getElementById("creditsBalanceBig"),
   creditsHeroEmail: document.getElementById("creditsHeroEmail"),
   creditsRedeemInput: document.getElementById("creditsRedeemInput"),
@@ -1077,6 +1079,7 @@ function applyRoute() {
     void refreshAuthStateFromSupabase();
     setProfileEditing(false);
     void refreshMyCredits({ silent: true });
+    renderPersonaSelect();
   }
   if (wanted === "credits") {
     void refreshMyCredits({ silent: true });
@@ -1114,6 +1117,7 @@ function applyRoute() {
   }
   syncGenerateOrbVisibility();
   renderGenerateReadyDot();
+  updateProfilePersonaRow();
 }
 
 function updateBrandPulse() {
@@ -1136,8 +1140,10 @@ function resetAdvancedOptionsToDefaults() {
   if (els.sunoDialect) els.sunoDialect.value = "";
   if (els.sunoDialectHint) els.sunoDialectHint.value = "";
   if (els.sunoPersonaId) els.sunoPersonaId.value = "";
+  savePersonaSelection("");
   document.body.classList.remove("proMode");
   if (els.advancedSheet) els.advancedSheet.open = false;
+  updateProfilePersonaRow();
 }
 
 function resetCreateDraft() {
@@ -1518,10 +1524,46 @@ let libraryNowPlayingId = null;
 let lastGenerationMeta = null;
 const PROFILE_KEY = "mas:profile:v1";
 const PROFILE_PERSONAS_KEY = "mas:personas:v1";
+const PERSONA_SELECTED_KEY = "mas:personaSelected:v1";
+function personaSelectedStorageKey() {
+  const uid = authSession?.user?.id || activeProfile?.id || "guest";
+  return `${PERSONA_SELECTED_KEY}:${uid}`;
+}
+function loadPersonaSelection() {
+  try {
+    return localStorage.getItem(personaSelectedStorageKey()) || "";
+  } catch {
+    return "";
+  }
+}
+function savePersonaSelection(id) {
+  try {
+    const k = personaSelectedStorageKey();
+    if (id) localStorage.setItem(k, String(id));
+    else localStorage.removeItem(k);
+  } catch {}
+}
+function updateProfilePersonaRow() {
+  if (!els.profilePersonaRow || !els.profilePersonaLabel) return;
+  if (!authSession?.user?.id) {
+    els.profilePersonaRow.style.display = "none";
+    return;
+  }
+  const idFromSelect = String(els.sunoPersonaId?.value || "").trim();
+  const idSaved = loadPersonaSelection().trim();
+  const id = idFromSelect || idSaved;
+  const list = loadPersonas();
+  const hit = list.find((x) => String(x.personaId) === id);
+  if (!id || !hit) {
+    els.profilePersonaRow.style.display = "none";
+    return;
+  }
+  els.profilePersonaRow.style.display = "";
+  els.profilePersonaLabel.textContent = hit.label || id.slice(0, 12) + "…";
+}
 const AUTH_SESSION_KEY = "mas:supabase:session:v1";
 const AUTH_PKCE_KEY = "mas:supabase:pkce:v1";
 let activeProfile = { id: "guest", username: "guest", email: "" };
-authSession = null;
 let lastAuthDebug = "";
 function loadProfile() {
   try {
@@ -1691,7 +1733,7 @@ function getSupabaseAuthToken() {
  *
  *  Server side: api/credits/* and api/_lib/credits-auth.js.
  * ----------------------------------------------------------------- */
-const FULL_SONG_CREDIT_COST = 10;
+const FULL_SONG_CREDIT_COST = 12;
 const creditsState = {
   balance: 0,
   ledger: [],
@@ -1993,6 +2035,7 @@ function resetProfileUiToGuest() {
   renderProfileHubShared();
   setProfileEditing(false);
   renderLibrary();
+  if (els.profilePersonaRow) els.profilePersonaRow.style.display = "none";
 }
 async function supabaseSendOtp(email) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase config missing");
@@ -3032,7 +3075,12 @@ function savePersonas(items) {
 function renderPersonaSelect() {
   if (!els.sunoPersonaId) return;
   const list = loadPersonas();
-  const current = String(els.sunoPersonaId.value || "");
+  const saved = loadPersonaSelection().trim();
+  const domCurrent = String(els.sunoPersonaId.value || "").trim();
+  const current =
+    (domCurrent && list.some((x) => String(x.personaId) === domCurrent) && domCurrent) ||
+    (saved && list.some((x) => String(x.personaId) === saved) && saved) ||
+    "";
   const opts = ['<option value="">None (default voice)</option>']
     .concat(
       list.map(
@@ -3044,17 +3092,22 @@ function renderPersonaSelect() {
     )
     .join("");
   els.sunoPersonaId.innerHTML = opts;
-  if (current && list.some((x) => String(x.personaId) === current)) els.sunoPersonaId.value = current;
+  if (current) els.sunoPersonaId.value = current;
+  updateProfilePersonaRow();
 }
 function addPersona(personaId, label) {
+  const id = String(personaId || "").trim();
+  if (!id) return;
   const items = loadPersonas();
-  if (items.some((x) => String(x.personaId) === String(personaId))) return;
-  items.unshift({
-    personaId: String(personaId),
-    label: label || `Persona ${items.length + 1}`,
-    ts: Date.now(),
-  });
-  savePersonas(items.slice(0, 20));
+  if (!items.some((x) => String(x.personaId) === id)) {
+    items.unshift({
+      personaId: id,
+      label: label || `Persona ${items.length + 1}`,
+      ts: Date.now(),
+    });
+    savePersonas(items.slice(0, 20));
+  }
+  savePersonaSelection(id);
   renderPersonaSelect();
 }
 
@@ -3348,6 +3401,7 @@ function syncActiveProfileIdFromSession() {
     email: authSession.user.email || activeProfile.email || "",
   });
   invalidateLibraryMemCache();
+  renderPersonaSelect();
 }
 
 /** Where the Library JSON blob lives in localStorage. When signed in,
@@ -9784,6 +9838,12 @@ if (els.btnOpenAdvancedSheet && els.advancedSheet) {
     if (first) setTimeout(() => first.focus(), 120);
   });
 }
+if (els.sunoPersonaId) {
+  els.sunoPersonaId.addEventListener("change", () => {
+    savePersonaSelection(String(els.sunoPersonaId.value || ""));
+    updateProfilePersonaRow();
+  });
+}
 if (els.btnCreatePersona) {
   els.btnCreatePersona.addEventListener("click", async () => {
     if (!sunoTaskId) {
@@ -9799,7 +9859,13 @@ if (els.btnCreatePersona) {
         body: JSON.stringify({ taskId: sunoTaskId }),
       });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d?.error || "Persona creation failed");
+      if (!r.ok) {
+        const det = d?.lastError || d?.details;
+        const extra = det
+          ? ` — ${typeof det === "string" ? det : JSON.stringify(det).slice(0, 200)}`
+          : "";
+        throw new Error((d?.error || "Persona creation failed") + extra);
+      }
       const personaId = String(d?.personaId || "").trim();
       if (!personaId) throw new Error("Persona created but ID was missing.");
       addPersona(personaId, `${lastSunoTitle || "Generated"} persona`);
@@ -10165,6 +10231,7 @@ void (async () => {
     // resolves. On a PWA cold start this turned a "Library is stuck"
     // wait into "Library populates a beat after the tab opens".
     void ensureUserLibraryHydrated();
+    renderPersonaSelect();
   } else {
     // Never leak previous user visuals when session is not valid.
     resetProfileUiToGuest();

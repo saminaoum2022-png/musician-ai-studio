@@ -5085,6 +5085,57 @@ input::placeholder, textarea::placeholder{
   flex: 0 0 auto;
 }
 
+.profilePersonaRow{
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(124,92,255,0.28);
+  background: linear-gradient(135deg, rgba(124,92,255,0.08), rgba(35,213,171,0.05));
+}
+.profilePersonaIco{
+  font-size: 22px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.profilePersonaBody{
+  flex: 1;
+  min-width: 0;
+}
+.profilePersonaTitle{
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(232,238,247,0.55);
+  margin-bottom: 4px;
+}
+.profilePersonaLine strong{
+  font-size: 15px;
+  font-weight: 800;
+  color: rgba(232,238,247,0.96);
+}
+.profilePersonaHint{
+  font-size: 12px;
+  color: rgba(232,238,247,0.52);
+  margin-top: 6px;
+  line-height: 1.35;
+}
+.profilePersonaLink{
+  flex: 0 0 auto;
+  align-self: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(124,92,255,0.95);
+  text-decoration: none;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(124,92,255,0.35);
+  background: rgba(124,92,255,0.12);
+}
+.profilePersonaLink:active{ transform: scale(0.97); }
+
 .creditsPage{
   max-width: 720px;
   margin: 0 auto;
@@ -5181,13 +5232,13 @@ input::placeholder, textarea::placeholder{
 }
 .creditsRedeemInput{
   flex: 1;
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 14px;
   border-radius: 12px;
   border: 1px solid rgba(255,255,255,0.14);
   background: rgba(8,12,20,0.46);
   color: #fff;
-  font-size: 14px;
+  font-size: 16px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }

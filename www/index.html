@@ -828,6 +828,20 @@
             </a>
           </div>
 
+          <div id="profilePersonaRow" class="profilePersonaRow" style="display:none" aria-live="polite">
+            <span class="profilePersonaIco" aria-hidden="true">🎙️</span>
+            <div class="profilePersonaBody">
+              <div class="profilePersonaTitle">Voice persona for new songs</div>
+              <div class="profilePersonaLine">
+                <strong id="profilePersonaLabel">—</strong>
+              </div>
+              <div class="profilePersonaHint">
+                Create → <strong>Options</strong> → Voice → choose persona or create from last song.
+              </div>
+            </div>
+            <a href="#/generate" class="profilePersonaLink">Open Create</a>
+          </div>
+
           <!-- Songs — same Apple-Music-style row design as Library, no card chrome -->
           <div class="profileSongsBlock">
             <header class="libraryHeader profileSongsHeader">
@@ -1370,6 +1384,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260509credits"></script>
+    <script type="module" src="./src/app.js?v=20260509persona"></script>
   </body>
 </html>

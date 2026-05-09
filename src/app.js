@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510ah";
+const APP_BUILD = "20260510ai";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -3911,7 +3911,18 @@ function renderLibrary() {
           lines.push(`auth.email: ${email || "(none)"}`);
           lines.push(`auth.user.id: ${uid || "(none)"}`);
           lines.push(`token length: ${token ? token.length : 0}`);
-          // Probe 1: count without filter (SELECT-RLS view of user_songs)
+          // Local-state probes: these reveal mismatches between
+          // activeProfile / authSession / what the renderer actually
+          // reads from localStorage.
+          lines.push(`activeProfile.id: ${String(activeProfile?.id || "")}`);
+          const libKey = profileLibraryKey();
+          lines.push(`profileLibraryKey: ${libKey}`);
+          let rawLen = 0;
+          try { rawLen = (localStorage.getItem(libKey) || "").length; } catch {}
+          lines.push(`local raw bytes @ key: ${rawLen}`);
+          lines.push(`loadLibrary().length: ${loadLibrary().length}`);
+          lines.push(`hydrate inFlight=${_libraryHydrateInFlight} completed=${_libraryHydrateCompleted}`);
+          // Cloud probes (token + RLS round-trip).
           try {
             const r1 = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?select=id&limit=1`, {
               headers: {
@@ -3926,7 +3937,6 @@ function renderLibrary() {
           } catch (e) {
             lines.push(`probe.unfiltered ERR: ${e?.message || String(e)}`);
           }
-          // Probe 2: filtered by user_id with same token
           try {
             const r2 = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${encodeURIComponent(uid)}&select=id,title&limit=3`, {
               headers: {
@@ -3935,11 +3945,10 @@ function renderLibrary() {
               },
             });
             const t2 = await r2.text().catch(() => "");
-            lines.push(`probe.filtered: HTTP ${r2.status} body=${t2.slice(0, 240)}`);
+            lines.push(`probe.filtered: HTTP ${r2.status} body=${t2.slice(0, 200)}`);
           } catch (e) {
             lines.push(`probe.filtered ERR: ${e?.message || String(e)}`);
           }
-          // Probe 3: confirm token still resolves the user via /auth/v1/user
           try {
             const r3 = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
               headers: {
@@ -3952,6 +3961,37 @@ function renderLibrary() {
             lines.push(`probe.user: HTTP ${r3.status} id=${parsed?.id || "?"} email=${parsed?.email || "?"}`);
           } catch (e) {
             lines.push(`probe.user ERR: ${e?.message || String(e)}`);
+          }
+          // Force a fresh hydrate cycle and report what came back.
+          // The previous flags are reset so the call isn't short-
+          // circuited by "already in flight" / "already completed".
+          lines.push("--- forced hydrate ---");
+          _libraryHydrateInFlight = false;
+          _libraryHydrateCompleted = false;
+          _libraryReconcileLastAt = 0;
+          try {
+            const beforeLen = loadLibrary().length;
+            // Time the actual `supabaseLoadUserSongs` call we use
+            // inside hydrate, with the exact same params.
+            const t0 = performance.now();
+            const cloudSongs = await supabaseLoadUserSongs();
+            const dt = Math.round(performance.now() - t0);
+            lines.push(`supabaseLoadUserSongs: ${cloudSongs.length} rows in ${dt}ms (status=${_lastUserSongsLoadStatus})`);
+            if (cloudSongs.length) {
+              const sample = cloudSongs[0];
+              lines.push(`first row: title="${String(sample?.title || "").slice(0, 40)}" url=${(sample?.url || "").slice(0, 60)}`);
+            }
+            await ensureUserLibraryHydrated();
+            const afterLen = loadLibrary().length;
+            lines.push(`loadLibrary() before=${beforeLen} after=${afterLen}`);
+            lines.push(`activeProfile.id (post-hydrate): ${String(activeProfile?.id || "")}`);
+            lines.push(`profileLibraryKey (post-hydrate): ${profileLibraryKey()}`);
+            if (afterLen > 0) {
+              lines.push("→ hydrate succeeded; tap Library tab again to refresh the view.");
+              try { renderLibrary(); } catch {}
+            }
+          } catch (e) {
+            lines.push(`forced hydrate ERR: ${e?.message || String(e)}`);
           }
           dbgOut.textContent = lines.join("\n");
         });

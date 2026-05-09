@@ -1872,16 +1872,28 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   font-weight: 700;
 }
 /*
- * Hub: scroll-snap was removed in 20260509hubcalm2. Even at `proximity`
- * iOS would pull the viewport toward the next card after every short
- * gesture, which felt like the page was scrolling itself. Free-scroll is
- * the default; audio autoplay (track-follows-centered-post) is handled
- * entirely in JS now, so we don't need CSS snapping to drive it.
- * `scroll-padding-top` is kept for any programmatic scrollIntoView calls.
+ * Hub: bring back per-row scroll-snap so each swipe lands on exactly one
+ * post (TikTok-style). Without this autoplay was unreliable — the user
+ * could scroll past two cards before the 280ms tail timer settled, the
+ * previously-playing song kept playing, and the new card just glowed.
+ * `mandatory` is intentional: we want strict 1-post-per-scroll. The
+ * `body.hubJumpingToTop` override below disables snap during the
+ * "jump to top of feed" smooth scroll so iOS doesn't pull us back.
  */
 html:has(body[data-route="hub"]),
 body[data-route="hub"]{
+  scroll-snap-type: y mandatory;
   scroll-padding-top: 80px;
+}
+body[data-route="hub"] .hubRow{
+  scroll-snap-align: center;
+}
+html:has(body.hubJumpingToTop),
+body.hubJumpingToTop{
+  scroll-snap-type: none !important;
+}
+body.hubJumpingToTop .hubRow{
+  scroll-snap-align: none !important;
 }
 [data-route="hub"] .trackName{
   font-size:15px;

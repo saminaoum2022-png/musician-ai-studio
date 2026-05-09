@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509hubcalm2";
+const APP_BUILD = "20260509hubsnap";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1091,15 +1091,15 @@ function applyRoute() {
     renderHubDots();
     renderHubUpdatedAt();
     updateHubAudioHint();
-    // Paint synchronously from the local feed cache so the Hub never
-    // looks blank on route entry. Cloud refresh below repaints once the
-    // merged set lands. Same pattern as Library: cache-first, network
-    // catches up.
     try { renderHub(); } catch {}
-    // Fire focus once on the next frame so the closest-to-center card
-    // already shows the lift / hero title before any scroll event.
     requestAnimationFrame(() => updateHubFocusedRow());
-    setTimeout(() => scheduleHubViewportAutoplay(), 60);
+    // Kick autoplay immediately on entry so the first centered post
+    // plays without the user having to scroll. Two attempts: an instant
+    // try (covers the case where the click handler already unlocked
+    // audio for us) and a short follow-up so we win even if the layout
+    // hasn't settled yet.
+    setTimeout(() => flushHubViewportAutoplay(), 0);
+    setTimeout(() => flushHubViewportAutoplay(), 220);
     // Always trigger a Supabase refresh on entering Hub. Boot already does
     // this once, but a cold visitor landing directly on `#/hub?post=ID`
     // (from a shared link) may render before boot's refresh resolves —
@@ -9592,7 +9592,26 @@ if (els.hubTabLink) {
   let hubSingleTimer = null;
   els.hubTabLink.addEventListener("click", (e) => {
     const onHub = (document.body.getAttribute("data-route") || "") === "hub";
-    if (!onHub) return;
+    // Tapping the Hub tab is a real user gesture — even when navigating
+    // *into* Hub from another tab. Use it to satisfy iOS Safari's
+    // "audio requires gesture" rule so the very first post on the feed
+    // can autoplay on entry, instead of forcing the user to tap ▶ first.
+    if (!onHub) {
+      try {
+        setHubAudioUnlocked();
+        ensureHubAudio();
+        // A silent play()/pause() inside the click handler primes the
+        // shared audio element. Subsequent programmatic play() calls
+        // inside `tryHubViewportAutoplay` will then be allowed.
+        if (hubAudio) {
+          hubAudio.muted = false;
+          const p = hubAudio.play();
+          if (p && typeof p.catch === "function") p.catch(() => {});
+          try { hubAudio.pause(); } catch {}
+        }
+      } catch {}
+      return;
+    }
     e.preventDefault();
     try { stopHubPlayback(); } catch {}
     scrollHubFeedToTop();
@@ -9609,7 +9628,6 @@ if (els.hubTabLink) {
         setStatus("Refreshing Hub…");
         await refreshHubFromSupabase();
         setStatus("Hub refreshed.");
-        // After refresh, the feed re-rendered — re-pin to the top.
         requestAnimationFrame(() => scrollHubFeedToTop());
       }
       hubTapCount = 0;

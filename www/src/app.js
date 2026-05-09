@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509persona3";
+const APP_BUILD = "20260509libmenu";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -2672,10 +2672,10 @@ async function supabasePatchUserSong(track, patch) {
 async function supabaseDeleteUserSong(track) {
   const token = getSupabaseAuthToken();
   if (!token || !authSession?.user?.id) return;
-  const title = encodeURIComponent(String(track?.title || ""));
-  const songUrl = encodeURIComponent(String(track?.url || ""));
-  if (!title || !songUrl) return;
-  await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${encodeURIComponent(authSession.user.id)}&title=eq.${title}&song_url=eq.${songUrl}`, {
+  const songUrl = encodeURIComponent(String(track?.url || "").trim());
+  const kind = encodeURIComponent(String(track?.kind || "full"));
+  if (!String(track?.url || "").trim()) return;
+  await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${encodeURIComponent(authSession.user.id)}&song_url=eq.${songUrl}&kind=eq.${kind}`, {
     method: "DELETE",
     headers: {
       apikey: SUPABASE_ANON_KEY,
@@ -2726,16 +2726,52 @@ async function supabasePatchHub(id, patch) {
   return await r.json().catch(() => []);
 }
 async function supabaseDeleteHub(id) {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !id) return null;
+  const token = getSupabaseAuthToken();
+  const headers = {
+    apikey: SUPABASE_ANON_KEY,
+    Prefer: "return=minimal",
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
   const r = await fetch(`${SUPABASE_URL}/rest/v1/hub_posts?id=eq.${encodeURIComponent(id)}`, {
     method: "DELETE",
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Prefer: "return=representation",
-    },
+    headers,
   });
   if (!r.ok) throw new Error("supabase delete failed");
   return await r.json().catch(() => []);
+}
+
+/** Supabase/Postgres UUID v4 (matches hub_posts.id after cloud insert). */
+function isHubCloudUuid(id) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(id || ""));
+}
+
+/** When the user deletes a library song, drop matching Hub posts they shared (same audio URL + creator) locally and in hub_posts. */
+function removeHubPostsLinkedToLibraryTrack(track) {
+  const songUrl = String(track?.url || "").trim();
+  if (!songUrl) return;
+  const myCreator = String(activeProfile.username || "guest").trim();
+  const feed = loadHubFeed();
+  const matches = feed.filter((p) => {
+    const sameUrl = String(p?.url || "").trim() === songUrl;
+    const mine = String(p?.creator || "").trim() === myCreator;
+    return sameUrl && mine;
+  });
+  if (!matches.length) return;
+  const dropIds = new Set(matches.map((p) => String(p.id)));
+  const next = feed.filter((p) => !dropIds.has(String(p.id)));
+  saveHubFeed(next);
+  for (const post of matches) {
+    const hid = String(post?.id || "");
+    if (isHubCloudUuid(hid)) {
+      void supabaseDeleteHub(hid).catch(() => {});
+    }
+  }
+  try {
+    if ((document.body.getAttribute("data-route") || "") === "hub") renderHub();
+    renderHubDots();
+    renderProfileHubShared();
+  } catch {}
 }
 function loadHubFeed() {
   return Array.isArray(hubFeedMemory) ? hubFeedMemory : [];
@@ -4346,7 +4382,10 @@ function removeFromLibrary(id) {
   const items = prev.filter((x) => x.id !== id);
   saveLibrary(items);
   renderLibrary();
-  if (removed) void supabaseDeleteUserSong(removed);
+  if (removed) {
+    void supabaseDeleteUserSong(removed);
+    removeHubPostsLinkedToLibraryTrack(removed);
+  }
 }
 async function downloadLibraryVideoTrack(track) {
   const url = String(track?.url || "").trim();
@@ -4416,7 +4455,9 @@ async function downloadLibraryVideoTrack(track) {
   dl.remove();
   setTimeout(() => URL.revokeObjectURL(dl.href), 4000);
 }
-async function pollLibraryStemsUntilDone(taskId, kind) {
+async function pollLibraryStemsUntilDone(taskId, kind, opts = {}) {
+  const sourceTitle = String(opts.sourceTitle || "").trim();
+  const sourceArtUrl = String(opts.sourceArtUrl || "").trim();
   let tries = 0;
   const maxTries = kind === "multi" ? 80 : 60;
   const delayMs = kind === "multi" ? 5000 : 4500;
@@ -4424,7 +4465,7 @@ async function pollLibraryStemsUntilDone(taskId, kind) {
     tries += 1;
     await new Promise((r) => setTimeout(r, delayMs));
     try {
-      const r = await fetch(`/api/suno/stems_status?taskId=${encodeURIComponent(taskId)}`);
+      const r = await fetch(apiUrl(`/api/suno/stems_status?taskId=${encodeURIComponent(taskId)}`));
       const data = await r.json().catch(() => ({}));
       if (!r.ok) continue;
       const flag =
@@ -4434,37 +4475,53 @@ async function pollLibraryStemsUntilDone(taskId, kind) {
         data?.status ||
         "";
       const resp = data?.data?.response || data?.response || data || {};
-      if (String(flag).toUpperCase() === "SUCCESS") {
-        if (kind === "multi") {
-          printSunoStems(resp);
-          if (els.btnMixerLoad) els.btnMixerLoad.disabled = false;
-          setStatus("Multi-stems are ready. Load stems into mixer.");
-        } else {
-          lastSunoVocalUrl = resp.vocalUrl || "";
-          lastSunoInstUrl = resp.instrumentalUrl || "";
-          lastSunoInstProxyUrl = lastSunoInstUrl ? toAudioProxyUrl(lastSunoInstUrl) : "";
-          setLink(els.sunoVocalLink, lastSunoVocalUrl || null);
-          setLink(els.sunoInstLink, lastSunoInstProxyUrl || lastSunoInstUrl || null);
-          if (els.btnLoadInstrumental) els.btnLoadInstrumental.disabled = !lastSunoInstUrl;
-          if (els.btnPlayInstrumental) els.btnPlayInstrumental.disabled = !lastSunoInstUrl;
-          setStatus("Instrumental version is ready.");
-          if (lastSunoInstUrl) {
-            addToLibrary({
-              title: `${lastSunoTitle || "Generated song"} • Instrumental`,
-              artUrl: lastSunoArtUrl || "",
-              url: lastSunoInstProxyUrl || lastSunoInstUrl,
-              kind: "instrumental",
-            });
-          }
+      const vocalUrl =
+        deepFindFirstStringByKeys(resp, ["vocalUrl", "vocal_url"]) ||
+        deepFindFirstStringByKeys(data, ["vocalUrl", "vocal_url"]);
+      const instrumentalUrl =
+        deepFindFirstStringByKeys(resp, ["instrumentalUrl", "instrumental_url", "accompanimentUrl"]) ||
+        deepFindFirstStringByKeys(data, ["instrumentalUrl", "instrumental_url", "accompanimentUrl"]);
+      const doneByUrls = Boolean(vocalUrl || instrumentalUrl);
+      const success = String(flag).toUpperCase() === "SUCCESS" || doneByUrls;
+      if (!success) {
+        if (String(flag).toUpperCase() === "FAILED") {
+          const reason =
+            data?.data?.message ||
+            data?.message ||
+            data?.error ||
+            `${kind === "multi" ? "Multi-stems" : "Instrumental"} failed.`;
+          setStatus(reason);
+          setLoading(false);
+          return;
         }
-        setLoading(false);
-        return;
+        continue;
       }
-      if (String(flag).toUpperCase() === "FAILED") {
-        setStatus(`${kind === "multi" ? "Multi-stems" : "Instrumental"} failed.`);
-        setLoading(false);
-        return;
+      if (kind === "multi") {
+        printSunoStems(resp);
+        if (els.btnMixerLoad) els.btnMixerLoad.disabled = false;
+        setStatus("Multi-stems are ready. Load stems into mixer.");
+      } else {
+        lastSunoVocalUrl = vocalUrl || "";
+        lastSunoInstUrl = instrumentalUrl || "";
+        lastSunoInstProxyUrl = lastSunoInstUrl ? toAudioProxyUrl(lastSunoInstUrl) : "";
+        setLink(els.sunoVocalLink, lastSunoVocalUrl || null);
+        setLink(els.sunoInstLink, lastSunoInstProxyUrl || lastSunoInstUrl || null);
+        if (els.btnLoadInstrumental) els.btnLoadInstrumental.disabled = !lastSunoInstUrl;
+        if (els.btnPlayInstrumental) els.btnPlayInstrumental.disabled = !lastSunoInstUrl;
+        setStatus("Instrumental version is ready.");
+        const titleBase = sourceTitle || lastSunoTitle || "Generated song";
+        const artBase = sourceArtUrl || lastSunoArtUrl || "";
+        if (lastSunoInstUrl) {
+          addToLibrary({
+            title: `${titleBase} • Instrumental`,
+            artUrl: artBase,
+            url: lastSunoInstProxyUrl || lastSunoInstUrl,
+            kind: "instrumental",
+          });
+        }
       }
+      setLoading(false);
+      return;
     } catch {}
   }
   setStatus(`${kind === "multi" ? "Multi-stems" : "Instrumental"} is delayed. Please try again.`);
@@ -4528,8 +4585,8 @@ async function backfillLibraryThumbsLazy() {
 let _libraryOpenMenuId = "";
 
 /** Build the per-row "more options" menu HTML on demand. We don't ship
- *  these 7 buttons in the initial render anymore — at 24 rows that was
- *  168 hidden DOM nodes that nobody saw until they tapped ⋯, and they
+ *  these buttons in the initial render anymore — at 24 rows that was
+ *  many hidden DOM nodes that nobody saw until they tapped ⋯, and they
  *  were the dominant cost of `renderLibrary()` after pagination
  *  trimmed the row count. The lazy build keeps the closed-state Library
  *  list as small as Hub's.
@@ -4549,7 +4606,6 @@ function buildLibMenuHtml(track) {
       ${personaEligible ? `<button class="ghost" data-lib-persona="${id}">Save voice as persona</button>` : ""}
       <button class="ghost" data-lib-details="${id}">Song details</button>
       ${isInstrumental ? "" : `<button class="ghost" data-lib-inst="${id}">Get instrumental</button>`}
-      ${isInstrumental ? "" : `<button class="ghost" data-lib-stems="${id}">Get stems</button>`}
       <button class="ghost libRowDelete" data-lib-del="${id}">Delete</button>
     </div>
   `;
@@ -4614,8 +4670,25 @@ function bindLibraryDelegatedListeners() {
       }
       const del = target.closest("[data-lib-del]");
       if (del) {
-        removeFromLibrary(del.getAttribute("data-lib-del"));
+        const delId = del.getAttribute("data-lib-del");
+        const t = loadLibrary().find((x) => x.id === delId);
+        const title = String(t?.title || "this song").trim() || "this song";
+        const hubHint =
+          t && loadHubFeed().some(
+            (p) =>
+              String(p?.url || "").trim() === String(t?.url || "").trim() &&
+              String(p?.creator || "").trim() === String(activeProfile.username || "guest").trim()
+          )
+            ? " This also removes your Hub post for this song."
+            : "";
+        const ok = window.confirm(`Remove "${title}" from your Library?${hubHint}`);
+        if (!ok) {
+          closeLibraryMenu();
+          return;
+        }
+        removeFromLibrary(delId);
         closeLibraryMenu();
+        setStatus("Song removed from Library.");
         return;
       }
       const det = target.closest("[data-lib-details]");
@@ -4702,7 +4775,10 @@ function bindLibraryDelegatedListeners() {
             sunoStemsTaskId = d?.data?.taskId || d?.data?.task_id || d?.taskId || null;
             if (!sunoStemsTaskId) throw new Error("Missing stems task id");
             setStatus("Instrumental requested from library song. Processing now…");
-            void pollLibraryStemsUntilDone(sunoStemsTaskId, "inst");
+            void pollLibraryStemsUntilDone(sunoStemsTaskId, "inst", {
+              sourceTitle: t.title,
+              sourceArtUrl: t.artUrl || (t.meta && t.meta.imageUrl) || "",
+            });
           } catch (err) {
             setStatus(`Library instrumental failed: ${err?.message || String(err)}`);
             setLoading(false);
@@ -4711,37 +4787,9 @@ function bindLibraryDelegatedListeners() {
         closeLibraryMenu();
         return;
       }
-      const stems = target.closest("[data-lib-stems]");
-      if (stems) {
-        const ok = window.confirm("Get stems may consume around 50 credits. Do you want to continue?");
-        if (!ok) { closeLibraryMenu(); return; }
-        const id = stems.getAttribute("data-lib-stems");
-        const t = loadLibrary().find((x) => x.id === id);
-        if (!t?.taskId || !t?.audioId) {
-          setStatus("This song is missing generation ids for stems request.");
-        } else {
-          try {
-            setStatus("Getting multi-stems for selected song…");
-            setLoading(true, { title: "Extracting multi-stems…", sub: "Processing selected library song." });
-            const r = await fetch(apiUrl("/api/suno/stems"), {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ taskId: t.taskId, audioId: t.audioId, type: "split_stem" }),
-            });
-            const d = await r.json().catch(() => ({}));
-            if (!r.ok) throw new Error(d?.error || "Multi-stems request failed");
-            sunoMultiStemsTaskId = d?.data?.taskId || d?.data?.task_id || d?.taskId || null;
-            if (!sunoMultiStemsTaskId) throw new Error("Missing multi-stems task id");
-            setStatus("Multi-stems requested from library song. Processing now…");
-            void pollLibraryStemsUntilDone(sunoMultiStemsTaskId, "multi");
-          } catch (err) {
-            setStatus(`Library multi-stems failed: ${err?.message || String(err)}`);
-            setLoading(false);
-          }
-        }
-        closeLibraryMenu();
-        return;
-      }
+      // "Get stems" was removed from the Library ⋯ menu (coming in a later
+      // update). Stems are still available from the Studio / Generate page.
+      // Intentionally no [data-lib-stems] handler here.
       // Click landed inside the menu but not on an action — leave open.
       return;
     }
@@ -4942,6 +4990,10 @@ function syncLibraryStorageBanner() {
 
 function renderLibrary() {
   if (!els.libraryList) return;
+  // Bind delegated clicks once the list container exists — including empty /
+  // loading states — otherwise the first time the user sees rows, none of the
+  // ⋯ menu actions (share, delete, instrumental, …) fire.
+  bindLibraryDelegatedListeners();
   // Re-rendering blows away the lazy-built menu DOM (it's not in the
   // HTML template), so clear the open-id tracker too. Otherwise the
   // first ⋯ tap after a re-render would think the menu is open and
@@ -5142,11 +5194,9 @@ function renderLibrary() {
     io.observe(libSentinel);
   }
   // All row interactions are dispatched via one delegated listener
-  // installed below (`bindLibraryDelegatedListeners`). Doing it that way
   // means each `renderLibrary()` is just `innerHTML` + the load-more
-  // setup above — no per-row `addEventListener` calls. With 24 visible
-  // rows that's 200+ fewer listeners attached on every render.
-  bindLibraryDelegatedListeners();
+  // setup above — no per-row `addEventListener` calls. Delegation is
+  // attached once at the top of this function via `bindLibraryDelegatedListeners`.
   // Fire-and-forget thumb backfill once the list is in the DOM. Wraps in
   // requestIdleCallback when available so it never competes with the
   // initial paint or a play tap.
@@ -8041,7 +8091,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     stemsPollTimer = setInterval(async () => {
       tries += 1;
       try {
-        const r = await fetch(`/api/suno/stems_status?taskId=${encodeURIComponent(sunoStemsTaskId)}`);
+        const r = await fetch(apiUrl(`/api/suno/stems_status?taskId=${encodeURIComponent(sunoStemsTaskId)}`));
         const data = await r.json().catch(() => ({}));
         printSunoStems({ poll: "instrumental", taskId: sunoStemsTaskId, tries, data });
         if (!r.ok) return;
@@ -8107,7 +8157,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     multiStemsPollTimer = setInterval(async () => {
       tries += 1;
       try {
-        const r = await fetch(`/api/suno/stems_status?taskId=${encodeURIComponent(sunoMultiStemsTaskId)}`);
+        const r = await fetch(apiUrl(`/api/suno/stems_status?taskId=${encodeURIComponent(sunoMultiStemsTaskId)}`));
         const data = await r.json().catch(() => ({}));
         printSunoStems({ poll: "multi", taskId: sunoMultiStemsTaskId, tries, data });
         if (!r.ok) return;

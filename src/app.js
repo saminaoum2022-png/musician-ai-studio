@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510am";
+const APP_BUILD = "20260510an";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -3124,35 +3124,132 @@ function loadAllLocalSongsDeduped() {
   return merged.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
 }
 let _lastLibraryPersistError = "";
+let _lastLibraryPersistedCount = 0;
+
+/** Strip every data: URL out of a track row before localStorage. iOS
+ *  PWA mobile quota historically caps around ~5 MB per origin; a
+ *  single base64 cover is 200–500 KB, so 100 rows of "small" UI data
+ *  with covers easily blows past it. The cloud row we just fetched
+ *  doesn't carry data: URLs anyway — only stale local rows do. */
+function slimTrackForStorage(t) {
+  if (!t || typeof t !== "object") return t;
+  const out = { ...t };
+  const art = String(out.artUrl || "");
+  if (art.startsWith("data:")) out.artUrl = "";
+  if (out.meta && typeof out.meta === "object") {
+    const meta = { ...out.meta };
+    if (typeof meta.imageUrl === "string" && meta.imageUrl.startsWith("data:")) delete meta.imageUrl;
+    if (typeof meta.imageThumb === "string" && meta.imageThumb.startsWith("data:")) delete meta.imageThumb;
+    out.meta = meta;
+  }
+  return out;
+}
+
+function slimLibraryForStorage(items) {
+  return (Array.isArray(items) ? items : []).map(slimTrackForStorage);
+}
+
+/** Clear the largest non-essential localStorage entries to make room
+ *  for the Library JSON. We deliberately do NOT touch the active
+ *  Library key (cloud refill comes next), the auth session, or the
+ *  user's profile. Hub feed cache and stale per-profile library blobs
+ *  are the typical culprits — they can hold base64 covers from older
+ *  versions of the app. */
+function freeUpLocalStorage() {
+  const activeLibKey = getLibraryStorageKey();
+  const keepKeys = new Set([
+    activeLibKey,
+    "mas:auth-session:v1",
+    "mas:profile:v1",
+    "mas:device-id:v1",
+    "mas:public-config:v1",
+  ]);
+  const dropPrefixes = [
+    "mas:hub:",
+    "mas:hub-seen",
+    "mas:credits-history",
+    "mas:library:v1:guest",
+    "mas:library:v1:", // clears all per-profile blobs except the active one (filtered below)
+    "mas:library:",
+    "mas:cache:",
+  ];
+  const toDelete = [];
+  try {
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const k = String(localStorage.key(i) || "");
+      if (keepKeys.has(k)) continue;
+      const shouldDrop =
+        dropPrefixes.some((p) => k.startsWith(p)) ||
+        /image|cover|cache|blob/i.test(k);
+      if (shouldDrop) toDelete.push(k);
+    }
+  } catch {}
+  for (const k of toDelete) {
+    try { localStorage.removeItem(k); } catch {}
+  }
+  // Make sure the in-memory Hub list resets so it re-fetches fresh.
+  try { hubFeedMemory = []; } catch {}
+}
+
+/** Best-effort localStorage write. Tries the full slim payload, then
+ *  shrinks (60 / 40 / 20 / 10 / 5 / 1) until something fits.
+ *  Returns the count actually persisted plus the underlying error
+ *  on the last attempt. The mem cache update is the caller's job
+ *  (we keep it independent so the UI renders even if persistence
+ *  fails entirely). */
+function persistLibraryToStorage(items, key) {
+  const slim = slimLibraryForStorage(items);
+  const fullN = slim.length;
+  const sizes = [fullN, 60, 40, 20, 10, 5, 1].filter(
+    (n) => n > 0 && n <= fullN
+  );
+  // Dedupe (e.g. fullN === 60 would double up)
+  const tried = Array.from(new Set(sizes));
+  let lastErr = null;
+  for (const n of tried) {
+    try {
+      localStorage.setItem(key, JSON.stringify(slim.slice(0, n)));
+      return { ok: true, savedCount: n, error: null };
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  // Last resort: clear the slot so next render at least has []
+  // instead of stale partial JSON.
+  try {
+    localStorage.removeItem(key);
+  } catch {}
+  return { ok: false, savedCount: 0, error: lastErr };
+}
+
+function classifyPersistError(e) {
+  if (!e) return "save_failed";
+  const quota =
+    e.name === "QuotaExceededError" ||
+    e.code === 22 ||
+    e.code === 1014 ||
+    /quota|exceeded|storage/i.test(String(e.message || ""));
+  return quota ? "quota" : String(e.message || e || "save_failed").slice(0, 120);
+}
 
 function saveLibrary(items) {
   const capped = capLibraryItems(items);
-  try {
-    const key = getLibraryStorageKey();
-    localStorage.setItem(key, JSON.stringify(capped));
-    _libraryMemCache = capped;
-    _libraryMemCacheKey = key;
+  const key = getLibraryStorageKey();
+  // The mem cache is the source of truth for `loadLibrary()` /
+  // `renderLibrary()` during this session. Update it FIRST so the UI
+  // works regardless of whether localStorage accepts the bytes.
+  _libraryMemCache = capped;
+  _libraryMemCacheKey = key;
+  const r = persistLibraryToStorage(capped, key);
+  _lastLibraryPersistedCount = r.savedCount;
+  if (r.ok) {
     _lastLibraryPersistError = "";
-  } catch (e) {
-    const quota =
-      e &&
-      (e.name === "QuotaExceededError" ||
-        e.code === 22 ||
-        /quota|exceeded|storage/i.test(String(e.message || "")));
-    _lastLibraryPersistError = quota ? "quota" : String(e?.message || e || "save_failed").slice(0, 120);
-    try {
-      const key = getLibraryStorageKey();
-      const tinier = capped.slice(0, Math.min(40, LIBRARY_MAX_TRACKS));
-      localStorage.setItem(key, JSON.stringify(tinier));
-      _libraryMemCache = tinier;
-      _libraryMemCacheKey = key;
-      _lastLibraryPersistError = "";
-      setStatus("Library partially saved — device storage is almost full.");
-    } catch {
-      try {
-        setStatus("Can't save library locally (storage full or blocked). Cloud still has your songs.");
-      } catch {}
+    if (r.savedCount < capped.length) {
+      setStatus(`Library cached in memory; ${r.savedCount} of ${capped.length} saved on this device.`);
     }
+  } else {
+    _lastLibraryPersistError = classifyPersistError(r.error);
+    setStatus("Couldn't save library to this device storage. Cloud still has your songs.");
   }
 }
 function patchLibraryTrack(id, patch) {
@@ -3196,32 +3293,21 @@ async function syncHubCoverForTrack(track, coverUrl) {
   );
 }
 function saveLibraryFor(id, items) {
-  try {
-    const writeKey = profileLibraryKeyFor(id);
-    const capped = capLibraryItems(items);
-    localStorage.setItem(writeKey, JSON.stringify(capped));
-    if (writeKey === getLibraryStorageKey()) {
-      _libraryMemCache = capped;
-      _libraryMemCacheKey = writeKey;
+  const writeKey = profileLibraryKeyFor(id);
+  const capped = capLibraryItems(items);
+  const isActive = writeKey === getLibraryStorageKey();
+  if (isActive) {
+    _libraryMemCache = capped;
+    _libraryMemCacheKey = writeKey;
+  }
+  const r = persistLibraryToStorage(capped, writeKey);
+  if (isActive) {
+    _lastLibraryPersistedCount = r.savedCount;
+    if (r.ok) {
       _lastLibraryPersistError = "";
+    } else {
+      _lastLibraryPersistError = classifyPersistError(r.error);
     }
-  } catch (e) {
-    const quota =
-      e &&
-      (e.name === "QuotaExceededError" ||
-        e.code === 22 ||
-        /quota|exceeded|storage/i.test(String(e.message || "")));
-    _lastLibraryPersistError = quota ? "quota" : String(e?.message || e || "save_failed").slice(0, 120);
-    try {
-      const writeKey = profileLibraryKeyFor(id);
-      const tinier = capLibraryItems(items).slice(0, 40);
-      localStorage.setItem(writeKey, JSON.stringify(tinier));
-      if (writeKey === getLibraryStorageKey()) {
-        _libraryMemCache = tinier;
-        _libraryMemCacheKey = writeKey;
-        _lastLibraryPersistError = "";
-      }
-    } catch {}
   }
 }
 
@@ -3903,7 +3989,21 @@ async function runLibraryDiagnostic() {
     try { rawLen = (localStorage.getItem(libKey) || "").length; } catch {}
     lines.push(`local raw bytes @ key: ${rawLen}`);
     lines.push(`loadLibrary().length: ${loadLibrary().length}`);
+    lines.push(`memCache: ${_libraryMemCache ? _libraryMemCache.length : "null"}`);
+    lines.push(`persisted: ${_lastLibraryPersistedCount} (err=${_lastLibraryPersistError || "ok"})`);
     lines.push(`hydrate inFlight=${_libraryHydrateInFlight} completed=${_libraryHydrateCompleted}`);
+    try {
+      let totalBytes = 0;
+      const heavy = [];
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const k = String(localStorage.key(i) || "");
+        const v = String(localStorage.getItem(k) || "");
+        totalBytes += k.length + v.length;
+        if (v.length > 50_000) heavy.push(`${k}=${(v.length / 1024).toFixed(0)}KB`);
+      }
+      lines.push(`localStorage total: ${(totalBytes / 1024).toFixed(0)}KB across ${localStorage.length} keys`);
+      if (heavy.length) lines.push(`heavy keys: ${heavy.slice(0, 6).join(", ")}`);
+    } catch {}
     try {
       const r1 = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?select=id&limit=1`, {
         headers: {
@@ -4072,8 +4172,13 @@ function renderLibrary() {
       const failLine = _lastUserSongInsertFailure
         ? `<p class="emptyStateHint" style="margin-top:10px;font-size:12px;line-height:1.45;opacity:0.88">Last cloud save error: ${escapeHtml(_lastUserSongInsertFailure)}</p>`
         : "";
-      const persistLine = _lastLibraryPersistError
-        ? `<p class="emptyStateHint" style="margin-top:10px;font-size:12px;line-height:1.45;opacity:0.88">Local device save: ${escapeHtml(_lastLibraryPersistError)} — try freeing Safari storage or reinstalling the app shortcut.</p>`
+      const persistLine = _lastLibraryPersistError === "quota"
+        ? `<p class="emptyStateHint" style="margin-top:10px;font-size:12px;line-height:1.45;opacity:0.88">Device storage is full. Tap Free up space to clear cached covers and song lists, then retry.</p>`
+        : (_lastLibraryPersistError
+          ? `<p class="emptyStateHint" style="margin-top:10px;font-size:12px;line-height:1.45;opacity:0.88">Local device save: ${escapeHtml(_lastLibraryPersistError)}</p>`
+          : "");
+      const freeBtn = _lastLibraryPersistError === "quota"
+        ? `<button type="button" class="emptyStateCta" id="libraryEmptyFreeSpace" style="margin-top:10px;border:none;cursor:pointer;font:inherit">Free up space &amp; retry</button>`
         : "";
       els.libraryList.innerHTML = `
         <div class="emptyState">
@@ -4082,6 +4187,7 @@ function renderLibrary() {
           <p class="emptyStateHint">The cloud has no songs stored for your account yet. Create one here while logged in — it should appear after generation. If you used Safari before adding this app to your Home Screen, open the site in Safari once so older local songs can upload.</p>
           ${failLine}
           ${persistLine}
+          ${freeBtn}
           <button type="button" class="emptyStateCta" id="libraryEmptyUploadAgain" style="margin-top:10px;border:none;cursor:pointer;font:inherit">Try sync from this device</button>
           <a href="#/generate" class="emptyStateCta" data-route-link="generate" style="margin-top:8px;display:inline-flex">Create a song</a>
         </div>
@@ -4090,6 +4196,14 @@ function renderLibrary() {
       if (uploadAgain) {
         uploadAgain.addEventListener("click", () => {
           setStatus("Syncing library to cloud…");
+          void ensureUserLibraryHydrated();
+        });
+      }
+      const freeUp = document.getElementById("libraryEmptyFreeSpace");
+      if (freeUp) {
+        freeUp.addEventListener("click", () => {
+          freeUpLocalStorage();
+          setStatus("Cleared cached space — retrying sync.");
           void ensureUserLibraryHydrated();
         });
       }

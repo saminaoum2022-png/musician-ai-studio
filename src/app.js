@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509credits3";
+const APP_BUILD = "20260509sounds";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -111,6 +111,13 @@ const els = {
   adminUsers: document.getElementById("adminUsers"),
   adminCodesRedeemed: document.getElementById("adminCodesRedeemed"),
   adminCodesList: document.getElementById("adminCodesList"),
+  soundPrompt: document.getElementById("soundPrompt"),
+  soundLoop: document.getElementById("soundLoop"),
+  soundTempo: document.getElementById("soundTempo"),
+  soundTempoLabel: document.getElementById("soundTempoLabel"),
+  soundKeySelect: document.getElementById("soundKeySelect"),
+  soundGrabLyrics: document.getElementById("soundGrabLyrics"),
+  btnSoundGenerate: document.getElementById("btnSoundGenerate"),
   btnPlayerPlay: document.getElementById("btnPlayerPlay"),
   btnPlayerPause: document.getElementById("btnPlayerPause"),
   btnPlayerStop: document.getElementById("btnPlayerStop"),
@@ -1004,6 +1011,10 @@ function showLikeBurst() {
 var authSession = null;
 var generationReadyNotice = false;
 
+/** Suno "Sounds" task polling (separate from full-song generate). */
+let soundTaskId = "";
+let soundPollTimer = null;
+
 function applyRoute() {
   const hash = String(location.hash || "");
   const rawRoute = hash.startsWith("#/") ? hash.slice(2) : "generate";
@@ -1015,12 +1026,12 @@ function applyRoute() {
   if (/^u\//.test(route)) {
     pendingPublicUsername = decodeURIComponent(route.slice(2)).trim();
   }
-  const allowedRoutes = new Set(["intro", "start", "auth", "generate", "library", "hub", "settings", "profile", "player", "search", "vocal", "stems", "advanced", "user", "credits"]);
+  const allowedRoutes = new Set(["intro", "start", "auth", "generate", "library", "hub", "settings", "profile", "player", "search", "vocal", "stems", "advanced", "user", "credits", "sounds"]);
   const normalized = pendingPublicUsername ? "user" : (route === "start" ? "intro" : route);
   let wanted = allowedRoutes.has(normalized) ? normalized : "generate";
   // Public profile is intentionally readable without auth so share-link
   // visitors don't hit a wall before discovering the rest of the product.
-  const protectedRoutes = new Set(["generate", "library", "profile", "player", "vocal", "stems", "advanced", "credits"]);
+  const protectedRoutes = new Set(["generate", "library", "profile", "player", "vocal", "stems", "advanced", "credits", "sounds"]);
   const isLoggedIn = Boolean(authSession?.user?.id);
   if (!isLoggedIn && protectedRoutes.has(wanted)) wanted = "auth";
   document.body.classList.toggle("isIntro", wanted === "intro");
@@ -1081,7 +1092,7 @@ function applyRoute() {
     void refreshMyCredits({ silent: true });
     renderPersonaSelect();
   }
-  if (wanted === "credits") {
+  if (wanted === "credits" || wanted === "sounds") {
     void refreshMyCredits({ silent: true });
   }
   if (wanted === "library") {
@@ -1734,6 +1745,8 @@ function getSupabaseAuthToken() {
  *  Server side: api/credits/* and api/_lib/credits-auth.js.
  * ----------------------------------------------------------------- */
 const FULL_SONG_CREDIT_COST = 12;
+/** Mirrors Suno pricing for `/api/v1/generate/sounds` (beta). */
+const SOUND_CREDIT_COST = 2.5;
 const creditsState = {
   balance: 0,
   ledger: [],
@@ -1743,14 +1756,24 @@ const creditsState = {
   lastError: "",
 };
 
+function formatCreditsAmount(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return "0";
+  const clamped = Math.max(0, x);
+  const s = clamped.toFixed(4).replace(/\.?0+$/, "");
+  return s || "0";
+}
+
 function setCreditsBalance(n) {
-  const v = Number.isFinite(Number(n)) ? Math.max(0, Math.floor(Number(n))) : 0;
+  const raw = Number(n);
+  const v = Number.isFinite(raw) ? Math.max(0, raw) : 0;
   creditsState.balance = v;
-  if (els.profileCreditsBalance) els.profileCreditsBalance.textContent = String(v);
-  if (els.creditsBalanceBig) els.creditsBalanceBig.textContent = String(v);
+  const disp = formatCreditsAmount(v);
+  if (els.profileCreditsBalance) els.profileCreditsBalance.textContent = disp;
+  if (els.creditsBalanceBig) els.creditsBalanceBig.textContent = disp;
   if (els.profileQuickLinkCreditsSub) {
     els.profileQuickLinkCreditsSub.textContent = creditsState.loaded
-      ? (v > 0 ? `Balance: ${v} credits` : "Tap to redeem a code")
+      ? (v > 0 ? `Balance: ${disp} credits` : "Tap to redeem a code")
       : "Tap to redeem a code";
   }
 }
@@ -1759,7 +1782,9 @@ function formatLedgerReason(reason) {
   const r = String(reason || "");
   if (r === "promo_redeem") return "Promo code redeemed";
   if (r === "full_song") return "Full song generation";
+  if (r === "sound_generate") return "Sound generation";
   if (r === "refund_full_song") return "Refund (failed generation)";
+  if (r === "refund_sound_generate") return "Refund (failed sound)";
   if (r === "stems") return "Stems";
   if (r === "persona") return "Voice persona";
   return r.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
@@ -1776,7 +1801,8 @@ function renderCreditsLedger() {
   root.innerHTML = rows
     .map((row) => {
       const delta = Number(row?.delta || 0);
-      const sign = delta > 0 ? "+" : "";
+      const deltaDisp = formatCreditsAmount(Math.abs(delta));
+      const sign = delta > 0 ? "+" : delta < 0 ? "−" : "";
       const cls = delta > 0 ? "isPositive" : delta < 0 ? "isNegative" : "";
       const reason = formatLedgerReason(row?.reason);
       const ref = String(row?.ref || "").trim();
@@ -1788,7 +1814,7 @@ function renderCreditsLedger() {
             <div class="creditsLedgerReason">${escapeHtml(reason)}</div>
             <div class="creditsLedgerSub">${escapeHtml(when)}${ref ? ` · ${escapeHtml(ref)}` : ""}</div>
           </div>
-          <div class="creditsLedgerDelta">${sign}${delta}</div>
+          <div class="creditsLedgerDelta">${sign}${deltaDisp}</div>
         </div>`;
     })
     .join("");
@@ -1919,7 +1945,10 @@ async function redeemPromoCode(rawCode) {
       return;
     }
     if (d.status === "redeemed") {
-      setCreditsRedeemMsg(`+${d.creditsAdded} credits added. New balance: ${d.balance}.`, "ok");
+      setCreditsRedeemMsg(
+        `+${formatCreditsAmount(d.creditsAdded)} credits added. New balance: ${formatCreditsAmount(d.balance)}.`,
+        "ok"
+      );
       if (els.creditsRedeemInput) els.creditsRedeemInput.value = "";
     } else if (d.status === "already_redeemed") {
       setCreditsRedeemMsg("You already redeemed this code.", "warn");
@@ -1933,6 +1962,103 @@ async function redeemPromoCode(rawCode) {
     if (els.btnCreditsRedeem) els.btnCreditsRedeem.disabled = false;
   }
 }
+
+function extractFirstClipFromSunoStatusPayload(data) {
+  const genData = data?.data?.response?.sunoData || data?.data?.response?.suno_data || [];
+  const first = Array.isArray(genData) ? genData[0] : null;
+  if (!first) {
+    return { first: null, audioUrl: "", imageUrl: null, title: "", audioId: "" };
+  }
+  const audioUrl =
+    first.sourceAudioUrl ||
+    first.source_audio_url ||
+    first.sourceStreamAudioUrl ||
+    first.source_stream_audio_url ||
+    first.audioUrl ||
+    first.audio_url ||
+    first.streamAudioUrl ||
+    first.stream_audio_url ||
+    "";
+  const imageUrl =
+    first.sourceImageUrl ||
+    first.source_image_url ||
+    first.imageUrl ||
+    first.image_url ||
+    first.coverUrl ||
+    first.cover_url ||
+    null;
+  const title = first.title || first.songTitle || first.song_title || "";
+  const audioId =
+    first.id ||
+    first.audioId ||
+    first.audio_id ||
+    first.songId ||
+    first.song_id ||
+    "";
+  return { first, audioUrl, imageUrl, title, audioId };
+}
+
+function stopSoundGenerationPolling() {
+  if (soundPollTimer) {
+    clearInterval(soundPollTimer);
+    soundPollTimer = null;
+  }
+}
+
+function startSoundGenerationPolling(meta) {
+  stopSoundGenerationPolling();
+  let tries = 0;
+  const maxTries = 160;
+  soundPollTimer = setInterval(async () => {
+    tries += 1;
+    try {
+      const r = await fetch(apiUrl(`/api/suno/status?taskId=${encodeURIComponent(soundTaskId)}`));
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data?.error || "Status failed");
+      const status = String(data?.data?.status || data?.status || "").toUpperCase();
+      const clip = extractFirstClipFromSunoStatusPayload(data);
+      if (clip.audioUrl) {
+        const url = toAudioProxyUrl(clip.audioUrl) || clip.audioUrl;
+        stopSoundGenerationPolling();
+        addToLibrary({
+          title: String(clip.title || meta.fallbackTitle || "Sound").trim() || "Sound",
+          artUrl: clip.imageUrl || "./assets/nabadai-logo.png",
+          url,
+          taskId: soundTaskId || "",
+          audioId: String(clip.audioId || ""),
+          kind: "sound",
+          meta: meta.libraryMeta,
+        });
+        setStatus("Sound ready — saved to Library.");
+        setLoading(false);
+        if (els.btnSoundGenerate) els.btnSoundGenerate.disabled = false;
+        void refreshMyCredits({ silent: true });
+        return;
+      }
+      if (status === "FAILED" || status === "ERROR") {
+        stopSoundGenerationPolling();
+        setStatus("Sound generation failed on Suno's side. Check Recent activity for charges.");
+        setLoading(false);
+        if (els.btnSoundGenerate) els.btnSoundGenerate.disabled = false;
+        return;
+      }
+      if (tries >= maxTries) {
+        stopSoundGenerationPolling();
+        setStatus("Still processing — check Library in a minute.");
+        setLoading(false);
+        if (els.btnSoundGenerate) els.btnSoundGenerate.disabled = false;
+      }
+    } catch (e) {
+      if (tries >= 10) {
+        stopSoundGenerationPolling();
+        setStatus(`Could not get sound status: ${e?.message || String(e)}`);
+        setLoading(false);
+        if (els.btnSoundGenerate) els.btnSoundGenerate.disabled = false;
+      }
+    }
+  }, 4500);
+}
+
 function b64urlFromBytes(bytes) {
   let bin = "";
   for (let i = 0; i < bytes.length; i += 1) bin += String.fromCharCode(bytes[i]);
@@ -4739,10 +4865,12 @@ function renderLibrary() {
         const playing = libraryNowPlayingId === t.id;
         const dateLabel = formatLibraryDate(t.ts);
         const isInstrumental = t.kind === "instrumental";
+        const isSound = t.kind === "sound";
         const safeTitle = escapeHtml(t.title || "Generated song");
         const subBits = [];
         if (dateLabel) subBits.push(`<span class="libRowDot">${escapeHtml(dateLabel)}</span>`);
         if (isInstrumental) subBits.push(`<span class="libRowChip">Instrumental</span>`);
+        if (isSound) subBits.push(`<span class="libRowChip">Sound</span>`);
         // First row paints with high priority so the page never looks
         // empty above the fold; everything else is lazy + low-priority,
         // identical pattern to Hub.
@@ -8101,10 +8229,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           });
           const d = await r.json().catch(() => ({}));
           if (r.status === 402 || d?.code === "insufficient_credits") {
-            const need = Number(d?.needed || FULL_SONG_CREDIT_COST);
+            const need = Number(d?.needed ?? FULL_SONG_CREDIT_COST);
             const have = Number(d?.balance || 0);
             const err = new Error(
-              `Not enough credits (you have ${have}, need ${need}). Open Profile → Credits to redeem a code.`
+              `Not enough credits (you have ${formatCreditsAmount(have)}, need ${formatCreditsAmount(need)}). Open Profile → Credits to redeem a code.`
             );
             err.code = "insufficient_credits";
             err.balance = have;
@@ -9075,7 +9203,7 @@ window.addEventListener("hashchange", () => {
 window.addEventListener("hashchange", () => {
   const route = document.body.getAttribute("data-route") || "";
   if (route === "profile") void refreshSunoCredits();
-  if (route === "profile" || route === "credits") void refreshMyCredits({ silent: true });
+  if (route === "profile" || route === "credits" || route === "sounds") void refreshMyCredits({ silent: true });
 });
 
 if (els.btnCreditsRedeem) {
@@ -9093,6 +9221,103 @@ if (els.creditsRedeemInput) {
   els.creditsRedeemInput.addEventListener("input", () => {
     if (els.creditsRedeemMsg && els.creditsRedeemMsg.style.display !== "none") {
       setCreditsRedeemMsg("", "");
+    }
+  });
+}
+if (els.soundTempo && els.soundTempoLabel) {
+  const syncTempoLabel = () => {
+    els.soundTempoLabel.textContent = `${els.soundTempo.value} BPM`;
+  };
+  els.soundTempo.addEventListener("input", syncTempoLabel);
+  syncTempoLabel();
+}
+if (els.btnSoundGenerate) {
+  els.btnSoundGenerate.addEventListener("click", async () => {
+    const prompt = String(els.soundPrompt?.value || "").trim();
+    if (!prompt) {
+      setStatus("Describe the sound you want (up to 500 characters).");
+      return;
+    }
+    const token = getSupabaseAuthToken();
+    if (!token) {
+      setStatus("Sign in with Google to generate sounds.");
+      location.hash = "#/auth";
+      return;
+    }
+    try {
+      els.btnSoundGenerate.disabled = true;
+      setLoading(true, {
+        title: "Creating sound…",
+        sub: `${formatCreditsAmount(SOUND_CREDIT_COST)} credits · Suno Sounds`,
+      });
+      const payload = {
+        prompt,
+        soundLoop: Boolean(els.soundLoop?.checked),
+        grabLyrics: Boolean(els.soundGrabLyrics?.checked),
+        soundKey: String(els.soundKeySelect?.value || "Any").trim() || "Any",
+      };
+      if (els.soundTempo) payload.soundTempo = Number(els.soundTempo.value);
+      const r = await fetch(apiUrl("/api/suno/sounds"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.status === 402 || d?.code === "insufficient_credits") {
+        const need = Number(d?.needed ?? SOUND_CREDIT_COST);
+        const have = Number(d?.balance || 0);
+        setStatus(
+          `Not enough credits (you have ${formatCreditsAmount(have)}, need ${formatCreditsAmount(need)}).`
+        );
+        setLoading(false);
+        els.btnSoundGenerate.disabled = false;
+        return;
+      }
+      if (r.status === 401) {
+        setStatus("Sign in to generate sounds.");
+        setLoading(false);
+        els.btnSoundGenerate.disabled = false;
+        return;
+      }
+      if (!r.ok) {
+        setStatus(d?.error || "Sound request failed.");
+        setLoading(false);
+        els.btnSoundGenerate.disabled = false;
+        return;
+      }
+      if (d?._credits && Number.isFinite(Number(d._credits.balance))) {
+        setCreditsBalance(Number(d._credits.balance));
+        creditsState.loaded = true;
+      }
+      soundTaskId = extractTaskIdLoose(d) || "";
+      if (!soundTaskId) {
+        setStatus("Sound task did not return an id — check Library shortly.");
+        setLoading(false);
+        els.btnSoundGenerate.disabled = false;
+        return;
+      }
+      const fallbackTitle =
+        prompt.split(/\r?\n/)[0]?.trim()?.slice(0, 80) || "Sound";
+      startSoundGenerationPolling({
+        fallbackTitle,
+        libraryMeta: {
+          mode: "sound",
+          soundPrompt: prompt,
+          soundLoop: Boolean(els.soundLoop?.checked),
+          soundTempo: els.soundTempo ? Number(els.soundTempo.value) : null,
+          soundKey: String(els.soundKeySelect?.value || "Any"),
+          grabLyrics: Boolean(els.soundGrabLyrics?.checked),
+          model: "V5",
+        },
+      });
+      setStatus("Sound is generating…");
+    } catch (e) {
+      setStatus(`Sound failed: ${e?.message || String(e)}`);
+      setLoading(false);
+      els.btnSoundGenerate.disabled = false;
     }
   });
 }

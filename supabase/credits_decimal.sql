@@ -1,98 +1,28 @@
--- Credits system — per-user balance, promo code redemptions, and an
--- append-only ledger for full audit (`+30 NABADAI-BETA-2026-A1B2`,
--- `-10 full song`, `+10 refund`). Run inside the Supabase SQL Editor.
+-- Migrate credits from INTEGER to NUMERIC so balances can reflect Suno's
+-- fractional pricing (e.g. sounds at 2.5 credits). Run in Supabase SQL Editor
+-- AFTER the initial credits.sql has been applied.
 --
--- Fractional balances (e.g. 2.5 credits for Suno Sounds): after this file,
--- run `supabase/credits_decimal.sql` once to switch INTEGER columns to NUMERIC.
---
--- Design notes:
---   - The Vercel server ALWAYS calls these RPCs with the service role
---     key after verifying the user's JWT via /auth/v1/user. Functions
---     are SECURITY DEFINER and trust the user_id we hand them — RLS
---     keeps direct REST traffic from users locked out.
---   - All mutations go through the three RPCs below so the schema can
---     evolve without rewriting the API code.
+-- FUTURE: peer-to-peer credit transfers will need a new RPC (e.g.
+-- transfer_credits) + ledger reason 'peer_transfer' — not implemented here.
 
-create extension if not exists "pgcrypto";
+begin;
 
--- ---------- tables ----------------------------------------------------
+alter table public.user_credits
+  alter column balance type numeric(14, 4) using balance::numeric(14, 4);
 
-create table if not exists public.user_credits (
-  user_id uuid primary key references auth.users (id) on delete cascade,
-  balance integer not null default 0 check (balance >= 0),
-  updated_at timestamptz not null default now()
-);
+alter table public.credit_ledger
+  alter column delta type numeric(14, 4) using delta::numeric(14, 4);
 
-create table if not exists public.credit_ledger (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users (id) on delete cascade,
-  delta integer not null,
-  reason text not null,
-  ref text default '',
-  created_at timestamptz not null default now()
-);
+alter table public.promo_codes
+  alter column credits type numeric(14, 4) using credits::numeric(14, 4);
 
-create index if not exists credit_ledger_user_created_idx
-  on public.credit_ledger (user_id, created_at desc);
+alter table public.promo_redemptions
+  alter column credits type numeric(14, 4) using credits::numeric(14, 4);
 
-create table if not exists public.promo_codes (
-  code text primary key,
-  credits integer not null check (credits > 0),
-  max_redemptions integer not null default 1 check (max_redemptions > 0),
-  redemptions integer not null default 0,
-  active boolean not null default true,
-  expires_at timestamptz,
-  created_at timestamptz not null default now()
-);
+-- Replace RPCs: drop old integer signatures, recreate with numeric amounts.
+drop function if exists public.consume_credits(uuid, integer, text, text);
+drop function if exists public.refund_credits(uuid, integer, text, text);
 
-create table if not exists public.promo_redemptions (
-  code text not null references public.promo_codes (code) on delete cascade,
-  user_id uuid not null references auth.users (id) on delete cascade,
-  credits integer not null,
-  created_at timestamptz not null default now(),
-  primary key (code, user_id)
-);
-
-create index if not exists promo_redemptions_user_idx
-  on public.promo_redemptions (user_id, created_at desc);
-
--- ---------- RLS -------------------------------------------------------
---
--- Users can READ their own balance + their own ledger rows. Writes
--- always go through SECURITY DEFINER RPCs, so we don't need INSERT/
--- UPDATE policies here at all. promo_codes is fully locked down (only
--- the service role on the server can touch it).
-
-alter table public.user_credits enable row level security;
-alter table public.credit_ledger enable row level security;
-alter table public.promo_codes enable row level security;
-alter table public.promo_redemptions enable row level security;
-
-drop policy if exists "user_credits_select_own" on public.user_credits;
-create policy "user_credits_select_own"
-  on public.user_credits for select
-  using (auth.uid() = user_id);
-
-drop policy if exists "credit_ledger_select_own" on public.credit_ledger;
-create policy "credit_ledger_select_own"
-  on public.credit_ledger for select
-  using (auth.uid() = user_id);
-
-drop policy if exists "promo_redemptions_select_own" on public.promo_redemptions;
-create policy "promo_redemptions_select_own"
-  on public.promo_redemptions for select
-  using (auth.uid() = user_id);
-
--- ---------- RPCs ------------------------------------------------------
-
--- redeem_promo_code: atomic + idempotent.
---  - Returns json: { ok, balance, credits_added, status, message }
---  - Status values:
---      'redeemed'        — first redemption, credits added.
---      'already_redeemed'— same user retried; balance unchanged, no error.
---      'invalid_code'    — code doesn't exist.
---      'inactive_code'   — code disabled or expired.
---      'exhausted_code'  — max_redemptions reached.
 create or replace function public.redeem_promo_code(
   p_user_id uuid,
   p_code text
@@ -104,7 +34,7 @@ as $$
 declare
   v_code public.promo_codes;
   v_existing public.promo_redemptions;
-  v_balance integer;
+  v_balance numeric(14, 4);
 begin
   select * into v_existing
     from public.promo_redemptions
@@ -187,15 +117,9 @@ begin
 end;
 $$;
 
-revoke all on function public.redeem_promo_code(uuid, text) from public;
-grant execute on function public.redeem_promo_code(uuid, text) to service_role;
-
--- consume_credits: atomic spend with insufficient_funds guard.
--- Reason is a short string ("full_song", "stems", "persona") and ref is
--- the Suno taskId or any other correlation id (used later for refunds).
 create or replace function public.consume_credits(
   p_user_id uuid,
-  p_amount integer,
+  p_amount numeric(14, 4),
   p_reason text,
   p_ref text default ''
 ) returns json
@@ -204,7 +128,7 @@ security definer
 set search_path = public
 as $$
 declare
-  v_balance integer;
+  v_balance numeric(14, 4);
 begin
   if p_amount is null or p_amount <= 0 then
     return json_build_object(
@@ -249,14 +173,9 @@ begin
 end;
 $$;
 
-revoke all on function public.consume_credits(uuid, integer, text, text) from public;
-grant execute on function public.consume_credits(uuid, integer, text, text) to service_role;
-
--- refund_credits: undo a previous consume_credits when the upstream call
--- fails after we deducted. Always succeeds (creates the row if missing).
 create or replace function public.refund_credits(
   p_user_id uuid,
-  p_amount integer,
+  p_amount numeric(14, 4),
   p_reason text,
   p_ref text default ''
 ) returns json
@@ -265,7 +184,7 @@ security definer
 set search_path = public
 as $$
 declare
-  v_balance integer;
+  v_balance numeric(14, 4);
 begin
   if p_amount is null or p_amount <= 0 then
     return json_build_object('ok', false, 'message', 'Invalid amount.');
@@ -285,11 +204,12 @@ begin
 end;
 $$;
 
-revoke all on function public.refund_credits(uuid, integer, text, text) from public;
-grant execute on function public.refund_credits(uuid, integer, text, text) to service_role;
+revoke all on function public.consume_credits(uuid, numeric, text, text) from public;
+grant execute on function public.consume_credits(uuid, numeric, text, text) to service_role;
 
--- get_credits_summary: admin only — totals across all users. Cheap on
--- a small beta DB and saves an extra round-trip from the Vercel function.
+revoke all on function public.refund_credits(uuid, numeric, text, text) from public;
+grant execute on function public.refund_credits(uuid, numeric, text, text) to service_role;
+
 create or replace function public.get_credits_summary()
 returns json
 language plpgsql
@@ -298,9 +218,9 @@ set search_path = public
 as $$
 declare
   v_users integer;
-  v_allocated integer;
-  v_spent integer;
-  v_outstanding integer;
+  v_allocated numeric(14, 4);
+  v_spent numeric(14, 4);
+  v_outstanding numeric(14, 4);
   v_codes_total integer;
   v_codes_redeemed integer;
 begin
@@ -325,3 +245,5 @@ $$;
 
 revoke all on function public.get_credits_summary() from public;
 grant execute on function public.get_credits_summary() to service_role;
+
+commit;

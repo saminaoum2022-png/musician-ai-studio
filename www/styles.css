@@ -5396,3 +5396,92 @@ input::placeholder, textarea::placeholder{
 @media (min-width: 720px){
   .creditsAdminGrid{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
+/* ---------- Sounds (Suno /generate/sounds) ---------- */
+.soundsPage{
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 0 24px;
+  min-width: 0;
+  animation: sectionFadeIn 260ms ease;
+}
+.soundsLead{
+  margin: 0;
+  line-height: 1.45;
+}
+.soundsCard{
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012));
+  padding: 14px 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.soundPromptArea{
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(8,12,20,0.46);
+  color: #fff;
+  padding: 12px 14px;
+  font-size: 16px;
+  line-height: 1.45;
+  resize: vertical;
+  min-height: 96px;
+}
+.soundOptRow{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: rgba(232,238,247,0.88);
+}
+.soundOptRow input{
+  width: 18px;
+  height: 18px;
+}
+.soundTempoRow{
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+.soundTempoRow .label{
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(232,238,247,0.55);
+}
+.soundTempoRow input[type="range"]{
+  width: 100%;
+}
+.soundTempoLabel{
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: rgba(232,238,247,0.72);
+  min-width: 72px;
+  text-align: right;
+}
+.soundKeySelect{
+  width: 100%;
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(8,12,20,0.46);
+  color: #fff;
+  padding: 0 12px;
+  font-size: 16px;
+}
+.soundCostHint{
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: rgba(232,238,247,0.62);
+}
+.soundGenerateBtn{
+  width: 100%;
+  margin-top: 4px;
+}

@@ -770,6 +770,33 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   overflow: visible;
   max-height: none;
 }
+.libraryDiagActions{
+  margin: 12px 0 0;
+  text-align: center;
+}
+.libraryDiagBtn{
+  font-size: 11px;
+  padding: 6px 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+.libraryDiagnosticOutput{
+  display: block;
+  margin-top: 12px;
+  padding: 12px;
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: left;
+  color: rgba(232, 238, 247, 0.82);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  max-height: min(45vh, 320px);
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
 /* Generic empty-state panel — shared by Library, Hub, and any other route. */
 .emptyState{
   text-align: center;

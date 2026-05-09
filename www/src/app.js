@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510ai";
+const APP_BUILD = "20260510aj";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -206,6 +206,8 @@ const els = {
   btnCloseAdvancedSheet: document.getElementById("btnCloseAdvancedSheet"),
   advancedSheet: document.getElementById("advancedSheet"),
   libraryList: document.getElementById("libraryList"),
+  btnLibraryDiagnostic: document.getElementById("btnLibraryDiagnostic"),
+  libraryDiagnosticOutput: document.getElementById("libraryDiagnosticOutput"),
   hubList: document.getElementById("hubList"),
   hubAudioHint: document.getElementById("hubAudioHint"),
   hubUpdatedAt: document.getElementById("hubUpdatedAt"),
@@ -3792,6 +3794,112 @@ function bindLibraryDelegatedListeners() {
   });
 }
 
+/** Runs cloud + local probes and writes to `#libraryDiagnosticOutput`
+ *  (sibling of `#libraryList`). Must NOT live inside `libraryList`
+ *  innerHTML — `ensureUserLibraryHydrated` calls `renderLibrary()`, which
+ *  replaces the list DOM and would wipe an inline diagnostic `<pre>`.
+ */
+async function runLibraryDiagnostic() {
+  const out = els.libraryDiagnosticOutput || document.getElementById("libraryDiagnosticOutput");
+  const btn = els.btnLibraryDiagnostic || document.getElementById("btnLibraryDiagnostic");
+  if (!out) return;
+  out.hidden = false;
+  out.textContent = "Running diagnostic…";
+  if (btn) btn.disabled = true;
+  const lines = [];
+  try {
+    const token = getSupabaseAuthToken();
+    const uid = String(authSession?.user?.id || "");
+    const email = String(authSession?.user?.email || "");
+    lines.push(`auth.email: ${email || "(none)"}`);
+    lines.push(`auth.user.id: ${uid || "(none)"}`);
+    lines.push(`token length: ${token ? token.length : 0}`);
+    lines.push(`activeProfile.id: ${String(activeProfile?.id || "")}`);
+    const libKey = profileLibraryKey();
+    lines.push(`profileLibraryKey: ${libKey}`);
+    let rawLen = 0;
+    try { rawLen = (localStorage.getItem(libKey) || "").length; } catch {}
+    lines.push(`local raw bytes @ key: ${rawLen}`);
+    lines.push(`loadLibrary().length: ${loadLibrary().length}`);
+    lines.push(`hydrate inFlight=${_libraryHydrateInFlight} completed=${_libraryHydrateCompleted}`);
+    try {
+      const r1 = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?select=id&limit=1`, {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${token}`,
+          Prefer: "count=exact",
+          Range: "0-0",
+        },
+      });
+      const cr = r1.headers.get("content-range") || r1.headers.get("Content-Range") || "";
+      lines.push(`probe.unfiltered: HTTP ${r1.status} content-range=${cr}`);
+    } catch (e) {
+      lines.push(`probe.unfiltered ERR: ${e?.message || String(e)}`);
+    }
+    try {
+      const r2 = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${encodeURIComponent(uid)}&select=id,title&limit=3`, {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const t2 = await r2.text().catch(() => "");
+      lines.push(`probe.filtered: HTTP ${r2.status} body=${t2.slice(0, 200)}`);
+    } catch (e) {
+      lines.push(`probe.filtered ERR: ${e?.message || String(e)}`);
+    }
+    try {
+      const r3 = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const t3 = await r3.text().catch(() => "");
+      const parsed = (() => { try { return JSON.parse(t3); } catch { return null; } })();
+      lines.push(`probe.user: HTTP ${r3.status} id=${parsed?.id || "?"} email=${parsed?.email || "?"}`);
+    } catch (e) {
+      lines.push(`probe.user ERR: ${e?.message || String(e)}`);
+    }
+    lines.push("--- forced hydrate ---");
+    _libraryHydrateInFlight = false;
+    _libraryHydrateCompleted = false;
+    _libraryReconcileLastAt = 0;
+    try {
+      const beforeLen = loadLibrary().length;
+      const t0 = performance.now();
+      const cloudSongs = await supabaseLoadUserSongs();
+      const dt = Math.round(performance.now() - t0);
+      lines.push(`supabaseLoadUserSongs: ${cloudSongs.length} rows in ${dt}ms (status=${_lastUserSongsLoadStatus})`);
+      if (cloudSongs.length) {
+        const sample = cloudSongs[0];
+        lines.push(`first row: title="${String(sample?.title || "").slice(0, 40)}" url=${(sample?.url || "").slice(0, 60)}`);
+      }
+      await ensureUserLibraryHydrated();
+      const afterLen = loadLibrary().length;
+      lines.push(`loadLibrary() before=${beforeLen} after=${afterLen}`);
+      lines.push(`activeProfile.id (post-hydrate): ${String(activeProfile?.id || "")}`);
+      lines.push(`profileLibraryKey (post-hydrate): ${profileLibraryKey()}`);
+      if (afterLen > 0) {
+        lines.push("→ hydrate succeeded; list refreshed below.");
+        try { renderLibrary(); } catch {}
+      }
+    } catch (e) {
+      lines.push(`forced hydrate ERR: ${e?.message || String(e)}`);
+    }
+    const text = lines.join("\n");
+    out.textContent = text;
+    try {
+      await navigator.clipboard.writeText(text);
+      setStatus("Diagnostic copied to clipboard.");
+    } catch {
+      setStatus("Diagnostic ready — scroll the panel below.");
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 // Library pagination — same pattern as Hub. Rendering 100 rows at once
 // builds ~1000 DOM nodes (each row has a hidden 7-button menu) and binds
 // ~900 listeners across the row/menu queries, which is what made the
@@ -3887,8 +3995,6 @@ function renderLibrary() {
           ${failLine}
           <button type="button" class="emptyStateCta" id="libraryEmptyUploadAgain" style="margin-top:10px;border:none;cursor:pointer;font:inherit">Try sync from this device</button>
           <a href="#/generate" class="emptyStateCta" data-route-link="generate" style="margin-top:8px;display:inline-flex">Create a song</a>
-          <button type="button" id="libraryDebugSync" style="margin-top:14px;background:transparent;border:1px solid rgba(255,255,255,0.14);color:rgba(232,238,247,0.7);font-size:11px;letter-spacing:0.04em;text-transform:uppercase;padding:7px 14px;border-radius:999px;cursor:pointer">Show diagnostic</button>
-          <pre id="libraryDebugOut" style="display:none;text-align:left;margin-top:12px;font-size:11px;line-height:1.45;color:rgba(232,238,247,0.78);background:rgba(0,0,0,0.32);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px;max-width:340px;overflow:auto;white-space:pre-wrap;word-break:break-all"></pre>
         </div>
       `;
       const uploadAgain = document.getElementById("libraryEmptyUploadAgain");
@@ -3896,104 +4002,6 @@ function renderLibrary() {
         uploadAgain.addEventListener("click", () => {
           setStatus("Syncing library to cloud…");
           void ensureUserLibraryHydrated();
-        });
-      }
-      const dbgBtn = document.getElementById("libraryDebugSync");
-      const dbgOut = document.getElementById("libraryDebugOut");
-      if (dbgBtn && dbgOut) {
-        dbgBtn.addEventListener("click", async () => {
-          dbgOut.style.display = "";
-          dbgOut.textContent = "Running diagnostic…";
-          const lines = [];
-          const token = getSupabaseAuthToken();
-          const uid = String(authSession?.user?.id || "");
-          const email = String(authSession?.user?.email || "");
-          lines.push(`auth.email: ${email || "(none)"}`);
-          lines.push(`auth.user.id: ${uid || "(none)"}`);
-          lines.push(`token length: ${token ? token.length : 0}`);
-          // Local-state probes: these reveal mismatches between
-          // activeProfile / authSession / what the renderer actually
-          // reads from localStorage.
-          lines.push(`activeProfile.id: ${String(activeProfile?.id || "")}`);
-          const libKey = profileLibraryKey();
-          lines.push(`profileLibraryKey: ${libKey}`);
-          let rawLen = 0;
-          try { rawLen = (localStorage.getItem(libKey) || "").length; } catch {}
-          lines.push(`local raw bytes @ key: ${rawLen}`);
-          lines.push(`loadLibrary().length: ${loadLibrary().length}`);
-          lines.push(`hydrate inFlight=${_libraryHydrateInFlight} completed=${_libraryHydrateCompleted}`);
-          // Cloud probes (token + RLS round-trip).
-          try {
-            const r1 = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?select=id&limit=1`, {
-              headers: {
-                apikey: SUPABASE_ANON_KEY,
-                Authorization: `Bearer ${token}`,
-                Prefer: "count=exact",
-                Range: "0-0",
-              },
-            });
-            const cr = r1.headers.get("content-range") || r1.headers.get("Content-Range") || "";
-            lines.push(`probe.unfiltered: HTTP ${r1.status} content-range=${cr}`);
-          } catch (e) {
-            lines.push(`probe.unfiltered ERR: ${e?.message || String(e)}`);
-          }
-          try {
-            const r2 = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${encodeURIComponent(uid)}&select=id,title&limit=3`, {
-              headers: {
-                apikey: SUPABASE_ANON_KEY,
-                Authorization: `Bearer ${token}`,
-              },
-            });
-            const t2 = await r2.text().catch(() => "");
-            lines.push(`probe.filtered: HTTP ${r2.status} body=${t2.slice(0, 200)}`);
-          } catch (e) {
-            lines.push(`probe.filtered ERR: ${e?.message || String(e)}`);
-          }
-          try {
-            const r3 = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-              headers: {
-                apikey: SUPABASE_ANON_KEY,
-                Authorization: `Bearer ${token}`,
-              },
-            });
-            const t3 = await r3.text().catch(() => "");
-            const parsed = (() => { try { return JSON.parse(t3); } catch { return null; } })();
-            lines.push(`probe.user: HTTP ${r3.status} id=${parsed?.id || "?"} email=${parsed?.email || "?"}`);
-          } catch (e) {
-            lines.push(`probe.user ERR: ${e?.message || String(e)}`);
-          }
-          // Force a fresh hydrate cycle and report what came back.
-          // The previous flags are reset so the call isn't short-
-          // circuited by "already in flight" / "already completed".
-          lines.push("--- forced hydrate ---");
-          _libraryHydrateInFlight = false;
-          _libraryHydrateCompleted = false;
-          _libraryReconcileLastAt = 0;
-          try {
-            const beforeLen = loadLibrary().length;
-            // Time the actual `supabaseLoadUserSongs` call we use
-            // inside hydrate, with the exact same params.
-            const t0 = performance.now();
-            const cloudSongs = await supabaseLoadUserSongs();
-            const dt = Math.round(performance.now() - t0);
-            lines.push(`supabaseLoadUserSongs: ${cloudSongs.length} rows in ${dt}ms (status=${_lastUserSongsLoadStatus})`);
-            if (cloudSongs.length) {
-              const sample = cloudSongs[0];
-              lines.push(`first row: title="${String(sample?.title || "").slice(0, 40)}" url=${(sample?.url || "").slice(0, 60)}`);
-            }
-            await ensureUserLibraryHydrated();
-            const afterLen = loadLibrary().length;
-            lines.push(`loadLibrary() before=${beforeLen} after=${afterLen}`);
-            lines.push(`activeProfile.id (post-hydrate): ${String(activeProfile?.id || "")}`);
-            lines.push(`profileLibraryKey (post-hydrate): ${profileLibraryKey()}`);
-            if (afterLen > 0) {
-              lines.push("→ hydrate succeeded; tap Library tab again to refresh the view.");
-              try { renderLibrary(); } catch {}
-            }
-          } catch (e) {
-            lines.push(`forced hydrate ERR: ${e?.message || String(e)}`);
-          }
-          dbgOut.textContent = lines.join("\n");
         });
       }
       return;
@@ -4112,6 +4120,9 @@ if (els.songDetailsBackdrop) {
 }
 if (els.btnCloseSongDetails) {
   els.btnCloseSongDetails.addEventListener("click", closeSongDetailsModal);
+}
+if (els.btnLibraryDiagnostic) {
+  els.btnLibraryDiagnostic.addEventListener("click", () => void runLibraryDiagnostic());
 }
 
 // Vocal Room state

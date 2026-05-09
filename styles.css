@@ -926,6 +926,7 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   bottom:10px;
   width:34px;
   height:34px;
+  z-index:3;
   border-radius:999px;
   border:1px solid rgba(255,255,255,0.22);
   background: rgba(8,12,20,0.62);
@@ -939,13 +940,15 @@ body.isAuth .hubNowPlaying{ display:none !important; }
 }
 .hubPlayProgress{
   position:absolute;
-  left:10px;
+  left:46px;
   right:10px;
-  bottom:10px;
-  height:4px;
+  bottom:8px;
+  height:5px;
+  z-index:2;
   border-radius:999px;
   background: rgba(255,255,255,0.22);
   overflow:hidden;
+  pointer-events:none;
   display:none;
 }
 .hubCoverWrap.isPlaying .hubPlayProgress{ display:block; }
@@ -982,12 +985,15 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   left:10px;
   display:flex;
   align-items:flex-end;
-  gap:3px;
-  height:14px;
-  padding:5px 7px;
-  border-radius:8px;
-  background: rgba(8,12,20,0.55);
-  border: 1px solid rgba(255,255,255,0.10);
+  gap:4px;
+  height:18px;
+  padding:6px 9px;
+  border-radius:9px;
+  background: rgba(6,10,18,0.72);
+  border: 1px solid rgba(255,255,255,0.16);
+  box-shadow:
+    0 0 12px rgba(124,92,255,0.35),
+    0 0 10px rgba(35,213,171,0.22);
   pointer-events:none;
   opacity:0;
   transition: opacity 220ms ease;
@@ -995,21 +1001,23 @@ body.isAuth .hubNowPlaying{ display:none !important; }
 .hubCoverWrap.isPlaying .hubEq{ opacity:1; }
 .hubEq i{
   display:block;
-  width:3px;
+  width:4px;
   height:100%;
   background: linear-gradient(180deg, rgba(35,213,171,1), rgba(124,92,255,1));
   border-radius:2px;
+  box-shadow: 0 0 6px rgba(35,213,171,0.55);
   transform-origin: bottom center;
-  animation: hubEqBar 900ms ease-in-out infinite;
+  animation: hubEqBar 780ms ease-in-out infinite;
   will-change: transform;
 }
-.hubEq i:nth-child(2){ animation-duration: 1100ms; animation-delay: 120ms; }
-.hubEq i:nth-child(3){ animation-duration: 800ms; animation-delay: 60ms; }
+.hubEq i:nth-child(2){ animation-duration: 980ms; animation-delay: 100ms; }
+.hubEq i:nth-child(3){ animation-duration: 860ms; animation-delay: 55ms; }
 @keyframes hubEqBar{
-  0%, 100% { transform: scaleY(0.35); }
-  30% { transform: scaleY(0.85); }
-  50% { transform: scaleY(0.55); }
-  70% { transform: scaleY(1); }
+  0%, 100% { transform: scaleY(0.28); }
+  25% { transform: scaleY(0.92); }
+  45% { transform: scaleY(0.48); }
+  65% { transform: scaleY(1); }
+  85% { transform: scaleY(0.62); }
 }
 
 /* Loading shimmer on the progress bar while audio is buffering. The progress
@@ -1048,11 +1056,11 @@ body.isAuth .hubNowPlaying{ display:none !important; }
  */
 #hubList .hubRow{
   transition:
-    opacity 280ms cubic-bezier(0.22, 1, 0.36, 1),
-    filter 280ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 280ms cubic-bezier(0.22, 1, 0.36, 1),
-    background 280ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    background 200ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 #hubList:has(.hubRow.isActive) .hubRow:not(.isActive){
   opacity: 0.5;

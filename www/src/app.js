@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510at";
+const APP_BUILD = "20260509hub";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -314,17 +314,32 @@ let hubAudio = null;
 let hubAudioPostId = null;
 let hubNowMeta = null;
 let miniSource = null;
+/** Avoid mini-player toggling when scroll hovers near the visibility threshold. */
+let hubPlayingPostProminent = false;
 function isPlayingHubPostVisible() {
   if (!hubAudioPostId) return false;
   const route = document.body.getAttribute("data-route") || "";
-  if (route !== "hub") return false;
+  if (route !== "hub") {
+    hubPlayingPostProminent = false;
+    return false;
+  }
   const row = document.querySelector(`[data-hub-row="${hubAudioPostId}"]`);
-  if (!row) return false;
+  if (!row) {
+    hubPlayingPostProminent = false;
+    return false;
+  }
   const r = row.getBoundingClientRect();
   const vh = window.innerHeight || document.documentElement.clientHeight || 0;
   const visiblePx = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
   const ratio = r.height > 0 ? visiblePx / r.height : 0;
-  return ratio >= 0.35;
+  const ENTER = 0.42;
+  const EXIT = 0.26;
+  if (!hubPlayingPostProminent) {
+    if (ratio >= ENTER) hubPlayingPostProminent = true;
+  } else if (ratio <= EXIT) {
+    hubPlayingPostProminent = false;
+  }
+  return hubPlayingPostProminent;
 }
 function isPlayingLibraryRowVisible() {
   const route = document.body.getAttribute("data-route") || "";
@@ -349,7 +364,7 @@ let hubAutoplayMutedPostId = null;
 let hubViewportTailTimer = null;
 /** After Hub-tab “jump to top”, kill stale debounce timers and silence viewport
  * autoplay briefly — otherwise a pending `tryHubViewportAutoplay` from *before*
- * the tap fires ~140ms later, calls `startHubPlayback(oldPostId)`, and scroll-
+ * the tap fires ~280ms later, calls `startHubPlayback(oldPostId)`, and scroll-
  * snap fights bring the viewport back to that row. */
 let hubSuppressViewportAutoplayUntil = 0;
 let hubPlaybackSeq = 0;
@@ -412,6 +427,14 @@ function suppressHubViewportAutoplayFor(ms) {
   hubSuppressViewportAutoplayUntil = Date.now() + ms;
 }
 
+function getHubRowIntersectionRatio(row) {
+  if (!row) return 0;
+  const r = row.getBoundingClientRect();
+  const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+  const visiblePx = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+  return r.height > 0 ? visiblePx / r.height : 0;
+}
+
 function getHubRowClosestToViewportCenter() {
   const root = els.hubList;
   if (!root) return null;
@@ -419,38 +442,45 @@ function getHubRowClosestToViewportCenter() {
   if (!rows.length) return null;
   const vh = window.innerHeight || document.documentElement.clientHeight || 0;
   const cy = vh / 2;
+  const bandTop = vh * 0.22;
+  const bandBottom = vh * 0.78;
+  let bestInBandId = null;
+  let bestInBandDist = Infinity;
   let bestIntersectId = null;
   let bestIntersectDist = Infinity;
-  let bestAnyId = null;
-  let bestAnyDist = Infinity;
+  let bestAreaId = null;
+  let bestAreaPx = -1;
   rows.forEach((row) => {
     const r = row.getBoundingClientRect();
-    const mid = r.top + r.height / 2;
-    const d = Math.abs(mid - cy);
     const id = row.getAttribute("data-hub-row");
     if (!id) return;
-    if (d < bestAnyDist) {
-      bestAnyDist = d;
-      bestAnyId = id;
+    const mid = r.top + r.height / 2;
+    const d = Math.abs(mid - cy);
+    const visiblePx = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+    const overlapsBand = r.bottom > bandTop && r.top < bandBottom;
+    if (overlapsBand && visiblePx > 12 && d < bestInBandDist) {
+      bestInBandDist = d;
+      bestInBandId = id;
     }
-    const intersects = r.bottom > 0 && r.top < vh;
-    if (intersects && d < bestIntersectDist) {
+    if (visiblePx > 0 && d < bestIntersectDist) {
       bestIntersectDist = d;
       bestIntersectId = id;
     }
+    if (visiblePx > bestAreaPx) {
+      bestAreaPx = visiblePx;
+      bestAreaId = id;
+    }
   });
-  // Prefer a row that actually intersects the viewport (finger on a card).
-  // When you scroll between two posts the viewport center can sit in the gap
-  // between rows — then no row "intersects" and autoplay used to go silent.
-  // Fall back to whichever row center is closest overall (still on the feed).
-  return bestIntersectId || bestAnyId;
+  // Prefer the row that crosses the middle “reading band” — stable when the
+  // viewport center sits in whitespace between two cards.
+  return bestInBandId || bestIntersectId || bestAreaId;
 }
 
 // Don't run *audio* on every scroll frame — that was the cause of "rapid
 // play/stop": while the user dragged, every frame
 // `getHubRowClosestToViewportCenter` could pick a different row and we'd
 // start/abandon playback in a loop. So audio waits for the scroll to be
-// quiet for ~140ms (or instantly on `scrollend`).
+// quiet for ~280ms (or instantly on `scrollend`).
 //
 // VISUAL focus is a separate path (`updateHubFocusedRow`) that DOES run on
 // every scroll frame, raf-throttled. Just toggling a class is cheap and
@@ -463,7 +493,7 @@ function scheduleHubViewportAutoplay() {
   hubViewportTailTimer = setTimeout(() => {
     hubViewportTailTimer = null;
     tryHubViewportAutoplay();
-  }, 140);
+  }, 280);
 }
 
 // Visual focus tracking — separate from audio playback. Sets `.isActive`
@@ -605,6 +635,8 @@ function tryHubViewportAutoplay() {
   if (!getHubAudioUnlocked()) return;
   const centerId = getHubRowClosestToViewportCenter();
   if (!centerId) return;
+  const centerRow = els.hubList.querySelector(`[data-hub-row="${centerId}"]`);
+  if (getHubRowIntersectionRatio(centerRow) < 0.1) return;
   if (hubAutoplayMutedPostId && centerId !== hubAutoplayMutedPostId) {
     hubAutoplayMutedPostId = null;
   }
@@ -629,6 +661,7 @@ function stopHubPlayback() {
   hubAudioCurrentPost = null;
   hubNowMeta = null;
   miniSource = null;
+  hubPlayingPostProminent = false;
   const root = els.hubList;
   if (root) {
     root.querySelectorAll("[data-hub-play]").forEach((btn) => {
@@ -647,6 +680,7 @@ function stopHubPlayback() {
 }
 
 async function startHubPlayback(postId) {
+  if (hubAudioPostId !== postId) hubPlayingPostProminent = false;
   // Idempotent: if we're already targeting this post, just make sure it's
   // playing again (in case the user tapped pause earlier or the load was
   // interrupted). Don't re-allocate state — that's what produced the
@@ -817,6 +851,15 @@ function renderHubNowPlaying() {
     const pct = Math.max(0, Math.min(100, (hubAudio.currentTime / hubAudio.duration) * 100));
     els.hubNowProgBar.style.width = `${pct}%`;
   }
+}
+
+let hubNowPlayingScrollRaf = 0;
+function scheduleRenderHubNowPlaying() {
+  if (hubNowPlayingScrollRaf) return;
+  hubNowPlayingScrollRaf = requestAnimationFrame(() => {
+    hubNowPlayingScrollRaf = 0;
+    renderHubNowPlaying();
+  });
 }
 const LATEST_SUNO_MODEL = "V5_5";
 const API_BASE = (window.__API_BASE__ || "").replace(/\/$/, "");
@@ -8481,7 +8524,7 @@ if (els.hubSortTrending) els.hubSortTrending.addEventListener("click", () => set
  *     feed themselves — no rubber-band possible.
  *
  * Suppress `tryHubViewportAutoplay` until the user starts scrolling so
- * the 140ms debounce can't restart the previous row mid-jump either.
+ * the debounced autoplay can't restart the previous row mid-jump either.
  */
 let hubJumpToTopRaf = 0;
 let hubJumpToTopActive = false;
@@ -8626,12 +8669,12 @@ window.addEventListener("scroll", () => {
     scheduleHubFocusUpdate();
     scheduleHubViewportAutoplay();
   }
-  if (hubAudio) renderHubNowPlaying();
+  if (hubAudio) scheduleRenderHubNowPlaying();
 }, { passive: true });
 // `scrollend` fires once the page (or a programmatic smooth scroll) actually
 // stops — much more reliable than waiting for `scroll` events to taper off.
 // Supported on iOS Safari 16+, Chrome 114+, and Firefox 109+. Where it isn't
-// supported the 140ms debounce above still covers us.
+// supported the 280ms debounce above still covers us.
 window.addEventListener("scrollend", () => {
   if ((document.body.getAttribute("data-route") || "") !== "hub") return;
   updateHubFocusedRow();

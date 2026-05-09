@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510z";
+const APP_BUILD = "20260510aa";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1883,18 +1883,39 @@ async function supabaseLoadUserSongs() {
     meta: s.meta || null,
   }));
 }
+/** Strip values that aren't safe / efficient to ship to a JSONB row in
+ *  Supabase. v1 Library cloud sync intentionally leaves custom-cover
+ *  data: URLs out of the payload — they're typically 200–500 KB each
+ *  and would inflate every user_songs row by an order of magnitude.
+ *  Phase C will upload custom covers to Supabase Storage and store the
+ *  resulting public URL here instead.
+ */
+function sanitizeMetaForCloud(meta) {
+  if (!meta || typeof meta !== "object") return meta || null;
+  const out = { ...meta };
+  for (const k of ["imageUrl", "imageThumb"]) {
+    const v = out[k];
+    if (typeof v === "string" && v.startsWith("data:")) delete out[k];
+  }
+  return out;
+}
+
 async function supabaseInsertUserSong(track) {
   const token = getSupabaseAuthToken();
   if (!token || !authSession?.user?.id) return { ok: false, reason: "no_auth" };
+  const rawArt = String(track.artUrl || "");
   const payload = {
     user_id: authSession.user.id,
     title: track.title || "Generated song",
-    art_url: track.artUrl || "",
+    // Skip data: URLs for the same reason as meta above. If the only
+    // cover we have right now is a local upload, send empty and let
+    // Phase C populate a real URL later.
+    art_url: rawArt.startsWith("data:") ? "" : rawArt,
     song_url: track.url || "",
     task_id: track.taskId || "",
     audio_id: track.audioId || "",
     kind: track.kind || "full",
-    meta: track.meta || null,
+    meta: sanitizeMetaForCloud(track.meta || null),
   };
   const r = await fetch(`${SUPABASE_URL}/rest/v1/user_songs`, {
     method: "POST",
@@ -1913,6 +1934,50 @@ async function supabaseInsertUserSong(track) {
   }
   return { ok: true };
 }
+/** Patch an existing `user_songs` row keyed by (user_id, song_url, kind).
+ *  Used when a track changes locally — currently just custom-cover
+ *  uploads from the Player. Fire-and-forget; failures fall back to
+ *  localStorage being authoritative until the next reconcile.
+ */
+async function supabasePatchUserSong(track, patch) {
+  const token = getSupabaseAuthToken();
+  if (!token || !authSession?.user?.id) return { ok: false, reason: "no_auth" };
+  const songUrl = String(track?.url || "").trim();
+  if (!songUrl) return { ok: false, reason: "no_song_url" };
+  const uid = encodeURIComponent(authSession.user.id);
+  const url = encodeURIComponent(songUrl);
+  const kind = encodeURIComponent(String(track?.kind || "full"));
+  const body = {};
+  if (typeof patch?.title === "string") body.title = patch.title;
+  // Same reasoning as in supabaseInsertUserSong: don't ship a custom
+  // cover data URL into a JSONB row, and don't overwrite an existing
+  // remote art_url with empty just because the user uploaded a local
+  // cover. We push only real (non-data:) URLs.
+  if (typeof patch?.artUrl === "string" && patch.artUrl && !patch.artUrl.startsWith("data:")) {
+    body.art_url = patch.artUrl;
+  }
+  if (patch?.meta && typeof patch.meta === "object") {
+    body.meta = sanitizeMetaForCloud(patch.meta);
+  }
+  if (Object.keys(body).length === 0) return { ok: false, reason: "noop" };
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${uid}&song_url=eq.${url}&kind=eq.${kind}`, {
+    method: "PATCH",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify(body),
+  }).catch(() => null);
+  if (!r) return { ok: false, reason: "network" };
+  if (!r.ok) {
+    const txt = await r.text().catch(() => "");
+    return { ok: false, reason: `http_${r.status}`, details: String(txt).slice(0, 180) };
+  }
+  return { ok: true };
+}
+
 async function supabaseDeleteUserSong(track) {
   const token = getSupabaseAuthToken();
   if (!token || !authSession?.user?.id) return;
@@ -2902,9 +2967,20 @@ function patchLibraryTrack(id, patch) {
   const items = loadLibrary();
   const idx = items.findIndex((x) => String(x.id) === String(id));
   if (idx < 0) return;
-  items[idx] = { ...items[idx], ...patch, ts: Date.now() };
+  const prev = items[idx];
+  items[idx] = { ...prev, ...patch, ts: Date.now() };
   saveLibrary(items);
   renderLibrary();
+  // Fire-and-forget cloud sync. The PATCH is keyed by the song_url +
+  // kind of the previous row (those don't change in any current patch
+  // path), so we use `prev` as the lookup. Custom-cover data: URLs are
+  // stripped server-side by sanitizeArtUrl/sanitizeMetaForCloud — see
+  // notes in those helpers for the v1 limitation.
+  void supabasePatchUserSong(prev, {
+    title: items[idx].title,
+    artUrl: items[idx].artUrl,
+    meta: items[idx].meta,
+  });
 }
 async function syncHubCoverForTrack(track, coverUrl) {
   const title = String(track?.title || "").trim();
@@ -2988,7 +3064,96 @@ async function ensureUserLibraryHydrated() {
       setStatus(`Library sync complete: ${okCount} saved to cloud.`);
     }
   }
+  // Skip the next reconcile — we just did a full cloud round-trip.
+  _libraryReconcileLastAt = Date.now();
 }
+// ─── Lightweight cloud → local reconcile for ongoing sync ─────────────
+// `ensureUserLibraryHydrated` (above) is the heavy migration path that
+// runs once at boot: it uploads every local-only track. Once that's
+// done we don't want to re-run it every time the user taps Library —
+// it's slow and serial. `reconcileLibraryFromCloud` is the cheap
+// alternative: pull the latest cloud rows, merge with local (preserving
+// any local custom-cover data: URLs that v1 doesn't ship to the cloud),
+// re-render. Throttled so we don't hammer Supabase if the user
+// rapid-toggles tabs.
+let _libraryReconcileInFlight = false;
+let _libraryReconcileLastAt = 0;
+const LIBRARY_RECONCILE_MIN_INTERVAL_MS = 30_000;
+
+async function reconcileLibraryFromCloud({ force = false } = {}) {
+  if (!authSession?.user?.id) return;
+  if (_libraryReconcileInFlight) return;
+  if (!force && Date.now() - _libraryReconcileLastAt < LIBRARY_RECONCILE_MIN_INTERVAL_MS) return;
+  _libraryReconcileInFlight = true;
+  try {
+    const cloud = await supabaseLoadUserSongs();
+    if (!Array.isArray(cloud)) return;
+    const local = loadLibrary();
+
+    // Two indices for the merge. Signature pins a logical track
+    // (song URL + audio id + kind) without depending on the DB id
+    // (cloud rows use UUIDs, local rows use timestamp+random).
+    const sigOf = (t) =>
+      `${String(t?.url || "").trim()}|${String(t?.audioId || "").trim()}|${String(t?.kind || "full").trim()}`;
+    const localBySig = new Map();
+    for (const t of local) localBySig.set(sigOf(t), t);
+    const cloudSigs = new Set(cloud.map(sigOf));
+
+    const merged = [];
+    const seen = new Set();
+    // Cloud is the source of truth — but we keep the local id (so any
+    // open menus / now-playing references stay valid) and we keep the
+    // local cover when the local copy has a custom data: URL that the
+    // cloud row doesn't carry yet (Phase C will fix that).
+    for (const c of cloud) {
+      const sig = sigOf(c);
+      if (seen.has(sig)) continue;
+      seen.add(sig);
+      const localCopy = localBySig.get(sig);
+      if (localCopy) {
+        const localArtIsCustom = String(localCopy.artUrl || "").startsWith("data:");
+        const localImgIsCustom = String(localCopy.meta?.imageUrl || "").startsWith("data:");
+        merged.push({
+          ...c,
+          id: localCopy.id || c.id,
+          artUrl: localArtIsCustom ? localCopy.artUrl : (c.artUrl || localCopy.artUrl || ""),
+          meta: {
+            ...(c.meta || {}),
+            ...(localCopy.meta || {}),
+            ...(localImgIsCustom
+              ? { imageUrl: localCopy.meta.imageUrl, ...(localCopy.meta.imageThumb ? { imageThumb: localCopy.meta.imageThumb } : {}) }
+              : {}),
+          },
+        });
+      } else {
+        merged.push(c);
+      }
+    }
+
+    // Local-only tracks (created in this session before the cloud
+    // insert finished, or where insert failed). Keep them visible and
+    // re-attempt the insert in the background.
+    for (const t of local) {
+      const sig = sigOf(t);
+      if (cloudSigs.has(sig) || seen.has(sig)) continue;
+      seen.add(sig);
+      merged.push(t);
+      if (t.url) void supabaseInsertUserSong(t);
+    }
+
+    merged.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
+    saveLibrary(merged);
+    if ((document.body.getAttribute("data-route") || "") === "library") {
+      renderLibrary();
+    }
+    _libraryReconcileLastAt = Date.now();
+  } catch {
+    // Silent: reconcile is purely an optimization on top of localStorage.
+  } finally {
+    _libraryReconcileInFlight = false;
+  }
+}
+
 function addToLibrary(track) {
   const items = loadLibrary();
   const url = String(track.url || "").trim();
@@ -7663,6 +7828,15 @@ window.addEventListener("hashchange", () => {
 window.addEventListener("hashchange", () => {
   const route = document.body.getAttribute("data-route") || "";
   if (route === "profile") void refreshSunoCredits();
+});
+// Pull the latest Library state from Supabase whenever the user opens
+// the Library tab. Throttled inside the function so a rapid tab toggle
+// doesn't hammer the API. localStorage stays the immediate source of
+// truth for the first paint; this just merges new rows from other
+// devices once they arrive.
+window.addEventListener("hashchange", () => {
+  const route = document.body.getAttribute("data-route") || "";
+  if (route === "library") void reconcileLibraryFromCloud();
 });
 if (els.shareLiveBackdrop) els.shareLiveBackdrop.addEventListener("click", closeShareLiveModal);
 if (els.btnCloseShareLive) els.btnCloseShareLive.addEventListener("click", closeShareLiveModal);

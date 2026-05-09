@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510aa";
+const APP_BUILD = "20260510ab";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -999,6 +999,12 @@ function applyRoute() {
   if (wanted === "profile") {
     void refreshAuthStateFromSupabase();
     setProfileEditing(false);
+  }
+  if (wanted === "library") {
+    // One synchronous paint from the in-memory + memoized local cache so
+    // the tab never flashes empty while `reconcileLibraryFromCloud` waits
+    // for idle + network (scheduled from hashchange).
+    renderLibrary();
   }
   if (wanted === "user") {
     renderUserProfile(pendingPublicUsername);
@@ -2852,13 +2858,32 @@ function renderProfileHubShared() {
   });
 }
 
+/** Parsed Library JSON — `loadLibrary()` can run many times per tick
+ *  (render, reconcile, handlers). Re-parsing a multi-megabyte string
+ *  (custom covers as base64 in meta) was a major source of jank.
+ *  Invalidate on every `saveLibrary` / `saveLibraryFor` write.
+ */
+let _libraryMemCache = null;
+let _libraryMemCacheKey = "";
+
+function invalidateLibraryMemCache() {
+  _libraryMemCache = null;
+  _libraryMemCacheKey = "";
+}
+
 function loadLibrary() {
+  const key = profileLibraryKey();
+  if (_libraryMemCacheKey === key && _libraryMemCache) return _libraryMemCache;
   try {
-    const raw = localStorage.getItem(profileLibraryKey());
+    const raw = localStorage.getItem(key);
     const arr = raw ? JSON.parse(raw) : [];
-    return Array.isArray(arr) ? arr : [];
+    _libraryMemCache = Array.isArray(arr) ? arr : [];
+    _libraryMemCacheKey = key;
+    return _libraryMemCache;
   } catch {
-    return [];
+    _libraryMemCache = [];
+    _libraryMemCacheKey = key;
+    return _libraryMemCache;
   }
 }
 function loadLibraryFor(id) {
@@ -2959,7 +2984,10 @@ function loadAllLocalSongsDeduped() {
 }
 function saveLibrary(items) {
   try {
-    localStorage.setItem(profileLibraryKey(), JSON.stringify(items || []));
+    const key = profileLibraryKey();
+    localStorage.setItem(key, JSON.stringify(items || []));
+    _libraryMemCache = Array.isArray(items) ? items : [];
+    _libraryMemCacheKey = key;
   } catch {}
 }
 function patchLibraryTrack(id, patch) {
@@ -3005,6 +3033,10 @@ async function syncHubCoverForTrack(track, coverUrl) {
 function saveLibraryFor(id, items) {
   try {
     localStorage.setItem(profileLibraryKeyFor(id), JSON.stringify(items || []));
+    if (String(id || "") === String(activeProfile?.id || "guest")) {
+      _libraryMemCache = Array.isArray(items) ? items : [];
+      _libraryMemCacheKey = profileLibraryKey();
+    }
   } catch {}
 }
 
@@ -7836,7 +7868,16 @@ window.addEventListener("hashchange", () => {
 // devices once they arrive.
 window.addEventListener("hashchange", () => {
   const route = document.body.getAttribute("data-route") || "";
-  if (route === "library") void reconcileLibraryFromCloud();
+  if (route !== "library") return;
+  // Paint the tab from memory/localStorage first; cloud reconcile hits
+  // the network and merges — scheduling it for idle keeps the route swap
+  // feeling instant on slower phones.
+  const run = () => void reconcileLibraryFromCloud();
+  if (typeof requestIdleCallback === "function") {
+    requestIdleCallback(run, { timeout: 2500 });
+  } else {
+    setTimeout(run, 120);
+  }
 });
 if (els.shareLiveBackdrop) els.shareLiveBackdrop.addEventListener("click", closeShareLiveModal);
 if (els.btnCloseShareLive) els.btnCloseShareLive.addEventListener("click", closeShareLiveModal);

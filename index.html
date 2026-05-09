@@ -106,13 +106,8 @@
             <p class="libraryLead">Your songs stay on this device until you delete them.</p>
             <p id="libraryCount" class="libraryCount" hidden aria-live="polite"></p>
           </header>
-          <div id="libraryStorageBanner" class="libraryStorageBanner" hidden>
-            <span class="libraryStorageBannerText" id="libraryStorageBannerText"></span>
-            <button type="button" id="btnLibraryFreeSpace" class="ghost libraryDiagBtn">Free up space</button>
-          </div>
           <div id="libraryList" class="libraryList"></div>
-          <p class="libraryDiagActions">
-            <button type="button" id="btnLibraryFreeSpaceAlt" class="ghost libraryDiagBtn">Free up local storage</button>
+          <p class="libraryDiagActions" hidden>
             <button type="button" id="btnLibraryDiagnostic" class="ghost libraryDiagBtn">Run library diagnostic</button>
           </p>
           <pre id="libraryDiagnosticOutput" class="libraryDiagnosticOutput" hidden></pre>
@@ -1486,6 +1481,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260509libmenu2"></script>
+    <script type="module" src="./src/app.js?v=20260509nobanner"></script>
   </body>
 </html>

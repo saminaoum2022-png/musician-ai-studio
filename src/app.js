@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510hubfocus";
+const APP_BUILD = "20260510snapstop";
 
 (() => {
   const f = document.getElementById("footerBuild");

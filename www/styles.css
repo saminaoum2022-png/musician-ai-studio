@@ -1976,6 +1976,11 @@ body[data-route="hub"]{
 }
 body[data-route="hub"] .hubRow{
   scroll-snap-align: center;
+  /* Force the scroller to stop at every post even on fast/hard
+   * swipes. Without this, iOS lets a strong flick carry past one
+   * snap point so the middle post never lands in view. `always`
+   * is exactly the TikTok/Reels behavior the user is asking for. */
+  scroll-snap-stop: always;
 }
 html:has(body.hubJumpingToTop),
 body.hubJumpingToTop{
@@ -1983,6 +1988,7 @@ body.hubJumpingToTop{
 }
 body.hubJumpingToTop .hubRow{
   scroll-snap-align: none !important;
+  scroll-snap-stop: normal !important;
 }
 [data-route="hub"] .trackName{
   font-size:15px;

@@ -20,7 +20,7 @@ const {
   sendJson,
 } = require("../_lib/credits-auth");
 
-const FULL_SONG_COST = 10;
+const FULL_SONG_COST = 12;
 
 module.exports = async function handler(req, res) {
   try {

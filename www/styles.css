@@ -4817,6 +4817,28 @@ input::placeholder, textarea::placeholder{
   .mobileTabbar a:hover{
     color: rgba(223, 231, 251, 0.85);
   }
+  /* Inactive tabs: dim so the active tab really stands out */
+  .mobileTabbar a{
+    color: rgba(223, 231, 251, 0.58);
+  }
+  /* iOS-style top indicator pill — present on every tab, fades in only
+   * when active. One consistent active signal that works for the
+   * gradient-icon Hub tab too (the icon itself doesn't need to change). */
+  .mobileTabbar a::before{
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 50%;
+    width: 22px;
+    height: 3px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #7c5cff, #23d5ab);
+    opacity: 0;
+    transform: translateX(-50%) scaleX(0.4);
+    transform-origin: center;
+    transition: opacity 220ms ease, transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1);
+    pointer-events: none;
+  }
   /* Hub keeps its gradient identity — the SVG itself uses a gradient
    * stroke (defined inline in the markup), so the link's color cascade
    * doesn't apply. We just make the label gradient-tinted. */
@@ -4826,14 +4848,23 @@ input::placeholder, textarea::placeholder{
             background-clip: text;
     -webkit-text-fill-color: transparent;
     color: transparent;
-    opacity: 0.88;
+    opacity: 0.78;
+    transition: opacity 220ms ease;
   }
   .mobileTabbar a.active{
     color:#fff;
     background: transparent;
   }
   .mobileTabbar a.active .tabIco{
-    stroke: rgba(255,255,255,0.96);
+    stroke: rgba(255,255,255,0.98);
+  }
+  .mobileTabbar a.active .tabLabel{
+    font-weight: 700;
+    letter-spacing: 0.2px;
+  }
+  .mobileTabbar a.active::before{
+    opacity: 1;
+    transform: translateX(-50%) scaleX(1);
   }
   .mobileTabbar a.hubTab.active{
     background: transparent;

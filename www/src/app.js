@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510hubpub2";
+const APP_BUILD = "20260510hubboot";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -3139,14 +3139,33 @@ function renderHub() {
   // 20260509k — they were title regex, not real categories. The sort
   // segment is now Latest | Trending only.
   if (!items.length) {
-    els.hubList.innerHTML = `
-      <div class="emptyState">
-        <div class="emptyStateIcon" aria-hidden="true">♫</div>
-        <p class="emptyStateTitle">The Hub is quiet</p>
-        <p class="emptyStateHint">Songs you publish from your Library will land here. Be the first to share something today.</p>
-        <a href="#/library" class="emptyStateCta" data-route-link="library">Open Library</a>
-      </div>
-    `;
+    // Two distinct empty states. While the first cloud refresh is
+    // mid-flight (`hubSyncInFlight`) or has never resolved
+    // (`hubLastSyncOk` still false and no error yet), show a Loading
+    // pulse instead of the "Hub is quiet" CTA — otherwise the user
+    // sees the empty CTA flash on every cold open before posts arrive.
+    const stillLoading = hubSyncInFlight || (!hubLastSyncOk && !hubLastSyncError);
+    if (stillLoading) {
+      els.hubList.innerHTML = `
+        <div class="hubLoadingSkeleton" aria-live="polite" aria-busy="true">
+          <div class="hubSkelRow"><div class="hubSkelCover"></div><div class="hubSkelMeta"><span></span><span></span></div></div>
+          <div class="hubSkelRow"><div class="hubSkelCover"></div><div class="hubSkelMeta"><span></span><span></span></div></div>
+          <div class="hubSkelRow"><div class="hubSkelCover"></div><div class="hubSkelMeta"><span></span><span></span></div></div>
+        </div>
+      `;
+    } else {
+      els.hubList.innerHTML = `
+        <div class="emptyState">
+          <div class="emptyStateIcon" aria-hidden="true">♫</div>
+          <p class="emptyStateTitle">The Hub is quiet</p>
+          <p class="emptyStateHint">Songs you publish from your Library will land here. Be the first to share something today.</p>
+          <a href="#/library" class="emptyStateCta" data-route-link="library">Open Library</a>
+        </div>
+      `;
+    }
+    // Reset sig so when posts arrive, the skip-if-unchanged branch
+    // can't falsely match against an old sig from a previous render.
+    _hubLastRenderedSig = "";
     renderHubUpdatedAt();
     updateHubAudioHint();
     return;
@@ -11260,17 +11279,22 @@ void (async () => {
     renderProfileHubShared();
 
     syncActiveProfileIdFromSession();
-    // Fire-and-forget so the rest of boot (Hub refresh, route apply,
-    // first paint) is never gated on the user_songs round-trip. The
-    // hydrate function repaints Library by itself once the fetch
-    // resolves. On a PWA cold start this turned a "Library is stuck"
-    // wait into "Library populates a beat after the tab opens".
-    void ensureUserLibraryHydrated();
-    // Targeted "just my Hub posts" fetch in parallel with everything
-    // else so the Profile's songs/likes section doesn't have to wait
-    // for the full Hub feed (the slowest call). This is a single tiny
-    // query filtered by creatorUserId + creator_username.
-    void refreshMyHubPostsFast();
+    // Defer the heavier Library + Profile-targeted queries so the
+    // global Hub fetch isn't competing with them for the iOS
+    // 6-connection-per-origin budget at boot. They still run early
+    // (idle-callback, ~50–500ms after first paint), but Hub gets the
+    // pipe first. The Profile route handler also re-fires
+    // `refreshMyHubPostsFast()` whenever the user actually opens
+    // Profile, so deferring here doesn't leave Profile stale.
+    const startDeferredQueries = () => {
+      void ensureUserLibraryHydrated();
+      void refreshMyHubPostsFast();
+    };
+    if (typeof requestIdleCallback === "function") {
+      requestIdleCallback(startDeferredQueries, { timeout: 800 });
+    } else {
+      setTimeout(startDeferredQueries, 250);
+    }
     renderPersonaSelect();
   } else {
     // Never leak previous user visuals when session is not valid.

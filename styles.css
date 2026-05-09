@@ -1083,6 +1083,55 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   #hubList .hubRow{ transition: none; }
 }
 
+/* Skeleton placeholders for the Hub feed while the first cloud refresh
+ * is in flight. Beats the "Hub is quiet" empty state flashing for half
+ * a second on cold opens. The shimmer matches the row layout so the
+ * paint feels continuous when real posts swap in. */
+.hubLoadingSkeleton{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0 12px;
+}
+.hubSkelRow{
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 8px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+}
+.hubSkelCover{
+  flex: 0 0 auto;
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.04) 100%);
+  background-size: 200% 100%;
+  animation: hubSkelShimmer 1.2s ease-in-out infinite;
+}
+.hubSkelMeta{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.hubSkelMeta > span{
+  display: block;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.04) 100%);
+  background-size: 200% 100%;
+  animation: hubSkelShimmer 1.2s ease-in-out infinite;
+}
+.hubSkelMeta > span:nth-child(1){ width: 70%; }
+.hubSkelMeta > span:nth-child(2){ width: 40%; }
+@keyframes hubSkelShimmer{
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 /* "Load more" affordance at the end of the Hub feed. The sentinel is
  * also the IntersectionObserver target — once it scrolls into view the
  * observer fires its click handler so the feed feels endless without

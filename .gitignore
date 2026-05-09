@@ -2,3 +2,7 @@
 .vercel
 
 node_modules/ffmpeg-static/ffmpeg
+
+# Generated promo code lists (live, unredeemed codes — keep private)
+codes.sql
+codes-*.sql

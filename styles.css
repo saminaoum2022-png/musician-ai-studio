@@ -2551,6 +2551,74 @@ textarea{
   gap: 14px;
   margin-bottom: 10px;
 }
+.remixSourceBanner{
+  display:flex;
+  align-items:center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(124, 92, 255, 0.45);
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.18), rgba(78, 192, 255, 0.12));
+  box-shadow: 0 8px 22px rgba(124, 92, 255, 0.18);
+}
+.remixSourceBanner[hidden]{ display:none !important; }
+.remixSourceBannerCover{
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background-color: rgba(255,255,255,0.08);
+  background-size: cover;
+  background-position: center;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.remixSourceBannerBody{
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.remixSourceBannerKicker{
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(180, 168, 255, 0.95);
+}
+.remixSourceBannerTitle{
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.remixSourceBannerSub{
+  font-size: 12.5px;
+  color: rgba(220, 220, 235, 0.78);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.remixSourceBannerClose{
+  flex: 0 0 auto;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.85);
+  cursor: pointer;
+  padding: 0;
+}
+.remixSourceBannerClose:hover{
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+}
 .card[data-route="generate"] #simpleBox > h2{
   margin-bottom: 6px;
 }

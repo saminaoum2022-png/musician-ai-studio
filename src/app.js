@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510proofgate";
+const APP_BUILD = "20260510hubremix2";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -39,6 +39,11 @@ const els = {
   sunoVocalUpload: document.getElementById("sunoVocalUpload"),
   sunoVocalUploadName: document.getElementById("sunoVocalUploadName"),
   vocalRefHint: document.getElementById("vocalRefHint"),
+  remixSourceBanner: document.getElementById("remixSourceBanner"),
+  remixSourceCover: document.getElementById("remixSourceCover"),
+  remixSourceTitle: document.getElementById("remixSourceTitle"),
+  remixSourceSub: document.getElementById("remixSourceSub"),
+  remixSourceCancel: document.getElementById("remixSourceCancel"),
   sunoReferenceMode: document.getElementById("sunoReferenceMode"),
   sunoReferenceHint: document.getElementById("sunoReferenceHint"),
   btnVocalRefRec: document.getElementById("btnVocalRefRec"),
@@ -1555,7 +1560,8 @@ function getVocalReferenceFile() {
   return null;
 }
 
-function clearVocalReferenceSelection() {
+function clearVocalReferenceSelection(opts = {}) {
+  const preserveRemixBanner = opts.preserveRemixBanner === true;
   currentVocalRefFile = null;
   vocalRefBlob = null;
   if (els.sunoVocalUpload) els.sunoVocalUpload.value = "";
@@ -1563,6 +1569,95 @@ function clearVocalReferenceSelection() {
   if (els.sunoVocalUploadName) els.sunoVocalUploadName.textContent = "No vocal reference attached.";
   updateVocalRefPreviewState();
   renderReferenceHints();
+  if (!preserveRemixBanner) clearRemixSource({ keepRefFile: true });
+}
+
+// Hub Remix state. When set, the Generate flow uploads this audio as the
+// melody reference and routes through Suno's upload-cover endpoint, so the
+// new lyrics are sung over the same arrangement instead of a brand-new song.
+var currentRemixSource = null;
+
+function setRemixSource(src) {
+  currentRemixSource = src && src.id ? { ...src } : null;
+  renderRemixSourceBanner();
+}
+
+function clearRemixSource({ keepRefFile = false } = {}) {
+  if (!currentRemixSource) {
+    renderRemixSourceBanner();
+    return;
+  }
+  currentRemixSource = null;
+  renderRemixSourceBanner();
+  if (!keepRefFile) {
+    try { clearVocalReferenceSelection({ preserveRemixBanner: true }); } catch {}
+  }
+}
+
+function renderRemixSourceBanner() {
+  if (!els.remixSourceBanner) return;
+  if (!currentRemixSource) {
+    els.remixSourceBanner.hidden = true;
+    if (els.remixSourceCover) els.remixSourceCover.style.backgroundImage = "";
+    return;
+  }
+  els.remixSourceBanner.hidden = false;
+  const title = String(currentRemixSource.title || "Track").trim() || "Track";
+  const creator = String(currentRemixSource.creator || "").trim();
+  if (els.remixSourceTitle) {
+    els.remixSourceTitle.textContent = creator ? `${title} · @${creator}` : title;
+  }
+  if (els.remixSourceSub) {
+    els.remixSourceSub.textContent = "Your new lyrics will be sung over this melody.";
+  }
+  if (els.remixSourceCover) {
+    const cover = String(currentRemixSource.coverUrl || "").trim();
+    els.remixSourceCover.style.backgroundImage = cover ? `url("${cover.replace(/"/g, '\\"')}")` : "";
+  }
+}
+
+async function startHubRemix(post) {
+  if (!post || !post.url) {
+    showToast("Cannot remix: this post has no audio.", { icon: "!", durationMs: 3200 });
+    return;
+  }
+  try {
+    setStatus("Loading remix source…");
+    showToast("Loading remix source…", { icon: "♪", durationMs: 1600 });
+    const proxied = apiUrl(`/api/suno/audio?url=${encodeURIComponent(String(post.url))}`);
+    const r = await fetch(proxied, { method: "GET", cache: "no-store" });
+    if (!r.ok) throw new Error(`Failed to fetch source (${r.status})`);
+    const blob = await r.blob();
+    if (!blob || blob.size < 1024) throw new Error("Source audio is empty");
+    const mime = blob.type && blob.type !== "application/octet-stream" ? blob.type : "audio/mpeg";
+    const ext = mime.includes("mpeg") ? "mp3" : (mime.split("/")[1] || "mp3").split(";")[0];
+    const safeBase = String(post.title || "remix-source")
+      .replace(/[^a-z0-9_-]+/gi, "-")
+      .slice(0, 48) || "remix-source";
+    const file = new File([blob], `${safeBase}.${ext}`, { type: mime });
+    setVocalRefFile(file, `Remix source: ${post.title || "Track"}`);
+    if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
+    if (els.vocalModeFull) els.vocalModeFull.classList.add("active");
+    if (els.vocalModeInstrumental) els.vocalModeInstrumental.classList.remove("active");
+    setRemixSource({
+      id: post.id,
+      title: post.title || "",
+      creator: post.creator || "",
+      coverUrl: post.artUrl || "",
+      originalUrl: post.url || "",
+      meta: post.meta || null,
+    });
+    if (els.sunoPrompt) els.sunoPrompt.value = String(post?.meta?.lyricsInput || "").trim();
+    if (els.sunoStyle) els.sunoStyle.value = String(post?.meta?.styleInput || "").trim();
+    if (els.sunoTitle) els.sunoTitle.value = `${post.title || "Track"} Remix`;
+    location.hash = "#/generate";
+    setStatus(`Remix ready: ${post.title || "Track"} — adjust lyrics and tap Generate.`);
+    try { syncGenerateOrbVisibility(); } catch {}
+  } catch (e) {
+    console.error("[hub remix] failed", e);
+    showToast(`Could not load remix source: ${e?.message || "error"}`, { icon: "!", durationMs: 3600 });
+    setStatus("Remix could not be loaded.");
+  }
 }
 
 function openVocalReferencePicker() {
@@ -3675,17 +3770,13 @@ function renderHub() {
     if (!p) return;
     await shareHubPost(p);
   }));
-  els.hubList.querySelectorAll("[data-hub-remix]").forEach((b) => b.addEventListener("click", (e) => {
+  els.hubList.querySelectorAll("[data-hub-remix]").forEach((b) => b.addEventListener("click", async (e) => {
     e.stopPropagation();
     const id = b.getAttribute("data-hub-remix");
     const p = loadHubFeed().find((x) => x.id === id);
     if (!p) return;
-    if (els.sunoPrompt) els.sunoPrompt.value = String(p?.meta?.lyricsInput || "").trim();
-    if (els.sunoStyle) els.sunoStyle.value = String(p?.meta?.styleInput || "").trim();
-    if (els.sunoTitle) els.sunoTitle.value = `${p.title} Remix`;
-    location.hash = "#/generate";
-    setStatus(`Remix seed loaded from Hub: ${p.title}`);
-    syncGenerateOrbVisibility();
+    document.getElementById(`hubMore_${id}`)?.style.setProperty("display", "none");
+    await startHubRemix(p);
   }));
   els.hubList.querySelectorAll("[data-hub-persona]").forEach((b) => b.addEventListener("click", async (e) => {
     e.stopPropagation();
@@ -8295,11 +8386,17 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       currentVocalRefFile = f || null;
       vocalRefBlob = null;
       clearVocalRefPreviewUrl();
+      try { clearRemixSource({ keepRefFile: true }); } catch {}
       if (els.sunoVocalUploadName) {
         els.sunoVocalUploadName.textContent = f ? `Voice reference attached: ${f.name}` : "No vocal reference attached.";
       }
       renderReferenceHints();
       updateVocalRefPreviewState();
+    });
+  }
+  if (els.remixSourceCancel) {
+    els.remixSourceCancel.addEventListener("click", () => {
+      try { clearRemixSource({ keepRefFile: false }); } catch {}
     });
   }
   if (els.btnVocalRefRec && els.btnVocalRefStop) {
@@ -9128,10 +9225,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     try {
       const engine = "gemini_assisted";
       const referenceInstrumentalOnly = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+      const hubRemixLocked = Boolean(currentRemixSource?.id);
       const modeLabel = hasReference
         ? referenceInstrumentalOnly
           ? "Reference: Instrumental only"
-          : "Reference: Full song"
+          : hubRemixLocked
+            ? "Hub remix (melody / arrangement locked)"
+            : "Reference: Full song"
         : "Normal";
       const engineLabel = "Suno + Gemini lyrics assist";
       setGenerateBtn("Generating…", true, "generate");
@@ -9240,6 +9340,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         voiceProfile: (els.sunoVoiceProfile?.value || "").trim(),
         model: payload.model,
         imageOnlyInstrumental,
+        remixOfHubPostId: currentRemixSource?.id || null,
       };
       if (imageOnlyInstrumental) {
         setStatus("Image-inspired mode with no lyrics detected: generating instrumental.");
@@ -9250,7 +9351,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           if (hasReference) {
             const fd = new FormData();
             fd.append("action", "add_instrumental");
-            fd.append("referenceMode", referenceInstrumentalOnly ? "humming_music" : "vocal_full");
+            const stemRefMode = referenceInstrumentalOnly
+              ? "humming_music"
+              : hubRemixLocked
+                ? "song_remix"
+                : "vocal_full";
+            fd.append("referenceMode", stemRefMode);
             fd.append("file", vocalRefFile, vocalRefFile?.name || "vocal-reference.webm");
             fd.append("fileName", vocalRefFile?.name || "vocal-reference.webm");
             fd.append("fileType", vocalRefFile?.type || "audio/webm");

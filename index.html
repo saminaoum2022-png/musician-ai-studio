@@ -29,7 +29,7 @@
     <link rel="dns-prefetch" href="https://cdn2.suno.ai" />
     <link rel="dns-prefetch" href="https://cdn4.suno.ai" />
     <link rel="dns-prefetch" href="https://suno.com" />
-    <link rel="stylesheet" href="./styles.css?v=20260510proofgate" />
+    <link rel="stylesheet" href="./styles.css?v=20260510hubremix2" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -363,6 +363,19 @@
           </div>
 
           <div class="createSectionStack">
+            <div id="remixSourceBanner" class="remixSourceBanner" hidden>
+              <div class="remixSourceBannerCover" id="remixSourceCover" aria-hidden="true"></div>
+              <div class="remixSourceBannerBody">
+                <div class="remixSourceBannerKicker">Remixing</div>
+                <div class="remixSourceBannerTitle" id="remixSourceTitle">Track</div>
+                <div class="remixSourceBannerSub" id="remixSourceSub">Your new lyrics will be sung over this melody.</div>
+              </div>
+              <button id="remixSourceCancel" class="remixSourceBannerClose" type="button" aria-label="Cancel remix">
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                  <path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/>
+                </svg>
+              </button>
+            </div>
             <div class="createPanes" data-mode="lyrics">
               <div class="createPane createPane--photo" data-mode="photo" hidden>
                 <button id="createPhotoCta" class="createPaneCta" type="button" aria-label="Add a photo">
@@ -1638,6 +1651,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260510proofgate"></script>
+    <script type="module" src="./src/app.js?v=20260510hubremix2"></script>
   </body>
 </html>

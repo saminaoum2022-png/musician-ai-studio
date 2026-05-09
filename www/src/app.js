@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510ab";
+const APP_BUILD = "20260510ac";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -2871,6 +2871,25 @@ function invalidateLibraryMemCache() {
   _libraryMemCacheKey = "";
 }
 
+/** If we have a stored Supabase session, the library key must be
+ *  `mas:library:v1:<userId>`. Stale on-disk profile sometimes still
+ *  says "guest" until the async auth IIFE runs — that made the
+ *  deferred `renderLibrary` read the wrong localStorage key while Hub
+ *  + Profile were already on the right user. Sync synchronously so the
+ *  first paint and `ensureUserLibraryHydrated` both target the same
+ *  store as the session. */
+function syncActiveProfileIdFromSession() {
+  const uid = authSession?.user?.id;
+  if (!uid) return;
+  if (String(activeProfile?.id || "guest") === String(uid)) return;
+  saveProfile({
+    ...activeProfile,
+    id: String(uid),
+    email: authSession.user.email || activeProfile.email || "",
+  });
+  invalidateLibraryMemCache();
+}
+
 function loadLibrary() {
   const key = profileLibraryKey();
   if (_libraryMemCacheKey === key && _libraryMemCache) return _libraryMemCache;
@@ -3070,34 +3089,47 @@ async function ensureUserLibraryHydrated() {
     return;
   }
 
-  // 2) Upsert merged local tracks to cloud (best effort), then reload cloud.
-  let okCount = 0;
-  let failCount = 0;
-  let firstFail = "";
-  for (const t of merged) {
-    // Best effort; ignore individual failures.
-    // eslint-disable-next-line no-await-in-loop
-    const ins = await supabaseInsertUserSong(t);
-    if (ins?.ok) okCount += 1;
-    else {
-      failCount += 1;
-      if (!firstFail) firstFail = `${ins?.reason || "insert_failed"}${ins?.details ? `: ${ins.details}` : ""}`;
-    }
-  }
-  const cloudAfter = await supabaseLoadUserSongs();
-  const finalSongs = cloudAfter.length ? cloudAfter : merged;
-  saveLibraryFor(uid, finalSongs);
+  // Fast path: merge is already the full set we want the user to see.
+  // Painting here keeps Library in step with Hub + Profile. The
+  // previous version awaited one network round-trip *per song* to
+  // `supabaseInsertUserSong` before the first `renderLibrary`, which
+  // made the Library tab look "stuck" for many seconds.
+  saveLibraryFor(uid, merged);
   if (String(activeProfile.id) === uid) {
-    saveLibrary(finalSongs);
+    saveLibrary(merged);
     renderLibrary();
-    if (failCount > 0) {
-      setStatus(`Library sync partial: ${okCount} saved, ${failCount} failed (${firstFail.slice(0, 90)})`);
-    } else {
-      setStatus(`Library sync complete: ${okCount} saved to cloud.`);
-    }
   }
-  // Skip the next reconcile — we just did a full cloud round-trip.
-  _libraryReconcileLastAt = Date.now();
+
+  // Background: push any local-only rows to the cloud, then replace
+  // with an authoritative re-fetch. Failures are non-fatal; local
+  // data from the fast path is already on screen.
+  void (async () => {
+    let okCount = 0;
+    let failCount = 0;
+    let firstFail = "";
+    for (const t of merged) {
+      // eslint-disable-next-line no-await-in-loop
+      const ins = await supabaseInsertUserSong(t);
+      if (ins?.ok) okCount += 1;
+      else {
+        failCount += 1;
+        if (!firstFail) firstFail = `${ins?.reason || "insert_failed"}${ins?.details ? `: ${ins.details}` : ""}`;
+      }
+    }
+    const cloudAfter = await supabaseLoadUserSongs();
+    const finalSongs = cloudAfter.length ? cloudAfter : merged;
+    saveLibraryFor(uid, finalSongs);
+    if (String(activeProfile.id) === uid) {
+      saveLibrary(finalSongs);
+      renderLibrary();
+      if (failCount > 0) {
+        setStatus(`Library sync partial: ${okCount} saved, ${failCount} failed (${firstFail.slice(0, 90)})`);
+      } else {
+        setStatus(`Library sync complete: ${okCount} saved to cloud.`);
+      }
+    }
+    _libraryReconcileLastAt = Date.now();
+  })();
 }
 // ─── Lightweight cloud → local reconcile for ongoing sync ─────────────
 // `ensureUserLibraryHydrated` (above) is the heavy migration path that
@@ -8973,6 +9005,7 @@ void refreshSunoCredits();
 renderCreditsHistory();
 loadProfile();
 loadAuthSession();
+syncActiveProfileIdFromSession();
 renderAuthStatus();
 void (async () => {
   await loadPublicConfig();
@@ -8997,6 +9030,7 @@ void (async () => {
     renderProfilePreviewFromInputs();
     renderProfileHubShared();
 
+    syncActiveProfileIdFromSession();
     await ensureUserLibraryHydrated();
   } else {
     // Never leak previous user visuals when session is not valid.

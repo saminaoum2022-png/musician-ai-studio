@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509hubsnap";
+const APP_BUILD = "20260509hubsnap2";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -9668,6 +9668,11 @@ if (els.hubNowPlaying) {
 window.addEventListener("scroll", () => {
   if ((document.body.getAttribute("data-route") || "") === "hub") {
     scheduleHubFocusUpdate();
+    // CRITICAL: schedule audio autoplay on every scroll — this is what
+    // makes the centered post start playing as the user swipes. The
+    // 280ms tail-debounce inside `scheduleHubViewportAutoplay` keeps it
+    // from thrashing while the user is still dragging.
+    scheduleHubViewportAutoplay();
     // If the periodic refresh deferred a rebuild because new posts arrived
     // mid-scroll, redraw once the user has clearly returned to the top of
     // the feed. Avoids the "screen glitched/refreshed itself" surprise.
@@ -9683,10 +9688,15 @@ window.addEventListener("scroll", () => {
 }, { passive: true });
 // `scrollend` fires once the page (or a programmatic smooth scroll) actually
 // stops — much more reliable than waiting for `scroll` events to taper off.
-// Supported on iOS Safari 16+, Chrome 114+, and Firefox 109+.
+// Supported on iOS Safari 16+, Chrome 114+, and Firefox 109+. Where it isn't
+// supported the 280ms debounce above still covers us.
 window.addEventListener("scrollend", () => {
   if ((document.body.getAttribute("data-route") || "") !== "hub") return;
   updateHubFocusedRow();
+  // Instant autoplay swap on snap landing — `scrollend` fires once
+  // iOS finishes the snap animation, so this is the most reliable
+  // moment to switch the playing track to the freshly-centered card.
+  flushHubViewportAutoplay();
   if (_hubDeferredRebuild) {
     const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
     if (scrollY < 80) {

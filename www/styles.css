@@ -1664,6 +1664,17 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   height:7px;
   margin-left:0;
 }
+.libraryTab{
+  position: relative;
+}
+.libraryTabDot{
+  position: absolute;
+  right: 22%;
+  top: 6px;
+  width: 7px;
+  height: 7px;
+  margin-left: 0;
+}
 .likeBurst{
   position:fixed;
   left:50%;
@@ -5454,7 +5465,14 @@ input::placeholder, textarea::placeholder{
   gap: 14px;
   padding: 4px 0 24px;
   min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
   animation: sectionFadeIn 260ms ease;
+}
+.soundsPage *{ min-width: 0; max-width: 100%; }
+.soundsPage textarea,
+.soundsPage select{
+  word-break: break-word;
 }
 .soundsLead{
   margin: 0;

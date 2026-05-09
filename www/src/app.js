@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509sounds2";
+const APP_BUILD = "20260509sounds3";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -260,6 +260,7 @@ const els = {
   hubDotInstrumental: document.getElementById("hubDotInstrumental"),
   hubDotRemix: document.getElementById("hubDotRemix"),
   hubTabDot: document.getElementById("hubTabDot"),
+  libraryTabDot: document.getElementById("libraryTabDot"),
   hubTabLink: document.querySelector('.mobileTabbar [data-route-link="hub"]'),
   hubNowPlaying: document.getElementById("hubNowPlaying"),
   hubNowArt: document.getElementById("hubNowArt"),
@@ -1015,6 +1016,26 @@ var generationReadyNotice = false;
 let soundTaskId = "";
 let soundPollTimer = null;
 
+/** Library tab red-dot persistence — fires on sound generations to nudge the
+ *  user that something landed; full songs use the result card instead. */
+const LIBRARY_TAB_DOT_KEY = "mas:libraryTabDot:v1";
+function markLibraryTabDot(on) {
+  try {
+    if (on) localStorage.setItem(LIBRARY_TAB_DOT_KEY, "1");
+    else localStorage.removeItem(LIBRARY_TAB_DOT_KEY);
+  } catch {}
+  if (els.libraryTabDot) {
+    const route = document.body.getAttribute("data-route") || "";
+    const visible = on && route !== "library";
+    els.libraryTabDot.style.display = visible ? "inline-block" : "none";
+  }
+}
+function syncLibraryTabDotFromStorage() {
+  let stored = "";
+  try { stored = localStorage.getItem(LIBRARY_TAB_DOT_KEY) || ""; } catch {}
+  markLibraryTabDot(stored === "1");
+}
+
 function applyRoute() {
   const hash = String(location.hash || "");
   const rawRoute = hash.startsWith("#/") ? hash.slice(2) : "generate";
@@ -1096,6 +1117,7 @@ function applyRoute() {
     void refreshMyCredits({ silent: true });
   }
   if (wanted === "library") {
+    markLibraryTabDot(false);
     // One synchronous paint from the in-memory + memoized local cache so
     // the tab never flashes empty while `reconcileLibraryFromCloud` waits
     // for idle + network (scheduled from hashchange).
@@ -1233,6 +1255,7 @@ function resetCreateDraft() {
 window.addEventListener("hashchange", applyRoute);
 if (!location.hash) location.hash = "#/intro";
 applyRoute();
+syncLibraryTabDotFromStorage();
 updateEnvironmentBadge();
 document.body.classList.remove("booting");
 document.querySelectorAll("[data-route-link]").forEach((a) => {
@@ -2020,8 +2043,12 @@ function startSoundGenerationPolling(meta) {
       if (clip.audioUrl) {
         const url = toAudioProxyUrl(clip.audioUrl) || clip.audioUrl;
         stopSoundGenerationPolling();
+        const rawTitle = String(clip.title || meta.fallbackTitle || "Sound").trim();
+        const finalTitle = rawTitle.length > 48
+          ? `${rawTitle.slice(0, 47)}…`
+          : (rawTitle || "Sound");
         addToLibrary({
-          title: String(clip.title || meta.fallbackTitle || "Sound").trim() || "Sound",
+          title: finalTitle,
           artUrl: clip.imageUrl || "./assets/nabadai-logo.png",
           url,
           taskId: soundTaskId || "",
@@ -2029,9 +2056,11 @@ function startSoundGenerationPolling(meta) {
           kind: "sound",
           meta: meta.libraryMeta,
         });
-        setStatus("Sound ready — saved to Library.");
+        setStatus("Sound saved to Library.");
         setLoading(false);
         if (els.btnSoundGenerate) els.btnSoundGenerate.disabled = false;
+        markLibraryTabDot(true);
+        showToast("Sound saved to your Library", { icon: "✓", durationMs: 3200 });
         void refreshMyCredits({ silent: true });
         return;
       }
@@ -9299,8 +9328,11 @@ if (els.btnSoundGenerate) {
         els.btnSoundGenerate.disabled = false;
         return;
       }
+      const firstLine = (prompt.split(/\r?\n/)[0] || "").trim();
       const fallbackTitle =
-        prompt.split(/\r?\n/)[0]?.trim()?.slice(0, 80) || "Sound";
+        firstLine.length > 48
+          ? `${firstLine.slice(0, 47)}…`
+          : firstLine || "Sound";
       startSoundGenerationPolling({
         fallbackTitle,
         libraryMeta: {

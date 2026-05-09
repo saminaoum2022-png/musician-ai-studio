@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510aj";
+const APP_BUILD = "20260510ak";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -2011,6 +2011,16 @@ async function supabaseInsertUserSong(track) {
   }
   if (!r.ok) {
     const txt = await r.text().catch(() => "");
+    // HTTP 409 / Postgres unique_violation (SQLSTATE 23505) means the
+    // row already exists in the cloud — that's a success from the
+    // app's perspective (the song is safely synced), not a failure.
+    // Don't surface it as an error and don't poison the empty-state
+    // "Last cloud save error" line.
+    const looksDuplicate = r.status === 409 || /23505|duplicate key/i.test(txt);
+    if (looksDuplicate) {
+      recordUserSongInsertResult({ ok: true });
+      return { ok: true, reason: "duplicate" };
+    }
     const fail = { ok: false, reason: `http_${r.status}`, details: String(txt).slice(0, 180) };
     recordUserSongInsertResult(fail);
     return fail;

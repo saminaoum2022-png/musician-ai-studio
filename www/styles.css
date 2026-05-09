@@ -5397,6 +5397,56 @@ input::placeholder, textarea::placeholder{
   .creditsAdminGrid{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
+/* ---------- Sounds entry banner on Generate page ---------- */
+.createSoundsBanner{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  margin: 6px 0 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(124,92,255,0.34);
+  background:
+    radial-gradient(120% 100% at 0% -20%, rgba(124,92,255,0.22), transparent 60%),
+    linear-gradient(180deg, rgba(124,92,255,0.08), rgba(35,213,171,0.04));
+  color: rgba(232,238,247,0.96);
+  text-decoration: none;
+  transition: transform 140ms ease, box-shadow 200ms ease;
+}
+.createSoundsBanner:active{ transform: scale(0.985); }
+.createSoundsBannerIco{
+  width: 36px; height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(124,92,255,0.20);
+  color: #c9c0ff;
+  flex: 0 0 auto;
+}
+.createSoundsBannerIco svg{ width: 20px; height: 20px; }
+.createSoundsBannerBody{
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.createSoundsBannerTitle{
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.createSoundsBannerSub{
+  font-size: 12.5px;
+  color: rgba(232,238,247,0.66);
+}
+.createSoundsBannerChev{
+  font-size: 22px;
+  color: rgba(232,238,247,0.55);
+  flex: 0 0 auto;
+}
+
 /* ---------- Sounds (Suno /generate/sounds) ---------- */
 .soundsPage{
   display: flex;

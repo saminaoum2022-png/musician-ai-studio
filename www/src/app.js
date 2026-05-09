@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510ad";
+const APP_BUILD = "20260510ae";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1676,6 +1676,10 @@ function resetProfileUiToGuest() {
   if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = "Add a short bio to introduce your music style.";
   if (els.profileIsPublic) els.profileIsPublic.checked = true;
   if (els.profileAvatarFile) els.profileAvatarFile.value = "";
+  // Reset hydrate flags so the next sign-in re-runs the cloud pull
+  // and the loading state appears for the new account.
+  _libraryHydrateInFlight = false;
+  _libraryHydrateCompleted = false;
   renderProfilePreviewFromInputs();
   renderProfileHubShared();
   setProfileEditing(false);
@@ -3076,19 +3080,48 @@ function saveLibraryFor(id, items) {
   } catch {}
 }
 
-/** True from the moment we kick off the boot-time cloud fetch until
- *  Library is on screen with cloud data. The Library renderer reads
- *  this so the empty-state shows "Loading your library…" instead of
- *  the "Nothing here yet" CTA during a PWA cold start (where local
- *  storage is empty until the cloud responds).
+/** True from the moment we know we *intend* to hydrate (synchronously,
+ *  during boot, if there's a stored auth session) until the cloud
+ *  fetch resolves. The Library renderer reads this so the empty-state
+ *  shows "Loading your library…" instead of the "Nothing here yet"
+ *  CTA during a PWA cold start. Unlike `_libraryHydrateCompleted` it
+ *  flips back to `false` after each hydrate, so a future re-hydrate
+ *  reuses it cleanly.
  */
 let _libraryHydrateInFlight = false;
+/** Has the boot-time hydrate completed at least once for this
+ *  session? Used to suppress the "Nothing here yet" empty state in
+ *  the narrow window between page load and the IIFE-triggered hydrate
+ *  actually starting. Reset on logout / profile reset.
+ */
+let _libraryHydrateCompleted = false;
 
 async function ensureUserLibraryHydrated() {
-  if (!authSession?.user?.id) return;
+  if (!authSession?.user?.id) {
+    // No session → there's nothing to hydrate; mark complete so the
+    // empty-state stops showing the "Loading your library…" copy and
+    // falls back to the create-song CTA.
+    _libraryHydrateCompleted = true;
+    _libraryHydrateInFlight = false;
+    return;
+  }
   const uid = String(authSession.user.id);
 
   _libraryHydrateInFlight = true;
+  // Safety net: if the network hangs (e.g. captive Wi-Fi / blocked
+  // request), don't pin the user on a "Loading…" forever. After 15s
+  // we drop the in-flight flag and mark the hydrate complete so the
+  // empty state can render normally. The fetch itself already has a
+  // 12s AbortController inside `supabaseLoadUserSongs`.
+  const safetyTimer = setTimeout(() => {
+    if (_libraryHydrateInFlight) {
+      _libraryHydrateInFlight = false;
+      _libraryHydrateCompleted = true;
+      if (String(activeProfile.id) === uid) {
+        try { renderLibrary(); } catch {}
+      }
+    }
+  }, 15000);
   // Repaint the Library tab immediately so the loading state can show
   // before the first network response lands.
   if (String(activeProfile.id) === uid) {
@@ -3128,6 +3161,8 @@ async function ensureUserLibraryHydrated() {
   // made the Library tab look "stuck" for many seconds on PWAs.
   saveLibraryFor(uid, merged);
   _libraryHydrateInFlight = false;
+  _libraryHydrateCompleted = true;
+  clearTimeout(safetyTimer);
   if (String(activeProfile.id) === uid) {
     saveLibrary(merged);
     renderLibrary();
@@ -3738,10 +3773,14 @@ function renderLibrary() {
     }
   }
   if (!totalCount) {
-    // PWA cold start: localStorage is empty, hydrate is in flight. Show
-    // a "Loading…" state so the user doesn't see the "Nothing here yet"
-    // CTA flash for a couple of seconds and assume their songs are gone.
-    if (_libraryHydrateInFlight) {
+    // PWA cold start: localStorage is empty, hydrate hasn't completed
+    // yet. Show a "Loading…" state so the user doesn't see the "Nothing
+    // here yet" CTA flash for a couple of seconds and assume their
+    // songs are gone. We trust either the in-flight flag or the "never
+    // completed yet during this session" flag — the latter covers the
+    // window between page boot and the IIFE actually firing hydrate.
+    const isLoggedIn = Boolean(authSession?.user?.id);
+    if (_libraryHydrateInFlight || (isLoggedIn && !_libraryHydrateCompleted)) {
       els.libraryList.innerHTML = `
         <div class="emptyState">
           <div class="emptyStateIcon" aria-hidden="true">♪</div>
@@ -9061,6 +9100,15 @@ loadProfile();
 loadAuthSession();
 syncActiveProfileIdFromSession();
 renderAuthStatus();
+// If the user has a stored session, we're going to hydrate Library in
+// the boot IIFE below. Set the in-flight flag synchronously *now* so
+// the very first `renderLibrary()` (deferred on rAF or fired by the
+// route handler) shows the loading state instead of the "Nothing here
+// yet" CTA. Without this, the IIFE doesn't get to flip the flag until
+// after the first paint, and the empty CTA flashes for a beat.
+if (authSession?.user?.id) {
+  _libraryHydrateInFlight = true;
+}
 void (async () => {
   await loadPublicConfig();
   const usedCodeFlow = await maybeHandleAuthCodeFromQuery();

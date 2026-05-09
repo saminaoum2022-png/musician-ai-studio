@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510y";
+const APP_BUILD = "20260510z";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -3197,6 +3197,233 @@ async function backfillLibraryThumbsLazy() {
   }
 }
 
+// Track which row's menu is currently expanded so the delegated click
+// handler can toggle it cheaply and we never have more than one menu
+// inflated in the DOM at a time.
+let _libraryOpenMenuId = "";
+
+/** Build the per-row "more options" menu HTML on demand. We don't ship
+ *  these 7 buttons in the initial render anymore — at 24 rows that was
+ *  168 hidden DOM nodes that nobody saw until they tapped ⋯, and they
+ *  were the dominant cost of `renderLibrary()` after pagination
+ *  trimmed the row count. The lazy build keeps the closed-state Library
+ *  list as small as Hub's.
+ */
+function buildLibMenuHtml(track) {
+  const id = String(track?.id || "");
+  const isInstrumental = track?.kind === "instrumental";
+  const url = String(track?.url || "");
+  return `
+    <div class="libMenu" id="libMenu_${id}">
+      <a class="ghost" href="${escapeHtml(url)}" target="_blank" rel="noreferrer" data-lib-dlaudio="${id}">Download audio</a>
+      <button class="ghost" data-lib-dlvideo="${id}">Download video</button>
+      <button class="ghost" data-lib-share="${id}">Share to Hub</button>
+      <button class="ghost" data-lib-details="${id}">Song details</button>
+      ${isInstrumental ? "" : `<button class="ghost" data-lib-inst="${id}">Get instrumental</button>`}
+      ${isInstrumental ? "" : `<button class="ghost" data-lib-stems="${id}">Get stems</button>`}
+      <button class="ghost libRowDelete" data-lib-del="${id}">Delete</button>
+    </div>
+  `;
+}
+
+/** Close any currently-open Library row menu. */
+function closeLibraryMenu() {
+  if (!_libraryOpenMenuId || !els.libraryList) return;
+  const node = els.libraryList.querySelector(`#libMenu_${CSS.escape(_libraryOpenMenuId)}`);
+  if (node && node.parentNode) node.parentNode.removeChild(node);
+  _libraryOpenMenuId = "";
+}
+
+/** Toggle the menu for a given row id. Builds the menu DOM lazily on
+ *  first open and removes it from the DOM on close, so the closed-state
+ *  Library list stays minimal.
+ */
+function toggleLibraryMenuFor(id) {
+  if (!els.libraryList) return;
+  if (_libraryOpenMenuId === id) {
+    closeLibraryMenu();
+    return;
+  }
+  closeLibraryMenu();
+  const t = loadLibrary().find((x) => String(x.id) === String(id));
+  if (!t) return;
+  const row = els.libraryList.querySelector(`[data-lib-row="${CSS.escape(String(id))}"]`);
+  if (!row) return;
+  row.insertAdjacentHTML("beforeend", buildLibMenuHtml(t));
+  _libraryOpenMenuId = String(id);
+}
+
+let _libraryListenersBound = false;
+/** Install one delegated `click` listener on the Library list. Replaces
+ *  the previous render-time loop that attached ~9 listeners per row.
+ *  Bound exactly once for the lifetime of the page.
+ */
+function bindLibraryDelegatedListeners() {
+  if (_libraryListenersBound || !els.libraryList) return;
+  _libraryListenersBound = true;
+  els.libraryList.addEventListener("click", async (e) => {
+    const target = e.target;
+    if (!(target instanceof Element)) return;
+
+    // 1) ⋯ menu toggle button.
+    const menuBtn = target.closest("[data-lib-menu]");
+    if (menuBtn && els.libraryList.contains(menuBtn)) {
+      e.stopPropagation();
+      toggleLibraryMenuFor(menuBtn.getAttribute("data-lib-menu"));
+      return;
+    }
+
+    // 2) Anything inside an open menu (lazy-built so inspect first).
+    const inMenu = target.closest(".libMenu");
+    if (inMenu) {
+      e.stopPropagation();
+      const dlAudio = target.closest("[data-lib-dlaudio]");
+      if (dlAudio) {
+        // Native anchor handles the actual download. Just close the menu.
+        closeLibraryMenu();
+        return;
+      }
+      const del = target.closest("[data-lib-del]");
+      if (del) {
+        removeFromLibrary(del.getAttribute("data-lib-del"));
+        closeLibraryMenu();
+        return;
+      }
+      const det = target.closest("[data-lib-details]");
+      if (det) {
+        const id = det.getAttribute("data-lib-details");
+        const t = loadLibrary().find((x) => x.id === id);
+        if (t) {
+          openSongDetailsModal({
+            title: t.title,
+            createdAt: new Date(t.ts).toLocaleString(),
+            taskId: t.taskId || "",
+            audioId: t.audioId || "",
+            kind: t.kind || "",
+            ...(t.meta || {}),
+          });
+        }
+        closeLibraryMenu();
+        return;
+      }
+      const sh = target.closest("[data-lib-share]");
+      if (sh) {
+        const id = sh.getAttribute("data-lib-share");
+        const t = loadLibrary().find((x) => x.id === id);
+        if (t) {
+          shareToHub(t);
+          openShareLiveModal(t.title || "Your song");
+          setStatus("Shared to Hub.");
+        }
+        closeLibraryMenu();
+        return;
+      }
+      const dlv = target.closest("[data-lib-dlvideo]");
+      if (dlv) {
+        const id = dlv.getAttribute("data-lib-dlvideo");
+        const t = loadLibrary().find((x) => x.id === id);
+        if (t) {
+          try {
+            setStatus("Preparing video download…");
+            await downloadLibraryVideoTrack(t);
+            setStatus("Video download is ready.");
+          } catch (err) {
+            setStatus(`Video download failed: ${err?.message || String(err)}`);
+          }
+        }
+        closeLibraryMenu();
+        return;
+      }
+      const inst = target.closest("[data-lib-inst]");
+      if (inst) {
+        const id = inst.getAttribute("data-lib-inst");
+        const t = loadLibrary().find((x) => x.id === id);
+        if (!t?.taskId || !t?.audioId) {
+          setStatus("This song is missing generation ids for instrumental request.");
+        } else {
+          try {
+            setStatus("Getting instrumental for selected song…");
+            setLoading(true, { title: "Getting your instrumental version…", sub: "Processing selected library song." });
+            const r = await fetch(apiUrl("/api/suno/stems"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ taskId: t.taskId, audioId: t.audioId, type: "separate_vocal" }),
+            });
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(d?.error || "Instrumental request failed");
+            sunoStemsTaskId = d?.data?.taskId || d?.data?.task_id || d?.taskId || null;
+            if (!sunoStemsTaskId) throw new Error("Missing stems task id");
+            setStatus("Instrumental requested from library song. Processing now…");
+            void pollLibraryStemsUntilDone(sunoStemsTaskId, "inst");
+          } catch (err) {
+            setStatus(`Library instrumental failed: ${err?.message || String(err)}`);
+            setLoading(false);
+          }
+        }
+        closeLibraryMenu();
+        return;
+      }
+      const stems = target.closest("[data-lib-stems]");
+      if (stems) {
+        const ok = window.confirm("Get stems may consume around 50 credits. Do you want to continue?");
+        if (!ok) { closeLibraryMenu(); return; }
+        const id = stems.getAttribute("data-lib-stems");
+        const t = loadLibrary().find((x) => x.id === id);
+        if (!t?.taskId || !t?.audioId) {
+          setStatus("This song is missing generation ids for stems request.");
+        } else {
+          try {
+            setStatus("Getting multi-stems for selected song…");
+            setLoading(true, { title: "Extracting multi-stems…", sub: "Processing selected library song." });
+            const r = await fetch(apiUrl("/api/suno/stems"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ taskId: t.taskId, audioId: t.audioId, type: "split_stem" }),
+            });
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(d?.error || "Multi-stems request failed");
+            sunoMultiStemsTaskId = d?.data?.taskId || d?.data?.task_id || d?.taskId || null;
+            if (!sunoMultiStemsTaskId) throw new Error("Missing multi-stems task id");
+            setStatus("Multi-stems requested from library song. Processing now…");
+            void pollLibraryStemsUntilDone(sunoMultiStemsTaskId, "multi");
+          } catch (err) {
+            setStatus(`Library multi-stems failed: ${err?.message || String(err)}`);
+            setLoading(false);
+          }
+        }
+        closeLibraryMenu();
+        return;
+      }
+      // Click landed inside the menu but not on an action — leave open.
+      return;
+    }
+
+    // 3) Play / row tap. Both behaviors are identical, so a single
+    //    branch covers `[data-lib-play]` (the main button) and
+    //    `[data-lib-row]` (anywhere on the card).
+    const play = target.closest("[data-lib-play]") || target.closest("[data-lib-row]");
+    if (play && els.libraryList.contains(play)) {
+      const id = play.getAttribute("data-lib-play") || play.getAttribute("data-lib-row");
+      const t = loadLibrary().find((x) => x.id === id);
+      if (!t?.url) return;
+      currentPlayerTrackRef = t;
+      setPlayerMeta({
+        title: t.title || "Library song",
+        subtitle: "Library • Full song",
+        artUrl: (t.meta && t.meta.imageUrl) || placeholderCoverDataUrl(),
+      });
+      miniSource = { type: "library", id };
+      libraryNowPlayingId = id;
+      renderLibrary();
+      await playOnPlayerPage(t.url, "Full song", {
+        title: t.title || "Library song",
+        subtitle: "Library • Full song",
+        artUrl: (t.meta && t.meta.imageUrl) || t.artUrl || placeholderCoverDataUrl(),
+      });
+    }
+  });
+}
+
 // Library pagination — same pattern as Hub. Rendering 100 rows at once
 // builds ~1000 DOM nodes (each row has a hidden 7-button menu) and binds
 // ~900 listeners across the row/menu queries, which is what made the
@@ -3211,6 +3438,11 @@ let _libLastTotal = -1;
 
 function renderLibrary() {
   if (!els.libraryList) return;
+  // Re-rendering blows away the lazy-built menu DOM (it's not in the
+  // HTML template), so clear the open-id tracker too. Otherwise the
+  // first ⋯ tap after a re-render would think the menu is open and
+  // close-then-noop.
+  _libraryOpenMenuId = "";
   const items = loadLibrary();
   const totalCount = items.length;
   // Reset the window if the underlying list shrunk OR is the same size
@@ -3287,15 +3519,6 @@ function renderLibrary() {
               ${playing ? `<span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>` : ""}
             </button>
             <button class="libRowMore" type="button" data-lib-menu="${t.id}" aria-label="More options for ${safeTitle}">⋯</button>
-            <div class="libMenu" id="libMenu_${t.id}" style="display:none">
-              <a class="ghost" href="${t.url}" target="_blank" rel="noreferrer" data-lib-dlaudio="${t.id}">Download audio</a>
-              <button class="ghost" data-lib-dlvideo="${t.id}">Download video</button>
-              <button class="ghost" data-lib-share="${t.id}">Share to Hub</button>
-              <button class="ghost" data-lib-details="${t.id}">Song details</button>
-              ${isInstrumental ? "" : `<button class="ghost" data-lib-inst="${t.id}">Get instrumental</button>`}
-              ${isInstrumental ? "" : `<button class="ghost" data-lib-stems="${t.id}">Get stems</button>`}
-              <button class="ghost libRowDelete" data-lib-del="${t.id}">Delete</button>
-            </div>
           </li>
         `;
       }).join("")}
@@ -3329,168 +3552,12 @@ function renderLibrary() {
     }, { rootMargin: "240px 0px" });
     io.observe(libSentinel);
   }
-  els.libraryList.querySelectorAll("[data-lib-play]").forEach((btn) => {
-    btn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      const id = btn.getAttribute("data-lib-play");
-      const t = loadLibrary().find((x) => x.id === id);
-      if (!t?.url) return;
-      currentPlayerTrackRef = t;
-      setPlayerMeta({
-        title: t.title || "Library song",
-        subtitle: "Library • Full song",
-        artUrl: (t.meta && t.meta.imageUrl) || placeholderCoverDataUrl(),
-      });
-      miniSource = { type: "library", id };
-      libraryNowPlayingId = id;
-      renderLibrary();
-      await playOnPlayerPage(t.url, "Full song", {
-        title: t.title || "Library song",
-        subtitle: "Library • Full song",
-        artUrl: (t.meta && t.meta.imageUrl) || t.artUrl || placeholderCoverDataUrl(),
-      });
-    });
-  });
-  els.libraryList.querySelectorAll("[data-lib-row]").forEach((row) => {
-    row.addEventListener("click", async (e) => {
-      const tgt = e.target;
-      if (tgt && (tgt.closest("[data-lib-menu]") || tgt.closest(".libMenu"))) return;
-      const id = row.getAttribute("data-lib-row");
-      const t = loadLibrary().find((x) => x.id === id);
-      if (!t?.url) return;
-      currentPlayerTrackRef = t;
-      setPlayerMeta({
-        title: t.title || "Library song",
-        subtitle: "Library • Full song",
-        artUrl: (t.meta && t.meta.imageUrl) || placeholderCoverDataUrl(),
-      });
-      miniSource = { type: "library", id };
-      libraryNowPlayingId = id;
-      renderLibrary();
-      await playOnPlayerPage(t.url, "Full song", {
-        title: t.title || "Library song",
-        subtitle: "Library • Full song",
-        artUrl: (t.meta && t.meta.imageUrl) || t.artUrl || placeholderCoverDataUrl(),
-      });
-    });
-  });
-  els.libraryList.querySelectorAll("[data-lib-menu]").forEach((b) => {
-    b.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const id = b.getAttribute("data-lib-menu");
-      const menu = document.getElementById(`libMenu_${id}`);
-      const open = menu && menu.style.display !== "none";
-      els.libraryList.querySelectorAll(".libMenu").forEach((m) => (m.style.display = "none"));
-      if (menu) menu.style.display = open ? "none" : "";
-    });
-  });
-  els.libraryList.querySelectorAll("[data-lib-del]").forEach((b) => {
-    b.addEventListener("click", (e) => e.stopPropagation());
-    b.addEventListener("click", () => removeFromLibrary(b.getAttribute("data-lib-del")));
-  });
-  els.libraryList.querySelectorAll("[data-lib-details]").forEach((b) => {
-    b.addEventListener("click", (e) => e.stopPropagation());
-    b.addEventListener("click", () => {
-      const id = b.getAttribute("data-lib-details");
-      const t = loadLibrary().find((x) => x.id === id);
-      if (!t) return;
-      const details = {
-        title: t.title,
-        createdAt: new Date(t.ts).toLocaleString(),
-        taskId: t.taskId || "",
-        audioId: t.audioId || "",
-        kind: t.kind || "",
-        ...(t.meta || {}),
-      };
-      openSongDetailsModal(details);
-    });
-  });
-  els.libraryList.querySelectorAll("[data-lib-share]").forEach((b) => {
-    b.addEventListener("click", (e) => e.stopPropagation());
-    b.addEventListener("click", () => {
-      const id = b.getAttribute("data-lib-share");
-      const t = loadLibrary().find((x) => x.id === id);
-      if (!t) return;
-      shareToHub(t);
-      openShareLiveModal(t.title || "Your song");
-      setStatus("Shared to Hub.");
-    });
-  });
-  els.libraryList.querySelectorAll("[data-lib-dlvideo]").forEach((b) => {
-    b.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      const id = b.getAttribute("data-lib-dlvideo");
-      const t = loadLibrary().find((x) => x.id === id);
-      if (!t) return;
-      try {
-        setStatus("Preparing video download…");
-        await downloadLibraryVideoTrack(t);
-        setStatus("Video download is ready.");
-      } catch (err) {
-        setStatus(`Video download failed: ${err?.message || String(err)}`);
-      }
-    });
-  });
-  els.libraryList.querySelectorAll("[data-lib-inst]").forEach((b) => {
-    b.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      const id = b.getAttribute("data-lib-inst");
-      const t = loadLibrary().find((x) => x.id === id);
-      if (!t?.taskId || !t?.audioId) {
-        setStatus("This song is missing generation ids for instrumental request.");
-        return;
-      }
-      try {
-        setStatus("Getting instrumental for selected song…");
-        setLoading(true, { title: "Getting your instrumental version…", sub: "Processing selected library song." });
-        const r = await fetch(apiUrl("/api/suno/stems"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ taskId: t.taskId, audioId: t.audioId, type: "separate_vocal" }),
-        });
-        const d = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(d?.error || "Instrumental request failed");
-        sunoStemsTaskId = d?.data?.taskId || d?.data?.task_id || d?.taskId || null;
-        if (!sunoStemsTaskId) throw new Error("Missing stems task id");
-        setStatus("Instrumental requested from library song. Processing now…");
-        void pollLibraryStemsUntilDone(sunoStemsTaskId, "inst");
-      } catch (err) {
-        setStatus(`Library instrumental failed: ${err?.message || String(err)}`);
-        setLoading(false);
-      }
-    });
-  });
-  els.libraryList.querySelectorAll("[data-lib-stems]").forEach((b) => {
-    b.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      const ok = window.confirm("Get stems may consume around 50 credits. Do you want to continue?");
-      if (!ok) return;
-      const id = b.getAttribute("data-lib-stems");
-      const t = loadLibrary().find((x) => x.id === id);
-      if (!t?.taskId || !t?.audioId) {
-        setStatus("This song is missing generation ids for stems request.");
-        return;
-      }
-      try {
-        setStatus("Getting multi-stems for selected song…");
-        setLoading(true, { title: "Extracting multi-stems…", sub: "Processing selected library song." });
-        const r = await fetch(apiUrl("/api/suno/stems"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ taskId: t.taskId, audioId: t.audioId, type: "split_stem" }),
-        });
-        const d = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(d?.error || "Multi-stems request failed");
-        sunoMultiStemsTaskId = d?.data?.taskId || d?.data?.task_id || d?.taskId || null;
-        if (!sunoMultiStemsTaskId) throw new Error("Missing multi-stems task id");
-        setStatus("Multi-stems requested from library song. Processing now…");
-        void pollLibraryStemsUntilDone(sunoMultiStemsTaskId, "multi");
-      } catch (err) {
-        setStatus(`Library multi-stems failed: ${err?.message || String(err)}`);
-        setLoading(false);
-      }
-    });
-  });
+  // All row interactions are dispatched via one delegated listener
+  // installed below (`bindLibraryDelegatedListeners`). Doing it that way
+  // means each `renderLibrary()` is just `innerHTML` + the load-more
+  // setup above — no per-row `addEventListener` calls. With 24 visible
+  // rows that's 200+ fewer listeners attached on every render.
+  bindLibraryDelegatedListeners();
   // Fire-and-forget thumb backfill once the list is in the DOM. Wraps in
   // requestIdleCallback when available so it never competes with the
   // initial paint or a play tap.
@@ -7348,8 +7415,20 @@ if (generateStackEl) {
   });
 }
 setTimeout(autoResizeLyricsBox, 0);
-renderLibrary();
-renderHub();
+// Defer the cold-start Library + Hub renders to after first paint.
+// Both lists read from localStorage which is heavy when Library has
+// custom-cover data URLs, and both inflate large amounts of HTML. Doing
+// this after the browser has shown the initial frame keeps the route
+// swap snappy regardless of which tab the user lands on.
+const _bootInitialLists = () => {
+  try { renderLibrary(); } catch {}
+  try { renderHub(); } catch {}
+};
+if (typeof requestAnimationFrame === "function") {
+  requestAnimationFrame(() => requestAnimationFrame(_bootInitialLists));
+} else {
+  setTimeout(_bootInitialLists, 0);
+}
 els.sunoPrompt?.addEventListener("focus", showReferenceHintsPopupOnce, { once: true });
 els.sunoStyle?.addEventListener("focus", showReferenceHintsPopupOnce, { once: true });
 els.sunoPrompt?.addEventListener("input", () => {

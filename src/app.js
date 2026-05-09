@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509profilefast";
+const APP_BUILD = "20260509hubminihide";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -791,6 +791,14 @@ async function startHubPlayback(postId) {
   try {
     a.pause();
   } catch {}
+  // Pause anything that's playing on the *other* audio element — the
+  // global player handles Library + generated tracks via `playerEl`,
+  // and without this Hub + Library would play on top of each other.
+  try {
+    if (typeof playerEl !== "undefined" && playerEl && !playerEl.paused) {
+      playerEl.pause();
+    }
+  } catch {}
 
   hubAudioPostId = postId;
   hubAudioCurrentPost = p;
@@ -893,15 +901,18 @@ async function startHubPlayback(postId) {
 function renderHubNowPlaying() {
   if (!els.hubNowPlaying) return;
   const route = document.body.getAttribute("data-route") || "";
-  // The mini-player is now a global persistent surface — it shows for any
+  // The mini-player is a global persistent surface — it shows for any
   // active source (Hub post, Library track, generated result) and hides
   // contextually so it never duplicates a richer "now playing" UI:
   //  - hidden on /player (the full-screen Now Playing replaces it);
-  //  - hidden on Hub when the playing post is on-screen;
+  //  - hidden on Hub entirely (the per-post card *is* the controller; the
+  //    mini-player on top of the swipe feed felt like a second audio
+  //    source, especially when a Library track was still streaming on
+  //    `playerEl` and Hub was streaming on `hubAudio`);
   //  - hidden on Library (the row already shows the EQ + dot indicator);
   //  - hidden on Generate when a result card is mid-playback (the card
   //    shows its own progress + play/pause already).
-  const hideOnHubVisible = isPlayingHubPostVisible();
+  const hideOnHubVisible = route === "hub";
   const hideOnLibrary = route === "library";
   const hideOnPlayer = route === "player";
   const hideOnGenerate = route === "generate" && miniSource?.type === "generateResult";
@@ -5113,6 +5124,10 @@ function bindLibraryDelegatedListeners() {
       const id = play.getAttribute("data-lib-play") || play.getAttribute("data-lib-row");
       const t = loadLibrary().find((x) => x.id === id);
       if (!t?.url) return;
+      // Library and Hub use different audio elements (`playerEl` vs
+      // `hubAudio`). Without this, tapping a Library track while a Hub
+      // post was streaming would leave both playing simultaneously.
+      try { stopHubPlayback(); } catch {}
       currentPlayerTrackRef = t;
       setPlayerMeta({
         title: t.title || "Library song",

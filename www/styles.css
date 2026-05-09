@@ -5137,13 +5137,14 @@ input::placeholder, textarea::placeholder{
 .profilePersonaLink:active{ transform: scale(0.97); }
 
 .creditsPage{
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 8px 14px 32px;
   display: flex;
   flex-direction: column;
   gap: 14px;
+  padding: 4px 0 24px;
+  min-width: 0;
+  animation: sectionFadeIn 260ms ease;
 }
+.creditsPage *{ min-width: 0; }
 .creditsHeader{
   display: flex;
   align-items: center;
@@ -5169,12 +5170,12 @@ input::placeholder, textarea::placeholder{
 }
 .creditsTitle{
   margin: 0;
-  font-size: 22px;
+  font-size: 20px;
   letter-spacing: -0.01em;
 }
 .creditsHero{
   border-radius: 18px;
-  padding: 22px;
+  padding: 18px 16px;
   text-align: center;
   border: 1px solid rgba(124,92,255,0.34);
   background:
@@ -5183,16 +5184,16 @@ input::placeholder, textarea::placeholder{
   box-shadow: 0 12px 36px -16px rgba(124,92,255,0.55);
 }
 .creditsHeroLabel{
-  font-size: 12px;
-  letter-spacing: 0.08em;
+  font-size: 11px;
+  letter-spacing: 0.10em;
   text-transform: uppercase;
   color: rgba(232,238,247,0.66);
 }
 .creditsHeroValue{
-  font-size: 56px;
+  font-size: clamp(40px, 12vw, 52px);
   font-weight: 900;
   line-height: 1;
-  margin-top: 6px;
+  margin-top: 4px;
   background: linear-gradient(180deg, #ffffff, #c9c0ff);
   -webkit-background-clip: text;
   background-clip: text;
@@ -5212,17 +5213,19 @@ input::placeholder, textarea::placeholder{
   border-radius: 16px;
   border: 1px solid rgba(255,255,255,0.10);
   background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012));
-  padding: 16px 16px 18px;
+  padding: 14px 14px 16px;
+  min-width: 0;
+  overflow: hidden;
 }
 .creditsCardTitle{
   margin: 0 0 4px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
   color: rgba(232,238,247,0.96);
 }
 .creditsCardLead{
-  margin: 0 0 12px;
-  font-size: 13px;
+  margin: 0 0 10px;
+  font-size: 12.5px;
   color: rgba(232,238,247,0.62);
 }
 .creditsRedeemRow{
@@ -5276,7 +5279,7 @@ input::placeholder, textarea::placeholder{
 .creditsRules{
   margin: 0;
   padding: 0 0 0 18px;
-  font-size: 13.5px;
+  font-size: 12.5px;
   color: rgba(232,238,247,0.78);
   line-height: 1.5;
 }
@@ -5357,7 +5360,10 @@ input::placeholder, textarea::placeholder{
   flex-direction: column;
   gap: 4px;
   max-height: 280px;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  width: 100%;
+  min-width: 0;
 }
 .creditsAdminCodeRow{
   display: flex;

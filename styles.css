@@ -1075,9 +1075,21 @@ body.isAuth .hubNowPlaying{ display:none !important; }
     border-color 200ms cubic-bezier(0.22, 1, 0.36, 1),
     background 200ms cubic-bezier(0.22, 1, 0.36, 1);
 }
+/* Option B (focused-card): when any post is active, neighbors dim
+ * hard so the active card feels like the only thing on screen
+ * without going fullscreen. We use opacity + saturate + blur in
+ * concert — opacity alone made nearby covers still grab the eye. */
 #hubList:has(.hubRow.isActive) .hubRow:not(.isActive){
-  opacity: 0.5;
-  filter: saturate(0.7);
+  opacity: 0.32;
+  filter: saturate(0.45) blur(1.5px);
+  transform: scale(0.985);
+}
+/* Old Safari (and the iOS PWA at boot) doesn't always honor the
+ * filter blur immediately if there's no dedicated layer. Promote the
+ * row to its own compositing layer so the dim animates cleanly on
+ * scroll-snap. */
+#hubList .hubRow{
+  will-change: transform, opacity, filter;
 }
 @media (prefers-reduced-motion: reduce){
   #hubList .hubRow{ transition: none; }
@@ -1208,13 +1220,41 @@ body.isAuth .hubNowPlaying{ display:none !important; }
  * glowing picture sitting on top of an invisible card. The glow pulses
  * strong on entry and settles into a soft steady state. */
 #hubList .hubRow.isActive{
-  transform: translateY(-2px) scale(1.012);
-  border-color: rgba(124, 92, 255, 0.42);
+  transform: translateY(-2px) scale(1.03);
+  border-color: rgba(124, 92, 255, 0.55);
   background: linear-gradient(180deg,
-    rgba(124, 92, 255, 0.10) 0%,
-    rgba(124, 92, 255, 0.04) 60%,
-    rgba(124, 92, 255, 0.025) 100%);
+    rgba(124, 92, 255, 0.16) 0%,
+    rgba(124, 92, 255, 0.06) 60%,
+    rgba(124, 92, 255, 0.035) 100%);
   animation: hubFocusPulse 720ms cubic-bezier(.2, 1.4, .4, 1) both;
+  z-index: 2;
+}
+/* Ambient cover tint behind the active card. We render the cover
+ * image again as an absolutely-positioned blurred backdrop so the
+ * post's color spills into its own card frame — this is the
+ * "Spotify Now Playing" feel without going fullscreen. The image
+ * inherits its src from the real cover via a CSS variable set by JS
+ * (`--hub-cover-tint`), and is invisible until isActive lands. */
+#hubList .hubRow.isActive::before{
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  background-image: var(--hub-cover-tint, none);
+  background-size: cover;
+  background-position: center;
+  filter: blur(28px) saturate(1.2);
+  opacity: 0.55;
+  pointer-events: none;
+  transition: opacity 240ms ease;
+}
+/* The cover itself feels a touch larger and crisper on the focused
+ * card so the eye lands on it. We do this with object-position
+ * tricks instead of resizing the row, which would jitter scroll
+ * snap. */
+#hubList .hubRow.isActive .hubCover{
+  filter: saturate(1.08) contrast(1.04);
 }
 
 /* One-shot pulse: lands strong (peak ~28%) then eases into the steady

@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510type1";
+const APP_BUILD = "20260510hubfocus";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -3244,7 +3244,7 @@ function renderHub() {
       { width: 48, quality: 70 },
     );
     return `
-    <div class="trackRow hubRow" data-hub-row="${p.id}">
+    <div class="trackRow hubRow" data-hub-row="${p.id}" style="--hub-cover-tint: url('${escapeHtml(coverSrc)}');">
       <div class="hubCoverWrap" data-hub-cover="${p.id}">
         <img class="hubCover" src="${escapeHtml(coverSrc)}" alt="cover" decoding="async" ${loadingAttr} />
         <div class="hubCoverScrim" aria-hidden="true"></div>

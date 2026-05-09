@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510ae";
+const APP_BUILD = "20260510af";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1868,9 +1868,22 @@ async function supabaseLoadProfile() {
     isPublic: p.is_public !== false,
   };
 }
+/** Last status of the most recent `supabaseLoadUserSongs` call. The
+ *  Library renderer uses this to differentiate between "cloud has
+ *  zero rows" (user genuinely has nothing synced) and "fetch failed"
+ *  (network / auth / RLS issue) so the empty state can show a
+ *  different message in each case.
+ */
+let _lastUserSongsLoadStatus = "ok"; // "ok" | "auth" | "network" | "http"
+let _lastUserSongsLoadDetails = "";
+
 async function supabaseLoadUserSongs() {
   const token = getSupabaseAuthToken();
-  if (!token || !authSession?.user?.id) return [];
+  if (!token || !authSession?.user?.id) {
+    _lastUserSongsLoadStatus = "auth";
+    _lastUserSongsLoadDetails = !token ? "no_token" : "no_user_id";
+    return [];
+  }
   const uid = encodeURIComponent(authSession.user.id);
   // Slim list: render-only columns. We deliberately omit `meta` here
   // because legacy rows can carry base64 cover data URLs in
@@ -1890,14 +1903,27 @@ async function supabaseLoadUserSongs() {
       },
       signal: ctrl.signal,
     });
-  } catch {
+  } catch (e) {
     clearTimeout(timer);
+    _lastUserSongsLoadStatus = "network";
+    _lastUserSongsLoadDetails = String(e?.message || e || "fetch_aborted").slice(0, 120);
     return [];
   }
   clearTimeout(timer);
-  if (!r.ok) return [];
+  if (!r.ok) {
+    _lastUserSongsLoadStatus = "http";
+    const txt = await r.text().catch(() => "");
+    _lastUserSongsLoadDetails = `${r.status} ${String(txt).slice(0, 120)}`;
+    return [];
+  }
   const rows = await r.json().catch(() => []);
-  if (!Array.isArray(rows)) return [];
+  if (!Array.isArray(rows)) {
+    _lastUserSongsLoadStatus = "http";
+    _lastUserSongsLoadDetails = "non_array_response";
+    return [];
+  }
+  _lastUserSongsLoadStatus = "ok";
+  _lastUserSongsLoadDetails = "";
   return rows.map((s) => ({
     id: String(s.id || `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
     ts: new Date(s.created_at || Date.now()).getTime(),
@@ -3786,6 +3812,39 @@ function renderLibrary() {
           <div class="emptyStateIcon" aria-hidden="true">♪</div>
           <p class="emptyStateTitle">Loading your library…</p>
           <p class="emptyStateHint">Pulling your songs from the cloud.</p>
+        </div>
+      `;
+      return;
+    }
+    // Hydrate finished but result is empty. Three sub-cases:
+    //  (a) fetch errored → show "Couldn't reach cloud" + Retry
+    //  (b) authed user with 0 cloud rows → show migration hint
+    //      (their old browser localStorage hasn't been pushed yet —
+    //      common when first opening the standalone PWA)
+    //  (c) guest / never logged in → original "Nothing here yet" CTA
+    if (isLoggedIn && _lastUserSongsLoadStatus !== "ok") {
+      els.libraryList.innerHTML = `
+        <div class="emptyState">
+          <div class="emptyStateIcon" aria-hidden="true">♪</div>
+          <p class="emptyStateTitle">Couldn't sync your library</p>
+          <p class="emptyStateHint">Network or sign-in issue. Tap Retry to try again.</p>
+          <button type="button" class="emptyStateCta" id="libraryEmptyRetry">Retry sync</button>
+        </div>
+      `;
+      const retry = document.getElementById("libraryEmptyRetry");
+      if (retry) retry.addEventListener("click", () => {
+        setStatus("Retrying library sync…");
+        void ensureUserLibraryHydrated();
+      });
+      return;
+    }
+    if (isLoggedIn) {
+      els.libraryList.innerHTML = `
+        <div class="emptyState">
+          <div class="emptyStateIcon" aria-hidden="true">♪</div>
+          <p class="emptyStateTitle">No songs synced yet</p>
+          <p class="emptyStateHint">Songs you create here land in your Library automatically. If you have older songs in your browser, open the app there once to sync them across devices.</p>
+          <a href="#/generate" class="emptyStateCta" data-route-link="generate">Create a song</a>
         </div>
       `;
       return;

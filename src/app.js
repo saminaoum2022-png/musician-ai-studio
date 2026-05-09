@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510hubskel";
+const APP_BUILD = "20260510proofcert";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -332,7 +332,10 @@ const els = {
   proofBackdrop: document.getElementById("proofBackdrop"),
   btnCloseProof: document.getElementById("btnCloseProof"),
   btnDownloadProof: document.getElementById("btnDownloadProof"),
-  proofCard: document.getElementById("proofCard"),
+  btnProofShareImg: document.getElementById("btnProofShareImg"),
+  btnProofCopyFp: document.getElementById("btnProofCopyFp"),
+  proofCertificateCapture: document.getElementById("proofCertificateCapture"),
+  proofCertCoverImg: document.getElementById("proofCertCoverImg"),
   envBadge: document.getElementById("envBadge"),
 };
 
@@ -2950,32 +2953,135 @@ function closeShareLiveModal() {
   els.shareLiveModal.style.display = "none";
 }
 function openProofModal(post) {
-  if (!els.proofModal || !els.proofCard) return;
+  if (!els.proofModal || !els.proofCertificateCapture) return;
   currentProofPost = post || null;
-  const ts = post?.ts ? new Date(post.ts) : new Date();
+  const p = post || {};
+  const ts = p?.ts ? new Date(p.ts) : new Date();
   const localTs = ts.toLocaleString();
   const utcTs = ts.toISOString();
-  const text = [
-    "NabadAi Music — Proof of Creation",
-    "",
-    "This certificate confirms that this musical work was created using NabadAi Music on the stated date and recorded with the unique creation fingerprint below.",
-    "",
-    `Title: ${post?.title || "Untitled"}`,
-    `Creator: @${post?.creator || "guest"}`,
-    `Date (Local): ${localTs}`,
-    `Date (UTC): ${utcTs}`,
-    `Fingerprint: #${post?.proof?.promptHash || "N/A"}`,
-    `Model: ${post?.proof?.model || LATEST_SUNO_MODEL}`,
-    `Mode: ${post?.proof?.mode || post?.kind || "full"}`,
-    "",
-    "This certificate records creation metadata and timestamp for attribution purposes.",
-  ].join("\n");
-  els.proofCard.textContent = text;
+
+  const setTxt = (id, text) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  };
+  setTxt("proofValTitle", String(p.title || "Untitled").trim() || "Untitled");
+  setTxt("proofValCreator", `@${String(p.creator || "guest").replace(/^@/, "")}`);
+  setTxt("proofValLocal", localTs);
+  setTxt("proofValUtc", `UTC · ${utcTs}`);
+  setTxt("proofValModel", String(p?.proof?.model || LATEST_SUNO_MODEL));
+  setTxt("proofValMode", String(p?.proof?.mode || p?.kind || "full"));
+  const fp = String(p?.proof?.promptHash || "").trim();
+  setTxt("proofValFingerprint", fp ? `#${fp}` : "—");
+
+  const img = els.proofCertCoverImg;
+  if (img) {
+    const art = String(p.artUrl || "").trim();
+    const fallback = "./assets/nabadai-logo.png";
+    img.onload = null;
+    img.onerror = () => {
+      img.removeAttribute("crossorigin");
+      img.onerror = null;
+      img.src = fallback;
+    };
+    img.alt = String(p.title || "Cover art").slice(0, 120);
+    img.removeAttribute("crossorigin");
+    if (/^https?:\/\//i.test(art)) {
+      img.crossOrigin = "anonymous";
+    }
+    img.src = art || fallback;
+  }
+
+  const buildEl = document.getElementById("proofCertBuildLine");
+  if (buildEl) {
+    buildEl.textContent = `Verified by NabadAi · Build ${APP_BUILD}`;
+  }
   els.proofModal.style.display = "";
 }
 function closeProofModal() {
   if (!els.proofModal) return;
   els.proofModal.style.display = "none";
+}
+
+function proofFingerprintText(post) {
+  const fp = String(post?.proof?.promptHash || "").trim();
+  return fp ? `#${fp}` : "";
+}
+
+function slugProofFilename(title) {
+  const s = String(title || "song")
+    .trim()
+    .slice(0, 48)
+    .replace(/[^\w\u0600-\u06FF-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return s || "song";
+}
+
+async function shareProofCertificateImage() {
+  const cap = els.proofCertificateCapture;
+  if (!cap || !currentProofPost) return;
+  try {
+    setStatus?.("Preparing image…");
+    const url = "https://esm.sh/html-to-image@1.11.11";
+    const mod = await import(/* webpackIgnore: true */ url);
+    const toPng = mod.toPng;
+    if (typeof toPng !== "function") throw new Error("toPng unavailable");
+    const dataUrl = await toPng(cap, {
+      pixelRatio: 3,
+      backgroundColor: "#0b0d12",
+      cacheBust: true,
+    });
+    const base = slugProofFilename(currentProofPost.title);
+    const idShort = String(currentProofPost.id || "").replace(/\W/g, "").slice(0, 10);
+    const fname = `nabadai-proof-${base}${idShort ? `-${idShort}` : ""}.png`;
+    const blob = await (await fetch(dataUrl)).blob();
+    const file = new File([blob], fname, { type: "image/png" });
+    if (navigator.share && navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: "NabadAi proof of creation" });
+      showToast?.("Ready to share.");
+    } else {
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      showToast?.("Image saved — check Downloads or Photos.");
+    }
+    setStatus?.("");
+  } catch (e) {
+    console.warn(e);
+    setStatus?.("");
+    showToast?.("Could not create the image. Try Print / PDF or take a screenshot.", { durationMs: 4200 });
+  }
+}
+
+function copyProofFingerprint() {
+  const line = proofFingerprintText(currentProofPost);
+  if (!line) {
+    showToast?.("No fingerprint stored for this post.", { durationMs: 2800 });
+    return;
+  }
+  const ok = () => showToast?.("Fingerprint copied.");
+  const fallback = () => {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = line;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      ok();
+    } catch {
+      showToast?.("Could not copy — select the fingerprint manually.", { durationMs: 3200 });
+    }
+  };
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(line).then(ok).catch(fallback);
+  } else {
+    fallback();
+  }
 }
 function shareToHub(track) {
   const feed = loadHubFeed();
@@ -10269,20 +10375,24 @@ if (els.btnDownloadProof) {
   els.btnDownloadProof.addEventListener("click", () => {
     if (!currentProofPost) return;
     const ts = currentProofPost?.ts ? new Date(currentProofPost.ts) : new Date();
+    const fp = proofFingerprintText(currentProofPost) || "—";
     const html = `
-      <html><head><meta charset="utf-8"><title>Proof of Creation</title></head>
-      <body style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;padding:28px;color:#0b0d12">
-        <h1 style="margin:0 0 8px">NabadAi Music</h1>
-        <h2 style="margin:0 0 18px;color:#2b3560">Proof of Creation</h2>
-        <p>This certificate confirms that this musical work was created using NabadAi Music on the stated date and recorded with the unique creation fingerprint below.</p>
-        <p><strong>Title:</strong> ${escapeHtml(currentProofPost.title || "Untitled")}</p>
-        <p><strong>Creator:</strong> @${escapeHtml(currentProofPost.creator || "guest")}</p>
-        <p><strong>Date (Local):</strong> ${escapeHtml(ts.toLocaleString())}</p>
-        <p><strong>Date (UTC):</strong> ${escapeHtml(ts.toISOString())}</p>
-        <p><strong>Fingerprint:</strong> #${escapeHtml(currentProofPost?.proof?.promptHash || "N/A")}</p>
-        <p><strong>Model:</strong> ${escapeHtml(currentProofPost?.proof?.model || LATEST_SUNO_MODEL)}</p>
-        <p><strong>Mode:</strong> ${escapeHtml(currentProofPost?.proof?.mode || currentProofPost?.kind || "full")}</p>
-        <p style="margin-top:18px;font-size:12px;color:#4e5a7a">This certificate records creation metadata and timestamp for attribution purposes.</p>
+      <!DOCTYPE html>
+      <html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+      <title>NabadAi — Proof of creation</title></head>
+      <body style="margin:0;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0b0d12;color:#e7edf7;padding:28px 18px;line-height:1.45;">
+        <div style="max-width:520px;margin:0 auto;border:1px solid rgba(124,92,255,0.32);border-radius:18px;padding:26px 22px;background:linear-gradient(180deg,rgba(18,28,44,0.92),rgba(8,12,20,0.96));box-shadow:0 22px 52px rgba(0,0,0,0.48);">
+          <h1 style="margin:0 0 4px;font-size:26px;font-weight:900;letter-spacing:-0.03em;background:linear-gradient(135deg,rgba(124,92,255,0.98),rgba(35,213,171,0.92));-webkit-background-clip:text;background-clip:text;color:transparent;">NabadAi</h1>
+          <p style="margin:0 0 18px;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:rgba(231,237,247,0.52);">Proof of creation</p>
+          <p style="margin:0 0 16px;color:rgba(232,238,247,0.72);font-size:14px;">This record confirms this musical work was created in NabadAi with the metadata below.</p>
+          <p style="margin:10px 0"><strong style="color:rgba(232,238,247,0.46);font-size:11px;text-transform:uppercase;letter-spacing:0.08em;">Track</strong><br/><span style="font-size:15px;font-weight:600;">${escapeHtml(currentProofPost.title || "Untitled")}</span></p>
+          <p style="margin:10px 0"><strong style="color:rgba(232,238,247,0.46);font-size:11px;text-transform:uppercase;letter-spacing:0.08em;">Creator</strong><br/><span style="font-size:15px;font-weight:600;">@${escapeHtml(String(currentProofPost.creator || "guest").replace(/^@/, ""))}</span></p>
+          <p style="margin:10px 0"><strong style="color:rgba(232,238,247,0.46);font-size:11px;text-transform:uppercase;letter-spacing:0.08em;">Recorded</strong><br/><span style="font-size:14px;">${escapeHtml(ts.toLocaleString())}</span><br/><span style="font-size:12px;color:rgba(232,238,247,0.45);">UTC ${escapeHtml(ts.toISOString())}</span></p>
+          <p style="margin:10px 0"><strong style="color:rgba(232,238,247,0.46);font-size:11px;text-transform:uppercase;letter-spacing:0.08em;">Model</strong><br/><span style="font-size:14px;">${escapeHtml(currentProofPost?.proof?.model || LATEST_SUNO_MODEL)}</span></p>
+          <p style="margin:10px 0"><strong style="color:rgba(232,238,247,0.46);font-size:11px;text-transform:uppercase;letter-spacing:0.08em;">Mode</strong><br/><span style="font-size:14px;">${escapeHtml(currentProofPost?.proof?.mode || currentProofPost?.kind || "full")}</span></p>
+          <p style="margin:14px 0 0;padding:12px 14px;border-radius:10px;background:rgba(0,0,0,0.42);border:1px solid rgba(255,255,255,0.08);font-size:12px;word-break:break-all;"><strong style="display:block;margin-bottom:6px;color:rgba(232,238,247,0.46);font-size:11px;text-transform:uppercase;letter-spacing:0.08em;">Fingerprint</strong>${escapeHtml(fp)}</p>
+          <p style="margin:18px 0 0;font-size:11px;text-align:center;color:rgba(232,238,247,0.42);">Verified by NabadAi · Build ${escapeHtml(APP_BUILD)}</p>
+        </div>
       </body></html>`;
     const w = window.open("", "_blank");
     if (!w) return;
@@ -10293,6 +10403,8 @@ if (els.btnDownloadProof) {
     setTimeout(() => w.print(), 250);
   });
 }
+if (els.btnProofShareImg) els.btnProofShareImg.addEventListener("click", () => void shareProofCertificateImage());
+if (els.btnProofCopyFp) els.btnProofCopyFp.addEventListener("click", copyProofFingerprint);
 
 // In-app player controls
 if (els.btnPlayerPlay) {

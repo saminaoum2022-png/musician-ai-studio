@@ -29,7 +29,7 @@
     <link rel="dns-prefetch" href="https://cdn2.suno.ai" />
     <link rel="dns-prefetch" href="https://cdn4.suno.ai" />
     <link rel="dns-prefetch" href="https://suno.com" />
-    <link rel="stylesheet" href="./styles.css?v=20260510hubskel" />
+    <link rel="stylesheet" href="./styles.css?v=20260510proofcert" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1418,16 +1418,101 @@
           </div>
         </div>
       </div>
-      <div id="proofModal" class="songDetailsModal" style="display:none">
+      <div id="proofModal" class="songDetailsModal proofCertModal" style="display:none">
         <div class="songDetailsBackdrop" id="proofBackdrop"></div>
-        <div class="songDetailsSheet shareLiveSheet">
-          <div class="row" style="justify-content:space-between;align-items:center">
-            <h2 style="margin:0">Proof of Creation</h2>
-            <button id="btnCloseProof" class="ghost" type="button">Close</button>
+        <div class="songDetailsSheet proofCertSheet">
+          <div class="proofCertToolbar">
+            <h2 class="proofCertToolbarTitle">Proof of creation</h2>
+            <button id="btnCloseProof" class="ghost proofCertClose" type="button" aria-label="Close">Close</button>
           </div>
-          <div id="proofCard" class="code" style="max-height:none; white-space:pre-wrap; margin-top:10px"></div>
-          <div class="row" style="justify-content:flex-end; margin-top:14px">
-            <button id="btnDownloadProof" class="primary" type="button">Download PDF</button>
+          <p class="proofCertLead">
+            A verified record of how this track was created in NabadAi. Share the image or keep the fingerprint for attribution.
+          </p>
+          <div id="proofCertificateCapture" class="proofCertCard">
+            <div class="proofCertBrand">
+              <svg class="proofCertBrandMark" viewBox="0 0 32 32" aria-hidden="true">
+                <defs>
+                  <linearGradient id="proofGradMark" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="rgba(124,92,255,0.98)"/>
+                    <stop offset="100%" stop-color="rgba(35,213,171,0.95)"/>
+                  </linearGradient>
+                </defs>
+                <circle cx="16" cy="16" r="14" fill="none" stroke="url(#proofGradMark)" stroke-width="2"/>
+                <path d="M11 11v10l10-5-10-5z" fill="url(#proofGradMark)"/>
+              </svg>
+              <div class="proofCertBrandText">
+                <span class="proofCertBrandName">NabadAi</span>
+                <span class="proofCertBrandSub">Music</span>
+              </div>
+            </div>
+            <p class="proofCertTagline">Verified creation record</p>
+            <div class="proofCertCoverWrap">
+              <img id="proofCertCoverImg" class="proofCertCoverImg" src="./assets/nabadai-logo.png" alt="" width="640" height="360" decoding="async"/>
+              <div class="proofCertCoverFrame" aria-hidden="true"></div>
+            </div>
+            <dl class="proofCertFields">
+              <div class="proofCertRow">
+                <dt class="proofCertIconWrap" aria-hidden="true">
+                  <svg class="proofCertSvg" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13M9 9l12-2" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </dt>
+                <dd class="proofCertCell">
+                  <span class="proofCertLabel">Track</span>
+                  <span id="proofValTitle" class="proofCertValue"></span>
+                </dd>
+              </div>
+              <div class="proofCertRow">
+                <dt class="proofCertIconWrap" aria-hidden="true">
+                  <svg class="proofCertSvg" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="1.75"/><path d="M5 20a7 7 0 0 1 14 0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
+                </dt>
+                <dd class="proofCertCell">
+                  <span class="proofCertLabel">Creator</span>
+                  <span id="proofValCreator" class="proofCertValue"></span>
+                </dd>
+              </div>
+              <div class="proofCertRow">
+                <dt class="proofCertIconWrap" aria-hidden="true">
+                  <svg class="proofCertSvg" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="16" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.75"/><path d="M3.5 10.5h17M8 3.5v4M16 3.5v4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
+                </dt>
+                <dd class="proofCertCell">
+                  <span class="proofCertLabel">Recorded</span>
+                  <span id="proofValLocal" class="proofCertValue"></span>
+                  <span id="proofValUtc" class="proofCertMuted"></span>
+                </dd>
+              </div>
+              <div class="proofCertRow">
+                <dt class="proofCertIconWrap" aria-hidden="true">
+                  <svg class="proofCertSvg" viewBox="0 0 24 24"><path d="M8 8h8v8H8zM4 4v4M20 4v4M4 20v-4M20 20v-4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>
+                </dt>
+                <dd class="proofCertCell">
+                  <span class="proofCertLabel">Model</span>
+                  <span id="proofValModel" class="proofCertValue"></span>
+                </dd>
+              </div>
+              <div class="proofCertRow">
+                <dt class="proofCertIconWrap" aria-hidden="true">
+                  <svg class="proofCertSvg" viewBox="0 0 24 24"><path d="M6 15h4l6-6 4 4-6 6H6v-4z" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><path d="M14 7l3 3" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
+                </dt>
+                <dd class="proofCertCell">
+                  <span class="proofCertLabel">Mode</span>
+                  <span id="proofValMode" class="proofCertValue"></span>
+                </dd>
+              </div>
+              <div class="proofCertRow proofCertRowFp">
+                <dt class="proofCertIconWrap" aria-hidden="true">
+                  <svg class="proofCertSvg" viewBox="0 0 24 24"><path d="M7 14a5 5 0 0 1 5-5m0 0a5 5 0 0 1 5 5m-5-9v2m0 14v2M4 12H2m20 0h-2" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="12" cy="14" r="1.5" fill="currentColor"/></svg>
+                </dt>
+                <dd class="proofCertCell">
+                  <span class="proofCertLabel">Fingerprint</span>
+                  <code id="proofValFingerprint" class="proofCertFp"></code>
+                </dd>
+              </div>
+            </dl>
+            <p id="proofCertBuildLine" class="proofCertFooter"></p>
+          </div>
+          <div class="proofCertActions">
+            <button id="btnProofShareImg" class="primary proofCertActionPrimary" type="button">Share image</button>
+            <button id="btnProofCopyFp" class="ghost" type="button">Copy fingerprint</button>
+            <button id="btnDownloadProof" class="ghost" type="button">Print / PDF</button>
           </div>
         </div>
       </div>
@@ -1500,6 +1585,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260510hubskel"></script>
+    <script type="module" src="./src/app.js?v=20260510proofcert"></script>
   </body>
 </html>

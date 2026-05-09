@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510v";
+const APP_BUILD = "20260510w";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -4373,6 +4373,55 @@ function toCoverThumbUrl(url, opts) {
   return `${origin}/storage/v1/render/image/public/${cleanRest}?width=${w}&quality=${q}&resize=cover`;
 }
 
+/** Read a picked file as a data URL (same pattern as the Image Mood flow). */
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result || ""));
+    fr.onerror = () => reject(new Error("Could not read file"));
+    fr.readAsDataURL(file);
+  });
+}
+
+/** Downscale a raster image data URL to JPEG for smaller localStorage + Hub payloads. */
+async function downscaleImageDataUrl(dataUrl, maxSide = 1600, quality = 0.82) {
+  if (!String(dataUrl).startsWith("data:image/")) return dataUrl;
+  const img = await new Promise((resolve, reject) => {
+    const i = new Image();
+    i.onload = () => resolve(i);
+    i.onerror = () => reject(new Error("Could not decode image"));
+    i.src = dataUrl;
+  });
+  const w = Number(img.width || 0);
+  const h = Number(img.height || 0);
+  if (!w || !h) return dataUrl;
+  const scale = Math.min(1, maxSide / Math.max(w, h));
+  const tw = Math.max(1, Math.round(w * scale));
+  const th = Math.max(1, Math.round(h * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = tw;
+  canvas.height = th;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return dataUrl;
+  ctx.drawImage(img, 0, 0, tw, th);
+  return canvas.toDataURL("image/jpeg", quality);
+}
+
+/** Turn a user-picked cover into a persistent data URL (no blob: URLs).
+ *  Stored in Library JSON + Supabase `cover_url`, so it must survive
+ *  refresh and load on other devices — blobObjectURLs break both.
+ */
+async function fileToCoverDataUrl(file) {
+  if (!file || !String(file.type || "").startsWith("image/")) {
+    throw new Error("Choose an image file.");
+  }
+  let dataUrl = await readFileAsDataUrl(file);
+  dataUrl = await downscaleImageDataUrl(dataUrl, 1024, 0.78);
+  if (dataUrl.length > 450_000) dataUrl = await downscaleImageDataUrl(dataUrl, 800, 0.72);
+  if (dataUrl.length > 280_000) dataUrl = await downscaleImageDataUrl(dataUrl, 640, 0.68);
+  return dataUrl;
+}
+
 function preferDirectAudioUrl(url) {
   const s = String(url || "").trim();
   if (!s || s === "#") return "";
@@ -7711,19 +7760,28 @@ if (els.btnPlayerChangeCover) {
   });
 }
 if (els.playerCoverUpload) {
-  els.playerCoverUpload.addEventListener("change", () => {
+  els.playerCoverUpload.addEventListener("change", async () => {
     const f = els.playerCoverUpload?.files?.[0];
     if (!f || !currentPlayerTrackRef?.id) return;
-    const url = URL.createObjectURL(f);
-    patchLibraryTrack(currentPlayerTrackRef.id, { artUrl: url, meta: { ...(currentPlayerTrackRef.meta || {}), imageUrl: url } });
-    currentPlayerTrackRef = { ...currentPlayerTrackRef, artUrl: url, meta: { ...(currentPlayerTrackRef.meta || {}), imageUrl: url } };
-    setPlayerMeta({
-      title: els.playerTitle?.textContent || currentPlayerTrackRef.title || "Library song",
-      subtitle: els.playerSubtitle?.textContent || "Library • Full song",
-      artUrl: url,
-    });
-    setStatus("Cover updated.");
-    void syncHubCoverForTrack(currentPlayerTrackRef, url);
+    try {
+      setStatus("Processing cover…");
+      const url = await fileToCoverDataUrl(f);
+      patchLibraryTrack(currentPlayerTrackRef.id, { artUrl: url, meta: { ...(currentPlayerTrackRef.meta || {}), imageUrl: url } });
+      currentPlayerTrackRef = { ...currentPlayerTrackRef, artUrl: url, meta: { ...(currentPlayerTrackRef.meta || {}), imageUrl: url } };
+      setPlayerMeta({
+        title: els.playerTitle?.textContent || currentPlayerTrackRef.title || "Library song",
+        subtitle: els.playerSubtitle?.textContent || "Library • Full song",
+        artUrl: url,
+      });
+      setStatus("Cover updated.");
+      void syncHubCoverForTrack(currentPlayerTrackRef, url);
+    } catch (e) {
+      setStatus(`Cover failed: ${e?.message || String(e)}`);
+    } finally {
+      try {
+        els.playerCoverUpload.value = "";
+      } catch {}
+    }
   });
 }
 if (els.playerSeek) {

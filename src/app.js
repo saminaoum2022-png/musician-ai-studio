@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509sounds3";
+const APP_BUILD = "20260509sounds4";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1015,6 +1015,21 @@ var generationReadyNotice = false;
 /** Suno "Sounds" task polling (separate from full-song generate). */
 let soundTaskId = "";
 let soundPollTimer = null;
+
+/** Shorten a sound's title for display: keep just the first 2 meaningful
+ *  words (or up to ~24 chars). The full prompt remains in `meta.soundPrompt`
+ *  so we can render it as a description later without losing context. */
+function shortenSoundTitle(raw) {
+  const cleaned = String(raw || "").replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!cleaned) return "Sound";
+  const upTo = cleaned.split(/[,.;:!?]/)[0].trim() || cleaned;
+  const words = upTo.split(/\s+/).filter(Boolean);
+  let head = words.slice(0, 2).join(" ");
+  if (head.length < 3) head = words.slice(0, 3).join(" ");
+  if (head.length > 28) head = `${head.slice(0, 27)}…`;
+  if (!head) head = cleaned.slice(0, 24);
+  return head.charAt(0).toUpperCase() + head.slice(1);
+}
 
 /** Library tab red-dot persistence — fires on sound generations to nudge the
  *  user that something landed; full songs use the result card instead. */
@@ -2043,10 +2058,8 @@ function startSoundGenerationPolling(meta) {
       if (clip.audioUrl) {
         const url = toAudioProxyUrl(clip.audioUrl) || clip.audioUrl;
         stopSoundGenerationPolling();
-        const rawTitle = String(clip.title || meta.fallbackTitle || "Sound").trim();
-        const finalTitle = rawTitle.length > 48
-          ? `${rawTitle.slice(0, 47)}…`
-          : (rawTitle || "Sound");
+        const candidate = String(clip.title || meta.fallbackTitle || "Sound").trim();
+        const finalTitle = shortenSoundTitle(candidate || "Sound");
         addToLibrary({
           title: finalTitle,
           artUrl: clip.imageUrl || "./assets/nabadai-logo.png",
@@ -4895,7 +4908,9 @@ function renderLibrary() {
         const dateLabel = formatLibraryDate(t.ts);
         const isInstrumental = t.kind === "instrumental";
         const isSound = t.kind === "sound";
-        const safeTitle = escapeHtml(t.title || "Generated song");
+        const rawTitle = String(t.title || "").trim() || (isSound ? "Sound" : "Generated song");
+        const displayTitle = isSound ? shortenSoundTitle(rawTitle) : rawTitle;
+        const safeTitle = escapeHtml(displayTitle);
         const subBits = [];
         if (dateLabel) subBits.push(`<span class="libRowDot">${escapeHtml(dateLabel)}</span>`);
         if (isInstrumental) subBits.push(`<span class="libRowChip">Instrumental</span>`);
@@ -9328,11 +9343,7 @@ if (els.btnSoundGenerate) {
         els.btnSoundGenerate.disabled = false;
         return;
       }
-      const firstLine = (prompt.split(/\r?\n/)[0] || "").trim();
-      const fallbackTitle =
-        firstLine.length > 48
-          ? `${firstLine.slice(0, 47)}…`
-          : firstLine || "Sound";
+      const fallbackTitle = shortenSoundTitle((prompt.split(/\r?\n/)[0] || "").trim() || "Sound");
       startSoundGenerationPolling({
         fallbackTitle,
         libraryMeta: {

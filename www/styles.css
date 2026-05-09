@@ -6096,3 +6096,75 @@ input::placeholder, textarea::placeholder{
     grid-column: 1 / -1;
   }
 }
+
+/* Collapsible/grouped sections inside the certificate (Composition,
+ * Technical). Composition shows only for the creator. Technical is
+ * also creator-only and collapsed by default so a public-facing
+ * screenshot/share doesn't include the fingerprint or model code. */
+.proofCertSection{
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(255,255,255,0.10);
+}
+.proofCertSection[hidden]{
+  display: none !important;
+}
+.proofCertSectionHead{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(232,238,247,0.55);
+}
+.proofCertDetails{
+  position: relative;
+}
+.proofCertDetails > summary{
+  list-style: none;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  padding: 4px 2px 4px 0;
+  margin: 0;
+  border-radius: 8px;
+  transition: color 160ms ease;
+}
+.proofCertDetails > summary::-webkit-details-marker{
+  display: none;
+}
+.proofCertDetails > summary:hover{
+  color: rgba(232,238,247,0.78);
+}
+.proofCertSummary{
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(232,238,247,0.55);
+}
+.proofCertSummaryChev{
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  transition: transform 200ms ease;
+  color: rgba(232,238,247,0.62);
+}
+.proofCertDetails[open] .proofCertSummaryChev{
+  transform: rotate(180deg);
+}
+.proofCertDetails > .proofCertFields{
+  margin-top: 10px;
+}
+/* Public stub feels lighter — pull the lead copy in tighter so it
+ * doesn't try to compete with the creator-only flow visually. */
+.proofCertSheet[data-proof-mode="public"] .proofCertCard{
+  padding-bottom: 18px;
+}
+.proofCertSheet[data-proof-mode="public"] .proofCertLead{
+  margin-bottom: 12px;
+}

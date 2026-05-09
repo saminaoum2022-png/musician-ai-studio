@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510profilebar";
+const APP_BUILD = "20260510proofgate";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -2953,6 +2953,86 @@ function closeShareLiveModal() {
   if (!els.shareLiveModal) return;
   els.shareLiveModal.style.display = "none";
 }
+/** Decide whether the signed-in user is the creator of this post.
+ *  Strict: we ONLY trust `meta.creatorUserId === uid`. Username
+ *  fallbacks were what caused old `@guest` posts to leak attribution
+ *  into other accounts — see the cloud profile migration. */
+function isProofPostOwner(post) {
+  if (!post) return false;
+  const uid = String(authSession?.user?.id || "").trim();
+  if (!uid) return false;
+  const owner = String(post?.meta?.creatorUserId || "").trim();
+  return Boolean(owner) && owner === uid;
+}
+
+/** Translate the raw `meta` we stored at share-time into human
+ *  "what's me, what's the model" rows. We deliberately stay
+ *  conservative — only show a row when we have data; never invent
+ *  attribution we can't back up. */
+function buildProofComposition(post) {
+  const meta = post?.meta || {};
+  const mode = String(meta.mode || post?.kind || "").toLowerCase();
+  const lyricsInput = String(meta.lyricsInput || "").trim();
+  const finalPrompt = String(meta.finalPrompt || "").trim();
+  const personaName = String(meta.personaLabel || meta.personaName || "").trim();
+
+  let lyrics = "";
+  if (mode.includes("instrumental") || mode === "sound") {
+    lyrics = "Instrumental — no lyrics";
+  } else if (mode === "hum" || meta.humMelody) {
+    lyrics = "Hummed melody by creator";
+  } else if (lyricsInput && finalPrompt && lyricsInput !== finalPrompt) {
+    lyrics = "User-written, AI-assisted";
+  } else if (lyricsInput) {
+    lyrics = "User-written";
+  } else if (finalPrompt) {
+    lyrics = "AI-assisted from a prompt";
+  }
+
+  let inspiration = "";
+  if (mode === "photo" || meta.imageUrl || meta.photoMode) {
+    inspiration = "From a user photo";
+  } else if (mode === "hum") {
+    inspiration = "From a hummed melody";
+  }
+
+  const styleTagsRaw = meta.styleTags || meta.styleInput || meta.style || "";
+  let style = "";
+  if (Array.isArray(styleTagsRaw) && styleTagsRaw.length) {
+    style = styleTagsRaw.slice(0, 5).join(", ");
+  } else if (typeof styleTagsRaw === "string" && styleTagsRaw.trim()) {
+    style = styleTagsRaw
+      .split(/[,;]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 5)
+      .join(", ");
+  }
+  if (style.length > 80) style = style.slice(0, 78).trim() + "…";
+
+  return {
+    lyrics,
+    inspiration,
+    persona: personaName,
+    style,
+  };
+}
+
+/** Tag the engine row with friendly NabadAi-first wording. We hide
+ *  the raw Suno model code (e.g. `chirp-v3-5`) behind a neutral
+ *  label so the certificate reads as a NabadAi product, not a
+ *  passthrough. The exact model is still in `meta.proof.model` if
+ *  someone needs it for support. */
+function buildProofEngineLabel(post) {
+  const raw = String(post?.proof?.model || LATEST_SUNO_MODEL || "").trim();
+  if (!raw) return "NabadAi";
+  const upper = raw.toUpperCase();
+  if (/^V?\d/.test(upper) || upper.startsWith("CHIRP")) {
+    return `NabadAi · ${upper.replace(/^CHIRP-/, "Chirp ")}`;
+  }
+  return `NabadAi · ${raw}`;
+}
+
 function openProofModal(post) {
   if (!els.proofModal || !els.proofCertificateCapture) return;
   currentProofPost = post || null;
@@ -2960,19 +3040,81 @@ function openProofModal(post) {
   const ts = p?.ts ? new Date(p.ts) : new Date();
   const localTs = ts.toLocaleString();
   const utcTs = ts.toISOString();
+  const isOwner = isProofPostOwner(p);
 
   const setTxt = (id, text) => {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
   };
+  const setRow = (rowId, text) => {
+    const row = document.getElementById(rowId);
+    if (!row) return;
+    if (text) {
+      row.hidden = false;
+    } else {
+      row.hidden = true;
+    }
+  };
+
   setTxt("proofValTitle", String(p.title || "Untitled").trim() || "Untitled");
   setTxt("proofValCreator", `@${String(p.creator || "guest").replace(/^@/, "")}`);
   setTxt("proofValLocal", localTs);
   setTxt("proofValUtc", `UTC · ${utcTs}`);
-  setTxt("proofValModel", String(p?.proof?.model || LATEST_SUNO_MODEL));
+
+  // Composition block — always derived, but hidden in the public
+  // stub view so non-owners don't get bombarded with metadata.
+  const comp = buildProofComposition(p);
+  setTxt("proofValLyrics", comp.lyrics);
+  setRow("proofRowLyrics", comp.lyrics);
+  setTxt("proofValInspiration", comp.inspiration);
+  setRow("proofRowInspiration", comp.inspiration);
+  setTxt("proofValPersona", comp.persona);
+  setRow("proofRowPersona", comp.persona);
+  setTxt("proofValStyle", comp.style);
+  setRow("proofRowStyle", comp.style);
+  const compositionWrap = document.getElementById("proofCertCompositionWrap");
+  const anyComposition = Boolean(comp.lyrics || comp.inspiration || comp.persona || comp.style);
+  if (compositionWrap) compositionWrap.hidden = !(isOwner && anyComposition);
+
+  // Technical / fingerprint — owner-only, collapsed by default so a
+  // screenshot for IG looks clean unless the creator opens it.
+  setTxt("proofValEngine", buildProofEngineLabel(p));
   setTxt("proofValMode", String(p?.proof?.mode || p?.kind || "full"));
   const fp = String(p?.proof?.promptHash || "").trim();
   setTxt("proofValFingerprint", fp ? `#${fp}` : "—");
+  const techWrap = document.getElementById("proofCertTechWrap");
+  if (techWrap) {
+    techWrap.hidden = !isOwner;
+    techWrap.open = false;
+  }
+
+  // Owner-only action bar.
+  const actions = document.getElementById("proofCertActions");
+  if (actions) actions.hidden = !isOwner;
+
+  // Toolbar / lead / tagline copy switches between the public stub
+  // ("Created with NabadAi") and the creator's full record
+  // ("Proof of creation"). The capture card itself reuses the same
+  // tagline so a screenshot reads consistently with what's on
+  // screen.
+  const toolbarTitleEl = document.getElementById("proofCertToolbarTitle");
+  const taglineEl = document.getElementById("proofCertTagline");
+  const leadEl = document.getElementById("proofCertLead");
+  const sheet = els.proofModal.querySelector(".proofCertSheet");
+  if (sheet) sheet.setAttribute("data-proof-mode", isOwner ? "owner" : "public");
+  if (isOwner) {
+    if (toolbarTitleEl) toolbarTitleEl.textContent = "Proof of creation";
+    if (taglineEl) taglineEl.textContent = "Verified creation record";
+    if (leadEl) {
+      leadEl.textContent = "A verified record of how this track was created in NabadAi. Share the image or open Technical details for the fingerprint.";
+    }
+  } else {
+    if (toolbarTitleEl) toolbarTitleEl.textContent = "Created with NabadAi";
+    if (taglineEl) taglineEl.textContent = "Created with NabadAi";
+    if (leadEl) {
+      leadEl.textContent = "This track was created on NabadAi. Only the creator can view full creation details.";
+    }
+  }
 
   const img = els.proofCertCoverImg;
   if (img) {
@@ -2994,7 +3136,9 @@ function openProofModal(post) {
 
   const buildEl = document.getElementById("proofCertBuildLine");
   if (buildEl) {
-    buildEl.textContent = `Verified by NabadAi · Build ${APP_BUILD}`;
+    buildEl.textContent = isOwner
+      ? `Verified by NabadAi · Build ${APP_BUILD}`
+      : "Created with NabadAi";
   }
   els.proofModal.style.display = "";
 }
@@ -3020,6 +3164,10 @@ function slugProofFilename(title) {
 async function shareProofCertificateImage() {
   const cap = els.proofCertificateCapture;
   if (!cap || !currentProofPost) return;
+  if (!isProofPostOwner(currentProofPost)) {
+    showToast?.("Only the creator can share the certificate.", { durationMs: 3200 });
+    return;
+  }
   try {
     setStatus?.("Preparing image…");
     const url = "https://esm.sh/html-to-image@1.11.11";
@@ -3057,6 +3205,10 @@ async function shareProofCertificateImage() {
 }
 
 function copyProofFingerprint() {
+  if (!isProofPostOwner(currentProofPost)) {
+    showToast?.("Only the creator can copy the fingerprint.", { durationMs: 3200 });
+    return;
+  }
   const line = proofFingerprintText(currentProofPost);
   if (!line) {
     showToast?.("No fingerprint stored for this post.", { durationMs: 2800 });
@@ -10377,8 +10529,21 @@ if (els.btnCloseProof) els.btnCloseProof.addEventListener("click", closeProofMod
 if (els.btnDownloadProof) {
   els.btnDownloadProof.addEventListener("click", () => {
     if (!currentProofPost) return;
+    if (!isProofPostOwner(currentProofPost)) {
+      // Defensive: the button is hidden for non-owners but a manual
+      // click via DevTools would otherwise still print. Stay
+      // consistent with the gating model.
+      showToast?.("Only the creator can print the full record.", { durationMs: 3200 });
+      return;
+    }
     const ts = currentProofPost?.ts ? new Date(currentProofPost.ts) : new Date();
     const fp = proofFingerprintText(currentProofPost) || "—";
+    const comp = buildProofComposition(currentProofPost);
+    const engine = buildProofEngineLabel(currentProofPost);
+    const mode = String(currentProofPost?.proof?.mode || currentProofPost?.kind || "full");
+    const compRow = (label, value) => value
+      ? `<p style="margin:10px 0"><strong style="color:rgba(232,238,247,0.46);font-size:11px;text-transform:uppercase;letter-spacing:0.08em;">${escapeHtml(label)}</strong><br/><span style="font-size:14px;">${escapeHtml(value)}</span></p>`
+      : "";
     const html = `
       <!DOCTYPE html>
       <html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
@@ -10387,12 +10552,20 @@ if (els.btnDownloadProof) {
         <div style="max-width:520px;margin:0 auto;border:1px solid rgba(124,92,255,0.32);border-radius:18px;padding:26px 22px;background:linear-gradient(180deg,rgba(18,28,44,0.92),rgba(8,12,20,0.96));box-shadow:0 22px 52px rgba(0,0,0,0.48);">
           <h1 style="margin:0 0 4px;font-size:26px;font-weight:900;letter-spacing:-0.03em;background:linear-gradient(135deg,rgba(124,92,255,0.98),rgba(35,213,171,0.92));-webkit-background-clip:text;background-clip:text;color:transparent;">NabadAi</h1>
           <p style="margin:0 0 18px;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:rgba(231,237,247,0.52);">Proof of creation</p>
-          <p style="margin:0 0 16px;color:rgba(232,238,247,0.72);font-size:14px;">This record confirms this musical work was created in NabadAi with the metadata below.</p>
-          <p style="margin:10px 0"><strong style="color:rgba(232,238,247,0.46);font-size:11px;text-transform:uppercase;letter-spacing:0.08em;">Track</strong><br/><span style="font-size:15px;font-weight:600;">${escapeHtml(currentProofPost.title || "Untitled")}</span></p>
-          <p style="margin:10px 0"><strong style="color:rgba(232,238,247,0.46);font-size:11px;text-transform:uppercase;letter-spacing:0.08em;">Creator</strong><br/><span style="font-size:15px;font-weight:600;">@${escapeHtml(String(currentProofPost.creator || "guest").replace(/^@/, ""))}</span></p>
+          <p style="margin:0 0 16px;color:rgba(232,238,247,0.72);font-size:14px;">This record confirms this musical work was created on NabadAi with the metadata below.</p>
+          ${compRow("Track", currentProofPost.title || "Untitled")}
+          ${compRow("Creator", "@" + String(currentProofPost.creator || "guest").replace(/^@/, ""))}
           <p style="margin:10px 0"><strong style="color:rgba(232,238,247,0.46);font-size:11px;text-transform:uppercase;letter-spacing:0.08em;">Recorded</strong><br/><span style="font-size:14px;">${escapeHtml(ts.toLocaleString())}</span><br/><span style="font-size:12px;color:rgba(232,238,247,0.45);">UTC ${escapeHtml(ts.toISOString())}</span></p>
-          <p style="margin:10px 0"><strong style="color:rgba(232,238,247,0.46);font-size:11px;text-transform:uppercase;letter-spacing:0.08em;">Model</strong><br/><span style="font-size:14px;">${escapeHtml(currentProofPost?.proof?.model || LATEST_SUNO_MODEL)}</span></p>
-          <p style="margin:10px 0"><strong style="color:rgba(232,238,247,0.46);font-size:11px;text-transform:uppercase;letter-spacing:0.08em;">Mode</strong><br/><span style="font-size:14px;">${escapeHtml(currentProofPost?.proof?.mode || currentProofPost?.kind || "full")}</span></p>
+          ${comp.lyrics || comp.inspiration || comp.persona || comp.style
+            ? `<h2 style="margin:18px 0 6px;font-size:13px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:rgba(232,238,247,0.62);">Composition</h2>
+               ${compRow("Lyrics", comp.lyrics)}
+               ${compRow("Inspiration", comp.inspiration)}
+               ${compRow("Persona", comp.persona)}
+               ${compRow("Style", comp.style)}`
+            : ""}
+          <h2 style="margin:18px 0 6px;font-size:13px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:rgba(232,238,247,0.62);">Technical</h2>
+          ${compRow("Engine", engine)}
+          ${compRow("Mode", mode)}
           <p style="margin:14px 0 0;padding:12px 14px;border-radius:10px;background:rgba(0,0,0,0.42);border:1px solid rgba(255,255,255,0.08);font-size:12px;word-break:break-all;"><strong style="display:block;margin-bottom:6px;color:rgba(232,238,247,0.46);font-size:11px;text-transform:uppercase;letter-spacing:0.08em;">Fingerprint</strong>${escapeHtml(fp)}</p>
           <p style="margin:18px 0 0;font-size:11px;text-align:center;color:rgba(232,238,247,0.42);">Verified by NabadAi · Build ${escapeHtml(APP_BUILD)}</p>
         </div>

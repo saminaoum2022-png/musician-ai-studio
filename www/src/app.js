@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510hubboot";
+const APP_BUILD = "20260510unpublish";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -3996,46 +3996,92 @@ function renderUserProfile(rawUsername) {
   }
 }
 
-/** Take a song off Hub. The canonical unpublish path: removes the row
- *  from `hub_posts` (Supabase, RLS-gated to the creator) and from the
- *  local feed cache, then repaints Profile + Hub. Library is left
- *  untouched — that's the user's private inventory. */
+/** Take a song off Hub. Routes through the server-side
+ *  /api/hub/unpublish endpoint which uses the service role to delete
+ *  the row after verifying the caller is the post's creator. This
+ *  bypasses any client-side RLS quirks (some legacy rows track owner
+ *  via `meta->>creatorUserId`, others only via `creator_username`),
+ *  so deletes are reliable.
+ *
+ *  The local feed is updated optimistically for snappy UI; if the
+ *  server delete fails we roll back and surface the reason. */
 async function unpublishHubPostById(id) {
   const hid = String(id || "").trim();
-  if (!hid) return false;
+  if (!hid) return { ok: false, reason: "Missing post id" };
   const feed = loadHubFeed();
   const post = feed.find((x) => String(x.id) === hid);
-  // Optimistic local removal so the UI feels instant.
+  if (!isHubCloudUuid(hid)) {
+    // Local-only placeholder (cloud insert hasn't finished). Just drop it.
+    saveHubFeed(feed.filter((x) => String(x.id) !== hid));
+    try {
+      if ((document.body.getAttribute("data-route") || "") === "hub") renderHub();
+      renderHubDots();
+      renderProfileHubShared();
+    } catch {}
+    return { ok: true };
+  }
+
   saveHubFeed(feed.filter((x) => String(x.id) !== hid));
   try {
     if ((document.body.getAttribute("data-route") || "") === "hub") renderHub();
     renderHubDots();
     renderProfileHubShared();
   } catch {}
-  if (isHubCloudUuid(hid)) {
-    try {
-      await supabaseDeleteHub(hid);
-      return true;
-    } catch (err) {
-      // Cloud failed — put the post back so the local feed matches
-      // truth and the user can retry.
-      if (post) {
-        const restored = loadHubFeed();
-        if (!restored.some((x) => String(x.id) === hid)) {
-          restored.push(post);
-          restored.sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
-          saveHubFeed(restored);
-          try {
-            if ((document.body.getAttribute("data-route") || "") === "hub") renderHub();
-            renderHubDots();
-            renderProfileHubShared();
-          } catch {}
-        }
+
+  let serverOk = false;
+  let serverReason = "";
+  try {
+    const token = getSupabaseAuthToken();
+    if (!token) {
+      serverReason = "Sign in to manage your Hub posts.";
+    } else {
+      const r = await fetch(apiUrl("/api/hub/unpublish"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ id: hid }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok && data?.ok) {
+        serverOk = true;
+      } else if (r.status === 401) {
+        serverReason = "Sign in expired — sign in again and retry.";
+      } else if (r.status === 403) {
+        serverReason = "You can only unpublish your own posts.";
+      } else if (r.status === 404) {
+        // Already gone on the server — treat as success so the UI
+        // doesn't restore a row that no longer exists in the cloud.
+        serverOk = true;
+      } else {
+        serverReason = String(data?.error || `Unpublish failed (${r.status}).`);
       }
-      return false;
     }
+  } catch (e) {
+    serverReason = e?.message || "Network error";
   }
-  return true;
+
+  if (!serverOk) {
+    // Roll back: put the post back so the next periodic refresh
+    // doesn't quietly reintroduce it (which is exactly what the user
+    // saw — disappear, then reappear).
+    if (post) {
+      const restored = loadHubFeed();
+      if (!restored.some((x) => String(x.id) === hid)) {
+        restored.push(post);
+        restored.sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
+        saveHubFeed(restored);
+        try {
+          if ((document.body.getAttribute("data-route") || "") === "hub") renderHub();
+          renderHubDots();
+          renderProfileHubShared();
+        } catch {}
+      }
+    }
+    return { ok: false, reason: serverReason };
+  }
+  return { ok: true };
 }
 
 let _profileHubOpenMenuId = "";
@@ -4155,8 +4201,13 @@ function renderProfileHubShared() {
       );
       if (!ok) return;
       closeProfileHubMenu();
-      const success = await unpublishHubPostById(sid);
-      setStatus(success ? "Unpublished from Hub." : "Could not unpublish — try again.");
+      const result = await unpublishHubPostById(sid);
+      if (result?.ok) {
+        setStatus("Unpublished from Hub.");
+      } else {
+        const reason = result?.reason || "Try again.";
+        setStatus(`Could not unpublish: ${reason}`);
+      }
     });
   });
 }

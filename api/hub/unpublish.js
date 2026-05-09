@@ -49,8 +49,17 @@ async function fetchHubRow(id) {
   return Array.isArray(arr) && arr[0] ? arr[0] : null;
 }
 
+function metaCreatorUid(meta) {
+  if (!meta) return "";
+  const m = typeof meta === "string" ? (() => { try { return JSON.parse(meta); } catch { return null; } })() : meta;
+  if (!m || typeof m !== "object") return "";
+  return String(m.creatorUserId || m.creator_user_id || "").trim();
+}
+
 async function fetchProfileUsername(userId) {
-  const url = `${SUPABASE_URL}/rest/v1/profiles?select=username,id&id=eq.${encodeURIComponent(userId)}&limit=1`;
+  // `profiles` rows use `user_id` as the FK to auth.users — NOT `id`.
+  // The client loads profiles with `user_id=eq.<uuid>` (see `supabaseLoadProfile`).
+  const url = `${SUPABASE_URL}/rest/v1/profiles?select=username,user_id&user_id=eq.${encodeURIComponent(userId)}&limit=1`;
   const r = await fetch(url, { headers: svcHeaders() });
   if (!r.ok) return "";
   const arr = await r.json().catch(() => []);
@@ -85,14 +94,17 @@ module.exports = async function handler(req, res) {
   const row = await fetchHubRow(id);
   if (!row) return sendJson(res, 404, { error: "Post not found" });
 
-  // Ownership check, three sources of truth in priority order:
-  //   1) meta.creatorUserId === user.userId  (newest path, set on insert)
-  //   2) profiles.username === row.creator_username for this user
-  const metaUid = String(row?.meta?.creatorUserId || "").trim();
+  // Ownership check — two sources (legacy rows often lack meta.creatorUserId):
+  //   1) meta.creatorUserId / meta.creator_user_id === auth user id
+  //   2) profiles.username (joined via profiles.user_id) === row.creator_username
+  const metaUid = metaCreatorUid(row?.meta);
   let owns = metaUid && metaUid === user.userId;
   if (!owns) {
     const username = await fetchProfileUsername(user.userId);
-    if (username && username === String(row?.creator_username || "")) owns = true;
+    const rowCreator = String(row?.creator_username || "").trim();
+    const normMine = String(username || "").trim().toLowerCase();
+    const normRow = rowCreator.toLowerCase();
+    if (normMine && normMine === normRow) owns = true;
   }
   if (!owns) return sendJson(res, 403, { error: "Not the post owner" });
 

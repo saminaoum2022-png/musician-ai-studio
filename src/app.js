@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510unpublish";
+const APP_BUILD = "20260510unpublish2";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -4204,9 +4204,11 @@ function renderProfileHubShared() {
       const result = await unpublishHubPostById(sid);
       if (result?.ok) {
         setStatus("Unpublished from Hub.");
+        showToast("Removed from Hub ✓");
       } else {
         const reason = result?.reason || "Try again.";
         setStatus(`Could not unpublish: ${reason}`);
+        showToast(reason, { durationMs: 4500 });
       }
     });
   });

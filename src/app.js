@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510ap";
+const APP_BUILD = "20260510aq";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -6116,21 +6116,33 @@ function setLink(el, url) {
   }
 }
 
+function setSunoCreditsNote(text) {
+  const note = els.sunoCreditsNote;
+  if (!note) return;
+  if (text) {
+    note.textContent = text;
+    note.hidden = false;
+  } else {
+    note.textContent = "";
+    note.hidden = true;
+  }
+}
+
 async function refreshSunoCredits() {
   if (!els.sunoCredits) return;
   try {
     if (els.btnSunoCredits) els.btnSunoCredits.disabled = true;
-    if (els.sunoCreditsNote) els.sunoCreditsNote.textContent = " (updating…)";
+    setSunoCreditsNote("updating…");
     const r = await fetch(apiUrl("/api/suno/credits"));
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data?.error || "credits failed");
     const credits = data?.data;
     els.sunoCredits.textContent = Number.isFinite(Number(credits)) ? String(credits) : "—";
-    if (els.sunoCreditsNote) els.sunoCreditsNote.textContent = "";
+    setSunoCreditsNote("");
     return Number.isFinite(Number(credits)) ? Number(credits) : null;
   } catch (e) {
     els.sunoCredits.textContent = "—";
-    if (els.sunoCreditsNote) els.sunoCreditsNote.textContent = " (failed)";
+    setSunoCreditsNote("failed");
     return null;
   } finally {
     if (els.btnSunoCredits) els.btnSunoCredits.disabled = false;

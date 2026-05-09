@@ -762,24 +762,13 @@
 
               <div id="profilePreviewGenres" class="profilePreviewGenres" style="display:none"></div>
 
-              <div id="profileOwnStats" class="profileOwnStats" style="display:none" aria-live="polite"></div>
-
-              <div class="profileCreditsRow" aria-live="polite">
-                <div class="profileCreditsMain">
-                  <svg class="profileCreditsIco" viewBox="0 0 24 24" aria-hidden="true">
-                    <circle cx="12" cy="12" r="9"/>
-                    <path d="M12 7v10M9.5 9.5h4.25a2 2 0 1 1 0 4H10a2 2 0 1 0 0 4h4.5"/>
-                  </svg>
-                  <div class="profileCreditsText">
-                    <span class="profileCreditsLabel">Suno credits</span>
-                    <span class="profileCreditsValueWrap">
-                      <strong id="sunoCredits" class="profileCreditsValue">—</strong>
-                      <span id="sunoCreditsNote" class="profileCreditsNote"></span>
-                    </span>
-                  </div>
-                </div>
-                <button id="btnSunoCredits" class="profileCreditsRefresh" type="button" aria-label="Refresh credits">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
+              <div class="profileStatStrip" aria-live="polite">
+                <div id="profileOwnStats" class="profileOwnStats" style="display:none"></div>
+                <button id="btnSunoCredits" class="profileCreditsChip" type="button" aria-label="Refresh credits">
+                  <span class="profileCreditsChipLabel">Credits</span>
+                  <strong id="sunoCredits" class="profileCreditsChipValue">—</strong>
+                  <span id="sunoCreditsNote" class="profileCreditsChipNote" hidden></span>
+                  <svg class="profileCreditsChipIco" viewBox="0 0 24 24" aria-hidden="true">
                     <polyline points="23 4 23 10 17 10"/>
                     <polyline points="1 20 1 14 7 14"/>
                     <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
@@ -1246,6 +1235,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260510ao"></script>
+    <script type="module" src="./src/app.js?v=20260510aq"></script>
   </body>
 </html>

@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509hubunlock";
+const APP_BUILD = "20260509profilefast";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1179,6 +1179,10 @@ function applyRoute() {
     void refreshAuthStateFromSupabase();
     setProfileEditing(false);
     void refreshMyCredits({ silent: true });
+    // Pull the user's own Hub posts in parallel with credits so the
+    // "songs / likes" section doesn't blank-out until the full Hub
+    // feed arrives. Cheap query, scoped to one user.
+    void refreshMyHubPostsFast();
     renderPersonaSelect();
   }
   if (wanted === "credits" || wanted === "sounds") {
@@ -1847,30 +1851,31 @@ function renderHubDots() {
     els.hubTabDot.style.display = hasAnyUnseen ? "inline-block" : "none";
   }
 }
+const HUB_SELECT_COLUMNS = [
+  "id",
+  "created_at",
+  "title",
+  "cover_url",
+  "song_url",
+  "kind",
+  "creator_username",
+  "creator_avatar",
+  "likes",
+  "reacts",
+  "remix_of",
+  "proof",
+  "meta",
+].join(",");
+
 async function supabaseSelectHub() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
-  const selectCols = [
-    "id",
-    "created_at",
-    "title",
-    "cover_url",
-    "song_url",
-    "kind",
-    "creator_username",
-    "creator_avatar",
-    "likes",
-    "reacts",
-    "remix_of",
-    "proof",
-    "meta",
-  ].join(",");
   // 30 rows is enough to fill the visible feed plus a healthy backlog
   // for the IntersectionObserver "Load more" path. Older posts are
   // still reachable via subsequent paginated fetches if we ever need
   // them (kept in sync with HUB_PAGE_SIZE * ~1.5).
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(selectCols)}&order=created_at.desc&limit=30`, {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(HUB_SELECT_COLUMNS)}&order=created_at.desc&limit=30`, {
     headers: {
       apikey: SUPABASE_ANON_KEY,
     },
@@ -1882,6 +1887,82 @@ async function supabaseSelectHub() {
     throw new Error(`supabase select failed (${r.status}) ${String(txt).slice(0, 100)}`);
   }
   return await r.json().catch(() => []);
+}
+
+/** Targeted fetch of the signed-in user's own Hub posts.
+ *  Used on login + on Profile entry so the Profile's "songs / likes"
+ *  section can populate without waiting for the full Hub feed to
+ *  arrive (which fetches 30 latest globally and is the slowest call
+ *  in the boot sequence). Filters on meta->>creatorUserId for the
+ *  reliable id-based match, with a creator_username fallback for
+ *  legacy posts written before we started stamping the user id into
+ *  meta. */
+async function supabaseSelectMyHubPosts({ uid, username } = {}) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  if (!uid && !username) return null;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+  // PostgREST `or` lets us match either creator_user_id-in-meta or
+  // creator_username in a single round-trip. Wrapped in `or=(...)`.
+  const filters = [];
+  if (uid) filters.push(`meta->>creatorUserId.eq.${encodeURIComponent(uid)}`);
+  if (username) filters.push(`creator_username.eq.${encodeURIComponent(username)}`);
+  const orClause = filters.length === 1 ? filters[0] : `or=(${filters.join(",")})`;
+  const url = filters.length === 1
+    ? `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(HUB_SELECT_COLUMNS)}&${filters[0]}&order=created_at.desc&limit=30`
+    : `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(HUB_SELECT_COLUMNS)}&${orClause}&order=created_at.desc&limit=30`;
+  try {
+    const r = await fetch(url, {
+      headers: { apikey: SUPABASE_ANON_KEY },
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    if (!r.ok) return null;
+    return await r.json().catch(() => []);
+  } catch {
+    clearTimeout(timer);
+    return null;
+  }
+}
+
+/** Merge user's own Hub rows into the local cache and re-render
+ *  Profile + the global Hub if it's already painted. Idempotent so
+ *  it can run alongside the periodic Hub refresh without conflict. */
+function ingestMyHubPostsRows(rows) {
+  if (!Array.isArray(rows) || !rows.length) return;
+  const mapped = rows.map((r) => ({
+    id: String(r.id),
+    ts: new Date(r.created_at).getTime(),
+    title: r.title || "Untitled",
+    artUrl: r.cover_url || "",
+    url: r.song_url || "",
+    kind: r.kind || "full",
+    creator: r.creator_username || "guest",
+    creatorAvatar: r.creator_avatar || "./assets/nabadai-logo.png",
+    likes: Number(r.likes || 0),
+    reacts: r.reacts || { melody: 0, lyrics: 0, mix: 0, groove: 0 },
+    remixOf: r.remix_of || "",
+    proof: r.proof || null,
+    meta: r.meta || null,
+  }));
+  const prev = loadHubFeed();
+  const byId = new Map();
+  prev.forEach((p) => byId.set(String(p.id), p));
+  // Mine wins on conflict — they're freshly fetched.
+  mapped.forEach((p) => byId.set(String(p.id), p));
+  const merged = Array.from(byId.values()).sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0)).slice(0, 300);
+  saveHubFeed(merged);
+  renderProfileHubShared();
+}
+
+async function refreshMyHubPostsFast() {
+  try {
+    const uid = String(authSession?.user?.id || "");
+    const username = String(activeProfile?.username || "");
+    if (!uid && !username) return;
+    const rows = await supabaseSelectMyHubPosts({ uid, username });
+    if (rows && rows.length) ingestMyHubPostsRows(rows);
+  } catch {}
 }
 function loadAuthSession() {
   try {
@@ -11084,6 +11165,11 @@ void (async () => {
     // resolves. On a PWA cold start this turned a "Library is stuck"
     // wait into "Library populates a beat after the tab opens".
     void ensureUserLibraryHydrated();
+    // Targeted "just my Hub posts" fetch in parallel with everything
+    // else so the Profile's songs/likes section doesn't have to wait
+    // for the full Hub feed (the slowest call). This is a single tiny
+    // query filtered by creatorUserId + creator_username.
+    void refreshMyHubPostsFast();
     renderPersonaSelect();
   } else {
     // Never leak previous user visuals when session is not valid.

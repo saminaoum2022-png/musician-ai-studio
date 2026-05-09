@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510snapstop";
+const APP_BUILD = "20260510profmerge";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -11409,7 +11409,23 @@ void (async () => {
     const cloud = await supabaseLoadProfile();
     let nextProfile;
     if (cloud) {
-      nextProfile = cloud;
+      // Merge local + cloud instead of clobbering local with cloud.
+      // If cloud has a field but it's empty (e.g. bio was never
+      // synced because of a flaky save), prefer the local value.
+      // This was the source of a "my bio + avatar got reset on
+      // sign-in" report: we used to do `nextProfile = cloud` which
+      // wiped any locally-richer fields the next upsert then
+      // persisted as empty in Supabase.
+      const looksFilled = (v) => v !== "" && v != null;
+      const cloudFilled = Object.fromEntries(
+        Object.entries(cloud).filter(([, v]) => looksFilled(v)),
+      );
+      nextProfile = {
+        ...activeProfile,
+        ...cloudFilled,
+        id: String(authSession.user.id),
+        email: cloud.email || authSession.user.email || activeProfile.email || "",
+      };
     } else {
       // First sign-in for this user. Don't fall back to the boot-time
       // `username: "guest"` default — that's the unauthenticated

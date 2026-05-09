@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509hubplay";
+const APP_BUILD = "20260509hubunlock";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -409,10 +409,20 @@ let hubBlobLru = [];
 let hubPreloadInflight = new Map();
 let hubPreloadTimer = null;
 
-/** iOS/Safari allow programmatic audio only after a user gesture. Until then,
- * scroll-autoplay would call play(), fail, flash the UI — hence no autoplay
- * until the user taps ▶ once. Persist unlock for this tab via sessionStorage. */
+/** iOS/Safari allow programmatic audio only after a user gesture. We
+ * install a single capture-phase listener at boot that fires on the
+ * very first tap *anywhere* in the app — including the Hub tab tap
+ * itself — and runs `audio.play()` synchronously inside that gesture
+ * with a tiny silent data URL. That's the only thing iOS reliably
+ * accepts as an audio unlock. After that, scroll-driven autoplay can
+ * start any post programmatically. The session flag is set after the
+ * unlock succeeds so we don't re-arm the listener. */
 const HUB_AUDIO_UNLOCK_KEY = "mas:hub:audioUnlock:v1";
+// 0.05s of silence as a data URL — enough for iOS to satisfy "play()
+// was called inside a gesture and produced sound" without the user
+// hearing anything.
+const HUB_AUDIO_SILENT_SRC =
+  "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU3LjgzLjEwMAAAAAAAAAAAAAAA//tQwAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAACAAACcQCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqv////////////////////////////////////////////////////////////////8AAAAATGF2YzU3LjEwAAAAAAAAAAAAAAAAJAAAAAAAAAAAAnFGn7hjAAAAAAAAAAAAAAAAAAAAAP/7kGQAD/AAAGkAAAAIAAANIAAAAQAAAaQAAAAgAAA0gAAABExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=";
 function getHubAudioUnlocked() {
   try {
     return sessionStorage.getItem(HUB_AUDIO_UNLOCK_KEY) === "1";
@@ -444,6 +454,48 @@ function updateHubAudioHint() {
   }
   els.hubAudioHint.style.display = hasAudio ? "" : "none";
 }
+
+let _hubAudioUnlockArmed = false;
+function installHubAudioUnlockOnce() {
+  if (_hubAudioUnlockArmed) return;
+  if (getHubAudioUnlocked()) return;
+  _hubAudioUnlockArmed = true;
+  const handler = () => {
+    try {
+      const a = ensureHubAudio();
+      a.muted = true;
+      const prevSrc = a.src;
+      a.src = HUB_AUDIO_SILENT_SRC;
+      const p = a.play();
+      const cleanup = () => {
+        try { a.pause(); } catch {}
+        try { a.muted = false; } catch {}
+        // Don't leave the silent src hanging — clear it so a real
+        // post URL set later doesn't have to fight the data URL.
+        try {
+          if (a.src && a.src.startsWith("data:")) {
+            a.removeAttribute("src");
+            a.load();
+          } else if (prevSrc) {
+            a.src = prevSrc;
+          }
+        } catch {}
+        setHubAudioUnlocked();
+        updateHubAudioHint();
+      };
+      if (p && typeof p.then === "function") {
+        p.then(cleanup).catch(() => { try { a.muted = false; } catch {} });
+      } else {
+        cleanup();
+      }
+    } catch {}
+    document.removeEventListener("touchstart", handler, true);
+    document.removeEventListener("click", handler, true);
+  };
+  document.addEventListener("touchstart", handler, { capture: true, passive: true, once: true });
+  document.addEventListener("click", handler, { capture: true, once: true });
+}
+installHubAudioUnlockOnce();
 
 function suppressHubViewportAutoplayFor(ms) {
   if (hubViewportTailTimer) {
@@ -3144,11 +3196,11 @@ function renderHub() {
         return;
       }
       hubAutoplayMutedPostId = null;
-      // Mute scroll-driven autoplay for ~900ms so a snap-induced scroll
-      // event (iOS may briefly re-snap when the row layout shifts as
-      // audio loads) can't immediately switch playback to the *next*
-      // centered post and make the user's tap feel like it stopped.
-      suppressHubViewportAutoplayFor(900);
+      // Short suppression so a snap-induced scroll right after the tap
+      // can't immediately switch to a different centered post. Kept
+      // brief (400ms) so scroll-driven autoplay recovers fast if the
+      // play() is rejected for any reason.
+      suppressHubViewportAutoplayFor(400);
       await startHubPlayback(id);
     })
   );
@@ -9600,29 +9652,13 @@ if (els.hubTabLink) {
   let hubSingleTimer = null;
   els.hubTabLink.addEventListener("click", (e) => {
     const onHub = (document.body.getAttribute("data-route") || "") === "hub";
-    // Tapping the Hub tab from another tab is a real user gesture. Use
-    // it to start playback of the top post *synchronously inside the
-    // click* — that's the only thing iOS Safari accepts as an audio
-    // unlock. Setting a flag and calling play() later from setTimeout
-    // would just be silently rejected.
-    if (!onHub) {
-      try {
-        setHubAudioUnlocked();
-        const feed = loadHubFeed();
-        const first = feed && feed[0];
-        if (first?.url) {
-          // Fire-and-forget: navigation will happen on next tick via
-          // the link's default href. The audio element is global so
-          // playback continues into the Hub view; renderHub re-applies
-          // the visual playing state when the rows mount.
-          void startHubPlayback(first.id);
-          // And don't let scroll-snap immediately swap to a different
-          // post when the Hub view paints in.
-          suppressHubViewportAutoplayFor(1200);
-        }
-      } catch {}
-      return;
-    }
+    // Tab tap from elsewhere → just navigate. Audio unlock is handled
+    // by the global one-shot listener (`installHubAudioUnlockOnce`),
+    // which fires on this same gesture before anything async runs;
+    // applyRoute("hub") then uses scroll-driven autoplay to start the
+    // first centered post — same code path Latest and Trending share,
+    // so neither tab can be "more broken" than the other.
+    if (!onHub) return;
     e.preventDefault();
     try { stopHubPlayback(); } catch {}
     scrollHubFeedToTop();

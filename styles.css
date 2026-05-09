@@ -1722,6 +1722,90 @@ body.isAuth .hubNowPlaying{ display:none !important; }
 @media (prefers-reduced-motion: reduce){
   .toast{ transition: opacity 120ms linear; }
 }
+
+/* -------- Inline confirm bar inside the player ------------------- */
+.playerConfirm{
+  margin: 14px auto 0;
+  max-width: 460px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: linear-gradient(180deg, rgba(28,33,52,0.96), rgba(14,18,30,0.94));
+  box-shadow:
+    0 12px 36px -16px rgba(0,0,0,0.55),
+    0 0 0 1px rgba(124, 92, 255, 0.18) inset;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.playerConfirm[hidden]{
+  display: none;
+}
+.playerConfirm.show{
+  opacity: 1;
+  transform: translateY(0);
+}
+.playerConfirmInner{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.playerConfirmThumb{
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.playerConfirmThumb[hidden]{
+  display: none;
+}
+.playerConfirmText{
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: #f0f4ff;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.playerConfirmActions{
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.playerConfirmBtn{
+  font-size: 13px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+.playerConfirmBtn.danger{
+  background: linear-gradient(180deg, #ff5b6c, #d6364a);
+  border-color: rgba(255, 91, 108, 0.4);
+}
+@media (prefers-reduced-motion: reduce){
+  .playerConfirm{ transition: opacity 120ms linear; }
+}
+
+/* -------- Cover flash after save --------------------------------- */
+@keyframes playerCoverFlash{
+  0%{ box-shadow: 0 0 0 0 rgba(124, 92, 255, 0); }
+  20%{ box-shadow: 0 0 0 6px rgba(124, 92, 255, 0.45); }
+  100%{ box-shadow: 0 0 0 0 rgba(124, 92, 255, 0); }
+}
+.playerCoverFlash{
+  animation: playerCoverFlash 800ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (prefers-reduced-motion: reduce){
+  .playerCoverFlash{ animation: none; }
+}
 [data-route="hub"] #hubList{
   border:0;
   border-radius:0;

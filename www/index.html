@@ -650,13 +650,25 @@
               </div>
               <input id="playerCoverUpload" type="file" accept="image/*" style="display:none" />
 
+              <!-- Inline confirm bar (publish, clip publish, cover save). -->
+              <div id="playerConfirm" class="playerConfirm" hidden>
+                <div class="playerConfirmInner">
+                  <img id="playerConfirmThumb" class="playerConfirmThumb" alt="" hidden />
+                  <p id="playerConfirmText" class="playerConfirmText"></p>
+                </div>
+                <div class="playerConfirmActions">
+                  <button id="playerConfirmCancel" class="ghost playerConfirmBtn" type="button">Cancel</button>
+                  <button id="playerConfirmOk" class="primary playerConfirmBtn" type="button">Confirm</button>
+                </div>
+              </div>
+
               <div id="trimSheet" class="playerTrimSheet" style="display:none">
                 <div class="playerTrimRow">
                   <label class="small">In</label>
                   <input id="clipStartSec" type="number" min="0" step="1" value="0" />
                   <label class="small">Out</label>
                   <input id="clipEndSec" type="number" min="0" step="1" value="30" />
-                  <button id="btnShareClipHub" class="primary" type="button">Use clip + Share</button>
+                  <button id="btnShareClipHub" class="primary" type="button">Publish clip</button>
                   <button id="btnCloseTrimSheet" class="ghost" type="button">Cancel</button>
                 </div>
               </div>
@@ -1235,6 +1247,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260510aq"></script>
+    <script type="module" src="./src/app.js?v=20260510ar"></script>
   </body>
 </html>

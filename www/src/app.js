@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510aq";
+const APP_BUILD = "20260510ar";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -119,6 +119,11 @@ const els = {
   trimSheet: document.getElementById("trimSheet"),
   btnPlayerChangeCover: document.getElementById("btnPlayerChangeCover"),
   playerCoverUpload: document.getElementById("playerCoverUpload"),
+  playerConfirm: document.getElementById("playerConfirm"),
+  playerConfirmThumb: document.getElementById("playerConfirmThumb"),
+  playerConfirmText: document.getElementById("playerConfirmText"),
+  playerConfirmCancel: document.getElementById("playerConfirmCancel"),
+  playerConfirmOk: document.getElementById("playerConfirmOk"),
 
   // Multitrack session (Vocal Room)
   btnSessionLoadSuno: document.getElementById("btnSessionLoadSuno"),
@@ -5629,6 +5634,82 @@ function showShareToast(message) {
   showToast(message, { icon: "✓" });
 }
 
+/** Inline confirm bar inside the player. Returns a Promise that
+ *  resolves true if the user tapped the primary action, false on
+ *  cancel / dismiss. Replaces window.confirm() so we can keep the
+ *  app's minimal aesthetic and avoid the iOS PWA system dialog. */
+let _playerConfirmResolver = null;
+function playerInlineConfirm({ text, confirmLabel, cancelLabel, thumbUrl, danger } = {}) {
+  return new Promise((resolve) => {
+    const wrap = els.playerConfirm;
+    const txt = els.playerConfirmText;
+    const okBtn = els.playerConfirmOk;
+    const cancelBtn = els.playerConfirmCancel;
+    const thumb = els.playerConfirmThumb;
+    if (!wrap || !txt || !okBtn || !cancelBtn) {
+      // Fallback: if the bar isn't in the DOM, just resolve true so
+      // existing behavior continues. setStatus surfaces the action.
+      if (text) setStatus(text);
+      resolve(true);
+      return;
+    }
+    if (_playerConfirmResolver) {
+      try { _playerConfirmResolver(false); } catch {}
+    }
+    _playerConfirmResolver = resolve;
+    txt.textContent = String(text || "Are you sure?");
+    okBtn.textContent = String(confirmLabel || "Confirm");
+    cancelBtn.textContent = String(cancelLabel || "Cancel");
+    okBtn.classList.toggle("danger", Boolean(danger));
+    if (thumb) {
+      const url = String(thumbUrl || "").trim();
+      if (url) {
+        thumb.src = url;
+        thumb.hidden = false;
+      } else {
+        thumb.removeAttribute("src");
+        thumb.hidden = true;
+      }
+    }
+    wrap.hidden = false;
+    requestAnimationFrame(() => wrap.classList.add("show"));
+  });
+}
+function dismissPlayerConfirm(answer) {
+  const wrap = els.playerConfirm;
+  if (wrap) {
+    wrap.classList.remove("show");
+    setTimeout(() => { if (!wrap.classList.contains("show")) wrap.hidden = true; }, 220);
+  }
+  if (_playerConfirmResolver) {
+    try { _playerConfirmResolver(Boolean(answer)); } catch {}
+    _playerConfirmResolver = null;
+  }
+}
+if (typeof document !== "undefined") {
+  document.addEventListener("DOMContentLoaded", () => {
+    if (els.playerConfirmOk) {
+      els.playerConfirmOk.addEventListener("click", () => dismissPlayerConfirm(true));
+    }
+    if (els.playerConfirmCancel) {
+      els.playerConfirmCancel.addEventListener("click", () => dismissPlayerConfirm(false));
+    }
+  }, { once: true });
+}
+
+/** Briefly flash the player cover after a save. Pure visual feedback —
+ *  no behavior change. */
+function flashPlayerCover() {
+  const img = els.playerArt || document.getElementById("playerArt");
+  if (!img) return;
+  img.classList.remove("playerCoverFlash");
+  // Force reflow so the animation restarts on rapid re-saves.
+  // eslint-disable-next-line no-unused-expressions
+  img.offsetWidth;
+  img.classList.add("playerCoverFlash");
+  setTimeout(() => img.classList.remove("playerCoverFlash"), 900);
+}
+
 /** Native share via Web Share API; falls back to copying the link to the
  * clipboard with a toast. Used by Hub posts and the Player page. */
 async function shareHubLink({ title, text, url }) {
@@ -8652,13 +8733,15 @@ if (els.btnPlayerShare) {
   els.btnPlayerShare.addEventListener("click", async () => {
     haptic("light");
     const trackUrl = String(currentPlayerTrackRef?.url || playerEl?.src || "").trim();
-    const trackTitle = String(currentPlayerTrackRef?.title || els.playerTitle?.textContent || "").trim();
+    const trackTitle = String(currentPlayerTrackRef?.title || els.playerTitle?.textContent || "Listen on Nabadai").trim();
     if (!trackUrl) {
       showToast("Open a song first, then share.");
       return;
     }
-    // Prefer a matching Hub post — that's a real, scrollable destination
-    // with a proper preview card.
+    // Share is for sending to friends (WhatsApp, Messenger, IG…).
+    // Hub publishing is a separate, deliberate action — never auto-publish
+    // here. If the song is already on Hub, prefer that link (rich preview);
+    // otherwise share the raw playable audio URL.
     const hubMatch = loadHubFeed().find((p) => {
       const sameUrl = trackUrl && String(p?.url || "").trim() === trackUrl;
       const sameTitle = trackTitle && String(p?.title || "").trim().toLowerCase() === trackTitle.toLowerCase();
@@ -8668,29 +8751,12 @@ if (els.btnPlayerShare) {
       await shareHubPost(hubMatch);
       return;
     }
-    // Library song not yet on Hub — offer to publish first so the share
-    // gets a real preview card instead of leaking a raw audio URL.
-    const ok = window.confirm(
-      "Publish this song to Hub first?\n\nThis gives the share a preview card (cover, title, your handle) instead of a bare audio link."
-    );
-    if (!ok) return;
-    if (!currentPlayerTrackRef) {
-      showToast("Couldn't find this track to publish.");
-      return;
-    }
-    try {
-      shareToHub(currentPlayerTrackRef);
-    } catch {
-      showToast("Couldn't publish to Hub. Try again.");
-      return;
-    }
-    // Find the freshly-published post (it's at index 0 of the feed).
-    const fresh = loadHubFeed()[0];
-    if (!fresh) {
-      showToast("Couldn't publish to Hub. Try again.");
-      return;
-    }
-    await shareHubPost(fresh);
+    const ok = await shareHubLink({
+      title: `${trackTitle} — Nabadai`,
+      text: `Listen to “${trackTitle}” on Nabadai`,
+      url: trackUrl,
+    });
+    if (ok) showShareToast("Sharing…");
   });
 }
 if (els.btnPlayerDownloadVideo) {
@@ -8787,9 +8853,9 @@ if (els.playerVol) {
   });
 }
 if (els.btnShareClipHub) {
-  els.btnShareClipHub.addEventListener("click", () => {
+  els.btnShareClipHub.addEventListener("click", async () => {
     if (!currentPlayerTrackRef?.url) {
-      setStatus("Open a library song first, then share a clip.");
+      setStatus("Open a library song first, then publish a clip.");
       return;
     }
     const a = ensurePlayer();
@@ -8798,6 +8864,18 @@ if (els.btnShareClipHub) {
       Number(els.clipEndSec?.value || 0),
       Number(a?.duration || 0)
     );
+    if (range.endSec <= range.startSec) {
+      showToast("Pick an end time after the start.");
+      return;
+    }
+    const ok = await playerInlineConfirm({
+      text: `Publish this ${range.endSec - range.startSec}s clip (${range.startSec}s → ${range.endSec}s) to Hub?`,
+      confirmLabel: "Publish clip",
+      cancelLabel: "Cancel",
+      thumbUrl: currentPlayerTrackRef.artUrl || els.playerArt?.src || "",
+    });
+    dismissPlayerConfirm(ok);
+    if (!ok) return;
     const clipTrack = {
       ...currentPlayerTrackRef,
       title: `${currentPlayerTrackRef.title || "Song"} [${range.startSec}s-${range.endSec}s]`,
@@ -8806,8 +8884,13 @@ if (els.btnShareClipHub) {
         clip: range,
       },
     };
-    shareToHub(clipTrack);
-    setStatus(`Clip shared to Hub (${range.startSec}s → ${range.endSec}s).`);
+    try {
+      shareToHub(clipTrack);
+      if (els.trimSheet) els.trimSheet.style.display = "none";
+      showShareToast(`Clip published (${range.startSec}s → ${range.endSec}s)`);
+    } catch (e) {
+      showToast("Couldn't publish the clip. Try again.");
+    }
   });
 }
 if (els.btnOpenTrimSheet) {
@@ -8821,24 +8904,45 @@ if (els.btnCloseTrimSheet) {
   });
 }
 if (els.btnShareFullHub) {
-  els.btnShareFullHub.addEventListener("click", () => {
-    const id = currentPlayerTrackRef || playerLoadedLabel || `player_${Date.now()}`;
-    const url = playerEl?.src || lastSunoFullUrl || "";
+  els.btnShareFullHub.addEventListener("click", async () => {
+    const url = String(currentPlayerTrackRef?.url || playerEl?.src || "").trim();
     if (!url) {
-      setStatus("No loaded song to share.");
+      showToast("No loaded song to publish.");
       return;
     }
-    const title = (els.playerTitle?.textContent || "Shared song").trim();
-    const item = {
-      id: String(id),
+    const title = String(currentPlayerTrackRef?.title || els.playerTitle?.textContent || "Shared song").trim();
+    // Prevent accidental double-publish — Hub feed is keyed by url+title.
+    const alreadyOnHub = loadHubFeed().some((p) => {
+      const sameUrl = url && String(p?.url || "").trim() === url;
+      const sameTitle = title && String(p?.title || "").trim().toLowerCase() === title.toLowerCase();
+      return sameUrl || sameTitle;
+    });
+    if (alreadyOnHub) {
+      showToast("Already on Hub — open the post to share it.");
+      return;
+    }
+    const ok = await playerInlineConfirm({
+      text: `Publish “${title}” to Hub? Anyone can listen and react.`,
+      confirmLabel: "Publish",
+      cancelLabel: "Cancel",
+      thumbUrl: currentPlayerTrackRef?.artUrl || els.playerArt?.src || "",
+    });
+    dismissPlayerConfirm(ok);
+    if (!ok) return;
+    const track = currentPlayerTrackRef || {
+      id: `player_${Date.now()}`,
       title,
-      fullUrl: url,
+      url,
       artUrl: els.playerArt?.src || "",
       kind: /instrumental/i.test(title) ? "instrumental" : "full",
-      ts: Date.now(),
+      meta: null,
     };
-    shareLibraryTrackToHub(item, { clip: null });
-    setStatus("Shared full version to Hub.");
+    try {
+      shareToHub(track);
+      showShareToast("Published to Hub");
+    } catch (e) {
+      showToast("Couldn't publish. Try again.");
+    }
   });
 }
 if (els.btnPlayerChangeCover) {
@@ -8853,35 +8957,49 @@ if (els.btnPlayerChangeCover) {
 if (els.playerCoverUpload) {
   els.playerCoverUpload.addEventListener("change", async () => {
     const f = els.playerCoverUpload?.files?.[0];
-    if (!f || !currentPlayerTrackRef?.id) return;
+    if (!f || !currentPlayerTrackRef?.id) {
+      try { els.playerCoverUpload.value = ""; } catch {}
+      return;
+    }
+    let url = "";
+    let thumb = "";
     try {
       setStatus("Processing cover…");
-      const url = await fileToCoverDataUrl(f);
-      // Build a tiny thumb from the already-downscaled cover so Library
-      // rows don't have to decode the 1024px JPEG. Fail-soft: if it
-      // doesn't generate, rows will fall back to imageUrl.
-      const thumb = await buildCoverThumbDataUrl(url);
-      const newMeta = {
-        ...(currentPlayerTrackRef.meta || {}),
-        imageUrl: url,
-        ...(thumb ? { imageThumb: thumb } : {}),
-      };
-      patchLibraryTrack(currentPlayerTrackRef.id, { artUrl: url, meta: newMeta });
-      currentPlayerTrackRef = { ...currentPlayerTrackRef, artUrl: url, meta: newMeta };
-      setPlayerMeta({
-        title: els.playerTitle?.textContent || currentPlayerTrackRef.title || "Library song",
-        subtitle: els.playerSubtitle?.textContent || "Library • Full song",
-        artUrl: url,
-      });
-      setStatus("Cover updated.");
-      void syncHubCoverForTrack(currentPlayerTrackRef, url);
+      url = await fileToCoverDataUrl(f);
+      thumb = await buildCoverThumbDataUrl(url);
     } catch (e) {
       setStatus(`Cover failed: ${e?.message || String(e)}`);
-    } finally {
-      try {
-        els.playerCoverUpload.value = "";
-      } catch {}
+      try { els.playerCoverUpload.value = ""; } catch {}
+      return;
     }
+    // Always reset the input so picking the same file twice still fires.
+    try { els.playerCoverUpload.value = ""; } catch {}
+    const ok = await playerInlineConfirm({
+      text: "Use this as the new cover?",
+      confirmLabel: "Save cover",
+      cancelLabel: "Cancel",
+      thumbUrl: thumb || url,
+    });
+    dismissPlayerConfirm(ok);
+    if (!ok) {
+      setStatus("Cover unchanged.");
+      return;
+    }
+    const newMeta = {
+      ...(currentPlayerTrackRef.meta || {}),
+      imageUrl: url,
+      ...(thumb ? { imageThumb: thumb } : {}),
+    };
+    patchLibraryTrack(currentPlayerTrackRef.id, { artUrl: url, meta: newMeta });
+    currentPlayerTrackRef = { ...currentPlayerTrackRef, artUrl: url, meta: newMeta };
+    setPlayerMeta({
+      title: els.playerTitle?.textContent || currentPlayerTrackRef.title || "Library song",
+      subtitle: els.playerSubtitle?.textContent || "Library • Full song",
+      artUrl: url,
+    });
+    flashPlayerCover();
+    showShareToast("Cover updated");
+    void syncHubCoverForTrack(currentPlayerTrackRef, url);
   });
 }
 if (els.playerSeek) {

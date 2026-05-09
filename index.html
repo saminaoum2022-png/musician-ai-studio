@@ -722,6 +722,12 @@
                 <button type="button" id="btnProfileEdit" class="profileOwnBtnEdit" aria-label="Edit profile">Edit</button>
                 <button type="button" id="btnProfileCancel" class="profileOwnBtnCancel" style="display:none" aria-label="Cancel editing">Cancel</button>
                 <button type="button" id="btnProfileSave" class="primary profileOwnBtnSave" style="display:none" aria-label="Save profile">Save</button>
+                <a href="#/settings" id="btnProfileSettingsGear" class="profileOwnBtnGear" aria-label="Settings" title="Settings">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
+                  </svg>
+                </a>
               </div>
             </div>
 
@@ -778,18 +784,48 @@
 
               <div class="profileStatStrip" aria-live="polite">
                 <div id="profileOwnStats" class="profileOwnStats" style="display:none"></div>
-                <button id="btnSunoCredits" class="profileCreditsChip" type="button" aria-label="Refresh credits">
+                <a href="#/credits" id="profileCreditsLink" class="profileCreditsChip profileCreditsChipLink" aria-label="My credits">
                   <span class="profileCreditsChipLabel">Credits</span>
-                  <strong id="sunoCredits" class="profileCreditsChipValue">—</strong>
-                  <span id="sunoCreditsNote" class="profileCreditsChipNote" hidden></span>
+                  <strong id="profileCreditsBalance" class="profileCreditsChipValue">0</strong>
+                  <span id="profileCreditsNote" class="profileCreditsChipNote" hidden></span>
                   <svg class="profileCreditsChipIco" viewBox="0 0 24 24" aria-hidden="true">
-                    <polyline points="23 4 23 10 17 10"/>
-                    <polyline points="1 20 1 14 7 14"/>
-                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                    <polyline points="9 18 15 12 9 6"/>
                   </svg>
-                </button>
+                </a>
               </div>
             </div>
+          </div>
+
+          <!-- Quick links — Credits + Settings, the two surfaces hardest
+               to find on a phone. Placed right under the hero so they're
+               above the fold without crowding identity. -->
+          <div class="profileQuickLinks">
+            <a href="#/credits" class="profileQuickLink">
+              <span class="profileQuickLinkIco">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9"/>
+                  <path d="M12 7v10M9 9.5h4.5a2 2 0 0 1 0 4H9M9 13.5h4.75a2 2 0 0 1 0 4H9"/>
+                </svg>
+              </span>
+              <span class="profileQuickLinkBody">
+                <span class="profileQuickLinkTitle">My Credits</span>
+                <span class="profileQuickLinkSub" id="profileQuickLinkCreditsSub">Tap to redeem a code</span>
+              </span>
+              <span class="profileQuickLinkChev" aria-hidden="true">›</span>
+            </a>
+            <a href="#/settings" class="profileQuickLink">
+              <span class="profileQuickLinkIco">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
+                </svg>
+              </span>
+              <span class="profileQuickLinkBody">
+                <span class="profileQuickLinkTitle">Settings</span>
+                <span class="profileQuickLinkSub">Account, environment, advanced</span>
+              </span>
+              <span class="profileQuickLinkChev" aria-hidden="true">›</span>
+            </a>
           </div>
 
           <!-- Songs — same Apple-Music-style row design as Library, no card chrome -->
@@ -819,6 +855,91 @@
 
           <div id="profileSavedMsg" class="hint" style="margin-top:8px; display:none"></div>
           <div id="profileSaveToast" class="profileSaveToast" style="display:none">Profile updated.</div>
+        </section>
+
+        <section class="wide creditsPage" data-route="credits">
+          <header class="creditsHeader">
+            <a href="#/profile" class="creditsBack" aria-label="Back to Profile">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+              <span>Profile</span>
+            </a>
+            <h2 class="creditsTitle">Credits</h2>
+          </header>
+
+          <div class="creditsHero">
+            <div class="creditsHeroLabel">Balance</div>
+            <div class="creditsHeroValue"><span id="creditsBalanceBig">0</span></div>
+            <div class="creditsHeroSub">credits</div>
+            <div id="creditsHeroEmail" class="creditsHeroEmail" style="display:none"></div>
+          </div>
+
+          <section class="creditsCard">
+            <h3 class="creditsCardTitle">Redeem a code</h3>
+            <p class="creditsCardLead">Got a code from Samy? Paste it below.</p>
+            <div class="creditsRedeemRow">
+              <input
+                id="creditsRedeemInput"
+                class="creditsRedeemInput"
+                type="text"
+                placeholder="NABADAI-BETA-2026-XXXX"
+                autocapitalize="characters"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <button id="btnCreditsRedeem" class="primary creditsRedeemBtn" type="button">Redeem</button>
+            </div>
+            <div id="creditsRedeemMsg" class="creditsRedeemMsg" style="display:none"></div>
+          </section>
+
+          <section class="creditsCard">
+            <h3 class="creditsCardTitle">How it works</h3>
+            <ul class="creditsRules">
+              <li><strong>1 full song = 10 credits</strong> (returns 2 variations).</li>
+              <li><strong>Lyrics are free</strong> — write as many drafts as you like.</li>
+              <li>Each promo code can be redeemed <strong>once per account</strong>.</li>
+              <li>If a generation fails, your credits are <strong>refunded automatically</strong>.</li>
+              <li>Need more? <strong>Ask Samy</strong> — this is a closed friends beta.</li>
+            </ul>
+          </section>
+
+          <section class="creditsCard">
+            <h3 class="creditsCardTitle">Recent activity</h3>
+            <div id="creditsLedgerList" class="creditsLedgerList">
+              <div class="creditsLedgerEmpty">No activity yet.</div>
+            </div>
+          </section>
+
+          <section id="creditsAdminCard" class="creditsCard creditsAdminCard" style="display:none">
+            <h3 class="creditsCardTitle">Admin</h3>
+            <div class="creditsAdminGrid">
+              <div class="creditsAdminStat">
+                <div class="creditsAdminStatLabel">Master Suno balance</div>
+                <div class="creditsAdminStatValue" id="adminMasterSuno">—</div>
+              </div>
+              <div class="creditsAdminStat">
+                <div class="creditsAdminStatLabel">Allocated</div>
+                <div class="creditsAdminStatValue" id="adminAllocated">—</div>
+              </div>
+              <div class="creditsAdminStat">
+                <div class="creditsAdminStatLabel">Spent</div>
+                <div class="creditsAdminStatValue" id="adminSpent">—</div>
+              </div>
+              <div class="creditsAdminStat">
+                <div class="creditsAdminStatLabel">Outstanding</div>
+                <div class="creditsAdminStatValue" id="adminOutstanding">—</div>
+              </div>
+              <div class="creditsAdminStat">
+                <div class="creditsAdminStatLabel">Users</div>
+                <div class="creditsAdminStatValue" id="adminUsers">—</div>
+              </div>
+              <div class="creditsAdminStat">
+                <div class="creditsAdminStatLabel">Codes redeemed</div>
+                <div class="creditsAdminStatValue" id="adminCodesRedeemed">—</div>
+              </div>
+            </div>
+            <h4 class="creditsAdminCodesHead">Promo codes</h4>
+            <div id="adminCodesList" class="creditsAdminCodesList"></div>
+          </section>
         </section>
 
         <section class="card wide" data-route="vocal">
@@ -1249,6 +1370,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260510at"></script>
+    <script type="module" src="./src/app.js?v=20260509credits"></script>
   </body>
 </html>

@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509hub";
+const APP_BUILD = "20260509credits";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -91,6 +91,24 @@ const els = {
   btnCreditsHistoryClear: document.getElementById("btnCreditsHistoryClear"),
   btnCreditRecovery: document.getElementById("btnCreditRecovery"),
   creditsHistoryOut: document.getElementById("creditsHistoryOut"),
+  profileCreditsBalance: document.getElementById("profileCreditsBalance"),
+  profileCreditsNote: document.getElementById("profileCreditsNote"),
+  profileCreditsLink: document.getElementById("profileCreditsLink"),
+  profileQuickLinkCreditsSub: document.getElementById("profileQuickLinkCreditsSub"),
+  creditsBalanceBig: document.getElementById("creditsBalanceBig"),
+  creditsHeroEmail: document.getElementById("creditsHeroEmail"),
+  creditsRedeemInput: document.getElementById("creditsRedeemInput"),
+  btnCreditsRedeem: document.getElementById("btnCreditsRedeem"),
+  creditsRedeemMsg: document.getElementById("creditsRedeemMsg"),
+  creditsLedgerList: document.getElementById("creditsLedgerList"),
+  creditsAdminCard: document.getElementById("creditsAdminCard"),
+  adminMasterSuno: document.getElementById("adminMasterSuno"),
+  adminAllocated: document.getElementById("adminAllocated"),
+  adminSpent: document.getElementById("adminSpent"),
+  adminOutstanding: document.getElementById("adminOutstanding"),
+  adminUsers: document.getElementById("adminUsers"),
+  adminCodesRedeemed: document.getElementById("adminCodesRedeemed"),
+  adminCodesList: document.getElementById("adminCodesList"),
   btnPlayerPlay: document.getElementById("btnPlayerPlay"),
   btnPlayerPause: document.getElementById("btnPlayerPause"),
   btnPlayerStop: document.getElementById("btnPlayerStop"),
@@ -995,12 +1013,12 @@ function applyRoute() {
   if (/^u\//.test(route)) {
     pendingPublicUsername = decodeURIComponent(route.slice(2)).trim();
   }
-  const allowedRoutes = new Set(["intro", "start", "auth", "generate", "library", "hub", "settings", "profile", "player", "search", "vocal", "stems", "advanced", "user"]);
+  const allowedRoutes = new Set(["intro", "start", "auth", "generate", "library", "hub", "settings", "profile", "player", "search", "vocal", "stems", "advanced", "user", "credits"]);
   const normalized = pendingPublicUsername ? "user" : (route === "start" ? "intro" : route);
   let wanted = allowedRoutes.has(normalized) ? normalized : "generate";
   // Public profile is intentionally readable without auth so share-link
   // visitors don't hit a wall before discovering the rest of the product.
-  const protectedRoutes = new Set(["generate", "library", "profile", "player", "vocal", "stems", "advanced"]);
+  const protectedRoutes = new Set(["generate", "library", "profile", "player", "vocal", "stems", "advanced", "credits"]);
   const isLoggedIn = Boolean(authSession?.user?.id);
   if (!isLoggedIn && protectedRoutes.has(wanted)) wanted = "auth";
   document.body.classList.toggle("isIntro", wanted === "intro");
@@ -1058,6 +1076,10 @@ function applyRoute() {
   if (wanted === "profile") {
     void refreshAuthStateFromSupabase();
     setProfileEditing(false);
+    void refreshMyCredits({ silent: true });
+  }
+  if (wanted === "credits") {
+    void refreshMyCredits({ silent: true });
   }
   if (wanted === "library") {
     // One synchronous paint from the in-memory + memoized local cache so
@@ -1657,6 +1679,218 @@ function saveAuthSession(sess) {
 function getSupabaseAuthToken() {
   return authSession?.access_token || "";
 }
+
+/* -----------------------------------------------------------------
+ *  Per-user credits (friends-beta promo system)
+ *
+ *  - Profile shows a live balance pill that links to the Credits page.
+ *  - Credits page redeems promo codes, shows ledger, and (admin only)
+ *    surfaces the master Suno balance + per-code usage.
+ *  - Generation paths inspect the same balance to display a friendly
+ *    "redeem a code" prompt instead of a generic Suno error.
+ *
+ *  Server side: api/credits/* and api/_lib/credits-auth.js.
+ * ----------------------------------------------------------------- */
+const FULL_SONG_CREDIT_COST = 10;
+const creditsState = {
+  balance: 0,
+  ledger: [],
+  isAdmin: false,
+  loaded: false,
+  inFlight: false,
+  lastError: "",
+};
+
+function setCreditsBalance(n) {
+  const v = Number.isFinite(Number(n)) ? Math.max(0, Math.floor(Number(n))) : 0;
+  creditsState.balance = v;
+  if (els.profileCreditsBalance) els.profileCreditsBalance.textContent = String(v);
+  if (els.creditsBalanceBig) els.creditsBalanceBig.textContent = String(v);
+  if (els.profileQuickLinkCreditsSub) {
+    els.profileQuickLinkCreditsSub.textContent = creditsState.loaded
+      ? (v > 0 ? `Balance: ${v} credits` : "Tap to redeem a code")
+      : "Tap to redeem a code";
+  }
+}
+
+function formatLedgerReason(reason) {
+  const r = String(reason || "");
+  if (r === "promo_redeem") return "Promo code redeemed";
+  if (r === "full_song") return "Full song generation";
+  if (r === "refund_full_song") return "Refund (failed generation)";
+  if (r === "stems") return "Stems";
+  if (r === "persona") return "Voice persona";
+  return r.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+}
+
+function renderCreditsLedger() {
+  const root = els.creditsLedgerList;
+  if (!root) return;
+  const rows = creditsState.ledger || [];
+  if (!rows.length) {
+    root.innerHTML = `<div class="creditsLedgerEmpty">No activity yet.</div>`;
+    return;
+  }
+  root.innerHTML = rows
+    .map((row) => {
+      const delta = Number(row?.delta || 0);
+      const sign = delta > 0 ? "+" : "";
+      const cls = delta > 0 ? "isPositive" : delta < 0 ? "isNegative" : "";
+      const reason = formatLedgerReason(row?.reason);
+      const ref = String(row?.ref || "").trim();
+      const ts = row?.created_at ? new Date(row.created_at) : null;
+      const when = ts && !Number.isNaN(ts.valueOf()) ? ts.toLocaleString() : "";
+      return `
+        <div class="creditsLedgerRow ${cls}">
+          <div class="creditsLedgerMain">
+            <div class="creditsLedgerReason">${escapeHtml(reason)}</div>
+            <div class="creditsLedgerSub">${escapeHtml(when)}${ref ? ` · ${escapeHtml(ref)}` : ""}</div>
+          </div>
+          <div class="creditsLedgerDelta">${sign}${delta}</div>
+        </div>`;
+    })
+    .join("");
+}
+
+async function refreshMyCredits({ silent = false } = {}) {
+  if (creditsState.inFlight) return creditsState;
+  const token = getSupabaseAuthToken();
+  if (!token) {
+    creditsState.loaded = false;
+    setCreditsBalance(0);
+    creditsState.ledger = [];
+    renderCreditsLedger();
+    if (els.creditsAdminCard) els.creditsAdminCard.style.display = "none";
+    return creditsState;
+  }
+  creditsState.inFlight = true;
+  try {
+    const r = await fetch(apiUrl("/api/credits/me"), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d?.error || `credits/me ${r.status}`);
+    creditsState.balance = Number(d?.balance || 0);
+    creditsState.ledger = Array.isArray(d?.ledger) ? d.ledger : [];
+    creditsState.isAdmin = Boolean(d?.isAdmin);
+    creditsState.loaded = true;
+    creditsState.lastError = "";
+    setCreditsBalance(creditsState.balance);
+    renderCreditsLedger();
+    if (els.creditsHeroEmail && d?.email) {
+      els.creditsHeroEmail.textContent = String(d.email);
+      els.creditsHeroEmail.style.display = "";
+    } else if (els.creditsHeroEmail) {
+      els.creditsHeroEmail.style.display = "none";
+    }
+    if (els.creditsAdminCard) {
+      els.creditsAdminCard.style.display = creditsState.isAdmin ? "" : "none";
+    }
+    if (creditsState.isAdmin) void refreshAdminCreditsView();
+  } catch (e) {
+    creditsState.lastError = e?.message || String(e);
+    if (!silent) console.warn("[credits/me]", creditsState.lastError);
+  } finally {
+    creditsState.inFlight = false;
+  }
+  return creditsState;
+}
+
+async function refreshAdminCreditsView() {
+  const token = getSupabaseAuthToken();
+  if (!token) return;
+  try {
+    const r = await fetch(apiUrl("/api/credits/admin"), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!r.ok) return;
+    const d = await r.json().catch(() => ({}));
+    if (!d?.ok) return;
+    if (els.adminMasterSuno) els.adminMasterSuno.textContent = d.masterSuno == null ? "—" : String(d.masterSuno);
+    const s = d.summary || {};
+    if (els.adminAllocated) els.adminAllocated.textContent = String(s.allocatedTotal || 0);
+    if (els.adminSpent) els.adminSpent.textContent = String(s.spentTotal || 0);
+    if (els.adminOutstanding) els.adminOutstanding.textContent = String(s.outstanding || 0);
+    if (els.adminUsers) els.adminUsers.textContent = String(s.users || 0);
+    if (els.adminCodesRedeemed)
+      els.adminCodesRedeemed.textContent = `${s.codesRedeemed || 0} / ${s.codesTotal || 0}`;
+    if (els.adminCodesList) {
+      const codes = Array.isArray(d.codes) ? d.codes : [];
+      els.adminCodesList.innerHTML = codes.length
+        ? codes
+            .map((c) => {
+              const used = Number(c?.redemptions || 0) >= Number(c?.max_redemptions || 1);
+              const cls = !c?.active || used ? "isUsed" : "isOpen";
+              return `
+                <div class="creditsAdminCodeRow ${cls}">
+                  <div class="creditsAdminCodeText">${escapeHtml(c.code)}</div>
+                  <div class="creditsAdminCodeMeta">${Number(c.credits || 0)} cr · ${Number(c.redemptions || 0)}/${Number(c.max_redemptions || 1)}${c.active ? "" : " · inactive"}</div>
+                </div>`;
+            })
+            .join("")
+        : `<div class="creditsLedgerEmpty">No promo codes yet.</div>`;
+    }
+  } catch {}
+}
+
+function setCreditsRedeemMsg(text, kind) {
+  if (!els.creditsRedeemMsg) return;
+  if (!text) {
+    els.creditsRedeemMsg.style.display = "none";
+    els.creditsRedeemMsg.textContent = "";
+    els.creditsRedeemMsg.classList.remove("isOk", "isWarn", "isErr");
+    return;
+  }
+  els.creditsRedeemMsg.style.display = "";
+  els.creditsRedeemMsg.textContent = text;
+  els.creditsRedeemMsg.classList.remove("isOk", "isWarn", "isErr");
+  els.creditsRedeemMsg.classList.add(
+    kind === "ok" ? "isOk" : kind === "warn" ? "isWarn" : "isErr"
+  );
+}
+
+async function redeemPromoCode(rawCode) {
+  const token = getSupabaseAuthToken();
+  if (!token) {
+    setCreditsRedeemMsg("Sign in with Google first to redeem a code.", "err");
+    return;
+  }
+  const code = String(rawCode || "").trim().toUpperCase();
+  if (!code) {
+    setCreditsRedeemMsg("Enter a code to redeem.", "warn");
+    return;
+  }
+  if (els.btnCreditsRedeem) els.btnCreditsRedeem.disabled = true;
+  setCreditsRedeemMsg("Redeeming…", "warn");
+  try {
+    const r = await fetch(apiUrl("/api/credits/redeem"), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ code }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d?.ok) {
+      setCreditsRedeemMsg(d?.message || d?.error || "Could not redeem code.", "err");
+      return;
+    }
+    if (d.status === "redeemed") {
+      setCreditsRedeemMsg(`+${d.creditsAdded} credits added. New balance: ${d.balance}.`, "ok");
+      if (els.creditsRedeemInput) els.creditsRedeemInput.value = "";
+    } else if (d.status === "already_redeemed") {
+      setCreditsRedeemMsg("You already redeemed this code.", "warn");
+    } else {
+      setCreditsRedeemMsg(d.message || "Code not accepted.", "err");
+    }
+    await refreshMyCredits();
+  } catch (e) {
+    setCreditsRedeemMsg(e?.message || "Network error.", "err");
+  } finally {
+    if (els.btnCreditsRedeem) els.btnCreditsRedeem.disabled = false;
+  }
+}
 function b64urlFromBytes(bytes) {
   let bin = "";
   for (let i = 0; i < bytes.length; i += 1) bin += String.fromCharCode(bytes[i]);
@@ -1703,6 +1937,7 @@ async function refreshAuthStateFromSupabase() {
   const remoteUser = await supabaseFetchUser(token);
   if (remoteUser) {
     saveAuthSession({ ...(authSession || {}), access_token: token, user: remoteUser });
+    void refreshMyCredits({ silent: true });
     return remoteUser;
   }
   renderAuthStatus();
@@ -7737,15 +7972,37 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             return dd;
           }
 
+          const authToken = getSupabaseAuthToken();
           const r = await fetch(apiUrl("/api/suno/generate"), {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+            },
             body: JSON.stringify(payload),
           });
           const d = await r.json().catch(() => ({}));
+          if (r.status === 402 || d?.code === "insufficient_credits") {
+            const need = Number(d?.needed || FULL_SONG_CREDIT_COST);
+            const have = Number(d?.balance || 0);
+            const err = new Error(
+              `Not enough credits (you have ${have}, need ${need}). Open Profile → Credits to redeem a code.`
+            );
+            err.code = "insufficient_credits";
+            err.balance = have;
+            err.needed = need;
+            throw err;
+          }
+          if (r.status === 401) {
+            throw new Error("Please sign in with Google before generating a song.");
+          }
           if (!r.ok) {
             const more = d?.detailMessage || d?.details?.message || d?.details?.error || "";
             throw new Error(`${d?.error || "Suno generate failed"}${more ? `: ${more}` : ""}`);
+          }
+          if (d?._credits && Number.isFinite(Number(d._credits.balance))) {
+            setCreditsBalance(Number(d._credits.balance));
+            creditsState.loaded = true;
           }
           if (typeof d?.code !== "undefined" && Number(d.code) !== 200) {
             const bodyErr = d?.msg || d?.message || d?.error || "Suno generate failed";
@@ -8700,7 +8957,27 @@ window.addEventListener("hashchange", () => {
 window.addEventListener("hashchange", () => {
   const route = document.body.getAttribute("data-route") || "";
   if (route === "profile") void refreshSunoCredits();
+  if (route === "profile" || route === "credits") void refreshMyCredits({ silent: true });
 });
+
+if (els.btnCreditsRedeem) {
+  els.btnCreditsRedeem.addEventListener("click", () => {
+    void redeemPromoCode(els.creditsRedeemInput?.value || "");
+  });
+}
+if (els.creditsRedeemInput) {
+  els.creditsRedeemInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void redeemPromoCode(els.creditsRedeemInput.value || "");
+    }
+  });
+  els.creditsRedeemInput.addEventListener("input", () => {
+    if (els.creditsRedeemMsg && els.creditsRedeemMsg.style.display !== "none") {
+      setCreditsRedeemMsg("", "");
+    }
+  });
+}
 // Pull the latest Library state from Supabase whenever the user opens
 // the Library tab. Throttled inside the function so a rapid tab toggle
 // doesn't hammer the API. localStorage stays the immediate source of

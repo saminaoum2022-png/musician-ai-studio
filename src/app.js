@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510hubpub";
+const APP_BUILD = "20260510hubpub2";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -4025,6 +4025,14 @@ function closeProfileHubMenu() {
   els.profileHubSharedList.querySelectorAll(".libMenu").forEach((m) => {
     m.style.display = "none";
   });
+  // Drop the `libRowMenuOpen` class on every row so the previously-open
+  // row stops floating above its siblings. Without this the absolutely-
+  // positioned menu ends up below the next row's `.libRowMain` and the
+  // tap on "Unpublish" actually hits the row underneath — which is the
+  // exact bug the user just reported.
+  els.profileHubSharedList.querySelectorAll(".libRow").forEach((r) => {
+    r.classList.remove("libRowMenuOpen");
+  });
   _profileHubOpenMenuId = "";
 }
 
@@ -4110,6 +4118,8 @@ function renderProfileHubShared() {
       closeProfileHubMenu();
       if (!isOpen && menu) {
         menu.style.display = "";
+        const row = menu.closest(".libRow");
+        if (row) row.classList.add("libRowMenuOpen");
         _profileHubOpenMenuId = sid;
       }
     });

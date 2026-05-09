@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510ac";
+const APP_BUILD = "20260510ad";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1868,12 +1868,29 @@ async function supabaseLoadUserSongs() {
   const token = getSupabaseAuthToken();
   if (!token || !authSession?.user?.id) return [];
   const uid = encodeURIComponent(authSession.user.id);
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${uid}&select=*&order=created_at.desc`, {
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  // Slim list: render-only columns. We deliberately omit `meta` here
+  // because legacy rows can carry base64 cover data URLs in
+  // `meta.imageUrl`, which inflated the response into multi-MB
+  // territory on cold PWA logins. Custom covers now live in
+  // localStorage thumbs; metadata is only needed by Song Details (and
+  // the local copy already has it for tracks generated on this device).
+  const cols = "id,created_at,title,art_url,song_url,task_id,audio_id,kind";
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 12000);
+  let r;
+  try {
+    r = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${uid}&select=${cols}&order=created_at.desc&limit=500`, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${token}`,
+      },
+      signal: ctrl.signal,
+    });
+  } catch {
+    clearTimeout(timer);
+    return [];
+  }
+  clearTimeout(timer);
   if (!r.ok) return [];
   const rows = await r.json().catch(() => []);
   if (!Array.isArray(rows)) return [];
@@ -1886,7 +1903,7 @@ async function supabaseLoadUserSongs() {
     taskId: s.task_id || "",
     audioId: s.audio_id || "",
     kind: s.kind || "full",
-    meta: s.meta || null,
+    meta: null,
   }));
 }
 /** Strip values that aren't safe / efficient to ship to a JSONB row in
@@ -3059,9 +3076,24 @@ function saveLibraryFor(id, items) {
   } catch {}
 }
 
+/** True from the moment we kick off the boot-time cloud fetch until
+ *  Library is on screen with cloud data. The Library renderer reads
+ *  this so the empty-state shows "Loading your library…" instead of
+ *  the "Nothing here yet" CTA during a PWA cold start (where local
+ *  storage is empty until the cloud responds).
+ */
+let _libraryHydrateInFlight = false;
+
 async function ensureUserLibraryHydrated() {
   if (!authSession?.user?.id) return;
   const uid = String(authSession.user.id);
+
+  _libraryHydrateInFlight = true;
+  // Repaint the Library tab immediately so the loading state can show
+  // before the first network response lands.
+  if (String(activeProfile.id) === uid) {
+    try { renderLibrary(); } catch {}
+  }
 
   // 1) Load cloud + local candidates and merge-dedupe.
   const cloudSongs = await supabaseLoadUserSongs();
@@ -3069,13 +3101,18 @@ async function ensureUserLibraryHydrated() {
   const allLocalSongs = loadAllLocalSongsDeduped();
   const localCandidates = guestSongs.length ? guestSongs : allLocalSongs;
 
-  const merged = [];
-  const seen = new Set();
-  const addMerged = (row) => {
+  const sigOf = (row) => {
     const url = String(row?.url || "").trim();
     const aid = String(row?.audioId || "").trim();
     const kind = String(row?.kind || "full").trim();
-    const sig = `${url}|${aid}|${kind}`;
+    return `${url}|${aid}|${kind}`;
+  };
+  const cloudSigs = new Set(cloudSongs.map(sigOf));
+
+  const merged = [];
+  const seen = new Set();
+  const addMerged = (row) => {
+    const sig = sigOf(row);
     if (seen.has(sig)) return;
     seen.add(sig);
     merged.push(row);
@@ -3084,30 +3121,34 @@ async function ensureUserLibraryHydrated() {
   localCandidates.forEach(addMerged);
   merged.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
 
-  if (!merged.length) {
-    if (String(activeProfile.id) === uid) renderLibrary();
-    return;
-  }
-
   // Fast path: merge is already the full set we want the user to see.
   // Painting here keeps Library in step with Hub + Profile. The
   // previous version awaited one network round-trip *per song* to
   // `supabaseInsertUserSong` before the first `renderLibrary`, which
-  // made the Library tab look "stuck" for many seconds.
+  // made the Library tab look "stuck" for many seconds on PWAs.
   saveLibraryFor(uid, merged);
+  _libraryHydrateInFlight = false;
   if (String(activeProfile.id) === uid) {
     saveLibrary(merged);
     renderLibrary();
   }
 
-  // Background: push any local-only rows to the cloud, then replace
-  // with an authoritative re-fetch. Failures are non-fatal; local
-  // data from the fast path is already on screen.
+  if (!merged.length) return;
+
+  // Background: only upload local-only rows (the ones not already in
+  // the cloud snapshot we just fetched). The previous version pushed
+  // every merged row, including cloud-resident ones, which wasted
+  // dozens of round-trips on every PWA cold start.
+  const localOnly = merged.filter((row) => !cloudSigs.has(sigOf(row)));
+  if (!localOnly.length) {
+    _libraryReconcileLastAt = Date.now();
+    return;
+  }
   void (async () => {
     let okCount = 0;
     let failCount = 0;
     let firstFail = "";
-    for (const t of merged) {
+    for (const t of localOnly) {
       // eslint-disable-next-line no-await-in-loop
       const ins = await supabaseInsertUserSong(t);
       if (ins?.ok) okCount += 1;
@@ -3123,9 +3164,9 @@ async function ensureUserLibraryHydrated() {
       saveLibrary(finalSongs);
       renderLibrary();
       if (failCount > 0) {
-        setStatus(`Library sync partial: ${okCount} saved, ${failCount} failed (${firstFail.slice(0, 90)})`);
-      } else {
-        setStatus(`Library sync complete: ${okCount} saved to cloud.`);
+        setStatus(`Library sync partial: ${okCount} uploaded, ${failCount} failed (${firstFail.slice(0, 90)})`);
+      } else if (okCount > 0) {
+        setStatus(`Library sync complete: ${okCount} new songs uploaded.`);
       }
     }
     _libraryReconcileLastAt = Date.now();
@@ -3697,6 +3738,19 @@ function renderLibrary() {
     }
   }
   if (!totalCount) {
+    // PWA cold start: localStorage is empty, hydrate is in flight. Show
+    // a "Loading…" state so the user doesn't see the "Nothing here yet"
+    // CTA flash for a couple of seconds and assume their songs are gone.
+    if (_libraryHydrateInFlight) {
+      els.libraryList.innerHTML = `
+        <div class="emptyState">
+          <div class="emptyStateIcon" aria-hidden="true">♪</div>
+          <p class="emptyStateTitle">Loading your library…</p>
+          <p class="emptyStateHint">Pulling your songs from the cloud.</p>
+        </div>
+      `;
+      return;
+    }
     els.libraryList.innerHTML = `
       <div class="emptyState">
         <div class="emptyStateIcon" aria-hidden="true">♪</div>
@@ -9031,7 +9085,12 @@ void (async () => {
     renderProfileHubShared();
 
     syncActiveProfileIdFromSession();
-    await ensureUserLibraryHydrated();
+    // Fire-and-forget so the rest of boot (Hub refresh, route apply,
+    // first paint) is never gated on the user_songs round-trip. The
+    // hydrate function repaints Library by itself once the fetch
+    // resolves. On a PWA cold start this turned a "Library is stuck"
+    // wait into "Library populates a beat after the tab opens".
+    void ensureUserLibraryHydrated();
   } else {
     // Never leak previous user visuals when session is not valid.
     resetProfileUiToGuest();

@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510as";
+const APP_BUILD = "20260510at";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -983,6 +983,11 @@ function applyRoute() {
     renderHubDots();
     renderHubUpdatedAt();
     updateHubAudioHint();
+    // Paint synchronously from the local feed cache so the Hub never
+    // looks blank on route entry. Cloud refresh below repaints once the
+    // merged set lands. Same pattern as Library: cache-first, network
+    // catches up.
+    try { renderHub(); } catch {}
     // Fire focus once on the next frame so the closest-to-center card
     // already shows the lift / hero title before any scroll event.
     requestAnimationFrame(() => updateHubFocusedRow());

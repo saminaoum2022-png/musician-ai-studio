@@ -710,6 +710,19 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   right: 6px;
   top: calc(100% - 8px);
   z-index: 80;
+  pointer-events: auto;
+}
+.libRow .libMenu .ghost,
+.libRow .libMenu a,
+.libRow .libMenu button{
+  pointer-events: auto;
+}
+/* When the menu is open, lift the entire row above sibling rows so the
+ * absolutely-positioned menu actually wins iOS hit-testing — without this,
+ * later siblings paint after the menu (no z-index on the rows) and steal
+ * the tap, which is why every Library ⋯ action looked dead. */
+.libRow.libRowMenuOpen{
+  z-index: 90;
 }
 .libRowPlaying{
   background: linear-gradient(180deg, rgba(124,92,255,0.10), rgba(35,213,171,0.04));

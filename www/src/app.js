@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509libmenu";
+const APP_BUILD = "20260509libmenu2";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -4614,6 +4614,10 @@ function buildLibMenuHtml(track) {
 /** Close any currently-open Library row menu. */
 function closeLibraryMenu() {
   if (!_libraryOpenMenuId || !els.libraryList) return;
+  const openRow = els.libraryList.querySelector(
+    `[data-lib-row="${CSS.escape(_libraryOpenMenuId)}"]`
+  );
+  if (openRow) openRow.classList.remove("libRowMenuOpen");
   const node = els.libraryList.querySelector(`#libMenu_${CSS.escape(_libraryOpenMenuId)}`);
   if (node && node.parentNode) node.parentNode.removeChild(node);
   _libraryOpenMenuId = "";
@@ -4635,7 +4639,33 @@ function toggleLibraryMenuFor(id) {
   const row = els.libraryList.querySelector(`[data-lib-row="${CSS.escape(String(id))}"]`);
   if (!row) return;
   row.insertAdjacentHTML("beforeend", buildLibMenuHtml(t));
+  // Lift this row above its siblings so its absolutely-positioned
+  // menu actually receives taps on iOS (sibling rows otherwise paint
+  // on top because they come later in DOM order with no z-index).
+  row.classList.add("libRowMenuOpen");
   _libraryOpenMenuId = String(id);
+}
+
+// Close any open Library menu when the user taps outside it. We use
+// `pointerdown` (capture phase) so we don't fight iOS's click delegation
+// on the list itself — the inside-menu handler in
+// `bindLibraryDelegatedListeners` still fires first for taps on items.
+let _libraryOutsideListenerBound = false;
+function bindLibraryOutsideCloseListener() {
+  if (_libraryOutsideListenerBound) return;
+  _libraryOutsideListenerBound = true;
+  document.addEventListener(
+    "pointerdown",
+    (ev) => {
+      if (!_libraryOpenMenuId) return;
+      const t = ev.target;
+      if (!(t instanceof Element)) return;
+      if (t.closest(".libMenu")) return;
+      if (t.closest("[data-lib-menu]")) return; // ⋯ trigger handles itself
+      closeLibraryMenu();
+    },
+    true
+  );
 }
 
 let _libraryListenersBound = false;
@@ -4646,6 +4676,7 @@ let _libraryListenersBound = false;
 function bindLibraryDelegatedListeners() {
   if (_libraryListenersBound || !els.libraryList) return;
   _libraryListenersBound = true;
+  bindLibraryOutsideCloseListener();
   els.libraryList.addEventListener("click", async (e) => {
     const target = e.target;
     if (!(target instanceof Element)) return;
@@ -4956,36 +4987,15 @@ let libVisibleCount = LIB_PAGE_SIZE;
 let _libLastTotal = -1;
 
 /** Inline warning when localStorage couldn't fit the full Library or
- *  quota blocked writes. Hidden when persistence matches memory. */
+ *  quota blocked writes. Disabled in v1 — songs are always synced from
+ *  the cloud, so a localStorage cache miss is invisible to the user
+ *  and the banner only added confusion. The diagnostic page still has
+ *  the underlying free-space tool when we need it. */
 function syncLibraryStorageBanner() {
   const b = els.libraryStorageBanner;
-  const txt = els.libraryStorageBannerText;
   const alt = els.btnLibraryFreeSpaceAlt;
-  if (!b || !txt) return;
-  const items = loadLibrary();
-  const memN = items.length;
-  const persistShort =
-    memN > 0 && _lastLibraryPersistedCount < memN;
-  const show =
-    Boolean(authSession?.user?.id) &&
-    (Boolean(_lastLibraryPersistError) || persistShort);
-  if (!show) {
-    b.hidden = true;
-    if (alt) alt.hidden = true;
-    return;
-  }
-  let msg = "";
-  if (_lastLibraryPersistError === "quota") {
-    msg =
-      "Device storage is tight — not everything could be saved offline. Tap to clear cache.";
-  } else if (_lastLibraryPersistError) {
-    msg = `Couldn't save the full library on this device (${_lastLibraryPersistError}). Tap to free space.`;
-  } else {
-    msg = `${_lastLibraryPersistedCount} of ${memN} songs saved locally — tap to free space and retry.`;
-  }
-  txt.textContent = msg;
-  b.hidden = false;
-  if (alt) alt.hidden = false;
+  if (b) b.hidden = true;
+  if (alt) alt.hidden = true;
 }
 
 function renderLibrary() {

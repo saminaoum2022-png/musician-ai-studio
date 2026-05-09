@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510af";
+const APP_BUILD = "20260510ag";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1680,6 +1680,7 @@ function resetProfileUiToGuest() {
   // and the loading state appears for the new account.
   _libraryHydrateInFlight = false;
   _libraryHydrateCompleted = false;
+  _lastUserSongInsertFailure = "";
   renderProfilePreviewFromInputs();
   renderProfileHubShared();
   setProfileEditing(false);
@@ -1953,9 +1954,30 @@ function sanitizeMetaForCloud(meta) {
   return out;
 }
 
+/** Last cloud insert failure for `user_songs` (RLS, missing table,
+ *  schema mismatch). Cleared on a successful insert. The Library
+ *  empty state surfaces this so "0 rows" isn't mistaken for "no songs"
+ *  when the real issue is writes blocked server-side.
+ */
+let _lastUserSongInsertFailure = "";
+
+function recordUserSongInsertResult(ins) {
+  if (ins?.ok) {
+    _lastUserSongInsertFailure = "";
+    return;
+  }
+  const msg = `${ins?.reason || "fail"}${ins?.details ? `: ${ins.details}` : ""}`.slice(0, 280);
+  _lastUserSongInsertFailure = msg;
+  try {
+    console.warn("[user_songs] insert failed:", msg);
+  } catch {}
+}
+
 async function supabaseInsertUserSong(track) {
   const token = getSupabaseAuthToken();
-  if (!token || !authSession?.user?.id) return { ok: false, reason: "no_auth" };
+  if (!token || !authSession?.user?.id) {
+    return { ok: false, reason: "no_auth" };
+  }
   const rawArt = String(track.artUrl || "");
   const payload = {
     user_id: authSession.user.id,
@@ -1980,11 +2002,18 @@ async function supabaseInsertUserSong(track) {
     },
     body: JSON.stringify(payload),
   }).catch(() => null);
-  if (!r) return { ok: false, reason: "network" };
+  if (!r) {
+    const fail = { ok: false, reason: "network" };
+    recordUserSongInsertResult(fail);
+    return fail;
+  }
   if (!r.ok) {
     const txt = await r.text().catch(() => "");
-    return { ok: false, reason: `http_${r.status}`, details: String(txt).slice(0, 180) };
+    const fail = { ok: false, reason: `http_${r.status}`, details: String(txt).slice(0, 180) };
+    recordUserSongInsertResult(fail);
+    return fail;
   }
+  recordUserSongInsertResult({ ok: true });
   return { ok: true };
 }
 /** Patch an existing `user_songs` row keyed by (user_id, song_url, kind).
@@ -3344,7 +3373,15 @@ function addToLibrary(track) {
   items.unshift(newTrack);
   saveLibrary(items.slice(0, 100));
   renderLibrary();
-  void supabaseInsertUserSong(newTrack);
+  void (async () => {
+    const ins = await supabaseInsertUserSong(newTrack);
+    if (!ins?.ok) {
+      setStatus(`Could not save copy to the cloud (${ins.reason}). Song is still saved on this device. ${_lastUserSongInsertFailure || ""}`.slice(0, 280));
+      // If Library is empty-looking elsewhere, refresh so any diagnostic
+      // empty-state can pick up `_lastUserSongInsertFailure`.
+      try { renderLibrary(); } catch {}
+    }
+  })();
 }
 function removeFromLibrary(id) {
   const prev = loadLibrary();
@@ -3839,14 +3876,26 @@ function renderLibrary() {
       return;
     }
     if (isLoggedIn) {
+      const failLine = _lastUserSongInsertFailure
+        ? `<p class="emptyStateHint" style="margin-top:10px;font-size:12px;line-height:1.45;opacity:0.88">Last cloud save error: ${escapeHtml(_lastUserSongInsertFailure)}</p>`
+        : "";
       els.libraryList.innerHTML = `
         <div class="emptyState">
           <div class="emptyStateIcon" aria-hidden="true">♪</div>
           <p class="emptyStateTitle">No songs synced yet</p>
-          <p class="emptyStateHint">Songs you create here land in your Library automatically. If you have older songs in your browser, open the app there once to sync them across devices.</p>
-          <a href="#/generate" class="emptyStateCta" data-route-link="generate">Create a song</a>
+          <p class="emptyStateHint">The cloud has no songs stored for your account yet. Create one here while logged in — it should appear after generation. If you used Safari before adding this app to your Home Screen, open the site in Safari once so older local songs can upload.</p>
+          ${failLine}
+          <button type="button" class="emptyStateCta" id="libraryEmptyUploadAgain" style="margin-top:10px;border:none;cursor:pointer;font:inherit">Try sync from this device</button>
+          <a href="#/generate" class="emptyStateCta" data-route-link="generate" style="margin-top:8px;display:inline-flex">Create a song</a>
         </div>
       `;
+      const uploadAgain = document.getElementById("libraryEmptyUploadAgain");
+      if (uploadAgain) {
+        uploadAgain.addEventListener("click", () => {
+          setStatus("Syncing library to cloud…");
+          void ensureUserLibraryHydrated();
+        });
+      }
       return;
     }
     els.libraryList.innerHTML = `

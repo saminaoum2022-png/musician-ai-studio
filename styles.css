@@ -3155,6 +3155,71 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
   box-shadow: 0 18px 45px rgba(0,0,0,0.32);
 }
+/* Soft "pick your username" prompt rendered above the profile hero
+   card whenever the user still has the auto-minted `user_xxxxxx`
+   handle. Reads as a friendly nudge, not a blocking dialog —
+   anything they shared on Hub still works under the temporary
+   handle, but tapping this jumps them straight into edit mode with
+   the username field focused. */
+.profileUsernamePrompt{
+  -webkit-appearance: none;
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(120, 200, 255, 0.32);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(120, 200, 255, 0.14), rgba(120, 200, 255, 0.06));
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.18);
+}
+.profileUsernamePrompt:hover{
+  border-color: rgba(120, 200, 255, 0.55);
+  box-shadow: 0 10px 26px rgba(120, 200, 255, 0.18);
+}
+.profileUsernamePrompt:active{ transform: translateY(1px); }
+.profileUsernamePromptIcon{
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(120, 200, 255, 0.22);
+  color: #cfe9ff;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.01em;
+}
+.profileUsernamePromptText{
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.profileUsernamePromptText strong{
+  font-size: 14px;
+  font-weight: 600;
+}
+.profileUsernamePromptHint{
+  font-size: 12px;
+  color: var(--muted);
+}
+.profileUsernamePromptCta{
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: #cfe9ff;
+  letter-spacing: 0.02em;
+}
 /* Songs block — full-bleed, mirrors Library's aesthetic. */
 .profileSongsBlock{
   display: flex;

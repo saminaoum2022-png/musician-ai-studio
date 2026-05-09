@@ -790,6 +790,25 @@
         </section>
 
         <section class="wide profileSection" data-route="profile">
+          <!-- Soft prompt nudging brand-new users (whose username is
+               still the auto-minted `user_xxxxxx` handle) to pick a
+               personal handle. Tapping the banner enters edit mode
+               and focuses the username field. Hidden by default;
+               `renderProfileUsernamePrompt()` toggles it. -->
+          <button
+            type="button"
+            id="profileUsernamePrompt"
+            class="profileUsernamePrompt"
+            style="display:none"
+            aria-label="Choose your username"
+          >
+            <span class="profileUsernamePromptIcon" aria-hidden="true">@</span>
+            <span class="profileUsernamePromptText">
+              <strong>Pick a username</strong>
+              <span class="profileUsernamePromptHint">Friends will see this on Hub.</span>
+            </span>
+            <span class="profileUsernamePromptCta" aria-hidden="true">Set →</span>
+          </button>
           <!-- Hero card — keeps a focused container around just the user
                info so identity has visual weight, while everything below
                flows full-bleed like Library. -->
@@ -1481,6 +1500,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260510unpublish2"></script>
+    <script type="module" src="./src/app.js?v=20260510pickname"></script>
   </body>
 </html>

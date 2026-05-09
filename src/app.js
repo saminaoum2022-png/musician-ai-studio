@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509hubcalm";
+const APP_BUILD = "20260509hubcalm2";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -504,14 +504,24 @@ function getHubRowClosestToViewportCenter() {
   return bestInBandId || bestIntersectId || bestAreaId;
 }
 
-// Scroll-driven autoplay was disabled in 20260509hubcalm. On mobile the
-// debounce window kept racing iOS scroll-snap and starting the wrong post,
-// or starting *no* post (first card on cold open). Users now tap ▶
-// explicitly — predictable, no surprises, no flicker. The visual focus
-// path (`updateHubFocusedRow`) is still on so the centered card still
-// lifts/dims/scales as you scroll.
+// Don't run *audio* on every scroll frame — that was the cause of "rapid
+// play/stop": while the user dragged, every frame
+// `getHubRowClosestToViewportCenter` could pick a different row and we'd
+// start/abandon playback in a loop. So audio waits for the scroll to be
+// quiet for ~280ms (or instantly on `scrollend`).
+//
+// VISUAL focus is a separate path (`updateHubFocusedRow`) that runs on
+// every scroll frame, raf-throttled. Just toggling a class is cheap and
+// makes the lift/dim/title-resize feel immediate instead of arriving late
+// after the audio finally loads.
 function scheduleHubViewportAutoplay() {
-  // No-op. Kept as a stub so existing call sites don't have to be removed.
+  if (hubViewportTailTimer) {
+    try { clearTimeout(hubViewportTailTimer); } catch {}
+  }
+  hubViewportTailTimer = setTimeout(() => {
+    hubViewportTailTimer = null;
+    tryHubViewportAutoplay();
+  }, 280);
 }
 
 // Visual focus tracking — separate from audio playback. Sets `.isActive`
@@ -541,8 +551,11 @@ function scheduleHubFocusUpdate() {
   });
 }
 function flushHubViewportAutoplay() {
-  // Companion no-op for `scheduleHubViewportAutoplay`. See comment above:
-  // scroll-driven autoplay is disabled to keep playback predictable.
+  if (hubViewportTailTimer) {
+    try { clearTimeout(hubViewportTailTimer); } catch {}
+    hubViewportTailTimer = null;
+  }
+  tryHubViewportAutoplay();
 }
 
 async function hubAudioPlayWithRetry(audio) {
@@ -642,8 +655,28 @@ function ensureHubAudio() {
 }
 
 function tryHubViewportAutoplay() {
-  // Disabled in 20260509hubcalm — see comment on `scheduleHubViewportAutoplay`.
-  // Kept as a stub for any leftover callers.
+  if ((document.body.getAttribute("data-route") || "") !== "hub") return;
+  if (!els.hubList) return;
+  if (Date.now() < hubSuppressViewportAutoplayUntil) return;
+  // Never attempt scroll-driven play until the browser has accepted audio once
+  // (user tapped ▶). Otherwise play() fails repeatedly and the button flickers.
+  if (!getHubAudioUnlocked()) return;
+  const centerId = getHubRowClosestToViewportCenter();
+  if (!centerId) return;
+  const centerRow = els.hubList.querySelector(`[data-hub-row="${centerId}"]`);
+  if (getHubRowIntersectionRatio(centerRow) < 0.1) return;
+  if (hubAutoplayMutedPostId && centerId !== hubAutoplayMutedPostId) {
+    hubAutoplayMutedPostId = null;
+  }
+  if (centerId === hubAutoplayMutedPostId) return;
+  const feed = loadHubFeed();
+  const p = feed.find((x) => x.id === centerId);
+  if (!p?.url) return;
+  // If we already targeted this post — even if play() hasn't resolved yet,
+  // even if the element is momentarily paused mid-load — never kick off a
+  // second startHubPlayback for the same id.
+  if (hubAudioPostId === centerId) return;
+  void startHubPlayback(centerId);
 }
 
 function stopHubPlayback() {

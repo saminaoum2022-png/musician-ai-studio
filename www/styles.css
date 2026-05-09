@@ -1872,29 +1872,16 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   font-weight: 700;
 }
 /*
- * Hub: nudge each scroll to settle on a post so audio autoplay has an
- * unambiguous "centered" target. `proximity` is gentle — the page only
- * snaps when you're already close to a card, so it doesn't fight the user
- * scrolling fast. Targets both html and body so it lights up on whichever
- * element is actually the page scroller.
+ * Hub: scroll-snap was removed in 20260509hubcalm2. Even at `proximity`
+ * iOS would pull the viewport toward the next card after every short
+ * gesture, which felt like the page was scrolling itself. Free-scroll is
+ * the default; audio autoplay (track-follows-centered-post) is handled
+ * entirely in JS now, so we don't need CSS snapping to drive it.
+ * `scroll-padding-top` is kept for any programmatic scrollIntoView calls.
  */
 html:has(body[data-route="hub"]),
 body[data-route="hub"]{
-  scroll-snap-type: y proximity;
   scroll-padding-top: 80px;
-}
-body[data-route="hub"] .hubRow{
-  scroll-snap-align: center;
-}
-/* While jumping to the top of the Hub feed, disable scroll-snap so iOS
- * doesn't pull the viewport back to the previously-centered row. The body
- * class is added before scrollTo(0) and removed ~360ms later. */
-html:has(body.hubJumpingToTop),
-body.hubJumpingToTop{
-  scroll-snap-type: none !important;
-}
-body.hubJumpingToTop .hubRow{
-  scroll-snap-align: none !important;
 }
 [data-route="hub"] .trackName{
   font-size:15px;

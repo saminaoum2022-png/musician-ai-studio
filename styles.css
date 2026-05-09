@@ -130,7 +130,7 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
   border-radius:12px;
   padding:10px 8px;
   text-decoration:none;
-  font-size:12px;
+  font-size: 13px;
   font-weight:900;
   text-align:center;
 }
@@ -157,7 +157,7 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
   border:1px solid var(--border);
   background:linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
   padding:6px 10px; border-radius:999px; color:var(--muted);
-  font-weight:700; font-size:12px;
+  font-weight:700; font-size: 13px;
 }
 
 .loadingBar{
@@ -182,7 +182,7 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
 }
 @keyframes spin{ to { transform: rotate(360deg); } }
 .loadingTitle{ font-weight:900; letter-spacing:-0.01em; }
-.loadingSub{ color: var(--muted); font-size: 12px; margin-top: 2px; }
+.loadingSub{ color: var(--muted); font-size: 13px; margin-top: 2px; }
 /* Ready state should not look like "still generating" */
 .loadingBar.isReadyNotice .spinner{
   width: 14px;
@@ -476,7 +476,7 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   box-shadow: 0 14px 35px rgba(0,0,0,0.22);
 }
 .homeTitle{ font-weight: 950; letter-spacing:-0.02em; font-size: 16px; }
-.homeSub{ margin-top: 6px; color: var(--muted); font-size: 12.5px; line-height:1.35; }
+.homeSub{ margin-top: 6px; color: var(--muted); font-size: 13.5px; line-height:1.35; }
 
 .agentBox{
   border:1px solid var(--border);
@@ -509,7 +509,7 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   background: rgba(10, 14, 22, 0.35);
 }
 .trackName{ font-weight:950; min-width:140px; }
-.trackTiny{ font-size:12px; color:var(--muted); }
+.trackTiny{ font-size: 13px; color:var(--muted); }
 .trackCtl{ display:flex; gap:8px; align-items:center; }
 .trackCtl input[type="range"]{ padding:0; height: 36px; }
 /* Library — list rows (Apple Music style) */
@@ -599,7 +599,7 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   background: rgba(8,11,18,0.65);
   border: 1px solid rgba(255,255,255,0.30);
   color: #fff;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 800;
   line-height: 1;
   display: flex;
@@ -637,7 +637,7 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 10px;
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: rgba(232,238,247,0.55);
 }
 .libRowDot{
@@ -649,7 +649,7 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   height: 20px;
   padding: 0 8px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: rgba(244,247,255,0.92);
@@ -769,7 +769,7 @@ body.isAuth .hubNowPlaying{ display:none !important; }
 }
 .libraryCount{
   margin: 10px 0 0;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -813,7 +813,7 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   text-align: left;
 }
 .libraryDiagBtn{
-  font-size: 11px;
+  font-size: 13px;
   padding: 6px 14px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -823,7 +823,7 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   display: block;
   margin-top: 12px;
   padding: 12px;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.45;
   text-align: left;
   color: rgba(232, 238, 247, 0.82);
@@ -1291,7 +1291,7 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   gap:6px;
   min-width:0;
   flex:1 1 auto;
-  font-size:12.5px;
+  font-size: 13.5px;
   color: rgba(223, 231, 251, 0.78);
   white-space:nowrap;
   overflow:hidden;
@@ -1441,7 +1441,7 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   border:1px solid rgba(255,255,255,0.10);
   background: rgba(255,255,255,0.025);
   color: rgba(223, 231, 251, 0.82);
-  font-size:12px;
+  font-size: 13px;
   font-weight:500;
   cursor:pointer;
   transition:
@@ -1489,7 +1489,7 @@ body.isAuth .hubNowPlaying{ display:none !important; }
  * the arrow icon + label is unambiguous on its own. */
 .hubShare .hubReactIcon{
   transform: translateX(0.5px);
-  font-size:12px;
+  font-size: 13px;
   letter-spacing:0;
 }
 
@@ -1585,7 +1585,7 @@ body.isAuth .hubNowPlaying{ display:none !important; }
     height:32px;
     padding:0 11px 0 10px;
     gap:6px;
-    font-size:12.5px;
+    font-size: 13.5px;
     flex:0 0 auto;
   }
   .hubLikeHeart{ font-size:16px; }
@@ -1677,7 +1677,7 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   border: none;
   background: transparent;
   color: rgba(223, 231, 251, 0.55);
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 700;
   letter-spacing: 0.2px;
   border-radius: 999px;
@@ -1948,7 +1948,7 @@ body.hubJumpingToTop .hubRow{
   font-size:15px;
 }
 [data-route="hub"] .trackTiny{
-  font-size:12px;
+  font-size: 13px;
 }
 .libRow .trackName{
   white-space:nowrap;
@@ -1992,7 +1992,7 @@ body.hubJumpingToTop .hubRow{
   padding:8px 12px;
   border-radius:10px;
   font-weight:900;
-  font-size:12.5px;
+  font-size: 13.5px;
 }
 .chip.active{
   border-color: rgba(35,213,171,0.45);
@@ -2028,7 +2028,7 @@ body.hubJumpingToTop .hubRow{
   border:1px solid rgba(255,255,255,0.10);
   background: transparent;
   color: rgba(223, 231, 251, 0.78);
-  font-size:12.5px;
+  font-size: 13.5px;
   font-weight:600;
   letter-spacing:0.1px;
   cursor:pointer;
@@ -2141,7 +2141,7 @@ body.hubJumpingToTop .hubRow{
 }
 .playerSubtitle{
   color: rgba(223, 231, 251, 0.55);
-  font-size: 12.5px;
+  font-size: 13.5px;
   letter-spacing: 0.1px;
   line-height: 1.4;
   margin: 0;
@@ -2162,7 +2162,7 @@ body.hubJumpingToTop .hubRow{
 }
 .playerTimeNum{
   font-variant-numeric: tabular-nums;
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: 0.3px;
   color: rgba(223, 231, 251, 0.50);
 }
@@ -2350,7 +2350,7 @@ body.hubJumpingToTop .hubRow{
   border: none;
   background: transparent;
   color: rgba(223, 231, 251, 0.62);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.15px;
   cursor: pointer;
@@ -2439,7 +2439,7 @@ h2{ margin:0 0 12px; font-size:16px; letter-spacing:-0.01em; }
 .grow{ flex:1; min-width:260px; }
 
 .field{ display:flex; flex-direction:column; gap:6px; min-width:160px; }
-.label{ color:var(--muted); font-size:12px; font-weight:700; }
+.label{ color:var(--muted); font-size: 13px; font-weight:700; }
 input,select{
   border:1px solid var(--border);
   background: rgba(10, 14, 22, 0.6);
@@ -2466,7 +2466,7 @@ textarea{
   font-size: 14px;
   font-weight: 500;
 }
-.label{ font-size:12.5px; letter-spacing:0.01em; }
+.label{ font-size: 13.5px; letter-spacing:0.01em; }
 .createSectionStack{
   display:flex;
   flex-direction:column;
@@ -2500,13 +2500,13 @@ textarea{
   align-items:center;
   justify-content:center;
   gap:6px;
-  min-height:36px;
-  padding:6px 10px;
+  min-height:44px;
+  padding:8px 10px;
   border:0;
   border-radius:999px;
   background:transparent;
   color: rgba(232,238,247,0.72);
-  font-size:12.5px;
+  font-size: 13.5px;
   font-weight:700;
   letter-spacing:0.01em;
   cursor:pointer;
@@ -2603,7 +2603,7 @@ textarea{
   letter-spacing:-0.01em;
 }
 .createPaneCtaSub{
-  font-size:12.5px;
+  font-size: 13.5px;
   color: rgba(232,238,247,0.74);
   max-width: 32em;
   line-height:1.4;
@@ -2611,7 +2611,7 @@ textarea{
 .createPaneFoot{
   margin: 4px 4px 0;
   text-align:center;
-  font-size:12px;
+  font-size: 13px;
 }
 .inputPanel{
   width:100%;
@@ -2625,7 +2625,7 @@ textarea{
 .inPanelLabel{
   margin:0;
   color: rgba(232,238,247,0.90);
-  font-size: 12.5px;
+  font-size: 13.5px;
   letter-spacing: 0.01em;
 }
 .inputPanel--style input{
@@ -2636,7 +2636,7 @@ textarea{
   position: relative;
   overflow: hidden;
   margin: 0 0 4px;
-  font-size: 12px;
+  font-size: 13px;
   padding: 7px 10px;
 }
 .lyricsAttachBtn input[type="file"]{
@@ -2764,7 +2764,7 @@ textarea{
 .lyricsMagicMenu .ghost{
   justify-content:flex-start;
   width:100%;
-  font-size:12px;
+  font-size: 13px;
   padding:8px 10px;
 }
 .vocalQuickRow{
@@ -2791,7 +2791,7 @@ textarea{
   align-items: center;
   gap: 10px;
   padding: 11px 12px;
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 700;
   letter-spacing: 0.01em;
   color: rgba(232,238,247,0.72);
@@ -2848,7 +2848,7 @@ textarea{
 .vocalModePill .ghost{
   flex: 1;
   min-height: 32px;
-  font-size: 12px;
+  font-size: 13px;
   padding: 6px 10px;
 }
 .vocalModePill .ghost.active{
@@ -2863,7 +2863,7 @@ textarea{
 }
 .imageMoodSummary{
   margin-top:0;
-  font-size:12px;
+  font-size: 13px;
   color: rgba(205,214,230,0.72);
   padding-left: 2px;
 }
@@ -2959,7 +2959,7 @@ textarea{
   min-height:34px;
   border-radius:10px;
   padding:6px 10px;
-  font-size:12px;
+  font-size: 13px;
 }
 body.generateLocked [data-route="generate"] .inputPanel,
 body.generateLocked [data-route="generate"] .stepCard,
@@ -2981,7 +2981,7 @@ body.generateLocked [data-route="generate"] button{
 .referenceModeWrap > summary{
   list-style:none;
   cursor:pointer;
-  font-size:12px;
+  font-size: 13px;
   font-weight:700;
   color:rgba(231,237,247,0.72);
 }
@@ -2995,7 +2995,7 @@ body.generateLocked [data-route="generate"] button{
   color: rgba(255, 229, 179, 0.96);
   border-radius: 10px;
   padding: 8px 10px;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.35;
 }
 .refHintAlert.isCritical{
@@ -3125,7 +3125,7 @@ a.primary:active{
 button:disabled{ opacity:0.5; cursor:not-allowed; }
 .disabled{ opacity:0.55; pointer-events:none; }
 
-.hint{ margin-top:12px; color:var(--muted); font-size:12.5px; line-height:1.4; }
+.hint{ margin-top:12px; color:var(--muted); font-size:14px; line-height:1.4; }
 .stepCard{
   border:1px solid var(--border);
   border-radius:14px;
@@ -3210,7 +3210,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   font-weight: 600;
 }
 .profileUsernamePromptHint{
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
 }
 .profileUsernamePromptCta{
@@ -3245,7 +3245,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
 }
 .profileAccountSectionTitle{
   margin: 0 0 4px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -3311,7 +3311,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   position:absolute;
   bottom:-2px;
   right:-2px;
-  font-size:10px;
+  font-size:11px;
   font-weight:700;
   letter-spacing:0.4px;
   text-transform:uppercase;
@@ -3384,7 +3384,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   opacity: 0.7;
 }
 .profileCreditsChipLabel{
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -3398,7 +3398,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   letter-spacing: -0.01em;
 }
 .profileCreditsChipNote{
-  font-size: 11px;
+  font-size: 13px;
   color: rgba(223, 231, 251, 0.5);
 }
 .profileCreditsChipNote[hidden]{
@@ -3464,7 +3464,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
 .profileInlineSelect{
   margin-top:2px;
   color: var(--muted);
-  font-size:12px;
+  font-size: 13px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 8px;
@@ -3533,7 +3533,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
 }
 .profilePreviewTimbre{
   color: var(--muted);
-  font-size:12px;
+  font-size: 13px;
   margin-top:2px;
 }
 .profilePreviewBio{
@@ -3545,7 +3545,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
 .profilePreviewGenres{
   margin-top:8px;
   color: rgba(168,180,199,0.95);
-  font-size:12px;
+  font-size: 13px;
 }
 .profilePreviewLinks{
   margin-top:8px;
@@ -3556,7 +3556,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
 .profilePreviewLinks .ghost{
   padding:5px 8px;
   border-radius:999px;
-  font-size:11px;
+  font-size: 13px;
 }
 .profileSaveRow{
   justify-content: center;
@@ -3617,7 +3617,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   text-overflow:ellipsis;
 }
 .userPublicVoice{
-  font-size:12.5px;
+  font-size: 13.5px;
   color: rgba(223, 231, 251, 0.78);
   letter-spacing:0.2px;
 }
@@ -3660,7 +3660,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   color: rgba(223, 231, 251, 0.78);
 }
 .userPublicSongsCount{
-  font-size:12px;
+  font-size: 13px;
   color: rgba(223, 231, 251, 0.55);
   font-variant-numeric: tabular-nums;
 }
@@ -3744,7 +3744,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
 }
 .profileAccountEmailInline{
   margin-top: 4px;
-  font-size: 11px;
+  font-size: 13px;
   color: rgba(168,180,199,0.82);
   white-space: nowrap;
   overflow: hidden;
@@ -3853,7 +3853,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   color: rgba(232,238,247,0.92);
 }
 .miniMoreOptions .field .label{
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: 0.01em;
   color: rgba(188,201,222,0.78);
   font-weight: 700;
@@ -3867,7 +3867,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   border-radius: 12px;
 }
 .miniMoreOptions .stepHead{
-  font-size: 12px;
+  font-size: 13px;
   color: rgba(214,224,240,0.86);
 }
 .miniMoreOptions select.isDefaultOption{
@@ -3910,7 +3910,7 @@ body.proMode .proField{
   margin-top:10px;
 }
 .stepDetails summary{
-  font-size:12.5px;
+  font-size: 13.5px;
   color: var(--muted);
 }
 .resultCard{
@@ -3969,7 +3969,7 @@ body.proMode .proField{
   z-index: 2;
   padding: 3px 8px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.04em;
   color: rgba(244,247,255,0.96);
@@ -4034,7 +4034,7 @@ body.proMode .proField{
 }
 .resultTimeLabel{
   flex: 0 0 auto;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: rgba(232,238,247,0.55);
@@ -4074,7 +4074,7 @@ body.proMode .proField{
   gap: 4px;
   padding: 2px 8px 2px 6px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: rgba(155, 245, 211, 0.95);
@@ -4093,7 +4093,7 @@ body.proMode .proField{
 }
 .resultMetaLine{
   margin: 2px 0 0;
-  font-size: 12.5px;
+  font-size: 13.5px;
   line-height: 1.4;
   color: rgba(232,238,247,0.62);
   display: -webkit-box;
@@ -4285,7 +4285,7 @@ button.resultMoreLink{
 
 .progress{ margin-top:12px; height:10px; border-radius:999px; background: rgba(255,255,255,0.08); overflow:hidden; border:1px solid var(--border); }
 .bar{ height:100%; background: linear-gradient(90deg, var(--primary), var(--primary2)); }
-.status{ margin-top:10px; color:var(--muted); font-size:12.5px; }
+.status{ margin-top:10px; color:var(--muted); font-size: 13.5px; }
 
 /* Unified premium slider/bar style */
 input[type="range"]{
@@ -4344,7 +4344,7 @@ input[type="range"]::-moz-range-thumb{
   box-shadow: 0 0 12px rgba(124,92,255,0.35);
 }
 
-.footer{ margin-top:14px; color:var(--muted); font-size:12px; text-align:center; }
+.footer{ margin-top:14px; color:var(--muted); font-size: 13px; text-align:center; }
 .songDetailsModal{
   position: fixed;
   inset: 0;
@@ -4475,7 +4475,7 @@ input[type="range"]::-moz-range-thumb{
     font-weight: 850;
   }
   .brandSecondary{
-    font-size: 12px;
+    font-size: 13px;
     letter-spacing: 0.12em;
     transform: translateY(1px);
     opacity: 0.82;
@@ -4597,7 +4597,7 @@ input[type="range"]::-moz-range-thumb{
   }
   .stepHead{
     margin-bottom: 6px;
-    font-size: 12px;
+    font-size: 13px;
     color: rgba(232,238,247,0.86);
   }
   .advancedGrid{
@@ -4646,17 +4646,17 @@ input[type="range"]::-moz-range-thumb{
   .vocalQuickRow .ghost{
     min-height: 32px;
     padding: 6px 10px;
-    font-size: 12px;
+    font-size: 13px;
   }
   .uploadVocalsName{
     margin-top: 2px;
-    font-size: 12px;
+    font-size: 13px;
   }
   .mobileAdvancedBtn{
     margin-top: 4px;
     margin-bottom: 6px;
     min-height: 34px;
-    font-size: 12.5px;
+    font-size: 13.5px;
   }
 input::placeholder, textarea::placeholder{
   color: rgba(232,238,247,0.36);
@@ -4720,7 +4720,7 @@ input::placeholder, textarea::placeholder{
   margin-bottom: 6px;
 }
 .optionsRecommended{
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: .01em;
   color: rgba(232,238,247,0.72);
   padding: 4px 10px;
@@ -4737,7 +4737,7 @@ input::placeholder, textarea::placeholder{
 .optionsPresetRow .ghost{
   min-height: 34px;
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: 13px;
   white-space: nowrap;
 }
 .fineTuneDetails{
@@ -4752,7 +4752,7 @@ input::placeholder, textarea::placeholder{
 .compactHint{
   margin-top: 4px;
   margin-bottom: 8px;
-  font-size: 12px;
+  font-size: 13px;
   color: rgba(232,238,247,0.56);
 }
 .optionsActions{
@@ -4816,8 +4816,8 @@ input::placeholder, textarea::placeholder{
   .mobileTabbar a{
     text-decoration:none;
     color: rgba(223, 231, 251, 0.55);
-    font-size:10px;
-    font-weight:600;
+    font-size:12px;
+    font-weight:700;
     letter-spacing: 0.15px;
     text-align:center;
     border: 0;
@@ -4847,7 +4847,8 @@ input::placeholder, textarea::placeholder{
   }
   .mobileTabbar a .tabLabel{
     line-height: 1;
-    font-size: 10px;
+    font-size: 12px;
+    font-weight: 700;
     letter-spacing: 0.15px;
   }
   /* Create tab — subtle morph when on Create with inputs ready */
@@ -5073,7 +5074,7 @@ input::placeholder, textarea::placeholder{
   }
   .hubNowMain{ flex:1; min-width:0; }
   .hubNowTitle{
-    font-size:12px;
+    font-size: 13px;
     font-weight:700;
     color: rgba(232,238,248,0.95);
     white-space:nowrap;
@@ -5255,7 +5256,7 @@ input::placeholder, textarea::placeholder{
   color: rgba(232,238,247,0.96);
 }
 .profileQuickLinkSub{
-  font-size: 12px;
+  font-size: 13px;
   color: rgba(232,238,247,0.58);
 }
 .profileQuickLinkChev{
@@ -5285,7 +5286,7 @@ input::placeholder, textarea::placeholder{
   min-width: 0;
 }
 .profilePersonaTitle{
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: rgba(232,238,247,0.55);
@@ -5297,7 +5298,7 @@ input::placeholder, textarea::placeholder{
   color: rgba(232,238,247,0.96);
 }
 .profilePersonaHint{
-  font-size: 12px;
+  font-size: 13px;
   color: rgba(232,238,247,0.62);
   margin-top: 6px;
   line-height: 1.4;
@@ -5383,7 +5384,7 @@ input::placeholder, textarea::placeholder{
   box-shadow: 0 12px 36px -16px rgba(124,92,255,0.55);
 }
 .creditsHeroLabel{
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: 0.10em;
   text-transform: uppercase;
   color: rgba(232,238,247,0.66);
@@ -5404,7 +5405,7 @@ input::placeholder, textarea::placeholder{
   margin-top: 2px;
 }
 .creditsHeroEmail{
-  font-size: 12px;
+  font-size: 13px;
   color: rgba(232,238,247,0.50);
   margin-top: 8px;
 }
@@ -5424,7 +5425,7 @@ input::placeholder, textarea::placeholder{
 }
 .creditsCardLead{
   margin: 0 0 10px;
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: rgba(232,238,247,0.62);
 }
 .creditsRedeemRow{
@@ -5478,7 +5479,7 @@ input::placeholder, textarea::placeholder{
 .creditsRules{
   margin: 0;
   padding: 0 0 0 18px;
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: rgba(232,238,247,0.78);
   line-height: 1.5;
 }
@@ -5538,7 +5539,7 @@ input::placeholder, textarea::placeholder{
   padding: 8px 10px;
 }
 .creditsAdminStatLabel{
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: rgba(232,238,247,0.55);
@@ -5570,7 +5571,7 @@ input::placeholder, textarea::placeholder{
   gap: 8px;
   padding: 6px 8px;
   border-radius: 8px;
-  font-size: 12px;
+  font-size: 13px;
   border: 1px solid rgba(255,255,255,0.06);
   background: rgba(255,255,255,0.02);
 }
@@ -5637,7 +5638,7 @@ input::placeholder, textarea::placeholder{
   letter-spacing: -0.01em;
 }
 .createSoundsBannerSub{
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: rgba(232,238,247,0.66);
 }
 .createSoundsBannerChev{
@@ -5706,7 +5707,7 @@ input::placeholder, textarea::placeholder{
   align-items: center;
 }
 .soundTempoRow .label{
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -5734,7 +5735,7 @@ input::placeholder, textarea::placeholder{
 }
 .soundCostHint{
   margin: 4px 0 0;
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: rgba(232,238,247,0.62);
 }
 .soundGenerateBtn{

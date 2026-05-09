@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510an";
+const APP_BUILD = "20260510ao";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -208,6 +208,10 @@ const els = {
   libraryList: document.getElementById("libraryList"),
   btnLibraryDiagnostic: document.getElementById("btnLibraryDiagnostic"),
   libraryDiagnosticOutput: document.getElementById("libraryDiagnosticOutput"),
+  libraryStorageBanner: document.getElementById("libraryStorageBanner"),
+  libraryStorageBannerText: document.getElementById("libraryStorageBannerText"),
+  btnLibraryFreeSpace: document.getElementById("btnLibraryFreeSpace"),
+  btnLibraryFreeSpaceAlt: document.getElementById("btnLibraryFreeSpaceAlt"),
   hubList: document.getElementById("hubList"),
   hubAudioHint: document.getElementById("hubAudioHint"),
   hubUpdatedAt: document.getElementById("hubUpdatedAt"),
@@ -1695,6 +1699,7 @@ function resetProfileUiToGuest() {
   _libraryHydrateCompleted = false;
   _lastUserSongInsertFailure = "";
   _lastLibraryPersistError = "";
+  _lastLibraryPersistedCount = 0;
   invalidateLibraryMemCache();
   renderProfilePreviewFromInputs();
   renderProfileHubShared();
@@ -4097,6 +4102,39 @@ let libVisibleCount = LIB_PAGE_SIZE;
 // shrinks; when a new song lands, we keep the user's scrolled position).
 let _libLastTotal = -1;
 
+/** Inline warning when localStorage couldn't fit the full Library or
+ *  quota blocked writes. Hidden when persistence matches memory. */
+function syncLibraryStorageBanner() {
+  const b = els.libraryStorageBanner;
+  const txt = els.libraryStorageBannerText;
+  const alt = els.btnLibraryFreeSpaceAlt;
+  if (!b || !txt) return;
+  const items = loadLibrary();
+  const memN = items.length;
+  const persistShort =
+    memN > 0 && _lastLibraryPersistedCount < memN;
+  const show =
+    Boolean(authSession?.user?.id) &&
+    (Boolean(_lastLibraryPersistError) || persistShort);
+  if (!show) {
+    b.hidden = true;
+    if (alt) alt.hidden = true;
+    return;
+  }
+  let msg = "";
+  if (_lastLibraryPersistError === "quota") {
+    msg =
+      "Device storage is tight — not everything could be saved offline. Tap to clear cache.";
+  } else if (_lastLibraryPersistError) {
+    msg = `Couldn't save the full library on this device (${_lastLibraryPersistError}). Tap to free space.`;
+  } else {
+    msg = `${_lastLibraryPersistedCount} of ${memN} songs saved locally — tap to free space and retry.`;
+  }
+  txt.textContent = msg;
+  b.hidden = false;
+  if (alt) alt.hidden = false;
+}
+
 function renderLibrary() {
   if (!els.libraryList) return;
   // Re-rendering blows away the lazy-built menu DOM (it's not in the
@@ -4105,6 +4143,7 @@ function renderLibrary() {
   // close-then-noop.
   _libraryOpenMenuId = "";
   const items = loadLibrary();
+  syncLibraryStorageBanner();
   const totalCount = items.length;
   // Reset the window if the underlying list shrunk OR is the same size
   // as last render but only on a full re-render after a route swap. The
@@ -4326,6 +4365,21 @@ if (els.btnCloseSongDetails) {
 }
 if (els.btnLibraryDiagnostic) {
   els.btnLibraryDiagnostic.addEventListener("click", () => void runLibraryDiagnostic());
+}
+function handleLibraryFreeSpaceClick() {
+  freeUpLocalStorage();
+  // Re-persist whatever's in mem cache so the user sees a green banner.
+  const items = loadLibrary();
+  if (items.length) saveLibrary(items);
+  syncLibraryStorageBanner();
+  setStatus("Cleared cached space — Library will sync fresh on next launch.");
+  void ensureUserLibraryHydrated();
+}
+if (els.btnLibraryFreeSpace) {
+  els.btnLibraryFreeSpace.addEventListener("click", handleLibraryFreeSpaceClick);
+}
+if (els.btnLibraryFreeSpaceAlt) {
+  els.btnLibraryFreeSpaceAlt.addEventListener("click", handleLibraryFreeSpaceClick);
 }
 
 // Vocal Room state

@@ -773,6 +773,31 @@ body.isAuth .hubNowPlaying{ display:none !important; }
 .libraryDiagActions{
   margin: 12px 0 0;
   text-align: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+.libraryStorageBanner{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(255, 180, 90, 0.12);
+  border: 1px solid rgba(255, 200, 120, 0.28);
+}
+.libraryStorageBannerText{
+  flex: 1 1 200px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(232, 238, 247, 0.92);
+  text-align: left;
 }
 .libraryDiagBtn{
   font-size: 11px;

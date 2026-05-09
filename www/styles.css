@@ -1010,6 +1010,39 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   #hubList .hubRow{ transition: none; }
 }
 
+/* "Load more" affordance at the end of the Hub feed. The sentinel is
+ * also the IntersectionObserver target — once it scrolls into view the
+ * observer fires its click handler so the feed feels endless without
+ * us paying to render every row up front. */
+.hubLoadMoreWrap{
+  display: flex;
+  justify-content: center;
+  padding: 14px 8px 4px;
+}
+.hubLoadMore{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 18px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(232, 238, 247, 0.86);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 160ms ease, color 160ms ease, transform 140ms ease;
+}
+.hubLoadMore:hover{
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+.hubLoadMore:active{
+  transform: scale(0.98);
+}
+
 /* -----------------------------------------------------------------
  *  Hub card polish (Build 20260508s)
  *  Hierarchy + a few quality-of-life touches so the playing card

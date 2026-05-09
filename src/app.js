@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510u";
+const APP_BUILD = "20260510v";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -547,7 +547,12 @@ function onHubTrackEnded(endedPostId) {
 function ensureHubAudio() {
   if (hubAudio) return hubAudio;
   const a = new Audio();
-  a.preload = "auto";
+  // `metadata` fetches just the headers (~16 KB) so we know duration
+  // without committing to the entire file. The full bytes only arrive
+  // when the user actually presses play, which keeps cellular cold-starts
+  // snappy. Once playback starts the browser switches to streaming
+  // automatically.
+  a.preload = "metadata";
   a.addEventListener("ended", () => {
     const endedPostId = hubAudioPostId;
     stopHubPlayback();
@@ -863,6 +868,24 @@ async function loadPublicConfig() {
     rawUrl = rawUrl.replace(/\/auth\/v1$/i, "");
     SUPABASE_URL = rawUrl;
     SUPABASE_ANON_KEY = String(d?.supabaseAnonKey || "");
+    // Once we know the Supabase host, hint the browser so the very first
+    // hub_posts query opens TLS instantly. Idempotent — multiple calls
+    // just stack identical <link> tags which the browser collapses.
+    if (SUPABASE_URL) addPreconnectHint(SUPABASE_URL);
+  } catch {}
+}
+const _addedPreconnects = new Set();
+function addPreconnectHint(url) {
+  try {
+    const u = new URL(url, location.origin);
+    const origin = `${u.protocol}//${u.host}`;
+    if (_addedPreconnects.has(origin)) return;
+    _addedPreconnects.add(origin);
+    const link = document.createElement("link");
+    link.rel = "preconnect";
+    link.href = origin;
+    link.crossOrigin = "anonymous";
+    document.head.appendChild(link);
   } catch {}
 }
 function haptic(kind = "light") {
@@ -1522,7 +1545,11 @@ async function supabaseSelectHub() {
     "proof",
     "meta",
   ].join(",");
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(selectCols)}&order=created_at.desc&limit=60`, {
+  // 30 rows is enough to fill the visible feed plus a healthy backlog
+  // for the IntersectionObserver "Load more" path. Older posts are
+  // still reachable via subsequent paginated fetches if we ever need
+  // them (kept in sync with HUB_PAGE_SIZE * ~1.5).
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(selectCols)}&order=created_at.desc&limit=30`, {
     headers: {
       apikey: SUPABASE_ANON_KEY,
     },
@@ -2077,6 +2104,13 @@ function hubTrendingScore(post, nowMs) {
   const decay = Math.pow(0.5, ageHours / HUB_TRENDING_HALF_LIFE_HOURS);
   return (engagement + 1) * decay;
 }
+// Initial Hub render shows just enough rows to fill the first viewport;
+// the rest reveals via "Load more" + an IntersectionObserver sentinel.
+// Keeping this small means cold opens on cellular don't kick off 60
+// parallel cover requests.
+const HUB_PAGE_SIZE = 24;
+let hubVisibleCount = HUB_PAGE_SIZE;
+let _hubLastRenderedFilter = null;
 function renderHub() {
   if (!els.hubList) return;
   let items = loadHubFeed();
@@ -2105,10 +2139,33 @@ function renderHub() {
     updateHubAudioHint();
     return;
   }
-  els.hubList.innerHTML = items.map((p) => `
+  // Filter switch resets the visible window so users always start at
+  // the top of the new sort. New posts trickling in (DESC by created_at)
+  // slot at the top automatically without resetting.
+  if (_hubLastRenderedFilter !== hubFilter) {
+    _hubLastRenderedFilter = hubFilter;
+    hubVisibleCount = HUB_PAGE_SIZE;
+  }
+  const totalCount = items.length;
+  const visibleItems = items.slice(0, Math.min(hubVisibleCount, totalCount));
+  const hasMore = totalCount > visibleItems.length;
+  els.hubList.innerHTML = visibleItems.map((p, i) => {
+    // First row gets the eager + high-priority treatment so the user's
+    // first impression is sharp; everything else loads lazily.
+    const isFirst = i === 0;
+    const loadingAttr = isFirst ? `loading="eager" fetchpriority="high"` : `loading="lazy" fetchpriority="low"`;
+    const coverSrc = toCoverThumbUrl(
+      p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png",
+      { width: 480, quality: 72 },
+    );
+    const avatarSrc = toCoverThumbUrl(
+      p.creatorAvatar || "./assets/nabadai-logo.png",
+      { width: 48, quality: 70 },
+    );
+    return `
     <div class="trackRow hubRow" data-hub-row="${p.id}">
       <div class="hubCoverWrap" data-hub-cover="${p.id}">
-        <img class="hubCover" src="${escapeHtml(p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png")}" alt="cover" />
+        <img class="hubCover" src="${escapeHtml(coverSrc)}" alt="cover" decoding="async" ${loadingAttr} />
         <div class="hubCoverScrim" aria-hidden="true"></div>
         <div class="hubEq" aria-hidden="true"><i></i><i></i><i></i></div>
         <button class="hubPlayOverlay" data-hub-play="${p.id}" aria-label="Play">▶</button>
@@ -2117,7 +2174,7 @@ function renderHub() {
       </div>
       <div class="hubBody">
         <div class="hubMetaTop">
-          <img class="hubAvatar" src="${escapeHtml(p.creatorAvatar || "./assets/nabadai-logo.png")}" alt="avatar" data-hub-user="${p.id}" />
+          <img class="hubAvatar" src="${escapeHtml(avatarSrc)}" alt="avatar" width="24" height="24" decoding="async" loading="lazy" data-hub-user="${p.id}" />
           <div class="hubMetaText">
             <span class="hubCreator" data-hub-user="${p.id}">@${escapeHtml(p.creator)}</span>
             <span class="hubMetaDot">·</span>
@@ -2155,7 +2212,33 @@ function renderHub() {
         <button class="ghost" data-hub-del="${p.id}">Remove</button>
       </div>
     </div>
-  `).join("");
+  `;
+  }).join("") + (hasMore ? `
+    <div class="hubLoadMoreWrap" data-hub-loadmore-sentinel>
+      <button type="button" class="hubLoadMore" id="hubLoadMore">Load more</button>
+    </div>
+  ` : "");
+  // Auto-trigger Load more when the sentinel scrolls into view, so the
+  // feed feels endless without us having to render 60 rows up front.
+  const loadMoreBtn = document.getElementById("hubLoadMore");
+  const sentinel = els.hubList.querySelector("[data-hub-loadmore-sentinel]");
+  if (loadMoreBtn) {
+    loadMoreBtn.addEventListener("click", () => {
+      hubVisibleCount = Math.min(loadHubFeed().length, hubVisibleCount + HUB_PAGE_SIZE);
+      renderHub();
+    });
+  }
+  if (sentinel && typeof IntersectionObserver === "function") {
+    const io = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        io.disconnect();
+        loadMoreBtn?.click();
+        break;
+      }
+    }, { rootMargin: "240px 0px" });
+    io.observe(sentinel);
+  }
   renderHubDots();
   renderHubUpdatedAt();
   els.hubList.querySelectorAll("[data-hub-play]").forEach((b) =>
@@ -4256,6 +4339,40 @@ function rememberHubBlob(postId, objectUrl) {
  * URL so the browser can fetch from the origin and skip our serverless
  * function entirely. Anything else (raw https URL, blob:, data:) passes
  * through unchanged. */
+/** Rewrite Supabase Storage public URLs through the image transformer
+ *  for a smaller, faster thumbnail. Anything else (Suno CDN URLs,
+ *  data/blob URLs, local assets) is returned unchanged so this helper
+ *  is safe to apply blanket-fashion to any cover/avatar `<img src>`.
+ *
+ *  Supabase pricing: image transformations are billed per
+ *  transformation, but the resulting WebP is heavily cached at the
+ *  edge so the marginal cost on a feed reload is essentially zero.
+ *
+ *  Why we don't proxy Suno covers: their CDN is already fast and they
+ *  serve reasonably compressed JPEGs. Routing them through a Vercel
+ *  function would double-pay bandwidth and add a hop for no real win.
+ */
+function toCoverThumbUrl(url, opts) {
+  const s = String(url || "").trim();
+  if (!s) return "";
+  if (s.startsWith("data:") || s.startsWith("blob:") || s.startsWith("./")) return s;
+  // Only touch Supabase Storage public-object URLs. The transformer is
+  // exposed at `/storage/v1/render/image/public/...` with the same path
+  // segment after `public/` as the original object URL.
+  const match = s.match(/^(https?:\/\/[^/]+)\/storage\/v1\/object\/(public|sign)\/(.+)$/i);
+  if (!match) return s;
+  const [, origin, mode, rest] = match;
+  const w = Number(opts?.width || 240);
+  const q = Number(opts?.quality || 70);
+  // Strip any query string the original URL carried (e.g. signed token);
+  // signed URLs would need different handling and we'd refuse to thumb
+  // them anyway, since the signature ties the response to the original
+  // path. For public objects, this is a clean rewrite.
+  if (mode !== "public") return s;
+  const cleanRest = rest.split("?")[0].split("#")[0];
+  return `${origin}/storage/v1/render/image/public/${cleanRest}?width=${w}&quality=${q}&resize=cover`;
+}
+
 function preferDirectAudioUrl(url) {
   const s = String(url || "").trim();
   if (!s || s === "#") return "";
@@ -4304,8 +4421,27 @@ async function fetchHubTrackIntoBlob(postId, rawUrl) {
   return job;
 }
 
+/** Whether the current network looks fast enough to spend bytes on
+ * speculative preloads. Returns true on WiFi/4G+ and unknown (when the
+ * Network Information API isn't available, we don't penalize the user
+ * — they probably have a fast connection). Returns false on 2g/3g and
+ * when the user has explicitly opted into Data Saver. */
+function shouldPreloadHubBytes() {
+  try {
+    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (!conn) return true;
+    if (conn.saveData) return false;
+    const t = String(conn.effectiveType || "").toLowerCase();
+    if (t === "slow-2g" || t === "2g" || t === "3g") return false;
+    return true;
+  } catch {
+    return true;
+  }
+}
+
 function preloadNextHubTrack(currentPostId) {
   if (!currentPostId) return;
+  if (!shouldPreloadHubBytes()) return;
   const root = els.hubList;
   if (!root) return;
   const currentRow = root.querySelector(`[data-hub-row="${currentPostId}"]`);
@@ -4480,6 +4616,9 @@ function focusHubPostFromShare(postId) {
 
 function preloadInitialHubTracks() {
   if (!els.hubList) return;
+  // Skip the eager first-track download on slow networks. The user pays
+  // a small "first tap" delay later, but the Hub feed itself paints fast.
+  if (!shouldPreloadHubBytes()) return;
   const firstRow = els.hubList.querySelector("[data-hub-row]");
   if (!firstRow) return;
   const id = firstRow.getAttribute("data-hub-row");

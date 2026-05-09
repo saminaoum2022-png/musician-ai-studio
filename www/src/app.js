@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510al";
+const APP_BUILD = "20260510am";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1007,6 +1007,17 @@ function applyRoute() {
     // the tab never flashes empty while `reconcileLibraryFromCloud` waits
     // for idle + network (scheduled from hashchange).
     renderLibrary();
+    // If we're logged in but local JSON is still empty (hydrate failed,
+    // storage quota, or first tap landed before boot finished), pull once
+    // with `force` so the 30s reconcile throttle doesn't block recovery.
+    if (authSession?.user?.id && !loadLibrary().length) {
+      const run = () => void reconcileLibraryFromCloud({ force: true });
+      if (typeof requestIdleCallback === "function") {
+        requestIdleCallback(run, { timeout: 1200 });
+      } else {
+        setTimeout(run, 0);
+      }
+    }
   }
   if (wanted === "user") {
     renderUserProfile(pendingPublicUsername);
@@ -1683,6 +1694,7 @@ function resetProfileUiToGuest() {
   _libraryHydrateInFlight = false;
   _libraryHydrateCompleted = false;
   _lastUserSongInsertFailure = "";
+  _lastLibraryPersistError = "";
   invalidateLibraryMemCache();
   renderProfilePreviewFromInputs();
   renderProfileHubShared();
@@ -2948,6 +2960,14 @@ function renderProfileHubShared() {
   });
 }
 
+/** Max tracks persisted locally (matches `addToLibrary`). Keeps JSON under
+ *  typical mobile localStorage limits when cloud merge pulls 100+ rows. */
+const LIBRARY_MAX_TRACKS = 100;
+
+function capLibraryItems(items) {
+  return Array.isArray(items) ? items.slice(0, LIBRARY_MAX_TRACKS) : [];
+}
+
 /** Parsed Library JSON — `loadLibrary()` can run many times per tick
  *  (render, reconcile, handlers). Re-parsing a multi-megabyte string
  *  (custom covers as base64 in meta) was a major source of jank.
@@ -3103,13 +3123,37 @@ function loadAllLocalSongsDeduped() {
   } catch {}
   return merged.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
 }
+let _lastLibraryPersistError = "";
+
 function saveLibrary(items) {
+  const capped = capLibraryItems(items);
   try {
     const key = getLibraryStorageKey();
-    localStorage.setItem(key, JSON.stringify(items || []));
-    _libraryMemCache = Array.isArray(items) ? items : [];
+    localStorage.setItem(key, JSON.stringify(capped));
+    _libraryMemCache = capped;
     _libraryMemCacheKey = key;
-  } catch {}
+    _lastLibraryPersistError = "";
+  } catch (e) {
+    const quota =
+      e &&
+      (e.name === "QuotaExceededError" ||
+        e.code === 22 ||
+        /quota|exceeded|storage/i.test(String(e.message || "")));
+    _lastLibraryPersistError = quota ? "quota" : String(e?.message || e || "save_failed").slice(0, 120);
+    try {
+      const key = getLibraryStorageKey();
+      const tinier = capped.slice(0, Math.min(40, LIBRARY_MAX_TRACKS));
+      localStorage.setItem(key, JSON.stringify(tinier));
+      _libraryMemCache = tinier;
+      _libraryMemCacheKey = key;
+      _lastLibraryPersistError = "";
+      setStatus("Library partially saved — device storage is almost full.");
+    } catch {
+      try {
+        setStatus("Can't save library locally (storage full or blocked). Cloud still has your songs.");
+      } catch {}
+    }
+  }
 }
 function patchLibraryTrack(id, patch) {
   if (!id) return;
@@ -3154,12 +3198,31 @@ async function syncHubCoverForTrack(track, coverUrl) {
 function saveLibraryFor(id, items) {
   try {
     const writeKey = profileLibraryKeyFor(id);
-    localStorage.setItem(writeKey, JSON.stringify(items || []));
+    const capped = capLibraryItems(items);
+    localStorage.setItem(writeKey, JSON.stringify(capped));
     if (writeKey === getLibraryStorageKey()) {
-      _libraryMemCache = Array.isArray(items) ? items : [];
+      _libraryMemCache = capped;
       _libraryMemCacheKey = writeKey;
+      _lastLibraryPersistError = "";
     }
-  } catch {}
+  } catch (e) {
+    const quota =
+      e &&
+      (e.name === "QuotaExceededError" ||
+        e.code === 22 ||
+        /quota|exceeded|storage/i.test(String(e.message || "")));
+    _lastLibraryPersistError = quota ? "quota" : String(e?.message || e || "save_failed").slice(0, 120);
+    try {
+      const writeKey = profileLibraryKeyFor(id);
+      const tinier = capLibraryItems(items).slice(0, 40);
+      localStorage.setItem(writeKey, JSON.stringify(tinier));
+      if (writeKey === getLibraryStorageKey()) {
+        _libraryMemCache = tinier;
+        _libraryMemCacheKey = writeKey;
+        _lastLibraryPersistError = "";
+      }
+    } catch {}
+  }
 }
 
 /** True from the moment we know we *intend* to hydrate (synchronously,
@@ -3200,16 +3263,12 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
     if (_libraryHydrateInFlight) {
       _libraryHydrateInFlight = false;
       _libraryHydrateCompleted = true;
-      if (String(activeProfile.id) === uid) {
-        try { renderLibrary(); } catch {}
-      }
+      try { renderLibrary(); } catch {}
     }
   }, 15000);
   // Repaint the Library tab immediately so the loading state can show
   // before the first network response lands.
-  if (String(activeProfile.id) === uid) {
-    try { renderLibrary(); } catch {}
-  }
+  try { renderLibrary(); } catch {}
 
   // 1) Load cloud + local candidates and merge-dedupe.
   const cloudSongs =
@@ -3247,10 +3306,8 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
   _libraryHydrateInFlight = false;
   _libraryHydrateCompleted = true;
   clearTimeout(safetyTimer);
-  if (String(activeProfile.id) === uid) {
-    saveLibrary(merged);
-    renderLibrary();
-  }
+  saveLibrary(merged);
+  renderLibrary();
 
   if (!merged.length) return;
 
@@ -3279,14 +3336,12 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
     const cloudAfter = await supabaseLoadUserSongs();
     const finalSongs = cloudAfter.length ? cloudAfter : merged;
     saveLibraryFor(uid, finalSongs);
-    if (String(activeProfile.id) === uid) {
-      saveLibrary(finalSongs);
-      renderLibrary();
-      if (failCount > 0) {
-        setStatus(`Library sync partial: ${okCount} uploaded, ${failCount} failed (${firstFail.slice(0, 90)})`);
-      } else if (okCount > 0) {
-        setStatus(`Library sync complete: ${okCount} new songs uploaded.`);
-      }
+    saveLibrary(finalSongs);
+    renderLibrary();
+    if (failCount > 0) {
+      setStatus(`Library sync partial: ${okCount} uploaded, ${failCount} failed (${firstFail.slice(0, 90)})`);
+    } else if (okCount > 0) {
+      setStatus(`Library sync complete: ${okCount} new songs uploaded.`);
     }
     _libraryReconcileLastAt = Date.now();
   })();
@@ -3400,7 +3455,7 @@ function addToLibrary(track) {
     meta: track.meta || null,
   };
   items.unshift(newTrack);
-  saveLibrary(items.slice(0, 100));
+  saveLibrary(items);
   renderLibrary();
   void (async () => {
     const ins = await supabaseInsertUserSong(newTrack);
@@ -4017,12 +4072,16 @@ function renderLibrary() {
       const failLine = _lastUserSongInsertFailure
         ? `<p class="emptyStateHint" style="margin-top:10px;font-size:12px;line-height:1.45;opacity:0.88">Last cloud save error: ${escapeHtml(_lastUserSongInsertFailure)}</p>`
         : "";
+      const persistLine = _lastLibraryPersistError
+        ? `<p class="emptyStateHint" style="margin-top:10px;font-size:12px;line-height:1.45;opacity:0.88">Local device save: ${escapeHtml(_lastLibraryPersistError)} — try freeing Safari storage or reinstalling the app shortcut.</p>`
+        : "";
       els.libraryList.innerHTML = `
         <div class="emptyState">
           <div class="emptyStateIcon" aria-hidden="true">♪</div>
           <p class="emptyStateTitle">No songs synced yet</p>
           <p class="emptyStateHint">The cloud has no songs stored for your account yet. Create one here while logged in — it should appear after generation. If you used Safari before adding this app to your Home Screen, open the site in Safari once so older local songs can upload.</p>
           ${failLine}
+          ${persistLine}
           <button type="button" class="emptyStateCta" id="libraryEmptyUploadAgain" style="margin-top:10px;border:none;cursor:pointer;font:inherit">Try sync from this device</button>
           <a href="#/generate" class="emptyStateCta" data-route-link="generate" style="margin-top:8px;display:inline-flex">Create a song</a>
         </div>

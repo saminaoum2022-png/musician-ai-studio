@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509persona";
+const APP_BUILD = "20260509persona2";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -2582,7 +2582,12 @@ function shareToHub(track) {
     reacts: { melody: 0, lyrics: 0, mix: 0, groove: 0 },
     remixOf: track?.remixOf || "",
     proof,
-    meta: { ...(track.meta || {}), creatorUserId },
+    meta: {
+      ...(track.meta || {}),
+      creatorUserId,
+      taskId: String(track.taskId || track?.meta?.taskId || ""),
+      audioId: String(track.audioId || track?.meta?.audioId || ""),
+    },
   };
   feed.unshift(newPost);
   saveHubFeed(feed.slice(0, 200));
@@ -2757,6 +2762,7 @@ function renderHub() {
       </div>
       <div class="libMenu hubMoreMenu" id="hubMore_${p.id}" style="display:none">
         <button class="ghost" data-hub-remix="${p.id}">Remix</button>
+        <button class="ghost" data-hub-persona="${p.id}">Use this voice (persona)</button>
         <button class="ghost" data-hub-del="${p.id}">Remove</button>
       </div>
     </div>
@@ -2869,6 +2875,14 @@ function renderHub() {
     location.hash = "#/generate";
     setStatus(`Remix seed loaded from Hub: ${p.title}`);
     syncGenerateOrbVisibility();
+  }));
+  els.hubList.querySelectorAll("[data-hub-persona]").forEach((b) => b.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    const id = b.getAttribute("data-hub-persona");
+    const p = loadHubFeed().find((x) => x.id === id);
+    if (!p) return;
+    document.getElementById(`hubMore_${id}`)?.style.setProperty("display", "none");
+    await createPersonaFromHubPost(p);
   }));
   els.hubList.querySelectorAll("[data-hub-user]").forEach((u) => u.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -3109,6 +3123,56 @@ function addPersona(personaId, label) {
   }
   savePersonaSelection(id);
   renderPersonaSelect();
+}
+
+async function createPersonaFromHubPost(post) {
+  const taskId = String(post?.meta?.taskId || "").trim();
+  const creator = String(post?.creator || "artist").trim() || "artist";
+  const title = String(post?.title || "song").trim() || "song";
+  if (!taskId) {
+    const msg = "This post is older and doesn't carry a voice signature. Try a newer post.";
+    setStatus(msg);
+    showToast(msg, { icon: "!", durationMs: 3600 });
+    return;
+  }
+  const ok = window.confirm(
+    `Save @${creator}'s voice from "${title}" as a persona you can reuse?`
+  );
+  if (!ok) return;
+  try {
+    setLoading(true, {
+      title: "Saving voice…",
+      sub: `Capturing @${creator}'s vocal style as a persona.`,
+    });
+    showToast("Saving voice as persona…", { icon: "♪", durationMs: 2400 });
+    const r = await fetch(apiUrl("/api/suno/persona"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ taskId }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const det = d?.lastError || d?.details;
+      const extra = det
+        ? ` — ${typeof det === "string" ? det : JSON.stringify(det).slice(0, 200)}`
+        : "";
+      throw new Error((d?.error || "Persona creation failed") + extra);
+    }
+    const personaId = String(d?.personaId || "").trim();
+    if (!personaId) throw new Error("Persona created but ID was missing.");
+    const label = `@${creator} · ${title}`.slice(0, 60);
+    addPersona(personaId, label);
+    if (els.sunoPersonaId) els.sunoPersonaId.value = personaId;
+    const okMsg = `Saved @${creator}'s voice. It will be used on your next generations.`;
+    setStatus(okMsg);
+    showToast(`Voice saved: @${creator}`, { icon: "✓", durationMs: 3200 });
+  } catch (e) {
+    const errMsg = `Couldn't save voice: ${e?.message || String(e)}`;
+    setStatus(errMsg);
+    showToast(errMsg, { icon: "!", durationMs: 4400 });
+  } finally {
+    setLoading(false);
+  }
 }
 
 let profileEditing = false;
@@ -9847,12 +9911,15 @@ if (els.sunoPersonaId) {
 if (els.btnCreatePersona) {
   els.btnCreatePersona.addEventListener("click", async () => {
     if (!sunoTaskId) {
-      setStatus("Generate a song first, then create persona from that song.");
+      const msg = "Generate a song first, then come back and tap this.";
+      setStatus(msg);
+      showToast(msg, { icon: "♪", durationMs: 3200 });
       return;
     }
     try {
       els.btnCreatePersona.disabled = true;
       setLoading(true, { title: "Creating persona…", sub: "Building persona from your last generated song." });
+      showToast("Creating persona from your last song…", { icon: "♪", durationMs: 2400 });
       const r = await fetch(apiUrl("/api/suno/persona"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -9870,9 +9937,13 @@ if (els.btnCreatePersona) {
       if (!personaId) throw new Error("Persona created but ID was missing.");
       addPersona(personaId, `${lastSunoTitle || "Generated"} persona`);
       if (els.sunoPersonaId) els.sunoPersonaId.value = personaId;
-      setStatus("Persona created and selected for next generations.");
+      const okMsg = "Persona saved and selected. It will be used on your next generations.";
+      setStatus(okMsg);
+      showToast("Persona saved & selected", { icon: "✓", durationMs: 3000 });
     } catch (e) {
-      setStatus(`Persona failed: ${e?.message || String(e)}`);
+      const errMsg = `Persona failed: ${e?.message || String(e)}`;
+      setStatus(errMsg);
+      showToast(errMsg, { icon: "!", durationMs: 4200 });
     } finally {
       els.btnCreatePersona.disabled = false;
       setLoading(false);

@@ -7,7 +7,7 @@
  *   (used by ../_lib/credits-auth to verify the user and debit credits)
  *
  * Credit handling:
- *  - Debits FULL_SONG_COST (10 credits) BEFORE calling Suno.
+ *  - Debits FULL_SONG_COST (12 credits) BEFORE calling Suno.
  *  - Refunds the full amount if Suno rejects the request synchronously.
  *  - Per-task callback failures are NOT auto-refunded here (the response
  *    from Suno was 200 — the song could still arrive). We rely on the

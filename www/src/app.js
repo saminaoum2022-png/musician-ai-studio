@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510x";
+const APP_BUILD = "20260510y";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -3197,20 +3197,45 @@ async function backfillLibraryThumbsLazy() {
   }
 }
 
+// Library pagination — same pattern as Hub. Rendering 100 rows at once
+// builds ~1000 DOM nodes (each row has a hidden 7-button menu) and binds
+// ~900 listeners across the row/menu queries, which is what made the
+// Library feel slow even though Hub was snappy. We render 24 by default
+// and auto-extend via an IntersectionObserver on the "Load more" sentinel.
+const LIB_PAGE_SIZE = 24;
+let libVisibleCount = LIB_PAGE_SIZE;
+// Tracks total items count from the previous render so we know when to
+// reset the visible window (e.g. when a song is deleted, the list
+// shrinks; when a new song lands, we keep the user's scrolled position).
+let _libLastTotal = -1;
+
 function renderLibrary() {
   if (!els.libraryList) return;
   const items = loadLibrary();
+  const totalCount = items.length;
+  // Reset the window if the underlying list shrunk OR is the same size
+  // as last render but only on a full re-render after a route swap. The
+  // simplest heuristic: any time the count drops, snap back to page 1.
+  if (_libLastTotal !== -1 && totalCount < _libLastTotal) {
+    libVisibleCount = LIB_PAGE_SIZE;
+  }
+  // Always cap to page size when the count just became "small enough" to
+  // fit on a single page anyway.
+  if (totalCount <= LIB_PAGE_SIZE) libVisibleCount = LIB_PAGE_SIZE;
+  _libLastTotal = totalCount;
+  const visibleItems = items.slice(0, Math.min(libVisibleCount, totalCount));
+  const hasMore = totalCount > visibleItems.length;
   const countEl = document.getElementById("libraryCount");
   if (countEl) {
-    if (!items.length) {
+    if (!totalCount) {
       countEl.textContent = "";
       countEl.hidden = true;
     } else {
-      countEl.textContent = `${items.length} saved`;
+      countEl.textContent = `${totalCount} saved`;
       countEl.hidden = false;
     }
   }
-  if (!items.length) {
+  if (!totalCount) {
     els.libraryList.innerHTML = `
       <div class="emptyState">
         <div class="emptyStateIcon" aria-hidden="true">♪</div>
@@ -3223,7 +3248,7 @@ function renderLibrary() {
   }
   els.libraryList.innerHTML = `
     <ul class="libraryRows" role="list">
-      ${items.map((t, i) => {
+      ${visibleItems.map((t, i) => {
         // Prefer the small thumbnail when one is saved (custom covers
         // generate it on save). Fall back to the full-size cover, then
         // the original artUrl, then the bundled placeholder. Library
@@ -3275,7 +3300,35 @@ function renderLibrary() {
         `;
       }).join("")}
     </ul>
+    ${hasMore ? `
+      <div class="libLoadMoreWrap" data-lib-loadmore-sentinel>
+        <button type="button" class="libLoadMore" id="libLoadMore">Load more</button>
+      </div>
+    ` : ""}
   `;
+  // Mirror Hub's auto-extension: clicking "Load more" reveals another
+  // page; an IntersectionObserver on the sentinel auto-clicks it as the
+  // user scrolls so the list feels endless without burning the initial
+  // paint budget.
+  const libLoadMoreBtn = document.getElementById("libLoadMore");
+  const libSentinel = els.libraryList.querySelector("[data-lib-loadmore-sentinel]");
+  if (libLoadMoreBtn) {
+    libLoadMoreBtn.addEventListener("click", () => {
+      libVisibleCount = Math.min(loadLibrary().length, libVisibleCount + LIB_PAGE_SIZE);
+      renderLibrary();
+    });
+  }
+  if (libSentinel && typeof IntersectionObserver === "function") {
+    const io = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        io.disconnect();
+        libLoadMoreBtn?.click();
+        break;
+      }
+    }, { rootMargin: "240px 0px" });
+    io.observe(libSentinel);
+  }
   els.libraryList.querySelectorAll("[data-lib-play]").forEach((btn) => {
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();

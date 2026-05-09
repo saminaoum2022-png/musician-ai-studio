@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509hubminihide";
+const APP_BUILD = "20260510hubpub";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -2891,33 +2891,11 @@ function isHubCloudUuid(id) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(id || ""));
 }
 
-/** When the user deletes a library song, drop matching Hub posts they shared (same audio URL + creator) locally and in hub_posts. */
-function removeHubPostsLinkedToLibraryTrack(track) {
-  const songUrl = String(track?.url || "").trim();
-  if (!songUrl) return;
-  const myCreator = String(activeProfile.username || "guest").trim();
-  const feed = loadHubFeed();
-  const matches = feed.filter((p) => {
-    const sameUrl = String(p?.url || "").trim() === songUrl;
-    const mine = String(p?.creator || "").trim() === myCreator;
-    return sameUrl && mine;
-  });
-  if (!matches.length) return;
-  const dropIds = new Set(matches.map((p) => String(p.id)));
-  const next = feed.filter((p) => !dropIds.has(String(p.id)));
-  saveHubFeed(next);
-  for (const post of matches) {
-    const hid = String(post?.id || "");
-    if (isHubCloudUuid(hid)) {
-      void supabaseDeleteHub(hid).catch(() => {});
-    }
-  }
-  try {
-    if ((document.body.getAttribute("data-route") || "") === "hub") renderHub();
-    renderHubDots();
-    renderProfileHubShared();
-  } catch {}
-}
+/** Removed in 20260510hubpub. Library deletion no longer cascades to
+ *  Hub — Library is private, Hub is public, and a private action
+ *  shouldn't surprise-edit the public feed. To take a song off Hub
+ *  the user goes to Profile → Songs on Hub → ⋯ → Unpublish from Hub.
+ *  See `unpublishHubPostById` for the canonical unpublish path. */
 function loadHubFeed() {
   return Array.isArray(hubFeedMemory) ? hubFeedMemory : [];
 }
@@ -3244,7 +3222,6 @@ function renderHub() {
       <div class="libMenu hubMoreMenu" id="hubMore_${p.id}" style="display:none">
         <button class="ghost" data-hub-remix="${p.id}">Remix</button>
         <button class="ghost" data-hub-persona="${p.id}">Save voice as persona</button>
-        <button class="ghost" data-hub-del="${p.id}">Remove</button>
       </div>
     </div>
   `;
@@ -4000,6 +3977,57 @@ function renderUserProfile(rawUsername) {
   }
 }
 
+/** Take a song off Hub. The canonical unpublish path: removes the row
+ *  from `hub_posts` (Supabase, RLS-gated to the creator) and from the
+ *  local feed cache, then repaints Profile + Hub. Library is left
+ *  untouched — that's the user's private inventory. */
+async function unpublishHubPostById(id) {
+  const hid = String(id || "").trim();
+  if (!hid) return false;
+  const feed = loadHubFeed();
+  const post = feed.find((x) => String(x.id) === hid);
+  // Optimistic local removal so the UI feels instant.
+  saveHubFeed(feed.filter((x) => String(x.id) !== hid));
+  try {
+    if ((document.body.getAttribute("data-route") || "") === "hub") renderHub();
+    renderHubDots();
+    renderProfileHubShared();
+  } catch {}
+  if (isHubCloudUuid(hid)) {
+    try {
+      await supabaseDeleteHub(hid);
+      return true;
+    } catch (err) {
+      // Cloud failed — put the post back so the local feed matches
+      // truth and the user can retry.
+      if (post) {
+        const restored = loadHubFeed();
+        if (!restored.some((x) => String(x.id) === hid)) {
+          restored.push(post);
+          restored.sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
+          saveHubFeed(restored);
+          try {
+            if ((document.body.getAttribute("data-route") || "") === "hub") renderHub();
+            renderHubDots();
+            renderProfileHubShared();
+          } catch {}
+        }
+      }
+      return false;
+    }
+  }
+  return true;
+}
+
+let _profileHubOpenMenuId = "";
+function closeProfileHubMenu() {
+  if (!els.profileHubSharedList) return;
+  els.profileHubSharedList.querySelectorAll(".libMenu").forEach((m) => {
+    m.style.display = "none";
+  });
+  _profileHubOpenMenuId = "";
+}
+
 function renderProfileHubShared() {
   if (!els.profileHubSharedList) return;
   const creator = String(activeProfile.username || "guest");
@@ -4008,8 +4036,6 @@ function renderProfileHubShared() {
     .filter((p) => (uid ? String(p?.meta?.creatorUserId || "") === uid : String(p?.creator || "") === creator))
     .slice(0, 30);
   renderProfileOwnStats();
-  // Mirror the Library count chip when there is something to count, hide it
-  // otherwise so the empty state owns the visual weight.
   const countEl = document.getElementById("profileOwnSongCount");
   if (countEl) {
     if (items.length) {
@@ -4032,9 +4058,8 @@ function renderProfileHubShared() {
     return;
   }
   // Reuse the Library row markup so the visual language stays consistent
-  // (cover · title · meta · ▶ badge on hover). Profile rows don't need a
-  // ⋯ menu — the click target is the whole row and it deep-links to the
-  // post in the Hub feed.
+  // (cover · title · meta · ▶ badge on hover) and add a ⋯ menu with
+  // "Unpublish from Hub" — Profile is the publishing dashboard.
   els.profileHubSharedList.innerHTML = `
     <ul class="libraryRows" role="list">
       ${items.map((p) => {
@@ -4045,9 +4070,10 @@ function renderProfileHubShared() {
         const subBits = [];
         if (dateLabel) subBits.push(`<span class="libRowDot">${escapeHtml(dateLabel)}</span>`);
         if (likes > 0) subBits.push(`<span class="libRowChip libRowChipLikes">❤ ${likes}</span>`);
+        const sid = escapeHtml(String(p.id));
         return `
-          <li class="libRow" data-profile-hub-row="${escapeHtml(String(p.id))}">
-            <button class="libRowMain" type="button" data-profile-hub-open="${escapeHtml(String(p.id))}" aria-label="Open ${safeTitle} on Hub">
+          <li class="libRow" data-profile-hub-row="${sid}">
+            <button class="libRowMain" type="button" data-profile-hub-open="${sid}" aria-label="Open ${safeTitle} on Hub">
               <span class="libRowArt">
                 <img src="${escapeHtml(art)}" alt="" />
                 <span class="libRowArtBadge" aria-hidden="true">▶</span>
@@ -4057,6 +4083,10 @@ function renderProfileHubShared() {
                 <span class="libRowSub">${subBits.join("")}</span>
               </span>
             </button>
+            <button class="libRowMore" type="button" data-profile-hub-menu="${sid}" aria-label="More options for ${safeTitle}">⋯</button>
+            <div class="libMenu" id="profileHubMenu_${sid}" style="display:none">
+              <button class="ghost libRowDelete" data-profile-hub-unpublish="${sid}">Unpublish from Hub</button>
+            </div>
           </li>
         `;
       }).join("")}
@@ -4066,10 +4096,51 @@ function renderProfileHubShared() {
     b.addEventListener("click", () => {
       const sid = b.getAttribute("data-profile-hub-open");
       if (!sid) return;
+      closeProfileHubMenu();
       location.hash = `#/hub?post=${encodeURIComponent(sid)}`;
     });
   });
+  els.profileHubSharedList.querySelectorAll("[data-profile-hub-menu]").forEach((b) => {
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const sid = b.getAttribute("data-profile-hub-menu");
+      if (!sid) return;
+      const menu = document.getElementById(`profileHubMenu_${sid}`);
+      const isOpen = _profileHubOpenMenuId === sid && menu && menu.style.display !== "none";
+      closeProfileHubMenu();
+      if (!isOpen && menu) {
+        menu.style.display = "";
+        _profileHubOpenMenuId = sid;
+      }
+    });
+  });
+  els.profileHubSharedList.querySelectorAll("[data-profile-hub-unpublish]").forEach((b) => {
+    b.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const sid = b.getAttribute("data-profile-hub-unpublish");
+      if (!sid) return;
+      const post = loadHubFeed().find((x) => String(x.id) === sid);
+      const title = String(post?.title || "this post").trim() || "this post";
+      const ok = window.confirm(
+        `Unpublish "${title}" from Hub?\n\nThis takes the post off the public feed. Your Library copy stays on this device.`
+      );
+      if (!ok) return;
+      closeProfileHubMenu();
+      const success = await unpublishHubPostById(sid);
+      setStatus(success ? "Unpublished from Hub." : "Could not unpublish — try again.");
+    });
+  });
 }
+
+// Clicks anywhere outside a Profile→Hub row close the menu, matching
+// the Library menu behavior.
+document.addEventListener("pointerdown", (e) => {
+  if (!_profileHubOpenMenuId) return;
+  if (!els.profileHubSharedList) return;
+  const t = e.target;
+  if (t && t.closest && (t.closest("[data-profile-hub-menu]") || t.closest(".libMenu"))) return;
+  closeProfileHubMenu();
+}, true);
 
 /** Max tracks persisted locally (matches `addToLibrary`). Keeps JSON under
  *  typical mobile localStorage limits when cloud merge pulls 100+ rows. */
@@ -4675,7 +4746,11 @@ function removeFromLibrary(id) {
   renderLibrary();
   if (removed) {
     void supabaseDeleteUserSong(removed);
-    removeHubPostsLinkedToLibraryTrack(removed);
+    // Library is the user's PRIVATE inventory; Hub is PUBLIC. Deleting
+    // here only takes the song off this account's Library — any Hub
+    // post stays live so the public feed isn't surprise-edited by a
+    // private action. To take a song off Hub the user goes to Profile
+    // → Songs on Hub → ⋯ → Unpublish from Hub.
   }
 }
 async function downloadLibraryVideoTrack(track) {
@@ -4995,14 +5070,15 @@ function bindLibraryDelegatedListeners() {
         const delId = del.getAttribute("data-lib-del");
         const t = loadLibrary().find((x) => x.id === delId);
         const title = String(t?.title || "this song").trim() || "this song";
-        const hubHint =
+        const sharedToHub =
           t && loadHubFeed().some(
             (p) =>
               String(p?.url || "").trim() === String(t?.url || "").trim() &&
               String(p?.creator || "").trim() === String(activeProfile.username || "guest").trim()
-          )
-            ? " This also removes your Hub post for this song."
-            : "";
+          );
+        const hubHint = sharedToHub
+          ? "\n\nThis song is also on Hub. It will stay public — manage your Hub posts in Profile → Songs on Hub."
+          : "";
         const ok = window.confirm(`Remove "${title}" from your Library?${hubHint}`);
         if (!ok) {
           closeLibraryMenu();

@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509nobanner";
+const APP_BUILD = "20260509hubcalm";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -504,24 +504,14 @@ function getHubRowClosestToViewportCenter() {
   return bestInBandId || bestIntersectId || bestAreaId;
 }
 
-// Don't run *audio* on every scroll frame — that was the cause of "rapid
-// play/stop": while the user dragged, every frame
-// `getHubRowClosestToViewportCenter` could pick a different row and we'd
-// start/abandon playback in a loop. So audio waits for the scroll to be
-// quiet for ~280ms (or instantly on `scrollend`).
-//
-// VISUAL focus is a separate path (`updateHubFocusedRow`) that DOES run on
-// every scroll frame, raf-throttled. Just toggling a class is cheap and
-// makes the lift/dim/title-resize feel immediate instead of arriving late
-// after the audio finally loads.
+// Scroll-driven autoplay was disabled in 20260509hubcalm. On mobile the
+// debounce window kept racing iOS scroll-snap and starting the wrong post,
+// or starting *no* post (first card on cold open). Users now tap ▶
+// explicitly — predictable, no surprises, no flicker. The visual focus
+// path (`updateHubFocusedRow`) is still on so the centered card still
+// lifts/dims/scales as you scroll.
 function scheduleHubViewportAutoplay() {
-  if (hubViewportTailTimer) {
-    try { clearTimeout(hubViewportTailTimer); } catch {}
-  }
-  hubViewportTailTimer = setTimeout(() => {
-    hubViewportTailTimer = null;
-    tryHubViewportAutoplay();
-  }, 280);
+  // No-op. Kept as a stub so existing call sites don't have to be removed.
 }
 
 // Visual focus tracking — separate from audio playback. Sets `.isActive`
@@ -551,11 +541,8 @@ function scheduleHubFocusUpdate() {
   });
 }
 function flushHubViewportAutoplay() {
-  if (hubViewportTailTimer) {
-    try { clearTimeout(hubViewportTailTimer); } catch {}
-    hubViewportTailTimer = null;
-  }
-  tryHubViewportAutoplay();
+  // Companion no-op for `scheduleHubViewportAutoplay`. See comment above:
+  // scroll-driven autoplay is disabled to keep playback predictable.
 }
 
 async function hubAudioPlayWithRetry(audio) {
@@ -655,30 +642,8 @@ function ensureHubAudio() {
 }
 
 function tryHubViewportAutoplay() {
-  if ((document.body.getAttribute("data-route") || "") !== "hub") return;
-  if (!els.hubList) return;
-  if (Date.now() < hubSuppressViewportAutoplayUntil) return;
-  // Never attempt scroll-driven play until the browser has accepted audio once
-  // (user tapped ▶). Otherwise play() fails repeatedly and the button flickers.
-  if (!getHubAudioUnlocked()) return;
-  const centerId = getHubRowClosestToViewportCenter();
-  if (!centerId) return;
-  const centerRow = els.hubList.querySelector(`[data-hub-row="${centerId}"]`);
-  if (getHubRowIntersectionRatio(centerRow) < 0.1) return;
-  if (hubAutoplayMutedPostId && centerId !== hubAutoplayMutedPostId) {
-    hubAutoplayMutedPostId = null;
-  }
-  if (centerId === hubAutoplayMutedPostId) return;
-  const feed = loadHubFeed();
-  const p = feed.find((x) => x.id === centerId);
-  if (!p?.url) return;
-  // If we already targeted this post — even if play() hasn't resolved yet,
-  // even if the element is momentarily paused mid-load — never kick off a
-  // second startHubPlayback for the same id. Scroll-snap fires scroll events
-  // while it animates the card into place, and re-triggering during that
-  // window was racing the first call and producing rapid play/stop glitches.
-  if (hubAudioPostId === centerId) return;
-  void startHubPlayback(centerId);
+  // Disabled in 20260509hubcalm — see comment on `scheduleHubViewportAutoplay`.
+  // Kept as a stub for any leftover callers.
 }
 
 function stopHubPlayback() {
@@ -2947,6 +2912,59 @@ function hubTrendingScore(post, nowMs) {
 const HUB_PAGE_SIZE = 24;
 let hubVisibleCount = HUB_PAGE_SIZE;
 let _hubLastRenderedFilter = null;
+// Tracks what's currently painted into the Hub list so the periodic
+// background refresh can decide whether a real DOM rebuild is necessary.
+// Without this every poll wiped innerHTML and looked like a screen flash.
+let _hubLastRenderedSig = "";
+let _hubDeferredRebuild = false;
+
+function computeHubVisibleSig(items) {
+  const top = (items || []).slice(0, hubVisibleCount || HUB_PAGE_SIZE);
+  return top.map((p) => {
+    const r = p?.reacts || {};
+    return [
+      String(p?.id || ""),
+      Number(p?.likes || 0),
+      Number(r?.melody || 0),
+      Number(r?.lyrics || 0),
+    ].join(":");
+  }).join("|");
+}
+
+function computeHubVisibleIds(items) {
+  return (items || [])
+    .slice(0, hubVisibleCount || HUB_PAGE_SIZE)
+    .map((p) => String(p?.id || ""))
+    .join("|");
+}
+
+// Update like/react counts inside the existing rendered rows without
+// blowing away innerHTML. Keeps the playing row's audio hookup intact,
+// keeps the user's scroll position pinned, no flicker.
+function applyHubInPlaceCountUpdates(items) {
+  if (!els.hubList) return;
+  (items || []).slice(0, hubVisibleCount || HUB_PAGE_SIZE).forEach((p) => {
+    const id = String(p?.id || "");
+    if (!id) return;
+    const row = els.hubList.querySelector(`[data-hub-row="${id}"]`);
+    if (!row) return;
+    const likeBtn = row.querySelector(`[data-hub-like="${id}"]`);
+    if (likeBtn) {
+      const likes = Number(p.likes || 0);
+      const c = likeBtn.querySelector(".hubLikeCount");
+      if (c) c.textContent = String(likes);
+      likeBtn.setAttribute("data-count", String(likes));
+    }
+    const r = p?.reacts || {};
+    ["melody", "lyrics"].forEach((key) => {
+      const btn = row.querySelector(`[data-hub-react="${id}:${key}"]`);
+      if (!btn) return;
+      const c = btn.querySelector(".hubReactCount");
+      if (c) c.textContent = String(Number(r[key] || 0));
+    });
+  });
+}
+
 function renderHub() {
   if (!els.hubList) return;
   let items = loadHubFeed();
@@ -3203,9 +3221,10 @@ function renderHub() {
   // skip toggling on the new elements).
   hubFocusedPostId = null;
   requestAnimationFrame(() => updateHubFocusedRow());
-  setTimeout(() => scheduleHubViewportAutoplay(), 40);
   preloadInitialHubTracks();
   updateHubAudioHint();
+  _hubLastRenderedSig = computeHubVisibleSig(items);
+  _hubDeferredRebuild = false;
 }
 if (els.hubList) {
   els.hubList.addEventListener("click", async (e) => {
@@ -3286,9 +3305,67 @@ async function refreshHubFromSupabase() {
     const merged = Array.from(byId.values()).sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0)).slice(0, 300);
     saveHubFeed(merged);
     lastHubUpdateAt = merged.length ? Math.max(...merged.map((x) => Number(x.ts || 0))) : 0;
-    renderHub();
-    renderHubDots();
-    renderProfileHubShared();
+
+    // Avoid the visible "page refresh" flash: only do a real rebuild when
+    // it's actually warranted. Three cases:
+    //   1) Nothing changed in the visible window → just update the
+    //      "Updated: …" timestamp and the unseen dot. No DOM churn.
+    //   2) Same posts in same order, only counts changed → update the
+    //      like/react number text in place.
+    //   3) New post(s) appeared or order changed → only blow away
+    //      innerHTML when the user is NOT actively viewing Hub or is
+    //      already at the top. Otherwise defer; the next route change
+    //      or scroll-to-top will redraw.
+    const onHub = (document.body.getAttribute("data-route") || "") === "hub";
+    const items = (() => {
+      let arr = merged;
+      if (hubFilter === "trending") {
+        const now = Date.now();
+        arr = [...arr].sort((a, b) => {
+          const sa = hubTrendingScore(a, now);
+          const sb = hubTrendingScore(b, now);
+          if (sb !== sa) return sb - sa;
+          return Number(b.ts || 0) - Number(a.ts || 0);
+        });
+      }
+      return arr;
+    })();
+    const newSig = computeHubVisibleSig(items);
+    const newIds = computeHubVisibleIds(items);
+    const oldIds = (_hubLastRenderedSig || "")
+      .split("|")
+      .map((s) => s.split(":")[0])
+      .join("|");
+    const renderedAlready = els.hubList && els.hubList.querySelector("[data-hub-row]");
+
+    if (renderedAlready && newSig === _hubLastRenderedSig) {
+      // No-op render: nothing visible changed.
+      renderHubUpdatedAt();
+      renderHubDots();
+      renderProfileHubShared();
+    } else if (renderedAlready && newIds === oldIds && oldIds.length > 0) {
+      applyHubInPlaceCountUpdates(items);
+      _hubLastRenderedSig = newSig;
+      renderHubUpdatedAt();
+      renderHubDots();
+      renderProfileHubShared();
+    } else {
+      const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+      const atTop = scrollY < 80;
+      if (renderedAlready && onHub && !atTop) {
+        // Defer: rebuilding right now would yank the page under the
+        // user's finger. We'll rebuild on next scroll-to-top, route
+        // change, or pull-down refresh.
+        _hubDeferredRebuild = true;
+        renderHubUpdatedAt();
+        renderHubDots();
+        renderProfileHubShared();
+      } else {
+        renderHub();
+        renderHubDots();
+        renderProfileHubShared();
+      }
+    }
     // If we're currently viewing a public profile, re-render so freshly
     // synced posts (or a cold-load via share link) show up immediately.
     if (document.body.getAttribute("data-route") === "user") {
@@ -3332,9 +3409,38 @@ async function refreshHubFromSupabase() {
         hubRetryCount = 0;
         saveHubFeed(mapped);
         lastHubUpdateAt = Math.max(...mapped.map((x) => Number(x.ts || 0)));
-        renderHub();
-        renderHubDots();
-        renderProfileHubShared();
+        // Same skip-if-unchanged logic as the main path so the retry
+        // doesn't flash either.
+        const newSig = computeHubVisibleSig(mapped);
+        const newIds = computeHubVisibleIds(mapped);
+        const oldIds = (_hubLastRenderedSig || "")
+          .split("|").map((s) => s.split(":")[0]).join("|");
+        const renderedAlready = els.hubList && els.hubList.querySelector("[data-hub-row]");
+        if (renderedAlready && newSig === _hubLastRenderedSig) {
+          renderHubUpdatedAt();
+          renderHubDots();
+          renderProfileHubShared();
+        } else if (renderedAlready && newIds === oldIds && oldIds.length > 0) {
+          applyHubInPlaceCountUpdates(mapped);
+          _hubLastRenderedSig = newSig;
+          renderHubUpdatedAt();
+          renderHubDots();
+          renderProfileHubShared();
+        } else {
+          const onHub = (document.body.getAttribute("data-route") || "") === "hub";
+          const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+          const atTop = scrollY < 80;
+          if (renderedAlready && onHub && !atTop) {
+            _hubDeferredRebuild = true;
+            renderHubUpdatedAt();
+            renderHubDots();
+            renderProfileHubShared();
+          } else {
+            renderHub();
+            renderHubDots();
+            renderProfileHubShared();
+          }
+        }
       } catch {} finally {
         hubSyncInFlight = false;
       }
@@ -9511,18 +9617,32 @@ if (els.hubNowPlaying) {
 window.addEventListener("scroll", () => {
   if ((document.body.getAttribute("data-route") || "") === "hub") {
     scheduleHubFocusUpdate();
-    scheduleHubViewportAutoplay();
+    // If the periodic refresh deferred a rebuild because new posts arrived
+    // mid-scroll, redraw once the user has clearly returned to the top of
+    // the feed. Avoids the "screen glitched/refreshed itself" surprise.
+    if (_hubDeferredRebuild) {
+      const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+      if (scrollY < 80) {
+        _hubDeferredRebuild = false;
+        renderHub();
+      }
+    }
   }
   if (hubAudio) scheduleRenderHubNowPlaying();
 }, { passive: true });
 // `scrollend` fires once the page (or a programmatic smooth scroll) actually
 // stops — much more reliable than waiting for `scroll` events to taper off.
-// Supported on iOS Safari 16+, Chrome 114+, and Firefox 109+. Where it isn't
-// supported the 280ms debounce above still covers us.
+// Supported on iOS Safari 16+, Chrome 114+, and Firefox 109+.
 window.addEventListener("scrollend", () => {
   if ((document.body.getAttribute("data-route") || "") !== "hub") return;
   updateHubFocusedRow();
-  flushHubViewportAutoplay();
+  if (_hubDeferredRebuild) {
+    const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    if (scrollY < 80) {
+      _hubDeferredRebuild = false;
+      renderHub();
+    }
+  }
 }, { passive: true });
 window.addEventListener("resize", () => {
   if ((document.body.getAttribute("data-route") || "") === "hub") {

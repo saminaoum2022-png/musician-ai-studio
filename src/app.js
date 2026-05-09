@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510ag";
+const APP_BUILD = "20260510ah";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -3887,6 +3887,8 @@ function renderLibrary() {
           ${failLine}
           <button type="button" class="emptyStateCta" id="libraryEmptyUploadAgain" style="margin-top:10px;border:none;cursor:pointer;font:inherit">Try sync from this device</button>
           <a href="#/generate" class="emptyStateCta" data-route-link="generate" style="margin-top:8px;display:inline-flex">Create a song</a>
+          <button type="button" id="libraryDebugSync" style="margin-top:14px;background:transparent;border:1px solid rgba(255,255,255,0.14);color:rgba(232,238,247,0.7);font-size:11px;letter-spacing:0.04em;text-transform:uppercase;padding:7px 14px;border-radius:999px;cursor:pointer">Show diagnostic</button>
+          <pre id="libraryDebugOut" style="display:none;text-align:left;margin-top:12px;font-size:11px;line-height:1.45;color:rgba(232,238,247,0.78);background:rgba(0,0,0,0.32);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px;max-width:340px;overflow:auto;white-space:pre-wrap;word-break:break-all"></pre>
         </div>
       `;
       const uploadAgain = document.getElementById("libraryEmptyUploadAgain");
@@ -3894,6 +3896,64 @@ function renderLibrary() {
         uploadAgain.addEventListener("click", () => {
           setStatus("Syncing library to cloud…");
           void ensureUserLibraryHydrated();
+        });
+      }
+      const dbgBtn = document.getElementById("libraryDebugSync");
+      const dbgOut = document.getElementById("libraryDebugOut");
+      if (dbgBtn && dbgOut) {
+        dbgBtn.addEventListener("click", async () => {
+          dbgOut.style.display = "";
+          dbgOut.textContent = "Running diagnostic…";
+          const lines = [];
+          const token = getSupabaseAuthToken();
+          const uid = String(authSession?.user?.id || "");
+          const email = String(authSession?.user?.email || "");
+          lines.push(`auth.email: ${email || "(none)"}`);
+          lines.push(`auth.user.id: ${uid || "(none)"}`);
+          lines.push(`token length: ${token ? token.length : 0}`);
+          // Probe 1: count without filter (SELECT-RLS view of user_songs)
+          try {
+            const r1 = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?select=id&limit=1`, {
+              headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${token}`,
+                Prefer: "count=exact",
+                Range: "0-0",
+              },
+            });
+            const cr = r1.headers.get("content-range") || r1.headers.get("Content-Range") || "";
+            lines.push(`probe.unfiltered: HTTP ${r1.status} content-range=${cr}`);
+          } catch (e) {
+            lines.push(`probe.unfiltered ERR: ${e?.message || String(e)}`);
+          }
+          // Probe 2: filtered by user_id with same token
+          try {
+            const r2 = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${encodeURIComponent(uid)}&select=id,title&limit=3`, {
+              headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${token}`,
+              },
+            });
+            const t2 = await r2.text().catch(() => "");
+            lines.push(`probe.filtered: HTTP ${r2.status} body=${t2.slice(0, 240)}`);
+          } catch (e) {
+            lines.push(`probe.filtered ERR: ${e?.message || String(e)}`);
+          }
+          // Probe 3: confirm token still resolves the user via /auth/v1/user
+          try {
+            const r3 = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+              headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${token}`,
+              },
+            });
+            const t3 = await r3.text().catch(() => "");
+            const parsed = (() => { try { return JSON.parse(t3); } catch { return null; } })();
+            lines.push(`probe.user: HTTP ${r3.status} id=${parsed?.id || "?"} email=${parsed?.email || "?"}`);
+          } catch (e) {
+            lines.push(`probe.user ERR: ${e?.message || String(e)}`);
+          }
+          dbgOut.textContent = lines.join("\n");
         });
       }
       return;

@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510ao";
+const APP_BUILD = "20260510ap";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -3154,46 +3154,48 @@ function slimLibraryForStorage(items) {
   return (Array.isArray(items) ? items : []).map(slimTrackForStorage);
 }
 
-/** Clear the largest non-essential localStorage entries to make room
- *  for the Library JSON. We deliberately do NOT touch the active
- *  Library key (cloud refill comes next), the auth session, or the
- *  user's profile. Hub feed cache and stale per-profile library blobs
- *  are the typical culprits — they can hold base64 covers from older
- *  versions of the app. */
+/** Aggressive localStorage reset: drop everything except the absolute
+ *  minimum needed to stay logged in and remember device identity.
+ *  Everything else either rebuilds from the cloud (Library, Hub) or
+ *  starts at safe defaults (tab-tip, credits-history, personas). The
+ *  active library key is dropped too — the in-memory cache holds the
+ *  current merge and saveLibrary() will re-write it fresh after this. */
 function freeUpLocalStorage() {
-  const activeLibKey = getLibraryStorageKey();
   const keepKeys = new Set([
-    activeLibKey,
     "mas:auth-session:v1",
     "mas:profile:v1",
     "mas:device-id:v1",
     "mas:public-config:v1",
+    "mas:auth-pkce:v1",
   ]);
-  const dropPrefixes = [
-    "mas:hub:",
-    "mas:hub-seen",
-    "mas:credits-history",
-    "mas:library:v1:guest",
-    "mas:library:v1:", // clears all per-profile blobs except the active one (filtered below)
-    "mas:library:",
-    "mas:cache:",
-  ];
+  let beforeBytes = 0;
+  let afterBytes = 0;
+  let droppedCount = 0;
   const toDelete = [];
   try {
     for (let i = 0; i < localStorage.length; i += 1) {
       const k = String(localStorage.key(i) || "");
-      if (keepKeys.has(k)) continue;
-      const shouldDrop =
-        dropPrefixes.some((p) => k.startsWith(p)) ||
-        /image|cover|cache|blob/i.test(k);
-      if (shouldDrop) toDelete.push(k);
+      const v = String(localStorage.getItem(k) || "");
+      beforeBytes += k.length + v.length;
+      if (!keepKeys.has(k)) toDelete.push(k);
     }
   } catch {}
   for (const k of toDelete) {
-    try { localStorage.removeItem(k); } catch {}
+    try { localStorage.removeItem(k); droppedCount += 1; } catch {}
   }
-  // Make sure the in-memory Hub list resets so it re-fetches fresh.
+  try {
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const k = String(localStorage.key(i) || "");
+      const v = String(localStorage.getItem(k) || "");
+      afterBytes += k.length + v.length;
+    }
+  } catch {}
   try { hubFeedMemory = []; } catch {}
+  return {
+    beforeKB: Math.round(beforeBytes / 1024),
+    afterKB: Math.round(afterBytes / 1024),
+    dropped: droppedCount,
+  };
 }
 
 /** Best-effort localStorage write. Tries the full slim payload, then
@@ -4366,20 +4368,40 @@ if (els.btnCloseSongDetails) {
 if (els.btnLibraryDiagnostic) {
   els.btnLibraryDiagnostic.addEventListener("click", () => void runLibraryDiagnostic());
 }
-function handleLibraryFreeSpaceClick() {
-  freeUpLocalStorage();
-  // Re-persist whatever's in mem cache so the user sees a green banner.
+async function handleLibraryFreeSpaceClick() {
+  const r = freeUpLocalStorage();
+  // iOS Safari PWA: localStorage, Cache API, and IndexedDB share a
+  // single origin quota, so we sweep the Cache API too. SW caches
+  // (audio/cover blobs, prebuilt page chunks) are often the real
+  // hogs even when localStorage looks small.
+  let cachesCleared = 0;
+  try {
+    if (typeof caches !== "undefined" && caches?.keys) {
+      const names = await caches.keys();
+      for (const name of names) {
+        try {
+          const ok = await caches.delete(name);
+          if (ok) cachesCleared += 1;
+        } catch {}
+      }
+    }
+  } catch {}
   const items = loadLibrary();
   if (items.length) saveLibrary(items);
+  const memN = items.length;
+  const persistedN = _lastLibraryPersistedCount;
   syncLibraryStorageBanner();
-  setStatus("Cleared cached space — Library will sync fresh on next launch.");
+  const freedKB = Math.max(0, r.beforeKB - r.afterKB);
+  setStatus(
+    `Freed ${freedKB}KB (${r.dropped} keys${cachesCleared ? ` + ${cachesCleared} caches` : ""}). Saved ${persistedN}/${memN} songs locally.`
+  );
   void ensureUserLibraryHydrated();
 }
 if (els.btnLibraryFreeSpace) {
-  els.btnLibraryFreeSpace.addEventListener("click", handleLibraryFreeSpaceClick);
+  els.btnLibraryFreeSpace.addEventListener("click", () => void handleLibraryFreeSpaceClick());
 }
 if (els.btnLibraryFreeSpaceAlt) {
-  els.btnLibraryFreeSpaceAlt.addEventListener("click", handleLibraryFreeSpaceClick);
+  els.btnLibraryFreeSpaceAlt.addEventListener("click", () => void handleLibraryFreeSpaceClick());
 }
 
 // Vocal Room state

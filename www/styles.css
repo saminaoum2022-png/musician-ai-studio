@@ -1723,44 +1723,58 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   .toast{ transition: opacity 120ms linear; }
 }
 
-/* -------- Inline confirm bar inside the player ------------------- */
+/* -------- Centered confirm modal (publish / cover / clip) -------- */
 .playerConfirm{
-  margin: 14px auto 0;
-  max-width: 460px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: linear-gradient(180deg, rgba(28,33,52,0.96), rgba(14,18,30,0.94));
-  box-shadow:
-    0 12px 36px -16px rgba(0,0,0,0.55),
-    0 0 0 1px rgba(124, 92, 255, 0.18) inset;
+  position: fixed;
+  inset: 0;
+  z-index: 220;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(8, 10, 18, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   opacity: 0;
-  transform: translateY(8px);
-  transition:
-    opacity 220ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+  transition: opacity 200ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .playerConfirm[hidden]{
   display: none;
 }
 .playerConfirm.show{
   opacity: 1;
-  transform: translateY(0);
+  pointer-events: auto;
+}
+.playerConfirmCard{
+  width: min(420px, 100%);
+  padding: 20px 22px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: linear-gradient(180deg, rgba(28,33,52,0.98), rgba(14,18,30,0.96));
+  box-shadow:
+    0 32px 80px -20px rgba(0,0,0,0.7),
+    0 0 0 1px rgba(124, 92, 255, 0.22) inset;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transform: scale(0.96) translateY(6px);
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.playerConfirm.show .playerConfirmCard{
+  transform: scale(1) translateY(0);
 }
 .playerConfirmInner{
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   min-width: 0;
 }
 .playerConfirmThumb{
   flex: 0 0 auto;
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
   object-fit: cover;
   border: 1px solid rgba(255,255,255,0.12);
 }
@@ -1769,29 +1783,31 @@ body.isAuth .hubNowPlaying{ display:none !important; }
 }
 .playerConfirmText{
   margin: 0;
-  font-size: 13.5px;
-  line-height: 1.4;
+  font-size: 14.5px;
+  line-height: 1.45;
   color: #f0f4ff;
   flex: 1 1 auto;
   min-width: 0;
 }
 .playerConfirmActions{
   display: flex;
-  gap: 8px;
+  gap: 10px;
   justify-content: flex-end;
 }
 .playerConfirmBtn{
-  font-size: 13px;
-  padding: 8px 16px;
+  font-size: 13.5px;
+  padding: 10px 20px;
   border-radius: 999px;
   font-weight: 600;
+  min-width: 96px;
 }
 .playerConfirmBtn.danger{
   background: linear-gradient(180deg, #ff5b6c, #d6364a);
   border-color: rgba(255, 91, 108, 0.4);
 }
 @media (prefers-reduced-motion: reduce){
-  .playerConfirm{ transition: opacity 120ms linear; }
+  .playerConfirm,
+  .playerConfirm .playerConfirmCard{ transition: opacity 120ms linear; }
 }
 
 /* -------- Cover flash after save --------------------------------- */

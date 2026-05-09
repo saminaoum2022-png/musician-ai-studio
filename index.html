@@ -650,15 +650,17 @@
               </div>
               <input id="playerCoverUpload" type="file" accept="image/*" style="display:none" />
 
-              <!-- Inline confirm bar (publish, clip publish, cover save). -->
-              <div id="playerConfirm" class="playerConfirm" hidden>
-                <div class="playerConfirmInner">
-                  <img id="playerConfirmThumb" class="playerConfirmThumb" alt="" hidden />
-                  <p id="playerConfirmText" class="playerConfirmText"></p>
-                </div>
-                <div class="playerConfirmActions">
-                  <button id="playerConfirmCancel" class="ghost playerConfirmBtn" type="button">Cancel</button>
-                  <button id="playerConfirmOk" class="primary playerConfirmBtn" type="button">Confirm</button>
+              <!-- Centered confirm modal (publish, clip publish, cover save). -->
+              <div id="playerConfirm" class="playerConfirm" role="dialog" aria-modal="true" aria-labelledby="playerConfirmText" hidden>
+                <div class="playerConfirmCard">
+                  <div class="playerConfirmInner">
+                    <img id="playerConfirmThumb" class="playerConfirmThumb" alt="" hidden />
+                    <p id="playerConfirmText" class="playerConfirmText"></p>
+                  </div>
+                  <div class="playerConfirmActions">
+                    <button id="playerConfirmCancel" class="ghost playerConfirmBtn" type="button">Cancel</button>
+                    <button id="playerConfirmOk" class="primary playerConfirmBtn" type="button">Confirm</button>
+                  </div>
                 </div>
               </div>
 
@@ -1247,6 +1249,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260510ar"></script>
+    <script type="module" src="./src/app.js?v=20260510as"></script>
   </body>
 </html>

@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510ar";
+const APP_BUILD = "20260510as";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -2222,13 +2222,33 @@ function shareToHub(track) {
     promptHash: btoa(unescape(encodeURIComponent(String(track?.meta?.finalPrompt || track?.meta?.lyricsInput || track?.title || ""))))
       .slice(0, 16),
   };
-  feed.unshift({
-    id: `hub_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+  // Local-only id for the optimistic render. We swap it out for the
+  // cloud-issued UUID as soon as the insert returns, so the next
+  // refresh from Supabase merges by id without producing a duplicate.
+  const localId = `hub_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const url = String(track.url || "").trim();
+  const title = String(track.title || "Untitled").trim();
+  const kind = track.kind || "full";
+
+  // Defensive dedupe: if this same song was just published by the same
+  // creator (within 30s) and is already in the feed (e.g. user
+  // double-tapped Publish), drop the older local placeholder.
+  const recentDupe = feed.findIndex((p) => {
+    const sameUrl = url && String(p?.url || "").trim() === url;
+    const sameKind = String(p?.kind || "full") === kind;
+    const sameCreator = String(p?.creator || "") === creator;
+    const isRecent = Math.abs(Date.now() - Number(p?.ts || 0)) < 30_000;
+    return sameUrl && sameKind && sameCreator && isRecent;
+  });
+  if (recentDupe >= 0) feed.splice(recentDupe, 1);
+
+  const newPost = {
+    id: localId,
     ts: Date.now(),
-    title: track.title || "Untitled",
+    title,
     artUrl: track.artUrl || "",
-    url: track.url || "",
-    kind: track.kind || "full",
+    url,
+    kind,
     creator,
     creatorAvatar: String(activeProfile.avatar || "./assets/nabadai-logo.png"),
     ownerDeviceId: getLocalDeviceId(),
@@ -2237,9 +2257,28 @@ function shareToHub(track) {
     remixOf: track?.remixOf || "",
     proof,
     meta: { ...(track.meta || {}), creatorUserId },
-  });
+  };
+  feed.unshift(newPost);
   saveHubFeed(feed.slice(0, 200));
-  void supabaseInsertHub(feed[0]).catch(() => {});
+  // Fire-and-forget: when the cloud row lands, replace the local id
+  // with the real UUID so subsequent merges dedupe cleanly.
+  void supabaseInsertHub(newPost).then((rows) => {
+    const row = Array.isArray(rows) ? rows[0] : rows;
+    const cloudId = String(row?.id || "");
+    if (!cloudId) return;
+    const cur = loadHubFeed();
+    const idx = cur.findIndex((p) => String(p?.id || "") === localId);
+    if (idx < 0) return;
+    cur[idx] = {
+      ...cur[idx],
+      id: cloudId,
+      // Trust cloud's created_at if it came back; keeps ts in step.
+      ts: row?.created_at ? new Date(row.created_at).getTime() : cur[idx].ts,
+    };
+    saveHubFeed(cur);
+    if ((document.body.getAttribute("data-route") || "") === "hub") renderHub();
+    renderProfileHubShared();
+  }).catch(() => {});
   renderHub();
   renderProfileHubShared();
 }
@@ -2600,8 +2639,26 @@ async function refreshHubFromSupabase() {
       renderHubDots();
       return;
     }
+    // Cloud is the source of truth. Index it by id and by content
+    // signature so a prev local-only placeholder (e.g. cloud insert
+    // is still in flight, or its id swap hasn't run yet) gets
+    // collapsed into the canonical cloud row instead of duplicating.
+    const cloudById = new Map();
+    const cloudBySig = new Map();
+    const sigOf = (p) =>
+      `${String(p?.url || "").trim()}|${String(p?.kind || "full")}|${String(p?.creator || "")}|${String(p?.title || "").trim().toLowerCase()}`;
+    mapped.forEach((p) => {
+      cloudById.set(String(p.id), p);
+      cloudBySig.set(sigOf(p), p);
+    });
     const byId = new Map();
-    prev.forEach((p) => byId.set(String(p.id), p));
+    // Keep prev local-only rows that have NO cloud counterpart yet;
+    // drop the ones the cloud has already absorbed.
+    prev.forEach((p) => {
+      if (cloudById.has(String(p.id))) return;
+      if (cloudBySig.has(sigOf(p))) return;
+      byId.set(String(p.id), p);
+    });
     mapped.forEach((p) => byId.set(String(p.id), p));
     const merged = Array.from(byId.values()).sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0)).slice(0, 300);
     saveHubFeed(merged);
@@ -5681,6 +5738,7 @@ function dismissPlayerConfirm(answer) {
     wrap.classList.remove("show");
     setTimeout(() => { if (!wrap.classList.contains("show")) wrap.hidden = true; }, 220);
   }
+  if (els.playerConfirmOk) els.playerConfirmOk.classList.remove("danger");
   if (_playerConfirmResolver) {
     try { _playerConfirmResolver(Boolean(answer)); } catch {}
     _playerConfirmResolver = null;
@@ -5694,6 +5752,24 @@ if (typeof document !== "undefined") {
     if (els.playerConfirmCancel) {
       els.playerConfirmCancel.addEventListener("click", () => dismissPlayerConfirm(false));
     }
+    // Tap the dim backdrop = cancel.
+    if (els.playerConfirm) {
+      els.playerConfirm.addEventListener("click", (e) => {
+        if (e.target === els.playerConfirm) dismissPlayerConfirm(false);
+      });
+    }
+    // Escape = cancel, Enter = confirm (only while the modal is open).
+    document.addEventListener("keydown", (e) => {
+      const wrap = els.playerConfirm;
+      if (!wrap || wrap.hidden || !wrap.classList.contains("show")) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        dismissPlayerConfirm(false);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        dismissPlayerConfirm(true);
+      }
+    });
   }, { once: true });
 }
 
@@ -8874,7 +8950,6 @@ if (els.btnShareClipHub) {
       cancelLabel: "Cancel",
       thumbUrl: currentPlayerTrackRef.artUrl || els.playerArt?.src || "",
     });
-    dismissPlayerConfirm(ok);
     if (!ok) return;
     const clipTrack = {
       ...currentPlayerTrackRef,
@@ -8927,7 +9002,6 @@ if (els.btnShareFullHub) {
       cancelLabel: "Cancel",
       thumbUrl: currentPlayerTrackRef?.artUrl || els.playerArt?.src || "",
     });
-    dismissPlayerConfirm(ok);
     if (!ok) return;
     const track = currentPlayerTrackRef || {
       id: `player_${Date.now()}`,
@@ -8980,7 +9054,6 @@ if (els.playerCoverUpload) {
       cancelLabel: "Cancel",
       thumbUrl: thumb || url,
     });
-    dismissPlayerConfirm(ok);
     if (!ok) {
       setStatus("Cover unchanged.");
       return;

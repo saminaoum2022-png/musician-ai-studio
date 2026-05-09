@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509tabs";
+const APP_BUILD = "20260509newsong";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1176,6 +1176,33 @@ function updateBrandPulse() {
   els.brandTitle.classList.toggle("isPlaying", isPlaying);
 }
 
+// Hoisted so it's reachable from `resetCreateDraft` (which lives at top level).
+// Previously this was defined as a `const` inside the big
+// `if (els.btnSunoGenerate && els.btnSunoStems)` block, which made the call
+// from `resetCreateDraft` throw a ReferenceError — leaving `body.generateLocked`
+// stuck on after a successful generation, which in turn made the Lyrics/Hum/Photo
+// tabs and every other button under `[data-route="generate"]` un-tappable until
+// the app was force-closed.
+function setGenerateFieldsLocked(locked) {
+  const refFile = (typeof getVocalReferenceFile === "function") ? getVocalReferenceFile() : null;
+  const lockPreviewAllowed = !locked && Boolean(refFile);
+  if (els.sunoPrompt) els.sunoPrompt.disabled = locked;
+  if (els.sunoStyle) els.sunoStyle.disabled = locked;
+  if (els.sunoTitle) els.sunoTitle.disabled = locked;
+  if (els.sunoReferenceMode) els.sunoReferenceMode.disabled = locked;
+  if (els.sunoVocalUpload) els.sunoVocalUpload.disabled = locked;
+  if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = locked;
+  if (els.btnMagicUploadVocal) els.btnMagicUploadVocal.disabled = locked;
+  if (els.btnMagicRecordVocal) els.btnMagicRecordVocal.disabled = locked;
+  if (els.vocalModeFull) els.vocalModeFull.disabled = locked;
+  if (els.vocalModeInstrumental) els.vocalModeInstrumental.disabled = locked;
+  if (els.btnPreviewVocalRef) els.btnPreviewVocalRef.disabled = locked ? true : !lockPreviewAllowed;
+  if (els.btnVocalRefStop) els.btnVocalRefStop.disabled = true;
+  if (els.btnOpenAdvancedSheet) els.btnOpenAdvancedSheet.disabled = locked;
+  if (els.btnGenerateOrb) els.btnGenerateOrb.disabled = locked;
+  document.body.classList.toggle("generateLocked", Boolean(locked));
+}
+
 function resetAdvancedOptionsToDefaults() {
   if (els.sunoGroovePace) els.sunoGroovePace.value = "";
   if (els.sunoProsody) els.sunoProsody.value = "";
@@ -1197,6 +1224,12 @@ function resetAdvancedOptionsToDefaults() {
 function resetCreateDraft() {
   busyCount = 0;
   generationReadyNotice = false;
+  // Defensive: clear UI-locking body classes BEFORE any later step can throw.
+  // `body.generateLocked` makes every button under [data-route="generate"]
+  // un-tappable (including the Lyrics/Hum/Photo tabs), so it MUST come off
+  // even if something below this line errors out.
+  try { document.body.classList.remove("generateLocked"); } catch {}
+  try { document.body.classList.remove("isBusy"); } catch {}
   if (els.sunoPrompt) els.sunoPrompt.value = "";
   if (els.sunoStyle) els.sunoStyle.value = "";
   if (els.sunoTitle) els.sunoTitle.value = "";
@@ -1204,7 +1237,7 @@ function resetCreateDraft() {
   if (els.sunoReferenceMode) els.sunoReferenceMode.value = "none";
   if (els.sunoVocalUpload) els.sunoVocalUpload.value = "";
   if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
-  resetAdvancedOptionsToDefaults();
+  try { resetAdvancedOptionsToDefaults(); } catch {}
   if (els.vocalModeFull) els.vocalModeFull.classList.add("active");
   if (els.vocalModeInstrumental) els.vocalModeInstrumental.classList.remove("active");
   if (els.sunoReferenceHint) {
@@ -1215,7 +1248,7 @@ function resetCreateDraft() {
   vocalRefBlob = null;
   if (els.sunoVocalUploadName) els.sunoVocalUploadName.textContent = "No vocal reference attached.";
   if (vocalRefPreviewUrl) {
-    safeRevokeObjectUrl(vocalRefPreviewUrl);
+    try { safeRevokeObjectUrl(vocalRefPreviewUrl); } catch {}
     vocalRefPreviewUrl = "";
   }
   if (els.btnSunoGenerate) {
@@ -1225,11 +1258,29 @@ function resetCreateDraft() {
   }
   if (els.resultCard) els.resultCard.style.display = "none";
   if (els.resultCard2) els.resultCard2.style.display = "none";
-  if (generatePollTimer) {
-    clearInterval(generatePollTimer);
-    generatePollTimer = null;
-  }
-  savePendingBackendTask("");
+  // Stop every poll loop that could re-lock the UI mid-reset.
+  try {
+    if (generatePollTimer) {
+      clearInterval(generatePollTimer);
+      generatePollTimer = null;
+    }
+  } catch {}
+  try {
+    if (typeof stemsPollTimer !== "undefined" && stemsPollTimer) {
+      clearInterval(stemsPollTimer);
+      stemsPollTimer = null;
+    }
+  } catch {}
+  try {
+    if (typeof multiStemsPollTimer !== "undefined" && multiStemsPollTimer) {
+      clearInterval(multiStemsPollTimer);
+      multiStemsPollTimer = null;
+    }
+  } catch {}
+  try {
+    if (typeof stopSoundGenerationPolling === "function") stopSoundGenerationPolling();
+  } catch {}
+  try { savePendingBackendTask(""); } catch {}
   pendingGeneratedCoverDataUrl = "";
   pendingBackendTaskId = "";
   imageMoodAppliedForNextGen = false;
@@ -1238,8 +1289,10 @@ function resetCreateDraft() {
   sunoTaskId = null;
   sunoAudioId = null;
   lastSunoAudioId2 = "";
-  if (lastSunoCachedUrl) safeRevokeObjectUrl(lastSunoCachedUrl);
-  if (lastSunoCachedUrl2) safeRevokeObjectUrl(lastSunoCachedUrl2);
+  try {
+    if (lastSunoCachedUrl) safeRevokeObjectUrl(lastSunoCachedUrl);
+    if (lastSunoCachedUrl2) safeRevokeObjectUrl(lastSunoCachedUrl2);
+  } catch {}
   lastSunoCachedUrl = "";
   lastSunoCachedUrl2 = "";
   lastSunoFullUrl = "";
@@ -1251,7 +1304,7 @@ function resetCreateDraft() {
   lastSunoArtUrl2 = "";
   lastSunoTitle2 = "";
   lastSunoReferenceUrl = "";
-  updateListenRefButton();
+  try { updateListenRefButton(); } catch {}
   if (playerEl) {
     try {
       playerEl.pause();
@@ -1260,11 +1313,34 @@ function resetCreateDraft() {
   }
   if (els.btnSunoStems) els.btnSunoStems.disabled = true;
   if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = true;
-  renderReferenceHints();
-  setGenerateFieldsLocked(false);
-  setLoading(false);
-  setStatus("New draft started.");
-  syncGenerateOrbVisibility();
+  try { renderReferenceHints(); } catch {}
+  try { setGenerateFieldsLocked(false); } catch {}
+  // Always make sure these stuck classes are gone, even if the call above
+  // throws for any reason.
+  try { document.body.classList.remove("generateLocked"); } catch {}
+  try { setLoading(false); } catch {}
+  // Land the user back on the Lyrics tab (the natural starting view) so the
+  // "start new song" gesture feels like a real fresh page.
+  try {
+    if (typeof setActiveCreateTab === "function") setActiveCreateTab("lyrics");
+  } catch {}
+  // Scroll the create page to the top so the user sees the inputs / tabs,
+  // not the (now hidden) stale result card position.
+  try {
+    const top = document.querySelector('[data-route="generate"]');
+    if (top && typeof top.scrollIntoView === "function") {
+      top.scrollIntoView({ block: "start", behavior: "smooth" });
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  } catch {}
+  try { setStatus("New draft started."); } catch {}
+  try { syncGenerateOrbVisibility(); } catch {}
+  try {
+    if (typeof showToast === "function") {
+      showToast("New song started", { icon: "✓", durationMs: 2000 });
+    }
+  } catch {}
 }
 
 window.addEventListener("hashchange", applyRoute);
@@ -7290,24 +7366,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     });
   }
   syncVocalModeUi();
-  const setGenerateFieldsLocked = (locked) => {
-    const lockPreviewAllowed = !locked && Boolean(getVocalReferenceFile());
-    if (els.sunoPrompt) els.sunoPrompt.disabled = locked;
-    if (els.sunoStyle) els.sunoStyle.disabled = locked;
-    if (els.sunoTitle) els.sunoTitle.disabled = locked;
-    if (els.sunoReferenceMode) els.sunoReferenceMode.disabled = locked;
-    if (els.sunoVocalUpload) els.sunoVocalUpload.disabled = locked;
-    if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = locked;
-    if (els.btnMagicUploadVocal) els.btnMagicUploadVocal.disabled = locked;
-    if (els.btnMagicRecordVocal) els.btnMagicRecordVocal.disabled = locked;
-    if (els.vocalModeFull) els.vocalModeFull.disabled = locked;
-    if (els.vocalModeInstrumental) els.vocalModeInstrumental.disabled = locked;
-    if (els.btnPreviewVocalRef) els.btnPreviewVocalRef.disabled = locked ? true : !lockPreviewAllowed;
-    if (els.btnVocalRefStop) els.btnVocalRefStop.disabled = true;
-    if (els.btnOpenAdvancedSheet) els.btnOpenAdvancedSheet.disabled = locked;
-    if (els.btnGenerateOrb) els.btnGenerateOrb.disabled = locked;
-    document.body.classList.toggle("generateLocked", Boolean(locked));
-  };
 
   const countSentences = (text) => {
     const t = String(text || "").trim();
@@ -8970,14 +9028,40 @@ syncCreateTabMorph();
 })();
 
 if (els.brandTitle) {
+  // Double-tap-to-confirm. window.confirm() is unreliable inside an iOS PWA
+  // (and was getting users stuck with a half-reset page), so we use a toast
+  // pattern instead: first tap arms, second tap within 3s actually resets.
+  let _brandResetArmedAt = 0;
+  const ARM_WINDOW_MS = 3000;
   els.brandTitle.addEventListener("click", () => {
-    if ((document.body.getAttribute("data-route") || "") !== "generate") {
+    const route = document.body.getAttribute("data-route") || "";
+    if (route !== "generate") {
       location.hash = "#/generate";
       return;
     }
-    const ok = window.confirm("Start a new song? Current draft will be cleared.");
-    if (!ok) return;
-    resetCreateDraft();
+    const now = Date.now();
+    const isArmed = _brandResetArmedAt && (now - _brandResetArmedAt) <= ARM_WINDOW_MS;
+    if (!isArmed) {
+      _brandResetArmedAt = now;
+      try {
+        if (typeof showToast === "function") {
+          showToast("Tap NabadAi again to start a new song", { icon: "↺", durationMs: 2800 });
+        }
+      } catch {}
+      return;
+    }
+    _brandResetArmedAt = 0;
+    try { resetCreateDraft(); } catch (err) {
+      console.error(err);
+      // Last-resort safety net: even if the reset throws, never leave the
+      // page locked. Strip the locking class and re-enable the generate btn.
+      try { document.body.classList.remove("generateLocked"); } catch {}
+      try { document.body.classList.remove("isBusy"); } catch {}
+      if (els.btnSunoGenerate) {
+        els.btnSunoGenerate.disabled = false;
+        els.btnSunoGenerate.textContent = "Generate song";
+      }
+    }
   });
 }
 els.sunoPrompt?.addEventListener("input", autoResizeLyricsBox);

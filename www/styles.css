@@ -1096,49 +1096,81 @@ body.isAuth .hubNowPlaying{ display:none !important; }
 }
 
 /* Skeleton placeholders for the Hub feed while the first cloud refresh
- * is in flight. Beats the "Hub is quiet" empty state flashing for half
- * a second on cold opens. The shimmer matches the row layout so the
- * paint feels continuous when real posts swap in. */
+ * is in flight. The silhouette mirrors the real `.hubRow` (16:9 art
+ * on top, meta strip with avatar + creator/time, title line, then
+ * the Like/Melody/Share pill row) so the swap from skeleton to real
+ * post feels continuous instead of cutting between two layouts. */
 .hubLoadingSkeleton{
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   padding: 4px 0 12px;
 }
-.hubSkelRow{
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  padding: 8px;
+.hubSkelCard{
+  border: 1px solid rgba(255,255,255,0.08);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.025);
-}
-.hubSkelCover{
-  flex: 0 0 auto;
-  width: 72px;
-  height: 72px;
-  border-radius: 12px;
-  background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.04) 100%);
-  background-size: 200% 100%;
-  animation: hubSkelShimmer 1.2s ease-in-out infinite;
-}
-.hubSkelMeta{
+  padding: 10px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0.012));
   display: flex;
   flex-direction: column;
   gap: 8px;
-  flex: 1 1 auto;
-  min-width: 0;
 }
-.hubSkelMeta > span{
-  display: block;
-  height: 12px;
-  border-radius: 6px;
+.hubSkelArt{
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
   background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.04) 100%);
   background-size: 200% 100%;
   animation: hubSkelShimmer 1.2s ease-in-out infinite;
 }
-.hubSkelMeta > span:nth-child(1){ width: 70%; }
-.hubSkelMeta > span:nth-child(2){ width: 40%; }
+.hubSkelMetaRow{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hubSkelAvatar{
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.04) 100%);
+  background-size: 200% 100%;
+  animation: hubSkelShimmer 1.2s ease-in-out infinite;
+}
+.hubSkelMetaText{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.hubSkelLineSm,
+.hubSkelLineXs,
+.hubSkelTitle,
+.hubSkelPill{
+  display: block;
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.04) 100%);
+  background-size: 200% 100%;
+  animation: hubSkelShimmer 1.2s ease-in-out infinite;
+  border-radius: 6px;
+}
+.hubSkelLineSm{ height: 10px; width: 45%; }
+.hubSkelLineXs{ height: 8px; width: 25%; }
+.hubSkelTitle{ height: 14px; width: 70%; border-radius: 7px; margin-top: 2px; }
+.hubSkelActions{
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.hubSkelPill{
+  flex: 0 0 auto;
+  height: 26px;
+  width: 64px;
+  border-radius: 999px;
+}
+.hubSkelPill:nth-child(1){ width: 56px; }
+.hubSkelPill:nth-child(2){ width: 78px; }
+.hubSkelPill:nth-child(3){ width: 70px; }
 @keyframes hubSkelShimmer{
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }

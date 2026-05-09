@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510profmerge";
+const APP_BUILD = "20260510hubskel";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -3196,11 +3196,31 @@ function renderHub() {
     // sees the empty CTA flash on every cold open before posts arrive.
     const stillLoading = hubSyncInFlight || (!hubLastSyncOk && !hubLastSyncError);
     if (stillLoading) {
+      // Skeletons mirror the real `.hubRow` layout (16:9 cover on
+      // top, meta strip below, action pill row at the bottom) so the
+      // first-paint silhouette matches what's about to land. Reads
+      // as "your feed is loading" instead of "generic placeholder".
+      const skelCard = `
+        <div class="hubSkelCard" aria-hidden="true">
+          <div class="hubSkelArt"></div>
+          <div class="hubSkelMetaRow">
+            <div class="hubSkelAvatar"></div>
+            <div class="hubSkelMetaText">
+              <span class="hubSkelLineSm"></span>
+              <span class="hubSkelLineXs"></span>
+            </div>
+          </div>
+          <div class="hubSkelTitle"></div>
+          <div class="hubSkelActions">
+            <span class="hubSkelPill"></span>
+            <span class="hubSkelPill"></span>
+            <span class="hubSkelPill"></span>
+          </div>
+        </div>
+      `;
       els.hubList.innerHTML = `
         <div class="hubLoadingSkeleton" aria-live="polite" aria-busy="true">
-          <div class="hubSkelRow"><div class="hubSkelCover"></div><div class="hubSkelMeta"><span></span><span></span></div></div>
-          <div class="hubSkelRow"><div class="hubSkelCover"></div><div class="hubSkelMeta"><span></span><span></span></div></div>
-          <div class="hubSkelRow"><div class="hubSkelCover"></div><div class="hubSkelMeta"><span></span><span></span></div></div>
+          ${skelCard}${skelCard}${skelCard}
         </div>
       `;
     } else {

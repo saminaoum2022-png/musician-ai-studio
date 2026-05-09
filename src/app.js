@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510w";
+const APP_BUILD = "20260510x";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -3158,6 +3158,45 @@ function formatLibraryDate(ts) {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
 }
 
+/** Backfill missing meta.imageThumb for tracks whose cover is stored as
+ *  a base64 data URL (i.e. custom covers uploaded before we started
+ *  saving thumbs). Runs lazily after a Library render so the page paints
+ *  first. Skips remote URLs because those usually CORS-block canvas;
+ *  we already lazy-load remote covers anyway, so the saving there is
+ *  small.
+ */
+let _libraryThumbBackfilling = false;
+async function backfillLibraryThumbsLazy() {
+  if (_libraryThumbBackfilling) return;
+  _libraryThumbBackfilling = true;
+  try {
+    const items = loadLibrary();
+    let changed = false;
+    for (const t of items) {
+      const m = t && t.meta;
+      if (!m) continue;
+      if (m.imageThumb) continue;
+      const src = String(m.imageUrl || "").trim();
+      if (!src.startsWith("data:")) continue;
+      // eslint-disable-next-line no-await-in-loop
+      const thumb = await buildCoverThumbDataUrl(src);
+      if (thumb) {
+        m.imageThumb = thumb;
+        changed = true;
+      }
+    }
+    if (changed) {
+      saveLibrary(items);
+      // Re-render once so the thumbs swap in for the next paint.
+      try { renderLibrary(); } catch {}
+    }
+  } catch {
+    // Silent: backfill is purely an optimization.
+  } finally {
+    _libraryThumbBackfilling = false;
+  }
+}
+
 function renderLibrary() {
   if (!els.libraryList) return;
   const items = loadLibrary();
@@ -3184,8 +3223,17 @@ function renderLibrary() {
   }
   els.libraryList.innerHTML = `
     <ul class="libraryRows" role="list">
-      ${items.map((t) => {
-        const art = String((t.meta && t.meta.imageUrl) || t.artUrl || "./assets/nabadai-logo.png");
+      ${items.map((t, i) => {
+        // Prefer the small thumbnail when one is saved (custom covers
+        // generate it on save). Fall back to the full-size cover, then
+        // the original artUrl, then the bundled placeholder. Library
+        // rows render small (~56px) so the thumb is always sharp enough
+        // and shaves the decode cost off long lists.
+        const art = String(
+          (t.meta && (t.meta.imageThumb || t.meta.imageUrl)) ||
+          t.artUrl ||
+          "./assets/nabadai-logo.png"
+        );
         const playing = libraryNowPlayingId === t.id;
         const dateLabel = formatLibraryDate(t.ts);
         const isInstrumental = t.kind === "instrumental";
@@ -3193,11 +3241,18 @@ function renderLibrary() {
         const subBits = [];
         if (dateLabel) subBits.push(`<span class="libRowDot">${escapeHtml(dateLabel)}</span>`);
         if (isInstrumental) subBits.push(`<span class="libRowChip">Instrumental</span>`);
+        // First row paints with high priority so the page never looks
+        // empty above the fold; everything else is lazy + low-priority,
+        // identical pattern to Hub.
+        const isFirst = i === 0;
+        const loadingAttr = isFirst
+          ? `loading="eager" fetchpriority="high"`
+          : `loading="lazy" fetchpriority="low"`;
         return `
           <li class="libRow ${playing ? "libRowPlaying" : ""}" data-lib-row="${t.id}">
             <button class="libRowMain" type="button" data-lib-play="${t.id}" aria-label="Play ${safeTitle}">
               <span class="libRowArt">
-                <img src="${escapeHtml(art)}" alt="" />
+                <img src="${escapeHtml(art)}" alt="" width="56" height="56" decoding="async" ${loadingAttr} />
                 <span class="libRowArtBadge" aria-hidden="true">${playing ? "❚❚" : "▶"}</span>
               </span>
               <span class="libRowInfo">
@@ -3383,6 +3438,15 @@ function renderLibrary() {
       }
     });
   });
+  // Fire-and-forget thumb backfill once the list is in the DOM. Wraps in
+  // requestIdleCallback when available so it never competes with the
+  // initial paint or a play tap.
+  const _scheduleThumbBackfill = () => { void backfillLibraryThumbsLazy(); };
+  if (typeof requestIdleCallback === "function") {
+    requestIdleCallback(_scheduleThumbBackfill, { timeout: 1500 });
+  } else {
+    setTimeout(_scheduleThumbBackfill, 600);
+  }
 }
 function openSongDetailsModal(details) {
   if (!els.songDetailsModal || !els.songDetailsContent) return;
@@ -4420,6 +4484,51 @@ async function fileToCoverDataUrl(file) {
   if (dataUrl.length > 450_000) dataUrl = await downscaleImageDataUrl(dataUrl, 800, 0.72);
   if (dataUrl.length > 280_000) dataUrl = await downscaleImageDataUrl(dataUrl, 640, 0.68);
   return dataUrl;
+}
+
+/** Build a small (256px) JPEG thumbnail from any cover URL/data-URL.
+ *  Library rows render at ~56px so this is plenty crisp; the saving
+ *  is dramatic on lists with many custom covers because we no longer
+ *  hand the browser a 1024px image to decode for every row.
+ *
+ *  Returns "" on failure (CORS, decode error) so callers can fall
+ *  back to the original cover URL.
+ */
+async function buildCoverThumbDataUrl(src) {
+  const s = String(src || "").trim();
+  if (!s) return "";
+  if (s.startsWith("./")) return ""; // bundled placeholder, no thumb needed
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image();
+      // crossOrigin lets us paint remote covers (Suno CDN) into a canvas
+      // when the host serves CORS headers. If it doesn't, the draw will
+      // throw a SecurityError and we return "" — caller falls back to
+      // the original src, no harm done.
+      if (!s.startsWith("data:") && !s.startsWith("blob:")) {
+        i.crossOrigin = "anonymous";
+      }
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error("Could not decode image"));
+      i.src = s;
+    });
+    const max = 256;
+    const w = Number(img.width || 0);
+    const h = Number(img.height || 0);
+    if (!w || !h) return "";
+    const scale = Math.min(1, max / Math.max(w, h));
+    const tw = Math.max(1, Math.round(w * scale));
+    const th = Math.max(1, Math.round(h * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = tw;
+    canvas.height = th;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return "";
+    ctx.drawImage(img, 0, 0, tw, th);
+    return canvas.toDataURL("image/jpeg", 0.7);
+  } catch {
+    return "";
+  }
 }
 
 function preferDirectAudioUrl(url) {
@@ -7766,8 +7875,17 @@ if (els.playerCoverUpload) {
     try {
       setStatus("Processing cover…");
       const url = await fileToCoverDataUrl(f);
-      patchLibraryTrack(currentPlayerTrackRef.id, { artUrl: url, meta: { ...(currentPlayerTrackRef.meta || {}), imageUrl: url } });
-      currentPlayerTrackRef = { ...currentPlayerTrackRef, artUrl: url, meta: { ...(currentPlayerTrackRef.meta || {}), imageUrl: url } };
+      // Build a tiny thumb from the already-downscaled cover so Library
+      // rows don't have to decode the 1024px JPEG. Fail-soft: if it
+      // doesn't generate, rows will fall back to imageUrl.
+      const thumb = await buildCoverThumbDataUrl(url);
+      const newMeta = {
+        ...(currentPlayerTrackRef.meta || {}),
+        imageUrl: url,
+        ...(thumb ? { imageThumb: thumb } : {}),
+      };
+      patchLibraryTrack(currentPlayerTrackRef.id, { artUrl: url, meta: newMeta });
+      currentPlayerTrackRef = { ...currentPlayerTrackRef, artUrl: url, meta: newMeta };
       setPlayerMeta({
         title: els.playerTitle?.textContent || currentPlayerTrackRef.title || "Library song",
         subtitle: els.playerSubtitle?.textContent || "Library • Full song",

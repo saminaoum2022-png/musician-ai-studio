@@ -310,6 +310,7 @@
                     <div class="resultMorePanel">
                       <a id="resultDownload" class="resultMoreLink disabled" href="#" download="generated_song.mp3" rel="noreferrer">Download</a>
                       <a id="btnResultOpenDirect" class="resultMoreLink disabled" href="#" rel="noreferrer" target="_blank">Open in browser</a>
+                      <button id="btnResultPersona" class="resultMoreLink" type="button" data-result-persona="A">Save voice as persona</button>
                     </div>
                   </details>
                 </div>
@@ -358,6 +359,7 @@
                     <div class="resultMorePanel">
                       <a id="resultDownload2" class="resultMoreLink disabled" href="#" download="generated_song_b.mp3" rel="noreferrer">Download</a>
                       <a id="btnResultOpenDirect2" class="resultMoreLink disabled" href="#" rel="noreferrer" target="_blank">Open in browser</a>
+                      <button id="btnResultPersona2" class="resultMoreLink" type="button" data-result-persona="B">Save voice as persona</button>
                     </div>
                   </details>
                 </div>
@@ -595,7 +597,7 @@
                 <option value="">None (default voice)</option>
                 </select>
               </label>
-              <button id="btnCreatePersona" class="ghost advancedPersonaBtn" type="button">Create persona from last song</button>
+              <button id="btnCreatePersona" class="ghost advancedPersonaBtn" type="button" title="Save the voice from your last finished song as a reusable persona">Save voice as persona (from last song)</button>
             </div>
             <div class="hint compactHint">Voice controls tone and dialect behavior.</div>
           </details>
@@ -928,8 +930,13 @@
               <div class="profilePersonaLine">
                 <strong id="profilePersonaLabel">—</strong>
               </div>
-              <div class="profilePersonaHint">
-                Create → <strong>Options</strong> → Voice → choose persona or create from last song.
+              <div id="profilePersonaHint" class="profilePersonaHint">
+                Save a voice as persona from any of these spots:
+                <ul class="profilePersonaSpots">
+                  <li>After a song finishes → tap the ⋯ on the result card → <strong>Save voice as persona</strong>.</li>
+                  <li>In <a href="#/library">Library</a> → tap ⋯ on a song → <strong>Save voice as persona</strong>.</li>
+                  <li>On any <a href="#/hub">Hub</a> post → tap ⋯ → <strong>Save voice as persona</strong>.</li>
+                </ul>
               </div>
             </div>
             <a href="#/generate" class="profilePersonaLink">Open Create</a>
@@ -1479,6 +1486,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260509persona2"></script>
+    <script type="module" src="./src/app.js?v=20260509persona3"></script>
   </body>
 </html>

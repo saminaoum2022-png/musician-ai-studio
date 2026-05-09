@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509persona2";
+const APP_BUILD = "20260509persona3";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1679,12 +1679,15 @@ function updateProfilePersonaRow() {
   const id = idFromSelect || idSaved;
   const list = loadPersonas();
   const hit = list.find((x) => String(x.personaId) === id);
-  if (!id || !hit) {
-    els.profilePersonaRow.style.display = "none";
-    return;
-  }
   els.profilePersonaRow.style.display = "";
-  els.profilePersonaLabel.textContent = hit.label || id.slice(0, 12) + "…";
+  const hint = document.getElementById("profilePersonaHint");
+  if (id && hit) {
+    els.profilePersonaLabel.textContent = hit.label || id.slice(0, 12) + "…";
+    if (hint) hint.style.display = "none";
+  } else {
+    els.profilePersonaLabel.textContent = "No persona selected";
+    if (hint) hint.style.display = "";
+  }
 }
 const AUTH_SESSION_KEY = "mas:supabase:session:v1";
 const AUTH_PKCE_KEY = "mas:supabase:pkce:v1";
@@ -3006,7 +3009,7 @@ function renderHub() {
       </div>
       <div class="libMenu hubMoreMenu" id="hubMore_${p.id}" style="display:none">
         <button class="ghost" data-hub-remix="${p.id}">Remix</button>
-        <button class="ghost" data-hub-persona="${p.id}">Use this voice (persona)</button>
+        <button class="ghost" data-hub-persona="${p.id}">Save voice as persona</button>
         <button class="ghost" data-hub-del="${p.id}">Remove</button>
       </div>
     </div>
@@ -3369,45 +3372,65 @@ function addPersona(personaId, label) {
   renderPersonaSelect();
 }
 
-async function createPersonaFromHubPost(post) {
-  const taskId = String(post?.meta?.taskId || "").trim();
-  const audioId = String(post?.meta?.audioId || "").trim();
-  const creator = String(post?.creator || "artist").trim() || "artist";
-  const title = String(post?.title || "song").trim() || "song";
-  if (!taskId || !audioId) {
-    const msg = "This post is older and doesn't carry a voice signature. Try a newer post.";
+/**
+ * One shared persona-creation helper used by every entry point in the app
+ * (Result card, Library row, Hub more-menu, Advanced Options). Each caller
+ * passes whatever it knows; we build a sensible name + description from the
+ * available metadata and call /api/suno/persona.
+ *
+ * Required: taskId + audioId. Returns the new personaId on success.
+ */
+async function createPersonaForSong({
+  taskId,
+  audioId,
+  title,
+  style,
+  voiceProfile,
+  dialect,
+  timbre,
+  creator,
+  source, // "result" | "library" | "hub" | "options"
+} = {}) {
+  const tId = String(taskId || "").trim();
+  const aId = String(audioId || "").trim();
+  if (!tId || !aId) {
+    const msg = "This song is missing the voice signature. Generate a new song or try a newer one.";
     setStatus(msg);
     showToast(msg, { icon: "!", durationMs: 3600 });
-    return;
+    return null;
   }
-  const ok = window.confirm(
-    `Save @${creator}'s voice from "${title}" as a persona you can reuse?`
-  );
-  if (!ok) return;
+
+  const songTitle = String(title || "").trim();
+  const styleStr = String(style || "").trim();
+  const personaName = creator
+    ? `@${String(creator).trim()} · ${songTitle || "voice"}`.slice(0, 60)
+    : (songTitle ? `${songTitle} voice` : `My voice ${new Date().toLocaleDateString()}`).slice(0, 60);
+  const descParts = [
+    creator ? `Captured from @${creator}'s post "${songTitle || "song"}".`
+            : (songTitle ? `Captured from "${songTitle}".` : ""),
+    styleStr ? `Style: ${styleStr}.` : "",
+    voiceProfile ? `Voice: ${voiceProfile}.` : "",
+    dialect ? `Dialect: ${dialect}.` : "",
+    timbre ? `Timbre: ${timbre}.` : "",
+  ].filter(Boolean);
+  const personaDescription = (descParts.join(" ") || "A reusable vocal style captured from a previous generation.").slice(0, 580);
+  const personaStyle = styleStr.split(/[,|]/)[0]?.trim().slice(0, 60) || "";
+
   try {
     setLoading(true, {
-      title: "Saving voice…",
-      sub: `Capturing @${creator}'s vocal style as a persona.`,
+      title: "Saving voice as persona…",
+      sub: creator
+        ? `Capturing @${creator}'s vocal style.`
+        : (songTitle ? `Capturing the voice from "${songTitle}".` : "Capturing the vocal style."),
     });
     showToast("Saving voice as persona…", { icon: "♪", durationMs: 2400 });
-
-    const styleStr = String(post?.meta?.style || post?.style || "").trim();
-    const dialect = String(post?.meta?.dialect || "").trim();
-    const personaName = `@${creator} · ${title}`.slice(0, 60);
-    const descParts = [
-      `Captured from @${creator}'s post "${title}".`,
-      styleStr ? `Style: ${styleStr}.` : "",
-      dialect ? `Dialect: ${dialect}.` : "",
-    ].filter(Boolean);
-    const personaDescription = descParts.join(" ").slice(0, 580);
-    const personaStyle = styleStr.split(/[,|]/)[0]?.trim().slice(0, 60) || "";
 
     const r = await fetch(apiUrl("/api/suno/persona"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        taskId,
-        audioId,
+        taskId: tId,
+        audioId: aId,
         name: personaName,
         description: personaDescription,
         ...(personaStyle ? { style: personaStyle } : {}),
@@ -3423,20 +3446,50 @@ async function createPersonaFromHubPost(post) {
     }
     const personaId = String(d?.personaId || "").trim();
     if (!personaId) throw new Error("Persona created but ID was missing.");
+
     addPersona(personaId, personaName);
     if (els.sunoPersonaId) els.sunoPersonaId.value = personaId;
     try { savePersonaSelection(personaId); } catch {}
+    try { renderPersonaSelect(); } catch {}
     try { updateProfilePersonaRow(); } catch {}
-    const okMsg = `Saved @${creator}'s voice. It will be used on your next generations.`;
+    const okMsg = "Persona saved & selected for your next generations.";
     setStatus(okMsg);
-    showToast(`Voice saved: @${creator}`, { icon: "✓", durationMs: 3200 });
+    showToast(creator ? `Voice saved: @${creator}` : "Persona saved & selected", { icon: "✓", durationMs: 3200 });
+    return personaId;
   } catch (e) {
     const errMsg = `Couldn't save voice: ${e?.message || String(e)}`;
     setStatus(errMsg);
     showToast(errMsg, { icon: "!", durationMs: 4400 });
+    return null;
   } finally {
     setLoading(false);
   }
+}
+
+async function createPersonaFromHubPost(post) {
+  const taskId = String(post?.meta?.taskId || "").trim();
+  const audioId = String(post?.meta?.audioId || "").trim();
+  const creator = String(post?.creator || "artist").trim() || "artist";
+  const title = String(post?.title || "song").trim() || "song";
+  if (!taskId || !audioId) {
+    const msg = "This post is older and doesn't carry a voice signature. Try a newer post.";
+    setStatus(msg);
+    showToast(msg, { icon: "!", durationMs: 3600 });
+    return;
+  }
+  const ok = window.confirm(
+    `Save @${creator}'s voice from "${title}" as a persona you can reuse?`
+  );
+  if (!ok) return;
+  await createPersonaForSong({
+    taskId,
+    audioId,
+    title,
+    style: post?.meta?.style || post?.style,
+    dialect: post?.meta?.dialect,
+    creator,
+    source: "hub",
+  });
 }
 
 let profileEditing = false;
@@ -4483,13 +4536,17 @@ let _libraryOpenMenuId = "";
  */
 function buildLibMenuHtml(track) {
   const id = String(track?.id || "");
-  const isInstrumental = track?.kind === "instrumental";
+  const kind = String(track?.kind || "full");
+  const isInstrumental = kind === "instrumental";
+  const isSound = kind === "sound";
   const url = String(track?.url || "");
+  const personaEligible = !isInstrumental && !isSound && Boolean(track?.taskId) && Boolean(track?.audioId);
   return `
     <div class="libMenu" id="libMenu_${id}">
       <a class="ghost" href="${escapeHtml(url)}" target="_blank" rel="noreferrer" data-lib-dlaudio="${id}">Download audio</a>
       <button class="ghost" data-lib-dlvideo="${id}">Download video</button>
       <button class="ghost" data-lib-share="${id}">Share to Hub</button>
+      ${personaEligible ? `<button class="ghost" data-lib-persona="${id}">Save voice as persona</button>` : ""}
       <button class="ghost" data-lib-details="${id}">Song details</button>
       ${isInstrumental ? "" : `<button class="ghost" data-lib-inst="${id}">Get instrumental</button>`}
       ${isInstrumental ? "" : `<button class="ghost" data-lib-stems="${id}">Get stems</button>`}
@@ -4588,6 +4645,25 @@ function bindLibraryDelegatedListeners() {
           setStatus("Shared to Hub.");
         }
         closeLibraryMenu();
+        return;
+      }
+      const persona = target.closest("[data-lib-persona]");
+      if (persona) {
+        const id = persona.getAttribute("data-lib-persona");
+        const t = loadLibrary().find((x) => x.id === id);
+        closeLibraryMenu();
+        if (t) {
+          await createPersonaForSong({
+            taskId: t.taskId,
+            audioId: t.audioId,
+            title: t.title,
+            style: t?.meta?.style,
+            voiceProfile: t?.meta?.voiceProfile,
+            dialect: t?.meta?.dialect,
+            timbre: activeProfile?.voiceTimbre,
+            source: "library",
+          });
+        }
         return;
       }
       const dlv = target.closest("[data-lib-dlvideo]");
@@ -8560,6 +8636,63 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       await shareGeneratedTrack("b");
     });
   }
+
+  // "Save voice as persona" — placed in the result card's more-menu so the
+  // user sees it the moment a song finishes, not buried in Advanced Options.
+  const btnResultPersona = document.getElementById("btnResultPersona");
+  const btnResultPersona2 = document.getElementById("btnResultPersona2");
+  if (btnResultPersona) {
+    btnResultPersona.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      haptic("light");
+      if (!sunoTaskId || !sunoAudioId) {
+        showToast("Wait until your song fully finishes, then try again.", { icon: "!", durationMs: 3600 });
+        return;
+      }
+      try {
+        btnResultPersona.disabled = true;
+        await createPersonaForSong({
+          taskId: sunoTaskId,
+          audioId: sunoAudioId,
+          title: lastSunoTitle,
+          style: els.sunoStyle?.value || lastGenerationMeta?.style,
+          voiceProfile: els.sunoVoiceProfile?.value || lastGenerationMeta?.voiceProfile,
+          dialect: els.sunoDialect?.value || lastGenerationMeta?.dialect,
+          timbre: activeProfile?.voiceTimbre,
+          source: "result",
+        });
+      } finally {
+        btnResultPersona.disabled = false;
+      }
+    });
+  }
+  if (btnResultPersona2) {
+    btnResultPersona2.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      haptic("light");
+      if (!sunoTaskId || !lastSunoAudioId2) {
+        showToast("Wait until version B fully finishes, then try again.", { icon: "!", durationMs: 3600 });
+        return;
+      }
+      try {
+        btnResultPersona2.disabled = true;
+        await createPersonaForSong({
+          taskId: sunoTaskId,
+          audioId: lastSunoAudioId2,
+          title: lastSunoTitle2 || lastSunoTitle,
+          style: els.sunoStyle?.value || lastGenerationMeta?.style,
+          voiceProfile: els.sunoVoiceProfile?.value || lastGenerationMeta?.voiceProfile,
+          dialect: els.sunoDialect?.value || lastGenerationMeta?.dialect,
+          timbre: activeProfile?.voiceTimbre,
+          source: "result",
+        });
+      } finally {
+        btnResultPersona2.disabled = false;
+      }
+    });
+  }
   if (els.btnResultListenRef) {
     // Opens the exact temporary file Suno received as the vocal reference in a
     // new tab so the system audio player handles it. We deliberately avoid the
@@ -10296,61 +10429,18 @@ if (els.btnCreatePersona) {
     }
     try {
       els.btnCreatePersona.disabled = true;
-      setLoading(true, { title: "Creating persona…", sub: "Building persona from your last generated song." });
-      showToast("Creating persona from your last song…", { icon: "♪", durationMs: 2400 });
-
-      // Build a useful name + description from what we know about the song.
-      const songTitle = String(lastSunoTitle || "").trim();
-      const styleStr = String(els.sunoStyle?.value || lastGenerationMeta?.style || "").trim();
-      const dialect = String(els.sunoDialect?.value || lastGenerationMeta?.dialect || "").trim();
-      const voiceProfile = String(els.sunoVoiceProfile?.value || lastGenerationMeta?.voiceProfile || "").trim();
-      const timbre = String(activeProfile?.voiceTimbre || "").trim();
-      const personaName = (songTitle ? `${songTitle} voice` : `My voice ${new Date().toLocaleDateString()}`).slice(0, 60);
-      const descParts = [
-        songTitle ? `Captured from "${songTitle}".` : "",
-        styleStr ? `Style: ${styleStr}.` : "",
-        voiceProfile ? `Voice: ${voiceProfile}.` : "",
-        dialect ? `Dialect: ${dialect}.` : "",
-        timbre ? `Timbre: ${timbre}.` : "",
-      ].filter(Boolean);
-      const personaDescription = (descParts.join(" ") || "A reusable vocal style captured from a previous generation.").slice(0, 580);
-      const personaStyle = styleStr.split(/[,|]/)[0]?.trim().slice(0, 60) || "";
-
-      const r = await fetch(apiUrl("/api/suno/persona"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          taskId: sunoTaskId,
-          audioId: sunoAudioId,
-          name: personaName,
-          description: personaDescription,
-          ...(personaStyle ? { style: personaStyle } : {}),
-        }),
+      await createPersonaForSong({
+        taskId: sunoTaskId,
+        audioId: sunoAudioId,
+        title: lastSunoTitle,
+        style: els.sunoStyle?.value || lastGenerationMeta?.style,
+        voiceProfile: els.sunoVoiceProfile?.value || lastGenerationMeta?.voiceProfile,
+        dialect: els.sunoDialect?.value || lastGenerationMeta?.dialect,
+        timbre: activeProfile?.voiceTimbre,
+        source: "options",
       });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        const det = d?.details;
-        const extra = det
-          ? ` — ${typeof det === "string" ? det : JSON.stringify(det).slice(0, 200)}`
-          : "";
-        throw new Error((d?.error || "Persona creation failed") + extra);
-      }
-      const personaId = String(d?.personaId || "").trim();
-      if (!personaId) throw new Error("Persona created but ID was missing.");
-      addPersona(personaId, personaName);
-      if (els.sunoPersonaId) els.sunoPersonaId.value = personaId;
-      try { savePersonaSelection(personaId); } catch {}
-      try { updateProfilePersonaRow(); } catch {}
-      const okMsg = "Persona saved and selected. It will be used on your next generations.";
-      setStatus(okMsg);
-      showToast("Persona saved & selected", { icon: "✓", durationMs: 3000 });
-    } catch (e) {
-      const errMsg = `Persona failed: ${e?.message || String(e)}`;
-      setStatus(errMsg);
-      showToast(errMsg, { icon: "!", durationMs: 4400 });
     } finally {
       els.btnCreatePersona.disabled = false;
-      setLoading(false);
     }
   });
 }

@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260509hubsnap2";
+const APP_BUILD = "20260509hubplay";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1093,13 +1093,16 @@ function applyRoute() {
     updateHubAudioHint();
     try { renderHub(); } catch {}
     requestAnimationFrame(() => updateHubFocusedRow());
-    // Kick autoplay immediately on entry so the first centered post
-    // plays without the user having to scroll. Two attempts: an instant
-    // try (covers the case where the click handler already unlocked
-    // audio for us) and a short follow-up so we win even if the layout
-    // hasn't settled yet.
-    setTimeout(() => flushHubViewportAutoplay(), 0);
-    setTimeout(() => flushHubViewportAutoplay(), 220);
+    // Kick autoplay on entry — but never override an already-active
+    // pick. The Hub-tab click handler may have synchronously started
+    // playback inside the gesture (the only way iOS reliably unlocks
+    // audio); blindly flushing here would yank that choice away.
+    setTimeout(() => {
+      if (!hubAudioPostId) flushHubViewportAutoplay();
+    }, 0);
+    setTimeout(() => {
+      if (!hubAudioPostId) flushHubViewportAutoplay();
+    }, 240);
     // Always trigger a Supabase refresh on entering Hub. Boot already does
     // this once, but a cold visitor landing directly on `#/hub?post=ID`
     // (from a shared link) may render before boot's refresh resolves —
@@ -3141,6 +3144,11 @@ function renderHub() {
         return;
       }
       hubAutoplayMutedPostId = null;
+      // Mute scroll-driven autoplay for ~900ms so a snap-induced scroll
+      // event (iOS may briefly re-snap when the row layout shifts as
+      // audio loads) can't immediately switch playback to the *next*
+      // centered post and make the user's tap feel like it stopped.
+      suppressHubViewportAutoplayFor(900);
       await startHubPlayback(id);
     })
   );
@@ -9592,22 +9600,25 @@ if (els.hubTabLink) {
   let hubSingleTimer = null;
   els.hubTabLink.addEventListener("click", (e) => {
     const onHub = (document.body.getAttribute("data-route") || "") === "hub";
-    // Tapping the Hub tab is a real user gesture — even when navigating
-    // *into* Hub from another tab. Use it to satisfy iOS Safari's
-    // "audio requires gesture" rule so the very first post on the feed
-    // can autoplay on entry, instead of forcing the user to tap ▶ first.
+    // Tapping the Hub tab from another tab is a real user gesture. Use
+    // it to start playback of the top post *synchronously inside the
+    // click* — that's the only thing iOS Safari accepts as an audio
+    // unlock. Setting a flag and calling play() later from setTimeout
+    // would just be silently rejected.
     if (!onHub) {
       try {
         setHubAudioUnlocked();
-        ensureHubAudio();
-        // A silent play()/pause() inside the click handler primes the
-        // shared audio element. Subsequent programmatic play() calls
-        // inside `tryHubViewportAutoplay` will then be allowed.
-        if (hubAudio) {
-          hubAudio.muted = false;
-          const p = hubAudio.play();
-          if (p && typeof p.catch === "function") p.catch(() => {});
-          try { hubAudio.pause(); } catch {}
+        const feed = loadHubFeed();
+        const first = feed && feed[0];
+        if (first?.url) {
+          // Fire-and-forget: navigation will happen on next tick via
+          // the link's default href. The audio element is global so
+          // playback continues into the Hub view; renderHub re-applies
+          // the visual playing state when the rows mount.
+          void startHubPlayback(first.id);
+          // And don't let scroll-snap immediately swap to a different
+          // post when the Hub view paints in.
+          suppressHubViewportAutoplayFor(1200);
         }
       } catch {}
       return;

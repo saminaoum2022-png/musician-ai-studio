@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510ak";
+const APP_BUILD = "20260510al";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1683,6 +1683,7 @@ function resetProfileUiToGuest() {
   _libraryHydrateInFlight = false;
   _libraryHydrateCompleted = false;
   _lastUserSongInsertFailure = "";
+  invalidateLibraryMemCache();
   renderProfilePreviewFromInputs();
   renderProfileHubShared();
   setProfileEditing(false);
@@ -1905,6 +1906,7 @@ async function supabaseLoadUserSongs() {
         Authorization: `Bearer ${token}`,
       },
       signal: ctrl.signal,
+      cache: "no-store",
     });
   } catch (e) {
     clearTimeout(timer);
@@ -2978,8 +2980,20 @@ function syncActiveProfileIdFromSession() {
   invalidateLibraryMemCache();
 }
 
+/** Where the Library JSON blob lives in localStorage. When signed in,
+ *  always key off `authSession.user.id` — not `activeProfile.id`, which
+ *  can still be `"guest"` until async boot finishes. Otherwise `saveLibrary`
+ *  writes `mas:library:v1:guest` while `saveLibraryFor(uid)` writes the
+ *  real account key; `loadLibrary()` then reads the wrong slot and looks
+ *  empty despite a successful cloud merge. */
+function getLibraryStorageKey() {
+  const uid = authSession?.user?.id;
+  if (uid) return profileLibraryKeyFor(uid);
+  return profileLibraryKey();
+}
+
 function loadLibrary() {
-  const key = profileLibraryKey();
+  const key = getLibraryStorageKey();
   if (_libraryMemCacheKey === key && _libraryMemCache) return _libraryMemCache;
   try {
     const raw = localStorage.getItem(key);
@@ -3091,7 +3105,7 @@ function loadAllLocalSongsDeduped() {
 }
 function saveLibrary(items) {
   try {
-    const key = profileLibraryKey();
+    const key = getLibraryStorageKey();
     localStorage.setItem(key, JSON.stringify(items || []));
     _libraryMemCache = Array.isArray(items) ? items : [];
     _libraryMemCacheKey = key;
@@ -3139,10 +3153,11 @@ async function syncHubCoverForTrack(track, coverUrl) {
 }
 function saveLibraryFor(id, items) {
   try {
-    localStorage.setItem(profileLibraryKeyFor(id), JSON.stringify(items || []));
-    if (String(id || "") === String(activeProfile?.id || "guest")) {
+    const writeKey = profileLibraryKeyFor(id);
+    localStorage.setItem(writeKey, JSON.stringify(items || []));
+    if (writeKey === getLibraryStorageKey()) {
       _libraryMemCache = Array.isArray(items) ? items : [];
-      _libraryMemCacheKey = profileLibraryKey();
+      _libraryMemCacheKey = writeKey;
     }
   } catch {}
 }
@@ -3163,7 +3178,7 @@ let _libraryHydrateInFlight = false;
  */
 let _libraryHydrateCompleted = false;
 
-async function ensureUserLibraryHydrated() {
+async function ensureUserLibraryHydrated(prefetchedCloud) {
   if (!authSession?.user?.id) {
     // No session → there's nothing to hydrate; mark complete so the
     // empty-state stops showing the "Loading your library…" copy and
@@ -3173,6 +3188,7 @@ async function ensureUserLibraryHydrated() {
     return;
   }
   const uid = String(authSession.user.id);
+  syncActiveProfileIdFromSession();
 
   _libraryHydrateInFlight = true;
   // Safety net: if the network hangs (e.g. captive Wi-Fi / blocked
@@ -3196,7 +3212,8 @@ async function ensureUserLibraryHydrated() {
   }
 
   // 1) Load cloud + local candidates and merge-dedupe.
-  const cloudSongs = await supabaseLoadUserSongs();
+  const cloudSongs =
+    prefetchedCloud !== undefined ? prefetchedCloud : await supabaseLoadUserSongs();
   const guestSongs = loadLibraryFor("guest");
   const allLocalSongs = loadAllLocalSongsDeduped();
   const localCandidates = guestSongs.length ? guestSongs : allLocalSongs;
@@ -3825,8 +3842,8 @@ async function runLibraryDiagnostic() {
     lines.push(`auth.user.id: ${uid || "(none)"}`);
     lines.push(`token length: ${token ? token.length : 0}`);
     lines.push(`activeProfile.id: ${String(activeProfile?.id || "")}`);
-    const libKey = profileLibraryKey();
-    lines.push(`profileLibraryKey: ${libKey}`);
+    const libKey = getLibraryStorageKey();
+    lines.push(`libraryStorageKey: ${libKey}`);
     let rawLen = 0;
     try { rawLen = (localStorage.getItem(libKey) || "").length; } catch {}
     lines.push(`local raw bytes @ key: ${rawLen}`);
@@ -3885,11 +3902,14 @@ async function runLibraryDiagnostic() {
         const sample = cloudSongs[0];
         lines.push(`first row: title="${String(sample?.title || "").slice(0, 40)}" url=${(sample?.url || "").slice(0, 60)}`);
       }
-      await ensureUserLibraryHydrated();
+      await ensureUserLibraryHydrated(cloudSongs);
       const afterLen = loadLibrary().length;
       lines.push(`loadLibrary() before=${beforeLen} after=${afterLen}`);
       lines.push(`activeProfile.id (post-hydrate): ${String(activeProfile?.id || "")}`);
-      lines.push(`profileLibraryKey (post-hydrate): ${profileLibraryKey()}`);
+      lines.push(`libraryStorageKey (post-hydrate): ${getLibraryStorageKey()}`);
+      let rawAfter = 0;
+      try { rawAfter = (localStorage.getItem(getLibraryStorageKey()) || "").length; } catch {}
+      lines.push(`local raw bytes @ key (post-hydrate): ${rawAfter}`);
       if (afterLen > 0) {
         lines.push("→ hydrate succeeded; list refreshed below.");
         try { renderLibrary(); } catch {}

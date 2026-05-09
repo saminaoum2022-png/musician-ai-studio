@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510proofcert";
+const APP_BUILD = "20260510profilebar";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -278,6 +278,7 @@ const els = {
   profileIsPublic: document.getElementById("profileIsPublic"),
   btnProfileSave: document.getElementById("btnProfileSave"),
   btnProfileEdit: document.getElementById("btnProfileEdit"),
+  profileEditActions: document.getElementById("profileEditActions"),
   btnProfileCancel: document.getElementById("btnProfileCancel"),
   profileOwnStats: document.getElementById("profileOwnStats"),
   profileOwnSongCount: document.getElementById("profileOwnSongCount"),
@@ -3999,8 +4000,10 @@ function setProfileEditing(on) {
   if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.disabled = !profileEditing;
   if (els.profilePreviewBioInput) els.profilePreviewBioInput.disabled = !profileEditing;
   if (els.btnProfileEdit) els.btnProfileEdit.style.display = profileEditing ? "none" : "";
-  if (els.btnProfileCancel) els.btnProfileCancel.style.display = profileEditing ? "" : "none";
-  if (els.btnProfileSave) els.btnProfileSave.style.display = profileEditing ? "" : "none";
+  if (els.profileEditActions) {
+    els.profileEditActions.style.display = profileEditing ? "flex" : "none";
+    els.profileEditActions.setAttribute("aria-hidden", profileEditing ? "false" : "true");
+  }
   const hint = document.getElementById("profileAvatarEditHint");
   if (hint) hint.style.display = profileEditing ? "" : "none";
   renderProfileUsernamePrompt();

@@ -29,7 +29,7 @@
     <link rel="dns-prefetch" href="https://cdn2.suno.ai" />
     <link rel="dns-prefetch" href="https://cdn4.suno.ai" />
     <link rel="dns-prefetch" href="https://suno.com" />
-    <link rel="stylesheet" href="./styles.css?v=20260510proofcert" />
+    <link rel="stylesheet" href="./styles.css?v=20260510profilebar" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -816,9 +816,13 @@
             <div class="profileOwnHead">
               <h2 class="profileOwnTitle">Profile</h2>
               <div class="profileOwnToolbar">
-                <button type="button" id="btnProfileEdit" class="profileOwnBtnEdit" aria-label="Edit profile">Edit</button>
-                <button type="button" id="btnProfileCancel" class="profileOwnBtnCancel" style="display:none" aria-label="Cancel editing">Cancel</button>
-                <button type="button" id="btnProfileSave" class="primary profileOwnBtnSave" style="display:none" aria-label="Save profile">Save</button>
+                <div class="profileOwnPrimaryActions">
+                  <button type="button" id="btnProfileEdit" class="profileOwnBtnEdit" aria-label="Edit profile">Edit</button>
+                  <div id="profileEditActions" class="profileOwnEditActions" style="display:none" aria-hidden="true">
+                    <button type="button" id="btnProfileCancel" class="profileOwnBtnCancel" aria-label="Cancel editing">Cancel</button>
+                    <button type="button" id="btnProfileSave" class="primary profileOwnBtnSave" aria-label="Save profile">Save</button>
+                  </div>
+                </div>
                 <a href="#/settings" id="btnProfileSettingsGear" class="profileOwnBtnGear" aria-label="Settings" title="Settings">
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <circle cx="12" cy="12" r="3"/>
@@ -1585,6 +1589,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260510proofcert"></script>
+    <script type="module" src="./src/app.js?v=20260510profilebar"></script>
   </body>
 </html>

@@ -29,7 +29,7 @@
     <link rel="dns-prefetch" href="https://cdn2.suno.ai" />
     <link rel="dns-prefetch" href="https://cdn4.suno.ai" />
     <link rel="dns-prefetch" href="https://suno.com" />
-    <link rel="stylesheet" href="./styles.css?v=20260510voicechip" />
+    <link rel="stylesheet" href="./styles.css?v=20260510iosnoselect" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1455,7 +1455,7 @@
           <pre id="songDetailsContent" class="code" style="max-height:55vh; white-space:pre-wrap"></pre>
         </div>
       </div>
-      <div id="vocalRecorderModal" class="songDetailsModal" style="display:none">
+      <div id="vocalRecorderModal" class="songDetailsModal modalNoTextSelect" style="display:none">
         <div class="songDetailsBackdrop" id="vocalRecorderBackdrop"></div>
         <div class="songDetailsSheet recorderSheet">
           <div class="row" style="justify-content:space-between;align-items:center">
@@ -1474,7 +1474,7 @@
       <!-- Calling card recorder. Long-press your own avatar to open.
            8-second cap, autoplays once on first profile visit so other
            visitors hear a tiny intro from the creator. -->
-      <div id="callingCardModal" class="songDetailsModal" style="display:none" aria-hidden="true">
+      <div id="callingCardModal" class="songDetailsModal modalNoTextSelect" style="display:none" aria-hidden="true">
         <div class="songDetailsBackdrop" id="callingCardBackdrop"></div>
         <div class="songDetailsSheet callingCardSheet">
           <div class="row" style="justify-content:space-between;align-items:center">
@@ -1738,6 +1738,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260510voicechip"></script>
+    <script type="module" src="./src/app.js?v=20260510iosnoselect"></script>
   </body>
 </html>

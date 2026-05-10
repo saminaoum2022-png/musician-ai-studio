@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510voicechip";
+const APP_BUILD = "20260510iosnoselect";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -2400,6 +2400,21 @@ async function refreshUserPublicCallingCard(rawUsername) {
   } catch {
     chip.dataset.state = "idle";
   }
+}
+
+/** iOS Safari still fires selection UI on some long-press paths even when
+ *  CSS says user-select:none. Belt-and-braces: kill selectstart /
+ *  contextmenu / dragstart at capture phase on modal roots that are
+ *  interactive shells (recording, not reading). */
+function installModalNoSelectGuards(root) {
+  if (!root || root.dataset.noSelectGuards === "1") return;
+  root.dataset.noSelectGuards = "1";
+  const stop = (ev) => {
+    ev.preventDefault();
+  };
+  root.addEventListener("selectstart", stop, { capture: true });
+  root.addEventListener("contextmenu", stop, { capture: true });
+  root.addEventListener("dragstart", stop, { capture: true });
 }
 
 /** Long-press helper. Fires `cb()` after `holdMs` if the pointer
@@ -9644,6 +9659,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       closeVocalRecorderModal();
     });
   }
+
+  installModalNoSelectGuards(els.vocalRecorderModal);
+  installModalNoSelectGuards(els.callingCardModal);
 
   // Calling card recorder ----------------------------------------------
   if (els.btnCloseCallingCard) {

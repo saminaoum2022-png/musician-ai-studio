@@ -5058,6 +5058,23 @@ input[type="range"]::-moz-range-thumb{
   inset: 0;
   z-index: 120;
 }
+
+/* iOS Safari treats long-press on text as “select word” and shows the
+ * Copy / Look Up / Translate bar — which fights our own long-press and
+ * recording UI. These modals are control surfaces, not documents; kill
+ * selection and the magnifier/callout chrome everywhere inside them.
+ *
+ * Buttons remain fully tappable; we’re only suppressing text selection. */
+.modalNoTextSelect,
+.modalNoTextSelect *{
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+}
+.modalNoTextSelect ::selection{
+  background: transparent;
+}
+
 .songDetailsBackdrop{
   position:absolute;
   inset:0;

@@ -29,7 +29,7 @@
     <link rel="dns-prefetch" href="https://cdn2.suno.ai" />
     <link rel="dns-prefetch" href="https://cdn4.suno.ai" />
     <link rel="dns-prefetch" href="https://suno.com" />
-    <link rel="stylesheet" href="./styles.css?v=20260511profilehubplay" />
+    <link rel="stylesheet" href="./styles.css?v=20260511backingtracklabel" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -446,12 +446,12 @@
                       <button id="btnPreviewVocalRef" class="ghost" type="button" disabled>Listen</button>
                     </div>
                     <div class="segPill vocalModePill" role="group" aria-label="Vocal output mode">
-                      <button id="vocalModeFull" type="button" class="ghost active">Full song</button>
-                      <button id="vocalModeInstrumental" type="button" class="ghost">Instrumental</button>
+                      <button id="vocalModeFull" type="button" class="ghost active" title="AI sings your lyrics on a new arrangement (your voice is replaced)">Full song</button>
+                      <button id="vocalModeInstrumental" type="button" class="ghost" title="Generates a backing band that follows your melody — no vocals in the result">Backing track</button>
                     </div>
                     <input id="vocalInstrumentalOnly" type="hidden" value="0" />
                     <div id="sunoVocalUploadName" class="hint uploadVocalsName">No vocal reference attached.</div>
-                    <div id="vocalRefHint" class="hint" style="margin-top:6px; display:none">Audio reference attached. You can choose full song or instrumental-only.</div>
+                    <div id="vocalRefHint" class="hint" style="margin-top:6px; display:none">Audio reference attached. Choose <strong>Full song</strong> (AI re-sings your lyrics) or <strong>Backing track</strong> (band that follows your melody, no vocals).</div>
                   </div>
                 </details>
               </div>
@@ -1791,6 +1791,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260511profilehubplay"></script>
+    <script type="module" src="./src/app.js?v=20260511backingtracklabel"></script>
   </body>
 </html>

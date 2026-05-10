@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511profilehubplay";
+const APP_BUILD = "20260511backingtracklabel";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -11135,7 +11135,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const hubRemixLocked = Boolean(currentRemixSource?.id);
       const modeLabel = hasReference
         ? referenceInstrumentalOnly
-          ? "Reference: Instrumental only"
+          ? "Reference: Backing track (no vocals)"
           : hubRemixLocked
             ? "Hub remix (melody / arrangement locked)"
             : "Reference: Full song"

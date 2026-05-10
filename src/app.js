@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510pagewidth";
+const APP_BUILD = "20260510personavoice";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -10620,6 +10620,23 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             .filter(Boolean)
             .join(", ");
 
+      const personaIdSel = (els.sunoPersonaId?.value || "").trim();
+      // Voice personas only work on V5 (Suno docs). The server will also
+      // coerce this defensively; we set it here so the client knows
+      // which engine label to display and to keep request → response in
+      // sync if a future build exposes a personaModel toggle.
+      const personaModelSel = personaIdSel ? "voice_persona" : "";
+      const modelForRequest = personaIdSel && personaModelSel === "voice_persona"
+        ? "V5"
+        : LATEST_SUNO_MODEL;
+      if (personaIdSel && modelForRequest !== LATEST_SUNO_MODEL) {
+        try {
+          showToast(
+            "Using V5 for this song so your voice persona can sing it. (Voice personas don't work on V5.5 yet.)",
+            { icon: "♪", durationMs: 4200 }
+          );
+        } catch {}
+      }
       const payload = {
         prompt: finalPrompt,
         style: hasReference ? String(userStyle || "").trim() : `${userStyle}${userStyle ? " | " : ""}${timingClause}, ${styleExtras}${artworkStyle ? `, cover art: ${artworkStyle}` : ""}`,
@@ -10627,8 +10644,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         title: (els.sunoTitle?.value || "").trim(),
         customMode: true,
         instrumental: imageOnlyInstrumental,
-        model: LATEST_SUNO_MODEL,
-        personaId: (els.sunoPersonaId?.value || "").trim() || undefined,
+        model: modelForRequest,
+        personaId: personaIdSel || undefined,
+        personaModel: personaModelSel || undefined,
       };
       const vp = String(els.sunoVoiceProfile?.value || "").trim();
       let vocalProfileClause = "";

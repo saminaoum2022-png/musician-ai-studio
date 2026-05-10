@@ -10525,6 +10525,19 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             .filter(Boolean)
             .join(", ");
 
+      const personaIdSel = (els.sunoPersonaId?.value || "").trim();
+      const personaModelSel = personaIdSel ? "voice_persona" : "";
+      const modelForRequest = personaIdSel && personaModelSel === "voice_persona"
+        ? "V5"
+        : LATEST_SUNO_MODEL;
+      if (personaIdSel && modelForRequest !== LATEST_SUNO_MODEL) {
+        try {
+          showToast(
+            "Using V5 for this song so your voice persona can sing it. (Voice personas don't work on V5.5 yet.)",
+            { icon: "♪", durationMs: 4200 }
+          );
+        } catch {}
+      }
       const payload = {
         prompt: finalPrompt,
         style: hasReference ? String(userStyle || "").trim() : `${userStyle}${userStyle ? " | " : ""}${timingClause}, ${styleExtras}${artworkStyle ? `, cover art: ${artworkStyle}` : ""}`,
@@ -10532,8 +10545,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         title: (els.sunoTitle?.value || "").trim(),
         customMode: true,
         instrumental: imageOnlyInstrumental,
-        model: LATEST_SUNO_MODEL,
-        personaId: (els.sunoPersonaId?.value || "").trim() || undefined,
+        model: modelForRequest,
+        personaId: personaIdSel || undefined,
+        personaModel: personaModelSel || undefined,
       };
       const vp = String(els.sunoVoiceProfile?.value || "").trim();
       let vocalProfileClause = "";

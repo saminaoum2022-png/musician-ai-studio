@@ -68,12 +68,13 @@ module.exports = async function handler(req, res) {
       title = "",
       customMode = true,
       instrumental = false,
-      model = "V5_5",
+      model: requestedModel,
       negativeTags = "",
       vocalGender,
       styleWeight,
       weirdnessConstraint,
       personaId,
+      personaModel: requestedPersonaModel,
     } = body || {};
 
     const { host, proto } = getHostProto(req);
@@ -85,22 +86,52 @@ module.exports = async function handler(req, res) {
     if (voiceTimbre) styleBits.push(`Voice timbre: ${String(voiceTimbre).trim()}`);
     const mergedStyle = styleBits.filter(Boolean).join(", ");
 
+    // See api/suno/generate.js for the full rationale. Short version:
+    // voice_persona only works on V5; without coercion Suno returns a
+    // taskId but never produces audio. Default personaModel to
+    // voice_persona because our app saves personas from finished vocals.
+    const cleanPersonaId = personaId ? String(personaId).trim() : "";
+    let personaModel = "";
+    if (cleanPersonaId) {
+      personaModel = String(requestedPersonaModel || "voice_persona").trim();
+      if (personaModel !== "style_persona" && personaModel !== "voice_persona") {
+        personaModel = "voice_persona";
+      }
+    }
+    let chosenModel = String(requestedModel || "V5_5").trim() || "V5_5";
+    if (cleanPersonaId && personaModel === "voice_persona" && chosenModel !== "V5") {
+      chosenModel = "V5";
+    }
+
     const payload = {
       customMode: Boolean(customMode),
       instrumental: Boolean(instrumental),
       callBackUrl,
-      model: "V5_5",
+      model: chosenModel,
       ...(prompt ? { prompt: String(prompt) } : {}),
       ...(mergedStyle ? { style: mergedStyle } : {}),
       ...(title ? { title: String(title) } : {}),
       ...(negativeTags ? { negativeTags: String(negativeTags) } : {}),
       ...(vocalGender === "m" || vocalGender === "f" ? { vocalGender } : {}),
-      ...(personaId ? { personaId: String(personaId).trim() } : {}),
+      ...(cleanPersonaId ? { personaId: cleanPersonaId } : {}),
+      ...(cleanPersonaId && personaModel ? { personaModel } : {}),
       ...(Number.isFinite(Number(styleWeight)) ? { styleWeight: clamp01(Number(styleWeight)) } : {}),
       ...(Number.isFinite(Number(weirdnessConstraint))
         ? { weirdnessConstraint: clamp01(Number(weirdnessConstraint)) }
         : {}),
     };
+
+    try {
+      console.info("[suno/generate] →", {
+        model: payload.model,
+        personaId: payload.personaId || null,
+        personaModel: payload.personaModel || null,
+        customMode: payload.customMode,
+        instrumental: payload.instrumental,
+        promptLen: payload.prompt?.length || 0,
+        styleLen: payload.style?.length || 0,
+      });
+    } catch {}
 
     const r = await fetch("https://api.sunoapi.org/api/v1/generate", {
       method: "POST",
@@ -113,6 +144,14 @@ module.exports = async function handler(req, res) {
 
     const text = await r.text().catch(() => "");
     const data = safeJson(text);
+    try {
+      console.info("[suno/generate] ←", {
+        httpStatus: r.status,
+        sunoCode: data?.code,
+        sunoMsg: data?.msg,
+        taskId: data?.data?.taskId || null,
+      });
+    } catch {}
     if (!r.ok) {
       await refund(user.userId, FULL_SONG_COST, "refund_full_song", "suno_http_error").catch(() => null);
       return json(res, 502, { error: "Upstream Suno error", status: r.status, details: data || text });

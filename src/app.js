@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510personawin";
+const APP_BUILD = "20260510personadiag";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -5035,6 +5035,26 @@ async function measureAudioDurationSec(rawUrl) {
   const s = String(rawUrl || "").trim();
   if (!s || s === "#") return null;
   const url = hubAbsoluteUrl(s);
+
+  // Fast path: if the library player is currently loaded with the same
+  // src and already has a known duration, skip the network probe.
+  // (PWA cached cases land here on a tap right after playback.)
+  try {
+    if (
+      playerEl &&
+      typeof playerEl.duration === "number" &&
+      Number.isFinite(playerEl.duration) &&
+      playerEl.duration > 0 &&
+      typeof playerEl.currentSrc === "string" &&
+      playerEl.currentSrc &&
+      (playerEl.currentSrc === url ||
+        playerEl.currentSrc.endsWith(s) ||
+        url.endsWith(playerEl.currentSrc))
+    ) {
+      return playerEl.duration;
+    }
+  } catch {}
+
   return new Promise((resolve) => {
     const a = new Audio();
     let settled = false;
@@ -5067,7 +5087,10 @@ async function measureAudioDurationSec(rawUrl) {
     );
     try {
       a.preload = "metadata";
-      a.crossOrigin = "anonymous";
+      // Intentionally NOT setting crossOrigin: it forces a CORS handshake
+      // even when the URL is same-origin (our /api/suno/audio proxy), and
+      // our proxy doesn't echo Access-Control-Allow-Origin. Reading just
+      // the duration via metadata doesn't require CORS at all.
       a.src = url;
     } catch {
       clearTimeout(timer);
@@ -5076,21 +5099,28 @@ async function measureAudioDurationSec(rawUrl) {
   });
 }
 
-/** Suno docs: segment (vocalEnd − vocalStart) must be 10–30s and lie
- *  within [0, duration]. Returns rounded seconds. */
+/** Suno's persona endpoint requires the analysis segment to be 10–30s
+ *  and to lie strictly inside the file. We leave a small tail margin so
+ *  that small floating-point differences between our duration reading
+ *  and Suno's don't push vocalEnd past EOF.
+ *
+ *  Returns null if the file is too short (<10.6s) — caller will fall
+ *  back to omitting vocalStart/vocalEnd, which lets Suno auto-pick. */
 function buildPersonaVocalWindowFromDuration(durationSec) {
   const d = Number(durationSec);
   if (!Number.isFinite(d) || d <= 0) return null;
   const round2 = (x) => Math.round(x * 100) / 100;
-  if (d >= 30) {
+  const TAIL_MARGIN = 0.5;
+  if (d >= 30 + TAIL_MARGIN) {
     return { vocalStart: 0, vocalEnd: 30 };
   }
-  if (d >= 10) {
-    return { vocalStart: 0, vocalEnd: round2(d) };
+  if (d >= 10 + TAIL_MARGIN) {
+    return { vocalStart: 0, vocalEnd: round2(d - TAIL_MARGIN) };
   }
-  // Shorter than 10s — cannot meet the minimum segment length; still
-  // send 0→d so Suno can error clearly if it rejects.
-  return { vocalStart: 0, vocalEnd: round2(d) };
+  // Below the minimum-with-margin window. Don't send a window at all
+  // and let Suno's auto-pick run; it occasionally succeeds even on
+  // ~10s files because their internal probe is more lenient.
+  return null;
 }
 
 async function createPersonaForSong({
@@ -5140,14 +5170,23 @@ async function createPersonaForSong({
     showToast("Saving voice as persona…", { icon: "♪", durationMs: 2400 });
 
     let vocalPayload = {};
+    let probeDurSec = null;
     const probeUrl = String(audioUrl || "").trim();
     if (probeUrl) {
-      const dur = await measureAudioDurationSec(probeUrl);
-      const win = buildPersonaVocalWindowFromDuration(dur);
+      probeDurSec = await measureAudioDurationSec(probeUrl);
+      const win = buildPersonaVocalWindowFromDuration(probeDurSec);
       if (win) {
         vocalPayload = { vocalStart: win.vocalStart, vocalEnd: win.vocalEnd };
       }
     }
+    try {
+      console.info("[persona] request", {
+        taskId: tId,
+        audioId: aId,
+        probeDurSec,
+        vocalPayload,
+      });
+    } catch {}
 
     const r = await fetch(apiUrl("/api/suno/persona"), {
       method: "POST",
@@ -5163,21 +5202,33 @@ async function createPersonaForSong({
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) {
+      try {
+        console.warn("[persona] failed", { status: r.status, response: d });
+      } catch {}
       // Build the friendliest error possible. Prefer Suno's own
       // upstream `msg` (already merged into d.error by our serverless
       // proxy), then fall back to status/details.
       const baseMsg = d?.error || "Persona creation failed";
+      const probeNote = probeDurSec
+        ? ` [measured ${Math.round(probeDurSec)}s${
+            vocalPayload.vocalStart != null
+              ? `, sent ${vocalPayload.vocalStart}–${vocalPayload.vocalEnd}s`
+              : ", auto-window"
+          }]`
+        : "";
       let hint = "";
-      // "Current music failed to generate persona" is often a bad vocal
-      // window (defaults assume a ≥30s file). We now auto-fit from
-      // duration; remaining failures may be short clips (<10s analyzable).
       if (/failed to generate persona|Current music failed/i.test(baseMsg)) {
-        hint =
-          " — Persona analysis needs a 10–30 second slice inside your file. If this track is very short, try a longer song.";
+        if (probeDurSec && probeDurSec < 11) {
+          hint =
+            " — Suno needs about 10+ seconds of analyzable audio. This track is too short.";
+        } else {
+          hint =
+            " — Suno couldn’t analyze this track’s vocals. Try a different song with clearer singing for at least 10s.";
+        }
       } else if (/internal error|code 500|Suno hit/i.test(baseMsg)) {
         hint = " — Wait a minute and retry, or try another track.";
       }
-      throw new Error(`${baseMsg}${hint}`);
+      throw new Error(`${baseMsg}${hint}${probeNote}`);
     }
     const personaId = String(d?.personaId || "").trim();
     if (!personaId) throw new Error("Persona created but ID was missing.");

@@ -7,7 +7,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511voicebandfix";
+const APP_BUILD = "20260511voicebandsoon";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -10332,14 +10332,20 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     });
   }
   if (els.vocalModeMix) {
-    els.vocalModeMix.addEventListener("click", () => {
-      // Mix mode shares Suno-side behavior with Backing track: same
-      // add-instrumental call. The only difference is what we do
-      // after the result lands (on-device mix). So both flags need
-      // to be set.
-      if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "1";
-      if (els.vocalMixMode) els.vocalMixMode.value = "1";
-      syncVocalModeUi();
+    els.vocalModeMix.classList.add("isComingSoon");
+    els.vocalModeMix.setAttribute("aria-disabled", "true");
+    els.vocalModeMix.setAttribute(
+      "title",
+      "Coming soon — we're tuning melody-tracking + vocal clarity before shipping this."
+    );
+    els.vocalModeMix.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      try {
+        showToast("My voice + band — coming soon. We're tuning melody-tracking and vocal clarity.", {
+          dwellMs: 4500,
+        });
+      } catch {}
     });
   }
   syncVocalModeUi();

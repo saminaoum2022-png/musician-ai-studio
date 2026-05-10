@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510aurabio";
+const APP_BUILD = "20260510hubpause";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -749,6 +749,44 @@ function tryHubViewportAutoplay() {
   void startHubPlayback(centerId);
 }
 
+/** Pause Hub audio when the user navigates away to Profile/User
+ *  routes, but keep `hubAudioPostId` and `hubAudio.currentTime`
+ *  intact so we can resume the exact same post from the exact same
+ *  position when they come back. Called from the route handler.
+ *
+ *  Why not stopHubPlayback(): that nukes all state, which means
+ *  the user lands back on Hub silent and has to scroll to retrigger
+ *  autoplay — a worse UX than just pause/resume. */
+function pauseHubForRouteChange() {
+  if (!hubAudio || hubAudio.paused || !hubAudioPostId) return;
+  try { hubAudio.pause(); } catch {}
+  // Reflect the paused state on the row UI so the user sees a "▶"
+  // button when they come back, not a stuck "⏸".
+  const root = els.hubList;
+  if (root && hubAudioPostId) {
+    const btn = root.querySelector(`[data-hub-play="${hubAudioPostId}"]`);
+    if (btn) btn.textContent = "▶";
+  }
+}
+
+/** Counterpart to pauseHubForRouteChange. Idempotent: no-op if no
+ *  paused-state exists or if Hub is already playing. */
+async function resumeHubAfterRouteChange() {
+  if (!hubAudio || !hubAudioPostId) return;
+  if (!hubAudio.paused) return;
+  try {
+    await hubAudio.play();
+    const root = els.hubList;
+    if (root) {
+      const btn = root.querySelector(`[data-hub-play="${hubAudioPostId}"]`);
+      if (btn) btn.textContent = "⏸";
+    }
+  } catch {
+    // iOS may block resume if the gesture chain was lost; that's fine,
+    // the play button is now showing "▶" so the user can tap once.
+  }
+}
+
 function stopHubPlayback() {
   try {
     if (hubAudio) hubAudio.pause();
@@ -1174,6 +1212,9 @@ function applyRoute() {
     updateHubAudioHint();
     try { renderHub(); } catch {}
     requestAnimationFrame(() => updateHubFocusedRow());
+    // Resume the post we paused when leaving Hub for Profile/User.
+    // Idempotent — does nothing if Hub wasn't playing before.
+    void resumeHubAfterRouteChange();
     // Kick autoplay on entry — but never override an already-active
     // pick. The Hub-tab click handler may have synchronously started
     // playback inside the gesture (the only way iOS reliably unlocks
@@ -1205,6 +1246,9 @@ function applyRoute() {
     } catch {}
   }
   if (wanted === "profile") {
+    // Pause Hub if it was playing in the background — only one audio
+    // surface at a time, and Profile is its own world.
+    pauseHubForRouteChange();
     void refreshAuthStateFromSupabase();
     setProfileEditing(false);
     void refreshMyCredits({ silent: true });
@@ -1236,6 +1280,9 @@ function applyRoute() {
     }
   }
   if (wanted === "user") {
+    // Pause Hub before rendering the public profile so we don't have
+    // a Hub song bleeding into a creator page. Resume on Hub return.
+    pauseHubForRouteChange();
     renderUserProfile(pendingPublicUsername);
     // Hub posts arrive via Supabase sync; on a cold visit (someone landing
     // straight on `#/u/USERNAME` from a share) we may need to wait for

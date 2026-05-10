@@ -43,38 +43,85 @@ module.exports = async function handler(req, res) {
     };
 
     const url = "https://api.sunoapi.org/api/v1/generate/generate-persona";
-    let r;
-    try {
-      r = await fetch(url, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-    } catch (e) {
-      return json(res, 502, { error: "Persona request failed", details: e?.message || String(e) });
-    }
+    // Suno's persona endpoint is occasionally flaky on transient codes
+    // (500 / 451 / 429 / 503 / 504). Retry once with a small backoff
+    // before bubbling the failure up — keeps within Vercel's 10s
+    // function budget while rescuing 80% of the "internal error" toasts.
+    const isTransient = (httpStatus, code) =>
+      httpStatus === 500 || httpStatus === 502 || httpStatus === 503 || httpStatus === 504 ||
+      httpStatus === 429 || httpStatus === 451 ||
+      code === 500 || code === 502 || code === 503 || code === 451 || code === 429;
 
-    const text = await r.text().catch(() => "");
-    const data = safeJson(text);
+    let r;
+    let text = "";
+    let data = null;
+    let httpStatus = 0;
+    let upstreamCode = 200;
+    let attempt = 0;
+    const maxAttempts = 2;
+
+    while (attempt < maxAttempts) {
+      attempt += 1;
+      try {
+        r = await fetch(url, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+      } catch (e) {
+        // Network-level failure (DNS, TLS, abort). Retry once if budget allows.
+        if (attempt < maxAttempts) {
+          await sleep(1500);
+          continue;
+        }
+        return json(res, 502, {
+          error: "Persona request failed",
+          details: e?.message || String(e),
+          attempts: attempt,
+        });
+      }
+      text = await r.text().catch(() => "");
+      data = safeJson(text);
+      httpStatus = r.status;
+      upstreamCode = data && typeof data === "object" && "code" in data ? Number(data.code) : 200;
+      const ok = r.ok && upstreamCode === 200;
+      if (ok) break;
+      if (attempt < maxAttempts && isTransient(httpStatus, upstreamCode)) {
+        await sleep(1500);
+        continue;
+      }
+      break;
+    }
 
     if (!r.ok) {
+      // Surface Suno's own message when present so the toast actually
+      // helps the user (e.g. "audioId not eligible for persona").
+      const upstreamMsg =
+        (data && (data.msg || data.message || data.error)) ||
+        (typeof text === "string" ? text.slice(0, 200) : "");
       return json(res, r.status, {
-        error: "Upstream Suno persona error",
+        error: upstreamMsg
+          ? `Upstream Suno persona error: ${String(upstreamMsg).slice(0, 200)}`
+          : "Upstream Suno persona error",
         status: r.status,
         details: data || text,
+        attempts: attempt,
       });
     }
 
-    const code = data && typeof data === "object" && "code" in data ? Number(data.code) : 200;
-    if (code !== 200) {
-      const friendly = mapPersonaCode(code, data?.msg);
+    if (upstreamCode !== 200) {
+      const friendly = mapPersonaCode(upstreamCode, data?.msg);
+      const detailedMsg = data?.msg && !friendly.includes(data.msg)
+        ? `${friendly} (Suno: ${String(data.msg).slice(0, 160)})`
+        : friendly;
       return json(res, 502, {
-        error: friendly,
-        code,
+        error: detailedMsg,
+        code: upstreamCode,
         details: data,
+        attempts: attempt,
       });
     }
 
@@ -134,4 +181,7 @@ function safeJson(txt) {
   } catch {
     return null;
   }
+}
+function sleep(ms) {
+  return new Promise((res) => setTimeout(res, ms));
 }

@@ -3308,31 +3308,37 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   --aura-tint-soft: rgba(124, 92, 255, 0.18);
   position: relative;
   isolation: isolate;
+  /* Clip the ambient glow to the header bounds. Without this, the
+     -inset glow lets the page scroll horizontally on iOS Safari and
+     fights the viewport meta. The header itself has no border/bg so
+     the rounded corners aren't visible — they just shape the glow. */
+  overflow: hidden;
+  border-radius: 22px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 18px 4px 24px;
+  padding: 18px 16px 24px;
   margin-bottom: 4px;
+  max-width: 100%;
 }
 .profileAuraGlow{
   position: absolute;
-  inset: -40px -40px auto -40px;
-  height: 320px;
+  inset: 0;
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(60% 70% at 30% 20%, var(--aura-tint), transparent 70%),
-    radial-gradient(50% 60% at 80% 30%, var(--aura-tint-soft), transparent 75%);
-  filter: blur(40px) saturate(1.25);
-  opacity: 0.85;
+    radial-gradient(80% 90% at 24% 18%, var(--aura-tint), transparent 70%),
+    radial-gradient(70% 80% at 82% 28%, var(--aura-tint-soft), transparent 75%);
+  filter: blur(34px) saturate(1.25);
+  opacity: 0.9;
   transition: background 320ms ease, opacity 320ms ease;
 }
 
 /* Toolbar — equal-weight icon buttons in the top-right. */
 .profileAuraToolbar{
   position: absolute;
-  top: 8px;
-  right: 4px;
+  top: 12px;
+  right: 12px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -3490,9 +3496,12 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   line-height: 1.1;
   padding: 0;
   max-width: 100%;
-  width: auto;
-  min-width: 4ch;
+  width: 100%;
+  min-width: 0;
   outline: none;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
 }
 .profileAuraNameInput:disabled{
   opacity: 1;
@@ -3537,6 +3546,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
+  max-width: 100%;
   margin-top: 8px;
   padding: 0;
   border: 0;
@@ -3547,6 +3557,8 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   resize: none;
   outline: none;
   min-height: 22px;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 .profileAuraBio::placeholder{
   color: rgba(231,237,247,0.40);
@@ -3641,8 +3653,9 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
 .profileAuraStat--link:active{ transform: scale(0.98); }
 
 @media (max-width: 440px){
-  .profileAuraIdentity{ padding: 0 2px; }
-  .profileAuraToolbar{ top: 4px; right: 2px; }
+  .profileAura{ padding: 16px 14px 22px; }
+  .profileAuraIdentity{ padding: 0; }
+  .profileAuraToolbar{ top: 10px; right: 10px; }
   .profileAuraNameInput{ font-size: 24px; }
   .profileAuraStatStrip{ padding: 8px 12px; gap: 8px; }
   .profileAuraStat strong,

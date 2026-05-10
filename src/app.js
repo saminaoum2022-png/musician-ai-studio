@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510profsimple";
+const APP_BUILD = "20260510aura";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -286,6 +286,11 @@ const els = {
   btnProfileCancel: document.getElementById("btnProfileCancel"),
   profileOwnStats: document.getElementById("profileOwnStats"),
   profileOwnSongCount: document.getElementById("profileOwnSongCount"),
+  profileAura: document.getElementById("profileAura"),
+  profileAuraStatSongs: document.getElementById("profileAuraStatSongs"),
+  profileAuraStatLikes: document.getElementById("profileAuraStatLikes"),
+  profileAuraSongsValue: document.getElementById("profileAuraSongsValue"),
+  profileAuraLikesValue: document.getElementById("profileAuraLikesValue"),
   profileSavedMsg: document.getElementById("profileSavedMsg"),
   profileSaveToast: document.getElementById("profileSaveToast"),
   authLoginControls: document.getElementById("authLoginControls"),
@@ -683,10 +688,14 @@ function ensureHubAudio() {
   // snappy. Once playback starts the browser switches to streaming
   // automatically.
   a.preload = "metadata";
+  // Aura header ring breathes whenever any audio is playing.
+  a.addEventListener("play", () => { try { setProfileAuraAudioState(true); } catch {} });
+  a.addEventListener("pause", () => { try { setProfileAuraAudioState(isAnyAppAudioPlaying()); } catch {} });
   a.addEventListener("ended", () => {
     const endedPostId = hubAudioPostId;
     stopHubPlayback();
     onHubTrackEnded(endedPostId);
+    try { setProfileAuraAudioState(isAnyAppAudioPlaying()); } catch {}
   });
   a.addEventListener("timeupdate", () => {
     const postId = hubAudioPostId;
@@ -4348,7 +4357,6 @@ function restoreProfileInputsFromActive() {
 }
 
 function renderProfileOwnStats() {
-  if (!els.profileOwnStats) return;
   const creator = String(activeProfile.username || "guest");
   const uid = String(authSession?.user?.id || "");
   // When signed in, ALWAYS scope to uid via meta.creatorUserId. Never
@@ -4362,9 +4370,6 @@ function renderProfileOwnStats() {
     return String(p?.creator || "") === creator;
   });
   const totalLikes = items.reduce((sum, p) => sum + Number(p.likes || 0), 0);
-  // Songs count chip (sits in the Songs header, Library-style). The renderer
-  // for the Songs list also keeps this in sync; this branch covers stat
-  // refreshes triggered without a full re-render.
   if (els.profileOwnSongCount) {
     if (items.length) {
       els.profileOwnSongCount.textContent = `${items.length} ${items.length === 1 ? "song" : "songs"}`;
@@ -4374,17 +4379,100 @@ function renderProfileOwnStats() {
       els.profileOwnSongCount.hidden = true;
     }
   }
-  if (!items.length) {
-    els.profileOwnStats.innerHTML = "";
-    els.profileOwnStats.style.display = "none";
+  // Legacy compatibility node — still updated for code paths that read
+  // `els.profileOwnStats.innerHTML` directly. Hidden in the DOM via the
+  // `srOnly` wrapper so it doesn't render visually.
+  if (els.profileOwnStats) {
+    if (items.length) {
+      els.profileOwnStats.innerHTML = `
+        <span><strong>${items.length}</strong> song${items.length === 1 ? "" : "s"}</span>
+        <span aria-hidden="true">·</span>
+        <span><strong>${totalLikes}</strong> like${totalLikes === 1 ? "" : "s"}</span>
+      `;
+    } else {
+      els.profileOwnStats.innerHTML = "";
+    }
+  }
+  // Aura stat strip — vertical-bar separators, gradient values. Each
+  // stat hides itself when its value is zero/unavailable; the
+  // separator CSS hides the dangling bars on either side.
+  if (els.profileAuraSongsValue) els.profileAuraSongsValue.textContent = String(items.length);
+  if (els.profileAuraLikesValue) els.profileAuraLikesValue.textContent = String(totalLikes);
+  if (els.profileAuraStatSongs) els.profileAuraStatSongs.dataset.show = items.length > 0 ? "true" : "false";
+  if (els.profileAuraStatLikes) els.profileAuraStatLikes.dataset.show = totalLikes > 0 ? "true" : "false";
+}
+
+/* -----------------------------------------------------------------
+ *  Aura header helpers
+ *
+ *  - applyProfileAuraAvatarTint: paints the active avatar onto an
+ *    offscreen canvas to extract a dominant color, then writes it
+ *    into `--aura-tint` so the page glows in the user's own palette.
+ *    Falls back to the brand purple when sampling can't run.
+ *
+ *  - setProfileAuraAudioState: toggles `data-audio-state="playing"`
+ *    on the Aura header, which makes the gradient ring breathe.
+ *    Wired up below to global `play`/`pause` events on Hub + Library
+ *    audio so the ring lights up whenever any audio plays.
+ * ----------------------------------------------------------------- */
+let _auraTintLastSrc = "";
+function applyProfileAuraAvatarTint(srcOverride) {
+  const aura = els.profileAura;
+  if (!aura) return;
+  const src = String(srcOverride || activeProfile?.avatar || "").trim();
+  if (!src || src === "./assets/nabadai-logo.png") {
+    aura.style.setProperty("--aura-tint", "rgba(124, 92, 255, 0.55)");
+    aura.style.setProperty("--aura-tint-soft", "rgba(35, 213, 171, 0.18)");
+    _auraTintLastSrc = src;
     return;
   }
-  els.profileOwnStats.style.display = "";
-  els.profileOwnStats.innerHTML = `
-    <span><strong>${items.length}</strong> song${items.length === 1 ? "" : "s"}</span>
-    <span aria-hidden="true">·</span>
-    <span><strong>${totalLikes}</strong> like${totalLikes === 1 ? "" : "s"}</span>
-  `;
+  if (src === _auraTintLastSrc) return;
+  _auraTintLastSrc = src;
+  try {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const c = document.createElement("canvas");
+        c.width = 24;
+        c.height = 24;
+        const ctx = c.getContext("2d", { willReadFrequently: true });
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0, 24, 24);
+        const data = ctx.getImageData(0, 0, 24, 24).data;
+        let r = 0, g = 0, b = 0, n = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          const a = data[i + 3];
+          if (a < 32) continue;
+          r += data[i];
+          g += data[i + 1];
+          b += data[i + 2];
+          n++;
+        }
+        if (!n) return;
+        r = Math.round(r / n);
+        g = Math.round(g / n);
+        b = Math.round(b / n);
+        // Boost vibrancy by pushing each channel away from gray slightly,
+        // then clamp. Avoids flat brown-ish averages that read as muddy.
+        const punch = (v) => Math.max(0, Math.min(255, Math.round(128 + (v - 128) * 1.35)));
+        const rr = punch(r), gg = punch(g), bb = punch(b);
+        aura.style.setProperty("--aura-tint", `rgba(${rr}, ${gg}, ${bb}, 0.55)`);
+        aura.style.setProperty("--aura-tint-soft", `rgba(${rr}, ${gg}, ${bb}, 0.18)`);
+      } catch {}
+    };
+    img.onerror = () => {
+      aura.style.setProperty("--aura-tint", "rgba(124, 92, 255, 0.55)");
+      aura.style.setProperty("--aura-tint-soft", "rgba(35, 213, 171, 0.18)");
+    };
+    img.src = src;
+  } catch {}
+}
+
+function setProfileAuraAudioState(playing) {
+  const aura = els.profileAura;
+  if (!aura) return;
+  aura.setAttribute("data-audio-state", playing ? "playing" : "idle");
 }
 
 function renderProfilePreviewFromInputs() {
@@ -4416,8 +4504,20 @@ function renderProfilePreviewFromInputs() {
   if (els.profilePreviewAvatar) {
     els.profilePreviewAvatar.src = activeProfile.avatar || "./assets/nabadai-logo.png";
   }
+  applyProfileAuraAvatarTint(activeProfile.avatar);
   renderProfileOwnStats();
   renderProfileUsernamePrompt();
+  // Email is private — only show inside edit mode.
+  if (els.authLoggedInEmailInline) {
+    const email = String(authSession?.user?.email || activeProfile?.email || "").trim();
+    if (profileEditing && email) {
+      els.authLoggedInEmailInline.textContent = email;
+      els.authLoggedInEmailInline.style.display = "";
+    } else {
+      els.authLoggedInEmailInline.textContent = "";
+      els.authLoggedInEmailInline.style.display = "none";
+    }
+  }
 }
 
 /** Public-facing profile aggregated from this user's Hub posts. We use the
@@ -7002,11 +7102,23 @@ function ensurePlayer() {
   playerEl.addEventListener("progress", syncPlayerUI);
   playerEl.addEventListener("play", syncPlayerUI);
   playerEl.addEventListener("pause", syncPlayerUI);
+  playerEl.addEventListener("play", () => { try { setProfileAuraAudioState(true); } catch {} });
+  playerEl.addEventListener("pause", () => { try { setProfileAuraAudioState(isAnyAppAudioPlaying()); } catch {} });
   playerEl.addEventListener("ended", () => {
     if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = false;
     if (els.btnPlayerPause) els.btnPlayerPause.disabled = true;
+    try { setProfileAuraAudioState(isAnyAppAudioPlaying()); } catch {}
   });
   return playerEl;
+}
+
+/** True when either Hub or Library audio is currently playing. The
+ *  Aura ring uses this on `pause`/`ended` to decide whether to keep
+ *  breathing (the *other* source is still playing) or stop. */
+function isAnyAppAudioPlaying() {
+  const hub = hubAudio && !hubAudio.paused && !hubAudio.ended && hubAudio.currentTime > 0;
+  const lib = playerEl && !playerEl.paused && !playerEl.ended && playerEl.currentTime > 0;
+  return Boolean(hub || lib);
 }
 
 /** Best-effort track duration — works even when `audio.duration` is Infinity

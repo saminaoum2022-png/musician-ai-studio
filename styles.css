@@ -3288,6 +3288,367 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   gap: 22px;
   animation: sectionFadeIn 260ms ease;
 }
+
+/* =================================================================
+ * Aura profile header
+ *
+ * The page IS the profile — no card chrome. The avatar is sampled
+ * (via JS) into `--aura-tint` and that variable powers an ambient
+ * glow behind the identity stack. A breathing gradient ring around
+ * the avatar lights up only when audio is playing somewhere in the
+ * app (data-audio-state="playing"), which makes the profile feel
+ * connected to live audio without dropping a visualizer onto it.
+ *
+ * This is the same visual family as Hub's active-card ambient
+ * tint and the Hub bottom-tab bars (│), so flipping between Hub
+ * and Profile feels like two views of the same world.
+ * ================================================================= */
+.profileAura{
+  --aura-tint: rgba(124, 92, 255, 0.55);
+  --aura-tint-soft: rgba(124, 92, 255, 0.18);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 4px 24px;
+  margin-bottom: 4px;
+}
+.profileAuraGlow{
+  position: absolute;
+  inset: -40px -40px auto -40px;
+  height: 320px;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 70% at 30% 20%, var(--aura-tint), transparent 70%),
+    radial-gradient(50% 60% at 80% 30%, var(--aura-tint-soft), transparent 75%);
+  filter: blur(40px) saturate(1.25);
+  opacity: 0.85;
+  transition: background 320ms ease, opacity 320ms ease;
+}
+
+/* Toolbar — equal-weight icon buttons in the top-right. */
+.profileAuraToolbar{
+  position: absolute;
+  top: 8px;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 2;
+}
+.profileAuraIconBtn{
+  -webkit-appearance: none;
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04));
+  color: rgba(232,238,247,0.92);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 160ms ease, border-color 160ms ease, transform 120ms ease;
+}
+.profileAuraIconBtn:hover{
+  background: linear-gradient(180deg, rgba(124,92,255,0.18), rgba(35,213,171,0.06));
+  border-color: rgba(124,92,255,0.45);
+}
+.profileAuraIconBtn:active{ transform: scale(0.96); }
+.profileAuraIconBtn svg{
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.profileAuraEditActions{
+  display: none;
+  align-items: center;
+  gap: 8px;
+}
+.profileAuraEditBtn{
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 999px;
+  padding: 8px 14px;
+  min-height: 36px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+.profileAuraEditBtn--cancel{
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.06);
+  color: rgba(232,238,247,0.9);
+}
+.profileAuraEditBtn--cancel:hover{ background: rgba(255,255,255,0.10); }
+.profileAuraEditBtn--save{
+  border: 0;
+  background: linear-gradient(135deg, #7c5cff, #23d5ab);
+  color: #0b0d12;
+  box-shadow:
+    0 10px 26px rgba(124,92,255,0.35),
+    inset 0 0 0 1px rgba(255,255,255,0.18);
+}
+.profileAuraEditBtn--save:hover{
+  transform: translateY(-1px);
+  box-shadow:
+    0 12px 30px rgba(124,92,255,0.45),
+    inset 0 0 0 1px rgba(255,255,255,0.22);
+}
+
+/* Identity stack — left-aligned, no card. */
+.profileAuraIdentity{
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 0 4px;
+}
+.profileAuraAvatarWrap{
+  position: relative;
+  width: 104px;
+  height: 104px;
+  border-radius: 999px;
+  margin-bottom: 4px;
+}
+.profileAuraRing{
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(135deg, #7c5cff, #23d5ab);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.55;
+  transition: opacity 280ms ease;
+}
+.profileAura[data-audio-state="playing"] .profileAuraRing{
+  animation: profileAuraBreath 3s ease-in-out infinite;
+}
+@keyframes profileAuraBreath{
+  0%   { opacity: 0.55; transform: scale(1); }
+  50%  { opacity: 1;    transform: scale(1.035); }
+  100% { opacity: 0.55; transform: scale(1); }
+}
+.profileAuraAvatar{
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+  border: 2px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.06);
+  display: block;
+  position: relative;
+  z-index: 1;
+}
+.profileAuraAvatarHint{
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #7c5cff, #23d5ab);
+  color: #0b0d12;
+  z-index: 2;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.35);
+}
+.profileAuraNameRow{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+.profileAuraNameInput{
+  -webkit-appearance: none;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  line-height: 1.1;
+  padding: 0;
+  max-width: 100%;
+  width: auto;
+  min-width: 4ch;
+  outline: none;
+}
+.profileAuraNameInput:disabled{
+  opacity: 1;
+  -webkit-text-fill-color: #fff;
+  cursor: default;
+}
+.profileAuraNameInput:focus{
+  outline: 2px solid rgba(124,92,255,0.45);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+.profileAuraGender{
+  transform: translateY(2px);
+}
+
+/* Voice tag — gradient-bordered chip, same family as Hub action pills. */
+.profileAuraVoiceChip{
+  -webkit-appearance: none;
+  appearance: none;
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background:
+    linear-gradient(rgba(13,16,22,0.85), rgba(13,16,22,0.85)) padding-box,
+    linear-gradient(135deg, #7c5cff, #23d5ab) border-box;
+  border: 1px solid transparent;
+  color: rgba(232,238,247,0.94);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  -webkit-tap-highlight-color: transparent;
+}
+.profileAuraVoiceChip:disabled{
+  opacity: 1;
+  -webkit-text-fill-color: rgba(232,238,247,0.94);
+  cursor: default;
+}
+
+/* Bio — single-row look, expands when typed. */
+.profileAuraBio{
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(231,237,247,0.92);
+  font-size: 14px;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+  min-height: 22px;
+}
+.profileAuraBio::placeholder{
+  color: rgba(231,237,247,0.40);
+  font-style: normal;
+}
+.profileAuraBio:disabled{
+  opacity: 1;
+  -webkit-text-fill-color: rgba(231,237,247,0.92);
+  cursor: default;
+}
+.profileAuraBio:focus{
+  outline: 2px solid rgba(124,92,255,0.35);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+/* Email is private. Only revealed in edit mode (JS toggles display). */
+.profileAuraEmail{
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: rgba(168,180,199,0.78);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.profileAuraGenres{
+  margin-top: 4px;
+}
+
+/* Stats strip — vertical-bar separators echoing the Hub bottom-tab icon. */
+.profileAuraStatStrip{
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012));
+}
+.profileAuraStat{
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  text-decoration: none;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.profileAuraStat[data-show="false"]{
+  /* Hide stats whose underlying data is zero/unavailable. */
+  display: none;
+}
+.profileAuraStat strong,
+.profileAuraStatValue{
+  font-size: 18px;
+  font-weight: 800;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #c9bfff, #92e8d2);
+  -webkit-background-clip: text;
+          background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.profileAuraStatLabel{
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(232,238,247,0.55);
+}
+.profileAuraStatSep{
+  font-weight: 600;
+  font-size: 16px;
+  color: rgba(232,238,247,0.20);
+  letter-spacing: 0;
+  user-select: none;
+}
+/* Hide the separator that immediately precedes a hidden stat to avoid
+   a leading/trailing dangling bar. */
+.profileAuraStat[data-show="false"] + .profileAuraStatSep,
+.profileAuraStatStrip > .profileAuraStatSep:first-child,
+.profileAuraStatStrip > .profileAuraStatSep:last-child{
+  display: none;
+}
+.profileAuraStat--link{
+  cursor: pointer;
+  transition: transform 120ms ease;
+}
+.profileAuraStat--link:active{ transform: scale(0.98); }
+
+@media (max-width: 440px){
+  .profileAuraIdentity{ padding: 0 2px; }
+  .profileAuraToolbar{ top: 4px; right: 2px; }
+  .profileAuraNameInput{ font-size: 24px; }
+  .profileAuraStatStrip{ padding: 8px 12px; gap: 8px; }
+  .profileAuraStat strong,
+  .profileAuraStatValue{ font-size: 16px; }
+}
+
 /* Focused hero card — keeps a clear container around just the user info
  * so identity has visual weight. Everything below the hero flows
  * full-bleed (Songs list, Account). */

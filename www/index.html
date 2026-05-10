@@ -29,7 +29,7 @@
     <link rel="dns-prefetch" href="https://cdn2.suno.ai" />
     <link rel="dns-prefetch" href="https://cdn4.suno.ai" />
     <link rel="dns-prefetch" href="https://suno.com" />
-    <link rel="stylesheet" href="./styles.css?v=20260510profsimple" />
+    <link rel="stylesheet" href="./styles.css?v=20260510aura" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -822,92 +822,121 @@
             </span>
             <span class="profileUsernamePromptCta" aria-hidden="true">Set →</span>
           </button>
-          <!-- Hero card — keeps a focused container around just the user
-               info so identity has visual weight, while everything below
-               flows full-bleed like Library. -->
-          <div class="profileHeroCard">
-            <div class="profileOwnHead">
-              <h2 class="profileOwnTitle">Profile</h2>
-              <div class="profileOwnToolbar">
-                <div class="profileOwnPrimaryActions">
-                  <button type="button" id="btnProfileEdit" class="profileOwnBtnEdit" aria-label="Edit profile">Edit</button>
-                  <div id="profileEditActions" class="profileOwnEditActions" style="display:none" aria-hidden="true">
-                    <button type="button" id="btnProfileCancel" class="profileOwnBtnCancel" aria-label="Cancel editing">Cancel</button>
-                    <button type="button" id="btnProfileSave" class="primary profileOwnBtnSave" aria-label="Save profile">Save</button>
-                  </div>
-                </div>
-                <a href="#/settings" id="btnProfileSettingsGear" class="profileOwnBtnGear" aria-label="Settings" title="Settings">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <circle cx="12" cy="12" r="3"/>
-                    <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
-                  </svg>
-                </a>
+          <!-- Aura header — no card chrome. Avatar tints the page,
+               gradient ring breathes when audio is playing somewhere in
+               the app. Stats row uses the same vertical-bar separator
+               motif as the Hub bottom-tab icon. -->
+          <section class="profileAura" id="profileAura" data-audio-state="idle">
+            <div class="profileAuraGlow" aria-hidden="true"></div>
+
+            <div class="profileAuraToolbar" role="toolbar" aria-label="Profile actions">
+              <button
+                type="button"
+                id="btnProfileEdit"
+                class="profileAuraIconBtn"
+                aria-label="Edit profile"
+                title="Edit profile"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M14.06 6.19l3.75 3.75M3 21l3.5-.62a3 3 0 0 0 1.55-.83l11.1-11.1a2.5 2.5 0 0 0 0-3.54l-.07-.07a2.5 2.5 0 0 0-3.54 0L4.45 15.95a3 3 0 0 0-.83 1.55L3 21z"/>
+                </svg>
+              </button>
+              <div id="profileEditActions" class="profileAuraEditActions" style="display:none" aria-hidden="true">
+                <button type="button" id="btnProfileCancel" class="profileAuraEditBtn profileAuraEditBtn--cancel" aria-label="Cancel editing">Cancel</button>
+                <button type="button" id="btnProfileSave" class="profileAuraEditBtn profileAuraEditBtn--save" aria-label="Save profile">Save</button>
               </div>
+              <a
+                href="#/settings"
+                id="btnProfileSettingsGear"
+                class="profileAuraIconBtn"
+                aria-label="Settings"
+                title="Settings"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
+                </svg>
+              </a>
             </div>
 
-            <div class="profileOwnBody">
-              <div class="profileOwnHero">
-                <div class="profileOwnAvatarWrap">
-                  <img
-                    id="profilePreviewAvatar"
-                    class="profileOwnAvatar"
-                    src="./assets/nabadai-logo.png"
-                    alt="Your avatar"
-                  />
-                  <span id="profileAvatarEditHint" class="profileOwnAvatarHint" style="display:none">Photo</span>
-                </div>
-                <div class="profileOwnMeta">
-                  <div class="profilePreviewUserRow">
-                    <input
-                      id="profilePreviewUsernameInput"
-                      class="profileInlineInput profileInlineUsername"
-                      type="text"
-                      value="@guest"
-                      maxlength="24"
-                      disabled
-                      spellcheck="false"
-                      autocomplete="username"
-                      aria-label="Username"
-                    />
-                    <span id="profilePreviewGenderIcon" class="profilePreviewGenderIcon" style="display:none"></span>
-                  </div>
-                  <select id="profilePreviewTimbreInput" class="profileInlineSelect" disabled aria-label="Voice range">
-                    <option value="" selected>Voice: Not set</option>
-                    <option value="bass">Voice: Bass</option>
-                    <option value="baritone">Voice: Baritone</option>
-                    <option value="tenor">Voice: Tenor</option>
-                    <option value="alto">Voice: Alto</option>
-                    <option value="mezzo_soprano">Voice: Mezzo-Soprano</option>
-                    <option value="soprano">Voice: Soprano</option>
-                  </select>
-                  <div id="authLoggedInEmailInline" class="hint profileAccountEmailInline"></div>
-                </div>
+            <div class="profileAuraIdentity">
+              <div class="profileAuraAvatarWrap" id="profileAuraAvatarWrap">
+                <span class="profileAuraRing" aria-hidden="true"></span>
+                <img
+                  id="profilePreviewAvatar"
+                  class="profileAuraAvatar"
+                  src="./assets/nabadai-logo.png"
+                  alt="Your avatar"
+                />
+                <span id="profileAvatarEditHint" class="profileAuraAvatarHint" style="display:none">Photo</span>
               </div>
+
+              <div class="profileAuraNameRow">
+                <input
+                  id="profilePreviewUsernameInput"
+                  class="profileAuraNameInput"
+                  type="text"
+                  value="@guest"
+                  maxlength="24"
+                  disabled
+                  spellcheck="false"
+                  autocomplete="username"
+                  aria-label="Username"
+                />
+                <span id="profilePreviewGenderIcon" class="profilePreviewGenderIcon profileAuraGender" style="display:none"></span>
+              </div>
+
+              <select id="profilePreviewTimbreInput" class="profileAuraVoiceChip" disabled aria-label="Voice range">
+                <option value="" selected>Voice · not set</option>
+                <option value="bass">Voice · Bass</option>
+                <option value="baritone">Voice · Baritone</option>
+                <option value="tenor">Voice · Tenor</option>
+                <option value="alto">Voice · Alto</option>
+                <option value="mezzo_soprano">Voice · Mezzo-Soprano</option>
+                <option value="soprano">Voice · Soprano</option>
+              </select>
 
               <textarea
                 id="profilePreviewBioInput"
-                class="profileInlineBio"
-                rows="3"
+                class="profileAuraBio"
+                rows="2"
                 maxlength="120"
                 disabled
                 spellcheck="true"
                 aria-label="Bio"
-              >Add a short bio to introduce your music style.</textarea>
+                placeholder="Add a short bio to introduce your music style."
+              ></textarea>
 
-              <div id="profilePreviewGenres" class="profilePreviewGenres" style="display:none"></div>
+              <div id="authLoggedInEmailInline" class="profileAuraEmail hint" style="display:none"></div>
 
-              <div class="profileStatStrip" aria-live="polite">
-                <div id="profileOwnStats" class="profileOwnStats" style="display:none"></div>
-                <a href="#/credits" id="profileCreditsLink" class="profileCreditsChip profileCreditsChipLink" aria-label="My credits">
-                  <span class="profileCreditsChipLabel">Credits</span>
-                  <strong id="profileCreditsBalance" class="profileCreditsChipValue">0</strong>
-                  <span id="profileCreditsNote" class="profileCreditsChipNote" hidden></span>
-                  <svg class="profileCreditsChipIco" viewBox="0 0 24 24" aria-hidden="true">
-                    <polyline points="9 18 15 12 9 6"/>
-                  </svg>
+              <div id="profilePreviewGenres" class="profilePreviewGenres profileAuraGenres" style="display:none"></div>
+
+              <div class="profileAuraStatStrip" id="profileAuraStatStrip" aria-live="polite">
+                <span class="profileAuraStat" id="profileAuraStatSongs" data-show="false">
+                  <strong id="profileAuraSongsValue">0</strong>
+                  <span class="profileAuraStatLabel">Songs</span>
+                </span>
+                <span class="profileAuraStatSep" aria-hidden="true">│</span>
+                <span class="profileAuraStat" id="profileAuraStatLikes" data-show="false">
+                  <strong id="profileAuraLikesValue">0</strong>
+                  <span class="profileAuraStatLabel">Likes</span>
+                </span>
+                <span class="profileAuraStatSep" aria-hidden="true">│</span>
+                <a href="#/credits" id="profileCreditsLink" class="profileAuraStat profileAuraStat--link" aria-label="My credits">
+                  <strong id="profileCreditsBalance" class="profileAuraStatValue">0</strong>
+                  <span class="profileAuraStatLabel">Credits</span>
                 </a>
               </div>
             </div>
+          </section>
+
+          <!-- Hidden compatibility nodes — older code paths still target
+               these IDs (e.g. credit pill helpers, hub stats fallback).
+               Kept off-screen so existing logic keeps working without
+               leaking visuals into the new Aura header. -->
+          <div class="srOnly" aria-hidden="true">
+            <span id="profileCreditsNote"></span>
+            <span id="profileOwnStats"></span>
           </div>
 
           <div id="profilePersonaRow" class="profilePersonaRow" style="display:none" aria-live="polite">
@@ -1620,6 +1649,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260510profsimple"></script>
+    <script type="module" src="./src/app.js?v=20260510aura"></script>
   </body>
 </html>

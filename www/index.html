@@ -29,7 +29,7 @@
     <link rel="dns-prefetch" href="https://cdn2.suno.ai" />
     <link rel="dns-prefetch" href="https://cdn4.suno.ai" />
     <link rel="dns-prefetch" href="https://suno.com" />
-    <link rel="stylesheet" href="./styles.css?v=20260510hubpause" />
+    <link rel="stylesheet" href="./styles.css?v=20260510callcard" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -792,6 +792,27 @@
               <button id="btnUserPublicBack" class="ghost userPublicBack" type="button" aria-label="Back">← Back</button>
             </div>
             <div class="userPublicBio" id="userPublicBio"></div>
+            <!-- Calling card mini-player. Hidden until we know the creator
+                 has a card. Auto-plays once on the very first profile
+                 visit (any profile), tap-to-play after that. -->
+            <button
+              id="userPublicCallingCard"
+              class="callingCardChip"
+              type="button"
+              style="display:none"
+              aria-label="Play calling card"
+            >
+              <span class="callingCardChipDot" aria-hidden="true"></span>
+              <span class="callingCardChipLabel">
+                <span class="callingCardChipTitle">Voice note</span>
+                <span class="callingCardChipSub" id="userPublicCallingCardSub">Tap to play</span>
+              </span>
+              <span class="callingCardChipWave" aria-hidden="true">
+                <span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span>
+              </span>
+            </button>
+            <audio id="userPublicCallingCardAudio" preload="none" playsinline></audio>
             <div class="userPublicStats" id="userPublicStats"></div>
             <div class="userPublicSongsHead">
               <span class="userPublicSongsTitle">Songs</span>
@@ -869,6 +890,21 @@
                   alt="Your avatar"
                 />
                 <span id="profileAvatarEditHint" class="profileAuraAvatarHint" style="display:none">Photo</span>
+                <!-- Self-hint when no calling card exists yet. Tapping
+                     this badge (or long-pressing the avatar) opens the
+                     calling-card recorder. -->
+                <button
+                  type="button"
+                  id="profileCallingCardHint"
+                  class="profileCallingCardHint"
+                  style="display:none"
+                  aria-label="Record your voice note"
+                  title="Record a 8-sec voice note"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 12a7 7 0 0 0 14 0M12 19v3"/>
+                  </svg>
+                </button>
               </div>
 
               <div class="profileAuraNameRow">
@@ -1346,6 +1382,14 @@
             <span class="settingsSoundsLinkChev" aria-hidden="true">›</span>
           </a>
 
+          <label class="settingsToggleRow" for="settingsCallingCardAutoplay">
+            <span class="settingsToggleBody">
+              <span class="settingsToggleTitle">Auto-play voice notes</span>
+              <span class="settingsToggleSub">Play a creator’s 8-sec calling card once when you open their profile.</span>
+            </span>
+            <input id="settingsCallingCardAutoplay" type="checkbox" checked />
+          </label>
+
           <div class="row">
             <button id="btnBetaTopup" class="primary" type="button">Beta top-up (Suno credits)</button>
             <button id="btnOpenBilling" class="ghost" type="button">Open billing page</button>
@@ -1417,6 +1461,44 @@
           </div>
           <div class="row" style="justify-content:flex-end; margin-top:10px">
             <button id="btnRecorderUse" class="primary" type="button" disabled>Use recording</button>
+          </div>
+        </div>
+      </div>
+      <!-- Calling card recorder. Long-press your own avatar to open.
+           8-second cap, autoplays once on first profile visit so other
+           visitors hear a tiny intro from the creator. -->
+      <div id="callingCardModal" class="songDetailsModal" style="display:none" aria-hidden="true">
+        <div class="songDetailsBackdrop" id="callingCardBackdrop"></div>
+        <div class="songDetailsSheet callingCardSheet">
+          <div class="row" style="justify-content:space-between;align-items:center">
+            <h2 style="margin:0">Calling card</h2>
+            <button id="btnCloseCallingCard" class="ghost" type="button">Close</button>
+          </div>
+          <p class="hint" id="callingCardLead">
+            Record up to 8 seconds. Visitors will hear it once when they open your profile.
+          </p>
+          <div class="callingCardCenter">
+            <div class="callingCardRingWrap" id="callingCardRingWrap" data-state="idle">
+              <svg class="callingCardRing" viewBox="0 0 120 120" aria-hidden="true">
+                <circle class="callingCardRingTrack" cx="60" cy="60" r="54" />
+                <circle class="callingCardRingFill" id="callingCardRingFill" cx="60" cy="60" r="54" />
+              </svg>
+              <button id="btnCallingCardToggle" class="callingCardRecBtn" type="button" aria-label="Record calling card">
+                <span class="callingCardRecGlyph" aria-hidden="true"></span>
+              </button>
+            </div>
+            <div id="callingCardStatus" class="hint">Tap to start. We’ll stop at 8s.</div>
+            <div class="callingCardWaveBar" id="callingCardWaveBar" aria-hidden="true">
+              <span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+          </div>
+          <audio id="callingCardPreview" preload="metadata" style="display:none"></audio>
+          <div class="row callingCardActions">
+            <button id="btnCallingCardDelete" class="ghost callingCardDeleteBtn" type="button" style="display:none">Remove current</button>
+            <span class="spacer" aria-hidden="true"></span>
+            <button id="btnCallingCardDiscard" class="ghost" type="button" disabled>Discard</button>
+            <button id="btnCallingCardSave" class="primary" type="button" disabled>Save</button>
           </div>
         </div>
       </div>
@@ -1649,6 +1731,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260510hubpause"></script>
+    <script type="module" src="./src/app.js?v=20260510callcard"></script>
   </body>
 </html>

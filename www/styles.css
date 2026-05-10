@@ -6615,3 +6615,349 @@ input::placeholder, textarea::placeholder{
 .proofCertSheet[data-proof-mode="public"] .proofCertLead{
   margin-bottom: 12px;
 }
+
+/* ----------------------------------------------------------------------
+ * Calling card recorder + public mini-player.
+ * Long-press own avatar → records up to 8s → uploaded to Supabase
+ * Storage. On other users' profiles, plays once on first profile visit
+ * (any profile) at 60% volume, then becomes tap-to-play.
+ * -------------------------------------------------------------------- */
+
+/* Self-hint badge — only shown when the signed-in user has no card yet.
+ * Sits on the bottom-right of the avatar wrap, gentle pulse to draw the
+ * eye without screaming. */
+.profileCallingCardHint{
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  color: #0a0d14;
+  background:
+    radial-gradient(120% 120% at 30% 25%, #ffffff 0%, transparent 55%),
+    linear-gradient(135deg, #7c5cff, #23d5ab);
+  box-shadow:
+    0 6px 14px rgba(124,92,255,0.42),
+    0 0 0 2px rgba(7,11,18,0.95);
+  animation: profileCallingCardHintPulse 2.6s ease-in-out infinite;
+  -webkit-tap-highlight-color: transparent;
+}
+.profileCallingCardHint svg{
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+.profileCallingCardHint:active{
+  transform: scale(0.94);
+}
+@keyframes profileCallingCardHintPulse{
+  0%, 100% { transform: scale(1); box-shadow: 0 6px 14px rgba(124,92,255,0.42), 0 0 0 2px rgba(7,11,18,0.95); }
+  50%      { transform: scale(1.06); box-shadow: 0 8px 22px rgba(124,92,255,0.62), 0 0 0 2px rgba(7,11,18,0.95); }
+}
+
+/* Recorder modal sheet — same family as recorderSheet but with a wider
+ * focus on the giant rec button. */
+.callingCardSheet{
+  max-width: 420px;
+  border:1px solid rgba(255,255,255,0.1);
+  background:
+    linear-gradient(180deg, rgba(18,28,44,0.92), rgba(8,12,20,0.94)),
+    radial-gradient(140% 140% at 15% 0%, rgba(124,92,255,0.20), transparent 60%),
+    radial-gradient(140% 140% at 100% 0%, rgba(35,213,171,0.15), transparent 62%);
+  box-shadow: 0 20px 54px rgba(0,0,0,0.46);
+  backdrop-filter: blur(10px);
+}
+.callingCardCenter{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:14px;
+  padding: 22px 8px 10px;
+}
+.callingCardRingWrap{
+  position: relative;
+  width: 138px;
+  height: 138px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.callingCardRing{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.callingCardRingTrack{
+  fill: none;
+  stroke: rgba(255,255,255,0.10);
+  stroke-width: 5;
+}
+.callingCardRingFill{
+  fill: none;
+  stroke: #7c5cff;
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-dasharray: 339.292;
+  stroke-dashoffset: 339.292;
+  transition: stroke-dashoffset 200ms linear, stroke 200ms ease;
+}
+.callingCardRingWrap[data-state="recording"] .callingCardRingFill{
+  stroke: #ff6b6b;
+}
+.callingCardRingWrap[data-state="ready"] .callingCardRingFill,
+.callingCardRingWrap[data-state="playing"] .callingCardRingFill{
+  stroke: #23d5ab;
+}
+.callingCardRecBtn{
+  position: relative;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  background:
+    radial-gradient(120% 120% at 30% 30%, rgba(255,255,255,0.18) 0%, transparent 60%),
+    linear-gradient(160deg, #ff6b6b 0%, #c0307a 100%);
+  box-shadow:
+    0 14px 38px rgba(255,107,107,0.42),
+    inset 0 0 0 4px rgba(255,255,255,0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 160ms ease, box-shadow 200ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.callingCardRecBtn:active{
+  transform: scale(0.96);
+}
+.callingCardRecGlyph{
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 6px rgba(255,255,255,0.10);
+  transition: border-radius 180ms ease, width 180ms ease, height 180ms ease;
+}
+.callingCardRingWrap[data-state="recording"] .callingCardRecGlyph{
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+}
+.callingCardRingWrap[data-state="ready"] .callingCardRecBtn,
+.callingCardRingWrap[data-state="playing"] .callingCardRecBtn{
+  background:
+    radial-gradient(120% 120% at 30% 30%, rgba(255,255,255,0.20) 0%, transparent 60%),
+    linear-gradient(160deg, #23d5ab 0%, #1a8a87 100%);
+  box-shadow:
+    0 14px 38px rgba(35,213,171,0.40),
+    inset 0 0 0 4px rgba(255,255,255,0.06);
+}
+.callingCardRingWrap[data-state="ready"] .callingCardRecGlyph,
+.callingCardRingWrap[data-state="playing"] .callingCardRecGlyph{
+  width: 0; height: 0;
+  border-left: 14px solid #fff;
+  border-top: 9px solid transparent;
+  border-bottom: 9px solid transparent;
+  border-right: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  margin-left: 4px;
+}
+.callingCardRingWrap[data-state="playing"] .callingCardRecGlyph{
+  border-left: 0;
+  border-top: 0;
+  border-bottom: 0;
+  width: 14px;
+  height: 18px;
+  background:
+    linear-gradient(90deg, #fff 0 4px, transparent 4px 10px, #fff 10px 14px);
+  margin-left: 0;
+}
+
+/* Animated waveform bar shown while recording / playing back. */
+.callingCardWaveBar{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 22px;
+  margin-top: 4px;
+  opacity: 0.5;
+  transition: opacity 200ms ease;
+}
+.callingCardWaveBar > span{
+  width: 3px;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #7c5cff, #23d5ab);
+  transform-origin: center;
+}
+.callingCardWaveBar.isActive{ opacity: 1; }
+.callingCardWaveBar.isActive > span{
+  animation: callingCardWaveBarPulse 900ms ease-in-out infinite;
+}
+.callingCardWaveBar.isActive > span:nth-child(1){ animation-delay: 0ms; }
+.callingCardWaveBar.isActive > span:nth-child(2){ animation-delay: 60ms; }
+.callingCardWaveBar.isActive > span:nth-child(3){ animation-delay: 120ms; }
+.callingCardWaveBar.isActive > span:nth-child(4){ animation-delay: 180ms; }
+.callingCardWaveBar.isActive > span:nth-child(5){ animation-delay: 240ms; }
+.callingCardWaveBar.isActive > span:nth-child(6){ animation-delay: 200ms; }
+.callingCardWaveBar.isActive > span:nth-child(7){ animation-delay: 140ms; }
+.callingCardWaveBar.isActive > span:nth-child(8){ animation-delay: 80ms; }
+.callingCardWaveBar.isActive > span:nth-child(9){ animation-delay: 30ms; }
+.callingCardWaveBar.isActive > span:nth-child(10){ animation-delay: 100ms; }
+@keyframes callingCardWaveBarPulse{
+  0%, 100% { transform: scaleY(0.4); }
+  50%      { transform: scaleY(2.6); }
+}
+
+.callingCardActions{
+  margin-top: 14px;
+  align-items: center;
+  gap: 8px;
+}
+.callingCardActions .spacer{ flex: 1; }
+.callingCardDeleteBtn{
+  color: rgba(255,107,107,0.92);
+  border-color: rgba(255,107,107,0.32);
+}
+
+/* Public profile mini-player (calling card chip). Lives between the bio
+ * and the songs list. Auto-shows only when a card exists. */
+.callingCardChip{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 8px 10px;
+  margin: 4px 0 12px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background:
+    linear-gradient(180deg, rgba(18,28,44,0.66), rgba(8,12,20,0.66)),
+    radial-gradient(120% 130% at 15% 0%, rgba(124,92,255,0.18), transparent 60%);
+  border-radius: 999px;
+  cursor: pointer;
+  color: #e8eef7;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 160ms ease, box-shadow 200ms ease, border-color 200ms ease;
+  position: relative;
+}
+.callingCardChip:hover{
+  border-color: rgba(124,92,255,0.4);
+  box-shadow: 0 8px 22px rgba(124,92,255,0.18);
+}
+.callingCardChip:active{
+  transform: scale(0.98);
+}
+.callingCardChip[data-state="playing"]{
+  border-color: rgba(35,213,171,0.55);
+  box-shadow: 0 0 0 1px rgba(35,213,171,0.25), 0 8px 22px rgba(35,213,171,0.18);
+}
+.callingCardChipDot{
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background:
+    radial-gradient(120% 120% at 30% 30%, #ffffff 0%, transparent 60%),
+    linear-gradient(135deg, #7c5cff, #23d5ab);
+  box-shadow: 0 0 12px rgba(124,92,255,0.6);
+}
+.callingCardChip[data-state="playing"] .callingCardChipDot{
+  animation: callingCardChipPulse 1.2s ease-in-out infinite;
+}
+@keyframes callingCardChipPulse{
+  0%, 100% { transform: scale(1);   box-shadow: 0 0 12px rgba(35,213,171,0.6); }
+  50%      { transform: scale(1.3); box-shadow: 0 0 22px rgba(35,213,171,0.9); }
+}
+.callingCardChipLabel{
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  line-height: 1.2;
+}
+.callingCardChipTitle{
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.callingCardChipSub{
+  font-size: 11px;
+  color: rgba(232,238,247,0.62);
+}
+.callingCardChipWave{
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 16px;
+  margin-left: 4px;
+  opacity: 0.55;
+  transition: opacity 200ms ease;
+}
+.callingCardChipWave > span{
+  width: 2px;
+  border-radius: 2px;
+  height: 4px;
+  background: linear-gradient(180deg, #7c5cff, #23d5ab);
+}
+.callingCardChip[data-state="playing"] .callingCardChipWave{ opacity: 1; }
+.callingCardChip[data-state="playing"] .callingCardChipWave > span{
+  animation: callingCardChipWave 800ms ease-in-out infinite;
+}
+.callingCardChip[data-state="playing"] .callingCardChipWave > span:nth-child(1){ animation-delay: 0ms; }
+.callingCardChip[data-state="playing"] .callingCardChipWave > span:nth-child(2){ animation-delay: 80ms; }
+.callingCardChip[data-state="playing"] .callingCardChipWave > span:nth-child(3){ animation-delay: 160ms; }
+.callingCardChip[data-state="playing"] .callingCardChipWave > span:nth-child(4){ animation-delay: 240ms; }
+.callingCardChip[data-state="playing"] .callingCardChipWave > span:nth-child(5){ animation-delay: 200ms; }
+.callingCardChip[data-state="playing"] .callingCardChipWave > span:nth-child(6){ animation-delay: 120ms; }
+.callingCardChip[data-state="playing"] .callingCardChipWave > span:nth-child(7){ animation-delay: 60ms; }
+@keyframes callingCardChipWave{
+  0%, 100% { transform: scaleY(0.5); }
+  50%      { transform: scaleY(3.0); }
+}
+
+/* Settings toggle row — generic style we can reuse for future toggles. */
+.settingsToggleRow{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  margin: 10px 0;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(18,28,44,0.55), rgba(8,12,20,0.55));
+  cursor: pointer;
+}
+.settingsToggleBody{
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.settingsToggleTitle{
+  font-size: 14px;
+  font-weight: 700;
+  color: #e8eef7;
+}
+.settingsToggleSub{
+  font-size: 12px;
+  color: rgba(232,238,247,0.62);
+  line-height: 1.4;
+}
+.settingsToggleRow input[type="checkbox"]{
+  width: 18px;
+  height: 18px;
+  accent-color: #7c5cff;
+  flex: 0 0 auto;
+}

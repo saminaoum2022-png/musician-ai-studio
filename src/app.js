@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510hubpause";
+const APP_BUILD = "20260510callcard";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -333,6 +333,24 @@ const els = {
   btnRecorderToggle: document.getElementById("btnRecorderToggle"),
   btnRecorderUse: document.getElementById("btnRecorderUse"),
   recorderStatus: document.getElementById("recorderStatus"),
+  callingCardModal: document.getElementById("callingCardModal"),
+  callingCardBackdrop: document.getElementById("callingCardBackdrop"),
+  btnCloseCallingCard: document.getElementById("btnCloseCallingCard"),
+  callingCardLead: document.getElementById("callingCardLead"),
+  callingCardRingWrap: document.getElementById("callingCardRingWrap"),
+  callingCardRingFill: document.getElementById("callingCardRingFill"),
+  btnCallingCardToggle: document.getElementById("btnCallingCardToggle"),
+  callingCardStatus: document.getElementById("callingCardStatus"),
+  callingCardWaveBar: document.getElementById("callingCardWaveBar"),
+  callingCardPreview: document.getElementById("callingCardPreview"),
+  btnCallingCardSave: document.getElementById("btnCallingCardSave"),
+  btnCallingCardDiscard: document.getElementById("btnCallingCardDiscard"),
+  btnCallingCardDelete: document.getElementById("btnCallingCardDelete"),
+  profileCallingCardHint: document.getElementById("profileCallingCardHint"),
+  userPublicCallingCard: document.getElementById("userPublicCallingCard"),
+  userPublicCallingCardSub: document.getElementById("userPublicCallingCardSub"),
+  userPublicCallingCardAudio: document.getElementById("userPublicCallingCardAudio"),
+  settingsCallingCardAutoplay: document.getElementById("settingsCallingCardAutoplay"),
   shareLiveModal: document.getElementById("shareLiveModal"),
   shareLiveBackdrop: document.getElementById("shareLiveBackdrop"),
   btnCloseShareLive: document.getElementById("btnCloseShareLive"),
@@ -1257,6 +1275,7 @@ function applyRoute() {
     // feed arrives. Cheap query, scoped to one user.
     void refreshMyHubPostsFast();
     renderPersonaSelect();
+    renderProfileCallingCardHint();
   }
   if (wanted === "credits" || wanted === "sounds") {
     void refreshMyCredits({ silent: true });
@@ -1808,6 +1827,543 @@ function stopVocalReferenceRecording() {
   setStatus("Voice reference ready.");
   renderReferenceHints();
 }
+
+/* ----------------------------------------------------------------------
+ *  Calling card (welcome voice note)
+ *
+ *  Long-press on your own avatar opens a record sheet. We capture up to
+ *  8 seconds of audio via MediaRecorder, upload the resulting blob to
+ *  Supabase Storage at `calling_cards/<uid>/card.<ext>`, then persist
+ *  the public URL to `profiles.calling_card_url`.
+ *
+ *  When ANY user opens a public profile (`#/u/handle`) for the FIRST
+ *  TIME EVER on this device, the creator's calling card autoplays once
+ *  at 60% volume. After that first play, the chip stays tap-to-play —
+ *  for that profile and every future profile visit. Owners viewing
+ *  their own profile never autoplay; they see a hint to record (if
+ *  they haven't yet) or the card as a tap-to-play chip.
+ *
+ *  Performance shape:
+ *  - Audio is preload="none" so we never download until tap/play call.
+ *  - We don't block route render on the calling-card lookup; it's an
+ *    out-of-band query that updates the chip when it resolves.
+ *  - Settings has a global "Auto-play voice notes" toggle which lets
+ *    users opt out entirely.
+ * -------------------------------------------------------------------- */
+
+const CALLING_CARD_MAX_MS = 8000;
+const CALLING_CARD_MAX_BYTES = 200 * 1024;
+const CALLING_CARD_PLAYBACK_VOL = 0.6;
+const CALLING_CARD_AUTOPLAY_KEY = "nabadai.callingCard.autoplayedOnce.v1";
+const CALLING_CARD_AUTOPLAY_PREF_KEY = "nabadai.callingCard.autoplayEnabled.v1";
+
+let callingCardRecState = "idle"; // idle | recording | ready | uploading | playing
+let callingCardStream = null;
+let callingCardRecorder = null;
+let callingCardChunks = [];
+let callingCardBlob = null;
+let callingCardBlobUrl = "";
+let callingCardStartedAt = 0;
+let callingCardTickRaf = 0;
+let callingCardAutostopTimer = 0;
+
+function isCallingCardAutoplayEnabled() {
+  try {
+    const v = localStorage.getItem(CALLING_CARD_AUTOPLAY_PREF_KEY);
+    return v === null ? true : v === "1";
+  } catch { return true; }
+}
+function setCallingCardAutoplayEnabled(on) {
+  try { localStorage.setItem(CALLING_CARD_AUTOPLAY_PREF_KEY, on ? "1" : "0"); } catch {}
+}
+function hasAutoplayedCallingCardOnce() {
+  try { return localStorage.getItem(CALLING_CARD_AUTOPLAY_KEY) === "1"; } catch { return false; }
+}
+function markAutoplayedCallingCardOnce() {
+  try { localStorage.setItem(CALLING_CARD_AUTOPLAY_KEY, "1"); } catch {}
+}
+
+function pickCallingCardMimeType() {
+  const candidates = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/mp4;codecs=mp4a.40.2",
+    "audio/mp4",
+  ];
+  for (const m of candidates) {
+    if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported?.(m)) return m;
+  }
+  return "";
+}
+function callingCardExtensionFromMime(mime) {
+  const m = String(mime || "").toLowerCase();
+  if (m.includes("mp4")) return "m4a";
+  if (m.includes("mpeg")) return "mp3";
+  return "webm";
+}
+
+function setCallingCardRingProgress(ratio) {
+  const fill = els.callingCardRingFill;
+  if (!fill) return;
+  const r = 54;
+  const circumference = 2 * Math.PI * r; // ≈ 339.292
+  const clamped = Math.max(0, Math.min(1, Number(ratio) || 0));
+  fill.style.strokeDashoffset = String(circumference * (1 - clamped));
+}
+function setCallingCardState(state) {
+  callingCardRecState = state;
+  const wrap = els.callingCardRingWrap;
+  if (wrap) wrap.dataset.state = state;
+  const wave = els.callingCardWaveBar;
+  if (wave) wave.classList.toggle("isActive", state === "recording" || state === "playing");
+}
+function resetCallingCardSheet({ keepBlob = false } = {}) {
+  if (callingCardAutostopTimer) {
+    try { clearTimeout(callingCardAutostopTimer); } catch {}
+    callingCardAutostopTimer = 0;
+  }
+  if (callingCardTickRaf) {
+    try { cancelAnimationFrame(callingCardTickRaf); } catch {}
+    callingCardTickRaf = 0;
+  }
+  setCallingCardRingProgress(0);
+  setCallingCardState("idle");
+  if (els.callingCardStatus) {
+    els.callingCardStatus.textContent = "Tap to start. We’ll stop at 8s.";
+  }
+  if (!keepBlob) {
+    callingCardBlob = null;
+    if (callingCardBlobUrl) {
+      try { URL.revokeObjectURL(callingCardBlobUrl); } catch {}
+      callingCardBlobUrl = "";
+    }
+    callingCardChunks = [];
+    if (els.btnCallingCardSave) els.btnCallingCardSave.disabled = true;
+    if (els.btnCallingCardDiscard) els.btnCallingCardDiscard.disabled = true;
+  }
+  if (els.callingCardPreview) {
+    try { els.callingCardPreview.pause(); } catch {}
+    els.callingCardPreview.removeAttribute("src");
+    try { els.callingCardPreview.load(); } catch {}
+  }
+}
+function openCallingCardModal() {
+  if (!els.callingCardModal) return;
+  if (!authSession?.user?.id) {
+    showToast("Sign in to record a calling card.");
+    location.hash = "#/auth";
+    return;
+  }
+  resetCallingCardSheet({ keepBlob: false });
+  // Show "remove current" only if we already have a card.
+  if (els.btnCallingCardDelete) {
+    const has = Boolean(activeProfile?.callingCardUrl);
+    els.btnCallingCardDelete.style.display = has ? "" : "none";
+  }
+  els.callingCardModal.style.display = "";
+  els.callingCardModal.setAttribute("aria-hidden", "false");
+  // Pause Hub if playing — clean recording, no bleed.
+  pauseHubForRouteChange();
+}
+function closeCallingCardModal() {
+  if (!els.callingCardModal) return;
+  // If recording is in flight, stop the stream cleanly first.
+  if (callingCardRecState === "recording") {
+    try { stopCallingCardRecording(); } catch {}
+  }
+  resetCallingCardSheet();
+  els.callingCardModal.style.display = "none";
+  els.callingCardModal.setAttribute("aria-hidden", "true");
+}
+
+async function startCallingCardRecording() {
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  } catch (e) {
+    showToast("Microphone permission needed.");
+    return;
+  }
+  const mimeType = pickCallingCardMimeType();
+  let rec;
+  try {
+    rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+  } catch (e) {
+    try { stream.getTracks().forEach((t) => t.stop()); } catch {}
+    showToast("Recorder not supported on this device.");
+    return;
+  }
+  callingCardChunks = [];
+  rec.ondataavailable = (e) => {
+    if (e.data && e.data.size) callingCardChunks.push(e.data);
+  };
+  rec.onstop = () => {
+    try { stream.getTracks().forEach((t) => t.stop()); } catch {}
+    callingCardStream = null;
+    callingCardRecorder = null;
+    if (callingCardTickRaf) {
+      try { cancelAnimationFrame(callingCardTickRaf); } catch {}
+      callingCardTickRaf = 0;
+    }
+    if (callingCardAutostopTimer) {
+      try { clearTimeout(callingCardAutostopTimer); } catch {}
+      callingCardAutostopTimer = 0;
+    }
+    const blob = new Blob(callingCardChunks, { type: rec.mimeType || mimeType || "audio/webm" });
+    if (!blob.size) {
+      setCallingCardState("idle");
+      if (els.callingCardStatus) els.callingCardStatus.textContent = "Recording empty. Try again.";
+      return;
+    }
+    if (blob.size > CALLING_CARD_MAX_BYTES) {
+      setCallingCardState("idle");
+      if (els.callingCardStatus) {
+        els.callingCardStatus.textContent = "Recording too large. Try a shorter take.";
+      }
+      return;
+    }
+    callingCardBlob = blob;
+    if (callingCardBlobUrl) {
+      try { URL.revokeObjectURL(callingCardBlobUrl); } catch {}
+    }
+    callingCardBlobUrl = URL.createObjectURL(blob);
+    if (els.callingCardPreview) {
+      els.callingCardPreview.src = callingCardBlobUrl;
+      try { els.callingCardPreview.load(); } catch {}
+    }
+    setCallingCardState("ready");
+    setCallingCardRingProgress(1);
+    if (els.callingCardStatus) {
+      els.callingCardStatus.textContent = "Tap ▶ to preview, or Save.";
+    }
+    if (els.btnCallingCardSave) els.btnCallingCardSave.disabled = false;
+    if (els.btnCallingCardDiscard) els.btnCallingCardDiscard.disabled = false;
+  };
+  callingCardStream = stream;
+  callingCardRecorder = rec;
+  try {
+    rec.start();
+  } catch (e) {
+    try { stream.getTracks().forEach((t) => t.stop()); } catch {}
+    showToast("Couldn’t start recording.");
+    return;
+  }
+  callingCardStartedAt = performance.now();
+  setCallingCardState("recording");
+  if (els.callingCardStatus) els.callingCardStatus.textContent = "Recording… speak now.";
+  // Animate the progress ring 0→1 across CALLING_CARD_MAX_MS.
+  const tick = () => {
+    if (callingCardRecState !== "recording") return;
+    const elapsed = performance.now() - callingCardStartedAt;
+    const r = Math.min(1, elapsed / CALLING_CARD_MAX_MS);
+    setCallingCardRingProgress(r);
+    if (r < 1) callingCardTickRaf = requestAnimationFrame(tick);
+  };
+  callingCardTickRaf = requestAnimationFrame(tick);
+  callingCardAutostopTimer = setTimeout(() => {
+    if (callingCardRecState === "recording") stopCallingCardRecording();
+  }, CALLING_CARD_MAX_MS + 50);
+}
+function stopCallingCardRecording() {
+  try {
+    if (callingCardRecorder && callingCardRecorder.state !== "inactive") {
+      callingCardRecorder.stop();
+    }
+  } catch {}
+}
+
+async function previewOrPauseCallingCard() {
+  const audio = els.callingCardPreview;
+  if (!audio) return;
+  if (audio.paused) {
+    audio.volume = 1.0;
+    try { await audio.play(); setCallingCardState("playing"); } catch {}
+    audio.onended = () => {
+      setCallingCardState("ready");
+    };
+  } else {
+    try { audio.pause(); } catch {}
+    setCallingCardState("ready");
+  }
+}
+
+function callingCardStorageKey(uid, ext) {
+  return `${uid}/card.${ext}`;
+}
+async function uploadCallingCardBlob(blob) {
+  const token = getSupabaseAuthToken();
+  const uid = authSession?.user?.id;
+  if (!token || !uid) throw new Error("Login required");
+  if (!SUPABASE_URL) throw new Error("Supabase not configured");
+  const ext = callingCardExtensionFromMime(blob.type);
+  const key = callingCardStorageKey(uid, ext);
+  const r = await fetch(`${SUPABASE_URL}/storage/v1/object/calling_cards/${key}`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": blob.type || "audio/webm",
+      "x-upsert": "true",
+      "Cache-Control": "max-age=3600",
+    },
+    body: blob,
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(`Upload failed (${r.status}): ${t.slice(0, 140)}`);
+  }
+  // Public URL pattern for public buckets. Append a cache-buster from
+  // the upload timestamp so listeners pull the new version even when
+  // the path didn't change.
+  const ts = Date.now();
+  return {
+    url: `${SUPABASE_URL}/storage/v1/object/public/calling_cards/${key}?v=${ts}`,
+    updatedAt: ts,
+    storageKey: key,
+  };
+}
+async function deleteCallingCardObject(storageKey) {
+  const token = getSupabaseAuthToken();
+  if (!token || !SUPABASE_URL || !storageKey) return;
+  await fetch(`${SUPABASE_URL}/storage/v1/object/calling_cards/${storageKey}`, {
+    method: "DELETE",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+    },
+  }).catch(() => {});
+}
+
+async function saveCallingCard() {
+  if (!callingCardBlob) return;
+  if (!authSession?.user?.id) {
+    showToast("Sign in to save your calling card.");
+    return;
+  }
+  if (els.btnCallingCardSave) els.btnCallingCardSave.disabled = true;
+  if (els.btnCallingCardDiscard) els.btnCallingCardDiscard.disabled = true;
+  setCallingCardState("uploading");
+  if (els.callingCardStatus) els.callingCardStatus.textContent = "Uploading…";
+  let result;
+  try {
+    result = await uploadCallingCardBlob(callingCardBlob);
+  } catch (e) {
+    setCallingCardState("ready");
+    if (els.btnCallingCardSave) els.btnCallingCardSave.disabled = false;
+    if (els.btnCallingCardDiscard) els.btnCallingCardDiscard.disabled = false;
+    if (els.callingCardStatus) els.callingCardStatus.textContent = String(e?.message || e || "Upload failed.");
+    showToast("Couldn’t upload calling card.");
+    return;
+  }
+  // Persist on the profile row so visitors can read it back.
+  activeProfile.callingCardUrl = result.url;
+  activeProfile.callingCardUpdatedAt = result.updatedAt;
+  try { localStorage.setItem(PROFILE_KEY, JSON.stringify(activeProfile)); } catch {}
+  try { await supabaseUpsertProfile(activeProfile); } catch (e) {
+    showToast("Saved on this device. Cloud sync failed.");
+  }
+  showToast("Calling card saved.", { icon: "✓" });
+  renderProfileCallingCardHint();
+  closeCallingCardModal();
+}
+
+async function discardCallingCardDraft() {
+  resetCallingCardSheet({ keepBlob: false });
+}
+async function deleteExistingCallingCard() {
+  if (!activeProfile?.callingCardUrl) return;
+  if (!authSession?.user?.id) return;
+  try {
+    // Best-effort path extraction. The URL pattern is
+    // `${SUPABASE_URL}/storage/v1/object/public/calling_cards/<uid>/card.<ext>?v=...`
+    const u = new URL(activeProfile.callingCardUrl);
+    const idx = u.pathname.indexOf("/calling_cards/");
+    if (idx >= 0) {
+      const storageKey = u.pathname.slice(idx + "/calling_cards/".length);
+      await deleteCallingCardObject(storageKey);
+    }
+  } catch {}
+  activeProfile.callingCardUrl = "";
+  activeProfile.callingCardUpdatedAt = 0;
+  try { localStorage.setItem(PROFILE_KEY, JSON.stringify(activeProfile)); } catch {}
+  try { await supabaseUpsertProfile(activeProfile); } catch {}
+  showToast("Calling card removed.");
+  renderProfileCallingCardHint();
+  closeCallingCardModal();
+}
+
+/** Show/hide the +mic hint badge over the user's own avatar. We only
+ *  draw the hint when the signed-in user has no card yet — once they
+ *  record one, the avatar goes back to clean. Long-press on the avatar
+ *  always opens the recorder regardless. */
+function renderProfileCallingCardHint() {
+  const hint = els.profileCallingCardHint;
+  if (!hint) return;
+  const signedIn = Boolean(authSession?.user?.id);
+  const hasCard = Boolean(activeProfile?.callingCardUrl);
+  hint.style.display = (signedIn && !hasCard) ? "" : "none";
+}
+
+/** Lookup another user's calling card by their public username. We use
+ *  the anon key on a public-readable view of `profiles`. If RLS blocks
+ *  the read we fail silently — the profile just won't show a chip. */
+async function fetchCallingCardForUsername(username) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  const handle = String(username || "").replace(/^@/, "").trim();
+  if (!handle) return null;
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/profiles?username=eq.${encodeURIComponent(handle)}&select=calling_card_url,calling_card_updated_at&limit=1`,
+      { headers: { apikey: SUPABASE_ANON_KEY } }
+    );
+    if (!r.ok) return null;
+    const arr = await r.json().catch(() => []);
+    if (!Array.isArray(arr) || !arr.length) return null;
+    const row = arr[0];
+    if (!row?.calling_card_url) return null;
+    return {
+      url: row.calling_card_url,
+      updatedAt: row.calling_card_updated_at
+        ? Date.parse(row.calling_card_updated_at) || 0
+        : 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Render the public profile's calling-card chip + autoplay-once rule.
+ *  - Owners viewing their own profile via #/u/handle: never autoplay.
+ *  - First profile visit ever (any creator) AND user has not opted out:
+ *    autoplay once at 60% volume.
+ *  - All subsequent visits: chip is tap-to-play.
+ */
+async function refreshUserPublicCallingCard(rawUsername) {
+  const chip = els.userPublicCallingCard;
+  const audio = els.userPublicCallingCardAudio;
+  if (!chip || !audio) return;
+  // Reset chip + audio first so a stale state doesn't leak from the
+  // previously-viewed creator.
+  chip.style.display = "none";
+  chip.dataset.state = "idle";
+  try { audio.pause(); } catch {}
+  try { audio.removeAttribute("src"); audio.load(); } catch {}
+
+  const handle = String(rawUsername || "").replace(/^@/, "").trim();
+  if (!handle) return;
+
+  const myUsername = String(activeProfile?.username || "").toLowerCase();
+  const isOwnProfile = handle.toLowerCase() === myUsername && Boolean(authSession?.user?.id);
+
+  const card = await fetchCallingCardForUsername(handle);
+  if (!card?.url) return;
+  // Stale-route guard: only render if we're still on this user's route.
+  const stillOnThisUser =
+    (document.body.getAttribute("data-route") === "user")
+    && String(location.hash || "").toLowerCase().includes(handle.toLowerCase());
+  if (!stillOnThisUser) return;
+
+  audio.src = card.url;
+  audio.preload = "metadata";
+  chip.style.display = "";
+  if (els.userPublicCallingCardSub) {
+    els.userPublicCallingCardSub.textContent = "Tap to play";
+  }
+  // Wave/state events.
+  audio.onplay = () => {
+    chip.dataset.state = "playing";
+    if (els.userPublicCallingCardSub) els.userPublicCallingCardSub.textContent = "Playing…";
+  };
+  audio.onpause = () => {
+    if (chip.dataset.state === "playing") {
+      chip.dataset.state = "idle";
+      if (els.userPublicCallingCardSub) els.userPublicCallingCardSub.textContent = "Tap to play";
+    }
+  };
+  audio.onended = () => {
+    chip.dataset.state = "idle";
+    if (els.userPublicCallingCardSub) els.userPublicCallingCardSub.textContent = "Tap to play";
+  };
+  audio.onerror = () => {
+    chip.dataset.state = "idle";
+    if (els.userPublicCallingCardSub) els.userPublicCallingCardSub.textContent = "Couldn’t load";
+  };
+
+  // Autoplay decision. We never autoplay on the owner's own profile,
+  // we honor the global preference, and we only do it ONCE per device.
+  if (isOwnProfile) return;
+  if (!isCallingCardAutoplayEnabled()) return;
+  if (hasAutoplayedCallingCardOnce()) return;
+
+  // Tag this device as having had the one-shot autoplay so future
+  // profile visits stay quiet by default. Set the flag BEFORE play()
+  // so that a quick second visit can't double-fire if the play()
+  // promise hasn't resolved yet.
+  markAutoplayedCallingCardOnce();
+  audio.volume = CALLING_CARD_PLAYBACK_VOL;
+  try {
+    await audio.play();
+  } catch {
+    // iOS blocked it (unlock chain lost or the navigation wasn't a
+    // tap). Fall back to tap-to-play silently.
+    chip.dataset.state = "idle";
+    if (els.userPublicCallingCardSub) els.userPublicCallingCardSub.textContent = "Tap to play";
+  }
+}
+
+/** Long-press helper. Fires `cb()` after `holdMs` if the pointer
+ *  hasn't moved or lifted. Cancels cleanly on movement, leave, lift,
+ *  or scroll. Returns a teardown function in case we ever need it. */
+function attachLongPress(el, cb, holdMs = 600) {
+  if (!el || typeof cb !== "function") return () => {};
+  let timer = 0;
+  let startX = 0;
+  let startY = 0;
+  let active = false;
+  const cancel = () => {
+    if (timer) { clearTimeout(timer); timer = 0; }
+    active = false;
+  };
+  const onDown = (ev) => {
+    cancel();
+    active = true;
+    const t = ev.touches?.[0] || ev;
+    startX = t.clientX || 0;
+    startY = t.clientY || 0;
+    timer = setTimeout(() => {
+      if (!active) return;
+      try { cb(ev); } catch {}
+      cancel();
+    }, holdMs);
+  };
+  const onMove = (ev) => {
+    if (!active) return;
+    const t = ev.touches?.[0] || ev;
+    const dx = (t.clientX || 0) - startX;
+    const dy = (t.clientY || 0) - startY;
+    if (Math.hypot(dx, dy) > 10) cancel();
+  };
+  el.addEventListener("touchstart", onDown, { passive: true });
+  el.addEventListener("touchmove", onMove, { passive: true });
+  el.addEventListener("touchend", cancel, { passive: true });
+  el.addEventListener("touchcancel", cancel, { passive: true });
+  el.addEventListener("mousedown", onDown);
+  el.addEventListener("mousemove", onMove);
+  el.addEventListener("mouseup", cancel);
+  el.addEventListener("mouseleave", cancel);
+  return () => {
+    cancel();
+    el.removeEventListener("touchstart", onDown);
+    el.removeEventListener("touchmove", onMove);
+    el.removeEventListener("touchend", cancel);
+    el.removeEventListener("touchcancel", cancel);
+    el.removeEventListener("mousedown", onDown);
+    el.removeEventListener("mousemove", onMove);
+    el.removeEventListener("mouseup", cancel);
+    el.removeEventListener("mouseleave", cancel);
+  };
+}
+
 function extractTaskIdLoose(data) {
   return (
     data?.data?.taskId ||
@@ -2672,6 +3228,8 @@ function resetProfileUiToGuest() {
     genres: "",
     links: {},
     isPublic: true,
+    callingCardUrl: "",
+    callingCardUpdatedAt: 0,
   };
   try { localStorage.setItem(PROFILE_KEY, JSON.stringify(activeProfile)); } catch {}
   if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = "@guest";
@@ -2829,6 +3387,10 @@ async function supabaseUpsertProfile(profile) {
     youtube: profile.links?.youtube || "",
     tiktok: profile.links?.tiktok || "",
     is_public: profile.isPublic !== false,
+    calling_card_url: profile.callingCardUrl || null,
+    calling_card_updated_at: profile.callingCardUpdatedAt
+      ? new Date(profile.callingCardUpdatedAt).toISOString()
+      : null,
     updated_at: new Date().toISOString(),
   };
   const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
@@ -2875,6 +3437,10 @@ async function supabaseLoadProfile() {
       tiktok: p.tiktok || "",
     },
     isPublic: p.is_public !== false,
+    callingCardUrl: p.calling_card_url || "",
+    callingCardUpdatedAt: p.calling_card_updated_at
+      ? Date.parse(p.calling_card_updated_at) || 0
+      : 0,
   };
 }
 /** Last status of the most recent `supabaseLoadUserSongs` call. The
@@ -4382,6 +4948,7 @@ function setProfileEditing(on) {
   const hint = document.getElementById("profileAvatarEditHint");
   if (hint) hint.style.display = profileEditing ? "" : "none";
   renderProfileUsernamePrompt();
+  renderProfileCallingCardHint();
 }
 
 /** Show the soft "pick a username" banner when the current user is
@@ -4579,6 +5146,9 @@ function renderProfilePreviewFromInputs() {
 function renderUserProfile(rawUsername) {
   const username = String(rawUsername || "").replace(/^@/, "").trim();
   if (!els.userPublicName) return;
+  // Resolve the creator's calling card out of band — don't block render.
+  // This populates the chip + may autoplay once per device.
+  void refreshUserPublicCallingCard(username);
   const feed = loadHubFeed();
   // Compare case-insensitively but render the username with the casing
   // from the actual posts so it looks like the creator's chosen handle.
@@ -8976,6 +9546,79 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
       if (!getVocalReferenceFile()) return;
       closeVocalRecorderModal();
+    });
+  }
+
+  // Calling card recorder ----------------------------------------------
+  if (els.btnCloseCallingCard) {
+    els.btnCloseCallingCard.addEventListener("click", closeCallingCardModal);
+  }
+  if (els.callingCardBackdrop) {
+    els.callingCardBackdrop.addEventListener("click", closeCallingCardModal);
+  }
+  if (els.btnCallingCardToggle) {
+    els.btnCallingCardToggle.addEventListener("click", async () => {
+      if (callingCardRecState === "idle") {
+        await startCallingCardRecording();
+      } else if (callingCardRecState === "recording") {
+        stopCallingCardRecording();
+      } else if (callingCardRecState === "ready" || callingCardRecState === "playing") {
+        await previewOrPauseCallingCard();
+      }
+    });
+  }
+  if (els.btnCallingCardSave) {
+    els.btnCallingCardSave.addEventListener("click", () => void saveCallingCard());
+  }
+  if (els.btnCallingCardDiscard) {
+    els.btnCallingCardDiscard.addEventListener("click", () => void discardCallingCardDraft());
+  }
+  if (els.btnCallingCardDelete) {
+    els.btnCallingCardDelete.addEventListener("click", () => {
+      if (confirm("Remove your calling card? Visitors won’t hear it anymore.")) {
+        void deleteExistingCallingCard();
+      }
+    });
+  }
+  // Long-press own avatar to open the recorder. Tap-to-edit-photo is
+  // already wired elsewhere; long-press is a strict superset on top.
+  if (els.profilePreviewAvatar) {
+    attachLongPress(els.profilePreviewAvatar, () => {
+      if (!authSession?.user?.id) {
+        showToast("Sign in to record a calling card.");
+        return;
+      }
+      openCallingCardModal();
+    }, 600);
+  }
+  if (els.profileCallingCardHint) {
+    els.profileCallingCardHint.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      openCallingCardModal();
+    });
+  }
+  // Public profile chip — tap-to-(play|pause). Autoplay is handled in
+  // refreshUserPublicCallingCard once per device.
+  if (els.userPublicCallingCard) {
+    els.userPublicCallingCard.addEventListener("click", () => {
+      const audio = els.userPublicCallingCardAudio;
+      if (!audio || !audio.src) return;
+      if (audio.paused) {
+        audio.volume = CALLING_CARD_PLAYBACK_VOL;
+        try { audio.play(); } catch {}
+      } else {
+        try { audio.pause(); } catch {}
+      }
+    });
+  }
+  // Settings auto-play preference toggle.
+  if (els.settingsCallingCardAutoplay) {
+    try {
+      els.settingsCallingCardAutoplay.checked = isCallingCardAutoplayEnabled();
+    } catch {}
+    els.settingsCallingCardAutoplay.addEventListener("change", () => {
+      setCallingCardAutoplayEnabled(Boolean(els.settingsCallingCardAutoplay.checked));
     });
   }
   if (els.btnPreviewVocalRef) {

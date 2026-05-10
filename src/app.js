@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510hubremix2";
+const APP_BUILD = "20260510profilefix";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1873,6 +1873,72 @@ function saveProfile(p) {
   try { localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); } catch {}
 }
 
+/** Resize an uploaded avatar in-browser before we keep it. Older code
+ *  stored the raw camera/library photo as a multi-MB base64 string,
+ *  which then bloated the profile JSON in localStorage and made boot
+ *  slow because `loadProfile()` had to parse that on every open.
+ *  320 px square at JPEG q=0.82 is plenty for a 96 px avatar. */
+async function compressAvatarFile(file, { maxSize = 320, quality = 0.82 } = {}) {
+  if (!file) return "";
+  if (typeof createImageBitmap !== "function" || typeof OffscreenCanvas === "undefined") {
+    return await new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => res(String(fr.result || ""));
+      fr.onerror = () => rej(fr.error || new Error("read_failed"));
+      fr.readAsDataURL(file);
+    });
+  }
+  try {
+    const bmp = await createImageBitmap(file);
+    const ratio = Math.min(1, maxSize / Math.max(bmp.width, bmp.height));
+    const w = Math.max(1, Math.round(bmp.width * ratio));
+    const h = Math.max(1, Math.round(bmp.height * ratio));
+    const canvas = new OffscreenCanvas(w, h);
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(bmp, 0, 0, w, h);
+    const blob = await canvas.convertToBlob({ type: "image/jpeg", quality });
+    return await new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => res(String(fr.result || ""));
+      fr.onerror = () => rej(fr.error || new Error("read_failed"));
+      fr.readAsDataURL(blob);
+    });
+  } catch {
+    return await new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => res(String(fr.result || ""));
+      fr.onerror = () => rej(fr.error || new Error("read_failed"));
+      fr.readAsDataURL(file);
+    });
+  }
+}
+
+let _profileCloudSyncTimer = null;
+let _profileCloudSyncInFlight = false;
+/** Push the current `activeProfile` to Supabase. Debounced so quick
+ *  successive edits (e.g. typing a username + adding a photo) collapse
+ *  into one upsert. Failures are silent — local copy stays correct
+ *  and the next save will reconcile. */
+function scheduleProfileCloudSync({ delayMs = 600 } = {}) {
+  if (_profileCloudSyncTimer) clearTimeout(_profileCloudSyncTimer);
+  _profileCloudSyncTimer = setTimeout(async () => {
+    _profileCloudSyncTimer = null;
+    if (_profileCloudSyncInFlight) {
+      scheduleProfileCloudSync({ delayMs: 800 });
+      return;
+    }
+    if (!authSession?.user?.id) return;
+    _profileCloudSyncInFlight = true;
+    try {
+      await supabaseUpsertProfile(activeProfile);
+    } catch (e) {
+      console.warn("[profile] cloud sync failed (will retry on next save)", e);
+    } finally {
+      _profileCloudSyncInFlight = false;
+    }
+  }, Math.max(50, delayMs));
+}
+
 /** Build an anonymous default username for a Supabase auth user.
  *  We deliberately DO NOT use the email handle here — a name like
  *  `samy.naoum` on Hub would leak part of the user's real email to
@@ -2099,14 +2165,29 @@ function ingestMyHubPostsRows(rows) {
   renderProfileHubShared();
 }
 
-async function refreshMyHubPostsFast() {
+let _myHubPostsLastFetchMs = 0;
+let _myHubPostsInFlight = null;
+async function refreshMyHubPostsFast({ force = false } = {}) {
   try {
     const uid = String(authSession?.user?.id || "");
     const username = String(activeProfile?.username || "");
     if (!uid && !username) return;
-    const rows = await supabaseSelectMyHubPosts({ uid, username });
-    if (rows && rows.length) ingestMyHubPostsRows(rows);
-  } catch {}
+    const now = Date.now();
+    if (!force && now - _myHubPostsLastFetchMs < 8000) return;
+    if (_myHubPostsInFlight) return _myHubPostsInFlight;
+    _myHubPostsInFlight = (async () => {
+      try {
+        const rows = await supabaseSelectMyHubPosts({ uid, username });
+        _myHubPostsLastFetchMs = Date.now();
+        if (rows && rows.length) ingestMyHubPostsRows(rows);
+      } finally {
+        _myHubPostsInFlight = null;
+      }
+    })();
+    return _myHubPostsInFlight;
+  } catch {
+    _myHubPostsInFlight = null;
+  }
 }
 function loadAuthSession() {
   try {
@@ -11620,15 +11701,26 @@ if (els.btnProfileDelete) {
   });
 }
 if (els.profileAvatarFile) {
-  els.profileAvatarFile.addEventListener("change", () => {
+  els.profileAvatarFile.addEventListener("change", async () => {
     const f = els.profileAvatarFile?.files?.[0];
     if (!f) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      activeProfile.avatar = String(reader.result || "");
+    try {
+      const dataUrl = await compressAvatarFile(f, { maxSize: 320, quality: 0.82 });
+      if (!dataUrl) throw new Error("Could not read photo");
+      activeProfile.avatar = dataUrl;
+      // Persist to localStorage IMMEDIATELY so a PWA close doesn't
+      // throw away the photo just because the user navigated away
+      // before tapping Save. Previous behavior: only the in-memory
+      // copy was updated, which is why "I put a photo, came back,
+      // it's gone" was reproducible after a hard restart.
+      saveProfile(activeProfile);
       renderProfilePreviewFromInputs();
-    };
-    reader.readAsDataURL(f);
+      showToast("Photo saved", { icon: "✓", durationMs: 1800 });
+      void scheduleProfileCloudSync();
+    } catch (e) {
+      console.error("[avatar] failed to read photo", e);
+      showToast(`Could not load photo: ${e?.message || "error"}`, { icon: "!", durationMs: 3200 });
+    }
   });
 }
 if (els.profilePreviewAvatar && els.profileAvatarFile) {
@@ -11823,22 +11915,22 @@ void (async () => {
     const cloud = await supabaseLoadProfile();
     let nextProfile;
     if (cloud) {
-      // Merge local + cloud instead of clobbering local with cloud.
-      // If cloud has a field but it's empty (e.g. bio was never
-      // synced because of a flaky save), prefer the local value.
-      // This was the source of a "my bio + avatar got reset on
-      // sign-in" report: we used to do `nextProfile = cloud` which
-      // wiped any locally-richer fields the next upsert then
-      // persisted as empty in Supabase.
+      // Local-first merge. Cloud is the fallback for fields the user
+      // hasn't filled on this device yet (e.g. fresh install). For any
+      // overlapping field, local wins so an unsaved avatar pick or a
+      // recent edit doesn't get clobbered by a stale cloud value (this
+      // was the "I put a photo then came back and don't see it"
+      // report). Anything richer in local automatically promotes back
+      // to cloud through the debounced sync below.
       const looksFilled = (v) => v !== "" && v != null;
-      const cloudFilled = Object.fromEntries(
-        Object.entries(cloud).filter(([, v]) => looksFilled(v)),
+      const localFilled = Object.fromEntries(
+        Object.entries(activeProfile).filter(([, v]) => looksFilled(v)),
       );
       nextProfile = {
-        ...activeProfile,
-        ...cloudFilled,
+        ...cloud,
+        ...localFilled,
         id: String(authSession.user.id),
-        email: cloud.email || authSession.user.email || activeProfile.email || "",
+        email: localFilled.email || cloud.email || authSession.user.email || "",
       };
     } else {
       // First sign-in for this user. Don't fall back to the boot-time
@@ -11861,26 +11953,16 @@ void (async () => {
       nextProfile = { ...nextProfile, username: deriveUsernameFromAuth(authSession.user) };
     }
     saveProfile(nextProfile);
-    if (!cloud || cloud.username !== nextProfile.username) {
-      // Best-effort upsert. Failure is non-fatal: the local username
-      // is still correct so the rest of the app behaves; the next
-      // profile save in the UI will reconcile. If the username has a
-      // unique-constraint collision on the cloud table, append a
-      // short id-derived tail and try once more so the cloud row
-      // lands cleanly without prompting the user during sign-in.
-      try {
-        await supabaseUpsertProfile(nextProfile);
-      } catch (e1) {
-        const msg = String(e1?.message || "");
-        if (/duplicate|unique/i.test(msg)) {
-          const tail = String(authSession.user.id || "").replace(/-/g, "").slice(0, 4);
-          const fallback = `${nextProfile.username}${tail}`.slice(0, 32);
-          nextProfile = { ...nextProfile, username: fallback };
-          saveProfile(nextProfile);
-          try { await supabaseUpsertProfile(nextProfile); } catch {}
-        }
-      }
-    }
+    // Push back to cloud only when the merge introduced changes that
+    // need to land on the server (new username, new avatar/bio that
+    // were only in local). Fire-and-forget via the debounced sync so
+    // boot stays snappy on slow networks.
+    const cloudIsStale = !cloud
+      || cloud.username !== nextProfile.username
+      || cloud.avatar !== nextProfile.avatar
+      || cloud.bio !== nextProfile.bio
+      || cloud.voice_timbre !== nextProfile.voiceTimbre;
+    if (cloudIsStale) scheduleProfileCloudSync({ delayMs: 400 });
 
     if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = activeProfile.username ? `@${activeProfile.username}` : "@guest";
     if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = activeProfile.voiceTimbre || "";

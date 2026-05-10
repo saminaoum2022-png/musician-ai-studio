@@ -29,7 +29,7 @@
     <link rel="dns-prefetch" href="https://cdn2.suno.ai" />
     <link rel="dns-prefetch" href="https://cdn4.suno.ai" />
     <link rel="dns-prefetch" href="https://suno.com" />
-    <link rel="stylesheet" href="./styles.css?v=20260510creditsfix" />
+    <link rel="stylesheet" href="./styles.css?v=20260510stuckclear" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -65,6 +65,11 @@
           <div id="loadingTitle" class="loadingTitle">Generating…</div>
           <div id="loadingSub" class="loadingSub">This can take 30–120 seconds.</div>
         </div>
+        <button id="btnLoadingDismiss" class="loadingDismiss" type="button" aria-label="Dismiss" title="Dismiss" hidden>
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/>
+          </svg>
+        </button>
       </div>
 
       <main class="grid">
@@ -1756,6 +1761,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260510personavoice"></script>
+    <script type="module" src="./src/app.js?v=20260510creditsfix"></script>
   </body>
 </html>

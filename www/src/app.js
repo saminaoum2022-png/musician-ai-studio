@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510creditsfix";
+const APP_BUILD = "20260510stuckclear";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -213,6 +213,7 @@ const els = {
   globalLoading: document.getElementById("globalLoading"),
   loadingTitle: document.getElementById("loadingTitle"),
   loadingSub: document.getElementById("loadingSub"),
+  btnLoadingDismiss: document.getElementById("btnLoadingDismiss"),
 
   btnEnterApp: document.getElementById("btnEnterApp"),
   btnStartHelp: document.getElementById("btnStartHelp"),
@@ -9102,7 +9103,7 @@ function setAiBgState(state) {
   // Background is intentionally stable (non-reactive) for a cleaner UI.
   return state;
 }
-function setLoading(on, { title, sub } = {}) {
+function setLoading(on, { title, sub, dismissible } = {}) {
   busyCount = Math.max(0, busyCount + (on ? 1 : -1));
   const show = busyCount > 0;
   const readyMode = false;
@@ -9119,6 +9120,60 @@ function setLoading(on, { title, sub } = {}) {
   if (show) {
     if (els.loadingTitle && title) els.loadingTitle.textContent = title;
     if (els.loadingSub && sub) els.loadingSub.textContent = sub;
+  }
+  // Dismiss button is sticky once shown — any pending-task UI calls
+  // setLoading repeatedly, and we don't want it to flicker. We hide it
+  // only when loading itself goes away.
+  if (els.btnLoadingDismiss) {
+    if (!show) {
+      els.btnLoadingDismiss.hidden = true;
+    } else if (dismissible === true) {
+      els.btnLoadingDismiss.hidden = false;
+    }
+  }
+}
+
+/**
+ * Manually clear a stuck "Processing in backend" state. The user can
+ * tap the × on the loading bar; we wipe the persisted task id, stop
+ * any running poll timer, drop the spinner, and reset the Generate
+ * button so they can start fresh. The Suno task itself may still be
+ * running on Suno's side — that's fine, the callback path will deposit
+ * the song into the library when it lands.
+ */
+function dismissPendingBackendTask({ silent = false } = {}) {
+  try {
+    if (generatePollTimer) {
+      clearInterval(generatePollTimer);
+      generatePollTimer = null;
+    }
+  } catch {}
+  try { savePendingBackendTask(""); } catch {}
+  try { sunoTaskId = ""; } catch {}
+  try {
+    if (els.btnSunoGenerate) {
+      els.btnSunoGenerate.textContent = "Generate song";
+      els.btnSunoGenerate.disabled = false;
+      els.btnSunoGenerate.dataset.mode = "generate";
+    }
+  } catch {}
+  try { setGenerateFieldsLocked(false); } catch {}
+  // Force the loading bar off regardless of busyCount; this is a hard
+  // reset for a stuck overlay so we don't want to be subtle here.
+  try {
+    busyCount = 0;
+    if (els.globalLoading) els.globalLoading.style.display = "none";
+    document.body.classList.remove("isBusy");
+    if (els.btnLoadingDismiss) els.btnLoadingDismiss.hidden = true;
+  } catch {}
+  if (!silent) {
+    try { setStatus("Cleared. You can start a new generation."); } catch {}
+    try {
+      showToast(
+        "Cleared the stuck task. If you saw the song complete on Suno's side, you can fetch it again later — open the Library actions menu.",
+        { icon: "✓", durationMs: 4500 }
+      );
+    } catch {}
   }
 }
 
@@ -10338,7 +10393,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           setGenerateBtn("Check status", false, "resume");
           setStatus("Still processing in backend. Tap Check status.");
           setGenerateFieldsLocked(false);
-          setLoading(true, { title: "Processing in backend...", sub: "You can keep using the app. Tap Check status anytime." });
+          setLoading(true, {
+            title: "Processing in backend...",
+            sub: "You can keep using the app. Tap Check status anytime, or × to clear.",
+            dismissible: true,
+          });
         }
       } catch {}
     }, 4500);
@@ -10565,7 +10624,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       sunoTaskId = resumeTask;
       savePendingBackendTask(resumeTask);
       setStatus("Checking backend status...");
-      setLoading(true, { title: "Processing in backend...", sub: "Checking latest status..." });
+      setLoading(true, {
+        title: "Processing in backend...",
+        sub: "Checking latest status...",
+        dismissible: true,
+      });
       setGenerateBtn("Checking...", true, "resume");
       startGeneratePolling();
       return;
@@ -10603,7 +10666,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = true;
       setStatus(`Submitting generation… (Mode: ${modeLabel} | Engine: ${engineLabel})`);
       setProgress(5);
-      setLoading(true, { title: "Processing in backend...", sub: "This can take 30–120 seconds." });
+      setLoading(true, {
+        title: "Processing in backend...",
+        sub: "This can take 30–120 seconds.",
+        dismissible: true,
+      });
 
       applyMaqamToStyleInput();
       const userPrompt = (els.sunoPrompt?.value || "").trim();
@@ -11160,12 +11227,22 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   }
 
   // Auto-resume pending backend generation on reopen/reload.
+  // Previously this only set the UI to "Tap Check status" and waited
+  // for a manual click — meaning a user who closed the app mid-poll
+  // came back to a perpetual "Processing..." screen. Now we kick off
+  // polling immediately AND show a dismiss button so the user can
+  // bail out if it actually completed long ago and just got stuck.
   const bootPendingTask = loadPendingBackendTask();
   if (bootPendingTask && !generatePollTimer) {
     sunoTaskId = bootPendingTask;
-    setGenerateBtn("Check status", false, "resume");
-    setStatus("Pending backend task found. Tap Check status.");
-    setLoading(true, { title: "Processing in backend...", sub: "Pending task detected from last session." });
+    setGenerateBtn("Checking…", true, "resume");
+    setStatus("Pending backend task found. Reconnecting…");
+    setLoading(true, {
+      title: "Reconnecting to your last song…",
+      sub: "If this lingers, tap × to clear and try again.",
+      dismissible: true,
+    });
+    try { startGeneratePolling(); } catch {}
   }
 
   els.btnSunoStems.addEventListener("click", async () => {
@@ -13050,11 +13127,19 @@ if (els.btnAuthLogout) {
     saveAuthSession(null);
     resetProfileUiToGuest();
     setProfileEditing(false);
+    // A pending generation belongs to the previous user — wipe it so a
+    // fresh login on the same device doesn't inherit a stuck spinner.
+    try { dismissPendingBackendTask({ silent: true }); } catch {}
     if (els.btnAuthGoogle) {
       els.btnAuthGoogle.disabled = false;
       els.btnAuthGoogle.textContent = "Continue with Google";
     }
     setStatus("Logged out.");
+  });
+}
+if (els.btnLoadingDismiss) {
+  els.btnLoadingDismiss.addEventListener("click", () => {
+    dismissPendingBackendTask();
   });
 }
 if (els.btnProfileDelete) {

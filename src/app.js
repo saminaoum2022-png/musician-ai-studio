@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511personacollapse";
+const APP_BUILD = "20260511profilehubplay";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -5863,6 +5863,77 @@ function closeProfileHubMenu() {
   _profileHubOpenMenuId = "";
 }
 
+/** Profile → "Songs on Hub" rows: play the track in the full-screen
+ *  player instead of routing to Hub (which caused scroll / snap /
+ *  routing glitches). Uses the same CDN-first URL + proxy fallback as
+ *  Hub playback. */
+async function playHubPostFromProfile(postId) {
+  const pid = String(postId || "").trim();
+  if (!pid) return;
+  const p = loadHubFeed().find((x) => String(x.id) === pid);
+  if (!p?.url) return;
+  closeProfileHubMenu();
+  try {
+    stopHubPlayback();
+  } catch {}
+
+  const rawUrl = String(p.url || "").trim();
+  let src = hubPlaybackSrcForPost(pid, p);
+  if (!src) return;
+
+  currentPlayerTrackRef = {
+    id: pid,
+    url: rawUrl,
+    title: p.title || "Hub song",
+    artUrl: p.artUrl || p.creatorAvatar || "",
+    meta: p.meta || {},
+  };
+  miniSource = { type: "profile_hub", postId: pid };
+  libraryNowPlayingId = null;
+
+  const meta = {
+    title: p.title || "Hub song",
+    subtitle: `Hub • @${String(p.creator || "").trim() || "creator"}`,
+    artUrl: p.artUrl || p.creatorAvatar || placeholderCoverDataUrl(),
+  };
+
+  const applyClipStart = () => {
+    const a = ensurePlayer();
+    if (p?.meta?.clip && Number.isFinite(Number(p.meta.clip.startSec))) {
+      try {
+        a.currentTime = Math.max(0, Number(p.meta.clip.startSec));
+      } catch {}
+    }
+  };
+
+  const tryOnce = async (urlToUse) => {
+    setPlayerSource(urlToUse, "Hub");
+    setPlayerMeta(meta);
+    location.hash = "#/player";
+    const a = ensurePlayer();
+    await a.play();
+    applyClipStart();
+    if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = true;
+    if (els.btnPlayerPause) els.btnPlayerPause.disabled = false;
+  };
+
+  try {
+    await tryOnce(src);
+  } catch (e) {
+    const direct = String(src || "");
+    if (/^https?:\/\//i.test(direct)) {
+      const prox = toAudioProxyUrl(rawUrl);
+      if (prox && prox !== direct) {
+        try {
+          await tryOnce(prox);
+          return;
+        } catch {}
+      }
+    }
+    setStatus(`Playback failed (${e?.name || "error"}). Try again in a moment.`);
+  }
+}
+
 function renderProfileHubShared() {
   if (!els.profileHubSharedList) return;
   const creator = String(activeProfile.username || "guest");
@@ -5908,11 +5979,19 @@ function renderProfileHubShared() {
         const likes = Number(p.likes || 0);
         const subBits = [];
         if (dateLabel) subBits.push(`<span class="libRowDot">${escapeHtml(dateLabel)}</span>`);
-        if (likes > 0) subBits.push(`<span class="libRowChip libRowChipLikes">❤ ${likes}</span>`);
+        if (likes > 0) {
+          subBits.push(`
+            <span class="libRowChip libRowChipLikes profileHubLikeChip" aria-hidden="true">
+              <svg class="profileHubLikeHeartSvg" viewBox="0 0 24 24" width="14" height="14" focusable="false" aria-hidden="true">
+                <path fill="currentColor" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+              </svg>
+              <span class="profileHubLikeCount">${likes}</span>
+            </span>`);
+        }
         const sid = escapeHtml(String(p.id));
         return `
           <li class="libRow" data-profile-hub-row="${sid}">
-            <button class="libRowMain" type="button" data-profile-hub-open="${sid}" aria-label="Open ${safeTitle} on Hub">
+            <button class="libRowMain" type="button" data-profile-hub-play="${sid}" aria-label="Play ${safeTitle}">
               <span class="libRowArt">
                 <img src="${escapeHtml(art)}" alt="" />
                 <span class="libRowArtBadge" aria-hidden="true">▶</span>
@@ -5931,12 +6010,11 @@ function renderProfileHubShared() {
       }).join("")}
     </ul>
   `;
-  els.profileHubSharedList.querySelectorAll("[data-profile-hub-open]").forEach((b) => {
+  els.profileHubSharedList.querySelectorAll("[data-profile-hub-play]").forEach((b) => {
     b.addEventListener("click", () => {
-      const sid = b.getAttribute("data-profile-hub-open");
+      const sid = b.getAttribute("data-profile-hub-play");
       if (!sid) return;
-      closeProfileHubMenu();
-      location.hash = `#/hub?post=${encodeURIComponent(sid)}`;
+      void playHubPostFromProfile(sid);
     });
   });
   els.profileHubSharedList.querySelectorAll("[data-profile-hub-menu]").forEach((b) => {

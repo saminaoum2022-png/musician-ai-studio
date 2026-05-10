@@ -4494,6 +4494,23 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   border-color: rgba(255, 122, 158, 0.30);
   color: rgba(255, 222, 232, 0.95);
 }
+/* Heart glyph matches Hub like control (SVG path + glow), not emoji. */
+.profileHubLikeChip{
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.profileHubLikeHeartSvg{
+  flex: 0 0 auto;
+  color: #ff6b88;
+  filter: drop-shadow(0 0 5px rgba(255, 107, 136, 0.42));
+}
+.profileHubLikeCount{
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.2px;
+}
 
 /* -------- Public creator profile (#/u/USERNAME) -------- */
 .userPublic{

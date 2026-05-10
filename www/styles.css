@@ -6202,41 +6202,86 @@ input::placeholder, textarea::placeholder{
   flex: 0 0 auto;
 }
 
+/* Collapsible persona card on the Profile.
+   Compact by default — header only (icon + small uppercase label +
+   persona name + chevron). Tap to expand for the multi-line hint and
+   the "Open Create" CTA. Same gradient/border as before, just denser. */
 .profilePersonaRow{
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  margin: 14px 0 18px;
-  padding: 12px 14px;
+  display: block;
+  margin: 12px 0 16px;
+  padding: 0;
   border-radius: 14px;
   border: 1px solid rgba(124,92,255,0.28);
   background: linear-gradient(135deg, rgba(124,92,255,0.08), rgba(35,213,171,0.05));
+  overflow: hidden;
 }
+.profilePersonaHead{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.profilePersonaHead:active{ background: rgba(124,92,255,0.06); }
 .profilePersonaIco{
-  font-size: 22px;
+  font-size: 20px;
   line-height: 1;
   flex: 0 0 auto;
 }
-.profilePersonaBody{
+.profilePersonaHeadText{
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 .profilePersonaTitle{
-  font-size: 13px;
-  letter-spacing: 0.06em;
+  font-size: 11px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: rgba(232,238,247,0.55);
-  margin-bottom: 4px;
+  line-height: 1.2;
 }
-.profilePersonaLine strong{
-  font-size: 15px;
-  font-weight: 800;
+.profilePersonaHeadText strong{
+  font-size: 14px;
+  font-weight: 700;
   color: rgba(232,238,247,0.96);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+.profilePersonaChev{
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(232,238,247,0.55);
+  transition: transform 180ms ease, color 180ms ease;
+}
+.profilePersonaRow[data-expanded="true"] .profilePersonaChev{
+  transform: rotate(180deg);
+  color: rgba(124,92,255,0.95);
+}
+.profilePersonaDetails{
+  padding: 0 14px 12px;
+  border-top: 1px solid rgba(124,92,255,0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+.profilePersonaDetails[hidden]{ display: none; }
 .profilePersonaHint{
   font-size: 13px;
   color: rgba(232,238,247,0.62);
-  margin-top: 6px;
+  margin-top: 10px;
   line-height: 1.4;
 }
 .profilePersonaSpots{
@@ -6259,16 +6304,15 @@ input::placeholder, textarea::placeholder{
   text-decoration: underline;
 }
 .profilePersonaLink{
-  flex: 0 0 auto;
-  align-self: center;
   font-size: 13px;
   font-weight: 700;
   color: rgba(124,92,255,0.95);
   text-decoration: none;
-  padding: 6px 10px;
+  padding: 7px 12px;
   border-radius: 999px;
   border: 1px solid rgba(124,92,255,0.35);
   background: rgba(124,92,255,0.12);
+  align-self: flex-start;
 }
 .profilePersonaLink:active{ transform: scale(0.97); }
 

@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511callcardunlock";
+const APP_BUILD = "20260511personacollapse";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -105,6 +105,8 @@ const els = {
   profileCreditsLink: document.getElementById("profileCreditsLink"),
   profilePersonaRow: document.getElementById("profilePersonaRow"),
   profilePersonaLabel: document.getElementById("profilePersonaLabel"),
+  profilePersonaToggle: document.getElementById("profilePersonaToggle"),
+  profilePersonaDetails: document.getElementById("profilePersonaDetails"),
   creditsBalanceBig: document.getElementById("creditsBalanceBig"),
   creditsHeroEmail: document.getElementById("creditsHeroEmail"),
   creditsRedeemInput: document.getElementById("creditsRedeemInput"),
@@ -2698,6 +2700,29 @@ function savePersonaSelection(id) {
     else localStorage.removeItem(k);
   } catch {}
 }
+/** Persisted expand/collapse state for the persona card on Profile.
+ *  We keep it compact by default so the card doesn't dominate the
+ *  page, and remember the user's choice across sessions. */
+const PROFILE_PERSONA_EXPANDED_KEY = "nabadai.profile.personaExpanded.v1";
+function isProfilePersonaExpanded() {
+  try { return localStorage.getItem(PROFILE_PERSONA_EXPANDED_KEY) === "1"; }
+  catch { return false; }
+}
+function setProfilePersonaExpanded(on) {
+  try { localStorage.setItem(PROFILE_PERSONA_EXPANDED_KEY, on ? "1" : "0"); } catch {}
+  applyProfilePersonaExpandedUi(on);
+}
+function applyProfilePersonaExpandedUi(on) {
+  const row = els.profilePersonaRow;
+  const btn = els.profilePersonaToggle;
+  const body = els.profilePersonaDetails;
+  if (!row || !btn || !body) return;
+  row.dataset.expanded = on ? "true" : "false";
+  btn.setAttribute("aria-expanded", on ? "true" : "false");
+  if (on) body.removeAttribute("hidden");
+  else body.setAttribute("hidden", "");
+}
+
 function updateProfilePersonaRow() {
   if (!els.profilePersonaRow || !els.profilePersonaLabel) return;
   if (!authSession?.user?.id) {
@@ -2718,6 +2743,7 @@ function updateProfilePersonaRow() {
     els.profilePersonaLabel.textContent = "No persona selected";
     if (hint) hint.style.display = "";
   }
+  applyProfilePersonaExpandedUi(isProfilePersonaExpanded());
   renderActivePersonaBanner();
 }
 
@@ -10474,6 +10500,16 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       "dragstart",
       (ev) => ev.preventDefault()
     );
+  }
+
+  // Profile persona card — collapsed by default; tap header to
+  // expand the multi-line hint + Open Create CTA. Choice persists
+  // across sessions via localStorage.
+  if (els.profilePersonaToggle) {
+    els.profilePersonaToggle.addEventListener("click", () => {
+      const next = !(els.profilePersonaRow?.dataset.expanded === "true");
+      setProfilePersonaExpanded(next);
+    });
   }
 
   // Own-profile voice chip — handles BOTH "play my card" and

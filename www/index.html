@@ -29,7 +29,7 @@
     <link rel="dns-prefetch" href="https://cdn2.suno.ai" />
     <link rel="dns-prefetch" href="https://cdn4.suno.ai" />
     <link rel="dns-prefetch" href="https://suno.com" />
-    <link rel="stylesheet" href="./styles.css?v=20260511callcardunlock" />
+    <link rel="stylesheet" href="./styles.css?v=20260511personacollapse" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1028,13 +1028,20 @@
             <span id="profileOwnStats"></span>
           </div>
 
-          <div id="profilePersonaRow" class="profilePersonaRow" style="display:none" aria-live="polite">
-            <span class="profilePersonaIco" aria-hidden="true">🎙️</span>
-            <div class="profilePersonaBody">
-              <div class="profilePersonaTitle">Voice persona for new songs</div>
-              <div class="profilePersonaLine">
+          <div id="profilePersonaRow" class="profilePersonaRow" style="display:none" aria-live="polite" data-expanded="false">
+            <button type="button" id="profilePersonaToggle" class="profilePersonaHead" aria-expanded="false" aria-controls="profilePersonaDetails">
+              <span class="profilePersonaIco" aria-hidden="true">🎙️</span>
+              <span class="profilePersonaHeadText">
+                <span class="profilePersonaTitle">Voice persona</span>
                 <strong id="profilePersonaLabel">—</strong>
-              </div>
+              </span>
+              <span class="profilePersonaChev" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+                  <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+            </button>
+            <div id="profilePersonaDetails" class="profilePersonaDetails" hidden>
               <div id="profilePersonaHint" class="profilePersonaHint">
                 Save a voice as persona from any of these spots:
                 <ul class="profilePersonaSpots">
@@ -1043,8 +1050,8 @@
                   <li>On any <a href="#/hub">Hub</a> post → tap ⋯ → <strong>Save voice as persona</strong>.</li>
                 </ul>
               </div>
+              <a href="#/generate" class="profilePersonaLink">Open Create</a>
             </div>
-            <a href="#/generate" class="profilePersonaLink">Open Create</a>
           </div>
 
           <!-- Songs — same Apple-Music-style row design as Library, no card chrome -->
@@ -1784,6 +1791,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260511callcardunlock"></script>
+    <script type="module" src="./src/app.js?v=20260511personacollapse"></script>
   </body>
 </html>

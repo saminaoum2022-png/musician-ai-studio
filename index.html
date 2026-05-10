@@ -29,7 +29,7 @@
     <link rel="dns-prefetch" href="https://cdn2.suno.ai" />
     <link rel="dns-prefetch" href="https://cdn4.suno.ai" />
     <link rel="dns-prefetch" href="https://suno.com" />
-    <link rel="stylesheet" href="./styles.css?v=20260511killmix" />
+    <link rel="stylesheet" href="./styles.css?v=20260511nomix" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -448,10 +448,8 @@
                     <div class="segPill vocalModePill" role="group" aria-label="Vocal output mode">
                       <button id="vocalModeFull" type="button" class="ghost active" title="AI sings your lyrics on a new arrangement (your voice is replaced)">Full song</button>
                       <button id="vocalModeInstrumental" type="button" class="ghost" title="Generates a backing band that follows your melody — no vocals in the result">Backing track</button>
-                      <button id="vocalModeMix" type="button" class="ghost isComingSoon" aria-disabled="true" title="Coming soon — tuning melody-tracking and vocal clarity">My voice + band <span class="vocalModeMixStar" aria-hidden="true">✦</span></button>
                     </div>
                     <input id="vocalInstrumentalOnly" type="hidden" value="0" />
-                    <input id="vocalMixMode" type="hidden" value="0" />
                     <div id="vocalRefActiveStrip" class="vocalRefActiveStrip" hidden>
                       <span class="vocalRefActiveStripIco" aria-hidden="true">
                         <svg viewBox="0 0 24 24" width="18" height="18" focusable="false"><path fill="currentColor" d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
@@ -469,7 +467,6 @@
                       <ul class="vocalRefHintList">
                         <li><strong>Full song</strong> — AI re-sings your lyrics on a new arrangement.</li>
                         <li><strong>Backing track</strong> — band that follows your melody, no vocals.</li>
-                        <li><strong>My voice + band</strong> ✦ — coming soon. We're tuning melody-tracking and vocal clarity before shipping this.</li>
                       </ul>
                     </div>
                   </div>
@@ -1811,6 +1808,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260511killmix"></script>
+    <script type="module" src="./src/app.js?v=20260511nomix"></script>
   </body>
 </html>

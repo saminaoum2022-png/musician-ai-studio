@@ -2,12 +2,11 @@ import { generateArrangement, randomizeParams } from "./arrangement.js";
 import { renderArrangementToWav } from "./render.js";
 import { recordHumToMelody } from "./melody/extract.js";
 import { mixStemsToWav } from "./studio/mixer.js";
-import { mixVoicePlusBand } from "./studio/voicePlusBand.js";
 import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511killmix";
+const APP_BUILD = "20260511nomix";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -35,10 +34,8 @@ const els = {
   btnCreatePersona: document.getElementById("btnCreatePersona"),
   sunoProMode: document.getElementById("sunoProMode"),
   vocalInstrumentalOnly: document.getElementById("vocalInstrumentalOnly"),
-  vocalMixMode: document.getElementById("vocalMixMode"),
   vocalModeFull: document.getElementById("vocalModeFull"),
   vocalModeInstrumental: document.getElementById("vocalModeInstrumental"),
-  vocalModeMix: document.getElementById("vocalModeMix"),
   sunoVocalUpload: document.getElementById("sunoVocalUpload"),
   sunoVocalUploadName: document.getElementById("sunoVocalUploadName"),
   vocalRefActiveStrip: document.getElementById("vocalRefActiveStrip"),
@@ -1394,7 +1391,6 @@ function setGenerateFieldsLocked(locked) {
   if (els.btnMagicRecordVocal) els.btnMagicRecordVocal.disabled = locked;
   if (els.vocalModeFull) els.vocalModeFull.disabled = locked;
   if (els.vocalModeInstrumental) els.vocalModeInstrumental.disabled = locked;
-  if (els.vocalModeMix) els.vocalModeMix.disabled = locked;
   if (els.btnClearVocalRef) els.btnClearVocalRef.disabled = locked;
   if (els.btnPreviewVocalRef) els.btnPreviewVocalRef.disabled = locked ? true : !lockPreviewAllowed;
   if (els.btnVocalRefStop) els.btnVocalRefStop.disabled = true;
@@ -1436,18 +1432,15 @@ function resetCreateDraft() {
   try {
     clearVocalReferenceSelection({ preserveRemixBanner: false });
   } catch {}
-  pendingVoiceBandMix = null;
   if (els.sunoPrompt) els.sunoPrompt.value = "";
   if (els.sunoStyle) els.sunoStyle.value = "";
   if (els.sunoTitle) els.sunoTitle.value = "";
   if (els.sunoArtworkStyle) els.sunoArtworkStyle.value = "";
   if (els.sunoReferenceMode) els.sunoReferenceMode.value = "none";
   if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
-  if (els.vocalMixMode) els.vocalMixMode.value = "0";
   try { resetAdvancedOptionsToDefaults(); } catch {}
   if (els.vocalModeFull) els.vocalModeFull.classList.add("active");
   if (els.vocalModeInstrumental) els.vocalModeInstrumental.classList.remove("active");
-  if (els.vocalModeMix) els.vocalModeMix.classList.remove("active");
   if (els.sunoReferenceHint) {
     els.sunoReferenceHint.style.display = "none";
     els.sunoReferenceHint.textContent = "";
@@ -1767,31 +1760,6 @@ function syncVocalReferenceFromDom() {
  *                       backing track lands so we can mix locally.
  *   title:     string - hint for the resulting Library entry title.
  */
-/**
- * Feature flag for "My voice + band" mix mode.
- *
- * Set to `false` while the feature is parked (see `vocalModeMix` pill
- * marked `isComingSoon`). When false the entire post-mix pipeline is a
- * no-op:
- *   - submit never stores `pendingVoiceBandMix`
- *   - polling success never calls `runVoicePlusBandPostMix`
- *   - `isVoicePlusBandMixSelected()` always returns false
- * That way even if `vocalMixMode` somehow gets stuck at "1" (cached HTML,
- * stale PWA, prior session state), Backing-track runs can never end up
- * with the user's old vocal mixed back in.
- */
-const VOICE_BAND_MIX_ENABLED = false;
-
-let pendingVoiceBandMix = null;
-
-function isVoicePlusBandMixSelected() {
-  if (!VOICE_BAND_MIX_ENABLED) return false;
-  return (
-    String(els.vocalMixMode?.value || "0") === "1"
-    && String(els.vocalInstrumentalOnly?.value || "0") === "1"
-  );
-}
-
 // Hub Remix state. When set, the Generate flow uploads this audio as the
 // melody reference and routes through Suno's upload-cover endpoint, so the
 // new lyrics are sung over the same arrangement instead of a brand-new song.
@@ -1946,10 +1914,8 @@ async function startHubRemix(post) {
     const file = new File([blob], `${safeBase}.${ext}`, { type: mime });
     setVocalRefFile(file, `Remix source: ${post.title || "Track"}`, "remix");
     if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
-    if (els.vocalMixMode) els.vocalMixMode.value = "0";
     if (els.vocalModeFull) els.vocalModeFull.classList.add("active");
     if (els.vocalModeInstrumental) els.vocalModeInstrumental.classList.remove("active");
-    if (els.vocalModeMix) els.vocalModeMix.classList.remove("active");
     setRemixSource({
       id: post.id,
       title: post.title || "",
@@ -6780,73 +6746,6 @@ function addToLibrary(track) {
   })();
   return newTrack;
 }
-/**
- * "My voice + band" post-mix step.
- *
- * Runs after Suno's add-instrumental returns. Takes the just-added
- * Library entry's backing track URL, mixes the preserved user vocal
- * on top via the on-device mixer, and PATCHes the same Library entry
- * to point at the resulting WAV blob URL (with a `voicePlusBandMix`
- * marker in meta so we can show a "Mixed" chip on the row).
- *
- * Failure mode: leave the band-only entry as-is so the user still
- * has *something* playable. Show a non-blocking toast so they know
- * what happened.
- */
-async function runVoicePlusBandPostMix(libraryTrackId, pending) {
-  if (!libraryTrackId || !pending?.vocalFile) return;
-  const items = loadLibrary();
-  const target = items.find((x) => String(x.id) === String(libraryTrackId));
-  if (!target?.url) return;
-  const bandUrl = String(target.url || "").trim();
-  try {
-    setStatus("Mixing your voice with the band…");
-    showToast?.("Mixing your voice with the band…", { icon: "✦", durationMs: 2400 });
-    const mixedBlob = await mixVoicePlusBand({
-      vocalBlob: pending.vocalFile,
-      bandUrl,
-      onProgress: (m) => setStatus(m),
-    });
-    if (!mixedBlob || mixedBlob.size < 1024) {
-      throw new Error("Empty mix output");
-    }
-    const mixedUrl = URL.createObjectURL(mixedBlob);
-    const baseTitle = String(target.title || pending.title || "Generated song").replace(/\s*•.*$/, "").trim();
-    const newTitle = `${baseTitle || "Generated song"} • My voice + band`;
-    const newMeta = {
-      ...(target.meta || {}),
-      voicePlusBandMix: true,
-      bandOnlyUrl: bandUrl,
-      mode: "Reference: My voice + band (experimental)",
-    };
-    patchLibraryTrack(libraryTrackId, {
-      url: mixedUrl,
-      title: newTitle,
-      meta: newMeta,
-    });
-    // Result card / Player still point at the old band-only URL —
-    // swap to the mixed one so the user hears the new file
-    // immediately on "Play full".
-    try {
-      lastSunoFullUrl = mixedUrl;
-      lastSunoProxyUrl = mixedUrl;
-      lastSunoTitle = newTitle;
-      if (els.btnLoadFull) els.btnLoadFull.disabled = false;
-      setLink(els.sunoFullLink, mixedUrl);
-    } catch {}
-    setStatus("Mixed track ready — your voice + band.");
-    showToast?.("Mixed track ready ✦", { icon: "♪", durationMs: 2600 });
-  } catch (e) {
-    // Keep the band-only entry; just tell the user we couldn't mix.
-    const reason = e?.message || String(e);
-    setStatus(`Mix failed: ${reason}. Band-only track saved to Library.`);
-    showToast?.(
-      `Couldn't mix your voice in (${reason}). The band-only track is saved in Library.`,
-      { durationMs: 5200 }
-    );
-  }
-}
-
 function removeFromLibrary(id) {
   const prev = loadLibrary();
   const removed = prev.find((x) => x.id === id);
@@ -7640,7 +7539,6 @@ function renderLibrary() {
         const dateLabel = formatLibraryDate(t.ts);
         const isInstrumental = t.kind === "instrumental";
         const isSound = t.kind === "sound";
-        const isVoicePlusBand = Boolean(t?.meta?.voicePlusBandMix);
         const rawTitle = String(t.title || "").trim() || (isSound ? "Sound" : "Generated song");
         const displayTitle = isSound ? shortenSoundTitle(rawTitle) : rawTitle;
         const safeTitle = escapeHtml(displayTitle);
@@ -7648,7 +7546,6 @@ function renderLibrary() {
         if (dateLabel) subBits.push(`<span class="libRowDot">${escapeHtml(dateLabel)}</span>`);
         if (isInstrumental) subBits.push(`<span class="libRowChip">Instrumental</span>`);
         if (isSound) subBits.push(`<span class="libRowChip">Sound</span>`);
-        if (isVoicePlusBand) subBits.push(`<span class="libRowChip libRowChipMixed">Mixed ✦</span>`);
         // First row paints with high priority so the page never looks
         // empty above the fold; everything else is lazy + low-priority,
         // identical pattern to Hub.
@@ -9607,10 +9504,6 @@ function dismissPendingBackendTask({ silent = false, skipRecoverSave = false } =
   } catch {}
   try { savePendingBackendTask(""); } catch {}
   try { sunoTaskId = ""; } catch {}
-  pendingVoiceBandMix = null;
-  try {
-    if (els.vocalMixMode) els.vocalMixMode.value = "0";
-  } catch {}
   try {
     if (els.btnSunoGenerate) {
       els.btnSunoGenerate.textContent = "Generate song";
@@ -10384,69 +10277,32 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       stopVocalReferenceRecording();
     });
   }
-  // Hum-tab output pill — three modes:
-  //   Full song  -> Suno upload-cover (AI re-sings your lyrics; vocalInstrumentalOnly=0, vocalMixMode=0)
-  //   Backing    -> Suno add-instrumental (band only; vocalInstrumentalOnly=1, vocalMixMode=0)
-  //   Mix        -> Suno add-instrumental + on-device mix of band + user vocal
-  //                 (vocalInstrumentalOnly=1, vocalMixMode=1). Backend path is
-  //                 identical to Backing; the only difference is the post-success
-  //                 mix step on the client.
+  // Hum-tab output pill — two modes:
+  //   Full song  -> Suno upload-cover (AI re-sings your lyrics; vocalInstrumentalOnly=0)
+  //   Backing    -> Suno add-instrumental (band only; vocalInstrumentalOnly=1)
   const syncVocalModeUi = () => {
     const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
-    const mix = String(els.vocalMixMode?.value || "0") === "1";
-    if (els.vocalModeFull) els.vocalModeFull.classList.toggle("active", !instrumental && !mix);
-    if (els.vocalModeInstrumental) els.vocalModeInstrumental.classList.toggle("active", instrumental && !mix);
-    if (els.vocalModeMix) els.vocalModeMix.classList.toggle("active", mix);
-    // The lyrics field is OPTIONAL in Backing / Mix modes (band-only
-    // output, or user's own voice mixed back in — Suno doesn't need
-    // lyrics for either). Update the placeholder so users don't think
-    // it's required. Default placeholder is restored for Full song.
+    if (els.vocalModeFull) els.vocalModeFull.classList.toggle("active", !instrumental);
+    if (els.vocalModeInstrumental) els.vocalModeInstrumental.classList.toggle("active", instrumental);
+    // The lyrics field is OPTIONAL in Backing mode (band-only output —
+    // Suno doesn't need lyrics). Update the placeholder so users don't
+    // think it's required. Default placeholder restored for Full song.
     if (els.sunoPrompt) {
-      if (mix) {
-        els.sunoPrompt.placeholder = "Lyrics — optional. Your real voice will be mixed in.";
-      } else if (instrumental) {
-        els.sunoPrompt.placeholder = "Lyrics — optional. Output is band-only.";
-      } else {
-        els.sunoPrompt.placeholder = "Write your lyrics here...";
-      }
+      els.sunoPrompt.placeholder = instrumental
+        ? "Lyrics — optional. Output is band-only."
+        : "Write your lyrics here...";
     }
   };
   if (els.vocalModeFull) {
     els.vocalModeFull.addEventListener("click", () => {
       if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
-      if (els.vocalMixMode) els.vocalMixMode.value = "0";
       syncVocalModeUi();
     });
   }
   if (els.vocalModeInstrumental) {
     els.vocalModeInstrumental.addEventListener("click", () => {
       if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "1";
-      if (els.vocalMixMode) els.vocalMixMode.value = "0";
       syncVocalModeUi();
-    });
-  }
-  if (els.vocalModeMix) {
-    // Mix mode is parked: Suno's add-instrumental + on-device mix
-    // produced a mushy, MIDI-ish result and didn't preserve vocal
-    // clarity in real tests. Keep the pill visible (so users know
-    // it's on the roadmap) but show a "Coming soon" toast instead
-    // of running the broken flow. We do NOT flip the hidden inputs
-    // so the rest of the form stays in whatever mode was previously
-    // active.
-    els.vocalModeMix.classList.add("isComingSoon");
-    els.vocalModeMix.setAttribute("aria-disabled", "true");
-    els.vocalModeMix.setAttribute(
-      "title",
-      "Coming soon — we're tuning melody-tracking + vocal clarity before shipping this."
-    );
-    els.vocalModeMix.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      try {
-        showToast("My voice + band — coming soon. We're tuning melody-tracking and vocal clarity.", {
-          dwellMs: 4500,
-        });
-      } catch {}
     });
   }
   syncVocalModeUi();
@@ -11166,7 +11022,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
     setGenerateBtn("Generate song", false, "generate");
     savePendingBackendTask("");
-    pendingVoiceBandMix = null;
     try { clearVocalReferenceSelection(); } catch {}
     setGenerateFieldsLocked(false);
     setLoading(false);
@@ -11213,15 +11068,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           generatePollTimer = null;
           setGenerateBtn("Regenerate", false, "generate");
           showResultCard(true);
-          // First Library entry (Variant A). If a "My voice + band" mix
-          // is pending, we mark it so the post-mix step can find it
-          // and swap its URL to the mixed WAV.
-          // No mix queued: also reflect that in the variantA meta so a
-          // stale flag from a prior generation can't survive into this
-          // Library entry.
-          const variantAMeta = (VOICE_BAND_MIX_ENABLED && pendingVoiceBandMix)
-            ? { ...(lastGenerationMeta || {}), voicePlusBandPending: true }
-            : lastGenerationMeta;
           const variantAEntry = addToLibrary({
             title: lastSunoTitle,
             artUrl: lastSunoArtUrl,
@@ -11229,7 +11075,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             taskId: sunoTaskId || "",
             audioId: sunoAudioId || "",
             kind: "full",
-            meta: variantAMeta,
+            meta: lastGenerationMeta,
           });
           if (lastSunoProxyUrl2 || lastSunoFullUrl2) {
             addToLibrary({
@@ -11257,19 +11103,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             updateLibraryRecoverBanner();
           } catch {}
           markGenerationReadyNotice();
-          // Mix mode: the band landed — now mix the preserved vocal on
-          // top, locally. We don't await; the Library entry already
-          // exists with the band-only URL, and the post-mix step will
-          // PATCH that entry with the mixed WAV when it's done.
-          //
-          // GUARD: this entire branch is gated on the feature flag, so
-          // a stale `pendingVoiceBandMix` from a prior session (or a
-          // dismissed run) can never trigger a mix into a fresh
-          // Backing-track result.
-          if (VOICE_BAND_MIX_ENABLED && pendingVoiceBandMix && variantAEntry?.id) {
-            void runVoicePlusBandPostMix(variantAEntry.id, pendingVoiceBandMix);
-          }
-          pendingVoiceBandMix = null;
           // Avoid stale vocal reference leaking into the next generation.
           clearVocalReferenceSelection();
           setGenerateFieldsLocked(false);
@@ -11547,26 +11380,16 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const hasUploadedReference = Boolean(vocalRefFile);
     const referenceMode = hasUploadedReference ? "humming_music" : "none";
     const hasReference = hasUploadedReference;
-    // Mode flags read once here so both validation and downstream
-    // generation use the same source of truth.
-    const wantsBackingOrMix = String(els.vocalInstrumentalOnly?.value || "0") === "1";
-    const wantsMix = isVoicePlusBandMixSelected();
+    const wantsBackingTrack = String(els.vocalInstrumentalOnly?.value || "0") === "1";
 
     if (hasReference && !vocalRefFile) {
       window.alert("Please upload or record audio reference first.");
       return;
     }
 
-    // Backing / Mix mode REQUIRE a vocal reference — those endpoints
-    // generate around an upload; there's nothing for Suno to do
-    // without one. The previous generic "need lyrics" alert was
-    // misleading because the user wasn't asking for lyrics — they
-    // were asking the band to fit their voice. Show a mode-specific
-    // message instead.
-    if (wantsBackingOrMix && !vocalRefFile) {
-      const modeName = wantsMix ? "My voice + band" : "Backing track";
+    if (wantsBackingTrack && !vocalRefFile) {
       window.alert(
-        `${modeName} needs a vocal/melody attached.\n\n` +
+        "Backing track needs a vocal/melody attached.\n\n" +
         "Tap '+ Audio' to upload, or 'Record' to record your voice/hum first, " +
         "then tap Generate."
       );
@@ -11580,16 +11403,14 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
     try {
       const engine = "gemini_assisted";
-      const referenceInstrumentalOnly = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+      const referenceInstrumentalOnly = wantsBackingTrack;
       const hubRemixLocked = Boolean(currentRemixSource?.id);
       const modeLabel = hasReference
-        ? wantsMix
-          ? "Mix: Your voice + AI band (locked to your melody)"
-          : referenceInstrumentalOnly
-            ? "Reference: Backing track (locked to your melody)"
-            : hubRemixLocked
-              ? "Hub remix (melody / arrangement locked)"
-              : "Reference: Full song"
+        ? referenceInstrumentalOnly
+          ? "Reference: Backing track (locked to your melody)"
+          : hubRemixLocked
+            ? "Hub remix (melody / arrangement locked)"
+            : "Reference: Full song"
         : "Normal";
       const engineLabel = "Suno + Gemini lyrics assist";
       setGenerateBtn("Generating…", true, "generate");
@@ -11772,23 +11593,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             // Drop the local reference state the moment the request is in flight.
             // The server already has its own copy in the multipart body, so any
             // residual state here can only cause stale-reuse on the next run.
-            //
-            // EXCEPTION: "My voice + band" mix mode. The on-device post-mix
-            // step needs the user's original vocal Blob *after* Suno comes
-            // back with the backing track. Preserve a copy in
-            // pendingVoiceBandMix before the form is cleared so the polling
-            // success path can pick it up. Cleared on success / failure.
-            if (isVoicePlusBandMixSelected() && vocalRefFile) {
-              try {
-                const titleHint = String(els.sunoTitle?.value || "").trim();
-                pendingVoiceBandMix = {
-                  vocalFile: vocalRefFile,
-                  title: titleHint,
-                };
-              } catch {}
-            } else {
-              pendingVoiceBandMix = null;
-            }
             try { clearVocalReferenceSelection(); } catch {}
             const stemsTok = getSupabaseAuthToken();
             const rr = await fetch(apiUrl("/api/suno/stems"), {
@@ -12623,24 +12427,11 @@ function showReferenceHintsPopupOnce() {
 try {
   syncVocalReferenceFromDom();
 } catch {}
-// Hard reset for "My voice + band" residue: feature is parked, but defensive
-// cleanup ensures a stale `vocalMixMode=1` hidden input or in-memory pending
-// vocal blob from a prior session can never mix into a fresh Backing-track.
-try {
-  pendingVoiceBandMix = null;
-  if (els.vocalMixMode) els.vocalMixMode.value = "0";
-  if (els.vocalModeMix) els.vocalModeMix.classList.remove("active");
-} catch {}
 window.addEventListener("pageshow", (ev) => {
   // iOS PWA bfcache restore can resurrect stale File objects + input state.
   if (!ev.persisted) return;
   try {
     clearVocalReferenceSelection({ preserveRemixBanner: false });
-  } catch {}
-  try {
-    pendingVoiceBandMix = null;
-    if (els.vocalMixMode) els.vocalMixMode.value = "0";
-    if (els.vocalModeMix) els.vocalModeMix.classList.remove("active");
   } catch {}
 });
 window.addEventListener("hashchange", syncGenerateOrbVisibility);

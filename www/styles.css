@@ -3197,6 +3197,57 @@ textarea{
   background: transparent;
   padding: 12px;
 }
+.vocalRefActiveStrip{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(124,92,255,0.28);
+  background: rgba(14,16,26,0.72);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.04),
+    0 4px 18px rgba(0,0,0,0.22);
+}
+.vocalRefActiveStripIco{
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(186,176,255,0.9);
+}
+.vocalRefActiveStripMid{
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.vocalRefActiveStripLabel{
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: rgba(180,190,210,0.52);
+}
+.vocalRefActiveName{
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(244,247,255,0.96);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vocalRefActiveMeta{
+  font-size: 12px;
+  color: rgba(200,210,230,0.68);
+}
+button.vocalRefClearBtn{
+  flex-shrink: 0;
+  padding: 6px 12px !important;
+  font-size: 13px;
+  min-height: 32px;
+}
 .vocalModePill{
   margin-top: 8px;
   display: flex;
@@ -3222,6 +3273,9 @@ textarea{
   color: transparent;
   font-weight: 900;
 }
+/* "Coming soon" state for the My-voice+band pill. Kept clickable so we
+   can show the explanatory toast, but visually muted so users don't
+   expect it to be wired up. The star icon is also desaturated. */
 .vocalModePill .ghost.isComingSoon{
   opacity: 0.5;
   color: rgba(205,214,230,0.6);

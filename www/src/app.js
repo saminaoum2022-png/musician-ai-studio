@@ -7,7 +7,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511voicebandsoon";
+const APP_BUILD = "20260511vocalrefsafe";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -41,6 +41,10 @@ const els = {
   vocalModeMix: document.getElementById("vocalModeMix"),
   sunoVocalUpload: document.getElementById("sunoVocalUpload"),
   sunoVocalUploadName: document.getElementById("sunoVocalUploadName"),
+  vocalRefActiveStrip: document.getElementById("vocalRefActiveStrip"),
+  vocalRefActiveName: document.getElementById("vocalRefActiveName"),
+  vocalRefActiveMeta: document.getElementById("vocalRefActiveMeta"),
+  btnClearVocalRef: document.getElementById("btnClearVocalRef"),
   vocalRefHint: document.getElementById("vocalRefHint"),
   remixSourceBanner: document.getElementById("remixSourceBanner"),
   remixSourceCover: document.getElementById("remixSourceCover"),
@@ -1391,6 +1395,7 @@ function setGenerateFieldsLocked(locked) {
   if (els.vocalModeFull) els.vocalModeFull.disabled = locked;
   if (els.vocalModeInstrumental) els.vocalModeInstrumental.disabled = locked;
   if (els.vocalModeMix) els.vocalModeMix.disabled = locked;
+  if (els.btnClearVocalRef) els.btnClearVocalRef.disabled = locked;
   if (els.btnPreviewVocalRef) els.btnPreviewVocalRef.disabled = locked ? true : !lockPreviewAllowed;
   if (els.btnVocalRefStop) els.btnVocalRefStop.disabled = true;
   if (els.btnOpenAdvancedSheet) els.btnOpenAdvancedSheet.disabled = locked;
@@ -1425,12 +1430,17 @@ function resetCreateDraft() {
   // even if something below this line errors out.
   try { document.body.classList.remove("generateLocked"); } catch {}
   try { document.body.classList.remove("isBusy"); } catch {}
+  // Clear vocal reference completely — previously we wiped the file input + blob
+  // but left `currentVocalRefFile`, so an old upload could survive "New song"
+  // and the next Generate silently reused it.
+  try {
+    clearVocalReferenceSelection({ preserveRemixBanner: false });
+  } catch {}
   if (els.sunoPrompt) els.sunoPrompt.value = "";
   if (els.sunoStyle) els.sunoStyle.value = "";
   if (els.sunoTitle) els.sunoTitle.value = "";
   if (els.sunoArtworkStyle) els.sunoArtworkStyle.value = "";
   if (els.sunoReferenceMode) els.sunoReferenceMode.value = "none";
-  if (els.sunoVocalUpload) els.sunoVocalUpload.value = "";
   if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
   if (els.vocalMixMode) els.vocalMixMode.value = "0";
   try { resetAdvancedOptionsToDefaults(); } catch {}
@@ -1441,12 +1451,6 @@ function resetCreateDraft() {
     els.sunoReferenceHint.style.display = "none";
     els.sunoReferenceHint.textContent = "";
     els.sunoReferenceHint.classList.remove("isCritical");
-  }
-  vocalRefBlob = null;
-  if (els.sunoVocalUploadName) els.sunoVocalUploadName.textContent = "No vocal reference attached.";
-  if (vocalRefPreviewUrl) {
-    try { safeRevokeObjectUrl(vocalRefPreviewUrl); } catch {}
-    vocalRefPreviewUrl = "";
   }
   if (els.btnSunoGenerate) {
     els.btnSunoGenerate.textContent = "Generate song";
@@ -1659,26 +1663,61 @@ function markGenerationReadyNotice() {
 // user picks a file or finishes a recording, and cleared as soon as a Generate
 // request fires. Avoids stale selections leaking from previous runs.
 var currentVocalRefFile = null;
+/** @type {null | "upload" | "record" | "remix"} */
+var vocalRefOrigin = null;
 
-function setVocalRefFile(file, label) {
-  currentVocalRefFile = file || null;
-  vocalRefBlob = null;
-  if (els.sunoVocalUploadName) {
-    els.sunoVocalUploadName.textContent = currentVocalRefFile
-      ? (label || `Voice reference attached: ${currentVocalRefFile.name || "vocal-reference"}`)
-      : "No vocal reference attached.";
+function refreshVocalReferenceUi() {
+  const f = getVocalReferenceFile();
+  const strip = els.vocalRefActiveStrip;
+  const nameEl = els.vocalRefActiveName;
+  const metaEl = els.vocalRefActiveMeta;
+  const emptyHint = els.sunoVocalUploadName;
+  if (!f || !f.size) {
+    if (strip) strip.hidden = true;
+    if (nameEl) nameEl.textContent = "";
+    if (metaEl) metaEl.textContent = "";
+    if (emptyHint) {
+      emptyHint.style.display = "";
+      emptyHint.textContent = "No vocal reference attached.";
+    }
+  } else {
+    if (strip) strip.hidden = false;
+    if (emptyHint) emptyHint.style.display = "none";
+    if (nameEl) nameEl.textContent = f.name || "audio";
+    const kb = Math.max(1, Math.round(f.size / 1024));
+    let originLabel = "Attached";
+    if (vocalRefOrigin === "upload") originLabel = "Uploaded file";
+    else if (vocalRefOrigin === "record") originLabel = "Recorded take";
+    else if (vocalRefOrigin === "remix") originLabel = "Hub remix source";
+    if (metaEl) metaEl.textContent = `${originLabel} · ~${kb} KB`;
   }
   updateVocalRefPreviewState();
   renderReferenceHints();
 }
 
+function setVocalRefFile(file, label, origin) {
+  currentVocalRefFile = file || null;
+  vocalRefBlob = null;
+  if (!file) {
+    vocalRefOrigin = null;
+  } else if (origin) {
+    vocalRefOrigin = origin;
+  }
+  if (els.sunoVocalUploadName && !file) {
+    els.sunoVocalUploadName.textContent = "No vocal reference attached.";
+  }
+  refreshVocalReferenceUi();
+}
+
 function getVocalReferenceFile() {
-  if (currentVocalRefFile) return currentVocalRefFile;
-  if (vocalRefBlob) {
+  // Prefer in-memory recording over an older upload if both exist
+  // (bfcache / failed-promote edge cases).
+  if (vocalRefBlob && vocalRefBlob.size > 0) {
     return new File([vocalRefBlob], "vocal-reference.webm", {
       type: vocalRefBlob.type || "audio/webm",
     });
   }
+  if (currentVocalRefFile) return currentVocalRefFile;
   return null;
 }
 
@@ -1686,12 +1725,31 @@ function clearVocalReferenceSelection(opts = {}) {
   const preserveRemixBanner = opts.preserveRemixBanner === true;
   currentVocalRefFile = null;
   vocalRefBlob = null;
+  vocalRefOrigin = null;
   if (els.sunoVocalUpload) els.sunoVocalUpload.value = "";
   clearVocalRefPreviewUrl();
-  if (els.sunoVocalUploadName) els.sunoVocalUploadName.textContent = "No vocal reference attached.";
-  updateVocalRefPreviewState();
-  renderReferenceHints();
+  refreshVocalReferenceUi();
   if (!preserveRemixBanner) clearRemixSource({ keepRefFile: true });
+}
+
+/**
+ * If the hidden file input lost its selection but JS still holds a File
+ * (or the opposite), fix the mismatch. Cold-load safety only — bfcache is
+ * handled in `pageshow`.
+ */
+function syncVocalReferenceFromDom() {
+  try {
+    const domFile = els.sunoVocalUpload?.files?.[0];
+    if (!domFile && currentVocalRefFile) {
+      currentVocalRefFile = null;
+      vocalRefOrigin = null;
+      refreshVocalReferenceUi();
+      return;
+    }
+    if (domFile && !currentVocalRefFile && !vocalRefBlob) {
+      setVocalRefFile(domFile, `Voice reference attached: ${domFile.name}`, "upload");
+    }
+  } catch {}
 }
 
 /**
@@ -1869,7 +1927,7 @@ async function startHubRemix(post) {
       .replace(/[^a-z0-9_-]+/gi, "-")
       .slice(0, 48) || "remix-source";
     const file = new File([blob], `${safeBase}.${ext}`, { type: mime });
-    setVocalRefFile(file, `Remix source: ${post.title || "Track"}`);
+    setVocalRefFile(file, `Remix source: ${post.title || "Track"}`, "remix");
     if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
     if (els.vocalMixMode) els.vocalMixMode.value = "0";
     if (els.vocalModeFull) els.vocalModeFull.classList.add("active");
@@ -1936,6 +1994,7 @@ function pickRecorderMimeType() {
 }
 
 async function startVocalReferenceRecording() {
+  const hadExisting = Boolean(getVocalReferenceFile());
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
   const mimeType = pickRecorderMimeType();
   const rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
@@ -1949,8 +2008,8 @@ async function startVocalReferenceRecording() {
     vocalRefBlob = blob;
     let promoted = false;
     // Immediately promote the recording to the active reference and drop any
-    // previously uploaded file. Otherwise an earlier upload still wins because
-    // currentVocalRefFile takes priority over vocalRefBlob in the picker.
+    // previously uploaded file. `getVocalReferenceFile` also prefers a live
+    // `vocalRefBlob` over an older `currentVocalRefFile` when both exist.
     if (blob && blob.size > 0) {
       const recordedFile = new File([blob], "vocal-reference.webm", {
         type: blob.type || "audio/webm",
@@ -1958,7 +2017,7 @@ async function startVocalReferenceRecording() {
       if (els.sunoVocalUpload) {
         try { els.sunoVocalUpload.value = ""; } catch {}
       }
-      setVocalRefFile(recordedFile, "Voice reference recorded and attached.");
+      setVocalRefFile(recordedFile, "Voice reference recorded and attached.", "record");
       promoted = true;
     } else {
       renderReferenceHints();
@@ -1978,6 +2037,11 @@ async function startVocalReferenceRecording() {
   vocalRefStream = stream;
   vocalRefRecorder = rec;
   rec.start();
+  if (hadExisting) {
+    try {
+      showToast("Replacing attached audio with this recording.", { durationMs: 3800, icon: "↻" });
+    } catch {}
+  }
   if (els.btnVocalRefRec) els.btnVocalRefRec.disabled = true;
   if (els.btnVocalRefStop) els.btnVocalRefStop.disabled = false;
   setStatus("Recording voice reference…");
@@ -10262,15 +10326,24 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   if (els.sunoVocalUpload) {
     els.sunoVocalUpload.addEventListener("change", () => {
       const f = els.sunoVocalUpload?.files?.[0];
-      currentVocalRefFile = f || null;
-      vocalRefBlob = null;
-      clearVocalRefPreviewUrl();
-      try { clearRemixSource({ keepRefFile: true }); } catch {}
-      if (els.sunoVocalUploadName) {
-        els.sunoVocalUploadName.textContent = f ? `Voice reference attached: ${f.name}` : "No vocal reference attached.";
+      if (f) {
+        setVocalRefFile(f, `Voice reference attached: ${f.name}`, "upload");
+        try { clearRemixSource({ keepRefFile: true }); } catch {}
+      } else {
+        try {
+          clearVocalReferenceSelection({ preserveRemixBanner: true });
+        } catch {}
       }
-      renderReferenceHints();
-      updateVocalRefPreviewState();
+    });
+  }
+  if (els.btnClearVocalRef) {
+    els.btnClearVocalRef.addEventListener("click", () => {
+      try {
+        clearVocalReferenceSelection({ preserveRemixBanner: true });
+      } catch {}
+      try {
+        showToast("Melody guide cleared.", { durationMs: 2400, icon: "✓" });
+      } catch {}
     });
   }
   if (els.remixSourceCancel) {
@@ -10332,6 +10405,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     });
   }
   if (els.vocalModeMix) {
+    // Mix mode is parked: Suno's add-instrumental + on-device mix
+    // produced a mushy, MIDI-ish result and didn't preserve vocal
+    // clarity in real tests. Keep the pill visible (so users know
+    // it's on the roadmap) but show a "Coming soon" toast instead
+    // of running the broken flow. We do NOT flip the hidden inputs
+    // so the rest of the form stays in whatever mode was previously
+    // active.
     els.vocalModeMix.classList.add("isComingSoon");
     els.vocalModeMix.setAttribute("aria-disabled", "true");
     els.vocalModeMix.setAttribute(
@@ -10653,7 +10733,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           { type: vocalRefBlob.type || "audio/webm" }
         );
         if (els.sunoVocalUpload) els.sunoVocalUpload.value = "";
-        setVocalRefFile(recordedFile, "Voice reference recorded and attached.");
+        setVocalRefFile(recordedFile, "Voice reference recorded and attached.", "record");
       }
       if (!getVocalReferenceFile()) return;
       closeVocalRecorderModal();
@@ -11278,6 +11358,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const hasUploadedReference = Boolean(vocalRefFile);
     const referenceMode = hasUploadedReference ? "humming_music" : "none";
     const hasReference = hasUploadedReference;
+    // Mode flags read once here so both validation and downstream
+    // generation use the same source of truth.
     const wantsBackingOrMix = String(els.vocalInstrumentalOnly?.value || "0") === "1";
     const wantsMix = isVoicePlusBandMixSelected();
 
@@ -11286,6 +11368,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       return;
     }
 
+    // Backing / Mix mode REQUIRE a vocal reference — those endpoints
+    // generate around an upload; there's nothing for Suno to do
+    // without one. The previous generic "need lyrics" alert was
+    // misleading because the user wasn't asking for lyrics — they
+    // were asking the band to fit their voice. Show a mode-specific
+    // message instead.
     if (wantsBackingOrMix && !vocalRefFile) {
       const modeName = wantsMix ? "My voice + band" : "Backing track";
       window.alert(
@@ -12306,6 +12394,16 @@ function showReferenceHintsPopupOnce() {
 ["input", "change"].forEach((ev) => {
   els.sunoPrompt?.addEventListener(ev, syncGenerateOrbVisibility);
   els.sunoStyle?.addEventListener(ev, syncGenerateOrbVisibility);
+});
+try {
+  syncVocalReferenceFromDom();
+} catch {}
+window.addEventListener("pageshow", (ev) => {
+  // iOS PWA bfcache restore can resurrect stale File objects + input state.
+  if (!ev.persisted) return;
+  try {
+    clearVocalReferenceSelection({ preserveRemixBanner: false });
+  } catch {}
 });
 window.addEventListener("hashchange", syncGenerateOrbVisibility);
 

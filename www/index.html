@@ -29,7 +29,7 @@
     <link rel="dns-prefetch" href="https://cdn2.suno.ai" />
     <link rel="dns-prefetch" href="https://cdn4.suno.ai" />
     <link rel="dns-prefetch" href="https://suno.com" />
-    <link rel="stylesheet" href="./styles.css?v=20260511voicebandsoon" />
+    <link rel="stylesheet" href="./styles.css?v=20260511vocalrefsafe" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -452,6 +452,17 @@
                     </div>
                     <input id="vocalInstrumentalOnly" type="hidden" value="0" />
                     <input id="vocalMixMode" type="hidden" value="0" />
+                    <div id="vocalRefActiveStrip" class="vocalRefActiveStrip" hidden>
+                      <span class="vocalRefActiveStripIco" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="18" height="18" focusable="false"><path fill="currentColor" d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                      </span>
+                      <div class="vocalRefActiveStripMid">
+                        <span class="vocalRefActiveStripLabel">Melody guide in use</span>
+                        <span id="vocalRefActiveName" class="vocalRefActiveName"></span>
+                        <span id="vocalRefActiveMeta" class="vocalRefActiveMeta"></span>
+                      </div>
+                      <button id="btnClearVocalRef" type="button" class="ghost vocalRefClearBtn">Clear</button>
+                    </div>
                     <div id="sunoVocalUploadName" class="hint uploadVocalsName">No vocal reference attached.</div>
                     <div id="vocalRefHint" class="hint" style="margin-top:6px; display:none">
                       Audio reference attached. Choose:
@@ -1800,6 +1811,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260511voicebandsoon"></script>
+    <script type="module" src="./src/app.js?v=20260511vocalrefsafe"></script>
   </body>
 </html>

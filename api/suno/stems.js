@@ -155,6 +155,19 @@ module.exports = async function handler(req, res) {
       const dialectHint = String(body?.dialectHint || "").trim();
       const personaId = String(body?.personaId || "").trim();
       const negativeTags = String(body?.negativeTags || "").trim();
+      // Optional weights for backing / mix modes. The client forwards
+      // audioWeight=0.95, styleWeight=0.25 for those modes so Suno
+      // tracks the uploaded vocal melody instead of letting the style
+      // tags dominate. Range-checked and ignored when missing.
+      const clamp01 = (v) => {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return null;
+        if (n < 0) return 0;
+        if (n > 1) return 1;
+        return n;
+      };
+      const audioWeight = clamp01(body?.audioWeight);
+      const styleWeight = clamp01(body?.styleWeight);
 
       // 1) Upload file to Suno temporary file store (3-day URL)
       const up = new FormData();
@@ -309,19 +322,30 @@ module.exports = async function handler(req, res) {
         timing ? `timing: ${timing}` : "",
         dialect ? `dialect: ${dialect}` : "",
         voiceTimbre ? `voice timbre: ${voiceTimbre}` : "",
+        // Locked phrases that strongly bias Suno toward melody-tracking.
+        // These pair with audioWeight=0.95 from the client.
+        "instrumental backing only",
+        "lock to uploaded vocal melody",
+        "match phrase timing exactly",
         "follow humming contour",
-        "stable phrase timing",
-        "do not replace main motif",
+        "preserve the input rhythm and downbeats",
+        "do not replace or overshadow the main motif",
       ]
         .filter(Boolean)
         .join(", ");
       const addPayload = {
         uploadUrl,
         title: title || "Reference instrumental",
-        tags: hummingLockedTags || "instrumental, follow humming contour, stable phrase timing",
-        negativeTags: negativeTags || "spoken word, narration, noise",
+        tags: hummingLockedTags || "instrumental, lock to uploaded vocal melody, match phrase timing exactly",
+        negativeTags: negativeTags || "lead vocals, sung vocals, spoken word, narration, noise, off-beat, drifting tempo",
         callBackUrl,
         model: instModel,
+        // Weights that decide "follow upload vs. follow tags". The
+        // client sends audioWeight=0.95 + styleWeight=0.25 for
+        // backing/mix modes, which is the single most impactful fix
+        // for "the band didn't follow my voice".
+        ...(audioWeight !== null ? { audioWeight } : {}),
+        ...(styleWeight !== null ? { styleWeight } : {}),
         ...(vocalGender === "m" || vocalGender === "f" ? { vocalGender } : {}),
         ...(personaId ? { personaId } : {}),
       };

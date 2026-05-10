@@ -7,7 +7,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511voiceband";
+const APP_BUILD = "20260511voicebandfix";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -10303,6 +10303,19 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (els.vocalModeFull) els.vocalModeFull.classList.toggle("active", !instrumental && !mix);
     if (els.vocalModeInstrumental) els.vocalModeInstrumental.classList.toggle("active", instrumental && !mix);
     if (els.vocalModeMix) els.vocalModeMix.classList.toggle("active", mix);
+    // The lyrics field is OPTIONAL in Backing / Mix modes (band-only
+    // output, or user's own voice mixed back in — Suno doesn't need
+    // lyrics for either). Update the placeholder so users don't think
+    // it's required. Default placeholder is restored for Full song.
+    if (els.sunoPrompt) {
+      if (mix) {
+        els.sunoPrompt.placeholder = "Lyrics — optional. Your real voice will be mixed in.";
+      } else if (instrumental) {
+        els.sunoPrompt.placeholder = "Lyrics — optional. Output is band-only.";
+      } else {
+        els.sunoPrompt.placeholder = "Write your lyrics here...";
+      }
+    }
   };
   if (els.vocalModeFull) {
     els.vocalModeFull.addEventListener("click", () => {
@@ -11259,10 +11272,24 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const hasUploadedReference = Boolean(vocalRefFile);
     const referenceMode = hasUploadedReference ? "humming_music" : "none";
     const hasReference = hasUploadedReference;
+    const wantsBackingOrMix = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+    const wantsMix = isVoicePlusBandMixSelected();
+
     if (hasReference && !vocalRefFile) {
       window.alert("Please upload or record audio reference first.");
       return;
     }
+
+    if (wantsBackingOrMix && !vocalRefFile) {
+      const modeName = wantsMix ? "My voice + band" : "Backing track";
+      window.alert(
+        `${modeName} needs a vocal/melody attached.\n\n` +
+        "Tap '+ Audio' to upload, or 'Record' to record your voice/hum first, " +
+        "then tap Generate."
+      );
+      return;
+    }
+
     const allowImageOnlyFlow = Boolean(imageMoodAppliedForNextGen);
     if (!promptText && !vocalRefFile && !allowImageOnlyFlow) {
       window.alert("Please write lyrics or apply image mood before generating.");
@@ -11273,11 +11300,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const referenceInstrumentalOnly = String(els.vocalInstrumentalOnly?.value || "0") === "1";
       const hubRemixLocked = Boolean(currentRemixSource?.id);
       const modeLabel = hasReference
-        ? referenceInstrumentalOnly
-          ? "Reference: Backing track (no vocals)"
-          : hubRemixLocked
-            ? "Hub remix (melody / arrangement locked)"
-            : "Reference: Full song"
+        ? wantsMix
+          ? "Mix: Your voice + AI band (locked to your melody)"
+          : referenceInstrumentalOnly
+            ? "Reference: Backing track (locked to your melody)"
+            : hubRemixLocked
+              ? "Hub remix (melody / arrangement locked)"
+              : "Reference: Full song"
         : "Normal";
       const engineLabel = "Suno + Gemini lyrics assist";
       setGenerateBtn("Generating…", true, "generate");
@@ -11439,6 +11468,24 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             if (dialect) fd.append("dialect", String(dialect));
             if (dialectHint) fd.append("dialectHint", String(dialectHint));
             if (payload?.personaId) fd.append("personaId", String(payload.personaId));
+            // Backing / Mix modes: force the backing band to track the
+            // uploaded vocal much more strictly than the default.
+            //   audioWeight 0.95  -> band closely matches the audio's
+            //                        melody / timing / phrasing.
+            //   styleWeight 0.25  -> style tags become a soft hint, not
+            //                        the dominant signal.
+            //
+            // This is the fix for "Suno didn't follow my vocal melody" —
+            // before, we sent no weight params at all and Suno defaulted
+            // to a style-led arrangement that mostly ignored the upload.
+            //
+            // Full song / cover mode keeps the server's existing
+            // (style-led) defaults, since for AI re-singing we *want*
+            // more stylistic freedom around the contour.
+            if (referenceInstrumentalOnly) {
+              fd.append("audioWeight", "0.95");
+              fd.append("styleWeight", "0.25");
+            }
             // Drop the local reference state the moment the request is in flight.
             // The server already has its own copy in the multipart body, so any
             // residual state here can only cause stale-reuse on the next run.

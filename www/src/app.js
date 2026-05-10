@@ -7,7 +7,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511vocalrefsafe";
+const APP_BUILD = "20260511failclear";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -10941,13 +10941,117 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     updateBrandPulse();
   };
 
+  /**
+   * Translate a Suno failure payload into a clear, user-friendly message.
+   * Suno reports content-policy rejections (e.g. humming a copyrighted melody)
+   * via a few different fields depending on the endpoint and stage:
+   *   - successFlag: "SENSITIVE_WORD_ERROR" | "CREATE_TASK_FAILED" | "GENERATE_AUDIO_FAILED" | "CALLBACK_EXCEPTION"
+   *   - errorCode  : 400 | 451 | 429 | 413 | 500
+   *   - errorMessage / msg / message: free-form text, sometimes contains "copyright" / "fingerprint" / "sensitive"
+   *
+   * Returns { kind, headline, detail }.
+   *   kind = "copyright" | "sensitive" | "tooLong" | "credits" | "transient" | "generic" | null
+   */
+  function interpretSunoFailure(raw) {
+    if (!raw) return { kind: null, headline: "", detail: "" };
+    const flag = String(raw.successFlag || raw.flag || "").toUpperCase();
+    const code = Number(raw.errorCode || raw.code || 0);
+    const msg = String(raw.errorMessage || raw.msg || raw.message || raw.error || "").trim();
+    const m = msg.toLowerCase();
+    const looksCopyright =
+      m.includes("copyright")
+      || m.includes("infringe")
+      || m.includes("fingerprint")
+      || m.includes("rights holder")
+      || m.includes("protected song")
+      || m.includes("commercial track")
+      || m.includes("known song");
+    const looksSensitive =
+      flag === "SENSITIVE_WORD_ERROR"
+      || code === 451
+      || m.includes("sensitive")
+      || m.includes("policy")
+      || m.includes("prohibited")
+      || m.includes("explicit content");
+    if (looksCopyright) {
+      return {
+        kind: "copyright",
+        headline: "Couldn't generate — likely copyrighted material",
+        detail:
+          "Suno detected what sounds like a well-known commercial track in your audio. Try humming a melody you've made up, or change the vocal so it doesn't reference a copyrighted song."
+          + (msg ? `\n\nSuno: ${msg}` : ""),
+      };
+    }
+    if (looksSensitive) {
+      return {
+        kind: "sensitive",
+        headline: "Couldn't generate — content policy",
+        detail:
+          "Suno's content policy blocked this request. Please adjust the lyrics, style tags, or vocal reference and try again."
+          + (msg ? `\n\nSuno: ${msg}` : ""),
+      };
+    }
+    if (code === 413 || m.includes("too long")) {
+      return {
+        kind: "tooLong",
+        headline: "Couldn't generate — too long",
+        detail: "Lyrics or style tags exceeded Suno's length limit. Shorten them and try again."
+          + (msg ? `\n\nSuno: ${msg}` : ""),
+      };
+    }
+    if (code === 429 || flag === "INSUFFICIENT_CREDITS" || m.includes("insufficient credit")) {
+      return {
+        kind: "credits",
+        headline: "Couldn't generate — insufficient credits",
+        detail: "Your Suno-side budget ran out. Top up credits and try again."
+          + (msg ? `\n\nSuno: ${msg}` : ""),
+      };
+    }
+    if (
+      flag === "CALLBACK_EXCEPTION"
+      || flag === "GENERATE_AUDIO_FAILED"
+      || flag === "CREATE_TASK_FAILED"
+      || (code >= 500 && code < 600)
+    ) {
+      return {
+        kind: "transient",
+        headline: "Generation failed on Suno's side",
+        detail: "Suno couldn't complete the task. This is usually a temporary upstream issue — please try again."
+          + (msg ? `\n\nSuno: ${msg}` : ""),
+      };
+    }
+    if (flag || msg || code) {
+      return {
+        kind: "generic",
+        headline: "Generation failed",
+        detail: msg || `Suno returned ${flag || `code ${code}`}.`,
+      };
+    }
+    return { kind: null, headline: "", detail: "" };
+  }
+
   const fetchGenerationStatus = async () => {
     if (!sunoTaskId) return null;
     const r = await fetch(`/api/suno/status?taskId=${encodeURIComponent(sunoTaskId)}`);
     const data = await r.json().catch(() => ({}));
+    // The Suno proxy returns 200 with the full body when Suno itself
+    // responded — even when that body contains a failure. Only treat
+    // proxy-level transport errors as throwing failures here. Surfacing
+    // upstream "failed but no FAILED status" payloads is the job of
+    // `interpretSunoFailure` further down.
     if (!r.ok) throw new Error(data?.error || "Status failed");
-    const status = String(data?.data?.status || data?.status || "").toUpperCase();
-    const genData = data?.data?.response?.sunoData || data?.data?.response?.suno_data || [];
+    const inner = data?.data || data || {};
+    const status = String(inner.status || data?.status || "").toUpperCase();
+    const successFlag = String(inner.successFlag || data?.successFlag || "").toUpperCase();
+    const errorCode = inner.errorCode || data?.errorCode || data?.code || null;
+    const errorMessage = String(
+      inner.errorMessage
+      || data?.errorMessage
+      || inner.msg
+      || data?.msg
+      || ""
+    ).trim();
+    const genData = inner.response?.sunoData || inner.response?.suno_data || data?.data?.response?.sunoData || data?.data?.response?.suno_data || [];
     const first = Array.isArray(genData) ? genData[0] : null;
     const second = Array.isArray(genData) ? genData[1] : null;
     const audioUrl =
@@ -11025,18 +11129,64 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       lastSunoTitle2 = String(title2 || "").trim() || "Generated song B";
       await cacheGeneratedAudio2(lastSunoProxyUrl2 || audioUrl2);
     }
-    return { status, hasAudio: Boolean(lastSunoFullUrl || audioUrl) };
+    return {
+      status,
+      hasAudio: Boolean(lastSunoFullUrl || audioUrl),
+      successFlag,
+      errorCode,
+      errorMessage,
+    };
+  };
+
+  const handleGenerationFailure = (failureInfo) => {
+    if (generatePollTimer) {
+      clearInterval(generatePollTimer);
+      generatePollTimer = null;
+    }
+    setGenerateBtn("Generate song", false, "generate");
+    savePendingBackendTask("");
+    pendingVoiceBandMix = null;
+    try { clearVocalReferenceSelection(); } catch {}
+    setGenerateFieldsLocked(false);
+    setLoading(false);
+    setProgress(0);
+    const info = failureInfo || { kind: "generic", headline: "Generation failed", detail: "" };
+    const fullDetail = [info.headline, info.detail].filter(Boolean).join("\n\n");
+    setStatus(`${info.headline}${info.detail ? `: ${info.detail.split("\n")[0]}` : ""}`);
+    try {
+      const icon = info.kind === "copyright" || info.kind === "sensitive" ? "!" : "✗";
+      showToast(fullDetail || info.headline || "Generation failed", {
+        icon,
+        durationMs: info.kind === "copyright" || info.kind === "sensitive" ? 12000 : 8000,
+      });
+    } catch {}
   };
 
   const startGeneratePolling = () => {
     if (generatePollTimer) clearInterval(generatePollTimer);
     let tries = 0;
+    let consecutiveFetchErrors = 0;
     const maxTries = 160; // ~12 minutes at 4.5s interval
     generatePollTimer = setInterval(async () => {
       tries += 1;
       try {
         const state = await fetchGenerationStatus();
+        consecutiveFetchErrors = 0;
         if (!state) return;
+        // Check for explicit upstream failure flags before status — Suno
+        // sometimes keeps `status: PENDING` while signalling rejection via
+        // successFlag / errorMessage (esp. for copyright fingerprinting on
+        // hummed/uploaded references).
+        const failure = interpretSunoFailure(state);
+        const failedByFlag =
+          failure.kind === "copyright"
+          || failure.kind === "sensitive"
+          || (failure.kind === "transient" && !!state.errorMessage)
+          || (failure.kind && state.successFlag && state.successFlag !== "SUCCESS" && state.successFlag !== "PENDING" && state.successFlag !== "TEXT_SUCCESS" && state.successFlag !== "FIRST_SUCCESS");
+        if (failedByFlag && !state.hasAudio) {
+          handleGenerationFailure(failure);
+          return;
+        }
         if (state.status === "SUCCESS" && state.hasAudio) {
           clearInterval(generatePollTimer);
           generatePollTimer = null;
@@ -11097,15 +11247,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           return;
         }
         if (state.status === "FAILED") {
-          clearInterval(generatePollTimer);
-          generatePollTimer = null;
-          setGenerateBtn("Generate song", false, "generate");
-          setStatus("Generation failed. Please try again.");
-          savePendingBackendTask("");
-          pendingVoiceBandMix = null;
-          clearVocalReferenceSelection();
-          setGenerateFieldsLocked(false);
-          setLoading(false);
+          // FAILED status: try to surface a specific reason. If Suno gave
+          // us enough fields to classify (copyright, content, etc.) the
+          // toast is detailed; otherwise we fall back to a generic message.
+          handleGenerationFailure(
+            failure.kind ? failure : { kind: "generic", headline: "Generation failed. Please try again.", detail: state.errorMessage || "" }
+          );
+          return;
         }
         if (tries >= maxTries) {
           clearInterval(generatePollTimer);
@@ -11119,7 +11267,19 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             dismissible: true,
           });
         }
-      } catch {}
+      } catch (err) {
+        consecutiveFetchErrors += 1;
+        // Quietly retry transient network blips, but bail with a clear
+        // message if the status endpoint has been failing for ~45s — the
+        // old code swallowed every error so the spinner stayed forever.
+        if (consecutiveFetchErrors >= 10) {
+          handleGenerationFailure({
+            kind: "transient",
+            headline: "Lost connection while checking generation status",
+            detail: "We couldn't reach the backend. Tap Generate to try again, or check your network.",
+          });
+        }
+      }
     }, 4500);
   };
 
@@ -11617,14 +11777,36 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             }
             if (!rr.ok) {
               const more = dd?.detailMessage || dd?.details?.message || dd?.details?.error || "";
+              const upstreamPayload = dd?.details && typeof dd.details === "object" ? dd.details : dd;
+              const intent = interpretSunoFailure({
+                ...upstreamPayload,
+                errorMessage: upstreamPayload?.msg || upstreamPayload?.message || upstreamPayload?.error || more,
+              });
+              if (intent.kind === "copyright" || intent.kind === "sensitive") {
+                const e = new Error(intent.detail);
+                e._friendly = intent;
+                throw e;
+              }
               throw new Error(`${dd?.error || "Reference upload failed"}${more ? `: ${more}` : ""}`);
             }
             if (typeof dd?.code !== "undefined" && Number(dd.code) !== 200) {
               const bodyErr = dd?.msg || dd?.message || dd?.error || "Reference upload failed";
+              const intent = interpretSunoFailure(dd);
+              if (intent.kind === "copyright" || intent.kind === "sensitive") {
+                const e = new Error(intent.detail);
+                e._friendly = intent;
+                throw e;
+              }
               throw new Error(`Suno rejected reference upload: ${bodyErr}`);
             }
             if (dd?.data && typeof dd.data?.code !== "undefined" && Number(dd.data.code) !== 200) {
               const nestedErr = dd?.data?.msg || dd?.data?.message || dd?.data?.error || "Reference upload failed";
+              const intent = interpretSunoFailure(dd.data);
+              if (intent.kind === "copyright" || intent.kind === "sensitive") {
+                const e = new Error(intent.detail);
+                e._friendly = intent;
+                throw e;
+              }
               throw new Error(`Suno rejected reference upload: ${nestedErr}`);
             }
             try {
@@ -11764,7 +11946,21 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       setProgress(0);
     } catch (e) {
       console.error(e);
-      setStatus(`Generation failed: ${e?.message || String(e)}`);
+      const friendly = e?._friendly;
+      if (friendly) {
+        setStatus(`${friendly.headline}: ${(friendly.detail || "").split("\n")[0]}`);
+        try {
+          showToast(
+            [friendly.headline, friendly.detail].filter(Boolean).join("\n\n"),
+            {
+              icon: "!",
+              durationMs: friendly.kind === "copyright" || friendly.kind === "sensitive" ? 12000 : 8000,
+            }
+          );
+        } catch {}
+      } else {
+        setStatus(`Generation failed: ${e?.message || String(e)}`);
+      }
       setGenerateBtn("Generate song", false, "generate");
       savePendingBackendTask("");
       setGenerateFieldsLocked(false);

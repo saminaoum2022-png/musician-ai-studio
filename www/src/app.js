@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510recover";
+const APP_BUILD = "20260510recoverlink";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -252,6 +252,7 @@ const els = {
   btnLibraryRecover: document.getElementById("btnLibraryRecover"),
   btnLibraryRecoverById: document.getElementById("btnLibraryRecoverById"),
   btnLibraryRecoverDismiss: document.getElementById("btnLibraryRecoverDismiss"),
+  btnLibraryRecoverLink: document.getElementById("btnLibraryRecoverLink"),
   btnLibraryDiagnostic: document.getElementById("btnLibraryDiagnostic"),
   libraryDiagnosticOutput: document.getElementById("libraryDiagnosticOutput"),
   libraryStorageBanner: document.getElementById("libraryStorageBanner"),
@@ -7419,6 +7420,31 @@ if (els.btnLibraryRecoverDismiss) {
       icon: "♪",
       durationMs: 4000,
     });
+  });
+}
+// Always-visible header link → reuses the same prompt-by-id path as
+// the banner. Available even when no task was captured locally (e.g.
+// dismissed before this feature shipped, or recovering on a fresh
+// install / different device).
+if (els.btnLibraryRecoverLink) {
+  els.btnLibraryRecoverLink.addEventListener("click", async () => {
+    const seed = loadRecoverableGenerationTask()?.taskId || "";
+    const raw = window.prompt(
+      "Paste the Suno task ID (from your Suno log or Vercel logs):",
+      seed
+    );
+    const tid = String(raw || "").trim();
+    if (!tid) return;
+    try {
+      els.btnLibraryRecoverLink.disabled = true;
+      saveRecoverableGenerationTask(tid, "manual");
+      updateLibraryRecoverBanner();
+      await recoverSongFromTaskId(tid);
+    } catch (e) {
+      showToast(e?.message || String(e), { icon: "!", durationMs: 6000 });
+    } finally {
+      els.btnLibraryRecoverLink.disabled = false;
+    }
   });
 }
 async function handleLibraryFreeSpaceClick() {

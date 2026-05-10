@@ -7,7 +7,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511failclear";
+const APP_BUILD = "20260511killmix";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1436,6 +1436,7 @@ function resetCreateDraft() {
   try {
     clearVocalReferenceSelection({ preserveRemixBanner: false });
   } catch {}
+  pendingVoiceBandMix = null;
   if (els.sunoPrompt) els.sunoPrompt.value = "";
   if (els.sunoStyle) els.sunoStyle.value = "";
   if (els.sunoTitle) els.sunoTitle.value = "";
@@ -1766,9 +1767,25 @@ function syncVocalReferenceFromDom() {
  *                       backing track lands so we can mix locally.
  *   title:     string - hint for the resulting Library entry title.
  */
+/**
+ * Feature flag for "My voice + band" mix mode.
+ *
+ * Set to `false` while the feature is parked (see `vocalModeMix` pill
+ * marked `isComingSoon`). When false the entire post-mix pipeline is a
+ * no-op:
+ *   - submit never stores `pendingVoiceBandMix`
+ *   - polling success never calls `runVoicePlusBandPostMix`
+ *   - `isVoicePlusBandMixSelected()` always returns false
+ * That way even if `vocalMixMode` somehow gets stuck at "1" (cached HTML,
+ * stale PWA, prior session state), Backing-track runs can never end up
+ * with the user's old vocal mixed back in.
+ */
+const VOICE_BAND_MIX_ENABLED = false;
+
 let pendingVoiceBandMix = null;
 
 function isVoicePlusBandMixSelected() {
+  if (!VOICE_BAND_MIX_ENABLED) return false;
   return (
     String(els.vocalMixMode?.value || "0") === "1"
     && String(els.vocalInstrumentalOnly?.value || "0") === "1"
@@ -9590,6 +9607,10 @@ function dismissPendingBackendTask({ silent = false, skipRecoverSave = false } =
   } catch {}
   try { savePendingBackendTask(""); } catch {}
   try { sunoTaskId = ""; } catch {}
+  pendingVoiceBandMix = null;
+  try {
+    if (els.vocalMixMode) els.vocalMixMode.value = "0";
+  } catch {}
   try {
     if (els.btnSunoGenerate) {
       els.btnSunoGenerate.textContent = "Generate song";
@@ -11195,7 +11216,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           // First Library entry (Variant A). If a "My voice + band" mix
           // is pending, we mark it so the post-mix step can find it
           // and swap its URL to the mixed WAV.
-          const variantAMeta = pendingVoiceBandMix
+          // No mix queued: also reflect that in the variantA meta so a
+          // stale flag from a prior generation can't survive into this
+          // Library entry.
+          const variantAMeta = (VOICE_BAND_MIX_ENABLED && pendingVoiceBandMix)
             ? { ...(lastGenerationMeta || {}), voicePlusBandPending: true }
             : lastGenerationMeta;
           const variantAEntry = addToLibrary({
@@ -11237,7 +11261,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           // top, locally. We don't await; the Library entry already
           // exists with the band-only URL, and the post-mix step will
           // PATCH that entry with the mixed WAV when it's done.
-          if (pendingVoiceBandMix && variantAEntry?.id) {
+          //
+          // GUARD: this entire branch is gated on the feature flag, so
+          // a stale `pendingVoiceBandMix` from a prior session (or a
+          // dismissed run) can never trigger a mix into a fresh
+          // Backing-track result.
+          if (VOICE_BAND_MIX_ENABLED && pendingVoiceBandMix && variantAEntry?.id) {
             void runVoicePlusBandPostMix(variantAEntry.id, pendingVoiceBandMix);
           }
           pendingVoiceBandMix = null;
@@ -12594,11 +12623,24 @@ function showReferenceHintsPopupOnce() {
 try {
   syncVocalReferenceFromDom();
 } catch {}
+// Hard reset for "My voice + band" residue: feature is parked, but defensive
+// cleanup ensures a stale `vocalMixMode=1` hidden input or in-memory pending
+// vocal blob from a prior session can never mix into a fresh Backing-track.
+try {
+  pendingVoiceBandMix = null;
+  if (els.vocalMixMode) els.vocalMixMode.value = "0";
+  if (els.vocalModeMix) els.vocalModeMix.classList.remove("active");
+} catch {}
 window.addEventListener("pageshow", (ev) => {
   // iOS PWA bfcache restore can resurrect stale File objects + input state.
   if (!ev.persisted) return;
   try {
     clearVocalReferenceSelection({ preserveRemixBanner: false });
+  } catch {}
+  try {
+    pendingVoiceBandMix = null;
+    if (els.vocalMixMode) els.vocalMixMode.value = "0";
+    if (els.vocalModeMix) els.vocalModeMix.classList.remove("active");
   } catch {}
 });
 window.addEventListener("hashchange", syncGenerateOrbVisibility);

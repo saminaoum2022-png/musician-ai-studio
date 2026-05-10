@@ -804,6 +804,62 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   text-transform: uppercase;
   color: rgba(124, 92, 255, 0.85);
 }
+.libraryRecoverBanner{
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(124, 92, 255, 0.35);
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.16), rgba(35, 213, 171, 0.1));
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+}
+.libraryRecoverBanner[hidden]{
+  display: none !important;
+}
+.libraryRecoverBannerInner{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+@media (min-width: 520px){
+  .libraryRecoverBannerInner{
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .libraryRecoverBannerBody{ flex: 1 1 auto; min-width: 0; }
+  .libraryRecoverBannerActions{
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+}
+.libraryRecoverBannerTitle{
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 4px;
+}
+.libraryRecoverBannerHint{
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: rgba(220, 224, 235, 0.78);
+}
+.libraryRecoverPrimary{
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 10px;
+}
+.libraryRecoverSecondary,
+.libraryRecoverDismiss{
+  font-size: 12.5px;
+  padding: 7px 10px;
+  border-radius: 10px;
+}
 .libraryList{
   margin: 0;
   padding: 0;

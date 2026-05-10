@@ -29,7 +29,7 @@
     <link rel="dns-prefetch" href="https://cdn2.suno.ai" />
     <link rel="dns-prefetch" href="https://cdn4.suno.ai" />
     <link rel="dns-prefetch" href="https://suno.com" />
-    <link rel="stylesheet" href="./styles.css?v=20260510stuckclear" />
+    <link rel="stylesheet" href="./styles.css?v=20260510recover" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -111,6 +111,21 @@
             <p class="libraryLead">Your songs stay on this device until you delete them.</p>
             <p id="libraryCount" class="libraryCount" hidden aria-live="polite"></p>
           </header>
+          <div id="libraryRecoverBanner" class="libraryRecoverBanner" hidden role="region" aria-label="Recover song">
+            <div class="libraryRecoverBannerInner">
+              <div class="libraryRecoverBannerBody">
+                <div class="libraryRecoverBannerTitle">Song finished but didn’t show up?</div>
+                <p id="libraryRecoverHint" class="libraryRecoverBannerHint">
+                  If Suno finished while the app was stuck, pull that generation into your Library here.
+                </p>
+              </div>
+              <div class="libraryRecoverBannerActions">
+                <button type="button" id="btnLibraryRecover" class="primary libraryRecoverPrimary">Recover my song</button>
+                <button type="button" id="btnLibraryRecoverById" class="ghost libraryRecoverSecondary">Enter task ID…</button>
+                <button type="button" id="btnLibraryRecoverDismiss" class="ghost libraryRecoverDismiss">Dismiss</button>
+              </div>
+            </div>
+          </div>
           <div id="libraryList" class="libraryList"></div>
           <p class="libraryDiagActions" hidden>
             <button type="button" id="btnLibraryDiagnostic" class="ghost libraryDiagBtn">Run library diagnostic</button>
@@ -1761,6 +1776,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260510creditsfix"></script>
+    <script type="module" src="./src/app.js?v=20260510recover"></script>
   </body>
 </html>

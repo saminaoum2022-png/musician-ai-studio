@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510stuckclear";
+const APP_BUILD = "20260510recover";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -247,6 +247,11 @@ const els = {
   btnCloseAdvancedSheet: document.getElementById("btnCloseAdvancedSheet"),
   advancedSheet: document.getElementById("advancedSheet"),
   libraryList: document.getElementById("libraryList"),
+  libraryRecoverBanner: document.getElementById("libraryRecoverBanner"),
+  libraryRecoverHint: document.getElementById("libraryRecoverHint"),
+  btnLibraryRecover: document.getElementById("btnLibraryRecover"),
+  btnLibraryRecoverById: document.getElementById("btnLibraryRecoverById"),
+  btnLibraryRecoverDismiss: document.getElementById("btnLibraryRecoverDismiss"),
   btnLibraryDiagnostic: document.getElementById("btnLibraryDiagnostic"),
   libraryDiagnosticOutput: document.getElementById("libraryDiagnosticOutput"),
   libraryStorageBanner: document.getElementById("libraryStorageBanner"),
@@ -1595,6 +1600,9 @@ let imageMoodCoverDataUrl = "";
 let pendingGeneratedCoverDataUrl = "";
 let pendingBackendTaskId = "";
 const PENDING_TASK_KEY = "mas:pending_backend_task_v1";
+const RECOVERY_TASK_KEY = "mas:gen_task_recovery_v1";
+/** Suno keeps finished files ~15 days per their docs — don't offer recovery after that. */
+const RECOVERY_MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000;
 var lastGenerationReadyAt = 0;
 
 function renderGenerateReadyDot() {
@@ -6447,8 +6455,10 @@ function addToLibrary(track) {
   const items = loadLibrary();
   const url = String(track.url || "").trim();
   const audioId = String(track.audioId || "").trim();
+  const taskId = String(track.taskId || "").trim();
   const kind = String(track.kind || "full").trim();
   const duplicate = items.some((x) =>
+    (taskId && String(x.taskId || "").trim() === taskId) ||
     (url && String(x.url || "").trim() === url) ||
     (audioId && String(x.audioId || "").trim() === audioId && String(x.kind || "full").trim() === kind)
   );
@@ -7125,6 +7135,9 @@ function syncLibraryStorageBanner() {
 
 function renderLibrary() {
   if (!els.libraryList) return;
+  try {
+    updateLibraryRecoverBanner();
+  } catch {}
   // Bind delegated clicks once the list container exists — including empty /
   // loading states — otherwise the first time the user sees rows, none of the
   // ⋯ menu actions (share, delete, instrumental, …) fire.
@@ -7359,6 +7372,54 @@ if (els.btnCloseSongDetails) {
 }
 if (els.btnLibraryDiagnostic) {
   els.btnLibraryDiagnostic.addEventListener("click", () => void runLibraryDiagnostic());
+}
+if (els.btnLibraryRecover) {
+  els.btnLibraryRecover.addEventListener("click", async () => {
+    const rec = loadRecoverableGenerationTask();
+    const tid = rec?.taskId || "";
+    if (!tid) {
+      showToast("No saved task on this device. Use “Enter task ID…”.", { icon: "!", durationMs: 3600 });
+      return;
+    }
+    try {
+      els.btnLibraryRecover.disabled = true;
+      await recoverSongFromTaskId(tid);
+    } catch (e) {
+      showToast(e?.message || String(e), { icon: "!", durationMs: 6000 });
+    } finally {
+      els.btnLibraryRecover.disabled = false;
+    }
+  });
+}
+if (els.btnLibraryRecoverById) {
+  els.btnLibraryRecoverById.addEventListener("click", async () => {
+    const raw = window.prompt(
+      "Paste the Suno task ID (from your API/Suno log, or the long id from the app debug output):",
+      loadRecoverableGenerationTask()?.taskId || ""
+    );
+    const tid = String(raw || "").trim();
+    if (!tid) return;
+    try {
+      els.btnLibraryRecoverById.disabled = true;
+      saveRecoverableGenerationTask(tid, "manual");
+      updateLibraryRecoverBanner();
+      await recoverSongFromTaskId(tid);
+    } catch (e) {
+      showToast(e?.message || String(e), { icon: "!", durationMs: 6000 });
+    } finally {
+      els.btnLibraryRecoverById.disabled = false;
+    }
+  });
+}
+if (els.btnLibraryRecoverDismiss) {
+  els.btnLibraryRecoverDismiss.addEventListener("click", () => {
+    clearRecoverableGenerationTask();
+    updateLibraryRecoverBanner();
+    showToast("Tip: you can still recover later with “Enter task ID…” if you keep the task id.", {
+      icon: "♪",
+      durationMs: 4000,
+    });
+  });
 }
 async function handleLibraryFreeSpaceClick() {
   const r = freeUpLocalStorage();
@@ -9141,7 +9202,16 @@ function setLoading(on, { title, sub, dismissible } = {}) {
  * running on Suno's side — that's fine, the callback path will deposit
  * the song into the library when it lands.
  */
-function dismissPendingBackendTask({ silent = false } = {}) {
+function dismissPendingBackendTask({ silent = false, skipRecoverSave = false } = {}) {
+  if (!skipRecoverSave) {
+    try {
+      const tid = String(sunoTaskId || loadPendingBackendTask() || "").trim();
+      if (tid) {
+        const hint = String(els.sunoTitle?.value || lastSunoTitle || "").trim();
+        saveRecoverableGenerationTask(tid, hint);
+      }
+    } catch {}
+  }
   try {
     if (generatePollTimer) {
       clearInterval(generatePollTimer);
@@ -9170,11 +9240,14 @@ function dismissPendingBackendTask({ silent = false } = {}) {
     try { setStatus("Cleared. You can start a new generation."); } catch {}
     try {
       showToast(
-        "Cleared the stuck task. If you saw the song complete on Suno's side, you can fetch it again later — open the Library actions menu.",
+        "Spinner cleared. Open Library → Recover my song if Suno already finished that generation.",
         { icon: "✓", durationMs: 4500 }
       );
     } catch {}
   }
+  try {
+    updateLibraryRecoverBanner();
+  } catch {}
 }
 
 function savePendingBackendTask(taskId) {
@@ -9190,6 +9263,192 @@ function loadPendingBackendTask() {
     return String(localStorage.getItem(PENDING_TASK_KEY) || "").trim();
   } catch {
     return "";
+  }
+}
+
+function saveRecoverableGenerationTask(taskId, titleHint) {
+  const t = String(taskId || "").trim();
+  if (!t) return;
+  try {
+    localStorage.setItem(
+      RECOVERY_TASK_KEY,
+      JSON.stringify({
+        taskId: t,
+        savedAt: Date.now(),
+        titleHint: String(titleHint || "").trim().slice(0, 120),
+      })
+    );
+  } catch {}
+}
+
+function loadRecoverableGenerationTask() {
+  try {
+    const raw = localStorage.getItem(RECOVERY_TASK_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    if (!o?.taskId) return null;
+    const savedAt = Number(o.savedAt || 0);
+    if (!savedAt || Date.now() - savedAt > RECOVERY_MAX_AGE_MS) {
+      localStorage.removeItem(RECOVERY_TASK_KEY);
+      return null;
+    }
+    return {
+      taskId: String(o.taskId),
+      savedAt,
+      titleHint: String(o.titleHint || ""),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function clearRecoverableGenerationTask() {
+  try {
+    localStorage.removeItem(RECOVERY_TASK_KEY);
+  } catch {}
+}
+
+/** Shared parser for GET /api/suno/status bodies (same shape generate polling uses). */
+function parseSunoGenerationRecordInfo(data) {
+  const status = String(data?.data?.status || data?.status || "").toUpperCase();
+  const genData = data?.data?.response?.sunoData || data?.data?.response?.suno_data || [];
+  const arr = Array.isArray(genData) ? genData : [];
+  const pick = (first) => {
+    if (!first) return null;
+    const audioUrl =
+      first?.sourceAudioUrl ||
+      first?.source_audio_url ||
+      first?.sourceStreamAudioUrl ||
+      first?.source_stream_audio_url ||
+      first?.audioUrl ||
+      first?.audio_url ||
+      first?.streamAudioUrl ||
+      first?.stream_audio_url ||
+      "";
+    const imageUrl =
+      first?.sourceImageUrl ||
+      first?.source_image_url ||
+      first?.imageUrl ||
+      first?.image_url ||
+      first?.coverUrl ||
+      first?.cover_url ||
+      "";
+    const title = first?.title || first?.songTitle || first?.song_title || "";
+    const audioId =
+      first?.id ||
+      first?.audioId ||
+      first?.audio_id ||
+      first?.songId ||
+      first?.song_id ||
+      "";
+    return {
+      audioUrl: String(audioUrl || "").trim(),
+      imageUrl,
+      title: String(title || "").trim(),
+      audioId: String(audioId || "").trim(),
+    };
+  };
+  const first = pick(arr[0]);
+  const second = pick(arr[1]);
+  const hasAudio = Boolean((first && first.audioUrl) || (second && second.audioUrl));
+  return { status, first, second, hasAudio };
+}
+
+/**
+ * Poll Suno once for a completed generation and add tracks to Library.
+ * Safe to call after the user dismissed a stuck spinner — the audio may
+ * already exist server-side.
+ */
+async function recoverSongFromTaskId(taskId, { silent = false } = {}) {
+  const tid = String(taskId || "").trim();
+  if (!tid) throw new Error("Missing task ID.");
+
+  const r = await fetch(apiUrl(`/api/suno/status?taskId=${encodeURIComponent(tid)}`));
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data?.error || "Could not check Suno status.");
+
+  const parsed = parseSunoGenerationRecordInfo(data);
+  const st = parsed.status;
+
+  if (st === "FAILED") {
+    throw new Error("That generation failed on Suno's side.");
+  }
+
+  if (st !== "SUCCESS" || !parsed.hasAudio) {
+    if (!silent) {
+      showToast(
+        "Suno is still processing this task — wait a bit and tap Recover again.",
+        { icon: "♪", durationMs: 4200 }
+      );
+    }
+    return false;
+  }
+
+  const metaBase =
+    lastGenerationMeta && typeof lastGenerationMeta === "object"
+      ? { ...lastGenerationMeta }
+      : {};
+  metaBase.recoveredFromTaskId = tid;
+  metaBase.recoveredAt = Date.now();
+
+  if (parsed.first?.audioUrl) {
+    const prox = toAudioProxyUrl(parsed.first.audioUrl);
+    addToLibrary({
+      title: parsed.first.title || "Recovered song",
+      artUrl: parsed.first.imageUrl || "",
+      url: prox || parsed.first.audioUrl,
+      taskId: tid,
+      audioId: parsed.first.audioId || "",
+      kind: "full",
+      meta: metaBase,
+    });
+  }
+  if (parsed.second?.audioUrl) {
+    const prox2 = toAudioProxyUrl(parsed.second.audioUrl);
+    addToLibrary({
+      title: parsed.second.title || "Recovered song B",
+      artUrl: parsed.second.imageUrl || "",
+      url: prox2 || parsed.second.audioUrl,
+      taskId: tid,
+      audioId: parsed.second.audioId || "",
+      kind: "full",
+      meta: metaBase,
+    });
+  }
+
+  clearRecoverableGenerationTask();
+  updateLibraryRecoverBanner();
+  if (!silent) {
+    showToast("Song added to your Library.", { icon: "✓", durationMs: 3200 });
+    try {
+      setStatus("Recovered from Suno — check Library.");
+    } catch {}
+  }
+  return true;
+}
+
+function updateLibraryRecoverBanner() {
+  const wrap = els.libraryRecoverBanner;
+  if (!wrap) return;
+  const rec = loadRecoverableGenerationTask();
+  const hint = els.libraryRecoverHint;
+  if (!rec?.taskId) {
+    wrap.hidden = true;
+    return;
+  }
+  const lib = loadLibrary();
+  const already = lib.some((x) => String(x.taskId || "").trim() === rec.taskId);
+  if (already) {
+    clearRecoverableGenerationTask();
+    wrap.hidden = true;
+    return;
+  }
+  wrap.hidden = false;
+  if (hint) {
+    const th = rec.titleHint;
+    hint.textContent = th
+      ? `Saved task · ${th.length > 52 ? `${th.slice(0, 52)}…` : th}`
+      : `Task ID ends with …${rec.taskId.slice(-8)}`;
   }
 }
 
@@ -10371,6 +10630,15 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = !(sunoAudioId);
           setStatus("Song is ready. Press Play full.");
           savePendingBackendTask("");
+          try {
+            const rec = loadRecoverableGenerationTask();
+            if (rec?.taskId && String(sunoTaskId || "") === rec.taskId) {
+              clearRecoverableGenerationTask();
+            }
+          } catch {}
+          try {
+            updateLibraryRecoverBanner();
+          } catch {}
           markGenerationReadyNotice();
           // Avoid stale vocal reference leaking into the next generation.
           clearVocalReferenceSelection();
@@ -10901,6 +11169,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
 
       sunoTaskId = extractTaskIdLoose(data);
       savePendingBackendTask(sunoTaskId || "");
+      if (sunoTaskId) {
+        saveRecoverableGenerationTask(sunoTaskId, String(els.sunoTitle?.value || "").trim());
+      }
       sunoAudioId = null;
       sunoStemsTaskId = null;
       sunoMultiStemsTaskId = null;
@@ -13129,7 +13400,11 @@ if (els.btnAuthLogout) {
     setProfileEditing(false);
     // A pending generation belongs to the previous user — wipe it so a
     // fresh login on the same device doesn't inherit a stuck spinner.
-    try { dismissPendingBackendTask({ silent: true }); } catch {}
+    try { dismissPendingBackendTask({ silent: true, skipRecoverSave: true }); } catch {}
+    try {
+      clearRecoverableGenerationTask();
+      updateLibraryRecoverBanner();
+    } catch {}
     if (els.btnAuthGoogle) {
       els.btnAuthGoogle.disabled = false;
       els.btnAuthGoogle.textContent = "Continue with Google";

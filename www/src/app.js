@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511addinst";
+const APP_BUILD = "20260511vocsendfix";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1715,6 +1715,45 @@ function getVocalReferenceFile() {
   return null;
 }
 
+/**
+ * Pick the exact File bytes we send to `/api/suno/stems`.
+ *
+ * iOS Safari sometimes keeps an old `File` on the hidden `<input type=file>`
+ * even after we assigned `input.value = ""` following a mic recording. That
+ * lets the DOM disagree with `currentVocalRefFile` at submit time — Suno
+ * receives yesterday's upload instead of today's hum. Recording-origin and
+ * remix-origin references must ignore the DOM entirely; picker uploads use
+ * `files[0]` as ground truth.
+ */
+function resolveVocalReferenceForSubmit() {
+  try {
+    const input = els.sunoVocalUpload;
+    const domFile = input?.files?.[0] || null;
+
+    if (vocalRefOrigin === "record" && currentVocalRefFile) {
+      try {
+        if (input) input.value = "";
+      } catch {}
+      return currentVocalRefFile;
+    }
+
+    if (vocalRefOrigin === "remix" && currentVocalRefFile) {
+      return currentVocalRefFile;
+    }
+
+    if (domFile && vocalRefOrigin === "upload") {
+      if (currentVocalRefFile !== domFile) {
+        setVocalRefFile(domFile, `Voice reference attached: ${domFile.name}`, "upload");
+      }
+      return domFile;
+    }
+
+    return getVocalReferenceFile();
+  } catch {
+    return getVocalReferenceFile();
+  }
+}
+
 function clearVocalReferenceSelection(opts = {}) {
   const preserveRemixBanner = opts.preserveRemixBanner === true;
   currentVocalRefFile = null;
@@ -1747,20 +1786,7 @@ function syncVocalReferenceFromDom() {
 }
 
 /**
- * Pending "My voice + band" mix state.
- *
- * Set the instant we kick off a generation in mix mode (held in a
- * module-level variable so the polling success path can pick it up
- * even after the upload form clears). Cleared on success / failure /
- * cancel so a later non-mix generation can't accidentally inherit a
- * stale vocal blob.
- *
- * Fields:
- *   vocalFile: File   - the user's recording, kept alive until the
- *                       backing track lands so we can mix locally.
- *   title:     string - hint for the resulting Library entry title.
- */
-// Hub Remix state. When set, the Generate flow uploads this audio as the
+ * Hub Remix state. When set, the Generate flow uploads this audio as the
 // melody reference and routes through Suno's upload-cover endpoint, so the
 // new lyrics are sung over the same arrangement instead of a brand-new song.
 var currentRemixSource = null;
@@ -1978,6 +2004,17 @@ function pickRecorderMimeType() {
 
 async function startVocalReferenceRecording() {
   const hadExisting = Boolean(getVocalReferenceFile());
+  // Mic capture supersedes any prior upload. Clear JS state + the hidden
+  // file input *before* capture starts so WebKit can't glue an obsolete
+  // File object back onto the input while we're recording.
+  try {
+    if (els.sunoVocalUpload) els.sunoVocalUpload.value = "";
+  } catch {}
+  currentVocalRefFile = null;
+  vocalRefBlob = null;
+  vocalRefOrigin = null;
+  refreshVocalReferenceUi();
+
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
   const mimeType = pickRecorderMimeType();
   const rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
@@ -11376,7 +11413,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       return;
     }
     const promptText = String(els.sunoPrompt?.value || "").trim();
-    const vocalRefFile = getVocalReferenceFile();
+    const vocalRefFile = resolveVocalReferenceForSubmit();
     const hasUploadedReference = Boolean(vocalRefFile);
     const referenceMode = hasUploadedReference ? "humming_music" : "none";
     const hasReference = hasUploadedReference;
@@ -11551,6 +11588,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         async () => {
           if (hasReference) {
             const fd = new FormData();
+            const sendFile = resolveVocalReferenceForSubmit();
+            if (!sendFile || !sendFile.size) {
+              throw new Error(
+                "Lost the vocal reference before upload. Tap '+ Audio' or Record again, then Generate."
+              );
+            }
             fd.append("action", "add_instrumental");
             const stemRefMode = referenceInstrumentalOnly
               ? "humming_music"
@@ -11558,9 +11601,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                 ? "song_remix"
                 : "vocal_full";
             fd.append("referenceMode", stemRefMode);
-            fd.append("file", vocalRefFile, vocalRefFile?.name || "vocal-reference.webm");
-            fd.append("fileName", vocalRefFile?.name || "vocal-reference.webm");
-            fd.append("fileType", vocalRefFile?.type || "audio/webm");
+            fd.append("file", sendFile, sendFile?.name || "vocal-reference.webm");
+            fd.append("fileName", sendFile?.name || "vocal-reference.webm");
+            fd.append("fileType", sendFile?.type || "audio/webm");
             fd.append("style", String(userStyle || "").trim());
             if (finalPrompt) fd.append("prompt", String(finalPrompt));
             fd.append("title", String((els.sunoTitle?.value || "").trim() || "Reference full song"));

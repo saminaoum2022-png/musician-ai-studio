@@ -5407,16 +5407,12 @@ input::placeholder, textarea::placeholder{
   stroke-linejoin: round;
 }
 
-.profileQuickLinks{
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 14px 0 18px;
-}
-.profileQuickLink{
+/* Sounds entry moved from Profile → Settings (same row style). */
+.settingsSoundsLink{
   display: flex;
   align-items: center;
   gap: 12px;
+  margin: 14px 0 18px;
   padding: 12px 14px;
   border-radius: 14px;
   border: 1px solid rgba(255,255,255,0.10);
@@ -5426,12 +5422,12 @@ input::placeholder, textarea::placeholder{
   -webkit-tap-highlight-color: transparent;
   transition: background 160ms ease, border-color 160ms ease, transform 140ms ease;
 }
-.profileQuickLink:hover{
+.settingsSoundsLink:hover{
   background: linear-gradient(180deg, rgba(124,92,255,0.10), rgba(35,213,171,0.04));
   border-color: rgba(124,92,255,0.38);
 }
-.profileQuickLink:active{ transform: scale(0.99); }
-.profileQuickLinkIco{
+.settingsSoundsLink:active{ transform: scale(0.99); }
+.settingsSoundsLinkIco{
   width: 36px;
   height: 36px;
   flex: 0 0 auto;
@@ -5442,25 +5438,27 @@ input::placeholder, textarea::placeholder{
   background: rgba(124,92,255,0.16);
   color: rgba(232,238,247,0.95);
 }
-.profileQuickLinkIco svg{
-  width: 20px; height: 20px;
-  fill: none; stroke: currentColor;
-  stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+.settingsSoundsLinkIco svg{
+  width: 20px;
+  height: 20px;
 }
-.profileQuickLinkBody{
-  flex: 1; min-width: 0;
-  display: flex; flex-direction: column; gap: 2px;
+.settingsSoundsLinkBody{
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
-.profileQuickLinkTitle{
+.settingsSoundsLinkTitle{
   font-size: 14px;
   font-weight: 700;
   color: rgba(232,238,247,0.96);
 }
-.profileQuickLinkSub{
+.settingsSoundsLinkSub{
   font-size: 13px;
   color: rgba(232,238,247,0.58);
 }
-.profileQuickLinkChev{
+.settingsSoundsLinkChev{
   font-size: 22px;
   line-height: 1;
   color: rgba(232,238,247,0.40);
@@ -5471,7 +5469,7 @@ input::placeholder, textarea::placeholder{
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  margin: 0 0 18px;
+  margin: 14px 0 18px;
   padding: 12px 14px;
   border-radius: 14px;
   border: 1px solid rgba(124,92,255,0.28);

@@ -29,7 +29,7 @@
     <link rel="dns-prefetch" href="https://cdn2.suno.ai" />
     <link rel="dns-prefetch" href="https://cdn4.suno.ai" />
     <link rel="dns-prefetch" href="https://suno.com" />
-    <link rel="stylesheet" href="./styles.css?v=20260510profilefix" />
+    <link rel="stylesheet" href="./styles.css?v=20260510profsimple" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -910,50 +910,6 @@
             </div>
           </div>
 
-          <!-- Quick links — Credits + Settings, the two surfaces hardest
-               to find on a phone. Placed right under the hero so they're
-               above the fold without crowding identity. -->
-          <div class="profileQuickLinks">
-            <a href="#/credits" class="profileQuickLink">
-              <span class="profileQuickLinkIco">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="12" cy="12" r="9"/>
-                  <path d="M12 7v10M9 9.5h4.5a2 2 0 0 1 0 4H9M9 13.5h4.75a2 2 0 0 1 0 4H9"/>
-                </svg>
-              </span>
-              <span class="profileQuickLinkBody">
-                <span class="profileQuickLinkTitle">My Credits</span>
-                <span class="profileQuickLinkSub" id="profileQuickLinkCreditsSub">Tap to redeem a code</span>
-              </span>
-              <span class="profileQuickLinkChev" aria-hidden="true">›</span>
-            </a>
-            <a href="#/sounds" class="profileQuickLink">
-              <span class="profileQuickLinkIco">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M3 12c2 0 2-4 4-4s2 8 4 8 2-12 4-12 2 8 4 8 2-4 2-4"/>
-                </svg>
-              </span>
-              <span class="profileQuickLinkBody">
-                <span class="profileQuickLinkTitle">Sounds</span>
-                <span class="profileQuickLinkSub">Loops &amp; ambience · 2.5 credits</span>
-              </span>
-              <span class="profileQuickLinkChev" aria-hidden="true">›</span>
-            </a>
-            <a href="#/settings" class="profileQuickLink">
-              <span class="profileQuickLinkIco">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="12" cy="12" r="3"/>
-                  <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
-                </svg>
-              </span>
-              <span class="profileQuickLinkBody">
-                <span class="profileQuickLinkTitle">Settings</span>
-                <span class="profileQuickLinkSub">Account, environment, advanced</span>
-              </span>
-              <span class="profileQuickLinkChev" aria-hidden="true">›</span>
-            </a>
-          </div>
-
           <div id="profilePersonaRow" class="profilePersonaRow" style="display:none" aria-live="polite">
             <span class="profilePersonaIco" aria-hidden="true">🎙️</span>
             <div class="profilePersonaBody">
@@ -1348,6 +1304,19 @@
             credits system.
           </p>
 
+          <a href="#/sounds" class="settingsSoundsLink" data-route-link="sounds">
+            <span class="settingsSoundsLinkIco" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20">
+                <path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M3 12c2 0 2-4 4-4s2 8 4 8 2-12 4-12 2 8 4 8 2-4 2-4"/>
+              </svg>
+            </span>
+            <span class="settingsSoundsLinkBody">
+              <span class="settingsSoundsLinkTitle">Sounds</span>
+              <span class="settingsSoundsLinkSub">Loops &amp; ambience · 2.5 credits per generation</span>
+            </span>
+            <span class="settingsSoundsLinkChev" aria-hidden="true">›</span>
+          </a>
+
           <div class="row">
             <button id="btnBetaTopup" class="primary" type="button">Beta top-up (Suno credits)</button>
             <button id="btnOpenBilling" class="ghost" type="button">Open billing page</button>
@@ -1651,6 +1620,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260510profilefix"></script>
+    <script type="module" src="./src/app.js?v=20260510profsimple"></script>
   </body>
 </html>

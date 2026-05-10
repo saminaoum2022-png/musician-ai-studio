@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510profilefix";
+const APP_BUILD = "20260510profsimple";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -99,7 +99,6 @@ const els = {
   profileCreditsBalance: document.getElementById("profileCreditsBalance"),
   profileCreditsNote: document.getElementById("profileCreditsNote"),
   profileCreditsLink: document.getElementById("profileCreditsLink"),
-  profileQuickLinkCreditsSub: document.getElementById("profileQuickLinkCreditsSub"),
   profilePersonaRow: document.getElementById("profilePersonaRow"),
   profilePersonaLabel: document.getElementById("profilePersonaLabel"),
   creditsBalanceBig: document.getElementById("creditsBalanceBig"),
@@ -2247,11 +2246,6 @@ function setCreditsBalance(n) {
   const disp = formatCreditsAmount(v);
   if (els.profileCreditsBalance) els.profileCreditsBalance.textContent = disp;
   if (els.creditsBalanceBig) els.creditsBalanceBig.textContent = disp;
-  if (els.profileQuickLinkCreditsSub) {
-    els.profileQuickLinkCreditsSub.textContent = creditsState.loaded
-      ? (v > 0 ? `Balance: ${disp} credits` : "Tap to redeem a code")
-      : "Tap to redeem a code";
-  }
 }
 
 function formatLedgerReason(reason) {

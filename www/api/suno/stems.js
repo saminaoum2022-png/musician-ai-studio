@@ -33,8 +33,18 @@
  */
 
 const Busboy = require("busboy");
+const {
+  verifyUser,
+  callRpc,
+} = require("../_lib/credits-auth");
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+// Reference-audio generations (cover / extend / add-instrumental) all
+// produce a full song's worth of audio on Suno's side, so they cost
+// the same as a normal generation.
+const STEMS_REMIX_COST = 10;
+// Vocal isolation / stem split on Suno is much cheaper than generation.
+const STEMS_VOCAL_COST = 2;
 
 module.exports = async function handler(req, res) {
   try {
@@ -42,6 +52,13 @@ module.exports = async function handler(req, res) {
 
     const apiKey = process.env.SUNO_API_KEY;
     if (!apiKey) return json(res, 500, { error: "Missing SUNO_API_KEY on server" });
+
+    // Identify the caller. verifyUser only inspects headers, so it's
+    // safe to call before we drain the multipart body below.
+    const user = await verifyUser(req);
+    if (!user) {
+      return json(res, 401, { error: "Sign in to use this feature." });
+    }
 
     const { host, proto } = getHostProto(req);
     const callBackUrl = `${proto}://${host}/api/suno/callback`;
@@ -60,10 +77,59 @@ module.exports = async function handler(req, res) {
     }
     const action = String(body?.action || "").trim();
 
+    // Determine cost + ledger reason for this request.
+    const isRemixAction = action === "add_instrumental";
+    const cost = isRemixAction ? STEMS_REMIX_COST : STEMS_VOCAL_COST;
+    const reason = isRemixAction ? "stems_remix" : "stems_vocal_removal";
+
+    // Debit profile credits BEFORE calling Suno. Refund in full on any
+    // pre-task failure so the user is never charged for a request Suno
+    // didn't actually accept.
+    const debit = await callRpc("consume_credits", {
+      p_user_id: user.userId,
+      p_amount: cost,
+      p_reason: reason,
+      p_ref: "",
+    });
+    if (!debit.ok || !debit.data?.ok) {
+      const status = String(debit.data?.status || "");
+      if (status === "insufficient") {
+        const featureLabel = isRemixAction ? "this generation" : "vocal extraction";
+        return json(res, 402, {
+          error: "Not enough credits",
+          code: "insufficient_credits",
+          balance: Number(debit.data?.balance || 0),
+          needed: cost,
+          message:
+            debit.data?.message ||
+            `Not enough credits for ${featureLabel} (${cost} credits). Redeem a code from your Profile.`,
+        });
+      }
+      return json(res, 500, {
+        error: "Credit check failed",
+        details: debit.data || debit.error || null,
+      });
+    }
+    const balanceAfterDebit = Number(debit.data?.balance || 0);
+    const refund = async (refLabel) => {
+      try {
+        await callRpc("refund_credits", {
+          p_user_id: user.userId,
+          p_amount: cost,
+          p_reason: `refund_${reason}`,
+          p_ref: refLabel || "",
+        });
+      } catch {}
+    };
+
     if (action === "add_instrumental") {
       let fileBytes = body?.fileBytes || null;
-      if (!fileBytes) return json(res, 400, { error: "Missing uploaded file" });
+      if (!fileBytes) {
+        await refund("missing_file");
+        return json(res, 400, { error: "Missing uploaded file" });
+      }
       if (Buffer.isBuffer(fileBytes) && fileBytes.length > MAX_UPLOAD_BYTES) {
+        await refund("file_too_large");
         return json(res, 413, { error: "Audio reference is too large. Max 25 MB." });
       }
       let fileName = String(body?.fileName || "vocal-reference.webm").trim();
@@ -103,6 +169,7 @@ module.exports = async function handler(req, res) {
       const upText = await upRes.text().catch(() => "");
       const upData = safeJson(upText);
       if (!upRes.ok || !upData?.success || !upData?.data?.downloadUrl) {
+        await refund("suno_upload_failed");
         return json(res, 502, {
           error: "Suno temporary upload failed",
           status: upRes.status || 502,
@@ -178,6 +245,7 @@ module.exports = async function handler(req, res) {
         const coverText = await coverRes.text().catch(() => "");
         const coverData = safeJson(coverText);
         if (!coverRes.ok || (coverData && "code" in coverData && Number(coverData.code) !== 200)) {
+          await refund("suno_cover_failed");
           return json(res, 502, {
             error: "Upload-cover failed",
             status: coverRes.status || 502,
@@ -185,7 +253,11 @@ module.exports = async function handler(req, res) {
             uploadUrl,
           });
         }
-        return json(res, 200, { ...(coverData || { raw: coverText }), uploadUrl });
+        return json(res, 200, {
+          ...(coverData || { raw: coverText }),
+          uploadUrl,
+          _credits: { spent: cost, balance: balanceAfterDebit },
+        });
       }
 
       // === Extend mode: explicit "use upload as intro, continue from continueAt" ===
@@ -214,6 +286,7 @@ module.exports = async function handler(req, res) {
         const extText = await extRes.text().catch(() => "");
         const extData = safeJson(extText);
         if (!extRes.ok || (extData && "code" in extData && Number(extData.code) !== 200)) {
+          await refund("suno_extend_failed");
           return json(res, 502, {
             error: "Upload-extend failed",
             status: extRes.status || 502,
@@ -221,7 +294,11 @@ module.exports = async function handler(req, res) {
             uploadUrl,
           });
         }
-        return json(res, 200, { ...(extData || { raw: extText }), uploadUrl });
+        return json(res, 200, {
+          ...(extData || { raw: extText }),
+          uploadUrl,
+          _credits: { spent: cost, balance: balanceAfterDebit },
+        });
       }
 
       // === Backing mode (humming_music / humming_backing / default): keep upload as lead, add band ===
@@ -259,6 +336,7 @@ module.exports = async function handler(req, res) {
       const addText = await addRes.text().catch(() => "");
       const addData = safeJson(addText);
       if (!addRes.ok || (addData && "code" in addData && Number(addData.code) !== 200)) {
+        await refund("suno_add_inst_failed");
         return json(res, 502, {
           error: "Add instrumental failed",
           status: addRes.status || 502,
@@ -266,13 +344,20 @@ module.exports = async function handler(req, res) {
           uploadUrl,
         });
       }
-      return json(res, 200, { ...(addData || { raw: addText }), uploadUrl });
+      return json(res, 200, {
+        ...(addData || { raw: addText }),
+        uploadUrl,
+        _credits: { spent: cost, balance: balanceAfterDebit },
+      });
     }
 
     const taskId = String(body?.taskId || "").trim();
     const audioId = String(body?.audioId || "").trim();
     const type = body?.type === "split_stem" ? "split_stem" : "separate_vocal";
-    if (!taskId || !audioId) return json(res, 400, { error: "Missing taskId or audioId" });
+    if (!taskId || !audioId) {
+      await refund("missing_ids");
+      return json(res, 400, { error: "Missing taskId or audioId" });
+    }
 
     const payload = { taskId, audioId, type, callBackUrl };
 
@@ -288,12 +373,17 @@ module.exports = async function handler(req, res) {
     const text = await r.text().catch(() => "");
     const data = safeJson(text);
     if (!r.ok) {
+      await refund(`suno_http_${r.status}`);
       return json(res, 502, { error: "Upstream Suno error", status: r.status, details: data || text });
     }
     if (data && typeof data === "object" && "code" in data && data.code !== 200) {
+      await refund(`suno_code_${data.code}`);
       return json(res, 502, { error: "Suno rejected request", details: data });
     }
-    return json(res, 200, data || { raw: text });
+    return json(res, 200, {
+      ...(data || { raw: text }),
+      _credits: { spent: cost, balance: balanceAfterDebit },
+    });
   } catch (e) {
     return json(res, 500, { error: e?.message || String(e) });
   }

@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510personawin";
+const APP_BUILD = "20260510creditsfix";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -44,6 +44,10 @@ const els = {
   remixSourceTitle: document.getElementById("remixSourceTitle"),
   remixSourceSub: document.getElementById("remixSourceSub"),
   remixSourceCancel: document.getElementById("remixSourceCancel"),
+  personaActiveBanner: document.getElementById("personaActiveBanner"),
+  personaActiveBannerLabel: document.getElementById("personaActiveBannerLabel"),
+  personaActiveBannerChange: document.getElementById("personaActiveBannerChange"),
+  personaActiveBannerClear: document.getElementById("personaActiveBannerClear"),
   sunoReferenceMode: document.getElementById("sunoReferenceMode"),
   sunoReferenceHint: document.getElementById("sunoReferenceHint"),
   btnVocalRefRec: document.getElementById("btnVocalRefRec"),
@@ -2670,6 +2674,46 @@ function updateProfilePersonaRow() {
     els.profilePersonaLabel.textContent = "No persona selected";
     if (hint) hint.style.display = "";
   }
+  renderActivePersonaBanner();
+}
+
+/**
+ * Persona-active banner on the Create page.
+ *
+ * Mirrors the Remix banner pattern: when a persona is the current
+ * selection (either coming from Profile via "Open Create" or chosen
+ * directly inside Advanced options), surface it at the top of the
+ * Create page so the user can:
+ *   - see *which* voice is going into the next song,
+ *   - jump straight into Advanced options to swap it (Change), or
+ *   - clear it back to default voice (×).
+ *
+ * The banner is rendered on every persona-state change AND on route
+ * change to "generate" so that returning to Create after selecting a
+ * persona elsewhere shows the right state immediately.
+ */
+function renderActivePersonaBanner() {
+  if (!els.personaActiveBanner || !els.personaActiveBannerLabel) return;
+  const idFromSelect = String(els.sunoPersonaId?.value || "").trim();
+  const idSaved = (() => {
+    try { return loadPersonaSelection().trim(); } catch { return ""; }
+  })();
+  const id = idFromSelect || idSaved;
+  if (!id) {
+    els.personaActiveBanner.hidden = true;
+    return;
+  }
+  const list = loadPersonas();
+  const hit = list.find((x) => String(x.personaId) === id);
+  // Don't show a banner for an id we no longer recognize locally —
+  // could be from a prior account or a deleted persona.
+  if (!hit) {
+    els.personaActiveBanner.hidden = true;
+    return;
+  }
+  const label = String(hit.label || id.slice(0, 12) + "…").trim() || "Persona";
+  els.personaActiveBannerLabel.textContent = label;
+  els.personaActiveBanner.hidden = false;
 }
 const AUTH_SESSION_KEY = "mas:supabase:session:v1";
 const AUTH_PKCE_KEY = "mas:supabase:pkce:v1";
@@ -5035,6 +5079,26 @@ async function measureAudioDurationSec(rawUrl) {
   const s = String(rawUrl || "").trim();
   if (!s || s === "#") return null;
   const url = hubAbsoluteUrl(s);
+
+  // Fast path: if the library player is currently loaded with the same
+  // src and already has a known duration, skip the network probe.
+  // (PWA cached cases land here on a tap right after playback.)
+  try {
+    if (
+      playerEl &&
+      typeof playerEl.duration === "number" &&
+      Number.isFinite(playerEl.duration) &&
+      playerEl.duration > 0 &&
+      typeof playerEl.currentSrc === "string" &&
+      playerEl.currentSrc &&
+      (playerEl.currentSrc === url ||
+        playerEl.currentSrc.endsWith(s) ||
+        url.endsWith(playerEl.currentSrc))
+    ) {
+      return playerEl.duration;
+    }
+  } catch {}
+
   return new Promise((resolve) => {
     const a = new Audio();
     let settled = false;
@@ -5067,7 +5131,10 @@ async function measureAudioDurationSec(rawUrl) {
     );
     try {
       a.preload = "metadata";
-      a.crossOrigin = "anonymous";
+      // Intentionally NOT setting crossOrigin: it forces a CORS handshake
+      // even when the URL is same-origin (our /api/suno/audio proxy), and
+      // our proxy doesn't echo Access-Control-Allow-Origin. Reading just
+      // the duration via metadata doesn't require CORS at all.
       a.src = url;
     } catch {
       clearTimeout(timer);
@@ -5076,21 +5143,28 @@ async function measureAudioDurationSec(rawUrl) {
   });
 }
 
-/** Suno docs: segment (vocalEnd − vocalStart) must be 10–30s and lie
- *  within [0, duration]. Returns rounded seconds. */
+/** Suno's persona endpoint requires the analysis segment to be 10–30s
+ *  and to lie strictly inside the file. We leave a small tail margin so
+ *  that small floating-point differences between our duration reading
+ *  and Suno's don't push vocalEnd past EOF.
+ *
+ *  Returns null if the file is too short (<10.6s) — caller will fall
+ *  back to omitting vocalStart/vocalEnd, which lets Suno auto-pick. */
 function buildPersonaVocalWindowFromDuration(durationSec) {
   const d = Number(durationSec);
   if (!Number.isFinite(d) || d <= 0) return null;
   const round2 = (x) => Math.round(x * 100) / 100;
-  if (d >= 30) {
+  const TAIL_MARGIN = 0.5;
+  if (d >= 30 + TAIL_MARGIN) {
     return { vocalStart: 0, vocalEnd: 30 };
   }
-  if (d >= 10) {
-    return { vocalStart: 0, vocalEnd: round2(d) };
+  if (d >= 10 + TAIL_MARGIN) {
+    return { vocalStart: 0, vocalEnd: round2(d - TAIL_MARGIN) };
   }
-  // Shorter than 10s — cannot meet the minimum segment length; still
-  // send 0→d so Suno can error clearly if it rejects.
-  return { vocalStart: 0, vocalEnd: round2(d) };
+  // Below the minimum-with-margin window. Don't send a window at all
+  // and let Suno's auto-pick run; it occasionally succeeds even on
+  // ~10s files because their internal probe is more lenient.
+  return null;
 }
 
 async function createPersonaForSong({
@@ -5140,18 +5214,31 @@ async function createPersonaForSong({
     showToast("Saving voice as persona…", { icon: "♪", durationMs: 2400 });
 
     let vocalPayload = {};
+    let probeDurSec = null;
     const probeUrl = String(audioUrl || "").trim();
     if (probeUrl) {
-      const dur = await measureAudioDurationSec(probeUrl);
-      const win = buildPersonaVocalWindowFromDuration(dur);
+      probeDurSec = await measureAudioDurationSec(probeUrl);
+      const win = buildPersonaVocalWindowFromDuration(probeDurSec);
       if (win) {
         vocalPayload = { vocalStart: win.vocalStart, vocalEnd: win.vocalEnd };
       }
     }
+    try {
+      console.info("[persona] request", {
+        taskId: tId,
+        audioId: aId,
+        probeDurSec,
+        vocalPayload,
+      });
+    } catch {}
 
+    const personaAuthToken = getSupabaseAuthToken();
     const r = await fetch(apiUrl("/api/suno/persona"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(personaAuthToken ? { Authorization: `Bearer ${personaAuthToken}` } : {}),
+      },
       body: JSON.stringify({
         taskId: tId,
         audioId: aId,
@@ -5162,23 +5249,47 @@ async function createPersonaForSong({
       }),
     });
     const d = await r.json().catch(() => ({}));
+    if (r.status === 402 || d?.code === "insufficient_credits") {
+      const need = Number(d?.needed ?? 5);
+      const have = Number(d?.balance || 0);
+      throw new Error(
+        `Not enough credits to save a persona (you have ${have}, need ${need}). Open Profile → Credits to redeem a code.`
+      );
+    }
     if (!r.ok) {
+      try {
+        console.warn("[persona] failed", { status: r.status, response: d });
+      } catch {}
       // Build the friendliest error possible. Prefer Suno's own
       // upstream `msg` (already merged into d.error by our serverless
       // proxy), then fall back to status/details.
       const baseMsg = d?.error || "Persona creation failed";
+      const probeNote = probeDurSec
+        ? ` [measured ${Math.round(probeDurSec)}s${
+            vocalPayload.vocalStart != null
+              ? `, sent ${vocalPayload.vocalStart}–${vocalPayload.vocalEnd}s`
+              : ", auto-window"
+          }]`
+        : "";
       let hint = "";
-      // "Current music failed to generate persona" is often a bad vocal
-      // window (defaults assume a ≥30s file). We now auto-fit from
-      // duration; remaining failures may be short clips (<10s analyzable).
       if (/failed to generate persona|Current music failed/i.test(baseMsg)) {
-        hint =
-          " — Persona analysis needs a 10–30 second slice inside your file. If this track is very short, try a longer song.";
+        if (probeDurSec && probeDurSec < 11) {
+          hint =
+            " — Suno needs about 10+ seconds of analyzable audio. This track is too short.";
+        } else {
+          hint =
+            " — Suno couldn’t analyze this track’s vocals. Try a different song with clearer singing for at least 10s.";
+        }
       } else if (/internal error|code 500|Suno hit/i.test(baseMsg)) {
         hint = " — Wait a minute and retry, or try another track.";
       }
-      throw new Error(`${baseMsg}${hint}`);
+      throw new Error(`${baseMsg}${hint}${probeNote}`);
     }
+    // After a successful save, sync the displayed credit balance so
+    // the user sees the deduction immediately.
+    try {
+      if (typeof refreshMyCredits === "function") void refreshMyCredits({ silent: true });
+    } catch {}
     const personaId = String(d?.personaId || "").trim();
     if (!personaId) throw new Error("Persona created but ID was missing.");
 
@@ -6791,13 +6902,27 @@ function bindLibraryDelegatedListeners() {
           try {
             setStatus("Getting instrumental for selected song…");
             setLoading(true, { title: "Getting your instrumental version…", sub: "Processing selected library song." });
+            const stemsTok = getSupabaseAuthToken();
             const r = await fetch(apiUrl("/api/suno/stems"), {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                ...(stemsTok ? { Authorization: `Bearer ${stemsTok}` } : {}),
+              },
               body: JSON.stringify({ taskId: t.taskId, audioId: t.audioId, type: "separate_vocal" }),
             });
             const d = await r.json().catch(() => ({}));
+            if (r.status === 402 || d?.code === "insufficient_credits") {
+              const need = Number(d?.needed ?? 2);
+              const have = Number(d?.balance || 0);
+              throw new Error(
+                `Not enough credits to extract vocals (you have ${have}, need ${need}). Open Profile → Credits to redeem a code.`
+              );
+            }
             if (!r.ok) throw new Error(d?.error || "Instrumental request failed");
+            try {
+              if (typeof refreshMyCredits === "function") void refreshMyCredits({ silent: true });
+            } catch {}
             sunoStemsTaskId = d?.data?.taskId || d?.data?.task_id || d?.taskId || null;
             if (!sunoStemsTaskId) throw new Error("Missing stems task id");
             setStatus("Instrumental requested from library song. Processing now…");
@@ -10526,6 +10651,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             .join(", ");
 
       const personaIdSel = (els.sunoPersonaId?.value || "").trim();
+      // Voice personas only work on V5 (Suno docs). The server will also
+      // coerce this defensively; we set it here so the client knows
+      // which engine label to display and to keep request → response in
+      // sync if a future build exposes a personaModel toggle.
       const personaModelSel = personaIdSel ? "voice_persona" : "";
       const modelForRequest = personaIdSel && personaModelSel === "voice_persona"
         ? "V5"
@@ -10626,8 +10755,20 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             // The server already has its own copy in the multipart body, so any
             // residual state here can only cause stale-reuse on the next run.
             try { clearVocalReferenceSelection(); } catch {}
-            const rr = await fetch(apiUrl("/api/suno/stems"), { method: "POST", body: fd });
+            const stemsTok = getSupabaseAuthToken();
+            const rr = await fetch(apiUrl("/api/suno/stems"), {
+              method: "POST",
+              headers: stemsTok ? { Authorization: `Bearer ${stemsTok}` } : undefined,
+              body: fd,
+            });
             const dd = await rr.json().catch(() => ({}));
+            if (rr.status === 402 || dd?.code === "insufficient_credits") {
+              const need = Number(dd?.needed ?? 10);
+              const have = Number(dd?.balance || 0);
+              throw new Error(
+                `Not enough credits for this generation (you have ${have}, need ${need}). Open Profile → Credits to redeem a code.`
+              );
+            }
             if (!rr.ok) {
               const more = dd?.detailMessage || dd?.details?.message || dd?.details?.error || "";
               throw new Error(`${dd?.error || "Reference upload failed"}${more ? `: ${more}` : ""}`);
@@ -10640,6 +10781,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               const nestedErr = dd?.data?.msg || dd?.data?.message || dd?.data?.error || "Reference upload failed";
               throw new Error(`Suno rejected reference upload: ${nestedErr}`);
             }
+            try {
+              if (typeof refreshMyCredits === "function") void refreshMyCredits({ silent: true });
+            } catch {}
             return dd;
           }
 
@@ -11038,13 +11182,27 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const data = await trackCreditsAround(
         "Suno: instrumental version",
         async () => {
+          const stemsTok = getSupabaseAuthToken();
           const r = await fetch(apiUrl("/api/suno/stems"), {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              ...(stemsTok ? { Authorization: `Bearer ${stemsTok}` } : {}),
+            },
             body: JSON.stringify({ taskId: sunoTaskId, audioId: sunoAudioId, type: "separate_vocal" }),
           });
           const d = await r.json().catch(() => ({}));
+          if (r.status === 402 || d?.code === "insufficient_credits") {
+            const need = Number(d?.needed ?? 2);
+            const have = Number(d?.balance || 0);
+            throw new Error(
+              `Not enough credits to extract vocals (you have ${have}, need ${need}). Open Profile → Credits to redeem a code.`
+            );
+          }
           if (!r.ok) throw new Error(d?.error || "Stem request failed");
+          try {
+            if (typeof refreshMyCredits === "function") void refreshMyCredits({ silent: true });
+          } catch {}
           return d;
         },
         `taskId=${sunoTaskId}`
@@ -11088,12 +11246,26 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         const data = await trackCreditsAround(
           "Suno: multi-stems",
           async () => {
+            const stemsTok = getSupabaseAuthToken();
             const r = await fetch(apiUrl("/api/suno/stems"), {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                ...(stemsTok ? { Authorization: `Bearer ${stemsTok}` } : {}),
+              },
               body: JSON.stringify({ taskId: sunoTaskId, audioId: sunoAudioId, type: "split_stem" }),
             });
             const d = await r.json().catch(() => ({}));
+            if (r.status === 402 || d?.code === "insufficient_credits") {
+              const need = Number(d?.needed ?? 2);
+              const have = Number(d?.balance || 0);
+              throw new Error(
+                `Not enough credits to split stems (you have ${have}, need ${need}). Open Profile → Credits to redeem a code.`
+              );
+            }
+            try {
+              if (typeof refreshMyCredits === "function") void refreshMyCredits({ silent: true });
+            } catch {}
             if (!r.ok) throw new Error(d?.error || "Multi-stems request failed");
             return d;
           },
@@ -12696,6 +12868,38 @@ if (els.sunoPersonaId) {
   els.sunoPersonaId.addEventListener("change", () => {
     savePersonaSelection(String(els.sunoPersonaId.value || ""));
     updateProfilePersonaRow();
+    renderActivePersonaBanner();
+  });
+}
+if (els.personaActiveBannerChange && els.advancedSheet) {
+  els.personaActiveBannerChange.addEventListener("click", () => {
+    // Same opening behavior as the main "Open advanced options" button.
+    els.advancedSheet.open = true;
+    if (els.fineTuneDetails) els.fineTuneDetails.open = true;
+    els.advancedSheet.scrollTop = 0;
+    if (els.sunoPersonaId) {
+      try {
+        // Bring the persona dropdown directly into view + focus so the
+        // user can swap voices in one tap, instead of hunting for it.
+        els.sunoPersonaId.scrollIntoView({ block: "center", behavior: "smooth" });
+      } catch {
+        try { els.sunoPersonaId.scrollIntoView(); } catch {}
+      }
+      setTimeout(() => {
+        try { els.sunoPersonaId.focus(); } catch {}
+      }, 180);
+    }
+  });
+}
+if (els.personaActiveBannerClear) {
+  els.personaActiveBannerClear.addEventListener("click", () => {
+    if (els.sunoPersonaId) els.sunoPersonaId.value = "";
+    savePersonaSelection("");
+    updateProfilePersonaRow();
+    renderActivePersonaBanner();
+    try {
+      showToast("Voice persona cleared. Default voice will be used.", { icon: "✓", durationMs: 2200 });
+    } catch {}
   });
 }
 if (els.btnCreatePersona) {

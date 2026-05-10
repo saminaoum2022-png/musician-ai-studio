@@ -29,7 +29,7 @@
     <link rel="dns-prefetch" href="https://cdn2.suno.ai" />
     <link rel="dns-prefetch" href="https://cdn4.suno.ai" />
     <link rel="dns-prefetch" href="https://suno.com" />
-    <link rel="stylesheet" href="./styles.css?v=20260510personawin" />
+    <link rel="stylesheet" href="./styles.css?v=20260510creditsfix" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -371,6 +371,24 @@
                 <div class="remixSourceBannerSub" id="remixSourceSub">Your new lyrics will be sung over this melody.</div>
               </div>
               <button id="remixSourceCancel" class="remixSourceBannerClose" type="button" aria-label="Cancel remix">
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                  <path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/>
+                </svg>
+              </button>
+            </div>
+            <div id="personaActiveBanner" class="remixSourceBanner personaActiveBanner" hidden>
+              <div class="personaActiveBannerIcon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="20" height="20" focusable="false">
+                  <path fill="currentColor" d="M12 14.25a3.5 3.5 0 0 0 3.5-3.5V6.5a3.5 3.5 0 1 0-7 0v4.25a3.5 3.5 0 0 0 3.5 3.5Zm5.75-3.5a.75.75 0 0 1 1.5 0 7.25 7.25 0 0 1-6.5 7.21V20a.75.75 0 0 1-1.5 0v-2.04a7.25 7.25 0 0 1-6.5-7.21.75.75 0 0 1 1.5 0 5.75 5.75 0 0 0 11.5 0Z"/>
+                </svg>
+              </div>
+              <div class="remixSourceBannerBody">
+                <div class="remixSourceBannerKicker">Singing voice</div>
+                <div class="remixSourceBannerTitle" id="personaActiveBannerLabel">Persona</div>
+                <div class="remixSourceBannerSub">Your next song will use this voice. Tap Change to swap or clear it.</div>
+              </div>
+              <button id="personaActiveBannerChange" class="personaActiveBannerChange" type="button">Change</button>
+              <button id="personaActiveBannerClear" class="remixSourceBannerClose" type="button" aria-label="Clear voice persona">
                 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
                   <path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/>
                 </svg>
@@ -1738,6 +1756,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260510personawin"></script>
+    <script type="module" src="./src/app.js?v=20260510personavoice"></script>
   </body>
 </html>

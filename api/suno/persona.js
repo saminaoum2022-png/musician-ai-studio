@@ -8,15 +8,32 @@
  *   Requirements:  source must be a completed V4+ generation, and each
  *                  audioId can only generate a Persona once.
  *
+ * Credits:
+ *   Debits PERSONA_COST profile credits BEFORE calling Suno. Refunds in
+ *   full if Suno rejects synchronously (HTTP error or non-200 code) so
+ *   the user is never charged for a request Suno didn't accept.
+ *
  * Env:
- *   SUNO_API_KEY
+ *   SUNO_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
  */
+const {
+  verifyUser,
+  callRpc,
+} = require("../_lib/credits-auth");
+
+const PERSONA_COST = 5;
+
 module.exports = async function handler(req, res) {
   try {
     if (req.method !== "POST") return json(res, 405, { error: "Method not allowed" });
 
     const apiKey = process.env.SUNO_API_KEY;
     if (!apiKey) return json(res, 500, { error: "Missing SUNO_API_KEY on server" });
+
+    const user = await verifyUser(req);
+    if (!user) {
+      return json(res, 401, { error: "Sign in to save a persona." });
+    }
 
     const body = await readJson(req);
     const taskId = String(body?.taskId || "").trim();
@@ -31,6 +48,42 @@ module.exports = async function handler(req, res) {
     if (!audioId) return json(res, 400, { error: "Missing audioId" });
     if (!name) return json(res, 400, { error: "Missing name" });
     if (!description) return json(res, 400, { error: "Missing description" });
+
+    const debit = await callRpc("consume_credits", {
+      p_user_id: user.userId,
+      p_amount: PERSONA_COST,
+      p_reason: "persona_create",
+      p_ref: audioId,
+    });
+    if (!debit.ok || !debit.data?.ok) {
+      const status = String(debit.data?.status || "");
+      if (status === "insufficient") {
+        return json(res, 402, {
+          error: "Not enough credits",
+          code: "insufficient_credits",
+          balance: Number(debit.data?.balance || 0),
+          needed: PERSONA_COST,
+          message:
+            debit.data?.message ||
+            `Saving a voice persona costs ${PERSONA_COST} credits. Redeem a code from your Profile.`,
+        });
+      }
+      return json(res, 500, {
+        error: "Credit check failed",
+        details: debit.data || debit.error || null,
+      });
+    }
+    const balanceAfterDebit = Number(debit.data?.balance || 0);
+    const refund = async (refLabel) => {
+      try {
+        await callRpc("refund_credits", {
+          p_user_id: user.userId,
+          p_amount: PERSONA_COST,
+          p_reason: "refund_persona_create",
+          p_ref: refLabel || "",
+        });
+      } catch {}
+    };
 
     const payload = {
       taskId,
@@ -77,6 +130,7 @@ module.exports = async function handler(req, res) {
           await sleep(1500);
           continue;
         }
+        await refund("persona_network_error");
         return json(res, 502, {
           error: "Persona request failed",
           details: e?.message || String(e),
@@ -102,6 +156,7 @@ module.exports = async function handler(req, res) {
       const upstreamMsg =
         (data && (data.msg || data.message || data.error)) ||
         (typeof text === "string" ? text.slice(0, 200) : "");
+      await refund(`suno_http_${r.status}`);
       return json(res, r.status, {
         error: upstreamMsg
           ? `Upstream Suno persona error: ${String(upstreamMsg).slice(0, 200)}`
@@ -117,6 +172,7 @@ module.exports = async function handler(req, res) {
       const detailedMsg = data?.msg && !friendly.includes(data.msg)
         ? `${friendly} (Suno: ${String(data.msg).slice(0, 160)})`
         : friendly;
+      await refund(`suno_code_${upstreamCode}`);
       return json(res, 502, {
         error: detailedMsg,
         code: upstreamCode,
@@ -136,6 +192,10 @@ module.exports = async function handler(req, res) {
       ...(data || { raw: text }),
       personaId,
       endpoint: url,
+      _credits: {
+        spent: PERSONA_COST,
+        balance: balanceAfterDebit,
+      },
     });
   } catch (e) {
     return json(res, 500, { error: e?.message || String(e) });

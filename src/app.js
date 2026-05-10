@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510personavoice";
+const APP_BUILD = "20260510creditsfix";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -5232,9 +5232,13 @@ async function createPersonaForSong({
       });
     } catch {}
 
+    const personaAuthToken = getSupabaseAuthToken();
     const r = await fetch(apiUrl("/api/suno/persona"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(personaAuthToken ? { Authorization: `Bearer ${personaAuthToken}` } : {}),
+      },
       body: JSON.stringify({
         taskId: tId,
         audioId: aId,
@@ -5245,6 +5249,13 @@ async function createPersonaForSong({
       }),
     });
     const d = await r.json().catch(() => ({}));
+    if (r.status === 402 || d?.code === "insufficient_credits") {
+      const need = Number(d?.needed ?? 5);
+      const have = Number(d?.balance || 0);
+      throw new Error(
+        `Not enough credits to save a persona (you have ${have}, need ${need}). Open Profile → Credits to redeem a code.`
+      );
+    }
     if (!r.ok) {
       try {
         console.warn("[persona] failed", { status: r.status, response: d });
@@ -5274,6 +5285,11 @@ async function createPersonaForSong({
       }
       throw new Error(`${baseMsg}${hint}${probeNote}`);
     }
+    // After a successful save, sync the displayed credit balance so
+    // the user sees the deduction immediately.
+    try {
+      if (typeof refreshMyCredits === "function") void refreshMyCredits({ silent: true });
+    } catch {}
     const personaId = String(d?.personaId || "").trim();
     if (!personaId) throw new Error("Persona created but ID was missing.");
 
@@ -6886,13 +6902,27 @@ function bindLibraryDelegatedListeners() {
           try {
             setStatus("Getting instrumental for selected song…");
             setLoading(true, { title: "Getting your instrumental version…", sub: "Processing selected library song." });
+            const stemsTok = getSupabaseAuthToken();
             const r = await fetch(apiUrl("/api/suno/stems"), {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                ...(stemsTok ? { Authorization: `Bearer ${stemsTok}` } : {}),
+              },
               body: JSON.stringify({ taskId: t.taskId, audioId: t.audioId, type: "separate_vocal" }),
             });
             const d = await r.json().catch(() => ({}));
+            if (r.status === 402 || d?.code === "insufficient_credits") {
+              const need = Number(d?.needed ?? 2);
+              const have = Number(d?.balance || 0);
+              throw new Error(
+                `Not enough credits to extract vocals (you have ${have}, need ${need}). Open Profile → Credits to redeem a code.`
+              );
+            }
             if (!r.ok) throw new Error(d?.error || "Instrumental request failed");
+            try {
+              if (typeof refreshMyCredits === "function") void refreshMyCredits({ silent: true });
+            } catch {}
             sunoStemsTaskId = d?.data?.taskId || d?.data?.task_id || d?.taskId || null;
             if (!sunoStemsTaskId) throw new Error("Missing stems task id");
             setStatus("Instrumental requested from library song. Processing now…");
@@ -10725,8 +10755,20 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             // The server already has its own copy in the multipart body, so any
             // residual state here can only cause stale-reuse on the next run.
             try { clearVocalReferenceSelection(); } catch {}
-            const rr = await fetch(apiUrl("/api/suno/stems"), { method: "POST", body: fd });
+            const stemsTok = getSupabaseAuthToken();
+            const rr = await fetch(apiUrl("/api/suno/stems"), {
+              method: "POST",
+              headers: stemsTok ? { Authorization: `Bearer ${stemsTok}` } : undefined,
+              body: fd,
+            });
             const dd = await rr.json().catch(() => ({}));
+            if (rr.status === 402 || dd?.code === "insufficient_credits") {
+              const need = Number(dd?.needed ?? 10);
+              const have = Number(dd?.balance || 0);
+              throw new Error(
+                `Not enough credits for this generation (you have ${have}, need ${need}). Open Profile → Credits to redeem a code.`
+              );
+            }
             if (!rr.ok) {
               const more = dd?.detailMessage || dd?.details?.message || dd?.details?.error || "";
               throw new Error(`${dd?.error || "Reference upload failed"}${more ? `: ${more}` : ""}`);
@@ -10739,6 +10781,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               const nestedErr = dd?.data?.msg || dd?.data?.message || dd?.data?.error || "Reference upload failed";
               throw new Error(`Suno rejected reference upload: ${nestedErr}`);
             }
+            try {
+              if (typeof refreshMyCredits === "function") void refreshMyCredits({ silent: true });
+            } catch {}
             return dd;
           }
 
@@ -11137,13 +11182,27 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const data = await trackCreditsAround(
         "Suno: instrumental version",
         async () => {
+          const stemsTok = getSupabaseAuthToken();
           const r = await fetch(apiUrl("/api/suno/stems"), {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              ...(stemsTok ? { Authorization: `Bearer ${stemsTok}` } : {}),
+            },
             body: JSON.stringify({ taskId: sunoTaskId, audioId: sunoAudioId, type: "separate_vocal" }),
           });
           const d = await r.json().catch(() => ({}));
+          if (r.status === 402 || d?.code === "insufficient_credits") {
+            const need = Number(d?.needed ?? 2);
+            const have = Number(d?.balance || 0);
+            throw new Error(
+              `Not enough credits to extract vocals (you have ${have}, need ${need}). Open Profile → Credits to redeem a code.`
+            );
+          }
           if (!r.ok) throw new Error(d?.error || "Stem request failed");
+          try {
+            if (typeof refreshMyCredits === "function") void refreshMyCredits({ silent: true });
+          } catch {}
           return d;
         },
         `taskId=${sunoTaskId}`
@@ -11187,12 +11246,26 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         const data = await trackCreditsAround(
           "Suno: multi-stems",
           async () => {
+            const stemsTok = getSupabaseAuthToken();
             const r = await fetch(apiUrl("/api/suno/stems"), {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                ...(stemsTok ? { Authorization: `Bearer ${stemsTok}` } : {}),
+              },
               body: JSON.stringify({ taskId: sunoTaskId, audioId: sunoAudioId, type: "split_stem" }),
             });
             const d = await r.json().catch(() => ({}));
+            if (r.status === 402 || d?.code === "insufficient_credits") {
+              const need = Number(d?.needed ?? 2);
+              const have = Number(d?.balance || 0);
+              throw new Error(
+                `Not enough credits to split stems (you have ${have}, need ${need}). Open Profile → Credits to redeem a code.`
+              );
+            }
+            try {
+              if (typeof refreshMyCredits === "function") void refreshMyCredits({ silent: true });
+            } catch {}
             if (!r.ok) throw new Error(d?.error || "Multi-stems request failed");
             return d;
           },

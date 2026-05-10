@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511nomix";
+const APP_BUILD = "20260511addinst";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -10278,18 +10278,18 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     });
   }
   // Hum-tab output pill — two modes:
-  //   Full song  -> Suno upload-cover (AI re-sings your lyrics; vocalInstrumentalOnly=0)
-  //   Backing    -> Suno add-instrumental (band only; vocalInstrumentalOnly=1)
+  //   Full song        -> Suno upload-cover (AI re-sings your lyrics; vocalInstrumentalOnly=0)
+  //   Add Instrumental -> Suno add-instrumental (band built around your audio,
+  //                       your vocal stays in the result; vocalInstrumentalOnly=1)
   const syncVocalModeUi = () => {
     const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
     if (els.vocalModeFull) els.vocalModeFull.classList.toggle("active", !instrumental);
     if (els.vocalModeInstrumental) els.vocalModeInstrumental.classList.toggle("active", instrumental);
-    // The lyrics field is OPTIONAL in Backing mode (band-only output —
-    // Suno doesn't need lyrics). Update the placeholder so users don't
-    // think it's required. Default placeholder restored for Full song.
+    // Lyrics field is optional when adding instrumental (Suno builds a band
+    // around the audio you uploaded; lyrics not needed).
     if (els.sunoPrompt) {
       els.sunoPrompt.placeholder = instrumental
-        ? "Lyrics — optional. Output is band-only."
+        ? "Lyrics — optional. Suno will build an instrumental band under your vocal."
         : "Write your lyrics here...";
     }
   };
@@ -11389,7 +11389,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
 
     if (wantsBackingTrack && !vocalRefFile) {
       window.alert(
-        "Backing track needs a vocal/melody attached.\n\n" +
+        "Add Instrumental needs a vocal/melody attached.\n\n" +
         "Tap '+ Audio' to upload, or 'Record' to record your voice/hum first, " +
         "then tap Generate."
       );
@@ -11407,7 +11407,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const hubRemixLocked = Boolean(currentRemixSource?.id);
       const modeLabel = hasReference
         ? referenceInstrumentalOnly
-          ? "Reference: Backing track (locked to your melody)"
+          ? "Reference: Add Instrumental (band under your vocal)"
           : hubRemixLocked
             ? "Hub remix (melody / arrangement locked)"
             : "Reference: Full song"

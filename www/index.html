@@ -29,7 +29,7 @@
     <link rel="dns-prefetch" href="https://cdn2.suno.ai" />
     <link rel="dns-prefetch" href="https://cdn4.suno.ai" />
     <link rel="dns-prefetch" href="https://suno.com" />
-    <link rel="stylesheet" href="./styles.css?v=20260511nomix" />
+    <link rel="stylesheet" href="./styles.css?v=20260511addinst" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -447,7 +447,7 @@
                     </div>
                     <div class="segPill vocalModePill" role="group" aria-label="Vocal output mode">
                       <button id="vocalModeFull" type="button" class="ghost active" title="AI sings your lyrics on a new arrangement (your voice is replaced)">Full song</button>
-                      <button id="vocalModeInstrumental" type="button" class="ghost" title="Generates a backing band that follows your melody — no vocals in the result">Backing track</button>
+                      <button id="vocalModeInstrumental" type="button" class="ghost" title="Suno builds an instrumental band around your uploaded audio. Your vocal stays in the result.">Add Instrumental</button>
                     </div>
                     <input id="vocalInstrumentalOnly" type="hidden" value="0" />
                     <div id="vocalRefActiveStrip" class="vocalRefActiveStrip" hidden>
@@ -466,7 +466,7 @@
                       Audio reference attached. Choose:
                       <ul class="vocalRefHintList">
                         <li><strong>Full song</strong> — AI re-sings your lyrics on a new arrangement.</li>
-                        <li><strong>Backing track</strong> — band that follows your melody, no vocals.</li>
+                        <li><strong>Add Instrumental</strong> — Suno builds a band around your audio. Your vocal stays in the final mix.</li>
                       </ul>
                     </div>
                   </div>
@@ -1808,6 +1808,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260511nomix"></script>
+    <script type="module" src="./src/app.js?v=20260511addinst"></script>
   </body>
 </html>

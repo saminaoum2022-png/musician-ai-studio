@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510usernamelock";
+const APP_BUILD = "20260511callcardunlock";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -497,40 +497,67 @@ function updateHubAudioHint() {
   els.hubAudioHint.style.display = hasAudio ? "" : "none";
 }
 
+/** Prime a single <audio> element inside a user gesture so iOS will
+ *  let us play() it later from a non-gesture context (e.g. after an
+ *  async network fetch). We do this by calling play() with a silent
+ *  muted data URL, then immediately pausing and clearing the src so
+ *  the element is ready to receive a real source.
+ *
+ *  This is the only thing iOS Safari reliably accepts as an "audio
+ *  unlock". It must happen synchronously inside the gesture handler.
+ */
+function primeAudioElementInGesture(a) {
+  if (!a) return;
+  try {
+    a.muted = true;
+    const prevSrc = a.src;
+    a.src = HUB_AUDIO_SILENT_SRC;
+    const p = a.play();
+    const cleanup = () => {
+      try { a.pause(); } catch {}
+      try { a.muted = false; } catch {}
+      try {
+        if (a.src && a.src.startsWith("data:")) {
+          a.removeAttribute("src");
+          a.load();
+        } else if (prevSrc) {
+          a.src = prevSrc;
+        }
+      } catch {}
+    };
+    if (p && typeof p.then === "function") {
+      p.then(cleanup).catch(() => { try { a.muted = false; } catch {} });
+    } else {
+      cleanup();
+    }
+  } catch {}
+}
+
 let _hubAudioUnlockArmed = false;
 function installHubAudioUnlockOnce() {
   if (_hubAudioUnlockArmed) return;
   if (getHubAudioUnlocked()) return;
   _hubAudioUnlockArmed = true;
   const handler = () => {
+    // Prime ALL audio elements that may need to autoplay later in
+    // this session. iOS Safari unlocks autoplay per-element, not
+    // per-document, so unlocking only the Hub element wasn't enough
+    // for the calling card on guest profile visits — by the time we
+    // finished fetching the card URL, the gesture was stale and
+    // play() was rejected silently.
+    //
+    // The calling card is the most affected because its play() is
+    // gated behind an async fetch. The Hub player is also primed
+    // (was always primed). The Library player is intentionally NOT
+    // primed here — it always plays from a direct user tap so the
+    // gesture is never stale.
+    primeAudioElementInGesture(ensureHubAudio());
     try {
-      const a = ensureHubAudio();
-      a.muted = true;
-      const prevSrc = a.src;
-      a.src = HUB_AUDIO_SILENT_SRC;
-      const p = a.play();
-      const cleanup = () => {
-        try { a.pause(); } catch {}
-        try { a.muted = false; } catch {}
-        // Don't leave the silent src hanging — clear it so a real
-        // post URL set later doesn't have to fight the data URL.
-        try {
-          if (a.src && a.src.startsWith("data:")) {
-            a.removeAttribute("src");
-            a.load();
-          } else if (prevSrc) {
-            a.src = prevSrc;
-          }
-        } catch {}
-        setHubAudioUnlocked();
-        updateHubAudioHint();
-      };
-      if (p && typeof p.then === "function") {
-        p.then(cleanup).catch(() => { try { a.muted = false; } catch {} });
-      } else {
-        cleanup();
-      }
+      const cardAudio = els.userPublicCallingCardAudio;
+      if (cardAudio) primeAudioElementInGesture(cardAudio);
     } catch {}
+    setHubAudioUnlocked();
+    updateHubAudioHint();
     document.removeEventListener("touchstart", handler, true);
     document.removeEventListener("click", handler, true);
   };
@@ -2504,12 +2531,19 @@ async function refreshUserPublicCallingCard(rawUsername) {
   if (!isCallingCardAutoplayEnabled()) return;
   if (hasAutoplayedCallingCardOnce()) return;
 
-  markAutoplayedCallingCardOnce();
   audio.volume = CALLING_CARD_PLAYBACK_VOL;
   try {
     await audio.play();
+    // Only mark "autoplayed once" after a successful play — otherwise
+    // a denied autoplay (no prior gesture, autoplay policy, etc.)
+    // would burn the one-shot and the user would never get the
+    // feature even on a later visit that does have a gesture.
+    markAutoplayedCallingCardOnce();
   } catch {
     chip.dataset.state = "idle";
+    // Surface a tiny "tap to play" hint via the chip's existing
+    // visible state — the chip is already clickable, so the user
+    // can recover by tapping it.
   }
 }
 

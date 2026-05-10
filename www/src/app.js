@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510iosnoselect";
+const APP_BUILD = "20260510remixfetch";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1689,6 +1689,99 @@ function renderRemixSourceBanner() {
   }
 }
 
+/** Fetch any audio URL and return its Blob. Tries the same-origin proxy
+ *  first (handles CORS-locked CDNs reliably); on network or upstream
+ *  failure, falls back to the raw URL when it's already same-origin or
+ *  obviously CORS-permissive. Adds a 25s timeout so we don't hang
+ *  forever on a stuck connection.
+ *
+ *  Returns the Blob on success. Throws an Error with a useful message
+ *  describing where the failure happened. */
+async function fetchAudioForRemix(rawUrl) {
+  const original = String(rawUrl || "").trim();
+  if (!original || original === "#") {
+    throw new Error("This post has no audio URL");
+  }
+  // blob: URLs (a freshly-shared local placeholder) — fetch directly,
+  // they live in the current document context.
+  if (original.startsWith("blob:") || original.startsWith("data:")) {
+    const r = await fetch(original);
+    if (!r.ok) throw new Error(`Local source unreachable (${r.status})`);
+    return r.blob();
+  }
+
+  const proxyOnce = async (target) => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 25000);
+    try {
+      const r = await fetch(target, {
+        method: "GET",
+        cache: "no-store",
+        signal: ctrl.signal,
+        credentials: "omit",
+      });
+      if (!r.ok) {
+        let detail = "";
+        try {
+          const ct = r.headers.get("content-type") || "";
+          if (ct.includes("application/json")) {
+            const j = await r.json();
+            detail = j?.error || j?.message || JSON.stringify(j).slice(0, 140);
+          } else {
+            detail = (await r.text()).slice(0, 140);
+          }
+        } catch {}
+        const msg = detail ? `${r.status} — ${detail}` : `HTTP ${r.status}`;
+        const err = new Error(msg);
+        err._httpStatus = r.status;
+        throw err;
+      }
+      const blob = await r.blob();
+      if (!blob || blob.size < 1024) throw new Error("Source audio is empty");
+      return blob;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  // Pick a sensible first attempt. If `original` is ALREADY a
+  // `/api/suno/audio?url=…` wrapper, hit it directly (don't double-wrap)
+  // so the server doesn't try to URL-parse a relative path. Otherwise,
+  // wrap into the proxy.
+  let firstUrl;
+  if (original.includes("/api/suno/audio?")) {
+    firstUrl = hubAbsoluteUrl(original);
+  } else if (/^https?:\/\//i.test(original)) {
+    firstUrl = hubAbsoluteUrl(toAudioProxyUrl(original));
+  } else {
+    firstUrl = hubAbsoluteUrl(original);
+  }
+
+  try {
+    return await proxyOnce(firstUrl);
+  } catch (eFirst) {
+    console.warn("[remix] proxy fetch failed", { firstUrl, err: eFirst });
+    // Last-ditch: try the raw CDN URL directly. Will only work if the
+    // CDN sets permissive CORS, but it's a free retry — we already
+    // know the proxy didn't deliver. This commonly rescues iOS Safari
+    // when the serverless function timed out on a slow backend.
+    if (/^https?:\/\//i.test(original) && original !== firstUrl) {
+      try {
+        return await proxyOnce(original);
+      } catch (eSecond) {
+        console.warn("[remix] direct fetch failed", { original, err: eSecond });
+        // Surface the most informative error.
+        const reason =
+          eFirst?.message && eFirst.message !== "Failed to fetch"
+            ? eFirst.message
+            : eSecond?.message || "Network error";
+        throw new Error(reason);
+      }
+    }
+    throw eFirst;
+  }
+}
+
 async function startHubRemix(post) {
   if (!post || !post.url) {
     showToast("Cannot remix: this post has no audio.", { icon: "!", durationMs: 3200 });
@@ -1697,11 +1790,7 @@ async function startHubRemix(post) {
   try {
     setStatus("Loading remix source…");
     showToast("Loading remix source…", { icon: "♪", durationMs: 1600 });
-    const proxied = apiUrl(`/api/suno/audio?url=${encodeURIComponent(String(post.url))}`);
-    const r = await fetch(proxied, { method: "GET", cache: "no-store" });
-    if (!r.ok) throw new Error(`Failed to fetch source (${r.status})`);
-    const blob = await r.blob();
-    if (!blob || blob.size < 1024) throw new Error("Source audio is empty");
+    const blob = await fetchAudioForRemix(post.url);
     const mime = blob.type && blob.type !== "application/octet-stream" ? blob.type : "audio/mpeg";
     const ext = mime.includes("mpeg") ? "mp3" : (mime.split("/")[1] || "mp3").split(";")[0];
     const safeBase = String(post.title || "remix-source")
@@ -1728,7 +1817,15 @@ async function startHubRemix(post) {
     try { syncGenerateOrbVisibility(); } catch {}
   } catch (e) {
     console.error("[hub remix] failed", e);
-    showToast(`Could not load remix source: ${e?.message || "error"}`, { icon: "!", durationMs: 3600 });
+    const baseMsg = String(e?.message || "error");
+    // Translate the obscure native fetch errors into something the user
+    // can act on. "Failed to fetch" is what every browser throws when
+    // the network request never lands — usually means the proxy
+    // timed out, the device is offline, or a service worker blocked it.
+    const friendly = /failed to fetch|networkerror|load failed/i.test(baseMsg)
+      ? "Network blocked the source — check your connection or try again."
+      : baseMsg;
+    showToast(`Could not load remix source: ${friendly}`, { icon: "!", durationMs: 3600 });
     setStatus("Remix could not be loaded.");
   }
 }

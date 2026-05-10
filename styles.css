@@ -1843,18 +1843,28 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   z-index: 200;
   pointer-events: none;
   opacity: 0;
-  max-width: 86vw;
+  /* Generous max so long error messages (e.g. Suno's upstream
+   * verbatim) actually fit on a phone. Multi-line is allowed. */
+  max-width: min(560px, calc(100vw - 24px));
   padding: 11px 16px;
-  border-radius: 999px;
+  /* 18px keeps a soft, modern look on multi-line copy. The previous
+   * 999px (pill) made tall multi-line cards look like a stretched
+   * lozenge, which is also why long text was clamped to a single line. */
+  border-radius: 18px;
   border: 1px solid rgba(255,255,255,0.16);
   background: linear-gradient(180deg, rgba(28,33,52,0.96), rgba(14,18,30,0.94));
   color: #f0f4ff;
   font-size: 13.5px;
   font-weight: 600;
   letter-spacing: 0.1px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.42;
+  /* Wrap freely; preserve hard line breaks so we can format error
+   * details with newlines if needed. Long words / URLs break instead
+   * of pushing the layout off-screen. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-align: left;
   box-shadow:
     0 12px 36px -12px rgba(0,0,0,0.55),
     0 0 0 1px rgba(124, 92, 255, 0.22) inset;
@@ -1866,11 +1876,20 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   opacity: 1;
   transform: translate(-50%, 0);
   pointer-events: auto;
+  /* Make it obvious it can be tapped to dismiss when long. */
+  cursor: pointer;
 }
 .toast .toastIcon{
   display:inline-block;
   margin-right: 7px;
   color: #b8a6ff;
+  flex: 0 0 auto;
+}
+/* Stay slim on short single-line content; extend gracefully when long. */
+.toast.isLong{
+  padding: 12px 18px 14px;
+  font-weight: 500;
+  letter-spacing: 0.05px;
 }
 @media (prefers-reduced-motion: reduce){
   .toast{ transition: opacity 120ms linear; }

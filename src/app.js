@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510personaretry";
+const APP_BUILD = "20260510toastwrap";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -8408,15 +8408,39 @@ function showToast(message, opts) {
   el.innerHTML = icon
     ? `<span class="toastIcon" aria-hidden="true">${escapeHtml(icon)}</span>${escapeHtml(text)}`
     : escapeHtml(text);
+
+  // Long messages (e.g. upstream Suno error bodies) need extra room
+  // and reading time. Anything past ~70 chars gets the multi-line
+  // card style and a longer auto-dismiss.
+  const isLong = text.length > 70 || /\n/.test(text);
+  el.classList.toggle("isLong", isLong);
+
   el.classList.add("show");
   if (toastDismissTimer) {
     try { clearTimeout(toastDismissTimer); } catch {}
   }
-  const ms = Math.max(1200, Math.min(5000, Number(opts?.durationMs) || 2200));
+  // Default windows: 2.2s for short, 7s for long. Caller can still
+  // override via durationMs but we cap at 12s so the UI never stays
+  // stuck behind a forgotten toast.
+  const baseDefault = isLong ? 7000 : 2200;
+  const ms = Math.max(1200, Math.min(12000, Number(opts?.durationMs) || baseDefault));
   toastDismissTimer = setTimeout(() => {
     el.classList.remove("show");
+    el.classList.remove("isLong");
     toastDismissTimer = null;
   }, ms);
+
+  // Tap-to-dismiss for long toasts so the user can clear them on
+  // their own schedule once they've finished reading. We rebind
+  // each call so the latest text is what's dismissed cleanly.
+  el.onclick = () => {
+    if (toastDismissTimer) {
+      try { clearTimeout(toastDismissTimer); } catch {}
+      toastDismissTimer = null;
+    }
+    el.classList.remove("show");
+    el.classList.remove("isLong");
+  };
 }
 function showShareToast(message) {
   showToast(message, { icon: "✓" });

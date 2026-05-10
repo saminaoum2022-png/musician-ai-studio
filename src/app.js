@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510personadiag";
+const APP_BUILD = "20260510personabanner";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -44,6 +44,10 @@ const els = {
   remixSourceTitle: document.getElementById("remixSourceTitle"),
   remixSourceSub: document.getElementById("remixSourceSub"),
   remixSourceCancel: document.getElementById("remixSourceCancel"),
+  personaActiveBanner: document.getElementById("personaActiveBanner"),
+  personaActiveBannerLabel: document.getElementById("personaActiveBannerLabel"),
+  personaActiveBannerChange: document.getElementById("personaActiveBannerChange"),
+  personaActiveBannerClear: document.getElementById("personaActiveBannerClear"),
   sunoReferenceMode: document.getElementById("sunoReferenceMode"),
   sunoReferenceHint: document.getElementById("sunoReferenceHint"),
   btnVocalRefRec: document.getElementById("btnVocalRefRec"),
@@ -2670,6 +2674,46 @@ function updateProfilePersonaRow() {
     els.profilePersonaLabel.textContent = "No persona selected";
     if (hint) hint.style.display = "";
   }
+  renderActivePersonaBanner();
+}
+
+/**
+ * Persona-active banner on the Create page.
+ *
+ * Mirrors the Remix banner pattern: when a persona is the current
+ * selection (either coming from Profile via "Open Create" or chosen
+ * directly inside Advanced options), surface it at the top of the
+ * Create page so the user can:
+ *   - see *which* voice is going into the next song,
+ *   - jump straight into Advanced options to swap it (Change), or
+ *   - clear it back to default voice (×).
+ *
+ * The banner is rendered on every persona-state change AND on route
+ * change to "generate" so that returning to Create after selecting a
+ * persona elsewhere shows the right state immediately.
+ */
+function renderActivePersonaBanner() {
+  if (!els.personaActiveBanner || !els.personaActiveBannerLabel) return;
+  const idFromSelect = String(els.sunoPersonaId?.value || "").trim();
+  const idSaved = (() => {
+    try { return loadPersonaSelection().trim(); } catch { return ""; }
+  })();
+  const id = idFromSelect || idSaved;
+  if (!id) {
+    els.personaActiveBanner.hidden = true;
+    return;
+  }
+  const list = loadPersonas();
+  const hit = list.find((x) => String(x.personaId) === id);
+  // Don't show a banner for an id we no longer recognize locally —
+  // could be from a prior account or a deleted persona.
+  if (!hit) {
+    els.personaActiveBanner.hidden = true;
+    return;
+  }
+  const label = String(hit.label || id.slice(0, 12) + "…").trim() || "Persona";
+  els.personaActiveBannerLabel.textContent = label;
+  els.personaActiveBanner.hidden = false;
 }
 const AUTH_SESSION_KEY = "mas:supabase:session:v1";
 const AUTH_PKCE_KEY = "mas:supabase:pkce:v1";
@@ -12733,6 +12777,38 @@ if (els.sunoPersonaId) {
   els.sunoPersonaId.addEventListener("change", () => {
     savePersonaSelection(String(els.sunoPersonaId.value || ""));
     updateProfilePersonaRow();
+    renderActivePersonaBanner();
+  });
+}
+if (els.personaActiveBannerChange && els.advancedSheet) {
+  els.personaActiveBannerChange.addEventListener("click", () => {
+    // Same opening behavior as the main "Open advanced options" button.
+    els.advancedSheet.open = true;
+    if (els.fineTuneDetails) els.fineTuneDetails.open = true;
+    els.advancedSheet.scrollTop = 0;
+    if (els.sunoPersonaId) {
+      try {
+        // Bring the persona dropdown directly into view + focus so the
+        // user can swap voices in one tap, instead of hunting for it.
+        els.sunoPersonaId.scrollIntoView({ block: "center", behavior: "smooth" });
+      } catch {
+        try { els.sunoPersonaId.scrollIntoView(); } catch {}
+      }
+      setTimeout(() => {
+        try { els.sunoPersonaId.focus(); } catch {}
+      }, 180);
+    }
+  });
+}
+if (els.personaActiveBannerClear) {
+  els.personaActiveBannerClear.addEventListener("click", () => {
+    if (els.sunoPersonaId) els.sunoPersonaId.value = "";
+    savePersonaSelection("");
+    updateProfilePersonaRow();
+    renderActivePersonaBanner();
+    try {
+      showToast("Voice persona cleared. Default voice will be used.", { icon: "✓", durationMs: 2200 });
+    } catch {}
   });
 }
 if (els.btnCreatePersona) {

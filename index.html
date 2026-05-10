@@ -29,7 +29,7 @@
     <link rel="dns-prefetch" href="https://cdn2.suno.ai" />
     <link rel="dns-prefetch" href="https://cdn4.suno.ai" />
     <link rel="dns-prefetch" href="https://suno.com" />
-    <link rel="stylesheet" href="./styles.css?v=20260510callcard" />
+    <link rel="stylesheet" href="./styles.css?v=20260510voicechip" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -784,34 +784,33 @@
         <section class="card wide" data-route="user">
           <div class="userPublic" id="userPublicCard">
             <div class="userPublicHead">
-              <img id="userPublicAvatar" class="userPublicAvatar" alt="avatar" />
+              <img id="userPublicAvatar" class="userPublicAvatar" alt="avatar" draggable="false" />
               <div class="userPublicMeta">
                 <div class="userPublicName" id="userPublicName">@user</div>
-                <div class="userPublicVoice" id="userPublicVoice"></div>
+                <!-- Unified voice chip on the public profile. When the
+                     creator has a calling card, this chip becomes the
+                     play/pause button (and autoplays once per device
+                     on the first profile visit). When there's no card,
+                     it falls back to a static "Voice · X" label. -->
+                <button
+                  id="userPublicVoice"
+                  class="userPublicVoice profileAuraVoiceChip profileAuraVoiceChipBtn"
+                  type="button"
+                  data-state="idle"
+                  data-has-card="false"
+                  style="display:none"
+                  aria-label="Voice"
+                >
+                  <span class="profileAuraVoiceChipIcon" aria-hidden="true"></span>
+                  <span class="profileAuraVoiceChipText">Voice</span>
+                  <span class="profileAuraVoiceChipWave" aria-hidden="true">
+                    <span></span><span></span><span></span><span></span><span></span>
+                  </span>
+                </button>
               </div>
               <button id="btnUserPublicBack" class="ghost userPublicBack" type="button" aria-label="Back">← Back</button>
             </div>
             <div class="userPublicBio" id="userPublicBio"></div>
-            <!-- Calling card mini-player. Hidden until we know the creator
-                 has a card. Auto-plays once on the very first profile
-                 visit (any profile), tap-to-play after that. -->
-            <button
-              id="userPublicCallingCard"
-              class="callingCardChip"
-              type="button"
-              style="display:none"
-              aria-label="Play calling card"
-            >
-              <span class="callingCardChipDot" aria-hidden="true"></span>
-              <span class="callingCardChipLabel">
-                <span class="callingCardChipTitle">Voice note</span>
-                <span class="callingCardChipSub" id="userPublicCallingCardSub">Tap to play</span>
-              </span>
-              <span class="callingCardChipWave" aria-hidden="true">
-                <span></span><span></span><span></span><span></span>
-                <span></span><span></span><span></span>
-              </span>
-            </button>
             <audio id="userPublicCallingCardAudio" preload="none" playsinline></audio>
             <div class="userPublicStats" id="userPublicStats"></div>
             <div class="userPublicSongsHead">
@@ -888,23 +887,9 @@
                   class="profileAuraAvatar"
                   src="./assets/nabadai-logo.png"
                   alt="Your avatar"
+                  draggable="false"
                 />
                 <span id="profileAvatarEditHint" class="profileAuraAvatarHint" style="display:none">Photo</span>
-                <!-- Self-hint when no calling card exists yet. Tapping
-                     this badge (or long-pressing the avatar) opens the
-                     calling-card recorder. -->
-                <button
-                  type="button"
-                  id="profileCallingCardHint"
-                  class="profileCallingCardHint"
-                  style="display:none"
-                  aria-label="Record your voice note"
-                  title="Record a 8-sec voice note"
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 12a7 7 0 0 0 14 0M12 19v3"/>
-                  </svg>
-                </button>
               </div>
 
               <div class="profileAuraNameRow">
@@ -922,15 +907,37 @@
                 <span id="profilePreviewGenderIcon" class="profilePreviewGenderIcon profileAuraGender" style="display:none"></span>
               </div>
 
-              <select id="profilePreviewTimbreInput" class="profileAuraVoiceChip" disabled aria-label="Voice range">
-                <option value="" selected>Voice · not set</option>
-                <option value="bass">Voice · Bass</option>
-                <option value="baritone">Voice · Baritone</option>
-                <option value="tenor">Voice · Tenor</option>
-                <option value="alto">Voice · Alto</option>
-                <option value="mezzo_soprano">Voice · Mezzo-Soprano</option>
-                <option value="soprano">Voice · Soprano</option>
-              </select>
+              <!-- The voice chip is now context-aware. In edit mode it
+                   shows the timbre dropdown. In view mode it morphs into
+                   either "▶ Voice · X" (when a calling card exists,
+                   plays it) or "+ Add voice note" (own profile, no card,
+                   opens recorder). renderProfileAuraVoiceChip() owns
+                   the toggling. -->
+              <div class="profileAuraVoiceChipSlot" id="profileAuraVoiceChipSlot">
+                <select id="profilePreviewTimbreInput" class="profileAuraVoiceChip" disabled aria-label="Voice range">
+                  <option value="" selected>Voice · not set</option>
+                  <option value="bass">Voice · Bass</option>
+                  <option value="baritone">Voice · Baritone</option>
+                  <option value="tenor">Voice · Tenor</option>
+                  <option value="alto">Voice · Alto</option>
+                  <option value="mezzo_soprano">Voice · Mezzo-Soprano</option>
+                  <option value="soprano">Voice · Soprano</option>
+                </select>
+                <button
+                  id="profilePreviewVoiceChipBtn"
+                  class="profileAuraVoiceChip profileAuraVoiceChipBtn"
+                  type="button"
+                  data-state="idle"
+                  style="display:none"
+                  aria-label="Play voice note"
+                >
+                  <span class="profileAuraVoiceChipIcon" aria-hidden="true"></span>
+                  <span class="profileAuraVoiceChipText">Voice</span>
+                  <span class="profileAuraVoiceChipWave" aria-hidden="true">
+                    <span></span><span></span><span></span><span></span><span></span>
+                  </span>
+                </button>
+              </div>
 
               <textarea
                 id="profilePreviewBioInput"
@@ -1731,6 +1738,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260510callcard"></script>
+    <script type="module" src="./src/app.js?v=20260510voicechip"></script>
   </body>
 </html>

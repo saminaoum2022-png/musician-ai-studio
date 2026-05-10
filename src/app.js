@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510callcard";
+const APP_BUILD = "20260510voicechip";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -346,9 +346,8 @@ const els = {
   btnCallingCardSave: document.getElementById("btnCallingCardSave"),
   btnCallingCardDiscard: document.getElementById("btnCallingCardDiscard"),
   btnCallingCardDelete: document.getElementById("btnCallingCardDelete"),
-  profileCallingCardHint: document.getElementById("profileCallingCardHint"),
-  userPublicCallingCard: document.getElementById("userPublicCallingCard"),
-  userPublicCallingCardSub: document.getElementById("userPublicCallingCardSub"),
+  profileAuraVoiceChipSlot: document.getElementById("profileAuraVoiceChipSlot"),
+  profilePreviewVoiceChipBtn: document.getElementById("profilePreviewVoiceChipBtn"),
   userPublicCallingCardAudio: document.getElementById("userPublicCallingCardAudio"),
   settingsCallingCardAutoplay: document.getElementById("settingsCallingCardAutoplay"),
   shareLiveModal: document.getElementById("shareLiveModal"),
@@ -2192,16 +2191,120 @@ async function deleteExistingCallingCard() {
   closeCallingCardModal();
 }
 
-/** Show/hide the +mic hint badge over the user's own avatar. We only
- *  draw the hint when the signed-in user has no card yet — once they
- *  record one, the avatar goes back to clean. Long-press on the avatar
- *  always opens the recorder regardless. */
+/** Forward to the unified voice chip renderer. The floating mic-badge
+ *  has been retired — its job (signaling "you haven't recorded yet")
+ *  is now handled by the voice chip in `record` mode, which doubles as
+ *  the call-to-action and the play button once a card exists. */
 function renderProfileCallingCardHint() {
-  const hint = els.profileCallingCardHint;
-  if (!hint) return;
-  const signedIn = Boolean(authSession?.user?.id);
+  renderProfileAuraVoiceChip();
+}
+
+/** Audio element used to preview the OWN profile's calling card from
+ *  the voice chip. Distinct from the recorder's preview (which plays a
+ *  draft blob) and from the public profile's audio (which plays a
+ *  visited creator's card). */
+let _ownProfileCardAudio = null;
+function _ownProfileCardAudioInstance() {
+  if (_ownProfileCardAudio) return _ownProfileCardAudio;
+  const a = new Audio();
+  a.preload = "none";
+  a.playsInline = true;
+  _ownProfileCardAudio = a;
+  return a;
+}
+
+/** Render the unified voice chip on the user's OWN profile.
+ *
+ *  Behavior matrix:
+ *    - Edit mode             → show the timbre <select> (so you can pick).
+ *    - View, has card        → button "▶ Voice · X" (tap to play preview).
+ *    - View, no card, signed in → button "+ Add voice note · X" (tap → recorder).
+ *    - View, no card, signed out → button hidden (nothing to do).
+ *    - No timbre, no card    → button still useful as the recorder CTA.
+ */
+function renderProfileAuraVoiceChip() {
+  const slot = els.profileAuraVoiceChipSlot;
+  const select = els.profilePreviewTimbreInput;
+  const btn = els.profilePreviewVoiceChipBtn;
+  if (!slot || !select || !btn) return;
+  const editing = Boolean(profileEditing);
   const hasCard = Boolean(activeProfile?.callingCardUrl);
-  hint.style.display = (signedIn && !hasCard) ? "" : "none";
+  const signedIn = Boolean(authSession?.user?.id);
+  const timbreRaw = String(activeProfile?.voiceTimbre || "").trim();
+  const pretty = timbreRaw
+    ? timbreRaw.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    : "";
+
+  if (editing) {
+    select.style.display = "";
+    btn.style.display = "none";
+    return;
+  }
+  // View mode: hide the dropdown, show the button.
+  select.style.display = "none";
+
+  // Hide the chip entirely when there's nothing to show or do.
+  if (!hasCard && !signedIn) {
+    btn.style.display = pretty ? "" : "none";
+  } else {
+    btn.style.display = "";
+  }
+
+  const labelEl = btn.querySelector(".profileAuraVoiceChipText");
+  if (hasCard) {
+    btn.dataset.state = "idle";
+    btn.dataset.hasCard = "true";
+    btn.disabled = false;
+    btn.setAttribute("aria-label", "Play your voice note");
+    if (labelEl) labelEl.textContent = pretty ? `Voice · ${pretty}` : "Voice note";
+  } else if (signedIn) {
+    btn.dataset.state = "record";
+    btn.dataset.hasCard = "false";
+    btn.disabled = false;
+    btn.setAttribute("aria-label", "Record voice note");
+    if (labelEl) labelEl.textContent = pretty ? `Add voice note · ${pretty}` : "Add voice note";
+  } else {
+    btn.dataset.state = "idle";
+    btn.dataset.hasCard = "false";
+    btn.disabled = true;
+    btn.setAttribute("aria-label", "Voice");
+    if (labelEl) labelEl.textContent = pretty ? `Voice · ${pretty}` : "";
+  }
+}
+
+/** Toggle play/pause for the OWN-profile calling card preview. Wires
+ *  up the chip's data-state events so the waveform animates. */
+async function toggleOwnCallingCardPreview() {
+  const btn = els.profilePreviewVoiceChipBtn;
+  const url = activeProfile?.callingCardUrl;
+  if (!btn || !url) return;
+  const audio = _ownProfileCardAudioInstance();
+  if (audio.src !== url) {
+    audio.src = url;
+    try { audio.load(); } catch {}
+  }
+  if (audio.paused) {
+    audio.volume = CALLING_CARD_PLAYBACK_VOL;
+    try {
+      await audio.play();
+      btn.dataset.state = "playing";
+      btn.setAttribute("aria-label", "Pause voice note");
+    } catch {}
+    audio.onended = () => {
+      btn.dataset.state = "idle";
+      btn.setAttribute("aria-label", "Play your voice note");
+    };
+    audio.onpause = () => {
+      if (btn.dataset.state === "playing") {
+        btn.dataset.state = "idle";
+        btn.setAttribute("aria-label", "Play your voice note");
+      }
+    };
+  } else {
+    try { audio.pause(); } catch {}
+    btn.dataset.state = "idle";
+    btn.setAttribute("aria-label", "Play your voice note");
+  }
 }
 
 /** Lookup another user's calling card by their public username. We use
@@ -2232,20 +2335,26 @@ async function fetchCallingCardForUsername(username) {
   }
 }
 
-/** Render the public profile's calling-card chip + autoplay-once rule.
- *  - Owners viewing their own profile via #/u/handle: never autoplay.
- *  - First profile visit ever (any creator) AND user has not opted out:
- *    autoplay once at 60% volume.
- *  - All subsequent visits: chip is tap-to-play.
+/** Update the unified voice chip on the public profile to reflect
+ *  whether the creator has a calling card, and apply the autoplay-once
+ *  rule. The chip is the SAME element that displays "Voice · X" — it
+ *  just gains a play affordance + audio when a card exists.
+ *
+ *    - Owner viewing their own #/u/handle: never autoplay (we already
+ *      have the dedicated own-profile chip on /profile for that).
+ *    - First profile visit ever (any creator) AND not opted out:
+ *      autoplay once at 60% volume.
+ *    - All subsequent visits: tap-to-play.
  */
 async function refreshUserPublicCallingCard(rawUsername) {
-  const chip = els.userPublicCallingCard;
+  const chip = els.userPublicVoice;
   const audio = els.userPublicCallingCardAudio;
   if (!chip || !audio) return;
-  // Reset chip + audio first so a stale state doesn't leak from the
-  // previously-viewed creator.
-  chip.style.display = "none";
+
+  // Reset chip + audio so stale state from a previous creator doesn't
+  // bleed in.
   chip.dataset.state = "idle";
+  chip.dataset.hasCard = "false";
   try { audio.pause(); } catch {}
   try { audio.removeAttribute("src"); audio.load(); } catch {}
 
@@ -2265,49 +2374,31 @@ async function refreshUserPublicCallingCard(rawUsername) {
 
   audio.src = card.url;
   audio.preload = "metadata";
+  chip.dataset.hasCard = "true";
+  chip.dataset.state = "idle";
   chip.style.display = "";
-  if (els.userPublicCallingCardSub) {
-    els.userPublicCallingCardSub.textContent = "Tap to play";
-  }
   // Wave/state events.
-  audio.onplay = () => {
-    chip.dataset.state = "playing";
-    if (els.userPublicCallingCardSub) els.userPublicCallingCardSub.textContent = "Playing…";
-  };
+  audio.onplay = () => { chip.dataset.state = "playing"; };
   audio.onpause = () => {
-    if (chip.dataset.state === "playing") {
-      chip.dataset.state = "idle";
-      if (els.userPublicCallingCardSub) els.userPublicCallingCardSub.textContent = "Tap to play";
-    }
+    if (chip.dataset.state === "playing") chip.dataset.state = "idle";
   };
-  audio.onended = () => {
-    chip.dataset.state = "idle";
-    if (els.userPublicCallingCardSub) els.userPublicCallingCardSub.textContent = "Tap to play";
-  };
+  audio.onended = () => { chip.dataset.state = "idle"; };
   audio.onerror = () => {
     chip.dataset.state = "idle";
-    if (els.userPublicCallingCardSub) els.userPublicCallingCardSub.textContent = "Couldn’t load";
+    chip.dataset.hasCard = "false";
   };
 
-  // Autoplay decision. We never autoplay on the owner's own profile,
-  // we honor the global preference, and we only do it ONCE per device.
+  // Autoplay decision.
   if (isOwnProfile) return;
   if (!isCallingCardAutoplayEnabled()) return;
   if (hasAutoplayedCallingCardOnce()) return;
 
-  // Tag this device as having had the one-shot autoplay so future
-  // profile visits stay quiet by default. Set the flag BEFORE play()
-  // so that a quick second visit can't double-fire if the play()
-  // promise hasn't resolved yet.
   markAutoplayedCallingCardOnce();
   audio.volume = CALLING_CARD_PLAYBACK_VOL;
   try {
     await audio.play();
   } catch {
-    // iOS blocked it (unlock chain lost or the navigation wasn't a
-    // tap). Fall back to tap-to-play silently.
     chip.dataset.state = "idle";
-    if (els.userPublicCallingCardSub) els.userPublicCallingCardSub.textContent = "Tap to play";
   }
 }
 
@@ -4976,6 +5067,7 @@ function restoreProfileInputsFromActive() {
     els.profilePreviewBioInput.value = cleaned;
   }
   renderProfilePreviewFromInputs();
+  renderProfileAuraVoiceChip();
 }
 
 function renderProfileOwnStats() {
@@ -5164,17 +5256,21 @@ function renderUserProfile(rawUsername) {
     els.userPublicAvatar.alt = `${displayName} avatar`;
   }
   if (els.userPublicVoice) {
+    const chip = els.userPublicVoice;
+    const labelEl = chip.querySelector(".profileAuraVoiceChipText");
     const voice = String(latest?.meta?.voiceTimbre || "").trim();
-    if (voice) {
-      const pretty = voice
-        .replace(/_/g, " ")
-        .replace(/\b\w/g, (c) => c.toUpperCase());
-      els.userPublicVoice.textContent = `Voice · ${pretty}`;
-      els.userPublicVoice.style.display = "";
-    } else {
-      els.userPublicVoice.textContent = "";
-      els.userPublicVoice.style.display = "none";
+    const pretty = voice
+      ? voice.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+      : "";
+    if (labelEl) {
+      labelEl.textContent = pretty ? `Voice · ${pretty}` : "Voice note";
     }
+    // Visibility: show the chip when we have a voice timbre OR we're
+    // about to discover a calling card. refreshUserPublicCallingCard
+    // will flip data-has-card / data-state and (if needed) keep it
+    // visible. If neither voice nor card materialize, we hide below.
+    chip.style.display = pretty ? "" : "none";
+    chip.dataset.state = "idle";
   }
   if (els.userPublicBio) {
     const bio = String(latest?.meta?.bio || "").trim();
@@ -9580,30 +9676,57 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
     });
   }
-  // Long-press own avatar to open the recorder. Tap-to-edit-photo is
-  // already wired elsewhere; long-press is a strict superset on top.
-  if (els.profilePreviewAvatar) {
-    attachLongPress(els.profilePreviewAvatar, () => {
+  // Long-press the avatar WRAP (the ring container, not the <img>) to
+  // open the calling-card recorder. Attaching to the wrap rather than
+  // the <img> avoids iOS's image quick-look / "Save Image" sheet,
+  // which was hijacking the gesture and showing only a zoomed photo.
+  // Belt-and-braces: also suppress the contextmenu on the avatar img
+  // so older iOS versions don't fall back to the share menu.
+  const avatarWrap = document.getElementById("profileAuraAvatarWrap");
+  if (avatarWrap) {
+    attachLongPress(avatarWrap, () => {
       if (!authSession?.user?.id) {
         showToast("Sign in to record a calling card.");
         return;
       }
       openCallingCardModal();
-    }, 600);
+    }, 550);
+    avatarWrap.addEventListener("contextmenu", (ev) => ev.preventDefault());
   }
-  if (els.profileCallingCardHint) {
-    els.profileCallingCardHint.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      openCallingCardModal();
+  if (els.profilePreviewAvatar) {
+    els.profilePreviewAvatar.addEventListener(
+      "contextmenu",
+      (ev) => ev.preventDefault()
+    );
+    // Make the <img> not a drag source on desktop browsers.
+    els.profilePreviewAvatar.addEventListener(
+      "dragstart",
+      (ev) => ev.preventDefault()
+    );
+  }
+
+  // Own-profile voice chip — handles BOTH "play my card" and
+  // "open recorder" depending on whether a card exists.
+  if (els.profilePreviewVoiceChipBtn) {
+    els.profilePreviewVoiceChipBtn.addEventListener("click", () => {
+      const btn = els.profilePreviewVoiceChipBtn;
+      const state = btn.dataset.state;
+      const hasCard = btn.dataset.hasCard === "true";
+      if (state === "record" || (!hasCard && authSession?.user?.id)) {
+        openCallingCardModal();
+        return;
+      }
+      if (hasCard) void toggleOwnCallingCardPreview();
     });
   }
-  // Public profile chip — tap-to-(play|pause). Autoplay is handled in
-  // refreshUserPublicCallingCard once per device.
-  if (els.userPublicCallingCard) {
-    els.userPublicCallingCard.addEventListener("click", () => {
+
+  // Public profile chip — tap to play/pause the visited creator's card.
+  // Autoplay-once is handled in refreshUserPublicCallingCard.
+  if (els.userPublicVoice) {
+    els.userPublicVoice.addEventListener("click", () => {
       const audio = els.userPublicCallingCardAudio;
-      if (!audio || !audio.src) return;
+      const hasCard = els.userPublicVoice.dataset.hasCard === "true";
+      if (!hasCard || !audio || !audio.src) return;
       if (audio.paused) {
         audio.volume = CALLING_CARD_PLAYBACK_VOL;
         try { audio.play(); } catch {}

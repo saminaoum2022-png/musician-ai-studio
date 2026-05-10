@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260510aurafix";
+const APP_BUILD = "20260510aurabio";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -2609,10 +2609,10 @@ function renderAuthStatus() {
   if (els.authLoginControls) els.authLoginControls.style.display = email ? "none" : "";
   if (els.authLoggedInRow) els.authLoggedInRow.style.display = email ? "flex" : "none";
   if (els.authLoggedInEmail) els.authLoggedInEmail.textContent = email ? email : "Logged in.";
-  if (els.authLoggedInEmailInline) {
-    els.authLoggedInEmailInline.textContent = email ? email : "";
-    els.authLoggedInEmailInline.style.display = email ? "" : "none";
-  }
+  // The inline Aura email is controlled by edit mode (see
+  // renderProfilePreviewFromInputs / setProfileEditing). Don't override
+  // its visibility here, otherwise the email leaks into the public-feeling
+  // header even when the user isn't editing.
 }
 function resetProfileUiToGuest() {
   activeProfile = {
@@ -2620,7 +2620,7 @@ function resetProfileUiToGuest() {
     username: "guest",
     email: "",
     voiceTimbre: "",
-    bio: "Add a short bio to introduce your music style.",
+    bio: "",
     avatar: "",
     genres: "",
     links: {},
@@ -2629,7 +2629,8 @@ function resetProfileUiToGuest() {
   try { localStorage.setItem(PROFILE_KEY, JSON.stringify(activeProfile)); } catch {}
   if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = "@guest";
   if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = "";
-  if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = "Add a short bio to introduce your music style.";
+  // Bio left empty — the placeholder attribute drives the prompt copy.
+  if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = "";
   if (els.profileIsPublic) els.profileIsPublic.checked = true;
   if (els.profileAvatarFile) els.profileAvatarFile.value = "";
   // Reset hydrate flags so the next sign-in re-runs the cloud pull
@@ -4352,7 +4353,14 @@ function renderProfileUsernamePrompt() {
 function restoreProfileInputsFromActive() {
   if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = activeProfile.username ? `@${activeProfile.username}` : "@guest";
   if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = activeProfile.voiceTimbre || "";
-  if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = activeProfile.bio || "";
+  if (els.profilePreviewBioInput) {
+    // Strip the legacy "Add a short bio…" placeholder that older
+    // versions stored as a real value. The placeholder attribute now
+    // handles the empty-state copy, so we should only carry real bios.
+    const rawBio = String(activeProfile.bio || "").trim();
+    const cleaned = /^add a short bio/i.test(rawBio) ? "" : activeProfile.bio || "";
+    els.profilePreviewBioInput.value = cleaned;
+  }
   renderProfilePreviewFromInputs();
 }
 
@@ -4476,20 +4484,17 @@ function setProfileAuraAudioState(playing) {
 }
 
 function renderProfilePreviewFromInputs() {
-  const usernameRaw = String(els.profilePreviewUsernameInput?.value || "").trim().toLowerCase();
-  const username = usernameRaw ? `@${usernameRaw.replace(/^@/, "")}` : "@guest";
-  const voiceTimbre = String(els.profilePreviewTimbreInput?.value || "").trim();
-  const bio = String(els.profilePreviewBioInput?.value || "").trim() || "Add a short bio to introduce your music style.";
+  // Don't trim / overwrite live input values while the user is typing —
+  // earlier behavior killed trailing spaces, lost mid-word spaces, and
+  // (worst) replaced an empty bio with the placeholder string as a
+  // real value, which made the field look "stuck" on the prompt text.
+  // We just measure for layout and keep mirrors in sync.
   const genres = String(activeProfile.genres || "").trim();
-  const isPublic = Boolean(els.profileIsPublic?.checked);
 
-  if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = username;
   if (els.profilePreviewGenderIcon) els.profilePreviewGenderIcon.style.display = "none";
-  if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = voiceTimbre;
-  if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = bio;
   if (els.profilePreviewBioInput) {
     els.profilePreviewBioInput.style.height = "auto";
-    const h = Math.max(54, Math.min(132, els.profilePreviewBioInput.scrollHeight || 54));
+    const h = Math.max(48, Math.min(160, els.profilePreviewBioInput.scrollHeight || 48));
     els.profilePreviewBioInput.style.height = `${h}px`;
   }
   if (els.profilePreviewGenres) {

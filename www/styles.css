@@ -3308,29 +3308,30 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   --aura-tint-soft: rgba(124, 92, 255, 0.18);
   position: relative;
   isolation: isolate;
-  /* Clip the ambient glow to the header bounds. Without this, the
-     -inset glow lets the page scroll horizontally on iOS Safari and
-     fights the viewport meta. The header itself has no border/bg so
-     the rounded corners aren't visible — they just shape the glow. */
-  overflow: hidden;
-  border-radius: 22px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 18px 16px 24px;
+  padding: 18px 4px 24px;
   margin-bottom: 4px;
   max-width: 100%;
+  /* Intentionally NO overflow:hidden / NO border-radius. The glow
+     fades out via its own radial-gradient transparency falloff, so
+     no clip is needed. Adding either made the page look like a
+     rounded card. */
 }
 .profileAuraGlow{
   position: absolute;
   inset: 0;
   z-index: -1;
   pointer-events: none;
+  /* Soft falloff inside the gradients themselves so the glow
+     disappears before reaching the edges of the header — no clip
+     line ever shows, no card chrome. */
   background:
-    radial-gradient(80% 90% at 24% 18%, var(--aura-tint), transparent 70%),
-    radial-gradient(70% 80% at 82% 28%, var(--aura-tint-soft), transparent 75%);
-  filter: blur(34px) saturate(1.25);
-  opacity: 0.9;
+    radial-gradient(ellipse 55% 45% at 28% 22%, var(--aura-tint), transparent 78%),
+    radial-gradient(ellipse 45% 40% at 82% 30%, var(--aura-tint-soft), transparent 82%);
+  filter: blur(26px) saturate(1.2);
+  opacity: 0.8;
   transition: background 320ms ease, opacity 320ms ease;
 }
 
@@ -3541,38 +3542,44 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   cursor: default;
 }
 
-/* Bio — single-row look, expands when typed. */
+/* Bio — soft pill that always carries its own breathing room so the
+   text never feels jammed against the page. Same chrome in display
+   and edit mode for visual consistency; only the focus ring + border
+   color change while editing. */
 .profileAuraBio{
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
   max-width: 100%;
-  margin-top: 8px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: rgba(231,237,247,0.92);
+  margin-top: 6px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012));
+  color: rgba(231,237,247,0.94);
+  font-family: inherit;
   font-size: 14px;
   line-height: 1.5;
   resize: none;
   outline: none;
-  min-height: 22px;
+  min-height: 48px;
   word-break: break-word;
   overflow-wrap: break-word;
+  transition: border-color 160ms ease, background 160ms ease;
 }
 .profileAuraBio::placeholder{
-  color: rgba(231,237,247,0.40);
+  color: rgba(231,237,247,0.42);
   font-style: normal;
 }
 .profileAuraBio:disabled{
   opacity: 1;
-  -webkit-text-fill-color: rgba(231,237,247,0.92);
+  -webkit-text-fill-color: rgba(231,237,247,0.94);
   cursor: default;
 }
 .profileAuraBio:focus{
-  outline: 2px solid rgba(124,92,255,0.35);
-  outline-offset: 4px;
-  border-radius: 6px;
+  border-color: rgba(124,92,255,0.45);
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+  outline: none;
 }
 
 /* Email is private. Only revealed in edit mode (JS toggles display). */

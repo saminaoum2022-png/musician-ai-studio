@@ -2814,6 +2814,19 @@ textarea{
 .personaActiveBannerChange:hover{
   background: linear-gradient(135deg, rgba(35, 213, 171, 0.5), rgba(124, 92, 255, 0.42));
 }
+/* Warn variant: shown only when a vocal reference is ALSO attached, so
+   the user understands the persona will replace the recording's voice. */
+.personaActiveBanner.personaActiveBanner--warn{
+  border-color: rgba(255, 175, 80, 0.55);
+  background: linear-gradient(135deg, rgba(255, 175, 80, 0.18), rgba(255, 105, 110, 0.12));
+  box-shadow: 0 8px 22px rgba(255, 140, 80, 0.18);
+}
+.personaActiveBanner.personaActiveBanner--warn .remixSourceBannerKicker{
+  color: rgba(255, 215, 175, 0.95);
+}
+.personaActiveBanner.personaActiveBanner--warn .personaActiveBannerIcon{
+  background: linear-gradient(135deg, rgba(255, 175, 80, 0.32), rgba(255, 105, 110, 0.26));
+}
 /* Narrow-viewport guards. We progressively shed inessentials so the
    banner never forces its parent past 100% width:
    1) <420px: shrink the Change button.

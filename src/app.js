@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511gentaskid";
+const APP_BUILD = "20260511personaclr";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1808,9 +1808,13 @@ function refreshVocalReferenceUi() {
   }
   updateVocalRefPreviewState();
   renderReferenceHints();
+  // Keep the persona banner copy in sync with whether a reference is
+  // attached — that's the only way the warning state can be triggered.
+  try { renderActivePersonaBanner(); } catch {}
 }
 
 function setVocalRefFile(file, label, origin) {
+  const prevFile = currentVocalRefFile;
   currentVocalRefFile = file || null;
   vocalRefBlob = null;
   if (!file) {
@@ -1821,7 +1825,46 @@ function setVocalRefFile(file, label, origin) {
   if (els.sunoVocalUploadName && !file) {
     els.sunoVocalUploadName.textContent = "No vocal reference attached.";
   }
+  // ROOT CAUSE FIX for "Suno used an OLD voice on my new recording":
+  //   Suno's upload-cover (Full Song) re-sings the new melody using the
+  //   `personaId` we send. A previously created persona was being silently
+  //   restored from localStorage on every load and silently included in
+  //   the request — so even after recording a brand-new vocal, the OUTPUT
+  //   was sung in the old persona's voice. Fresh reference = fresh intent;
+  //   clear the active persona so the new audio's analysis drives the
+  //   voice. User can re-pick a persona from Advanced if they want to.
+  //
+  // Same logic for a fresh upload — "here's new audio" implies "use this,
+  // not an older saved voice". Remix origin keeps the persona because it
+  // intentionally remixes an existing arrangement.
+  if (file && (origin === "record" || origin === "upload")) {
+    try { clearActiveVoicePersona({ silent: prevFile !== file }); } catch {}
+  }
   refreshVocalReferenceUi();
+}
+
+/** Centralised "stop using any saved voice persona". Called when the user
+ *  records a fresh vocal so an old persona can't silently re-sing it.
+ *  Also exposed via the persona banner's × button. */
+function clearActiveVoicePersona(opts = {}) {
+  let hadActive = false;
+  try {
+    const prev = (loadPersonaSelection() || "").trim();
+    const dom = String(els.sunoPersonaId?.value || "").trim();
+    hadActive = Boolean(prev || dom);
+    if (els.sunoPersonaId) els.sunoPersonaId.value = "";
+    savePersonaSelection("");
+  } catch {}
+  try { renderPersonaSelect(); } catch {}
+  try { renderActivePersonaBanner(); } catch {}
+  if (hadActive && !opts.silent) {
+    try {
+      showToast("Voice persona cleared — your new recording's voice will drive the next song.", {
+        icon: "♪",
+        durationMs: 4200,
+      });
+    } catch {}
+  }
 }
 
 function getVocalReferenceFile() {
@@ -3134,14 +3177,26 @@ function renderActivePersonaBanner() {
   }
   const list = loadPersonas();
   const hit = list.find((x) => String(x.personaId) === id);
-  // Don't show a banner for an id we no longer recognize locally —
-  // could be from a prior account or a deleted persona.
   if (!hit) {
     els.personaActiveBanner.hidden = true;
     return;
   }
   const label = String(hit.label || id.slice(0, 12) + "…").trim() || "Persona";
   els.personaActiveBannerLabel.textContent = label;
+  // When a vocal reference is attached, escalate the banner copy so the
+  // user can't miss that the persona will OVERRIDE the new recording's
+  // voice. The persona-singing-over-new-recording surprise was the #1
+  // reason for "Suno used the wrong voice" reports.
+  try {
+    const refAttached = Boolean(getVocalReferenceFile());
+    const subEl = els.personaActiveBanner.querySelector(".remixSourceBannerSub");
+    if (subEl) {
+      subEl.textContent = refAttached
+        ? "Heads up: this persona will replace your new recording's voice. Tap × to use the recording's voice instead."
+        : "Your next song will use this voice. Tap Change to swap or clear it.";
+    }
+    els.personaActiveBanner.classList.toggle("personaActiveBanner--warn", refAttached);
+  } catch {}
   els.personaActiveBanner.hidden = false;
 }
 const AUTH_SESSION_KEY = "mas:supabase:session:v1";

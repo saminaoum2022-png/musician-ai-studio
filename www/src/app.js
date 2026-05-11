@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260512humsingsfresh";
+const APP_BUILD = "20260512enginetruth";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -11944,7 +11944,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       return;
     }
     try {
-      const engine = "gemini_assisted";
       const referenceInstrumentalOnly = false;
       const hubRemixLocked = Boolean(currentRemixSource?.id);
       const modeLabel = hasReference
@@ -11952,13 +11951,19 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           ? "Hub remix (melody / arrangement locked)"
           : "Reference: AI re-sings on new arrangement"
         : "Normal";
-      const engineLabel = "Suno + Gemini lyrics assist";
+      // `engine` reflects who actually wrote the lyrics for this run.
+      // Resolved AFTER the Gemini call below so the metadata log is
+      // honest. Default is "suno_only" — user wrote the lyrics and we
+      // sent them straight to Suno without touching them. Flipped to
+      // "gemini_drafted" only when /api/lyrics returned text that we
+      // ended up sending to Suno.
+      let engine = "suno_only";
+      let engineLabel = "Suno";
       setGenerateBtn("Generating…", true, "generate");
       setGenerateFieldsLocked(true);
       showResultCard(false);
       els.btnSunoStems.disabled = true;
       if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = true;
-      setStatus(`Submitting generation… (Mode: ${modeLabel} | Engine: ${engineLabel})`);
       setProgress(5);
       setLoading(true, {
         title: "Processing in backend...",
@@ -11994,9 +11999,14 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             body: JSON.stringify({ seed: userPrompt, style: userStyle, mode: "arrange", dialect, dialectHint }),
           });
           const dd = await rr.json().catch(() => ({}));
-          if (rr.ok && dd?.lyrics) finalPrompt = sanitizeLyricsPrompt(dd.lyrics);
+          if (rr.ok && dd?.lyrics) {
+            finalPrompt = sanitizeLyricsPrompt(dd.lyrics);
+            engine = "gemini_drafted";
+            engineLabel = "Suno + Gemini lyrics draft";
+          }
         } catch {}
       }
+      setStatus(`Submitting generation… (Mode: ${modeLabel} | Engine: ${engineLabel})`);
 
       const styleExtras = hasReference
         ? ""

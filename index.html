@@ -903,6 +903,13 @@
                motif as the Hub bottom-tab icon. -->
           <section class="profileAura" id="profileAura" data-audio-state="idle">
             <div class="profileAuraGlow" aria-hidden="true"></div>
+            <!-- Faint equalizer bars sit in the gradient background to
+                 give the hero a "music alive" feeling. CSS-only, pure
+                 decoration, ignored by screen readers. -->
+            <div class="profileAuraEq" aria-hidden="true">
+              <span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span>
+            </div>
 
             <div class="profileAuraToolbar" role="toolbar" aria-label="Profile actions">
               <button
@@ -1023,6 +1030,117 @@
               <span id="profileAuraStatSongs" class="srOnly" data-show="false" aria-hidden="true"></span>
               <span id="profileAuraStatLikes" class="srOnly" data-show="false" aria-hidden="true"></span>
             </div>
+
+            <!-- Big shuffle-play button anchored bottom-right of the hero,
+                 Spotify-artist-page style. Plays a random release from
+                 the user's own Hub catalog. Hidden until at least one
+                 share exists (toggled by renderProfileShufflePlay). -->
+            <button
+              type="button"
+              id="profileShufflePlayBig"
+              class="profileShufflePlayBig"
+              hidden
+              aria-label="Shuffle play your releases"
+            >
+              <svg viewBox="0 0 24 24" class="profileShufflePlayIcon" aria-hidden="true">
+                <path d="M8 5v14l11-7z" fill="currentColor"/>
+              </svg>
+              <span class="profileShufflePlayDot" aria-hidden="true"></span>
+            </button>
+          </section>
+
+          <!-- Secondary action row, Spotify-style: heart count chip, share,
+               quick add-to-library / more. Sits between hero and the
+               popular list so the eye lands on the play action above. -->
+          <section
+            class="profileActionRow"
+            id="profileActionRow"
+            aria-label="Profile actions"
+            hidden
+          >
+            <button type="button" class="profileActionBtnIcon" id="profileActionShare" aria-label="Share profile">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M16 6l-4-4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                <path d="M12 2v14" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+                <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+              </svg>
+            </button>
+            <span class="profileActionLikesChip" id="profileActionLikesChip" hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="currentColor"/>
+              </svg>
+              <strong id="profileActionLikesCount">0</strong>
+            </span>
+            <span class="profileActionSpacer"></span>
+            <button type="button" class="profileActionBtnIcon" id="profileActionCopyLink" aria-label="Copy profile link">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+                <path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+              </svg>
+            </button>
+          </section>
+
+          <section class="profileHeroLatest" id="profileHeroLatest" hidden>
+            <header class="profileSectionHead">
+              <span class="profileEyebrow">Latest release</span>
+            </header>
+            <div class="profileHeroLatestInner">
+              <div class="profileHeroLatestArt">
+                <img id="profileHeroArtImg" src="" alt="" draggable="false" />
+                <button type="button" id="profileHeroPlayBtn" class="profileHeroPlayBtn" aria-label="Play latest release">
+                  <span aria-hidden="true">▶</span>
+                </button>
+              </div>
+              <div class="profileHeroLatestText">
+                <span class="profileHeroLatestTag">New</span>
+                <h3 id="profileHeroTitle" class="profileHeroTitle">—</h3>
+                <p id="profileHeroMeta" class="profileHeroMeta hint"></p>
+              </div>
+            </div>
+          </section>
+
+          <!-- Popular this week — Spotify's "Popular" list, ranked 1–5 by
+               like count. Each row: rank, cover, title, likes, ⋯ menu. -->
+          <section class="profileTopWeek" id="profileTopWeek" hidden>
+            <header class="profileSectionHead">
+              <h3 class="profileSectionTitle">Popular this week</h3>
+            </header>
+            <ol id="profileTopWeekList" class="profileTopWeekList" role="list"></ol>
+          </section>
+
+          <!-- Horizontal cover-art shelf for the full release catalog,
+               Spotify-discography style. Drag/scroll laterally on mobile. -->
+          <section class="profileShelf" id="profileShelf" hidden>
+            <header class="profileSectionHead profileSectionHeadRow">
+              <h3 class="profileSectionTitle">Singles &amp; releases</h3>
+              <button type="button" id="profileShelfSeeAll" class="profileSectionMore" aria-label="See all releases">See all</button>
+            </header>
+            <div id="profileShelfScroll" class="profileShelfScroll" role="list"></div>
+          </section>
+
+          <!-- Nabad-exclusive: "Hear my voice" voice-essence block.
+               This is the unique-to-us answer to Spotify's "About" image.
+               Plays the user's calling card with a waveform animation. -->
+          <section class="profileVoiceEssence" id="profileVoiceEssence" hidden>
+            <header class="profileSectionHead">
+              <span class="profileEyebrow">Voice essence</span>
+              <h3 class="profileSectionTitle">Hear my voice</h3>
+            </header>
+            <button type="button" id="profileVoiceEssencePlay" class="profileVoiceEssencePlay" aria-label="Play voice essence">
+              <span class="profileVoiceEssencePlayIcon" aria-hidden="true">▶</span>
+              <span class="profileVoiceEssenceWave" aria-hidden="true">
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span>
+              </span>
+              <span class="profileVoiceEssenceMeta">
+                <strong id="profileVoiceEssenceTitle">Calling card</strong>
+                <span id="profileVoiceEssenceSub" class="profileVoiceEssenceSub">8s preview · your raw voice</span>
+              </span>
+            </button>
+            <button type="button" id="profileVoiceEssenceRecord" class="profileVoiceEssenceCta" hidden>+ Record</button>
           </section>
 
           <!-- Hidden compatibility nodes — older code paths still target
@@ -1060,22 +1178,6 @@
             </div>
           </div>
 
-          <section class="profileHeroLatest" id="profileHeroLatest" hidden>
-            <div class="profileHeroLatestInner">
-              <div class="profileHeroLatestArt">
-                <img id="profileHeroArtImg" src="" alt="" draggable="false" />
-                <button type="button" id="profileHeroPlayBtn" class="profileHeroPlayBtn" aria-label="Play latest release">
-                  <span aria-hidden="true">▶</span>
-                </button>
-              </div>
-              <div class="profileHeroLatestText">
-                <span class="profileEyebrow">Latest release</span>
-                <h3 id="profileHeroTitle" class="profileHeroTitle">—</h3>
-                <p id="profileHeroMeta" class="profileHeroMeta hint"></p>
-              </div>
-            </div>
-          </section>
-
           <section class="profilePulseStrip" id="profilePulseStrip" hidden>
             <div class="profilePulseStripHead">
               <span class="profileEyebrow">Your pulse</span>
@@ -1084,6 +1186,20 @@
             <div class="profileHeartbeatScroll">
               <svg id="profileHeartbeatSvg" class="profileHeartbeatSvg" viewBox="0 0 320 48" preserveAspectRatio="none" role="img" aria-label="Releases over time"></svg>
               <div id="profileHeartbeatPeaks" class="profileHeartbeatPeaks"></div>
+            </div>
+          </section>
+
+          <!-- Spotify-style About card. Mirrors the bio textarea (view-only)
+               in a quote-block treatment. Lets the user see their own
+               story the way visitors will. -->
+          <section class="profileAboutCard" id="profileAboutCard" hidden>
+            <header class="profileSectionHead">
+              <h3 class="profileSectionTitle">About</h3>
+            </header>
+            <div class="profileAboutInner">
+              <span class="profileAboutQuote" aria-hidden="true">“</span>
+              <p id="profileAboutText" class="profileAboutText"></p>
+              <p id="profileAboutMeta" class="profileAboutMeta hint"></p>
             </div>
           </section>
 
@@ -1824,6 +1940,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260512profilepulse"></script>
+    <script type="module" src="./src/app.js?v=20260512spotifynabad"></script>
   </body>
 </html>

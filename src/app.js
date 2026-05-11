@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260512profilepulse";
+const APP_BUILD = "20260512spotifynabad";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -379,6 +379,26 @@ const els = {
   profilePulseStrip: document.getElementById("profilePulseStrip"),
   profileHeartbeatSvg: document.getElementById("profileHeartbeatSvg"),
   profileHeartbeatPeaks: document.getElementById("profileHeartbeatPeaks"),
+  // Spotify-x-Nabad redesign nodes
+  profileShufflePlayBig: document.getElementById("profileShufflePlayBig"),
+  profileActionRow: document.getElementById("profileActionRow"),
+  profileActionShare: document.getElementById("profileActionShare"),
+  profileActionCopyLink: document.getElementById("profileActionCopyLink"),
+  profileActionLikesChip: document.getElementById("profileActionLikesChip"),
+  profileActionLikesCount: document.getElementById("profileActionLikesCount"),
+  profileTopWeek: document.getElementById("profileTopWeek"),
+  profileTopWeekList: document.getElementById("profileTopWeekList"),
+  profileShelf: document.getElementById("profileShelf"),
+  profileShelfScroll: document.getElementById("profileShelfScroll"),
+  profileShelfSeeAll: document.getElementById("profileShelfSeeAll"),
+  profileVoiceEssence: document.getElementById("profileVoiceEssence"),
+  profileVoiceEssencePlay: document.getElementById("profileVoiceEssencePlay"),
+  profileVoiceEssenceTitle: document.getElementById("profileVoiceEssenceTitle"),
+  profileVoiceEssenceSub: document.getElementById("profileVoiceEssenceSub"),
+  profileVoiceEssenceRecord: document.getElementById("profileVoiceEssenceRecord"),
+  profileAboutCard: document.getElementById("profileAboutCard"),
+  profileAboutText: document.getElementById("profileAboutText"),
+  profileAboutMeta: document.getElementById("profileAboutMeta"),
   profileAuraStatsInline: document.getElementById("profileAuraStatsInline"),
   profileAuraStatLine: document.getElementById("profileAuraStatLine"),
   profilePersonaInlineChip: document.getElementById("profilePersonaInlineChip"),
@@ -6028,6 +6048,33 @@ function setProfileEditing(on) {
   }
   const hint = document.getElementById("profileAvatarEditHint");
   if (hint) hint.style.display = profileEditing ? "" : "none";
+  // Toggle the editing class on the hero — the CSS uses it to swap the
+  // About card vs the bio textarea, hide the shuffle play, etc.
+  if (els.profileAura) {
+    els.profileAura.classList.toggle("profileAuraEditing", profileEditing);
+  }
+  // Hide the Spotify-style chrome while editing — it overlaps form
+  // fields and confuses the touch targets on small screens.
+  const sections = [
+    els.profileActionRow,
+    els.profileTopWeek,
+    els.profileShelf,
+    els.profileVoiceEssence,
+    els.profileAboutCard,
+  ];
+  sections.forEach((node) => {
+    if (!node) return;
+    if (profileEditing) {
+      node.dataset._profileWasHidden = node.hidden ? "1" : "0";
+      node.hidden = true;
+    } else {
+      // Restore visibility — the next render pass will recompute it
+      // based on the live data, so don't force-show anything that was
+      // empty before.
+      if (node.dataset._profileWasHidden === "0") node.hidden = false;
+      delete node.dataset._profileWasHidden;
+    }
+  });
   renderProfileUsernamePrompt();
   renderProfileCallingCardHint();
 }
@@ -6325,6 +6372,213 @@ function setProfileAuraAudioState(playing) {
   aura.setAttribute("data-audio-state", playing ? "playing" : "idle");
 }
 
+/* =================================================================
+ *  Spotify-x-Nabad — render helpers
+ *
+ *  All called from renderProfileHubShared() with the freshly fetched
+ *  list of own Hub posts (newest-first). Each helper hides its
+ *  section when there's nothing to show so the page collapses cleanly
+ *  for a brand-new account.
+ * ================================================================= */
+
+function renderProfileShufflePlay(items) {
+  const btn = els.profileShufflePlayBig;
+  if (!btn) return;
+  if (!items?.length) {
+    btn.hidden = true;
+    btn.onclick = null;
+    return;
+  }
+  btn.hidden = false;
+  btn.onclick = () => {
+    const pool = items.slice(0, 30);
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    const sid = String(pick?.id || "");
+    if (sid) void playHubPostFromProfile(sid);
+  };
+}
+
+function renderProfileActionRow(items) {
+  const row = els.profileActionRow;
+  if (!row) return;
+  const ownProfile = true;
+  if (!ownProfile && !items?.length) {
+    row.hidden = true;
+    return;
+  }
+  row.hidden = false;
+  const totalLikes = (items || []).reduce((s, p) => s + Number(p.likes || 0), 0);
+  if (els.profileActionLikesChip && els.profileActionLikesCount) {
+    if (totalLikes > 0) {
+      els.profileActionLikesCount.textContent = String(totalLikes);
+      els.profileActionLikesChip.hidden = false;
+    } else {
+      els.profileActionLikesChip.hidden = true;
+    }
+  }
+}
+
+function renderProfileTopWeek(items) {
+  const sec = els.profileTopWeek;
+  const list = els.profileTopWeekList;
+  if (!sec || !list) return;
+  const ranked = (items || [])
+    .slice()
+    .sort((a, b) => Number(b.likes || 0) - Number(a.likes || 0))
+    .filter((p, _, arr) => Number(p.likes || 0) > 0 || arr.length <= 5)
+    .slice(0, 5);
+  if (!ranked.length) {
+    sec.hidden = true;
+    list.innerHTML = "";
+    return;
+  }
+  sec.hidden = false;
+  list.innerHTML = ranked
+    .map((p, i) => {
+      const sid = escapeHtml(String(p.id));
+      const tl = escapeHtml(String(p.title || "Untitled"));
+      const art = escapeHtml(String(p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png"));
+      const likes = Number(p.likes || 0);
+      const rel = typeof relativeTime === "function" ? relativeTime(p.ts) : "";
+      const subBits = [];
+      if (rel) subBits.push(`<span>${escapeHtml(rel)}</span>`);
+      if (likes > 0) {
+        subBits.push(`
+          <span class="profileTopWeekLikes" aria-label="${likes} likes">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+            ${likes}
+          </span>`);
+      }
+      return `
+        <li>
+          <button type="button" class="profileTopWeekItem" data-top-week-play="${sid}" aria-label="Play ${tl}">
+            <span class="profileTopWeekRank">${i + 1}</span>
+            <span class="profileTopWeekArt"><img src="${art}" alt="" /></span>
+            <span class="profileTopWeekInfo">
+              <span class="profileTopWeekTitle">${tl}</span>
+              <span class="profileTopWeekSub">${subBits.join('<span aria-hidden="true">·</span>')}</span>
+            </span>
+          </button>
+        </li>
+      `;
+    })
+    .join("");
+  list.querySelectorAll("[data-top-week-play]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const sid = b.getAttribute("data-top-week-play");
+      if (sid) void playHubPostFromProfile(sid);
+    });
+  });
+}
+
+function renderProfileShelf(items) {
+  const sec = els.profileShelf;
+  const scroll = els.profileShelfScroll;
+  if (!sec || !scroll) return;
+  if (!items?.length) {
+    sec.hidden = true;
+    scroll.innerHTML = "";
+    return;
+  }
+  sec.hidden = false;
+  scroll.innerHTML = items
+    .slice(0, 20)
+    .map((p) => {
+      const sid = escapeHtml(String(p.id));
+      const tl = escapeHtml(String(p.title || "Untitled"));
+      const art = escapeHtml(String(p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png"));
+      const rel = typeof relativeTime === "function" ? relativeTime(p.ts) : "";
+      const sub = escapeHtml(rel || "Single");
+      return `
+        <button type="button" class="profileShelfCard" data-shelf-play="${sid}" role="listitem" aria-label="Play ${tl}">
+          <span class="profileShelfCardArt">
+            <img src="${art}" alt="" />
+            <span class="profileShelfCardPlay" aria-hidden="true">▶</span>
+          </span>
+          <span class="profileShelfCardTitle">${tl}</span>
+          <span class="profileShelfCardSub">${sub}</span>
+        </button>
+      `;
+    })
+    .join("");
+  scroll.querySelectorAll("[data-shelf-play]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const sid = b.getAttribute("data-shelf-play");
+      if (sid) void playHubPostFromProfile(sid);
+    });
+  });
+}
+
+function renderProfileVoiceEssence() {
+  const sec = els.profileVoiceEssence;
+  const playBtn = els.profileVoiceEssencePlay;
+  const recBtn = els.profileVoiceEssenceRecord;
+  const titleEl = els.profileVoiceEssenceTitle;
+  const subEl = els.profileVoiceEssenceSub;
+  if (!sec || !playBtn) return;
+  const url = String(activeProfile?.callingCardUrl || "").trim();
+  const signedIn = Boolean(authSession?.user?.id);
+  const timbreRaw = String(activeProfile?.voiceTimbre || "").trim();
+  const pretty = timbreRaw
+    ? timbreRaw.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    : "";
+
+  if (url) {
+    sec.hidden = false;
+    playBtn.style.display = "";
+    playBtn.dataset.state = "idle";
+    playBtn.setAttribute("aria-label", "Play voice essence");
+    if (titleEl) titleEl.textContent = pretty ? `${pretty} voice` : "Voice essence";
+    if (subEl) subEl.textContent = "8s preview · your raw voice";
+    if (recBtn) recBtn.hidden = true;
+    playBtn.onclick = () => {
+      void toggleOwnCallingCardPreview();
+      const proxy = els.profilePreviewVoiceChipBtn;
+      const syncFromProxy = () => {
+        const state = proxy?.dataset?.state === "playing" ? "playing" : "idle";
+        playBtn.dataset.state = state;
+        playBtn.setAttribute(
+          "aria-label",
+          state === "playing" ? "Pause voice essence" : "Play voice essence"
+        );
+      };
+      setTimeout(syncFromProxy, 80);
+      setTimeout(syncFromProxy, 350);
+    };
+  } else if (signedIn) {
+    sec.hidden = false;
+    playBtn.style.display = "none";
+    if (recBtn) {
+      recBtn.hidden = false;
+      recBtn.onclick = () => {
+        try { openCallingCardModal(); } catch {}
+      };
+    }
+  } else {
+    sec.hidden = true;
+  }
+}
+
+function renderProfileAboutCard() {
+  const sec = els.profileAboutCard;
+  const text = els.profileAboutText;
+  const meta = els.profileAboutMeta;
+  if (!sec || !text) return;
+  const bioRaw = String(activeProfile?.bio || "").trim();
+  const bio = /^add a short bio/i.test(bioRaw) ? "" : bioRaw;
+  if (!bio) {
+    sec.hidden = true;
+    text.textContent = "";
+    return;
+  }
+  sec.hidden = false;
+  text.textContent = bio;
+  if (meta) {
+    const handle = String(activeProfile?.username || "").trim();
+    meta.textContent = handle ? `— @${handle}` : "";
+  }
+}
+
 function renderProfilePreviewFromInputs() {
   // Don't trim / overwrite live input values while the user is typing —
   // earlier behavior killed trailing spaces, lost mid-word spaces, and
@@ -6360,6 +6614,12 @@ function renderProfilePreviewFromInputs() {
   renderProfileOwnStats();
   renderProfileUsernamePrompt();
   updateProfilePersonaInlineChip();
+  // Keep the About card / voice essence in sync with live input changes
+  // — but only outside edit mode, where they're actually visible.
+  if (!profileEditing) {
+    try { renderProfileAboutCard(); } catch {}
+    try { renderProfileVoiceEssence(); } catch {}
+  }
   // Email is private — only show inside edit mode.
   if (els.authLoggedInEmailInline) {
     const email = String(authSession?.user?.email || activeProfile?.email || "").trim();
@@ -6657,6 +6917,13 @@ function renderProfileHubShared() {
   renderProfileOwnStats();
   renderProfileHero(items);
   renderProfileHeartbeat(items);
+  // Spotify-x-Nabad blocks — order matches the visual flow in the DOM.
+  renderProfileShufflePlay(items);
+  renderProfileActionRow(items);
+  renderProfileTopWeek(items);
+  renderProfileShelf(items);
+  renderProfileVoiceEssence();
+  renderProfileAboutCard();
   const countEl = document.getElementById("profileOwnSongCount");
   if (countEl) {
     if (items.length) {
@@ -14882,6 +15149,70 @@ if (els.profilePreviewAvatar && els.profileAvatarFile) {
   els.profilePreviewAvatar.addEventListener("click", () => {
     if (!profileEditing) return;
     els.profileAvatarFile.click();
+  });
+}
+
+// --- Spotify-x-Nabad: share + copy-link buttons in the action row.
+function _profileShareUrl() {
+  const handle = String(activeProfile?.username || "").replace(/^@/, "").trim();
+  if (!handle || handle === "guest") return location.origin || "";
+  const base = (location.origin || "").replace(/\/$/, "");
+  return `${base}/#/u/${encodeURIComponent(handle)}`;
+}
+async function _profileCopyLink(button) {
+  const url = _profileShareUrl();
+  if (!url) return;
+  let ok = false;
+  try {
+    await navigator.clipboard.writeText(url);
+    ok = true;
+  } catch {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = url;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+    } catch {}
+  }
+  if (button) {
+    const original = button.getAttribute("aria-label") || "Copy profile link";
+    button.setAttribute("aria-label", ok ? "Link copied" : "Copy failed");
+    button.classList.toggle("profileActionBtnIconOk", ok);
+    setTimeout(() => {
+      button.setAttribute("aria-label", original);
+      button.classList.remove("profileActionBtnIconOk");
+    }, 1500);
+  }
+  if (typeof setStatus === "function") setStatus(ok ? "Profile link copied." : "Couldn't copy link.");
+}
+async function _profileShare(button) {
+  const url = _profileShareUrl();
+  const handle = String(activeProfile?.username || "").replace(/^@/, "").trim();
+  const title = handle ? `@${handle} on Nabad` : "My Nabad profile";
+  if (navigator.share && url) {
+    try {
+      await navigator.share({ title, text: title, url });
+      return;
+    } catch {}
+  }
+  await _profileCopyLink(button);
+}
+if (els.profileActionShare) {
+  els.profileActionShare.addEventListener("click", () => void _profileShare(els.profileActionShare));
+}
+if (els.profileActionCopyLink) {
+  els.profileActionCopyLink.addEventListener("click", () => void _profileCopyLink(els.profileActionCopyLink));
+}
+if (els.profileShelfSeeAll) {
+  els.profileShelfSeeAll.addEventListener("click", () => {
+    const list = els.profileHubSharedList || document.getElementById("profileHubSharedList");
+    if (list && typeof list.scrollIntoView === "function") {
+      list.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   });
 }
 [

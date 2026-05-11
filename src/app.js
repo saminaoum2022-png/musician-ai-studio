@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260512perturbback";
+const APP_BUILD = "20260512vocalsessionfix";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1747,6 +1747,8 @@ let vocalRefRecorder = null;
 let vocalRefStream = null;
 let vocalRefBlob = null;
 let vocalRefChunks = [];
+/** Incremented on each new mic session so a late `MediaRecorder.onstop` from a superseded recording cannot overwrite state (WKWebView race). */
+let vocalRecordSessionId = 0;
 let vocalRefPreviewUrl = "";
 let lastVocalRefFingerprint = "";
 
@@ -1906,15 +1908,16 @@ function clearActiveVoicePersona(opts = {}) {
 }
 
 function getVocalReferenceFile() {
-  // Prefer in-memory recording over an older upload if both exist
-  // (bfcache / failed-promote edge cases).
+  // Prefer the promoted File (record/upload/remix) over a raw blob. A stray
+  // `vocalRefBlob` from a failed promote or race must NOT override the
+  // current attachment — that was a source of "always the old vocal".
+  if (currentVocalRefFile && currentVocalRefFile.size > 0) return currentVocalRefFile;
   if (vocalRefBlob && vocalRefBlob.size > 0) {
     const name = vocalReferenceFilenameForMime(vocalRefBlob.type);
     return new File([vocalRefBlob], name, {
       type: vocalRefBlob.type || "audio/webm",
     });
   }
-  if (currentVocalRefFile) return currentVocalRefFile;
   return null;
 }
 
@@ -1984,9 +1987,12 @@ function clearVocalReferenceSelection(opts = {}) {
 function syncVocalReferenceFromDom() {
   try {
     const domFile = els.sunoVocalUpload?.files?.[0];
-    if (!domFile && currentVocalRefFile) {
+    // Mic/remix clips never sit on the hidden file input — only picker uploads do.
+    // Clearing JS state whenever `files` is empty would wipe a fresh recording.
+    if (!domFile && currentVocalRefFile && vocalRefOrigin === "upload") {
       currentVocalRefFile = null;
       vocalRefOrigin = null;
+      vocalRefBlob = null;
       refreshVocalReferenceUi();
       return;
     }
@@ -2284,7 +2290,16 @@ function pickRecorderMimeType() {
 }
 
 async function startVocalReferenceRecording() {
+  vocalRecordSessionId += 1;
+  const recordSession = vocalRecordSessionId;
   const hadExisting = Boolean(getVocalReferenceFile());
+  // Invalidate any in-flight onstop from a previous recorder instance before
+  // we touch shared state (prevents "new hum overwrote by old onstop").
+  try {
+    if (vocalRefRecorder && vocalRefRecorder.state !== "inactive") {
+      vocalRefRecorder.stop();
+    }
+  } catch {}
   // Mic capture supersedes any prior upload. Clear JS state + the hidden
   // file input *before* capture starts so WebKit can't glue an obsolete
   // File object back onto the input while we're recording.
@@ -2311,6 +2326,7 @@ async function startVocalReferenceRecording() {
     if (e.data && e.data.size) chunks.push(e.data);
   };
   rec.onstop = async () => {
+    if (recordSession !== vocalRecordSessionId) return;
     vocalRefChunks = chunks.slice();
     const blobType = effectiveMime();
     const blob = new Blob(chunks, { type: blobType });
@@ -12181,8 +12197,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                 ? "song_remix"
                 : "vocal_full";
             fd.append("referenceMode", stemRefMode);
-            fd.append("file", sendFile, sendFile?.name || "vocal-reference.webm");
-            fd.append("fileName", sendFile?.name || "vocal-reference.webm");
+            const uploadBaseName = sendFile?.name || "vocal-reference.webm";
+            const uniqueUploadName = `ref-${Date.now()}-${uploadBaseName.replace(/^.*[/\\]/, "")}`;
+            fd.append("file", sendFile, uniqueUploadName);
+            fd.append("fileName", uniqueUploadName);
             fd.append("fileType", sendFile?.type || "audio/webm");
             if (sendFp) fd.append("clientFingerprint", sendFp);
             fd.append("style", String(userStyle || "").trim());

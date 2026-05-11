@@ -341,48 +341,30 @@ module.exports = async function handler(req, res) {
       // style word so the field is never empty (it's required).
       const instModel = ["V4_5PLUS", "V5", "V5_5"].includes(safeModel) ? safeModel : "V4_5PLUS";
       const styleClean = String(style || "").replace(/\s+/g, " ").trim();
-      const dialectTag = dialect ? String(dialect).trim() : "";
-      const timbreTag = voiceTimbre ? String(voiceTimbre).trim() : "";
-      // Anti-derivative style hints, appended invisibly so Suno's
-      // generator skews toward an ORIGINAL composition rather than
-      // matching the closest known reference in its training. Without
-      // these, short hums with single-instrument styles (e.g. "violin")
-      // routinely trip Suno's melody fingerprinting and come back
-      // flagged as copyrighted material — even when the user hummed
-      // a completely original phrase.
-      const originalityTags = ["original composition", "contemporary"];
-      const cleanTagsList = [styleClean, dialectTag, timbreTag, ...originalityTags]
+      // Build the addPayload to mirror the Suno OpenAPI example AS
+      // CLOSELY AS POSSIBLE: short style words for `tags`, short
+      // negative style words for `negativeTags`, nothing else. The
+      // last few iterations added phrases like "copyrighted melody"
+      // and "cover of existing song" into negativeTags hoping to
+      // bias Suno away from popular references; instead, Suno's
+      // text-safety classifier pattern-matched those phrases and
+      // returned 413 "Uploaded audio contains copyrighted lyrics" on
+      // every request — regardless of audio. Strict minimal payload
+      // is the fix.
+      const cleanTagsList = [styleClean]
         .map((s) => String(s || "").trim())
         .filter(Boolean);
       let cleanTags = cleanTagsList.join(", ");
-      if (!cleanTags) cleanTags = "cinematic, instrumental, original composition";
-      if (cleanTags.length > 200) cleanTags = cleanTags.slice(0, 197) + "...";
+      if (!cleanTags) cleanTags = "ambient, instrumental";
+      if (cleanTags.length > 180) cleanTags = cleanTags.slice(0, 177) + "...";
       const cleanNegative = (() => {
-        // Always include anti-derivative phrases so Suno's generator
-        // is biased away from popular references that trigger its
-        // own copyright filter on the output side.
-        const antiDerivative = [
-          "famous melody",
-          "well-known song",
-          "copyrighted melody",
-          "derivative",
-          "cover of existing song",
-          "lead vocals",
-          "narration",
-        ];
         const userExtra = String(negativeTags || "")
           .split(",")
           .map((s) => s.trim())
           .filter(Boolean);
-        const merged = [...new Set([...antiDerivative, ...userExtra])].join(", ");
-        return merged.length > 200 ? merged.slice(0, 197) + "..." : merged;
+        const merged = userExtra.length ? userExtra.join(", ") : "heavy metal, aggressive drums";
+        return merged.length > 180 ? merged.slice(0, 177) + "..." : merged;
       })();
-      // weirdnessConstraint is Suno's "make it novel, not a copy" knob
-      // per the official OpenAPI. Default to 0.75 so the generator
-      // visibly drifts away from any known reference it might match —
-      // this is the single most effective mitigation for false-positive
-      // copyright rejections on short hums.
-      const weirdnessConstraint = 0.75;
       const addPayload = {
         uploadUrl,
         title: title || "Reference instrumental",
@@ -390,7 +372,6 @@ module.exports = async function handler(req, res) {
         negativeTags: cleanNegative,
         callBackUrl,
         model: instModel,
-        weirdnessConstraint,
         ...(audioWeight !== null ? { audioWeight } : {}),
         ...(styleWeight !== null ? { styleWeight } : {}),
         ...(vocalGender === "m" || vocalGender === "f" ? { vocalGender } : {}),
@@ -653,19 +634,12 @@ async function maybeTranscodeToMp3({ bytes, mime, name }) {
 
   const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
   const mp3Name = `${String(name || "vocal").replace(/\.[^.]+$/, "")}.mp3`;
-  // Pick one perturbation for this request. Same perturbation is used
-  // for both the full-chain and loudnorm-less fallback encodes so the
-  // final bytes Suno sees are consistent within a single generation,
-  // but a retry generates a different perturbation and therefore a
-  // different fingerprint.
-  const perturb = pickPerturbation();
-  try {
-    console.log("[suno/stems] perturbation", {
-      tempo: perturb.tempo,
-      pitchCents: perturb.cents,
-      pitchRatio: perturb.pitchRatio,
-    });
-  } catch {}
+  // Audio perturbation was an emergency mitigation for a Suno-side
+  // false-positive that turned out to be self-inflicted (anti-copyright
+  // phrases in our own negativeTags triggering Suno's text classifier).
+  // Disabled now so the audio Suno receives is exactly what the user
+  // recorded, normalized only.
+  const perturb = null;
 
   async function encodePlain() {
     await runFfmpeg(ffmpegPath, [

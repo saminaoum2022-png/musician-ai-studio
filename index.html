@@ -425,46 +425,40 @@
               </div>
 
               <div class="createPane createPane--hum" data-mode="hum" hidden>
-                <label class="field grow inputPanel humGuidePanel">
-                  <div class="label inPanelLabel">Hum · melody guide</div>
-                  <p class="humGuideLead hint">Hum or sing a short phrase — we use it as your melody guide (no extra popup).</p>
-                  <div class="humInlineRecorder" aria-live="polite">
-                    <button type="button" id="humRecorderToggle" class="humRecorderBtn" aria-label="Record melody guide">
-                      <span class="humRecorderBtnDot" aria-hidden="true"></span>
-                    </button>
-                    <div id="humRecorderStatus" class="humRecorderStatus hint">Tap to record · tap again to stop</div>
-                  </div>
-                  <div class="row vocalQuickRow humGuideQuickRow">
-                    <button id="btnMagicUploadVocal" class="ghost" type="button">+ Audio</button>
-                    <button id="btnPreviewVocalRef" class="ghost" type="button" disabled>Listen</button>
-                  </div>
-                  <div class="segPill vocalModePill" role="group" aria-label="Vocal output mode">
-                    <button id="vocalModeFull" type="button" class="ghost active" title="AI sings your lyrics on a new arrangement (your voice is replaced)">Full song</button>
-                    <button id="vocalModeInstrumental" type="button" class="ghost" title="Suno builds an instrumental band around your uploaded audio. Your vocal stays in the result.">Add Instrumental</button>
-                  </div>
-                  <input id="vocalInstrumentalOnly" type="hidden" value="0" />
-                  <div id="vocalRefActiveStrip" class="vocalRefActiveStrip" hidden>
-                    <span class="vocalRefActiveStripIco" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" width="18" height="18" focusable="false"><path fill="currentColor" d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
-                    </span>
-                    <div class="vocalRefActiveStripMid">
-                      <span class="vocalRefActiveStripLabel">Melody guide in use</span>
-                      <span id="vocalRefActiveName" class="vocalRefActiveName"></span>
-                      <span id="vocalRefActiveMeta" class="vocalRefActiveMeta"></span>
+                <details class="details vocalRefDetails" id="vocalRefDetails" open>
+                  <summary>Use your voice as a guide</summary>
+                  <div class="vocalRefCard">
+                    <div class="row vocalQuickRow">
+                      <button id="btnMagicUploadVocal" class="ghost" type="button">+ Audio</button>
+                      <button id="btnMagicRecordVocal" class="ghost" type="button">Record</button>
+                      <button id="btnPreviewVocalRef" class="ghost" type="button" disabled>Listen</button>
                     </div>
-                    <button id="btnClearVocalRef" type="button" class="ghost vocalRefClearBtn">Clear</button>
+                    <div class="segPill vocalModePill" role="group" aria-label="Vocal output mode">
+                      <button id="vocalModeFull" type="button" class="ghost active" title="AI sings your lyrics on a new arrangement (your voice is replaced)">Full song</button>
+                      <button id="vocalModeInstrumental" type="button" class="ghost" title="Suno builds an instrumental band around your uploaded audio. Your vocal stays in the result.">Add Instrumental</button>
+                    </div>
+                    <input id="vocalInstrumentalOnly" type="hidden" value="0" />
+                    <div id="vocalRefActiveStrip" class="vocalRefActiveStrip" hidden>
+                      <span class="vocalRefActiveStripIco" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="18" height="18" focusable="false"><path fill="currentColor" d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                      </span>
+                      <div class="vocalRefActiveStripMid">
+                        <span class="vocalRefActiveStripLabel">Melody guide in use</span>
+                        <span id="vocalRefActiveName" class="vocalRefActiveName"></span>
+                        <span id="vocalRefActiveMeta" class="vocalRefActiveMeta"></span>
+                      </div>
+                      <button id="btnClearVocalRef" type="button" class="ghost vocalRefClearBtn">Clear</button>
+                    </div>
+                    <div id="sunoVocalUploadName" class="hint uploadVocalsName">No vocal reference attached.</div>
+                    <div id="vocalRefHint" class="hint" style="margin-top:6px; display:none">
+                      Audio reference attached. Choose:
+                      <ul class="vocalRefHintList">
+                        <li><strong>Full song</strong> — AI re-sings your lyrics on a new arrangement.</li>
+                        <li><strong>Add Instrumental</strong> — Suno builds a band around your audio. Your vocal stays in the final mix.</li>
+                      </ul>
+                    </div>
                   </div>
-                  <div id="sunoVocalUploadName" class="hint uploadVocalsName">No vocal reference attached.</div>
-                  <div id="vocalRefHint" class="hint" style="margin-top:6px; display:none">
-                    Audio reference attached. Choose:
-                    <ul class="vocalRefHintList">
-                      <li><strong>Full song</strong> — AI re-sings your lyrics on a new arrangement.</li>
-                      <li><strong>Add Instrumental</strong> — Suno builds a band around your audio. Your vocal stays in the final mix.</li>
-                    </ul>
-                  </div>
-                  <!-- Legacy hook: lyrics ✦ menu still calls openVocalRecorderModal via this id -->
-                  <button type="button" id="btnMagicRecordVocal" hidden tabindex="-1" aria-hidden="true"></button>
-                </label>
+                </details>
               </div>
 
               <div class="createPane createPane--lyrics" data-mode="lyrics">
@@ -1814,6 +1808,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260512vocalstub"></script>
+    <script type="module" src="./src/app.js?v=20260512perturbback"></script>
   </body>
 </html>

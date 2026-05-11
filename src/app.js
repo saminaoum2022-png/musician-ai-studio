@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260512vocalstub";
+const APP_BUILD = "20260512perturbback";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -113,8 +113,12 @@ const els = {
   lyricsMagicMenu: document.getElementById("lyricsMagicMenu"),
   btnMagicUploadVocal: document.getElementById("btnMagicUploadVocal"),
   btnMagicRecordVocal: document.getElementById("btnMagicRecordVocal"),
-  humRecorderToggle: document.getElementById("humRecorderToggle"),
-  humRecorderStatus: document.getElementById("humRecorderStatus"),
+  vocalRecorderModal: document.getElementById("vocalRecorderModal"),
+  vocalRecorderBackdrop: document.getElementById("vocalRecorderBackdrop"),
+  btnCloseVocalRecorder: document.getElementById("btnCloseVocalRecorder"),
+  btnRecorderToggle: document.getElementById("btnRecorderToggle"),
+  btnRecorderUse: document.getElementById("btnRecorderUse"),
+  recorderStatus: document.getElementById("recorderStatus"),
   btnPreviewVocalRef: document.getElementById("btnPreviewVocalRef"),
   btnSunoRefresh: document.getElementById("btnSunoRefresh"),
   btnSunoStems: document.getElementById("btnSunoStems"),
@@ -382,12 +386,6 @@ const els = {
   songDetailsContent: document.getElementById("songDetailsContent"),
   brandTitle: document.getElementById("brandTitle"),
   brandSecondary: document.getElementById("brandSecondary"),
-  vocalRecorderModal: document.getElementById("vocalRecorderModal"),
-  vocalRecorderBackdrop: document.getElementById("vocalRecorderBackdrop"),
-  btnCloseVocalRecorder: document.getElementById("btnCloseVocalRecorder"),
-  btnRecorderToggle: document.getElementById("btnRecorderToggle"),
-  btnRecorderUse: document.getElementById("btnRecorderUse"),
-  recorderStatus: document.getElementById("recorderStatus"),
   callingCardModal: document.getElementById("callingCardModal"),
   callingCardBackdrop: document.getElementById("callingCardBackdrop"),
   btnCloseCallingCard: document.getElementById("btnCloseCallingCard"),
@@ -2207,6 +2205,7 @@ function updateVocalRoomAvailability() {}
 function openVocalRecorderModal() {
   if (!els.vocalRecorderModal) return;
   els.vocalRecorderModal.style.display = "";
+  setRecorderToggleRecordingUi(Boolean(vocalRefRecorder && vocalRefRecorder.state === "recording"));
 }
 function closeVocalRecorderModal() {
   if (!els.vocalRecorderModal) return;
@@ -2215,11 +2214,9 @@ function closeVocalRecorderModal() {
 }
 function setVocalRecorderStatusAll(text) {
   if (els.recorderStatus) els.recorderStatus.textContent = text;
-  if (els.humRecorderStatus) els.humRecorderStatus.textContent = text;
 }
 function setRecorderToggleRecordingUi(active) {
   if (els.btnRecorderToggle) els.btnRecorderToggle.classList.toggle("isRecording", Boolean(active));
-  if (els.humRecorderToggle) els.humRecorderToggle.classList.toggle("isRecording", Boolean(active));
 }
 async function toggleVocalReferenceRecorderFromUi() {
   const isRecording = Boolean(vocalRefRecorder && vocalRefRecorder.state === "recording");
@@ -2235,7 +2232,7 @@ async function toggleVocalReferenceRecorderFromUi() {
       return;
     }
     setRecorderToggleRecordingUi(true);
-    setVocalRecorderStatusAll("Recording… tap again to stop");
+    setVocalRecorderStatusAll("Recording… tap to stop");
   } else {
     stopVocalReferenceRecording();
     setRecorderToggleRecordingUi(false);
@@ -11113,9 +11110,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   if (els.btnRecorderToggle) {
     els.btnRecorderToggle.addEventListener("click", () => void toggleVocalReferenceRecorderFromUi());
   }
-  if (els.humRecorderToggle) {
-    els.humRecorderToggle.addEventListener("click", () => void toggleVocalReferenceRecorderFromUi());
-  }
   if (els.btnRecorderUse) {
     els.btnRecorderUse.addEventListener("click", () => {
       // The recording is already promoted to currentVocalRefFile in
@@ -11372,15 +11366,18 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (looksCopyright) {
       return {
         kind: "copyright",
-        headline: "Suno flagged this hum as matching a known melody",
+        headline: "Suno's filter flagged this take — tap Generate again",
         detail:
-          "Suno's copyright filter sometimes false-positives on short hums — "
-          + "even original ones — when the melodic contour resembles a popular reference.\n\n"
-          + "Tips that usually fix it:\n"
-          + "• Hum a longer phrase (8–15 seconds) with more varied notes.\n"
-          + "• Avoid generic do-re-mi runs and arpeggios; add unexpected intervals.\n"
-          + "• Use a more specific style tag (e.g. \"sparse solo violin, modern minimal\") "
-          + "instead of just a generic instrument name."
+          "This is almost always a false positive. Suno caches every audio "
+          + "upload for ~14 days, and when you record + retry the same melody "
+          + "it sometimes matches its own cached fingerprint and rejects it as "
+          + "\"copyrighted\".\n\n"
+          + "Fix:\n"
+          + "• Tap Generate again — we apply a small random pitch/tempo nudge "
+          + "to every upload, so the next try sends a fresh fingerprint Suno "
+          + "hasn't seen.\n"
+          + "• If it keeps failing, re-record (don't reuse the same take) and "
+          + "vary the phrasing slightly."
           + (msg ? `\n\nSuno raw: ${msg}` : ""),
       };
     }

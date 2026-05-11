@@ -6720,6 +6720,10 @@ input::placeholder, textarea::placeholder{
   color: rgba(232,238,247,0.55);
   flex: 0 0 auto;
 }
+/* Below Generate / Options — spacing tuned for foot-of-flow placement */
+.createSoundsBanner--footer{
+  margin: 14px 0 2px;
+}
 
 /* ---------- Sounds (Suno /generate/sounds) ---------- */
 .soundsPage{

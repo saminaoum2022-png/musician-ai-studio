@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260512enginetruth";
+const APP_BUILD = "20260512profilepulse";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -371,6 +371,17 @@ const els = {
   profilePreviewGenres: document.getElementById("profilePreviewGenres"),
   profilePreviewLinks: document.getElementById("profilePreviewLinks"),
   profileHubSharedList: document.getElementById("profileHubSharedList"),
+  profileHeroLatest: document.getElementById("profileHeroLatest"),
+  profileHeroArtImg: document.getElementById("profileHeroArtImg"),
+  profileHeroPlayBtn: document.getElementById("profileHeroPlayBtn"),
+  profileHeroTitle: document.getElementById("profileHeroTitle"),
+  profileHeroMeta: document.getElementById("profileHeroMeta"),
+  profilePulseStrip: document.getElementById("profilePulseStrip"),
+  profileHeartbeatSvg: document.getElementById("profileHeartbeatSvg"),
+  profileHeartbeatPeaks: document.getElementById("profileHeartbeatPeaks"),
+  profileAuraStatsInline: document.getElementById("profileAuraStatsInline"),
+  profileAuraStatLine: document.getElementById("profileAuraStatLine"),
+  profilePersonaInlineChip: document.getElementById("profilePersonaInlineChip"),
   userPublicAvatar: document.getElementById("userPublicAvatar"),
   userPublicName: document.getElementById("userPublicName"),
   userPublicVoice: document.getElementById("userPublicVoice"),
@@ -3222,6 +3233,46 @@ function updateProfilePersonaRow() {
 }
 
 /**
+ * Compact persona / voice line under bio on Profile (Direction A).
+ */
+function updateProfilePersonaInlineChip() {
+  const el = els.profilePersonaInlineChip;
+  if (!el) return;
+  let id = "";
+  try {
+    id =
+      String(els.sunoPersonaId?.value || "").trim()
+      || (() => {
+        try {
+          return loadPersonaSelection().trim();
+        } catch {
+          return "";
+        }
+      })();
+  } catch {}
+  if (id) {
+    let label = "";
+    try {
+      const list = loadPersonas();
+      const hit = list.find((x) => String(x.personaId) === id);
+      label = String(hit?.label || "").trim();
+    } catch {}
+    el.textContent = label ? `Persona · ${label}` : `Persona · ${id.slice(0, 10)}…`;
+    el.style.display = "";
+    return;
+  }
+  const vt = String(activeProfile?.voiceTimbre || "").trim();
+  if (vt) {
+    const pretty = vt.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    el.textContent = `Voice · ${pretty}`;
+    el.style.display = "";
+    return;
+  }
+  el.textContent = "";
+  el.style.display = "none";
+}
+
+/**
  * Persona-active banner on the Create page.
  *
  * Mirrors the Remix banner pattern: when a persona is the current
@@ -3237,39 +3288,43 @@ function updateProfilePersonaRow() {
  * persona elsewhere shows the right state immediately.
  */
 function renderActivePersonaBanner() {
-  if (!els.personaActiveBanner || !els.personaActiveBannerLabel) return;
-  const idFromSelect = String(els.sunoPersonaId?.value || "").trim();
-  const idSaved = (() => {
-    try { return loadPersonaSelection().trim(); } catch { return ""; }
-  })();
-  const id = idFromSelect || idSaved;
-  if (!id) {
-    els.personaActiveBanner.hidden = true;
-    return;
-  }
-  const list = loadPersonas();
-  const hit = list.find((x) => String(x.personaId) === id);
-  if (!hit) {
-    els.personaActiveBanner.hidden = true;
-    return;
-  }
-  const label = String(hit.label || id.slice(0, 12) + "…").trim() || "Persona";
-  els.personaActiveBannerLabel.textContent = label;
-  // When a vocal reference is attached, escalate the banner copy so the
-  // user can't miss that the persona will OVERRIDE the new recording's
-  // voice. The persona-singing-over-new-recording surprise was the #1
-  // reason for "Suno used the wrong voice" reports.
   try {
-    const refAttached = Boolean(getVocalReferenceFile());
-    const subEl = els.personaActiveBanner.querySelector(".remixSourceBannerSub");
-    if (subEl) {
-      subEl.textContent = refAttached
-        ? "Heads up: this persona will replace your new recording's voice. Tap × to use the recording's voice instead."
-        : "Your next song will use this voice. Tap Change to swap or clear it.";
+    if (!els.personaActiveBanner || !els.personaActiveBannerLabel) return;
+    const idFromSelect = String(els.sunoPersonaId?.value || "").trim();
+    const idSaved = (() => {
+      try { return loadPersonaSelection().trim(); } catch { return ""; }
+    })();
+    const id = idFromSelect || idSaved;
+    if (!id) {
+      els.personaActiveBanner.hidden = true;
+      return;
     }
-    els.personaActiveBanner.classList.toggle("personaActiveBanner--warn", refAttached);
-  } catch {}
-  els.personaActiveBanner.hidden = false;
+    const list = loadPersonas();
+    const hit = list.find((x) => String(x.personaId) === id);
+    if (!hit) {
+      els.personaActiveBanner.hidden = true;
+      return;
+    }
+    const label = String(hit.label || id.slice(0, 12) + "…").trim() || "Persona";
+    els.personaActiveBannerLabel.textContent = label;
+    // When a vocal reference is attached, escalate the banner copy so the
+    // user can't miss that the persona will OVERRIDE the new recording's
+    // voice. The persona-singing-over-new-recording surprise was the #1
+    // reason for "Suno used the wrong voice" reports.
+    try {
+      const refAttached = Boolean(getVocalReferenceFile());
+      const subEl = els.personaActiveBanner.querySelector(".remixSourceBannerSub");
+      if (subEl) {
+        subEl.textContent = refAttached
+          ? "Heads up: this persona will replace your new recording's voice. Tap × to use the recording's voice instead."
+          : "Your next song will use this voice. Tap Change to swap or clear it.";
+      }
+      els.personaActiveBanner.classList.toggle("personaActiveBanner--warn", refAttached);
+    } catch {}
+    els.personaActiveBanner.hidden = false;
+  } finally {
+    try { updateProfilePersonaInlineChip(); } catch {}
+  }
 }
 const AUTH_SESSION_KEY = "mas:supabase:session:v1";
 const AUTH_PKCE_KEY = "mas:supabase:pkce:v1";
@@ -6006,18 +6061,7 @@ function restoreProfileInputsFromActive() {
 }
 
 function renderProfileOwnStats() {
-  const creator = String(activeProfile.username || "guest");
-  const uid = String(authSession?.user?.id || "");
-  // When signed in, ALWAYS scope to uid via meta.creatorUserId. Never
-  // fall back to creator_username matching for signed-in users —
-  // that's how legacy "@guest" posts ended up attributed to other
-  // accounts. Unsigned users keep the legacy username path so a
-  // returning guest still sees their own demo posts on this device.
-  const items = loadHubFeed().filter((p) => {
-    if (uid) return String(p?.meta?.creatorUserId || "") === uid;
-    if (!creator || creator === "guest") return false;
-    return String(p?.creator || "") === creator;
-  });
+  const items = getProfileOwnerHubItems();
   const totalLikes = items.reduce((sum, p) => sum + Number(p.likes || 0), 0);
   if (els.profileOwnSongCount) {
     if (items.length) {
@@ -6028,9 +6072,6 @@ function renderProfileOwnStats() {
       els.profileOwnSongCount.hidden = true;
     }
   }
-  // Legacy compatibility node — still updated for code paths that read
-  // `els.profileOwnStats.innerHTML` directly. Hidden in the DOM via the
-  // `srOnly` wrapper so it doesn't render visually.
   if (els.profileOwnStats) {
     if (items.length) {
       els.profileOwnStats.innerHTML = `
@@ -6042,13 +6083,21 @@ function renderProfileOwnStats() {
       els.profileOwnStats.innerHTML = "";
     }
   }
-  // Aura stat strip — vertical-bar separators, gradient values. Each
-  // stat hides itself when its value is zero/unavailable; the
-  // separator CSS hides the dangling bars on either side.
   if (els.profileAuraSongsValue) els.profileAuraSongsValue.textContent = String(items.length);
   if (els.profileAuraLikesValue) els.profileAuraLikesValue.textContent = String(totalLikes);
   if (els.profileAuraStatSongs) els.profileAuraStatSongs.dataset.show = items.length > 0 ? "true" : "false";
   if (els.profileAuraStatLikes) els.profileAuraStatLikes.dataset.show = totalLikes > 0 ? "true" : "false";
+
+  const lineEl = els.profileAuraStatLine;
+  if (lineEl) {
+    const bits = [];
+    if (items.length) bits.push(`<strong>${items.length}</strong> song${items.length === 1 ? "" : "s"}`);
+    if (totalLikes > 0) bits.push(`<strong>${totalLikes}</strong> like${totalLikes === 1 ? "" : "s"}`);
+    lineEl.innerHTML =
+      bits.length > 0 ? bits.join('<span class="profileAuraStatsSepDot" aria-hidden="true"> · </span>') : "No releases yet";
+  }
+
+  syncProfileAuraPulseFromLatest(items);
 }
 
 /* -----------------------------------------------------------------
@@ -6118,6 +6167,158 @@ function applyProfileAuraAvatarTint(srcOverride) {
   } catch {}
 }
 
+/** Voice timbre → page tint (Twist 1). When unset, falls back to avatar sampling. */
+function timbreToAuraCss(timbreRaw) {
+  const t = String(timbreRaw || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+  const map = {
+    bass: [88, 118, 235],
+    baritone: [118, 152, 255],
+    tenor: [255, 200, 118],
+    alto: [255, 138, 188],
+    mezzo_soprano: [228, 152, 255],
+    soprano: [168, 218, 255],
+  };
+  const rgb = map[t];
+  if (!rgb) return null;
+  const [r, g, b] = rgb;
+  return {
+    tint: `rgba(${r}, ${g}, ${b}, 0.52)`,
+    soft: `rgba(${r}, ${g}, ${b}, 0.22)`,
+  };
+}
+
+function applyProfileAuraVisualTint() {
+  const aura = els.profileAura;
+  if (!aura) return;
+  const timbre = String(
+    activeProfile?.voiceTimbre || els.profilePreviewTimbreInput?.value || ""
+  ).trim();
+  const fromTimbre = timbreToAuraCss(timbre);
+  if (fromTimbre) {
+    aura.style.setProperty("--aura-tint", fromTimbre.tint);
+    aura.style.setProperty("--aura-tint-soft", fromTimbre.soft);
+    _auraTintLastSrc = ""; // next avatar-only pass may refresh
+    return;
+  }
+  applyProfileAuraAvatarTint(activeProfile.avatar);
+}
+
+/** Rough BPM guess from Hub post meta — drives aura ring cadence (Twist 1). */
+function estimateBpmFromHubPost(p) {
+  if (!p) return 88;
+  try {
+    const m = p.meta || {};
+    const n = Number(m.bpm);
+    if (Number.isFinite(n) && n >= 48 && n <= 200) return Math.round(n);
+    const g = String(m.groovePace || "").toLowerCase();
+    if (g === "slow") return 72;
+    if (g === "energetic" || g === "fast") return 118;
+    if (g === "balanced") return 92;
+    const id = String(p.id || p.title || "");
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h = ((h << 5) - h + id.charCodeAt(i)) | 0;
+    return 68 + (Math.abs(h) % 38);
+  } catch {
+    return 88;
+  }
+}
+
+function syncProfileAuraPulseFromLatest(items) {
+  const aura = els.profileAura;
+  if (!aura) return;
+  const latest = Array.isArray(items) && items.length ? items[0] : null;
+  const bpm = latest ? estimateBpmFromHubPost(latest) : 88;
+  aura.style.setProperty("--aura-bpm", String(bpm));
+}
+
+function getProfileOwnerHubItems() {
+  const creator = String(activeProfile.username || "guest");
+  const uid = String(authSession?.user?.id || "");
+  return loadHubFeed()
+    .filter((p) => {
+      if (uid) return String(p?.meta?.creatorUserId || "") === uid;
+      if (!creator || creator === "guest") return false;
+      return String(p?.creator || "") === creator;
+    })
+    .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
+}
+
+function renderProfileHero(items) {
+  const sec = els.profileHeroLatest;
+  const img = els.profileHeroArtImg;
+  const titleEl = els.profileHeroTitle;
+  const metaEl = els.profileHeroMeta;
+  const btn = els.profileHeroPlayBtn;
+  if (!sec || !img || !titleEl || !metaEl || !btn) return;
+  if (!items?.length) {
+    sec.hidden = true;
+    return;
+  }
+  sec.hidden = false;
+  const latest = items[0];
+  const art = String(latest.artUrl || latest.creatorAvatar || "./assets/nabadai-logo.png");
+  img.src = art;
+  img.alt = String(latest.title || "Cover art").slice(0, 120);
+  titleEl.textContent = String(latest.title || "Untitled").trim() || "Untitled";
+  const bits = [];
+  const rel = typeof relativeTime === "function" ? relativeTime(latest.ts) : "";
+  if (rel) bits.push(rel);
+  const lk = Number(latest.likes || 0);
+  if (lk > 0) bits.push(`${lk} like${lk === 1 ? "" : "s"}`);
+  metaEl.textContent = bits.join(" · ");
+  sec.dataset.hubId = String(latest.id || "");
+  const play = () => {
+    const sid = String(latest.id || "");
+    if (sid) void playHubPostFromProfile(sid);
+  };
+  btn.onclick = play;
+  img.onclick = play;
+}
+
+function renderProfileHeartbeat(items) {
+  const strip = els.profilePulseStrip;
+  const svg = els.profileHeartbeatSvg;
+  const peaks = els.profileHeartbeatPeaks;
+  if (!strip || !svg || !peaks) return;
+  if (!items?.length) {
+    strip.hidden = true;
+    peaks.innerHTML = "";
+    svg.innerHTML = "";
+    return;
+  }
+  strip.hidden = false;
+  const chron = [...items].sort((a, b) => Number(a.ts || 0) - Number(b.ts || 0));
+  const n = chron.length;
+  const maxL = Math.max(1, ...chron.map((p) => Number(p.likes || 0)));
+  let d = "M 4 38";
+  chron.forEach((p, i) => {
+    const x = n === 1 ? 160 : 12 + (i / Math.max(n - 1, 1)) * 296;
+    const likes = Number(p.likes || 0);
+    const h = 10 + (likes / maxL) * 26;
+    const y = 38 - h;
+    d += ` L ${Math.max(4, x - 5)} 38 L ${x} ${y} L ${Math.min(316, x + 5)} 38`;
+  });
+  d += " L 316 38";
+  svg.innerHTML = `<path d="${d}" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" opacity="0.82"/>`;
+  peaks.innerHTML = chron
+    .map((p, i) => {
+      const leftPct = n === 1 ? 50 : (i / Math.max(n - 1, 1)) * 100;
+      const sid = escapeHtml(String(p.id));
+      const tl = escapeHtml(String(p.title || "Song").slice(0, 80));
+      return `<button type="button" class="profileHeartbeatPeak" style="left:${leftPct}%" data-profile-heart-play="${sid}" aria-label="Play ${tl}"></button>`;
+    })
+    .join("");
+  peaks.querySelectorAll("[data-profile-heart-play]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const sid = b.getAttribute("data-profile-heart-play");
+      if (sid) void playHubPostFromProfile(sid);
+    });
+  });
+}
+
 function setProfileAuraAudioState(playing) {
   const aura = els.profileAura;
   if (!aura) return;
@@ -6140,7 +6341,12 @@ function renderProfilePreviewFromInputs() {
   }
   if (els.profilePreviewGenres) {
     if (genres) {
-      els.profilePreviewGenres.textContent = `Genres: ${genres}`;
+      const wash = genres
+        .split(/[,|]/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .join(" · ");
+      els.profilePreviewGenres.textContent = wash.toUpperCase();
       els.profilePreviewGenres.style.display = "";
     } else {
       els.profilePreviewGenres.textContent = "";
@@ -6150,9 +6356,10 @@ function renderProfilePreviewFromInputs() {
   if (els.profilePreviewAvatar) {
     els.profilePreviewAvatar.src = activeProfile.avatar || "./assets/nabadai-logo.png";
   }
-  applyProfileAuraAvatarTint(activeProfile.avatar);
+  applyProfileAuraVisualTint();
   renderProfileOwnStats();
   renderProfileUsernamePrompt();
+  updateProfilePersonaInlineChip();
   // Email is private — only show inside edit mode.
   if (els.authLoggedInEmailInline) {
     const email = String(authSession?.user?.email || activeProfile?.email || "").trim();
@@ -6446,16 +6653,10 @@ async function playHubPostFromProfile(postId) {
 
 function renderProfileHubShared() {
   if (!els.profileHubSharedList) return;
-  const creator = String(activeProfile.username || "guest");
-  const uid = String(authSession?.user?.id || "");
-  const items = loadHubFeed()
-    .filter((p) => {
-      if (uid) return String(p?.meta?.creatorUserId || "") === uid;
-      if (!creator || creator === "guest") return false;
-      return String(p?.creator || "") === creator;
-    })
-    .slice(0, 30);
+  const items = getProfileOwnerHubItems().slice(0, 30);
   renderProfileOwnStats();
+  renderProfileHero(items);
+  renderProfileHeartbeat(items);
   const countEl = document.getElementById("profileOwnSongCount");
   if (countEl) {
     if (items.length) {

@@ -1007,24 +1007,21 @@
 
               <div id="authLoggedInEmailInline" class="profileAuraEmail hint" style="display:none"></div>
 
-              <div id="profilePreviewGenres" class="profilePreviewGenres profileAuraGenres" style="display:none"></div>
+              <p id="profilePersonaInlineChip" class="profilePersonaInlineChip" style="display:none" aria-live="polite"></p>
 
-              <div class="profileAuraStatStrip" id="profileAuraStatStrip" aria-live="polite">
-                <span class="profileAuraStat" id="profileAuraStatSongs" data-show="false">
-                  <strong id="profileAuraSongsValue">0</strong>
-                  <span class="profileAuraStatLabel">Songs</span>
+              <p id="profilePreviewGenres" class="profileGenreWash" style="display:none" aria-label="Genres"></p>
+
+              <p class="profileAuraStatsInline" id="profileAuraStatsInline" aria-live="polite">
+                <span class="profileAuraStatsInlineInner">
+                  <span id="profileAuraStatLine">—</span>
+                  <a href="#/credits" id="profileCreditsLink" class="profileAuraCreditsLink">Credits <strong id="profileCreditsBalance">0</strong></a>
                 </span>
-                <span class="profileAuraStatSep" aria-hidden="true">│</span>
-                <span class="profileAuraStat" id="profileAuraStatLikes" data-show="false">
-                  <strong id="profileAuraLikesValue">0</strong>
-                  <span class="profileAuraStatLabel">Likes</span>
-                </span>
-                <span class="profileAuraStatSep" aria-hidden="true">│</span>
-                <a href="#/credits" id="profileCreditsLink" class="profileAuraStat profileAuraStat--link" aria-label="My credits">
-                  <strong id="profileCreditsBalance" class="profileAuraStatValue">0</strong>
-                  <span class="profileAuraStatLabel">Credits</span>
-                </a>
-              </div>
+              </p>
+              <!-- Legacy numeric nodes — updated by renderProfileOwnStats for scripts that read counts -->
+              <span id="profileAuraSongsValue" class="srOnly" aria-hidden="true">0</span>
+              <span id="profileAuraLikesValue" class="srOnly" aria-hidden="true">0</span>
+              <span id="profileAuraStatSongs" class="srOnly" data-show="false" aria-hidden="true"></span>
+              <span id="profileAuraStatLikes" class="srOnly" data-show="false" aria-hidden="true"></span>
             </div>
           </section>
 
@@ -1063,10 +1060,37 @@
             </div>
           </div>
 
+          <section class="profileHeroLatest" id="profileHeroLatest" hidden>
+            <div class="profileHeroLatestInner">
+              <div class="profileHeroLatestArt">
+                <img id="profileHeroArtImg" src="" alt="" draggable="false" />
+                <button type="button" id="profileHeroPlayBtn" class="profileHeroPlayBtn" aria-label="Play latest release">
+                  <span aria-hidden="true">▶</span>
+                </button>
+              </div>
+              <div class="profileHeroLatestText">
+                <span class="profileEyebrow">Latest release</span>
+                <h3 id="profileHeroTitle" class="profileHeroTitle">—</h3>
+                <p id="profileHeroMeta" class="profileHeroMeta hint"></p>
+              </div>
+            </div>
+          </section>
+
+          <section class="profilePulseStrip" id="profilePulseStrip" hidden>
+            <div class="profilePulseStripHead">
+              <span class="profileEyebrow">Your pulse</span>
+              <span class="profilePulseHint hint">One beat per story — tap a peak to play</span>
+            </div>
+            <div class="profileHeartbeatScroll">
+              <svg id="profileHeartbeatSvg" class="profileHeartbeatSvg" viewBox="0 0 320 48" preserveAspectRatio="none" role="img" aria-label="Releases over time"></svg>
+              <div id="profileHeartbeatPeaks" class="profileHeartbeatPeaks"></div>
+            </div>
+          </section>
+
           <!-- Songs — same Apple-Music-style row design as Library, no card chrome -->
           <div class="profileSongsBlock">
             <header class="libraryHeader profileSongsHeader">
-              <h2>Songs</h2>
+              <h2>All releases</h2>
               <p class="libraryLead">Your shares on the Hub.</p>
               <p id="profileOwnSongCount" class="libraryCount" hidden></p>
             </header>
@@ -1800,6 +1824,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260512enginetruth"></script>
+    <script type="module" src="./src/app.js?v=20260512profilepulse"></script>
   </body>
 </html>

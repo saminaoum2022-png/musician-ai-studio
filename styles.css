@@ -5536,10 +5536,18 @@ input[type="range"]::-moz-range-thumb{
     display: none !important;
   }
   body[data-route="player"] .app{
-    /* Don’t force the .app shell to full viewport height — that leaves a tall
-       dead band above the page footer on tall phones (content is short, box is not). */
-    min-height: 0;
-    padding: calc(env(safe-area-inset-top) + 12px) 14px calc(env(safe-area-inset-bottom) + 8px) !important;
+    /* Full-height shell so the player can vertically center inside the viewport
+       and the bottom black band feels balanced (not pinned at the top). */
+    min-height: 100vh;
+    min-height: 100svh;
+    padding: calc(env(safe-area-inset-top) + 12px) 14px calc(env(safe-area-inset-bottom) + 12px) !important;
+    /* Center .grid (which holds the player card) vertically. */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  body[data-route="player"] main.grid{
+    margin: 0;
   }
   body[data-route="player"] .playerCard{
     padding: 0;
@@ -5553,21 +5561,14 @@ input[type="range"]::-moz-range-thumb{
   }
   body[data-route="player"] .playerHeader{
     margin-bottom: 12px;
-    padding-top: 4px;
+    padding-top: 2px;
   }
   body[data-route="player"] .playerSecondaryRow{
     margin-bottom: 0;
   }
   body[data-route="player"] .footer{
-    margin-top: 8px;
+    margin-top: 10px;
     margin-bottom: 0;
-    padding-bottom: 2px;
-  }
-  /* Smaller artwork on phone Now Playing — full-width 1:1 square felt huge and “too high”. */
-  body[data-route="player"] .playerArtWrap{
-    max-width: min(320px, 88vw);
-    margin-left: auto;
-    margin-right: auto;
   }
   .playerShell{
     gap: 14px;

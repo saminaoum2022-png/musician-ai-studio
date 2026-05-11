@@ -6,11 +6,47 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511oauthnative";
+const APP_BUILD = "20260511oauthplugins";
 
 (() => {
   const f = document.getElementById("footerBuild");
   if (f) f.textContent = `Build ${APP_BUILD}`;
+})();
+
+/**
+ * Capacitor only wires native plugins after JS calls registerPlugin().
+ * Our app has no bundle step that imports @capacitor/browser — without this,
+ * Plugins.Browser is missing and Google OAuth never opens on iOS.
+ * Web stubs mirror the official plugins (safe no-ops / window.open).
+ */
+(() => {
+  try {
+    const cap = typeof window !== "undefined" ? window.Capacitor : null;
+    if (!cap?.registerPlugin) return;
+    if (!cap.Plugins?.Browser) {
+      cap.registerPlugin("Browser", {
+        web: () => ({
+          async open(options) {
+            const url = options?.url;
+            if (url) window.open(url, options?.windowName || "_blank");
+          },
+          async close() {},
+        }),
+      });
+    }
+    if (!cap.Plugins?.App) {
+      cap.registerPlugin("App", {
+        web: () => ({
+          async addListener() {
+            return { remove: async () => {} };
+          },
+          async removeAllListeners() {},
+        }),
+      });
+    }
+  } catch {
+    /* Already registered elsewhere */
+  }
 })();
 
 const els = {
@@ -14068,8 +14104,11 @@ if (els.btnAuthGoogle) {
       if (!url) throw new Error("Could not create Google auth URL");
       const Browser = getCapacitorBrowserPlugin();
       if (isCapacitorNativeAuth() && Browser?.open) {
-        await Browser.open({ url, presentationStyle: "popover" });
+        await Browser.open({ url, presentationStyle: "fullscreen" });
         // Button is reset by the appUrlOpen handler once the deep link returns.
+      } else if (isCapacitorNativeAuth() && !Browser?.open) {
+        setStatus("Auth browser failed to load. Rebuild the app in Xcode (Product → Clean, then Run).");
+        resetGoogleAuthButton();
       } else {
         window.location.assign(url);
         setTimeout(resetGoogleAuthButton, 3500);

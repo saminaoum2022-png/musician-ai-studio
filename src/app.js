@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511oauthplugins";
+const APP_BUILD = "20260511oauthapi";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1106,7 +1106,18 @@ function scheduleRenderHubNowPlaying() {
   });
 }
 const LATEST_SUNO_MODEL = "V5_5";
-const API_BASE = (window.__API_BASE__ || "").replace(/\/$/, "");
+/** Production API origin for native shells — relative `/api/*` has no server on-device. */
+const DEFAULT_NATIVE_API_BASE = "https://musician-ai-studio.vercel.app";
+const API_BASE = (() => {
+  let b = String(window.__API_BASE__ || "").trim().replace(/\/$/, "");
+  if (b) return b;
+  try {
+    if (window.Capacitor?.isNativePlatform?.()) {
+      return DEFAULT_NATIVE_API_BASE.replace(/\/$/, "");
+    }
+  } catch {}
+  return "";
+})();
 const apiUrl = (p) => API_BASE ? `${API_BASE}${p}` : p;
 let SUPABASE_URL = "";
 let SUPABASE_ANON_KEY = "";
@@ -9571,6 +9582,18 @@ function setStatus(text) {
   }, 2600);
 }
 
+/** Login / OAuth feedback: status strip is often off-screen on `#/auth`; mirror to toast. */
+function notifyLoginFeedback(text) {
+  const t = String(text || "").trim();
+  if (!t) return;
+  try {
+    if (els.status) els.status.textContent = t;
+  } catch {}
+  try {
+    showToast(t, { durationMs: Math.min(12000, 5200 + t.length * 40) });
+  } catch {}
+}
+
 function setProgress(pct) {
   els.progressBar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
 }
@@ -14091,38 +14114,48 @@ if (isCapacitorNativeAuth()) {
     } catch {}
   }
 }
-if (els.btnAuthGoogle) {
-  els.btnAuthGoogle.addEventListener("click", async () => {
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return setStatus("Supabase config missing.");
-    try {
-      if (els.btnAuthGoogle) {
-        els.btnAuthGoogle.disabled = true;
-        els.btnAuthGoogle.textContent = "Opening Google…";
-      }
-      setStatus("Opening Google login…");
-      const url = await supabaseGoogleLoginUrl();
-      if (!url) throw new Error("Could not create Google auth URL");
-      const Browser = getCapacitorBrowserPlugin();
-      if (isCapacitorNativeAuth() && Browser?.open) {
-        await Browser.open({ url, presentationStyle: "fullscreen" });
-        // Button is reset by the appUrlOpen handler once the deep link returns.
-      } else if (isCapacitorNativeAuth() && !Browser?.open) {
-        setStatus("Auth browser failed to load. Rebuild the app in Xcode (Product → Clean, then Run).");
-        resetGoogleAuthButton();
-      } else {
-        window.location.assign(url);
-        setTimeout(resetGoogleAuthButton, 3500);
-      }
-    } catch (e) {
-      resetGoogleAuthButton();
-      setStatus(`Google login failed to start: ${e?.message || String(e)}`);
+async function runGoogleOAuthLogin() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    await loadPublicConfig();
+  }
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    notifyLoginFeedback(
+      "Could not load login settings from the server. Check Wi‑Fi or open the web app once, then try again."
+    );
+    resetGoogleAuthButton();
+    return;
+  }
+  try {
+    if (els.btnAuthGoogle) {
+      els.btnAuthGoogle.disabled = true;
+      els.btnAuthGoogle.textContent = "Opening Google…";
     }
-  });
+    notifyLoginFeedback("Opening Google login…");
+    const url = await supabaseGoogleLoginUrl();
+    if (!url) throw new Error("Could not create Google auth URL");
+    const Browser = getCapacitorBrowserPlugin();
+    if (isCapacitorNativeAuth() && Browser?.open) {
+      await Browser.open({ url, presentationStyle: "fullscreen" });
+      // Button is reset by the appUrlOpen handler once the deep link returns.
+    } else if (isCapacitorNativeAuth() && !Browser?.open) {
+      notifyLoginFeedback(
+        "Could not open the sign-in browser. Product → Clean Build Folder in Xcode, then Run again."
+      );
+      resetGoogleAuthButton();
+    } else {
+      window.location.assign(url);
+      setTimeout(resetGoogleAuthButton, 3500);
+    }
+  } catch (e) {
+    resetGoogleAuthButton();
+    notifyLoginFeedback(`Google login failed to start: ${e?.message || String(e)}`);
+  }
+}
+if (els.btnAuthGoogle) {
+  els.btnAuthGoogle.addEventListener("click", () => void runGoogleOAuthLogin());
 }
 if (els.btnAuthGateGoogle) {
-  els.btnAuthGateGoogle.addEventListener("click", () => {
-    if (els.btnAuthGoogle) els.btnAuthGoogle.click();
-  });
+  els.btnAuthGateGoogle.addEventListener("click", () => void runGoogleOAuthLogin());
 }
 if (els.btnAuthGateGuest) {
   els.btnAuthGateGuest.addEventListener("click", () => {

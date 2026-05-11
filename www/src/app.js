@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511huminline";
+const APP_BUILD = "20260511oauthnative";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -3787,16 +3787,14 @@ function maybeHandleMagicLinkFromHash() {
     return false;
   }
 }
-async function maybeHandleAuthCodeFromQuery() {
+async function exchangeOAuthCodeForSession(code) {
+  if (!code) return false;
+  const verifier = localStorage.getItem(AUTH_PKCE_KEY) || "";
+  if (!verifier) {
+    lastAuthDebug = "missing pkce verifier";
+    return false;
+  }
   try {
-    const sp = new URLSearchParams(window.location.search || "");
-    const code = sp.get("code");
-    if (!code) return false;
-    const verifier = localStorage.getItem(AUTH_PKCE_KEY) || "";
-    if (!verifier) {
-      lastAuthDebug = "missing pkce verifier";
-      return false;
-    }
     const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=pkce`, {
       method: "POST",
       headers: {
@@ -3819,9 +3817,22 @@ async function maybeHandleAuthCodeFromQuery() {
       token_type: d.token_type || "bearer",
       user,
     });
+    setStatus("Logged in via Google.");
+    return true;
+  } catch (e) {
+    lastAuthDebug = `code flow error: ${e?.message || String(e)}`;
+    return false;
+  }
+}
+async function maybeHandleAuthCodeFromQuery() {
+  try {
+    const sp = new URLSearchParams(window.location.search || "");
+    const code = sp.get("code");
+    if (!code) return false;
+    const ok = await exchangeOAuthCodeForSession(code);
+    if (!ok) return false;
     window.history.replaceState({}, document.title, window.location.pathname + "#/profile");
     applyRoute();
-    setStatus("Logged in via Google.");
     return true;
   } catch (e) {
     lastAuthDebug = `code flow error: ${e?.message || String(e)}`;
@@ -3846,11 +3857,24 @@ async function supabaseVerifyOtp(email, token) {
   if (!r.ok) throw new Error(d?.msg || `OTP verify failed (${r.status})`);
   return d;
 }
+const OAUTH_NATIVE_REDIRECT = "com.nabadai.music://auth-callback";
+function isCapacitorNativeAuth() {
+  return Boolean(window?.Capacitor?.isNativePlatform?.());
+}
+function getCapacitorBrowserPlugin() {
+  return window?.Capacitor?.Plugins?.Browser || null;
+}
+function getCapacitorAppPlugin() {
+  return window?.Capacitor?.Plugins?.App || null;
+}
 async function supabaseGoogleLoginUrl() {
   const verifier = randomVerifier(64);
   localStorage.setItem(AUTH_PKCE_KEY, verifier);
   const challenge = await sha256Base64Url(verifier);
-  const redirectTo = encodeURIComponent(`${window.location.origin}${window.location.pathname}`);
+  const redirectTarget = isCapacitorNativeAuth()
+    ? OAUTH_NATIVE_REDIRECT
+    : `${window.location.origin}${window.location.pathname}`;
+  const redirectTo = encodeURIComponent(redirectTarget);
   return `${SUPABASE_URL}/auth/v1/authorize?provider=google&response_type=code&scope=email%20profile&code_challenge=${encodeURIComponent(challenge)}&code_challenge_method=S256&redirect_to=${redirectTo}`;
 }
 async function supabaseUpsertProfile(profile) {
@@ -11349,8 +11373,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }, 5000);
   };
 
-  const REFERENCE_MELODY_LOCK =
-    "strict melody lock, follow uploaded vocal contour and phrase timing, keep topline and cadence points, no spoken instructions";
   const GROOVE_MAP = {
     slow: "tempo target 68-78 bpm, softer groove emphasis",
     balanced: "tempo target 84-96 bpm, balanced groove emphasis",
@@ -11392,12 +11414,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       "unstable groove",
       "spoken meta text",
       "melody lock",
-      "strict melody lock",
-      "keep topline and cadence points",
-      "respect vocal phrasing timing",
-      "melody-preserving arrangement",
-      "voice stability:",
-      "accent lock:",
       "build a full song around this vocal reference",
       "do not",
       "keep this timing stable",
@@ -13987,6 +14003,58 @@ if (els.btnProfileCancel) {
     setStatus("Edits cancelled.");
   });
 }
+function resetGoogleAuthButton() {
+  if (els.btnAuthGoogle) {
+    els.btnAuthGoogle.disabled = false;
+    els.btnAuthGoogle.textContent = "Continue with Google";
+  }
+}
+async function handleNativeAuthDeepLink(url) {
+  try {
+    const raw = String(url || "");
+    if (!raw) return false;
+    const lower = raw.toLowerCase();
+    if (!lower.startsWith("com.nabadai.music://")) return false;
+    let code = "";
+    try {
+      const u = new URL(raw);
+      code = u.searchParams.get("code") || "";
+    } catch {
+      const q = raw.split("?")[1] || "";
+      code = new URLSearchParams(q).get("code") || "";
+    }
+    if (!code) {
+      setStatus(`Google login failed: no code in callback`);
+      resetGoogleAuthButton();
+      return false;
+    }
+    setStatus("Finishing Google login…");
+    const ok = await exchangeOAuthCodeForSession(code);
+    try { await getCapacitorBrowserPlugin()?.close?.(); } catch {}
+    if (ok) {
+      location.hash = "#/profile";
+      applyRoute();
+    } else {
+      setStatus(`Google login failed: ${lastAuthDebug || "exchange error"}`);
+    }
+    resetGoogleAuthButton();
+    return ok;
+  } catch (e) {
+    setStatus(`Login callback error: ${e?.message || String(e)}`);
+    resetGoogleAuthButton();
+    return false;
+  }
+}
+if (isCapacitorNativeAuth()) {
+  const CapApp = getCapacitorAppPlugin();
+  if (CapApp?.addListener) {
+    try {
+      CapApp.addListener("appUrlOpen", (event) => {
+        void handleNativeAuthDeepLink(event?.url);
+      });
+    } catch {}
+  }
+}
 if (els.btnAuthGoogle) {
   els.btnAuthGoogle.addEventListener("click", async () => {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return setStatus("Supabase config missing.");
@@ -13998,19 +14066,16 @@ if (els.btnAuthGoogle) {
       setStatus("Opening Google login…");
       const url = await supabaseGoogleLoginUrl();
       if (!url) throw new Error("Could not create Google auth URL");
-      window.location.assign(url);
-      // If redirect is blocked, recover button state.
-      setTimeout(() => {
-        if (els.btnAuthGoogle) {
-          els.btnAuthGoogle.disabled = false;
-          els.btnAuthGoogle.textContent = "Continue with Google";
-        }
-      }, 3500);
-    } catch (e) {
-      if (els.btnAuthGoogle) {
-        els.btnAuthGoogle.disabled = false;
-        els.btnAuthGoogle.textContent = "Continue with Google";
+      const Browser = getCapacitorBrowserPlugin();
+      if (isCapacitorNativeAuth() && Browser?.open) {
+        await Browser.open({ url, presentationStyle: "popover" });
+        // Button is reset by the appUrlOpen handler once the deep link returns.
+      } else {
+        window.location.assign(url);
+        setTimeout(resetGoogleAuthButton, 3500);
       }
+    } catch (e) {
+      resetGoogleAuthButton();
       setStatus(`Google login failed to start: ${e?.message || String(e)}`);
     }
   });

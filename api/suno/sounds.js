@@ -12,10 +12,12 @@ const {
   verifyUser,
   callRpc,
 } = require("../_lib/credits-auth");
+const { applyCors } = require("../_lib/cors");
 
 const SOUND_COST = 2.5;
 
 module.exports = async function handler(req, res) {
+  if (applyCors(req, res)) return;
   try {
     if (req.method !== "POST") return json(res, 405, { error: "Method not allowed" });
 

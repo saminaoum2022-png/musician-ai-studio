@@ -7,7 +7,10 @@
  * - SUNO_API_KEY
  */
 
+const { applyCors } = require("../_lib/cors");
+
 module.exports = async function handler(req, res) {
+  if (applyCors(req, res)) return;
   try {
     if (req.method !== "GET") return json(res, 405, { error: "Method not allowed" });
 

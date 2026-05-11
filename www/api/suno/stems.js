@@ -37,6 +37,7 @@ const {
   verifyUser,
   callRpc,
 } = require("../_lib/credits-auth");
+const { applyCors } = require("../_lib/cors");
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 // Reference-audio generations (cover / extend / add-instrumental) all
@@ -47,6 +48,7 @@ const STEMS_REMIX_COST = 10;
 const STEMS_VOCAL_COST = 2;
 
 module.exports = async function handler(req, res) {
+  if (applyCors(req, res)) return;
   try {
     if (req.method !== "POST") return json(res, 405, { error: "Method not allowed" });
 

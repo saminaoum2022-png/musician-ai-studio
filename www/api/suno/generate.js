@@ -7,7 +7,7 @@
  *   (used by ../_lib/credits-auth to verify the user and debit credits)
  *
  * Credit handling:
- *  - Debits FULL_SONG_COST (10 credits) BEFORE calling Suno.
+ *  - Debits FULL_SONG_COST (12 credits) BEFORE calling Suno.
  *  - Refunds the full amount if Suno rejects the request synchronously.
  *  - Per-task callback failures are NOT auto-refunded here (the response
  *    from Suno was 200 — the song could still arrive). We rely on the
@@ -19,10 +19,12 @@ const {
   callRpc,
   sendJson,
 } = require("../_lib/credits-auth");
+const { applyCors } = require("../_lib/cors");
 
 const FULL_SONG_COST = 12;
 
 module.exports = async function handler(req, res) {
+  if (applyCors(req, res)) return;
   try {
     if (req.method !== "POST") return json(res, 405, { error: "Method not allowed" });
 
@@ -86,10 +88,18 @@ module.exports = async function handler(req, res) {
     if (voiceTimbre) styleBits.push(`Voice timbre: ${String(voiceTimbre).trim()}`);
     const mergedStyle = styleBits.filter(Boolean).join(", ");
 
-    // See api/suno/generate.js for the full rationale. Short version:
-    // voice_persona only works on V5; without coercion Suno returns a
-    // taskId but never produces audio. Default personaModel to
-    // voice_persona because our app saves personas from finished vocals.
+    // Persona / model coercion. Per Suno's docs:
+    //   - personaId is only honored when customMode is true.
+    //   - personaModel selects which dimension of the persona to apply:
+    //       style_persona (default): apply style/genre characteristics.
+    //       voice_persona: apply the saved voice timbre.
+    //         "voice_persona" is ONLY supported on the V5 model.
+    // Our app's persona is created from a finished song's vocals, so the
+    // user's intent is always "sing in this voice" → voice_persona. If
+    // the client didn't say otherwise we default to voice_persona, and
+    // we coerce the model to V5 so Suno actually accepts it. Without
+    // this coercion Suno returns a taskId but the task silently never
+    // completes (no callback, no log on their side).
     const cleanPersonaId = personaId ? String(personaId).trim() : "";
     let personaModel = "";
     if (cleanPersonaId) {

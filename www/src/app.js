@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511oauthplugins";
+const APP_BUILD = "20260511audioproxy";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -8783,7 +8783,10 @@ async function cacheGeneratedAudio2(url) {
 }
 function toAudioProxyUrl(url) {
   if (!url || url === "#") return "";
-  return `/api/suno/audio?url=${encodeURIComponent(url)}`;
+  // Use apiUrl() so native (Capacitor) gets an absolute URL pointing at the
+  // deployed API. Relative `/api/...` resolves to `capacitor://localhost/api/...`
+  // on iOS — which nothing serves — and silently breaks all audio playback.
+  return apiUrl(`/api/suno/audio?url=${encodeURIComponent(url)}`);
 }
 
 function hubAbsoluteUrl(pathOrUrl) {

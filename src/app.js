@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511vocalmic";
+const APP_BUILD = "20260511gentaskid";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -2945,17 +2945,48 @@ function attachLongPress(el, cb, holdMs = 600) {
   };
 }
 
+/** Walk nested Suno/Capacitor JSON for `taskId` / `task_id` strings.
+ *  NOTE: `deepFindFirstStringByKeys(..., ["taskId"])` only returns values that
+ *  start with `http` — so it never found task IDs. This helper is for IDs only.
+ */
+function deepFindTaskIdString(obj, depth = 0) {
+  if (!obj || typeof obj !== "object" || depth > 16) return "";
+  for (const [k, v] of Object.entries(obj)) {
+    const kl = String(k).toLowerCase();
+    if ((kl === "taskid" || kl === "task_id") && typeof v === "string" && v.trim()) {
+      return v.trim();
+    }
+  }
+  for (const [, v] of Object.entries(obj)) {
+    if (!v || typeof v !== "object") continue;
+    if (Array.isArray(v)) {
+      for (const item of v) {
+        const hit = deepFindTaskIdString(item, depth + 1);
+        if (hit) return hit;
+      }
+    } else {
+      const hit = deepFindTaskIdString(v, depth + 1);
+      if (hit) return hit;
+    }
+  }
+  return "";
+}
+
 function extractTaskIdLoose(data) {
-  return (
+  const direct =
     data?.data?.taskId ||
     data?.data?.task_id ||
     data?.taskId ||
     data?.task_id ||
-    data?.data?.id ||
-    data?.id ||
-    deepFindFirstStringByKeys(data, ["taskId", "task_id", "id"]) ||
-    null
-  );
+    data?.data?.response?.taskId ||
+    data?.data?.response?.task_id ||
+    data?.response?.taskId ||
+    data?.response?.task_id ||
+    null;
+  if (direct) return String(direct);
+  const nested = deepFindTaskIdString(data);
+  if (nested) return nested;
+  return null;
 }
 function compactStyleForProvider(input, maxLen = 980) {
   let s = String(input || "")
@@ -11950,10 +11981,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               fd.append("audioWeight", "0.95");
               fd.append("styleWeight", "0.25");
             }
-            // Drop the local reference state the moment the request is in flight.
-            // The server already has its own copy in the multipart body, so any
-            // residual state here can only cause stale-reuse on the next run.
-            try { clearVocalReferenceSelection(); } catch {}
             const stemsTok = getSupabaseAuthToken();
             const rr = await fetch(apiUrl("/api/suno/stems"), {
               method: "POST",
@@ -12004,6 +12031,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             }
             try {
               if (typeof refreshMyCredits === "function") void refreshMyCredits({ silent: true });
+            } catch {}
+            // Clear local vocal reference only after Suno accepted the upload —
+            // otherwise a failed network/upstream run leaves the user with no
+            // attachment for an immediate retry (and looked like "stopped").
+            try {
+              clearVocalReferenceSelection();
             } catch {}
             return dd;
           }
@@ -12100,6 +12133,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           data?.data?.msg ||
           data?.data?.message ||
           "";
+        try {
+          console.warn("[generate] no taskId in response", data);
+        } catch {}
         const immediateFullUrl =
           deepFindFirstStringByKeys(data, ["audioUrl", "audio_url", "streamAudioUrl", "stream_audio_url"]) ||
           deepFindFirstStringByKeys(data?.data, ["audioUrl", "audio_url", "streamAudioUrl", "stream_audio_url"]) ||
@@ -12122,6 +12158,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         setStatus(
           `Generation failed to start: provider returned no task id.${providerMsg ? ` ${providerMsg}` : ""}`
         );
+        try {
+          showToast(
+            `No task id from Suno — generation did not start.${providerMsg ? ` ${providerMsg}` : ""}`,
+            { icon: "⚠", durationMs: 9000 }
+          );
+        } catch {}
         setGenerateBtn("Generate song", false, "generate");
         setGenerateFieldsLocked(false);
         setLoading(false);
@@ -12153,6 +12195,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         } catch {}
       } else {
         setStatus(`Generation failed: ${e?.message || String(e)}`);
+        try {
+          showToast(String(e?.message || e || "Generation failed"), { icon: "✗", durationMs: 8000 });
+        } catch {}
       }
       setGenerateBtn("Generate song", false, "generate");
       savePendingBackendTask("");

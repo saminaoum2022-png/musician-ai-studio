@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511hubstaleended";
+const APP_BUILD = "20260511hubnoblob";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -9101,8 +9101,17 @@ function preferDirectAudioUrl(url) {
 }
 
 function hubPlaybackSrcForPost(postId, p) {
-  const cached = hubAudioBlobByPostId.get(postId);
-  if (cached) return cached;
+  // Skip the blob cache on native (Capacitor) WKWebView. iOS WebKit has a
+  // long-standing bug where `<audio>.src = "blob:..."` silently fails to
+  // play roughly every other time — and since `scheduleHubPreloadNext`
+  // preloads exactly one row ahead, that produced a textbook alternating
+  // "plays / stops / plays / stops" pattern as the user scrolled the feed.
+  // The proxy URL is just as fast on cellular (Vercel caches it) and plays
+  // reliably, so we always go through the proxy on native.
+  if (!isCapacitorNativeAuth()) {
+    const cached = hubAudioBlobByPostId.get(postId);
+    if (cached) return cached;
+  }
   // Use the direct CDN URL when possible to avoid streaming the file through
   // our /api/suno/audio proxy (where every byte counts twice on Vercel
   // bandwidth). The HTML5 <audio> element happily plays cross-origin URLs
@@ -9168,6 +9177,10 @@ function shouldPreloadHubBytes() {
 function preloadNextHubTrack(currentPostId) {
   if (!currentPostId) return;
   if (!shouldPreloadHubBytes()) return;
+  // On native, hubPlaybackSrcForPost intentionally ignores cached blob URLs
+  // (WKWebView fails on every other blob playback), so preloading them is
+  // wasted cellular bytes. The proxy URL stream is fast enough on its own.
+  if (isCapacitorNativeAuth()) return;
   const root = els.hubList;
   if (!root) return;
   const currentRow = root.querySelector(`[data-hub-row="${currentPostId}"]`);
@@ -9464,6 +9477,10 @@ function preloadInitialHubTracks() {
   // Skip the eager first-track download on slow networks. The user pays
   // a small "first tap" delay later, but the Hub feed itself paints fast.
   if (!shouldPreloadHubBytes()) return;
+  // Same reason as preloadNextHubTrack: blob playback is unreliable on iOS
+  // WKWebView, so the cached blob is never read on native — making the
+  // preload pure wasted bandwidth there.
+  if (isCapacitorNativeAuth()) return;
   const firstRow = els.hubList.querySelector("[data-hub-row]");
   if (!firstRow) return;
   const id = firstRow.getAttribute("data-hub-row");

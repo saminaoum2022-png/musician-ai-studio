@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511vocsendfix";
+const APP_BUILD = "20260511remixcommentfix";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1787,8 +1787,9 @@ function syncVocalReferenceFromDom() {
 
 /**
  * Hub Remix state. When set, the Generate flow uploads this audio as the
-// melody reference and routes through Suno's upload-cover endpoint, so the
-// new lyrics are sung over the same arrangement instead of a brand-new song.
+ * melody reference and routes through Suno's upload-cover endpoint, so the
+ * new lyrics are sung over the same arrangement instead of a brand-new song.
+ */
 var currentRemixSource = null;
 
 function setRemixSource(src) {

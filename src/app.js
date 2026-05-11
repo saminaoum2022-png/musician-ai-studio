@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511remixcommentfix";
+const APP_BUILD = "20260511libv2dedupefix";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -6752,11 +6752,20 @@ function addToLibrary(track) {
   const audioId = String(track.audioId || "").trim();
   const taskId = String(track.taskId || "").trim();
   const kind = String(track.kind || "full").trim();
-  const duplicate = items.find((x) =>
-    (taskId && String(x.taskId || "").trim() === taskId) ||
-    (url && String(x.url || "").trim() === url) ||
-    (audioId && String(x.audioId || "").trim() === audioId && String(x.kind || "full").trim() === kind)
-  );
+  const duplicate = items.find((x) => {
+    const xTaskId = String(x.taskId || "").trim();
+    const xUrl = String(x.url || "").trim();
+    const xAudioId = String(x.audioId || "").trim();
+    const xKind = String(x.kind || "full").trim();
+    if (url && xUrl === url) return true;
+    if (audioId && xAudioId === audioId && xKind === kind) return true;
+    // taskId-only match is reserved for the poll/recover path where the
+    // audioId hasn't materialized yet on either side. Suno returns two
+    // variants (V1 + V2) sharing one taskId but with distinct audioIds /
+    // urls — those must stay as two rows in the Library.
+    if (taskId && xTaskId === taskId && !audioId && !xAudioId && xKind === kind) return true;
+    return false;
+  });
   // Returning the matched entry on duplicate lets callers (e.g. the
   // voice+band post-mix step) still find the row they want to patch
   // even when the same generation was re-resolved (poll + recover).

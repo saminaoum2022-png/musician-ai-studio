@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511voicefingerprint";
+const APP_BUILD = "20260511voicefp2";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -11511,25 +11511,59 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     };
   };
 
-  const handleGenerationFailure = (failureInfo) => {
+  const handleGenerationFailure = (failureInfo, rawState) => {
     if (generatePollTimer) {
       clearInterval(generatePollTimer);
       generatePollTimer = null;
     }
     setGenerateBtn("Generate song", false, "generate");
     savePendingBackendTask("");
-    try { clearVocalReferenceSelection(); } catch {}
+    // Keep the vocal reference intact on failure so the user can retry
+    // immediately instead of having to re-record. We only clear it on a
+    // *successful* generation (already wired in the SUCCESS branch above).
     setGenerateFieldsLocked(false);
     setLoading(false);
     setProgress(0);
     const info = failureInfo || { kind: "generic", headline: "Generation failed", detail: "" };
+    // Dump everything Suno told us into the console so we (and the user)
+    // can grab it for debugging. Includes successFlag, errorCode, raw
+    // errorMessage, and the taskId so it pairs with Vercel logs.
+    try {
+      console.warn("[generate] failure", {
+        kind: info.kind,
+        headline: info.headline,
+        detail: info.detail,
+        taskId: sunoTaskId || null,
+        successFlag: rawState?.successFlag || null,
+        errorCode: rawState?.errorCode || null,
+        errorMessage: rawState?.errorMessage || null,
+      });
+    } catch {}
     const fullDetail = [info.headline, info.detail].filter(Boolean).join("\n\n");
     setStatus(`${info.headline}${info.detail ? `: ${info.detail.split("\n")[0]}` : ""}`);
+    // Build a toast that surfaces the RAW Suno error too. The friendly
+    // interpretation is great when our classifier matches, but when it
+    // doesn't (e.g. Suno's underpainting/add-instrumental rejects with a
+    // brand-new code we haven't seen) we want the user to see the actual
+    // server message so we can debug without a screenshot of the Suno
+    // dashboard.
+    let toastBody = fullDetail || info.headline || "Generation failed";
+    try {
+      const rawBits = [];
+      if (rawState?.successFlag) rawBits.push(`flag: ${rawState.successFlag}`);
+      if (rawState?.errorCode) rawBits.push(`code: ${rawState.errorCode}`);
+      if (rawState?.errorMessage) rawBits.push(`msg: ${rawState.errorMessage}`);
+      if (sunoTaskId) rawBits.push(`task: ${String(sunoTaskId).slice(0, 12)}…`);
+      const rawLine = rawBits.join(" · ");
+      if (rawLine && !toastBody.includes(rawLine)) {
+        toastBody = `${toastBody}\n\nRaw: ${rawLine}`;
+      }
+    } catch {}
     try {
       const icon = info.kind === "copyright" || info.kind === "sensitive" ? "!" : "✗";
-      showToast(fullDetail || info.headline || "Generation failed", {
+      showToast(toastBody, {
         icon,
-        durationMs: info.kind === "copyright" || info.kind === "sensitive" ? 12000 : 8000,
+        durationMs: 14000,
       });
     } catch {}
   };
@@ -11556,7 +11590,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           || (failure.kind === "transient" && !!state.errorMessage)
           || (failure.kind && state.successFlag && state.successFlag !== "SUCCESS" && state.successFlag !== "PENDING" && state.successFlag !== "TEXT_SUCCESS" && state.successFlag !== "FIRST_SUCCESS");
         if (failedByFlag && !state.hasAudio) {
-          handleGenerationFailure(failure);
+          handleGenerationFailure(failure, state);
           return;
         }
         if (state.status === "SUCCESS" && state.hasAudio) {
@@ -11609,7 +11643,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           // us enough fields to classify (copyright, content, etc.) the
           // toast is detailed; otherwise we fall back to a generic message.
           handleGenerationFailure(
-            failure.kind ? failure : { kind: "generic", headline: "Generation failed. Please try again.", detail: state.errorMessage || "" }
+            failure.kind ? failure : { kind: "generic", headline: "Generation failed. Please try again.", detail: state.errorMessage || "" },
+            state
           );
           return;
         }
@@ -12062,7 +12097,19 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               });
             } catch {}
             if (sendFp) {
-              setStatus(`Uploading voice clip · #${sendFp.slice(0, 8)} (${Math.max(1, Math.round(sendFile.size / 1024))} KB)`);
+              const fpShort = sendFp.slice(0, 8);
+              const kb = Math.max(1, Math.round(sendFile.size / 1024));
+              setStatus(`Uploading voice clip · #${fpShort} (${kb} KB)`);
+              // Toast it too — status text gets overwritten by the polling
+              // loop within ~1s, so the toast is the only thing the user
+              // can actually catch. This is the "did my new bytes leave
+              // the phone?" proof point we asked for last round.
+              try {
+                showToast(`Uploading ${kb} KB · #${fpShort}`, {
+                  icon: "↑",
+                  durationMs: 5200,
+                });
+              } catch {}
             }
             fd.append("action", "add_instrumental");
             const stemRefMode = referenceInstrumentalOnly

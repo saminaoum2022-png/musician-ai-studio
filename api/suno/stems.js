@@ -368,6 +368,22 @@ module.exports = async function handler(req, res) {
       });
       const addText = await addRes.text().catch(() => "");
       const addData = safeJson(addText);
+      // Log Suno's response for add-instrumental (a.k.a. "underpainting"
+      // in Suno's dashboard). Pair this with the [reference uploaded] log
+      // above using `clientFingerprint` + `uploadUrl` to trace a single
+      // generation end-to-end through Vercel logs.
+      try {
+        const addTaskId = addData?.data?.taskId || addData?.taskId || null;
+        console.log("[suno/stems] add-instrumental response", {
+          httpStatus: addRes.status,
+          ok: addRes.ok,
+          taskId: addTaskId,
+          sunoCode: addData?.code ?? null,
+          sunoMsg: String(addData?.msg || addData?.message || "").slice(0, 200),
+          uploadUrl,
+          clientFingerprint: String(body?.clientFingerprint || "").slice(0, 16) || null,
+        });
+      } catch {}
       if (!addRes.ok || (addData && "code" in addData && Number(addData.code) !== 200)) {
         await refund("suno_add_inst_failed");
         return json(res, 502, {

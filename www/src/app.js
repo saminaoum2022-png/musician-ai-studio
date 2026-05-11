@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511addinstnopersona";
+const APP_BUILD = "20260511voicefingerprint";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1750,6 +1750,28 @@ let vocalRefStream = null;
 let vocalRefBlob = null;
 let vocalRefChunks = [];
 let vocalRefPreviewUrl = "";
+let lastVocalRefFingerprint = "";
+
+async function computeBytesFingerprint(input) {
+  try {
+    let buf = null;
+    if (input instanceof ArrayBuffer) buf = input;
+    else if (input && typeof input.arrayBuffer === "function") buf = await input.arrayBuffer();
+    else if (input instanceof Uint8Array) buf = input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength);
+    if (!buf) return "";
+    const subtle = (window.crypto || {}).subtle;
+    if (!subtle) return "";
+    const digest = await subtle.digest("SHA-256", buf);
+    const bytes = new Uint8Array(digest);
+    let hex = "";
+    for (let i = 0; i < bytes.length; i++) {
+      hex += bytes[i].toString(16).padStart(2, "0");
+    }
+    return hex;
+  } catch {
+    return "";
+  }
+}
 let imageMoodData = null;
 let imageMoodCoverDataUrl = "";
 let pendingGeneratedCoverDataUrl = "";
@@ -1924,6 +1946,14 @@ function clearVocalReferenceSelection(opts = {}) {
   currentVocalRefFile = null;
   vocalRefBlob = null;
   vocalRefOrigin = null;
+  vocalRefChunks = [];
+  // Wipe any cached fingerprint so the next recording starts fresh in the UI.
+  lastVocalRefFingerprint = "";
+  // The previous Suno temporary-upload URL must not survive into the next
+  // generation. If a stale URL ever leaked back through, Suno would re-use
+  // the OLD audio for the new request — which is exactly the "old vocal
+  // stuck" symptom users report on iOS WKWebView.
+  lastSunoReferenceUrl = "";
   if (els.sunoVocalUpload) els.sunoVocalUpload.value = "";
   clearVocalRefPreviewUrl();
   refreshVocalReferenceUi();
@@ -2244,6 +2274,12 @@ async function startVocalReferenceRecording() {
   currentVocalRefFile = null;
   vocalRefBlob = null;
   vocalRefOrigin = null;
+  vocalRefChunks = [];
+  // Any previously cached Suno temporary upload URL must not survive a
+  // fresh recording. Otherwise the *next* generate could (in theory)
+  // see the stale URL and ask Suno to reuse the old audio.
+  lastSunoReferenceUrl = "";
+  lastVocalRefFingerprint = "";
   refreshVocalReferenceUi();
 
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -2254,15 +2290,12 @@ async function startVocalReferenceRecording() {
   rec.ondataavailable = (e) => {
     if (e.data && e.data.size) chunks.push(e.data);
   };
-  rec.onstop = () => {
+  rec.onstop = async () => {
     vocalRefChunks = chunks.slice();
     const blobType = effectiveMime();
     const blob = new Blob(chunks, { type: blobType });
     vocalRefBlob = blob;
     let promoted = false;
-    // Immediately promote the recording to the active reference and drop any
-    // previously uploaded file. `getVocalReferenceFile` also prefers a live
-    // `vocalRefBlob` over an older `currentVocalRefFile` when both exist.
     if (blob && blob.size > 0) {
       const name = vocalReferenceFilenameForMime(blobType);
       const recordedFile = new File([blob], name, {
@@ -2273,6 +2306,23 @@ async function startVocalReferenceRecording() {
       }
       setVocalRefFile(recordedFile, "Voice reference recorded and attached.", "record");
       promoted = true;
+      // Byte fingerprint diagnostic. If this is the SAME hex as a previous
+      // recording, the recorder is silently returning cached bytes — that's
+      // a MediaRecorder/WebKit bug, not a sticky JS variable. Surfacing it
+      // to the user (and console) gives us a definitive verdict.
+      try {
+        const fp = await computeBytesFingerprint(blob);
+        lastVocalRefFingerprint = fp;
+        try {
+          console.info("[voice] recording fingerprint", { size: blob.size, mime: blobType, fp });
+        } catch {}
+        try {
+          showToast(`Recorded ${Math.max(1, Math.round(blob.size / 1024))} KB · #${fp.slice(0, 8)}`, {
+            icon: "♪",
+            durationMs: 5200,
+          });
+        } catch {}
+      } catch {}
     } else {
       try {
         showToast("Recording was empty. Check the microphone in Settings, then try again.", {
@@ -2283,8 +2333,6 @@ async function startVocalReferenceRecording() {
       renderReferenceHints();
       updateVocalRefPreviewState();
     }
-    // Use recording stays enabled whenever we actually have a reference;
-    // setVocalRefFile clears vocalRefBlob, so we cannot rely on it here.
     if (els.btnRecorderUse) {
       els.btnRecorderUse.disabled = !(promoted || getVocalReferenceFile());
     }
@@ -11997,6 +12045,25 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                 "Lost the vocal reference before upload. Tap '+ Audio' or Record again, then Generate."
               );
             }
+            // Fingerprint the EXACT bytes we're about to send. We stamp the
+            // FormData so the server can echo it back into its logs, and we
+            // show the short prefix to the user in the status strip. If two
+            // consecutive generations show the SAME fingerprint, we know the
+            // recorder handed us cached bytes (not a sticky JS variable).
+            const sendFp = await computeBytesFingerprint(sendFile);
+            try {
+              console.info("[voice] upload fingerprint", {
+                size: sendFile.size,
+                type: sendFile.type,
+                name: sendFile.name,
+                fp: sendFp,
+                origin: vocalRefOrigin,
+                referenceInstrumentalOnly,
+              });
+            } catch {}
+            if (sendFp) {
+              setStatus(`Uploading voice clip · #${sendFp.slice(0, 8)} (${Math.max(1, Math.round(sendFile.size / 1024))} KB)`);
+            }
             fd.append("action", "add_instrumental");
             const stemRefMode = referenceInstrumentalOnly
               ? "humming_music"
@@ -12007,6 +12074,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             fd.append("file", sendFile, sendFile?.name || "vocal-reference.webm");
             fd.append("fileName", sendFile?.name || "vocal-reference.webm");
             fd.append("fileType", sendFile?.type || "audio/webm");
+            if (sendFp) fd.append("clientFingerprint", sendFp);
             fd.append("style", String(userStyle || "").trim());
             if (finalPrompt) fd.append("prompt", String(finalPrompt));
             fd.append("title", String((els.sunoTitle?.value || "").trim() || "Reference full song"));

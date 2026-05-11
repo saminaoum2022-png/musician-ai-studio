@@ -195,6 +195,9 @@ module.exports = async function handler(req, res) {
 
       // Diagnostic log so we can verify, in Vercel logs, exactly what audio
       // Suno received per request. Logged once per generation, no PII.
+      // `clientFingerprint` is the SHA-256 hex of the EXACT bytes the
+      // browser FormData built; matching it against `head8/tail8` proves
+      // whether bytes were mutated in transit or by ffmpeg.
       try {
         const head = Buffer.isBuffer(fileBytes) ? fileBytes.slice(0, 8).toString("hex") : "";
         const tail = Buffer.isBuffer(fileBytes) ? fileBytes.slice(-8).toString("hex") : "";
@@ -205,6 +208,7 @@ module.exports = async function handler(req, res) {
           bytes: Buffer.isBuffer(fileBytes) ? fileBytes.length : null,
           head8: head,
           tail8: tail,
+          clientFingerprint: String(body?.clientFingerprint || "").slice(0, 16) || null,
           uploadUrl,
         });
       } catch {}

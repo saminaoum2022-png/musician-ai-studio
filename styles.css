@@ -5536,23 +5536,34 @@ input[type="range"]::-moz-range-thumb{
     display: none !important;
   }
   body[data-route="player"] .app{
-    padding: calc(env(safe-area-inset-top) + 6px) 14px calc(env(safe-area-inset-bottom) + 14px) !important;
+    /* Slightly more top inset so cover isn’t flush under the status bar;
+       tighter bottom so the build footer isn’t floating in a sea of empty space. */
+    padding: calc(env(safe-area-inset-top) + 10px) 14px calc(env(safe-area-inset-bottom) + 10px) !important;
     min-height: 100vh;
     min-height: 100svh;
   }
   body[data-route="player"] .playerCard{
     padding: 0;
-    min-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 20px);
-    min-height: calc(100svh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 20px);
+    /* Height follows content — the old min-height + flex:1 shell stretched the
+       block to ~full viewport and left a dead zone above the page footer. */
+    min-height: 0;
     display: flex;
     flex-direction: column;
   }
   body[data-route="player"] .playerShell{
-    flex: 1;
+    flex: 0 1 auto;
     align-content: start;
   }
+  body[data-route="player"] .playerHeader{
+    margin-bottom: 14px;
+    padding-top: 2px;
+  }
   body[data-route="player"] .playerSecondaryRow{
-    margin-bottom: 4px;
+    margin-bottom: 0;
+  }
+  body[data-route="player"] .footer{
+    margin-top: 12px;
+    margin-bottom: 0;
   }
   .playerShell{
     gap: 14px;
@@ -5567,7 +5578,7 @@ input[type="range"]::-moz-range-thumb{
     border-radius: 18px;
   }
   .playerHeader{
-    margin-bottom: 8px;
+    margin-bottom: 10px;
   }
   .grid{
     gap: var(--space-2);

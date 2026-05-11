@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511pollfix";
+const APP_BUILD = "20260511hubplayback";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1013,6 +1013,11 @@ async function startHubPlayback(postId) {
   try {
     a.currentTime = 0;
   } catch {}
+  if (isCapacitorNativeAuth()) {
+    try {
+      a.load();
+    } catch {}
+  }
 
   let ok = await hubAudioPlayWithRetry(a);
   if (mySeq !== hubPlaybackSeq) {
@@ -1020,18 +1025,30 @@ async function startHubPlayback(postId) {
     // touching it — pausing here would stomp on the new owner's load.
     return;
   }
-  // If the direct CDN URL failed (rare — e.g. expired token, blocked by
-  // origin, brief network glitch), retry once through the /api/suno/audio
-  // proxy. We only ever need this for plain http(s) URLs; blob:/data: URLs
-  // skip the fallback because there is no proxy equivalent.
-  if (!ok && typeof targetSrc === "string" && /^https?:\/\//i.test(targetSrc)) {
-    const fallbackSrc = toAudioProxyUrl(targetSrc);
-    if (fallbackSrc && fallbackSrc !== targetSrc) {
+  // First play() sometimes fails on iOS WKWebView when reusing one Audio().
+  // Never pass an already-proxied URL back through toAudioProxyUrl — that
+  // double-wraps and breaks every other track. Unwrap to the leaf CDN,
+  // rebuild one canonical proxy URL, then retry. If still failing, load()+play.
+  if (!ok && typeof targetSrc === "string" && !/^blob:|^data:/i.test(targetSrc)) {
+    const leaf = unwrapInnermostHttpAudioUrl(targetSrc);
+    let rebuilt = "";
+    if (leaf && /^https?:\/\//i.test(leaf) && !leaf.toLowerCase().includes("api/suno/audio")) {
+      rebuilt = normalizeAudioUrlForPlayback(toAudioProxyUrl(leaf));
+    }
+    if (rebuilt && rebuilt !== targetSrc) {
       try {
-        a.src = fallbackSrc;
+        a.src = rebuilt;
         a.currentTime = 0;
+        if (isCapacitorNativeAuth()) try { a.load(); } catch {}
       } catch {}
       ok = await hubAudioPlayWithRetry(a);
+      if (mySeq !== hubPlaybackSeq) return;
+    }
+    if (!ok && isCapacitorNativeAuth()) {
+      try {
+        a.load();
+        ok = await hubAudioPlayWithRetry(a);
+      } catch {}
       if (mySeq !== hubPlaybackSeq) return;
     }
   }
@@ -8808,6 +8825,31 @@ function normalizeAudioUrlForPlayback(url) {
   // Older entries may have saved the relative proxy without a leading slash.
   if (/^api\/suno\/audio\?/.test(s)) return apiUrl(`/${s}`);
   return s;
+}
+
+/** Peel nested `/api/suno/audio?url=` wrappers (never legitimately nested —
+ *  only happens when a buggy fallback double-encoded our proxy URL).
+ *  Returns the innermost http(s) leaf suitable for `toAudioProxyUrl`.
+ */
+function unwrapInnermostHttpAudioUrl(url) {
+  let cur = String(url || "").trim();
+  if (!cur) return "";
+  const originBase =
+    API_BASE ||
+    (typeof location !== "undefined" && location.origin ? location.origin : "") ||
+    "https://musician-ai-studio.vercel.app";
+  for (let i = 0; i < 8; i++) {
+    if (!cur.toLowerCase().includes("api/suno/audio")) break;
+    try {
+      const u = /^https?:\/\//i.test(cur) ? new URL(cur) : new URL(cur, originBase);
+      const inner = u.searchParams.get("url");
+      if (!inner) break;
+      cur = inner.includes("%") ? decodeURIComponent(inner) : inner;
+    } catch {
+      break;
+    }
+  }
+  return cur;
 }
 
 function hubAbsoluteUrl(pathOrUrl) {

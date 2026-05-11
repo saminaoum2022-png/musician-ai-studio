@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511personaclr";
+const APP_BUILD = "20260511addinstnopersona";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -12017,7 +12017,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             if (timing) fd.append("timing", String(timing));
             if (dialect) fd.append("dialect", String(dialect));
             if (dialectHint) fd.append("dialectHint", String(dialectHint));
-            if (payload?.personaId) fd.append("personaId", String(payload.personaId));
+            if (payload?.personaId && !referenceInstrumentalOnly) {
+              fd.append("personaId", String(payload.personaId));
+            }
             // Backing / Mix modes: force the backing band to track the
             // uploaded vocal much more strictly than the default.
             //   audioWeight 0.95  -> band closely matches the audio's

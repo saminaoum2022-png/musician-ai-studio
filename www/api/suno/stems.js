@@ -349,8 +349,11 @@ module.exports = async function handler(req, res) {
         ...(audioWeight !== null ? { audioWeight } : {}),
         ...(styleWeight !== null ? { styleWeight } : {}),
         ...(vocalGender === "m" || vocalGender === "f" ? { vocalGender } : {}),
-        ...(personaId ? { personaId } : {}),
       };
+      // Do NOT forward personaId here — official add-instrumental OpenAPI has no
+      // persona field. Forwarding it caused Suno to mis-handle requests (seen as
+      // lyric/extension failures with code 531 / "empty extending lyrics"). Voice
+      // persona belongs on upload-cover / generate, not on backing-band flow.
       const addRes = await fetch("https://api.sunoapi.org/api/v1/generate/add-instrumental", {
         method: "POST",
         headers: {

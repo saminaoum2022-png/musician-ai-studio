@@ -5536,16 +5536,13 @@ input[type="range"]::-moz-range-thumb{
     display: none !important;
   }
   body[data-route="player"] .app{
-    /* Slightly more top inset so cover isn’t flush under the status bar;
-       tighter bottom so the build footer isn’t floating in a sea of empty space. */
-    padding: calc(env(safe-area-inset-top) + 10px) 14px calc(env(safe-area-inset-bottom) + 10px) !important;
-    min-height: 100vh;
-    min-height: 100svh;
+    /* Don’t force the .app shell to full viewport height — that leaves a tall
+       dead band above the page footer on tall phones (content is short, box is not). */
+    min-height: 0;
+    padding: calc(env(safe-area-inset-top) + 12px) 14px calc(env(safe-area-inset-bottom) + 8px) !important;
   }
   body[data-route="player"] .playerCard{
     padding: 0;
-    /* Height follows content — the old min-height + flex:1 shell stretched the
-       block to ~full viewport and left a dead zone above the page footer. */
     min-height: 0;
     display: flex;
     flex-direction: column;
@@ -5555,15 +5552,22 @@ input[type="range"]::-moz-range-thumb{
     align-content: start;
   }
   body[data-route="player"] .playerHeader{
-    margin-bottom: 14px;
-    padding-top: 2px;
+    margin-bottom: 12px;
+    padding-top: 4px;
   }
   body[data-route="player"] .playerSecondaryRow{
     margin-bottom: 0;
   }
   body[data-route="player"] .footer{
-    margin-top: 12px;
+    margin-top: 8px;
     margin-bottom: 0;
+    padding-bottom: 2px;
+  }
+  /* Smaller artwork on phone Now Playing — full-width 1:1 square felt huge and “too high”. */
+  body[data-route="player"] .playerArtWrap{
+    max-width: min(320px, 88vw);
+    margin-left: auto;
+    margin-right: auto;
   }
   .playerShell{
     gap: 14px;

@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511audioproxy";
+const APP_BUILD = "20260511audionative";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -997,7 +997,7 @@ async function startHubPlayback(postId) {
     hubFocusedPostId = postId;
   }
 
-  const targetSrc = hubPlaybackSrcForPost(postId, p);
+  const targetSrc = normalizeAudioUrlForPlayback(hubPlaybackSrcForPost(postId, p));
   if (!targetSrc) {
     coverWrap?.classList.remove("isLoading");
     stopHubPlayback();
@@ -8712,13 +8712,16 @@ let lastPlayerHttpUrl = "";
 function setPlayerSource(url, label) {
   const a = ensurePlayer();
   a.pause();
-  if (typeof url === "string" && /^https?:\/\//i.test(url)) {
-    lastPlayerHttpUrl = url;
+  // Heal legacy library URLs (relative `/api/...`) into absolute URLs so the
+  // native shell can fetch them. No-op on web.
+  const playUrl = normalizeAudioUrlForPlayback(url);
+  if (typeof playUrl === "string" && /^https?:\/\//i.test(playUrl)) {
+    lastPlayerHttpUrl = playUrl;
   }
   // Only same-origin or blob URLs need crossOrigin for WebAudio/spectrum; forcing
   // "anonymous" on arbitrary Suno CDN URLs breaks playback when ACAO is absent.
   try {
-    const u = String(url || "");
+    const u = String(playUrl || "");
     if (!u || u.startsWith("blob:")) {
       a.crossOrigin = "anonymous";
     } else {
@@ -8732,7 +8735,7 @@ function setPlayerSource(url, label) {
   } catch {
     a.removeAttribute("crossOrigin");
   }
-  a.src = url;
+  a.src = playUrl;
   a.currentTime = 0;
   playerLoadedLabel = label || "";
   if (els.playerSource) els.playerSource.textContent = label ? `Loaded: ${label}` : "";
@@ -8787,6 +8790,24 @@ function toAudioProxyUrl(url) {
   // deployed API. Relative `/api/...` resolves to `capacitor://localhost/api/...`
   // on iOS — which nothing serves — and silently breaks all audio playback.
   return apiUrl(`/api/suno/audio?url=${encodeURIComponent(url)}`);
+}
+
+/** Normalize an audio URL so it's playable on every surface.
+ *
+ *  Library entries persisted before the absolute-URL fix saved
+ *  `/api/suno/audio?url=…` (relative). On the iOS WebView that resolves
+ *  to `capacitor://localhost/api/…` and silently fails. Hub posts from
+ *  Supabase can also store relative proxy URLs. Run every audio.src
+ *  assignment through this helper so old data heals automatically.
+ */
+function normalizeAudioUrlForPlayback(url) {
+  const s = String(url || "").trim();
+  if (!s) return "";
+  if (s.startsWith("blob:") || s.startsWith("data:")) return s;
+  if (s.startsWith("/api/")) return apiUrl(s);
+  // Older entries may have saved the relative proxy without a leading slash.
+  if (/^api\/suno\/audio\?/.test(s)) return apiUrl(`/${s}`);
+  return s;
 }
 
 function hubAbsoluteUrl(pathOrUrl) {
@@ -8990,7 +9011,20 @@ function hubPlaybackSrcForPost(postId, p) {
   // bandwidth). The HTML5 <audio> element happily plays cross-origin URLs
   // without a CORS preflight; if direct play fails we fall back to the
   // proxy URL inside startHubPlayback.
-  return preferDirectAudioUrl(String(p?.url || "").trim());
+  //
+  // EXCEPTION: native (Capacitor) WKWebView is finicky about Suno's CDN —
+  // some posts stream, others stall silently. Routing every native play
+  // through our proxy is consistent and reliable (and we already enforce
+  // CORS on the endpoint). Bandwidth cost is acceptable for a small native
+  // user base; reliability beats penny-pinching on Vercel egress.
+  const raw = String(p?.url || "").trim();
+  if (isCapacitorNativeAuth()) {
+    if (!raw) return "";
+    if (raw.startsWith("blob:") || raw.startsWith("data:")) return raw;
+    if (raw.includes("/api/suno/audio")) return raw;
+    return toAudioProxyUrl(raw);
+  }
+  return preferDirectAudioUrl(raw);
 }
 
 async function fetchHubTrackIntoBlob(postId, rawUrl) {

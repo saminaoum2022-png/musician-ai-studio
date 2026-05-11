@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260512spotifynabad";
+const APP_BUILD = "20260512profilepolish";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -383,9 +383,7 @@ const els = {
   profileShufflePlayBig: document.getElementById("profileShufflePlayBig"),
   profileActionRow: document.getElementById("profileActionRow"),
   profileActionShare: document.getElementById("profileActionShare"),
-  profileActionCopyLink: document.getElementById("profileActionCopyLink"),
-  profileActionLikesChip: document.getElementById("profileActionLikesChip"),
-  profileActionLikesCount: document.getElementById("profileActionLikesCount"),
+  profileShareToast: document.getElementById("profileShareToast"),
   profileTopWeek: document.getElementById("profileTopWeek"),
   profileTopWeekList: document.getElementById("profileTopWeekList"),
   profileShelf: document.getElementById("profileShelf"),
@@ -6398,24 +6396,11 @@ function renderProfileShufflePlay(items) {
   };
 }
 
-function renderProfileActionRow(items) {
+function renderProfileActionRow(_items) {
   const row = els.profileActionRow;
   if (!row) return;
-  const ownProfile = true;
-  if (!ownProfile && !items?.length) {
-    row.hidden = true;
-    return;
-  }
+  // Share is always meaningful — even an empty profile is shareable.
   row.hidden = false;
-  const totalLikes = (items || []).reduce((s, p) => s + Number(p.likes || 0), 0);
-  if (els.profileActionLikesChip && els.profileActionLikesCount) {
-    if (totalLikes > 0) {
-      els.profileActionLikesCount.textContent = String(totalLikes);
-      els.profileActionLikesChip.hidden = false;
-    } else {
-      els.profileActionLikesChip.hidden = true;
-    }
-  }
 }
 
 function renderProfileTopWeek(items) {
@@ -15152,60 +15137,71 @@ if (els.profilePreviewAvatar && els.profileAvatarFile) {
   });
 }
 
-// --- Spotify-x-Nabad: share + copy-link buttons in the action row.
+// --- Spotify-x-Nabad: share pill with toast feedback. Uses the native
+//     share sheet when available (Capacitor WKWebView on iOS exposes
+//     navigator.share); falls back to clipboard with execCommand as a
+//     last resort. Always surfaces a tiny toast under the pill.
 function _profileShareUrl() {
   const handle = String(activeProfile?.username || "").replace(/^@/, "").trim();
-  if (!handle || handle === "guest") return location.origin || "";
-  const base = (location.origin || "").replace(/\/$/, "");
+  // Prefer the deployed Vercel host for a real link; fall back to
+  // origin when running on http(s). In the iOS app origin can be
+  // `capacitor://localhost` which isn't shareable, so we hardcode the
+  // public host in that case.
+  const origin = (location.origin || "").replace(/\/$/, "");
+  const isWebOrigin = /^https?:\/\//i.test(origin);
+  const base = isWebOrigin ? origin : "https://nabad-ai.vercel.app";
+  if (!handle || handle === "guest") return base;
   return `${base}/#/u/${encodeURIComponent(handle)}`;
 }
-async function _profileCopyLink(button) {
-  const url = _profileShareUrl();
-  if (!url) return;
-  let ok = false;
-  try {
-    await navigator.clipboard.writeText(url);
-    ok = true;
-  } catch {
-    try {
-      const ta = document.createElement("textarea");
-      ta.value = url;
-      ta.style.position = "fixed";
-      ta.style.left = "-9999px";
-      document.body.appendChild(ta);
-      ta.select();
-      ok = document.execCommand("copy");
-      document.body.removeChild(ta);
-    } catch {}
-  }
-  if (button) {
-    const original = button.getAttribute("aria-label") || "Copy profile link";
-    button.setAttribute("aria-label", ok ? "Link copied" : "Copy failed");
-    button.classList.toggle("profileActionBtnIconOk", ok);
-    setTimeout(() => {
-      button.setAttribute("aria-label", original);
-      button.classList.remove("profileActionBtnIconOk");
-    }, 1500);
-  }
-  if (typeof setStatus === "function") setStatus(ok ? "Profile link copied." : "Couldn't copy link.");
+function _profileShowShareToast(message) {
+  const toast = els.profileShareToast;
+  if (!toast) return;
+  toast.textContent = message;
+  toast.hidden = false;
+  clearTimeout(_profileShowShareToast._t);
+  _profileShowShareToast._t = setTimeout(() => { toast.hidden = true; }, 1800);
 }
-async function _profileShare(button) {
+async function _profileCopyLink() {
+  const url = _profileShareUrl();
+  if (!url) return false;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+      return true;
+    }
+  } catch {}
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = url;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return Boolean(ok);
+  } catch {}
+  return false;
+}
+async function _profileShare() {
   const url = _profileShareUrl();
   const handle = String(activeProfile?.username || "").replace(/^@/, "").trim();
   const title = handle ? `@${handle} on Nabad` : "My Nabad profile";
   if (navigator.share && url) {
     try {
       await navigator.share({ title, text: title, url });
+      _profileShowShareToast("Shared!");
       return;
-    } catch {}
+    } catch (e) {
+      // User dismissed the sheet — silently fall through to copy.
+      if (String(e?.name || "") === "AbortError") return;
+    }
   }
-  await _profileCopyLink(button);
+  const ok = await _profileCopyLink();
+  _profileShowShareToast(ok ? "Link copied" : "Couldn't share");
 }
 if (els.profileActionShare) {
-  els.profileActionShare.addEventListener("click", () => void _profileShare(els.profileActionShare));
-}
-if (els.profileActionCopyLink) {
-  els.profileActionCopyLink.addEventListener("click", () => void _profileCopyLink(els.profileActionCopyLink));
+  els.profileActionShare.addEventListener("click", () => void _profileShare());
 }
 if (els.profileShelfSeeAll) {
   els.profileShelfSeeAll.addEventListener("click", () => {

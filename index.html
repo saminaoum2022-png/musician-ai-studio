@@ -1049,35 +1049,33 @@
             </button>
           </section>
 
-          <!-- Secondary action row, Spotify-style: heart count chip, share,
-               quick add-to-library / more. Sits between hero and the
-               popular list so the eye lands on the play action above. -->
+          <!-- Spotify-style About card — moved up to sit right under the
+               hero so it reads like a continuation of the identity card.
+               Mirrors the bio textarea (view-only) in a quote-block. -->
+          <section class="profileAboutCard profileAboutCardHero" id="profileAboutCard" hidden>
+            <span class="profileAboutQuote" aria-hidden="true">“</span>
+            <p id="profileAboutText" class="profileAboutText"></p>
+            <p id="profileAboutMeta" class="profileAboutMeta hint"></p>
+          </section>
+
+          <!-- Single Share pill — Spotify-style wide action button. Uses
+               the native share sheet when available, falls back to
+               clipboard. Toast feedback on tap. -->
           <section
             class="profileActionRow"
             id="profileActionRow"
             aria-label="Profile actions"
             hidden
           >
-            <button type="button" class="profileActionBtnIcon" id="profileActionShare" aria-label="Share profile">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
+            <button type="button" class="profileShareBtn" id="profileActionShare" aria-label="Share profile">
+              <svg viewBox="0 0 24 24" aria-hidden="true" class="profileShareBtnIcon">
                 <path d="M16 6l-4-4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
                 <path d="M12 2v14" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
                 <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
               </svg>
+              <span class="profileShareBtnLabel">Share profile</span>
             </button>
-            <span class="profileActionLikesChip" id="profileActionLikesChip" hidden>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="currentColor"/>
-              </svg>
-              <strong id="profileActionLikesCount">0</strong>
-            </span>
-            <span class="profileActionSpacer"></span>
-            <button type="button" class="profileActionBtnIcon" id="profileActionCopyLink" aria-label="Copy profile link">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-                <path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-              </svg>
-            </button>
+            <span id="profileShareToast" class="profileShareToast" hidden aria-live="polite"></span>
           </section>
 
           <section class="profileHeroLatest" id="profileHeroLatest" hidden>
@@ -1186,20 +1184,6 @@
             <div class="profileHeartbeatScroll">
               <svg id="profileHeartbeatSvg" class="profileHeartbeatSvg" viewBox="0 0 320 48" preserveAspectRatio="none" role="img" aria-label="Releases over time"></svg>
               <div id="profileHeartbeatPeaks" class="profileHeartbeatPeaks"></div>
-            </div>
-          </section>
-
-          <!-- Spotify-style About card. Mirrors the bio textarea (view-only)
-               in a quote-block treatment. Lets the user see their own
-               story the way visitors will. -->
-          <section class="profileAboutCard" id="profileAboutCard" hidden>
-            <header class="profileSectionHead">
-              <h3 class="profileSectionTitle">About</h3>
-            </header>
-            <div class="profileAboutInner">
-              <span class="profileAboutQuote" aria-hidden="true">“</span>
-              <p id="profileAboutText" class="profileAboutText"></p>
-              <p id="profileAboutMeta" class="profileAboutMeta hint"></p>
             </div>
           </section>
 
@@ -1940,6 +1924,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260512spotifynabad"></script>
+    <script type="module" src="./src/app.js?v=20260512profilepolish"></script>
   </body>
 </html>

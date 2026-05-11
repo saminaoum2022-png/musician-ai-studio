@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511hubnoblob";
+const APP_BUILD = "20260511vocalmic";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1828,7 +1828,8 @@ function getVocalReferenceFile() {
   // Prefer in-memory recording over an older upload if both exist
   // (bfcache / failed-promote edge cases).
   if (vocalRefBlob && vocalRefBlob.size > 0) {
-    return new File([vocalRefBlob], "vocal-reference.webm", {
+    const name = vocalReferenceFilenameForMime(vocalRefBlob.type);
+    return new File([vocalRefBlob], name, {
       type: vocalRefBlob.type || "audio/webm",
     });
   }
@@ -2130,7 +2131,11 @@ async function toggleVocalReferenceRecorderFromUi() {
     try {
       await startVocalReferenceRecording();
     } catch (e) {
-      setStatus(`Microphone access failed: ${e?.message || String(e)}`);
+      const msg = e?.message || String(e);
+      setStatus(`Microphone access failed: ${msg}`);
+      try {
+        showToast(`Microphone: ${msg}`, { durationMs: 5500, icon: "⚠" });
+      } catch {}
       return;
     }
     setRecorderToggleRecordingUi(true);
@@ -2141,8 +2146,44 @@ async function toggleVocalReferenceRecorderFromUi() {
     setVocalRecorderStatusAll("Recorded. Tap Use recording.");
   }
 }
+/** WKWebView / Safari record AAC in MP4 containers — not WebM. Prefer mp4 on
+ *  iOS and Capacitor so MediaRecorder actually emits bytes; WebM-first breaks
+ *  mic capture there (empty blobs / silent failure). */
+function isSafariLikeRecorderEnv() {
+  try {
+    if (window?.Capacitor?.isNativePlatform?.()) return true;
+    const ua = navigator.userAgent || "";
+    if (/iPhone|iPad|iPod/i.test(ua)) return true;
+    if (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) return true;
+    return /^((?!chrome|android).)*safari/i.test(ua);
+  } catch {
+    return false;
+  }
+}
+
+function vocalReferenceFilenameForMime(mime) {
+  const t = String(mime || "").toLowerCase();
+  if (t.includes("mp4") || t.includes("aac") || t.includes("mpeg")) return "vocal-reference.m4a";
+  if (t.includes("webm")) return "vocal-reference.webm";
+  if (t.includes("ogg")) return "vocal-reference.ogg";
+  return "vocal-reference.m4a";
+}
+
 function pickRecorderMimeType() {
-  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
+  const safariLike = isSafariLikeRecorderEnv();
+  const mp4First = [
+    "audio/mp4",
+    "audio/mp4;codecs=mp4a.40.2",
+    "audio/webm;codecs=opus",
+    "audio/webm",
+  ];
+  const webFirst = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/mp4",
+    "audio/mp4;codecs=mp4a.40.2",
+  ];
+  const candidates = safariLike ? mp4First : webFirst;
   for (const m of candidates) {
     if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported?.(m)) return m;
   }
@@ -2165,21 +2206,24 @@ async function startVocalReferenceRecording() {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
   const mimeType = pickRecorderMimeType();
   const rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+  const effectiveMime = () => (rec.mimeType || mimeType || "audio/webm");
   const chunks = [];
   rec.ondataavailable = (e) => {
     if (e.data && e.data.size) chunks.push(e.data);
   };
   rec.onstop = () => {
     vocalRefChunks = chunks.slice();
-    const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm;codecs=opus" });
+    const blobType = effectiveMime();
+    const blob = new Blob(chunks, { type: blobType });
     vocalRefBlob = blob;
     let promoted = false;
     // Immediately promote the recording to the active reference and drop any
     // previously uploaded file. `getVocalReferenceFile` also prefers a live
     // `vocalRefBlob` over an older `currentVocalRefFile` when both exist.
     if (blob && blob.size > 0) {
-      const recordedFile = new File([blob], "vocal-reference.webm", {
-        type: blob.type || "audio/webm",
+      const name = vocalReferenceFilenameForMime(blobType);
+      const recordedFile = new File([blob], name, {
+        type: blob.type || blobType,
       });
       if (els.sunoVocalUpload) {
         try { els.sunoVocalUpload.value = ""; } catch {}
@@ -2187,6 +2231,12 @@ async function startVocalReferenceRecording() {
       setVocalRefFile(recordedFile, "Voice reference recorded and attached.", "record");
       promoted = true;
     } else {
+      try {
+        showToast("Recording was empty. Check the microphone in Settings, then try again.", {
+          durationMs: 5000,
+          icon: "⚠",
+        });
+      } catch {}
       renderReferenceHints();
       updateVocalRefPreviewState();
     }
@@ -2203,7 +2253,23 @@ async function startVocalReferenceRecording() {
   };
   vocalRefStream = stream;
   vocalRefRecorder = rec;
-  rec.start();
+  const safariLike = isSafariLikeRecorderEnv();
+  try {
+    // iOS WKWebView often delivers zero-size blobs unless we use a timeslice.
+    if (safariLike) rec.start(250);
+    else rec.start();
+  } catch (e) {
+    try {
+      rec.start();
+    } catch (e2) {
+      try {
+        stream.getTracks().forEach((t) => t.stop());
+      } catch {}
+      vocalRefRecorder = null;
+      vocalRefStream = null;
+      throw e2 || e;
+    }
+  }
   if (hadExisting) {
     try {
       showToast("Replacing attached audio with this recording.", { durationMs: 3800, icon: "↻" });
@@ -10899,9 +10965,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       // MediaRecorder.onstop. If a stale blob is still around, promote it now
       // as a safety net. Either way, just close the modal.
       if (vocalRefBlob && !currentVocalRefFile) {
+        const nm = vocalReferenceFilenameForMime(vocalRefBlob.type);
         const recordedFile = new File(
           [vocalRefBlob],
-          "vocal-reference.webm",
+          nm,
           { type: vocalRefBlob.type || "audio/webm" }
         );
         if (els.sunoVocalUpload) els.sunoVocalUpload.value = "";

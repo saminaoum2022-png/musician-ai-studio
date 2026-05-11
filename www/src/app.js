@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511hum531fix";
+const APP_BUILD = "20260511modetitle";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -12179,7 +12179,17 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             if (sendFp) fd.append("clientFingerprint", sendFp);
             fd.append("style", String(userStyle || "").trim());
             if (finalPrompt) fd.append("prompt", String(finalPrompt));
-            fd.append("title", String((els.sunoTitle?.value || "").trim() || "Reference full song"));
+            // Mode-specific default title makes the Suno dashboard
+            // immediately legible: "Hum instrumental" => add-instrumental,
+            // "Reference full song" => upload-cover. No more guessing
+            // which endpoint a failed task was on.
+            const defaultTitleForMode = referenceInstrumentalOnly
+              ? "Hum instrumental"
+              : "Reference full song";
+            fd.append(
+              "title",
+              String((els.sunoTitle?.value || "").trim() || defaultTitleForMode)
+            );
             fd.append("model", LATEST_SUNO_MODEL);
             if (payload?.vocalGender) fd.append("vocalGender", String(payload.vocalGender));
             if (payload?.voiceTimbre) fd.append("voiceTimbre", String(payload.voiceTimbre));

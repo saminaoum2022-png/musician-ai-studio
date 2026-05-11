@@ -433,10 +433,6 @@
                       <button id="btnMagicRecordVocal" class="ghost" type="button">Record</button>
                       <button id="btnPreviewVocalRef" class="ghost" type="button" disabled>Listen</button>
                     </div>
-                    <div class="segPill vocalModePill" role="group" aria-label="Vocal output mode">
-                      <button id="vocalModeFull" type="button" class="ghost active" title="AI sings your lyrics on a new arrangement (your voice is replaced)">Full song</button>
-                      <button id="vocalModeInstrumental" type="button" class="ghost" title="Suno builds an instrumental band around your uploaded audio. Your vocal stays in the result.">Add Instrumental</button>
-                    </div>
                     <input id="vocalInstrumentalOnly" type="hidden" value="0" />
                     <div id="vocalRefActiveStrip" class="vocalRefActiveStrip" hidden>
                       <span class="vocalRefActiveStripIco" aria-hidden="true">
@@ -451,11 +447,7 @@
                     </div>
                     <div id="sunoVocalUploadName" class="hint uploadVocalsName">No vocal reference attached.</div>
                     <div id="vocalRefHint" class="hint" style="margin-top:6px; display:none">
-                      Audio reference attached. Choose:
-                      <ul class="vocalRefHintList">
-                        <li><strong>Full song</strong> — AI re-sings your lyrics on a new arrangement.</li>
-                        <li><strong>Add Instrumental</strong> — Suno builds a band around your audio. Your vocal stays in the final mix.</li>
-                      </ul>
+                      Melody guide attached — AI will sing new vocals over a new arrangement that follows your melody.
                     </div>
                   </div>
                 </details>
@@ -1808,6 +1800,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260512perturbback"></script>
+    <script type="module" src="./src/app.js?v=20260512humsingsfresh"></script>
   </body>
 </html>

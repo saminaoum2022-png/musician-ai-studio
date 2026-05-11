@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260512vocalsessionfix";
+const APP_BUILD = "20260512humsingsfresh";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1863,24 +1863,12 @@ function setVocalRefFile(file, label, origin) {
     try { clearActiveVoicePersona({ silent: prevFile !== file }); } catch {}
   }
   refreshVocalReferenceUi();
-  // Hum / upload without lyrics: default to Add Instrumental. "Full song"
-  // uses Suno upload-cover and *requires* non-empty lyrics — otherwise Suno
-  // fails mid-task with code 531 ("extending lyrics empty"), which users
-  // read as "broken vocal". Remix keeps Full song + hub lyrics flow.
-  if (file && (origin === "record" || origin === "upload")) {
-    try {
-      const lyricsEmpty = !String(els.sunoPrompt?.value || "").trim();
-      if (lyricsEmpty && els.vocalInstrumentalOnly) {
-        els.vocalInstrumentalOnly.value = "1";
-        if (els.vocalModeFull) els.vocalModeFull.classList.remove("active");
-        if (els.vocalModeInstrumental) els.vocalModeInstrumental.classList.add("active");
-        if (els.sunoPrompt) {
-          els.sunoPrompt.placeholder =
-            "Lyrics — optional. Suno will build an instrumental band under your vocal.";
-        }
-      }
-    } catch {}
-  }
+  // Hum is ALWAYS "AI re-sings on new arrangement" (Suno upload-cover) now.
+  // We never auto-switch to Add Instrumental — that path kept the user's
+  // raw hum in the final mix and confused the UX. If lyrics are empty at
+  // submit time, the Generate flow calls Gemini to draft them so Suno's
+  // upload-cover endpoint has non-empty lyrics to sing.
+  if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
 }
 
 /** Centralised "stop using any saved voice persona". Called when the user
@@ -10821,35 +10809,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       stopVocalReferenceRecording();
     });
   }
-  // Hum-tab output pill — two modes:
-  //   Full song        -> Suno upload-cover (AI re-sings your lyrics; vocalInstrumentalOnly=0)
-  //   Add Instrumental -> Suno add-instrumental (band built around your audio,
-  //                       your vocal stays in the result; vocalInstrumentalOnly=1)
-  const syncVocalModeUi = () => {
-    const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
-    if (els.vocalModeFull) els.vocalModeFull.classList.toggle("active", !instrumental);
-    if (els.vocalModeInstrumental) els.vocalModeInstrumental.classList.toggle("active", instrumental);
-    // Lyrics field is optional when adding instrumental (Suno builds a band
-    // around the audio you uploaded; lyrics not needed).
-    if (els.sunoPrompt) {
-      els.sunoPrompt.placeholder = instrumental
-        ? "Lyrics — optional. Suno will build an instrumental band under your vocal."
-        : "Write your lyrics here...";
-    }
-  };
-  if (els.vocalModeFull) {
-    els.vocalModeFull.addEventListener("click", () => {
-      if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
-      syncVocalModeUi();
-    });
-  }
-  if (els.vocalModeInstrumental) {
-    els.vocalModeInstrumental.addEventListener("click", () => {
-      if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "1";
-      syncVocalModeUi();
-    });
-  }
-  syncVocalModeUi();
+  // Hum tab is hard-wired to "AI re-sings on a new arrangement" (Suno
+  // upload-cover). The Add Instrumental pill was removed — it kept the
+  // user's raw hum in the final mix and was confused with the deprecated
+  // "voice + band" feature. vocalInstrumentalOnly stays at 0 always.
+  if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
 
   const countSentences = (text) => {
     const t = String(text || "").trim();
@@ -11962,39 +11926,15 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const promptText = String(els.sunoPrompt?.value || "").trim();
     const vocalRefFile = resolveVocalReferenceForSubmit();
     const hasUploadedReference = Boolean(vocalRefFile);
-    const referenceMode = hasUploadedReference ? "humming_music" : "none";
+    // Hum tab is always "AI re-sings on a new arrangement". The
+    // add-instrumental ("voice + band") path is gone; Suno upload-cover
+    // is the only reference route. If lyrics are empty, Gemini drafts
+    // them below before submit so upload-cover never fails with 531.
+    const referenceMode = hasUploadedReference ? "vocal_full" : "none";
     const hasReference = hasUploadedReference;
-    const wantsBackingTrack = String(els.vocalInstrumentalOnly?.value || "0") === "1";
 
     if (hasReference && !vocalRefFile) {
       window.alert("Please upload or record audio reference first.");
-      return;
-    }
-
-    if (wantsBackingTrack && !vocalRefFile) {
-      window.alert(
-        "Add Instrumental needs a vocal/melody attached.\n\n" +
-        "Tap '+ Audio' to upload, or 'Record' to record your voice/hum first, " +
-        "then tap Generate."
-      );
-      return;
-    }
-
-    // Full song + reference uses Suno upload-cover — it needs real lyrics.
-    // Empty lyrics → Suno task fails with 531 ("extending lyrics empty").
-    // Add Instrumental is the correct hum-only path (add-instrumental API).
-    if (hasReference && !wantsBackingTrack && !promptText.trim()) {
-      try {
-        showToast(
-          "Full song needs lyrics in the Lyrics box — or tap Add Instrumental for hum-only.",
-          { icon: "!", durationMs: 8200 }
-        );
-      } catch {}
-      window.alert(
-        "Full song mode needs lyrics.\n\n" +
-          "Paste or write lyrics in the Lyrics tab first (Full song re-sings them). " +
-          "Or tap Add Instrumental — that builds a band under your hum without lyrics."
-      );
       return;
     }
 
@@ -12005,14 +11945,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
     try {
       const engine = "gemini_assisted";
-      const referenceInstrumentalOnly = wantsBackingTrack;
+      const referenceInstrumentalOnly = false;
       const hubRemixLocked = Boolean(currentRemixSource?.id);
       const modeLabel = hasReference
-        ? referenceInstrumentalOnly
-          ? "Reference: Add Instrumental (band under your vocal)"
-          : hubRemixLocked
-            ? "Hub remix (melody / arrangement locked)"
-            : "Reference: Full song"
+        ? hubRemixLocked
+          ? "Hub remix (melody / arrangement locked)"
+          : "Reference: AI re-sings on new arrangement"
         : "Normal";
       const engineLabel = "Suno + Gemini lyrics assist";
       setGenerateBtn("Generating…", true, "generate");
@@ -12043,7 +11981,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const beatStability = String(els.sunoBeatStability?.value || "").trim();
       let finalPrompt = sanitizeLyricsPrompt(userPrompt);
       const imageOnlyInstrumental = Boolean(imageMoodAppliedForNextGen && !finalPrompt && !hasReference);
-      if (!hasReference) {
+      // Auto-draft lyrics with Gemini when the user hasn't typed any.
+      // Hum-tab requires non-empty lyrics: Suno's upload-cover endpoint
+      // returns 531 ("extending lyrics empty") otherwise. Same path works
+      // for no-reference generations — Gemini drafts lyrics from style.
+      if (!finalPrompt) {
         try {
           setStatus("Preparing prompt with Gemini… (Engine: Gemini assisted + Suno render)");
           const rr = await fetch(apiUrl("/api/lyrics"), {
@@ -12055,9 +11997,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           if (rr.ok && dd?.lyrics) finalPrompt = sanitizeLyricsPrompt(dd.lyrics);
         } catch {}
       }
-      // In vocal-reference flow, use clean native reference handling:
-      // do not pass textual prompt guidance from app internals.
-      if (hasReference && referenceInstrumentalOnly) finalPrompt = "";
 
       const styleExtras = hasReference
         ? ""
@@ -12191,11 +12130,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               } catch {}
             }
             fd.append("action", "add_instrumental");
-            const stemRefMode = referenceInstrumentalOnly
-              ? "humming_music"
-              : hubRemixLocked
-                ? "song_remix"
-                : "vocal_full";
+            // Hum tab always routes through Suno upload-cover (AI re-sings on
+            // a new arrangement, follows the melody contour of the upload).
+            // Hub remix uses song_remix; everything else is vocal_full.
+            const stemRefMode = hubRemixLocked ? "song_remix" : "vocal_full";
             fd.append("referenceMode", stemRefMode);
             const uploadBaseName = sendFile?.name || "vocal-reference.webm";
             const uniqueUploadName = `ref-${Date.now()}-${uploadBaseName.replace(/^.*[/\\]/, "")}`;
@@ -12205,16 +12143,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             if (sendFp) fd.append("clientFingerprint", sendFp);
             fd.append("style", String(userStyle || "").trim());
             if (finalPrompt) fd.append("prompt", String(finalPrompt));
-            // Mode-specific default title makes the Suno dashboard
-            // immediately legible: "Hum instrumental" => add-instrumental,
-            // "Reference full song" => upload-cover. No more guessing
-            // which endpoint a failed task was on.
-            const defaultTitleForMode = referenceInstrumentalOnly
-              ? "Hum instrumental"
-              : "Reference full song";
             fd.append(
               "title",
-              String((els.sunoTitle?.value || "").trim() || defaultTitleForMode)
+              String((els.sunoTitle?.value || "").trim() || "Reference full song")
             );
             fd.append("model", LATEST_SUNO_MODEL);
             if (payload?.vocalGender) fd.append("vocalGender", String(payload.vocalGender));
@@ -12223,27 +12154,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             if (timing) fd.append("timing", String(timing));
             if (dialect) fd.append("dialect", String(dialect));
             if (dialectHint) fd.append("dialectHint", String(dialectHint));
-            if (payload?.personaId && !referenceInstrumentalOnly) {
-              fd.append("personaId", String(payload.personaId));
-            }
-            // Backing / Mix modes: force the backing band to track the
-            // uploaded vocal much more strictly than the default.
-            //   audioWeight 0.95  -> band closely matches the audio's
-            //                        melody / timing / phrasing.
-            //   styleWeight 0.25  -> style tags become a soft hint, not
-            //                        the dominant signal.
-            //
-            // This is the fix for "Suno didn't follow my vocal melody" —
-            // before, we sent no weight params at all and Suno defaulted
-            // to a style-led arrangement that mostly ignored the upload.
-            //
-            // Full song / cover mode keeps the server's existing
-            // (style-led) defaults, since for AI re-singing we *want*
-            // more stylistic freedom around the contour.
-            if (referenceInstrumentalOnly) {
-              fd.append("audioWeight", "0.95");
-              fd.append("styleWeight", "0.25");
-            }
+            if (payload?.personaId) fd.append("personaId", String(payload.personaId));
             const stemsTok = getSupabaseAuthToken();
             const rr = await fetch(apiUrl("/api/suno/stems"), {
               method: "POST",

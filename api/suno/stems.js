@@ -661,31 +661,16 @@ async function maybeTranscodeToMp3({ bytes, mime, name }) {
 
   const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
   const mp3Name = `${String(name || "vocal").replace(/\.[^.]+$/, "")}.mp3`;
-  // Random sub-perceptual tempo/pitch perturbation. Suno caches audio
-  // fingerprints from /api/v1/generate/upload-cover and /add-instrumental
-  // for ~14 days. Re-uploading the same hum (or even a sufficiently
-  // similar one from the same user) hits that cache and returns 413
-  // "Uploaded audio contains copyrighted lyrics" — a false positive
-  // matching the user's OWN prior upload.
+  // Audio perturbation is OFF. Earlier we applied a random tempo+pitch
+  // nudge to break Suno's input-side fingerprint cache, but users
+  // reported the perturbed audio sounded "filtered/processed" — fair,
+  // since high-pass + tempo + pitch + loudnorm is audible on melodic
+  // takes. Cleaner reference in → cleaner generation out.
   //
-  // A randomized perceptual nudge (±2–4% tempo, ±10–25 cents pitch)
-  // is below the just-noticeable difference for vocal melody but far
-  // outside Suno's spectral-hash tolerance. Each retry gets a fresh
-  // random nudge so the fingerprint never repeats.
-  //
-  // The previous attempt also added "copyrighted melody" phrases to
-  // `negativeTags`, which triggered Suno's text-safety classifier and
-  // returned the same 413 on every request — that part was reverted
-  // in de00083. Perturbation alone is safe (text payload now mirrors
-  // Suno's OpenAPI example exactly).
-  const perturb = pickPerturbation();
-  try {
-    console.log("[suno/stems] perturbation", {
-      tempo: perturb.tempo,
-      pitchCents: perturb.cents,
-      pitchRatio: perturb.pitchRatio,
-    });
-  } catch {}
+  // If Suno's cache flags repeat uploads, we now lean on the unique
+  // multipart filename (ref-{ts}-...) and the upload-cover endpoint's
+  // own variability instead.
+  const perturb = null;
 
   async function encodePlain() {
     await runFfmpeg(ffmpegPath, [

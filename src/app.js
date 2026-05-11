@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511minimalpayload";
+const APP_BUILD = "20260512vocalstub";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -2199,6 +2199,11 @@ function updateVocalRefPreviewState() {
   const hasRef = Boolean(getVocalReferenceFile());
   if (els.btnPreviewVocalRef) els.btnPreviewVocalRef.disabled = !hasRef;
 }
+/** Stub: called after Studio stem WAV export. The old "My voice + band"
+ *  Vocal Room hook was removed with `voicePlusBand.js`; export still
+ *  updates `mixerDownloadLink` directly. Kept so Export Mix never throws.
+ */
+function updateVocalRoomAvailability() {}
 function openVocalRecorderModal() {
   if (!els.vocalRecorderModal) return;
   els.vocalRecorderModal.style.display = "";
@@ -7154,9 +7159,9 @@ function addToLibrary(track) {
     if (taskId && xTaskId === taskId && !audioId && !xAudioId && xKind === kind) return true;
     return false;
   });
-  // Returning the matched entry on duplicate lets callers (e.g. the
-  // voice+band post-mix step) still find the row they want to patch
-  // even when the same generation was re-resolved (poll + recover).
+  // Returning the matched entry on duplicate lets callers find the
+  // row they want to patch even when the same generation was
+  // re-resolved (poll + recover).
   if (duplicate) return duplicate;
   const newTrack = {
     id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,

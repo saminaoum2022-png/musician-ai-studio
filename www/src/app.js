@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511soundsbannerbottom";
+const APP_BUILD = "20260511huminline";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -77,6 +77,8 @@ const els = {
   lyricsMagicMenu: document.getElementById("lyricsMagicMenu"),
   btnMagicUploadVocal: document.getElementById("btnMagicUploadVocal"),
   btnMagicRecordVocal: document.getElementById("btnMagicRecordVocal"),
+  humRecorderToggle: document.getElementById("humRecorderToggle"),
+  humRecorderStatus: document.getElementById("humRecorderStatus"),
   btnPreviewVocalRef: document.getElementById("btnPreviewVocalRef"),
   btnSunoRefresh: document.getElementById("btnSunoRefresh"),
   btnSunoStems: document.getElementById("btnSunoStems"),
@@ -1993,7 +1995,32 @@ function openVocalRecorderModal() {
 function closeVocalRecorderModal() {
   if (!els.vocalRecorderModal) return;
   els.vocalRecorderModal.style.display = "none";
-  if (els.btnRecorderToggle) els.btnRecorderToggle.classList.remove("isRecording");
+  setRecorderToggleRecordingUi(false);
+}
+function setVocalRecorderStatusAll(text) {
+  if (els.recorderStatus) els.recorderStatus.textContent = text;
+  if (els.humRecorderStatus) els.humRecorderStatus.textContent = text;
+}
+function setRecorderToggleRecordingUi(active) {
+  if (els.btnRecorderToggle) els.btnRecorderToggle.classList.toggle("isRecording", Boolean(active));
+  if (els.humRecorderToggle) els.humRecorderToggle.classList.toggle("isRecording", Boolean(active));
+}
+async function toggleVocalReferenceRecorderFromUi() {
+  const isRecording = Boolean(vocalRefRecorder && vocalRefRecorder.state === "recording");
+  if (!isRecording) {
+    try {
+      await startVocalReferenceRecording();
+    } catch (e) {
+      setStatus(`Microphone access failed: ${e?.message || String(e)}`);
+      return;
+    }
+    setRecorderToggleRecordingUi(true);
+    setVocalRecorderStatusAll("Recording… tap again to stop");
+  } else {
+    stopVocalReferenceRecording();
+    setRecorderToggleRecordingUi(false);
+    setVocalRecorderStatusAll("Recorded. Tap Use recording.");
+  }
 }
 function pickRecorderMimeType() {
   const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
@@ -2049,11 +2076,11 @@ async function startVocalReferenceRecording() {
     if (els.btnRecorderUse) {
       els.btnRecorderUse.disabled = !(promoted || getVocalReferenceFile());
     }
-    if (els.recorderStatus) {
-      els.recorderStatus.textContent = promoted
+    setVocalRecorderStatusAll(
+      promoted
         ? "Recording ready. Tap Use recording or close."
-        : "Recording empty. Try again.";
-    }
+        : "Recording empty. Try again."
+    );
   };
   vocalRefStream = stream;
   vocalRefRecorder = rec;
@@ -10627,23 +10654,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     els.vocalRecorderBackdrop.addEventListener("click", closeVocalRecorderModal);
   }
   if (els.btnRecorderToggle) {
-    els.btnRecorderToggle.addEventListener("click", async () => {
-      const isRecording = Boolean(vocalRefRecorder && vocalRefRecorder.state === "recording");
-      if (!isRecording) {
-        try {
-          await startVocalReferenceRecording();
-        } catch (e) {
-          setStatus(`Microphone access failed: ${e?.message || String(e)}`);
-          return;
-        }
-        if (els.btnRecorderToggle) els.btnRecorderToggle.classList.add("isRecording");
-        if (els.recorderStatus) els.recorderStatus.textContent = "Recording… tap again to stop";
-      } else {
-        stopVocalReferenceRecording();
-        if (els.btnRecorderToggle) els.btnRecorderToggle.classList.remove("isRecording");
-        if (els.recorderStatus) els.recorderStatus.textContent = "Recorded. Tap Use recording.";
-      }
-    });
+    els.btnRecorderToggle.addEventListener("click", () => void toggleVocalReferenceRecorderFromUi());
+  }
+  if (els.humRecorderToggle) {
+    els.humRecorderToggle.addEventListener("click", () => void toggleVocalReferenceRecorderFromUi());
   }
   if (els.btnRecorderUse) {
     els.btnRecorderUse.addEventListener("click", () => {

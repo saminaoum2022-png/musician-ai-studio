@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511audionative";
+const APP_BUILD = "20260511pollfix";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -11090,7 +11090,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
 
   const fetchGenerationStatus = async () => {
     if (!sunoTaskId) return null;
-    const r = await fetch(`/api/suno/status?taskId=${encodeURIComponent(sunoTaskId)}`);
+    const r = await fetch(apiUrl(`/api/suno/status?taskId=${encodeURIComponent(sunoTaskId)}`));
     const data = await r.json().catch(() => ({}));
     // The Suno proxy returns 200 with the full body when Suno itself
     // responded — even when that body contains a failure. Only treat

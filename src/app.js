@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511tagsclean";
+const APP_BUILD = "20260511antiderivative";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -11367,10 +11367,16 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (looksCopyright) {
       return {
         kind: "copyright",
-        headline: "Couldn't generate — likely copyrighted material",
+        headline: "Suno flagged this hum as matching a known melody",
         detail:
-          "Suno detected what sounds like a well-known commercial track in your audio. Try humming a melody you've made up, or change the vocal so it doesn't reference a copyrighted song."
-          + (msg ? `\n\nSuno: ${msg}` : ""),
+          "Suno's copyright filter sometimes false-positives on short hums — "
+          + "even original ones — when the melodic contour resembles a popular reference.\n\n"
+          + "Tips that usually fix it:\n"
+          + "• Hum a longer phrase (8–15 seconds) with more varied notes.\n"
+          + "• Avoid generic do-re-mi runs and arpeggios; add unexpected intervals.\n"
+          + "• Use a more specific style tag (e.g. \"sparse solo violin, modern minimal\") "
+          + "instead of just a generic instrument name."
+          + (msg ? `\n\nSuno raw: ${msg}` : ""),
       };
     }
     if (looksSensitive) {

@@ -343,20 +343,46 @@ module.exports = async function handler(req, res) {
       const styleClean = String(style || "").replace(/\s+/g, " ").trim();
       const dialectTag = dialect ? String(dialect).trim() : "";
       const timbreTag = voiceTimbre ? String(voiceTimbre).trim() : "";
-      const cleanTagsList = [styleClean, dialectTag, timbreTag]
+      // Anti-derivative style hints, appended invisibly so Suno's
+      // generator skews toward an ORIGINAL composition rather than
+      // matching the closest known reference in its training. Without
+      // these, short hums with single-instrument styles (e.g. "violin")
+      // routinely trip Suno's melody fingerprinting and come back
+      // flagged as copyrighted material — even when the user hummed
+      // a completely original phrase.
+      const originalityTags = ["original composition", "contemporary"];
+      const cleanTagsList = [styleClean, dialectTag, timbreTag, ...originalityTags]
         .map((s) => String(s || "").trim())
         .filter(Boolean);
       let cleanTags = cleanTagsList.join(", ");
-      if (!cleanTags) cleanTags = "cinematic, instrumental";
+      if (!cleanTags) cleanTags = "cinematic, instrumental, original composition";
       if (cleanTags.length > 200) cleanTags = cleanTags.slice(0, 197) + "...";
       const cleanNegative = (() => {
-        const base = String(negativeTags || "").trim();
-        if (base) return base.length > 200 ? base.slice(0, 197) + "..." : base;
-        // Short, style-only negative tags. The previous default had
-        // long compound phrases like "drifting tempo" that risk the
-        // same parser trip-up.
-        return "lead vocals, narration";
+        // Always include anti-derivative phrases so Suno's generator
+        // is biased away from popular references that trigger its
+        // own copyright filter on the output side.
+        const antiDerivative = [
+          "famous melody",
+          "well-known song",
+          "copyrighted melody",
+          "derivative",
+          "cover of existing song",
+          "lead vocals",
+          "narration",
+        ];
+        const userExtra = String(negativeTags || "")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const merged = [...new Set([...antiDerivative, ...userExtra])].join(", ");
+        return merged.length > 200 ? merged.slice(0, 197) + "..." : merged;
       })();
+      // weirdnessConstraint is Suno's "make it novel, not a copy" knob
+      // per the official OpenAPI. Default to 0.75 so the generator
+      // visibly drifts away from any known reference it might match —
+      // this is the single most effective mitigation for false-positive
+      // copyright rejections on short hums.
+      const weirdnessConstraint = 0.75;
       const addPayload = {
         uploadUrl,
         title: title || "Reference instrumental",
@@ -364,10 +390,7 @@ module.exports = async function handler(req, res) {
         negativeTags: cleanNegative,
         callBackUrl,
         model: instModel,
-        // Optional weights from the client when present. We deliberately
-        // do NOT default-fill these — passing weights only when the
-        // client opted in keeps the request shape minimal so the
-        // upstream parser has the smallest surface to choke on.
+        weirdnessConstraint,
         ...(audioWeight !== null ? { audioWeight } : {}),
         ...(styleWeight !== null ? { styleWeight } : {}),
         ...(vocalGender === "m" || vocalGender === "f" ? { vocalGender } : {}),

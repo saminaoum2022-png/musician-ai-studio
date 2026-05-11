@@ -321,39 +321,71 @@ module.exports = async function handler(req, res) {
       }
 
       // === Backing mode (humming_music / humming_backing / default): keep upload as lead, add band ===
+      //
+      // ROOT CAUSE FIX (Suno 531 "extending lyrics empty/malformed" on
+      // underpainting/add-instrumental):
+      //   The previous payload jammed sentence-style instructions like
+      //   "lock to uploaded vocal melody" and "follow humming contour"
+      //   into `tags`. Suno's docs explicitly want short, comma-separated
+      //   style words (e.g. "Relaxing Piano, Ambient, Peaceful").
+      //   sunoapi.org's underpainting parser tries to extract a style
+      //   from those tags; when it sees verbs and prose it fails with
+      //   their generic 531 template — which mentions "lyrics" even
+      //   though add-instrumental has no lyrics field. That's why we
+      //   couldn't reproduce the issue by changing recordings: it's a
+      //   tags-parsing bug, not a vocal-bytes bug.
+      //
+      // The new `tags` is: user's `style` + optional dialect/timbre
+      // descriptors only. Anything that looks like an instruction is
+      // dropped. If style is empty we fall back to a single neutral
+      // style word so the field is never empty (it's required).
       const instModel = ["V4_5PLUS", "V5", "V5_5"].includes(safeModel) ? safeModel : "V4_5PLUS";
-      const hummingLockedTags = [
-        style,
-        songKey ? `key: ${songKey}` : "",
-        timing ? `timing: ${timing}` : "",
-        dialect ? `dialect: ${dialect}` : "",
-        voiceTimbre ? `voice timbre: ${voiceTimbre}` : "",
-        // Locked phrases that strongly bias Suno toward melody-tracking.
-        // These pair with audioWeight=0.95 from the client.
-        "instrumental backing only",
-        "lock to uploaded vocal melody",
-        "match phrase timing exactly",
-        "follow humming contour",
-        "preserve the input rhythm and downbeats",
-        "do not replace or overshadow the main motif",
-      ]
-        .filter(Boolean)
-        .join(", ");
+      const styleClean = String(style || "").replace(/\s+/g, " ").trim();
+      const dialectTag = dialect ? String(dialect).trim() : "";
+      const timbreTag = voiceTimbre ? String(voiceTimbre).trim() : "";
+      const cleanTagsList = [styleClean, dialectTag, timbreTag]
+        .map((s) => String(s || "").trim())
+        .filter(Boolean);
+      let cleanTags = cleanTagsList.join(", ");
+      if (!cleanTags) cleanTags = "cinematic, instrumental";
+      if (cleanTags.length > 200) cleanTags = cleanTags.slice(0, 197) + "...";
+      const cleanNegative = (() => {
+        const base = String(negativeTags || "").trim();
+        if (base) return base.length > 200 ? base.slice(0, 197) + "..." : base;
+        // Short, style-only negative tags. The previous default had
+        // long compound phrases like "drifting tempo" that risk the
+        // same parser trip-up.
+        return "lead vocals, narration";
+      })();
       const addPayload = {
         uploadUrl,
         title: title || "Reference instrumental",
-        tags: hummingLockedTags || "instrumental, lock to uploaded vocal melody, match phrase timing exactly",
-        negativeTags: negativeTags || "lead vocals, sung vocals, spoken word, narration, noise, off-beat, drifting tempo",
+        tags: cleanTags,
+        negativeTags: cleanNegative,
         callBackUrl,
         model: instModel,
-        // Weights that decide "follow upload vs. follow tags". The
-        // client sends audioWeight=0.95 + styleWeight=0.25 for
-        // backing/mix modes, which is the single most impactful fix
-        // for "the band didn't follow my voice".
+        // Optional weights from the client when present. We deliberately
+        // do NOT default-fill these — passing weights only when the
+        // client opted in keeps the request shape minimal so the
+        // upstream parser has the smallest surface to choke on.
         ...(audioWeight !== null ? { audioWeight } : {}),
         ...(styleWeight !== null ? { styleWeight } : {}),
         ...(vocalGender === "m" || vocalGender === "f" ? { vocalGender } : {}),
       };
+      try {
+        console.log("[suno/stems] add-instrumental payload", {
+          title: addPayload.title,
+          tags: addPayload.tags,
+          tagsLen: addPayload.tags.length,
+          negativeTags: addPayload.negativeTags,
+          negativeTagsLen: addPayload.negativeTags.length,
+          model: addPayload.model,
+          audioWeight: addPayload.audioWeight ?? null,
+          styleWeight: addPayload.styleWeight ?? null,
+          vocalGender: addPayload.vocalGender ?? null,
+          uploadUrlHost: (() => { try { return new URL(uploadUrl).host; } catch { return null; } })(),
+        });
+      } catch {}
       // Do NOT forward personaId here — official add-instrumental OpenAPI has no
       // persona field. Forwarding it caused Suno to mis-handle requests (seen as
       // lyric/extension failures with code 531 / "empty extending lyrics"). Voice

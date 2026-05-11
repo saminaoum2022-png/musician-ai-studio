@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511hubaborts";
+const APP_BUILD = "20260511hubstaleended";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -828,12 +828,20 @@ function ensureHubAudio() {
   a.addEventListener("play", () => { try { setProfileAuraAudioState(true); } catch {} });
   a.addEventListener("pause", () => { try { setProfileAuraAudioState(isAnyAppAudioPlaying()); } catch {} });
   a.addEventListener("ended", () => {
+    // Stale-event guard: the previous src's ended can fire AFTER a new
+    // startHubPlayback has already taken over the element. Without this,
+    // it would pause the freshly-loaded new track and auto-skip to the
+    // following row — exactly the "every-other-post fails" pattern on iOS.
+    const elSeq = Number(a.dataset?.hubSeq || 0);
+    if (elSeq !== hubPlaybackSeq) return;
     const endedPostId = hubAudioPostId;
     stopHubPlayback();
     onHubTrackEnded(endedPostId);
     try { setProfileAuraAudioState(isAnyAppAudioPlaying()); } catch {}
   });
   a.addEventListener("timeupdate", () => {
+    const elSeq = Number(a.dataset?.hubSeq || 0);
+    if (elSeq !== hubPlaybackSeq) return;
     const postId = hubAudioPostId;
     const post = hubAudioCurrentPost;
     if (!postId || !post) return;
@@ -1052,6 +1060,11 @@ async function startHubPlayback(postId) {
   } catch {
     if (a.src !== targetSrc) a.src = targetSrc;
   }
+  // Stamp the playback sequence onto the element so listeners can ignore
+  // stale ended/timeupdate events from the previous src. Must happen AFTER
+  // src is set and BEFORE play(), so the new fire-and-forget play() races
+  // any leftover events with the correct seq attached.
+  try { a.dataset.hubSeq = String(mySeq); } catch {}
   try {
     a.currentTime = 0;
   } catch {}

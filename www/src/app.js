@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511voicefp2";
+const APP_BUILD = "20260511hum531fix";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1863,6 +1863,24 @@ function setVocalRefFile(file, label, origin) {
     try { clearActiveVoicePersona({ silent: prevFile !== file }); } catch {}
   }
   refreshVocalReferenceUi();
+  // Hum / upload without lyrics: default to Add Instrumental. "Full song"
+  // uses Suno upload-cover and *requires* non-empty lyrics — otherwise Suno
+  // fails mid-task with code 531 ("extending lyrics empty"), which users
+  // read as "broken vocal". Remix keeps Full song + hub lyrics flow.
+  if (file && (origin === "record" || origin === "upload")) {
+    try {
+      const lyricsEmpty = !String(els.sunoPrompt?.value || "").trim();
+      if (lyricsEmpty && els.vocalInstrumentalOnly) {
+        els.vocalInstrumentalOnly.value = "1";
+        if (els.vocalModeFull) els.vocalModeFull.classList.remove("active");
+        if (els.vocalModeInstrumental) els.vocalModeInstrumental.classList.add("active");
+        if (els.sunoPrompt) {
+          els.sunoPrompt.placeholder =
+            "Lyrics — optional. Suno will build an instrumental band under your vocal.";
+        }
+      }
+    } catch {}
+  }
 }
 
 /** Centralised "stop using any saved voice persona". Called when the user
@@ -11364,6 +11382,22 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           + (msg ? `\n\nSuno: ${msg}` : ""),
       };
     }
+    // 531 with "extending lyrics" almost always means upload-cover ran with
+    // empty/missing lyrics — same symptom if user left Full song selected
+    // for a hum-only take. Not an instrumental/add-instrumental failure.
+    const looksEmptyLyrics531 =
+      code === 531
+      || (m.includes("extending lyrics") && (m.includes("empty") || m.includes("too short")));
+    if (looksEmptyLyrics531) {
+      return {
+        kind: "needsLyricsOrInstrumental",
+        headline: "Wrong mode for hum-only — add lyrics or use Add Instrumental",
+        detail:
+          "Suno rejected this because Full song mode needs lyrics in the Lyrics box. "
+          + "For a melody-only recording, tap Add Instrumental on the Hum tab (no lyrics needed)."
+          + (msg ? `\n\nSuno: ${msg}` : ""),
+      };
+    }
     if (code === 413 || m.includes("too long")) {
       return {
         kind: "tooLong",
@@ -11560,7 +11594,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
     } catch {}
     try {
-      const icon = info.kind === "copyright" || info.kind === "sensitive" ? "!" : "✗";
+      const icon =
+        info.kind === "copyright" || info.kind === "sensitive" || info.kind === "needsLyricsOrInstrumental"
+          ? "!"
+          : "✗";
       showToast(toastBody, {
         icon,
         durationMs: 14000,
@@ -11915,6 +11952,24 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         "Add Instrumental needs a vocal/melody attached.\n\n" +
         "Tap '+ Audio' to upload, or 'Record' to record your voice/hum first, " +
         "then tap Generate."
+      );
+      return;
+    }
+
+    // Full song + reference uses Suno upload-cover — it needs real lyrics.
+    // Empty lyrics → Suno task fails with 531 ("extending lyrics empty").
+    // Add Instrumental is the correct hum-only path (add-instrumental API).
+    if (hasReference && !wantsBackingTrack && !promptText.trim()) {
+      try {
+        showToast(
+          "Full song needs lyrics in the Lyrics box — or tap Add Instrumental for hum-only.",
+          { icon: "!", durationMs: 8200 }
+        );
+      } catch {}
+      window.alert(
+        "Full song mode needs lyrics.\n\n" +
+          "Paste or write lyrics in the Lyrics tab first (Full song re-sings them). " +
+          "Or tap Add Instrumental — that builds a band under your hum without lyrics."
       );
       return;
     }

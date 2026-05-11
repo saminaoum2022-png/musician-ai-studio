@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260511hubplayback";
+const APP_BUILD = "20260511hubaborts";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -723,19 +723,56 @@ function flushHubViewportAutoplay() {
   tryHubViewportAutoplay();
 }
 
-async function hubAudioPlayWithRetry(audio) {
+/** Track the in-flight play() promise on the shared Hub audio element.
+ *  On iOS WKWebView, calling pause()+src=... while the previous play()
+ *  is still pending makes the next play() reject with AbortError. Awaiting
+ *  the prior promise (with a short timeout) removes that race entirely and
+ *  fixes the "every-other-post fails" pattern.
+ */
+let _hubInflightPlay = null;
+
+async function awaitWithTimeout(promise, ms) {
+  if (!promise) return;
+  let to;
   try {
-    await audio.play();
-    return true;
-  } catch {
-    await new Promise((r) => setTimeout(r, 90));
+    await Promise.race([
+      promise.catch(() => {}),
+      new Promise((r) => { to = setTimeout(r, ms); }),
+    ]);
+  } finally {
+    if (to) clearTimeout(to);
+  }
+}
+
+async function hubAudioPlayWithRetry(audio) {
+  // Let any previous play() settle (either resolve or reject) before kicking
+  // a new one off — otherwise the browser cancels the new request.
+  await awaitWithTimeout(_hubInflightPlay, 250);
+  _hubInflightPlay = null;
+
+  const tryOnce = async () => {
     try {
-      await audio.play();
+      const p = audio.play();
+      _hubInflightPlay = p;
+      await p;
+      _hubInflightPlay = null;
       return true;
     } catch {
+      _hubInflightPlay = null;
       return false;
     }
-  }
+  };
+
+  if (await tryOnce()) return true;
+
+  // iOS reset between retries — load() forces a fresh fetch and recreates the
+  // media element internally, which clears the AbortError stickiness.
+  try { audio.load(); } catch {}
+  await new Promise((r) => setTimeout(r, 160));
+  if (await tryOnce()) return true;
+
+  await new Promise((r) => setTimeout(r, 360));
+  return tryOnce();
 }
 
 // Hub next-track preload (`preloadNextHubTrack`, `hubPlaybackSrcForPost`, …)
@@ -943,9 +980,14 @@ async function startHubPlayback(postId) {
   // background fetch finish for next time the user comes back to this post.
 
   const a = ensureHubAudio();
+  // Before changing src on iOS, settle the previous play() promise so it
+  // can't abort the new one. pause() is best-effort; the awaitWithTimeout
+  // in hubAudioPlayWithRetry is the real guarantee.
   try {
     a.pause();
   } catch {}
+  await awaitWithTimeout(_hubInflightPlay, 220);
+  _hubInflightPlay = null;
   // Pause anything that's playing on the *other* audio element — the
   // global player handles Library + generated tracks via `playerEl`,
   // and without this Hub + Library would play on top of each other.

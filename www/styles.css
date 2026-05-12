@@ -10192,27 +10192,35 @@ body[data-route="hub"] #hubList .hubRow.isActive::before{
 }
 
 /* Layer 1 — full-bleed blurred backdrop, derived from the cover. */
+/* Backdrop draws the cover artwork as a CSS background image, scaled
+   and blurred to fill the panel behind the centered cover. Using the
+   same URL as the foreground cover means the browser fetches it
+   once per reel (backdrop = cached cover hit), which keeps Supabase
+   egress minimal. The blur lives on a ::before so we don't blur the
+   veil gradient on top of it. */
 .hubReelBackdrop{
   position: absolute;
   inset: 0;
   z-index: 0;
   overflow: hidden;
-  background: #04060c;
+  background-color: #04060c;
 }
-.hubReelBackdropImg{
+.hubReelBackdrop::before{
+  content: "";
   position: absolute;
-  top: -20%;
-  left: -20%;
-  width: 140%;
-  height: 140%;
-  object-fit: cover;
-  filter: blur(40px) saturate(1.4) brightness(0.65);
-  transform: scale(1.08);
+  inset: -10%;
+  background-image: var(--reel-bg, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: blur(36px) saturate(1.35) brightness(0.62);
+  transform: scale(1.06);
   opacity: 0.95;
 }
 .hubReelBackdropVeil{
   position: absolute;
   inset: 0;
+  z-index: 1;
   background: radial-gradient(120% 80% at 50% 35%, transparent 0%, rgba(4,6,12,0.45) 70%, rgba(4,6,12,0.7) 100%);
 }
 

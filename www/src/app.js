@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514hubCoverDirectUrl";
+const APP_BUILD = "20260514hubReelLite";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -856,6 +856,27 @@ function updateHubFocusedRow() {
  *       and "user tapped pause" semantics are preserved.
  * ================================================================= */
 let _hubReelObserver = null;
+let _hubReelPrefetchObserver = null;
+
+/** Promote a single reel from `data-src` to real `src` so iOS WebKit
+ *  fetches the cover. Idempotent and cheap. Also fills the backdrop
+ *  CSS var so the blurred backplate paints on the same fetch (browser
+ *  cache dedup — one Supabase egress per post no matter how many
+ *  visual layers reference it). */
+function hydrateHubReelCover(reelEl) {
+  if (!reelEl || reelEl.getAttribute("data-cover-hydrated") === "1") return;
+  const img = reelEl.querySelector(".hubReelCover");
+  if (!img) return;
+  const ds = img.getAttribute("data-src");
+  if (ds && !img.getAttribute("src")) img.setAttribute("src", ds);
+  if (ds) img.removeAttribute("data-src");
+  const backdrop = reelEl.querySelector(".hubReelBackdrop");
+  if (backdrop && !backdrop.style.getPropertyValue("--reel-bg")) {
+    const url = reelEl.getAttribute("data-cover-url") || ds || img.getAttribute("src") || "";
+    if (url) backdrop.style.setProperty("--reel-bg", `url('${url}')`);
+  }
+  reelEl.setAttribute("data-cover-hydrated", "1");
+}
 
 function tryHubReelAutoplay(activeId) {
   if (!activeId) return;
@@ -879,12 +900,19 @@ function wireHubReelObserver() {
     try { _hubReelObserver.disconnect(); } catch {}
     _hubReelObserver = null;
   }
+  if (_hubReelPrefetchObserver) {
+    try { _hubReelPrefetchObserver.disconnect(); } catch {}
+    _hubReelPrefetchObserver = null;
+  }
   const reels = els.hubList.querySelectorAll(".hubReel");
   if (!reels.length) return;
+  // Hydrate the first reel up-front so the cover is on the wire
+  // before the user has a chance to swipe.
+  if (reels[0]) hydrateHubReelCover(reels[0]);
+
+  // Active-panel observer — drives `.isActive` + autoplay.
   _hubReelObserver = new IntersectionObserver((entries) => {
     if ((document.body.getAttribute("data-route") || "") !== "hub") return;
-    // Pick the entry with the highest intersection ratio above
-    // threshold — that's the panel currently snapped.
     let best = null;
     let bestRatio = 0;
     for (const e of entries) {
@@ -897,16 +925,12 @@ function wireHubReelObserver() {
     const id = best.getAttribute("data-hub-row");
     if (!id || hubFocusedPostId === id) return;
     hubFocusedPostId = id;
-    // Update .isActive once across all reels in the container.
     els.hubList.querySelectorAll(".hubReel").forEach((r) => {
       r.classList.toggle("isActive", r === best);
     });
-    // Pause any previously-playing post that just left the viewport.
     if (hubAudioPostId && hubAudioPostId !== id && hubAudio && !hubAudio.paused) {
       try { hubAudio.pause(); } catch {}
     }
-    // Sample the cover color once per panel; subsequent visits are
-    // instant (cached on the cache + the panel's data attr).
     if (!best.getAttribute("data-cover-tinted")) {
       const cover = best.querySelector(".hubReelCover, .hubCover");
       const src = cover ? cover.getAttribute("src") : "";
@@ -915,6 +939,20 @@ function wireHubReelObserver() {
     tryHubReelAutoplay(id);
   }, { root: els.hubList, threshold: [0.6, 0.85] });
   reels.forEach((r) => _hubReelObserver.observe(r));
+
+  // Prefetch observer — hydrates the cover ~one reel ahead of the
+  // user's scroll so the next swipe lands on a ready image instead
+  // of a blank tile. Works around iOS WebKit's flaky native
+  // loading="lazy" inside internal-scroll snap containers.
+  // 100% rootMargin = one full reel of lookahead in each direction,
+  // so we only fetch covers the user is likely to see in the next
+  // swipe (keeps Supabase egress proportional to engagement).
+  _hubReelPrefetchObserver = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (e.isIntersecting) hydrateHubReelCover(e.target);
+    }
+  }, { root: els.hubList, rootMargin: "100% 0px 100% 0px", threshold: 0 });
+  reels.forEach((r) => _hubReelPrefetchObserver.observe(r));
 }
 function scheduleHubFocusUpdate() {
   if (hubFocusUpdateRaf) return;
@@ -6155,9 +6193,18 @@ function hubTrendingScore(post, nowMs) {
 }
 // Initial Hub render shows just enough rows to fill the first viewport;
 // the rest reveals via "Load more" + an IntersectionObserver sentinel.
-// Keeping this small means cold opens on cellular don't kick off 60
-// parallel cover requests.
-const HUB_PAGE_SIZE = 24;
+// 24 was too aggressive for the reel layout — each panel pulls a cover
+// image, so 24 reels = 24 Supabase egress hits on first paint. With
+// scroll-snap we only ever see ONE panel at a time, so 6 is enough to
+// fill the immediate buffer and the rest stream in as the user swipes.
+const HUB_PAGE_SIZE = 6;
+/** Reels rendered with `loading="eager"` so iOS WebKit doesn't fall
+ *  asleep on `loading="lazy"` inside an internal-scroll snap
+ *  container (a real Safari/iOS quirk — lazy images can stay
+ *  unfetched even after the user snaps to them). Beyond this index
+ *  the `<img>` ships with `data-src` and is hydrated by an
+ *  IntersectionObserver tied to the reel scroller. */
+const HUB_EAGER_REEL_COUNT = 2;
 let hubVisibleCount = HUB_PAGE_SIZE;
 let _hubLastRenderedFilter = null;
 // Tracks what's currently painted into the Hub list so the periodic
@@ -6310,28 +6357,39 @@ function renderHub() {
   const visibleItems = items.slice(0, Math.min(hubVisibleCount, totalCount));
   const hasMore = totalCount > visibleItems.length;
   els.hubList.innerHTML = visibleItems.map((p, i) => {
-    // First reel paints eagerly so the cover lands instantly; the
-    // rest stream in as the user scrolls. Lazy is safe because the
-    // reel container is a snap scroller — neighbors are already in
-    // the DOM but offscreen until the user swipes.
-    const isFirst = i === 0;
-    const loadingAttr = isFirst ? `loading="eager" fetchpriority="high"` : `loading="lazy" fetchpriority="low"`;
+    // Strategy:
+    //   - First HUB_EAGER_REEL_COUNT panels render with the real
+    //     `src` and `loading="eager"` so the very first cover lands
+    //     instantly.
+    //   - Later panels ship with `data-src` only; a single
+    //     IntersectionObserver (wired in `wireHubReelObserver`)
+    //     promotes them to `src` as soon as they're within ~one reel
+    //     of the viewport. This sidesteps iOS WebKit's broken
+    //     `loading="lazy"` behavior inside internal-scroll snap
+    //     containers (covers can stay unfetched even after the user
+    //     snaps to them) and keeps Supabase egress proportional to
+    //     what the user actually views.
+    const isEager = i < HUB_EAGER_REEL_COUNT;
     const coverSrc = hubCoverImgSrc(
       p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png",
     );
-    const backdropSrc = coverSrc;
+    const imgSrcAttr = isEager
+      ? `src="${escapeHtml(coverSrc)}" loading="eager" fetchpriority="high"`
+      : `data-src="${escapeHtml(coverSrc)}" loading="lazy" decoding="async"`;
+    const backdropStyle = isEager
+      ? `--reel-bg: url('${escapeHtml(coverSrc)}');`
+      : ``;
     const avatarSrc = p.creatorAvatar || "./assets/nabadai-logo.png";
     const safeTitle = escapeHtml(p.title);
     const likes = Number(p.likes || 0);
     return `
-    <article class="trackRow hubRow hubReel" data-hub-row="${p.id}" style="--hub-cover-tint: url('${escapeHtml(coverSrc)}');">
-      <div class="hubReelBackdrop" aria-hidden="true">
-        <img class="hubReelBackdropImg" src="${escapeHtml(backdropSrc)}" alt="" loading="lazy" decoding="async" />
+    <article class="trackRow hubRow hubReel" data-hub-row="${p.id}" data-cover-url="${escapeHtml(coverSrc)}" style="--hub-cover-tint: url('${escapeHtml(coverSrc)}');">
+      <div class="hubReelBackdrop" aria-hidden="true" style="${backdropStyle}">
         <span class="hubReelBackdropVeil" aria-hidden="true"></span>
       </div>
       <div class="hubReelStage">
         <button class="hubCoverWrap hubReelCoverBtn" type="button" data-hub-cover="${p.id}" data-hub-play="${p.id}" aria-label="Play ${safeTitle}">
-          <img class="hubCover hubReelCover" src="${escapeHtml(coverSrc)}" alt="cover" decoding="async" ${loadingAttr} />
+          <img class="hubCover hubReelCover" ${imgSrcAttr} alt="cover" decoding="async" />
           <span class="hubReelCoverGlow" aria-hidden="true"></span>
           <span class="hubEq" aria-hidden="true"><i></i><i></i><i></i></span>
           <span class="hubReelCoverGlyph" aria-hidden="true">▶</span>

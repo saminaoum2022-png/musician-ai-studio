@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514profileAvatarPulseNa";
+const APP_BUILD = "20260514genreInstrumentLabels";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -7634,17 +7634,44 @@ const TIMBRE_TRAITS = {
   soprano:        "Bright · Airy · Soaring",
 };
 
-const GENRE_ICONS = {
-  pop:        '<svg viewBox="0 0 24 24" fill="currentColor"><path d="m12 2 2.6 6.6L21 9.3l-5 4.6 1.5 6.9L12 17l-5.5 3.8L8 13.9 3 9.3l6.4-.7Z"/></svg>',
-  rock:       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17a2 2 0 1 0 4 0V7"/><path d="M15 15a2 2 0 1 0 4 0V5"/><path d="M11 7l8-2"/></svg>',
-  arabic:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-6.5-7.85A6 6 0 0 0 20 12Z"/></svg>',
-  jazz:       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12c2-4 6-4 8 0s6 4 8 0"/><path d="M5 18c2-4 6-4 8 0s6 4 8 0"/></svg>',
-  classical:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17V5l10-2v12"/><circle cx="6" cy="17" r="3"/><circle cx="16" cy="15" r="3"/></svg>',
-  hiphop:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M3 12h6"/><path d="M15 12h6"/></svg>',
-  rnb:        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17V7l10-3v10"/><circle cx="6" cy="17" r="3"/><circle cx="16" cy="14" r="3"/></svg>',
-  electronic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h6l4 12h6"/><path d="M4 18h6"/><path d="M14 6h6"/></svg>',
-  edm:        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h6l4 12h6"/><path d="M4 18h6"/><path d="M14 6h6"/></svg>',
-  folk:       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17V5l10-2v12"/><path d="M9 9l10-2"/><circle cx="6" cy="17" r="3"/><circle cx="16" cy="15" r="3"/></svg>',
+/** Instrument-style icons for My Sound genres (readable with label). */
+const GENRE_INSTRUMENTS = {
+  default:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><path d="M9 18V5l10-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg>',
+  pop:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><rect x="3" y="13" width="18" height="7" rx="1"/><path d="M5 13V10h2v3M9 13V9h2v4M13 13V10h2v3M17 13V8h2v5"/></svg>',
+  rock:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 20h4"/><path d="M12 20V10"/><path d="M9 7c0-2 1.5-3.5 3-3.5S15 5 15 7v3l-1 1H10L9 10V7Z"/><circle cx="12" cy="4.5" r="1.2" fill="currentColor"/></svg>',
+  metal:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 20h4"/><path d="M12 20V10"/><path d="M8 7c0-2.2 1.8-4 4-4s4 1.8 4 4v3l-1 1H9L8 10V7Z"/><path d="M10 7h4"/></svg>',
+  indie:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><path d="M10 20h4"/><path d="M12 20v-8"/><path d="M8 10c0-3 1.8-5 4-5s4 2 4 5v2H8v-2Z"/><circle cx="12" cy="5" r="1.5" fill="currentColor"/></svg>',
+  folk:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><path d="M10 20h4"/><path d="M12 20v-8"/><path d="M8 10c0-3 1.8-5 4-5s4 2 4 5v2H8v-2Z"/><circle cx="12" cy="5" r="1.5" fill="currentColor"/></svg>',
+  country:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="15" r="5"/><path d="M12 10V5l3-1"/><circle cx="12" cy="15" r="2" stroke-dasharray="2 2"/></svg>',
+  classical:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><path d="M9 3l2 2-2.5 14 4 1L15 5l2-2"/><path d="M7 19l5 2"/></svg>',
+  arabic:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><ellipse cx="11" cy="15.5" rx="5.5" ry="4.5"/><path d="M16.5 14L20 6"/><path d="M19 6.5l1.5-1.5"/></svg>',
+  dabke:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><path d="M8 9h8v10a2.5 2.5 0 0 1-2.5 2.5h-3A2.5 2.5 0 0 1 8 19V9Z"/><ellipse cx="12" cy="9" rx="4" ry="1.8"/></svg>',
+  jazz:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><path d="M7 4l2 2-1.5 10c0 2 1.5 3.5 3.5 3.5S15 18 15 16"/><path d="M9 6l7-2"/><circle cx="6" cy="3.5" r="1.2" fill="currentColor"/></svg>',
+  hiphop:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="12" r="3"/><circle cx="16.5" cy="10" r="1.5" fill="currentColor"/><path d="M15 15h5"/></svg>',
+  rnb:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v3"/><path d="M8 21h8"/></svg>',
+  soul:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v3"/><path d="M8 21h8"/></svg>',
+  kpop:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v3"/><path d="M8 21h8"/></svg>',
+  electronic:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><rect x="4" y="6" width="16" height="13" rx="2"/><circle cx="8" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="16" cy="12" r="2"/><path d="M8 10V8M12 10V7M16 10V8"/></svg>',
+  latin:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><ellipse cx="8" cy="15" rx="3" ry="4"/><ellipse cx="16" cy="15" rx="3" ry="4"/><path d="M8 11V7M16 11V7"/></svg>',
+  reggae:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><path d="M10 20h4"/><path d="M12 20v-8"/><path d="M8 10c0-3 1.8-5 4-5s4 2 4 5v2H8v-2Z"/><circle cx="12" cy="5" r="1.5" fill="currentColor"/></svg>',
 };
 
 function moodPresetsStorageKey() {
@@ -7686,20 +7713,33 @@ function genreIconSvg(name) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "");
   const aliases = {
-    "rnb": "rnb",
-    "rb": "rnb",
-    "hiphop": "hiphop",
-    "rap": "hiphop",
-    "edm": "edm",
-    "electronic": "electronic",
-    "house": "electronic",
-    "techno": "electronic",
-    "trap": "hiphop",
-    "klezmer": "folk",
-    "country": "folk",
+    rnb: "rnb",
+    rb: "rnb",
+    hiphop: "hiphop",
+    rap: "hiphop",
+    trap: "hiphop",
+    edm: "electronic",
+    house: "electronic",
+    techno: "electronic",
+    electronic: "electronic",
+    dance: "electronic",
+    klezmer: "folk",
+    country: "country",
+    latin: "latin",
+    soul: "soul",
+    reggae: "reggae",
+    indie: "indie",
+    metal: "metal",
+    dabke: "dabke",
+    khaleeji: "arabic",
+    tarab: "arabic",
+    afrobeats: "latin",
+    kpop: "kpop",
+    blues: "jazz",
+    funk: "soul",
   };
   const resolved = aliases[key] || key;
-  return GENRE_ICONS[resolved] || GENRE_ICONS.pop;
+  return GENRE_INSTRUMENTS[resolved] || GENRE_INSTRUMENTS.default;
 }
 
 function renderProfileMySound() {
@@ -7732,7 +7772,7 @@ function renderProfileMySound() {
   const list = els.profileMySoundGenresList;
   if (list) {
     const chips = genres.map((g) => {
-      return `<span class="profileMySoundGenreChip" role="listitem" title="${escapeHtml(g)}" aria-label="${escapeHtml(g)}">${genreIconSvg(g)}</span>`;
+      return `<span class="profileMySoundGenreChip profileMySoundGenreChip--labeled" data-has-text="true" role="listitem" title="${escapeHtml(g)}" aria-label="${escapeHtml(g)}"><span class="profileMySoundGenreChipIco" aria-hidden="true">${genreIconSvg(g)}</span><span class="profileMySoundGenreChipLabel">${escapeHtml(g)}</span></span>`;
     });
     chips.push(
       `<button type="button" class="profileMySoundGenreChip profileMySoundGenreChip--add" id="profileMySoundAddGenreBtn" aria-label="Add favorite genre">
@@ -7872,8 +7912,8 @@ function renderMySoundModalContents() {
         ? "mySoundGenreOption mySoundGenreOption--custom"
         : "mySoundGenreOption";
       return `<button type="button" class="${cls}" data-genre-label="${escapeHtml(g.label)}" data-genre-key="${escapeHtml(g.key)}" aria-pressed="${pressed}">
-        ${genreIconSvg(g.label)}
-        <span>${escapeHtml(g.label)}</span>
+        <span class="mySoundGenreOptionIco" aria-hidden="true">${genreIconSvg(g.label)}</span>
+        <span class="mySoundGenreOptionTxt">${escapeHtml(g.label)}</span>
         ${g.custom ? `<span class="mySoundGenreOptionRemove" aria-hidden="true" data-remove="${escapeHtml(g.key)}">×</span>` : ""}
       </button>`;
     }).join("");

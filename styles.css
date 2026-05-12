@@ -5361,8 +5361,8 @@ body[data-route="profile"] .profileAuraGlow{
 /* Compact Credits pill that lives inline with the username row in the
    profile aura header. Anchored to the right edge via margin-left:auto
    so it occupies the empty space next to @handle. Links to the full
-   /credits page. Admin (owner) accounts get a gradient + ∞ glyph
-   because their generations bypass the per-user ledger. */
+   /credits page. Admin (owner) accounts get a gradient and show live
+   Suno API balance (same pool as generations). */
 .profileCreditsPill{
   display: inline-flex;
   align-items: center;

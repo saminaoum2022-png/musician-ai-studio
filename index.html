@@ -39,7 +39,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260512creditsInline" />
+    <link rel="stylesheet" href="./styles.css?v=20260513creditsPill" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1050,9 +1050,9 @@
                 <p id="profileIdentityLine" class="profileIdentityLine" hidden aria-live="polite"></p>
                 <span id="profilePreviewGenderIcon" class="profilePreviewGenderIcon profileAuraGender" style="display:none"></span>
                 <!-- Compact Credits pill — anchored to the right of the
-                     username row so the value sits next to @handle. Admin
-                     accounts render "∞" because their generations are
-                     debited from the master Suno account. -->
+                     username row. Shows app credits for beta users; for
+                     admin it shows live Suno API balance (same pool as
+                     generations). -->
                 <a
                   href="#/credits"
                   id="profileCreditsLink"
@@ -1962,6 +1962,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260512creditsInline"></script>
+    <script type="module" src="./src/app.js?v=20260513creditsPill"></script>
   </body>
 </html>

@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260512creditsInline";
+const APP_BUILD = "20260513creditsPill";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -4414,6 +4414,11 @@ const creditsState = {
   lastError: "",
 };
 
+/** Live Suno API remaining credits (same pool as `SUNO_API_KEY`). Shown on
+ *  the Profile pill + Credits hero when `creditsState.isAdmin` is true,
+ *  because admin generations skip the per-user Supabase ledger. */
+let sunoCreditsLive = null;
+
 function formatCreditsAmount(n) {
   const x = Number(n);
   if (!Number.isFinite(x)) return "0";
@@ -4422,26 +4427,36 @@ function formatCreditsAmount(n) {
   return s || "0";
 }
 
-function setCreditsBalance(n) {
-  const raw = Number(n);
-  const v = Number.isFinite(raw) ? Math.max(0, raw) : 0;
-  creditsState.balance = v;
-  // Admin (owner) accounts skip per-user debits server-side, so a numeric
-  // balance has no meaning. Show an infinity glyph instead — the Suno
-  // master account is the real ledger for these generations.
+function paintCreditsDisplays() {
   const admin = Boolean(creditsState.isAdmin);
-  const disp = admin ? "∞" : formatCreditsAmount(v);
+  let disp = "0";
+  let aria = "";
+  if (admin) {
+    if (sunoCreditsLive != null && Number.isFinite(sunoCreditsLive)) {
+      disp = formatCreditsAmount(sunoCreditsLive);
+      aria = `Suno balance ${disp} credits`;
+    } else {
+      disp = "—";
+      aria = "Suno balance loading or unavailable";
+    }
+  } else {
+    const v = Number.isFinite(Number(creditsState.balance)) ? Math.max(0, Number(creditsState.balance)) : 0;
+    disp = formatCreditsAmount(v);
+    aria = `App credits balance ${disp}`;
+  }
   if (els.profileCreditsBalance) els.profileCreditsBalance.textContent = disp;
   if (els.creditsBalanceBig) els.creditsBalanceBig.textContent = disp;
   if (els.profileCreditsLink) {
     els.profileCreditsLink.classList.toggle("isAdmin", admin);
-    els.profileCreditsLink.setAttribute(
-      "aria-label",
-      admin
-        ? "Credits balance: unlimited (admin). Tap for details."
-        : `Credits balance: ${disp}. Tap to manage credits.`
-    );
+    els.profileCreditsLink.setAttribute("aria-label", `${aria}. Tap to manage credits.`);
   }
+}
+
+function setCreditsBalance(n) {
+  const raw = Number(n);
+  const v = Number.isFinite(raw) ? Math.max(0, raw) : 0;
+  creditsState.balance = v;
+  paintCreditsDisplays();
 }
 
 function formatLedgerReason(reason) {
@@ -4491,6 +4506,8 @@ async function refreshMyCredits({ silent = false } = {}) {
   const token = getSupabaseAuthToken();
   if (!token) {
     creditsState.loaded = false;
+    creditsState.isAdmin = false;
+    sunoCreditsLive = null;
     setCreditsBalance(0);
     creditsState.ledger = [];
     renderCreditsLedger();
@@ -4507,6 +4524,7 @@ async function refreshMyCredits({ silent = false } = {}) {
     creditsState.balance = Number(d?.balance || 0);
     creditsState.ledger = Array.isArray(d?.ledger) ? d.ledger : [];
     creditsState.isAdmin = Boolean(d?.isAdmin);
+    if (!creditsState.isAdmin) sunoCreditsLive = null;
     creditsState.loaded = true;
     creditsState.lastError = "";
     setCreditsBalance(creditsState.balance);
@@ -4520,7 +4538,7 @@ async function refreshMyCredits({ silent = false } = {}) {
     if (els.creditsAdminCard) {
       els.creditsAdminCard.style.display = creditsState.isAdmin ? "" : "none";
     }
-    if (creditsState.isAdmin) void refreshAdminCreditsView();
+    if (creditsState.isAdmin) await refreshAdminCreditsView();
   } catch (e) {
     creditsState.lastError = e?.message || String(e);
     if (!silent) console.warn("[credits/me]", creditsState.lastError);
@@ -4540,6 +4558,12 @@ async function refreshAdminCreditsView() {
     if (!r.ok) return;
     const d = await r.json().catch(() => ({}));
     if (!d?.ok) return;
+    if (Number.isFinite(Number(d.masterSuno))) {
+      sunoCreditsLive = Number(d.masterSuno);
+    } else {
+      sunoCreditsLive = null;
+    }
+    paintCreditsDisplays();
     if (els.adminMasterSuno) els.adminMasterSuno.textContent = d.masterSuno == null ? "—" : String(d.masterSuno);
     const s = d.summary || {};
     if (els.adminAllocated) els.adminAllocated.textContent = String(s.allocatedTotal || 0);
@@ -11620,7 +11644,6 @@ function setSunoCreditsNote(text) {
 }
 
 async function refreshSunoCredits() {
-  if (!els.sunoCredits) return;
   try {
     if (els.btnSunoCredits) els.btnSunoCredits.disabled = true;
     setSunoCreditsNote("updating…");
@@ -11628,11 +11651,16 @@ async function refreshSunoCredits() {
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data?.error || "credits failed");
     const credits = data?.data;
-    els.sunoCredits.textContent = Number.isFinite(Number(credits)) ? String(credits) : "—";
+    const num = Number.isFinite(Number(credits)) ? Number(credits) : null;
+    sunoCreditsLive = num;
+    if (els.sunoCredits) els.sunoCredits.textContent = num != null ? String(num) : "—";
+    paintCreditsDisplays();
     setSunoCreditsNote("");
-    return Number.isFinite(Number(credits)) ? Number(credits) : null;
+    return num;
   } catch (e) {
-    els.sunoCredits.textContent = "—";
+    if (creditsState.isAdmin) sunoCreditsLive = null;
+    if (els.sunoCredits) els.sunoCredits.textContent = "—";
+    paintCreditsDisplays();
     setSunoCreditsNote("failed");
     return null;
   } finally {
@@ -14659,12 +14687,11 @@ window.addEventListener("hashchange", () => {
   const route = document.body.getAttribute("data-route") || "";
   if (route === "hub") void refreshHubFromSupabase();
 });
-// Refresh Suno credits whenever the Profile route opens — keeps the
-// number on the hero card in sync with what the backend actually has,
-// without nagging the API on every route change.
+// Refresh credits when Profile / Credits / Sounds open. `refreshMyCredits`
+// pulls the Supabase ledger; for admin users it also triggers
+// `refreshAdminCreditsView`, which seeds `sunoCreditsLive` for the pill.
 window.addEventListener("hashchange", () => {
   const route = document.body.getAttribute("data-route") || "";
-  if (route === "profile") void refreshSunoCredits();
   if (route === "profile" || route === "credits" || route === "sounds") void refreshMyCredits({ silent: true });
 });
 

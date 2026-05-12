@@ -1,9 +1,16 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" style="background:#0b0d12;">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
     <title>NabadAi Music</title>
+    <!-- Inline so the very first paint inside WKWebView is dark — avoids the
+         "white flash" between the native launch screen handing off to the
+         webview and our external stylesheet finishing its parse. -->
+    <style>
+      html, body { background-color: #0b0d12; color: #e7edf7; margin: 0; }
+      html { color-scheme: dark; }
+    </style>
     <meta name="theme-color" content="#0b0d12" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -32,7 +39,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260512splashsimple" />
+    <link rel="stylesheet" href="./styles.css?v=20260512noflash" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1903,6 +1910,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260512splashsimple"></script>
+    <script type="module" src="./src/app.js?v=20260512noflash"></script>
   </body>
 </html>

@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260512novoice";
+const APP_BUILD = "20260512headertint";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -6088,6 +6088,7 @@ function applyProfileAuraAvatarTint(srcOverride) {
   if (!src || src === "./assets/nabadai-logo.png") {
     aura.style.setProperty("--aura-tint", "rgba(124, 92, 255, 0.55)");
     aura.style.setProperty("--aura-tint-soft", "rgba(35, 213, 171, 0.18)");
+    aura.style.setProperty("--aura-tint-solid", "rgb(168, 152, 255)");
     _auraTintLastSrc = src;
     return;
   }
@@ -6120,15 +6121,19 @@ function applyProfileAuraAvatarTint(srcOverride) {
         b = Math.round(b / n);
         // Boost vibrancy by pushing each channel away from gray slightly,
         // then clamp. Avoids flat brown-ish averages that read as muddy.
-        const punch = (v) => Math.max(0, Math.min(255, Math.round(128 + (v - 128) * 1.35)));
+        const punch = (v) => Math.max(0, Math.min(255, Math.round(128 + (v - 128) * 1.55)));
         const rr = punch(r), gg = punch(g), bb = punch(b);
-        aura.style.setProperty("--aura-tint", `rgba(${rr}, ${gg}, ${bb}, 0.55)`);
-        aura.style.setProperty("--aura-tint-soft", `rgba(${rr}, ${gg}, ${bb}, 0.18)`);
+        aura.style.setProperty("--aura-tint", `rgba(${rr}, ${gg}, ${bb}, 0.62)`);
+        aura.style.setProperty("--aura-tint-soft", `rgba(${rr}, ${gg}, ${bb}, 0.22)`);
+        // Solid form for the live dot + pulse stroke (no alpha) — they
+        // sit against dark backgrounds and need to read at small size.
+        aura.style.setProperty("--aura-tint-solid", `rgb(${rr}, ${gg}, ${bb})`);
       } catch {}
     };
     img.onerror = () => {
       aura.style.setProperty("--aura-tint", "rgba(124, 92, 255, 0.55)");
       aura.style.setProperty("--aura-tint-soft", "rgba(35, 213, 171, 0.18)");
+      aura.style.setProperty("--aura-tint-solid", "rgb(168, 152, 255)");
     };
     img.src = src;
   } catch {}
@@ -6160,6 +6165,28 @@ function timbreToAuraCss(timbreRaw) {
 function applyProfileAuraVisualTint() {
   const aura = els.profileAura;
   if (!aura) return;
+  // New priority (matches the "header is the music" direction):
+  //   1) latest cover art — the strongest signal of what you make
+  //   2) avatar — your face
+  //   3) voice timbre — taxonomy fallback
+  //   4) brand purple — last resort
+  const latestArt = (() => {
+    try {
+      const items = getProfileOwnerHubItems();
+      const top = items?.[0];
+      const url = String(top?.artUrl || top?.creatorAvatar || "").trim();
+      if (!url || url === "./assets/nabadai-logo.png") return "";
+      return url;
+    } catch { return ""; }
+  })();
+  if (latestArt) {
+    applyProfileAuraAvatarTint(latestArt);
+    return;
+  }
+  if (activeProfile?.avatar) {
+    applyProfileAuraAvatarTint(activeProfile.avatar);
+    return;
+  }
   const timbre = String(
     activeProfile?.voiceTimbre || els.profilePreviewTimbreInput?.value || ""
   ).trim();
@@ -6167,10 +6194,11 @@ function applyProfileAuraVisualTint() {
   if (fromTimbre) {
     aura.style.setProperty("--aura-tint", fromTimbre.tint);
     aura.style.setProperty("--aura-tint-soft", fromTimbre.soft);
-    _auraTintLastSrc = ""; // next avatar-only pass may refresh
+    _auraTintLastSrc = "";
     return;
   }
-  applyProfileAuraAvatarTint(activeProfile.avatar);
+  aura.style.setProperty("--aura-tint", "rgba(124, 92, 255, 0.55)");
+  aura.style.setProperty("--aura-tint-soft", "rgba(124, 92, 255, 0.18)");
 }
 
 /** Rough BPM guess from Hub post meta — drives aura ring cadence (Twist 1). */
@@ -6884,6 +6912,10 @@ function renderProfileHubShared() {
   renderProfileHero(items);
   renderProfileActionRow(items);
   renderProfileTopWeek(items);
+  // After the hero paints, sample the latest cover art so the header
+  // tint matches the music. This is the "page IS the music" thread —
+  // the pulse stroke + live dot + share button all inherit this color.
+  try { applyProfileAuraVisualTint(); } catch {}
   const countEl = document.getElementById("profileOwnSongCount");
   if (countEl) {
     if (items.length) {

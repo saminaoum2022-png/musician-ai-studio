@@ -967,7 +967,10 @@
                   <svg class="profileLiquidPulseSvg" viewBox="0 0 120 80" preserveAspectRatio="none" aria-hidden="true">
                     <path id="profileLiquidPulsePath" class="profileLiquidPulsePath" d="" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
-                  <span class="profileLiquidPulseLabel" id="profileLiquidPulseLabel">Tap to know</span>
+                  <!-- Corner info badge — replaces the old "Tap to know"
+                       text label. Quiet glyph in the top-right of the
+                       pulse; users still get the popover on tap. -->
+                  <span class="profileLiquidPulseHelp" aria-hidden="true">?</span>
                 </button>
               </div>
               <!-- Tap-to-explain popover. Painted below the avatar row
@@ -980,6 +983,10 @@
               </div>
 
               <div class="profileAuraNameRow">
+                <!-- Live indicator dot — inherits the tint sampled from
+                     the latest cover art so the handle "carries" the
+                     color of your current music. Pulses softly. -->
+                <span class="profilePulseDot" aria-hidden="true"></span>
                 <input
                   id="profilePreviewUsernameInput"
                   class="profileAuraNameInput"
@@ -1896,6 +1903,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260512novoice"></script>
+    <script type="module" src="./src/app.js?v=20260512headertint"></script>
   </body>
 </html>

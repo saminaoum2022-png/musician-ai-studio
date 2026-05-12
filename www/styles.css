@@ -3661,6 +3661,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
 .profileAura{
   --aura-tint: rgba(124, 92, 255, 0.55);
   --aura-tint-soft: rgba(124, 92, 255, 0.18);
+  --aura-tint-solid: rgb(168, 152, 255);
   --aura-bpm: 88;
   position: relative;
   isolation: isolate;
@@ -3674,6 +3675,40 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
      fades out via its own radial-gradient transparency falloff, so
      no clip is needed. Adding either made the page look like a
      rounded card. */
+}
+
+/* Staff-line texture behind the hero — five faint horizontal rules
+   that read as "musician" without being decorative. Confined to the
+   top ~180px so it doesn't tile across the page; faded at the edges
+   via a mask gradient so there's no hard edge. */
+.profileAura::before{
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 180px;
+  pointer-events: none;
+  z-index: -2;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 26px,
+    rgba(255, 255, 255, 0.045) 26px,
+    rgba(255, 255, 255, 0.045) 27px
+  );
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    #000 26%,
+    #000 70%,
+    transparent 100%
+  );
+          mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    #000 26%,
+    #000 70%,
+    transparent 100%
+  );
 }
 .profileAuraGlow{
   position: absolute;
@@ -3797,14 +3832,16 @@ body[data-route="profile"] .profileAuraGlow{
   border-radius: 999px;
   margin-bottom: 4px;
 }
-/* Soft hairline around the avatar — no gradient. The pulse + cover
-   art carry color; the ring just gives the photo a quiet edge. */
+/* Ring retired. The pulse fingerprint + cover-tinted live dot now
+   carry all the "alive" feeling; a static white hairline around the
+   photo wasn't adding identity. Kept the node so JS can re-light it
+   later if we ever want a Now Playing arc here. */
 .profileAuraRing{
   position: absolute;
-  inset: -3px;
+  inset: -2px;
   border-radius: inherit;
-  padding: 1.5px;
-  background: rgba(255, 255, 255, 0.14);
+  padding: 1px;
+  background: rgba(255, 255, 255, 0.08);
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
@@ -3812,7 +3849,6 @@ body[data-route="profile"] .profileAuraGlow{
           mask-composite: exclude;
   pointer-events: none;
   opacity: 1;
-  transition: opacity 280ms ease;
 }
 .profileAura[data-audio-state="playing"] .profileAuraRing{
   animation: profileAuraBreath calc(120s / var(--aura-bpm, 88)) ease-in-out infinite;
@@ -3858,6 +3894,26 @@ body[data-route="profile"] .profileAuraGlow{
   width: 100%;
   max-width: 100%;
 }
+
+/* Live indicator dot before the handle. Inherits --aura-tint-solid
+   which is sampled from the latest cover art (or avatar fallback).
+   Pulses softly so the page feels alive, but stays small enough to
+   read as "live" not "notification badge". */
+.profilePulseDot{
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--aura-tint-solid, rgb(168, 152, 255));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--aura-tint-solid, rgb(168, 152, 255)) 22%, transparent);
+  animation: profilePulseDotBreath 2.4s ease-in-out infinite;
+  transform-origin: center;
+}
+@keyframes profilePulseDotBreath{
+  0%, 100%{ transform: scale(1);   opacity: 1; }
+  50%     { transform: scale(1.18); opacity: 0.72; }
+}
+.profileAura.profileAuraEditing .profilePulseDot{ display: none; }
 .profileAuraNameInput{
   -webkit-appearance: none;
   appearance: none;
@@ -4298,9 +4354,9 @@ body[data-route="profile"] .profileAuraGlow{
 .profileAuraTopRow{
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 18px;
-  margin-bottom: 12px;
+  justify-content: flex-start;
+  gap: 6px;
+  margin-bottom: 10px;
 }
 
 .profileLiquidPulse{
@@ -4308,7 +4364,9 @@ body[data-route="profile"] .profileAuraGlow{
   width: 130px;
   height: 100px;
   flex: 0 0 auto;
-  color: var(--aura-tint, rgba(124, 92, 255, 0.95));
+  /* The pulse path uses currentColor — pin it to the solid sampled
+     tint so the heartbeat lands at full saturation against dark bg. */
+  color: var(--aura-tint-solid, rgba(168, 152, 255, 0.95));
   isolation: isolate;
   -webkit-appearance: none;
   appearance: none;
@@ -4376,23 +4434,35 @@ body[data-route="profile"] .profileAuraGlow{
   from { stroke-dashoffset: 240; }
   to   { stroke-dashoffset: 0; }
 }
-.profileLiquidPulseLabel{
+/* Old centered "TAP TO KNOW" label retired. */
+.profileLiquidPulseLabel{ display: none; }
+
+/* Tiny corner help glyph — top-right of the pulse. Quiet at rest,
+   brightens to the live tint on hover/open. Replaces the loud text. */
+.profileLiquidPulseHelp{
   position: absolute;
-  left: 50%;
-  bottom: 2px;
-  transform: translateX(-50%);
-  font-size: 8.5px;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: rgba(220, 226, 240, 0.6);
+  top: 6px;
+  right: 8px;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  color: rgba(220, 226, 240, 0.55);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
   pointer-events: none;
-  white-space: nowrap;
-  transition: color 200ms ease;
+  transition: color 200ms ease, background 200ms ease, border-color 200ms ease;
 }
-.profileLiquidPulse:hover .profileLiquidPulseLabel,
-.profileLiquidPulse[data-open="true"] .profileLiquidPulseLabel{
-  color: var(--aura-tint, rgba(220, 226, 240, 0.95));
+.profileLiquidPulse:hover .profileLiquidPulseHelp,
+.profileLiquidPulse[data-open="true"] .profileLiquidPulseHelp{
+  color: var(--aura-tint-solid, #fff);
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 /* Info popover — appears under the avatar row when the user taps
@@ -4438,21 +4508,22 @@ body[data-route="profile"] .profileAuraGlow{
 }
 
 .profileIdentityLine{
-  margin: 4px 0 2px;
+  margin: 6px 0 2px;
   font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  color: rgba(220, 226, 240, 0.86);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  color: rgba(190, 202, 222, 0.74);
   line-height: 1.45;
-  text-align: center;
+  text-align: left;
+  align-self: flex-start;
 }
 .profileIdentityLine .profileIdentitySep{
   margin: 0 8px;
-  color: rgba(170, 182, 205, 0.45);
+  color: rgba(170, 182, 205, 0.32);
 }
 .profileIdentityLine strong{
-  font-weight: 700;
-  color: #fff;
+  font-weight: 500;
+  color: rgba(232, 238, 247, 0.92);
   letter-spacing: -0.005em;
 }
 
@@ -4460,10 +4531,11 @@ body[data-route="profile"] .profileAuraGlow{
    View-mode only; edit-mode shows the textarea above. --- */
 .profileHeroBio{
   position: relative;
-  margin: 12px auto 4px;
+  margin: 8px 0 4px;
   padding: 6px 12px 4px 26px;
   max-width: 460px;
   text-align: left;
+  align-self: flex-start;
 }
 .profileHeroBioQuote{
   position: absolute;
@@ -4507,7 +4579,11 @@ body[data-route="profile"] .profileAuraGlow{
   padding: 0 18px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.04);
+  /* Subtle inner tint pulled from the latest cover art. Falls back
+     to a flat dark surface when no tint is sampled yet. */
+  background:
+    radial-gradient(ellipse 120% 80% at 8% 50%, var(--aura-tint-soft, rgba(124, 92, 255, 0.18)) 0%, transparent 55%),
+    rgba(255, 255, 255, 0.04);
   color: rgba(248, 250, 255, 0.94);
   font-size: 14px;
   font-weight: 700;

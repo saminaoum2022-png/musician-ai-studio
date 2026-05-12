@@ -902,14 +902,15 @@
                the app. Stats row uses the same vertical-bar separator
                motif as the Hub bottom-tab icon. -->
           <section class="profileAura" id="profileAura" data-audio-state="idle">
-            <div class="profileAuraGlow" aria-hidden="true"></div>
-            <!-- Faint equalizer bars sit in the gradient background to
-                 give the hero a "music alive" feeling. CSS-only, pure
-                 decoration, ignored by screen readers. -->
-            <div class="profileAuraEq" aria-hidden="true">
-              <span></span><span></span><span></span><span></span>
-              <span></span><span></span><span></span><span></span>
+            <!-- Cinematic backdrop — JS paints the latest release cover
+                 here (blurred + scaled) so the hero art automatically
+                 follows the artist's catalog. Falls back to the
+                 timbre-tinted gradient when no release exists yet. -->
+            <div class="profileAuraBackdrop" id="profileAuraBackdrop" aria-hidden="true">
+              <img id="profileAuraBackdropImg" alt="" draggable="false" />
+              <div class="profileAuraBackdropShade" aria-hidden="true"></div>
             </div>
+            <div class="profileAuraGlow" aria-hidden="true"></div>
 
             <div class="profileAuraToolbar" role="toolbar" aria-label="Profile actions">
               <button
@@ -1014,9 +1015,18 @@
 
               <div id="authLoggedInEmailInline" class="profileAuraEmail hint" style="display:none"></div>
 
-              <p id="profilePersonaInlineChip" class="profilePersonaInlineChip" style="display:none" aria-live="polite"></p>
+              <!-- The single identity line — view mode only.
+                   Replaces the cluster of pills with one calm sentence:
+                   "Baritone · Cinematic Pop · Late-night". JS composes
+                   it from voiceTimbre + genres + persona. -->
+              <p id="profileIdentityLine" class="profileIdentityLine" hidden aria-live="polite"></p>
 
-              <p id="profilePreviewGenres" class="profileGenreWash" style="display:none" aria-label="Genres"></p>
+              <!-- These three nodes still exist for edit-mode + legacy
+                   data flow, but the view-mode UI now reads from
+                   profileIdentityLine instead. CSS hides them outside
+                   edit mode (see .profileAura:not(.profileAuraEditing)). -->
+              <p id="profilePersonaInlineChip" class="profilePersonaInlineChip profileLegacyChip" style="display:none" aria-live="polite"></p>
+              <p id="profilePreviewGenres" class="profileGenreWash profileLegacyChip" style="display:none" aria-label="Genres"></p>
 
               <p class="profileAuraStatsInline" id="profileAuraStatsInline" aria-live="polite">
                 <span class="profileAuraStatsInlineInner">
@@ -1049,14 +1059,16 @@
             </button>
           </section>
 
-          <!-- Spotify-style About card — moved up to sit right under the
-               hero so it reads like a continuation of the identity card.
-               Mirrors the bio textarea (view-only) in a quote-block. -->
-          <section class="profileAboutCard profileAboutCardHero" id="profileAboutCard" hidden>
-            <span class="profileAboutQuote" aria-hidden="true">“</span>
-            <p id="profileAboutText" class="profileAboutText"></p>
-            <p id="profileAboutMeta" class="profileAboutMeta hint"></p>
-          </section>
+          <!-- Sticky play ribbon — appears when the hero scrolls out of
+               view. Mini avatar + handle + green shuffle play, anchored
+               to the top of the page. Spotify pattern. -->
+          <div class="profileStickyRibbon" id="profileStickyRibbon" data-shown="false" aria-hidden="true">
+            <img id="profileStickyAvatar" class="profileStickyAvatar" src="./assets/nabadai-logo.png" alt="" />
+            <span id="profileStickyHandle" class="profileStickyHandle">@guest</span>
+            <button type="button" id="profileStickyPlay" class="profileStickyPlay" aria-label="Shuffle play">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
+            </button>
+          </div>
 
           <!-- Single Share pill — Spotify-style wide action button. Uses
                the native share sheet when available, falls back to
@@ -1116,29 +1128,51 @@
             <div id="profileShelfScroll" class="profileShelfScroll" role="list"></div>
           </section>
 
-          <!-- Nabad-exclusive: "Hear my voice" voice-essence block.
-               This is the unique-to-us answer to Spotify's "About" image.
-               Plays the user's calling card with a waveform animation. -->
-          <section class="profileVoiceEssence" id="profileVoiceEssence" hidden>
-            <header class="profileSectionHead">
-              <span class="profileEyebrow">Voice essence</span>
-              <h3 class="profileSectionTitle">Hear my voice</h3>
+          <!-- Nabad Signature card — the page's quiet centerpiece.
+               Replaces the trio (voice essence + pulse strip + about)
+               with one card that layers three statements: pulse line as
+               the artist's "fingerprint", a one-row voice mini-player,
+               and a tight bio paragraph. Premium = restraint. -->
+          <section class="profileSignatureCard" id="profileSignatureCard" hidden>
+            <header class="profileSignatureHead">
+              <span class="profileEyebrow">Signature</span>
+              <h3 class="profileSignatureTitle">Your sonic fingerprint</h3>
             </header>
-            <button type="button" id="profileVoiceEssencePlay" class="profileVoiceEssencePlay" aria-label="Play voice essence">
-              <span class="profileVoiceEssencePlayIcon" aria-hidden="true">▶</span>
-              <span class="profileVoiceEssenceWave" aria-hidden="true">
-                <span></span><span></span><span></span><span></span><span></span>
-                <span></span><span></span><span></span><span></span><span></span>
-                <span></span><span></span><span></span><span></span><span></span>
-                <span></span><span></span><span></span><span></span><span></span>
-                <span></span><span></span><span></span><span></span>
-              </span>
-              <span class="profileVoiceEssenceMeta">
-                <strong id="profileVoiceEssenceTitle">Calling card</strong>
-                <span id="profileVoiceEssenceSub" class="profileVoiceEssenceSub">8s preview · your raw voice</span>
-              </span>
-            </button>
-            <button type="button" id="profileVoiceEssenceRecord" class="profileVoiceEssenceCta" hidden>+ Record</button>
+
+            <!-- Pulse line — much thinner / slower than before. JS draws
+                 one continuous ECG from the user's catalog. Tap a peak
+                 to play. Treat as "barcode", not chart. -->
+            <div class="profileSignaturePulse" id="profileSignaturePulse">
+              <svg id="profileHeartbeatSvg" class="profileHeartbeatSvg" viewBox="0 0 320 36" preserveAspectRatio="none" role="img" aria-label="Releases over time"></svg>
+              <div id="profileHeartbeatPeaks" class="profileHeartbeatPeaks"></div>
+            </div>
+
+            <!-- Voice mini-player — one row, Anghami warmth. Reuses the
+                 calling-card URL. CTA-only when no card yet. -->
+            <div class="profileSignatureVoice" id="profileSignatureVoice">
+              <button type="button" id="profileVoiceEssencePlay" class="profileSignatureVoiceBtn" aria-label="Play voice essence">
+                <span class="profileSignatureVoicePlay" aria-hidden="true">▶</span>
+                <span class="profileSignatureVoiceWave" aria-hidden="true">
+                  <span></span><span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span>
+                </span>
+                <span class="profileSignatureVoiceMeta">
+                  <strong id="profileVoiceEssenceTitle">Voice</strong>
+                  <span id="profileVoiceEssenceSub" class="profileSignatureVoiceSub">8s · raw</span>
+                </span>
+              </button>
+              <button type="button" id="profileVoiceEssenceRecord" class="profileSignatureVoiceCta" hidden>+ Record voice</button>
+            </div>
+
+            <!-- Bio paragraph — calm, restrained, one paragraph max.
+                 Quote glyph kept but subtle. -->
+            <div class="profileSignatureBio" id="profileSignatureBio" hidden>
+              <span class="profileAboutQuote" aria-hidden="true">“</span>
+              <p id="profileAboutText" class="profileSignatureBioText"></p>
+              <p id="profileAboutMeta" class="profileSignatureBioMeta hint"></p>
+            </div>
           </section>
 
           <!-- Hidden compatibility nodes — older code paths still target
@@ -1175,17 +1209,6 @@
               <a href="#/generate" class="profilePersonaLink">Open Create</a>
             </div>
           </div>
-
-          <section class="profilePulseStrip" id="profilePulseStrip" hidden>
-            <div class="profilePulseStripHead">
-              <span class="profileEyebrow">Your pulse</span>
-              <span class="profilePulseHint hint">One beat per story — tap a peak to play</span>
-            </div>
-            <div class="profileHeartbeatScroll">
-              <svg id="profileHeartbeatSvg" class="profileHeartbeatSvg" viewBox="0 0 320 48" preserveAspectRatio="none" role="img" aria-label="Releases over time"></svg>
-              <div id="profileHeartbeatPeaks" class="profileHeartbeatPeaks"></div>
-            </div>
-          </section>
 
           <!-- Songs — same Apple-Music-style row design as Library, no card chrome -->
           <div class="profileSongsBlock">
@@ -1924,6 +1947,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260512profilepolish"></script>
+    <script type="module" src="./src/app.js?v=20260512cinematic"></script>
   </body>
 </html>

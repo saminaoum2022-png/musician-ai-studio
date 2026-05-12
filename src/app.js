@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260512profilepolish";
+const APP_BUILD = "20260512cinematic";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -376,9 +376,19 @@ const els = {
   profileHeroPlayBtn: document.getElementById("profileHeroPlayBtn"),
   profileHeroTitle: document.getElementById("profileHeroTitle"),
   profileHeroMeta: document.getElementById("profileHeroMeta"),
-  profilePulseStrip: document.getElementById("profilePulseStrip"),
   profileHeartbeatSvg: document.getElementById("profileHeartbeatSvg"),
   profileHeartbeatPeaks: document.getElementById("profileHeartbeatPeaks"),
+  // Cinematic redesign nodes
+  profileAuraBackdrop: document.getElementById("profileAuraBackdrop"),
+  profileAuraBackdropImg: document.getElementById("profileAuraBackdropImg"),
+  profileIdentityLine: document.getElementById("profileIdentityLine"),
+  profileSignatureCard: document.getElementById("profileSignatureCard"),
+  profileSignatureVoice: document.getElementById("profileSignatureVoice"),
+  profileSignatureBio: document.getElementById("profileSignatureBio"),
+  profileStickyRibbon: document.getElementById("profileStickyRibbon"),
+  profileStickyAvatar: document.getElementById("profileStickyAvatar"),
+  profileStickyHandle: document.getElementById("profileStickyHandle"),
+  profileStickyPlay: document.getElementById("profileStickyPlay"),
   // Spotify-x-Nabad redesign nodes
   profileShufflePlayBig: document.getElementById("profileShufflePlayBig"),
   profileActionRow: document.getElementById("profileActionRow"),
@@ -6051,14 +6061,17 @@ function setProfileEditing(on) {
   if (els.profileAura) {
     els.profileAura.classList.toggle("profileAuraEditing", profileEditing);
   }
-  // Hide the Spotify-style chrome while editing — it overlaps form
-  // fields and confuses the touch targets on small screens.
+  // Hide the cinematic chrome while editing — it overlaps form
+  // fields and confuses the touch targets on small screens. The hero
+  // identity line is hidden via CSS off the editing class; we still
+  // need to manually hide the cards below so they don't repaint stale
+  // data right under the form.
   const sections = [
     els.profileActionRow,
+    els.profileHeroLatest,
     els.profileTopWeek,
     els.profileShelf,
-    els.profileVoiceEssence,
-    els.profileAboutCard,
+    els.profileSignatureCard,
   ];
   sections.forEach((node) => {
     if (!node) return;
@@ -6066,15 +6079,21 @@ function setProfileEditing(on) {
       node.dataset._profileWasHidden = node.hidden ? "1" : "0";
       node.hidden = true;
     } else {
-      // Restore visibility — the next render pass will recompute it
-      // based on the live data, so don't force-show anything that was
-      // empty before.
       if (node.dataset._profileWasHidden === "0") node.hidden = false;
       delete node.dataset._profileWasHidden;
     }
   });
+  // Also hide the sticky ribbon while editing — no scroll target above.
+  if (els.profileStickyRibbon) {
+    els.profileStickyRibbon.setAttribute("data-shown", "false");
+    els.profileStickyRibbon.setAttribute("aria-hidden", "true");
+  }
   renderProfileUsernamePrompt();
   renderProfileCallingCardHint();
+  // Refresh the identity line so it picks up edits when we leave edit mode.
+  if (!profileEditing) {
+    try { renderProfileIdentityLine(); } catch {}
+  }
 }
 
 /** Show the soft "pick a username" banner when the current user is
@@ -6324,32 +6343,35 @@ function renderProfileHero(items) {
 }
 
 function renderProfileHeartbeat(items) {
-  const strip = els.profilePulseStrip;
   const svg = els.profileHeartbeatSvg;
   const peaks = els.profileHeartbeatPeaks;
-  if (!strip || !svg || !peaks) return;
+  if (!svg || !peaks) return;
   if (!items?.length) {
-    strip.hidden = true;
     peaks.innerHTML = "";
     svg.innerHTML = "";
     return;
   }
-  strip.hidden = false;
   const chron = [...items].sort((a, b) => Number(a.ts || 0) - Number(b.ts || 0));
   const n = chron.length;
   const maxL = Math.max(1, ...chron.map((p) => Number(p.likes || 0)));
-  let d = "M 4 38";
+  // Calmer fingerprint: thinner line, gentler peaks, viewBox height 36.
+  let d = "M 4 28";
   chron.forEach((p, i) => {
     const x = n === 1 ? 160 : 12 + (i / Math.max(n - 1, 1)) * 296;
     const likes = Number(p.likes || 0);
-    const h = 10 + (likes / maxL) * 26;
-    const y = 38 - h;
-    d += ` L ${Math.max(4, x - 5)} 38 L ${x} ${y} L ${Math.min(316, x + 5)} 38`;
+    const h = 6 + (likes / maxL) * 16;
+    const y = 28 - h;
+    d += ` L ${Math.max(4, x - 4)} 28 L ${x} ${y} L ${Math.min(316, x + 4)} 28`;
   });
-  d += " L 316 38";
-  svg.innerHTML = `<path d="${d}" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" opacity="0.82"/>`;
-  peaks.innerHTML = chron
-    .map((p, i) => {
+  d += " L 316 28";
+  svg.innerHTML = `<path d="${d}" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round" opacity="0.78"/>`;
+  // Only render peak dots for the 8 most recent releases — premium UI
+  // = restraint. Older peaks are still visible on the line but not
+  // clickable; tapping the line links to the full list below.
+  const recent = chron.slice(-8);
+  peaks.innerHTML = recent
+    .map((p) => {
+      const i = chron.indexOf(p);
       const leftPct = n === 1 ? 50 : (i / Math.max(n - 1, 1)) * 100;
       const sid = escapeHtml(String(p.id));
       const tl = escapeHtml(String(p.title || "Song").slice(0, 80));
@@ -6371,7 +6393,153 @@ function setProfileAuraAudioState(playing) {
 }
 
 /* =================================================================
- *  Spotify-x-Nabad — render helpers
+ *  Cinematic backdrop — paints the latest release cover onto a
+ *  heavily blurred image element behind the hero. Falls back to the
+ *  timbre/avatar tint gradient when no release exists yet.
+ * ================================================================= */
+let _profileBackdropLastSrc = "";
+function renderProfileBackdrop(items) {
+  const aura = els.profileAura;
+  const img = els.profileAuraBackdropImg;
+  if (!aura || !img) return;
+  const latest = Array.isArray(items) && items.length ? items[0] : null;
+  const candidate = String(latest?.artUrl || latest?.creatorAvatar || "").trim();
+  if (!candidate || /nabadai-logo\.png$/i.test(candidate)) {
+    aura.setAttribute("data-has-backdrop", "false");
+    if (img.src) img.removeAttribute("src");
+    _profileBackdropLastSrc = "";
+    return;
+  }
+  if (candidate === _profileBackdropLastSrc) {
+    aura.setAttribute("data-has-backdrop", "true");
+    return;
+  }
+  _profileBackdropLastSrc = candidate;
+  const probe = new Image();
+  probe.onload = () => {
+    img.src = candidate;
+    aura.setAttribute("data-has-backdrop", "true");
+  };
+  probe.onerror = () => {
+    aura.setAttribute("data-has-backdrop", "false");
+    _profileBackdropLastSrc = "";
+  };
+  probe.src = candidate;
+}
+
+/* =================================================================
+ *  Single identity line — replaces the cluster of pills with one
+ *  calm sentence under the handle. JS composes from voiceTimbre +
+ *  primary genre + persona label (when set).
+ * ================================================================= */
+function renderProfileIdentityLine() {
+  const el = els.profileIdentityLine;
+  if (!el) return;
+  const timbreRaw = String(activeProfile?.voiceTimbre || "").trim();
+  const pretty = timbreRaw
+    ? timbreRaw.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    : "";
+  const genres = String(activeProfile?.genres || "")
+    .split(/[,|]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 2);
+  const personaLabel = (() => {
+    try {
+      const lbl = document.getElementById("profilePersonaLabel")?.textContent?.trim();
+      if (!lbl || lbl === "—") return "";
+      return lbl;
+    } catch { return ""; }
+  })();
+  const parts = [];
+  if (pretty) parts.push(`<strong>${escapeHtml(pretty)}</strong>`);
+  genres.forEach((g) => parts.push(escapeHtml(g)));
+  if (personaLabel && parts.length < 3) parts.push(escapeHtml(personaLabel));
+  if (!parts.length) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  el.hidden = false;
+  el.innerHTML = parts.join('<span class="profileIdentitySep" aria-hidden="true">·</span>');
+}
+
+/* =================================================================
+ *  Nabad Signature card — renders visibility/content for the trio
+ *  (pulse fingerprint + voice mini-player + bio). The inner pieces
+ *  are still owned by renderProfileHeartbeat / renderProfileVoiceEssence
+ *  (which now targets nodes nested inside the card) / a tiny bio
+ *  helper below. We just decide whether the card shows at all.
+ * ================================================================= */
+function renderProfileSignatureCard(items) {
+  const card = els.profileSignatureCard;
+  if (!card) return;
+  const hasReleases = Boolean(items?.length);
+  const hasCard = Boolean(activeProfile?.callingCardUrl);
+  const hasBio = (() => {
+    const raw = String(activeProfile?.bio || "").trim();
+    return Boolean(raw) && !/^add a short bio/i.test(raw);
+  })();
+  const signedIn = Boolean(authSession?.user?.id);
+  const anything = hasReleases || hasCard || hasBio || signedIn;
+  card.hidden = !anything;
+
+  // Bio inside the card — show/hide its sub-block separately.
+  const bioWrap = els.profileSignatureBio;
+  if (bioWrap) {
+    bioWrap.hidden = !hasBio;
+    if (hasBio && els.profileAboutText) {
+      els.profileAboutText.textContent = String(activeProfile.bio || "").trim();
+    }
+    if (hasBio && els.profileAboutMeta) {
+      const handle = String(activeProfile?.username || "").trim();
+      els.profileAboutMeta.textContent = handle ? `— @${handle}` : "";
+    }
+  }
+}
+
+/* =================================================================
+ *  Sticky play ribbon — IntersectionObserver on the hero. Once the
+ *  hero scrolls out, slide the ribbon in and wire its shuffle play
+ *  to the same random-from-catalog logic as the big button.
+ * ================================================================= */
+let _profileStickyObserver = null;
+let _profileStickyItems = [];
+function syncProfileStickyRibbonFromState() {
+  const ribbon = els.profileStickyRibbon;
+  if (!ribbon) return;
+  if (els.profileStickyAvatar) {
+    els.profileStickyAvatar.src = activeProfile?.avatar || "./assets/nabadai-logo.png";
+  }
+  if (els.profileStickyHandle) {
+    const handle = String(activeProfile?.username || "guest").replace(/^@/, "");
+    els.profileStickyHandle.textContent = handle ? `@${handle}` : "@guest";
+  }
+}
+function setupProfileStickyRibbon() {
+  const ribbon = els.profileStickyRibbon;
+  const aura = els.profileAura;
+  if (!ribbon || !aura) return;
+  if (_profileStickyObserver) {
+    try { _profileStickyObserver.disconnect(); } catch {}
+    _profileStickyObserver = null;
+  }
+  if (typeof IntersectionObserver !== "function") return;
+  _profileStickyObserver = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        const out = !e.isIntersecting;
+        ribbon.setAttribute("data-shown", out ? "true" : "false");
+        ribbon.setAttribute("aria-hidden", out ? "false" : "true");
+      }
+    },
+    { rootMargin: "-44px 0px 0px 0px", threshold: 0.04 }
+  );
+  _profileStickyObserver.observe(aura);
+}
+function setProfileStickyItems(items) {
+  _profileStickyItems = Array.isArray(items) ? items.slice(0, 30) : [];
+}
  *
  *  All called from renderProfileHubShared() with the freshly fetched
  *  list of own Hub posts (newest-first). Each helper hides its
@@ -6495,11 +6663,14 @@ function renderProfileShelf(items) {
 }
 
 function renderProfileVoiceEssence() {
-  const sec = els.profileVoiceEssence;
+  // The voice mini-player now lives inside the Signature card; we
+  // toggle the inner wrapper (.profileSignatureVoice) and let the
+  // outer card own its own visibility (driven by renderProfileSignatureCard).
+  const sec = els.profileSignatureVoice;
   const playBtn = els.profileVoiceEssencePlay;
   const recBtn = els.profileVoiceEssenceRecord;
-  const titleEl = els.profileVoiceEssenceTitle;
-  const subEl = els.profileVoiceEssenceSub;
+  const titleEl = document.getElementById("profileVoiceEssenceTitle");
+  const subEl = document.getElementById("profileVoiceEssenceSub");
   if (!sec || !playBtn) return;
   const url = String(activeProfile?.callingCardUrl || "").trim();
   const signedIn = Boolean(authSession?.user?.id);
@@ -6513,8 +6684,8 @@ function renderProfileVoiceEssence() {
     playBtn.style.display = "";
     playBtn.dataset.state = "idle";
     playBtn.setAttribute("aria-label", "Play voice essence");
-    if (titleEl) titleEl.textContent = pretty ? `${pretty} voice` : "Voice essence";
-    if (subEl) subEl.textContent = "8s preview · your raw voice";
+    if (titleEl) titleEl.textContent = pretty ? `${pretty} voice` : "Voice";
+    if (subEl) subEl.textContent = "8s · raw";
     if (recBtn) recBtn.hidden = true;
     playBtn.onclick = () => {
       void toggleOwnCallingCardPreview();
@@ -6544,25 +6715,11 @@ function renderProfileVoiceEssence() {
   }
 }
 
-function renderProfileAboutCard() {
-  const sec = els.profileAboutCard;
-  const text = els.profileAboutText;
-  const meta = els.profileAboutMeta;
-  if (!sec || !text) return;
-  const bioRaw = String(activeProfile?.bio || "").trim();
-  const bio = /^add a short bio/i.test(bioRaw) ? "" : bioRaw;
-  if (!bio) {
-    sec.hidden = true;
-    text.textContent = "";
-    return;
-  }
-  sec.hidden = false;
-  text.textContent = bio;
-  if (meta) {
-    const handle = String(activeProfile?.username || "").trim();
-    meta.textContent = handle ? `— @${handle}` : "";
-  }
-}
+// Retired: the About card was replaced by .profileSignatureBio inside
+// the Signature card. The bio content is now painted by
+// renderProfileSignatureCard(). Kept as a no-op shim so any older
+// callers don't crash if the file is hot-reloaded mid-session.
+function renderProfileAboutCard() { /* no-op — see renderProfileSignatureCard */ }
 
 function renderProfilePreviewFromInputs() {
   // Don't trim / overwrite live input values while the user is typing —
@@ -6599,12 +6756,17 @@ function renderProfilePreviewFromInputs() {
   renderProfileOwnStats();
   renderProfileUsernamePrompt();
   updateProfilePersonaInlineChip();
-  // Keep the About card / voice essence in sync with live input changes
-  // — but only outside edit mode, where they're actually visible.
+  renderProfileIdentityLine();
+  // Keep the Signature card / voice essence in sync with live input
+  // changes — but only outside edit mode, where they're visible.
   if (!profileEditing) {
-    try { renderProfileAboutCard(); } catch {}
     try { renderProfileVoiceEssence(); } catch {}
+    try {
+      const items = getProfileOwnerHubItems().slice(0, 30);
+      renderProfileSignatureCard(items);
+    } catch {}
   }
+  syncProfileStickyRibbonFromState();
   // Email is private — only show inside edit mode.
   if (els.authLoggedInEmailInline) {
     const email = String(authSession?.user?.email || activeProfile?.email || "").trim();
@@ -6900,15 +7062,20 @@ function renderProfileHubShared() {
   if (!els.profileHubSharedList) return;
   const items = getProfileOwnerHubItems().slice(0, 30);
   renderProfileOwnStats();
+  // Cinematic backdrop + identity line fire first so the hero is the
+  // first thing painted when the page repaints (less flicker).
+  renderProfileBackdrop(items);
+  renderProfileIdentityLine();
   renderProfileHero(items);
   renderProfileHeartbeat(items);
-  // Spotify-x-Nabad blocks — order matches the visual flow in the DOM.
   renderProfileShufflePlay(items);
   renderProfileActionRow(items);
   renderProfileTopWeek(items);
   renderProfileShelf(items);
   renderProfileVoiceEssence();
-  renderProfileAboutCard();
+  renderProfileSignatureCard(items);
+  setProfileStickyItems(items);
+  syncProfileStickyRibbonFromState();
   const countEl = document.getElementById("profileOwnSongCount");
   if (countEl) {
     if (items.length) {
@@ -15209,6 +15376,20 @@ if (els.profileShelfSeeAll) {
     if (list && typeof list.scrollIntoView === "function") {
       list.scrollIntoView({ behavior: "smooth", block: "start" });
     }
+  });
+}
+// --- Sticky ribbon: observe the hero and wire the green play. The
+//     ribbon plays a random release from the cached items list.
+setupProfileStickyRibbon();
+if (els.profileStickyPlay) {
+  els.profileStickyPlay.addEventListener("click", () => {
+    const pool = _profileStickyItems.length
+      ? _profileStickyItems
+      : getProfileOwnerHubItems().slice(0, 30);
+    if (!pool.length) return;
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    const sid = String(pick?.id || "");
+    if (sid) void playHubPostFromProfile(sid);
   });
 }
 [

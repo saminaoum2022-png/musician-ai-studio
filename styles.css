@@ -3666,9 +3666,9 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   isolation: isolate;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 18px 4px 24px;
-  margin-bottom: 4px;
+  gap: 12px;
+  padding: 14px 4px 6px;
+  margin-bottom: 0;
   max-width: 100%;
   /* Intentionally NO overflow:hidden / NO border-radius. The glow
      fades out via its own radial-gradient transparency falloff, so
@@ -4284,6 +4284,21 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   flex: 0 0 auto;
   color: var(--aura-tint, rgba(124, 92, 255, 0.95));
   isolation: isolate;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 200ms ease, filter 200ms ease;
+}
+.profileLiquidPulse:hover,
+.profileLiquidPulse[data-open="true"]{
+  filter: brightness(1.18);
+}
+.profileLiquidPulse:active{
+  transform: scale(0.96);
 }
 /* Two blob layers — different shapes & speeds. The container clips
    the heartbeat path to a moving liquid shape using mask-image. */
@@ -4338,14 +4353,58 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
 .profileLiquidPulseLabel{
   position: absolute;
   left: 50%;
-  bottom: 4px;
+  bottom: 2px;
   transform: translateX(-50%);
   font-size: 8.5px;
   font-weight: 700;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: rgba(220, 226, 240, 0.55);
+  color: rgba(220, 226, 240, 0.6);
   pointer-events: none;
+  white-space: nowrap;
+  transition: color 200ms ease;
+}
+.profileLiquidPulse:hover .profileLiquidPulseLabel,
+.profileLiquidPulse[data-open="true"] .profileLiquidPulseLabel{
+  color: var(--aura-tint, rgba(220, 226, 240, 0.95));
+}
+
+/* Info popover — appears under the avatar row when the user taps
+   the pulse. Tells them what the visual means + their real stats. */
+.profileLiquidPulseInfo{
+  margin: -4px auto 8px;
+  max-width: 320px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: linear-gradient(135deg,
+    var(--aura-tint-soft, rgba(124, 92, 255, 0.18)) 0%,
+    rgba(10, 12, 20, 0.50) 80%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(228, 232, 244, 0.92);
+  letter-spacing: -0.005em;
+  text-align: center;
+  animation: profileLiquidPulseInfoIn 260ms ease;
+}
+.profileLiquidPulseInfo strong{
+  display: block;
+  color: #fff;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.profileLiquidPulseStat{
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--aura-tint, rgba(124, 92, 255, 0.95));
+}
+@keyframes profileLiquidPulseInfoIn{
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 @media (prefers-reduced-motion: reduce){
   .profileLiquidPulseBlob{ animation: none !important; }
@@ -4409,7 +4468,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 22px 0 8px;
+  margin: 8px 0 6px;
   padding: 0;
 }
 .profileShareBtn{
@@ -4799,70 +4858,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   display: none;
 }
 
-/* =================================================================
- *  Sticky play ribbon — appears when the hero scrolls out of view.
- *  Tiny avatar + handle + green shuffle play, anchored top of page.
- * ================================================================= */
-.profileStickyRibbon{
-  position: sticky;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 18;
-  margin: 0 -14px 0;
-  padding: 8px 14px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: rgba(10, 12, 20, 0.72);
-  backdrop-filter: blur(18px) saturate(1.4);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  opacity: 0;
-  transform: translateY(-12px);
-  transition: opacity 220ms ease, transform 220ms ease;
-  pointer-events: none;
-}
-.profileStickyRibbon[data-shown="true"]{
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
-}
-.profileStickyAvatar{
-  width: 30px;
-  height: 30px;
-  border-radius: 999px;
-  object-fit: cover;
-  flex: 0 0 auto;
-  border: 1px solid rgba(255, 255, 255, 0.10);
-}
-.profileStickyHandle{
-  flex: 1;
-  min-width: 0;
-  font-size: 13.5px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: rgba(248, 250, 255, 0.94);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.profileStickyPlay{
-  flex: 0 0 auto;
-  width: 36px;
-  height: 36px;
-  border-radius: 999px;
-  border: none;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #0c0c14;
-  background: linear-gradient(140deg, #1ed760 0%, #16a34a 100%);
-  box-shadow: 0 6px 20px rgba(30, 215, 96, 0.32);
-  transition: transform 140ms ease;
-}
-.profileStickyPlay svg{ width: 16px; height: 16px; margin-left: 1px; }
-.profileStickyPlay:active{ transform: scale(0.94); }
+/* Sticky play ribbon retired. The hero is the only play surface now. */
 
 /* Stats strip — vertical-bar separators echoing the Hub bottom-tab icon. */
 .profileAuraStatStrip{
@@ -4928,7 +4924,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
 .profileAuraStat--link:active{ transform: scale(0.98); }
 
 @media (max-width: 440px){
-  .profileAura{ padding: 16px 14px 22px; }
+  .profileAura{ padding: 14px 14px 4px; }
   .profileAuraIdentity{ padding: 0; }
   .profileAuraToolbar{ top: 10px; right: 10px; }
   .profileAuraNameInput{ font-size: 24px; }

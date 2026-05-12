@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260512liquid";
+const APP_BUILD = "20260512liquidv2";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -379,22 +379,18 @@ const els = {
   // Liquid pulse redesign nodes
   profileLiquidPulse: document.getElementById("profileLiquidPulse"),
   profileLiquidPulsePath: document.getElementById("profileLiquidPulsePath"),
+  profileLiquidPulseLabel: document.getElementById("profileLiquidPulseLabel"),
+  profileLiquidPulseInfo: document.getElementById("profileLiquidPulseInfo"),
+  profileLiquidPulseStat: document.getElementById("profileLiquidPulseStat"),
   profileIdentityLine: document.getElementById("profileIdentityLine"),
   profileHeroBio: document.getElementById("profileHeroBio"),
   profileWelcomeVoice: document.getElementById("profileWelcomeVoice"),
-  profileStickyRibbon: document.getElementById("profileStickyRibbon"),
-  profileStickyAvatar: document.getElementById("profileStickyAvatar"),
-  profileStickyHandle: document.getElementById("profileStickyHandle"),
-  profileStickyPlay: document.getElementById("profileStickyPlay"),
   // Spotify-x-Nabad redesign nodes
   profileActionRow: document.getElementById("profileActionRow"),
   profileActionShare: document.getElementById("profileActionShare"),
   profileShareToast: document.getElementById("profileShareToast"),
   profileTopWeek: document.getElementById("profileTopWeek"),
   profileTopWeekList: document.getElementById("profileTopWeekList"),
-  profileShelf: document.getElementById("profileShelf"),
-  profileShelfScroll: document.getElementById("profileShelfScroll"),
-  profileShelfSeeAll: document.getElementById("profileShelfSeeAll"),
   profileVoiceEssence: document.getElementById("profileVoiceEssence"),
   profileVoiceEssencePlay: document.getElementById("profileVoiceEssencePlay"),
   profileVoiceEssenceTitle: document.getElementById("profileVoiceEssenceTitle"),
@@ -6066,7 +6062,6 @@ function setProfileEditing(on) {
     els.profileActionRow,
     els.profileHeroLatest,
     els.profileTopWeek,
-    els.profileShelf,
     els.profileWelcomeVoice,
   ];
   sections.forEach((node) => {
@@ -6079,11 +6074,6 @@ function setProfileEditing(on) {
       delete node.dataset._profileWasHidden;
     }
   });
-  // Also hide the sticky ribbon while editing — no scroll target above.
-  if (els.profileStickyRibbon) {
-    els.profileStickyRibbon.setAttribute("data-shown", "false");
-    els.profileStickyRibbon.setAttribute("aria-hidden", "true");
-  }
   renderProfileUsernamePrompt();
   renderProfileCallingCardHint();
   // Refresh the identity line so it picks up edits when we leave edit mode.
@@ -6457,7 +6447,45 @@ function renderProfileLiquidPulse(items) {
   }
   d += ` L ${W} ${baseline}`;
   path.setAttribute("d", d);
+  // Paint the real stat into the info popover so the user sees that
+  // each peak is a real release — not just an animation.
+  const statEl = els.profileLiquidPulseStat;
+  if (statEl) {
+    const totalLikes = release.reduce((acc, p) => acc + Number(p.likes || 0), 0);
+    const beatsLabel = `${beats} ${beats === 1 ? "beat" : "beats"}`;
+    const likesLabel = totalLikes > 0 ? ` · ${totalLikes} ${totalLikes === 1 ? "like" : "likes"}` : "";
+    statEl.textContent = `${beatsLabel}${likesLabel}`;
+  }
 }
+
+/* Tap-to-explain popover for the liquid pulse. Mounted once at module
+ * load. Toggles a small descriptive bubble under the avatar row so
+ * users understand what the pulse actually represents. */
+function setupProfileLiquidPulseInfo() {
+  const btn = els.profileLiquidPulse;
+  const info = els.profileLiquidPulseInfo;
+  if (!btn || !info) return;
+  const close = () => {
+    btn.setAttribute("data-open", "false");
+    info.hidden = true;
+    document.removeEventListener("click", onDocClick, true);
+  };
+  function onDocClick(e) {
+    if (info.contains(e.target) || btn.contains(e.target)) return;
+    close();
+  }
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    const open = btn.getAttribute("data-open") === "true";
+    if (open) { close(); return; }
+    btn.setAttribute("data-open", "true");
+    info.hidden = false;
+    setTimeout(() => {
+      document.addEventListener("click", onDocClick, true);
+    }, 0);
+  });
+}
+setupProfileLiquidPulseInfo();
 
 /* =================================================================
  *  Single identity line — replaces the cluster of pills with one
@@ -6514,49 +6542,6 @@ function renderProfileHeroBio() {
   }
   wrap.hidden = false;
   text.textContent = cleaned;
-}
-
-/* =================================================================
- *  Sticky play ribbon — IntersectionObserver on the hero. Once the
- *  hero scrolls out, slide the ribbon in and wire its shuffle play
- *  to the same random-from-catalog logic as the big button.
- * ================================================================= */
-let _profileStickyObserver = null;
-let _profileStickyItems = [];
-function syncProfileStickyRibbonFromState() {
-  const ribbon = els.profileStickyRibbon;
-  if (!ribbon) return;
-  if (els.profileStickyAvatar) {
-    els.profileStickyAvatar.src = activeProfile?.avatar || "./assets/nabadai-logo.png";
-  }
-  if (els.profileStickyHandle) {
-    const handle = String(activeProfile?.username || "guest").replace(/^@/, "");
-    els.profileStickyHandle.textContent = handle ? `@${handle}` : "@guest";
-  }
-}
-function setupProfileStickyRibbon() {
-  const ribbon = els.profileStickyRibbon;
-  const aura = els.profileAura;
-  if (!ribbon || !aura) return;
-  if (_profileStickyObserver) {
-    try { _profileStickyObserver.disconnect(); } catch {}
-    _profileStickyObserver = null;
-  }
-  if (typeof IntersectionObserver !== "function") return;
-  _profileStickyObserver = new IntersectionObserver(
-    (entries) => {
-      for (const e of entries) {
-        const out = !e.isIntersecting;
-        ribbon.setAttribute("data-shown", out ? "true" : "false");
-        ribbon.setAttribute("aria-hidden", out ? "false" : "true");
-      }
-    },
-    { rootMargin: "-44px 0px 0px 0px", threshold: 0.04 }
-  );
-  _profileStickyObserver.observe(aura);
-}
-function setProfileStickyItems(items) {
-  _profileStickyItems = Array.isArray(items) ? items.slice(0, 30) : [];
 }
 
 /* =================================================================
@@ -6628,44 +6613,6 @@ function renderProfileTopWeek(items) {
   list.querySelectorAll("[data-top-week-play]").forEach((b) => {
     b.addEventListener("click", () => {
       const sid = b.getAttribute("data-top-week-play");
-      if (sid) void playHubPostFromProfile(sid);
-    });
-  });
-}
-
-function renderProfileShelf(items) {
-  const sec = els.profileShelf;
-  const scroll = els.profileShelfScroll;
-  if (!sec || !scroll) return;
-  if (!items?.length) {
-    sec.hidden = true;
-    scroll.innerHTML = "";
-    return;
-  }
-  sec.hidden = false;
-  scroll.innerHTML = items
-    .slice(0, 20)
-    .map((p) => {
-      const sid = escapeHtml(String(p.id));
-      const tl = escapeHtml(String(p.title || "Untitled"));
-      const art = escapeHtml(String(p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png"));
-      const rel = typeof relativeTime === "function" ? relativeTime(p.ts) : "";
-      const sub = escapeHtml(rel || "Single");
-      return `
-        <button type="button" class="profileShelfCard" data-shelf-play="${sid}" role="listitem" aria-label="Play ${tl}">
-          <span class="profileShelfCardArt">
-            <img src="${art}" alt="" />
-            <span class="profileShelfCardPlay" aria-hidden="true">▶</span>
-          </span>
-          <span class="profileShelfCardTitle">${tl}</span>
-          <span class="profileShelfCardSub">${sub}</span>
-        </button>
-      `;
-    })
-    .join("");
-  scroll.querySelectorAll("[data-shelf-play]").forEach((b) => {
-    b.addEventListener("click", () => {
-      const sid = b.getAttribute("data-shelf-play");
       if (sid) void playHubPostFromProfile(sid);
     });
   });
@@ -6773,7 +6720,6 @@ function renderProfilePreviewFromInputs() {
       renderProfileLiquidPulse(items);
     } catch {}
   }
-  syncProfileStickyRibbonFromState();
   // Email is private — only show inside edit mode.
   if (els.authLoggedInEmailInline) {
     const email = String(authSession?.user?.email || activeProfile?.email || "").trim();
@@ -7078,9 +7024,6 @@ function renderProfileHubShared() {
   renderProfileActionRow(items);
   renderProfileVoiceEssence();
   renderProfileTopWeek(items);
-  renderProfileShelf(items);
-  setProfileStickyItems(items);
-  syncProfileStickyRibbonFromState();
   const countEl = document.getElementById("profileOwnSongCount");
   if (countEl) {
     if (items.length) {
@@ -15374,28 +15317,6 @@ async function _profileShare() {
 }
 if (els.profileActionShare) {
   els.profileActionShare.addEventListener("click", () => void _profileShare());
-}
-if (els.profileShelfSeeAll) {
-  els.profileShelfSeeAll.addEventListener("click", () => {
-    const list = els.profileHubSharedList || document.getElementById("profileHubSharedList");
-    if (list && typeof list.scrollIntoView === "function") {
-      list.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  });
-}
-// --- Sticky ribbon: observe the hero and wire the green play. The
-//     ribbon plays a random release from the cached items list.
-setupProfileStickyRibbon();
-if (els.profileStickyPlay) {
-  els.profileStickyPlay.addEventListener("click", () => {
-    const pool = _profileStickyItems.length
-      ? _profileStickyItems
-      : getProfileOwnerHubItems().slice(0, 30);
-    if (!pool.length) return;
-    const pick = pool[Math.floor(Math.random() * pool.length)];
-    const sid = String(pick?.id || "");
-    if (sid) void playHubPostFromProfile(sid);
-  });
 }
 [
   els.profilePreviewUsernameInput,

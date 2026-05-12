@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514canvasVisible";
+const APP_BUILD = "20260514shareIcon";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -385,6 +385,7 @@ const els = {
   profileActionRow: document.getElementById("profileActionRow"),
   profileActionShare: document.getElementById("profileActionShare"),
   profileShareToast: document.getElementById("profileShareToast"),
+  btnProfileShareIcon: document.getElementById("btnProfileShareIcon"),
   profileTopWeek: document.getElementById("profileTopWeek"),
   profileTopWeekList: document.getElementById("profileTopWeekList"),
   profileAboutCard: document.getElementById("profileAboutCard"),
@@ -4928,10 +4929,17 @@ function renderAuthStatus() {
     els.profileCreditsLink.style.display = isAuthed ? "" : "none";
     els.profileCreditsLink.setAttribute("aria-hidden", isAuthed ? "false" : "true");
   }
-  // Same idea for "Share profile" — a logged-out user has no profile
-  // worth sharing yet, and the @guest URL leaks the placeholder handle.
+  // Same idea for the Share button — a logged-out user has no
+  // profile worth sharing yet, and the @guest URL leaks the
+  // placeholder handle. We tolerate both the legacy big-pill button
+  // (kept for safety while older HTML cached on devices) and the new
+  // toolbar icon.
   if (els.profileActionShare) {
     els.profileActionShare.style.display = isAuthed ? "" : "none";
+  }
+  if (els.btnProfileShareIcon) {
+    els.btnProfileShareIcon.style.display = isAuthed ? "" : "none";
+    els.btnProfileShareIcon.setAttribute("aria-hidden", isAuthed ? "false" : "true");
   }
   document.body.setAttribute("data-logged-in", isAuthed ? "true" : "false");
 }
@@ -16199,12 +16207,17 @@ function _profileShareUrl() {
   return `${base}/#/u/${encodeURIComponent(handle)}`;
 }
 function _profileShowShareToast(message) {
+  // The old in-section toast pill was removed with the wide share row;
+  // fall back to the global toast so confirmation still surfaces.
   const toast = els.profileShareToast;
-  if (!toast) return;
-  toast.textContent = message;
-  toast.hidden = false;
-  clearTimeout(_profileShowShareToast._t);
-  _profileShowShareToast._t = setTimeout(() => { toast.hidden = true; }, 1800);
+  if (toast) {
+    toast.textContent = message;
+    toast.hidden = false;
+    clearTimeout(_profileShowShareToast._t);
+    _profileShowShareToast._t = setTimeout(() => { toast.hidden = true; }, 1800);
+    return;
+  }
+  try { showToast(message, { durationMs: 1800 }); } catch {}
 }
 async function _profileCopyLink() {
   const url = _profileShareUrl();
@@ -16247,6 +16260,9 @@ async function _profileShare() {
 }
 if (els.profileActionShare) {
   els.profileActionShare.addEventListener("click", () => void _profileShare());
+}
+if (els.btnProfileShareIcon) {
+  els.btnProfileShareIcon.addEventListener("click", () => void _profileShare());
 }
 [
   els.profilePreviewUsernameInput,

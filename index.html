@@ -39,7 +39,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260514canvasVisible" />
+    <link rel="stylesheet" href="./styles.css?v=20260514shareIcon" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -972,6 +972,24 @@
                 <button type="button" id="btnProfileCancel" class="profileAuraEditBtn profileAuraEditBtn--cancel" aria-label="Cancel editing">Cancel</button>
                 <button type="button" id="btnProfileSave" class="profileAuraEditBtn profileAuraEditBtn--save" aria-label="Save profile">Save</button>
               </div>
+              <!-- Compact share icon — replaces the old full-width
+                   "Share profile" pill. Sits between Edit and Settings
+                   so the entire account-action set is one tidy cluster
+                   (Instagram pattern). Hidden when signed-out via
+                   renderAuthStatus, same as the old wide pill. -->
+              <button
+                type="button"
+                id="btnProfileShareIcon"
+                class="profileAuraIconBtn"
+                aria-label="Share profile"
+                title="Share profile"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M16 6l-4-4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                  <path d="M12 2v14" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+                  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+                </svg>
+              </button>
               <a
                 href="#/settings"
                 id="btnProfileSettingsGear"
@@ -1118,25 +1136,10 @@
 
           </section>
 
-          <!-- Single Share pill — Spotify-style wide action button. Uses
-               the native share sheet when available, falls back to
-               clipboard. Toast feedback on tap. -->
-          <section
-            class="profileActionRow"
-            id="profileActionRow"
-            aria-label="Profile actions"
-            hidden
-          >
-            <button type="button" class="profileShareBtn" id="profileActionShare" aria-label="Share profile">
-              <svg viewBox="0 0 24 24" aria-hidden="true" class="profileShareBtnIcon">
-                <path d="M16 6l-4-4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-                <path d="M12 2v14" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-                <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-              </svg>
-              <span class="profileShareBtnLabel">Share profile</span>
-            </button>
-            <span id="profileShareToast" class="profileShareToast" hidden aria-live="polite"></span>
-          </section>
+          <!-- The old full-width "Share profile" pill row was retired —
+               share now lives as a compact icon in the Aura toolbar
+               (Instagram pattern). Share confirmations use the global
+               toast. -->
 
           <section class="profileHeroLatest" id="profileHeroLatest" hidden>
             <header class="profileSectionHead">
@@ -1939,6 +1942,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260514canvasVisible"></script>
+    <script type="module" src="./src/app.js?v=20260514shareIcon"></script>
   </body>
 </html>

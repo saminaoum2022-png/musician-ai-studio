@@ -1039,10 +1039,8 @@
 
               <div id="authLoggedInEmailInline" class="profileAuraEmail hint" style="display:none"></div>
 
-              <!-- The single identity line — view mode only.
-                   Replaces the cluster of pills with one calm sentence:
-                   "Baritone · Cinematic Pop · Late-night". JS composes
-                   it from voiceTimbre + genres + persona. -->
+              <!-- Identity line (view mode): genres + persona when set.
+                   Voice timbre is on the chip above — not repeated here. -->
               <p id="profileIdentityLine" class="profileIdentityLine" hidden aria-live="polite"></p>
 
               <!-- Bio quote — sits directly under the identity line.
@@ -1114,29 +1112,6 @@
                 <p id="profileHeroMeta" class="profileHeroMeta hint"></p>
               </div>
             </div>
-          </section>
-
-          <!-- Welcome voice note — own section, separate from anything
-               else. Plays the user's 8-second calling card. Compact
-               row, no quote / no bio / no pulse. Just the voice. -->
-          <section class="profileWelcomeVoice" id="profileWelcomeVoice" hidden>
-            <header class="profileSectionHead">
-              <span class="profileEyebrow">Welcome voice note</span>
-            </header>
-            <button type="button" id="profileVoiceEssencePlay" class="profileWelcomeVoiceBtn" aria-label="Play welcome voice note">
-              <span class="profileWelcomeVoicePlay" aria-hidden="true">▶</span>
-              <span class="profileWelcomeVoiceWave" aria-hidden="true">
-                <span></span><span></span><span></span><span></span><span></span>
-                <span></span><span></span><span></span><span></span><span></span>
-                <span></span><span></span><span></span><span></span><span></span>
-                <span></span><span></span><span></span><span></span><span></span>
-              </span>
-              <span class="profileWelcomeVoiceMeta">
-                <strong id="profileVoiceEssenceTitle">Voice note</strong>
-                <span id="profileVoiceEssenceSub" class="profileWelcomeVoiceSub">8s · raw</span>
-              </span>
-            </button>
-            <button type="button" id="profileVoiceEssenceRecord" class="profileWelcomeVoiceCta" hidden>+ Record voice note</button>
           </section>
 
           <!-- Popular this week — top 3 only, horizontal carousel. -->
@@ -1921,6 +1896,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260512liquidv2"></script>
+    <script type="module" src="./src/app.js?v=20260512profileheader"></script>
   </body>
 </html>

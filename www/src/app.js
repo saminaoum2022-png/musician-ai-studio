@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260512liquidv2";
+const APP_BUILD = "20260512profileheader";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -384,18 +384,12 @@ const els = {
   profileLiquidPulseStat: document.getElementById("profileLiquidPulseStat"),
   profileIdentityLine: document.getElementById("profileIdentityLine"),
   profileHeroBio: document.getElementById("profileHeroBio"),
-  profileWelcomeVoice: document.getElementById("profileWelcomeVoice"),
   // Spotify-x-Nabad redesign nodes
   profileActionRow: document.getElementById("profileActionRow"),
   profileActionShare: document.getElementById("profileActionShare"),
   profileShareToast: document.getElementById("profileShareToast"),
   profileTopWeek: document.getElementById("profileTopWeek"),
   profileTopWeekList: document.getElementById("profileTopWeekList"),
-  profileVoiceEssence: document.getElementById("profileVoiceEssence"),
-  profileVoiceEssencePlay: document.getElementById("profileVoiceEssencePlay"),
-  profileVoiceEssenceTitle: document.getElementById("profileVoiceEssenceTitle"),
-  profileVoiceEssenceSub: document.getElementById("profileVoiceEssenceSub"),
-  profileVoiceEssenceRecord: document.getElementById("profileVoiceEssenceRecord"),
   profileAboutCard: document.getElementById("profileAboutCard"),
   profileAboutText: document.getElementById("profileAboutText"),
   profileAboutMeta: document.getElementById("profileAboutMeta"),
@@ -6062,7 +6056,6 @@ function setProfileEditing(on) {
     els.profileActionRow,
     els.profileHeroLatest,
     els.profileTopWeek,
-    els.profileWelcomeVoice,
   ];
   sections.forEach((node) => {
     if (!node) return;
@@ -6488,17 +6481,12 @@ function setupProfileLiquidPulseInfo() {
 setupProfileLiquidPulseInfo();
 
 /* =================================================================
- *  Single identity line — replaces the cluster of pills with one
- *  calm sentence under the handle. JS composes from voiceTimbre +
- *  primary genre + persona label (when set).
+ *  Single identity line — genres + persona when set. Voice timbre
+ *  lives on the header chip ("Voice · …") so we do not repeat it here.
  * ================================================================= */
 function renderProfileIdentityLine() {
   const el = els.profileIdentityLine;
   if (!el) return;
-  const timbreRaw = String(activeProfile?.voiceTimbre || "").trim();
-  const pretty = timbreRaw
-    ? timbreRaw.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
-    : "";
   const genres = String(activeProfile?.genres || "")
     .split(/[,|]/)
     .map((s) => s.trim())
@@ -6508,11 +6496,11 @@ function renderProfileIdentityLine() {
     try {
       const lbl = document.getElementById("profilePersonaLabel")?.textContent?.trim();
       if (!lbl || lbl === "—") return "";
+      if (/no persona/i.test(lbl)) return "";
       return lbl;
     } catch { return ""; }
   })();
   const parts = [];
-  if (pretty) parts.push(`<strong>${escapeHtml(pretty)}</strong>`);
   genres.forEach((g) => parts.push(escapeHtml(g)));
   if (personaLabel && parts.length < 3) parts.push(escapeHtml(personaLabel));
   if (!parts.length) {
@@ -6618,59 +6606,9 @@ function renderProfileTopWeek(items) {
   });
 }
 
-function renderProfileVoiceEssence() {
-  // The welcome voice note is its own dedicated section now (not part
-  // of any signature card). Toggle the section's visibility based on
-  // whether the user has a calling card and is signed in.
-  const sec = els.profileWelcomeVoice;
-  const playBtn = els.profileVoiceEssencePlay;
-  const recBtn = els.profileVoiceEssenceRecord;
-  const titleEl = document.getElementById("profileVoiceEssenceTitle");
-  const subEl = document.getElementById("profileVoiceEssenceSub");
-  if (!sec || !playBtn) return;
-  const url = String(activeProfile?.callingCardUrl || "").trim();
-  const signedIn = Boolean(authSession?.user?.id);
+// Voice note playback + recording: header voice chip only (see
+// renderProfileAuraVoiceChip, toggleOwnCallingCardPreview, calling card modal).
 
-  if (url) {
-    sec.hidden = false;
-    playBtn.style.display = "";
-    playBtn.dataset.state = "idle";
-    playBtn.setAttribute("aria-label", "Play welcome voice note");
-    if (titleEl) titleEl.textContent = "Voice note";
-    if (subEl) subEl.textContent = "8s · raw";
-    if (recBtn) recBtn.hidden = true;
-    playBtn.onclick = () => {
-      void toggleOwnCallingCardPreview();
-      const proxy = els.profilePreviewVoiceChipBtn;
-      const syncFromProxy = () => {
-        const state = proxy?.dataset?.state === "playing" ? "playing" : "idle";
-        playBtn.dataset.state = state;
-        playBtn.setAttribute(
-          "aria-label",
-          state === "playing" ? "Pause voice essence" : "Play voice essence"
-        );
-      };
-      setTimeout(syncFromProxy, 80);
-      setTimeout(syncFromProxy, 350);
-    };
-  } else if (signedIn) {
-    sec.hidden = false;
-    playBtn.style.display = "none";
-    if (recBtn) {
-      recBtn.hidden = false;
-      recBtn.onclick = () => {
-        try { openCallingCardModal(); } catch {}
-      };
-    }
-  } else {
-    sec.hidden = true;
-  }
-}
-
-// Retired: the About card was replaced by .profileSignatureBio inside
-// the Signature card. The bio content is now painted by
-// renderProfileSignatureCard(). Kept as a no-op shim so any older
-// callers don't crash if the file is hot-reloaded mid-session.
 function renderProfileAboutCard() { /* no-op — see renderProfileSignatureCard */ }
 
 function renderProfilePreviewFromInputs() {
@@ -6709,12 +6647,10 @@ function renderProfilePreviewFromInputs() {
   renderProfileUsernamePrompt();
   updateProfilePersonaInlineChip();
   renderProfileIdentityLine();
-  // Keep the hero bio + welcome voice + liquid pulse in sync with
-  // live input changes — but only outside edit mode, where they're
-  // actually visible.
+  // Keep the hero bio + liquid pulse in sync with live input changes —
+  // but only outside edit mode, where they're actually visible.
   if (!profileEditing) {
     try { renderProfileHeroBio(); } catch {}
-    try { renderProfileVoiceEssence(); } catch {}
     try {
       const items = getProfileOwnerHubItems().slice(0, 30);
       renderProfileLiquidPulse(items);
@@ -7022,7 +6958,6 @@ function renderProfileHubShared() {
   renderProfileHeroBio();
   renderProfileHero(items);
   renderProfileActionRow(items);
-  renderProfileVoiceEssence();
   renderProfileTopWeek(items);
   const countEl = document.getElementById("profileOwnSongCount");
   if (countEl) {

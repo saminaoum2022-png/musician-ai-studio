@@ -998,6 +998,10 @@
                   autocomplete="username"
                   aria-label="Username"
                 />
+                <!-- Identity (timbre + genre + persona) lives INLINE with
+                     the handle now, separated by a small middle-dot.
+                     Smaller font than the username, quieter color. -->
+                <p id="profileIdentityLine" class="profileIdentityLine" hidden aria-live="polite"></p>
                 <span id="profilePreviewGenderIcon" class="profilePreviewGenderIcon profileAuraGender" style="display:none"></span>
               </div>
 
@@ -1046,11 +1050,7 @@
 
               <div id="authLoggedInEmailInline" class="profileAuraEmail hint" style="display:none"></div>
 
-              <!-- Identity line (view mode): genres + persona when set.
-                   Voice timbre is on the chip above — not repeated here. -->
-              <p id="profileIdentityLine" class="profileIdentityLine" hidden aria-live="polite"></p>
-
-              <!-- Bio quote — sits directly under the identity line.
+              <!-- Bio quote — sits directly under the name row.
                    View-mode only; edit mode shows the textarea above. -->
               <div id="profileHeroBio" class="profileHeroBio" hidden>
                 <span class="profileHeroBioQuote" aria-hidden="true">"</span>
@@ -1903,6 +1903,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260512headertint"></script>
+    <script type="module" src="./src/app.js?v=20260512inlinebari"></script>
   </body>
 </html>

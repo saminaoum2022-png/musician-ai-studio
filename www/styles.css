@@ -4507,18 +4507,37 @@ body[data-route="profile"] .profileAuraGlow{
   .profileLiquidPulsePath{ animation: none !important; }
 }
 
+/* Identity line sits INLINE with the @handle, separated by a leading
+   middle-dot. Smaller font than the handle, quieter color so the
+   handle keeps hierarchy. Hides itself when there's nothing to say. */
 .profileIdentityLine{
-  margin: 6px 0 2px;
+  margin: 0;
   font-size: 13px;
   font-weight: 400;
   letter-spacing: 0.01em;
-  color: rgba(190, 202, 222, 0.74);
-  line-height: 1.45;
-  text-align: left;
-  align-self: flex-start;
+  color: rgba(190, 202, 222, 0.72);
+  line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Nudge down a hair so it optically baselines with the larger
+     handle to its left rather than vertically centering. */
+  margin-top: 3px;
 }
+/* Leading divider — sits between handle and the first identity word. */
+.profileIdentityLine::before{
+  content: "·";
+  color: rgba(170, 182, 205, 0.35);
+  font-weight: 400;
+  margin-right: 2px;
+}
+.profileIdentityLine[hidden]{ display: none; }
 .profileIdentityLine .profileIdentitySep{
-  margin: 0 8px;
+  margin: 0 4px;
   color: rgba(170, 182, 205, 0.32);
 }
 .profileIdentityLine strong{
@@ -4526,6 +4545,9 @@ body[data-route="profile"] .profileAuraGlow{
   color: rgba(232, 238, 247, 0.92);
   letter-spacing: -0.005em;
 }
+/* In edit mode, hide identity line entirely — the timbre picker is up
+   in the chip slot and the input fields own the visual space. */
+.profileAura.profileAuraEditing .profileIdentityLine{ display: none !important; }
 
 /* --- Bio quote that sits directly under the identity line in the hero.
    View-mode only; edit-mode shows the textarea above. --- */

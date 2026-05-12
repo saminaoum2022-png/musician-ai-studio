@@ -591,6 +591,76 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   display: flex;
   flex-direction: column;
 }
+.librarySkeletonWrap{
+  padding: 4px 0 8px;
+}
+.libraryRowsSkeleton{
+  margin-bottom: 2px;
+}
+.libRowSkeleton{
+  pointer-events: none;
+}
+.libRowSkeleton .libRowMain{
+  cursor: default;
+  opacity: 1;
+}
+.libSkelBlock{
+  display: block;
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.04) 100%);
+  background-size: 200% 100%;
+  animation: hubSkelShimmer 1.2s ease-in-out infinite;
+  animation-delay: var(--libSkelDelay, 0s);
+  border-radius: 6px;
+}
+.libSkelArt{
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+}
+.libSkelTitleLine{
+  height: 14px;
+  width: 72%;
+  max-width: 100%;
+  border-radius: 7px;
+  margin-bottom: 2px;
+}
+.libSkelSubLine{
+  height: 10px;
+  width: 40%;
+  max-width: 100%;
+}
+.libRowSkeleton .libRowArt{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.2);
+}
+.libRowSkeleton .libSkelMore{
+  width: 36px;
+  height: 36px;
+  margin-right: 4px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 100%);
+  background-size: 200% 100%;
+  animation: hubSkelShimmer 1.2s ease-in-out infinite;
+  animation-delay: var(--libSkelDelay, 0s);
+  box-sizing: border-box;
+}
+.librarySkeletonHint{
+  margin: 10px 8px 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(232,238,247,0.48);
+  text-align: center;
+}
+@media (prefers-reduced-motion: reduce){
+  .libSkelBlock,
+  .libRowSkeleton .libSkelMore{
+    animation: none;
+    opacity: 0.5;
+  }
+}
 .libRow{
   position: relative;
   display: flex;

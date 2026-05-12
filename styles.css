@@ -3797,19 +3797,21 @@ body[data-route="profile"] .profileAuraGlow{
   border-radius: 999px;
   margin-bottom: 4px;
 }
+/* Soft hairline around the avatar — no gradient. The pulse + cover
+   art carry color; the ring just gives the photo a quiet edge. */
 .profileAuraRing{
   position: absolute;
-  inset: -4px;
+  inset: -3px;
   border-radius: inherit;
-  padding: 2px;
-  background: linear-gradient(135deg, #7c5cff, #23d5ab);
+  padding: 1.5px;
+  background: rgba(255, 255, 255, 0.14);
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
           mask-composite: exclude;
   pointer-events: none;
-  opacity: 0.55;
+  opacity: 1;
   transition: opacity 280ms ease;
 }
 .profileAura[data-audio-state="playing"] .profileAuraRing{
@@ -3841,7 +3843,7 @@ body[data-route="profile"] .profileAuraGlow{
   text-transform: uppercase;
   padding: 4px 8px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #7c5cff, #23d5ab);
+  background: rgba(255, 255, 255, 0.92);
   color: #0b0d12;
   z-index: 2;
   box-shadow: 0 6px 14px rgba(0,0,0,0.35);
@@ -3898,7 +3900,8 @@ body[data-route="profile"] .profileAuraGlow{
   transform: translateY(2px);
 }
 
-/* Voice tag — gradient-bordered chip, same family as Hub action pills. */
+/* Voice timbre pill — flat, quiet. Only used inside edit mode as the
+   <select> for picking your voice range. No gradient, no neon. */
 .profileAuraVoiceChipSlot{
   display: inline-flex;
   align-items: center;
@@ -3911,11 +3914,9 @@ body[data-route="profile"] .profileAuraGlow{
   margin-top: 2px;
   padding: 6px 14px;
   border-radius: 999px;
-  background:
-    linear-gradient(rgba(13,16,22,0.85), rgba(13,16,22,0.85)) padding-box,
-    linear-gradient(135deg, #7c5cff, #23d5ab) border-box;
-  border: 1px solid transparent;
-  color: rgba(232,238,247,0.94);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: rgba(232, 238, 247, 0.92);
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.01em;
@@ -3923,8 +3924,14 @@ body[data-route="profile"] .profileAuraGlow{
 }
 .profileAuraVoiceChip:disabled{
   opacity: 1;
-  -webkit-text-fill-color: rgba(232,238,247,0.94);
+  -webkit-text-fill-color: rgba(232,238,247,0.92);
   cursor: default;
+}
+
+/* Playable voice-note chip is retired. Always hide it, regardless of
+   the dataset state JS may still set on legacy code paths. */
+.profileAuraVoiceChipBtn{
+  display: none !important;
 }
 
 /* Button form of the voice chip — same shell, but adds an icon, an

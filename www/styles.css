@@ -43,87 +43,25 @@ body.pageTransitioning{ opacity: 0; }
 body.booting .app{ visibility: hidden; }
 
 /* -------------------------------------------------------------------
- *  Pull-to-refresh indicator (Instagram-style)
- *
- *  Position-fixed pill that lives above the content. When the user
- *  pulls down at scrollTop=0, the JS handler updates `transform`
- *  (translateY) inline and rotates the spinner via `--ptrAngle`. The
- *  pill snaps to "armed" past the threshold (purple glow + small
- *  haptic) and to "refreshing" once the touch is released (continuous
- *  spinner + impact haptic).
- *
- *  CSS transitions are disabled while the user's finger is on the
- *  screen (`data-dragging="true"`), so the indicator follows the
- *  finger 1:1 instead of catching up. They re-engage on release so
- *  the snap-back and commit motion feel smooth.
+ *  Tap-active-tab to refresh — when the user taps the tab they're
+ *  already on, the route's data layer re-fetches and the tab icon
+ *  spins once so they get a visible confirmation. CSS only handles
+ *  the spin animation; the JS toggles `.isRefreshing`. The animation
+ *  duration matches the floor in `triggerTabRefresh()` (520ms) so a
+ *  too-fast network refresh still completes a visible rotation.
  * ----------------------------------------------------------------- */
-.ptrIndicator{
-  position: fixed;
-  top: 12px;
-  left: 50%;
-  width: 40px;
-  height: 40px;
-  border-radius: 999px;
-  background: rgba(20,24,34,0.78);
-  border: 1px solid rgba(255,255,255,0.10);
-  box-shadow: 0 6px 22px rgba(0,0,0,0.35);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transform: translate3d(-50%, -56px, 0);
-  pointer-events: none;
-  z-index: 9999;
-  transition:
-    transform 240ms cubic-bezier(0.22, 0.61, 0.36, 1),
-    opacity   200ms ease,
-    border-color 180ms ease,
-    box-shadow 180ms ease,
-    background-color 180ms ease;
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+.mobileTabbar a.isRefreshing .tabIco{
+  animation: tabRefreshSpin 0.85s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  transform-origin: 50% 50%;
 }
-.ptrIndicator[data-dragging="true"]{
-  transition: none;
-}
-.ptrIndicator[data-armed="true"]{
-  border-color: rgba(124,92,255,0.55);
-  box-shadow: 0 6px 22px rgba(124,92,255,0.32);
-  background: rgba(28,22,52,0.82);
-}
-.ptrSpinner{
-  width: 22px;
-  height: 22px;
-  color: rgba(244,247,255,0.92);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transform: rotate(var(--ptrAngle, 0deg));
-  transition: transform 90ms linear;
-}
-.ptrIndicator[data-dragging="true"] .ptrSpinner{
-  transition: none;
-}
-.ptrSpinnerIcon{
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-.ptrIndicator[data-refreshing="true"] .ptrSpinner{
-  animation: ptrSpinSpin 0.85s linear infinite;
-  transform: none;
-  transition: none;
-}
-@keyframes ptrSpinSpin{
+@keyframes tabRefreshSpin{
   0%   { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
 @media (prefers-reduced-motion: reduce){
-  .ptrIndicator{
-    transition: opacity 160ms ease;
-  }
-  .ptrIndicator[data-refreshing="true"] .ptrSpinner{
+  .mobileTabbar a.isRefreshing .tabIco{
     animation: none;
+    opacity: 0.6;
   }
 }
 

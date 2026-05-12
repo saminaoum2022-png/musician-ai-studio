@@ -8569,11 +8569,12 @@ input::placeholder, textarea::placeholder{
   display: flex;
   gap: 14px;
   overflow-x: auto;
-  /* iOS-safe horizontal scroll: no overflow-y constraint, no mask,
-     and momentum scrolling enabled. mask-image + scroll-snap on
-     WKWebView was eating the touch gesture, which is why the rows
-     felt frozen. */
+  /* iOS-safe horizontal scroll: pan-x tells WKWebView "this element
+     only handles horizontal swipes," so the page-scroll heuristic
+     doesn't eat the gesture. No mask, no snap — both were freezing
+     the row on iOS. Momentum scrolling enabled. */
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
   padding: 2px 2px 12px;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -8590,14 +8591,14 @@ input::placeholder, textarea::placeholder{
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.08);
   -webkit-tap-highlight-color: transparent;
-  transform: translateZ(0);
-  transition: transform 220ms ease, border-color 200ms ease;
+  transition: border-color 200ms ease;
+  /* Let the parent row capture the horizontal pan — poster only
+     handles tap. translateZ() here was creating its own layer and
+     swallowing scroll hit-tests in WKWebView. */
+  touch-action: manipulation;
 }
 .searchPoster:hover, .searchPoster:focus-visible{
   border-color: rgba(255,255,255,0.18);
-}
-.searchPoster:active{
-  transform: scale(0.985) translateZ(0);
 }
 .searchPosterArt{
   position: absolute;

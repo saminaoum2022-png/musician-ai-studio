@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514profileNotchPadReleasesPager";
+const APP_BUILD = "20260514removeLatestRelease";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -377,11 +377,6 @@ const els = {
   profilePreviewGenres: document.getElementById("profilePreviewGenres"),
   profilePreviewLinks: document.getElementById("profilePreviewLinks"),
   profileHubSharedList: document.getElementById("profileHubSharedList"),
-  profileHeroLatest: document.getElementById("profileHeroLatest"),
-  profileHeroArtImg: document.getElementById("profileHeroArtImg"),
-  profileHeroPlayBtn: document.getElementById("profileHeroPlayBtn"),
-  profileHeroTitle: document.getElementById("profileHeroTitle"),
-  profileHeroMeta: document.getElementById("profileHeroMeta"),
   // Liquid pulse redesign nodes
   profileAuraTopRow: document.getElementById("profileAuraTopRow"),
   profileAuraNameRow: document.getElementById("profileAuraNameRow"),
@@ -7069,7 +7064,6 @@ function setProfileEditing(on) {
   // don't repaint stale data right under the form.
   const sections = [
     els.profileActionRow,
-    els.profileHeroLatest,
     els.profileTopWeek,
   ];
   sections.forEach((node) => {
@@ -7345,44 +7339,8 @@ function shouldShowProfileHubSkeleton(items) {
   return true;
 }
 
-function renderProfileHero(items) {
-  const sec = els.profileHeroLatest;
-  const img = els.profileHeroArtImg;
-  const titleEl = els.profileHeroTitle;
-  const metaEl = els.profileHeroMeta;
-  const btn = els.profileHeroPlayBtn;
-  if (!sec || !img || !titleEl || !metaEl || !btn) return;
-  if (!items?.length) {
-    if (shouldShowProfileHubSkeleton(items)) {
-      sec.hidden = false;
-      sec.setAttribute("data-skeleton", "true");
-    } else {
-      sec.hidden = true;
-      sec.removeAttribute("data-skeleton");
-    }
-    return;
-  }
-  sec.removeAttribute("data-skeleton");
-  sec.hidden = false;
-  const latest = items[0];
-  const art = String(latest.artUrl || latest.creatorAvatar || "./assets/nabadai-logo.png");
-  img.src = art;
-  img.alt = String(latest.title || "Cover art").slice(0, 120);
-  titleEl.textContent = String(latest.title || "Untitled").trim() || "Untitled";
-  const bits = [];
-  const rel = typeof relativeTime === "function" ? relativeTime(latest.ts) : "";
-  if (rel) bits.push(rel);
-  const lk = Number(latest.likes || 0);
-  if (lk > 0) bits.push(`${lk} like${lk === 1 ? "" : "s"}`);
-  metaEl.textContent = bits.join(" · ");
-  sec.dataset.hubId = String(latest.id || "");
-  const play = () => {
-    const sid = String(latest.id || "");
-    if (sid) void playHubPostFromProfile(sid);
-  };
-  btn.onclick = play;
-  img.onclick = play;
-}
+/** Latest-release hero card removed from Profile UI. */
+function renderProfileHero(_items) {}
 
 function renderProfileHeartbeat(items) {
   const svg = els.profileHeartbeatSvg;
@@ -7682,11 +7640,16 @@ function renderProfileNabadCertBadge() {
 
 /* =================================================================
  *  "My Sound" — Profile sonic identity card.
- *  Distinct from the Sounds generator page (under #/sounds). This
- *  panel surfaces the user's voice timbre, favorite genres parsed
- *  from `activeProfile.genres`, and a small set of AI mood presets
- *  the user can toggle. Presets are stored client-side per user id
- *  for now (key: nabad:moodPresets:<uid>) until we add a column.
+ *  Distinct from the Sounds generator page (under #/sounds).
+ *
+ *  Sync model (why the card can feel instant):
+ *    - Voice timbre + favorite genres: read from `activeProfile` after
+ *      `supabaseLoadProfile()` / local merge; saved to Supabase
+ *      `profiles.voice_timbre` + `profiles.genres` on My Sound Save
+ *      (`saveMySoundDraft` → `supabaseUpsertProfile`).
+ *    - AI mood presets: still localStorage only (`nabad:moodPresets:<uid>`)
+ *      until a `profiles` column (or JSON field) is added and wired in
+ *      upsert/load — they never hit the network on read after first load.
  * ================================================================= */
 const MOOD_PRESETS = [
   {

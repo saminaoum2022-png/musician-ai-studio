@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514profileLibSkeleton";
+const APP_BUILD = "20260514logoutWipeCredits";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -4813,6 +4813,7 @@ function renderAuthStatus() {
   if (!els.authStatus) return;
   const email = authSession?.user?.email || "";
   const hasToken = Boolean(getSupabaseAuthToken());
+  const isAuthed = Boolean(email);
   let msg = email
     ? ""
     : hasToken
@@ -4824,10 +4825,20 @@ function renderAuthStatus() {
   if (els.authLoginControls) els.authLoginControls.style.display = email ? "none" : "";
   if (els.authLoggedInRow) els.authLoggedInRow.style.display = email ? "flex" : "none";
   if (els.authLoggedInEmail) els.authLoggedInEmail.textContent = email ? email : "Logged in.";
-  // The inline Aura email is controlled by edit mode (see
-  // renderProfilePreviewFromInputs / setProfileEditing). Don't override
-  // its visibility here, otherwise the email leaks into the public-feeling
-  // header even when the user isn't editing.
+  // Hide the Credits pill entirely when logged-out. A "0 credits" badge
+  // on a guest profile is meaningless and was where the previous user's
+  // balance kept leaking through (e.g. "326" after Logout). The pill
+  // is only relevant to the signed-in account that owns the balance.
+  if (els.profileCreditsLink) {
+    els.profileCreditsLink.style.display = isAuthed ? "" : "none";
+    els.profileCreditsLink.setAttribute("aria-hidden", isAuthed ? "false" : "true");
+  }
+  // Same idea for "Share profile" — a logged-out user has no profile
+  // worth sharing yet, and the @guest URL leaks the placeholder handle.
+  if (els.profileActionShare) {
+    els.profileActionShare.style.display = isAuthed ? "" : "none";
+  }
+  document.body.setAttribute("data-logged-in", isAuthed ? "true" : "false");
 }
 function resetProfileUiToGuest() {
   activeProfile = {
@@ -4846,23 +4857,43 @@ function resetProfileUiToGuest() {
   try { localStorage.setItem(PROFILE_KEY, JSON.stringify(activeProfile)); } catch {}
   if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = "@guest";
   if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = "";
-  // Bio left empty — the placeholder attribute drives the prompt copy.
   if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = "";
   if (els.profileIsPublic) els.profileIsPublic.checked = true;
   if (els.profileAvatarFile) els.profileAvatarFile.value = "";
-  // Reset hydrate flags so the next sign-in re-runs the cloud pull
-  // and the loading state appears for the new account.
   _libraryHydrateInFlight = false;
   _libraryHydrateCompleted = false;
   _lastUserSongInsertFailure = "";
   _lastLibraryPersistError = "";
   _lastLibraryPersistedCount = 0;
   invalidateLibraryMemCache();
+  // Wipe every personal balance/badge so a logged-out screen never
+  // leaks the previous account's state. Without this, the Profile
+  // credits pill kept showing the last balance (e.g. 326) after Logout
+  // because `paintCreditsDisplays()` only re-fires when something else
+  // changes credits. We also drop the admin Suno mirror and the
+  // separate Credits page balance display so flipping tabs doesn't
+  // bring the number back. The pill itself is hidden via the
+  // [data-logged-in] flag on <body> so a "0 credits" tag doesn't
+  // appear for guests — `renderAuthStatus()` flips that flag.
+  creditsState.balance = 0;
+  creditsState.ledger = [];
+  creditsState.isAdmin = false;
+  creditsState.loaded = false;
+  creditsState.lastError = "";
+  sunoCreditsLive = null;
+  paintCreditsDisplays();
+  try { renderCreditsLedger(); } catch {}
+  if (els.creditsAdminCard) els.creditsAdminCard.style.display = "none";
+  if (els.creditsHeroEmail) {
+    els.creditsHeroEmail.textContent = "";
+    els.creditsHeroEmail.style.display = "none";
+  }
   if (typeof setProfileHeaderLoading === "function") setProfileHeaderLoading(false);
   renderProfilePreviewFromInputs();
   renderProfileHubShared();
   setProfileEditing(false);
   renderLibrary();
+  renderAuthStatus();
   if (els.profilePersonaRow) els.profilePersonaRow.style.display = "none";
 }
 async function supabaseSendOtp(email) {

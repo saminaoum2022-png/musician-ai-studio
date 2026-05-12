@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514profileMySoundNeon";
+const APP_BUILD = "20260514mySoundModal";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -392,6 +392,15 @@ const els = {
   profileMySoundVoiceTraits: document.getElementById("profileMySoundVoiceTraits"),
   profileMySoundGenresList: document.getElementById("profileMySoundGenresList"),
   profileMySoundPresetsList: document.getElementById("profileMySoundPresetsList"),
+  mySoundModal: document.getElementById("mySoundModal"),
+  mySoundVoiceGrid: document.getElementById("mySoundVoiceGrid"),
+  mySoundGenresGrid: document.getElementById("mySoundGenresGrid"),
+  mySoundPresetsGrid: document.getElementById("mySoundPresetsGrid"),
+  mySoundCustomGenreInput: document.getElementById("mySoundCustomGenreInput"),
+  mySoundCustomGenreAdd: document.getElementById("mySoundCustomGenreAdd"),
+  btnMySoundClose: document.getElementById("btnMySoundClose"),
+  btnMySoundCancel: document.getElementById("btnMySoundCancel"),
+  btnMySoundSave: document.getElementById("btnMySoundSave"),
   profileIdentityLine: document.getElementById("profileIdentityLine"),
   profileHeroBio: document.getElementById("profileHeroBio"),
   // Spotify-x-Nabad redesign nodes
@@ -7406,15 +7415,9 @@ function shouldShowProfileHeaderSkeleton() {
 function renderProfileIdentityLine() {
   const el = els.profileIdentityLine;
   if (!el) return;
-  const timbreRaw = String(activeProfile?.voiceTimbre || "").trim();
-  const pretty = timbreRaw
-    ? timbreRaw.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
-    : "";
-  const genres = String(activeProfile?.genres || "")
-    .split(/[,|]/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .slice(0, 2);
+  // Voice timbre is now surfaced by the "My Sound" card; keep this
+  // inline line for persona only. If we ever want genres back here we
+  // can add them — but per latest mockup the row stays clean.
   const personaLabel = (() => {
     try {
       const lbl = document.getElementById("profilePersonaLabel")?.textContent?.trim();
@@ -7423,17 +7426,13 @@ function renderProfileIdentityLine() {
       return lbl;
     } catch { return ""; }
   })();
-  const parts = [];
-  if (pretty) parts.push(`<strong>${escapeHtml(pretty)}</strong>`);
-  genres.forEach((g) => parts.push(escapeHtml(g)));
-  if (personaLabel && parts.length < 3) parts.push(escapeHtml(personaLabel));
-  if (!parts.length) {
+  if (!personaLabel) {
     el.hidden = true;
     el.innerHTML = "";
     return;
   }
   el.hidden = false;
-  el.innerHTML = parts.join('<span class="profileIdentitySep" aria-hidden="true">·</span>');
+  el.innerHTML = escapeHtml(personaLabel);
 }
 
 /* =================================================================
@@ -7744,10 +7743,7 @@ function renderProfileMySound() {
     const addBtn = document.getElementById("profileMySoundAddGenreBtn");
     if (addBtn) {
       addBtn.addEventListener("click", () => {
-        try { setProfileEditing(true); } catch {}
-        try {
-          els.profilePreviewGenres?.scrollIntoView({ behavior: "smooth", block: "center" });
-        } catch {}
+        try { openMySoundModal(); } catch {}
       }, { once: true });
     }
   }
@@ -7767,6 +7763,196 @@ function renderProfileMySound() {
         btn.setAttribute("aria-pressed", now ? "true" : "false");
       });
     });
+  }
+}
+
+/* =================================================================
+ *  "My Sound" editor — modal popup. Edits voice timbre, favorite
+ *  genres, and AI mood presets in one place. Save commits to
+ *  `activeProfile`, persists via Supabase upsert, and re-renders
+ *  the Profile My Sound card.
+ * ================================================================= */
+const MY_SOUND_VOICES = [
+  { id: "bass",           label: "Bass" },
+  { id: "baritone",       label: "Baritone" },
+  { id: "tenor",          label: "Tenor" },
+  { id: "alto",           label: "Alto" },
+  { id: "mezzo_soprano",  label: "Mezzo-Soprano" },
+  { id: "soprano",        label: "Soprano" },
+];
+
+const MY_SOUND_GENRES = [
+  "Pop", "Rock", "Arabic", "Jazz", "Classical",
+  "Hip-Hop", "R&B", "Electronic", "Folk", "Latin",
+  "Country", "Soul", "Reggae", "Indie", "Metal",
+  "Dabke", "Khaleeji", "Tarab", "Afrobeats", "K-Pop",
+];
+
+let _mySoundDraft = null;
+function _normalizeGenreList(rawCsv) {
+  return String(rawCsv || "")
+    .split(/[,|]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+function _genreKey(g) {
+  return String(g || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function openMySoundModal() {
+  const modal = els.mySoundModal;
+  if (!modal) return;
+  if (!authSession?.user?.id) {
+    try { showToast("Sign in to set your sound."); } catch {}
+    return;
+  }
+  _mySoundDraft = {
+    voiceTimbre: String(activeProfile?.voiceTimbre || "").trim().toLowerCase(),
+    genres: _normalizeGenreList(activeProfile?.genres),
+    moodPresets: new Set(getMoodPresetSet()),
+  };
+  renderMySoundModalContents();
+  modal.style.display = "flex";
+  modal.setAttribute("aria-hidden", "false");
+  try { document.body.style.overflow = "hidden"; } catch {}
+}
+function closeMySoundModal() {
+  const modal = els.mySoundModal;
+  if (!modal) return;
+  modal.style.display = "none";
+  modal.setAttribute("aria-hidden", "true");
+  _mySoundDraft = null;
+  try { document.body.style.overflow = ""; } catch {}
+}
+
+function renderMySoundModalContents() {
+  if (!_mySoundDraft) return;
+  const draft = _mySoundDraft;
+
+  const voiceGrid = els.mySoundVoiceGrid;
+  if (voiceGrid) {
+    voiceGrid.innerHTML = MY_SOUND_VOICES.map((v) => {
+      const checked = draft.voiceTimbre === v.id ? "true" : "false";
+      const traits = TIMBRE_TRAITS[v.id] || "";
+      return `<button type="button" class="mySoundVoiceOption" role="radio" aria-checked="${checked}" data-voice-id="${v.id}">
+        <span class="mySoundVoiceOptionName">${escapeHtml(v.label)}</span>
+        ${traits ? `<span class="mySoundVoiceOptionTraits">${escapeHtml(traits)}</span>` : ""}
+      </button>`;
+    }).join("");
+    voiceGrid.querySelectorAll(".mySoundVoiceOption").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-voice-id") || "";
+        if (!id) return;
+        if (draft.voiceTimbre === id) {
+          draft.voiceTimbre = "";
+        } else {
+          draft.voiceTimbre = id;
+        }
+        voiceGrid.querySelectorAll(".mySoundVoiceOption").forEach((b) => {
+          b.setAttribute(
+            "aria-checked",
+            b.getAttribute("data-voice-id") === draft.voiceTimbre ? "true" : "false",
+          );
+        });
+      });
+    });
+  }
+
+  const genresGrid = els.mySoundGenresGrid;
+  if (genresGrid) {
+    const selectedKeys = new Set(draft.genres.map(_genreKey));
+    const preset = MY_SOUND_GENRES.map((g) => ({ key: _genreKey(g), label: g, custom: false }));
+    const customs = draft.genres
+      .filter((g) => !preset.some((p) => p.key === _genreKey(g)))
+      .map((g) => ({ key: _genreKey(g), label: g, custom: true }));
+    const all = [...preset, ...customs];
+    genresGrid.innerHTML = all.map((g) => {
+      const pressed = selectedKeys.has(g.key) ? "true" : "false";
+      const cls = g.custom
+        ? "mySoundGenreOption mySoundGenreOption--custom"
+        : "mySoundGenreOption";
+      return `<button type="button" class="${cls}" data-genre-label="${escapeHtml(g.label)}" data-genre-key="${escapeHtml(g.key)}" aria-pressed="${pressed}">
+        ${genreIconSvg(g.label)}
+        <span>${escapeHtml(g.label)}</span>
+        ${g.custom ? `<span class="mySoundGenreOptionRemove" aria-hidden="true" data-remove="${escapeHtml(g.key)}">×</span>` : ""}
+      </button>`;
+    }).join("");
+    genresGrid.querySelectorAll(".mySoundGenreOption").forEach((btn) => {
+      btn.addEventListener("click", (ev) => {
+        const target = ev.target;
+        if (target instanceof Element && target.getAttribute("data-remove")) {
+          const removeKey = target.getAttribute("data-remove") || "";
+          draft.genres = draft.genres.filter((g) => _genreKey(g) !== removeKey);
+          renderMySoundModalContents();
+          return;
+        }
+        const label = btn.getAttribute("data-genre-label") || "";
+        const key = btn.getAttribute("data-genre-key") || "";
+        if (!label) return;
+        const has = draft.genres.some((g) => _genreKey(g) === key);
+        if (has) {
+          draft.genres = draft.genres.filter((g) => _genreKey(g) !== key);
+        } else {
+          draft.genres.push(label);
+        }
+        btn.setAttribute("aria-pressed", has ? "false" : "true");
+      });
+    });
+  }
+
+  const presetsGrid = els.mySoundPresetsGrid;
+  if (presetsGrid) {
+    presetsGrid.innerHTML = MOOD_PRESETS.map((p) => {
+      const pressed = draft.moodPresets.has(p.id) ? "true" : "false";
+      return `<button type="button" class="mySoundPresetOption" data-preset-id="${p.id}" aria-pressed="${pressed}">
+        ${p.svg}<span>${escapeHtml(p.label)}</span>
+      </button>`;
+    }).join("");
+    presetsGrid.querySelectorAll(".mySoundPresetOption").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-preset-id") || "";
+        if (!id) return;
+        if (draft.moodPresets.has(id)) draft.moodPresets.delete(id);
+        else draft.moodPresets.add(id);
+        btn.setAttribute("aria-pressed", draft.moodPresets.has(id) ? "true" : "false");
+      });
+    });
+  }
+}
+
+function addCustomGenreToDraft() {
+  if (!_mySoundDraft) return;
+  const input = els.mySoundCustomGenreInput;
+  if (!input) return;
+  const raw = String(input.value || "").trim();
+  if (!raw) return;
+  const key = _genreKey(raw);
+  if (!key) return;
+  const exists = _mySoundDraft.genres.some((g) => _genreKey(g) === key);
+  if (!exists) _mySoundDraft.genres.push(raw);
+  input.value = "";
+  renderMySoundModalContents();
+}
+
+async function saveMySoundDraft() {
+  if (!_mySoundDraft) return closeMySoundModal();
+  const draft = _mySoundDraft;
+  activeProfile.voiceTimbre = draft.voiceTimbre || "";
+  activeProfile.genres = draft.genres.join(", ");
+  saveMoodPresets(draft.moodPresets);
+  _moodPresetsCache = new Set(draft.moodPresets);
+  try { localStorage.setItem(PROFILE_KEY, JSON.stringify(activeProfile)); } catch {}
+  if (els.profilePreviewTimbreInput) {
+    els.profilePreviewTimbreInput.value = activeProfile.voiceTimbre;
+  }
+  try { renderProfileMySound(); } catch {}
+  try { renderProfileIdentityLine(); } catch {}
+  closeMySoundModal();
+  try { showToast("My Sound saved.", { icon: "✓" }); } catch {}
+  try {
+    await supabaseUpsertProfile(activeProfile);
+  } catch (e) {
+    try { showToast("Saved on this device. Cloud sync failed."); } catch {}
   }
 }
 
@@ -16226,13 +16412,41 @@ if (els.btnProfileEdit) {
 }
 if (els.profileMySoundEditBtn) {
   els.profileMySoundEditBtn.addEventListener("click", () => {
-    try { setProfileEditing(true); } catch {}
-    try {
-      els.profilePreviewTimbreInput?.scrollIntoView({ behavior: "smooth", block: "center" });
-      els.profilePreviewTimbreInput?.focus();
-    } catch {}
+    try { openMySoundModal(); } catch {}
   });
 }
+if (els.btnMySoundClose) {
+  els.btnMySoundClose.addEventListener("click", () => closeMySoundModal());
+}
+if (els.btnMySoundCancel) {
+  els.btnMySoundCancel.addEventListener("click", () => closeMySoundModal());
+}
+if (els.btnMySoundSave) {
+  els.btnMySoundSave.addEventListener("click", () => {
+    saveMySoundDraft().catch(() => {});
+  });
+}
+if (els.mySoundModal) {
+  els.mySoundModal.addEventListener("click", (ev) => {
+    if (ev.target === els.mySoundModal) closeMySoundModal();
+  });
+}
+if (els.mySoundCustomGenreAdd) {
+  els.mySoundCustomGenreAdd.addEventListener("click", () => addCustomGenreToDraft());
+}
+if (els.mySoundCustomGenreInput) {
+  els.mySoundCustomGenreInput.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      addCustomGenreToDraft();
+    }
+  });
+}
+document.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape" && els.mySoundModal && els.mySoundModal.style.display !== "none") {
+    closeMySoundModal();
+  }
+});
 if (els.profileUsernamePrompt) {
   // Tap the soft prompt → enter edit mode and select the username
   // text so they can just start typing their handle of choice.

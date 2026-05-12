@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514profileCenterCompact";
+const APP_BUILD = "20260514profileNotchPadReleasesPager";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -5075,6 +5075,7 @@ function resetProfileUiToGuest() {
     soundCertified: false,
   };
   _moodPresetsCache = null;
+  resetProfileReleasesPagination();
   try { localStorage.setItem(PROFILE_KEY, JSON.stringify(activeProfile)); } catch {}
   if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = "@guest";
   if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = "";
@@ -8465,9 +8466,24 @@ async function playHubPostFromProfile(postId) {
   }
 }
 
+/** Pagination state for "All releases" on the Profile page. Renders
+ *  the first PROFILE_RELEASES_PAGE_SIZE rows; the user reveals more
+ *  via the Load more button. Resets whenever the underlying item set
+ *  changes (re-login, share, unpublish). */
+const PROFILE_RELEASES_PAGE_SIZE = 10;
+let _profileReleasesShown = PROFILE_RELEASES_PAGE_SIZE;
+function resetProfileReleasesPagination() {
+  _profileReleasesShown = PROFILE_RELEASES_PAGE_SIZE;
+}
+
 function renderProfileHubShared() {
   if (!els.profileHubSharedList) return;
-  const items = getProfileOwnerHubItems().slice(0, 30);
+  const allItems = getProfileOwnerHubItems();
+  if (_profileReleasesShown > Math.max(allItems.length, PROFILE_RELEASES_PAGE_SIZE)) {
+    _profileReleasesShown = PROFILE_RELEASES_PAGE_SIZE;
+  }
+  const shownCount = Math.min(_profileReleasesShown, allItems.length);
+  const items = allItems.slice(0, shownCount);
   renderProfileOwnStats();
   // Liquid pulse + identity line + hero bio fire first so the hero is
   // painted before the scrollable music sections.
@@ -8483,15 +8499,15 @@ function renderProfileHubShared() {
   try { applyProfileAuraVisualTint(); } catch {}
   const countEl = document.getElementById("profileOwnSongCount");
   if (countEl) {
-    if (items.length) {
-      countEl.textContent = `${items.length} ${items.length === 1 ? "song" : "songs"}`;
+    if (allItems.length) {
+      countEl.textContent = `${allItems.length} ${allItems.length === 1 ? "song" : "songs"}`;
       countEl.hidden = false;
     } else {
       countEl.textContent = "";
       countEl.hidden = true;
     }
   }
-  if (!items.length) {
+  if (!allItems.length) {
     if (shouldShowProfileHubSkeleton(items)) {
       const skelRows = [0, 1, 2, 3].map((i) => `
         <li class="libRow libRowSkeleton" style="--libSkelDelay:${(i * 0.08).toFixed(2)}s" aria-hidden="true">
@@ -8522,6 +8538,10 @@ function renderProfileHubShared() {
     `;
     return;
   }
+  const remaining = Math.max(0, allItems.length - shownCount);
+  const loadMoreHtml = remaining > 0
+    ? `<div class="profileReleasesLoadMoreRow"><button type="button" id="profileReleasesLoadMore" class="profileReleasesLoadMore" aria-label="Load more releases">Load more<span class="profileReleasesLoadMoreCount">${remaining}</span></button></div>`
+    : "";
   // Reuse the Library row markup so the visual language stays consistent
   // (cover · title · meta · ▶ badge on hover) and add a ⋯ menu with
   // "Unpublish from Hub" — Profile is the publishing dashboard.
@@ -8564,7 +8584,15 @@ function renderProfileHubShared() {
         `;
       }).join("")}
     </ul>
+    ${loadMoreHtml}
   `;
+  const loadMoreBtn = document.getElementById("profileReleasesLoadMore");
+  if (loadMoreBtn) {
+    loadMoreBtn.addEventListener("click", () => {
+      _profileReleasesShown += PROFILE_RELEASES_PAGE_SIZE;
+      renderProfileHubShared();
+    }, { once: true });
+  }
   els.profileHubSharedList.querySelectorAll("[data-profile-hub-play]").forEach((b) => {
     b.addEventListener("click", () => {
       const sid = b.getAttribute("data-profile-hub-play");
@@ -16804,11 +16832,30 @@ if (els.profileAvatarFile) {
       // it's gone" was reproducible after a hard restart.
       saveProfile(activeProfile);
       renderProfilePreviewFromInputs();
-      showToast("Photo saved", { icon: "✓", durationMs: 1800 });
-      void scheduleProfileCloudSync();
+      // Optimistic toast — UI already updated. Cloud sync happens
+      // inline below so a reload re-fetches the same photo from
+      // Supabase (the prior debounced path could be dropped if the
+      // app was closed before the 600ms timer fired).
+      showToast("Photo saved", { icon: "✓", durationMs: 1400 });
+      // Cancel any pending debounced sync — we're about to flush.
+      if (_profileCloudSyncTimer) {
+        clearTimeout(_profileCloudSyncTimer);
+        _profileCloudSyncTimer = null;
+      }
+      if (authSession?.user?.id) {
+        try {
+          await supabaseUpsertProfile(activeProfile);
+        } catch (e) {
+          console.warn("[avatar] cloud sync failed; will retry on next Save", e);
+          showToast("Photo saved locally — cloud will retry on Save", { durationMs: 3200 });
+          void scheduleProfileCloudSync({ delayMs: 2000 });
+        }
+      }
     } catch (e) {
       console.error("[avatar] failed to read photo", e);
       showToast(`Could not load photo: ${e?.message || "error"}`, { icon: "!", durationMs: 3200 });
+    } finally {
+      try { if (els.profileAvatarFile) els.profileAvatarFile.value = ""; } catch {}
     }
   });
 }

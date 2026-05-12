@@ -3879,7 +3879,13 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 14px 4px 6px;
+  /* Top padding must clear the absolute-positioned toolbar (Cancel /
+     Save / Settings) AND the credits pill, plus leave breathing room
+     above the centered avatar so it never feels glued to the iOS
+     notch / dynamic island. The `.app` shell already adds
+     env(safe-area-inset-top); this is the in-section spacing on top
+     of that. */
+  padding: 60px 8px 6px;
   margin-bottom: 0;
   max-width: 100%;
   /* Intentionally NO overflow:hidden / NO border-radius. The glow
@@ -5139,9 +5145,10 @@ body[data-route="profile"] .profileAuraGlow{
 .profileAuraStat--link:active{ transform: scale(0.98); }
 
 @media (max-width: 440px){
-  .profileAura{ padding: 14px 14px 4px; }
+  .profileAura{ padding: 60px 6px 4px; }
   .profileAuraIdentity{ padding: 0; }
-  .profileAuraToolbar{ top: 10px; right: 10px; }
+  .profileAuraToolbar{ top: 12px; right: 10px; }
+  .profileAura .profileCreditsPill--inline{ left: 10px; }
   .profileAuraNameInput{ font-size: 18px; max-width: min(100%, 260px); }
   .profileAuraStatStrip{ padding: 8px 12px; gap: 8px; }
   .profileAuraStat strong,
@@ -5226,20 +5233,66 @@ body[data-route="profile"] .profileAuraGlow{
   color: #cfe9ff;
   letter-spacing: 0.02em;
 }
-/* Songs block — full-bleed, mirrors Library's aesthetic. */
+/* Songs block — full-bleed, mirrors Library's aesthetic. Horizontal
+   padding matches .profileMySound and .profileAura so the three
+   sections share the same left/right edge on mobile. */
 .profileSongsBlock{
   display: flex;
   flex-direction: column;
+  padding: 0 6px;
 }
 .profileSongsHeader{
   margin: 0 0 10px;
-  padding: 4px 4px 0;
+  padding: 4px 0 0;
 }
 .profileSongsHeader h2{
   margin: 0 0 6px;
 }
 .profileSongsHeader .libraryCount{
   margin-top: 8px;
+}
+/* Load more pill — sits below the 10-row page of releases. The number
+   on the right tells the user exactly how many more shares are
+   waiting; tapping reveals the next 10 (handler is in app.js). */
+.profileReleasesLoadMoreRow{
+  display: flex;
+  justify-content: center;
+  margin: 14px 0 4px;
+}
+.profileReleasesLoadMore{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(124, 92, 255, 0.30);
+  background: linear-gradient(180deg, rgba(124, 92, 255, 0.12), rgba(124, 92, 255, 0.04));
+  color: rgba(232, 238, 247, 0.92);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 140ms ease, border-color 140ms ease, transform 120ms ease;
+}
+.profileReleasesLoadMore:hover{
+  background: linear-gradient(180deg, rgba(124, 92, 255, 0.20), rgba(35, 213, 171, 0.08));
+  border-color: rgba(124, 92, 255, 0.50);
+}
+.profileReleasesLoadMore:active{ transform: scale(0.98); }
+.profileReleasesLoadMoreCount{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  background: rgba(124, 92, 255, 0.35);
+  color: #fff;
+  letter-spacing: 0.02em;
 }
 /* Account block — quiet, unframed; sits as its own page region. */
 .profileAccountBlock{
@@ -8214,6 +8267,7 @@ input::placeholder, textarea::placeholder{
 /* ---------- Profile — "My Sound" sonic-identity card (compact) ---------- */
 .profileMySound{
   margin: 14px 0 6px;
+  padding: 0 6px;
 }
 .profileMySoundHeader{
   display: flex;

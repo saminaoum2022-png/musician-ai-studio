@@ -8066,106 +8066,98 @@ input::placeholder, textarea::placeholder{
   display: none !important;
 }
 
-/* ---------- Profile avatar — neon ring + emanating waveform ----------
-   Mockup energy: thick purple glow ring around the photo and a row of
-   gradient bars trailing to the right like the avatar is broadcasting.
-   Bars use CSS vars so each one has a different height + phase. */
-.profileAuraAvatarWrapNeon{
-  overflow: visible;
-  box-shadow:
-    0 0 0 1px rgba(124,92,255,0.35),
-    0 0 30px -4px rgba(124,92,255,0.55),
-    0 0 60px -10px rgba(35,213,171,0.35);
+/* ---------- Profile avatar — centered stage, static swirl + waves ----------
+   Mockup: photo centered; organic purple→teal swirl around the circle;
+   horizontal EQ bars behind the head, fading at screen edges. All
+   static — no spin, no bar animation (no "live" visualizer). */
+.profileAuraTopRowNeon{
+  width: 100%;
+  justify-content: center;
+  margin-left: auto;
+  margin-right: auto;
 }
-.profileAuraRingNeon{
-  inset: -4px;
-  padding: 2px;
-  background: conic-gradient(
-    from 0deg,
-    rgba(124,92,255,0.95),
-    rgba(90,140,255,0.85),
-    rgba(35,213,171,0.85),
-    rgba(124,92,255,0.95)
-  );
-  opacity: 1;
-  filter: drop-shadow(0 0 12px rgba(124,92,255,0.55));
-  animation: profileAuraRingNeonSpin 14s linear infinite;
-}
-@keyframes profileAuraRingNeonSpin{
-  to { transform: rotate(360deg); }
-}
-@media (prefers-reduced-motion: reduce){
-  .profileAuraRingNeon{ animation: none; }
-}
-.profileAuraWaveform{
-  position: absolute;
-  left: calc(100% + 14px);
-  top: 50%;
-  transform: translateY(-50%);
+.profileAuraAvatarStage{
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-height: 118px;
   display: flex;
   align-items: center;
-  gap: 4px;
-  height: 60%;
-  width: 60vw;
-  max-width: 280px;
+  justify-content: center;
+  padding: 10px 0 6px;
+}
+.profileAuraWaveformBand{
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(104vw, 520px);
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.88;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 10%, #000 90%, transparent 100%);
+          mask-image: linear-gradient(90deg, transparent 0%, #000 10%, #000 90%, transparent 100%);
+}
+.profileAuraWaveBar{
+  flex: 0 0 auto;
+  width: 2.5px;
+  border-radius: 2px;
+  align-self: center;
+  height: 44%;
+  background: linear-gradient(180deg, rgba(155,124,255,0.92) 0%, rgba(90,140,255,0.75) 45%, rgba(35,213,171,0.88) 100%);
+  box-shadow: 0 0 10px rgba(124,92,255,0.35);
+}
+.profileAuraWaveBar:nth-child(8n+1){ height: 32%; }
+.profileAuraWaveBar:nth-child(8n+2){ height: 58%; }
+.profileAuraWaveBar:nth-child(8n+3){ height: 42%; }
+.profileAuraWaveBar:nth-child(8n+4){ height: 76%; }
+.profileAuraWaveBar:nth-child(8n+5){ height: 50%; }
+.profileAuraWaveBar:nth-child(8n+6){ height: 68%; }
+.profileAuraWaveBar:nth-child(8n+7){ height: 36%; }
+.profileAuraWaveBar:nth-child(8n+8){ height: 62%; }
+.profileAuraAvatarWrapNeon{
+  position: relative;
+  z-index: 2;
+  overflow: visible;
+  margin-bottom: 4px;
+  box-shadow:
+    0 0 0 1px rgba(124,92,255,0.22),
+    0 0 28px -6px rgba(124,92,255,0.45),
+    0 0 48px -12px rgba(35,213,171,0.28);
+}
+.profileAuraSwirlSvg{
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(100% + 34px);
+  height: calc(100% + 34px);
+  transform: translate(-50%, -50%);
   pointer-events: none;
   z-index: 0;
-  mask-image: linear-gradient(90deg, #000 0%, #000 70%, transparent 100%);
-  -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 70%, transparent 100%);
+  filter:
+    drop-shadow(0 0 10px rgba(124,92,255,0.55))
+    drop-shadow(0 0 18px rgba(35,213,171,0.28));
 }
-.profileAuraWaveform > span{
-  flex: 1 1 0;
-  min-width: 2px;
-  border-radius: 3px;
-  background: linear-gradient(180deg, #7c5cff 0%, #5a8cff 50%, #23d5ab 100%);
-  filter: drop-shadow(0 0 6px rgba(124,92,255,0.55));
-  animation: profileAuraWaveformPulse 1.6s ease-in-out infinite;
-  opacity: 0.85;
+.profileAuraAvatarWrapNeon .profileAuraAvatar{
+  position: relative;
+  z-index: 1;
 }
-.profileAuraWaveform > span:nth-child(1)  { --h: 22%; animation-delay: -0.05s; }
-.profileAuraWaveform > span:nth-child(2)  { --h: 38%; animation-delay: -0.15s; }
-.profileAuraWaveform > span:nth-child(3)  { --h: 58%; animation-delay: -0.30s; }
-.profileAuraWaveform > span:nth-child(4)  { --h: 82%; animation-delay: -0.45s; }
-.profileAuraWaveform > span:nth-child(5)  { --h: 68%; animation-delay: -0.55s; }
-.profileAuraWaveform > span:nth-child(6)  { --h: 92%; animation-delay: -0.70s; }
-.profileAuraWaveform > span:nth-child(7)  { --h: 74%; animation-delay: -0.80s; }
-.profileAuraWaveform > span:nth-child(8)  { --h: 48%; animation-delay: -0.20s; }
-.profileAuraWaveform > span:nth-child(9)  { --h: 64%; animation-delay: -0.65s; }
-.profileAuraWaveform > span:nth-child(10) { --h: 78%; animation-delay: -0.95s; }
-.profileAuraWaveform > span:nth-child(11) { --h: 54%; animation-delay: -0.10s; }
-.profileAuraWaveform > span:nth-child(12) { --h: 88%; animation-delay: -0.60s; }
-.profileAuraWaveform > span:nth-child(13) { --h: 36%; animation-delay: -0.40s; }
-.profileAuraWaveform > span:nth-child(14) { --h: 60%; animation-delay: -0.25s; }
-.profileAuraWaveform > span:nth-child(15) { --h: 84%; animation-delay: -0.85s; }
-.profileAuraWaveform > span:nth-child(16) { --h: 46%; animation-delay: -0.50s; }
-.profileAuraWaveform > span:nth-child(17) { --h: 70%; animation-delay: -0.35s; }
-.profileAuraWaveform > span:nth-child(18) { --h: 56%; animation-delay: -0.75s; }
-.profileAuraWaveform > span:nth-child(19) { --h: 40%; animation-delay: -0.18s; }
-.profileAuraWaveform > span:nth-child(20) { --h: 64%; animation-delay: -0.90s; }
-.profileAuraWaveform > span:nth-child(21) { --h: 32%; animation-delay: -0.12s; }
-.profileAuraWaveform > span:nth-child(22) { --h: 50%; animation-delay: -0.42s; }
-.profileAuraWaveform > span:nth-child(23) { --h: 28%; animation-delay: -0.62s; }
-.profileAuraWaveform > span:nth-child(24) { --h: 44%; animation-delay: -0.22s; }
-.profileAuraWaveform > span:nth-child(25) { --h: 36%; animation-delay: -0.52s; }
-.profileAuraWaveform > span:nth-child(26) { --h: 24%; animation-delay: -0.82s; }
-.profileAuraWaveform > span:nth-child(27) { --h: 30%; animation-delay: -0.32s; }
-.profileAuraWaveform > span:nth-child(28) { --h: 20%; animation-delay: -0.92s; }
-.profileAuraWaveform > span:nth-child(29) { --h: 26%; animation-delay: -0.08s; }
-.profileAuraWaveform > span:nth-child(30) { --h: 18%; animation-delay: -0.48s; }
-@keyframes profileAuraWaveformPulse{
-  0%   { height: calc(var(--h, 50%) * 0.45); opacity: 0.55; }
-  50%  { height: var(--h, 50%);               opacity: 0.95; }
-  100% { height: calc(var(--h, 50%) * 0.45); opacity: 0.55; }
+.profileAuraAvatarWrapNeon .profileAuraAvatarSkeleton{
+  z-index: 3;
 }
-@media (prefers-reduced-motion: reduce){
-  .profileAuraWaveform > span{
-    animation: none;
-    height: var(--h, 50%);
-    opacity: 0.85;
-  }
+.profileAuraAvatarWrapNeon .profileAuraAvatarHint{
+  z-index: 4;
 }
-.profileAuraEditing .profileAuraWaveform{
+.profileAuraEditing .profileAuraWaveformBand{
   display: none;
+}
+.profileAuraEditing .profileAuraSwirlSvg{
+  opacity: 0.35;
 }
 
 /* ---------- Profile — "My Sound" sonic-identity card ---------- */

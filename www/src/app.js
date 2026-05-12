@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514profileAvatarCenterSwirl";
+const APP_BUILD = "20260514profileAvatarCleanRing";
 
 (() => {
   const f = document.getElementById("footerBuild");

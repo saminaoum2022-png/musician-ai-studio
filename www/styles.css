@@ -8546,6 +8546,8 @@ input::placeholder, textarea::placeholder{
   display: flex;
   flex-direction: column;
   gap: 10px;
+  max-width: 100%;
+  overflow: hidden;
 }
 .searchShelf.isDimmed{
   opacity: 0.32;
@@ -8566,36 +8568,36 @@ input::placeholder, textarea::placeholder{
   color: #e8eef7;
 }
 .searchShelfRow{
+  /* Same pattern as `.profileTopWeekScroll`, which is the proven-working
+     horizontal carousel in the app. The combination of `overflow-y: hidden`
+     and `scroll-snap-type` on iOS WKWebView is what *unlocks* the touch
+     gesture; without them, the page absorbs the swipe. */
   display: flex;
   gap: 14px;
   overflow-x: auto;
-  /* iOS-safe horizontal scroll: pan-x tells WKWebView "this element
-     only handles horizontal swipes," so the page-scroll heuristic
-     doesn't eat the gesture. No mask, no snap — both were freezing
-     the row on iOS. Momentum scrolling enabled. */
+  overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
+  scroll-snap-type: x mandatory;
   padding: 2px 2px 12px;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  max-width: 100%;
 }
 .searchShelfRow::-webkit-scrollbar{ display: none; }
 .searchPoster{
-  flex: 0 0 auto;
-  position: relative;
+  flex: 0 0 168px;
   width: 168px;
   height: 230px;
+  position: relative;
   border-radius: 18px;
   overflow: hidden;
   cursor: pointer;
+  scroll-snap-align: start;
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.08);
+  padding: 0;
   -webkit-tap-highlight-color: transparent;
   transition: border-color 200ms ease;
-  /* Let the parent row capture the horizontal pan — poster only
-     handles tap. translateZ() here was creating its own layer and
-     swallowing scroll hit-tests in WKWebView. */
-  touch-action: manipulation;
 }
 .searchPoster:hover, .searchPoster:focus-visible{
   border-color: rgba(255,255,255,0.18);
@@ -8873,7 +8875,7 @@ input::placeholder, textarea::placeholder{
   .searchShelfTitle{ font-size: 16px; }
   /* Smaller posters so the next-card peek is obvious — feed reads
      as a scrollable carousel, not a cropped grid. */
-  .searchPoster{ width: 138px; height: 188px; border-radius: 16px; }
+  .searchPoster{ flex: 0 0 138px; width: 138px; height: 188px; border-radius: 16px; }
   .searchPosterTitle{ font-size: 14px; }
   .searchPosterSub{ font-size: 10px; }
   .searchPosterCta{ font-size: 10px; margin-top: 4px; }

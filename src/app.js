@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514profileAvatarCleanRing";
+const APP_BUILD = "20260514profileAvatarPulseNa";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -7985,7 +7985,15 @@ function renderProfilePreviewFromInputs() {
     }
   }
   if (els.profilePreviewAvatar) {
-    els.profilePreviewAvatar.src = activeProfile.avatar || "./assets/nabadai-logo.png";
+    const raw = String(activeProfile.avatar || "").trim();
+    const isReal = raw && !/nabadai-logo\.png(?:$|\?)/.test(raw);
+    if (isReal) {
+      els.profilePreviewAvatar.src = raw;
+      els.profilePreviewAvatar.removeAttribute("data-empty");
+    } else {
+      els.profilePreviewAvatar.removeAttribute("src");
+      els.profilePreviewAvatar.setAttribute("data-empty", "true");
+    }
   }
   applyProfileAuraVisualTint();
   renderProfileOwnStats();

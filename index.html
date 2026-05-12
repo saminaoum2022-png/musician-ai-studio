@@ -39,7 +39,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260514profileAvatarCleanRing" />
+    <link rel="stylesheet" href="./styles.css?v=20260514profileAvatarPulseNa" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1014,32 +1014,18 @@
                    was retired — it didn't read clearly and felt off the
                    app's aesthetic. Skeleton shimmer wraps the avatar and
                    name on cold opens until the real data resolves. -->
-              <div class="profileAuraTopRow profileAuraTopRowNeon" id="profileAuraTopRow" data-loading="false">
-                <div class="profileAuraAvatarStage">
-                  <div class="profileAuraWaveformBand" aria-hidden="true">
-                    <span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span><span class="profileAuraWaveBar"></span>
-                  </div>
-                  <div class="profileAuraAvatarWrap profileAuraAvatarWrapNeon" id="profileAuraAvatarWrap">
-                    <svg class="profileAuraSwirlSvg" viewBox="0 0 140 140" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">
-                      <defs>
-                        <linearGradient id="profileAuraSwirlGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%"   stop-color="#9b7cff"/>
-                          <stop offset="50%"  stop-color="#5a8cff"/>
-                          <stop offset="100%" stop-color="#23d5ab"/>
-                        </linearGradient>
-                      </defs>
-                      <circle cx="70" cy="70" r="60" fill="none" stroke="url(#profileAuraSwirlGrad)" stroke-width="4.5" stroke-linecap="round"/>
-                    </svg>
-                    <img
-                      id="profilePreviewAvatar"
-                      class="profileAuraAvatar"
-                      src="./assets/nabadai-logo.png"
-                      alt="Your avatar"
-                      draggable="false"
-                    />
-                    <span class="profileAuraAvatarSkeleton" aria-hidden="true"></span>
-                    <span id="profileAvatarEditHint" class="profileAuraAvatarHint" style="display:none">Photo</span>
-                  </div>
+              <div class="profileAuraTopRow profileAuraTopRowCentered" id="profileAuraTopRow" data-loading="false">
+                <div class="profileAuraAvatarWrap profileAuraAvatarWrapNeon" id="profileAuraAvatarWrap">
+                  <span class="profileAuraRing profileAuraRingPulse" aria-hidden="true"></span>
+                  <img
+                    id="profilePreviewAvatar"
+                    class="profileAuraAvatar"
+                    alt="Your avatar"
+                    draggable="false"
+                  />
+                  <span id="profileAvatarFallback" class="profileAuraAvatarFallback" aria-hidden="true">Na</span>
+                  <span class="profileAuraAvatarSkeleton" aria-hidden="true"></span>
+                  <span id="profileAvatarEditHint" class="profileAuraAvatarHint" style="display:none">Photo</span>
                 </div>
               </div>
 
@@ -2096,6 +2082,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260514profileAvatarCleanRing"></script>
+    <script type="module" src="./src/app.js?v=20260514profileAvatarPulseNa"></script>
   </body>
 </html>

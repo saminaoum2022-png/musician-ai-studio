@@ -7927,6 +7927,148 @@ input::placeholder, textarea::placeholder{
   margin-top: 4px;
 }
 
+/* ---------- Sounds — neon studio treatment (mockup-inspired) ---------- */
+.soundsPageNeon{
+  position: relative;
+  isolation: isolate;
+  padding-top: 8px;
+}
+.soundsNeonDecor{
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: min(120%, 520px);
+  height: 200px;
+  transform: translateX(-50%);
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 0%, rgba(124,92,255,0.22), transparent 72%),
+    radial-gradient(ellipse 55% 45% at 18% 18%, rgba(35,213,171,0.12), transparent 68%),
+    radial-gradient(ellipse 50% 40% at 88% 22%, rgba(124,92,255,0.14), transparent 70%);
+  opacity: 0.95;
+  filter: blur(0px);
+}
+.soundsPageNeon > *:not(.soundsNeonDecor){
+  position: relative;
+  z-index: 1;
+}
+.soundsHeroHeader{
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.soundsHeroTitleBlock{
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.soundsHeroTitle{
+  margin: 0;
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  background: linear-gradient(115deg, #f4f0ff 0%, #c9b8ff 38%, #7cf0e0 88%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 42px rgba(124,92,255,0.25);
+}
+.soundsHeroTagline{
+  margin: 4px 0 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(124,92,255,0.55);
+}
+.soundsLeadNeon{
+  color: rgba(232,238,247,0.72);
+  border-left: 3px solid transparent;
+  border-image: linear-gradient(180deg, rgba(124,92,255,0.95), rgba(35,213,171,0.85)) 1;
+  padding-left: 12px;
+}
+.soundsCardNeon{
+  position: relative;
+  border-radius: 20px;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(180deg, rgba(26,30,44,0.92), rgba(14,16,24,0.96)) padding-box,
+    linear-gradient(135deg, rgba(124,92,255,0.55), rgba(35,213,171,0.45), rgba(124,92,255,0.35)) border-box;
+  box-shadow:
+    0 0 0 1px rgba(124,92,255,0.12) inset,
+    0 20px 56px -24px rgba(124,92,255,0.45),
+    0 28px 70px -30px rgba(35,213,171,0.22);
+}
+.soundsPageNeon .soundPromptArea,
+.soundsPageNeon .soundKeySelect{
+  border-color: rgba(124,92,255,0.22);
+  background: rgba(10,12,20,0.72);
+  box-shadow: 0 0 0 1px rgba(35,213,171,0.06) inset;
+}
+.soundsPageNeon .soundOptRow{
+  color: rgba(232,238,247,0.82);
+}
+.soundsPageNeon .soundTempoRow .label{
+  color: rgba(124,180,255,0.55);
+}
+.soundsPageNeon .soundCostHint{
+  color: rgba(200,210,232,0.62);
+}
+.soundsPageNeon .soundGenerateBtn.primary,
+.soundsPageNeon .soundGenerateBtn{
+  border: 0;
+  border-radius: 14px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  background: linear-gradient(135deg, #7c5cff, #5a8cff 48%, #23d5ab);
+  color: #0a0c12;
+  box-shadow:
+    0 14px 36px -8px rgba(124,92,255,0.55),
+    0 10px 28px -10px rgba(35,213,171,0.35),
+    inset 0 1px 0 rgba(255,255,255,0.22);
+}
+.soundsPageNeon .soundGenerateBtn:hover{
+  filter: brightness(1.06);
+}
+.soundsPageNeon .soundGenerateBtn:active{
+  transform: scale(0.985);
+}
+@media (prefers-reduced-motion: reduce){
+  .soundsPageNeon .soundGenerateBtn:active{ transform: none; }
+}
+
+/* ---------- Profile — Nabad sound certification badge (gated) ---------- */
+.profileNabadCertBadge{
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 2px;
+  padding: 5px 12px 5px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(244,247,255,0.94);
+  background: linear-gradient(135deg, rgba(124,92,255,0.22), rgba(35,213,171,0.12));
+  border: 1px solid rgba(124,92,255,0.38);
+  box-shadow:
+    0 0 24px -6px rgba(124,92,255,0.45),
+    0 0 0 1px rgba(255,255,255,0.08) inset;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.profileNabadCertBadgeCheck{
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  color: #7cf0e0;
+  filter: drop-shadow(0 0 6px rgba(35,213,171,0.55));
+}
+.profileAuraEditing .profileNabadCertBadge{
+  display: none !important;
+}
+
 /* ---------- Proof of creation certificate (Hub modal) ---------- */
 .proofCertModal{
   z-index: 125;

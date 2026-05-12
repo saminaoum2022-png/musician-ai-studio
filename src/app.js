@@ -6,12 +6,17 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514shareIcon";
+const APP_BUILD = "20260514soundsNeonCertBadge";
 
 (() => {
   const f = document.getElementById("footerBuild");
   if (f) f.textContent = `Build ${APP_BUILD}`;
 })();
+
+/** UUID allowlist from `/api/public-config` (env `NABAD_CERTIFIED_USER_IDS`)
+ *  — interim gate for the Profile "Verified Nabad Creator" badge until
+ *  `profiles.sound_certified` is live in Supabase. */
+let _nabadCertifiedUserIds = new Set();
 
 /**
  * Capacitor only wires native plugins after JS calls registerPlugin().
@@ -379,6 +384,7 @@ const els = {
   // Liquid pulse redesign nodes
   profileAuraTopRow: document.getElementById("profileAuraTopRow"),
   profileAuraNameRow: document.getElementById("profileAuraNameRow"),
+  profileNabadCertBadge: document.getElementById("profileNabadCertBadge"),
   profileIdentityLine: document.getElementById("profileIdentityLine"),
   profileHeroBio: document.getElementById("profileHeroBio"),
   // Spotify-x-Nabad redesign nodes
@@ -1270,6 +1276,10 @@ async function loadPublicConfig() {
     rawUrl = rawUrl.replace(/\/auth\/v1$/i, "");
     SUPABASE_URL = rawUrl;
     SUPABASE_ANON_KEY = String(d?.supabaseAnonKey || "");
+    const ids = Array.isArray(d?.nabadCertifiedUserIds) ? d.nabadCertifiedUserIds : [];
+    _nabadCertifiedUserIds = new Set(
+      ids.map((x) => String(x || "").trim()).filter(Boolean),
+    );
     // Once we know the Supabase host, hint the browser so the very first
     // hub_posts query opens TLS instantly. Idempotent — multiple calls
     // just stack identical <link> tags which the browser collapses.
@@ -4059,7 +4069,7 @@ function renderActivePersonaBanner() {
 }
 const AUTH_SESSION_KEY = "mas:supabase:session:v1";
 const AUTH_PKCE_KEY = "mas:supabase:pkce:v1";
-let activeProfile = { id: "guest", username: "guest", email: "" };
+let activeProfile = { id: "guest", username: "guest", email: "", soundCertified: false };
 let lastAuthDebug = "";
 function loadProfile() {
   try {
@@ -4956,6 +4966,7 @@ function resetProfileUiToGuest() {
     isPublic: true,
     callingCardUrl: "",
     callingCardUpdatedAt: 0,
+    soundCertified: false,
   };
   try { localStorage.setItem(PROFILE_KEY, JSON.stringify(activeProfile)); } catch {}
   if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = "@guest";
@@ -5234,6 +5245,7 @@ async function supabaseLoadProfile() {
     callingCardUpdatedAt: p.calling_card_updated_at
       ? Date.parse(p.calling_card_updated_at) || 0
       : 0,
+    soundCertified: p.sound_certified === true || p.sound_certified === "t" || p.sound_certified === "true",
   };
 }
 /** Last status of the most recent `supabaseLoadUserSongs` call. The
@@ -6968,6 +6980,7 @@ function setProfileEditing(on) {
   if (!profileEditing) {
     try { renderProfileIdentityLine(); } catch {}
   }
+  try { renderProfileNabadCertBadge(); } catch {}
 }
 
 /** Show the soft "pick a username" banner when the current user is
@@ -7543,6 +7556,30 @@ function renderProfileTopWeek(items) {
 
 function renderProfileAboutCard() { /* no-op — see renderProfileSignatureCard */ }
 
+/** True when this account should show the "Verified Nabad Creator"
+ *  pill under the avatar. Gated — never shown by default. Sources:
+ *    1) `activeProfile.soundCertified` from Supabase `profiles.sound_certified`
+ *       (after you run the migration + set rows server-side).
+ *    2) Optional env allowlist `NABAD_CERTIFIED_USER_IDS` exposed via
+ *       `/api/public-config` as `nabadCertifiedUserIds` (comma-separated
+ *       auth UUIDs) for staging / early partners only. */
+function isNabadSoundCertified() {
+  if (!authSession?.user?.id) return false;
+  const uid = String(authSession.user.id);
+  if (Boolean(activeProfile?.soundCertified)) return true;
+  try {
+    if (_nabadCertifiedUserIds && _nabadCertifiedUserIds.has(uid)) return true;
+  } catch {}
+  return false;
+}
+
+function renderProfileNabadCertBadge() {
+  const el = els.profileNabadCertBadge;
+  if (!el) return;
+  const show = isNabadSoundCertified() && !profileEditing;
+  el.hidden = !show;
+}
+
 function renderProfilePreviewFromInputs() {
   // Don't trim / overwrite live input values while the user is typing —
   // earlier behavior killed trailing spaces, lost mid-word spaces, and
@@ -7594,6 +7631,7 @@ function renderProfilePreviewFromInputs() {
     els.authLoggedInEmailInline.textContent = "";
     els.authLoggedInEmailInline.style.display = "none";
   }
+  renderProfileNabadCertBadge();
 }
 
 /** Public-facing profile aggregated from this user's Hub posts. We use the
@@ -16154,6 +16192,7 @@ if (els.btnProfileDelete) {
       genres: "",
       links: {},
       isPublic: true,
+      soundCertified: false,
     };
     saveProfile(activeProfile);
     resetProfileUiToGuest();

@@ -39,7 +39,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260514shareIcon" />
+    <link rel="stylesheet" href="./styles.css?v=20260514soundsNeonCertBadge" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -196,18 +196,22 @@
           </div>
         </section>
 
-        <section class="wide soundsPage" data-route="sounds">
-          <header class="creditsHeader">
-            <a href="#/home" class="creditsBack" aria-label="Back to Home">
+        <section class="wide soundsPage soundsPageNeon" data-route="sounds">
+          <div class="soundsNeonDecor" aria-hidden="true"></div>
+          <header class="soundsHeroHeader creditsHeader">
+            <a href="#/home" class="creditsBack soundsHeroBack" aria-label="Back to Home">
               <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
               <span>Home</span>
             </a>
-            <h2 class="creditsTitle">Sounds</h2>
+            <div class="soundsHeroTitleBlock">
+              <h2 class="soundsHeroTitle creditsTitle">Sounds</h2>
+              <p class="soundsHeroTagline">Loops · ambience · neon</p>
+            </div>
           </header>
-          <p class="hint soundsLead">
+          <p class="hint soundsLead soundsLeadNeon">
             Loops and ambience (games, podcasts, backgrounds). Priced at <strong>2.5 credits</strong> per generation — same as Suno.
           </p>
-          <div class="soundsCard">
+          <div class="soundsCard soundsCardNeon">
             <label class="field grow">
               <span class="label">Describe the sound</span>
               <textarea id="soundPrompt" rows="4" maxlength="500" class="soundPromptArea" placeholder="Soft rain on a window, distant thunder, seamless loop…"></textarea>
@@ -1023,6 +1027,13 @@
                   <span class="profileAuraAvatarSkeleton" aria-hidden="true"></span>
                   <span id="profileAvatarEditHint" class="profileAuraAvatarHint" style="display:none">Photo</span>
                 </div>
+              </div>
+
+              <div id="profileNabadCertBadge" class="profileNabadCertBadge" hidden role="status" aria-live="polite">
+                <svg class="profileNabadCertBadgeCheck" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path fill="currentColor" d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                </svg>
+                <span class="profileNabadCertBadgeText">Verified Nabad Creator</span>
               </div>
 
               <div class="profileAuraNameRow" id="profileAuraNameRow" data-loading="false">
@@ -1942,6 +1953,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260514shareIcon"></script>
+    <script type="module" src="./src/app.js?v=20260514soundsNeonCertBadge"></script>
   </body>
 </html>

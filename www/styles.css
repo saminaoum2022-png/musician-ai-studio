@@ -3885,6 +3885,7 @@ body[data-route="profile"] .profileAuraGlow{
   box-shadow: 0 6px 14px rgba(0,0,0,0.35);
 }
 .profileAuraNameRow{
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3895,25 +3896,10 @@ body[data-route="profile"] .profileAuraGlow{
   max-width: 100%;
 }
 
-/* Live indicator dot before the handle. Inherits --aura-tint-solid
-   which is sampled from the latest cover art (or avatar fallback).
-   Pulses softly so the page feels alive, but stays small enough to
-   read as "live" not "notification badge". */
-.profilePulseDot{
-  flex: 0 0 auto;
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: var(--aura-tint-solid, rgb(168, 152, 255));
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--aura-tint-solid, rgb(168, 152, 255)) 22%, transparent);
-  animation: profilePulseDotBreath 2.4s ease-in-out infinite;
-  transform-origin: center;
-}
-@keyframes profilePulseDotBreath{
-  0%, 100%{ transform: scale(1);   opacity: 1; }
-  50%     { transform: scale(1.18); opacity: 0.72; }
-}
-.profileAura.profileAuraEditing .profilePulseDot{ display: none; }
+/* Live indicator dot retired — the cover-tinted pulse fingerprint
+   next to the avatar already carries the "page is alive" signal,
+   and the dot was forcing the handle out of column alignment with
+   bio + stats. Pulse alone is enough. */
 .profileAuraNameInput{
   -webkit-appearance: none;
   appearance: none;
@@ -3925,10 +3911,15 @@ body[data-route="profile"] .profileAuraGlow{
   letter-spacing: -0.03em;
   line-height: 1.15;
   padding: 0;
+  /* View mode: shrink the input to its actual content so the identity
+     line ("· Baritone") sits right next to the handle. iOS 17+ /
+     Chromium 123+ support `field-sizing: content`. Fallback below
+     uses `width: max-content` (also size=1 via attribute at render). */
+  field-sizing: content;
+  width: max-content;
   max-width: min(100%, 288px);
-  width: auto;
   min-width: 0;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   outline: none;
   text-overflow: ellipsis;
   overflow: hidden;
@@ -3947,8 +3938,9 @@ body[data-route="profile"] .profileAuraGlow{
   border-radius: 6px;
 }
 .profileAura.profileAuraEditing .profileAuraNameInput{
-  max-width: 100%;
+  field-sizing: fixed;
   width: 100%;
+  max-width: 100%;
   font-size: 22px;
   font-weight: 700;
 }
@@ -4553,31 +4545,26 @@ body[data-route="profile"] .profileAuraGlow{
    View-mode only; edit-mode shows the textarea above. --- */
 .profileHeroBio{
   position: relative;
-  margin: 8px 0 4px;
-  padding: 6px 12px 4px 26px;
+  margin: 6px 0 4px;
+  /* Left edge MUST match the rest of the column (handle, stats) so
+     the hero reads as a single column, not a misindented quote card. */
+  padding: 0;
   max-width: 460px;
   text-align: left;
   align-self: flex-start;
 }
-.profileHeroBioQuote{
-  position: absolute;
-  left: 4px;
-  top: -10px;
-  font-size: 46px;
-  line-height: 1;
-  font-weight: 900;
-  color: var(--aura-tint, rgba(124, 92, 255, 0.55));
-  opacity: 0.6;
-  font-family: Georgia, serif;
-  pointer-events: none;
-}
+/* Decorative serif quote glyph retired — was forcing a 26px indent
+   that broke alignment with the handle + stats above and below.
+   Bio reads as italic prose now; that's enough to feel like a tagline. */
+.profileHeroBioQuote{ display: none; }
 .profileHeroBioText{
   margin: 0;
   font-size: 13.5px;
   line-height: 1.5;
-  color: rgba(228, 232, 244, 0.92);
+  color: rgba(228, 232, 244, 0.86);
   letter-spacing: -0.005em;
   white-space: pre-wrap;
+  font-style: italic;
 }
 /* Shuffle play button + equalizer styles were removed. The sticky
    ribbon at the top of the page now owns the play action. */

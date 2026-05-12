@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514genresOneRow";
+const APP_BUILD = "20260514hubReelFullscreen";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -820,8 +820,13 @@ function applyHubRowCoverTint(rowEl, src) {
 }
 
 function updateHubFocusedRow() {
+  // Legacy path retained for any code that still calls it (mostly the
+  // global scroll listeners). The Hub reel layout drives focus from
+  // an IntersectionObserver inside `wireHubReelObserver()`; if a reel
+  // has already been marked active, leave it alone.
   if ((document.body.getAttribute("data-route") || "") !== "hub") return;
   if (!els.hubList) return;
+  if (els.hubList.querySelector(".hubReel.isActive")) return;
   const centerId = getHubRowClosestToViewportCenter();
   if (centerId === hubFocusedPostId) return;
   hubFocusedPostId = centerId;
@@ -835,6 +840,81 @@ function updateHubFocusedRow() {
       if (src) applyHubRowCoverTint(r, src);
     }
   });
+}
+
+/* =================================================================
+ *  Hub reel — vertical scroll-snap, one post per viewport.
+ *
+ *  An IntersectionObserver scoped to #hubList tells us which reel
+ *  panel is currently snapped. That callback:
+ *    1. Toggles .isActive
+ *    2. Samples the cover color into --hub-cover-rgb (per panel)
+ *    3. Pauses any previously playing post
+ *    4. Auto-plays the newly active post — gated by the same
+ *       audio-unlock + suppress + muted-post safeguards used by the
+ *       legacy viewport-center system, so iOS WKWebView behavior
+ *       and "user tapped pause" semantics are preserved.
+ * ================================================================= */
+let _hubReelObserver = null;
+
+function tryHubReelAutoplay(activeId) {
+  if (!activeId) return;
+  if ((document.body.getAttribute("data-route") || "") !== "hub") return;
+  if (Date.now() < hubSuppressViewportAutoplayUntil) return;
+  if (!getHubAudioUnlocked()) return;
+  if (hubAutoplayMutedPostId && activeId !== hubAutoplayMutedPostId) {
+    hubAutoplayMutedPostId = null;
+  }
+  if (activeId === hubAutoplayMutedPostId) return;
+  const feed = loadHubFeed();
+  const p = feed.find((x) => x.id === activeId);
+  if (!p?.url) return;
+  if (hubAudioPostId === activeId) return;
+  void startHubPlayback(activeId);
+}
+
+function wireHubReelObserver() {
+  if (!els.hubList) return;
+  if (_hubReelObserver) {
+    try { _hubReelObserver.disconnect(); } catch {}
+    _hubReelObserver = null;
+  }
+  const reels = els.hubList.querySelectorAll(".hubReel");
+  if (!reels.length) return;
+  _hubReelObserver = new IntersectionObserver((entries) => {
+    if ((document.body.getAttribute("data-route") || "") !== "hub") return;
+    // Pick the entry with the highest intersection ratio above
+    // threshold — that's the panel currently snapped.
+    let best = null;
+    let bestRatio = 0;
+    for (const e of entries) {
+      if (e.intersectionRatio > bestRatio) {
+        bestRatio = e.intersectionRatio;
+        best = e.target;
+      }
+    }
+    if (!best || bestRatio < 0.6) return;
+    const id = best.getAttribute("data-hub-row");
+    if (!id || hubFocusedPostId === id) return;
+    hubFocusedPostId = id;
+    // Update .isActive once across all reels in the container.
+    els.hubList.querySelectorAll(".hubReel").forEach((r) => {
+      r.classList.toggle("isActive", r === best);
+    });
+    // Pause any previously-playing post that just left the viewport.
+    if (hubAudioPostId && hubAudioPostId !== id && hubAudio && !hubAudio.paused) {
+      try { hubAudio.pause(); } catch {}
+    }
+    // Sample the cover color once per panel; subsequent visits are
+    // instant (cached on the cache + the panel's data attr).
+    if (!best.getAttribute("data-cover-tinted")) {
+      const cover = best.querySelector(".hubReelCover, .hubCover");
+      const src = cover ? cover.getAttribute("src") : "";
+      if (src) applyHubRowCoverTint(best, src);
+    }
+    tryHubReelAutoplay(id);
+  }, { root: els.hubList, threshold: [0.6, 0.85] });
+  reels.forEach((r) => _hubReelObserver.observe(r));
 }
 function scheduleHubFocusUpdate() {
   if (hubFocusUpdateRaf) return;
@@ -6236,69 +6316,73 @@ function renderHub() {
   const visibleItems = items.slice(0, Math.min(hubVisibleCount, totalCount));
   const hasMore = totalCount > visibleItems.length;
   els.hubList.innerHTML = visibleItems.map((p, i) => {
-    // First row gets the eager + high-priority treatment so the user's
-    // first impression is sharp; everything else loads lazily.
+    // First reel paints eagerly so the cover lands instantly; the
+    // rest stream in as the user scrolls. Lazy is safe because the
+    // reel container is a snap scroller — neighbors are already in
+    // the DOM but offscreen until the user swipes.
     const isFirst = i === 0;
     const loadingAttr = isFirst ? `loading="eager" fetchpriority="high"` : `loading="lazy" fetchpriority="low"`;
     const coverSrc = toCoverThumbUrl(
       p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png",
-      { width: 360, quality: 55 },
+      { width: 540, quality: 70 },
+    );
+    const backdropSrc = toCoverThumbUrl(
+      p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png",
+      { width: 160, quality: 35 },
     );
     const avatarSrc = p.creatorAvatar || "./assets/nabadai-logo.png";
+    const safeTitle = escapeHtml(p.title);
+    const likes = Number(p.likes || 0);
     return `
-    <div class="trackRow hubRow" data-hub-row="${p.id}" style="--hub-cover-tint: url('${escapeHtml(coverSrc)}');">
-      <div class="hubCoverWrap" data-hub-cover="${p.id}">
-        <img class="hubCover" src="${escapeHtml(coverSrc)}" alt="cover" decoding="async" ${loadingAttr} />
-        <div class="hubCoverScrim" aria-hidden="true"></div>
-        <div class="hubEq" aria-hidden="true"><i></i><i></i><i></i></div>
-        <button class="hubPlayOverlay" data-hub-play="${p.id}" aria-label="Play">▶</button>
-        <div class="hubPlayProgress"><span id="hubProg_${p.id}" style="width:0%"></span></div>
-        <button class="hubMoreCorner" data-hub-more="${p.id}" aria-label="More">⋯</button>
+    <article class="trackRow hubRow hubReel" data-hub-row="${p.id}" style="--hub-cover-tint: url('${escapeHtml(coverSrc)}');">
+      <div class="hubReelBackdrop" aria-hidden="true">
+        <img class="hubReelBackdropImg" src="${escapeHtml(backdropSrc)}" alt="" loading="lazy" decoding="async" />
+        <span class="hubReelBackdropVeil" aria-hidden="true"></span>
       </div>
-      <div class="hubBody">
-        <div class="hubMetaTop">
-          <img class="hubAvatar" src="${escapeHtml(avatarSrc)}" alt="avatar" width="24" height="24" decoding="async" loading="lazy" data-hub-user="${p.id}" />
-          <div class="hubMetaText">
-            <span class="hubCreator" data-hub-user="${p.id}">@${escapeHtml(p.creator)}</span>
-            <span class="hubMetaDot">·</span>
-            <span class="hubTimeAgo">${escapeHtml(relativeTime(p.ts))}</span>
-          </div>
-          <span class="hubProofChip" title="Proof ${escapeHtml(String(p?.proof?.model || LATEST_SUNO_MODEL))} · #${escapeHtml(String(p?.proof?.promptHash || ""))}">Proof</span>
-        </div>
-        <div class="trackName hubTitle">${escapeHtml(p.title)}</div>
-        ${p.remixOf ? `<div class="hubRemixOf">Remix of: ${escapeHtml(p.remixOf)}</div>` : ""}
-        ${p?.meta?.searchTemplateTitle ? `<div class="hubSearchTemplateLine">From Search · ${escapeHtml(String(p.meta.searchTemplateTitle))}</div>` : ""}
-      </div>
-      <div class="hubActionRow">
-        <button class="hubLike" data-hub-like="${p.id}" aria-label="Like" data-count="${Number(p.likes || 0)}">
-          <span class="hubLikeHeart" aria-hidden="true">♥</span>
-          <span class="hubLikeCount">${Number(p.likes || 0)}</span>
+      <div class="hubReelStage">
+        <button class="hubCoverWrap hubReelCoverBtn" type="button" data-hub-cover="${p.id}" data-hub-play="${p.id}" aria-label="Play ${safeTitle}">
+          <img class="hubCover hubReelCover" src="${escapeHtml(coverSrc)}" alt="cover" decoding="async" ${loadingAttr} />
+          <span class="hubReelCoverGlow" aria-hidden="true"></span>
+          <span class="hubEq" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="hubReelCoverGlyph" aria-hidden="true">▶</span>
+          <span class="hubPlayProgress hubReelProgress"><span id="hubProg_${p.id}" style="width:0%"></span></span>
         </button>
-        <div class="hubReacts">
-          <button class="hubReact" data-hub-react="${p.id}:melody" aria-label="Melody strong">
-            <span class="hubReactIcon" aria-hidden="true">♪</span>
-            <span class="hubReactLabel">Melody</span>
-            <span class="hubReactCount">${Number(p?.reacts?.melody || 0)}</span>
-          </button>
-          <button class="hubReact" data-hub-react="${p.id}:lyrics" aria-label="Lyrics strong">
-            <span class="hubReactIcon" aria-hidden="true">✎</span>
-            <span class="hubReactLabel">Lyrics</span>
-            <span class="hubReactCount">${Number(p?.reacts?.lyrics || 0)}</span>
-          </button>
-          <button class="hubReact hubShare" data-hub-share="${p.id}" aria-label="Share this song">
-            <span class="hubReactIcon" aria-hidden="true">➤</span>
-            <span class="hubReactLabel">Share</span>
-          </button>
-        </div>
       </div>
-      <div class="libMenu hubMoreMenu" id="hubMore_${p.id}" style="display:none">
+      <aside class="hubReelRail" aria-label="Post actions">
+        <button type="button" class="hubReelAvatarBtn" data-hub-user="${p.id}" aria-label="Open @${escapeHtml(p.creator)}'s profile">
+          <img class="hubAvatar hubReelAvatarImg" src="${escapeHtml(avatarSrc)}" alt="" loading="lazy" decoding="async" />
+        </button>
+        <button class="hubLike hubReelRailBtn hubReelLikeBtn" data-hub-like="${p.id}" data-count="${likes}" aria-label="Like">
+          <span class="hubLikeHeart" aria-hidden="true">♥</span>
+          <span class="hubLikeCount">${likes}</span>
+        </button>
+        <button class="hubReact hubShare hubReelRailBtn hubReelShareBtn" data-hub-share="${p.id}" aria-label="Share this song">
+          <span class="hubReactIcon" aria-hidden="true">➤</span>
+          <span class="hubReactLabel">Share</span>
+        </button>
+        <button class="hubReelRailBtn hubReelMoreBtn" data-hub-more="${p.id}" aria-label="More options">
+          <span aria-hidden="true">⋯</span>
+        </button>
+      </aside>
+      <footer class="hubReelMeta">
+        <div class="hubReelCreatorRow">
+          <span class="hubCreator hubReelCreator" data-hub-user="${p.id}">@${escapeHtml(p.creator)}</span>
+          <span class="hubMetaDot">·</span>
+          <span class="hubTimeAgo">${escapeHtml(relativeTime(p.ts))}</span>
+          <button type="button" class="hubProofChip hubReelProofChip" title="Proof ${escapeHtml(String(p?.proof?.model || LATEST_SUNO_MODEL))} · #${escapeHtml(String(p?.proof?.promptHash || ""))}">Proof</button>
+        </div>
+        <h3 class="hubReelTitle">${safeTitle}</h3>
+        ${p.remixOf ? `<div class="hubRemixOf hubReelRemixLine">Remix of: ${escapeHtml(p.remixOf)}</div>` : ""}
+        ${p?.meta?.searchTemplateTitle ? `<div class="hubSearchTemplateLine hubReelTemplateLine">From Search · ${escapeHtml(String(p.meta.searchTemplateTitle))}</div>` : ""}
+      </footer>
+      <div class="libMenu hubMoreMenu hubReelMoreMenu" id="hubMore_${p.id}" style="display:none">
         <button class="ghost" data-hub-remix="${p.id}">Remix</button>
         <button class="ghost" data-hub-persona="${p.id}">Save voice as persona</button>
       </div>
-    </div>
+    </article>
   `;
   }).join("") + (hasMore ? `
-    <div class="hubLoadMoreWrap" data-hub-loadmore-sentinel>
+    <div class="hubLoadMoreWrap hubReelLoadMoreWrap" data-hub-loadmore-sentinel>
       <button type="button" class="hubLoadMore" id="hubLoadMore">Load more</button>
     </div>
   ` : "");
@@ -6446,11 +6530,17 @@ function renderHub() {
       btn.closest(".hubCoverWrap")?.classList.add("isPlaying");
     }
   }
-  // Reset cached focused id so updateHubFocusedRow re-evaluates against the
-  // freshly rendered DOM (otherwise a stale id == previous id check would
-  // skip toggling on the new elements).
+  // Reset cached focused id so the reel observer can re-fire against
+  // the freshly mounted panels (otherwise an id == previous id check
+  // would skip toggling on the new elements).
   hubFocusedPostId = null;
-  requestAnimationFrame(() => updateHubFocusedRow());
+  requestAnimationFrame(() => {
+    // Reel observer is the source of truth on the new layout.
+    // updateHubFocusedRow is kept as a no-op fallback (it bails when a
+    // reel already owns focus) for legacy code paths.
+    wireHubReelObserver();
+    updateHubFocusedRow();
+  });
   preloadInitialHubTracks();
   updateHubAudioHint();
   _hubLastRenderedSig = computeHubVisibleSig(items);

@@ -10006,3 +10006,414 @@ input::placeholder, textarea::placeholder{
   .searchShelfRow{ gap: 10px; }
   .searchRemixCard{ border-radius: 22px 22px 0 0; margin: 0; }
 }
+
+/* =================================================================
+ *  Hub reel — vertical scroll-snap, one post per viewport.
+ *
+ *  The legacy `.hubRow` page-scroll + neighbor-blur layout still
+ *  lives in CSS for any non-hub surface that reuses it (the Profile
+ *  "All releases" list reuses `.libraryRows` instead, so this is
+ *  hub-route only). Everything below is scoped to
+ *  body[data-route="hub"] so the rest of the app is untouched.
+ *
+ *  Layout:
+ *    - .app loses its top/side/bottom padding so the reel fills the
+ *      device edge-to-edge.
+ *    - The brand header is hidden; the Latest / Trending segment
+ *      floats over the reel as a translucent pill.
+ *    - #hubList becomes the snap-y scroll container, sized to the
+ *      viewport minus the bottom tab bar.
+ *    - Each .hubReel panel is 100% of the container (one screen at
+ *      a time) with three layers: blurred backdrop, centered cover
+ *      card, and the action rail + meta footer floated above.
+ * ================================================================= */
+body[data-route="hub"] .header{ display: none !important; }
+body[data-route="hub"] .app{
+  padding: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden;
+}
+body[data-route="hub"] .card.wide.hubCard{
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  position: relative;
+}
+body[data-route="hub"] .hubTop{
+  position: absolute;
+  top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
+  z-index: 6;
+  padding: 10px 14px 10px;
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  background: linear-gradient(180deg, rgba(8,10,18,0.55), transparent);
+  pointer-events: none;
+}
+body[data-route="hub"] .hubTop > *{ pointer-events: auto; }
+body[data-route="hub"] .hubSegment{
+  background: rgba(8, 10, 18, 0.55);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255,255,255,0.12);
+  padding: 4px;
+  border-radius: 999px;
+}
+body[data-route="hub"] #hubAudioHint{
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 64px);
+  left: 12px;
+  right: 12px;
+  z-index: 6;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(8,10,18,0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(124,92,255,0.35);
+  text-align: center;
+}
+
+/* The reel container itself. Fills the visible viewport minus the
+   mobile tab bar (which is fixed-positioned at the bottom). */
+body[data-route="hub"] #hubList{
+  height: calc(100dvh - 76px - env(safe-area-inset-bottom, 0px));
+  min-height: calc(100svh - 76px - env(safe-area-inset-bottom, 0px));
+  margin: 0;
+  padding: 0;
+  overflow-y: scroll;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  background: #04060c;
+}
+@media (min-width: 721px){
+  body[data-route="hub"] #hubList{
+    height: 100dvh;
+    min-height: 100svh;
+  }
+}
+body[data-route="hub"] #hubList::-webkit-scrollbar{ display: none; }
+
+/* Hard-reset any legacy hubRow scroll FX on the new reel route so
+   they can't repaint over us. */
+body[data-route="hub"] #hubList .hubReel{
+  filter: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+  pointer-events: auto !important;
+}
+body[data-route="hub"] #hubList:has(.hubReel.isActive) .hubReel:not(.isActive){
+  filter: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+body[data-route="hub"] #hubList .hubReel.isActive::before{ content: none !important; }
+
+/* One panel per viewport, full bleed, snap-aligned. */
+.hubReel{
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  isolation: isolate;
+  overflow: hidden;
+  display: grid;
+  grid-template-areas: "stage";
+  color: #fff;
+}
+.hubReel::after{
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(4,6,12,0.55) 0, transparent 18%),
+    linear-gradient(180deg, transparent 55%, rgba(4,6,12,0.78) 100%);
+  z-index: 2;
+}
+
+/* Layer 1 — full-bleed blurred backdrop, derived from the cover. */
+.hubReelBackdrop{
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: #04060c;
+}
+.hubReelBackdropImg{
+  position: absolute;
+  top: -20%;
+  left: -20%;
+  width: 140%;
+  height: 140%;
+  object-fit: cover;
+  filter: blur(40px) saturate(1.4) brightness(0.65);
+  transform: scale(1.08);
+  opacity: 0.95;
+}
+.hubReelBackdropVeil{
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 80% at 50% 35%, transparent 0%, rgba(4,6,12,0.45) 70%, rgba(4,6,12,0.7) 100%);
+}
+
+/* Layer 2 — centered sharp cover card. */
+.hubReelStage{
+  position: relative;
+  z-index: 1;
+  grid-area: stage;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+}
+.hubReelCoverBtn{
+  position: relative;
+  width: min(72vw, 360px);
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 24px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+  transition: transform 240ms ease;
+  box-shadow:
+    0 28px 60px -18px rgba(0,0,0,0.6),
+    0 10px 36px -10px rgba(var(--hub-cover-rgb, 124, 92, 255), 0.55),
+    inset 0 0 0 1px rgba(255,255,255,0.06);
+}
+.hubReelCoverBtn:active{ transform: scale(0.985); }
+.hubReelCover{
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+.hubReelCoverGlow{
+  position: absolute;
+  inset: -2px;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(120% 120% at 50% 50%, rgba(var(--hub-cover-rgb, 124, 92, 255), 0.35), transparent 70%);
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+.hubReel.isActive .hubReelCoverGlow{ opacity: 1; }
+.hubReelCoverGlyph{
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 72px;
+  line-height: 1;
+  color: rgba(255,255,255,0.92);
+  text-shadow: 0 8px 20px rgba(0,0,0,0.55);
+  pointer-events: none;
+  transition: opacity 220ms ease, transform 220ms ease;
+  z-index: 2;
+}
+.hubCoverWrap.isPlaying .hubReelCoverGlyph{
+  opacity: 0;
+  transform: scale(0.7);
+}
+.hubReelProgress{
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 0;
+  margin: 0;
+  padding: 0;
+  display: block;
+  overflow: hidden;
+  z-index: 3;
+}
+.hubReelProgress > span{
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #7c5cff, #23d5ab);
+  transition: width 120ms linear;
+}
+
+/* Layer 3a — right action rail (Reels pattern). */
+.hubReelRail{
+  position: absolute;
+  right: 10px;
+  bottom: calc(28% + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  z-index: 4;
+}
+.hubReelAvatarBtn{
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border: 2px solid rgba(255,255,255,0.85);
+  border-radius: 999px;
+  background: rgba(0,0,0,0.4);
+  overflow: hidden;
+  cursor: pointer;
+}
+.hubReelAvatarBtn:active{ transform: scale(0.94); }
+.hubReelAvatarImg{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 0;
+}
+.hubReelRailBtn{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 50px;
+  min-width: 50px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+}
+.hubReelRailBtn:active{ transform: scale(0.94); }
+.hubReelRailBtn .hubLikeHeart,
+.hubReelRailBtn .hubReactIcon{
+  font-size: 30px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.55));
+}
+.hubReelRailBtn .hubReactLabel{ display: none; }
+.hubReelLikeBtn[data-burst="1"] .hubLikeHeart{
+  animation: hubReelHeartPop 320ms ease;
+  color: #ff4d6d;
+}
+@keyframes hubReelHeartPop{
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+.hubReelMoreBtn span{ font-size: 30px; line-height: 1; }
+
+/* Layer 3b — bottom meta strip. */
+.hubReelMeta{
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 18px 84px calc(20px + env(safe-area-inset-bottom, 0px)) 18px;
+  z-index: 4;
+  color: #fff;
+  pointer-events: none;
+}
+.hubReelMeta > *{ pointer-events: auto; }
+.hubReelCreatorRow{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.92);
+  flex-wrap: wrap;
+}
+.hubReelCreator{
+  color: #fff;
+  font-weight: 800;
+  text-decoration: none;
+}
+.hubReelTitle{
+  margin: 0 0 4px;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.18;
+  letter-spacing: -0.01em;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.6);
+  word-break: break-word;
+}
+.hubReelProofChip{
+  border: 0;
+  background: rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.9);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.hubReelRemixLine,
+.hubReelTemplateLine{
+  font-size: 11px;
+  color: rgba(232,238,247,0.78);
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+}
+
+/* The "Load more" pill at the end of the feed gets its own snap
+   panel so it doesn't share a screen with a real post. */
+.hubReelLoadMoreWrap{
+  scroll-snap-align: start;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  padding: 24px;
+}
+
+/* The more menu floats above the cover when opened (already inside
+   .hubReel as an absolutely-positioned popover). */
+.hubReelMoreMenu{
+  position: absolute;
+  right: 16px;
+  bottom: calc(36% + env(safe-area-inset-bottom, 0px));
+  z-index: 6;
+  min-width: 200px;
+}
+
+/* iOS still throws a tiny extra paint at the snap edges — kill the
+   default user-select highlight inside reels so a long-press on the
+   meta doesn't show a text selection rectangle over the cover. */
+.hubReel,
+.hubReel * {
+  -webkit-user-select: none;
+  user-select: none;
+}
+.hubReelTitle,
+.hubReelCreator,
+.hubReelCreatorRow{
+  -webkit-user-select: text;
+  user-select: text;
+}

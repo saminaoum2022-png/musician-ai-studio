@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260512searchv2";
+const APP_BUILD = "20260512egress1";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -5868,12 +5868,9 @@ function renderHub() {
     const loadingAttr = isFirst ? `loading="eager" fetchpriority="high"` : `loading="lazy" fetchpriority="low"`;
     const coverSrc = toCoverThumbUrl(
       p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png",
-      { width: 480, quality: 72 },
+      { width: 360, quality: 55 },
     );
-    const avatarSrc = toCoverThumbUrl(
-      p.creatorAvatar || "./assets/nabadai-logo.png",
-      { width: 48, quality: 70 },
-    );
+    const avatarSrc = p.creatorAvatar || "./assets/nabadai-logo.png";
     return `
     <div class="trackRow hubRow" data-hub-row="${p.id}" style="--hub-cover-tint: url('${escapeHtml(coverSrc)}');">
       <div class="hubCoverWrap" data-hub-cover="${p.id}">
@@ -6310,10 +6307,14 @@ async function refreshHubFromSupabase() {
 }
 function startHubLiveSync() {
   if (hubSyncTimer) clearInterval(hubSyncTimer);
-  // Always keep Hub fresh for guest + logged users.
+  // Egress saver: only refetch the Hub feed while the user is actually
+  // looking at the Hub tab, and at a calmer cadence than the old 15s/28s.
+  // Off-Hub routes get zero requests instead of polling forever.
   const isMobile = window.matchMedia?.("(max-width: 720px)")?.matches;
-  const interval = isMobile ? 28000 : 15000;
+  const interval = isMobile ? 120_000 : 60_000;
   hubSyncTimer = setInterval(() => {
+    const route = document.body.getAttribute("data-route") || "";
+    if (route !== "hub") return;
     void refreshHubFromSupabase();
   }, interval);
 }
@@ -14277,14 +14278,24 @@ els.sunoPrompt?.addEventListener("input", () => {
 });
 void (async () => {
   await loadPublicConfig();
-  await refreshHubFromSupabase();
+  // Egress saver: only do the boot Hub fetch when the user actually
+  // landed on (or will land on) the Hub. Otherwise wait until they tap
+  // the tab — `applyRoute` already triggers `refreshHubFromSupabase`
+  // on entry to `#/hub`.
+  const route0 = document.body.getAttribute("data-route") || "";
+  if (route0 === "hub") {
+    await refreshHubFromSupabase();
+  }
   startHubLiveSync();
 })();
 window.addEventListener("focus", () => {
+  if ((document.body.getAttribute("data-route") || "") !== "hub") return;
   void refreshHubFromSupabase();
 });
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) void refreshHubFromSupabase();
+  if (document.hidden) return;
+  if ((document.body.getAttribute("data-route") || "") !== "hub") return;
+  void refreshHubFromSupabase();
 });
 // Hub feed sort segment: Latest | Trending. The genre dropdown
 // (Arabic / Instrumental / Remix / Demo) was removed in 20260509k —

@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514hubReelFullscreen2";
+const APP_BUILD = "20260514hubCoverDirectUrl";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -6316,14 +6316,10 @@ function renderHub() {
     // the DOM but offscreen until the user swipes.
     const isFirst = i === 0;
     const loadingAttr = isFirst ? `loading="eager" fetchpriority="high"` : `loading="lazy" fetchpriority="low"`;
-    const coverSrc = toCoverThumbUrl(
+    const coverSrc = hubCoverImgSrc(
       p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png",
-      { width: 540, quality: 70 },
     );
-    const backdropSrc = toCoverThumbUrl(
-      p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png",
-      { width: 160, quality: 35 },
-    );
+    const backdropSrc = coverSrc;
     const avatarSrc = p.creatorAvatar || "./assets/nabadai-logo.png";
     const safeTitle = escapeHtml(p.title);
     const likes = Number(p.likes || 0);
@@ -11359,6 +11355,17 @@ function toCoverThumbUrl(url, opts) {
   if (mode !== "public") return s;
   const cleanRest = rest.split("?")[0].split("#")[0];
   return `${origin}/storage/v1/render/image/public/${cleanRest}?width=${w}&quality=${q}&resize=cover`;
+}
+
+/** Hub reel `<img>` sources must use the real Storage object URL.
+ *  `toCoverThumbUrl()` rewrites to `/storage/v1/render/image/…`, which
+ *  only works when Supabase Image Transform is enabled for the project;
+ *  otherwise the CDN errors and covers never paint (blur backdrop still
+ *  looks like a muddy plate from a failed decode). Library tiles can
+ *  keep using thumbs where transforms are known-good. */
+function hubCoverImgSrc(url) {
+  const s = String(url || "").trim();
+  return s || "./assets/nabadai-logo.png";
 }
 
 /** Read a picked file as a data URL (same pattern as the Image Mood flow). */

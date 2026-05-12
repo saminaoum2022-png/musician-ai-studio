@@ -10255,6 +10255,7 @@ body[data-route="hub"] #hubList .hubRow.isActive::before{
   display: block !important;
   position: absolute;
   inset: 0;
+  z-index: 1;
   width: 100% !important;
   height: 100% !important;
   aspect-ratio: auto !important;

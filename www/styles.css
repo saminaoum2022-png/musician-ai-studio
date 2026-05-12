@@ -8395,14 +8395,14 @@ input::placeholder, textarea::placeholder{
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 6px 0 28px;
+  padding: 12px 0 28px;
 }
 
 .searchBarWrap{
   position: sticky;
   top: 0;
   z-index: 5;
-  padding: 4px 0 8px;
+  padding: 6px 0 10px;
   background: linear-gradient(180deg, rgba(11,13,18,0.96) 70%, rgba(11,13,18,0));
 }
 .searchBar{
@@ -8474,6 +8474,11 @@ input::placeholder, textarea::placeholder{
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+.searchPeopleStrip[hidden],
+.searchEmpty[hidden],
+.searchRemixSheet[hidden]{
+  display: none !important;
 }
 .searchPeopleHead{
   font-size: 11px;
@@ -8867,9 +8872,19 @@ input::placeholder, textarea::placeholder{
 }
 
 @media (max-width: 720px){
-  .searchPage{ padding-top: 0; gap: 16px; }
+  .searchPage{ padding: 8px 0 28px; gap: 16px; }
+  .searchBarWrap{ padding: 4px 0 8px; }
   .searchBar{ height: 48px; padding: 0 12px; }
   .searchBarInput, .searchBarHint{ font-size: 16px; }
-  .searchPoster{ width: 152px; height: 210px; }
+  .searchShelves{ gap: 18px; }
+  .searchShelf{ gap: 8px; }
+  .searchShelfTitle{ font-size: 16px; }
+  /* Smaller posters so the next-card peek is obvious — feed reads
+     as a scrollable carousel, not a cropped grid. */
+  .searchPoster{ width: 138px; height: 188px; border-radius: 16px; }
+  .searchPosterTitle{ font-size: 14px; }
+  .searchPosterSub{ font-size: 10px; }
+  .searchPosterCta{ font-size: 10px; margin-top: 4px; }
+  .searchShelfRow{ gap: 10px; }
   .searchRemixCard{ border-radius: 22px 22px 0 0; margin: 0; }
 }

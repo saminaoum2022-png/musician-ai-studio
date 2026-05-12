@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514removeLatestRelease";
+const APP_BUILD = "20260514genresOneRow";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -7825,20 +7825,21 @@ function renderProfileMySound() {
     .slice(0, MY_SOUND_GENRE_CAP);
   const list = els.profileMySoundGenresList;
   if (list) {
-    const chips = genres.map((g) => {
-      return `<span class="profileMySoundGenreChip profileMySoundGenreChip--labeled" data-has-text="true" role="listitem" title="${escapeHtml(g)}" aria-label="${escapeHtml(g)}"><span class="profileMySoundGenreChipIco" aria-hidden="true">${genreIconSvg(g)}</span><span class="profileMySoundGenreChipLabel">${escapeHtml(g)}</span></span>`;
-    });
-    chips.push(
-      `<button type="button" class="profileMySoundGenreChip profileMySoundGenreChip--add" id="profileMySoundAddGenreBtn" aria-label="Add favorite genre">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-      </button>`
-    );
-    list.innerHTML = chips.join("");
-    const addBtn = document.getElementById("profileMySoundAddGenreBtn");
-    if (addBtn) {
-      addBtn.addEventListener("click", () => {
-        try { openMySoundModal(); } catch {}
-      }, { once: true });
+    // No add (+) chip on the card — saves a row, "View all" in the
+    // header already handles add/remove. When the user has nothing
+    // selected yet we show a single CTA chip that opens the modal.
+    if (!genres.length) {
+      list.innerHTML = `<button type="button" class="profileMySoundGenreChip profileMySoundGenreChip--empty" id="profileMySoundAddGenreBtn">Add favorite genres</button>`;
+      const addBtn = document.getElementById("profileMySoundAddGenreBtn");
+      if (addBtn) {
+        addBtn.addEventListener("click", () => {
+          try { openMySoundModal(); } catch {}
+        }, { once: true });
+      }
+    } else {
+      list.innerHTML = genres
+        .map((g) => `<span class="profileMySoundGenreChip profileMySoundGenreChip--labeled" data-has-text="true" role="listitem" title="${escapeHtml(g)}" aria-label="${escapeHtml(g)}"><span class="profileMySoundGenreChipIco" aria-hidden="true">${genreIconSvg(g)}</span><span class="profileMySoundGenreChipLabel">${escapeHtml(g)}</span></span>`)
+        .join("");
     }
   }
 

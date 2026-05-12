@@ -8382,10 +8382,15 @@ input::placeholder, textarea::placeholder{
   gap: 4px;
   min-width: 0;
 }
+/* Genre chips share the row evenly. Three chips with no + button,
+   each taking an equal share of the available width — even
+   "Afrobeats" fits beside "Pop" without wrapping. */
 .profileMySoundGenresList{
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
+  width: 100%;
+  min-width: 0;
 }
 .profileMySoundGenreChip{
   display: inline-flex;
@@ -8393,7 +8398,7 @@ input::placeholder, textarea::placeholder{
   justify-content: flex-start;
   gap: 4px;
   min-height: 28px;
-  padding: 0 7px 0 5px;
+  padding: 0 6px 0 4px;
   border-radius: 9px;
   border: 1px solid rgba(255,255,255,0.10);
   background: rgba(255,255,255,0.04);
@@ -8402,7 +8407,9 @@ input::placeholder, textarea::placeholder{
   font-weight: 700;
   letter-spacing: 0.02em;
   position: relative;
-  max-width: min(118px, 38vw);
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: none;
 }
 .profileMySoundGenreChip[data-has-text="true"]{
   width: auto;
@@ -8433,24 +8440,24 @@ input::placeholder, textarea::placeholder{
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.profileMySoundGenreChip--add{
-  width: 28px;
-  height: 28px;
+/* Empty-state CTA when no genres are picked yet — single full-width
+   chip that opens the modal. Replaces the old "+" mini button. */
+.profileMySoundGenreChip--empty{
+  flex: 1 1 100%;
+  width: 100%;
   min-height: 28px;
-  padding: 0;
+  padding: 0 10px;
   justify-content: center;
-  max-width: none;
+  text-align: center;
   border-style: dashed;
   border-color: rgba(124,92,255,0.55);
   color: #c8b8ff;
   background: rgba(124,92,255,0.10);
   cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
 }
-.profileMySoundGenreChip--add svg{
-  width: 13px;
-  height: 13px;
-}
-.profileMySoundGenreChip--add:hover{ background: rgba(124,92,255,0.18); }
+.profileMySoundGenreChip--empty:hover{ background: rgba(124,92,255,0.18); }
 .profileMySoundPresets{
   display: grid;
   gap: 8px;

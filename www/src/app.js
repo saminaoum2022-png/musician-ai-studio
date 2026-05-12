@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514hubReelRailRemix";
+const APP_BUILD = "20260514hubReelSkelFullCover";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -6316,11 +6316,9 @@ function renderHub() {
       // bottom title bar) so the swap to real data is invisible.
       els.hubList.innerHTML = `
         <article class="hubReelSkeleton" aria-live="polite" aria-busy="true" aria-label="Loading Hub feed">
-          <div class="hubReelSkelBackdrop" aria-hidden="true"></div>
-          <div class="hubReelSkelStage" aria-hidden="true">
-            <div class="hubReelSkelCover"></div>
-          </div>
+          <div class="hubReelSkelCover" aria-hidden="true"></div>
           <div class="hubReelSkelRail" aria-hidden="true">
+            <span class="hubReelSkelDot"></span>
             <span class="hubReelSkelDot"></span>
             <span class="hubReelSkelDot"></span>
             <span class="hubReelSkelDot"></span>

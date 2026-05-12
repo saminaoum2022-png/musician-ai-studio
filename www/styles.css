@@ -1518,16 +1518,32 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
 /* Focused card: lift, brighten, and tint the whole container so the
  * cover image and the body underneath read as one unit instead of a
  * glowing picture sitting on top of an invisible card. The glow pulses
- * strong on entry and settles into a soft steady state. */
+ * strong on entry and settles into a soft steady state.
+ *
+ * The active card's color comes from the post's cover art:
+ *   --hub-cover-rgb        — "r, g, b" sampled from the cover (set by JS)
+ *   --hub-cover-rgb-fb     — fallback purple, used until/unless we sample
+ * Each color reference reads from --hub-cover-rgb-eff, which resolves to
+ * the sampled value when present and the fallback otherwise (so an
+ * unsampled card keeps the brand purple it always had). */
+#hubList .hubRow{
+  --hub-cover-rgb-fb: 124, 92, 255;
+  --hub-cover-rgb-eff: var(--hub-cover-rgb, var(--hub-cover-rgb-fb));
+}
 #hubList .hubRow.isActive{
   transform: translateY(-2px) scale(1.03);
-  border-color: rgba(124, 92, 255, 0.55);
+  border-color: rgba(var(--hub-cover-rgb-eff), 0.55);
   background: linear-gradient(180deg,
-    rgba(124, 92, 255, 0.16) 0%,
-    rgba(124, 92, 255, 0.06) 60%,
-    rgba(124, 92, 255, 0.035) 100%);
+    rgba(var(--hub-cover-rgb-eff), 0.16) 0%,
+    rgba(var(--hub-cover-rgb-eff), 0.06) 60%,
+    rgba(var(--hub-cover-rgb-eff), 0.035) 100%);
   animation: hubFocusPulse 720ms cubic-bezier(.2, 1.4, .4, 1) both;
   z-index: 2;
+  transition:
+    border-color 280ms ease,
+    background 280ms ease,
+    box-shadow 280ms ease,
+    transform 220ms ease;
 }
 /* Ambient cover tint behind the active card. We render the cover
  * image again as an absolutely-positioned blurred backdrop so the
@@ -1559,32 +1575,33 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
 
 /* One-shot pulse: lands strong (peak ~28%) then eases into the steady
  * glow that holds while the card stays focused. Animation `both` keeps
- * the final keyframe applied so the steady glow persists. */
+ * the final keyframe applied so the steady glow persists. Colors come
+ * from `--hub-cover-rgb-eff` so each post pulses in its own hue. */
 @keyframes hubFocusPulse{
   0% {
     box-shadow:
-      0 0 0 1px rgba(124, 92, 255, 0.10),
-      0 0 0 0 rgba(124, 92, 255, 0);
+      0 0 0 1px rgba(var(--hub-cover-rgb-eff, 124, 92, 255), 0.10),
+      0 0 0 0 rgba(var(--hub-cover-rgb-eff, 124, 92, 255), 0);
   }
   28% {
     box-shadow:
-      0 0 0 1.5px rgba(124, 92, 255, 0.85),
-      0 14px 56px -10px rgba(124, 92, 255, 0.85),
-      0 8px 28px -8px rgba(35, 213, 171, 0.45);
+      0 0 0 1.5px rgba(var(--hub-cover-rgb-eff, 124, 92, 255), 0.85),
+      0 14px 56px -10px rgba(var(--hub-cover-rgb-eff, 124, 92, 255), 0.85),
+      0 8px 28px -8px rgba(var(--hub-cover-rgb-eff, 124, 92, 255), 0.45);
   }
   100% {
     box-shadow:
-      0 0 0 1px rgba(124, 92, 255, 0.32),
-      0 10px 36px -12px rgba(124, 92, 255, 0.45),
-      0 4px 14px -10px rgba(35, 213, 171, 0.22);
+      0 0 0 1px rgba(var(--hub-cover-rgb-eff, 124, 92, 255), 0.32),
+      0 10px 36px -12px rgba(var(--hub-cover-rgb-eff, 124, 92, 255), 0.45),
+      0 4px 14px -10px rgba(var(--hub-cover-rgb-eff, 124, 92, 255), 0.22);
   }
 }
 @media (prefers-reduced-motion: reduce){
   #hubList .hubRow.isActive{
     animation: none;
     box-shadow:
-      0 0 0 1px rgba(124, 92, 255, 0.32),
-      0 10px 36px -12px rgba(124, 92, 255, 0.45);
+      0 0 0 1px rgba(var(--hub-cover-rgb-eff, 124, 92, 255), 0.32),
+      0 10px 36px -12px rgba(var(--hub-cover-rgb-eff, 124, 92, 255), 0.45);
   }
 }
 

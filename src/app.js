@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514genreInstrumentLabels";
+const APP_BUILD = "20260514hubCoverTintedFocus";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -739,6 +739,90 @@ function scheduleHubViewportAutoplay() {
 // waiting for `startHubPlayback` to add `.isPlaying` after audio loads.
 let hubFocusedPostId = null;
 let hubFocusUpdateRaf = 0;
+
+/** Memoize the dominant tint we sample from each Hub post's cover so
+ *  switching back to a previously-focused row is instant. The focused
+ *  card's border/background/shadow read from CSS vars set per row
+ *  (`--hub-cover-rgb`); we fall back to the brand purple when we
+ *  can't sample (CORS, decode error, fully grey cover). */
+const _hubCoverColorCache = new Map();
+function _hubColorIsGrey(r, g, b) {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  return max - min < 24;
+}
+function sampleHubCoverColor(src) {
+  if (!src) return Promise.resolve(null);
+  if (_hubCoverColorCache.has(src)) {
+    return Promise.resolve(_hubCoverColorCache.get(src));
+  }
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.decoding = "async";
+    img.referrerPolicy = "no-referrer";
+    let done = false;
+    const finish = (rgb) => {
+      if (done) return;
+      done = true;
+      _hubCoverColorCache.set(src, rgb);
+      resolve(rgb);
+    };
+    img.onload = () => {
+      try {
+        const w = 24, h = 24;
+        const c = document.createElement("canvas");
+        c.width = w; c.height = h;
+        const ctx = c.getContext("2d", { willReadFrequently: true });
+        if (!ctx) return finish(null);
+        ctx.drawImage(img, 0, 0, w, h);
+        const data = ctx.getImageData(0, 0, w, h).data;
+        let r = 0, g = 0, b = 0, n = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          const cr = data[i], cg = data[i + 1], cb = data[i + 2], ca = data[i + 3];
+          if (ca < 200) continue;
+          if (_hubColorIsGrey(cr, cg, cb)) continue;
+          r += cr; g += cg; b += cb; n += 1;
+        }
+        if (!n) {
+          for (let i = 0; i < data.length; i += 4) {
+            r += data[i]; g += data[i + 1]; b += data[i + 2]; n += 1;
+          }
+        }
+        if (!n) return finish(null);
+        r = Math.round(r / n);
+        g = Math.round(g / n);
+        b = Math.round(b / n);
+        const max = Math.max(r, g, b) || 1;
+        if (max < 140) {
+          const boost = 165 / max;
+          r = Math.min(255, Math.round(r * boost));
+          g = Math.min(255, Math.round(g * boost));
+          b = Math.min(255, Math.round(b * boost));
+        }
+        finish([r, g, b]);
+      } catch {
+        finish(null);
+      }
+    };
+    img.onerror = () => finish(null);
+    img.src = src;
+  });
+}
+function applyHubRowCoverTint(rowEl, src) {
+  if (!rowEl || !src) return;
+  rowEl.setAttribute("data-cover-tinted", "pending");
+  sampleHubCoverColor(src).then((rgb) => {
+    if (!rgb) {
+      rowEl.removeAttribute("data-cover-tinted");
+      rowEl.style.removeProperty("--hub-cover-rgb");
+      return;
+    }
+    rowEl.style.setProperty("--hub-cover-rgb", `${rgb[0]}, ${rgb[1]}, ${rgb[2]}`);
+    rowEl.setAttribute("data-cover-tinted", "ready");
+  });
+}
+
 function updateHubFocusedRow() {
   if ((document.body.getAttribute("data-route") || "") !== "hub") return;
   if (!els.hubList) return;
@@ -749,6 +833,11 @@ function updateHubFocusedRow() {
   root.querySelectorAll(".hubRow").forEach((r) => {
     const isActive = centerId && r.getAttribute("data-hub-row") === centerId;
     r.classList.toggle("isActive", Boolean(isActive));
+    if (isActive && !r.getAttribute("data-cover-tinted")) {
+      const cover = r.querySelector(".hubCover");
+      const src = cover ? cover.getAttribute("src") : "";
+      if (src) applyHubRowCoverTint(r, src);
+    }
   });
 }
 function scheduleHubFocusUpdate() {

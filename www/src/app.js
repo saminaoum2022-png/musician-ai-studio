@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514hubReelLite";
+const APP_BUILD = "20260514hubReelCoverKeep";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1150,12 +1150,16 @@ function tryHubViewportAutoplay() {
 function pauseHubForRouteChange() {
   if (!hubAudio || hubAudio.paused || !hubAudioPostId) return;
   try { hubAudio.pause(); } catch {}
-  // Reflect the paused state on the row UI so the user sees a "▶"
-  // button when they come back, not a stuck "⏸".
+  // Reflect the paused state on the row UI via the `.isPlaying` class
+  // on .hubCoverWrap — never write `textContent` on the play button,
+  // because in the reel layout the button IS the cover container
+  // and `textContent =` wipes its child <img>/glyph/equalizer.
   const root = els.hubList;
   if (root && hubAudioPostId) {
-    const btn = root.querySelector(`[data-hub-play="${hubAudioPostId}"]`);
-    if (btn) btn.textContent = "▶";
+    const wrap = root.querySelector(`.hubCoverWrap[data-hub-cover="${hubAudioPostId}"]`)
+      || root.querySelector(`[data-hub-play="${hubAudioPostId}"]`)?.closest?.(".hubCoverWrap");
+    wrap?.classList.remove("isPlaying");
+    wrap?.classList.remove("isLoading");
   }
 }
 
@@ -1168,12 +1172,13 @@ async function resumeHubAfterRouteChange() {
     await hubAudio.play();
     const root = els.hubList;
     if (root) {
-      const btn = root.querySelector(`[data-hub-play="${hubAudioPostId}"]`);
-      if (btn) btn.textContent = "⏸";
+      const wrap = root.querySelector(`.hubCoverWrap[data-hub-cover="${hubAudioPostId}"]`)
+        || root.querySelector(`[data-hub-play="${hubAudioPostId}"]`)?.closest?.(".hubCoverWrap");
+      wrap?.classList.add("isPlaying");
     }
   } catch {
     // iOS may block resume if the gesture chain was lost; that's fine,
-    // the play button is now showing "▶" so the user can tap once.
+    // the next user tap on the cover restarts cleanly.
   }
 }
 
@@ -1188,9 +1193,10 @@ function stopHubPlayback() {
   hubPlayingPostProminent = false;
   const root = els.hubList;
   if (root) {
-    root.querySelectorAll("[data-hub-play]").forEach((btn) => {
-      btn.textContent = "▶";
-    });
+    // NEVER write textContent on [data-hub-play] — the reel layout
+    // makes the play button the cover container, so textContent would
+    // delete the cover <img> and overlay sprites. Reset visuals via
+    // the .isPlaying / .isLoading class flags only.
     root.querySelectorAll(".hubPlayProgress > span").forEach((bar) => {
       bar.style.width = "0%";
     });
@@ -1259,12 +1265,12 @@ async function startHubPlayback(postId) {
     art: p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png",
   };
 
-  // Reset all per-row visuals and mark the new active row.
+  // Reset all per-row visuals and mark the new active row. NEVER write
+  // textContent on [data-hub-play] — the reel layout makes the play
+  // button the cover container, so textContent would wipe the cover
+  // <img> + overlay sprites. State is driven by the `.isPlaying` class.
   const root = els.hubList;
   if (root) {
-    root.querySelectorAll("[data-hub-play]").forEach((btn) => {
-      btn.textContent = "▶";
-    });
     root.querySelectorAll(".hubCoverWrap").forEach((w) => w.classList.remove("isPlaying"));
   }
   const playBtn =
@@ -1272,10 +1278,7 @@ async function startHubPlayback(postId) {
     document.querySelector(`[data-hub-play="${postId}"]`);
   const coverWrap = playBtn?.closest?.(".hubCoverWrap")
     || document.querySelector(`.hubCoverWrap[data-hub-cover="${postId}"]`);
-  if (playBtn) {
-    playBtn.textContent = "■";
-    coverWrap?.classList.add("isPlaying");
-  }
+  coverWrap?.classList.add("isPlaying");
   // Loading shimmer on the progress bar — confirms "we heard you tap" while
   // the audio element is buffering. Cleared as soon as play() resolves
   // (success or failure), so it never lingers on a finished/dead row.
@@ -6572,11 +6575,9 @@ function renderHub() {
     if (menu) menu.style.display = open ? "none" : "";
   }));
   if (hubAudioPostId && hubAudio && !hubAudio.paused) {
-    const btn = els.hubList.querySelector(`[data-hub-play="${hubAudioPostId}"]`);
-    if (btn) {
-      btn.textContent = "■";
-      btn.closest(".hubCoverWrap")?.classList.add("isPlaying");
-    }
+    const wrap = els.hubList.querySelector(`.hubCoverWrap[data-hub-cover="${hubAudioPostId}"]`)
+      || els.hubList.querySelector(`[data-hub-play="${hubAudioPostId}"]`)?.closest?.(".hubCoverWrap");
+    wrap?.classList.add("isPlaying");
   }
   // Reset cached focused id so the reel observer can re-fire against
   // the freshly mounted panels (otherwise an id == previous id check

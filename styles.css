@@ -8555,7 +8555,6 @@ input::placeholder, textarea::placeholder{
 .searchShelfHead{
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
   gap: 8px;
   padding: 0 2px;
 }
@@ -8566,25 +8565,18 @@ input::placeholder, textarea::placeholder{
   letter-spacing: -0.01em;
   color: #e8eef7;
 }
-.searchShelfHint{
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(232,238,247,0.42);
-}
 .searchShelfRow{
   display: flex;
   gap: 14px;
   overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x proximity;
-  padding: 2px 2px 10px;
+  /* iOS-safe horizontal scroll: no overflow-y constraint, no mask,
+     and momentum scrolling enabled. mask-image + scroll-snap on
+     WKWebView was eating the touch gesture, which is why the rows
+     felt frozen. */
+  -webkit-overflow-scrolling: touch;
+  padding: 2px 2px 12px;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  /* Soft edge fade so the row hints "more here" without a scrollbar. */
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 24px), transparent 100%);
-          mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 24px), transparent 100%);
 }
 .searchShelfRow::-webkit-scrollbar{ display: none; }
 .searchPoster{
@@ -8595,7 +8587,6 @@ input::placeholder, textarea::placeholder{
   border-radius: 18px;
   overflow: hidden;
   cursor: pointer;
-  scroll-snap-align: start;
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.08);
   -webkit-tap-highlight-color: transparent;

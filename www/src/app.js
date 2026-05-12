@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260512searchfit";
+const APP_BUILD = "20260512searchscroll";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1940,7 +1940,6 @@ function renderSearchShelves(query) {
         <section class="searchShelf" data-search-shelf="${shelf.id}">
           <header class="searchShelfHead">
             <h3 class="searchShelfTitle">${escapeHtml(shelf.title)}</h3>
-            <span class="searchShelfHint">${escapeHtml(shelf.hint)}</span>
           </header>
           <div class="searchShelfRow">
             ${toShow.map(renderSearchPosterHTML).join("")}

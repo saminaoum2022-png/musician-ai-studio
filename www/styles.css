@@ -272,27 +272,90 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
 /* The wordmark reuses the .brandPrimary gradient defined in the header so
  * the splash is visually identical to the title users will see throughout
  * the app — same family, same gradient, just much bigger. */
-.introWordmark{
+.introWordmarkShell{
+  --intro-glass-radius: 40px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 26px 40px 32px;
+  border-radius: var(--intro-glass-radius);
+  isolation: isolate;
+  animation: introBreath 2.6s ease-in-out infinite;
+  filter: drop-shadow(0 22px 50px rgba(0, 0, 0, 0.42));
+}
+.introWordmarkShell::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0.04) 40%,
+    rgba(12, 16, 26, 0.45) 100%
+  );
+  backdrop-filter: blur(40px) saturate(190%);
+  -webkit-backdrop-filter: blur(40px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.48),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22),
+    0 0 0 0.5px rgba(255, 255, 255, 0.05),
+    0 18px 48px rgba(0, 0, 0, 0.38);
+}
+.introWordmarkShell::after{
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: calc(var(--intro-glass-radius) - 1px);
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    168deg,
+    rgba(255, 255, 255, 0.32) 0%,
+    rgba(255, 255, 255, 0.08) 18%,
+    transparent 45%,
+    transparent 58%,
+    rgba(35, 213, 171, 0.12) 92%,
+    rgba(124, 92, 255, 0.1) 100%
+  );
+  opacity: 0.85;
+  mix-blend-mode: soft-light;
+}
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))){
+  .introWordmarkShell::before{
+    background: rgba(18, 22, 34, 0.88);
+    border-color: rgba(255, 255, 255, 0.18);
+  }
+}
+.introWordmarkShell .introWordmark{
+  position: relative;
+  z-index: 2;
   margin: 0;
   font-size: 78px;
   font-weight: 900;
   letter-spacing: -0.052em;
   line-height: 1;
-  animation: introBreath 2.6s ease-in-out infinite;
-  filter: drop-shadow(0 0 40px rgba(124,92,255,0.18));
   display: inline-flex;
   align-items: baseline;
   gap: 14px;
 }
-.introWordmark .brandPrimary{
-  text-shadow: 0 0 32px rgba(124,92,255,0.20), 0 0 48px rgba(35,213,171,0.12);
+.introWordmarkShell .introWordmark .brandPrimary{
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.18),
+    0 0 36px rgba(124, 92, 255, 0.28),
+    0 12px 40px rgba(35, 213, 171, 0.18);
 }
-.introWordmark .introBrandSecondary{
+.introWordmarkShell .introBrandSecondary{
   font-size: 22px;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(231,237,247,0.72);
+  color: rgba(248, 250, 255, 0.88);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.12);
   transform: translateY(-6px);
 }
 @keyframes introBreath{
@@ -300,7 +363,7 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
   50%      { transform: scale(1.006); }
 }
 @media (prefers-reduced-motion: reduce){
-  .introWordmark{ animation: none; }
+  .introWordmarkShell{ animation: none; }
 }
 
 /* Three small dots that pulse one after the other — soft "loading" cue
@@ -330,8 +393,19 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
 }
 
 @media (max-width: 720px){
-  .introWordmark{ font-size: 62px; gap: 10px; }
-  .introWordmark .introBrandSecondary{ font-size: 17px; letter-spacing: 0.12em; transform: translateY(-4px); }
+  .introWordmarkShell{
+    --intro-glass-radius: 30px;
+    padding: 18px 22px 22px;
+  }
+  .introWordmarkShell .introWordmark{
+    font-size: 62px;
+    gap: 10px;
+  }
+  .introWordmarkShell .introBrandSecondary{
+    font-size: 17px;
+    letter-spacing: 0.12em;
+    transform: translateY(-4px);
+  }
 }
 
 body.isIntro .header{ display:none; }

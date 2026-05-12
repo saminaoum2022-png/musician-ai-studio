@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260512cinematic";
+const APP_BUILD = "20260512cinematic-fix";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -6540,6 +6540,9 @@ function setupProfileStickyRibbon() {
 function setProfileStickyItems(items) {
   _profileStickyItems = Array.isArray(items) ? items.slice(0, 30) : [];
 }
+
+/* =================================================================
+ *  Spotify-x-Nabad — render helpers
  *
  *  All called from renderProfileHubShared() with the freshly fetched
  *  list of own Hub posts (newest-first). Each helper hides its

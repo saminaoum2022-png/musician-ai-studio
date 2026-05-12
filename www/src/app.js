@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514tabRefreshFixedSpin";
+const APP_BUILD = "20260514profileSkeletons";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -4435,6 +4435,13 @@ function ingestMyHubPostsRows(rows) {
 
 let _myHubPostsLastFetchMs = 0;
 let _myHubPostsInFlight = null;
+/** Distinguishes "user has no Hub posts" from "we haven't asked yet".
+ *  Profile hero / top-week / all-releases would otherwise hide
+ *  themselves on a fresh load (no items) AND show "No songs on Hub
+ *  yet" — same UI as a brand-new account, which is what made Profile
+ *  feel late-loading. Once true, the empty state is genuine and the
+ *  skeletons stop. Reset on logout. */
+let _myHubPostsFirstLoadDone = false;
 async function refreshMyHubPostsFast({ force = false } = {}) {
   try {
     const uid = String(authSession?.user?.id || "");
@@ -4450,11 +4457,17 @@ async function refreshMyHubPostsFast({ force = false } = {}) {
         if (rows && rows.length) ingestMyHubPostsRows(rows);
       } finally {
         _myHubPostsInFlight = null;
+        _myHubPostsFirstLoadDone = true;
+        // Paint once more so the skeletons swap to either real rows or
+        // the genuine empty state, even when the caller forgot to
+        // re-render after awaiting us (most call-sites are fire-and-forget).
+        try { renderProfileHubShared(); } catch {}
       }
     })();
     return _myHubPostsInFlight;
   } catch {
     _myHubPostsInFlight = null;
+    _myHubPostsFirstLoadDone = true;
   }
 }
 function loadAuthSession() {
@@ -4948,6 +4961,10 @@ function resetProfileUiToGuest() {
   _lastLibraryPersistError = "";
   _lastLibraryPersistedCount = 0;
   invalidateLibraryMemCache();
+  // Reset Profile-Hub first-load gate so a fresh sign-in re-shows the
+  // skeletons until the new account's posts have been fetched.
+  _myHubPostsFirstLoadDone = false;
+  _myHubPostsLastFetchMs = 0;
   // Wipe every personal balance/badge so a logged-out screen never
   // leaks the previous account's state. Without this, the Profile
   // credits pill kept showing the last balance (e.g. 326) after Logout
@@ -7187,6 +7204,17 @@ function getProfileOwnerHubItems() {
     .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
 }
 
+/** True when the signed-in user's Hub posts haven't finished their
+ *  first fetch this session AND we have nothing in the local cache to
+ *  show yet. Used by the three Profile sections to paint shimmer
+ *  skeletons instead of blank cards or premature "no songs" CTA. */
+function shouldShowProfileHubSkeleton(items) {
+  if (!authSession?.user?.id) return false;
+  if (items && items.length) return false;
+  if (_myHubPostsFirstLoadDone) return false;
+  return true;
+}
+
 function renderProfileHero(items) {
   const sec = els.profileHeroLatest;
   const img = els.profileHeroArtImg;
@@ -7195,9 +7223,16 @@ function renderProfileHero(items) {
   const btn = els.profileHeroPlayBtn;
   if (!sec || !img || !titleEl || !metaEl || !btn) return;
   if (!items?.length) {
-    sec.hidden = true;
+    if (shouldShowProfileHubSkeleton(items)) {
+      sec.hidden = false;
+      sec.setAttribute("data-skeleton", "true");
+    } else {
+      sec.hidden = true;
+      sec.removeAttribute("data-skeleton");
+    }
     return;
   }
+  sec.removeAttribute("data-skeleton");
   sec.hidden = false;
   const latest = items[0];
   const art = String(latest.artUrl || latest.creatorAvatar || "./assets/nabadai-logo.png");
@@ -7422,11 +7457,41 @@ function renderProfileTopWeek(items) {
     .filter((p, _, arr) => Number(p.likes || 0) > 0 || arr.length <= 3)
     .slice(0, 3);
   if (!ranked.length) {
-    sec.hidden = true;
-    list.innerHTML = "";
+    if (shouldShowProfileHubSkeleton(items)) {
+      sec.hidden = false;
+      sec.setAttribute("data-skeleton", "true");
+      list.innerHTML = `
+        <div class="profileTopWeekItem profileTopWeekSkel" aria-hidden="true">
+          <span class="profileTopWeekArt profileTopWeekSkelArt"></span>
+          <span class="profileTopWeekInfo">
+            <span class="profileSkelLine profileSkelLineTitle"></span>
+            <span class="profileSkelLine profileSkelLineSub"></span>
+          </span>
+        </div>
+        <div class="profileTopWeekItem profileTopWeekSkel" style="--profSkelDelay:0.12s" aria-hidden="true">
+          <span class="profileTopWeekArt profileTopWeekSkelArt"></span>
+          <span class="profileTopWeekInfo">
+            <span class="profileSkelLine profileSkelLineTitle"></span>
+            <span class="profileSkelLine profileSkelLineSub"></span>
+          </span>
+        </div>
+        <div class="profileTopWeekItem profileTopWeekSkel" style="--profSkelDelay:0.24s" aria-hidden="true">
+          <span class="profileTopWeekArt profileTopWeekSkelArt"></span>
+          <span class="profileTopWeekInfo">
+            <span class="profileSkelLine profileSkelLineTitle"></span>
+            <span class="profileSkelLine profileSkelLineSub"></span>
+          </span>
+        </div>
+      `;
+    } else {
+      sec.hidden = true;
+      sec.removeAttribute("data-skeleton");
+      list.innerHTML = "";
+    }
     return;
   }
   sec.hidden = false;
+  sec.removeAttribute("data-skeleton");
   list.innerHTML = ranked
     .map((p, i) => {
       const sid = escapeHtml(String(p.id));
@@ -7828,6 +7893,26 @@ function renderProfileHubShared() {
     }
   }
   if (!items.length) {
+    if (shouldShowProfileHubSkeleton(items)) {
+      const skelRows = [0, 1, 2, 3].map((i) => `
+        <li class="libRow libRowSkeleton" style="--libSkelDelay:${(i * 0.08).toFixed(2)}s" aria-hidden="true">
+          <button type="button" class="libRowMain" disabled tabindex="-1">
+            <span class="libRowArt"><span class="libSkelBlock libSkelArt"></span></span>
+            <span class="libRowInfo">
+              <span class="libSkelBlock libSkelTitleLine"></span>
+              <span class="libSkelBlock libSkelSubLine"></span>
+            </span>
+          </button>
+          <span class="libRowMore libSkelMore" aria-hidden="true"></span>
+        </li>
+      `).join("");
+      els.profileHubSharedList.innerHTML = `
+        <ul class="libraryRows libraryRowsSkeleton" aria-busy="true" aria-label="Loading your releases">
+          ${skelRows}
+        </ul>
+      `;
+      return;
+    }
     els.profileHubSharedList.innerHTML = `
       <div class="emptyState">
         <div class="emptyStateIcon" aria-hidden="true">♪</div>

@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514logoutWipeCredits";
+const APP_BUILD = "20260514pullToRefresh";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1326,6 +1326,201 @@ function showLikeBurst() {
     el.classList.remove("show");
     el.style.display = "none";
   }, 620);
+}
+
+/* ------------------------------------------------------------------
+ *  Pull-to-refresh (Instagram-style)
+ *
+ *  Single global gesture handler — much cheaper than four bespoke ones,
+ *  and the indicator is always exactly one DOM element. We dispatch
+ *  the refresh callback per active route so each surface can stay
+ *  responsible for its own data layer:
+ *
+ *    - hub      → refreshHubFromSupabase()
+ *    - search   → re-run last query (live input value)
+ *    - profile  → auth refresh + credits + my-hub posts, in parallel
+ *    - library  → reconcileLibraryFromCloud({ force: true })
+ *
+ *  Routes not listed here (create, player, settings, …) ignore the
+ *  gesture entirely — the gesture handler bails early. We deliberately
+ *  skip Create so a half-typed prompt is never wiped by a pull.
+ *
+ *  Mechanics:
+ *    - Only engages when body scrollTop is 0 (i.e. user is already at
+ *      the top of the page).
+ *    - Resistive drag (0.55× factor) feels closer to native iOS.
+ *    - Crosses an arming threshold once the eased distance ≥ 70px;
+ *      below that, releasing snaps back without a refresh.
+ *    - Light haptic on arm, impact haptic on commit, gives the gesture
+ *      a tactile "you've got it" feel that matches Instagram/Twitter.
+ *    - Only one refresh in flight at a time — re-pulls during a
+ *      refresh are no-ops.
+ *    - Bails the moment dy goes negative or finger drifts > 18° off
+ *      vertical, so horizontal carousels at the top of the page
+ *      (e.g. Search shelves) still scroll cleanly without ever
+ *      pulling the page down with them.
+ * ----------------------------------------------------------------- */
+const PULL_TO_REFRESH_ROUTES = {
+  async hub() {
+    try { await refreshHubFromSupabase(); } catch (e) { console.warn("[ptr/hub]", e); }
+  },
+  async search() {
+    try {
+      const input = document.getElementById("searchInput");
+      const q = String(input?.value || "");
+      runSearchQuery(q);
+    } catch (e) { console.warn("[ptr/search]", e); }
+  },
+  async profile() {
+    try {
+      await Promise.all([
+        Promise.resolve(refreshAuthStateFromSupabase()).catch(() => {}),
+        Promise.resolve(refreshMyCredits({ silent: true })).catch(() => {}),
+        Promise.resolve(refreshMyHubPostsFast({ force: true })).catch(() => {}),
+      ]);
+    } catch (e) { console.warn("[ptr/profile]", e); }
+  },
+  async library() {
+    try { await reconcileLibraryFromCloud({ force: true }); }
+    catch (e) { console.warn("[ptr/library]", e); }
+  },
+};
+
+function attachGlobalPullToRefresh() {
+  const PTR_THRESHOLD = 68;
+  const PTR_MAX = 130;
+  const PTR_RESISTANCE = 0.55;
+
+  const indicator = document.createElement("div");
+  indicator.id = "ptrIndicator";
+  indicator.className = "ptrIndicator";
+  indicator.setAttribute("aria-hidden", "true");
+  indicator.innerHTML = `
+    <div class="ptrSpinner">
+      <svg viewBox="0 0 24 24" class="ptrSpinnerIcon">
+        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2.2"
+                fill="none" stroke-linecap="round" stroke-dasharray="14 80" />
+      </svg>
+    </div>
+  `;
+  document.body.appendChild(indicator);
+
+  let startY = 0;
+  let startX = 0;
+  let pulling = false;
+  let lockedOut = false;
+  let armed = false;
+  let refreshing = false;
+
+  function activeRoute() {
+    const r = document.body.getAttribute("data-route") || "";
+    return Object.prototype.hasOwnProperty.call(PULL_TO_REFRESH_ROUTES, r) ? r : "";
+  }
+
+  function setDragging(on) {
+    if (on) indicator.setAttribute("data-dragging", "true");
+    else indicator.removeAttribute("data-dragging");
+  }
+
+  function setVisual(rawDy) {
+    const eased = Math.min(PTR_MAX, rawDy * PTR_RESISTANCE);
+    indicator.style.transform = `translate3d(-50%, ${eased - 56}px, 0)`;
+    indicator.style.opacity = String(Math.min(1, eased / (PTR_THRESHOLD * 0.85)));
+    const wasArmed = armed;
+    armed = eased >= PTR_THRESHOLD;
+    indicator.setAttribute("data-armed", armed ? "true" : "false");
+    if (armed && !wasArmed) haptic("light");
+    const angle = Math.min(360, (eased / PTR_THRESHOLD) * 360);
+    indicator.style.setProperty("--ptrAngle", `${angle}deg`);
+  }
+
+  function resetIndicator() {
+    setDragging(false);
+    indicator.removeAttribute("data-armed");
+    indicator.removeAttribute("data-refreshing");
+    indicator.style.transform = "translate3d(-50%, -56px, 0)";
+    indicator.style.opacity = "0";
+    armed = false;
+  }
+
+  function commit(routeKey) {
+    const fn = PULL_TO_REFRESH_ROUTES[routeKey];
+    if (!fn) { resetIndicator(); return; }
+    refreshing = true;
+    setDragging(false);
+    indicator.setAttribute("data-refreshing", "true");
+    indicator.style.transform = "translate3d(-50%, 8px, 0)";
+    indicator.style.opacity = "1";
+    haptic("impact");
+    const start = Date.now();
+    Promise.resolve()
+      .then(() => fn())
+      .catch((e) => console.warn("[ptr] refresh error", e))
+      .finally(() => {
+        // Hold the spinner for at least 380ms so a too-fast network
+        // refresh doesn't look like a flicker.
+        const elapsed = Date.now() - start;
+        const remaining = Math.max(0, 380 - elapsed);
+        setTimeout(() => {
+          refreshing = false;
+          resetIndicator();
+        }, remaining);
+      });
+  }
+
+  document.addEventListener("touchstart", (e) => {
+    if (refreshing) return;
+    if (window.scrollY > 0) return;
+    if (!activeRoute()) return;
+    const t = e.touches && e.touches[0];
+    if (!t) return;
+    startY = t.clientY;
+    startX = t.clientX;
+    pulling = true;
+    lockedOut = false;
+  }, { passive: true });
+
+  document.addEventListener("touchmove", (e) => {
+    if (!pulling || refreshing || lockedOut) return;
+    const t = e.touches && e.touches[0];
+    if (!t) return;
+    const dy = t.clientY - startY;
+    const dx = t.clientX - startX;
+    if (dy <= 0) {
+      resetIndicator();
+      return;
+    }
+    // Horizontal-gesture lockout — carousels (e.g. Search shelves)
+    // at the top of the page deserve to swipe freely. If horizontal
+    // travel ever beats vertical by 1.6×, treat the gesture as
+    // sideways and ignore until next touchstart.
+    if (Math.abs(dx) > Math.abs(dy) * 1.6) {
+      lockedOut = true;
+      resetIndicator();
+      return;
+    }
+    if (window.scrollY > 0) {
+      pulling = false;
+      resetIndicator();
+      return;
+    }
+    setDragging(true);
+    setVisual(dy);
+  }, { passive: true });
+
+  document.addEventListener("touchend", () => {
+    if (!pulling) return;
+    pulling = false;
+    const route = activeRoute();
+    if (armed && route && !refreshing) commit(route);
+    else resetIndicator();
+  }, { passive: true });
+
+  document.addEventListener("touchcancel", () => {
+    if (!pulling) return;
+    pulling = false;
+    resetIndicator();
+  }, { passive: true });
 }
 
 var authSession = null;
@@ -16379,6 +16574,12 @@ if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !=
 renderProfilePreviewFromInputs();
 renderProfileHubShared();
 setProfileEditing(false);
+
+// Instagram-style pull-to-refresh on Hub / Search / Profile / Library.
+// Attached once at boot — the helper itself reads `body[data-route]`
+// to decide whether the gesture is active for the current screen, so
+// we never need to detach/re-attach on route changes.
+try { attachGlobalPullToRefresh(); } catch (e) { console.warn("[ptr] init", e); }
 
 // Hum → melody (MVP)
 if (els.btnHumStart && els.btnHumStop && els.btnHumClear) {

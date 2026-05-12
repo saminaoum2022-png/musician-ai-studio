@@ -39,7 +39,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260514soundsNeonCertBadge" />
+    <link rel="stylesheet" href="./styles.css?v=20260514profileMySoundNeon" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1014,9 +1014,12 @@
                    was retired — it didn't read clearly and felt off the
                    app's aesthetic. Skeleton shimmer wraps the avatar and
                    name on cold opens until the real data resolves. -->
-              <div class="profileAuraTopRow" id="profileAuraTopRow" data-loading="false">
-                <div class="profileAuraAvatarWrap" id="profileAuraAvatarWrap">
-                  <span class="profileAuraRing" aria-hidden="true"></span>
+              <div class="profileAuraTopRow profileAuraTopRowNeon" id="profileAuraTopRow" data-loading="false">
+                <div class="profileAuraAvatarWrap profileAuraAvatarWrapNeon" id="profileAuraAvatarWrap">
+                  <span class="profileAuraRing profileAuraRingNeon" aria-hidden="true"></span>
+                  <span class="profileAuraWaveform" aria-hidden="true">
+                    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                  </span>
                   <img
                     id="profilePreviewAvatar"
                     class="profileAuraAvatar"
@@ -1050,6 +1053,12 @@
                   autocomplete="username"
                   aria-label="Username"
                 />
+                <span id="profileNabadCertCheck" class="profileNabadCertCheck" hidden role="img" aria-label="Verified Nabad Creator" title="Verified Nabad Creator">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path fill="currentColor" d="M12 1.5 14.6 4l3.5-.4.7 3.5 3 1.9-1.6 3.2 1.6 3.2-3 1.9-.7 3.5L14.6 20 12 22.5 9.4 20l-3.5.4-.7-3.5-3-1.9 1.6-3.2L2.2 8.6l3-1.9.7-3.5L9.4 4 12 1.5Z"/>
+                    <path fill="#0a0c12" d="m10.6 14.6-2.3-2.3 1.3-1.3 1 1 3.4-3.4 1.3 1.3-4.7 4.7Z"/>
+                  </svg>
+                </span>
                 <!-- Identity (timbre + genre + persona) lives INLINE with
                      the handle now, separated by a small middle-dot.
                      Smaller font than the username, quieter color. -->
@@ -1151,6 +1160,66 @@
                share now lives as a compact icon in the Aura toolbar
                (Instagram pattern). Share confirmations use the global
                toast. -->
+
+          <!-- "My Sound" — sonic identity card. Distinct from the
+               Sounds generator page (which lives under its own route).
+               Shows the user's voice timbre, favorite genres parsed
+               from profile, and toggleable AI mood presets used as
+               creative cues when generating. View-mode only; hidden
+               while the hero is in edit mode. -->
+          <section class="profileMySound" id="profileMySound" hidden aria-labelledby="profileMySoundHeading">
+            <header class="profileMySoundHeader">
+              <h3 id="profileMySoundHeading" class="profileMySoundTitle">
+                <span class="profileMySoundTitleIcon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                    <path d="M3 12h2"/>
+                    <path d="M7 8v8"/>
+                    <path d="M11 5v14"/>
+                    <path d="M15 9v6"/>
+                    <path d="M19 11v2"/>
+                  </svg>
+                </span>
+                My Sound
+              </h3>
+              <button id="profileMySoundEditBtn" type="button" class="profileMySoundViewAll" aria-label="Edit My Sound">
+                <span>View all</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>
+              </button>
+            </header>
+            <div class="profileMySoundCard">
+              <div class="profileMySoundRow">
+                <div class="profileMySoundVoice">
+                  <span class="profileMySoundVoiceIcon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="9" y="3" width="6" height="12" rx="3"/>
+                      <path d="M5 11a7 7 0 0 0 14 0"/>
+                      <path d="M12 18v3"/>
+                    </svg>
+                  </span>
+                  <div class="profileMySoundVoiceBody">
+                    <span class="profileMySoundLabel">Voice Type</span>
+                    <strong id="profileMySoundVoiceName" class="profileMySoundVoiceName">—</strong>
+                    <span id="profileMySoundVoiceTraits" class="profileMySoundVoiceTraits">Tap pencil to set your voice</span>
+                  </div>
+                </div>
+                <div class="profileMySoundGenres">
+                  <span class="profileMySoundLabel">Favorite Genres</span>
+                  <div id="profileMySoundGenresList" class="profileMySoundGenresList" role="list"></div>
+                </div>
+              </div>
+              <div class="profileMySoundPresets">
+                <span class="profileMySoundLabel profileMySoundPresetsLabel">
+                  <span class="profileMySoundPresetsLabelIcon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="m12 2 1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5L12 2Zm6 10 1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3ZM5 15l.8 2.2L8 18l-2.2.8L5 21l-.8-2.2L2 18l2.2-.8L5 15Z"/>
+                    </svg>
+                  </span>
+                  AI Mood Presets
+                </span>
+                <div id="profileMySoundPresetsList" class="profileMySoundPresetsList" role="list"></div>
+              </div>
+            </div>
+          </section>
 
           <section class="profileHeroLatest" id="profileHeroLatest" hidden>
             <header class="profileSectionHead">
@@ -1953,6 +2022,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260514soundsNeonCertBadge"></script>
+    <script type="module" src="./src/app.js?v=20260514profileMySoundNeon"></script>
   </body>
 </html>

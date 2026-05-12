@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514soundsNeonCertBadge";
+const APP_BUILD = "20260514profileMySoundNeon";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -385,6 +385,13 @@ const els = {
   profileAuraTopRow: document.getElementById("profileAuraTopRow"),
   profileAuraNameRow: document.getElementById("profileAuraNameRow"),
   profileNabadCertBadge: document.getElementById("profileNabadCertBadge"),
+  profileNabadCertCheck: document.getElementById("profileNabadCertCheck"),
+  profileMySound: document.getElementById("profileMySound"),
+  profileMySoundEditBtn: document.getElementById("profileMySoundEditBtn"),
+  profileMySoundVoiceName: document.getElementById("profileMySoundVoiceName"),
+  profileMySoundVoiceTraits: document.getElementById("profileMySoundVoiceTraits"),
+  profileMySoundGenresList: document.getElementById("profileMySoundGenresList"),
+  profileMySoundPresetsList: document.getElementById("profileMySoundPresetsList"),
   profileIdentityLine: document.getElementById("profileIdentityLine"),
   profileHeroBio: document.getElementById("profileHeroBio"),
   // Spotify-x-Nabad redesign nodes
@@ -4968,6 +4975,7 @@ function resetProfileUiToGuest() {
     callingCardUpdatedAt: 0,
     soundCertified: false,
   };
+  _moodPresetsCache = null;
   try { localStorage.setItem(PROFILE_KEY, JSON.stringify(activeProfile)); } catch {}
   if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = "@guest";
   if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = "";
@@ -6981,6 +6989,7 @@ function setProfileEditing(on) {
     try { renderProfileIdentityLine(); } catch {}
   }
   try { renderProfileNabadCertBadge(); } catch {}
+  try { renderProfileMySound(); } catch {}
 }
 
 /** Show the soft "pick a username" banner when the current user is
@@ -7574,10 +7583,191 @@ function isNabadSoundCertified() {
 }
 
 function renderProfileNabadCertBadge() {
-  const el = els.profileNabadCertBadge;
-  if (!el) return;
+  const check = els.profileNabadCertCheck;
+  const legacy = els.profileNabadCertBadge;
   const show = isNabadSoundCertified() && !profileEditing;
-  el.hidden = !show;
+  if (check) check.hidden = !show;
+  if (legacy) legacy.hidden = true;
+}
+
+/* =================================================================
+ *  "My Sound" — Profile sonic identity card.
+ *  Distinct from the Sounds generator page (under #/sounds). This
+ *  panel surfaces the user's voice timbre, favorite genres parsed
+ *  from `activeProfile.genres`, and a small set of AI mood presets
+ *  the user can toggle. Presets are stored client-side per user id
+ *  for now (key: nabad:moodPresets:<uid>) until we add a column.
+ * ================================================================= */
+const MOOD_PRESETS = [
+  {
+    id: "romantic",
+    label: "Romantic",
+    svg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-7-4.35-9.33-9.07A5.4 5.4 0 0 1 12 5.94a5.4 5.4 0 0 1 9.33 6C19 16.65 12 21 12 21Z"/></svg>',
+  },
+  {
+    id: "dabke",
+    label: "Dabke",
+    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 21V11l3-2 3 2v10"/><path d="M12 11l3-2 3 2v10"/><path d="M3 21h18"/></svg>',
+  },
+  {
+    id: "pop",
+    label: "Pop",
+    svg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 2.6 6.6L21 9.3l-5 4.6 1.5 6.9L12 17l-5.5 3.8L8 13.9 3 9.3l6.4-.7Z"/></svg>',
+  },
+  {
+    id: "sad",
+    label: "Sad",
+    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16a5 5 0 1 1 1-9.9A6 6 0 0 1 19 9.5"/><path d="M19 11v0a3 3 0 0 1 0 6h-1"/><path d="M9 19l-1 2"/><path d="M13 19l-1 2"/><path d="M17 19l-1 2"/></svg>',
+  },
+  {
+    id: "wedding",
+    label: "Wedding",
+    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="15" r="5"/><circle cx="15" cy="15" r="5"/><path d="M7 3l2 4"/><path d="M17 3l-2 4"/></svg>',
+  },
+];
+
+const TIMBRE_TRAITS = {
+  bass:           "Deep · Smooth · Powerful",
+  baritone:       "Deep · Warm · Powerful",
+  tenor:          "Bright · Agile · Soaring",
+  alto:           "Rich · Smoky · Grounded",
+  mezzo_soprano:  "Warm · Versatile · Expressive",
+  soprano:        "Bright · Airy · Soaring",
+};
+
+const GENRE_ICONS = {
+  pop:        '<svg viewBox="0 0 24 24" fill="currentColor"><path d="m12 2 2.6 6.6L21 9.3l-5 4.6 1.5 6.9L12 17l-5.5 3.8L8 13.9 3 9.3l6.4-.7Z"/></svg>',
+  rock:       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17a2 2 0 1 0 4 0V7"/><path d="M15 15a2 2 0 1 0 4 0V5"/><path d="M11 7l8-2"/></svg>',
+  arabic:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-6.5-7.85A6 6 0 0 0 20 12Z"/></svg>',
+  jazz:       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12c2-4 6-4 8 0s6 4 8 0"/><path d="M5 18c2-4 6-4 8 0s6 4 8 0"/></svg>',
+  classical:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17V5l10-2v12"/><circle cx="6" cy="17" r="3"/><circle cx="16" cy="15" r="3"/></svg>',
+  hiphop:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M3 12h6"/><path d="M15 12h6"/></svg>',
+  rnb:        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17V7l10-3v10"/><circle cx="6" cy="17" r="3"/><circle cx="16" cy="14" r="3"/></svg>',
+  electronic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h6l4 12h6"/><path d="M4 18h6"/><path d="M14 6h6"/></svg>',
+  edm:        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h6l4 12h6"/><path d="M4 18h6"/><path d="M14 6h6"/></svg>',
+  folk:       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17V5l10-2v12"/><path d="M9 9l10-2"/><circle cx="6" cy="17" r="3"/><circle cx="16" cy="15" r="3"/></svg>',
+};
+
+function moodPresetsStorageKey() {
+  const uid = authSession?.user?.id || "guest";
+  return `nabad:moodPresets:${uid}`;
+}
+function loadMoodPresets() {
+  try {
+    const raw = localStorage.getItem(moodPresetsStorageKey());
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return new Set();
+    return new Set(arr.filter((s) => typeof s === "string"));
+  } catch {
+    return new Set();
+  }
+}
+function saveMoodPresets(set) {
+  try {
+    const arr = Array.from(set || []);
+    localStorage.setItem(moodPresetsStorageKey(), JSON.stringify(arr));
+  } catch {}
+}
+let _moodPresetsCache = null;
+function getMoodPresetSet() {
+  if (!_moodPresetsCache) _moodPresetsCache = loadMoodPresets();
+  return _moodPresetsCache;
+}
+function toggleMoodPreset(id) {
+  const set = getMoodPresetSet();
+  if (set.has(id)) set.delete(id);
+  else set.add(id);
+  saveMoodPresets(set);
+  return set.has(id);
+}
+
+function genreIconSvg(name) {
+  const key = String(name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+  const aliases = {
+    "rnb": "rnb",
+    "rb": "rnb",
+    "hiphop": "hiphop",
+    "rap": "hiphop",
+    "edm": "edm",
+    "electronic": "electronic",
+    "house": "electronic",
+    "techno": "electronic",
+    "trap": "hiphop",
+    "klezmer": "folk",
+    "country": "folk",
+  };
+  const resolved = aliases[key] || key;
+  return GENRE_ICONS[resolved] || GENRE_ICONS.pop;
+}
+
+function renderProfileMySound() {
+  const section = els.profileMySound;
+  if (!section) return;
+  const signedIn = Boolean(authSession?.user?.id);
+  if (!signedIn || profileEditing) {
+    section.hidden = true;
+    return;
+  }
+  section.hidden = false;
+
+  const timbreRaw = String(activeProfile?.voiceTimbre || "").trim().toLowerCase();
+  const pretty = timbreRaw
+    ? timbreRaw.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    : "Not set";
+  if (els.profileMySoundVoiceName) {
+    els.profileMySoundVoiceName.textContent = pretty;
+  }
+  if (els.profileMySoundVoiceTraits) {
+    const traits = TIMBRE_TRAITS[timbreRaw] || "Tap edit to set your voice";
+    els.profileMySoundVoiceTraits.textContent = traits;
+  }
+
+  const genres = String(activeProfile?.genres || "")
+    .split(/[,|]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 4);
+  const list = els.profileMySoundGenresList;
+  if (list) {
+    const chips = genres.map((g) => {
+      return `<span class="profileMySoundGenreChip" role="listitem" title="${escapeHtml(g)}" aria-label="${escapeHtml(g)}">${genreIconSvg(g)}</span>`;
+    });
+    chips.push(
+      `<button type="button" class="profileMySoundGenreChip profileMySoundGenreChip--add" id="profileMySoundAddGenreBtn" aria-label="Add favorite genre">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+      </button>`
+    );
+    list.innerHTML = chips.join("");
+    const addBtn = document.getElementById("profileMySoundAddGenreBtn");
+    if (addBtn) {
+      addBtn.addEventListener("click", () => {
+        try { setProfileEditing(true); } catch {}
+        try {
+          els.profilePreviewGenres?.scrollIntoView({ behavior: "smooth", block: "center" });
+        } catch {}
+      }, { once: true });
+    }
+  }
+
+  const presetList = els.profileMySoundPresetsList;
+  if (presetList) {
+    const active = getMoodPresetSet();
+    presetList.innerHTML = MOOD_PRESETS.map((p) => {
+      const pressed = active.has(p.id);
+      return `<button type="button" class="profileMySoundPresetChip" data-preset-id="${p.id}" aria-pressed="${pressed ? "true" : "false"}">${p.svg}<span>${escapeHtml(p.label)}</span></button>`;
+    }).join("");
+    presetList.querySelectorAll(".profileMySoundPresetChip").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-preset-id") || "";
+        if (!id) return;
+        const now = toggleMoodPreset(id);
+        btn.setAttribute("aria-pressed", now ? "true" : "false");
+      });
+    });
+  }
 }
 
 function renderProfilePreviewFromInputs() {
@@ -7632,6 +7822,7 @@ function renderProfilePreviewFromInputs() {
     els.authLoggedInEmailInline.style.display = "none";
   }
   renderProfileNabadCertBadge();
+  try { renderProfileMySound(); } catch {}
 }
 
 /** Public-facing profile aggregated from this user's Hub posts. We use the
@@ -16031,6 +16222,15 @@ if (els.btnProfileEdit) {
     setProfileEditing(true);
     if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.focus();
     setStatus("Editing profile — adjust fields, then Save.");
+  });
+}
+if (els.profileMySoundEditBtn) {
+  els.profileMySoundEditBtn.addEventListener("click", () => {
+    try { setProfileEditing(true); } catch {}
+    try {
+      els.profilePreviewTimbreInput?.scrollIntoView({ behavior: "smooth", block: "center" });
+      els.profilePreviewTimbreInput?.focus();
+    } catch {}
   });
 }
 if (els.profileUsernamePrompt) {

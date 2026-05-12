@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260512cinematic-fix";
+const APP_BUILD = "20260512liquid";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -376,21 +376,17 @@ const els = {
   profileHeroPlayBtn: document.getElementById("profileHeroPlayBtn"),
   profileHeroTitle: document.getElementById("profileHeroTitle"),
   profileHeroMeta: document.getElementById("profileHeroMeta"),
-  profileHeartbeatSvg: document.getElementById("profileHeartbeatSvg"),
-  profileHeartbeatPeaks: document.getElementById("profileHeartbeatPeaks"),
-  // Cinematic redesign nodes
-  profileAuraBackdrop: document.getElementById("profileAuraBackdrop"),
-  profileAuraBackdropImg: document.getElementById("profileAuraBackdropImg"),
+  // Liquid pulse redesign nodes
+  profileLiquidPulse: document.getElementById("profileLiquidPulse"),
+  profileLiquidPulsePath: document.getElementById("profileLiquidPulsePath"),
   profileIdentityLine: document.getElementById("profileIdentityLine"),
-  profileSignatureCard: document.getElementById("profileSignatureCard"),
-  profileSignatureVoice: document.getElementById("profileSignatureVoice"),
-  profileSignatureBio: document.getElementById("profileSignatureBio"),
+  profileHeroBio: document.getElementById("profileHeroBio"),
+  profileWelcomeVoice: document.getElementById("profileWelcomeVoice"),
   profileStickyRibbon: document.getElementById("profileStickyRibbon"),
   profileStickyAvatar: document.getElementById("profileStickyAvatar"),
   profileStickyHandle: document.getElementById("profileStickyHandle"),
   profileStickyPlay: document.getElementById("profileStickyPlay"),
   // Spotify-x-Nabad redesign nodes
-  profileShufflePlayBig: document.getElementById("profileShufflePlayBig"),
   profileActionRow: document.getElementById("profileActionRow"),
   profileActionShare: document.getElementById("profileActionShare"),
   profileShareToast: document.getElementById("profileShareToast"),
@@ -6061,17 +6057,17 @@ function setProfileEditing(on) {
   if (els.profileAura) {
     els.profileAura.classList.toggle("profileAuraEditing", profileEditing);
   }
-  // Hide the cinematic chrome while editing — it overlaps form
-  // fields and confuses the touch targets on small screens. The hero
-  // identity line is hidden via CSS off the editing class; we still
-  // need to manually hide the cards below so they don't repaint stale
-  // data right under the form.
+  // Hide the chrome while editing — it overlaps form fields and
+  // confuses the touch targets on small screens. The hero identity
+  // line + bio quote are hidden via CSS off the editing class; we
+  // still need to manually hide the music + voice cards below so they
+  // don't repaint stale data right under the form.
   const sections = [
     els.profileActionRow,
     els.profileHeroLatest,
     els.profileTopWeek,
     els.profileShelf,
-    els.profileSignatureCard,
+    els.profileWelcomeVoice,
   ];
   sections.forEach((node) => {
     if (!node) return;
@@ -6393,38 +6389,74 @@ function setProfileAuraAudioState(playing) {
 }
 
 /* =================================================================
- *  Cinematic backdrop — paints the latest release cover onto a
- *  heavily blurred image element behind the hero. Falls back to the
- *  timbre/avatar tint gradient when no release exists yet.
+ *  Liquid heartbeat fingerprint
+ *
+ *  Draws a unique-per-user heartbeat curve into the SVG that sits
+ *  next to the avatar. The curve is composed from:
+ *    1. A deterministic hash of the user's handle/id, so two users
+ *       with the same release count still get distinct shapes.
+ *    2. The user's actual release timeline — more releases =
+ *       more peaks; popular releases = taller peaks.
+ *  The animation (stroke-dashoffset flow + blob morph) is purely
+ *  CSS-driven; this only writes a `d` attribute.
  * ================================================================= */
-let _profileBackdropLastSrc = "";
-function renderProfileBackdrop(items) {
-  const aura = els.profileAura;
-  const img = els.profileAuraBackdropImg;
-  if (!aura || !img) return;
-  const latest = Array.isArray(items) && items.length ? items[0] : null;
-  const candidate = String(latest?.artUrl || latest?.creatorAvatar || "").trim();
-  if (!candidate || /nabadai-logo\.png$/i.test(candidate)) {
-    aura.setAttribute("data-has-backdrop", "false");
-    if (img.src) img.removeAttribute("src");
-    _profileBackdropLastSrc = "";
-    return;
+function _hashSeed32(str) {
+  let h = 2166136261 >>> 0;
+  const s = String(str || "guest");
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
   }
-  if (candidate === _profileBackdropLastSrc) {
-    aura.setAttribute("data-has-backdrop", "true");
-    return;
+  return h >>> 0;
+}
+function _mulberry32(seed) {
+  let t = seed >>> 0;
+  return function () {
+    t = (t + 0x6D2B79F5) >>> 0;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function renderProfileLiquidPulse(items) {
+  const path = els.profileLiquidPulsePath;
+  if (!path) return;
+  // viewBox is 120x80; baseline at y=44 keeps the curve visually
+  // centered with room for peaks both above and below.
+  const W = 120;
+  const H = 80;
+  const baseline = 44;
+  // Seed from handle so the curve is stable per user.
+  const handleSeed = String(activeProfile?.username || authSession?.user?.id || "guest");
+  const rand = _mulberry32(_hashSeed32(handleSeed));
+  const release = Array.isArray(items) ? items.slice(0, 12) : [];
+  // Beats per drawing — anywhere from 3 (lonely heartbeat) to ~7 for
+  // a full catalog. Even a brand-new account gets a faint signature.
+  const beats = Math.max(3, Math.min(7, 3 + Math.ceil(release.length / 2)));
+  const maxL = Math.max(1, ...release.map((p) => Number(p.likes || 0)));
+  let d = `M 0 ${baseline}`;
+  for (let i = 0; i < beats; i++) {
+    const t = (i + 1) / (beats + 1);
+    const cx = t * W;
+    // Each beat: small dip, sharp peak, small dip back.
+    // Peak height is biased by the matching release's likes when
+    // available, with a small per-beat random jitter for personality.
+    const r = release[i];
+    const likes = r ? Number(r.likes || 0) : 0;
+    const norm = release.length ? likes / maxL : 0;
+    const baseHeight = 14 + norm * 22; // 14..36
+    const peakH = baseHeight * (0.85 + rand() * 0.4); // jitter
+    const dipH = 4 + rand() * 5;
+    // Optional below-baseline upswing for visual "liquid" pulse
+    const below = (rand() - 0.35) * 6;
+    d += ` Q ${cx - 8} ${baseline + below} ${cx - 4} ${baseline - dipH}`;
+    d += ` L ${cx} ${baseline - peakH}`;
+    d += ` L ${cx + 4} ${baseline - dipH}`;
+    d += ` Q ${cx + 8} ${baseline + below} ${cx + 10} ${baseline}`;
   }
-  _profileBackdropLastSrc = candidate;
-  const probe = new Image();
-  probe.onload = () => {
-    img.src = candidate;
-    aura.setAttribute("data-has-backdrop", "true");
-  };
-  probe.onerror = () => {
-    aura.setAttribute("data-has-backdrop", "false");
-    _profileBackdropLastSrc = "";
-  };
-  probe.src = candidate;
+  d += ` L ${W} ${baseline}`;
+  path.setAttribute("d", d);
 }
 
 /* =================================================================
@@ -6465,37 +6497,23 @@ function renderProfileIdentityLine() {
 }
 
 /* =================================================================
- *  Nabad Signature card — renders visibility/content for the trio
- *  (pulse fingerprint + voice mini-player + bio). The inner pieces
- *  are still owned by renderProfileHeartbeat / renderProfileVoiceEssence
- *  (which now targets nodes nested inside the card) / a tiny bio
- *  helper below. We just decide whether the card shows at all.
+ *  Bio quote — sits directly under the identity line in the hero.
+ *  Visible only in view-mode (CSS handles edit-mode hiding) and
+ *  only when there's a real bio (not the legacy placeholder string).
  * ================================================================= */
-function renderProfileSignatureCard(items) {
-  const card = els.profileSignatureCard;
-  if (!card) return;
-  const hasReleases = Boolean(items?.length);
-  const hasCard = Boolean(activeProfile?.callingCardUrl);
-  const hasBio = (() => {
-    const raw = String(activeProfile?.bio || "").trim();
-    return Boolean(raw) && !/^add a short bio/i.test(raw);
-  })();
-  const signedIn = Boolean(authSession?.user?.id);
-  const anything = hasReleases || hasCard || hasBio || signedIn;
-  card.hidden = !anything;
-
-  // Bio inside the card — show/hide its sub-block separately.
-  const bioWrap = els.profileSignatureBio;
-  if (bioWrap) {
-    bioWrap.hidden = !hasBio;
-    if (hasBio && els.profileAboutText) {
-      els.profileAboutText.textContent = String(activeProfile.bio || "").trim();
-    }
-    if (hasBio && els.profileAboutMeta) {
-      const handle = String(activeProfile?.username || "").trim();
-      els.profileAboutMeta.textContent = handle ? `— @${handle}` : "";
-    }
+function renderProfileHeroBio() {
+  const wrap = els.profileHeroBio;
+  const text = els.profileAboutText;
+  if (!wrap || !text) return;
+  const raw = String(activeProfile?.bio || "").trim();
+  const cleaned = /^add a short bio/i.test(raw) ? "" : raw;
+  if (!cleaned) {
+    wrap.hidden = true;
+    text.textContent = "";
+    return;
   }
+  wrap.hidden = false;
+  text.textContent = cleaned;
 }
 
 /* =================================================================
@@ -6550,22 +6568,8 @@ function setProfileStickyItems(items) {
  *  for a brand-new account.
  * ================================================================= */
 
-function renderProfileShufflePlay(items) {
-  const btn = els.profileShufflePlayBig;
-  if (!btn) return;
-  if (!items?.length) {
-    btn.hidden = true;
-    btn.onclick = null;
-    return;
-  }
-  btn.hidden = false;
-  btn.onclick = () => {
-    const pool = items.slice(0, 30);
-    const pick = pool[Math.floor(Math.random() * pool.length)];
-    const sid = String(pick?.id || "");
-    if (sid) void playHubPostFromProfile(sid);
-  };
-}
+// renderProfileShufflePlay was retired with the green floating button.
+// The sticky ribbon at the top of the page now owns the shuffle action.
 
 function renderProfileActionRow(_items) {
   const row = els.profileActionRow;
@@ -6578,11 +6582,13 @@ function renderProfileTopWeek(items) {
   const sec = els.profileTopWeek;
   const list = els.profileTopWeekList;
   if (!sec || !list) return;
+  // Top 3 only — like a magazine cover. Cards laid out horizontally,
+  // scrollable on small screens.
   const ranked = (items || [])
     .slice()
     .sort((a, b) => Number(b.likes || 0) - Number(a.likes || 0))
-    .filter((p, _, arr) => Number(p.likes || 0) > 0 || arr.length <= 5)
-    .slice(0, 5);
+    .filter((p, _, arr) => Number(p.likes || 0) > 0 || arr.length <= 3)
+    .slice(0, 3);
   if (!ranked.length) {
     sec.hidden = true;
     list.innerHTML = "";
@@ -6606,16 +6612,16 @@ function renderProfileTopWeek(items) {
           </span>`);
       }
       return `
-        <li>
-          <button type="button" class="profileTopWeekItem" data-top-week-play="${sid}" aria-label="Play ${tl}">
+        <button type="button" class="profileTopWeekItem" role="listitem" data-top-week-play="${sid}" aria-label="Play ${tl}">
+          <span class="profileTopWeekArt">
+            <img src="${art}" alt="" />
             <span class="profileTopWeekRank">${i + 1}</span>
-            <span class="profileTopWeekArt"><img src="${art}" alt="" /></span>
-            <span class="profileTopWeekInfo">
-              <span class="profileTopWeekTitle">${tl}</span>
-              <span class="profileTopWeekSub">${subBits.join('<span aria-hidden="true">·</span>')}</span>
-            </span>
-          </button>
-        </li>
+          </span>
+          <span class="profileTopWeekInfo">
+            <span class="profileTopWeekTitle">${tl}</span>
+            <span class="profileTopWeekSub">${subBits.join('<span aria-hidden="true">·</span>')}</span>
+          </span>
+        </button>
       `;
     })
     .join("");
@@ -6666,10 +6672,10 @@ function renderProfileShelf(items) {
 }
 
 function renderProfileVoiceEssence() {
-  // The voice mini-player now lives inside the Signature card; we
-  // toggle the inner wrapper (.profileSignatureVoice) and let the
-  // outer card own its own visibility (driven by renderProfileSignatureCard).
-  const sec = els.profileSignatureVoice;
+  // The welcome voice note is its own dedicated section now (not part
+  // of any signature card). Toggle the section's visibility based on
+  // whether the user has a calling card and is signed in.
+  const sec = els.profileWelcomeVoice;
   const playBtn = els.profileVoiceEssencePlay;
   const recBtn = els.profileVoiceEssenceRecord;
   const titleEl = document.getElementById("profileVoiceEssenceTitle");
@@ -6677,17 +6683,13 @@ function renderProfileVoiceEssence() {
   if (!sec || !playBtn) return;
   const url = String(activeProfile?.callingCardUrl || "").trim();
   const signedIn = Boolean(authSession?.user?.id);
-  const timbreRaw = String(activeProfile?.voiceTimbre || "").trim();
-  const pretty = timbreRaw
-    ? timbreRaw.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
-    : "";
 
   if (url) {
     sec.hidden = false;
     playBtn.style.display = "";
     playBtn.dataset.state = "idle";
-    playBtn.setAttribute("aria-label", "Play voice essence");
-    if (titleEl) titleEl.textContent = pretty ? `${pretty} voice` : "Voice";
+    playBtn.setAttribute("aria-label", "Play welcome voice note");
+    if (titleEl) titleEl.textContent = "Voice note";
     if (subEl) subEl.textContent = "8s · raw";
     if (recBtn) recBtn.hidden = true;
     playBtn.onclick = () => {
@@ -6760,13 +6762,15 @@ function renderProfilePreviewFromInputs() {
   renderProfileUsernamePrompt();
   updateProfilePersonaInlineChip();
   renderProfileIdentityLine();
-  // Keep the Signature card / voice essence in sync with live input
-  // changes — but only outside edit mode, where they're visible.
+  // Keep the hero bio + welcome voice + liquid pulse in sync with
+  // live input changes — but only outside edit mode, where they're
+  // actually visible.
   if (!profileEditing) {
+    try { renderProfileHeroBio(); } catch {}
     try { renderProfileVoiceEssence(); } catch {}
     try {
       const items = getProfileOwnerHubItems().slice(0, 30);
-      renderProfileSignatureCard(items);
+      renderProfileLiquidPulse(items);
     } catch {}
   }
   syncProfileStickyRibbonFromState();
@@ -7065,18 +7069,16 @@ function renderProfileHubShared() {
   if (!els.profileHubSharedList) return;
   const items = getProfileOwnerHubItems().slice(0, 30);
   renderProfileOwnStats();
-  // Cinematic backdrop + identity line fire first so the hero is the
-  // first thing painted when the page repaints (less flicker).
-  renderProfileBackdrop(items);
+  // Liquid pulse + identity line + hero bio fire first so the hero is
+  // painted before the scrollable music sections.
+  renderProfileLiquidPulse(items);
   renderProfileIdentityLine();
+  renderProfileHeroBio();
   renderProfileHero(items);
-  renderProfileHeartbeat(items);
-  renderProfileShufflePlay(items);
   renderProfileActionRow(items);
+  renderProfileVoiceEssence();
   renderProfileTopWeek(items);
   renderProfileShelf(items);
-  renderProfileVoiceEssence();
-  renderProfileSignatureCard(items);
   setProfileStickyItems(items);
   syncProfileStickyRibbonFromState();
   const countEl = document.getElementById("profileOwnSongCount");

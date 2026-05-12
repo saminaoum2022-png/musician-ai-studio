@@ -902,14 +902,9 @@
                the app. Stats row uses the same vertical-bar separator
                motif as the Hub bottom-tab icon. -->
           <section class="profileAura" id="profileAura" data-audio-state="idle">
-            <!-- Cinematic backdrop — JS paints the latest release cover
-                 here (blurred + scaled) so the hero art automatically
-                 follows the artist's catalog. Falls back to the
-                 timbre-tinted gradient when no release exists yet. -->
-            <div class="profileAuraBackdrop" id="profileAuraBackdrop" aria-hidden="true">
-              <img id="profileAuraBackdropImg" alt="" draggable="false" />
-              <div class="profileAuraBackdropShade" aria-hidden="true"></div>
-            </div>
+            <!-- The header now blends with the page background — no
+                 separate-color backdrop. A very soft aura glow remains
+                 for subtle warmth tied to --aura-tint. -->
             <div class="profileAuraGlow" aria-hidden="true"></div>
 
             <div class="profileAuraToolbar" role="toolbar" aria-label="Profile actions">
@@ -943,16 +938,31 @@
             </div>
 
             <div class="profileAuraIdentity">
-              <div class="profileAuraAvatarWrap" id="profileAuraAvatarWrap">
-                <span class="profileAuraRing" aria-hidden="true"></span>
-                <img
-                  id="profilePreviewAvatar"
-                  class="profileAuraAvatar"
-                  src="./assets/nabadai-logo.png"
-                  alt="Your avatar"
-                  draggable="false"
-                />
-                <span id="profileAvatarEditHint" class="profileAuraAvatarHint" style="display:none">Photo</span>
+              <!-- Avatar + liquid heartbeat fingerprint sit side-by-side
+                   as the signature visual of the page. The fingerprint
+                   is generated per-user from their release timeline +
+                   a hash of their handle, so every artist gets a
+                   unique liquid pulse. -->
+              <div class="profileAuraTopRow">
+                <div class="profileAuraAvatarWrap" id="profileAuraAvatarWrap">
+                  <span class="profileAuraRing" aria-hidden="true"></span>
+                  <img
+                    id="profilePreviewAvatar"
+                    class="profileAuraAvatar"
+                    src="./assets/nabadai-logo.png"
+                    alt="Your avatar"
+                    draggable="false"
+                  />
+                  <span id="profileAvatarEditHint" class="profileAuraAvatarHint" style="display:none">Photo</span>
+                </div>
+                <div class="profileLiquidPulse" id="profileLiquidPulse" aria-label="Your sonic fingerprint">
+                  <div class="profileLiquidPulseBlob" aria-hidden="true"></div>
+                  <div class="profileLiquidPulseBlob profileLiquidPulseBlob--b" aria-hidden="true"></div>
+                  <svg class="profileLiquidPulseSvg" viewBox="0 0 120 80" preserveAspectRatio="none" aria-hidden="true">
+                    <path id="profileLiquidPulsePath" class="profileLiquidPulsePath" d="" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  <span class="profileLiquidPulseLabel">Pulse</span>
+                </div>
               </div>
 
               <div class="profileAuraNameRow">
@@ -1021,19 +1031,29 @@
                    it from voiceTimbre + genres + persona. -->
               <p id="profileIdentityLine" class="profileIdentityLine" hidden aria-live="polite"></p>
 
-              <!-- These three nodes still exist for edit-mode + legacy
+              <!-- Bio quote — sits directly under the identity line.
+                   View-mode only; edit mode shows the textarea above. -->
+              <div id="profileHeroBio" class="profileHeroBio" hidden>
+                <span class="profileHeroBioQuote" aria-hidden="true">"</span>
+                <p id="profileAboutText" class="profileHeroBioText"></p>
+              </div>
+
+              <!-- These two nodes still exist for edit-mode + legacy
                    data flow, but the view-mode UI now reads from
                    profileIdentityLine instead. CSS hides them outside
                    edit mode (see .profileAura:not(.profileAuraEditing)). -->
               <p id="profilePersonaInlineChip" class="profilePersonaInlineChip profileLegacyChip" style="display:none" aria-live="polite"></p>
               <p id="profilePreviewGenres" class="profileGenreWash profileLegacyChip" style="display:none" aria-label="Genres"></p>
 
+              <!-- Stats — songs · likes only. Credits moved out of the
+                   profile header per user request; the balance span is
+                   kept off-screen so older code paths still work. -->
               <p class="profileAuraStatsInline" id="profileAuraStatsInline" aria-live="polite">
                 <span class="profileAuraStatsInlineInner">
                   <span id="profileAuraStatLine">—</span>
-                  <a href="#/credits" id="profileCreditsLink" class="profileAuraCreditsLink">Credits <strong id="profileCreditsBalance">0</strong></a>
                 </span>
               </p>
+              <a href="#/credits" id="profileCreditsLink" class="srOnly" aria-hidden="true">Credits <strong id="profileCreditsBalance">0</strong></a>
               <!-- Legacy numeric nodes — updated by renderProfileOwnStats for scripts that read counts -->
               <span id="profileAuraSongsValue" class="srOnly" aria-hidden="true">0</span>
               <span id="profileAuraLikesValue" class="srOnly" aria-hidden="true">0</span>
@@ -1041,22 +1061,6 @@
               <span id="profileAuraStatLikes" class="srOnly" data-show="false" aria-hidden="true"></span>
             </div>
 
-            <!-- Big shuffle-play button anchored bottom-right of the hero,
-                 Spotify-artist-page style. Plays a random release from
-                 the user's own Hub catalog. Hidden until at least one
-                 share exists (toggled by renderProfileShufflePlay). -->
-            <button
-              type="button"
-              id="profileShufflePlayBig"
-              class="profileShufflePlayBig"
-              hidden
-              aria-label="Shuffle play your releases"
-            >
-              <svg viewBox="0 0 24 24" class="profileShufflePlayIcon" aria-hidden="true">
-                <path d="M8 5v14l11-7z" fill="currentColor"/>
-              </svg>
-              <span class="profileShufflePlayDot" aria-hidden="true"></span>
-            </button>
           </section>
 
           <!-- Sticky play ribbon — appears when the hero scrolls out of
@@ -1109,13 +1113,35 @@
             </div>
           </section>
 
-          <!-- Popular this week — Spotify's "Popular" list, ranked 1–5 by
-               like count. Each row: rank, cover, title, likes, ⋯ menu. -->
+          <!-- Welcome voice note — own section, separate from anything
+               else. Plays the user's 8-second calling card. Compact
+               row, no quote / no bio / no pulse. Just the voice. -->
+          <section class="profileWelcomeVoice" id="profileWelcomeVoice" hidden>
+            <header class="profileSectionHead">
+              <span class="profileEyebrow">Welcome voice note</span>
+            </header>
+            <button type="button" id="profileVoiceEssencePlay" class="profileWelcomeVoiceBtn" aria-label="Play welcome voice note">
+              <span class="profileWelcomeVoicePlay" aria-hidden="true">▶</span>
+              <span class="profileWelcomeVoiceWave" aria-hidden="true">
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span><span></span>
+              </span>
+              <span class="profileWelcomeVoiceMeta">
+                <strong id="profileVoiceEssenceTitle">Voice note</strong>
+                <span id="profileVoiceEssenceSub" class="profileWelcomeVoiceSub">8s · raw</span>
+              </span>
+            </button>
+            <button type="button" id="profileVoiceEssenceRecord" class="profileWelcomeVoiceCta" hidden>+ Record voice note</button>
+          </section>
+
+          <!-- Popular this week — top 3 only, horizontal carousel. -->
           <section class="profileTopWeek" id="profileTopWeek" hidden>
             <header class="profileSectionHead">
               <h3 class="profileSectionTitle">Popular this week</h3>
             </header>
-            <ol id="profileTopWeekList" class="profileTopWeekList" role="list"></ol>
+            <div id="profileTopWeekList" class="profileTopWeekScroll" role="list"></div>
           </section>
 
           <!-- Horizontal cover-art shelf for the full release catalog,
@@ -1128,53 +1154,6 @@
             <div id="profileShelfScroll" class="profileShelfScroll" role="list"></div>
           </section>
 
-          <!-- Nabad Signature card — the page's quiet centerpiece.
-               Replaces the trio (voice essence + pulse strip + about)
-               with one card that layers three statements: pulse line as
-               the artist's "fingerprint", a one-row voice mini-player,
-               and a tight bio paragraph. Premium = restraint. -->
-          <section class="profileSignatureCard" id="profileSignatureCard" hidden>
-            <header class="profileSignatureHead">
-              <span class="profileEyebrow">Signature</span>
-              <h3 class="profileSignatureTitle">Your sonic fingerprint</h3>
-            </header>
-
-            <!-- Pulse line — much thinner / slower than before. JS draws
-                 one continuous ECG from the user's catalog. Tap a peak
-                 to play. Treat as "barcode", not chart. -->
-            <div class="profileSignaturePulse" id="profileSignaturePulse">
-              <svg id="profileHeartbeatSvg" class="profileHeartbeatSvg" viewBox="0 0 320 36" preserveAspectRatio="none" role="img" aria-label="Releases over time"></svg>
-              <div id="profileHeartbeatPeaks" class="profileHeartbeatPeaks"></div>
-            </div>
-
-            <!-- Voice mini-player — one row, Anghami warmth. Reuses the
-                 calling-card URL. CTA-only when no card yet. -->
-            <div class="profileSignatureVoice" id="profileSignatureVoice">
-              <button type="button" id="profileVoiceEssencePlay" class="profileSignatureVoiceBtn" aria-label="Play voice essence">
-                <span class="profileSignatureVoicePlay" aria-hidden="true">▶</span>
-                <span class="profileSignatureVoiceWave" aria-hidden="true">
-                  <span></span><span></span><span></span><span></span><span></span>
-                  <span></span><span></span><span></span><span></span><span></span>
-                  <span></span><span></span><span></span><span></span><span></span>
-                  <span></span><span></span><span></span>
-                </span>
-                <span class="profileSignatureVoiceMeta">
-                  <strong id="profileVoiceEssenceTitle">Voice</strong>
-                  <span id="profileVoiceEssenceSub" class="profileSignatureVoiceSub">8s · raw</span>
-                </span>
-              </button>
-              <button type="button" id="profileVoiceEssenceRecord" class="profileSignatureVoiceCta" hidden>+ Record voice</button>
-            </div>
-
-            <!-- Bio paragraph — calm, restrained, one paragraph max.
-                 Quote glyph kept but subtle. -->
-            <div class="profileSignatureBio" id="profileSignatureBio" hidden>
-              <span class="profileAboutQuote" aria-hidden="true">“</span>
-              <p id="profileAboutText" class="profileSignatureBioText"></p>
-              <p id="profileAboutMeta" class="profileSignatureBioMeta hint"></p>
-            </div>
-          </section>
-
           <!-- Hidden compatibility nodes — older code paths still target
                these IDs (e.g. credit pill helpers, hub stats fallback).
                Kept off-screen so existing logic keeps working without
@@ -1182,32 +1161,6 @@
           <div class="srOnly" aria-hidden="true">
             <span id="profileCreditsNote"></span>
             <span id="profileOwnStats"></span>
-          </div>
-
-          <div id="profilePersonaRow" class="profilePersonaRow" style="display:none" aria-live="polite" data-expanded="false">
-            <button type="button" id="profilePersonaToggle" class="profilePersonaHead" aria-expanded="false" aria-controls="profilePersonaDetails">
-              <span class="profilePersonaIco" aria-hidden="true">🎙️</span>
-              <span class="profilePersonaHeadText">
-                <span class="profilePersonaTitle">Voice persona</span>
-                <strong id="profilePersonaLabel">—</strong>
-              </span>
-              <span class="profilePersonaChev" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
-                  <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </span>
-            </button>
-            <div id="profilePersonaDetails" class="profilePersonaDetails" hidden>
-              <div id="profilePersonaHint" class="profilePersonaHint">
-                Save a voice as persona from any of these spots:
-                <ul class="profilePersonaSpots">
-                  <li>After a song finishes → tap the ⋯ on the result card → <strong>Save voice as persona</strong>.</li>
-                  <li>In <a href="#/library">Library</a> → tap ⋯ on a song → <strong>Save voice as persona</strong>.</li>
-                  <li>On any <a href="#/hub">Hub</a> post → tap ⋯ → <strong>Save voice as persona</strong>.</li>
-                </ul>
-              </div>
-              <a href="#/generate" class="profilePersonaLink">Open Create</a>
-            </div>
           </div>
 
           <!-- Songs — same Apple-Music-style row design as Library, no card chrome -->
@@ -1598,6 +1551,34 @@
             <span class="settingsSoundsLinkChev" aria-hidden="true">›</span>
           </a>
 
+          <!-- Voice persona — relocated here from Profile per the redesign.
+               Sits right under Sounds because both are voice/audio-related. -->
+          <div id="profilePersonaRow" class="profilePersonaRow profilePersonaRowSettings" style="display:none" aria-live="polite" data-expanded="false">
+            <button type="button" id="profilePersonaToggle" class="profilePersonaHead" aria-expanded="false" aria-controls="profilePersonaDetails">
+              <span class="profilePersonaIco" aria-hidden="true">🎙️</span>
+              <span class="profilePersonaHeadText">
+                <span class="profilePersonaTitle">Voice persona</span>
+                <strong id="profilePersonaLabel">—</strong>
+              </span>
+              <span class="profilePersonaChev" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+                  <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+            </button>
+            <div id="profilePersonaDetails" class="profilePersonaDetails" hidden>
+              <div id="profilePersonaHint" class="profilePersonaHint">
+                Save a voice as persona from any of these spots:
+                <ul class="profilePersonaSpots">
+                  <li>After a song finishes → tap the ⋯ on the result card → <strong>Save voice as persona</strong>.</li>
+                  <li>In <a href="#/library">Library</a> → tap ⋯ on a song → <strong>Save voice as persona</strong>.</li>
+                  <li>On any <a href="#/hub">Hub</a> post → tap ⋯ → <strong>Save voice as persona</strong>.</li>
+                </ul>
+              </div>
+              <a href="#/generate" class="profilePersonaLink">Open Create</a>
+            </div>
+          </div>
+
           <label class="settingsToggleRow" for="settingsCallingCardAutoplay">
             <span class="settingsToggleBody">
               <span class="settingsToggleTitle">Auto-play voice notes</span>
@@ -1947,6 +1928,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260512cinematic-fix"></script>
+    <script type="module" src="./src/app.js?v=20260512liquid"></script>
   </body>
 </html>

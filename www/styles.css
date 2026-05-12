@@ -10278,17 +10278,20 @@ body[data-route="hub"] .hubEq{
   display: none !important;
 }
 
-/* Layer 3a — right action rail (Reels pattern). Sits above the
-   floating tab bar so taps land on the buttons, not the tabs. */
+/* Layer 3a — right action rail (Reels pattern). Sits well above the
+   floating tab bar so the buttons aren't crowded near the bottom edge
+   and the lowest icon (⋯) has comfortable thumb clearance. */
 .hubReelRail{
   position: absolute;
   right: 10px;
-  /* tab bar ~64px + safe-area + ~30px breathing room */
-  bottom: calc(110px + env(safe-area-inset-bottom, 0px));
+  /* tab bar ~76px + safe-area + ~70px breathing room. Higher than v1
+     because the rail now has 5 items (avatar/like/share/remix/more)
+     and the user reported the lowest icon felt cramped against tab. */
+  bottom: calc(150px + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 18px;
+  gap: 16px;
   z-index: 4;
 }
 .hubReelAvatarBtn{
@@ -10334,7 +10337,17 @@ body[data-route="hub"] .hubEq{
   line-height: 1;
   filter: drop-shadow(0 2px 6px rgba(0,0,0,0.55));
 }
-.hubReelRailBtn .hubReactLabel{ display: none; }
+.hubReelRailBtn .hubReactLabel,
+.hubReelRailBtn .hubReelRemixLabel{ display: none; }
+/* Remix icon — slightly thicker glyph than the share arrow so the
+   "loop / re-make" affordance reads at the same visual weight as
+   the heart and arrow. */
+.hubReelRailBtn .hubReelRemixIcon{
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 900;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.55));
+}
 .hubReelLikeBtn[data-burst="1"] .hubLikeHeart{
   animation: hubReelHeartPop 320ms ease;
   color: #ff4d6d;
@@ -10416,14 +10429,46 @@ body[data-route="hub"] .hubEq{
   padding: 24px;
 }
 
-/* The more menu floats above the cover when opened (already inside
-   .hubReel as an absolutely-positioned popover). */
+/* Compact "More" popover — anchors right next to the ⋯ button so it
+   looks attached, not detached. Overrides the base .libMenu/.hubMoreMenu
+   rules (which assume top-right anchoring inside a card with min-width
+   170px) to force a small, content-tight rectangle for the reel
+   layout. */
 .hubReelMoreMenu{
   position: absolute;
-  right: 16px;
-  bottom: calc(160px + env(safe-area-inset-bottom, 0px));
+  right: 70px;
+  /* Rail's More button sits at bottom: calc(150px + safe-area); the
+     popover lines up with it horizontally and sits just to its left. */
+  bottom: calc(150px + env(safe-area-inset-bottom, 0px));
+  top: auto;
+  left: auto;
   z-index: 6;
-  min-width: 200px;
+  min-width: 0;
+  width: max-content;
+  max-width: 220px;
+  padding: 6px;
+  gap: 2px;
+  border-radius: 10px;
+  background: rgba(10, 14, 24, 0.96);
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 14px 30px rgba(0,0,0,0.5);
+}
+.hubReelMoreMenu .ghost{
+  padding: 8px 12px;
+  font-size: 13.5px;
+  font-weight: 700;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  justify-content: flex-start;
+  text-align: left;
+  white-space: nowrap;
+}
+.hubReelMoreMenu .ghost:hover,
+.hubReelMoreMenu .ghost:active{
+  background: rgba(255,255,255,0.06);
+  border-color: transparent;
 }
 
 /* iOS still throws a tiny extra paint at the snap edges — kill the

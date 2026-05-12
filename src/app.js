@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514hubReelFullCover";
+const APP_BUILD = "20260514hubReelRailRemix";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -6411,6 +6411,10 @@ function renderHub() {
           <span class="hubReactIcon" aria-hidden="true">➤</span>
           <span class="hubReactLabel">Share</span>
         </button>
+        <button class="hubReelRailBtn hubReelRemixBtn" data-hub-remix="${p.id}" aria-label="Remix this song">
+          <span class="hubReelRemixIcon" aria-hidden="true">↻</span>
+          <span class="hubReelRemixLabel">Remix</span>
+        </button>
         <button class="hubReelRailBtn hubReelMoreBtn" data-hub-more="${p.id}" aria-label="More options">
           <span aria-hidden="true">⋯</span>
         </button>
@@ -6427,7 +6431,7 @@ function renderHub() {
         ${p?.meta?.searchTemplateTitle ? `<div class="hubSearchTemplateLine hubReelTemplateLine">From Search · ${escapeHtml(String(p.meta.searchTemplateTitle))}</div>` : ""}
       </footer>
       <div class="libMenu hubMoreMenu hubReelMoreMenu" id="hubMore_${p.id}" style="display:none">
-        <button class="ghost" data-hub-remix="${p.id}">Remix</button>
+        <button class="ghost" data-hub-copy-link="${p.id}">Copy link</button>
         <button class="ghost" data-hub-persona="${p.id}">Save voice as persona</button>
       </div>
     </article>
@@ -6549,6 +6553,23 @@ function renderHub() {
     if (!p) return;
     document.getElementById(`hubMore_${id}`)?.style.setProperty("display", "none");
     await createPersonaFromHubPost(p);
+  }));
+  els.hubList.querySelectorAll("[data-hub-copy-link]").forEach((b) => b.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    const id = b.getAttribute("data-hub-copy-link");
+    document.getElementById(`hubMore_${id}`)?.style.setProperty("display", "none");
+    const url = buildHubShareUrl(id);
+    if (!url) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        showToast("Link copied", { icon: "✓", durationMs: 1800 });
+      } else {
+        showToast(url, { durationMs: 3000 });
+      }
+    } catch {
+      showToast("Could not copy link", { durationMs: 2200 });
+    }
   }));
   els.hubList.querySelectorAll("[data-hub-user]").forEach((u) => u.addEventListener("click", (e) => {
     e.stopPropagation();

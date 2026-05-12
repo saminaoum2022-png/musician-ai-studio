@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260513creditsPill";
+const APP_BUILD = "20260513profilePolish";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -377,11 +377,8 @@ const els = {
   profileHeroTitle: document.getElementById("profileHeroTitle"),
   profileHeroMeta: document.getElementById("profileHeroMeta"),
   // Liquid pulse redesign nodes
-  profileLiquidPulse: document.getElementById("profileLiquidPulse"),
-  profileLiquidPulsePath: document.getElementById("profileLiquidPulsePath"),
-  profileLiquidPulseLabel: document.getElementById("profileLiquidPulseLabel"),
-  profileLiquidPulseInfo: document.getElementById("profileLiquidPulseInfo"),
-  profileLiquidPulseStat: document.getElementById("profileLiquidPulseStat"),
+  profileAuraTopRow: document.getElementById("profileAuraTopRow"),
+  profileAuraNameRow: document.getElementById("profileAuraNameRow"),
   profileIdentityLine: document.getElementById("profileIdentityLine"),
   profileHeroBio: document.getElementById("profileHeroBio"),
   // Spotify-x-Nabad redesign nodes
@@ -4255,7 +4252,11 @@ async function hubFetchPostMetaFull(postId) {
 async function supabaseSelectHub() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 12000);
+  // 12s was too aggressive on mobile data — DNS + TLS handshake to a
+  // cold Supabase region can swallow most of that on its own, leaving
+  // < 4s for the actual query. 20s is still well under iOS's 30s
+  // request budget and gives genuine slow-network users a chance.
+  const timer = setTimeout(() => ctrl.abort(), 20000);
   // 30 rows is enough to fill the visible feed plus a healthy backlog
   // for the IntersectionObserver "Load more" path. Older posts are
   // still reachable via subsequent paginated fetches if we ever need
@@ -4854,6 +4855,7 @@ function resetProfileUiToGuest() {
   _lastLibraryPersistError = "";
   _lastLibraryPersistedCount = 0;
   invalidateLibraryMemCache();
+  if (typeof setProfileHeaderLoading === "function") setProfileHeaderLoading(false);
   renderProfilePreviewFromInputs();
   renderProfileHubShared();
   setProfileEditing(false);
@@ -5891,12 +5893,37 @@ function renderHub() {
   // 20260509k — they were title regex, not real categories. The sort
   // segment is now Latest | Trending only.
   if (!items.length) {
-    // Two distinct empty states. While the first cloud refresh is
-    // mid-flight (`hubSyncInFlight`) or has never resolved
-    // (`hubLastSyncOk` still false and no error yet), show a Loading
-    // pulse instead of the "Hub is quiet" CTA — otherwise the user
-    // sees the empty CTA flash on every cold open before posts arrive.
+    // Three distinct empty states:
+    //   - "Still loading" (sync in-flight, or first sync hasn't
+    //     resolved yet and we don't have an error)        → skeleton
+    //   - "Network failed multiple times" on slow mobile  → retry CTA
+    //   - "Cloud is genuinely empty"                       → empty CTA
     const stillLoading = hubSyncInFlight || (!hubLastSyncOk && !hubLastSyncError);
+    const sawFailure = !hubLastSyncOk && hubLastSyncError && hubRetryCount >= 2;
+    if (sawFailure) {
+      els.hubList.innerHTML = `
+        <div class="emptyState hubErrorState" aria-live="polite">
+          <div class="emptyStateIcon" aria-hidden="true">⚠︎</div>
+          <p class="emptyStateTitle">Can't load the Hub</p>
+          <p class="emptyStateHint">Check your connection and try again. On slow mobile data this can take a few seconds.</p>
+          <button type="button" id="hubRetryBtn" class="emptyStateCta">Try again</button>
+        </div>
+      `;
+      const btn = document.getElementById("hubRetryBtn");
+      if (btn) {
+        btn.addEventListener("click", () => {
+          hubRetryCount = 0;
+          hubLastSyncError = "";
+          btn.disabled = true;
+          btn.textContent = "Loading…";
+          void refreshHubFromSupabase();
+        }, { once: true });
+      }
+      _hubLastRenderedSig = "";
+      renderHubUpdatedAt();
+      updateHubAudioHint();
+      return;
+    }
     if (stillLoading) {
       // Skeletons mirror the real `.hubRow` layout (16:9 cover on
       // top, meta strip below, action pill row at the bottom) so the
@@ -7157,83 +7184,38 @@ function _mulberry32(seed) {
   };
 }
 
-function renderProfileLiquidPulse(items) {
-  const path = els.profileLiquidPulsePath;
-  if (!path) return;
-  // viewBox is 120x80; baseline at y=44 keeps the curve visually
-  // centered with room for peaks both above and below.
-  const W = 120;
-  const H = 80;
-  const baseline = 44;
-  // Seed from handle so the curve is stable per user.
-  const handleSeed = String(activeProfile?.username || authSession?.user?.id || "guest");
-  const rand = _mulberry32(_hashSeed32(handleSeed));
-  const release = Array.isArray(items) ? items.slice(0, 12) : [];
-  // Beats per drawing — anywhere from 3 (lonely heartbeat) to ~7 for
-  // a full catalog. Even a brand-new account gets a faint signature.
-  const beats = Math.max(3, Math.min(7, 3 + Math.ceil(release.length / 2)));
-  const maxL = Math.max(1, ...release.map((p) => Number(p.likes || 0)));
-  let d = `M 0 ${baseline}`;
-  for (let i = 0; i < beats; i++) {
-    const t = (i + 1) / (beats + 1);
-    const cx = t * W;
-    // Each beat: small dip, sharp peak, small dip back.
-    // Peak height is biased by the matching release's likes when
-    // available, with a small per-beat random jitter for personality.
-    const r = release[i];
-    const likes = r ? Number(r.likes || 0) : 0;
-    const norm = release.length ? likes / maxL : 0;
-    const baseHeight = 14 + norm * 22; // 14..36
-    const peakH = baseHeight * (0.85 + rand() * 0.4); // jitter
-    const dipH = 4 + rand() * 5;
-    // Optional below-baseline upswing for visual "liquid" pulse
-    const below = (rand() - 0.35) * 6;
-    d += ` Q ${cx - 8} ${baseline + below} ${cx - 4} ${baseline - dipH}`;
-    d += ` L ${cx} ${baseline - peakH}`;
-    d += ` L ${cx + 4} ${baseline - dipH}`;
-    d += ` Q ${cx + 8} ${baseline + below} ${cx + 10} ${baseline}`;
-  }
-  d += ` L ${W} ${baseline}`;
-  path.setAttribute("d", d);
-  // Paint the real stat into the info popover so the user sees that
-  // each peak is a real release — not just an animation.
-  const statEl = els.profileLiquidPulseStat;
-  if (statEl) {
-    const totalLikes = release.reduce((acc, p) => acc + Number(p.likes || 0), 0);
-    const beatsLabel = `${beats} ${beats === 1 ? "beat" : "beats"}`;
-    const likesLabel = totalLikes > 0 ? ` · ${totalLikes} ${totalLikes === 1 ? "like" : "likes"}` : "";
-    statEl.textContent = `${beatsLabel}${likesLabel}`;
-  }
+/* The "liquid heartbeat" sonic-fingerprint visual was retired — it
+ * felt off the app aesthetic and didn't help users understand their
+ * stats. Kept as a no-op so existing call sites don't blow up; the
+ * DOM nodes were also removed from index.html. */
+function renderProfileLiquidPulse(_items) {
+  /* no-op (heartbeat retired) */
 }
 
-/* Tap-to-explain popover for the liquid pulse. Mounted once at module
- * load. Toggles a small descriptive bubble under the avatar row so
- * users understand what the pulse actually represents. */
-function setupProfileLiquidPulseInfo() {
-  const btn = els.profileLiquidPulse;
-  const info = els.profileLiquidPulseInfo;
-  if (!btn || !info) return;
-  const close = () => {
-    btn.setAttribute("data-open", "false");
-    info.hidden = true;
-    document.removeEventListener("click", onDocClick, true);
-  };
-  function onDocClick(e) {
-    if (info.contains(e.target) || btn.contains(e.target)) return;
-    close();
-  }
-  btn.addEventListener("click", (e) => {
-    e.preventDefault();
-    const open = btn.getAttribute("data-open") === "true";
-    if (open) { close(); return; }
-    btn.setAttribute("data-open", "true");
-    info.hidden = false;
-    setTimeout(() => {
-      document.addEventListener("click", onDocClick, true);
-    }, 0);
-  });
+/* Profile header shimmer — covers the avatar + username while the cold
+ * boot is fetching the cloud profile. Without this, users on slow
+ * mobile data see the placeholder logo + "@guest" for several seconds
+ * before the real data lands. Toggled on at boot, off as soon as we
+ * have a real handle (real handles always start with the username and
+ * never equal the placeholder sentinels). */
+function setProfileHeaderLoading(on) {
+  const top = els.profileAuraTopRow;
+  const row = els.profileAuraNameRow;
+  const flag = on ? "true" : "false";
+  if (top) top.setAttribute("data-loading", flag);
+  if (row) row.setAttribute("data-loading", flag);
 }
-setupProfileLiquidPulseInfo();
+
+/** Heuristic: does `activeProfile` look like the unauthenticated
+ *  placeholder that boot draws before we resolve the cloud profile?
+ *  We use this to decide when the skeleton shimmer should still be
+ *  showing — once a real handle or avatar lands, we hide it. */
+function isPlaceholderProfileState() {
+  const u = String(activeProfile?.username || "");
+  const hasRealHandle = u && u !== "guest" && !isAutoGeneratedUsername(u);
+  const hasRealAvatar = Boolean(activeProfile?.avatar);
+  return !(hasRealHandle || hasRealAvatar);
+}
 
 /* =================================================================
  *  Single identity line — timbre + genres + persona when set. The
@@ -16206,6 +16188,14 @@ loadProfile();
 loadAuthSession();
 syncActiveProfileIdFromSession();
 renderAuthStatus();
+// Light the profile header shimmer NOW if we already know a sign-in
+// is on its way (stored session + no real handle/avatar yet). This
+// avoids the "M logo + @guest" flash on cold opens with slow mobile
+// data. The boot IIFE flips it off as soon as it has merged the
+// cloud profile (or determined the user is genuinely signed-out).
+if (authSession?.user?.id && isPlaceholderProfileState()) {
+  setProfileHeaderLoading(true);
+}
 // If the user has a stored session, we're going to hydrate Library in
 // the boot IIFE below. Set the in-flight flag synchronously *now* so
 // the very first `renderLibrary()` (deferred on rAF or fired by the
@@ -16278,6 +16268,9 @@ void (async () => {
       nextProfile = { ...nextProfile, username: deriveUsernameFromAuth(authSession.user) };
     }
     saveProfile(nextProfile);
+    // Real profile is in memory now — drop the header shimmer before
+    // we paint, so the avatar/handle don't fade in twice.
+    setProfileHeaderLoading(false);
     // Push back to cloud only when the merge introduced changes that
     // need to land on the server (new username, new avatar/bio that
     // were only in local). Fire-and-forget via the debounced sync so
@@ -16317,6 +16310,7 @@ void (async () => {
   } else {
     // Never leak previous user visuals when session is not valid.
     resetProfileUiToGuest();
+    setProfileHeaderLoading(false);
     if ((location.hash || "") === "#/intro") location.hash = "#/auth";
   }
 })();

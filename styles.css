@@ -4427,9 +4427,9 @@ body[data-route="profile"] .profileAuraGlow{
   display: none !important;
 }
 
-/* --- Avatar + liquid heartbeat fingerprint row. Sits at the top of
-   the hero. Each user gets a unique liquid pulse generated from their
-   release timeline + a hash of their handle. --- */
+/* --- Avatar sits on its own at the top of the hero. The "liquid
+   heartbeat" visual that used to sit next to it was retired — felt
+   off the app aesthetic and didn't help users read their stats. --- */
 .profileAuraTopRow{
   display: flex;
   align-items: center;
@@ -4438,152 +4438,61 @@ body[data-route="profile"] .profileAuraGlow{
   margin-bottom: 10px;
 }
 
-.profileLiquidPulse{
-  position: relative;
-  width: 130px;
-  height: 100px;
-  flex: 0 0 auto;
-  /* The pulse path uses currentColor — pin it to the solid sampled
-     tint so the heartbeat lands at full saturation against dark bg. */
-  color: var(--aura-tint-solid, rgba(168, 152, 255, 0.95));
-  isolation: isolate;
-  -webkit-appearance: none;
-  appearance: none;
-  background: transparent;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: transform 200ms ease, filter 200ms ease;
-}
-.profileLiquidPulse:hover,
-.profileLiquidPulse[data-open="true"]{
-  filter: brightness(1.18);
-}
-.profileLiquidPulse:active{
-  transform: scale(0.96);
-}
-/* Two blob layers — different shapes & speeds. The container clips
-   the heartbeat path to a moving liquid shape using mask-image. */
-.profileLiquidPulseBlob{
-  position: absolute;
-  inset: 14% 6%;
-  background: linear-gradient(135deg,
-    var(--aura-tint, rgba(124, 92, 255, 0.85)) 0%,
-    var(--aura-tint-soft, rgba(35, 213, 171, 0.55)) 100%);
-  border-radius: 60% 40% 55% 45% / 55% 60% 40% 45%;
-  filter: blur(0.2px);
-  opacity: 0.22;
-  animation: profileLiquidMorphA 9s ease-in-out infinite;
-}
-.profileLiquidPulseBlob--b{
-  inset: 22% 14%;
-  opacity: 0.18;
-  background: linear-gradient(135deg,
-    var(--aura-tint-soft, rgba(35, 213, 171, 0.55)) 0%,
-    var(--aura-tint, rgba(124, 92, 255, 0.85)) 100%);
-  border-radius: 50% 50% 70% 30% / 40% 60% 40% 60%;
-  animation: profileLiquidMorphB 11s ease-in-out infinite;
-}
-@keyframes profileLiquidMorphA{
-  0%, 100% { border-radius: 60% 40% 55% 45% / 55% 60% 40% 45%; transform: scale(1) rotate(0deg); }
-  33%      { border-radius: 45% 55% 40% 60% / 60% 45% 55% 40%; transform: scale(1.04) rotate(8deg); }
-  66%      { border-radius: 55% 45% 65% 35% / 45% 55% 60% 40%; transform: scale(0.97) rotate(-6deg); }
-}
-@keyframes profileLiquidMorphB{
-  0%, 100% { border-radius: 50% 50% 70% 30% / 40% 60% 40% 60%; transform: scale(1) rotate(0deg); }
-  40%      { border-radius: 65% 35% 50% 50% / 55% 45% 60% 40%; transform: scale(1.05) rotate(-10deg); }
-  70%      { border-radius: 40% 60% 45% 55% / 50% 50% 45% 55%; transform: scale(0.96) rotate(7deg); }
-}
-.profileLiquidPulseSvg{
+/* --- Profile header skeleton: shimmer over avatar + username while
+   the cold boot fetches the cloud profile. Without this, slow mobile
+   data shows the placeholder logo + "@guest" for several seconds
+   before the real data lands, which feels like the app is broken. --- */
+.profileAuraAvatarSkeleton{
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 2;
+  border-radius: inherit;
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.04) 0%,
+    rgba(255,255,255,0.14) 50%,
+    rgba(255,255,255,0.04) 100%);
+  background-size: 200% 100%;
+  animation: profileSkelShimmer 1.25s ease-in-out infinite;
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 220ms ease;
+  z-index: 3;
 }
-.profileLiquidPulsePath{
-  stroke-dasharray: 240;
-  stroke-dashoffset: 0;
-  animation: profileLiquidStrokeFlow calc(120s / var(--aura-bpm, 88)) linear infinite;
-  filter: drop-shadow(0 0 4px var(--aura-tint, rgba(124, 92, 255, 0.6)));
+.profileAuraTopRow[data-loading="true"] .profileAuraAvatar{
+  opacity: 0;
 }
-@keyframes profileLiquidStrokeFlow{
-  from { stroke-dashoffset: 240; }
-  to   { stroke-dashoffset: 0; }
-}
-/* Old centered "TAP TO KNOW" label retired. */
-.profileLiquidPulseLabel{ display: none; }
-
-/* Tiny corner help glyph — top-right of the pulse. Quiet at rest,
-   brightens to the live tint on hover/open. Replaces the loud text. */
-.profileLiquidPulseHelp{
-  position: absolute;
-  top: 6px;
-  right: 8px;
-  width: 14px;
-  height: 14px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 9px;
-  font-weight: 800;
-  line-height: 1;
-  color: rgba(220, 226, 240, 0.55);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  pointer-events: none;
-  transition: color 200ms ease, background 200ms ease, border-color 200ms ease;
-}
-.profileLiquidPulse:hover .profileLiquidPulseHelp,
-.profileLiquidPulse[data-open="true"] .profileLiquidPulseHelp{
-  color: var(--aura-tint-solid, #fff);
-  background: rgba(255, 255, 255, 0.10);
-  border-color: rgba(255, 255, 255, 0.18);
+.profileAuraTopRow[data-loading="true"] .profileAuraAvatarSkeleton{
+  opacity: 1;
 }
 
-/* Info popover — appears under the avatar row when the user taps
-   the pulse. Tells them what the visual means + their real stats. */
-.profileLiquidPulseInfo{
-  margin: -4px auto 8px;
-  max-width: 320px;
-  padding: 10px 14px;
-  border-radius: 14px;
-  background: linear-gradient(135deg,
-    var(--aura-tint-soft, rgba(124, 92, 255, 0.18)) 0%,
-    rgba(10, 12, 20, 0.50) 80%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 12px;
-  line-height: 1.45;
-  color: rgba(228, 232, 244, 0.92);
-  letter-spacing: -0.005em;
-  text-align: center;
-  animation: profileLiquidPulseInfoIn 260ms ease;
+.profileAuraNameSkeleton{
+  display: none;
+  width: 140px;
+  max-width: 60%;
+  height: 18px;
+  border-radius: 9px;
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.04) 0%,
+    rgba(255,255,255,0.14) 50%,
+    rgba(255,255,255,0.04) 100%);
+  background-size: 200% 100%;
+  animation: profileSkelShimmer 1.25s ease-in-out infinite;
 }
-.profileLiquidPulseInfo strong{
-  display: block;
-  color: #fff;
-  font-weight: 700;
-  margin-bottom: 2px;
+.profileAuraNameRow[data-loading="true"] .profileAuraNameSkeleton{
+  display: inline-block;
 }
-.profileLiquidPulseStat{
-  display: block;
-  margin-top: 4px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--aura-tint, rgba(124, 92, 255, 0.95));
+.profileAuraNameRow[data-loading="true"] .profileAuraNameInput,
+.profileAuraNameRow[data-loading="true"] .profileIdentityLine,
+.profileAuraNameRow[data-loading="true"] .profilePreviewGenderIcon,
+.profileAuraNameRow[data-loading="true"] .profileCreditsPill{
+  visibility: hidden;
 }
-@keyframes profileLiquidPulseInfoIn{
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: translateY(0); }
+@keyframes profileSkelShimmer{
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 @media (prefers-reduced-motion: reduce){
-  .profileLiquidPulseBlob{ animation: none !important; }
-  .profileLiquidPulsePath{ animation: none !important; }
+  .profileAuraAvatarSkeleton,
+  .profileAuraNameSkeleton{ animation: none !important; }
 }
 
 /* Identity line sits INLINE with the @handle, separated by a leading

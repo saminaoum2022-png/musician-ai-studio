@@ -39,7 +39,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260513creditsPill" />
+    <link rel="stylesheet" href="./styles.css?v=20260513profilePolish" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -987,12 +987,12 @@
             </div>
 
             <div class="profileAuraIdentity">
-              <!-- Avatar + liquid heartbeat fingerprint sit side-by-side
-                   as the signature visual of the page. The fingerprint
-                   is generated per-user from their release timeline +
-                   a hash of their handle, so every artist gets a
-                   unique liquid pulse. -->
-              <div class="profileAuraTopRow">
+              <!-- Avatar sits on its own at the top of the hero. The
+                   "liquid heartbeat" visual that used to live next to it
+                   was retired — it didn't read clearly and felt off the
+                   app's aesthetic. Skeleton shimmer wraps the avatar and
+                   name on cold opens until the real data resolves. -->
+              <div class="profileAuraTopRow" id="profileAuraTopRow" data-loading="false">
                 <div class="profileAuraAvatarWrap" id="profileAuraAvatarWrap">
                   <span class="profileAuraRing" aria-hidden="true"></span>
                   <img
@@ -1002,36 +1002,13 @@
                     alt="Your avatar"
                     draggable="false"
                   />
+                  <span class="profileAuraAvatarSkeleton" aria-hidden="true"></span>
                   <span id="profileAvatarEditHint" class="profileAuraAvatarHint" style="display:none">Photo</span>
                 </div>
-                <button
-                  type="button"
-                  class="profileLiquidPulse"
-                  id="profileLiquidPulse"
-                  data-open="false"
-                  aria-label="Your sonic fingerprint. Tap for details."
-                >
-                  <div class="profileLiquidPulseBlob" aria-hidden="true"></div>
-                  <div class="profileLiquidPulseBlob profileLiquidPulseBlob--b" aria-hidden="true"></div>
-                  <svg class="profileLiquidPulseSvg" viewBox="0 0 120 80" preserveAspectRatio="none" aria-hidden="true">
-                    <path id="profileLiquidPulsePath" class="profileLiquidPulsePath" d="" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  <!-- Corner info badge — replaces the old "Tap to know"
-                       text label. Quiet glyph in the top-right of the
-                       pulse; users still get the popover on tap. -->
-                  <span class="profileLiquidPulseHelp" aria-hidden="true">?</span>
-                </button>
-              </div>
-              <!-- Tap-to-explain popover. Painted below the avatar row
-                   by JS when the user taps the pulse. Tells the user
-                   what the visual actually means + their real stats. -->
-              <div id="profileLiquidPulseInfo" class="profileLiquidPulseInfo" hidden role="note">
-                <strong>Your sonic fingerprint.</strong>
-                Each beat is one of your releases — height grows with likes, shape is unique to your handle.
-                <span class="profileLiquidPulseStat" id="profileLiquidPulseStat"></span>
               </div>
 
-              <div class="profileAuraNameRow">
+              <div class="profileAuraNameRow" id="profileAuraNameRow" data-loading="false">
+                <span class="profileAuraNameSkeleton" aria-hidden="true"></span>
                 <input
                   id="profilePreviewUsernameInput"
                   class="profileAuraNameInput"
@@ -1962,6 +1939,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260513creditsPill"></script>
+    <script type="module" src="./src/app.js?v=20260513profilePolish"></script>
   </body>
 </html>

@@ -5358,16 +5358,16 @@ body[data-route="profile"] .profileAuraGlow{
   to{ transform: rotate(360deg); }
 }
 
-/* Compact Credits pill displayed inside the profile aura header, just
-   below the songs/likes inline stats. Links to the full /credits page.
-   Admin (owner) accounts get an upgraded gradient and the ∞ glyph
+/* Compact Credits pill that lives inline with the username row in the
+   profile aura header. Anchored to the right edge via margin-left:auto
+   so it occupies the empty space next to @handle. Links to the full
+   /credits page. Admin (owner) accounts get a gradient + ∞ glyph
    because their generations bypass the per-user ledger. */
 .profileCreditsPill{
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin: 8px auto 0;
-  padding: 6px 12px 6px 10px;
+  gap: 6px;
+  padding: 4px 10px 4px 8px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
@@ -5380,44 +5380,51 @@ body[data-route="profile"] .profileAuraGlow{
   cursor: pointer;
   transition: background 140ms ease, border-color 140ms ease, transform 120ms ease;
 }
+.profileCreditsPill--inline{
+  margin-left: auto;
+  align-self: center;
+  flex: 0 0 auto;
+}
 .profileCreditsPill:hover{
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.025));
   border-color: rgba(255, 255, 255, 0.22);
 }
 .profileCreditsPill:active{ transform: scale(0.98); }
 .profileCreditsPillIco{
-  width: 14px;
-  height: 14px;
-  opacity: 0.7;
+  width: 13px;
+  height: 13px;
+  opacity: 0.75;
   flex: 0 0 auto;
 }
 .profileCreditsPillLabel{
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: rgba(223, 231, 251, 0.6);
 }
 .profileCreditsPillValue{
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
   color: #fff;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
+  line-height: 1;
 }
 .profileCreditsPill.isAdmin{
-  border-color: rgba(160, 132, 255, 0.55);
-  background: linear-gradient(135deg, rgba(110, 86, 220, 0.28), rgba(64, 162, 255, 0.18));
+  border-color: rgba(160, 132, 255, 0.5);
+  background: linear-gradient(135deg, rgba(110, 86, 220, 0.32), rgba(64, 162, 255, 0.2));
   color: #fff;
 }
 .profileCreditsPill.isAdmin .profileCreditsPillIco{ opacity: 0.95; }
-.profileCreditsPill.isAdmin .profileCreditsPillLabel{
-  color: rgba(255, 255, 255, 0.78);
-}
 .profileCreditsPill.isAdmin .profileCreditsPillValue{
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1;
 }
+/* In edit mode the username input expands to full width, which would
+   wrap the credits pill onto its own line and look like a separate
+   chip. Hide it during editing — the user is busy renaming. */
+.profileAura.profileAuraEditing .profileCreditsPill--inline{ display: none; }
 .profileOwnAuthRow{
   display:flex;
   flex-wrap:wrap;

@@ -4630,11 +4630,10 @@ body[data-route="profile"] .profileAuraGlow{
   padding: 0 18px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  /* Subtle inner tint pulled from the latest cover art. Falls back
-     to a flat dark surface when no tint is sampled yet. */
-  background:
-    radial-gradient(ellipse 120% 80% at 8% 50%, var(--aura-tint-soft, rgba(124, 92, 255, 0.18)) 0%, transparent 55%),
-    rgba(255, 255, 255, 0.04);
+  /* Flat dark surface — matches the rest of the dark theme. The
+     cover-art aura tint that used to glow here was retired with the
+     flat-dark redesign. */
+  background: rgba(255, 255, 255, 0.04);
   color: rgba(248, 250, 255, 0.94);
   font-size: 14px;
   font-weight: 700;

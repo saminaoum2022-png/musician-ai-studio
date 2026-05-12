@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260512egress1";
+const APP_BUILD = "20260512egress2";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -2858,6 +2858,17 @@ async function startHubRemix(post) {
     showToast("Cannot remix: this post has no audio.", { icon: "!", durationMs: 3200 });
     return;
   }
+  // Hub list rows ship a minimal `meta` (egress saver). When the user
+  // actually opens Remix we need the heavy keys (lyricsInput, styleInput,
+  // dialect, etc.) — fetch them on demand for this single post.
+  if (post.id && (!post.meta || (!post.meta.lyricsInput && !post.meta.styleInput))) {
+    try {
+      const fullMeta = await hubFetchPostMetaFull(post.id);
+      if (fullMeta && typeof fullMeta === "object") {
+        post = { ...post, meta: { ...(post.meta || {}), ...fullMeta } };
+      }
+    } catch {}
+  }
   try {
     setStatus("Loading remix source…");
     showToast("Loading remix source…", { icon: "♪", durationMs: 1600 });
@@ -4182,6 +4193,13 @@ function renderHubDots() {
     els.hubTabDot.style.display = hasAnyUnseen ? "inline-block" : "none";
   }
 }
+// Egress saver: do NOT select the full `meta` JSONB on the broad list.
+// Each row's `meta` carries finalPrompt / lyricsInput / styleSent (often
+// thousands of chars per row) — multiplied by 30 rows × every fetch this
+// was ~95% of the Hub feed payload. Only project the keys the renderer
+// and ownership checks actually need; heavy keys (lyricsInput, styleInput,
+// taskId, audioId, etc.) are fetched on-demand from `hubFetchPostMetaFull`
+// when the user opens Remix on a specific post.
 const HUB_SELECT_COLUMNS = [
   "id",
   "created_at",
@@ -4195,8 +4213,44 @@ const HUB_SELECT_COLUMNS = [
   "reacts",
   "remix_of",
   "proof",
-  "meta",
+  "meta_clip:meta->clip",
+  "meta_creator_user_id:meta->>creatorUserId",
+  "meta_template_title:meta->>searchTemplateTitle",
 ].join(",");
+
+/** Reconstruct the minimal `meta` shape the Hub renderer + playback expect
+ *  from the projected JSON keys returned by PostgREST. Keys not selected
+ *  on the list view (e.g. `lyricsInput`) are intentionally omitted. */
+function reconstructHubRowMeta(row) {
+  const meta = {};
+  if (row && row.meta_clip != null) meta.clip = row.meta_clip;
+  const creatorUserId = String((row && row.meta_creator_user_id) || "").trim();
+  if (creatorUserId) meta.creatorUserId = creatorUserId;
+  const tplTitle = String((row && row.meta_template_title) || "").trim();
+  if (tplTitle) meta.searchTemplateTitle = tplTitle;
+  return Object.keys(meta).length ? meta : null;
+}
+
+/** On-demand fetch of a single Hub post's full `meta` (only when the user
+ *  actually needs it — e.g. opens Remix or owner-only actions). One row,
+ *  one column. Cheap. */
+async function hubFetchPostMetaFull(postId) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  const id = String(postId || "").trim();
+  if (!id) return null;
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/hub_posts?id=eq.${encodeURIComponent(id)}&select=meta&limit=1`,
+      { headers: { apikey: SUPABASE_ANON_KEY } },
+    );
+    if (!r.ok) return null;
+    const arr = await r.json().catch(() => []);
+    const row = Array.isArray(arr) ? arr[0] : null;
+    return row?.meta || null;
+  } catch {
+    return null;
+  }
+}
 
 async function supabaseSelectHub() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
@@ -4281,7 +4335,7 @@ function ingestMyHubPostsRows(rows) {
     reacts: r.reacts || { melody: 0, lyrics: 0, mix: 0, groove: 0 },
     remixOf: r.remix_of || "",
     proof: r.proof || null,
-    meta: r.meta || null,
+    meta: reconstructHubRowMeta(r),
   }));
   const prev = loadHubFeed();
   const byId = new Map();
@@ -6129,7 +6183,7 @@ async function refreshHubFromSupabase() {
       reacts: r.reacts || { melody: 0, lyrics: 0, mix: 0, groove: 0 },
       remixOf: r.remix_of || "",
       proof: r.proof || null,
-      meta: r.meta || null,
+      meta: reconstructHubRowMeta(r),
     }));
     // Never wipe feed on empty cloud response.
     if (!mapped.length && prev.length) {
@@ -6627,6 +6681,17 @@ async function createPersonaForSong({
 }
 
 async function createPersonaFromHubPost(post) {
+  // Hub list rows ship a minimal `meta` to save egress. The voice
+  // signature lives in the heavy keys (taskId / audioId) — fetch them
+  // on demand for this single post.
+  if (post && post.id && (!post.meta || (!post.meta.taskId && !post.meta.audioId))) {
+    try {
+      const fullMeta = await hubFetchPostMetaFull(post.id);
+      if (fullMeta && typeof fullMeta === "object") {
+        post = { ...post, meta: { ...(post.meta || {}), ...fullMeta } };
+      }
+    } catch {}
+  }
   const taskId = String(post?.meta?.taskId || "").trim();
   const audioId = String(post?.meta?.audioId || "").trim();
   const creator = String(post?.creator || "artist").trim() || "artist";

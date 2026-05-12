@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514profileSkeletons";
+const APP_BUILD = "20260514canvasLift";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -5754,7 +5754,7 @@ async function shareProofCertificateImage() {
     if (typeof toPng !== "function") throw new Error("toPng unavailable");
     const dataUrl = await toPng(cap, {
       pixelRatio: 3,
-      backgroundColor: "#0b0d12",
+      backgroundColor: "#0d0f17",
       cacheBust: true,
     });
     const base = slugProofFilename(currentProofPost.title);
@@ -8672,7 +8672,7 @@ async function downloadLibraryVideoTrack(track) {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas unavailable");
   const draw = () => {
-    ctx.fillStyle = "#0b0d12";
+    ctx.fillStyle = "#0d0f17";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     const ratio = Math.max(canvas.width / img.width, canvas.height / img.height);
     const w = img.width * ratio;
@@ -15064,7 +15064,7 @@ if (els.btnDownloadProof) {
       <!DOCTYPE html>
       <html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
       <title>NabadAi — Proof of creation</title></head>
-      <body style="margin:0;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0b0d12;color:#e7edf7;padding:28px 18px;line-height:1.45;">
+      <body style="margin:0;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0d0f17;color:#e7edf7;padding:28px 18px;line-height:1.45;">
         <div style="max-width:520px;margin:0 auto;border:1px solid rgba(124,92,255,0.32);border-radius:18px;padding:26px 22px;background:linear-gradient(180deg,rgba(18,28,44,0.92),rgba(8,12,20,0.96));box-shadow:0 22px 52px rgba(0,0,0,0.48);">
           <h1 style="margin:0 0 4px;font-size:26px;font-weight:900;letter-spacing:-0.03em;background:linear-gradient(135deg,rgba(124,92,255,0.98),rgba(35,213,171,0.92));-webkit-background-clip:text;background-clip:text;color:transparent;">NabadAi</h1>
           <p style="margin:0 0 18px;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:rgba(231,237,247,0.52);">Proof of creation</p>

@@ -1,9 +1,16 @@
 :root{
   /* Dark theme (default). Future light mode: mirror these tokens under
-   * `html[data-theme="light"]` and flip `data-theme` from app settings. */
-  --bg: #0b0d12;
-  --card: #121722;
-  --card2:#0f1420;
+   * `html[data-theme="light"]` and flip `data-theme` from app settings.
+   *
+   * Canvas was nudged from #0d0f17 (cool, slightly green) to #0d0f17
+   * (slightly more violet undertone) — same perceptual darkness, less
+   * "sad navy", and harmonizes with the icon's purple→cyan gradient
+   * without spreading that gradient across every screen. The Instagram
+   * principle: one neutral canvas, brand colors only at meaningful
+   * moments (Aura ring, active tab, Generate orb, equalizer). */
+  --bg: #0d0f17;
+  --card: #141826;
+  --card2:#10131e;
   --text: #e7edf7;
   --muted: #a8b4c7;
   --border: rgba(255,255,255,0.14);
@@ -12,7 +19,7 @@
   --danger:#ff4d6d;
   --ai-a: rgba(124,92,255,0.30);
   --ai-b: rgba(35,213,171,0.20);
-  --ai-c: #0b0d12;
+  --ai-c: #0d0f17;
   --space-1: 8px;
   --space-2: 12px;
   --space-3: 16px;
@@ -3985,7 +3992,7 @@ body[data-route="profile"] .profileAuraGlow{
 .profileAuraEditBtn--save{
   border: 0;
   background: linear-gradient(135deg, #7c5cff, #23d5ab);
-  color: #0b0d12;
+  color: #0d0f17;
   box-shadow:
     0 10px 26px rgba(124,92,255,0.35),
     inset 0 0 0 1px rgba(255,255,255,0.18);
@@ -4060,7 +4067,7 @@ body[data-route="profile"] .profileAuraGlow{
   padding: 4px 8px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.92);
-  color: #0b0d12;
+  color: #0d0f17;
   z-index: 2;
   box-shadow: 0 6px 14px rgba(0,0,0,0.35);
 }
@@ -8958,7 +8965,7 @@ input::placeholder, textarea::placeholder{
   height: 44px;
   border-radius: 999px;
   background: rgba(255,255,255,0.92);
-  color: #0b0d12;
+  color: #0d0f17;
   border: 0;
   display: inline-flex;
   align-items: center;
@@ -8972,7 +8979,7 @@ input::placeholder, textarea::placeholder{
   content: "";
   width: 12px;
   height: 12px;
-  background: linear-gradient(90deg, #0b0d12 5px, transparent 5px 7px, #0b0d12 7px);
+  background: linear-gradient(90deg, #0d0f17 5px, transparent 5px 7px, #0d0f17 7px);
 }
 .searchRemixMeta{
   display: flex;

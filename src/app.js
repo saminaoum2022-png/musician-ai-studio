@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514hubCoverTintedFocus";
+const APP_BUILD = "20260514profileAvatarPickerWrap";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -351,6 +351,7 @@ const els = {
   profileOwnStats: document.getElementById("profileOwnStats"),
   profileOwnSongCount: document.getElementById("profileOwnSongCount"),
   profileAura: document.getElementById("profileAura"),
+  profileAuraAvatarWrap: document.getElementById("profileAuraAvatarWrap"),
   profileAuraStatSongs: document.getElementById("profileAuraStatSongs"),
   profileAuraStatLikes: document.getElementById("profileAuraStatLikes"),
   profileAuraSongsValue: document.getElementById("profileAuraSongsValue"),
@@ -16773,10 +16774,24 @@ if (els.profileAvatarFile) {
     }
   });
 }
-if (els.profilePreviewAvatar && els.profileAvatarFile) {
-  els.profilePreviewAvatar.addEventListener("click", () => {
-    if (!profileEditing) return;
+/** Avatar file picker — must fire from a user gesture. The <img> alone
+ *  is a bad hit target when `data-empty` hides it (Na placeholder); the
+ *  whole wrap + "Photo" pill must open the picker in edit mode. */
+function triggerProfileAvatarFilePicker() {
+  if (!profileEditing || !els.profileAvatarFile) return;
+  try {
     els.profileAvatarFile.click();
+  } catch (e) {
+    console.error("[avatar] file picker failed", e);
+  }
+}
+if (els.profileAuraAvatarWrap && els.profileAvatarFile) {
+  els.profileAuraAvatarWrap.addEventListener("click", (e) => {
+    if (!profileEditing) return;
+    const t = e.target;
+    if (!(t instanceof Element)) return;
+    if (t.closest("a, button, input, select, textarea")) return;
+    triggerProfileAvatarFilePicker();
   });
 }
 

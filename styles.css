@@ -8161,7 +8161,12 @@ input::placeholder, textarea::placeholder{
 }
 .profileAuraAvatarWrapNeon .profileAuraAvatarSkeleton{ z-index: 3; }
 .profileAuraAvatarWrapNeon .profileAuraAvatarHint{ z-index: 4; }
-.profileAuraEditing .profileAuraRingPulse{ animation: none; opacity: 0.5; }
+.profileAuraEditing .profileAuraAvatarWrapNeon{
+  cursor: pointer;
+}
+.profileAuraEditing .profileAuraAvatarHint{
+  cursor: pointer;
+}
 
 /* ---------- Profile — "My Sound" sonic-identity card ---------- */
 .profileMySound{

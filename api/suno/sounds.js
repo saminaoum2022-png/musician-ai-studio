@@ -11,6 +11,7 @@
 const {
   verifyUser,
   callRpc,
+  isAdminEmail,
 } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
 
@@ -29,34 +30,40 @@ module.exports = async function handler(req, res) {
       return json(res, 401, { error: "Sign in to generate sounds." });
     }
 
-    const debit = await callRpc("consume_credits", {
-      p_user_id: user.userId,
-      p_amount: SOUND_COST,
-      p_reason: "sound_generate",
-      p_ref: "",
-    });
-    if (!debit.ok || !debit.data?.ok) {
-      const status = String(debit.data?.status || "");
-      if (status === "insufficient") {
-        return json(res, 402, {
-          error: "Not enough credits",
-          code: "insufficient_credits",
-          balance: Number(debit.data?.balance || 0),
-          needed: SOUND_COST,
-          message: debit.data?.message || "Not enough credits. Redeem a code from your Profile.",
+    const isAdmin = isAdminEmail(user.email);
+    let balanceAfterDebit = null;
+    if (!isAdmin) {
+      const debit = await callRpc("consume_credits", {
+        p_user_id: user.userId,
+        p_amount: SOUND_COST,
+        p_reason: "sound_generate",
+        p_ref: "",
+      });
+      if (!debit.ok || !debit.data?.ok) {
+        const status = String(debit.data?.status || "");
+        if (status === "insufficient") {
+          return json(res, 402, {
+            error: "Not enough credits",
+            code: "insufficient_credits",
+            balance: Number(debit.data?.balance || 0),
+            needed: SOUND_COST,
+            message: debit.data?.message || "Not enough credits. Redeem a code from your Profile.",
+          });
+        }
+        return json(res, 500, {
+          error: "Credit check failed",
+          details: debit.data || debit.error || null,
         });
       }
-      return json(res, 500, {
-        error: "Credit check failed",
-        details: debit.data || debit.error || null,
-      });
+      balanceAfterDebit = Number(debit.data?.balance || 0);
     }
-    const balanceAfterDebit = Number(debit.data?.balance || 0);
 
     const body = await readJson(req);
     const prompt = String(body?.prompt || "").trim();
     if (!prompt) {
-      await refund(user.userId, SOUND_COST, "refund_sound_generate", "empty_prompt").catch(() => null);
+      if (!isAdmin) {
+        await refund(user.userId, SOUND_COST, "refund_sound_generate", "empty_prompt").catch(() => null);
+      }
       return json(res, 400, { error: "Missing prompt" });
     }
 
@@ -93,12 +100,16 @@ module.exports = async function handler(req, res) {
     const text = await r.text().catch(() => "");
     const data = safeJson(text);
     if (!r.ok) {
-      await refund(user.userId, SOUND_COST, "refund_sound_generate", "suno_http_error").catch(() => null);
+      if (!isAdmin) {
+        await refund(user.userId, SOUND_COST, "refund_sound_generate", "suno_http_error").catch(() => null);
+      }
       return json(res, 502, { error: "Upstream Suno error", status: r.status, details: data || text });
     }
     const sunoCode = data && typeof data === "object" && "code" in data ? Number(data.code) : 200;
     if (Number.isFinite(sunoCode) && sunoCode !== 200) {
-      await refund(user.userId, SOUND_COST, "refund_sound_generate", `suno_code_${sunoCode}`).catch(() => null);
+      if (!isAdmin) {
+        await refund(user.userId, SOUND_COST, "refund_sound_generate", `suno_code_${sunoCode}`).catch(() => null);
+      }
       const msg = data?.msg || data?.message || data?.error || "Suno rejected request";
       return json(res, 502, { error: msg, details: data });
     }
@@ -106,8 +117,9 @@ module.exports = async function handler(req, res) {
     return json(res, 200, {
       ...(data || { raw: text }),
       _credits: {
-        spent: SOUND_COST,
+        spent: isAdmin ? 0 : SOUND_COST,
         balance: balanceAfterDebit,
+        admin: isAdmin || undefined,
       },
     });
   } catch (e) {

@@ -36,6 +36,7 @@ const Busboy = require("busboy");
 const {
   verifyUser,
   callRpc,
+  isAdminEmail,
 } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
 
@@ -86,34 +87,40 @@ module.exports = async function handler(req, res) {
 
     // Debit profile credits BEFORE calling Suno. Refund in full on any
     // pre-task failure so the user is never charged for a request Suno
-    // didn't actually accept.
-    const debit = await callRpc("consume_credits", {
-      p_user_id: user.userId,
-      p_amount: cost,
-      p_reason: reason,
-      p_ref: "",
-    });
-    if (!debit.ok || !debit.data?.ok) {
-      const status = String(debit.data?.status || "");
-      if (status === "insufficient") {
-        const featureLabel = isRemixAction ? "this generation" : "vocal extraction";
-        return json(res, 402, {
-          error: "Not enough credits",
-          code: "insufficient_credits",
-          balance: Number(debit.data?.balance || 0),
-          needed: cost,
-          message:
-            debit.data?.message ||
-            `Not enough credits for ${featureLabel} (${cost} credits). Redeem a code from your Profile.`,
+    // didn't actually accept. Admin (owner) accounts skip the debit:
+    // their Suno usage shows up directly on the master Suno account.
+    const isAdmin = isAdminEmail(user.email);
+    let balanceAfterDebit = null;
+    if (!isAdmin) {
+      const debit = await callRpc("consume_credits", {
+        p_user_id: user.userId,
+        p_amount: cost,
+        p_reason: reason,
+        p_ref: "",
+      });
+      if (!debit.ok || !debit.data?.ok) {
+        const status = String(debit.data?.status || "");
+        if (status === "insufficient") {
+          const featureLabel = isRemixAction ? "this generation" : "vocal extraction";
+          return json(res, 402, {
+            error: "Not enough credits",
+            code: "insufficient_credits",
+            balance: Number(debit.data?.balance || 0),
+            needed: cost,
+            message:
+              debit.data?.message ||
+              `Not enough credits for ${featureLabel} (${cost} credits). Redeem a code from your Profile.`,
+          });
+        }
+        return json(res, 500, {
+          error: "Credit check failed",
+          details: debit.data || debit.error || null,
         });
       }
-      return json(res, 500, {
-        error: "Credit check failed",
-        details: debit.data || debit.error || null,
-      });
+      balanceAfterDebit = Number(debit.data?.balance || 0);
     }
-    const balanceAfterDebit = Number(debit.data?.balance || 0);
     const refund = async (refLabel) => {
+      if (isAdmin) return;
       try {
         await callRpc("refund_credits", {
           p_user_id: user.userId,
@@ -302,7 +309,7 @@ module.exports = async function handler(req, res) {
         return json(res, 200, {
           ...(coverData || { raw: coverText }),
           uploadUrl,
-          _credits: { spent: cost, balance: balanceAfterDebit },
+          _credits: { spent: isAdmin ? 0 : cost, balance: balanceAfterDebit, admin: isAdmin || undefined },
         });
       }
 
@@ -343,7 +350,7 @@ module.exports = async function handler(req, res) {
         return json(res, 200, {
           ...(extData || { raw: extText }),
           uploadUrl,
-          _credits: { spent: cost, balance: balanceAfterDebit },
+          _credits: { spent: isAdmin ? 0 : cost, balance: balanceAfterDebit, admin: isAdmin || undefined },
         });
       }
 
@@ -459,7 +466,7 @@ module.exports = async function handler(req, res) {
       return json(res, 200, {
         ...(addData || { raw: addText }),
         uploadUrl,
-        _credits: { spent: cost, balance: balanceAfterDebit },
+        _credits: { spent: isAdmin ? 0 : cost, balance: balanceAfterDebit, admin: isAdmin || undefined },
       });
     }
 
@@ -494,7 +501,7 @@ module.exports = async function handler(req, res) {
     }
     return json(res, 200, {
       ...(data || { raw: text }),
-      _credits: { spent: cost, balance: balanceAfterDebit },
+      _credits: { spent: isAdmin ? 0 : cost, balance: balanceAfterDebit, admin: isAdmin || undefined },
     });
   } catch (e) {
     return json(res, 500, { error: e?.message || String(e) });

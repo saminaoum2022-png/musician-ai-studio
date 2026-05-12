@@ -19,6 +19,7 @@
 const {
   verifyUser,
   callRpc,
+  isAdminEmail,
 } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
 
@@ -51,32 +52,37 @@ module.exports = async function handler(req, res) {
     if (!name) return json(res, 400, { error: "Missing name" });
     if (!description) return json(res, 400, { error: "Missing description" });
 
-    const debit = await callRpc("consume_credits", {
-      p_user_id: user.userId,
-      p_amount: PERSONA_COST,
-      p_reason: "persona_create",
-      p_ref: audioId,
-    });
-    if (!debit.ok || !debit.data?.ok) {
-      const status = String(debit.data?.status || "");
-      if (status === "insufficient") {
-        return json(res, 402, {
-          error: "Not enough credits",
-          code: "insufficient_credits",
-          balance: Number(debit.data?.balance || 0),
-          needed: PERSONA_COST,
-          message:
-            debit.data?.message ||
-            `Saving a voice persona costs ${PERSONA_COST} credits. Redeem a code from your Profile.`,
+    const isAdmin = isAdminEmail(user.email);
+    let balanceAfterDebit = null;
+    if (!isAdmin) {
+      const debit = await callRpc("consume_credits", {
+        p_user_id: user.userId,
+        p_amount: PERSONA_COST,
+        p_reason: "persona_create",
+        p_ref: audioId,
+      });
+      if (!debit.ok || !debit.data?.ok) {
+        const status = String(debit.data?.status || "");
+        if (status === "insufficient") {
+          return json(res, 402, {
+            error: "Not enough credits",
+            code: "insufficient_credits",
+            balance: Number(debit.data?.balance || 0),
+            needed: PERSONA_COST,
+            message:
+              debit.data?.message ||
+              `Saving a voice persona costs ${PERSONA_COST} credits. Redeem a code from your Profile.`,
+          });
+        }
+        return json(res, 500, {
+          error: "Credit check failed",
+          details: debit.data || debit.error || null,
         });
       }
-      return json(res, 500, {
-        error: "Credit check failed",
-        details: debit.data || debit.error || null,
-      });
+      balanceAfterDebit = Number(debit.data?.balance || 0);
     }
-    const balanceAfterDebit = Number(debit.data?.balance || 0);
     const refund = async (refLabel) => {
+      if (isAdmin) return;
       try {
         await callRpc("refund_credits", {
           p_user_id: user.userId,
@@ -195,8 +201,9 @@ module.exports = async function handler(req, res) {
       personaId,
       endpoint: url,
       _credits: {
-        spent: PERSONA_COST,
+        spent: isAdmin ? 0 : PERSONA_COST,
         balance: balanceAfterDebit,
+        admin: isAdmin || undefined,
       },
     });
   } catch (e) {

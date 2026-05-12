@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260512newsong";
+const APP_BUILD = "20260512credits";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -4426,9 +4426,22 @@ function setCreditsBalance(n) {
   const raw = Number(n);
   const v = Number.isFinite(raw) ? Math.max(0, raw) : 0;
   creditsState.balance = v;
-  const disp = formatCreditsAmount(v);
+  // Admin (owner) accounts skip per-user debits server-side, so a numeric
+  // balance has no meaning. Show an infinity glyph instead — the Suno
+  // master account is the real ledger for these generations.
+  const admin = Boolean(creditsState.isAdmin);
+  const disp = admin ? "∞" : formatCreditsAmount(v);
   if (els.profileCreditsBalance) els.profileCreditsBalance.textContent = disp;
   if (els.creditsBalanceBig) els.creditsBalanceBig.textContent = disp;
+  if (els.profileCreditsLink) {
+    els.profileCreditsLink.classList.toggle("isAdmin", admin);
+    els.profileCreditsLink.setAttribute(
+      "aria-label",
+      admin
+        ? "Credits balance: unlimited (admin). Tap for details."
+        : `Credits balance: ${disp}. Tap to manage credits.`
+    );
+  }
 }
 
 function formatLedgerReason(reason) {

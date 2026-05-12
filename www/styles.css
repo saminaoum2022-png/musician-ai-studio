@@ -5357,6 +5357,67 @@ body[data-route="profile"] .profileAuraGlow{
   from{ transform: rotate(0deg); }
   to{ transform: rotate(360deg); }
 }
+
+/* Compact Credits pill displayed inside the profile aura header, just
+   below the songs/likes inline stats. Links to the full /credits page.
+   Admin (owner) accounts get an upgraded gradient and the ∞ glyph
+   because their generations bypass the per-user ledger. */
+.profileCreditsPill{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px auto 0;
+  padding: 6px 12px 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
+  color: rgba(248, 250, 255, 0.92);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, transform 120ms ease;
+}
+.profileCreditsPill:hover{
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.025));
+  border-color: rgba(255, 255, 255, 0.22);
+}
+.profileCreditsPill:active{ transform: scale(0.98); }
+.profileCreditsPillIco{
+  width: 14px;
+  height: 14px;
+  opacity: 0.7;
+  flex: 0 0 auto;
+}
+.profileCreditsPillLabel{
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(223, 231, 251, 0.6);
+}
+.profileCreditsPillValue{
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.profileCreditsPill.isAdmin{
+  border-color: rgba(160, 132, 255, 0.55);
+  background: linear-gradient(135deg, rgba(110, 86, 220, 0.28), rgba(64, 162, 255, 0.18));
+  color: #fff;
+}
+.profileCreditsPill.isAdmin .profileCreditsPillIco{ opacity: 0.95; }
+.profileCreditsPill.isAdmin .profileCreditsPillLabel{
+  color: rgba(255, 255, 255, 0.78);
+}
+.profileCreditsPill.isAdmin .profileCreditsPillValue{
+  font-size: 18px;
+  line-height: 1;
+}
 .profileOwnAuthRow{
   display:flex;
   flex-wrap:wrap;

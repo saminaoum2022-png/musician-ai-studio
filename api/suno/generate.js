@@ -17,6 +17,7 @@
 const {
   verifyUser,
   callRpc,
+  isAdminEmail,
   sendJson,
 } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
@@ -36,29 +37,36 @@ module.exports = async function handler(req, res) {
       return json(res, 401, { error: "Sign in to generate songs." });
     }
 
-    const debit = await callRpc("consume_credits", {
-      p_user_id: user.userId,
-      p_amount: FULL_SONG_COST,
-      p_reason: "full_song",
-      p_ref: "",
-    });
-    if (!debit.ok || !debit.data?.ok) {
-      const status = String(debit.data?.status || "");
-      if (status === "insufficient") {
-        return json(res, 402, {
-          error: "Not enough credits",
-          code: "insufficient_credits",
-          balance: Number(debit.data?.balance || 0),
-          needed: FULL_SONG_COST,
-          message: debit.data?.message || "Not enough credits. Redeem a code from your Profile.",
+    // Admin bypass: owner accounts (ADMIN_EMAILS env) skip the per-user
+    // balance deduction entirely. The Suno API call below still hits the
+    // master Suno account, so usage shows up there directly.
+    const isAdmin = isAdminEmail(user.email);
+    let balanceAfterDebit = null;
+    if (!isAdmin) {
+      const debit = await callRpc("consume_credits", {
+        p_user_id: user.userId,
+        p_amount: FULL_SONG_COST,
+        p_reason: "full_song",
+        p_ref: "",
+      });
+      if (!debit.ok || !debit.data?.ok) {
+        const status = String(debit.data?.status || "");
+        if (status === "insufficient") {
+          return json(res, 402, {
+            error: "Not enough credits",
+            code: "insufficient_credits",
+            balance: Number(debit.data?.balance || 0),
+            needed: FULL_SONG_COST,
+            message: debit.data?.message || "Not enough credits. Redeem a code from your Profile.",
+          });
+        }
+        return json(res, 500, {
+          error: "Credit check failed",
+          details: debit.data || debit.error || null,
         });
       }
-      return json(res, 500, {
-        error: "Credit check failed",
-        details: debit.data || debit.error || null,
-      });
+      balanceAfterDebit = Number(debit.data?.balance || 0);
     }
-    const balanceAfterDebit = Number(debit.data?.balance || 0);
 
     const body = await readJson(req);
     const {
@@ -163,12 +171,16 @@ module.exports = async function handler(req, res) {
       });
     } catch {}
     if (!r.ok) {
-      await refund(user.userId, FULL_SONG_COST, "refund_full_song", "suno_http_error").catch(() => null);
+      if (!isAdmin) {
+        await refund(user.userId, FULL_SONG_COST, "refund_full_song", "suno_http_error").catch(() => null);
+      }
       return json(res, 502, { error: "Upstream Suno error", status: r.status, details: data || text });
     }
     const sunoCode = data && typeof data === "object" && "code" in data ? Number(data.code) : 200;
     if (Number.isFinite(sunoCode) && sunoCode !== 200) {
-      await refund(user.userId, FULL_SONG_COST, "refund_full_song", `suno_code_${sunoCode}`).catch(() => null);
+      if (!isAdmin) {
+        await refund(user.userId, FULL_SONG_COST, "refund_full_song", `suno_code_${sunoCode}`).catch(() => null);
+      }
       const msg = data?.msg || data?.message || data?.error || "Suno rejected request";
       return json(res, 502, { error: msg, details: data });
     }
@@ -176,8 +188,9 @@ module.exports = async function handler(req, res) {
     return json(res, 200, {
       ...(data || { raw: text }),
       _credits: {
-        spent: FULL_SONG_COST,
+        spent: isAdmin ? 0 : FULL_SONG_COST,
         balance: balanceAfterDebit,
+        admin: isAdmin || undefined,
       },
     });
   } catch (e) {

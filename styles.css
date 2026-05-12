@@ -450,6 +450,28 @@ body.isAuth .footer{ display:none; }
 body.isAuth .generateOrb{ display:none !important; }
 body.isAuth .hubNowPlaying{ display:none !important; }
 
+/* Brand chrome reservation:
+ *
+ *  Hub is the "home" tab — the brand wordmark stays there as the
+ *  app's anchor. Every other route (Create, Library, Search, Profile,
+ *  Player, etc.) hides the brand so the page content is the only
+ *  thing competing for attention. Pattern matches Instagram /
+ *  Anghami where the wordmark sits on the home feed only.
+ *
+ *  Desktop still needs top-level navigation, so we hide ONLY the
+ *  brand title there and keep the .journeyBar visible. On mobile
+ *  the bottom .mobileTabbar handles navigation, so the whole
+ *  .header can collapse off non-hub routes.
+ */
+body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-route="auth"]) .brandTitle{
+  display: none;
+}
+@media (max-width: 720px){
+  body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-route="auth"]) .header{
+    display: none;
+  }
+}
+
 .homeGrid{
   display:grid;
   grid-template-columns: 1fr 1fr;

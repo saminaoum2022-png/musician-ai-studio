@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260512egress2";
+const APP_BUILD = "20260512newsong";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -14263,34 +14263,80 @@ syncCreateTabMorph();
   }, true);
 })();
 
+// Double-tap-to-confirm "Start a new song" reset. window.confirm() is
+// unreliable inside an iOS PWA (and was getting users stuck with a
+// half-reset page), so we use a toast + visual-armed pattern: first
+// tap arms, second tap within 3s actually resets.
+//
+// Wired to two surfaces:
+//  - The brand title (shown only on Hub / Intro / Auth — historical UX).
+//  - The "↺ New" pill on the Generate page (the primary surface now that
+//    the title is hidden everywhere else; replaces the old double-click
+//    title gesture that disappeared with the header collapse).
+let _newSongResetArmedAt = 0;
+const NEW_SONG_ARM_WINDOW_MS = 3000;
+const _btnNewSong = document.getElementById("btnNewSong");
+function armNewSongReset(srcEl) {
+  _newSongResetArmedAt = Date.now();
+  try { srcEl?.classList?.add?.("isArmed"); } catch {}
+  try {
+    if (typeof showToast === "function") {
+      showToast("Tap again to start a new song", { icon: "↺", durationMs: 2800 });
+    }
+  } catch {}
+  // Auto-disarm after the window so the button doesn't stay red forever.
+  setTimeout(() => {
+    if (Date.now() - _newSongResetArmedAt >= NEW_SONG_ARM_WINDOW_MS) {
+      _newSongResetArmedAt = 0;
+      try { srcEl?.classList?.remove?.("isArmed"); } catch {}
+    }
+  }, NEW_SONG_ARM_WINDOW_MS + 50);
+}
+function performNewSongReset(srcEl) {
+  _newSongResetArmedAt = 0;
+  try { srcEl?.classList?.remove?.("isArmed"); } catch {}
+  try { resetCreateDraft(); } catch (err) {
+    console.error(err);
+    // Last-resort safety net: even if the reset throws, never leave the
+    // page locked. Strip the locking class and re-enable the generate btn.
+    try { document.body.classList.remove("generateLocked"); } catch {}
+    try { document.body.classList.remove("isBusy"); } catch {}
+    if (els.btnSunoGenerate) {
+      els.btnSunoGenerate.disabled = false;
+      els.btnSunoGenerate.textContent = "Generate song";
+    }
+  }
+}
+if (_btnNewSong) {
+  _btnNewSong.addEventListener("click", () => {
+    const isArmed =
+      _newSongResetArmedAt &&
+      Date.now() - _newSongResetArmedAt <= NEW_SONG_ARM_WINDOW_MS;
+    if (!isArmed) {
+      armNewSongReset(_btnNewSong);
+      return;
+    }
+    performNewSongReset(_btnNewSong);
+  });
+}
 if (els.brandTitle) {
-  // Double-tap-to-confirm. window.confirm() is unreliable inside an iOS PWA
-  // (and was getting users stuck with a half-reset page), so we use a toast
-  // pattern instead: first tap arms, second tap within 3s actually resets.
-  let _brandResetArmedAt = 0;
-  const ARM_WINDOW_MS = 3000;
   els.brandTitle.addEventListener("click", () => {
     const route = document.body.getAttribute("data-route") || "";
     if (route !== "generate") {
       location.hash = "#/generate";
       return;
     }
-    const now = Date.now();
-    const isArmed = _brandResetArmedAt && (now - _brandResetArmedAt) <= ARM_WINDOW_MS;
+    const isArmed =
+      _newSongResetArmedAt &&
+      Date.now() - _newSongResetArmedAt <= NEW_SONG_ARM_WINDOW_MS;
     if (!isArmed) {
-      _brandResetArmedAt = now;
-      try {
-        if (typeof showToast === "function") {
-          showToast("Tap NabadAi again to start a new song", { icon: "↺", durationMs: 2800 });
-        }
-      } catch {}
+      armNewSongReset(_btnNewSong);
       return;
     }
-    _brandResetArmedAt = 0;
-    try { resetCreateDraft(); } catch (err) {
+    try {
+      performNewSongReset(_btnNewSong);
+    } catch (err) {
       console.error(err);
-      // Last-resort safety net: even if the reset throws, never leave the
-      // page locked. Strip the locking class and re-enable the generate btn.
       try { document.body.classList.remove("generateLocked"); } catch {}
       try { document.body.classList.remove("isBusy"); } catch {}
       if (els.btnSunoGenerate) {

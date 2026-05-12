@@ -39,7 +39,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260512egress2" />
+    <link rel="stylesheet" href="./styles.css?v=20260512newsong" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -262,7 +262,16 @@
 
         <section class="card wide" data-route="generate">
           <div id="simpleBox">
-          <h2>Create</h2>
+          <div class="createHeadRow">
+            <h2>Create</h2>
+            <button id="btnNewSong" class="btnNewSong" type="button" title="Start a new song" aria-label="Start a new song">
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"/>
+                <path d="M20.49 15A9 9 0 1 1 18.36 5.64L23 10"/>
+              </svg>
+              <span class="btnNewSongLabel">New</span>
+            </button>
+          </div>
           <p class="hint createPageLead">
             Three ways to start: a photo, your voice, or words. Set a style, then generate.
           </p>
@@ -1940,6 +1949,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260512egress2"></script>
+    <script type="module" src="./src/app.js?v=20260512newsong"></script>
   </body>
 </html>

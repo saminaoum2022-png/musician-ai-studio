@@ -3670,6 +3670,46 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
 .disabled{ opacity:0.55; pointer-events:none; }
 
 .hint{ margin-top:12px; color:var(--muted); font-size:14px; line-height:1.4; }
+
+/* Generate page header row: "Create" + "↺ New" reset pill.
+ * Replaces the old "double-tap NabadAi title" gesture that disappeared
+ * when we hid the brand title on non-Hub routes. */
+.createHeadRow{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+}
+.createHeadRow h2{
+  margin: 0;
+}
+.btnNewSong{
+  font-size: 12px;
+  font-weight: 800;
+  padding: 6px 12px 6px 10px;
+  border-radius: 999px;
+  background: rgba(10, 14, 22, 0.55);
+  border: 1px solid rgba(255,255,255,0.14);
+  color: rgba(232, 238, 247, 0.82);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms ease, border-color 160ms ease, background 200ms ease, color 200ms ease;
+}
+.btnNewSong:hover{ border-color: rgba(255,255,255,0.24); color: #fff; }
+.btnNewSong:active{ transform: translateY(1px) scale(0.97); }
+.btnNewSong svg{ opacity: 0.85; }
+.btnNewSong.isArmed{
+  background: linear-gradient(180deg, rgba(255, 90, 90, 0.32), rgba(255, 90, 90, 0.16));
+  border-color: rgba(255, 130, 130, 0.55);
+  color: #fff;
+}
+.btnNewSong.isArmed svg{ opacity: 1; }
 .stepCard{
   border:1px solid var(--border);
   border-radius:14px;

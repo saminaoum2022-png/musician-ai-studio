@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514hubReelFullscreen";
+const APP_BUILD = "20260514hubReelFullscreen2";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -6261,32 +6261,26 @@ function renderHub() {
       return;
     }
     if (stillLoading) {
-      // Skeletons mirror the real `.hubRow` layout (16:9 cover on
-      // top, meta strip below, action pill row at the bottom) so the
-      // first-paint silhouette matches what's about to land. Reads
-      // as "your feed is loading" instead of "generic placeholder".
-      const skelCard = `
-        <div class="hubSkelCard" aria-hidden="true">
-          <div class="hubSkelArt"></div>
-          <div class="hubSkelMetaRow">
-            <div class="hubSkelAvatar"></div>
-            <div class="hubSkelMetaText">
-              <span class="hubSkelLineSm"></span>
-              <span class="hubSkelLineXs"></span>
-            </div>
-          </div>
-          <div class="hubSkelTitle"></div>
-          <div class="hubSkelActions">
-            <span class="hubSkelPill"></span>
-            <span class="hubSkelPill"></span>
-            <span class="hubSkelPill"></span>
-          </div>
-        </div>
-      `;
+      // Reel-style skeleton: a single full-screen panel that mirrors
+      // the production layout (centered cover, right rail dots,
+      // bottom title bar) so the swap to real data is invisible.
       els.hubList.innerHTML = `
-        <div class="hubLoadingSkeleton" aria-live="polite" aria-busy="true">
-          ${skelCard}${skelCard}${skelCard}
-        </div>
+        <article class="hubReelSkeleton" aria-live="polite" aria-busy="true" aria-label="Loading Hub feed">
+          <div class="hubReelSkelBackdrop" aria-hidden="true"></div>
+          <div class="hubReelSkelStage" aria-hidden="true">
+            <div class="hubReelSkelCover"></div>
+          </div>
+          <div class="hubReelSkelRail" aria-hidden="true">
+            <span class="hubReelSkelDot"></span>
+            <span class="hubReelSkelDot"></span>
+            <span class="hubReelSkelDot"></span>
+            <span class="hubReelSkelDot"></span>
+          </div>
+          <div class="hubReelSkelMeta" aria-hidden="true">
+            <span class="hubReelSkelLineSm"></span>
+            <span class="hubReelSkelLineLg"></span>
+          </div>
+        </article>
       `;
     } else {
       els.hubList.innerHTML = `

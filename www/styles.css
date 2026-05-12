@@ -10028,10 +10028,25 @@ input::placeholder, textarea::placeholder{
  *      card, and the action rail + meta footer floated above.
  * ================================================================= */
 body[data-route="hub"] .header{ display: none !important; }
+/* Page footer (build hint) leaks under the reel as dead space — hide
+   it on the hub route. Also lock viewport to 100dvh so nothing else
+   pushes the layout taller than the screen. */
+body[data-route="hub"] > .app > .footer,
+body[data-route="hub"] .footer{ display: none !important; }
 body[data-route="hub"] .app{
   padding: 0 !important;
+  margin: 0 !important;
   max-width: 100% !important;
-  overflow: hidden;
+  width: 100vw !important;
+  height: 100dvh !important;
+  min-height: 100dvh !important;
+  overflow: hidden !important;
+  position: relative;
+}
+/* Lock the document so scroll only happens inside #hubList */
+body[data-route="hub"]{
+  overflow: hidden !important;
+  height: 100dvh !important;
 }
 body[data-route="hub"] .card.wide.hubCard{
   padding: 0 !important;
@@ -10079,11 +10094,11 @@ body[data-route="hub"] #hubAudioHint{
   text-align: center;
 }
 
-/* The reel container itself. Fills the visible viewport minus the
-   mobile tab bar (which is fixed-positioned at the bottom). */
+/* The reel container itself. Truly full-bleed — the tab bar floats
+   over the bottom with its own translucent gradient. */
 body[data-route="hub"] #hubList{
-  height: calc(100dvh - 76px - env(safe-area-inset-bottom, 0px));
-  min-height: calc(100svh - 76px - env(safe-area-inset-bottom, 0px));
+  height: 100dvh;
+  min-height: 100svh;
   margin: 0;
   padding: 0;
   overflow-y: scroll;
@@ -10095,28 +10110,57 @@ body[data-route="hub"] #hubList{
   scrollbar-width: none;
   background: #04060c;
 }
-@media (min-width: 721px){
-  body[data-route="hub"] #hubList{
-    height: 100dvh;
-    min-height: 100svh;
-  }
-}
 body[data-route="hub"] #hubList::-webkit-scrollbar{ display: none; }
+/* The mobile tab bar gets a soft gradient backdrop on the reel route
+   so the reel can flow under it without losing icon legibility. */
+body[data-route="hub"] .mobileTabbar{
+  background: linear-gradient(180deg, rgba(4,6,12,0) 0%, rgba(4,6,12,0.85) 60%, rgba(4,6,12,0.95) 100%);
+  border-top-color: transparent;
+}
 
-/* Hard-reset any legacy hubRow scroll FX on the new reel route so
-   they can't repaint over us. */
+/* HARD-RESET every legacy .hubRow.isActive effect on the hub route.
+   The new layout owns the entire viewport; the old neighbor-blur +
+   focus-pulse + cover-tint backdrop were never meant to coexist with
+   a snap reel. We blanket-clear them so the screenshot's "purple
+   border while scrolling" cannot reappear. */
+body[data-route="hub"] #hubList .hubRow,
 body[data-route="hub"] #hubList .hubReel{
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
   filter: none !important;
   opacity: 1 !important;
   transform: none !important;
+  animation: none !important;
+  transition: none !important;
+  will-change: auto !important;
   pointer-events: auto !important;
+  gap: 0 !important;
 }
 body[data-route="hub"] #hubList:has(.hubReel.isActive) .hubReel:not(.isActive){
   filter: none !important;
   opacity: 1 !important;
   transform: none !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
 }
-body[data-route="hub"] #hubList .hubReel.isActive::before{ content: none !important; }
+body[data-route="hub"] #hubList .hubReel.isActive,
+body[data-route="hub"] #hubList .hubRow.isActive{
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  animation: none !important;
+  transform: none !important;
+}
+body[data-route="hub"] #hubList .hubReel.isActive::before,
+body[data-route="hub"] #hubList .hubRow.isActive::before{
+  content: none !important;
+  background: none !important;
+}
 
 /* One panel per viewport, full bleed, snap-aligned. */
 .hubReel{
@@ -10184,11 +10228,13 @@ body[data-route="hub"] #hubList .hubReel.isActive::before{ content: none !import
 }
 .hubReelCoverBtn{
   position: relative;
+  display: block;
   width: min(72vw, 360px);
+  height: min(72vw, 360px);
   aspect-ratio: 1 / 1;
   padding: 0;
   border: 0;
-  background: transparent;
+  background: rgba(255,255,255,0.04);
   border-radius: 24px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -10200,12 +10246,21 @@ body[data-route="hub"] #hubList .hubReel.isActive::before{ content: none !import
     inset 0 0 0 1px rgba(255,255,255,0.06);
 }
 .hubReelCoverBtn:active{ transform: scale(0.985); }
-.hubReelCover{
-  display: block;
-  width: 100%;
-  height: 100%;
+/* The cover image — fills the square button. Beats out the legacy
+   .hubCover { aspect-ratio: 16/9 } rule by explicitly setting both
+   axes; !important on the aspect-ratio is for iOS Safari 17 which
+   sometimes resolves aspect-ratio before explicit width/height. */
+.hubReelCoverBtn .hubReelCover,
+.hubReelCoverBtn img.hubCover{
+  display: block !important;
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  aspect-ratio: auto !important;
   object-fit: cover;
   border-radius: inherit;
+  animation: none !important;
 }
 .hubReelCoverGlow{
   position: absolute;
@@ -10258,11 +10313,13 @@ body[data-route="hub"] #hubList .hubReel.isActive::before{ content: none !import
   transition: width 120ms linear;
 }
 
-/* Layer 3a — right action rail (Reels pattern). */
+/* Layer 3a — right action rail (Reels pattern). Sits above the
+   floating tab bar so taps land on the buttons, not the tabs. */
 .hubReelRail{
   position: absolute;
   right: 10px;
-  bottom: calc(28% + env(safe-area-inset-bottom, 0px));
+  /* tab bar ~64px + safe-area + ~30px breathing room */
+  bottom: calc(110px + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -10324,13 +10381,14 @@ body[data-route="hub"] #hubList .hubReel.isActive::before{ content: none !import
 }
 .hubReelMoreBtn span{ font-size: 30px; line-height: 1; }
 
-/* Layer 3b — bottom meta strip. */
+/* Layer 3b — bottom meta strip. Padded UP from the bottom so the
+   title clears the floating tab bar (tabbar ~64px + safe-area). */
 .hubReelMeta{
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 18px 84px calc(20px + env(safe-area-inset-bottom, 0px)) 18px;
+  padding: 18px 84px calc(90px + env(safe-area-inset-bottom, 0px)) 18px;
   z-index: 4;
   color: #fff;
   pointer-events: none;
@@ -10398,7 +10456,7 @@ body[data-route="hub"] #hubList .hubReel.isActive::before{ content: none !import
 .hubReelMoreMenu{
   position: absolute;
   right: 16px;
-  bottom: calc(36% + env(safe-area-inset-bottom, 0px));
+  bottom: calc(160px + env(safe-area-inset-bottom, 0px));
   z-index: 6;
   min-width: 200px;
 }
@@ -10416,4 +10474,101 @@ body[data-route="hub"] #hubList .hubReel.isActive::before{ content: none !import
 .hubReelCreatorRow{
   -webkit-user-select: text;
   user-select: text;
+}
+
+/* Reel-style loading skeleton — one full-bleed panel that mirrors
+   the production reel silhouette (centered square cover, right-rail
+   action dots, bottom meta lines). When the first cloud refresh
+   lands the skeleton is replaced by real reel articles in the same
+   layout, so the swap is invisible to the eye. */
+.hubReelSkeleton{
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(120% 80% at 50% 18%, rgba(124,92,255,0.10), transparent 60%),
+    radial-gradient(120% 80% at 50% 90%, rgba(35,213,171,0.05), transparent 60%),
+    #04060c;
+  scroll-snap-align: start;
+  overflow: hidden;
+}
+.hubReelSkelBackdrop{
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.04) 50%, rgba(255,255,255,0.02) 100%);
+  background-size: 100% 200%;
+  animation: hubReelSkelShimmer 1.6s ease-in-out infinite;
+}
+.hubReelSkelStage{
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+}
+.hubReelSkelCover{
+  width: min(72vw, 360px);
+  height: min(72vw, 360px);
+  aspect-ratio: 1 / 1;
+  border-radius: 24px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.04) 100%);
+  background-size: 200% 100%;
+  animation: hubReelSkelShimmer 1.4s ease-in-out infinite;
+  box-shadow:
+    0 28px 60px -18px rgba(0,0,0,0.6),
+    0 10px 36px -10px rgba(124,92,255,0.30),
+    inset 0 0 0 1px rgba(255,255,255,0.06);
+}
+.hubReelSkelRail{
+  position: absolute;
+  right: 10px;
+  bottom: calc(110px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  z-index: 2;
+}
+.hubReelSkelDot{
+  display: block;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.04) 100%);
+  background-size: 200% 100%;
+  animation: hubReelSkelShimmer 1.4s ease-in-out infinite;
+}
+.hubReelSkelMeta{
+  position: absolute;
+  left: 18px;
+  right: 84px;
+  bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 2;
+}
+.hubReelSkelLineSm,
+.hubReelSkelLineLg{
+  display: block;
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.04) 100%);
+  background-size: 200% 100%;
+  animation: hubReelSkelShimmer 1.4s ease-in-out infinite;
+  border-radius: 6px;
+}
+.hubReelSkelLineSm{ height: 10px; width: 40%; }
+.hubReelSkelLineLg{ height: 18px; width: 60%; border-radius: 7px; }
+@keyframes hubReelSkelShimmer{
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce){
+  .hubReelSkelCover,
+  .hubReelSkelBackdrop,
+  .hubReelSkelDot,
+  .hubReelSkelLineSm,
+  .hubReelSkelLineLg{
+    animation: none !important;
+  }
 }

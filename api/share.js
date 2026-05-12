@@ -108,7 +108,7 @@ ${audioTag}
 
 <link rel="canonical" href="${safeUrl}" />
 <style>
-  html,body{margin:0;padding:0;background:#0d0f17;color:#e9eefb;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
+  html,body{margin:0;padding:0;background:#12151e;color:#e9eefb;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
   .wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;gap:18px;}
   .cover{width:min(90vw,420px);aspect-ratio:1/1;border-radius:18px;object-fit:cover;border:1px solid rgba(255,255,255,0.10);box-shadow:0 18px 60px -20px rgba(124,92,255,0.55);}
   .title{font-size:24px;font-weight:800;letter-spacing:-0.3px;background:linear-gradient(95deg,#f7f4ff 0%,#e0d6ff 50%,#d3f0ec 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}

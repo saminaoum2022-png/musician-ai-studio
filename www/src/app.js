@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260512searchwide";
+const APP_BUILD = "20260512searchv2";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1333,6 +1333,8 @@ function showLikeBurst() {
 
 var authSession = null;
 var generationReadyNotice = false;
+/** Search → Make it mine; merged into `lastGenerationMeta` on Generate (declared early for `applyRoute`). */
+let pendingSearchRemixMeta = null;
 
 /** Suno "Sounds" task polling (separate from full-song generate). */
 let soundTaskId = "";
@@ -1392,9 +1394,13 @@ function applyRoute() {
   const protectedRoutes = new Set(["generate", "library", "profile", "player", "vocal", "stems", "advanced", "credits", "sounds"]);
   const isLoggedIn = Boolean(authSession?.user?.id);
   if (!isLoggedIn && protectedRoutes.has(wanted)) wanted = "auth";
+  const prevRoute = document.body.getAttribute("data-route") || "";
   document.body.classList.toggle("isIntro", wanted === "intro");
   document.body.classList.toggle("isAuth", wanted === "auth");
   document.body.setAttribute("data-route", wanted);
+  if (prevRoute === "generate" && wanted !== "generate") {
+    pendingSearchRemixMeta = null;
+  }
   if (els.brandSecondary) {
     els.brandSecondary.textContent = wanted === "hub" ? "Hub" : "Music";
   }
@@ -1579,6 +1585,7 @@ function resetCreateDraft() {
   if (els.sunoPrompt) els.sunoPrompt.value = "";
   if (els.sunoStyle) els.sunoStyle.value = "";
   if (els.sunoTitle) els.sunoTitle.value = "";
+  pendingSearchRemixMeta = null;
   if (els.sunoArtworkStyle) els.sunoArtworkStyle.value = "";
   if (els.sunoReferenceMode) els.sunoReferenceMode.value = "none";
   if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
@@ -1689,11 +1696,10 @@ syncLibraryTabDotFromStorage();
 
 /* ============================================================
  * Search page — magazine of remixable occasion shelves.
- *   Shelves and templates are stubbed in-code for v1 so the
- *   experience can ship without backend churn; the shape lines
- *   up with a future `search_templates` Supabase table.
+ *   In-code `SEARCH_TEMPLATE_FALLBACK` always ships; Supabase `search_templates`
+ *   rows (same `id`) overlay titles, media URLs, lyrics, etc. when present.
  * ============================================================ */
-const SEARCH_TEMPLATES = [
+const SEARCH_TEMPLATE_FALLBACK = [
   {
     id: "bday-jazz",
     shelf: "birthday",
@@ -1837,6 +1843,148 @@ const SEARCH_SHELVES = [
   { id: "heart",      title: "From the heart",           hint: "Heartbreak · gratitude" },
 ];
 
+/** Non-null when Supabase returned ≥1 active row; merged over `SEARCH_TEMPLATE_FALLBACK` by `id`. */
+let searchTemplatesRemote = null;
+let _searchPeopleFetchGen = 0;
+
+async function supabaseSelectSearchTemplates() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10_000);
+  try {
+    const sel =
+      "id,shelf,occasion,title,sub,chip,style,lyrics,keywords,cover_url,preview_url,sort_order,active";
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/search_templates?select=${encodeURIComponent(sel)}&active=eq.true&order=shelf.asc,sort_order.asc,id.asc`,
+      {
+        headers: { apikey: SUPABASE_ANON_KEY },
+        signal: ctrl.signal,
+      },
+    );
+    if (!r.ok) return null;
+    const arr = await r.json().catch(() => null);
+    return Array.isArray(arr) ? arr : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function mapSearchTemplateRowFromDb(r) {
+  let keywords = [];
+  if (Array.isArray(r?.keywords)) keywords = r.keywords.map((x) => String(x));
+  else if (typeof r?.keywords === "string" && r.keywords) {
+    try {
+      const p = JSON.parse(r.keywords);
+      if (Array.isArray(p)) keywords = p.map((x) => String(x));
+    } catch {
+      keywords = r.keywords.split(/[\s,]+/).filter(Boolean);
+    }
+  }
+  return {
+    id: String(r.id || ""),
+    shelf: String(r.shelf || ""),
+    occasion: String(r.occasion || ""),
+    title: String(r.title || ""),
+    sub: String(r.sub || ""),
+    chip: String(r.chip || ""),
+    style: String(r.style || ""),
+    lyrics: String(r.lyrics || ""),
+    keywords,
+    coverUrl: String(r.cover_url || "").trim(),
+    previewUrl: String(r.preview_url || "").trim(),
+    sortOrder: Number(r.sort_order) || 0,
+  };
+}
+
+async function refreshSearchTemplates() {
+  const raw = await supabaseSelectSearchTemplates();
+  if (Array.isArray(raw) && raw.length) {
+    searchTemplatesRemote = raw.map(mapSearchTemplateRowFromDb).filter((t) => t.id && t.shelf);
+  } else {
+    searchTemplatesRemote = null;
+  }
+}
+
+function getSearchTemplates() {
+  const fb = SEARCH_TEMPLATE_FALLBACK;
+  if (!searchTemplatesRemote?.length) return fb.slice();
+  const byId = new Map(fb.map((t) => [t.id, { ...t }]));
+  for (const o of searchTemplatesRemote) {
+    if (!o.id) continue;
+    const cur = byId.get(o.id) || {
+      id: o.id,
+      shelf: o.shelf,
+      occasion: o.occasion,
+      title: o.title,
+      sub: o.sub,
+      chip: o.chip,
+      style: o.style,
+      lyrics: o.lyrics,
+      keywords: o.keywords || [],
+    };
+    byId.set(o.id, {
+      ...cur,
+      ...o,
+      keywords: o.keywords && o.keywords.length ? o.keywords : cur.keywords || [],
+    });
+  }
+  const shelfRank = (shelf) => {
+    const i = SEARCH_SHELVES.findIndex((s) => s.id === shelf);
+    return i >= 0 ? i : 99;
+  };
+  return Array.from(byId.values()).sort((a, b) => {
+    const sr = shelfRank(a.shelf) - shelfRank(b.shelf);
+    if (sr !== 0) return sr;
+    const o = (a.sortOrder || 0) - (b.sortOrder || 0);
+    if (o !== 0) return o;
+    return String(a.id).localeCompare(String(b.id));
+  });
+}
+
+function escapePostgrestIlikeToken(qNorm) {
+  const t = String(qNorm || "")
+    .trim()
+    .toLowerCase()
+    .replace(/,/g, " ")
+    .replace(/\s+/g, " ")
+    .slice(0, 36);
+  if (t.length < 2) return "";
+  return t.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_").replace(/\*/g, "");
+}
+
+async function supabaseSearchPublicProfiles(qNorm) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
+  const token = escapePostgrestIlikeToken(qNorm);
+  if (!token) return [];
+  const wild = `*${token}*`;
+  const orRaw = `(username.ilike.${wild},bio.ilike.${wild})`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/profiles?is_public=eq.true&or=${encodeURIComponent(orRaw)}&select=username,avatar,user_id&limit=14`;
+    const r = await fetch(url, {
+      headers: { apikey: SUPABASE_ANON_KEY },
+      signal: ctrl.signal,
+    });
+    if (!r.ok) return [];
+    const rows = await r.json().catch(() => []);
+    if (!Array.isArray(rows)) return [];
+    return rows
+      .map((row) => ({
+        handle: String(row.username || "").trim(),
+        avatar: String(row.avatar || "").trim() || "./assets/nabadai-logo.png",
+        userId: String(row.user_id || "").trim(),
+      }))
+      .filter((u) => u.handle && !isPlaceholderUsername(u.handle));
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 const SEARCH_HINT_EXAMPLES = [
   "birthday for sara",
   "wedding entrance",
@@ -1879,6 +2027,7 @@ function searchTemplateMatchesQuery(tpl, qNorm) {
   if (!qNorm) return true;
   const haystack = [
     tpl.id, tpl.shelf, tpl.occasion, tpl.title, tpl.sub, tpl.chip,
+    tpl.coverUrl, tpl.previewUrl,
     ...(tpl.keywords || []),
   ].join(" ").toLowerCase();
   return haystack.includes(qNorm);
@@ -1886,15 +2035,19 @@ function searchTemplateMatchesQuery(tpl, qNorm) {
 
 function searchShelfMatchesQuery(shelfId, qNorm) {
   if (!qNorm) return true;
-  return SEARCH_TEMPLATES.some((t) => t.shelf === shelfId && searchTemplateMatchesQuery(t, qNorm));
+  return getSearchTemplates().some((t) => t.shelf === shelfId && searchTemplateMatchesQuery(t, qNorm));
 }
 
 function renderSearchPosterHTML(tpl) {
   const occ = String(tpl.occasion || "").split("·")[0]?.trim() || tpl.chip || "";
   const sub = String(tpl.occasion || "").split("·").slice(1).join("·").trim();
+  const cover = String(tpl.coverUrl || "").trim();
+  const artInner = cover
+    ? `<img class="searchPosterArt" src="${escapeHtml(cover)}" alt="" loading="lazy" decoding="async" />`
+    : `<div class="searchPosterArt" data-placeholder="1" aria-hidden="true"></div>`;
   return `
     <button class="searchPoster" type="button" data-search-poster="${tpl.id}" aria-label="${escapeHtml(tpl.title)}">
-      <div class="searchPosterArt" data-placeholder="1" aria-hidden="true"></div>
+      ${artInner}
       <div class="searchPosterVignette" aria-hidden="true"></div>
       <span class="searchPosterChip">${escapeHtml(tpl.chip || occ)}</span>
       <div class="searchPosterText">
@@ -1915,7 +2068,7 @@ function renderSearchShelves(query) {
 
   // Build shelf-by-shelf so the matching one floats to the top when there's a query.
   const shelves = SEARCH_SHELVES.map((shelf) => {
-    const templates = SEARCH_TEMPLATES.filter((t) => t.shelf === shelf.id);
+    const templates = getSearchTemplates().filter((t) => t.shelf === shelf.id);
     const matched = qNorm
       ? templates.filter((t) => searchTemplateMatchesQuery(t, qNorm))
       : templates;
@@ -1960,6 +2113,16 @@ function renderSearchShelves(query) {
   });
 }
 
+function bindSearchPeopleRowClickHandlers(rowEl) {
+  if (!rowEl) return;
+  rowEl.querySelectorAll("[data-search-user]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const handle = decodeURIComponent(btn.getAttribute("data-search-user") || "");
+      if (handle) location.hash = `#/u/${encodeURIComponent(handle)}`;
+    });
+  });
+}
+
 function renderSearchPeople(query) {
   const stripEl = document.getElementById("searchPeopleStrip");
   const rowEl = document.getElementById("searchPeopleRow");
@@ -1970,42 +2133,56 @@ function renderSearchPeople(query) {
     rowEl.innerHTML = "";
     return;
   }
-  // Source candidates from the current Hub feed (already cached locally).
+  const seq = ++_searchPeopleFetchGen;
   let posts = [];
   try { posts = loadHubFeed() || []; } catch { posts = []; }
   const seen = new Set();
-  const people = [];
+  const hubPeople = [];
   for (const p of posts) {
     const handle = String(p?.creator || "").trim();
-    if (!handle) continue;
+    if (!handle || isPlaceholderUsername(handle)) continue;
     const key = handle.toLowerCase();
     if (seen.has(key)) continue;
     if (!key.includes(qNorm)) continue;
     seen.add(key);
-    people.push({
+    hubPeople.push({
       handle,
       avatar: String(p?.creatorAvatar || "./assets/nabadai-logo.png"),
     });
-    if (people.length >= 12) break;
+    if (hubPeople.length >= 12) break;
   }
-  if (!people.length) {
-    stripEl.hidden = true;
-    rowEl.innerHTML = "";
-    return;
-  }
-  stripEl.hidden = false;
-  rowEl.innerHTML = people.map((u) => `
+  const paint = (people) => {
+    if (!people.length) {
+      stripEl.hidden = true;
+      rowEl.innerHTML = "";
+      return;
+    }
+    stripEl.hidden = false;
+    rowEl.innerHTML = people.map((u) => `
     <button class="searchPersonCard" type="button" data-search-user="${encodeURIComponent(u.handle)}">
       <img class="searchPersonAvatar" src="${escapeHtml(u.avatar)}" alt="" loading="lazy" />
       <div class="searchPersonName">@${escapeHtml(u.handle)}</div>
     </button>
   `).join("");
-  rowEl.querySelectorAll("[data-search-user]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const handle = decodeURIComponent(btn.getAttribute("data-search-user") || "");
-      if (handle) location.hash = `#/u/${encodeURIComponent(handle)}`;
-    });
-  });
+    bindSearchPeopleRowClickHandlers(rowEl);
+  };
+  paint(hubPeople);
+  void (async () => {
+    const cloud = await supabaseSearchPublicProfiles(qNorm);
+    if (seq !== _searchPeopleFetchGen) return;
+    const input = document.getElementById("searchInput");
+    if (String(input?.value || "").trim().toLowerCase() !== qNorm) return;
+    const merged = [...hubPeople];
+    const seen2 = new Set(merged.map((h) => h.handle.toLowerCase()));
+    for (const c of cloud) {
+      const k = c.handle.toLowerCase();
+      if (seen2.has(k)) continue;
+      seen2.add(k);
+      merged.push({ handle: c.handle, avatar: c.avatar });
+      if (merged.length >= 12) break;
+    }
+    paint(merged);
+  })();
 }
 
 function runSearchQuery(query) {
@@ -2022,6 +2199,34 @@ function openSearchRemixSheet(tpl) {
   const sub = document.getElementById("searchRemixSub");
   const nameInput = document.getElementById("searchRemixName");
   const cta = document.getElementById("searchRemixCta");
+  const coverImg = document.getElementById("searchRemixCover");
+  const previewBtn = document.getElementById("searchRemixPreviewBtn");
+  const audio = document.getElementById("searchRemixPreviewAudio");
+  const coverUrl = String(tpl.coverUrl || "").trim();
+  const previewUrl = String(tpl.previewUrl || "").trim();
+  if (coverImg) {
+    if (coverUrl) {
+      coverImg.hidden = false;
+      coverImg.src = coverUrl;
+    } else {
+      try { coverImg.removeAttribute("src"); } catch {}
+      coverImg.hidden = true;
+    }
+  }
+  if (audio) {
+    try { audio.pause(); } catch {}
+    try { audio.currentTime = 0; } catch {}
+    if (previewUrl) {
+      audio.src = previewUrl;
+    } else {
+      try { audio.removeAttribute("src"); } catch {}
+    }
+  }
+  if (previewBtn) {
+    previewBtn.hidden = !previewUrl;
+    previewBtn.disabled = !previewUrl;
+    previewBtn.classList.remove("isPlaying");
+  }
   if (occ) occ.textContent = tpl.occasion;
   if (title) title.textContent = tpl.title;
   if (sub) sub.textContent = tpl.sub;
@@ -2041,9 +2246,16 @@ function closeSearchRemixSheet() {
   sheet.classList.remove("isOpen");
   setTimeout(() => { sheet.hidden = true; }, 240);
   const audio = document.getElementById("searchRemixPreviewAudio");
-  if (audio) { try { audio.pause(); } catch {} }
+  if (audio) {
+    try { audio.pause(); } catch {}
+    try { audio.currentTime = 0; } catch {}
+  }
   const playBtn = document.getElementById("searchRemixPreviewBtn");
-  if (playBtn) playBtn.classList.remove("isPlaying");
+  if (playBtn) {
+    playBtn.classList.remove("isPlaying");
+    playBtn.hidden = false;
+    playBtn.disabled = false;
+  }
   _searchActiveTemplate = null;
 }
 
@@ -2055,6 +2267,11 @@ function applyRemixTemplateToCreate(tpl, name) {
   if (els.sunoPrompt) els.sunoPrompt.value = lyrics;
   if (els.sunoStyle) els.sunoStyle.value = String(tpl.style || "");
   if (els.sunoTitle) els.sunoTitle.value = titleWithName;
+  pendingSearchRemixMeta = {
+    searchTemplateId: String(tpl.id || "").trim(),
+    searchTemplateTitle: String(tpl.title || "").trim(),
+    searchRemixPersonalizedFor: cleanName,
+  };
   try { setStatus?.(`Loaded ${tpl.title} — tap Generate when ready.`); } catch {}
 }
 
@@ -2107,21 +2324,40 @@ function initSearchPageOnce() {
     });
   }
   const previewBtn = document.getElementById("searchRemixPreviewBtn");
-  if (previewBtn) {
+  const previewAudio = document.getElementById("searchRemixPreviewAudio");
+  if (previewBtn && previewAudio) {
+    previewAudio.addEventListener("ended", () => {
+      previewBtn.classList.remove("isPlaying");
+    });
     previewBtn.addEventListener("click", () => {
-      // v1: no audio preview wired yet (templates aren't pre-rendered).
-      // Tapping the button shakes the CTA to nudge users to "Make it mine".
-      const cta = document.getElementById("searchRemixCta");
-      if (!cta) return;
-      cta.animate(
-        [
-          { transform: "translateX(0)" },
-          { transform: "translateX(-3px)" },
-          { transform: "translateX(3px)" },
-          { transform: "translateX(0)" },
-        ],
-        { duration: 220, easing: "ease-out" }
-      );
+      const tpl = _searchActiveTemplate;
+      const url = String(tpl?.previewUrl || "").trim();
+      const audio = document.getElementById("searchRemixPreviewAudio");
+      const btn = document.getElementById("searchRemixPreviewBtn");
+      if (!url || !audio || !btn) {
+        const cta = document.getElementById("searchRemixCta");
+        if (!cta) return;
+        cta.animate(
+          [
+            { transform: "translateX(0)" },
+            { transform: "translateX(-3px)" },
+            { transform: "translateX(3px)" },
+            { transform: "translateX(0)" },
+          ],
+          { duration: 220, easing: "ease-out" },
+        );
+        return;
+      }
+      if (audio.paused) {
+        void audio.play().then(() => btn.classList.add("isPlaying")).catch(() => {
+          try {
+            showToast("Could not play preview.", { icon: "♪", durationMs: 2800 });
+          } catch {}
+        });
+      } else {
+        try { audio.pause(); } catch {}
+        btn.classList.remove("isPlaying");
+      }
     });
   }
   runSearchQuery("");
@@ -2130,6 +2366,10 @@ function initSearchPageOnce() {
 function onEnterSearchRoute() {
   initSearchPageOnce();
   startSearchHintRotator();
+  void refreshSearchTemplates().then(() => {
+    const input = document.getElementById("searchInput");
+    runSearchQuery(input?.value || "");
+  });
 }
 function onLeaveSearchRoute() {
   stopSearchHintRotator();
@@ -5656,6 +5896,7 @@ function renderHub() {
         </div>
         <div class="trackName hubTitle">${escapeHtml(p.title)}</div>
         ${p.remixOf ? `<div class="hubRemixOf">Remix of: ${escapeHtml(p.remixOf)}</div>` : ""}
+        ${p?.meta?.searchTemplateTitle ? `<div class="hubSearchTemplateLine">From Search · ${escapeHtml(String(p.meta.searchTemplateTitle))}</div>` : ""}
       </div>
       <div class="hubActionRow">
         <button class="hubLike" data-hub-like="${p.id}" aria-label="Like" data-count="${Number(p.likes || 0)}">
@@ -12955,6 +13196,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
       if (!hasReference && vocalProfileClause) payload.style = `${payload.style}, ${vocalProfileClause}`;
       payload.style = compactStyleForProvider(payload.style, 980);
+      const remixMeta =
+        pendingSearchRemixMeta && typeof pendingSearchRemixMeta === "object"
+          ? { ...pendingSearchRemixMeta }
+          : {};
+      pendingSearchRemixMeta = null;
       lastGenerationMeta = {
         engine,
         mode: modeLabel,
@@ -12975,6 +13221,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         model: payload.model,
         imageOnlyInstrumental,
         remixOfHubPostId: currentRemixSource?.id || null,
+        ...remixMeta,
       };
       if (imageOnlyInstrumental) {
         setStatus("Image-inspired mode with no lyrics detected: generating instrumental.");

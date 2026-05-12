@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514profileAvatarPickerWrap";
+const APP_BUILD = "20260514profileCenterCompact";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -7858,7 +7858,7 @@ function renderProfileMySound() {
     .split(/[,|]/)
     .map((s) => s.trim())
     .filter(Boolean)
-    .slice(0, 4);
+    .slice(0, MY_SOUND_GENRE_CAP);
   const list = els.profileMySoundGenresList;
   if (list) {
     const chips = genres.map((g) => {
@@ -7881,18 +7881,28 @@ function renderProfileMySound() {
   const presetList = els.profileMySoundPresetsList;
   if (presetList) {
     const active = getMoodPresetSet();
-    presetList.innerHTML = MOOD_PRESETS.map((p) => {
-      const pressed = active.has(p.id);
-      return `<button type="button" class="profileMySoundPresetChip" data-preset-id="${p.id}" aria-pressed="${pressed ? "true" : "false"}">${p.svg}<span>${escapeHtml(p.label)}</span></button>`;
-    }).join("");
-    presetList.querySelectorAll(".profileMySoundPresetChip").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const id = btn.getAttribute("data-preset-id") || "";
-        if (!id) return;
-        const now = toggleMoodPreset(id);
-        btn.setAttribute("aria-pressed", now ? "true" : "false");
-      });
-    });
+    // Card shows only the user's actually-selected presets (ordered by
+    // MOOD_PRESETS, capped at MY_SOUND_PRESET_CAP). Adding/removing
+    // happens from the View all modal so the row stays tight.
+    const selected = MOOD_PRESETS
+      .filter((p) => active.has(p.id))
+      .slice(0, MY_SOUND_PRESET_CAP);
+    if (selected.length) {
+      presetList.innerHTML = selected
+        .map((p) => `<span class="profileMySoundPresetChip profileMySoundPresetChip--readonly" aria-pressed="true">${p.svg}<span>${escapeHtml(p.label)}</span></span>`)
+        .join("");
+    } else {
+      presetList.innerHTML = `<button type="button" class="profileMySoundPresetChip profileMySoundPresetChip--empty" id="profileMySoundPresetsEmpty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+        <span>Add up to ${MY_SOUND_PRESET_CAP}</span>
+      </button>`;
+      const emptyBtn = document.getElementById("profileMySoundPresetsEmpty");
+      if (emptyBtn) {
+        emptyBtn.addEventListener("click", () => {
+          try { openMySoundModal(); } catch {}
+        }, { once: true });
+      }
+    }
   }
 }
 
@@ -7917,6 +7927,12 @@ const MY_SOUND_GENRES = [
   "Country", "Soul", "Reggae", "Indie", "Metal",
   "Dabke", "Khaleeji", "Tarab", "Afrobeats", "K-Pop",
 ];
+
+/** Hard caps so the My Sound card stays tiny on the profile. Users can
+ *  add/remove from the View all modal; once at the cap, trying to
+ *  select another option shows a quiet toast and is a no-op. */
+const MY_SOUND_GENRE_CAP = 3;
+const MY_SOUND_PRESET_CAP = 3;
 
 let _mySoundDraft = null;
 function _normalizeGenreList(rawCsv) {
@@ -8022,10 +8038,15 @@ function renderMySoundModalContents() {
         const has = draft.genres.some((g) => _genreKey(g) === key);
         if (has) {
           draft.genres = draft.genres.filter((g) => _genreKey(g) !== key);
-        } else {
-          draft.genres.push(label);
+          btn.setAttribute("aria-pressed", "false");
+          return;
         }
-        btn.setAttribute("aria-pressed", has ? "false" : "true");
+        if (draft.genres.length >= MY_SOUND_GENRE_CAP) {
+          try { showToast(`Up to ${MY_SOUND_GENRE_CAP} genres. Remove one first.`); } catch {}
+          return;
+        }
+        draft.genres.push(label);
+        btn.setAttribute("aria-pressed", "true");
       });
     });
   }
@@ -8042,9 +8063,17 @@ function renderMySoundModalContents() {
       btn.addEventListener("click", () => {
         const id = btn.getAttribute("data-preset-id") || "";
         if (!id) return;
-        if (draft.moodPresets.has(id)) draft.moodPresets.delete(id);
-        else draft.moodPresets.add(id);
-        btn.setAttribute("aria-pressed", draft.moodPresets.has(id) ? "true" : "false");
+        if (draft.moodPresets.has(id)) {
+          draft.moodPresets.delete(id);
+          btn.setAttribute("aria-pressed", "false");
+          return;
+        }
+        if (draft.moodPresets.size >= MY_SOUND_PRESET_CAP) {
+          try { showToast(`Up to ${MY_SOUND_PRESET_CAP} presets. Remove one first.`); } catch {}
+          return;
+        }
+        draft.moodPresets.add(id);
+        btn.setAttribute("aria-pressed", "true");
       });
     });
   }
@@ -8059,7 +8088,15 @@ function addCustomGenreToDraft() {
   const key = _genreKey(raw);
   if (!key) return;
   const exists = _mySoundDraft.genres.some((g) => _genreKey(g) === key);
-  if (!exists) _mySoundDraft.genres.push(raw);
+  if (exists) {
+    input.value = "";
+    return;
+  }
+  if (_mySoundDraft.genres.length >= MY_SOUND_GENRE_CAP) {
+    try { showToast(`Up to ${MY_SOUND_GENRE_CAP} genres. Remove one first.`); } catch {}
+    return;
+  }
+  _mySoundDraft.genres.push(raw);
   input.value = "";
   renderMySoundModalContents();
 }
@@ -8068,9 +8105,10 @@ async function saveMySoundDraft() {
   if (!_mySoundDraft) return closeMySoundModal();
   const draft = _mySoundDraft;
   activeProfile.voiceTimbre = draft.voiceTimbre || "";
-  activeProfile.genres = draft.genres.join(", ");
-  saveMoodPresets(draft.moodPresets);
-  _moodPresetsCache = new Set(draft.moodPresets);
+  activeProfile.genres = draft.genres.slice(0, MY_SOUND_GENRE_CAP).join(", ");
+  const cappedPresets = new Set(Array.from(draft.moodPresets).slice(0, MY_SOUND_PRESET_CAP));
+  saveMoodPresets(cappedPresets);
+  _moodPresetsCache = new Set(cappedPresets);
   try { localStorage.setItem(PROFILE_KEY, JSON.stringify(activeProfile)); } catch {}
   if (els.profilePreviewTimbreInput) {
     els.profilePreviewTimbreInput.value = activeProfile.voiceTimbre;

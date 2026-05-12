@@ -39,7 +39,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260514profileAvatarPickerWrap" />
+    <link rel="stylesheet" href="./styles.css?v=20260514profileCenterCompact" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1732,7 +1732,7 @@
             </section>
 
             <section class="mySoundEditSection">
-              <h3 class="mySoundEditTitle">Favorite Genres</h3>
+              <h3 class="mySoundEditTitle">Favorite Genres <span class="mySoundEditCap" aria-hidden="true">· up to 3</span></h3>
               <p class="mySoundEditHint">Tap to toggle. We'll use these when generating.</p>
               <div id="mySoundGenresGrid" class="mySoundGenresGrid" role="group" aria-label="Favorite genres"></div>
               <div class="mySoundCustomGenreRow">
@@ -1750,7 +1750,7 @@
             </section>
 
             <section class="mySoundEditSection">
-              <h3 class="mySoundEditTitle">AI Mood Presets</h3>
+              <h3 class="mySoundEditTitle">AI Mood Presets <span class="mySoundEditCap" aria-hidden="true">· up to 3</span></h3>
               <p class="mySoundEditHint">Vibes Nabad will lean into for your generations.</p>
               <div id="mySoundPresetsGrid" class="mySoundPresetsGrid" role="group" aria-label="AI mood presets"></div>
             </section>
@@ -2082,6 +2082,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260514profileAvatarPickerWrap"></script>
+    <script type="module" src="./src/app.js?v=20260514profileCenterCompact"></script>
   </body>
 </html>

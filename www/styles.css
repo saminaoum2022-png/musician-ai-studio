@@ -4028,13 +4028,19 @@ body[data-route="profile"] .profileAuraGlow{
     inset 0 0 0 1px rgba(255,255,255,0.22);
 }
 
-/* Identity stack — left-aligned, no card. */
+/* Identity stack — view-mode is centered (mockup), edit-mode falls
+   back to left-aligned because form fields look weird centered. */
 .profileAuraIdentity{
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
   padding: 0 4px;
+}
+.profileAura.profileAuraEditing .profileAuraIdentity{
+  align-items: flex-start;
+  text-align: left;
 }
 .profileAuraAvatarWrap{
   position: relative;
@@ -4099,12 +4105,17 @@ body[data-route="profile"] .profileAuraGlow{
   position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 6px;
   flex-wrap: wrap;
   margin-top: 2px;
-  align-self: flex-start;
+  align-self: center;
   width: 100%;
   max-width: 100%;
+}
+.profileAura.profileAuraEditing .profileAuraNameRow{
+  justify-content: flex-start;
+  align-self: flex-start;
 }
 
 /* Live indicator dot retired — the cover-tinted pulse fingerprint
@@ -4389,18 +4400,38 @@ body[data-route="profile"] .profileAuraGlow{
   color: rgba(210, 218, 238, 0.88);
 }
 
+/* Stats live as a small centered pill under the bio. The mockup ran
+   "17 songs · 142 likes" inline with country + flag; we keep that
+   pattern but center it so it sits cleanly under the centered name
+   + bio. Smaller text so it feels like meta, not a headline. */
 .profileAuraStatsInline{
-  margin-top: 16px;
-  font-size: 14px;
-  line-height: 1.5;
-  color: rgba(232, 238, 247, 0.82);
+  margin: 8px auto 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: rgba(210, 220, 240, 0.82);
+  text-align: center;
 }
 .profileAuraStatsInlineInner{
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-wrap: wrap;
-  gap: 10px 14px;
+  gap: 6px 10px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.profileAura.profileAuraEditing .profileAuraStatsInline{
+  text-align: left;
+  margin: 12px 0 0;
+}
+.profileAura.profileAuraEditing .profileAuraStatsInlineInner{
+  display: flex;
+  justify-content: space-between;
+  padding: 0;
+  border: 0;
+  background: none;
 }
 .profileAuraStatsInline strong{
   font-weight: 800;
@@ -4661,21 +4692,22 @@ body[data-route="profile"] .profileAuraGlow{
    in the chip slot and the input fields own the visual space. */
 .profileAura.profileAuraEditing .profileIdentityLine{ display: none !important; }
 
-/* --- Bio quote that sits directly under the identity line in the hero.
-   View-mode only; edit-mode shows the textarea above. --- */
+/* --- Bio quote that sits directly under the username in the hero.
+   View-mode is centered; edit-mode shows the textarea above and
+   keeps left alignment. --- */
 .profileHeroBio{
   position: relative;
-  margin: 6px 0 4px;
-  /* Left edge MUST match the rest of the column (handle, stats) so
-     the hero reads as a single column, not a misindented quote card. */
+  margin: 4px auto 0;
   padding: 0;
   max-width: 460px;
+  text-align: center;
+  align-self: center;
+}
+.profileAura.profileAuraEditing .profileHeroBio{
   text-align: left;
   align-self: flex-start;
+  margin: 6px 0 4px;
 }
-/* Decorative serif quote glyph retired — was forcing a 26px indent
-   that broke alignment with the handle + stats above and below.
-   Bio reads as italic prose now; that's enough to feel like a tagline. */
 .profileHeroBioQuote{ display: none; }
 .profileHeroBioText{
   margin: 0;
@@ -5471,10 +5503,21 @@ body[data-route="profile"] .profileAuraGlow{
   cursor: pointer;
   transition: background 140ms ease, border-color 140ms ease, transform 120ms ease;
 }
+/* Anchor the credits pill to the top-left of the Aura header so the
+   centered username row reads clean. The toolbar (edit/share/gear)
+   continues to live in the top-right. In edit mode we drop back to
+   inline flow because the input takes over the whole row. */
 .profileCreditsPill--inline{
-  margin-left: auto;
-  align-self: center;
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  margin: 0;
   flex: 0 0 auto;
+}
+.profileAura.profileAuraEditing .profileCreditsPill--inline{
+  position: static;
+  margin-left: auto;
 }
 .profileCreditsPill:hover{
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.025));
@@ -8168,69 +8211,68 @@ input::placeholder, textarea::placeholder{
   cursor: pointer;
 }
 
-/* ---------- Profile — "My Sound" sonic-identity card ---------- */
+/* ---------- Profile — "My Sound" sonic-identity card (compact) ---------- */
 .profileMySound{
-  margin: 22px 0 6px;
+  margin: 14px 0 6px;
 }
 .profileMySoundHeader{
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin: 0 0 10px;
+  gap: 10px;
+  margin: 0 0 6px;
 }
 .profileMySoundTitle{
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   margin: 0;
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 800;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.005em;
   color: rgba(248, 250, 255, 0.96);
 }
 .profileMySoundTitleIcon{
   display: inline-flex;
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   color: #7c5cff;
-  filter: drop-shadow(0 0 6px rgba(124,92,255,0.55));
+  filter: drop-shadow(0 0 5px rgba(124,92,255,0.45));
 }
 .profileMySoundTitleIcon svg{ width: 100%; height: 100%; }
 .profileMySoundViewAll{
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   background: transparent;
   border: 0;
-  padding: 4px 0;
+  padding: 2px 0;
   color: rgba(180, 196, 232, 0.78);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
   cursor: pointer;
 }
 .profileMySoundViewAll:hover{ color: #fff; }
-.profileMySoundViewAll svg{ width: 12px; height: 12px; }
+.profileMySoundViewAll svg{ width: 10px; height: 10px; }
 .profileMySoundCard{
   position: relative;
-  padding: 14px 14px 16px;
-  border-radius: 18px;
+  padding: 10px 12px 12px;
+  border-radius: 14px;
   border: 1px solid transparent;
   background:
     linear-gradient(180deg, rgba(22,26,38,0.92), rgba(14,16,24,0.96)) padding-box,
-    linear-gradient(135deg, rgba(124,92,255,0.45), rgba(35,213,171,0.32), rgba(124,92,255,0.28)) border-box;
+    linear-gradient(135deg, rgba(124,92,255,0.35), rgba(35,213,171,0.22), rgba(124,92,255,0.22)) border-box;
   box-shadow:
-    0 0 0 1px rgba(124,92,255,0.10) inset,
-    0 18px 44px -22px rgba(124,92,255,0.40),
-    0 22px 56px -28px rgba(35,213,171,0.20);
+    0 0 0 1px rgba(124,92,255,0.08) inset,
+    0 12px 28px -18px rgba(124,92,255,0.30);
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 .profileMySoundRow{
   display: grid;
   grid-template-columns: minmax(0, auto) minmax(0, 1fr);
-  gap: 14px;
+  gap: 10px;
   align-items: flex-start;
 }
 @media (max-width: 380px){
@@ -8239,7 +8281,7 @@ input::placeholder, textarea::placeholder{
 .profileMySoundVoice{
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 .profileMySoundVoiceIcon{
@@ -8247,35 +8289,35 @@ input::placeholder, textarea::placeholder{
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, rgba(124,92,255,0.30), rgba(35,213,171,0.18));
-  border: 1px solid rgba(124,92,255,0.40);
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(124,92,255,0.26), rgba(35,213,171,0.14));
+  border: 1px solid rgba(124,92,255,0.35);
   color: #c8b8ff;
-  box-shadow: 0 0 18px -4px rgba(124,92,255,0.55);
+  box-shadow: 0 0 12px -4px rgba(124,92,255,0.45);
 }
-.profileMySoundVoiceIcon svg{ width: 18px; height: 18px; }
+.profileMySoundVoiceIcon svg{ width: 14px; height: 14px; }
 .profileMySoundVoiceBody{
   display: grid;
-  gap: 1px;
+  gap: 0;
   min-width: 0;
 }
 .profileMySoundLabel{
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: rgba(170, 182, 205, 0.72);
 }
 .profileMySoundVoiceName{
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 800;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.005em;
   color: #f4f7ff;
 }
 .profileMySoundVoiceTraits{
-  font-size: 12px;
+  font-size: 11px;
   color: rgba(200, 210, 232, 0.62);
   white-space: nowrap;
   overflow: hidden;
@@ -8283,22 +8325,22 @@ input::placeholder, textarea::placeholder{
 }
 .profileMySoundGenres{
   display: grid;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 .profileMySoundGenresList{
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 .profileMySoundGenreChip{
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 6px;
-  min-height: 34px;
-  padding: 0 8px 0 6px;
-  border-radius: 11px;
+  gap: 4px;
+  min-height: 28px;
+  padding: 0 7px 0 5px;
+  border-radius: 9px;
   border: 1px solid rgba(255,255,255,0.10);
   background: rgba(255,255,255,0.04);
   color: rgba(232, 238, 247, 0.85);
@@ -8306,7 +8348,7 @@ input::placeholder, textarea::placeholder{
   font-weight: 700;
   letter-spacing: 0.02em;
   position: relative;
-  max-width: min(132px, 42vw);
+  max-width: min(118px, 38vw);
 }
 .profileMySoundGenreChip[data-has-text="true"]{
   width: auto;
@@ -8317,13 +8359,13 @@ input::placeholder, textarea::placeholder{
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   color: rgba(200, 210, 232, 0.95);
 }
 .profileMySoundGenreChipIco svg{
-  width: 18px;
-  height: 18px;
+  width: 15px;
+  height: 15px;
 }
 .profileMySoundGenreChipLabel{
   flex: 1 1 auto;
@@ -8338,9 +8380,9 @@ input::placeholder, textarea::placeholder{
   text-overflow: ellipsis;
 }
 .profileMySoundGenreChip--add{
-  width: 36px;
-  height: 36px;
-  min-height: 36px;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
   padding: 0;
   justify-content: center;
   max-width: none;
@@ -8351,8 +8393,8 @@ input::placeholder, textarea::placeholder{
   cursor: pointer;
 }
 .profileMySoundGenreChip--add svg{
-  width: 16px;
-  height: 16px;
+  width: 13px;
+  height: 13px;
 }
 .profileMySoundGenreChip--add:hover{ background: rgba(124,92,255,0.18); }
 .profileMySoundPresets{
@@ -8379,21 +8421,21 @@ input::placeholder, textarea::placeholder{
 .profileMySoundPresetChip{
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
+  gap: 5px;
+  padding: 5px 10px;
   border-radius: 999px;
   border: 1px solid rgba(255,255,255,0.10);
   background: rgba(255,255,255,0.04);
   color: rgba(232, 238, 247, 0.85);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
   cursor: pointer;
   transition: transform 120ms ease, background 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 .profileMySoundPresetChip svg{
-  width: 13px;
-  height: 13px;
+  width: 11px;
+  height: 11px;
   flex: 0 0 auto;
 }
 .profileMySoundPresetChip:hover{
@@ -8513,6 +8555,17 @@ input::placeholder, textarea::placeholder{
   letter-spacing: 0.10em;
   text-transform: uppercase;
   color: rgba(200, 212, 240, 0.88);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.mySoundEditCap{
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: rgba(170, 182, 205, 0.55);
+  text-transform: none;
 }
 .mySoundEditHint{
   margin: -4px 0 4px;

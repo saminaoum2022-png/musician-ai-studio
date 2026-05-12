@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260513profilePolish";
+const APP_BUILD = "20260513hubRetryMeta";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -6374,7 +6374,7 @@ async function refreshHubFromSupabase() {
           reacts: r.reacts || { melody: 0, lyrics: 0, mix: 0, groove: 0 },
           remixOf: r.remix_of || "",
           proof: r.proof || null,
-          meta: r.meta || null,
+          meta: reconstructHubRowMeta(r),
         }));
         if (!mapped.length) return;
         hubLastSyncOk = true;

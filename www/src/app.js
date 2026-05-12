@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514tabRefresh";
+const APP_BUILD = "20260514tabRefreshFixedSpin";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1341,57 +1341,54 @@ function showLikeBurst() {
  *  Visual: the active tab's icon does a single-revolution spin while
  *  the refresh runs (CSS `.isRefreshing` class on the tab anchor).
  * ----------------------------------------------------------------- */
+/* Each action FIRES its refreshes and returns immediately. The spin
+ * animation is a *visual* confirmation, not a network wait — Profile
+ * in particular was painting the icon for 20+ seconds whenever the
+ * cellular round-trip to /auth/v1/user dragged, which read as the
+ * app hanging. The actual data continues loading in the background;
+ * the UI updates reactively as each promise resolves.
+ *
+ * Profile intentionally drops refreshAuthStateFromSupabase() — that
+ * call only re-validates the JWT and the user object barely ever
+ * changes between taps. Keeping credits + my-hub-posts gives the
+ * user the two values that actually move (balance + new shares).  */
 const TAB_REFRESH_ACTIONS = {
-  async hub() {
-    try { await refreshHubFromSupabase(); } catch (e) { console.warn("[tabRefresh/hub]", e); }
+  hub() {
+    void Promise.resolve(refreshHubFromSupabase()).catch((e) => console.warn("[tabRefresh/hub]", e));
   },
-  async search() {
+  search() {
     try {
       const input = document.getElementById("searchInput");
       runSearchQuery(String(input?.value || ""));
     } catch (e) { console.warn("[tabRefresh/search]", e); }
   },
-  async profile() {
-    try {
-      await Promise.all([
-        Promise.resolve(refreshAuthStateFromSupabase()).catch(() => {}),
-        Promise.resolve(refreshMyCredits({ silent: true })).catch(() => {}),
-        Promise.resolve(refreshMyHubPostsFast({ force: true })).catch(() => {}),
-      ]);
-    } catch (e) { console.warn("[tabRefresh/profile]", e); }
+  profile() {
+    void Promise.resolve(refreshMyCredits({ silent: true })).catch(() => {});
+    void Promise.resolve(refreshMyHubPostsFast({ force: true })).catch(() => {});
   },
-  async library() {
-    try { await reconcileLibraryFromCloud({ force: true }); }
-    catch (e) { console.warn("[tabRefresh/library]", e); }
+  library() {
+    void Promise.resolve(reconcileLibraryFromCloud({ force: true }))
+      .catch((e) => console.warn("[tabRefresh/library]", e));
   },
 };
 
-let _tabRefreshInFlight = false;
+let _tabRefreshSpinTimer = 0;
 
-async function triggerTabRefresh(route) {
-  if (_tabRefreshInFlight) return;
+function triggerTabRefresh(route) {
   const fn = TAB_REFRESH_ACTIONS[route];
   if (!fn) return;
-  _tabRefreshInFlight = true;
+  try { fn(); } catch (e) { console.warn("[tabRefresh]", e); }
   try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
+  // Fixed visual: a single, satisfying rotation regardless of network.
+  // 900ms ≈ one rotation of the CSS animation, plus a tiny breath.
   const tabEl = document.querySelector(`.mobileTabbar a[data-route-link="${route}"]`);
-  if (tabEl) tabEl.classList.add("isRefreshing");
-  const start = Date.now();
-  try {
-    await fn();
-  } catch (e) {
-    console.warn("[tabRefresh]", e);
-  } finally {
-    // Floor the spin animation at ~520ms so even a too-fast network
-    // refresh shows the icon actually rotating once — otherwise the
-    // class flicks on/off and the user thinks nothing happened.
-    const elapsed = Date.now() - start;
-    const remaining = Math.max(0, 520 - elapsed);
-    setTimeout(() => {
-      _tabRefreshInFlight = false;
-      if (tabEl) tabEl.classList.remove("isRefreshing");
-    }, remaining);
-  }
+  if (!tabEl) return;
+  tabEl.classList.add("isRefreshing");
+  if (_tabRefreshSpinTimer) clearTimeout(_tabRefreshSpinTimer);
+  _tabRefreshSpinTimer = setTimeout(() => {
+    tabEl.classList.remove("isRefreshing");
+    _tabRefreshSpinTimer = 0;
+  }, 900);
 }
 
 function attachTabRefresh() {

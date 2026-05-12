@@ -8396,6 +8396,8 @@ input::placeholder, textarea::placeholder{
   flex-direction: column;
   gap: 18px;
   padding: 12px 0 28px;
+  width: 100%;
+  min-width: 0;
 }
 
 .searchBarWrap{
@@ -8416,6 +8418,7 @@ input::placeholder, textarea::placeholder{
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.10);
   transition: border-color 180ms ease, background-color 180ms ease;
+  width: 100%;
 }
 .searchBar:focus-within{
   border-color: rgba(255,255,255,0.22);
@@ -8426,8 +8429,9 @@ input::placeholder, textarea::placeholder{
   color: rgba(232,238,247,0.7);
 }
 .searchBarInput{
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
+  width: 100%;
   background: transparent;
   border: 0;
   outline: 0;

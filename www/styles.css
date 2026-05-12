@@ -8382,3 +8382,494 @@ input::placeholder, textarea::placeholder{
   accent-color: #7c5cff;
   flex: 0 0 auto;
 }
+
+/* ============================================================
+ * Search page — magazine of remixable occasion shelves.
+ *   One sticky search bar, lazy people strip when relevant,
+ *   horizontal shelves of "make it yours" templates, and a
+ *   bottom sheet that pre-fills the Create page with the
+ *   chosen template's style/lyrics/title.
+ * ============================================================ */
+
+.searchPage{
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 6px 0 28px;
+}
+
+.searchBarWrap{
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: 4px 0 8px;
+  background: linear-gradient(180deg, rgba(11,13,18,0.96) 70%, rgba(11,13,18,0));
+}
+.searchBar{
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 14px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.10);
+  transition: border-color 180ms ease, background-color 180ms ease;
+}
+.searchBar:focus-within{
+  border-color: rgba(255,255,255,0.22);
+  background: rgba(255,255,255,0.08);
+}
+.searchBarIcon{
+  flex: 0 0 auto;
+  color: rgba(232,238,247,0.7);
+}
+.searchBarInput{
+  flex: 1 1 auto;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: #e8eef7;
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  caret-color: #7c5cff;
+}
+.searchBarInput::placeholder{
+  color: transparent;
+}
+.searchBarHint{
+  position: absolute;
+  left: 50px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(232,238,247,0.42);
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  pointer-events: none;
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+.searchBar.hasValue .searchBarHint{ opacity: 0; }
+.searchBarHint.swapping{ opacity: 0; transform: translateY(calc(-50% + 8px)); }
+.searchBarClear{
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  border: 0;
+  color: rgba(232,238,247,0.85);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.searchBarClear[hidden]{ display: none !important; }
+
+/* People strip ---------------------------------------------- */
+.searchPeopleStrip{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.searchPeopleHead{
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(232,238,247,0.5);
+}
+.searchPeopleRow{
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px 2px 6px;
+  -ms-overflow-style: none;
+}
+.searchPeopleRow::-webkit-scrollbar{ display: none; }
+.searchPersonCard{
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 76px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: inherit;
+}
+.searchPersonAvatar{
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  object-fit: cover;
+}
+.searchPersonName{
+  font-size: 12px;
+  font-weight: 700;
+  color: #e8eef7;
+  max-width: 76px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.searchPersonHandle{
+  font-size: 11px;
+  color: rgba(232,238,247,0.52);
+  max-width: 76px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Shelves --------------------------------------------------- */
+.searchShelves{
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.searchShelf{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.searchShelf.isDimmed{
+  opacity: 0.32;
+  filter: saturate(0.7);
+  transition: opacity 220ms ease, filter 220ms ease;
+}
+.searchShelfHead{
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px;
+}
+.searchShelfTitle{
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #e8eef7;
+}
+.searchShelfHint{
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(232,238,247,0.42);
+}
+.searchShelfRow{
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  padding: 2px 2px 10px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  /* Soft edge fade so the row hints "more here" without a scrollbar. */
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 24px), transparent 100%);
+          mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 24px), transparent 100%);
+}
+.searchShelfRow::-webkit-scrollbar{ display: none; }
+.searchPoster{
+  flex: 0 0 auto;
+  position: relative;
+  width: 168px;
+  height: 230px;
+  border-radius: 18px;
+  overflow: hidden;
+  cursor: pointer;
+  scroll-snap-align: start;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  -webkit-tap-highlight-color: transparent;
+  transform: translateZ(0);
+  transition: transform 220ms ease, border-color 200ms ease;
+}
+.searchPoster:hover, .searchPoster:focus-visible{
+  border-color: rgba(255,255,255,0.18);
+}
+.searchPoster:active{
+  transform: scale(0.985) translateZ(0);
+}
+.searchPosterArt{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.searchPosterArt[data-placeholder="1"]{
+  background:
+    radial-gradient(120% 80% at 0% 0%, rgba(124,92,255,0.55), transparent 60%),
+    radial-gradient(120% 80% at 100% 100%, rgba(35,213,171,0.42), transparent 65%),
+    linear-gradient(160deg, #1a1f2e 0%, #0f1320 100%);
+  filter: saturate(0.95);
+}
+.searchPosterVignette{
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0) 38%, rgba(0,0,0,0.78) 100%);
+  pointer-events: none;
+}
+.searchPosterChip{
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(11,13,18,0.6);
+  border: 1px solid rgba(255,255,255,0.14);
+  color: rgba(248,250,255,0.94);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.searchPosterText{
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.searchPosterTitle{
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #fff;
+  line-height: 1.2;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.55);
+}
+.searchPosterSub{
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.78);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+.searchPosterCta{
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.9);
+}
+.searchPosterCta::after{
+  content: "→";
+  font-size: 12px;
+  line-height: 1;
+  transform: translateY(-0.5px);
+}
+
+/* Empty state ----------------------------------------------- */
+.searchEmpty{
+  padding: 26px 12px;
+  text-align: center;
+  color: rgba(232,238,247,0.6);
+}
+.searchEmptyTitle{
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #e8eef7;
+}
+.searchEmptyHint{
+  margin: 0;
+  font-size: 13px;
+}
+
+/* Remix bottom sheet ---------------------------------------- */
+.searchRemixSheet{
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+}
+.searchRemixSheet.isOpen{ pointer-events: auto; }
+.searchRemixSheet[hidden]{ display: none !important; }
+.searchRemixBackdrop{
+  position: absolute;
+  inset: 0;
+  background: rgba(4,6,12,0.6);
+  opacity: 0;
+  transition: opacity 220ms ease;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.searchRemixSheet.isOpen .searchRemixBackdrop{ opacity: 1; }
+.searchRemixCard{
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 12px;
+  border-radius: 22px 22px 18px 18px;
+  background: linear-gradient(180deg, #14182a, #0e1220);
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 16px 16px calc(20px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transform: translateY(28px);
+  opacity: 0;
+  transition: transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 200ms ease;
+  box-shadow: 0 -10px 60px rgba(0,0,0,0.55);
+}
+.searchRemixSheet.isOpen .searchRemixCard{
+  transform: translateY(0);
+  opacity: 1;
+}
+.searchRemixClose{
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  border: 0;
+  color: #e8eef7;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.searchRemixCover{
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #1a1f2e;
+}
+.searchRemixCover img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.searchRemixPlay{
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.92);
+  color: #0b0d12;
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 8px 18px rgba(0,0,0,0.4);
+}
+.searchRemixPlay.isPlaying svg{ display: none; }
+.searchRemixPlay.isPlaying::after{
+  content: "";
+  width: 12px;
+  height: 12px;
+  background: linear-gradient(90deg, #0b0d12 5px, transparent 5px 7px, #0b0d12 7px);
+}
+.searchRemixMeta{
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.searchRemixOccasion{
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(232,238,247,0.55);
+}
+.searchRemixTitle{
+  margin: 0;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+.searchRemixSub{
+  margin: 0;
+  font-size: 13px;
+  color: rgba(232,238,247,0.7);
+  line-height: 1.4;
+}
+.searchRemixField{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.searchRemixFieldLabel{
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(232,238,247,0.75);
+}
+.searchRemixField input{
+  height: 48px;
+  padding: 0 14px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 12px;
+  font-size: 16px;
+  color: #fff;
+  outline: 0;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+.searchRemixField input:focus{
+  border-color: rgba(124,92,255,0.6);
+  background: rgba(124,92,255,0.06);
+}
+.searchRemixCta{
+  height: 52px;
+  border-radius: 14px;
+  border: 0;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: #fff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  background: linear-gradient(135deg, rgba(124,92,255,0.95), rgba(35,213,171,0.92));
+  box-shadow: 0 10px 26px rgba(124,92,255,0.32);
+  transition: transform 120ms ease, box-shadow 200ms ease;
+}
+.searchRemixCta:active{ transform: scale(0.985); }
+.searchRemixCta[disabled]{
+  opacity: 0.55;
+  pointer-events: none;
+  box-shadow: none;
+}
+
+@media (max-width: 720px){
+  .searchPage{ padding-top: 0; gap: 16px; }
+  .searchBar{ height: 48px; padding: 0 12px; }
+  .searchBarInput, .searchBarHint{ font-size: 16px; }
+  .searchPoster{ width: 152px; height: 210px; }
+  .searchRemixCard{ border-radius: 22px 22px 0 0; margin: 0; }
+}

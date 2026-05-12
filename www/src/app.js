@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260512shareflat";
+const APP_BUILD = "20260512searchshelves";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1686,6 +1686,466 @@ window.addEventListener("hashchange", applyRoute);
 if (!location.hash) location.hash = "#/intro";
 applyRoute();
 syncLibraryTabDotFromStorage();
+
+/* ============================================================
+ * Search page — magazine of remixable occasion shelves.
+ *   Shelves and templates are stubbed in-code for v1 so the
+ *   experience can ship without backend churn; the shape lines
+ *   up with a future `search_templates` Supabase table.
+ * ============================================================ */
+const SEARCH_TEMPLATES = [
+  {
+    id: "bday-jazz",
+    shelf: "birthday",
+    occasion: "Birthday · Jazz lounge",
+    title: "Happy Birthday Jazz",
+    sub: "A warm jazz-club birthday number — we'll sing their name in the chorus.",
+    chip: "Birthday",
+    style: "Jazz, smooth piano, brushed drums, upright bass, warm vocal, 90 bpm",
+    lyrics: "Happy birthday [name], the room is yours tonight\nLights down low, the band plays bright\nHere's to the years and all the highs to come\n[name], take the floor — this song's your one",
+    keywords: ["birthday", "bday", "anniversaire", "عيد ميلاد", "happy birthday", "jazz"],
+  },
+  {
+    id: "bday-trap",
+    shelf: "birthday",
+    occasion: "Birthday · Trap hype",
+    title: "Birthday Trap",
+    sub: "Loud, modern, and hype — for the squad night out.",
+    chip: "Birthday",
+    style: "Trap, 808s, hi-hats, hype vocal, 145 bpm",
+    lyrics: "[name] in the building, light it up\nCake on the table, drinks on the cup\nIt's your night, it's your year\n[name], [name], everybody cheer",
+    keywords: ["birthday", "bday", "hype", "trap", "party"],
+  },
+  {
+    id: "bday-arabic",
+    shelf: "birthday",
+    occasion: "Birthday · Arabic dabke",
+    title: "Sana Helwa Dabke",
+    sub: "Dabke groove, oud + darbuka, ready to bring the family to their feet.",
+    chip: "Birthday",
+    style: "Dabke, oud, darbuka, mijwiz, arabic vocal, 105 bpm",
+    lyrics: "سنة حلوة يا [name]\nسنة حلوة يا حبيبنا\nالليلة عيدك يا [name]\nيا قمر بليلتنا",
+    keywords: ["birthday", "عيد ميلاد", "arabic", "dabke", "sana helwa"],
+  },
+  {
+    id: "mom-warm",
+    shelf: "family",
+    occasion: "For mom · Acoustic",
+    title: "Mama's Song",
+    sub: "A gentle acoustic letter to mom — fingerpicked guitar, soft strings.",
+    chip: "Family",
+    style: "Acoustic ballad, fingerpicked guitar, soft strings, warm male vocal, 72 bpm",
+    lyrics: "Mama, [name], you were always there\nWith your hand on my heart and your love in the air\nEvery road I walked, every dream I chased\nI saw your smile and I knew my place",
+    keywords: ["mom", "mother", "mama", "family", "maman", "أمي"],
+  },
+  {
+    id: "dad-rock",
+    shelf: "family",
+    occasion: "For dad · Indie rock",
+    title: "Old Man's Anthem",
+    sub: "Indie rock tribute — drive, guitar, gratitude.",
+    chip: "Family",
+    style: "Indie rock, driving drums, electric guitar, anthemic vocal, 118 bpm",
+    lyrics: "Dad, [name], you taught me how to stand\nHow to face the world with a steady hand\nThis one's for you, the road you laid down\nFor every step from here to home",
+    keywords: ["dad", "father", "papa", "family", "أبي"],
+  },
+  {
+    id: "anniv-soul",
+    shelf: "anniversary",
+    occasion: "Anniversary · Soul",
+    title: "All Our Years",
+    sub: "Soulful, slow burn, retro horns — say it without saying it.",
+    chip: "Anniversary",
+    style: "Neo-soul, Rhodes, horns, female lead vocal, 78 bpm",
+    lyrics: "[name], all our years rolled into one\nFrom the first night, our song's never done\nEvery hand I held was always yours\nThis is for us, for all of ours",
+    keywords: ["anniversary", "love", "amour", "couple"],
+  },
+  {
+    id: "wed-entrance",
+    shelf: "wedding",
+    occasion: "Wedding · Entrance",
+    title: "Walking In",
+    sub: "Cinematic strings build into a triumphant entrance.",
+    chip: "Wedding",
+    style: "Cinematic strings, drums, anthemic, instrumental opening then vocal, 92 bpm",
+    lyrics: "Here we come, [name] and [name]\nHand in hand into the light\nEvery eye on the road we paved\nThis is our forever night",
+    keywords: ["wedding", "mariage", "زفاف", "entrance"],
+  },
+  {
+    id: "wed-firstdance",
+    shelf: "wedding",
+    occasion: "Wedding · First dance",
+    title: "First Dance",
+    sub: "Soft piano, intimate vocal — your first song.",
+    chip: "Wedding",
+    style: "Piano ballad, intimate vocal, light strings, 65 bpm",
+    lyrics: "[name], take my hand and stay\nThe lights are low, we found our way\nNothing else but this moment now\nForever starts with how we vow",
+    keywords: ["wedding", "first dance", "couple"],
+  },
+  {
+    id: "gym-hype",
+    shelf: "hype",
+    occasion: "Workout · Drill",
+    title: "Last Set",
+    sub: "Hard drums, low end, push-through energy.",
+    chip: "Hype",
+    style: "UK drill, sliding 808s, dark synths, aggressive vocal, 144 bpm",
+    lyrics: "[name], one more rep, no flinch\nEvery rep a step, every step an inch\nLast set, last breath, all in\nWalk out heavy, walk out a king",
+    keywords: ["gym", "workout", "hype", "drill", "pump"],
+  },
+  {
+    id: "gym-rock",
+    shelf: "hype",
+    occasion: "Workout · Arena rock",
+    title: "Run It",
+    sub: "Stadium rock — distorted guitars, four-on-the-floor.",
+    chip: "Hype",
+    style: "Arena rock, distorted guitars, four-on-the-floor drums, anthemic vocal, 128 bpm",
+    lyrics: "[name], on the line tonight\nFeel the burn, ride the light\nWe don't stop till the bell\nWe run it, we run it well",
+    keywords: ["gym", "workout", "rock", "running"],
+  },
+  {
+    id: "heart-piano",
+    shelf: "heart",
+    occasion: "Heartbreak · Piano",
+    title: "Empty Rooms",
+    sub: "Slow piano, raw vocal — for when the room is too quiet.",
+    chip: "From the heart",
+    style: "Piano ballad, sparse arrangement, raw emotional vocal, 60 bpm",
+    lyrics: "[name], I left the light on for you\nThe room still holds the things we drew\nI'm sorry, I'm tired, I'm here\nThis song's the only way to be near",
+    keywords: ["heartbreak", "sad", "missing you", "breakup"],
+  },
+  {
+    id: "heart-grat",
+    shelf: "heart",
+    occasion: "Gratitude · Acoustic",
+    title: "Thank You",
+    sub: "Acoustic letter of thanks — gentle and simple.",
+    chip: "From the heart",
+    style: "Acoustic, light percussion, warm vocal, 84 bpm",
+    lyrics: "[name], I never said it loud enough\nThank you for every soft and every rough\nThis song's a hand across the room\nA quiet thank you, from me to you",
+    keywords: ["thank you", "gratitude", "friend"],
+  },
+];
+
+const SEARCH_SHELVES = [
+  { id: "birthday",   title: "Birthdays that hit",       hint: "Remix with a name" },
+  { id: "family",     title: "For your people",          hint: "Mom, dad, anyone" },
+  { id: "anniversary",title: "Anniversaries",            hint: "Say it in song" },
+  { id: "wedding",    title: "Wedding moments",          hint: "Entrance · first dance" },
+  { id: "hype",       title: "Hype it up",               hint: "Gym · pre-game · party" },
+  { id: "heart",      title: "From the heart",           hint: "Heartbreak · gratitude" },
+];
+
+const SEARCH_HINT_EXAMPLES = [
+  "birthday for sara",
+  "wedding entrance",
+  "samy_foun",
+  "song for mom",
+  "hype gym track",
+  "anniversary in arabic",
+  "thank you, friend",
+  "heartbreak piano",
+];
+
+let _searchHintIdx = 0;
+let _searchHintTimer = null;
+let _searchPosterIdToTemplate = new Map();
+let _searchActiveTemplate = null;
+let _searchInited = false;
+
+function startSearchHintRotator() {
+  const hintEl = document.getElementById("searchInputHint");
+  const inputEl = document.getElementById("searchInput");
+  if (!hintEl || !inputEl) return;
+  stopSearchHintRotator();
+  const rotate = () => {
+    if (inputEl.value) return;
+    hintEl.classList.add("swapping");
+    setTimeout(() => {
+      _searchHintIdx = (_searchHintIdx + 1) % SEARCH_HINT_EXAMPLES.length;
+      hintEl.textContent = SEARCH_HINT_EXAMPLES[_searchHintIdx];
+      hintEl.classList.remove("swapping");
+    }, 220);
+  };
+  hintEl.textContent = SEARCH_HINT_EXAMPLES[_searchHintIdx];
+  _searchHintTimer = setInterval(rotate, 2600);
+}
+function stopSearchHintRotator() {
+  if (_searchHintTimer) { clearInterval(_searchHintTimer); _searchHintTimer = null; }
+}
+
+function searchTemplateMatchesQuery(tpl, qNorm) {
+  if (!qNorm) return true;
+  const haystack = [
+    tpl.id, tpl.shelf, tpl.occasion, tpl.title, tpl.sub, tpl.chip,
+    ...(tpl.keywords || []),
+  ].join(" ").toLowerCase();
+  return haystack.includes(qNorm);
+}
+
+function searchShelfMatchesQuery(shelfId, qNorm) {
+  if (!qNorm) return true;
+  return SEARCH_TEMPLATES.some((t) => t.shelf === shelfId && searchTemplateMatchesQuery(t, qNorm));
+}
+
+function renderSearchPosterHTML(tpl) {
+  const occ = String(tpl.occasion || "").split("·")[0]?.trim() || tpl.chip || "";
+  const sub = String(tpl.occasion || "").split("·").slice(1).join("·").trim();
+  return `
+    <button class="searchPoster" type="button" data-search-poster="${tpl.id}" aria-label="${escapeHtml(tpl.title)}">
+      <div class="searchPosterArt" data-placeholder="1" aria-hidden="true"></div>
+      <div class="searchPosterVignette" aria-hidden="true"></div>
+      <span class="searchPosterChip">${escapeHtml(tpl.chip || occ)}</span>
+      <div class="searchPosterText">
+        <div class="searchPosterTitle">${escapeHtml(tpl.title)}</div>
+        ${sub ? `<div class="searchPosterSub">${escapeHtml(sub)}</div>` : ""}
+        <div class="searchPosterCta">Make it yours</div>
+      </div>
+    </button>
+  `;
+}
+
+function renderSearchShelves(query) {
+  const root = document.getElementById("searchShelves");
+  const emptyEl = document.getElementById("searchEmpty");
+  if (!root) return;
+  const qNorm = String(query || "").trim().toLowerCase();
+  _searchPosterIdToTemplate = new Map();
+
+  // Build shelf-by-shelf so the matching one floats to the top when there's a query.
+  const shelves = SEARCH_SHELVES.map((shelf) => {
+    const templates = SEARCH_TEMPLATES.filter((t) => t.shelf === shelf.id);
+    const matched = qNorm
+      ? templates.filter((t) => searchTemplateMatchesQuery(t, qNorm))
+      : templates;
+    return { shelf, templates, matched, hasMatch: matched.length > 0 };
+  });
+
+  let anyMatch = false;
+  let html = "";
+  // Matching shelves first.
+  shelves
+    .filter((s) => qNorm ? s.hasMatch : true)
+    .sort((a, b) => {
+      if (!qNorm) return 0;
+      return Number(b.hasMatch) - Number(a.hasMatch);
+    })
+    .forEach(({ shelf, templates, matched }) => {
+      const toShow = qNorm ? matched : templates;
+      if (!toShow.length) return;
+      anyMatch = true;
+      toShow.forEach((t) => _searchPosterIdToTemplate.set(t.id, t));
+      html += `
+        <section class="searchShelf" data-search-shelf="${shelf.id}">
+          <header class="searchShelfHead">
+            <h3 class="searchShelfTitle">${escapeHtml(shelf.title)}</h3>
+            <span class="searchShelfHint">${escapeHtml(shelf.hint)}</span>
+          </header>
+          <div class="searchShelfRow">
+            ${toShow.map(renderSearchPosterHTML).join("")}
+          </div>
+        </section>
+      `;
+    });
+
+  root.innerHTML = html;
+  if (emptyEl) emptyEl.hidden = anyMatch || !qNorm;
+
+  root.querySelectorAll("[data-search-poster]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-search-poster");
+      const tpl = _searchPosterIdToTemplate.get(id);
+      if (tpl) openSearchRemixSheet(tpl);
+    });
+  });
+}
+
+function renderSearchPeople(query) {
+  const stripEl = document.getElementById("searchPeopleStrip");
+  const rowEl = document.getElementById("searchPeopleRow");
+  if (!stripEl || !rowEl) return;
+  const qNorm = String(query || "").trim().toLowerCase();
+  if (!qNorm) {
+    stripEl.hidden = true;
+    rowEl.innerHTML = "";
+    return;
+  }
+  // Source candidates from the current Hub feed (already cached locally).
+  let posts = [];
+  try { posts = loadHubFeed() || []; } catch { posts = []; }
+  const seen = new Set();
+  const people = [];
+  for (const p of posts) {
+    const handle = String(p?.creator || "").trim();
+    if (!handle) continue;
+    const key = handle.toLowerCase();
+    if (seen.has(key)) continue;
+    if (!key.includes(qNorm)) continue;
+    seen.add(key);
+    people.push({
+      handle,
+      avatar: String(p?.creatorAvatar || "./assets/nabadai-logo.png"),
+    });
+    if (people.length >= 12) break;
+  }
+  if (!people.length) {
+    stripEl.hidden = true;
+    rowEl.innerHTML = "";
+    return;
+  }
+  stripEl.hidden = false;
+  rowEl.innerHTML = people.map((u) => `
+    <button class="searchPersonCard" type="button" data-search-user="${encodeURIComponent(u.handle)}">
+      <img class="searchPersonAvatar" src="${escapeHtml(u.avatar)}" alt="" loading="lazy" />
+      <div class="searchPersonName">@${escapeHtml(u.handle)}</div>
+    </button>
+  `).join("");
+  rowEl.querySelectorAll("[data-search-user]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const handle = decodeURIComponent(btn.getAttribute("data-search-user") || "");
+      if (handle) location.hash = `#/u/${encodeURIComponent(handle)}`;
+    });
+  });
+}
+
+function runSearchQuery(query) {
+  renderSearchPeople(query);
+  renderSearchShelves(query);
+}
+
+function openSearchRemixSheet(tpl) {
+  const sheet = document.getElementById("searchRemixSheet");
+  if (!sheet || !tpl) return;
+  _searchActiveTemplate = tpl;
+  const occ = document.getElementById("searchRemixOccasion");
+  const title = document.getElementById("searchRemixTitle");
+  const sub = document.getElementById("searchRemixSub");
+  const nameInput = document.getElementById("searchRemixName");
+  const cta = document.getElementById("searchRemixCta");
+  if (occ) occ.textContent = tpl.occasion;
+  if (title) title.textContent = tpl.title;
+  if (sub) sub.textContent = tpl.sub;
+  if (nameInput) {
+    nameInput.value = "";
+    nameInput.placeholder = "Sara";
+    setTimeout(() => nameInput.focus(), 80);
+  }
+  if (cta) cta.disabled = false;
+  sheet.hidden = false;
+  requestAnimationFrame(() => sheet.classList.add("isOpen"));
+}
+
+function closeSearchRemixSheet() {
+  const sheet = document.getElementById("searchRemixSheet");
+  if (!sheet) return;
+  sheet.classList.remove("isOpen");
+  setTimeout(() => { sheet.hidden = true; }, 240);
+  const audio = document.getElementById("searchRemixPreviewAudio");
+  if (audio) { try { audio.pause(); } catch {} }
+  const playBtn = document.getElementById("searchRemixPreviewBtn");
+  if (playBtn) playBtn.classList.remove("isPlaying");
+  _searchActiveTemplate = null;
+}
+
+function applyRemixTemplateToCreate(tpl, name) {
+  if (!tpl) return;
+  const cleanName = String(name || "").trim() || "you";
+  const lyrics = String(tpl.lyrics || "").replaceAll("[name]", cleanName);
+  const titleWithName = `${tpl.title} — for ${cleanName}`;
+  if (els.sunoPrompt) els.sunoPrompt.value = lyrics;
+  if (els.sunoStyle) els.sunoStyle.value = String(tpl.style || "");
+  if (els.sunoTitle) els.sunoTitle.value = titleWithName;
+  try { setStatus?.(`Loaded ${tpl.title} — tap Generate when ready.`); } catch {}
+}
+
+function initSearchPageOnce() {
+  if (_searchInited) return;
+  _searchInited = true;
+  const input = document.getElementById("searchInput");
+  const bar = input?.closest(".searchBar");
+  const clearBtn = document.getElementById("searchInputClear");
+  if (input) {
+    input.addEventListener("input", () => {
+      const v = input.value;
+      if (bar) bar.classList.toggle("hasValue", Boolean(v));
+      if (clearBtn) clearBtn.hidden = !v;
+      runSearchQuery(v);
+    });
+    input.addEventListener("focus", stopSearchHintRotator);
+    input.addEventListener("blur", () => { if (!input.value) startSearchHintRotator(); });
+  }
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      if (!input) return;
+      input.value = "";
+      if (bar) bar.classList.remove("hasValue");
+      clearBtn.hidden = true;
+      runSearchQuery("");
+      input.focus();
+    });
+  }
+  const sheet = document.getElementById("searchRemixSheet");
+  if (sheet) {
+    sheet.addEventListener("click", (e) => {
+      const t = e.target;
+      if (t && t instanceof HTMLElement && t.matches('[data-action="close-remix"]')) {
+        closeSearchRemixSheet();
+      }
+    });
+  }
+  const cta = document.getElementById("searchRemixCta");
+  if (cta) {
+    cta.addEventListener("click", () => {
+      const tpl = _searchActiveTemplate;
+      const nameInput = document.getElementById("searchRemixName");
+      const name = nameInput?.value || "";
+      if (!tpl) return;
+      applyRemixTemplateToCreate(tpl, name);
+      closeSearchRemixSheet();
+      location.hash = "#/generate";
+      try { syncGenerateOrbVisibility?.(); } catch {}
+    });
+  }
+  const previewBtn = document.getElementById("searchRemixPreviewBtn");
+  if (previewBtn) {
+    previewBtn.addEventListener("click", () => {
+      // v1: no audio preview wired yet (templates aren't pre-rendered).
+      // Tapping the button shakes the CTA to nudge users to "Make it mine".
+      const cta = document.getElementById("searchRemixCta");
+      if (!cta) return;
+      cta.animate(
+        [
+          { transform: "translateX(0)" },
+          { transform: "translateX(-3px)" },
+          { transform: "translateX(3px)" },
+          { transform: "translateX(0)" },
+        ],
+        { duration: 220, easing: "ease-out" }
+      );
+    });
+  }
+  runSearchQuery("");
+}
+
+function onEnterSearchRoute() {
+  initSearchPageOnce();
+  startSearchHintRotator();
+}
+function onLeaveSearchRoute() {
+  stopSearchHintRotator();
+  closeSearchRemixSheet();
+}
+
+window.addEventListener("hashchange", () => {
+  const route = document.body.getAttribute("data-route") || "";
+  if (route === "search") onEnterSearchRoute();
+  else onLeaveSearchRoute();
+});
+// First paint may land directly on search via deep-link.
+if ((document.body.getAttribute("data-route") || "") === "search") {
+  onEnterSearchRoute();
+}
 updateEnvironmentBadge();
 document.body.classList.remove("booting");
 document.querySelectorAll("[data-route-link]").forEach((a) => {

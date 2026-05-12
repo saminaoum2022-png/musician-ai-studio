@@ -39,7 +39,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260512shareflat" />
+    <link rel="stylesheet" href="./styles.css?v=20260512searchshelves" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -702,29 +702,59 @@
           <div class="hint">Everything stays here so Home stays clean on mobile.</div>
         </section>
 
-        <section class="card wide librarySection" data-route="search">
-          <header class="libraryHeader">
-            <h2>Search</h2>
-            <p class="libraryLead">Find songs in your Library, on the Hub, and creators you've discovered — all from one place.</p>
-          </header>
-          <div class="emptyState searchEmpty">
-            <div class="emptyStateIcon emptyStateIconSvg" aria-hidden="true">
-              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <defs>
-                  <linearGradient id="searchEmptyGrad" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stop-color="#7c5cff"/>
-                    <stop offset="100%" stop-color="#23d5ab"/>
-                  </linearGradient>
-                </defs>
-                <circle cx="11" cy="11" r="7" stroke="url(#searchEmptyGrad)"/>
-                <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="url(#searchEmptyGrad)"/>
+        <section class="searchPage" data-route="search">
+          <div class="searchBarWrap">
+            <div class="searchBar">
+              <svg class="searchBarIcon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
               </svg>
+              <input id="searchInput" class="searchBarInput" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="" aria-label="Search NabadAi" />
+              <span id="searchInputHint" class="searchBarHint" aria-hidden="true">birthday for sara</span>
+              <button id="searchInputClear" class="searchBarClear" type="button" aria-label="Clear search" hidden>
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
+              </button>
             </div>
-            <p class="emptyStateTitle">Search is coming soon</p>
-            <p class="emptyStateHint">In the next update you'll be able to search across your Library, Hub posts, and creators — right from this tab.</p>
-            <a href="#/hub" class="emptyStateCta" data-route-link="hub">Browse the Hub for now</a>
+          </div>
+
+          <div id="searchPeopleStrip" class="searchPeopleStrip" hidden>
+            <div class="searchPeopleHead">People</div>
+            <div id="searchPeopleRow" class="searchPeopleRow"></div>
+          </div>
+
+          <div id="searchShelves" class="searchShelves" aria-live="polite"></div>
+
+          <div id="searchEmpty" class="searchEmpty" hidden>
+            <p class="searchEmptyTitle">Nothing matches that yet.</p>
+            <p class="searchEmptyHint">Try a name, a moment, or a mood.</p>
           </div>
         </section>
+
+        <div id="searchRemixSheet" class="searchRemixSheet" aria-hidden="true" hidden>
+          <div class="searchRemixBackdrop" data-action="close-remix"></div>
+          <div class="searchRemixCard" role="dialog" aria-modal="true" aria-labelledby="searchRemixTitle">
+            <button class="searchRemixClose" type="button" data-action="close-remix" aria-label="Close">
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
+            </button>
+            <div class="searchRemixCover">
+              <img id="searchRemixCover" alt="" />
+              <button id="searchRemixPreviewBtn" class="searchRemixPlay" type="button" aria-label="Preview">
+                <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><polygon points="6 4 20 12 6 20" fill="currentColor"/></svg>
+              </button>
+              <audio id="searchRemixPreviewAudio" preload="none"></audio>
+            </div>
+            <div class="searchRemixMeta">
+              <div class="searchRemixOccasion" id="searchRemixOccasion">Birthday · Jazz lounge</div>
+              <h3 class="searchRemixTitle" id="searchRemixTitle">Happy Birthday Jazz</h3>
+              <p class="searchRemixSub" id="searchRemixSub">A warm jazz-club birthday number — we'll sing their name in the chorus.</p>
+            </div>
+            <label class="searchRemixField">
+              <span class="searchRemixFieldLabel">Whose name should we sing?</span>
+              <input id="searchRemixName" type="text" autocomplete="off" maxlength="40" placeholder="Sara" />
+            </label>
+            <button id="searchRemixCta" class="searchRemixCta" type="button">Make it mine</button>
+          </div>
+        </div>
 
         <section class="card wide playerCard" data-route="player">
           <div class="playerHeader">
@@ -1910,6 +1940,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260512shareflat"></script>
+    <script type="module" src="./src/app.js?v=20260512searchshelves"></script>
   </body>
 </html>

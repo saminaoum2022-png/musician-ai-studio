@@ -4792,8 +4792,19 @@ async function supabaseSelectHub({ sinceIsoTs = "" } = {}) {
   // 30 rows: enough for a full reel session on Latest without the old
   // "Load more" cap (reel shows every cached post). Incremental polls
   // still return 0 rows most of the time — egress stays low.
+  //
+  // **Cost guard**: skip rows whose `cover_url` or `creator_avatar` is a
+  // base64 `data:` URL. Legacy rows could carry ~500 KB–1.5 MB cover
+  // strings inline; 30 of those = ~30 MB per feed fetch. PostgREST
+  // pattern: `or=(col.is.null,col.not.like.data:*)` keeps rows with
+  // missing/HTTP covers and drops the inline-blob ones. Once
+  // `supabase/hub_posts_strip_data_urls.sql` runs the bad rows are
+  // permanently null'd and the filter becomes a no-op.
+  const dataUrlGuard =
+    `&or=${encodeURIComponent("(cover_url.is.null,cover_url.not.like.data:*)")}` +
+    `&or=${encodeURIComponent("(creator_avatar.is.null,creator_avatar.not.like.data:*)")}`;
   const hubListUrl = (selectCols) =>
-    `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(selectCols)}&order=created_at.desc&limit=30${sinceFilter}`;
+    `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(selectCols)}&order=created_at.desc&limit=30${sinceFilter}${dataUrlGuard}`;
   let r = await fetch(hubListUrl(HUB_SELECT_COLUMNS), {
     headers: {
       apikey: SUPABASE_ANON_KEY,
@@ -5939,12 +5950,22 @@ async function supabaseDeleteUserSong(track) {
 }
 async function supabaseInsertHub(post) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  // Never store base64 `data:` URLs in hub_posts. They are the single
+  // biggest egress cost on the Hub list endpoint (a 500 KB inline cover
+  // multiplied by 30 rows = ~15 MB per feed fetch). If the local copy
+  // is a data URL, drop it — the renderer falls back to the generic
+  // placeholder cover, and Phase C will upload covers to Supabase
+  // Storage and persist the resulting HTTP URL here.
+  const sanitizeNonDataUrl = (s) => {
+    const v = String(s == null ? "" : s).trim();
+    return v && !v.startsWith("data:") ? v : null;
+  };
   const payload = {
     title: post.title,
     song_url: post.url,
-    cover_url: post.artUrl || null,
+    cover_url: sanitizeNonDataUrl(post.artUrl),
     creator_username: post.creator,
-    creator_avatar: post.creatorAvatar || null,
+    creator_avatar: sanitizeNonDataUrl(post.creatorAvatar),
     kind: post.kind || "full",
     likes: Number(post.likes || 0),
     reacts: post.reacts || { melody: 0, lyrics: 0, mix: 0, groove: 0 },

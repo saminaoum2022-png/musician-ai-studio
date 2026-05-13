@@ -3,10 +3,11 @@ import { renderArrangementToWav } from "./render.js";
 import { recordHumToMelody } from "./melody/extract.js";
 import { mixStemsToWav } from "./studio/mixer.js";
 import { encodeWav16 } from "./wav.js";
+import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514hubRemoved";
+const APP_BUILD = "20260514mentor";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1634,6 +1635,9 @@ const TAB_REFRESH_ACTIONS = {
       runSearchQuery(String(input?.value || ""));
     } catch (e) { console.warn("[tabRefresh/search]", e); }
   },
+  mentor() {
+    resetMentorSession();
+  },
   profile() {
     void Promise.resolve(refreshMyCredits({ silent: true })).catch(() => {});
     void Promise.resolve(refreshMyHubPostsFast({ force: true })).catch(() => {});
@@ -1740,7 +1744,7 @@ function applyRoute() {
   const allowedRoutes = new Set([
     "intro", "start", "auth", "generate", "library",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
-    "settings", "profile", "player", "search", "vocal", "stems", "advanced", "user", "credits", "sounds",
+    "settings", "profile", "player", "search", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
   ]);
   const normalized = pendingPublicUsername ? "user" : (route === "start" ? "intro" : route);
   let wanted = allowedRoutes.has(normalized) ? normalized : "generate";
@@ -18038,6 +18042,7 @@ setProfileEditing(false);
 // click time, so it stays correct across hash changes without needing
 // a rebind.
 try { attachTabRefresh(); } catch (e) { console.warn("[tabRefresh] init", e); }
+try { initMentor(); } catch (e) { console.warn("[mentor] init", e); }
 
 // Hum → melody (MVP)
 if (els.btnHumStart && els.btnHumStop && els.btnHumClear) {

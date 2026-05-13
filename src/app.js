@@ -1509,8 +1509,18 @@ function updateEnvironmentBadge() {
   els.envBadge.textContent = `Environment: ${mode} • ${target} • Build ${APP_BUILD}`;
 }
 async function loadPublicConfig() {
+  // 6s timeout — without it, a stalled `/api/public-config` (cold native
+  // start on flaky mobile data) hangs the entire boot IIFE, which in
+  // turn leaves the profile header skeleton stuck on forever.
   try {
-    const r = await fetch(apiUrl("/api/public-config"));
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    let r;
+    try {
+      r = await fetch(apiUrl("/api/public-config"), { signal: ctrl.signal });
+    } finally {
+      clearTimeout(timer);
+    }
     const d = await r.json().catch(() => ({}));
     let rawUrl = String(d?.supabaseUrl || "").trim();
     // Accept either project root URL or mistakenly pasted REST URL.
@@ -1818,6 +1828,36 @@ function applyRoute() {
     renderProfileCallingCardHint();
     if (authSession?.user?.id && shouldShowProfileHeaderSkeleton()) {
       setProfileHeaderLoading(true);
+      // Active retry: if the boot-time cloud profile load missed (slow
+      // network, fetch threw, race with auth), the route handler used
+      // to just arm the shimmer and rely on the boot IIFE having
+      // already run. That's how the "always loading + @guest" bug
+      // happened. Kick a fresh fetch now, with the same timeout, and
+      // dismiss the shimmer either way.
+      void (async () => {
+        try {
+          const cloud = await supabaseLoadProfile();
+          if (cloud && authSession?.user?.id) {
+            const looksFilled = (v) => v !== "" && v != null;
+            const localFilled = Object.fromEntries(
+              Object.entries(activeProfile).filter(([k, v]) => {
+                if (k === "username" && isPlaceholderUsername(v)) return false;
+                return looksFilled(v);
+              }),
+            );
+            const nextProfile = {
+              ...cloud,
+              ...localFilled,
+              id: String(authSession.user.id),
+              email: localFilled.email || cloud.email || authSession.user.email || "",
+            };
+            saveProfile(nextProfile);
+            renderProfilePreviewFromInputs();
+            renderProfileHubShared();
+          }
+        } catch {}
+        try { setProfileHeaderLoading(false); } catch {}
+      })();
     }
   }
   if (wanted === "credits" || wanted === "sounds") {
@@ -5412,12 +5452,26 @@ function randomVerifier(len = 64) {
 }
 async function supabaseFetchUser(token) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !token) return null;
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  // 8s timeout — without it, a slow auth/user lookup leaves the boot
+  // IIFE hanging, which keeps the profile header in its loading state
+  // and the username stuck on the local placeholder.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+  let r;
+  try {
+    r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${token}`,
+      },
+      signal: ctrl.signal,
+    });
+  } catch (e) {
+    clearTimeout(timer);
+    lastAuthDebug = `user fetch aborted: ${String(e?.message || e || "timeout").slice(0, 80)}`;
+    return null;
+  }
+  clearTimeout(timer);
   if (!r.ok) {
     const t = await r.text().catch(() => "");
     lastAuthDebug = `user fetch ${r.status}: ${String(t || "").slice(0, 120)}`;
@@ -5750,12 +5804,24 @@ async function supabaseLoadProfile() {
   const token = getSupabaseAuthToken();
   if (!token || !authSession?.user?.id) return null;
   const uid = encodeURIComponent(authSession.user.id);
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${uid}&select=*`, {
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  // 8s timeout — same reasoning as supabaseFetchUser: a hung profile
+  // fetch was the root cause of the "stuck loading + @guest" report.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+  let r;
+  try {
+    r = await fetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${uid}&select=*`, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${token}`,
+      },
+      signal: ctrl.signal,
+    });
+  } catch {
+    clearTimeout(timer);
+    return null;
+  }
+  clearTimeout(timer);
   if (!r.ok) return null;
   const arr = await r.json().catch(() => []);
   if (!Array.isArray(arr) || !arr.length) return null;
@@ -17755,6 +17821,14 @@ renderAuthStatus();
 if (authSession?.user?.id && shouldShowProfileHeaderSkeleton()) {
   setProfileHeaderLoading(true);
 }
+// Absolute safety net: under no circumstance keep the shimmer on past
+// 10s. The "always loading, @guest" report came from one of the boot
+// fetches hanging with no timeout; even with timeouts in place, any
+// unexpected exception inside the IIFE must not leave the header stuck.
+// This is a fire-and-forget defense in depth.
+setTimeout(() => {
+  try { setProfileHeaderLoading(false); } catch {}
+}, 10000);
 // If the user has a stored session, we're going to hydrate Library in
 // the boot IIFE below. Set the in-flight flag synchronously *now* so
 // the very first `renderLibrary()` (deferred on rAF or fired by the
@@ -17765,6 +17839,10 @@ if (authSession?.user?.id) {
   _libraryHydrateInFlight = true;
 }
 void (async () => {
+  // try/finally guarantees the profile header shimmer is dismissed no
+  // matter what fails inside the boot chain. Pre-fix, an unhandled
+  // throw or a hung fetch would leave it stuck on with @guest visible.
+  try {
   await loadPublicConfig();
   const usedCodeFlow = await maybeHandleAuthCodeFromQuery();
   const usedTokenFlow = !usedCodeFlow && maybeHandleMagicLinkFromHash();
@@ -17867,6 +17945,13 @@ void (async () => {
     resetProfileUiToGuest();
     setProfileHeaderLoading(false);
     if ((location.hash || "") === "#/intro") location.hash = "#/auth";
+  }
+  } finally {
+    // Defense in depth — the success paths above already dismiss the
+    // shimmer, but a thrown error anywhere in the chain would otherwise
+    // skip them and leave the profile header stuck. This finally
+    // guarantees a single dismissal.
+    try { setProfileHeaderLoading(false); } catch {}
   }
 })();
 if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = activeProfile.username ? `@${activeProfile.username}` : "@guest";

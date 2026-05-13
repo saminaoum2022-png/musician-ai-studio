@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514hubTuningPill";
+const APP_BUILD = "20260514hubSmartPickOff";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1742,17 +1742,10 @@ function applyRoute() {
     updateHubAudioHint();
     try { renderHub(); } catch {}
     requestAnimationFrame(() => updateHubFocusedRow());
-    // Smart-pick on tab entry: the Hub tab click handler may have
-    // flagged `_hubPendingSmartScroll` to ask us to land on the first
-    // unseen post once the route is painted. Defer one rAF so the
-    // reel DOM exists; do nothing if the user is already at the top
-    // of an unseen feed (avoid a redundant smooth scroll).
-    if (_hubPendingSmartScroll) {
-      _hubPendingSmartScroll = false;
-      requestAnimationFrame(() => {
-        try { scrollHubFeedToUnseenOrTop(); } catch {}
-      });
-    }
+    // Smart-pick on tab entry was reverted (see hubTabLink click handler).
+    // Clearing the flag here keeps it harmless in case anything else
+    // sets it; the actual scroll behavior stays at "land on top".
+    _hubPendingSmartScroll = false;
     // Resume the post we paused when leaving Hub for Profile/User.
     // Idempotent — does nothing if Hub wasn't playing before.
     void resumeHubAfterRouteChange();
@@ -15813,23 +15806,22 @@ if (els.hubTabLink) {
   let hubSingleTimer = null;
   els.hubTabLink.addEventListener("click", (e) => {
     const onHub = (document.body.getAttribute("data-route") || "") === "hub";
-    // Tab tap from elsewhere → navigate, but request a smart-pick scroll
-    // (first unseen post or top) to fire once `applyRoute` has rendered.
-    // Audio unlock is handled by the global one-shot listener
-    // (`installHubAudioUnlockOnce`), which fires on this same gesture
-    // before anything async runs; applyRoute("hub") then uses
-    // scroll-driven autoplay to start whatever ends up centered.
-    if (!onHub) {
-      _hubPendingSmartScroll = true;
-      return;
-    }
+    // Tab tap from elsewhere → just navigate. Audio unlock is handled
+    // by the global one-shot listener (`installHubAudioUnlockOnce`),
+    // which fires on this same gesture before anything async runs;
+    // applyRoute("hub") then uses scroll-driven autoplay to start the
+    // first centered post — same code path Latest and Trending share.
+    //
+    // Smart-pick (jump-to-first-unseen) was reverted in 20260514hubSmartPickOff
+    // — once a post was seen it stayed seen across sessions, so the tap
+    // could land 3 posts deep with unseen content above. Helpers
+    // (`scrollHubFeedToUnseenOrTop`, seen-set tracking) are still
+    // defined but dormant; revisit when we have a smarter ruleset
+    // (e.g. session-scoped or like-based).
+    if (!onHub) return;
     e.preventDefault();
     try { stopHubPlayback(); } catch {}
-    // Already on Hub, single tap = jump to first unseen post (or top
-    // if all caught up). Double-tap (handled below) wins via the
-    // hubTapCount branch — that path still scrolls to top + force-
-    // refreshes the feed.
-    scrollHubFeedToUnseenOrTop();
+    scrollHubFeedToTop();
     hubTapCount += 1;
     const now = Date.now();
     if (now - hubTapAt > 420) hubTapCount = 1;

@@ -4845,13 +4845,18 @@ async function hubFetchPostProofFull(postId) {
   }
 }
 
-/** PostgREST `or=` clauses so list queries skip rows whose `cover_url` /
- *  `creator_avatar` is an inline base64 `data:` blob (legacy data).
- *  Applied to **both** the global Hub feed and `supabaseSelectMyHubPosts`
- *  so idle Profile-targeted fetches cannot pull tens of MB on Generate. */
-const HUB_POSTS_JSON_LIST_DATA_GUARD =
-  `&or=${encodeURIComponent("(cover_url.is.null,cover_url.not.like.data:*)")}` +
-  `&or=${encodeURIComponent("(creator_avatar.is.null,creator_avatar.not.like.data:*)")}`;
+/** Originally a client-side `or=()` guard that skipped rows whose
+ *  `cover_url` or `creator_avatar` was a base64 `data:` URL — a quick
+ *  fix when the Hub list response ballooned to ~33 MB on legacy data.
+ *  Reality bit back: lots of users had `data:` *avatars* from an old
+ *  upload flow, so the guard hid every post by those creators (~3 rows
+ *  ever made it through; newer posts were invisible). The correct
+ *  defense is the SQL cleanup in `supabase/hub_posts_strip_data_urls.sql`
+ *  (one-shot UPDATE to null the bad fields + CHECK constraint to prevent
+ *  future inserts). Until that runs, accept the occasional larger
+ *  response over hiding real content. Kept as an empty string so the
+ *  call-sites can stay unchanged. */
+const HUB_POSTS_JSON_LIST_DATA_GUARD = "";
 
 async function supabaseSelectHub({ sinceIsoTs = "" } = {}) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;

@@ -32,6 +32,10 @@ function percentile(sorted, p) {
   return sorted[lo] * (1 - w) + sorted[hi] * w;
 }
 
+function clamp(n, lo, hi) {
+  return Math.max(lo, Math.min(hi, n));
+}
+
 const MAX_SECONDS = 22;
 const MIN_SECONDS = 2;
 
@@ -683,17 +687,34 @@ async function finalizeMentorRecording(chunks, mimeTypeHint, recordSession) {
       audioBuf = await dec.decodeAudioData(ab.slice(0));
     } catch (e) {
       setText("mentorStatus", `Could not read this take: ${e?.message || e}`);
-      return;
-    } finally {
       try {
         await dec.close();
       } catch {}
+      return;
     }
 
-    if (recordSession !== _mentorRecSession) return;
+    if (recordSession !== _mentorRecSession) {
+      try {
+        await dec.close();
+      } catch {}
+      return;
+    }
 
     const sr = audioBuf.sampleRate;
     const full = floatMonoFromAudioBuffer(audioBuf);
+
+    try {
+      await dec.close();
+    } catch {}
+
+    if (recordSession !== _mentorRecSession) {
+      setText(
+        "mentorStatus",
+        "That take was discarded (Mentor was reset while decoding). Tap Start capture again.",
+      );
+      return;
+    }
+
     const dur = full.length / sr;
 
     if (dur < MIN_SECONDS) {
@@ -714,54 +735,67 @@ async function finalizeMentorRecording(chunks, mimeTypeHint, recordSession) {
       return;
     }
 
-    setText("mentorStatus", "Snapshot ready — see below.");
-    const pullQuotes = [
-      "This pass",
-      "Your snapshot",
-      "What we heard",
-      "A quick read",
-      "This take",
-    ];
-    setText("mentorPullQuote", pullQuotes[Math.floor(Math.random() * pullQuotes.length)]);
-    setText("mentorValRange", `${res.lowName} – ${res.highName}`);
-    setText("mentorValSpan", `${res.spanSemitones} semitones (robust) · ${res.spanHint}`);
-    setText("mentorValMedian", res.medianName);
-    setText("mentorValVoice", res.voiceTitle);
-    setText("mentorValVoiceBody", res.voiceBody);
-    setText("mentorValVoiceMeta", res.voiceMeta);
-    setText("mentorCardMaqamTitle", res.maqamTitle);
-    setText("mentorCardMaqamBody", res.maqamBody);
-    setText("mentorCardMaqamMeta", res.maqamMeta);
-    renderMaqamDiagram(res.maqamTonicPc, res.maqamDegrees);
-    const mood = document.querySelector(".mentorTile--mood");
-    if (mood) mood.style.setProperty("--mentor-mood-hue", String(hueFromMaqamId(res.maqamId)));
-    setText("mentorCardGenreTitle", res.genreTitle);
-    setText("mentorCardGenreBody", res.genreBody);
-    setText("mentorCardTuneTitle", res.tuneTitle);
-    setText("mentorCardTuneBody", res.tuneBody);
-    setText("mentorCardTuneMeta", res.tuneMeta);
-    setText("mentorCardTimbreTitle", res.timbreLabel);
-    setText("mentorCardTimbreBody", res.timbreDetail);
-    setText("mentorCardTimbreMeta", `Brightness index ~${res.brightMean}`);
-    setText("mentorCardVibratoTitle", res.vibratoLabel);
-    setText("mentorCardVibratoBody", res.vibratoDetail);
-    setText("mentorCardVibratoMeta", `Avg melodic step ~${res.meanAbsC} cents between windows`);
-    setText("mentorCardKeysTitle", "Key starting points");
-    setText("mentorCardKeysBody", res.keysLine);
-    setText("mentorCardKeysSub", res.keysDetail);
-    setText("mentorCardQualityTitle", "Take quality (heuristic)");
-    setText("mentorCardQualityScore", `${res.quality}/100`);
-    setText(
-      "mentorCardQualityBody",
-      "Blends pitch steadiness, usable range in the clip, and presence. Re-record in a quiet room for a higher score.",
-    );
+    try {
+      setText("mentorStatus", "Snapshot ready — see below.");
+      const pullQuotes = [
+        "This pass",
+        "Your snapshot",
+        "What we heard",
+        "A quick read",
+        "This take",
+      ];
+      setText("mentorPullQuote", pullQuotes[Math.floor(Math.random() * pullQuotes.length)]);
+      setText("mentorValRange", `${res.lowName} – ${res.highName}`);
+      setText("mentorValSpan", `${res.spanSemitones} semitones (robust) · ${res.spanHint}`);
+      setText("mentorValMedian", res.medianName);
+      setText("mentorValVoice", res.voiceTitle);
+      setText("mentorValVoiceBody", res.voiceBody);
+      setText("mentorValVoiceMeta", res.voiceMeta);
+      setText("mentorCardMaqamTitle", res.maqamTitle);
+      setText("mentorCardMaqamBody", res.maqamBody);
+      setText("mentorCardMaqamMeta", res.maqamMeta);
+      renderMaqamDiagram(res.maqamTonicPc, res.maqamDegrees);
+      const mood = document.querySelector(".mentorTile--mood");
+      if (mood) mood.style.setProperty("--mentor-mood-hue", String(hueFromMaqamId(res.maqamId)));
+      setText("mentorCardGenreTitle", res.genreTitle);
+      setText("mentorCardGenreBody", res.genreBody);
+      setText("mentorCardTuneTitle", res.tuneTitle);
+      setText("mentorCardTuneBody", res.tuneBody);
+      setText("mentorCardTuneMeta", res.tuneMeta);
+      setText("mentorCardTimbreTitle", res.timbreLabel);
+      setText("mentorCardTimbreBody", res.timbreDetail);
+      setText("mentorCardTimbreMeta", `Brightness index ~${res.brightMean}`);
+      setText("mentorCardVibratoTitle", res.vibratoLabel);
+      setText("mentorCardVibratoBody", res.vibratoDetail);
+      setText("mentorCardVibratoMeta", `Avg melodic step ~${res.meanAbsC} cents between windows`);
+      setText("mentorCardKeysTitle", "Key starting points");
+      setText("mentorCardKeysBody", res.keysLine);
+      setText("mentorCardKeysSub", res.keysDetail);
+      setText("mentorCardQualityTitle", "Take quality (heuristic)");
+      setText("mentorCardQualityScore", `${res.quality}/100`);
+      setText(
+        "mentorCardQualityBody",
+        "Blends pitch steadiness, usable range in the clip, and presence. Re-record in a quiet room for a higher score.",
+      );
 
-    renderGauge(res.minM, res.maxM, res.medianM);
-    showResults(true);
+      renderGauge(res.minM, res.maxM, res.medianM);
+      showResults(true);
+    } catch (e) {
+      try {
+        console.warn("[mentor] result UI", e);
+      } catch {}
+      setText(
+        "mentorStatus",
+        `Analysis finished but the results panel hit an error: ${e?.message || e}. Try Start capture again.`,
+      );
+      showResults(true);
+    }
   } finally {
     setMentorLiveUi(false);
-    if (btnStart) btnStart.disabled = false;
-    if (btnStop) btnStop.disabled = true;
+    if (recordSession === _mentorRecSession) {
+      if (btnStart) btnStart.disabled = false;
+      if (btnStop) btnStop.disabled = true;
+    }
   }
 }
 
@@ -899,16 +933,12 @@ export function initMentor() {
     };
     rec.onstop = async () => {
       await new Promise((r) => setTimeout(r, isSafariLikeMentorEnv() ? 120 : 40));
-      const chunks = _mentorChunks.slice();
-      _mentorChunks.length = 0;
       if (recordSession !== _mentorRecSession) {
-        const bs = document.getElementById("mentorBtnStart");
-        const bt = document.getElementById("mentorBtnStop");
-        if (bs) bs.disabled = false;
-        if (bt) bt.disabled = true;
         setMentorLiveUi(false);
         return;
       }
+      const chunks = _mentorChunks.slice();
+      _mentorChunks.length = 0;
       await finalizeMentorRecording(chunks, effectiveMime(), recordSession);
     };
 

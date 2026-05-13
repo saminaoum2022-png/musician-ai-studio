@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514hubSmartPickOff";
+const APP_BUILD = "20260514hubLatestSimple";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -857,6 +857,9 @@ function updateHubFocusedRow() {
  * ================================================================= */
 let _hubReelObserver = null;
 let _hubReelPrefetchObserver = null;
+/** Hub reel scrolls `#hubList`, not `window` — bind once so autoplay,
+ *  focus updates, and deferred rebuilds see real `scrollTop`. */
+let _hubListScrollBound = false;
 
 /** Promote a single reel from `data-src` to real `src` so iOS WebKit
  *  fetches the cover. Idempotent and cheap. Also fills the backdrop
@@ -960,6 +963,33 @@ function wireHubReelObserver() {
     }
   }, { root: els.hubList, rootMargin: "100% 0px 100% 0px", threshold: 0 });
   reels.forEach((r) => _hubReelPrefetchObserver.observe(r));
+
+  if (els.hubList && !_hubListScrollBound) {
+    _hubListScrollBound = true;
+    const onHubListScroll = () => {
+      if ((document.body.getAttribute("data-route") || "") !== "hub") return;
+      scheduleHubFocusUpdate();
+      scheduleHubViewportAutoplay();
+      if (_hubDeferredRebuild && (els.hubList.scrollTop || 0) < 80) {
+        _hubDeferredRebuild = false;
+        renderHub();
+      }
+    };
+    els.hubList.addEventListener("scroll", onHubListScroll, { passive: true });
+    try {
+      els.hubList.addEventListener("scrollend", () => {
+        if ((document.body.getAttribute("data-route") || "") !== "hub") return;
+        updateHubFocusedRow();
+        flushHubViewportAutoplay();
+        if (_hubDeferredRebuild && (els.hubList.scrollTop || 0) < 80) {
+          _hubDeferredRebuild = false;
+          renderHub();
+        }
+      }, { passive: true });
+    } catch {
+      /* scrollend not supported — 280ms debounce in scheduleHubViewportAutoplay suffices */
+    }
+  }
 }
 function scheduleHubFocusUpdate() {
   if (hubFocusUpdateRaf) return;
@@ -4732,13 +4762,10 @@ async function supabaseSelectHub({ sinceIsoTs = "" } = {}) {
   const sinceFilter = sinceIsoTs
     ? `&created_at=gt.${encodeURIComponent(sinceIsoTs)}`
     : "";
-  // 12 rows = HUB_PAGE_SIZE (6) plus a 6-row swipe-ahead backlog. The
-  // reel only renders 6 at a time and the user typically swipes through
-  // 2-4 before tapping out, so 12 is plenty for a first-paint session
-  // and cuts the cold-start payload by ~60% vs the previous 30. Older
-  // posts can be fetched later if we wire cloud pagination into the
-  // "Load more" sentinel; incremental polls keep adding new rows on top.
-  const url = `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(HUB_SELECT_COLUMNS)}&order=created_at.desc&limit=12${sinceFilter}`;
+  // 30 rows: enough for a full reel session on Latest without the old
+  // "Load more" cap (reel shows every cached post). Incremental polls
+  // still return 0 rows most of the time — egress stays low.
+  const url = `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(HUB_SELECT_COLUMNS)}&order=created_at.desc&limit=30${sinceFilter}`;
   const r = await fetch(url, {
     headers: {
       apikey: SUPABASE_ANON_KEY,
@@ -6530,6 +6557,12 @@ function renderHub() {
     hubVisibleCount = HUB_PAGE_SIZE;
   }
   const totalCount = items.length;
+  // Latest-only UX (Trending hidden): show every post we have cached in
+  // the reel — the old 6-at-a-time + "Load more" cap made the feed look
+  // artificially short (12-15 posts max) even when localStorage held more.
+  if (hubFilter === "latest") {
+    hubVisibleCount = totalCount;
+  }
   const visibleItems = items.slice(0, Math.min(hubVisibleCount, totalCount));
   const hasMore = totalCount > visibleItems.length;
   els.hubList.innerHTML = visibleItems.map((p, i) => {
@@ -6960,8 +6993,10 @@ async function refreshHubFromSupabase({ force = false } = {}) {
       renderHubDots();
       renderProfileHubShared();
     } else {
-      const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-      const atTop = scrollY < 80;
+      const hubListTop = onHub && els.hubList
+        ? (els.hubList.scrollTop || 0)
+        : (window.scrollY || document.documentElement.scrollTop || 0);
+      const atTop = hubListTop < 80;
       if (renderedAlready && onHub && !atTop) {
         // Defer: rebuilding right now would yank the page under the
         // user's finger. We'll rebuild on next scroll-to-top, route
@@ -7038,8 +7073,10 @@ async function refreshHubFromSupabase({ force = false } = {}) {
           renderProfileHubShared();
         } else {
           const onHub = (document.body.getAttribute("data-route") || "") === "hub";
-          const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-          const atTop = scrollY < 80;
+          const hubListTop = onHub && els.hubList
+            ? (els.hubList.scrollTop || 0)
+            : (window.scrollY || document.documentElement.scrollTop || 0);
+          const atTop = hubListTop < 80;
           if (renderedAlready && onHub && !atTop) {
             _hubDeferredRebuild = true;
             renderHubUpdatedAt();
@@ -15661,7 +15698,6 @@ function setHubSort(next) {
   renderHub();
 }
 if (els.hubSortLatest) els.hubSortLatest.addEventListener("click", () => setHubSort("latest"));
-if (els.hubSortTrending) els.hubSortTrending.addEventListener("click", () => setHubSort("trending"));
 /** Jump to the top of the Hub feed.
  *
  * Hub uses `scroll-snap-align: center` on every row. iOS Safari remembers
@@ -15752,25 +15788,51 @@ function scrollHubFeedToTop() {
 
   document.body.classList.add("hubJumpingToTop");
   hubJumpToTopActive = true;
-  // Block scroll-driven autoplay for a generous window. Released earlier
-  // when the user resumes scrolling.
   suppressHubViewportAutoplayFor(8000);
 
-  // Re-enable snap on the FIRST user gesture, not on a timer. iOS can no
-  // longer rubber-band us because snap stays off until the user is the
-  // one driving the scroll.
   hubJumpUserGestureHandler = () => {
     endHubJumpGuard();
   };
-  // Pointerdown covers mouse + touch on iOS Safari; touchstart kept for
-  // older WebViews. wheel covers desktop trackpads; keydown covers space
-  // / arrows. All passive — we never preventDefault.
   try {
     window.addEventListener("touchstart", hubJumpUserGestureHandler, { once: true, passive: true });
     window.addEventListener("pointerdown", hubJumpUserGestureHandler, { once: true, passive: true });
     window.addEventListener("wheel", hubJumpUserGestureHandler, { once: true, passive: true });
     window.addEventListener("keydown", hubJumpUserGestureHandler, { once: true, passive: true });
   } catch {}
+
+  const onHubRoute = (document.body.getAttribute("data-route") || "") === "hub";
+  const listRoot = onHubRoute && els.hubList ? els.hubList : null;
+
+  // Hub reel scrolls `#hubList`, not `window` — `window.scrollY` stays ~0
+  // so the old path never moved the feed. Animate `listRoot.scrollTop`.
+  if (listRoot) {
+    const start = listRoot.scrollTop || 0;
+    let reducedMotion = false;
+    try {
+      reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    } catch {}
+    if (start <= 2 || reducedMotion) {
+      listRoot.scrollTop = 0;
+      return;
+    }
+    const animDurationMs = 320;
+    const t0 = performance.now();
+    const easeOutCubic = (u) => 1 - (1 - u) ** 3;
+    const tick = (now) => {
+      const elapsed = now - t0;
+      const u = Math.min(1, elapsed / animDurationMs);
+      const y = Math.round(start * (1 - easeOutCubic(u)));
+      listRoot.scrollTop = y;
+      if (u < 1) {
+        hubJumpToTopRaf = requestAnimationFrame(tick);
+      } else {
+        hubJumpToTopRaf = 0;
+        listRoot.scrollTop = 0;
+      }
+    };
+    hubJumpToTopRaf = requestAnimationFrame(tick);
+    return;
+  }
 
   const start = window.scrollY ?? document.documentElement.scrollTop ?? 0;
   let reducedMotion = false;
@@ -15873,44 +15935,14 @@ if (els.hubNowPlaying) {
   });
 }
 window.addEventListener("scroll", () => {
-  if ((document.body.getAttribute("data-route") || "") === "hub") {
-    scheduleHubFocusUpdate();
-    // CRITICAL: schedule audio autoplay on every scroll — this is what
-    // makes the centered post start playing as the user swipes. The
-    // 280ms tail-debounce inside `scheduleHubViewportAutoplay` keeps it
-    // from thrashing while the user is still dragging.
-    scheduleHubViewportAutoplay();
-    // If the periodic refresh deferred a rebuild because new posts arrived
-    // mid-scroll, redraw once the user has clearly returned to the top of
-    // the feed. Avoids the "screen glitched/refreshed itself" surprise.
-    if (_hubDeferredRebuild) {
-      const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-      if (scrollY < 80) {
-        _hubDeferredRebuild = false;
-        renderHub();
-      }
-    }
+  const route = document.body.getAttribute("data-route") || "";
+  // Hub reel scrolls inside `#hubList` — `window` does not move. All Hub
+  // scroll-driven updates are on `hubList` (see `wireHubReelObserver`).
+  if (route === "hub") {
+    if (hubAudio) scheduleRenderHubNowPlaying();
+    return;
   }
   if (hubAudio) scheduleRenderHubNowPlaying();
-}, { passive: true });
-// `scrollend` fires once the page (or a programmatic smooth scroll) actually
-// stops — much more reliable than waiting for `scroll` events to taper off.
-// Supported on iOS Safari 16+, Chrome 114+, and Firefox 109+. Where it isn't
-// supported the 280ms debounce above still covers us.
-window.addEventListener("scrollend", () => {
-  if ((document.body.getAttribute("data-route") || "") !== "hub") return;
-  updateHubFocusedRow();
-  // Instant autoplay swap on snap landing — `scrollend` fires once
-  // iOS finishes the snap animation, so this is the most reliable
-  // moment to switch the playing track to the freshly-centered card.
-  flushHubViewportAutoplay();
-  if (_hubDeferredRebuild) {
-    const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-    if (scrollY < 80) {
-      _hubDeferredRebuild = false;
-      renderHub();
-    }
-  }
 }, { passive: true });
 window.addEventListener("resize", () => {
   if ((document.body.getAttribute("data-route") || "") === "hub") {

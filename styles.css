@@ -2331,6 +2331,17 @@ body.hubJumpingToTop .hubRow{
   scroll-snap-align: none !important;
   scroll-snap-stop: normal !important;
 }
+/* Reel scroll container: snap lives on `#hubList`, not `body` — without
+ * this, `body.hubJumpingToTop` alone doesn't release snap during
+ * programmatic jump-to-top, so iOS rubber-bands back to the old panel. */
+body.hubJumpingToTop #hubList{
+  scroll-snap-type: none !important;
+}
+body.hubJumpingToTop #hubList .hubReel,
+body.hubJumpingToTop #hubList .hubRow{
+  scroll-snap-align: none !important;
+  scroll-snap-stop: normal !important;
+}
 [data-route="hub"] .trackName{
   font-size:15px;
 }
@@ -10077,6 +10088,12 @@ body[data-route="hub"] .hubSegment{
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(255,255,255,0.12);
   padding: 4px;
+  border-radius: 999px;
+}
+body[data-route="hub"] .hubSegmentSingle{
+  padding: 3px 10px;
+}
+body[data-route="hub"] .hubSegmentSingle .hubSegmentBtn{
   border-radius: 999px;
 }
 body[data-route="hub"] #hubAudioHint{

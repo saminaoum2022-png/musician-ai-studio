@@ -10933,6 +10933,246 @@ body[data-route="hub"] .hubEq{
   z-index: 1;
   margin-top: 18px;
 }
+.mentorPullQuote{
+  margin: 0 0 14px;
+  font-family: ui-serif, Georgia, "Times New Roman", serif;
+  font-size: clamp(22px, 3.2vw, 30px);
+  font-weight: 500;
+  font-style: italic;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: rgba(231, 237, 247, 0.52);
+}
+.mentorBento{
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+.mentorTile{
+  min-width: 0;
+  padding: 14px 16px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(28, 33, 46, 0.72);
+}
+.mentorTile--span2{ grid-column: span 2; }
+.mentorTile--span3{ grid-column: span 3; }
+.mentorTile--span4{ grid-column: span 4; }
+.mentorTile--sq{
+  min-height: 128px;
+  display: flex;
+  flex-direction: column;
+}
+.mentorTile--stat{
+  padding: 14px 16px;
+  background: rgba(18, 21, 30, 0.55);
+}
+.mentorTile--statGlow{
+  border-color: rgba(124, 92, 255, 0.35);
+  background: linear-gradient(155deg, rgba(124, 92, 255, 0.12) 0%, rgba(35, 213, 171, 0.06) 100%);
+  box-shadow: inset 0 0 0 1px rgba(124, 92, 255, 0.12);
+}
+.mentorTile--statMint{
+  border-color: rgba(35, 213, 171, 0.22);
+  background: linear-gradient(160deg, rgba(35, 213, 171, 0.08) 0%, rgba(28, 33, 46, 0.65) 55%);
+}
+.mentorTile--maqam{
+  border-color: rgba(124, 92, 255, 0.22);
+  background: linear-gradient(165deg, rgba(124, 92, 255, 0.1) 0%, rgba(18, 21, 30, 0.55) 42%, rgba(28, 33, 46, 0.75) 100%);
+}
+.mentorMaqamTop{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 16px;
+  margin-bottom: 10px;
+}
+.mentorMaqamTitles{
+  flex: 1 1 160px;
+  min-width: 0;
+}
+.mentorEyebrow{
+  display: block;
+  margin-bottom: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(168, 180, 199, 0.82);
+}
+.mentorMaqamTitle{
+  margin: 0;
+  font-size: clamp(17px, 2.2vw, 22px);
+  font-weight: 850;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  background: linear-gradient(115deg, #e9e6ff 0%, #a7f3d0 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.mentorMaqamDiagram{
+  flex: 0 1 220px;
+  width: min(100%, 240px);
+  max-width: 100%;
+}
+.mentorStaffSvg{
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 100px;
+}
+.mentorMaqamBody{
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(210, 218, 232, 0.93);
+}
+.mentorMaqamMeta{
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(168, 180, 199, 0.88);
+}
+.mentorTile--mood{
+  --mentor-mood-hue: 258;
+  position: relative;
+  overflow: hidden;
+  min-height: 148px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    conic-gradient(
+      from 200deg at 78% 22%,
+      hsla(var(--mentor-mood-hue), 70%, 46%, 0.38),
+      hsla(calc(var(--mentor-mood-hue) + 72), 62%, 40%, 0.28),
+      hsla(calc(var(--mentor-mood-hue) + 140), 52%, 38%, 0.34)
+    ),
+    radial-gradient(120% 90% at 8% 100%, rgba(124, 92, 255, 0.24), transparent 58%);
+}
+.mentorMoodLayers{
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.mentorMoodMark{
+  position: absolute;
+  right: -18px;
+  bottom: -22px;
+  width: 140px;
+  height: auto;
+  opacity: 0.09;
+  transform: rotate(-12deg);
+  filter: grayscale(0.2) contrast(1.05);
+  mix-blend-mode: soft-light;
+}
+.mentorMoodGlow{
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.12), transparent 52%);
+  opacity: 0.55;
+}
+.mentorMoodCaption{
+  position: absolute;
+  left: 14px;
+  bottom: 12px;
+  z-index: 1;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(231, 237, 247, 0.45);
+}
+.mentorTileTitle{
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.mentorTileProse{
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(210, 218, 232, 0.92);
+}
+.mentorTileFoot{
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(168, 180, 199, 0.88);
+}
+.mentorTile--genre{
+  border-top: 3px solid rgba(124, 92, 255, 0.45);
+}
+.mentorTile--tune{
+  border-top: 3px solid rgba(35, 213, 171, 0.4);
+}
+.mentorTile--plain{
+  background: linear-gradient(165deg, rgba(18, 21, 30, 0.38) 0%, rgba(28, 33, 46, 0.55) 100%);
+  border-style: dashed;
+  border-color: rgba(255, 255, 255, 0.11);
+}
+.mentorTile--plainAlt{
+  background: linear-gradient(198deg, rgba(124, 92, 255, 0.08) 0%, rgba(18, 21, 30, 0.42) 48%, rgba(35, 213, 171, 0.06) 100%);
+  border-style: dashed;
+  border-color: rgba(35, 213, 171, 0.16);
+}
+.mentorSerifTitle{
+  margin: 0 0 8px;
+  font-family: ui-serif, Georgia, "Times New Roman", serif;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: rgba(231, 237, 247, 0.96);
+}
+.mentorSerifBody{
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.58;
+  color: rgba(210, 218, 232, 0.93);
+}
+.mentorTile--keys{
+  border-color: rgba(94, 234, 212, 0.22);
+  background: linear-gradient(175deg, rgba(35, 213, 171, 0.07) 0%, rgba(28, 33, 46, 0.72) 55%);
+}
+.mentorTile--quality{
+  align-items: flex-start;
+}
+.mentorQualityWrap{
+  position: relative;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+@media (max-width: 900px){
+  .mentorBento{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .mentorTile--span3,
+  .mentorTile--span4{
+    grid-column: span 2;
+  }
+}
+@media (max-width: 520px){
+  .mentorBento{
+    grid-template-columns: 1fr;
+  }
+  .mentorTile--span2,
+  .mentorTile--span3,
+  .mentorTile--span4{
+    grid-column: span 1;
+  }
+  .mentorMaqamTop{
+    flex-direction: column;
+  }
+  .mentorMaqamDiagram{
+    flex-basis: auto;
+    width: 100%;
+  }
+}
 .mentorStatRow{
   display: grid;
   grid-template-columns: 1fr 1fr;

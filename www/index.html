@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260513profileChromePortal" />
+    <link rel="stylesheet" href="./styles.css?v=20260514mentorBento" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -825,84 +825,82 @@
           </div>
 
           <div id="mentorResults" class="mentorResults" hidden>
-            <div class="mentorStatRow mentorStatRow3">
-              <div class="mentorStatCard">
+            <p class="mentorPullQuote" id="mentorPullQuote">This pass</p>
+
+            <div class="mentorBento">
+              <div class="mentorTile mentorTile--stat mentorTile--span2">
                 <div class="mentorStatLabel">Low → high</div>
                 <div id="mentorValRange" class="mentorStatValue">—</div>
                 <div id="mentorValSpan" class="mentorStatMeta">—</div>
               </div>
-              <div class="mentorStatCard mentorStatCardAccent">
-                <div class="mentorStatLabel">Center note</div>
+              <div class="mentorTile mentorTile--stat mentorTile--statGlow mentorTile--span2">
+                <div class="mentorStatLabel">Center</div>
                 <div id="mentorValMedian" class="mentorStatValue mentorStatValueLg">—</div>
-                <div class="mentorStatMeta">Robust median (middle of this take)</div>
+                <div class="mentorStatMeta">Robust median</div>
               </div>
-              <div class="mentorStatCard mentorStatCardVoice">
-                <div class="mentorStatLabel">Classical range tag</div>
+              <div class="mentorTile mentorTile--stat mentorTile--statMint mentorTile--span2">
+                <div class="mentorStatLabel">Classical tag</div>
                 <div id="mentorValVoice" class="mentorStatValue mentorStatValueVoice">—</div>
                 <p id="mentorValVoiceBody" class="mentorStatVoiceBody"></p>
                 <div id="mentorValVoiceMeta" class="mentorStatMeta">—</div>
               </div>
-            </div>
 
-            <div class="mentorCardGrid">
-              <article class="mentorInsightCard mentorInsightCardWide">
-                <div class="mentorInsightIcon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 5v2M12 17v2M5 12h2M17 12h2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              <div class="mentorTile mentorTile--maqam mentorTile--span4">
+                <div class="mentorMaqamTop">
+                  <div class="mentorMaqamTitles">
+                    <span class="mentorEyebrow">Detected scale (12-TET)</span>
+                    <h3 id="mentorCardMaqamTitle" class="mentorMaqamTitle">—</h3>
+                  </div>
+                  <div id="mentorMaqamDiagram" class="mentorMaqamDiagram" aria-hidden="true"></div>
                 </div>
-                <h3 id="mentorCardMaqamTitle" class="mentorInsightTitle">—</h3>
-                <p id="mentorCardMaqamBody" class="mentorInsightBody"></p>
-                <p id="mentorCardMaqamMeta" class="mentorInsightMeta">—</p>
-              </article>
-              <article class="mentorInsightCard">
-                <div class="mentorInsightIcon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M4 19V5M8 16V8M12 18v-8M16 14v-4M20 17V7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                <p id="mentorCardMaqamBody" class="mentorMaqamBody"></p>
+                <p id="mentorCardMaqamMeta" class="mentorMaqamMeta">—</p>
+              </div>
+              <div class="mentorTile mentorTile--mood mentorTile--span2" aria-hidden="true">
+                <div class="mentorMoodLayers">
+                  <img src="./assets/nabadai-logo.png" alt="" class="mentorMoodMark" width="120" height="120" decoding="async" />
+                  <div class="mentorMoodGlow"></div>
                 </div>
-                <h3 id="mentorCardGenreTitle" class="mentorInsightTitle">Genres that may fit</h3>
-                <p id="mentorCardGenreBody" class="mentorInsightBody"></p>
-              </article>
-              <article class="mentorInsightCard">
-                <div class="mentorInsightIcon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M8 16c2-4 6-4 8 0M9 12h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
-                </div>
-                <h3 id="mentorCardTuneTitle" class="mentorInsightTitle">Intonation</h3>
-                <p id="mentorCardTuneBody" class="mentorInsightBody">—</p>
-                <p id="mentorCardTuneMeta" class="mentorInsightMeta">—</p>
-              </article>
-              <article class="mentorInsightCard">
-                <div class="mentorInsightIcon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M12 3v18M8 9c2-2 4-2 8 0M8 15c2 2 4 2 8 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-                </div>
-                <h3 id="mentorCardTimbreTitle" class="mentorInsightTitle">Timbre</h3>
-                <p id="mentorCardTimbreBody" class="mentorInsightBody">—</p>
-                <p id="mentorCardTimbreMeta" class="mentorInsightMeta">—</p>
-              </article>
-              <article class="mentorInsightCard">
-                <div class="mentorInsightIcon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M4 12c3-6 13-6 16 0M6 12h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-                </div>
-                <h3 id="mentorCardVibratoTitle" class="mentorInsightTitle">Pitch motion</h3>
-                <p id="mentorCardVibratoBody" class="mentorInsightBody">—</p>
-                <p id="mentorCardVibratoMeta" class="mentorInsightMeta">—</p>
-              </article>
-              <article class="mentorInsightCard mentorInsightCardWide">
-                <div class="mentorInsightIcon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="16" cy="16" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10.5 10.5l5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-                </div>
-                <h3 id="mentorCardKeysTitle" class="mentorInsightTitle">Keys</h3>
+                <span class="mentorMoodCaption">Colour field</span>
+              </div>
+
+              <div class="mentorTile mentorTile--sq mentorTile--genre">
+                <h3 id="mentorCardGenreTitle" class="mentorTileTitle">Genres</h3>
+                <p id="mentorCardGenreBody" class="mentorTileProse"></p>
+              </div>
+              <div class="mentorTile mentorTile--sq mentorTile--tune">
+                <h3 id="mentorCardTuneTitle" class="mentorTileTitle">Intonation</h3>
+                <p id="mentorCardTuneBody" class="mentorTileProse">—</p>
+                <p id="mentorCardTuneMeta" class="mentorTileFoot">—</p>
+              </div>
+
+              <div class="mentorTile mentorTile--span3 mentorTile--plain">
+                <h3 id="mentorCardTimbreTitle" class="mentorSerifTitle">Brightness</h3>
+                <p id="mentorCardTimbreBody" class="mentorSerifBody">—</p>
+                <p id="mentorCardTimbreMeta" class="mentorTileFoot">—</p>
+              </div>
+              <div class="mentorTile mentorTile--span3 mentorTile--plain mentorTile--plainAlt">
+                <h3 id="mentorCardVibratoTitle" class="mentorSerifTitle">Pitch motion</h3>
+                <p id="mentorCardVibratoBody" class="mentorSerifBody">—</p>
+                <p id="mentorCardVibratoMeta" class="mentorTileFoot">—</p>
+              </div>
+
+              <div class="mentorTile mentorTile--span4 mentorTile--keys">
+                <h3 id="mentorCardKeysTitle" class="mentorTileTitle">Key ideas</h3>
                 <p id="mentorCardKeysBody" class="mentorInsightKeys">—</p>
-                <p id="mentorCardKeysSub" class="mentorInsightMeta">—</p>
-              </article>
-              <article class="mentorInsightCard">
-                <div class="mentorInsightRing" aria-hidden="true">
-                  <svg viewBox="0 0 36 36" class="mentorQualityRing">
+                <p id="mentorCardKeysSub" class="mentorTileFoot">—</p>
+              </div>
+              <div class="mentorTile mentorTile--span2 mentorTile--sq mentorTile--quality">
+                <div class="mentorQualityWrap">
+                  <svg viewBox="0 0 36 36" class="mentorQualityRing" aria-hidden="true">
                     <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="3" />
                     <circle cx="18" cy="18" r="15" fill="none" stroke="url(#mentorArcGrad)" stroke-width="3" stroke-dasharray="70 94" stroke-linecap="round" transform="rotate(-90 18 18)" />
                   </svg>
                   <span id="mentorCardQualityScore" class="mentorInsightRingLabel">—</span>
                 </div>
-                <h3 id="mentorCardQualityTitle" class="mentorInsightTitle">Quality</h3>
-                <p id="mentorCardQualityBody" class="mentorInsightBody">—</p>
-              </article>
+                <h3 id="mentorCardQualityTitle" class="mentorTileTitle">Quality</h3>
+                <p id="mentorCardQualityBody" class="mentorTileProse">—</p>
+              </div>
             </div>
 
             <p class="mentorDisclaimer">
@@ -2239,6 +2237,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260514mentorVoiceRef"></script>
+    <script type="module" src="./src/app.js?v=20260514mentorBento"></script>
   </body>
 </html>

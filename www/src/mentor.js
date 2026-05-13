@@ -408,6 +408,9 @@ function analyzeBuffer(full, sampleRate) {
     maqamTitle: `${maqam.name} on ${tonicName}`,
     maqamBody,
     maqamMeta: "Pitch-class histogram vs maqam templates (educational only)",
+    maqamId: maqam.id,
+    maqamTonicPc: maqam.tonicPc,
+    maqamDegrees: [...maqam.degrees],
     genreTitle: "Genres that may fit",
     genreBody: genreLine,
     tuneTitle: tune.title,
@@ -432,6 +435,50 @@ function setText(id, text) {
   if (el) el.textContent = text;
 }
 
+function hueFromMaqamId(id) {
+  const s = String(id || "");
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h % 360;
+}
+
+/** Decorative staff sketch: scale degrees left-to-right with note names (12-TET). */
+function renderMaqamDiagram(tonicPc, degrees) {
+  const el = document.getElementById("mentorMaqamDiagram");
+  if (!el) return;
+  if (!degrees || !degrees.length) {
+    el.innerHTML = "";
+    return;
+  }
+  const W = 280;
+  const H = 96;
+  const lines = [22, 30, 38, 46, 54];
+  let html = `<svg class="mentorStaffSvg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
+  for (const y of lines) {
+    html += `<line x1="12" y1="${y}" x2="${W - 6}" y2="${y}" stroke="rgba(255,255,255,0.14)" stroke-width="1.25"/>`;
+  }
+  const n = degrees.length;
+  const span = n <= 1 ? 0 : W - 44;
+  degrees.forEach((d, i) => {
+    const pc = (((tonicPc + d) % 12) + 12) % 12;
+    const label = NOTE_NAMES[pc];
+    const x = n === 1 ? W / 2 : 22 + (i * span) / (n - 1);
+    const spread = 54 - (pc * 32) / 11;
+    const yn = Math.min(56, Math.max(20, spread));
+    html += `<ellipse cx="${x}" cy="${yn}" rx="6.5" ry="4.8" fill="rgba(124,92,255,0.92)" stroke="rgba(255,255,255,0.22)" stroke-width="1"/>`;
+    const stemUp = yn > 38;
+    const stemLen = 22;
+    if (stemUp) {
+      html += `<line x1="${x + 5.2}" y1="${yn}" x2="${x + 5.2}" y2="${yn - stemLen}" stroke="rgba(255,255,255,0.38)" stroke-width="1.35" stroke-linecap="round"/>`;
+    } else {
+      html += `<line x1="${x - 5.2}" y1="${yn}" x2="${x - 5.2}" y2="${yn + stemLen}" stroke="rgba(35,213,171,0.5)" stroke-width="1.35" stroke-linecap="round"/>`;
+    }
+    html += `<text x="${x}" y="${H - 8}" text-anchor="middle" fill="rgba(210,218,232,0.92)" font-size="9.5" font-weight="700" font-family="system-ui,sans-serif">${label}</text>`;
+  });
+  html += "</svg>";
+  el.innerHTML = html;
+}
+
 function showResults(on) {
   const wrap = document.getElementById("mentorResults");
   if (wrap) wrap.hidden = !on;
@@ -446,9 +493,13 @@ export function resetMentorSession() {
     "mentorHint",
     "Set range labels (above) to match you, then follow “How to sing this test” before recording.",
   );
+  setText("mentorValRange", "—");
+  setText("mentorValSpan", "—");
+  setText("mentorValMedian", "—");
   setText("mentorValVoice", "—");
   setText("mentorValVoiceBody", "");
   setText("mentorValVoiceMeta", "");
+  setText("mentorPullQuote", "This pass");
   setText("mentorCardMaqamTitle", "Maqam guess");
   setText("mentorCardMaqamBody", "");
   setText("mentorCardMaqamMeta", "");
@@ -457,6 +508,21 @@ export function resetMentorSession() {
   setText("mentorCardTuneTitle", "Intonation");
   setText("mentorCardTuneBody", "");
   setText("mentorCardTuneMeta", "");
+  setText("mentorCardTimbreTitle", "Brightness");
+  setText("mentorCardTimbreBody", "—");
+  setText("mentorCardTimbreMeta", "—");
+  setText("mentorCardVibratoTitle", "Pitch motion");
+  setText("mentorCardVibratoBody", "—");
+  setText("mentorCardVibratoMeta", "—");
+  setText("mentorCardKeysTitle", "Key ideas");
+  setText("mentorCardKeysBody", "—");
+  setText("mentorCardKeysSub", "—");
+  setText("mentorCardQualityTitle", "Quality");
+  setText("mentorCardQualityScore", "—");
+  setText("mentorCardQualityBody", "—");
+  renderMaqamDiagram(0, []);
+  const mood = document.querySelector(".mentorTile--mood");
+  if (mood) mood.style.removeProperty("--mentor-mood-hue");
 }
 
 function stopStreams() {
@@ -655,6 +721,14 @@ export function initMentor() {
     }
 
     setText("mentorStatus", "Snapshot ready — see below.");
+    const pullQuotes = [
+      "This pass",
+      "Your snapshot",
+      "What we heard",
+      "A quick read",
+      "This take",
+    ];
+    setText("mentorPullQuote", pullQuotes[Math.floor(Math.random() * pullQuotes.length)]);
     setText("mentorValRange", `${res.lowName} – ${res.highName}`);
     setText("mentorValSpan", `${res.spanSemitones} semitones (robust) · ${res.spanHint}`);
     setText("mentorValMedian", res.medianName);
@@ -664,6 +738,9 @@ export function initMentor() {
     setText("mentorCardMaqamTitle", res.maqamTitle);
     setText("mentorCardMaqamBody", res.maqamBody);
     setText("mentorCardMaqamMeta", res.maqamMeta);
+    renderMaqamDiagram(res.maqamTonicPc, res.maqamDegrees);
+    const mood = document.querySelector(".mentorTile--mood");
+    if (mood) mood.style.setProperty("--mentor-mood-hue", String(hueFromMaqamId(res.maqamId)));
     setText("mentorCardGenreTitle", res.genreTitle);
     setText("mentorCardGenreBody", res.genreBody);
     setText("mentorCardTuneTitle", res.tuneTitle);

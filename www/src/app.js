@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514cellularBoost";
+const APP_BUILD = "20260514profileLean";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -4679,9 +4679,12 @@ async function supabaseSelectMyHubPosts({ uid, username } = {}) {
   }
   if (!filters.length) return [];
   const orClause = filters.length === 1 ? filters[0] : `or=(${filters.join(",")})`;
+  // 15 rows = top-3 (Popular this week) + first-10 (All releases) + 2 slack.
+  // The Profile UI never shows more than that on initial paint, so paying
+  // for 30 was 50% wasted bandwidth on cellular cold-starts.
   const url = filters.length === 1
-    ? `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(HUB_SELECT_COLUMNS)}&${filters[0]}&order=created_at.desc&limit=30`
-    : `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(HUB_SELECT_COLUMNS)}&${orClause}&order=created_at.desc&limit=30`;
+    ? `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(HUB_SELECT_COLUMNS)}&${filters[0]}&order=created_at.desc&limit=15`
+    : `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(HUB_SELECT_COLUMNS)}&${orClause}&order=created_at.desc&limit=15`;
   try {
     const r = await fetch(url, {
       headers: { apikey: SUPABASE_ANON_KEY },

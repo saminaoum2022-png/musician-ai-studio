@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514hubProfileVisibility";
+const APP_BUILD = "20260514libraryProfileVis";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5926,7 +5926,7 @@ async function supabaseLoadUserSongs() {
   // happens to be a legacy `data:` URL*, same trick we use on `hub_posts`
   // for cover_url / creator_avatar. The cheap `art_url is null` branch
   // covers freshly inserted rows where we deliberately wrote null.
-  const cols = "id,created_at,title,song_url,task_id,audio_id,kind,art_url";
+  const cols = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
@@ -5971,6 +5971,9 @@ async function supabaseLoadUserSongs() {
     audioId: s.audio_id || "",
     kind: s.kind || "full",
     meta: null,
+    publicOnProfile: Boolean(
+      s.public_on_profile === true || s.public_on_profile === "t" || s.public_on_profile === "true",
+    ),
   }));
 }
 /** Strip values that aren't safe / efficient to ship to a JSONB row in
@@ -6027,6 +6030,7 @@ async function supabaseInsertUserSong(track) {
     audio_id: track.audioId || "",
     kind: track.kind || "full",
     meta: sanitizeMetaForCloud(track.meta || null),
+    public_on_profile: Boolean(track.publicOnProfile),
   };
   const r = await fetch(`${SUPABASE_URL}/rest/v1/user_songs`, {
     method: "POST",
@@ -6087,6 +6091,9 @@ async function supabasePatchUserSong(track, patch) {
   if (patch?.meta && typeof patch.meta === "object") {
     body.meta = sanitizeMetaForCloud(patch.meta);
   }
+  if (typeof patch?.publicOnProfile === "boolean") {
+    body.public_on_profile = patch.publicOnProfile;
+  }
   if (Object.keys(body).length === 0) return { ok: false, reason: "noop" };
   const r = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${uid}&song_url=eq.${url}&kind=eq.${kind}`, {
     method: "PATCH",
@@ -6121,6 +6128,229 @@ async function supabaseDeleteUserSong(track) {
     },
   }).catch(() => null);
 }
+
+/** Public `profiles` row by handle — anon when `profiles_select_public_directory` exists. */
+async function fetchPublicProfileRowByUsername(username) {
+  const handle = String(username || "").replace(/^@/, "").trim();
+  if (!handle || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/profiles?username=eq.${encodeURIComponent(handle)}&select=user_id,username,avatar,bio,voice_timbre&limit=1`,
+      { headers: { apikey: SUPABASE_ANON_KEY } },
+    );
+    if (!r.ok) return null;
+    const arr = await r.json().catch(() => []);
+    return Array.isArray(arr) && arr[0] ? arr[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Library songs the owner marked `public_on_profile` (separate RLS policy). */
+async function supabaseFetchPublicLibraryForUserId(userId) {
+  const uid = String(userId || "").trim();
+  if (!uid || !SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
+  const enc = encodeURIComponent(uid);
+  const cols = "id,created_at,title,song_url,task_id,audio_id,kind,art_url";
+  const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${enc}&public_on_profile=eq.true&select=${cols}&order=created_at.desc&limit=80${artUrlGuard}`,
+      { headers: { apikey: SUPABASE_ANON_KEY }, cache: "no-store" },
+    );
+    if (!r.ok) return [];
+    const arr = await r.json().catch(() => []);
+    if (!Array.isArray(arr)) return [];
+    return arr.map((s) => ({
+      id: String(s.id || ""),
+      ts: new Date(s.created_at || Date.now()).getTime(),
+      title: s.title || "Generated song",
+      artUrl: s.art_url || "",
+      url: s.song_url || "",
+      taskId: s.task_id || "",
+      audioId: s.audio_id || "",
+      kind: s.kind || "full",
+      meta: null,
+      publicOnProfile: true,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function setLibraryTrackPublicOnProfile(trackId, wantPublic) {
+  const id = String(trackId || "").trim();
+  if (!authSession?.user?.id) {
+    showToast("Sign in to change visibility.");
+    return { ok: false };
+  }
+  const items = loadLibrary();
+  const idx = items.findIndex((x) => String(x.id) === id);
+  if (idx < 0) return { ok: false };
+  const track = items[idx];
+  const next = { ...track, publicOnProfile: Boolean(wantPublic) };
+  const nextItems = [...items];
+  nextItems[idx] = next;
+  saveLibrary(nextItems);
+  try {
+    renderLibrary();
+  } catch {}
+  try {
+    renderProfileHubShared();
+  } catch {}
+  if (!String(track.url || "").trim()) {
+    showToast("This track has no audio URL yet — try again after it finishes saving.");
+    return { ok: false };
+  }
+  const patch = await supabasePatchUserSong(track, { publicOnProfile: next.publicOnProfile });
+  if (patch && patch.ok === false && patch.reason && patch.reason !== "noop") {
+    showToast("Saved on this device — cloud update failed. Check connection.", { durationMs: 4200 });
+    return { ok: false };
+  }
+  showToast(
+    next.publicOnProfile ? "Visible on your public profile link." : "Hidden from your public profile link.",
+  );
+  return { ok: true };
+}
+
+async function playLibraryUrlOnPlayer(rawUrl, title, artUrl) {
+  const raw = String(rawUrl || "").trim();
+  if (!raw) return;
+  try {
+    stopHubPlayback();
+  } catch {}
+  const prox = toAudioProxyUrl(raw) || raw;
+  currentPlayerTrackRef = {
+    id: `public_${String(title || "").slice(0, 24)}`,
+    url: raw,
+    title: title || "Song",
+    artUrl: artUrl || "",
+    meta: {},
+  };
+  miniSource = { type: "public_profile_lib", url: raw };
+  libraryNowPlayingId = null;
+  try {
+    renderLibrary();
+  } catch {}
+  await playOnPlayerPage(prox, title || "Song", {
+    title: title || "Song",
+    subtitle: "Public profile",
+    artUrl: artUrl || placeholderCoverDataUrl(),
+  });
+}
+
+async function renderUserProfilePublicLibraryAsync(username) {
+  const handle = String(username || "").replace(/^@/, "").trim();
+  const prof = await fetchPublicProfileRowByUsername(handle);
+  if (!prof?.user_id) {
+    if (els.userPublicName) els.userPublicName.textContent = handle ? `@${handle}` : "@?";
+    if (els.userPublicAvatar) {
+      els.userPublicAvatar.src = "./assets/nabadai-logo.png";
+      els.userPublicAvatar.alt = "Profile";
+    }
+    if (els.userPublicVoice) els.userPublicVoice.style.display = "none";
+    if (els.userPublicBio) {
+      els.userPublicBio.textContent = "";
+      els.userPublicBio.style.display = "none";
+    }
+    if (els.userPublicStats) els.userPublicStats.style.display = "none";
+    if (els.userPublicSongsCount) els.userPublicSongsCount.textContent = "";
+    if (els.userPublicSongs) els.userPublicSongs.innerHTML = "";
+    if (els.userPublicEmpty) {
+      els.userPublicEmpty.textContent = handle
+        ? `No one with @${handle} yet — check the spelling, or they have not set a username.`
+        : "User not found.";
+      els.userPublicEmpty.style.display = "";
+    }
+    return;
+  }
+  const displayName = String(prof.username || handle || "user").trim();
+  if (els.userPublicName) els.userPublicName.textContent = `@${displayName}`;
+  if (els.userPublicAvatar) {
+    const av = String(prof.avatar || "").trim();
+    els.userPublicAvatar.src = av && !av.startsWith("data:") ? av : "./assets/nabadai-logo.png";
+    els.userPublicAvatar.alt = `${displayName} avatar`;
+  }
+  if (els.userPublicVoice) {
+    const chip = els.userPublicVoice;
+    const labelEl = chip.querySelector(".profileAuraVoiceChipText");
+    const voice = String(prof.voice_timbre || "").trim();
+    const pretty = voice
+      ? voice.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+      : "";
+    if (labelEl) labelEl.textContent = pretty ? `Voice · ${pretty}` : "Voice";
+    chip.style.display = pretty ? "" : "none";
+    chip.dataset.state = "idle";
+  }
+  if (els.userPublicBio) {
+    const bio = String(prof.bio || "").trim();
+    if (bio && !/^add a short bio/i.test(bio)) {
+      els.userPublicBio.textContent = bio;
+      els.userPublicBio.style.display = "";
+    } else {
+      els.userPublicBio.textContent = "";
+      els.userPublicBio.style.display = "none";
+    }
+  }
+  const songs = await supabaseFetchPublicLibraryForUserId(prof.user_id);
+  if (els.userPublicStats) {
+    if (songs.length) {
+      els.userPublicStats.innerHTML = `
+        <span><strong>${songs.length}</strong> public song${songs.length === 1 ? "" : "s"}</span>
+      `;
+      els.userPublicStats.style.display = "";
+    } else {
+      els.userPublicStats.style.display = "none";
+    }
+  }
+  if (els.userPublicSongsCount) {
+    els.userPublicSongsCount.textContent = songs.length ? String(songs.length) : "";
+  }
+  if (!songs.length) {
+    if (els.userPublicSongs) els.userPublicSongs.innerHTML = "";
+    if (els.userPublicEmpty) {
+      els.userPublicEmpty.textContent = `No public Library songs from @${displayName} yet — they can mark songs Public in Library (⋯ menu).`;
+      els.userPublicEmpty.style.display = "";
+    }
+    return;
+  }
+  if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
+  if (els.userPublicSongs) {
+    els.userPublicSongs.innerHTML = songs
+      .slice(0, 60)
+      .map((t) => {
+        const art = String(t.artUrl || "./assets/nabadai-logo.png");
+        const safeTitle = escapeHtml(String(t.title || "Untitled"));
+        const encUrl = encodeURIComponent(String(t.url || ""));
+        return `
+      <button class="userPublicSong" type="button" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(art)}">
+        <img class="userPublicSongCover" src="${escapeHtml(art)}" alt="" />
+        <div class="userPublicSongMeta">
+          <div class="userPublicSongTitle">${safeTitle}</div>
+          <div class="userPublicSongTiny">${escapeHtml(relativeTime(t.ts))}</div>
+        </div>
+        <span class="userPublicSongPlay" aria-hidden="true">▶</span>
+      </button>`;
+      })
+      .join("");
+    els.userPublicSongs.querySelectorAll("[data-user-lib-play]").forEach((b) => {
+      b.addEventListener("click", () => {
+        const u = b.getAttribute("data-user-lib-url");
+        const title = b.getAttribute("data-user-lib-title") || "Song";
+        const art = b.getAttribute("data-user-lib-art") || "";
+        if (!u) return;
+        let raw = "";
+        try {
+          raw = decodeURIComponent(u);
+        } catch {
+          raw = u;
+        }
+        void playLibraryUrlOnPlayer(raw, title, art);
+      });
+    });
+  }
+}
+
 async function supabaseInsertHub(post) {
   if (!HUB_FEATURE_ENABLED) return null;
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
@@ -7787,11 +8017,25 @@ function restoreProfileInputsFromActive() {
 }
 
 function renderProfileOwnStats() {
-  const items = getProfileOwnerHubItems();
-  const totalLikes = items.reduce((sum, p) => sum + Number(p.likes || 0), 0);
+  const hubItems = HUB_FEATURE_ENABLED ? getProfileOwnerHubItems() : [];
+  const lib = loadLibrary();
+  const pubLib = lib.filter((t) => Boolean(t.publicOnProfile));
+  const pubLibCount = pubLib.length;
+  const totalLikes = HUB_FEATURE_ENABLED ? hubItems.reduce((sum, p) => sum + Number(p.likes || 0), 0) : 0;
+  const songCountForPills = HUB_FEATURE_ENABLED ? hubItems.length : pubLibCount;
+  const songCountForOwnHeader = HUB_FEATURE_ENABLED ? hubItems.length : lib.length;
+
   if (els.profileOwnSongCount) {
-    if (items.length) {
-      els.profileOwnSongCount.textContent = `${items.length} ${items.length === 1 ? "song" : "songs"}`;
+    if (HUB_FEATURE_ENABLED) {
+      if (hubItems.length) {
+        els.profileOwnSongCount.textContent = `${hubItems.length} ${hubItems.length === 1 ? "song" : "songs"}`;
+        els.profileOwnSongCount.hidden = false;
+      } else {
+        els.profileOwnSongCount.textContent = "";
+        els.profileOwnSongCount.hidden = true;
+      }
+    } else if (lib.length) {
+      els.profileOwnSongCount.textContent = `${pubLibCount} public on link · ${lib.length} saved`;
       els.profileOwnSongCount.hidden = false;
     } else {
       els.profileOwnSongCount.textContent = "";
@@ -7799,45 +8043,59 @@ function renderProfileOwnStats() {
     }
   }
   if (els.profileOwnStats) {
-    if (items.length) {
-      els.profileOwnStats.innerHTML = `
-        <span><strong>${items.length}</strong> song${items.length === 1 ? "" : "s"}</span>
+    if (HUB_FEATURE_ENABLED) {
+      if (hubItems.length) {
+        els.profileOwnStats.innerHTML = `
+        <span><strong>${hubItems.length}</strong> song${hubItems.length === 1 ? "" : "s"}</span>
         <span aria-hidden="true">·</span>
         <span><strong>${totalLikes}</strong> like${totalLikes === 1 ? "" : "s"}</span>
+      `;
+      } else {
+        els.profileOwnStats.innerHTML = "";
+      }
+    } else if (lib.length) {
+      els.profileOwnStats.innerHTML = `
+        <span><strong>${pubLibCount}</strong> public on profile link</span>
+        <span aria-hidden="true">·</span>
+        <span><strong>${lib.length}</strong> saved</span>
       `;
     } else {
       els.profileOwnStats.innerHTML = "";
     }
   }
-  if (els.profileAuraSongsValue) els.profileAuraSongsValue.textContent = String(items.length);
+  if (els.profileAuraSongsValue) els.profileAuraSongsValue.textContent = String(songCountForPills);
   if (els.profileAuraLikesValue) els.profileAuraLikesValue.textContent = String(totalLikes);
-  if (els.profileAuraStatSongs) els.profileAuraStatSongs.dataset.show = items.length > 0 ? "true" : "false";
+  if (els.profileAuraStatSongs) els.profileAuraStatSongs.dataset.show = songCountForPills > 0 ? "true" : "false";
   if (els.profileAuraStatLikes) els.profileAuraStatLikes.dataset.show = totalLikes > 0 ? "true" : "false";
 
-  // New: two pills under the bio. Hide the row entirely when both
-  // counts are zero so a fresh account doesn't show "0 Songs / 0
-  // Likes" — that was the empty-state ugliness the inline "—" used to
-  // hide. Show the row as soon as the user has at least 1 song.
   if (els.profileStatPillSongsValue) {
-    els.profileStatPillSongsValue.textContent = formatStatCount(items.length);
+    els.profileStatPillSongsValue.textContent = formatStatCount(songCountForPills);
   }
   if (els.profileStatPillLikesValue) {
     els.profileStatPillLikesValue.textContent = formatStatCount(totalLikes);
   }
   if (els.profileStatsPills) {
-    els.profileStatsPills.hidden = items.length === 0;
+    els.profileStatsPills.hidden = HUB_FEATURE_ENABLED ? hubItems.length === 0 : lib.length === 0;
   }
 
   const lineEl = els.profileAuraStatLine;
   if (lineEl) {
-    const bits = [];
-    if (items.length) bits.push(`<strong>${items.length}</strong> song${items.length === 1 ? "" : "s"}`);
-    if (totalLikes > 0) bits.push(`<strong>${totalLikes}</strong> like${totalLikes === 1 ? "" : "s"}`);
-    lineEl.innerHTML =
-      bits.length > 0 ? bits.join('<span class="profileAuraStatsSepDot" aria-hidden="true"> · </span>') : "No releases yet";
+    if (HUB_FEATURE_ENABLED) {
+      const bits = [];
+      if (hubItems.length) bits.push(`<strong>${hubItems.length}</strong> song${hubItems.length === 1 ? "" : "s"}`);
+      if (totalLikes > 0) bits.push(`<strong>${totalLikes}</strong> like${totalLikes === 1 ? "" : "s"}`);
+      lineEl.innerHTML =
+        bits.length > 0 ? bits.join('<span class="profileAuraStatsSepDot" aria-hidden="true"> · </span>') : "No releases yet";
+    } else if (pubLibCount) {
+      lineEl.innerHTML = `<strong>${pubLibCount}</strong> public on your profile link`;
+    } else if (lib.length) {
+      lineEl.textContent = "No Library songs marked public yet — use ⋯ on each row in Library.";
+    } else {
+      lineEl.textContent = "No saves yet";
+    }
   }
 
-  syncProfileAuraPulseFromLatest(items);
+  syncProfileAuraPulseFromLatest(HUB_FEATURE_ENABLED ? hubItems : lib.filter((t) => String(t?.url || "").trim()).slice(0, 24));
 }
 
 /** Compact stat formatter: 0..999 raw, 1.2k, 14.3k, 1.1M. Keeps the
@@ -8867,6 +9125,14 @@ function renderUserProfile(rawUsername) {
   // Resolve the creator's calling card out of band — don't block render.
   // This populates the chip + may autoplay once per device.
   void refreshUserPublicCallingCard(username);
+  if (!HUB_FEATURE_ENABLED) {
+    if (els.userPublicSongs) {
+      els.userPublicSongs.innerHTML = `<p class="hint" style="padding:12px 0">Loading…</p>`;
+    }
+    if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
+    void renderUserProfilePublicLibraryAsync(username);
+    return;
+  }
   const feed = loadHubFeed();
   // Compare case-insensitively but render the username with the casing
   // from the actual posts so it looks like the creator's chosen handle.
@@ -9207,8 +9473,156 @@ function resetProfileReleasesPagination() {
   _profileReleasesShown = PROFILE_RELEASES_PAGE_SIZE;
 }
 
+/** Profile → Library list (Hub off): every saved track + Public/Private for `#/u/…`. */
+function renderProfileLibraryPublicOnLinkSection() {
+  if (!els.profileHubSharedList) return;
+  const allLib = loadLibrary().filter((t) => String(t?.url || "").trim());
+  allLib.sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
+  if (_profileReleasesShown < PROFILE_RELEASES_PAGE_SIZE) {
+    _profileReleasesShown = PROFILE_RELEASES_PAGE_SIZE;
+  }
+  if (allLib.length && _profileReleasesShown > allLib.length) {
+    _profileReleasesShown = allLib.length;
+  }
+  const shownCount = Math.min(_profileReleasesShown, allLib.length);
+  const rows = allLib.slice(0, shownCount);
+  renderProfileOwnStats();
+  renderProfileLiquidPulse(rows);
+  renderProfileIdentityLine();
+  renderProfileHeroBio();
+  renderProfileHero(rows);
+  renderProfileActionRow(rows);
+  renderProfileTopWeek(rows);
+  try {
+    applyProfileAuraVisualTint();
+  } catch {}
+  const countEl = document.getElementById("profileOwnSongCount");
+  if (countEl) {
+    const pubN = allLib.filter((t) => Boolean(t.publicOnProfile)).length;
+    if (allLib.length) {
+      countEl.textContent = `${pubN} public on link · ${allLib.length} saved`;
+      countEl.hidden = false;
+    } else {
+      countEl.textContent = "";
+      countEl.hidden = true;
+    }
+  }
+  if (!allLib.length) {
+    els.profileHubSharedList.innerHTML = `
+      <div class="emptyState">
+        <div class="emptyStateIcon" aria-hidden="true">♪</div>
+        <p class="emptyStateTitle">Nothing in Library yet</p>
+        <p class="emptyStateHint">Generated songs land in Library. Use ⋯ on a row to mark them <strong>Public</strong> on your profile link.</p>
+        <a href="#/library" class="emptyStateCta" data-route-link="library">Open Library</a>
+      </div>`;
+    return;
+  }
+  const remaining = Math.max(0, allLib.length - shownCount);
+  const loadMoreHtml =
+    remaining > 0
+      ? `<div class="profileReleasesLoadMoreRow"><button type="button" id="profileReleasesLoadMore" class="profileReleasesLoadMore" aria-label="Load more">Load more<span class="profileReleasesLoadMoreCount">${remaining}</span></button></div>`
+      : "";
+  const esc = escapeHtml;
+  els.profileHubSharedList.innerHTML = `
+    <ul class="libraryRows" role="list">
+      ${rows
+        .map((t) => {
+          const safeTitle = esc(String(t.title || "Untitled"));
+          const art = String(
+            (t.meta && (t.meta.imageThumb || t.meta.imageUrl)) || t.artUrl || "./assets/nabadai-logo.png",
+          );
+          const dateLabel = formatLibraryDate(t.ts);
+          const profilePublic = Boolean(t.publicOnProfile);
+          const subBits = [];
+          if (dateLabel) subBits.push(`<span class="libRowDot">${esc(dateLabel)}</span>`);
+          subBits.push(
+            `<span class="libRowChip libRowChipProfileVis libRowChipProfileVis--${
+              profilePublic ? "public" : "private"
+            }">${profilePublic ? "Public" : "Private"}</span>`,
+          );
+          const tid = esc(String(t.id));
+          return `
+          <li class="libRow" data-profile-lib-row="${tid}">
+            <button class="libRowMain" type="button" data-profile-lib-play="${tid}" aria-label="Play ${safeTitle}">
+              <span class="libRowArt">
+                <img src="${esc(art)}" alt="" />
+                <span class="libRowArtBadge" aria-hidden="true">▶</span>
+              </span>
+              <span class="libRowInfo">
+                <span class="libRowTitle">${safeTitle}</span>
+                <span class="libRowSub">${subBits.join("")}</span>
+              </span>
+            </button>
+            <button class="libRowMore" type="button" data-profile-lib-menu="${tid}" aria-label="More for ${safeTitle}">⋯</button>
+            <div class="libMenu" id="profileLibMenu_${tid}" style="display:none">
+              <button class="ghost" type="button" data-profile-lib-pub="${tid}" data-profile-lib-pub-to="${
+                profilePublic ? "private" : "public"
+              }">${profilePublic ? "Hide from public profile" : "Show on public profile"}</button>
+            </div>
+          </li>`;
+        })
+        .join("")}
+    </ul>
+    ${loadMoreHtml}
+  `;
+  const loadMoreBtn = document.getElementById("profileReleasesLoadMore");
+  if (loadMoreBtn) {
+    loadMoreBtn.addEventListener(
+      "click",
+      () => {
+        _profileReleasesShown += PROFILE_RELEASES_PAGE_SIZE;
+        renderProfileHubShared();
+      },
+      { once: true },
+    );
+  }
+  els.profileHubSharedList.querySelectorAll("[data-profile-lib-play]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const id = b.getAttribute("data-profile-lib-play");
+      const tr = loadLibrary().find((x) => String(x.id) === id);
+      if (!tr?.url) return;
+      closeProfileHubMenu();
+      void playLibraryUrlOnPlayer(
+        tr.url,
+        tr.title,
+        (tr.meta && tr.meta.imageUrl) || tr.artUrl || "",
+      );
+    });
+  });
+  els.profileHubSharedList.querySelectorAll("[data-profile-lib-menu]").forEach((b) => {
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = b.getAttribute("data-profile-lib-menu");
+      if (!id) return;
+      const menu = document.getElementById(`profileLibMenu_${id}`);
+      const isOpen = _profileHubOpenMenuId === id && menu && menu.style.display !== "none";
+      closeProfileHubMenu();
+      if (!isOpen && menu) {
+        menu.style.display = "";
+        const row = menu.closest(".libRow");
+        if (row) row.classList.add("libRowMenuOpen");
+        _profileHubOpenMenuId = id;
+      }
+    });
+  });
+  els.profileHubSharedList.querySelectorAll("[data-profile-lib-pub]").forEach((b) => {
+    b.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const id = b.getAttribute("data-profile-lib-pub");
+      const to = String(b.getAttribute("data-profile-lib-pub-to") || "").toLowerCase();
+      if (!id || (to !== "public" && to !== "private")) return;
+      closeProfileHubMenu();
+      await setLibraryTrackPublicOnProfile(id, to === "public");
+    });
+  });
+}
+
 function renderProfileHubShared() {
   if (!els.profileHubSharedList) return;
+  if (!HUB_FEATURE_ENABLED) {
+    renderProfileLibraryPublicOnLinkSection();
+    return;
+  }
   const allItems = getProfileOwnerHubItems();
   if (_profileReleasesShown < PROFILE_RELEASES_PAGE_SIZE) {
     _profileReleasesShown = PROFILE_RELEASES_PAGE_SIZE;
@@ -9429,7 +9843,15 @@ document.addEventListener("pointerdown", (e) => {
   if (!_profileHubOpenMenuId) return;
   if (!els.profileHubSharedList) return;
   const t = e.target;
-  if (t && t.closest && (t.closest("[data-profile-hub-menu]") || t.closest(".libMenu"))) return;
+  if (
+    t &&
+    t.closest &&
+    (t.closest("[data-profile-hub-menu]") ||
+      t.closest("[data-profile-lib-menu]") ||
+      t.closest(".libMenu"))
+  ) {
+    return;
+  }
   closeProfileHubMenu();
 }, true);
 
@@ -10040,6 +10462,7 @@ function addToLibrary(track) {
     audioId: track.audioId || "",
     kind: track.kind || "full",
     meta: track.meta || null,
+    publicOnProfile: false,
   };
   items.unshift(newTrack);
   saveLibrary(items);
@@ -10285,6 +10708,7 @@ function buildLibMenuHtml(track) {
       <button class="ghost" data-lib-dlvideo="${id}">Download video</button>
       ${HUB_FEATURE_ENABLED ? `<button class="ghost" data-lib-share="${id}">Share to Hub</button>` : ""}
       ${personaEligible ? `<button class="ghost" data-lib-persona="${id}">Save voice as persona</button>` : ""}
+      ${authSession?.user?.id ? `<button class="ghost" data-lib-pubprof="${id}" data-lib-pubprof-to="${Boolean(track.publicOnProfile) ? "private" : "public"}">${Boolean(track.publicOnProfile) ? "Hide from public profile" : "Show on public profile"}</button>` : ""}
       <button class="ghost" data-lib-details="${id}">Song details</button>
       ${isInstrumental ? "" : `<button class="ghost" data-lib-inst="${id}">Get instrumental</button>`}
       <button class="ghost libRowDelete" data-lib-del="${id}">Delete</button>
@@ -10456,6 +10880,16 @@ function bindLibraryDelegatedListeners() {
             timbre: activeProfile?.voiceTimbre,
             source: "library",
           });
+        }
+        return;
+      }
+      const pubProf = target.closest("[data-lib-pubprof]");
+      if (pubProf) {
+        const id = pubProf.getAttribute("data-lib-pubprof");
+        const to = String(pubProf.getAttribute("data-lib-pubprof-to") || "").toLowerCase();
+        closeLibraryMenu();
+        if (id && (to === "public" || to === "private")) {
+          await setLibraryTrackPublicOnProfile(id, to === "public");
         }
         return;
       }
@@ -10883,6 +11317,14 @@ function renderLibrary() {
         if (dateLabel) subBits.push(`<span class="libRowDot">${escapeHtml(dateLabel)}</span>`);
         if (isInstrumental) subBits.push(`<span class="libRowChip">Instrumental</span>`);
         if (isSound) subBits.push(`<span class="libRowChip">Sound</span>`);
+        if (authSession?.user?.id) {
+          const profilePublic = Boolean(t.publicOnProfile);
+          subBits.push(
+            `<span class="libRowChip libRowChipProfileVis libRowChipProfileVis--${
+              profilePublic ? "public" : "private"
+            }">${profilePublic ? "Public" : "Private"}</span>`,
+          );
+        }
         // First row paints with high priority so the page never looks
         // empty above the fold; everything else is lazy + low-priority,
         // identical pattern to Hub.

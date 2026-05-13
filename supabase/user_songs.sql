@@ -16,6 +16,7 @@ create table if not exists public.user_songs (
   audio_id text default '',
   kind text default 'full',
   meta jsonb,
+  public_on_profile boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -45,3 +46,9 @@ create policy "user_songs_update_own"
 create policy "user_songs_delete_own"
   on public.user_songs for delete
   using (auth.uid() = user_id);
+
+drop policy if exists "user_songs_select_public_on_profile" on public.user_songs;
+
+create policy "user_songs_select_public_on_profile"
+  on public.user_songs for select
+  using (public_on_profile is true);

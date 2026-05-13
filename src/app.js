@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514hubReelSkelFullCover";
+const APP_BUILD = "20260514hubEgressLean";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -4453,6 +4453,27 @@ let hubLastSyncError = "";
 let hubSyncInFlight = false;
 let hubRetryCount = 0;
 let hubFeedMemory = [];
+/** Last time we hit Supabase for the Hub feed. Used to throttle every
+ *  trigger (interval, focus, visibilitychange, route enter, tab nav)
+ *  so a user rapidly switching apps can't force back-to-back fetches.
+ *  Egress saver. */
+let _hubLastFetchAtMs = 0;
+/** Last time we did a FULL hub feed fetch (no `created_at>` filter).
+ *  Subsequent fetches within HUB_FULL_REFETCH_MS request only rows
+ *  newer than `_hubKnownNewestIsoTs` — that's typically zero or one
+ *  row instead of 30, cutting the per-poll payload dramatically. */
+let _hubLastFullFetchAtMs = 0;
+/** Max `created_at` we've already ingested, as an ISO string. Used
+ *  by the incremental fetch path. */
+let _hubKnownNewestIsoTs = "";
+/** Minimum gap between Hub fetches, regardless of trigger. iOS fires
+ *  `focus` + `visibilitychange` together when the app returns from
+ *  background; without this, every tab-back paid for two full pulls. */
+const HUB_MIN_FETCH_GAP_MS = 25_000;
+/** How often to do a FULL feed refetch (catches like/react count
+ *  updates from other users, deleted posts, etc.). Between full
+ *  refetches we run incremental "what's new since X" queries. */
+const HUB_FULL_REFETCH_MS = 10 * 60_000;
 function loadHubSeen() {
   try {
     const raw = localStorage.getItem(hubSeenKey());
@@ -4515,6 +4536,15 @@ function renderHubDots() {
 // and ownership checks actually need; heavy keys (lyricsInput, styleInput,
 // taskId, audioId, etc.) are fetched on-demand from `hubFetchPostMetaFull`
 // when the user opens Remix on a specific post.
+/** Lean projection — never fetch the full `proof` or `meta` JSONB on
+ *  list queries. We only display three string keys from `proof`
+ *  (`model`, `mode`, `promptHash`) in the chip + proof modal, so we
+ *  ask PostgREST for just those scalar paths. `song_url` is included
+ *  because tapping play depends on it landing with the row; pulling
+ *  it lazily would add a round-trip on every first play. The big
+ *  win is dropping the full `proof` JSONB (often 200-500 bytes of
+ *  generation metadata per row) and the full `meta` (lyricsInput,
+ *  styleInput, finalPrompt — easily 2-5 KB per row when present). */
 const HUB_SELECT_COLUMNS = [
   "id",
   "created_at",
@@ -4527,7 +4557,9 @@ const HUB_SELECT_COLUMNS = [
   "likes",
   "reacts",
   "remix_of",
-  "proof",
+  "proof_model:proof->>model",
+  "proof_mode:proof->>mode",
+  "proof_hash:proof->>promptHash",
   "meta_clip:meta->clip",
   "meta_creator_user_id:meta->>creatorUserId",
   "meta_template_title:meta->>searchTemplateTitle",
@@ -4544,6 +4576,23 @@ function reconstructHubRowMeta(row) {
   const tplTitle = String((row && row.meta_template_title) || "").trim();
   if (tplTitle) meta.searchTemplateTitle = tplTitle;
   return Object.keys(meta).length ? meta : null;
+}
+
+/** Rebuild the minimal `proof` shape from the three projected keys.
+ *  Keeps the renderer + proof modal happy without us paying egress
+ *  for the entire `proof` JSONB column on every list fetch (and the
+ *  full thing can drift in size as we add fields server-side). */
+function reconstructHubRowProof(row) {
+  if (!row) return null;
+  const model = String(row.proof_model || "").trim();
+  const mode = String(row.proof_mode || "").trim();
+  const hash = String(row.proof_hash || "").trim();
+  if (!model && !mode && !hash) return null;
+  const proof = {};
+  if (model) proof.model = model;
+  if (mode) proof.mode = mode;
+  if (hash) proof.promptHash = hash;
+  return proof;
 }
 
 /** On-demand fetch of a single Hub post's full `meta` (only when the user
@@ -4567,7 +4616,7 @@ async function hubFetchPostMetaFull(postId) {
   }
 }
 
-async function supabaseSelectHub() {
+async function supabaseSelectHub({ sinceIsoTs = "" } = {}) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   const ctrl = new AbortController();
   // 12s was too aggressive on mobile data — DNS + TLS handshake to a
@@ -4575,11 +4624,19 @@ async function supabaseSelectHub() {
   // < 4s for the actual query. 20s is still well under iOS's 30s
   // request budget and gives genuine slow-network users a chance.
   const timer = setTimeout(() => ctrl.abort(), 20000);
+  // Incremental fetch path: when caller passes `sinceIsoTs` we only
+  // request rows newer than that timestamp. Most polls return 0 rows
+  // = a few hundred bytes total instead of 30 KB. Full refresh runs
+  // every HUB_FULL_REFETCH_MS to catch like/react updates.
+  const sinceFilter = sinceIsoTs
+    ? `&created_at=gt.${encodeURIComponent(sinceIsoTs)}`
+    : "";
   // 30 rows is enough to fill the visible feed plus a healthy backlog
   // for the IntersectionObserver "Load more" path. Older posts are
   // still reachable via subsequent paginated fetches if we ever need
   // them (kept in sync with HUB_PAGE_SIZE * ~1.5).
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(HUB_SELECT_COLUMNS)}&order=created_at.desc&limit=30`, {
+  const url = `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(HUB_SELECT_COLUMNS)}&order=created_at.desc&limit=30${sinceFilter}`;
+  const r = await fetch(url, {
     headers: {
       apikey: SUPABASE_ANON_KEY,
     },
@@ -4653,7 +4710,7 @@ function ingestMyHubPostsRows(rows) {
     likes: Number(r.likes || 0),
     reacts: r.reacts || { melody: 0, lyrics: 0, mix: 0, groove: 0 },
     remixOf: r.remix_of || "",
-    proof: r.proof || null,
+    proof: reconstructHubRowProof(r),
     meta: reconstructHubRowMeta(r),
   }));
   const prev = loadHubFeed();
@@ -6631,18 +6688,44 @@ if (els.hubList) {
     try {
       await supabaseDeleteHub(id);
       setStatus("Post removed from Hub.");
-      await refreshHubFromSupabase();
+      await refreshHubFromSupabase({ force: true });
     } catch {
       setStatus("Post removed locally. Cloud delete failed.");
     }
   });
 }
-async function refreshHubFromSupabase() {
+async function refreshHubFromSupabase({ force = false } = {}) {
   if (hubSyncInFlight) return;
+  // Throttle: every trigger (interval, window focus, visibilitychange,
+  // route enter, like/share tap) funnels here. Without this, iOS firing
+  // focus + visibilitychange together = two consecutive full fetches.
+  // `force: true` (only used by pull-to-refresh and explicit user
+  // gestures) bypasses the throttle.
+  const now = Date.now();
+  if (!force && now - _hubLastFetchAtMs < HUB_MIN_FETCH_GAP_MS) return;
   hubSyncInFlight = true;
+  _hubLastFetchAtMs = now;
+  // Decide between full and incremental. Full runs:
+  //   - First fetch (never had one)
+  //   - Every HUB_FULL_REFETCH_MS to catch external like/react/delete
+  //     changes that incremental "what's new" can't see.
+  //   - When the caller explicitly forces it (pull-to-refresh).
+  const needFull = force
+    || !_hubLastFullFetchAtMs
+    || (now - _hubLastFullFetchAtMs > HUB_FULL_REFETCH_MS);
+  const sinceIsoTs = needFull ? "" : _hubKnownNewestIsoTs;
   try {
-    const rows = await supabaseSelectHub();
+    const rows = await supabaseSelectHub({ sinceIsoTs });
     if (!rows || !Array.isArray(rows)) return;
+    if (needFull) _hubLastFullFetchAtMs = now;
+    // Track the newest ISO timestamp we've seen so the next
+    // incremental fetch can ask for "rows newer than this".
+    for (const r of rows) {
+      const iso = String(r?.created_at || "");
+      if (iso && (!_hubKnownNewestIsoTs || iso > _hubKnownNewestIsoTs)) {
+        _hubKnownNewestIsoTs = iso;
+      }
+    }
     hubLastSyncOk = true;
     hubLastSyncError = "";
     hubLastSyncRows = rows.length;
@@ -6660,36 +6743,57 @@ async function refreshHubFromSupabase() {
       likes: Number(r.likes || 0),
       reacts: r.reacts || { melody: 0, lyrics: 0, mix: 0, groove: 0 },
       remixOf: r.remix_of || "",
-      proof: r.proof || null,
+      proof: reconstructHubRowProof(r),
       meta: reconstructHubRowMeta(r),
     }));
-    // Never wipe feed on empty cloud response.
+    // Incremental responses can legitimately be empty (no new rows
+    // since last poll) — that's the happy path, not a fetch failure.
+    // Don't wipe the feed and don't re-render; just bail.
+    if (!mapped.length && !needFull) {
+      renderHubUpdatedAt();
+      return;
+    }
+    // Never wipe feed on empty cloud response (full fetch + empty
+    // result is still treated as transient — keep what we have).
     if (!mapped.length && prev.length) {
       renderHub();
       renderHubDots();
       return;
     }
-    // Cloud is the source of truth. Index it by id and by content
-    // signature so a prev local-only placeholder (e.g. cloud insert
-    // is still in flight, or its id swap hasn't run yet) gets
-    // collapsed into the canonical cloud row instead of duplicating.
-    const cloudById = new Map();
-    const cloudBySig = new Map();
+    // Merge strategy depends on full vs incremental.
+    //
+    // FULL: cloud is the source of truth for the visible window.
+    //   We absorb prev local-only placeholders (cloud insert still
+    //   in flight) and otherwise let cloud rows win — that's how
+    //   like/react count changes from other users propagate, and
+    //   how deleted-on-cloud rows disappear locally.
+    //
+    // INCREMENTAL: cloud only returned rows newer than what we've
+    //   seen. We MUST keep every prev row; we're just adding new
+    //   ones on top. If we used the FULL merge here we'd lose the
+    //   entire backlog (cloudById wouldn't have those ids, so the
+    //   prev rows would be dropped on the sig-match step).
     const sigOf = (p) =>
       `${String(p?.url || "").trim()}|${String(p?.kind || "full")}|${String(p?.creator || "")}|${String(p?.title || "").trim().toLowerCase()}`;
-    mapped.forEach((p) => {
-      cloudById.set(String(p.id), p);
-      cloudBySig.set(sigOf(p), p);
-    });
     const byId = new Map();
-    // Keep prev local-only rows that have NO cloud counterpart yet;
-    // drop the ones the cloud has already absorbed.
-    prev.forEach((p) => {
-      if (cloudById.has(String(p.id))) return;
-      if (cloudBySig.has(sigOf(p))) return;
-      byId.set(String(p.id), p);
-    });
-    mapped.forEach((p) => byId.set(String(p.id), p));
+    if (needFull) {
+      const cloudById = new Map();
+      const cloudBySig = new Map();
+      mapped.forEach((p) => {
+        cloudById.set(String(p.id), p);
+        cloudBySig.set(sigOf(p), p);
+      });
+      prev.forEach((p) => {
+        if (cloudById.has(String(p.id))) return;
+        if (cloudBySig.has(sigOf(p))) return;
+        byId.set(String(p.id), p);
+      });
+      mapped.forEach((p) => byId.set(String(p.id), p));
+    } else {
+      // Incremental: keep prev (full backlog), overlay new rows on top.
+      prev.forEach((p) => byId.set(String(p.id), p));
+      mapped.forEach((p) => byId.set(String(p.id), p));
+    }
     const merged = Array.from(byId.values()).sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0)).slice(0, 300);
     saveHubFeed(merged);
     lastHubUpdateAt = merged.length ? Math.max(...merged.map((x) => Number(x.ts || 0))) : 0;
@@ -6787,7 +6891,7 @@ async function refreshHubFromSupabase() {
           likes: Number(r.likes || 0),
           reacts: r.reacts || { melody: 0, lyrics: 0, mix: 0, groove: 0 },
           remixOf: r.remix_of || "",
-          proof: r.proof || null,
+          proof: reconstructHubRowProof(r),
           meta: reconstructHubRowMeta(r),
         }));
         if (!mapped.length) return;
@@ -6839,11 +6943,13 @@ async function refreshHubFromSupabase() {
 }
 function startHubLiveSync() {
   if (hubSyncTimer) clearInterval(hubSyncTimer);
-  // Egress saver: only refetch the Hub feed while the user is actually
-  // looking at the Hub tab, and at a calmer cadence than the old 15s/28s.
-  // Off-Hub routes get zero requests instead of polling forever.
-  const isMobile = window.matchMedia?.("(max-width: 720px)")?.matches;
-  const interval = isMobile ? 120_000 : 60_000;
+  // Egress saver v2: 60s/120s was still firing ~1,000 PostgREST hits
+  // per active session per day. Pushed to 5min on both desktop and
+  // mobile — combined with the incremental fetch path (only rows
+  // created since the last poll, usually zero), each poll now costs
+  // ~300 bytes instead of ~30 KB. Like/react updates from other
+  // users land on the next full refetch (HUB_FULL_REFETCH_MS = 10min).
+  const interval = 5 * 60_000;
   hubSyncTimer = setInterval(() => {
     const route = document.body.getAttribute("data-route") || "";
     if (route !== "hub") return;
@@ -15561,7 +15667,7 @@ if (els.hubTabLink) {
     hubSingleTimer = setTimeout(async () => {
       if (hubTapCount >= 2) {
         setStatus("Refreshing Hub…");
-        await refreshHubFromSupabase();
+        await refreshHubFromSupabase({ force: true });
         setStatus("Hub refreshed.");
         requestAnimationFrame(() => scrollHubFeedToTop());
       }

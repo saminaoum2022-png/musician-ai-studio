@@ -4,6 +4,34 @@
  */
 
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+function hzToMidi(hz) {
+  if (!(hz > 0) || !Number.isFinite(hz)) return NaN;
+  return 69 + 12 * Math.log2(hz / 440);
+}
+
+/** Scientific pitch: C4 = MIDI 60. */
+function midiToName(m) {
+  if (!Number.isFinite(m)) return "—";
+  const mi = Math.round(m);
+  const pc = ((mi % 12) + 12) % 12;
+  const oct = Math.floor(mi / 12) - 1;
+  return `${NOTE_NAMES[pc]}${oct}`;
+}
+
+/** `sorted` ascending; `p` in [0, 1]. Linear interpolation between closest ranks. */
+function percentile(sorted, p) {
+  const n = sorted.length;
+  if (!n) return NaN;
+  if (n === 1) return sorted[0];
+  const x = Math.max(0, Math.min(1, p)) * (n - 1);
+  const lo = Math.floor(x);
+  const hi = Math.ceil(x);
+  if (lo === hi) return sorted[lo];
+  const w = x - lo;
+  return sorted[lo] * (1 - w) + sorted[hi] * w;
+}
+
 const MAX_SECONDS = 22;
 const MIN_SECONDS = 2;
 
@@ -674,7 +702,13 @@ async function finalizeMentorRecording(chunks, mimeTypeHint, recordSession) {
     }
 
     setText("mentorStatus", "Analyzing…");
-    const res = analyzeBuffer(full, sr);
+    let res;
+    try {
+      res = analyzeBuffer(full, sr);
+    } catch (e) {
+      setText("mentorStatus", `Analysis hit an error: ${e?.message || e}. Try again or update the app.`);
+      return;
+    }
     if (!res.ok) {
       setText("mentorStatus", res.reason);
       return;

@@ -3861,9 +3861,12 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   gap: 18px;
   animation: sectionFadeIn 260ms ease;
   /* Contain children — keeps the cover shelf, heartbeat, and any long
-     song titles from forcing horizontal scroll on the whole page. */
+     song titles from forcing horizontal scroll on the whole page.
+     `clip` instead of `hidden` so sticky/fixed positioning on children
+     keeps working (overflow: hidden creates a scroll context that
+     can break sticky). */
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* =================================================================
@@ -3890,10 +3893,11 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   display: flex;
   flex-direction: column;
   gap: 12px;
-  /* Chrome row now lives as a sibling (sticky), so .profileAura only
-     needs a small breathing top so the avatar isn't glued to the
-     chrome capsules. */
-  padding: 12px 8px 6px;
+  /* Chrome is position: fixed (lives outside flow), so .profileAura
+     needs enough top padding so the avatar sits below the floating
+     capsules on initial render. Adds the device safe-area inset on
+     top of a fixed clearance so the iOS notch never overlaps. */
+  padding: calc(env(safe-area-inset-top, 0px) + 64px) 8px 6px;
   margin-bottom: 0;
   max-width: 100%;
   /* Intentionally NO overflow:hidden / NO border-radius. The glow
@@ -3902,20 +3906,23 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
      rounded card. */
 }
 
-/* Soft brand wash behind the hero. Kept gentle so the header
- * dissolves into the page background instead of reading as a
- * separate banded region. Two faint blooms (teal + violet) fade
- * out top + bottom via a long, soft mask. */
+/* Edge-to-edge brand wash behind the hero. Spans the full viewport
+ * width (escapes .app's 18px gutter) by centering and using 100vw.
+ * Two faint blooms (teal + violet) fade out top + bottom via a long
+ * soft mask, so the wash dissolves into the page background. */
 .profileAura::before{
   content: "";
   position: absolute;
-  inset: -40px 0 auto 0;
+  top: -40px;
+  left: 50%;
+  width: 100vw;
   height: 320px;
+  transform: translateX(-50%);
   pointer-events: none;
   z-index: -2;
   background-image:
-    radial-gradient(ellipse 110% 80% at 18% 28%, rgba(35, 213, 171, 0.07), transparent 70%),
-    radial-gradient(ellipse 100% 75% at 86% 18%, rgba(124, 92, 255, 0.085), transparent 68%),
+    radial-gradient(ellipse 110% 80% at 18% 28%, rgba(35, 213, 171, 0.08), transparent 70%),
+    radial-gradient(ellipse 100% 75% at 86% 18%, rgba(124, 92, 255, 0.095), transparent 68%),
     radial-gradient(ellipse 80% 60% at 50% 55%, rgba(124, 92, 255, 0.03), transparent 75%);
   filter: blur(8px);
   -webkit-mask-image: linear-gradient(
@@ -3963,22 +3970,25 @@ body[data-route="profile"] .profileAuraGlow{
   filter: blur(56px) saturate(1.05);
 }
 
-/* Top chrome row — sticks at the top of the profile scroll so the
- * credits pill (left) and edit / save-cancel / settings cluster
- * (right) stay floating while the rest of the profile scrolls
- * behind them. Each child is its own liquid-glass capsule.
- * Pointer-events: none on the shell so empty flex space doesn't
- * eat taps; children re-enable. */
+/* Top chrome row — fixed to the viewport top so the credits pill
+ * (left) and edit / save-cancel / settings cluster (right) stay
+ * floating no matter how far the user scrolls inside the profile
+ * route. Each child is its own liquid-glass capsule.
+ * Only rendered when body[data-route="profile"] is active (the
+ * router hides the .profileSection for other routes, which also
+ * hides this fixed child). */
 .profileAuraHeaderChrome{
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 60;
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: max(10px, env(safe-area-inset-top, 0px)) 12px 8px;
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 14px 10px;
   margin: 0;
   pointer-events: none;
   background: transparent;
@@ -3987,12 +3997,14 @@ body[data-route="profile"] .profileAuraGlow{
   pointer-events: auto;
 }
 
-/* Toolbar — icon cluster on the right (no absolute positioning). */
+/* Toolbar — icon cluster on the right of the floating chrome.
+ * Tight gap so Edit + Settings feel like one cluster, not two
+ * scattered controls. */
 .profileAuraToolbar{
   position: static;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex: 0 0 auto;
   margin-left: auto;
 }
@@ -4006,21 +4018,22 @@ body[data-route="profile"] .profileAuraGlow{
   height: 38px;
   padding: 0;
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.18);
-  background: rgba(20, 24, 36, 0.55);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-          backdrop-filter: blur(28px) saturate(180%);
-  color: rgba(232,238,247,0.96);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.06));
+  -webkit-backdrop-filter: blur(24px) saturate(200%);
+          backdrop-filter: blur(24px) saturate(200%);
+  color: #fff;
   cursor: pointer;
   text-decoration: none;
   box-shadow:
-    0 10px 28px rgba(0, 0, 0, 0.38),
-    inset 0 1px 0 rgba(255, 255, 255, 0.10);
+    0 14px 36px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.25);
   transition: background 160ms ease, border-color 160ms ease, transform 120ms ease;
 }
 .profileAuraIconBtn:hover{
-  background: rgba(36, 30, 60, 0.62);
-  border-color: rgba(124,92,255,0.45);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.10));
+  border-color: rgba(255, 255, 255, 0.4);
 }
 .profileAuraIconBtn:active{ transform: scale(0.96); }
 .profileAuraIconBtn svg{
@@ -5184,10 +5197,10 @@ body[data-route="profile"] .profileAuraGlow{
 .profileAuraStat--link:active{ transform: scale(0.98); }
 
 @media (max-width: 440px){
-  .profileAura{ padding: 10px 6px 4px; }
+  .profileAura{ padding: calc(env(safe-area-inset-top, 0px) + 60px) 6px 4px; }
   .profileAuraIdentity{ padding: 0; }
   .profileAuraHeaderChrome{
-    padding: max(8px, env(safe-area-inset-top, 0px)) 10px 6px;
+    padding: calc(env(safe-area-inset-top, 0px) + 8px) 12px 8px;
   }
   .profileAuraNameInput{ font-size: 18px; max-width: min(100%, 260px); }
   .profileAuraStatStrip{ padding: 8px 12px; gap: 8px; }
@@ -5595,7 +5608,7 @@ body[data-route="profile"] .profileAuraGlow{
   transition: background 140ms ease, border-color 140ms ease, transform 120ms ease;
 }
 /* Credits pill in the floating top chrome row (left). Liquid-glass
-   capsule that matches the icon-button height. */
+   capsule matching the icon-button height. */
 .profileCreditsPill--toolbar{
   position: static;
   margin: 0;
@@ -5604,18 +5617,22 @@ body[data-route="profile"] .profileAuraGlow{
   min-height: 38px;
   padding: 6px 12px 6px 9px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(20, 24, 36, 0.55);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-          backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.06));
+  -webkit-backdrop-filter: blur(24px) saturate(200%);
+          backdrop-filter: blur(24px) saturate(200%);
+  color: #fff;
   box-shadow:
-    0 10px 28px rgba(0, 0, 0, 0.38),
-    inset 0 1px 0 rgba(255, 255, 255, 0.10);
+    0 14px 36px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.25);
 }
 .profileCreditsPill--toolbar:hover{
-  background: rgba(36, 30, 60, 0.62);
-  border-color: rgba(255, 255, 255, 0.26);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.10));
+  border-color: rgba(255, 255, 255, 0.4);
 }
+.profileCreditsPill--toolbar .profileCreditsPillIco{ opacity: 0.95; }
+.profileCreditsPill--toolbar .profileCreditsPillValue{ color: #fff; }
 .profileSection:has(.profileAura.profileAuraEditing) .profileCreditsPill--toolbar{
   display: none;
 }

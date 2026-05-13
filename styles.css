@@ -3861,12 +3861,9 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   gap: 18px;
   animation: sectionFadeIn 260ms ease;
   /* Contain children — keeps the cover shelf, heartbeat, and any long
-     song titles from forcing horizontal scroll on the whole page.
-     `clip` instead of `hidden` so sticky/fixed positioning on children
-     keeps working (overflow: hidden creates a scroll context that
-     can break sticky). */
+     song titles from forcing horizontal scroll on the whole page. */
   max-width: 100%;
-  overflow-x: clip;
+  overflow-x: hidden;
 }
 
 /* =================================================================
@@ -3905,18 +3902,16 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
      rounded card. */
 }
 
-/* Edge-to-edge brand wash behind the hero. Spans the full viewport
- * width (escapes .app's 18px gutter) by centering and using 100vw.
- * Two faint blooms (teal + violet) fade out top + bottom via a long
- * soft mask, so the wash dissolves into the page background. */
+/* Soft brand wash behind the hero — stays inside .profileAura
+ * bounds (no 100vw tricks; those were causing a horizontal shift
+ * on some iOS WebView setups). Two faint blooms (teal + violet)
+ * fade in / out via a vertical mask so the wash dissolves into
+ * the page background. */
 .profileAura::before{
   content: "";
   position: absolute;
-  top: -40px;
-  left: 50%;
-  width: 100vw;
-  height: 320px;
-  transform: translateX(-50%);
+  inset: -32px 0 auto 0;
+  height: 280px;
   pointer-events: none;
   z-index: -2;
   background-image:

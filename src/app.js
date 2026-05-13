@@ -8890,8 +8890,11 @@ function resetProfileReleasesPagination() {
 function renderProfileHubShared() {
   if (!els.profileHubSharedList) return;
   const allItems = getProfileOwnerHubItems();
-  if (_profileReleasesShown > Math.max(allItems.length, PROFILE_RELEASES_PAGE_SIZE)) {
+  if (_profileReleasesShown < PROFILE_RELEASES_PAGE_SIZE) {
     _profileReleasesShown = PROFILE_RELEASES_PAGE_SIZE;
+  }
+  if (allItems.length && _profileReleasesShown > allItems.length) {
+    _profileReleasesShown = allItems.length;
   }
   const shownCount = Math.min(_profileReleasesShown, allItems.length);
   const items = allItems.slice(0, shownCount);

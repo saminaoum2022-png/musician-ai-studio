@@ -3901,32 +3901,36 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
      rounded card. */
 }
 
-/* Soft brand wash behind the hero — no horizontal "staff lines"
- * (those read as scanlines / stuck texture on OLED). Two drifting
- * radial blooms (teal + violet) fade out toward the bottom via mask. */
+/* Soft brand wash behind the hero. Kept gentle so the header
+ * dissolves into the page background instead of reading as a
+ * separate banded region. Two faint blooms (teal + violet) fade
+ * out top + bottom via a long, soft mask. */
 .profileAura::before{
   content: "";
   position: absolute;
-  inset: 0 0 auto 0;
-  height: 220px;
+  inset: -40px 0 auto 0;
+  height: 320px;
   pointer-events: none;
   z-index: -2;
   background-image:
-    radial-gradient(ellipse 95% 70% at 22% 18%, rgba(35, 213, 171, 0.16), transparent 62%),
-    radial-gradient(ellipse 85% 65% at 88% 12%, rgba(124, 92, 255, 0.18), transparent 58%),
-    radial-gradient(ellipse 70% 50% at 50% 55%, rgba(124, 92, 255, 0.06), transparent 70%);
+    radial-gradient(ellipse 110% 80% at 18% 28%, rgba(35, 213, 171, 0.07), transparent 70%),
+    radial-gradient(ellipse 100% 75% at 86% 18%, rgba(124, 92, 255, 0.085), transparent 68%),
+    radial-gradient(ellipse 80% 60% at 50% 55%, rgba(124, 92, 255, 0.03), transparent 75%);
+  filter: blur(8px);
   -webkit-mask-image: linear-gradient(
     180deg,
     transparent 0%,
-    #000 18%,
-    #000 72%,
+    rgba(0, 0, 0, 0.6) 25%,
+    rgba(0, 0, 0, 0.85) 50%,
+    rgba(0, 0, 0, 0.35) 80%,
     transparent 100%
   );
           mask-image: linear-gradient(
     180deg,
     transparent 0%,
-    #000 18%,
-    #000 72%,
+    rgba(0, 0, 0, 0.6) 25%,
+    rgba(0, 0, 0, 0.85) 50%,
+    rgba(0, 0, 0, 0.35) 80%,
     transparent 100%
   );
 }
@@ -3954,8 +3958,8 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
 /* Profile route — keep the tint extremely soft so the hero reads as the
    same surface as the page (no visible "header frame"). */
 body[data-route="profile"] .profileAuraGlow{
-  opacity: 0.42;
-  filter: blur(42px) saturate(1.12);
+  opacity: 0.28;
+  filter: blur(56px) saturate(1.05);
 }
 
 /* Top chrome row: credits (left) + edit / save-cancel / settings (right).
@@ -8221,9 +8225,7 @@ input::placeholder, textarea::placeholder{
   width: 112px;
   height: 112px;
   border-radius: 999px;
-  box-shadow:
-    0 0 0 1px rgba(124,92,255,0.12),
-    0 0 22px -10px rgba(124,92,255,0.30);
+  box-shadow: 0 0 38px -14px rgba(124,92,255,0.22);
 }
 .profileAuraAvatarWrapNeon .profileAuraAvatar{
   position: relative;
@@ -8282,15 +8284,15 @@ input::placeholder, textarea::placeholder{
     linear-gradient(#000 0 0);
           mask-composite: exclude;
   box-shadow:
-    0 0 22px -4px rgba(35, 213, 171, 0.40),
-    0 0 28px -6px rgba(124, 92, 255, 0.48);
+    0 0 30px -10px rgba(35, 213, 171, 0.26),
+    0 0 36px -12px rgba(124, 92, 255, 0.32);
   animation: profileAuraPulseRing 2.6s ease-in-out infinite;
-  opacity: 0.92;
+  opacity: 0.82;
 }
 @keyframes profileAuraPulseRing{
-  0%   { transform: scale(1);     opacity: 0.62; }
-  50%  { transform: scale(1.045); opacity: 1; }
-  100% { transform: scale(1);     opacity: 0.62; }
+  0%   { transform: scale(1);     opacity: 0.55; }
+  50%  { transform: scale(1.035); opacity: 0.88; }
+  100% { transform: scale(1);     opacity: 0.55; }
 }
 @media (prefers-reduced-motion: reduce){
   .profileAuraRingPulse{ animation: none; opacity: 0.9; }

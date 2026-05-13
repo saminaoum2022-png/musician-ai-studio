@@ -47,7 +47,18 @@ body{
      and break sticky/iOS bottom-bar offsets. */
   overflow-x: clip;
 }
+/* Mentor: unify canvas so the in-page glow layer does not “fight” body radials */
+body[data-route="mentor"]{
+  background:
+    radial-gradient(125% 80% at 50% -28%, rgba(124, 92, 255, 0.11) 0%, transparent 58%),
+    radial-gradient(95% 55% at 92% 8%, rgba(34, 211, 238, 0.06) 0%, transparent 50%),
+    radial-gradient(90% 50% at 8% 22%, rgba(167, 139, 250, 0.06) 0%, transparent 52%),
+    var(--bg);
+}
 @media (prefers-reduced-motion: reduce){
+  body[data-route="mentor"]{
+    background: var(--bg);
+  }
   body{
     background: var(--bg);
   }
@@ -10810,14 +10821,20 @@ body[data-route="hub"] .hubEq{
 }
 
 /* --- Mentor (voice lab) — premium “alive” layout --- */
+.mentorPage.wide,
+section.mentorPage{
+  grid-column: 1 / -1;
+  width: 100%;
+  max-width: 100%;
+}
 .mentorPage{
   position: relative;
   /* Let page scroll naturally; html already clips horizontal scroll */
   overflow: visible;
   width: 100%;
-  max-width: min(1120px, 100%);
+  max-width: 100%;
   margin: 0 auto;
-  padding: 0 max(16px, env(safe-area-inset-left, 0px)) 48px max(16px, env(safe-area-inset-right, 0px));
+  padding: 0 max(16px, env(safe-area-inset-right, 0px)) 48px max(16px, env(safe-area-inset-left, 0px));
   box-sizing: border-box;
 }
 .mentorAmbient{
@@ -10825,17 +10842,11 @@ body[data-route="hub"] .hubEq{
   left: 0;
   right: 0;
   top: 0;
-  height: min(480px, 62vh);
+  height: min(420px, 58vh);
   pointer-events: none;
-  background:
-    radial-gradient(ellipse 80% 55% at 50% -10%, rgba(124, 92, 255, 0.22) 0%, transparent 55%),
-    radial-gradient(ellipse 60% 40% at 100% 20%, rgba(34, 211, 238, 0.12) 0%, transparent 45%),
-    radial-gradient(ellipse 50% 35% at 0% 40%, rgba(167, 139, 250, 0.1) 0%, transparent 50%);
-  animation: mentorAmbientDrift 18s ease-in-out infinite alternate;
-}
-@keyframes mentorAmbientDrift{
-  from{ opacity: 0.92; }
-  to{ opacity: 1; }
+  /* Single soft veil — avoids a second “hot blob” on top of body[data-route="mentor"] */
+  background: radial-gradient(ellipse 130% 95% at 50% -5%, rgba(124, 92, 255, 0.1) 0%, transparent 62%);
+  opacity: 0.55;
 }
 .mentorGlass{
   border-radius: 22px;
@@ -10846,6 +10857,7 @@ body[data-route="hub"] .hubEq{
     0 28px 64px rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
+  max-width: 100%;
 }
 .mentorHeroTop{
   position: relative;
@@ -10886,6 +10898,7 @@ body[data-route="hub"] .hubEq{
   line-height: 1.55;
   color: var(--muted);
   max-width: 46ch;
+  overflow-wrap: anywhere;
 }
 .mentorHeroBadges{
   display: flex;
@@ -11002,6 +11015,7 @@ body[data-route="hub"] .hubEq{
   font-size: 15px;
   font-weight: 750;
   color: rgba(231, 237, 247, 0.96);
+  overflow-wrap: anywhere;
 }
 .mentorStatus{
   margin: 0 0 8px;
@@ -11009,6 +11023,7 @@ body[data-route="hub"] .hubEq{
   font-size: 15px;
   font-weight: 700;
   color: rgba(94, 234, 212, 0.95);
+  overflow-wrap: anywhere;
 }
 .mentorHint{
   margin: 0 0 14px;
@@ -11018,6 +11033,7 @@ body[data-route="hub"] .hubEq{
   max-width: 40rem;
   margin-left: auto;
   margin-right: auto;
+  overflow-wrap: anywhere;
 }
 .mentorScanFoot{
   display: flex;

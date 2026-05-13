@@ -3896,8 +3896,9 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   /* Chrome is position: fixed (lives outside flow), so .profileAura
      needs enough top padding so the avatar sits below the floating
      capsules on initial render. Adds the device safe-area inset on
-     top of a fixed clearance so the iOS notch never overlaps. */
-  padding: calc(env(safe-area-inset-top, 0px) + 64px) 8px 6px;
+     top of a fixed clearance so the iOS notch never overlaps. The
+     value below targets ~chrome-height (~58px) + 8px breathing. */
+  padding: calc(env(safe-area-inset-top, 0px) + 50px) 8px 6px;
   margin-bottom: 0;
   max-width: 100%;
   /* Intentionally NO overflow:hidden / NO border-radius. The glow
@@ -3971,12 +3972,13 @@ body[data-route="profile"] .profileAuraGlow{
 }
 
 /* Top chrome row — fixed to the viewport top so the credits pill
- * (left) and edit / save-cancel / settings cluster (right) stay
- * floating no matter how far the user scrolls inside the profile
- * route. Each child is its own liquid-glass capsule.
- * Only rendered when body[data-route="profile"] is active (the
- * router hides the .profileSection for other routes, which also
- * hides this fixed child). */
+ * (left) and edit / settings cluster (right) stay floating no
+ * matter how far the user scrolls inside the profile route. The
+ * shell itself is a frosted-glass bar (so content under it is
+ * uniformly blurred instead of leaking through the gap above the
+ * capsules), with a soft fade to transparent at the bottom edge so
+ * it dissolves into the page. Only rendered while the profile route
+ * is mounted (its parent .profileSection is hidden on other routes). */
 .profileAuraHeaderChrome{
   position: fixed;
   top: 0;
@@ -3988,10 +3990,19 @@ body[data-route="profile"] .profileAuraGlow{
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: calc(env(safe-area-inset-top, 0px) + 10px) 14px 10px;
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 10px;
   margin: 0;
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+          backdrop-filter: blur(22px) saturate(180%);
+  background: linear-gradient(
+    180deg,
+    rgba(10, 12, 22, 0.55) 0%,
+    rgba(10, 12, 22, 0.42) 60%,
+    rgba(10, 12, 22, 0.10) 100%
+  );
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 78%, transparent 100%);
+          mask-image: linear-gradient(180deg, #000 0%, #000 78%, transparent 100%);
   pointer-events: none;
-  background: transparent;
 }
 .profileAuraHeaderChrome > *{
   pointer-events: auto;
@@ -5197,10 +5208,10 @@ body[data-route="profile"] .profileAuraGlow{
 .profileAuraStat--link:active{ transform: scale(0.98); }
 
 @media (max-width: 440px){
-  .profileAura{ padding: calc(env(safe-area-inset-top, 0px) + 60px) 6px 4px; }
+  .profileAura{ padding: calc(env(safe-area-inset-top, 0px) + 48px) 6px 4px; }
   .profileAuraIdentity{ padding: 0; }
   .profileAuraHeaderChrome{
-    padding: calc(env(safe-area-inset-top, 0px) + 8px) 12px 8px;
+    padding: calc(env(safe-area-inset-top, 0px) + 8px) 14px 10px;
   }
   .profileAuraNameInput{ font-size: 18px; max-width: min(100%, 260px); }
   .profileAuraStatStrip{ padding: 8px 12px; gap: 8px; }

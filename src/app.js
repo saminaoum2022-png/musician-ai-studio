@@ -4845,6 +4845,14 @@ async function hubFetchPostProofFull(postId) {
   }
 }
 
+/** PostgREST `or=` clauses so list queries skip rows whose `cover_url` /
+ *  `creator_avatar` is an inline base64 `data:` blob (legacy data).
+ *  Applied to **both** the global Hub feed and `supabaseSelectMyHubPosts`
+ *  so idle Profile-targeted fetches cannot pull tens of MB on Generate. */
+const HUB_POSTS_JSON_LIST_DATA_GUARD =
+  `&or=${encodeURIComponent("(cover_url.is.null,cover_url.not.like.data:*)")}` +
+  `&or=${encodeURIComponent("(creator_avatar.is.null,creator_avatar.not.like.data:*)")}`;
+
 async function supabaseSelectHub({ sinceIsoTs = "" } = {}) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   const ctrl = new AbortController();
@@ -4872,11 +4880,8 @@ async function supabaseSelectHub({ sinceIsoTs = "" } = {}) {
   // missing/HTTP covers and drops the inline-blob ones. Once
   // `supabase/hub_posts_strip_data_urls.sql` runs the bad rows are
   // permanently null'd and the filter becomes a no-op.
-  const dataUrlGuard =
-    `&or=${encodeURIComponent("(cover_url.is.null,cover_url.not.like.data:*)")}` +
-    `&or=${encodeURIComponent("(creator_avatar.is.null,creator_avatar.not.like.data:*)")}`;
   const hubListUrl = (selectCols) =>
-    `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(selectCols)}&order=created_at.desc&limit=30${sinceFilter}${dataUrlGuard}`;
+    `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(selectCols)}&order=created_at.desc&limit=30${sinceFilter}${HUB_POSTS_JSON_LIST_DATA_GUARD}`;
   let r = await fetch(hubListUrl(HUB_SELECT_COLUMNS_FEED), {
     headers: {
       apikey: SUPABASE_ANON_KEY,
@@ -4925,7 +4930,7 @@ async function supabaseSelectMyHubPosts({ uid, username } = {}) {
       const q = `${encodeURIComponent("meta->>creatorUserId")}=eq.${encodeURIComponent(uid)}`;
       reqs.push(
         fetch(
-          `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(selectCols)}&${q}&order=created_at.desc&limit=15`,
+          `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(selectCols)}&${q}${HUB_POSTS_JSON_LIST_DATA_GUARD}&order=created_at.desc&limit=15`,
           { headers: { apikey: SUPABASE_ANON_KEY }, signal: ctrl.signal },
         ),
       );
@@ -4935,7 +4940,7 @@ async function supabaseSelectMyHubPosts({ uid, username } = {}) {
         fetch(
           `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(
             selectCols,
-          )}&creator_username=eq.${encodeURIComponent(username)}&order=created_at.desc&limit=15`,
+          )}&creator_username=eq.${encodeURIComponent(username)}${HUB_POSTS_JSON_LIST_DATA_GUARD}&order=created_at.desc&limit=15`,
           { headers: { apikey: SUPABASE_ANON_KEY }, signal: ctrl.signal },
         ),
       );
@@ -6976,6 +6981,12 @@ if (els.hubList) {
 }
 async function refreshHubFromSupabase({ force = false } = {}) {
   if (hubSyncInFlight) return;
+  const route = document.body.getAttribute("data-route") || "";
+  // Do not hit PostgREST for the global feed while the user is on
+  // Generate/Library/Profile — they still saw multi‑MB `hub_posts`
+  // transfers from stray callers + the duplicate hashchange listener.
+  // Public creator pages (`user`) need the same merge feed as deep links.
+  if (route !== "hub" && route !== "user") return;
   // Throttle: every trigger (interval, window focus, visibilitychange,
   // route enter, like/share tap) funnels here. Without this, iOS firing
   // focus + visibilitychange together = two consecutive full fetches.
@@ -7150,8 +7161,12 @@ async function refreshHubFromSupabase({ force = false } = {}) {
     const backoff = Math.min(8000, 1500 * Math.max(1, hubRetryCount));
     setTimeout(async () => {
       try {
+        const routeR = document.body.getAttribute("data-route") || "";
+        if (routeR !== "hub" && routeR !== "user") return;
         if (hubSyncInFlight) return;
         hubSyncInFlight = true;
+        const rows = await supabaseSelectHub();
+        if (!rows || !Array.isArray(rows)) return;
         const prevRetry = loadHubFeed();
         const mapped = rows
           .map((r) => mapHubRestRowToPost(r, { includeProof: false }))
@@ -16141,10 +16156,9 @@ window.addEventListener("hashchange", () => {
   if (!hubAudio) return;
   setTimeout(() => renderHubNowPlaying(), 0);
 });
-window.addEventListener("hashchange", () => {
-  const route = document.body.getAttribute("data-route") || "";
-  if (route === "hub") void refreshHubFromSupabase();
-});
+// Hub sync on `#/hub` / `#/u/…` is driven by `applyRoute` only — a
+// duplicate hashchange listener used to double-call `refreshHubFromSupabase`.
+
 // Refresh credits when Profile / Credits / Sounds open. `refreshMyCredits`
 // pulls the Supabase ledger; for admin users it also triggers
 // `refreshAdminCreditsView`, which seeds `sunoCreditsLive` for the pill.
@@ -17845,16 +17859,12 @@ void (async () => {
     renderProfileHubShared();
 
     syncActiveProfileIdFromSession();
-    // Defer the heavier Library + Profile-targeted queries so the
-    // global Hub fetch isn't competing with them for the iOS
-    // 6-connection-per-origin budget at boot. They still run early
-    // (idle-callback, ~50–500ms after first paint), but Hub gets the
-    // pipe first. The Profile route handler also re-fires
-    // `refreshMyHubPostsFast()` whenever the user actually opens
-    // Profile, so deferring here doesn't leave Profile stale.
+    // Defer Library hydration to idle so the first Generate paint wins the
+    // network pipe. Own Hub releases load when the user opens Profile
+    // (`applyRoute` → `refreshMyHubPostsFast`) — not here — so staying on
+    // Generate never downloads multi‑MB `hub_posts` rows in the background.
     const startDeferredQueries = () => {
       void ensureUserLibraryHydrated();
-      void refreshMyHubPostsFast();
     };
     if (typeof requestIdleCallback === "function") {
       requestIdleCallback(startDeferredQueries, { timeout: 800 });

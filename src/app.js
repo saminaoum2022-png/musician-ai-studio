@@ -1180,48 +1180,24 @@ function tryHubViewportAutoplay() {
   void startHubPlayback(centerId);
 }
 
-/** Pause Hub audio when the user navigates away to Profile/User
- *  routes, but keep `hubAudioPostId` and `hubAudio.currentTime`
- *  intact so we can resume the exact same post from the exact same
- *  position when they come back. Called from the route handler.
+/** Hub audio is bound to the Hub view only — there is no persistent
+ *  mini-player surface that follows Hub posts across routes. Leaving
+ *  Hub fully stops Hub playback (state + audio) so nothing keeps
+ *  streaming silently in the background. Returning to Hub starts
+ *  fresh from the viewport-centered row via the autoplay path.
  *
- *  Why not stopHubPlayback(): that nukes all state, which means
- *  the user lands back on Hub silent and has to scroll to retrigger
- *  autoplay — a worse UX than just pause/resume. */
+ *  Library / generated tracks still use the global mini-player; only
+ *  Hub-source playback is killed here (guard on `miniSource.type`). */
 function pauseHubForRouteChange() {
-  if (!hubAudio || hubAudio.paused || !hubAudioPostId) return;
-  try { hubAudio.pause(); } catch {}
-  // Reflect the paused state on the row UI via the `.isPlaying` class
-  // on .hubCoverWrap — never write `textContent` on the play button,
-  // because in the reel layout the button IS the cover container
-  // and `textContent =` wipes its child <img>/glyph/equalizer.
-  const root = els.hubList;
-  if (root && hubAudioPostId) {
-    const wrap = root.querySelector(`.hubCoverWrap[data-hub-cover="${hubAudioPostId}"]`)
-      || root.querySelector(`[data-hub-play="${hubAudioPostId}"]`)?.closest?.(".hubCoverWrap");
-    wrap?.classList.remove("isPlaying");
-    wrap?.classList.remove("isLoading");
-  }
+  if (miniSource?.type !== "hub" && !hubAudioPostId) return;
+  try { stopHubPlayback(); } catch {}
 }
 
-/** Counterpart to pauseHubForRouteChange. Idempotent: no-op if no
- *  paused-state exists or if Hub is already playing. */
-async function resumeHubAfterRouteChange() {
-  if (!hubAudio || !hubAudioPostId) return;
-  if (!hubAudio.paused) return;
-  try {
-    await hubAudio.play();
-    const root = els.hubList;
-    if (root) {
-      const wrap = root.querySelector(`.hubCoverWrap[data-hub-cover="${hubAudioPostId}"]`)
-        || root.querySelector(`[data-hub-play="${hubAudioPostId}"]`)?.closest?.(".hubCoverWrap");
-      wrap?.classList.add("isPlaying");
-    }
-  } catch {
-    // iOS may block resume if the gesture chain was lost; that's fine,
-    // the next user tap on the cover restarts cleanly.
-  }
-}
+/** Kept as a stable export for older call sites. Hub no longer
+ *  resumes across route changes (see pauseHubForRouteChange) so this
+ *  is now a no-op; returning to Hub re-triggers autoplay from the
+ *  viewport-centered row. */
+async function resumeHubAfterRouteChange() {}
 
 function stopHubPlayback() {
   try {
@@ -1419,7 +1395,7 @@ function renderHubNowPlaying() {
   if (!els.hubNowPlaying) return;
   const route = document.body.getAttribute("data-route") || "";
   // The mini-player is a global persistent surface — it shows for any
-  // active source (Hub post, Library track, generated result) and hides
+  // active source (Library track, generated result) and hides
   // contextually so it never duplicates a richer "now playing" UI:
   //  - hidden on /player (the full-screen Now Playing replaces it);
   //  - hidden on Hub entirely (the per-post card *is* the controller; the
@@ -1429,6 +1405,10 @@ function renderHubNowPlaying() {
   //  - hidden on Library (the row already shows the EQ + dot indicator);
   //  - hidden on Generate when a result card is mid-playback (the card
   //    shows its own progress + play/pause already).
+  //  - hidden globally for Hub-source playback: Hub posts are intentionally
+  //    tied to the Hub view, so no persistent surface follows them across
+  //    routes. Leaving Hub stops Hub audio entirely (see applyRoute).
+  const hideHubSource = miniSource?.type === "hub";
   const hideOnHubVisible = route === "hub";
   const hideOnLibrary = route === "library";
   const hideOnPlayer = route === "player";
@@ -1437,7 +1417,7 @@ function renderHubNowPlaying() {
   // playerEl when streaming Library/Generated tracks), so its paused state
   // is the single source of truth for "is anything playing right now".
   const isPlaying = Boolean(hubAudio && !hubAudio.paused && !hubAudio.ended);
-  const active = Boolean(hubNowMeta && isPlaying) && !hideOnHubVisible && !hideOnLibrary && !hideOnPlayer && !hideOnGenerate;
+  const active = Boolean(hubNowMeta && isPlaying) && !hideHubSource && !hideOnHubVisible && !hideOnLibrary && !hideOnPlayer && !hideOnGenerate;
   if (!active) {
     els.hubNowPlaying.classList.remove("isVisible", "isPlaying");
     setTimeout(() => {
@@ -1775,6 +1755,13 @@ function applyRoute() {
     main.classList.remove("routeSwap");
     requestAnimationFrame(() => main.classList.add("routeSwap"));
   }
+  // Hub audio is bound to the Hub view only. Any route swap away from
+  // Hub fully stops Hub playback so nothing keeps streaming silently
+  // and no mini-player surfaces a Hub post outside the feed. Library/
+  // generated tracks (other miniSource types) are unaffected.
+  if (prevRoute === "hub" && wanted !== "hub") {
+    try { pauseHubForRouteChange(); } catch {}
+  }
   if (wanted === "hub") {
     markAllHubSeen();
     renderHubDots();
@@ -1786,9 +1773,9 @@ function applyRoute() {
     // Clearing the flag here keeps it harmless in case anything else
     // sets it; the actual scroll behavior stays at "land on top".
     _hubPendingSmartScroll = false;
-    // Resume the post we paused when leaving Hub for Profile/User.
-    // Idempotent — does nothing if Hub wasn't playing before.
-    void resumeHubAfterRouteChange();
+    // (No Hub resume: leaving Hub now fully stops Hub audio, so there
+    //  is nothing to pick back up. Autoplay below re-engages from the
+    //  viewport-centered row on entry.)
     // Kick autoplay on entry — but never override an already-active
     // pick. The Hub-tab click handler may have synchronously started
     // playback inside the gesture (the only way iOS reliably unlocks
@@ -1820,9 +1807,6 @@ function applyRoute() {
     } catch {}
   }
   if (wanted === "profile") {
-    // Pause Hub if it was playing in the background — only one audio
-    // surface at a time, and Profile is its own world.
-    pauseHubForRouteChange();
     void refreshAuthStateFromSupabase();
     setProfileEditing(false);
     void refreshMyCredits({ silent: true });
@@ -1858,9 +1842,6 @@ function applyRoute() {
     }
   }
   if (wanted === "user") {
-    // Pause Hub before rendering the public profile so we don't have
-    // a Hub song bleeding into a creator page. Resume on Hub return.
-    pauseHubForRouteChange();
     renderUserProfile(pendingPublicUsername);
     // Hub posts arrive via Supabase sync; on a cold visit (someone landing
     // straight on `#/u/USERNAME` from a share) we may need to wait for

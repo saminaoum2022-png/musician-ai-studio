@@ -3890,12 +3890,8 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   display: flex;
   flex-direction: column;
   gap: 12px;
-  /* Top padding must clear the absolute-positioned toolbar (Cancel /
-     Save / Settings) AND the credits pill, plus leave breathing room
-     above the centered avatar so it never feels glued to the iOS
-     notch / dynamic island. The `.app` shell already adds
-     env(safe-area-inset-top); this is the in-section spacing on top
-     of that. */
+  /* Top padding clears the header chrome row (credits + edit /
+     settings) and leaves room above the centered avatar vs notch. */
   padding: 60px 8px 6px;
   margin-bottom: 0;
   max-width: 100%;
@@ -3905,36 +3901,32 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
      rounded card. */
 }
 
-/* Staff-line texture behind the hero — five faint horizontal rules
-   that read as "musician" without being decorative. Confined to the
-   top ~180px so it doesn't tile across the page; faded at the edges
-   via a mask gradient so there's no hard edge. */
+/* Soft brand wash behind the hero — no horizontal "staff lines"
+ * (those read as scanlines / stuck texture on OLED). Two drifting
+ * radial blooms (teal + violet) fade out toward the bottom via mask. */
 .profileAura::before{
   content: "";
   position: absolute;
   inset: 0 0 auto 0;
-  height: 180px;
+  height: 220px;
   pointer-events: none;
   z-index: -2;
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0,
-    transparent 26px,
-    rgba(255, 255, 255, 0.045) 26px,
-    rgba(255, 255, 255, 0.045) 27px
-  );
+  background-image:
+    radial-gradient(ellipse 95% 70% at 22% 18%, rgba(35, 213, 171, 0.16), transparent 62%),
+    radial-gradient(ellipse 85% 65% at 88% 12%, rgba(124, 92, 255, 0.18), transparent 58%),
+    radial-gradient(ellipse 70% 50% at 50% 55%, rgba(124, 92, 255, 0.06), transparent 70%);
   -webkit-mask-image: linear-gradient(
     180deg,
     transparent 0%,
-    #000 26%,
-    #000 70%,
+    #000 18%,
+    #000 72%,
     transparent 100%
   );
           mask-image: linear-gradient(
     180deg,
     transparent 0%,
-    #000 26%,
-    #000 70%,
+    #000 18%,
+    #000 72%,
     transparent 100%
   );
 }
@@ -3962,19 +3954,39 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
 /* Profile route — keep the tint extremely soft so the hero reads as the
    same surface as the page (no visible "header frame"). */
 body[data-route="profile"] .profileAuraGlow{
-  opacity: 0.32;
-  filter: blur(38px) saturate(1.05);
+  opacity: 0.42;
+  filter: blur(42px) saturate(1.12);
 }
 
-/* Toolbar — equal-weight icon buttons in the top-right. */
-.profileAuraToolbar{
+/* Top chrome row: credits (left) + edit / save-cancel / settings (right).
+ * Pointer-events: none on the shell so empty flex space doesn't eat taps;
+ * children re-enable. */
+.profileAuraHeaderChrome{
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: max(8px, env(safe-area-inset-top, 0px));
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 12px;
+  z-index: 4;
+  pointer-events: none;
+}
+.profileAuraHeaderChrome > *{
+  pointer-events: auto;
+}
+
+/* Toolbar — icon cluster on the right (no absolute positioning). */
+.profileAuraToolbar{
+  position: static;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  z-index: 2;
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 .profileAuraIconBtn{
   -webkit-appearance: none;
@@ -4655,8 +4667,10 @@ body[data-route="profile"] .profileAuraGlow{
 }
 .profileAuraNameRow[data-loading="true"] .profileAuraNameInput,
 .profileAuraNameRow[data-loading="true"] .profileIdentityLine,
-.profileAuraNameRow[data-loading="true"] .profilePreviewGenderIcon,
-.profileAuraNameRow[data-loading="true"] .profileCreditsPill{
+.profileAuraNameRow[data-loading="true"] .profilePreviewGenderIcon{
+  visibility: hidden;
+}
+.profileAuraIdentity:has(.profileAuraNameRow[data-loading="true"]) .profileAuraHeaderChrome .profileCreditsPill{
   visibility: hidden;
 }
 @keyframes profileSkelShimmer{
@@ -5159,8 +5173,10 @@ body[data-route="profile"] .profileAuraGlow{
 @media (max-width: 440px){
   .profileAura{ padding: 60px 6px 4px; }
   .profileAuraIdentity{ padding: 0; }
-  .profileAuraToolbar{ top: 12px; right: 10px; }
-  .profileAura .profileCreditsPill--inline{ left: 10px; }
+  .profileAuraHeaderChrome{
+    padding: 0 10px;
+    top: max(6px, env(safe-area-inset-top, 0px));
+  }
   .profileAuraNameInput{ font-size: 18px; max-width: min(100%, 260px); }
   .profileAuraStatStrip{ padding: 8px 12px; gap: 8px; }
   .profileAuraStat strong,
@@ -5546,11 +5562,9 @@ body[data-route="profile"] .profileAuraGlow{
   to{ transform: rotate(360deg); }
 }
 
-/* Compact Credits pill that lives inline with the username row in the
-   profile aura header. Anchored to the right edge via margin-left:auto
-   so it occupies the empty space next to @handle. Links to the full
-   /credits page. Admin (owner) accounts get a gradient and show live
-   Suno API balance (same pool as generations). */
+/* Compact Credits pill in the profile aura header (top chrome row via
+   .profileCreditsPill--toolbar). Links to /credits. Admin (owner)
+   accounts get a gradient and show live Suno API balance. */
 .profileCreditsPill{
   display: inline-flex;
   align-items: center;
@@ -5568,21 +5582,22 @@ body[data-route="profile"] .profileAuraGlow{
   cursor: pointer;
   transition: background 140ms ease, border-color 140ms ease, transform 120ms ease;
 }
-/* Anchor the credits pill to the top-left of the Aura header so the
-   centered username row reads clean. The toolbar (edit/share/gear)
-   continues to live in the top-right. In edit mode we drop back to
-   inline flow because the input takes over the whole row. */
-.profileCreditsPill--inline{
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 2;
+/* Credits pill in the top chrome row (left), same vertical band as
+   edit + settings. Matches icon button height for visual rhythm. */
+.profileCreditsPill--toolbar{
+  position: static;
   margin: 0;
   flex: 0 0 auto;
+  align-self: flex-start;
+  min-height: 38px;
+  padding: 6px 12px 6px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.22);
 }
-.profileAura.profileAuraEditing .profileCreditsPill--inline{
-  position: static;
-  margin-left: auto;
+.profileAura.profileAuraEditing .profileCreditsPill--toolbar{
+  display: none;
 }
 .profileCreditsPill:hover{
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.025));
@@ -5620,10 +5635,9 @@ body[data-route="profile"] .profileAuraGlow{
   font-size: 16px;
   line-height: 1;
 }
-/* In edit mode the username input expands to full width, which would
-   wrap the credits pill onto its own line and look like a separate
-   chip. Hide it during editing — the user is busy renaming. */
-.profileAura.profileAuraEditing .profileCreditsPill--inline{ display: none; }
+/* In edit mode the username input expands to full width — hide the
+   credits chrome so the row doesn't compete with Cancel/Save. */
+.profileAura.profileAuraEditing .profileCreditsPill--toolbar{ display: none; }
 .profileOwnAuthRow{
   display:flex;
   flex-wrap:wrap;

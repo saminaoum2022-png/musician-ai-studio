@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260514profileBrandFlow" />
+    <link rel="stylesheet" href="./styles.css?v=20260513profileHeaderPolish" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -967,52 +967,51 @@
                  for subtle warmth tied to --aura-tint. -->
             <div class="profileAuraGlow" aria-hidden="true"></div>
 
-            <div class="profileAuraToolbar" role="toolbar" aria-label="Profile actions">
-              <button
-                type="button"
-                id="btnProfileEdit"
-                class="profileAuraIconBtn"
-                aria-label="Edit profile"
-                title="Edit profile"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M14.06 6.19l3.75 3.75M3 21l3.5-.62a3 3 0 0 0 1.55-.83l11.1-11.1a2.5 2.5 0 0 0 0-3.54l-.07-.07a2.5 2.5 0 0 0-3.54 0L4.45 15.95a3 3 0 0 0-.83 1.55L3 21z"/>
-                </svg>
-              </button>
-              <div id="profileEditActions" class="profileAuraEditActions" style="display:none" aria-hidden="true">
-                <button type="button" id="btnProfileCancel" class="profileAuraEditBtn profileAuraEditBtn--cancel" aria-label="Cancel editing">Cancel</button>
-                <button type="button" id="btnProfileSave" class="profileAuraEditBtn profileAuraEditBtn--save" aria-label="Save profile">Save</button>
-              </div>
-              <!-- Compact share icon — replaces the old full-width
-                   "Share profile" pill. Sits between Edit and Settings
-                   so the entire account-action set is one tidy cluster
-                   (Instagram pattern). Hidden when signed-out via
-                   renderAuthStatus, same as the old wide pill. -->
-              <button
-                type="button"
-                id="btnProfileShareIcon"
-                class="profileAuraIconBtn"
-                aria-label="Share profile"
-                title="Share profile"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M16 6l-4-4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-                  <path d="M12 2v14" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-                  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-                </svg>
-              </button>
+            <!-- Top bar: credits (left) + actions (right). Share removed
+                 for now — revisit when deep links / native share sheet
+                 are polished. -->
+            <div class="profileAuraHeaderChrome">
               <a
-                href="#/settings"
-                id="btnProfileSettingsGear"
-                class="profileAuraIconBtn"
-                aria-label="Settings"
-                title="Settings"
+                href="#/credits"
+                id="profileCreditsLink"
+                class="profileCreditsPill profileCreditsPill--toolbar"
+                aria-label="Credits balance. Tap to manage credits."
               >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="12" cy="12" r="3"/>
-                  <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
+                <svg class="profileCreditsPillIco" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/>
+                  <path d="M12 7v10M9 10h4.5a2 2 0 0 1 0 4H9m0 0h4.5a2 2 0 0 1 0 4H9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
+                <strong id="profileCreditsBalance" class="profileCreditsPillValue">0</strong>
               </a>
+              <div class="profileAuraToolbar" role="toolbar" aria-label="Profile actions">
+                <button
+                  type="button"
+                  id="btnProfileEdit"
+                  class="profileAuraIconBtn"
+                  aria-label="Edit profile"
+                  title="Edit profile"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M14.06 6.19l3.75 3.75M3 21l3.5-.62a3 3 0 0 0 1.55-.83l11.1-11.1a2.5 2.5 0 0 0 0-3.54l-.07-.07a2.5 2.5 0 0 0-3.54 0L4.45 15.95a3 3 0 0 0-.83 1.55L3 21z"/>
+                  </svg>
+                </button>
+                <div id="profileEditActions" class="profileAuraEditActions" style="display:none" aria-hidden="true">
+                  <button type="button" id="btnProfileCancel" class="profileAuraEditBtn profileAuraEditBtn--cancel" aria-label="Cancel editing">Cancel</button>
+                  <button type="button" id="btnProfileSave" class="profileAuraEditBtn profileAuraEditBtn--save" aria-label="Save profile">Save</button>
+                </div>
+                <a
+                  href="#/settings"
+                  id="btnProfileSettingsGear"
+                  class="profileAuraIconBtn"
+                  aria-label="Settings"
+                  title="Settings"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
+                  </svg>
+                </a>
+              </div>
             </div>
 
             <div class="profileAuraIdentity">
@@ -1080,22 +1079,6 @@
                      Smaller font than the username, quieter color. -->
                 <p id="profileIdentityLine" class="profileIdentityLine" hidden aria-live="polite"></p>
                 <span id="profilePreviewGenderIcon" class="profilePreviewGenderIcon profileAuraGender" style="display:none"></span>
-                <!-- Compact Credits pill — anchored to the right of the
-                     username row. Shows app credits for beta users; for
-                     admin it shows live Suno API balance (same pool as
-                     generations). -->
-                <a
-                  href="#/credits"
-                  id="profileCreditsLink"
-                  class="profileCreditsPill profileCreditsPill--inline"
-                  aria-label="Credits balance. Tap to manage credits."
-                >
-                  <svg class="profileCreditsPillIco" viewBox="0 0 24 24" aria-hidden="true">
-                    <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/>
-                    <path d="M12 7v10M9 10h4.5a2 2 0 0 1 0 4H9m0 0h4.5a2 2 0 0 1 0 4H9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  <strong id="profileCreditsBalance" class="profileCreditsPillValue">0</strong>
-                </a>
               </div>
 
               <!-- The voice chip is now context-aware. In edit mode it
@@ -2108,6 +2091,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260514profileBrandFlow"></script>
+    <script type="module" src="./src/app.js?v=20260513profileHeaderPolish"></script>
   </body>
 </html>

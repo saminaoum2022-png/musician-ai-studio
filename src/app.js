@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514hubLimit12";
+const APP_BUILD = "20260514cellularBoost";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -4619,11 +4619,12 @@ async function hubFetchPostMetaFull(postId) {
 async function supabaseSelectHub({ sinceIsoTs = "" } = {}) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   const ctrl = new AbortController();
-  // 12s was too aggressive on mobile data — DNS + TLS handshake to a
-  // cold Supabase region can swallow most of that on its own, leaving
-  // < 4s for the actual query. 20s is still well under iOS's 30s
-  // request budget and gives genuine slow-network users a chance.
-  const timer = setTimeout(() => ctrl.abort(), 20000);
+  // Cellular reality check: on real-world 3G/Edge, DNS + TLS handshake
+  // to a cold Supabase region can take 8-12s on its own. 20s left genuine
+  // slow-network users hitting the AbortError path. 30s is still well
+  // under iOS's 60s URLSession default and matches what users tolerate
+  // before assuming the app is frozen.
+  const timer = setTimeout(() => ctrl.abort(), 30000);
   // Incremental fetch path: when caller passes `sinceIsoTs` we only
   // request rows newer than that timestamp. Most polls return 0 rows
   // = a few hundred bytes total instead of multi-KB. Full refresh runs
@@ -6266,7 +6267,12 @@ const HUB_PAGE_SIZE = 6;
  *  unfetched even after the user snaps to them). Beyond this index
  *  the `<img>` ships with `data-src` and is hydrated by an
  *  IntersectionObserver tied to the reel scroller. */
-const HUB_EAGER_REEL_COUNT = 2;
+/** Cellular saver: only the very first reel renders its cover eagerly.
+ *  Every other cover defers until the IntersectionObserver one-swipe-ahead
+ *  prefetcher promotes it. On 3G this drops cold-start image traffic from
+ *  ~500 KB-1 MB to ~200-400 KB, which is the difference between "Hub
+ *  appears in 5s" and "Hub appears in 15s". */
+const HUB_EAGER_REEL_COUNT = 1;
 let hubVisibleCount = HUB_PAGE_SIZE;
 let _hubLastRenderedFilter = null;
 // Tracks what's currently painted into the Hub list so the periodic
@@ -6373,6 +6379,9 @@ function renderHub() {
       // Reel-style skeleton: a single full-screen panel that mirrors
       // the production layout (centered cover, right rail dots,
       // bottom title bar) so the swap to real data is invisible.
+      // The hint text only fades in after 2.5s (CSS animation) so
+      // fast connections never see it; slow-cellular users get a
+      // "this is working, not stuck" signal instead of a blank screen.
       els.hubList.innerHTML = `
         <article class="hubReelSkeleton" aria-live="polite" aria-busy="true" aria-label="Loading Hub feed">
           <div class="hubReelSkelCover" aria-hidden="true"></div>
@@ -6387,6 +6396,7 @@ function renderHub() {
             <span class="hubReelSkelLineSm"></span>
             <span class="hubReelSkelLineLg"></span>
           </div>
+          <p class="hubReelSkelHint" aria-live="polite">Loading Hub… this can take a moment on cellular.</p>
         </article>
       `;
     } else {

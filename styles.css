@@ -10561,6 +10561,34 @@ body[data-route="hub"] .hubEq{
 }
 .hubReelSkelLineSm{ height: 10px; width: 40%; }
 .hubReelSkelLineLg{ height: 18px; width: 60%; border-radius: 7px; }
+/* Slow-cellular hint. Only fades in after 2.5s so fast networks never see
+   it — gives the user a "this is loading, not frozen" signal when the
+   first Supabase fetch takes longer than expected. */
+.hubReelSkelHint{
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0;
+  padding: 10px 14px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(255,255,255,0.72);
+  background: rgba(0,0,0,0.32);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  opacity: 0;
+  z-index: 3;
+  animation: hubReelSkelHintIn 0.5s ease-out 2.5s forwards;
+  pointer-events: none;
+}
+@keyframes hubReelSkelHintIn{
+  to { opacity: 1; }
+}
 @keyframes hubReelSkelShimmer{
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
@@ -10571,5 +10599,9 @@ body[data-route="hub"] .hubEq{
   .hubReelSkelLineSm,
   .hubReelSkelLineLg{
     animation: none !important;
+  }
+  .hubReelSkelHint{
+    animation: none !important;
+    opacity: 1;
   }
 }

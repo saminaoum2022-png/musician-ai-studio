@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514hubBrandWordmark";
+const APP_BUILD = "20260514profileBrandFlow";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -411,6 +411,9 @@ const els = {
   profileAboutText: document.getElementById("profileAboutText"),
   profileAboutMeta: document.getElementById("profileAboutMeta"),
   profileAuraStatsInline: document.getElementById("profileAuraStatsInline"),
+  profileStatsPills: document.getElementById("profileStatsPills"),
+  profileStatPillSongsValue: document.getElementById("profileStatPillSongsValue"),
+  profileStatPillLikesValue: document.getElementById("profileStatPillLikesValue"),
   profileAuraStatLine: document.getElementById("profileAuraStatLine"),
   profilePersonaInlineChip: document.getElementById("profilePersonaInlineChip"),
   userPublicAvatar: document.getElementById("userPublicAvatar"),
@@ -7562,6 +7565,20 @@ function renderProfileOwnStats() {
   if (els.profileAuraStatSongs) els.profileAuraStatSongs.dataset.show = items.length > 0 ? "true" : "false";
   if (els.profileAuraStatLikes) els.profileAuraStatLikes.dataset.show = totalLikes > 0 ? "true" : "false";
 
+  // New: two pills under the bio. Hide the row entirely when both
+  // counts are zero so a fresh account doesn't show "0 Songs / 0
+  // Likes" — that was the empty-state ugliness the inline "—" used to
+  // hide. Show the row as soon as the user has at least 1 song.
+  if (els.profileStatPillSongsValue) {
+    els.profileStatPillSongsValue.textContent = formatStatCount(items.length);
+  }
+  if (els.profileStatPillLikesValue) {
+    els.profileStatPillLikesValue.textContent = formatStatCount(totalLikes);
+  }
+  if (els.profileStatsPills) {
+    els.profileStatsPills.hidden = items.length === 0;
+  }
+
   const lineEl = els.profileAuraStatLine;
   if (lineEl) {
     const bits = [];
@@ -7572,6 +7589,16 @@ function renderProfileOwnStats() {
   }
 
   syncProfileAuraPulseFromLatest(items);
+}
+
+/** Compact stat formatter: 0..999 raw, 1.2k, 14.3k, 1.1M. Keeps the
+ *  pills from blowing out on very-liked profiles. */
+function formatStatCount(n) {
+  const v = Number(n) || 0;
+  if (v < 1000) return String(v);
+  if (v < 10000) return `${(v / 1000).toFixed(1).replace(/\.0$/, "")}k`;
+  if (v < 1000000) return `${Math.round(v / 1000)}k`;
+  return `${(v / 1000000).toFixed(1).replace(/\.0$/, "")}M`;
 }
 
 /* -----------------------------------------------------------------

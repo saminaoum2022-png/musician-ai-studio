@@ -4603,6 +4603,7 @@ body[data-route="profile"] .profileAuraGlow{
    heartbeat" visual that used to sit next to it was retired — felt
    off the app aesthetic and didn't help users read their stats. --- */
 .profileAuraTopRow{
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -8245,26 +8246,147 @@ input::placeholder, textarea::placeholder{
 .profileAuraAvatarWrapNeon .profileAuraAvatar[data-empty="true"] + .profileAuraAvatarFallback{
   display: flex;
 }
+/* Brand gradient ring (teal -> indigo -> purple). Drawn as a gradient
+ * background masked into a ring outline so the rounded shape renders
+ * correctly across all engines (border-image with border-radius is
+ * still flaky on iOS WebKit). Slow scale pulse stays. */
 .profileAuraRingPulse{
   position: absolute;
   inset: -6px;
   z-index: 0;
   border-radius: inherit;
   pointer-events: none;
-  border: 1.5px solid rgba(124, 92, 255, 0.55);
+  padding: 1.5px;
+  background: linear-gradient(135deg, #23d5ab 0%, #4ad6c8 25%, #7c5cff 70%, #b78bff 100%);
+  /* Mask the inner circle so only the outline is painted. */
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+          mask-composite: exclude;
   box-shadow:
-    0 0 0 1px rgba(124, 92, 255, 0.18) inset,
-    0 0 18px -2px rgba(124, 92, 255, 0.45);
+    0 0 22px -4px rgba(35, 213, 171, 0.40),
+    0 0 28px -6px rgba(124, 92, 255, 0.48);
   animation: profileAuraPulseRing 2.6s ease-in-out infinite;
-  opacity: 0.9;
+  opacity: 0.92;
 }
 @keyframes profileAuraPulseRing{
-  0%   { transform: scale(1);     opacity: 0.55; }
+  0%   { transform: scale(1);     opacity: 0.62; }
   50%  { transform: scale(1.045); opacity: 1; }
-  100% { transform: scale(1);     opacity: 0.55; }
+  100% { transform: scale(1);     opacity: 0.62; }
 }
 @media (prefers-reduced-motion: reduce){
-  .profileAuraRingPulse{ animation: none; opacity: 0.85; }
+  .profileAuraRingPulse{ animation: none; opacity: 0.9; }
+}
+
+/* Music-note particles drifting up behind the avatar. The container
+ * fills the top row and clips to a circular zone around the avatar so
+ * notes spawn from the avatar's lower edge, rise, drift sideways, and
+ * fade. All pure CSS — never touches JS. */
+.profileAuraParticles{
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 220px;
+  height: 160px;
+  transform: translate(-50%, -28%);
+  pointer-events: none;
+  z-index: 0;
+  overflow: visible;
+}
+.profileAuraParticle{
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  font-size: 18px;
+  line-height: 1;
+  color: rgba(180, 200, 255, 0.55);
+  text-shadow:
+    0 0 8px rgba(124, 92, 255, 0.45),
+    0 0 16px rgba(35, 213, 171, 0.30);
+  opacity: 0;
+  transform: translate(-50%, 0) scale(0.9);
+  animation: profileAuraParticleRise var(--p-dur, 7s) linear var(--p-delay, 0s) infinite;
+  will-change: transform, opacity;
+}
+.profileAuraParticle:nth-child(2n){
+  color: rgba(160, 230, 220, 0.55);
+}
+@keyframes profileAuraParticleRise{
+  0%   { transform: translate(-50%, 10px) scale(0.85); opacity: 0; }
+  12%  { opacity: 1; }
+  60%  { transform: translate(calc(-50% + var(--p-x, 40px) * 0.6), -90px) scale(1); opacity: 0.85; }
+  100% { transform: translate(calc(-50% + var(--p-x, 40px)), -160px) scale(0.7); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce){
+  .profileAuraParticles{ display: none; }
+}
+
+/* --- Stats pills under the bio: Songs (left) + Likes (right). --- */
+.profileStatsPills{
+  display: flex;
+  gap: 10px;
+  margin: 10px 0 4px;
+  padding: 0 4px;
+  width: 100%;
+  justify-content: center;
+}
+.profileStatsPills[hidden]{ display: none; }
+.profileStatPill{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px 7px 11px;
+  border-radius: 999px;
+  background: rgba(10, 12, 22, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  backdrop-filter: blur(10px) saturate(130%);
+  -webkit-backdrop-filter: blur(10px) saturate(130%);
+  font-size: 13px;
+  line-height: 1;
+  color: rgba(232, 238, 247, 0.92);
+  min-width: 96px;
+  justify-content: center;
+  transition: border-color 180ms ease, background 180ms ease;
+}
+.profileStatPill--songs{
+  /* Cool teal accent for the left pill. */
+  border-color: rgba(35, 213, 171, 0.32);
+  background:
+    linear-gradient(135deg, rgba(35, 213, 171, 0.12), rgba(10, 12, 22, 0.6) 60%);
+}
+.profileStatPill--likes{
+  /* Warm purple accent for the right pill. */
+  border-color: rgba(124, 92, 255, 0.36);
+  background:
+    linear-gradient(135deg, rgba(124, 92, 255, 0.16), rgba(10, 12, 22, 0.6) 60%);
+}
+.profileStatPillIcon{
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+.profileStatPillIcon svg{
+  width: 16px;
+  height: 16px;
+}
+.profileStatPill--songs .profileStatPillIcon{ color: #6ee7d3; }
+.profileStatPill--likes .profileStatPillIcon{ color: #d8b4fe; }
+.profileStatPillValue{
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
+.profileStatPillLabel{
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(232, 238, 247, 0.72);
 }
 .profileAuraAvatarWrapNeon .profileAuraAvatarSkeleton{ z-index: 3; }
 .profileAuraAvatarWrapNeon .profileAuraAvatarHint{ z-index: 4; }

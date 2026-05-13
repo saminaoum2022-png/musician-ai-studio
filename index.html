@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260514hubBrandWordmark" />
+    <link rel="stylesheet" href="./styles.css?v=20260514profileBrandFlow" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1022,6 +1022,18 @@
                    app's aesthetic. Skeleton shimmer wraps the avatar and
                    name on cold opens until the real data resolves. -->
               <div class="profileAuraTopRow profileAuraTopRowCentered" id="profileAuraTopRow" data-loading="false">
+                <!-- Soft music-note particles drifting up behind the
+                     avatar. Pure CSS, position: absolute, pointer-events:
+                     none. 6 staggered nodes give the hero a quiet sense
+                     of life without competing with the avatar. -->
+                <div class="profileAuraParticles" aria-hidden="true">
+                  <span class="profileAuraParticle" style="--p-delay:0s;   --p-x:-46px; --p-dur:6.4s;">♪</span>
+                  <span class="profileAuraParticle" style="--p-delay:1.1s; --p-x:42px;  --p-dur:7.2s;">♫</span>
+                  <span class="profileAuraParticle" style="--p-delay:2.3s; --p-x:-72px; --p-dur:6.8s;">♩</span>
+                  <span class="profileAuraParticle" style="--p-delay:3.4s; --p-x:64px;  --p-dur:7.6s;">♪</span>
+                  <span class="profileAuraParticle" style="--p-delay:4.6s; --p-x:-30px; --p-dur:6.2s;">♬</span>
+                  <span class="profileAuraParticle" style="--p-delay:5.8s; --p-x:80px;  --p-dur:7.0s;">♫</span>
+                </div>
                 <div class="profileAuraAvatarWrap profileAuraAvatarWrapNeon" id="profileAuraAvatarWrap">
                   <span class="profileAuraRing profileAuraRingPulse" aria-hidden="true"></span>
                   <img
@@ -1145,13 +1157,39 @@
               <p id="profilePersonaInlineChip" class="profilePersonaInlineChip profileLegacyChip" style="display:none" aria-live="polite"></p>
               <p id="profilePreviewGenres" class="profileGenreWash profileLegacyChip" style="display:none" aria-label="Genres"></p>
 
-              <!-- Stats — songs · likes only. -->
-              <p class="profileAuraStatsInline" id="profileAuraStatsInline" aria-live="polite">
+              <!-- Stats — two pills under the bio. Replaces the old
+                   "17 songs · 142 likes" inline line. Glassy, brand-
+                   tinted; Songs on the left, Likes on the right. -->
+              <div class="profileStatsPills" id="profileStatsPills" aria-live="polite" hidden>
+                <div class="profileStatPill profileStatPill--songs" data-stat="songs">
+                  <span class="profileStatPillIcon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M9 18V5l12-2v13"/>
+                      <circle cx="6" cy="18" r="3"/>
+                      <circle cx="18" cy="16" r="3"/>
+                    </svg>
+                  </span>
+                  <strong class="profileStatPillValue" id="profileStatPillSongsValue">0</strong>
+                  <span class="profileStatPillLabel">Songs</span>
+                </div>
+                <div class="profileStatPill profileStatPill--likes" data-stat="likes">
+                  <span class="profileStatPillIcon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 21.35 10.55 20C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35Z"/>
+                    </svg>
+                  </span>
+                  <strong class="profileStatPillValue" id="profileStatPillLikesValue">0</strong>
+                  <span class="profileStatPillLabel">Likes</span>
+                </div>
+              </div>
+              <!-- Legacy "—" line kept off-screen for the few callers that
+                   still read it (accessibility / sr-only fallback). The
+                   visible stats now live in the pills above. -->
+              <p class="profileAuraStatsInline srOnly" id="profileAuraStatsInline" aria-hidden="true">
                 <span class="profileAuraStatsInlineInner">
                   <span id="profileAuraStatLine">—</span>
                 </span>
               </p>
-              <!-- Legacy numeric nodes — updated by renderProfileOwnStats for scripts that read counts -->
               <span id="profileAuraSongsValue" class="srOnly" aria-hidden="true">0</span>
               <span id="profileAuraLikesValue" class="srOnly" aria-hidden="true">0</span>
               <span id="profileAuraStatSongs" class="srOnly" data-show="false" aria-hidden="true"></span>
@@ -2070,6 +2108,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260514hubBrandWordmark"></script>
+    <script type="module" src="./src/app.js?v=20260514profileBrandFlow"></script>
   </body>
 </html>

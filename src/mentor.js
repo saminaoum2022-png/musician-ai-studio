@@ -58,8 +58,39 @@ export function bumpMentorRecSession() {
 
 function setMentorLiveUi(on) {
   const root = document.querySelector(".mentorPage");
-  if (!root) return;
-  root.classList.toggle("mentorPage--live", Boolean(on));
+  if (root) root.classList.toggle("mentorPage--live", Boolean(on));
+  const viz = document.querySelector(".mentorVizCard");
+  if (viz) viz.classList.toggle("mentorVizCard--live", Boolean(on));
+  const ready = document.getElementById("mentorVizReadyText");
+  if (ready) ready.textContent = on ? "Listening…" : "Ready when you are";
+}
+
+function blurb(s, maxLen) {
+  const t = String(s || "").replace(/\s+/g, " ").trim();
+  if (t.length <= maxLen) return t;
+  return `${t.slice(0, Math.max(1, maxLen - 1))}…`;
+}
+
+function renderGenrePills(line) {
+  const strip = document.getElementById("mentorGenreStrip");
+  if (!strip) return;
+  strip.textContent = "";
+  for (const chunk of String(line || "").split(" · ")) {
+    const t = chunk.trim();
+    if (!t) continue;
+    const span = document.createElement("span");
+    span.className = "mentorGenrePill";
+    span.textContent = t;
+    strip.appendChild(span);
+  }
+}
+
+function setMentorQualityRing(score) {
+  const el = document.getElementById("mentorQualityProgress");
+  if (!el) return;
+  const q = Math.max(0, Math.min(100, Number(score) || 0));
+  const C = 94.248;
+  el.style.strokeDasharray = `${(q / 100) * C} ${C}`;
 }
 
 /** Downmix to mono for pitch analysis (some devices record stereo duplicates). */
@@ -614,9 +645,19 @@ export function resetMentorSession() {
   setText("mentorCardQualityTitle", "Quality");
   setText("mentorCardQualityScore", "—");
   setText("mentorCardQualityBody", "—");
-  renderMaqamDiagram(0, []);
-  const mood = document.querySelector(".mentorTile--mood");
-  if (mood) mood.style.removeProperty("--mentor-mood-hue");
+  setText("mentorHeroTimbre", "—");
+  setText("mentorStrVibratoTitle", "Pitch motion");
+  setText("mentorStrVibratoBody", "—");
+  setText("mentorStrTimbreTitle", "Brightness");
+  setText("mentorStrTimbreBody", "—");
+  setText("mentorStrTuneTitle", "Intonation");
+  setText("mentorStrTuneBody", "—");
+  setText("mentorFocusLine", "—");
+  setText("mentorFocusSub", "—");
+  renderGenrePills("");
+  setMentorQualityRing(0);
+  const hero = document.querySelector("[data-mentor-hero]");
+  if (hero) hero.style.setProperty("--mentor-mood-hue", "258");
   const bs = document.getElementById("mentorBtnStart");
   const bt = document.getElementById("mentorBtnStop");
   if (bs) bs.disabled = false;
@@ -755,10 +796,21 @@ async function finalizeMentorRecording(chunks, mimeTypeHint, recordSession) {
       setText("mentorCardMaqamBody", res.maqamBody);
       setText("mentorCardMaqamMeta", res.maqamMeta);
       renderMaqamDiagram(res.maqamTonicPc, res.maqamDegrees);
-      const mood = document.querySelector(".mentorTile--mood");
-      if (mood) mood.style.setProperty("--mentor-mood-hue", String(hueFromMaqamId(res.maqamId)));
+      const hero = document.querySelector("[data-mentor-hero]");
+      if (hero) hero.style.setProperty("--mentor-mood-hue", String(hueFromMaqamId(res.maqamId)));
+      setText("mentorHeroTimbre", `${res.timbreLabel} · ${res.medianName}`);
+      setText("mentorStrVibratoTitle", res.vibratoLabel);
+      setText("mentorStrVibratoBody", blurb(res.vibratoDetail, 140));
+      setText("mentorStrTimbreTitle", res.timbreLabel);
+      setText("mentorStrTimbreBody", blurb(res.timbreDetail, 140));
+      setText("mentorStrTuneTitle", res.tuneTitle);
+      setText("mentorStrTuneBody", blurb(res.tuneBody, 140));
+      setText("mentorFocusLine", res.tuneBody);
+      setText("mentorFocusSub", `${res.keysDetail} ${res.vibratoMeta}`.trim());
       setText("mentorCardGenreTitle", res.genreTitle);
       setText("mentorCardGenreBody", res.genreBody);
+      renderGenrePills(res.genreBody);
+      setMentorQualityRing(res.quality);
       setText("mentorCardTuneTitle", res.tuneTitle);
       setText("mentorCardTuneBody", res.tuneBody);
       setText("mentorCardTuneMeta", res.tuneMeta);
@@ -861,8 +913,31 @@ export function initMentor() {
       try {
         sessionStorage.setItem("mentor:voiceRef", refEl.value);
       } catch {}
+      syncMentorVoiceCards();
     });
   }
+
+  function syncMentorVoiceCards() {
+    const sel = document.getElementById("mentorVoiceRef");
+    if (!sel) return;
+    const v = sel.value || "mens";
+    document.querySelectorAll("[data-mentor-voice]").forEach((btn) => {
+      btn.classList.toggle("isSelected", btn.getAttribute("data-mentor-voice") === v);
+    });
+  }
+
+  syncMentorVoiceCards();
+  document.querySelectorAll("[data-mentor-voice]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const v = btn.getAttribute("data-mentor-voice");
+      if (!v || !refEl || refEl.value === v) return;
+      refEl.value = v;
+      try {
+        sessionStorage.setItem("mentor:voiceRef", refEl.value);
+      } catch {}
+      syncMentorVoiceCards();
+    });
+  });
 
   btnStart.addEventListener("click", async () => {
     if (btnStart.disabled) return;

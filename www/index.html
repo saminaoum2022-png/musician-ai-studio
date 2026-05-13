@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260514mentorResultsFix" />
+    <link rel="stylesheet" href="./styles.css?v=20260514mentorVivid" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -738,186 +738,357 @@
         </section>
 
         <section class="mentorPage" data-route="mentor">
-          <header class="mentorPageHead">
-            <div class="mentorPageKicker">Voice lab</div>
+          <div class="mentorAmbient" aria-hidden="true"></div>
+
+          <header class="mentorHeroTop">
+            <div class="mentorHeroBrand"><span class="mentorHeroBrandNa">Na</span> VOICE LAB</div>
             <h2 class="mentorPageTitle">Mentor</h2>
             <p class="mentorPageLead">
-              Pitch range, optional classical range tags (separate men’s vs women’s lists), rough maqam guess, brightness proxy (“timbre”), genre ideas, and intonation — for practice, not diagnosis.
+              Understand your voice in one comfortable take — range, colour hints, maqam guess, and style ideas. On-device; for practice, not diagnosis.
             </p>
-            <details class="mentorGuide">
-              <summary class="mentorGuideSummary">How to sing this test (read once)</summary>
-              <ol class="mentorGuideList">
-                <li>Warm up 30–60s lightly — no shouting.</li>
-                <li>Start a comfortable low “ah” for 2–3 seconds (chest speaking pitch is fine).</li>
-                <li>Glide <strong>slowly</strong> chest → head on “ah” or “ee” over ~5–8 seconds — one continuous slide.</li>
-                <li>Hold your <strong>highest comfortable</strong> note ~2s (not a strained scream).</li>
-                <li>Stay ~15–25cm from the mic; steady volume helps highs register.</li>
-              </ol>
-              <p class="mentorGuideFoot">
-                <strong>Low → high</strong> uses robust percentiles (not your absolute max squeak). For men, choose <em>Men’s voices</em> so high notes never map to mezzo/soprano.
+            <div class="mentorHeroBadges" aria-hidden="true">
+              <span class="mentorHeroBadge">AI-powered</span>
+              <span class="mentorHeroBadge">Private</span>
+              <span class="mentorHeroBadge">For practice</span>
+            </div>
+          </header>
+
+          <div class="mentorPreFlow">
+            <div class="mentorScanCard mentorGlass">
+              <svg width="0" height="0" class="mentorWaveDefs" aria-hidden="true">
+                <defs>
+                  <linearGradient id="mentorWaveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#7c5cff" />
+                    <stop offset="55%" stop-color="#5eead4" />
+                    <stop offset="100%" stop-color="#22d3ee" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div class="mentorScanWaves" aria-hidden="true">
+                <svg class="mentorWaveSvg mentorWaveSvg--l" viewBox="0 0 120 48" preserveAspectRatio="none">
+                  <path
+                    d="M0 28 Q15 8 30 28 T60 28 T90 28 T120 28"
+                    fill="none"
+                    stroke="url(#mentorWaveGrad)"
+                    stroke-width="2.5"
+                    stroke-linecap="round"
+                  />
+                </svg>
+                <div class="mentorOrbWrap">
+                  <div class="mentorOrbRing" aria-hidden="true"></div>
+                  <button type="button" id="mentorBtnStart" class="mentorOrbBtn" aria-label="Start voice scan">
+                    <svg viewBox="0 0 24 24" width="34" height="34" aria-hidden="true">
+                      <path
+                        fill="currentColor"
+                        d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V19h2v-1.28c3.28-.49 6-3.31 6-6.72h-1.7z"
+                      />
+                    </svg>
+                    <span class="mentorOrbLabel">Tap to scan</span>
+                  </button>
+                </div>
+                <svg class="mentorWaveSvg mentorWaveSvg--r" viewBox="0 0 120 48" preserveAspectRatio="none">
+                  <path
+                    d="M0 28 Q15 8 30 28 T60 28 T90 28 T120 28"
+                    fill="none"
+                    stroke="url(#mentorWaveGrad)"
+                    stroke-width="2.5"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </div>
+              <p class="mentorScanTagline">Tap the mic — one slow chest-to-head glide.</p>
+              <p id="mentorStatus" class="mentorStatus mentorScanStatus" role="status"></p>
+              <p id="mentorHint" class="mentorHint mentorScanHint">
+                Quiet room, steady volume. Men’s / Women’s / Notes only changes classical-style labels.
               </p>
-            </details>
-            <div class="mentorPrefs">
-              <label class="mentorPrefLabel" for="mentorVoiceRef">Classical range labels</label>
-              <select id="mentorVoiceRef" class="mentorSelect" autocomplete="off">
+              <div class="mentorScanFoot">
+                <button type="button" id="mentorBtnStop" class="mentorBtnStop mentorGlass ghost" disabled>Stop</button>
+                <span id="mentorTimer" class="mentorTimer" aria-live="polite"></span>
+              </div>
+            </div>
+
+            <div class="mentorAnalyzeBlock">
+              <div class="mentorSectionEyebrow">Analyze for</div>
+              <select id="mentorVoiceRef" class="mentorVoiceRefNative" autocomplete="off" aria-label="Voice range labels">
                 <option value="mens">Men’s voices (bass · baritone · tenor)</option>
                 <option value="womens">Women’s voices (contralto · alto · mezzo · soprano)</option>
                 <option value="range">Notes only — no bass/tenor/soprano words</option>
               </select>
+              <div class="mentorVoiceCards" role="group" aria-label="Choose range labels">
+                <button type="button" class="mentorVoiceCard" data-mentor-voice="mens">
+                  <span class="mentorVoiceCardIcon" aria-hidden="true">♂</span>
+                  <span class="mentorVoiceCardTitle">Men’s voices</span>
+                  <span class="mentorVoiceCardSub">Bass · Baritone · Tenor</span>
+                </button>
+                <button type="button" class="mentorVoiceCard" data-mentor-voice="womens">
+                  <span class="mentorVoiceCardIcon" aria-hidden="true">♀</span>
+                  <span class="mentorVoiceCardTitle">Women’s voices</span>
+                  <span class="mentorVoiceCardSub">Alto · Mezzo · Soprano</span>
+                </button>
+                <button type="button" class="mentorVoiceCard" data-mentor-voice="range">
+                  <span class="mentorVoiceCardIcon" aria-hidden="true">♪</span>
+                  <span class="mentorVoiceCardTitle">Notes only</span>
+                  <span class="mentorVoiceCardSub">Pitch range, no voice tags</span>
+                </button>
+              </div>
             </div>
-          </header>
 
-          <div class="mentorStudio">
-            <div class="mentorFloat mentorFloat--gauge">
-              <div class="mentorGauge" aria-hidden="true">
-                <svg class="mentorGaugeSvg" viewBox="0 0 120 88" width="200" height="147">
-                  <defs>
-                    <linearGradient id="mentorArcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" stop-color="#7c5cff" />
-                      <stop offset="100%" stop-color="#23d5ab" />
-                    </linearGradient>
-                  </defs>
-                  <path
-                    class="mentorArcTrack"
-                    d="M 22 72 A 52 52 0 0 1 98 72"
-                    fill="none"
-                    stroke="rgba(255,255,255,0.08)"
-                    stroke-width="8"
-                    stroke-linecap="round"
-                  />
-                  <path
-                    id="mentorArcRange"
-                    d="M 22 72 A 52 52 0 0 1 98 72"
-                    fill="none"
-                    stroke="url(#mentorArcGrad)"
-                    stroke-width="9"
-                    stroke-linecap="round"
-                    stroke-opacity="0.55"
-                    stroke-dasharray="0 175"
-                    pathLength="175"
-                  />
-                  <path
-                    id="mentorArcMedian"
-                    d="M 22 72 A 52 52 0 0 1 98 72"
-                    fill="none"
-                    stroke="#23d5ab"
-                    stroke-width="9"
-                    stroke-linecap="round"
-                    stroke-dasharray="0 175"
-                    pathLength="175"
-                  />
-                </svg>
-                <div class="mentorGaugeCenter">
-                  <span class="mentorGaugeKicker">Pitch map</span>
-                  <span id="mentorArcCaption" class="mentorGaugeCaption">—</span>
-                  <span class="mentorGaugeHint">Violet band · comfortable span · Teal tick · centre</span>
+            <div class="mentorVizCard mentorGlass">
+              <div class="mentorVizHead">
+                <span class="mentorSectionEyebrow">Live visualization</span>
+                <span class="mentorVizReady">
+                  <span class="mentorLiveDot" aria-hidden="true"></span>
+                  <span id="mentorVizReadyText">Ready when you are</span>
+                </span>
+              </div>
+              <div class="mentorVizCanvas" aria-hidden="true">
+                <div class="mentorVizMesh"></div>
+                <div class="mentorVizRibbon"></div>
+                <div class="mentorVizSpark"></div>
+              </div>
+              <p class="mentorVizCaption">Your voice paints this ribbon while we listen.</p>
+            </div>
+
+            <div class="mentorDiscover">
+              <div class="mentorSectionEyebrow">What you’ll discover</div>
+              <div class="mentorDiscoverTrack">
+                <div class="mentorDiscoverCard mentorGlass">
+                  <span class="mentorDiscoverIcon">〰</span>
+                  <strong>Your range</strong>
+                  <span>Comfortable low → high</span>
+                </div>
+                <div class="mentorDiscoverCard mentorGlass">
+                  <span class="mentorDiscoverIcon">◉</span>
+                  <strong>Vocal colour</strong>
+                  <span>Warmth &amp; brightness hints</span>
+                </div>
+                <div class="mentorDiscoverCard mentorGlass">
+                  <span class="mentorDiscoverIcon">♫</span>
+                  <strong>Maqam guess</strong>
+                  <span>12-TET learning map</span>
+                </div>
+                <div class="mentorDiscoverCard mentorGlass">
+                  <span class="mentorDiscoverIcon">✦</span>
+                  <strong>Genre fit</strong>
+                  <span>Styles that may suit you</span>
                 </div>
               </div>
             </div>
-            <div class="mentorFloat mentorFloat--capture">
-              <div class="mentorCaptureHead">
-                <span class="mentorLiveDot" aria-hidden="true"></span>
-                <span class="mentorCaptureTitle">Live capture</span>
-              </div>
-              <p id="mentorStatus" class="mentorStatus" role="status"></p>
-              <p id="mentorHint" class="mentorHint">
-                Use a quiet room, open “How to sing this test” if you need it, then record one slow chest-to-head glide. Men’s / Women’s / Notes only changes classical-style labels.
-              </p>
-              <div class="mentorActions">
-                <button type="button" id="mentorBtnStart" class="primary mentorBtnStart">Start capture</button>
-                <button type="button" id="mentorBtnStop" class="ghost mentorBtnStop" disabled>Stop</button>
-                <span id="mentorTimer" class="mentorTimer" aria-live="polite"></span>
-              </div>
+
+            <div class="mentorTipCard mentorGlass">
+              <div class="mentorTipIcon" aria-hidden="true">✦</div>
+              <p class="mentorTipText">Sing naturally in a quiet room — one glide is enough.</p>
+              <details class="mentorGuide mentorGuide--tip">
+                <summary class="mentorGuideSummary">How to sing this test →</summary>
+                <ol class="mentorGuideList">
+                  <li>Warm up 30–60s lightly — no shouting.</li>
+                  <li>Start a comfortable low “ah” for 2–3 seconds.</li>
+                  <li>Glide <strong>slowly</strong> chest → head on “ah” or “ee” over ~5–8 seconds.</li>
+                  <li>Hold your highest <strong>comfortable</strong> note ~2s.</li>
+                  <li>Stay ~15–25cm from the mic.</li>
+                </ol>
+                <p class="mentorGuideFoot">
+                  <strong>Low → high</strong> uses robust percentiles. For men, choose <em>Men’s voices</em> so highs don’t read as mezzo/soprano.
+                </p>
+              </details>
             </div>
           </div>
 
           <div id="mentorResults" class="mentorResults" hidden>
             <p class="mentorPullQuote" id="mentorPullQuote">This pass</p>
 
-            <div class="mentorBento">
-              <div class="mentorTile mentorTile--stat mentorTile--span2">
-                <div class="mentorStatLabel">Low → high</div>
-                <div id="mentorValRange" class="mentorStatValue">—</div>
-                <div id="mentorValSpan" class="mentorStatMeta">—</div>
+            <div class="mentorResultHero mentorGlass" data-mentor-hero>
+              <div class="mentorResultHeroGlow" aria-hidden="true"></div>
+              <div class="mentorResultHeroSilhouette" aria-hidden="true"></div>
+              <div class="mentorResultHeroMain">
+                <span class="mentorEyebrow mentorEyebrow--hero">Your voice identity</span>
+                <h3 id="mentorValVoice" class="mentorResultIdentityTitle">—</h3>
+                <p id="mentorHeroTimbre" class="mentorResultIdentityGradient">—</p>
+                <p id="mentorValVoiceBody" class="mentorResultIdentityBody"></p>
+                <p id="mentorValVoiceMeta" class="mentorResultIdentityMeta">—</p>
+                <div class="mentorPersonaChips" aria-hidden="true">
+                  <span class="mentorChip">Expressive</span>
+                  <span class="mentorChip">Musical</span>
+                  <span class="mentorChip">Present</span>
+                </div>
               </div>
-              <div class="mentorTile mentorTile--stat mentorTile--statGlow mentorTile--span2">
-                <div class="mentorStatLabel">Center</div>
-                <div id="mentorValMedian" class="mentorStatValue mentorStatValueLg">—</div>
-                <div class="mentorStatMeta">Robust median</div>
-              </div>
-              <div class="mentorTile mentorTile--stat mentorTile--statMint mentorTile--span2">
-                <div class="mentorStatLabel">Classical tag</div>
-                <div id="mentorValVoice" class="mentorStatValue mentorStatValueVoice">—</div>
-                <p id="mentorValVoiceBody" class="mentorStatVoiceBody"></p>
-                <div id="mentorValVoiceMeta" class="mentorStatMeta">—</div>
-              </div>
-
-              <div class="mentorTile mentorTile--maqam mentorTile--span4">
-                <div class="mentorMaqamTop">
-                  <div class="mentorMaqamTitles">
-                    <span class="mentorEyebrow">Detected scale (12-TET)</span>
-                    <h3 id="mentorCardMaqamTitle" class="mentorMaqamTitle">—</h3>
+              <div class="mentorResultHeroGauge">
+                <div class="mentorGauge mentorGauge--hero" aria-hidden="true">
+                  <svg class="mentorGaugeSvg" viewBox="0 0 120 88" width="200" height="147">
+                    <defs>
+                      <linearGradient id="mentorArcGradHero" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stop-color="#7c5cff" />
+                        <stop offset="100%" stop-color="#23d5ab" />
+                      </linearGradient>
+                    </defs>
+                    <path
+                      class="mentorArcTrack"
+                      d="M 22 72 A 52 52 0 0 1 98 72"
+                      fill="none"
+                      stroke="rgba(255,255,255,0.08)"
+                      stroke-width="8"
+                      stroke-linecap="round"
+                    />
+                    <path
+                      id="mentorArcRange"
+                      d="M 22 72 A 52 52 0 0 1 98 72"
+                      fill="none"
+                      stroke="url(#mentorArcGradHero)"
+                      stroke-width="9"
+                      stroke-linecap="round"
+                      stroke-opacity="0.55"
+                      stroke-dasharray="0 175"
+                      pathLength="175"
+                    />
+                    <path
+                      id="mentorArcMedian"
+                      d="M 22 72 A 52 52 0 0 1 98 72"
+                      fill="none"
+                      stroke="#23d5ab"
+                      stroke-width="9"
+                      stroke-linecap="round"
+                      stroke-dasharray="0 175"
+                      pathLength="175"
+                    />
+                  </svg>
+                  <div class="mentorGaugeCenter">
+                    <span class="mentorGaugeKicker">Pitch map</span>
+                    <span id="mentorArcCaption" class="mentorGaugeCaption">—</span>
+                    <span class="mentorGaugeHint">Band · span · centre tick</span>
                   </div>
-                  <div id="mentorMaqamDiagram" class="mentorMaqamDiagram" aria-hidden="true"></div>
                 </div>
-                <p id="mentorCardMaqamBody" class="mentorMaqamBody"></p>
-                <p id="mentorCardMaqamMeta" class="mentorMaqamMeta">—</p>
               </div>
-              <div class="mentorTile mentorTile--mood mentorTile--span2" aria-hidden="true">
-                <div class="mentorMoodLayers">
-                  <img src="./assets/nabadai-logo.png" alt="" class="mentorMoodMark" width="120" height="120" decoding="async" />
-                  <div class="mentorMoodGlow"></div>
-                </div>
-                <span class="mentorMoodCaption">Colour field</span>
-              </div>
+            </div>
 
-              <div class="mentorTile mentorTile--sq mentorTile--genre">
-                <h3 id="mentorCardGenreTitle" class="mentorTileTitle">Genres</h3>
-                <p id="mentorCardGenreBody" class="mentorTileProse"></p>
+            <div class="mentorSnapGrid">
+              <div class="mentorSnapCard mentorGlass">
+                <span class="mentorSnapEyebrow">Range</span>
+                <div id="mentorValRange" class="mentorSnapValue">—</div>
+                <div id="mentorValSpan" class="mentorSnapMeta">—</div>
+                <div class="mentorSnapWave" aria-hidden="true"></div>
               </div>
-              <div class="mentorTile mentorTile--sq mentorTile--tune">
-                <h3 id="mentorCardTuneTitle" class="mentorTileTitle">Intonation</h3>
-                <p id="mentorCardTuneBody" class="mentorTileProse">—</p>
-                <p id="mentorCardTuneMeta" class="mentorTileFoot">—</p>
+              <div class="mentorSnapCard mentorGlass">
+                <span class="mentorSnapEyebrow">Key / maqam</span>
+                <div id="mentorCardMaqamTitle" class="mentorSnapValue mentorSnapValueSm">—</div>
+                <div id="mentorValMedian" class="mentorSnapAccent">—</div>
               </div>
-
-              <div class="mentorTile mentorTile--span3 mentorTile--plain">
-                <h3 id="mentorCardTimbreTitle" class="mentorSerifTitle">Brightness</h3>
-                <p id="mentorCardTimbreBody" class="mentorSerifBody">—</p>
-                <p id="mentorCardTimbreMeta" class="mentorTileFoot">—</p>
+              <div class="mentorSnapCard mentorGlass">
+                <span class="mentorSnapEyebrow">Tone</span>
+                <div id="mentorCardTimbreTitle" class="mentorSnapValue mentorSnapValueSm">—</div>
+                <p id="mentorCardTimbreBody" class="mentorSnapMeta">—</p>
               </div>
-              <div class="mentorTile mentorTile--span3 mentorTile--plain mentorTile--plainAlt">
-                <h3 id="mentorCardVibratoTitle" class="mentorSerifTitle">Pitch motion</h3>
-                <p id="mentorCardVibratoBody" class="mentorSerifBody">—</p>
-                <p id="mentorCardVibratoMeta" class="mentorTileFoot">—</p>
-              </div>
-
-              <div class="mentorTile mentorTile--span4 mentorTile--keys">
-                <h3 id="mentorCardKeysTitle" class="mentorTileTitle">Key ideas</h3>
-                <p id="mentorCardKeysBody" class="mentorInsightKeys">—</p>
-                <p id="mentorCardKeysSub" class="mentorTileFoot">—</p>
-              </div>
-              <div class="mentorTile mentorTile--span2 mentorTile--sq mentorTile--quality">
-                <div class="mentorQualityWrap">
+              <div class="mentorSnapCard mentorGlass mentorSnapCard--quality">
+                <span class="mentorSnapEyebrow">Quality</span>
+                <div class="mentorQualityHero">
                   <svg viewBox="0 0 36 36" class="mentorQualityRing" aria-hidden="true">
                     <defs>
-                      <linearGradient id="mentorQualityGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <linearGradient id="mentorQualityGradHero" x1="0%" y1="0%" x2="100%" y2="0%">
                         <stop offset="0%" stop-color="#7c5cff" />
                         <stop offset="100%" stop-color="#23d5ab" />
                       </linearGradient>
                     </defs>
                     <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="3" />
-                    <circle cx="18" cy="18" r="15" fill="none" stroke="url(#mentorQualityGrad)" stroke-width="3" stroke-dasharray="70 94" stroke-linecap="round" transform="rotate(-90 18 18)" />
+                    <circle
+                      id="mentorQualityProgress"
+                      cx="18"
+                      cy="18"
+                      r="15"
+                      fill="none"
+                      stroke="url(#mentorQualityGradHero)"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                      transform="rotate(-90 18 18)"
+                      stroke-dasharray="0 94.248"
+                      pathLength="94.248"
+                    />
                   </svg>
-                  <span id="mentorCardQualityScore" class="mentorInsightRingLabel">—</span>
+                  <span id="mentorCardQualityScore" class="mentorQualityHeroLabel">—</span>
                 </div>
-                <h3 id="mentorCardQualityTitle" class="mentorTileTitle">Quality</h3>
-                <p id="mentorCardQualityBody" class="mentorTileProse">—</p>
+                <p id="mentorCardQualityBody" class="mentorSnapMeta">—</p>
+              </div>
+            </div>
+
+            <div class="mentorStrengths mentorGlass">
+              <div class="mentorStrengthsHead">
+                <span class="mentorSectionEyebrow">Your strengths</span>
+                <span class="mentorStrengthsHint">From this take</span>
+              </div>
+              <div class="mentorStrengthsGrid">
+                <div class="mentorStrength">
+                  <span class="mentorStrengthIcon" aria-hidden="true">★</span>
+                  <strong id="mentorStrVibratoTitle">Pitch motion</strong>
+                  <p id="mentorStrVibratoBody" class="mentorStrengthBody">—</p>
+                </div>
+                <div class="mentorStrength">
+                  <span class="mentorStrengthIcon mentorStrengthIcon--heart" aria-hidden="true">♥</span>
+                  <strong id="mentorStrTimbreTitle">Brightness</strong>
+                  <p id="mentorStrTimbreBody" class="mentorStrengthBody">—</p>
+                </div>
+                <div class="mentorStrength">
+                  <span class="mentorStrengthIcon mentorStrengthIcon--aim" aria-hidden="true">◎</span>
+                  <strong id="mentorStrTuneTitle">Intonation</strong>
+                  <p id="mentorStrTuneBody" class="mentorStrengthBody">—</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="mentorMaqamDeck mentorGlass">
+              <div class="mentorMaqamTop">
+                <div class="mentorMaqamTitles">
+                  <span class="mentorEyebrow">Detected scale (12-TET)</span>
+                  <p class="mentorMaqamLead">Heuristic pitch-class map for practice — not a full maqam analysis.</p>
+                </div>
+                <div id="mentorMaqamDiagram" class="mentorMaqamDiagram" aria-hidden="true"></div>
+              </div>
+              <p id="mentorCardMaqamBody" class="mentorMaqamBody"></p>
+              <p id="mentorCardMaqamMeta" class="mentorMaqamMeta">—</p>
+            </div>
+
+            <div class="mentorGenreSection mentorGlass">
+              <h3 id="mentorCardGenreTitle" class="mentorGenreTitle">Genres that may fit</h3>
+              <div id="mentorGenreStrip" class="mentorGenreStrip"></div>
+              <p id="mentorCardGenreBody" class="mentorGenreFallback" hidden></p>
+            </div>
+
+            <div class="mentorTuneRow">
+              <div class="mentorTuneCard mentorGlass">
+                <h3 id="mentorCardTuneTitle" class="mentorTileTitle">Intonation</h3>
+                <p id="mentorCardTuneBody" class="mentorTileProse">—</p>
+                <p id="mentorCardTuneMeta" class="mentorTileFoot">—</p>
+              </div>
+              <div class="mentorTuneCard mentorGlass">
+                <h3 id="mentorCardKeysTitle" class="mentorTileTitle">Key ideas</h3>
+                <p id="mentorCardKeysBody" class="mentorInsightKeys">—</p>
+                <p id="mentorCardKeysSub" class="mentorTileFoot">—</p>
+              </div>
+            </div>
+
+            <div class="mentorFocusCard mentorGlass">
+              <span class="mentorFocusIcon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
+                  <path
+                    d="M12 3v1M12 20v1M4.22 4.22l.7.7M19.08 19.08l.7.7M3 12h1M20 12h1M4.22 19.78l.7-.7M19.08 4.92l.7-.7"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                  />
+                  <path
+                    d="M12 17a5 5 0 1 0-4.9-6h9.8A5 5 0 0 0 12 17Z"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </span>
+              <div class="mentorFocusCopy">
+                <span class="mentorSectionEyebrow">Focus next time</span>
+                <p id="mentorFocusLine" class="mentorFocusLine">—</p>
+                <p id="mentorFocusSub" class="mentorFocusSub">—</p>
               </div>
             </div>
 
             <p class="mentorDisclaimer">
-              Educational estimate only — maqam detection uses a coarse 12-semitone map. Range tags compare pitch to teaching lists you choose (men’s vs women’s). “Timbre” here is brightness, not formants. Voice labels are not a fach exam.
+              Educational estimate only — maqam detection uses a coarse 12-semitone map. Range tags compare pitch to teaching lists you choose. “Timbre” here is brightness, not formants. Voice labels are not a fach exam.
             </p>
           </div>
         </section>
@@ -2250,6 +2421,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260514mentorResultsFix"></script>
+    <script type="module" src="./src/app.js?v=20260514mentorVivid"></script>
   </body>
 </html>

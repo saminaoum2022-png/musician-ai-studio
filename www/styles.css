@@ -10812,15 +10812,20 @@ body[data-route="hub"] .hubEq{
 /* --- Mentor (voice lab) — premium “alive” layout --- */
 .mentorPage{
   position: relative;
-  overflow: hidden;
-  max-width: 1120px;
+  /* Let page scroll naturally; html already clips horizontal scroll */
+  overflow: visible;
+  width: 100%;
+  max-width: min(1120px, 100%);
   margin: 0 auto;
-  padding: 0 16px 48px;
+  padding: 0 max(16px, env(safe-area-inset-left, 0px)) 48px max(16px, env(safe-area-inset-right, 0px));
+  box-sizing: border-box;
 }
 .mentorAmbient{
   position: absolute;
-  inset: -20% -30% auto;
-  height: 70%;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: min(480px, 62vh);
   pointer-events: none;
   background:
     radial-gradient(ellipse 80% 55% at 50% -10%, rgba(124, 92, 255, 0.22) 0%, transparent 55%),
@@ -10829,8 +10834,8 @@ body[data-route="hub"] .hubEq{
   animation: mentorAmbientDrift 18s ease-in-out infinite alternate;
 }
 @keyframes mentorAmbientDrift{
-  from{ transform: translate3d(-2%, 0, 0) scale(1); opacity: 0.95; }
-  to{ transform: translate3d(2%, 1%, 0) scale(1.03); opacity: 1; }
+  from{ opacity: 0.92; }
+  to{ opacity: 1; }
 }
 .mentorGlass{
   border-radius: 22px;
@@ -10846,6 +10851,8 @@ body[data-route="hub"] .hubEq{
   position: relative;
   z-index: 1;
   padding: 8px 0 4px;
+  min-width: 0;
+  max-width: 100%;
 }
 .mentorHeroBrand{
   font-size: 11px;
@@ -10903,6 +10910,8 @@ body[data-route="hub"] .hubEq{
   flex-direction: column;
   gap: 16px;
   margin-top: 22px;
+  min-width: 0;
+  max-width: 100%;
 }
 .mentorScanCard{
   padding: 22px 18px 18px;
@@ -10914,6 +10923,9 @@ body[data-route="hub"] .hubEq{
   justify-content: center;
   gap: 10px;
   margin-bottom: 8px;
+  max-width: 100%;
+  padding: 10px 0;
+  overflow: hidden;
 }
 .mentorWaveSvg{
   flex: 1 1 72px;
@@ -11152,13 +11164,13 @@ body[data-route="hub"] .hubEq{
   animation: mentorMeshMove 12s ease-in-out infinite alternate;
 }
 @keyframes mentorMeshMove{
-  from{ transform: translate3d(-3%, 0, 0) scale(1); }
-  to{ transform: translate3d(3%, -2%, 0) scale(1.05); }
+  from{ transform: translate3d(-1.5%, 0, 0) scale(1); }
+  to{ transform: translate3d(1.5%, -1%, 0) scale(1.03); }
 }
 .mentorVizRibbon{
   position: absolute;
-  left: -15%;
-  right: -15%;
+  left: -8%;
+  right: -8%;
   top: 28%;
   height: 44%;
   background: linear-gradient(
@@ -11174,8 +11186,8 @@ body[data-route="hub"] .hubEq{
   animation: mentorRibbonFlow 5s ease-in-out infinite alternate;
 }
 @keyframes mentorRibbonFlow{
-  from{ transform: translateX(-4%) skewX(-4deg); opacity: 0.75; }
-  to{ transform: translateX(4%) skewX(3deg); opacity: 1; }
+  from{ transform: translateX(-2%); opacity: 0.75; }
+  to{ transform: translateX(2%); opacity: 1; }
 }
 .mentorVizSpark{
   position: absolute;
@@ -11206,6 +11218,10 @@ body[data-route="hub"] .hubEq{
   font-size: 12px;
   color: rgba(168, 180, 199, 0.85);
 }
+.mentorDiscover{
+  min-width: 0;
+  max-width: 100%;
+}
 .mentorDiscoverTrack{
   display: flex;
   gap: 10px;
@@ -11213,6 +11229,7 @@ body[data-route="hub"] .hubEq{
   padding-bottom: 6px;
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
+  max-width: 100%;
 }
 .mentorDiscoverCard{
   flex: 0 0 min(220px, 78vw);
@@ -11314,6 +11331,8 @@ body[data-route="hub"] .hubEq{
   position: relative;
   z-index: 1;
   margin-top: 28px;
+  min-width: 0;
+  max-width: 100%;
 }
 .mentorPullQuote{
   margin: 0 0 16px;
@@ -11340,7 +11359,7 @@ body[data-route="hub"] .hubEq{
 }
 .mentorResultHeroGlow{
   position: absolute;
-  inset: -40%;
+  inset: -18%;
   background:
     radial-gradient(circle at 20% 30%, hsla(var(--mentor-mood-hue), 70%, 52%, 0.22) 0%, transparent 42%),
     radial-gradient(circle at 90% 20%, rgba(34, 211, 238, 0.12) 0%, transparent 40%);
@@ -11348,21 +11367,20 @@ body[data-route="hub"] .hubEq{
   animation: mentorHeroGlow 10s ease-in-out infinite alternate;
 }
 @keyframes mentorHeroGlow{
-  from{ opacity: 0.7; transform: scale(1); }
-  to{ opacity: 1; transform: scale(1.05); }
+  from{ opacity: 0.75; transform: scale(1); }
+  to{ opacity: 1; transform: scale(1.02); }
 }
 .mentorResultHeroSilhouette{
   position: absolute;
-  right: 8%;
-  top: 10%;
-  width: min(180px, 40vw);
-  height: 200px;
+  right: 0;
+  top: 8%;
+  width: min(120px, 30vw);
+  height: min(160px, 36vw);
   border-radius: 50% 50% 45% 45%;
-  border: 2px solid rgba(167, 139, 250, 0.25);
-  box-shadow: 0 0 60px rgba(124, 92, 255, 0.15);
-  opacity: 0.35;
+  border: 2px solid rgba(167, 139, 250, 0.22);
+  box-shadow: 0 0 48px rgba(124, 92, 255, 0.12);
+  opacity: 0.26;
   pointer-events: none;
-  transform: rotate(-6deg);
 }
 .mentorResultHeroMain{
   position: relative;
@@ -11482,6 +11500,8 @@ body[data-route="hub"] .hubEq{
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 14px;
+  min-width: 0;
+  width: 100%;
 }
 @media (max-width: 960px){
   .mentorSnapGrid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }

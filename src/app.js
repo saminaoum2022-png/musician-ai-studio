@@ -5813,17 +5813,21 @@ async function supabaseLoadUserSongs() {
     return [];
   }
   const uid = encodeURIComponent(authSession.user.id);
-  // Slim list: render-only columns. We omit `meta` (base64 in
-  // `meta.imageUrl`) and **`art_url`** — legacy rows sometimes stored
-  // full data: URLs in `art_url` itself, which turned a 500-row fetch
-  // into 10–20 MB. Covers still flow from local merge/reconcile; HTTP
-  // CDN art can be re-fetched later if we add a thin head endpoint.
-  const cols = "id,created_at,title,song_url,task_id,audio_id,kind";
+  // Slim list: render-only columns. `meta` stays out (legacy rows could
+  // carry base64 cover blobs in `meta.imageUrl`). `art_url` is included
+  // again — without it, cloud rows arrive cover-less and the merge wipes
+  // out the local CDN URL the user actually sees in Library. We pair the
+  // select with a PostgREST guard that *skips rows whose `art_url`
+  // happens to be a legacy `data:` URL*, same trick we use on `hub_posts`
+  // for cover_url / creator_avatar. The cheap `art_url is null` branch
+  // covers freshly inserted rows where we deliberately wrote null.
+  const cols = "id,created_at,title,song_url,task_id,audio_id,kind,art_url";
+  const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
   let r;
   try {
-    r = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${uid}&select=${cols}&order=created_at.desc&limit=500`, {
+    r = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${uid}&select=${cols}&order=created_at.desc&limit=500${artUrlGuard}`, {
       headers: {
         apikey: SUPABASE_ANON_KEY,
         Authorization: `Bearer ${token}`,

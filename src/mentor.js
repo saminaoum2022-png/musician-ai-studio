@@ -83,6 +83,130 @@ function guessVoiceArchetype(p5, p50, p95) {
   };
 }
 
+/**
+ * 12-TET scale-degree sets (semitones from tonic). Real Arabic intonation uses
+ * quarter tones — this is a keyboard-style guess for learning prompts only.
+ */
+const MAQAM_CATALOG = [
+  { id: "kurd", name: "Kurd", degrees: [0, 1, 3, 5, 7, 8, 10] },
+  { id: "hijaz", name: "Hijaz", degrees: [0, 1, 4, 5, 7, 8, 11] },
+  { id: "nahawand", name: "Nahawand", degrees: [0, 2, 3, 5, 7, 8, 10] },
+  { id: "rast", name: "Rast", degrees: [0, 2, 4, 5, 7, 9, 10] },
+  { id: "bayati", name: "Bayati", degrees: [0, 3, 5, 6, 7, 9, 10] },
+  { id: "sikah", name: "Sikah (approx.)", degrees: [0, 4, 5, 7, 9, 10, 11] },
+  { id: "ajam", name: "‘Ajam", degrees: [0, 2, 4, 5, 7, 9, 11] },
+  { id: "saba", name: "Saba", degrees: [0, 3, 5, 6, 7, 10, 11] },
+];
+
+function pitchClassHistogram(voiced) {
+  const h = new Array(12).fill(0);
+  for (const m of voiced) {
+    const pc = ((Math.round(m) % 12) + 12) % 12;
+    h[pc] += 1;
+  }
+  const s = h.reduce((a, b) => a + b, 0) || 1;
+  return h.map((x) => x / s);
+}
+
+function scoreMaqamGuess(hist) {
+  const all = [];
+  for (const m of MAQAM_CATALOG) {
+    for (let tonicPc = 0; tonicPc < 12; tonicPc++) {
+      const on = new Set(m.degrees.map((d) => (tonicPc + d) % 12));
+      let onScale = 0;
+      let offScale = 0;
+      for (let j = 0; j < 12; j++) {
+        if (on.has(j)) onScale += hist[j];
+        else offScale += hist[j];
+      }
+      const score = onScale - 0.33 * offScale;
+      all.push({ score, id: m.id, name: m.name, tonicPc, degrees: [...m.degrees] });
+    }
+  }
+  all.sort((a, b) => b.score - a.score);
+  const best = all[0];
+  const second = all.find((x) => x.id !== best.id) || { name: "", score: 0 };
+  const ambiguous = second.score > 0 && best.score > 0 && second.score / best.score > 0.92;
+  return {
+    id: best.id,
+    name: best.name,
+    tonicPc: best.tonicPc,
+    degrees: best.degrees,
+    score: best.score,
+    secondName: second.name || "",
+    ambiguous,
+  };
+}
+
+function alignRootMidi(p50, tonicPc) {
+  let r = Math.round(p50);
+  const pc = ((r % 12) + 12) % 12;
+  let delta = (tonicPc - pc + 12) % 12;
+  if (delta > 6) delta -= 12;
+  return r + delta;
+}
+
+function nearestScaleMidi(m, root, degrees) {
+  const r = Math.round(m);
+  let best = r;
+  let bd = Infinity;
+  for (let t = r - 24; t <= r + 24; t++) {
+    const rel = (((t - root) % 12) + 12) % 12;
+    if (!degrees.includes(rel)) continue;
+    const d = Math.abs(m - t);
+    if (d < bd) {
+      bd = d;
+      best = t;
+    }
+  }
+  if (bd === Infinity) return r;
+  return best;
+}
+
+/** Mean absolute cents vs nearest note on the guessed maqam (12-TET grid). */
+function intonationVsMaqam(voiced, rootMidi, degrees) {
+  const centsArr = [];
+  let loose = 0;
+  for (const m of voiced) {
+    const near = nearestScaleMidi(m, rootMidi, degrees);
+    const cents = Math.abs(100 * (m - near));
+    centsArr.push(cents);
+    if (cents > 35) loose += 1;
+  }
+  const mean = centsArr.reduce((a, b) => a + b, 0) / centsArr.length;
+  const loosePct = Math.round((100 * loose) / centsArr.length);
+  let title = "On this maqam grid";
+  let body =
+    mean < 22
+      ? "Pitch stays close to the nearest scale steps — good centering for this rough 12-note model."
+      : mean < 38
+        ? "Some frames sit between steps — normal for slides, ornaments, or quarter tones we do not model yet."
+        : "Many frames read far from the nearest step — try slower phrases, clearer vowels, or check mic distance.";
+  if (loosePct >= 35) {
+    title = "Pitch vs grid";
+    body += ` About ${loosePct}% of windows are >35¢ off a step — could be intentional color, vibrato, or tuning drift.`;
+  }
+  const meta = `Mean distance ~${Math.round(mean)}¢ · >35¢ in ${loosePct}% of windows`;
+  return { title, body, meta, meanCents: mean, loosePct };
+}
+
+function recommendGenres({ maqamId, voiceTitle, p95, brightMean }) {
+  const g = new Set();
+  const vt = String(voiceTitle || "").toLowerCase();
+  g.add("Arabic ballad / tarab (long lines, room for ornaments)");
+  if (maqamId === "hijaz" || maqamId === "kurd") g.add("Levantine & Egyptian drama (mawwal, aghani klasik-style phrasing)");
+  if (maqamId === "rast" || maqamId === "bayati") g.add("Wasla / waqt-style journeys (study ajnas with a teacher)");
+  if (maqamId === "nahawand" || maqamId === "saba") g.add("Minor-leaning pop & film themes");
+  if (maqamId === "ajam") g.add("Up-major pop, shaabi hooks, children’s songs");
+  if (p95 >= 73) g.add("Pop, soul, R&B belt sections");
+  if (p95 < 63) g.add("Spoken-adjacent storytelling & low-tessitura jazz");
+  if (brightMean > 2650) g.add("Bright indie / modern pop mixes");
+  if (brightMean < 1980) g.add("Warm acoustic sessions · jazz standards");
+  if (vt.includes("tenor") || vt.includes("baritone")) g.add("Male-fronted Arabic pop & khaleeji leads (where your tessitura fits)");
+  if (vt.includes("soprano") || vt.includes("mezzo") || vt.includes("alto")) g.add("Female-fronted ballads & choral top lines");
+  return Array.from(g).slice(0, 6).join(" · ");
+}
+
 /** YIN cumulative mean normalized difference (simplified port). */
 function yinPitch(buffer, sampleRate, minHz = 65, maxHz = 1400) {
   const n = buffer.length;
@@ -244,6 +368,16 @@ function analyzeBuffer(full, sampleRate) {
   );
 
   const voice = guessVoiceArchetype(p5, p50, p95);
+  const hist = pitchClassHistogram(voiced);
+  const maqam = scoreMaqamGuess(hist);
+  const tonicName = NOTE_NAMES[maqam.tonicPc];
+  const rootMidi = alignRootMidi(p50, maqam.tonicPc);
+  const tune = intonationVsMaqam(voiced, rootMidi, maqam.degrees);
+  const genreLine = recommendGenres({ maqamId: maqam.id, voiceTitle: voice.title, p95, brightMean });
+
+  let maqamBody = `Heuristic fit: ${maqam.name} on tonic ${tonicName} using a 12-note keyboard map — quarter tones & full ajnas are not modeled.`;
+  if (maqam.secondName) maqamBody += ` Second guess: ${maqam.secondName}.`;
+  if (maqam.ambiguous) maqamBody += " Several maqamat scored similarly — clearer phrases help disambiguate.";
 
   return {
     ok: true,
@@ -271,6 +405,14 @@ function analyzeBuffer(full, sampleRate) {
     voiceTitle: voice.title,
     voiceBody: voice.body,
     voiceMeta: voice.meta,
+    maqamTitle: `${maqam.name} on ${tonicName}`,
+    maqamBody,
+    maqamMeta: "Pitch-class histogram vs maqam templates (educational only)",
+    genreTitle: "Genres that may fit",
+    genreBody: genreLine,
+    tuneTitle: tune.title,
+    tuneBody: tune.body,
+    tuneMeta: tune.meta,
   };
 }
 
@@ -307,6 +449,14 @@ export function resetMentorSession() {
   setText("mentorValVoice", "—");
   setText("mentorValVoiceBody", "");
   setText("mentorValVoiceMeta", "");
+  setText("mentorCardMaqamTitle", "Maqam guess");
+  setText("mentorCardMaqamBody", "");
+  setText("mentorCardMaqamMeta", "");
+  setText("mentorCardGenreTitle", "Genres that may fit");
+  setText("mentorCardGenreBody", "");
+  setText("mentorCardTuneTitle", "Intonation");
+  setText("mentorCardTuneBody", "");
+  setText("mentorCardTuneMeta", "");
 }
 
 function stopStreams() {
@@ -499,6 +649,14 @@ export function initMentor() {
     setText("mentorValVoice", res.voiceTitle);
     setText("mentorValVoiceBody", res.voiceBody);
     setText("mentorValVoiceMeta", res.voiceMeta);
+    setText("mentorCardMaqamTitle", res.maqamTitle);
+    setText("mentorCardMaqamBody", res.maqamBody);
+    setText("mentorCardMaqamMeta", res.maqamMeta);
+    setText("mentorCardGenreTitle", res.genreTitle);
+    setText("mentorCardGenreBody", res.genreBody);
+    setText("mentorCardTuneTitle", res.tuneTitle);
+    setText("mentorCardTuneBody", res.tuneBody);
+    setText("mentorCardTuneMeta", res.tuneMeta);
     setText("mentorCardTimbreTitle", res.timbreLabel);
     setText("mentorCardTimbreBody", res.timbreDetail);
     setText("mentorCardTimbreMeta", `Brightness index ~${res.brightMean}`);

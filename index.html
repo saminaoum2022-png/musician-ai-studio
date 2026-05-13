@@ -742,7 +742,7 @@
             <div class="mentorPageKicker">Voice lab</div>
             <h2 class="mentorPageTitle">Mentor</h2>
             <p class="mentorPageLead">
-              A quick, on-device snapshot of pitch range, timbre brightness, and motion — useful for warm-ups and choosing comfortable keys. Not a clinical diagnosis.
+              A quick, on-device snapshot: pitch range, rough maqam guess (12-note map only), timbre brightness, motion, genre ideas, and intonation vs that maqam grid — useful for warm-ups, not a clinical diagnosis.
             </p>
           </header>
 
@@ -824,6 +824,29 @@
             </div>
 
             <div class="mentorCardGrid">
+              <article class="mentorInsightCard mentorInsightCardWide">
+                <div class="mentorInsightIcon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 5v2M12 17v2M5 12h2M17 12h2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                </div>
+                <h3 id="mentorCardMaqamTitle" class="mentorInsightTitle">—</h3>
+                <p id="mentorCardMaqamBody" class="mentorInsightBody"></p>
+                <p id="mentorCardMaqamMeta" class="mentorInsightMeta">—</p>
+              </article>
+              <article class="mentorInsightCard">
+                <div class="mentorInsightIcon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M4 19V5M8 16V8M12 18v-8M16 14v-4M20 17V7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                </div>
+                <h3 id="mentorCardGenreTitle" class="mentorInsightTitle">Genres that may fit</h3>
+                <p id="mentorCardGenreBody" class="mentorInsightBody"></p>
+              </article>
+              <article class="mentorInsightCard">
+                <div class="mentorInsightIcon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M8 16c2-4 6-4 8 0M9 12h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+                </div>
+                <h3 id="mentorCardTuneTitle" class="mentorInsightTitle">Intonation</h3>
+                <p id="mentorCardTuneBody" class="mentorInsightBody">—</p>
+                <p id="mentorCardTuneMeta" class="mentorInsightMeta">—</p>
+              </article>
               <article class="mentorInsightCard">
                 <div class="mentorInsightIcon" aria-hidden="true">
                   <svg viewBox="0 0 24 24"><path d="M12 3v18M8 9c2-2 4-2 8 0M8 15c2 2 4 2 8 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
@@ -862,7 +885,7 @@
             </div>
 
             <p class="mentorDisclaimer">
-              Educational estimate only — microphone placement, room noise, and note choices all affect the numbers. Voice labels are range guesses only (not a formal fach exam). Future versions could add breath support timing, onset sharpness, formant tracks, and pitch-to-MIDI export.
+              Educational estimate only — maqam detection uses a coarse 12-semitone map (no quarter tones). Microphone, room, and ornaments affect pitch tracking. Voice labels are not a formal fach exam.
             </p>
           </div>
         </section>
@@ -2195,6 +2218,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260514mentorGauge"></script>
+    <script type="module" src="./src/app.js?v=20260514mentorMaqam"></script>
   </body>
 </html>

@@ -3869,16 +3869,10 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
 /* =================================================================
  * Aura profile header
  *
- * The page IS the profile — no card chrome. The avatar is sampled
- * (via JS) into `--aura-tint` and that variable powers an ambient
- * glow behind the identity stack. A breathing gradient ring around
- * the avatar lights up only when audio is playing somewhere in the
- * app (data-audio-state="playing"), which makes the profile feel
- * connected to live audio without dropping a visualizer onto it.
- *
- * This is the same visual family as Hub's active-card ambient
- * tint and the Hub bottom-tab bars (│), so flipping between Hub
- * and Profile feels like two views of the same world.
+ * No full-page gradient wash — the hero sits on the same surface as
+ * the rest of the app. A breathing gradient ring around the avatar
+ * lights up when audio is playing (data-audio-state="playing").
+ * Drifting note particles behind the avatar stay for quiet motion.
  * ================================================================= */
 .profileAura{
   --aura-tint: rgba(124, 92, 255, 0.55);
@@ -3890,86 +3884,18 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   display: flex;
   flex-direction: column;
   gap: 12px;
-  /* Chrome is position: fixed (lives outside flow), so .profileAura
-     just needs enough top padding so the avatar sits below the
-     floating capsules on initial render. */
-  padding: calc(env(safe-area-inset-top, 0px) + 56px) 8px 6px;
+  /* Top chrome is position:fixed outside [data-route]; pad so the
+     avatar clears the floating capsules + notch. */
+  padding: calc(env(safe-area-inset-top, 0px) + 52px) 8px 6px;
   margin-bottom: 0;
   max-width: 100%;
-  /* Intentionally NO overflow:hidden / NO border-radius. The glow
-     fades out via its own radial-gradient transparency falloff, so
-     no clip is needed. Adding either made the page look like a
-     rounded card. */
 }
 
-/* Soft brand wash behind the hero — stays inside .profileAura
- * bounds (no 100vw tricks; those were causing a horizontal shift
- * on some iOS WebView setups). Two faint blooms (teal + violet)
- * fade in / out via a vertical mask so the wash dissolves into
- * the page background. */
-.profileAura::before{
-  content: "";
-  position: absolute;
-  inset: -32px 0 auto 0;
-  height: 280px;
-  pointer-events: none;
-  z-index: -2;
-  background-image:
-    radial-gradient(ellipse 110% 80% at 18% 28%, rgba(35, 213, 171, 0.08), transparent 70%),
-    radial-gradient(ellipse 100% 75% at 86% 18%, rgba(124, 92, 255, 0.095), transparent 68%),
-    radial-gradient(ellipse 80% 60% at 50% 55%, rgba(124, 92, 255, 0.03), transparent 75%);
-  filter: blur(8px);
-  -webkit-mask-image: linear-gradient(
-    180deg,
-    transparent 0%,
-    rgba(0, 0, 0, 0.6) 25%,
-    rgba(0, 0, 0, 0.85) 50%,
-    rgba(0, 0, 0, 0.35) 80%,
-    transparent 100%
-  );
-          mask-image: linear-gradient(
-    180deg,
-    transparent 0%,
-    rgba(0, 0, 0, 0.6) 25%,
-    rgba(0, 0, 0, 0.85) 50%,
-    rgba(0, 0, 0, 0.35) 80%,
-    transparent 100%
-  );
-}
-.profileAuraGlow{
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  /* Soft falloff inside the gradients themselves so the glow
-     disappears before reaching the edges of the header — no clip
-     line ever shows, no card chrome. */
-  background:
-    radial-gradient(ellipse 55% 45% at 28% 22%, var(--aura-tint), transparent 78%),
-    radial-gradient(ellipse 45% 40% at 82% 30%, var(--aura-tint-soft), transparent 82%);
-  filter: blur(26px) saturate(1.2);
-  opacity: 0.48;
-  transition: background 320ms ease, opacity 320ms ease;
-}
-/* When the cinematic backdrop is active, calm the tint glow so we
-   don't double-layer two competing color washes. */
-.profileAura[data-has-backdrop="true"] .profileAuraGlow{
-  opacity: 0.28;
-}
-
-/* Profile route — keep the tint extremely soft so the hero reads as the
-   same surface as the page (no visible "header frame"). */
-body[data-route="profile"] .profileAuraGlow{
-  opacity: 0.28;
-  filter: blur(56px) saturate(1.05);
-}
-
-/* Top chrome row — fixed to the viewport top so the credits pill
- * (left) and edit / settings cluster (right) stay floating no
- * matter how far the user scrolls. Shell is fully transparent —
- * only the capsules carry liquid-glass styling. Only rendered while
- * the profile route is mounted (its parent .profileSection is
- * hidden on other routes). */
+/* Top chrome row — fixed to the viewport. Markup lives in
+ * #profileAuraHeaderChromeRoot OUTSIDE [data-route="profile"] so the
+ * router's display:none never tears down fixed layout (fixes iOS
+ * jump when returning from Credits / Settings). Off-route: visibility
+ * hidden (not display:none) so safe-area stays stable. */
 .profileAuraHeaderChrome{
   position: fixed;
   top: 0;
@@ -3985,6 +3911,11 @@ body[data-route="profile"] .profileAuraGlow{
   margin: 0;
   pointer-events: none;
   background: transparent;
+}
+body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 .profileAuraHeaderChrome > *{
   pointer-events: auto;
@@ -4689,7 +4620,7 @@ body[data-route="profile"] .profileAuraGlow{
 .profileAuraNameRow[data-loading="true"] .profilePreviewGenderIcon{
   visibility: hidden;
 }
-.profileSection:has(.profileAuraNameRow[data-loading="true"]) .profileAuraHeaderChrome .profileCreditsPill{
+body[data-route="profile"]:has(#profileAuraNameRow[data-loading="true"]) #profileAuraHeaderChromeRoot .profileCreditsPill{
   visibility: hidden;
 }
 @keyframes profileSkelShimmer{
@@ -5190,7 +5121,7 @@ body[data-route="profile"] .profileAuraGlow{
 .profileAuraStat--link:active{ transform: scale(0.98); }
 
 @media (max-width: 440px){
-  .profileAura{ padding: calc(env(safe-area-inset-top, 0px) + 54px) 6px 4px; }
+  .profileAura{ padding: calc(env(safe-area-inset-top, 0px) + 50px) 6px 4px; }
   .profileAuraIdentity{ padding: 0; }
   .profileAuraHeaderChrome{
     padding: calc(env(safe-area-inset-top, 0px) + 8px) 12px 8px;
@@ -5626,7 +5557,8 @@ body[data-route="profile"] .profileAuraGlow{
 }
 .profileCreditsPill--toolbar .profileCreditsPillIco{ opacity: 0.95; }
 .profileCreditsPill--toolbar .profileCreditsPillValue{ color: #fff; }
-.profileSection:has(.profileAura.profileAuraEditing) .profileCreditsPill--toolbar{
+/* In edit mode hide credits in the portal chrome. */
+body[data-route="profile"]:has(#profileAura.profileAuraEditing) #profileAuraHeaderChromeRoot .profileCreditsPill--toolbar{
   display: none;
 }
 .profileCreditsPill:hover{
@@ -5665,10 +5597,6 @@ body[data-route="profile"] .profileAuraGlow{
   font-size: 16px;
   line-height: 1;
 }
-/* In edit mode the username input expands to full width — hide the
-   credits chrome so the row doesn't compete with Cancel/Save.
-   Chrome lives as a sibling of .profileAura now, hence :has(). */
-.profileSection:has(.profileAura.profileAuraEditing) .profileCreditsPill--toolbar{ display: none; }
 .profileOwnAuthRow{
   display:flex;
   flex-wrap:wrap;

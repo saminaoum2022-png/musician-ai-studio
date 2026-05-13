@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260513profileWashNoVwShift" />
+    <link rel="stylesheet" href="./styles.css?v=20260513profileChromePortal" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -957,64 +957,11 @@
             </span>
             <span class="profileUsernamePromptCta" aria-hidden="true">Set →</span>
           </button>
-          <!-- Floating top chrome — sticky-positioned at the top of the
-               profile scroll so it stays in place while songs scroll
-               past behind it. Liquid-glass capsule styling on each
-               control (credits pill + edit / settings icons). -->
-          <div class="profileAuraHeaderChrome">
-            <a
-              href="#/credits"
-              id="profileCreditsLink"
-              class="profileCreditsPill profileCreditsPill--toolbar"
-              aria-label="Credits balance. Tap to manage credits."
-            >
-              <svg class="profileCreditsPillIco" viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/>
-                <path d="M12 7v10M9 10h4.5a2 2 0 0 1 0 4H9m0 0h4.5a2 2 0 0 1 0 4H9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              <strong id="profileCreditsBalance" class="profileCreditsPillValue">0</strong>
-            </a>
-            <div class="profileAuraToolbar" role="toolbar" aria-label="Profile actions">
-              <button
-                type="button"
-                id="btnProfileEdit"
-                class="profileAuraIconBtn"
-                aria-label="Edit profile"
-                title="Edit profile"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M14.06 6.19l3.75 3.75M3 21l3.5-.62a3 3 0 0 0 1.55-.83l11.1-11.1a2.5 2.5 0 0 0 0-3.54l-.07-.07a2.5 2.5 0 0 0-3.54 0L4.45 15.95a3 3 0 0 0-.83 1.55L3 21z"/>
-                </svg>
-              </button>
-              <div id="profileEditActions" class="profileAuraEditActions" style="display:none" aria-hidden="true">
-                <button type="button" id="btnProfileCancel" class="profileAuraEditBtn profileAuraEditBtn--cancel" aria-label="Cancel editing">Cancel</button>
-                <button type="button" id="btnProfileSave" class="profileAuraEditBtn profileAuraEditBtn--save" aria-label="Save profile">Save</button>
-              </div>
-              <a
-                href="#/settings"
-                id="btnProfileSettingsGear"
-                class="profileAuraIconBtn"
-                aria-label="Settings"
-                title="Settings"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="12" cy="12" r="3"/>
-                  <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
-                </svg>
-              </a>
-            </div>
-          </div>
-
           <!-- Aura header — no card chrome. Avatar tints the page,
                gradient ring breathes when audio is playing somewhere in
                the app. Stats row uses the same vertical-bar separator
                motif as the Hub bottom-tab icon. -->
           <section class="profileAura" id="profileAura" data-audio-state="idle">
-            <!-- The header now blends with the page background — no
-                 separate-color backdrop. A very soft aura glow remains
-                 for subtle warmth tied to --aura-tint. -->
-            <div class="profileAuraGlow" aria-hidden="true"></div>
-
             <div class="profileAuraIdentity">
               <!-- Avatar sits on its own at the top of the hero. The
                    "liquid heartbeat" visual that used to live next to it
@@ -2090,8 +2037,56 @@
       <button id="btnGenerateOrb" class="generateOrb" type="button">Generate</button>
       <div id="likeBurst" class="likeBurst" style="display:none">❤</div>
     </div>
+    <!-- Profile top chrome lives OUTSIDE any [data-route] section. When
+         the router hides Profile with display:none, descendants would
+         otherwise drop from layout — fixed buttons then "jump" on
+         return. This portal stays in the DOM; visibility is CSS-tied to
+         body[data-route="profile"]. -->
+    <div id="profileAuraHeaderChromeRoot" class="profileAuraHeaderChrome" aria-hidden="true">
+      <a
+        href="#/credits"
+        id="profileCreditsLink"
+        class="profileCreditsPill profileCreditsPill--toolbar"
+        aria-label="Credits balance. Tap to manage credits."
+      >
+        <svg class="profileCreditsPillIco" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/>
+          <path d="M12 7v10M9 10h4.5a2 2 0 0 1 0 4H9m0 0h4.5a2 2 0 0 1 0 4H9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <strong id="profileCreditsBalance" class="profileCreditsPillValue">0</strong>
+      </a>
+      <div class="profileAuraToolbar" role="toolbar" aria-label="Profile actions">
+        <button
+          type="button"
+          id="btnProfileEdit"
+          class="profileAuraIconBtn"
+          aria-label="Edit profile"
+          title="Edit profile"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M14.06 6.19l3.75 3.75M3 21l3.5-.62a3 3 0 0 0 1.55-.83l11.1-11.1a2.5 2.5 0 0 0 0-3.54l-.07-.07a2.5 2.5 0 0 0-3.54 0L4.45 15.95a3 3 0 0 0-.83 1.55L3 21z"/>
+          </svg>
+        </button>
+        <div id="profileEditActions" class="profileAuraEditActions" style="display:none" aria-hidden="true">
+          <button type="button" id="btnProfileCancel" class="profileAuraEditBtn profileAuraEditBtn--cancel" aria-label="Cancel editing">Cancel</button>
+          <button type="button" id="btnProfileSave" class="profileAuraEditBtn profileAuraEditBtn--save" aria-label="Save profile">Save</button>
+        </div>
+        <a
+          href="#/settings"
+          id="btnProfileSettingsGear"
+          class="profileAuraIconBtn"
+          aria-label="Settings"
+          title="Settings"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
+          </svg>
+        </a>
+      </div>
+    </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260513transparentChrome"></script>
+    <script type="module" src="./src/app.js?v=20260513profileChromePortalJs"></script>
   </body>
 </html>

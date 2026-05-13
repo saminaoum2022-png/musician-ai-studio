@@ -1761,6 +1761,12 @@ function applyRoute() {
   document.querySelectorAll("[data-route]").forEach((el) => {
     el.style.display = el.getAttribute("data-route") === wanted ? "" : "none";
   });
+  try {
+    const profileChrome = document.getElementById("profileAuraHeaderChromeRoot");
+    if (profileChrome) {
+      profileChrome.setAttribute("aria-hidden", wanted === "profile" ? "false" : "true");
+    }
+  } catch {}
   document.querySelectorAll("[data-route-link]").forEach((a) => {
     a.classList.toggle("active", a.getAttribute("data-route-link") === wanted);
   });

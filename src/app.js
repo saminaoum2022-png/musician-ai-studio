@@ -8874,18 +8874,23 @@ function renderUserProfile(rawUsername) {
     String(p?.creator || "").toLowerCase() === username.toLowerCase());
   matches.sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
   const publicMatches = matches.filter(isHubPostVisibleOnPublicProfile);
-  const latest = publicMatches[0] || matches[0];
-  const displayName = latest?.creator || username || "user";
+  const latestPublic = publicMatches[0] || null;
+  const latestAny = matches[0] || null;
+  const displayName = latestAny?.creator || username || "user";
 
   if (els.userPublicName) els.userPublicName.textContent = `@${displayName}`;
   if (els.userPublicAvatar) {
-    els.userPublicAvatar.src = latest?.creatorAvatar || "./assets/nabadai-logo.png";
+    const av =
+      (latestPublic && (latestPublic.artUrl || latestPublic.creatorAvatar)) ||
+      latestAny?.creatorAvatar ||
+      "./assets/nabadai-logo.png";
+    els.userPublicAvatar.src = av;
     els.userPublicAvatar.alt = `${displayName} avatar`;
   }
   if (els.userPublicVoice) {
     const chip = els.userPublicVoice;
     const labelEl = chip.querySelector(".profileAuraVoiceChipText");
-    const voice = String(latest?.meta?.voiceTimbre || "").trim();
+    const voice = String(latestPublic?.meta?.voiceTimbre || "").trim();
     const pretty = voice
       ? voice.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
       : "";
@@ -8900,7 +8905,7 @@ function renderUserProfile(rawUsername) {
     chip.dataset.state = "idle";
   }
   if (els.userPublicBio) {
-    const bio = String(latest?.meta?.bio || "").trim();
+    const bio = String(latestPublic?.meta?.bio || "").trim();
     if (bio) {
       els.userPublicBio.textContent = bio;
       els.userPublicBio.style.display = "";

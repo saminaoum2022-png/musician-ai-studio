@@ -4676,15 +4676,31 @@ function renderHubDots() {
 // and ownership checks actually need; heavy keys (lyricsInput, styleInput,
 // taskId, audioId, etc.) are fetched on-demand from `hubFetchPostMetaFull`
 // when the user opens Remix on a specific post.
-/** Lean projection — never fetch the full `proof` or `meta` JSONB on
- *  list queries. We only display three string keys from `proof`
- *  (`model`, `mode`, `promptHash`) in the chip + proof modal, so we
- *  ask PostgREST for just those scalar paths. `song_url` is included
- *  because tapping play depends on it landing with the row; pulling
- *  it lazily would add a round-trip on every first play. The big
- *  win is dropping the full `proof` JSONB (often 200-500 bytes of
- *  generation metadata per row) and the full `meta` (lyricsInput,
- *  styleInput, finalPrompt — easily 2-5 KB per row when present). */
+/** Public Hub feed list — **no `proof` projection**. Proof / fingerprint
+ *  UI is owner-only (Profile → releases menu + lazy `proof` fetch).
+ *  We still project light `meta` keys for playback/remix. Never fetch
+ *  the full `meta` JSONB on list queries (lyricsInput, styleInput, …).
+ *  `song_url` stays on the row so first play does not need a second
+ *  round-trip. */
+const HUB_SELECT_COLUMNS_FEED = [
+  "id",
+  "created_at",
+  "title",
+  "cover_url",
+  "song_url",
+  "kind",
+  "creator_username",
+  "creator_avatar",
+  "likes",
+  "reacts",
+  "remix_of",
+  "meta_clip:meta->clip",
+  "meta_creator_user_id:meta->>creatorUserId",
+  "meta_template_title:meta->>searchTemplateTitle",
+].join(",");
+
+/** Profile “my Hub posts” fetch — includes scalar `proof` paths so the
+ *  owner cache has chips/modal data without an extra round-trip per row. */
 const HUB_SELECT_COLUMNS = [
   "id",
   "created_at",
@@ -4705,7 +4721,7 @@ const HUB_SELECT_COLUMNS = [
   "meta_template_title:meta->>searchTemplateTitle",
 ].join(",");
 
-/** Same as `HUB_SELECT_COLUMNS` but without JSON-path fragments. Used when
+/** Same as `HUB_SELECT_COLUMNS_FEED` but without JSON-path fragments. Used when
  *  PostgREST/Postgres returns 5xx on the lean projection (some deployments
  *  reject nested `select=` aliases until extensions/views match). */
 const HUB_SELECT_COLUMNS_LEAN = [
@@ -4721,6 +4737,10 @@ const HUB_SELECT_COLUMNS_LEAN = [
   "reacts",
   "remix_of",
 ].join(",");
+
+/** If PostgREST rejects `meta->>` / `meta->` projections but `proof->>`
+ *  still works, use this for `supabaseSelectMyHubPosts` fallback only. */
+const HUB_SELECT_COLUMNS_LEAN_OWNER = `${HUB_SELECT_COLUMNS_LEAN},proof_model:proof->>model,proof_mode:proof->>mode,proof_hash:proof->>promptHash`;
 
 /** Reconstruct the minimal `meta` shape the Hub renderer + playback expect
  *  from the projected JSON keys returned by PostgREST. Keys not selected
@@ -4752,6 +4772,39 @@ function reconstructHubRowProof(row) {
   return proof;
 }
 
+/** Map a PostgREST `hub_posts` row into the in-memory Hub post shape. */
+function mapHubRestRowToPost(r, { includeProof = false } = {}) {
+  return {
+    id: String(r.id),
+    ts: new Date(r.created_at).getTime(),
+    title: r.title || "Untitled",
+    artUrl: r.cover_url || "",
+    url: r.song_url || "",
+    kind: r.kind || "full",
+    creator: r.creator_username || "guest",
+    creatorAvatar: r.creator_avatar || "./assets/nabadai-logo.png",
+    likes: Number(r.likes || 0),
+    reacts: r.reacts || { melody: 0, lyrics: 0, mix: 0, groove: 0 },
+    remixOf: r.remix_of || "",
+    proof: includeProof ? reconstructHubRowProof(r) : null,
+    meta: reconstructHubRowMeta(r),
+  };
+}
+
+/** After a public feed sync, keep any `proof` we already had for the same
+ *  id so Profile → Proof still works without re-fetching `my` rows. */
+function mergeHubProofFromPrevPost(post, prevFeed) {
+  if (post.proof?.model || post.proof?.mode || post.proof?.promptHash) return post;
+  const prevRow = prevFeed.find((x) => String(x.id) === String(post.id));
+  if (
+    prevRow?.proof &&
+    (prevRow.proof.model || prevRow.proof.mode || prevRow.proof.promptHash)
+  ) {
+    return { ...post, proof: prevRow.proof };
+  }
+  return post;
+}
+
 /** On-demand fetch of a single Hub post's full `meta` (only when the user
  *  actually needs it — e.g. opens Remix or owner-only actions). One row,
  *  one column. Cheap. */
@@ -4768,6 +4821,25 @@ async function hubFetchPostMetaFull(postId) {
     const arr = await r.json().catch(() => []);
     const row = Array.isArray(arr) ? arr[0] : null;
     return row?.meta || null;
+  } catch {
+    return null;
+  }
+}
+
+/** On-demand fetch of a single Hub post's `proof` JSONB (owner flows). */
+async function hubFetchPostProofFull(postId) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  const id = String(postId || "").trim();
+  if (!id) return null;
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/hub_posts?id=eq.${encodeURIComponent(id)}&select=proof&limit=1`,
+      { headers: { apikey: SUPABASE_ANON_KEY } },
+    );
+    if (!r.ok) return null;
+    const arr = await r.json().catch(() => []);
+    const row = Array.isArray(arr) ? arr[0] : null;
+    return row?.proof || null;
   } catch {
     return null;
   }
@@ -4805,7 +4877,7 @@ async function supabaseSelectHub({ sinceIsoTs = "" } = {}) {
     `&or=${encodeURIComponent("(creator_avatar.is.null,creator_avatar.not.like.data:*)")}`;
   const hubListUrl = (selectCols) =>
     `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(selectCols)}&order=created_at.desc&limit=30${sinceFilter}${dataUrlGuard}`;
-  let r = await fetch(hubListUrl(HUB_SELECT_COLUMNS), {
+  let r = await fetch(hubListUrl(HUB_SELECT_COLUMNS_FEED), {
     headers: {
       apikey: SUPABASE_ANON_KEY,
     },
@@ -4886,6 +4958,7 @@ async function supabaseSelectMyHubPosts({ uid, username } = {}) {
   };
   try {
     let { rows, anyOk } = await pullMerged(HUB_SELECT_COLUMNS);
+    if (!anyOk) ({ rows, anyOk } = await pullMerged(HUB_SELECT_COLUMNS_LEAN_OWNER));
     if (!anyOk) ({ rows, anyOk } = await pullMerged(HUB_SELECT_COLUMNS_LEAN));
     clearTimeout(timer);
     if (!anyOk) return null;
@@ -4901,21 +4974,7 @@ async function supabaseSelectMyHubPosts({ uid, username } = {}) {
  *  it can run alongside the periodic Hub refresh without conflict. */
 function ingestMyHubPostsRows(rows) {
   if (!Array.isArray(rows) || !rows.length) return;
-  const mapped = rows.map((r) => ({
-    id: String(r.id),
-    ts: new Date(r.created_at).getTime(),
-    title: r.title || "Untitled",
-    artUrl: r.cover_url || "",
-    url: r.song_url || "",
-    kind: r.kind || "full",
-    creator: r.creator_username || "guest",
-    creatorAvatar: r.creator_avatar || "./assets/nabadai-logo.png",
-    likes: Number(r.likes || 0),
-    reacts: r.reacts || { melody: 0, lyrics: 0, mix: 0, groove: 0 },
-    remixOf: r.remix_of || "",
-    proof: reconstructHubRowProof(r),
-    meta: reconstructHubRowMeta(r),
-  }));
+  const mapped = rows.map((r) => mapHubRestRowToPost(r, { includeProof: true }));
   const prev = loadHubFeed();
   const byId = new Map();
   prev.forEach((p) => byId.set(String(p.id), p));
@@ -6709,7 +6768,6 @@ function renderHub() {
           <span class="hubCreator hubReelCreator" data-hub-user="${p.id}">@${escapeHtml(p.creator)}</span>
           <span class="hubMetaDot">·</span>
           <span class="hubTimeAgo">${escapeHtml(relativeTime(p.ts))}</span>
-          <button type="button" class="hubProofChip hubReelProofChip" title="Proof ${escapeHtml(String(p?.proof?.model || LATEST_SUNO_MODEL))} · #${escapeHtml(String(p?.proof?.promptHash || ""))}">Proof</button>
         </div>
         <h3 class="hubReelTitle">${safeTitle}</h3>
         ${p.remixOf ? `<div class="hubRemixOf hubReelRemixLine">Remix of: ${escapeHtml(p.remixOf)}</div>` : ""}
@@ -6864,14 +6922,6 @@ function renderHub() {
     if (!username) return;
     location.hash = `#/u/${encodeURIComponent(username)}`;
   }));
-  els.hubList.querySelectorAll(".hubProofChip").forEach((chip) => chip.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const row = chip.closest("[data-hub-row]");
-    const id = row?.getAttribute("data-hub-row");
-    const p = loadHubFeed().find((x) => x.id === id);
-    if (!p) return;
-    openProofModal(p);
-  }));
   els.hubList.querySelectorAll("[data-hub-more]").forEach((b) => b.addEventListener("click", (e) => {
     e.stopPropagation();
     const id = b.getAttribute("data-hub-more");
@@ -6961,21 +7011,7 @@ async function refreshHubFromSupabase({ force = false } = {}) {
     hubLastSyncRows = rows.length;
     hubRetryCount = 0;
     const prev = loadHubFeed();
-    const mapped = rows.map((r) => ({
-      id: String(r.id),
-      ts: new Date(r.created_at).getTime(),
-      title: r.title || "Untitled",
-      artUrl: r.cover_url || "",
-      url: r.song_url || "",
-      kind: r.kind || "full",
-      creator: r.creator_username || "guest",
-      creatorAvatar: r.creator_avatar || "./assets/nabadai-logo.png",
-      likes: Number(r.likes || 0),
-      reacts: r.reacts || { melody: 0, lyrics: 0, mix: 0, groove: 0 },
-      remixOf: r.remix_of || "",
-      proof: reconstructHubRowProof(r),
-      meta: reconstructHubRowMeta(r),
-    }));
+    const mapped = rows.map((r) => mapHubRestRowToPost(r, { includeProof: false }));
     // Incremental responses can legitimately be empty (no new rows
     // since last poll) — that's the happy path, not a fetch failure.
     // Don't wipe the feed and don't re-render; just bail.
@@ -7009,7 +7045,8 @@ async function refreshHubFromSupabase({ force = false } = {}) {
     if (needFull) {
       const cloudById = new Map();
       const cloudBySig = new Map();
-      mapped.forEach((p) => {
+      mapped.forEach((raw) => {
+        const p = mergeHubProofFromPrevPost(raw, prev);
         cloudById.set(String(p.id), p);
         cloudBySig.set(sigOf(p), p);
       });
@@ -7018,11 +7055,17 @@ async function refreshHubFromSupabase({ force = false } = {}) {
         if (cloudBySig.has(sigOf(p))) return;
         byId.set(String(p.id), p);
       });
-      mapped.forEach((p) => byId.set(String(p.id), p));
+      mapped.forEach((raw) => {
+        const p = mergeHubProofFromPrevPost(raw, prev);
+        byId.set(String(p.id), p);
+      });
     } else {
       // Incremental: keep prev (full backlog), overlay new rows on top.
       prev.forEach((p) => byId.set(String(p.id), p));
-      mapped.forEach((p) => byId.set(String(p.id), p));
+      mapped.forEach((raw) => {
+        const p = mergeHubProofFromPrevPost(raw, prev);
+        byId.set(String(p.id), p);
+      });
     }
     const merged = Array.from(byId.values()).sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0)).slice(0, 300);
     saveHubFeed(merged);
@@ -7109,23 +7152,10 @@ async function refreshHubFromSupabase({ force = false } = {}) {
       try {
         if (hubSyncInFlight) return;
         hubSyncInFlight = true;
-        const rows = await supabaseSelectHub();
-        if (!rows || !Array.isArray(rows)) return;
-        const mapped = rows.map((r) => ({
-          id: String(r.id),
-          ts: new Date(r.created_at).getTime(),
-          title: r.title || "Untitled",
-          artUrl: r.cover_url || "",
-          url: r.song_url || "",
-          kind: r.kind || "full",
-          creator: r.creator_username || "guest",
-          creatorAvatar: r.creator_avatar || "./assets/nabadai-logo.png",
-          likes: Number(r.likes || 0),
-          reacts: r.reacts || { melody: 0, lyrics: 0, mix: 0, groove: 0 },
-          remixOf: r.remix_of || "",
-          proof: reconstructHubRowProof(r),
-          meta: reconstructHubRowMeta(r),
-        }));
+        const prevRetry = loadHubFeed();
+        const mapped = rows
+          .map((r) => mapHubRestRowToPost(r, { includeProof: false }))
+          .map((raw) => mergeHubProofFromPrevPost(raw, prevRetry));
         if (!mapped.length) return;
         hubLastSyncOk = true;
         hubLastSyncError = "";
@@ -9067,6 +9097,7 @@ function renderProfileHubShared() {
             </button>
             <button class="libRowMore" type="button" data-profile-hub-menu="${sid}" aria-label="More options for ${safeTitle}">⋯</button>
             <div class="libMenu" id="profileHubMenu_${sid}" style="display:none">
+              <button class="ghost" type="button" data-profile-hub-proof="${sid}">Proof of creation</button>
               <button class="ghost libRowDelete" data-profile-hub-unpublish="${sid}">Unpublish from Hub</button>
             </div>
           </li>
@@ -9103,6 +9134,21 @@ function renderProfileHubShared() {
         if (row) row.classList.add("libRowMenuOpen");
         _profileHubOpenMenuId = sid;
       }
+    });
+  });
+  els.profileHubSharedList.querySelectorAll("[data-profile-hub-proof]").forEach((b) => {
+    b.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const sid = b.getAttribute("data-profile-hub-proof");
+      if (!sid) return;
+      let post = loadHubFeed().find((x) => String(x.id) === sid);
+      if (!post) return;
+      if (!post.proof?.model && !post.proof?.mode && !post.proof?.promptHash) {
+        const proof = await hubFetchPostProofFull(sid);
+        if (proof) post = { ...post, proof };
+      }
+      closeProfileHubMenu();
+      openProofModal(post);
     });
   });
   els.profileHubSharedList.querySelectorAll("[data-profile-hub-unpublish]").forEach((b) => {

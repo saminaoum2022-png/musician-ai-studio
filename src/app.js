@@ -4705,6 +4705,23 @@ const HUB_SELECT_COLUMNS = [
   "meta_template_title:meta->>searchTemplateTitle",
 ].join(",");
 
+/** Same as `HUB_SELECT_COLUMNS` but without JSON-path fragments. Used when
+ *  PostgREST/Postgres returns 5xx on the lean projection (some deployments
+ *  reject nested `select=` aliases until extensions/views match). */
+const HUB_SELECT_COLUMNS_LEAN = [
+  "id",
+  "created_at",
+  "title",
+  "cover_url",
+  "song_url",
+  "kind",
+  "creator_username",
+  "creator_avatar",
+  "likes",
+  "reacts",
+  "remix_of",
+].join(",");
+
 /** Reconstruct the minimal `meta` shape the Hub renderer + playback expect
  *  from the projected JSON keys returned by PostgREST. Keys not selected
  *  on the list view (e.g. `lyricsInput`) are intentionally omitted. */
@@ -4775,18 +4792,28 @@ async function supabaseSelectHub({ sinceIsoTs = "" } = {}) {
   // 30 rows: enough for a full reel session on Latest without the old
   // "Load more" cap (reel shows every cached post). Incremental polls
   // still return 0 rows most of the time — egress stays low.
-  const url = `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(HUB_SELECT_COLUMNS)}&order=created_at.desc&limit=30${sinceFilter}`;
-  const r = await fetch(url, {
+  const hubListUrl = (selectCols) =>
+    `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(selectCols)}&order=created_at.desc&limit=30${sinceFilter}`;
+  let r = await fetch(hubListUrl(HUB_SELECT_COLUMNS), {
     headers: {
       apikey: SUPABASE_ANON_KEY,
     },
     signal: ctrl.signal,
   });
-  clearTimeout(timer);
   if (!r.ok) {
-    const txt = await r.text().catch(() => "");
-    throw new Error(`supabase select failed (${r.status}) ${String(txt).slice(0, 100)}`);
+    const r2 = await fetch(hubListUrl(HUB_SELECT_COLUMNS_LEAN), {
+      headers: { apikey: SUPABASE_ANON_KEY },
+      signal: ctrl.signal,
+    });
+    if (r2.ok) {
+      r = r2;
+    } else {
+      clearTimeout(timer);
+      const txt = await r.text().catch(() => "");
+      throw new Error(`supabase select failed (${r.status}) ${String(txt).slice(0, 100)}`);
+    }
   }
+  clearTimeout(timer);
   return await r.json().catch(() => []);
 }
 
@@ -4803,33 +4830,55 @@ async function supabaseSelectMyHubPosts({ uid, username } = {}) {
   if (!uid && !username) return null;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 8000);
-  // PostgREST `or` lets us match either creator_user_id-in-meta or
-  // creator_username in a single round-trip. Wrapped in `or=(...)`.
-  // CRITICAL: never match by `username === "guest"`. That's the
-  // unauthenticated sentinel and matching it would pull every old
-  // demo post anyone ever shared without signing in into the user's
-  // profile — the exact regression that caused inheritance.
-  const filters = [];
-  if (uid) filters.push(`meta->>creatorUserId.eq.${encodeURIComponent(uid)}`);
-  if (username && username !== "guest") {
-    filters.push(`creator_username.eq.${encodeURIComponent(username)}`);
-  }
-  if (!filters.length) return [];
-  const orClause = filters.length === 1 ? filters[0] : `or=(${filters.join(",")})`;
-  // 15 rows = top-3 (Popular this week) + first-10 (All releases) + 2 slack.
-  // The Profile UI never shows more than that on initial paint, so paying
-  // for 30 was 50% wasted bandwidth on cellular cold-starts.
-  const url = filters.length === 1
-    ? `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(HUB_SELECT_COLUMNS)}&${filters[0]}&order=created_at.desc&limit=15`
-    : `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(HUB_SELECT_COLUMNS)}&${orClause}&order=created_at.desc&limit=15`;
+  // PostgREST **standalone** filters use `column=eq.value` (one `=` between
+  // the column token and `eq…`). The `or=(a.eq.x,b.eq.y)` form is only for
+  // logical groups; embedding `meta->>….eq.uuid` without `or=` was invalid
+  // and could yield 5xx from PostgREST. We run up to two requests in parallel
+  // (meta user id + username) and merge — same rows dedupe by `id`.
+  // CRITICAL: never match by `username === "guest"`.
+  const pullMerged = async (selectCols) => {
+    const reqs = [];
+    if (uid) {
+      const q = `${encodeURIComponent("meta->>creatorUserId")}=eq.${encodeURIComponent(uid)}`;
+      reqs.push(
+        fetch(
+          `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(selectCols)}&${q}&order=created_at.desc&limit=15`,
+          { headers: { apikey: SUPABASE_ANON_KEY }, signal: ctrl.signal },
+        ),
+      );
+    }
+    if (username && username !== "guest") {
+      reqs.push(
+        fetch(
+          `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(
+            selectCols,
+          )}&creator_username=eq.${encodeURIComponent(username)}&order=created_at.desc&limit=15`,
+          { headers: { apikey: SUPABASE_ANON_KEY }, signal: ctrl.signal },
+        ),
+      );
+    }
+    const responses = await Promise.all(reqs);
+    const anyOk = responses.some((r) => r.ok);
+    const rowsById = new Map();
+    for (const r of responses) {
+      if (!r.ok) continue;
+      const arr = await r.json().catch(() => []);
+      if (!Array.isArray(arr)) continue;
+      for (const row of arr) {
+        if (row && row.id != null) rowsById.set(String(row.id), row);
+      }
+    }
+    const merged = Array.from(rowsById.values()).sort(
+      (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0),
+    );
+    return { rows: merged.slice(0, 15), anyOk };
+  };
   try {
-    const r = await fetch(url, {
-      headers: { apikey: SUPABASE_ANON_KEY },
-      signal: ctrl.signal,
-    });
+    let { rows, anyOk } = await pullMerged(HUB_SELECT_COLUMNS);
+    if (!anyOk) ({ rows, anyOk } = await pullMerged(HUB_SELECT_COLUMNS_LEAN));
     clearTimeout(timer);
-    if (!r.ok) return null;
-    return await r.json().catch(() => []);
+    if (!anyOk) return null;
+    return rows;
   } catch {
     clearTimeout(timer);
     return null;
@@ -5689,13 +5738,12 @@ async function supabaseLoadUserSongs() {
     return [];
   }
   const uid = encodeURIComponent(authSession.user.id);
-  // Slim list: render-only columns. We deliberately omit `meta` here
-  // because legacy rows can carry base64 cover data URLs in
-  // `meta.imageUrl`, which inflated the response into multi-MB
-  // territory on cold PWA logins. Custom covers now live in
-  // localStorage thumbs; metadata is only needed by Song Details (and
-  // the local copy already has it for tracks generated on this device).
-  const cols = "id,created_at,title,art_url,song_url,task_id,audio_id,kind";
+  // Slim list: render-only columns. We omit `meta` (base64 in
+  // `meta.imageUrl`) and **`art_url`** — legacy rows sometimes stored
+  // full data: URLs in `art_url` itself, which turned a 500-row fetch
+  // into 10–20 MB. Covers still flow from local merge/reconcile; HTTP
+  // CDN art can be re-fetched later if we add a thin head endpoint.
+  const cols = "id,created_at,title,song_url,task_id,audio_id,kind";
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
   let r;

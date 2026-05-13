@@ -7,6 +7,53 @@ const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", 
 const MAX_SECONDS = 22;
 const MIN_SECONDS = 2;
 
+/** @type {MediaStream | null} */
+let _stream = null;
+let _recording = false;
+let _raf = 0;
+let _startedAt = 0;
+/** @type {MediaRecorder | null} */
+let _mentorRecorder = null;
+/** @type {Blob[]} */
+let _mentorChunks = [];
+/** Bumps on `stopStreams` so stale `MediaRecorder.onstop` cannot publish results. */
+let _mentorRecSession = 0;
+let _mentorAutoStopTimer = 0;
+
+/** Same idea as vocal reference: WKWebView / Safari need MP4-ish containers for bytes. */
+function isSafariLikeMentorEnv() {
+  try {
+    if (window?.Capacitor?.isNativePlatform?.()) return true;
+    const ua = navigator.userAgent || "";
+    if (/iPhone|iPad|iPod/i.test(ua)) return true;
+    if (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) return true;
+    return /^((?!chrome|android).)*safari/i.test(ua);
+  } catch {
+    return false;
+  }
+}
+
+function pickMentorRecorderMimeType() {
+  const safariLike = isSafariLikeMentorEnv();
+  const mp4First = [
+    "audio/mp4",
+    "audio/mp4;codecs=mp4a.40.2",
+    "audio/webm;codecs=opus",
+    "audio/webm",
+  ];
+  const webFirst = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/mp4",
+    "audio/mp4;codecs=mp4a.40.2",
+  ];
+  const candidates = safariLike ? mp4First : webFirst;
+  for (const m of candidates) {
+    if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported?.(m)) return m;
+  }
+  return "";
+}
+
 /** Rough classical range anchors in MIDI (low / mid / high). */
 const VOICE_MALE = [
   { name: "Bass", L: 41, M: 50, H: 62 },
@@ -419,17 +466,6 @@ function analyzeBuffer(full, sampleRate) {
   };
 }
 
-function mergeSamples() {
-  const total = _samples.reduce((n, a) => n + a.length, 0);
-  const out = new Float32Array(total);
-  let o = 0;
-  for (const a of _samples) {
-    out.set(a, o);
-    o += a.length;
-  }
-  return out;
-}
-
 function setText(id, text) {
   const el = document.getElementById(id);
   if (el) el.textContent = text;
@@ -485,13 +521,15 @@ function showResults(on) {
 }
 
 export function resetMentorSession() {
+  _mentorRecSession += 1;
+  stopStreams();
   showResults(false);
   setText("mentorStatus", "");
   const t = document.getElementById("mentorTimer");
   if (t) t.textContent = "";
   setText(
     "mentorHint",
-    "Set range labels (above) to match you, then follow “How to sing this test” before recording.",
+    "Quiet room helps. Open “How to sing this test” if you need it — then one slow chest-to-head glide on “ah” or “ee”. Men’s / Women’s / Notes only changes classical-style labels only.",
   );
   setText("mentorValRange", "—");
   setText("mentorValSpan", "—");
@@ -523,24 +561,24 @@ export function resetMentorSession() {
   renderMaqamDiagram(0, []);
   const mood = document.querySelector(".mentorTile--mood");
   if (mood) mood.style.removeProperty("--mentor-mood-hue");
+  const bs = document.getElementById("mentorBtnStart");
+  const bt = document.getElementById("mentorBtnStop");
+  if (bs) bs.disabled = false;
+  if (bt) bt.disabled = true;
 }
 
 function stopStreams() {
+  if (_mentorAutoStopTimer) {
+    try {
+      clearTimeout(_mentorAutoStopTimer);
+    } catch {}
+    _mentorAutoStopTimer = 0;
+  }
+  const rec = _mentorRecorder;
+  _mentorRecorder = null;
   try {
-    if (_processor) {
-      _processor.disconnect();
-      _processor.onaudioprocess = null;
-    }
+    if (rec && rec.state !== "inactive") rec.stop();
   } catch {}
-  try {
-    if (_source) _source.disconnect();
-  } catch {}
-  try {
-    if (_silentGain) _silentGain.disconnect();
-  } catch {}
-  _processor = null;
-  _source = null;
-  _silentGain = null;
   if (_stream) {
     _stream.getTracks().forEach((tr) => {
       try {
@@ -549,13 +587,6 @@ function stopStreams() {
     });
   }
   _stream = null;
-  if (_audioCtx) {
-    try {
-      _audioCtx.close();
-    } catch {}
-  }
-  _audioCtx = null;
-  _samples = [];
   _recording = false;
   if (_raf) {
     cancelAnimationFrame(_raf);
@@ -571,142 +602,47 @@ function updateTimer() {
   _raf = requestAnimationFrame(updateTimer);
 }
 
-/**
- * Map pitch to arc: left = low, right = high.
- * `dispLo`–`dispHi` is the visible scale (padded from your robust min/max).
- * Range band = p5–p95; tick = median (p50).
- */
-function renderGauge(minM, maxM, medM) {
-  const L = 175;
-  const rangePath = document.getElementById("mentorArcRange");
-  const tickPath = document.getElementById("mentorArcMedian");
-  const label = document.getElementById("mentorArcCaption");
-  if (!label) return;
-
-  const pad = Math.max(2.5, (maxM - minM) * 0.12);
-  let dispLo = minM - pad;
-  let dispHi = maxM + pad;
-  if (dispHi - dispLo < 9) {
-    const c = (minM + maxM) / 2;
-    dispLo = c - 4.5;
-    dispHi = c + 4.5;
-  }
-  dispLo = clamp(dispLo, 33, 92);
-  dispHi = clamp(dispHi, 36, 96);
-  if (dispHi - dispLo < 5) dispHi = dispLo + 5;
-
-  const span = dispHi - dispLo;
-  const tMin = clamp((minM - dispLo) / span, 0, 1);
-  const tMax = clamp((maxM - dispLo) / span, 0, 1);
-  const tMed = clamp((medM - dispLo) / span, 0, 1);
-
-  if (rangePath) {
-    const seg = Math.max(2, (tMax - tMin) * L * 0.96);
-    const off = -tMin * L;
-    rangePath.style.strokeDasharray = `${seg} ${L}`;
-    rangePath.style.strokeDashoffset = String(off);
-  }
-  if (tickPath) {
-    const w = 7;
-    tickPath.style.strokeDasharray = `${w} ${L}`;
-    tickPath.style.strokeDashoffset = String(-(tMed * L) + w / 2);
-  }
-
-  label.textContent = `${midiToName(minM)} → ${midiToName(maxM)}`;
-}
-
-export function initMentor() {
+async function finalizeMentorRecording(chunks, mimeTypeHint, recordSession) {
   const btnStart = document.getElementById("mentorBtnStart");
   const btnStop = document.getElementById("mentorBtnStop");
-  const refEl = document.getElementById("mentorVoiceRef");
-  if (refEl && !refEl.dataset.mentorBound) {
-    refEl.dataset.mentorBound = "1";
-    try {
-      const s = sessionStorage.getItem("mentor:voiceRef");
-      if (s === "mens" || s === "womens" || s === "range") refEl.value = s;
-    } catch {}
-    refEl.addEventListener("change", () => {
+  try {
+    if (recordSession !== _mentorRecSession) return;
+
+    if (_stream) {
       try {
-        sessionStorage.setItem("mentor:voiceRef", refEl.value);
+        _stream.getTracks().forEach((t) => t.stop());
       } catch {}
-    });
-  }
+      _stream = null;
+    }
 
-  btnStart.addEventListener("click", async () => {
-    resetMentorSession();
-    showResults(false);
-    stopStreams();
-    _samples = [];
+    const totalBytes = chunks.reduce((n, b) => n + (b.size || 0), 0);
+    if (!chunks.length || !totalBytes) {
+      setText("mentorStatus", "No audio captured. Allow the microphone, then try again (iOS: Settings → Privacy → Microphone).");
+      return;
+    }
+
+    const blob = new Blob(chunks, { type: mimeTypeHint || "audio/webm" });
+    const ab = await blob.arrayBuffer();
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const dec = new AudioCtx();
+    let audioBuf;
     try {
-      _stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-        },
-        video: false,
-      });
+      audioBuf = await dec.decodeAudioData(ab.slice(0));
     } catch (e) {
-      setText("mentorStatus", `Microphone blocked or unavailable: ${e?.message || e}`);
+      setText("mentorStatus", `Could not read this take: ${e?.message || e}`);
       return;
+    } finally {
+      try {
+        await dec.close();
+      } catch {}
     }
 
-    _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    try {
-      await _audioCtx.resume();
-    } catch {}
+    if (recordSession !== _mentorRecSession) return;
 
-    _source = _audioCtx.createMediaStreamSource(_stream);
-    const bufferSize = 4096;
-    _processor = _audioCtx.createScriptProcessor(bufferSize, 1, 1);
-    const maxSamples = Math.floor(MAX_SECONDS * _audioCtx.sampleRate);
-
-    _processor.onaudioprocess = (ev) => {
-      if (!_recording) return;
-      const ch = ev.inputBuffer.getChannelData(0);
-      const copy = new Float32Array(ch.length);
-      copy.set(ch);
-      _samples.push(copy);
-      let total = 0;
-      for (const a of _samples) total += a.length;
-      if (total >= maxSamples) {
-        btnStop.click();
-      }
-    };
-
-    _silentGain = _audioCtx.createGain();
-    _silentGain.gain.value = 0;
-    _source.connect(_processor);
-    _processor.connect(_silentGain);
-    _silentGain.connect(_audioCtx.destination);
-
-    _recording = true;
-    _startedAt = performance.now();
-    btnStart.disabled = true;
-    btnStop.disabled = false;
-    setText("mentorStatus", "Listening… follow the guide: chest → head glide, then hold top comfortably.");
-    setText("mentorHint", "Tip: set range labels (Men’s / Women’s / Notes only) to match you before recording.");
-    updateTimer();
-  });
-
-  btnStop.addEventListener("click", () => {
-    if (!_recording && _samples.length === 0) return;
-
-    _recording = false;
-    if (_raf) cancelAnimationFrame(_raf);
-    _raf = 0;
-    btnStart.disabled = false;
-    btnStop.disabled = true;
-
-    const buf = mergeSamples();
-    const sr = _audioCtx ? _audioCtx.sampleRate : 48000;
-    const dur = buf.length / sr;
-    stopStreams();
-
-    if (!buf.length) {
-      setText("mentorStatus", "");
-      return;
-    }
+    const sr = audioBuf.sampleRate;
+    const ch0 = audioBuf.getChannelData(0);
+    const full = Float32Array.from(ch0);
+    const dur = full.length / sr;
 
     if (dur < MIN_SECONDS) {
       setText("mentorStatus", `Keep going a bit longer (at least ~${MIN_SECONDS}s).`);
@@ -714,7 +650,7 @@ export function initMentor() {
     }
 
     setText("mentorStatus", "Analyzing…");
-    const res = analyzeBuffer(buf, sr);
+    const res = analyzeBuffer(full, sr);
     if (!res.ok) {
       setText("mentorStatus", res.reason);
       return;
@@ -764,5 +700,207 @@ export function initMentor() {
 
     renderGauge(res.minM, res.maxM, res.medianM);
     showResults(true);
+  } finally {
+    if (btnStart) btnStart.disabled = false;
+    if (btnStop) btnStop.disabled = true;
+  }
+}
+
+/**
+ * Map pitch to arc: left = low, right = high.
+ * `dispLo`–`dispHi` is the visible scale (padded from your robust min/max).
+ * Range band = p5–p95; tick = median (p50).
+ */
+function renderGauge(minM, maxM, medM) {
+  const L = 175;
+  const rangePath = document.getElementById("mentorArcRange");
+  const tickPath = document.getElementById("mentorArcMedian");
+  const label = document.getElementById("mentorArcCaption");
+  if (!label) return;
+
+  const pad = Math.max(2.5, (maxM - minM) * 0.12);
+  let dispLo = minM - pad;
+  let dispHi = maxM + pad;
+  if (dispHi - dispLo < 9) {
+    const c = (minM + maxM) / 2;
+    dispLo = c - 4.5;
+    dispHi = c + 4.5;
+  }
+  dispLo = clamp(dispLo, 33, 92);
+  dispHi = clamp(dispHi, 36, 96);
+  if (dispHi - dispLo < 5) dispHi = dispLo + 5;
+
+  const span = dispHi - dispLo;
+  const tMin = clamp((minM - dispLo) / span, 0, 1);
+  const tMax = clamp((maxM - dispLo) / span, 0, 1);
+  const tMed = clamp((medM - dispLo) / span, 0, 1);
+
+  if (rangePath) {
+    const seg = Math.max(2, (tMax - tMin) * L * 0.96);
+    const off = -tMin * L;
+    rangePath.style.strokeDasharray = `${seg} ${L}`;
+    rangePath.style.strokeDashoffset = String(off);
+  }
+  if (tickPath) {
+    const w = 7;
+    tickPath.style.strokeDasharray = `${w} ${L}`;
+    tickPath.style.strokeDashoffset = String(-(tMed * L) + w / 2);
+  }
+
+  label.textContent = `${midiToName(minM)} → ${midiToName(maxM)}`;
+}
+
+export function initMentor() {
+  const btnStart = document.getElementById("mentorBtnStart");
+  const btnStop = document.getElementById("mentorBtnStop");
+  if (!btnStart || !btnStop) return;
+  if (btnStart.dataset.mentorInit === "1") return;
+  btnStart.dataset.mentorInit = "1";
+
+  const refEl = document.getElementById("mentorVoiceRef");
+  if (refEl && !refEl.dataset.mentorBound) {
+    refEl.dataset.mentorBound = "1";
+    try {
+      const s = sessionStorage.getItem("mentor:voiceRef");
+      if (s === "mens" || s === "womens" || s === "range") refEl.value = s;
+    } catch {}
+    refEl.addEventListener("change", () => {
+      try {
+        sessionStorage.setItem("mentor:voiceRef", refEl.value);
+      } catch {}
+    });
+  }
+
+  btnStart.addEventListener("click", async () => {
+    if (btnStart.disabled) return;
+    resetMentorSession();
+    const recordSession = _mentorRecSession;
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setText("mentorStatus", "Microphone capture needs HTTPS or the native app.");
+      return;
+    }
+
+    setText("mentorStatus", "Requesting microphone access…");
+    setText(
+      "mentorHint",
+      "If the system asks, allow the microphone — then sing one slow glide. Men’s / Women’s / Notes only affects classical-style labels.",
+    );
+
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: { ideal: false },
+          noiseSuppression: { ideal: false },
+          autoGainControl: { ideal: false },
+        },
+        video: false,
+      });
+    } catch (e1) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      } catch (e2) {
+        setText(
+          "mentorStatus",
+          `Microphone blocked or unavailable: ${e2?.message || e1?.message || e2 || e1}`,
+        );
+        return;
+      }
+    }
+
+    if (recordSession !== _mentorRecSession) {
+      try {
+        stream.getTracks().forEach((t) => t.stop());
+      } catch {}
+      return;
+    }
+
+    if (typeof MediaRecorder === "undefined") {
+      try {
+        stream.getTracks().forEach((t) => t.stop());
+      } catch {}
+      setText("mentorStatus", "Recording is not supported in this browser.");
+      return;
+    }
+
+    _stream = stream;
+    _mentorChunks = [];
+    const mimeType = pickMentorRecorderMimeType();
+    const rec =
+      mimeType && MediaRecorder.isTypeSupported?.(mimeType)
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+    const effectiveMime = () => String(rec.mimeType || mimeType || "audio/webm");
+
+    _mentorRecorder = rec;
+    rec.ondataavailable = (e) => {
+      if (e.data && e.data.size) _mentorChunks.push(e.data);
+    };
+    rec.onstop = async () => {
+      const chunks = _mentorChunks.slice();
+      _mentorChunks.length = 0;
+      if (recordSession !== _mentorRecSession) {
+        const bs = document.getElementById("mentorBtnStart");
+        const bt = document.getElementById("mentorBtnStop");
+        if (bs) bs.disabled = false;
+        if (bt) bt.disabled = true;
+        return;
+      }
+      await finalizeMentorRecording(chunks, effectiveMime(), recordSession);
+    };
+
+    try {
+      if (isSafariLikeMentorEnv()) rec.start(250);
+      else rec.start();
+    } catch (e) {
+      stopStreams();
+      setText("mentorStatus", `Could not start recorder: ${e?.message || e}`);
+      return;
+    }
+
+    _recording = true;
+    _startedAt = performance.now();
+    btnStart.disabled = true;
+    btnStop.disabled = false;
+    setText("mentorStatus", "Listening… glide chest → head, then hold your top note briefly.");
+    updateTimer();
+
+    _mentorAutoStopTimer = window.setTimeout(() => {
+      if (_recording && recordSession === _mentorRecSession) {
+        try {
+          btnStop.click();
+        } catch {}
+      }
+    }, MAX_SECONDS * 1000);
+  });
+
+  btnStop.addEventListener("click", () => {
+    if (!_recording || !_mentorRecorder) return;
+    if (_mentorRecorder.state === "inactive") return;
+    _recording = false;
+    if (_raf) {
+      cancelAnimationFrame(_raf);
+      _raf = 0;
+    }
+    if (_mentorAutoStopTimer) {
+      try {
+        clearTimeout(_mentorAutoStopTimer);
+      } catch {}
+      _mentorAutoStopTimer = 0;
+    }
+    btnStop.disabled = true;
+    try {
+      _mentorRecorder.requestData?.();
+    } catch {}
+    try {
+      _mentorRecorder.stop();
+    } catch (e) {
+      setText("mentorStatus", `Stop failed: ${e?.message || e}`);
+      try {
+        stopStreams();
+      } catch {}
+      btnStart.disabled = false;
+    }
   });
 }

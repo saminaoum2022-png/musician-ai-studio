@@ -9484,6 +9484,7 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
     return `${url}|${aid}|${kind}`;
   };
   const cloudSigs = new Set(cloudSongs.map(sigOf));
+  const cloudStableKeys = new Set(cloudSongs.map(libraryTrackStableKey));
 
   const merged = [];
   const seen = new Set();
@@ -9515,7 +9516,11 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
   // the cloud snapshot we just fetched). The previous version pushed
   // every merged row, including cloud-resident ones, which wasted
   // dozens of round-trips on every PWA cold start.
-  const localOnly = merged.filter((row) => !cloudSigs.has(sigOf(row)));
+  const localOnly = merged.filter((row) => {
+    if (cloudSigs.has(sigOf(row))) return false;
+    if (cloudStableKeys.has(libraryTrackStableKey(row))) return false;
+    return true;
+  });
   if (!localOnly.length) {
     _libraryReconcileLastAt = Date.now();
     return;
@@ -9577,9 +9582,11 @@ async function reconcileLibraryFromCloud({ force = false } = {}) {
     const localBySig = new Map();
     for (const t of local) localBySig.set(sigOf(t), t);
     const cloudSigs = new Set(cloud.map(sigOf));
+    const cloudStableKeys = new Set(cloud.map(libraryTrackStableKey));
 
     const merged = [];
     const seen = new Set();
+    const seenStable = new Set(cloud.map(libraryTrackStableKey));
     // Cloud is the source of truth — but we keep the local id (so any
     // open menus / now-playing references stay valid) and we keep the
     // local cover when the local copy has a custom data: URL that the
@@ -9614,8 +9621,12 @@ async function reconcileLibraryFromCloud({ force = false } = {}) {
     // re-attempt the insert in the background.
     for (const t of local) {
       const sig = sigOf(t);
-      if (cloudSigs.has(sig) || seen.has(sig)) continue;
+      const stable = libraryTrackStableKey(t);
+      if (cloudSigs.has(sig) || cloudStableKeys.has(stable) || seen.has(sig) || seenStable.has(stable)) {
+        continue;
+      }
       seen.add(sig);
+      seenStable.add(stable);
       merged.push(t);
       if (t.url) void supabaseInsertUserSong(t);
     }
@@ -11646,6 +11657,21 @@ function unwrapInnermostHttpAudioUrl(url) {
     }
   }
   return cur;
+}
+
+/** Canonical audio URL for Library ↔ cloud dedupe. Local rows often
+ *  persist `…/api/suno/audio?url=…` (playback proxy) while PostgREST
+ *  returns raw Suno CDN URLs — string equality on `url` then fails,
+ *  reconcile thinks every row is "local-only", and we POST in a loop
+ *  → 23505 / 409 spam + multi‑GB egress. */
+function libraryTrackCanonicalUrl(url) {
+  return unwrapInnermostHttpAudioUrl(String(url || "").trim()).trim();
+}
+
+/** Stable identity: canonical URL + kind (matches DB unique intent). */
+function libraryTrackStableKey(t) {
+  const kind = String(t?.kind || "full").trim();
+  return `${libraryTrackCanonicalUrl(t?.url)}|${kind}`;
 }
 
 function hubAbsoluteUrl(pathOrUrl) {

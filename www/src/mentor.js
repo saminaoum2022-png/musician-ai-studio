@@ -7,6 +7,17 @@ const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", 
 const MAX_SECONDS = 22;
 const MIN_SECONDS = 2;
 
+/** Rough classical “fach” anchors in MIDI (low / mid / high of typical warm range). Not gender-deterministic. */
+const VOICE_ARCHETYPES = [
+  { name: "Bass", L: 41, M: 50, H: 62 },
+  { name: "Baritone", L: 44, M: 54, H: 67 },
+  { name: "Tenor", L: 47, M: 58, H: 72 },
+  { name: "Contralto", L: 48, M: 56, H: 68 },
+  { name: "Alto", L: 50, M: 59, H: 71 },
+  { name: "Mezzo-soprano", L: 52, M: 62, H: 75 },
+  { name: "Soprano", L: 54, M: 65, H: 79 },
+];
+
 let _audioCtx = null;
 let _stream = null;
 let _processor = null;
@@ -30,8 +41,50 @@ function midiToName(m) {
   return `${NOTE_NAMES[pc]}${oct}`;
 }
 
+function clamp(x, a, b) {
+  return Math.max(a, Math.min(b, x));
+}
+
+function percentile(sorted, p) {
+  if (!sorted.length) return NaN;
+  if (sorted.length === 1) return sorted[0];
+  const x = (sorted.length - 1) * clamp(p, 0, 1);
+  const i0 = Math.floor(x);
+  const i1 = Math.min(sorted.length - 1, i0 + 1);
+  const w = x - i0;
+  return sorted[i0] * (1 - w) + sorted[i1] * w;
+}
+
+function guessVoiceArchetype(p5, p50, p95) {
+  const low = p5;
+  const mid = p50;
+  const high = p95;
+  const scored = VOICE_ARCHETYPES.map((t) => ({
+    t,
+    d:
+      Math.abs(low - t.L) +
+      1.25 * Math.abs(mid - t.M) +
+      1.05 * Math.abs(high - t.H),
+  })).sort((a, b) => a.d - b.d);
+  const best = scored[0]?.t?.name || "—";
+  const second = scored[1]?.t?.name || "";
+  let body = `Closest match in this clip: ${best}`;
+  if (second && second !== best) body += ` — also near ${second}`;
+  body +=
+    ". True voice type depends on timbre, passaggio, and repertoire, not pitch alone; we only heard a short sample.";
+  if (p95 >= 72 && p50 <= 58) {
+    body +=
+      " High peaks with a low center can be belt/mix or pitch-tracking quirks — try a steady bright “ee” on your top note.";
+  }
+  return {
+    title: `${best}${second && second !== best ? ` · ${second}?` : ""}`,
+    body,
+    meta: `Based on notes ~${midiToName(p5)}–${midiToName(p95)} (robust range in this take)`,
+  };
+}
+
 /** YIN cumulative mean normalized difference (simplified port). */
-function yinPitch(buffer, sampleRate, minHz = 70, maxHz = 1100) {
+function yinPitch(buffer, sampleRate, minHz = 65, maxHz = 1400) {
   const n = buffer.length;
   if (n < 512) return -1;
   const half = Math.floor(n / 2);
@@ -58,7 +111,7 @@ function yinPitch(buffer, sampleRate, minHz = 70, maxHz = 1100) {
     yin[tau] = cumsum > 0 ? (tau * d[tau]) / cumsum : 1;
   }
 
-  const threshold = 0.15;
+  const threshold = 0.14;
   const minTau = Math.max(2, Math.floor(sampleRate / maxHz));
   const maxTau = Math.min(half - 1, Math.ceil(sampleRate / minHz));
 
@@ -103,7 +156,7 @@ function frameBrightness(frame) {
 
 function analyzeBuffer(full, sampleRate) {
   const win = 2048;
-  const hop = 512;
+  const hop = 384;
   const f0s = [];
   const stepCents = [];
   const bright = [];
@@ -135,9 +188,11 @@ function analyzeBuffer(full, sampleRate) {
   }
 
   const sorted = [...voiced].sort((a, b) => a - b);
-  const minM = sorted[0];
-  const maxM = sorted[sorted.length - 1];
-  const medianM = sorted[Math.floor(sorted.length / 2)];
+  const p5 = percentile(sorted, 0.07);
+  const p50 = percentile(sorted, 0.5);
+  const p95 = percentile(sorted, 0.93);
+  const minRaw = sorted[0];
+  const maxRaw = sorted[sorted.length - 1];
   const sum = voiced.reduce((a, b) => a + b, 0);
 
   const brightMean = bright.length ? bright.reduce((a, b) => a + b, 0) / bright.length : 1700;
@@ -175,28 +230,33 @@ function analyzeBuffer(full, sampleRate) {
       "Pitch stayed unusually level between analysis windows — great control, or a very short sustained tone.";
   }
 
-  const medianPc = ((Math.round(medianM) % 12) + 12) % 12;
+  const medianPc = ((Math.round(p50) % 12) + 12) % 12;
   const k1 = NOTE_NAMES[medianPc];
   const kRel = NOTE_NAMES[(medianPc + 9) % 12];
   const kDom = NOTE_NAMES[(medianPc + 7) % 12];
-  const relMin = NOTE_NAMES[((Math.round(minM) % 12) + 12) % 12];
-  const relMax = NOTE_NAMES[((Math.round(maxM) % 12) + 12) % 12];
+  const relMin = NOTE_NAMES[((Math.round(p5) % 12) + 12) % 12];
+  const relMax = NOTE_NAMES[((Math.round(p95) % 12) + 12) % 12];
 
   const stability = Math.max(0, 100 - Math.min(60, meanAbsC) * 1.1);
-  const rangeScore = Math.min(100, (maxM - minM) * 8);
+  const rangeScore = Math.min(100, (p95 - p5) * 8);
   const quality = Math.round(
     Math.min(100, stability * 0.55 + rangeScore * 0.25 + Math.min(100, brightMean / 45)),
   );
 
+  const voice = guessVoiceArchetype(p5, p50, p95);
+
   return {
     ok: true,
-    minM,
-    maxM,
-    medianM,
-    lowName: midiToName(minM),
-    highName: midiToName(maxM),
-    medianName: midiToName(medianM),
-    spanSemitones: Math.round(maxM - minM),
+    minM: p5,
+    maxM: p95,
+    medianM: p50,
+    minRaw,
+    maxRaw,
+    lowName: midiToName(p5),
+    highName: midiToName(p95),
+    medianName: midiToName(p50),
+    spanSemitones: Math.round(p95 - p5),
+    spanHint: `Raw span in clip ${midiToName(minRaw)}–${midiToName(maxRaw)} (includes outliers)`,
     timbreLabel,
     timbreDetail,
     brightMean: Math.round(brightMean),
@@ -208,6 +268,9 @@ function analyzeBuffer(full, sampleRate) {
     keysDetail: `Heuristic keys from where your pitch sat (${relMin}–${relMax} pitch-class range in this clip). Use as a starting point — songs and arrangements vary.`,
     quality,
     voicedFrames: voiced.length,
+    voiceTitle: voice.title,
+    voiceBody: voice.body,
+    voiceMeta: voice.meta,
   };
 }
 
@@ -237,7 +300,13 @@ export function resetMentorSession() {
   setText("mentorStatus", "");
   const t = document.getElementById("mentorTimer");
   if (t) t.textContent = "";
-  setText("mentorHint", "Hold a comfortable “ah” or glide gently through your range for 8–15 seconds.");
+  setText(
+    "mentorHint",
+    "Glide chest to head on “ah” or “ee”, stay close to the mic, and hold top notes 1–2s so highs register.",
+  );
+  setText("mentorValVoice", "—");
+  setText("mentorValVoiceBody", "");
+  setText("mentorValVoiceMeta", "");
 }
 
 function stopStreams() {
@@ -286,16 +355,47 @@ function updateTimer() {
   _raf = requestAnimationFrame(updateTimer);
 }
 
+/**
+ * Map pitch to arc: left = low, right = high.
+ * `dispLo`–`dispHi` is the visible scale (padded from your robust min/max).
+ * Range band = p5–p95; tick = median (p50).
+ */
 function renderGauge(minM, maxM, medM) {
-  const arc = document.getElementById("mentorArcProgress");
+  const L = 175;
+  const rangePath = document.getElementById("mentorArcRange");
+  const tickPath = document.getElementById("mentorArcMedian");
   const label = document.getElementById("mentorArcCaption");
-  if (!arc || !label) return;
-  const lo = Math.max(36, Math.min(84, minM));
-  const hi = Math.max(lo + 1, Math.min(90, maxM));
-  const span = hi - lo;
-  const t = span > 0 ? (Math.max(lo, Math.min(hi, medM)) - lo) / span : 0.5;
-  const circumference = 175;
-  arc.style.strokeDasharray = `${circumference * 0.52 * t} ${circumference}`;
+  if (!label) return;
+
+  const pad = Math.max(2.5, (maxM - minM) * 0.12);
+  let dispLo = minM - pad;
+  let dispHi = maxM + pad;
+  if (dispHi - dispLo < 9) {
+    const c = (minM + maxM) / 2;
+    dispLo = c - 4.5;
+    dispHi = c + 4.5;
+  }
+  dispLo = clamp(dispLo, 33, 92);
+  dispHi = clamp(dispHi, 36, 96);
+  if (dispHi - dispLo < 5) dispHi = dispLo + 5;
+
+  const span = dispHi - dispLo;
+  const tMin = clamp((minM - dispLo) / span, 0, 1);
+  const tMax = clamp((maxM - dispLo) / span, 0, 1);
+  const tMed = clamp((medM - dispLo) / span, 0, 1);
+
+  if (rangePath) {
+    const seg = Math.max(2, (tMax - tMin) * L * 0.96);
+    const off = -tMin * L;
+    rangePath.style.strokeDasharray = `${seg} ${L}`;
+    rangePath.style.strokeDashoffset = String(off);
+  }
+  if (tickPath) {
+    const w = 7;
+    tickPath.style.strokeDasharray = `${w} ${L}`;
+    tickPath.style.strokeDashoffset = String(-(tMed * L) + w / 2);
+  }
+
   label.textContent = `${midiToName(minM)} → ${midiToName(maxM)}`;
 }
 
@@ -356,8 +456,8 @@ export function initMentor() {
     _startedAt = performance.now();
     btnStart.disabled = true;
     btnStop.disabled = false;
-    setText("mentorStatus", "Listening… one sustained vowel works best.");
-    setText("mentorHint", "Tip: steady volume — avoid whispering.");
+    setText("mentorStatus", "Listening… glide low to high and hold your top note briefly.");
+    setText("mentorHint", "Tip: bright vowel (“ee”, “ah”) helps the tracker catch highs.");
     updateTimer();
   });
 
@@ -394,8 +494,11 @@ export function initMentor() {
 
     setText("mentorStatus", "Snapshot ready — see below.");
     setText("mentorValRange", `${res.lowName} – ${res.highName}`);
-    setText("mentorValSpan", `${res.spanSemitones} semitones in this clip`);
+    setText("mentorValSpan", `${res.spanSemitones} semitones (robust) · ${res.spanHint}`);
     setText("mentorValMedian", res.medianName);
+    setText("mentorValVoice", res.voiceTitle);
+    setText("mentorValVoiceBody", res.voiceBody);
+    setText("mentorValVoiceMeta", res.voiceMeta);
     setText("mentorCardTimbreTitle", res.timbreLabel);
     setText("mentorCardTimbreBody", res.timbreDetail);
     setText("mentorCardTimbreMeta", `Brightness index ~${res.brightMean}`);

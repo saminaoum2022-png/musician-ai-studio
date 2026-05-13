@@ -764,11 +764,22 @@
                   stroke-linecap="round"
                 />
                 <path
-                  id="mentorArcProgress"
+                  id="mentorArcRange"
                   d="M 22 72 A 52 52 0 0 1 98 72"
                   fill="none"
                   stroke="url(#mentorArcGrad)"
-                  stroke-width="8"
+                  stroke-width="9"
+                  stroke-linecap="round"
+                  stroke-opacity="0.55"
+                  stroke-dasharray="0 175"
+                  pathLength="175"
+                />
+                <path
+                  id="mentorArcMedian"
+                  d="M 22 72 A 52 52 0 0 1 98 72"
+                  fill="none"
+                  stroke="#23d5ab"
+                  stroke-width="9"
                   stroke-linecap="round"
                   stroke-dasharray="0 175"
                   pathLength="175"
@@ -776,13 +787,13 @@
               </svg>
               <div class="mentorGaugeCenter">
                 <span id="mentorArcCaption" class="mentorGaugeCaption">—</span>
-                <span class="mentorGaugeHint">Range arc</span>
+                <span class="mentorGaugeHint">Purple band = robust range · teal tick = center</span>
               </div>
             </div>
             <div class="mentorCapture">
               <p id="mentorStatus" class="mentorStatus" role="status"></p>
               <p id="mentorHint" class="mentorHint">
-                Hold a comfortable “ah” or glide gently through your range for 8–15 seconds.
+                Glide chest to head on “ah” or “ee”, stay close to the mic, and hold top notes 1–2s so highs register.
               </p>
               <div class="mentorActions">
                 <button type="button" id="mentorBtnStart" class="primary mentorBtnStart">Start capture</button>
@@ -793,7 +804,7 @@
           </div>
 
           <div id="mentorResults" class="mentorResults" hidden>
-            <div class="mentorStatRow">
+            <div class="mentorStatRow mentorStatRow3">
               <div class="mentorStatCard">
                 <div class="mentorStatLabel">Low → high</div>
                 <div id="mentorValRange" class="mentorStatValue">—</div>
@@ -802,7 +813,13 @@
               <div class="mentorStatCard mentorStatCardAccent">
                 <div class="mentorStatLabel">Center note</div>
                 <div id="mentorValMedian" class="mentorStatValue mentorStatValueLg">—</div>
-                <div class="mentorStatMeta">Median of voiced windows</div>
+                <div class="mentorStatMeta">Robust median (middle of this take)</div>
+              </div>
+              <div class="mentorStatCard mentorStatCardVoice">
+                <div class="mentorStatLabel">Voice-type guess</div>
+                <div id="mentorValVoice" class="mentorStatValue mentorStatValueVoice">—</div>
+                <p id="mentorValVoiceBody" class="mentorStatVoiceBody"></p>
+                <div id="mentorValVoiceMeta" class="mentorStatMeta">—</div>
               </div>
             </div>
 
@@ -845,7 +862,7 @@
             </div>
 
             <p class="mentorDisclaimer">
-              Educational estimate only — microphone placement, room noise, and note choices all affect the numbers. Future versions could add breath support timing, onset sharpness, formant tracks, and pitch-to-MIDI export.
+              Educational estimate only — microphone placement, room noise, and note choices all affect the numbers. Voice labels are range guesses only (not a formal fach exam). Future versions could add breath support timing, onset sharpness, formant tracks, and pitch-to-MIDI export.
             </p>
           </div>
         </section>
@@ -2178,6 +2195,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260514mentor"></script>
+    <script type="module" src="./src/app.js?v=20260514mentorGauge"></script>
   </body>
 </html>

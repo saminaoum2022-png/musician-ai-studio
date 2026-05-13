@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514hubSmartPick";
+const APP_BUILD = "20260514hubTuningPill";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -6506,7 +6506,10 @@ function renderHub() {
             <span class="hubReelSkelLineSm"></span>
             <span class="hubReelSkelLineLg"></span>
           </div>
-          <p class="hubReelSkelHint" aria-live="polite">Loading Hub… this can take a moment on cellular.</p>
+          <div class="hubReelSkelHint" role="status" aria-live="polite">
+            <span class="hubReelSkelHintBars" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="hubReelSkelHintText">Tuning in…</span>
+          </div>
         </article>
       `;
     } else {

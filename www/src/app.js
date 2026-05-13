@@ -15609,14 +15609,13 @@ function performNewSongReset(srcEl) {
 }
 if (_btnNewSong) {
   _btnNewSong.addEventListener("click", () => {
-    const isArmed =
-      _newSongResetArmedAt &&
-      Date.now() - _newSongResetArmedAt <= NEW_SONG_ARM_WINDOW_MS;
-    if (!isArmed) {
-      armNewSongReset(_btnNewSong);
-      return;
-    }
+    try { haptic?.("light"); } catch {}
     performNewSongReset(_btnNewSong);
+    try {
+      if (typeof showToast === "function") {
+        showToast("Started a fresh draft", { icon: "↺", durationMs: 1800 });
+      }
+    } catch {}
   });
 }
 if (els.brandTitle) {

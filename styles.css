@@ -10834,7 +10834,7 @@ section.mentorPage{
   width: 100%;
   max-width: 100%;
   margin: 0 auto;
-  padding: 0 max(16px, env(safe-area-inset-right, 0px)) 48px max(16px, env(safe-area-inset-left, 0px));
+  padding: 0 max(18px, env(safe-area-inset-right, 0px)) 52px max(18px, env(safe-area-inset-left, 0px));
   box-sizing: border-box;
 }
 .mentorAmbient{
@@ -11347,8 +11347,21 @@ section.mentorPage{
   position: relative;
   z-index: 1;
   margin-top: 28px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  /* Contain wide children (SVG, long model strings); vertical scroll stays on the page */
+  overflow-x: clip;
+}
+.mentorResults > .mentorGlass,
+.mentorResults .mentorSnapGrid,
+.mentorResults .mentorTuneRow{
   min-width: 0;
   max-width: 100%;
+}
+.mentorResults :where(p, h3, .mentorSnapValue, .mentorSnapMeta, .mentorSnapAccent, .mentorGaugeCaption, .mentorResultIdentityTitle, .mentorTileTitle, .mentorInsightKeys, .mentorStrengthBody, .mentorMaqamBody, .mentorMaqamMeta, .mentorMaqamLead, .mentorGenrePill){
+  overflow-wrap: anywhere;
 }
 .mentorPullQuote{
   margin: 0 0 16px;
@@ -11357,16 +11370,20 @@ section.mentorPage{
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: rgba(167, 139, 250, 0.75);
+  overflow-wrap: anywhere;
 }
 .mentorResultHero{
   --mentor-mood-hue: 258;
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(200px, 0.9fr);
+  /* Both tracks may shrink — avoids horizontal spill on mid-width layouts */
+  grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
   gap: 18px;
-  padding: 22px 20px 20px;
+  padding: 22px 18px 20px;
   margin-bottom: 14px;
   overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
 }
 @media (max-width: 820px){
   .mentorResultHero{ grid-template-columns: 1fr; text-align: center; }
@@ -11401,6 +11418,8 @@ section.mentorPage{
 .mentorResultHeroMain{
   position: relative;
   z-index: 1;
+  min-width: 0;
+  max-width: 100%;
 }
 .mentorEyebrow{
   display: block;
@@ -11421,6 +11440,7 @@ section.mentorPage{
   letter-spacing: -0.03em;
   line-height: 1.15;
   color: var(--text);
+  overflow-wrap: anywhere;
 }
 .mentorResultIdentityGradient{
   margin: 0 0 10px;
@@ -11430,17 +11450,20 @@ section.mentorPage{
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  overflow-wrap: anywhere;
 }
 .mentorResultIdentityBody{
   margin: 0 0 8px;
   font-size: 14px;
   line-height: 1.55;
   color: rgba(210, 218, 232, 0.92);
+  overflow-wrap: anywhere;
 }
 .mentorResultIdentityMeta{
   margin: 0 0 12px;
   font-size: 12px;
   color: rgba(168, 180, 199, 0.88);
+  overflow-wrap: anywhere;
 }
 .mentorPersonaChips{
   display: flex;
@@ -11463,18 +11486,27 @@ section.mentorPage{
   display: flex;
   align-items: center;
   justify-content: center;
+  min-width: 0;
+  max-width: 100%;
 }
 .mentorGauge--hero{
   min-height: 150px;
+  width: 100%;
+  max-width: min(220px, 100%);
 }
 .mentorGauge{
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
+  max-width: 100%;
 }
 .mentorGaugeSvg{
   display: block;
+  width: min(200px, 100%);
+  max-width: 100%;
+  height: auto;
   filter: drop-shadow(0 12px 28px rgba(124, 92, 255, 0.35));
 }
 .mentorGaugeCenter{
@@ -11528,6 +11560,7 @@ section.mentorPage{
 .mentorSnapCard{
   padding: 14px 14px 16px;
   min-height: 120px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
 }
@@ -11545,6 +11578,7 @@ section.mentorPage{
   letter-spacing: -0.02em;
   color: var(--text);
   line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 .mentorSnapValueSm{
   font-size: 15px;
@@ -11615,6 +11649,7 @@ section.mentorPage{
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+  min-width: 0;
 }
 @media (max-width: 720px){
   .mentorStrengthsGrid{ grid-template-columns: 1fr; }
@@ -11624,6 +11659,7 @@ section.mentorPage{
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(10, 12, 18, 0.45);
+  min-width: 0;
 }
 .mentorStrengthIcon{
   display: block;
@@ -11639,6 +11675,7 @@ section.mentorPage{
   font-size: 13px;
   font-weight: 800;
   margin-bottom: 6px;
+  overflow-wrap: anywhere;
 }
 .mentorStrengthBody{
   margin: 0;
@@ -11657,6 +11694,7 @@ section.mentorPage{
   justify-content: space-between;
   gap: 12px 16px;
   margin-bottom: 10px;
+  min-width: 0;
 }
 .mentorMaqamTitles{
   flex: 1 1 200px;
@@ -11669,7 +11707,9 @@ section.mentorPage{
   color: rgba(168, 180, 199, 0.82);
 }
 .mentorMaqamDiagram{
-  flex: 0 0 auto;
+  flex: 1 1 200px;
+  min-width: 0;
+  max-width: 100%;
 }
 .mentorMaqamBody{
   margin: 0 0 8px;
@@ -11702,9 +11742,12 @@ section.mentorPage{
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
 }
 .mentorGenrePill{
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  max-width: 100%;
   padding: 8px 14px;
   border-radius: 999px;
   font-size: 12px;
@@ -11712,7 +11755,7 @@ section.mentorPage{
   border: 1px solid rgba(124, 92, 255, 0.28);
   background: rgba(124, 92, 255, 0.1);
   color: rgba(231, 237, 247, 0.92);
-  white-space: nowrap;
+  text-align: center;
 }
 .mentorGenreFallback{
   display: none !important;
@@ -11728,6 +11771,8 @@ section.mentorPage{
 }
 .mentorTuneCard{
   padding: 14px 16px 16px;
+  min-width: 0;
+  max-width: 100%;
 }
 .mentorTileTitle{
   margin: 0 0 8px;
@@ -11763,6 +11808,8 @@ section.mentorPage{
   margin-bottom: 14px;
   border-color: rgba(34, 211, 238, 0.22);
   box-shadow: 0 0 40px rgba(34, 211, 238, 0.08);
+  min-width: 0;
+  max-width: 100%;
 }
 .mentorFocusIcon{
   flex-shrink: 0;
@@ -11779,21 +11826,29 @@ section.mentorPage{
 .mentorFocusIcon svg{
   display: block;
 }
+.mentorFocusCopy{
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 100%;
+}
 .mentorFocusLine{
   margin: 0 0 6px;
   font-size: 14px;
   line-height: 1.5;
   color: rgba(231, 237, 247, 0.95);
+  overflow-wrap: anywhere;
 }
 .mentorFocusSub{
   margin: 0;
   font-size: 12px;
   line-height: 1.45;
   color: rgba(168, 180, 199, 0.88);
+  overflow-wrap: anywhere;
 }
 .mentorDisclaimer{
   margin: 16px 0 0;
   font-size: 12px;
   line-height: 1.5;
   color: rgba(168, 180, 199, 0.75);
+  overflow-wrap: anywhere;
 }

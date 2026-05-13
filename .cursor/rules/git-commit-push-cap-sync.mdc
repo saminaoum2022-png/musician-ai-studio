@@ -1,0 +1,15 @@
+---
+description: After app changes, commit, push, and Capacitor iOS sync
+alwaysApply: true
+---
+
+# Ship workflow (musician-ai-studio)
+
+When you finish a task that **changes tracked project files** (especially `www/`, `src/`, root `index.html` / `styles.css`, `api/`, or anything that affects the shipped web or native shell), do this **before ending the turn** unless the user explicitly says not to:
+
+1. **`git status`** — confirm what changed.
+2. **`git add`** the relevant paths and **`git commit -m "…"`** with a short, accurate message (full sentences, no fluff).
+3. **`git push`** to the current branch’s upstream (usually `origin main`).
+4. **`npx cap sync ios`** from the repo root so **`www`** is copied into **`ios/App/App/public`** and plugins/config stay aligned.
+
+Skip only when there is **nothing to commit** (clean tree after sync) or the user asked to leave git alone. If push or sync fails, fix or report and do not claim success.

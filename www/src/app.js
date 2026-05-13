@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514hubEgressLean";
+const APP_BUILD = "20260514hubLimit12";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -4626,16 +4626,18 @@ async function supabaseSelectHub({ sinceIsoTs = "" } = {}) {
   const timer = setTimeout(() => ctrl.abort(), 20000);
   // Incremental fetch path: when caller passes `sinceIsoTs` we only
   // request rows newer than that timestamp. Most polls return 0 rows
-  // = a few hundred bytes total instead of 30 KB. Full refresh runs
+  // = a few hundred bytes total instead of multi-KB. Full refresh runs
   // every HUB_FULL_REFETCH_MS to catch like/react updates.
   const sinceFilter = sinceIsoTs
     ? `&created_at=gt.${encodeURIComponent(sinceIsoTs)}`
     : "";
-  // 30 rows is enough to fill the visible feed plus a healthy backlog
-  // for the IntersectionObserver "Load more" path. Older posts are
-  // still reachable via subsequent paginated fetches if we ever need
-  // them (kept in sync with HUB_PAGE_SIZE * ~1.5).
-  const url = `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(HUB_SELECT_COLUMNS)}&order=created_at.desc&limit=30${sinceFilter}`;
+  // 12 rows = HUB_PAGE_SIZE (6) plus a 6-row swipe-ahead backlog. The
+  // reel only renders 6 at a time and the user typically swipes through
+  // 2-4 before tapping out, so 12 is plenty for a first-paint session
+  // and cuts the cold-start payload by ~60% vs the previous 30. Older
+  // posts can be fetched later if we wire cloud pagination into the
+  // "Load more" sentinel; incremental polls keep adding new rows on top.
+  const url = `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(HUB_SELECT_COLUMNS)}&order=created_at.desc&limit=12${sinceFilter}`;
   const r = await fetch(url, {
     headers: {
       apikey: SUPABASE_ANON_KEY,

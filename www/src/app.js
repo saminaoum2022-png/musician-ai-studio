@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514deployBump2";
+const APP_BUILD = "20260514libraryAuthPaintFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5121,6 +5121,10 @@ function saveAuthSession(sess) {
     else localStorage.removeItem(AUTH_SESSION_KEY);
   } catch {}
   renderAuthStatus();
+  try {
+    if ((document.body.getAttribute("data-route") || "") === "library") renderLibrary();
+    renderProfileHubShared();
+  } catch {}
 }
 function getSupabaseAuthToken() {
   return authSession?.access_token || "";
@@ -10708,7 +10712,7 @@ function buildLibMenuHtml(track) {
       <button class="ghost" data-lib-dlvideo="${id}">Download video</button>
       ${HUB_FEATURE_ENABLED ? `<button class="ghost" data-lib-share="${id}">Share to Hub</button>` : ""}
       ${personaEligible ? `<button class="ghost" data-lib-persona="${id}">Save voice as persona</button>` : ""}
-      ${authSession?.user?.id ? `<button class="ghost" data-lib-pubprof="${id}" data-lib-pubprof-to="${Boolean(track.publicOnProfile) ? "private" : "public"}">${Boolean(track.publicOnProfile) ? "Hide from public profile" : "Show on public profile"}</button>` : ""}
+      <button class="ghost" data-lib-pubprof="${id}" data-lib-pubprof-to="${Boolean(track.publicOnProfile) ? "private" : "public"}">${Boolean(track.publicOnProfile) ? "Hide from public profile" : "Show on public profile"}</button>
       <button class="ghost" data-lib-details="${id}">Song details</button>
       ${isInstrumental ? "" : `<button class="ghost" data-lib-inst="${id}">Get instrumental</button>`}
       <button class="ghost libRowDelete" data-lib-del="${id}">Delete</button>
@@ -11317,14 +11321,12 @@ function renderLibrary() {
         if (dateLabel) subBits.push(`<span class="libRowDot">${escapeHtml(dateLabel)}</span>`);
         if (isInstrumental) subBits.push(`<span class="libRowChip">Instrumental</span>`);
         if (isSound) subBits.push(`<span class="libRowChip">Sound</span>`);
-        if (authSession?.user?.id) {
-          const profilePublic = Boolean(t.publicOnProfile);
-          subBits.push(
-            `<span class="libRowChip libRowChipProfileVis libRowChipProfileVis--${
-              profilePublic ? "public" : "private"
-            }">${profilePublic ? "Public" : "Private"}</span>`,
-          );
-        }
+        const profilePublic = Boolean(t.publicOnProfile);
+        subBits.push(
+          `<span class="libRowChip libRowChipProfileVis libRowChipProfileVis--${
+            profilePublic ? "public" : "private"
+          }">${profilePublic ? "Public" : "Private"}</span>`,
+        );
         // First row paints with high priority so the page never looks
         // empty above the fold; everything else is lazy + low-priority,
         // identical pattern to Hub.
@@ -18445,6 +18447,16 @@ loadProfile();
 loadAuthSession();
 syncActiveProfileIdFromSession();
 renderAuthStatus();
+// `applyRoute()` already ran once at module load (before this block). At
+// that moment `authSession` was still null, so protected routes mis-routed
+// and `renderLibrary()` never saw a signed-in session — Library rows had
+// no Public/Private chip and the ⋯ menu omitted "Show on public profile".
+// Re-run routing after localStorage hydration so Library paints correctly.
+try {
+  applyRoute();
+} catch (e) {
+  console.warn("[boot] applyRoute after loadAuthSession", e);
+}
 // Light the profile header shimmer NOW if we already know a sign-in
 // is on its way and the handle is still the boot placeholder ("guest").
 // This avoids the "M logo + @guest" flash on cold opens with slow mobile
@@ -18479,6 +18491,9 @@ void (async () => {
   const usedCodeFlow = await maybeHandleAuthCodeFromQuery();
   const usedTokenFlow = !usedCodeFlow && maybeHandleMagicLinkFromHash();
   await refreshAuthStateFromSupabase();
+  try {
+    if ((document.body.getAttribute("data-route") || "") === "library") renderLibrary();
+  } catch {}
   if (usedCodeFlow || usedTokenFlow) window.location.hash = "#/generate";
 
   // Always hydrate from cloud when a valid session exists (not only callback flows).

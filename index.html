@@ -24,7 +24,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/icons/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="./assets/icons/favicon-16.png" />
     <!--
-      Network preflight hints. Hub covers + audio almost always come from
+      Network preflight hints. Supabase + CDN audio origins warm up faster on first tap.
       Suno's CDN; preconnecting on cellular knocks out DNS + TLS for the
       first byte. The Supabase project URL is environment-driven (loaded
       via /api/public-config), so we add its preconnect dynamically in
@@ -55,7 +55,7 @@
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Nabadai" />
     <meta property="og:title" content="Nabadai — AI Music Studio" />
-    <meta property="og:description" content="Hum a melody. Write lyrics. Ship a song. Listen to what people are making in the Hub." />
+    <meta property="og:description" content="Hum a melody. Write lyrics. Ship a song with NabadAi." />
     <meta property="og:image" content="./assets/nabadai-logo.png" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Nabadai — AI Music Studio" />
@@ -70,7 +70,6 @@
           <div class="journeyBar">
             <a href="#/generate" class="journeyStep" data-route-link="generate">Generate</a>
             <a href="#/library" class="journeyStep" data-route-link="library">Library</a>
-            <a href="#/hub" class="journeyStep" data-route-link="hub">Hub</a>
             <a href="#/sounds" class="journeyStep" data-route-link="sounds">Sounds</a>
             <a href="#/vocal" class="journeyStep" data-route-link="vocal">Vocal</a>
             <a href="#/player" class="journeyStep" data-route-link="player">Player</a>
@@ -822,7 +821,7 @@
                   <span>Cover</span>
                 </button>
                 <span class="playerMiniDot" aria-hidden="true"></span>
-                <button id="btnOpenTrimSheet" class="playerMiniBtn" type="button" aria-label="Trim for Hub">
+                <button id="btnOpenTrimSheet" class="playerMiniBtn" type="button" aria-label="Trim clip">
                   <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
                     <circle cx="6" cy="6" r="3"/>
                     <circle cx="6" cy="18" r="3"/>
@@ -833,7 +832,7 @@
                   <span>Trim</span>
                 </button>
                 <span class="playerMiniDot" aria-hidden="true"></span>
-                <button id="btnShareFullHub" class="playerMiniBtn" type="button" aria-label="Publish to Hub">
+                <button id="btnShareFullHub" class="playerMiniBtn" type="button" aria-label="Publish to Hub" hidden>
                   <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                     <polyline points="17 8 12 3 7 8"/>
@@ -864,7 +863,7 @@
                   <input id="clipStartSec" type="number" min="0" step="1" value="0" />
                   <label class="small">Out</label>
                   <input id="clipEndSec" type="number" min="0" step="1" value="30" />
-                  <button id="btnShareClipHub" class="primary" type="button">Publish clip</button>
+                  <button id="btnShareClipHub" class="primary" type="button" hidden>Publish clip</button>
                   <button id="btnCloseTrimSheet" class="ghost" type="button">Cancel</button>
                 </div>
               </div>
@@ -941,7 +940,7 @@
             <span class="profileUsernamePromptIcon" aria-hidden="true">@</span>
             <span class="profileUsernamePromptText">
               <strong>Pick a username</strong>
-              <span class="profileUsernamePromptHint">Friends will see this on Hub.</span>
+              <span class="profileUsernamePromptHint">This is how friends find you when you share your profile link.</span>
             </span>
             <span class="profileUsernamePromptCta" aria-hidden="true">Set →</span>
           </button>
@@ -1203,7 +1202,7 @@
           <div class="profileSongsBlock">
             <header class="libraryHeader profileSongsHeader">
               <h2>All releases</h2>
-              <p class="libraryLead">Your shares on the Hub.</p>
+              <p class="libraryLead">Public releases (Hub paused — no new shares).</p>
               <p id="profileOwnSongCount" class="libraryCount" hidden></p>
             </header>
             <div id="profileHubSharedList" class="libraryList profileHubSharedList"></div>
@@ -1608,7 +1607,7 @@
                 <ul class="profilePersonaSpots">
                   <li>After a song finishes → tap the ⋯ on the result card → <strong>Save voice as persona</strong>.</li>
                   <li>In <a href="#/library">Library</a> → tap ⋯ on a song → <strong>Save voice as persona</strong>.</li>
-                  <li>On any <a href="#/hub">Hub</a> post → tap ⋯ → <strong>Save voice as persona</strong>.</li>
+                  <li>On a published track → tap ⋯ → <strong>Save voice as persona</strong> (when available).</li>
                 </ul>
               </div>
               <a href="#/generate" class="profilePersonaLink">Open Create</a>
@@ -1802,12 +1801,12 @@
         <div class="songDetailsBackdrop" id="shareLiveBackdrop"></div>
         <div class="songDetailsSheet shareLiveSheet">
           <div class="row" style="justify-content:space-between;align-items:center">
-            <h2 style="margin:0">Live on Hub</h2>
+            <h2 style="margin:0">Shared</h2>
             <button id="btnCloseShareLive" class="ghost" type="button">Close</button>
           </div>
-          <div class="hint" id="shareLiveText" style="margin-top:10px">Your song is now live on Hub.</div>
+          <div class="hint" id="shareLiveText" style="margin-top:10px">Your song was saved locally.</div>
           <div class="row" style="justify-content:flex-end; margin-top:14px">
-            <button id="btnGoHub" class="primary" type="button">Go to Hub</button>
+            <button id="btnGoHub" class="primary" type="button">Continue</button>
           </div>
         </div>
       </div>
@@ -1983,22 +1982,6 @@
           <span class="tabLabel">Library</span>
           <span id="libraryTabDot" class="hubDot libraryTabDot" style="display:none"></span>
         </a>
-        <a href="#/hub" data-route-link="hub" class="hubTab" aria-label="Hub" title="Hub">
-          <svg class="tabIco hubTabIco" viewBox="0 0 24 24" aria-hidden="true">
-            <defs>
-              <linearGradient id="hubTabGrad" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#7c5cff"/>
-                <stop offset="100%" stop-color="#23d5ab"/>
-              </linearGradient>
-            </defs>
-            <line x1="4" y1="9" x2="20" y2="9" stroke="url(#hubTabGrad)"/>
-            <line x1="4" y1="15" x2="20" y2="15" stroke="url(#hubTabGrad)"/>
-            <line x1="10" y1="3" x2="8" y2="21" stroke="url(#hubTabGrad)"/>
-            <line x1="16" y1="3" x2="14" y2="21" stroke="url(#hubTabGrad)"/>
-          </svg>
-          <span class="tabLabel hubTabLabel">Hub</span>
-          <span id="hubTabDot" class="hubDot hubTabDot" style="display:none"></span>
-        </a>
         <a href="#/search" data-route-link="search">
           <svg class="tabIco" viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="11" cy="11" r="7"/>
@@ -2075,6 +2058,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260513profileLoadFix"></script>
+    <script type="module" src="./src/app.js?v=20260514hubRemoved"></script>
   </body>
 </html>

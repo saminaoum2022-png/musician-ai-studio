@@ -6,7 +6,11 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514profileLoadFix";
+const APP_BUILD = "20260514hubRemoved";
+
+/** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
+ *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
+const HUB_FEATURE_ENABLED = false;
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -1617,9 +1621,13 @@ function showLikeBurst() {
  * changes between taps. Keeping credits + my-hub-posts gives the
  * user the two values that actually move (balance + new shares).  */
 const TAB_REFRESH_ACTIONS = {
-  hub() {
-    void Promise.resolve(refreshHubFromSupabase()).catch((e) => console.warn("[tabRefresh/hub]", e));
-  },
+  ...(HUB_FEATURE_ENABLED
+    ? {
+      hub() {
+        void Promise.resolve(refreshHubFromSupabase()).catch((e) => console.warn("[tabRefresh/hub]", e));
+      },
+    }
+    : {}),
   search() {
     try {
       const input = document.getElementById("searchInput");
@@ -1729,9 +1737,20 @@ function applyRoute() {
   if (/^u\//.test(route)) {
     pendingPublicUsername = decodeURIComponent(route.slice(2)).trim();
   }
-  const allowedRoutes = new Set(["intro", "start", "auth", "generate", "library", "hub", "settings", "profile", "player", "search", "vocal", "stems", "advanced", "user", "credits", "sounds"]);
+  const allowedRoutes = new Set([
+    "intro", "start", "auth", "generate", "library",
+    ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
+    "settings", "profile", "player", "search", "vocal", "stems", "advanced", "user", "credits", "sounds",
+  ]);
   const normalized = pendingPublicUsername ? "user" : (route === "start" ? "intro" : route);
   let wanted = allowedRoutes.has(normalized) ? normalized : "generate";
+  if (!HUB_FEATURE_ENABLED && normalized === "hub") {
+    wanted = "generate";
+    try {
+      const h = String(location.hash || "");
+      if (/\/hub\b/.test(h)) history.replaceState(null, "", "#/generate");
+    } catch {}
+  }
   // Public profile is intentionally readable without auth so share-link
   // visitors don't hit a wall before discovering the rest of the product.
   const protectedRoutes = new Set(["generate", "library", "profile", "player", "vocal", "stems", "advanced", "credits", "sounds"]);
@@ -4830,6 +4849,7 @@ function mergeHubProofFromPrevPost(post, prevFeed) {
  *  actually needs it — e.g. opens Remix or owner-only actions). One row,
  *  one column. Cheap. */
 async function hubFetchPostMetaFull(postId) {
+  if (!HUB_FEATURE_ENABLED) return null;
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   const id = String(postId || "").trim();
   if (!id) return null;
@@ -4849,6 +4869,7 @@ async function hubFetchPostMetaFull(postId) {
 
 /** On-demand fetch of a single Hub post's `proof` JSONB (owner flows). */
 async function hubFetchPostProofFull(postId) {
+  if (!HUB_FEATURE_ENABLED) return null;
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   const id = String(postId || "").trim();
   if (!id) return null;
@@ -4880,6 +4901,7 @@ async function hubFetchPostProofFull(postId) {
 const HUB_POSTS_JSON_LIST_DATA_GUARD = "";
 
 async function supabaseSelectHub({ sinceIsoTs = "" } = {}) {
+  if (!HUB_FEATURE_ENABLED) return null;
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   const ctrl = new AbortController();
   // Cellular reality check: on real-world 3G/Edge, DNS + TLS handshake
@@ -4940,6 +4962,7 @@ async function supabaseSelectHub({ sinceIsoTs = "" } = {}) {
  *  legacy posts written before we started stamping the user id into
  *  meta. */
 async function supabaseSelectMyHubPosts({ uid, username } = {}) {
+  if (!HUB_FEATURE_ENABLED) return null;
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   if (!uid && !username) return null;
   const ctrl = new AbortController();
@@ -5026,6 +5049,11 @@ let _myHubPostsInFlight = null;
  *  skeletons stop. Reset on logout. */
 let _myHubPostsFirstLoadDone = false;
 async function refreshMyHubPostsFast({ force = false } = {}) {
+  if (!HUB_FEATURE_ENABLED) {
+    _myHubPostsFirstLoadDone = true;
+    try { renderProfileHubShared(); } catch {}
+    return;
+  }
   try {
     const uid = String(authSession?.user?.id || "");
     const username = String(activeProfile?.username || "");
@@ -6069,6 +6097,7 @@ async function supabaseDeleteUserSong(track) {
   }).catch(() => null);
 }
 async function supabaseInsertHub(post) {
+  if (!HUB_FEATURE_ENABLED) return null;
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   // Never store base64 `data:` URLs in hub_posts. They are the single
   // biggest egress cost on the Hub list endpoint (a 500 KB inline cover
@@ -6106,6 +6135,7 @@ async function supabaseInsertHub(post) {
   return await r.json().catch(() => []);
 }
 async function supabasePatchHub(id, patch) {
+  if (!HUB_FEATURE_ENABLED) return null;
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   const r = await fetch(`${SUPABASE_URL}/rest/v1/hub_posts?id=eq.${encodeURIComponent(id)}`, {
     method: "PATCH",
@@ -6120,6 +6150,7 @@ async function supabasePatchHub(id, patch) {
   return await r.json().catch(() => []);
 }
 async function supabaseDeleteHub(id) {
+  if (!HUB_FEATURE_ENABLED) return null;
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !id) return null;
   const token = getSupabaseAuthToken();
   const headers = {
@@ -6154,9 +6185,15 @@ function saveHubFeed(items) {
 function openShareLiveModal(title) {
   if (!els.shareLiveModal) return;
   if (els.shareLiveText) {
-    els.shareLiveText.textContent = title
-      ? `“${title}” is now live on Hub.`
-      : "Your song is now live on Hub.";
+    if (!HUB_FEATURE_ENABLED) {
+      els.shareLiveText.textContent = title
+        ? `“${title}” — saved locally.`
+        : "Your song was saved locally.";
+    } else {
+      els.shareLiveText.textContent = title
+        ? `“${title}” is now live on Hub.`
+        : "Your song is now live on Hub.";
+    }
   }
   els.shareLiveModal.style.display = "";
 }
@@ -6448,6 +6485,11 @@ function copyProofFingerprint() {
   }
 }
 function shareToHub(track) {
+  if (!HUB_FEATURE_ENABLED) {
+    setStatus?.("Public Hub is paused.");
+    showToast?.("Sharing to Hub isn’t available right now.", { durationMs: 3500 });
+    return;
+  }
   const feed = loadHubFeed();
   const creator = String(activeProfile.username || "guest");
   const creatorUserId = String(authSession?.user?.id || "");
@@ -7036,6 +7078,7 @@ if (els.hubList) {
   });
 }
 async function refreshHubFromSupabase({ force = false } = {}) {
+  if (!HUB_FEATURE_ENABLED) return;
   if (hubSyncInFlight) return;
   const route = document.body.getAttribute("data-route") || "";
   // Do not hit PostgREST for the global feed while the user is on
@@ -7277,6 +7320,7 @@ async function refreshHubFromSupabase({ force = false } = {}) {
   }
 }
 function startHubLiveSync() {
+  if (!HUB_FEATURE_ENABLED) return;
   if (hubSyncTimer) clearInterval(hubSyncTimer);
   // Egress saver v2: 60s/120s was still firing ~1,000 PostgREST hits
   // per active session per day. Pushed to 5min on both desktop and
@@ -7940,6 +7984,7 @@ function syncProfileAuraPulseFromLatest(items) {
 }
 
 function getProfileOwnerHubItems() {
+  if (!HUB_FEATURE_ENABLED) return [];
   const creator = String(activeProfile.username || "guest");
   const uid = String(authSession?.user?.id || "");
   return loadHubFeed()
@@ -8871,7 +8916,9 @@ function renderUserProfile(rawUsername) {
       b.addEventListener("click", () => {
         const sid = b.getAttribute("data-user-song");
         if (!sid) return;
-        location.hash = `#/hub?post=${encodeURIComponent(sid)}`;
+        location.hash = HUB_FEATURE_ENABLED
+          ? `#/hub?post=${encodeURIComponent(sid)}`
+          : "#/generate";
       });
     });
   }
@@ -8889,6 +8936,7 @@ function renderUserProfile(rawUsername) {
 async function unpublishHubPostById(id) {
   const hid = String(id || "").trim();
   if (!hid) return { ok: false, reason: "Missing post id" };
+  if (!HUB_FEATURE_ENABLED) return { ok: false, reason: "Hub is paused" };
   const feed = loadHubFeed();
   const post = feed.find((x) => String(x.id) === hid);
   if (!isHubCloudUuid(hid)) {
@@ -9118,7 +9166,16 @@ function renderProfileHubShared() {
       `;
       return;
     }
-    els.profileHubSharedList.innerHTML = `
+    els.profileHubSharedList.innerHTML = !HUB_FEATURE_ENABLED
+      ? `
+      <div class="emptyState">
+        <div class="emptyStateIcon" aria-hidden="true">⏸</div>
+        <p class="emptyStateTitle">Public Hub is paused</p>
+        <p class="emptyStateHint">We turned off the public feed to save data costs. Your Library and creations are unchanged — sharing here may return later.</p>
+        <a href="#/library" class="emptyStateCta" data-route-link="library">Open Library</a>
+      </div>
+    `
+      : `
       <div class="emptyState">
         <div class="emptyStateIcon" aria-hidden="true">♪</div>
         <p class="emptyStateTitle">No songs on Hub yet</p>
@@ -10107,7 +10164,7 @@ function buildLibMenuHtml(track) {
     <div class="libMenu" id="libMenu_${id}">
       <a class="ghost" href="${escapeHtml(url)}" target="_blank" rel="noreferrer" data-lib-dlaudio="${id}">Download audio</a>
       <button class="ghost" data-lib-dlvideo="${id}">Download video</button>
-      <button class="ghost" data-lib-share="${id}">Share to Hub</button>
+      ${HUB_FEATURE_ENABLED ? `<button class="ghost" data-lib-share="${id}">Share to Hub</button>` : ""}
       ${personaEligible ? `<button class="ghost" data-lib-persona="${id}">Save voice as persona</button>` : ""}
       <button class="ghost" data-lib-details="${id}">Song details</button>
       ${isInstrumental ? "" : `<button class="ghost" data-lib-inst="${id}">Get instrumental</button>`}
@@ -10210,7 +10267,9 @@ function bindLibraryDelegatedListeners() {
         const t = loadLibrary().find((x) => x.id === delId);
         const title = String(t?.title || "this song").trim() || "this song";
         const sharedToHub =
-          t && loadHubFeed().some(
+          HUB_FEATURE_ENABLED &&
+          t &&
+          loadHubFeed().some(
             (p) =>
               String(p?.url || "").trim() === String(t?.url || "").trim() &&
               String(p?.creator || "").trim() === String(activeProfile.username || "guest").trim()
@@ -10250,9 +10309,13 @@ function bindLibraryDelegatedListeners() {
         const id = sh.getAttribute("data-lib-share");
         const t = loadLibrary().find((x) => x.id === id);
         if (t) {
-          shareToHub(t);
-          openShareLiveModal(t.title || "Your song");
-          setStatus("Shared to Hub.");
+          if (!HUB_FEATURE_ENABLED) {
+            showToast?.("Hub sharing is paused.", { durationMs: 3200 });
+          } else {
+            shareToHub(t);
+            openShareLiveModal(t.title || "Your song");
+            setStatus("Shared to Hub.");
+          }
         }
         closeLibraryMenu();
         return;
@@ -16359,7 +16422,7 @@ if (els.shareLiveBackdrop) els.shareLiveBackdrop.addEventListener("click", close
 if (els.btnCloseShareLive) els.btnCloseShareLive.addEventListener("click", closeShareLiveModal);
 if (els.btnGoHub) els.btnGoHub.addEventListener("click", () => {
   closeShareLiveModal();
-  location.hash = "#/hub";
+  location.hash = HUB_FEATURE_ENABLED ? "#/hub" : "#/generate";
 });
 if (els.proofBackdrop) els.proofBackdrop.addEventListener("click", closeProofModal);
 if (els.btnCloseProof) els.btnCloseProof.addEventListener("click", closeProofModal);
@@ -16512,7 +16575,7 @@ if (els.btnUserPublicBack) {
     if (history.length > 1) {
       history.back();
     } else {
-      location.hash = "#/hub";
+      location.hash = HUB_FEATURE_ENABLED ? "#/hub" : "#/generate";
     }
   });
 }
@@ -16641,6 +16704,10 @@ if (els.playerVol) {
 }
 if (els.btnShareClipHub) {
   els.btnShareClipHub.addEventListener("click", async () => {
+    if (!HUB_FEATURE_ENABLED) {
+      showToast("Hub sharing is paused.", { durationMs: 3200 });
+      return;
+    }
     if (!currentPlayerTrackRef?.url) {
       setStatus("Open a library song first, then publish a clip.");
       return;
@@ -16691,6 +16758,10 @@ if (els.btnCloseTrimSheet) {
 }
 if (els.btnShareFullHub) {
   els.btnShareFullHub.addEventListener("click", async () => {
+    if (!HUB_FEATURE_ENABLED) {
+      showToast("Hub sharing is paused.", { durationMs: 3200 });
+      return;
+    }
     const url = String(currentPlayerTrackRef?.url || playerEl?.src || "").trim();
     if (!url) {
       showToast("No loaded song to publish.");
@@ -17462,7 +17533,7 @@ if (els.btnAuthGateGoogle) {
 }
 if (els.btnAuthGateGuest) {
   els.btnAuthGateGuest.addEventListener("click", () => {
-    location.hash = "#/hub";
+    location.hash = HUB_FEATURE_ENABLED ? "#/hub" : "#/generate";
     setStatus("Guest mode enabled. Login anytime from Profile.");
   });
 }

@@ -179,8 +179,8 @@ module.exports = async function handler(req, res) {
 
   const url = absoluteUrl(req, id ? `/s/${encodeURIComponent(id)}` : "/");
   const redirectTo = id
-    ? `/#/hub?post=${encodeURIComponent(id)}`
-    : `/#/hub`;
+    ? `/#/generate`
+    : `/#/generate`;
 
   const html = renderHtml({
     title,

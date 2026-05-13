@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514mentorResultsClamp";
+const APP_BUILD = "20260514hubProfileVisibility";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4741,6 +4741,7 @@ const HUB_SELECT_COLUMNS_FEED = [
   "meta_clip:meta->clip",
   "meta_creator_user_id:meta->>creatorUserId",
   "meta_template_title:meta->>searchTemplateTitle",
+  "meta_profile_visibility:meta->>profileVisibility",
 ].join(",");
 
 /** Profile “my Hub posts” fetch — includes scalar `proof` paths so the
@@ -4763,6 +4764,7 @@ const HUB_SELECT_COLUMNS = [
   "meta_clip:meta->clip",
   "meta_creator_user_id:meta->>creatorUserId",
   "meta_template_title:meta->>searchTemplateTitle",
+  "meta_profile_visibility:meta->>profileVisibility",
 ].join(",");
 
 /** Same as `HUB_SELECT_COLUMNS_FEED` but without JSON-path fragments. Used when
@@ -4796,6 +4798,8 @@ function reconstructHubRowMeta(row) {
   if (creatorUserId) meta.creatorUserId = creatorUserId;
   const tplTitle = String((row && row.meta_template_title) || "").trim();
   if (tplTitle) meta.searchTemplateTitle = tplTitle;
+  const profVis = String((row && row.meta_profile_visibility) || "").trim().toLowerCase();
+  if (profVis === "private" || profVis === "public") meta.profileVisibility = profVis;
   return Object.keys(meta).length ? meta : null;
 }
 
@@ -4838,15 +4842,29 @@ function mapHubRestRowToPost(r, { includeProof = false } = {}) {
 /** After a public feed sync, keep any `proof` we already had for the same
  *  id so Profile → Proof still works without re-fetching `my` rows. */
 function mergeHubProofFromPrevPost(post, prevFeed) {
-  if (post.proof?.model || post.proof?.mode || post.proof?.promptHash) return post;
   const prevRow = prevFeed.find((x) => String(x.id) === String(post.id));
-  if (
-    prevRow?.proof &&
-    (prevRow.proof.model || prevRow.proof.mode || prevRow.proof.promptHash)
-  ) {
-    return { ...post, proof: prevRow.proof };
+  let next = post;
+
+  if (!(next.proof?.model || next.proof?.mode || next.proof?.promptHash)) {
+    if (
+      prevRow?.proof &&
+      (prevRow.proof.model || prevRow.proof.mode || prevRow.proof.promptHash)
+    ) {
+      next = { ...next, proof: prevRow.proof };
+    }
   }
-  return post;
+
+  const prevVis = String(prevRow?.meta?.profileVisibility || "").trim().toLowerCase();
+  const curVis = String(next.meta?.profileVisibility || "").trim().toLowerCase();
+  // Lean feed projections omit visibility — keep a prior "private" stamp
+  // so Profile badges don't flash back to Public on every Hub poll.
+  if (prevVis === "private" && !curVis) {
+    next = {
+      ...next,
+      meta: { ...(next.meta || {}), profileVisibility: "private" },
+    };
+  }
+  return next;
 }
 
 /** On-demand fetch of a single Hub post's full `meta` (only when the user
@@ -4858,9 +4876,12 @@ async function hubFetchPostMetaFull(postId) {
   const id = String(postId || "").trim();
   if (!id) return null;
   try {
+    const headers = { apikey: SUPABASE_ANON_KEY };
+    const tok = getSupabaseAuthToken();
+    if (tok) headers.Authorization = `Bearer ${tok}`;
     const r = await fetch(
       `${SUPABASE_URL}/rest/v1/hub_posts?id=eq.${encodeURIComponent(id)}&select=meta&limit=1`,
-      { headers: { apikey: SUPABASE_ANON_KEY } },
+      { headers },
     );
     if (!r.ok) return null;
     const arr = await r.json().catch(() => []);
@@ -6141,13 +6162,16 @@ async function supabaseInsertHub(post) {
 async function supabasePatchHub(id, patch) {
   if (!HUB_FEATURE_ENABLED) return null;
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  const headers = {
+    apikey: SUPABASE_ANON_KEY,
+    "Content-Type": "application/json",
+    Prefer: "return=representation",
+  };
+  const tok = getSupabaseAuthToken();
+  if (tok) headers.Authorization = `Bearer ${tok}`;
   const r = await fetch(`${SUPABASE_URL}/rest/v1/hub_posts?id=eq.${encodeURIComponent(id)}`, {
     method: "PATCH",
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      "Content-Type": "application/json",
-      Prefer: "return=representation",
-    },
+    headers,
     body: JSON.stringify(patch),
   });
   if (!r.ok) throw new Error("supabase update failed");
@@ -6559,6 +6583,7 @@ function shareToHub(track) {
       creatorUserId,
       taskId: String(track.taskId || track?.meta?.taskId || ""),
       audioId: String(track.audioId || track?.meta?.audioId || ""),
+      profileVisibility: "public",
     },
   };
   feed.unshift(newPost);
@@ -8824,6 +8849,14 @@ function renderProfilePreviewFromInputs() {
   try { renderProfileMySound(); } catch {}
 }
 
+/** `meta.profileVisibility === "private"` hides the release on `#/u/…`;
+ *  anything else (missing / "public") counts as public — matches legacy
+ *  rows that pre-date this flag. */
+function isHubPostVisibleOnPublicProfile(post) {
+  const v = String(post?.meta?.profileVisibility || "").trim().toLowerCase();
+  return v !== "private";
+}
+
 /** Public-facing profile aggregated from this user's Hub posts. We use the
  * Hub feed as the source of truth (no separate "users" table yet) — this
  * keeps the route purely client-side and means a creator's bio / voice /
@@ -8840,7 +8873,8 @@ function renderUserProfile(rawUsername) {
   const matches = feed.filter((p) =>
     String(p?.creator || "").toLowerCase() === username.toLowerCase());
   matches.sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
-  const latest = matches[0];
+  const publicMatches = matches.filter(isHubPostVisibleOnPublicProfile);
+  const latest = publicMatches[0] || matches[0];
   const displayName = latest?.creator || username || "user";
 
   if (els.userPublicName) els.userPublicName.textContent = `@${displayName}`;
@@ -8876,11 +8910,11 @@ function renderUserProfile(rawUsername) {
     }
   }
 
-  const totalLikes = matches.reduce((sum, p) => sum + Number(p.likes || 0), 0);
+  const totalLikes = publicMatches.reduce((sum, p) => sum + Number(p.likes || 0), 0);
   if (els.userPublicStats) {
-    if (matches.length) {
+    if (publicMatches.length) {
       els.userPublicStats.innerHTML = `
-        <span><strong>${matches.length}</strong> song${matches.length === 1 ? "" : "s"}</span>
+        <span><strong>${publicMatches.length}</strong> song${publicMatches.length === 1 ? "" : "s"}</span>
         <span aria-hidden="true">·</span>
         <span><strong>${totalLikes}</strong> like${totalLikes === 1 ? "" : "s"}</span>
       `;
@@ -8890,14 +8924,17 @@ function renderUserProfile(rawUsername) {
     }
   }
   if (els.userPublicSongsCount) {
-    els.userPublicSongsCount.textContent = matches.length ? String(matches.length) : "";
+    els.userPublicSongsCount.textContent = publicMatches.length ? String(publicMatches.length) : "";
   }
 
-  if (!matches.length) {
+  if (!publicMatches.length) {
     if (els.userPublicSongs) els.userPublicSongs.innerHTML = "";
     if (els.userPublicEmpty) {
+      const hasPrivateOnly = matches.length > 0 && !publicMatches.length;
       els.userPublicEmpty.textContent = username
-        ? `No public songs from @${displayName} yet.`
+        ? hasPrivateOnly
+          ? `No public songs from @${displayName} yet — their releases may be set to private.`
+          : `No public songs from @${displayName} yet.`
         : "User not found.";
       els.userPublicEmpty.style.display = "";
     }
@@ -8906,7 +8943,7 @@ function renderUserProfile(rawUsername) {
   if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
 
   if (els.userPublicSongs) {
-    els.userPublicSongs.innerHTML = matches.slice(0, 60).map((p) => `
+    els.userPublicSongs.innerHTML = publicMatches.slice(0, 60).map((p) => `
       <button class="userPublicSong" data-user-song="${escapeHtml(p.id)}" type="button">
         <img class="userPublicSongCover" src="${escapeHtml(p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png")}" alt="" />
         <div class="userPublicSongMeta">
@@ -9014,6 +9051,56 @@ async function unpublishHubPostById(id) {
     }
     return { ok: false, reason: serverReason };
   }
+  return { ok: true };
+}
+
+/** Toggle whether a Hub release appears on the creator's public profile
+ *  (`#/u/username`). Does not remove the post from the Hub feed — use
+ *  Unpublish for that. Requires full `meta` from the cloud so we never
+ *  PATCH a partial object that would wipe server-side keys. */
+async function setHubPostProfileVisibility(postId, wantPublic) {
+  const hid = String(postId || "").trim();
+  if (!HUB_FEATURE_ENABLED || !hid) return { ok: false, reason: "Hub is paused." };
+  const token = getSupabaseAuthToken();
+  if (!token) return { ok: false, reason: "Sign in to change visibility." };
+  const feed = loadHubFeed();
+  const local = feed.find((x) => String(x.id) === hid);
+  if (!local) return { ok: false, reason: "Song not found." };
+
+  let cloudMeta = null;
+  try {
+    cloudMeta = await hubFetchPostMetaFull(hid);
+  } catch {}
+  if (!cloudMeta || typeof cloudMeta !== "object") {
+    return {
+      ok: false,
+      reason: "Could not load this song's cloud metadata. Try again in a moment.",
+    };
+  }
+  const mergedMeta = {
+    ...cloudMeta,
+    ...(typeof local.meta === "object" && local.meta ? local.meta : {}),
+  };
+  mergedMeta.profileVisibility = wantPublic ? "public" : "private";
+
+  try {
+    await supabasePatchHub(hid, { meta: mergedMeta });
+  } catch (e) {
+    return { ok: false, reason: e?.message || "Update failed." };
+  }
+
+  const next = feed.map((p) =>
+    String(p.id) === hid
+      ? { ...p, meta: { ...(p.meta || {}), profileVisibility: mergedMeta.profileVisibility } }
+      : p,
+  );
+  saveHubFeed(next);
+  try {
+    renderProfileHubShared();
+  } catch {}
+  try {
+    if ((document.body.getAttribute("data-route") || "") === "hub") renderHub();
+  } catch {}
   return { ok: true };
 }
 
@@ -9203,8 +9290,14 @@ function renderProfileHubShared() {
         const art = String(p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png");
         const dateLabel = relativeTime(p.ts);
         const likes = Number(p.likes || 0);
+        const profilePublic = isHubPostVisibleOnPublicProfile(p);
         const subBits = [];
         if (dateLabel) subBits.push(`<span class="libRowDot">${escapeHtml(dateLabel)}</span>`);
+        subBits.push(
+          `<span class="libRowChip libRowChipProfileVis libRowChipProfileVis--${
+            profilePublic ? "public" : "private"
+          }">${profilePublic ? "Public" : "Private"}</span>`,
+        );
         if (likes > 0) {
           subBits.push(`
             <span class="libRowChip libRowChipLikes profileHubLikeChip" aria-hidden="true">
@@ -9229,6 +9322,7 @@ function renderProfileHubShared() {
             </button>
             <button class="libRowMore" type="button" data-profile-hub-menu="${sid}" aria-label="More options for ${safeTitle}">⋯</button>
             <div class="libMenu" id="profileHubMenu_${sid}" style="display:none">
+              <button class="ghost" type="button" data-profile-hub-vis="${sid}" data-profile-hub-vis-to="${profilePublic ? "private" : "public"}">${profilePublic ? "Hide from public profile" : "Show on public profile"}</button>
               <button class="ghost" type="button" data-profile-hub-proof="${sid}">Proof of creation</button>
               <button class="ghost libRowDelete" data-profile-hub-unpublish="${sid}">Unpublish from Hub</button>
             </div>
@@ -9265,6 +9359,22 @@ function renderProfileHubShared() {
         const row = menu.closest(".libRow");
         if (row) row.classList.add("libRowMenuOpen");
         _profileHubOpenMenuId = sid;
+      }
+    });
+  });
+  els.profileHubSharedList.querySelectorAll("[data-profile-hub-vis]").forEach((b) => {
+    b.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const sid = b.getAttribute("data-profile-hub-vis");
+      const to = String(b.getAttribute("data-profile-hub-vis-to") || "").toLowerCase();
+      if (!sid || (to !== "public" && to !== "private")) return;
+      closeProfileHubMenu();
+      const wantPublic = to === "public";
+      const result = await setHubPostProfileVisibility(sid, wantPublic);
+      if (result?.ok) {
+        showToast(wantPublic ? "Now visible on your public profile." : "Hidden from your public profile.");
+      } else {
+        showToast(String(result?.reason || "Could not update."), { durationMs: 4200 });
       }
     });
   });

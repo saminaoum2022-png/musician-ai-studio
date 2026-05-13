@@ -5779,6 +5779,26 @@ body[data-route="profile"]:has(#profileAura.profileAuraEditing) #profileAuraHead
   font-size: 12px;
   letter-spacing: 0.2px;
 }
+.libRowChip.libRowChipProfileVis{
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  flex-shrink: 0;
+}
+.libRowChipProfileVis--public{
+  color: rgba(94, 234, 212, 0.95);
+  border-color: rgba(45, 212, 191, 0.38);
+  background: rgba(45, 212, 191, 0.1);
+}
+.libRowChipProfileVis--private{
+  color: rgba(168, 180, 199, 0.92);
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(12, 14, 20, 0.5);
+}
 
 /* -------- Public creator profile (#/u/USERNAME) -------- */
 .userPublic{

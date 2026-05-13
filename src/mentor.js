@@ -7,59 +7,39 @@ const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", 
 const MAX_SECONDS = 22;
 const MIN_SECONDS = 2;
 
-/** Rough classical “fach” anchors in MIDI (low / mid / high of typical warm range). Not gender-deterministic. */
-const VOICE_ARCHETYPES = [
+/** Rough classical range anchors in MIDI (low / mid / high). */
+const VOICE_MALE = [
   { name: "Bass", L: 41, M: 50, H: 62 },
   { name: "Baritone", L: 44, M: 54, H: 67 },
   { name: "Tenor", L: 47, M: 58, H: 72 },
+];
+const VOICE_FEMALE = [
   { name: "Contralto", L: 48, M: 56, H: 68 },
   { name: "Alto", L: 50, M: 59, H: 71 },
   { name: "Mezzo-soprano", L: 52, M: 62, H: 75 },
   { name: "Soprano", L: 54, M: 65, H: 79 },
 ];
 
-let _audioCtx = null;
-let _stream = null;
-let _processor = null;
-let _source = null;
-let _silentGain = null;
-let _samples = [];
-let _startedAt = 0;
-let _raf = 0;
-let _recording = false;
-
-function hzToMidi(hz) {
-  if (!hz || hz <= 0 || !Number.isFinite(hz)) return NaN;
-  return 69 + 12 * (Math.log(hz) / Math.LN2 - Math.log(440) / Math.LN2);
+function getMentorVoiceRef() {
+  const el = document.getElementById("mentorVoiceRef");
+  const v = String(el?.value || "mens");
+  return v === "womens" || v === "range" || v === "mens" ? v : "mens";
 }
 
-function midiToName(m) {
-  if (!Number.isFinite(m)) return "—";
-  const n = Math.round(m);
-  const pc = ((n % 12) + 12) % 12;
-  const oct = Math.floor(n / 12) - 1;
-  return `${NOTE_NAMES[pc]}${oct}`;
-}
-
-function clamp(x, a, b) {
-  return Math.max(a, Math.min(b, x));
-}
-
-function percentile(sorted, p) {
-  if (!sorted.length) return NaN;
-  if (sorted.length === 1) return sorted[0];
-  const x = (sorted.length - 1) * clamp(p, 0, 1);
-  const i0 = Math.floor(x);
-  const i1 = Math.min(sorted.length - 1, i0 + 1);
-  const w = x - i0;
-  return sorted[i0] * (1 - w) + sorted[i1] * w;
-}
-
-function guessVoiceArchetype(p5, p50, p95) {
+function guessVoiceArchetype(p5, p50, p95, ref) {
+  if (ref === "range") {
+    return {
+      title: "Notes captured (no voice tag)",
+      body:
+        "We only report pitch range here — no bass/baritone/tenor or alto/mezzo/soprano labels. Use “How to sing this test” and a slow chest-to-head glide so Low → high shows your comfortable reach, not just a high squeak.",
+      meta: `Robust span ~${midiToName(p5)}–${midiToName(p95)} (7th–93rd percentile of detected pitch)`,
+    };
+  }
+  const pool = ref === "mens" ? VOICE_MALE : VOICE_FEMALE;
   const low = p5;
   const mid = p50;
   const high = p95;
-  const scored = VOICE_ARCHETYPES.map((t) => ({
+  const scored = pool.map((t) => ({
     t,
     d:
       Math.abs(low - t.L) +
@@ -68,20 +48,21 @@ function guessVoiceArchetype(p5, p50, p95) {
   })).sort((a, b) => a.d - b.d);
   const best = scored[0]?.t?.name || "—";
   const second = scored[1]?.t?.name || "";
-  let body = `Closest match in this clip: ${best}`;
+  let body = `Closest ${ref === "mens" ? "men’s-range" : "women’s-range"} label in this clip: ${best}`;
   if (second && second !== best) body += ` — also near ${second}`;
   body +=
-    ". True voice type depends on timbre, passaggio, and repertoire, not pitch alone; we only heard a short sample.";
+    ". This compares note heights to common teaching ranges, not who you are. If you only sing high for a few seconds, pick “Notes only” or include more low chest in the take.";
   if (p95 >= 72 && p50 <= 58) {
     body +=
-      " High peaks with a low center can be belt/mix or pitch-tracking quirks — try a steady bright “ee” on your top note.";
+      " Big gap between low center and high peaks? Glide more slowly on “ah” / “ee” so we register your chest register too.";
   }
   return {
     title: `${best}${second && second !== best ? ` · ${second}?` : ""}`,
     body,
-    meta: `Based on notes ~${midiToName(p5)}–${midiToName(p95)} (robust range in this take)`,
+    meta: `Based on notes ~${midiToName(p5)}–${midiToName(p95)} in this take`,
   };
 }
+
 
 /**
  * 12-TET scale-degree sets (semitones from tonic). Real Arabic intonation uses
@@ -190,7 +171,7 @@ function intonationVsMaqam(voiced, rootMidi, degrees) {
   return { title, body, meta, meanCents: mean, loosePct };
 }
 
-function recommendGenres({ maqamId, voiceTitle, p95, brightMean }) {
+function recommendGenres({ maqamId, voiceTitle, p95, brightMean, voiceRef }) {
   const g = new Set();
   const vt = String(voiceTitle || "").toLowerCase();
   g.add("Arabic ballad / tarab (long lines, room for ornaments)");
@@ -202,8 +183,17 @@ function recommendGenres({ maqamId, voiceTitle, p95, brightMean }) {
   if (p95 < 63) g.add("Spoken-adjacent storytelling & low-tessitura jazz");
   if (brightMean > 2650) g.add("Bright indie / modern pop mixes");
   if (brightMean < 1980) g.add("Warm acoustic sessions · jazz standards");
-  if (vt.includes("tenor") || vt.includes("baritone")) g.add("Male-fronted Arabic pop & khaleeji leads (where your tessitura fits)");
-  if (vt.includes("soprano") || vt.includes("mezzo") || vt.includes("alto")) g.add("Female-fronted ballads & choral top lines");
+  if (voiceRef === "mens") {
+    if (vt.includes("tenor") || vt.includes("baritone") || vt.includes("bass")) {
+      g.add("Male-fronted Arabic pop & khaleeji leads (where your tessitura fits)");
+    }
+  } else if (voiceRef === "womens") {
+    if (vt.includes("soprano") || vt.includes("mezzo") || vt.includes("alto") || vt.includes("contralto")) {
+      g.add("Female-fronted ballads & choral top lines");
+    }
+  } else {
+    g.add("Any genre — pick a range label above when you want classical-style hints");
+  }
   return Array.from(g).slice(0, 6).join(" · ");
 }
 
@@ -332,6 +322,9 @@ function analyzeBuffer(full, sampleRate) {
     timbreDetail =
       "More high-frequency motion in this clip — tends to feel present and “lit” on small speakers.";
   }
+  timbreDetail +=
+    " This row is **spectral brightness** (HF energy in the waveform), not a professional timbre / formant analysis.";
+  timbreDetail = timbreDetail.replace(/\*\*(.*?)\*\*/g, "$1");
 
   const f0Std = (() => {
     const mean = sum / voiced.length;
@@ -367,13 +360,20 @@ function analyzeBuffer(full, sampleRate) {
     Math.min(100, stability * 0.55 + rangeScore * 0.25 + Math.min(100, brightMean / 45)),
   );
 
-  const voice = guessVoiceArchetype(p5, p50, p95);
+  const voiceRef = getMentorVoiceRef();
+  const voice = guessVoiceArchetype(p5, p50, p95, voiceRef);
   const hist = pitchClassHistogram(voiced);
   const maqam = scoreMaqamGuess(hist);
   const tonicName = NOTE_NAMES[maqam.tonicPc];
   const rootMidi = alignRootMidi(p50, maqam.tonicPc);
   const tune = intonationVsMaqam(voiced, rootMidi, maqam.degrees);
-  const genreLine = recommendGenres({ maqamId: maqam.id, voiceTitle: voice.title, p95, brightMean });
+  const genreLine = recommendGenres({
+    maqamId: maqam.id,
+    voiceTitle: voice.title,
+    p95,
+    brightMean,
+    voiceRef,
+  });
 
   let maqamBody = `Heuristic fit: ${maqam.name} on tonic ${tonicName} using a 12-note keyboard map — quarter tones & full ajnas are not modeled.`;
   if (maqam.secondName) maqamBody += ` Second guess: ${maqam.secondName}.`;
@@ -390,7 +390,7 @@ function analyzeBuffer(full, sampleRate) {
     highName: midiToName(p95),
     medianName: midiToName(p50),
     spanSemitones: Math.round(p95 - p5),
-    spanHint: `Raw span in clip ${midiToName(minRaw)}–${midiToName(maxRaw)} (includes outliers)`,
+    spanHint: `Robust low/high ≈ 7th–93rd percentile of tracked pitch (comfortable reach, not a forced max). Raw: ${midiToName(minRaw)}–${midiToName(maxRaw)}.`,
     timbreLabel,
     timbreDetail,
     brightMean: Math.round(brightMean),
@@ -444,7 +444,7 @@ export function resetMentorSession() {
   if (t) t.textContent = "";
   setText(
     "mentorHint",
-    "Glide chest to head on “ah” or “ee”, stay close to the mic, and hold top notes 1–2s so highs register.",
+    "Set range labels (above) to match you, then follow “How to sing this test” before recording.",
   );
   setText("mentorValVoice", "—");
   setText("mentorValVoiceBody", "");
@@ -552,7 +552,19 @@ function renderGauge(minM, maxM, medM) {
 export function initMentor() {
   const btnStart = document.getElementById("mentorBtnStart");
   const btnStop = document.getElementById("mentorBtnStop");
-  if (!btnStart || !btnStop) return;
+  const refEl = document.getElementById("mentorVoiceRef");
+  if (refEl && !refEl.dataset.mentorBound) {
+    refEl.dataset.mentorBound = "1";
+    try {
+      const s = sessionStorage.getItem("mentor:voiceRef");
+      if (s === "mens" || s === "womens" || s === "range") refEl.value = s;
+    } catch {}
+    refEl.addEventListener("change", () => {
+      try {
+        sessionStorage.setItem("mentor:voiceRef", refEl.value);
+      } catch {}
+    });
+  }
 
   btnStart.addEventListener("click", async () => {
     resetMentorSession();
@@ -606,8 +618,8 @@ export function initMentor() {
     _startedAt = performance.now();
     btnStart.disabled = true;
     btnStop.disabled = false;
-    setText("mentorStatus", "Listening… glide low to high and hold your top note briefly.");
-    setText("mentorHint", "Tip: bright vowel (“ee”, “ah”) helps the tracker catch highs.");
+    setText("mentorStatus", "Listening… follow the guide: chest → head glide, then hold top comfortably.");
+    setText("mentorHint", "Tip: set range labels (Men’s / Women’s / Notes only) to match you before recording.");
     updateTimer();
   });
 

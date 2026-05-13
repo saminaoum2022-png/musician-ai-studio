@@ -742,8 +742,29 @@
             <div class="mentorPageKicker">Voice lab</div>
             <h2 class="mentorPageTitle">Mentor</h2>
             <p class="mentorPageLead">
-              A quick, on-device snapshot: pitch range, rough maqam guess (12-note map only), timbre brightness, motion, genre ideas, and intonation vs that maqam grid — useful for warm-ups, not a clinical diagnosis.
+              Pitch range, optional classical range tags (separate men’s vs women’s lists), rough maqam guess, brightness proxy (“timbre”), genre ideas, and intonation — for practice, not diagnosis.
             </p>
+            <details class="mentorGuide">
+              <summary class="mentorGuideSummary">How to sing this test (read once)</summary>
+              <ol class="mentorGuideList">
+                <li>Warm up 30–60s lightly — no shouting.</li>
+                <li>Start a comfortable low “ah” for 2–3 seconds (chest speaking pitch is fine).</li>
+                <li>Glide <strong>slowly</strong> chest → head on “ah” or “ee” over ~5–8 seconds — one continuous slide.</li>
+                <li>Hold your <strong>highest comfortable</strong> note ~2s (not a strained scream).</li>
+                <li>Stay ~15–25cm from the mic; steady volume helps highs register.</li>
+              </ol>
+              <p class="mentorGuideFoot">
+                <strong>Low → high</strong> uses robust percentiles (not your absolute max squeak). For men, choose <em>Men’s voices</em> so high notes never map to mezzo/soprano.
+              </p>
+            </details>
+            <div class="mentorPrefs">
+              <label class="mentorPrefLabel" for="mentorVoiceRef">Classical range labels</label>
+              <select id="mentorVoiceRef" class="mentorSelect" autocomplete="off">
+                <option value="mens">Men’s voices (bass · baritone · tenor)</option>
+                <option value="womens">Women’s voices (contralto · alto · mezzo · soprano)</option>
+                <option value="range">Notes only — no bass/tenor/soprano words</option>
+              </select>
+            </div>
           </header>
 
           <div class="mentorHero">
@@ -793,7 +814,7 @@
             <div class="mentorCapture">
               <p id="mentorStatus" class="mentorStatus" role="status"></p>
               <p id="mentorHint" class="mentorHint">
-                Glide chest to head on “ah” or “ee”, stay close to the mic, and hold top notes 1–2s so highs register.
+                Set range labels above, open “How to sing this test”, then record a slow chest-to-head glide.
               </p>
               <div class="mentorActions">
                 <button type="button" id="mentorBtnStart" class="primary mentorBtnStart">Start capture</button>
@@ -816,7 +837,7 @@
                 <div class="mentorStatMeta">Robust median (middle of this take)</div>
               </div>
               <div class="mentorStatCard mentorStatCardVoice">
-                <div class="mentorStatLabel">Voice-type guess</div>
+                <div class="mentorStatLabel">Classical range tag</div>
                 <div id="mentorValVoice" class="mentorStatValue mentorStatValueVoice">—</div>
                 <p id="mentorValVoiceBody" class="mentorStatVoiceBody"></p>
                 <div id="mentorValVoiceMeta" class="mentorStatMeta">—</div>
@@ -885,7 +906,7 @@
             </div>
 
             <p class="mentorDisclaimer">
-              Educational estimate only — maqam detection uses a coarse 12-semitone map (no quarter tones). Microphone, room, and ornaments affect pitch tracking. Voice labels are not a formal fach exam.
+              Educational estimate only — maqam detection uses a coarse 12-semitone map. Range tags compare pitch to teaching lists you choose (men’s vs women’s). “Timbre” here is brightness, not formants. Voice labels are not a fach exam.
             </p>
           </div>
         </section>
@@ -2218,6 +2239,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260514mentorMaqam"></script>
+    <script type="module" src="./src/app.js?v=20260514mentorVoiceRef"></script>
   </body>
 </html>

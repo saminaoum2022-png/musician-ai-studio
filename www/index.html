@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260514hubLatestSimple" />
+    <link rel="stylesheet" href="./styles.css?v=20260514hubBrandWordmark" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -163,12 +163,12 @@
 
         <section class="card wide hubCard" data-route="hub">
           <div class="hubTop">
-            <div class="hubSegment hubSegmentSingle" role="tablist" aria-label="Hub feed">
-              <button class="hubSegmentBtn isActive" id="hubSortLatest" type="button" role="tab" aria-selected="true">
-                <span>Latest</span>
-                <span id="hubDotLatest" class="hubDot hubSegmentDot" style="display:none"></span>
-              </button>
-            </div>
+            <button type="button" id="hubBrand" class="hubBrand" aria-label="NabadAi Music — scroll to top">
+              <span class="hubBrandWordmark">
+                <span class="brandPrimary hubBrandPrimary">NabadAi</span><span class="brandSecondary hubBrandSecondary">Music</span>
+              </span>
+              <span id="hubDotLatest" class="hubDot hubBrandDot" style="display:none" aria-hidden="true"></span>
+            </button>
           </div>
           <div id="hubAudioHint" class="hint hubAudioHint" style="display:none" role="status">
             Tap <strong class="hubHintPlay">▶</strong> on any post once to start audio — then scroll and songs switch automatically.
@@ -2070,6 +2070,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260514hubLatestSimple"></script>
+    <script type="module" src="./src/app.js?v=20260514hubBrandWordmark"></script>
   </body>
 </html>

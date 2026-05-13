@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514hubLatestSimple";
+const APP_BUILD = "20260514hubBrandWordmark";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -323,6 +323,7 @@ const els = {
   hubFilterSelect: document.getElementById("hubFilterSelect"),
   hubSortLatest: document.getElementById("hubSortLatest"),
   hubSortTrending: document.getElementById("hubSortTrending"),
+  hubBrand: document.getElementById("hubBrand"),
   hubDotLatest: document.getElementById("hubDotLatest"),
   hubDotArabic: document.getElementById("hubDotArabic"),
   hubDotInstrumental: document.getElementById("hubDotInstrumental"),
@@ -15698,6 +15699,16 @@ function setHubSort(next) {
   renderHub();
 }
 if (els.hubSortLatest) els.hubSortLatest.addEventListener("click", () => setHubSort("latest"));
+/** Hub wordmark = scroll to top. Replaces the old Latest pill on the
+ *  reel route. We still mark the Latest category seen so the unseen
+ *  dot clears immediately on tap (same UX as visiting the tab). */
+if (els.hubBrand) {
+  els.hubBrand.addEventListener("click", () => {
+    try { markHubCategorySeen("latest"); } catch {}
+    try { renderHubDots(); } catch {}
+    scrollHubFeedToTop();
+  });
+}
 /** Jump to the top of the Hub feed.
  *
  * Hub uses `scroll-snap-align: center` on every row. iOS Safari remembers

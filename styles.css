@@ -10082,19 +10082,63 @@ body[data-route="hub"] .hubTop{
   pointer-events: none;
 }
 body[data-route="hub"] .hubTop > *{ pointer-events: auto; }
-body[data-route="hub"] .hubSegment{
+/* Centered Nabad wordmark replaces the old Latest/Trending pill on the
+   reel. Acts as both branding ("this is Nabad") and an affordance:
+   tap = scroll to top. Tiny glass plate keeps it legible over bright
+   covers without being a heavy chrome bar. */
+body[data-route="hub"] .hubBrand{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 16px 7px 16px;
+  background: rgba(8, 10, 18, 0.42);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 999px;
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  cursor: pointer;
+  position: relative;
+  min-height: 36px;
+  /* Keep the gradient text from picking up the parent's transparent fill. */
+  color: #fff;
+  transition: transform 160ms ease, background 200ms ease, border-color 200ms ease;
+}
+body[data-route="hub"] .hubBrand:hover{
   background: rgba(8, 10, 18, 0.55);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(255,255,255,0.12);
-  padding: 4px;
-  border-radius: 999px;
+  border-color: rgba(255,255,255,0.16);
 }
-body[data-route="hub"] .hubSegmentSingle{
-  padding: 3px 10px;
+body[data-route="hub"] .hubBrand:active{
+  transform: scale(0.97);
 }
-body[data-route="hub"] .hubSegmentSingle .hubSegmentBtn{
+body[data-route="hub"] .hubBrandWordmark{
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  line-height: 1;
+}
+/* The wordmark mirrors the header brand but ~70% size so it sits inside
+   the floating pill without dominating the cover. */
+body[data-route="hub"] .hubBrandPrimary{
+  font-size: 18px;
+  letter-spacing: -0.048em;
+}
+body[data-route="hub"] .hubBrandSecondary{
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  transform: translateY(0);
+  color: rgba(231,237,247,0.78);
+}
+/* Tiny notification dot sits up-right of the wordmark; only visible
+   when new posts arrived since the last Hub visit. */
+body[data-route="hub"] .hubBrandDot{
+  position: absolute;
+  top: 5px;
+  right: 8px;
+  width: 8px;
+  height: 8px;
   border-radius: 999px;
+  background: linear-gradient(135deg, #67e8f9, #c084fc);
+  box-shadow: 0 0 8px rgba(192,132,252,0.55), 0 0 14px rgba(103,232,249,0.32);
 }
 body[data-route="hub"] #hubAudioHint{
   position: absolute;

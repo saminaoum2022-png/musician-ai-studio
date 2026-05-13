@@ -6,7 +6,7 @@ import { encodeWav16 } from "./wav.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514profileLean";
+const APP_BUILD = "20260514hubSmartPick";
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -923,7 +923,14 @@ function wireHubReelObserver() {
     }
     if (!best || bestRatio < 0.6) return;
     const id = best.getAttribute("data-hub-row");
-    if (!id || hubFocusedPostId === id) return;
+    if (!id) return;
+    // Smart-pick bookkeeping: a panel held >=60% viewport for the dwell
+    // window counts as "seen". Re-scheduled every focus change so a
+    // user scrolling fast past a post never marks it watched — they
+    // must linger. The timer is cancelled by `scheduleMarkHubPostSeen`
+    // when the focused id changes.
+    scheduleMarkHubPostSeen(id);
+    if (hubFocusedPostId === id) return;
     hubFocusedPostId = id;
     els.hubList.querySelectorAll(".hubReel").forEach((r) => {
       r.classList.toggle("isActive", r === best);
@@ -1735,6 +1742,17 @@ function applyRoute() {
     updateHubAudioHint();
     try { renderHub(); } catch {}
     requestAnimationFrame(() => updateHubFocusedRow());
+    // Smart-pick on tab entry: the Hub tab click handler may have
+    // flagged `_hubPendingSmartScroll` to ask us to land on the first
+    // unseen post once the route is painted. Defer one rAF so the
+    // reel DOM exists; do nothing if the user is already at the top
+    // of an unseen feed (avoid a redundant smooth scroll).
+    if (_hubPendingSmartScroll) {
+      _hubPendingSmartScroll = false;
+      requestAnimationFrame(() => {
+        try { scrollHubFeedToUnseenOrTop(); } catch {}
+      });
+    }
     // Resume the post we paused when leaving Hub for Profile/User.
     // Idempotent — does nothing if Hub wasn't playing before.
     void resumeHubAfterRouteChange();
@@ -4474,6 +4492,95 @@ const HUB_MIN_FETCH_GAP_MS = 25_000;
  *  updates from other users, deleted posts, etc.). Between full
  *  refetches we run incremental "what's new since X" queries. */
 const HUB_FULL_REFETCH_MS = 10 * 60_000;
+
+/** localStorage key for the post-level "seen" set — distinct from the
+ *  legacy `hubSeen` map (which tracks per-category timestamps for the
+ *  notification dot on Latest/Arabic/etc.). This drives the Hub tab's
+ *  smart-pick: tap Hub → land on the first post you haven't actually
+ *  watched yet. */
+const HUB_SEEN_POSTS_KEY = "nabad.hubSeenPostIds.v1";
+/** Cap so the seen-set can't grow without bound. 500 ≈ 10x the feed
+ *  size; older IDs roll off so deleted-from-cloud posts don't pin
+ *  storage forever. */
+const HUB_SEEN_POSTS_MAX = 500;
+/** Dwell time (ms) a panel must hold >=60% viewport before we mark it
+ *  seen. Stops a fast flick-through from marking everything as
+ *  "watched" and immediately defeating the smart-pick. */
+const HUB_SEEN_DWELL_MS = 1000;
+let _hubSeenSet = null;
+let _hubSeenMarkTimer = null;
+let _hubSeenMarkPendingId = "";
+/** Set when the user enters Hub from another tab and wants the
+ *  smart-pick scroll to fire AFTER the route has rendered.
+ *  Consumed (and cleared) by `applyRoute`'s hub branch. */
+let _hubPendingSmartScroll = false;
+
+function loadHubSeenPostSet() {
+  if (_hubSeenSet) return _hubSeenSet;
+  try {
+    const raw = localStorage.getItem(HUB_SEEN_POSTS_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    _hubSeenSet = new Set(Array.isArray(arr) ? arr.map(String) : []);
+  } catch {
+    _hubSeenSet = new Set();
+  }
+  return _hubSeenSet;
+}
+function saveHubSeenPostSet() {
+  if (!_hubSeenSet) return;
+  try {
+    // Keep newest-tail by insertion order — Set preserves insertion
+    // order in JS, so slicing the array tail gives us the most
+    // recently marked IDs.
+    let arr = Array.from(_hubSeenSet);
+    if (arr.length > HUB_SEEN_POSTS_MAX) {
+      arr = arr.slice(arr.length - HUB_SEEN_POSTS_MAX);
+      _hubSeenSet = new Set(arr);
+    }
+    localStorage.setItem(HUB_SEEN_POSTS_KEY, JSON.stringify(arr));
+  } catch {}
+}
+function isHubPostSeen(id) {
+  return loadHubSeenPostSet().has(String(id || ""));
+}
+function markHubPostSeen(id) {
+  const sid = String(id || "");
+  if (!sid) return;
+  const set = loadHubSeenPostSet();
+  if (set.has(sid)) {
+    // Re-insert so it sits at the tail (treated as "freshly seen")
+    // and the eviction policy keeps it around longer.
+    set.delete(sid);
+  }
+  set.add(sid);
+  saveHubSeenPostSet();
+}
+function scheduleMarkHubPostSeen(id) {
+  const sid = String(id || "");
+  if (!sid) return;
+  if (_hubSeenMarkPendingId === sid) return;
+  if (_hubSeenMarkTimer) {
+    clearTimeout(_hubSeenMarkTimer);
+    _hubSeenMarkTimer = null;
+  }
+  _hubSeenMarkPendingId = sid;
+  _hubSeenMarkTimer = setTimeout(() => {
+    markHubPostSeen(sid);
+    _hubSeenMarkTimer = null;
+    _hubSeenMarkPendingId = "";
+  }, HUB_SEEN_DWELL_MS);
+}
+/** First post in `items` (already in display order) that hasn't been
+ *  marked seen yet. Returns "" when everything is seen — caller should
+ *  fall back to scroll-to-top. */
+function getFirstUnseenHubPostId(items) {
+  const set = loadHubSeenPostSet();
+  for (const p of items || []) {
+    const id = String(p?.id || "");
+    if (id && !set.has(id)) return id;
+  }
+  return "";
+}
 function loadHubSeen() {
   try {
     const raw = localStorage.getItem(hubSeenKey());
@@ -15596,6 +15703,48 @@ function endHubJumpGuard() {
   }
   updateHubFocusedRow();
 }
+/** Smart-pick scroll for the Hub tab tap. Lands the user on the first
+ *  post they haven't watched yet (60% viewport for >=1s = "watched").
+ *  Falls back to top when:
+ *    - The feed is empty (nothing to pick).
+ *    - The user has seen every visible post (caught up).
+ *    - The first unseen *is* the top — `scrollIntoView` from row 0 to
+ *      row 0 would be a no-op; the explicit top-jump animates nicely.
+ *  Why centralize this: applyRoute (Hub entry from another tab) and
+ *  the Hub tab single-tap handler both need the same logic. */
+function scrollHubFeedToUnseenOrTop() {
+  if (!els.hubList) {
+    scrollHubFeedToTop();
+    return;
+  }
+  const items = loadHubFeed();
+  if (!items.length) {
+    scrollHubFeedToTop();
+    return;
+  }
+  const unseenId = getFirstUnseenHubPostId(items);
+  if (!unseenId || String(items[0]?.id || "") === unseenId) {
+    scrollHubFeedToTop();
+    return;
+  }
+  const sel = `[data-hub-row="${(window.CSS && CSS.escape) ? CSS.escape(unseenId) : unseenId.replace(/"/g, '\\"')}"]`;
+  const el = els.hubList.querySelector(sel);
+  if (!el) {
+    scrollHubFeedToTop();
+    return;
+  }
+  // Tell the autoplay observer to back off briefly so the snap animation
+  // can land without a mid-scroll play()/pause() flicker on the rows
+  // we're sweeping past.
+  try { suppressHubViewportAutoplayFor(1800); } catch {}
+  // scrollIntoView walks every scrollable ancestor; works whether the
+  // hubList itself is scrollable or the window is (CSS varies by route).
+  try {
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch {
+    el.scrollIntoView();
+  }
+}
 function scrollHubFeedToTop() {
   if (hubJumpToTopRaf) {
     try { cancelAnimationFrame(hubJumpToTopRaf); } catch {}
@@ -15661,16 +15810,23 @@ if (els.hubTabLink) {
   let hubSingleTimer = null;
   els.hubTabLink.addEventListener("click", (e) => {
     const onHub = (document.body.getAttribute("data-route") || "") === "hub";
-    // Tab tap from elsewhere → just navigate. Audio unlock is handled
-    // by the global one-shot listener (`installHubAudioUnlockOnce`),
-    // which fires on this same gesture before anything async runs;
-    // applyRoute("hub") then uses scroll-driven autoplay to start the
-    // first centered post — same code path Latest and Trending share,
-    // so neither tab can be "more broken" than the other.
-    if (!onHub) return;
+    // Tab tap from elsewhere → navigate, but request a smart-pick scroll
+    // (first unseen post or top) to fire once `applyRoute` has rendered.
+    // Audio unlock is handled by the global one-shot listener
+    // (`installHubAudioUnlockOnce`), which fires on this same gesture
+    // before anything async runs; applyRoute("hub") then uses
+    // scroll-driven autoplay to start whatever ends up centered.
+    if (!onHub) {
+      _hubPendingSmartScroll = true;
+      return;
+    }
     e.preventDefault();
     try { stopHubPlayback(); } catch {}
-    scrollHubFeedToTop();
+    // Already on Hub, single tap = jump to first unseen post (or top
+    // if all caught up). Double-tap (handled below) wins via the
+    // hubTapCount branch — that path still scrolls to top + force-
+    // refreshes the feed.
+    scrollHubFeedToUnseenOrTop();
     hubTapCount += 1;
     const now = Date.now();
     if (now - hubTapAt > 420) hubTapCount = 1;

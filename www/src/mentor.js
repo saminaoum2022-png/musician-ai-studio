@@ -16,9 +16,34 @@ let _startedAt = 0;
 let _mentorRecorder = null;
 /** @type {Blob[]} */
 let _mentorChunks = [];
-/** Bumps on `stopStreams` so stale `MediaRecorder.onstop` cannot publish results. */
+/** Bumped when starting a new capture or invalidating in-flight decode (tab refresh). */
 let _mentorRecSession = 0;
 let _mentorAutoStopTimer = 0;
+
+export function bumpMentorRecSession() {
+  _mentorRecSession += 1;
+}
+
+function setMentorLiveUi(on) {
+  const root = document.querySelector(".mentorPage");
+  if (!root) return;
+  root.classList.toggle("mentorPage--live", Boolean(on));
+}
+
+/** Downmix to mono for pitch analysis (some devices record stereo duplicates). */
+function floatMonoFromAudioBuffer(audioBuf) {
+  const ch = audioBuf.numberOfChannels;
+  const n = audioBuf.length;
+  if (ch <= 1) return Float32Array.from(audioBuf.getChannelData(0));
+  const out = new Float32Array(n);
+  for (let c = 0; c < ch; c++) {
+    const d = audioBuf.getChannelData(c);
+    for (let i = 0; i < n; i++) out[i] += d[i];
+  }
+  const inv = 1 / ch;
+  for (let i = 0; i < n; i++) out[i] *= inv;
+  return out;
+}
 
 /** Same idea as vocal reference: WKWebView / Safari need MP4-ish containers for bytes. */
 function isSafariLikeMentorEnv() {
@@ -521,7 +546,6 @@ function showResults(on) {
 }
 
 export function resetMentorSession() {
-  _mentorRecSession += 1;
   stopStreams();
   showResults(false);
   setText("mentorStatus", "");
@@ -529,7 +553,7 @@ export function resetMentorSession() {
   if (t) t.textContent = "";
   setText(
     "mentorHint",
-    "Quiet room helps. Open “How to sing this test” if you need it — then one slow chest-to-head glide on “ah” or “ee”. Men’s / Women’s / Notes only changes classical-style labels only.",
+    "Quiet room helps. Open “How to sing this test” if you need it — then one slow chest-to-head glide on “ah” or “ee”. Men’s / Women’s / Notes only tweaks classical-style labels.",
   );
   setText("mentorValRange", "—");
   setText("mentorValSpan", "—");
@@ -592,6 +616,7 @@ function stopStreams() {
     cancelAnimationFrame(_raf);
     _raf = 0;
   }
+  setMentorLiveUi(false);
 }
 
 function updateTimer() {
@@ -640,8 +665,7 @@ async function finalizeMentorRecording(chunks, mimeTypeHint, recordSession) {
     if (recordSession !== _mentorRecSession) return;
 
     const sr = audioBuf.sampleRate;
-    const ch0 = audioBuf.getChannelData(0);
-    const full = Float32Array.from(ch0);
+    const full = floatMonoFromAudioBuffer(audioBuf);
     const dur = full.length / sr;
 
     if (dur < MIN_SECONDS) {
@@ -701,6 +725,7 @@ async function finalizeMentorRecording(chunks, mimeTypeHint, recordSession) {
     renderGauge(res.minM, res.maxM, res.medianM);
     showResults(true);
   } finally {
+    setMentorLiveUi(false);
     if (btnStart) btnStart.disabled = false;
     if (btnStop) btnStop.disabled = true;
   }
@@ -773,8 +798,9 @@ export function initMentor() {
 
   btnStart.addEventListener("click", async () => {
     if (btnStart.disabled) return;
-    resetMentorSession();
+    bumpMentorRecSession();
     const recordSession = _mentorRecSession;
+    resetMentorSession();
 
     if (!navigator.mediaDevices?.getUserMedia) {
       setText("mentorStatus", "Microphone capture needs HTTPS or the native app.");
@@ -838,6 +864,7 @@ export function initMentor() {
       if (e.data && e.data.size) _mentorChunks.push(e.data);
     };
     rec.onstop = async () => {
+      await new Promise((r) => setTimeout(r, isSafariLikeMentorEnv() ? 120 : 40));
       const chunks = _mentorChunks.slice();
       _mentorChunks.length = 0;
       if (recordSession !== _mentorRecSession) {
@@ -845,6 +872,7 @@ export function initMentor() {
         const bt = document.getElementById("mentorBtnStop");
         if (bs) bs.disabled = false;
         if (bt) bt.disabled = true;
+        setMentorLiveUi(false);
         return;
       }
       await finalizeMentorRecording(chunks, effectiveMime(), recordSession);
@@ -863,7 +891,8 @@ export function initMentor() {
     _startedAt = performance.now();
     btnStart.disabled = true;
     btnStop.disabled = false;
-    setText("mentorStatus", "Listening… glide chest → head, then hold your top note briefly.");
+    setMentorLiveUi(true);
+    setText("mentorStatus", "Live · glide chest → head, then hold your top note briefly.");
     updateTimer();
 
     _mentorAutoStopTimer = window.setTimeout(() => {
@@ -879,6 +908,7 @@ export function initMentor() {
     if (!_recording || !_mentorRecorder) return;
     if (_mentorRecorder.state === "inactive") return;
     _recording = false;
+    setMentorLiveUi(false);
     if (_raf) {
       cancelAnimationFrame(_raf);
       _raf = 0;

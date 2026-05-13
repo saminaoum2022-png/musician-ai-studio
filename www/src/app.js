@@ -3,11 +3,11 @@ import { renderArrangementToWav } from "./render.js";
 import { recordHumToMelody } from "./melody/extract.js";
 import { mixStemsToWav } from "./studio/mixer.js";
 import { encodeWav16 } from "./wav.js";
-import { initMentor, resetMentorSession } from "./mentor.js";
+import { initMentor, resetMentorSession, bumpMentorRecSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514mentorMicMR";
+const APP_BUILD = "20260514mentorLiveFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1636,6 +1636,7 @@ const TAB_REFRESH_ACTIONS = {
     } catch (e) { console.warn("[tabRefresh/search]", e); }
   },
   mentor() {
+    bumpMentorRecSession();
     resetMentorSession();
   },
   profile() {

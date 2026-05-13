@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260514mentorBento" />
+    <link rel="stylesheet" href="./styles.css?v=20260514mentorLiveFix" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -737,7 +737,7 @@
           </div>
         </section>
 
-        <section class="card wide mentorPage" data-route="mentor">
+        <section class="mentorPage" data-route="mentor">
           <header class="mentorPageHead">
             <div class="mentorPageKicker">Voice lab</div>
             <h2 class="mentorPageTitle">Mentor</h2>
@@ -767,51 +767,58 @@
             </div>
           </header>
 
-          <div class="mentorHero">
-            <div class="mentorGauge" aria-hidden="true">
-              <svg class="mentorGaugeSvg" viewBox="0 0 120 88" width="200" height="147">
-                <defs>
-                  <linearGradient id="mentorArcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stop-color="#7c5cff" />
-                    <stop offset="100%" stop-color="#23d5ab" />
-                  </linearGradient>
-                </defs>
-                <path
-                  class="mentorArcTrack"
-                  d="M 22 72 A 52 52 0 0 1 98 72"
-                  fill="none"
-                  stroke="rgba(255,255,255,0.08)"
-                  stroke-width="8"
-                  stroke-linecap="round"
-                />
-                <path
-                  id="mentorArcRange"
-                  d="M 22 72 A 52 52 0 0 1 98 72"
-                  fill="none"
-                  stroke="url(#mentorArcGrad)"
-                  stroke-width="9"
-                  stroke-linecap="round"
-                  stroke-opacity="0.55"
-                  stroke-dasharray="0 175"
-                  pathLength="175"
-                />
-                <path
-                  id="mentorArcMedian"
-                  d="M 22 72 A 52 52 0 0 1 98 72"
-                  fill="none"
-                  stroke="#23d5ab"
-                  stroke-width="9"
-                  stroke-linecap="round"
-                  stroke-dasharray="0 175"
-                  pathLength="175"
-                />
-              </svg>
-              <div class="mentorGaugeCenter">
-                <span id="mentorArcCaption" class="mentorGaugeCaption">—</span>
-                <span class="mentorGaugeHint">Purple band = robust range · teal tick = center</span>
+          <div class="mentorStudio">
+            <div class="mentorFloat mentorFloat--gauge">
+              <div class="mentorGauge" aria-hidden="true">
+                <svg class="mentorGaugeSvg" viewBox="0 0 120 88" width="200" height="147">
+                  <defs>
+                    <linearGradient id="mentorArcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stop-color="#7c5cff" />
+                      <stop offset="100%" stop-color="#23d5ab" />
+                    </linearGradient>
+                  </defs>
+                  <path
+                    class="mentorArcTrack"
+                    d="M 22 72 A 52 52 0 0 1 98 72"
+                    fill="none"
+                    stroke="rgba(255,255,255,0.08)"
+                    stroke-width="8"
+                    stroke-linecap="round"
+                  />
+                  <path
+                    id="mentorArcRange"
+                    d="M 22 72 A 52 52 0 0 1 98 72"
+                    fill="none"
+                    stroke="url(#mentorArcGrad)"
+                    stroke-width="9"
+                    stroke-linecap="round"
+                    stroke-opacity="0.55"
+                    stroke-dasharray="0 175"
+                    pathLength="175"
+                  />
+                  <path
+                    id="mentorArcMedian"
+                    d="M 22 72 A 52 52 0 0 1 98 72"
+                    fill="none"
+                    stroke="#23d5ab"
+                    stroke-width="9"
+                    stroke-linecap="round"
+                    stroke-dasharray="0 175"
+                    pathLength="175"
+                  />
+                </svg>
+                <div class="mentorGaugeCenter">
+                  <span class="mentorGaugeKicker">Pitch map</span>
+                  <span id="mentorArcCaption" class="mentorGaugeCaption">—</span>
+                  <span class="mentorGaugeHint">Violet band · comfortable span · Teal tick · centre</span>
+                </div>
               </div>
             </div>
-            <div class="mentorCapture">
+            <div class="mentorFloat mentorFloat--capture">
+              <div class="mentorCaptureHead">
+                <span class="mentorLiveDot" aria-hidden="true"></span>
+                <span class="mentorCaptureTitle">Live capture</span>
+              </div>
               <p id="mentorStatus" class="mentorStatus" role="status"></p>
               <p id="mentorHint" class="mentorHint">
                 Use a quiet room, open “How to sing this test” if you need it, then record one slow chest-to-head glide. Men’s / Women’s / Notes only changes classical-style labels.
@@ -893,8 +900,14 @@
               <div class="mentorTile mentorTile--span2 mentorTile--sq mentorTile--quality">
                 <div class="mentorQualityWrap">
                   <svg viewBox="0 0 36 36" class="mentorQualityRing" aria-hidden="true">
+                    <defs>
+                      <linearGradient id="mentorQualityGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stop-color="#7c5cff" />
+                        <stop offset="100%" stop-color="#23d5ab" />
+                      </linearGradient>
+                    </defs>
                     <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="3" />
-                    <circle cx="18" cy="18" r="15" fill="none" stroke="url(#mentorArcGrad)" stroke-width="3" stroke-dasharray="70 94" stroke-linecap="round" transform="rotate(-90 18 18)" />
+                    <circle cx="18" cy="18" r="15" fill="none" stroke="url(#mentorQualityGrad)" stroke-width="3" stroke-dasharray="70 94" stroke-linecap="round" transform="rotate(-90 18 18)" />
                   </svg>
                   <span id="mentorCardQualityScore" class="mentorInsightRingLabel">—</span>
                 </div>
@@ -2237,6 +2250,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260514mentorMicMR"></script>
+    <script type="module" src="./src/app.js?v=20260514mentorLiveFix"></script>
   </body>
 </html>

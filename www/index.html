@@ -1499,26 +1499,37 @@
                from profile, and toggleable AI mood presets used as
                creative cues when generating. View-mode only; hidden
                while the hero is in edit mode. -->
-          <section class="profileMySound" id="profileMySound" hidden aria-labelledby="profileMySoundHeading">
+          <section class="profileMySound profileMySound--collapsed" id="profileMySound" hidden aria-labelledby="profileMySoundHeading">
             <header class="profileMySoundHeader">
-              <h3 id="profileMySoundHeading" class="profileMySoundTitle">
-                <span class="profileMySoundTitleIcon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-                    <path d="M3 12h2"/>
-                    <path d="M7 8v8"/>
-                    <path d="M11 5v14"/>
-                    <path d="M15 9v6"/>
-                    <path d="M19 11v2"/>
-                  </svg>
-                </span>
-                My Sound
-              </h3>
+              <div
+                class="profileMySoundHeaderTap"
+                id="profileMySoundHeaderTap"
+                role="button"
+                tabindex="0"
+                aria-expanded="false"
+                aria-controls="profileMySoundCard"
+                aria-label="Show or hide My Sound details"
+              >
+                <span class="profileMySoundHeaderChevron" aria-hidden="true">▾</span>
+                <h3 id="profileMySoundHeading" class="profileMySoundTitle">
+                  <span class="profileMySoundTitleIcon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                      <path d="M3 12h2"/>
+                      <path d="M7 8v8"/>
+                      <path d="M11 5v14"/>
+                      <path d="M15 9v6"/>
+                      <path d="M19 11v2"/>
+                    </svg>
+                  </span>
+                  My Sound
+                </h3>
+              </div>
               <button id="profileMySoundEditBtn" type="button" class="profileMySoundViewAll" aria-label="Edit My Sound">
                 <span>View all</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>
               </button>
             </header>
-            <div class="profileMySoundCard">
+            <div id="profileMySoundCard" class="profileMySoundCard">
               <div class="profileMySoundRow">
                 <div class="profileMySoundVoice">
                   <span class="profileMySoundVoiceIcon" aria-hidden="true">
@@ -1573,8 +1584,7 @@
           <!-- Songs — same Apple-Music-style row design as Library, no card chrome -->
           <div class="profileSongsBlock">
             <header class="libraryHeader profileSongsHeader appScreenHeader">
-              <h2 class="appScreenTitle appScreenTitle--panel">Songs on your link</h2>
-              <p class="libraryLead appScreenLead">In <strong>Library</strong>, <strong>⋯</strong> → <strong>Show on public profile</strong> adds a song to your link. <strong>Private</strong> = this device only.</p>
+              <h2 class="appScreenTitle appScreenTitle--panel">Your public songs</h2>
               <p id="profileOwnSongCount" class="libraryCount" hidden></p>
             </header>
             <div id="profileHubSharedList" class="libraryList profileHubSharedList"></div>

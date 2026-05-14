@@ -396,6 +396,7 @@ const els = {
   profileNabadCertBadge: document.getElementById("profileNabadCertBadge"),
   profileNabadCertCheck: document.getElementById("profileNabadCertCheck"),
   profileMySound: document.getElementById("profileMySound"),
+  profileMySoundHeaderTap: document.getElementById("profileMySoundHeaderTap"),
   profileMySoundEditBtn: document.getElementById("profileMySoundEditBtn"),
   profileMySoundVoiceName: document.getElementById("profileMySoundVoiceName"),
   profileMySoundVoiceTraits: document.getElementById("profileMySoundVoiceTraits"),
@@ -8908,7 +8909,7 @@ function renderProfileOwnStats() {
         els.profileOwnSongCount.hidden = true;
       }
     } else if (lib.length) {
-      els.profileOwnSongCount.textContent = `${pubLibCount} public on link · ${lib.length} saved`;
+      els.profileOwnSongCount.textContent = `${pubLibCount} public · ${lib.length} saved`;
       els.profileOwnSongCount.hidden = false;
     } else {
       els.profileOwnSongCount.textContent = "";
@@ -10407,8 +10408,8 @@ function renderProfileLibraryPublicOnLinkSection() {
     const pubN = allLib.length;
     if (totalSaved) {
       countEl.textContent = pubN
-        ? `${pubN} public on link · ${totalSaved} in Library`
-        : `0 public on link · ${totalSaved} in Library`;
+        ? `${pubN} public · ${totalSaved} in library`
+        : `0 public · ${totalSaved} in library`;
       countEl.hidden = false;
     } else {
       countEl.textContent = "";
@@ -10420,7 +10421,7 @@ function renderProfileLibraryPublicOnLinkSection() {
       <div class="emptyState">
         <div class="emptyStateIcon" aria-hidden="true">♪</div>
         <p class="emptyStateTitle">Nothing in Library yet</p>
-        <p class="emptyStateHint">Generated songs land in Library. Use ⋯ on a row to mark them <strong>Public</strong> on your profile link.</p>
+        <p class="emptyStateHint">Generated songs land in Library. Use ⋯ on a row, then <strong>Show on public profile</strong>.</p>
         <a href="#/library" class="emptyStateCta" data-route-link="library">Open Library</a>
       </div>`;
     return;
@@ -19178,6 +19179,27 @@ if (els.profileMySoundEditBtn) {
   els.profileMySoundEditBtn.addEventListener("click", () => {
     try { openMySoundModal(); } catch {}
   });
+}
+function syncProfileMySoundCollapsedAria() {
+  const sec = els.profileMySound;
+  const tap = els.profileMySoundHeaderTap;
+  if (!sec || !tap) return;
+  const collapsed = sec.classList.contains("profileMySound--collapsed");
+  tap.setAttribute("aria-expanded", collapsed ? "false" : "true");
+}
+if (els.profileMySoundHeaderTap && els.profileMySound) {
+  const toggleMySoundCollapsed = () => {
+    els.profileMySound.classList.toggle("profileMySound--collapsed");
+    syncProfileMySoundCollapsedAria();
+  };
+  els.profileMySoundHeaderTap.addEventListener("click", toggleMySoundCollapsed);
+  els.profileMySoundHeaderTap.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggleMySoundCollapsed();
+    }
+  });
+  syncProfileMySoundCollapsedAria();
 }
 if (els.btnMySoundClose) {
   els.btnMySoundClose.addEventListener("click", () => closeMySoundModal());

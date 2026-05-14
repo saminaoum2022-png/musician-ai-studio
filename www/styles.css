@@ -5291,6 +5291,8 @@ body[data-route="profile"]:has(#profileAuraNameRow[data-loading="true"]) #profil
 }
 .profileSongsHeader .libraryCount{
   margin-top: 8px;
+  color: rgba(220, 228, 250, 0.52);
+  letter-spacing: 0.06em;
 }
 /* Load more pill — sits below the 10-row page of releases. The number
    on the right tells the user exactly how many more shares are
@@ -5652,11 +5654,15 @@ body[data-route="profile"]:has(#profileAura.profileAuraEditing) #profileAuraHead
   line-height: 1;
 }
 .profileCreditsPill.isAdmin{
-  border-color: rgba(160, 132, 255, 0.5);
-  background: linear-gradient(135deg, rgba(110, 86, 220, 0.32), rgba(64, 162, 255, 0.2));
+  /* Same liquid glass as the toolbar; admin is hinted only on the coin icon. */
+  border-color: rgba(255, 255, 255, 0.28);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.06));
   color: #fff;
 }
-.profileCreditsPill.isAdmin .profileCreditsPillIco{ opacity: 0.95; }
+.profileCreditsPill.isAdmin .profileCreditsPillIco{
+  opacity: 1;
+  color: #f0d78a;
+}
 .profileCreditsPill.isAdmin .profileCreditsPillValue{
   font-size: 16px;
   line-height: 1;
@@ -8521,36 +8527,33 @@ input::placeholder, textarea::placeholder{
   gap: 8px;
   padding: 7px 14px 7px 11px;
   border-radius: 999px;
-  background: rgba(10, 12, 22, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  backdrop-filter: blur(10px) saturate(130%);
-  -webkit-backdrop-filter: blur(10px) saturate(130%);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
+  -webkit-backdrop-filter: blur(22px) saturate(185%);
+          backdrop-filter: blur(22px) saturate(185%);
   font-size: 13px;
   line-height: 1;
-  color: rgba(232, 238, 247, 0.92);
+  color: rgba(232, 238, 247, 0.88);
   min-width: 96px;
   justify-content: center;
-  transition: border-color 180ms ease, background 180ms ease;
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+  transition: border-color 180ms ease, background 180ms ease, transform 120ms ease;
+}
+.profileStatPill:active{
+  transform: scale(0.98);
 }
 .profileStatsPills--hubOn .profileStatPill--public{
   display: none !important;
 }
-.profileStatPill--songs{
-  /* Cool teal accent for the left pill. */
-  border-color: rgba(35, 213, 171, 0.32);
-  background:
-    linear-gradient(135deg, rgba(35, 213, 171, 0.12), rgba(10, 12, 22, 0.6) 60%);
-}
-.profileStatPill--public{
-  border-color: rgba(56, 189, 248, 0.38);
-  background:
-    linear-gradient(135deg, rgba(56, 189, 248, 0.13), rgba(10, 12, 22, 0.6) 60%);
-}
+.profileStatPill--songs,
+.profileStatPill--public,
 .profileStatPill--likes{
-  /* Warm purple accent for the right pill. */
-  border-color: rgba(124, 92, 255, 0.36);
-  background:
-    linear-gradient(135deg, rgba(124, 92, 255, 0.16), rgba(10, 12, 22, 0.6) 60%);
+  /* Per-type fills retired — glass shell is shared; color lives in icons only. */
+  border-color: rgba(255, 255, 255, 0.28);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
 }
 .profileStatPillIcon{
   display: inline-flex;
@@ -8569,13 +8572,13 @@ input::placeholder, textarea::placeholder{
   font-size: 14px;
   font-weight: 800;
   letter-spacing: -0.01em;
-  color: #fff;
+  color: rgba(248, 250, 255, 0.94);
 }
 .profileStatPillLabel{
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: rgba(232, 238, 247, 0.72);
+  color: rgba(232, 238, 247, 0.55);
 }
 .profileAuraAvatarWrapNeon .profileAuraAvatarSkeleton{ z-index: 3; }
 .profileAuraAvatarWrapNeon .profileAuraAvatarHint{ z-index: 4; }
@@ -8598,6 +8601,41 @@ input::placeholder, textarea::placeholder{
   gap: 10px;
   margin: 0 0 6px;
 }
+.profileMySoundHeaderTap{
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: -4px 0 -4px -4px;
+  padding: 4px 8px 4px 4px;
+  border-radius: 12px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  transition: background 0.16s ease;
+}
+.profileMySoundHeaderTap:hover{
+  background: rgba(255, 255, 255, 0.05);
+}
+.profileMySoundHeaderTap:focus-visible{
+  outline: 2px solid rgba(255, 255, 255, 0.35);
+  outline-offset: 2px;
+}
+.profileMySoundHeaderChevron{
+  flex: 0 0 auto;
+  font-size: 9px;
+  line-height: 1;
+  color: rgba(232, 238, 247, 0.42);
+  transform: rotate(0deg);
+  transition: transform 0.22s ease, color 0.16s ease;
+}
+.profileMySound--collapsed .profileMySoundHeaderChevron{
+  transform: rotate(-90deg);
+}
+.profileMySound--collapsed .profileMySoundCard{
+  display: none;
+}
 .profileMySoundTitle{
   display: inline-flex;
   align-items: center;
@@ -8612,8 +8650,7 @@ input::placeholder, textarea::placeholder{
   display: inline-flex;
   width: 14px;
   height: 14px;
-  color: #7c5cff;
-  filter: drop-shadow(0 0 5px rgba(124,92,255,0.45));
+  color: rgba(180, 196, 232, 0.72);
 }
 .profileMySoundTitleIcon svg{ width: 100%; height: 100%; }
 .profileMySoundViewAll{
@@ -8635,13 +8672,14 @@ input::placeholder, textarea::placeholder{
   position: relative;
   padding: 10px 12px 12px;
   border-radius: 14px;
-  border: 1px solid transparent;
-  background:
-    linear-gradient(180deg, rgba(22,26,38,0.92), rgba(14,16,24,0.96)) padding-box,
-    linear-gradient(135deg, rgba(124,92,255,0.35), rgba(35,213,171,0.22), rgba(124,92,255,0.22)) border-box;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+          backdrop-filter: blur(22px) saturate(180%);
   box-shadow:
-    0 0 0 1px rgba(124,92,255,0.08) inset,
-    0 12px 28px -18px rgba(124,92,255,0.30);
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.12),
+    0 12px 32px rgba(0, 0, 0, 0.28);
   display: grid;
   gap: 10px;
 }
@@ -8668,10 +8706,10 @@ input::placeholder, textarea::placeholder{
   width: 30px;
   height: 30px;
   border-radius: 10px;
-  background: linear-gradient(135deg, rgba(124,92,255,0.26), rgba(35,213,171,0.14));
-  border: 1px solid rgba(124,92,255,0.35);
-  color: #c8b8ff;
-  box-shadow: 0 0 12px -4px rgba(124,92,255,0.45);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
+  color: rgba(200, 210, 232, 0.92);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 .profileMySoundVoiceIcon svg{ width: 14px; height: 14px; }
 .profileMySoundVoiceBody{

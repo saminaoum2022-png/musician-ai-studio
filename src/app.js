@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514publicProfileFetchFix";
+const APP_BUILD = "20260514discoverSkeletonSpotlight";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -6742,11 +6742,20 @@ async function refreshDiscoverFeed() {
   const spotlightWrap = document.getElementById("discoverySpotlightWrap");
   const rail = document.getElementById("discoverySpotlightRail");
   if (!statusEl || !listEl) return;
-  if (spotlightWrap) spotlightWrap.hidden = true;
-  if (rail) rail.innerHTML = "";
+  if (spotlightWrap) spotlightWrap.hidden = false;
+  if (rail) {
+    rail.innerHTML = Array.from({ length: 4 }, () => `
+      <div class="discoverySkeletonSpotCard" aria-hidden="true">
+        <div class="discoverySkeletonSpotFill"></div>
+        <div class="discoverySkeletonSpotFooter">
+          <div class="discoverySkeletonLine"></div>
+          <div class="discoverySkeletonLine short"></div>
+        </div>
+      </div>`).join("");
+  }
   listEl.classList.add("isDiscoveryLoading");
   listEl.hidden = false;
-  listEl.innerHTML = `<div class="discoverySkeletonStack">${Array.from({ length: 6 }, () => `
+  listEl.innerHTML = `<div class="discoverySkeletonMoreLabel" aria-hidden="true"></div><div class="discoverySkeletonStack">${Array.from({ length: 4 }, () => `
     <div class="discoverySkeletonRow" aria-hidden="true">
       <div class="discoverySkeletonArt"></div>
       <div class="discoverySkeletonMid">
@@ -6768,6 +6777,7 @@ async function refreshDiscoverFeed() {
     listEl.hidden = true;
     listEl.innerHTML = "";
     if (spotlightWrap) spotlightWrap.hidden = true;
+    if (rail) rail.innerHTML = "";
     statusEl.hidden = false;
     const ill = discoveryEmptyIllustrationSvg();
     if (rows.length) {

@@ -10046,8 +10046,9 @@ input::placeholder, textarea::placeholder{
   overflow-x: auto;
   overflow-y: hidden;
   padding: 4px 2px 12px;
-  margin: 0 -4px;
+  margin: 0;
   scroll-snap-type: x mandatory;
+  scroll-padding-inline: 2px;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }

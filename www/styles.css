@@ -12144,9 +12144,28 @@ section.mentorPage{
   max-width: 100%;
 }
 .mentorGauge--hero{
-  min-height: 150px;
+  /* Stack arc and copy so labels are not drawn on top of the arc */
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  min-height: 0;
   width: 100%;
   max-width: min(220px, 100%);
+  padding: 4px 0 6px;
+}
+.mentorGauge--hero .mentorGaugeSvg{
+  flex-shrink: 0;
+}
+.mentorGauge--hero .mentorGaugeCenter{
+  position: static;
+  left: auto;
+  bottom: auto;
+  transform: none;
+  width: 100%;
+  max-width: 100%;
+  padding: 0 2px;
+  box-sizing: border-box;
 }
 .mentorGauge{
   position: relative;

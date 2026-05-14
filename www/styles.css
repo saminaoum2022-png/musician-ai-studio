@@ -850,12 +850,15 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
 }
 .libRowEq{
   flex: 0 0 auto;
-  display: inline-flex;
+  display: none;
   align-items: flex-end;
   gap: 3px;
   height: 18px;
   margin-left: 8px;
   margin-right: 2px;
+}
+.libRow.libRowPlaying .libRowEq{
+  display: inline-flex;
 }
 .libRowEq span{
   display: block;
@@ -916,6 +919,13 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
 .libRow.libRowMenuOpen{
   z-index: 90;
 }
+.libRowActive{
+  background: rgba(124,92,255,0.06);
+  box-shadow: inset 0 0 0 1px rgba(124,92,255,0.12);
+}
+.libRowActive .libRowTitle{
+  color: rgba(248,250,255,0.94);
+}
 .libRowPlaying{
   background: linear-gradient(180deg, rgba(124,92,255,0.10), rgba(35,213,171,0.04));
   box-shadow: inset 0 0 0 1px rgba(124,92,255,0.18);
@@ -933,7 +943,9 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   box-shadow: 0 6px 18px rgba(124,92,255,0.30);
 }
 .libRow + .libRow.libRowPlaying::before,
-.libRowPlaying + .libRow::before{
+.libRowPlaying + .libRow::before,
+.libRow + .libRow.libRowActive::before,
+.libRowActive + .libRow::before{
   opacity: 0;
 }
 /* Library section lives directly on the page (no inner card chrome) so

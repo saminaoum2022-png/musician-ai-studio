@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514profileEditHeroLegacyClean";
+const APP_BUILD = "20260514libraryRowPauseEq";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -11989,6 +11989,43 @@ function getLibraryHydratingSkeletonHtml() {
   `;
 }
 
+/** Library row chrome: the mini player can have this track loaded
+ *  (`active`) while paused (`audible` false). Only the EQ + strong
+ *  "now playing" treatment should run while audio is actually playing. */
+function getLibraryRowPlaybackUiForTrack(trackId) {
+  const idStr = String(trackId || "");
+  if (miniSource?.type !== "library" || String(miniSource.id || "") !== idStr) {
+    return { active: false, audible: false };
+  }
+  const a = playerEl;
+  if (!a) return { active: true, audible: false };
+  const dur = getPlayerDuration();
+  const cur = Number.isFinite(a.currentTime) ? a.currentTime : 0;
+  const audible = !a.paused && !a.ended && (dur > 0 || cur > 0);
+  return { active: true, audible };
+}
+
+function syncLibraryRowsFromPlayer() {
+  const route = document.body.getAttribute("data-route") || "";
+  if (route !== "library" || !els.libraryList) return;
+  const rows = els.libraryList.querySelectorAll(".libRow[data-lib-row]");
+  if (!rows.length) return;
+  rows.forEach((row) => {
+    const id = row.getAttribute("data-lib-row");
+    const { active, audible } = getLibraryRowPlaybackUiForTrack(id);
+    row.classList.toggle("libRowPlaying", audible);
+    row.classList.toggle("libRowActive", active && !audible);
+    const badge = row.querySelector(".libRowArtBadge");
+    if (badge) badge.textContent = audible ? "❚❚" : "▶";
+    const mainBtn = row.querySelector("[data-lib-play]");
+    const titleEl = row.querySelector(".libRowTitle");
+    const name = titleEl ? String(titleEl.textContent || "").trim() || "song" : "song";
+    if (mainBtn) {
+      mainBtn.setAttribute("aria-label", audible ? `Pause ${name}` : `Play ${name}`);
+    }
+  });
+}
+
 function renderLibrary() {
   if (!els.libraryList) return;
   try {
@@ -12126,7 +12163,7 @@ function renderLibrary() {
           t.artUrl ||
           "./assets/nabadai-logo.png"
         );
-        const playing = libraryNowPlayingId === t.id;
+        const { active: libActive, audible: libAudible } = getLibraryRowPlaybackUiForTrack(t.id);
         const dateLabel = formatLibraryDate(t.ts);
         const isInstrumental = t.kind === "instrumental";
         const isSound = t.kind === "sound";
@@ -12151,17 +12188,17 @@ function renderLibrary() {
           ? `loading="eager" fetchpriority="high"`
           : `loading="lazy" fetchpriority="low"`;
         return `
-          <li class="libRow ${playing ? "libRowPlaying" : ""}" data-lib-row="${t.id}">
-            <button class="libRowMain" type="button" data-lib-play="${t.id}" aria-label="Play ${safeTitle}">
+          <li class="libRow ${libAudible ? "libRowPlaying" : ""}${libActive && !libAudible ? " libRowActive" : ""}" data-lib-row="${t.id}">
+            <button class="libRowMain" type="button" data-lib-play="${t.id}" aria-label="${libAudible ? "Pause" : "Play"} ${safeTitle}">
               <span class="libRowArt">
                 <img src="${escapeHtml(art)}" alt="" width="56" height="56" decoding="async" ${loadingAttr} />
-                <span class="libRowArtBadge" aria-hidden="true">${playing ? "❚❚" : "▶"}</span>
+                <span class="libRowArtBadge" aria-hidden="true">${libAudible ? "❚❚" : "▶"}</span>
               </span>
               <span class="libRowInfo">
                 <span class="libRowTitle">${safeTitle}</span>
                 <span class="libRowSub">${subBits.join("")}</span>
               </span>
-              ${playing ? `<span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>` : ""}
+              <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
             </button>
             <button class="libRowMore" type="button" data-lib-menu="${t.id}" aria-label="More options for ${safeTitle}">⋯</button>
           </li>
@@ -14132,6 +14169,9 @@ function syncPlayerUI() {
   syncResultCardsFromPlayer();
   try {
     syncDiscoveryNowPlayingChip();
+  } catch {}
+  try {
+    syncLibraryRowsFromPlayer();
   } catch {}
 }
 

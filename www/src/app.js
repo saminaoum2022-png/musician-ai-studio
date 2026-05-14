@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514profilePublicOnlyDiscoverDefault";
+const APP_BUILD = "20260514librarySunoUrlRefresh";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -6254,6 +6254,9 @@ async function supabasePatchUserSong(track, patch) {
   if (typeof patch?.publicOnProfile === "boolean") {
     body.public_on_profile = patch.publicOnProfile;
   }
+  if (typeof patch?.songUrl === "string" && patch.songUrl.trim()) {
+    body.song_url = patch.songUrl.trim();
+  }
   if (Object.keys(body).length === 0) return { ok: false, reason: "noop" };
   const r = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?${filter}`, {
     method: "PATCH",
@@ -11452,12 +11455,24 @@ function bindLibraryDelegatedListeners() {
     const play = target.closest("[data-lib-play]") || target.closest("[data-lib-row]");
     if (play && els.libraryList.contains(play)) {
       const id = play.getAttribute("data-lib-play") || play.getAttribute("data-lib-row");
-      const t = loadLibrary().find((x) => x.id === id);
+      let t = loadLibrary().find((x) => x.id === id);
       if (!t?.url) return;
       // Library and Hub use different audio elements (`playerEl` vs
       // `hubAudio`). Without this, tapping a Library track while a Hub
       // post was streaming would leave both playing simultaneously.
       try { stopHubPlayback(); } catch {}
+      const rawForPlay = unwrapInnermostHttpAudioUrl(t.url);
+      let playSource = normalizeAudioUrlForPlayback(toAudioProxyUrl(rawForPlay) || rawForPlay);
+      const refreshed = await tryRefreshLibraryTrackAudioFromSuno(t);
+      if (refreshed?.url) {
+        const freshInner = String(refreshed.url).trim();
+        const newProx = normalizeAudioUrlForPlayback(toAudioProxyUrl(freshInner) || freshInner);
+        if (freshInner !== rawForPlay) {
+          const updated = patchLibraryRowWithRefreshedUrl(id, newProx, freshInner, t);
+          if (updated) t = updated;
+        }
+        playSource = newProx;
+      }
       currentPlayerTrackRef = t;
       setPlayerMeta({
         title: t.title || "Library song",
@@ -11467,7 +11482,7 @@ function bindLibraryDelegatedListeners() {
       miniSource = { type: "library", id };
       libraryNowPlayingId = id;
       renderLibrary();
-      await playOnPlayerPage(t.url, "Full song", {
+      await playOnPlayerPage(playSource, "Full song", {
         title: t.title || "Library song",
         subtitle: "Library • Full song",
         artUrl: (t.meta && t.meta.imageUrl) || t.artUrl || placeholderCoverDataUrl(),
@@ -13588,6 +13603,12 @@ async function playOnPlayerPage(url, label, meta = null) {
     if (els.btnPlayerPause) els.btnPlayerPause.disabled = false;
   } catch (e) {
     setStatus(`In-app playback failed (${e?.name || "error"}). Tap Open Direct.`);
+    try {
+      showToast("Playback failed — link may be expired. Try Open Direct or Recover.", {
+        icon: "♪",
+        durationMs: 4200,
+      });
+    } catch {}
   }
 }
 
@@ -14017,6 +14038,89 @@ function parseSunoGenerationRecordInfo(data) {
   const second = pick(arr[1]);
   const hasAudio = Boolean((first && first.audioUrl) || (second && second.audioUrl));
   return { status, first, second, hasAudio };
+}
+
+/** If `t` has a Suno `taskId`, re-fetch record-info and return a current
+ *  `audioUrl` when status is still SUCCESS. Heals expired CDN links for
+ *  older Library rows before playback.
+ */
+async function tryRefreshLibraryTrackAudioFromSuno(t) {
+  const tid = String(t?.taskId || "").trim();
+  if (!tid) return null;
+  try {
+    const r = await fetch(apiUrl(`/api/suno/status?taskId=${encodeURIComponent(tid)}`), {
+      cache: "no-store",
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) return null;
+    const st = String(data?.data?.status || data?.status || "").toUpperCase();
+    if (st !== "SUCCESS") return null;
+    const wantAid = String(t?.audioId || "").trim();
+    const genData = data?.data?.response?.sunoData || data?.data?.response?.suno_data || [];
+    const arr = Array.isArray(genData) ? genData : [];
+    const pickClipUrl = (clip) => {
+      if (!clip || typeof clip !== "object") return "";
+      return String(
+        clip.sourceAudioUrl ||
+          clip.source_audio_url ||
+          clip.sourceStreamAudioUrl ||
+          clip.source_stream_audio_url ||
+          clip.audioUrl ||
+          clip.audio_url ||
+          clip.streamAudioUrl ||
+          clip.stream_audio_url ||
+          "",
+      ).trim();
+    };
+    let fresh = "";
+    if (arr.length) {
+      if (wantAid) {
+        for (const clip of arr) {
+          const cid = String(
+            clip?.id || clip?.audioId || clip?.audio_id || clip?.songId || clip?.song_id || "",
+          ).trim();
+          if (cid && cid === wantAid) {
+            fresh = pickClipUrl(clip);
+            break;
+          }
+        }
+      }
+      if (!fresh) fresh = pickClipUrl(arr[0]);
+    }
+    if (!fresh) {
+      const parsed = parseSunoGenerationRecordInfo(data);
+      fresh = parsed.first?.audioUrl || parsed.second?.audioUrl || "";
+    }
+    if (!fresh) return null;
+    return { url: fresh };
+  } catch {
+    return null;
+  }
+}
+
+/** Persist a refreshed remote URL on the Library row and PATCH cloud `song_url`. */
+function patchLibraryRowWithRefreshedUrl(trackId, proxiedUrlForLibrary, rawRemoteUrl, prevTrack) {
+  const items = loadLibrary();
+  const idx = items.findIndex((x) => String(x.id) === String(trackId));
+  if (idx < 0) return null;
+  const nextUrl = String(proxiedUrlForLibrary || "").trim();
+  if (!nextUrl) return null;
+  const row = { ...items[idx], url: nextUrl };
+  const next = [...items];
+  next[idx] = row;
+  try {
+    saveLibrary(next);
+  } catch {
+    return null;
+  }
+  try {
+    renderLibrary();
+  } catch {}
+  const forCloud = String(rawRemoteUrl || "").trim();
+  if (forCloud) {
+    void supabasePatchUserSong(prevTrack, { songUrl: forCloud });
+  }
+  return row;
 }
 
 /**

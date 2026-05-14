@@ -713,6 +713,7 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   }
 }
 .libRow{
+  --cover-glow-rgb: 98, 106, 125;
   position: relative;
   display: flex;
   align-items: center;
@@ -920,15 +921,15 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   z-index: 90;
 }
 .libRowActive{
-  background: rgba(124,92,255,0.06);
-  box-shadow: inset 0 0 0 1px rgba(124,92,255,0.12);
+  background: rgba(var(--cover-glow-rgb), 0.06);
+  box-shadow: inset 0 0 0 1px rgba(var(--cover-glow-rgb), 0.12);
 }
 .libRowActive .libRowTitle{
   color: rgba(248,250,255,0.94);
 }
 .libRowPlaying{
-  background: linear-gradient(180deg, rgba(124,92,255,0.10), rgba(35,213,171,0.04));
-  box-shadow: inset 0 0 0 1px rgba(124,92,255,0.18);
+  background: linear-gradient(180deg, rgba(var(--cover-glow-rgb), 0.09), rgba(var(--cover-glow-rgb), 0.03));
+  box-shadow: inset 0 0 0 1px rgba(var(--cover-glow-rgb), 0.16);
 }
 .libRowPlaying .libRowArt img{
   filter: saturate(1.06) brightness(1.02);
@@ -938,9 +939,9 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
 }
 .libRowPlaying .libRowArtBadge{
   opacity: 1;
-  background: linear-gradient(180deg, rgba(124,92,255,0.85), rgba(35,213,171,0.55));
+  background: linear-gradient(180deg, rgba(var(--cover-glow-rgb), 0.55), rgba(var(--cover-glow-rgb), 0.22));
   border-color: rgba(255,255,255,0.45);
-  box-shadow: 0 6px 18px rgba(124,92,255,0.30);
+  box-shadow: 0 6px 18px rgba(var(--cover-glow-rgb), 0.22);
 }
 .libRow + .libRow.libRowPlaying::before,
 .libRowPlaying + .libRow::before,
@@ -1194,6 +1195,8 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   transform: scale(0.98);
 }
 .hubRow{
+  --hub-cover-rgb-fb: 102, 110, 132;
+  --hub-cover-rgb-eff: var(--hub-cover-rgb, var(--hub-cover-rgb-fb));
   border:1px solid rgba(255,255,255,0.10);
   border-radius:14px;
   padding:10px 10px 10px;
@@ -1264,7 +1267,7 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   display:block;
   height:100%;
   width:0%;
-  background: linear-gradient(90deg, rgba(124,92,255,0.95), rgba(35,213,171,0.95));
+  background: linear-gradient(90deg, rgba(var(--hub-cover-rgb-eff), 0.62), rgba(var(--hub-cover-rgb-eff), 0.22));
   transition: width 120ms linear;
 }
 
@@ -1300,8 +1303,8 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   background: rgba(6,10,18,0.72);
   border: 1px solid rgba(255,255,255,0.16);
   box-shadow:
-    0 0 12px rgba(124,92,255,0.35),
-    0 0 10px rgba(35,213,171,0.22);
+    0 0 12px rgba(var(--hub-cover-rgb-eff), 0.16),
+    0 0 10px rgba(var(--hub-cover-rgb-eff), 0.10);
   pointer-events:none;
   opacity:0;
   transition: opacity 220ms ease;
@@ -1311,9 +1314,9 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   display:block;
   width:4px;
   height:100%;
-  background: linear-gradient(180deg, rgba(35,213,171,1), rgba(124,92,255,1));
+  background: linear-gradient(180deg, rgba(var(--hub-cover-rgb-eff), 0.95), rgba(var(--hub-cover-rgb-eff), 0.35));
   border-radius:2px;
-  box-shadow: 0 0 6px rgba(35,213,171,0.55);
+  box-shadow: 0 0 6px rgba(var(--hub-cover-rgb-eff), 0.28);
   transform-origin: bottom center;
   animation: hubEqBar 780ms ease-in-out infinite;
   will-change: transform;
@@ -1549,21 +1552,17 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
  *
  * The active card's color comes from the post's cover art:
  *   --hub-cover-rgb        — "r, g, b" sampled from the cover (set by JS)
- *   --hub-cover-rgb-fb     — fallback purple, used until/unless we sample
+ *   --hub-cover-rgb-fb     — neutral fallback until JS samples the cover
  * Each color reference reads from --hub-cover-rgb-eff, which resolves to
  * the sampled value when present and the fallback otherwise (so an
- * unsampled card keeps the brand purple it always had). */
-#hubList .hubRow{
-  --hub-cover-rgb-fb: 124, 92, 255;
-  --hub-cover-rgb-eff: var(--hub-cover-rgb, var(--hub-cover-rgb-fb));
-}
+ * unsampled card keeps a soft neutral halo). */
 #hubList .hubRow.isActive{
   transform: translateY(-2px) scale(1.03);
-  border-color: rgba(var(--hub-cover-rgb-eff), 0.55);
+  border-color: rgba(var(--hub-cover-rgb-eff), 0.28);
   background: linear-gradient(180deg,
-    rgba(var(--hub-cover-rgb-eff), 0.16) 0%,
-    rgba(var(--hub-cover-rgb-eff), 0.06) 60%,
-    rgba(var(--hub-cover-rgb-eff), 0.035) 100%);
+    rgba(var(--hub-cover-rgb-eff), 0.09) 0%,
+    rgba(var(--hub-cover-rgb-eff), 0.035) 60%,
+    rgba(var(--hub-cover-rgb-eff), 0.02) 100%);
   animation: hubFocusPulse 720ms cubic-bezier(.2, 1.4, .4, 1) both;
   z-index: 2;
   transition:
@@ -1588,7 +1587,7 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   background-size: cover;
   background-position: center;
   filter: blur(28px) saturate(1.2);
-  opacity: 0.55;
+  opacity: 0.22;
   pointer-events: none;
   transition: opacity 240ms ease;
 }
@@ -1607,28 +1606,28 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
 @keyframes hubFocusPulse{
   0% {
     box-shadow:
-      0 0 0 1px rgba(var(--hub-cover-rgb-eff, 124, 92, 255), 0.10),
-      0 0 0 0 rgba(var(--hub-cover-rgb-eff, 124, 92, 255), 0);
+      0 0 0 1px rgba(var(--hub-cover-rgb-eff), 0.08),
+      0 0 0 0 rgba(var(--hub-cover-rgb-eff), 0);
   }
   28% {
     box-shadow:
-      0 0 0 1.5px rgba(var(--hub-cover-rgb-eff, 124, 92, 255), 0.85),
-      0 14px 56px -10px rgba(var(--hub-cover-rgb-eff, 124, 92, 255), 0.85),
-      0 8px 28px -8px rgba(var(--hub-cover-rgb-eff, 124, 92, 255), 0.45);
+      0 0 0 1px rgba(var(--hub-cover-rgb-eff), 0.22),
+      0 12px 40px -12px rgba(var(--hub-cover-rgb-eff), 0.26),
+      0 6px 20px -10px rgba(var(--hub-cover-rgb-eff), 0.14);
   }
   100% {
     box-shadow:
-      0 0 0 1px rgba(var(--hub-cover-rgb-eff, 124, 92, 255), 0.32),
-      0 10px 36px -12px rgba(var(--hub-cover-rgb-eff, 124, 92, 255), 0.45),
-      0 4px 14px -10px rgba(var(--hub-cover-rgb-eff, 124, 92, 255), 0.22);
+      0 0 0 1px rgba(var(--hub-cover-rgb-eff), 0.14),
+      0 8px 28px -14px rgba(var(--hub-cover-rgb-eff), 0.18),
+      0 3px 12px -10px rgba(var(--hub-cover-rgb-eff), 0.10);
   }
 }
 @media (prefers-reduced-motion: reduce){
   #hubList .hubRow.isActive{
     animation: none;
     box-shadow:
-      0 0 0 1px rgba(var(--hub-cover-rgb-eff, 124, 92, 255), 0.32),
-      0 10px 36px -12px rgba(var(--hub-cover-rgb-eff, 124, 92, 255), 0.45);
+      0 0 0 1px rgba(var(--hub-cover-rgb-eff), 0.14),
+      0 8px 28px -14px rgba(var(--hub-cover-rgb-eff), 0.18);
   }
 }
 
@@ -2495,6 +2494,7 @@ body.hubJumpingToTop #hubList .hubRow{
   }
 }
 .playerArtWrap{
+  --cover-glow-rgb: 100, 108, 128;
   border:1px solid rgba(255,255,255,0.10);
   border-radius:20px;
   background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012));
@@ -2502,11 +2502,11 @@ body.hubJumpingToTop #hubList .hubRow{
   transition: box-shadow 320ms ease, border-color 280ms ease, transform 280ms ease;
 }
 .playerArtWrap.isNowPlaying{
-  border-color: rgba(124, 92, 255, 0.42);
+  border-color: rgba(var(--cover-glow-rgb), 0.32);
   box-shadow:
-    0 0 0 1px rgba(124, 92, 255, 0.32),
-    0 14px 56px -14px rgba(124, 92, 255, 0.55),
-    0 6px 22px -10px rgba(35, 213, 171, 0.30);
+    0 0 0 1px rgba(var(--cover-glow-rgb), 0.22),
+    0 14px 48px -16px rgba(var(--cover-glow-rgb), 0.28),
+    0 6px 22px -12px rgba(var(--cover-glow-rgb), 0.14);
 }
 .playerArt{
   width:100%;
@@ -7363,6 +7363,7 @@ input::placeholder, textarea::placeholder{
   /* Base rule above is display:none; JS clears inline display when showing.
      Without this, computed style stays none and the bar never paints. */
   .hubNowPlaying{
+    --cover-glow-rgb: 100, 108, 128;
     display: block;
     position: fixed;
     left: 0;
@@ -7395,8 +7396,8 @@ input::placeholder, textarea::placeholder{
     inset: -32%;
     background-position: center;
     background-size: cover;
-    filter: blur(52px) saturate(1.12);
-    opacity: 0.13;
+    filter: blur(56px) saturate(1.02);
+    opacity: 0.075;
     transform: scale(1.06);
     pointer-events: none;
     transition: opacity 0.45s ease, filter 0.45s ease;
@@ -7425,7 +7426,9 @@ input::placeholder, textarea::placeholder{
     border-radius: 10px;
     overflow: hidden;
     border: 1px solid rgba(255, 255, 255, 0.14);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    box-shadow:
+      0 4px 14px rgba(0, 0, 0, 0.35),
+      0 0 28px -6px rgba(var(--cover-glow-rgb), 0.22);
   }
   .hubNowArt{
     width: 100%;
@@ -7476,7 +7479,7 @@ input::placeholder, textarea::placeholder{
     height: 100%;
     width: 0%;
     border-radius: inherit;
-    background: linear-gradient(90deg, rgba(124, 92, 255, 0.85), rgba(35, 213, 171, 0.85));
+    background: linear-gradient(90deg, rgba(var(--cover-glow-rgb), 0.5), rgba(var(--cover-glow-rgb), 0.16));
   }
   .hubNowIconBtn{
     -webkit-appearance: none;
@@ -10010,6 +10013,10 @@ input::placeholder, textarea::placeholder{
   scrollbar-width: none;
 }
 .discoverySpotlightRail::-webkit-scrollbar{ display: none; }
+.discoveryRow,
+.discoverySpotCard{
+  --cover-glow-rgb: 98, 106, 125;
+}
 .discoverySpotCard{
   flex: 0 0 min(78vw, 210px);
   width: min(78vw, 210px);
@@ -10094,9 +10101,9 @@ input::placeholder, textarea::placeholder{
 }
 .discoverySpotCard.discoveryRowPlaying .discoverySpotCardArtBadge{
   opacity: 1;
-  background: linear-gradient(180deg, rgba(124,92,255,0.9), rgba(35,213,171,0.55));
+  background: linear-gradient(180deg, rgba(var(--cover-glow-rgb), 0.52), rgba(var(--cover-glow-rgb), 0.22));
   border-color: rgba(255,255,255,0.48);
-  box-shadow: 0 8px 26px rgba(124,92,255,0.35);
+  box-shadow: 0 8px 26px rgba(var(--cover-glow-rgb), 0.22);
 }
 .discoverySpotCard.discoveryRowActive .discoverySpotCardArtBadge{
   opacity: 1;
@@ -10142,7 +10149,7 @@ input::placeholder, textarea::placeholder{
   width: 3px;
   height: 100%;
   border-radius: 2px;
-  background: linear-gradient(180deg, rgba(35,213,171,0.95), rgba(124,92,255,0.95));
+  background: linear-gradient(180deg, rgba(var(--cover-glow-rgb), 0.85), rgba(var(--cover-glow-rgb), 0.35));
   transform-origin: bottom;
   animation: discoveryRowEqBar 1.05s ease-in-out infinite;
 }
@@ -10213,17 +10220,17 @@ input::placeholder, textarea::placeholder{
 
 /* Discover feed + Spotlight: Library-style active / playing chrome */
 .discoveryRow.discoveryRowActive{
-  background: linear-gradient(145deg, rgba(124,92,255,0.12), rgba(18,24,38,0.94));
-  box-shadow: inset 0 0 0 1px rgba(124,92,255,0.22), 0 10px 36px rgba(0,0,0,0.28);
-  border-color: rgba(124,92,255,0.38);
+  background: linear-gradient(145deg, rgba(var(--cover-glow-rgb), 0.10), rgba(18,24,38,0.94));
+  box-shadow: inset 0 0 0 1px rgba(var(--cover-glow-rgb), 0.14), 0 10px 36px rgba(0,0,0,0.28);
+  border-color: rgba(var(--cover-glow-rgb), 0.26);
 }
 .discoveryRow.discoveryRowActive .discoveryRowTitle{
   color: rgba(248,250,255,0.96);
 }
 .discoveryRow.discoveryRowPlaying{
-  background: linear-gradient(180deg, rgba(124,92,255,0.14), rgba(35,213,171,0.06));
-  box-shadow: inset 0 0 0 1px rgba(124,92,255,0.28), 0 12px 40px rgba(124,92,255,0.18);
-  border-color: rgba(124,92,255,0.55);
+  background: linear-gradient(180deg, rgba(var(--cover-glow-rgb), 0.11), rgba(var(--cover-glow-rgb), 0.03));
+  box-shadow: inset 0 0 0 1px rgba(var(--cover-glow-rgb), 0.18), 0 12px 40px rgba(0,0,0,0.26);
+  border-color: rgba(var(--cover-glow-rgb), 0.32);
 }
 .discoveryRow.discoveryRowPlaying .discoveryRowArt img{
   filter: saturate(1.06) brightness(1.02);
@@ -10232,12 +10239,12 @@ input::placeholder, textarea::placeholder{
   color: #fff;
 }
 .discoverySpotCard.discoveryRowActive{
-  border-color: rgba(124,92,255,0.48);
-  box-shadow: 0 14px 40px rgba(124,92,255,0.16);
+  border-color: rgba(var(--cover-glow-rgb), 0.32);
+  box-shadow: 0 14px 40px rgba(0,0,0,0.32), 0 0 0 1px rgba(var(--cover-glow-rgb), 0.12);
 }
 .discoverySpotCard.discoveryRowPlaying{
-  border-color: rgba(124,92,255,0.62);
-  box-shadow: 0 16px 44px rgba(124,92,255,0.26), 0 0 0 1px rgba(124,92,255,0.22);
+  border-color: rgba(var(--cover-glow-rgb), 0.36);
+  box-shadow: 0 16px 44px rgba(0,0,0,0.30), 0 0 0 1px rgba(var(--cover-glow-rgb), 0.16);
 }
 .discoverySpotCard.discoveryRowPlaying .discoverySpotCardArt img{
   filter: saturate(1.08) brightness(1.03);
@@ -10479,9 +10486,9 @@ input::placeholder, textarea::placeholder{
 }
 .discoveryRow.discoveryRowPlaying .discoveryRowArtBadge{
   opacity: 1;
-  background: linear-gradient(180deg, rgba(124,92,255,0.88), rgba(35,213,171,0.58));
+  background: linear-gradient(180deg, rgba(var(--cover-glow-rgb), 0.52), rgba(var(--cover-glow-rgb), 0.22));
   border-color: rgba(255,255,255,0.45);
-  box-shadow: 0 6px 18px rgba(124,92,255,0.32);
+  box-shadow: 0 6px 18px rgba(var(--cover-glow-rgb), 0.22);
 }
 .discoveryRow.discoveryRowActive .discoveryRowArtBadge{
   opacity: 1;
@@ -10502,7 +10509,7 @@ input::placeholder, textarea::placeholder{
   width: 3px;
   height: 100%;
   border-radius: 2px;
-  background: linear-gradient(180deg, rgba(35,213,171,0.95), rgba(124,92,255,0.95));
+  background: linear-gradient(180deg, rgba(var(--cover-glow-rgb), 0.85), rgba(var(--cover-glow-rgb), 0.35));
   transform-origin: bottom;
   animation: discoveryRowEqBar 1.05s ease-in-out infinite;
 }

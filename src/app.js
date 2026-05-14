@@ -757,7 +757,7 @@ let hubFocusUpdateRaf = 0;
 /** Memoize the dominant tint we sample from each Hub post's cover so
  *  switching back to a previously-focused row is instant. The focused
  *  card's border/background/shadow read from CSS vars set per row
- *  (`--hub-cover-rgb`); we fall back to the brand purple when we
+ *  (`--hub-cover-rgb`); we fall back to a neutral slate when we
  *  can't sample (CORS, decode error, fully grey cover). */
 const _hubCoverColorCache = new Map();
 function _hubColorIsGrey(r, g, b) {
@@ -834,6 +834,28 @@ function applyHubRowCoverTint(rowEl, src) {
     }
     rowEl.style.setProperty("--hub-cover-rgb", `${rgb[0]}, ${rgb[1]}, ${rgb[2]}`);
     rowEl.setAttribute("data-cover-tinted", "ready");
+  });
+}
+
+/** Soft glow / progress accents tied to artwork (not brand purple). */
+function applyCoverGlowRgb(el, src) {
+  if (!el) return;
+  const s = String(src || "").trim();
+  if (!s || s.startsWith("data:") || /nabadai-logo\.png/i.test(s)) {
+    try {
+      el.style.removeProperty("--cover-glow-rgb");
+    } catch {}
+    return;
+  }
+  sampleHubCoverColor(s).then((rgb) => {
+    try {
+      if (!el.isConnected) return;
+      if (!rgb) {
+        el.style.removeProperty("--cover-glow-rgb");
+        return;
+      }
+      el.style.setProperty("--cover-glow-rgb", `${rgb[0]}, ${rgb[1]}, ${rgb[2]}`);
+    } catch {}
   });
 }
 
@@ -1465,6 +1487,9 @@ function renderHubNowPlaying() {
 
   if (!showMini) {
     els.hubNowPlaying.classList.remove("isVisible", "isPlaying");
+    try {
+      els.hubNowPlaying.style.removeProperty("--cover-glow-rgb");
+    } catch {}
     setTimeout(() => {
       if (els.hubNowPlaying && !els.hubNowPlaying.classList.contains("isVisible")) {
         els.hubNowPlaying.style.display = "none";
@@ -1473,6 +1498,7 @@ function renderHubNowPlaying() {
     return;
   }
 
+  applyCoverGlowRgb(els.hubNowPlaying, hubNowMeta?.art || "");
   els.hubNowPlaying.style.display = "";
   requestAnimationFrame(() => {
     els.hubNowPlaying.classList.add("isVisible");
@@ -6775,6 +6801,9 @@ function syncDiscoveryPlayingHighlights() {
 
   const resetDiscoveryHost = (host) => {
     host.classList.remove("discoveryRowPlaying", "discoveryRowActive");
+    try {
+      host.style.removeProperty("--cover-glow-rgb");
+    } catch {}
     const badge = host.querySelector(".discoveryRowArtBadge, .discoverySpotCardArtBadge");
     if (badge) badge.textContent = "▶";
     if (host.classList.contains("discoveryRow")) {
@@ -6814,6 +6843,11 @@ function syncDiscoveryPlayingHighlights() {
       const name = String(host.getAttribute("data-user-lib-title") || "").trim() || "Song";
       host.setAttribute("aria-label", audible ? `Pause ${name}` : `Play ${name}`);
     }
+    const artHint =
+      String(host.getAttribute("data-user-lib-art") || "").trim() ||
+      String(urlEl?.getAttribute?.("data-user-lib-art") || "").trim() ||
+      String(host.querySelector?.(".discoverySpotCardArt img, .discoveryRowArt img")?.getAttribute?.("src") || "").trim();
+    if (active) applyCoverGlowRgb(host, artHint);
   };
 
   root.querySelectorAll(".discoveryRow").forEach((row) => {
@@ -12171,6 +12205,14 @@ function syncLibraryRowsFromPlayer() {
     const { active, audible } = getLibraryRowPlaybackUiForTrack(id);
     row.classList.toggle("libRowPlaying", audible);
     row.classList.toggle("libRowActive", active && !audible);
+    if (audible || active) {
+      const img = row.querySelector(".libRowArt img");
+      applyCoverGlowRgb(row, img?.getAttribute?.("src") || "");
+    } else {
+      try {
+        row.style.removeProperty("--cover-glow-rgb");
+      } catch {}
+    }
     const badge = row.querySelector(".libRowArtBadge");
     if (badge) badge.textContent = audible ? "❚❚" : "▶";
     const mainBtn = row.querySelector("[data-lib-play]");
@@ -13343,7 +13385,10 @@ function setPlayerMeta({ title, subtitle, artUrl } = {}) {
   if (els.playerSubtitle) els.playerSubtitle.textContent = subtitle || "";
   if (els.playerArt) els.playerArt.src = artUrl || placeholderCoverDataUrl();
   const artWrap = document.querySelector(".playerArtWrap");
-  if (artWrap) artWrap.classList.toggle("isEmpty", !hasTrack);
+  if (artWrap) {
+    artWrap.classList.toggle("isEmpty", !hasTrack);
+    applyCoverGlowRgb(artWrap, hasTrack ? artUrl : "");
+  }
   if (els.playerArt) els.playerArt.classList.toggle("isPlaceholder", !hasTrack);
   hubNowMeta = {
     title: title || "Now playing",

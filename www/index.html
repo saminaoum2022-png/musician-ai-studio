@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260514discoveryTab" />
+    <link rel="stylesheet" href="./styles.css?v=20260514discoveryFeed" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -715,10 +715,11 @@
             <button type="button" class="discoverySegment isActive" role="tab" aria-selected="true" data-discovery-segment="ideas" id="discoverySegIdeas">Ideas</button>
           </header>
           <div class="discoveryPane" id="discoveryPaneDiscover" data-discovery-pane="discover" hidden>
-            <div class="discoveryPlaceholder">
-              <p class="discoveryPlaceholderTitle">Community listening</p>
-              <p class="discoveryPlaceholderHint">Public songs from creators will land here for browsing and plays — the same “Public on profile” switch you use today.</p>
-              <p class="discoveryPlaceholderHint">Use <strong>Ideas</strong> for occasion templates and quick starts.</p>
+            <p class="discoveryFeedLead hint">Newest tracks creators marked <strong>Public on profile</strong> in Library.</p>
+            <div id="discoveryFeedStatus" class="discoveryFeedStatus" aria-live="polite">Loading…</div>
+            <div id="discoveryFeedList" class="userPublicSongs discoveryFeedList" hidden></div>
+            <div class="discoveryPlaceholder discoveryFeedFooter">
+              <p class="discoveryPlaceholderHint">Looking for templates? Switch to <strong>Ideas</strong> or tap below.</p>
               <button type="button" class="primary" id="btnDiscoveryJumpIdeas">Open Ideas</button>
             </div>
           </div>
@@ -2444,6 +2445,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260514discoveryTab"></script>
+    <script type="module" src="./src/app.js?v=20260514discoveryFeed"></script>
   </body>
 </html>

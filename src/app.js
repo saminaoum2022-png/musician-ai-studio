@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514discoveryTab";
+const APP_BUILD = "20260514discoveryFeed";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1635,6 +1635,8 @@ const TAB_REFRESH_ACTIONS = {
       if (_discoveryActiveSegment === "ideas") {
         const input = document.getElementById("searchInput");
         runSearchQuery(String(input?.value || ""));
+      } else {
+        void refreshDiscoverFeed();
       }
     } catch (e) { console.warn("[tabRefresh/discover]", e); }
   },
@@ -1927,6 +1929,7 @@ function applyRoute() {
       try { onEnterSearchRoute(); } catch {}
     } else {
       try { onLeaveSearchRoute(); } catch {}
+      void refreshDiscoverFeed();
     }
   }
   if (wanted === "user") {
@@ -2853,6 +2856,7 @@ function bindDiscoverySegmentControls() {
         try { onEnterSearchRoute(); } catch {}
       } else if (s === "discover" && prev !== "discover") {
         try { onLeaveSearchRoute(); } catch {}
+        void refreshDiscoverFeed();
       }
     });
   });
@@ -6287,6 +6291,129 @@ async function supabaseFetchPublicLibraryForUserId(userId) {
   }
 }
 
+/** Recent `user_songs` rows anyone marked public (RLS: `public_on_profile` select). */
+async function supabaseFetchDiscoveryPublicSongs(limit) {
+  const lim = Math.max(1, Math.min(80, Number(limit) || 48));
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
+  const cols = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id";
+  const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/user_songs?public_on_profile=eq.true&select=${cols}&order=created_at.desc&limit=${lim}${artUrlGuard}`,
+      { headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" }, cache: "no-store" },
+    );
+    if (!r.ok) {
+      const det = await r.text().catch(() => "");
+      console.warn("[discovery/user_songs]", r.status, det.slice(0, 280));
+      return [];
+    }
+    const arr = await r.json().catch(() => []);
+    if (!Array.isArray(arr)) return [];
+    return arr.map((s) => ({
+      id: String(s.id || ""),
+      ts: new Date(s.created_at || Date.now()).getTime(),
+      title: s.title || "Generated song",
+      artUrl: String(s.art_url || "").trim(),
+      url: String(s.song_url || "").trim(),
+      taskId: String(s.task_id || ""),
+      audioId: String(s.audio_id || ""),
+      kind: s.kind || "full",
+      userId: String(s.user_id || "").trim(),
+    }));
+  } catch (e) {
+    console.warn("[discovery/user_songs]", e);
+    return [];
+  }
+}
+
+async function fetchProfilesByUserIdsMap(userIds) {
+  const ids = [...new Set((userIds || []).map((x) => String(x || "").trim()).filter(Boolean))];
+  if (!ids.length || !SUPABASE_URL || !SUPABASE_ANON_KEY) return new Map();
+  const inClause = ids.map((id) => encodeURIComponent(id)).join(",");
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/profiles?user_id=in.(${inClause})&select=user_id,username,avatar`,
+      { headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" }, cache: "no-store" },
+    );
+    if (!r.ok) return new Map();
+    const arr = await r.json().catch(() => []);
+    const m = new Map();
+    for (const row of Array.isArray(arr) ? arr : []) {
+      const uid = String(row?.user_id || "").trim();
+      if (uid) m.set(uid, row);
+    }
+    return m;
+  } catch {
+    return new Map();
+  }
+}
+
+let _discoveryFeedGen = 0;
+
+async function refreshDiscoverFeed() {
+  const gen = ++_discoveryFeedGen;
+  const statusEl = document.getElementById("discoveryFeedStatus");
+  const listEl = document.getElementById("discoveryFeedList");
+  if (!statusEl || !listEl) return;
+  listEl.hidden = true;
+  listEl.innerHTML = "";
+  statusEl.hidden = false;
+  statusEl.classList.remove("discoveryFeedStatusError");
+  statusEl.textContent = "Loading…";
+  const rows = await supabaseFetchDiscoveryPublicSongs(48);
+  if (gen !== _discoveryFeedGen) return;
+  const playable = rows.filter((t) => String(t.url || "").trim());
+  const profMap = await fetchProfilesByUserIdsMap(playable.map((t) => t.userId));
+  if (gen !== _discoveryFeedGen) return;
+  if (!playable.length) {
+    if (rows.length) {
+      statusEl.textContent =
+        "Public tracks are listed, but none have a playable audio URL yet — try again after they finish saving.";
+    } else {
+      statusEl.innerHTML =
+        "No public songs in the feed yet. After you enable <strong>Public on profile</strong> in Library, wait until the song finishes saving to the cloud — only rows in Supabase appear here. Newest first.";
+    }
+    return;
+  }
+  statusEl.hidden = true;
+  listEl.hidden = false;
+  listEl.innerHTML = playable
+    .map((t) => {
+      const art = String(t.artUrl || "").trim();
+      const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
+      const prof = t.userId ? profMap.get(t.userId) : null;
+      const handle = String(prof?.username || "").trim();
+      const byLine = handle ? `@${handle}` : "Creator";
+      const safeTitle = escapeHtml(String(t.title || "Untitled"));
+      const encUrl = encodeURIComponent(String(t.url || ""));
+      return `
+      <button class="userPublicSong discoveryFeedSong" type="button" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(artSafe)}">
+        <img class="userPublicSongCover" src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" />
+        <div class="userPublicSongMeta">
+          <div class="userPublicSongTitle">${safeTitle}</div>
+          <div class="userPublicSongTiny">${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}</div>
+        </div>
+        <span class="userPublicSongPlay" aria-hidden="true">▶</span>
+      </button>`;
+    })
+    .join("");
+  listEl.querySelectorAll("[data-user-lib-play]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const u = b.getAttribute("data-user-lib-url");
+      const title = b.getAttribute("data-user-lib-title") || "Song";
+      const art = b.getAttribute("data-user-lib-art") || "";
+      if (!u) return;
+      let raw = "";
+      try {
+        raw = decodeURIComponent(u);
+      } catch {
+        raw = u;
+      }
+      void playLibraryUrlOnPlayer(raw, title, art);
+    });
+  });
+}
+
 async function setLibraryTrackPublicOnProfile(trackId, wantPublic) {
   const id = String(trackId || "").trim();
   if (!authSession?.user?.id) {
@@ -6329,6 +6456,16 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic) {
   showToast(
     next.publicOnProfile ? "Visible on your public profile link." : "Hidden from your public profile link.",
   );
+  if (next.publicOnProfile) {
+    try {
+      if (
+        String(document.body.getAttribute("data-route") || "") === "discover" &&
+        _discoveryActiveSegment === "discover"
+      ) {
+        void refreshDiscoverFeed();
+      }
+    } catch {}
+  }
   return { ok: true };
 }
 

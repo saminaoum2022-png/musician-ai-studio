@@ -9724,6 +9724,24 @@ input::placeholder, textarea::placeholder{
   align-self: flex-start;
   margin-top: 4px;
 }
+.discoveryFeedLead{
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(232,238,247,0.58);
+}
+.discoveryFeedStatus{
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(232,238,247,0.72);
+  padding: 4px 0 14px;
+}
+.discoveryFeedList{
+  margin-top: 2px;
+}
+.discoveryFeedFooter{
+  margin-top: 20px;
+}
 
 /* ============================================================
  * Search page — magazine of remixable occasion shelves.

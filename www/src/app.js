@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514playerVideoShareSheet";
+const APP_BUILD = "20260514playerVideoCapShare";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5925,6 +5925,68 @@ async function supabaseVerifyOtp(email, token) {
 const OAUTH_NATIVE_REDIRECT = "com.nabadai.music://auth-callback";
 function isCapacitorNativeAuth() {
   return Boolean(window?.Capacitor?.isNativePlatform?.());
+}
+
+/** Base64 body only (no data: prefix) for Capacitor Filesystem.writeFile on native. */
+function blobToBase64Payload(blob) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onloadend = () => {
+      const s = String(fr.result || "");
+      const i = s.indexOf(",");
+      resolve(i >= 0 ? s.slice(i + 1) : s);
+    };
+    fr.onerror = () => reject(fr.error || new Error("read failed"));
+    fr.readAsDataURL(blob);
+  });
+}
+
+function shareSheetCanceledError(err) {
+  if (!err) return false;
+  if (err.name === "AbortError") return true;
+  const m = String(err.message || err || "").toLowerCase();
+  return m.includes("share canceled") || m.includes("cancelled") || m.includes("canceled");
+}
+
+/** iOS WKWebView: Web Share with File[] often fails; write to cache then native Share (file://). */
+let _capVideoExportModPromise = null;
+async function shareVideoBlobThroughCapacitorNative(blob, { filename, title } = {}) {
+  if (!_capVideoExportModPromise) {
+    const core = "8.3.1";
+    const fsUrl = `https://esm.sh/@capacitor/filesystem@8.1.2?deps=@capacitor/core@${core}`;
+    const shUrl = `https://esm.sh/@capacitor/share@8.0.1?deps=@capacitor/core@${core}`;
+    _capVideoExportModPromise = Promise.all([
+      import(/* webpackIgnore: true */ fsUrl),
+      import(/* webpackIgnore: true */ shUrl),
+    ]);
+  }
+  const [fsMod, shMod] = await _capVideoExportModPromise;
+  const { Filesystem, Directory } = fsMod;
+  const { Share } = shMod;
+  const name = String(filename || "song.mp4")
+    .replace(/[^\w.\- ]+/g, "_")
+    .replace(/\s+/g, " ")
+    .slice(0, 80);
+  const rel = `NabadAi/exports/${Date.now()}-${name || "song.mp4"}`;
+  const data = await blobToBase64Payload(blob);
+  await Filesystem.writeFile({
+    path: rel,
+    data,
+    directory: Directory.Cache,
+    recursive: true,
+  });
+  const { uri } = await Filesystem.getUri({
+    path: rel,
+    directory: Directory.Cache,
+  });
+  if (!uri || !String(uri).trim().toLowerCase().startsWith("file")) {
+    throw new Error("Could not build a local file to share");
+  }
+  await Share.share({
+    title: String(title || "Nabadai").slice(0, 100),
+    text: "Save to Photos (Save Video) or Files",
+    files: [uri],
+  });
 }
 function getCapacitorBrowserPlugin() {
   return window?.Capacitor?.Plugins?.Browser || null;
@@ -17886,7 +17948,6 @@ if (els.btnPlayerDownloadVideo) {
       }
       const blob = await r.blob();
       const filename = `${trackTitle.replace(/[\\/:*?"<>|]/g, "").trim() || "song"}.mp4`;
-      const file = new File([blob], filename, { type: "video/mp4" });
       const tryAnchorDownload = () => {
         const blobUrl = URL.createObjectURL(blob);
         try {
@@ -17900,55 +17961,73 @@ if (els.btnPlayerDownloadVideo) {
           setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
         }
       };
-      const canFileShare =
-        typeof navigator !== "undefined" &&
-        typeof navigator.share === "function" &&
-        typeof navigator.canShare === "function" &&
-        navigator.canShare({ files: [file] });
-      const tryShareSheet = async () => {
-        await navigator.share({
-          files: [file],
-          title: trackTitle,
-          text: `“${trackTitle}” — save to Photos or Files`,
-        });
-      };
-      if (canFileShare || (isCapacitorNativeAuth() && typeof navigator.share === "function")) {
+
+      if (isCapacitorNativeAuth()) {
         try {
-          await tryShareSheet();
-          showToast("In the share sheet, choose “Save Video” for Photos or “Save to Files”.", {
-            durationMs: 4800,
-          });
-        } catch (shareErr) {
-          if (shareErr && shareErr.name === "AbortError") {
+          await shareVideoBlobThroughCapacitorNative(blob, { filename, title: trackTitle });
+          showToast("Choose “Save Video” for Photos or “Save to Files”.", { durationMs: 4800 });
+        } catch (nativeErr) {
+          if (shareSheetCanceledError(nativeErr)) {
             showToast("Cancelled.", { durationMs: 1600 });
-          } else if (canFileShare) {
-            try {
-              tryAnchorDownload();
-              showToast("Saved — check Downloads or Files if the share sheet did not open.", {
-                durationMs: 3200,
-              });
-            } catch {
-              const msg = shareErr?.message ? String(shareErr.message).slice(0, 80) : "Save failed";
-              showToast(`Could not save: ${msg}`, { durationMs: 3500 });
-            }
           } else {
+            console.warn("[player-download-video] native share", nativeErr);
+            const file = new File([blob], filename, { type: "video/mp4" });
             try {
-              tryAnchorDownload();
-            } catch {}
-            showToast(
-              "Could not open the share sheet for this video. Try again on a newer iOS or use the web app.",
-              { durationMs: 4500 },
-            );
+              if (
+                typeof navigator.share === "function" &&
+                (typeof navigator.canShare !== "function" || navigator.canShare({ files: [file] }))
+              ) {
+                await navigator.share({
+                  files: [file],
+                  title: trackTitle,
+                  text: `Save “${trackTitle}” to Photos or Files`,
+                });
+                showToast("Choose “Save Video” for Photos or “Save to Files”.", { durationMs: 4800 });
+              } else {
+                showToast(
+                  `Could not open share: ${String(nativeErr?.message || nativeErr).slice(0, 72)}`,
+                  { durationMs: 4800 },
+                );
+              }
+            } catch (webShareErr) {
+              if (shareSheetCanceledError(webShareErr)) {
+                showToast("Cancelled.", { durationMs: 1600 });
+              } else {
+                showToast(
+                  `Could not save video: ${String(webShareErr?.message || webShareErr || nativeErr).slice(0, 72)}`,
+                  { durationMs: 4800 },
+                );
+              }
+            }
           }
         }
       } else {
-        tryAnchorDownload();
-        showToast(
-          isCapacitorNativeAuth()
-            ? "If nothing appeared: iOS needs the share sheet for video — try updating iOS or open this page in Safari once."
-            : "Video saved — check your Downloads folder.",
-          { durationMs: 3800 },
-        );
+        const file = new File([blob], filename, { type: "video/mp4" });
+        const canFileShare =
+          typeof navigator !== "undefined" &&
+          typeof navigator.share === "function" &&
+          typeof navigator.canShare === "function" &&
+          navigator.canShare({ files: [file] });
+        if (canFileShare) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: trackTitle,
+              text: `“${trackTitle}” — save to Photos or Files`,
+            });
+            showToast("Choose “Save Video” for Photos or “Save to Files”.", { durationMs: 4800 });
+          } catch (shareErr) {
+            if (shareSheetCanceledError(shareErr)) {
+              showToast("Cancelled.", { durationMs: 1600 });
+            } else {
+              tryAnchorDownload();
+              showToast("Saved — check your Downloads folder.", { durationMs: 2800 });
+            }
+          }
+        } else {
+          tryAnchorDownload();
+          showToast("Video saved — check your Downloads folder.", { durationMs: 2800 });
+        }
       }
     } catch (e) {
       const msg = e?.message ? String(e.message).slice(0, 80) : "Render failed";

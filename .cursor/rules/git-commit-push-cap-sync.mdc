@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Ship workflow (musician-ai-studio)
 
-When you finish a task that **changes tracked project files** (especially `www/`, `src/`, root `index.html` / `styles.css`, `api/`, or anything that affects the shipped web or native shell), do this **before ending the turn** unless the user explicitly says not to:
+When you finish a task that **changes tracked project files** (especially `www/`, `src/`, root `index.html` / `styles.css`, `api/`, or anything that affects the shipped web or native shell), do this **before ending the turn** unless the user explicitly says not to. **Do not wait for the user to say “commit / push / sync”** — they want this every time by default.
 
 1. **`git status`** — confirm what changed.
 2. If you edited anything under **`src/`** (especially `src/app.js`), **mirror into `www/src/`** before shipping native or testing Capacitor — e.g. `rsync -a src/ www/src/` from the repo root. The iOS shell loads **`www/`**, not `src/`; stale `www/src/app.js` is a common reason the footer build string and playback fixes never appear on device.

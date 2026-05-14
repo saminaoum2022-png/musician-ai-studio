@@ -3,20 +3,26 @@
  * Audio is analyzed locally; nothing is uploaded by this module.
  */
 
-const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+/** Fixed-Do solfege pitch classes (C = Do … B = Si), for Lab display only. */
+const SOLFEGE_PC = ["Do", "Do#", "Re", "Re#", "Mi", "Fa", "Fa#", "Sol", "Sol#", "La", "La#", "Si"];
 
 function hzToMidi(hz) {
   if (!(hz > 0) || !Number.isFinite(hz)) return NaN;
   return 69 + 12 * Math.log2(hz / 440);
 }
 
-/** Scientific pitch: C4 = MIDI 60. */
+/** Rounded MIDI → fixed-Do name + octave (MIDI 60 = Do4, same octave convention as “C4”). */
 function midiToName(m) {
   if (!Number.isFinite(m)) return "—";
   const mi = Math.round(m);
   const pc = ((mi % 12) + 12) % 12;
   const oct = Math.floor(mi / 12) - 1;
-  return `${NOTE_NAMES[pc]}${oct}`;
+  return `${SOLFEGE_PC[pc]}${oct}`;
+}
+
+function pitchClassSolfege(pc) {
+  const j = ((pc % 12) + 12) % 12;
+  return SOLFEGE_PC[j];
 }
 
 /** `sorted` ascending; `p` in [0, 1]. Linear interpolation between closest ranks. */
@@ -479,11 +485,11 @@ function analyzeBuffer(full, sampleRate) {
   }
 
   const medianPc = ((Math.round(p50) % 12) + 12) % 12;
-  const k1 = NOTE_NAMES[medianPc];
-  const kRel = NOTE_NAMES[(medianPc + 9) % 12];
-  const kDom = NOTE_NAMES[(medianPc + 7) % 12];
-  const relMin = NOTE_NAMES[((Math.round(p5) % 12) + 12) % 12];
-  const relMax = NOTE_NAMES[((Math.round(p95) % 12) + 12) % 12];
+  const k1 = pitchClassSolfege(medianPc);
+  const kRel = pitchClassSolfege((medianPc + 9) % 12);
+  const kDom = pitchClassSolfege((medianPc + 7) % 12);
+  const relMin = pitchClassSolfege(((Math.round(p5) % 12) + 12) % 12);
+  const relMax = pitchClassSolfege(((Math.round(p95) % 12) + 12) % 12);
 
   const stability = Math.max(0, 100 - Math.min(60, meanAbsC) * 1.1);
   const rangeScore = Math.min(100, (p95 - p5) * 8);
@@ -495,7 +501,7 @@ function analyzeBuffer(full, sampleRate) {
   const voice = guessVoiceArchetype(p5, p50, p95, voiceRef);
   const hist = pitchClassHistogram(voiced);
   const maqam = scoreMaqamGuess(hist);
-  const tonicName = NOTE_NAMES[maqam.tonicPc];
+  const tonicName = pitchClassSolfege(maqam.tonicPc);
   const rootMidi = alignRootMidi(p50, maqam.tonicPc);
   const tune = intonationVsMaqam(voiced, rootMidi, maqam.degrees);
   const genreLine = recommendGenres({
@@ -562,7 +568,7 @@ function hueFromMaqamId(id) {
   return h % 360;
 }
 
-/** Decorative staff sketch: scale degrees left-to-right with note names (12-TET). */
+/** Decorative staff sketch: scale degrees left-to-right with fixed-Do labels (12-TET). */
 function renderMaqamDiagram(tonicPc, degrees) {
   const el = document.getElementById("mentorMaqamDiagram");
   if (!el) return;
@@ -581,7 +587,7 @@ function renderMaqamDiagram(tonicPc, degrees) {
   const span = n <= 1 ? 0 : W - 44;
   degrees.forEach((d, i) => {
     const pc = (((tonicPc + d) % 12) + 12) % 12;
-    const label = NOTE_NAMES[pc];
+    const label = pitchClassSolfege(pc);
     const x = n === 1 ? W / 2 : 22 + (i * span) / (n - 1);
     const spread = 54 - (pc * 32) / 11;
     const yn = Math.min(56, Math.max(20, spread));

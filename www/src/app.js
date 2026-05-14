@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514discoverTabCompass";
+const APP_BUILD = "20260514discoverPauseDismiss";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2936,6 +2936,16 @@ function bindDiscoverySegmentControls() {
       try {
         location.hash = "#/player";
       } catch {}
+    });
+  }
+  const npd = document.getElementById("discoveryNowPlayingDismiss");
+  if (npd && !npd.dataset.boundDiscoveryDismiss) {
+    npd.dataset.boundDiscoveryDismiss = "1";
+    npd.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      haptic("light");
+      dismissDiscoverFeedPlayback();
     });
   }
 }
@@ -6627,13 +6637,49 @@ function discoveryEmptyIllustrationSvg() {
 </svg>`;
 }
 
+function dismissDiscoverFeedPlayback() {
+  if (miniSource?.type !== "discover_feed") return;
+  try {
+    if (playerEl) {
+      playerEl.pause();
+      playerEl.currentTime = 0;
+      try {
+        playerEl.removeAttribute("src");
+        playerEl.load();
+      } catch {}
+    }
+  } catch {}
+  miniSource = null;
+  currentPlayerTrackRef = null;
+  try {
+    syncPlayerUI();
+  } catch {}
+  try {
+    syncPlayerToggleUI();
+  } catch {}
+  try {
+    updateBrandPulse();
+  } catch {}
+  try {
+    syncDiscoveryNowPlayingChip();
+  } catch {}
+  try {
+    renderHubNowPlaying();
+  } catch {}
+}
+
 function syncDiscoveryPlayingHighlights() {
   const root = document.getElementById("discoveryPaneDiscover");
   if (!root) return;
-  const wants = miniSource?.type === "discover_feed" && String(currentPlayerTrackRef?.url || "").trim();
-  const cur = wants ? String(currentPlayerTrackRef.url).trim() : "";
   root.querySelectorAll(".isDiscoveryNowPlaying").forEach((el) => el.classList.remove("isDiscoveryNowPlaying"));
-  if (!cur) return;
+  const wants = miniSource?.type === "discover_feed" && String(currentPlayerTrackRef?.url || "").trim();
+  if (!wants) return;
+  const au = ensurePlayer();
+  const dur = getPlayerDuration();
+  const cur = au && Number.isFinite(au.currentTime) ? au.currentTime : 0;
+  const playing = Boolean(au && !au.paused && !au.ended && (dur > 0 || cur > 0));
+  if (!playing) return;
+  const curUrl = String(currentPlayerTrackRef.url).trim();
   root.querySelectorAll("[data-user-lib-play]").forEach((btn) => {
     let u = "";
     try {
@@ -6641,7 +6687,7 @@ function syncDiscoveryPlayingHighlights() {
     } catch {
       u = String(btn.getAttribute("data-user-lib-url") || "");
     }
-    if (!u || u !== cur) return;
+    if (!u || u !== curUrl) return;
     const host = btn.classList.contains("discoverySpotCard") ? btn : btn.closest(".discoveryRow");
     if (host) host.classList.add("isDiscoveryNowPlaying");
   });
@@ -6655,6 +6701,19 @@ function syncDiscoveryNowPlayingChip() {
   const fromFeed = miniSource?.type === "discover_feed";
   if (!onDiscover || !fromFeed || !currentPlayerTrackRef?.title) {
     wrap.hidden = true;
+    wrap.classList.remove("isPlaying");
+    try {
+      syncDiscoveryPlayingHighlights();
+    } catch {}
+    return;
+  }
+  const au = ensurePlayer();
+  const dur = getPlayerDuration();
+  const cur = au && Number.isFinite(au.currentTime) ? au.currentTime : 0;
+  const playing = Boolean(au && !au.paused && !au.ended && (dur > 0 || cur > 0));
+  if (!playing) {
+    wrap.hidden = true;
+    wrap.classList.remove("isPlaying");
     try {
       syncDiscoveryPlayingHighlights();
     } catch {}
@@ -6664,15 +6723,13 @@ function syncDiscoveryNowPlayingChip() {
   const art = document.getElementById("discoveryNowPlayingArt");
   const titleEl = document.getElementById("discoveryNowPlayingTitle");
   const stateEl = document.getElementById("discoveryNowPlayingState");
-  const au = ensurePlayer();
-  const playing = Boolean(au && !au.paused && !au.ended && au.currentTime > 0);
   if (art) {
     const src = String(currentPlayerTrackRef.artUrl || "").trim();
     art.src = src && !src.startsWith("data:") ? src : placeholderCoverDataUrl();
   }
   if (titleEl) titleEl.textContent = currentPlayerTrackRef.title || "Playing";
-  if (stateEl) stateEl.textContent = playing ? "Now playing" : "Paused";
-  wrap.classList.toggle("isPlaying", playing);
+  if (stateEl) stateEl.textContent = "Now playing";
+  wrap.classList.add("isPlaying");
   try {
     syncDiscoveryPlayingHighlights();
   } catch {}

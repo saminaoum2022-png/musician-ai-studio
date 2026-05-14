@@ -736,15 +736,18 @@
               </button>
             </header>
             <div id="discoveryNowPlaying" class="discoveryNowPlaying" hidden>
-              <button type="button" class="discoveryNowPlayingBtn" id="discoveryNowPlayingBtn" aria-label="Open full player">
-                <span class="discoveryNowPlayingPulse" aria-hidden="true"></span>
-                <img id="discoveryNowPlayingArt" class="discoveryNowPlayingArt" src="./assets/nabadai-logo.png" alt="" decoding="async" />
-                <span class="discoveryNowPlayingMeta">
-                  <span id="discoveryNowPlayingTitle" class="discoveryNowPlayingTitle"></span>
-                  <span id="discoveryNowPlayingState" class="discoveryNowPlayingState">Discover</span>
-                </span>
-                <span class="discoveryNowPlayingGo" aria-hidden="true">Player</span>
-              </button>
+              <div class="discoveryNowPlayingRow">
+                <button type="button" class="discoveryNowPlayingBtn" id="discoveryNowPlayingBtn" aria-label="Open full player">
+                  <span class="discoveryNowPlayingPulse" aria-hidden="true"></span>
+                  <img id="discoveryNowPlayingArt" class="discoveryNowPlayingArt" src="./assets/nabadai-logo.png" alt="" decoding="async" />
+                  <span class="discoveryNowPlayingMeta">
+                    <span id="discoveryNowPlayingTitle" class="discoveryNowPlayingTitle"></span>
+                    <span id="discoveryNowPlayingState" class="discoveryNowPlayingState">Now playing</span>
+                  </span>
+                  <span class="discoveryNowPlayingGo" aria-hidden="true">Player</span>
+                </button>
+                <button type="button" class="discoveryNowPlayingDismiss" id="discoveryNowPlayingDismiss" aria-label="Stop and dismiss">×</button>
+              </div>
             </div>
             <div id="discoverySpotlightWrap" class="discoverySpotlightWrap" hidden>
               <div class="discoverySpotlightHead">

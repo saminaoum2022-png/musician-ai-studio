@@ -9892,11 +9892,19 @@ input::placeholder, textarea::placeholder{
 .discoveryNowPlaying{
   margin: 0 0 14px;
 }
+.discoveryNowPlayingRow{
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+}
 .discoveryNowPlayingBtn{
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
   padding: 10px 12px;
   border-radius: 16px;
   border: 1px solid rgba(124,92,255,0.28);
@@ -9980,6 +9988,34 @@ input::placeholder, textarea::placeholder{
   padding: 6px 10px;
   border-radius: 10px;
   background: rgba(255,255,255,0.06);
+}
+.discoveryNowPlayingDismiss{
+  flex: 0 0 auto;
+  width: 44px;
+  min-height: 0;
+  align-self: stretch;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  color: rgba(232,238,247,0.72);
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+.discoveryNowPlayingDismiss:hover{
+  background: rgba(255,100,120,0.12);
+  border-color: rgba(255,120,140,0.35);
+  color: #fff;
+}
+.discoveryNowPlayingDismiss:active{
+  transform: scale(0.97);
+}
+.discoveryNowPlayingDismiss:focus-visible{
+  outline: 2px solid rgba(124,92,255,0.55);
+  outline-offset: 2px;
 }
 
 /* Spotlight horizontal rail */

@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514discoverMiniGlass";
+const APP_BUILD = "20260514discoverNoInlineStrip";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1936,9 +1936,6 @@ function applyRoute() {
       onLeaveSearchRoute();
     } catch {}
     void refreshDiscoverFeed();
-    try {
-      syncDiscoveryNowPlayingChip();
-    } catch {}
   }
   if (wanted === "user") {
     renderUserProfile(pendingPublicUsername);
@@ -2861,9 +2858,6 @@ function bindDiscoverySegmentControls() {
         try { onLeaveSearchRoute(); } catch {}
         void refreshDiscoverFeed();
       }
-      try {
-        syncDiscoveryNowPlayingChip();
-      } catch {}
     });
   });
   const jump = document.getElementById("btnDiscoveryJumpIdeas");
@@ -2875,9 +2869,6 @@ function bindDiscoverySegmentControls() {
       if (prev !== "ideas") {
         try { onEnterSearchRoute(); } catch {}
       }
-      try {
-        syncDiscoveryNowPlayingChip();
-      } catch {}
     });
   }
   const rfb = document.getElementById("discoveryRefreshBtn");
@@ -2946,47 +2937,6 @@ function bindDiscoverySegmentControls() {
       }
       haptic("light");
       void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer, discoverBy: by });
-    });
-  }
-  const npo = document.getElementById("discoveryNowPlayingOpenPlayer");
-  if (npo && !npo.dataset.boundDiscoveryNpOpen) {
-    npo.dataset.boundDiscoveryNpOpen = "1";
-    npo.addEventListener("click", () => {
-      haptic("light");
-      try {
-        location.hash = "#/player";
-      } catch {}
-    });
-  }
-  const npp = document.getElementById("discoveryNpPlayPause");
-  if (npp && !npp.dataset.boundDiscoveryNpPlay) {
-    npp.dataset.boundDiscoveryNpPlay = "1";
-    npp.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (miniSource?.type !== "discover_feed") return;
-      haptic("light");
-      const a = ensurePlayer();
-      try {
-        if (a.paused || a.ended) {
-          void a.play();
-        } else {
-          a.pause();
-        }
-      } catch {}
-      try {
-        syncPlayerUI();
-      } catch {}
-    });
-  }
-  const npd = document.getElementById("discoveryNowPlayingDismiss");
-  if (npd && !npd.dataset.boundDiscoveryDismiss) {
-    npd.dataset.boundDiscoveryDismiss = "1";
-    npd.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      haptic("light");
-      dismissDiscoverFeedPlayback();
     });
   }
 }
@@ -6702,9 +6652,6 @@ function dismissDiscoverFeedPlayback() {
     updateBrandPulse();
   } catch {}
   try {
-    syncDiscoveryNowPlayingChip();
-  } catch {}
-  try {
     renderHubNowPlaying();
   } catch {}
 }
@@ -6732,90 +6679,6 @@ function syncDiscoveryPlayingHighlights() {
     const host = btn.classList.contains("discoverySpotCard") ? btn : btn.closest(".discoveryRow");
     if (host) host.classList.add("isDiscoveryNowPlaying");
   });
-}
-
-function syncDiscoveryNpAuraFromCoverUrl(coverUrl) {
-  const aura = document.getElementById("discoveryNpAura");
-  if (!aura) return;
-  const u = String(coverUrl || "").trim();
-  if (!u || u.startsWith("data:")) {
-    aura.style.backgroundImage = "none";
-    return;
-  }
-  try {
-    aura.style.backgroundImage = `url("${u.replace(/\\/g, "/").replace(/"/g, "%22")}")`;
-  } catch {
-    aura.style.backgroundImage = "none";
-  }
-}
-
-function syncDiscoveryMiniTransport() {
-  const wrap = document.getElementById("discoveryNowPlaying");
-  const btn = document.getElementById("discoveryNpPlayPause");
-  if (!wrap || wrap.hidden || !btn) return;
-  const au = ensurePlayer();
-  const dur = getPlayerDuration();
-  const cur = au && Number.isFinite(au.currentTime) ? au.currentTime : 0;
-  const playing = Boolean(au && !au.paused && !au.ended && (dur > 0 || cur > 0));
-  const icoPause = btn.querySelector(".discoveryNpPlayPauseIco--pause");
-  const icoPlay = btn.querySelector(".discoveryNpPlayPauseIco--play");
-  const showPause = playing;
-  if (icoPause) icoPause.hidden = !showPause;
-  if (icoPlay) icoPlay.hidden = showPause;
-  btn.setAttribute("aria-label", showPause ? "Pause" : "Play");
-}
-
-function syncDiscoveryNowPlayingChip() {
-  const wrap = document.getElementById("discoveryNowPlaying");
-  if (!wrap) return;
-  const route = document.body.getAttribute("data-route") || "";
-  const onDiscover = route === "discover" && _discoveryActiveSegment === "discover";
-  const fromFeed = miniSource?.type === "discover_feed";
-  if (!onDiscover || !fromFeed || !currentPlayerTrackRef?.title) {
-    wrap.hidden = true;
-    wrap.classList.remove("isPlaying");
-    try {
-      syncDiscoveryPlayingHighlights();
-    } catch {}
-    try {
-      syncDiscoveryMiniTransport();
-    } catch {}
-    return;
-  }
-  const au = ensurePlayer();
-  const dur = getPlayerDuration();
-  const cur = au && Number.isFinite(au.currentTime) ? au.currentTime : 0;
-  const playing = Boolean(au && !au.paused && !au.ended && (dur > 0 || cur > 0));
-  wrap.hidden = false;
-  const art = document.getElementById("discoveryNowPlayingArt");
-  const titleEl = document.getElementById("discoveryNowPlayingTitle");
-  const byEl = document.getElementById("discoveryNowPlayingBy");
-  if (art) {
-    if (!art.dataset.discoveryNpAuraBound) {
-      art.dataset.discoveryNpAuraBound = "1";
-      art.addEventListener("load", () => {
-        try {
-          syncDiscoveryNpAuraFromCoverUrl(art.currentSrc || art.src || "");
-        } catch {}
-      });
-    }
-    const src = String(currentPlayerTrackRef.artUrl || "").trim();
-    const next = src && !src.startsWith("data:") ? src : placeholderCoverDataUrl();
-    art.src = next;
-    syncDiscoveryNpAuraFromCoverUrl(next);
-  }
-  if (titleEl) titleEl.textContent = currentPlayerTrackRef.title || "Playing";
-  if (byEl) {
-    const b = String(currentPlayerTrackRef.byLine || "").trim();
-    byEl.textContent = b || "Discover feed";
-  }
-  wrap.classList.toggle("isPlaying", playing);
-  try {
-    syncDiscoveryPlayingHighlights();
-  } catch {}
-  try {
-    syncDiscoveryMiniTransport();
-  } catch {}
 }
 
 let _discoveryFeedGen = 0;
@@ -6939,7 +6802,7 @@ async function refreshDiscoverFeed() {
         </div>`;
     }
     try {
-      syncDiscoveryNowPlayingChip();
+      syncDiscoveryPlayingHighlights();
     } catch {}
     return;
   }
@@ -6966,7 +6829,7 @@ async function refreshDiscoverFeed() {
     listEl.hidden = true;
   }
   try {
-    syncDiscoveryNowPlayingChip();
+    syncDiscoveryPlayingHighlights();
   } catch {}
 }
 
@@ -7059,9 +6922,6 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   } else {
     await playOnPlayerPage(prox, title || "Song", meta);
   }
-  try {
-    syncDiscoveryNowPlayingChip();
-  } catch {}
 }
 
 async function renderUserProfilePublicLibraryAsync(username) {
@@ -14326,7 +14186,7 @@ function syncPlayerUI() {
   renderHubNowPlaying();
   syncResultCardsFromPlayer();
   try {
-    syncDiscoveryNowPlayingChip();
+    syncDiscoveryPlayingHighlights();
   } catch {}
   try {
     syncLibraryRowsFromPlayer();

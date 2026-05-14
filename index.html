@@ -790,6 +790,7 @@
         <section class="mentorPage wide" data-route="mentor">
           <div class="mentorAmbient" aria-hidden="true"></div>
 
+          <div id="mentorLabMain" class="mentorLabMain">
           <header class="mentorHeroTop">
             <h2 class="mentorPageTitle">Lab</h2>
             <p class="mentorPageLead">Voice scan on this device — for practice, not diagnosis.</p>
@@ -873,21 +874,6 @@
               </div>
             </div>
 
-            <div class="mentorVizCard mentorGlass">
-              <div class="mentorVizHead">
-                <span class="mentorSectionEyebrow">Live</span>
-                <span class="mentorVizReady">
-                  <span class="mentorLiveDot" aria-hidden="true"></span>
-                  <span id="mentorVizReadyText">Ready when you are</span>
-                </span>
-              </div>
-              <div class="mentorVizCanvas" aria-hidden="true">
-                <div class="mentorVizMesh"></div>
-                <div class="mentorVizRibbon"></div>
-                <div class="mentorVizSpark"></div>
-              </div>
-            </div>
-
             <div class="mentorTipCard mentorGlass">
               <details class="mentorGuide mentorGuide--tip">
                 <summary class="mentorGuideSummary">Tips for a clean scan</summary>
@@ -900,8 +886,17 @@
               </details>
             </div>
           </div>
+          </div>
 
           <div id="mentorResults" class="mentorResults" hidden>
+            <div class="mentorResultsBar">
+              <button type="button" id="mentorBtnBackToLab" class="mentorBackBtn" aria-label="Back to Lab">
+                <svg class="mentorBackChev" viewBox="0 0 24 24" aria-hidden="true" fill="none">
+                  <path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                Back to Lab
+              </button>
+            </div>
             <p class="mentorPullQuote" id="mentorPullQuote">This pass</p>
 
             <div class="mentorResultHero mentorGlass" data-mentor-hero>
@@ -2443,6 +2438,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260514desktopNavLabDiscover"></script>
+    <script type="module" src="./src/app.js?v=20260514labBleedResultsNav"></script>
   </body>
 </html>

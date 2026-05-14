@@ -59,10 +59,6 @@ export function bumpMentorRecSession() {
 function setMentorLiveUi(on) {
   const root = document.querySelector(".mentorPage");
   if (root) root.classList.toggle("mentorPage--live", Boolean(on));
-  const viz = document.querySelector(".mentorVizCard");
-  if (viz) viz.classList.toggle("mentorVizCard--live", Boolean(on));
-  const ready = document.getElementById("mentorVizReadyText");
-  if (ready) ready.textContent = on ? "Listening…" : "Ready when you are";
 }
 
 function blurb(s, maxLen) {
@@ -605,7 +601,18 @@ function renderMaqamDiagram(tonicPc, degrees) {
 
 function showResults(on) {
   const wrap = document.getElementById("mentorResults");
+  const main = document.getElementById("mentorLabMain");
   if (wrap) wrap.hidden = !on;
+  if (main) main.hidden = Boolean(on);
+  if (on) {
+    try {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch {
+      try {
+        window.scrollTo(0, 0);
+      } catch {}
+    }
+  }
 }
 
 export function resetMentorSession() {
@@ -777,7 +784,7 @@ async function finalizeMentorRecording(chunks, mimeTypeHint, recordSession) {
     }
 
     try {
-      setText("mentorStatus", "Snapshot ready — see below.");
+      setText("mentorStatus", "Snapshot ready — review your report.");
       const pullQuotes = [
         "This pass",
         "Your snapshot",
@@ -901,6 +908,15 @@ export function initMentor() {
   if (!btnStart || !btnStop) return;
   if (btnStart.dataset.mentorInit === "1") return;
   btnStart.dataset.mentorInit = "1";
+
+  const btnBack = document.getElementById("mentorBtnBackToLab");
+  if (btnBack && !btnBack.dataset.mentorBound) {
+    btnBack.dataset.mentorBound = "1";
+    btnBack.addEventListener("click", () => {
+      showResults(false);
+      setText("mentorStatus", "");
+    });
+  }
 
   const refEl = document.getElementById("mentorVoiceRef");
   if (refEl && !refEl.dataset.mentorBound) {

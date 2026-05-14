@@ -1368,15 +1368,18 @@
                   autocomplete="username"
                   aria-label="Username"
                 />
+                <span id="profileVoiceTimbreInline" class="profileVoiceTimbreInline" hidden aria-hidden="true">
+                  <span class="profileVoiceTimbreInlineSep" aria-hidden="true"> — </span>
+                  <span id="profileVoiceTimbreInlineLabel" class="profileVoiceTimbreInlineLabel"></span>
+                </span>
                 <span id="profileNabadCertCheck" class="profileNabadCertCheck" hidden role="img" aria-label="Verified Nabad Creator" title="Verified Nabad Creator">
                   <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                     <path fill="currentColor" d="M12 1.5 14.6 4l3.5-.4.7 3.5 3 1.9-1.6 3.2 1.6 3.2-3 1.9-.7 3.5L14.6 20 12 22.5 9.4 20l-3.5.4-.7-3.5-3-1.9 1.6-3.2L2.2 8.6l3-1.9.7-3.5L9.4 4 12 1.5Z"/>
                     <path fill="#0a0c12" d="m10.6 14.6-2.3-2.3 1.3-1.3 1 1 3.4-3.4 1.3 1.3-4.7 4.7Z"/>
                   </svg>
                 </span>
-                <!-- Identity (timbre + genre + persona) lives INLINE with
-                     the handle now, separated by a small middle-dot.
-                     Smaller font than the username, quieter color. -->
+                <!-- Persona-only line next to the handle (middle-dot). Voice timbre
+                     uses #profileVoiceTimbreInline (dash + italic label). -->
                 <p id="profileIdentityLine" class="profileIdentityLine" hidden aria-live="polite"></p>
                 <span id="profilePreviewGenderIcon" class="profilePreviewGenderIcon profileAuraGender" style="display:none"></span>
               </div>
@@ -1433,9 +1436,9 @@
                 <p id="profileAboutText" class="profileHeroBioText"></p>
               </div>
 
-              <!-- Legacy nodes kept for DOM stability; genres are never
-                   shown here (My Sound owns them). Persona chip may show
-                   in edit mode only when a Suno persona is selected. -->
+              <!-- Legacy nodes kept for DOM stability; genres stay off
+                   the hero. Persona chip may show in edit mode when a Suno
+                   persona is selected. -->
               <p id="profilePersonaInlineChip" class="profilePersonaInlineChip profileLegacyChip" style="display:none" aria-live="polite"></p>
               <p id="profilePreviewGenres" class="profileGenreWash profileLegacyChip" style="display:none" aria-label="Genres"></p>
 
@@ -1493,75 +1496,6 @@
                (Instagram pattern). Share confirmations use the global
                toast. -->
 
-          <!-- "My Sound" — sonic identity card. Distinct from the
-               Sounds generator page (which lives under its own route).
-               Shows the user's voice timbre, favorite genres parsed
-               from profile, and toggleable AI mood presets used as
-               creative cues when generating. View-mode only; hidden
-               while the hero is in edit mode. -->
-          <section class="profileMySound profileMySound--collapsed" id="profileMySound" hidden aria-labelledby="profileMySoundHeading">
-            <header class="profileMySoundHeader">
-              <div
-                class="profileMySoundHeaderTap"
-                id="profileMySoundHeaderTap"
-                role="button"
-                tabindex="0"
-                aria-expanded="false"
-                aria-controls="profileMySoundCard"
-                aria-label="Show or hide My Sound details"
-              >
-                <span class="profileMySoundHeaderChevron" aria-hidden="true">▾</span>
-                <h3 id="profileMySoundHeading" class="profileMySoundTitle">
-                  <span class="profileMySoundTitleIcon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-                      <path d="M3 12h2"/>
-                      <path d="M7 8v8"/>
-                      <path d="M11 5v14"/>
-                      <path d="M15 9v6"/>
-                      <path d="M19 11v2"/>
-                    </svg>
-                  </span>
-                  My Sound
-                </h3>
-              </div>
-              <button id="profileMySoundEditBtn" type="button" class="profileMySoundViewAll" aria-label="Edit My Sound">
-                <span>View all</span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>
-              </button>
-            </header>
-            <div id="profileMySoundCard" class="profileMySoundCard">
-              <div class="profileMySoundRow">
-                <div class="profileMySoundVoice">
-                  <span class="profileMySoundVoiceIcon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <rect x="9" y="3" width="6" height="12" rx="3"/>
-                      <path d="M5 11a7 7 0 0 0 14 0"/>
-                      <path d="M12 18v3"/>
-                    </svg>
-                  </span>
-                  <div class="profileMySoundVoiceBody">
-                    <span class="profileMySoundLabel">Voice Type</span>
-                    <strong id="profileMySoundVoiceName" class="profileMySoundVoiceName">—</strong>
-                    <span id="profileMySoundVoiceTraits" class="profileMySoundVoiceTraits">Tap pencil to set your voice</span>
-                  </div>
-                </div>
-                <div class="profileMySoundGenres">
-                  <span class="profileMySoundLabel">Favorite Genres</span>
-                  <div id="profileMySoundGenresList" class="profileMySoundGenresList" role="list"></div>
-                </div>
-              </div>
-              <div class="profileMySoundPresets">
-                <span class="profileMySoundLabel profileMySoundPresetsLabel">
-                  <span class="profileMySoundPresetsLabelIcon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                      <path d="m12 2 1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5L12 2Zm6 10 1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3ZM5 15l.8 2.2L8 18l-2.2.8L5 21l-.8-2.2L2 18l2.2-.8L5 15Z"/>
-                    </svg>
-                  </span>
-                  AI Mood Presets
-                </span>
-                <div id="profileMySoundPresetsList" class="profileMySoundPresetsList" role="list"></div>
-              </div>
-            </div>
           </section>
 
           <!-- Popular this week — top 3 only, horizontal carousel. -->
@@ -2026,67 +1960,6 @@
           </details>
         </section>
       </main>
-      <!-- My Sound editor — modal popup launched from the "View all"
-           button on the Profile My Sound card (and from the "+" genre
-           chip). Edits voice timbre, favorite genres, and AI mood
-           presets in one place, then persists to Supabase. -->
-      <div id="mySoundModal" class="mySoundModal" style="display:none" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="mySoundModalTitle">
-        <div class="mySoundModalCard">
-          <header class="mySoundModalHead">
-            <div class="mySoundModalTitleWrap">
-              <span class="mySoundModalTitleIcon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-                  <path d="M3 12h2"/>
-                  <path d="M7 8v8"/>
-                  <path d="M11 5v14"/>
-                  <path d="M15 9v6"/>
-                  <path d="M19 11v2"/>
-                </svg>
-              </span>
-              <h2 id="mySoundModalTitle" class="mySoundModalTitle">My Sound</h2>
-            </div>
-            <button id="btnMySoundClose" class="mySoundModalClose" type="button" aria-label="Close">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
-            </button>
-          </header>
-
-          <div class="mySoundModalBody">
-            <section class="mySoundEditSection">
-              <h3 class="mySoundEditTitle">Voice Type</h3>
-              <p class="mySoundEditHint">Pick the range that best fits your voice.</p>
-              <div id="mySoundVoiceGrid" class="mySoundVoiceGrid" role="radiogroup" aria-label="Voice type"></div>
-            </section>
-
-            <section class="mySoundEditSection">
-              <h3 class="mySoundEditTitle">Favorite Genres <span class="mySoundEditCap" aria-hidden="true">· up to 3</span></h3>
-              <p class="mySoundEditHint">Tap to toggle. We'll use these when generating.</p>
-              <div id="mySoundGenresGrid" class="mySoundGenresGrid" role="group" aria-label="Favorite genres"></div>
-              <div class="mySoundCustomGenreRow">
-                <input
-                  id="mySoundCustomGenreInput"
-                  type="text"
-                  class="mySoundCustomGenreInput"
-                  placeholder="Add a custom genre…"
-                  maxlength="24"
-                  autocomplete="off"
-                  spellcheck="false"
-                />
-                <button id="mySoundCustomGenreAdd" class="mySoundCustomGenreAdd" type="button">Add</button>
-              </div>
-            </section>
-
-            <section class="mySoundEditSection">
-              <h3 class="mySoundEditTitle">AI Mood Presets <span class="mySoundEditCap" aria-hidden="true">· up to 3</span></h3>
-              <p class="mySoundEditHint">Vibes Nabad will lean into for your generations.</p>
-              <div id="mySoundPresetsGrid" class="mySoundPresetsGrid" role="group" aria-label="AI mood presets"></div>
-            </section>
-          </div>
-
-          <footer class="mySoundModalActions">
-            <button id="btnMySoundCancel" class="mySoundModalBtn mySoundModalBtnGhost" type="button">Cancel</button>
-            <button id="btnMySoundSave" class="mySoundModalBtn mySoundModalBtnPrimary" type="button">Save</button>
-          </footer>
-        </div>
       </div>
 
       <div id="imageMoodModal" class="modal imageMoodModal" style="display:none" aria-hidden="true">

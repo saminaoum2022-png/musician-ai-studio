@@ -395,22 +395,8 @@ const els = {
   profileAuraNameRow: document.getElementById("profileAuraNameRow"),
   profileNabadCertBadge: document.getElementById("profileNabadCertBadge"),
   profileNabadCertCheck: document.getElementById("profileNabadCertCheck"),
-  profileMySound: document.getElementById("profileMySound"),
-  profileMySoundHeaderTap: document.getElementById("profileMySoundHeaderTap"),
-  profileMySoundEditBtn: document.getElementById("profileMySoundEditBtn"),
-  profileMySoundVoiceName: document.getElementById("profileMySoundVoiceName"),
-  profileMySoundVoiceTraits: document.getElementById("profileMySoundVoiceTraits"),
-  profileMySoundGenresList: document.getElementById("profileMySoundGenresList"),
-  profileMySoundPresetsList: document.getElementById("profileMySoundPresetsList"),
-  mySoundModal: document.getElementById("mySoundModal"),
-  mySoundVoiceGrid: document.getElementById("mySoundVoiceGrid"),
-  mySoundGenresGrid: document.getElementById("mySoundGenresGrid"),
-  mySoundPresetsGrid: document.getElementById("mySoundPresetsGrid"),
-  mySoundCustomGenreInput: document.getElementById("mySoundCustomGenreInput"),
-  mySoundCustomGenreAdd: document.getElementById("mySoundCustomGenreAdd"),
-  btnMySoundClose: document.getElementById("btnMySoundClose"),
-  btnMySoundCancel: document.getElementById("btnMySoundCancel"),
-  btnMySoundSave: document.getElementById("btnMySoundSave"),
+  profileVoiceTimbreInline: document.getElementById("profileVoiceTimbreInline"),
+  profileVoiceTimbreInlineLabel: document.getElementById("profileVoiceTimbreInlineLabel"),
   profileIdentityLine: document.getElementById("profileIdentityLine"),
   profileHeroBio: document.getElementById("profileHeroBio"),
   // Spotify-x-Nabad redesign nodes
@@ -4193,8 +4179,8 @@ function renderProfileAuraVoiceChip() {
   const editing = Boolean(profileEditing);
   // The playable voice-note chip is retired. In edit mode we still
   // show the timbre <select> so users can pick their voice range
-  // (it surfaces as plain text in the identity line). In view mode
-  // the whole slot collapses — timbre is read off the identity line.
+  // (it surfaces next to the @handle in view mode). In view mode
+  // the whole slot collapses — timbre is read from #profileVoiceTimbreInline.
   btn.style.display = "none";
   if (editing) {
     select.style.display = "";
@@ -4528,7 +4514,7 @@ function updateProfilePersonaRow() {
 /**
  * Optional "Persona · …" line under the hero in **edit** mode when a
  * Suno persona is selected. Voice timbre is not mirrored here (hero
- * `<select>` + My Sound card).
+ * `<select>` + inline timbre next to the handle in view mode).
  */
 function updateProfilePersonaInlineChip() {
   const el = els.profilePersonaInlineChip;
@@ -4556,8 +4542,8 @@ function updateProfilePersonaInlineChip() {
     el.style.display = "";
     return;
   }
-  // Voice timbre lives in the hero `<select>` while editing and on the
-  // My Sound card in view mode — do not mirror "Voice · …" here (duplicate).
+  // Voice timbre: hero `<select>` while editing; next to @handle in view mode.
+  // Do not mirror "Voice · …" here (duplicate).
   el.textContent = "";
   el.style.display = "none";
 }
@@ -5843,7 +5829,6 @@ function resetProfileUiToGuest() {
     callingCardUpdatedAt: 0,
     soundCertified: false,
   };
-  _moodPresetsCache = null;
   resetProfileReleasesPagination();
   try { localStorage.setItem(PROFILE_KEY, JSON.stringify(activeProfile)); } catch {}
   if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = "@guest";
@@ -8834,7 +8819,7 @@ function setProfileEditing(on) {
   // Hide the chrome while editing — it overlaps form fields and
   // confuses the touch targets on small screens. The hero identity
   // line + bio quote are hidden via CSS off the editing class; we
-  // still need to manually hide the music + voice cards below so they
+  // still need to manually hide the music sections below so they
   // don't repaint stale data right under the form.
   const sections = [
     els.profileActionRow,
@@ -8857,7 +8842,7 @@ function setProfileEditing(on) {
     try { renderProfileIdentityLine(); } catch {}
   }
   try { renderProfileNabadCertBadge(); } catch {}
-  try { renderProfileMySound(); } catch {}
+  try { renderProfileVoiceTimbreInline(); } catch {}
 }
 
 /** Show the soft "pick a username" banner when the current user is
@@ -9295,16 +9280,13 @@ function shouldShowProfileHeaderSkeleton() {
 }
 
 /* =================================================================
- *  Single identity line — timbre + genres + persona when set. The
- *  voice chip / calling card UI is retired, so timbre lives here
- *  again as quiet text (no gradient, no chip).
+ *  Single identity line — persona when set (quiet text next to the
+ *  @handle). Voice timbre shows in #profileVoiceTimbreInline.
  * ================================================================= */
 function renderProfileIdentityLine() {
   const el = els.profileIdentityLine;
   if (!el) return;
-  // Voice timbre is now surfaced by the "My Sound" card; keep this
-  // inline line for persona only. If we ever want genres back here we
-  // can add them — but per latest mockup the row stays clean.
+  // Persona only; timbre is inline next to the username in view mode.
   const personaLabel = (() => {
     try {
       const lbl = document.getElementById("profilePersonaLabel")?.textContent?.trim();
@@ -9497,455 +9479,36 @@ function renderProfileNabadCertBadge() {
   if (legacy) legacy.hidden = true;
 }
 
-/* =================================================================
- *  "My Sound" — Profile sonic identity card.
- *  Distinct from the Sounds generator page (under #/sounds).
- *
- *  Sync model (why the card can feel instant):
- *    - Voice timbre + favorite genres: read from `activeProfile` after
- *      `supabaseLoadProfile()` / local merge; saved to Supabase
- *      `profiles.voice_timbre` + `profiles.genres` on My Sound Save
- *      (`saveMySoundDraft` → `supabaseUpsertProfile`).
- *    - AI mood presets: still localStorage only (`nabad:moodPresets:<uid>`)
- *      until a `profiles` column (or JSON field) is added and wired in
- *      upsert/load — they never hit the network on read after first load.
- * ================================================================= */
-const MOOD_PRESETS = [
-  {
-    id: "romantic",
-    label: "Romantic",
-    svg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-7-4.35-9.33-9.07A5.4 5.4 0 0 1 12 5.94a5.4 5.4 0 0 1 9.33 6C19 16.65 12 21 12 21Z"/></svg>',
-  },
-  {
-    id: "dabke",
-    label: "Dabke",
-    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 21V11l3-2 3 2v10"/><path d="M12 11l3-2 3 2v10"/><path d="M3 21h18"/></svg>',
-  },
-  {
-    id: "pop",
-    label: "Pop",
-    svg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 2.6 6.6L21 9.3l-5 4.6 1.5 6.9L12 17l-5.5 3.8L8 13.9 3 9.3l6.4-.7Z"/></svg>',
-  },
-  {
-    id: "sad",
-    label: "Sad",
-    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16a5 5 0 1 1 1-9.9A6 6 0 0 1 19 9.5"/><path d="M19 11v0a3 3 0 0 1 0 6h-1"/><path d="M9 19l-1 2"/><path d="M13 19l-1 2"/><path d="M17 19l-1 2"/></svg>',
-  },
-  {
-    id: "wedding",
-    label: "Wedding",
-    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="15" r="5"/><circle cx="15" cy="15" r="5"/><path d="M7 3l2 4"/><path d="M17 3l-2 4"/></svg>',
-  },
-];
 
-const TIMBRE_TRAITS = {
-  bass:           "Deep · Smooth · Powerful",
-  baritone:       "Deep · Warm · Powerful",
-  tenor:          "Bright · Agile · Soaring",
-  alto:           "Rich · Smoky · Grounded",
-  mezzo_soprano:  "Warm · Versatile · Expressive",
-  soprano:        "Bright · Airy · Soaring",
-};
-
-/** Instrument-style icons for My Sound genres (readable with label). */
-const GENRE_INSTRUMENTS = {
-  default:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><path d="M9 18V5l10-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg>',
-  pop:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><rect x="3" y="13" width="18" height="7" rx="1"/><path d="M5 13V10h2v3M9 13V9h2v4M13 13V10h2v3M17 13V8h2v5"/></svg>',
-  rock:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 20h4"/><path d="M12 20V10"/><path d="M9 7c0-2 1.5-3.5 3-3.5S15 5 15 7v3l-1 1H10L9 10V7Z"/><circle cx="12" cy="4.5" r="1.2" fill="currentColor"/></svg>',
-  metal:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 20h4"/><path d="M12 20V10"/><path d="M8 7c0-2.2 1.8-4 4-4s4 1.8 4 4v3l-1 1H9L8 10V7Z"/><path d="M10 7h4"/></svg>',
-  indie:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><path d="M10 20h4"/><path d="M12 20v-8"/><path d="M8 10c0-3 1.8-5 4-5s4 2 4 5v2H8v-2Z"/><circle cx="12" cy="5" r="1.5" fill="currentColor"/></svg>',
-  folk:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><path d="M10 20h4"/><path d="M12 20v-8"/><path d="M8 10c0-3 1.8-5 4-5s4 2 4 5v2H8v-2Z"/><circle cx="12" cy="5" r="1.5" fill="currentColor"/></svg>',
-  country:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="15" r="5"/><path d="M12 10V5l3-1"/><circle cx="12" cy="15" r="2" stroke-dasharray="2 2"/></svg>',
-  classical:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><path d="M9 3l2 2-2.5 14 4 1L15 5l2-2"/><path d="M7 19l5 2"/></svg>',
-  arabic:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><ellipse cx="11" cy="15.5" rx="5.5" ry="4.5"/><path d="M16.5 14L20 6"/><path d="M19 6.5l1.5-1.5"/></svg>',
-  dabke:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><path d="M8 9h8v10a2.5 2.5 0 0 1-2.5 2.5h-3A2.5 2.5 0 0 1 8 19V9Z"/><ellipse cx="12" cy="9" rx="4" ry="1.8"/></svg>',
-  jazz:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><path d="M7 4l2 2-1.5 10c0 2 1.5 3.5 3.5 3.5S15 18 15 16"/><path d="M9 6l7-2"/><circle cx="6" cy="3.5" r="1.2" fill="currentColor"/></svg>',
-  hiphop:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="12" r="3"/><circle cx="16.5" cy="10" r="1.5" fill="currentColor"/><path d="M15 15h5"/></svg>',
-  rnb:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v3"/><path d="M8 21h8"/></svg>',
-  soul:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v3"/><path d="M8 21h8"/></svg>',
-  kpop:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v3"/><path d="M8 21h8"/></svg>',
-  electronic:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><rect x="4" y="6" width="16" height="13" rx="2"/><circle cx="8" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="16" cy="12" r="2"/><path d="M8 10V8M12 10V7M16 10V8"/></svg>',
-  latin:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><ellipse cx="8" cy="15" rx="3" ry="4"/><ellipse cx="16" cy="15" rx="3" ry="4"/><path d="M8 11V7M16 11V7"/></svg>',
-  reggae:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><path d="M10 20h4"/><path d="M12 20v-8"/><path d="M8 10c0-3 1.8-5 4-5s4 2 4 5v2H8v-2Z"/><circle cx="12" cy="5" r="1.5" fill="currentColor"/></svg>',
-};
-
-function moodPresetsStorageKey() {
-  const uid = authSession?.user?.id || "guest";
-  return `nabad:moodPresets:${uid}`;
-}
-function loadMoodPresets() {
-  try {
-    const raw = localStorage.getItem(moodPresetsStorageKey());
-    if (!raw) return new Set();
-    const arr = JSON.parse(raw);
-    if (!Array.isArray(arr)) return new Set();
-    return new Set(arr.filter((s) => typeof s === "string"));
-  } catch {
-    return new Set();
-  }
-}
-function saveMoodPresets(set) {
-  try {
-    const arr = Array.from(set || []);
-    localStorage.setItem(moodPresetsStorageKey(), JSON.stringify(arr));
-  } catch {}
-}
-let _moodPresetsCache = null;
-function getMoodPresetSet() {
-  if (!_moodPresetsCache) _moodPresetsCache = loadMoodPresets();
-  return _moodPresetsCache;
-}
-function toggleMoodPreset(id) {
-  const set = getMoodPresetSet();
-  if (set.has(id)) set.delete(id);
-  else set.add(id);
-  saveMoodPresets(set);
-  return set.has(id);
+/** Pretty label for `profiles.voice_timbre` slug (e.g. mezzo_soprano → Mezzo Soprano). */
+function formatVoiceTimbreLabel(raw) {
+  const slug = String(raw || "").trim().toLowerCase();
+  if (!slug) return "";
+  return slug.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function genreIconSvg(name) {
-  const key = String(name || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "");
-  const aliases = {
-    rnb: "rnb",
-    rb: "rnb",
-    hiphop: "hiphop",
-    rap: "hiphop",
-    trap: "hiphop",
-    edm: "electronic",
-    house: "electronic",
-    techno: "electronic",
-    electronic: "electronic",
-    dance: "electronic",
-    klezmer: "folk",
-    country: "country",
-    latin: "latin",
-    soul: "soul",
-    reggae: "reggae",
-    indie: "indie",
-    metal: "metal",
-    dabke: "dabke",
-    khaleeji: "arabic",
-    tarab: "arabic",
-    afrobeats: "latin",
-    kpop: "kpop",
-    blues: "jazz",
-    funk: "soul",
-  };
-  const resolved = aliases[key] || key;
-  return GENRE_INSTRUMENTS[resolved] || GENRE_INSTRUMENTS.default;
-}
-
-function renderProfileMySound() {
-  const section = els.profileMySound;
-  if (!section) return;
+/** View-mode timbre next to the @handle (hidden while editing or unset). */
+function renderProfileVoiceTimbreInline() {
+  const wrap = els.profileVoiceTimbreInline;
+  const labelEl = els.profileVoiceTimbreInlineLabel;
+  if (!wrap || !labelEl) return;
   const signedIn = Boolean(authSession?.user?.id);
   if (!signedIn || profileEditing) {
-    section.hidden = true;
+    wrap.hidden = true;
+    labelEl.textContent = "";
+    wrap.setAttribute("aria-hidden", "true");
     return;
   }
-  section.hidden = false;
-
-  const timbreRaw = String(activeProfile?.voiceTimbre || "").trim().toLowerCase();
-  const pretty = timbreRaw
-    ? timbreRaw.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
-    : "Not set";
-  if (els.profileMySoundVoiceName) {
-    els.profileMySoundVoiceName.textContent = pretty;
-  }
-  if (els.profileMySoundVoiceTraits) {
-    const traits = TIMBRE_TRAITS[timbreRaw] || "Tap edit to set your voice";
-    els.profileMySoundVoiceTraits.textContent = traits;
-  }
-
-  const genres = String(activeProfile?.genres || "")
-    .split(/[,|]/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .slice(0, MY_SOUND_GENRE_CAP);
-  const list = els.profileMySoundGenresList;
-  if (list) {
-    // No add (+) chip on the card — saves a row, "View all" in the
-    // header already handles add/remove. When the user has nothing
-    // selected yet we show a single CTA chip that opens the modal.
-    if (!genres.length) {
-      list.innerHTML = `<button type="button" class="profileMySoundGenreChip profileMySoundGenreChip--empty" id="profileMySoundAddGenreBtn">Add favorite genres</button>`;
-      const addBtn = document.getElementById("profileMySoundAddGenreBtn");
-      if (addBtn) {
-        addBtn.addEventListener("click", () => {
-          try { openMySoundModal(); } catch {}
-        }, { once: true });
-      }
-    } else {
-      list.innerHTML = genres
-        .map((g) => `<span class="profileMySoundGenreChip profileMySoundGenreChip--labeled" data-has-text="true" role="listitem" title="${escapeHtml(g)}" aria-label="${escapeHtml(g)}"><span class="profileMySoundGenreChipIco" aria-hidden="true">${genreIconSvg(g)}</span><span class="profileMySoundGenreChipLabel">${escapeHtml(g)}</span></span>`)
-        .join("");
-    }
-  }
-
-  const presetList = els.profileMySoundPresetsList;
-  if (presetList) {
-    const active = getMoodPresetSet();
-    // Card shows only the user's actually-selected presets (ordered by
-    // MOOD_PRESETS, capped at MY_SOUND_PRESET_CAP). Adding/removing
-    // happens from the View all modal so the row stays tight.
-    const selected = MOOD_PRESETS
-      .filter((p) => active.has(p.id))
-      .slice(0, MY_SOUND_PRESET_CAP);
-    if (selected.length) {
-      presetList.innerHTML = selected
-        .map((p) => `<span class="profileMySoundPresetChip profileMySoundPresetChip--readonly" aria-pressed="true">${p.svg}<span>${escapeHtml(p.label)}</span></span>`)
-        .join("");
-    } else {
-      presetList.innerHTML = `<button type="button" class="profileMySoundPresetChip profileMySoundPresetChip--empty" id="profileMySoundPresetsEmpty">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-        <span>Add up to ${MY_SOUND_PRESET_CAP}</span>
-      </button>`;
-      const emptyBtn = document.getElementById("profileMySoundPresetsEmpty");
-      if (emptyBtn) {
-        emptyBtn.addEventListener("click", () => {
-          try { openMySoundModal(); } catch {}
-        }, { once: true });
-      }
-    }
-  }
-}
-
-/* =================================================================
- *  "My Sound" editor — modal popup. Edits voice timbre, favorite
- *  genres, and AI mood presets in one place. Save commits to
- *  `activeProfile`, persists via Supabase upsert, and re-renders
- *  the Profile My Sound card.
- * ================================================================= */
-const MY_SOUND_VOICES = [
-  { id: "bass",           label: "Bass" },
-  { id: "baritone",       label: "Baritone" },
-  { id: "tenor",          label: "Tenor" },
-  { id: "alto",           label: "Alto" },
-  { id: "mezzo_soprano",  label: "Mezzo-Soprano" },
-  { id: "soprano",        label: "Soprano" },
-];
-
-const MY_SOUND_GENRES = [
-  "Pop", "Rock", "Arabic", "Jazz", "Classical",
-  "Hip-Hop", "R&B", "Electronic", "Folk", "Latin",
-  "Country", "Soul", "Reggae", "Indie", "Metal",
-  "Dabke", "Khaleeji", "Tarab", "Afrobeats", "K-Pop",
-];
-
-/** Hard caps so the My Sound card stays tiny on the profile. Users can
- *  add/remove from the View all modal; once at the cap, trying to
- *  select another option shows a quiet toast and is a no-op. */
-const MY_SOUND_GENRE_CAP = 3;
-const MY_SOUND_PRESET_CAP = 3;
-
-let _mySoundDraft = null;
-function _normalizeGenreList(rawCsv) {
-  return String(rawCsv || "")
-    .split(/[,|]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-function _genreKey(g) {
-  return String(g || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
-}
-
-function openMySoundModal() {
-  const modal = els.mySoundModal;
-  if (!modal) return;
-  if (!authSession?.user?.id) {
-    try { showToast("Sign in to set your sound."); } catch {}
+  const pretty = formatVoiceTimbreLabel(activeProfile?.voiceTimbre);
+  if (!pretty) {
+    wrap.hidden = true;
+    labelEl.textContent = "";
+    wrap.setAttribute("aria-hidden", "true");
     return;
   }
-  _mySoundDraft = {
-    voiceTimbre: String(activeProfile?.voiceTimbre || "").trim().toLowerCase(),
-    genres: _normalizeGenreList(activeProfile?.genres),
-    moodPresets: new Set(getMoodPresetSet()),
-  };
-  renderMySoundModalContents();
-  modal.style.display = "flex";
-  modal.setAttribute("aria-hidden", "false");
-  try { document.body.style.overflow = "hidden"; } catch {}
-}
-function closeMySoundModal() {
-  const modal = els.mySoundModal;
-  if (!modal) return;
-  modal.style.display = "none";
-  modal.setAttribute("aria-hidden", "true");
-  _mySoundDraft = null;
-  try { document.body.style.overflow = ""; } catch {}
-}
-
-function renderMySoundModalContents() {
-  if (!_mySoundDraft) return;
-  const draft = _mySoundDraft;
-
-  const voiceGrid = els.mySoundVoiceGrid;
-  if (voiceGrid) {
-    voiceGrid.innerHTML = MY_SOUND_VOICES.map((v) => {
-      const checked = draft.voiceTimbre === v.id ? "true" : "false";
-      const traits = TIMBRE_TRAITS[v.id] || "";
-      return `<button type="button" class="mySoundVoiceOption" role="radio" aria-checked="${checked}" data-voice-id="${v.id}">
-        <span class="mySoundVoiceOptionName">${escapeHtml(v.label)}</span>
-        ${traits ? `<span class="mySoundVoiceOptionTraits">${escapeHtml(traits)}</span>` : ""}
-      </button>`;
-    }).join("");
-    voiceGrid.querySelectorAll(".mySoundVoiceOption").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const id = btn.getAttribute("data-voice-id") || "";
-        if (!id) return;
-        if (draft.voiceTimbre === id) {
-          draft.voiceTimbre = "";
-        } else {
-          draft.voiceTimbre = id;
-        }
-        voiceGrid.querySelectorAll(".mySoundVoiceOption").forEach((b) => {
-          b.setAttribute(
-            "aria-checked",
-            b.getAttribute("data-voice-id") === draft.voiceTimbre ? "true" : "false",
-          );
-        });
-      });
-    });
-  }
-
-  const genresGrid = els.mySoundGenresGrid;
-  if (genresGrid) {
-    const selectedKeys = new Set(draft.genres.map(_genreKey));
-    const preset = MY_SOUND_GENRES.map((g) => ({ key: _genreKey(g), label: g, custom: false }));
-    const customs = draft.genres
-      .filter((g) => !preset.some((p) => p.key === _genreKey(g)))
-      .map((g) => ({ key: _genreKey(g), label: g, custom: true }));
-    const all = [...preset, ...customs];
-    genresGrid.innerHTML = all.map((g) => {
-      const pressed = selectedKeys.has(g.key) ? "true" : "false";
-      const cls = g.custom
-        ? "mySoundGenreOption mySoundGenreOption--custom"
-        : "mySoundGenreOption";
-      return `<button type="button" class="${cls}" data-genre-label="${escapeHtml(g.label)}" data-genre-key="${escapeHtml(g.key)}" aria-pressed="${pressed}">
-        <span class="mySoundGenreOptionIco" aria-hidden="true">${genreIconSvg(g.label)}</span>
-        <span class="mySoundGenreOptionTxt">${escapeHtml(g.label)}</span>
-        ${g.custom ? `<span class="mySoundGenreOptionRemove" aria-hidden="true" data-remove="${escapeHtml(g.key)}">×</span>` : ""}
-      </button>`;
-    }).join("");
-    genresGrid.querySelectorAll(".mySoundGenreOption").forEach((btn) => {
-      btn.addEventListener("click", (ev) => {
-        const target = ev.target;
-        if (target instanceof Element && target.getAttribute("data-remove")) {
-          const removeKey = target.getAttribute("data-remove") || "";
-          draft.genres = draft.genres.filter((g) => _genreKey(g) !== removeKey);
-          renderMySoundModalContents();
-          return;
-        }
-        const label = btn.getAttribute("data-genre-label") || "";
-        const key = btn.getAttribute("data-genre-key") || "";
-        if (!label) return;
-        const has = draft.genres.some((g) => _genreKey(g) === key);
-        if (has) {
-          draft.genres = draft.genres.filter((g) => _genreKey(g) !== key);
-          btn.setAttribute("aria-pressed", "false");
-          return;
-        }
-        if (draft.genres.length >= MY_SOUND_GENRE_CAP) {
-          try { showToast(`Up to ${MY_SOUND_GENRE_CAP} genres. Remove one first.`); } catch {}
-          return;
-        }
-        draft.genres.push(label);
-        btn.setAttribute("aria-pressed", "true");
-      });
-    });
-  }
-
-  const presetsGrid = els.mySoundPresetsGrid;
-  if (presetsGrid) {
-    presetsGrid.innerHTML = MOOD_PRESETS.map((p) => {
-      const pressed = draft.moodPresets.has(p.id) ? "true" : "false";
-      return `<button type="button" class="mySoundPresetOption" data-preset-id="${p.id}" aria-pressed="${pressed}">
-        ${p.svg}<span>${escapeHtml(p.label)}</span>
-      </button>`;
-    }).join("");
-    presetsGrid.querySelectorAll(".mySoundPresetOption").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const id = btn.getAttribute("data-preset-id") || "";
-        if (!id) return;
-        if (draft.moodPresets.has(id)) {
-          draft.moodPresets.delete(id);
-          btn.setAttribute("aria-pressed", "false");
-          return;
-        }
-        if (draft.moodPresets.size >= MY_SOUND_PRESET_CAP) {
-          try { showToast(`Up to ${MY_SOUND_PRESET_CAP} presets. Remove one first.`); } catch {}
-          return;
-        }
-        draft.moodPresets.add(id);
-        btn.setAttribute("aria-pressed", "true");
-      });
-    });
-  }
-}
-
-function addCustomGenreToDraft() {
-  if (!_mySoundDraft) return;
-  const input = els.mySoundCustomGenreInput;
-  if (!input) return;
-  const raw = String(input.value || "").trim();
-  if (!raw) return;
-  const key = _genreKey(raw);
-  if (!key) return;
-  const exists = _mySoundDraft.genres.some((g) => _genreKey(g) === key);
-  if (exists) {
-    input.value = "";
-    return;
-  }
-  if (_mySoundDraft.genres.length >= MY_SOUND_GENRE_CAP) {
-    try { showToast(`Up to ${MY_SOUND_GENRE_CAP} genres. Remove one first.`); } catch {}
-    return;
-  }
-  _mySoundDraft.genres.push(raw);
-  input.value = "";
-  renderMySoundModalContents();
-}
-
-async function saveMySoundDraft() {
-  if (!_mySoundDraft) return closeMySoundModal();
-  const draft = _mySoundDraft;
-  activeProfile.voiceTimbre = draft.voiceTimbre || "";
-  activeProfile.genres = draft.genres.slice(0, MY_SOUND_GENRE_CAP).join(", ");
-  const cappedPresets = new Set(Array.from(draft.moodPresets).slice(0, MY_SOUND_PRESET_CAP));
-  saveMoodPresets(cappedPresets);
-  _moodPresetsCache = new Set(cappedPresets);
-  try { localStorage.setItem(PROFILE_KEY, JSON.stringify(activeProfile)); } catch {}
-  if (els.profilePreviewTimbreInput) {
-    els.profilePreviewTimbreInput.value = activeProfile.voiceTimbre;
-  }
-  try { renderProfileMySound(); } catch {}
-  try { renderProfileIdentityLine(); } catch {}
-  closeMySoundModal();
-  try { showToast("My Sound saved.", { icon: "✓" }); } catch {}
-  try {
-    await supabaseUpsertProfile(activeProfile);
-  } catch (e) {
-    try { showToast("Saved on this device. Cloud sync failed."); } catch {}
-  }
+  wrap.hidden = false;
+  labelEl.textContent = pretty;
+  wrap.setAttribute("aria-hidden", "false");
 }
 
 function renderProfilePreviewFromInputs() {
@@ -9997,7 +9560,7 @@ function renderProfilePreviewFromInputs() {
     els.authLoggedInEmailInline.style.display = "none";
   }
   renderProfileNabadCertBadge();
-  try { renderProfileMySound(); } catch {}
+  try { renderProfileVoiceTimbreInline(); } catch {}
 }
 
 /** `meta.profileVisibility === "private"` hides the release on `#/u/…`;
@@ -10395,6 +9958,7 @@ function renderProfileLibraryPublicOnLinkSection() {
   renderProfileOwnStats();
   renderProfileLiquidPulse(rows);
   renderProfileIdentityLine();
+  try { renderProfileVoiceTimbreInline(); } catch {}
   renderProfileHeroBio();
   renderProfileHero(rows);
   renderProfileActionRow(rows);
@@ -10551,6 +10115,7 @@ function renderProfileHubShared() {
   // painted before the scrollable music sections.
   renderProfileLiquidPulse(items);
   renderProfileIdentityLine();
+  try { renderProfileVoiceTimbreInline(); } catch {}
   renderProfileHeroBio();
   renderProfileHero(items);
   renderProfileActionRow(items);
@@ -19175,64 +18740,6 @@ if (els.btnProfileEdit) {
     setStatus("Editing profile — adjust fields, then Save.");
   });
 }
-if (els.profileMySoundEditBtn) {
-  els.profileMySoundEditBtn.addEventListener("click", () => {
-    try { openMySoundModal(); } catch {}
-  });
-}
-function syncProfileMySoundCollapsedAria() {
-  const sec = els.profileMySound;
-  const tap = els.profileMySoundHeaderTap;
-  if (!sec || !tap) return;
-  const collapsed = sec.classList.contains("profileMySound--collapsed");
-  tap.setAttribute("aria-expanded", collapsed ? "false" : "true");
-}
-if (els.profileMySoundHeaderTap && els.profileMySound) {
-  const toggleMySoundCollapsed = () => {
-    els.profileMySound.classList.toggle("profileMySound--collapsed");
-    syncProfileMySoundCollapsedAria();
-  };
-  els.profileMySoundHeaderTap.addEventListener("click", toggleMySoundCollapsed);
-  els.profileMySoundHeaderTap.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      toggleMySoundCollapsed();
-    }
-  });
-  syncProfileMySoundCollapsedAria();
-}
-if (els.btnMySoundClose) {
-  els.btnMySoundClose.addEventListener("click", () => closeMySoundModal());
-}
-if (els.btnMySoundCancel) {
-  els.btnMySoundCancel.addEventListener("click", () => closeMySoundModal());
-}
-if (els.btnMySoundSave) {
-  els.btnMySoundSave.addEventListener("click", () => {
-    saveMySoundDraft().catch(() => {});
-  });
-}
-if (els.mySoundModal) {
-  els.mySoundModal.addEventListener("click", (ev) => {
-    if (ev.target === els.mySoundModal) closeMySoundModal();
-  });
-}
-if (els.mySoundCustomGenreAdd) {
-  els.mySoundCustomGenreAdd.addEventListener("click", () => addCustomGenreToDraft());
-}
-if (els.mySoundCustomGenreInput) {
-  els.mySoundCustomGenreInput.addEventListener("keydown", (ev) => {
-    if (ev.key === "Enter") {
-      ev.preventDefault();
-      addCustomGenreToDraft();
-    }
-  });
-}
-document.addEventListener("keydown", (ev) => {
-  if (ev.key === "Escape" && els.mySoundModal && els.mySoundModal.style.display !== "none") {
-    closeMySoundModal();
-  }
-});
 if (els.profileUsernamePrompt) {
   // Tap the soft prompt → enter edit mode and select the username
   // text so they can just start typing their handle of choice.

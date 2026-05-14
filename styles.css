@@ -10323,7 +10323,7 @@ input::placeholder, textarea::placeholder{
 .discoveryRow{
   display: flex;
   align-items: stretch;
-  gap: 0;
+  gap: 10px;
   border-radius: 18px;
   border: 1px solid rgba(255,255,255,0.1);
   background: linear-gradient(145deg, rgba(22,26,38,0.92), rgba(12,14,22,0.88));
@@ -10347,8 +10347,8 @@ input::placeholder, textarea::placeholder{
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px 10px 10px;
+  gap: 0;
+  padding: 10px 12px 10px 0;
   border: 0;
   background: transparent;
   color: inherit;
@@ -10363,14 +10363,38 @@ input::placeholder, textarea::placeholder{
 .discoveryRowMain:active{
   background: rgba(124,92,255,0.14);
 }
-.discoveryRowArt{
-  position: relative;
+.discoveryRowArtBtn{
   flex: 0 0 auto;
+  position: relative;
   width: 64px;
   height: 64px;
+  margin: 0;
+  padding: 0;
+  border: 0;
   border-radius: 14px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
   overflow: hidden;
   box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.16s ease, box-shadow 0.2s ease;
+}
+.discoveryRowArtBtn:hover{
+  box-shadow: 0 6px 20px rgba(0,0,0,0.42);
+}
+.discoveryRowArtBtn:active{
+  transform: scale(0.97);
+}
+.discoveryRowArtBtn:focus-visible{
+  outline: 2px solid rgba(124,92,255,0.55);
+  outline-offset: 2px;
+}
+.discoveryRowArt{
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
 }
 .discoveryRowArt img{
   width: 100%;
@@ -10383,6 +10407,28 @@ input::placeholder, textarea::placeholder{
   inset: 0;
   background: linear-gradient(180deg, transparent 35%, rgba(0,0,0,0.45) 100%);
   pointer-events: none;
+}
+.discoveryRowArtPlay{
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8,11,18,0.72);
+  border: 1px solid rgba(255,255,255,0.22);
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+  pointer-events: none;
+}
+.discoveryRowArtPlay svg{
+  width: 13px;
+  height: 13px;
+  margin-left: 2px;
+  display: block;
 }
 .discoveryRowMid{
   flex: 1 1 auto;
@@ -10406,25 +10452,6 @@ input::placeholder, textarea::placeholder{
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.discoveryRowPlay{
-  flex: 0 0 auto;
-  width: 44px;
-  height: 44px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(145deg, rgba(124,92,255,0.35), rgba(124,92,255,0.12));
-  border: 1px solid rgba(168,140,255,0.45);
-  color: #ebe4ff;
-  transition: transform 0.18s ease, box-shadow 0.22s ease;
-  box-shadow: 0 0 20px rgba(124,92,255,0.22);
-}
-.discoveryRowMain:hover .discoveryRowPlay,
-.discoveryRowMain:focus-visible .discoveryRowPlay{
-  transform: scale(1.06);
-  box-shadow: 0 0 26px rgba(124,92,255,0.35);
 }
 .discoveryRowSide{
   flex: 0 0 auto;
@@ -10968,8 +10995,9 @@ input::placeholder, textarea::placeholder{
   .discoveryPage{ gap: 12px; }
   .discoverySegment{ font-size: 13px; padding: 9px 10px; border-radius: 12px; }
   .discoveryRefreshBtn{ width: 42px; height: 42px; border-radius: 12px; }
-  .discoveryRowArt{ width: 56px; height: 56px; border-radius: 12px; }
-  .discoveryRowPlay{ width: 40px; height: 40px; }
+  .discoveryRowArtBtn{ width: 56px; height: 56px; border-radius: 12px; }
+  .discoveryRowArtPlay{ width: 26px; height: 26px; right: 4px; bottom: 4px; }
+  .discoveryRowArtPlay svg{ width: 12px; height: 12px; }
   .discoverySpotCard{ height: 228px; }
   .discoverySkeletonSpotCard{ height: 228px; }
   .discoverySpotlightRail{ gap: 10px; }

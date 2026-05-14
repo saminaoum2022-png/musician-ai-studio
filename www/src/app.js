@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514spotlightRailPadding";
+const APP_BUILD = "20260514discoverListThumbPlay";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2912,8 +2912,26 @@ function bindDiscoverySegmentControls() {
         } catch {}
         return;
       }
+      const inline = e.target.closest("[data-discovery-inline-play]");
+      if (inline && dPane.contains(inline)) {
+        const u = inline.getAttribute("data-user-lib-url");
+        const title = inline.getAttribute("data-user-lib-title") || "Song";
+        const art = inline.getAttribute("data-user-lib-art") || "";
+        if (!u) return;
+        let raw = "";
+        try {
+          raw = decodeURIComponent(u);
+        } catch {
+          raw = u;
+        }
+        haptic("light");
+        void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false });
+        return;
+      }
       const pl = e.target.closest("[data-user-lib-play]");
       if (!pl || !dPane.contains(pl)) return;
+      const row = pl.closest(".discoveryRow");
+      const openPlayer = !row || pl.hasAttribute("data-discovery-open-player");
       const u = pl.getAttribute("data-user-lib-url");
       const title = pl.getAttribute("data-user-lib-title") || "Song";
       const art = pl.getAttribute("data-user-lib-art") || "";
@@ -2925,7 +2943,7 @@ function bindDiscoverySegmentControls() {
         raw = u;
       }
       haptic("light");
-      void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true });
+      void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer });
     });
   }
   const npb = document.getElementById("discoveryNowPlayingBtn");
@@ -6741,7 +6759,11 @@ function discoveryPlayIconSvg() {
   return "<svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" aria-hidden=\"true\"><path fill=\"currentColor\" d=\"M9 7.5v9l7.5-4.5L9 7.5z\"/></svg>";
 }
 
-function discoveryTrackRowHtml(t, profMap, idx, playIco) {
+function discoveryRowThumbPlaySvg() {
+  return '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 7.5v9l7.5-4.5L9 7.5z"/></svg>';
+}
+
+function discoveryTrackRowHtml(t, profMap, idx) {
   const art = String(t.artUrl || "").trim();
   const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
   const prof = t.userId ? profMap.get(t.userId) : null;
@@ -6754,16 +6776,18 @@ function discoveryTrackRowHtml(t, profMap, idx, playIco) {
     : `<span class="discoveryRowSpacer" aria-hidden="true"></span>`;
   return `
       <div class="discoveryRow" style="--i:${idx}">
-        <button type="button" class="discoveryRowMain" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(artSafe)}">
+        <button type="button" class="discoveryRowArtBtn" data-discovery-inline-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(artSafe)}" aria-label="Play ${safeTitle}">
           <span class="discoveryRowArt">
             <img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" />
             <span class="discoveryRowArtGlow" aria-hidden="true"></span>
           </span>
+          <span class="discoveryRowArtPlay" aria-hidden="true">${discoveryRowThumbPlaySvg()}</span>
+        </button>
+        <button type="button" class="discoveryRowMain" data-discovery-open-player="1" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(artSafe)}" aria-label="Open player for ${safeTitle}">
           <span class="discoveryRowMid">
             <span class="discoveryRowTitle">${safeTitle}</span>
             <span class="discoveryRowMeta">${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}</span>
           </span>
-          <span class="discoveryRowPlay" aria-hidden="true">${playIco}</span>
         </button>
         ${side}
       </div>`;
@@ -6869,7 +6893,7 @@ async function refreshDiscoverFeed() {
   if (rest.length) {
     listEl.hidden = false;
     const more = rest
-      .map((t, j) => discoveryTrackRowHtml(t, profMap, j + spot.length, playIco))
+      .map((t, j) => discoveryTrackRowHtml(t, profMap, j + spot.length))
       .join("");
     listEl.innerHTML = `<div class="discoveryMoreHead" role="presentation">More in the feed</div>${more}`;
   } else {
@@ -6940,6 +6964,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   const raw = String(rawUrl || "").trim();
   if (!raw) return;
   const fromDiscover = Boolean(opts && opts.discoverFeed);
+  const openPlayer = fromDiscover ? opts?.openPlayer !== false : true;
   try {
     stopHubPlayback();
   } catch {}
@@ -6956,11 +6981,17 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   try {
     renderLibrary();
   } catch {}
-  await playOnPlayerPage(prox, title || "Song", {
+  const meta = {
     title: title || "Song",
     subtitle: fromDiscover ? "Discover feed" : "Public profile",
     artUrl: artUrl || placeholderCoverDataUrl(),
-  });
+  };
+  if (fromDiscover && !openPlayer) {
+    setPlayerMeta(meta);
+    await playInline(prox, title || "Song", { type: "discover_feed", url: raw });
+  } else {
+    await playOnPlayerPage(prox, title || "Song", meta);
+  }
   try {
     syncDiscoveryNowPlayingChip();
   } catch {}

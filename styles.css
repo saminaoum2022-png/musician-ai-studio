@@ -9659,6 +9659,73 @@ input::placeholder, textarea::placeholder{
 }
 
 /* ============================================================
+ * Discovery tab — segment bar (Discover | Ideas) + Ideas pane
+ *   reuses the Search page layout for templates and query.
+ * ============================================================ */
+
+.discoveryPage{
+  gap: 14px;
+}
+.discoverySegmentBar{
+  display: flex;
+  gap: 8px;
+  padding: 2px 0 4px;
+  width: 100%;
+  min-width: 0;
+}
+.discoverySegment{
+  flex: 1 1 0;
+  min-width: 0;
+  appearance: none;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  color: rgba(232,238,247,0.72);
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  border-radius: 14px;
+  padding: 10px 12px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+.discoverySegment.isActive{
+  background: rgba(124,92,255,0.22);
+  border-color: rgba(124,92,255,0.45);
+  color: #f0f4ff;
+}
+.discoveryPane[hidden]{
+  display: none !important;
+}
+.discoveryPlaceholder{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 16px 28px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  max-width: 520px;
+}
+.discoveryPlaceholderTitle{
+  margin: 0;
+  font-size: 18px;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  color: #e8eef7;
+}
+.discoveryPlaceholderHint{
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: rgba(232,238,247,0.62);
+}
+.discoveryPlaceholder .primary{
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+/* ============================================================
  * Search page — magazine of remixable occasion shelves.
  *   One sticky search bar, lazy people strip when relevant,
  *   horizontal shelves of "make it yours" templates, and a
@@ -10149,6 +10216,8 @@ input::placeholder, textarea::placeholder{
 
 @media (max-width: 720px){
   .searchPage{ padding: 8px 0 28px; gap: 16px; }
+  .discoveryPage{ gap: 12px; }
+  .discoverySegment{ font-size: 13px; padding: 9px 10px; border-radius: 12px; }
   .searchBarWrap{ padding: 4px 0 8px; }
   .searchBar{ height: 48px; padding: 0 12px; }
   .searchBarInput, .searchBarHint{ font-size: 16px; }

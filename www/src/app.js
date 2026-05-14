@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514profilePillsPublicLikes";
+const APP_BUILD = "20260514discoveryTab";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1630,11 +1630,13 @@ const TAB_REFRESH_ACTIONS = {
       },
     }
     : {}),
-  search() {
+  discover() {
     try {
-      const input = document.getElementById("searchInput");
-      runSearchQuery(String(input?.value || ""));
-    } catch (e) { console.warn("[tabRefresh/search]", e); }
+      if (_discoveryActiveSegment === "ideas") {
+        const input = document.getElementById("searchInput");
+        runSearchQuery(String(input?.value || ""));
+      }
+    } catch (e) { console.warn("[tabRefresh/discover]", e); }
   },
   mentor() {
     resetMentorSession();
@@ -1734,7 +1736,16 @@ function syncLibraryTabDotFromStorage() {
 function applyRoute() {
   const hash = String(location.hash || "");
   const rawRoute = hash.startsWith("#/") ? hash.slice(2) : "generate";
-  const route = rawRoute.split(/[?#&]/)[0].trim();
+  let route = rawRoute.split(/[?#&]/)[0].trim();
+  if (route === "search") {
+    try {
+      const h = String(location.hash || "");
+      if (/\/search\b/i.test(h)) {
+        history.replaceState(null, "", h.replace(/#\/?search\b/i, "#/discover"));
+      }
+    } catch {}
+    route = "discover";
+  }
   // Public profile route: `#/u/USERNAME`. Treat as the dedicated `user`
   // route so it gets its own section + nav state. Username is preserved
   // separately so the renderer can pick it up after the route swap.
@@ -1745,7 +1756,7 @@ function applyRoute() {
   const allowedRoutes = new Set([
     "intro", "start", "auth", "generate", "library",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
-    "settings", "profile", "player", "search", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
+    "settings", "profile", "player", "discover", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
   ]);
   const normalized = pendingPublicUsername ? "user" : (route === "start" ? "intro" : route);
   let wanted = allowedRoutes.has(normalized) ? normalized : "generate";
@@ -1762,6 +1773,9 @@ function applyRoute() {
   const isLoggedIn = Boolean(authSession?.user?.id);
   if (!isLoggedIn && protectedRoutes.has(wanted)) wanted = "auth";
   const prevRoute = document.body.getAttribute("data-route") || "";
+  if (prevRoute === "discover" && wanted !== "discover") {
+    try { onLeaveSearchRoute(); } catch {}
+  }
   document.body.classList.toggle("isIntro", wanted === "intro");
   document.body.classList.toggle("isAuth", wanted === "auth");
   document.body.setAttribute("data-route", wanted);
@@ -1903,6 +1917,16 @@ function applyRoute() {
       } else {
         setTimeout(run, 0);
       }
+    }
+  }
+  if (wanted === "discover") {
+    bindDiscoverySegmentControls();
+    const seg = getDiscoverySegmentPreference();
+    syncDiscoveryUiToSegment(seg);
+    if (seg === "ideas") {
+      try { onEnterSearchRoute(); } catch {}
+    } else {
+      try { onLeaveSearchRoute(); } catch {}
     }
   }
   if (wanted === "user") {
@@ -2412,6 +2436,10 @@ let _searchHintTimer = null;
 let _searchPosterIdToTemplate = new Map();
 let _searchActiveTemplate = null;
 let _searchInited = false;
+const DISCOVERY_SEGMENT_KEY = "mas:discoverySegment:v1";
+let _discoverySegmentBound = false;
+/** `discover` (community placeholder) or `ideas` (templates + search). */
+let _discoveryActiveSegment = "ideas";
 
 function startSearchHintRotator() {
   const hintEl = document.getElementById("searchInputHint");
@@ -2787,15 +2815,60 @@ function onLeaveSearchRoute() {
   closeSearchRemixSheet();
 }
 
-window.addEventListener("hashchange", () => {
-  const route = document.body.getAttribute("data-route") || "";
-  if (route === "search") onEnterSearchRoute();
-  else onLeaveSearchRoute();
-});
-// First paint may land directly on search via deep-link.
-if ((document.body.getAttribute("data-route") || "") === "search") {
-  onEnterSearchRoute();
+function getDiscoverySegmentPreference() {
+  try {
+    const v = sessionStorage.getItem(DISCOVERY_SEGMENT_KEY);
+    if (v === "discover" || v === "ideas") return v;
+  } catch {}
+  return "ideas";
 }
+
+function syncDiscoveryUiToSegment(seg) {
+  const next = seg === "discover" ? "discover" : "ideas";
+  _discoveryActiveSegment = next;
+  document.querySelectorAll("[data-discovery-segment]").forEach((btn) => {
+    const isSel = btn.getAttribute("data-discovery-segment") === next;
+    btn.classList.toggle("isActive", isSel);
+    btn.setAttribute("aria-selected", isSel ? "true" : "false");
+  });
+  document.querySelectorAll("[data-discovery-pane]").forEach((pane) => {
+    const p = pane.getAttribute("data-discovery-pane");
+    const show = p === next;
+    if (show) pane.removeAttribute("hidden");
+    else pane.setAttribute("hidden", "");
+  });
+}
+
+function bindDiscoverySegmentControls() {
+  if (_discoverySegmentBound) return;
+  _discoverySegmentBound = true;
+  document.querySelectorAll("[data-discovery-segment]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const s = btn.getAttribute("data-discovery-segment");
+      if (s !== "discover" && s !== "ideas") return;
+      try { sessionStorage.setItem(DISCOVERY_SEGMENT_KEY, s); } catch {}
+      const prev = _discoveryActiveSegment;
+      syncDiscoveryUiToSegment(s);
+      if (s === "ideas" && prev !== "ideas") {
+        try { onEnterSearchRoute(); } catch {}
+      } else if (s === "discover" && prev !== "discover") {
+        try { onLeaveSearchRoute(); } catch {}
+      }
+    });
+  });
+  const jump = document.getElementById("btnDiscoveryJumpIdeas");
+  if (jump) {
+    jump.addEventListener("click", () => {
+      try { sessionStorage.setItem(DISCOVERY_SEGMENT_KEY, "ideas"); } catch {}
+      const prev = _discoveryActiveSegment;
+      syncDiscoveryUiToSegment("ideas");
+      if (prev !== "ideas") {
+        try { onEnterSearchRoute(); } catch {}
+      }
+    });
+  }
+}
+
 updateEnvironmentBadge();
 document.body.classList.remove("booting");
 document.querySelectorAll("[data-route-link]").forEach((a) => {

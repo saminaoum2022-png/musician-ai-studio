@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260514profilePillsPublicLikes" />
+    <link rel="stylesheet" href="./styles.css?v=20260514discoveryTab" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -709,31 +709,45 @@
           <div class="hint">Everything stays here so Home stays clean on mobile.</div>
         </section>
 
-        <section class="searchPage wide" data-route="search">
-          <div class="searchBarWrap">
-            <div class="searchBar">
-              <svg class="searchBarIcon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-                <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/>
-                <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-              </svg>
-              <input id="searchInput" class="searchBarInput" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="" aria-label="Search NabadAi" />
-              <span id="searchInputHint" class="searchBarHint" aria-hidden="true">birthday for sara</span>
-              <button id="searchInputClear" class="searchBarClear" type="button" aria-label="Clear search" hidden>
-                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
-              </button>
+        <section class="searchPage wide discoveryPage" data-route="discover">
+          <header class="discoverySegmentBar" role="tablist" aria-label="Discovery sections">
+            <button type="button" class="discoverySegment" role="tab" aria-selected="false" data-discovery-segment="discover" id="discoverySegDiscover">Discover</button>
+            <button type="button" class="discoverySegment isActive" role="tab" aria-selected="true" data-discovery-segment="ideas" id="discoverySegIdeas">Ideas</button>
+          </header>
+          <div class="discoveryPane" id="discoveryPaneDiscover" data-discovery-pane="discover" hidden>
+            <div class="discoveryPlaceholder">
+              <p class="discoveryPlaceholderTitle">Community listening</p>
+              <p class="discoveryPlaceholderHint">Public songs from creators will land here for browsing and plays — the same “Public on profile” switch you use today.</p>
+              <p class="discoveryPlaceholderHint">Use <strong>Ideas</strong> for occasion templates and quick starts.</p>
+              <button type="button" class="primary" id="btnDiscoveryJumpIdeas">Open Ideas</button>
             </div>
           </div>
+          <div class="discoveryPane" id="discoveryPaneIdeas" data-discovery-pane="ideas">
+            <div class="searchBarWrap">
+              <div class="searchBar">
+                <svg class="searchBarIcon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                </svg>
+                <input id="searchInput" class="searchBarInput" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="" aria-label="Search NabadAi" />
+                <span id="searchInputHint" class="searchBarHint" aria-hidden="true">birthday for sara</span>
+                <button id="searchInputClear" class="searchBarClear" type="button" aria-label="Clear search" hidden>
+                  <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
+                </button>
+              </div>
+            </div>
 
-          <div id="searchPeopleStrip" class="searchPeopleStrip" hidden>
-            <div class="searchPeopleHead">People</div>
-            <div id="searchPeopleRow" class="searchPeopleRow"></div>
-          </div>
+            <div id="searchPeopleStrip" class="searchPeopleStrip" hidden>
+              <div class="searchPeopleHead">People</div>
+              <div id="searchPeopleRow" class="searchPeopleRow"></div>
+            </div>
 
-          <div id="searchShelves" class="searchShelves" aria-live="polite"></div>
+            <div id="searchShelves" class="searchShelves" aria-live="polite"></div>
 
-          <div id="searchEmpty" class="searchEmpty" hidden>
-            <p class="searchEmptyTitle">Nothing matches that yet.</p>
-            <p class="searchEmptyHint">Try a name, a moment, or a mood.</p>
+            <div id="searchEmpty" class="searchEmpty" hidden>
+              <p class="searchEmptyTitle">Nothing matches that yet.</p>
+              <p class="searchEmptyHint">Try a name, a moment, or a mood.</p>
+            </div>
           </div>
         </section>
 
@@ -2346,12 +2360,13 @@
           <span class="tabLabel">Library</span>
           <span id="libraryTabDot" class="hubDot libraryTabDot" style="display:none"></span>
         </a>
-        <a href="#/search" data-route-link="search">
+        <a href="#/discover" data-route-link="discover">
           <svg class="tabIco" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="7"/>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.65"/>
+            <circle cx="12" cy="12" r="2.2" fill="currentColor"/>
+            <path d="M12 3v3M12 18v3M3 12h3M18 12h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>
           </svg>
-          <span class="tabLabel">Search</span>
+          <span class="tabLabel">Discovery</span>
         </a>
         <a href="#/mentor" data-route-link="mentor" class="mentorTab">
           <svg class="tabIco" viewBox="0 0 24 24" aria-hidden="true">
@@ -2429,6 +2444,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260514profilePillsPublicLikes"></script>
+    <script type="module" src="./src/app.js?v=20260514discoveryTab"></script>
   </body>
 </html>

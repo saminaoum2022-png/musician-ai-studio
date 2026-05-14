@@ -2873,9 +2873,8 @@ h2{ margin:0 0 12px; font-size:16px; letter-spacing:-0.01em; }
   max-width: 100%;
   margin: 0 0 14px;
 }
-.profileSongsHeader.appScreenHeader{
-  margin: 0 0 12px;
-  padding: 8px 4px 4px;
+.profileSongsHeader.appScreenHeader .appScreenTitle--panel{
+  text-shadow: none;
 }
 .appScreenTitle,
 .mentorPageTitle{
@@ -4009,22 +4008,26 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
   height: 38px;
   padding: 0;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.06));
-  -webkit-backdrop-filter: blur(24px) saturate(200%);
-          backdrop-filter: blur(24px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
+  -webkit-backdrop-filter: blur(26px) saturate(185%);
+          backdrop-filter: blur(26px) saturate(185%);
   color: #fff;
   cursor: pointer;
   text-decoration: none;
   box-shadow:
-    0 14px 36px rgba(0, 0, 0, 0.42),
-    inset 0 1px 0 rgba(255, 255, 255, 0.32),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.25);
-  transition: background 160ms ease, border-color 160ms ease, transform 120ms ease;
+    0 8px 26px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.08);
+  transition: background 160ms ease, border-color 160ms ease, transform 120ms ease, box-shadow 160ms ease;
 }
 .profileAuraIconBtn:hover{
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.10));
-  border-color: rgba(255, 255, 255, 0.4);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.20), rgba(255, 255, 255, 0.08));
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.08);
 }
 .profileAuraIconBtn:active{ transform: scale(0.96); }
 .profileAuraIconBtn svg{
@@ -4793,21 +4796,28 @@ body[data-route="profile"]:has(#profileAuraNameRow[data-loading="true"]) #profil
   padding: 0 18px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  /* Flat dark surface — matches the rest of the dark theme. The
-     cover-art aura tint that used to glow here was retired with the
-     flat-dark redesign. */
-  background: rgba(255, 255, 255, 0.04);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+  -webkit-backdrop-filter: blur(26px) saturate(175%);
+          backdrop-filter: blur(26px) saturate(175%);
   color: rgba(248, 250, 255, 0.94);
   font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.01em;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: background 140ms ease, transform 140ms ease, border-color 140ms ease;
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.07);
+  transition: background 160ms ease, transform 140ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 .profileShareBtn:hover{
-  background: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.17), rgba(255, 255, 255, 0.06));
   border-color: rgba(255, 255, 255, 0.22);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.07);
 }
 .profileShareBtn:active{
   transform: scale(0.985);
@@ -5607,19 +5617,23 @@ body[data-route="profile"]:has(#profileAuraNameRow[data-loading="true"]) #profil
   min-height: 38px;
   padding: 6px 12px 6px 9px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.06));
-  -webkit-backdrop-filter: blur(24px) saturate(200%);
-          backdrop-filter: blur(24px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
+  -webkit-backdrop-filter: blur(26px) saturate(185%);
+          backdrop-filter: blur(26px) saturate(185%);
   color: #fff;
   box-shadow:
-    0 14px 36px rgba(0, 0, 0, 0.42),
-    inset 0 1px 0 rgba(255, 255, 255, 0.32),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.25);
+    0 8px 26px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.08);
 }
 .profileCreditsPill--toolbar:hover{
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.10));
-  border-color: rgba(255, 255, 255, 0.4);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.20), rgba(255, 255, 255, 0.08));
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.08);
 }
 .profileCreditsPill--toolbar .profileCreditsPillIco{ opacity: 0.95; }
 .profileCreditsPill--toolbar .profileCreditsPillValue{ color: #fff; }
@@ -5655,8 +5669,8 @@ body[data-route="profile"]:has(#profileAura.profileAuraEditing) #profileAuraHead
 }
 .profileCreditsPill.isAdmin{
   /* Same liquid glass as the toolbar; admin is hinted only on the coin icon. */
-  border-color: rgba(255, 255, 255, 0.28);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.06));
+  border-color: rgba(255, 255, 255, 0.14);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
   color: #fff;
 }
 .profileCreditsPill.isAdmin .profileCreditsPillIco{
@@ -7391,10 +7405,10 @@ input::placeholder, textarea::placeholder{
     position: relative;
     margin: 0 auto;
     max-width: min(560px, 100%);
-    border-radius: 18px;
+    border-radius: 22px;
     overflow: hidden;
     isolation: isolate;
-    box-shadow: 0 10px 36px rgba(0, 0, 0, 0.32);
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.26);
   }
   /* Very soft tint from artwork — stays behind frosted glass */
   .hubNowAura{
@@ -7416,25 +7430,25 @@ input::placeholder, textarea::placeholder{
     gap: 10px;
     padding: 8px 8px 9px 10px;
     border-radius: inherit;
-    border: 1px solid rgba(255, 255, 255, 0.24);
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.04));
-    -webkit-backdrop-filter: blur(22px) saturate(185%);
-    backdrop-filter: blur(22px) saturate(185%);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.035));
+    -webkit-backdrop-filter: blur(26px) saturate(175%);
+    backdrop-filter: blur(26px) saturate(175%);
     color: #f3f6ff;
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.26),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+      inset 0 1px 0 rgba(255, 255, 255, 0.11),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.08);
   }
   .hubNowCoverWrap{
     flex: 0 0 auto;
     width: 42px;
     height: 42px;
-    border-radius: 10px;
+    border-radius: 12px;
     overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow:
-      0 4px 14px rgba(0, 0, 0, 0.35),
-      0 0 28px -6px rgba(var(--cover-glow-rgb), 0.22);
+      0 3px 12px rgba(0, 0, 0, 0.26),
+      0 0 24px -8px rgba(var(--cover-glow-rgb), 0.18);
   }
   .hubNowArt{
     width: 100%;
@@ -7499,15 +7513,18 @@ input::placeholder, textarea::placeholder{
     align-items: center;
     justify-content: center;
     border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.035));
+    -webkit-backdrop-filter: blur(18px) saturate(170%);
+    backdrop-filter: blur(18px) saturate(170%);
     color: #fff;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.2),
-      0 6px 16px rgba(0, 0, 0, 0.22);
-    transition: transform 0.12s ease, background 0.16s ease, border-color 0.16s ease;
+      inset 0 1px 0 rgba(255, 255, 255, 0.10),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.06),
+      0 6px 14px rgba(0, 0, 0, 0.18);
+    transition: transform 0.12s ease, background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
   }
   .hubNowIconBtn:active{
     transform: scale(0.94);
@@ -7535,8 +7552,13 @@ input::placeholder, textarea::placeholder{
     font-weight: 600;
     line-height: 1;
     color: rgba(232, 238, 247, 0.72);
-    border-color: rgba(255, 255, 255, 0.14);
-    background: rgba(8, 12, 20, 0.35);
+    border-color: rgba(255, 255, 255, 0.12);
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(8, 12, 20, 0.32));
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    backdrop-filter: blur(16px) saturate(160%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 4px 12px rgba(0, 0, 0, 0.16);
   }
 }
 @keyframes hubArtworkBreath{
@@ -8527,20 +8549,24 @@ input::placeholder, textarea::placeholder{
   gap: 8px;
   padding: 7px 14px 7px 11px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
-  -webkit-backdrop-filter: blur(22px) saturate(185%);
-          backdrop-filter: blur(22px) saturate(185%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+  -webkit-backdrop-filter: blur(26px) saturate(175%);
+          backdrop-filter: blur(26px) saturate(175%);
   font-size: 13px;
   line-height: 1;
   color: rgba(232, 238, 247, 0.88);
   min-width: 96px;
   justify-content: center;
   box-shadow:
-    0 10px 28px rgba(0, 0, 0, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.18);
-  transition: border-color 180ms ease, background 180ms ease, transform 120ms ease;
+    0 8px 24px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.07);
+  transition: border-color 180ms ease, background 180ms ease, transform 120ms ease, box-shadow 180ms ease;
+}
+.profileStatPill:hover{
+  border-color: rgba(255, 255, 255, 0.20);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06));
 }
 .profileStatPill:active{
   transform: scale(0.98);
@@ -8552,8 +8578,8 @@ input::placeholder, textarea::placeholder{
 .profileStatPill--public,
 .profileStatPill--likes{
   /* Per-type fills retired — glass shell is shared; color lives in icons only. */
-  border-color: rgba(255, 255, 255, 0.28);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
+  border-color: rgba(255, 255, 255, 0.14);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
 }
 .profileStatPillIcon{
   display: inline-flex;
@@ -8671,15 +8697,15 @@ input::placeholder, textarea::placeholder{
 .profileMySoundCard{
   position: relative;
   padding: 10px 12px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
-  -webkit-backdrop-filter: blur(22px) saturate(180%);
-          backdrop-filter: blur(22px) saturate(180%);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03));
+  -webkit-backdrop-filter: blur(26px) saturate(170%);
+          backdrop-filter: blur(26px) saturate(170%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.12),
-    0 12px 32px rgba(0, 0, 0, 0.28);
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+    0 10px 28px rgba(0, 0, 0, 0.22);
   display: grid;
   gap: 10px;
 }

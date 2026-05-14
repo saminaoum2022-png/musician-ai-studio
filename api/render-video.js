@@ -106,6 +106,9 @@ async function readJsonBody(req) {
 }
 
 module.exports = async function handler(req, res) {
+  const { applyCors } = require("./_lib/cors");
+  if (applyCors(req, res)) return;
+
   const fs = require("fs");
   const os = require("os");
   const path = require("path");
@@ -132,6 +135,7 @@ module.exports = async function handler(req, res) {
     if (!audioUrl) {
       res.statusCode = 400;
       res.setHeader("Content-Type", "application/json");
+      res.setHeader("Cache-Control", "no-store");
       res.end(JSON.stringify({ error: "Missing audioUrl" }));
       return;
     }
@@ -140,6 +144,7 @@ module.exports = async function handler(req, res) {
     if (!/^https?:\/\//i.test(audioUrl)) {
       res.statusCode = 400;
       res.setHeader("Content-Type", "application/json");
+      res.setHeader("Cache-Control", "no-store");
       res.end(JSON.stringify({
         error: `audioUrl must be http(s). Got: ${audioUrl.slice(0, 40)}…`,
       }));
@@ -154,6 +159,7 @@ module.exports = async function handler(req, res) {
     if (!ffmpegPath) {
       res.statusCode = 500;
       res.setHeader("Content-Type", "application/json");
+      res.setHeader("Cache-Control", "no-store");
       res.end(JSON.stringify({ error: "ffmpeg unavailable on server" }));
       return;
     }
@@ -233,7 +239,6 @@ module.exports = async function handler(req, res) {
       `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
     );
     res.setHeader("Cache-Control", "no-store");
-    res.setHeader("Access-Control-Allow-Origin", "*");
     res.end(out);
   } catch (e) {
     const msg = e?.message ? String(e.message) : "render failed";

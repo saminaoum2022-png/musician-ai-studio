@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514labSolfegeLabels";
+const APP_BUILD = "20260514playerDownloadVideoFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -17822,25 +17822,27 @@ if (els.btnPlayerDownloadVideo) {
     // Node, so prefer the track ref's persisted URL and only fall back to
     // playerEl.src when it's a plain remote URL.
     const isHttpUrl = (s) => /^https?:\/\//i.test(String(s || "").trim());
-    // Try in this order:
-    //   1. The library/profile track ref (Library entry point)
-    //   2. The captured "last http url handed to the player" (covers
-    //      Generate result cards which don't set the track ref)
-    //   3. The most recent generated song URLs (raw CDN, then proxy)
-    //   4. playerEl.src as a last resort (skipped if it's a blob: URL,
-    //      which happens after a Hub playback shares the audio element)
+    const resolvePlaybackUrl = (s) => {
+      const t = String(s || "").trim();
+      if (!t) return "";
+      const n = normalizeAudioUrlForPlayback(t);
+      return isHttpUrl(n) ? n : "";
+    };
+    // Prefer the URL last handed to the audio element (normalized proxy on
+    // native) so Discover / public Library and Library-relative `/api/…`
+    // rows all resolve the same way as playback.
     const candidates = [
+      lastPlayerHttpUrl,
       currentPlayerTrackRef?.url,
       currentPlayerTrackRef?.audioUrl,
       currentPlayerTrackRef?.song_url,
-      lastPlayerHttpUrl,
       lastSunoFullUrl,
       lastSunoProxyUrl,
       lastSunoFullUrl2,
       lastSunoProxyUrl2,
       playerEl?.src,
     ];
-    const trackUrl = (candidates.find((s) => isHttpUrl(s)) || "").trim();
+    const trackUrl = candidates.map(resolvePlaybackUrl).find(Boolean) || "";
     const trackTitle = String(
       currentPlayerTrackRef?.title
         || els.playerTitle?.textContent
@@ -17853,7 +17855,7 @@ if (els.btnPlayerDownloadVideo) {
       currentPlayerTrackRef?.cover_url,
       lastSunoArtUrl,
       lastSunoArtUrl2,
-      els.playerCover?.src,
+      els.playerArt?.src,
     ];
     const trackArt = (artCandidates.find((s) => isHttpUrl(s)) || "").trim();
     if (!trackUrl) {
@@ -17867,13 +17869,16 @@ if (els.btnPlayerDownloadVideo) {
     btn.setAttribute("aria-label", "Rendering video…");
     showToast("Rendering video — this takes a few seconds…", { durationMs: 4000 });
     try {
-      const u = new URL("/api/render-video", location.origin);
-      u.searchParams.set("audioUrl", trackUrl);
-      if (trackArt && /^https?:\/\//i.test(trackArt)) {
-        u.searchParams.set("imageUrl", trackArt);
-      }
-      u.searchParams.set("title", trackTitle);
-      const r = await fetch(u.toString(), { method: "GET" });
+      const endpoint = apiUrl("/api/render-video");
+      const r = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          audioUrl: trackUrl,
+          ...(trackArt && isHttpUrl(trackArt) ? { imageUrl: trackArt } : {}),
+          title: trackTitle,
+        }),
+      });
       if (!r.ok) {
         let detail = "";
         try { detail = (await r.json())?.error || ""; } catch {}

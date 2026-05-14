@@ -943,18 +943,19 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   padding: 0;
   animation: sectionFadeIn 260ms ease;
 }
-.librarySection .libraryHeader{
-  margin: 0 0 14px;
-  padding: 4px 4px 0;
-}
-.librarySection .libraryHeader h2{
-  margin: 0 0 6px;
-}
 .libraryLead{
   margin: 0;
   font-size: 13px;
   line-height: 1.45;
   color: rgba(232, 238, 247, 0.62);
+}
+.librarySection .libraryHeader .libraryLead.appScreenLead,
+.profileSongsHeader .libraryLead.appScreenLead{
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--muted);
+  max-width: 46ch;
+  margin-bottom: 14px;
 }
 .libraryHeaderRow{
   display: flex;
@@ -2848,6 +2849,48 @@ body.hubJumpingToTop #hubList .hubRow{
 
 h2{ margin:0 0 12px; font-size:16px; letter-spacing:-0.01em; }
 
+/* Primary screen titles (Lab scale) — Create, Library, Discover, Profile route. */
+.appScreenHeader{
+  position: relative;
+  z-index: 1;
+  padding: 8px 4px 4px;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0 0 14px;
+}
+.profileRouteScreenHeader.appScreenHeader{
+  margin: 0 0 10px;
+}
+.profileSongsHeader.appScreenHeader{
+  margin: 0 0 12px;
+  padding: 8px 4px 4px;
+}
+.appScreenTitle,
+.mentorPageTitle{
+  margin: 0 0 8px;
+  font-size: clamp(28px, 6vw, 36px);
+  font-weight: 850;
+  letter-spacing: -0.04em;
+  color: var(--text);
+  text-shadow: 0 0 40px rgba(124, 92, 255, 0.25);
+}
+/* In-profile panels (below the main Profile hero title). */
+.appScreenTitle.appScreenTitle--panel{
+  font-size: clamp(20px, 4.2vw, 26px);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  text-shadow: 0 0 28px rgba(124, 92, 255, 0.22);
+}
+.appScreenLead,
+.mentorPageLead{
+  margin: 0 0 14px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--muted);
+  max-width: 46ch;
+  overflow-wrap: anywhere;
+}
+
 .row{ display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
 .grow{ flex:1; min-width:260px; }
 
@@ -3040,10 +3083,7 @@ textarea{
   .personaActiveBanner{ gap: 8px; padding: 8px 10px; }
   .personaActiveBanner .remixSourceBannerBody{ flex: 1 1 0; min-width: 0; }
 }
-.card[data-route="generate"] #simpleBox > h2{
-  margin-bottom: 6px;
-}
-.card[data-route="generate"] .createPageLead{
+.card[data-route="generate"] .createPageHeader .appScreenLead.createPageLead{
   margin-top: 0;
   margin-bottom: 12px;
   max-width: 42em;
@@ -3821,18 +3861,17 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
 
 .hint{ margin-top:12px; color:var(--muted); font-size:14px; line-height:1.4; }
 
-/* Generate page header row: "Create" + "↺ New" reset pill.
- * Replaces the old "double-tap NabadAi title" gesture that disappeared
- * when we hid the brand title on non-Hub routes. */
+/* Generate page header: large `.appScreenTitle` + "New" pill (see index). */
 .createHeadRow{
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   margin: 0;
 }
-.createHeadRow h2{
-  margin: 0;
+.createPageHeader .btnNewSong{
+  margin-top: 10px;
+  flex-shrink: 0;
 }
 .btnNewSong{
   font-size: 12px;
@@ -5232,13 +5271,6 @@ body[data-route="profile"]:has(#profileAuraNameRow[data-loading="true"]) #profil
   display: flex;
   flex-direction: column;
   padding: 0 6px;
-}
-.profileSongsHeader{
-  margin: 0 0 10px;
-  padding: 4px 0 0;
-}
-.profileSongsHeader h2{
-  margin: 0 0 6px;
 }
 .profileSongsHeader .libraryCount{
   margin-top: 8px;
@@ -6842,7 +6874,7 @@ input[type="range"]::-moz-range-thumb{
   .inputPanel--style{
     padding-bottom: 8px;
   }
-  .card.wide[data-route="generate"] h2{
+  .card.wide[data-route="generate"] .createPageHeader .appScreenTitle{
     margin-bottom: 8px;
   }
   .wizardTop{
@@ -9765,20 +9797,18 @@ input::placeholder, textarea::placeholder{
   padding: 4px 2px 14px;
   min-width: 0;
 }
+.discoveryStudioTitles{
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .discoveryStudioH2{
   margin: 0;
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  line-height: 1.15;
-  color: #f2f6ff;
-  text-shadow: 0 1px 22px rgba(124,92,255,0.25);
+  flex: 1 1 auto;
+  min-width: 0;
+  /* Typography: `.appScreenTitle` in markup (Lab-scale). */
 }
-.discoveryStudioTag{
+.discoveryStudioTag.appScreenLead{
   margin: 6px 0 0;
-  font-size: 13px;
-  line-height: 1.4;
-  color: rgba(232,238,247,0.55);
   max-width: 22em;
 }
 .discoveryRefreshBtn{
@@ -10801,7 +10831,6 @@ input::placeholder, textarea::placeholder{
   .searchPage{ padding: 8px 0 28px; gap: 16px; }
   .discoveryPage{ gap: 12px; }
   .discoverySegment{ font-size: 13px; padding: 9px 10px; border-radius: 12px; }
-  .discoveryStudioH2{ font-size: 19px; }
   .discoveryRefreshBtn{ width: 42px; height: 42px; border-radius: 12px; }
   .discoveryRowArt{ width: 56px; height: 56px; border-radius: 12px; }
   .discoveryRowPlay{ width: 40px; height: 40px; }
@@ -11571,13 +11600,7 @@ section.mentorPage{
   -webkit-backdrop-filter: blur(18px);
   max-width: 100%;
 }
-.mentorHeroTop{
-  position: relative;
-  z-index: 1;
-  padding: 8px 0 4px;
-  min-width: 0;
-  max-width: 100%;
-}
+/* Lab hero title row uses global `.appScreenHeader` (see near `h2`). */
 .mentorHeroBrand{
   font-size: 11px;
   font-weight: 800;
@@ -11595,22 +11618,6 @@ section.mentorPage{
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-}
-.mentorPageTitle{
-  margin: 0 0 8px;
-  font-size: clamp(28px, 6vw, 36px);
-  font-weight: 850;
-  letter-spacing: -0.04em;
-  color: var(--text);
-  text-shadow: 0 0 40px rgba(124, 92, 255, 0.25);
-}
-.mentorPageLead{
-  margin: 0 0 14px;
-  font-size: 14px;
-  line-height: 1.55;
-  color: var(--muted);
-  max-width: 46ch;
-  overflow-wrap: anywhere;
 }
 .mentorHeroBadges{
   display: flex;

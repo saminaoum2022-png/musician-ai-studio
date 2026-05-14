@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260514discoveryFeed" />
+    <link rel="stylesheet" href="./styles.css?v=20260514discoveryStudioUi" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -714,14 +714,26 @@
             <button type="button" class="discoverySegment" role="tab" aria-selected="false" data-discovery-segment="discover" id="discoverySegDiscover">Discover</button>
             <button type="button" class="discoverySegment isActive" role="tab" aria-selected="true" data-discovery-segment="ideas" id="discoverySegIdeas">Ideas</button>
           </header>
-          <div class="discoveryPane" id="discoveryPaneDiscover" data-discovery-pane="discover" hidden>
-            <p class="discoveryFeedLead hint">Newest tracks creators marked <strong>Public on profile</strong> in Library.</p>
-            <div id="discoveryFeedStatus" class="discoveryFeedStatus" aria-live="polite">Loading…</div>
-            <div id="discoveryFeedList" class="userPublicSongs discoveryFeedList" hidden></div>
-            <div class="discoveryPlaceholder discoveryFeedFooter">
-              <p class="discoveryPlaceholderHint">Looking for templates? Switch to <strong>Ideas</strong> or tap below.</p>
+          <div class="discoveryPane discoveryPaneStudio" id="discoveryPaneDiscover" data-discovery-pane="discover" hidden>
+            <div class="discoveryStudioAmbient" aria-hidden="true"></div>
+            <header class="discoveryStudioHead">
+              <div class="discoveryStudioTitles">
+                <h2 class="discoveryStudioH2">Listen in</h2>
+                <p class="discoveryStudioTag">Public picks from creators · newest first</p>
+              </div>
+              <button type="button" class="discoveryRefreshBtn" id="discoveryRefreshBtn" aria-label="Refresh public feed">
+                <svg class="discoveryRefreshIco" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                  <path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" d="M21 12a9 9 0 1 1-2.64-6.36"/>
+                  <path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" d="M21 3v6h-6"/>
+                </svg>
+              </button>
+            </header>
+            <div id="discoveryFeedStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
+            <div id="discoveryFeedList" class="discoveryFeedList discoveryCardStack" hidden></div>
+            <footer class="discoveryFeedFooter discoveryStudioFooter discoveryPlaceholder">
+              <p class="discoveryPlaceholderHint">Need a starting point? Occasion templates are under <strong>Ideas</strong>.</p>
               <button type="button" class="primary" id="btnDiscoveryJumpIdeas">Open Ideas</button>
-            </div>
+            </footer>
           </div>
           <div class="discoveryPane" id="discoveryPaneIdeas" data-discovery-pane="ideas">
             <div class="searchBarWrap">
@@ -2445,6 +2457,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260514discoveryFeed"></script>
+    <script type="module" src="./src/app.js?v=20260514discoveryStudioUi"></script>
   </body>
 </html>

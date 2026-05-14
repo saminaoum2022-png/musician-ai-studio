@@ -9724,23 +9724,301 @@ input::placeholder, textarea::placeholder{
   align-self: flex-start;
   margin-top: 4px;
 }
-.discoveryFeedLead{
-  margin: 0 0 10px;
+
+/* --- Discover segment (public feed) — studio / interactive chrome --- */
+.discoveryPaneStudio{
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-bottom: 8px;
+  min-height: 42vh;
+}
+.discoveryStudioAmbient{
+  position: absolute;
+  inset: -8px -12px 40%;
+  background:
+    radial-gradient(ellipse 90% 70% at 50% -10%, rgba(124,92,255,0.28), transparent 55%),
+    radial-gradient(ellipse 60% 45% at 100% 20%, rgba(56,189,248,0.12), transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.95;
+}
+.discoveryStudioHead,
+.discoveryFeedStatus,
+.discoveryCardStack,
+.discoveryStudioFooter{
+  position: relative;
+  z-index: 1;
+}
+.discoveryStudioHead{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 2px 14px;
+  min-width: 0;
+}
+.discoveryStudioH2{
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+  color: #f2f6ff;
+  text-shadow: 0 1px 22px rgba(124,92,255,0.25);
+}
+.discoveryStudioTag{
+  margin: 6px 0 0;
   font-size: 13px;
-  line-height: 1.45;
-  color: rgba(232,238,247,0.58);
+  line-height: 1.4;
+  color: rgba(232,238,247,0.55);
+  max-width: 22em;
+}
+.discoveryRefreshBtn{
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: rgba(232,238,247,0.88);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 160ms ease, background 180ms ease, border-color 180ms ease, box-shadow 220ms ease;
+}
+.discoveryRefreshBtn:hover{
+  border-color: rgba(124,92,255,0.45);
+  background: rgba(124,92,255,0.14);
+  box-shadow: 0 0 0 1px rgba(124,92,255,0.2);
+}
+.discoveryRefreshBtn:active{
+  transform: scale(0.94);
+}
+.discoveryRefreshBtn.isRefreshing .discoveryRefreshIco{
+  animation: discoveryRefreshSpin 0.72s linear infinite;
+}
+@keyframes discoveryRefreshSpin{
+  to { transform: rotate(360deg); }
 }
 .discoveryFeedStatus{
   font-size: 14px;
   line-height: 1.5;
   color: rgba(232,238,247,0.72);
-  padding: 4px 0 14px;
+  padding: 0 0 12px;
+  min-height: 1.5em;
 }
-.discoveryFeedList{
+.discoveryFeedStatus:empty{
+  display: none;
+}
+.discoveryCardStack{
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
   margin-top: 2px;
 }
-.discoveryFeedFooter{
-  margin-top: 20px;
+.discoveryCardStack.isDiscoveryLoading{
+  gap: 10px;
+}
+.discoverySkeletonStack{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.discoverySkeletonRow{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.03);
+  overflow: hidden;
+}
+.discoverySkeletonArt,
+.discoverySkeletonLine{
+  border-radius: 12px;
+  background: linear-gradient(
+    110deg,
+    rgba(255,255,255,0.05) 0%,
+    rgba(255,255,255,0.12) 42%,
+    rgba(255,255,255,0.05) 88%
+  );
+  background-size: 200% 100%;
+  animation: discoveryShimmer 1.15s ease-in-out infinite;
+}
+.discoverySkeletonArt{
+  width: 64px;
+  height: 64px;
+  flex: 0 0 auto;
+  border-radius: 14px;
+}
+.discoverySkeletonMid{
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.discoverySkeletonLine{
+  height: 13px;
+  border-radius: 8px;
+}
+.discoverySkeletonLine.short{ width: 46%; }
+@keyframes discoveryShimmer{
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+.discoveryRow{
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: linear-gradient(145deg, rgba(22,26,38,0.92), rgba(12,14,22,0.88));
+  box-shadow: 0 10px 36px rgba(0,0,0,0.28);
+  overflow: hidden;
+  animation: discoveryRowIn 0.48s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 52ms);
+}
+@keyframes discoveryRowIn{
+  from{
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to{
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.discoveryRowMain{
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px 10px 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.2s ease;
+}
+.discoveryRowMain:hover{
+  background: rgba(124,92,255,0.08);
+}
+.discoveryRowMain:active{
+  background: rgba(124,92,255,0.14);
+}
+.discoveryRowArt{
+  position: relative;
+  flex: 0 0 auto;
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+}
+.discoveryRowArt img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.discoveryRowArtGlow{
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 35%, rgba(0,0,0,0.45) 100%);
+  pointer-events: none;
+}
+.discoveryRowMid{
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.discoveryRowTitle{
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  color: #f0f4ff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoveryRowMeta{
+  font-size: 12px;
+  color: rgba(223,231,251,0.58);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoveryRowPlay{
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(145deg, rgba(124,92,255,0.35), rgba(124,92,255,0.12));
+  border: 1px solid rgba(168,140,255,0.45);
+  color: #ebe4ff;
+  transition: transform 0.18s ease, box-shadow 0.22s ease;
+  box-shadow: 0 0 20px rgba(124,92,255,0.22);
+}
+.discoveryRowMain:hover .discoveryRowPlay,
+.discoveryRowMain:focus-visible .discoveryRowPlay{
+  transform: scale(1.06);
+  box-shadow: 0 0 26px rgba(124,92,255,0.35);
+}
+.discoveryRowSide{
+  flex: 0 0 auto;
+  width: 44px;
+  margin: 10px 8px 10px 0;
+  align-self: center;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: rgba(232,238,247,0.55);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+.discoveryRowSide:hover{
+  color: rgba(232,238,247,0.95);
+  border-color: rgba(124,92,255,0.35);
+  background: rgba(124,92,255,0.12);
+}
+.discoveryRowSide:focus-visible{
+  outline: 2px solid rgba(124,92,255,0.55);
+  outline-offset: 2px;
+}
+.discoveryRowMain:focus-visible{
+  outline: 2px solid rgba(124,92,255,0.55);
+  outline-offset: 2px;
+  border-radius: 16px;
+}
+.discoveryStudioFooter{
+  margin-top: 22px;
+}
+@media (prefers-reduced-motion: reduce){
+  .discoveryRow,
+  .discoverySkeletonArt,
+  .discoverySkeletonLine,
+  .discoveryRefreshBtn.isRefreshing .discoveryRefreshIco{
+    animation: none !important;
+  }
+  .discoveryRow{ opacity: 1; transform: none; }
 }
 
 /* ============================================================
@@ -10236,6 +10514,10 @@ input::placeholder, textarea::placeholder{
   .searchPage{ padding: 8px 0 28px; gap: 16px; }
   .discoveryPage{ gap: 12px; }
   .discoverySegment{ font-size: 13px; padding: 9px 10px; border-radius: 12px; }
+  .discoveryStudioH2{ font-size: 19px; }
+  .discoveryRefreshBtn{ width: 42px; height: 42px; border-radius: 12px; }
+  .discoveryRowArt{ width: 56px; height: 56px; border-radius: 12px; }
+  .discoveryRowPlay{ width: 40px; height: 40px; }
   .searchBarWrap{ padding: 4px 0 8px; }
   .searchBar{ height: 48px; padding: 0 12px; }
   .searchBarInput, .searchBarHint{ font-size: 16px; }

@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514discoveryFeed";
+const APP_BUILD = "20260514discoveryStudioUi";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2869,6 +2869,17 @@ function bindDiscoverySegmentControls() {
       if (prev !== "ideas") {
         try { onEnterSearchRoute(); } catch {}
       }
+    });
+  }
+  const rfb = document.getElementById("discoveryRefreshBtn");
+  if (rfb && !rfb.dataset.boundDiscoveryRefresh) {
+    rfb.dataset.boundDiscoveryRefresh = "1";
+    rfb.addEventListener("click", () => {
+      haptic("light");
+      rfb.classList.add("isRefreshing");
+      void refreshDiscoverFeed().finally(() => {
+        try { rfb.classList.remove("isRefreshing"); } catch {}
+      });
     });
   }
 }
@@ -6355,30 +6366,47 @@ async function refreshDiscoverFeed() {
   const statusEl = document.getElementById("discoveryFeedStatus");
   const listEl = document.getElementById("discoveryFeedList");
   if (!statusEl || !listEl) return;
-  listEl.hidden = true;
-  listEl.innerHTML = "";
-  statusEl.hidden = false;
-  statusEl.classList.remove("discoveryFeedStatusError");
-  statusEl.textContent = "Loading…";
+  listEl.classList.add("isDiscoveryLoading");
+  listEl.hidden = false;
+  listEl.innerHTML = `<div class="discoverySkeletonStack">${Array.from({ length: 6 }, () => `
+    <div class="discoverySkeletonRow" aria-hidden="true">
+      <div class="discoverySkeletonArt"></div>
+      <div class="discoverySkeletonMid">
+        <div class="discoverySkeletonLine"></div>
+        <div class="discoverySkeletonLine short"></div>
+      </div>
+    </div>`).join("")}</div>`;
+  statusEl.textContent = "";
+  statusEl.hidden = true;
+
   const rows = await supabaseFetchDiscoveryPublicSongs(48);
   if (gen !== _discoveryFeedGen) return;
   const playable = rows.filter((t) => String(t.url || "").trim());
   const profMap = await fetchProfilesByUserIdsMap(playable.map((t) => t.userId));
   if (gen !== _discoveryFeedGen) return;
+  listEl.classList.remove("isDiscoveryLoading");
+
   if (!playable.length) {
+    listEl.hidden = true;
+    listEl.innerHTML = "";
+    statusEl.hidden = false;
     if (rows.length) {
       statusEl.textContent =
         "Public tracks are listed, but none have a playable audio URL yet — try again after they finish saving.";
     } else {
       statusEl.innerHTML =
-        "No public songs in the feed yet. After you enable <strong>Public on profile</strong> in Library, wait until the song finishes saving to the cloud — only rows in Supabase appear here. Newest first.";
+        "No public songs in the feed yet. After you enable <strong>Public on profile</strong> in Library, wait until the song finishes saving to the cloud. Newest first.";
     }
     return;
   }
+
   statusEl.hidden = true;
+  statusEl.textContent = "";
   listEl.hidden = false;
+  const playIco =
+    "<svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" aria-hidden=\"true\"><path fill=\"currentColor\" d=\"M9 7.5v9l7.5-4.5L9 7.5z\"/></svg>";
   listEl.innerHTML = playable
-    .map((t) => {
+    .map((t, idx) => {
       const art = String(t.artUrl || "").trim();
       const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
       const prof = t.userId ? profMap.get(t.userId) : null;
@@ -6386,15 +6414,24 @@ async function refreshDiscoverFeed() {
       const byLine = handle ? `@${handle}` : "Creator";
       const safeTitle = escapeHtml(String(t.title || "Untitled"));
       const encUrl = encodeURIComponent(String(t.url || ""));
+      const side = handle
+        ? `<button type="button" class="discoveryRowSide" data-discovery-profile="${encodeURIComponent(handle)}" aria-label="Open creator profile">⋯</button>`
+        : `<span class="discoveryRowSpacer" aria-hidden="true"></span>`;
       return `
-      <button class="userPublicSong discoveryFeedSong" type="button" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(artSafe)}">
-        <img class="userPublicSongCover" src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" />
-        <div class="userPublicSongMeta">
-          <div class="userPublicSongTitle">${safeTitle}</div>
-          <div class="userPublicSongTiny">${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}</div>
-        </div>
-        <span class="userPublicSongPlay" aria-hidden="true">▶</span>
-      </button>`;
+      <div class="discoveryRow" style="--i:${idx}">
+        <button type="button" class="discoveryRowMain" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(artSafe)}">
+          <span class="discoveryRowArt">
+            <img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" />
+            <span class="discoveryRowArtGlow" aria-hidden="true"></span>
+          </span>
+          <span class="discoveryRowMid">
+            <span class="discoveryRowTitle">${safeTitle}</span>
+            <span class="discoveryRowMeta">${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}</span>
+          </span>
+          <span class="discoveryRowPlay" aria-hidden="true">${playIco}</span>
+        </button>
+        ${side}
+      </div>`;
     })
     .join("");
   listEl.querySelectorAll("[data-user-lib-play]").forEach((b) => {
@@ -6409,7 +6446,25 @@ async function refreshDiscoverFeed() {
       } catch {
         raw = u;
       }
+      haptic("light");
       void playLibraryUrlOnPlayer(raw, title, art);
+    });
+  });
+  listEl.querySelectorAll("[data-discovery-profile]").forEach((b) => {
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      haptic("light");
+      const raw = b.getAttribute("data-discovery-profile") || "";
+      let h = "";
+      try {
+        h = decodeURIComponent(raw);
+      } catch {
+        h = raw;
+      }
+      if (!h) return;
+      try {
+        location.hash = `#/u/${encodeURIComponent(h)}`;
+      } catch {}
     });
   });
 }

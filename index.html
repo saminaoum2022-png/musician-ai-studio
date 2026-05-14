@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260514playerListenOnlyCssRoute" />
+    <link rel="stylesheet" href="./styles.css?v=20260514labVoiceUi" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -786,16 +786,8 @@
           <div class="mentorAmbient" aria-hidden="true"></div>
 
           <header class="mentorHeroTop">
-            <div class="mentorHeroBrand"><span class="mentorHeroBrandNa">Na</span> VOICE LAB</div>
-            <h2 class="mentorPageTitle">Mentor</h2>
-            <p class="mentorPageLead">
-              Understand your voice in one comfortable take — range, colour hints, maqam guess, and style ideas. On-device; for practice, not diagnosis.
-            </p>
-            <div class="mentorHeroBadges" aria-hidden="true">
-              <span class="mentorHeroBadge">AI-powered</span>
-              <span class="mentorHeroBadge">Private</span>
-              <span class="mentorHeroBadge">For practice</span>
-            </div>
+            <h2 class="mentorPageTitle">Lab</h2>
+            <p class="mentorPageLead">Voice scan on this device — for practice, not diagnosis.</p>
           </header>
 
           <div class="mentorPreFlow">
@@ -821,7 +813,7 @@
                 </svg>
                 <div class="mentorOrbWrap">
                   <div class="mentorOrbRing" aria-hidden="true"></div>
-                  <button type="button" id="mentorBtnStart" class="mentorOrbBtn" aria-label="Start voice scan">
+                  <button type="button" id="mentorBtnStart" class="mentorOrbBtn" aria-label="Start scan">
                     <svg viewBox="0 0 24 24" width="34" height="34" aria-hidden="true">
                       <path
                         fill="currentColor"
@@ -841,11 +833,9 @@
                   />
                 </svg>
               </div>
-              <p class="mentorScanTagline">Tap the mic — one slow chest-to-head glide.</p>
+              <p class="mentorScanTagline">Quiet room. One slow low → high glide.</p>
               <p id="mentorStatus" class="mentorStatus mentorScanStatus" role="status"></p>
-              <p id="mentorHint" class="mentorHint mentorScanHint">
-                Quiet room, steady volume. Men’s / Women’s / Notes only changes classical-style labels.
-              </p>
+              <p id="mentorHint" class="mentorHint mentorScanHint"></p>
               <div class="mentorScanFoot">
                 <button type="button" id="mentorBtnStop" class="mentorBtnStop mentorGlass ghost" disabled>Stop</button>
                 <span id="mentorTimer" class="mentorTimer" aria-live="polite"></span>
@@ -853,7 +843,7 @@
             </div>
 
             <div class="mentorAnalyzeBlock">
-              <div class="mentorSectionEyebrow">Analyze for</div>
+              <div class="mentorSectionEyebrow">Range labels</div>
               <select id="mentorVoiceRef" class="mentorVoiceRefNative" autocomplete="off" aria-label="Voice range labels">
                 <option value="mens">Men’s voices (bass · baritone · tenor)</option>
                 <option value="womens">Women’s voices (contralto · alto · mezzo · soprano)</option>
@@ -880,7 +870,7 @@
 
             <div class="mentorVizCard mentorGlass">
               <div class="mentorVizHead">
-                <span class="mentorSectionEyebrow">Live visualization</span>
+                <span class="mentorSectionEyebrow">Live</span>
                 <span class="mentorVizReady">
                   <span class="mentorLiveDot" aria-hidden="true"></span>
                   <span id="mentorVizReadyText">Ready when you are</span>
@@ -891,50 +881,17 @@
                 <div class="mentorVizRibbon"></div>
                 <div class="mentorVizSpark"></div>
               </div>
-              <p class="mentorVizCaption">Your voice paints this ribbon while we listen.</p>
-            </div>
-
-            <div class="mentorDiscover">
-              <div class="mentorSectionEyebrow">What you’ll discover</div>
-              <div class="mentorDiscoverTrack">
-                <div class="mentorDiscoverCard mentorGlass">
-                  <span class="mentorDiscoverIcon">〰</span>
-                  <strong>Your range</strong>
-                  <span>Comfortable low → high</span>
-                </div>
-                <div class="mentorDiscoverCard mentorGlass">
-                  <span class="mentorDiscoverIcon">◉</span>
-                  <strong>Vocal colour</strong>
-                  <span>Warmth &amp; brightness hints</span>
-                </div>
-                <div class="mentorDiscoverCard mentorGlass">
-                  <span class="mentorDiscoverIcon">♫</span>
-                  <strong>Maqam guess</strong>
-                  <span>12-TET learning map</span>
-                </div>
-                <div class="mentorDiscoverCard mentorGlass">
-                  <span class="mentorDiscoverIcon">✦</span>
-                  <strong>Genre fit</strong>
-                  <span>Styles that may suit you</span>
-                </div>
-              </div>
             </div>
 
             <div class="mentorTipCard mentorGlass">
-              <div class="mentorTipIcon" aria-hidden="true">✦</div>
-              <p class="mentorTipText">Sing naturally in a quiet room — one glide is enough.</p>
               <details class="mentorGuide mentorGuide--tip">
-                <summary class="mentorGuideSummary">How to sing this test →</summary>
+                <summary class="mentorGuideSummary">Tips for a clean scan</summary>
                 <ol class="mentorGuideList">
-                  <li>Warm up 30–60s lightly — no shouting.</li>
-                  <li>Start a comfortable low “ah” for 2–3 seconds.</li>
-                  <li>Glide <strong>slowly</strong> chest → head on “ah” or “ee” over ~5–8 seconds.</li>
-                  <li>Hold your highest <strong>comfortable</strong> note ~2s.</li>
-                  <li>Stay ~15–25cm from the mic.</li>
+                  <li>Warm up lightly ~30s — no shouting.</li>
+                  <li>Glide slowly chest → head on “ah” (~6–8s).</li>
+                  <li>Hold your highest comfortable note ~2s.</li>
                 </ol>
-                <p class="mentorGuideFoot">
-                  <strong>Low → high</strong> uses robust percentiles. For men, choose <em>Men’s voices</em> so highs don’t read as mezzo/soprano.
-                </p>
+                <p class="mentorGuideFoot">Pick <strong>Men’s</strong> or <strong>Women’s</strong> so the printed range matches how you sing.</p>
               </details>
             </div>
           </div>
@@ -946,7 +903,7 @@
               <div class="mentorResultHeroGlow" aria-hidden="true"></div>
               <div class="mentorResultHeroSilhouette" aria-hidden="true"></div>
               <div class="mentorResultHeroMain">
-                <span class="mentorEyebrow mentorEyebrow--hero">Your voice identity</span>
+                <span class="mentorEyebrow mentorEyebrow--hero">Snapshot</span>
                 <h3 id="mentorValVoice" class="mentorResultIdentityTitle">—</h3>
                 <p id="mentorHeroTimbre" class="mentorResultIdentityGradient">—</p>
                 <p id="mentorValVoiceBody" class="mentorResultIdentityBody"></p>
@@ -2399,12 +2356,18 @@
           </svg>
           <span class="tabLabel">Discovery</span>
         </a>
-        <a href="#/mentor" data-route-link="mentor" class="mentorTab">
-          <svg class="tabIco" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 3l7 4v6c0 5-3 9-7 11-4-2-7-6-7-11V7l7-4z" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/>
-            <path d="M12 8v8M9 11h6" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+        <a href="#/mentor" data-route-link="mentor" class="mentorTab" aria-label="Lab — voice scan">
+          <svg class="tabIco tabIcoLabWave" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.85"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M2.5 12h1.8M19.7 12H22M6 12c0-3.2 1.6-3.2 3.2 0s3.2 3.2 4.8 0 3.2-3.2 4.8 0 3.2 3.2 4.8 0"
+            />
           </svg>
-          <span class="tabLabel">Mentor</span>
+          <span class="tabLabel">Lab</span>
         </a>
         <a href="#/profile" data-route-link="profile">
           <svg class="tabIco" viewBox="0 0 24 24" aria-hidden="true">
@@ -2475,6 +2438,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260514playerListenOnlyCssRoute"></script>
+    <script type="module" src="./src/app.js?v=20260514labVoiceUi"></script>
   </body>
 </html>

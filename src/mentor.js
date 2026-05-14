@@ -616,7 +616,7 @@ export function resetMentorSession() {
   if (t) t.textContent = "";
   setText(
     "mentorHint",
-    "Quiet room helps. Open “How to sing this test” if you need it — then one slow chest-to-head glide on “ah” or “ee”. Men’s / Women’s / Notes only tweaks classical-style labels.",
+    "Open tips below if you want a quick checklist — then one slow glide.",
   );
   setText("mentorValRange", "—");
   setText("mentorValSpan", "—");
@@ -953,7 +953,7 @@ export function initMentor() {
     setText("mentorStatus", "Requesting microphone access…");
     setText(
       "mentorHint",
-      "If the system asks, allow the microphone — then sing one slow glide. Men’s / Women’s / Notes only affects classical-style labels.",
+      "Allow the mic if asked — then one slow glide. Range labels only change printed names.",
     );
 
     let stream;

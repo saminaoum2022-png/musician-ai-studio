@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514playerDownloadVideoFix";
+const APP_BUILD = "20260514playerVideoShareSheet";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -17886,16 +17886,70 @@ if (els.btnPlayerDownloadVideo) {
       }
       const blob = await r.blob();
       const filename = `${trackTitle.replace(/[\\/:*?"<>|]/g, "").trim() || "song"}.mp4`;
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      // Free the blob after the click has had time to take effect.
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
-      showToast("Video saved", { durationMs: 1800 });
+      const file = new File([blob], filename, { type: "video/mp4" });
+      const tryAnchorDownload = () => {
+        const blobUrl = URL.createObjectURL(blob);
+        try {
+          const a = document.createElement("a");
+          a.href = blobUrl;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        } finally {
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
+        }
+      };
+      const canFileShare =
+        typeof navigator !== "undefined" &&
+        typeof navigator.share === "function" &&
+        typeof navigator.canShare === "function" &&
+        navigator.canShare({ files: [file] });
+      const tryShareSheet = async () => {
+        await navigator.share({
+          files: [file],
+          title: trackTitle,
+          text: `“${trackTitle}” — save to Photos or Files`,
+        });
+      };
+      if (canFileShare || (isCapacitorNativeAuth() && typeof navigator.share === "function")) {
+        try {
+          await tryShareSheet();
+          showToast("In the share sheet, choose “Save Video” for Photos or “Save to Files”.", {
+            durationMs: 4800,
+          });
+        } catch (shareErr) {
+          if (shareErr && shareErr.name === "AbortError") {
+            showToast("Cancelled.", { durationMs: 1600 });
+          } else if (canFileShare) {
+            try {
+              tryAnchorDownload();
+              showToast("Saved — check Downloads or Files if the share sheet did not open.", {
+                durationMs: 3200,
+              });
+            } catch {
+              const msg = shareErr?.message ? String(shareErr.message).slice(0, 80) : "Save failed";
+              showToast(`Could not save: ${msg}`, { durationMs: 3500 });
+            }
+          } else {
+            try {
+              tryAnchorDownload();
+            } catch {}
+            showToast(
+              "Could not open the share sheet for this video. Try again on a newer iOS or use the web app.",
+              { durationMs: 4500 },
+            );
+          }
+        }
+      } else {
+        tryAnchorDownload();
+        showToast(
+          isCapacitorNativeAuth()
+            ? "If nothing appeared: iOS needs the share sheet for video — try updating iOS or open this page in Safari once."
+            : "Video saved — check your Downloads folder.",
+          { durationMs: 3800 },
+        );
+      }
     } catch (e) {
       const msg = e?.message ? String(e.message).slice(0, 80) : "Render failed";
       showToast(`Couldn't render: ${msg}`, { durationMs: 3500 });

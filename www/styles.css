@@ -8327,7 +8327,7 @@ input::placeholder, textarea::placeholder{
   .profileAuraParticles{ display: none; }
 }
 
-/* --- Stats pills under the bio: Songs (left) + Likes (right). --- */
+/* --- Stats pills under the bio: Hub on = Songs + Likes; Hub off = Songs + Public + Likes. --- */
 .profileStatsPills{
   display: flex;
   gap: 10px;
@@ -8335,6 +8335,20 @@ input::placeholder, textarea::placeholder{
   padding: 0 4px;
   width: 100%;
   justify-content: center;
+}
+.profileStatsPills:not(.profileStatsPills--hubOn){
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.profileStatsPills:not(.profileStatsPills--hubOn) .profileStatPill{
+  min-width: 0;
+  flex: 1 1 88px;
+  max-width: 118px;
+  padding: 7px 10px 7px 9px;
+  font-size: 12px;
+}
+.profileStatsPills:not(.profileStatsPills--hubOn) .profileStatPillValue{
+  font-size: 13px;
 }
 .profileStatsPills[hidden]{ display: none; }
 .profileStatPill{
@@ -8354,11 +8368,19 @@ input::placeholder, textarea::placeholder{
   justify-content: center;
   transition: border-color 180ms ease, background 180ms ease;
 }
+.profileStatsPills--hubOn .profileStatPill--public{
+  display: none !important;
+}
 .profileStatPill--songs{
   /* Cool teal accent for the left pill. */
   border-color: rgba(35, 213, 171, 0.32);
   background:
     linear-gradient(135deg, rgba(35, 213, 171, 0.12), rgba(10, 12, 22, 0.6) 60%);
+}
+.profileStatPill--public{
+  border-color: rgba(56, 189, 248, 0.38);
+  background:
+    linear-gradient(135deg, rgba(56, 189, 248, 0.13), rgba(10, 12, 22, 0.6) 60%);
 }
 .profileStatPill--likes{
   /* Warm purple accent for the right pill. */
@@ -8377,6 +8399,7 @@ input::placeholder, textarea::placeholder{
   height: 16px;
 }
 .profileStatPill--songs .profileStatPillIcon{ color: #6ee7d3; }
+.profileStatPill--public .profileStatPillIcon{ color: #7dd3fc; }
 .profileStatPill--likes .profileStatPillIcon{ color: #d8b4fe; }
 .profileStatPillValue{
   font-size: 14px;

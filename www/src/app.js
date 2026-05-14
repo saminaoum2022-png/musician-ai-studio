@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514patchUserSongById";
+const APP_BUILD = "20260514profilePillsPublicLikes";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -418,6 +418,7 @@ const els = {
   profileAuraStatsInline: document.getElementById("profileAuraStatsInline"),
   profileStatsPills: document.getElementById("profileStatsPills"),
   profileStatPillSongsValue: document.getElementById("profileStatPillSongsValue"),
+  profileStatPillPublicValue: document.getElementById("profileStatPillPublicValue"),
   profileStatPillLikesValue: document.getElementById("profileStatPillLikesValue"),
   profileAuraStatLine: document.getElementById("profileAuraStatLine"),
   profilePersonaInlineChip: document.getElementById("profilePersonaInlineChip"),
@@ -8067,10 +8068,9 @@ function renderProfileOwnStats() {
   const pubLib = lib.filter((t) => Boolean(t.publicOnProfile));
   const pubLibCount = pubLib.length;
   const totalLikes = HUB_FEATURE_ENABLED ? hubItems.reduce((sum, p) => sum + Number(p.likes || 0), 0) : 0;
-  // Hub off: "Songs" = everything saved in Library (not only public).
-  // Second pill repurposed from "Likes" → "Public" (likes only exist on Hub).
+  // Hub off: second pill = Public (eye icon in HTML); third = Likes (0 until discovery feed).
   const songCountForPills = HUB_FEATURE_ENABLED ? hubItems.length : lib.length;
-  const secondPillValue = HUB_FEATURE_ENABLED ? totalLikes : pubLibCount;
+  const hubLikesOnly = HUB_FEATURE_ENABLED ? totalLikes : 0;
   const songCountForOwnHeader = HUB_FEATURE_ENABLED ? hubItems.length : lib.length;
 
   if (els.profileOwnSongCount) {
@@ -8112,25 +8112,24 @@ function renderProfileOwnStats() {
     }
   }
   if (els.profileAuraSongsValue) els.profileAuraSongsValue.textContent = String(songCountForPills);
-  if (els.profileAuraLikesValue) els.profileAuraLikesValue.textContent = String(secondPillValue);
+  if (els.profileAuraLikesValue) els.profileAuraLikesValue.textContent = String(hubLikesOnly);
   if (els.profileAuraStatSongs) els.profileAuraStatSongs.dataset.show = songCountForPills > 0 ? "true" : "false";
   if (els.profileAuraStatLikes) {
-    els.profileAuraStatLikes.dataset.show =
-      HUB_FEATURE_ENABLED ? (totalLikes > 0 ? "true" : "false") : (pubLibCount > 0 ? "true" : "false");
+    els.profileAuraStatLikes.dataset.show = hubLikesOnly > 0 ? "true" : "false";
   }
 
+  if (els.profileStatsPills) {
+    els.profileStatsPills.classList.toggle("profileStatsPills--hubOn", HUB_FEATURE_ENABLED);
+    els.profileStatsPills.hidden = HUB_FEATURE_ENABLED ? hubItems.length === 0 : lib.length === 0;
+  }
   if (els.profileStatPillSongsValue) {
     els.profileStatPillSongsValue.textContent = formatStatCount(songCountForPills);
   }
+  if (els.profileStatPillPublicValue) {
+    els.profileStatPillPublicValue.textContent = formatStatCount(pubLibCount);
+  }
   if (els.profileStatPillLikesValue) {
-    els.profileStatPillLikesValue.textContent = formatStatCount(secondPillValue);
-  }
-  const secondPillLabel = els.profileStatsPills?.querySelector?.(".profileStatPill--likes .profileStatPillLabel");
-  if (secondPillLabel) {
-    secondPillLabel.textContent = HUB_FEATURE_ENABLED ? "Likes" : "Public";
-  }
-  if (els.profileStatsPills) {
-    els.profileStatsPills.hidden = HUB_FEATURE_ENABLED ? hubItems.length === 0 : lib.length === 0;
+    els.profileStatPillLikesValue.textContent = formatStatCount(hubLikesOnly);
   }
 
   const lineEl = els.profileAuraStatLine;

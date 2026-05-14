@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260514discoverySpotlightNp" />
+    <link rel="stylesheet" href="./styles.css?v=20260514profilePublicOnlyDiscoverDefault" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -711,10 +711,10 @@
 
         <section class="searchPage wide discoveryPage" data-route="discover">
           <header class="discoverySegmentBar" role="tablist" aria-label="Discovery sections">
-            <button type="button" class="discoverySegment" role="tab" aria-selected="false" data-discovery-segment="discover" id="discoverySegDiscover">Discover</button>
-            <button type="button" class="discoverySegment isActive" role="tab" aria-selected="true" data-discovery-segment="ideas" id="discoverySegIdeas">Ideas</button>
+            <button type="button" class="discoverySegment isActive" role="tab" aria-selected="true" data-discovery-segment="discover" id="discoverySegDiscover">Discover</button>
+            <button type="button" class="discoverySegment" role="tab" aria-selected="false" data-discovery-segment="ideas" id="discoverySegIdeas">Ideas</button>
           </header>
-          <div class="discoveryPane discoveryPaneStudio" id="discoveryPaneDiscover" data-discovery-pane="discover" hidden>
+          <div class="discoveryPane discoveryPaneStudio" id="discoveryPaneDiscover" data-discovery-pane="discover">
             <div class="discoveryStudioAmbient" aria-hidden="true"></div>
             <header class="discoveryStudioHead">
               <div class="discoveryStudioTitles">
@@ -753,7 +753,7 @@
               <button type="button" class="primary" id="btnDiscoveryJumpIdeas">Open Ideas</button>
             </footer>
           </div>
-          <div class="discoveryPane" id="discoveryPaneIdeas" data-discovery-pane="ideas">
+          <div class="discoveryPane" id="discoveryPaneIdeas" data-discovery-pane="ideas" hidden>
             <div class="searchBarWrap">
               <div class="searchBar">
                 <svg class="searchBarIcon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
@@ -2475,6 +2475,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260514discoverySpotlightNp"></script>
+    <script type="module" src="./src/app.js?v=20260514profilePublicOnlyDiscoverDefault"></script>
   </body>
 </html>

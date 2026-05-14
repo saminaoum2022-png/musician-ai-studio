@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514discoverySpotlightNp";
+const APP_BUILD = "20260514profilePublicOnlyDiscoverDefault";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1923,14 +1923,14 @@ function applyRoute() {
   }
   if (wanted === "discover") {
     bindDiscoverySegmentControls();
-    const seg = getDiscoverySegmentPreference();
-    syncDiscoveryUiToSegment(seg);
-    if (seg === "ideas") {
-      try { onEnterSearchRoute(); } catch {}
-    } else {
-      try { onLeaveSearchRoute(); } catch {}
-      void refreshDiscoverFeed();
-    }
+    try {
+      sessionStorage.setItem(DISCOVERY_SEGMENT_KEY, "discover");
+    } catch {}
+    syncDiscoveryUiToSegment("discover");
+    try {
+      onLeaveSearchRoute();
+    } catch {}
+    void refreshDiscoverFeed();
     try {
       syncDiscoveryNowPlayingChip();
     } catch {}
@@ -2445,7 +2445,7 @@ let _searchInited = false;
 const DISCOVERY_SEGMENT_KEY = "mas:discoverySegment:v1";
 let _discoverySegmentBound = false;
 /** `discover` (community placeholder) or `ideas` (templates + search). */
-let _discoveryActiveSegment = "ideas";
+let _discoveryActiveSegment = "discover";
 
 function startSearchHintRotator() {
   const hintEl = document.getElementById("searchInputHint");
@@ -2819,14 +2819,6 @@ function onEnterSearchRoute() {
 function onLeaveSearchRoute() {
   stopSearchHintRotator();
   closeSearchRemixSheet();
-}
-
-function getDiscoverySegmentPreference() {
-  try {
-    const v = sessionStorage.getItem(DISCOVERY_SEGMENT_KEY);
-    if (v === "discover" || v === "ideas") return v;
-  } catch {}
-  return "ideas";
 }
 
 function syncDiscoveryUiToSegment(seg) {
@@ -8560,7 +8552,10 @@ function renderProfileOwnStats() {
     }
   }
 
-  syncProfileAuraPulseFromLatest(HUB_FEATURE_ENABLED ? hubItems : lib.filter((t) => String(t?.url || "").trim()).slice(0, 24));
+  const libUrl = lib.filter((t) => String(t?.url || "").trim());
+  const pubPulse = libUrl.filter((t) => Boolean(t.publicOnProfile));
+  const pulseItems = HUB_FEATURE_ENABLED ? hubItems : (pubPulse.length ? pubPulse : libUrl).slice(0, 24);
+  syncProfileAuraPulseFromLatest(pulseItems);
 }
 
 /** Compact stat formatter: 0..999 raw, 1.2k, 14.3k, 1.1M. Keeps the
@@ -9938,10 +9933,12 @@ function resetProfileReleasesPagination() {
   _profileReleasesShown = PROFILE_RELEASES_PAGE_SIZE;
 }
 
-/** Profile → Library list (Hub off): every saved track + Public/Private for `#/u/…`. */
+/** Profile → songs on your public link (Hub off): **public Library rows only**.
+ *  All saves (public + private) stay on `#/library`; use ⋯ there to toggle visibility. */
 function renderProfileLibraryPublicOnLinkSection() {
   if (!els.profileHubSharedList) return;
-  const allLib = loadLibrary().filter((t) => String(t?.url || "").trim());
+  const withUrl = loadLibrary().filter((t) => String(t?.url || "").trim());
+  const allLib = withUrl.filter((t) => Boolean(t.publicOnProfile));
   allLib.sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
   if (_profileReleasesShown < PROFILE_RELEASES_PAGE_SIZE) {
     _profileReleasesShown = PROFILE_RELEASES_PAGE_SIZE;
@@ -9963,21 +9960,34 @@ function renderProfileLibraryPublicOnLinkSection() {
   } catch {}
   const countEl = document.getElementById("profileOwnSongCount");
   if (countEl) {
-    const pubN = allLib.filter((t) => Boolean(t.publicOnProfile)).length;
-    if (allLib.length) {
-      countEl.textContent = `${pubN} public on link · ${allLib.length} saved`;
+    const totalSaved = withUrl.length;
+    const pubN = allLib.length;
+    if (totalSaved) {
+      countEl.textContent = pubN
+        ? `${pubN} public on link · ${totalSaved} in Library`
+        : `0 public on link · ${totalSaved} in Library`;
       countEl.hidden = false;
     } else {
       countEl.textContent = "";
       countEl.hidden = true;
     }
   }
-  if (!allLib.length) {
+  if (!withUrl.length) {
     els.profileHubSharedList.innerHTML = `
       <div class="emptyState">
         <div class="emptyStateIcon" aria-hidden="true">♪</div>
         <p class="emptyStateTitle">Nothing in Library yet</p>
         <p class="emptyStateHint">Generated songs land in Library. Use ⋯ on a row to mark them <strong>Public</strong> on your profile link.</p>
+        <a href="#/library" class="emptyStateCta" data-route-link="library">Open Library</a>
+      </div>`;
+    return;
+  }
+  if (!allLib.length) {
+    els.profileHubSharedList.innerHTML = `
+      <div class="emptyState">
+        <div class="emptyStateIcon" aria-hidden="true">◎</div>
+        <p class="emptyStateTitle">No public songs on your profile yet</p>
+        <p class="emptyStateHint">Your saves stay private until you choose <strong>Show on public profile</strong> from ⋯ on each row in Library.</p>
         <a href="#/library" class="emptyStateCta" data-route-link="library">Open Library</a>
       </div>`;
     return;
@@ -9997,13 +10007,10 @@ function renderProfileLibraryPublicOnLinkSection() {
             (t.meta && (t.meta.imageThumb || t.meta.imageUrl)) || t.artUrl || "./assets/nabadai-logo.png",
           );
           const dateLabel = formatLibraryDate(t.ts);
-          const profilePublic = Boolean(t.publicOnProfile);
           const subBits = [];
           if (dateLabel) subBits.push(`<span class="libRowDot">${esc(dateLabel)}</span>`);
           subBits.push(
-            `<span class="libRowChip libRowChipProfileVis libRowChipProfileVis--${
-              profilePublic ? "public" : "private"
-            }">${profilePublic ? "Public" : "Private"}</span>`,
+            `<span class="libRowChip libRowChipProfileVis libRowChipProfileVis--public">Public</span>`,
           );
           const tid = esc(String(t.id));
           return `
@@ -10020,9 +10027,7 @@ function renderProfileLibraryPublicOnLinkSection() {
             </button>
             <button class="libRowMore" type="button" data-profile-lib-menu="${tid}" aria-label="More for ${safeTitle}">⋯</button>
             <div class="libMenu" id="profileLibMenu_${tid}" style="display:none">
-              <button class="ghost" type="button" data-profile-lib-pub="${tid}" data-profile-lib-pub-to="${
-                profilePublic ? "private" : "public"
-              }">${profilePublic ? "Hide from public profile" : "Show on public profile"}</button>
+              <button class="ghost" type="button" data-profile-lib-pub="${tid}" data-profile-lib-pub-to="private">Hide from public profile</button>
             </div>
           </li>`;
         })

@@ -2385,12 +2385,33 @@
         </a>
       </nav>
       <div id="hubNowPlaying" class="hubNowPlaying" style="display:none">
-        <img id="hubNowArt" src="./assets/nabadai-logo.png" alt="Now playing" />
-        <div class="hubNowMain">
-          <div id="hubNowTitle" class="hubNowTitle">Now playing</div>
-          <div class="hubNowProg"><span id="hubNowProgBar" style="width:0%"></span></div>
+        <div class="hubNowShell">
+          <div id="hubNowAura" class="hubNowAura" aria-hidden="true"></div>
+          <div class="hubNowGlass">
+            <div class="hubNowCoverWrap">
+              <img id="hubNowArt" class="hubNowArt" src="./assets/nabadai-logo.png" alt="" decoding="async" />
+            </div>
+            <div class="hubNowText">
+              <div id="hubNowTitle" class="hubNowTitle">Now playing</div>
+              <div id="hubNowSubtitle" class="hubNowSubtitle"></div>
+              <div class="hubNowProg"><span id="hubNowProgBar" class="hubNowProgBar" style="width:0%"></span></div>
+            </div>
+            <button id="hubNowPlayPause" type="button" class="hubNowIconBtn hubNowPlayPause" aria-label="Pause">
+              <span class="hubNowPPIco hubNowPPIco--pause" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M8 5h3v14H8V5zm5 0h3v14h-3V5z"/></svg>
+              </span>
+              <span class="hubNowPPIco hubNowPPIco--play" hidden aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M9 7.5v9l7.5-4.5L9 7.5z"/></svg>
+              </span>
+            </button>
+            <button id="hubNowExpand" type="button" class="hubNowIconBtn hubNowExpand" aria-label="Open full player" title="Full player">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                <path fill="currentColor" d="M6 18l8.5-6L6 6v12zm10 0h2V6h-2v12z"/>
+              </svg>
+            </button>
+            <button id="hubNowClose" class="hubNowIconBtn hubNowClose" type="button" aria-label="Stop">✕</button>
+          </div>
         </div>
-        <button id="hubNowClose" class="hubNowClose" type="button" aria-label="Close">✕</button>
       </div>
       <button id="btnGenerateOrb" class="generateOrb" type="button">Generate</button>
       <div id="likeBurst" class="likeBurst" style="display:none">❤</div>

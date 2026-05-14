@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514discoverRowLibraryChrome";
+const APP_BUILD = "20260514hubMiniGlass";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -343,7 +343,10 @@ const els = {
   hubNowPlaying: document.getElementById("hubNowPlaying"),
   hubNowArt: document.getElementById("hubNowArt"),
   hubNowTitle: document.getElementById("hubNowTitle"),
+  hubNowSubtitle: document.getElementById("hubNowSubtitle"),
   hubNowProgBar: document.getElementById("hubNowProgBar"),
+  hubNowPlayPause: document.getElementById("hubNowPlayPause"),
+  hubNowExpand: document.getElementById("hubNowExpand"),
   hubNowClose: document.getElementById("hubNowClose"),
   likeBurst: document.getElementById("likeBurst"),
   toast: document.getElementById("toast"),
@@ -1291,6 +1294,7 @@ async function startHubPlayback(postId) {
   hubNowMeta = {
     title: p.title || "Hub song",
     art: p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png",
+    subtitle: String(p.creator || "").trim() ? `@${String(p.creator).trim()}` : "Hub",
   };
 
   // Reset all per-row visuals and mark the new active row. NEVER write
@@ -1402,34 +1406,64 @@ async function startHubPlayback(postId) {
   renderHubNowPlaying();
 }
 
+function syncHubNowAuraFromCoverUrl(artUrl) {
+  const aura = document.getElementById("hubNowAura");
+  if (!aura) return;
+  const u = String(artUrl || "").trim();
+  if (!u || u.startsWith("data:")) {
+    aura.style.backgroundImage = "none";
+    return;
+  }
+  try {
+    aura.style.backgroundImage = `url("${u.replace(/\\/g, "/").replace(/"/g, "%22")}")`;
+  } catch {
+    aura.style.backgroundImage = "none";
+  }
+}
+
+function syncHubNowPlayPauseUi(audible) {
+  const btn = document.getElementById("hubNowPlayPause");
+  if (!btn) return;
+  const pPause = btn.querySelector(".hubNowPPIco--pause");
+  const pPlay = btn.querySelector(".hubNowPPIco--play");
+  if (pPause) pPause.hidden = !audible;
+  if (pPlay) pPlay.hidden = audible;
+  btn.setAttribute("aria-label", audible ? "Pause" : "Play");
+}
+
 function renderHubNowPlaying() {
   if (!els.hubNowPlaying) return;
   const route = document.body.getAttribute("data-route") || "";
-  // The mini-player is a global persistent surface — it shows for any
-  // active source (Library track, generated result) and hides
-  // contextually so it never duplicates a richer "now playing" UI:
-  //  - hidden on /player (the full-screen Now Playing replaces it);
-  //  - hidden on Hub entirely (the per-post card *is* the controller; the
-  //    mini-player on top of the swipe feed felt like a second audio
-  //    source, especially when a Library track was still streaming on
-  //    `playerEl` and Hub was streaming on `hubAudio`);
-  //  - hidden on Library (the row already shows the EQ + dot indicator);
-  //  - hidden on Generate when a result card is mid-playback (the card
-  //    shows its own progress + play/pause already).
-  //  - hidden globally for Hub-source playback: Hub posts are intentionally
-  //    tied to the Hub view, so no persistent surface follows them across
-  //    routes. Leaving Hub stops Hub audio entirely (see applyRoute).
   const hideHubSource = miniSource?.type === "hub";
   const hideOnHubVisible = route === "hub";
   const hideOnLibrary = route === "library";
   const hideOnPlayer = route === "player";
   const hideOnGenerate = route === "generate" && miniSource?.type === "generateResult";
-  // hubAudio is the active audio element (either the internal hub audio or
-  // playerEl when streaming Library/Generated tracks), so its paused state
-  // is the single source of truth for "is anything playing right now".
-  const isPlaying = Boolean(hubAudio && !hubAudio.paused && !hubAudio.ended);
-  const active = Boolean(hubNowMeta && isPlaying) && !hideHubSource && !hideOnHubVisible && !hideOnLibrary && !hideOnPlayer && !hideOnGenerate;
-  if (!active) {
+
+  const hasMeta = Boolean(hubNowMeta && String(hubNowMeta.title || "").trim());
+  const hubSrc = Boolean(
+    hubAudio && (String(hubAudio.src || "").trim() || String(hubAudio.currentSrc || "").trim()),
+  );
+  let dur = 0;
+  try {
+    if (hubAudio === playerEl && typeof getPlayerDuration === "function") dur = getPlayerDuration();
+    else if (hubAudio && Number.isFinite(hubAudio.duration) && hubAudio.duration > 0) dur = hubAudio.duration;
+  } catch {}
+  const cur = hubAudio && Number.isFinite(hubAudio.currentTime) ? hubAudio.currentTime : 0;
+  const audible = Boolean(
+    hubAudio && !hubAudio.paused && !hubAudio.ended && hasMeta && hubSrc && (dur > 0 || cur > 0),
+  );
+
+  const showMini =
+    hasMeta &&
+    hubSrc &&
+    !hideHubSource &&
+    !hideOnHubVisible &&
+    !hideOnLibrary &&
+    !hideOnPlayer &&
+    !hideOnGenerate;
+
+  if (!showMini) {
     els.hubNowPlaying.classList.remove("isVisible", "isPlaying");
     setTimeout(() => {
       if (els.hubNowPlaying && !els.hubNowPlaying.classList.contains("isVisible")) {
@@ -1438,16 +1472,41 @@ function renderHubNowPlaying() {
     }, 220);
     return;
   }
+
   els.hubNowPlaying.style.display = "";
   requestAnimationFrame(() => {
-    els.hubNowPlaying.classList.add("isVisible", "isPlaying");
+    els.hubNowPlaying.classList.add("isVisible");
+    if (audible) els.hubNowPlaying.classList.add("isPlaying");
+    else els.hubNowPlaying.classList.remove("isPlaying");
   });
-  if (els.hubNowArt) els.hubNowArt.src = hubNowMeta.art || "./assets/nabadai-logo.png";
-  if (els.hubNowTitle) els.hubNowTitle.textContent = hubNowMeta.title || "Now playing";
-  if (els.hubNowProgBar && hubAudio?.duration && Number.isFinite(hubAudio.duration)) {
-    const pct = Math.max(0, Math.min(100, (hubAudio.currentTime / hubAudio.duration) * 100));
-    els.hubNowProgBar.style.width = `${pct}%`;
+
+  if (els.hubNowArt) {
+    if (!els.hubNowArt.dataset.hubAuraBound) {
+      els.hubNowArt.dataset.hubAuraBound = "1";
+      els.hubNowArt.addEventListener("load", () => {
+        try {
+          syncHubNowAuraFromCoverUrl(els.hubNowArt.currentSrc || els.hubNowArt.src || "");
+        } catch {}
+      });
+    }
+    const artSrc = hubNowMeta.art || "./assets/nabadai-logo.png";
+    els.hubNowArt.src = artSrc;
+    syncHubNowAuraFromCoverUrl(artSrc);
   }
+  if (els.hubNowTitle) els.hubNowTitle.textContent = hubNowMeta.title || "Now playing";
+  if (els.hubNowSubtitle) {
+    const sub = String(hubNowMeta.subtitle || "").trim();
+    els.hubNowSubtitle.textContent = sub;
+  }
+
+  if (els.hubNowProgBar && dur > 0) {
+    const pct = Math.max(0, Math.min(100, (cur / dur) * 100));
+    els.hubNowProgBar.style.width = `${pct}%`;
+  } else if (els.hubNowProgBar) {
+    els.hubNowProgBar.style.width = "0%";
+  }
+
+  syncHubNowPlayPauseUi(Boolean(audible));
 }
 
 let hubNowPlayingScrollRaf = 0;
@@ -13289,6 +13348,7 @@ function setPlayerMeta({ title, subtitle, artUrl } = {}) {
   hubNowMeta = {
     title: title || "Now playing",
     art: artUrl || placeholderCoverDataUrl(),
+    subtitle: subtitle || "",
   };
   renderHubNowPlaying();
 }
@@ -17881,16 +17941,52 @@ if (els.hubTabLink) {
   });
 }
 if (els.hubNowClose) {
-  els.hubNowClose.addEventListener("click", () => {
+  els.hubNowClose.addEventListener("click", (e) => {
+    try {
+      e.stopPropagation();
+    } catch {}
     const mutedId = hubAudioPostId;
     stopHubPlayback();
     if (mutedId) hubAutoplayMutedPostId = mutedId;
   });
 }
+if (els.hubNowPlayPause && !els.hubNowPlayPause.dataset.boundHubPp) {
+  els.hubNowPlayPause.dataset.boundHubPp = "1";
+  els.hubNowPlayPause.addEventListener("click", (e) => {
+    try {
+      e.preventDefault();
+      e.stopPropagation();
+    } catch {}
+    if (!hubAudio) return;
+    haptic("light");
+    try {
+      if (hubAudio.paused || hubAudio.ended) void hubAudio.play();
+      else hubAudio.pause();
+    } catch {}
+    try {
+      syncPlayerUI();
+    } catch {}
+    try {
+      renderHubNowPlaying();
+    } catch {}
+  });
+}
+if (els.hubNowExpand && !els.hubNowExpand.dataset.boundHubExp) {
+  els.hubNowExpand.dataset.boundHubExp = "1";
+  els.hubNowExpand.addEventListener("click", (e) => {
+    try {
+      e.preventDefault();
+      e.stopPropagation();
+    } catch {}
+    haptic("light");
+    try {
+      location.hash = "#/player";
+    } catch {}
+  });
+}
 if (els.hubNowPlaying) {
   els.hubNowPlaying.addEventListener("click", (e) => {
-    const isClose = e.target?.closest?.("#hubNowClose");
-    if (isClose) return;
+    if (e.target?.closest?.(".hubNowIconBtn")) return;
     // Hub posts get special treatment: the post itself is the richer
     // "now playing" surface (cover art, full controls, comments, share),
     // so we jump back to the post in the feed instead of the player.

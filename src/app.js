@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514publicProfileAvatarFix";
+const APP_BUILD = "20260514playerListenOnlyDiscover";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -12847,6 +12847,26 @@ function setPlayerMeta({ title, subtitle, artUrl } = {}) {
 // (Library sets `currentPlayerTrackRef`, but Generate result cards and
 // other paths don't).
 let lastPlayerHttpUrl = "";
+
+/** Discover / another user's public Library: listen-only — no cover edit,
+ *  trim-to-clip, or Hub publish (those flows assume you own the row). */
+function playerSourceIsExternalListenOnly() {
+  const ms = String(miniSource?.type || "");
+  if (ms === "discover_feed" || ms === "public_profile_lib") return true;
+  const id = String(currentPlayerTrackRef?.id || "");
+  if (id.startsWith("public_")) return true;
+  return false;
+}
+
+function updatePlayerSecondaryChrome() {
+  const ro = playerSourceIsExternalListenOnly();
+  const row = document.querySelector(".playerSecondaryRow");
+  if (row) row.hidden = ro;
+  const card = document.querySelector(".playerCard");
+  if (card) card.dataset.readOnlyListen = ro ? "1" : "0";
+  if (ro && els.trimSheet) els.trimSheet.style.display = "none";
+}
+
 function setPlayerSource(url, label) {
   const a = ensurePlayer();
   a.pause();
@@ -12892,6 +12912,7 @@ function setPlayerSource(url, label) {
   }
   syncPlayerUI();
   renderHubNowPlaying();
+  updatePlayerSecondaryChrome();
 }
 
 async function cacheGeneratedAudio(url) {
@@ -17926,6 +17947,7 @@ if (els.btnShareClipHub) {
 }
 if (els.btnOpenTrimSheet) {
   els.btnOpenTrimSheet.addEventListener("click", () => {
+    if (playerSourceIsExternalListenOnly()) return;
     if (els.trimSheet) els.trimSheet.style.display = "";
   });
 }
@@ -17981,6 +18003,7 @@ if (els.btnShareFullHub) {
 }
 if (els.btnPlayerChangeCover) {
   els.btnPlayerChangeCover.addEventListener("click", () => {
+    if (playerSourceIsExternalListenOnly()) return;
     if (!currentPlayerTrackRef?.id) {
       setStatus("Open a library song first.");
       return;

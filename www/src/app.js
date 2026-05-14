@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514librarySunoUrlRefresh";
+const APP_BUILD = "20260514publicProfileAvatarFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -6719,8 +6719,15 @@ async function renderUserProfilePublicLibraryAsync(username) {
   const displayName = String(prof.username || handle || "user").trim();
   if (els.userPublicName) els.userPublicName.textContent = `@${displayName}`;
   if (els.userPublicAvatar) {
-    const av = String(prof.avatar || "").trim();
-    els.userPublicAvatar.src = av && !av.startsWith("data:") ? av : "./assets/nabadai-logo.png";
+    const av = normalizeProfileAvatarForImg(String(prof.avatar || "").trim());
+    els.userPublicAvatar.onerror = () => {
+      try {
+        const logo = "./assets/nabadai-logo.png";
+        const cur = String(els.userPublicAvatar.src || "");
+        if (!cur.includes("nabadai-logo.png")) els.userPublicAvatar.src = logo;
+      } catch {}
+    };
+    els.userPublicAvatar.src = av || "./assets/nabadai-logo.png";
     els.userPublicAvatar.alt = `${displayName} avatar`;
   }
   if (els.userPublicVoice) {
@@ -12979,6 +12986,27 @@ function libraryTrackCanonicalUrl(url) {
 function libraryTrackStableKey(t) {
   const kind = String(t?.kind || "full").trim();
   return `${libraryTrackCanonicalUrl(t?.url)}|${kind}`;
+}
+
+/** `profiles.avatar` may be `data:`, full `https:`, or a path-only
+ *  `/storage/v1/...` that must be resolved against `SUPABASE_URL` for
+ *  `<img src>` on web and Capacitor. Public `#/u/…` must accept data URLs:
+ *  in-browser avatar picks are saved as compressed JPEG data URLs today.
+ */
+function normalizeProfileAvatarForImg(url) {
+  const s = String(url || "").trim();
+  if (!s) return "";
+  if (s.startsWith("data:") || s.startsWith("blob:")) return s;
+  if (s.startsWith("./") || /^\.?\/assets\//i.test(s)) return s;
+  if (/^https?:\/\//i.test(s)) return s;
+  if (/^\/\//.test(s)) return `https:${s}`;
+  const base = String(SUPABASE_URL || "").replace(/\/+$/, "");
+  if (!base) return s;
+  if (s.startsWith("/storage/") || /^storage\/v1\//i.test(s)) {
+    const path = s.startsWith("/") ? s : `/${s}`;
+    return `${base}${path}`;
+  }
+  return s;
 }
 
 function hubAbsoluteUrl(pathOrUrl) {

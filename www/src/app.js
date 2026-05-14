@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514publicProfileVerified";
+const APP_BUILD = "20260514publicProfileFetchFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -6490,21 +6490,46 @@ async function supabaseDeleteUserSong(track) {
   }).catch(() => null);
 }
 
+/** Escape `LIKE`/`ILIKE` wildcards so `username=ilike…` is an exact handle match (underscore is special in SQL). */
+function escapeUsernameForIlikeExact(handle) {
+  return String(handle || "")
+    .trim()
+    .replace(/\\/g, "\\\\")
+    .replace(/%/g, "\\%")
+    .replace(/_/g, "\\_");
+}
+
 /** Public `profiles` row by handle — anon when `profiles_select_public_directory` exists. */
 async function fetchPublicProfileRowByUsername(username) {
   const handle = String(username || "").replace(/^@/, "").trim();
   if (!handle || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
-  try {
-    const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/profiles?username=eq.${encodeURIComponent(handle)}&select=user_id,username,avatar,bio,voice_timbre,sound_certified&limit=1`,
-      { headers: { apikey: SUPABASE_ANON_KEY } },
-    );
-    if (!r.ok) return null;
-    const arr = await r.json().catch(() => []);
-    return Array.isArray(arr) && arr[0] ? arr[0] : null;
-  } catch {
-    return null;
-  }
+  const headers = { apikey: SUPABASE_ANON_KEY, Accept: "application/json" };
+  const base = `${SUPABASE_URL}/rest/v1/profiles`;
+  const selFull = "user_id,username,avatar,bio,voice_timbre,sound_certified";
+  const selCore = "user_id,username,avatar,bio,voice_timbre";
+  const eq = `username=eq.${encodeURIComponent(handle)}`;
+  const il = `username=ilike.${encodeURIComponent(escapeUsernameForIlikeExact(handle))}`;
+  const tryOne = async (filter, selectList) => {
+    try {
+      const r = await fetch(`${base}?${filter}&select=${selectList}&limit=1`, {
+        headers,
+        cache: "no-store",
+      });
+      if (!r.ok) return null;
+      const arr = await r.json().catch(() => []);
+      return Array.isArray(arr) && arr[0] ? arr[0] : null;
+    } catch {
+      return null;
+    }
+  };
+  // `sound_certified` breaks the whole request if the column is not migrated yet — fall back to `selCore`.
+  // `eq` is case-sensitive — try escaped `ilike` second so `@Samy_CEO` still resolves.
+  return (
+    (await tryOne(eq, selFull)) ||
+    (await tryOne(eq, selCore)) ||
+    (await tryOne(il, selFull)) ||
+    (await tryOne(il, selCore))
+  );
 }
 
 /** Library songs the owner marked `public_on_profile` (separate RLS policy). */

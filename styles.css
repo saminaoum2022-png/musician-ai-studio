@@ -5864,11 +5864,14 @@ body[data-route="profile"]:has(#profileAura.profileAuraEditing) #profileAuraHead
 .userPublicNameRow{
   display: flex;
   align-items: center;
-  gap: 5px;
+  justify-content: flex-start;
+  gap: 6px;
   min-width: 0;
+  width: 100%;
 }
+/* Do not use flex-grow on the name — it shoves the verified check to the far edge of the row. */
 .userPublicNameRow .userPublicName{
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
 }
 .userPublicVerified{

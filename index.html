@@ -1444,10 +1444,9 @@
                 <p id="profileAboutText" class="profileHeroBioText"></p>
               </div>
 
-              <!-- These two nodes still exist for edit-mode + legacy
-                   data flow, but the view-mode UI now reads from
-                   profileIdentityLine instead. CSS hides them outside
-                   edit mode (see .profileAura:not(.profileAuraEditing)). -->
+              <!-- Legacy nodes kept for DOM stability; genres are never
+                   shown here (My Sound owns them). Persona chip may show
+                   in edit mode only when a Suno persona is selected. -->
               <p id="profilePersonaInlineChip" class="profilePersonaInlineChip profileLegacyChip" style="display:none" aria-live="polite"></p>
               <p id="profilePreviewGenres" class="profileGenreWash profileLegacyChip" style="display:none" aria-label="Genres"></p>
 

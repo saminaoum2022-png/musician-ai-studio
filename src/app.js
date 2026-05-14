@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514discoverSkeletonSpotlight";
+const APP_BUILD = "20260514profileEditHeroLegacyClean";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4436,7 +4436,9 @@ function updateProfilePersonaRow() {
 }
 
 /**
- * Compact persona / voice line under bio on Profile (Direction A).
+ * Optional "Persona · …" line under the hero in **edit** mode when a
+ * Suno persona is selected. Voice timbre is not mirrored here (hero
+ * `<select>` + My Sound card).
  */
 function updateProfilePersonaInlineChip() {
   const el = els.profilePersonaInlineChip;
@@ -4464,13 +4466,8 @@ function updateProfilePersonaInlineChip() {
     el.style.display = "";
     return;
   }
-  const vt = String(activeProfile?.voiceTimbre || "").trim();
-  if (vt) {
-    const pretty = vt.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-    el.textContent = `Voice · ${pretty}`;
-    el.style.display = "";
-    return;
-  }
+  // Voice timbre lives in the hero `<select>` while editing and on the
+  // My Sound card in view mode — do not mirror "Voice · …" here (duplicate).
   el.textContent = "";
   el.style.display = "none";
 }
@@ -9766,7 +9763,6 @@ function renderProfilePreviewFromInputs() {
   // (worst) replaced an empty bio with the placeholder string as a
   // real value, which made the field look "stuck" on the prompt text.
   // We just measure for layout and keep mirrors in sync.
-  const genres = String(activeProfile.genres || "").trim();
 
   if (els.profilePreviewGenderIcon) els.profilePreviewGenderIcon.style.display = "none";
   if (els.profilePreviewBioInput) {
@@ -9775,18 +9771,8 @@ function renderProfilePreviewFromInputs() {
     els.profilePreviewBioInput.style.height = `${h}px`;
   }
   if (els.profilePreviewGenres) {
-    if (genres) {
-      const wash = genres
-        .split(/[,|]/)
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .join(" · ");
-      els.profilePreviewGenres.textContent = wash.toUpperCase();
-      els.profilePreviewGenres.style.display = "";
-    } else {
-      els.profilePreviewGenres.textContent = "";
-      els.profilePreviewGenres.style.display = "none";
-    }
+    els.profilePreviewGenres.textContent = "";
+    els.profilePreviewGenres.style.display = "none";
   }
   if (els.profilePreviewAvatar) {
     const raw = String(activeProfile.avatar || "").trim();

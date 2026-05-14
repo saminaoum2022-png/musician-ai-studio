@@ -4606,9 +4606,13 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
   isolation: isolate;
 }
 
-/* --- Hide legacy chip cluster in view mode — the identity line takes
-   over. Still visible inside edit mode so the form is editable. --- */
-.profileAura:not(.profileAuraEditing) .profileLegacyChip{
+/* --- Genre wash: retired from hero — "My Sound" owns genres. --- */
+.profileAura .profilePreviewGenres{
+  display: none !important;
+}
+/* --- Persona/voice inline chip: view mode uses #profileIdentityLine.
+   Edit mode may show "Persona · …" only (see updateProfilePersonaInlineChip). --- */
+.profileAura:not(.profileAuraEditing) .profilePersonaInlineChip.profileLegacyChip{
   display: none !important;
 }
 .profileAura.profileAuraEditing .profileIdentityLine,

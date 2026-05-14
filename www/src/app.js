@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514libraryLeadClarify";
+const APP_BUILD = "20260514profileStatsLibFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -8026,7 +8026,10 @@ function renderProfileOwnStats() {
   const pubLib = lib.filter((t) => Boolean(t.publicOnProfile));
   const pubLibCount = pubLib.length;
   const totalLikes = HUB_FEATURE_ENABLED ? hubItems.reduce((sum, p) => sum + Number(p.likes || 0), 0) : 0;
-  const songCountForPills = HUB_FEATURE_ENABLED ? hubItems.length : pubLibCount;
+  // Hub off: "Songs" = everything saved in Library (not only public).
+  // Second pill repurposed from "Likes" → "Public" (likes only exist on Hub).
+  const songCountForPills = HUB_FEATURE_ENABLED ? hubItems.length : lib.length;
+  const secondPillValue = HUB_FEATURE_ENABLED ? totalLikes : pubLibCount;
   const songCountForOwnHeader = HUB_FEATURE_ENABLED ? hubItems.length : lib.length;
 
   if (els.profileOwnSongCount) {
@@ -8068,15 +8071,22 @@ function renderProfileOwnStats() {
     }
   }
   if (els.profileAuraSongsValue) els.profileAuraSongsValue.textContent = String(songCountForPills);
-  if (els.profileAuraLikesValue) els.profileAuraLikesValue.textContent = String(totalLikes);
+  if (els.profileAuraLikesValue) els.profileAuraLikesValue.textContent = String(secondPillValue);
   if (els.profileAuraStatSongs) els.profileAuraStatSongs.dataset.show = songCountForPills > 0 ? "true" : "false";
-  if (els.profileAuraStatLikes) els.profileAuraStatLikes.dataset.show = totalLikes > 0 ? "true" : "false";
+  if (els.profileAuraStatLikes) {
+    els.profileAuraStatLikes.dataset.show =
+      HUB_FEATURE_ENABLED ? (totalLikes > 0 ? "true" : "false") : (pubLibCount > 0 ? "true" : "false");
+  }
 
   if (els.profileStatPillSongsValue) {
     els.profileStatPillSongsValue.textContent = formatStatCount(songCountForPills);
   }
   if (els.profileStatPillLikesValue) {
-    els.profileStatPillLikesValue.textContent = formatStatCount(totalLikes);
+    els.profileStatPillLikesValue.textContent = formatStatCount(secondPillValue);
+  }
+  const secondPillLabel = els.profileStatsPills?.querySelector?.(".profileStatPill--likes .profileStatPillLabel");
+  if (secondPillLabel) {
+    secondPillLabel.textContent = HUB_FEATURE_ENABLED ? "Likes" : "Public";
   }
   if (els.profileStatsPills) {
     els.profileStatsPills.hidden = HUB_FEATURE_ENABLED ? hubItems.length === 0 : lib.length === 0;
@@ -10327,9 +10337,22 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
       }
     }
     const cloudAfter = await supabaseLoadUserSongs();
-    const finalSongs = cloudAfter.length ? cloudAfter : merged;
-    saveLibraryFor(uid, finalSongs);
-    saveLibrary(finalSongs);
+    // Do not replace a full merged list with a shorter/partial cloud
+    // snapshot (RLS hiccup, transient HTTP empty body, etc.) — union by
+    // signature so local-only rows stay until the server confirms them.
+    const mergedFinal = [];
+    const seenFinal = new Set();
+    const addFinal = (row) => {
+      const s = sigOf(row);
+      if (seenFinal.has(s)) return;
+      seenFinal.add(s);
+      mergedFinal.push(row);
+    };
+    if (Array.isArray(cloudAfter)) cloudAfter.forEach(addFinal);
+    merged.forEach(addFinal);
+    mergedFinal.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
+    saveLibraryFor(uid, mergedFinal);
+    saveLibrary(mergedFinal);
     renderLibrary();
     if (failCount > 0) {
       setStatus(`Library sync partial: ${okCount} uploaded, ${failCount} failed (${firstFail.slice(0, 90)})`);

@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514profileStatsLibFix";
+const APP_BUILD = "20260514patchUserSongById";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5965,20 +5965,24 @@ async function supabaseLoadUserSongs() {
   }
   _lastUserSongsLoadStatus = "ok";
   _lastUserSongsLoadDetails = "";
-  return rows.map((s) => ({
-    id: String(s.id || `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
-    ts: new Date(s.created_at || Date.now()).getTime(),
-    title: s.title || "Generated song",
-    artUrl: s.art_url || "",
-    url: s.song_url || "",
-    taskId: s.task_id || "",
-    audioId: s.audio_id || "",
-    kind: s.kind || "full",
-    meta: null,
-    publicOnProfile: Boolean(
-      s.public_on_profile === true || s.public_on_profile === "t" || s.public_on_profile === "true",
-    ),
-  }));
+  return rows.map((s) => {
+    const cid = String(s.id || "").trim();
+    return {
+      id: cid || `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      cloudSongId: cid,
+      ts: new Date(s.created_at || Date.now()).getTime(),
+      title: s.title || "Generated song",
+      artUrl: s.art_url || "",
+      url: s.song_url || "",
+      taskId: s.task_id || "",
+      audioId: s.audio_id || "",
+      kind: s.kind || "full",
+      meta: null,
+      publicOnProfile: Boolean(
+        s.public_on_profile === true || s.public_on_profile === "t" || s.public_on_profile === "true",
+      ),
+    };
+  });
 }
 /** Strip values that aren't safe / efficient to ship to a JSONB row in
  *  Supabase. v1 Library cloud sync intentionally leaves custom-cover
@@ -6070,6 +6074,11 @@ async function supabaseInsertUserSong(track) {
   recordUserSongInsertResult({ ok: true });
   return { ok: true };
 }
+/** True when `v` looks like a Postgres `uuid` text form (REST `id=eq.` filters). */
+function isPostgresUuidString(v) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || "").trim());
+}
+
 /** Patch an existing `user_songs` row keyed by (user_id, song_url, kind).
  *  Used when a track changes locally — currently just custom-cover
  *  uploads from the Player. Fire-and-forget; failures fall back to
@@ -6078,11 +6087,21 @@ async function supabaseInsertUserSong(track) {
 async function supabasePatchUserSong(track, patch) {
   const token = getSupabaseAuthToken();
   if (!token || !authSession?.user?.id) return { ok: false, reason: "no_auth" };
-  const songUrl = String(track?.url || "").trim();
-  if (!songUrl) return { ok: false, reason: "no_song_url" };
   const uid = encodeURIComponent(authSession.user.id);
+  const songUrl = String(track?.url || "").trim();
   const url = encodeURIComponent(songUrl);
   const kind = encodeURIComponent(String(track?.kind || "full"));
+  const rowRef =
+    String(track?.cloudSongId || "").trim() ||
+    (isPostgresUuidString(track?.id) ? String(track.id).trim() : "");
+  let filter;
+  if (rowRef && isPostgresUuidString(rowRef)) {
+    filter = `user_id=eq.${uid}&id=eq.${encodeURIComponent(rowRef)}`;
+  } else if (songUrl) {
+    filter = `user_id=eq.${uid}&song_url=eq.${url}&kind=eq.${kind}`;
+  } else {
+    return { ok: false, reason: "no_row_ref", details: "missing cloudSongId and song_url" };
+  }
   const body = {};
   if (typeof patch?.title === "string") body.title = patch.title;
   // Same reasoning as in supabaseInsertUserSong: don't ship a custom
@@ -6099,7 +6118,7 @@ async function supabasePatchUserSong(track, patch) {
     body.public_on_profile = patch.publicOnProfile;
   }
   if (Object.keys(body).length === 0) return { ok: false, reason: "noop" };
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${uid}&song_url=eq.${url}&kind=eq.${kind}`, {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?${filter}`, {
     method: "PATCH",
     headers: {
       apikey: SUPABASE_ANON_KEY,
@@ -6112,7 +6131,7 @@ async function supabasePatchUserSong(track, patch) {
   if (!r) return { ok: false, reason: "network" };
   if (!r.ok) {
     const txt = await r.text().catch(() => "");
-    return { ok: false, reason: `http_${r.status}`, details: String(txt).slice(0, 180) };
+    return { ok: false, reason: `http_${r.status}`, details: String(txt).slice(0, 280) };
   }
   return { ok: true };
 }
@@ -6120,10 +6139,22 @@ async function supabasePatchUserSong(track, patch) {
 async function supabaseDeleteUserSong(track) {
   const token = getSupabaseAuthToken();
   if (!token || !authSession?.user?.id) return;
-  const songUrl = encodeURIComponent(String(track?.url || "").trim());
+  const uid = encodeURIComponent(authSession.user.id);
+  const songUrl = String(track?.url || "").trim();
+  const encUrl = encodeURIComponent(songUrl);
   const kind = encodeURIComponent(String(track?.kind || "full"));
-  if (!String(track?.url || "").trim()) return;
-  await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${encodeURIComponent(authSession.user.id)}&song_url=eq.${songUrl}&kind=eq.${kind}`, {
+  const rowRef =
+    String(track?.cloudSongId || "").trim() ||
+    (isPostgresUuidString(track?.id) ? String(track.id).trim() : "");
+  let filter;
+  if (rowRef && isPostgresUuidString(rowRef)) {
+    filter = `user_id=eq.${uid}&id=eq.${encodeURIComponent(rowRef)}`;
+  } else if (songUrl) {
+    filter = `user_id=eq.${uid}&song_url=eq.${encUrl}&kind=eq.${kind}`;
+  } else {
+    return;
+  }
+  await fetch(`${SUPABASE_URL}/rest/v1/user_songs?${filter}`, {
     method: "DELETE",
     headers: {
       apikey: SUPABASE_ANON_KEY,
@@ -6208,7 +6239,17 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic) {
   }
   const patch = await supabasePatchUserSong(track, { publicOnProfile: next.publicOnProfile });
   if (patch && patch.ok === false && patch.reason && patch.reason !== "noop") {
-    showToast("Saved on this device — cloud update failed. Check connection.", { durationMs: 4200 });
+    const det = String(patch.details || "").trim();
+    let msg = "Saved on this device — cloud update failed.";
+    if (/public_on_profile|42703|column/i.test(det)) {
+      msg =
+        "Database missing public_on_profile. In Supabase SQL Editor run: supabase/user_songs_public_on_profile.sql";
+    } else if (det) {
+      msg = `${msg} ${det.slice(0, 140)}`;
+    } else {
+      msg = `${msg} Check connection.`;
+    }
+    showToast(msg, { durationMs: 6200 });
     return { ok: false };
   }
   showToast(
@@ -10413,6 +10454,7 @@ async function reconcileLibraryFromCloud({ force = false } = {}) {
         merged.push({
           ...c,
           id: localCopy.id || c.id,
+          cloudSongId: String(c.id || c.cloudSongId || "").trim(),
           artUrl: localArtIsCustom ? localCopy.artUrl : (c.artUrl || localCopy.artUrl || ""),
           meta: {
             ...(c.meta || {}),

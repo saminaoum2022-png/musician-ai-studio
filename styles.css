@@ -2749,6 +2749,10 @@ body.hubJumpingToTop #hubList .hubRow{
   margin-top: 14px;
   flex-wrap: wrap;
 }
+.playerSecondaryRow.isListenOnlyHidden{
+  display: none !important;
+  margin-top: 0;
+}
 .playerMiniBtn{
   display:inline-flex;
   align-items:center;

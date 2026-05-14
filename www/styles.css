@@ -9888,58 +9888,92 @@ input::placeholder, textarea::placeholder{
   display: none;
 }
 
-/* Now playing strip (Discover feed source) */
+/* Now playing strip (Discover feed) — liquid glass + cover aura (profileAuraIconBtn family) */
 .discoveryNowPlaying{
   margin: 0 0 14px;
 }
-.discoveryNowPlayingRow{
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
-  width: 100%;
+.discoveryNpShell{
+  position: relative;
+  border-radius: 20px;
+  overflow: hidden;
+  isolation: isolate;
 }
-.discoveryNowPlayingBtn{
+.discoveryNpAura{
+  position: absolute;
+  inset: -28%;
+  background-position: center;
+  background-size: cover;
+  filter: blur(38px) saturate(1.85);
+  opacity: 0.62;
+  transform: scale(1.05);
+  pointer-events: none;
+  transition: opacity 0.35s ease, filter 0.35s ease;
+}
+.discoveryNpRow{
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 8px 8px 10px;
+  border-radius: inherit;
+}
+.discoveryNpGlass{
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
+  -webkit-backdrop-filter: blur(24px) saturate(200%);
+          backdrop-filter: blur(24px) saturate(200%);
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.25);
+  color: #f0f4ff;
+}
+.discoveryNpOpenPlayer{
+  -webkit-appearance: none;
+  appearance: none;
   flex: 1 1 auto;
   min-width: 0;
-  width: auto;
-  padding: 10px 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(124,92,255,0.28);
-  background: linear-gradient(120deg, rgba(124,92,255,0.18), rgba(18,22,34,0.92));
-  color: #f0f4ff;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
   cursor: pointer;
   text-align: left;
-  position: relative;
-  overflow: hidden;
   -webkit-tap-highlight-color: transparent;
-  transition: border-color 0.2s ease, transform 0.16s ease, box-shadow 0.22s ease;
+  border-radius: 14px;
 }
-.discoveryNowPlayingBtn:hover{
-  border-color: rgba(168,140,255,0.5);
-  box-shadow: 0 8px 28px rgba(124,92,255,0.18);
-}
-.discoveryNowPlayingBtn:active{
-  transform: scale(0.99);
-}
-.discoveryNowPlayingBtn:focus-visible{
-  outline: 2px solid rgba(124,92,255,0.55);
+.discoveryNpOpenPlayer:focus-visible{
+  outline: 2px solid rgba(255, 255, 255, 0.45);
   outline-offset: 2px;
+}
+.discoveryNpCoverClip{
+  position: relative;
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 .discoveryNowPlayingPulse{
   position: absolute;
-  left: 18px;
-  top: 50%;
+  left: 6px;
+  top: 6px;
   width: 10px;
   height: 10px;
-  margin-top: -5px;
   border-radius: 999px;
-  background: rgba(56,189,248,0.85);
+  background: rgba(56, 189, 248, 0.88);
   opacity: 0;
   transform: scale(0.6);
   pointer-events: none;
+  z-index: 1;
 }
 .discoveryNowPlaying.isPlaying .discoveryNowPlayingPulse{
   opacity: 1;
@@ -9950,22 +9984,19 @@ input::placeholder, textarea::placeholder{
   50%{ transform: scale(1.15); opacity: 1; }
 }
 .discoveryNowPlayingArt{
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  display: block;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  flex: 0 0 auto;
-  margin-left: 6px;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.35);
 }
-.discoveryNowPlayingMeta{
+.discoveryNpMetaCol{
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
-.discoveryNowPlayingTitle{
+.discoveryNpTitle{
   font-size: 14px;
   font-weight: 750;
   letter-spacing: -0.02em;
@@ -9973,48 +10004,90 @@ input::placeholder, textarea::placeholder{
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.discoveryNowPlayingState{
-  font-size: 11.5px;
-  font-weight: 650;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: rgba(186,198,230,0.65);
-}
-.discoveryNowPlayingGo{
-  flex: 0 0 auto;
+.discoveryNpBy{
   font-size: 12px;
-  font-weight: 700;
-  color: rgba(200,210,245,0.75);
-  padding: 6px 10px;
-  border-radius: 10px;
-  background: rgba(255,255,255,0.06);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: rgba(232, 238, 247, 0.62);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.discoveryNowPlayingDismiss{
+.discoveryNpPlayPause{
+  -webkit-appearance: none;
+  appearance: none;
   flex: 0 0 auto;
   width: 44px;
-  min-height: 0;
-  align-self: stretch;
-  border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.05);
-  color: rgba(232,238,247,0.72);
+  height: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.06));
+  -webkit-backdrop-filter: blur(24px) saturate(200%);
+          backdrop-filter: blur(24px) saturate(200%);
+  color: #fff;
+  cursor: pointer;
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22);
+  transition: transform 0.12s ease, background 0.16s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoveryNpPlayPause:hover{
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.1));
+}
+.discoveryNpPlayPause:active{
+  transform: scale(0.94);
+}
+.discoveryNpPlayPause:focus-visible{
+  outline: 2px solid rgba(255, 255, 255, 0.45);
+  outline-offset: 2px;
+}
+.discoveryNpPlayPauseIco{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.discoveryNpPlayPauseIco svg{
+  display: block;
+}
+.discoveryNpDismiss{
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+          backdrop-filter: blur(18px) saturate(180%);
+  color: rgba(232, 238, 247, 0.78);
   font-size: 22px;
   font-weight: 500;
   line-height: 1;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
 }
-.discoveryNowPlayingDismiss:hover{
-  background: rgba(255,100,120,0.12);
-  border-color: rgba(255,120,140,0.35);
+.discoveryNpDismiss:hover{
+  background: rgba(255, 100, 120, 0.14);
+  border-color: rgba(255, 120, 140, 0.38);
   color: #fff;
 }
-.discoveryNowPlayingDismiss:active{
-  transform: scale(0.97);
+.discoveryNpDismiss:active{
+  transform: scale(0.96);
 }
-.discoveryNowPlayingDismiss:focus-visible{
-  outline: 2px solid rgba(124,92,255,0.55);
+.discoveryNpDismiss:focus-visible{
+  outline: 2px solid rgba(255, 255, 255, 0.45);
   outline-offset: 2px;
 }
 

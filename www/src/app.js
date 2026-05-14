@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514discoverListThumbPlay";
+const APP_BUILD = "20260514discoverMiniGlass";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2917,6 +2917,7 @@ function bindDiscoverySegmentControls() {
         const u = inline.getAttribute("data-user-lib-url");
         const title = inline.getAttribute("data-user-lib-title") || "Song";
         const art = inline.getAttribute("data-user-lib-art") || "";
+        const by = inline.getAttribute("data-discovery-by") || "";
         if (!u) return;
         let raw = "";
         try {
@@ -2925,7 +2926,7 @@ function bindDiscoverySegmentControls() {
           raw = u;
         }
         haptic("light");
-        void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false });
+        void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by });
         return;
       }
       const pl = e.target.closest("[data-user-lib-play]");
@@ -2935,6 +2936,7 @@ function bindDiscoverySegmentControls() {
       const u = pl.getAttribute("data-user-lib-url");
       const title = pl.getAttribute("data-user-lib-title") || "Song";
       const art = pl.getAttribute("data-user-lib-art") || "";
+      const by = pl.getAttribute("data-discovery-by") || "";
       if (!u) return;
       let raw = "";
       try {
@@ -2943,16 +2945,37 @@ function bindDiscoverySegmentControls() {
         raw = u;
       }
       haptic("light");
-      void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer });
+      void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer, discoverBy: by });
     });
   }
-  const npb = document.getElementById("discoveryNowPlayingBtn");
-  if (npb && !npb.dataset.boundDiscoveryNp) {
-    npb.dataset.boundDiscoveryNp = "1";
-    npb.addEventListener("click", () => {
+  const npo = document.getElementById("discoveryNowPlayingOpenPlayer");
+  if (npo && !npo.dataset.boundDiscoveryNpOpen) {
+    npo.dataset.boundDiscoveryNpOpen = "1";
+    npo.addEventListener("click", () => {
       haptic("light");
       try {
         location.hash = "#/player";
+      } catch {}
+    });
+  }
+  const npp = document.getElementById("discoveryNpPlayPause");
+  if (npp && !npp.dataset.boundDiscoveryNpPlay) {
+    npp.dataset.boundDiscoveryNpPlay = "1";
+    npp.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (miniSource?.type !== "discover_feed") return;
+      haptic("light");
+      const a = ensurePlayer();
+      try {
+        if (a.paused || a.ended) {
+          void a.play();
+        } else {
+          a.pause();
+        }
+      } catch {}
+      try {
+        syncPlayerUI();
       } catch {}
     });
   }
@@ -6711,6 +6734,37 @@ function syncDiscoveryPlayingHighlights() {
   });
 }
 
+function syncDiscoveryNpAuraFromCoverUrl(coverUrl) {
+  const aura = document.getElementById("discoveryNpAura");
+  if (!aura) return;
+  const u = String(coverUrl || "").trim();
+  if (!u || u.startsWith("data:")) {
+    aura.style.backgroundImage = "none";
+    return;
+  }
+  try {
+    aura.style.backgroundImage = `url("${u.replace(/\\/g, "/").replace(/"/g, "%22")}")`;
+  } catch {
+    aura.style.backgroundImage = "none";
+  }
+}
+
+function syncDiscoveryMiniTransport() {
+  const wrap = document.getElementById("discoveryNowPlaying");
+  const btn = document.getElementById("discoveryNpPlayPause");
+  if (!wrap || wrap.hidden || !btn) return;
+  const au = ensurePlayer();
+  const dur = getPlayerDuration();
+  const cur = au && Number.isFinite(au.currentTime) ? au.currentTime : 0;
+  const playing = Boolean(au && !au.paused && !au.ended && (dur > 0 || cur > 0));
+  const icoPause = btn.querySelector(".discoveryNpPlayPauseIco--pause");
+  const icoPlay = btn.querySelector(".discoveryNpPlayPauseIco--play");
+  const showPause = playing;
+  if (icoPause) icoPause.hidden = !showPause;
+  if (icoPlay) icoPlay.hidden = showPause;
+  btn.setAttribute("aria-label", showPause ? "Pause" : "Play");
+}
+
 function syncDiscoveryNowPlayingChip() {
   const wrap = document.getElementById("discoveryNowPlaying");
   if (!wrap) return;
@@ -6723,33 +6777,44 @@ function syncDiscoveryNowPlayingChip() {
     try {
       syncDiscoveryPlayingHighlights();
     } catch {}
+    try {
+      syncDiscoveryMiniTransport();
+    } catch {}
     return;
   }
   const au = ensurePlayer();
   const dur = getPlayerDuration();
   const cur = au && Number.isFinite(au.currentTime) ? au.currentTime : 0;
   const playing = Boolean(au && !au.paused && !au.ended && (dur > 0 || cur > 0));
-  if (!playing) {
-    wrap.hidden = true;
-    wrap.classList.remove("isPlaying");
-    try {
-      syncDiscoveryPlayingHighlights();
-    } catch {}
-    return;
-  }
   wrap.hidden = false;
   const art = document.getElementById("discoveryNowPlayingArt");
   const titleEl = document.getElementById("discoveryNowPlayingTitle");
-  const stateEl = document.getElementById("discoveryNowPlayingState");
+  const byEl = document.getElementById("discoveryNowPlayingBy");
   if (art) {
+    if (!art.dataset.discoveryNpAuraBound) {
+      art.dataset.discoveryNpAuraBound = "1";
+      art.addEventListener("load", () => {
+        try {
+          syncDiscoveryNpAuraFromCoverUrl(art.currentSrc || art.src || "");
+        } catch {}
+      });
+    }
     const src = String(currentPlayerTrackRef.artUrl || "").trim();
-    art.src = src && !src.startsWith("data:") ? src : placeholderCoverDataUrl();
+    const next = src && !src.startsWith("data:") ? src : placeholderCoverDataUrl();
+    art.src = next;
+    syncDiscoveryNpAuraFromCoverUrl(next);
   }
   if (titleEl) titleEl.textContent = currentPlayerTrackRef.title || "Playing";
-  if (stateEl) stateEl.textContent = "Now playing";
-  wrap.classList.add("isPlaying");
+  if (byEl) {
+    const b = String(currentPlayerTrackRef.byLine || "").trim();
+    byEl.textContent = b || "Discover feed";
+  }
+  wrap.classList.toggle("isPlaying", playing);
   try {
     syncDiscoveryPlayingHighlights();
+  } catch {}
+  try {
+    syncDiscoveryMiniTransport();
   } catch {}
 }
 
@@ -6776,14 +6841,14 @@ function discoveryTrackRowHtml(t, profMap, idx) {
     : `<span class="discoveryRowSpacer" aria-hidden="true"></span>`;
   return `
       <div class="discoveryRow" style="--i:${idx}">
-        <button type="button" class="discoveryRowArtBtn" data-discovery-inline-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(artSafe)}" aria-label="Play ${safeTitle}">
+        <button type="button" class="discoveryRowArtBtn" data-discovery-inline-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(artSafe)}" data-discovery-by="${escapeHtml(byLine)}" aria-label="Play ${safeTitle}">
           <span class="discoveryRowArt">
             <img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" />
             <span class="discoveryRowArtGlow" aria-hidden="true"></span>
           </span>
           <span class="discoveryRowArtPlay" aria-hidden="true">${discoveryRowThumbPlaySvg()}</span>
         </button>
-        <button type="button" class="discoveryRowMain" data-discovery-open-player="1" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(artSafe)}" aria-label="Open player for ${safeTitle}">
+        <button type="button" class="discoveryRowMain" data-discovery-open-player="1" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(artSafe)}" data-discovery-by="${escapeHtml(byLine)}" aria-label="Open player for ${safeTitle}">
           <span class="discoveryRowMid">
             <span class="discoveryRowTitle">${safeTitle}</span>
             <span class="discoveryRowMeta">${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}</span>
@@ -6802,7 +6867,7 @@ function discoverySpotCardHtml(t, profMap, idx, playIco) {
   const safeTitle = escapeHtml(String(t.title || "Untitled"));
   const encUrl = encodeURIComponent(String(t.url || ""));
   return `
-      <button type="button" class="discoverySpotCard" style="--i:${idx}" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(artSafe)}">
+      <button type="button" class="discoverySpotCard" style="--i:${idx}" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(artSafe)}" data-discovery-by="${escapeHtml(byLine)}">
         <span class="discoverySpotCardArt"><img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" /></span>
         <span class="discoverySpotCardShade" aria-hidden="true"></span>
         <span class="discoverySpotCardPlay" aria-hidden="true">${playIco}</span>
@@ -6965,6 +7030,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   if (!raw) return;
   const fromDiscover = Boolean(opts && opts.discoverFeed);
   const openPlayer = fromDiscover ? opts?.openPlayer !== false : true;
+  const byLine = fromDiscover ? String(opts?.discoverBy || "").trim() : "";
   try {
     stopHubPlayback();
   } catch {}
@@ -6974,6 +7040,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     url: raw,
     title: title || "Song",
     artUrl: artUrl || "",
+    byLine,
     meta: {},
   };
   miniSource = fromDiscover ? { type: "discover_feed", url: raw } : { type: "public_profile_lib", url: raw };
@@ -6983,7 +7050,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   } catch {}
   const meta = {
     title: title || "Song",
-    subtitle: fromDiscover ? "Discover feed" : "Public profile",
+    subtitle: fromDiscover ? byLine || "Discover feed" : "Public profile",
     artUrl: artUrl || placeholderCoverDataUrl(),
   };
   if (fromDiscover && !openPlayer) {
@@ -13224,6 +13291,9 @@ function ensurePlayer() {
     if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = false;
     if (els.btnPlayerPause) els.btnPlayerPause.disabled = true;
     try { setProfileAuraAudioState(isAnyAppAudioPlaying()); } catch {}
+    try {
+      syncPlayerUI();
+    } catch {}
   });
   return playerEl;
 }

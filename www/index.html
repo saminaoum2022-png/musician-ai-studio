@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260514discoveryStudioUi" />
+    <link rel="stylesheet" href="./styles.css?v=20260514discoverySpotlightNp" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -728,6 +728,24 @@
                 </svg>
               </button>
             </header>
+            <div id="discoveryNowPlaying" class="discoveryNowPlaying" hidden>
+              <button type="button" class="discoveryNowPlayingBtn" id="discoveryNowPlayingBtn" aria-label="Open full player">
+                <span class="discoveryNowPlayingPulse" aria-hidden="true"></span>
+                <img id="discoveryNowPlayingArt" class="discoveryNowPlayingArt" src="./assets/nabadai-logo.png" alt="" decoding="async" />
+                <span class="discoveryNowPlayingMeta">
+                  <span id="discoveryNowPlayingTitle" class="discoveryNowPlayingTitle"></span>
+                  <span id="discoveryNowPlayingState" class="discoveryNowPlayingState">Discover</span>
+                </span>
+                <span class="discoveryNowPlayingGo" aria-hidden="true">Player</span>
+              </button>
+            </div>
+            <div id="discoverySpotlightWrap" class="discoverySpotlightWrap" hidden>
+              <div class="discoverySpotlightHead">
+                <span class="discoverySpotlightTitle">Spotlight</span>
+                <span class="discoverySpotlightHint">Swipe</span>
+              </div>
+              <div id="discoverySpotlightRail" class="discoverySpotlightRail" role="list"></div>
+            </div>
             <div id="discoveryFeedStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
             <div id="discoveryFeedList" class="discoveryFeedList discoveryCardStack" hidden></div>
             <footer class="discoveryFeedFooter discoveryStudioFooter discoveryPlaceholder">
@@ -2457,6 +2475,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260514discoveryStudioUi"></script>
+    <script type="module" src="./src/app.js?v=20260514discoverySpotlightNp"></script>
   </body>
 </html>

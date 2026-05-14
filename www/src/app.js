@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514discoveryStudioUi";
+const APP_BUILD = "20260514discoverySpotlightNp";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1931,6 +1931,9 @@ function applyRoute() {
       try { onLeaveSearchRoute(); } catch {}
       void refreshDiscoverFeed();
     }
+    try {
+      syncDiscoveryNowPlayingChip();
+    } catch {}
   }
   if (wanted === "user") {
     renderUserProfile(pendingPublicUsername);
@@ -2858,6 +2861,9 @@ function bindDiscoverySegmentControls() {
         try { onLeaveSearchRoute(); } catch {}
         void refreshDiscoverFeed();
       }
+      try {
+        syncDiscoveryNowPlayingChip();
+      } catch {}
     });
   });
   const jump = document.getElementById("btnDiscoveryJumpIdeas");
@@ -2869,6 +2875,9 @@ function bindDiscoverySegmentControls() {
       if (prev !== "ideas") {
         try { onEnterSearchRoute(); } catch {}
       }
+      try {
+        syncDiscoveryNowPlayingChip();
+      } catch {}
     });
   }
   const rfb = document.getElementById("discoveryRefreshBtn");
@@ -2880,6 +2889,53 @@ function bindDiscoverySegmentControls() {
       void refreshDiscoverFeed().finally(() => {
         try { rfb.classList.remove("isRefreshing"); } catch {}
       });
+    });
+  }
+  const dPane = document.getElementById("discoveryPaneDiscover");
+  if (dPane && !dPane.dataset.boundDiscoverPane) {
+    dPane.dataset.boundDiscoverPane = "1";
+    dPane.addEventListener("click", (e) => {
+      const pr = e.target.closest("[data-discovery-profile]");
+      if (pr && dPane.contains(pr)) {
+        e.preventDefault();
+        haptic("light");
+        const raw = pr.getAttribute("data-discovery-profile") || "";
+        let h = "";
+        try {
+          h = decodeURIComponent(raw);
+        } catch {
+          h = raw;
+        }
+        if (!h) return;
+        try {
+          location.hash = `#/u/${encodeURIComponent(h)}`;
+        } catch {}
+        return;
+      }
+      const pl = e.target.closest("[data-user-lib-play]");
+      if (!pl || !dPane.contains(pl)) return;
+      const u = pl.getAttribute("data-user-lib-url");
+      const title = pl.getAttribute("data-user-lib-title") || "Song";
+      const art = pl.getAttribute("data-user-lib-art") || "";
+      if (!u) return;
+      let raw = "";
+      try {
+        raw = decodeURIComponent(u);
+      } catch {
+        raw = u;
+      }
+      haptic("light");
+      void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true });
+    });
+  }
+  const npb = document.getElementById("discoveryNowPlayingBtn");
+  if (npb && !npb.dataset.boundDiscoveryNp) {
+    npb.dataset.boundDiscoveryNp = "1";
+    npb.addEventListener("click", () => {
+      haptic("light");
+      try {
+        location.hash = "#/player";
+      } catch {}
     });
   }
 }
@@ -6359,13 +6415,129 @@ async function fetchProfilesByUserIdsMap(userIds) {
   }
 }
 
+function discoveryEmptyIllustrationSvg() {
+  return `<svg class="discoveryEmptySvg" viewBox="0 0 120 120" aria-hidden="true">
+  <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(124,92,255,0.45)" stroke-width="2.2"/>
+  <circle cx="60" cy="60" r="34" fill="rgba(255,255,255,0.045)" stroke="rgba(255,255,255,0.11)" stroke-width="1.2"/>
+  <circle cx="60" cy="60" r="9" fill="rgba(232,238,247,0.88)"/>
+  <path fill="rgba(56,189,248,0.28)" d="M26 44c9-11 24-17 39-15 3 0 6 2 5 6l-4 15c-1 3-5 4-8 3-11-3-21 2-28 11-2 3-7 3-9-1l-9-13c-2-3 0-8 4-9zm68 32c-9 11-24 17-39 15-3 0-6-2-5-6l4-15c1-3 5-4 8-3 11 3 21-2 28-11 2-3 7-3 9 1l9 13c2 3 0 8-4 9z"/>
+</svg>`;
+}
+
+function syncDiscoveryPlayingHighlights() {
+  const root = document.getElementById("discoveryPaneDiscover");
+  if (!root) return;
+  const wants = miniSource?.type === "discover_feed" && String(currentPlayerTrackRef?.url || "").trim();
+  const cur = wants ? String(currentPlayerTrackRef.url).trim() : "";
+  root.querySelectorAll(".isDiscoveryNowPlaying").forEach((el) => el.classList.remove("isDiscoveryNowPlaying"));
+  if (!cur) return;
+  root.querySelectorAll("[data-user-lib-play]").forEach((btn) => {
+    let u = "";
+    try {
+      u = decodeURIComponent(btn.getAttribute("data-user-lib-url") || "");
+    } catch {
+      u = String(btn.getAttribute("data-user-lib-url") || "");
+    }
+    if (!u || u !== cur) return;
+    const host = btn.classList.contains("discoverySpotCard") ? btn : btn.closest(".discoveryRow");
+    if (host) host.classList.add("isDiscoveryNowPlaying");
+  });
+}
+
+function syncDiscoveryNowPlayingChip() {
+  const wrap = document.getElementById("discoveryNowPlaying");
+  if (!wrap) return;
+  const route = document.body.getAttribute("data-route") || "";
+  const onDiscover = route === "discover" && _discoveryActiveSegment === "discover";
+  const fromFeed = miniSource?.type === "discover_feed";
+  if (!onDiscover || !fromFeed || !currentPlayerTrackRef?.title) {
+    wrap.hidden = true;
+    try {
+      syncDiscoveryPlayingHighlights();
+    } catch {}
+    return;
+  }
+  wrap.hidden = false;
+  const art = document.getElementById("discoveryNowPlayingArt");
+  const titleEl = document.getElementById("discoveryNowPlayingTitle");
+  const stateEl = document.getElementById("discoveryNowPlayingState");
+  const au = ensurePlayer();
+  const playing = Boolean(au && !au.paused && !au.ended && au.currentTime > 0);
+  if (art) {
+    const src = String(currentPlayerTrackRef.artUrl || "").trim();
+    art.src = src && !src.startsWith("data:") ? src : placeholderCoverDataUrl();
+  }
+  if (titleEl) titleEl.textContent = currentPlayerTrackRef.title || "Playing";
+  if (stateEl) stateEl.textContent = playing ? "Now playing" : "Paused";
+  wrap.classList.toggle("isPlaying", playing);
+  try {
+    syncDiscoveryPlayingHighlights();
+  } catch {}
+}
+
 let _discoveryFeedGen = 0;
+
+function discoveryPlayIconSvg() {
+  return "<svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" aria-hidden=\"true\"><path fill=\"currentColor\" d=\"M9 7.5v9l7.5-4.5L9 7.5z\"/></svg>";
+}
+
+function discoveryTrackRowHtml(t, profMap, idx, playIco) {
+  const art = String(t.artUrl || "").trim();
+  const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
+  const prof = t.userId ? profMap.get(t.userId) : null;
+  const handle = String(prof?.username || "").trim();
+  const byLine = handle ? `@${handle}` : "Creator";
+  const safeTitle = escapeHtml(String(t.title || "Untitled"));
+  const encUrl = encodeURIComponent(String(t.url || ""));
+  const side = handle
+    ? `<button type="button" class="discoveryRowSide" data-discovery-profile="${encodeURIComponent(handle)}" aria-label="Open creator profile">⋯</button>`
+    : `<span class="discoveryRowSpacer" aria-hidden="true"></span>`;
+  return `
+      <div class="discoveryRow" style="--i:${idx}">
+        <button type="button" class="discoveryRowMain" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(artSafe)}">
+          <span class="discoveryRowArt">
+            <img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" />
+            <span class="discoveryRowArtGlow" aria-hidden="true"></span>
+          </span>
+          <span class="discoveryRowMid">
+            <span class="discoveryRowTitle">${safeTitle}</span>
+            <span class="discoveryRowMeta">${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}</span>
+          </span>
+          <span class="discoveryRowPlay" aria-hidden="true">${playIco}</span>
+        </button>
+        ${side}
+      </div>`;
+}
+
+function discoverySpotCardHtml(t, profMap, idx, playIco) {
+  const art = String(t.artUrl || "").trim();
+  const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
+  const prof = t.userId ? profMap.get(t.userId) : null;
+  const handle = String(prof?.username || "").trim();
+  const byLine = handle ? `@${handle}` : "Creator";
+  const safeTitle = escapeHtml(String(t.title || "Untitled"));
+  const encUrl = encodeURIComponent(String(t.url || ""));
+  return `
+      <button type="button" class="discoverySpotCard" style="--i:${idx}" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(artSafe)}">
+        <span class="discoverySpotCardArt"><img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" /></span>
+        <span class="discoverySpotCardShade" aria-hidden="true"></span>
+        <span class="discoverySpotCardPlay" aria-hidden="true">${playIco}</span>
+        <span class="discoverySpotCardText">
+          <span class="discoverySpotCardTitle">${safeTitle}</span>
+          <span class="discoverySpotCardBy">${escapeHtml(byLine)}</span>
+        </span>
+      </button>`;
+}
 
 async function refreshDiscoverFeed() {
   const gen = ++_discoveryFeedGen;
   const statusEl = document.getElementById("discoveryFeedStatus");
   const listEl = document.getElementById("discoveryFeedList");
+  const spotlightWrap = document.getElementById("discoverySpotlightWrap");
+  const rail = document.getElementById("discoverySpotlightRail");
   if (!statusEl || !listEl) return;
+  if (spotlightWrap) spotlightWrap.hidden = true;
+  if (rail) rail.innerHTML = "";
   listEl.classList.add("isDiscoveryLoading");
   listEl.hidden = false;
   listEl.innerHTML = `<div class="discoverySkeletonStack">${Array.from({ length: 6 }, () => `
@@ -6389,84 +6561,54 @@ async function refreshDiscoverFeed() {
   if (!playable.length) {
     listEl.hidden = true;
     listEl.innerHTML = "";
+    if (spotlightWrap) spotlightWrap.hidden = true;
     statusEl.hidden = false;
+    const ill = discoveryEmptyIllustrationSvg();
     if (rows.length) {
-      statusEl.textContent =
-        "Public tracks are listed, but none have a playable audio URL yet — try again after they finish saving.";
+      statusEl.innerHTML = `
+        <div class="discoveryEmptyWrap discoveryEmptyWrapMuted">
+          <div class="discoveryEmptyArt">${ill}</div>
+          <p class="discoveryEmptyTitle">Almost there</p>
+          <p class="discoveryEmptyText">We see public rows, but none have a playable audio URL yet. Try again after they finish saving.</p>
+        </div>`;
     } else {
-      statusEl.innerHTML =
-        "No public songs in the feed yet. After you enable <strong>Public on profile</strong> in Library, wait until the song finishes saving to the cloud. Newest first.";
+      statusEl.innerHTML = `
+        <div class="discoveryEmptyWrap">
+          <div class="discoveryEmptyArt">${ill}</div>
+          <p class="discoveryEmptyTitle">The feed is quiet</p>
+          <p class="discoveryEmptyText">When creators mark songs <strong>Public on profile</strong> in Library and they sync to the cloud, they show up here — newest first.</p>
+        </div>`;
     }
+    try {
+      syncDiscoveryNowPlayingChip();
+    } catch {}
     return;
   }
 
   statusEl.hidden = true;
   statusEl.textContent = "";
-  listEl.hidden = false;
-  const playIco =
-    "<svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" aria-hidden=\"true\"><path fill=\"currentColor\" d=\"M9 7.5v9l7.5-4.5L9 7.5z\"/></svg>";
-  listEl.innerHTML = playable
-    .map((t, idx) => {
-      const art = String(t.artUrl || "").trim();
-      const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
-      const prof = t.userId ? profMap.get(t.userId) : null;
-      const handle = String(prof?.username || "").trim();
-      const byLine = handle ? `@${handle}` : "Creator";
-      const safeTitle = escapeHtml(String(t.title || "Untitled"));
-      const encUrl = encodeURIComponent(String(t.url || ""));
-      const side = handle
-        ? `<button type="button" class="discoveryRowSide" data-discovery-profile="${encodeURIComponent(handle)}" aria-label="Open creator profile">⋯</button>`
-        : `<span class="discoveryRowSpacer" aria-hidden="true"></span>`;
-      return `
-      <div class="discoveryRow" style="--i:${idx}">
-        <button type="button" class="discoveryRowMain" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(artSafe)}">
-          <span class="discoveryRowArt">
-            <img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" />
-            <span class="discoveryRowArtGlow" aria-hidden="true"></span>
-          </span>
-          <span class="discoveryRowMid">
-            <span class="discoveryRowTitle">${safeTitle}</span>
-            <span class="discoveryRowMeta">${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}</span>
-          </span>
-          <span class="discoveryRowPlay" aria-hidden="true">${playIco}</span>
-        </button>
-        ${side}
-      </div>`;
-    })
-    .join("");
-  listEl.querySelectorAll("[data-user-lib-play]").forEach((b) => {
-    b.addEventListener("click", () => {
-      const u = b.getAttribute("data-user-lib-url");
-      const title = b.getAttribute("data-user-lib-title") || "Song";
-      const art = b.getAttribute("data-user-lib-art") || "";
-      if (!u) return;
-      let raw = "";
-      try {
-        raw = decodeURIComponent(u);
-      } catch {
-        raw = u;
-      }
-      haptic("light");
-      void playLibraryUrlOnPlayer(raw, title, art);
-    });
-  });
-  listEl.querySelectorAll("[data-discovery-profile]").forEach((b) => {
-    b.addEventListener("click", (e) => {
-      e.stopPropagation();
-      haptic("light");
-      const raw = b.getAttribute("data-discovery-profile") || "";
-      let h = "";
-      try {
-        h = decodeURIComponent(raw);
-      } catch {
-        h = raw;
-      }
-      if (!h) return;
-      try {
-        location.hash = `#/u/${encodeURIComponent(h)}`;
-      } catch {}
-    });
-  });
+  const playIco = discoveryPlayIconSvg();
+  const spot = playable.slice(0, 5);
+  const rest = playable.slice(5);
+
+  if (rail && spotlightWrap) {
+    rail.innerHTML = spot.map((t, i) => discoverySpotCardHtml(t, profMap, i, playIco)).join("");
+    spotlightWrap.hidden = spot.length === 0;
+  }
+
+  if (rest.length) {
+    listEl.hidden = false;
+    const more = rest
+      .map((t, j) => discoveryTrackRowHtml(t, profMap, j + spot.length, playIco))
+      .join("");
+    listEl.innerHTML = `<div class="discoveryMoreHead" role="presentation">More in the feed</div>${more}`;
+  } else {
+    listEl.innerHTML = "";
+    listEl.hidden = true;
+  }
+  try {
+    syncDiscoveryNowPlayingChip();
+  } catch {}
 }
 
 async function setLibraryTrackPublicOnProfile(trackId, wantPublic) {
@@ -6524,9 +6666,10 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic) {
   return { ok: true };
 }
 
-async function playLibraryUrlOnPlayer(rawUrl, title, artUrl) {
+async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   const raw = String(rawUrl || "").trim();
   if (!raw) return;
+  const fromDiscover = Boolean(opts && opts.discoverFeed);
   try {
     stopHubPlayback();
   } catch {}
@@ -6538,16 +6681,19 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl) {
     artUrl: artUrl || "",
     meta: {},
   };
-  miniSource = { type: "public_profile_lib", url: raw };
+  miniSource = fromDiscover ? { type: "discover_feed", url: raw } : { type: "public_profile_lib", url: raw };
   libraryNowPlayingId = null;
   try {
     renderLibrary();
   } catch {}
   await playOnPlayerPage(prox, title || "Song", {
     title: title || "Song",
-    subtitle: "Public profile",
+    subtitle: fromDiscover ? "Discover feed" : "Public profile",
     artUrl: artUrl || placeholderCoverDataUrl(),
   });
+  try {
+    syncDiscoveryNowPlayingChip();
+  } catch {}
 }
 
 async function renderUserProfilePublicLibraryAsync(username) {
@@ -13592,6 +13738,9 @@ function syncPlayerUI() {
   }
   renderHubNowPlaying();
   syncResultCardsFromPlayer();
+  try {
+    syncDiscoveryNowPlayingChip();
+  } catch {}
 }
 
 function clampClipRange(startSec, endSec, durationSec) {

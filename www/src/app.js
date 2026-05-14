@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514playerVideoCapShare";
+const APP_BUILD = "20260514libraryDlBlob";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5950,7 +5950,7 @@ function shareSheetCanceledError(err) {
 
 /** iOS WKWebView: Web Share with File[] often fails; write to cache then native Share (file://). */
 let _capVideoExportModPromise = null;
-async function shareVideoBlobThroughCapacitorNative(blob, { filename, title } = {}) {
+async function shareVideoBlobThroughCapacitorNative(blob, { filename, title, shareText } = {}) {
   if (!_capVideoExportModPromise) {
     const core = "8.3.1";
     const fsUrl = `https://esm.sh/@capacitor/filesystem@8.1.2?deps=@capacitor/core@${core}`;
@@ -5984,9 +5984,125 @@ async function shareVideoBlobThroughCapacitorNative(blob, { filename, title } = 
   }
   await Share.share({
     title: String(title || "Nabadai").slice(0, 100),
-    text: "Save to Photos (Save Video) or Files",
+    text: String(shareText || "Save to Photos (Save Video) or Files").slice(0, 200),
     files: [uri],
   });
+}
+
+/** Web `File` MIME guess for Library / player blob delivery (not used on native path). */
+function guessFileMimeFromFilename(filename, isVideo) {
+  if (isVideo) return "video/mp4";
+  const n = String(filename || "").toLowerCase();
+  if (n.endsWith(".mp3")) return "audio/mpeg";
+  if (n.endsWith(".m4a")) return "audio/mp4";
+  if (n.endsWith(".wav")) return "audio/wav";
+  if (n.endsWith(".webm")) return "audio/webm";
+  return "application/octet-stream";
+}
+
+/**
+ * Save a blob on device: native → Capacitor Filesystem + Share; web → Web Share or `<a download>`.
+ * Used by the player “download video” control and Library ⋯ audio / video actions.
+ */
+async function deliverDownloadBlobToDevice(blob, { filename, title, isVideo } = {}) {
+  const safeName = String(filename || (isVideo ? "clip.mp4" : "audio.mp3")).trim();
+  const trackTitle = String(title || "Nabadai").trim();
+  const tryAnchorDownload = () => {
+    const blobUrl = URL.createObjectURL(blob);
+    try {
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = safeName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } finally {
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
+    }
+  };
+  const nativeShareText = isVideo
+    ? "Save to Photos (Save Video) or Files"
+    : "Save this audio to Files, Music, or another app.";
+  const hintToast = isVideo
+    ? "Choose “Save Video” for Photos or “Save to Files”."
+    : "Choose “Save to Files” or another app from the share sheet.";
+
+  if (isCapacitorNativeAuth()) {
+    try {
+      await shareVideoBlobThroughCapacitorNative(blob, {
+        filename: safeName,
+        title: trackTitle,
+        shareText: nativeShareText,
+      });
+      showToast(hintToast, { durationMs: 4800 });
+    } catch (nativeErr) {
+      if (shareSheetCanceledError(nativeErr)) {
+        showToast("Cancelled.", { durationMs: 1600 });
+      } else {
+        console.warn("[deliverDownloadBlob] native share", nativeErr);
+        const mime = guessFileMimeFromFilename(safeName, isVideo);
+        const file = new File([blob], safeName, { type: mime });
+        try {
+          if (
+            typeof navigator.share === "function" &&
+            (typeof navigator.canShare !== "function" || navigator.canShare({ files: [file] }))
+          ) {
+            await navigator.share({
+              files: [file],
+              title: trackTitle,
+              text: nativeShareText,
+            });
+            showToast(hintToast, { durationMs: 4800 });
+          } else {
+            showToast(
+              `Could not open share: ${String(nativeErr?.message || nativeErr).slice(0, 72)}`,
+              { durationMs: 4800 },
+            );
+          }
+        } catch (webShareErr) {
+          if (shareSheetCanceledError(webShareErr)) {
+            showToast("Cancelled.", { durationMs: 1600 });
+          } else {
+            showToast(
+              `Could not save: ${String(webShareErr?.message || webShareErr || nativeErr).slice(0, 72)}`,
+              { durationMs: 4800 },
+            );
+          }
+        }
+      }
+    }
+  } else {
+    const mime = guessFileMimeFromFilename(safeName, isVideo);
+    const file = new File([blob], safeName, { type: mime });
+    const canFileShare =
+      typeof navigator !== "undefined" &&
+      typeof navigator.share === "function" &&
+      typeof navigator.canShare === "function" &&
+      navigator.canShare({ files: [file] });
+    if (canFileShare) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: trackTitle,
+          text: isVideo ? `“${trackTitle}” — save to Photos or Files` : `“${trackTitle}” — save this audio`,
+        });
+        showToast(hintToast, { durationMs: 4800 });
+      } catch (shareErr) {
+        if (shareSheetCanceledError(shareErr)) {
+          showToast("Cancelled.", { durationMs: 1600 });
+        } else {
+          tryAnchorDownload();
+          showToast("Saved — check your Downloads folder.", { durationMs: 2800 });
+        }
+      }
+    } else {
+      tryAnchorDownload();
+      showToast(
+        isVideo ? "Video saved — check your Downloads folder." : "Audio saved — check your Downloads folder.",
+        { durationMs: 2800 },
+      );
+    }
+  }
 }
 function getCapacitorBrowserPlugin() {
   return window?.Capacitor?.Plugins?.Browser || null;
@@ -11050,73 +11166,135 @@ function removeFromLibrary(id) {
     // → Songs on Hub → ⋯ → Unpublish from Hub.
   }
 }
+function parseFilenameFromContentDisposition(cd) {
+  const s = String(cd || "").trim();
+  if (!s) return "";
+  const star = /filename\*\s*=\s*UTF-8''([^;\s]+)/i.exec(s);
+  if (star) {
+    try {
+      return decodeURIComponent(star[1].replace(/\+/g, " "));
+    } catch {
+      return star[1];
+    }
+  }
+  const q = /filename\s*=\s*"((?:\\.|[^"\\])*)"/i.exec(s);
+  if (q) return q[1].replace(/\\"/g, '"');
+  const u = /filename\s*=\s*([^;\s]+)/i.exec(s);
+  if (!u) return "";
+  return u[1].replace(/^"(.*)"$/, "$1");
+}
+
+function extensionFromAudioContentType(ct) {
+  const c = String(ct || "").toLowerCase().split(";")[0].trim();
+  if (c === "audio/mpeg" || c === "audio/mp3") return "mp3";
+  if (c === "audio/mp4" || c === "audio/x-m4a") return "m4a";
+  if (c === "audio/wav" || c === "audio/x-wav") return "wav";
+  if (c === "audio/webm") return "webm";
+  return "";
+}
+
+/** Fetch the same playable URL as Library playback, then share / save the bytes (native + web). */
+async function downloadLibraryAudioTrack(track) {
+  const isHttpUrl = (u) => /^https?:\/\//i.test(String(u || "").trim());
+  let t = track;
+  if (!t?.url) throw new Error("Missing audio URL");
+
+  const rawForPlay = unwrapInnermostHttpAudioUrl(t.url);
+  let fetchUrl = normalizeAudioUrlForPlayback(toAudioProxyUrl(rawForPlay) || rawForPlay);
+  const refreshed = await tryRefreshLibraryTrackAudioFromSuno(t);
+  if (refreshed?.url) {
+    const freshInner = String(refreshed.url).trim();
+    const newProx = normalizeAudioUrlForPlayback(toAudioProxyUrl(freshInner) || freshInner);
+    if (freshInner !== rawForPlay) {
+      const updated = patchLibraryRowWithRefreshedUrl(String(t.id), newProx, freshInner, t);
+      if (updated) t = updated;
+    }
+    fetchUrl = newProx;
+  }
+
+  if (!isHttpUrl(fetchUrl)) throw new Error("This song isn't downloadable from this device.");
+
+  const trackTitle = String(t?.title || "song").trim() || "song";
+  const baseSlug = trackTitle.replace(/[\\/:*?"<>|]/g, "").trim() || "song";
+
+  const r = await fetch(fetchUrl, { method: "GET", cache: "no-store" });
+  if (!r.ok) {
+    let detail = "";
+    try {
+      detail = (await r.json())?.error || "";
+    } catch {
+      try {
+        detail = (await r.text()).slice(0, 160);
+      } catch {}
+    }
+    throw new Error(detail ? String(detail).slice(0, 120) : `HTTP ${r.status}`);
+  }
+  const blob = await r.blob();
+  const cdName = parseFilenameFromContentDisposition(r.headers.get("content-disposition"));
+  const safeCd =
+    cdName &&
+    !cdName.includes("/") &&
+    !cdName.includes("\\") &&
+    cdName.length < 200 &&
+    /\.[a-z0-9]{2,5}$/i.test(cdName)
+      ? cdName
+      : "";
+  const fromCt = extensionFromAudioContentType(r.headers.get("content-type"));
+  const ext = fromCt ? `.${fromCt}` : ".mp3";
+  const filename = safeCd || `${baseSlug}${ext}`;
+  await deliverDownloadBlobToDevice(blob, { filename, title: trackTitle, isVideo: false });
+}
+
+/** Server-side render (same as player) — canvas `MediaRecorder` fails on iOS WKWebView. */
 async function downloadLibraryVideoTrack(track) {
-  const url = String(track?.url || "").trim();
-  if (!url) throw new Error("Missing audio URL");
-  const artSrc = String((track?.meta && track.meta.imageUrl) || track?.artUrl || "./assets/nabadai-logo.png");
-  const audio = new Audio(url);
-  audio.crossOrigin = "anonymous";
-  await new Promise((resolve, reject) => {
-    audio.addEventListener("loadedmetadata", resolve, { once: true });
-    audio.addEventListener("error", () => reject(new Error("Audio load failed")), { once: true });
-  });
-  const duration = Math.max(1, Math.min(600, Number(audio.duration) || 1));
-  const img = new Image();
-  img.crossOrigin = "anonymous";
-  await new Promise((resolve, reject) => {
-    img.onload = resolve;
-    img.onerror = () => reject(new Error("Artwork load failed"));
-    img.src = artSrc;
-  });
-  const canvas = document.createElement("canvas");
-  canvas.width = 720;
-  canvas.height = 720;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas unavailable");
-  const draw = () => {
-    ctx.fillStyle = "#12151e";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const ratio = Math.max(canvas.width / img.width, canvas.height / img.height);
-    const w = img.width * ratio;
-    const h = img.height * ratio;
-    const x = (canvas.width - w) / 2;
-    const y = (canvas.height - h) / 2;
-    ctx.drawImage(img, x, y, w, h);
+  const isHttpUrl = (u) => /^https?:\/\//i.test(String(u || "").trim());
+  let t = track;
+  if (!t?.url) throw new Error("Missing audio URL");
+
+  const rawForPlay = unwrapInnermostHttpAudioUrl(t.url);
+  let trackUrl = normalizeAudioUrlForPlayback(toAudioProxyUrl(rawForPlay) || rawForPlay);
+  const refreshed = await tryRefreshLibraryTrackAudioFromSuno(t);
+  if (refreshed?.url) {
+    const freshInner = String(refreshed.url).trim();
+    const newProx = normalizeAudioUrlForPlayback(toAudioProxyUrl(freshInner) || freshInner);
+    if (freshInner !== rawForPlay) {
+      const updated = patchLibraryRowWithRefreshedUrl(String(t.id), newProx, freshInner, t);
+      if (updated) t = updated;
+    }
+    trackUrl = newProx;
+  }
+
+  const resolvePlaybackUrl = (url) => {
+    const n = normalizeAudioUrlForPlayback(String(url || "").trim());
+    return isHttpUrl(n) ? n : "";
   };
-  draw();
-  const vStream = canvas.captureStream(30);
-  const ac = new (window.AudioContext || window.webkitAudioContext)();
-  const src = ac.createMediaElementSource(audio);
-  const dest = ac.createMediaStreamDestination();
-  src.connect(dest);
-  src.connect(ac.destination);
-  const out = new MediaStream([...vStream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
-  const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
-    ? "video/webm;codecs=vp9,opus"
-    : "video/webm;codecs=vp8,opus";
-  const rec = new MediaRecorder(out, { mimeType: mime });
-  const chunks = [];
-  rec.ondataavailable = (e) => { if (e.data?.size) chunks.push(e.data); };
-  await ac.resume().catch(() => {});
-  rec.start(500);
-  await audio.play();
-  await new Promise((resolve) => {
-    audio.addEventListener("ended", resolve, { once: true });
-    setTimeout(resolve, duration * 1000 + 1200);
+  const audioUrl = resolvePlaybackUrl(trackUrl);
+  if (!audioUrl) throw new Error("This song isn't downloadable. Try opening it from Library again.");
+
+  const trackTitle = String(t?.title || "song").trim() || "song";
+  const artCandidates = [t?.meta && t.meta.imageUrl, t?.artUrl];
+  const imageUrl = (artCandidates.find((s) => isHttpUrl(s)) || "").trim();
+
+  const endpoint = apiUrl("/api/render-video");
+  const r = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      audioUrl,
+      ...(imageUrl ? { imageUrl } : {}),
+      title: trackTitle,
+    }),
   });
-  if (rec.state !== "inactive") rec.stop();
-  await new Promise((resolve) => rec.addEventListener("stop", resolve, { once: true }));
-  src.disconnect();
-  dest.disconnect();
-  ac.close().catch(() => {});
-  const blob = new Blob(chunks, { type: "video/webm" });
-  const dl = document.createElement("a");
-  dl.href = URL.createObjectURL(blob);
-  dl.download = `${String(track?.title || "song").replace(/[^\w\- ]+/g, "").trim() || "song"}.webm`;
-  document.body.appendChild(dl);
-  dl.click();
-  dl.remove();
-  setTimeout(() => URL.revokeObjectURL(dl.href), 4000);
+  if (!r.ok) {
+    let detail = "";
+    try {
+      detail = (await r.json())?.error || "";
+    } catch {}
+    throw new Error(detail || `HTTP ${r.status}`);
+  }
+  const blob = await r.blob();
+  const filename = `${trackTitle.replace(/[\\/:*?"<>|]/g, "").trim() || "song"}.mp4`;
+  await deliverDownloadBlobToDevice(blob, { filename, title: trackTitle, isVideo: true });
 }
 async function pollLibraryStemsUntilDone(taskId, kind, opts = {}) {
   const sourceTitle = String(opts.sourceTitle || "").trim();
@@ -11259,11 +11437,10 @@ function buildLibMenuHtml(track) {
   const kind = String(track?.kind || "full");
   const isInstrumental = kind === "instrumental";
   const isSound = kind === "sound";
-  const url = String(track?.url || "");
   const personaEligible = !isInstrumental && !isSound && Boolean(track?.taskId) && Boolean(track?.audioId);
   return `
     <div class="libMenu" id="libMenu_${id}">
-      <a class="ghost" href="${escapeHtml(url)}" target="_blank" rel="noreferrer" data-lib-dlaudio="${id}">Download audio</a>
+      <button class="ghost" type="button" data-lib-dlaudio="${id}">Download audio</button>
       <button class="ghost" data-lib-dlvideo="${id}">Download video</button>
       ${HUB_FEATURE_ENABLED ? `<button class="ghost" data-lib-share="${id}">Share to Hub</button>` : ""}
       ${personaEligible ? `<button class="ghost" data-lib-persona="${id}">Save voice as persona</button>` : ""}
@@ -11359,7 +11536,17 @@ function bindLibraryDelegatedListeners() {
       e.stopPropagation();
       const dlAudio = target.closest("[data-lib-dlaudio]");
       if (dlAudio) {
-        // Native anchor handles the actual download. Just close the menu.
+        const id = dlAudio.getAttribute("data-lib-dlaudio");
+        const t = loadLibrary().find((x) => x.id === id);
+        if (t) {
+          try {
+            setStatus("Preparing audio download…");
+            await downloadLibraryAudioTrack(t);
+            setStatus("Audio download is ready.");
+          } catch (err) {
+            setStatus(`Audio download failed: ${err?.message || String(err)}`);
+          }
+        }
         closeLibraryMenu();
         return;
       }
@@ -17948,87 +18135,7 @@ if (els.btnPlayerDownloadVideo) {
       }
       const blob = await r.blob();
       const filename = `${trackTitle.replace(/[\\/:*?"<>|]/g, "").trim() || "song"}.mp4`;
-      const tryAnchorDownload = () => {
-        const blobUrl = URL.createObjectURL(blob);
-        try {
-          const a = document.createElement("a");
-          a.href = blobUrl;
-          a.download = filename;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-        } finally {
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
-        }
-      };
-
-      if (isCapacitorNativeAuth()) {
-        try {
-          await shareVideoBlobThroughCapacitorNative(blob, { filename, title: trackTitle });
-          showToast("Choose “Save Video” for Photos or “Save to Files”.", { durationMs: 4800 });
-        } catch (nativeErr) {
-          if (shareSheetCanceledError(nativeErr)) {
-            showToast("Cancelled.", { durationMs: 1600 });
-          } else {
-            console.warn("[player-download-video] native share", nativeErr);
-            const file = new File([blob], filename, { type: "video/mp4" });
-            try {
-              if (
-                typeof navigator.share === "function" &&
-                (typeof navigator.canShare !== "function" || navigator.canShare({ files: [file] }))
-              ) {
-                await navigator.share({
-                  files: [file],
-                  title: trackTitle,
-                  text: `Save “${trackTitle}” to Photos or Files`,
-                });
-                showToast("Choose “Save Video” for Photos or “Save to Files”.", { durationMs: 4800 });
-              } else {
-                showToast(
-                  `Could not open share: ${String(nativeErr?.message || nativeErr).slice(0, 72)}`,
-                  { durationMs: 4800 },
-                );
-              }
-            } catch (webShareErr) {
-              if (shareSheetCanceledError(webShareErr)) {
-                showToast("Cancelled.", { durationMs: 1600 });
-              } else {
-                showToast(
-                  `Could not save video: ${String(webShareErr?.message || webShareErr || nativeErr).slice(0, 72)}`,
-                  { durationMs: 4800 },
-                );
-              }
-            }
-          }
-        }
-      } else {
-        const file = new File([blob], filename, { type: "video/mp4" });
-        const canFileShare =
-          typeof navigator !== "undefined" &&
-          typeof navigator.share === "function" &&
-          typeof navigator.canShare === "function" &&
-          navigator.canShare({ files: [file] });
-        if (canFileShare) {
-          try {
-            await navigator.share({
-              files: [file],
-              title: trackTitle,
-              text: `“${trackTitle}” — save to Photos or Files`,
-            });
-            showToast("Choose “Save Video” for Photos or “Save to Files”.", { durationMs: 4800 });
-          } catch (shareErr) {
-            if (shareSheetCanceledError(shareErr)) {
-              showToast("Cancelled.", { durationMs: 1600 });
-            } else {
-              tryAnchorDownload();
-              showToast("Saved — check your Downloads folder.", { durationMs: 2800 });
-            }
-          }
-        } else {
-          tryAnchorDownload();
-          showToast("Video saved — check your Downloads folder.", { durationMs: 2800 });
-        }
-      }
+      await deliverDownloadBlobToDevice(blob, { filename, title: trackTitle, isVideo: true });
     } catch (e) {
       const msg = e?.message ? String(e.message).slice(0, 80) : "Render failed";
       showToast(`Couldn't render: ${msg}`, { durationMs: 3500 });

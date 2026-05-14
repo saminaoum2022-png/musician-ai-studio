@@ -9,7 +9,7 @@ When you finish a task that **changes tracked project files** (especially `www/`
 
 1. **`git status`** — confirm what changed.
 2. **`git add`** the relevant paths and **`git commit -m "…"`** with a short, accurate message (full sentences, no fluff).
-3. **`git push`** to the current branch’s upstream (usually `origin main`).
-4. **`npx cap sync ios`** from the repo root so **`www`** is copied into **`ios/App/App/public`** and plugins/config stay aligned.
+3. **`git push`** to the current branch’s upstream (usually `origin main`). That is the deploy step for the web app when the GitHub repo is connected to Vercel; do not wait for the user to ask.
+4. **`npx cap sync ios`** from the repo root so **`www`** is copied into **`ios/App/App/public`** and plugins/config stay aligned. If sync changes tracked files under `ios/`, commit and push those too in the same pass.
 
 Skip only when there is **nothing to commit** (clean tree after sync) or the user asked to leave git alone. If push or sync fails, fix or report and do not claim success.

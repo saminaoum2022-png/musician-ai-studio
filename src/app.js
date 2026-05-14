@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514discoverNoInlineStrip";
+const APP_BUILD = "20260514discoverRowLibraryChrome";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2917,13 +2917,12 @@ function bindDiscoverySegmentControls() {
           raw = u;
         }
         haptic("light");
+        if (toggleDiscoverFeedPlaybackIfSameUrl(raw)) return;
         void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by });
         return;
       }
       const pl = e.target.closest("[data-user-lib-play]");
       if (!pl || !dPane.contains(pl)) return;
-      const row = pl.closest(".discoveryRow");
-      const openPlayer = !row || pl.hasAttribute("data-discovery-open-player");
       const u = pl.getAttribute("data-user-lib-url");
       const title = pl.getAttribute("data-user-lib-title") || "Song";
       const art = pl.getAttribute("data-user-lib-art") || "";
@@ -2936,6 +2935,10 @@ function bindDiscoverySegmentControls() {
         raw = u;
       }
       haptic("light");
+      if (!pl.hasAttribute("data-discovery-open-player")) {
+        if (toggleDiscoverFeedPlaybackIfSameUrl(raw)) return;
+      }
+      const openPlayer = pl.hasAttribute("data-discovery-open-player");
       void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer, discoverBy: by });
     });
   }
@@ -6656,40 +6659,114 @@ function dismissDiscoverFeedPlayback() {
   } catch {}
 }
 
+function decodeDiscoveryUserLibUrl(el) {
+  const raw = el?.getAttribute?.("data-user-lib-url") || "";
+  if (!raw) return "";
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return String(raw);
+  }
+}
+
+/** Same contract as Library rows: `active` when this feed URL is loaded from Discover;
+ *  `audible` when audio is actively playing (EQ + pause badge). */
+function getDiscoveryPlaybackUiForUrl(trackUrl) {
+  const u = String(trackUrl || "").trim();
+  if (!u) return { active: false, audible: false };
+  if (miniSource?.type !== "discover_feed") return { active: false, audible: false };
+  const cur = String(currentPlayerTrackRef?.url || "").trim();
+  if (!cur || cur !== u) return { active: false, audible: false };
+  const a = ensurePlayer();
+  if (!a) return { active: true, audible: false };
+  const dur = getPlayerDuration();
+  const ct = Number.isFinite(a.currentTime) ? a.currentTime : 0;
+  const audible = Boolean(!a.paused && !a.ended && (dur > 0 || ct > 0));
+  return { active: true, audible };
+}
+
+/** When Discover is already playing this URL, toggle pause/play (thumb + spotlight). */
+function toggleDiscoverFeedPlaybackIfSameUrl(rawUrl) {
+  const raw = String(rawUrl || "").trim();
+  if (miniSource?.type !== "discover_feed") return false;
+  const cur = String(currentPlayerTrackRef?.url || "").trim();
+  if (!raw || !cur || raw !== cur) return false;
+  const a = ensurePlayer();
+  const dur = getPlayerDuration();
+  const ct = Number.isFinite(a.currentTime) ? a.currentTime : 0;
+  const audible = Boolean(!a.paused && !a.ended && (dur > 0 || ct > 0));
+  if (audible) {
+    try {
+      a.pause();
+    } catch {}
+  } else {
+    try {
+      void a.play();
+    } catch {}
+  }
+  try {
+    syncPlayerUI();
+  } catch {}
+  return true;
+}
+
 function syncDiscoveryPlayingHighlights() {
   const root = document.getElementById("discoveryPaneDiscover");
   if (!root) return;
-  root.querySelectorAll(".isDiscoveryNowPlaying").forEach((el) => el.classList.remove("isDiscoveryNowPlaying"));
-  const wants = miniSource?.type === "discover_feed" && String(currentPlayerTrackRef?.url || "").trim();
-  if (!wants) return;
-  const au = ensurePlayer();
-  const dur = getPlayerDuration();
-  const cur = au && Number.isFinite(au.currentTime) ? au.currentTime : 0;
-  const playing = Boolean(au && !au.paused && !au.ended && (dur > 0 || cur > 0));
-  if (!playing) return;
-  const curUrl = String(currentPlayerTrackRef.url).trim();
-  root.querySelectorAll("[data-user-lib-play]").forEach((btn) => {
-    let u = "";
-    try {
-      u = decodeURIComponent(btn.getAttribute("data-user-lib-url") || "");
-    } catch {
-      u = String(btn.getAttribute("data-user-lib-url") || "");
+
+  const resetDiscoveryHost = (host) => {
+    host.classList.remove("discoveryRowPlaying", "discoveryRowActive");
+    const badge = host.querySelector(".discoveryRowArtBadge, .discoverySpotCardArtBadge");
+    if (badge) badge.textContent = "▶";
+    if (host.classList.contains("discoveryRow")) {
+      const artBtn = host.querySelector("[data-discovery-inline-play]");
+      if (artBtn) {
+        const name = String(artBtn.getAttribute("data-user-lib-title") || "").trim() || "Song";
+        artBtn.setAttribute("aria-label", `Play ${name}`);
+      }
+    } else if (host.classList.contains("discoverySpotCard")) {
+      const name = String(host.getAttribute("data-user-lib-title") || "").trim() || "Song";
+      host.setAttribute("aria-label", `Play ${name}`);
     }
-    if (!u || u !== curUrl) return;
-    const host = btn.classList.contains("discoverySpotCard") ? btn : btn.closest(".discoveryRow");
-    if (host) host.classList.add("isDiscoveryNowPlaying");
+  };
+
+  root.querySelectorAll(".discoveryRow").forEach(resetDiscoveryHost);
+  root.querySelectorAll(".discoverySpotCard").forEach(resetDiscoveryHost);
+
+  const curRef = String(currentPlayerTrackRef?.url || "").trim();
+  if (miniSource?.type !== "discover_feed" || !curRef) return;
+
+  const paintHost = (host, urlEl) => {
+    if (!urlEl) return;
+    const trackUrl = decodeDiscoveryUserLibUrl(urlEl);
+    const { active, audible } = getDiscoveryPlaybackUiForUrl(trackUrl);
+    if (!active) return;
+    host.classList.toggle("discoveryRowPlaying", audible);
+    host.classList.toggle("discoveryRowActive", active && !audible);
+    const badge = host.querySelector(".discoveryRowArtBadge, .discoverySpotCardArtBadge");
+    if (badge) badge.textContent = audible ? "❚❚" : "▶";
+    if (host.classList.contains("discoveryRow")) {
+      const artBtn = host.querySelector("[data-discovery-inline-play]");
+      if (artBtn) {
+        const name = String(artBtn.getAttribute("data-user-lib-title") || "").trim() || "Song";
+        artBtn.setAttribute("aria-label", audible ? `Pause ${name}` : `Play ${name}`);
+      }
+    } else if (host.classList.contains("discoverySpotCard")) {
+      const name = String(host.getAttribute("data-user-lib-title") || "").trim() || "Song";
+      host.setAttribute("aria-label", audible ? `Pause ${name}` : `Play ${name}`);
+    }
+  };
+
+  root.querySelectorAll(".discoveryRow").forEach((row) => {
+    const artBtn = row.querySelector("[data-discovery-inline-play]");
+    paintHost(row, artBtn);
+  });
+  root.querySelectorAll(".discoverySpotCard").forEach((card) => {
+    paintHost(card, card);
   });
 }
 
 let _discoveryFeedGen = 0;
-
-function discoveryPlayIconSvg() {
-  return "<svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" aria-hidden=\"true\"><path fill=\"currentColor\" d=\"M9 7.5v9l7.5-4.5L9 7.5z\"/></svg>";
-}
-
-function discoveryRowThumbPlaySvg() {
-  return '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 7.5v9l7.5-4.5L9 7.5z"/></svg>';
-}
 
 function discoveryTrackRowHtml(t, profMap, idx) {
   const art = String(t.artUrl || "").trim();
@@ -6708,20 +6785,21 @@ function discoveryTrackRowHtml(t, profMap, idx) {
           <span class="discoveryRowArt">
             <img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" />
             <span class="discoveryRowArtGlow" aria-hidden="true"></span>
+            <span class="discoveryRowArtBadge" aria-hidden="true">▶</span>
           </span>
-          <span class="discoveryRowArtPlay" aria-hidden="true">${discoveryRowThumbPlaySvg()}</span>
         </button>
         <button type="button" class="discoveryRowMain" data-discovery-open-player="1" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(artSafe)}" data-discovery-by="${escapeHtml(byLine)}" aria-label="Open player for ${safeTitle}">
           <span class="discoveryRowMid">
             <span class="discoveryRowTitle">${safeTitle}</span>
             <span class="discoveryRowMeta">${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}</span>
           </span>
+          <span class="discoveryRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
         </button>
         ${side}
       </div>`;
 }
 
-function discoverySpotCardHtml(t, profMap, idx, playIco) {
+function discoverySpotCardHtml(t, profMap, idx) {
   const art = String(t.artUrl || "").trim();
   const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
   const prof = t.userId ? profMap.get(t.userId) : null;
@@ -6730,13 +6808,18 @@ function discoverySpotCardHtml(t, profMap, idx, playIco) {
   const safeTitle = escapeHtml(String(t.title || "Untitled"));
   const encUrl = encodeURIComponent(String(t.url || ""));
   return `
-      <button type="button" class="discoverySpotCard" style="--i:${idx}" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(artSafe)}" data-discovery-by="${escapeHtml(byLine)}">
+      <button type="button" class="discoverySpotCard" style="--i:${idx}" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(artSafe)}" data-discovery-by="${escapeHtml(byLine)}" aria-label="Play ${safeTitle}">
         <span class="discoverySpotCardArt"><img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" /></span>
         <span class="discoverySpotCardShade" aria-hidden="true"></span>
-        <span class="discoverySpotCardPlay" aria-hidden="true">${playIco}</span>
+        <span class="discoverySpotCardArtBadge" aria-hidden="true">▶</span>
         <span class="discoverySpotCardText">
-          <span class="discoverySpotCardTitle">${safeTitle}</span>
-          <span class="discoverySpotCardBy">${escapeHtml(byLine)}</span>
+          <span class="discoverySpotCardTextRow">
+            <span class="discoverySpotCardTextCol">
+              <span class="discoverySpotCardTitle">${safeTitle}</span>
+              <span class="discoverySpotCardBy">${escapeHtml(byLine)}</span>
+            </span>
+            <span class="discoverySpotCardEq" aria-hidden="true"><span></span><span></span><span></span></span>
+          </span>
         </span>
       </button>`;
 }
@@ -6809,12 +6892,11 @@ async function refreshDiscoverFeed() {
 
   statusEl.hidden = true;
   statusEl.textContent = "";
-  const playIco = discoveryPlayIconSvg();
   const spot = playable.slice(0, 5);
   const rest = playable.slice(5);
 
   if (rail && spotlightWrap) {
-    rail.innerHTML = spot.map((t, i) => discoverySpotCardHtml(t, profMap, i, playIco)).join("");
+    rail.innerHTML = spot.map((t, i) => discoverySpotCardHtml(t, profMap, i)).join("");
     spotlightWrap.hidden = spot.length === 0;
   }
 

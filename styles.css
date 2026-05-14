@@ -7360,7 +7360,10 @@ input::placeholder, textarea::placeholder{
   display:none;
 }
 @media (max-width: 720px){
+  /* Base rule above is display:none; JS clears inline display when showing.
+     Without this, computed style stays none and the bar never paints. */
   .hubNowPlaying{
+    display: block;
     position: fixed;
     left: 0;
     right: 0;

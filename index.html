@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260515profileNoRouteTitle" />
+    <link rel="stylesheet" href="./styles.css?v=20260514publicUVerified" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1248,7 +1248,23 @@
             <div class="userPublicHead">
               <img id="userPublicAvatar" class="userPublicAvatar" alt="avatar" draggable="false" />
               <div class="userPublicMeta">
-                <div class="userPublicName" id="userPublicName">@user</div>
+                <div class="userPublicNameRow">
+                  <div class="userPublicName" id="userPublicName">@user</div>
+                  <span
+                    id="userPublicVerified"
+                    class="profileNabadCertCheck userPublicVerified"
+                    hidden
+                    role="img"
+                    aria-label="Verified Nabad Creator"
+                    title="Verified Nabad Creator"
+                    aria-hidden="true"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path fill="currentColor" d="M12 1.5 14.6 4l3.5-.4.7 3.5 3 1.9-1.6 3.2 1.6 3.2-3 1.9-.7 3.5L14.6 20 12 22.5 9.4 20l-3.5.4-.7-3.5-3-1.9 1.6-3.2L2.2 8.6l3-1.9.7-3.5L9.4 4 12 1.5Z"/>
+                      <path fill="#0a0c12" d="m10.6 14.6-2.3-2.3 1.3-1.3 1 1 3.4-3.4 1.3 1.3-4.7 4.7Z"/>
+                    </svg>
+                  </span>
+                </div>
                 <!-- Unified voice chip on the public profile. When the
                      creator has a calling card, this chip becomes the
                      play/pause button (and autoplays once per device
@@ -2440,6 +2456,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260514libraryDlBlob"></script>
+    <script type="module" src="./src/app.js?v=20260514publicProfileVerified"></script>
   </body>
 </html>

@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514libraryDlBlob";
+const APP_BUILD = "20260514publicProfileVerified";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -22,6 +22,10 @@ const HUB_FEATURE_ENABLED = false;
  *  — interim gate for the Profile "Verified Nabad Creator" badge until
  *  `profiles.sound_certified` is live in Supabase. */
 let _nabadCertifiedUserIds = new Set();
+
+/** When true, `#/u/…` shows the verified check for every resolved profile (staging / admin preview).
+ *  Set to `false` once `sound_certified` + `NABAD_CERTIFIED_USER_IDS` are enough on their own. */
+const INTERIM_ALWAYS_SHOW_PUBLIC_PROFILE_VERIFIED = true;
 
 /**
  * Capacitor only wires native plugins after JS calls registerPlugin().
@@ -424,6 +428,7 @@ const els = {
   profilePersonaInlineChip: document.getElementById("profilePersonaInlineChip"),
   userPublicAvatar: document.getElementById("userPublicAvatar"),
   userPublicName: document.getElementById("userPublicName"),
+  userPublicVerified: document.getElementById("userPublicVerified"),
   userPublicVoice: document.getElementById("userPublicVoice"),
   userPublicBio: document.getElementById("userPublicBio"),
   userPublicStats: document.getElementById("userPublicStats"),
@@ -6491,7 +6496,7 @@ async function fetchPublicProfileRowByUsername(username) {
   if (!handle || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   try {
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/profiles?username=eq.${encodeURIComponent(handle)}&select=user_id,username,avatar,bio,voice_timbre&limit=1`,
+      `${SUPABASE_URL}/rest/v1/profiles?username=eq.${encodeURIComponent(handle)}&select=user_id,username,avatar,bio,voice_timbre,sound_certified&limit=1`,
       { headers: { apikey: SUPABASE_ANON_KEY } },
     );
     if (!r.ok) return null;
@@ -6874,6 +6879,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
 
 async function renderUserProfilePublicLibraryAsync(username) {
   const handle = String(username || "").replace(/^@/, "").trim();
+  syncUserPublicVerifiedBadge(null);
   const prof = await fetchPublicProfileRowByUsername(handle);
   if (!prof?.user_id) {
     if (els.userPublicName) els.userPublicName.textContent = handle ? `@${handle}` : "@?";
@@ -6895,6 +6901,7 @@ async function renderUserProfilePublicLibraryAsync(username) {
         : "User not found.";
       els.userPublicEmpty.style.display = "";
     }
+    syncUserPublicVerifiedBadge(null);
     return;
   }
   const displayName = String(prof.username || handle || "user").trim();
@@ -6952,6 +6959,7 @@ async function renderUserProfilePublicLibraryAsync(username) {
       els.userPublicEmpty.textContent = `No public Library songs from @${displayName} yet — they can mark songs Public in Library (⋯ menu).`;
       els.userPublicEmpty.style.display = "";
     }
+    syncUserPublicVerifiedBadge(prof);
     return;
   }
   if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
@@ -6989,6 +6997,7 @@ async function renderUserProfilePublicLibraryAsync(username) {
       });
     });
   }
+  syncUserPublicVerifiedBadge(prof);
 }
 
 async function supabaseInsertHub(post) {
@@ -9236,6 +9245,27 @@ function isNabadSoundCertified() {
   return false;
 }
 
+/** Whether the public `#/u/…` header should show the verified checkmark for this `profiles` row. */
+function isPublicProfileVerifiedForDisplay(prof) {
+  if (!prof || !String(prof.user_id || "").trim()) return false;
+  if (INTERIM_ALWAYS_SHOW_PUBLIC_PROFILE_VERIFIED) return true;
+  const sc = prof.sound_certified;
+  if (sc === true || sc === "t" || sc === "true") return true;
+  const uid = String(prof.user_id || "").trim();
+  try {
+    if (_nabadCertifiedUserIds && _nabadCertifiedUserIds.has(uid)) return true;
+  } catch {}
+  return false;
+}
+
+function syncUserPublicVerifiedBadge(prof) {
+  const el = els.userPublicVerified;
+  if (!el) return;
+  const show = isPublicProfileVerifiedForDisplay(prof);
+  el.hidden = !show;
+  el.setAttribute("aria-hidden", show ? "false" : "true");
+}
+
 function renderProfileNabadCertBadge() {
   const check = els.profileNabadCertCheck;
   const legacy = els.profileNabadCertBadge;
@@ -9773,6 +9803,7 @@ function isHubPostVisibleOnPublicProfile(post) {
 function renderUserProfile(rawUsername) {
   const username = String(rawUsername || "").replace(/^@/, "").trim();
   if (!els.userPublicName) return;
+  syncUserPublicVerifiedBadge(null);
   // Resolve the creator's calling card out of band — don't block render.
   // This populates the chip + may autoplay once per device.
   void refreshUserPublicCallingCard(username);
@@ -9860,6 +9891,11 @@ function renderUserProfile(rawUsername) {
         : "User not found.";
       els.userPublicEmpty.style.display = "";
     }
+    void fetchPublicProfileRowByUsername(username).then((p) => {
+      try {
+        syncUserPublicVerifiedBadge(p);
+      } catch {}
+    });
     return;
   }
   if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
@@ -9885,6 +9921,11 @@ function renderUserProfile(rawUsername) {
       });
     });
   }
+  void fetchPublicProfileRowByUsername(username).then((p) => {
+    try {
+      syncUserPublicVerifiedBadge(p);
+    } catch {}
+  });
 }
 
 /** Take a song off Hub. Routes through the server-side

@@ -5861,6 +5861,20 @@ body[data-route="profile"]:has(#profileAura.profileAuraEditing) #profileAuraHead
   flex:1 1 auto;
   min-width:0;
 }
+.userPublicNameRow{
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.userPublicNameRow .userPublicName{
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.userPublicVerified{
+  flex: 0 0 auto;
+  margin-left: 0;
+}
 .userPublicName{
   font-size:22px;
   font-weight:800;

@@ -7076,6 +7076,7 @@ input[type="range"]::-moz-range-thumb{
   }
   .footer{
     bottom: calc(62px + env(safe-area-inset-bottom, 0px));
+    transition: bottom 300ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   body:has(.hubNowPlaying.isVisible) .footer{
     bottom: calc(148px + env(safe-area-inset-bottom, 0px));
@@ -7609,13 +7610,15 @@ input::placeholder, textarea::placeholder{
     z-index: 65;
     padding: 0 10px;
     pointer-events: none;
-    transform: translateY(10px);
+    transform: translate3d(0, 22px, 0);
     opacity: 0;
-    transition: transform 240ms cubic-bezier(0.2, 0.85, 0.2, 1), opacity 220ms ease;
+    transition:
+      transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 280ms ease;
   }
   .hubNowPlaying.isVisible{
     pointer-events: auto;
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
     opacity: 1;
   }
   .hubNowShell{
@@ -7626,6 +7629,33 @@ input::placeholder, textarea::placeholder{
     overflow: hidden;
     isolation: isolate;
     box-shadow: 0 10px 32px rgba(0, 0, 0, 0.26);
+    transform: scale(0.97);
+    opacity: 0.96;
+    transition:
+      transform 340ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 280ms ease,
+      box-shadow 280ms ease;
+  }
+  .hubNowPlaying.isVisible .hubNowShell{
+    transform: scale(1);
+    opacity: 1;
+  }
+  @media (prefers-reduced-motion: reduce){
+    .hubNowPlaying{
+      transform: none;
+      transition: none;
+    }
+    .hubNowPlaying.isVisible{
+      transform: none;
+    }
+    .hubNowShell{
+      transform: none !important;
+      transition: none;
+      opacity: 1 !important;
+    }
+    .footer{
+      transition: none !important;
+    }
   }
   /* Very soft tint from artwork — stays behind frosted glass */
   .hubNowAura{

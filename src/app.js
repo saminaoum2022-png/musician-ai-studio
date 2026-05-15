@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260515userPublicDiscoverRows";
+const APP_BUILD = "20260516miniPlayerEnterAnim";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1583,20 +1583,26 @@ function renderHubNowPlaying() {
     try {
       els.hubNowPlaying.style.removeProperty("--cover-glow-rgb");
     } catch {}
-    setTimeout(() => {
+    // Match `.hubNowPlaying` exit transition so display:none does not clip the animation.
+    window.setTimeout(() => {
       if (els.hubNowPlaying && !els.hubNowPlaying.classList.contains("isVisible")) {
         els.hubNowPlaying.style.display = "none";
       }
-    }, 220);
+    }, 340);
     return;
   }
 
   applyCoverGlowRgb(els.hubNowPlaying, hubNowMeta?.art || "");
   els.hubNowPlaying.style.display = "";
+  // Two frames after display so the browser commits layout before we toggle
+  // `.isVisible` — otherwise opacity/transform transitions often never run.
   requestAnimationFrame(() => {
-    els.hubNowPlaying.classList.add("isVisible");
-    if (audible) els.hubNowPlaying.classList.add("isPlaying");
-    else els.hubNowPlaying.classList.remove("isPlaying");
+    requestAnimationFrame(() => {
+      if (!els.hubNowPlaying) return;
+      els.hubNowPlaying.classList.add("isVisible");
+      if (audible) els.hubNowPlaying.classList.add("isPlaying");
+      else els.hubNowPlaying.classList.remove("isPlaying");
+    });
   });
 
   if (els.hubNowArt) {

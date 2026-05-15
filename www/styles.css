@@ -12283,3 +12283,67 @@ section.mentorPage{
   color: rgba(168, 180, 199, 0.75);
   overflow-wrap: anywhere;
 }
+
+/* Touch: no sticky :hover on thumbnails / song rows (iOS treats tap as hover). */
+@media (hover: none) {
+  .libRow:hover{
+    background: transparent;
+  }
+  .libRow:hover .libRowArtBadge{
+    opacity: 0;
+  }
+  .libRowPlaying .libRowArtBadge,
+  .libRow.libRowPlaying:hover .libRowArtBadge,
+  .libRowMain:focus-visible .libRowArtBadge{
+    opacity: 1;
+  }
+
+  .discoverySpotCard:hover{
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: none;
+  }
+  .discoverySpotCard:hover .discoverySpotCardArtBadge{
+    opacity: 0;
+  }
+  .discoverySpotCard.discoveryRowPlaying .discoverySpotCardArtBadge,
+  .discoverySpotCard.discoveryRowActive .discoverySpotCardArtBadge,
+  .discoverySpotCard:focus-visible .discoverySpotCardArtBadge{
+    opacity: 1;
+  }
+
+  .discoveryRowMain:hover{
+    background: transparent;
+  }
+  .discoveryRowArtBtn:hover{
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  }
+  .discoveryRowArtBtn:hover .discoveryRowArtBadge{
+    opacity: 0;
+  }
+  .discoveryRow.discoveryRowPlaying .discoveryRowArtBadge,
+  .discoveryRow.discoveryRowActive .discoveryRowArtBadge,
+  .discoveryRowArtBtn:focus-visible .discoveryRowArtBadge{
+    opacity: 1;
+  }
+
+  .resultCard:hover{
+    border-color: rgba(255, 255, 255, 0.10);
+  }
+  .resultArtPlay:hover{
+    filter: none;
+  }
+
+  .profileShelfCard:hover .profileShelfCardPlay{
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  .profileShelfCard:focus-within .profileShelfCardPlay{
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .userPublicSong:hover{
+    border-color: rgba(255, 255, 255, 0.10);
+    background: linear-gradient(180deg, rgba(18, 25, 39, 0.70), rgba(10, 14, 22, 0.62));
+  }
+}

@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260515profileLibPlaylistMini";
+const APP_BUILD = "20260515visGlobeLock";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -11024,9 +11024,7 @@ function renderProfileLibraryPublicOnLinkSection() {
           const dateLabel = formatLibraryDate(t.ts);
           const subBits = [];
           if (dateLabel) subBits.push(`<span class="libRowDot">${esc(dateLabel)}</span>`);
-          subBits.push(
-            `<span class="libRowChip libRowChipProfileVis libRowChipProfileVis--public">Public</span>`,
-          );
+          subBits.push(libRowProfileVisChipHtml(true));
           const tid = esc(String(t.id));
           return `
           <li class="libRow" data-profile-lib-row="${tid}">
@@ -11179,11 +11177,7 @@ function renderProfileHubShared() {
         const profilePublic = isHubPostVisibleOnPublicProfile(p);
         const subBits = [];
         if (dateLabel) subBits.push(`<span class="libRowDot">${escapeHtml(dateLabel)}</span>`);
-        subBits.push(
-          `<span class="libRowChip libRowChipProfileVis libRowChipProfileVis--${
-            profilePublic ? "public" : "private"
-          }">${profilePublic ? "Public" : "Private"}</span>`,
-        );
+        subBits.push(libRowProfileVisChipHtml(profilePublic));
         if (likes > 0) {
           subBits.push(`
             <span class="libRowChip libRowChipLikes profileHubLikeChip" aria-hidden="true">
@@ -12090,6 +12084,20 @@ async function pollLibraryStemsUntilDone(taskId, kind, opts = {}) {
   setStatus(`${kind === "multi" ? "Multi-stems" : "Instrumental"} is delayed. Please try again.`);
   setLoading(false);
 }
+
+/** Globe / lock chip for profile link visibility on library-style rows. */
+function libRowProfileVisChipHtml(isPublic) {
+  const pub = Boolean(isPublic);
+  const cls = pub ? "public" : "private";
+  const label = pub ? "Public on your profile link" : "Private — not on profile link";
+  const safeLabel = escapeHtml(label);
+  const globe =
+    '<svg class="libRowVisIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.45 2.1 1.17 2.83l-1.17 1.1zm6.9.75c-.64-.98-1.02-2.15-1.02-3.43v-3h-2v-2h2V9c0-.46.06-.9.17-1.32L13 5.35V5c0-1.1-.45-2.1-1.17-2.83l1.41-1.41C16.59 3.06 19 7.12 19 12c0 1.79-.44 3.48-1.22 4.97l-1.88-1.29z"/></svg>';
+  const lock =
+    '<svg class="libRowVisIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>';
+  return `<span class="libRowChip libRowChipProfileVis libRowChipProfileVis--${cls}" role="img" title="${safeLabel}" aria-label="${safeLabel}">${pub ? globe : lock}</span>`;
+}
+
 function formatLibraryDate(ts) {
   const d = new Date(Number(ts) || 0);
   if (Number.isNaN(d.getTime())) return "";
@@ -12539,11 +12547,7 @@ function renderLibrary() {
         if (isInstrumental) subBits.push(`<span class="libRowChip">Instrumental</span>`);
         if (isSound) subBits.push(`<span class="libRowChip">Sound</span>`);
         const profilePublic = Boolean(t.publicOnProfile);
-        subBits.push(
-          `<span class="libRowChip libRowChipProfileVis libRowChipProfileVis--${
-            profilePublic ? "public" : "private"
-          }">${profilePublic ? "Public" : "Private"}</span>`,
-        );
+        subBits.push(libRowProfileVisChipHtml(profilePublic));
         // First row paints with high priority so the page never looks
         // empty above the fold; everything else is lazy + low-priority,
         // identical pattern to Hub.

@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260515discoverSpotlightTwoUp";
+const APP_BUILD = "20260515discoverTrackSheet";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -3043,30 +3043,22 @@ function bindDiscoverySegmentControls() {
   const dPane = document.getElementById("discoveryPaneDiscover");
   if (dPane && !dPane.dataset.boundDiscoverPane) {
     dPane.dataset.boundDiscoverPane = "1";
+    wireDiscoverTrackSheetOnce();
     dPane.addEventListener("click", (e) => {
-      const pr = e.target.closest("[data-discovery-profile]");
-      if (pr && dPane.contains(pr)) {
+      const menuBtn = e.target.closest("[data-discovery-open-sheet]");
+      if (menuBtn && dPane.contains(menuBtn)) {
         e.preventDefault();
+        e.stopPropagation();
         haptic("light");
-        const raw = pr.getAttribute("data-discovery-profile") || "";
-        let h = "";
-        try {
-          h = decodeURIComponent(raw);
-        } catch {
-          h = raw;
-        }
-        if (!h) return;
-        try {
-          location.hash = `#/u/${encodeURIComponent(h)}`;
-        } catch {}
+        openDiscoverTrackSheetFromEl(menuBtn);
         return;
       }
       const inline = e.target.closest("[data-discovery-inline-play]");
       if (inline && dPane.contains(inline)) {
         const u = inline.getAttribute("data-user-lib-url");
-        const title = inline.getAttribute("data-user-lib-title") || "Song";
-        const art = inline.getAttribute("data-user-lib-art") || "";
-        const by = inline.getAttribute("data-discovery-by") || "";
+        const title = decodeDiscoverDataAttr(inline, "data-user-lib-title") || "Song";
+        const art = decodeDiscoverDataAttr(inline, "data-user-lib-art") || "";
+        const by = decodeDiscoverDataAttr(inline, "data-discovery-by") || "";
         if (!u) return;
         let raw = "";
         try {
@@ -3082,9 +3074,9 @@ function bindDiscoverySegmentControls() {
       const pl = e.target.closest("[data-user-lib-play]");
       if (!pl || !dPane.contains(pl)) return;
       const u = pl.getAttribute("data-user-lib-url");
-      const title = pl.getAttribute("data-user-lib-title") || "Song";
-      const art = pl.getAttribute("data-user-lib-art") || "";
-      const by = pl.getAttribute("data-discovery-by") || "";
+      const title = decodeDiscoverDataAttr(pl, "data-user-lib-title") || "Song";
+      const art = decodeDiscoverDataAttr(pl, "data-user-lib-art") || "";
+      const by = decodeDiscoverDataAttr(pl, "data-discovery-by") || "";
       if (!u) return;
       let raw = "";
       try {
@@ -3439,7 +3431,8 @@ function syncVocalReferenceFromDom() {
 var currentRemixSource = null;
 
 function setRemixSource(src) {
-  currentRemixSource = src && src.id ? { ...src } : null;
+  const u = src && String(src.originalUrl || src.url || "").trim();
+  currentRemixSource = u ? { ...src } : null;
   renderRemixSourceBanner();
 }
 
@@ -6828,6 +6821,169 @@ function decodeDiscoveryUserLibUrl(el) {
   }
 }
 
+function decodeDiscoverDataAttr(el, attrName) {
+  const raw = el?.getAttribute?.(attrName);
+  if (raw == null || raw === "") return "";
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return String(raw);
+  }
+}
+
+let _discoverSheetCtx = null;
+
+function readDiscoverSheetPayload(el) {
+  if (!el?.getAttribute) return null;
+  const url = decodeDiscoverDataAttr(el, "data-dp-url") || decodeDiscoveryUserLibUrl(el);
+  const title = decodeDiscoverDataAttr(el, "data-dp-title") || "Song";
+  const art = decodeDiscoverDataAttr(el, "data-dp-art") || "";
+  const by = decodeDiscoverDataAttr(el, "data-dp-by") || "";
+  const handle = decodeDiscoverDataAttr(el, "data-dp-handle").trim();
+  if (!String(url || "").trim()) return null;
+  return { url, title, art, by, handle };
+}
+
+function discoverSharePageUrl(ctx) {
+  const h = ctx && String(ctx.handle || "").trim();
+  const pathBase = `${location.origin.replace(/\/$/, "")}${location.pathname.replace(/\/$/, "")}`;
+  return h ? `${pathBase}#/u/${encodeURIComponent(h)}` : `${pathBase}#/discover`;
+}
+
+function openDiscoverTrackSheetFromEl(el) {
+  const ctx = readDiscoverSheetPayload(el);
+  if (!ctx) return;
+  _discoverSheetCtx = ctx;
+  const sheet = document.getElementById("discoverTrackSheet");
+  const artEl = document.getElementById("discoverTrackSheetArt");
+  const tEl = document.getElementById("discoverTrackSheetTitle");
+  const sEl = document.getElementById("discoverTrackSheetSub");
+  const pr = document.getElementById("discoverSheetRowProfile");
+  if (artEl) {
+    artEl.src = ctx.art || "./assets/nabadai-logo.png";
+    artEl.alt = "";
+  }
+  if (tEl) tEl.textContent = ctx.title || "Song";
+  if (sEl) sEl.textContent = ctx.by || "Discover";
+  if (pr) pr.hidden = !ctx.handle;
+  if (!sheet) return;
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  requestAnimationFrame(() => sheet.classList.add("isOpen"));
+  try {
+    document.body.style.overflow = "hidden";
+  } catch {}
+}
+
+function closeDiscoverTrackSheet() {
+  const sheet = document.getElementById("discoverTrackSheet");
+  if (!sheet) return;
+  sheet.classList.remove("isOpen");
+  _discoverSheetCtx = null;
+  try {
+    document.body.style.overflow = "";
+  } catch {}
+  window.setTimeout(() => {
+    sheet.hidden = true;
+    sheet.setAttribute("aria-hidden", "true");
+  }, 260);
+}
+
+function runDiscoverSheetAction(action) {
+  const ctx = _discoverSheetCtx;
+  if (!ctx) return;
+  const shut = () => closeDiscoverTrackSheet();
+  if (action === "remix") {
+    shut();
+    void startHubRemix({
+      url: ctx.url,
+      title: ctx.title,
+      creator: ctx.handle || "",
+      artUrl: ctx.art,
+      meta: { lyricsInput: "", styleInput: "" },
+    });
+    return;
+  }
+  if (action === "player") {
+    shut();
+    void playLibraryUrlOnPlayer(ctx.url, ctx.title, ctx.art, {
+      discoverFeed: true,
+      openPlayer: true,
+      discoverBy: ctx.by,
+    });
+    return;
+  }
+  if (action === "share") {
+    shut();
+    window.setTimeout(() => {
+      void shareHubLink({
+        title: ctx.title ? `${ctx.title} — NabadAi` : "NabadAi Music",
+        text: ctx.by ? `${ctx.title} · ${ctx.by}` : ctx.title || "Discover on NabadAi",
+        url: discoverSharePageUrl(ctx),
+      });
+    }, 220);
+    return;
+  }
+  if (action === "profile") {
+    if (!ctx.handle) return;
+    shut();
+    try {
+      location.hash = `#/u/${encodeURIComponent(ctx.handle)}`;
+    } catch {}
+    return;
+  }
+  if (action === "copy") {
+    const url = discoverSharePageUrl(ctx);
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard
+        .writeText(url)
+        .then(() => showToast("Link copied", { icon: "✓" }))
+        .catch(() => showToast("Could not copy", { icon: "!" }));
+    } else {
+      showToast("Could not copy", { icon: "!" });
+    }
+    return;
+  }
+  if (action === "shuffle") {
+    shut();
+    void playRandomDiscoveryFeedTrack(ctx.url);
+    return;
+  }
+  if (action === "report") {
+    const note = window.prompt("What should we know? (optional)", "");
+    showToast("Thanks — we review reports as soon as we can.", { icon: "✓", durationMs: 3400 });
+    if (note && String(note).trim()) {
+      console.info("[discover/report]", { title: ctx.title, by: ctx.by, handle: ctx.handle, note: String(note).trim() });
+    }
+    return;
+  }
+}
+
+function wireDiscoverTrackSheetOnce() {
+  const sheet = document.getElementById("discoverTrackSheet");
+  if (!sheet || sheet.dataset.wiredDiscoverSheet) return;
+  sheet.dataset.wiredDiscoverSheet = "1";
+  sheet.addEventListener("click", (e) => {
+    const t = e.target;
+    if (t && t.closest && t.closest("[data-discover-sheet-dismiss]")) {
+      e.preventDefault();
+      closeDiscoverTrackSheet();
+      return;
+    }
+    const act = t && t.closest && t.closest("[data-discover-sheet-action]");
+    if (act) {
+      e.preventDefault();
+      const action = act.getAttribute("data-discover-sheet-action");
+      if (action) runDiscoverSheetAction(action);
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (!sheet.classList.contains("isOpen")) return;
+    closeDiscoverTrackSheet();
+  });
+}
+
 /** Same contract as Library rows: `active` when this feed URL is loaded from Discover;
  *  `audible` when audio is actively playing (EQ + pause badge). */
 function getDiscoveryPlaybackUiForUrl(trackUrl) {
@@ -6986,21 +7142,24 @@ function discoveryTrackRowHtml(t, profMap, idx) {
   const prof = t.userId ? profMap.get(t.userId) : null;
   const handle = String(prof?.username || "").trim();
   const byLine = handle ? `@${handle}` : "Creator";
-  const safeTitle = escapeHtml(String(t.title || "Untitled"));
+  const rawTitle = String(t.title || "Untitled");
+  const safeTitle = escapeHtml(rawTitle);
   const encUrl = encodeURIComponent(String(t.url || ""));
-  const side = handle
-    ? `<button type="button" class="discoveryRowSide" data-discovery-profile="${encodeURIComponent(handle)}" aria-label="Open creator profile">⋯</button>`
-    : `<span class="discoveryRowSpacer" aria-hidden="true"></span>`;
+  const encTitle = encodeURIComponent(rawTitle);
+  const encBy = encodeURIComponent(byLine);
+  const encArt = encodeURIComponent(artSafe);
+  const encHandle = handle ? encodeURIComponent(handle) : "";
+  const side = `<button type="button" class="discoveryRowSide" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" aria-label="Options for ${safeTitle}">⋯</button>`;
   return `
       <div class="discoveryRow" style="--i:${idx}">
-        <button type="button" class="discoveryRowArtBtn" data-discovery-inline-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(artSafe)}" data-discovery-by="${escapeHtml(byLine)}" aria-label="Play ${safeTitle}">
+        <button type="button" class="discoveryRowArtBtn" data-discovery-inline-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" aria-label="Play ${safeTitle}">
           <span class="discoveryRowArt">
             <img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" />
             <span class="discoveryRowArtGlow" aria-hidden="true"></span>
             <span class="discoveryRowArtBadge" aria-hidden="true">▶</span>
           </span>
         </button>
-        <button type="button" class="discoveryRowMain" data-discovery-open-player="1" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(artSafe)}" data-discovery-by="${escapeHtml(byLine)}" aria-label="Open player for ${safeTitle}">
+        <button type="button" class="discoveryRowMain" data-discovery-open-player="1" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" aria-label="Open player for ${safeTitle}">
           <span class="discoveryRowMid">
             <span class="discoveryRowTitle">${safeTitle}</span>
             <span class="discoveryRowMeta">${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}</span>
@@ -7017,13 +7176,19 @@ function discoverySpotCardHtml(t, profMap, idx) {
   const prof = t.userId ? profMap.get(t.userId) : null;
   const handle = String(prof?.username || "").trim();
   const byLine = handle ? `@${handle}` : "Creator";
-  const safeTitle = escapeHtml(String(t.title || "Untitled"));
+  const rawTitle = String(t.title || "Untitled");
+  const safeTitle = escapeHtml(rawTitle);
   const encUrl = encodeURIComponent(String(t.url || ""));
+  const encTitle = encodeURIComponent(rawTitle);
+  const encBy = encodeURIComponent(byLine);
+  const encArt = encodeURIComponent(artSafe);
   const spotIdx = Number(idx) || 0;
   const imgLoad = spotIdx < 3 ? "eager" : "lazy";
   const imgPriority = spotIdx === 0 ? ' fetchpriority="high"' : "";
+  const encHandle = handle ? encodeURIComponent(handle) : "";
   return `
-      <button type="button" class="discoverySpotCard" style="--i:${spotIdx}" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(artSafe)}" data-discovery-by="${escapeHtml(byLine)}" aria-label="Play ${safeTitle}">
+      <div class="discoverySpotCardWrap" style="--i:${spotIdx}">
+        <button type="button" class="discoverySpotCard" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" aria-label="Play ${safeTitle}">
         <span class="discoverySpotCardArt"><img src="${escapeHtml(artSafe)}" alt="" loading="${imgLoad}"${imgPriority} decoding="async" /></span>
         <span class="discoverySpotCardShade" aria-hidden="true"></span>
         <span class="discoverySpotCardArtBadge" aria-hidden="true">▶</span>
@@ -7036,7 +7201,11 @@ function discoverySpotCardHtml(t, profMap, idx) {
             <span class="discoverySpotCardEq" aria-hidden="true"><span></span><span></span><span></span></span>
           </span>
         </span>
-      </button>`;
+        </button>
+        <span class="discoverySpotMenuOuter">
+          <button type="button" class="discoverySpotMenuBtn" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" aria-label="Song options for ${safeTitle}">⋯</button>
+        </span>
+      </div>`;
 }
 
 async function refreshDiscoverFeed() {

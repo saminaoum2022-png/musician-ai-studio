@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260515discoverSpotlightTwoUp" />
+    <link rel="stylesheet" href="./styles.css?v=20260515discoverTrackSheet" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1105,6 +1105,35 @@
               <input id="searchRemixName" type="text" autocomplete="off" maxlength="40" placeholder="Sara" />
             </label>
             <button id="searchRemixCta" class="searchRemixCta" type="button">Make it mine</button>
+          </div>
+        </div>
+
+        <!-- Discover: track options bottom sheet (carousel + feed) -->
+        <div id="discoverTrackSheet" class="discoverTrackSheet" aria-hidden="true" hidden>
+          <div class="discoverTrackSheetBackdrop" data-discover-sheet-dismiss="1"></div>
+          <div class="discoverTrackSheetCard" role="dialog" aria-modal="true" aria-labelledby="discoverTrackSheetTitle">
+            <div class="discoverTrackSheetGrab" aria-hidden="true"></div>
+            <button type="button" class="discoverTrackSheetClose" data-discover-sheet-dismiss="1" aria-label="Close">
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
+            </button>
+            <div class="discoverTrackSheetHead">
+              <img id="discoverTrackSheetArt" class="discoverTrackSheetArt" src="./assets/nabadai-logo.png" alt="" />
+              <div class="discoverTrackSheetHeadText">
+                <div id="discoverTrackSheetTitle" class="discoverTrackSheetTitle">—</div>
+                <div id="discoverTrackSheetSub" class="discoverTrackSheetSub">—</div>
+              </div>
+            </div>
+            <div class="discoverTrackSheetQuick">
+              <button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-discover-sheet-action="remix">Remix</button>
+              <button type="button" class="discoverTrackSheetQuickBtn" data-discover-sheet-action="player">Player</button>
+              <button type="button" class="discoverTrackSheetQuickBtn" data-discover-sheet-action="share">Share</button>
+            </div>
+            <div class="discoverTrackSheetList" role="group" aria-label="More actions">
+              <button type="button" class="discoverTrackSheetRow" data-discover-sheet-action="profile" id="discoverSheetRowProfile">View profile</button>
+              <button type="button" class="discoverTrackSheetRow" data-discover-sheet-action="copy">Copy link</button>
+              <button type="button" class="discoverTrackSheetRow" data-discover-sheet-action="shuffle">Play another from Discover</button>
+              <button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--danger" data-discover-sheet-action="report">Report</button>
+            </div>
           </div>
         </div>
 
@@ -2340,6 +2369,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260515discoverSpotlightTwoUp"></script>
+    <script type="module" src="./src/app.js?v=20260515discoverTrackSheet"></script>
   </body>
 </html>

@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260515discoverSpotCover";
+const APP_BUILD = "20260515profileVerifyOrder";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -9618,6 +9618,7 @@ function renderProfileAboutCard() { /* no-op — see renderProfileSignatureCard 
  *       auth UUIDs) for staging / early partners only. */
 function isNabadSoundCertified() {
   if (!authSession?.user?.id) return false;
+  if (INTERIM_ALWAYS_SHOW_PUBLIC_PROFILE_VERIFIED) return true;
   const uid = String(authSession.user.id);
   if (Boolean(activeProfile?.soundCertified)) return true;
   try {
@@ -9651,7 +9652,10 @@ function renderProfileNabadCertBadge() {
   const check = els.profileNabadCertCheck;
   const legacy = els.profileNabadCertBadge;
   const show = isNabadSoundCertified() && !profileEditing;
-  if (check) check.hidden = !show;
+  if (check) {
+    check.hidden = !show;
+    check.setAttribute("aria-hidden", show ? "false" : "true");
+  }
   if (legacy) legacy.hidden = true;
 }
 

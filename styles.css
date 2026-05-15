@@ -4727,8 +4727,7 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
 }
 .profileAuraNameRow[data-loading="true"] .profileAuraNameInput,
 .profileAuraNameRow[data-loading="true"] .profileVoiceTimbreInline,
-.profileAuraNameRow[data-loading="true"] .profilePreviewGenderIcon,
-.profileAuraNameRow[data-loading="true"] .profileNabadCertCheck{
+.profileAuraNameRow[data-loading="true"] .profilePreviewGenderIcon{
   visibility: hidden;
 }
 #profileAuraNameRow[data-loading="true"] + .profileIdentityLine{
@@ -4786,12 +4785,12 @@ body[data-route="profile"]:has(#profileAuraNameRow[data-loading="true"]) #profil
    in the chip slot and the input fields own the visual space. */
 .profileAura.profileAuraEditing .profileIdentityLine{ display: none !important; }
 
-/* Voice timbre — em dash + label next to @handle (view mode only). */
+/* Voice timbre — after @handle + verified check (view mode only). */
 .profileVoiceTimbreInline{
   display: inline-flex;
   align-items: baseline;
   gap: 0;
-  margin-top: 3px;
+  margin-top: 0;
   font-size: 13px;
   font-weight: 400;
   letter-spacing: 0.01em;
@@ -4804,12 +4803,6 @@ body[data-route="profile"]:has(#profileAuraNameRow[data-loading="true"]) #profil
   text-overflow: ellipsis;
 }
 .profileVoiceTimbreInline[hidden]{ display: none !important; }
-.profileVoiceTimbreInlineSep{
-  flex: 0 0 auto;
-  color: rgba(170, 182, 205, 0.45);
-  font-style: normal;
-  font-weight: 400;
-}
 .profileVoiceTimbreInlineLabel{
   font-style: italic;
   font-weight: 400;
@@ -8468,7 +8461,7 @@ input::placeholder, textarea::placeholder{
   justify-content: center;
   width: 18px;
   height: 18px;
-  margin-left: 2px;
+  margin: 0;
   color: #4ea4ff;
   filter: none;
   overflow: visible;

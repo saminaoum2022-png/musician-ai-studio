@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514playerDurationFix";
+const APP_BUILD = "20260514playerDurationCap";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -8554,23 +8554,32 @@ function getActiveAudioSrc(a) {
   return String(a.currentSrc || a.src || "").trim();
 }
 
+/** Suno full songs are ~2–4 min; cap rejects WebKit bogus values (e.g. after 1e10 seek). */
+const AUDIO_DURATION_SANE_MAX_SEC = 600;
+
+function normalizeAudioDurationSec(raw) {
+  const d = Number(raw);
+  if (!Number.isFinite(d) || d <= 0 || d > AUDIO_DURATION_SANE_MAX_SEC) return 0;
+  return d;
+}
+
 /** Read duration from a media element (handles Infinity + seekable/buffered). */
 function readAudioElementDurationSec(a) {
   if (!a) return 0;
-  const raw = Number(a.duration);
-  if (Number.isFinite(raw) && raw > 0) return raw;
+  const fromDur = normalizeAudioDurationSec(a.duration);
+  if (fromDur > 0) return fromDur;
   try {
     const sk = a.seekable;
     if (sk && sk.length) {
-      const end = Number(sk.end(sk.length - 1));
-      if (Number.isFinite(end) && end > 0) return end;
+      const end = normalizeAudioDurationSec(sk.end(sk.length - 1));
+      if (end > 0) return end;
     }
   } catch {}
   try {
     const bf = a.buffered;
     if (bf && bf.length) {
-      const end = Number(bf.end(bf.length - 1));
-      if (Number.isFinite(end) && end > 0) return end;
+      const end = normalizeAudioDurationSec(bf.end(bf.length - 1));
+      if (end > 0) return end;
     }
   } catch {}
   return 0;
@@ -8583,8 +8592,8 @@ function resetAudioDurationHintForUrl(url) {
 
 /** Only grow — streamed audio often reports a short buffer before the full length. */
 function applyAudioDurationHint(sec) {
-  const d = Number(sec);
-  if (!Number.isFinite(d) || d <= 0) return;
+  const d = normalizeAudioDurationSec(sec);
+  if (d <= 0) return;
   if (d > audioDurationHint.sec) audioDurationHint.sec = d;
 }
 
@@ -8600,13 +8609,9 @@ function getAudioDuration(a) {
   refreshAudioDurationHintFromElement(a);
   let dur = readAudioElementDurationSec(a);
   const src = getActiveAudioSrc(a);
-  if (
-    src &&
-    audioDurationHint.url &&
-    audioUrlsEquivalent(src, audioDurationHint.url) &&
-    audioDurationHint.sec > 0
-  ) {
-    dur = Math.max(dur, audioDurationHint.sec);
+  const hinted = normalizeAudioDurationSec(audioDurationHint.sec);
+  if (src && audioDurationHint.url && audioUrlsEquivalent(src, audioDurationHint.url) && hinted > 0) {
+    dur = Math.max(dur, hinted);
   }
   return dur;
 }
@@ -8697,18 +8702,30 @@ async function measureAudioDurationSec(rawUrl) {
         finish(d);
         return;
       }
-      // WebKit streaming: duration stays Infinity until we seek near EOF.
-      const onSeeked = () => {
-        a.removeEventListener("seeked", onSeeked);
-        d = readAudioElementDurationSec(a);
-        finish(d > 0 ? d : null);
-      };
-      a.addEventListener("seeked", onSeeked, { once: true });
+      // WebKit streaming: duration may stay Infinity until seekable range exists.
+      // Never seek to 1e10 — iOS can adopt that as the track length (billions of minutes).
       try {
-        a.currentTime = 1e10;
-      } catch {
-        finish(null);
-      }
+        const sk = a.seekable;
+        if (sk && sk.length) {
+          const end = normalizeAudioDurationSec(sk.end(sk.length - 1));
+          if (end > 0) {
+            finish(end);
+            return;
+          }
+          const onSeeked = () => {
+            a.removeEventListener("seeked", onSeeked);
+            finish(readAudioElementDurationSec(a) || null);
+          };
+          a.addEventListener("seeked", onSeeked, { once: true });
+          try {
+            a.currentTime = Math.max(0, Number(sk.end(sk.length - 1)) - 0.05);
+          } catch {
+            finish(null);
+          }
+          return;
+        }
+      } catch {}
+      finish(null);
     };
     a.addEventListener("loadedmetadata", onMeta, { once: true });
     a.addEventListener(

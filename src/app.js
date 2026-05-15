@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514playerDurationCap";
+const APP_BUILD = "20260514playerDurationProbe";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1355,7 +1355,7 @@ async function startHubPlayback(postId) {
     return;
   }
   resetAudioDurationHintForUrl(targetSrc);
-  void primeAudioDurationHint(targetSrc);
+  await primeAudioDurationHint(targetSrc);
   try {
     const wantAbs = new URL(targetSrc, location.href).href;
     const haveAbs = String(a.src || "").trim();
@@ -8563,24 +8563,48 @@ function normalizeAudioDurationSec(raw) {
   return d;
 }
 
-/** Read duration from a media element (handles Infinity + seekable/buffered). */
+/** Read duration from a media element — never use `buffered` (download progress ≠ song length). */
 function readAudioElementDurationSec(a) {
   if (!a) return 0;
+  const cur = Number.isFinite(a.currentTime) ? a.currentTime : 0;
   const fromDur = normalizeAudioDurationSec(a.duration);
   if (fromDur > 0) return fromDur;
   try {
     const sk = a.seekable;
     if (sk && sk.length) {
       const end = normalizeAudioDurationSec(sk.end(sk.length - 1));
-      if (end > 0) return end;
+      // On progressive streams seekable end can lag; ignore if we're already past it.
+      if (end > 0 && (cur < 1 || end >= cur + 0.5)) return end;
     }
   } catch {}
+  return 0;
+}
+
+/** Parse total byte length from a Range probe (`Content-Range: bytes 0-1/12345`). */
+function parseTotalBytesFromContentRange(header) {
+  const m = /\/(\d+)\s*$/i.exec(String(header || "").trim());
+  if (!m) return 0;
+  const n = Number(m[1]);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/** Rough MP3 length from file size (Suno MP3s are typically 128–192 kbps CBR/VBR). */
+function estimateMp3DurationFromByteLength(bytes) {
+  const n = Number(bytes);
+  if (!Number.isFinite(n) || n < 4096) return 0;
+  const bytesPerSec = 20000; // ~160 kbps — slightly conservative for VBR
+  return normalizeAudioDurationSec(n / bytesPerSec);
+}
+
+async function fetchAudioByteLength(url) {
+  const u = String(url || "").trim();
+  if (!u || u.startsWith("blob:") || u.startsWith("data:")) return 0;
   try {
-    const bf = a.buffered;
-    if (bf && bf.length) {
-      const end = normalizeAudioDurationSec(bf.end(bf.length - 1));
-      if (end > 0) return end;
-    }
+    const r = await fetch(u, { method: "GET", headers: { Range: "bytes=0-1" }, cache: "no-store" });
+    const cr = parseTotalBytesFromContentRange(r.headers.get("content-range"));
+    if (cr > 0) return cr;
+    const cl = Number(r.headers.get("content-length") || 0);
+    if (Number.isFinite(cl) && cl > 4096) return cl;
   } catch {}
   return 0;
 }
@@ -8590,10 +8614,12 @@ function resetAudioDurationHintForUrl(url) {
   audioDurationHint.sec = 0;
 }
 
-/** Only grow — streamed audio often reports a short buffer before the full length. */
+/** Only grow — ignore partial-buffer readings shorter than current playback. */
 function applyAudioDurationHint(sec) {
   const d = normalizeAudioDurationSec(sec);
   if (d <= 0) return;
+  const cur = playerEl && Number.isFinite(playerEl.currentTime) ? playerEl.currentTime : 0;
+  if (cur > 1 && d < cur - 0.5) return;
   if (d > audioDurationHint.sec) audioDurationHint.sec = d;
 }
 
@@ -8613,6 +8639,10 @@ function getAudioDuration(a) {
   if (src && audioDurationHint.url && audioUrlsEquivalent(src, audioDurationHint.url) && hinted > 0) {
     dur = Math.max(dur, hinted);
   }
+  const cur = Number.isFinite(a.currentTime) ? a.currentTime : 0;
+  if (cur > 0.5 && dur > 0 && cur > dur - 0.25) {
+    dur = Math.max(dur, cur);
+  }
   return dur;
 }
 
@@ -8622,7 +8652,6 @@ async function primeAudioDurationHint(rawUrl) {
   if (!audioUrlsEquivalent(url, audioDurationHint.url)) {
     resetAudioDurationHintForUrl(url);
   }
-  applyAudioDurationHint(readAudioElementDurationSec(playerEl));
   const probed = await measureAudioDurationSec(url);
   if (audioUrlsEquivalent(url, audioDurationHint.url)) {
     applyAudioDurationHint(probed);
@@ -8669,22 +8698,28 @@ async function measureAudioDurationSec(rawUrl) {
   if (!s || s === "#") return null;
   const url = hubAbsoluteUrl(s);
 
-  // Fast path: if the library player is currently loaded with the same
-  // src and already has a known duration, skip the network probe.
-  // (PWA cached cases land here on a tap right after playback.)
+  // Best: full file size from proxy (Content-Range / Content-Length) → real length.
+  try {
+    const bytes = await fetchAudioByteLength(url);
+    const fromSize = estimateMp3DurationFromByteLength(bytes);
+    if (fromSize > 0) return fromSize;
+  } catch {}
+
+  // Fast path: same src already decoded on the shared player element.
   try {
     if (
       playerEl &&
-      audioUrlsEquivalent(getActiveAudioSrc(playerEl), url) &&
-      readAudioElementDurationSec(playerEl) > 0
+      audioUrlsEquivalent(getActiveAudioSrc(playerEl), url)
     ) {
-      return readAudioElementDurationSec(playerEl);
+      const d = readAudioElementDurationSec(playerEl);
+      if (d > 0) return d;
     }
   } catch {}
 
   return new Promise((resolve) => {
     const a = new Audio();
     let settled = false;
+    let best = 0;
     const finish = (v) => {
       if (settled) return;
       settled = true;
@@ -8692,42 +8727,17 @@ async function measureAudioDurationSec(rawUrl) {
         a.removeAttribute("src");
         a.load();
       } catch {}
-      resolve(v);
+      const out = normalizeAudioDurationSec(v) || (best > 0 ? best : null);
+      resolve(out);
     };
-    const timer = setTimeout(() => finish(null), 12000);
-    const onMeta = () => {
-      clearTimeout(timer);
-      let d = readAudioElementDurationSec(a);
-      if (d > 0) {
-        finish(d);
-        return;
-      }
-      // WebKit streaming: duration may stay Infinity until seekable range exists.
-      // Never seek to 1e10 — iOS can adopt that as the track length (billions of minutes).
-      try {
-        const sk = a.seekable;
-        if (sk && sk.length) {
-          const end = normalizeAudioDurationSec(sk.end(sk.length - 1));
-          if (end > 0) {
-            finish(end);
-            return;
-          }
-          const onSeeked = () => {
-            a.removeEventListener("seeked", onSeeked);
-            finish(readAudioElementDurationSec(a) || null);
-          };
-          a.addEventListener("seeked", onSeeked, { once: true });
-          try {
-            a.currentTime = Math.max(0, Number(sk.end(sk.length - 1)) - 0.05);
-          } catch {
-            finish(null);
-          }
-          return;
-        }
-      } catch {}
-      finish(null);
+    const consider = () => {
+      const d = readAudioElementDurationSec(a);
+      if (d > best) best = d;
     };
-    a.addEventListener("loadedmetadata", onMeta, { once: true });
+    const timer = setTimeout(() => finish(best > 0 ? best : null), 18000);
+    a.addEventListener("durationchange", consider);
+    a.addEventListener("loadedmetadata", consider);
+    a.addEventListener("progress", consider);
     a.addEventListener(
       "error",
       () => {
@@ -8737,11 +8747,7 @@ async function measureAudioDurationSec(rawUrl) {
       { once: true }
     );
     try {
-      a.preload = "metadata";
-      // Intentionally NOT setting crossOrigin: it forces a CORS handshake
-      // even when the URL is same-origin (our /api/suno/audio proxy), and
-      // our proxy doesn't echo Access-Control-Allow-Origin. Reading just
-      // the duration via metadata doesn't require CORS at all.
+      a.preload = "auto";
       a.src = url;
     } catch {
       clearTimeout(timer);
@@ -13161,7 +13167,6 @@ function setPlayerSource(url, label) {
   resetAudioDurationHintForUrl(playUrl);
   a.src = playUrl;
   a.currentTime = 0;
-  void primeAudioDurationHint(playUrl);
   playerLoadedLabel = label || "";
   if (els.playerSource) els.playerSource.textContent = label ? `Loaded: ${label}` : "";
   if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = false;
@@ -13912,6 +13917,8 @@ async function playOnPlayerPage(url, label, meta = null) {
   }
   location.hash = "#/player";
   const a = ensurePlayer();
+  const playUrl = normalizeAudioUrlForPlayback(url);
+  await primeAudioDurationHint(playUrl);
   await waitForAudioCanPlay(a, 12000);
   try {
     const ok = await hubAudioPlayWithRetry(a);
@@ -13934,6 +13941,8 @@ async function playInline(url, label, source) {
   miniSource = source || { type: "player" };
   setPlayerSource(url, label);
   const a = ensurePlayer();
+  const playUrl = normalizeAudioUrlForPlayback(url);
+  await primeAudioDurationHint(playUrl);
   await waitForAudioCanPlay(a, 12000);
   try {
     const ok = await hubAudioPlayWithRetry(a);

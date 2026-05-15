@@ -33,6 +33,10 @@ module.exports = async function handler(req, res) {
     res.statusCode = 200;
     res.setHeader("Content-Type", upstream.headers.get("content-type") || "audio/mpeg");
     res.setHeader("Cache-Control", "no-store");
+    const cl = upstream.headers.get("content-length");
+    if (cl) res.setHeader("Content-Length", cl);
+    const ar = upstream.headers.get("accept-ranges");
+    if (ar) res.setHeader("Accept-Ranges", ar);
     const cd = upstream.headers.get("content-disposition");
     if (cd) res.setHeader("Content-Disposition", cd);
 

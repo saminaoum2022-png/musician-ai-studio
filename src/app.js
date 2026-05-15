@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260515createRemixLayout";
+const APP_BUILD = "20260515libraryRemix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2307,6 +2307,9 @@ function resetCreateDraft() {
 window.addEventListener("hashchange", applyRoute);
 if (!location.hash) location.hash = "#/intro";
 applyRoute();
+try {
+  bindDiscoverySegmentControls();
+} catch {}
 syncLibraryTabDotFromStorage();
 
 /* ============================================================
@@ -6894,6 +6897,14 @@ function runDiscoverSheetAction(action) {
   if (!ctx) return;
   const shut = () => closeDiscoverTrackSheet();
   if (action === "remix") {
+    if (!authSession?.user?.id) {
+      showToast("Sign in to remix songs from Discover.", { icon: "!", durationMs: 3800 });
+      shut();
+      try {
+        location.hash = "#/auth";
+      } catch {}
+      return;
+    }
     shut();
     void startHubRemix({
       url: ctx.url,
@@ -11721,10 +11732,13 @@ function buildLibMenuHtml(track) {
   const kind = String(track?.kind || "full");
   const isInstrumental = kind === "instrumental";
   const isSound = kind === "sound";
+  const remixEligible =
+    !isSound && Boolean(track?.url && String(track.url).trim());
   const personaEligible = !isInstrumental && !isSound && Boolean(track?.taskId) && Boolean(track?.audioId);
   return `
     <div class="libMenu" id="libMenu_${id}">
       <button class="ghost" type="button" data-lib-dlaudio="${id}">Download audio</button>
+      ${remixEligible ? `<button class="ghost libRowRemix" type="button" data-lib-remix="${id}">Remix</button>` : ""}
       <button class="ghost" data-lib-dlvideo="${id}">Download video</button>
       ${HUB_FEATURE_ENABLED ? `<button class="ghost" data-lib-share="${id}">Share to Hub</button>` : ""}
       ${personaEligible ? `<button class="ghost" data-lib-persona="${id}">Save voice as persona</button>` : ""}
@@ -11832,6 +11846,55 @@ function bindLibraryDelegatedListeners() {
           }
         }
         closeLibraryMenu();
+        return;
+      }
+      const libRemix = target.closest("[data-lib-remix]");
+      if (libRemix) {
+        const id = libRemix.getAttribute("data-lib-remix");
+        const t = loadLibrary().find((x) => x.id === id);
+        closeLibraryMenu();
+        if (!t?.url || !String(t.url).trim()) {
+          showToast("This song has no audio to remix.", { icon: "!", durationMs: 3200 });
+          return;
+        }
+        if (!authSession?.user?.id) {
+          showToast("Sign in to remix a library song.", { icon: "!", durationMs: 3800 });
+          try {
+            location.hash = "#/auth";
+          } catch {}
+          return;
+        }
+        void (async () => {
+          let track = t;
+          try {
+            const refreshed = await tryRefreshLibraryTrackAudioFromSuno(t);
+            if (refreshed?.url) track = { ...t, ...refreshed };
+          } catch {}
+          const rawInner = unwrapInnermostHttpAudioUrl(track.url);
+          if (!String(rawInner || "").trim()) {
+            showToast("Could not resolve audio for remix.", { icon: "!", durationMs: 3400 });
+            return;
+          }
+          const remixUrl =
+            normalizeAudioUrlForPlayback(toAudioProxyUrl(rawInner) || rawInner) || rawInner;
+          const art =
+            String(
+              (track.meta && (track.meta.imageThumb || track.meta.imageUrl)) || track.artUrl || ""
+            ).trim() || "./assets/nabadai-logo.png";
+          const handle = String(activeProfile?.username || "").trim();
+          await startHubRemix({
+            url: remixUrl,
+            title: track.title || "Library song",
+            creator: handle,
+            artUrl: art,
+            meta: {
+              lyricsInput: String(
+                track?.meta?.lyricsInput || track?.meta?.finalPrompt || ""
+              ).trim(),
+              styleInput: String(track?.meta?.styleInput || track?.meta?.styleSent || "").trim(),
+            },
+          });
+        })();
         return;
       }
       const del = target.closest("[data-lib-del]");

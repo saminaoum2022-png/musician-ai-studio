@@ -4,10 +4,15 @@ import { recordHumToMelody } from "./melody/extract.js";
 import { mixStemsToWav } from "./studio/mixer.js";
 import { encodeWav16 } from "./wav.js";
 import { initMentor, resetMentorSession } from "./mentor.js";
+import {
+  clearLockScreenNowPlaying,
+  initLockScreenNowPlaying,
+  syncLockScreenNowPlaying,
+} from "./lockScreenNowPlaying.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260515discoverMiniPlayer";
+const APP_BUILD = "20260515lockScreenNowPlaying";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -58,10 +63,76 @@ const INTERIM_ALWAYS_SHOW_PUBLIC_PROFILE_VERIFIED = true;
         }),
       });
     }
+    if (!cap.Plugins?.NowPlaying) {
+      cap.registerPlugin("NowPlaying", {
+        web: () => ({
+          async update() {},
+          async clear() {},
+          async addListener() {
+            return { remove: async () => {} };
+          },
+        }),
+      });
+    }
   } catch {
     /* Already registered elsewhere */
   }
 })();
+
+initLockScreenNowPlaying({
+  getAudio: () => {
+    const hub = hubAudio && !hubAudio.paused && !hubAudio.ended;
+    const lib = playerEl && !playerEl.paused && !playerEl.ended;
+    if (hub && !lib) return hubAudio;
+    if (lib && !hub) return playerEl;
+    if (hub && lib) {
+      try {
+        if ((hubAudio.currentTime || 0) >= (playerEl.currentTime || 0)) return hubAudio;
+      } catch {}
+      return playerEl;
+    }
+    return hubAudio || playerEl || null;
+  },
+  getMeta: () => hubNowMeta,
+  getDuration: (audio) => {
+    try {
+      return getAudioDuration(audio);
+    } catch {
+      return Number(audio?.duration) || 0;
+    }
+  },
+  onPlay: () => {
+    const a = getMiniPlayerAudio() || hubAudio || playerEl;
+    if (a) void a.play();
+    try {
+      renderHubNowPlaying();
+    } catch {}
+    syncLockScreenNowPlaying({ force: true });
+  },
+  onPause: () => {
+    const a = getMiniPlayerAudio() || hubAudio || playerEl;
+    if (a) a.pause();
+    try {
+      renderHubNowPlaying();
+    } catch {}
+    syncLockScreenNowPlaying({ force: true });
+  },
+  onToggle: () => {
+    const a = getMiniPlayerAudio() || hubAudio || playerEl;
+    if (!a) return;
+    if (a.paused || a.ended) void a.play();
+    else a.pause();
+    try {
+      renderHubNowPlaying();
+    } catch {}
+    syncLockScreenNowPlaying({ force: true });
+  },
+  onNext: () => {
+    if (miniSource?.type === "discover_feed" && _discoveryFeedTracks?.length) {
+      void playRandomDiscoveryFeedTrack(currentPlayerTrackRef?.url);
+    }
+  },
+});
 
 const els = {
   sunoPrompt: document.getElementById("sunoPrompt"),
@@ -1258,6 +1329,7 @@ function stopHubPlayback() {
   }
   if (els.hubNowProgBar) els.hubNowProgBar.style.width = "0%";
   renderHubNowPlaying();
+  void clearLockScreenNowPlaying();
 }
 
 async function startHubPlayback(postId) {
@@ -1426,6 +1498,7 @@ async function startHubPlayback(postId) {
   updateHubAudioHint();
   scheduleHubPreloadNext(postId);
   renderHubNowPlaying();
+  syncLockScreenNowPlaying({ force: true });
 }
 
 function syncHubNowAuraFromCoverUrl(artUrl) {
@@ -1543,6 +1616,7 @@ function renderHubNowPlaying() {
   }
 
   syncHubNowPlayPauseUi(Boolean(audible));
+  syncLockScreenNowPlaying();
 }
 
 let hubNowPlayingScrollRaf = 0;
@@ -13115,8 +13189,14 @@ function ensurePlayer() {
   playerEl.addEventListener("durationchange", syncPlayerUI);
   playerEl.addEventListener("canplay", syncPlayerUI);
   playerEl.addEventListener("progress", syncPlayerUI);
-  playerEl.addEventListener("play", syncPlayerUI);
-  playerEl.addEventListener("pause", syncPlayerUI);
+  playerEl.addEventListener("play", () => {
+    syncPlayerUI();
+    syncLockScreenNowPlaying({ force: true });
+  });
+  playerEl.addEventListener("pause", () => {
+    syncPlayerUI();
+    syncLockScreenNowPlaying({ force: true });
+  });
   playerEl.addEventListener("play", () => { try { setProfileAuraAudioState(true); } catch {} });
   playerEl.addEventListener("pause", () => { try { setProfileAuraAudioState(isAnyAppAudioPlaying()); } catch {} });
   playerEl.addEventListener("ended", () => {
@@ -13165,6 +13245,7 @@ function setPlayerMeta({ title, subtitle, artUrl } = {}) {
     subtitle: subtitle || "",
   };
   renderHubNowPlaying();
+  syncLockScreenNowPlaying({ force: true });
 }
 
 // Most recent http(s) URL handed to the player. Used by Download Video
@@ -14155,6 +14236,7 @@ function syncPlayerUI() {
   try {
     syncLibraryRowsFromPlayer();
   } catch {}
+  syncLockScreenNowPlaying();
 }
 
 function clampClipRange(startSec, endSec, durationSec) {

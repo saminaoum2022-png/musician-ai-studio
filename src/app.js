@@ -7074,8 +7074,8 @@ function syncDiscoveryPlayingHighlights() {
       host.setAttribute("aria-label", audible ? `Pause ${name}` : `Play ${name}`);
     }
     const artHint =
-      String(host.getAttribute("data-user-lib-art") || "").trim() ||
-      String(urlEl?.getAttribute?.("data-user-lib-art") || "").trim() ||
+      String(decodeDiscoverDataAttr(host, "data-user-lib-art") || "").trim() ||
+      String(decodeDiscoverDataAttr(urlEl, "data-user-lib-art") || "").trim() ||
       String(host.querySelector?.(".discoverySpotCardArt img, .discoveryRowArt img")?.getAttribute?.("src") || "").trim();
     if (active) applyCoverGlowRgb(host, artHint);
   };

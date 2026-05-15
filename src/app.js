@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260515visGlobeLock";
+const APP_BUILD = "20260515libRowVisRail";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -11024,7 +11024,6 @@ function renderProfileLibraryPublicOnLinkSection() {
           const dateLabel = formatLibraryDate(t.ts);
           const subBits = [];
           if (dateLabel) subBits.push(`<span class="libRowDot">${esc(dateLabel)}</span>`);
-          subBits.push(libRowProfileVisChipHtml(true));
           const tid = esc(String(t.id));
           return `
           <li class="libRow" data-profile-lib-row="${tid}">
@@ -11038,7 +11037,10 @@ function renderProfileLibraryPublicOnLinkSection() {
                 <span class="libRowSub">${subBits.join("")}</span>
               </span>
             </button>
-            <button class="libRowMore" type="button" data-profile-lib-menu="${tid}" aria-label="More for ${safeTitle}">⋯</button>
+            <div class="libRowActions">
+              ${libRowProfileVisChipHtml(true)}
+              <button class="libRowMore" type="button" data-profile-lib-menu="${tid}" aria-label="More for ${safeTitle}">⋯</button>
+            </div>
           </li>`;
         })
         .join("")}
@@ -11131,7 +11133,10 @@ function renderProfileHubShared() {
               <span class="libSkelBlock libSkelSubLine"></span>
             </span>
           </button>
-          <span class="libRowMore libSkelMore" aria-hidden="true"></span>
+          <div class="libRowActions">
+            <span class="libSkelVis libSkelBlock" aria-hidden="true"></span>
+            <span class="libRowMore libSkelMore" aria-hidden="true"></span>
+          </div>
         </li>
       `).join("");
       els.profileHubSharedList.innerHTML = `
@@ -11177,7 +11182,6 @@ function renderProfileHubShared() {
         const profilePublic = isHubPostVisibleOnPublicProfile(p);
         const subBits = [];
         if (dateLabel) subBits.push(`<span class="libRowDot">${escapeHtml(dateLabel)}</span>`);
-        subBits.push(libRowProfileVisChipHtml(profilePublic));
         if (likes > 0) {
           subBits.push(`
             <span class="libRowChip libRowChipLikes profileHubLikeChip" aria-hidden="true">
@@ -11200,7 +11204,10 @@ function renderProfileHubShared() {
                 <span class="libRowSub">${subBits.join("")}</span>
               </span>
             </button>
-            <button class="libRowMore" type="button" data-profile-hub-menu="${sid}" aria-label="More options for ${safeTitle}">⋯</button>
+            <div class="libRowActions">
+              ${libRowProfileVisChipHtml(profilePublic)}
+              <button class="libRowMore" type="button" data-profile-hub-menu="${sid}" aria-label="More options for ${safeTitle}">⋯</button>
+            </div>
           </li>
         `;
       }).join("")}
@@ -12344,7 +12351,10 @@ function getLibraryHydratingSkeletonHtml() {
             <span class="libSkelBlock libSkelSubLine"></span>
           </span>
         </button>
-        <span class="libRowMore libSkelMore" aria-hidden="true"></span>
+        <div class="libRowActions">
+          <span class="libSkelVis libSkelBlock" aria-hidden="true"></span>
+          <span class="libRowMore libSkelMore" aria-hidden="true"></span>
+        </div>
       </li>
     `);
   }
@@ -12547,10 +12557,6 @@ function renderLibrary() {
         if (isInstrumental) subBits.push(`<span class="libRowChip">Instrumental</span>`);
         if (isSound) subBits.push(`<span class="libRowChip">Sound</span>`);
         const profilePublic = Boolean(t.publicOnProfile);
-        subBits.push(libRowProfileVisChipHtml(profilePublic));
-        // First row paints with high priority so the page never looks
-        // empty above the fold; everything else is lazy + low-priority,
-        // identical pattern to Hub.
         const isFirst = i === 0;
         const loadingAttr = isFirst
           ? `loading="eager" fetchpriority="high"`
@@ -12568,7 +12574,10 @@ function renderLibrary() {
               </span>
               <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
             </button>
-            <button class="libRowMore" type="button" data-lib-menu="${t.id}" aria-label="More options for ${safeTitle}">⋯</button>
+            <div class="libRowActions">
+              ${libRowProfileVisChipHtml(profilePublic)}
+              <button class="libRowMore" type="button" data-lib-menu="${t.id}" aria-label="More options for ${safeTitle}">⋯</button>
+            </div>
           </li>
         `;
       }).join("")}

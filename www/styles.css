@@ -902,6 +902,40 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   0%, 100%{ transform: scaleY(0.35); }
   50%{ transform: scaleY(1); }
 }
+.libRowActions{
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 6px 0 10px;
+  align-self: center;
+}
+.libRowActions .libRowChip.libRowChipProfileVis{
+  flex-shrink: 0;
+}
+.libRowActions .libRowVisIco{
+  width: 13px;
+  height: 13px;
+}
+.libRowActions .libRowMore{
+  margin-right: 0;
+}
+.libRowSkeleton .libRowActions{
+  padding-right: 4px;
+}
+.libRowSkeleton .libSkelVis{
+  display: block;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  box-sizing: border-box;
+  border: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
+.libRowSkeleton .libRowActions .libRowMore.libSkelMore{
+  margin-right: 0;
+}
 .libRowMore{
   flex: 0 0 auto;
   width: 36px;

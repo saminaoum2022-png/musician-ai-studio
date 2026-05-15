@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260515profileRowPlaybackUi";
+const APP_BUILD = "20260515userPublicDiscoverRows";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -130,6 +130,10 @@ initLockScreenNowPlaying({
   onNext: () => {
     if (miniSource?.type === "discover_feed" && _discoveryFeedTracks?.length) {
       void playRandomDiscoveryFeedTrack(currentPlayerTrackRef?.url);
+      return;
+    }
+    if (miniSource?.type === "public_profile_lib" && _userPublicFeedTracks?.length) {
+      void playRandomUserPublicFeedTrack(currentPlayerTrackRef?.url);
     }
   },
 });
@@ -3024,6 +3028,7 @@ function syncDiscoveryUiToSegment(seg) {
 }
 
 function bindDiscoverySegmentControls() {
+  wireUserPublicFeedRowsOnce();
   if (_discoverySegmentBound) return;
   _discoverySegmentBound = true;
   document.querySelectorAll("[data-discovery-segment]").forEach((btn) => {
@@ -3101,6 +3106,55 @@ function bindDiscoverySegmentControls() {
       void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by });
     });
   }
+}
+
+function wireUserPublicFeedRowsOnce() {
+  const host = document.getElementById("userPublicSongs");
+  if (!host || host.dataset.boundUserPublicFeed) return;
+  host.dataset.boundUserPublicFeed = "1";
+  wireTrackOptionsSheetOnce();
+  host.addEventListener("click", (e) => {
+    const menuBtn = e.target.closest("[data-discovery-open-sheet]");
+    if (menuBtn && host.contains(menuBtn)) {
+      e.preventDefault();
+      e.stopPropagation();
+      haptic("light");
+      openDiscoverTrackSheetFromEl(menuBtn);
+      return;
+    }
+    const inline = e.target.closest("[data-discovery-inline-play]");
+    if (inline && host.contains(inline)) {
+      const u = inline.getAttribute("data-user-lib-url");
+      const title = decodeDiscoverDataAttr(inline, "data-user-lib-title") || "Song";
+      const art = decodeDiscoverDataAttr(inline, "data-user-lib-art") || "";
+      if (!u) return;
+      let raw = "";
+      try {
+        raw = decodeURIComponent(u);
+      } catch {
+        raw = u;
+      }
+      haptic("light");
+      if (togglePublicProfileLibPlaybackIfSameUrl(raw)) return;
+      void playLibraryUrlOnPlayer(raw, title, art, { openPlayer: false });
+      return;
+    }
+    const pl = e.target.closest("[data-user-lib-play]");
+    if (!pl || !host.contains(pl)) return;
+    const u = pl.getAttribute("data-user-lib-url");
+    const title = decodeDiscoverDataAttr(pl, "data-user-lib-title") || "Song";
+    const art = decodeDiscoverDataAttr(pl, "data-user-lib-art") || "";
+    if (!u) return;
+    let raw = "";
+    try {
+      raw = decodeURIComponent(u);
+    } catch {
+      raw = u;
+    }
+    haptic("light");
+    if (togglePublicProfileLibPlaybackIfSameUrl(raw)) return;
+    void playLibraryUrlOnPlayer(raw, title, art, { openPlayer: false });
+  });
 }
 
 updateEnvironmentBadge();
@@ -6890,11 +6944,14 @@ function renderTrackSheetDiscover(ctx) {
     <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="player">Player</button>
     <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="share">Share</button>
   `;
-  const profileHidden = !String(ctx.handle || "").trim();
+  const hideProfileRow = Boolean(ctx.hideDiscoverProfile) || !String(ctx.handle || "").trim();
+  const shuffleLabel = ctx.usePublicProfileShuffle
+    ? "Play another from this profile"
+    : "Play another from Discover";
   l.innerHTML = `
-    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="profile" id="discoverSheetRowProfile"${profileHidden ? " hidden" : ""}>View profile</button>
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="profile" id="discoverSheetRowProfile"${hideProfileRow ? " hidden" : ""}>View profile</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="copy">Copy link</button>
-    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="shuffle">Play another from Discover</button>
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="shuffle">${escapeHtml(shuffleLabel)}</button>
     <button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--danger" data-track-sheet-action="report">Report</button>
   `;
 }
@@ -7011,8 +7068,11 @@ function closeTrackOptionsSheet() {
 function openDiscoverTrackSheetFromEl(el) {
   const base = readDiscoverSheetPayload(el);
   if (!base) return;
-  _trackSheetCtx = { mode: "discover", ...base };
-  renderTrackSheetDiscover(base);
+  const hideDiscoverProfile = el.getAttribute("data-dp-hide-profile") === "1";
+  const usePublicProfileShuffle = el.getAttribute("data-dp-use-public-shuffle") === "1";
+  const ctx = { ...base, hideDiscoverProfile, usePublicProfileShuffle };
+  _trackSheetCtx = { mode: "discover", ...ctx };
+  renderTrackSheetDiscover(ctx);
   openTrackSheetShell({
     title: base.title || "Song",
     sub: base.by || "Discover",
@@ -7208,10 +7268,11 @@ function runTrackSheetAction(action, sourceEl) {
     }
     if (action === "player") {
       shut();
+      const fromPublicU = Boolean(ctx.usePublicProfileShuffle);
       void playLibraryUrlOnPlayer(ctx.url, ctx.title, ctx.art, {
-        discoverFeed: true,
+        discoverFeed: !fromPublicU,
         openPlayer: true,
-        discoverBy: ctx.by,
+        discoverBy: fromPublicU ? "" : ctx.by,
       });
       return;
     }
@@ -7249,6 +7310,10 @@ function runTrackSheetAction(action, sourceEl) {
     }
     if (action === "shuffle") {
       shut();
+      if (ctx.usePublicProfileShuffle) {
+        void playRandomUserPublicFeedTrack(ctx.url);
+        return;
+      }
       void playRandomDiscoveryFeedTrack(ctx.url);
       return;
     }
@@ -7540,10 +7605,49 @@ function getDiscoveryPlaybackUiForUrl(trackUrl) {
   return { active: true, audible };
 }
 
+/** Public `#/u/…` song rows: same UI contract as Discover, keyed off `public_profile_lib`. */
+function getPublicProfileLibPlaybackUiForUrl(trackUrl) {
+  const u = String(trackUrl || "").trim();
+  if (!u) return { active: false, audible: false };
+  if (miniSource?.type !== "public_profile_lib") return { active: false, audible: false };
+  const cur = String(currentPlayerTrackRef?.url || "").trim();
+  if (!cur || cur !== u) return { active: false, audible: false };
+  const a = ensurePlayer();
+  if (!a) return { active: true, audible: false };
+  const dur = getPlayerDuration();
+  const ct = Number.isFinite(a.currentTime) ? a.currentTime : 0;
+  const audible = Boolean(!a.paused && !a.ended && (dur > 0 || ct > 0));
+  return { active: true, audible };
+}
+
 /** When Discover is already playing this URL, toggle pause/play (thumb + spotlight). */
 function toggleDiscoverFeedPlaybackIfSameUrl(rawUrl) {
   const raw = String(rawUrl || "").trim();
   if (miniSource?.type !== "discover_feed") return false;
+  const cur = String(currentPlayerTrackRef?.url || "").trim();
+  if (!raw || !cur || raw !== cur) return false;
+  const a = ensurePlayer();
+  const dur = getPlayerDuration();
+  const ct = Number.isFinite(a.currentTime) ? a.currentTime : 0;
+  const audible = Boolean(!a.paused && !a.ended && (dur > 0 || ct > 0));
+  if (audible) {
+    try {
+      a.pause();
+    } catch {}
+  } else {
+    try {
+      void a.play();
+    } catch {}
+  }
+  try {
+    syncPlayerUI();
+  } catch {}
+  return true;
+}
+
+function togglePublicProfileLibPlaybackIfSameUrl(rawUrl) {
+  const raw = String(rawUrl || "").trim();
+  if (miniSource?.type !== "public_profile_lib") return false;
   const cur = String(currentPlayerTrackRef?.url || "").trim();
   if (!raw || !cur || raw !== cur) return false;
   const a = ensurePlayer();
@@ -7629,9 +7733,59 @@ function syncDiscoveryPlayingHighlights() {
   });
 }
 
+function syncUserPublicFeedPlayingHighlights() {
+  const root = document.getElementById("userPublicSongs");
+  if (!root) return;
+
+  const resetDiscoveryHost = (host) => {
+    host.classList.remove("discoveryRowPlaying", "discoveryRowActive");
+    try {
+      host.style.removeProperty("--cover-glow-rgb");
+    } catch {}
+    const badge = host.querySelector(".discoveryRowArtBadge");
+    if (badge) badge.textContent = "▶";
+    const artBtn = host.querySelector("[data-discovery-inline-play]");
+    if (artBtn) {
+      const name = String(artBtn.getAttribute("data-user-lib-title") || "").trim() || "Song";
+      let dec = name;
+      try {
+        dec = decodeURIComponent(name);
+      } catch {}
+      artBtn.setAttribute("aria-label", `Play ${dec}`);
+    }
+  };
+
+  root.querySelectorAll(".discoveryRow").forEach(resetDiscoveryHost);
+
+  const curRef = String(currentPlayerTrackRef?.url || "").trim();
+  if (miniSource?.type !== "public_profile_lib" || !curRef) return;
+
+  root.querySelectorAll(".discoveryRow").forEach((row) => {
+    const artBtn = row.querySelector("[data-discovery-inline-play]");
+    if (!artBtn) return;
+    const trackUrl = decodeDiscoveryUserLibUrl(artBtn);
+    const { active, audible } = getPublicProfileLibPlaybackUiForUrl(trackUrl);
+    if (!active) return;
+    row.classList.toggle("discoveryRowPlaying", audible);
+    row.classList.toggle("discoveryRowActive", active && !audible);
+    const badge = row.querySelector(".discoveryRowArtBadge");
+    if (badge) badge.textContent = audible ? "❚❚" : "▶";
+    if (artBtn) {
+      const name = decodeDiscoverDataAttr(artBtn, "data-user-lib-title") || "Song";
+      artBtn.setAttribute("aria-label", audible ? `Pause ${name}` : `Play ${name}`);
+    }
+    const artHint =
+      String(decodeDiscoverDataAttr(artBtn, "data-user-lib-art") || "").trim() ||
+      String(row.querySelector?.(".discoveryRowArt img")?.getAttribute?.("src") || "").trim();
+    if (active) applyCoverGlowRgb(row, artHint);
+  });
+}
+
 let _discoveryFeedGen = 0;
 /** Playable Discover feed rows (spotlight + list) for shuffle-next on the mini player. */
 let _discoveryFeedTracks = [];
+/** Songs listed on `#/u/…` (Library public list or Hub-derived profile) for sheet shuffle. */
+let _userPublicFeedTracks = [];
 
 function discoveryTrackPlaybackMeta(t, profMap) {
   const art = String(t.artUrl || "").trim();
@@ -7659,6 +7813,54 @@ async function playRandomDiscoveryFeedTrack(excludeUrl) {
     openPlayer: false,
     discoverBy: pick.byLine,
   });
+}
+
+/** Mini player “next” / sheet shuffle — pick another random song from the current `#/u/…` list. */
+async function playRandomUserPublicFeedTrack(excludeUrl) {
+  const pool = _userPublicFeedTracks.filter((t) => t.url && t.url !== String(excludeUrl || "").trim());
+  const pickFrom = pool.length ? pool : _userPublicFeedTracks;
+  if (!pickFrom.length) return;
+  const pick = pickFrom[Math.floor(Math.random() * pickFrom.length)];
+  haptic("light");
+  await playLibraryUrlOnPlayer(pick.url, pick.title, pick.artUrl, {
+    openPlayer: false,
+  });
+}
+
+/** Discover-style row for `#/u/…` public song lists (⋯ opens Discover sheet; no View profile). */
+function userPublicDiscoveryRowHtml(t, idx, pub) {
+  const art = String(t.artUrl || "").trim();
+  const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
+  const rawTitle = String(t.title || "Untitled");
+  const safeTitle = escapeHtml(rawTitle);
+  const encUrl = encodeURIComponent(String(t.url || ""));
+  const encTitle = encodeURIComponent(rawTitle);
+  const byLine = String(pub.byLine || "Creator");
+  const encBy = encodeURIComponent(byLine);
+  const encArt = encodeURIComponent(artSafe);
+  const rawHandle = String(pub.rawHandle || "").trim().replace(/^@/, "");
+  const encHandle = rawHandle ? encodeURIComponent(rawHandle) : "";
+  const extra = pub.extraMeta ? ` · ${escapeHtml(String(pub.extraMeta))}` : "";
+  const metaInner = `${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}${extra}`;
+  const side = `<button type="button" class="discoveryRowSide" data-discovery-open-sheet="1" data-dp-hide-profile="1" data-dp-use-public-shuffle="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" aria-label="Options for ${safeTitle}">⋯</button>`;
+  return `
+      <div class="discoveryRow userPublicFeedRow" style="--i:${idx}">
+        <button type="button" class="discoveryRowArtBtn" data-discovery-inline-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" aria-label="Play ${safeTitle}">
+          <span class="discoveryRowArt">
+            <img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" />
+            <span class="discoveryRowArtGlow" aria-hidden="true"></span>
+            <span class="discoveryRowArtBadge" aria-hidden="true">▶</span>
+          </span>
+        </button>
+        <button type="button" class="discoveryRowMain" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" aria-label="Play ${safeTitle}">
+          <span class="discoveryRowMid">
+            <span class="discoveryRowTitle">${safeTitle}</span>
+            <span class="discoveryRowMeta">${metaInner}</span>
+          </span>
+          <span class="discoveryRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
+        </button>
+        ${side}
+      </div>`;
 }
 
 /** Spotlight carousel covers: mark loaded so CSS can fade in flush fill (no letterbox flash). */
@@ -7958,6 +8160,7 @@ async function renderUserProfilePublicLibraryAsync(username) {
     if (els.userPublicStats) els.userPublicStats.style.display = "none";
     if (els.userPublicSongsCount) els.userPublicSongsCount.textContent = "";
     if (els.userPublicSongs) els.userPublicSongs.innerHTML = "";
+    _userPublicFeedTracks = [];
     if (els.userPublicEmpty) {
       els.userPublicEmpty.textContent = handle
         ? `No one with @${handle} yet — check the spelling, or they have not set a username.`
@@ -8018,6 +8221,7 @@ async function renderUserProfilePublicLibraryAsync(username) {
   }
   if (!songs.length) {
     if (els.userPublicSongs) els.userPublicSongs.innerHTML = "";
+    _userPublicFeedTracks = [];
     if (els.userPublicEmpty) {
       els.userPublicEmpty.textContent = `No public Library songs from @${displayName} yet — they can mark songs Public in Library (⋯ menu).`;
       els.userPublicEmpty.style.display = "";
@@ -8027,38 +8231,36 @@ async function renderUserProfilePublicLibraryAsync(username) {
   }
   if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
   if (els.userPublicSongs) {
-    els.userPublicSongs.innerHTML = songs
-      .slice(0, 60)
-      .map((t) => {
-        const art = String(t.artUrl || "./assets/nabadai-logo.png");
-        const safeTitle = escapeHtml(String(t.title || "Untitled"));
-        const encUrl = encodeURIComponent(String(t.url || ""));
-        return `
-      <button class="userPublicSong" type="button" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(art)}">
-        <img class="userPublicSongCover" src="${escapeHtml(art)}" alt="" />
-        <div class="userPublicSongMeta">
-          <div class="userPublicSongTitle">${safeTitle}</div>
-          <div class="userPublicSongTiny">${escapeHtml(relativeTime(t.ts))}</div>
-        </div>
-        <span class="userPublicSongPlay" aria-hidden="true">▶</span>
-      </button>`;
-      })
+    const slice = songs.slice(0, 60);
+    const byLine = `@${displayName}`;
+    const pubCtx = { byLine, rawHandle: displayName };
+    els.userPublicSongs.innerHTML = slice
+      .map((t, i) =>
+        userPublicDiscoveryRowHtml(
+          {
+            url: t.url,
+            title: t.title,
+            artUrl: t.artUrl,
+            ts: t.ts,
+          },
+          i,
+          pubCtx,
+        ),
+      )
       .join("");
-    els.userPublicSongs.querySelectorAll("[data-user-lib-play]").forEach((b) => {
-      b.addEventListener("click", () => {
-        const u = b.getAttribute("data-user-lib-url");
-        const title = b.getAttribute("data-user-lib-title") || "Song";
-        const art = b.getAttribute("data-user-lib-art") || "";
-        if (!u) return;
-        let raw = "";
-        try {
-          raw = decodeURIComponent(u);
-        } catch {
-          raw = u;
-        }
-        void playLibraryUrlOnPlayer(raw, title, art, { openPlayer: false });
-      });
+    _userPublicFeedTracks = slice.map((t) => {
+      const art = String(t.artUrl || "").trim();
+      const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
+      return {
+        url: String(t.url || "").trim(),
+        title: String(t.title || "Untitled"),
+        artUrl: artSafe,
+        byLine,
+      };
     });
+    try {
+      syncUserPublicFeedPlayingHighlights();
+    } catch {}
   }
   syncUserPublicVerifiedBadge(prof);
 }
@@ -10588,6 +10790,7 @@ function isHubPostVisibleOnPublicProfile(post) {
  * avatar reflects whatever was in their most recent post's meta. */
 function renderUserProfile(rawUsername) {
   const username = String(rawUsername || "").replace(/^@/, "").trim();
+  _userPublicFeedTracks = [];
   if (!els.userPublicName) return;
   syncUserPublicVerifiedBadge(null);
   // Resolve the creator's calling card out of band — don't block render.
@@ -10668,6 +10871,7 @@ function renderUserProfile(rawUsername) {
 
   if (!publicMatches.length) {
     if (els.userPublicSongs) els.userPublicSongs.innerHTML = "";
+    _userPublicFeedTracks = [];
     if (els.userPublicEmpty) {
       const hasPrivateOnly = matches.length > 0 && !publicMatches.length;
       els.userPublicEmpty.textContent = username
@@ -10687,25 +10891,39 @@ function renderUserProfile(rawUsername) {
   if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
 
   if (els.userPublicSongs) {
-    els.userPublicSongs.innerHTML = publicMatches.slice(0, 60).map((p) => `
-      <button class="userPublicSong" data-user-song="${escapeHtml(p.id)}" type="button">
-        <img class="userPublicSongCover" src="${escapeHtml(p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png")}" alt="" />
-        <div class="userPublicSongMeta">
-          <div class="userPublicSongTitle">${escapeHtml(p.title || "Untitled")}</div>
-          <div class="userPublicSongTiny">${escapeHtml(relativeTime(p.ts))} · ❤ ${Number(p.likes || 0)}</div>
-        </div>
-        <span class="userPublicSongPlay" aria-hidden="true">▶</span>
-      </button>
-    `).join("");
-    els.userPublicSongs.querySelectorAll("[data-user-song]").forEach((b) => {
-      b.addEventListener("click", () => {
-        const sid = b.getAttribute("data-user-song");
-        if (!sid) return;
-        location.hash = HUB_FEATURE_ENABLED
-          ? `#/hub?post=${encodeURIComponent(sid)}`
-          : "#/generate";
-      });
+    const slice = publicMatches.slice(0, 60).filter((p) => String(p?.url || "").trim());
+    const byLine = `@${displayName}`;
+    const pubBase = { byLine, rawHandle: displayName };
+    els.userPublicSongs.innerHTML = slice
+      .map((p, i) =>
+        userPublicDiscoveryRowHtml(
+          {
+            url: p.url,
+            title: p.title,
+            artUrl: p.artUrl || p.creatorAvatar,
+            ts: p.ts,
+          },
+          i,
+          {
+            ...pubBase,
+            extraMeta: `❤ ${Number(p.likes || 0)}`,
+          },
+        ),
+      )
+      .join("");
+    _userPublicFeedTracks = slice.map((p) => {
+      const art = String(p.artUrl || p.creatorAvatar || "").trim();
+      const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
+      return {
+        url: String(p.url || "").trim(),
+        title: String(p.title || "Untitled"),
+        artUrl: artSafe,
+        byLine,
+      };
     });
+    try {
+      syncUserPublicFeedPlayingHighlights();
+    } catch {}
   }
   void fetchPublicProfileRowByUsername(username).then((p) => {
     try {
@@ -14586,6 +14804,9 @@ function syncPlayerUI() {
     syncDiscoveryPlayingHighlights();
   } catch {}
   try {
+    syncUserPublicFeedPlayingHighlights();
+  } catch {}
+  try {
     syncLibraryRowsFromPlayer();
   } catch {}
   try {
@@ -18241,6 +18462,10 @@ if (els.hubNowExpand && !els.hubNowExpand.dataset.boundHubExp) {
     haptic("light");
     if (miniSource?.type === "discover_feed" && _discoveryFeedTracks.length) {
       void playRandomDiscoveryFeedTrack(currentPlayerTrackRef?.url);
+      return;
+    }
+    if (miniSource?.type === "public_profile_lib" && _userPublicFeedTracks.length) {
+      void playRandomUserPublicFeedTrack(currentPlayerTrackRef?.url);
       return;
     }
     try {

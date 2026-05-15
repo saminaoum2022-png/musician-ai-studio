@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260515splashVerifyClean";
+const APP_BUILD = "20260515discoverSpotCover";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -6850,6 +6850,21 @@ function syncDiscoveryPlayingHighlights() {
 
 let _discoveryFeedGen = 0;
 
+/** Spotlight carousel covers: mark loaded so CSS can fade in flush fill (no letterbox flash). */
+function wireDiscoverySpotCardImages(root) {
+  const scope = root && root.querySelectorAll ? root : document;
+  scope.querySelectorAll(".discoverySpotCardArt img").forEach((img) => {
+    const mark = () => {
+      img.classList.add("isLoaded");
+    };
+    if (img.complete && img.naturalWidth > 0) mark();
+    else {
+      img.addEventListener("load", mark, { once: true });
+      img.addEventListener("error", mark, { once: true });
+    }
+  });
+}
+
 function discoveryTrackRowHtml(t, profMap, idx) {
   const art = String(t.artUrl || "").trim();
   const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
@@ -6889,9 +6904,12 @@ function discoverySpotCardHtml(t, profMap, idx) {
   const byLine = handle ? `@${handle}` : "Creator";
   const safeTitle = escapeHtml(String(t.title || "Untitled"));
   const encUrl = encodeURIComponent(String(t.url || ""));
+  const spotIdx = Number(idx) || 0;
+  const imgLoad = spotIdx < 3 ? "eager" : "lazy";
+  const imgPriority = spotIdx === 0 ? ' fetchpriority="high"' : "";
   return `
-      <button type="button" class="discoverySpotCard" style="--i:${idx}" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(artSafe)}" data-discovery-by="${escapeHtml(byLine)}" aria-label="Play ${safeTitle}">
-        <span class="discoverySpotCardArt"><img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" /></span>
+      <button type="button" class="discoverySpotCard" style="--i:${spotIdx}" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${safeTitle}" data-user-lib-art="${escapeHtml(artSafe)}" data-discovery-by="${escapeHtml(byLine)}" aria-label="Play ${safeTitle}">
+        <span class="discoverySpotCardArt"><img src="${escapeHtml(artSafe)}" alt="" loading="${imgLoad}"${imgPriority} decoding="async" /></span>
         <span class="discoverySpotCardShade" aria-hidden="true"></span>
         <span class="discoverySpotCardArtBadge" aria-hidden="true">▶</span>
         <span class="discoverySpotCardText">
@@ -6980,6 +6998,9 @@ async function refreshDiscoverFeed() {
   if (rail && spotlightWrap) {
     rail.innerHTML = spot.map((t, i) => discoverySpotCardHtml(t, profMap, i)).join("");
     spotlightWrap.hidden = spot.length === 0;
+    try {
+      wireDiscoverySpotCardImages(rail);
+    } catch {}
   }
 
   if (rest.length) {

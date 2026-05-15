@@ -9551,7 +9551,8 @@ input::placeholder, textarea::placeholder{
 .discoverySpotCard{
   --cover-glow-rgb: 98, 106, 125;
 }
-.discoverySpotCard{
+.discoverySpotCard,
+button.discoverySpotCard{
   flex: 0 0 min(78vw, 210px);
   width: min(78vw, 210px);
   scroll-snap-align: start;
@@ -9561,19 +9562,22 @@ input::placeholder, textarea::placeholder{
   border-radius: 20px;
   border: 1px solid rgba(255,255,255,0.12);
   overflow: hidden;
-  padding: 0;
+  padding: 0 !important;
+  gap: 0 !important;
+  min-width: 0;
+  line-height: 0;
   cursor: pointer;
   text-align: left;
   color: #f6f8ff;
-  background: rgba(10,12,20,0.9);
+  background: rgba(8, 11, 18, 0.96);
   -webkit-tap-highlight-color: transparent;
   transition: transform 0.18s ease, border-color 0.2s ease, box-shadow 0.22s ease;
   animation: discoverySpotIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   animation-delay: calc(var(--i, 0) * 55ms);
 }
 @keyframes discoverySpotIn{
-  from{ opacity: 0; transform: translateY(12px) scale(0.96); }
-  to{ opacity: 1; transform: translateY(0) scale(1); }
+  from{ opacity: 0; transform: translateY(8px); }
+  to{ opacity: 1; transform: translateY(0); }
 }
 .discoverySpotCard:hover{
   border-color: rgba(124,92,255,0.45);
@@ -9590,12 +9594,29 @@ input::placeholder, textarea::placeholder{
   position: absolute;
   inset: 0;
   display: block;
+  overflow: hidden;
+  border-radius: inherit;
+  line-height: 0;
+  font-size: 0;
+  background: rgba(8, 11, 18, 0.96);
 }
 .discoverySpotCardArt img{
   width: 100%;
   height: 100%;
+  min-width: 100%;
+  min-height: 100%;
   object-fit: cover;
+  object-position: center center;
   display: block;
+  border: 0;
+  vertical-align: top;
+}
+.discoverySpotCardArt img:not(.isLoaded){
+  opacity: 0;
+}
+.discoverySpotCardArt img.isLoaded{
+  opacity: 1;
+  transition: opacity 0.22s ease;
 }
 .discoverySpotCardShade{
   position: absolute;

@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260515touchNoThumbHover";
+const APP_BUILD = "20260515discoverCoverFit";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2944,17 +2944,6 @@ function bindDiscoverySegmentControls() {
       }
     });
   });
-  const jump = document.getElementById("btnDiscoveryJumpIdeas");
-  if (jump) {
-    jump.addEventListener("click", () => {
-      try { sessionStorage.setItem(DISCOVERY_SEGMENT_KEY, "ideas"); } catch {}
-      const prev = _discoveryActiveSegment;
-      syncDiscoveryUiToSegment("ideas");
-      if (prev !== "ideas") {
-        try { onEnterSearchRoute(); } catch {}
-      }
-    });
-  }
   const rfb = document.getElementById("discoveryRefreshBtn");
   if (rfb && !rfb.dataset.boundDiscoveryRefresh) {
     rfb.dataset.boundDiscoveryRefresh = "1";

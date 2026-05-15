@@ -9866,7 +9866,7 @@ input::placeholder, textarea::placeholder{
 .discoveryRow{
   display: flex;
   align-items: stretch;
-  gap: 10px;
+  gap: 0;
   border-radius: 18px;
   border: 1px solid rgba(255,255,255,0.1);
   background: linear-gradient(145deg, rgba(22,26,38,0.92), rgba(12,14,22,0.88));
@@ -9891,7 +9891,7 @@ input::placeholder, textarea::placeholder{
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px 10px 0;
+  padding: 12px 10px 12px 12px;
   border: 0;
   background: transparent;
   color: inherit;
@@ -9908,23 +9908,27 @@ input::placeholder, textarea::placeholder{
 }
 .discoveryRowArtBtn{
   flex: 0 0 auto;
+  align-self: stretch;
   position: relative;
-  width: 64px;
-  height: 64px;
+  width: auto;
+  min-width: 68px;
+  max-width: 88px;
+  height: auto;
+  aspect-ratio: 1;
   margin: 0;
   padding: 0;
   border: 0;
-  border-radius: 14px;
-  background: transparent;
+  border-radius: 0;
+  background: rgba(0,0,0,0.25);
   color: #fff;
   cursor: pointer;
   overflow: hidden;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+  box-shadow: none;
   -webkit-tap-highlight-color: transparent;
-  transition: transform 0.16s ease, box-shadow 0.2s ease;
+  transition: transform 0.16s ease, filter 0.2s ease;
 }
 .discoveryRowArtBtn:hover{
-  box-shadow: 0 6px 20px rgba(0,0,0,0.42);
+  filter: brightness(1.04);
 }
 .discoveryRowArtBtn:active{
   transform: scale(0.97);
@@ -9936,7 +9940,7 @@ input::placeholder, textarea::placeholder{
 .discoveryRowArt{
   position: absolute;
   inset: 0;
-  border-radius: inherit;
+  border-radius: 0;
   overflow: hidden;
 }
 .discoveryRowArt img{
@@ -10040,7 +10044,7 @@ input::placeholder, textarea::placeholder{
 .discoveryRowSide{
   flex: 0 0 auto;
   width: 44px;
-  margin: 10px 8px 10px 0;
+  margin: 0 8px 0 0;
   align-self: center;
   border-radius: 12px;
   border: 1px solid rgba(255,255,255,0.1);
@@ -10582,7 +10586,7 @@ input::placeholder, textarea::placeholder{
   .discoveryPage{ gap: 12px; }
   .discoverySegment{ font-size: 13px; padding: 9px 10px; border-radius: 12px; }
   .discoveryRefreshBtn{ width: 42px; height: 42px; border-radius: 12px; }
-  .discoveryRowArtBtn{ width: 56px; height: 56px; border-radius: 12px; }
+  .discoveryRowArtBtn{ min-width: 60px; max-width: 76px; }
   .discoveryRowArtBadge{ width: 26px; height: 26px; font-size: 12px; }
   .discoverySpotCard{ height: 228px; }
   .discoverySkeletonSpotCard{ height: 228px; }
@@ -12315,7 +12319,7 @@ section.mentorPage{
     background: transparent;
   }
   .discoveryRowArtBtn:hover{
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    filter: none;
   }
   .discoveryRowArtBtn:hover .discoveryRowArtBadge{
     opacity: 0;

@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260515discoverSheetDotsFix";
+const APP_BUILD = "20260515discoverRowMiniOnly";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -3091,11 +3091,8 @@ function bindDiscoverySegmentControls() {
         raw = u;
       }
       haptic("light");
-      if (!pl.hasAttribute("data-discovery-open-player")) {
-        if (toggleDiscoverFeedPlaybackIfSameUrl(raw)) return;
-      }
-      const openPlayer = pl.hasAttribute("data-discovery-open-player");
-      void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer, discoverBy: by });
+      if (toggleDiscoverFeedPlaybackIfSameUrl(raw)) return;
+      void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by });
     });
   }
 }
@@ -7698,7 +7695,7 @@ function discoveryTrackRowHtml(t, profMap, idx) {
             <span class="discoveryRowArtBadge" aria-hidden="true">▶</span>
           </span>
         </button>
-        <button type="button" class="discoveryRowMain" data-discovery-open-player="1" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" aria-label="Open player for ${safeTitle}">
+        <button type="button" class="discoveryRowMain" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" aria-label="Play ${safeTitle}">
           <span class="discoveryRowMid">
             <span class="discoveryRowTitle">${safeTitle}</span>
             <span class="discoveryRowMeta">${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}</span>

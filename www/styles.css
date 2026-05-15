@@ -7027,11 +7027,8 @@ input[type="range"]::-moz-range-thumb{
        and the bottom black band feels balanced (not pinned at the top). */
     min-height: 100vh;
     min-height: 100svh;
-    /* Top inset handled by fixed .playerHeader (breathing below status / notch). */
-    padding-block-start: 0 !important;
-    padding-inline-start: max(14px, env(safe-area-inset-left, 0px)) !important;
-    padding-inline-end: max(14px, env(safe-area-inset-right, 0px)) !important;
-    padding-block-end: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
+    /* Original insets restore vertical balance for cover + transport. */
+    padding: calc(env(safe-area-inset-top) + 12px) 14px calc(env(safe-area-inset-bottom) + 12px) !important;
     /* Center .grid (which holds the player card) vertically. */
     display: flex;
     flex-direction: column;
@@ -7042,8 +7039,9 @@ input[type="range"]::-moz-range-thumb{
   }
   body[data-route="player"] .playerCard{
     padding: 0;
-    /* Reserve space: status bar + back row + gap before artwork. */
-    padding-block-start: calc(env(safe-area-inset-top, 0px) + 10px + 40px + 10px);
+    /* Fixed back sits in the viewport corner; ~48px ≈ old in-flow header + margin
+       so artwork sits where it did before (no extra safe-area here — .app handles notch). */
+    padding-block-start: 48px;
     min-height: 0;
     display: flex;
     flex-direction: column;

@@ -9625,28 +9625,33 @@ input::placeholder, textarea::placeholder{
   pointer-events: auto;
 }
 .discoverySpotMenuBtn{
-  width: 34px;
-  height: 34px;
-  border-radius: 11px;
-  border: 1px solid rgba(255,255,255,0.16);
-  background: rgba(8,11,18,0.62);
-  color: rgba(232,238,247,0.92);
-  font-size: 16px;
+  width: auto;
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(232,238,247,0.88);
+  font-size: 22px;
   font-weight: 800;
   line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  padding: 0;
+  padding: 4px 2px;
   margin: 0;
   -webkit-tap-highlight-color: transparent;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  box-shadow: none;
 }
 .discoverySpotMenuBtn:active{
-  transform: scale(0.96);
+  opacity: 0.75;
+  transform: none;
+}
+.discoverySpotMenuBtn:focus-visible{
+  outline: 2px solid rgba(124,92,255,0.55);
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 .discoverySpotCard,
 button.discoverySpotCard{
@@ -10198,24 +10203,24 @@ button.discoverySpotCard{
 }
 .discoveryRowSide{
   flex: 0 0 auto;
-  width: 44px;
-  margin: 0 8px 0 0;
+  width: auto;
+  min-width: 40px;
+  margin: 0 4px 0 0;
   align-self: center;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.04);
-  color: rgba(232,238,247,0.55);
-  font-size: 18px;
-  font-weight: 700;
+  border-radius: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(232,238,247,0.45);
+  font-size: 22px;
+  font-weight: 800;
   line-height: 1;
+  padding: 8px 4px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+  transition: color 0.18s ease, opacity 0.18s ease;
 }
 .discoveryRowSide:hover{
-  color: rgba(232,238,247,0.95);
-  border-color: rgba(124,92,255,0.35);
-  background: rgba(124,92,255,0.12);
+  color: rgba(232,238,247,0.92);
 }
 .discoveryRowSide:focus-visible{
   outline: 2px solid rgba(124,92,255,0.55);

@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260515trackSheetLibProfile";
+const APP_BUILD = "20260515discoverSheetDotsFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -6835,6 +6835,34 @@ function decodeDiscoverDataAttr(el, attrName) {
   } catch {
     return String(raw);
   }
+}
+
+/** Build a share URL for a Discover row (creator profile when we know the handle). */
+function discoverSharePageUrl(ctx) {
+  const pathBase = `${location.origin.replace(/\/$/, "")}${location.pathname.replace(/\/$/, "")}`;
+  const handle = String(ctx?.handle || "").trim();
+  if (handle) return `${pathBase}#/u/${encodeURIComponent(handle)}`;
+  return `${pathBase}#/discover`;
+}
+
+/** Read `data-dp-*` from a Discover ⋯ control into sheet + action context. */
+function readDiscoverSheetPayload(el) {
+  if (!el?.getAttribute) return null;
+  const encUrl = el.getAttribute("data-dp-url");
+  if (encUrl == null || encUrl === "") return null;
+  let url = "";
+  try {
+    url = decodeURIComponent(encUrl);
+  } catch {
+    url = String(encUrl);
+  }
+  url = String(url || "").trim();
+  if (!url) return null;
+  const title = decodeDiscoverDataAttr(el, "data-dp-title") || "Song";
+  const art = decodeDiscoverDataAttr(el, "data-dp-art") || "";
+  const by = decodeDiscoverDataAttr(el, "data-dp-by") || "";
+  const handle = String(decodeDiscoverDataAttr(el, "data-dp-handle") || "").trim();
+  return { url, title, art, by, handle };
 }
 
 let _trackSheetCtx = null;

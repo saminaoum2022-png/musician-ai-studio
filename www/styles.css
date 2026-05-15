@@ -6689,7 +6689,30 @@ input[type="range"]::-moz-range-thumb{
   box-shadow: 0 0 12px rgba(124,92,255,0.35);
 }
 
-.footer{ margin-top:14px; color:var(--muted); font-size: 13px; text-align:center; }
+/* Build stamp: fixed above chrome so it stays visible (flow footer sat under tab bar). */
+.footer{
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  z-index: 38;
+  margin: 0;
+  padding: 0 12px;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+  pointer-events: none;
+}
+.footer #footerBuild{
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(8, 11, 18, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  opacity: 0.72;
+}
 .songDetailsModal{
   position: fixed;
   inset: 0;
@@ -6920,9 +6943,14 @@ input[type="range"]::-moz-range-thumb{
   body[data-route="player"] .playerSecondaryRow{
     margin-bottom: 0;
   }
+  .footer{
+    bottom: calc(62px + env(safe-area-inset-bottom, 0px));
+  }
+  body:has(.hubNowPlaying.isVisible) .footer{
+    bottom: calc(148px + env(safe-area-inset-bottom, 0px));
+  }
   body[data-route="player"] .footer{
-    margin-top: 10px;
-    margin-bottom: 0;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   }
   .playerShell{
     gap: 14px;

@@ -8,7 +8,8 @@
 //   - assets/icons/icon-{192,512}.png, apple-touch-icon.png
 //   - www/assets/icons/… (same, for Capacitor web bundle)
 //
-// A slight center zoom makes the “Na” mark read larger on the home screen.
+// Keep ZOOM at 1.0 so the neon squircle frame is not cropped — iOS masks the
+// square to a superellipse; cropping would clip the glowing border.
 
 import sharp from "sharp";
 import { promises as fs } from "fs";
@@ -19,7 +20,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const MASTER = path.join(ROOT, "assets", "icons", "app-icon-master.png");
 
-const ZOOM = 1.12; // ~12% crop zoom — enlarges letterforms vs the frame
+const ZOOM = 1.0;
 const OUT_SIZE = 1024;
 
 const ICON_DIR = path.join(
@@ -72,6 +73,14 @@ async function main() {
     .resize(180, 180, { kernel: sharp.kernel.lanczos3 })
     .png({ compressionLevel: 9, force: true })
     .toBuffer();
+  const fav32 = await sharp(icon1024)
+    .resize(32, 32, { kernel: sharp.kernel.lanczos3 })
+    .png({ compressionLevel: 9, force: true })
+    .toBuffer();
+  const fav16 = await sharp(icon1024)
+    .resize(16, 16, { kernel: sharp.kernel.lanczos3 })
+    .png({ compressionLevel: 9, force: true })
+    .toBuffer();
 
   for (const rel of [
     ["assets", "icons", "icon-192.png"],
@@ -82,6 +91,16 @@ async function main() {
     const dest = path.join(ROOT, ...rel);
     await fs.mkdir(path.dirname(dest), { recursive: true });
     await fs.writeFile(dest, rel.includes("apple-touch") ? touch180 : icon192);
+  }
+  for (const [parts, buf] of [
+    [["assets", "icons", "favicon-32.png"], fav32],
+    [["www", "assets", "icons", "favicon-32.png"], fav32],
+    [["assets", "icons", "favicon-16.png"], fav16],
+    [["www", "assets", "icons", "favicon-16.png"], fav16],
+  ]) {
+    const dest = path.join(ROOT, ...parts);
+    await fs.mkdir(path.dirname(dest), { recursive: true });
+    await fs.writeFile(dest, buf);
   }
 
   const meta = await sharp(icon1024).metadata();

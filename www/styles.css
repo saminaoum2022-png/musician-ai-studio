@@ -9540,6 +9540,8 @@ input::placeholder, textarea::placeholder{
   color: rgba(232,238,247,0.38);
 }
 .discoverySpotlightRail{
+  /* ~two full cards in view + swipe for more (app horizontal padding + gap). */
+  --discovery-spot-card-w: min(calc((100vw - 52px) / 2), 198px);
   display: flex;
   flex-direction: row;
   gap: 12px;
@@ -9559,13 +9561,14 @@ input::placeholder, textarea::placeholder{
 }
 .discoverySpotCard,
 button.discoverySpotCard{
-  flex: 0 0 min(78vw, 210px);
-  width: min(78vw, 210px);
+  flex: 0 0 var(--discovery-spot-card-w);
+  width: var(--discovery-spot-card-w);
   scroll-snap-align: start;
   position: relative;
   display: block;
-  height: 248px;
-  border-radius: 20px;
+  aspect-ratio: 5 / 6;
+  height: auto;
+  border-radius: 18px;
   border: 1px solid rgba(255,255,255,0.12);
   overflow: hidden;
   padding: 0 !important;
@@ -9637,8 +9640,8 @@ button.discoverySpotCard{
   top: 42%;
   transform: translate(-50%, -50%);
   z-index: 3;
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   border-radius: 999px;
   display: flex;
   align-items: center;
@@ -9646,7 +9649,7 @@ button.discoverySpotCard{
   background: rgba(8,11,18,0.55);
   border: 1px solid rgba(255,255,255,0.28);
   color: #fff;
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 800;
   line-height: 1;
   opacity: 0;
@@ -9675,7 +9678,7 @@ button.discoverySpotCard{
   right: 0;
   bottom: 0;
   z-index: 2;
-  padding: 12px 14px 14px;
+  padding: 10px 12px 12px;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -9717,7 +9720,7 @@ button.discoverySpotCard{
 .discoverySpotCardEq span:nth-child(2){ animation-delay: 0.18s; }
 .discoverySpotCardEq span:nth-child(3){ animation-delay: 0.36s; }
 .discoverySpotCardTitle{
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1.2;
@@ -9727,7 +9730,7 @@ button.discoverySpotCard{
   overflow: hidden;
 }
 .discoverySpotCardBy{
-  font-size: 12px;
+  font-size: 11px;
   color: rgba(220,228,250,0.72);
 }
 
@@ -9841,11 +9844,12 @@ button.discoverySpotCard{
   animation: discoveryShimmer 1.15s ease-in-out infinite;
 }
 .discoverySkeletonSpotCard{
-  flex: 0 0 min(78vw, 210px);
-  width: min(78vw, 210px);
-  height: 248px;
+  flex: 0 0 var(--discovery-spot-card-w);
+  width: var(--discovery-spot-card-w);
+  aspect-ratio: 5 / 6;
+  height: auto;
   position: relative;
-  border-radius: 20px;
+  border-radius: 18px;
   border: 1px solid rgba(255,255,255,0.1);
   overflow: hidden;
   background: rgba(10,12,20,0.9);
@@ -10654,9 +10658,10 @@ button.discoverySpotCard{
   .discoveryRefreshBtn{ width: 42px; height: 42px; border-radius: 12px; }
   .discoveryRowArtBtn{ min-width: 60px; max-width: 76px; }
   .discoveryRowArtBadge{ width: 26px; height: 26px; font-size: 12px; }
-  .discoverySpotCard{ height: 228px; }
-  .discoverySkeletonSpotCard{ height: 228px; }
-  .discoverySpotlightRail{ gap: 10px; }
+  .discoverySpotlightRail{
+    gap: 10px;
+    --discovery-spot-card-w: min(calc((100vw - 48px) / 2), 188px);
+  }
   .searchBarWrap{ padding: 4px 0 8px; }
   .searchBar{ height: 48px; padding: 0 12px; }
   .searchBarInput, .searchBarHint{ font-size: 16px; }

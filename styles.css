@@ -271,7 +271,8 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
 
 .introScreen{
   padding: 0;
-  min-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  min-height: 0;
+  height: 100%;
   display:flex;
   align-items:center;
   justify-content:center;
@@ -282,11 +283,10 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
 .introInner{
   text-align:center;
   width:100%;
-  height:100%;
   display:flex;
   align-items:center;
   justify-content:center;
-  padding: 0;
+  padding: 0 16px;
   cursor: pointer;
 }
 .introHero{
@@ -300,23 +300,20 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
   transform: scale(1.045);
   opacity: 0.05;
 }
-/* The wordmark reuses the .brandPrimary gradient defined in the header so
- * the splash is visually identical to the title users will see throughout
- * the app — same family, same gradient, just much bigger. */
+/* Splash wordmark — flat gradient type, no glow (glow read as muddy on OLED). */
 .introWordmark{
   margin: 0;
   font-size: 78px;
   font-weight: 900;
   letter-spacing: -0.052em;
   line-height: 1;
-  animation: introBreath 2.6s ease-in-out infinite;
-  filter: drop-shadow(0 0 40px rgba(124,92,255,0.18));
+  filter: none;
   display: inline-flex;
   align-items: baseline;
   gap: 14px;
 }
 .introWordmark .brandPrimary{
-  text-shadow: 0 0 32px rgba(124,92,255,0.20), 0 0 48px rgba(35,213,171,0.12);
+  text-shadow: none;
 }
 .introWordmark .introBrandSecondary{
   font-size: 22px;
@@ -325,10 +322,6 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
   text-transform: uppercase;
   color: rgba(231,237,247,0.72);
   transform: translateY(-6px);
-}
-@keyframes introBreath{
-  0%, 100% { transform: scale(1); }
-  50%      { transform: scale(1.006); }
 }
 @media (prefers-reduced-motion: reduce){
   .introWordmark{ animation: none; }
@@ -369,6 +362,39 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
   }
 }
 
+body.isIntro{
+  overflow: hidden;
+  height: 100dvh;
+  height: 100svh;
+}
+body.isIntro .app{
+  margin: 0;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  max-width: none;
+  width: 100%;
+  min-height: 100dvh;
+  min-height: 100svh;
+  height: 100dvh;
+  height: 100svh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+body.isIntro main.grid{
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+body.isIntro .introScreen{
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+}
 body.isIntro .header{ display:none; }
 body.isIntro .loadingBar{ margin-top: 0; }
 body.isIntro .mobileTabbar{ display:none !important; }
@@ -4162,6 +4188,10 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
   width: 100%;
   max-width: 100%;
 }
+.profileAuraNameRow > :not(.profileAuraNameSkeleton){
+  position: relative;
+  z-index: 1;
+}
 .profileAura.profileAuraEditing .profileAuraNameRow{
   justify-content: flex-start;
   align-self: flex-start;
@@ -4675,6 +4705,10 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
 
 .profileAuraNameSkeleton{
   display: none;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   width: 140px;
   max-width: 60%;
   height: 18px;
@@ -4685,15 +4719,23 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
     rgba(255,255,255,0.04) 100%);
   background-size: 200% 100%;
   animation: profileSkelShimmer 1.25s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
 }
 .profileAuraNameRow[data-loading="true"] .profileAuraNameSkeleton{
-  display: inline-block;
+  display: block;
 }
 .profileAuraNameRow[data-loading="true"] .profileAuraNameInput,
-.profileAuraNameRow[data-loading="true"] .profileIdentityLine,
 .profileAuraNameRow[data-loading="true"] .profileVoiceTimbreInline,
-.profileAuraNameRow[data-loading="true"] .profilePreviewGenderIcon{
+.profileAuraNameRow[data-loading="true"] .profilePreviewGenderIcon,
+.profileAuraNameRow[data-loading="true"] .profileNabadCertCheck{
   visibility: hidden;
+}
+#profileAuraNameRow[data-loading="true"] + .profileIdentityLine{
+  visibility: hidden;
+}
+.profileAuraNameRow > [hidden]{
+  display: none !important;
 }
 body[data-route="profile"]:has(#profileAuraNameRow[data-loading="true"]) #profileAuraHeaderChromeRoot .profileCreditsPill{
   visibility: hidden;
@@ -4707,35 +4749,30 @@ body[data-route="profile"]:has(#profileAuraNameRow[data-loading="true"]) #profil
   .profileAuraNameSkeleton{ animation: none !important; }
 }
 
-/* Identity line sits INLINE with the @handle, separated by a leading
-   middle-dot. Smaller font than the handle, quieter color so the
-   handle keeps hierarchy. Hides itself when there's nothing to say. */
-.profileIdentityLine{
-  margin: 0;
+/* Persona line — below @handle row (not inline after verified badge). */
+.profileAuraIdentity > .profileIdentityLine{
+  margin: 4px auto 0;
   font-size: 13px;
   font-weight: 400;
   letter-spacing: 0.01em;
   color: rgba(190, 202, 222, 0.72);
   line-height: 1.2;
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   min-width: 0;
+  max-width: 460px;
+  width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  /* Nudge down a hair so it optically baselines with the larger
-     handle to its left rather than vertically centering. */
-  margin-top: 3px;
+  text-align: center;
 }
-/* Leading divider — sits between handle and the first identity word. */
-.profileIdentityLine::before{
-  content: "·";
-  color: rgba(170, 182, 205, 0.35);
-  font-weight: 400;
-  margin-right: 2px;
+.profileAuraIdentity > .profileIdentityLine::before{
+  display: none;
 }
-.profileIdentityLine[hidden]{ display: none; }
+.profileIdentityLine[hidden]{ display: none !important; }
 .profileIdentityLine .profileIdentitySep{
   margin: 0 4px;
   color: rgba(170, 182, 205, 0.32);
@@ -8433,9 +8470,11 @@ input::placeholder, textarea::placeholder{
   height: 18px;
   margin-left: 2px;
   color: #4ea4ff;
-  filter:
-    drop-shadow(0 0 6px rgba(78,164,255,0.65))
-    drop-shadow(0 0 12px rgba(124,92,255,0.35));
+  filter: none;
+  overflow: visible;
+}
+.profileNabadCertCheck[hidden]{
+  display: none !important;
 }
 .profileNabadCertCheck svg{
   width: 100%;

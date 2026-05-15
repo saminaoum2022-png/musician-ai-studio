@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260515discoverCoverFit" />
+    <link rel="stylesheet" href="./styles.css?v=20260515splashVerifyClean" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1374,11 +1374,9 @@
                     <path fill="#0a0c12" d="m10.6 14.6-2.3-2.3 1.3-1.3 1 1 3.4-3.4 1.3 1.3-4.7 4.7Z"/>
                   </svg>
                 </span>
-                <!-- Persona-only line next to the handle (middle-dot). Voice timbre
-                     uses #profileVoiceTimbreInline (dash + italic label). -->
-                <p id="profileIdentityLine" class="profileIdentityLine" hidden aria-live="polite"></p>
-                <span id="profilePreviewGenderIcon" class="profilePreviewGenderIcon profileAuraGender" style="display:none"></span>
+                <span id="profilePreviewGenderIcon" class="profilePreviewGenderIcon profileAuraGender" hidden aria-hidden="true"></span>
               </div>
+              <p id="profileIdentityLine" class="profileIdentityLine" hidden aria-live="polite"></p>
 
               <!-- The voice chip is now context-aware. In edit mode it
                    shows the timbre dropdown. In view mode it morphs into
@@ -2343,6 +2341,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260515discoverCoverFit"></script>
+    <script type="module" src="./src/app.js?v=20260515splashVerifyClean"></script>
   </body>
 </html>

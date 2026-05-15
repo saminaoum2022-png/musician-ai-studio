@@ -7625,14 +7625,27 @@ input::placeholder, textarea::placeholder{
   .hubNowPlayPause{
     width: 42px;
     height: 42px;
+    position: relative;
   }
   .hubNowPPIco{
-    display: inline-flex;
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    display: none;
     align-items: center;
     justify-content: center;
   }
   .hubNowPPIco svg{
     display: block;
+  }
+  .hubNowPlayPause:not(.isPlaying) .hubNowPPIco--play{
+    display: inline-flex;
+  }
+  .hubNowPlayPause.isPlaying .hubNowPPIco--pause{
+    display: inline-flex;
+  }
+  .hubNowPPIco[hidden]{
+    display: none !important;
   }
   .hubNowClose{
     width: 34px;

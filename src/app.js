@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260515profileVerifyOrder";
+const APP_BUILD = "20260515discoverMiniPlayer";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1446,11 +1446,21 @@ function syncHubNowAuraFromCoverUrl(artUrl) {
 function syncHubNowPlayPauseUi(audible) {
   const btn = document.getElementById("hubNowPlayPause");
   if (!btn) return;
+  const playing = Boolean(audible);
+  btn.classList.toggle("isPlaying", playing);
   const pPause = btn.querySelector(".hubNowPPIco--pause");
   const pPlay = btn.querySelector(".hubNowPPIco--play");
-  if (pPause) pPause.hidden = !audible;
-  if (pPlay) pPlay.hidden = audible;
-  btn.setAttribute("aria-label", audible ? "Pause" : "Play");
+  if (pPause) pPause.hidden = !playing;
+  if (pPlay) pPlay.hidden = playing;
+  btn.setAttribute("aria-label", playing ? "Pause" : "Play");
+}
+
+/** Audio element backing the bottom mini player (Discover uses `playerEl`). */
+function getMiniPlayerAudio() {
+  if (miniSource?.type === "discover_feed" || miniSource?.type === "public_profile_lib") {
+    return ensurePlayer();
+  }
+  return hubAudio || ensurePlayer();
 }
 
 function renderHubNowPlaying() {
@@ -1462,17 +1472,18 @@ function renderHubNowPlaying() {
   const hideOnPlayer = route === "player";
   const hideOnGenerate = route === "generate" && miniSource?.type === "generateResult";
 
+  const audio = getMiniPlayerAudio();
   const hasMeta = Boolean(hubNowMeta && String(hubNowMeta.title || "").trim());
   const hubSrc = Boolean(
-    hubAudio && (String(hubAudio.src || "").trim() || String(hubAudio.currentSrc || "").trim()),
+    audio && (String(audio.src || "").trim() || String(audio.currentSrc || "").trim()),
   );
   let dur = 0;
   try {
-    dur = getAudioDuration(hubAudio);
+    dur = audio ? getAudioDuration(audio) : 0;
   } catch {}
-  const cur = hubAudio && Number.isFinite(hubAudio.currentTime) ? hubAudio.currentTime : 0;
+  const cur = audio && Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
   const audible = Boolean(
-    hubAudio && !hubAudio.paused && !hubAudio.ended && hasMeta && hubSrc && (dur > 0 || cur > 0),
+    audio && !audio.paused && !audio.ended && hasMeta && hubSrc && (dur > 0 || cur > 0),
   );
 
   const showMini =
@@ -6849,6 +6860,36 @@ function syncDiscoveryPlayingHighlights() {
 }
 
 let _discoveryFeedGen = 0;
+/** Playable Discover feed rows (spotlight + list) for shuffle-next on the mini player. */
+let _discoveryFeedTracks = [];
+
+function discoveryTrackPlaybackMeta(t, profMap) {
+  const art = String(t.artUrl || "").trim();
+  const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
+  const prof = t.userId ? profMap.get(t.userId) : null;
+  const handle = String(prof?.username || "").trim();
+  const byLine = handle ? `@${handle}` : "Creator";
+  return {
+    url: String(t.url || "").trim(),
+    title: String(t.title || "Untitled"),
+    artUrl: artSafe,
+    byLine,
+  };
+}
+
+/** Mini player “next” — pick another random song from the current Discover feed. */
+async function playRandomDiscoveryFeedTrack(excludeUrl) {
+  const pool = _discoveryFeedTracks.filter((t) => t.url && t.url !== String(excludeUrl || "").trim());
+  const pickFrom = pool.length ? pool : _discoveryFeedTracks;
+  if (!pickFrom.length) return;
+  const pick = pickFrom[Math.floor(Math.random() * pickFrom.length)];
+  haptic("light");
+  await playLibraryUrlOnPlayer(pick.url, pick.title, pick.artUrl, {
+    discoverFeed: true,
+    openPlayer: false,
+    discoverBy: pick.byLine,
+  });
+}
 
 /** Spotlight carousel covers: mark loaded so CSS can fade in flush fill (no letterbox flash). */
 function wireDiscoverySpotCardImages(root) {
@@ -6963,6 +7004,7 @@ async function refreshDiscoverFeed() {
   listEl.classList.remove("isDiscoveryLoading");
 
   if (!playable.length) {
+    _discoveryFeedTracks = [];
     listEl.hidden = true;
     listEl.innerHTML = "";
     if (spotlightWrap) spotlightWrap.hidden = true;
@@ -6994,6 +7036,7 @@ async function refreshDiscoverFeed() {
   statusEl.textContent = "";
   const spot = playable.slice(0, 5);
   const rest = playable.slice(5);
+  _discoveryFeedTracks = playable.map((t) => discoveryTrackPlaybackMeta(t, profMap));
 
   if (rail && spotlightWrap) {
     rail.innerHTML = spot.map((t, i) => discoverySpotCardHtml(t, profMap, i)).join("");
@@ -17736,11 +17779,12 @@ if (els.hubNowPlayPause && !els.hubNowPlayPause.dataset.boundHubPp) {
       e.preventDefault();
       e.stopPropagation();
     } catch {}
-    if (!hubAudio) return;
+    const a = getMiniPlayerAudio();
+    if (!a) return;
     haptic("light");
     try {
-      if (hubAudio.paused || hubAudio.ended) void hubAudio.play();
-      else hubAudio.pause();
+      if (a.paused || a.ended) void a.play();
+      else a.pause();
     } catch {}
     try {
       syncPlayerUI();
@@ -17758,6 +17802,10 @@ if (els.hubNowExpand && !els.hubNowExpand.dataset.boundHubExp) {
       e.stopPropagation();
     } catch {}
     haptic("light");
+    if (miniSource?.type === "discover_feed" && _discoveryFeedTracks.length) {
+      void playRandomDiscoveryFeedTrack(currentPlayerTrackRef?.url);
+      return;
+    }
     try {
       location.hash = "#/player";
     } catch {}

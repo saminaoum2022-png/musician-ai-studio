@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260515playerLayoutRestore";
+const APP_BUILD = "20260515profileRowPlaybackUi";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -7401,11 +7401,7 @@ function runTrackSheetAction(action, sourceEl) {
     if (!t) return;
     if (action === "profile_lib_player") {
       shut();
-      void playLibraryUrlOnPlayer(
-        t.url,
-        t.title,
-        (t.meta && t.meta.imageUrl) || t.artUrl || "",
-      );
+      void playLibraryListRowById(t.id, { openPlayer: true });
       return;
     }
     if (action === "profile_lib_remix") {
@@ -11036,6 +11032,7 @@ function renderProfileLibraryPublicOnLinkSection() {
                 <span class="libRowTitle">${safeTitle}</span>
                 <span class="libRowSub">${subBits.join("")}</span>
               </span>
+              <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
             </button>
             <div class="libRowActions">
               ${libRowProfileVisChipHtml(true)}
@@ -11064,12 +11061,7 @@ function renderProfileLibraryPublicOnLinkSection() {
       const tr = loadLibrary().find((x) => String(x.id) === id);
       if (!tr?.url) return;
       closeTrackOptionsSheet();
-      void playLibraryUrlOnPlayer(
-        tr.url,
-        tr.title,
-        (tr.meta && tr.meta.imageUrl) || tr.artUrl || "",
-        { openPlayer: false },
-      );
+      void playLibraryListRowById(id, { openPlayer: false });
     });
   });
   els.profileHubSharedList.querySelectorAll("[data-profile-lib-menu]").forEach((b) => {
@@ -11081,6 +11073,9 @@ function renderProfileLibraryPublicOnLinkSection() {
       openProfilePublicTrackSheet(id);
     });
   });
+  try {
+    syncProfileHubSharedRowsFromPlayer();
+  } catch {}
 }
 
 function renderProfileHubShared() {
@@ -11203,6 +11198,7 @@ function renderProfileHubShared() {
                 <span class="libRowTitle">${safeTitle}</span>
                 <span class="libRowSub">${subBits.join("")}</span>
               </span>
+              <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
             </button>
             <div class="libRowActions">
               ${libRowProfileVisChipHtml(profilePublic)}
@@ -11237,6 +11233,9 @@ function renderProfileHubShared() {
       openProfileHubPostSheet(sid);
     });
   });
+  try {
+    syncProfileHubSharedRowsFromPlayer();
+  } catch {}
 }
 
 /** Max tracks persisted locally (matches `addToLibrary`). Keeps JSON under
@@ -12384,6 +12383,44 @@ function getLibraryRowPlaybackUiForTrack(trackId) {
   return { active: true, audible };
 }
 
+/** Profile → Hub release row matches `miniSource.type === "profile_hub"`. */
+function getProfileHubRowPlaybackUi(postId) {
+  const sid = String(postId || "");
+  if (miniSource?.type !== "profile_hub" || String(miniSource.postId || "") !== sid) {
+    return { active: false, audible: false };
+  }
+  const a = playerEl;
+  if (!a) return { active: true, audible: false };
+  const dur = getPlayerDuration();
+  const cur = Number.isFinite(a.currentTime) ? a.currentTime : 0;
+  const audible = !a.paused && !a.ended && (dur > 0 || cur > 0);
+  return { active: true, audible };
+}
+
+function applyLibRowNowPlayingChrome(row, active, audible) {
+  row.classList.toggle("libRowPlaying", audible);
+  row.classList.toggle("libRowActive", active && !audible);
+  if (audible || active) {
+    const img = row.querySelector(".libRowArt img");
+    applyCoverGlowRgb(row, img?.getAttribute?.("src") || "");
+  } else {
+    try {
+      row.style.removeProperty("--cover-glow-rgb");
+    } catch {}
+  }
+  const badge = row.querySelector(".libRowArtBadge");
+  if (badge) badge.textContent = audible ? "❚❚" : "▶";
+  const mainBtn =
+    row.querySelector("[data-lib-play]") ||
+    row.querySelector("[data-profile-lib-play]") ||
+    row.querySelector("[data-profile-hub-play]");
+  const titleEl = row.querySelector(".libRowTitle");
+  const name = titleEl ? String(titleEl.textContent || "").trim() || "song" : "song";
+  if (mainBtn) {
+    mainBtn.setAttribute("aria-label", audible ? `Pause ${name}` : `Play ${name}`);
+  }
+}
+
 function syncLibraryRowsFromPlayer() {
   const route = document.body.getAttribute("data-route") || "";
   if (route !== "library" || !els.libraryList) return;
@@ -12392,24 +12429,23 @@ function syncLibraryRowsFromPlayer() {
   rows.forEach((row) => {
     const id = row.getAttribute("data-lib-row");
     const { active, audible } = getLibraryRowPlaybackUiForTrack(id);
-    row.classList.toggle("libRowPlaying", audible);
-    row.classList.toggle("libRowActive", active && !audible);
-    if (audible || active) {
-      const img = row.querySelector(".libRowArt img");
-      applyCoverGlowRgb(row, img?.getAttribute?.("src") || "");
-    } else {
-      try {
-        row.style.removeProperty("--cover-glow-rgb");
-      } catch {}
-    }
-    const badge = row.querySelector(".libRowArtBadge");
-    if (badge) badge.textContent = audible ? "❚❚" : "▶";
-    const mainBtn = row.querySelector("[data-lib-play]");
-    const titleEl = row.querySelector(".libRowTitle");
-    const name = titleEl ? String(titleEl.textContent || "").trim() || "song" : "song";
-    if (mainBtn) {
-      mainBtn.setAttribute("aria-label", audible ? `Pause ${name}` : `Play ${name}`);
-    }
+    applyLibRowNowPlayingChrome(row, active, audible);
+  });
+}
+
+/** Profile releases list reuses `.libRow`; drive EQ / glow / cover badge from `playerEl`. */
+function syncProfileHubSharedRowsFromPlayer() {
+  const route = document.body.getAttribute("data-route") || "";
+  if (route !== "profile" || !els.profileHubSharedList) return;
+  els.profileHubSharedList.querySelectorAll(".libRow[data-profile-lib-row]").forEach((row) => {
+    const id = row.getAttribute("data-profile-lib-row");
+    const { active, audible } = getLibraryRowPlaybackUiForTrack(id);
+    applyLibRowNowPlayingChrome(row, active, audible);
+  });
+  els.profileHubSharedList.querySelectorAll(".libRow[data-profile-hub-row]").forEach((row) => {
+    const sid = row.getAttribute("data-profile-hub-row");
+    const { active, audible } = getProfileHubRowPlaybackUi(sid);
+    applyLibRowNowPlayingChrome(row, active, audible);
   });
 }
 
@@ -14551,6 +14587,9 @@ function syncPlayerUI() {
   } catch {}
   try {
     syncLibraryRowsFromPlayer();
+  } catch {}
+  try {
+    syncProfileHubSharedRowsFromPlayer();
   } catch {}
   syncLockScreenNowPlaying();
 }

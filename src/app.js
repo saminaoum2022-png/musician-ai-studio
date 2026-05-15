@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260515discoverRowMiniOnly";
+const APP_BUILD = "20260515profileLibPlaylistMini";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1530,7 +1530,13 @@ function syncHubNowPlayPauseUi(audible) {
 
 /** Audio element backing the bottom mini player (Discover uses `playerEl`). */
 function getMiniPlayerAudio() {
-  if (miniSource?.type === "discover_feed" || miniSource?.type === "public_profile_lib") {
+  const t = miniSource?.type;
+  if (
+    t === "discover_feed" ||
+    t === "public_profile_lib" ||
+    t === "library" ||
+    t === "profile_hub"
+  ) {
     return ensurePlayer();
   }
   return hubAudio || ensurePlayer();
@@ -1541,7 +1547,7 @@ function renderHubNowPlaying() {
   const route = document.body.getAttribute("data-route") || "";
   const hideHubSource = miniSource?.type === "hub";
   const hideOnHubVisible = route === "hub";
-  const hideOnLibrary = route === "library";
+  const hideOnLibrary = route === "library" && miniSource?.type !== "library";
   const hideOnPlayer = route === "player";
   const hideOnGenerate = route === "generate" && miniSource?.type === "generateResult";
 
@@ -7057,7 +7063,7 @@ function openProfileHubPostSheet(sid) {
   });
 }
 
-async function playLibraryListRowById(id) {
+async function playLibraryListRowById(id, opts) {
   let t = loadLibrary().find((x) => x.id === id);
   if (!t?.url) return;
   try {
@@ -7076,19 +7082,21 @@ async function playLibraryListRowById(id) {
     playSource = newProx;
   }
   currentPlayerTrackRef = t;
-  setPlayerMeta({
-    title: t.title || "Library song",
-    subtitle: "Library · Full song",
-    artUrl: (t.meta && t.meta.imageUrl) || placeholderCoverDataUrl(),
-  });
-  miniSource = { type: "library", id };
-  libraryNowPlayingId = id;
-  renderLibrary();
-  await playOnPlayerPage(playSource, "Full song", {
+  const meta = {
     title: t.title || "Library song",
     subtitle: "Library · Full song",
     artUrl: (t.meta && t.meta.imageUrl) || t.artUrl || placeholderCoverDataUrl(),
-  });
+  };
+  setPlayerMeta(meta);
+  miniSource = { type: "library", id };
+  libraryNowPlayingId = id;
+  renderLibrary();
+  const openPlayer = opts?.openPlayer === true;
+  if (openPlayer) {
+    await playOnPlayerPage(playSource, "Full song", meta);
+  } else {
+    await playInline(playSource, "Full song", { type: "library", id });
+  }
 }
 
 async function startLibraryRemixForLibraryTrack(t) {
@@ -7271,7 +7279,7 @@ function runTrackSheetAction(action, sourceEl) {
     }
     if (action === "library_player") {
       shut();
-      void playLibraryListRowById(t.id);
+      void playLibraryListRowById(t.id, { openPlayer: true });
       return;
     }
     if (action === "library_share") {
@@ -7429,7 +7437,7 @@ function runTrackSheetAction(action, sourceEl) {
     const sid = String(ctx.hubPostId || "");
     if (action === "profile_hub_player") {
       shut();
-      void playHubPostFromProfile(sid);
+      void playHubPostFromProfile(sid, { openPlayer: true });
       return;
     }
     if (action === "profile_hub_share") {
@@ -7899,7 +7907,9 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   const raw = String(rawUrl || "").trim();
   if (!raw) return;
   const fromDiscover = Boolean(opts && opts.discoverFeed);
-  const openPlayer = fromDiscover ? opts?.openPlayer !== false : true;
+  let openPlayer = true;
+  if (opts?.openPlayer === false) openPlayer = false;
+  else if (opts?.openPlayer === true) openPlayer = true;
   const byLine = fromDiscover ? String(opts?.discoverBy || "").trim() : "";
   try {
     stopHubPlayback();
@@ -7923,9 +7933,12 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     subtitle: fromDiscover ? byLine || "Discover feed" : "Public profile",
     artUrl: artUrl || placeholderCoverDataUrl(),
   };
-  if (fromDiscover && !openPlayer) {
+  if (!openPlayer) {
     setPlayerMeta(meta);
-    await playInline(prox, title || "Song", { type: "discover_feed", url: raw });
+    const inlineSource = fromDiscover
+      ? { type: "discover_feed", url: raw }
+      : { type: "public_profile_lib", url: raw };
+    await playInline(prox, title || "Song", inlineSource);
   } else {
     await playOnPlayerPage(prox, title || "Song", meta);
   }
@@ -8047,7 +8060,7 @@ async function renderUserProfilePublicLibraryAsync(username) {
         } catch {
           raw = u;
         }
-        void playLibraryUrlOnPlayer(raw, title, art);
+        void playLibraryUrlOnPlayer(raw, title, art, { openPlayer: false });
       });
     });
   }
@@ -10844,11 +10857,9 @@ async function setHubPostProfileVisibility(postId, wantPublic) {
   return { ok: true };
 }
 
-/** Profile → "Songs on Hub" rows: play the track in the full-screen
- *  player instead of routing to Hub (which caused scroll / snap /
- *  routing glitches). Uses the same CDN-first URL + proxy fallback as
- *  Hub playback. */
-async function playHubPostFromProfile(postId) {
+/** Profile → "Songs on Hub" rows: tap plays in mini player; sheet
+ *  "Player" opens full Player. CDN-first URL + proxy fallback. */
+async function playHubPostFromProfile(postId, opts) {
   const pid = String(postId || "").trim();
   if (!pid) return;
   const p = loadHubFeed().find((x) => String(x.id) === pid);
@@ -10861,6 +10872,7 @@ async function playHubPostFromProfile(postId) {
   const rawUrl = String(p.url || "").trim();
   let src = hubPlaybackSrcForPost(pid, p);
   if (!src) return;
+  const wantFullPlayer = opts?.openPlayer === true;
 
   currentPlayerTrackRef = {
     id: pid,
@@ -10887,7 +10899,7 @@ async function playHubPostFromProfile(postId) {
     }
   };
 
-  const tryOnce = async (urlToUse) => {
+  const runFull = async (urlToUse) => {
     setPlayerSource(urlToUse, "Hub");
     setPlayerMeta(meta);
     location.hash = "#/player";
@@ -10898,15 +10910,25 @@ async function playHubPostFromProfile(postId) {
     if (els.btnPlayerPause) els.btnPlayerPause.disabled = false;
   };
 
+  const runMini = async (urlToUse) => {
+    setPlayerMeta(meta);
+    await playInline(urlToUse, p.title || "Hub song", { type: "profile_hub", postId: pid });
+    applyClipStart();
+    if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = true;
+    if (els.btnPlayerPause) els.btnPlayerPause.disabled = false;
+  };
+
   try {
-    await tryOnce(src);
+    if (wantFullPlayer) await runFull(src);
+    else await runMini(src);
   } catch (e) {
     const direct = String(src || "");
     if (/^https?:\/\//i.test(direct)) {
       const prox = toAudioProxyUrl(rawUrl);
       if (prox && prox !== direct) {
         try {
-          await tryOnce(prox);
+          if (wantFullPlayer) await runFull(prox);
+          else await runMini(prox);
           return;
         } catch {}
       }
@@ -11046,6 +11068,7 @@ function renderProfileLibraryPublicOnLinkSection() {
         tr.url,
         tr.title,
         (tr.meta && tr.meta.imageUrl) || tr.artUrl || "",
+        { openPlayer: false },
       );
     });
   });
@@ -13538,7 +13561,7 @@ let lastPlayerHttpUrl = "";
  *  trim-to-clip, or Hub publish (those flows assume you own the row). */
 function playerSourceIsExternalListenOnly() {
   const ms = String(miniSource?.type || "");
-  if (ms === "discover_feed" || ms === "public_profile_lib") return true;
+  if (ms === "discover_feed" || ms === "public_profile_lib" || ms === "profile_hub") return true;
   const id = String(currentPlayerTrackRef?.id || "");
   if (id.startsWith("public_")) return true;
   return false;

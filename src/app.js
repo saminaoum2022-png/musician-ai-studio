@@ -7,7 +7,7 @@ import { initMentor, resetMentorSession } from "./mentor.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260514profileRouteFix";
+const APP_BUILD = "20260514playerDurationFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1075,11 +1075,21 @@ async function hubAudioPlayWithRetry(audio) {
 
   if (await tryOnce()) return true;
 
-  // iOS reset between retries — load() forces a fresh fetch and recreates the
-  // media element internally, which clears the AbortError stickiness.
-  try { audio.load(); } catch {}
-  await new Promise((r) => setTimeout(r, 160));
+  await new Promise((r) => setTimeout(r, 200));
   if (await tryOnce()) return true;
+
+  // `load()` rewinds to 0:00 — only when the element has no decodable data
+  // yet (fixes AbortError on iOS without restarting mid-song).
+  const needsLoad =
+    Boolean(audio.error) ||
+    (typeof audio.readyState === "number" && audio.readyState < 2);
+  if (needsLoad) {
+    try {
+      audio.load();
+    } catch {}
+    await new Promise((r) => setTimeout(r, 160));
+    if (await tryOnce()) return true;
+  }
 
   await new Promise((r) => setTimeout(r, 360));
   return tryOnce();
@@ -1168,8 +1178,9 @@ function ensureHubAudio() {
       }
     }
     const prog = document.getElementById(`hubProg_${postId}`);
-    if (!prog || !a?.duration) return;
-    const pct = Math.max(0, Math.min(100, (a.currentTime / a.duration) * 100));
+    const dur = getAudioDuration(a);
+    if (!prog || !dur) return;
+    const pct = Math.max(0, Math.min(100, (a.currentTime / dur) * 100));
     prog.style.width = `${pct}%`;
     if (els.hubNowProgBar) els.hubNowProgBar.style.width = `${pct}%`;
     renderHubNowPlaying();
@@ -1343,6 +1354,8 @@ async function startHubPlayback(postId) {
     stopHubPlayback();
     return;
   }
+  resetAudioDurationHintForUrl(targetSrc);
+  void primeAudioDurationHint(targetSrc);
   try {
     const wantAbs = new URL(targetSrc, location.href).href;
     const haveAbs = String(a.src || "").trim();
@@ -1455,8 +1468,7 @@ function renderHubNowPlaying() {
   );
   let dur = 0;
   try {
-    if (hubAudio === playerEl && typeof getPlayerDuration === "function") dur = getPlayerDuration();
-    else if (hubAudio && Number.isFinite(hubAudio.duration) && hubAudio.duration > 0) dur = hubAudio.duration;
+    dur = getAudioDuration(hubAudio);
   } catch {}
   const cur = hubAudio && Number.isFinite(hubAudio.currentTime) ? hubAudio.currentTime : 0;
   const audible = Boolean(
@@ -4420,6 +4432,8 @@ let mixerIsPlaying = false;
 // In-app player for Suno outputs
 /** @type {HTMLAudioElement | null} */
 let playerEl = null;
+/** Metadata-probed duration for the current `src` — stabilizes sliders on streamed audio. */
+const audioDurationHint = { url: "", sec: 0 };
 let playerLoadedLabel = "";
 let playerSeekDragging = false;
 let currentPlayerTrackRef = null;
@@ -8522,6 +8536,129 @@ function addPersona(personaId, label) {
  * shorter than 30 seconds — their API returns "Current music failed to
  * generate persona" even on brand-new v5 tracks.
  */
+
+function audioUrlsEquivalent(a, b) {
+  const sa = String(a || "").trim();
+  const sb = String(b || "").trim();
+  if (!sa || !sb) return false;
+  if (sa === sb) return true;
+  try {
+    return new URL(sa, location.href).href === new URL(sb, location.href).href;
+  } catch {
+    return sa.endsWith(sb) || sb.endsWith(sa);
+  }
+}
+
+function getActiveAudioSrc(a) {
+  if (!a) return "";
+  return String(a.currentSrc || a.src || "").trim();
+}
+
+/** Read duration from a media element (handles Infinity + seekable/buffered). */
+function readAudioElementDurationSec(a) {
+  if (!a) return 0;
+  const raw = Number(a.duration);
+  if (Number.isFinite(raw) && raw > 0) return raw;
+  try {
+    const sk = a.seekable;
+    if (sk && sk.length) {
+      const end = Number(sk.end(sk.length - 1));
+      if (Number.isFinite(end) && end > 0) return end;
+    }
+  } catch {}
+  try {
+    const bf = a.buffered;
+    if (bf && bf.length) {
+      const end = Number(bf.end(bf.length - 1));
+      if (Number.isFinite(end) && end > 0) return end;
+    }
+  } catch {}
+  return 0;
+}
+
+function resetAudioDurationHintForUrl(url) {
+  audioDurationHint.url = String(url || "").trim();
+  audioDurationHint.sec = 0;
+}
+
+/** Only grow — streamed audio often reports a short buffer before the full length. */
+function applyAudioDurationHint(sec) {
+  const d = Number(sec);
+  if (!Number.isFinite(d) || d <= 0) return;
+  if (d > audioDurationHint.sec) audioDurationHint.sec = d;
+}
+
+function refreshAudioDurationHintFromElement(a) {
+  if (!a || !audioDurationHint.url) return;
+  const src = getActiveAudioSrc(a);
+  if (!src || !audioUrlsEquivalent(src, audioDurationHint.url)) return;
+  applyAudioDurationHint(readAudioElementDurationSec(a));
+}
+
+function getAudioDuration(a) {
+  if (!a) return 0;
+  refreshAudioDurationHintFromElement(a);
+  let dur = readAudioElementDurationSec(a);
+  const src = getActiveAudioSrc(a);
+  if (
+    src &&
+    audioDurationHint.url &&
+    audioUrlsEquivalent(src, audioDurationHint.url) &&
+    audioDurationHint.sec > 0
+  ) {
+    dur = Math.max(dur, audioDurationHint.sec);
+  }
+  return dur;
+}
+
+async function primeAudioDurationHint(rawUrl) {
+  const url = String(rawUrl || "").trim();
+  if (!url) return;
+  if (!audioUrlsEquivalent(url, audioDurationHint.url)) {
+    resetAudioDurationHintForUrl(url);
+  }
+  applyAudioDurationHint(readAudioElementDurationSec(playerEl));
+  const probed = await measureAudioDurationSec(url);
+  if (audioUrlsEquivalent(url, audioDurationHint.url)) {
+    applyAudioDurationHint(probed);
+    try {
+      syncPlayerUI();
+    } catch {}
+    try {
+      renderHubNowPlaying();
+    } catch {}
+  }
+}
+
+async function waitForAudioCanPlay(a, timeoutMs = 12000) {
+  if (!a) return false;
+  if (a.readyState >= 3) return true;
+  if (a.readyState >= 2) return true;
+  if (readAudioElementDurationSec(a) > 0) return true;
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      a.removeEventListener("canplay", onEv);
+      a.removeEventListener("loadedmetadata", onEv);
+      a.removeEventListener("durationchange", onEv);
+      a.removeEventListener("error", onErr);
+      resolve(ok);
+    };
+    const onEv = () => {
+      if (a.readyState >= 2 || readAudioElementDurationSec(a) > 0) finish(true);
+    };
+    const onErr = () => finish(false);
+    const timer = setTimeout(() => finish(a.readyState >= 2), timeoutMs);
+    a.addEventListener("canplay", onEv);
+    a.addEventListener("loadedmetadata", onEv);
+    a.addEventListener("durationchange", onEv);
+    a.addEventListener("error", onErr, { once: true });
+  });
+}
+
 async function measureAudioDurationSec(rawUrl) {
   const s = String(rawUrl || "").trim();
   if (!s || s === "#") return null;
@@ -8533,16 +8670,10 @@ async function measureAudioDurationSec(rawUrl) {
   try {
     if (
       playerEl &&
-      typeof playerEl.duration === "number" &&
-      Number.isFinite(playerEl.duration) &&
-      playerEl.duration > 0 &&
-      typeof playerEl.currentSrc === "string" &&
-      playerEl.currentSrc &&
-      (playerEl.currentSrc === url ||
-        playerEl.currentSrc.endsWith(s) ||
-        url.endsWith(playerEl.currentSrc))
+      audioUrlsEquivalent(getActiveAudioSrc(playerEl), url) &&
+      readAudioElementDurationSec(playerEl) > 0
     ) {
-      return playerEl.duration;
+      return readAudioElementDurationSec(playerEl);
     }
   } catch {}
 
@@ -8558,16 +8689,28 @@ async function measureAudioDurationSec(rawUrl) {
       } catch {}
       resolve(v);
     };
-    const timer = setTimeout(() => finish(null), 9000);
-    a.addEventListener(
-      "loadedmetadata",
-      () => {
-        clearTimeout(timer);
-        const d = Number(a.duration);
-        finish(Number.isFinite(d) && d > 0 ? d : null);
-      },
-      { once: true }
-    );
+    const timer = setTimeout(() => finish(null), 12000);
+    const onMeta = () => {
+      clearTimeout(timer);
+      let d = readAudioElementDurationSec(a);
+      if (d > 0) {
+        finish(d);
+        return;
+      }
+      // WebKit streaming: duration stays Infinity until we seek near EOF.
+      const onSeeked = () => {
+        a.removeEventListener("seeked", onSeeked);
+        d = readAudioElementDurationSec(a);
+        finish(d > 0 ? d : null);
+      };
+      a.addEventListener("seeked", onSeeked, { once: true });
+      try {
+        a.currentTime = 1e10;
+      } catch {
+        finish(null);
+      }
+    };
+    a.addEventListener("loadedmetadata", onMeta, { once: true });
     a.addEventListener(
       "error",
       () => {
@@ -12916,29 +13059,9 @@ function isAnyAppAudioPlaying() {
   return Boolean(hub || lib);
 }
 
-/** Best-effort track duration — works even when `audio.duration` is Infinity
- *  (common on streamed Suno proxy URLs in iOS Safari). Falls back to the last
- *  seekable timestamp, then to the buffered end. Returns 0 when nothing is
- *  known yet so callers can still treat it as "unknown". */
+/** Best-effort track duration for the in-app player (see `getAudioDuration`). */
 function getPlayerDuration() {
-  if (!playerEl) return 0;
-  const raw = Number(playerEl.duration);
-  if (Number.isFinite(raw) && raw > 0) return raw;
-  try {
-    const sk = playerEl.seekable;
-    if (sk && sk.length) {
-      const end = Number(sk.end(sk.length - 1));
-      if (Number.isFinite(end) && end > 0) return end;
-    }
-  } catch {}
-  try {
-    const bf = playerEl.buffered;
-    if (bf && bf.length) {
-      const end = Number(bf.end(bf.length - 1));
-      if (Number.isFinite(end) && end > 0) return end;
-    }
-  } catch {}
-  return 0;
+  return getAudioDuration(playerEl);
 }
 
 function placeholderCoverDataUrl() {
@@ -13018,8 +13141,10 @@ function setPlayerSource(url, label) {
   } catch {
     a.removeAttribute("crossOrigin");
   }
+  resetAudioDurationHintForUrl(playUrl);
   a.src = playUrl;
   a.currentTime = 0;
+  void primeAudioDurationHint(playUrl);
   playerLoadedLabel = label || "";
   if (els.playerSource) els.playerSource.textContent = label ? `Loaded: ${label}` : "";
   if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = false;
@@ -13769,10 +13894,11 @@ async function playOnPlayerPage(url, label, meta = null) {
     });
   }
   location.hash = "#/player";
-  // Give the route a moment to render, then play.
   const a = ensurePlayer();
+  await waitForAudioCanPlay(a, 12000);
   try {
-    await a.play();
+    const ok = await hubAudioPlayWithRetry(a);
+    if (!ok) throw new Error("play_failed");
     if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = true;
     if (els.btnPlayerPause) els.btnPlayerPause.disabled = false;
   } catch (e) {
@@ -13791,8 +13917,10 @@ async function playInline(url, label, source) {
   miniSource = source || { type: "player" };
   setPlayerSource(url, label);
   const a = ensurePlayer();
+  await waitForAudioCanPlay(a, 12000);
   try {
-    await a.play();
+    const ok = await hubAudioPlayWithRetry(a);
+    if (!ok) throw new Error("play_failed");
     if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = true;
     if (els.btnPlayerPause) els.btnPlayerPause.disabled = false;
   } catch (e) {
@@ -13850,7 +13978,7 @@ function syncResultCardsFromPlayer() {
   const route = document.body.getAttribute("data-route") || "";
   const onGenerate = route === "generate";
   const a = playerEl;
-  const dur = a && Number.isFinite(a.duration) ? a.duration : 0;
+  const dur = getPlayerDuration();
   const cur = a && Number.isFinite(a.currentTime) ? a.currentTime : 0;
   const playing = Boolean(a && !a.paused && !a.ended && (dur > 0 || cur > 0));
   const mini =
@@ -18075,7 +18203,7 @@ if (els.btnShareClipHub) {
     const range = clampClipRange(
       Number(els.clipStartSec?.value || 0),
       Number(els.clipEndSec?.value || 0),
-      Number(a?.duration || 0)
+      getPlayerDuration()
     );
     if (range.endSec <= range.startSec) {
       showToast("Pick an end time after the start.");

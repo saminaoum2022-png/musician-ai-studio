@@ -7010,7 +7010,11 @@ input[type="range"]::-moz-range-thumb{
        and the bottom black band feels balanced (not pinned at the top). */
     min-height: 100vh;
     min-height: 100svh;
-    padding: calc(env(safe-area-inset-top) + 12px) 14px calc(env(safe-area-inset-bottom) + 12px) !important;
+    /* Top inset handled by fixed .playerHeader (breathing below status / notch). */
+    padding-block-start: 0 !important;
+    padding-inline-start: max(14px, env(safe-area-inset-left, 0px)) !important;
+    padding-inline-end: max(14px, env(safe-area-inset-right, 0px)) !important;
+    padding-block-end: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
     /* Center .grid (which holds the player card) vertically. */
     display: flex;
     flex-direction: column;
@@ -7021,6 +7025,8 @@ input[type="range"]::-moz-range-thumb{
   }
   body[data-route="player"] .playerCard{
     padding: 0;
+    /* Reserve space: status bar + back row + gap before artwork. */
+    padding-block-start: calc(env(safe-area-inset-top, 0px) + 10px + 40px + 10px);
     min-height: 0;
     display: flex;
     flex-direction: column;
@@ -7030,8 +7036,19 @@ input[type="range"]::-moz-range-thumb{
     align-content: start;
   }
   body[data-route="player"] .playerHeader{
-    margin-bottom: 12px;
-    padding-top: 2px;
+    position: fixed;
+    top: 0;
+    inset-inline-start: 0;
+    z-index: 200;
+    margin: 0;
+    padding-block-start: calc(env(safe-area-inset-top, 0px) + 10px);
+    padding-inline-start: calc(14px + env(safe-area-inset-left, 0px));
+    max-width: 100%;
+    box-sizing: border-box;
+    pointer-events: none;
+  }
+  body[data-route="player"] .playerHeader .playerBack{
+    pointer-events: auto;
   }
   body[data-route="player"] .playerSecondaryRow{
     margin-bottom: 0;
@@ -7057,7 +7074,7 @@ input[type="range"]::-moz-range-thumb{
   .playerArt{
     border-radius: 18px;
   }
-  .playerHeader{
+  body:not([data-route="player"]) .playerHeader{
     margin-bottom: 10px;
   }
   .grid{

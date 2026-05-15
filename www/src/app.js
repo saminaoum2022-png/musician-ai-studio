@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260515libraryRemix";
+const APP_BUILD = "20260515trackSheetLibProfile";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2310,6 +2310,9 @@ applyRoute();
 try {
   bindDiscoverySegmentControls();
 } catch {}
+try {
+  wireTrackOptionsSheetOnce();
+} catch {}
 syncLibraryTabDotFromStorage();
 
 /* ============================================================
@@ -3046,7 +3049,7 @@ function bindDiscoverySegmentControls() {
   const dPane = document.getElementById("discoveryPaneDiscover");
   if (dPane && !dPane.dataset.boundDiscoverPane) {
     dPane.dataset.boundDiscoverPane = "1";
-    wireDiscoverTrackSheetOnce();
+    wireTrackOptionsSheetOnce();
     dPane.addEventListener("click", (e) => {
       const menuBtn = e.target.closest("[data-discovery-open-sheet]");
       if (menuBtn && dPane.contains(menuBtn)) {
@@ -6834,41 +6837,119 @@ function decodeDiscoverDataAttr(el, attrName) {
   }
 }
 
-let _discoverSheetCtx = null;
+let _trackSheetCtx = null;
 
-function readDiscoverSheetPayload(el) {
-  if (!el?.getAttribute) return null;
-  const url = decodeDiscoverDataAttr(el, "data-dp-url") || decodeDiscoveryUserLibUrl(el);
-  const title = decodeDiscoverDataAttr(el, "data-dp-title") || "Song";
-  const art = decodeDiscoverDataAttr(el, "data-dp-art") || "";
-  const by = decodeDiscoverDataAttr(el, "data-dp-by") || "";
-  const handle = decodeDiscoverDataAttr(el, "data-dp-handle").trim();
-  if (!String(url || "").trim()) return null;
-  return { url, title, art, by, handle };
+function formatLibrarySheetSubtitle(t) {
+  if (!t) return "Library";
+  const dateLabel = formatLibraryDate(t.ts);
+  const bits = [];
+  if (dateLabel) bits.push(dateLabel);
+  if (t.kind === "instrumental") bits.push("Instrumental");
+  if (t.kind === "sound") bits.push("Sound");
+  bits.push(t.publicOnProfile ? "Public" : "Private");
+  return bits.join(" · ") || "Library";
 }
 
-function discoverSharePageUrl(ctx) {
-  const h = ctx && String(ctx.handle || "").trim();
+function renderTrackSheetDiscover(ctx) {
+  const q = document.getElementById("trackSheetQuickMount");
+  const l = document.getElementById("trackSheetListMount");
+  if (!q || !l) return;
+  q.innerHTML = `
+    <button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-track-sheet-action="remix">Remix</button>
+    <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="player">Player</button>
+    <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="share">Share</button>
+  `;
+  const profileHidden = !String(ctx.handle || "").trim();
+  l.innerHTML = `
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="profile" id="discoverSheetRowProfile"${profileHidden ? " hidden" : ""}>View profile</button>
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="copy">Copy link</button>
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="shuffle">Play another from Discover</button>
+    <button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--danger" data-track-sheet-action="report">Report</button>
+  `;
+}
+
+function renderTrackSheetLibrary(track) {
+  const q = document.getElementById("trackSheetQuickMount");
+  const l = document.getElementById("trackSheetListMount");
+  if (!q || !l) return;
+  const kind = String(track?.kind || "full");
+  const isInstrumental = kind === "instrumental";
+  const isSound = kind === "sound";
+  const remixEligible = !isSound && Boolean(track?.url && String(track.url).trim());
+  const personaEligible = !isInstrumental && !isSound && Boolean(track?.taskId) && Boolean(track?.audioId);
+  const profilePublic = Boolean(track.publicOnProfile);
+  const pubTo = profilePublic ? "private" : "public";
+  const pubLabel = profilePublic ? "Hide from public profile" : "Show on public profile";
+  const quickRemix = remixEligible
+    ? `<button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-track-sheet-action="library_remix">Remix</button>`
+    : "";
+  q.innerHTML = `
+    ${quickRemix}
+    <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="library_player">Player</button>
+    <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="library_share">Share</button>
+  `;
+  l.innerHTML = `
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_audio">Download audio</button>
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_video">Download video</button>
+    ${HUB_FEATURE_ENABLED ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_share_hub">Share to Hub</button>` : ""}
+    ${personaEligible ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_persona">Save voice as persona</button>` : ""}
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_pubprof" data-track-sheet-pub-to="${pubTo}">${escapeHtml(pubLabel)}</button>
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_details">Song details</button>
+    ${isInstrumental ? "" : `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_inst">Get instrumental</button>`}
+    <button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--danger" data-track-sheet-action="library_del">Delete</button>
+  `;
+}
+
+function renderTrackSheetProfileLib(t) {
+  const q = document.getElementById("trackSheetQuickMount");
+  const l = document.getElementById("trackSheetListMount");
+  if (!q || !l) return;
+  const kind = String(t?.kind || "full");
+  const isSound = kind === "sound";
+  const remixEligible = !isSound && Boolean(t?.url && String(t.url).trim());
+  const quickRemix = remixEligible
+    ? `<button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-track-sheet-action="profile_lib_remix">Remix</button>`
+    : "";
+  q.innerHTML = `
+    ${quickRemix}
+    <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="profile_lib_player">Player</button>
+    <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="profile_lib_share">Share</button>
+  `;
+  l.innerHTML = `
+    <button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--danger" data-track-sheet-action="profile_lib_hide">Hide from public profile</button>
+  `;
+}
+
+function renderTrackSheetProfileHub(p) {
+  const q = document.getElementById("trackSheetQuickMount");
+  const l = document.getElementById("trackSheetListMount");
+  if (!q || !l) return;
+  const sid = String(p.id);
+  const profilePublic = Boolean(p.publicOnProfile);
   const pathBase = `${location.origin.replace(/\/$/, "")}${location.pathname.replace(/\/$/, "")}`;
-  return h ? `${pathBase}#/u/${encodeURIComponent(h)}` : `${pathBase}#/discover`;
+  const shareUrl = HUB_FEATURE_ENABLED ? `${pathBase}#/hub?post=${encodeURIComponent(sid)}` : `${pathBase}#/profile`;
+  q.innerHTML = `
+    <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="profile_hub_player">Player</button>
+    <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="profile_hub_share" data-track-sheet-share-url="${escapeHtml(shareUrl)}">Share</button>
+  `;
+  l.innerHTML = `
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="profile_hub_vis" data-track-sheet-pub-to="${profilePublic ? "private" : "public"}">${profilePublic ? "Hide from public profile" : "Show on public profile"}</button>
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="profile_hub_proof">Proof of creation</button>
+    <button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--danger" data-track-sheet-action="profile_hub_unpublish">Unpublish from Hub</button>
+  `;
 }
 
-function openDiscoverTrackSheetFromEl(el) {
-  const ctx = readDiscoverSheetPayload(el);
-  if (!ctx) return;
-  _discoverSheetCtx = ctx;
+function openTrackSheetShell(payload) {
   const sheet = document.getElementById("discoverTrackSheet");
   const artEl = document.getElementById("discoverTrackSheetArt");
   const tEl = document.getElementById("discoverTrackSheetTitle");
   const sEl = document.getElementById("discoverTrackSheetSub");
-  const pr = document.getElementById("discoverSheetRowProfile");
   if (artEl) {
-    artEl.src = ctx.art || "./assets/nabadai-logo.png";
+    artEl.src = payload.artUrl || "./assets/nabadai-logo.png";
     artEl.alt = "";
   }
-  if (tEl) tEl.textContent = ctx.title || "Song";
-  if (sEl) sEl.textContent = ctx.by || "Discover";
-  if (pr) pr.hidden = !ctx.handle;
+  if (tEl) tEl.textContent = payload.title || "Song";
+  if (sEl) sEl.textContent = payload.sub || "";
   if (!sheet) return;
   sheet.hidden = false;
   sheet.setAttribute("aria-hidden", "false");
@@ -6878,122 +6959,541 @@ function openDiscoverTrackSheetFromEl(el) {
   } catch {}
 }
 
-function closeDiscoverTrackSheet() {
+function closeTrackOptionsSheet() {
   const sheet = document.getElementById("discoverTrackSheet");
   if (!sheet) return;
   sheet.classList.remove("isOpen");
-  _discoverSheetCtx = null;
+  _trackSheetCtx = null;
   try {
     document.body.style.overflow = "";
   } catch {}
   window.setTimeout(() => {
     sheet.hidden = true;
     sheet.setAttribute("aria-hidden", "true");
+    const q = document.getElementById("trackSheetQuickMount");
+    const l = document.getElementById("trackSheetListMount");
+    if (q) q.innerHTML = "";
+    if (l) l.innerHTML = "";
   }, 260);
 }
 
-function runDiscoverSheetAction(action) {
-  const ctx = _discoverSheetCtx;
-  if (!ctx) return;
-  const shut = () => closeDiscoverTrackSheet();
-  if (action === "remix") {
-    if (!authSession?.user?.id) {
-      showToast("Sign in to remix songs from Discover.", { icon: "!", durationMs: 3800 });
-      shut();
-      try {
-        location.hash = "#/auth";
-      } catch {}
-      return;
+function openDiscoverTrackSheetFromEl(el) {
+  const base = readDiscoverSheetPayload(el);
+  if (!base) return;
+  _trackSheetCtx = { mode: "discover", ...base };
+  renderTrackSheetDiscover(base);
+  openTrackSheetShell({
+    title: base.title || "Song",
+    sub: base.by || "Discover",
+    artUrl: base.art || "./assets/nabadai-logo.png",
+  });
+}
+
+function openLibraryTrackOptionsFromMenuButton(id) {
+  const t = loadLibrary().find((x) => String(x.id) === String(id));
+  if (!t) return;
+  _trackSheetCtx = { mode: "library", libraryId: t.id };
+  renderTrackSheetLibrary(t);
+  const art =
+    String((t.meta && (t.meta.imageThumb || t.meta.imageUrl)) || t.artUrl || "").trim() ||
+    "./assets/nabadai-logo.png";
+  openTrackSheetShell({
+    title: String(t.title || "").trim() || "Song",
+    sub: formatLibrarySheetSubtitle(t),
+    artUrl: art,
+  });
+}
+
+function openProfilePublicTrackSheet(id) {
+  const t = loadLibrary().find((x) => String(x.id) === String(id));
+  if (!t) return;
+  _trackSheetCtx = { mode: "profile_lib", libraryId: t.id };
+  renderTrackSheetProfileLib(t);
+  const art =
+    String((t.meta && (t.meta.imageThumb || t.meta.imageUrl)) || t.artUrl || "").trim() ||
+    "./assets/nabadai-logo.png";
+  openTrackSheetShell({
+    title: String(t.title || "").trim() || "Song",
+    sub: "On your public profile",
+    artUrl: art,
+  });
+}
+
+function openProfileHubPostSheet(sid) {
+  const p = loadHubFeed().find((x) => String(x.id) === String(sid));
+  if (!p) return;
+  _trackSheetCtx = { mode: "profile_hub", hubPostId: sid, hubTitle: p.title || "Song" };
+  renderTrackSheetProfileHub(p);
+  const art = String(p.artUrl || "./assets/nabadai-logo.png").trim();
+  openTrackSheetShell({
+    title: p.title || "Song",
+    sub: "On your Hub",
+    artUrl: art,
+  });
+}
+
+async function playLibraryListRowById(id) {
+  let t = loadLibrary().find((x) => x.id === id);
+  if (!t?.url) return;
+  try {
+    stopHubPlayback();
+  } catch {}
+  const rawForPlay = unwrapInnermostHttpAudioUrl(t.url);
+  let playSource = normalizeAudioUrlForPlayback(toAudioProxyUrl(rawForPlay) || rawForPlay);
+  const refreshed = await tryRefreshLibraryTrackAudioFromSuno(t);
+  if (refreshed?.url) {
+    const freshInner = String(refreshed.url).trim();
+    const newProx = normalizeAudioUrlForPlayback(toAudioProxyUrl(freshInner) || freshInner);
+    if (freshInner !== rawForPlay) {
+      const updated = patchLibraryRowWithRefreshedUrl(id, newProx, freshInner, t);
+      if (updated) t = updated;
     }
-    shut();
-    void startHubRemix({
-      url: ctx.url,
-      title: ctx.title,
-      creator: ctx.handle || "",
-      artUrl: ctx.art,
-      meta: { lyricsInput: "", styleInput: "" },
-    });
+    playSource = newProx;
+  }
+  currentPlayerTrackRef = t;
+  setPlayerMeta({
+    title: t.title || "Library song",
+    subtitle: "Library · Full song",
+    artUrl: (t.meta && t.meta.imageUrl) || placeholderCoverDataUrl(),
+  });
+  miniSource = { type: "library", id };
+  libraryNowPlayingId = id;
+  renderLibrary();
+  await playOnPlayerPage(playSource, "Full song", {
+    title: t.title || "Library song",
+    subtitle: "Library · Full song",
+    artUrl: (t.meta && t.meta.imageUrl) || t.artUrl || placeholderCoverDataUrl(),
+  });
+}
+
+async function startLibraryRemixForLibraryTrack(t) {
+  if (!t?.url || !String(t.url).trim()) {
+    showToast("This song has no audio to remix.", { icon: "!", durationMs: 3200 });
     return;
   }
-  if (action === "player") {
-    shut();
-    void playLibraryUrlOnPlayer(ctx.url, ctx.title, ctx.art, {
-      discoverFeed: true,
-      openPlayer: true,
-      discoverBy: ctx.by,
-    });
-    return;
-  }
-  if (action === "share") {
-    shut();
-    window.setTimeout(() => {
-      void shareHubLink({
-        title: ctx.title ? `${ctx.title} — NabadAi` : "NabadAi Music",
-        text: ctx.by ? `${ctx.title} · ${ctx.by}` : ctx.title || "Discover on NabadAi",
-        url: discoverSharePageUrl(ctx),
-      });
-    }, 220);
-    return;
-  }
-  if (action === "profile") {
-    if (!ctx.handle) return;
-    shut();
+  if (!authSession?.user?.id) {
+    showToast("Sign in to remix a library song.", { icon: "!", durationMs: 3800 });
     try {
-      location.hash = `#/u/${encodeURIComponent(ctx.handle)}`;
+      location.hash = "#/auth";
     } catch {}
     return;
   }
-  if (action === "copy") {
-    const url = discoverSharePageUrl(ctx);
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard
-        .writeText(url)
-        .then(() => showToast("Link copied", { icon: "✓" }))
-        .catch(() => showToast("Could not copy", { icon: "!" }));
-    } else {
-      showToast("Could not copy", { icon: "!" });
-    }
+  let track = t;
+  try {
+    const refreshed = await tryRefreshLibraryTrackAudioFromSuno(t);
+    if (refreshed?.url) track = { ...t, ...refreshed };
+  } catch {}
+  const rawInner = unwrapInnermostHttpAudioUrl(track.url);
+  if (!String(rawInner || "").trim()) {
+    showToast("Could not resolve audio for remix.", { icon: "!", durationMs: 3400 });
     return;
   }
-  if (action === "shuffle") {
-    shut();
-    void playRandomDiscoveryFeedTrack(ctx.url);
+  const remixUrl =
+    normalizeAudioUrlForPlayback(toAudioProxyUrl(rawInner) || rawInner) || rawInner;
+  const art =
+    String((track.meta && (track.meta.imageThumb || track.meta.imageUrl)) || track.artUrl || "").trim() ||
+    "./assets/nabadai-logo.png";
+  const handle = String(activeProfile?.username || "").trim();
+  await startHubRemix({
+    url: remixUrl,
+    title: track.title || "Library song",
+    creator: handle,
+    artUrl: art,
+    meta: {
+      lyricsInput: String(track?.meta?.lyricsInput || track?.meta?.finalPrompt || "").trim(),
+      styleInput: String(track?.meta?.styleInput || track?.meta?.styleSent || "").trim(),
+    },
+  });
+}
+
+async function runLibraryInstrumentalForTrack(t) {
+  if (!t?.taskId || !t?.audioId) {
+    setStatus("This song is missing generation ids for instrumental request.");
     return;
   }
-  if (action === "report") {
-    const note = window.prompt("What should we know? (optional)", "");
-    showToast("Thanks — we review reports as soon as we can.", { icon: "✓", durationMs: 3400 });
-    if (note && String(note).trim()) {
-      console.info("[discover/report]", { title: ctx.title, by: ctx.by, handle: ctx.handle, note: String(note).trim() });
+  try {
+    setStatus("Getting instrumental for selected song…");
+    setLoading(true, { title: "Getting your instrumental version…", sub: "Processing selected library song." });
+    const stemsTok = getSupabaseAuthToken();
+    const r = await fetch(apiUrl("/api/suno/stems"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(stemsTok ? { Authorization: `Bearer ${stemsTok}` } : {}),
+      },
+      body: JSON.stringify({ taskId: t.taskId, audioId: t.audioId, type: "separate_vocal" }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.status === 402 || d?.code === "insufficient_credits") {
+      const need = Number(d?.needed ?? 2);
+      const have = Number(d?.balance || 0);
+      throw new Error(
+        `Not enough credits to extract vocals (you have ${have}, need ${need}). Open Profile → Credits to redeem a code.`
+      );
     }
-    return;
+    if (!r.ok) throw new Error(d?.error || "Instrumental request failed");
+    try {
+      if (typeof refreshMyCredits === "function") void refreshMyCredits({ silent: true });
+    } catch {}
+    sunoStemsTaskId = d?.data?.taskId || d?.data?.task_id || d?.taskId || null;
+    if (!sunoStemsTaskId) throw new Error("Missing stems task id");
+    setStatus("Instrumental requested from library song. Processing now…");
+    void pollLibraryStemsUntilDone(sunoStemsTaskId, "inst", {
+      sourceTitle: t.title,
+      sourceArtUrl: t.artUrl || (t.meta && t.meta.imageUrl) || "",
+    });
+  } catch (err) {
+    setStatus(`Library instrumental failed: ${err?.message || String(err)}`);
+    setLoading(false);
   }
 }
 
-function wireDiscoverTrackSheetOnce() {
-  const sheet = document.getElementById("discoverTrackSheet");
-  if (!sheet || sheet.dataset.wiredDiscoverSheet) return;
-  sheet.dataset.wiredDiscoverSheet = "1";
-  sheet.addEventListener("click", (e) => {
-    const t = e.target;
-    if (t && t.closest && t.closest("[data-discover-sheet-dismiss]")) {
-      e.preventDefault();
-      closeDiscoverTrackSheet();
+function runTrackSheetAction(action, sourceEl) {
+  const ctx = _trackSheetCtx;
+  if (!ctx || !action) return;
+  const shut = () => closeTrackOptionsSheet();
+
+  if (ctx.mode === "discover") {
+    if (action === "remix") {
+      if (!authSession?.user?.id) {
+        showToast("Sign in to remix songs from Discover.", { icon: "!", durationMs: 3800 });
+        shut();
+        try {
+          location.hash = "#/auth";
+        } catch {}
+        return;
+      }
+      shut();
+      void startHubRemix({
+        url: ctx.url,
+        title: ctx.title,
+        creator: ctx.handle || "",
+        artUrl: ctx.art,
+        meta: { lyricsInput: "", styleInput: "" },
+      });
       return;
     }
-    const act = t && t.closest && t.closest("[data-discover-sheet-action]");
+    if (action === "player") {
+      shut();
+      void playLibraryUrlOnPlayer(ctx.url, ctx.title, ctx.art, {
+        discoverFeed: true,
+        openPlayer: true,
+        discoverBy: ctx.by,
+      });
+      return;
+    }
+    if (action === "share") {
+      shut();
+      window.setTimeout(() => {
+        void shareHubLink({
+          title: ctx.title ? `${ctx.title} — NabadAi` : "NabadAi Music",
+          text: ctx.by ? `${ctx.title} · ${ctx.by}` : ctx.title || "Discover on NabadAi",
+          url: discoverSharePageUrl(ctx),
+        });
+      }, 220);
+      return;
+    }
+    if (action === "profile") {
+      if (!ctx.handle) return;
+      shut();
+      try {
+        location.hash = `#/u/${encodeURIComponent(ctx.handle)}`;
+      } catch {}
+      return;
+    }
+    if (action === "copy") {
+      shut();
+      const url = discoverSharePageUrl(ctx);
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard
+          .writeText(url)
+          .then(() => showToast("Link copied", { icon: "✓" }))
+          .catch(() => showToast("Could not copy", { icon: "!" }));
+      } else {
+        showToast("Could not copy", { icon: "!" });
+      }
+      return;
+    }
+    if (action === "shuffle") {
+      shut();
+      void playRandomDiscoveryFeedTrack(ctx.url);
+      return;
+    }
+    if (action === "report") {
+      shut();
+      const note = window.prompt("What should we know? (optional)", "");
+      showToast("Thanks — we review reports as soon as we can.", { icon: "✓", durationMs: 3400 });
+      if (note && String(note).trim()) {
+        console.info("[discover/report]", {
+          title: ctx.title,
+          by: ctx.by,
+          handle: ctx.handle,
+          note: String(note).trim(),
+        });
+      }
+      return;
+    }
+    return;
+  }
+
+  if (ctx.mode === "library") {
+    const t = loadLibrary().find((x) => String(x.id) === String(ctx.libraryId));
+    if (!t) return;
+    if (action === "library_remix") {
+      shut();
+      void startLibraryRemixForLibraryTrack(t);
+      return;
+    }
+    if (action === "library_player") {
+      shut();
+      void playLibraryListRowById(t.id);
+      return;
+    }
+    if (action === "library_share") {
+      shut();
+      const handle = String(activeProfile?.username || "").trim();
+      const pathBase = `${location.origin.replace(/\/$/, "")}${location.pathname.replace(/\/$/, "")}`;
+      const url =
+        t.publicOnProfile && handle
+          ? `${pathBase}#/u/${encodeURIComponent(handle)}`
+          : `${pathBase}#/library`;
+      void shareHubLink({
+        title: t.title ? `${t.title} — NabadAi` : "NabadAi Music",
+        text: t.title || "From my library",
+        url,
+      });
+      return;
+    }
+    if (action === "library_dl_audio") {
+      shut();
+      void (async () => {
+        try {
+          setStatus("Preparing audio download…");
+          await downloadLibraryAudioTrack(t);
+          setStatus("Audio download is ready.");
+        } catch (err) {
+          setStatus(`Audio download failed: ${err?.message || String(err)}`);
+        }
+      })();
+      return;
+    }
+    if (action === "library_dl_video") {
+      shut();
+      void (async () => {
+        try {
+          setStatus("Preparing video download…");
+          await downloadLibraryVideoTrack(t);
+          setStatus("Video download is ready.");
+        } catch (err) {
+          setStatus(`Video download failed: ${err?.message || String(err)}`);
+        }
+      })();
+      return;
+    }
+    if (action === "library_share_hub") {
+      shut();
+      if (!HUB_FEATURE_ENABLED) {
+        showToast?.("Hub sharing is paused.", { durationMs: 3200 });
+        return;
+      }
+      shareToHub(t);
+      openShareLiveModal(t.title || "Your song");
+      setStatus("Shared to Hub.");
+      return;
+    }
+    if (action === "library_persona") {
+      shut();
+      void createPersonaForSong({
+        taskId: t.taskId,
+        audioId: t.audioId,
+        audioUrl: t.url,
+        title: t.title,
+        style: t?.meta?.style,
+        voiceProfile: t?.meta?.voiceProfile,
+        dialect: t?.meta?.dialect,
+        timbre: activeProfile?.voiceTimbre,
+        source: "library",
+      });
+      return;
+    }
+    if (action === "library_pubprof") {
+      const to = String(sourceEl?.getAttribute?.("data-track-sheet-pub-to") || "").toLowerCase();
+      shut();
+      if (to === "public" || to === "private") {
+        void setLibraryTrackPublicOnProfile(t.id, to === "public");
+      }
+      return;
+    }
+    if (action === "library_details") {
+      shut();
+      openSongDetailsModal({
+        title: t.title,
+        createdAt: new Date(t.ts).toLocaleString(),
+        taskId: t.taskId || "",
+        audioId: t.audioId || "",
+        kind: t.kind || "",
+        ...(t.meta || {}),
+      });
+      return;
+    }
+    if (action === "library_inst") {
+      shut();
+      void runLibraryInstrumentalForTrack(t);
+      return;
+    }
+    if (action === "library_del") {
+      const title = String(t?.title || "this song").trim() || "this song";
+      const sharedToHub =
+        HUB_FEATURE_ENABLED &&
+        loadHubFeed().some(
+          (p) =>
+            String(p?.url || "").trim() === String(t?.url || "").trim() &&
+            String(p?.creator || "").trim() === String(activeProfile.username || "guest").trim(),
+        );
+      const hubHint = sharedToHub
+        ? "\n\nThis song is also on Hub. It will stay public — manage your Hub posts in Profile → Songs on Hub."
+        : "";
+      const ok = window.confirm(`Remove "${title}" from your Library?${hubHint}`);
+      if (!ok) return;
+      shut();
+      removeFromLibrary(t.id);
+      setStatus("Song removed from Library.");
+      return;
+    }
+    return;
+  }
+
+  if (ctx.mode === "profile_lib") {
+    const t = loadLibrary().find((x) => String(x.id) === String(ctx.libraryId));
+    if (!t) return;
+    if (action === "profile_lib_player") {
+      shut();
+      void playLibraryUrlOnPlayer(
+        t.url,
+        t.title,
+        (t.meta && t.meta.imageUrl) || t.artUrl || "",
+      );
+      return;
+    }
+    if (action === "profile_lib_remix") {
+      shut();
+      void startLibraryRemixForLibraryTrack(t);
+      return;
+    }
+    if (action === "profile_lib_share") {
+      shut();
+      const handle = String(activeProfile?.username || "").trim();
+      const pathBase = `${location.origin.replace(/\/$/, "")}${location.pathname.replace(/\/$/, "")}`;
+      const url = handle ? `${pathBase}#/u/${encodeURIComponent(handle)}` : `${pathBase}#/library`;
+      void shareHubLink({
+        title: t.title ? `${t.title} — NabadAi` : "NabadAi Music",
+        text: t.title || "From my profile",
+        url,
+      });
+      return;
+    }
+    if (action === "profile_lib_hide") {
+      shut();
+      void setLibraryTrackPublicOnProfile(t.id, false);
+      return;
+    }
+    return;
+  }
+
+  if (ctx.mode === "profile_hub") {
+    const sid = String(ctx.hubPostId || "");
+    if (action === "profile_hub_player") {
+      shut();
+      void playHubPostFromProfile(sid);
+      return;
+    }
+    if (action === "profile_hub_share") {
+      shut();
+      const u = String(sourceEl?.getAttribute?.("data-track-sheet-share-url") || "").trim();
+      void shareHubLink({
+        title: ctx.hubTitle ? `${ctx.hubTitle} — NabadAi` : "NabadAi Music",
+        text: ctx.hubTitle || "Hub song",
+        url: u || `${location.origin}${location.pathname}`.replace(/\/$/, ""),
+      });
+      return;
+    }
+    if (action === "profile_hub_vis") {
+      const to = String(sourceEl?.getAttribute?.("data-track-sheet-pub-to") || "").toLowerCase();
+      shut();
+      if (to !== "public" && to !== "private") return;
+      const wantPublic = to === "public";
+      void (async () => {
+        const result = await setHubPostProfileVisibility(sid, wantPublic);
+        if (result?.ok) {
+          showToast(wantPublic ? "Now visible on your public profile." : "Hidden from your public profile.");
+        } else {
+          showToast(String(result?.reason || "Could not update."), { durationMs: 4200 });
+        }
+      })();
+      return;
+    }
+    if (action === "profile_hub_proof") {
+      shut();
+      void (async () => {
+        let post = loadHubFeed().find((x) => String(x.id) === sid);
+        if (!post) return;
+        if (!post.proof?.model && !post.proof?.mode && !post.proof?.promptHash) {
+          const proof = await hubFetchPostProofFull(sid);
+          if (proof) post = { ...post, proof };
+        }
+        openProofModal(post);
+      })();
+      return;
+    }
+    if (action === "profile_hub_unpublish") {
+      const post = loadHubFeed().find((x) => String(x.id) === sid);
+      const title = String(post?.title || "this post").trim() || "this post";
+      const ok = window.confirm(
+        `Unpublish "${title}" from Hub?\n\nThis takes the post off the public feed. Your Library copy stays on this device.`,
+      );
+      if (!ok) return;
+      shut();
+      void (async () => {
+        const result = await unpublishHubPostById(sid);
+        if (result?.ok) {
+          setStatus("Unpublished from Hub.");
+          showToast("Removed from Hub ✓");
+        } else {
+          const reason = result?.reason || "Try again.";
+          setStatus(`Could not unpublish: ${reason}`);
+          showToast(reason, { durationMs: 4500 });
+        }
+      })();
+      return;
+    }
+  }
+}
+
+function wireTrackOptionsSheetOnce() {
+  const sheet = document.getElementById("discoverTrackSheet");
+  if (!sheet || sheet.dataset.wiredTrackSheet) return;
+  sheet.dataset.wiredTrackSheet = "1";
+  sheet.addEventListener("click", (e) => {
+    const t = e.target;
+    if (t && t.closest && t.closest("[data-track-sheet-dismiss]")) {
+      e.preventDefault();
+      closeTrackOptionsSheet();
+      return;
+    }
+    const act = t && t.closest && t.closest("[data-track-sheet-action]");
     if (act) {
       e.preventDefault();
-      const action = act.getAttribute("data-discover-sheet-action");
-      if (action) runDiscoverSheetAction(action);
+      const action = act.getAttribute("data-track-sheet-action");
+      if (action) runTrackSheetAction(action, act);
     }
   });
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     if (!sheet.classList.contains("isOpen")) return;
-    closeDiscoverTrackSheet();
+    closeTrackOptionsSheet();
   });
 }
+
 
 /** Same contract as Library rows: `active` when this feed URL is loaded from Discover;
  *  `audible` when audio is actively playing (EQ + pause badge). */
@@ -10319,23 +10819,6 @@ async function setHubPostProfileVisibility(postId, wantPublic) {
   return { ok: true };
 }
 
-let _profileHubOpenMenuId = "";
-function closeProfileHubMenu() {
-  if (!els.profileHubSharedList) return;
-  els.profileHubSharedList.querySelectorAll(".libMenu").forEach((m) => {
-    m.style.display = "none";
-  });
-  // Drop the `libRowMenuOpen` class on every row so the previously-open
-  // row stops floating above its siblings. Without this the absolutely-
-  // positioned menu ends up below the next row's `.libRowMain` and the
-  // tap on "Unpublish" actually hits the row underneath — which is the
-  // exact bug the user just reported.
-  els.profileHubSharedList.querySelectorAll(".libRow").forEach((r) => {
-    r.classList.remove("libRowMenuOpen");
-  });
-  _profileHubOpenMenuId = "";
-}
-
 /** Profile → "Songs on Hub" rows: play the track in the full-screen
  *  player instead of routing to Hub (which caused scroll / snap /
  *  routing glitches). Uses the same CDN-first URL + proxy fallback as
@@ -10345,7 +10828,7 @@ async function playHubPostFromProfile(postId) {
   if (!pid) return;
   const p = loadHubFeed().find((x) => String(x.id) === pid);
   if (!p?.url) return;
-  closeProfileHubMenu();
+  closeTrackOptionsSheet();
   try {
     stopHubPlayback();
   } catch {}
@@ -10511,9 +10994,6 @@ function renderProfileLibraryPublicOnLinkSection() {
               </span>
             </button>
             <button class="libRowMore" type="button" data-profile-lib-menu="${tid}" aria-label="More for ${safeTitle}">⋯</button>
-            <div class="libMenu" id="profileLibMenu_${tid}" style="display:none">
-              <button class="ghost" type="button" data-profile-lib-pub="${tid}" data-profile-lib-pub-to="private">Hide from public profile</button>
-            </div>
           </li>`;
         })
         .join("")}
@@ -10536,7 +11016,7 @@ function renderProfileLibraryPublicOnLinkSection() {
       const id = b.getAttribute("data-profile-lib-play");
       const tr = loadLibrary().find((x) => String(x.id) === id);
       if (!tr?.url) return;
-      closeProfileHubMenu();
+      closeTrackOptionsSheet();
       void playLibraryUrlOnPlayer(
         tr.url,
         tr.title,
@@ -10549,25 +11029,8 @@ function renderProfileLibraryPublicOnLinkSection() {
       e.stopPropagation();
       const id = b.getAttribute("data-profile-lib-menu");
       if (!id) return;
-      const menu = document.getElementById(`profileLibMenu_${id}`);
-      const isOpen = _profileHubOpenMenuId === id && menu && menu.style.display !== "none";
-      closeProfileHubMenu();
-      if (!isOpen && menu) {
-        menu.style.display = "";
-        const row = menu.closest(".libRow");
-        if (row) row.classList.add("libRowMenuOpen");
-        _profileHubOpenMenuId = id;
-      }
-    });
-  });
-  els.profileHubSharedList.querySelectorAll("[data-profile-lib-pub]").forEach((b) => {
-    b.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      const id = b.getAttribute("data-profile-lib-pub");
-      const to = String(b.getAttribute("data-profile-lib-pub-to") || "").toLowerCase();
-      if (!id || (to !== "public" && to !== "private")) return;
-      closeProfileHubMenu();
-      await setLibraryTrackPublicOnProfile(id, to === "public");
+      haptic("light");
+      openProfilePublicTrackSheet(id);
     });
   });
 }
@@ -10696,11 +11159,6 @@ function renderProfileHubShared() {
               </span>
             </button>
             <button class="libRowMore" type="button" data-profile-hub-menu="${sid}" aria-label="More options for ${safeTitle}">⋯</button>
-            <div class="libMenu" id="profileHubMenu_${sid}" style="display:none">
-              <button class="ghost" type="button" data-profile-hub-vis="${sid}" data-profile-hub-vis-to="${profilePublic ? "private" : "public"}">${profilePublic ? "Hide from public profile" : "Show on public profile"}</button>
-              <button class="ghost" type="button" data-profile-hub-proof="${sid}">Proof of creation</button>
-              <button class="ghost libRowDelete" data-profile-hub-unpublish="${sid}">Unpublish from Hub</button>
-            </div>
           </li>
         `;
       }).join("")}
@@ -10726,90 +11184,11 @@ function renderProfileHubShared() {
       e.stopPropagation();
       const sid = b.getAttribute("data-profile-hub-menu");
       if (!sid) return;
-      const menu = document.getElementById(`profileHubMenu_${sid}`);
-      const isOpen = _profileHubOpenMenuId === sid && menu && menu.style.display !== "none";
-      closeProfileHubMenu();
-      if (!isOpen && menu) {
-        menu.style.display = "";
-        const row = menu.closest(".libRow");
-        if (row) row.classList.add("libRowMenuOpen");
-        _profileHubOpenMenuId = sid;
-      }
-    });
-  });
-  els.profileHubSharedList.querySelectorAll("[data-profile-hub-vis]").forEach((b) => {
-    b.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      const sid = b.getAttribute("data-profile-hub-vis");
-      const to = String(b.getAttribute("data-profile-hub-vis-to") || "").toLowerCase();
-      if (!sid || (to !== "public" && to !== "private")) return;
-      closeProfileHubMenu();
-      const wantPublic = to === "public";
-      const result = await setHubPostProfileVisibility(sid, wantPublic);
-      if (result?.ok) {
-        showToast(wantPublic ? "Now visible on your public profile." : "Hidden from your public profile.");
-      } else {
-        showToast(String(result?.reason || "Could not update."), { durationMs: 4200 });
-      }
-    });
-  });
-  els.profileHubSharedList.querySelectorAll("[data-profile-hub-proof]").forEach((b) => {
-    b.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      const sid = b.getAttribute("data-profile-hub-proof");
-      if (!sid) return;
-      let post = loadHubFeed().find((x) => String(x.id) === sid);
-      if (!post) return;
-      if (!post.proof?.model && !post.proof?.mode && !post.proof?.promptHash) {
-        const proof = await hubFetchPostProofFull(sid);
-        if (proof) post = { ...post, proof };
-      }
-      closeProfileHubMenu();
-      openProofModal(post);
-    });
-  });
-  els.profileHubSharedList.querySelectorAll("[data-profile-hub-unpublish]").forEach((b) => {
-    b.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      const sid = b.getAttribute("data-profile-hub-unpublish");
-      if (!sid) return;
-      const post = loadHubFeed().find((x) => String(x.id) === sid);
-      const title = String(post?.title || "this post").trim() || "this post";
-      const ok = window.confirm(
-        `Unpublish "${title}" from Hub?\n\nThis takes the post off the public feed. Your Library copy stays on this device.`
-      );
-      if (!ok) return;
-      closeProfileHubMenu();
-      const result = await unpublishHubPostById(sid);
-      if (result?.ok) {
-        setStatus("Unpublished from Hub.");
-        showToast("Removed from Hub ✓");
-      } else {
-        const reason = result?.reason || "Try again.";
-        setStatus(`Could not unpublish: ${reason}`);
-        showToast(reason, { durationMs: 4500 });
-      }
+      haptic("light");
+      openProfileHubPostSheet(sid);
     });
   });
 }
-
-// Clicks anywhere outside a Profile→Hub row close the menu, matching
-// the Library menu behavior.
-document.addEventListener("pointerdown", (e) => {
-  if (!_profileHubOpenMenuId) return;
-  if (!els.profileHubSharedList) return;
-  const t = e.target;
-  if (
-    t &&
-    t.closest &&
-    (t.closest("[data-profile-hub-menu]") ||
-      t.closest("[data-profile-lib-menu]") ||
-      t.closest(".libMenu"))
-  ) {
-    return;
-  }
-  closeProfileHubMenu();
-}, true);
 
 /** Max tracks persisted locally (matches `addToLibrary`). Keeps JSON under
  *  typical mobile localStorage limits when cloud merge pulls 100+ rows. */
@@ -11715,98 +12094,6 @@ async function backfillLibraryThumbsLazy() {
   }
 }
 
-// Track which row's menu is currently expanded so the delegated click
-// handler can toggle it cheaply and we never have more than one menu
-// inflated in the DOM at a time.
-let _libraryOpenMenuId = "";
-
-/** Build the per-row "more options" menu HTML on demand. We don't ship
- *  these buttons in the initial render anymore — at 24 rows that was
- *  many hidden DOM nodes that nobody saw until they tapped ⋯, and they
- *  were the dominant cost of `renderLibrary()` after pagination
- *  trimmed the row count. The lazy build keeps the closed-state Library
- *  list as small as Hub's.
- */
-function buildLibMenuHtml(track) {
-  const id = String(track?.id || "");
-  const kind = String(track?.kind || "full");
-  const isInstrumental = kind === "instrumental";
-  const isSound = kind === "sound";
-  const remixEligible =
-    !isSound && Boolean(track?.url && String(track.url).trim());
-  const personaEligible = !isInstrumental && !isSound && Boolean(track?.taskId) && Boolean(track?.audioId);
-  return `
-    <div class="libMenu" id="libMenu_${id}">
-      <button class="ghost" type="button" data-lib-dlaudio="${id}">Download audio</button>
-      ${remixEligible ? `<button class="ghost libRowRemix" type="button" data-lib-remix="${id}">Remix</button>` : ""}
-      <button class="ghost" data-lib-dlvideo="${id}">Download video</button>
-      ${HUB_FEATURE_ENABLED ? `<button class="ghost" data-lib-share="${id}">Share to Hub</button>` : ""}
-      ${personaEligible ? `<button class="ghost" data-lib-persona="${id}">Save voice as persona</button>` : ""}
-      <button class="ghost" data-lib-pubprof="${id}" data-lib-pubprof-to="${Boolean(track.publicOnProfile) ? "private" : "public"}">${Boolean(track.publicOnProfile) ? "Hide from public profile" : "Show on public profile"}</button>
-      <button class="ghost" data-lib-details="${id}">Song details</button>
-      ${isInstrumental ? "" : `<button class="ghost" data-lib-inst="${id}">Get instrumental</button>`}
-      <button class="ghost libRowDelete" data-lib-del="${id}">Delete</button>
-    </div>
-  `;
-}
-
-/** Close any currently-open Library row menu. */
-function closeLibraryMenu() {
-  if (!_libraryOpenMenuId || !els.libraryList) return;
-  const openRow = els.libraryList.querySelector(
-    `[data-lib-row="${CSS.escape(_libraryOpenMenuId)}"]`
-  );
-  if (openRow) openRow.classList.remove("libRowMenuOpen");
-  const node = els.libraryList.querySelector(`#libMenu_${CSS.escape(_libraryOpenMenuId)}`);
-  if (node && node.parentNode) node.parentNode.removeChild(node);
-  _libraryOpenMenuId = "";
-}
-
-/** Toggle the menu for a given row id. Builds the menu DOM lazily on
- *  first open and removes it from the DOM on close, so the closed-state
- *  Library list stays minimal.
- */
-function toggleLibraryMenuFor(id) {
-  if (!els.libraryList) return;
-  if (_libraryOpenMenuId === id) {
-    closeLibraryMenu();
-    return;
-  }
-  closeLibraryMenu();
-  const t = loadLibrary().find((x) => String(x.id) === String(id));
-  if (!t) return;
-  const row = els.libraryList.querySelector(`[data-lib-row="${CSS.escape(String(id))}"]`);
-  if (!row) return;
-  row.insertAdjacentHTML("beforeend", buildLibMenuHtml(t));
-  // Lift this row above its siblings so its absolutely-positioned
-  // menu actually receives taps on iOS (sibling rows otherwise paint
-  // on top because they come later in DOM order with no z-index).
-  row.classList.add("libRowMenuOpen");
-  _libraryOpenMenuId = String(id);
-}
-
-// Close any open Library menu when the user taps outside it. We use
-// `pointerdown` (capture phase) so we don't fight iOS's click delegation
-// on the list itself — the inside-menu handler in
-// `bindLibraryDelegatedListeners` still fires first for taps on items.
-let _libraryOutsideListenerBound = false;
-function bindLibraryOutsideCloseListener() {
-  if (_libraryOutsideListenerBound) return;
-  _libraryOutsideListenerBound = true;
-  document.addEventListener(
-    "pointerdown",
-    (ev) => {
-      if (!_libraryOpenMenuId) return;
-      const t = ev.target;
-      if (!(t instanceof Element)) return;
-      if (t.closest(".libMenu")) return;
-      if (t.closest("[data-lib-menu]")) return; // ⋯ trigger handles itself
-      closeLibraryMenu();
-    },
-    true
-  );
-}
-
 let _libraryListenersBound = false;
 /** Install one delegated `click` listener on the Library list. Replaces
  *  the previous render-time loop that attached ~9 listeners per row.
@@ -11815,284 +12102,25 @@ let _libraryListenersBound = false;
 function bindLibraryDelegatedListeners() {
   if (_libraryListenersBound || !els.libraryList) return;
   _libraryListenersBound = true;
-  bindLibraryOutsideCloseListener();
   els.libraryList.addEventListener("click", async (e) => {
     const target = e.target;
     if (!(target instanceof Element)) return;
 
-    // 1) ⋯ menu toggle button.
     const menuBtn = target.closest("[data-lib-menu]");
     if (menuBtn && els.libraryList.contains(menuBtn)) {
       e.stopPropagation();
-      toggleLibraryMenuFor(menuBtn.getAttribute("data-lib-menu"));
+      haptic("light");
+      const id = menuBtn.getAttribute("data-lib-menu");
+      if (id) openLibraryTrackOptionsFromMenuButton(id);
       return;
     }
 
-    // 2) Anything inside an open menu (lazy-built so inspect first).
-    const inMenu = target.closest(".libMenu");
-    if (inMenu) {
-      e.stopPropagation();
-      const dlAudio = target.closest("[data-lib-dlaudio]");
-      if (dlAudio) {
-        const id = dlAudio.getAttribute("data-lib-dlaudio");
-        const t = loadLibrary().find((x) => x.id === id);
-        if (t) {
-          try {
-            setStatus("Preparing audio download…");
-            await downloadLibraryAudioTrack(t);
-            setStatus("Audio download is ready.");
-          } catch (err) {
-            setStatus(`Audio download failed: ${err?.message || String(err)}`);
-          }
-        }
-        closeLibraryMenu();
-        return;
-      }
-      const libRemix = target.closest("[data-lib-remix]");
-      if (libRemix) {
-        const id = libRemix.getAttribute("data-lib-remix");
-        const t = loadLibrary().find((x) => x.id === id);
-        closeLibraryMenu();
-        if (!t?.url || !String(t.url).trim()) {
-          showToast("This song has no audio to remix.", { icon: "!", durationMs: 3200 });
-          return;
-        }
-        if (!authSession?.user?.id) {
-          showToast("Sign in to remix a library song.", { icon: "!", durationMs: 3800 });
-          try {
-            location.hash = "#/auth";
-          } catch {}
-          return;
-        }
-        void (async () => {
-          let track = t;
-          try {
-            const refreshed = await tryRefreshLibraryTrackAudioFromSuno(t);
-            if (refreshed?.url) track = { ...t, ...refreshed };
-          } catch {}
-          const rawInner = unwrapInnermostHttpAudioUrl(track.url);
-          if (!String(rawInner || "").trim()) {
-            showToast("Could not resolve audio for remix.", { icon: "!", durationMs: 3400 });
-            return;
-          }
-          const remixUrl =
-            normalizeAudioUrlForPlayback(toAudioProxyUrl(rawInner) || rawInner) || rawInner;
-          const art =
-            String(
-              (track.meta && (track.meta.imageThumb || track.meta.imageUrl)) || track.artUrl || ""
-            ).trim() || "./assets/nabadai-logo.png";
-          const handle = String(activeProfile?.username || "").trim();
-          await startHubRemix({
-            url: remixUrl,
-            title: track.title || "Library song",
-            creator: handle,
-            artUrl: art,
-            meta: {
-              lyricsInput: String(
-                track?.meta?.lyricsInput || track?.meta?.finalPrompt || ""
-              ).trim(),
-              styleInput: String(track?.meta?.styleInput || track?.meta?.styleSent || "").trim(),
-            },
-          });
-        })();
-        return;
-      }
-      const del = target.closest("[data-lib-del]");
-      if (del) {
-        const delId = del.getAttribute("data-lib-del");
-        const t = loadLibrary().find((x) => x.id === delId);
-        const title = String(t?.title || "this song").trim() || "this song";
-        const sharedToHub =
-          HUB_FEATURE_ENABLED &&
-          t &&
-          loadHubFeed().some(
-            (p) =>
-              String(p?.url || "").trim() === String(t?.url || "").trim() &&
-              String(p?.creator || "").trim() === String(activeProfile.username || "guest").trim()
-          );
-        const hubHint = sharedToHub
-          ? "\n\nThis song is also on Hub. It will stay public — manage your Hub posts in Profile → Songs on Hub."
-          : "";
-        const ok = window.confirm(`Remove "${title}" from your Library?${hubHint}`);
-        if (!ok) {
-          closeLibraryMenu();
-          return;
-        }
-        removeFromLibrary(delId);
-        closeLibraryMenu();
-        setStatus("Song removed from Library.");
-        return;
-      }
-      const det = target.closest("[data-lib-details]");
-      if (det) {
-        const id = det.getAttribute("data-lib-details");
-        const t = loadLibrary().find((x) => x.id === id);
-        if (t) {
-          openSongDetailsModal({
-            title: t.title,
-            createdAt: new Date(t.ts).toLocaleString(),
-            taskId: t.taskId || "",
-            audioId: t.audioId || "",
-            kind: t.kind || "",
-            ...(t.meta || {}),
-          });
-        }
-        closeLibraryMenu();
-        return;
-      }
-      const sh = target.closest("[data-lib-share]");
-      if (sh) {
-        const id = sh.getAttribute("data-lib-share");
-        const t = loadLibrary().find((x) => x.id === id);
-        if (t) {
-          if (!HUB_FEATURE_ENABLED) {
-            showToast?.("Hub sharing is paused.", { durationMs: 3200 });
-          } else {
-            shareToHub(t);
-            openShareLiveModal(t.title || "Your song");
-            setStatus("Shared to Hub.");
-          }
-        }
-        closeLibraryMenu();
-        return;
-      }
-      const persona = target.closest("[data-lib-persona]");
-      if (persona) {
-        const id = persona.getAttribute("data-lib-persona");
-        const t = loadLibrary().find((x) => x.id === id);
-        closeLibraryMenu();
-        if (t) {
-          await createPersonaForSong({
-            taskId: t.taskId,
-            audioId: t.audioId,
-            audioUrl: t.url,
-            title: t.title,
-            style: t?.meta?.style,
-            voiceProfile: t?.meta?.voiceProfile,
-            dialect: t?.meta?.dialect,
-            timbre: activeProfile?.voiceTimbre,
-            source: "library",
-          });
-        }
-        return;
-      }
-      const pubProf = target.closest("[data-lib-pubprof]");
-      if (pubProf) {
-        const id = pubProf.getAttribute("data-lib-pubprof");
-        const to = String(pubProf.getAttribute("data-lib-pubprof-to") || "").toLowerCase();
-        closeLibraryMenu();
-        if (id && (to === "public" || to === "private")) {
-          await setLibraryTrackPublicOnProfile(id, to === "public");
-        }
-        return;
-      }
-      const dlv = target.closest("[data-lib-dlvideo]");
-      if (dlv) {
-        const id = dlv.getAttribute("data-lib-dlvideo");
-        const t = loadLibrary().find((x) => x.id === id);
-        if (t) {
-          try {
-            setStatus("Preparing video download…");
-            await downloadLibraryVideoTrack(t);
-            setStatus("Video download is ready.");
-          } catch (err) {
-            setStatus(`Video download failed: ${err?.message || String(err)}`);
-          }
-        }
-        closeLibraryMenu();
-        return;
-      }
-      const inst = target.closest("[data-lib-inst]");
-      if (inst) {
-        const id = inst.getAttribute("data-lib-inst");
-        const t = loadLibrary().find((x) => x.id === id);
-        if (!t?.taskId || !t?.audioId) {
-          setStatus("This song is missing generation ids for instrumental request.");
-        } else {
-          try {
-            setStatus("Getting instrumental for selected song…");
-            setLoading(true, { title: "Getting your instrumental version…", sub: "Processing selected library song." });
-            const stemsTok = getSupabaseAuthToken();
-            const r = await fetch(apiUrl("/api/suno/stems"), {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                ...(stemsTok ? { Authorization: `Bearer ${stemsTok}` } : {}),
-              },
-              body: JSON.stringify({ taskId: t.taskId, audioId: t.audioId, type: "separate_vocal" }),
-            });
-            const d = await r.json().catch(() => ({}));
-            if (r.status === 402 || d?.code === "insufficient_credits") {
-              const need = Number(d?.needed ?? 2);
-              const have = Number(d?.balance || 0);
-              throw new Error(
-                `Not enough credits to extract vocals (you have ${have}, need ${need}). Open Profile → Credits to redeem a code.`
-              );
-            }
-            if (!r.ok) throw new Error(d?.error || "Instrumental request failed");
-            try {
-              if (typeof refreshMyCredits === "function") void refreshMyCredits({ silent: true });
-            } catch {}
-            sunoStemsTaskId = d?.data?.taskId || d?.data?.task_id || d?.taskId || null;
-            if (!sunoStemsTaskId) throw new Error("Missing stems task id");
-            setStatus("Instrumental requested from library song. Processing now…");
-            void pollLibraryStemsUntilDone(sunoStemsTaskId, "inst", {
-              sourceTitle: t.title,
-              sourceArtUrl: t.artUrl || (t.meta && t.meta.imageUrl) || "",
-            });
-          } catch (err) {
-            setStatus(`Library instrumental failed: ${err?.message || String(err)}`);
-            setLoading(false);
-          }
-        }
-        closeLibraryMenu();
-        return;
-      }
-      // "Get stems" was removed from the Library ⋯ menu (coming in a later
-      // update). Stems are still available from the Studio / Generate page.
-      // Intentionally no [data-lib-stems] handler here.
-      // Click landed inside the menu but not on an action — leave open.
-      return;
-    }
-
-    // 3) Play / row tap. Both behaviors are identical, so a single
-    //    branch covers `[data-lib-play]` (the main button) and
-    //    `[data-lib-row]` (anywhere on the card).
     const play = target.closest("[data-lib-play]") || target.closest("[data-lib-row]");
     if (play && els.libraryList.contains(play)) {
+      if (target.closest("[data-lib-menu]")) return;
       const id = play.getAttribute("data-lib-play") || play.getAttribute("data-lib-row");
-      let t = loadLibrary().find((x) => x.id === id);
-      if (!t?.url) return;
-      // Library and Hub use different audio elements (`playerEl` vs
-      // `hubAudio`). Without this, tapping a Library track while a Hub
-      // post was streaming would leave both playing simultaneously.
-      try { stopHubPlayback(); } catch {}
-      const rawForPlay = unwrapInnermostHttpAudioUrl(t.url);
-      let playSource = normalizeAudioUrlForPlayback(toAudioProxyUrl(rawForPlay) || rawForPlay);
-      const refreshed = await tryRefreshLibraryTrackAudioFromSuno(t);
-      if (refreshed?.url) {
-        const freshInner = String(refreshed.url).trim();
-        const newProx = normalizeAudioUrlForPlayback(toAudioProxyUrl(freshInner) || freshInner);
-        if (freshInner !== rawForPlay) {
-          const updated = patchLibraryRowWithRefreshedUrl(id, newProx, freshInner, t);
-          if (updated) t = updated;
-        }
-        playSource = newProx;
-      }
-      currentPlayerTrackRef = t;
-      setPlayerMeta({
-        title: t.title || "Library song",
-        subtitle: "Library • Full song",
-        artUrl: (t.meta && t.meta.imageUrl) || placeholderCoverDataUrl(),
-      });
-      miniSource = { type: "library", id };
-      libraryNowPlayingId = id;
-      renderLibrary();
-      await playOnPlayerPage(playSource, "Full song", {
-        title: t.title || "Library song",
-        subtitle: "Library • Full song",
-        artUrl: (t.meta && t.meta.imageUrl) || t.artUrl || placeholderCoverDataUrl(),
-      });
+      if (!id) return;
+      await playLibraryListRowById(id);
     }
   });
 }
@@ -12326,13 +12354,8 @@ function renderLibrary() {
   } catch {}
   // Bind delegated clicks once the list container exists — including empty /
   // loading states — otherwise the first time the user sees rows, none of the
-  // ⋯ menu actions (share, delete, instrumental, …) fire.
+  // ⋯ actions (bottom sheet) fire.
   bindLibraryDelegatedListeners();
-  // Re-rendering blows away the lazy-built menu DOM (it's not in the
-  // HTML template), so clear the open-id tracker too. Otherwise the
-  // first ⋯ tap after a re-render would think the menu is open and
-  // close-then-noop.
-  _libraryOpenMenuId = "";
   const items = loadLibrary();
   syncLibraryStorageBanner();
   const totalCount = items.length;

@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260515libraryRemix" />
+    <link rel="stylesheet" href="./styles.css?v=20260515trackSheetLibProfile" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -128,7 +128,7 @@
         <section class="card wide librarySection" data-route="library">
           <header class="libraryHeader appScreenHeader">
             <h2 class="appScreenTitle">Library</h2>
-            <p class="libraryLead appScreenLead"><strong>⋯</strong> on a row: <strong>Remix</strong>, <strong>Show on public profile</strong> (on your link) or <strong>Hide from public profile</strong>. Songs stay on this device.</p>
+            <p class="libraryLead appScreenLead"><strong>⋯</strong> on a row opens a bottom sheet: <strong>Remix</strong>, downloads, <strong>Show / hide on public profile</strong>, and more. Songs stay on this device.</p>
             <div class="libraryHeaderRow">
               <p id="libraryCount" class="libraryCount" hidden aria-live="polite"></p>
               <button
@@ -1108,12 +1108,12 @@
           </div>
         </div>
 
-        <!-- Discover: track options bottom sheet (carousel + feed) -->
+        <!-- Track options bottom sheet (Discover, Library, Profile) -->
         <div id="discoverTrackSheet" class="discoverTrackSheet" aria-hidden="true" hidden>
-          <div class="discoverTrackSheetBackdrop" data-discover-sheet-dismiss="1"></div>
+          <div class="discoverTrackSheetBackdrop" data-track-sheet-dismiss="1"></div>
           <div class="discoverTrackSheetCard" role="dialog" aria-modal="true" aria-labelledby="discoverTrackSheetTitle">
             <div class="discoverTrackSheetGrab" aria-hidden="true"></div>
-            <button type="button" class="discoverTrackSheetClose" data-discover-sheet-dismiss="1" aria-label="Close">
+            <button type="button" class="discoverTrackSheetClose" data-track-sheet-dismiss="1" aria-label="Close">
               <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
             </button>
             <div class="discoverTrackSheetHead">
@@ -1123,17 +1123,8 @@
                 <div id="discoverTrackSheetSub" class="discoverTrackSheetSub">—</div>
               </div>
             </div>
-            <div class="discoverTrackSheetQuick">
-              <button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-discover-sheet-action="remix">Remix</button>
-              <button type="button" class="discoverTrackSheetQuickBtn" data-discover-sheet-action="player">Player</button>
-              <button type="button" class="discoverTrackSheetQuickBtn" data-discover-sheet-action="share">Share</button>
-            </div>
-            <div class="discoverTrackSheetList" role="group" aria-label="More actions">
-              <button type="button" class="discoverTrackSheetRow" data-discover-sheet-action="profile" id="discoverSheetRowProfile">View profile</button>
-              <button type="button" class="discoverTrackSheetRow" data-discover-sheet-action="copy">Copy link</button>
-              <button type="button" class="discoverTrackSheetRow" data-discover-sheet-action="shuffle">Play another from Discover</button>
-              <button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--danger" data-discover-sheet-action="report">Report</button>
-            </div>
+            <div id="trackSheetQuickMount" class="discoverTrackSheetQuick"></div>
+            <div id="trackSheetListMount" class="discoverTrackSheetList" role="group" aria-label="More actions"></div>
           </div>
         </div>
 
@@ -2369,6 +2360,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260515libraryRemix"></script>
+    <script type="module" src="./src/app.js?v=20260515trackSheetLibProfile"></script>
   </body>
 </html>

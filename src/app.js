@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260516newUserDiscoverable";
+const APP_BUILD = "20260516notificationCenter";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -241,6 +241,11 @@ const els = {
   settingsFollowingRow: document.getElementById("settingsFollowingRow"),
   settingsNotificationsRow: document.getElementById("settingsNotificationsRow"),
   settingsNotificationsSub: document.getElementById("settingsNotificationsSub"),
+  notificationsCenter: document.getElementById("notificationsCenter"),
+  notificationsCenterLead: document.getElementById("notificationsCenterLead"),
+  notificationsCenterStatus: document.getElementById("notificationsCenterStatus"),
+  notificationsCenterList: document.getElementById("notificationsCenterList"),
+  notificationsCenterClose: document.getElementById("notificationsCenterClose"),
   profileCreditsBalance: document.getElementById("profileCreditsBalance"),
   profileCreditsNote: document.getElementById("profileCreditsNote"),
   profileCreditsLink: document.getElementById("profileCreditsLink"),
@@ -2060,6 +2065,7 @@ function applyRoute() {
     // "songs / likes" section doesn't blank-out until the full Hub
     // feed arrives. Cheap query, scoped to one user.
     void refreshMyHubPostsFast();
+    void refreshOwnProfileSocialStats({ force: true });
     renderPersonaSelect();
     renderProfileCallingCardHint();
     if (authSession?.user?.id && shouldShowProfileHeaderSkeleton()) {
@@ -7304,43 +7310,153 @@ async function showFollowingSummary() {
   }
 }
 
-async function showNotificationsSummary() {
-  if (!authSession?.user?.id) {
-    showToast("Sign in to view notifications.");
+function notificationMessage(n) {
+  const username = String(n?.metadata?.actor_username || "").replace(/^@/, "").trim();
+  if (n?.type === "follow") {
+    return {
+      title: username ? `@${username} started following you` : "Someone started following you",
+      body: "They can now find your public songs in their Following feed.",
+      action: username ? "View profile" : "",
+    };
+  }
+  return {
+    title: "New notification",
+    body: "You have a fresh app update.",
+    action: "",
+  };
+}
+
+function renderNotificationRows(list) {
+  if (!els.notificationsCenterList) return;
+  if (!list.length) {
+    els.notificationsCenterList.innerHTML = `
+      <div class="notificationsEmpty">
+        <div class="notificationsEmptyIcon" aria-hidden="true">♪</div>
+        <strong>No notifications yet</strong>
+        <span>When someone follows you or creator updates arrive, they will collect here.</span>
+      </div>`;
     return;
   }
+  els.notificationsCenterList.innerHTML = list.slice(0, 40).map((n) => {
+    const msg = notificationMessage(n);
+    const username = String(n?.metadata?.actor_username || "").replace(/^@/, "").trim();
+    const avatar = String(n?.metadata?.actor_avatar || "").trim() || "./assets/nabadai-logo.png";
+    const unread = !n?.read_at;
+    const time = relativeTime(new Date(n?.created_at || Date.now()).getTime());
+    const href = username ? `#/u/${encodeURIComponent(username)}` : "";
+    const actionHtml = href
+      ? `<a class="notificationsItemAction" href="${href}" data-notifications-close="1">${escapeHtml(msg.action || "Open")}</a>`
+      : "";
+    return `
+      <article class="notificationsItem${unread ? " isUnread" : ""}">
+        <img class="notificationsItemAvatar" src="${escapeHtml(avatar)}" alt="" loading="lazy" decoding="async" />
+        <div class="notificationsItemBody">
+          <div class="notificationsItemTop">
+            <strong>${escapeHtml(msg.title)}</strong>
+            <span>${escapeHtml(time)}</span>
+          </div>
+          <p>${escapeHtml(msg.body)}</p>
+          ${actionHtml}
+        </div>
+        ${unread ? `<span class="notificationsUnreadDot" aria-label="Unread"></span>` : ""}
+      </article>`;
+  }).join("");
+}
+
+function openNotificationsCenterShell() {
+  const modal = els.notificationsCenter;
+  if (!modal) return;
+  modal.hidden = false;
+  modal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("notificationsCenterOpen");
+  if (els.notificationsCenterStatus) {
+    els.notificationsCenterStatus.hidden = false;
+    els.notificationsCenterStatus.textContent = "Loading latest updates...";
+  }
+  if (els.notificationsCenterList) {
+    els.notificationsCenterList.innerHTML = `
+      <div class="notificationsLoading" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </div>`;
+  }
+}
+
+function closeNotificationsCenter() {
+  const modal = els.notificationsCenter;
+  if (!modal) return;
+  modal.hidden = true;
+  modal.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("notificationsCenterOpen");
+}
+
+async function refreshNotificationsCenter() {
+  if (!authSession?.user?.id) {
+    showToast("Sign in to view notifications.");
+    location.hash = "#/auth";
+    return;
+  }
+  openNotificationsCenterShell();
   try {
     const data = await socialApi("/api/social?type=notifications");
     const list = Array.isArray(data?.notifications) ? data.notifications : [];
-    if (!list.length) {
-      alert("Notifications\n\nNo notifications yet.");
-      return;
+    const unread = list.filter((n) => !n?.read_at).length;
+    if (els.notificationsCenterLead) {
+      els.notificationsCenterLead.textContent = unread
+        ? `${unread} unread ${unread === 1 ? "update" : "updates"} from your music circle.`
+        : "You are caught up. New follows and creator activity will appear here.";
     }
-    const lines = list.slice(0, 20).map((n) => {
-      const username = n?.metadata?.actor_username ? `@${n.metadata.actor_username}` : "Someone";
-      return n.type === "follow" ? `${username} started following you` : "New notification";
-    });
-    alert(`Notifications\n\n${lines.join("\n")}`);
-    void socialApi("/api/social", {
+    if (els.notificationsCenterStatus) {
+      els.notificationsCenterStatus.hidden = true;
+      els.notificationsCenterStatus.textContent = "";
+    }
+    renderNotificationRows(list);
+    if (els.settingsNotificationsSub) {
+      els.settingsNotificationsSub.textContent = unread
+        ? `${unread} unread ${unread === 1 ? "notification" : "notifications"}.`
+        : "You are all caught up.";
+    }
+    if (unread) void socialApi("/api/social", {
       method: "POST",
       body: JSON.stringify({ action: "mark_notifications_read" }),
     }).catch(() => {});
   } catch (e) {
+    if (els.notificationsCenterStatus) {
+      els.notificationsCenterStatus.hidden = false;
+      els.notificationsCenterStatus.textContent = e?.message || "Could not load notifications.";
+    }
+    if (els.notificationsCenterList) els.notificationsCenterList.innerHTML = "";
     showToast(e?.message || "Could not load notifications.");
   }
 }
 
-let _ownSocialStatsRequestAt = 0;
-async function refreshOwnProfileSocialStats() {
+async function showNotificationsSummary() {
+  return refreshNotificationsCenter();
+}
+
+let _ownSocialStatsInFlight = false;
+let _ownSocialStatsLastUserId = "";
+let _ownSocialStatsFollowers = null;
+async function refreshOwnProfileSocialStats({ force = false } = {}) {
   const uid = String(authSession?.user?.id || activeProfile?.id || "").trim();
   if (!uid || uid === "guest") return;
-  const now = Date.now();
-  if (now - _ownSocialStatsRequestAt < 8000) return;
-  _ownSocialStatsRequestAt = now;
-  const data = await fetchSocialStatsForProfile({ userId: uid });
-  const followers = Number(data?.stats?.followers || 0);
-  if (els.profileStatPillLikesValue) {
-    els.profileStatPillLikesValue.textContent = formatStatCount(followers);
+  if (_ownSocialStatsLastUserId !== uid) {
+    _ownSocialStatsLastUserId = uid;
+    _ownSocialStatsFollowers = null;
+  }
+  if (_ownSocialStatsFollowers != null && els.profileStatPillLikesValue) {
+    els.profileStatPillLikesValue.textContent = formatStatCount(_ownSocialStatsFollowers);
+  }
+  if (_ownSocialStatsInFlight && !force) return;
+  _ownSocialStatsInFlight = true;
+  try {
+    const data = await fetchSocialStatsForProfile({ userId: uid });
+    const followers = Number(data?.stats?.followers || 0);
+    _ownSocialStatsFollowers = followers;
+    if (els.profileStatPillLikesValue) {
+      els.profileStatPillLikesValue.textContent = formatStatCount(followers);
+    }
+  } finally {
+    _ownSocialStatsInFlight = false;
   }
 }
 
@@ -10709,7 +10825,7 @@ function renderProfileOwnStats() {
     els.profileStatPillPublicValue.textContent = "0";
   }
   if (els.profileStatPillLikesValue) {
-    els.profileStatPillLikesValue.textContent = "0";
+    els.profileStatPillLikesValue.textContent = formatStatCount(_ownSocialStatsFollowers ?? 0);
   }
   void refreshOwnProfileSocialStats();
 
@@ -20177,6 +20293,17 @@ if (els.btnProfileEdit) {
 if (els.btnProfileNotifications) {
   els.btnProfileNotifications.addEventListener("click", () => void showNotificationsSummary());
 }
+if (els.notificationsCenter) {
+  els.notificationsCenter.addEventListener("click", (e) => {
+    const t = e.target;
+    if (t?.closest?.("[data-notifications-close]")) closeNotificationsCenter();
+  });
+}
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && els.notificationsCenter && !els.notificationsCenter.hidden) {
+    closeNotificationsCenter();
+  }
+});
 if (els.settingsEditProfileRow) {
   els.settingsEditProfileRow.addEventListener("click", () => {
     window.setTimeout(() => {

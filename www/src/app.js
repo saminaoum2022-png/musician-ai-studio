@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260516publicProfileWrap";
+const APP_BUILD = "20260516followingInbox";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -238,6 +238,7 @@ const els = {
   settingsAccountEmail: document.getElementById("settingsAccountEmail"),
   settingsBtnSignIn: document.getElementById("settingsBtnSignIn"),
   settingsBtnLogout: document.getElementById("settingsBtnLogout"),
+  settingsEditProfileRow: document.getElementById("settingsEditProfileRow"),
   settingsFollowingRow: document.getElementById("settingsFollowingRow"),
   settingsNotificationsRow: document.getElementById("settingsNotificationsRow"),
   settingsNotificationsSub: document.getElementById("settingsNotificationsSub"),
@@ -440,6 +441,7 @@ const els = {
   profileIsPublic: document.getElementById("profileIsPublic"),
   btnProfileSave: document.getElementById("btnProfileSave"),
   btnProfileEdit: document.getElementById("btnProfileEdit"),
+  btnProfileNotifications: document.getElementById("btnProfileNotifications"),
   profileEditActions: document.getElementById("profileEditActions"),
   btnProfileCancel: document.getElementById("btnProfileCancel"),
   profileOwnStats: document.getElementById("profileOwnStats"),
@@ -1828,6 +1830,8 @@ const TAB_REFRESH_ACTIONS = {
       if (_discoveryActiveSegment === "ideas") {
         const input = document.getElementById("searchInput");
         runSearchQuery(String(input?.value || ""));
+      } else if (_discoveryActiveSegment === "following") {
+        void refreshDiscoveryFollowingFeed();
       } else {
         void refreshDiscoverFeed();
       }
@@ -2742,7 +2746,7 @@ let _searchActiveTemplate = null;
 let _searchInited = false;
 const DISCOVERY_SEGMENT_KEY = "mas:discoverySegment:v1";
 let _discoverySegmentBound = false;
-/** `discover` (community placeholder) or `ideas` (templates + search). */
+/** `discover` (everyone), `following` (followed creators), or `ideas` (templates + search). */
 let _discoveryActiveSegment = "discover";
 
 function startSearchHintRotator() {
@@ -3219,8 +3223,119 @@ function onLeaveSearchRoute() {
   closeSearchRemixSheet();
 }
 
+let _discoveryFollowingGen = 0;
+
+function renderDiscoveryFollowingEmpty(statusEl, title, text, actionHtml = "") {
+  if (!statusEl) return;
+  statusEl.hidden = false;
+  statusEl.innerHTML = `
+    <div class="discoveryEmptyWrap">
+      <div class="discoveryEmptyArt">${discoveryEmptyIllustrationSvg()}</div>
+      <p class="discoveryEmptyTitle">${escapeHtml(title)}</p>
+      <p class="discoveryEmptyText">${escapeHtml(text)}</p>
+      ${actionHtml}
+    </div>`;
+}
+
+async function refreshDiscoveryFollowingFeed() {
+  const gen = ++_discoveryFollowingGen;
+  const statusEl = document.getElementById("discoveryFollowingStatus");
+  const listEl = document.getElementById("discoveryFollowingList");
+  if (!statusEl || !listEl) return;
+
+  listEl.classList.add("isDiscoveryLoading");
+  listEl.hidden = false;
+  listEl.innerHTML = `<div class="discoverySkeletonStack">${Array.from({ length: 4 }, () => `
+    <div class="discoverySkeletonRow" aria-hidden="true">
+      <div class="discoverySkeletonArt"></div>
+      <div class="discoverySkeletonMid">
+        <div class="discoverySkeletonLine"></div>
+        <div class="discoverySkeletonLine short"></div>
+      </div>
+    </div>`).join("")}</div>`;
+  statusEl.hidden = true;
+  statusEl.textContent = "";
+
+  if (!authSession?.user?.id) {
+    listEl.classList.remove("isDiscoveryLoading");
+    listEl.hidden = true;
+    listEl.innerHTML = "";
+    renderDiscoveryFollowingEmpty(
+      statusEl,
+      "Sign in to build your feed",
+      "Follow creators from public profiles, then their newest public songs will show here.",
+      `<a class="solid discoveryEmptyCta" href="#/profile">Sign in</a>`,
+    );
+    return;
+  }
+
+  try {
+    const data = await socialApi("/api/social?type=me");
+    if (gen !== _discoveryFollowingGen) return;
+    const following = Array.isArray(data?.following) ? data.following : [];
+    if (!following.length) {
+      listEl.classList.remove("isDiscoveryLoading");
+      listEl.hidden = true;
+      listEl.innerHTML = "";
+      renderDiscoveryFollowingEmpty(
+        statusEl,
+        "Follow creators to build your feed",
+        "Open a creator profile from Discover and tap Follow. Their public songs will collect here.",
+      );
+      return;
+    }
+
+    const tracksNested = await Promise.all(following.slice(0, 24).map(async (creator) => {
+      const userId = String(creator?.userId || creator?.user_id || creator?.following_user_id || "").trim();
+      if (!userId) return [];
+      const rows = await supabaseFetchPublicLibraryForUserId(userId);
+      return rows.map((row) => ({ ...row, userId }));
+    }));
+    if (gen !== _discoveryFollowingGen) return;
+
+    const playable = tracksNested
+      .flat()
+      .filter((t) => String(t.url || "").trim())
+      .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0))
+      .slice(0, 60);
+    const profMap = await fetchProfilesByUserIdsMap(playable.map((t) => t.userId));
+    if (gen !== _discoveryFollowingGen) return;
+
+    listEl.classList.remove("isDiscoveryLoading");
+    if (!playable.length) {
+      listEl.hidden = true;
+      listEl.innerHTML = "";
+      renderDiscoveryFollowingEmpty(
+        statusEl,
+        "No songs from your follows yet",
+        "When creators you follow publish public songs, they will appear here.",
+      );
+      return;
+    }
+
+    statusEl.hidden = true;
+    statusEl.textContent = "";
+    _discoveryFeedTracks = playable.map((t) => discoveryTrackPlaybackMeta(t, profMap));
+    listEl.hidden = false;
+    listEl.innerHTML = playable.map((t, i) => discoveryTrackRowHtml(t, profMap, i)).join("");
+    try {
+      syncDiscoveryPlayingHighlights();
+    } catch {}
+  } catch (e) {
+    if (gen !== _discoveryFollowingGen) return;
+    listEl.classList.remove("isDiscoveryLoading");
+    listEl.hidden = true;
+    listEl.innerHTML = "";
+    renderDiscoveryFollowingEmpty(
+      statusEl,
+      "Could not load Following",
+      e?.message || "Please try again in a moment.",
+    );
+  }
+}
+
 function syncDiscoveryUiToSegment(seg) {
-  const next = seg === "discover" ? "discover" : "ideas";
+  const next = seg === "following" ? "following" : seg === "ideas" ? "ideas" : "discover";
   _discoveryActiveSegment = next;
   document.querySelectorAll("[data-discovery-segment]").forEach((btn) => {
     const isSel = btn.getAttribute("data-discovery-segment") === next;
@@ -3242,12 +3357,15 @@ function bindDiscoverySegmentControls() {
   document.querySelectorAll("[data-discovery-segment]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const s = btn.getAttribute("data-discovery-segment");
-      if (s !== "discover" && s !== "ideas") return;
+      if (s !== "discover" && s !== "following" && s !== "ideas") return;
       try { sessionStorage.setItem(DISCOVERY_SEGMENT_KEY, s); } catch {}
       const prev = _discoveryActiveSegment;
       syncDiscoveryUiToSegment(s);
       if (s === "ideas" && prev !== "ideas") {
         try { onEnterSearchRoute(); } catch {}
+      } else if (s === "following" && prev !== "following") {
+        try { onLeaveSearchRoute(); } catch {}
+        void refreshDiscoveryFollowingFeed();
       } else if (s === "discover" && prev !== "discover") {
         try { onLeaveSearchRoute(); } catch {}
         void refreshDiscoverFeed();
@@ -3262,6 +3380,17 @@ function bindDiscoverySegmentControls() {
       rfb.classList.add("isRefreshing");
       void refreshDiscoverFeed().finally(() => {
         try { rfb.classList.remove("isRefreshing"); } catch {}
+      });
+    });
+  }
+  const followingRefresh = document.getElementById("discoveryFollowingRefreshBtn");
+  if (followingRefresh && !followingRefresh.dataset.boundDiscoveryFollowingRefresh) {
+    followingRefresh.dataset.boundDiscoveryFollowingRefresh = "1";
+    followingRefresh.addEventListener("click", () => {
+      haptic("light");
+      followingRefresh.classList.add("isRefreshing");
+      void refreshDiscoveryFollowingFeed().finally(() => {
+        try { followingRefresh.classList.remove("isRefreshing"); } catch {}
       });
     });
   }
@@ -3298,6 +3427,55 @@ function bindDiscoverySegmentControls() {
       }
       const pl = e.target.closest("[data-user-lib-play]");
       if (!pl || !dPane.contains(pl)) return;
+      const u = pl.getAttribute("data-user-lib-url");
+      const title = decodeDiscoverDataAttr(pl, "data-user-lib-title") || "Song";
+      const art = decodeDiscoverDataAttr(pl, "data-user-lib-art") || "";
+      const by = decodeDiscoverDataAttr(pl, "data-discovery-by") || "";
+      if (!u) return;
+      let raw = "";
+      try {
+        raw = decodeURIComponent(u);
+      } catch {
+        raw = u;
+      }
+      haptic("light");
+      if (toggleDiscoverFeedPlaybackIfSameUrl(raw)) return;
+      void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by });
+    });
+  }
+  const followingPane = document.getElementById("discoveryPaneFollowing");
+  if (followingPane && !followingPane.dataset.boundDiscoverFollowingPane) {
+    followingPane.dataset.boundDiscoverFollowingPane = "1";
+    wireTrackOptionsSheetOnce();
+    followingPane.addEventListener("click", (e) => {
+      const menuBtn = e.target.closest("[data-discovery-open-sheet]");
+      if (menuBtn && followingPane.contains(menuBtn)) {
+        e.preventDefault();
+        e.stopPropagation();
+        haptic("light");
+        openDiscoverTrackSheetFromEl(menuBtn);
+        return;
+      }
+      const inline = e.target.closest("[data-discovery-inline-play]");
+      if (inline && followingPane.contains(inline)) {
+        const u = inline.getAttribute("data-user-lib-url");
+        const title = decodeDiscoverDataAttr(inline, "data-user-lib-title") || "Song";
+        const art = decodeDiscoverDataAttr(inline, "data-user-lib-art") || "";
+        const by = decodeDiscoverDataAttr(inline, "data-discovery-by") || "";
+        if (!u) return;
+        let raw = "";
+        try {
+          raw = decodeURIComponent(u);
+        } catch {
+          raw = u;
+        }
+        haptic("light");
+        if (toggleDiscoverFeedPlaybackIfSameUrl(raw)) return;
+        void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by });
+        return;
+      }
+      const pl = e.target.closest("[data-user-lib-play]");
+      if (!pl || !followingPane.contains(pl)) return;
       const u = pl.getAttribute("data-user-lib-url");
       const title = decodeDiscoverDataAttr(pl, "data-user-lib-title") || "Song";
       const art = decodeDiscoverDataAttr(pl, "data-user-lib-art") || "";
@@ -10388,6 +10566,7 @@ function setProfileEditing(on) {
   if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.disabled = !profileEditing;
   if (els.profilePreviewBioInput) els.profilePreviewBioInput.disabled = !profileEditing;
   if (els.btnProfileEdit) els.btnProfileEdit.style.display = profileEditing ? "none" : "";
+  if (els.btnProfileNotifications) els.btnProfileNotifications.style.display = profileEditing ? "none" : "";
   if (els.profileEditActions) {
     els.profileEditActions.style.display = profileEditing ? "flex" : "none";
     els.profileEditActions.setAttribute("aria-hidden", profileEditing ? "false" : "true");
@@ -19986,6 +20165,18 @@ if (els.btnProfileEdit) {
     setProfileEditing(true);
     if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.focus();
     setStatus("Editing profile — adjust fields, then Save.");
+  });
+}
+if (els.btnProfileNotifications) {
+  els.btnProfileNotifications.addEventListener("click", () => void showNotificationsSummary());
+}
+if (els.settingsEditProfileRow) {
+  els.settingsEditProfileRow.addEventListener("click", () => {
+    window.setTimeout(() => {
+      setProfileEditing(true);
+      if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.focus();
+      setStatus("Editing profile — adjust fields, then Save.");
+    }, 80);
   });
 }
 if (els.profileUsernamePrompt) {

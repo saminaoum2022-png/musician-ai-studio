@@ -1,23 +1,21 @@
 :root{
-  /* Dark theme (default). Future light mode: mirror these tokens under
+  /* Black mood trial (default dark theme). Future light mode: mirror these tokens under
    * `html[data-theme="light"]` and flip `data-theme` from app settings.
    *
-   * Canvas: lifted from the original #0b0d12 to #12151e so the shift is
-   * actually perceptible on OLED (the first micro-pass to #0d0f17 was
-   * only +2–5 RGB steps — easy to miss). Still dark enough for night
-   * listening. Cards sit one step above the canvas so sections read as surfaces. */
-  --bg: #12151e;
-  --card: #1c212e;
-  --card2:#171b26;
-  --text: #e7edf7;
-  --muted: #a8b4c7;
-  --border: rgba(255,255,255,0.14);
+   * App icon is black, so the canvas now leads with near-black OLED depth.
+   * Surfaces sit just above black and accents stay teal/purple. */
+  --bg: #05070d;
+  --card: #10141f;
+  --card2:#0b0f18;
+  --text: #eef4ff;
+  --muted: #97a5ba;
+  --border: rgba(255,255,255,0.105);
   --primary:#7c5cff;
   --primary2:#23d5ab;
   --danger:#ff4d6d;
-  --ai-a: rgba(124,92,255,0.30);
-  --ai-b: rgba(35,213,171,0.20);
-  --ai-c: #12151e;
+  --ai-a: rgba(124,92,255,0.24);
+  --ai-b: rgba(35,213,171,0.18);
+  --ai-c: #05070d;
   --space-1: 8px;
   --space-2: 12px;
   --space-3: 16px;
@@ -32,12 +30,11 @@ body{
   transition: opacity 260ms ease;
   position: relative;
   min-height: 100vh;
-  /* Slight top glow — reads as "room" instead of flat void; stays
-   * Instagram-quiet (no rainbow chrome). The solid --bg still shows
-   * below the fold and in overscroll. */
+  /* Black-led canvas with restrained teal/purple depth. */
   background:
-    radial-gradient(120% 70% at 50% -25%, rgba(124,92,255,0.10) 0%, transparent 55%),
-    radial-gradient(90% 50% at 50% 0%, rgba(35,213,171,0.05) 0%, transparent 45%),
+    radial-gradient(120% 72% at 50% -30%, rgba(124,92,255,0.11) 0%, transparent 56%),
+    radial-gradient(92% 52% at 100% 2%, rgba(35,213,171,0.055) 0%, transparent 48%),
+    radial-gradient(70% 46% at 0% 18%, rgba(124,92,255,0.05) 0%, transparent 54%),
     var(--bg);
   /* Hard clamp: no descendant can ever drag the whole page sideways.
      A single too-wide row (e.g. an over-wide banner on a 360px phone)
@@ -616,7 +613,9 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
 }
 .homeCard{
   border:1px solid var(--border);
-  background: rgba(10, 14, 22, 0.55);
+  background:
+    radial-gradient(120% 110% at 0% 0%, rgba(124,92,255,0.07), transparent 56%),
+    linear-gradient(180deg, rgba(18,23,35,0.82), rgba(7,10,17,0.76));
   border-radius:16px;
   padding:16px;
   text-decoration:none;
@@ -630,7 +629,7 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   border:1px solid var(--border);
   border-radius:16px;
   padding:14px;
-  background: rgba(0,0,0,0.20);
+  background: rgba(5,7,13,0.54);
   margin: 10px 0 14px;
 }
 .agentChat{
@@ -639,7 +638,7 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   padding: 9px;
   border-radius: 12px;
   border:1px solid var(--border);
-  background: rgba(0,0,0,0.25);
+  background: rgba(3,5,10,0.58);
 }
 .agentMsg{ padding:10px 12px; border-radius: 14px; margin: 8px 0; max-width: 92%; }
 .agentMsg.user{ margin-left:auto; background: rgba(124,92,255,0.18); border:1px solid rgba(124,92,255,0.35); }
@@ -654,7 +653,7 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   border:1px solid var(--border);
   border-radius:12px;
   margin-bottom:10px;
-  background: rgba(10, 14, 22, 0.35);
+  background: rgba(5, 8, 14, 0.58);
 }
 .trackName{ font-weight:950; min-width:140px; }
 .trackTiny{ font-size: 13px; color:var(--muted); }
@@ -2933,10 +2932,15 @@ body.hubJumpingToTop #hubList .hubRow{
 
 .card{
   border:1px solid var(--border);
-  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.025));
+  background:
+    radial-gradient(120% 100% at 8% 0%, rgba(124,92,255,0.07), transparent 58%),
+    radial-gradient(95% 85% at 100% 12%, rgba(35,213,171,0.035), transparent 62%),
+    linear-gradient(180deg, rgba(18,22,33,0.78), rgba(6,9,15,0.74));
   border-radius:16px;
   padding:16px;
-  box-shadow: 0 18px 45px rgba(0,0,0,0.35);
+  box-shadow:
+    0 18px 45px rgba(0,0,0,0.42),
+    inset 0 1px 0 rgba(255,255,255,0.045);
 }
 .wide{ grid-column: 1 / -1; }
 
@@ -2987,7 +2991,7 @@ h2{ margin:0 0 12px; font-size:16px; letter-spacing:-0.01em; }
 .label{ color:var(--muted); font-size: 13px; font-weight:700; }
 input,select{
   border:1px solid var(--border);
-  background: rgba(10, 14, 22, 0.6);
+  background: rgba(5, 8, 15, 0.72);
   color:var(--text);
   padding:10px 12px;
   border-radius:12px;
@@ -2998,7 +3002,7 @@ input,select{
 }
 textarea{
   border:1px solid var(--border);
-  background: rgba(10, 14, 22, 0.6);
+  background: rgba(5, 8, 15, 0.72);
   color:var(--text);
   padding:12px;
   border-radius:12px;
@@ -7458,13 +7462,15 @@ input::placeholder, textarea::placeholder{
     bottom: 0;
     z-index: 40;
     border: 0;
-    border-top: 1px solid rgba(255,255,255,0.06);
+    border-top: 1px solid rgba(255,255,255,0.075);
     border-radius: 0;
     padding: 6px 4px max(6px, env(safe-area-inset-bottom)) 4px;
-    background: rgba(8, 11, 18, 0.94);
-    box-shadow: none;
-    -webkit-backdrop-filter: blur(14px);
-    backdrop-filter: blur(14px);
+    background:
+      radial-gradient(72% 140% at 50% 0%, rgba(124,92,255,0.075), transparent 62%),
+      rgba(3, 5, 10, 0.92);
+    box-shadow: 0 -14px 32px rgba(0,0,0,0.24);
+    -webkit-backdrop-filter: blur(20px) saturate(155%);
+    backdrop-filter: blur(20px) saturate(155%);
   }
   .mobileTabbar a{
     text-decoration:none;
@@ -7512,7 +7518,9 @@ input::placeholder, textarea::placeholder{
   .mobileTabbar a.tabCreate.tabIsReady,
   .mobileTabbar a.tabCreate.tabIsListen{
     color: #fff;
-    background: linear-gradient(180deg, rgba(124,92,255,0.55), rgba(35,213,171,0.30));
+    background:
+      radial-gradient(100% 100% at 18% 0%, rgba(35,213,171,0.34), transparent 58%),
+      linear-gradient(180deg, rgba(124,92,255,0.50), rgba(35,213,171,0.24));
     box-shadow:
       0 10px 22px rgba(124,92,255,0.34),
       inset 0 0 0 1px rgba(124,92,255,0.42);

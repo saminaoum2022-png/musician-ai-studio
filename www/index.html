@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="dark" style="background:#12151e;">
+<html lang="en" data-theme="dark" style="background:#05070d;">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
@@ -8,10 +8,10 @@
          "white flash" between the native launch screen handing off to the
          webview and our external stylesheet finishing its parse. -->
     <style>
-      html, body { background-color: #12151e; color: #e7edf7; margin: 0; }
+      html, body { background-color: #05070d; color: #eef4ff; margin: 0; }
       html { color-scheme: dark; }
     </style>
-    <meta name="theme-color" content="#12151e" />
+    <meta name="theme-color" content="#05070d" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="NabadAi" />
@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260516neutralSheetTrial" />
+    <link rel="stylesheet" href="./styles.css?v=20260516blackStartupHandoff" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -2373,6 +2373,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260516neutralSheetTrial"></script>
+    <script type="module" src="./src/app.js?v=20260516blackStartupHandoff"></script>
   </body>
 </html>

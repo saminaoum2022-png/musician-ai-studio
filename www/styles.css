@@ -62,7 +62,31 @@ body[data-route="mentor"]{
 }
 html{ overflow-x: clip; }
 body.pageTransitioning{ opacity: 0; }
+body.booting{
+  background: #05070d;
+}
 body.booting .app{ visibility: hidden; }
+body.booting::before{
+  content: "NabadAi";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 28px;
+  font-family: "Inter Display", "Inter", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  font-size: clamp(42px, 12vw, 68px);
+  font-weight: 900;
+  letter-spacing: -0.052em;
+  background-image:
+    linear-gradient(135deg, rgba(124,92,255,0.98), rgba(35,213,171,0.95));
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  pointer-events: none;
+}
 
 /* -------------------------------------------------------------------
  *  Tap-active-tab to refresh — when the user taps the tab they're

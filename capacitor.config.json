@@ -3,8 +3,8 @@
   "appName": "NabadAi Music",
   "webDir": "www",
   "bundledWebRuntime": false,
-  "backgroundColor": "#12151e",
+  "backgroundColor": "#05070d",
   "ios": {
-    "backgroundColor": "#12151e"
+    "backgroundColor": "#05070d"
   }
 }

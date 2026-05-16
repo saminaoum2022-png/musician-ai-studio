@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260516fixedAuthSmallSplash" />
+    <link rel="stylesheet" href="./styles.css?v=20260516officialSettings" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1906,83 +1906,192 @@
 
         </details>
 
-        <section class="card wide" data-route="settings">
-          <h2>Settings</h2>
-          <div id="envBadge" class="hint" style="margin-bottom:8px">Environment: detecting…</div>
-          <p class="small">
-            This is a beta/testing settings area. Later we’ll add user profiles, subscriptions, and your own in-app
-            credits system.
-          </p>
+        <section class="settingsPage card wide" data-route="settings">
+          <header class="settingsHeader">
+            <p class="settingsKicker">App settings</p>
+            <h2>Settings</h2>
+            <p class="settingsLead">Manage your account, creator tools, preferences, and app information.</p>
+          </header>
 
-          <a href="#/sounds" class="settingsSoundsLink" data-route-link="sounds">
-            <span class="settingsSoundsLinkIco" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="20" height="20">
-                <path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M3 12c2 0 2-4 4-4s2 8 4 8 2-12 4-12 2 8 4 8 2-4 2-4"/>
-              </svg>
-            </span>
-            <span class="settingsSoundsLinkBody">
-              <span class="settingsSoundsLinkTitle">Sounds</span>
-              <span class="settingsSoundsLinkSub">Loops &amp; ambience · 2.5 credits per generation</span>
-            </span>
-            <span class="settingsSoundsLinkChev" aria-hidden="true">›</span>
-          </a>
-
-          <!-- Voice persona — relocated here from Profile per the redesign.
-               Sits right under Sounds because both are voice/audio-related. -->
-          <div id="profilePersonaRow" class="profilePersonaRow profilePersonaRowSettings" style="display:none" aria-live="polite" data-expanded="false">
-            <button type="button" id="profilePersonaToggle" class="profilePersonaHead" aria-expanded="false" aria-controls="profilePersonaDetails">
-              <span class="profilePersonaIco" aria-hidden="true">🎙️</span>
-              <span class="profilePersonaHeadText">
-                <span class="profilePersonaTitle">Voice persona</span>
-                <strong id="profilePersonaLabel">—</strong>
-              </span>
-              <span class="profilePersonaChev" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
-                  <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </span>
-            </button>
-            <div id="profilePersonaDetails" class="profilePersonaDetails" hidden>
-              <div id="profilePersonaHint" class="profilePersonaHint">
-                Save a voice as persona from any of these spots:
-                <ul class="profilePersonaSpots">
-                  <li>After a song finishes → tap the ⋯ on the result card → <strong>Save voice as persona</strong>.</li>
-                  <li>In <a href="#/library">Library</a> → tap ⋯ on a song → <strong>Save voice as persona</strong>.</li>
-                  <li>On a published track → tap ⋯ → <strong>Save voice as persona</strong> (when available).</li>
-                </ul>
+          <section class="settingsGroup" aria-labelledby="settingsAccountTitle">
+            <h3 id="settingsAccountTitle" class="settingsGroupTitle">Account</h3>
+            <div class="settingsList">
+              <div class="settingsRow">
+                <span class="settingsRowIco" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
+                </span>
+                <span class="settingsRowBody">
+                  <span class="settingsRowTitle">Signed in as</span>
+                  <span id="settingsAccountEmail" class="settingsRowSub">Guest mode</span>
+                </span>
               </div>
-              <a href="#/generate" class="profilePersonaLink">Open Create</a>
+              <a class="settingsRow settingsRowLink" href="#/profile">
+                <span class="settingsRowIco" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M4 20V4h16v16H4Z"/><path d="M8 9h8M8 13h5"/></svg>
+                </span>
+                <span class="settingsRowBody">
+                  <span class="settingsRowTitle">Public profile</span>
+                  <span class="settingsRowSub">Edit your name, bio, avatar, and public songs.</span>
+                </span>
+                <span class="settingsRowChev" aria-hidden="true">›</span>
+              </a>
+              <button id="settingsBtnSignIn" class="settingsRow settingsRowLink" type="button">
+                <span class="settingsRowIco" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5M15 12H3"/></svg>
+                </span>
+                <span class="settingsRowBody">
+                  <span class="settingsRowTitle">Sign in</span>
+                  <span class="settingsRowSub">Use Google to save and manage your profile.</span>
+                </span>
+                <span class="settingsRowChev" aria-hidden="true">›</span>
+              </button>
+              <button id="settingsBtnLogout" class="settingsRow settingsRowLink settingsRowDanger" type="button" hidden>
+                <span class="settingsRowIco" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
+                </span>
+                <span class="settingsRowBody">
+                  <span class="settingsRowTitle">Sign out</span>
+                  <span class="settingsRowSub">Remove this account session from the device.</span>
+                </span>
+              </button>
             </div>
-          </div>
+          </section>
 
-          <label class="settingsToggleRow" for="settingsCallingCardAutoplay">
-            <span class="settingsToggleBody">
-              <span class="settingsToggleTitle">Auto-play voice notes</span>
-              <span class="settingsToggleSub">Play a creator’s 8-sec calling card once when you open their profile.</span>
-            </span>
-            <input id="settingsCallingCardAutoplay" type="checkbox" checked />
-          </label>
-
-          <div class="row">
-            <button id="btnBetaTopup" class="primary" type="button">Beta top-up (Suno credits)</button>
-            <button id="btnOpenBilling" class="ghost" type="button">Open billing page</button>
-          </div>
-          <div class="hint">
-            This opens SunoAPI billing in a new tab, then come back and click “Refresh credits”.
-          </div>
-
-          <details class="details" open>
-            <summary>Credits usage history (this browser)</summary>
-            <div class="row" style="margin-top:10px">
-              <button id="btnCreditsHistoryRefresh" class="ghost" type="button">Refresh</button>
-              <button id="btnCreditsHistoryClear" class="ghost" type="button">Clear history</button>
-              <button id="btnCreditRecovery" class="ghost" type="button">Request credit recovery</button>
+          <section class="settingsGroup" aria-labelledby="settingsSubscriptionTitle">
+            <h3 id="settingsSubscriptionTitle" class="settingsGroupTitle">Subscription status</h3>
+            <div class="settingsList">
+              <div class="settingsRow">
+                <span class="settingsRowIco" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M12 2l3 6 6 .9-4.5 4.4 1.1 6.2L12 16.6 6.4 19.5l1.1-6.2L3 8.9 9 8l3-6Z"/></svg>
+                </span>
+                <span class="settingsRowBody">
+                  <span class="settingsRowTitle">Beta access</span>
+                  <span class="settingsRowSub">Your current access is active. Plan management will arrive later.</span>
+                </span>
+                <span class="settingsStatusPill">Active</span>
+              </div>
+              <a class="settingsRow settingsRowLink" href="#/credits">
+                <span class="settingsRowIco" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/></svg>
+                </span>
+                <span class="settingsRowBody">
+                  <span class="settingsRowTitle">Manage access</span>
+                  <span class="settingsRowSub">View credits and redeem codes in the Profile area.</span>
+                </span>
+                <span class="settingsRowChev" aria-hidden="true">›</span>
+              </a>
             </div>
-            <pre id="creditsHistoryOut" class="code" style="max-height:380px"></pre>
-            <div class="hint">
-              Stored locally in your browser for now (no account system yet).
+          </section>
+
+          <section class="settingsGroup" aria-labelledby="settingsCreatorTitle">
+            <h3 id="settingsCreatorTitle" class="settingsGroupTitle">Creator tools</h3>
+            <div class="settingsList">
+              <a href="#/sounds" class="settingsRow settingsRowLink" data-route-link="sounds">
+                <span class="settingsRowIco" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M3 12c2 0 2-4 4-4s2 8 4 8 2-12 4-12 2 8 4 8 2-4 2-4"/></svg>
+                </span>
+                <span class="settingsRowBody">
+                  <span class="settingsRowTitle">Sounds</span>
+                  <span class="settingsRowSub">Loops and ambience for new generations.</span>
+                </span>
+                <span class="settingsRowChev" aria-hidden="true">›</span>
+              </a>
+
+              <div id="profilePersonaRow" class="profilePersonaRow profilePersonaRowSettings" style="display:none" aria-live="polite" data-expanded="false">
+                <button type="button" id="profilePersonaToggle" class="profilePersonaHead" aria-expanded="false" aria-controls="profilePersonaDetails">
+                  <span class="profilePersonaIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v4M8 22h8"/></svg>
+                  </span>
+                  <span class="profilePersonaHeadText">
+                    <span class="profilePersonaTitle">Voice persona</span>
+                    <strong id="profilePersonaLabel">—</strong>
+                  </span>
+                  <span class="profilePersonaChev" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+                      <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </span>
+                </button>
+                <div id="profilePersonaDetails" class="profilePersonaDetails" hidden>
+                  <div id="profilePersonaHint" class="profilePersonaHint">
+                    Save a voice as persona from any of these spots:
+                    <ul class="profilePersonaSpots">
+                      <li>After a song finishes → tap the ⋯ on the result card → <strong>Save voice as persona</strong>.</li>
+                      <li>In <a href="#/library">Library</a> → tap ⋯ on a song → <strong>Save voice as persona</strong>.</li>
+                      <li>On a published track → tap ⋯ → <strong>Save voice as persona</strong> when available.</li>
+                    </ul>
+                  </div>
+                  <a href="#/generate" class="profilePersonaLink">Open Create</a>
+                </div>
+              </div>
             </div>
-          </details>
+          </section>
+
+          <section class="settingsGroup" aria-labelledby="settingsPrefsTitle">
+            <h3 id="settingsPrefsTitle" class="settingsGroupTitle">Preferences</h3>
+            <div class="settingsList">
+              <label class="settingsRow settingsToggleRow" for="settingsCallingCardAutoplay">
+                <span class="settingsRowIco" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+                </span>
+                <span class="settingsRowBody">
+                  <span class="settingsRowTitle">Auto-play voice notes</span>
+                  <span class="settingsRowSub">Play a creator’s 8-second calling card once when you open their profile.</span>
+                </span>
+                <input id="settingsCallingCardAutoplay" type="checkbox" checked />
+              </label>
+            </div>
+          </section>
+
+          <section class="settingsGroup" aria-labelledby="settingsSupportTitle">
+            <h3 id="settingsSupportTitle" class="settingsGroupTitle">Support</h3>
+            <div class="settingsList">
+              <button class="settingsRow settingsRowLink" type="button" data-settings-placeholder="Help & support">
+                <span class="settingsRowIco" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M12 18h.01"/><path d="M9.1 9a3 3 0 1 1 5.8 1c-.6 1.2-1.9 1.7-2.5 2.7-.3.5-.4.9-.4 1.3"/><circle cx="12" cy="12" r="10"/></svg>
+                </span>
+                <span class="settingsRowBody">
+                  <span class="settingsRowTitle">Help & support</span>
+                  <span class="settingsRowSub">Get help with your account or generated music.</span>
+                </span>
+                <span class="settingsRowChev" aria-hidden="true">›</span>
+              </button>
+              <button class="settingsRow settingsRowLink" type="button" data-settings-placeholder="Report a problem">
+                <span class="settingsRowIco" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
+                </span>
+                <span class="settingsRowBody">
+                  <span class="settingsRowTitle">Report a problem</span>
+                  <span class="settingsRowSub">Send feedback about a bug or unexpected result.</span>
+                </span>
+                <span class="settingsRowChev" aria-hidden="true">›</span>
+              </button>
+            </div>
+          </section>
+
+          <section class="settingsGroup" aria-labelledby="settingsLegalTitle">
+            <h3 id="settingsLegalTitle" class="settingsGroupTitle">Legal & app info</h3>
+            <div class="settingsList">
+              <button class="settingsRow settingsRowLink" type="button" data-settings-placeholder="Terms of Service">
+                <span class="settingsRowBody">
+                  <span class="settingsRowTitle">Terms of Service</span>
+                </span>
+                <span class="settingsRowChev" aria-hidden="true">›</span>
+              </button>
+              <button class="settingsRow settingsRowLink" type="button" data-settings-placeholder="Privacy Policy">
+                <span class="settingsRowBody">
+                  <span class="settingsRowTitle">Privacy Policy</span>
+                </span>
+                <span class="settingsRowChev" aria-hidden="true">›</span>
+              </button>
+              <div class="settingsRow settingsAppInfoRow">
+                <span class="settingsRowBody">
+                  <span class="settingsRowTitle">App version</span>
+                  <span id="envBadge" class="settingsRowSub">Build detecting...</span>
+                </span>
+              </div>
+            </div>
+          </section>
         </section>
       </main>
       </div>
@@ -2374,6 +2483,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260516fixedAuthSmallSplash"></script>
+    <script type="module" src="./src/app.js?v=20260516officialSettings"></script>
   </body>
 </html>

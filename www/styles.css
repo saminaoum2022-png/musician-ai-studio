@@ -8114,7 +8114,175 @@ input::placeholder, textarea::placeholder{
   stroke-linejoin: round;
 }
 
-/* Sounds entry moved from Profile → Settings (same row style). */
+/* Official Settings page — grouped rows, calm app-store style chrome. */
+.settingsPage{
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.settingsHeader{
+  padding: 2px 2px 0;
+}
+.settingsHeader h2{
+  margin: 0;
+  font-size: clamp(30px, 8vw, 42px);
+  line-height: 0.95;
+  letter-spacing: -0.055em;
+}
+.settingsKicker{
+  margin: 0 0 8px;
+  color: rgba(151,165,186,0.88);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.settingsLead{
+  margin: 10px 0 0;
+  max-width: 520px;
+  color: rgba(223,231,251,0.60);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.settingsGroup{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.settingsGroupTitle{
+  margin: 0 2px;
+  color: rgba(238,244,255,0.72);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+.settingsList{
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 20px;
+  background:
+    radial-gradient(100% 120% at 0% 0%, rgba(124,92,255,0.055), transparent 58%),
+    linear-gradient(180deg, rgba(18,23,35,0.82), rgba(7,10,17,0.78));
+  box-shadow: 0 18px 55px rgba(0,0,0,0.24);
+}
+.settingsRow{
+  width: 100%;
+  min-height: 62px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.075);
+  background: transparent;
+  color: rgba(238,244,255,0.92);
+  font: inherit;
+  text-align: left;
+}
+.settingsRow:last-child{
+  border-bottom: 0;
+}
+.settingsRowLink{
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 160ms ease, color 160ms ease, transform 120ms ease;
+}
+.settingsRowLink:hover{
+  background: rgba(255,255,255,0.045);
+  color: #fff;
+}
+.settingsRowLink:active{
+  transform: scale(0.992);
+}
+.settingsRowIco{
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 13px;
+  color: rgba(238,244,255,0.88);
+  background:
+    radial-gradient(100% 100% at 20% 10%, rgba(124,92,255,0.20), transparent 62%),
+    rgba(255,255,255,0.055);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.settingsRowIco svg{
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.settingsRowBody{
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.settingsRowTitle{
+  color: rgba(247,250,255,0.95);
+  font-size: 14px;
+  font-weight: 820;
+  letter-spacing: -0.01em;
+}
+.settingsRowSub{
+  color: rgba(223,231,251,0.56);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+.settingsRowChev{
+  flex: 0 0 auto;
+  color: rgba(223,231,251,0.38);
+  font-size: 24px;
+  line-height: 1;
+}
+.settingsStatusPill{
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(35,213,171,0.30);
+  background: rgba(35,213,171,0.10);
+  color: rgba(215,255,244,0.92);
+  font-size: 12px;
+  font-weight: 850;
+}
+.settingsRowDanger .settingsRowTitle{
+  color: rgba(255,154,174,0.94);
+}
+.settingsRowDanger .settingsRowIco{
+  color: rgba(255,154,174,0.92);
+  background: rgba(255,77,109,0.10);
+}
+.settingsAppInfoRow{
+  min-height: 54px;
+}
+body[data-logged-in="true"] #settingsBtnSignIn{
+  display: none;
+}
+body[data-logged-in="false"] #settingsBtnLogout{
+  display: none;
+}
+@media (max-width: 720px){
+  .settingsPage{
+    gap: 16px;
+  }
+  .settingsList{
+    border-radius: 18px;
+  }
+  .settingsRow{
+    min-height: 60px;
+    padding: 12px;
+  }
+}
+
+/* Sounds entry moved from Profile → Settings (legacy class retained for cached HTML). */
 .settingsSoundsLink{
   display: flex;
   align-items: center;
@@ -8185,10 +8353,11 @@ input::placeholder, textarea::placeholder{
   background: linear-gradient(135deg, rgba(124,92,255,0.08), rgba(35,213,171,0.05));
   overflow: hidden;
 }
-/* When relocated inside Settings, sit it right under the Sounds link
-   with matching spacing rhythm. */
 .profilePersonaRowSettings{
-  margin: 0 0 14px;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 .profilePersonaHead{
   display: flex;
@@ -8204,11 +8373,38 @@ input::placeholder, textarea::placeholder{
   font: inherit;
   -webkit-tap-highlight-color: transparent;
 }
+.profilePersonaRowSettings .profilePersonaHead{
+  min-height: 62px;
+  padding: 12px 14px;
+  border-top: 1px solid rgba(255,255,255,0.075);
+}
 .profilePersonaHead:active{ background: rgba(124,92,255,0.06); }
 .profilePersonaIco{
   font-size: 20px;
   line-height: 1;
   flex: 0 0 auto;
+}
+.profilePersonaRowSettings .profilePersonaIco{
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 13px;
+  background:
+    radial-gradient(100% 100% at 20% 10%, rgba(124,92,255,0.20), transparent 62%),
+    rgba(255,255,255,0.055);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(238,244,255,0.88);
+}
+.profilePersonaRowSettings .profilePersonaIco svg{
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .profilePersonaHeadText{
   flex: 1;
@@ -9634,7 +9830,7 @@ input::placeholder, textarea::placeholder{
   50%      { transform: scaleY(3.0); }
 }
 
-/* Settings toggle row — generic style we can reuse for future toggles. */
+/* Settings toggle row — legacy baseline, refined by .settingsRow on the official page. */
 .settingsToggleRow{
   display: flex;
   align-items: center;
@@ -9646,6 +9842,13 @@ input::placeholder, textarea::placeholder{
   background:
     linear-gradient(180deg, rgba(18,28,44,0.55), rgba(8,12,20,0.55));
   cursor: pointer;
+}
+.settingsList .settingsToggleRow{
+  margin: 0;
+  border: 0;
+  border-bottom: 0;
+  border-radius: 0;
+  background: transparent;
 }
 .settingsToggleBody{
   display: flex;

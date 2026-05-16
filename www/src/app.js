@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260516fixedAuthSmallSplash";
+const APP_BUILD = "20260516officialSettings";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -235,6 +235,9 @@ const els = {
   btnCreditsHistoryClear: document.getElementById("btnCreditsHistoryClear"),
   btnCreditRecovery: document.getElementById("btnCreditRecovery"),
   creditsHistoryOut: document.getElementById("creditsHistoryOut"),
+  settingsAccountEmail: document.getElementById("settingsAccountEmail"),
+  settingsBtnSignIn: document.getElementById("settingsBtnSignIn"),
+  settingsBtnLogout: document.getElementById("settingsBtnLogout"),
   profileCreditsBalance: document.getElementById("profileCreditsBalance"),
   profileCreditsNote: document.getElementById("profileCreditsNote"),
   profileCreditsLink: document.getElementById("profileCreditsLink"),
@@ -1698,17 +1701,7 @@ function renderHubUpdatedAt() {
 }
 function updateEnvironmentBadge() {
   if (!els.envBadge) return;
-  const isNative = Boolean(window?.Capacitor?.isNativePlatform?.());
-  const host = (() => {
-    try {
-      return new URL(API_BASE || window.location.origin).host;
-    } catch {
-      return "unknown";
-    }
-  })();
-  const mode = isNative ? "Native iOS" : "Web";
-  const target = API_BASE ? `Remote (${host})` : "Same-origin";
-  els.envBadge.textContent = `Environment: ${mode} • ${target} • Build ${APP_BUILD}`;
+  els.envBadge.textContent = `Build ${APP_BUILD}`;
 }
 async function loadPublicConfig() {
   // 6s timeout — without it, a stalled `/api/public-config` (cold native
@@ -6147,6 +6140,11 @@ function renderAuthStatus() {
   if (els.authLoginControls) els.authLoginControls.style.display = email ? "none" : "";
   if (els.authLoggedInRow) els.authLoggedInRow.style.display = email ? "flex" : "none";
   if (els.authLoggedInEmail) els.authLoggedInEmail.textContent = email ? email : "Logged in.";
+  if (els.settingsAccountEmail) {
+    els.settingsAccountEmail.textContent = email || (hasToken ? "Checking session..." : "Guest mode");
+  }
+  if (els.settingsBtnSignIn) els.settingsBtnSignIn.hidden = isAuthed;
+  if (els.settingsBtnLogout) els.settingsBtnLogout.hidden = !isAuthed;
   // Hide the Credits pill entirely when logged-out. A "0 credits" badge
   // on a guest profile is meaningless and was where the previous user's
   // balance kept leaking through (e.g. "326" after Logout). The pill
@@ -19950,25 +19948,39 @@ if (els.btnAuthGateGuest) {
     setStatus("Guest mode enabled. Login anytime from Profile.");
   });
 }
-if (els.btnAuthLogout) {
-  els.btnAuthLogout.addEventListener("click", () => {
-    saveAuthSession(null);
-    resetProfileUiToGuest();
-    setProfileEditing(false);
-    // A pending generation belongs to the previous user — wipe it so a
-    // fresh login on the same device doesn't inherit a stuck spinner.
-    try { dismissPendingBackendTask({ silent: true, skipRecoverSave: true }); } catch {}
-    try {
-      clearRecoverableGenerationTask();
-      updateLibraryRecoverBanner();
-    } catch {}
-    if (els.btnAuthGoogle) {
-      els.btnAuthGoogle.disabled = false;
-      els.btnAuthGoogle.textContent = "Continue with Google";
-    }
-    setStatus("Logged out.");
-  });
+function logoutCurrentUser() {
+  saveAuthSession(null);
+  resetProfileUiToGuest();
+  setProfileEditing(false);
+  // A pending generation belongs to the previous user — wipe it so a
+  // fresh login on the same device doesn't inherit a stuck spinner.
+  try { dismissPendingBackendTask({ silent: true, skipRecoverSave: true }); } catch {}
+  try {
+    clearRecoverableGenerationTask();
+    updateLibraryRecoverBanner();
+  } catch {}
+  if (els.btnAuthGoogle) {
+    els.btnAuthGoogle.disabled = false;
+    els.btnAuthGoogle.textContent = "Continue with Google";
+  }
+  renderAuthStatus();
+  setStatus("Logged out.");
 }
+if (els.settingsBtnSignIn) {
+  els.settingsBtnSignIn.addEventListener("click", () => void runGoogleOAuthLogin());
+}
+if (els.btnAuthLogout) {
+  els.btnAuthLogout.addEventListener("click", () => logoutCurrentUser());
+}
+if (els.settingsBtnLogout) {
+  els.settingsBtnLogout.addEventListener("click", () => logoutCurrentUser());
+}
+document.querySelectorAll("[data-settings-placeholder]").forEach((el) => {
+  el.addEventListener("click", () => {
+    const label = el.getAttribute("data-settings-placeholder") || "This section";
+    showToast(`${label} will be available before launch.`);
+  });
+});
 if (els.btnLoadingDismiss) {
   els.btnLoadingDismiss.addEventListener("click", () => {
     dismissPendingBackendTask();

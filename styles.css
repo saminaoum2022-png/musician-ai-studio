@@ -317,7 +317,7 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
   transform: scale(1.045);
   opacity: 0.05;
 }
-/* Splash wordmark — flat gradient type, no glow (glow read as muddy on OLED). */
+/* Splash wordmark — single-color type lets the colored N mark stay the hero. */
 .introWordmark{
   margin: 0;
   font-size: clamp(25px, 6.6vw, 38px);
@@ -330,6 +330,11 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
   gap: 7px;
 }
 .introWordmark .brandPrimary{
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  color: rgba(247,250,255,0.94);
+  -webkit-text-fill-color: rgba(247,250,255,0.94);
   text-shadow: none;
 }
 .introWordmark .introBrandSecondary{
@@ -371,11 +376,11 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
 }
 
 @media (max-width: 720px){
-  .introWordmark{ font-size: 62px; gap: 10px; }
+  .introWordmark{ font-size: clamp(25px, 6.8vw, 38px); gap: 7px; }
   .introWordmark .introBrandSecondary{
-    font-size: 17px;
-    letter-spacing: 0.12em;
-    transform: translateY(-4px);
+    font-size: 0.52em;
+    letter-spacing: -0.02em;
+    transform: translateY(-0.07em);
   }
 }
 

@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260517founderBadgeTimbre";
+const APP_BUILD = "20260517unfollowConfirm";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -7298,6 +7298,7 @@ function renderUserPublicFollowButton() {
   btn.textContent = isFollowing ? "Following" : "Follow";
   btn.dataset.following = isFollowing ? "true" : "false";
   btn.setAttribute("aria-label", isFollowing ? "Unfollow creator" : "Follow creator");
+  btn.title = isFollowing ? "Tap again to unfollow" : "Follow creator";
 }
 
 async function refreshUserPublicSocial({ username, userId, songCount }) {
@@ -7319,6 +7320,16 @@ async function toggleCurrentUserPublicFollow() {
   }
   const btn = els.btnUserPublicFollow;
   const wasFollowing = Boolean(currentUserPublicSocialStats?.isFollowing);
+  if (wasFollowing) {
+    const handle = String(els.userPublicName?.textContent || "").trim() || "this creator";
+    let ok = true;
+    try {
+      ok = window.confirm(`Unfollow ${handle}?`);
+    } catch {
+      ok = true;
+    }
+    if (!ok) return;
+  }
   if (btn) btn.disabled = true;
   try {
     const data = await socialApi("/api/social", {
@@ -7338,6 +7349,9 @@ async function toggleCurrentUserPublicFollow() {
     });
     renderUserPublicFollowButton();
     showToast(wasFollowing ? "Unfollowed creator." : "Following creator.");
+    if (wasFollowing && _discoveryActiveSegment === "following") {
+      void refreshDiscoveryFollowingFeed();
+    }
   } catch (e) {
     showToast(e?.message || "Could not update follow.");
   } finally {

@@ -7710,17 +7710,18 @@ input::placeholder, textarea::placeholder{
     gap: 10px;
     padding: 8px 8px 9px 10px;
     border-radius: inherit;
-    border: 1px solid rgba(var(--cover-glow-rgb), 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     background:
-      radial-gradient(115% 135% at 8% 0%, rgba(var(--cover-glow-rgb), 0.22), transparent 48%),
-      linear-gradient(145deg, rgba(255, 255, 255, 0.105), rgba(255, 255, 255, 0.035)),
-      rgba(18, 21, 30, 0.76);
-    -webkit-backdrop-filter: blur(22px) saturate(150%);
-    backdrop-filter: blur(22px) saturate(150%);
+      radial-gradient(115% 135% at 8% 0%, rgba(var(--cover-glow-rgb), 0.26), transparent 50%),
+      linear-gradient(145deg, rgba(255, 255, 255, 0.145), rgba(255, 255, 255, 0.052)),
+      rgba(18, 21, 30, 0.72);
+    -webkit-backdrop-filter: blur(28px) saturate(185%);
+    backdrop-filter: blur(28px) saturate(185%);
     color: #f3f6ff;
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.11),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.08);
+      inset 0 1px 0 rgba(255, 255, 255, 0.15),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.08),
+      0 0 0 1px rgba(var(--cover-glow-rgb), 0.10);
   }
   .hubNowCoverWrap{
     flex: 0 0 auto;
@@ -7796,19 +7797,19 @@ input::placeholder, textarea::placeholder{
     align-items: center;
     justify-content: center;
     border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.13);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     background:
-      linear-gradient(145deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.045)),
-      rgba(18, 21, 30, 0.62);
-    -webkit-backdrop-filter: blur(16px) saturate(150%);
-    backdrop-filter: blur(16px) saturate(150%);
+      linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.052)),
+      rgba(18, 21, 30, 0.66);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
     color: #fff;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.10),
       inset 0 -1px 0 rgba(0, 0, 0, 0.06),
-      0 6px 14px rgba(0, 0, 0, 0.18);
+      0 6px 16px rgba(0, 0, 0, 0.20);
     transition: transform 0.12s ease, background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
   }
   .hubNowIconBtn:active{

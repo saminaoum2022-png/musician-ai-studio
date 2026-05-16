@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260516ideasSearchIcon" />
+    <link rel="stylesheet" href="./styles.css?v=20260516ideasSearchMode" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -750,9 +750,12 @@
             <header class="discoveryIdeasHead">
               <span class="discoveryIdeasKicker">Weekly creative prompts</span>
               <button id="discoveryIdeasSearchToggle" class="discoveryIdeasSearchToggle" type="button" aria-label="Search ideas" aria-expanded="false" aria-controls="searchInput">
-                <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true">
+                <svg class="discoveryIdeasSearchIcon" viewBox="0 0 24 24" width="19" height="19" aria-hidden="true">
                   <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/>
                   <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                </svg>
+                <svg class="discoveryIdeasCloseIcon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                  <path d="M6.75 6.75 17.25 17.25M17.25 6.75 6.75 17.25" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                 </svg>
               </button>
               <h2 class="discoveryIdeasTitle appScreenTitle">This Week's Sparks</h2>
@@ -2370,6 +2373,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260516ideasSearchIcon"></script>
+    <script type="module" src="./src/app.js?v=20260516ideasSearchMode"></script>
   </body>
 </html>

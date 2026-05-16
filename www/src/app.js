@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260516ideasSearchIcon";
+const APP_BUILD = "20260516ideasSearchMode";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2962,6 +2962,8 @@ function renderDiscoveryIdeasOnce() {
   const pane = document.getElementById("discoveryPaneIdeas");
   const searchToggle = document.getElementById("discoveryIdeasSearchToggle");
   const input = document.getElementById("searchInput");
+  const titleEl = pane?.querySelector?.(".discoveryIdeasTitle");
+  const leadEl = pane?.querySelector?.(".discoveryIdeasLead");
   if (!rail || !grid || rail.dataset.renderedIdeas === "1") return;
   rail.dataset.renderedIdeas = "1";
   const tagHtml = (tags) => (Array.isArray(tags) ? tags : [])
@@ -2999,19 +3001,35 @@ function renderDiscoveryIdeasOnce() {
   rail.addEventListener("click", handleClick);
   grid.addEventListener("click", handleClick);
   if (pane && searchToggle && input) {
+    const defaultTitle = titleEl?.textContent || "This Week's Sparks";
+    const defaultLead = leadEl?.textContent || "Tiny challenges to get you making fast. Pick one, then bend it your way.";
     const openSearch = () => {
       pane.classList.add("isSearchOpen");
       searchToggle.setAttribute("aria-expanded", "true");
-      window.setTimeout(() => input.focus(), 40);
+      searchToggle.setAttribute("aria-label", "Close ideas search");
+      if (titleEl) titleEl.textContent = "Search ideas";
+      if (leadEl) leadEl.textContent = "Find a birthday, hook, remix, or prompt template.";
+      requestAnimationFrame(() => window.setTimeout(() => input.focus(), 40));
+    };
+    const closeSearch = () => {
+      pane.classList.remove("isSearchOpen");
+      searchToggle.setAttribute("aria-expanded", "false");
+      searchToggle.setAttribute("aria-label", "Search ideas");
+      if (titleEl) titleEl.textContent = defaultTitle;
+      if (leadEl) leadEl.textContent = defaultLead;
+      input.blur();
     };
     searchToggle.addEventListener("click", () => {
       haptic("light");
-      openSearch();
+      if (pane.classList.contains("isSearchOpen")) {
+        closeSearch();
+      } else {
+        openSearch();
+      }
     });
     input.addEventListener("input", () => {
-      if (String(input.value || "").trim()) {
-        pane.classList.add("isSearchOpen");
-        searchToggle.setAttribute("aria-expanded", "true");
+      if (String(input.value || "").trim() && !pane.classList.contains("isSearchOpen")) {
+        openSearch();
       }
     });
   }

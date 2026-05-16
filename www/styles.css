@@ -9882,6 +9882,7 @@ input::placeholder, textarea::placeholder{
   gap: 5px;
 }
 #discoveryPaneIdeas .searchBarWrap{
+  order: 5;
   position: relative;
   top: auto;
   z-index: 1;
@@ -9899,10 +9900,24 @@ input::placeholder, textarea::placeholder{
     transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 #discoveryPaneIdeas.isSearchOpen .searchBarWrap{
+  order: 1;
   max-height: 74px;
   opacity: 1;
-  transform: translateY(0) scale(1);
+  transform: translateY(-2px) scale(1);
   pointer-events: auto;
+}
+.discoveryIdeasPane.isSearchOpen .discoveryIdeasFeature,
+.discoveryIdeasPane.isSearchOpen .discoveryQuickStarts{
+  display: none;
+}
+.discoveryIdeasPane.isSearchOpen .searchPeopleStrip{
+  order: 2;
+}
+.discoveryIdeasPane.isSearchOpen .searchShelves{
+  order: 3;
+}
+.discoveryIdeasPane.isSearchOpen .searchEmpty{
+  order: 4;
 }
 .discoveryIdeasSearchToggle{
   position: absolute;
@@ -9929,6 +9944,15 @@ input::placeholder, textarea::placeholder{
     inset 0 1px 0 rgba(255,255,255,0.08),
     0 10px 24px rgba(0,0,0,0.16);
   transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+.discoveryIdeasCloseIcon{
+  display: none;
+}
+#discoveryPaneIdeas.isSearchOpen .discoveryIdeasSearchIcon{
+  display: none;
+}
+#discoveryPaneIdeas.isSearchOpen .discoveryIdeasCloseIcon{
+  display: block;
 }
 .discoveryIdeasSearchToggle:active{
   transform: scale(0.96);

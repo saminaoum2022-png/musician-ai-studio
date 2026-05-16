@@ -7094,7 +7094,7 @@ input[type="range"]::-moz-range-thumb{
 .songDetailsModal{
   position: fixed;
   inset: 0;
-  z-index: 120;
+  z-index: 140;
 }
 
 /* iOS Safari treats long-press on text as “select word” and shows the
@@ -7116,21 +7116,158 @@ input[type="range"]::-moz-range-thumb{
 .songDetailsBackdrop{
   position:absolute;
   inset:0;
-  background: rgba(2,6,14,0.62);
-  backdrop-filter: blur(4px);
+  background: rgba(2,6,14,0.68);
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+          backdrop-filter: blur(12px) saturate(120%);
 }
 .songDetailsSheet{
   position:absolute;
-  left: 12px;
-  right: 12px;
-  bottom: calc(14px + env(safe-area-inset-bottom));
-  max-height: 72vh;
-  overflow:auto;
+  left: 10px;
+  right: 10px;
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  max-height: min(82vh, 720px);
+  overflow:hidden;
   border:1px solid rgba(255,255,255,0.12);
-  border-radius:16px;
-  background: rgba(7,11,18,0.96);
+  border-radius: 28px;
+  background:
+    radial-gradient(120% 90% at 12% 0%, rgba(124,92,255,0.18), transparent 58%),
+    radial-gradient(100% 85% at 100% 4%, rgba(35,213,171,0.11), transparent 62%),
+    linear-gradient(180deg, rgba(18,26,42,0.94), rgba(7,10,18,0.97));
+  padding: 10px 14px 14px;
+  box-shadow: 0 28px 80px rgba(0,0,0,0.58), inset 0 1px 0 rgba(255,255,255,0.08);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+          backdrop-filter: blur(24px) saturate(150%);
+}
+.songDetailsGrab{
+  width: 42px;
+  height: 4px;
+  margin: 2px auto 12px;
+  border-radius: 999px;
+  background: rgba(232,238,247,0.26);
+}
+.songDetailsHead{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  padding: 0 2px 12px;
+}
+.songDetailsKicker{
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(162,178,205,0.74);
+}
+.songDetailsTitle{
+  margin:0;
+  font-size: 22px;
+  line-height: 1.08;
+  letter-spacing:-0.03em;
+}
+.songDetailsClose{
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: rgba(238,244,255,0.9);
+  font-size: 22px;
+  line-height: 1;
+}
+.songDetailsContent{
+  max-height: calc(min(82vh, 720px) - 86px);
+  overflow:auto;
+  padding: 0 2px 4px;
+  display:grid;
+  gap: 12px;
+  -webkit-overflow-scrolling: touch;
+}
+.songDetailsSection{
+  border:1px solid rgba(255,255,255,0.09);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.025));
+  padding: 13px;
+}
+.songDetailsSectionHero{
+  background:
+    linear-gradient(180deg, rgba(124,92,255,0.16), rgba(255,255,255,0.025)),
+    rgba(255,255,255,0.04);
+}
+.songDetailsSongTitle{
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing:-0.02em;
+  color: rgba(248,250,255,0.96);
+  overflow-wrap:anywhere;
+}
+.songDetailsMetaLine{
+  margin-top: 5px;
+  font-size: 12px;
+  color: rgba(188,201,222,0.76);
+}
+.songDetailsSectionTitle{
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing:0.08em;
+  text-transform: uppercase;
+  color: rgba(210,221,242,0.84);
+}
+.songDetailsSectionHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom: 10px;
+}
+.songDetailsInfoGrid{
+  display:grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+.songDetailsInfoRow{
+  display:grid;
+  grid-template-columns: minmax(88px, 0.42fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items:start;
+  font-size: 12.5px;
+}
+.songDetailsInfoRow span{
+  color: rgba(166,181,205,0.74);
+}
+.songDetailsInfoRow strong{
+  color: rgba(239,245,255,0.94);
+  font-weight: 750;
+  overflow-wrap:anywhere;
+}
+.songDetailsLyricsBox{
+  margin-top: 10px;
+  max-height: 230px;
+  overflow:auto;
+  white-space: pre-wrap;
+  -webkit-overflow-scrolling: touch;
+  border:1px solid rgba(255,255,255,0.09);
+  border-radius: 16px;
+  background: rgba(4,7,13,0.42);
   padding: 12px;
-  box-shadow: 0 24px 54px rgba(0,0,0,0.45);
+  color: rgba(235,241,252,0.92);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.songDetailsLyricsBox.isEmpty{
+  color: rgba(178,190,211,0.72);
+  font-style: italic;
+}
+.songDetailsCopyBtn{
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: rgba(236,243,255,0.9);
+  font-size: 12px;
+  font-weight: 850;
 }
 .recorderSheet{
   max-width: 420px;

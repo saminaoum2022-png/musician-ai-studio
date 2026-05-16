@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260517smallerWebSplashLogo" />
+    <link rel="stylesheet" href="./styles.css?v=20260517songDetailsLyricsSheet" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -2127,12 +2127,16 @@
       <footer class="footer"><span id="footerBuild" class="hint" style="opacity:.5;font-size:11px"></span></footer>
       <div id="songDetailsModal" class="songDetailsModal" style="display:none">
         <div class="songDetailsBackdrop" id="songDetailsBackdrop"></div>
-        <div class="songDetailsSheet">
-          <div class="row" style="justify-content:space-between;align-items:center">
-            <h2 style="margin:0">Song details</h2>
-            <button id="btnCloseSongDetails" class="ghost" type="button">Close</button>
+        <div class="songDetailsSheet" role="dialog" aria-modal="true" aria-labelledby="songDetailsTitle">
+          <div class="songDetailsGrab" aria-hidden="true"></div>
+          <div class="songDetailsHead">
+            <div>
+              <div class="songDetailsKicker">Library</div>
+              <h2 id="songDetailsTitle" class="songDetailsTitle">Song details</h2>
+            </div>
+            <button id="btnCloseSongDetails" class="songDetailsClose" type="button" aria-label="Close song details">×</button>
           </div>
-          <pre id="songDetailsContent" class="code" style="max-height:55vh; white-space:pre-wrap"></pre>
+          <div id="songDetailsContent" class="songDetailsContent"></div>
         </div>
       </div>
       <div id="vocalRecorderModal" class="songDetailsModal modalNoTextSelect" style="display:none">
@@ -2506,6 +2510,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260517smallerWebSplashLogo"></script>
+    <script type="module" src="./src/app.js?v=20260517songDetailsLyricsSheet"></script>
   </body>
 </html>

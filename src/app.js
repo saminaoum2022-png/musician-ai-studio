@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260517smallerWebSplashLogo";
+const APP_BUILD = "20260517songDetailsLyricsSheet";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -8264,14 +8264,7 @@ function runTrackSheetAction(action, sourceEl) {
     }
     if (action === "library_details") {
       shut();
-      openSongDetailsModal({
-        title: t.title,
-        createdAt: new Date(t.ts).toLocaleString(),
-        taskId: t.taskId || "",
-        audioId: t.audioId || "",
-        kind: t.kind || "",
-        ...(t.meta || {}),
-      });
+      openSongDetailsModal(t);
       return;
     }
     if (action === "library_inst") {
@@ -13784,14 +13777,124 @@ function renderLibrary() {
     setTimeout(_scheduleThumbBackfill, 600);
   }
 }
-function openSongDetailsModal(details) {
-  if (!els.songDetailsModal || !els.songDetailsContent) return;
-  els.songDetailsContent.textContent = JSON.stringify(details || {}, null, 2);
-  els.songDetailsModal.style.display = "";
+function songDetailsValue(v) {
+  const s = String(v == null ? "" : v).trim();
+  return s || "—";
 }
+
+function songDetailsKindLabel(track) {
+  const k = String(track?.kind || "").trim().toLowerCase();
+  if (k === "instrumental") return "Instrumental";
+  if (k === "sound") return "Sound";
+  return "Full song";
+}
+
+function songDetailsFirstText(...values) {
+  for (const v of values) {
+    const s = String(v == null ? "" : v).trim();
+    if (s) return s;
+  }
+  return "";
+}
+
+function songDetailsLyricsForTrack(track) {
+  const meta = track?.meta || {};
+  const kind = String(track?.kind || "").trim().toLowerCase();
+  if (kind === "instrumental" || kind === "sound") return "";
+  return songDetailsFirstText(
+    meta.lyricsInput,
+    meta.finalPrompt,
+    meta.prompt,
+    meta.lyrics,
+    meta.generatedLyrics,
+  );
+}
+
+function songDetailsRow(label, value) {
+  return `
+    <div class="songDetailsInfoRow">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(songDetailsValue(value))}</strong>
+    </div>
+  `;
+}
+
+function openSongDetailsModal(track) {
+  if (!els.songDetailsModal || !els.songDetailsContent) return;
+  const meta = track?.meta || {};
+  const title = String(track?.title || "Song details").trim() || "Song details";
+  const createdAt = track?.ts ? new Date(Number(track.ts)).toLocaleString() : "";
+  const kindLabel = songDetailsKindLabel(track);
+  const style = songDetailsFirstText(meta.styleInput, meta.styleSent, meta.style, meta.styleTags);
+  const voice = songDetailsFirstText(meta.voiceProfile, meta.timbre, meta.dialect);
+  const mode = songDetailsFirstText(meta.mode, track?.kind);
+  const lyrics = songDetailsLyricsForTrack(track);
+  const hasLyrics = Boolean(lyrics);
+  const technicalRows = [
+    songDetailsRow("Task ID", track?.taskId),
+    songDetailsRow("Audio ID", track?.audioId),
+    songDetailsRow("Library ID", track?.id),
+  ].join("");
+
+  els.songDetailsContent.innerHTML = `
+    <section class="songDetailsSection songDetailsSectionHero">
+      <div class="songDetailsSongTitle">${escapeHtml(title)}</div>
+      <div class="songDetailsMetaLine">${escapeHtml(kindLabel)}${createdAt ? ` · ${escapeHtml(createdAt)}` : ""}</div>
+    </section>
+
+    <section class="songDetailsSection">
+      <div class="songDetailsSectionTitle">Overview</div>
+      <div class="songDetailsInfoGrid">
+        ${songDetailsRow("Type", kindLabel)}
+        ${songDetailsRow("Visibility", track?.publicOnProfile ? "Public profile" : "Private library")}
+        ${songDetailsRow("Mode", mode)}
+      </div>
+    </section>
+
+    <section class="songDetailsSection">
+      <div class="songDetailsSectionTitle">Creation</div>
+      <div class="songDetailsInfoGrid">
+        ${songDetailsRow("Style", style)}
+        ${songDetailsRow("Voice", voice)}
+      </div>
+    </section>
+
+    <section class="songDetailsSection">
+      <div class="songDetailsSectionHead">
+        <div class="songDetailsSectionTitle">Lyrics</div>
+        ${hasLyrics ? `<button type="button" class="songDetailsCopyBtn" data-song-details-copy-lyrics="1">Copy</button>` : ""}
+      </div>
+      <div class="songDetailsLyricsBox ${hasLyrics ? "" : "isEmpty"}">${hasLyrics ? escapeHtml(lyrics) : "No lyrics were saved for this song. Instrumentals, sounds, and some older songs may not have lyrics metadata."}</div>
+    </section>
+
+    <section class="songDetailsSection">
+      <div class="songDetailsSectionTitle">Technical</div>
+      <div class="songDetailsInfoGrid">${technicalRows}</div>
+    </section>
+  `;
+  const copyBtn = els.songDetailsContent.querySelector("[data-song-details-copy-lyrics]");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(lyrics);
+        showToast("Lyrics copied.");
+      } catch {
+        showToast("Could not copy lyrics.");
+      }
+    });
+  }
+  els.songDetailsModal.style.display = "";
+  try {
+    document.body.style.overflow = "hidden";
+  } catch {}
+}
+
 function closeSongDetailsModal() {
   if (!els.songDetailsModal) return;
   els.songDetailsModal.style.display = "none";
+  try {
+    document.body.style.overflow = "";
+  } catch {}
 }
 if (els.songDetailsBackdrop) {
   els.songDetailsBackdrop.addEventListener("click", closeSongDetailsModal);

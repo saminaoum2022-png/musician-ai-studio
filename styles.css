@@ -9658,7 +9658,9 @@ input::placeholder, textarea::placeholder{
   z-index: 1;
 }
 .discoveryIdeasHead{
+  position: relative;
   padding: 6px 2px 0;
+  padding-right: 58px;
 }
 .discoveryIdeasKicker{
   display: inline-flex;
@@ -9884,7 +9886,7 @@ input::placeholder, textarea::placeholder{
   top: auto;
   z-index: 1;
   padding: 0;
-  margin-top: -2px;
+  margin-top: -4px;
   background: transparent;
   max-height: 0;
   opacity: 0;
@@ -9903,22 +9905,22 @@ input::placeholder, textarea::placeholder{
   pointer-events: auto;
 }
 .discoveryIdeasSearchToggle{
-  min-height: 50px;
-  width: 100%;
+  position: absolute;
+  top: 4px;
+  right: 2px;
+  min-height: 0;
+  width: 44px;
+  height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 9px;
-  margin-top: -2px;
-  border-radius: 18px;
+  border-radius: 999px;
   border: 1px solid rgba(255,255,255,0.12);
   background:
-    linear-gradient(145deg, rgba(255,255,255,0.09), rgba(255,255,255,0.025)),
-    rgba(10,12,18,0.64);
+    radial-gradient(90% 90% at 24% 8%, rgba(255,255,255,0.16), transparent 54%),
+    linear-gradient(145deg, rgba(124,92,255,0.18), rgba(35,213,171,0.045)),
+    rgba(10,12,18,0.72);
   color: rgba(232,238,247,0.82);
-  font-size: 14px;
-  font-weight: 850;
-  letter-spacing: -0.01em;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   -webkit-backdrop-filter: blur(18px) saturate(160%);
@@ -9929,13 +9931,14 @@ input::placeholder, textarea::placeholder{
   transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
 }
 .discoveryIdeasSearchToggle:active{
-  transform: scale(0.99);
+  transform: scale(0.96);
 }
 #discoveryPaneIdeas.isSearchOpen .discoveryIdeasSearchToggle{
-  border-color: rgba(124,92,255,0.32);
+  border-color: rgba(255,255,255,0.18);
   background:
-    linear-gradient(145deg, rgba(124,92,255,0.17), rgba(35,213,171,0.06)),
-    rgba(10,12,18,0.72);
+    radial-gradient(90% 90% at 24% 8%, rgba(255,255,255,0.18), transparent 54%),
+    linear-gradient(145deg, rgba(124,92,255,0.22), rgba(35,213,171,0.08)),
+    rgba(10,12,18,0.80);
 }
 #discoveryPaneIdeas .searchBar{
   height: 50px;
@@ -9943,19 +9946,23 @@ input::placeholder, textarea::placeholder{
   background:
     linear-gradient(145deg, rgba(255,255,255,0.10), rgba(255,255,255,0.025)),
     rgba(10,12,18,0.72);
-  border-color: rgba(255,255,255,0.12);
+  border-color: rgba(255,255,255,0.11);
   -webkit-backdrop-filter: blur(18px) saturate(160%);
   backdrop-filter: blur(18px) saturate(160%);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.07);
 }
 #discoveryPaneIdeas .searchBar:focus-within{
-  border-color: rgba(124,92,255,0.42);
+  border-color: rgba(255,255,255,0.17);
   background:
-    linear-gradient(145deg, rgba(124,92,255,0.14), rgba(255,255,255,0.03)),
+    linear-gradient(145deg, rgba(124,92,255,0.08), rgba(255,255,255,0.03)),
     rgba(10,12,18,0.76);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.09);
+}
+#discoveryPaneIdeas .searchBarInput{
+  caret-color: rgba(232,238,247,0.9);
 }
 #discoveryPaneIdeas .searchShelves{
-  gap: 18px;
+  gap: 20px;
 }
 #discoveryPaneIdeas .searchShelf{
   gap: 9px;
@@ -9974,18 +9981,25 @@ input::placeholder, textarea::placeholder{
   gap: 10px;
 }
 #discoveryPaneIdeas .searchPoster{
+  --idea-a: 124, 92, 255;
+  --idea-b: 35, 213, 171;
   flex-basis: 172px;
   width: 172px;
   height: 218px;
-  border-radius: 22px;
-  border: 1px solid rgba(255,255,255,0.13);
+  border-radius: 24px;
+  border: 1px solid rgba(255,255,255,0.15);
   background:
-    linear-gradient(145deg, rgba(255,255,255,0.10), rgba(255,255,255,0.026)),
-    rgba(10,12,18,0.76);
-  box-shadow: 0 14px 34px rgba(0,0,0,0.26);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
-  backdrop-filter: blur(18px) saturate(160%);
+    radial-gradient(120% 92% at 8% 0%, rgba(var(--idea-a),0.25), transparent 58%),
+    radial-gradient(105% 82% at 100% 100%, rgba(var(--idea-b),0.19), transparent 62%),
+    linear-gradient(145deg, rgba(255,255,255,0.12), rgba(255,255,255,0.032)),
+    rgba(10,12,18,0.84);
+  box-shadow: 0 18px 42px rgba(0,0,0,0.32);
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
+  backdrop-filter: blur(22px) saturate(170%);
 }
+#discoveryPaneIdeas .searchPoster:nth-child(2n){ --idea-a: 56, 189, 248; --idea-b: 167, 139, 250; }
+#discoveryPaneIdeas .searchPoster:nth-child(3n){ --idea-a: 245, 158, 11; --idea-b: 35, 213, 171; }
+#discoveryPaneIdeas .searchPoster:nth-child(4n){ --idea-a: 244, 114, 182; --idea-b: 251, 191, 36; }
 #discoveryPaneIdeas .searchPoster::before{
   content:"";
   position:absolute;
@@ -9993,15 +10007,21 @@ input::placeholder, textarea::placeholder{
   z-index:1;
   pointer-events:none;
   background:
-    radial-gradient(95% 70% at 12% 0%, rgba(124,92,255,0.16), transparent 55%),
-    linear-gradient(118deg, rgba(255,255,255,0.13), transparent 42%);
-  opacity:0.9;
+    radial-gradient(115% 86% at 7% 0%, rgba(var(--idea-a),0.34), transparent 56%),
+    radial-gradient(95% 86% at 100% 20%, rgba(var(--idea-b),0.24), transparent 61%),
+    linear-gradient(112deg, rgba(255,255,255,0.18), transparent 43%);
+  opacity:0.96;
 }
 #discoveryPaneIdeas .searchPosterArt{
   z-index: 0;
+  opacity: 0.54;
+  filter: saturate(1.16) contrast(0.96);
 }
 #discoveryPaneIdeas .searchPosterVignette{
   z-index: 2;
+  background:
+    linear-gradient(180deg, rgba(0,0,0,0.04) 18%, rgba(0,0,0,0.48) 63%, rgba(0,0,0,0.82) 100%),
+    radial-gradient(100% 60% at 50% 100%, rgba(0,0,0,0.34), transparent 60%);
 }
 #discoveryPaneIdeas .searchPosterChip,
 #discoveryPaneIdeas .searchPosterText{

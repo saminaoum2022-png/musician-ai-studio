@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260516notificationProfileFix";
+const APP_BUILD = "20260516followsYouBadge";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -513,6 +513,7 @@ const els = {
   userPublicSongs: document.getElementById("userPublicSongs"),
   userPublicEmpty: document.getElementById("userPublicEmpty"),
   btnUserPublicFollow: document.getElementById("btnUserPublicFollow"),
+  userPublicFollowsYou: document.getElementById("userPublicFollowsYou"),
   btnUserPublicBack: document.getElementById("btnUserPublicBack"),
   songDetailsModal: document.getElementById("songDetailsModal"),
   songDetailsBackdrop: document.getElementById("songDetailsBackdrop"),
@@ -1940,6 +1941,7 @@ function applyRoute() {
   const hash = String(location.hash || "");
   const rawRoute = hash.startsWith("#/") ? hash.slice(2) : "generate";
   let route = rawRoute.split(/[?#&]/)[0].trim();
+  const rawRouteQuery = String(rawRoute.split("?")[1] || "").split("#")[0];
   if (route === "search") {
     try {
       const h = String(location.hash || "");
@@ -1955,8 +1957,8 @@ function applyRoute() {
   let pendingPublicUsername = "";
   let pendingPublicUserId = "";
   if (/^u\//.test(route)) {
-    const rawPublicRoute = String(route.slice(2) || "");
-    const [rawHandle, rawQuery = ""] = rawPublicRoute.split("?");
+    const rawPublicRoute = String(rawRoute.slice(2) || "");
+    const [rawHandle, rawQuery = rawRouteQuery] = rawPublicRoute.split("?");
     pendingPublicUsername = decodeURIComponent(rawHandle || "").trim();
     try {
       pendingPublicUserId = String(new URLSearchParams(rawQuery).get("uid") || "").trim();
@@ -7222,7 +7224,7 @@ async function supabaseFetchPublicLibraryForUserId(userId) {
 }
 
 let currentUserPublicProfileId = "";
-let currentUserPublicSocialStats = { followers: 0, following: 0, isFollowing: false };
+let currentUserPublicSocialStats = { followers: 0, following: 0, isFollowing: false, followsViewer: false };
 
 async function socialApi(path, opts) {
   const token = getSupabaseAuthToken();
@@ -7269,10 +7271,15 @@ function renderUserPublicSocialStats({ songCount, stats }) {
 
 function renderUserPublicFollowButton() {
   const btn = els.btnUserPublicFollow;
-  if (!btn) return;
+  const followsYou = els.userPublicFollowsYou;
   const targetId = String(currentUserPublicProfileId || "").trim();
   const mine = String(authSession?.user?.id || "").trim();
   const canShow = Boolean(targetId && mine && targetId !== mine);
+  if (followsYou) {
+    const showFollowsYou = canShow && Boolean(currentUserPublicSocialStats?.followsViewer);
+    followsYou.hidden = !showFollowsYou;
+  }
+  if (!btn) return;
   btn.hidden = !canShow;
   if (!canShow) return;
   const isFollowing = Boolean(currentUserPublicSocialStats?.isFollowing);
@@ -7285,7 +7292,7 @@ async function refreshUserPublicSocial({ username, userId, songCount }) {
   const data = await fetchSocialStatsForProfile({ username, userId });
   const targetId = data?.profile?.user_id || userId || "";
   currentUserPublicProfileId = String(targetId || "");
-  currentUserPublicSocialStats = data?.stats || { followers: 0, following: 0, isFollowing: false };
+  currentUserPublicSocialStats = data?.stats || { followers: 0, following: 0, isFollowing: false, followsViewer: false };
   renderUserPublicSocialStats({ songCount, stats: currentUserPublicSocialStats });
   renderUserPublicFollowButton();
 }
@@ -8896,7 +8903,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
     if (els.userPublicSongsCount) els.userPublicSongsCount.textContent = "";
     if (els.userPublicSongs) els.userPublicSongs.innerHTML = "";
     currentUserPublicProfileId = "";
-    currentUserPublicSocialStats = { followers: 0, following: 0, isFollowing: false };
+    currentUserPublicSocialStats = { followers: 0, following: 0, isFollowing: false, followsViewer: false };
     renderUserPublicFollowButton();
     _userPublicFeedTracks = [];
     if (els.userPublicEmpty) {
@@ -8949,7 +8956,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
     resolvedSocialStats = socialData?.stats || null;
   }
   currentUserPublicProfileId = String(prof.user_id || "");
-  currentUserPublicSocialStats = resolvedSocialStats || { followers: 0, following: 0, isFollowing: false };
+  currentUserPublicSocialStats = resolvedSocialStats || { followers: 0, following: 0, isFollowing: false, followsViewer: false };
   renderUserPublicSocialStats({ songCount: songs.length, stats: currentUserPublicSocialStats });
   renderUserPublicFollowButton();
   if (els.userPublicSongsCount) {
@@ -11528,7 +11535,7 @@ function renderUserProfile(rawUsername) {
   const username = String(rawUsername || "").replace(/^@/, "").trim();
   _userPublicFeedTracks = [];
   currentUserPublicProfileId = "";
-  currentUserPublicSocialStats = { followers: 0, following: 0, isFollowing: false };
+  currentUserPublicSocialStats = { followers: 0, following: 0, isFollowing: false, followsViewer: false };
   renderUserPublicFollowButton();
   if (!els.userPublicName) return;
   syncUserPublicVerifiedBadge(null);

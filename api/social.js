@@ -78,7 +78,7 @@ async function countRows(path) {
 async function socialStats(userId, viewerId) {
   const uid = cleanUserId(userId);
   if (!uid) return null;
-  const [followers, following, isFollowingRows] = await Promise.all([
+  const [followers, following, isFollowingRows, followsViewerRows] = await Promise.all([
     countRows(`social_follows?select=follower_user_id&following_user_id=eq.${encodeURIComponent(uid)}&limit=10000`),
     countRows(`social_follows?select=following_user_id&follower_user_id=eq.${encodeURIComponent(uid)}&limit=10000`),
     viewerId
@@ -86,11 +86,17 @@ async function socialStats(userId, viewerId) {
           `social_follows?select=follower_user_id&follower_user_id=eq.${encodeURIComponent(viewerId)}&following_user_id=eq.${encodeURIComponent(uid)}&limit=1`,
         )
       : Promise.resolve({ data: [] }),
+    viewerId
+      ? svcFetch(
+          `social_follows?select=follower_user_id&follower_user_id=eq.${encodeURIComponent(uid)}&following_user_id=eq.${encodeURIComponent(viewerId)}&limit=1`,
+        )
+      : Promise.resolve({ data: [] }),
   ]);
   return {
     followers,
     following,
     isFollowing: Array.isArray(isFollowingRows.data) && isFollowingRows.data.length > 0,
+    followsViewer: Array.isArray(followsViewerRows.data) && followsViewerRows.data.length > 0,
   };
 }
 

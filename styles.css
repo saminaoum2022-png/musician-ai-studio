@@ -6228,6 +6228,26 @@ body[data-route="user"] section.card.wide[data-route="user"]{
 .userPublicFollowBtn:active{
   transform: scale(0.98);
 }
+.userPublicFollowsYou{
+  flex: 0 0 auto;
+  align-self: flex-start;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(35,213,171,0.24);
+  background:
+    radial-gradient(90% 120% at 20% 0%, rgba(35,213,171,0.16), transparent 62%),
+    rgba(255,255,255,0.045);
+  color: rgba(215,255,244,0.90);
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.userPublicFollowsYou[hidden]{
+  display: none;
+}
 .userPublicBio{
   min-width: 0;
   max-width: 100%;
@@ -6339,6 +6359,7 @@ body[data-route="user"] section.card.wide[data-route="user"]{
     flex: 1 1 calc(100% - 88px);
   }
   .userPublicFollowBtn,
+  .userPublicFollowsYou,
   .userPublicBack{
     order: 3;
   }
@@ -6362,6 +6383,7 @@ body[data-route="user"] section.card.wide[data-route="user"]{
     margin-left: 0;
   }
   .userPublicFollowBtn,
+  .userPublicFollowsYou,
   .userPublicBack{
     flex: 1 1 calc(50% - 8px);
     justify-content: center;

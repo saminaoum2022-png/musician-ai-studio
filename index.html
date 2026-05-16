@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260516notificationProfileFix" />
+    <link rel="stylesheet" href="./styles.css?v=20260516followsYouBadge" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1336,6 +1336,7 @@
                 </button>
               </div>
               <button id="btnUserPublicFollow" class="userPublicFollowBtn" type="button" hidden>Follow</button>
+              <span id="userPublicFollowsYou" class="userPublicFollowsYou" hidden>Follows you</span>
               <button id="btnUserPublicBack" class="ghost userPublicBack" type="button" aria-label="Back">← Back</button>
             </div>
             <div class="userPublicBio" id="userPublicBio"></div>
@@ -2505,6 +2506,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260516notificationProfileFix"></script>
+    <script type="module" src="./src/app.js?v=20260516followsYouBadge"></script>
   </body>
 </html>

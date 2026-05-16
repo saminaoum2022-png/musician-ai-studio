@@ -6015,26 +6015,51 @@ body[data-route="profile"]:has(#profileAura.profileAuraEditing) #profileAuraHead
 }
 
 /* -------- Public creator profile (#/u/USERNAME) -------- */
+body[data-route="user"]{
+  background:
+    radial-gradient(110% 62% at 50% -22%, rgba(124,92,255,0.12) 0%, transparent 58%),
+    radial-gradient(92% 46% at 12% 12%, rgba(35,213,171,0.05) 0%, transparent 52%),
+    var(--bg);
+}
+body[data-route="user"] .header{
+  margin-bottom: 10px;
+}
 body[data-route="user"] section.card.wide[data-route="user"]{
-  padding: 8px 0 24px;
+  padding: 4px 0 28px;
   border: 0;
   border-radius: 0;
   box-shadow: none;
   background: transparent;
 }
 .userPublic{
+  position: relative;
+  isolation: isolate;
   display:flex;
   flex-direction:column;
-  gap:16px;
+  gap:18px;
   width: min(100%, 680px);
   margin: 0 auto;
+}
+.userPublic::before{
+  content:"";
+  position:absolute;
+  inset:-18px -12px auto;
+  height: 156px;
+  z-index:-1;
+  pointer-events:none;
+  border-radius: 30px;
+  background:
+    radial-gradient(74% 110% at 14% 12%, rgba(255,255,255,0.075), transparent 58%),
+    radial-gradient(88% 125% at 8% 4%, rgba(var(--cover-glow-rgb, 124,92,255),0.12), transparent 62%),
+    linear-gradient(180deg, rgba(255,255,255,0.035), transparent);
+  opacity: 0.9;
 }
 .userPublicHead{
   display:flex;
   align-items:center;
   gap:16px;
   position:relative;
-  padding: 10px 2px 4px;
+  padding: 14px 2px 4px;
 }
 .userPublicAvatar{
   width:80px;
@@ -6097,10 +6122,14 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   font-size:13.5px;
   line-height:1.45;
   color: rgba(223, 231, 251, 0.92);
-  padding:11px 13px;
-  border:1px solid rgba(255,255,255,0.08);
-  border-radius:14px;
-  background: rgba(255,255,255,0.035);
+  padding:12px 14px;
+  border:1px solid rgba(255,255,255,0.09);
+  border-radius:16px;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.065), rgba(255,255,255,0.018)),
+    rgba(10,12,18,0.34);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(16px) saturate(150%);
 }
 .userPublicStats{
   display:flex;
@@ -6108,11 +6137,13 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   gap:8px;
   width: fit-content;
   padding: 7px 10px;
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.10);
   border-radius: 999px;
-  background: rgba(255,255,255,0.035);
+  background: linear-gradient(145deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02));
   font-size:13px;
   color: rgba(223, 231, 251, 0.85);
+  -webkit-backdrop-filter: blur(14px) saturate(145%);
+  backdrop-filter: blur(14px) saturate(145%);
 }
 .userPublicStats strong{
   color:#fff;
@@ -6123,7 +6154,8 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   display:flex;
   align-items:baseline;
   gap:8px;
-  margin-top:4px;
+  margin-top:2px;
+  padding: 0 2px;
 }
 .userPublicSongsTitle{
   font-size:13px;
@@ -6143,8 +6175,11 @@ body[data-route="user"] section.card.wide[data-route="user"]{
 }
 .userPublicSongs .discoveryRow{
   border-radius:16px;
-  background: linear-gradient(145deg, rgba(28, 33, 46, 0.78), rgba(17, 21, 31, 0.76));
-  box-shadow: 0 8px 24px rgba(0,0,0,0.22);
+  border-color: rgba(255,255,255,0.095);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.045), rgba(255,255,255,0.014)),
+    linear-gradient(145deg, rgba(26, 31, 44, 0.86), rgba(13, 16, 25, 0.84));
+  box-shadow: 0 8px 22px rgba(0,0,0,0.20);
 }
 .userPublicSongs .discoveryRowArtBtn{
   min-width: 64px;
@@ -6156,6 +6191,25 @@ body[data-route="user"] section.card.wide[data-route="user"]{
 .userPublicSongs .discoveryRowSide{
   color: rgba(232,238,247,0.68);
   background: transparent;
+}
+@media (max-width:720px){
+  body[data-route="user"] section.card.wide[data-route="user"]{
+    padding-top: 0;
+  }
+  .userPublic{
+    gap: 16px;
+  }
+  .userPublicHead{
+    gap: 13px;
+    padding-top: 8px;
+  }
+  .userPublicAvatar{
+    width: 72px;
+    height: 72px;
+  }
+  .userPublicName{
+    font-size: 21px;
+  }
 }
 .userPublicSong{
   display:flex;
@@ -10892,16 +10946,17 @@ button.discoverySpotCard{
 .discoverTrackSheet.isOpen .discoverTrackSheetBackdrop{ opacity: 1; }
 .discoverTrackSheetCard{
   position: relative;
+  isolation: isolate;
   width: 100%;
   max-width: 520px;
   margin: 0 12px;
   border-radius: 24px 24px 18px 18px;
   /* Match `.card` surfaces: app tokens, not a separate blue sheet. */
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018)),
-    linear-gradient(180deg, var(--card), var(--card2));
-  border: 1px solid rgba(255,255,255,0.12);
-  padding: 10px 14px calc(20px + env(safe-area-inset-bottom));
+    linear-gradient(145deg, rgba(255,255,255,0.14), rgba(255,255,255,0.045)),
+    rgba(10,12,18,0.94);
+  border: 1px solid rgba(255,255,255,0.15);
+  padding: 10px 14px calc(22px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -10911,8 +10966,28 @@ button.discoverySpotCard{
     transform 300ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 240ms ease;
   box-shadow:
-    0 -14px 48px rgba(0, 0, 0, 0.40),
+    0 -16px 54px rgba(0, 0, 0, 0.46),
+    inset 0 1px 0 rgba(255,255,255,0.13),
     0 0 0 1px rgba(255, 255, 255, 0.04);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: blur(30px) saturate(180%);
+}
+.discoverTrackSheetCard::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:0;
+  pointer-events:none;
+  border-radius:inherit;
+  background:
+    linear-gradient(108deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.045) 34%, transparent 60%),
+    radial-gradient(88% 92% at 16% 0%, rgba(255,255,255,0.10), transparent 50%);
+  opacity:0.78;
+  mix-blend-mode:screen;
+}
+.discoverTrackSheetCard > *{
+  position: relative;
+  z-index: 1;
 }
 .discoverTrackSheet.isOpen .discoverTrackSheetCard{
   transform: translateY(0) scale(1);
@@ -10933,14 +11008,18 @@ button.discoverySpotCard{
   width: 34px;
   height: 34px;
   border-radius: 999px;
-  background: rgba(255,255,255,0.07);
-  border: 0;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.14), rgba(255,255,255,0.045)),
+    rgba(10,12,18,0.72);
+  border: 1px solid rgba(255,255,255,0.12);
   color: #e8eef7;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   -webkit-tap-highlight-color: transparent;
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  backdrop-filter: blur(18px) saturate(170%);
 }
 .discoverTrackSheetHead{
   display: flex;
@@ -10988,52 +11067,68 @@ button.discoverySpotCard{
 .discoverTrackSheetQuickBtn{
   min-height: 50px;
   padding: 9px 7px;
-  border-radius: 15px;
-  border: 1px solid rgba(255,255,255,0.11);
-  background: rgba(255,255,255,0.045);
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.13);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.13), rgba(255,255,255,0.04)),
+    rgba(10,12,18,0.70);
   color: #e8eef7;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.02em;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(18px) saturate(160%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
 }
 .discoverTrackSheetQuickBtn:active{ transform: scale(0.98); }
 .discoverTrackSheetQuickBtn--accent{
-  border-color: rgba(124,92,255,0.34);
-  background: linear-gradient(135deg, rgba(124,92,255,0.24), rgba(35,213,171,0.13));
+  border-color: rgba(124,92,255,0.36);
+  background:
+    linear-gradient(135deg, rgba(124,92,255,0.28), rgba(35,213,171,0.14)),
+    rgba(10,12,18,0.78);
   color: #fff;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.14),
+    0 8px 20px rgba(0,0,0,0.16);
 }
 .discoverTrackSheetList{
   display: flex;
   flex-direction: column;
   gap: 9px;
+  padding-top: 3px;
 }
 .discoverTrackSheetRow{
   width: 100%;
   text-align: left;
-  padding: 14px 15px;
-  border-radius: 15px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.035);
+  padding: 14px 16px;
+  border-radius: 17px;
+  border: 1px solid rgba(255,255,255,0.095);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.07), rgba(255,255,255,0.022)),
+    rgba(10,12,18,0.58);
   color: rgba(232,238,247,0.92);
   font-size: 15px;
   font-weight: 650;
   letter-spacing: -0.02em;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: border-color 0.16s ease, background 0.16s ease;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
 }
 .discoverTrackSheetRow:active{
+  transform: scale(0.99);
   background: rgba(124,92,255,0.1);
   border-color: rgba(124,92,255,0.28);
 }
 .discoverTrackSheetRow--danger{
   color: rgba(255,178,178,0.95);
   border-color: rgba(255,120,120,0.13);
-  background: rgba(255,80,80,0.045);
+  background:
+    linear-gradient(145deg, rgba(255,100,100,0.075), rgba(255,80,80,0.026)),
+    rgba(10,12,18,0.58);
 }
 .discoverTrackSheetRow--danger:active{
   background: rgba(255,80,80,0.1);

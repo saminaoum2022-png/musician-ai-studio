@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260516profileSheetFinalPolish";
+const APP_BUILD = "20260516weeklyIdeas";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2486,6 +2486,105 @@ const SEARCH_SHELVES = [
   { id: "heart",      title: "From the heart",           hint: "Heartbreak · gratitude" },
 ];
 
+const DISCOVERY_IDEAS = [
+  {
+    id: "voice-note-remix",
+    title: "Remix a Voice Note",
+    kicker: "Weekly Challenge",
+    format: "Remix",
+    time: "10 min",
+    mood: "Personal",
+    prompt: "Take a voice note, hum, or tiny phrase and turn it into the hook of a polished song.",
+    style: "Voice-note remix, intimate intro, modern Arabic pop, warm drums, emotional hook, 96 bpm",
+    lyrics: "Start with a spoken line or hummed idea.\nTurn it into a repeating hook.\nKeep the first verse personal and close.\nMake the chorus simple enough to sing back.",
+    tags: ["Voice", "Remix", "Hook"],
+    tone: "violet",
+  },
+  {
+    id: "thirty-sec-hook",
+    title: "Make a 30-sec Hook",
+    kicker: "Fast Spark",
+    format: "Hook",
+    time: "30 sec",
+    mood: "Catchy",
+    prompt: "Write only the part people remember: intro hit, one line, one melody, done.",
+    style: "Short viral hook, punchy drums, bright synth lead, memorable chorus, 112 bpm",
+    lyrics: "One line that repeats.\nOne melody that sticks.\nNo long verse.\nBuild a 30-second hook that starts instantly.",
+    tags: ["30 sec", "Viral", "Chorus"],
+    tone: "cyan",
+  },
+  {
+    id: "wedding-dabke-chorus",
+    title: "Wedding Dabke Chorus",
+    kicker: "Party Prompt",
+    format: "Chorus",
+    time: "5 min",
+    mood: "Wedding",
+    prompt: "Make the chorus everyone can clap to at a wedding entrance.",
+    style: "Levantine dabke pop, mijwiz/oud accents, big claps, wedding chorus, 126 bpm",
+    lyrics: "Write a chorus for a wedding entrance.\nUse simple Arabic/English celebration lines.\nMake it clap-ready and easy for a crowd.",
+    tags: ["Wedding", "Dabke", "Crowd"],
+    tone: "gold",
+  },
+  {
+    id: "sad-to-dance",
+    title: "Turn Sad Into Dance",
+    kicker: "Flip It",
+    format: "Mood flip",
+    time: "8 min",
+    mood: "Bittersweet",
+    prompt: "Start melancholic, then flip the drop into movement without losing the emotion.",
+    style: "Bittersweet dance pop, minor-key piano intro, warm bass, emotional vocal, 118 bpm",
+    lyrics: "Verse: quiet and honest.\nPre-chorus: lift the feeling.\nChorus: dance through the sadness.\nKeep one lyric that feels like a text you never sent.",
+    tags: ["Sad", "Dance", "Drop"],
+    tone: "rose",
+  },
+  {
+    id: "cinematic-teaser",
+    title: "Cinematic Teaser",
+    kicker: "Trailer Mode",
+    format: "Teaser",
+    time: "45 sec",
+    mood: "Epic",
+    prompt: "Make a short dramatic teaser that sounds like the opening scene of a film.",
+    style: "Cinematic pop teaser, deep pulses, orchestral pads, dramatic drums, 84 bpm",
+    lyrics: "Write like the first scene of a movie.\nFew words, big space.\nBuild tension, then reveal one powerful hook line.",
+    tags: ["Cinematic", "Teaser", "Drama"],
+    tone: "blue",
+  },
+];
+
+const DISCOVERY_QUICK_IDEAS = [
+  {
+    id: "arabic-pop-intro",
+    title: "Arabic pop intro",
+    style: "Arabic pop intro, oud motif, glossy drums, confident vocal, 104 bpm",
+    lyrics: "Open with a short oud or vocal phrase.\nThen bring in a clean pop groove.\nMake the first line feel like a promise.",
+    tags: ["Arabic", "Intro"],
+  },
+  {
+    id: "afro-arab-groove",
+    title: "Afro-Arab groove",
+    style: "Afro-Arab groove, syncopated percussion, warm bass, airy vocal, 108 bpm",
+    lyrics: "Build around a bouncing groove.\nKeep the chorus light, sunny, and repeatable.\nAdd one Arabic phrase as the catch.",
+    tags: ["Groove", "Party"],
+  },
+  {
+    id: "late-night-piano",
+    title: "Late night piano",
+    style: "Late-night piano ballad, soft pads, intimate vocal, 68 bpm",
+    lyrics: "Write like a message after midnight.\nSmall room, big feeling.\nLet the chorus say the thing you avoided saying.",
+    tags: ["Piano", "Sad"],
+  },
+  {
+    id: "tiktok-teaser",
+    title: "TikTok teaser",
+    style: "Short social teaser, instant hook, tight drums, bright ear-candy, 120 bpm",
+    lyrics: "Start with the hook first.\nNo long intro.\nMake the first 8 seconds impossible to skip.",
+    tags: ["Short", "Hook"],
+  },
+];
+
 /** Non-null when Supabase returned ≥1 active row; merged over `SEARCH_TEMPLATE_FALLBACK` by `id`. */
 let searchTemplatesRemote = null;
 let _searchPeopleFetchGen = 0;
@@ -2837,6 +2936,67 @@ function runSearchQuery(query) {
   renderSearchShelves(query);
 }
 
+function applyDiscoveryIdeaToCreate(idea) {
+  if (!idea) return;
+  const title = String(idea.title || "New Idea").trim();
+  if (els.sunoTitle) els.sunoTitle.value = title;
+  if (els.sunoStyle) els.sunoStyle.value = String(idea.style || "").trim();
+  if (els.sunoPrompt) {
+    const body = String(idea.lyrics || idea.prompt || "").trim();
+    els.sunoPrompt.value = body;
+    try { autoResizeLyricsBox(); } catch {}
+  }
+  pendingSearchRemixMeta = {
+    searchTemplateId: `idea:${String(idea.id || title).trim()}`,
+    searchTemplateTitle: title,
+  };
+  try { setStatus?.(`Loaded idea: ${title}. Make it yours.`); } catch {}
+  try { showToast("Idea loaded - make it yours", { icon: "♪", durationMs: 2600 }); } catch {}
+  try { syncGenerateOrbVisibility?.(); } catch {}
+  location.hash = "#/generate";
+}
+
+function renderDiscoveryIdeasOnce() {
+  const rail = document.getElementById("discoveryIdeasRail");
+  const grid = document.getElementById("discoveryQuickGrid");
+  if (!rail || !grid || rail.dataset.renderedIdeas === "1") return;
+  rail.dataset.renderedIdeas = "1";
+  const tagHtml = (tags) => (Array.isArray(tags) ? tags : [])
+    .slice(0, 4)
+    .map((tag) => `<span>${escapeHtml(tag)}</span>`)
+    .join("");
+  rail.innerHTML = DISCOVERY_IDEAS.map((idea, idx) => `
+    <article class="discoveryIdeaCard discoveryIdeaCard--${escapeHtml(idea.tone || "violet")}" style="--i:${idx}">
+      <div class="discoveryIdeaCardGlow" aria-hidden="true"></div>
+      <div class="discoveryIdeaTop">
+        <span class="discoveryIdeaKicker">${escapeHtml(idea.kicker || "Prompt")}</span>
+        <span class="discoveryIdeaMeta">${escapeHtml(idea.time || "Fast")}</span>
+      </div>
+      <h3>${escapeHtml(idea.title)}</h3>
+      <p>${escapeHtml(idea.prompt)}</p>
+      <div class="discoveryIdeaTags">${tagHtml(idea.tags)}</div>
+      <button type="button" class="discoveryIdeaStart" data-discovery-idea="${escapeHtml(idea.id)}">Start</button>
+    </article>
+  `).join("");
+  grid.innerHTML = DISCOVERY_QUICK_IDEAS.map((idea) => `
+    <button type="button" class="discoveryQuickIdea" data-discovery-idea="${escapeHtml(idea.id)}">
+      <span>${escapeHtml(idea.title)}</span>
+      <small>${tagHtml(idea.tags)}</small>
+    </button>
+  `).join("");
+  const ideas = new Map([...DISCOVERY_IDEAS, ...DISCOVERY_QUICK_IDEAS].map((idea) => [String(idea.id), idea]));
+  const handleClick = (e) => {
+    const btn = e.target?.closest?.("[data-discovery-idea]");
+    if (!btn) return;
+    const idea = ideas.get(String(btn.getAttribute("data-discovery-idea") || ""));
+    if (!idea) return;
+    haptic("light");
+    applyDiscoveryIdeaToCreate(idea);
+  };
+  rail.addEventListener("click", handleClick);
+  grid.addEventListener("click", handleClick);
+}
+
 function openSearchRemixSheet(tpl) {
   const sheet = document.getElementById("searchRemixSheet");
   if (!sheet || !tpl) return;
@@ -3012,6 +3172,7 @@ function initSearchPageOnce() {
 
 function onEnterSearchRoute() {
   initSearchPageOnce();
+  renderDiscoveryIdeasOnce();
   startSearchHintRotator();
   void refreshSearchTemplates().then(() => {
     const input = document.getElementById("searchInput");

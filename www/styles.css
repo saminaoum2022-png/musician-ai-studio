@@ -11522,6 +11522,9 @@ button.discoverySpotCard{
 }
 .discoverTrackSheetQuickBtn{
   min-height: 50px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 9px 7px;
   border-radius: 999px;
   border: 1px solid rgba(255,255,255,0.13);
@@ -11529,8 +11532,10 @@ button.discoverySpotCard{
     linear-gradient(145deg, rgba(255,255,255,0.07), rgba(255,255,255,0.018)),
     rgba(10,12,18,0.62);
   color: #e8eef7;
+  text-align: center;
   font-size: 12px;
   font-weight: 800;
+  line-height: 1.15;
   letter-spacing: 0.02em;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -11555,40 +11560,59 @@ button.discoverySpotCard{
 .discoverTrackSheetList{
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  padding-top: 3px;
+  gap: 0;
+  padding: 6px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.052), rgba(255,255,255,0.014)),
+    rgba(9,12,19,0.46);
+  -webkit-backdrop-filter: blur(20px) saturate(155%);
+  backdrop-filter: blur(20px) saturate(155%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.06),
+    0 10px 28px rgba(0,0,0,0.14);
 }
 .discoverTrackSheetRow{
   width: 100%;
-  text-align: left;
-  padding: 14px 16px;
-  border-radius: 17px;
-  border: 1px solid rgba(255,255,255,0.095);
-  background:
-    linear-gradient(145deg, rgba(255,255,255,0.052), rgba(255,255,255,0.016)),
-    rgba(10,12,18,0.50);
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 13px 16px;
+  border-radius: 14px;
+  border: 0;
+  background: transparent;
   color: rgba(232,238,247,0.92);
   font-size: 15px;
   font-weight: 650;
+  line-height: 1.2;
   letter-spacing: -0.02em;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
-  backdrop-filter: blur(18px) saturate(150%);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.055);
-  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+  box-shadow: none;
+  transition: transform 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+.discoverTrackSheetRow + .discoverTrackSheetRow:not(.discoverTrackSheetRow--danger){
+  border-top: 1px solid rgba(255,255,255,0.07);
+  border-radius: 0;
 }
 .discoverTrackSheetRow:active{
   transform: scale(0.99);
   background: rgba(124,92,255,0.1);
-  border-color: rgba(124,92,255,0.28);
 }
 .discoverTrackSheetRow--danger{
+  margin-top: 8px;
   color: rgba(255,178,178,0.95);
+  border: 1px solid rgba(255,120,120,0.13);
+  border-radius: 15px;
   border-color: rgba(255,120,120,0.13);
   background:
     linear-gradient(145deg, rgba(255,100,100,0.07), rgba(255,80,80,0.02)),
     rgba(10,12,18,0.52);
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  backdrop-filter: blur(18px) saturate(145%);
 }
 .discoverTrackSheetRow--danger:active{
   background: rgba(255,80,80,0.1);

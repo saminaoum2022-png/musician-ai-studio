@@ -11398,8 +11398,8 @@ button.discoverySpotCard{
   inset: 0;
   /* Same canvas family as `body` (--bg #12151e) so the dimmer matches the app. */
   background:
-    radial-gradient(90% 70% at 50% 100%, rgba(124,92,255,0.08), transparent 62%),
-    rgba(7, 9, 15, 0.70);
+    radial-gradient(90% 70% at 50% 100%, rgba(124,92,255,0.035), transparent 64%),
+    rgba(3, 5, 10, 0.74);
   opacity: 0;
   transition: opacity 260ms ease;
   backdrop-filter: blur(10px) saturate(125%);
@@ -11414,11 +11414,11 @@ button.discoverySpotCard{
   margin: 0 12px;
   border-radius: 24px 24px 18px 18px;
   background:
-    radial-gradient(120% 86% at 14% 0%, rgba(124,92,255,0.16), transparent 56%),
-    radial-gradient(105% 78% at 100% 12%, rgba(35,213,171,0.065), transparent 60%),
-    linear-gradient(145deg, rgba(255,255,255,0.075), rgba(255,255,255,0.022)),
-    rgba(10,12,18,0.88);
-  border: 1px solid rgba(255,255,255,0.14);
+    radial-gradient(115% 82% at 12% 0%, rgba(255,255,255,0.045), transparent 56%),
+    radial-gradient(110% 86% at 100% 12%, rgba(35,213,171,0.024), transparent 62%),
+    linear-gradient(145deg, rgba(255,255,255,0.058), rgba(255,255,255,0.018)),
+    rgba(5,7,13,0.90);
+  border: 1px solid rgba(255,255,255,0.115);
   padding: 10px 14px calc(22px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
@@ -11430,9 +11430,9 @@ button.discoverySpotCard{
     opacity 240ms ease;
   box-shadow:
     0 -16px 54px rgba(0, 0, 0, 0.46),
-    inset 0 1px 0 rgba(255,255,255,0.13),
+    inset 0 1px 0 rgba(255,255,255,0.105),
     inset 0 -1px 0 rgba(0,0,0,0.18),
-    0 0 0 1px rgba(124,92,255,0.06);
+    0 0 0 1px rgba(124,92,255,0.025);
   -webkit-backdrop-filter: blur(34px) saturate(175%);
   backdrop-filter: blur(34px) saturate(175%);
 }
@@ -11444,9 +11444,9 @@ button.discoverySpotCard{
   pointer-events:none;
   border-radius:inherit;
   background:
-    radial-gradient(78% 72% at 16% 0%, rgba(255,255,255,0.08), transparent 54%),
-    linear-gradient(108deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.018) 38%, transparent 64%);
-  opacity:0.82;
+    radial-gradient(78% 72% at 16% 0%, rgba(255,255,255,0.055), transparent 54%),
+    linear-gradient(108deg, rgba(255,255,255,0.048) 0%, rgba(255,255,255,0.014) 38%, transparent 64%);
+  opacity:0.76;
 }
 .discoverTrackSheetCard > *{
   position: relative;
@@ -11472,10 +11472,9 @@ button.discoverySpotCard{
   height: 34px;
   border-radius: 999px;
   background:
-    radial-gradient(100% 100% at 18% 0%, rgba(124,92,255,0.12), transparent 58%),
-    linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0.022)),
-    rgba(10,12,18,0.76);
-  border: 1px solid rgba(255,255,255,0.13);
+    linear-gradient(145deg, rgba(255,255,255,0.065), rgba(255,255,255,0.018)),
+    rgba(5,7,13,0.78);
+  border: 1px solid rgba(255,255,255,0.11);
   color: #e8eef7;
   cursor: pointer;
   display: inline-flex;
@@ -11535,10 +11534,10 @@ button.discoverySpotCard{
   justify-content: center;
   padding: 9px 7px;
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.13);
+  border: 1px solid rgba(255,255,255,0.105);
   background:
-    linear-gradient(145deg, rgba(255,255,255,0.07), rgba(255,255,255,0.018)),
-    rgba(10,12,18,0.62);
+    linear-gradient(145deg, rgba(255,255,255,0.055), rgba(255,255,255,0.014)),
+    rgba(5,7,13,0.64);
   color: #e8eef7;
   text-align: center;
   font-size: 12px;
@@ -11549,15 +11548,15 @@ button.discoverySpotCard{
   -webkit-tap-highlight-color: transparent;
   -webkit-backdrop-filter: blur(22px) saturate(160%);
   backdrop-filter: blur(22px) saturate(160%);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.09);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.065);
   transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
 }
 .discoverTrackSheetQuickBtn:active{ transform: scale(0.98); }
 .discoverTrackSheetQuickBtn--accent{
   border-color: rgba(124,92,255,0.38);
   background:
-    radial-gradient(120% 100% at 12% 0%, rgba(124,92,255,0.32), transparent 62%),
-    radial-gradient(90% 100% at 100% 100%, rgba(35,213,171,0.12), transparent 62%),
+    radial-gradient(120% 100% at 12% 0%, rgba(124,92,255,0.30), transparent 62%),
+    radial-gradient(90% 100% at 100% 100%, rgba(35,213,171,0.11), transparent 62%),
     linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0.022)),
     rgba(10,12,18,0.72);
   color: #fff;
@@ -11571,14 +11570,14 @@ button.discoverySpotCard{
   gap: 0;
   padding: 6px;
   border-radius: 20px;
-  border: 1px solid rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.085);
   background:
-    linear-gradient(145deg, rgba(255,255,255,0.052), rgba(255,255,255,0.014)),
-    rgba(9,12,19,0.46);
+    linear-gradient(145deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012)),
+    rgba(5,7,13,0.50);
   -webkit-backdrop-filter: blur(20px) saturate(155%);
   backdrop-filter: blur(20px) saturate(155%);
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.06),
+    inset 0 1px 0 rgba(255,255,255,0.045),
     0 10px 28px rgba(0,0,0,0.14);
 }
 .discoverTrackSheetRow{

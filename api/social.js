@@ -75,12 +75,19 @@ async function countRows(path) {
   return Array.isArray(r.data) ? r.data.length : 0;
 }
 
+async function playCountForOwner(userId) {
+  const uid = cleanUserId(userId);
+  if (!uid) return 0;
+  return countRows(`social_song_plays?select=id&owner_user_id=eq.${encodeURIComponent(uid)}&limit=10000`);
+}
+
 async function socialStats(userId, viewerId) {
   const uid = cleanUserId(userId);
   if (!uid) return null;
-  const [followers, following, isFollowingRows, followsViewerRows] = await Promise.all([
+  const [followers, following, plays, isFollowingRows, followsViewerRows] = await Promise.all([
     countRows(`social_follows?select=follower_user_id&following_user_id=eq.${encodeURIComponent(uid)}&limit=10000`),
     countRows(`social_follows?select=following_user_id&follower_user_id=eq.${encodeURIComponent(uid)}&limit=10000`),
+    playCountForOwner(uid),
     viewerId
       ? svcFetch(
           `social_follows?select=follower_user_id&follower_user_id=eq.${encodeURIComponent(viewerId)}&following_user_id=eq.${encodeURIComponent(uid)}&limit=1`,
@@ -95,9 +102,50 @@ async function socialStats(userId, viewerId) {
   return {
     followers,
     following,
+    plays,
     isFollowing: Array.isArray(isFollowingRows.data) && isFollowingRows.data.length > 0,
     followsViewer: Array.isArray(followsViewerRows.data) && followsViewerRows.data.length > 0,
   };
+}
+
+function cleanSongId(v) {
+  return String(v || "").trim().slice(0, 140);
+}
+
+async function resolvePublicSong(songId) {
+  const sid = cleanSongId(songId);
+  if (!sid) return null;
+  const eq = encodeURIComponent(sid);
+  const r = await svcFetch(
+    `user_songs?select=id,user_id,title,public_on_profile&id=eq.${eq}&limit=1`,
+  );
+  const row = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
+  const isPublic = row?.public_on_profile === true || row?.public_on_profile === "t" || row?.public_on_profile === "true";
+  if (!row || !isPublic) return null;
+  return row;
+}
+
+async function recordSongPlay({ songId, listenerUserId, listenedSeconds }) {
+  const sid = cleanSongId(songId);
+  const listener = cleanUserId(listenerUserId);
+  if (!sid || !listener) return { counted: false, reason: "missing_input" };
+  const song = await resolvePublicSong(sid);
+  const owner = cleanUserId(song?.user_id);
+  if (!song || !owner) return { counted: false, reason: "song_not_public" };
+  if (owner === listener) return { counted: false, reason: "own_play" };
+  const seconds = Math.max(0, Math.min(24 * 60 * 60, Math.round(Number(listenedSeconds) || 0)));
+  const ins = await svcFetch("social_song_plays", {
+    method: "POST",
+    headers: { Prefer: "resolution=ignore-duplicates,return=minimal" },
+    body: JSON.stringify({
+      song_id: sid,
+      owner_user_id: owner,
+      listener_user_id: listener,
+      listened_seconds: seconds,
+    }),
+  });
+  if (!ins.ok) return { counted: false, reason: "insert_failed", details: ins.text };
+  return { counted: true, ownerUserId: owner };
 }
 
 async function createFollowNotification({ actorUserId, targetUserId }) {
@@ -211,6 +259,15 @@ async function handlePost(req, res, user) {
       body: JSON.stringify({ read_at: now }),
     });
     return sendJson(res, 200, { ok: true });
+  }
+
+  if (action === "record_play") {
+    const result = await recordSongPlay({
+      songId: body?.songId,
+      listenerUserId: user.userId,
+      listenedSeconds: body?.listenedSeconds,
+    });
+    return sendJson(res, 200, { ok: true, ...result });
   }
 
   return sendJson(res, 400, { ok: false, error: "Unknown social action" });

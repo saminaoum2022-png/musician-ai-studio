@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260516followsYouBadge";
+const APP_BUILD = "20260516playCounts";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -3433,7 +3433,7 @@ function bindDiscoverySegmentControls() {
         }
         haptic("light");
         if (toggleDiscoverFeedPlaybackIfSameUrl(raw)) return;
-        void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by });
+        void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by, playSource: publicPlaySourceFromEl(inline) });
         return;
       }
       const pl = e.target.closest("[data-user-lib-play]");
@@ -3451,7 +3451,7 @@ function bindDiscoverySegmentControls() {
       }
       haptic("light");
       if (toggleDiscoverFeedPlaybackIfSameUrl(raw)) return;
-      void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by });
+      void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by, playSource: publicPlaySourceFromEl(pl) });
     });
   }
   const followingPane = document.getElementById("discoveryPaneFollowing");
@@ -3482,7 +3482,7 @@ function bindDiscoverySegmentControls() {
         }
         haptic("light");
         if (toggleDiscoverFeedPlaybackIfSameUrl(raw)) return;
-        void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by });
+        void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by, playSource: publicPlaySourceFromEl(inline) });
         return;
       }
       const pl = e.target.closest("[data-user-lib-play]");
@@ -3500,7 +3500,7 @@ function bindDiscoverySegmentControls() {
       }
       haptic("light");
       if (toggleDiscoverFeedPlaybackIfSameUrl(raw)) return;
-      void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by });
+      void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by, playSource: publicPlaySourceFromEl(pl) });
     });
   }
 }
@@ -3533,7 +3533,7 @@ function wireUserPublicFeedRowsOnce() {
       }
       haptic("light");
       if (togglePublicProfileLibPlaybackIfSameUrl(raw)) return;
-      void playLibraryUrlOnPlayer(raw, title, art, { openPlayer: false });
+      void playLibraryUrlOnPlayer(raw, title, art, { openPlayer: false, playSource: publicPlaySourceFromEl(inline) });
       return;
     }
     const pl = e.target.closest("[data-user-lib-play]");
@@ -3550,7 +3550,7 @@ function wireUserPublicFeedRowsOnce() {
     }
     haptic("light");
     if (togglePublicProfileLibPlaybackIfSameUrl(raw)) return;
-    void playLibraryUrlOnPlayer(raw, title, art, { openPlayer: false });
+    void playLibraryUrlOnPlayer(raw, title, art, { openPlayer: false, playSource: publicPlaySourceFromEl(pl) });
   });
 }
 
@@ -7257,11 +7257,12 @@ async function fetchSocialStatsForProfile({ userId, username }) {
 
 function renderUserPublicSocialStats({ songCount, stats }) {
   const followers = Number(stats?.followers || 0);
+  const plays = Number(stats?.plays || 0);
   if (els.userPublicStats) {
     els.userPublicStats.innerHTML = `
       <span><strong>${formatStatCount(songCount || 0)}</strong> songs</span>
       <span aria-hidden="true">·</span>
-      <span><strong>0</strong> plays</span>
+      <span><strong>${formatStatCount(plays)}</strong> plays</span>
       <span aria-hidden="true">·</span>
       <span><strong>${formatStatCount(followers)}</strong> followers</span>
     `;
@@ -7480,28 +7481,88 @@ async function showNotificationsSummary() {
 let _ownSocialStatsInFlight = false;
 let _ownSocialStatsLastUserId = "";
 let _ownSocialStatsFollowers = null;
+let _ownSocialStatsPlays = null;
 async function refreshOwnProfileSocialStats({ force = false } = {}) {
   const uid = String(authSession?.user?.id || activeProfile?.id || "").trim();
   if (!uid || uid === "guest") return;
   if (_ownSocialStatsLastUserId !== uid) {
     _ownSocialStatsLastUserId = uid;
     _ownSocialStatsFollowers = null;
+    _ownSocialStatsPlays = null;
   }
   if (_ownSocialStatsFollowers != null && els.profileStatPillLikesValue) {
     els.profileStatPillLikesValue.textContent = formatStatCount(_ownSocialStatsFollowers);
+  }
+  if (_ownSocialStatsPlays != null && els.profileStatPillPublicValue) {
+    els.profileStatPillPublicValue.textContent = formatStatCount(_ownSocialStatsPlays);
   }
   if (_ownSocialStatsInFlight && !force) return;
   _ownSocialStatsInFlight = true;
   try {
     const data = await fetchSocialStatsForProfile({ userId: uid });
     const followers = Number(data?.stats?.followers || 0);
+    const plays = Number(data?.stats?.plays || 0);
     _ownSocialStatsFollowers = followers;
+    _ownSocialStatsPlays = plays;
     if (els.profileStatPillLikesValue) {
       els.profileStatPillLikesValue.textContent = formatStatCount(followers);
+    }
+    if (els.profileStatPillPublicValue) {
+      els.profileStatPillPublicValue.textContent = formatStatCount(plays);
     }
   } finally {
     _ownSocialStatsInFlight = false;
   }
+}
+
+let _publicPlayTrackState = null;
+
+function resetPublicPlayTracking(source) {
+  const songId = String(source?.songId || "").trim();
+  const ownerUserId = String(source?.ownerUserId || "").trim();
+  if (!songId || !ownerUserId) {
+    _publicPlayTrackState = null;
+    return;
+  }
+  _publicPlayTrackState = {
+    key: `${songId}:${ownerUserId}`,
+    songId,
+    ownerUserId,
+    counted: false,
+  };
+}
+
+function countedPlayThresholdSec(durationSec) {
+  const dur = Number(durationSec || 0);
+  if (Number.isFinite(dur) && dur > 0 && dur < 50) {
+    return Math.max(8, Math.ceil(dur * 0.6));
+  }
+  return 30;
+}
+
+function maybeRecordQualifiedPublicPlay() {
+  const state = _publicPlayTrackState;
+  if (!state || state.counted) return;
+  if (!authSession?.user?.id) return;
+  if (String(authSession.user.id) === String(state.ownerUserId)) return;
+  const a = playerEl;
+  if (!a || a.paused || a.ended) return;
+  const current = Number(a.currentTime || 0);
+  const duration = getPlayerDuration();
+  if (current < countedPlayThresholdSec(duration)) return;
+  state.counted = true;
+  void socialApi("/api/social", {
+    method: "POST",
+    body: JSON.stringify({
+      action: "record_play",
+      songId: state.songId,
+      listenedSeconds: Math.floor(current),
+    }),
+  }).then((data) => {
+    if (data?.counted && data?.ownerUserId === String(authSession?.user?.id || "")) {
+      void refreshOwnProfileSocialStats({ force: true });
+    }
+  }).catch(() => {});
 }
 
 /** Recent `user_songs` rows anyone marked public (RLS: `public_on_profile` select). */
@@ -7616,6 +7677,13 @@ function decodeDiscoverDataAttr(el, attrName) {
   } catch {
     return String(raw);
   }
+}
+
+function publicPlaySourceFromEl(el) {
+  const songId = String(decodeDiscoverDataAttr(el, "data-play-song-id") || "").trim();
+  const ownerUserId = String(decodeDiscoverDataAttr(el, "data-play-owner-id") || "").trim();
+  if (!songId || !ownerUserId) return null;
+  return { type: "public_song", songId, ownerUserId };
 }
 
 /** Build a share URL for a Discover row (creator profile when we know the handle). */
@@ -8522,6 +8590,8 @@ function discoveryTrackPlaybackMeta(t, profMap) {
     title: String(t.title || "Untitled"),
     artUrl: artSafe,
     byLine,
+    songId: String(t.id || ""),
+    ownerUserId: String(t.userId || ""),
   };
 }
 
@@ -8536,6 +8606,9 @@ async function playRandomDiscoveryFeedTrack(excludeUrl) {
     discoverFeed: true,
     openPlayer: false,
     discoverBy: pick.byLine,
+    playSource: pick.songId && pick.ownerUserId
+      ? { type: "public_song", songId: pick.songId, ownerUserId: pick.ownerUserId }
+      : null,
   });
 }
 
@@ -8548,6 +8621,9 @@ async function playRandomUserPublicFeedTrack(excludeUrl) {
   haptic("light");
   await playLibraryUrlOnPlayer(pick.url, pick.title, pick.artUrl, {
     openPlayer: false,
+    playSource: pick.songId && pick.ownerUserId
+      ? { type: "public_song", songId: pick.songId, ownerUserId: pick.ownerUserId }
+      : null,
   });
 }
 
@@ -8562,6 +8638,8 @@ function userPublicDiscoveryRowHtml(t, idx, pub) {
   const byLine = String(pub.byLine || "Creator");
   const encBy = encodeURIComponent(byLine);
   const encArt = encodeURIComponent(artSafe);
+  const encSongId = encodeURIComponent(String(t.id || ""));
+  const encOwnerId = encodeURIComponent(String(pub.ownerUserId || t.userId || ""));
   const rawHandle = String(pub.rawHandle || "").trim().replace(/^@/, "");
   const encHandle = rawHandle ? encodeURIComponent(rawHandle) : "";
   const extra = pub.extraMeta ? ` · ${escapeHtml(String(pub.extraMeta))}` : "";
@@ -8569,14 +8647,14 @@ function userPublicDiscoveryRowHtml(t, idx, pub) {
   const side = `<button type="button" class="discoveryRowSide" data-discovery-open-sheet="1" data-dp-hide-profile="1" data-dp-use-public-shuffle="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" aria-label="Options for ${safeTitle}">⋯</button>`;
   return `
       <div class="discoveryRow userPublicFeedRow" style="--i:${idx}">
-        <button type="button" class="discoveryRowArtBtn" data-discovery-inline-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" aria-label="Play ${safeTitle}">
+        <button type="button" class="discoveryRowArtBtn" data-discovery-inline-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" aria-label="Play ${safeTitle}">
           <span class="discoveryRowArt">
             <img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" />
             <span class="discoveryRowArtGlow" aria-hidden="true"></span>
             <span class="discoveryRowArtBadge" aria-hidden="true">▶</span>
           </span>
         </button>
-        <button type="button" class="discoveryRowMain" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" aria-label="Play ${safeTitle}">
+        <button type="button" class="discoveryRowMain" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" aria-label="Play ${safeTitle}">
           <span class="discoveryRowMid">
             <span class="discoveryRowTitle">${safeTitle}</span>
             <span class="discoveryRowMeta">${metaInner}</span>
@@ -8614,18 +8692,20 @@ function discoveryTrackRowHtml(t, profMap, idx) {
   const encTitle = encodeURIComponent(rawTitle);
   const encBy = encodeURIComponent(byLine);
   const encArt = encodeURIComponent(artSafe);
+  const encSongId = encodeURIComponent(String(t.id || ""));
+  const encOwnerId = encodeURIComponent(String(t.userId || ""));
   const encHandle = handle ? encodeURIComponent(handle) : "";
   const side = `<button type="button" class="discoveryRowSide" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" aria-label="Options for ${safeTitle}">⋯</button>`;
   return `
       <div class="discoveryRow" style="--i:${idx}">
-        <button type="button" class="discoveryRowArtBtn" data-discovery-inline-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" aria-label="Play ${safeTitle}">
+        <button type="button" class="discoveryRowArtBtn" data-discovery-inline-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" aria-label="Play ${safeTitle}">
           <span class="discoveryRowArt">
             <img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" />
             <span class="discoveryRowArtGlow" aria-hidden="true"></span>
             <span class="discoveryRowArtBadge" aria-hidden="true">▶</span>
           </span>
         </button>
-        <button type="button" class="discoveryRowMain" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" aria-label="Play ${safeTitle}">
+        <button type="button" class="discoveryRowMain" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" aria-label="Play ${safeTitle}">
           <span class="discoveryRowMid">
             <span class="discoveryRowTitle">${safeTitle}</span>
             <span class="discoveryRowMeta">${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}</span>
@@ -8648,13 +8728,15 @@ function discoverySpotCardHtml(t, profMap, idx) {
   const encTitle = encodeURIComponent(rawTitle);
   const encBy = encodeURIComponent(byLine);
   const encArt = encodeURIComponent(artSafe);
+  const encSongId = encodeURIComponent(String(t.id || ""));
+  const encOwnerId = encodeURIComponent(String(t.userId || ""));
   const spotIdx = Number(idx) || 0;
   const imgLoad = spotIdx < 3 ? "eager" : "lazy";
   const imgPriority = spotIdx === 0 ? ' fetchpriority="high"' : "";
   const encHandle = handle ? encodeURIComponent(handle) : "";
   return `
       <div class="discoverySpotCardWrap" style="--i:${spotIdx}">
-        <button type="button" class="discoverySpotCard" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" aria-label="Play ${safeTitle}">
+        <button type="button" class="discoverySpotCard" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" aria-label="Play ${safeTitle}">
         <span class="discoverySpotCardArt"><img src="${escapeHtml(artSafe)}" alt="" loading="${imgLoad}"${imgPriority} decoding="async" /></span>
         <span class="discoverySpotCardShade" aria-hidden="true"></span>
         <span class="discoverySpotCardArtBadge" aria-hidden="true">▶</span>
@@ -8833,6 +8915,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   if (opts?.openPlayer === false) openPlayer = false;
   else if (opts?.openPlayer === true) openPlayer = true;
   const byLine = fromDiscover ? String(opts?.discoverBy || "").trim() : "";
+  const playSource = opts?.playSource && opts.playSource.songId ? opts.playSource : null;
   try {
     stopHubPlayback();
   } catch {}
@@ -8845,7 +8928,8 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     byLine,
     meta: {},
   };
-  miniSource = fromDiscover ? { type: "discover_feed", url: raw } : { type: "public_profile_lib", url: raw };
+  miniSource = playSource || (fromDiscover ? { type: "discover_feed", url: raw } : { type: "public_profile_lib", url: raw });
+  resetPublicPlayTracking(miniSource);
   libraryNowPlayingId = null;
   try {
     renderLibrary();
@@ -8858,8 +8942,8 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   if (!openPlayer) {
     setPlayerMeta(meta);
     const inlineSource = fromDiscover
-      ? { type: "discover_feed", url: raw }
-      : { type: "public_profile_lib", url: raw };
+      ? { type: "discover_feed", url: raw, ...(playSource || {}) }
+      : { type: "public_profile_lib", url: raw, ...(playSource || {}) };
     await playInline(prox, title || "Song", inlineSource);
   } else {
     await playOnPlayerPage(prox, title || "Song", meta);
@@ -9000,6 +9084,8 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
         title: String(t.title || "Untitled"),
         artUrl: artSafe,
         byLine,
+        songId: String(t.id || ""),
+        ownerUserId: currentUserPublicProfileId,
       };
     });
     try {
@@ -10888,7 +10974,7 @@ function renderProfileOwnStats() {
     els.profileStatPillSongsValue.textContent = formatStatCount(songCountForPills);
   }
   if (els.profileStatPillPublicValue) {
-    els.profileStatPillPublicValue.textContent = "0";
+    els.profileStatPillPublicValue.textContent = formatStatCount(_ownSocialStatsPlays ?? 0);
   }
   if (els.profileStatPillLikesValue) {
     els.profileStatPillLikesValue.textContent = formatStatCount(_ownSocialStatsFollowers ?? 0);
@@ -11631,7 +11717,7 @@ function renderUserProfile(rawUsername) {
   if (els.userPublicSongs) {
     const slice = publicMatches.slice(0, 60).filter((p) => String(p?.url || "").trim());
     const byLine = `@${displayName}`;
-    const pubBase = { byLine, rawHandle: displayName };
+    const pubBase = { byLine, rawHandle: displayName, ownerUserId: currentUserPublicProfileId };
     els.userPublicSongs.innerHTML = slice
       .map((p, i) =>
         userPublicDiscoveryRowHtml(
@@ -11657,6 +11743,8 @@ function renderUserProfile(rawUsername) {
         title: String(p.title || "Untitled"),
         artUrl: artSafe,
         byLine,
+        songId: String(p.id || ""),
+        ownerUserId: metaUserId,
       };
     });
     try {
@@ -14490,6 +14578,7 @@ function ensurePlayer() {
   playerEl = new Audio();
   playerEl.preload = "auto";
   playerEl.addEventListener("timeupdate", syncPlayerUI);
+  playerEl.addEventListener("timeupdate", maybeRecordQualifiedPublicPlay);
   playerEl.addEventListener("loadedmetadata", syncPlayerUI);
   // iOS Safari often reports `duration === Infinity` on Suno-proxied audio
   // until enough is buffered. `durationchange` and `canplay` are the events
@@ -15385,6 +15474,7 @@ async function playOnPlayerPage(url, label, meta = null) {
 async function playInline(url, label, source) {
   if (!url) return;
   miniSource = source || { type: "player" };
+  resetPublicPlayTracking(miniSource);
   setPlayerSource(url, label);
   const a = ensurePlayer();
   const playUrl = normalizeAudioUrlForPlayback(url);

@@ -6016,29 +6016,34 @@ body[data-route="profile"]:has(#profileAura.profileAuraEditing) #profileAuraHead
 
 /* -------- Public creator profile (#/u/USERNAME) -------- */
 body[data-route="user"] section.card.wide[data-route="user"]{
+  padding: 8px 0 24px;
+  border: 0;
   border-radius: 0;
   box-shadow: none;
-  border-color: rgba(255,255,255,0.06);
-  background: rgba(10,12,18,0.35);
+  background: transparent;
 }
 .userPublic{
   display:flex;
   flex-direction:column;
-  gap:14px;
+  gap:16px;
+  width: min(100%, 680px);
+  margin: 0 auto;
 }
 .userPublicHead{
   display:flex;
   align-items:center;
-  gap:14px;
+  gap:16px;
   position:relative;
+  padding: 10px 2px 4px;
 }
 .userPublicAvatar{
-  width:72px;
-  height:72px;
+  width:80px;
+  height:80px;
   border-radius:999px;
   object-fit:cover;
-  border:2px solid rgba(255,255,255,0.14);
+  border:1px solid rgba(255,255,255,0.18);
   background: rgba(255,255,255,0.04);
+  box-shadow: 0 14px 34px rgba(0,0,0,0.28);
   flex:0 0 auto;
 }
 .userPublicMeta{
@@ -6066,7 +6071,7 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   margin-left: 0;
 }
 .userPublicName{
-  font-size:22px;
+  font-size:23px;
   font-weight:800;
   letter-spacing:-0.3px;
   background: linear-gradient(95deg, #f7f4ff 0%, #e0d6ff 50%, #d3f0ec 100%);
@@ -6085,20 +6090,27 @@ body[data-route="user"] section.card.wide[data-route="user"]{
 .userPublicBack{
   flex:0 0 auto;
   align-self:flex-start;
+  border-color: rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.045);
 }
 .userPublicBio{
   font-size:13.5px;
   line-height:1.45;
   color: rgba(223, 231, 251, 0.92);
-  padding:10px 12px;
+  padding:11px 13px;
   border:1px solid rgba(255,255,255,0.08);
-  border-radius:12px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0.008));
+  border-radius:14px;
+  background: rgba(255,255,255,0.035);
 }
 .userPublicStats{
   display:flex;
   align-items:center;
   gap:8px;
+  width: fit-content;
+  padding: 7px 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 999px;
+  background: rgba(255,255,255,0.035);
   font-size:13px;
   color: rgba(223, 231, 251, 0.85);
 }
@@ -6127,7 +6139,23 @@ body[data-route="user"] section.card.wide[data-route="user"]{
 }
 .userPublicSongs{
   display:grid;
-  gap:8px;
+  gap:10px;
+}
+.userPublicSongs .discoveryRow{
+  border-radius:16px;
+  background: linear-gradient(145deg, rgba(28, 33, 46, 0.78), rgba(17, 21, 31, 0.76));
+  box-shadow: 0 8px 24px rgba(0,0,0,0.22);
+}
+.userPublicSongs .discoveryRowArtBtn{
+  min-width: 64px;
+  max-width: 72px;
+}
+.userPublicSongs .discoveryRowMain{
+  padding: 11px 8px 11px 11px;
+}
+.userPublicSongs .discoveryRowSide{
+  color: rgba(232,238,247,0.68);
+  background: transparent;
 }
 .userPublicSong{
   display:flex;
@@ -7610,11 +7638,12 @@ input::placeholder, textarea::placeholder{
     z-index: 65;
     padding: 0 10px;
     pointer-events: none;
-    transform: translate3d(0, 22px, 0);
+    transform: translate3d(0, 26px, 0);
     opacity: 0;
+    will-change: transform, opacity;
     transition:
-      transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
-      opacity 280ms ease;
+      transform 340ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 300ms ease;
   }
   .hubNowPlaying.isVisible{
     pointer-events: auto;
@@ -7628,17 +7657,19 @@ input::placeholder, textarea::placeholder{
     border-radius: 22px;
     overflow: hidden;
     isolation: isolate;
-    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.26);
-    transform: scale(0.97);
-    opacity: 0.96;
+    box-shadow: 0 8px 26px rgba(0, 0, 0, 0.20);
+    transform: scale(0.965);
+    opacity: 0.94;
+    will-change: transform, opacity, box-shadow;
     transition:
-      transform 340ms cubic-bezier(0.22, 1, 0.36, 1),
-      opacity 280ms ease,
-      box-shadow 280ms ease;
+      transform 360ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 300ms ease,
+      box-shadow 320ms ease;
   }
   .hubNowPlaying.isVisible .hubNowShell{
     transform: scale(1);
     opacity: 1;
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
   }
   @media (prefers-reduced-motion: reduce){
     .hubNowPlaying{
@@ -7678,7 +7709,9 @@ input::placeholder, textarea::placeholder{
     padding: 8px 8px 9px 10px;
     border-radius: inherit;
     border: 1px solid rgba(255, 255, 255, 0.14);
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.035));
+    background:
+      linear-gradient(145deg, rgba(255, 255, 255, 0.105), rgba(255, 255, 255, 0.04)),
+      rgba(18, 21, 30, 0.58);
     -webkit-backdrop-filter: blur(26px) saturate(175%);
     backdrop-filter: blur(26px) saturate(175%);
     color: #f3f6ff;
@@ -10825,11 +10858,11 @@ button.discoverySpotCard{
   position: absolute;
   inset: 0;
   /* Same canvas family as `body` (--bg #12151e) so the dimmer matches the app. */
-  background: rgba(18, 21, 30, 0.66);
+  background: rgba(18, 21, 30, 0.70);
   opacity: 0;
-  transition: opacity 220ms ease;
-  backdrop-filter: blur(7px);
-  -webkit-backdrop-filter: blur(7px);
+  transition: opacity 260ms ease;
+  backdrop-filter: blur(8px) saturate(115%);
+  -webkit-backdrop-filter: blur(8px) saturate(115%);
 }
 .discoverTrackSheet.isOpen .discoverTrackSheetBackdrop{ opacity: 1; }
 .discoverTrackSheetCard{
@@ -10837,23 +10870,27 @@ button.discoverySpotCard{
   width: 100%;
   max-width: 520px;
   margin: 0 12px;
-  border-radius: 22px 22px 18px 18px;
+  border-radius: 24px 24px 18px 18px;
   /* Match `.card` surfaces: app tokens, not a separate blue sheet. */
-  background: linear-gradient(180deg, var(--card), var(--card2));
-  border: 1px solid var(--border);
-  padding: 10px 14px calc(18px + env(safe-area-inset-bottom));
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018)),
+    linear-gradient(180deg, var(--card), var(--card2));
+  border: 1px solid rgba(255,255,255,0.12);
+  padding: 10px 14px calc(20px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 14px;
-  transform: translateY(32px);
+  transform: translateY(28px) scale(0.985);
   opacity: 0;
-  transition: transform 260ms cubic-bezier(0.2, 0.85, 0.2, 1), opacity 200ms ease;
+  transition:
+    transform 300ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 240ms ease;
   box-shadow:
-    0 -12px 48px rgba(0, 0, 0, 0.42),
+    0 -14px 48px rgba(0, 0, 0, 0.40),
     0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 .discoverTrackSheet.isOpen .discoverTrackSheetCard{
-  transform: translateY(0);
+  transform: translateY(0) scale(1);
   opacity: 1;
 }
 .discoverTrackSheetGrab{
@@ -10921,41 +10958,41 @@ button.discoverySpotCard{
 .discoverTrackSheetQuick{
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: 9px;
 }
 .discoverTrackSheetQuickBtn{
-  min-height: 48px;
-  padding: 8px 6px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.06);
+  min-height: 50px;
+  padding: 9px 7px;
+  border-radius: 15px;
+  border: 1px solid rgba(255,255,255,0.11);
+  background: rgba(255,255,255,0.045);
   color: #e8eef7;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.02em;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: border-color 0.16s ease, background 0.16s ease;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
 }
 .discoverTrackSheetQuickBtn:active{ transform: scale(0.98); }
 .discoverTrackSheetQuickBtn--accent{
-  border-color: rgba(124,92,255,0.45);
-  background: linear-gradient(135deg, rgba(124,92,255,0.35), rgba(35,213,171,0.2));
+  border-color: rgba(124,92,255,0.34);
+  background: linear-gradient(135deg, rgba(124,92,255,0.24), rgba(35,213,171,0.13));
   color: #fff;
-  box-shadow: 0 6px 20px rgba(124,92,255,0.2);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
 }
 .discoverTrackSheetList{
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
 }
 .discoverTrackSheetRow{
   width: 100%;
   text-align: left;
-  padding: 14px 14px;
-  border-radius: 14px;
+  padding: 14px 15px;
+  border-radius: 15px;
   border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.04);
+  background: rgba(255,255,255,0.035);
   color: rgba(232,238,247,0.92);
   font-size: 15px;
   font-weight: 650;
@@ -10970,8 +11007,8 @@ button.discoverySpotCard{
 }
 .discoverTrackSheetRow--danger{
   color: rgba(255,178,178,0.95);
-  border-color: rgba(255,120,120,0.15);
-  background: rgba(255,80,80,0.06);
+  border-color: rgba(255,120,120,0.13);
+  background: rgba(255,80,80,0.045);
 }
 .discoverTrackSheetRow--danger:active{
   background: rgba(255,80,80,0.1);

@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260517unfollowConfirm";
+const APP_BUILD = "20260517founderBadgeAlways";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -31,7 +31,14 @@ let _nabadCertifiedUserIds = new Set();
 /** Verified badges are gated by `profiles.sound_certified` or the optional UUID allowlist only. */
 const INTERIM_ALWAYS_SHOW_PUBLIC_PROFILE_VERIFIED = false;
 /** Founder account: the badge must remain stable even if env config/profile flags arrive late. */
-const NABAD_FOUNDER_USERNAMES = new Set(["samy_foun"]);
+const NABAD_FOUNDER_USERNAMES = new Set([
+  "samy_foun",
+  "samy_founder",
+  "samy_naoum",
+  "samynaoum",
+  "saminaoum2022",
+]);
+const NABAD_FOUNDER_EMAIL_HINTS = ["samynaoum", "saminaoum2022"];
 
 function normalizedBadgeUsername(raw) {
   return String(raw || "").trim().replace(/^@/, "").toLowerCase();
@@ -40,6 +47,13 @@ function normalizedBadgeUsername(raw) {
 function isFounderBadgeUsername(raw) {
   const handle = normalizedBadgeUsername(raw);
   return Boolean(handle && NABAD_FOUNDER_USERNAMES.has(handle));
+}
+
+function isFounderBadgeEmail(raw) {
+  const email = String(raw || "").trim().toLowerCase();
+  if (!email || !email.includes("@")) return false;
+  const local = email.split("@")[0] || "";
+  return NABAD_FOUNDER_EMAIL_HINTS.some((hint) => local === hint || local.startsWith(`${hint}.`) || local.startsWith(`${hint}_`));
 }
 
 /**
@@ -11542,6 +11556,7 @@ function isNabadSoundCertified() {
   if (INTERIM_ALWAYS_SHOW_PUBLIC_PROFILE_VERIFIED) return true;
   const uid = String(authSession.user.id);
   if (isFounderBadgeUsername(activeProfile?.username)) return true;
+  if (isFounderBadgeEmail(activeProfile?.email || authSession?.user?.email)) return true;
   if (Boolean(activeProfile?.soundCertified)) return true;
   try {
     if (_nabadCertifiedUserIds && _nabadCertifiedUserIds.has(uid)) return true;
@@ -11575,7 +11590,7 @@ function syncUserPublicVerifiedBadge(prof) {
 function renderProfileNabadCertBadge() {
   const check = els.profileNabadCertCheck;
   const legacy = els.profileNabadCertBadge;
-  const show = isNabadSoundCertified() && !profileEditing;
+  const show = isNabadSoundCertified();
   if (check) {
     check.hidden = !show;
     check.setAttribute("aria-hidden", show ? "false" : "true");

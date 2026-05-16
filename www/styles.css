@@ -9360,10 +9360,6 @@ body.notificationsCenterOpen{
   height: 100%;
   display: block;
 }
-.profileAuraEditing .profileNabadCertCheck{
-  display: none !important;
-}
-
 /* ---------- Profile avatar — centered, soft pulse ring, "Na" fallback ----------
    Clean treatment: photo centered, a single quiet pulse ring around
    the circle; when no avatar is uploaded we show a greyed "Na"

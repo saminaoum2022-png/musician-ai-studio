@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260516slimProfileStats" />
+    <link rel="stylesheet" href="./styles.css?v=20260516profileSocialStats" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1469,19 +1469,19 @@
               <p id="profilePersonaInlineChip" class="profilePersonaInlineChip profileLegacyChip" style="display:none" aria-live="polite"></p>
               <p id="profilePreviewGenres" class="profileGenreWash profileLegacyChip" style="display:none" aria-label="Genres"></p>
 
-              <!-- Stats pills: Hub on = Songs + Likes. Hub off = Songs + Public + Likes (likes placeholder until shared feed ships). -->
+              <!-- Stats bar: creator-focused public profile counters. Plays/followers wire to backend later. -->
               <div class="profileStatsPills" id="profileStatsPills" aria-live="polite" hidden>
                 <div class="profileStatPill profileStatPill--songs" data-stat="songs">
                   <strong class="profileStatPillValue" id="profileStatPillSongsValue">0</strong>
                   <span class="profileStatPillLabel">Songs</span>
                 </div>
-                <div class="profileStatPill profileStatPill--public" id="profileStatPillPublicWrap" data-stat="public">
+                <div class="profileStatPill profileStatPill--plays" id="profileStatPillPublicWrap" data-stat="plays">
                   <strong class="profileStatPillValue" id="profileStatPillPublicValue">0</strong>
-                  <span class="profileStatPillLabel">Public Songs</span>
+                  <span class="profileStatPillLabel">Plays</span>
                 </div>
-                <div class="profileStatPill profileStatPill--likes" data-stat="likes" title="Likes on public songs will return with the discovery feed.">
+                <div class="profileStatPill profileStatPill--followers" data-stat="followers" title="Followers arrive with social profiles.">
                   <strong class="profileStatPillValue" id="profileStatPillLikesValue">0</strong>
-                  <span class="profileStatPillLabel">Likes</span>
+                  <span class="profileStatPillLabel">Followers</span>
                 </div>
               </div>
               <!-- Legacy "—" line kept off-screen for the few callers that
@@ -1917,6 +1917,16 @@
                 </span>
                 <span class="settingsRowChev" aria-hidden="true">›</span>
               </a>
+              <button class="settingsRow settingsRowLink" type="button" data-settings-placeholder="Following">
+                <span class="settingsRowIco" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 11h-6M20 8v6"/></svg>
+                </span>
+                <span class="settingsRowBody">
+                  <span class="settingsRowTitle">Following</span>
+                  <span class="settingsRowSub">Manage creators you follow and unfollow them later.</span>
+                </span>
+                <span class="settingsRowChev" aria-hidden="true">›</span>
+              </button>
               <button id="settingsBtnSignIn" class="settingsRow settingsRowLink" type="button">
                 <span class="settingsRowIco" aria-hidden="true">
                   <svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5M15 12H3"/></svg>
@@ -2465,6 +2475,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260516slimProfileStats"></script>
+    <script type="module" src="./src/app.js?v=20260516profileSocialStats"></script>
   </body>
 </html>

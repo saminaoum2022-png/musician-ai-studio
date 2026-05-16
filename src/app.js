@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260516slimProfileStats";
+const APP_BUILD = "20260516profileSocialStats";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -10355,10 +10355,10 @@ function renderProfileOwnStats() {
     els.profileStatPillSongsValue.textContent = formatStatCount(songCountForPills);
   }
   if (els.profileStatPillPublicValue) {
-    els.profileStatPillPublicValue.textContent = formatStatCount(pubLibCount);
+    els.profileStatPillPublicValue.textContent = "0";
   }
   if (els.profileStatPillLikesValue) {
-    els.profileStatPillLikesValue.textContent = formatStatCount(hubLikesOnly);
+    els.profileStatPillLikesValue.textContent = "0";
   }
 
   const lineEl = els.profileAuraStatLine;

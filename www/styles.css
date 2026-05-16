@@ -306,7 +306,7 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
 }
 .introHero::before{
   content:"";
-  width: min(44vw, 204px);
+  width: min(31vw, 143px);
   aspect-ratio: 1 / 1;
   background:
     radial-gradient(78% 78% at 50% 50%, rgba(124,92,255,0.10), transparent 70%),

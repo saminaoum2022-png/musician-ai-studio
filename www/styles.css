@@ -7712,16 +7712,35 @@ input::placeholder, textarea::placeholder{
     border-radius: inherit;
     border: 1px solid rgba(255, 255, 255, 0.15);
     background:
-      radial-gradient(115% 135% at 8% 0%, rgba(var(--cover-glow-rgb), 0.24), transparent 52%),
-      linear-gradient(145deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.052)),
-      rgba(13, 16, 24, 0.88);
-    -webkit-backdrop-filter: blur(42px) saturate(220%) brightness(0.92);
-    backdrop-filter: blur(42px) saturate(220%) brightness(0.92);
+      radial-gradient(118% 145% at 7% 0%, rgba(var(--cover-glow-rgb), 0.18), transparent 54%),
+      linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.052)),
+      rgba(10, 12, 18, 0.94);
+    -webkit-backdrop-filter: blur(32px) saturate(185%);
+    backdrop-filter: blur(32px) saturate(185%);
     color: #f3f6ff;
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.19),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.08),
-      0 0 0 1px rgba(var(--cover-glow-rgb), 0.10);
+      inset 0 1px 0 rgba(255, 255, 255, 0.24),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.10),
+      0 0 0 1px rgba(var(--cover-glow-rgb), 0.08);
+  }
+  .hubNowGlass::before{
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background:
+      linear-gradient(105deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.055) 32%, transparent 56%),
+      radial-gradient(80% 90% at 16% 0%, rgba(255,255,255,0.18), transparent 48%);
+    opacity: 0.72;
+    mix-blend-mode: screen;
+  }
+  .hubNowCoverWrap,
+  .hubNowText,
+  .hubNowIconBtn{
+    position: relative;
+    z-index: 1;
   }
   .hubNowCoverWrap{
     flex: 0 0 auto;
@@ -7799,15 +7818,15 @@ input::placeholder, textarea::placeholder{
     border-radius: 999px;
     border: 1px solid rgba(255, 255, 255, 0.15);
     background:
-      linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.06)),
-      rgba(13, 16, 24, 0.80);
-    -webkit-backdrop-filter: blur(34px) saturate(215%) brightness(0.94);
-    backdrop-filter: blur(34px) saturate(215%) brightness(0.94);
+      linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.055)),
+      rgba(10, 12, 18, 0.86);
+    -webkit-backdrop-filter: blur(26px) saturate(185%);
+    backdrop-filter: blur(26px) saturate(185%);
     color: #fff;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.14),
+      inset 0 1px 0 rgba(255, 255, 255, 0.18),
       inset 0 -1px 0 rgba(0, 0, 0, 0.06),
       0 6px 16px rgba(0, 0, 0, 0.20);
     transition: transform 0.12s ease, background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;

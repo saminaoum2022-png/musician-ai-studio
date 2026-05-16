@@ -6116,6 +6116,8 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   gap:18px;
   width: min(100%, 680px);
   margin: 0 auto;
+  min-width: 0;
+  overflow-x: clip;
 }
 .userPublic::before{
   content:"";
@@ -6137,6 +6139,7 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   gap:16px;
   position:relative;
   padding: 14px 2px 4px;
+  min-width: 0;
 }
 .userPublicAvatar{
   width:80px;
@@ -6154,6 +6157,7 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   gap:2px;
   flex:1 1 auto;
   min-width:0;
+  overflow: hidden;
 }
 .userPublicNameRow{
   display: flex;
@@ -6183,11 +6187,13 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
+  max-width: 100%;
 }
 .userPublicVoice{
   font-size: 13.5px;
   color: rgba(223, 231, 251, 0.78);
   letter-spacing:0.2px;
+  max-width: 100%;
 }
 .userPublicBack{
   flex:0 0 auto;
@@ -6223,6 +6229,8 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   transform: scale(0.98);
 }
 .userPublicBio{
+  min-width: 0;
+  max-width: 100%;
   font-size:13.5px;
   line-height:1.45;
   color: rgba(223, 231, 251, 0.92);
@@ -6234,12 +6242,16 @@ body[data-route="user"] section.card.wide[data-route="user"]{
     rgba(10,12,18,0.34);
   -webkit-backdrop-filter: blur(16px) saturate(150%);
   backdrop-filter: blur(16px) saturate(150%);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .userPublicStats{
   display:flex;
   align-items:center;
+  flex-wrap: wrap;
   gap:8px;
   width: fit-content;
+  max-width: 100%;
   padding: 7px 10px;
   border: 1px solid rgba(255,255,255,0.10);
   border-radius: 999px;
@@ -6276,8 +6288,12 @@ body[data-route="user"] section.card.wide[data-route="user"]{
 .userPublicSongs{
   display:grid;
   gap:10px;
+  min-width: 0;
 }
 .userPublicSongs .discoveryRow{
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   border-radius:16px;
   border-color: rgba(255,255,255,0.095);
   background:
@@ -6290,9 +6306,20 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   max-width: 72px;
 }
 .userPublicSongs .discoveryRowMain{
+  min-width: 0;
   padding: 11px 8px 11px 11px;
 }
+.userPublicSongs .discoveryRowMid{
+  min-width: 0;
+}
+.userPublicSongs .discoveryRowTitle,
+.userPublicSongs .discoveryRowMeta{
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
 .userPublicSongs .discoveryRowSide{
+  flex: 0 0 34px;
+  min-width: 34px;
   color: rgba(232,238,247,0.68);
   background: transparent;
 }
@@ -6304,8 +6331,19 @@ body[data-route="user"] section.card.wide[data-route="user"]{
     gap: 16px;
   }
   .userPublicHead{
+    flex-wrap: wrap;
     gap: 13px;
     padding-top: 8px;
+  }
+  .userPublicMeta{
+    flex: 1 1 calc(100% - 88px);
+  }
+  .userPublicFollowBtn,
+  .userPublicBack{
+    order: 3;
+  }
+  .userPublicFollowBtn{
+    margin-left: 85px;
   }
   .userPublicAvatar{
     width: 72px;
@@ -6313,6 +6351,20 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   }
   .userPublicName{
     font-size: 21px;
+  }
+  .userPublicStats{
+    width: 100%;
+    justify-content: center;
+  }
+}
+@media (max-width:390px){
+  .userPublicFollowBtn{
+    margin-left: 0;
+  }
+  .userPublicFollowBtn,
+  .userPublicBack{
+    flex: 1 1 calc(50% - 8px);
+    justify-content: center;
   }
 }
 .userPublicSong{

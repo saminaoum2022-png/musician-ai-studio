@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260516weeklyIdeas";
+const APP_BUILD = "20260516ideasUnifiedCards";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2959,6 +2959,9 @@ function applyDiscoveryIdeaToCreate(idea) {
 function renderDiscoveryIdeasOnce() {
   const rail = document.getElementById("discoveryIdeasRail");
   const grid = document.getElementById("discoveryQuickGrid");
+  const pane = document.getElementById("discoveryPaneIdeas");
+  const searchToggle = document.getElementById("discoveryIdeasSearchToggle");
+  const input = document.getElementById("searchInput");
   if (!rail || !grid || rail.dataset.renderedIdeas === "1") return;
   rail.dataset.renderedIdeas = "1";
   const tagHtml = (tags) => (Array.isArray(tags) ? tags : [])
@@ -2995,6 +2998,23 @@ function renderDiscoveryIdeasOnce() {
   };
   rail.addEventListener("click", handleClick);
   grid.addEventListener("click", handleClick);
+  if (pane && searchToggle && input) {
+    const openSearch = () => {
+      pane.classList.add("isSearchOpen");
+      searchToggle.setAttribute("aria-expanded", "true");
+      window.setTimeout(() => input.focus(), 40);
+    };
+    searchToggle.addEventListener("click", () => {
+      haptic("light");
+      openSearch();
+    });
+    input.addEventListener("input", () => {
+      if (String(input.value || "").trim()) {
+        pane.classList.add("isSearchOpen");
+        searchToggle.setAttribute("aria-expanded", "true");
+      }
+    });
+  }
 }
 
 function openSearchRemixSheet(tpl) {

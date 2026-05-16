@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260516followingInbox" />
+    <link rel="stylesheet" href="./styles.css?v=20260516newUserDiscoverable" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1351,25 +1351,6 @@
         </section>
 
         <section class="wide profileSection" data-route="profile">
-          <!-- Soft prompt nudging brand-new users (whose username is
-               still the auto-minted `user_xxxxxx` handle) to pick a
-               personal handle. Tapping the banner enters edit mode
-               and focuses the username field. Hidden by default;
-               `renderProfileUsernamePrompt()` toggles it. -->
-          <button
-            type="button"
-            id="profileUsernamePrompt"
-            class="profileUsernamePrompt"
-            style="display:none"
-            aria-label="Choose your username"
-          >
-            <span class="profileUsernamePromptIcon" aria-hidden="true">@</span>
-            <span class="profileUsernamePromptText">
-              <strong>Pick a username</strong>
-              <span class="profileUsernamePromptHint">This is how friends find you when you share your profile link.</span>
-            </span>
-            <span class="profileUsernamePromptCta" aria-hidden="true">Set →</span>
-          </button>
           <!-- Aura header — no card chrome. Avatar tints the page,
                gradient ring breathes when audio is playing somewhere in
                the app. Stats row uses the same vertical-bar separator
@@ -2505,6 +2486,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260516followingInbox"></script>
+    <script type="module" src="./src/app.js?v=20260516newUserDiscoverable"></script>
   </body>
 </html>

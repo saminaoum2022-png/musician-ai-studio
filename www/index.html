@@ -745,7 +745,23 @@
             <div id="discoveryFeedStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
             <div id="discoveryFeedList" class="discoveryFeedList discoveryCardStack" hidden></div>
           </div>
-          <div class="discoveryPane" id="discoveryPaneIdeas" data-discovery-pane="ideas" hidden>
+          <div class="discoveryPane discoveryIdeasPane" id="discoveryPaneIdeas" data-discovery-pane="ideas" hidden>
+            <div class="discoveryIdeasAmbient" aria-hidden="true"></div>
+            <header class="discoveryIdeasHead">
+              <span class="discoveryIdeasKicker">Weekly creative prompts</span>
+              <h2 class="discoveryIdeasTitle appScreenTitle">This Week's Sparks</h2>
+              <p class="discoveryIdeasLead appScreenLead">Tiny challenges to get you making fast. Pick one, then bend it your way.</p>
+            </header>
+            <section class="discoveryIdeasFeature" aria-label="Weekly Sparks">
+              <div class="discoveryIdeasRail" id="discoveryIdeasRail"></div>
+            </section>
+            <section class="discoveryQuickStarts" aria-label="Quick starts">
+              <div class="discoveryQuickStartsHead">
+                <span>Quick starts</span>
+                <small>Tap and create</small>
+              </div>
+              <div class="discoveryQuickGrid" id="discoveryQuickGrid"></div>
+            </section>
             <div class="searchBarWrap">
               <div class="searchBar">
                 <svg class="searchBarIcon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">

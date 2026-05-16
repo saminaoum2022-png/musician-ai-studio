@@ -4940,26 +4940,24 @@ body[data-route="profile"]:has(#profileAuraNameRow[data-loading="true"]) #profil
 /* Voice timbre — under @handle + verified check (view mode only). */
 .profileVoiceTimbreInline{
   display: block;
-  margin: 5px auto 0;
-  font-size: clamp(19px, 5vw, 25px);
-  font-weight: 800;
-  letter-spacing: -0.3px;
-  line-height: 1.08;
+  margin: 4px auto 0;
+  font-size: clamp(13px, 3.4vw, 15px);
+  font-weight: 400;
+  font-style: italic;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  color: rgba(202, 211, 231, 0.74);
   min-width: 0;
   max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
-  background: linear-gradient(95deg, rgba(247,244,255,0.82) 0%, rgba(224,214,255,0.76) 50%, rgba(211,240,236,0.72) 100%);
-  -webkit-background-clip: text;
-          background-clip: text;
-  -webkit-text-fill-color: transparent;
 }
 .profileVoiceTimbreInline[hidden]{ display: none !important; }
 .profileVoiceTimbreInlineLabel{
-  font-style: normal;
-  font-weight: 800;
+  font-style: inherit;
+  font-weight: inherit;
 }
 .profileAura.profileAuraEditing .profileVoiceTimbreInline{ display: none !important; }
 

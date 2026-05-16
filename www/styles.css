@@ -6195,6 +6195,33 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   border-color: rgba(255,255,255,0.1);
   background: rgba(255,255,255,0.045);
 }
+.userPublicFollowBtn{
+  flex: 0 0 auto;
+  align-self: flex-start;
+  min-width: 92px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background:
+    radial-gradient(100% 120% at 20% 0%, rgba(124,92,255,0.18), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,0.11), rgba(255,255,255,0.045));
+  color: rgba(247,250,255,0.96);
+  font-size: 13px;
+  font-weight: 850;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(22px) saturate(155%);
+          backdrop-filter: blur(22px) saturate(155%);
+  box-shadow: 0 14px 34px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.10);
+  -webkit-tap-highlight-color: transparent;
+}
+.userPublicFollowBtn[data-following="true"]{
+  color: rgba(232,238,247,0.76);
+  background: rgba(255,255,255,0.055);
+}
+.userPublicFollowBtn:active{
+  transform: scale(0.98);
+}
 .userPublicBio{
   font-size:13.5px;
   line-height:1.45;

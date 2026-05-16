@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260516profileSocialStats";
+const APP_BUILD = "20260516inAppSocial";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -238,6 +238,9 @@ const els = {
   settingsAccountEmail: document.getElementById("settingsAccountEmail"),
   settingsBtnSignIn: document.getElementById("settingsBtnSignIn"),
   settingsBtnLogout: document.getElementById("settingsBtnLogout"),
+  settingsFollowingRow: document.getElementById("settingsFollowingRow"),
+  settingsNotificationsRow: document.getElementById("settingsNotificationsRow"),
+  settingsNotificationsSub: document.getElementById("settingsNotificationsSub"),
   profileCreditsBalance: document.getElementById("profileCreditsBalance"),
   profileCreditsNote: document.getElementById("profileCreditsNote"),
   profileCreditsLink: document.getElementById("profileCreditsLink"),
@@ -503,6 +506,7 @@ const els = {
   userPublicSongsCount: document.getElementById("userPublicSongsCount"),
   userPublicSongs: document.getElementById("userPublicSongs"),
   userPublicEmpty: document.getElementById("userPublicEmpty"),
+  btnUserPublicFollow: document.getElementById("btnUserPublicFollow"),
   btnUserPublicBack: document.getElementById("btnUserPublicBack"),
   songDetailsModal: document.getElementById("songDetailsModal"),
   songDetailsBackdrop: document.getElementById("songDetailsBackdrop"),
@@ -6989,6 +6993,169 @@ async function supabaseFetchPublicLibraryForUserId(userId) {
   }
 }
 
+let currentUserPublicProfileId = "";
+let currentUserPublicSocialStats = { followers: 0, following: 0, isFollowing: false };
+
+async function socialApi(path, opts) {
+  const token = getSupabaseAuthToken();
+  const headers = {
+    Accept: "application/json",
+    ...(opts?.headers || {}),
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (opts?.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+  const r = await fetch(apiUrl(path), {
+    ...(opts || {}),
+    headers,
+    cache: "no-store",
+  });
+  const data = await r.json().catch(() => null);
+  if (!r.ok) throw new Error(data?.error || `Social request failed (${r.status})`);
+  return data;
+}
+
+async function fetchSocialStatsForProfile({ userId, username }) {
+  const qs = new URLSearchParams({ type: "stats" });
+  if (userId) qs.set("userId", userId);
+  if (username) qs.set("username", username);
+  try {
+    return await socialApi(`/api/social?${qs.toString()}`);
+  } catch {
+    return null;
+  }
+}
+
+function renderUserPublicSocialStats({ songCount, stats }) {
+  const followers = Number(stats?.followers || 0);
+  if (els.userPublicStats) {
+    els.userPublicStats.innerHTML = `
+      <span><strong>${formatStatCount(songCount || 0)}</strong> songs</span>
+      <span aria-hidden="true">·</span>
+      <span><strong>0</strong> plays</span>
+      <span aria-hidden="true">·</span>
+      <span><strong>${formatStatCount(followers)}</strong> followers</span>
+    `;
+    els.userPublicStats.style.display = "";
+  }
+}
+
+function renderUserPublicFollowButton() {
+  const btn = els.btnUserPublicFollow;
+  if (!btn) return;
+  const targetId = String(currentUserPublicProfileId || "").trim();
+  const mine = String(authSession?.user?.id || "").trim();
+  const canShow = Boolean(targetId && mine && targetId !== mine);
+  btn.hidden = !canShow;
+  if (!canShow) return;
+  const isFollowing = Boolean(currentUserPublicSocialStats?.isFollowing);
+  btn.textContent = isFollowing ? "Following" : "Follow";
+  btn.dataset.following = isFollowing ? "true" : "false";
+  btn.setAttribute("aria-label", isFollowing ? "Unfollow creator" : "Follow creator");
+}
+
+async function refreshUserPublicSocial({ username, userId, songCount }) {
+  const data = await fetchSocialStatsForProfile({ username, userId });
+  const targetId = data?.profile?.user_id || userId || "";
+  currentUserPublicProfileId = String(targetId || "");
+  currentUserPublicSocialStats = data?.stats || { followers: 0, following: 0, isFollowing: false };
+  renderUserPublicSocialStats({ songCount, stats: currentUserPublicSocialStats });
+  renderUserPublicFollowButton();
+}
+
+async function toggleCurrentUserPublicFollow() {
+  const targetUserId = String(currentUserPublicProfileId || "").trim();
+  if (!targetUserId) return;
+  if (!authSession?.user?.id || !getSupabaseAuthToken()) {
+    showToast("Sign in to follow creators.");
+    location.hash = "#/auth";
+    return;
+  }
+  const btn = els.btnUserPublicFollow;
+  const wasFollowing = Boolean(currentUserPublicSocialStats?.isFollowing);
+  if (btn) btn.disabled = true;
+  try {
+    const data = await socialApi("/api/social", {
+      method: "POST",
+      body: JSON.stringify({
+        action: wasFollowing ? "unfollow" : "follow",
+        targetUserId,
+      }),
+    });
+    currentUserPublicSocialStats = data?.stats || {
+      ...currentUserPublicSocialStats,
+      isFollowing: !wasFollowing,
+    };
+    renderUserPublicSocialStats({
+      songCount: Number(els.userPublicSongsCount?.textContent || 0),
+      stats: currentUserPublicSocialStats,
+    });
+    renderUserPublicFollowButton();
+    showToast(wasFollowing ? "Unfollowed creator." : "Following creator.");
+  } catch (e) {
+    showToast(e?.message || "Could not update follow.");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function showFollowingSummary() {
+  if (!authSession?.user?.id) {
+    showToast("Sign in to manage followed creators.");
+    return;
+  }
+  try {
+    const data = await socialApi("/api/social?type=me");
+    const list = Array.isArray(data?.following) ? data.following : [];
+    if (!list.length) {
+      alert("Following\n\nYou are not following any creators yet.");
+      return;
+    }
+    alert(`Following\n\n${list.map((x) => `@${x.username || x.userId}`).join("\n")}`);
+  } catch (e) {
+    showToast(e?.message || "Could not load following.");
+  }
+}
+
+async function showNotificationsSummary() {
+  if (!authSession?.user?.id) {
+    showToast("Sign in to view notifications.");
+    return;
+  }
+  try {
+    const data = await socialApi("/api/social?type=notifications");
+    const list = Array.isArray(data?.notifications) ? data.notifications : [];
+    if (!list.length) {
+      alert("Notifications\n\nNo notifications yet.");
+      return;
+    }
+    const lines = list.slice(0, 20).map((n) => {
+      const username = n?.metadata?.actor_username ? `@${n.metadata.actor_username}` : "Someone";
+      return n.type === "follow" ? `${username} started following you` : "New notification";
+    });
+    alert(`Notifications\n\n${lines.join("\n")}`);
+    void socialApi("/api/social", {
+      method: "POST",
+      body: JSON.stringify({ action: "mark_notifications_read" }),
+    }).catch(() => {});
+  } catch (e) {
+    showToast(e?.message || "Could not load notifications.");
+  }
+}
+
+let _ownSocialStatsRequestAt = 0;
+async function refreshOwnProfileSocialStats() {
+  const uid = String(authSession?.user?.id || activeProfile?.id || "").trim();
+  if (!uid || uid === "guest") return;
+  const now = Date.now();
+  if (now - _ownSocialStatsRequestAt < 8000) return;
+  _ownSocialStatsRequestAt = now;
+  const data = await fetchSocialStatsForProfile({ userId: uid });
+  const followers = Number(data?.stats?.followers || 0);
+  if (els.profileStatPillLikesValue) {
+    els.profileStatPillLikesValue.textContent = formatStatCount(followers);
+  }
+}
+
 /** Recent `user_songs` rows anyone marked public (RLS: `public_on_profile` select). */
 async function supabaseFetchDiscoveryPublicSongs(limit) {
   const lim = Math.max(1, Math.min(80, Number(limit) || 48));
@@ -8369,6 +8536,9 @@ async function renderUserProfilePublicLibraryAsync(username) {
     if (els.userPublicStats) els.userPublicStats.style.display = "none";
     if (els.userPublicSongsCount) els.userPublicSongsCount.textContent = "";
     if (els.userPublicSongs) els.userPublicSongs.innerHTML = "";
+    currentUserPublicProfileId = "";
+    currentUserPublicSocialStats = { followers: 0, following: 0, isFollowing: false };
+    renderUserPublicFollowButton();
     _userPublicFeedTracks = [];
     if (els.userPublicEmpty) {
       els.userPublicEmpty.textContent = handle
@@ -8415,16 +8585,10 @@ async function renderUserProfilePublicLibraryAsync(username) {
     }
   }
   const songs = await supabaseFetchPublicLibraryForUserId(prof.user_id);
-  if (els.userPublicStats) {
-    if (songs.length) {
-      els.userPublicStats.innerHTML = `
-        <span><strong>${songs.length}</strong> public song${songs.length === 1 ? "" : "s"}</span>
-      `;
-      els.userPublicStats.style.display = "";
-    } else {
-      els.userPublicStats.style.display = "none";
-    }
-  }
+  currentUserPublicProfileId = String(prof.user_id || "");
+  renderUserPublicSocialStats({ songCount: songs.length, stats: currentUserPublicSocialStats });
+  renderUserPublicFollowButton();
+  void refreshUserPublicSocial({ username: displayName, userId: prof.user_id, songCount: songs.length });
   if (els.userPublicSongsCount) {
     els.userPublicSongsCount.textContent = songs.length ? String(songs.length) : "";
   }
@@ -8436,6 +8600,7 @@ async function renderUserProfilePublicLibraryAsync(username) {
       els.userPublicEmpty.style.display = "";
     }
     syncUserPublicVerifiedBadge(prof);
+    renderUserPublicFollowButton();
     return;
   }
   if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
@@ -10360,6 +10525,7 @@ function renderProfileOwnStats() {
   if (els.profileStatPillLikesValue) {
     els.profileStatPillLikesValue.textContent = "0";
   }
+  void refreshOwnProfileSocialStats();
 
   const lineEl = els.profileAuraStatLine;
   if (lineEl) {
@@ -11000,6 +11166,9 @@ function isHubPostVisibleOnPublicProfile(post) {
 function renderUserProfile(rawUsername) {
   const username = String(rawUsername || "").replace(/^@/, "").trim();
   _userPublicFeedTracks = [];
+  currentUserPublicProfileId = "";
+  currentUserPublicSocialStats = { followers: 0, following: 0, isFollowing: false };
+  renderUserPublicFollowButton();
   if (!els.userPublicName) return;
   syncUserPublicVerifiedBadge(null);
   // Resolve the creator's calling card out of band — don't block render.
@@ -11023,6 +11192,7 @@ function renderUserProfile(rawUsername) {
   const latestPublic = publicMatches[0] || null;
   const latestAny = matches[0] || null;
   const displayName = latestAny?.creator || username || "user";
+  const metaUserId = String(latestAny?.meta?.creatorUserId || latestAny?.meta?.creator_user_id || "").trim();
 
   if (els.userPublicName) els.userPublicName.textContent = `@${displayName}`;
   if (els.userPublicAvatar) {
@@ -11061,19 +11231,10 @@ function renderUserProfile(rawUsername) {
     }
   }
 
-  const totalLikes = publicMatches.reduce((sum, p) => sum + Number(p.likes || 0), 0);
-  if (els.userPublicStats) {
-    if (publicMatches.length) {
-      els.userPublicStats.innerHTML = `
-        <span><strong>${publicMatches.length}</strong> song${publicMatches.length === 1 ? "" : "s"}</span>
-        <span aria-hidden="true">·</span>
-        <span><strong>${totalLikes}</strong> like${totalLikes === 1 ? "" : "s"}</span>
-      `;
-      els.userPublicStats.style.display = "";
-    } else {
-      els.userPublicStats.style.display = "none";
-    }
-  }
+  currentUserPublicProfileId = metaUserId;
+  renderUserPublicSocialStats({ songCount: publicMatches.length, stats: currentUserPublicSocialStats });
+  renderUserPublicFollowButton();
+  void refreshUserPublicSocial({ username: displayName, userId: metaUserId, songCount: publicMatches.length });
   if (els.userPublicSongsCount) {
     els.userPublicSongsCount.textContent = publicMatches.length ? String(publicMatches.length) : "";
   }
@@ -19974,6 +20135,15 @@ if (els.btnAuthLogout) {
 }
 if (els.settingsBtnLogout) {
   els.settingsBtnLogout.addEventListener("click", () => logoutCurrentUser());
+}
+if (els.btnUserPublicFollow) {
+  els.btnUserPublicFollow.addEventListener("click", () => void toggleCurrentUserPublicFollow());
+}
+if (els.settingsFollowingRow) {
+  els.settingsFollowingRow.addEventListener("click", () => void showFollowingSummary());
+}
+if (els.settingsNotificationsRow) {
+  els.settingsNotificationsRow.addEventListener("click", () => void showNotificationsSummary());
 }
 document.querySelectorAll("[data-settings-placeholder]").forEach((el) => {
   el.addEventListener("click", () => {

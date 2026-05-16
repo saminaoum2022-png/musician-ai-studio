@@ -458,7 +458,7 @@ body.isIntro .footer{ display:none; }
   line-height: 1;
 }
 .authBrandMark{
-  width: min(34vw, 136px);
+  width: min(24vw, 95px);
   aspect-ratio: 1 / 1;
   background:
     radial-gradient(75% 75% at 50% 50%, rgba(124,92,255,0.10), transparent 70%),

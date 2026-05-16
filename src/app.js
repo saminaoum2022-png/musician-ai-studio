@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260516playCounts";
+const APP_BUILD = "20260517discoverPlaybackRefresh";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -7682,8 +7682,10 @@ function decodeDiscoverDataAttr(el, attrName) {
 function publicPlaySourceFromEl(el) {
   const songId = String(decodeDiscoverDataAttr(el, "data-play-song-id") || "").trim();
   const ownerUserId = String(decodeDiscoverDataAttr(el, "data-play-owner-id") || "").trim();
+  const taskId = String(decodeDiscoverDataAttr(el, "data-play-task-id") || "").trim();
+  const audioId = String(decodeDiscoverDataAttr(el, "data-play-audio-id") || "").trim();
   if (!songId || !ownerUserId) return null;
-  return { type: "public_song", songId, ownerUserId };
+  return { type: "public_song", songId, ownerUserId, taskId, audioId };
 }
 
 /** Build a share URL for a Discover row (creator profile when we know the handle). */
@@ -7711,7 +7713,11 @@ function readDiscoverSheetPayload(el) {
   const art = decodeDiscoverDataAttr(el, "data-dp-art") || "";
   const by = decodeDiscoverDataAttr(el, "data-dp-by") || "";
   const handle = String(decodeDiscoverDataAttr(el, "data-dp-handle") || "").trim();
-  return { url, title, art, by, handle };
+  const songId = String(decodeDiscoverDataAttr(el, "data-dp-song-id") || "").trim();
+  const ownerUserId = String(decodeDiscoverDataAttr(el, "data-dp-owner-id") || "").trim();
+  const taskId = String(decodeDiscoverDataAttr(el, "data-dp-task-id") || "").trim();
+  const audioId = String(decodeDiscoverDataAttr(el, "data-dp-audio-id") || "").trim();
+  return { url, title, art, by, handle, songId, ownerUserId, taskId, audioId };
 }
 
 let _trackSheetCtx = null;
@@ -8065,6 +8071,9 @@ function runTrackSheetAction(action, sourceEl) {
         discoverFeed: !fromPublicU,
         openPlayer: true,
         discoverBy: fromPublicU ? "" : ctx.by,
+        playSource: ctx.songId && ctx.ownerUserId
+          ? { type: "public_song", songId: ctx.songId, ownerUserId: ctx.ownerUserId, taskId: ctx.taskId, audioId: ctx.audioId }
+          : null,
       });
       return;
     }
@@ -8592,6 +8601,8 @@ function discoveryTrackPlaybackMeta(t, profMap) {
     byLine,
     songId: String(t.id || ""),
     ownerUserId: String(t.userId || ""),
+    taskId: String(t.taskId || ""),
+    audioId: String(t.audioId || ""),
   };
 }
 
@@ -8607,7 +8618,7 @@ async function playRandomDiscoveryFeedTrack(excludeUrl) {
     openPlayer: false,
     discoverBy: pick.byLine,
     playSource: pick.songId && pick.ownerUserId
-      ? { type: "public_song", songId: pick.songId, ownerUserId: pick.ownerUserId }
+      ? { type: "public_song", songId: pick.songId, ownerUserId: pick.ownerUserId, taskId: pick.taskId, audioId: pick.audioId }
       : null,
   });
 }
@@ -8622,7 +8633,7 @@ async function playRandomUserPublicFeedTrack(excludeUrl) {
   await playLibraryUrlOnPlayer(pick.url, pick.title, pick.artUrl, {
     openPlayer: false,
     playSource: pick.songId && pick.ownerUserId
-      ? { type: "public_song", songId: pick.songId, ownerUserId: pick.ownerUserId }
+      ? { type: "public_song", songId: pick.songId, ownerUserId: pick.ownerUserId, taskId: pick.taskId, audioId: pick.audioId }
       : null,
   });
 }
@@ -8640,21 +8651,25 @@ function userPublicDiscoveryRowHtml(t, idx, pub) {
   const encArt = encodeURIComponent(artSafe);
   const encSongId = encodeURIComponent(String(t.id || ""));
   const encOwnerId = encodeURIComponent(String(pub.ownerUserId || t.userId || ""));
+  const encTaskId = encodeURIComponent(String(t.taskId || ""));
+  const encAudioId = encodeURIComponent(String(t.audioId || ""));
+  const playData = `data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" data-play-task-id="${encTaskId}" data-play-audio-id="${encAudioId}"`;
   const rawHandle = String(pub.rawHandle || "").trim().replace(/^@/, "");
   const encHandle = rawHandle ? encodeURIComponent(rawHandle) : "";
   const extra = pub.extraMeta ? ` · ${escapeHtml(String(pub.extraMeta))}` : "";
   const metaInner = `${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}${extra}`;
-  const side = `<button type="button" class="discoveryRowSide" data-discovery-open-sheet="1" data-dp-hide-profile="1" data-dp-use-public-shuffle="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" aria-label="Options for ${safeTitle}">⋯</button>`;
+  const sheetData = `data-dp-song-id="${encSongId}" data-dp-owner-id="${encOwnerId}" data-dp-task-id="${encTaskId}" data-dp-audio-id="${encAudioId}"`;
+  const side = `<button type="button" class="discoveryRowSide" data-discovery-open-sheet="1" data-dp-hide-profile="1" data-dp-use-public-shuffle="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" ${sheetData} aria-label="Options for ${safeTitle}">⋯</button>`;
   return `
       <div class="discoveryRow userPublicFeedRow" style="--i:${idx}">
-        <button type="button" class="discoveryRowArtBtn" data-discovery-inline-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" aria-label="Play ${safeTitle}">
+        <button type="button" class="discoveryRowArtBtn" data-discovery-inline-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
           <span class="discoveryRowArt">
             <img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" />
             <span class="discoveryRowArtGlow" aria-hidden="true"></span>
             <span class="discoveryRowArtBadge" aria-hidden="true">▶</span>
           </span>
         </button>
-        <button type="button" class="discoveryRowMain" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" aria-label="Play ${safeTitle}">
+        <button type="button" class="discoveryRowMain" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
           <span class="discoveryRowMid">
             <span class="discoveryRowTitle">${safeTitle}</span>
             <span class="discoveryRowMeta">${metaInner}</span>
@@ -8694,18 +8709,22 @@ function discoveryTrackRowHtml(t, profMap, idx) {
   const encArt = encodeURIComponent(artSafe);
   const encSongId = encodeURIComponent(String(t.id || ""));
   const encOwnerId = encodeURIComponent(String(t.userId || ""));
+  const encTaskId = encodeURIComponent(String(t.taskId || ""));
+  const encAudioId = encodeURIComponent(String(t.audioId || ""));
+  const playData = `data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" data-play-task-id="${encTaskId}" data-play-audio-id="${encAudioId}"`;
   const encHandle = handle ? encodeURIComponent(handle) : "";
-  const side = `<button type="button" class="discoveryRowSide" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" aria-label="Options for ${safeTitle}">⋯</button>`;
+  const sheetData = `data-dp-song-id="${encSongId}" data-dp-owner-id="${encOwnerId}" data-dp-task-id="${encTaskId}" data-dp-audio-id="${encAudioId}"`;
+  const side = `<button type="button" class="discoveryRowSide" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" ${sheetData} aria-label="Options for ${safeTitle}">⋯</button>`;
   return `
       <div class="discoveryRow" style="--i:${idx}">
-        <button type="button" class="discoveryRowArtBtn" data-discovery-inline-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" aria-label="Play ${safeTitle}">
+        <button type="button" class="discoveryRowArtBtn" data-discovery-inline-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
           <span class="discoveryRowArt">
             <img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" />
             <span class="discoveryRowArtGlow" aria-hidden="true"></span>
             <span class="discoveryRowArtBadge" aria-hidden="true">▶</span>
           </span>
         </button>
-        <button type="button" class="discoveryRowMain" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" aria-label="Play ${safeTitle}">
+        <button type="button" class="discoveryRowMain" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
           <span class="discoveryRowMid">
             <span class="discoveryRowTitle">${safeTitle}</span>
             <span class="discoveryRowMeta">${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}</span>
@@ -8730,13 +8749,16 @@ function discoverySpotCardHtml(t, profMap, idx) {
   const encArt = encodeURIComponent(artSafe);
   const encSongId = encodeURIComponent(String(t.id || ""));
   const encOwnerId = encodeURIComponent(String(t.userId || ""));
+  const encTaskId = encodeURIComponent(String(t.taskId || ""));
+  const encAudioId = encodeURIComponent(String(t.audioId || ""));
+  const playData = `data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" data-play-task-id="${encTaskId}" data-play-audio-id="${encAudioId}"`;
   const spotIdx = Number(idx) || 0;
   const imgLoad = spotIdx < 3 ? "eager" : "lazy";
   const imgPriority = spotIdx === 0 ? ' fetchpriority="high"' : "";
   const encHandle = handle ? encodeURIComponent(handle) : "";
   return `
       <div class="discoverySpotCardWrap" style="--i:${spotIdx}">
-        <button type="button" class="discoverySpotCard" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" aria-label="Play ${safeTitle}">
+        <button type="button" class="discoverySpotCard" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
         <span class="discoverySpotCardArt"><img src="${escapeHtml(artSafe)}" alt="" loading="${imgLoad}"${imgPriority} decoding="async" /></span>
         <span class="discoverySpotCardShade" aria-hidden="true"></span>
         <span class="discoverySpotCardArtBadge" aria-hidden="true">▶</span>
@@ -8751,7 +8773,7 @@ function discoverySpotCardHtml(t, profMap, idx) {
         </span>
         </button>
         <span class="discoverySpotMenuOuter">
-          <button type="button" class="discoverySpotMenuBtn" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" aria-label="Song options for ${safeTitle}">⋯</button>
+          <button type="button" class="discoverySpotMenuBtn" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" data-dp-song-id="${encSongId}" data-dp-owner-id="${encOwnerId}" data-dp-task-id="${encTaskId}" data-dp-audio-id="${encAudioId}" aria-label="Song options for ${safeTitle}">⋯</button>
         </span>
       </div>`;
 }
@@ -8919,16 +8941,29 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   try {
     stopHubPlayback();
   } catch {}
-  const prox = toAudioProxyUrl(raw) || raw;
+  let playableRaw = unwrapInnermostHttpAudioUrl(raw) || raw;
+  const refreshCandidate = playSource?.taskId ? {
+    taskId: playSource.taskId,
+    audioId: playSource.audioId || "",
+    url: playableRaw,
+  } : null;
+  if (refreshCandidate) {
+    const refreshed = await tryRefreshLibraryTrackAudioFromSuno(refreshCandidate);
+    if (refreshed?.url) playableRaw = String(refreshed.url).trim() || playableRaw;
+  }
+  const prox = toAudioProxyUrl(playableRaw) || playableRaw;
   currentPlayerTrackRef = {
     id: `public_${String(title || "").slice(0, 24)}`,
-    url: raw,
+    url: playableRaw,
     title: title || "Song",
     artUrl: artUrl || "",
     byLine,
     meta: {},
   };
-  miniSource = playSource || (fromDiscover ? { type: "discover_feed", url: raw } : { type: "public_profile_lib", url: raw });
+  const publicSource = fromDiscover
+    ? { type: "discover_feed", url: playableRaw, ...(playSource || {}) }
+    : { type: "public_profile_lib", url: playableRaw, ...(playSource || {}) };
+  miniSource = publicSource;
   resetPublicPlayTracking(miniSource);
   libraryNowPlayingId = null;
   try {
@@ -8941,10 +8976,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   };
   if (!openPlayer) {
     setPlayerMeta(meta);
-    const inlineSource = fromDiscover
-      ? { type: "discover_feed", url: raw, ...(playSource || {}) }
-      : { type: "public_profile_lib", url: raw, ...(playSource || {}) };
-    await playInline(prox, title || "Song", inlineSource);
+    await playInline(prox, title || "Song", publicSource);
   } else {
     await playOnPlayerPage(prox, title || "Song", meta);
   }
@@ -9086,6 +9118,8 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
         byLine,
         songId: String(t.id || ""),
         ownerUserId: currentUserPublicProfileId,
+        taskId: String(t.taskId || ""),
+        audioId: String(t.audioId || ""),
       };
     });
     try {
@@ -11745,6 +11779,8 @@ function renderUserProfile(rawUsername) {
         byLine,
         songId: String(p.id || ""),
         ownerUserId: metaUserId,
+        taskId: String(p.taskId || ""),
+        audioId: String(p.audioId || ""),
       };
     });
     try {

@@ -7669,7 +7669,9 @@ input::placeholder, textarea::placeholder{
   .hubNowPlaying.isVisible .hubNowShell{
     transform: scale(1);
     opacity: 1;
-    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
+    box-shadow:
+      0 12px 34px rgba(0, 0, 0, 0.30),
+      0 0 28px -16px rgba(var(--cover-glow-rgb), 0.55);
   }
   @media (prefers-reduced-motion: reduce){
     .hubNowPlaying{
@@ -7688,14 +7690,14 @@ input::placeholder, textarea::placeholder{
       transition: none !important;
     }
   }
-  /* Very soft tint from artwork — stays behind frosted glass */
+  /* Cover-derived aura stays behind darker glass for color without low contrast. */
   .hubNowAura{
     position: absolute;
     inset: -32%;
     background-position: center;
     background-size: cover;
-    filter: blur(56px) saturate(1.02);
-    opacity: 0.075;
+    filter: blur(48px) saturate(1.22);
+    opacity: 0.16;
     transform: scale(1.06);
     pointer-events: none;
     transition: opacity 0.45s ease, filter 0.45s ease;
@@ -7708,12 +7710,13 @@ input::placeholder, textarea::placeholder{
     gap: 10px;
     padding: 8px 8px 9px 10px;
     border-radius: inherit;
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(var(--cover-glow-rgb), 0.22);
     background:
-      linear-gradient(145deg, rgba(255, 255, 255, 0.105), rgba(255, 255, 255, 0.04)),
-      rgba(18, 21, 30, 0.58);
-    -webkit-backdrop-filter: blur(26px) saturate(175%);
-    backdrop-filter: blur(26px) saturate(175%);
+      radial-gradient(115% 135% at 8% 0%, rgba(var(--cover-glow-rgb), 0.22), transparent 48%),
+      linear-gradient(145deg, rgba(255, 255, 255, 0.105), rgba(255, 255, 255, 0.035)),
+      rgba(18, 21, 30, 0.76);
+    -webkit-backdrop-filter: blur(22px) saturate(150%);
+    backdrop-filter: blur(22px) saturate(150%);
     color: #f3f6ff;
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.11),
@@ -7728,7 +7731,7 @@ input::placeholder, textarea::placeholder{
     border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow:
       0 3px 12px rgba(0, 0, 0, 0.26),
-      0 0 24px -8px rgba(var(--cover-glow-rgb), 0.18);
+      0 0 26px -7px rgba(var(--cover-glow-rgb), 0.34);
   }
   .hubNowArt{
     width: 100%;
@@ -7771,7 +7774,7 @@ input::placeholder, textarea::placeholder{
     margin-top: 4px;
     height: 3px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.11);
     overflow: hidden;
   }
   .hubNowProgBar{
@@ -7779,7 +7782,7 @@ input::placeholder, textarea::placeholder{
     height: 100%;
     width: 0%;
     border-radius: inherit;
-    background: linear-gradient(90deg, rgba(var(--cover-glow-rgb), 0.5), rgba(var(--cover-glow-rgb), 0.16));
+    background: linear-gradient(90deg, rgba(var(--cover-glow-rgb), 0.72), rgba(var(--cover-glow-rgb), 0.24));
   }
   .hubNowIconBtn{
     -webkit-appearance: none;
@@ -7793,10 +7796,12 @@ input::placeholder, textarea::placeholder{
     align-items: center;
     justify-content: center;
     border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.035));
-    -webkit-backdrop-filter: blur(18px) saturate(170%);
-    backdrop-filter: blur(18px) saturate(170%);
+    border: 1px solid rgba(255, 255, 255, 0.13);
+    background:
+      linear-gradient(145deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.045)),
+      rgba(18, 21, 30, 0.62);
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
+    backdrop-filter: blur(16px) saturate(150%);
     color: #fff;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;

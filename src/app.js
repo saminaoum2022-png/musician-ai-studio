@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260516notificationCenter";
+const APP_BUILD = "20260516notificationProfileFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1953,8 +1953,16 @@ function applyRoute() {
   // route so it gets its own section + nav state. Username is preserved
   // separately so the renderer can pick it up after the route swap.
   let pendingPublicUsername = "";
+  let pendingPublicUserId = "";
   if (/^u\//.test(route)) {
-    pendingPublicUsername = decodeURIComponent(route.slice(2)).trim();
+    const rawPublicRoute = String(route.slice(2) || "");
+    const [rawHandle, rawQuery = ""] = rawPublicRoute.split("?");
+    pendingPublicUsername = decodeURIComponent(rawHandle || "").trim();
+    try {
+      pendingPublicUserId = String(new URLSearchParams(rawQuery).get("uid") || "").trim();
+    } catch {
+      pendingPublicUserId = "";
+    }
   }
   const allowedRoutes = new Set([
     "intro", "start", "auth", "generate", "library",
@@ -2129,7 +2137,9 @@ function applyRoute() {
     void refreshDiscoverFeed();
   }
   if (wanted === "user") {
+    renderUserProfile._pendingUserId = pendingPublicUserId;
     renderUserProfile(pendingPublicUsername);
+    renderUserProfile._pendingUserId = "";
     // Hub posts arrive via Supabase sync; on a cold visit (someone landing
     // straight on `#/u/USERNAME` from a share) we may need to wait for
     // them to populate. refreshHubFromSupabase is idempotent and re-renders
@@ -7122,6 +7132,30 @@ function escapeUsernameForIlikeExact(handle) {
     .replace(/_/g, "\\_");
 }
 
+async function fetchPublicProfileRowByUserId(userId) {
+  const uid = String(userId || "").trim();
+  if (!uid || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  const headers = { apikey: SUPABASE_ANON_KEY, Accept: "application/json" };
+  const base = `${SUPABASE_URL}/rest/v1/profiles`;
+  const selFull = "user_id,username,avatar,bio,voice_timbre,sound_certified";
+  const selCore = "user_id,username,avatar,bio,voice_timbre";
+  const filter = `user_id=eq.${encodeURIComponent(uid)}`;
+  const tryOne = async (selectList) => {
+    try {
+      const r = await fetch(`${base}?${filter}&select=${selectList}&limit=1`, {
+        headers,
+        cache: "no-store",
+      });
+      if (!r.ok) return null;
+      const arr = await r.json().catch(() => []);
+      return Array.isArray(arr) && arr[0] ? arr[0] : null;
+    } catch {
+      return null;
+    }
+  };
+  return (await tryOne(selFull)) || (await tryOne(selCore));
+}
+
 /** Public `profiles` row by handle — anon when `profiles_select_public_directory` exists. */
 async function fetchPublicProfileRowByUsername(username) {
   const handle = String(username || "").replace(/^@/, "").trim();
@@ -7340,10 +7374,13 @@ function renderNotificationRows(list) {
   els.notificationsCenterList.innerHTML = list.slice(0, 40).map((n) => {
     const msg = notificationMessage(n);
     const username = String(n?.metadata?.actor_username || "").replace(/^@/, "").trim();
+    const actorUserId = String(n?.actor_user_id || "").trim();
     const avatar = String(n?.metadata?.actor_avatar || "").trim() || "./assets/nabadai-logo.png";
     const unread = !n?.read_at;
     const time = relativeTime(new Date(n?.created_at || Date.now()).getTime());
-    const href = username ? `#/u/${encodeURIComponent(username)}` : "";
+    const href = username
+      ? `#/u/${encodeURIComponent(username)}${actorUserId ? `?uid=${encodeURIComponent(actorUserId)}` : ""}`
+      : "";
     const actionHtml = href
       ? `<a class="notificationsItemAction" href="${href}" data-notifications-close="1">${escapeHtml(msg.action || "Open")}</a>`
       : "";
@@ -8822,10 +8859,28 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   }
 }
 
-async function renderUserProfilePublicLibraryAsync(username) {
+async function renderUserProfilePublicLibraryAsync(username, userId = "") {
   const handle = String(username || "").replace(/^@/, "").trim();
+  const preferredUserId = String(userId || "").trim();
   syncUserPublicVerifiedBadge(null);
-  const prof = await fetchPublicProfileRowByUsername(handle);
+  let prof = preferredUserId
+    ? await fetchPublicProfileRowByUserId(preferredUserId)
+    : null;
+  let resolvedSocialStats = null;
+  if (!prof?.user_id) prof = await fetchPublicProfileRowByUsername(handle);
+  if (!prof?.user_id && preferredUserId) {
+    const socialData = await fetchSocialStatsForProfile({ userId: preferredUserId });
+    if (socialData?.profile?.user_id) {
+      prof = {
+        user_id: socialData.profile.user_id,
+        username: socialData.profile.username || handle,
+        avatar: socialData.profile.avatar || "",
+        bio: "",
+        voice_timbre: "",
+      };
+      resolvedSocialStats = socialData.stats || null;
+    }
+  }
   if (!prof?.user_id) {
     if (els.userPublicName) els.userPublicName.textContent = handle ? `@${handle}` : "@?";
     if (els.userPublicAvatar) {
@@ -8889,10 +8944,14 @@ async function renderUserProfilePublicLibraryAsync(username) {
     }
   }
   const songs = await supabaseFetchPublicLibraryForUserId(prof.user_id);
+  if (!resolvedSocialStats) {
+    const socialData = await fetchSocialStatsForProfile({ username: displayName, userId: prof.user_id });
+    resolvedSocialStats = socialData?.stats || null;
+  }
   currentUserPublicProfileId = String(prof.user_id || "");
+  currentUserPublicSocialStats = resolvedSocialStats || { followers: 0, following: 0, isFollowing: false };
   renderUserPublicSocialStats({ songCount: songs.length, stats: currentUserPublicSocialStats });
   renderUserPublicFollowButton();
-  void refreshUserPublicSocial({ username: displayName, userId: prof.user_id, songCount: songs.length });
   if (els.userPublicSongsCount) {
     els.userPublicSongsCount.textContent = songs.length ? String(songs.length) : "";
   }
@@ -11481,7 +11540,7 @@ function renderUserProfile(rawUsername) {
       els.userPublicSongs.innerHTML = `<p class="hint" style="padding:12px 0">Loading…</p>`;
     }
     if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
-    void renderUserProfilePublicLibraryAsync(username);
+    void renderUserProfilePublicLibraryAsync(username, renderUserProfile._pendingUserId || "");
     return;
   }
   const feed = loadHubFeed();

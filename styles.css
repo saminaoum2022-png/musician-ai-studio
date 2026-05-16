@@ -301,16 +301,16 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
   display:flex;
   flex-direction:column;
   align-items:center;
-  gap: 16px;
+  gap: 14px;
   transition: transform 280ms ease, opacity 280ms ease;
 }
 .introHero::before{
   content:"";
-  width: min(52vw, 244px);
+  width: min(64vw, 300px);
   aspect-ratio: 1 / 1;
   background:
-    radial-gradient(78% 78% at 50% 50%, rgba(124,92,255,0.12), transparent 68%),
-    url("./assets/icons/app-icon-master.png") center / contain no-repeat;
+    radial-gradient(78% 78% at 50% 50%, rgba(124,92,255,0.10), transparent 70%),
+    url("./assets/icons/splash-mark.png") center / contain no-repeat;
   pointer-events:none;
 }
 .introHero.entering{
@@ -447,24 +447,38 @@ body.isIntro .footer{ display:none; }
 }
 .authBrand{
   display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
   justify-content: center;
   font-size: 30px;
   font-weight: 900;
   letter-spacing: -0.045em;
   line-height: 1;
 }
+.authBrandMark{
+  width: min(40vw, 164px);
+  aspect-ratio: 1 / 1;
+  background:
+    radial-gradient(75% 75% at 50% 50%, rgba(124,92,255,0.10), transparent 70%),
+    url("./assets/icons/splash-mark.png") center / contain no-repeat;
+  pointer-events: none;
+}
 .authBrandText{
-  text-shadow: 0 0 18px rgba(124,92,255,0.16);
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  color: rgba(247,250,255,0.94);
+  -webkit-text-fill-color: rgba(247,250,255,0.94);
+  text-shadow: none;
 }
 .authBrandSecondary{
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: rgba(231,237,247,0.72);
-  transform: translateY(-2px);
+  font-size: 0.52em;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  text-transform: none;
+  color: rgba(238,244,255,0.74);
+  transform: translateY(-0.07em);
 }
 .authHero{
   margin: 16px 0 0;

@@ -7750,8 +7750,8 @@ input::placeholder, textarea::placeholder{
     inset: -32%;
     background-position: center;
     background-size: cover;
-    filter: blur(48px) saturate(1.22);
-    opacity: 0.16;
+    filter: blur(44px) saturate(1.08);
+    opacity: 0.10;
     transform: scale(1.06);
     pointer-events: none;
     transition: opacity 0.45s ease, filter 0.45s ease;
@@ -7764,31 +7764,20 @@ input::placeholder, textarea::placeholder{
     gap: 10px;
     padding: 8px 8px 9px 10px;
     border-radius: inherit;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.105);
     background:
-      radial-gradient(118% 145% at 7% 0%, rgba(var(--cover-glow-rgb), 0.18), transparent 54%),
-      linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.052)),
-      rgba(10, 12, 18, 0.94);
-    -webkit-backdrop-filter: blur(32px) saturate(185%);
-    backdrop-filter: blur(32px) saturate(185%);
+      radial-gradient(110% 130% at 4% 0%, rgba(var(--cover-glow-rgb), 0.10), transparent 58%),
+      linear-gradient(180deg, rgba(24,28,39,0.97), rgba(12,15,23,0.97));
+    -webkit-backdrop-filter: blur(24px) saturate(145%);
+    backdrop-filter: blur(24px) saturate(145%);
     color: #f3f6ff;
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.24),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.10),
-      0 0 0 1px rgba(var(--cover-glow-rgb), 0.08);
+      inset 0 1px 0 rgba(255, 255, 255, 0.075),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+      0 0 0 1px rgba(var(--cover-glow-rgb), 0.045);
   }
   .hubNowGlass::before{
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    border-radius: inherit;
-    pointer-events: none;
-    background:
-      linear-gradient(105deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.055) 32%, transparent 56%),
-      radial-gradient(80% 90% at 16% 0%, rgba(255,255,255,0.18), transparent 48%);
-    opacity: 0.72;
-    mix-blend-mode: screen;
+    content: none;
   }
   .hubNowCoverWrap,
   .hubNowText,
@@ -7870,18 +7859,17 @@ input::placeholder, textarea::placeholder{
     align-items: center;
     justify-content: center;
     border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.11);
     background:
-      linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.055)),
-      rgba(10, 12, 18, 0.86);
-    -webkit-backdrop-filter: blur(26px) saturate(185%);
-    backdrop-filter: blur(26px) saturate(185%);
+      linear-gradient(180deg, rgba(28,32,44,0.94), rgba(12,15,23,0.92));
+    -webkit-backdrop-filter: blur(18px) saturate(145%);
+    backdrop-filter: blur(18px) saturate(145%);
     color: #fff;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.18),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.14),
       0 6px 16px rgba(0, 0, 0, 0.20);
     transition: transform 0.12s ease, background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
   }
@@ -11388,11 +11376,11 @@ button.discoverySpotCard{
   position: absolute;
   inset: 0;
   /* Same canvas family as `body` (--bg #12151e) so the dimmer matches the app. */
-  background: rgba(18, 21, 30, 0.70);
+  background: rgba(7, 9, 15, 0.72);
   opacity: 0;
   transition: opacity 260ms ease;
-  backdrop-filter: blur(8px) saturate(115%);
-  -webkit-backdrop-filter: blur(8px) saturate(115%);
+  backdrop-filter: blur(7px) saturate(105%);
+  -webkit-backdrop-filter: blur(7px) saturate(105%);
 }
 .discoverTrackSheet.isOpen .discoverTrackSheetBackdrop{ opacity: 1; }
 .discoverTrackSheetCard{
@@ -11402,11 +11390,10 @@ button.discoverySpotCard{
   max-width: 520px;
   margin: 0 12px;
   border-radius: 24px 24px 18px 18px;
-  /* Match `.card` surfaces: app tokens, not a separate blue sheet. */
   background:
-    linear-gradient(145deg, rgba(255,255,255,0.14), rgba(255,255,255,0.045)),
-    rgba(10,12,18,0.94);
-  border: 1px solid rgba(255,255,255,0.15);
+    radial-gradient(120% 82% at 14% 0%, rgba(124,92,255,0.08), transparent 54%),
+    linear-gradient(180deg, rgba(24,28,39,0.98), rgba(12,15,23,0.98));
+  border: 1px solid rgba(255,255,255,0.105);
   padding: 10px 14px calc(22px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
@@ -11418,23 +11405,13 @@ button.discoverySpotCard{
     opacity 240ms ease;
   box-shadow:
     0 -16px 54px rgba(0, 0, 0, 0.46),
-    inset 0 1px 0 rgba(255,255,255,0.13),
-    0 0 0 1px rgba(255, 255, 255, 0.04);
-  -webkit-backdrop-filter: blur(30px) saturate(180%);
-  backdrop-filter: blur(30px) saturate(180%);
+    inset 0 1px 0 rgba(255,255,255,0.075),
+    0 0 0 1px rgba(124,92,255,0.035);
+  -webkit-backdrop-filter: blur(24px) saturate(145%);
+  backdrop-filter: blur(24px) saturate(145%);
 }
 .discoverTrackSheetCard::before{
-  content:"";
-  position:absolute;
-  inset:0;
-  z-index:0;
-  pointer-events:none;
-  border-radius:inherit;
-  background:
-    linear-gradient(108deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.045) 34%, transparent 60%),
-    radial-gradient(88% 92% at 16% 0%, rgba(255,255,255,0.10), transparent 50%);
-  opacity:0.78;
-  mix-blend-mode:screen;
+  content: none;
 }
 .discoverTrackSheetCard > *{
   position: relative;
@@ -11460,17 +11437,16 @@ button.discoverySpotCard{
   height: 34px;
   border-radius: 999px;
   background:
-    linear-gradient(145deg, rgba(255,255,255,0.14), rgba(255,255,255,0.045)),
-    rgba(10,12,18,0.72);
-  border: 1px solid rgba(255,255,255,0.12);
+    linear-gradient(180deg, rgba(28,32,44,0.92), rgba(12,15,23,0.90));
+  border: 1px solid rgba(255,255,255,0.10);
   color: #e8eef7;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   -webkit-tap-highlight-color: transparent;
-  -webkit-backdrop-filter: blur(18px) saturate(170%);
-  backdrop-filter: blur(18px) saturate(170%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
 }
 .discoverTrackSheetHead{
   display: flex;
@@ -11519,30 +11495,29 @@ button.discoverySpotCard{
   min-height: 50px;
   padding: 9px 7px;
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.13);
+  border: 1px solid rgba(255,255,255,0.105);
   background:
-    linear-gradient(145deg, rgba(255,255,255,0.13), rgba(255,255,255,0.04)),
-    rgba(10,12,18,0.70);
+    linear-gradient(180deg, rgba(28,32,44,0.86), rgba(12,15,23,0.84));
   color: #e8eef7;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.02em;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
-  backdrop-filter: blur(18px) saturate(160%);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.065);
   transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
 }
 .discoverTrackSheetQuickBtn:active{ transform: scale(0.98); }
 .discoverTrackSheetQuickBtn--accent{
-  border-color: rgba(124,92,255,0.36);
+  border-color: rgba(124,92,255,0.28);
   background:
-    linear-gradient(135deg, rgba(124,92,255,0.28), rgba(35,213,171,0.14)),
-    rgba(10,12,18,0.78);
+    radial-gradient(120% 100% at 12% 0%, rgba(124,92,255,0.22), transparent 62%),
+    linear-gradient(180deg, rgba(27,31,45,0.92), rgba(12,15,23,0.90));
   color: #fff;
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.14),
+    inset 0 1px 0 rgba(255,255,255,0.08),
     0 8px 20px rgba(0,0,0,0.16);
 }
 .discoverTrackSheetList{
@@ -11556,17 +11531,16 @@ button.discoverySpotCard{
   text-align: left;
   padding: 14px 16px;
   border-radius: 17px;
-  border: 1px solid rgba(255,255,255,0.095);
+  border: 1px solid rgba(255,255,255,0.075);
   background:
-    linear-gradient(145deg, rgba(255,255,255,0.07), rgba(255,255,255,0.022)),
-    rgba(10,12,18,0.58);
+    linear-gradient(180deg, rgba(22,26,36,0.76), rgba(11,14,22,0.78));
   color: rgba(232,238,247,0.92);
   font-size: 15px;
   font-weight: 650;
   letter-spacing: -0.02em;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
   transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
 }
 .discoverTrackSheetRow:active{
@@ -11578,8 +11552,7 @@ button.discoverySpotCard{
   color: rgba(255,178,178,0.95);
   border-color: rgba(255,120,120,0.13);
   background:
-    linear-gradient(145deg, rgba(255,100,100,0.075), rgba(255,80,80,0.026)),
-    rgba(10,12,18,0.58);
+    linear-gradient(180deg, rgba(38,18,25,0.70), rgba(16,12,18,0.78));
 }
 .discoverTrackSheetRow--danger:active{
   background: rgba(255,80,80,0.1);

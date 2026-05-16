@@ -9134,34 +9134,34 @@ body[data-logged-in="false"] #settingsBtnLogout{
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
-  width: min(100%, 760px);
-  margin: 14px auto 6px;
+  width: min(100%, 560px);
+  margin: 10px auto 4px;
   padding: 0;
   overflow: hidden;
   border: 1px solid rgba(255,255,255,0.105);
-  border-radius: 22px;
+  border-radius: 18px;
   background:
-    radial-gradient(115% 140% at 8% 0%, rgba(124,92,255,0.08), transparent 58%),
-    radial-gradient(100% 130% at 92% 18%, rgba(35,213,171,0.055), transparent 60%),
-    linear-gradient(180deg, rgba(18,23,35,0.72), rgba(6,9,15,0.66));
-  -webkit-backdrop-filter: blur(30px) saturate(165%);
-          backdrop-filter: blur(30px) saturate(165%);
+    radial-gradient(115% 140% at 8% 0%, rgba(124,92,255,0.055), transparent 58%),
+    radial-gradient(100% 130% at 92% 18%, rgba(35,213,171,0.04), transparent 60%),
+    linear-gradient(180deg, rgba(17,22,33,0.62), rgba(6,9,15,0.58));
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+          backdrop-filter: blur(24px) saturate(150%);
   box-shadow:
-    0 22px 58px rgba(0,0,0,0.28),
-    inset 0 1px 0 rgba(255,255,255,0.10),
+    0 14px 34px rgba(0,0,0,0.22),
+    inset 0 1px 0 rgba(255,255,255,0.085),
     inset 0 -1px 0 rgba(255,255,255,0.035);
 }
 .profileStatsPills[hidden]{ display: none; }
 .profileStatPill{
   position: relative;
   min-width: 0;
-  min-height: 78px;
+  min-height: 54px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  padding: 12px 8px 13px;
+  gap: 4px;
+  padding: 8px 8px 9px;
   border: 0;
   background: transparent;
   line-height: 1;
@@ -9177,10 +9177,10 @@ body[data-logged-in="false"] #settingsBtnLogout{
 .profileStatPill:not(:last-child)::after{
   content: "";
   position: absolute;
-  top: 18%;
+  top: 20%;
   right: 0;
   width: 1px;
-  height: 64%;
+  height: 60%;
   background:
     linear-gradient(180deg, transparent, rgba(255,255,255,0.13), transparent);
 }
@@ -9191,14 +9191,14 @@ body[data-logged-in="false"] #settingsBtnLogout{
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .profileStatPillValue{
-  font-size: clamp(22px, 6.1vw, 34px);
+  font-size: clamp(17px, 4.8vw, 25px);
   font-weight: 850;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.03em;
   color: rgba(248,250,255,0.96);
-  text-shadow: 0 1px 18px rgba(0,0,0,0.22);
+  text-shadow: 0 1px 14px rgba(0,0,0,0.18);
 }
 .profileStatPillLabel{
-  font-size: clamp(11px, 3.1vw, 14px);
+  font-size: clamp(10px, 2.7vw, 12px);
   font-weight: 650;
   letter-spacing: -0.01em;
   color: rgba(232,238,247,0.58);
@@ -9206,18 +9206,18 @@ body[data-logged-in="false"] #settingsBtnLogout{
 }
 @media (max-width: 390px){
   .profileStatsPills{
-    border-radius: 18px;
+    border-radius: 16px;
   }
   .profileStatPill{
-    min-height: 70px;
-    gap: 6px;
-    padding: 10px 6px 11px;
+    min-height: 50px;
+    gap: 4px;
+    padding: 7px 5px 8px;
   }
   .profileStatPillValue{
-    font-size: clamp(19px, 5.8vw, 26px);
+    font-size: clamp(16px, 4.8vw, 21px);
   }
   .profileStatPillLabel{
-    font-size: 11px;
+    font-size: 10px;
   }
 }
 .profileAuraAvatarWrapNeon .profileAuraAvatarSkeleton{ z-index: 3; }

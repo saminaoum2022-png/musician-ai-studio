@@ -7712,11 +7712,11 @@ input::placeholder, textarea::placeholder{
     border-radius: inherit;
     border: 1px solid rgba(255, 255, 255, 0.15);
     background:
-      radial-gradient(115% 135% at 8% 0%, rgba(var(--cover-glow-rgb), 0.26), transparent 50%),
-      linear-gradient(145deg, rgba(255, 255, 255, 0.17), rgba(255, 255, 255, 0.06)),
-      rgba(18, 21, 30, 0.72);
-    -webkit-backdrop-filter: blur(36px) saturate(215%);
-    backdrop-filter: blur(36px) saturate(215%);
+      radial-gradient(115% 135% at 8% 0%, rgba(var(--cover-glow-rgb), 0.24), transparent 52%),
+      linear-gradient(145deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.052)),
+      rgba(13, 16, 24, 0.88);
+    -webkit-backdrop-filter: blur(42px) saturate(220%) brightness(0.92);
+    backdrop-filter: blur(42px) saturate(220%) brightness(0.92);
     color: #f3f6ff;
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.19),
@@ -7800,9 +7800,9 @@ input::placeholder, textarea::placeholder{
     border: 1px solid rgba(255, 255, 255, 0.15);
     background:
       linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.06)),
-      rgba(18, 21, 30, 0.66);
-    -webkit-backdrop-filter: blur(30px) saturate(210%);
-    backdrop-filter: blur(30px) saturate(210%);
+      rgba(13, 16, 24, 0.80);
+    -webkit-backdrop-filter: blur(34px) saturate(215%) brightness(0.94);
+    backdrop-filter: blur(34px) saturate(215%) brightness(0.94);
     color: #fff;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;

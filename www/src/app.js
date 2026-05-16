@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260517discoverPlaybackRefresh";
+const APP_BUILD = "20260517founderBadgeTimbre";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -30,6 +30,17 @@ let _nabadCertifiedUserIds = new Set();
 
 /** Verified badges are gated by `profiles.sound_certified` or the optional UUID allowlist only. */
 const INTERIM_ALWAYS_SHOW_PUBLIC_PROFILE_VERIFIED = false;
+/** Founder account: the badge must remain stable even if env config/profile flags arrive late. */
+const NABAD_FOUNDER_USERNAMES = new Set(["samy_foun"]);
+
+function normalizedBadgeUsername(raw) {
+  return String(raw || "").trim().replace(/^@/, "").toLowerCase();
+}
+
+function isFounderBadgeUsername(raw) {
+  const handle = normalizedBadgeUsername(raw);
+  return Boolean(handle && NABAD_FOUNDER_USERNAMES.has(handle));
+}
 
 /**
  * Capacitor only wires native plugins after JS calls registerPlugin().
@@ -8985,7 +8996,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
 async function renderUserProfilePublicLibraryAsync(username, userId = "") {
   const handle = String(username || "").replace(/^@/, "").trim();
   const preferredUserId = String(userId || "").trim();
-  syncUserPublicVerifiedBadge(null);
+  syncUserPublicVerifiedBadge({ username: handle, user_id: preferredUserId });
   let prof = preferredUserId
     ? await fetchPublicProfileRowByUserId(preferredUserId)
     : null;
@@ -11352,13 +11363,13 @@ function shouldShowProfileHeaderSkeleton() {
 }
 
 /* =================================================================
- *  Single identity line — persona when set (quiet text next to the
- *  @handle). Voice timbre shows in #profileVoiceTimbreInline.
+ *  Single identity line — persona when set. Voice timbre shows under
+ *  the @handle in #profileVoiceTimbreInline.
  * ================================================================= */
 function renderProfileIdentityLine() {
   const el = els.profileIdentityLine;
   if (!el) return;
-  // Persona only; timbre is inline next to the username in view mode.
+  // Persona only; timbre is rendered separately under the username.
   const personaLabel = (() => {
     try {
       const lbl = document.getElementById("profilePersonaLabel")?.textContent?.trim();
@@ -11516,6 +11527,7 @@ function isNabadSoundCertified() {
   if (!authSession?.user?.id) return false;
   if (INTERIM_ALWAYS_SHOW_PUBLIC_PROFILE_VERIFIED) return true;
   const uid = String(authSession.user.id);
+  if (isFounderBadgeUsername(activeProfile?.username)) return true;
   if (Boolean(activeProfile?.soundCertified)) return true;
   try {
     if (_nabadCertifiedUserIds && _nabadCertifiedUserIds.has(uid)) return true;
@@ -11525,11 +11537,13 @@ function isNabadSoundCertified() {
 
 /** Whether the public `#/u/…` header should show the verified checkmark for this `profiles` row. */
 function isPublicProfileVerifiedForDisplay(prof) {
-  if (!prof || !String(prof.user_id || "").trim()) return false;
+  if (!prof) return false;
   if (INTERIM_ALWAYS_SHOW_PUBLIC_PROFILE_VERIFIED) return true;
+  if (isFounderBadgeUsername(prof.username)) return true;
+  const uid = String(prof.user_id || "").trim();
+  if (!uid) return false;
   const sc = prof.sound_certified;
   if (sc === true || sc === "t" || sc === "true") return true;
-  const uid = String(prof.user_id || "").trim();
   try {
     if (_nabadCertifiedUserIds && _nabadCertifiedUserIds.has(uid)) return true;
   } catch {}
@@ -11658,7 +11672,7 @@ function renderUserProfile(rawUsername) {
   currentUserPublicSocialStats = { followers: 0, following: 0, isFollowing: false, followsViewer: false };
   renderUserPublicFollowButton();
   if (!els.userPublicName) return;
-  syncUserPublicVerifiedBadge(null);
+  syncUserPublicVerifiedBadge({ username });
   // Resolve the creator's calling card out of band — don't block render.
   // This populates the chip + may autoplay once per device.
   void refreshUserPublicCallingCard(username);

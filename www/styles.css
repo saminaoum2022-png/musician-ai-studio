@@ -4876,11 +4876,13 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
   display: block;
 }
 .profileAuraNameRow[data-loading="true"] .profileAuraNameInput,
-.profileAuraNameRow[data-loading="true"] .profileVoiceTimbreInline,
 .profileAuraNameRow[data-loading="true"] .profilePreviewGenderIcon{
   visibility: hidden;
 }
-#profileAuraNameRow[data-loading="true"] + .profileIdentityLine{
+#profileAuraNameRow[data-loading="true"] + .profileVoiceTimbreInline{
+  visibility: hidden;
+}
+#profileAuraNameRow[data-loading="true"] + .profileVoiceTimbreInline + .profileIdentityLine{
   visibility: hidden;
 }
 .profileAuraNameRow > [hidden]{
@@ -4935,27 +4937,29 @@ body[data-route="profile"]:has(#profileAuraNameRow[data-loading="true"]) #profil
    in the chip slot and the input fields own the visual space. */
 .profileAura.profileAuraEditing .profileIdentityLine{ display: none !important; }
 
-/* Voice timbre — after @handle + verified check (view mode only). */
+/* Voice timbre — under @handle + verified check (view mode only). */
 .profileVoiceTimbreInline{
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0;
-  margin-top: 0;
-  font-size: 13px;
-  font-weight: 400;
-  letter-spacing: 0.01em;
-  color: rgba(190, 202, 222, 0.72);
-  line-height: 1.2;
+  display: block;
+  margin: 5px auto 0;
+  font-size: clamp(19px, 5vw, 25px);
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  line-height: 1.08;
   min-width: 0;
   max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-align: center;
+  background: linear-gradient(95deg, rgba(247,244,255,0.82) 0%, rgba(224,214,255,0.76) 50%, rgba(211,240,236,0.72) 100%);
+  -webkit-background-clip: text;
+          background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 .profileVoiceTimbreInline[hidden]{ display: none !important; }
 .profileVoiceTimbreInlineLabel{
-  font-style: italic;
-  font-weight: 400;
+  font-style: normal;
+  font-weight: 800;
 }
 .profileAura.profileAuraEditing .profileVoiceTimbreInline{ display: none !important; }
 

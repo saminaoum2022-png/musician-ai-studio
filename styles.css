@@ -306,7 +306,7 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
 }
 .introHero::before{
   content:"";
-  width: min(64vw, 300px);
+  width: min(52vw, 244px);
   aspect-ratio: 1 / 1;
   background:
     radial-gradient(78% 78% at 50% 50%, rgba(124,92,255,0.10), transparent 70%),
@@ -426,7 +426,8 @@ body.isIntro .footer{ display:none; }
 
 .authScreen{
   padding: 0;
-  min-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  min-height: 0;
+  height: 100%;
   display:flex;
   align-items:center;
   justify-content:center;
@@ -438,12 +439,12 @@ body.isIntro .footer{ display:none; }
   width: 100%;
   max-width: 380px;
   margin: 0 auto;
-  padding: 32px 24px;
+  padding: 18px 24px;
   display:flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 18px;
+  gap: 14px;
 }
 .authBrand{
   display: inline-flex;
@@ -457,7 +458,7 @@ body.isIntro .footer{ display:none; }
   line-height: 1;
 }
 .authBrandMark{
-  width: min(40vw, 164px);
+  width: min(34vw, 136px);
   aspect-ratio: 1 / 1;
   background:
     radial-gradient(75% 75% at 50% 50%, rgba(124,92,255,0.10), transparent 70%),
@@ -481,8 +482,8 @@ body.isIntro .footer{ display:none; }
   transform: translateY(-0.07em);
 }
 .authHero{
-  margin: 16px 0 0;
-  font-size: 28px;
+  margin: 8px 0 0;
+  font-size: clamp(24px, 7vw, 28px);
   line-height: 1.18;
   font-weight: 800;
   letter-spacing: -0.02em;
@@ -501,7 +502,7 @@ body.isIntro .footer{ display:none; }
   flex-direction: column;
   gap: 10px;
   width: 100%;
-  margin-top: 12px;
+  margin-top: 6px;
 }
 .authPrimaryBtn{
   display:inline-flex;
@@ -560,7 +561,7 @@ body.isIntro .footer{ display:none; }
 }
 .authGhostBtn:active{ transform: scale(0.98); }
 .authLegal{
-  margin: 14px 0 0;
+  margin: 6px 0 0;
   font-size: 11.5px;
   letter-spacing: 0.15px;
   color: rgba(223, 231, 251, 0.38);
@@ -576,6 +577,39 @@ body.isIntro .footer{ display:none; }
   border-bottom-color: rgba(255,255,255,0.40);
 }
 
+body.isAuth{
+  overflow: hidden;
+  height: 100dvh;
+  height: 100svh;
+}
+body.isAuth .app{
+  margin: 0;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  max-width: none;
+  width: 100%;
+  min-height: 100dvh;
+  min-height: 100svh;
+  height: 100dvh;
+  height: 100svh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+body.isAuth main.grid{
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+body.isAuth .authScreen{
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+}
 body.isAuth .header{ display:none; }
 body.isAuth .loadingBar{ margin-top: 0; }
 body.isAuth .mobileTabbar{ display:none !important; }

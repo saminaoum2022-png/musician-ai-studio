@@ -13690,6 +13690,9 @@ body[data-route="challenges"] .app{
 .challengeFeatureCard,
 .challengeMiniCard,
 .challengeLoopCard{
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   border: 1px solid rgba(255,255,255,0.11);
   background:
     linear-gradient(145deg, rgba(255,255,255,0.075), rgba(255,255,255,0.025)),
@@ -13727,6 +13730,7 @@ body[data-route="challenges"] .app{
   font-size: clamp(36px, 8vw, 76px);
   line-height: 0.88;
   letter-spacing: -0.075em;
+  overflow-wrap: anywhere;
 }
 .challengesLead{
   max-width: 580px;
@@ -13734,6 +13738,7 @@ body[data-route="challenges"] .app{
   color: rgba(223,231,251,0.66);
   font-size: 15px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 .challengesHeroActions{
   display: flex;
@@ -13779,6 +13784,9 @@ body[data-route="challenges"] .app{
 }
 .challengeStreakRing{
   position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   width: 168px;
   height: 168px;
   border-radius: 50%;
@@ -13786,6 +13794,11 @@ body[data-route="challenges"] .app{
     conic-gradient(from 230deg, #7c5cff 0 72%, rgba(255,255,255,0.08) 72% 100%),
     radial-gradient(circle, rgba(8,10,18,0.9) 58%, transparent 60%);
   filter: drop-shadow(0 0 24px rgba(124,92,255,0.28));
+}
+.challengeStreakLabel,
+.challengeStreakSub{
+  max-width: min(170px, 78%);
+  overflow-wrap: anywhere;
 }
 .challengeStreakLabel,
 .challengeStreakSub{
@@ -13865,6 +13878,7 @@ body[data-route="challenges"] .app{
   margin: 12px 0 0;
   color: rgba(223,231,251,0.68);
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 .challengeTagRow{
   display: flex;
@@ -14167,11 +14181,63 @@ body[data-route="challenges"] .app{
   line-height: 1.35;
 }
 @media (max-width: 760px){
+  .challengesPage{
+    overflow-x: hidden;
+    padding-inline: max(14px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px));
+  }
+  .challengesAmbient{
+    inset: -86px 0 auto;
+    max-width: 100%;
+  }
   .challengesHero,
   .challengePresetGrid,
   .challengeDeck,
   .challengeLoopCard{
     grid-template-columns: 1fr;
+  }
+  .challengesHero{
+    gap: 12px;
+  }
+  .challengesHeroCopy,
+  .challengeFeatureCard,
+  .challengePresetLab,
+  .challengeMiniCard,
+  .challengeLoopCard{
+    border-radius: 24px;
+  }
+  .challengesHeroCopy{
+    min-height: 0;
+    padding: 22px;
+  }
+  .challengesKicker,
+  .challengePresetKicker{
+    font-size: 10px;
+    letter-spacing: 0.12em;
+  }
+  .challengesTitle{
+    max-width: 100%;
+    font-size: clamp(30px, 9.6vw, 38px);
+    line-height: 0.98;
+    letter-spacing: -0.065em;
+  }
+  .challengesLead{
+    max-width: 100%;
+    margin-top: 12px;
+    font-size: 14px;
+    line-height: 1.42;
+  }
+  .challengesHeroActions{
+    gap: 8px;
+    margin-top: 18px;
+  }
+  .challengesPrimaryCta,
+  .challengesGhostCta{
+    flex: 1 1 132px;
+    min-width: 0;
+    min-height: 42px;
+    padding-inline: 10px;
+    text-align: center;
+    white-space: normal;
   }
   .challengePresetHead{
     align-items: stretch;
@@ -14181,11 +14247,33 @@ body[data-route="challenges"] .app{
     flex-basis: auto;
   }
   .challengeStreakCard{
-    min-height: 150px;
+    min-height: 136px;
+    padding: 18px;
   }
-  .challengesHeroCopy{
-    min-height: 0;
-    padding: 24px 20px;
+  .challengeStreakRing{
+    width: 136px;
+    height: 136px;
+  }
+  .challengeStreakCard strong{
+    font-size: 52px;
+  }
+  .challengeStreakSub{
+    max-width: 160px;
+    font-size: 11px;
+  }
+  .challengeFeatureCard{
+    padding: 20px;
+  }
+  .challengeFeatureCard h3{
+    max-width: 100%;
+    font-size: clamp(29px, 9.2vw, 38px);
+    line-height: 0.98;
+    letter-spacing: -0.055em;
+    overflow-wrap: anywhere;
+  }
+  .challengeFeatureCard p{
+    max-width: 100%;
+    font-size: 14px;
   }
   .challengeMiniCard{
     min-height: 0;

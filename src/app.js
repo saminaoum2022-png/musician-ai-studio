@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260517releaseNotes";
+const APP_BUILD = "20260517releaseCaptionCloud";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -7372,16 +7372,22 @@ async function supabasePatchUserSong(track, patch) {
   const songUrl = String(track?.url || "").trim();
   const url = encodeURIComponent(songUrl);
   const kind = encodeURIComponent(String(track?.kind || "full"));
+  const audioId = String(track?.audioId || track?.audio_id || track?.meta?.audioId || "").trim();
+  const taskId = String(track?.taskId || track?.task_id || track?.meta?.taskId || "").trim();
   const rowRef =
     String(track?.cloudSongId || "").trim() ||
     (isPostgresUuidString(track?.id) ? String(track.id).trim() : "");
   let filter;
   if (rowRef && isPostgresUuidString(rowRef)) {
     filter = `user_id=eq.${uid}&id=eq.${encodeURIComponent(rowRef)}`;
+  } else if (audioId) {
+    filter = `user_id=eq.${uid}&audio_id=eq.${encodeURIComponent(audioId)}&kind=eq.${kind}`;
   } else if (songUrl) {
     filter = `user_id=eq.${uid}&song_url=eq.${url}&kind=eq.${kind}`;
+  } else if (taskId) {
+    filter = `user_id=eq.${uid}&task_id=eq.${encodeURIComponent(taskId)}&kind=eq.${kind}`;
   } else {
-    return { ok: false, reason: "no_row_ref", details: "missing cloudSongId and song_url" };
+    return { ok: false, reason: "no_row_ref", details: "missing cloudSongId, audio_id, task_id, and song_url" };
   }
   const body = {};
   if (typeof patch?.title === "string") body.title = patch.title;
@@ -12658,8 +12664,21 @@ async function playHubPostFromProfile(postId, opts) {
  *  changes (re-login, share, unpublish). */
 const PROFILE_RELEASES_PAGE_SIZE = 10;
 let _profileReleasesShown = PROFILE_RELEASES_PAGE_SIZE;
+const _releaseCaptionCloudHealKeys = new Set();
 function resetProfileReleasesPagination() {
   _profileReleasesShown = PROFILE_RELEASES_PAGE_SIZE;
+}
+
+function queueReleaseCaptionCloudHeal(track) {
+  if (!authSession?.user?.id || !track || !track.publicOnProfile || !releaseCaptionForTrack(track)) return;
+  const key = String(track.cloudSongId || track.audioId || track.taskId || track.id || track.url || "").trim();
+  if (!key || _releaseCaptionCloudHealKeys.has(key)) return;
+  _releaseCaptionCloudHealKeys.add(key);
+  void supabasePatchUserSong(track, { meta: track.meta || {} }).then((res) => {
+    if (res && res.ok === false) _releaseCaptionCloudHealKeys.delete(key);
+  }).catch(() => {
+    _releaseCaptionCloudHealKeys.delete(key);
+  });
 }
 
 /** Profile → songs on your public link (Hub off): **public Library rows only**.
@@ -12669,6 +12688,7 @@ function renderProfileLibraryPublicOnLinkSection() {
   const withUrl = loadLibrary().filter((t) => String(t?.url || "").trim());
   const allLib = withUrl.filter((t) => Boolean(t.publicOnProfile));
   allLib.sort((a, b) => libraryTrackPublicTs(b) - libraryTrackPublicTs(a));
+  allLib.forEach(queueReleaseCaptionCloudHeal);
   if (_profileReleasesShown < PROFILE_RELEASES_PAGE_SIZE) {
     _profileReleasesShown = PROFILE_RELEASES_PAGE_SIZE;
   }

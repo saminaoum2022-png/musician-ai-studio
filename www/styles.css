@@ -12658,10 +12658,12 @@ button.discoverySpotCard{
 .discoverTrackSheet{
   position: fixed;
   inset: 0;
-  z-index: 61;
+  z-index: 120;
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  box-sizing: border-box;
+  padding-bottom: var(--discover-sheet-bottom-clearance, 0px);
   pointer-events: none;
 }
 .discoverTrackSheet.isOpen{ pointer-events: auto; }
@@ -12684,6 +12686,7 @@ button.discoverySpotCard{
   isolation: isolate;
   width: 100%;
   max-width: 520px;
+  max-height: calc(100dvh - var(--discover-sheet-bottom-clearance, 0px) - 18px);
   margin: 0 12px;
   border-radius: 24px 24px 18px 18px;
   background:
@@ -12706,6 +12709,7 @@ button.discoverySpotCard{
     0 0 0 1px rgba(124,92,255,0.025);
   -webkit-backdrop-filter: blur(18px) saturate(125%);
   backdrop-filter: blur(18px) saturate(125%);
+  overflow: hidden;
 }
 .discoverTrackSheetCard::before{
   display:none;
@@ -12830,6 +12834,10 @@ button.discoverySpotCard{
   display: flex;
   flex-direction: column;
   gap: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 6px;
   border-radius: 20px;
   border: 1px solid rgba(255,255,255,0.085);
@@ -12888,6 +12896,9 @@ button.discoverySpotCard{
 }
 
 @media (max-width: 720px){
+  .discoverTrackSheet{
+    --discover-sheet-bottom-clearance: calc(74px + env(safe-area-inset-bottom, 0px));
+  }
   .searchPage{ padding: 8px 0 28px; gap: 16px; }
   .discoveryPage{ gap: 12px; }
   .discoverySegment{ font-size: 13px; padding: 9px 10px; border-radius: 12px; }
@@ -12912,7 +12923,7 @@ button.discoverySpotCard{
   .searchPosterCta{ font-size: 10px; margin-top: 4px; }
   .searchShelfRow{ gap: 10px; }
   .searchRemixCard{ border-radius: 22px 22px 0 0; margin: 0; }
-  .discoverTrackSheetCard{ border-radius: 22px 22px 0 0; margin: 0; max-width: none; }
+  .discoverTrackSheetCard{ border-radius: 22px; margin: 0 10px; max-width: none; }
 }
 
 /* =================================================================

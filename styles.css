@@ -8541,15 +8541,15 @@ body.notificationsCenterOpen{
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(90% 70% at 50% 100%, rgba(124,92,255,0.035), transparent 64%),
-    rgba(3, 5, 10, 0.74);
+    radial-gradient(90% 70% at 50% 100%, rgba(124,92,255,0.025), transparent 64%),
+    rgba(3, 5, 10, 0.76);
   -webkit-backdrop-filter: blur(10px) saturate(125%);
           backdrop-filter: blur(10px) saturate(125%);
 }
 .notificationsCenterCard{
   position: absolute;
-  left: 12px;
-  right: 12px;
+  left: 0;
+  right: 0;
   bottom: 0;
   max-width: 520px;
   margin: 0 auto;
@@ -8562,30 +8562,19 @@ body.notificationsCenterOpen{
   border: 1px solid rgba(255,255,255,0.115);
   border-radius: 24px 24px 18px 18px;
   background:
-    radial-gradient(115% 82% at 12% 0%, rgba(255,255,255,0.045), transparent 56%),
-    radial-gradient(110% 86% at 100% 12%, rgba(35,213,171,0.024), transparent 62%),
-    linear-gradient(145deg, rgba(255,255,255,0.058), rgba(255,255,255,0.018)),
-    rgba(5,7,13,0.90);
+    radial-gradient(110% 72% at 8% 0%, rgba(124,92,255,0.045), transparent 58%),
+    linear-gradient(180deg, rgba(10,13,21,0.985), rgba(5,7,13,0.995));
   padding: 10px 14px calc(22px + env(safe-area-inset-bottom));
   box-shadow:
     0 -16px 54px rgba(0,0,0,0.46),
     inset 0 1px 0 rgba(255,255,255,0.105),
     inset 0 -1px 0 rgba(0,0,0,0.18),
     0 0 0 1px rgba(124,92,255,0.025);
-  -webkit-backdrop-filter: blur(34px) saturate(175%);
-          backdrop-filter: blur(34px) saturate(175%);
+  -webkit-backdrop-filter: blur(18px) saturate(125%);
+          backdrop-filter: blur(18px) saturate(125%);
 }
 .notificationsCenterCard::before{
-  content:"";
-  position:absolute;
-  inset:0;
-  z-index:0;
-  pointer-events:none;
-  border-radius:inherit;
-  background:
-    radial-gradient(78% 72% at 16% 0%, rgba(255,255,255,0.055), transparent 54%),
-    linear-gradient(108deg, rgba(255,255,255,0.048) 0%, rgba(255,255,255,0.014) 38%, transparent 64%);
-  opacity:0.76;
+  display:none;
 }
 .notificationsCenterCard > *{
   position: relative;
@@ -8660,38 +8649,29 @@ body.notificationsCenterOpen{
 .notificationsCenterList{
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
   overflow: auto;
-  padding: 6px;
-  border-radius: 20px;
-  border: 1px solid rgba(255,255,255,0.085);
-  background:
-    linear-gradient(145deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012)),
-    rgba(5,7,13,0.50);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.045),
-    0 10px 28px rgba(0,0,0,0.14);
-  -webkit-backdrop-filter: blur(20px) saturate(155%);
-          backdrop-filter: blur(20px) saturate(155%);
+  padding: 0;
+  border-radius: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   -webkit-overflow-scrolling: touch;
 }
 .notificationsItem{
   position: relative;
   display: flex;
   gap: 12px;
-  padding: 12px;
-  border: 1px solid rgba(255,255,255,0.075);
-  border-radius: 16px;
-  background:
-    linear-gradient(145deg, rgba(255,255,255,0.042), rgba(255,255,255,0.014)),
-    rgba(5,7,13,0.48);
+  padding: 14px 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.notificationsItem + .notificationsItem{
+  border-top: 1px solid rgba(255,255,255,0.075);
 }
 .notificationsItem.isUnread{
-  border-color: rgba(124,92,255,0.24);
-  background:
-    radial-gradient(110% 90% at 8% 0%, rgba(124,92,255,0.16), transparent 62%),
-    linear-gradient(145deg, rgba(255,255,255,0.055), rgba(255,255,255,0.016)),
-    rgba(7,9,16,0.58);
+  background: linear-gradient(90deg, rgba(124,92,255,0.08), transparent 48%);
 }
 .notificationsItemAvatarWrap{
   position: relative;
@@ -8820,17 +8800,19 @@ body.notificationsCenterOpen{
     padding: 12px;
   }
   .notificationsCenter{
-    padding: 10px;
+    padding: 0;
   }
   .notificationsCenterCard{
-    border-radius: 24px;
+    border-radius: 22px 22px 0 0;
     max-height: calc(100dvh - 20px);
+    max-width: none;
+    margin: 0;
   }
   .notificationsCenterHead{
-    padding: 20px 16px 12px;
+    padding-right: 40px;
   }
   .notificationsCenterList{
-    padding-inline: 10px;
+    padding-inline: 0;
   }
 }
 

@@ -2204,10 +2204,6 @@ function updateBrandPulse() {
 // the app was force-closed.
 function setCreateSongType(type) {
   const instrumental = type === "instrumental";
-  if (instrumental && typeof resolveVocalReferenceForSubmit === "function" && resolveVocalReferenceForSubmit()) {
-    showToast("Instrumental mode is for Lyrics/Photo starts without a voice reference.", { durationMs: 3200 });
-    return;
-  }
   if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = instrumental ? "1" : "0";
   if (els.vocalModeFull) {
     els.vocalModeFull.classList.toggle("active", !instrumental);
@@ -2219,7 +2215,7 @@ function setCreateSongType(type) {
   }
   if (els.sunoPrompt) {
     els.sunoPrompt.placeholder = instrumental
-      ? "Instrumental mode: lyrics will be ignored. Describe the mood in Style / Tags."
+      ? "Instrumental mode: lyrics will be ignored. Hum a melody or describe the mood in Style / Tags."
       : "Write your lyrics here...";
   }
   if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = instrumental;
@@ -17934,13 +17930,14 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const promptText = String(els.sunoPrompt?.value || "").trim();
     const vocalRefFile = resolveVocalReferenceForSubmit();
     const hasUploadedReference = Boolean(vocalRefFile);
-    // Hum tab is always "AI re-sings on a new arrangement". The
-    // add-instrumental ("voice + band") path is gone; Suno upload-cover
-    // is the only reference route. If lyrics are empty, Gemini drafts
-    // them below before submit so upload-cover never fails with 531.
-    const referenceMode = hasUploadedReference ? "vocal_full" : "none";
+    const instrumentalSelected = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+    // Hum + Vocal uses upload-cover so Suno re-sings the melody. Hum +
+    // Instrumental uses add-instrumental so the recording becomes the
+    // melodic guide without requiring lyrics.
+    const referenceMode = hasUploadedReference
+      ? (instrumentalSelected ? "humming_music" : "vocal_full")
+      : "none";
     const hasReference = hasUploadedReference;
-    const instrumentalOnly = String(els.vocalInstrumentalOnly?.value || "0") === "1" && !hasReference;
 
     if (hasReference && !vocalRefFile) {
       window.alert("Please upload or record audio reference first.");
@@ -17948,14 +17945,16 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
 
     const allowImageOnlyFlow = Boolean(imageMoodAppliedForNextGen);
-    if (!promptText && !vocalRefFile && !allowImageOnlyFlow && !instrumentalOnly) {
+    if (!promptText && !vocalRefFile && !allowImageOnlyFlow && !instrumentalSelected) {
       window.alert("Please write lyrics or apply image mood before generating.");
       return;
     }
     try {
-      const referenceInstrumentalOnly = false;
+      const referenceInstrumentalOnly = Boolean(hasReference && instrumentalSelected);
       const hubRemixLocked = Boolean(currentRemixSource?.id);
-      const modeLabel = instrumentalOnly
+      const modeLabel = referenceInstrumentalOnly
+        ? "Instrumental from melody"
+        : instrumentalSelected
         ? "Instrumental"
         : hasReference
         ? hubRemixLocked
@@ -17997,7 +17996,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const beatStability = String(els.sunoBeatStability?.value || "").trim();
       let finalPrompt = sanitizeLyricsPrompt(userPrompt);
       const imageOnlyInstrumental = Boolean(imageMoodAppliedForNextGen && !finalPrompt && !hasReference);
-      const shouldGenerateInstrumental = Boolean(instrumentalOnly || imageOnlyInstrumental);
+      const shouldGenerateInstrumental = Boolean(instrumentalSelected || imageOnlyInstrumental);
       // Auto-draft lyrics with Gemini when the user hasn't typed any.
       // Hum-tab requires non-empty lyrics: Suno's upload-cover endpoint
       // returns 531 ("extending lyrics empty") otherwise. Same path works
@@ -18109,12 +18108,19 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         voiceProfile: (els.sunoVoiceProfile?.value || "").trim(),
         model: payload.model,
         imageOnlyInstrumental,
-        instrumentalOnly,
+        instrumentalSelected,
+        referenceInstrumentalOnly,
         remixOfHubPostId: currentRemixSource?.id || null,
         ...remixMeta,
       };
       if (shouldGenerateInstrumental) {
-        setStatus(instrumentalOnly ? "Instrumental mode selected: generating without vocals." : "Image-inspired mode with no lyrics detected: generating instrumental.");
+        setStatus(
+          referenceInstrumentalOnly
+            ? "Instrumental mode selected: following your recorded melody."
+            : imageOnlyInstrumental
+            ? "Image-inspired mode with no lyrics detected: generating instrumental."
+            : "Instrumental mode selected: generating without vocals."
+        );
       }
       const data = await trackCreditsAround(
         hasReference ? "Suno: upload reference song" : "Suno: generate song",
@@ -18159,10 +18165,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               } catch {}
             }
             fd.append("action", "add_instrumental");
-            // Hum tab always routes through Suno upload-cover (AI re-sings on
-            // a new arrangement, follows the melody contour of the upload).
-            // Hub remix uses song_remix; everything else is vocal_full.
-            const stemRefMode = hubRemixLocked ? "song_remix" : "vocal_full";
+            // Vocal mode routes through upload-cover. Instrumental mode routes
+            // through add-instrumental so the uploaded hum/melody becomes the guide.
+            const stemRefMode = referenceInstrumentalOnly
+              ? "humming_music"
+              : hubRemixLocked
+              ? "song_remix"
+              : "vocal_full";
             fd.append("referenceMode", stemRefMode);
             const uploadBaseName = sendFile?.name || "vocal-reference.webm";
             const uniqueUploadName = `ref-${Date.now()}-${uploadBaseName.replace(/^.*[/\\]/, "")}`;
@@ -18171,12 +18180,16 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             fd.append("fileType", sendFile?.type || "audio/webm");
             if (sendFp) fd.append("clientFingerprint", sendFp);
             fd.append("style", String(userStyle || "").trim());
-            if (finalPrompt) fd.append("prompt", String(finalPrompt));
+            if (!referenceInstrumentalOnly && finalPrompt) fd.append("prompt", String(finalPrompt));
             fd.append(
               "title",
-              String((els.sunoTitle?.value || "").trim() || "Reference full song")
+              String((els.sunoTitle?.value || "").trim() || (referenceInstrumentalOnly ? "Reference instrumental" : "Reference full song"))
             );
             fd.append("model", LATEST_SUNO_MODEL);
+            if (referenceInstrumentalOnly) {
+              fd.append("audioWeight", "0.95");
+              fd.append("styleWeight", "0.25");
+            }
             if (payload?.vocalGender) fd.append("vocalGender", String(payload.vocalGender));
             if (payload?.voiceTimbre) fd.append("voiceTimbre", String(payload.voiceTimbre));
             if (payload?.songKey) fd.append("songKey", String(payload.songKey));

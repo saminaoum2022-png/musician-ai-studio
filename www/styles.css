@@ -12663,7 +12663,6 @@ button.discoverySpotCard{
   align-items: flex-end;
   justify-content: center;
   box-sizing: border-box;
-  padding-bottom: var(--discover-sheet-bottom-clearance, 0px);
   pointer-events: none;
 }
 .discoverTrackSheet.isOpen{ pointer-events: auto; }
@@ -12674,11 +12673,9 @@ button.discoverySpotCard{
   /* Same canvas family as `body` (--bg #12151e) so the dimmer matches the app. */
   background:
     radial-gradient(90% 70% at 50% 100%, rgba(124,92,255,0.025), transparent 64%),
-    rgba(3, 5, 10, 0.76);
+    rgba(3, 5, 10, 0.70);
   opacity: 0;
   transition: opacity 260ms ease;
-  backdrop-filter: blur(10px) saturate(125%);
-  -webkit-backdrop-filter: blur(10px) saturate(125%);
 }
 .discoverTrackSheet.isOpen .discoverTrackSheetBackdrop{ opacity: 1; }
 .discoverTrackSheetCard{
@@ -12686,7 +12683,7 @@ button.discoverySpotCard{
   isolation: isolate;
   width: 100%;
   max-width: 520px;
-  max-height: calc(100dvh - var(--discover-sheet-bottom-clearance, 0px) - 18px);
+  max-height: calc(100dvh - 18px - env(safe-area-inset-top, 0px));
   margin: 0 12px;
   border-radius: 24px 24px 18px 18px;
   background:
@@ -12850,6 +12847,17 @@ button.discoverySpotCard{
     inset 0 1px 0 rgba(255,255,255,0.045),
     0 10px 28px rgba(0,0,0,0.14);
 }
+.discoverTrackSheetList:empty{
+  display: none;
+}
+.discoverTrackSheetDanger{
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.discoverTrackSheetDanger:empty{
+  display: none;
+}
 .discoverTrackSheetRow{
   width: 100%;
   min-height: 50px;
@@ -12880,7 +12888,6 @@ button.discoverySpotCard{
   background: rgba(124,92,255,0.1);
 }
 .discoverTrackSheetRow--danger{
-  margin-top: 8px;
   color: rgba(255,178,178,0.95);
   border: 1px solid rgba(255,120,120,0.13);
   border-radius: 15px;
@@ -12896,9 +12903,7 @@ button.discoverySpotCard{
 }
 
 @media (max-width: 720px){
-  .discoverTrackSheet{
-    --discover-sheet-bottom-clearance: calc(74px + env(safe-area-inset-bottom, 0px));
-  }
+  body.trackSheetOpen .mobileTabbar{ display: none !important; }
   .searchPage{ padding: 8px 0 28px; gap: 16px; }
   .discoveryPage{ gap: 12px; }
   .discoverySegment{ font-size: 13px; padding: 9px 10px; border-radius: 12px; }
@@ -12923,7 +12928,7 @@ button.discoverySpotCard{
   .searchPosterCta{ font-size: 10px; margin-top: 4px; }
   .searchShelfRow{ gap: 10px; }
   .searchRemixCard{ border-radius: 22px 22px 0 0; margin: 0; }
-  .discoverTrackSheetCard{ border-radius: 22px; margin: 0 10px; max-width: none; }
+  .discoverTrackSheetCard{ border-radius: 22px 22px 0 0; margin: 0 10px; max-width: none; }
 }
 
 /* =================================================================

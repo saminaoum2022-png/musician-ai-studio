@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260517sheetAboveTabbar";
+const APP_BUILD = "20260517attachedActionSheet";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -8327,7 +8327,8 @@ function formatLibrarySheetSubtitle(t) {
 function renderTrackSheetDiscover(ctx) {
   const q = document.getElementById("trackSheetQuickMount");
   const l = document.getElementById("trackSheetListMount");
-  if (!q || !l) return;
+  const d = document.getElementById("trackSheetDangerMount");
+  if (!q || !l || !d) return;
   q.innerHTML = `
     <button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-track-sheet-action="remix">Remix</button>
     <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="player">Player</button>
@@ -8341,6 +8342,8 @@ function renderTrackSheetDiscover(ctx) {
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="profile" id="discoverSheetRowProfile"${hideProfileRow ? " hidden" : ""}>View profile</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="copy">Copy link</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="shuffle">${escapeHtml(shuffleLabel)}</button>
+  `;
+  d.innerHTML = `
     <button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--danger" data-track-sheet-action="report">Report</button>
   `;
 }
@@ -8348,7 +8351,8 @@ function renderTrackSheetDiscover(ctx) {
 function renderTrackSheetLibrary(track) {
   const q = document.getElementById("trackSheetQuickMount");
   const l = document.getElementById("trackSheetListMount");
-  if (!q || !l) return;
+  const d = document.getElementById("trackSheetDangerMount");
+  if (!q || !l || !d) return;
   const kind = String(track?.kind || "full");
   const isInstrumental = kind === "instrumental";
   const isSound = kind === "sound";
@@ -8377,6 +8381,8 @@ function renderTrackSheetLibrary(track) {
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_pubprof" data-track-sheet-pub-to="${pubTo}">${escapeHtml(pubLabel)}</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_details">Song details</button>
     ${isInstrumental ? "" : `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_inst">Get instrumental</button>`}
+  `;
+  d.innerHTML = `
     <button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--danger" data-track-sheet-action="library_del">Delete</button>
   `;
 }
@@ -8384,7 +8390,8 @@ function renderTrackSheetLibrary(track) {
 function renderTrackSheetProfileLib(t) {
   const q = document.getElementById("trackSheetQuickMount");
   const l = document.getElementById("trackSheetListMount");
-  if (!q || !l) return;
+  const d = document.getElementById("trackSheetDangerMount");
+  if (!q || !l || !d) return;
   const kind = String(t?.kind || "full");
   const isSound = kind === "sound";
   const remixEligible = !isSound && Boolean(t?.url && String(t.url).trim());
@@ -8396,7 +8403,8 @@ function renderTrackSheetProfileLib(t) {
     <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="profile_lib_player">Player</button>
     <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="profile_lib_share">Share</button>
   `;
-  l.innerHTML = `
+  l.innerHTML = "";
+  d.innerHTML = `
     <button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--danger" data-track-sheet-action="profile_lib_hide">Hide from public profile</button>
   `;
 }
@@ -8404,7 +8412,8 @@ function renderTrackSheetProfileLib(t) {
 function renderTrackSheetProfileHub(p) {
   const q = document.getElementById("trackSheetQuickMount");
   const l = document.getElementById("trackSheetListMount");
-  if (!q || !l) return;
+  const d = document.getElementById("trackSheetDangerMount");
+  if (!q || !l || !d) return;
   const sid = String(p.id);
   const profilePublic = Boolean(p.publicOnProfile);
   const pathBase = `${location.origin.replace(/\/$/, "")}${location.pathname.replace(/\/$/, "")}`;
@@ -8416,6 +8425,8 @@ function renderTrackSheetProfileHub(p) {
   l.innerHTML = `
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="profile_hub_vis" data-track-sheet-pub-to="${profilePublic ? "private" : "public"}">${profilePublic ? "Hide from public profile" : "Show on public profile"}</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="profile_hub_proof">Proof of creation</button>
+  `;
+  d.innerHTML = `
     <button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--danger" data-track-sheet-action="profile_hub_unpublish">Unpublish from Hub</button>
   `;
 }
@@ -8434,6 +8445,7 @@ function openTrackSheetShell(payload) {
   if (!sheet) return;
   sheet.hidden = false;
   sheet.setAttribute("aria-hidden", "false");
+  document.body.classList.add("trackSheetOpen");
   requestAnimationFrame(() => sheet.classList.add("isOpen"));
   try {
     document.body.style.overflow = "hidden";
@@ -8444,6 +8456,7 @@ function closeTrackOptionsSheet() {
   const sheet = document.getElementById("discoverTrackSheet");
   if (!sheet) return;
   sheet.classList.remove("isOpen");
+  document.body.classList.remove("trackSheetOpen");
   _trackSheetCtx = null;
   try {
     document.body.style.overflow = "";
@@ -8453,8 +8466,10 @@ function closeTrackOptionsSheet() {
     sheet.setAttribute("aria-hidden", "true");
     const q = document.getElementById("trackSheetQuickMount");
     const l = document.getElementById("trackSheetListMount");
+    const d = document.getElementById("trackSheetDangerMount");
     if (q) q.innerHTML = "";
     if (l) l.innerHTML = "";
+    if (d) d.innerHTML = "";
   }, 260);
 }
 

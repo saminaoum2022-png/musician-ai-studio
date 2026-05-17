@@ -17932,10 +17932,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const hasUploadedReference = Boolean(vocalRefFile);
     const instrumentalSelected = String(els.vocalInstrumentalOnly?.value || "0") === "1";
     // Hum + Vocal uses upload-cover so Suno re-sings the melody. Hum +
-    // Instrumental uses add-instrumental so the recording becomes the
-    // melodic guide without requiring lyrics.
+    // Instrumental must stay on upload-cover too, but with `instrumental`
+    // enabled, so Suno creates a new cover-style instrumental instead of
+    // underpainting the original recording.
     const referenceMode = hasUploadedReference
-      ? (instrumentalSelected ? "humming_music" : "vocal_full")
+      ? (instrumentalSelected ? "vocal_instrumental" : "vocal_full")
       : "none";
     const hasReference = hasUploadedReference;
 
@@ -18165,10 +18166,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               } catch {}
             }
             fd.append("action", "add_instrumental");
-            // Vocal mode routes through upload-cover. Instrumental mode routes
-            // through add-instrumental so the uploaded hum/melody becomes the guide.
+            // Both vocal and instrumental melody references stay on upload-cover.
+            // `vocal_instrumental` asks Suno for a cover-style instrumental,
+            // not underpainting/add-instrumental.
             const stemRefMode = referenceInstrumentalOnly
-              ? "humming_music"
+              ? "vocal_instrumental"
               : hubRemixLocked
               ? "song_remix"
               : "vocal_full";

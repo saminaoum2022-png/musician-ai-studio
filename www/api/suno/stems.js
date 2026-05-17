@@ -3,11 +3,11 @@
  *
  * POST /api/suno/stems
  * Modes (action="add_instrumental"):
- *  - referenceMode = "vocal_full" | "vocal_cover" | "song_remix" | "song_cover"
+ *  - referenceMode = "vocal_full" | "vocal_cover" | "song_remix" | "song_cover" | "vocal_instrumental"
  *      -> /api/v1/generate/upload-cover
- *      Suno analyses the uploaded melody and re-sings the user's lyrics on a NEW
- *      arrangement that follows the same melodic contour. THIS is the correct
- *      flow for "I sang/hummed something, sing my lyrics on a new song".
+ *      Suno analyses the uploaded melody and creates a NEW arrangement that
+ *      follows the same melodic contour. `vocal_instrumental` keeps this same
+ *      cover flow but asks Suno for an instrumental result, not underpainting.
  *
  *  - referenceMode = "vocal_extend" | "song_extend"
  *      -> /api/v1/generate/upload-extend
@@ -225,9 +225,10 @@ module.exports = async function handler(req, res) {
       const allowedModels = new Set(["V4_5PLUS", "V5", "V5_5", "V4_5ALL", "V4_5", "V4"]);
       const safeModel = allowedModels.has(requestedModel) ? requestedModel : "V5_5";
 
-      // === Cover mode: melody-following re-sing with new lyrics & arrangement ===
-      const coverModes = new Set(["vocal_full", "vocal_cover", "song_remix", "song_cover"]);
+      // === Cover mode: melody-following new arrangement ===
+      const coverModes = new Set(["vocal_full", "vocal_cover", "song_remix", "song_cover", "vocal_instrumental"]);
       if (coverModes.has(referenceMode)) {
+        const coverInstrumental = referenceMode === "vocal_instrumental";
         // Enrich style with delivery hints that don't fight the melody:
         // dialect, timbre, persona color. Skip rigid timing/key locks so Suno
         // can match the natural feel of the uploaded melody.
@@ -249,20 +250,21 @@ module.exports = async function handler(req, res) {
         const coverPayload = {
           uploadUrl,
           customMode: true,
-          instrumental: false,
+          instrumental: coverInstrumental,
           model: safeModel,
           callBackUrl,
-          prompt: prompt || "",
+          prompt: coverInstrumental ? "" : (prompt || ""),
           style: coverStyle,
-          title: title || "Cover from reference",
+          title: title || (coverInstrumental ? "Instrumental cover from reference" : "Cover from reference"),
           negativeTags: coverNegative,
           styleWeight: 0.5,
-          ...(vocalGender === "m" || vocalGender === "f" ? { vocalGender } : {}),
-          ...(personaId ? { personaId } : {}),
+          ...(!coverInstrumental && (vocalGender === "m" || vocalGender === "f") ? { vocalGender } : {}),
+          ...(!coverInstrumental && personaId ? { personaId } : {}),
         };
         try {
           console.log("[suno/stems] upload-cover payload", {
             title: coverPayload.title,
+            instrumental: coverPayload.instrumental,
             style: coverPayload.style,
             styleLen: coverPayload.style.length,
             promptLen: (coverPayload.prompt || "").length,

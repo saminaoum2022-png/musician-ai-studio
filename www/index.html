@@ -492,7 +492,13 @@
 
               <div class="createPane createPane--lyrics" data-mode="lyrics">
                 <label class="field grow inputPanel">
-                  <div class="label inPanelLabel">Lyrics</div>
+                  <div class="label inPanelLabel lyricsPanelHead">
+                    <span>Lyrics</span>
+                    <span class="vocalModePill lyricsModePill" role="group" aria-label="Song type">
+                      <button id="vocalModeFull" class="ghost active" type="button" aria-pressed="true">Vocal</button>
+                      <button id="vocalModeInstrumental" class="ghost" type="button" aria-pressed="false">Instrumental</button>
+                    </span>
+                  </div>
                   <label class="ghost lyricsAttachBtn srOnly" title="Attach vocal reference">
                     Insert vocal
                     <input id="sunoVocalUpload" type="file" accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.webm" />

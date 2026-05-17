@@ -3564,6 +3564,22 @@ textarea{
   width:100%;
   transition: box-shadow 240ms ease, filter 240ms ease;
 }
+.lyricsPanelHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.lyricsModePill{
+  margin-top:0;
+  flex:0 0 auto;
+}
+.lyricsModePill .ghost{
+  flex:0 0 auto;
+  min-height:28px;
+  padding:5px 10px;
+  font-size:12px;
+}
 .lyricsBoxMain{
   position:relative;
   width:100%;

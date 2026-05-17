@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260518challengesTab";
+const APP_BUILD = "20260518challengePresets";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2748,6 +2748,106 @@ const CHALLENGE_IDEAS = [
   },
 ];
 
+const CHALLENGE_OCCASIONS = [
+  {
+    id: "birthday",
+    label: "Birthday",
+    title: "Birthday Surprise",
+    angle: "a birthday song that feels personal, not generic",
+    lyricSeed: "Mention the person's name like the hook belongs to them.\nMake it warm, celebratory, and easy for friends to sing back.",
+    tags: ["Birthday", "Gift"],
+  },
+  {
+    id: "anniversary",
+    label: "Anniversary",
+    title: "Anniversary Memory",
+    angle: "a romantic anniversary song built around shared memories",
+    lyricSeed: "Write like a private message becoming a chorus.\nInclude a line about time, loyalty, and choosing each other again.",
+    tags: ["Love", "Memory"],
+  },
+  {
+    id: "wedding",
+    label: "Wedding entrance",
+    title: "Wedding Entrance",
+    angle: "a big entrance moment for a couple walking in",
+    lyricSeed: "Make the chorus grand, clap-ready, and family-friendly.\nUse the name as the crowd shout before the drop.",
+    tags: ["Wedding", "Entrance"],
+  },
+  {
+    id: "mom-day",
+    label: "Mom day",
+    title: "For Mom",
+    angle: "an emotional thank-you song for a mother",
+    lyricSeed: "Keep the verse sincere and specific.\nMake the chorus simple: gratitude, protection, and love.",
+    tags: ["Mom", "Thank you"],
+  },
+  {
+    id: "christmas",
+    label: "Christmas",
+    title: "Christmas Glow",
+    angle: "a cozy holiday song with a modern chorus",
+    lyricSeed: "Use winter, lights, home, and family warmth.\nKeep it festive without sounding like a template.",
+    tags: ["Holiday", "Cozy"],
+  },
+  {
+    id: "new-year",
+    label: "New Year",
+    title: "New Year Reset",
+    angle: "a hopeful countdown song for a fresh start",
+    lyricSeed: "Build toward midnight.\nMake the chorus about leaving the old behind and stepping into a better year.",
+    tags: ["Countdown", "Hope"],
+  },
+  {
+    id: "congrats",
+    label: "Congrats",
+    title: "Congratulations",
+    angle: "a proud celebration song for a big win",
+    lyricSeed: "Make it feel like everyone is clapping for the person.\nUse a confident chorus about the work finally paying off.",
+    tags: ["Win", "Proud"],
+  },
+  {
+    id: "prom",
+    label: "Prom day",
+    title: "Prom Night",
+    angle: "a shiny prom-night song made for memories and stories",
+    lyricSeed: "Write about lights, photos, friends, and one unforgettable night.\nKeep the hook young, bright, and cinematic.",
+    tags: ["Prom", "Night"],
+  },
+];
+
+const CHALLENGE_GENRES = [
+  {
+    id: "arabic-pop",
+    label: "Arabic pop",
+    style: "modern Arabic pop, glossy drums, oud sparkle, emotional vocal, radio-ready chorus",
+  },
+  {
+    id: "lev-dabke",
+    label: "Levantine dabke",
+    style: "Levantine dabke pop, mijwiz accents, big claps, driving percussion, crowd-response hook",
+  },
+  {
+    id: "jazz",
+    label: "Jazz soul",
+    style: "warm jazz soul, upright bass, brushed drums, soft piano chords, classy intimate vocal",
+  },
+  {
+    id: "deep-house",
+    label: "Deep house",
+    style: "melodic deep house, warm kick, pulsing bass, airy pads, emotional dance-pop topline",
+  },
+  {
+    id: "fusion",
+    label: "Fusion",
+    style: "Arabic fusion, oud and synth layers, hybrid percussion, cinematic build, modern global pop",
+  },
+  {
+    id: "acoustic",
+    label: "Acoustic",
+    style: "intimate acoustic pop, nylon guitar, soft hand percussion, close vocal, heartfelt chorus",
+  },
+];
+
 /** Non-null when Supabase returned ≥1 active row; merged over `SEARCH_TEMPLATE_FALLBACK` by `id`. */
 let searchTemplatesRemote = null;
 let _searchPeopleFetchGen = 0;
@@ -3124,7 +3224,103 @@ function bindChallengesPageOnce() {
   if (!page || page.dataset.boundChallenges === "1") return;
   page.dataset.boundChallenges = "1";
   const challenges = new Map(CHALLENGE_IDEAS.map((idea) => [String(idea.id), idea]));
+  const occasionRail = document.getElementById("challengeOccasionRail");
+  const genreRail = document.getElementById("challengeGenreRail");
+  const presetGrid = document.getElementById("challengePresetGrid");
+  const nameInput = document.getElementById("challengePersonName");
+  let selectedOccasion = CHALLENGE_OCCASIONS[0]?.id || "";
+  let selectedGenre = CHALLENGE_GENRES[0]?.id || "";
+  const selected = (list, id) => list.find((item) => item.id === id) || list[0] || null;
+  const nameForPrompt = () => String(nameInput?.value || "").trim() || "the person";
+  const buildPresetIdea = (occasion, genre, variant = "anthem") => {
+    const person = nameForPrompt();
+    const variantLabel = variant === "dance"
+      ? "Dance version"
+      : variant === "cinematic"
+        ? "Cinematic version"
+        : "Signature version";
+    const title = `${occasion.title} - ${variantLabel}`;
+    const tempoHint = variant === "dance"
+      ? "112-124 bpm, energetic but polished"
+      : variant === "cinematic"
+        ? "slow cinematic intro into a memorable chorus"
+        : "mid-tempo, polished, emotional but catchy";
+    return {
+      id: `occasion:${occasion.id}:${genre.id}:${variant}`,
+      title,
+      style: `${genre.style}, ${tempoHint}, personalized for ${person}`,
+      prompt: `Create ${occasion.angle} for ${person}.`,
+      lyrics: [
+        `Write a personalized song for ${person}.`,
+        occasion.lyricSeed,
+        variant === "dance"
+          ? "Make the chorus move fast and feel like a celebration."
+          : variant === "cinematic"
+            ? "Start cinematic and intimate, then open into a big emotional hook."
+            : "Make the hook feel custom, catchy, and easy to dedicate.",
+        "Avoid generic greeting-card lines. Use concrete images and a chorus people can remember.",
+      ].join("\n"),
+      tags: [...(occasion.tags || []), genre.label],
+    };
+  };
+  const renderFilters = () => {
+    if (occasionRail) {
+      occasionRail.innerHTML = CHALLENGE_OCCASIONS.map((o) => `
+        <button type="button" class="challengeFilterChip${o.id === selectedOccasion ? " active" : ""}" data-challenge-occasion="${escapeHtml(o.id)}" aria-pressed="${o.id === selectedOccasion ? "true" : "false"}">${escapeHtml(o.label)}</button>
+      `).join("");
+    }
+    if (genreRail) {
+      genreRail.innerHTML = CHALLENGE_GENRES.map((g) => `
+        <button type="button" class="challengeFilterChip challengeFilterChip--genre${g.id === selectedGenre ? " active" : ""}" data-challenge-genre="${escapeHtml(g.id)}" aria-pressed="${g.id === selectedGenre ? "true" : "false"}">${escapeHtml(g.label)}</button>
+      `).join("");
+    }
+  };
+  const renderPresets = () => {
+    if (!presetGrid) return;
+    const occasion = selected(CHALLENGE_OCCASIONS, selectedOccasion);
+    const genre = selected(CHALLENGE_GENRES, selectedGenre);
+    if (!occasion || !genre) return;
+    const variants = ["anthem", "dance", "cinematic"].map((variant) => buildPresetIdea(occasion, genre, variant));
+    presetGrid.innerHTML = variants.map((preset) => `
+      <article class="challengePresetCard">
+        <span class="challengePresetChip">${escapeHtml(genre.label)}</span>
+        <h3>${escapeHtml(preset.title)}</h3>
+        <p>${escapeHtml(preset.prompt)}</p>
+        <div class="challengePresetTags">${(preset.tags || []).slice(0, 3).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</div>
+        <button type="button" data-challenge-preset="${escapeHtml(preset.id)}">Create this</button>
+      </article>
+    `).join("");
+  };
+  const renderPresetLab = () => {
+    renderFilters();
+    renderPresets();
+  };
+  renderPresetLab();
   page.addEventListener("click", (e) => {
+    const occasionBtn = e.target?.closest?.("[data-challenge-occasion]");
+    if (occasionBtn && page.contains(occasionBtn)) {
+      selectedOccasion = String(occasionBtn.getAttribute("data-challenge-occasion") || selectedOccasion);
+      haptic("light");
+      renderPresetLab();
+      return;
+    }
+    const genreBtn = e.target?.closest?.("[data-challenge-genre]");
+    if (genreBtn && page.contains(genreBtn)) {
+      selectedGenre = String(genreBtn.getAttribute("data-challenge-genre") || selectedGenre);
+      haptic("light");
+      renderPresetLab();
+      return;
+    }
+    const presetBtn = e.target?.closest?.("[data-challenge-preset]");
+    if (presetBtn && page.contains(presetBtn)) {
+      const [, occasionId, genreId, variant] = String(presetBtn.getAttribute("data-challenge-preset") || "").split(":");
+      const occasion = selected(CHALLENGE_OCCASIONS, occasionId);
+      const genre = selected(CHALLENGE_GENRES, genreId);
+      if (!occasion || !genre) return;
+      haptic("light");
+      applyDiscoveryIdeaToCreate(buildPresetIdea(occasion, genre, variant || "anthem"));
+      return;
+    }
     const btn = e.target?.closest?.("[data-challenge-start]");
     if (!btn || !page.contains(btn)) return;
     const id = String(btn.getAttribute("data-challenge-start") || "");
@@ -3136,6 +3332,9 @@ function bindChallengesPageOnce() {
       id: `challenge:${challenge.id}`,
       title: `${challenge.title} Challenge`,
     });
+  });
+  nameInput?.addEventListener?.("input", () => {
+    renderPresets();
   });
 }
 

@@ -4196,6 +4196,7 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
 .profileAuraIconBtn{
   -webkit-appearance: none;
   appearance: none;
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4225,6 +4226,19 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
     inset 0 -1px 0 rgba(0, 0, 0, 0.08);
 }
 .profileAuraIconBtn:active{ transform: scale(0.96); }
+.profileAuraIconBtn.hasNotice::after{
+  content: "";
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ff4d6d, #ff8aa2);
+  box-shadow:
+    0 0 0 2px rgba(5, 7, 13, 0.94),
+    0 0 12px rgba(255, 77, 109, 0.72);
+}
 .profileAuraIconBtn svg{
   width: 18px;
   height: 18px;
@@ -8012,6 +8026,16 @@ input::placeholder, textarea::placeholder{
     border-radius:999px;
     background:#35d5ab;
     box-shadow:0 0 8px rgba(53,213,171,0.85);
+  }
+  .mobileTabbar a[data-route-link="profile"].hasNotice::after{
+    top: 6px;
+    right: 23%;
+    width: 8px;
+    height: 8px;
+    background: linear-gradient(135deg, #ff4d6d, #ff8aa2);
+    box-shadow:
+      0 0 0 2px rgba(3, 5, 10, 0.95),
+      0 0 12px rgba(255,77,109,0.74);
   }
 .mobileTabbar a:active{
   transform: scale(0.96);

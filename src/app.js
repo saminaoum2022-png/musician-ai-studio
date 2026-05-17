@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260517newButtonReset";
+const APP_BUILD = "20260517profileNotifyBadge";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -450,6 +450,7 @@ const els = {
   hubDotRemix: document.getElementById("hubDotRemix"),
   hubTabDot: document.getElementById("hubTabDot"),
   libraryTabDot: document.getElementById("libraryTabDot"),
+  profileTabLink: document.querySelector('.mobileTabbar [data-route-link="profile"]'),
   hubTabLink: document.querySelector('.mobileTabbar [data-route-link="hub"]'),
   hubNowPlaying: document.getElementById("hubNowPlaying"),
   hubNowArt: document.getElementById("hubNowArt"),
@@ -1873,6 +1874,7 @@ const TAB_REFRESH_ACTIONS = {
   profile() {
     void Promise.resolve(refreshMyCredits({ silent: true })).catch(() => {});
     void Promise.resolve(refreshMyHubPostsFast({ force: true })).catch(() => {});
+    void Promise.resolve(refreshNotificationsUnreadBadge({ force: true })).catch(() => {});
   },
   library() {
     void Promise.resolve(reconcileLibraryFromCloud({ force: true }))
@@ -1962,6 +1964,57 @@ function syncLibraryTabDotFromStorage() {
   markLibraryTabDot(stored === "1");
 }
 
+let _notificationsUnreadCount = 0;
+let _notificationsUnreadFetchInFlight = false;
+let _notificationsUnreadLastFetchedAt = 0;
+function updateNotificationsEntryBadges(unreadCount) {
+  const unread = Math.max(0, Number(unreadCount || 0));
+  _notificationsUnreadCount = unread;
+  const hasUnread = unread > 0;
+  const label = hasUnread
+    ? `Profile, ${unread} unread ${unread === 1 ? "notification" : "notifications"}`
+    : "Profile";
+  try {
+    els.profileTabLink?.classList?.toggle?.("hasNotice", hasUnread);
+    els.profileTabLink?.setAttribute?.("aria-label", label);
+  } catch {}
+  try {
+    els.btnProfileNotifications?.classList?.toggle?.("hasNotice", hasUnread);
+    els.btnProfileNotifications?.setAttribute?.(
+      "aria-label",
+      hasUnread
+        ? `Notifications, ${unread} unread`
+        : "Notifications",
+    );
+  } catch {}
+  if (els.settingsNotificationsSub) {
+    els.settingsNotificationsSub.textContent = hasUnread
+      ? `${unread} unread ${unread === 1 ? "notification" : "notifications"}.`
+      : "You are all caught up.";
+  }
+}
+
+async function refreshNotificationsUnreadBadge({ force = false } = {}) {
+  if (!authSession?.user?.id) {
+    updateNotificationsEntryBadges(0);
+    return;
+  }
+  const now = Date.now();
+  if (_notificationsUnreadFetchInFlight) return;
+  if (!force && now - _notificationsUnreadLastFetchedAt < 45000) return;
+  _notificationsUnreadFetchInFlight = true;
+  try {
+    const data = await socialApi("/api/social?type=notifications");
+    const list = Array.isArray(data?.notifications) ? data.notifications : [];
+    updateNotificationsEntryBadges(list.filter((n) => !n?.read_at).length);
+    _notificationsUnreadLastFetchedAt = now;
+  } catch (e) {
+    console.warn("[notifications/badge]", e);
+  } finally {
+    _notificationsUnreadFetchInFlight = false;
+  }
+}
+
 function applyRoute() {
   const hash = String(location.hash || "");
   const rawRoute = hash.startsWith("#/") ? hash.slice(2) : "generate";
@@ -2036,6 +2089,11 @@ function applyRoute() {
   document.querySelectorAll("[data-route-link]").forEach((a) => {
     a.classList.toggle("active", a.getAttribute("data-route-link") === wanted);
   });
+  if (isLoggedIn) {
+    void refreshNotificationsUnreadBadge({ force: wanted === "profile" || wanted === "settings" });
+  } else {
+    updateNotificationsEntryBadges(0);
+  }
   const main = document.querySelector("main.grid");
   if (main) {
     main.classList.remove("routeSwap");
@@ -7591,10 +7649,11 @@ async function refreshNotificationsCenter() {
         ? `${unread} unread ${unread === 1 ? "notification" : "notifications"}.`
         : "You are all caught up.";
     }
+    updateNotificationsEntryBadges(unread);
     if (unread) void socialApi("/api/social", {
       method: "POST",
       body: JSON.stringify({ action: "mark_notifications_read" }),
-    }).catch(() => {});
+    }).then(() => updateNotificationsEntryBadges(0)).catch(() => {});
   } catch (e) {
     if (els.notificationsCenterStatus) {
       els.notificationsCenterStatus.hidden = false;

@@ -12209,8 +12209,8 @@ button.discoverySpotCard{
   inset: 0;
   /* Same canvas family as `body` (--bg #12151e) so the dimmer matches the app. */
   background:
-    radial-gradient(90% 70% at 50% 100%, rgba(124,92,255,0.035), transparent 64%),
-    rgba(3, 5, 10, 0.74);
+    radial-gradient(90% 70% at 50% 100%, rgba(124,92,255,0.025), transparent 64%),
+    rgba(3, 5, 10, 0.76);
   opacity: 0;
   transition: opacity 260ms ease;
   backdrop-filter: blur(10px) saturate(125%);
@@ -12225,10 +12225,8 @@ button.discoverySpotCard{
   margin: 0 12px;
   border-radius: 24px 24px 18px 18px;
   background:
-    radial-gradient(115% 82% at 12% 0%, rgba(255,255,255,0.045), transparent 56%),
-    radial-gradient(110% 86% at 100% 12%, rgba(35,213,171,0.024), transparent 62%),
-    linear-gradient(145deg, rgba(255,255,255,0.058), rgba(255,255,255,0.018)),
-    rgba(5,7,13,0.90);
+    radial-gradient(110% 72% at 8% 0%, rgba(124,92,255,0.045), transparent 58%),
+    linear-gradient(180deg, rgba(10,13,21,0.985), rgba(5,7,13,0.995));
   border: 1px solid rgba(255,255,255,0.115);
   padding: 10px 14px calc(22px + env(safe-area-inset-bottom));
   display: flex;
@@ -12244,20 +12242,11 @@ button.discoverySpotCard{
     inset 0 1px 0 rgba(255,255,255,0.105),
     inset 0 -1px 0 rgba(0,0,0,0.18),
     0 0 0 1px rgba(124,92,255,0.025);
-  -webkit-backdrop-filter: blur(34px) saturate(175%);
-  backdrop-filter: blur(34px) saturate(175%);
+  -webkit-backdrop-filter: blur(18px) saturate(125%);
+  backdrop-filter: blur(18px) saturate(125%);
 }
 .discoverTrackSheetCard::before{
-  content:"";
-  position:absolute;
-  inset:0;
-  z-index:0;
-  pointer-events:none;
-  border-radius:inherit;
-  background:
-    radial-gradient(78% 72% at 16% 0%, rgba(255,255,255,0.055), transparent 54%),
-    linear-gradient(108deg, rgba(255,255,255,0.048) 0%, rgba(255,255,255,0.014) 38%, transparent 64%);
-  opacity:0.76;
+  display:none;
 }
 .discoverTrackSheetCard > *{
   position: relative;

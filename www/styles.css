@@ -10533,15 +10533,13 @@ body[data-route="discover"][data-discovery-segment="ideas"]::before{
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(105% 82% at 20% -12%, rgba(124,92,255,0.24), transparent 60%),
-    radial-gradient(95% 70% at 100% -6%, rgba(35,213,171,0.12), transparent 58%),
-    linear-gradient(180deg, rgba(124,92,255,0.055), transparent 78%);
+    radial-gradient(ellipse 90% 70% at 50% -14%, rgba(124,92,255,0.13), transparent 56%),
+    radial-gradient(ellipse 62% 46% at 100% 8%, rgba(56,189,248,0.055), transparent 50%);
 }
 body[data-route="discover"][data-discovery-segment="ideas"]::before{
   background:
-    radial-gradient(105% 82% at 18% -10%, rgba(124,92,255,0.24), transparent 60%),
-    radial-gradient(90% 72% at 96% -6%, rgba(35,213,171,0.14), transparent 58%),
-    linear-gradient(180deg, rgba(124,92,255,0.06), transparent 78%);
+    radial-gradient(ellipse 92% 72% at 46% -14%, rgba(124,92,255,0.12), transparent 57%),
+    radial-gradient(ellipse 68% 50% at 100% 8%, rgba(35,213,171,0.075), transparent 52%);
 }
 body[data-route="discover"] > .app{
   position: relative;
@@ -10587,14 +10585,13 @@ body[data-route="discover"] > .app{
 }
 .discoveryIdeasAmbient{
   position: absolute;
-  inset: -96px -18px 42%;
+  inset: -82px -14px 42%;
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(92% 74% at 18% -8%, rgba(124,92,255,0.22), transparent 60%),
-    radial-gradient(80% 58% at 96% 10%, rgba(35,213,171,0.11), transparent 54%),
-    radial-gradient(72% 52% at 50% 14%, rgba(255,255,255,0.055), transparent 58%);
-  opacity: 0.95;
+    radial-gradient(ellipse 90% 70% at 50% -10%, rgba(124,92,255,0.16), transparent 56%),
+    radial-gradient(ellipse 62% 46% at 100% 18%, rgba(35,213,171,0.075), transparent 52%);
+  opacity: 0.9;
 }
 .discoveryIdeasHead,
 .discoveryIdeasFeature,
@@ -11068,13 +11065,13 @@ body[data-route="discover"] > .app{
 }
 .discoveryPaneStudio .discoveryStudioAmbient{
   position: absolute;
-  inset: -96px -18px 40%;
+  inset: -82px -14px 40%;
   background:
-    radial-gradient(ellipse 92% 74% at 50% -12%, rgba(124,92,255,0.28), transparent 58%),
-    radial-gradient(ellipse 60% 45% at 100% 20%, rgba(56,189,248,0.12), transparent 50%);
+    radial-gradient(ellipse 90% 70% at 50% -10%, rgba(124,92,255,0.16), transparent 56%),
+    radial-gradient(ellipse 62% 46% at 100% 18%, rgba(56,189,248,0.06), transparent 52%);
   pointer-events: none;
   z-index: 0;
-  opacity: 0.95;
+  opacity: 0.9;
 }
 .discoveryPaneFollowing .discoveryStudioAmbient{
   position: absolute;

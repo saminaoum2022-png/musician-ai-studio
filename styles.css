@@ -8540,46 +8540,73 @@ body.notificationsCenterOpen{
 .notificationsCenterBackdrop{
   position: absolute;
   inset: 0;
-  background: rgba(2,6,14,0.68);
-  -webkit-backdrop-filter: blur(12px) saturate(120%);
-          backdrop-filter: blur(12px) saturate(120%);
+  background:
+    radial-gradient(90% 70% at 50% 100%, rgba(124,92,255,0.035), transparent 64%),
+    rgba(3, 5, 10, 0.74);
+  -webkit-backdrop-filter: blur(10px) saturate(125%);
+          backdrop-filter: blur(10px) saturate(125%);
 }
 .notificationsCenterCard{
   position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: calc(10px + env(safe-area-inset-bottom));
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+  max-width: 520px;
+  margin: 0 auto;
   max-height: min(82vh, 720px);
   display: flex;
   flex-direction: column;
+  gap: 14px;
   overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 28px;
+  isolation: isolate;
+  border: 1px solid rgba(255,255,255,0.115);
+  border-radius: 24px 24px 18px 18px;
   background:
-    radial-gradient(120% 90% at 12% 0%, rgba(124,92,255,0.18), transparent 58%),
-    radial-gradient(100% 85% at 100% 4%, rgba(35,213,171,0.11), transparent 62%),
-    linear-gradient(180deg, rgba(18,26,42,0.94), rgba(7,10,18,0.97));
-  padding: 10px 14px 14px;
-  box-shadow: 0 28px 80px rgba(0,0,0,0.58), inset 0 1px 0 rgba(255,255,255,0.08);
-  -webkit-backdrop-filter: blur(24px) saturate(150%);
-          backdrop-filter: blur(24px) saturate(150%);
+    radial-gradient(115% 82% at 12% 0%, rgba(255,255,255,0.045), transparent 56%),
+    radial-gradient(110% 86% at 100% 12%, rgba(35,213,171,0.024), transparent 62%),
+    linear-gradient(145deg, rgba(255,255,255,0.058), rgba(255,255,255,0.018)),
+    rgba(5,7,13,0.90);
+  padding: 10px 14px calc(22px + env(safe-area-inset-bottom));
+  box-shadow:
+    0 -16px 54px rgba(0,0,0,0.46),
+    inset 0 1px 0 rgba(255,255,255,0.105),
+    inset 0 -1px 0 rgba(0,0,0,0.18),
+    0 0 0 1px rgba(124,92,255,0.025);
+  -webkit-backdrop-filter: blur(34px) saturate(175%);
+          backdrop-filter: blur(34px) saturate(175%);
+}
+.notificationsCenterCard::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:0;
+  pointer-events:none;
+  border-radius:inherit;
+  background:
+    radial-gradient(78% 72% at 16% 0%, rgba(255,255,255,0.055), transparent 54%),
+    linear-gradient(108deg, rgba(255,255,255,0.048) 0%, rgba(255,255,255,0.014) 38%, transparent 64%);
+  opacity:0.76;
+}
+.notificationsCenterCard > *{
+  position: relative;
+  z-index: 1;
 }
 .notificationsCenterGrab{
-  width: 42px;
-  height: 4px;
-  margin: 2px auto 12px;
+  width: 40px;
+  height: 5px;
+  margin: 4px auto 2px;
   border-radius: 999px;
-  background: rgba(232,238,247,0.26);
+  background: rgba(232,238,247,0.22);
 }
 .notificationsCenterHead{
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding: 0 2px 12px;
+  padding: 0 40px 0 0;
 }
 .notificationsCenterKicker{
   margin: 0 0 4px;
-  color: rgba(162,178,205,0.74);
+  color: rgba(220,228,250,0.58);
   font-size: 11px;
   font-weight: 850;
   letter-spacing: 0.12em;
@@ -8587,28 +8614,35 @@ body.notificationsCenterOpen{
 }
 .notificationsCenterHead h2{
   margin: 0;
-  color: rgba(248,251,255,0.98);
+  color: #f6f8ff;
   font-size: 22px;
-  line-height: 1.08;
+  line-height: 1.05;
   letter-spacing: -0.03em;
 }
 .notificationsCenterLead{
   margin: 8px 0 0;
-  color: rgba(223,231,251,0.60);
+  color: rgba(220,228,250,0.62);
   font-size: 13px;
   line-height: 1.45;
 }
 .notificationsCenterClose{
+  position: absolute;
+  top: 12px;
+  right: 12px;
   width: 34px;
   height: 34px;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.11);
   border-radius: 999px;
-  background: rgba(255,255,255,0.06);
-  color: rgba(238,244,255,0.9);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.065), rgba(255,255,255,0.018)),
+    rgba(5,7,13,0.78);
+  color: #e8eef7;
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+          backdrop-filter: blur(22px) saturate(160%);
 }
 .notificationsCenterClose svg{
   width: 19px;
@@ -8619,34 +8653,45 @@ body.notificationsCenterOpen{
   stroke-linecap: round;
 }
 .notificationsCenterStatus{
-  margin: 0 2px 12px;
-  color: rgba(223,231,251,0.66);
+  margin: 0;
+  color: rgba(220,228,250,0.62);
   font-size: 13px;
 }
 .notificationsCenterList{
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   overflow: auto;
-  padding: 0 2px 4px;
+  padding: 6px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.085);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012)),
+    rgba(5,7,13,0.50);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.045),
+    0 10px 28px rgba(0,0,0,0.14);
+  -webkit-backdrop-filter: blur(20px) saturate(155%);
+          backdrop-filter: blur(20px) saturate(155%);
   -webkit-overflow-scrolling: touch;
 }
 .notificationsItem{
   position: relative;
   display: flex;
   gap: 12px;
-  padding: 13px;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 20px;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,0.075);
+  border-radius: 16px;
   background:
-    radial-gradient(90% 120% at 0% 0%, rgba(124,92,255,0.08), transparent 62%),
-    rgba(255,255,255,0.045);
+    linear-gradient(145deg, rgba(255,255,255,0.042), rgba(255,255,255,0.014)),
+    rgba(5,7,13,0.48);
 }
 .notificationsItem.isUnread{
-  border-color: rgba(124,92,255,0.30);
+  border-color: rgba(124,92,255,0.24);
   background:
-    radial-gradient(90% 120% at 0% 0%, rgba(124,92,255,0.16), transparent 62%),
-    rgba(255,255,255,0.065);
+    radial-gradient(110% 90% at 8% 0%, rgba(124,92,255,0.16), transparent 62%),
+    linear-gradient(145deg, rgba(255,255,255,0.055), rgba(255,255,255,0.016)),
+    rgba(7,9,16,0.58);
 }
 .notificationsItemAvatarWrap{
   position: relative;

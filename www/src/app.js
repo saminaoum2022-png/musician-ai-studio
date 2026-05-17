@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260517publicRemixMeta";
+const APP_BUILD = "20260517publicRemixUrl";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4156,7 +4156,16 @@ async function startHubRemix(post) {
   try {
     setStatus("Loading remix source…");
     showToast("Loading remix source…", { icon: "♪", durationMs: 1600 });
-    const blob = await fetchAudioForRemix(post.url);
+    let remixAudioUrl = String(post.url || "").trim();
+    try {
+      const refreshed = await tryRefreshLibraryTrackAudioFromSuno({
+        taskId: post.taskId || post?.meta?.taskId || "",
+        audioId: post.audioId || post?.meta?.audioId || "",
+        url: unwrapInnermostHttpAudioUrl(remixAudioUrl) || remixAudioUrl,
+      });
+      if (refreshed?.url) remixAudioUrl = String(refreshed.url).trim();
+    } catch {}
+    const blob = await fetchAudioForRemix(remixAudioUrl);
     const mime = blob.type && blob.type !== "application/octet-stream" ? blob.type : "audio/mpeg";
     const ext = mime.includes("mpeg") ? "mp3" : (mime.split("/")[1] || "mp3").split(";")[0];
     const safeBase = String(post.title || "remix-source")
@@ -4174,7 +4183,7 @@ async function startHubRemix(post) {
       title: post.title || "",
       creator: post.creator || "",
       coverUrl: post.artUrl || "",
-      originalUrl: post.url || "",
+      originalUrl: remixAudioUrl || post.url || "",
       meta: post.meta || null,
     });
     if (els.sunoPrompt) els.sunoPrompt.value = String(post?.meta?.lyricsInput || "").trim();
@@ -8351,6 +8360,8 @@ function runTrackSheetAction(action, sourceEl) {
           title: ctx.title,
           creator: ctx.handle || "",
           artUrl: ctx.art,
+          taskId: ctx.taskId || "",
+          audioId: ctx.audioId || "",
           meta: remixMeta,
         });
       })();

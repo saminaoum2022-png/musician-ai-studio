@@ -13947,6 +13947,13 @@ body[data-route="challenges"] .app{
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+.challengeNameField small{
+  color: rgba(94,234,212,0.68);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
 .challengeNameField input{
   width: 100%;
   min-height: 44px;
@@ -13961,6 +13968,15 @@ body[data-route="challenges"] .app{
 .challengeNameField input:focus{
   border-color: rgba(94,234,212,0.45);
   box-shadow: 0 0 0 3px rgba(94,234,212,0.11);
+}
+.challengeNameField.isRequired input{
+  border-color: rgba(248,113,113,0.78);
+  box-shadow:
+    0 0 0 3px rgba(248,113,113,0.14),
+    0 0 28px rgba(248,113,113,0.16);
+}
+.challengeNameField.isRequired small{
+  color: rgba(254,202,202,0.92);
 }
 .challengeRailBlock{
   margin-top: 16px;

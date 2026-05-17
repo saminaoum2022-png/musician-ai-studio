@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260518challengeWrapFix";
+const APP_BUILD = "20260518challengeNameRequired";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -3231,9 +3231,17 @@ function bindChallengesPageOnce() {
   let selectedOccasion = CHALLENGE_OCCASIONS[0]?.id || "";
   let selectedGenre = CHALLENGE_GENRES[0]?.id || "";
   const selected = (list, id) => list.find((item) => item.id === id) || list[0] || null;
-  const nameForPrompt = () => String(nameInput?.value || "").trim() || "the person";
+  const nameForPrompt = () => String(nameInput?.value || "").trim();
+  const requireChallengeName = () => {
+    if (nameForPrompt()) return true;
+    try { nameInput?.focus?.({ preventScroll: true }); } catch {}
+    try { nameInput?.scrollIntoView?.({ behavior: "smooth", block: "center" }); } catch {}
+    try { nameInput?.closest?.(".challengeNameField")?.classList?.add?.("isRequired"); } catch {}
+    try { showToast("Add the person's name first", { icon: "✍", durationMs: 2600 }); } catch {}
+    return false;
+  };
   const buildPresetIdea = (occasion, genre, variant = "anthem") => {
-    const person = nameForPrompt();
+    const person = nameForPrompt() || "someone special";
     const variantLabel = variant === "dance"
       ? "Dance version"
       : variant === "cinematic"
@@ -3313,6 +3321,7 @@ function bindChallengesPageOnce() {
     }
     const presetBtn = e.target?.closest?.("[data-challenge-preset]");
     if (presetBtn && page.contains(presetBtn)) {
+      if (!requireChallengeName()) return;
       const [, occasionId, genreId, variant] = String(presetBtn.getAttribute("data-challenge-preset") || "").split(":");
       const occasion = selected(CHALLENGE_OCCASIONS, occasionId);
       const genre = selected(CHALLENGE_GENRES, genreId);
@@ -3334,6 +3343,7 @@ function bindChallengesPageOnce() {
     });
   });
   nameInput?.addEventListener?.("input", () => {
+    try { nameInput.closest?.(".challengeNameField")?.classList?.remove?.("isRequired"); } catch {}
     renderPresets();
   });
 }

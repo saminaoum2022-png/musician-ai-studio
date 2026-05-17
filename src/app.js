@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260517playerReleaseNote";
+const APP_BUILD = "20260517remixPlayerBadge";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -315,6 +315,8 @@ const els = {
   playerArt: document.getElementById("playerArt"),
   playerTitle: document.getElementById("playerTitle"),
   playerSubtitle: document.getElementById("playerSubtitle"),
+  playerRemixAttribution: document.getElementById("playerRemixAttribution"),
+  playerRemixAttributionText: document.getElementById("playerRemixAttributionText"),
   playerReleaseNote: document.getElementById("playerReleaseNote"),
   playerReleaseNoteText: document.getElementById("playerReleaseNoteText"),
   btnLoadFull: document.getElementById("btnLoadFull"),
@@ -4046,12 +4048,25 @@ function remixAttributionForTrack(track) {
   return { ...remixOf, title: title || "Original song", creatorUsername, songId, ownerUserId };
 }
 
-function remixSourceLineHtml(track) {
-  const remixOf = remixAttributionForTrack(track);
+function remixIconSvgHtml() {
+  return `<svg class="remixIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h3.4c1.6 0 3 .8 3.8 2.1l1.1 1.8"/><path d="M7 17h3.4c1.6 0 3-.8 3.8-2.1l1.1-1.8"/><path d="M17 6l3 3-3 3"/><path d="M17 12l3 3-3 3"/><path d="M4 7h3"/><path d="M4 17h3"/></svg>`;
+}
+
+function remixPillHtml(label = "Remix") {
+  return `<span class="remixAttributionPill">${remixIconSvgHtml()}<span>${escapeHtml(label)}</span></span>`;
+}
+
+function remixAttributionText(remixOf) {
   if (!remixOf) return "";
   const who = remixOf.creatorUsername ? `@${remixOf.creatorUsername}` : "original creator";
   const sourceTitle = remixOf.title ? ` · ${remixOf.title}` : "";
-  return `<span class="remixAttributionLine"><span class="remixAttributionPill">Remix</span><span>Remixed from ${escapeHtml(who)}${escapeHtml(sourceTitle)}</span></span>`;
+  return `Remixed from ${who}${sourceTitle}`;
+}
+
+function remixSourceLineHtml(track) {
+  const remixOf = remixAttributionForTrack(track);
+  if (!remixOf) return "";
+  return `<span class="remixAttributionLine">${remixPillHtml()}<span>${escapeHtml(remixAttributionText(remixOf))}</span></span>`;
 }
 
 function releaseCaptionForTrack(track) {
@@ -4068,6 +4083,12 @@ function setPlayerReleaseNote(caption) {
   const note = String(caption || "").trim();
   if (els.playerReleaseNoteText) els.playerReleaseNoteText.textContent = note;
   if (els.playerReleaseNote) els.playerReleaseNote.hidden = !note;
+}
+
+function setPlayerRemixAttribution(remixOf) {
+  const text = remixAttributionText(remixOf);
+  if (els.playerRemixAttributionText) els.playerRemixAttributionText.textContent = text;
+  if (els.playerRemixAttribution) els.playerRemixAttribution.hidden = !text;
 }
 
 function publicPlaybackTrackBySource(source, rawUrl = "") {
@@ -8519,6 +8540,7 @@ async function playLibraryListRowById(id, opts) {
     subtitle: "Library · Full song",
     artUrl: (t.meta && t.meta.imageUrl) || t.artUrl || placeholderCoverDataUrl(),
     releaseCaption: releaseCaptionForTrack(t),
+    remixOf: remixAttributionForTrack(t),
   };
   setPlayerMeta(meta);
   miniSource = { type: "library", id };
@@ -9367,7 +9389,7 @@ function discoverySpotCardHtml(t, profMap, idx) {
           <span class="discoverySpotCardTextRow">
             <span class="discoverySpotCardTextCol">
               <span class="discoverySpotCardTitle">${safeTitle}</span>
-              <span class="discoverySpotCardBy">${remixOf ? `<span class="remixAttributionPill">Remix</span> ` : ""}${escapeHtml(byLine)}</span>
+              <span class="discoverySpotCardBy">${remixOf ? `${remixPillHtml()} ` : ""}${escapeHtml(byLine)}</span>
               ${releaseCaption ? `<span class="discoverySpotCardCaption">${escapeHtml(releaseCaption)}</span>` : ""}
             </span>
             <span class="discoverySpotCardEq" aria-hidden="true"><span></span><span></span><span></span></span>
@@ -9604,6 +9626,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   const playSource = opts?.playSource && opts.playSource.songId ? opts.playSource : null;
   const publicTrackMeta = playSource ? publicPlaybackTrackBySource(playSource, raw) : null;
   const releaseCaption = releaseCaptionForTrack(publicTrackMeta) || String(publicTrackMeta?.releaseCaption || "").trim();
+  const remixOf = remixAttributionForTrack(publicTrackMeta);
   try {
     stopHubPlayback();
   } catch {}
@@ -9627,8 +9650,10 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     meta: {
       ...(publicTrackMeta?.meta || {}),
       ...(releaseCaption ? { releaseCaption } : {}),
+      ...(remixOf ? { remixOf } : {}),
     },
     releaseCaption,
+    remixOf,
   };
   const publicSource = fromDiscover
     ? { type: "discover_feed", url: playableRaw, ...(playSource || {}) }
@@ -9644,6 +9669,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     subtitle: fromDiscover ? byLine || "Discover feed" : "Public profile",
     artUrl: artUrl || placeholderCoverDataUrl(),
     releaseCaption,
+    remixOf,
   };
   if (!openPlayer) {
     setPlayerMeta(meta);
@@ -14542,7 +14568,6 @@ function openSongDetailsModal(track) {
         ${songDetailsRow("Type", kindLabel)}
         ${songDetailsRow("Visibility", track?.publicOnProfile ? "Public profile" : "Private library")}
         ${songDetailsRow("Mode", mode)}
-        ${remixOf ? songDetailsRow("Remix", remixSummary) : ""}
       </div>
     </section>
 
@@ -14553,6 +14578,16 @@ function openSongDetailsModal(track) {
         ${songDetailsRow("Voice", voice)}
       </div>
     </section>
+
+    ${remixOf ? `
+    <section class="songDetailsSection">
+      <div class="songDetailsSectionTitle">Remix source</div>
+      <div class="songDetailsRemixCard">
+        ${remixPillHtml()}
+        <div class="songDetailsRemixText">${escapeHtml(remixSummary)}</div>
+      </div>
+    </section>
+    ` : ""}
 
     ${releaseCaption ? `
     <section class="songDetailsSection">
@@ -15509,11 +15544,12 @@ function placeholderCoverDataUrl() {
   return "./assets/nabadai-logo.png";
 }
 
-function setPlayerMeta({ title, subtitle, artUrl, releaseCaption } = {}) {
+function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf } = {}) {
   const hasTrack = Boolean(artUrl);
   if (els.playerTitle) els.playerTitle.textContent = title || "Now Playing";
   if (els.playerSubtitle) els.playerSubtitle.textContent = subtitle || "";
   if (els.playerArt) els.playerArt.src = artUrl || placeholderCoverDataUrl();
+  setPlayerRemixAttribution(remixOf || remixAttributionForTrack(currentPlayerTrackRef));
   setPlayerReleaseNote(releaseCaption);
   const artWrap = document.querySelector(".playerArtWrap");
   if (artWrap) {

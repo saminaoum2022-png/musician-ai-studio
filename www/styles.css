@@ -970,6 +970,7 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   flex: 0 0 auto;
   height: 18px;
   padding: 0 7px;
@@ -984,6 +985,15 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   letter-spacing: 0.04em;
   text-transform: uppercase;
   box-shadow: 0 0 16px rgba(124,92,255,0.16);
+}
+.remixIcon{
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .libRowChip{
   display: inline-flex;
@@ -3125,7 +3135,8 @@ body.hubJumpingToTop #hubList .hubRow{
   display: none !important;
   margin-top: 0;
 }
-.playerReleaseNote{
+.playerReleaseNote,
+.playerRemixAttribution{
   width: min(100%, 420px);
   margin: 14px auto 0;
   padding: 12px 14px;
@@ -3137,8 +3148,47 @@ body.hubJumpingToTop #hubList .hubRow{
   box-shadow: 0 14px 34px rgba(0,0,0,0.22);
   text-align: start;
 }
-.playerReleaseNote[hidden]{
+.playerReleaseNote[hidden],
+.playerRemixAttribution[hidden]{
   display: none !important;
+}
+.playerRemixAttribution{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.playerRemixAttributionBadge{
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(167,139,250,0.32);
+  background:
+    linear-gradient(135deg, rgba(124,92,255,0.30), rgba(56,189,248,0.17)),
+    rgba(255,255,255,0.045);
+  color: rgba(239,244,255,0.94);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  box-shadow: 0 0 18px rgba(124,92,255,0.18);
+}
+.playerRemixAttributionBadge .remixIcon{
+  width: 13px;
+  height: 13px;
+}
+.playerRemixAttributionText{
+  min-width: 0;
+  color: rgba(232,238,247,0.80);
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .playerReleaseNoteLabel{
   margin-bottom: 5px;
@@ -7573,6 +7623,28 @@ input[type="range"]::-moz-range-thumb{
   font-style: italic;
   line-height: 1.5;
   overflow-wrap: anywhere;
+}
+.songDetailsRemixCard{
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 10px;
+  padding: 12px 13px;
+  border-radius: 17px;
+  border: 1px solid rgba(167,139,250,0.20);
+  background:
+    linear-gradient(145deg, rgba(124,92,255,0.14), rgba(56,189,248,0.07)),
+    rgba(255,255,255,0.035);
+}
+.songDetailsRemixText{
+  min-width: 0;
+  color: rgba(232,238,247,0.82);
+  font-size: 12.5px;
+  font-weight: 750;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .songDetailsSectionHead{
   display:flex;

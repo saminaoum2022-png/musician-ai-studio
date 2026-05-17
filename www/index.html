@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260517remixAttribution" />
+    <link rel="stylesheet" href="./styles.css?v=20260517publishReleaseSheet" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -129,7 +129,7 @@
         <section class="card wide librarySection" data-route="library">
           <header class="libraryHeader appScreenHeader">
             <h2 class="appScreenTitle">Library</h2>
-            <p class="libraryLead appScreenLead"><strong>⋯</strong> on a row opens a bottom sheet: <strong>Remix</strong>, downloads, <strong>Show / hide on public profile</strong>, and more. Songs stay on this device.</p>
+            <p class="libraryLead appScreenLead"><strong>⋯</strong> on a row opens a bottom sheet: <strong>Remix</strong>, downloads, <strong>Publish release</strong>, and more. Songs stay private until you publish.</p>
             <div class="libraryHeaderRow">
               <p id="libraryCount" class="libraryCount" hidden aria-live="polite"></p>
               <button
@@ -1247,7 +1247,7 @@
                   <span>Trim</span>
                 </button>
                 <span class="playerMiniDot" aria-hidden="true"></span>
-                <button id="btnShareFullHub" class="playerMiniBtn" type="button" aria-label="Publish to Hub" hidden>
+                <button id="btnShareFullHub" class="playerMiniBtn" type="button" aria-label="Publish release">
                   <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                     <polyline points="17 8 12 3 7 8"/>
@@ -2517,6 +2517,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260517remixAttribution"></script>
+    <script type="module" src="./src/app.js?v=20260517publishReleaseSheet"></script>
   </body>
 </html>

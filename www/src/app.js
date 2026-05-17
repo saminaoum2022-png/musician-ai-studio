@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260517remixAttribution";
+const APP_BUILD = "20260517publishReleaseSheet";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -7062,6 +7062,106 @@ function libraryTrackPublicTs(track) {
   return Number(track?.ts || 0);
 }
 
+function ensurePublishReleaseSheet() {
+  let sheet = document.getElementById("publishReleaseSheet");
+  if (sheet) return sheet;
+  sheet = document.createElement("div");
+  sheet.id = "publishReleaseSheet";
+  sheet.className = "publishReleaseSheet";
+  sheet.hidden = true;
+  sheet.innerHTML = `
+    <div class="publishReleaseBackdrop" data-publish-release-close="1"></div>
+    <div class="publishReleaseCard" role="dialog" aria-modal="true" aria-labelledby="publishReleaseTitle">
+      <div class="publishReleaseGrab" aria-hidden="true"></div>
+      <button type="button" class="publishReleaseClose" data-publish-release-close="1" aria-label="Close">×</button>
+      <div class="publishReleaseHead">
+        <img id="publishReleaseArt" class="publishReleaseArt" alt="" />
+        <div class="publishReleaseHeadText">
+          <div class="publishReleaseKicker">Publish Release</div>
+          <div id="publishReleaseTitle" class="publishReleaseTitle">Release this song</div>
+          <div id="publishReleaseSub" class="publishReleaseSub">This becomes part of your public sound.</div>
+        </div>
+      </div>
+      <label class="publishReleaseLabel" for="publishReleaseCaption">Release note <span>(optional)</span></label>
+      <textarea id="publishReleaseCaption" class="publishReleaseCaption" rows="3" maxlength="160" placeholder="Say something about the mood, story, or moment..."></textarea>
+      <div id="publishReleaseMeta" class="publishReleaseMeta"></div>
+      <div class="publishReleaseActions">
+        <button type="button" class="ghost publishReleaseBtn" data-publish-release-close="1">Cancel</button>
+        <button type="button" class="primary publishReleaseBtn publishReleaseBtn--primary" id="publishReleaseConfirm">Publish</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(sheet);
+  sheet.addEventListener("click", (e) => {
+    if (e.target?.getAttribute?.("data-publish-release-close") === "1") closePublishReleaseSheet();
+  });
+  const confirm = sheet.querySelector("#publishReleaseConfirm");
+  if (confirm) {
+    confirm.addEventListener("click", () => {
+      const id = String(sheet.dataset.trackId || "").trim();
+      if (!id) return;
+      const caption = String(sheet.querySelector("#publishReleaseCaption")?.value || "").trim();
+      closePublishReleaseSheet();
+      void setLibraryTrackPublicOnProfile(id, true, { releaseCaption: caption });
+    });
+  }
+  return sheet;
+}
+
+function closePublishReleaseSheet() {
+  const sheet = document.getElementById("publishReleaseSheet");
+  if (!sheet) return;
+  sheet.classList.remove("isOpen");
+  setTimeout(() => {
+    if (!sheet.classList.contains("isOpen")) sheet.hidden = true;
+  }, 180);
+}
+
+function openPublishReleaseSheet(trackId, opts = {}) {
+  const id = String(trackId || "").trim();
+  const track = loadLibrary().find((x) => String(x.id) === id);
+  if (!track) {
+    showToast("Could not find this song in your Library.", { icon: "!", durationMs: 3200 });
+    return;
+  }
+  if (track.publicOnProfile) {
+    showToast("This song is already public.", { icon: "✓", durationMs: 2400 });
+    return;
+  }
+  if (!String(track.url || "").trim()) {
+    showToast("This track has no audio URL yet — try again after it finishes saving.", { icon: "!", durationMs: 3600 });
+    return;
+  }
+  const sheet = ensurePublishReleaseSheet();
+  sheet.dataset.trackId = id;
+  const art =
+    String((track.meta && (track.meta.imageThumb || track.meta.imageUrl)) || track.artUrl || "").trim() ||
+    "./assets/nabadai-logo.png";
+  const title = String(track.title || "Untitled").trim() || "Untitled";
+  const remixOf = remixAttributionForTrack(track);
+  const caption = sheet.querySelector("#publishReleaseCaption");
+  const artEl = sheet.querySelector("#publishReleaseArt");
+  const titleEl = sheet.querySelector("#publishReleaseTitle");
+  const subEl = sheet.querySelector("#publishReleaseSub");
+  const metaEl = sheet.querySelector("#publishReleaseMeta");
+  if (artEl) artEl.src = art;
+  if (titleEl) titleEl.textContent = title;
+  if (subEl) subEl.textContent = "Move this from your private studio to your public sound.";
+  if (caption) {
+    caption.value = String(track?.meta?.releaseCaption || "").trim();
+    caption.focus?.();
+  }
+  if (metaEl) {
+    metaEl.innerHTML = `
+      <span>Public profile</span>
+      <span>Stamped now</span>
+      ${remixOf ? `<span>Remix of @${escapeHtml(remixOf.creatorUsername || "creator")}</span>` : ""}
+    `;
+  }
+  sheet.hidden = false;
+  requestAnimationFrame(() => sheet.classList.add("isOpen"));
+}
+
 async function supabaseLoadUserSongs() {
   const token = getSupabaseAuthToken();
   if (!token || !authSession?.user?.id) {
@@ -8186,7 +8286,7 @@ function renderTrackSheetLibrary(track) {
   const personaEligible = !isInstrumental && !isSound && Boolean(track?.taskId) && Boolean(track?.audioId);
   const profilePublic = Boolean(track.publicOnProfile);
   const pubTo = profilePublic ? "private" : "public";
-  const pubLabel = profilePublic ? "Hide from public profile" : "Show on public profile";
+  const pubLabel = profilePublic ? "Hide from public profile" : "Publish release";
   const renameRow = profilePublic
     ? ""
     : `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_rename">Rename song</button>`;
@@ -8656,8 +8756,10 @@ function runTrackSheetAction(action, sourceEl) {
     if (action === "library_pubprof") {
       const to = String(sourceEl?.getAttribute?.("data-track-sheet-pub-to") || "").toLowerCase();
       shut();
-      if (to === "public" || to === "private") {
-        void setLibraryTrackPublicOnProfile(t.id, to === "public");
+      if (to === "public") {
+        openPublishReleaseSheet(t.id, { source: "library" });
+      } else if (to === "private") {
+        void setLibraryTrackPublicOnProfile(t.id, false);
       }
       return;
     }
@@ -9315,7 +9417,7 @@ async function refreshDiscoverFeed() {
   } catch {}
 }
 
-async function setLibraryTrackPublicOnProfile(trackId, wantPublic) {
+async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
   const id = String(trackId || "").trim();
   if (!authSession?.user?.id) {
     showToast("Sign in to change visibility.");
@@ -9330,10 +9432,15 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic) {
   const publishedAt = willBePublic && !wasPublic
     ? new Date().toISOString()
     : userSongPublishedAtValue(track);
+  const releaseCaption = String(opts?.releaseCaption || "").trim();
+  const nextMeta = willBePublic && releaseCaption
+    ? { ...(track.meta || {}), releaseCaption, releasedAt: publishedAt, releaseType: "public_profile" }
+    : track.meta;
   const next = {
     ...track,
     publicOnProfile: willBePublic,
     ...(publishedAt ? { publishedAt } : {}),
+    meta: nextMeta || null,
   };
   const nextItems = [...items];
   nextItems[idx] = next;
@@ -9351,6 +9458,7 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic) {
   const patch = await supabasePatchUserSong(track, {
     publicOnProfile: next.publicOnProfile,
     ...(willBePublic && publishedAt ? { publishedAt } : {}),
+    ...(willBePublic && releaseCaption ? { meta: nextMeta } : {}),
   });
   if (patch && patch.ok === false && patch.reason && patch.reason !== "noop") {
     const det = String(patch.details || "").trim();
@@ -9367,7 +9475,7 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic) {
     return { ok: false };
   }
   showToast(
-    next.publicOnProfile ? "Visible on your public profile link." : "Hidden from your public profile link.",
+    next.publicOnProfile ? "Release published to your public profile." : "Hidden from your public profile link.",
   );
   if (next.publicOnProfile) {
     if (!track.publicOnProfile) {
@@ -20516,47 +20624,23 @@ if (els.btnCloseTrimSheet) {
 }
 if (els.btnShareFullHub) {
   els.btnShareFullHub.addEventListener("click", async () => {
-    if (!HUB_FEATURE_ENABLED) {
-      showToast("Hub sharing is paused.", { durationMs: 3200 });
-      return;
-    }
+    if (playerSourceIsExternalListenOnly()) return;
     const url = String(currentPlayerTrackRef?.url || playerEl?.src || "").trim();
     if (!url) {
       showToast("No loaded song to publish.");
       return;
     }
-    const title = String(currentPlayerTrackRef?.title || els.playerTitle?.textContent || "Shared song").trim();
-    // Prevent accidental double-publish — Hub feed is keyed by url+title.
-    const alreadyOnHub = loadHubFeed().some((p) => {
-      const sameUrl = url && String(p?.url || "").trim() === url;
-      const sameTitle = title && String(p?.title || "").trim().toLowerCase() === title.toLowerCase();
-      return sameUrl || sameTitle;
-    });
-    if (alreadyOnHub) {
-      showToast("Already on Hub — open the post to share it.");
+    const lib = loadLibrary();
+    const currentId = String(currentPlayerTrackRef?.id || "").trim();
+    const canonical = libraryTrackCanonicalUrl(url);
+    const track =
+      (currentId ? lib.find((x) => String(x.id) === currentId) : null) ||
+      lib.find((x) => libraryTrackCanonicalUrl(x?.url) === canonical);
+    if (!track?.id) {
+      showToast("Save this song to your Library before publishing.", { icon: "!", durationMs: 3600 });
       return;
     }
-    const ok = await playerInlineConfirm({
-      text: `Publish “${title}” to Hub? Anyone can listen and react.`,
-      confirmLabel: "Publish",
-      cancelLabel: "Cancel",
-      thumbUrl: currentPlayerTrackRef?.artUrl || els.playerArt?.src || "",
-    });
-    if (!ok) return;
-    const track = currentPlayerTrackRef || {
-      id: `player_${Date.now()}`,
-      title,
-      url,
-      artUrl: els.playerArt?.src || "",
-      kind: /instrumental/i.test(title) ? "instrumental" : "full",
-      meta: null,
-    };
-    try {
-      shareToHub(track);
-      showShareToast("Published to Hub");
-    } catch (e) {
-      showToast("Couldn't publish. Try again.");
-    }
+    openPublishReleaseSheet(track.id, { source: "player" });
   });
 }
 if (els.btnPlayerChangeCover) {

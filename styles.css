@@ -2482,9 +2482,164 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   background: linear-gradient(180deg, #ff5b6c, #d6364a);
   border-color: rgba(255, 91, 108, 0.4);
 }
+.publishReleaseSheet{
+  position: fixed;
+  inset: 0;
+  z-index: 245;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 18px 12px calc(env(safe-area-inset-bottom, 0px) + 14px);
+  pointer-events: none;
+}
+.publishReleaseSheet[hidden]{ display: none !important; }
+.publishReleaseBackdrop{
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 12%, rgba(124,92,255,0.20), transparent 44%),
+    rgba(0,0,0,0.68);
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+.publishReleaseCard{
+  position: relative;
+  width: min(520px, 100%);
+  border-radius: 28px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background:
+    radial-gradient(circle at 20% 0%, rgba(124,92,255,0.18), transparent 32%),
+    linear-gradient(180deg, rgba(10,12,20,0.98), rgba(4,5,10,0.99));
+  box-shadow:
+    0 30px 90px rgba(0,0,0,0.72),
+    inset 0 1px 0 rgba(255,255,255,0.08);
+  padding: 12px 14px 14px;
+  color: #f2f5ff;
+  transform: translateY(18px) scale(0.985);
+  opacity: 0;
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease;
+  pointer-events: auto;
+  overflow: hidden;
+}
+.publishReleaseSheet.isOpen .publishReleaseBackdrop{ opacity: 1; }
+.publishReleaseSheet.isOpen .publishReleaseCard{
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+.publishReleaseGrab{
+  width: 44px;
+  height: 4px;
+  border-radius: 999px;
+  margin: 0 auto 12px;
+  background: rgba(232,238,247,0.22);
+}
+.publishReleaseClose{
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.055);
+  color: rgba(238,244,255,0.84);
+  font-size: 22px;
+  line-height: 1;
+}
+.publishReleaseHead{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 42px 12px 2px;
+}
+.publishReleaseArt{
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 18px 34px rgba(0,0,0,0.34);
+}
+.publishReleaseHeadText{ min-width: 0; }
+.publishReleaseKicker{
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(167,139,250,0.94);
+}
+.publishReleaseTitle{
+  margin-top: 2px;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.publishReleaseSub{
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: rgba(223,231,251,0.62);
+}
+.publishReleaseLabel{
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 2px 7px;
+  font-size: 12px;
+  font-weight: 850;
+  color: rgba(238,244,255,0.78);
+}
+.publishReleaseLabel span{
+  font-weight: 700;
+  color: rgba(223,231,251,0.44);
+}
+.publishReleaseCaption{
+  width: 100%;
+  resize: none;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 18px;
+  background: rgba(255,255,255,0.045);
+  color: #f2f5ff;
+  padding: 12px;
+  font: inherit;
+  outline: none;
+}
+.publishReleaseCaption:focus{
+  border-color: rgba(124,92,255,0.38);
+  box-shadow: 0 0 0 3px rgba(124,92,255,0.14);
+}
+.publishReleaseMeta{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 11px 0 13px;
+}
+.publishReleaseMeta span{
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.09);
+  background: rgba(255,255,255,0.045);
+  color: rgba(223,231,251,0.70);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 6px 9px;
+}
+.publishReleaseActions{
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.publishReleaseBtn{
+  min-width: 104px;
+  border-radius: 999px;
+  padding: 11px 18px;
+  font-weight: 850;
+}
 @media (prefers-reduced-motion: reduce){
   .playerConfirm,
-  .playerConfirm .playerConfirmCard{ transition: opacity 120ms linear; }
+  .playerConfirm .playerConfirmCard,
+  .publishReleaseBackdrop,
+  .publishReleaseCard{ transition: opacity 120ms linear; }
 }
 
 /* -------- Cover flash after save --------------------------------- */

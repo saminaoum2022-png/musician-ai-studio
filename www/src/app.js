@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260517profileNotifyBadge";
+const APP_BUILD = "20260517publicProfileAura";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -7396,11 +7396,18 @@ function renderUserPublicSocialStats({ songCount, stats }) {
   const plays = Number(stats?.plays || 0);
   if (els.userPublicStats) {
     els.userPublicStats.innerHTML = `
-      <span><strong>${formatStatCount(songCount || 0)}</strong> songs</span>
-      <span aria-hidden="true">·</span>
-      <span><strong>${formatStatCount(plays)}</strong> plays</span>
-      <span aria-hidden="true">·</span>
-      <span><strong>${formatStatCount(followers)}</strong> followers</span>
+      <div class="profileStatPill profileStatPill--songs" data-stat="songs">
+        <strong class="profileStatPillValue">${formatStatCount(songCount || 0)}</strong>
+        <span class="profileStatPillLabel">Songs</span>
+      </div>
+      <div class="profileStatPill profileStatPill--plays" data-stat="plays">
+        <strong class="profileStatPillValue">${formatStatCount(plays)}</strong>
+        <span class="profileStatPillLabel">Plays</span>
+      </div>
+      <div class="profileStatPill profileStatPill--followers" data-stat="followers">
+        <strong class="profileStatPillValue">${formatStatCount(followers)}</strong>
+        <span class="profileStatPillLabel">Followers</span>
+      </div>
     `;
     els.userPublicStats.style.display = "";
   }

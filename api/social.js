@@ -125,6 +125,49 @@ async function resolvePublicSong(songId) {
   return row;
 }
 
+async function notificationExists({ userId, type, entityId, actorUserId }) {
+  const uid = cleanUserId(userId);
+  const t = String(type || "").trim();
+  const eid = String(entityId || "").trim();
+  if (!uid || !t) return false;
+  let path = `social_notifications?select=id&user_id=eq.${encodeURIComponent(uid)}&type=eq.${encodeURIComponent(t)}&limit=1`;
+  if (eid) path += `&entity_id=eq.${encodeURIComponent(eid)}`;
+  if (actorUserId) path += `&actor_user_id=eq.${encodeURIComponent(actorUserId)}`;
+  const existing = await svcFetch(path);
+  return Array.isArray(existing.data) && existing.data.length > 0;
+}
+
+async function insertNotification({ userId, type, actorUserId, entityId, metadata }) {
+  const uid = cleanUserId(userId);
+  const actor = cleanUserId(actorUserId);
+  const t = String(type || "").trim().slice(0, 80);
+  if (!uid || !t) return false;
+  const body = {
+    user_id: uid,
+    type: t,
+    actor_user_id: actor || null,
+    entity_id: entityId ? String(entityId).trim().slice(0, 180) : null,
+    metadata: metadata && typeof metadata === "object" ? metadata : {},
+  };
+  const ins = await svcFetch("social_notifications", {
+    method: "POST",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify(body),
+  });
+  return Boolean(ins.ok);
+}
+
+async function followersForUser(userId) {
+  const uid = cleanUserId(userId);
+  if (!uid) return [];
+  const r = await svcFetch(
+    `social_follows?select=follower_user_id&following_user_id=eq.${encodeURIComponent(uid)}&order=created_at.desc&limit=500`,
+  );
+  return Array.isArray(r.data)
+    ? r.data.map((row) => cleanUserId(row.follower_user_id)).filter(Boolean)
+    : [];
+}
+
 async function recordSongPlay({ songId, listenerUserId, listenedSeconds }) {
   const sid = cleanSongId(songId);
   const listener = cleanUserId(listenerUserId);
@@ -145,27 +188,103 @@ async function recordSongPlay({ songId, listenerUserId, listenedSeconds }) {
     }),
   });
   if (!ins.ok) return { counted: false, reason: "insert_failed", details: ins.text };
-  return { counted: true, ownerUserId: owner };
+  const playCount = await countRows(`social_song_plays?select=id&song_id=eq.${encodeURIComponent(sid)}&limit=10000`);
+  await createPlayMilestoneNotification({ song, ownerUserId: owner, playCount });
+  return { counted: true, ownerUserId: owner, playCount };
 }
 
 async function createFollowNotification({ actorUserId, targetUserId }) {
   const actor = await profileByUserId(actorUserId);
-  const existing = await svcFetch(
-    `social_notifications?select=id&user_id=eq.${encodeURIComponent(targetUserId)}&actor_user_id=eq.${encodeURIComponent(actorUserId)}&type=eq.follow&limit=1`,
-  );
-  if (Array.isArray(existing.data) && existing.data.length) return;
-  await svcFetch("social_notifications", {
-    method: "POST",
-    headers: { Prefer: "return=minimal" },
-    body: JSON.stringify({
-      user_id: targetUserId,
-      type: "follow",
-      actor_user_id: actorUserId,
+  const exists = await notificationExists({
+    userId: targetUserId,
+    type: "follow",
+    actorUserId,
+  });
+  if (exists) return;
+  await insertNotification({
+    userId: targetUserId,
+    type: "follow",
+    actorUserId,
+    metadata: {
+      actor_username: actor?.username || "",
+      actor_avatar: actor?.avatar || "",
+    },
+  });
+}
+
+async function createPlayMilestoneNotification({ song, ownerUserId, playCount }) {
+  const milestones = new Set([10, 50, 100, 500, 1000]);
+  const count = Number(playCount || 0);
+  const owner = cleanUserId(ownerUserId);
+  const sid = cleanSongId(song?.id);
+  if (!owner || !sid || !milestones.has(count)) return;
+  const entityId = `${sid}:plays:${count}`;
+  if (await notificationExists({ userId: owner, type: "play_milestone", entityId })) return;
+  await insertNotification({
+    userId: owner,
+    type: "play_milestone",
+    entityId,
+    metadata: {
+      song_id: sid,
+      song_title: song?.title || "Your song",
+      play_count: count,
+    },
+  });
+}
+
+async function createPublicSongNotifications({ actorUserId, songId, title }) {
+  const actor = await profileByUserId(actorUserId);
+  const followers = await followersForUser(actorUserId);
+  const sid = cleanSongId(songId);
+  if (!sid || !followers.length) return 0;
+  let created = 0;
+  for (const followerId of followers) {
+    if (!followerId || followerId === actorUserId) continue;
+    const exists = await notificationExists({ userId: followerId, type: "public_song", entityId: sid });
+    if (exists) continue;
+    const ok = await insertNotification({
+      userId: followerId,
+      type: "public_song",
+      actorUserId,
+      entityId: sid,
       metadata: {
         actor_username: actor?.username || "",
         actor_avatar: actor?.avatar || "",
+        song_id: sid,
+        song_title: String(title || "New song").trim().slice(0, 120),
       },
-    }),
+    });
+    if (ok) created += 1;
+  }
+  return created;
+}
+
+async function createRemixNotification({ actorUserId, originalPostId, remixPostId, remixTitle }) {
+  const originalId = String(originalPostId || "").trim();
+  if (!originalId) return false;
+  const r = await svcFetch(
+    `hub_posts?select=id,title,creator_username,meta&id=eq.${encodeURIComponent(originalId)}&limit=1`,
+  );
+  const original = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
+  const owner = cleanUserId(original?.meta?.creatorUserId);
+  const actor = cleanUserId(actorUserId);
+  if (!owner || !actor || owner === actor) return false;
+  const actorProfile = await profileByUserId(actor);
+  const entityId = String(remixPostId || `${originalId}:remix:${actor}`).trim().slice(0, 180);
+  if (await notificationExists({ userId: owner, type: "remix", entityId })) return false;
+  return insertNotification({
+    userId: owner,
+    type: "remix",
+    actorUserId: actor,
+    entityId,
+    metadata: {
+      actor_username: actorProfile?.username || "",
+      actor_avatar: actorProfile?.avatar || "",
+      original_post_id: originalId,
+      original_title: original?.title || "your song",
+      remix_post_id: String(remixPostId || ""),
+      remix_title: String(remixTitle || "a remix").trim().slice(0, 120),
+    },
   });
 }
 
@@ -268,6 +387,29 @@ async function handlePost(req, res, user) {
       listenedSeconds: body?.listenedSeconds,
     });
     return sendJson(res, 200, { ok: true, ...result });
+  }
+
+  if (action === "notify_public_song") {
+    const song = await resolvePublicSong(body?.songId);
+    if (!song?.id || cleanUserId(song.user_id) !== user.userId) {
+      return sendJson(res, 404, { ok: false, error: "Public song not found" });
+    }
+    const created = await createPublicSongNotifications({
+      actorUserId: user.userId,
+      songId: song.id,
+      title: song.title || body?.title,
+    });
+    return sendJson(res, 200, { ok: true, created });
+  }
+
+  if (action === "notify_remix") {
+    const created = await createRemixNotification({
+      actorUserId: user.userId,
+      originalPostId: body?.originalPostId,
+      remixPostId: body?.remixPostId,
+      remixTitle: body?.remixTitle,
+    });
+    return sendJson(res, 200, { ok: true, created: Boolean(created) });
   }
 
   return sendJson(res, 400, { ok: false, error: "Unknown social action" });

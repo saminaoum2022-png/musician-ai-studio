@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260517songDetailsLyricsSheet";
+const APP_BUILD = "20260517notificationsSheet";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -7306,6 +7306,33 @@ async function fetchSocialStatsForProfile({ userId, username }) {
   }
 }
 
+function notifyPublicSongPublished(track) {
+  const songId = String(track?.cloudSongId || track?.id || "").trim();
+  if (!songId || !authSession?.user?.id) return;
+  void socialApi("/api/social", {
+    method: "POST",
+    body: JSON.stringify({
+      action: "notify_public_song",
+      songId,
+      title: String(track?.title || "New song").trim(),
+    }),
+  }).catch(() => {});
+}
+
+function notifyRemixPublished({ originalPostId, remixPostId, remixTitle }) {
+  const original = String(originalPostId || "").trim();
+  if (!original || !authSession?.user?.id) return;
+  void socialApi("/api/social", {
+    method: "POST",
+    body: JSON.stringify({
+      action: "notify_remix",
+      originalPostId: original,
+      remixPostId: String(remixPostId || "").trim(),
+      remixTitle: String(remixTitle || "Remix").trim(),
+    }),
+  }).catch(() => {});
+}
+
 function renderUserPublicSocialStats({ songCount, stats }) {
   const followers = Number(stats?.followers || 0);
   const plays = Number(stats?.plays || 0);
@@ -7417,12 +7444,47 @@ async function showFollowingSummary() {
   }
 }
 
+function notificationIconForType(type) {
+  const t = String(type || "").trim();
+  if (t === "follow") return "+";
+  if (t === "remix") return "R";
+  if (t === "play_milestone") return "10";
+  if (t === "public_song") return "P";
+  return ".";
+}
+
 function notificationMessage(n) {
   const username = String(n?.metadata?.actor_username || "").replace(/^@/, "").trim();
   if (n?.type === "follow") {
     return {
       title: username ? `@${username} started following you` : "Someone started following you",
       body: "They can now find your public songs in their Following feed.",
+      action: username ? "View profile" : "",
+    };
+  }
+  if (n?.type === "remix") {
+    const original = String(n?.metadata?.original_title || "your song").trim();
+    const remix = String(n?.metadata?.remix_title || "a new remix").trim();
+    return {
+      title: username ? `@${username} remixed your song` : "Someone remixed your song",
+      body: `${remix} was made from ${original}.`,
+      action: username ? "View creator" : "",
+    };
+  }
+  if (n?.type === "play_milestone") {
+    const count = Number(n?.metadata?.play_count || 0);
+    const title = String(n?.metadata?.song_title || "Your song").trim();
+    return {
+      title: count ? `${title} hit ${formatStatCount(count)} plays` : `${title} hit a play milestone`,
+      body: "A public song reached a new listener milestone.",
+      action: "",
+    };
+  }
+  if (n?.type === "public_song") {
+    const title = String(n?.metadata?.song_title || "a new public song").trim();
+    return {
+      title: username ? `@${username} published a song` : "A creator published a song",
+      body: `${title} is now available from your Following feed.`,
       action: username ? "View profile" : "",
     };
   }
@@ -7449,6 +7511,7 @@ function renderNotificationRows(list) {
     const username = String(n?.metadata?.actor_username || "").replace(/^@/, "").trim();
     const actorUserId = String(n?.actor_user_id || "").trim();
     const avatar = String(n?.metadata?.actor_avatar || "").trim() || "./assets/nabadai-logo.png";
+    const icon = notificationIconForType(n?.type);
     const unread = !n?.read_at;
     const time = relativeTime(new Date(n?.created_at || Date.now()).getTime());
     const href = username
@@ -7459,7 +7522,10 @@ function renderNotificationRows(list) {
       : "";
     return `
       <article class="notificationsItem${unread ? " isUnread" : ""}">
-        <img class="notificationsItemAvatar" src="${escapeHtml(avatar)}" alt="" loading="lazy" decoding="async" />
+        <div class="notificationsItemAvatarWrap">
+          <img class="notificationsItemAvatar" src="${escapeHtml(avatar)}" alt="" loading="lazy" decoding="async" />
+          <span class="notificationsItemBadge" aria-hidden="true">${escapeHtml(icon)}</span>
+        </div>
         <div class="notificationsItemBody">
           <div class="notificationsItemTop">
             <strong>${escapeHtml(msg.title)}</strong>
@@ -8975,6 +9041,9 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic) {
     next.publicOnProfile ? "Visible on your public profile link." : "Hidden from your public profile link.",
   );
   if (next.publicOnProfile) {
+    if (!track.publicOnProfile) {
+      notifyPublicSongPublished(next);
+    }
     try {
       if (
         String(document.body.getAttribute("data-route") || "") === "discover" &&
@@ -9672,6 +9741,11 @@ function shareToHub(track) {
     saveHubFeed(cur);
     if ((document.body.getAttribute("data-route") || "") === "hub") renderHub();
     renderProfileHubShared();
+    notifyRemixPublished({
+      originalPostId: cur[idx]?.meta?.remixOfHubPostId,
+      remixPostId: cloudId,
+      remixTitle: cur[idx]?.title,
+    });
   }).catch(() => {});
   renderHub();
   renderProfileHubShared();

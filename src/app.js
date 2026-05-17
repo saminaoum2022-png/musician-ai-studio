@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260517publishedAt";
+const APP_BUILD = "20260517remixAttribution";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4010,6 +4010,48 @@ function setRemixSource(src) {
   renderRemixSourceBanner();
 }
 
+function normalizeRemixCreatorHandle(raw) {
+  return String(raw || "").trim().replace(/^@+/, "");
+}
+
+function remixAttributionFromSource(src) {
+  if (!src) return null;
+  const sourceUrl = String(src.originalUrl || src.url || "").trim();
+  const title = String(src.title || "").trim();
+  const creatorUsername = normalizeRemixCreatorHandle(src.creator || src.creatorUsername || src.handle);
+  const songId = String(src.songId || src.id || "").trim();
+  const ownerUserId = String(src.ownerUserId || "").trim();
+  if (!sourceUrl && !title && !creatorUsername && !songId && !ownerUserId) return null;
+  return {
+    songId,
+    ownerUserId,
+    title: title || "Original song",
+    creatorUsername,
+    artUrl: String(src.coverUrl || src.artUrl || "").trim(),
+    audioUrl: sourceUrl,
+  };
+}
+
+function remixAttributionForTrack(track) {
+  const meta = track?.meta || {};
+  const remixOf = meta?.remixOf || meta?.remix_of || null;
+  if (!remixOf || typeof remixOf !== "object") return null;
+  const title = String(remixOf.title || "").trim();
+  const creatorUsername = normalizeRemixCreatorHandle(remixOf.creatorUsername || remixOf.creator || remixOf.handle);
+  const songId = String(remixOf.songId || remixOf.id || "").trim();
+  const ownerUserId = String(remixOf.ownerUserId || remixOf.userId || "").trim();
+  if (!title && !creatorUsername && !songId && !ownerUserId) return null;
+  return { ...remixOf, title: title || "Original song", creatorUsername, songId, ownerUserId };
+}
+
+function remixSourceLineHtml(track) {
+  const remixOf = remixAttributionForTrack(track);
+  if (!remixOf) return "";
+  const who = remixOf.creatorUsername ? `@${remixOf.creatorUsername}` : "original creator";
+  const sourceTitle = remixOf.title ? ` · ${remixOf.title}` : "";
+  return `<span class="remixAttributionLine"><span class="remixAttributionPill">Remix</span><span>Remixed from ${escapeHtml(who)}${escapeHtml(sourceTitle)}</span></span>`;
+}
+
 function clearRemixSource({ keepRefFile = false } = {}) {
   if (!currentRemixSource) {
     renderRemixSourceBanner();
@@ -4180,6 +4222,10 @@ async function startHubRemix(post) {
     }
     setRemixSource({
       id: post.id,
+      songId: post.songId || post.id || "",
+      ownerUserId: post.ownerUserId || "",
+      taskId: post.taskId || post?.meta?.taskId || "",
+      audioId: post.audioId || post?.meta?.audioId || "",
       title: post.title || "",
       creator: post.creator || "",
       coverUrl: post.artUrl || "",
@@ -7032,8 +7078,8 @@ async function supabaseLoadUserSongs() {
   // happens to be a legacy `data:` URL*, same trick we use on `hub_posts`
   // for cover_url / creator_avatar. The cheap `art_url is null` branch
   // covers freshly inserted rows where we deliberately wrote null.
-  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
@@ -7095,7 +7141,7 @@ async function supabaseLoadUserSongs() {
       taskId: s.task_id || "",
       audioId: s.audio_id || "",
       kind: s.kind || "full",
-      meta: null,
+      meta: s.meta_remix_of ? { remixOf: s.meta_remix_of } : null,
       publishedAt: selectedPublishedAt ? userSongPublishedAtValue(s) : "",
       publicOnProfile: Boolean(
         s.public_on_profile === true || s.public_on_profile === "t" || s.public_on_profile === "true",
@@ -7378,8 +7424,8 @@ async function supabaseFetchPublicLibraryForUserId(userId) {
   const uid = String(userId || "").trim();
   if (!uid || !SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
   const enc = encodeURIComponent(uid);
-  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   try {
     let r = await fetch(
@@ -7411,7 +7457,7 @@ async function supabaseFetchPublicLibraryForUserId(userId) {
       taskId: s.task_id || "",
       audioId: s.audio_id || "",
       kind: s.kind || "full",
-      meta: null,
+      meta: s.meta_remix_of ? { remixOf: s.meta_remix_of } : null,
       publicOnProfile: true,
     })).sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
   } catch {
@@ -7929,8 +7975,8 @@ function maybeRecordQualifiedPublicPlay() {
 async function supabaseFetchDiscoveryPublicSongs(limit) {
   const lim = Math.max(1, Math.min(80, Number(limit) || 48));
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
-  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,user_id";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   try {
     let r = await fetch(
@@ -7967,6 +8013,7 @@ async function supabaseFetchDiscoveryPublicSongs(limit) {
       audioId: String(s.audio_id || ""),
       kind: s.kind || "full",
       userId: String(s.user_id || "").trim(),
+      meta: s.meta_remix_of ? { remixOf: s.meta_remix_of } : null,
     })).sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
   } catch (e) {
     console.warn("[discovery/user_songs]", e);
@@ -8442,6 +8489,9 @@ function runTrackSheetAction(action, sourceEl) {
           : { lyricsInput: "", styleInput: "" };
         await startHubRemix({
           url: ctx.url,
+          id: ctx.songId || "",
+          songId: ctx.songId || "",
+          ownerUserId: ctx.ownerUserId || "",
           title: ctx.title,
           creator: ctx.handle || "",
           artUrl: ctx.art,
@@ -9044,6 +9094,7 @@ function userPublicDiscoveryRowHtml(t, idx, pub) {
   const encHandle = rawHandle ? encodeURIComponent(rawHandle) : "";
   const extra = pub.extraMeta ? ` · ${escapeHtml(String(pub.extraMeta))}` : "";
   const metaInner = `${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}${extra}`;
+  const remixLine = remixSourceLineHtml(t);
   const sheetData = `data-dp-song-id="${encSongId}" data-dp-owner-id="${encOwnerId}" data-dp-task-id="${encTaskId}" data-dp-audio-id="${encAudioId}"`;
   const side = `<button type="button" class="discoveryRowSide" data-discovery-open-sheet="1" data-dp-hide-profile="1" data-dp-use-public-shuffle="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" ${sheetData} aria-label="Options for ${safeTitle}">⋯</button>`;
   return `
@@ -9059,6 +9110,7 @@ function userPublicDiscoveryRowHtml(t, idx, pub) {
           <span class="discoveryRowMid">
             <span class="discoveryRowTitle">${safeTitle}</span>
             <span class="discoveryRowMeta">${metaInner}</span>
+            ${remixLine}
           </span>
           <span class="discoveryRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
         </button>
@@ -9100,6 +9152,7 @@ function discoveryTrackRowHtml(t, profMap, idx) {
   const playData = `data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" data-play-task-id="${encTaskId}" data-play-audio-id="${encAudioId}"`;
   const encHandle = handle ? encodeURIComponent(handle) : "";
   const sheetData = `data-dp-song-id="${encSongId}" data-dp-owner-id="${encOwnerId}" data-dp-task-id="${encTaskId}" data-dp-audio-id="${encAudioId}"`;
+  const remixLine = remixSourceLineHtml(t);
   const side = `<button type="button" class="discoveryRowSide" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" ${sheetData} aria-label="Options for ${safeTitle}">⋯</button>`;
   return `
       <div class="discoveryRow" style="--i:${idx}">
@@ -9114,6 +9167,7 @@ function discoveryTrackRowHtml(t, profMap, idx) {
           <span class="discoveryRowMid">
             <span class="discoveryRowTitle">${safeTitle}</span>
             <span class="discoveryRowMeta">${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}</span>
+            ${remixLine}
           </span>
           <span class="discoveryRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
         </button>
@@ -9142,6 +9196,7 @@ function discoverySpotCardHtml(t, profMap, idx) {
   const imgLoad = spotIdx < 3 ? "eager" : "lazy";
   const imgPriority = spotIdx === 0 ? ' fetchpriority="high"' : "";
   const encHandle = handle ? encodeURIComponent(handle) : "";
+  const remixOf = remixAttributionForTrack(t);
   return `
       <div class="discoverySpotCardWrap" style="--i:${spotIdx}">
         <button type="button" class="discoverySpotCard" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
@@ -9152,7 +9207,7 @@ function discoverySpotCardHtml(t, profMap, idx) {
           <span class="discoverySpotCardTextRow">
             <span class="discoverySpotCardTextCol">
               <span class="discoverySpotCardTitle">${safeTitle}</span>
-              <span class="discoverySpotCardBy">${escapeHtml(byLine)}</span>
+              <span class="discoverySpotCardBy">${remixOf ? `<span class="remixAttributionPill">Remix</span> ` : ""}${escapeHtml(byLine)}</span>
             </span>
             <span class="discoverySpotCardEq" aria-hidden="true"><span></span><span></span><span></span></span>
           </span>
@@ -12553,6 +12608,7 @@ function renderProfileLibraryPublicOnLinkSection() {
           const dateLabel = formatLibraryDate(t.ts);
           const subBits = [];
           if (dateLabel) subBits.push(`<span class="libRowDot">${esc(dateLabel)}</span>`);
+          const remixLine = remixSourceLineHtml(t);
           const tid = esc(String(t.id));
           return `
           <li class="libRow" data-profile-lib-row="${tid}">
@@ -12564,6 +12620,7 @@ function renderProfileLibraryPublicOnLinkSection() {
               <span class="libRowInfo">
                 <span class="libRowTitle">${safeTitle}</span>
                 <span class="libRowSub">${subBits.join("")}</span>
+                ${remixLine}
               </span>
               <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
             </button>
@@ -12875,6 +12932,7 @@ function looksLikeTrackRow(row) {
 }
 function normalizeTrackRow(row) {
   const url = String(row?.url || row?.song_url || "").trim();
+  const meta = row?.meta || (row?.meta_remix_of ? { remixOf: row.meta_remix_of } : null);
   return {
     id: String(row?.id || `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
     ts: Number(row?.ts || (row?.created_at ? new Date(row.created_at).getTime() : Date.now())),
@@ -12884,7 +12942,7 @@ function normalizeTrackRow(row) {
     taskId: String(row?.taskId || row?.task_id || ""),
     audioId: String(row?.audioId || row?.audio_id || ""),
     kind: String(row?.kind || "full"),
-    meta: row?.meta || null,
+    meta,
     publicOnProfile: Boolean(row?.publicOnProfile || row?.public_on_profile),
     publishedAt: userSongPublishedAtValue(row),
   };
@@ -14249,6 +14307,11 @@ function openSongDetailsModal(track) {
   const mode = songDetailsFirstText(meta.mode, track?.kind);
   const lyrics = songDetailsLyricsForTrack(track);
   const hasLyrics = Boolean(lyrics);
+  const remixOf = remixAttributionForTrack(track);
+  const remixCreator = remixOf?.creatorUsername ? `@${remixOf.creatorUsername}` : "";
+  const remixSummary = remixOf
+    ? `${remixCreator || "Original creator"}${remixOf.title ? ` · ${remixOf.title}` : ""}`
+    : "";
   const technicalRows = [
     songDetailsRow("Task ID", track?.taskId),
     songDetailsRow("Audio ID", track?.audioId),
@@ -14267,6 +14330,7 @@ function openSongDetailsModal(track) {
         ${songDetailsRow("Type", kindLabel)}
         ${songDetailsRow("Visibility", track?.publicOnProfile ? "Public profile" : "Private library")}
         ${songDetailsRow("Mode", mode)}
+        ${remixOf ? songDetailsRow("Remix", remixSummary) : ""}
       </div>
     </section>
 
@@ -18505,6 +18569,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         instrumentalSelected,
         referenceInstrumentalOnly,
         remixOfHubPostId: currentRemixSource?.id || null,
+        ...(currentRemixSource ? { remixOf: remixAttributionFromSource(currentRemixSource) } : {}),
         ...remixMeta,
       };
       if (shouldGenerateInstrumental) {

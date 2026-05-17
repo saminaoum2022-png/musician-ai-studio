@@ -13645,6 +13645,357 @@ body[data-route="hub"] .hubEq{
   }
 }
 
+/* --- Challenges --- */
+.challengesPage.wide,
+section.challengesPage{
+  grid-column: 1 / -1;
+  width: 100%;
+  max-width: 100%;
+}
+.challengesPage{
+  position: relative;
+  overflow: visible;
+  width: 100%;
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: 0 max(18px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)) 78px;
+  box-sizing: border-box;
+}
+body[data-route="challenges"] .app{
+  padding-left: 0;
+  padding-right: 0;
+}
+.challengesAmbient{
+  position: absolute;
+  inset: -90px -20px auto;
+  height: 430px;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 20% 16%, rgba(124,92,255,0.32), transparent 34%),
+    radial-gradient(circle at 82% 10%, rgba(34,211,238,0.22), transparent 35%),
+    radial-gradient(circle at 50% 48%, rgba(244,114,182,0.14), transparent 46%);
+  filter: blur(2px);
+  opacity: 0.9;
+}
+.challengesHero{
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(190px, 260px);
+  gap: 18px;
+  align-items: stretch;
+  padding-top: 12px;
+}
+.challengesHeroCopy,
+.challengeStreakCard,
+.challengeFeatureCard,
+.challengeMiniCard,
+.challengeLoopCard{
+  border: 1px solid rgba(255,255,255,0.11);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.075), rgba(255,255,255,0.025)),
+    rgba(8,10,18,0.72);
+  box-shadow: 0 20px 58px rgba(0,0,0,0.34);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+.challengesHeroCopy{
+  min-height: 252px;
+  border-radius: 30px;
+  padding: 28px;
+  overflow: hidden;
+}
+.challengesHeroCopy::after{
+  content: "";
+  position: absolute;
+  inset: auto 24px 18px 24px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent);
+}
+.challengesKicker,
+.challengeMiniKicker{
+  margin: 0 0 8px;
+  color: rgba(94,234,212,0.92);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.challengesTitle{
+  margin: 0;
+  max-width: 720px;
+  color: #f3f6ff;
+  font-size: clamp(36px, 8vw, 76px);
+  line-height: 0.88;
+  letter-spacing: -0.075em;
+}
+.challengesLead{
+  max-width: 580px;
+  margin: 18px 0 0;
+  color: rgba(223,231,251,0.66);
+  font-size: 15px;
+  line-height: 1.45;
+}
+.challengesHeroActions{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+}
+.challengesPrimaryCta,
+.challengesGhostCta,
+.challengeFeatureStart,
+.challengeMiniCard button{
+  min-height: 44px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.13);
+  padding: 0 18px;
+  color: #fff;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.challengesPrimaryCta,
+.challengeFeatureStart{
+  background: linear-gradient(135deg, #7c5cff, #22d3ee);
+  box-shadow: 0 16px 36px rgba(124,92,255,0.28);
+}
+.challengesGhostCta,
+.challengeMiniCard button{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.06);
+}
+.challengeStreakCard{
+  position: relative;
+  border-radius: 30px;
+  padding: 22px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  overflow: hidden;
+}
+.challengeStreakRing{
+  position: absolute;
+  width: 168px;
+  height: 168px;
+  border-radius: 50%;
+  background:
+    conic-gradient(from 230deg, #7c5cff 0 72%, rgba(255,255,255,0.08) 72% 100%),
+    radial-gradient(circle, rgba(8,10,18,0.9) 58%, transparent 60%);
+  filter: drop-shadow(0 0 24px rgba(124,92,255,0.28));
+}
+.challengeStreakLabel,
+.challengeStreakSub{
+  position: relative;
+  color: rgba(223,231,251,0.58);
+  font-size: 12px;
+  font-weight: 800;
+}
+.challengeStreakCard strong{
+  position: relative;
+  color: #fff;
+  font-size: 64px;
+  line-height: 1;
+  letter-spacing: -0.08em;
+}
+.challengeFeatureCard{
+  position: relative;
+  margin-top: 16px;
+  border-radius: 28px;
+  padding: 22px;
+  overflow: hidden;
+}
+.challengeFeatureCard::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(124,92,255,0.18), transparent 48%),
+    radial-gradient(circle at 88% 18%, rgba(94,234,212,0.16), transparent 34%);
+  pointer-events: none;
+}
+.challengeFeatureTop,
+.challengeTagRow,
+.challengeDeck,
+.challengeLoopCard{
+  position: relative;
+}
+.challengeFeatureTop{
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+.challengeLivePill,
+.challengeTimer,
+.challengeTagRow span{
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.065);
+  color: rgba(232,238,247,0.78);
+  font-size: 12px;
+  font-weight: 850;
+}
+.challengeLivePill,
+.challengeTimer{ padding: 7px 10px; }
+.challengeLivePill span{
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: #5eead4;
+  box-shadow: 0 0 16px rgba(94,234,212,0.9);
+}
+.challengeFeatureCard h3{
+  position: relative;
+  margin: 18px 0 0;
+  color: #fff;
+  font-size: clamp(30px, 8vw, 58px);
+  line-height: 0.92;
+  letter-spacing: -0.06em;
+}
+.challengeFeatureCard p{
+  position: relative;
+  max-width: 680px;
+  margin: 12px 0 0;
+  color: rgba(223,231,251,0.68);
+  line-height: 1.45;
+}
+.challengeTagRow{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.challengeTagRow span{ padding: 7px 10px; }
+.challengeFeatureStart{ position: relative; margin-top: 18px; }
+.challengeDeck{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.challengeMiniCard{
+  position: relative;
+  min-height: 222px;
+  border-radius: 26px;
+  padding: 18px;
+  overflow: hidden;
+}
+.challengeMiniCard::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 18% 0%, rgba(var(--challenge-rgb, 124,92,255),0.32), transparent 46%);
+  pointer-events: none;
+}
+.challengeMiniCard--violet{ --challenge-rgb: 124,92,255; }
+.challengeMiniCard--cyan{ --challenge-rgb: 34,211,238; }
+.challengeMiniCard--rose{ --challenge-rgb: 244,114,182; }
+.challengeMiniIcon{
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 15px;
+  color: #fff;
+  background: rgba(var(--challenge-rgb, 124,92,255),0.2);
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.challengeMiniIcon svg{
+  width: 23px;
+  height: 23px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.challengeMiniCard h3,
+.challengeMiniCard p,
+.challengeMiniCard button,
+.challengeMiniKicker{
+  position: relative;
+}
+.challengeMiniCard h3{
+  margin: 16px 0 0;
+  color: #f5f7ff;
+  font-size: 22px;
+  letter-spacing: -0.045em;
+}
+.challengeMiniCard p{
+  min-height: 54px;
+  margin: 8px 0 16px;
+  color: rgba(223,231,251,0.62);
+  font-size: 13px;
+  line-height: 1.38;
+}
+.challengeMiniCard button{
+  min-height: 38px;
+  padding-inline: 15px;
+}
+.challengeLoopCard{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+  border-radius: 26px;
+  padding: 14px;
+}
+.challengeLoopCard div{
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.045);
+}
+.challengeLoopStep{
+  display: inline-grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  background: rgba(124,92,255,0.24);
+  color: #fff;
+  font-weight: 900;
+  font-size: 12px;
+}
+.challengeLoopCard strong,
+.challengeLoopCard small{
+  display: block;
+}
+.challengeLoopCard strong{
+  margin-top: 8px;
+  color: #fff;
+  font-size: 14px;
+}
+.challengeLoopCard small{
+  margin-top: 3px;
+  color: rgba(223,231,251,0.55);
+  line-height: 1.35;
+}
+@media (max-width: 760px){
+  .challengesHero,
+  .challengeDeck,
+  .challengeLoopCard{
+    grid-template-columns: 1fr;
+  }
+  .challengeStreakCard{
+    min-height: 150px;
+  }
+  .challengesHeroCopy{
+    min-height: 0;
+    padding: 24px 20px;
+  }
+  .challengeMiniCard{
+    min-height: 0;
+  }
+}
+
 /* --- Mentor (voice lab) — premium “alive” layout --- */
 .mentorPage.wide,
 section.mentorPage{

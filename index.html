@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260518publicPlayerNote" />
+    <link rel="stylesheet" href="./styles.css?v=20260518challengesTab" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -71,7 +71,7 @@
             <a href="#/generate" class="journeyStep" data-route-link="generate">Generate</a>
             <a href="#/library" class="journeyStep" data-route-link="library">Library</a>
             <a href="#/discover" class="journeyStep" data-route-link="discover">Discover</a>
-            <a href="#/mentor" class="journeyStep" data-route-link="mentor">Lab</a>
+            <a href="#/challenges" class="journeyStep" data-route-link="challenges">Challenges</a>
             <a href="#/sounds" class="journeyStep" data-route-link="sounds">Sounds</a>
             <a href="#/player" class="journeyStep" data-route-link="player">Player</a>
           </div>
@@ -197,9 +197,9 @@
               <div class="homeTitle">Discover</div>
               <div class="homeSub">Public songs from creators</div>
             </a>
-            <a class="homeCard" href="#/mentor">
-              <div class="homeTitle">Lab</div>
-              <div class="homeSub">Voice scan · on-device</div>
+            <a class="homeCard" href="#/challenges">
+              <div class="homeTitle">Challenges</div>
+              <div class="homeSub">Daily prompts · remix games</div>
             </a>
             <a class="homeCard" href="#/more">
               <div class="homeTitle">Studio & More</div>
@@ -822,6 +822,90 @@
               <p class="searchEmptyHint">Try a name, a moment, or a mood.</p>
             </div>
           </div>
+        </section>
+
+        <section class="challengesPage wide" data-route="challenges">
+          <div class="challengesAmbient" aria-hidden="true"></div>
+          <header class="challengesHero">
+            <div class="challengesHeroCopy">
+              <p class="challengesKicker">Creator Arena</p>
+              <h2 class="challengesTitle">Beat the prompt before it disappears.</h2>
+              <p class="challengesLead">Tiny music games designed to make you create fast, publish, and pull people back to your profile.</p>
+              <div class="challengesHeroActions">
+                <button type="button" class="challengesPrimaryCta" data-challenge-start="hook-rush">Start today's challenge</button>
+                <a class="challengesGhostCta" href="#/discover">Hear entries</a>
+              </div>
+            </div>
+            <div class="challengeStreakCard" aria-label="Challenge streak preview">
+              <span class="challengeStreakRing" aria-hidden="true"></span>
+              <span class="challengeStreakLabel">Streak</span>
+              <strong>03</strong>
+              <span class="challengeStreakSub">days to unlock the gold badge</span>
+            </div>
+          </header>
+
+          <section class="challengeFeatureCard" aria-labelledby="challengeFeaturedTitle">
+            <div class="challengeFeatureTop">
+              <span class="challengeLivePill"><span></span> Live now</span>
+              <span class="challengeTimer">23h left</span>
+            </div>
+            <h3 id="challengeFeaturedTitle">Hook Rush</h3>
+            <p>Make the first 15 seconds impossible to skip. No long intro, no warm-up, just the part people replay.</p>
+            <div class="challengeTagRow">
+              <span>15 sec hook</span>
+              <span>Public profile</span>
+              <span>Most replays wins</span>
+            </div>
+            <button type="button" class="challengeFeatureStart" data-challenge-start="hook-rush">Create entry</button>
+          </section>
+
+          <section class="challengeDeck" aria-label="Challenge cards">
+            <article class="challengeMiniCard challengeMiniCard--violet">
+              <div class="challengeMiniIcon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M4 12h3l2-5 4 10 2-5h5"/><path d="M8 18c2.5 2 5.5 2 8 0"/></svg>
+              </div>
+              <span class="challengeMiniKicker">Remix game</span>
+              <h3>Voice Note Flip</h3>
+              <p>Turn a tiny spoken phrase or hum into a chorus people can sing back.</p>
+              <button type="button" data-challenge-start="voice-note-flip">Join</button>
+            </article>
+            <article class="challengeMiniCard challengeMiniCard--cyan">
+              <div class="challengeMiniIcon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M5 8h14"/><path d="M7 16h10"/><path d="M4 12h16"/></svg>
+              </div>
+              <span class="challengeMiniKicker">Crowd test</span>
+              <h3>Dabke Drop</h3>
+              <p>Build a clapping chorus for weddings, parties, and group voice notes.</p>
+              <button type="button" data-challenge-start="dabke-drop">Join</button>
+            </article>
+            <article class="challengeMiniCard challengeMiniCard--rose">
+              <div class="challengeMiniIcon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M4 17c4-9 12-9 16 0"/><path d="M7 17c2.8-5 7.2-5 10 0"/><path d="M12 17v3"/></svg>
+              </div>
+              <span class="challengeMiniKicker">Mood flip</span>
+              <h3>Sad to Dance</h3>
+              <p>Start emotional, then make the chorus move without losing the feeling.</p>
+              <button type="button" data-challenge-start="sad-to-dance-challenge">Join</button>
+            </article>
+          </section>
+
+          <section class="challengeLoopCard" aria-label="How challenges work">
+            <div>
+              <span class="challengeLoopStep">1</span>
+              <strong>Pick a prompt</strong>
+              <small>One tap loads lyrics and style into Create.</small>
+            </div>
+            <div>
+              <span class="challengeLoopStep">2</span>
+              <strong>Publish entry</strong>
+              <small>Add a release note so people know the story.</small>
+            </div>
+            <div>
+              <span class="challengeLoopStep">3</span>
+              <strong>Get remixed</strong>
+              <small>Entries can become the seed for the next challenge.</small>
+            </div>
+          </section>
         </section>
 
         <section class="mentorPage wide" data-route="mentor">
@@ -2024,6 +2108,16 @@
                 </span>
                 <span class="settingsRowChev" aria-hidden="true">›</span>
               </a>
+              <a href="#/mentor" class="settingsRow settingsRowLink" data-route-link="mentor">
+                <span class="settingsRowIco" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M2.5 12h1.8M19.7 12H22"/><path d="M6 12c0-3.2 1.6-3.2 3.2 0s3.2 3.2 4.8 0 3.2-3.2 4.8 0"/></svg>
+                </span>
+                <span class="settingsRowBody">
+                  <span class="settingsRowTitle">Voice Lab</span>
+                  <span class="settingsRowSub">On-device voice scan and range labels.</span>
+                </span>
+                <span class="settingsRowChev" aria-hidden="true">›</span>
+              </a>
 
               <div id="profilePersonaRow" class="profilePersonaRow profilePersonaRowSettings" style="display:none" aria-live="polite" data-expanded="false">
                 <button type="button" id="profilePersonaToggle" class="profilePersonaHead" aria-expanded="false" aria-controls="profilePersonaDetails">
@@ -2412,18 +2506,20 @@
           </svg>
           <span class="tabLabel">Discover</span>
         </a>
-        <a href="#/mentor" data-route-link="mentor" class="mentorTab" aria-label="Lab — voice scan">
-          <svg class="tabIco tabIcoLabWave" viewBox="0 0 24 24" aria-hidden="true">
+        <a href="#/challenges" data-route-link="challenges" class="challengesTab" aria-label="Challenges">
+          <svg class="tabIco tabIcoChallenges" viewBox="0 0 24 24" aria-hidden="true">
             <path
               fill="none"
               stroke="currentColor"
               stroke-width="1.85"
               stroke-linecap="round"
               stroke-linejoin="round"
-              d="M2.5 12h1.8M19.7 12H22M6 12c0-3.2 1.6-3.2 3.2 0s3.2 3.2 4.8 0 3.2-3.2 4.8 0 3.2 3.2 4.8 0"
+              d="M6 19V8.5M12 19V5M18 19V10"
             />
+            <path d="M5 8.5h3.9l1.1-3.2 1.1 3.2H15l-3.1 2 1.2 3.6-3.1-2.2-3.1 2.2 1.2-3.6L5 8.5Z" fill="currentColor" stroke="none"/>
+            <path d="M16 10h4l-2 3.2L20 16h-4l-2-2.8L16 10Z" fill="currentColor" opacity="0.55" stroke="none"/>
           </svg>
-          <span class="tabLabel">Lab</span>
+          <span class="tabLabel">Challenges</span>
         </a>
         <a href="#/profile" data-route-link="profile">
           <svg class="tabIco" viewBox="0 0 24 24" aria-hidden="true">
@@ -2536,6 +2632,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260518publicPlayerNote"></script>
+    <script type="module" src="./src/app.js?v=20260518challengesTab"></script>
   </body>
 </html>

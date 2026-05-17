@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260518publicPlayerNote";
+const APP_BUILD = "20260518challengesTab";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2052,7 +2052,7 @@ function applyRoute() {
   const allowedRoutes = new Set([
     "intro", "start", "auth", "generate", "library",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
-    "settings", "profile", "player", "discover", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
+    "settings", "profile", "player", "discover", "challenges", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
   ]);
   const normalized = pendingPublicUsername ? "user" : (route === "start" ? "intro" : route);
   let wanted = allowedRoutes.has(normalized) ? normalized : "generate";
@@ -2228,6 +2228,9 @@ function applyRoute() {
       onLeaveSearchRoute();
     } catch {}
     void refreshDiscoverFeed();
+  }
+  if (wanted === "challenges") {
+    bindChallengesPageOnce();
   }
   if (wanted === "user") {
     renderUserProfile._pendingUserId = pendingPublicUserId;
@@ -2710,6 +2713,41 @@ const DISCOVERY_QUICK_IDEAS = [
   },
 ];
 
+const CHALLENGE_IDEAS = [
+  {
+    id: "hook-rush",
+    title: "Hook Rush",
+    style: "Instant viral hook, no intro, punchy drums, bright lead melody, sticky chorus, 112 bpm",
+    lyrics: "Start with the hook immediately.\nOne short phrase repeats like a chant.\nKeep the verse tiny.\nMake the first 15 seconds impossible to skip.",
+    prompt: "Make the first 15 seconds the whole reason someone replays the song.",
+    tags: ["Hook", "Replay", "Fast"],
+  },
+  {
+    id: "voice-note-flip",
+    title: "Voice Note Flip",
+    style: "Voice-note remix, intimate spoken intro, modern Arabic pop, warm bass, emotional chorus, 96 bpm",
+    lyrics: "Use a spoken line or hummed phrase as the seed.\nTurn it into a chorus.\nKeep the first verse close and personal.\nEnd with the phrase becoming the hook.",
+    prompt: "Turn a tiny real-life voice note into a polished chorus.",
+    tags: ["Voice", "Remix", "Personal"],
+  },
+  {
+    id: "dabke-drop",
+    title: "Dabke Drop",
+    style: "Levantine dabke pop, mijwiz and oud accents, big claps, crowd chorus, wedding energy, 126 bpm",
+    lyrics: "Write a clapping chorus for a party entrance.\nUse simple Arabic or Arabizi lines.\nMake it easy for a group to shout back.\nDrop into a dabke rhythm fast.",
+    prompt: "Build the chorus everyone can clap to.",
+    tags: ["Dabke", "Party", "Crowd"],
+  },
+  {
+    id: "sad-to-dance-challenge",
+    title: "Sad to Dance",
+    style: "Bittersweet dance pop, minor-key piano intro, warm bass, emotional vocal, uplifting drop, 118 bpm",
+    lyrics: "Verse: honest and sad.\nPre-chorus: lift the feeling.\nChorus: dance through it.\nKeep one lyric that feels like a message you never sent.",
+    prompt: "Flip a sad idea into motion without losing the emotion.",
+    tags: ["Mood flip", "Dance", "Heart"],
+  },
+];
+
 /** Non-null when Supabase returned ≥1 active row; merged over `SEARCH_TEMPLATE_FALLBACK` by `id`. */
 let searchTemplatesRemote = null;
 let _searchPeopleFetchGen = 0;
@@ -3079,6 +3117,26 @@ function applyDiscoveryIdeaToCreate(idea) {
   try { showToast("Idea loaded - make it yours", { icon: "♪", durationMs: 2600 }); } catch {}
   try { syncGenerateOrbVisibility?.(); } catch {}
   location.hash = "#/generate";
+}
+
+function bindChallengesPageOnce() {
+  const page = document.querySelector('[data-route="challenges"]');
+  if (!page || page.dataset.boundChallenges === "1") return;
+  page.dataset.boundChallenges = "1";
+  const challenges = new Map(CHALLENGE_IDEAS.map((idea) => [String(idea.id), idea]));
+  page.addEventListener("click", (e) => {
+    const btn = e.target?.closest?.("[data-challenge-start]");
+    if (!btn || !page.contains(btn)) return;
+    const id = String(btn.getAttribute("data-challenge-start") || "");
+    const challenge = challenges.get(id);
+    if (!challenge) return;
+    haptic("light");
+    applyDiscoveryIdeaToCreate({
+      ...challenge,
+      id: `challenge:${challenge.id}`,
+      title: `${challenge.title} Challenge`,
+    });
+  });
 }
 
 function renderDiscoveryIdeasOnce() {

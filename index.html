@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260518challengeNameRequired" />
+    <link rel="stylesheet" href="./styles.css?v=20260518challengeEntries" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -859,6 +859,17 @@
             <button type="button" class="challengeFeatureStart" data-challenge-start="hook-rush">Create entry</button>
           </section>
 
+          <section class="challengeEntriesPanel" aria-labelledby="challengeEntriesTitle">
+            <div class="challengeEntriesHead">
+              <div>
+                <p class="challengePresetKicker">Live entries</p>
+                <h3 id="challengeEntriesTitle">Creators joining now</h3>
+              </div>
+              <span id="challengeEntriesCount" class="challengeEntriesCount">0 joined</span>
+            </div>
+            <div id="challengeEntriesRail" class="challengeEntriesRail" aria-live="polite"></div>
+          </section>
+
           <section class="challengePresetLab" aria-labelledby="challengePresetTitle">
             <div class="challengePresetHead">
               <div>
@@ -1363,6 +1374,16 @@
                   </svg>
                   <span>Publish</span>
                 </button>
+              </div>
+              <div id="playerChallengeAttribution" class="playerChallengeAttribution" hidden>
+                <div class="playerChallengeBadge">
+                  <svg class="challengeIcon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M7 4h10v3a5 5 0 0 1-10 0V4Z"/>
+                    <path d="M5 5H3v2a4 4 0 0 0 4 4M19 5h2v2a4 4 0 0 1-4 4M12 12v5M9 20h6"/>
+                  </svg>
+                  <span>Challenge</span>
+                </div>
+                <div id="playerChallengeAttributionText" class="playerChallengeAttributionText"></div>
               </div>
               <div id="playerRemixAttribution" class="playerRemixAttribution" hidden>
                 <div class="playerRemixAttributionBadge">
@@ -2655,6 +2676,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260518challengeNameRequired"></script>
+    <script type="module" src="./src/app.js?v=20260518challengeEntries"></script>
   </body>
 </html>

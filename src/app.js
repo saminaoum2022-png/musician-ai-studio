@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260518challengeNameRequired";
+const APP_BUILD = "20260518challengeEntries";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -315,6 +315,8 @@ const els = {
   playerArt: document.getElementById("playerArt"),
   playerTitle: document.getElementById("playerTitle"),
   playerSubtitle: document.getElementById("playerSubtitle"),
+  playerChallengeAttribution: document.getElementById("playerChallengeAttribution"),
+  playerChallengeAttributionText: document.getElementById("playerChallengeAttributionText"),
   playerRemixAttribution: document.getElementById("playerRemixAttribution"),
   playerRemixAttributionText: document.getElementById("playerRemixAttributionText"),
   playerReleaseNote: document.getElementById("playerReleaseNote"),
@@ -3212,6 +3214,7 @@ function applyDiscoveryIdeaToCreate(idea) {
   pendingSearchRemixMeta = {
     searchTemplateId: `idea:${String(idea.id || title).trim()}`,
     searchTemplateTitle: title,
+    ...(idea.challenge ? { challenge: idea.challenge } : {}),
   };
   try { setStatus?.(`Loaded idea: ${title}. Make it yours.`); } catch {}
   try { showToast("Idea loaded - make it yours", { icon: "♪", durationMs: 2600 }); } catch {}
@@ -3228,6 +3231,8 @@ function bindChallengesPageOnce() {
   const genreRail = document.getElementById("challengeGenreRail");
   const presetGrid = document.getElementById("challengePresetGrid");
   const nameInput = document.getElementById("challengePersonName");
+  const entriesRail = document.getElementById("challengeEntriesRail");
+  const entriesCount = document.getElementById("challengeEntriesCount");
   let selectedOccasion = CHALLENGE_OCCASIONS[0]?.id || "";
   let selectedGenre = CHALLENGE_GENRES[0]?.id || "";
   const selected = (list, id) => list.find((item) => item.id === id) || list[0] || null;
@@ -3269,6 +3274,15 @@ function bindChallengesPageOnce() {
         "Avoid generic greeting-card lines. Use concrete images and a chorus people can remember.",
       ].join("\n"),
       tags: [...(occasion.tags || []), genre.label],
+      challenge: {
+        id: `occasion:${occasion.id}:${genre.id}`,
+        title: `${occasion.label} ${genre.label}`,
+        type: "occasion",
+        occasion: occasion.label,
+        genre: genre.label,
+        personName: person,
+        variant,
+      },
     };
   };
   const renderFilters = () => {
@@ -3303,7 +3317,44 @@ function bindChallengesPageOnce() {
     renderFilters();
     renderPresets();
   };
+  const refreshChallengeEntries = async () => {
+    if (!entriesRail) return;
+    entriesRail.innerHTML = `<div class="challengeEntriesEmpty">Loading challenge entries...</div>`;
+    const rows = await supabaseFetchDiscoveryPublicSongs(80);
+    const entries = rows.filter((track) => challengeMetaForTrack(track));
+    if (entriesCount) entriesCount.textContent = `${entries.length} joined`;
+    if (!entries.length) {
+      _challengeEntryTracks = [];
+      entriesRail.innerHTML = `<div class="challengeEntriesEmpty">No published challenge entries yet. Be the first to join.</div>`;
+      return;
+    }
+    const profMap = await fetchProfilesByUserIdsMap(entries.map((t) => t.userId));
+    _challengeEntryTracks = entries.map((t) => ({
+      ...t,
+      songId: String(t.id || ""),
+      ownerUserId: String(t.userId || ""),
+    }));
+    entriesRail.innerHTML = entries.slice(0, 16).map((track) => {
+      const challenge = challengeMetaForTrack(track);
+      const prof = track.userId ? profMap.get(track.userId) : null;
+      const handle = String(prof?.username || "").trim();
+      const art = String(track.artUrl || "").trim();
+      const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
+      return `
+        <button type="button" class="challengeEntryCard" data-challenge-entry-play="${encodeURIComponent(track.url || "")}" data-challenge-entry-title="${encodeURIComponent(track.title || "Song")}" data-challenge-entry-art="${encodeURIComponent(artSafe)}" data-challenge-entry-by="${encodeURIComponent(handle ? `@${handle}` : "Creator")}" data-play-song-id="${encodeURIComponent(track.id || "")}" data-play-owner-id="${encodeURIComponent(track.userId || "")}" data-play-task-id="${encodeURIComponent(track.taskId || "")}" data-play-audio-id="${encodeURIComponent(track.audioId || "")}">
+          <span class="challengeEntryArt"><img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" /></span>
+          <span class="challengeEntryOverlay" aria-hidden="true"></span>
+          <span class="challengeEntryPill">${challengePillHtml()}</span>
+          <span class="challengeEntryText">
+            <strong>${escapeHtml(track.title || "Song")}</strong>
+            <small>${escapeHtml(challengeAttributionText(challenge))}</small>
+            ${handle ? `<em>@${escapeHtml(handle)}</em>` : ""}
+          </span>
+        </button>`;
+    }).join("");
+  };
   renderPresetLab();
+  void refreshChallengeEntries();
   page.addEventListener("click", (e) => {
     const occasionBtn = e.target?.closest?.("[data-challenge-occasion]");
     if (occasionBtn && page.contains(occasionBtn)) {
@@ -3330,6 +3381,17 @@ function bindChallengesPageOnce() {
       applyDiscoveryIdeaToCreate(buildPresetIdea(occasion, genre, variant || "anthem"));
       return;
     }
+    const entryBtn = e.target?.closest?.("[data-challenge-entry-play]");
+    if (entryBtn && page.contains(entryBtn)) {
+      const raw = decodeDiscoverDataAttr(entryBtn, "data-challenge-entry-play");
+      const title = decodeDiscoverDataAttr(entryBtn, "data-challenge-entry-title") || "Song";
+      const art = decodeDiscoverDataAttr(entryBtn, "data-challenge-entry-art") || "";
+      const by = decodeDiscoverDataAttr(entryBtn, "data-challenge-entry-by") || "";
+      if (!raw) return;
+      haptic("light");
+      void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by, playSource: publicPlaySourceFromEl(entryBtn) });
+      return;
+    }
     const btn = e.target?.closest?.("[data-challenge-start]");
     if (!btn || !page.contains(btn)) return;
     const id = String(btn.getAttribute("data-challenge-start") || "");
@@ -3340,6 +3402,15 @@ function bindChallengesPageOnce() {
       ...challenge,
       id: `challenge:${challenge.id}`,
       title: `${challenge.title} Challenge`,
+      challenge: {
+        id: challenge.id,
+        title: challenge.title,
+        type: "daily",
+        occasion: "",
+        genre: "",
+        personName: "",
+        variant: "daily",
+      },
     });
   });
   nameInput?.addEventListener?.("input", () => {
@@ -4336,6 +4407,41 @@ function remixSourceLineHtml(track) {
   return `<span class="remixAttributionLine">${remixPillHtml()}<span>${escapeHtml(remixAttributionText(remixOf))}</span></span>`;
 }
 
+function challengeMetaForTrack(track) {
+  const c = track?.meta?.challenge || track?.challenge || null;
+  if (!c || typeof c !== "object") return null;
+  const id = String(c.id || "").trim();
+  const title = String(c.title || c.name || "").trim();
+  const occasion = String(c.occasion || c.occasionLabel || "").trim();
+  const genre = String(c.genre || c.genreLabel || "").trim();
+  const personName = String(c.personName || c.person || "").trim();
+  const variant = String(c.variant || "").trim();
+  if (!id && !title && !occasion && !genre && !personName) return null;
+  return { ...c, id, title: title || "Challenge", occasion, genre, personName, variant };
+}
+
+function challengeIconSvgHtml() {
+  return `<svg class="challengeIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10v3a5 5 0 0 1-10 0V4Z"/><path d="M5 5H3v2a4 4 0 0 0 4 4M19 5h2v2a4 4 0 0 1-4 4M12 12v5M9 20h6"/></svg>`;
+}
+
+function challengePillHtml(label = "Challenge") {
+  return `<span class="challengeAttributionPill">${challengeIconSvgHtml()}<span>${escapeHtml(label)}</span></span>`;
+}
+
+function challengeAttributionText(challenge) {
+  if (!challenge) return "";
+  const title = String(challenge.title || "Challenge").trim();
+  const bits = [challenge.occasion, challenge.genre].map((x) => String(x || "").trim()).filter(Boolean);
+  const forWho = challenge.personName ? ` · For ${challenge.personName}` : "";
+  return `Joined ${title}${bits.length ? ` · ${bits.join(" / ")}` : ""}${forWho}`;
+}
+
+function challengeSourceLineHtml(track) {
+  const challenge = challengeMetaForTrack(track);
+  if (!challenge) return "";
+  return `<span class="challengeAttributionLine">${challengePillHtml()}<span>${escapeHtml(challengeAttributionText(challenge))}</span></span>`;
+}
+
 function releaseCaptionForTrack(track) {
   return String(track?.meta?.releaseCaption || track?.meta?.release_caption || "").trim();
 }
@@ -4358,11 +4464,17 @@ function setPlayerRemixAttribution(remixOf) {
   if (els.playerRemixAttribution) els.playerRemixAttribution.hidden = !text;
 }
 
+function setPlayerChallengeAttribution(challenge) {
+  const text = challengeAttributionText(challenge);
+  if (els.playerChallengeAttributionText) els.playerChallengeAttributionText.textContent = text;
+  if (els.playerChallengeAttribution) els.playerChallengeAttribution.hidden = !text;
+}
+
 function publicPlaybackTrackBySource(source, rawUrl = "") {
   const songId = String(source?.songId || "").trim();
   const ownerUserId = String(source?.ownerUserId || "").trim();
   const url = String(rawUrl || "").trim();
-  const pools = [_discoveryFeedTracks || [], _userPublicFeedTracks || []];
+  const pools = [_discoveryFeedTracks || [], _userPublicFeedTracks || [], _challengeEntryTracks || []];
   for (const pool of pools) {
     const hit = pool.find((t) => (
       (songId && String(t.songId || t.id || "") === songId) ||
@@ -7500,8 +7612,8 @@ async function supabaseLoadUserSongs() {
   // happens to be a legacy `data:` URL*, same trick we use on `hub_posts`
   // for cover_url / creator_avatar. The cheap `art_url is null` branch
   // covers freshly inserted rows where we deliberately wrote null.
-  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
@@ -7566,6 +7678,7 @@ async function supabaseLoadUserSongs() {
       meta: {
         ...(s.meta_remix_of ? { remixOf: s.meta_remix_of } : {}),
         ...(String(s.meta_release_caption || "").trim() ? { releaseCaption: String(s.meta_release_caption).trim() } : {}),
+        ...(s.meta_challenge ? { challenge: s.meta_challenge } : {}),
       },
       publishedAt: selectedPublishedAt ? userSongPublishedAtValue(s) : "",
       publicOnProfile: Boolean(
@@ -7855,8 +7968,8 @@ async function supabaseFetchPublicLibraryForUserId(userId) {
   const uid = String(userId || "").trim();
   if (!uid || !SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
   const enc = encodeURIComponent(uid);
-  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   try {
     let r = await fetch(
@@ -7891,6 +8004,7 @@ async function supabaseFetchPublicLibraryForUserId(userId) {
       meta: {
         ...(s.meta_remix_of ? { remixOf: s.meta_remix_of } : {}),
         ...(String(s.meta_release_caption || "").trim() ? { releaseCaption: String(s.meta_release_caption).trim() } : {}),
+        ...(s.meta_challenge ? { challenge: s.meta_challenge } : {}),
       },
       publicOnProfile: true,
     })).sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
@@ -8409,8 +8523,8 @@ function maybeRecordQualifiedPublicPlay() {
 async function supabaseFetchDiscoveryPublicSongs(limit) {
   const lim = Math.max(1, Math.min(80, Number(limit) || 48));
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
-  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   try {
     let r = await fetch(
@@ -8450,6 +8564,7 @@ async function supabaseFetchDiscoveryPublicSongs(limit) {
       meta: {
         ...(s.meta_remix_of ? { remixOf: s.meta_remix_of } : {}),
         ...(String(s.meta_release_caption || "").trim() ? { releaseCaption: String(s.meta_release_caption).trim() } : {}),
+        ...(s.meta_challenge ? { challenge: s.meta_challenge } : {}),
       },
     })).sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
   } catch (e) {
@@ -9482,6 +9597,8 @@ let _discoveryFeedGen = 0;
 let _discoveryFeedTracks = [];
 /** Songs listed on `#/u/…` (Library public list or Hub-derived profile) for sheet shuffle. */
 let _userPublicFeedTracks = [];
+/** Public songs currently shown in Challenges latest-entry rails. */
+let _challengeEntryTracks = [];
 
 function discoveryTrackPlaybackMeta(t, profMap) {
   const art = String(t.artUrl || "").trim();
@@ -9557,9 +9674,10 @@ function userPublicDiscoveryRowHtml(t, idx, pub) {
   const encHandle = rawHandle ? encodeURIComponent(rawHandle) : "";
   const extra = pub.extraMeta ? ` · ${escapeHtml(String(pub.extraMeta))}` : "";
   const metaInner = `${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}${extra}`;
+  const challengeLine = challengeSourceLineHtml(t);
   const remixLine = remixSourceLineHtml(t);
   const releaseLine = releaseCaptionLineHtml(t);
-  const richRowClass = remixLine || releaseLine ? " discoveryRow--rich" : "";
+  const richRowClass = challengeLine || remixLine || releaseLine ? " discoveryRow--rich" : "";
   const sheetData = `data-dp-song-id="${encSongId}" data-dp-owner-id="${encOwnerId}" data-dp-task-id="${encTaskId}" data-dp-audio-id="${encAudioId}"`;
   const side = `<button type="button" class="discoveryRowSide" data-discovery-open-sheet="1" data-dp-hide-profile="1" data-dp-use-public-shuffle="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" ${sheetData} aria-label="Options for ${safeTitle}">⋯</button>`;
   return `
@@ -9575,6 +9693,7 @@ function userPublicDiscoveryRowHtml(t, idx, pub) {
           <span class="discoveryRowMid">
             <span class="discoveryRowTitle">${safeTitle}</span>
             <span class="discoveryRowMeta">${metaInner}</span>
+            ${challengeLine}
             ${remixLine}
             ${releaseLine}
           </span>
@@ -9619,9 +9738,10 @@ function discoveryTrackRowHtml(t, profMap, idx) {
   const playData = `data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" data-play-task-id="${encTaskId}" data-play-audio-id="${encAudioId}" data-play-release-caption="${encReleaseCaption}"`;
   const encHandle = handle ? encodeURIComponent(handle) : "";
   const sheetData = `data-dp-song-id="${encSongId}" data-dp-owner-id="${encOwnerId}" data-dp-task-id="${encTaskId}" data-dp-audio-id="${encAudioId}"`;
+  const challengeLine = challengeSourceLineHtml(t);
   const remixLine = remixSourceLineHtml(t);
   const releaseLine = releaseCaptionLineHtml(t);
-  const richRowClass = remixLine || releaseLine ? " discoveryRow--rich" : "";
+  const richRowClass = challengeLine || remixLine || releaseLine ? " discoveryRow--rich" : "";
   const side = `<button type="button" class="discoveryRowSide" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" ${sheetData} aria-label="Options for ${safeTitle}">⋯</button>`;
   return `
       <div class="discoveryRow${richRowClass}" style="--i:${idx}">
@@ -9636,6 +9756,7 @@ function discoveryTrackRowHtml(t, profMap, idx) {
           <span class="discoveryRowMid">
             <span class="discoveryRowTitle">${safeTitle}</span>
             <span class="discoveryRowMeta">${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}</span>
+            ${challengeLine}
             ${remixLine}
             ${releaseLine}
           </span>
@@ -9667,6 +9788,7 @@ function discoverySpotCardHtml(t, profMap, idx) {
   const imgLoad = spotIdx < 3 ? "eager" : "lazy";
   const imgPriority = spotIdx === 0 ? ' fetchpriority="high"' : "";
   const encHandle = handle ? encodeURIComponent(handle) : "";
+  const challenge = challengeMetaForTrack(t);
   const remixOf = remixAttributionForTrack(t);
   const releaseCaption = releaseCaptionForTrack(t);
   return `
@@ -9679,7 +9801,8 @@ function discoverySpotCardHtml(t, profMap, idx) {
           <span class="discoverySpotCardTextRow">
             <span class="discoverySpotCardTextCol">
               <span class="discoverySpotCardTitle">${safeTitle}</span>
-              <span class="discoverySpotCardBy">${remixOf ? `${remixPillHtml()} ` : ""}${escapeHtml(byLine)}</span>
+              <span class="discoverySpotCardBy">${challenge ? `${challengePillHtml()} ` : remixOf ? `${remixPillHtml()} ` : ""}${escapeHtml(byLine)}</span>
+              ${challenge ? `<span class="discoverySpotCardCaption">${escapeHtml(challengeAttributionText(challenge))}</span>` : ""}
               ${releaseCaption ? `<span class="discoverySpotCardCaption">${escapeHtml(releaseCaption)}</span>` : ""}
             </span>
             <span class="discoverySpotCardEq" aria-hidden="true"><span></span><span></span><span></span></span>
@@ -9920,6 +10043,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     String(publicTrackMeta?.releaseCaption || "").trim() ||
     String(playSource?.releaseCaption || "").trim();
   const remixOf = remixAttributionForTrack(publicTrackMeta);
+  const challenge = challengeMetaForTrack(publicTrackMeta);
   try {
     stopHubPlayback();
   } catch {}
@@ -9944,9 +10068,11 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
       ...(publicTrackMeta?.meta || {}),
       ...(releaseCaption ? { releaseCaption } : {}),
       ...(remixOf ? { remixOf } : {}),
+      ...(challenge ? { challenge } : {}),
     },
     releaseCaption,
     remixOf,
+    challenge,
   };
   const publicSource = fromDiscover
     ? { type: "discover_feed", url: playableRaw, ...(playSource || {}) }
@@ -9963,6 +10089,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     artUrl: artUrl || placeholderCoverDataUrl(),
     releaseCaption,
     remixOf,
+    challenge,
   };
   if (!openPlayer) {
     setPlayerMeta(meta);
@@ -13462,6 +13589,7 @@ function normalizeTrackRow(row) {
   const meta = row?.meta || {
     ...(row?.meta_remix_of ? { remixOf: row.meta_remix_of } : {}),
     ...(String(row?.meta_release_caption || "").trim() ? { releaseCaption: String(row.meta_release_caption).trim() } : {}),
+    ...(row?.meta_challenge ? { challenge: row.meta_challenge } : {}),
   };
   return {
     id: String(row?.id || `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
@@ -14838,6 +14966,7 @@ function openSongDetailsModal(track) {
   const lyrics = songDetailsLyricsForTrack(track);
   const hasLyrics = Boolean(lyrics);
   const releaseCaption = releaseCaptionForTrack(track);
+  const challenge = challengeMetaForTrack(track);
   const remixOf = remixAttributionForTrack(track);
   const remixCreator = remixOf?.creatorUsername ? `@${remixOf.creatorUsername}` : "";
   const remixSummary = remixOf
@@ -14878,6 +15007,16 @@ function openSongDetailsModal(track) {
       <div class="songDetailsRemixCard">
         ${remixPillHtml()}
         <div class="songDetailsRemixText">${escapeHtml(remixSummary)}</div>
+      </div>
+    </section>
+    ` : ""}
+
+    ${challenge ? `
+    <section class="songDetailsSection">
+      <div class="songDetailsSectionTitle">Challenge entry</div>
+      <div class="songDetailsChallengeCard">
+        ${challengePillHtml()}
+        <div class="songDetailsChallengeText">${escapeHtml(challengeAttributionText(challenge))}</div>
       </div>
     </section>
     ` : ""}
@@ -15837,11 +15976,12 @@ function placeholderCoverDataUrl() {
   return "./assets/nabadai-logo.png";
 }
 
-function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf } = {}) {
+function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, challenge } = {}) {
   const hasTrack = Boolean(artUrl);
   if (els.playerTitle) els.playerTitle.textContent = title || "Now Playing";
   if (els.playerSubtitle) els.playerSubtitle.textContent = subtitle || "";
   if (els.playerArt) els.playerArt.src = artUrl || placeholderCoverDataUrl();
+  setPlayerChallengeAttribution(challenge || challengeMetaForTrack(currentPlayerTrackRef));
   setPlayerRemixAttribution(remixOf || remixAttributionForTrack(currentPlayerTrackRef));
   setPlayerReleaseNote(releaseCaption);
   const artWrap = document.querySelector(".playerArtWrap");

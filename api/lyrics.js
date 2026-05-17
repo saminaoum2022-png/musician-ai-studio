@@ -3,7 +3,8 @@
  * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange" }
  *
  * Provider:
- * 1) Gemini only
+ * 1) Suno lyrics API
+ * 2) Gemini fallback / repair
  */
 module.exports = async function handler(req, res) {
   setCors(res);
@@ -19,11 +20,39 @@ module.exports = async function handler(req, res) {
     const mode = detectModeFromSeed(seed, body?.mode);
     const nonce = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
     const prompt = buildPrompt({ seed, style, mode, nonce, dialect, dialectHint });
+    const sunoPrompt = buildSunoPrompt({ seed, style, mode, dialect, dialectHint });
     const complianceTerms = extractComplianceTerms({ seed, style });
     const sunoKey = process.env.SUNO_API_KEY || "";
 
     const debug = {};
     const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    if (sunoKey) {
+      const { host, proto } = getHostProto(req);
+      const callBackUrl = `${proto}://${host}/api/suno/callback`;
+      const sunoResult = await trySunoLyrics({ sunoKey, prompt: sunoPrompt, callBackUrl });
+      if (sunoResult?.ok) {
+        const normalized = sanitizeLyricsOutput(sunoResult.lyrics);
+        if (normalized) {
+          const repaired = await maybeRepairOnce({
+            text: normalized,
+            prompt,
+            complianceTerms,
+            sunoKey: "",
+            geminiKey,
+          });
+          return json(res, 200, {
+            lyrics: repaired.text,
+            provider: repaired.provider || "suno",
+            title: sunoResult.title || "",
+            debug: { nonce, suno: "ok", taskId: sunoResult.taskId || "" },
+          });
+        }
+      }
+      debug.suno = sunoResult?.error || "failed";
+    } else {
+      debug.suno = "missing_suno_key";
+    }
+
     if (geminiKey) {
       const gemResult = await tryGeminiLyrics({ geminiKey, prompt });
       if (gemResult?.ok) {
@@ -38,14 +67,14 @@ module.exports = async function handler(req, res) {
         return json(res, 200, {
           lyrics: repaired.text,
           provider: repaired.provider || "gemini",
-          debug: { nonce, gemini: "ok" },
+          debug: { ...debug, nonce, gemini: "ok" },
         });
       }
       debug.gemini = gemResult?.error || "failed";
     }
 
     return json(res, 502, {
-      error: `Lyrics provider unavailable (Gemini): ${debug.gemini || "unknown upstream error"}`,
+      error: `Lyrics providers unavailable (Suno/Gemini): suno=${debug.suno || "-"} gemini=${debug.gemini || "-"}`,
       provider: "none",
       debug: { ...debug, nonce },
     });
@@ -54,33 +83,46 @@ module.exports = async function handler(req, res) {
   }
 };
 
-async function trySunoLyrics({ sunoKey, prompt }) {
-  const endpoints = [
-    "https://api.sunoapi.org/api/v1/lyrics/generate",
-    "https://api.sunoapi.org/api/v1/generate/lyrics",
-  ];
-
-  for (const url of endpoints) {
-    try {
-      const r = await fetch(url, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${sunoKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ prompt }),
-      });
-      const text = await r.text().catch(() => "");
-      const data = safeJson(text) || {};
-      if (!r.ok) continue;
-      const lyrics = extractLyricsFromAny(data) || extractTextLoose(data) || String(text || "").trim();
-      if (lyrics) return { ok: true, lyrics };
-      return { ok: false, error: "empty response" };
-    } catch {
-      // try next endpoint
+async function trySunoLyrics({ sunoKey, prompt, callBackUrl }) {
+  const createUrl = "https://api.sunoapi.org/api/v1/lyrics";
+  try {
+    const created = await fetch(createUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${sunoKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ prompt: String(prompt || "").slice(0, 200), callBackUrl }),
+    });
+    const createText = await created.text().catch(() => "");
+    const createData = safeJson(createText) || {};
+    if (!created.ok || (createData.code && Number(createData.code) !== 200)) {
+      return { ok: false, error: createData?.msg || createData?.error || createText || `create_http_${created.status}` };
     }
+    const taskId = String(createData?.data?.taskId || createData?.taskId || "").trim();
+    if (!taskId) return { ok: false, error: "missing_task_id" };
+
+    for (let i = 0; i < 8; i += 1) {
+      if (i > 0) await delay(1500);
+      const info = await fetch(`https://api.sunoapi.org/api/v1/lyrics/record-info?taskId=${encodeURIComponent(taskId)}`, {
+        headers: { Authorization: `Bearer ${sunoKey}` },
+      });
+      const text = await info.text().catch(() => "");
+      const data = safeJson(text) || {};
+      if (!info.ok || (data.code && Number(data.code) !== 200)) {
+        return { ok: false, error: data?.msg || data?.error || text || `status_http_${info.status}`, taskId };
+      }
+      const extracted = extractSunoLyricsFromRecord(data);
+      if (extracted?.lyrics) return { ok: true, taskId, lyrics: extracted.lyrics, title: extracted.title || "" };
+      const status = String(data?.data?.status || data?.status || "").toUpperCase();
+      if (["CREATE_TASK_FAILED", "GENERATE_LYRICS_FAILED", "CALLBACK_EXCEPTION", "SENSITIVE_WORD_ERROR"].includes(status)) {
+        return { ok: false, error: status.toLowerCase(), taskId };
+      }
+    }
+    return { ok: false, error: "poll_timeout", taskId };
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e || "suno_failed").slice(0, 180) };
   }
-  return { ok: false, error: "all endpoints failed" };
 }
 
 async function maybeRepairOnce({ text, prompt, complianceTerms, sunoKey, geminiKey }) {
@@ -96,13 +138,6 @@ async function maybeRepairOnce({ text, prompt, complianceTerms, sunoKey, geminiK
     "Current non-compliant output to repair:",
     text,
   ].join("\n");
-  if (sunoKey) {
-    const s = await trySunoLyrics({ sunoKey, prompt: repairPrompt });
-    if (s?.ok) {
-      const out = sanitizeLyricsOutput(s.lyrics);
-      if (out) return { text: out, provider: "suno-repair" };
-    }
-  }
   if (geminiKey) {
     const g = await tryGeminiLyrics({ geminiKey, prompt: repairPrompt });
     if (g?.ok) {
@@ -223,6 +258,26 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint }) {
   ].join("\n");
 }
 
+function buildSunoPrompt({ seed, style, mode, dialect, dialectHint }) {
+  const intent = mode === "arrange"
+    ? "Arrange user lyrics into a singable song with section tags."
+    : mode === "continue"
+      ? "Continue these lyrics in the same mood and language."
+      : "Write complete singable song lyrics with verse and chorus tags.";
+  const parts = [
+    intent,
+    dialect ? `Dialect: ${dialect}.` : "",
+    dialectHint ? `Flavor: ${dialectHint}.` : "",
+    style ? `Style: ${style}.` : "",
+    seed ? `Idea: ${seed}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return parts.length > 200 ? parts.slice(0, 197).trimEnd() + "..." : parts;
+}
+
 function extractGeminiText(data) {
   const parts = data?.candidates?.[0]?.content?.parts || [];
   return parts
@@ -230,6 +285,32 @@ function extractGeminiText(data) {
     .filter(Boolean)
     .join("\n")
     .trim();
+}
+
+function extractSunoLyricsFromRecord(data) {
+  const variants = [];
+  const pushMany = (arr) => {
+    if (!Array.isArray(arr)) return;
+    for (const item of arr) {
+      const text = String(item?.text || item?.lyrics || "").trim();
+      if (!text) continue;
+      const status = String(item?.status || "").trim().toLowerCase();
+      variants.push({
+        text,
+        title: String(item?.title || "").trim(),
+        complete: !status || status === "complete",
+      });
+    }
+  };
+  pushMany(data?.data?.response?.data);
+  pushMany(data?.data?.data);
+  pushMany(data?.response?.data);
+  pushMany(data?.data?.response);
+  const direct = extractLyricsFromAny(data) || extractTextLoose(data);
+  if (direct) variants.push({ text: direct, title: "", complete: true });
+  variants.sort((a, b) => Number(b.complete) - Number(a.complete) || b.text.length - a.text.length);
+  const pick = variants[0];
+  return pick ? { lyrics: pick.text, title: pick.title } : null;
 }
 
 function extractLyricsFromAny(data) {
@@ -418,12 +499,22 @@ function json(res, status, obj) {
   res.end(JSON.stringify(obj));
 }
 
+function getHostProto(req) {
+  const host = req.headers["x-forwarded-host"] || req.headers.host || "localhost";
+  const proto = req.headers["x-forwarded-proto"] || "https";
+  return { host, proto };
+}
+
 async function readJson(req) {
   const chunks = [];
   for await (const c of req) chunks.push(c);
   const raw = Buffer.concat(chunks).toString("utf8").trim();
   if (!raw) return {};
   return JSON.parse(raw);
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function safeJson(txt) {

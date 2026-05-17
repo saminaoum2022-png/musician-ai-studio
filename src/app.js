@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260518challengeSingableLyrics";
+const APP_BUILD = "20260518challengeFreshLyrics";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -3206,6 +3206,8 @@ function applyDiscoveryIdeaToCreate(idea) {
   const title = String(idea.title || "New Idea").trim();
   if (els.sunoTitle) els.sunoTitle.value = title;
   if (els.sunoStyle) els.sunoStyle.value = String(idea.style || "").trim();
+  if (idea.dialect && els.sunoDialect) els.sunoDialect.value = String(idea.dialect || "").trim();
+  if (idea.dialectHint && els.sunoDialectHint) els.sunoDialectHint.value = String(idea.dialectHint || "").trim();
   if (els.sunoPrompt) {
     const body = String(idea.lyrics || idea.prompt || "").trim();
     els.sunoPrompt.value = body;
@@ -3330,13 +3332,104 @@ function bindChallengesPageOnce() {
         <h3>${escapeHtml(preset.title)}</h3>
         <p>${escapeHtml(preset.prompt)}</p>
         <div class="challengePresetTags">${(preset.tags || []).slice(0, 3).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</div>
-        <button type="button" data-challenge-preset="${escapeHtml(preset.id)}">Create this</button>
+        <button type="button" data-challenge-preset="${escapeHtml(preset.id)}">Create fresh</button>
       </article>
     `).join("");
   };
   const renderPresetLab = () => {
     renderFilters();
     renderPresets();
+  };
+  const challengeFreshLyricsSeed = (idea) => {
+    const challenge = idea?.challenge || {};
+    const person = String(challenge.personName || "").trim();
+    const occasion = String(challenge.occasion || challenge.title || idea?.title || "challenge").trim();
+    const genre = String(challenge.genre || "").trim();
+    const nonce = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    return [
+      "Write a BRAND NEW Arabic song lyric draft for this NabadAi Challenge entry.",
+      "Output ONLY singable lyrics with section tags like [Verse 1], [Chorus], [Bridge], [Final Chorus], [Outro].",
+      "Language: Arabic first. Levantine Arabic or natural Arabizi phrases are allowed only when musical.",
+      "Syllable discipline: use short balanced lines, around 5-8 syllables when possible, easy to sing, no long prose sentences.",
+      "Do not write instructions. Do not explain. Do not mention the word challenge.",
+      person ? `Dedication/name to include naturally in the hook: ${person}.` : "",
+      `Occasion/theme: ${occasion}.`,
+      genre ? `Musical color: ${genre}.` : "",
+      idea?.prompt ? `Creative brief: ${idea.prompt}` : "",
+      "Make this take noticeably different from common birthday/wedding template lyrics.",
+      `Fresh variation token: ${nonce}.`,
+    ].filter(Boolean).join("\n");
+  };
+  const challengeArabicFallbackLyrics = (idea) => {
+    const challenge = idea?.challenge || {};
+    const name = String(challenge.personName || "").trim() || "حبيبي";
+    const occasion = String(challenge.occasion || challenge.title || idea?.title || "").toLowerCase();
+    const hook = /wedding|زفاف|عرس/.test(occasion)
+      ? `يا ${name} الليلة فرح\nوالقلب يغني من مطرح`
+      : /anniversary|ذكرى/.test(occasion)
+        ? `يا ${name} سنين وعدت\nوالضحكة فينا ما سكتت`
+        : /new|سنة/.test(occasion)
+          ? `يا ${name} سنة وجاية\nنفتح لها ألف حكاية`
+          : /congrats|نجاح|مبروك/.test(occasion)
+            ? `يا ${name} مبروك عليك\nالتعب صار نجمة بإيديك`
+            : `يا ${name} عيدك نور\nوالفرحة حوالينا تدور`;
+    return `[Verse 1]\nيا ${name} جينا نغني\nوالليل صار أحلى معنا\nضحكة بعينك بتحلي\nكل دقيقة من عمرنا\n\n[Chorus]\n${hook}\nنرقص ونقولها سوا\nهيدا اليوم إلك يا هوا\n\n[Verse 2]\nخطوة خطوة والدرب ضاوي\nوالناس حواليك بتحبك\nصوتك بقلبي نداوي\nوالغنية اليوم بتشبهك\n\n[Bridge]\nخلي اللحظة تبقى\nمتل نجمة بالسما\n\n[Final Chorus]\n${hook}\nنغنيها مرة كمان\nلحد ما يخلص المكان\n\n[Outro]\nيا ${name} خلي الفرح يدوم\nتصبح على حب ونجوم`;
+  };
+  const withFreshChallengeLyrics = async (idea, btn) => {
+    const base = { ...(idea || {}) };
+    const originalLabel = btn?.textContent || "";
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Fresh lyrics...";
+      }
+      setStatus("Writing a fresh Arabic challenge take...");
+      const style = [
+        "Arabic lyrics, singable lines, clear syllable balance, no prose",
+        String(base.style || "").trim(),
+      ].filter(Boolean).join(", ");
+      const r = await fetch(apiUrl("/api/lyrics"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          seed: challengeFreshLyricsSeed(base),
+          style,
+          mode: "full",
+          dialect: "Levantine Arabic / Arabic",
+          dialectHint: "Natural Arabic lyrics with short lines and clean syllable flow for singing.",
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data?.error || "Fresh lyrics failed");
+      const lyrics = String(data?.lyrics || "").trim();
+      if (!lyrics) throw new Error("No fresh lyrics returned");
+      if (!/[\u0600-\u06FF]/.test(lyrics)) throw new Error("Fresh lyrics were not Arabic");
+      return {
+        ...base,
+        lyrics,
+        dialect: "Arabic",
+        dialectHint: "Natural Arabic phrasing with short, balanced singable lines.",
+        challenge: {
+          ...(base.challenge || {}),
+          freshLyricsProvider: String(data?.provider || "").trim(),
+          freshLyricsAt: new Date().toISOString(),
+        },
+      };
+    } catch (e) {
+      console.warn("[challenges/fresh-lyrics]", e);
+      try { showToast("Fresh lyrics failed - using starter draft", { icon: "!", durationMs: 2800 }); } catch {}
+      return {
+        ...base,
+        lyrics: challengeArabicFallbackLyrics(base),
+        dialect: "Arabic",
+        dialectHint: "Natural Arabic phrasing with short, balanced singable lines.",
+      };
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = originalLabel || "Create this";
+      }
+    }
   };
   const refreshChallengeEntries = async () => {
     if (!entriesRail) return;
@@ -3376,7 +3469,7 @@ function bindChallengesPageOnce() {
   };
   renderPresetLab();
   void refreshChallengeEntries();
-  page.addEventListener("click", (e) => {
+  page.addEventListener("click", async (e) => {
     const occasionBtn = e.target?.closest?.("[data-challenge-occasion]");
     if (occasionBtn && page.contains(occasionBtn)) {
       selectedOccasion = String(occasionBtn.getAttribute("data-challenge-occasion") || selectedOccasion);
@@ -3399,7 +3492,8 @@ function bindChallengesPageOnce() {
       const genre = selected(CHALLENGE_GENRES, genreId);
       if (!occasion || !genre) return;
       haptic("light");
-      applyDiscoveryIdeaToCreate(buildPresetIdea(occasion, genre, variant || "anthem"));
+      const freshIdea = await withFreshChallengeLyrics(buildPresetIdea(occasion, genre, variant || "anthem"), presetBtn);
+      applyDiscoveryIdeaToCreate(freshIdea);
       return;
     }
     const entryBtn = e.target?.closest?.("[data-challenge-entry-play]");
@@ -3419,7 +3513,7 @@ function bindChallengesPageOnce() {
     const challenge = challenges.get(id);
     if (!challenge) return;
     haptic("light");
-    applyDiscoveryIdeaToCreate({
+    const freshIdea = await withFreshChallengeLyrics({
       ...challenge,
       id: `challenge:${challenge.id}`,
       title: `${challenge.title} Challenge`,
@@ -3432,7 +3526,8 @@ function bindChallengesPageOnce() {
         personName: "",
         variant: "daily",
       },
-    });
+    }, btn);
+    applyDiscoveryIdeaToCreate(freshIdea);
   });
   nameInput?.addEventListener?.("input", () => {
     try { nameInput.closest?.(".challengeNameField")?.classList?.remove?.("isRequired"); } catch {}

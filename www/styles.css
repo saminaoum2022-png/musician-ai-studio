@@ -11608,6 +11608,18 @@ button.discoverySpotCard{
   padding: 0 6px;
   font-size: 9px;
 }
+.discoverySpotCardCaption{
+  display: block;
+  max-width: 100%;
+  color: rgba(244,247,255,0.82);
+  font-size: 10.5px;
+  font-weight: 650;
+  font-style: italic;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .discoveryMoreHead{
   font-size: 12px;

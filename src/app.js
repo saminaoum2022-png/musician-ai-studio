@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260517releaseCaptionCloud";
+const APP_BUILD = "20260517releaseCaptionPublic";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -9328,6 +9328,7 @@ function discoverySpotCardHtml(t, profMap, idx) {
   const imgPriority = spotIdx === 0 ? ' fetchpriority="high"' : "";
   const encHandle = handle ? encodeURIComponent(handle) : "";
   const remixOf = remixAttributionForTrack(t);
+  const releaseCaption = releaseCaptionForTrack(t);
   return `
       <div class="discoverySpotCardWrap" style="--i:${spotIdx}">
         <button type="button" class="discoverySpotCard" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
@@ -9339,6 +9340,7 @@ function discoverySpotCardHtml(t, profMap, idx) {
             <span class="discoverySpotCardTextCol">
               <span class="discoverySpotCardTitle">${safeTitle}</span>
               <span class="discoverySpotCardBy">${remixOf ? `<span class="remixAttributionPill">Remix</span> ` : ""}${escapeHtml(byLine)}</span>
+              ${releaseCaption ? `<span class="discoverySpotCardCaption">${escapeHtml(releaseCaption)}</span>` : ""}
             </span>
             <span class="discoverySpotCardEq" aria-hidden="true"><span></span><span></span><span></span></span>
           </span>
@@ -9734,10 +9736,17 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
       .map((t, i) =>
         userPublicDiscoveryRowHtml(
           {
+            id: t.id,
+            userId: t.userId,
             url: t.url,
             title: t.title,
             artUrl: t.artUrl,
             ts: t.ts,
+            taskId: t.taskId,
+            audioId: t.audioId,
+            kind: t.kind,
+            meta: t.meta,
+            publicOnProfile: t.publicOnProfile,
           },
           i,
           pubCtx,
@@ -12400,10 +12409,17 @@ function renderUserProfile(rawUsername) {
       .map((p, i) =>
         userPublicDiscoveryRowHtml(
           {
+            id: p.id,
+            userId: p.userId,
             url: p.url,
             title: p.title,
             artUrl: p.artUrl || p.creatorAvatar,
             ts: p.ts,
+            taskId: p.taskId,
+            audioId: p.audioId,
+            kind: p.kind,
+            meta: p.meta,
+            publicOnProfile: p.publicOnProfile,
           },
           i,
           {

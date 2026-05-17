@@ -17,11 +17,31 @@ create table if not exists public.user_songs (
   kind text default 'full',
   meta jsonb,
   public_on_profile boolean not null default false,
+  published_at timestamptz,
   created_at timestamptz not null default now()
 );
 
+alter table public.user_songs
+  add column if not exists public_on_profile boolean not null default false;
+
+alter table public.user_songs
+  add column if not exists published_at timestamptz;
+
+update public.user_songs
+  set published_at = created_at
+  where public_on_profile is true
+    and published_at is null;
+
 create index if not exists user_songs_user_created_idx
   on public.user_songs (user_id, created_at desc);
+
+create index if not exists user_songs_public_published_idx
+  on public.user_songs (published_at desc, created_at desc)
+  where public_on_profile is true;
+
+create index if not exists user_songs_user_public_published_idx
+  on public.user_songs (user_id, published_at desc, created_at desc)
+  where public_on_profile is true;
 
 alter table public.user_songs enable row level security;
 

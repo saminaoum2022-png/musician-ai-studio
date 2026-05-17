@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260517publicRemixUrl";
+const APP_BUILD = "20260517publishedAt";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -6997,6 +6997,25 @@ async function supabaseLoadProfile() {
 let _lastUserSongsLoadStatus = "ok"; // "ok" | "auth" | "network" | "http"
 let _lastUserSongsLoadDetails = "";
 
+function userSongPublishedTs(row) {
+  const raw = row?.published_at || row?.publishedAt || row?.created_at || "";
+  const ts = raw ? new Date(raw).getTime() : 0;
+  return Number.isFinite(ts) && ts > 0 ? ts : Date.now();
+}
+
+function userSongPublishedAtValue(row) {
+  return String(row?.published_at || row?.publishedAt || "").trim();
+}
+
+function libraryTrackPublicTs(track) {
+  const published = userSongPublishedAtValue(track);
+  if (published) {
+    const ts = new Date(published).getTime();
+    if (Number.isFinite(ts) && ts > 0) return ts;
+  }
+  return Number(track?.ts || 0);
+}
+
 async function supabaseLoadUserSongs() {
   const token = getSupabaseAuthToken();
   if (!token || !authSession?.user?.id) {
@@ -7013,13 +7032,15 @@ async function supabaseLoadUserSongs() {
   // happens to be a legacy `data:` URL*, same trick we use on `hub_posts`
   // for cover_url / creator_avatar. The cheap `art_url is null` branch
   // covers freshly inserted rows where we deliberately wrote null.
-  const cols = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
   let r;
+  let selectedPublishedAt = true;
   try {
-    r = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${uid}&select=${cols}&order=created_at.desc&limit=500${artUrlGuard}`, {
+    r = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${uid}&select=${colsWithPublished}&order=created_at.desc&limit=500${artUrlGuard}`, {
       headers: {
         apikey: SUPABASE_ANON_KEY,
         Authorization: `Bearer ${token}`,
@@ -7027,6 +7048,20 @@ async function supabaseLoadUserSongs() {
       signal: ctrl.signal,
       cache: "no-store",
     });
+    if (!r.ok) {
+      const txt = await r.clone().text().catch(() => "");
+      if (/published_at|42703|column/i.test(txt)) {
+        selectedPublishedAt = false;
+        r = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${uid}&select=${colsLegacy}&order=created_at.desc&limit=500${artUrlGuard}`, {
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${token}`,
+          },
+          signal: ctrl.signal,
+          cache: "no-store",
+        });
+      }
+    }
   } catch (e) {
     clearTimeout(timer);
     _lastUserSongsLoadStatus = "network";
@@ -7061,6 +7096,7 @@ async function supabaseLoadUserSongs() {
       audioId: s.audio_id || "",
       kind: s.kind || "full",
       meta: null,
+      publishedAt: selectedPublishedAt ? userSongPublishedAtValue(s) : "",
       publicOnProfile: Boolean(
         s.public_on_profile === true || s.public_on_profile === "t" || s.public_on_profile === "true",
       ),
@@ -7122,6 +7158,9 @@ async function supabaseInsertUserSong(track) {
     kind: track.kind || "full",
     meta: sanitizeMetaForCloud(track.meta || null),
     public_on_profile: Boolean(track.publicOnProfile),
+    ...(track.publicOnProfile
+      ? { published_at: userSongPublishedAtValue(track) || new Date().toISOString() }
+      : {}),
   };
   const r = await fetch(`${SUPABASE_URL}/rest/v1/user_songs`, {
     method: "POST",
@@ -7200,11 +7239,17 @@ async function supabasePatchUserSong(track, patch) {
   if (typeof patch?.publicOnProfile === "boolean") {
     body.public_on_profile = patch.publicOnProfile;
   }
+  if (typeof patch?.publishedAt === "string" && patch.publishedAt.trim()) {
+    body.published_at = patch.publishedAt.trim();
+  }
+  if (patch?.publishedAt === null) {
+    body.published_at = null;
+  }
   if (typeof patch?.songUrl === "string" && patch.songUrl.trim()) {
     body.song_url = patch.songUrl.trim();
   }
   if (Object.keys(body).length === 0) return { ok: false, reason: "noop" };
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?${filter}`, {
+  const sendPatch = (payload) => fetch(`${SUPABASE_URL}/rest/v1/user_songs?${filter}`, {
     method: "PATCH",
     headers: {
       apikey: SUPABASE_ANON_KEY,
@@ -7212,11 +7257,23 @@ async function supabasePatchUserSong(track, patch) {
       "Content-Type": "application/json",
       Prefer: "return=minimal",
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   }).catch(() => null);
+  let r = await sendPatch(body);
   if (!r) return { ok: false, reason: "network" };
   if (!r.ok) {
     const txt = await r.text().catch(() => "");
+    if (Object.prototype.hasOwnProperty.call(body, "published_at") && /published_at|42703|column/i.test(txt)) {
+      const retryBody = { ...body };
+      delete retryBody.published_at;
+      if (Object.keys(retryBody).length > 0) {
+        r = await sendPatch(retryBody);
+        if (r?.ok) return { ok: true, reason: "published_at_missing" };
+        if (!r) return { ok: false, reason: "network" };
+        const retryTxt = await r.text().catch(() => "");
+        return { ok: false, reason: `http_${r.status}`, details: String(retryTxt || txt).slice(0, 280) };
+      }
+    }
     return { ok: false, reason: `http_${r.status}`, details: String(txt).slice(0, 280) };
   }
   return { ok: true };
@@ -7321,19 +7378,33 @@ async function supabaseFetchPublicLibraryForUserId(userId) {
   const uid = String(userId || "").trim();
   if (!uid || !SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
   const enc = encodeURIComponent(uid);
-  const cols = "id,created_at,title,song_url,task_id,audio_id,kind,art_url";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   try {
-    const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${enc}&public_on_profile=eq.true&select=${cols}&order=created_at.desc&limit=80${artUrlGuard}`,
+    let r = await fetch(
+      `${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${enc}&public_on_profile=eq.true&select=${colsWithPublished}&order=published_at.desc.nullslast,created_at.desc&limit=80${artUrlGuard}`,
       { headers: { apikey: SUPABASE_ANON_KEY }, cache: "no-store" },
     );
+    let selectedPublishedAt = true;
+    if (!r.ok) {
+      const txt = await r.clone().text().catch(() => "");
+      if (/published_at|42703|column/i.test(txt)) {
+        selectedPublishedAt = false;
+        r = await fetch(
+          `${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${enc}&public_on_profile=eq.true&select=${colsLegacy}&order=created_at.desc&limit=80${artUrlGuard}`,
+          { headers: { apikey: SUPABASE_ANON_KEY }, cache: "no-store" },
+        );
+      }
+    }
     if (!r.ok) return [];
     const arr = await r.json().catch(() => []);
     if (!Array.isArray(arr)) return [];
     return arr.map((s) => ({
       id: String(s.id || ""),
-      ts: new Date(s.created_at || Date.now()).getTime(),
+      ts: selectedPublishedAt ? userSongPublishedTs(s) : new Date(s.created_at || Date.now()).getTime(),
+      createdTs: new Date(s.created_at || Date.now()).getTime(),
+      publishedAt: selectedPublishedAt ? userSongPublishedAtValue(s) : "",
       title: s.title || "Generated song",
       artUrl: s.art_url || "",
       url: s.song_url || "",
@@ -7342,7 +7413,7 @@ async function supabaseFetchPublicLibraryForUserId(userId) {
       kind: s.kind || "full",
       meta: null,
       publicOnProfile: true,
-    }));
+    })).sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
   } catch {
     return [];
   }
@@ -7858,13 +7929,25 @@ function maybeRecordQualifiedPublicPlay() {
 async function supabaseFetchDiscoveryPublicSongs(limit) {
   const lim = Math.max(1, Math.min(80, Number(limit) || 48));
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
-  const cols = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,user_id";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   try {
-    const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/user_songs?public_on_profile=eq.true&select=${cols}&order=created_at.desc&limit=${lim}${artUrlGuard}`,
+    let r = await fetch(
+      `${SUPABASE_URL}/rest/v1/user_songs?public_on_profile=eq.true&select=${colsWithPublished}&order=published_at.desc.nullslast,created_at.desc&limit=${lim}${artUrlGuard}`,
       { headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" }, cache: "no-store" },
     );
+    let selectedPublishedAt = true;
+    if (!r.ok) {
+      const txt = await r.clone().text().catch(() => "");
+      if (/published_at|42703|column/i.test(txt)) {
+        selectedPublishedAt = false;
+        r = await fetch(
+          `${SUPABASE_URL}/rest/v1/user_songs?public_on_profile=eq.true&select=${colsLegacy}&order=created_at.desc&limit=${lim}${artUrlGuard}`,
+          { headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" }, cache: "no-store" },
+        );
+      }
+    }
     if (!r.ok) {
       const det = await r.text().catch(() => "");
       console.warn("[discovery/user_songs]", r.status, det.slice(0, 280));
@@ -7874,7 +7957,9 @@ async function supabaseFetchDiscoveryPublicSongs(limit) {
     if (!Array.isArray(arr)) return [];
     return arr.map((s) => ({
       id: String(s.id || ""),
-      ts: new Date(s.created_at || Date.now()).getTime(),
+      ts: selectedPublishedAt ? userSongPublishedTs(s) : new Date(s.created_at || Date.now()).getTime(),
+      createdTs: new Date(s.created_at || Date.now()).getTime(),
+      publishedAt: selectedPublishedAt ? userSongPublishedAtValue(s) : "",
       title: s.title || "Generated song",
       artUrl: String(s.art_url || "").trim(),
       url: String(s.song_url || "").trim(),
@@ -7882,7 +7967,7 @@ async function supabaseFetchDiscoveryPublicSongs(limit) {
       audioId: String(s.audio_id || ""),
       kind: s.kind || "full",
       userId: String(s.user_id || "").trim(),
-    }));
+    })).sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
   } catch (e) {
     console.warn("[discovery/user_songs]", e);
     return [];
@@ -9185,7 +9270,16 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic) {
   const idx = items.findIndex((x) => String(x.id) === id);
   if (idx < 0) return { ok: false };
   const track = items[idx];
-  const next = { ...track, publicOnProfile: Boolean(wantPublic) };
+  const wasPublic = Boolean(track.publicOnProfile);
+  const willBePublic = Boolean(wantPublic);
+  const publishedAt = willBePublic && !wasPublic
+    ? new Date().toISOString()
+    : userSongPublishedAtValue(track);
+  const next = {
+    ...track,
+    publicOnProfile: willBePublic,
+    ...(publishedAt ? { publishedAt } : {}),
+  };
   const nextItems = [...items];
   nextItems[idx] = next;
   saveLibrary(nextItems);
@@ -9199,7 +9293,10 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic) {
     showToast("This track has no audio URL yet — try again after it finishes saving.");
     return { ok: false };
   }
-  const patch = await supabasePatchUserSong(track, { publicOnProfile: next.publicOnProfile });
+  const patch = await supabasePatchUserSong(track, {
+    publicOnProfile: next.publicOnProfile,
+    ...(willBePublic && publishedAt ? { publishedAt } : {}),
+  });
   if (patch && patch.ok === false && patch.reason && patch.reason !== "noop") {
     const det = String(patch.details || "").trim();
     let msg = "Saved on this device — cloud update failed.";
@@ -12385,7 +12482,7 @@ function renderProfileLibraryPublicOnLinkSection() {
   if (!els.profileHubSharedList) return;
   const withUrl = loadLibrary().filter((t) => String(t?.url || "").trim());
   const allLib = withUrl.filter((t) => Boolean(t.publicOnProfile));
-  allLib.sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
+  allLib.sort((a, b) => libraryTrackPublicTs(b) - libraryTrackPublicTs(a));
   if (_profileReleasesShown < PROFILE_RELEASES_PAGE_SIZE) {
     _profileReleasesShown = PROFILE_RELEASES_PAGE_SIZE;
   }
@@ -12788,6 +12885,8 @@ function normalizeTrackRow(row) {
     audioId: String(row?.audioId || row?.audio_id || ""),
     kind: String(row?.kind || "full"),
     meta: row?.meta || null,
+    publicOnProfile: Boolean(row?.publicOnProfile || row?.public_on_profile),
+    publishedAt: userSongPublishedAtValue(row),
   };
 }
 function loadAllLocalSongsDeduped() {

@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260517actionSheetStable";
+const APP_BUILD = "20260518sheetNoJump";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -8312,44 +8312,13 @@ function readDiscoverSheetPayload(el) {
 }
 
 let _trackSheetCtx = null;
-let _trackSheetScrollY = 0;
-let _trackSheetBodyStyle = null;
 
 function lockPageForTrackSheet() {
-  if (document.body.classList.contains("trackSheetOpen")) return;
-  _trackSheetScrollY = window.scrollY || document.documentElement.scrollTop || 0;
-  _trackSheetBodyStyle = {
-    position: document.body.style.position,
-    top: document.body.style.top,
-    left: document.body.style.left,
-    right: document.body.style.right,
-    width: document.body.style.width,
-    overflow: document.body.style.overflow,
-  };
   document.body.classList.add("trackSheetOpen");
-  document.body.style.position = "fixed";
-  document.body.style.top = `-${_trackSheetScrollY}px`;
-  document.body.style.left = "0";
-  document.body.style.right = "0";
-  document.body.style.width = "100%";
-  document.body.style.overflow = "hidden";
 }
 
 function unlockPageForTrackSheet() {
   document.body.classList.remove("trackSheetOpen");
-  const prev = _trackSheetBodyStyle || {};
-  document.body.style.position = prev.position || "";
-  document.body.style.top = prev.top || "";
-  document.body.style.left = prev.left || "";
-  document.body.style.right = prev.right || "";
-  document.body.style.width = prev.width || "";
-  document.body.style.overflow = prev.overflow || "";
-  const y = _trackSheetScrollY || 0;
-  _trackSheetBodyStyle = null;
-  _trackSheetScrollY = 0;
-  try {
-    window.scrollTo(0, y);
-  } catch {}
 }
 
 function formatLibrarySheetSubtitle(t) {

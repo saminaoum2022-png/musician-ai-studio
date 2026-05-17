@@ -12659,6 +12659,7 @@ button.discoverySpotCard{
 
 /* Discover track options bottom sheet (carousel + list) */
 .discoverTrackSheet{
+  --track-sheet-bottom-gap: max(8px, env(safe-area-inset-bottom, 0px));
   position: fixed;
   inset: 0;
   z-index: 120;
@@ -12666,7 +12667,9 @@ button.discoverySpotCard{
   align-items: flex-end;
   justify-content: center;
   box-sizing: border-box;
+  padding: 0 10px var(--track-sheet-bottom-gap);
   pointer-events: none;
+  touch-action: none;
 }
 .discoverTrackSheet.isOpen{ pointer-events: auto; }
 .discoverTrackSheet[hidden]{ display: none !important; }
@@ -12679,6 +12682,7 @@ button.discoverySpotCard{
     rgba(3, 5, 10, 0.70);
   opacity: 0;
   transition: opacity 260ms ease;
+  touch-action: none;
 }
 .discoverTrackSheet.isOpen .discoverTrackSheetBackdrop{ opacity: 1; }
 .discoverTrackSheetCard{
@@ -12686,9 +12690,9 @@ button.discoverySpotCard{
   isolation: isolate;
   width: 100%;
   max-width: 520px;
-  max-height: calc(100dvh - 18px - env(safe-area-inset-top, 0px));
-  margin: 0 12px;
-  border-radius: 24px 24px 18px 18px;
+  max-height: calc(100dvh - var(--track-sheet-bottom-gap) - 18px - env(safe-area-inset-top, 0px));
+  margin: 0;
+  border-radius: 24px 24px 16px 16px;
   background:
     radial-gradient(110% 72% at 8% 0%, rgba(124,92,255,0.045), transparent 58%),
     linear-gradient(180deg, rgba(10,13,21,0.985), rgba(5,7,13,0.995));
@@ -12708,6 +12712,7 @@ button.discoverySpotCard{
     inset 0 -1px 0 rgba(0,0,0,0.18),
     0 0 0 1px rgba(124,92,255,0.025);
   overflow: hidden;
+  touch-action: auto;
 }
 .discoverTrackSheetCard::after{
   content: "";
@@ -12843,6 +12848,8 @@ button.discoverySpotCard{
   min-height: 0;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   padding: 6px;
   border-radius: 20px;
   border: 1px solid rgba(255,255,255,0.085);
@@ -12932,7 +12939,7 @@ button.discoverySpotCard{
   .searchPosterCta{ font-size: 10px; margin-top: 4px; }
   .searchShelfRow{ gap: 10px; }
   .searchRemixCard{ border-radius: 22px 22px 0 0; margin: 0; }
-  .discoverTrackSheetCard{ border-radius: 22px 22px 0 0; margin: 0 10px; max-width: none; }
+  .discoverTrackSheetCard{ border-radius: 22px 22px 14px 14px; max-width: none; }
 }
 
 /* =================================================================

@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260518challengeLevantine";
+const APP_BUILD = "20260518challengePromptFlow";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -3247,34 +3247,21 @@ function bindChallengesPageOnce() {
     try { showToast("Add the person's name first", { icon: "✍", durationMs: 2600 }); } catch {}
     return false;
   };
-  const occasionLyricsFor = (occasion, person, variant) => {
-    const danceLift = variant === "dance"
-      ? "\n[Post-Chorus]\nMove it, move it, everybody shout\nThis is the night we talk about"
-      : "";
-    const cinematicLift = variant === "cinematic"
-      ? "\n[Bridge]\nWhen the lights go low and the whole room fades\nYour name stays bright like a golden flame"
-      : "";
-    const lift = danceLift || cinematicLift;
-    switch (occasion.id) {
-      case "birthday":
-        return `[Verse]\n${person}, the room is glowing just for you\nCandles in the light, every wish feels new\nFriends are singing, hearts are loud\nTonight your name is in the crowd\n\n[Chorus]\nHappy birthday, ${person}, this is your night\nShine like the stars in the city light\nOne more year and a dream comes true\nEverybody here is singing for you${lift}`;
-      case "anniversary":
-        return `[Verse]\n${person}, all our years are dancing slow\nEvery little memory still knows where to go\nFrom the first hello to this moment here\nI choose you again, year after year\n\n[Chorus]\nAll our years, all our days\nLove keeps finding brand new ways\n${person}, when the world moves fast\nYou are my forever, you are my past${lift}`;
-      case "wedding":
-        return `[Verse]\nOpen the doors, let the music rise\n${person} steps in with the light in their eyes\nHands are clapping, hearts are wide\nFamily singing from every side\n\n[Chorus]\nYalla, ${person}, take the floor\nLove is knocking at the door\nStep by step and hand in hand\nTonight we dance across the land${lift}`;
-      case "mom-day":
-        return `[Verse]\n${person}, you carried love in your hands\nYou made a home out of every chance\nWhen I was lost, you were the light\nYour voice still keeps me warm at night\n\n[Chorus]\nMama ${person}, this song is for you\nFor every little thing you do\nIf love had a sound, it would sing your name\nAgain and again, always the same${lift}`;
-      case "christmas":
-        return `[Verse]\n${person}, the lights are soft tonight\nSnow in the window, hearts burning bright\nHome feels warmer when you are near\nEvery little bell says you belong here\n\n[Chorus]\nChristmas glow around ${person}'s name\nEvery smile becomes a flame\nHold this moment, keep it close\nYou are the gift we love the most${lift}`;
-      case "new-year":
-        return `[Verse]\n${person}, the countdown fills the sky\nOld days fade and new dreams fly\nMidnight opens like a door\nWe are not who we were before\n\n[Chorus]\nNew year, new light, ${person}, rise\nFireworks dancing in your eyes\nLeave the old road, take the view\nThis whole year is calling you${lift}`;
-      case "congrats":
-        return `[Verse]\n${person}, they see the shine tonight\nBut we know the work behind the light\nEvery long road, every late fight\nTurned into cheers under these lights\n\n[Chorus]\nCongratulations, ${person}, stand tall\nYou earned the moment, you gave it all\nHands up high, let the whole room say\nThis is your win, this is your day${lift}`;
-      case "prom":
-        return `[Verse]\n${person}, the cameras flash like stars\nMusic pouring out of cars\nFriends are laughing, time moves slow\nTonight is a memory before we know\n\n[Chorus]\nProm night, ${person}, shining bright\nDancing through the city light\nOne more song and one more smile\nKeep this feeling for a while${lift}`;
-      default:
-        return `[Verse]\n${person}, this moment has your name\nEvery little light becomes a flame\n\n[Chorus]\nThis one is for you, loud and true\nEverybody sings it back to you${lift}`;
-    }
+  const buildChallengeLyricPrompt = (occasion, genre, person, variant) => {
+    const take = variant === "dance"
+      ? "Make it danceable with a repeatable hook."
+      : variant === "cinematic"
+        ? "Make it cinematic, emotional, and chorus-led."
+        : "Make it catchy, personal, and easy to sing.";
+    const arabicHint = /arabic|levantine|dabke|oud|mijwiz|fusion/i.test(`${genre?.id || ""} ${genre?.label || ""} ${genre?.style || ""}`)
+      ? "Use Levantine or neutral Arabic, not Egyptian."
+      : "Use the natural language for this style.";
+    return [
+      `Write lyrics for ${person}: ${occasion.angle}.`,
+      take,
+      arabicHint,
+      "Use verse and chorus sections.",
+    ].join("\n");
   };
   const buildPresetIdea = (occasion, genre, variant = "anthem") => {
     const person = nameForPrompt() || "someone special";
@@ -3290,12 +3277,13 @@ function bindChallengesPageOnce() {
         ? "slow cinematic intro into a memorable chorus"
         : "mid-tempo, polished, emotional but catchy";
     const challengeBrief = `Challenge brief: ${occasion.angle}. Dedicated to ${person}. Keep the lyrics personal and avoid generic lines.`;
+    const lyricPrompt = buildChallengeLyricPrompt(occasion, genre, person, variant);
     return {
       id: `occasion:${occasion.id}:${genre.id}:${variant}`,
       title,
       style: `${genre.style}, ${tempoHint}, personalized for ${person}. ${challengeBrief}`,
-      prompt: `Create ${occasion.angle} for ${person}.`,
-      lyrics: occasionLyricsFor(occasion, person, variant),
+      prompt: lyricPrompt,
+      lyrics: lyricPrompt,
       tags: [...(occasion.tags || []), genre.label],
       challenge: {
         id: `occasion:${occasion.id}:${genre.id}`,
@@ -3332,141 +3320,13 @@ function bindChallengesPageOnce() {
         <h3>${escapeHtml(preset.title)}</h3>
         <p>${escapeHtml(preset.prompt)}</p>
         <div class="challengePresetTags">${(preset.tags || []).slice(0, 3).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</div>
-        <button type="button" data-challenge-preset="${escapeHtml(preset.id)}">Create fresh</button>
+        <button type="button" data-challenge-preset="${escapeHtml(preset.id)}">Create this</button>
       </article>
     `).join("");
   };
   const renderPresetLab = () => {
     renderFilters();
     renderPresets();
-  };
-  const challengeFreshLyricsSeed = (idea) => {
-    const challenge = idea?.challenge || {};
-    const person = String(challenge.personName || "").trim();
-    const occasion = String(challenge.occasion || challenge.title || idea?.title || "challenge").trim();
-    const genre = String(challenge.genre || "").trim();
-    const isArabicTake = challengeUsesArabic(idea);
-    const languageLine = isArabicTake
-      ? "Language: Levantine Arabic or neutral Arabic first. Natural Arabizi phrases are allowed only when musical. Avoid Egyptian dialect, Egyptian slang, and Egyptian cliche phrasing unless explicitly requested."
-      : "Language: match the selected style naturally. Use English by default unless the style clearly asks for Arabic or bilingual phrasing.";
-    const flowLine = isArabicTake
-      ? "Levantine/neutral Arabic syllable discipline: use short balanced lines, around 5-8 syllables when possible, easy to sing, no long prose sentences."
-      : "Singable flow: use short balanced lines, natural rhyme, and no long prose sentences.";
-    const nonce = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    return [
-      "Write a BRAND NEW song lyric draft for this NabadAi Challenge entry.",
-      "Output ONLY singable lyrics with section tags like [Verse 1], [Chorus], [Bridge], [Final Chorus], [Outro].",
-      languageLine,
-      flowLine,
-      "Do not write instructions. Do not explain. Do not mention the word challenge.",
-      person ? `Dedication/name to include naturally in the hook: ${person}.` : "",
-      `Occasion/theme: ${occasion}.`,
-      genre ? `Musical color: ${genre}.` : "",
-      idea?.prompt ? `Creative brief: ${idea.prompt}` : "",
-      "Make this take noticeably different from common birthday/wedding template lyrics.",
-      `Fresh variation token: ${nonce}.`,
-    ].filter(Boolean).join("\n");
-  };
-  const challengeUsesArabic = (idea) => {
-    const text = [
-      idea?.style,
-      idea?.dialect,
-      idea?.dialectHint,
-      idea?.challenge?.genre,
-      idea?.challenge?.title,
-    ].map((v) => String(v || "").toLowerCase()).join(" ");
-    return /\barabic\b|levantine|dabke|oud|mijwiz|arabizi|عربي|دبكة/.test(text);
-  };
-  const challengeLanguageConfig = (idea) => {
-    if (challengeUsesArabic(idea)) {
-      return {
-        dialect: "Arabic",
-        dialectHint: "Levantine or neutral Arabic phrasing, not Egyptian. Use short, balanced singable lines.",
-        stylePrefix: "Levantine or neutral Arabic lyrics, avoid Egyptian dialect, singable lines, clear Arabic syllable balance, no prose",
-      };
-    }
-    return {
-      dialect: "",
-      dialectHint: "Natural singable phrasing with short, balanced lines.",
-      stylePrefix: "Singable lyrics, short balanced lines, no prose",
-    };
-  };
-  const challengeArabicFallbackLyrics = (idea) => {
-    const challenge = idea?.challenge || {};
-    const name = String(challenge.personName || "").trim() || "حبيبي";
-    const occasion = String(challenge.occasion || challenge.title || idea?.title || "").toLowerCase();
-    const hook = /wedding|زفاف|عرس/.test(occasion)
-      ? `يا ${name} الليلة فرح\nوالقلب يغني من مطرح`
-      : /anniversary|ذكرى/.test(occasion)
-        ? `يا ${name} سنين وعدت\nوالضحكة فينا ما سكتت`
-        : /new|سنة/.test(occasion)
-          ? `يا ${name} سنة وجاية\nنفتح لها ألف حكاية`
-          : /congrats|نجاح|مبروك/.test(occasion)
-            ? `يا ${name} مبروك عليك\nالتعب صار نجمة بإيديك`
-            : `يا ${name} عيدك نور\nوالفرحة حوالينا تدور`;
-    return `[Verse 1]\nيا ${name} جينا نغني\nوالليل صار أحلى معنا\nضحكة بعينك بتحلي\nكل دقيقة من عمرنا\n\n[Chorus]\n${hook}\nنرقص ونقولها سوا\nهيدا اليوم إلك يا هوا\n\n[Verse 2]\nخطوة خطوة والدرب ضاوي\nوالناس حواليك بتحبك\nصوتك بقلبي نداوي\nوالغنية اليوم بتشبهك\n\n[Bridge]\nخلي اللحظة تبقى\nمتل نجمة بالسما\n\n[Final Chorus]\n${hook}\nنغنيها مرة كمان\nلحد ما يخلص المكان\n\n[Outro]\nيا ${name} خلي الفرح يدوم\nتصبح على حب ونجوم`;
-  };
-  const challengeDefaultFallbackLyrics = (idea) => {
-    const challenge = idea?.challenge || {};
-    const name = String(challenge.personName || "").trim() || "you";
-    return `[Verse 1]\n${name}, the room is bright tonight\nEvery little moment turns into light\nFriends are laughing, hearts are loud\nYour name is moving through the crowd\n\n[Chorus]\nThis one is for ${name}, sing it out\nTurn the music up, let the whole room shout\nOne more memory, one more spark\nWe keep it glowing after dark\n\n[Verse 2]\nStep by step, the night feels new\nEvery beat is reaching back to you\nNo copy, no ordinary line\nJust your story in a different shine\n\n[Bridge]\nHold this second, let it stay\nLike a melody that will not fade\n\n[Final Chorus]\nThis one is for ${name}, sing it out\nTurn the music up, let the whole room shout\nOne more memory, one more spark\nWe keep it glowing after dark\n\n[Outro]\nFor ${name}, we let the last note fly`;
-  };
-  const withFreshChallengeLyrics = async (idea, btn) => {
-    const base = { ...(idea || {}) };
-    const originalLabel = btn?.textContent || "";
-    const languageConfig = challengeLanguageConfig(base);
-    try {
-      if (btn) {
-        btn.disabled = true;
-        btn.textContent = "Fresh lyrics...";
-      }
-      setStatus(challengeUsesArabic(base) ? "Writing a fresh Arabic challenge take..." : "Writing a fresh challenge take...");
-      const style = [
-        languageConfig.stylePrefix,
-        String(base.style || "").trim(),
-      ].filter(Boolean).join(", ");
-      const r = await fetch(apiUrl("/api/lyrics"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          seed: challengeFreshLyricsSeed(base),
-          style,
-          mode: "full",
-          dialect: languageConfig.dialect,
-          dialectHint: languageConfig.dialectHint,
-        }),
-      });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data?.error || "Fresh lyrics failed");
-      const lyrics = String(data?.lyrics || "").trim();
-      if (!lyrics) throw new Error("No fresh lyrics returned");
-      if (challengeUsesArabic(base) && !/[\u0600-\u06FF]/.test(lyrics)) throw new Error("Fresh lyrics were not Arabic");
-      return {
-        ...base,
-        lyrics,
-        dialect: languageConfig.dialect,
-        dialectHint: languageConfig.dialectHint,
-        challenge: {
-          ...(base.challenge || {}),
-          freshLyricsProvider: String(data?.provider || "").trim(),
-          freshLyricsAt: new Date().toISOString(),
-        },
-      };
-    } catch (e) {
-      console.warn("[challenges/fresh-lyrics]", e);
-      try { showToast("Fresh lyrics failed - using starter draft", { icon: "!", durationMs: 2800 }); } catch {}
-      return {
-        ...base,
-        lyrics: challengeUsesArabic(base) ? challengeArabicFallbackLyrics(base) : challengeDefaultFallbackLyrics(base),
-        dialect: languageConfig.dialect,
-        dialectHint: languageConfig.dialectHint,
-      };
-    } finally {
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = originalLabel || "Create this";
-      }
-    }
   };
   const refreshChallengeEntries = async () => {
     if (!entriesRail) return;
@@ -3506,7 +3366,7 @@ function bindChallengesPageOnce() {
   };
   renderPresetLab();
   void refreshChallengeEntries();
-  page.addEventListener("click", async (e) => {
+  page.addEventListener("click", (e) => {
     const occasionBtn = e.target?.closest?.("[data-challenge-occasion]");
     if (occasionBtn && page.contains(occasionBtn)) {
       selectedOccasion = String(occasionBtn.getAttribute("data-challenge-occasion") || selectedOccasion);
@@ -3529,8 +3389,7 @@ function bindChallengesPageOnce() {
       const genre = selected(CHALLENGE_GENRES, genreId);
       if (!occasion || !genre) return;
       haptic("light");
-      const freshIdea = await withFreshChallengeLyrics(buildPresetIdea(occasion, genre, variant || "anthem"), presetBtn);
-      applyDiscoveryIdeaToCreate(freshIdea);
+      applyDiscoveryIdeaToCreate(buildPresetIdea(occasion, genre, variant || "anthem"));
       return;
     }
     const entryBtn = e.target?.closest?.("[data-challenge-entry-play]");
@@ -3550,10 +3409,12 @@ function bindChallengesPageOnce() {
     const challenge = challenges.get(id);
     if (!challenge) return;
     haptic("light");
-    const freshIdea = await withFreshChallengeLyrics({
+    applyDiscoveryIdeaToCreate({
       ...challenge,
       id: `challenge:${challenge.id}`,
       title: `${challenge.title} Challenge`,
+      prompt: String(challenge.prompt || challenge.lyrics || "").trim(),
+      lyrics: String(challenge.prompt || challenge.lyrics || "").trim(),
       challenge: {
         id: challenge.id,
         title: challenge.title,
@@ -3563,8 +3424,7 @@ function bindChallengesPageOnce() {
         personName: "",
         variant: "daily",
       },
-    }, btn);
-    applyDiscoveryIdeaToCreate(freshIdea);
+    });
   });
   nameInput?.addEventListener?.("input", () => {
     try { nameInput.closest?.(".challengeNameField")?.classList?.remove?.("isRequired"); } catch {}

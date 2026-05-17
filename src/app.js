@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260517publicProfileShimmer";
+const APP_BUILD = "20260517discoverTopGlow";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2071,6 +2071,9 @@ function applyRoute() {
   document.body.classList.toggle("isIntro", wanted === "intro");
   document.body.classList.toggle("isAuth", wanted === "auth");
   document.body.setAttribute("data-route", wanted);
+  if (wanted !== "discover") {
+    try { document.body.removeAttribute("data-discovery-segment"); } catch {}
+  }
   if (prevRoute === "generate" && wanted !== "generate") {
     pendingSearchRemixMeta = null;
   }
@@ -3454,6 +3457,9 @@ async function refreshDiscoveryFollowingFeed() {
 function syncDiscoveryUiToSegment(seg) {
   const next = seg === "following" ? "following" : seg === "ideas" ? "ideas" : "discover";
   _discoveryActiveSegment = next;
+  try {
+    document.body.setAttribute("data-discovery-segment", next);
+  } catch {}
   document.querySelectorAll("[data-discovery-segment]").forEach((btn) => {
     const isSel = btn.getAttribute("data-discovery-segment") === next;
     btn.classList.toggle("isActive", isSel);

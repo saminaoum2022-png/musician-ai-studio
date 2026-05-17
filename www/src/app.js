@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260518challengeFreshLyrics";
+const APP_BUILD = "20260518challengeFreshLyricsLang";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -3206,8 +3206,8 @@ function applyDiscoveryIdeaToCreate(idea) {
   const title = String(idea.title || "New Idea").trim();
   if (els.sunoTitle) els.sunoTitle.value = title;
   if (els.sunoStyle) els.sunoStyle.value = String(idea.style || "").trim();
-  if (idea.dialect && els.sunoDialect) els.sunoDialect.value = String(idea.dialect || "").trim();
-  if (idea.dialectHint && els.sunoDialectHint) els.sunoDialectHint.value = String(idea.dialectHint || "").trim();
+  if (Object.prototype.hasOwnProperty.call(idea, "dialect") && els.sunoDialect) els.sunoDialect.value = String(idea.dialect || "").trim();
+  if (Object.prototype.hasOwnProperty.call(idea, "dialectHint") && els.sunoDialectHint) els.sunoDialectHint.value = String(idea.dialectHint || "").trim();
   if (els.sunoPrompt) {
     const body = String(idea.lyrics || idea.prompt || "").trim();
     els.sunoPrompt.value = body;
@@ -3345,12 +3345,19 @@ function bindChallengesPageOnce() {
     const person = String(challenge.personName || "").trim();
     const occasion = String(challenge.occasion || challenge.title || idea?.title || "challenge").trim();
     const genre = String(challenge.genre || "").trim();
+    const isArabicTake = challengeUsesArabic(idea);
+    const languageLine = isArabicTake
+      ? "Language: Arabic first. Levantine Arabic or natural Arabizi phrases are allowed only when musical."
+      : "Language: match the selected style naturally. Use English by default unless the style clearly asks for Arabic or bilingual phrasing.";
+    const flowLine = isArabicTake
+      ? "Arabic syllable discipline: use short balanced lines, around 5-8 syllables when possible, easy to sing, no long prose sentences."
+      : "Singable flow: use short balanced lines, natural rhyme, and no long prose sentences.";
     const nonce = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     return [
-      "Write a BRAND NEW Arabic song lyric draft for this NabadAi Challenge entry.",
+      "Write a BRAND NEW song lyric draft for this NabadAi Challenge entry.",
       "Output ONLY singable lyrics with section tags like [Verse 1], [Chorus], [Bridge], [Final Chorus], [Outro].",
-      "Language: Arabic first. Levantine Arabic or natural Arabizi phrases are allowed only when musical.",
-      "Syllable discipline: use short balanced lines, around 5-8 syllables when possible, easy to sing, no long prose sentences.",
+      languageLine,
+      flowLine,
       "Do not write instructions. Do not explain. Do not mention the word challenge.",
       person ? `Dedication/name to include naturally in the hook: ${person}.` : "",
       `Occasion/theme: ${occasion}.`,
@@ -3359,6 +3366,30 @@ function bindChallengesPageOnce() {
       "Make this take noticeably different from common birthday/wedding template lyrics.",
       `Fresh variation token: ${nonce}.`,
     ].filter(Boolean).join("\n");
+  };
+  const challengeUsesArabic = (idea) => {
+    const text = [
+      idea?.style,
+      idea?.dialect,
+      idea?.dialectHint,
+      idea?.challenge?.genre,
+      idea?.challenge?.title,
+    ].map((v) => String(v || "").toLowerCase()).join(" ");
+    return /\barabic\b|levantine|dabke|oud|mijwiz|arabizi|عربي|دبكة/.test(text);
+  };
+  const challengeLanguageConfig = (idea) => {
+    if (challengeUsesArabic(idea)) {
+      return {
+        dialect: "Arabic",
+        dialectHint: "Natural Arabic phrasing with short, balanced singable lines.",
+        stylePrefix: "Arabic lyrics, singable lines, clear Arabic syllable balance, no prose",
+      };
+    }
+    return {
+      dialect: "",
+      dialectHint: "Natural singable phrasing with short, balanced lines.",
+      stylePrefix: "Singable lyrics, short balanced lines, no prose",
+    };
   };
   const challengeArabicFallbackLyrics = (idea) => {
     const challenge = idea?.challenge || {};
@@ -3375,17 +3406,23 @@ function bindChallengesPageOnce() {
             : `يا ${name} عيدك نور\nوالفرحة حوالينا تدور`;
     return `[Verse 1]\nيا ${name} جينا نغني\nوالليل صار أحلى معنا\nضحكة بعينك بتحلي\nكل دقيقة من عمرنا\n\n[Chorus]\n${hook}\nنرقص ونقولها سوا\nهيدا اليوم إلك يا هوا\n\n[Verse 2]\nخطوة خطوة والدرب ضاوي\nوالناس حواليك بتحبك\nصوتك بقلبي نداوي\nوالغنية اليوم بتشبهك\n\n[Bridge]\nخلي اللحظة تبقى\nمتل نجمة بالسما\n\n[Final Chorus]\n${hook}\nنغنيها مرة كمان\nلحد ما يخلص المكان\n\n[Outro]\nيا ${name} خلي الفرح يدوم\nتصبح على حب ونجوم`;
   };
+  const challengeDefaultFallbackLyrics = (idea) => {
+    const challenge = idea?.challenge || {};
+    const name = String(challenge.personName || "").trim() || "you";
+    return `[Verse 1]\n${name}, the room is bright tonight\nEvery little moment turns into light\nFriends are laughing, hearts are loud\nYour name is moving through the crowd\n\n[Chorus]\nThis one is for ${name}, sing it out\nTurn the music up, let the whole room shout\nOne more memory, one more spark\nWe keep it glowing after dark\n\n[Verse 2]\nStep by step, the night feels new\nEvery beat is reaching back to you\nNo copy, no ordinary line\nJust your story in a different shine\n\n[Bridge]\nHold this second, let it stay\nLike a melody that will not fade\n\n[Final Chorus]\nThis one is for ${name}, sing it out\nTurn the music up, let the whole room shout\nOne more memory, one more spark\nWe keep it glowing after dark\n\n[Outro]\nFor ${name}, we let the last note fly`;
+  };
   const withFreshChallengeLyrics = async (idea, btn) => {
     const base = { ...(idea || {}) };
     const originalLabel = btn?.textContent || "";
+    const languageConfig = challengeLanguageConfig(base);
     try {
       if (btn) {
         btn.disabled = true;
         btn.textContent = "Fresh lyrics...";
       }
-      setStatus("Writing a fresh Arabic challenge take...");
+      setStatus(challengeUsesArabic(base) ? "Writing a fresh Arabic challenge take..." : "Writing a fresh challenge take...");
       const style = [
-        "Arabic lyrics, singable lines, clear syllable balance, no prose",
+        languageConfig.stylePrefix,
         String(base.style || "").trim(),
       ].filter(Boolean).join(", ");
       const r = await fetch(apiUrl("/api/lyrics"), {
@@ -3395,20 +3432,20 @@ function bindChallengesPageOnce() {
           seed: challengeFreshLyricsSeed(base),
           style,
           mode: "full",
-          dialect: "Levantine Arabic / Arabic",
-          dialectHint: "Natural Arabic lyrics with short lines and clean syllable flow for singing.",
+          dialect: languageConfig.dialect,
+          dialectHint: languageConfig.dialectHint,
         }),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error || "Fresh lyrics failed");
       const lyrics = String(data?.lyrics || "").trim();
       if (!lyrics) throw new Error("No fresh lyrics returned");
-      if (!/[\u0600-\u06FF]/.test(lyrics)) throw new Error("Fresh lyrics were not Arabic");
+      if (challengeUsesArabic(base) && !/[\u0600-\u06FF]/.test(lyrics)) throw new Error("Fresh lyrics were not Arabic");
       return {
         ...base,
         lyrics,
-        dialect: "Arabic",
-        dialectHint: "Natural Arabic phrasing with short, balanced singable lines.",
+        dialect: languageConfig.dialect,
+        dialectHint: languageConfig.dialectHint,
         challenge: {
           ...(base.challenge || {}),
           freshLyricsProvider: String(data?.provider || "").trim(),
@@ -3420,9 +3457,9 @@ function bindChallengesPageOnce() {
       try { showToast("Fresh lyrics failed - using starter draft", { icon: "!", durationMs: 2800 }); } catch {}
       return {
         ...base,
-        lyrics: challengeArabicFallbackLyrics(base),
-        dialect: "Arabic",
-        dialectHint: "Natural Arabic phrasing with short, balanced singable lines.",
+        lyrics: challengeUsesArabic(base) ? challengeArabicFallbackLyrics(base) : challengeDefaultFallbackLyrics(base),
+        dialect: languageConfig.dialect,
+        dialectHint: languageConfig.dialectHint,
       };
     } finally {
       if (btn) {

@@ -11994,6 +11994,10 @@ button.discoverySpotCard{
   -webkit-tap-highlight-color: transparent;
   transition: transform 0.16s ease, filter 0.2s ease;
 }
+.discoveryRow--rich .discoveryRowArtBtn{
+  min-width: 88px;
+  max-width: 112px;
+}
 .discoveryRowArtBtn:hover{
   filter: brightness(1.04);
 }
@@ -12920,6 +12924,7 @@ button.discoverySpotCard{
   .discoverySegment{ font-size: 13px; padding: 9px 10px; border-radius: 12px; }
   .discoveryRefreshBtn{ width: 42px; height: 42px; border-radius: 12px; }
   .discoveryRowArtBtn{ min-width: 60px; max-width: 76px; }
+  .discoveryRow--rich .discoveryRowArtBtn{ min-width: 82px; max-width: 104px; }
   .discoveryRowArtBadge{ width: 26px; height: 26px; font-size: 12px; }
   .discoverySpotlightRail{
     gap: 10px;

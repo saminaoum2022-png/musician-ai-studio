@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260518sheetNoJump";
+const APP_BUILD = "20260518publicPlayerNote";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -8275,8 +8275,9 @@ function publicPlaySourceFromEl(el) {
   const ownerUserId = String(decodeDiscoverDataAttr(el, "data-play-owner-id") || "").trim();
   const taskId = String(decodeDiscoverDataAttr(el, "data-play-task-id") || "").trim();
   const audioId = String(decodeDiscoverDataAttr(el, "data-play-audio-id") || "").trim();
+  const releaseCaption = String(decodeDiscoverDataAttr(el, "data-play-release-caption") || "").trim();
   if (!songId || !ownerUserId) return null;
-  return { type: "public_song", songId, ownerUserId, taskId, audioId };
+  return { type: "public_song", songId, ownerUserId, taskId, audioId, releaseCaption };
 }
 
 /** Build a share URL for a Discover row (creator profile when we know the handle). */
@@ -9283,17 +9284,19 @@ function userPublicDiscoveryRowHtml(t, idx, pub) {
   const encOwnerId = encodeURIComponent(String(pub.ownerUserId || t.userId || ""));
   const encTaskId = encodeURIComponent(String(t.taskId || ""));
   const encAudioId = encodeURIComponent(String(t.audioId || ""));
-  const playData = `data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" data-play-task-id="${encTaskId}" data-play-audio-id="${encAudioId}"`;
+  const encReleaseCaption = encodeURIComponent(releaseCaptionForTrack(t));
+  const playData = `data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" data-play-task-id="${encTaskId}" data-play-audio-id="${encAudioId}" data-play-release-caption="${encReleaseCaption}"`;
   const rawHandle = String(pub.rawHandle || "").trim().replace(/^@/, "");
   const encHandle = rawHandle ? encodeURIComponent(rawHandle) : "";
   const extra = pub.extraMeta ? ` · ${escapeHtml(String(pub.extraMeta))}` : "";
   const metaInner = `${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}${extra}`;
   const remixLine = remixSourceLineHtml(t);
   const releaseLine = releaseCaptionLineHtml(t);
+  const richRowClass = remixLine || releaseLine ? " discoveryRow--rich" : "";
   const sheetData = `data-dp-song-id="${encSongId}" data-dp-owner-id="${encOwnerId}" data-dp-task-id="${encTaskId}" data-dp-audio-id="${encAudioId}"`;
   const side = `<button type="button" class="discoveryRowSide" data-discovery-open-sheet="1" data-dp-hide-profile="1" data-dp-use-public-shuffle="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" ${sheetData} aria-label="Options for ${safeTitle}">⋯</button>`;
   return `
-      <div class="discoveryRow userPublicFeedRow" style="--i:${idx}">
+      <div class="discoveryRow userPublicFeedRow${richRowClass}" style="--i:${idx}">
         <button type="button" class="discoveryRowArtBtn" data-discovery-inline-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
           <span class="discoveryRowArt">
             <img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" />
@@ -9345,14 +9348,16 @@ function discoveryTrackRowHtml(t, profMap, idx) {
   const encOwnerId = encodeURIComponent(String(t.userId || ""));
   const encTaskId = encodeURIComponent(String(t.taskId || ""));
   const encAudioId = encodeURIComponent(String(t.audioId || ""));
-  const playData = `data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" data-play-task-id="${encTaskId}" data-play-audio-id="${encAudioId}"`;
+  const encReleaseCaption = encodeURIComponent(releaseCaptionForTrack(t));
+  const playData = `data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" data-play-task-id="${encTaskId}" data-play-audio-id="${encAudioId}" data-play-release-caption="${encReleaseCaption}"`;
   const encHandle = handle ? encodeURIComponent(handle) : "";
   const sheetData = `data-dp-song-id="${encSongId}" data-dp-owner-id="${encOwnerId}" data-dp-task-id="${encTaskId}" data-dp-audio-id="${encAudioId}"`;
   const remixLine = remixSourceLineHtml(t);
   const releaseLine = releaseCaptionLineHtml(t);
+  const richRowClass = remixLine || releaseLine ? " discoveryRow--rich" : "";
   const side = `<button type="button" class="discoveryRowSide" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" ${sheetData} aria-label="Options for ${safeTitle}">⋯</button>`;
   return `
-      <div class="discoveryRow" style="--i:${idx}">
+      <div class="discoveryRow${richRowClass}" style="--i:${idx}">
         <button type="button" class="discoveryRowArtBtn" data-discovery-inline-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
           <span class="discoveryRowArt">
             <img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" />
@@ -9389,7 +9394,8 @@ function discoverySpotCardHtml(t, profMap, idx) {
   const encOwnerId = encodeURIComponent(String(t.userId || ""));
   const encTaskId = encodeURIComponent(String(t.taskId || ""));
   const encAudioId = encodeURIComponent(String(t.audioId || ""));
-  const playData = `data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" data-play-task-id="${encTaskId}" data-play-audio-id="${encAudioId}"`;
+  const encReleaseCaption = encodeURIComponent(releaseCaptionForTrack(t));
+  const playData = `data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" data-play-task-id="${encTaskId}" data-play-audio-id="${encAudioId}" data-play-release-caption="${encReleaseCaption}"`;
   const spotIdx = Number(idx) || 0;
   const imgLoad = spotIdx < 3 ? "eager" : "lazy";
   const imgPriority = spotIdx === 0 ? ' fetchpriority="high"' : "";
@@ -9642,7 +9648,10 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   const byLine = fromDiscover ? String(opts?.discoverBy || "").trim() : "";
   const playSource = opts?.playSource && opts.playSource.songId ? opts.playSource : null;
   const publicTrackMeta = playSource ? publicPlaybackTrackBySource(playSource, raw) : null;
-  const releaseCaption = releaseCaptionForTrack(publicTrackMeta) || String(publicTrackMeta?.releaseCaption || "").trim();
+  const releaseCaption =
+    releaseCaptionForTrack(publicTrackMeta) ||
+    String(publicTrackMeta?.releaseCaption || "").trim() ||
+    String(playSource?.releaseCaption || "").trim();
   const remixOf = remixAttributionForTrack(publicTrackMeta);
   try {
     stopHubPlayback();
@@ -9809,7 +9818,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
   if (els.userPublicSongs) {
     const slice = songs.slice(0, 60);
     const byLine = `@${displayName}`;
-    const pubCtx = { byLine, rawHandle: displayName };
+    const pubCtx = { byLine, rawHandle: displayName, ownerUserId: String(prof.user_id || "") };
     els.userPublicSongs.innerHTML = slice
       .map((t, i) =>
         userPublicDiscoveryRowHtml(

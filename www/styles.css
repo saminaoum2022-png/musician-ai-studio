@@ -3125,6 +3125,41 @@ body.hubJumpingToTop #hubList .hubRow{
   display: none !important;
   margin-top: 0;
 }
+.playerReleaseNote{
+  width: min(100%, 420px);
+  margin: 14px auto 0;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.11);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.075), rgba(255,255,255,0.028)),
+    radial-gradient(circle at 18% 0%, rgba(var(--cover-glow-rgb), 0.18), transparent 62%);
+  box-shadow: 0 14px 34px rgba(0,0,0,0.22);
+  text-align: start;
+}
+.playerReleaseNote[hidden]{
+  display: none !important;
+}
+.playerReleaseNoteLabel{
+  margin-bottom: 5px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: rgba(180,168,255,0.88);
+}
+.playerReleaseNoteText{
+  color: rgba(244,247,255,0.88);
+  font-size: 13px;
+  font-weight: 650;
+  font-style: italic;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .playerMiniBtn{
   display:inline-flex;
   align-items:center;

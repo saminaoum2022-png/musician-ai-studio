@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260517releaseCaptionPublic";
+const APP_BUILD = "20260517playerReleaseNote";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -315,6 +315,8 @@ const els = {
   playerArt: document.getElementById("playerArt"),
   playerTitle: document.getElementById("playerTitle"),
   playerSubtitle: document.getElementById("playerSubtitle"),
+  playerReleaseNote: document.getElementById("playerReleaseNote"),
+  playerReleaseNoteText: document.getElementById("playerReleaseNoteText"),
   btnLoadFull: document.getElementById("btnLoadFull"),
   btnLoadVocals: document.getElementById("btnLoadVocals"),
   btnLoadInstrumental: document.getElementById("btnLoadInstrumental"),
@@ -4060,6 +4062,28 @@ function releaseCaptionLineHtml(track) {
   const caption = releaseCaptionForTrack(track);
   if (!caption) return "";
   return `<span class="releaseCaptionLine">${escapeHtml(caption)}</span>`;
+}
+
+function setPlayerReleaseNote(caption) {
+  const note = String(caption || "").trim();
+  if (els.playerReleaseNoteText) els.playerReleaseNoteText.textContent = note;
+  if (els.playerReleaseNote) els.playerReleaseNote.hidden = !note;
+}
+
+function publicPlaybackTrackBySource(source, rawUrl = "") {
+  const songId = String(source?.songId || "").trim();
+  const ownerUserId = String(source?.ownerUserId || "").trim();
+  const url = String(rawUrl || "").trim();
+  const pools = [_discoveryFeedTracks || [], _userPublicFeedTracks || []];
+  for (const pool of pools) {
+    const hit = pool.find((t) => (
+      (songId && String(t.songId || t.id || "") === songId) ||
+      (songId && ownerUserId && String(t.ownerUserId || t.userId || "") === ownerUserId && String(t.songId || t.id || "") === songId) ||
+      (url && String(t.url || "").trim() === url)
+    ));
+    if (hit) return hit;
+  }
+  return null;
 }
 
 function clearRemixSource({ keepRefFile = false } = {}) {
@@ -8494,6 +8518,7 @@ async function playLibraryListRowById(id, opts) {
     title: t.title || "Library song",
     subtitle: "Library · Full song",
     artUrl: (t.meta && t.meta.imageUrl) || t.artUrl || placeholderCoverDataUrl(),
+    releaseCaption: releaseCaptionForTrack(t),
   };
   setPlayerMeta(meta);
   miniSource = { type: "library", id };
@@ -9158,6 +9183,7 @@ function discoveryTrackPlaybackMeta(t, profMap) {
   const handle = String(prof?.username || "").trim();
   const byLine = handle ? `@${handle}` : "Creator";
   return {
+    id: String(t.id || ""),
     url: String(t.url || "").trim(),
     title: String(t.title || "Untitled"),
     artUrl: artSafe,
@@ -9166,6 +9192,8 @@ function discoveryTrackPlaybackMeta(t, profMap) {
     ownerUserId: String(t.userId || ""),
     taskId: String(t.taskId || ""),
     audioId: String(t.audioId || ""),
+    meta: t.meta || {},
+    releaseCaption: releaseCaptionForTrack(t),
   };
 }
 
@@ -9574,6 +9602,8 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   else if (opts?.openPlayer === true) openPlayer = true;
   const byLine = fromDiscover ? String(opts?.discoverBy || "").trim() : "";
   const playSource = opts?.playSource && opts.playSource.songId ? opts.playSource : null;
+  const publicTrackMeta = playSource ? publicPlaybackTrackBySource(playSource, raw) : null;
+  const releaseCaption = releaseCaptionForTrack(publicTrackMeta) || String(publicTrackMeta?.releaseCaption || "").trim();
   try {
     stopHubPlayback();
   } catch {}
@@ -9594,7 +9624,11 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     title: title || "Song",
     artUrl: artUrl || "",
     byLine,
-    meta: {},
+    meta: {
+      ...(publicTrackMeta?.meta || {}),
+      ...(releaseCaption ? { releaseCaption } : {}),
+    },
+    releaseCaption,
   };
   const publicSource = fromDiscover
     ? { type: "discover_feed", url: playableRaw, ...(playSource || {}) }
@@ -9609,6 +9643,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     title: title || "Song",
     subtitle: fromDiscover ? byLine || "Discover feed" : "Public profile",
     artUrl: artUrl || placeholderCoverDataUrl(),
+    releaseCaption,
   };
   if (!openPlayer) {
     setPlayerMeta(meta);
@@ -9765,6 +9800,8 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
         ownerUserId: currentUserPublicProfileId,
         taskId: String(t.taskId || ""),
         audioId: String(t.audioId || ""),
+        meta: t.meta || {},
+        releaseCaption: releaseCaptionForTrack(t),
       };
     });
     try {
@@ -12441,6 +12478,8 @@ function renderUserProfile(rawUsername) {
         ownerUserId: metaUserId,
         taskId: String(p.taskId || ""),
         audioId: String(p.audioId || ""),
+        meta: p.meta || {},
+        releaseCaption: releaseCaptionForTrack(p),
       };
     });
     try {
@@ -15470,11 +15509,12 @@ function placeholderCoverDataUrl() {
   return "./assets/nabadai-logo.png";
 }
 
-function setPlayerMeta({ title, subtitle, artUrl } = {}) {
+function setPlayerMeta({ title, subtitle, artUrl, releaseCaption } = {}) {
   const hasTrack = Boolean(artUrl);
   if (els.playerTitle) els.playerTitle.textContent = title || "Now Playing";
   if (els.playerSubtitle) els.playerSubtitle.textContent = subtitle || "";
   if (els.playerArt) els.playerArt.src = artUrl || placeholderCoverDataUrl();
+  setPlayerReleaseNote(releaseCaption);
   const artWrap = document.querySelector(".playerArtWrap");
   if (artWrap) {
     artWrap.classList.toggle("isEmpty", !hasTrack);

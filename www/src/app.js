@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260518challengeFreshLyricsLang";
+const APP_BUILD = "20260518challengeLevantine";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -3347,10 +3347,10 @@ function bindChallengesPageOnce() {
     const genre = String(challenge.genre || "").trim();
     const isArabicTake = challengeUsesArabic(idea);
     const languageLine = isArabicTake
-      ? "Language: Arabic first. Levantine Arabic or natural Arabizi phrases are allowed only when musical."
+      ? "Language: Levantine Arabic or neutral Arabic first. Natural Arabizi phrases are allowed only when musical. Avoid Egyptian dialect, Egyptian slang, and Egyptian cliche phrasing unless explicitly requested."
       : "Language: match the selected style naturally. Use English by default unless the style clearly asks for Arabic or bilingual phrasing.";
     const flowLine = isArabicTake
-      ? "Arabic syllable discipline: use short balanced lines, around 5-8 syllables when possible, easy to sing, no long prose sentences."
+      ? "Levantine/neutral Arabic syllable discipline: use short balanced lines, around 5-8 syllables when possible, easy to sing, no long prose sentences."
       : "Singable flow: use short balanced lines, natural rhyme, and no long prose sentences.";
     const nonce = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     return [
@@ -3381,8 +3381,8 @@ function bindChallengesPageOnce() {
     if (challengeUsesArabic(idea)) {
       return {
         dialect: "Arabic",
-        dialectHint: "Natural Arabic phrasing with short, balanced singable lines.",
-        stylePrefix: "Arabic lyrics, singable lines, clear Arabic syllable balance, no prose",
+        dialectHint: "Levantine or neutral Arabic phrasing, not Egyptian. Use short, balanced singable lines.",
+        stylePrefix: "Levantine or neutral Arabic lyrics, avoid Egyptian dialect, singable lines, clear Arabic syllable balance, no prose",
       };
     }
     return {

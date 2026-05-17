@@ -7897,6 +7897,9 @@ function renderTrackSheetLibrary(track) {
   const profilePublic = Boolean(track.publicOnProfile);
   const pubTo = profilePublic ? "private" : "public";
   const pubLabel = profilePublic ? "Hide from public profile" : "Show on public profile";
+  const renameRow = profilePublic
+    ? ""
+    : `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_rename">Rename song</button>`;
   const quickRemix = remixEligible
     ? `<button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-track-sheet-action="library_remix">Remix</button>`
     : "";
@@ -7910,6 +7913,7 @@ function renderTrackSheetLibrary(track) {
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_video">Download video</button>
     ${HUB_FEATURE_ENABLED ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_share_hub">Share to Hub</button>` : ""}
     ${personaEligible ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_persona">Save voice as persona</button>` : ""}
+    ${renameRow}
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_pubprof" data-track-sheet-pub-to="${pubTo}">${escapeHtml(pubLabel)}</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_details">Song details</button>
     ${isInstrumental ? "" : `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_inst">Get instrumental</button>`}
@@ -8352,6 +8356,11 @@ function runTrackSheetAction(action, sourceEl) {
       if (to === "public" || to === "private") {
         void setLibraryTrackPublicOnProfile(t.id, to === "public");
       }
+      return;
+    }
+    if (action === "library_rename") {
+      shut();
+      void renamePrivateLibraryTrack(t.id);
       return;
     }
     if (action === "library_details") {
@@ -9053,6 +9062,47 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic) {
       }
     } catch {}
   }
+  return { ok: true };
+}
+
+async function renamePrivateLibraryTrack(trackId) {
+  const id = String(trackId || "").trim();
+  if (!authSession?.user?.id) {
+    showToast("Sign in to rename songs.");
+    return { ok: false };
+  }
+  const items = loadLibrary();
+  const idx = items.findIndex((x) => String(x.id) === id);
+  if (idx < 0) return { ok: false };
+  const track = items[idx];
+  if (track.publicOnProfile) {
+    showToast("Hide this song from your public profile before renaming.");
+    return { ok: false };
+  }
+  const currentTitle = String(track.title || "").trim() || "Generated song";
+  let raw = "";
+  try {
+    raw = window.prompt("Rename song", currentTitle) || "";
+  } catch {
+    raw = "";
+  }
+  const nextTitle = raw.trim().replace(/\s+/g, " ").slice(0, 80);
+  if (!nextTitle || nextTitle === currentTitle) return { ok: false, reason: "cancelled" };
+  const next = { ...track, title: nextTitle };
+  const nextItems = [...items];
+  nextItems[idx] = next;
+  saveLibrary(nextItems);
+  try { renderLibrary(); } catch {}
+  try { renderProfileHubShared(); } catch {}
+  const patch = await supabasePatchUserSong(track, { title: nextTitle });
+  if (patch && patch.ok === false && patch.reason && patch.reason !== "noop") {
+    const msg = patch.details
+      ? `Renamed on this device — cloud update failed. ${String(patch.details).slice(0, 140)}`
+      : "Renamed on this device — cloud update failed.";
+    showToast(msg, { durationMs: 5200 });
+    return { ok: false };
+  }
+  showToast("Song renamed.");
   return { ok: true };
 }
 

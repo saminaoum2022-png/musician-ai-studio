@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260517publicProfileAura";
+const APP_BUILD = "20260517publicProfileShimmer";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -484,6 +484,7 @@ const els = {
   profileAuraLikesValue: document.getElementById("profileAuraLikesValue"),
   profileSavedMsg: document.getElementById("profileSavedMsg"),
   profileSaveToast: document.getElementById("profileSaveToast"),
+  userPublicCard: document.getElementById("userPublicCard"),
   authLoginControls: document.getElementById("authLoginControls"),
   authLoggedInRow: document.getElementById("authLoggedInRow"),
   authLoggedInEmail: document.getElementById("authLoggedInEmail"),
@@ -7413,6 +7414,50 @@ function renderUserPublicSocialStats({ songCount, stats }) {
   }
 }
 
+function userPublicStatsSkeletonHtml() {
+  return [0, 1, 2].map((idx) => `
+    <div class="profileStatPill userPublicStatSkeleton" aria-hidden="true">
+      <span class="userPublicSkelBlock userPublicStatValueSkel" style="--userPublicSkelDelay:${idx * 80}ms"></span>
+      <span class="userPublicSkelBlock userPublicStatLabelSkel" style="--userPublicSkelDelay:${idx * 80 + 50}ms"></span>
+    </div>
+  `).join("");
+}
+
+function userPublicSongsSkeletonHtml(count = 5) {
+  return Array.from({ length: count }, (_, idx) => `
+    <article class="discoveryRow userPublicSongSkeleton" aria-hidden="true">
+      <span class="userPublicSongSkelArt userPublicSkelBlock" style="--userPublicSkelDelay:${idx * 70}ms"></span>
+      <span class="userPublicSongSkelBody">
+        <span class="userPublicSkelBlock userPublicSongSkelTitle" style="--userPublicSkelDelay:${idx * 70 + 35}ms"></span>
+        <span class="userPublicSkelBlock userPublicSongSkelMeta" style="--userPublicSkelDelay:${idx * 70 + 70}ms"></span>
+      </span>
+      <span class="userPublicSkelBlock userPublicSongSkelMore" style="--userPublicSkelDelay:${idx * 70 + 105}ms"></span>
+    </article>
+  `).join("");
+}
+
+function setUserPublicLoading(on, username = "") {
+  const loading = Boolean(on);
+  els.userPublicCard?.setAttribute?.("data-loading", loading ? "true" : "false");
+  const handle = String(username || "").replace(/^@/, "").trim();
+  if (loading) {
+    if (els.userPublicName && handle) els.userPublicName.textContent = `@${handle}`;
+    if (els.userPublicAvatar) {
+      els.userPublicAvatar.src = "./assets/nabadai-logo.png";
+      els.userPublicAvatar.alt = handle ? `${handle} profile loading` : "Profile loading";
+    }
+    if (els.userPublicVoice) els.userPublicVoice.style.display = "none";
+    if (els.userPublicBio) els.userPublicBio.style.display = "none";
+    if (els.userPublicStats) {
+      els.userPublicStats.innerHTML = userPublicStatsSkeletonHtml();
+      els.userPublicStats.style.display = "";
+    }
+    if (els.userPublicSongsCount) els.userPublicSongsCount.textContent = "";
+    if (els.userPublicSongs) els.userPublicSongs.innerHTML = userPublicSongsSkeletonHtml();
+    if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
+  }
+}
+
 function renderUserPublicFollowButton() {
   const btn = els.btnUserPublicFollow;
   const followsYou = els.userPublicFollowsYou;
@@ -9272,6 +9317,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
       els.userPublicEmpty.style.display = "";
     }
     syncUserPublicVerifiedBadge(null);
+    setUserPublicLoading(false);
     return;
   }
   const displayName = String(prof.username || handle || "user").trim();
@@ -9330,6 +9376,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
     }
     syncUserPublicVerifiedBadge(prof);
     renderUserPublicFollowButton();
+    setUserPublicLoading(false);
     return;
   }
   if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
@@ -9370,6 +9417,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
     } catch {}
   }
   syncUserPublicVerifiedBadge(prof);
+  setUserPublicLoading(false);
 }
 
 async function supabaseInsertHub(post) {
@@ -11910,15 +11958,12 @@ function renderUserProfile(rawUsername) {
   currentUserPublicSocialStats = { followers: 0, following: 0, isFollowing: false, followsViewer: false };
   renderUserPublicFollowButton();
   if (!els.userPublicName) return;
+  setUserPublicLoading(true, username);
   syncUserPublicVerifiedBadge({ username });
   // Resolve the creator's calling card out of band — don't block render.
   // This populates the chip + may autoplay once per device.
   void refreshUserPublicCallingCard(username);
   if (!HUB_FEATURE_ENABLED) {
-    if (els.userPublicSongs) {
-      els.userPublicSongs.innerHTML = `<p class="hint" style="padding:12px 0">Loading…</p>`;
-    }
-    if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
     void renderUserProfilePublicLibraryAsync(username, renderUserProfile._pendingUserId || "");
     return;
   }
@@ -11996,6 +12041,7 @@ function renderUserProfile(rawUsername) {
         syncUserPublicVerifiedBadge(p);
       } catch {}
     });
+    setUserPublicLoading(false);
     return;
   }
   if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
@@ -12044,6 +12090,7 @@ function renderUserProfile(rawUsername) {
       syncUserPublicVerifiedBadge(p);
     } catch {}
   });
+  setUserPublicLoading(false);
 }
 
 /** Take a song off Hub. Routes through the server-side

@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260518challengePromptFlow" />
+    <link rel="stylesheet" href="./styles.css?v=20260518challengeSprint" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -446,6 +446,15 @@
                   <path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/>
                 </svg>
               </button>
+            </div>
+            <div id="createChallengeHint" class="createChallengeHint" hidden>
+              <span class="createChallengeHintBadge" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M7 4h10v3a5 5 0 0 1-10 0V4Z"/><path d="M5 5H3v2a4 4 0 0 0 4 4M19 5h2v2a4 4 0 0 1-4 4M12 12v5M9 20h6"/></svg>
+              </span>
+              <span class="createChallengeHintBody">
+                <strong id="createChallengeHintTitle">Challenge loaded</strong>
+                <small id="createChallengeHintSub">Edit this prompt, then tap ✦ to write lyrics.</small>
+              </span>
             </div>
             <div class="createPanes" data-mode="lyrics">
               <div class="createPane createPane--photo" data-mode="photo" hidden>
@@ -847,7 +856,7 @@
           <section class="challengeFeatureCard" aria-labelledby="challengeFeaturedTitle">
             <div class="challengeFeatureTop">
               <span class="challengeLivePill"><span></span> Live now</span>
-              <span class="challengeTimer">23h left</span>
+              <span class="challengeTimer"><span data-challenge-count="hook-rush">0 joined</span> · 23h left</span>
             </div>
             <h3 id="challengeFeaturedTitle">Hook Rush</h3>
             <p>Make the first 15 seconds impossible to skip. No long intro, no warm-up, just the part people replay.</p>
@@ -890,6 +899,10 @@
               <div class="challengeRailLabel">Sound</div>
               <div id="challengeGenreRail" class="challengeFilterRail" role="tablist" aria-label="Choose music style"></div>
             </div>
+            <div class="challengeRailBlock challengeRailBlock--language">
+              <div class="challengeRailLabel">Language</div>
+              <div id="challengeLanguageRail" class="challengeFilterRail" role="tablist" aria-label="Choose lyric language"></div>
+            </div>
             <div id="challengePresetGrid" class="challengePresetGrid" aria-live="polite"></div>
           </section>
 
@@ -901,6 +914,7 @@
               <span class="challengeMiniKicker">Remix game</span>
               <h3>Voice Note Flip</h3>
               <p>Turn a tiny spoken phrase or hum into a chorus people can sing back.</p>
+              <span class="challengeMiniCount" data-challenge-count="voice-note-flip">0 joined</span>
               <button type="button" data-challenge-start="voice-note-flip">Join</button>
             </article>
             <article class="challengeMiniCard challengeMiniCard--cyan">
@@ -910,6 +924,7 @@
               <span class="challengeMiniKicker">Crowd test</span>
               <h3>Dabke Drop</h3>
               <p>Build a clapping chorus for weddings, parties, and group voice notes.</p>
+              <span class="challengeMiniCount" data-challenge-count="dabke-drop">0 joined</span>
               <button type="button" data-challenge-start="dabke-drop">Join</button>
             </article>
             <article class="challengeMiniCard challengeMiniCard--rose">
@@ -919,6 +934,7 @@
               <span class="challengeMiniKicker">Mood flip</span>
               <h3>Sad to Dance</h3>
               <p>Start emotional, then make the chorus move without losing the feeling.</p>
+              <span class="challengeMiniCount" data-challenge-count="sad-to-dance-challenge">0 joined</span>
               <button type="button" data-challenge-start="sad-to-dance-challenge">Join</button>
             </article>
           </section>
@@ -1381,7 +1397,7 @@
                     <path d="M7 4h10v3a5 5 0 0 1-10 0V4Z"/>
                     <path d="M5 5H3v2a4 4 0 0 0 4 4M19 5h2v2a4 4 0 0 1-4 4M12 12v5M9 20h6"/>
                   </svg>
-                  <span>Challenge</span>
+                  <span>Challenge entry</span>
                 </div>
                 <div id="playerChallengeAttributionText" class="playerChallengeAttributionText"></div>
               </div>
@@ -2676,6 +2692,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260518challengePromptFlow"></script>
+    <script type="module" src="./src/app.js?v=20260518challengeSprint"></script>
   </body>
 </html>

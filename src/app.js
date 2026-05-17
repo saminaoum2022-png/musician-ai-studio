@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260518challengePromptFlow";
+const APP_BUILD = "20260518challengeSprint";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -201,6 +201,9 @@ const els = {
   personaActiveBannerLabel: document.getElementById("personaActiveBannerLabel"),
   personaActiveBannerChange: document.getElementById("personaActiveBannerChange"),
   personaActiveBannerClear: document.getElementById("personaActiveBannerClear"),
+  createChallengeHint: document.getElementById("createChallengeHint"),
+  createChallengeHintTitle: document.getElementById("createChallengeHintTitle"),
+  createChallengeHintSub: document.getElementById("createChallengeHintSub"),
   sunoReferenceMode: document.getElementById("sunoReferenceMode"),
   sunoReferenceHint: document.getElementById("sunoReferenceHint"),
   btnVocalRefRec: document.getElementById("btnVocalRefRec"),
@@ -1932,6 +1935,45 @@ var generationReadyNotice = false;
 /** Search → Make it mine; merged into `lastGenerationMeta` on Generate (declared early for `applyRoute`). */
 let pendingSearchRemixMeta = null;
 
+function challengePromptContext() {
+  return pendingSearchRemixMeta?.challengePromptPending && pendingSearchRemixMeta?.challenge && typeof pendingSearchRemixMeta.challenge === "object"
+    ? pendingSearchRemixMeta.challenge
+    : null;
+}
+
+function challengePromptMagicSeed(seed, challenge) {
+  const languageHint = String(challenge?.dialectHint || challenge?.language || "").trim();
+  return [
+    "Turn this Challenge brief into complete singable lyrics.",
+    "Output ONLY lyrics with section tags. Do not sing or repeat the instruction text.",
+    "Do not explain the challenge. Do not include metadata, notes, or descriptions.",
+    languageHint ? `Language/dialect: ${languageHint}.` : "",
+    "Use a strong verse/chorus structure and a short repeatable hook.",
+    "",
+    "Challenge brief:",
+    seed,
+  ].filter(Boolean).join("\n");
+}
+
+function setCreateChallengeHint(challenge) {
+  const c = challenge && typeof challenge === "object" ? challenge : null;
+  if (!els.createChallengeHint) return;
+  if (!c) {
+    els.createChallengeHint.hidden = true;
+    return;
+  }
+  const title = String(c.title || "Challenge").trim();
+  const details = [c.occasion, c.genre, c.language && c.language !== "Auto" ? c.language : ""]
+    .map((v) => String(v || "").trim())
+    .filter(Boolean)
+    .join(" · ");
+  if (els.createChallengeHintTitle) els.createChallengeHintTitle.textContent = `Challenge loaded: ${title}`;
+  if (els.createChallengeHintSub) {
+    els.createChallengeHintSub.textContent = `${details ? `${details}. ` : ""}Edit this prompt, then tap ✦ to write lyrics.`;
+  }
+  els.createChallengeHint.hidden = false;
+}
+
 /** Suno "Sounds" task polling (separate from full-song generate). */
 let soundTaskId = "";
 let soundPollTimer = null;
@@ -2082,6 +2124,7 @@ function applyRoute() {
   }
   if (prevRoute === "generate" && wanted !== "generate") {
     pendingSearchRemixMeta = null;
+    setCreateChallengeHint(null);
   }
   if (els.brandSecondary) {
     els.brandSecondary.textContent = wanted === "hub" ? "Hub" : "Music";
@@ -2351,6 +2394,7 @@ function resetCreateDraft() {
   if (els.sunoStyle) els.sunoStyle.value = "";
   if (els.sunoTitle) els.sunoTitle.value = "";
   pendingSearchRemixMeta = null;
+  setCreateChallengeHint(null);
   if (els.sunoArtworkStyle) els.sunoArtworkStyle.value = "";
   if (els.sunoReferenceMode) els.sunoReferenceMode.value = "none";
   try { setCreateSongType("vocal"); } catch {
@@ -2850,6 +2894,37 @@ const CHALLENGE_GENRES = [
   },
 ];
 
+const CHALLENGE_LANGUAGES = [
+  {
+    id: "auto",
+    label: "Auto",
+    prompt: "Use the natural language for this style.",
+    dialect: "",
+    dialectHint: "",
+  },
+  {
+    id: "english",
+    label: "English",
+    prompt: "Use English lyrics.",
+    dialect: "English",
+    dialectHint: "Natural English phrasing with short, singable lines.",
+  },
+  {
+    id: "levantine",
+    label: "Levantine Arabic",
+    prompt: "Use Levantine Arabic or natural Arabizi. Avoid Egyptian dialect and slang.",
+    dialect: "Arabic",
+    dialectHint: "Levantine Arabic phrasing, not Egyptian. Use short, balanced singable lines.",
+  },
+  {
+    id: "neutral-arabic",
+    label: "Neutral Arabic",
+    prompt: "Use neutral Arabic that works across Arab audiences. Avoid Egyptian slang unless requested.",
+    dialect: "Arabic",
+    dialectHint: "Neutral Arabic phrasing with short, balanced singable lines. Avoid Egyptian slang.",
+  },
+];
+
 /** Non-null when Supabase returned ≥1 active row; merged over `SEARCH_TEMPLATE_FALLBACK` by `id`. */
 let searchTemplatesRemote = null;
 let _searchPeopleFetchGen = 0;
@@ -3216,10 +3291,13 @@ function applyDiscoveryIdeaToCreate(idea) {
   pendingSearchRemixMeta = {
     searchTemplateId: `idea:${String(idea.id || title).trim()}`,
     searchTemplateTitle: title,
+    challengePromptPending: Boolean(idea.challenge),
     ...(idea.challenge ? { challenge: idea.challenge } : {}),
   };
-  try { setStatus?.(`Loaded idea: ${title}. Make it yours.`); } catch {}
-  try { showToast("Idea loaded - make it yours", { icon: "♪", durationMs: 2600 }); } catch {}
+  const challenge = challengePromptContext();
+  setCreateChallengeHint(challenge);
+  try { setStatus?.(challenge ? `Challenge loaded: ${title}. Edit the prompt or tap ✦ for lyrics.` : `Loaded idea: ${title}. Make it yours.`); } catch {}
+  try { showToast(challenge ? "Challenge loaded - tap ✦ for lyrics" : "Idea loaded - make it yours", { icon: "♪", durationMs: 2600 }); } catch {}
   try { syncGenerateOrbVisibility?.(); } catch {}
   location.hash = "#/generate";
 }
@@ -3231,12 +3309,14 @@ function bindChallengesPageOnce() {
   const challenges = new Map(CHALLENGE_IDEAS.map((idea) => [String(idea.id), idea]));
   const occasionRail = document.getElementById("challengeOccasionRail");
   const genreRail = document.getElementById("challengeGenreRail");
+  const languageRail = document.getElementById("challengeLanguageRail");
   const presetGrid = document.getElementById("challengePresetGrid");
   const nameInput = document.getElementById("challengePersonName");
   const entriesRail = document.getElementById("challengeEntriesRail");
   const entriesCount = document.getElementById("challengeEntriesCount");
   let selectedOccasion = CHALLENGE_OCCASIONS[0]?.id || "";
   let selectedGenre = CHALLENGE_GENRES[0]?.id || "";
+  let selectedLanguage = CHALLENGE_LANGUAGES[0]?.id || "auto";
   const selected = (list, id) => list.find((item) => item.id === id) || list[0] || null;
   const nameForPrompt = () => String(nameInput?.value || "").trim();
   const requireChallengeName = () => {
@@ -3247,23 +3327,26 @@ function bindChallengesPageOnce() {
     try { showToast("Add the person's name first", { icon: "✍", durationMs: 2600 }); } catch {}
     return false;
   };
-  const buildChallengeLyricPrompt = (occasion, genre, person, variant) => {
+  const buildChallengeLyricPrompt = (occasion, genre, language, person, variant) => {
     const take = variant === "dance"
       ? "Make it danceable with a repeatable hook."
       : variant === "cinematic"
         ? "Make it cinematic, emotional, and chorus-led."
         : "Make it catchy, personal, and easy to sing.";
-    const arabicHint = /arabic|levantine|dabke|oud|mijwiz|fusion/i.test(`${genre?.id || ""} ${genre?.label || ""} ${genre?.style || ""}`)
+    const languageHint = language?.id && language.id !== "auto"
+      ? language.prompt
+      : /arabic|levantine|dabke|oud|mijwiz|fusion/i.test(`${genre?.id || ""} ${genre?.label || ""} ${genre?.style || ""}`)
       ? "Use Levantine or neutral Arabic, not Egyptian."
       : "Use the natural language for this style.";
     return [
       `Write lyrics for ${person}: ${occasion.angle}.`,
       take,
-      arabicHint,
+      languageHint,
       "Use verse and chorus sections.",
     ].join("\n");
   };
   const buildPresetIdea = (occasion, genre, variant = "anthem") => {
+    const language = selected(CHALLENGE_LANGUAGES, selectedLanguage);
     const person = nameForPrompt() || "someone special";
     const variantLabel = variant === "dance"
       ? "Dance version"
@@ -3277,13 +3360,15 @@ function bindChallengesPageOnce() {
         ? "slow cinematic intro into a memorable chorus"
         : "mid-tempo, polished, emotional but catchy";
     const challengeBrief = `Challenge brief: ${occasion.angle}. Dedicated to ${person}. Keep the lyrics personal and avoid generic lines.`;
-    const lyricPrompt = buildChallengeLyricPrompt(occasion, genre, person, variant);
+    const lyricPrompt = buildChallengeLyricPrompt(occasion, genre, language, person, variant);
     return {
       id: `occasion:${occasion.id}:${genre.id}:${variant}`,
       title,
       style: `${genre.style}, ${tempoHint}, personalized for ${person}. ${challengeBrief}`,
       prompt: lyricPrompt,
       lyrics: lyricPrompt,
+      dialect: language?.dialect || "",
+      dialectHint: language?.dialectHint || "",
       tags: [...(occasion.tags || []), genre.label],
       challenge: {
         id: `occasion:${occasion.id}:${genre.id}`,
@@ -3291,6 +3376,10 @@ function bindChallengesPageOnce() {
         type: "occasion",
         occasion: occasion.label,
         genre: genre.label,
+        language: language?.label || "Auto",
+        languageId: language?.id || "auto",
+        dialect: language?.dialect || "",
+        dialectHint: language?.dialectHint || "",
         personName: person,
         variant,
       },
@@ -3305,6 +3394,11 @@ function bindChallengesPageOnce() {
     if (genreRail) {
       genreRail.innerHTML = CHALLENGE_GENRES.map((g) => `
         <button type="button" class="challengeFilterChip challengeFilterChip--genre${g.id === selectedGenre ? " active" : ""}" data-challenge-genre="${escapeHtml(g.id)}" aria-pressed="${g.id === selectedGenre ? "true" : "false"}">${escapeHtml(g.label)}</button>
+      `).join("");
+    }
+    if (languageRail) {
+      languageRail.innerHTML = CHALLENGE_LANGUAGES.map((l) => `
+        <button type="button" class="challengeFilterChip challengeFilterChip--language${l.id === selectedLanguage ? " active" : ""}" data-challenge-language="${escapeHtml(l.id)}" aria-pressed="${l.id === selectedLanguage ? "true" : "false"}">${escapeHtml(l.label)}</button>
       `).join("");
     }
   };
@@ -3328,11 +3422,26 @@ function bindChallengesPageOnce() {
     renderFilters();
     renderPresets();
   };
+  const updateChallengeJoinCounts = (entries = []) => {
+    const counts = new Map();
+    for (const track of entries) {
+      const challenge = challengeMetaForTrack(track);
+      const id = String(challenge?.id || "").trim();
+      if (!id) continue;
+      counts.set(id, (counts.get(id) || 0) + 1);
+    }
+    page.querySelectorAll("[data-challenge-count]").forEach((el) => {
+      const id = String(el.getAttribute("data-challenge-count") || "").trim();
+      const n = counts.get(id) || 0;
+      el.textContent = `${n} joined`;
+    });
+  };
   const refreshChallengeEntries = async () => {
     if (!entriesRail) return;
     entriesRail.innerHTML = `<div class="challengeEntriesEmpty">Loading challenge entries...</div>`;
     const rows = await supabaseFetchDiscoveryPublicSongs(80);
     const entries = rows.filter((track) => challengeMetaForTrack(track));
+    updateChallengeJoinCounts(entries);
     if (entriesCount) entriesCount.textContent = `${entries.length} joined`;
     if (!entries.length) {
       _challengeEntryTracks = [];
@@ -3381,6 +3490,13 @@ function bindChallengesPageOnce() {
       renderPresetLab();
       return;
     }
+    const languageBtn = e.target?.closest?.("[data-challenge-language]");
+    if (languageBtn && page.contains(languageBtn)) {
+      selectedLanguage = String(languageBtn.getAttribute("data-challenge-language") || selectedLanguage);
+      haptic("light");
+      renderPresetLab();
+      return;
+    }
     const presetBtn = e.target?.closest?.("[data-challenge-preset]");
     if (presetBtn && page.contains(presetBtn)) {
       if (!requireChallengeName()) return;
@@ -3415,6 +3531,8 @@ function bindChallengesPageOnce() {
       title: `${challenge.title} Challenge`,
       prompt: String(challenge.prompt || challenge.lyrics || "").trim(),
       lyrics: String(challenge.prompt || challenge.lyrics || "").trim(),
+      dialect: "",
+      dialectHint: "",
       challenge: {
         id: challenge.id,
         title: challenge.title,
@@ -4427,10 +4545,12 @@ function challengeMetaForTrack(track) {
   const title = String(c.title || c.name || "").trim();
   const occasion = String(c.occasion || c.occasionLabel || "").trim();
   const genre = String(c.genre || c.genreLabel || "").trim();
+  const language = String(c.language || c.languageLabel || "").trim();
+  const languageId = String(c.languageId || "").trim();
   const personName = String(c.personName || c.person || "").trim();
   const variant = String(c.variant || "").trim();
   if (!id && !title && !occasion && !genre && !personName) return null;
-  return { ...c, id, title: title || "Challenge", occasion, genre, personName, variant };
+  return { ...c, id, title: title || "Challenge", occasion, genre, language, languageId, personName, variant };
 }
 
 function challengeIconSvgHtml() {
@@ -4444,7 +4564,7 @@ function challengePillHtml(label = "Challenge") {
 function challengeAttributionText(challenge) {
   if (!challenge) return "";
   const title = String(challenge.title || "Challenge").trim();
-  const bits = [challenge.occasion, challenge.genre].map((x) => String(x || "").trim()).filter(Boolean);
+  const bits = [challenge.occasion, challenge.genre, challenge.language && challenge.language !== "Auto" ? challenge.language : ""].map((x) => String(x || "").trim()).filter(Boolean);
   const forWho = challenge.personName ? ` · For ${challenge.personName}` : "";
   return `Joined ${title}${bits.length ? ` · ${bits.join(" / ")}` : ""}${forWho}`;
 }
@@ -4452,7 +4572,7 @@ function challengeAttributionText(challenge) {
 function challengeSourceLineHtml(track) {
   const challenge = challengeMetaForTrack(track);
   if (!challenge) return "";
-  return `<span class="challengeAttributionLine">${challengePillHtml()}<span>${escapeHtml(challengeAttributionText(challenge))}</span></span>`;
+  return `<span class="challengeAttributionLine">${challengePillHtml("Challenge entry")}<span>${escapeHtml(challengeAttributionText(challenge))}</span></span>`;
 }
 
 function releaseCaptionForTrack(track) {
@@ -18034,7 +18154,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (!els.sunoPrompt) return;
     const lyricsBoxEl = els.sunoPrompt.closest(".lyricsBox");
     const seed = String(els.sunoPrompt.value || "").trim();
-    const mode = detectLyricsMode(seed);
+    const challenge = challengePromptContext();
+    const mode = challenge ? "full" : detectLyricsMode(seed);
+    const requestSeed = challenge ? challengePromptMagicSeed(seed, challenge) : seed;
     const style = String(els.sunoStyle?.value || "").trim();
     const dialect = String(els.sunoDialect?.value || "").trim();
     const dialectHint = String(els.sunoDialectHint?.value || "").trim();
@@ -18046,20 +18168,25 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
       if (els.sunoPrompt) els.sunoPrompt.disabled = true;
       if (els.sunoStyle) els.sunoStyle.disabled = true;
-      setStatus(mode === "continue" ? "AI is continuing your lyrics…" : mode === "arrange" ? "AI is arranging your lyrics for singing…" : "AI is writing structured lyrics…");
+      setStatus(challenge ? "AI is turning your Challenge brief into lyrics…" : mode === "continue" ? "AI is continuing your lyrics…" : mode === "arrange" ? "AI is arranging your lyrics for singing…" : "AI is writing structured lyrics…");
       const r = await fetch(apiUrl("/api/lyrics"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ seed, style, mode, dialect, dialectHint }),
+        body: JSON.stringify({ seed: requestSeed, style, mode, dialect, dialectHint }),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error || "Lyrics generation failed");
       const nextLyrics = String(data?.lyrics || "").trim();
       if (!nextLyrics) throw new Error("No lyrics returned");
-      if (mode === "continue" && seed) {
+      if (!challenge && mode === "continue" && seed) {
         els.sunoPrompt.value = `${seed}\n\n${nextLyrics}`.trim();
       } else {
         els.sunoPrompt.value = nextLyrics;
+      }
+      if (challenge && pendingSearchRemixMeta) {
+        pendingSearchRemixMeta.challengePromptPending = false;
+        setCreateChallengeHint(pendingSearchRemixMeta.challenge);
+        if (els.createChallengeHintSub) els.createChallengeHintSub.textContent = "Lyrics drafted. Review them, edit if needed, then Generate.";
       }
       if (lyricsBoxEl) lyricsBoxEl.classList.add("wandGenerated");
       const provider = String(data?.provider || "").trim();
@@ -19249,6 +19376,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           ? { ...pendingSearchRemixMeta }
           : {};
       pendingSearchRemixMeta = null;
+      setCreateChallengeHint(null);
       lastGenerationMeta = {
         engine,
         mode: modeLabel,

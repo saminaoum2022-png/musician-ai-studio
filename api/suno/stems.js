@@ -521,6 +521,7 @@ function buildCoverStyle({ baseStyle, dialect, dialectHint, voiceTimbre, vocalGe
   const parts = [];
   const base = String(baseStyle || "").trim();
   if (base) parts.push(base);
+  else parts.push("modern pop, polished full song arrangement");
 
   const dialectClean = String(dialect || "").trim();
   if (dialectClean) parts.push(`dialect: ${dialectClean}`);

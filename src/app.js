@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260517discoverUnifiedGlow";
+const APP_BUILD = "20260517publicRemixMeta";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -7339,6 +7339,38 @@ async function supabaseFetchPublicLibraryForUserId(userId) {
   }
 }
 
+function remixMetaFromSongMeta(meta) {
+  if (!meta || typeof meta !== "object") return { lyricsInput: "", styleInput: "" };
+  const lyricsInput = String(meta.lyricsInput || meta.finalPrompt || meta.prompt || "").trim();
+  const styleInput = String(meta.styleInput || meta.styleSent || meta.styleTags || meta.style || "").trim();
+  return { lyricsInput, styleInput };
+}
+
+async function supabaseFetchPublicSongRemixMeta({ songId, ownerUserId }) {
+  const sid = String(songId || "").trim();
+  const uid = String(ownerUserId || "").trim();
+  if (!sid || !uid || !SUPABASE_URL || !SUPABASE_ANON_KEY) return { lyricsInput: "", styleInput: "" };
+  try {
+    const token = getSupabaseAuthToken();
+    const filter = `id=eq.${encodeURIComponent(sid)}&user_id=eq.${encodeURIComponent(uid)}&public_on_profile=eq.true`;
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/user_songs?${filter}&select=meta&limit=1`,
+      {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        cache: "no-store",
+      },
+    );
+    if (!r.ok) return { lyricsInput: "", styleInput: "" };
+    const arr = await r.json().catch(() => []);
+    return remixMetaFromSongMeta(Array.isArray(arr) ? arr[0]?.meta : null);
+  } catch {
+    return { lyricsInput: "", styleInput: "" };
+  }
+}
+
 let currentUserPublicProfileId = "";
 let currentUserPublicSocialStats = { followers: 0, following: 0, isFollowing: false, followsViewer: false };
 
@@ -8307,13 +8339,21 @@ function runTrackSheetAction(action, sourceEl) {
         return;
       }
       shut();
-      void startHubRemix({
-        url: ctx.url,
-        title: ctx.title,
-        creator: ctx.handle || "",
-        artUrl: ctx.art,
-        meta: { lyricsInput: "", styleInput: "" },
-      });
+      void (async () => {
+        const remixMeta = ctx.songId && ctx.ownerUserId
+          ? await supabaseFetchPublicSongRemixMeta({
+              songId: ctx.songId,
+              ownerUserId: ctx.ownerUserId,
+            })
+          : { lyricsInput: "", styleInput: "" };
+        await startHubRemix({
+          url: ctx.url,
+          title: ctx.title,
+          creator: ctx.handle || "",
+          artUrl: ctx.art,
+          meta: remixMeta,
+        });
+      })();
       return;
     }
     if (action === "player") {
@@ -18195,7 +18235,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
     try {
       const referenceInstrumentalOnly = Boolean(hasReference && instrumentalSelected);
-      const hubRemixLocked = Boolean(currentRemixSource?.id);
+      const hubRemixLocked = Boolean(currentRemixSource?.originalUrl || currentRemixSource?.url);
       const modeLabel = referenceInstrumentalOnly
         ? "Instrumental from melody"
         : instrumentalSelected

@@ -3917,6 +3917,9 @@ body.generateLocked [data-route="generate"] select,
 body.generateLocked [data-route="generate"] button{
   pointer-events:none;
 }
+body.generateLocked [data-route="generate"] #btnNewSong{
+  pointer-events:auto;
+}
 .referenceModeWrap{
   margin-top:8px;
   border-top:1px solid rgba(255,255,255,0.08);

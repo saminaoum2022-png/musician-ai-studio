@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260518challengeEntries";
+const APP_BUILD = "20260518challengeSingableLyrics";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2720,7 +2720,7 @@ const CHALLENGE_IDEAS = [
     id: "hook-rush",
     title: "Hook Rush",
     style: "Instant viral hook, no intro, punchy drums, bright lead melody, sticky chorus, 112 bpm",
-    lyrics: "Start with the hook immediately.\nOne short phrase repeats like a chant.\nKeep the verse tiny.\nMake the first 15 seconds impossible to skip.",
+    lyrics: "[Intro]\nRight now, right now, we light it up\nNo waiting for the night to start\n\n[Chorus]\nThis is the moment, don't let it go\nSay it again till everybody knows\nRight now, right now, we light it up\nThis little spark is more than enough",
     prompt: "Make the first 15 seconds the whole reason someone replays the song.",
     tags: ["Hook", "Replay", "Fast"],
   },
@@ -2728,7 +2728,7 @@ const CHALLENGE_IDEAS = [
     id: "voice-note-flip",
     title: "Voice Note Flip",
     style: "Voice-note remix, intimate spoken intro, modern Arabic pop, warm bass, emotional chorus, 96 bpm",
-    lyrics: "Use a spoken line or hummed phrase as the seed.\nTurn it into a chorus.\nKeep the first verse close and personal.\nEnd with the phrase becoming the hook.",
+    lyrics: "[Verse]\nI heard your voice in a little note\nOne small line I could not let go\nIt stayed with me, it found a beat\nNow it is dancing under my feet\n\n[Chorus]\nSay it again, say it again\nYour voice became the hook, my friend\nFrom one small line to a whole song now\nWe turned the feeling up somehow",
     prompt: "Turn a tiny real-life voice note into a polished chorus.",
     tags: ["Voice", "Remix", "Personal"],
   },
@@ -2736,7 +2736,7 @@ const CHALLENGE_IDEAS = [
     id: "dabke-drop",
     title: "Dabke Drop",
     style: "Levantine dabke pop, mijwiz and oud accents, big claps, crowd chorus, wedding energy, 126 bpm",
-    lyrics: "Write a clapping chorus for a party entrance.\nUse simple Arabic or Arabizi lines.\nMake it easy for a group to shout back.\nDrop into a dabke rhythm fast.",
+    lyrics: "[Verse]\nOpen the doors, let the family see\nHands in the air, everybody with me\nStep to the left, clap to the sound\nTonight we lift this whole room off the ground\n\n[Chorus]\nYalla yalla, clap your hands\nDabke rolling through the land\nOne more step and one more cheer\nThe wedding rhythm starts right here",
     prompt: "Build the chorus everyone can clap to.",
     tags: ["Dabke", "Party", "Crowd"],
   },
@@ -2744,7 +2744,7 @@ const CHALLENGE_IDEAS = [
     id: "sad-to-dance-challenge",
     title: "Sad to Dance",
     style: "Bittersweet dance pop, minor-key piano intro, warm bass, emotional vocal, uplifting drop, 118 bpm",
-    lyrics: "Verse: honest and sad.\nPre-chorus: lift the feeling.\nChorus: dance through it.\nKeep one lyric that feels like a message you never sent.",
+    lyrics: "[Verse]\nI kept your name in a quiet place\nA little shadow I could not erase\nBut the night is calling me outside\nI can feel the tears turn into light\n\n[Chorus]\nI dance with the sadness, I move through the rain\nI turn every memory into a flame\nIf my heart is broken, let the rhythm play\nI will love what I lost in a brand new way",
     prompt: "Flip a sad idea into motion without losing the emotion.",
     tags: ["Mood flip", "Dance", "Heart"],
   },
@@ -3245,6 +3245,35 @@ function bindChallengesPageOnce() {
     try { showToast("Add the person's name first", { icon: "✍", durationMs: 2600 }); } catch {}
     return false;
   };
+  const occasionLyricsFor = (occasion, person, variant) => {
+    const danceLift = variant === "dance"
+      ? "\n[Post-Chorus]\nMove it, move it, everybody shout\nThis is the night we talk about"
+      : "";
+    const cinematicLift = variant === "cinematic"
+      ? "\n[Bridge]\nWhen the lights go low and the whole room fades\nYour name stays bright like a golden flame"
+      : "";
+    const lift = danceLift || cinematicLift;
+    switch (occasion.id) {
+      case "birthday":
+        return `[Verse]\n${person}, the room is glowing just for you\nCandles in the light, every wish feels new\nFriends are singing, hearts are loud\nTonight your name is in the crowd\n\n[Chorus]\nHappy birthday, ${person}, this is your night\nShine like the stars in the city light\nOne more year and a dream comes true\nEverybody here is singing for you${lift}`;
+      case "anniversary":
+        return `[Verse]\n${person}, all our years are dancing slow\nEvery little memory still knows where to go\nFrom the first hello to this moment here\nI choose you again, year after year\n\n[Chorus]\nAll our years, all our days\nLove keeps finding brand new ways\n${person}, when the world moves fast\nYou are my forever, you are my past${lift}`;
+      case "wedding":
+        return `[Verse]\nOpen the doors, let the music rise\n${person} steps in with the light in their eyes\nHands are clapping, hearts are wide\nFamily singing from every side\n\n[Chorus]\nYalla, ${person}, take the floor\nLove is knocking at the door\nStep by step and hand in hand\nTonight we dance across the land${lift}`;
+      case "mom-day":
+        return `[Verse]\n${person}, you carried love in your hands\nYou made a home out of every chance\nWhen I was lost, you were the light\nYour voice still keeps me warm at night\n\n[Chorus]\nMama ${person}, this song is for you\nFor every little thing you do\nIf love had a sound, it would sing your name\nAgain and again, always the same${lift}`;
+      case "christmas":
+        return `[Verse]\n${person}, the lights are soft tonight\nSnow in the window, hearts burning bright\nHome feels warmer when you are near\nEvery little bell says you belong here\n\n[Chorus]\nChristmas glow around ${person}'s name\nEvery smile becomes a flame\nHold this moment, keep it close\nYou are the gift we love the most${lift}`;
+      case "new-year":
+        return `[Verse]\n${person}, the countdown fills the sky\nOld days fade and new dreams fly\nMidnight opens like a door\nWe are not who we were before\n\n[Chorus]\nNew year, new light, ${person}, rise\nFireworks dancing in your eyes\nLeave the old road, take the view\nThis whole year is calling you${lift}`;
+      case "congrats":
+        return `[Verse]\n${person}, they see the shine tonight\nBut we know the work behind the light\nEvery long road, every late fight\nTurned into cheers under these lights\n\n[Chorus]\nCongratulations, ${person}, stand tall\nYou earned the moment, you gave it all\nHands up high, let the whole room say\nThis is your win, this is your day${lift}`;
+      case "prom":
+        return `[Verse]\n${person}, the cameras flash like stars\nMusic pouring out of cars\nFriends are laughing, time moves slow\nTonight is a memory before we know\n\n[Chorus]\nProm night, ${person}, shining bright\nDancing through the city light\nOne more song and one more smile\nKeep this feeling for a while${lift}`;
+      default:
+        return `[Verse]\n${person}, this moment has your name\nEvery little light becomes a flame\n\n[Chorus]\nThis one is for you, loud and true\nEverybody sings it back to you${lift}`;
+    }
+  };
   const buildPresetIdea = (occasion, genre, variant = "anthem") => {
     const person = nameForPrompt() || "someone special";
     const variantLabel = variant === "dance"
@@ -3258,21 +3287,13 @@ function bindChallengesPageOnce() {
       : variant === "cinematic"
         ? "slow cinematic intro into a memorable chorus"
         : "mid-tempo, polished, emotional but catchy";
+    const challengeBrief = `Challenge brief: ${occasion.angle}. Dedicated to ${person}. Keep the lyrics personal and avoid generic lines.`;
     return {
       id: `occasion:${occasion.id}:${genre.id}:${variant}`,
       title,
-      style: `${genre.style}, ${tempoHint}, personalized for ${person}`,
+      style: `${genre.style}, ${tempoHint}, personalized for ${person}. ${challengeBrief}`,
       prompt: `Create ${occasion.angle} for ${person}.`,
-      lyrics: [
-        `Write a personalized song for ${person}.`,
-        occasion.lyricSeed,
-        variant === "dance"
-          ? "Make the chorus move fast and feel like a celebration."
-          : variant === "cinematic"
-            ? "Start cinematic and intimate, then open into a big emotional hook."
-            : "Make the hook feel custom, catchy, and easy to dedicate.",
-        "Avoid generic greeting-card lines. Use concrete images and a chorus people can remember.",
-      ].join("\n"),
+      lyrics: occasionLyricsFor(occasion, person, variant),
       tags: [...(occasion.tags || []), genre.label],
       challenge: {
         id: `occasion:${occasion.id}:${genre.id}`,

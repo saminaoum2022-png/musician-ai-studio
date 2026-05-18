@@ -12948,7 +12948,7 @@ function renderProfileTopWeek(items) {
   const ranked = (items || [])
     .slice()
     .sort((a, b) => Number(b.likes || 0) - Number(a.likes || 0))
-    .filter((p, _, arr) => Number(p.likes || 0) > 0 || arr.length <= 3)
+    .filter((p) => Number(p.likes || 0) > 0)
     .slice(0, 3);
   if (!ranked.length) {
     if (shouldShowProfileHubSkeleton(items)) {

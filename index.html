@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260518arabicAddress" />
+    <link rel="stylesheet" href="./styles.css?v=20260518homeSparksV1" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -71,7 +71,7 @@
             <a href="#/generate" class="journeyStep" data-route-link="generate">Generate</a>
             <a href="#/library" class="journeyStep" data-route-link="library">Library</a>
             <a href="#/discover" class="journeyStep" data-route-link="discover">Discover</a>
-            <a href="#/challenges" class="journeyStep" data-route-link="challenges">Challenges</a>
+            <a href="#/challenges" class="journeyStep" data-route-link="challenges">Home</a>
             <a href="#/sounds" class="journeyStep" data-route-link="sounds">Sounds</a>
             <a href="#/player" class="journeyStep" data-route-link="player">Player</a>
           </div>
@@ -198,8 +198,8 @@
               <div class="homeSub">Public songs from creators</div>
             </a>
             <a class="homeCard" href="#/challenges">
-              <div class="homeTitle">Challenges</div>
-              <div class="homeSub">Daily prompts · remix games</div>
+              <div class="homeTitle">Home Sparks</div>
+              <div class="homeSub">Prompts · occasions · creator ideas</div>
             </a>
             <a class="homeCard" href="#/more">
               <div class="homeTitle">Studio & More</div>
@@ -849,42 +849,42 @@
           <div class="challengesAmbient" aria-hidden="true"></div>
           <header class="challengesHero">
             <div class="challengesHeroCopy">
-              <p class="challengesKicker">Creator Arena</p>
-              <h2 class="challengesTitle">Beat the prompt before it disappears.</h2>
-              <p class="challengesLead">Tiny music games designed to make you create fast, publish, and pull people back to your profile.</p>
+              <p class="challengesKicker">Studio Home</p>
+              <h2 class="challengesTitle">What are we making today?</h2>
+              <p class="challengesLead">Start from a spark, dedicate a song to someone, or jump into a creative challenge. Not a blank generator, not a feed.</p>
               <div class="challengesHeroActions">
-                <button type="button" class="challengesPrimaryCta" data-challenge-start="hook-rush">Start today's challenge</button>
-                <a class="challengesGhostCta" href="#/discover">Hear entries</a>
+                <button type="button" class="challengesPrimaryCta" data-challenge-start="hook-rush">Start with a spark</button>
+                <a class="challengesGhostCta" href="#/generate">Open Create</a>
               </div>
             </div>
-            <div class="challengeStreakCard" aria-label="Challenge streak preview">
+            <div class="challengeStreakCard" aria-label="Home entry points">
               <span class="challengeStreakRing" aria-hidden="true"></span>
-              <span class="challengeStreakLabel">Streak</span>
+              <span class="challengeStreakLabel">Ways in</span>
               <strong>03</strong>
-              <span class="challengeStreakSub">days to unlock the gold badge</span>
+              <span class="challengeStreakSub">spark · occasion · remix</span>
             </div>
           </header>
 
           <section class="challengeFeatureCard" aria-labelledby="challengeFeaturedTitle">
             <div class="challengeFeatureTop">
-              <span class="challengeLivePill"><span></span> Live now</span>
-              <span class="challengeTimer"><span data-challenge-count="hook-rush">0 joined</span> · 23h left</span>
+              <span class="challengeLivePill"><span></span> Start here</span>
+              <span class="challengeTimer"><span data-challenge-count="hook-rush">0 joined</span> · creative prompt</span>
             </div>
-            <h3 id="challengeFeaturedTitle">Hook Rush</h3>
+            <h3 id="challengeFeaturedTitle">Today’s Spark</h3>
             <p>Make the first 15 seconds impossible to skip. No long intro, no warm-up, just the part people replay.</p>
             <div class="challengeTagRow">
               <span>15 sec hook</span>
-              <span>Public profile</span>
-              <span>Most replays wins</span>
+              <span>Fast idea</span>
+              <span>Publish when ready</span>
             </div>
-            <button type="button" class="challengeFeatureStart" data-challenge-start="hook-rush">Create entry</button>
+            <button type="button" class="challengeFeatureStart" data-challenge-start="hook-rush">Use this spark</button>
           </section>
 
           <section class="challengeEntriesPanel" aria-labelledby="challengeEntriesTitle">
             <div class="challengeEntriesHead">
               <div>
-                <p class="challengePresetKicker">Live entries</p>
-                <h3 id="challengeEntriesTitle">Creators joining now</h3>
+                <p class="challengePresetKicker">Now playing</p>
+                <h3 id="challengeEntriesTitle">Latest spark entries</h3>
               </div>
               <span id="challengeEntriesCount" class="challengeEntriesCount">0 joined</span>
             </div>
@@ -918,12 +918,12 @@
             <div id="challengePresetGrid" class="challengePresetGrid" aria-live="polite"></div>
           </section>
 
-          <section class="challengeDeck" aria-label="Challenge cards">
+          <section class="challengeDeck" aria-label="Studio spark cards">
             <article class="challengeMiniCard challengeMiniCard--violet">
               <div class="challengeMiniIcon" aria-hidden="true">
                 <svg viewBox="0 0 24 24"><path d="M4 12h3l2-5 4 10 2-5h5"/><path d="M8 18c2.5 2 5.5 2 8 0"/></svg>
               </div>
-              <span class="challengeMiniKicker">Remix game</span>
+              <span class="challengeMiniKicker">Spark</span>
               <h3>Voice Note Flip</h3>
               <p>Turn a tiny spoken phrase or hum into a chorus people can sing back.</p>
               <span class="challengeMiniCount" data-challenge-count="voice-note-flip">0 joined</span>
@@ -933,7 +933,7 @@
               <div class="challengeMiniIcon" aria-hidden="true">
                 <svg viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M5 8h14"/><path d="M7 16h10"/><path d="M4 12h16"/></svg>
               </div>
-              <span class="challengeMiniKicker">Crowd test</span>
+              <span class="challengeMiniKicker">Party idea</span>
               <h3>Dabke Drop</h3>
               <p>Build a clapping chorus for weddings, parties, and group voice notes.</p>
               <span class="challengeMiniCount" data-challenge-count="dabke-drop">0 joined</span>
@@ -951,21 +951,21 @@
             </article>
           </section>
 
-          <section class="challengeLoopCard" aria-label="How challenges work">
+          <section class="challengeLoopCard" aria-label="How Home sparks work">
             <div>
               <span class="challengeLoopStep">1</span>
-              <strong>Pick a prompt</strong>
-              <small>One tap loads lyrics and style into Create.</small>
+              <strong>Pick a spark</strong>
+              <small>Start from a prompt, occasion, or sound idea.</small>
             </div>
             <div>
               <span class="challengeLoopStep">2</span>
-              <strong>Publish entry</strong>
-              <small>Add a release note so people know the story.</small>
+              <strong>Shape in Create</strong>
+              <small>Edit lyrics, style, voice, and language.</small>
             </div>
             <div>
               <span class="challengeLoopStep">3</span>
-              <strong>Get remixed</strong>
-              <small>Entries can become the seed for the next challenge.</small>
+              <strong>Release when ready</strong>
+              <small>Publish with a note when the song has a story.</small>
             </div>
           </section>
         </section>
@@ -2582,7 +2582,7 @@
           </svg>
           <span class="tabLabel">Discover</span>
         </a>
-        <a href="#/challenges" data-route-link="challenges" class="challengesTab" aria-label="Challenges">
+        <a href="#/challenges" data-route-link="challenges" class="challengesTab" aria-label="Home">
           <svg class="tabIco tabIcoChallenges" viewBox="0 0 24 24" aria-hidden="true">
             <path
               fill="none"
@@ -2595,7 +2595,7 @@
             <path d="M5 8.5h3.9l1.1-3.2 1.1 3.2H15l-3.1 2 1.2 3.6-3.1-2.2-3.1 2.2 1.2-3.6L5 8.5Z" fill="currentColor" stroke="none"/>
             <path d="M16 10h4l-2 3.2L20 16h-4l-2-2.8L16 10Z" fill="currentColor" opacity="0.55" stroke="none"/>
           </svg>
-          <span class="tabLabel">Challenges</span>
+          <span class="tabLabel">Home</span>
         </a>
         <a href="#/profile" data-route-link="profile">
           <svg class="tabIco" viewBox="0 0 24 24" aria-hidden="true">
@@ -2708,6 +2708,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260518arabicAddress"></script>
+    <script type="module" src="./src/app.js?v=20260518homeSparksV1"></script>
   </body>
 </html>

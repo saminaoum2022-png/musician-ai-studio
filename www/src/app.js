@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260518arabicAddress";
+const APP_BUILD = "20260518homeSparksV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2145,7 +2145,7 @@ function applyRoute() {
     setCreateChallengeHint(null);
   }
   if (els.brandSecondary) {
-    els.brandSecondary.textContent = wanted === "hub" ? "Hub" : "Music";
+    els.brandSecondary.textContent = wanted === "hub" ? "Hub" : wanted === "challenges" ? "Home" : "Music";
   }
 
   document.querySelectorAll("[data-route]").forEach((el) => {
@@ -22034,7 +22034,7 @@ function enterApp() {
   if (hero) hero.classList.add("entering");
   document.body.classList.add("pageTransitioning");
   setTimeout(() => {
-    location.hash = "#/generate";
+    location.hash = "#/challenges";
     requestAnimationFrame(() => {
       document.body.classList.remove("pageTransitioning");
       if (hero) hero.classList.remove("entering");
@@ -22400,7 +22400,7 @@ if (els.btnAuthGateGoogle) {
 }
 if (els.btnAuthGateGuest) {
   els.btnAuthGateGuest.addEventListener("click", () => {
-    location.hash = HUB_FEATURE_ENABLED ? "#/hub" : "#/generate";
+    location.hash = "#/challenges";
     setStatus("Guest mode enabled. Login anytime from Profile.");
   });
 }

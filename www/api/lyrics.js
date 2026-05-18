@@ -1,9 +1,9 @@
 /**
  * POST /api/lyrics
- * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange" }
+ * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange", lyricsProvider?: "gemini" }
  *
  * Provider:
- * 1) Suno lyrics API
+ * 1) Suno lyrics API, unless lyricsProvider is "gemini"
  * 2) Gemini fallback / repair
  */
 module.exports = async function handler(req, res) {
@@ -17,6 +17,8 @@ module.exports = async function handler(req, res) {
     const style = String(body?.style || "").trim().slice(0, 700);
     const dialect = String(body?.dialect || "").trim().slice(0, 120);
     const dialectHint = String(body?.dialectHint || "").trim().slice(0, 220);
+    const lyricsProvider = String(body?.lyricsProvider || body?.providerPreference || "").trim().toLowerCase();
+    const geminiOnly = ["gemini", "gemini-only", "emoni"].includes(lyricsProvider);
     const mode = detectModeFromSeed(seed, body?.mode);
     const nonce = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
     const prompt = buildPrompt({ seed, style, mode, nonce, dialect, dialectHint });
@@ -26,6 +28,37 @@ module.exports = async function handler(req, res) {
 
     const debug = {};
     const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    if (geminiOnly) {
+      if (!geminiKey) {
+        return json(res, 502, {
+          error: "Gemini lyrics provider unavailable: missing GEMINI_API_KEY",
+          provider: "none",
+          debug: { nonce, gemini: "missing_gemini_key" },
+        });
+      }
+      const gemResult = await tryGeminiLyrics({ geminiKey, prompt });
+      if (gemResult?.ok) {
+        const normalized = sanitizeLyricsOutput(gemResult.lyrics);
+        const repaired = await maybeRepairOnce({
+          text: normalized,
+          prompt,
+          complianceTerms,
+          sunoKey: "",
+          geminiKey,
+        });
+        return json(res, 200, {
+          lyrics: repaired.text,
+          provider: repaired.provider || "gemini",
+          debug: { nonce, gemini: "ok", lyricsProvider: "gemini" },
+        });
+      }
+      return json(res, 502, {
+        error: `Gemini lyrics provider unavailable: ${gemResult?.error || "failed"}`,
+        provider: "none",
+        debug: { nonce, gemini: gemResult?.error || "failed", lyricsProvider: "gemini" },
+      });
+    }
+
     if (sunoKey) {
       const { host, proto } = getHostProto(req);
       const callBackUrl = `${proto}://${host}/api/suno/callback`;
@@ -243,7 +276,9 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint }) {
     "Write complete singable lyrics for AI song generation.",
     "Output lyrics only.",
     "Use this structure exactly:",
+    "[Intro]",
     "[Verse 1]",
+    "[Pre-Chorus]",
     "[Chorus]",
     "[Verse 2]",
     "[Chorus]",

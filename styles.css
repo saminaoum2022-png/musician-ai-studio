@@ -3898,6 +3898,7 @@ textarea{
   box-shadow: none;
   padding: 12px;
   border-radius: 0;
+  font-size: 16px;
 }
 .card.wide[data-route="generate"] .inputPanel--style input{
   border: 0;
@@ -3905,6 +3906,7 @@ textarea{
   box-shadow: none;
   padding: 8px 0 0;
   border-radius: 0;
+  font-size: 16px;
 }
 .card.wide[data-route="generate"] .inputPanel .lyricsBox{
   border: 0;

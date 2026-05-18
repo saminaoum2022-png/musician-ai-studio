@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260518challengeSprint";
+const APP_BUILD = "20260518challengeLyricsEngine";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1945,14 +1945,28 @@ function challengePromptMagicSeed(seed, challenge) {
   const languageHint = String(challenge?.dialectHint || challenge?.language || "").trim();
   return [
     "Turn this Challenge brief into complete singable lyrics.",
+    "Write the lyric content yourself, then organize it into a clean song form.",
     "Output ONLY lyrics with section tags. Do not sing or repeat the instruction text.",
     "Do not explain the challenge. Do not include metadata, notes, or descriptions.",
     languageHint ? `Language/dialect: ${languageHint}.` : "",
-    "Use a strong verse/chorus structure and a short repeatable hook.",
+    "Use this structure when it fits: [Intro], [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Bridge], [Final Chorus], [Outro].",
+    "Use short singable lines, natural rhyme, and a short repeatable hook.",
     "",
     "Challenge brief:",
     seed,
   ].filter(Boolean).join("\n");
+}
+
+function challengePrefersGeminiLyrics(challenge) {
+  const text = [
+    challenge?.dialect,
+    challenge?.dialectHint,
+    challenge?.language,
+    challenge?.languageId,
+    challenge?.genre,
+    challenge?.title,
+  ].map((v) => String(v || "").toLowerCase()).join(" ");
+  return /arabic|levantine|neutral-arabic|dabke|oud|mijwiz|عربي|دبكة/.test(text);
 }
 
 function setCreateChallengeHint(challenge) {
@@ -18157,6 +18171,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const challenge = challengePromptContext();
     const mode = challenge ? "full" : detectLyricsMode(seed);
     const requestSeed = challenge ? challengePromptMagicSeed(seed, challenge) : seed;
+    const lyricsProvider = challenge && challengePrefersGeminiLyrics(challenge) ? "gemini" : "";
     const style = String(els.sunoStyle?.value || "").trim();
     const dialect = String(els.sunoDialect?.value || "").trim();
     const dialectHint = String(els.sunoDialectHint?.value || "").trim();
@@ -18172,7 +18187,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const r = await fetch(apiUrl("/api/lyrics"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ seed: requestSeed, style, mode, dialect, dialectHint }),
+        body: JSON.stringify({ seed: requestSeed, style, mode, dialect, dialectHint, lyricsProvider }),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error || "Lyrics generation failed");

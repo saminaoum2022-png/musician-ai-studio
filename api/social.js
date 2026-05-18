@@ -127,6 +127,16 @@ function feedbackLabel(type) {
   return "Feedback";
 }
 
+function feedbackInsertFailureReason(details) {
+  const text = String(details || "");
+  if (/relation .*social_song_feedback.* does not exist|42P01/i.test(text)) return "feedback_table_missing";
+  if (/column .* does not exist|42703/i.test(text)) return "feedback_schema_mismatch";
+  if (/violates foreign key constraint|23503/i.test(text)) return "feedback_foreign_key";
+  if (/row-level security|42501|permission denied/i.test(text)) return "feedback_policy";
+  if (/invalid input syntax|22P02|operator does not exist|42883/i.test(text)) return "feedback_type_mismatch";
+  return "insert_failed";
+}
+
 async function resolvePublicSong(songId) {
   const sid = cleanSongId(songId);
   if (!sid) return null;
@@ -259,7 +269,7 @@ async function recordSongFeedback({ songId, listenerUserId, feedbackType }) {
     if (Array.isArray(afterConflict.data) && afterConflict.data.length) {
       return { counted: true, existing: true, ownerUserId: owner, ...(await feedbackSummary({ songId: sid, listenerUserId: listener })) };
     }
-    return { counted: false, reason: "insert_failed", details: ins.text };
+    return { counted: false, reason: feedbackInsertFailureReason(ins.text), details: String(ins.text || "").slice(0, 260) };
   }
   await createFeedbackNotification({ song, ownerUserId: owner, actorUserId: listener, feedbackType: type });
   return { counted: true, ownerUserId: owner, ...(await feedbackSummary({ songId: sid, listenerUserId: listener })) };

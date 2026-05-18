@@ -1,6 +1,6 @@
 create table if not exists public.social_song_feedback (
   id uuid primary key default gen_random_uuid(),
-  song_id text not null references public.user_songs(id) on delete cascade,
+  song_id uuid not null references public.user_songs(id) on delete cascade,
   owner_user_id uuid not null references auth.users(id) on delete cascade,
   listener_user_id uuid not null references auth.users(id) on delete cascade,
   feedback_type text not null check (feedback_type in ('hook', 'lyrics', 'replay', 'remix')),

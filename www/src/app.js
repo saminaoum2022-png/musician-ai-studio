@@ -4770,6 +4770,14 @@ async function submitSongFeedback(songId, feedbackType) {
       showToast("Feedback works only on public profile songs.");
     } else if (data?.reason === "missing_input") {
       showToast("Could not identify this song for feedback.");
+    } else if (data?.reason === "feedback_foreign_key" || data?.reason === "feedback_type_mismatch") {
+      showToast("Run the updated feedback SQL; song_id must be uuid.");
+    } else if (data?.reason === "feedback_table_missing") {
+      showToast("Run the feedback SQL to create the feedback table.");
+    } else if (data?.reason === "feedback_schema_mismatch") {
+      showToast("Feedback table schema is outdated; rerun the latest SQL.");
+    } else if (data?.reason === "feedback_policy") {
+      showToast("Feedback table policy needs the latest SQL update.");
     } else if (data?.reason === "insert_failed") {
       showToast("Feedback storage is not ready yet. Check the Supabase feedback SQL.");
     } else if (data?.counted === false) {

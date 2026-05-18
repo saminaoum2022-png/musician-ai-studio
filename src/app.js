@@ -4657,6 +4657,7 @@ async function setLibraryTrackFeaturedOnProfile(id, featured) {
     showToast("Publish the song first, then pin it.");
     return;
   }
+  const previousFeaturedIds = new Set(lib.filter(isFeaturedOnProfile).map((t) => String(t.id)));
   const nextLib = lib.map((t) => {
     if (!t.publicOnProfile) return t;
     const shouldFeature = featured && String(t.id) === trackId;
@@ -4668,7 +4669,7 @@ async function setLibraryTrackFeaturedOnProfile(id, featured) {
   saveLibrary(nextLib);
   renderProfileHubShared();
   showToast(featured ? "Pinned as your featured song." : "Featured song removed.");
-  const changed = nextLib.filter((t) => t.publicOnProfile && (String(t.id) === trackId || isFeaturedOnProfile(t) === false));
+  const changed = nextLib.filter((t) => t.publicOnProfile && (String(t.id) === trackId || previousFeaturedIds.has(String(t.id))));
   for (const t of changed) {
     await supabasePatchUserSong(t, { meta: t.meta || {} }).catch(() => null);
   }

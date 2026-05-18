@@ -4766,8 +4766,16 @@ async function submitSongFeedback(songId, feedbackType) {
     });
     if (data?.reason === "own_song") {
       showToast("Feedback chips are for listeners on your public songs.");
+    } else if (data?.reason === "song_not_public") {
+      showToast("Feedback works only on public profile songs.");
+    } else if (data?.reason === "missing_input") {
+      showToast("Could not identify this song for feedback.");
+    } else if (data?.reason === "insert_failed") {
+      showToast("Feedback storage is not ready yet. Check the Supabase feedback SQL.");
     } else if (data?.counted === false) {
-      showToast("Feedback storage needs the Supabase SQL update.");
+      showToast("Could not send feedback yet.");
+    } else if (data?.existing) {
+      showToast("You already sent that feedback.");
     } else {
       showToast("Feedback sent to the creator.");
     }

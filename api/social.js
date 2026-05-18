@@ -236,9 +236,15 @@ async function recordSongFeedback({ songId, listenerUserId, feedbackType }) {
   const owner = cleanUserId(song?.user_id);
   if (!song || !owner) return { counted: false, reason: "song_not_public" };
   if (owner === listener) return { counted: false, reason: "own_song", ...(await feedbackSummary({ songId: sid, listenerUserId: listener })) };
+  const existing = await svcFetch(
+    `social_song_feedback?select=id&song_id=eq.${encodeURIComponent(sid)}&listener_user_id=eq.${encodeURIComponent(listener)}&feedback_type=eq.${encodeURIComponent(type)}&limit=1`,
+  );
+  if (Array.isArray(existing.data) && existing.data.length) {
+    return { counted: true, existing: true, ownerUserId: owner, ...(await feedbackSummary({ songId: sid, listenerUserId: listener })) };
+  }
   const ins = await svcFetch("social_song_feedback", {
     method: "POST",
-    headers: { Prefer: "resolution=ignore-duplicates,return=minimal" },
+    headers: { Prefer: "return=minimal" },
     body: JSON.stringify({
       song_id: sid,
       owner_user_id: owner,
@@ -246,7 +252,15 @@ async function recordSongFeedback({ songId, listenerUserId, feedbackType }) {
       feedback_type: type,
     }),
   });
-  if (!ins.ok) return { counted: false, reason: "insert_failed", details: ins.text };
+  if (!ins.ok) {
+    const afterConflict = await svcFetch(
+      `social_song_feedback?select=id&song_id=eq.${encodeURIComponent(sid)}&listener_user_id=eq.${encodeURIComponent(listener)}&feedback_type=eq.${encodeURIComponent(type)}&limit=1`,
+    );
+    if (Array.isArray(afterConflict.data) && afterConflict.data.length) {
+      return { counted: true, existing: true, ownerUserId: owner, ...(await feedbackSummary({ songId: sid, listenerUserId: listener })) };
+    }
+    return { counted: false, reason: "insert_failed", details: ins.text };
+  }
   await createFeedbackNotification({ song, ownerUserId: owner, actorUserId: listener, feedbackType: type });
   return { counted: true, ownerUserId: owner, ...(await feedbackSummary({ songId: sid, listenerUserId: listener })) };
 }

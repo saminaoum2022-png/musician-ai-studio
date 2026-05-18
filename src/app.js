@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260518creatorFeedback";
+const APP_BUILD = "20260518challengeDialectReset";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1945,31 +1945,17 @@ function challengePromptContext() {
 }
 
 function challengePromptMagicSeed(seed, challenge) {
-  const languageHint = String(challenge?.dialectHint || challenge?.language || "").trim();
   return [
     "Turn this Challenge brief into complete singable lyrics.",
     "Write the lyric content yourself, then organize it into a clean song form.",
     "Output ONLY lyrics with section tags. Do not sing or repeat the instruction text.",
     "Do not explain the challenge. Do not include metadata, notes, or descriptions.",
-    languageHint ? `Language/dialect: ${languageHint}.` : "",
     "Use this structure when it fits: [Intro], [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Bridge], [Final Chorus], [Outro].",
     "Use short singable lines, natural rhyme, and a short repeatable hook.",
     "",
     "Challenge brief:",
     seed,
   ].filter(Boolean).join("\n");
-}
-
-function challengePrefersGeminiLyrics(challenge) {
-  const text = [
-    challenge?.dialect,
-    challenge?.dialectHint,
-    challenge?.language,
-    challenge?.languageId,
-    challenge?.genre,
-    challenge?.title,
-  ].map((v) => String(v || "").toLowerCase()).join(" ");
-  return /arabic|levantine|neutral-arabic|dabke|oud|mijwiz|عربي|دبكة/.test(text);
 }
 
 function setCreateChallengeHint(challenge) {
@@ -2924,22 +2910,22 @@ const CHALLENGE_LANGUAGES = [
     id: "english",
     label: "English",
     prompt: "Use English lyrics.",
-    dialect: "English",
-    dialectHint: "Natural English phrasing with short, singable lines.",
+    dialect: "",
+    dialectHint: "",
   },
   {
     id: "levantine",
     label: "Levantine Arabic",
-    prompt: "Use Levantine Arabic or natural Arabizi. Avoid Egyptian dialect and slang.",
-    dialect: "Arabic",
-    dialectHint: "Levantine Arabic phrasing, not Egyptian. Use short, balanced singable lines.",
+    prompt: "Use Levantine Arabic or natural Arabizi.",
+    dialect: "",
+    dialectHint: "",
   },
   {
     id: "neutral-arabic",
     label: "Neutral Arabic",
-    prompt: "Use neutral Arabic that works across Arab audiences. Avoid Egyptian slang unless requested.",
-    dialect: "Arabic",
-    dialectHint: "Neutral Arabic phrasing with short, balanced singable lines. Avoid Egyptian slang.",
+    prompt: "Use neutral Arabic.",
+    dialect: "",
+    dialectHint: "",
   },
 ];
 
@@ -3353,8 +3339,6 @@ function bindChallengesPageOnce() {
         : "Make it catchy, personal, and easy to sing.";
     const languageHint = language?.id && language.id !== "auto"
       ? language.prompt
-      : /arabic|levantine|dabke|oud|mijwiz|fusion/i.test(`${genre?.id || ""} ${genre?.label || ""} ${genre?.style || ""}`)
-      ? "Use Levantine or neutral Arabic, not Egyptian."
       : "Use the natural language for this style.";
     return [
       `Write lyrics for ${person}: ${occasion.angle}.`,
@@ -3385,8 +3369,8 @@ function bindChallengesPageOnce() {
       style: `${genre.style}, ${tempoHint}, personalized for ${person}. ${challengeBrief}`,
       prompt: lyricPrompt,
       lyrics: lyricPrompt,
-      dialect: language?.dialect || "",
-      dialectHint: language?.dialectHint || "",
+      dialect: "",
+      dialectHint: "",
       tags: [...(occasion.tags || []), genre.label],
       challenge: {
         id: `occasion:${occasion.id}:${genre.id}`,
@@ -3396,8 +3380,8 @@ function bindChallengesPageOnce() {
         genre: genre.label,
         language: language?.label || "Auto",
         languageId: language?.id || "auto",
-        dialect: language?.dialect || "",
-        dialectHint: language?.dialectHint || "",
+        dialect: "",
+        dialectHint: "",
         personName: person,
         variant,
       },
@@ -18443,7 +18427,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const challenge = challengePromptContext();
     const mode = challenge ? "full" : detectLyricsMode(seed);
     const requestSeed = challenge ? challengePromptMagicSeed(seed, challenge) : seed;
-    const lyricsProvider = challenge && challengePrefersGeminiLyrics(challenge) ? "gemini" : "";
+    const lyricsProvider = "";
     const style = String(els.sunoStyle?.value || "").trim();
     const dialect = String(els.sunoDialect?.value || "").trim();
     const dialectHint = String(els.sunoDialectHint?.value || "").trim();

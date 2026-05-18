@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260518createFocusStable" />
+    <link rel="stylesheet" href="./styles.css?v=20260518imageMoodUi" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -459,6 +459,8 @@
             <div class="createPanes" data-mode="lyrics">
               <div class="createPane createPane--photo" data-mode="photo" hidden>
                 <button id="createPhotoCta" class="createPaneCta" type="button" aria-label="Add a photo">
+                  <span id="createPhotoPreview" class="createPhotoPreview" aria-hidden="true"></span>
+                  <span class="createPhotoShade" aria-hidden="true"></span>
                   <span class="createPaneCtaIcon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" width="28" height="28" focusable="false">
                       <path fill="currentColor" d="M5 4.5A2.5 2.5 0 0 0 2.5 7v10A2.5 2.5 0 0 0 5 19.5h14a2.5 2.5 0 0 0 2.5-2.5V7A2.5 2.5 0 0 0 19 4.5H5Zm0 1.5h14c.55 0 1 .45 1 1v7.2l-3.33-3.32a1.8 1.8 0 0 0-2.54 0L10 15.01l-1.63-1.63a1.8 1.8 0 0 0-2.54 0L4 15.21V7c0-.55.45-1 1-1Zm12.5 2.2a1.7 1.7 0 1 0 0 3.4 1.7 1.7 0 0 0 0-3.4ZM7.1 14.44a.3.3 0 0 1 .43 0L10 16.9l5.19-5.18a.3.3 0 0 1 .42 0L20 16.1V17c0 .55-.45 1-1 1H5c-.55 0-1-.45-1-1v-.26l3.1-2.3Z"/>
@@ -2280,11 +2282,14 @@
 
       <div id="imageMoodModal" class="modal imageMoodModal" style="display:none" aria-hidden="true">
         <div class="modalCard imageMoodCard">
-          <div class="row imageMoodHead">
-            <div class="modalTitle">Image Mood Assistant</div>
-            <button id="btnCloseImageMood" class="ghost" type="button">Close</button>
+          <div class="imageMoodHead">
+            <div>
+              <p class="imageMoodKicker">Photo mood</p>
+              <div class="modalTitle">Image Mood Assistant</div>
+            </div>
+            <button id="btnCloseImageMood" class="imageMoodClose" type="button">Close</button>
           </div>
-          <div class="hint">Upload cover/art/photo and NabadAi suggests mood, tags, and optional lyric seed.</div>
+          <div class="imageMoodLead">Upload cover/art/photo and NabadAi suggests mood, tags, and optional lyric seed.</div>
           <label class="field imageMoodField">
             <input id="imageMoodUpload" type="file" accept="image/*" />
           </label>
@@ -2692,6 +2697,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260518createFocusStable"></script>
+    <script type="module" src="./src/app.js?v=20260518imageMoodUi"></script>
   </body>
 </html>

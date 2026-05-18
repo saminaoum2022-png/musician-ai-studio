@@ -3724,6 +3724,8 @@ textarea{
   to{ opacity:1; transform: translateY(0); }
 }
 .createPaneCta{
+  position: relative;
+  overflow: hidden;
   display:flex;
   flex-direction:column;
   align-items:center;
@@ -3740,6 +3742,36 @@ textarea{
   -webkit-tap-highlight-color: transparent;
   transition: border-color 220ms ease, background 220ms ease, transform 140ms ease, box-shadow 220ms ease;
 }
+.createPhotoPreview,
+.createPhotoShade{
+  position:absolute;
+  inset:0;
+  opacity:0;
+  pointer-events:none;
+  transition: opacity 220ms ease;
+}
+.createPhotoPreview{
+  background-size: cover;
+  background-position: center;
+  filter: saturate(1.08) brightness(0.9);
+  transform: scale(1.01);
+}
+.createPhotoShade{
+  background:
+    linear-gradient(180deg, rgba(5,7,13,0.18), rgba(5,7,13,0.70)),
+    radial-gradient(circle at 50% 12%, rgba(94,234,212,0.22), transparent 48%);
+}
+.createPaneCta.hasPhotoAttached{
+  border-style: solid;
+  border-color: rgba(94,234,212,0.38);
+  box-shadow:
+    0 0 0 1px rgba(94,234,212,0.10) inset,
+    0 18px 38px rgba(0,0,0,0.24);
+}
+.createPaneCta.hasPhotoAttached .createPhotoPreview,
+.createPaneCta.hasPhotoAttached .createPhotoShade{
+  opacity:1;
+}
 .createPaneCta:hover{
   border-color: rgba(124,92,255,0.50);
   background: linear-gradient(180deg, rgba(124,92,255,0.10), rgba(124,92,255,0.02));
@@ -3748,6 +3780,8 @@ textarea{
   transform: scale(0.992);
 }
 .createPaneCtaIcon{
+  position:relative;
+  z-index:1;
   width:48px;
   height:48px;
   display:inline-flex;
@@ -3762,11 +3796,15 @@ textarea{
 }
 .createPaneCtaIcon svg{ display:block; }
 .createPaneCtaTitle{
+  position:relative;
+  z-index:1;
   font-size:15.5px;
   font-weight:800;
   letter-spacing:-0.01em;
 }
 .createPaneCtaSub{
+  position:relative;
+  z-index:1;
   font-size: 13.5px;
   color: rgba(232,238,247,0.74);
   max-width: 32em;
@@ -4190,25 +4228,31 @@ button.vocalRefClearBtn{
   align-items:flex-end;
   justify-content:center;
   padding: 14px;
-  background: rgba(2,6,14,0.58);
-  backdrop-filter: blur(4px);
+  background:
+    radial-gradient(circle at 50% 100%, rgba(124,92,255,0.14), transparent 42%),
+    rgba(2,6,14,0.70);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 .modalCard{
   width: min(560px, 100%);
-  border:1px solid rgba(255,255,255,0.12);
-  border-radius:16px;
+  border:1px solid rgba(255,255,255,0.11);
+  border-radius:24px;
   background:
-    linear-gradient(180deg, rgba(18,28,44,0.88), rgba(8,12,20,0.92)),
-    radial-gradient(120% 130% at 15% 0%, rgba(124,92,255,0.16), transparent 60%),
-    radial-gradient(120% 130% at 100% 0%, rgba(35,213,171,0.12), transparent 62%);
-  box-shadow: 0 22px 56px rgba(0,0,0,0.45);
-  backdrop-filter: blur(10px);
-  padding: 12px;
+    radial-gradient(110% 90% at 10% 0%, rgba(94,234,212,0.16), transparent 50%),
+    radial-gradient(120% 100% at 95% 0%, rgba(124,92,255,0.18), transparent 56%),
+    linear-gradient(180deg, rgba(15,22,36,0.94), rgba(7,10,18,0.96));
+  box-shadow:
+    0 24px 64px rgba(0,0,0,0.56),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  padding: 14px;
 }
 .imageMoodCard{
   display:flex;
   flex-direction:column;
-  gap:10px;
+  gap:12px;
 }
 .imageMoodCard.analyzing{
   position:relative;
@@ -4225,21 +4269,49 @@ button.vocalRefClearBtn{
   animation: lyricAura 2.6s ease-in-out infinite;
 }
 .imageMoodHead{
+  display:flex;
   justify-content:space-between;
   align-items:center;
+  gap:14px;
+}
+.imageMoodKicker{
+  margin:0 0 3px;
+  color: rgba(94,234,212,0.82);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.imageMoodClose{
+  min-height: 38px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.11);
+  background: rgba(255,255,255,0.07);
+  color: rgba(244,247,255,0.94);
+  padding: 0 14px;
+  font-weight: 900;
+}
+.imageMoodLead{
+  color: rgba(223,231,251,0.62);
+  font-size: 13.5px;
+  line-height: 1.45;
 }
 .imageMoodField input[type="file"]{
   width:100%;
-  padding:10px 12px;
-  border-radius:12px;
-  border:1px solid rgba(255,255,255,0.16);
-  background: rgba(8,12,20,0.62);
+  padding:11px 12px;
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.055);
+  color: rgba(244,247,255,0.88);
+  font-size: 13px;
 }
 .imageMoodPreviewWrap{
   min-height:140px;
-  border-radius:12px;
-  border:1px solid rgba(255,255,255,0.12);
-  background: linear-gradient(180deg, rgba(9,14,24,0.7), rgba(9,14,24,0.3));
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,0.10);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.018)),
+    rgba(7,10,18,0.58);
   display:flex;
   align-items:center;
   justify-content:center;
@@ -4251,15 +4323,39 @@ button.vocalRefClearBtn{
   object-fit:cover;
 }
 .imageMoodOutput{
-  border-radius:12px;
-  border:1px solid rgba(255,255,255,0.12);
-  background: rgba(8,12,20,0.54);
-  padding:10px 12px;
+  display:grid;
+  gap:8px;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,0.10);
+  background: rgba(4,7,14,0.50);
+  padding:10px;
   font-size:13px;
   color: rgba(225,235,248,0.9);
   line-height:1.45;
   min-height:88px;
-  white-space:pre-wrap;
+}
+.imageMoodResultRow{
+  border-radius:14px;
+  background: rgba(255,255,255,0.045);
+  padding:10px 11px;
+}
+.imageMoodResultRow span{
+  display:block;
+  color: rgba(94,234,212,0.78);
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:0.11em;
+  text-transform:uppercase;
+  margin-bottom:4px;
+}
+.imageMoodResultRow p{
+  margin:0;
+  color: rgba(232,238,247,0.86);
+}
+.imageMoodEmpty{
+  color: rgba(223,231,251,0.48);
+  align-self:center;
+  padding:10px;
 }
 .imageMoodActions{
   gap:10px;

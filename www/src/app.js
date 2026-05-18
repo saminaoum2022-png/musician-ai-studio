@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260518createFocusStable";
+const APP_BUILD = "20260518imageMoodUi";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -226,6 +226,8 @@ const els = {
   imageMoodUseAsCover: document.getElementById("imageMoodUseAsCover"),
   btnAnalyzeImageMood: document.getElementById("btnAnalyzeImageMood"),
   btnApplyImageMood: document.getElementById("btnApplyImageMood"),
+  createPhotoCta: document.getElementById("createPhotoCta"),
+  createPhotoPreview: document.getElementById("createPhotoPreview"),
   lyricsMagicMenu: document.getElementById("lyricsMagicMenu"),
   btnMagicUploadVocal: document.getElementById("btnMagicUploadVocal"),
   btnMagicRecordVocal: document.getElementById("btnMagicRecordVocal"),
@@ -2457,6 +2459,7 @@ function resetCreateDraft() {
   imageMoodAppliedForNextGen = false;
   imageMoodData = null;
   imageMoodCoverDataUrl = "";
+  setCreatePhotoAttachmentPreview("");
   sunoTaskId = null;
   sunoAudioId = null;
   lastSunoAudioId2 = "";
@@ -4266,6 +4269,25 @@ async function computeBytesFingerprint(input) {
 }
 let imageMoodData = null;
 let imageMoodCoverDataUrl = "";
+
+function setCreatePhotoAttachmentPreview(dataUrl = "", summary = "") {
+  const url = String(dataUrl || "").trim();
+  if (els.createPhotoPreview) {
+    els.createPhotoPreview.style.backgroundImage = url ? `url("${url}")` : "";
+  }
+  if (els.createPhotoCta) {
+    els.createPhotoCta.classList.toggle("hasPhotoAttached", Boolean(url));
+    els.createPhotoCta.setAttribute("aria-label", url ? "Change attached photo" : "Add a photo");
+    const title = els.createPhotoCta.querySelector(".createPaneCtaTitle");
+    const sub = els.createPhotoCta.querySelector(".createPaneCtaSub");
+    if (title) title.textContent = url ? "Photo attached" : "Add a photo";
+    if (sub) {
+      sub.textContent = url
+        ? (String(summary || "").trim() || "This image will guide the mood and cover.")
+        : "We'll catch the mood and feed it into your song.";
+    }
+  }
+}
 let pendingGeneratedCoverDataUrl = "";
 let pendingBackendTaskId = "";
 const PENDING_TASK_KEY = "mas:pending_backend_task_v1";
@@ -18265,18 +18287,25 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   const renderImageMood = (m) => {
     if (!els.imageMoodOutput) return;
     if (!m) {
-      els.imageMoodOutput.textContent = "No analysis yet.";
+      els.imageMoodOutput.innerHTML = `<div class="imageMoodEmpty">No analysis yet.</div>`;
       return;
     }
     const tags = Array.isArray(m.tags) ? m.tags.join(", ") : "";
-    const lines = [
-      m.concept ? `Mood: ${m.concept}` : "",
-      tags ? `Suggested tags: ${tags}` : "",
-      m.lyricSeed ? `Lyric seed: ${m.lyricSeed}` : "",
-      m.artworkHint ? `Artwork hint: ${m.artworkHint}` : "",
-      m.source ? `Source: ${m.source}` : "",
+    const rows = [
+      m.concept ? ["Mood", m.concept] : null,
+      tags ? ["Suggested tags", tags] : null,
+      m.lyricSeed ? ["Lyric seed", m.lyricSeed] : null,
+      m.artworkHint ? ["Artwork hint", m.artworkHint] : null,
+      m.source ? ["Source", m.source] : null,
     ].filter(Boolean);
-    els.imageMoodOutput.textContent = lines.join("\n\n") || "No analysis yet.";
+    els.imageMoodOutput.innerHTML = rows.length
+      ? rows.map(([label, value]) => `
+          <div class="imageMoodResultRow">
+            <span>${escapeHtml(label)}</span>
+            <p>${escapeHtml(value)}</p>
+          </div>
+        `).join("")
+      : `<div class="imageMoodEmpty">No analysis yet.</div>`;
   };
   const analyzeImageMood = async () => {
     const file = els.imageMoodUpload?.files?.[0];
@@ -18340,6 +18369,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     } else {
       pendingGeneratedCoverDataUrl = "";
     }
+    setCreatePhotoAttachmentPreview(
+      imageMoodCoverDataUrl,
+      String(imageMoodData.concept || tags.slice(0, 4).join(", ") || "Image mood applied.").trim()
+    );
     closeImageMoodModal();
     setStatus("Image mood applied. If no lyrics are provided, generation will be instrumental.");
     syncGenerateOrbVisibility();

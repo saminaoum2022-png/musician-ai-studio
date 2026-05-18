@@ -3971,7 +3971,8 @@ textarea{
   font-size: 13.5px;
   letter-spacing: 0.01em;
 }
-.inputPanel--style input{
+.inputPanel--style input,
+.inputPanel--style select{
   min-height:44px;
 }
 .lyricsAttachBtn{
@@ -4013,13 +4014,19 @@ textarea{
   border-radius: 0;
   font-size: 16px;
 }
-.card.wide[data-route="generate"] .inputPanel--style input{
+.card.wide[data-route="generate"] .inputPanel--style input,
+.card.wide[data-route="generate"] .inputPanel--style select{
   border: 0;
   background: transparent;
   box-shadow: none;
   padding: 8px 0 0;
   border-radius: 0;
   font-size: 16px;
+}
+.createMiniHint{
+  margin-top: 4px;
+  font-size: 11.5px;
+  line-height: 1.35;
 }
 .card.wide[data-route="generate"] .inputPanel .lyricsBox{
   border: 0;
@@ -4031,7 +4038,8 @@ textarea{
   border-radius: 12px;
 }
 .card.wide[data-route="generate"] .inputPanel .lyricsBoxMain textarea:focus,
-.card.wide[data-route="generate"] .inputPanel--style input:focus{
+.card.wide[data-route="generate"] .inputPanel--style input:focus,
+.card.wide[data-route="generate"] .inputPanel--style select:focus{
   box-shadow: none;
 }
 .lyricsBox{

@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260518challengeDialectReset";
+const APP_BUILD = "20260518arabicAddress";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -178,6 +178,7 @@ const els = {
   sunoEngine: document.getElementById("sunoEngine"),
   sunoDialect: document.getElementById("sunoDialect"),
   sunoDialectHint: document.getElementById("sunoDialectHint"),
+  sunoArabicAddress: document.getElementById("sunoArabicAddress"),
   sunoVoiceProfile: document.getElementById("sunoVoiceProfile"),
   sunoPersonaId: document.getElementById("sunoPersonaId"),
   btnCreatePersona: document.getElementById("btnCreatePersona"),
@@ -1958,6 +1959,20 @@ function challengePromptMagicSeed(seed, challenge) {
   ].filter(Boolean).join("\n");
 }
 
+function arabicAddressPronunciationNote(value) {
+  const v = String(value || "").trim().toLowerCase();
+  if (v === "male") {
+    return "Arabic address: sing to a man; keep masculine words clear: إنتَ، حبيبي، غالي، كنتَ.";
+  }
+  if (v === "female") {
+    return "Arabic address: sing to a woman; keep feminine words clear: إنتِ، حبيبتي، غالية، كنتِ.";
+  }
+  if (v === "group") {
+    return "Arabic address: sing to a group; keep plural words clear: إنتو، حبايبي، غاليين، كنتو.";
+  }
+  return "";
+}
+
 function setCreateChallengeHint(challenge) {
   const c = challenge && typeof challenge === "object" ? challenge : null;
   if (!els.createChallengeHint) return;
@@ -2371,6 +2386,7 @@ function resetAdvancedOptionsToDefaults() {
   if (els.sunoVoiceProfile) els.sunoVoiceProfile.value = "";
   if (els.sunoDialect) els.sunoDialect.value = "";
   if (els.sunoDialectHint) els.sunoDialectHint.value = "";
+  if (els.sunoArabicAddress) els.sunoArabicAddress.value = "";
   if (els.sunoPersonaId) els.sunoPersonaId.value = "";
   savePersonaSelection("");
   document.body.classList.remove("proMode");
@@ -18431,6 +18447,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const style = String(els.sunoStyle?.value || "").trim();
     const dialect = String(els.sunoDialect?.value || "").trim();
     const dialectHint = String(els.sunoDialectHint?.value || "").trim();
+    const addressNote = arabicAddressPronunciationNote(els.sunoArabicAddress?.value);
+    const lyricDialectHint = [dialectHint, addressNote].filter(Boolean).join(" ");
     try {
       if (els.btnLyricsMagic) {
         els.btnLyricsMagic.disabled = true;
@@ -18443,7 +18461,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const r = await fetch(apiUrl("/api/lyrics"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ seed: requestSeed, style, mode, dialect, dialectHint, lyricsProvider }),
+        body: JSON.stringify({ seed: requestSeed, style, mode, dialect, dialectHint: lyricDialectHint, lyricsProvider }),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error || "Lyrics generation failed");
@@ -19437,7 +19455,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const isDefault = String(selectEl.value || "").trim() === "";
     selectEl.classList.toggle("isDefaultOption", isDefault);
   }
-[els.sunoSongKey, els.sunoMaqam, els.sunoVoiceProfile, els.sunoDialect, els.sunoPersonaId, els.sunoGroovePace, els.sunoProsody, els.sunoBeatStability].forEach((sel) => {
+[els.sunoSongKey, els.sunoMaqam, els.sunoVoiceProfile, els.sunoDialect, els.sunoArabicAddress, els.sunoPersonaId, els.sunoGroovePace, els.sunoProsody, els.sunoBeatStability].forEach((sel) => {
     if (!sel) return;
     syncDefaultSelectVisual(sel);
     sel.addEventListener("change", () => syncDefaultSelectVisual(sel));
@@ -19556,6 +19574,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const artworkStyle = (els.sunoArtworkStyle?.value || "").trim();
       const dialect = String(els.sunoDialect?.value || "").trim();
       const dialectHint = String(els.sunoDialectHint?.value || "").trim();
+      const arabicAddress = String(els.sunoArabicAddress?.value || "").trim();
+      const arabicAddressNote = arabicAddressPronunciationNote(arabicAddress);
+      const lyricDialectHint = [dialectHint, arabicAddressNote].filter(Boolean).join(" ");
       const timing = String(els.sunoTiming?.value || "").trim();
       const timingClause = timing
         ? `Timing lock: ${timing}. Keep this timing stable across all sections and vocal entries.`
@@ -19576,7 +19597,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           const rr = await fetch(apiUrl("/api/lyrics"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ seed: userPrompt, style: userStyle, mode: "arrange", dialect, dialectHint }),
+            body: JSON.stringify({ seed: userPrompt, style: userStyle, mode: "arrange", dialect, dialectHint: lyricDialectHint }),
           });
           const dd = await rr.json().catch(() => ({}));
           if (rr.ok && dd?.lyrics) {
@@ -19593,6 +19614,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         : [
             dialect ? `Dialect: ${dialect}` : "",
             dialectHint ? `Hint: ${dialectHint}` : "",
+            arabicAddressNote,
             timing ? timing : "",
             groovePace ? (GROOVE_MAP[groovePace] || "") : "",
             prosodyStrictness ? (PROSODY_MAP[prosodyStrictness] || "") : "",
@@ -19669,6 +19691,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         styleSent: payload.style,
         dialect,
         dialectHint,
+        arabicAddress,
+        arabicAddressNote,
         timing,
         groovePace,
         prosodyStrictness,
@@ -19767,7 +19791,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             if (payload?.songKey) fd.append("songKey", String(payload.songKey));
             if (timing) fd.append("timing", String(timing));
             if (dialect) fd.append("dialect", String(dialect));
-            if (dialectHint) fd.append("dialectHint", String(dialectHint));
+            if (lyricDialectHint) fd.append("dialectHint", String(lyricDialectHint));
             if (payload?.personaId) fd.append("personaId", String(payload.personaId));
             const stemsTok = getSupabaseAuthToken();
             const rr = await fetch(apiUrl("/api/suno/stems"), {
@@ -22062,6 +22086,7 @@ if (els.sunoProMode) {
   els.sunoTiming,
   els.sunoDialect,
   els.sunoDialectHint,
+  els.sunoArabicAddress,
   els.sunoVoiceProfile,
   els.sunoSongKey,
   els.sunoPersonaId,

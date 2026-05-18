@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260518creatorFeedback" />
+    <link rel="stylesheet" href="./styles.css?v=20260518arabicAddress" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -533,6 +533,16 @@
             <label class="field grow inputPanel inputPanel--style">
               <div class="label inPanelLabel">Style / Tags</div>
               <input id="sunoStyle" type="text" placeholder="Hijaz, darbuka, 6/8" />
+            </label>
+            <label class="field grow inputPanel inputPanel--style">
+              <div class="label inPanelLabel">Arabic address (optional)</div>
+              <select id="sunoArabicAddress">
+                <option value="" selected>Auto / not needed</option>
+                <option value="male">To a man · إنتَ / حبيبي</option>
+                <option value="female">To a woman · إنتِ / حبيبتي</option>
+                <option value="group">To a group · إنتو / حبايبي</option>
+              </select>
+              <div class="hint createMiniHint">Adds a tiny pronunciation note for Arabic gendered words. It does not force a dialect.</div>
             </label>
             <label class="field grow inputPanel inputPanel--style">
               <div class="label inPanelLabel">Artwork style (optional)</div>
@@ -2698,6 +2708,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260518creatorFeedback"></script>
+    <script type="module" src="./src/app.js?v=20260518arabicAddress"></script>
   </body>
 </html>

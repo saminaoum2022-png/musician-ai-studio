@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260518imageMoodUi";
+const APP_BUILD = "20260518creatorFeedback";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -326,6 +326,7 @@ const els = {
   playerRemixAttributionText: document.getElementById("playerRemixAttributionText"),
   playerReleaseNote: document.getElementById("playerReleaseNote"),
   playerReleaseNoteText: document.getElementById("playerReleaseNoteText"),
+  playerFeedbackPanel: document.getElementById("playerFeedbackPanel"),
   btnLoadFull: document.getElementById("btnLoadFull"),
   btnLoadVocals: document.getElementById("btnLoadVocals"),
   btnLoadInstrumental: document.getElementById("btnLoadInstrumental"),
@@ -4621,6 +4622,179 @@ function releaseCaptionLineHtml(track) {
   return `<span class="releaseCaptionLine">${escapeHtml(caption)}</span>`;
 }
 
+function isFeaturedOnProfile(track) {
+  return track?.meta?.featuredOnProfile === true || String(track?.meta?.featuredOnProfile || "").toLowerCase() === "true";
+}
+
+function profileFeaturedSongHtml(track, mode = "own") {
+  if (!track) return "";
+  const title = escapeHtml(String(track.title || "Untitled"));
+  const art = escapeHtml(String((track.meta && (track.meta.imageThumb || track.meta.imageUrl)) || track.artUrl || "./assets/nabadai-logo.png"));
+  const sid = escapeHtml(String(track.id || track.songId || ""));
+  const playAttr = mode === "own" ? "data-profile-featured-play" : "data-public-featured-play";
+  const sub = mode === "own" ? "Your pinned release" : "Pinned by creator";
+  return `
+    <section class="profileFeaturedSong" data-featured-song="${sid}">
+      <button type="button" class="profileFeaturedSongMain" ${playAttr}="${sid}" aria-label="Play featured song ${title}">
+        <span class="profileFeaturedSongArt"><img src="${art}" alt="" /></span>
+        <span class="profileFeaturedSongText">
+          <span class="profileFeaturedSongKicker">Featured song</span>
+          <strong>${title}</strong>
+          <small>${escapeHtml(sub)}</small>
+        </span>
+        <span class="profileFeaturedSongPlay" aria-hidden="true">▶</span>
+      </button>
+    </section>
+  `;
+}
+
+async function setLibraryTrackFeaturedOnProfile(id, featured) {
+  const trackId = String(id || "").trim();
+  if (!trackId) return;
+  const lib = loadLibrary();
+  const target = lib.find((t) => String(t.id) === trackId);
+  if (!target?.publicOnProfile) {
+    showToast("Publish the song first, then pin it.");
+    return;
+  }
+  const nextLib = lib.map((t) => {
+    if (!t.publicOnProfile) return t;
+    const shouldFeature = featured && String(t.id) === trackId;
+    const meta = { ...(t.meta || {}) };
+    if (shouldFeature) meta.featuredOnProfile = true;
+    else if (meta.featuredOnProfile) delete meta.featuredOnProfile;
+    return { ...t, meta };
+  });
+  saveLibrary(nextLib);
+  renderProfileHubShared();
+  showToast(featured ? "Pinned as your featured song." : "Featured song removed.");
+  const changed = nextLib.filter((t) => t.publicOnProfile && (String(t.id) === trackId || isFeaturedOnProfile(t) === false));
+  for (const t of changed) {
+    await supabasePatchUserSong(t, { meta: t.meta || {} }).catch(() => null);
+  }
+}
+
+const SONG_FEEDBACK_TYPES = [
+  { id: "hook", label: "Loved the hook" },
+  { id: "lyrics", label: "Lyrics hit" },
+  { id: "replay", label: "Would replay" },
+  { id: "remix", label: "Remix-worthy" },
+];
+
+const _songFeedbackCache = new Map();
+
+function publicFeedbackContextForTrack(track) {
+  const songId = String(track?.songId || track?.cloudSongId || track?.id || "").trim();
+  const ownerUserId = String(track?.ownerUserId || track?.userId || "").trim();
+  if (!songId) return null;
+  if (!ownerUserId && !track?.publicOnProfile && !String(track?.id || "").startsWith("public_")) return null;
+  return { songId, ownerUserId };
+}
+
+function feedbackControlsHtml(track, placement = "details") {
+  const ctx = publicFeedbackContextForTrack(track);
+  if (!ctx?.songId) return "";
+  const cached = _songFeedbackCache.get(ctx.songId) || {};
+  const counts = cached.counts || {};
+  const viewer = new Set(cached.viewer || []);
+  return `
+    <section class="songFeedbackPanel songFeedbackPanel--${escapeHtml(placement)}" data-song-feedback-panel="${escapeHtml(ctx.songId)}">
+      <div class="songFeedbackHead">
+        <span>Send creator feedback</span>
+        <small>Private signal, not a public comment</small>
+      </div>
+      <div class="songFeedbackChips" role="group" aria-label="Song feedback">
+        ${SONG_FEEDBACK_TYPES.map((item) => {
+          const active = viewer.has(item.id);
+          const count = Number(counts[item.id] || 0);
+          return `<button type="button" class="songFeedbackChip${active ? " isActive" : ""}" data-song-feedback-type="${escapeHtml(item.id)}" data-song-feedback-song="${escapeHtml(ctx.songId)}" aria-pressed="${active ? "true" : "false"}">
+            <span>${escapeHtml(item.label)}</span>
+            ${count ? `<strong>${formatStatCount(count)}</strong>` : ""}
+          </button>`;
+        }).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function songFeedbackPanelsFor(songId) {
+  const sid = String(songId || "").trim();
+  return Array.from(document.querySelectorAll("[data-song-feedback-panel]")).filter((panel) => (
+    String(panel.getAttribute("data-song-feedback-panel") || "") === sid
+  ));
+}
+
+async function hydrateSongFeedbackPanels(songId) {
+  const sid = String(songId || "").trim();
+  if (!sid) return;
+  try {
+    const data = await socialApi(`/api/social?type=song_feedback&songId=${encodeURIComponent(sid)}`);
+    _songFeedbackCache.set(sid, {
+      counts: data?.counts || {},
+      viewer: Array.isArray(data?.viewer) ? data.viewer : [],
+    });
+  } catch {
+    return;
+  }
+  songFeedbackPanelsFor(sid).forEach((panel) => {
+    const placement = panel.classList.contains("songFeedbackPanel--player") ? "player" : "details";
+    const track = currentPlayerTrackRef && publicFeedbackContextForTrack(currentPlayerTrackRef)?.songId === sid
+      ? currentPlayerTrackRef
+      : { id: sid, songId: sid, ownerUserId: "public" };
+    panel.outerHTML = feedbackControlsHtml(track, placement);
+  });
+}
+
+async function submitSongFeedback(songId, feedbackType) {
+  const sid = String(songId || "").trim();
+  const type = String(feedbackType || "").trim();
+  if (!sid || !type) return;
+  if (!authSession?.user?.id) {
+    showToast("Sign in to send creator feedback.", { icon: "!", durationMs: 3200 });
+    try { location.hash = "#/auth"; } catch {}
+    return;
+  }
+  try {
+    const data = await socialApi("/api/social", {
+      method: "POST",
+      body: JSON.stringify({ action: "song_feedback", songId: sid, feedbackType: type }),
+    });
+    _songFeedbackCache.set(sid, {
+      counts: data?.counts || {},
+      viewer: Array.isArray(data?.viewer) ? data.viewer : [],
+    });
+    if (data?.reason === "own_song") {
+      showToast("Feedback chips are for listeners on your public songs.");
+    } else if (data?.counted === false) {
+      showToast("Feedback storage needs the Supabase SQL update.");
+    } else {
+      showToast("Feedback sent to the creator.");
+    }
+    songFeedbackPanelsFor(sid).forEach((panel) => {
+      const placement = panel.classList.contains("songFeedbackPanel--player") ? "player" : "details";
+      const track = currentPlayerTrackRef && publicFeedbackContextForTrack(currentPlayerTrackRef)?.songId === sid
+        ? currentPlayerTrackRef
+        : { id: sid, songId: sid, ownerUserId: "public" };
+      panel.outerHTML = feedbackControlsHtml(track, placement);
+    });
+  } catch (e) {
+    showToast(e?.message || "Could not send feedback.");
+  }
+}
+
+function setPlayerFeedback(track) {
+  if (!els.playerFeedbackPanel) return;
+  const ctx = publicFeedbackContextForTrack(track);
+  if (!ctx?.songId) {
+    els.playerFeedbackPanel.hidden = true;
+    els.playerFeedbackPanel.innerHTML = "";
+    return;
+  }
+  els.playerFeedbackPanel.hidden = false;
+  els.playerFeedbackPanel.innerHTML = feedbackControlsHtml(track, "player");
+  void hydrateSongFeedbackPanels(ctx.songId);
+}
+
 function setPlayerReleaseNote(caption) {
   const note = String(caption || "").trim();
   if (els.playerReleaseNoteText) els.playerReleaseNoteText.textContent = note;
@@ -7781,8 +7955,8 @@ async function supabaseLoadUserSongs() {
   // happens to be a legacy `data:` URL*, same trick we use on `hub_posts`
   // for cover_url / creator_avatar. The cheap `art_url is null` branch
   // covers freshly inserted rows where we deliberately wrote null.
-  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
@@ -7848,6 +8022,7 @@ async function supabaseLoadUserSongs() {
         ...(s.meta_remix_of ? { remixOf: s.meta_remix_of } : {}),
         ...(String(s.meta_release_caption || "").trim() ? { releaseCaption: String(s.meta_release_caption).trim() } : {}),
         ...(s.meta_challenge ? { challenge: s.meta_challenge } : {}),
+        ...(String(s.meta_featured_on_profile || "").toLowerCase() === "true" ? { featuredOnProfile: true } : {}),
       },
       publishedAt: selectedPublishedAt ? userSongPublishedAtValue(s) : "",
       publicOnProfile: Boolean(
@@ -8137,8 +8312,8 @@ async function supabaseFetchPublicLibraryForUserId(userId) {
   const uid = String(userId || "").trim();
   if (!uid || !SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
   const enc = encodeURIComponent(uid);
-  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   try {
     let r = await fetch(
@@ -8174,6 +8349,7 @@ async function supabaseFetchPublicLibraryForUserId(userId) {
         ...(s.meta_remix_of ? { remixOf: s.meta_remix_of } : {}),
         ...(String(s.meta_release_caption || "").trim() ? { releaseCaption: String(s.meta_release_caption).trim() } : {}),
         ...(s.meta_challenge ? { challenge: s.meta_challenge } : {}),
+        ...(String(s.meta_featured_on_profile || "").toLowerCase() === "true" ? { featuredOnProfile: true } : {}),
       },
       publicOnProfile: true,
     })).sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
@@ -8439,6 +8615,7 @@ function notificationIconForType(type) {
   const t = String(type || "").trim();
   if (t === "follow") return "+";
   if (t === "remix") return "R";
+  if (t === "song_feedback") return "♪";
   if (t === "play_milestone") return "10";
   if (t === "public_song") return "P";
   return ".";
@@ -8460,6 +8637,15 @@ function notificationMessage(n) {
       title: username ? `@${username} remixed your song` : "Someone remixed your song",
       body: `${remix} was made from ${original}.`,
       action: username ? "View creator" : "",
+    };
+  }
+  if (n?.type === "song_feedback") {
+    const title = String(n?.metadata?.song_title || "your song").trim();
+    const label = String(n?.metadata?.feedback_label || "sent feedback").trim();
+    return {
+      title: username ? `@${username} reacted to ${title}` : `Someone reacted to ${title}`,
+      body: label,
+      action: username ? "View listener" : "",
     };
   }
   if (n?.type === "play_milestone") {
@@ -8955,6 +9141,7 @@ function renderTrackSheetProfileLib(t) {
   const kind = String(t?.kind || "full");
   const isSound = kind === "sound";
   const remixEligible = !isSound && Boolean(t?.url && String(t.url).trim());
+  const featuredLabel = isFeaturedOnProfile(t) ? "Remove featured song" : "Pin as featured song";
   const quickRemix = remixEligible
     ? `<button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-track-sheet-action="profile_lib_remix">Remix</button>`
     : "";
@@ -8963,7 +9150,9 @@ function renderTrackSheetProfileLib(t) {
     <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="profile_lib_player">Player</button>
     <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="profile_lib_share">Share</button>
   `;
-  l.innerHTML = "";
+  l.innerHTML = `
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="profile_lib_featured">${escapeHtml(featuredLabel)}</button>
+  `;
   d.innerHTML = `
     <button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--danger" data-track-sheet-action="profile_lib_hide">Hide from public profile</button>
   `;
@@ -9464,6 +9653,11 @@ function runTrackSheetAction(action, sourceEl) {
         text: t.title || "From my profile",
         url,
       });
+      return;
+    }
+    if (action === "profile_lib_featured") {
+      shut();
+      void setLibraryTrackFeaturedOnProfile(t.id, !isFeaturedOnProfile(t));
       return;
     }
     if (action === "profile_lib_hide") {
@@ -10242,6 +10436,8 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     releaseCaption,
     remixOf,
     challenge,
+    songId: String(playSource?.songId || publicTrackMeta?.songId || publicTrackMeta?.id || "").trim(),
+    ownerUserId: String(playSource?.ownerUserId || publicTrackMeta?.ownerUserId || publicTrackMeta?.userId || "").trim(),
   };
   const publicSource = fromDiscover
     ? { type: "discover_feed", url: playableRaw, ...(playSource || {}) }
@@ -10259,6 +10455,8 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     releaseCaption,
     remixOf,
     challenge,
+    songId: currentPlayerTrackRef.songId,
+    ownerUserId: currentPlayerTrackRef.ownerUserId,
   };
   if (!openPlayer) {
     setPlayerMeta(meta);
@@ -10382,6 +10580,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
     const slice = songs.slice(0, 60);
     const byLine = `@${displayName}`;
     const pubCtx = { byLine, rawHandle: displayName, ownerUserId: String(prof.user_id || "") };
+    const featured = songs.find(isFeaturedOnProfile);
     els.userPublicSongs.innerHTML = slice
       .map((t, i) =>
         userPublicDiscoveryRowHtml(
@@ -10403,6 +10602,9 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
         ),
       )
       .join("");
+    if (featured) {
+      els.userPublicSongs.innerHTML = `${profileFeaturedSongHtml(featured, "public")}${els.userPublicSongs.innerHTML}`;
+    }
     _userPublicFeedTracks = slice.map((t) => {
       const art = String(t.artUrl || "").trim();
       const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
@@ -10422,6 +10624,24 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
     try {
       syncUserPublicFeedPlayingHighlights();
     } catch {}
+    els.userPublicSongs.querySelectorAll("[data-public-featured-play]").forEach((b) => {
+      b.addEventListener("click", () => {
+        const sid = b.getAttribute("data-public-featured-play");
+        const t = songs.find((x) => String(x.id) === String(sid));
+        if (!t?.url) return;
+        void playLibraryUrlOnPlayer(t.url, t.title || "Song", t.artUrl || "", {
+          discoverFeed: false,
+          openPlayer: true,
+          playSource: {
+            songId: String(t.id || ""),
+            ownerUserId: String(prof.user_id || ""),
+            taskId: String(t.taskId || ""),
+            audioId: String(t.audioId || ""),
+            releaseCaption: releaseCaptionForTrack(t),
+          },
+        });
+      });
+    });
   }
   syncUserPublicVerifiedBadge(prof);
   setUserPublicLoading(false);
@@ -13418,7 +13638,9 @@ function renderProfileLibraryPublicOnLinkSection() {
       ? `<div class="profileReleasesLoadMoreRow"><button type="button" id="profileReleasesLoadMore" class="profileReleasesLoadMore" aria-label="Load more">Load more<span class="profileReleasesLoadMoreCount">${remaining}</span></button></div>`
       : "";
   const esc = escapeHtml;
+  const featured = allLib.find(isFeaturedOnProfile);
   els.profileHubSharedList.innerHTML = `
+    ${profileFeaturedSongHtml(featured, "own")}
     <ul class="libraryRows" role="list">
       ${rows
         .map((t) => {
@@ -13468,6 +13690,12 @@ function renderProfileLibraryPublicOnLinkSection() {
       { once: true },
     );
   }
+  els.profileHubSharedList.querySelectorAll("[data-profile-featured-play]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const id = b.getAttribute("data-profile-featured-play");
+      if (id) void playLibraryListRowById(id, { openPlayer: true });
+    });
+  });
   els.profileHubSharedList.querySelectorAll("[data-profile-lib-play]").forEach((b) => {
     b.addEventListener("click", () => {
       const id = b.getAttribute("data-profile-lib-play");
@@ -15197,6 +15425,8 @@ function openSongDetailsModal(track) {
     </section>
     ` : ""}
 
+    ${feedbackControlsHtml(track, "details")}
+
     <section class="songDetailsSection">
       <div class="songDetailsSectionHead">
         <div class="songDetailsSectionTitle">Lyrics</div>
@@ -15221,6 +15451,8 @@ function openSongDetailsModal(track) {
       }
     });
   }
+  const feedbackCtx = publicFeedbackContextForTrack(track);
+  if (feedbackCtx?.songId) void hydrateSongFeedbackPanels(feedbackCtx.songId);
   els.songDetailsModal.style.display = "";
   try {
     document.body.style.overflow = "hidden";
@@ -16153,6 +16385,7 @@ function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, chall
   setPlayerChallengeAttribution(challenge || challengeMetaForTrack(currentPlayerTrackRef));
   setPlayerRemixAttribution(remixOf || remixAttributionForTrack(currentPlayerTrackRef));
   setPlayerReleaseNote(releaseCaption);
+  setPlayerFeedback(currentPlayerTrackRef);
   const artWrap = document.querySelector(".playerArtWrap");
   if (artWrap) {
     artWrap.classList.toggle("isEmpty", !hasTrack);
@@ -22001,6 +22234,15 @@ if (els.notificationsCenter) {
     if (t?.closest?.("[data-notifications-close]")) closeNotificationsCenter();
   });
 }
+
+document.addEventListener("click", (e) => {
+  const btn = e.target?.closest?.("[data-song-feedback-type]");
+  if (!btn) return;
+  e.preventDefault();
+  const songId = btn.getAttribute("data-song-feedback-song");
+  const type = btn.getAttribute("data-song-feedback-type");
+  void submitSongFeedback(songId, type);
+});
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && els.notificationsCenter && !els.notificationsCenter.hidden) {
     closeNotificationsCenter();

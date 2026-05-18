@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260518imageMoodUi" />
+    <link rel="stylesheet" href="./styles.css?v=20260518creatorFeedback" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1421,6 +1421,7 @@
                 <div class="playerReleaseNoteLabel">Release note</div>
                 <div id="playerReleaseNoteText" class="playerReleaseNoteText"></div>
               </div>
+              <div id="playerFeedbackPanel" class="playerFeedbackPanel" hidden></div>
               <input id="playerCoverUpload" type="file" accept="image/*" style="display:none" />
 
               <!-- Centered confirm modal (publish, clip publish, cover save). -->
@@ -2697,6 +2698,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260518imageMoodUi"></script>
+    <script type="module" src="./src/app.js?v=20260518creatorFeedback"></script>
   </body>
 </html>

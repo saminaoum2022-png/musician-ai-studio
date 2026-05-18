@@ -112,6 +112,21 @@ function cleanSongId(v) {
   return String(v || "").trim().slice(0, 140);
 }
 
+const FEEDBACK_TYPES = new Set(["hook", "lyrics", "replay", "remix"]);
+
+function cleanFeedbackType(v) {
+  const t = String(v || "").trim().toLowerCase();
+  return FEEDBACK_TYPES.has(t) ? t : "";
+}
+
+function feedbackLabel(type) {
+  if (type === "hook") return "Loved the hook";
+  if (type === "lyrics") return "Lyrics hit";
+  if (type === "replay") return "Would replay";
+  if (type === "remix") return "Remix-worthy";
+  return "Feedback";
+}
+
 async function resolvePublicSong(songId) {
   const sid = cleanSongId(songId);
   if (!sid) return null;
@@ -193,6 +208,49 @@ async function recordSongPlay({ songId, listenerUserId, listenedSeconds }) {
   return { counted: true, ownerUserId: owner, playCount };
 }
 
+async function feedbackSummary({ songId, listenerUserId }) {
+  const sid = cleanSongId(songId);
+  if (!sid) return { counts: {}, viewer: [] };
+  const r = await svcFetch(
+    `social_song_feedback?select=feedback_type,listener_user_id&song_id=eq.${encodeURIComponent(sid)}&limit=10000`,
+  );
+  const rows = Array.isArray(r.data) ? r.data : [];
+  const viewer = cleanUserId(listenerUserId);
+  const counts = {};
+  const viewerTypes = [];
+  for (const row of rows) {
+    const type = cleanFeedbackType(row.feedback_type);
+    if (!type) continue;
+    counts[type] = (counts[type] || 0) + 1;
+    if (viewer && cleanUserId(row.listener_user_id) === viewer) viewerTypes.push(type);
+  }
+  return { counts, viewer: viewerTypes };
+}
+
+async function recordSongFeedback({ songId, listenerUserId, feedbackType }) {
+  const sid = cleanSongId(songId);
+  const listener = cleanUserId(listenerUserId);
+  const type = cleanFeedbackType(feedbackType);
+  if (!sid || !listener || !type) return { counted: false, reason: "missing_input" };
+  const song = await resolvePublicSong(sid);
+  const owner = cleanUserId(song?.user_id);
+  if (!song || !owner) return { counted: false, reason: "song_not_public" };
+  if (owner === listener) return { counted: false, reason: "own_song", ...(await feedbackSummary({ songId: sid, listenerUserId: listener })) };
+  const ins = await svcFetch("social_song_feedback", {
+    method: "POST",
+    headers: { Prefer: "resolution=ignore-duplicates,return=minimal" },
+    body: JSON.stringify({
+      song_id: sid,
+      owner_user_id: owner,
+      listener_user_id: listener,
+      feedback_type: type,
+    }),
+  });
+  if (!ins.ok) return { counted: false, reason: "insert_failed", details: ins.text };
+  await createFeedbackNotification({ song, ownerUserId: owner, actorUserId: listener, feedbackType: type });
+  return { counted: true, ownerUserId: owner, ...(await feedbackSummary({ songId: sid, listenerUserId: listener })) };
+}
+
 async function createFollowNotification({ actorUserId, targetUserId }) {
   const actor = await profileByUserId(actorUserId);
   const exists = await notificationExists({
@@ -208,6 +266,31 @@ async function createFollowNotification({ actorUserId, targetUserId }) {
     metadata: {
       actor_username: actor?.username || "",
       actor_avatar: actor?.avatar || "",
+    },
+  });
+}
+
+async function createFeedbackNotification({ song, ownerUserId, actorUserId, feedbackType }) {
+  const owner = cleanUserId(ownerUserId);
+  const actorId = cleanUserId(actorUserId);
+  const sid = cleanSongId(song?.id);
+  const type = cleanFeedbackType(feedbackType);
+  if (!owner || !actorId || owner === actorId || !sid || !type) return false;
+  const entityId = `${sid}:feedback:${actorId}:${type}`;
+  if (await notificationExists({ userId: owner, type: "song_feedback", entityId })) return false;
+  const actor = await profileByUserId(actorId);
+  return insertNotification({
+    userId: owner,
+    type: "song_feedback",
+    actorUserId: actorId,
+    entityId,
+    metadata: {
+      actor_username: actor?.username || "",
+      actor_avatar: actor?.avatar || "",
+      song_id: sid,
+      song_title: song?.title || "your song",
+      feedback_type: type,
+      feedback_label: feedbackLabel(type),
     },
   });
 }
@@ -331,6 +414,13 @@ async function handleGet(req, res, user) {
     });
   }
 
+  if (type === "song_feedback") {
+    const songId = cleanSongId(url.searchParams.get("songId"));
+    if (!songId) return sendJson(res, 400, { ok: false, error: "Missing songId" });
+    const summary = await feedbackSummary({ songId, listenerUserId: user?.userId || "" });
+    return sendJson(res, 200, { ok: true, ...summary });
+  }
+
   return sendJson(res, 400, { ok: false, error: "Unknown social query" });
 }
 
@@ -385,6 +475,15 @@ async function handlePost(req, res, user) {
       songId: body?.songId,
       listenerUserId: user.userId,
       listenedSeconds: body?.listenedSeconds,
+    });
+    return sendJson(res, 200, { ok: true, ...result });
+  }
+
+  if (action === "song_feedback") {
+    const result = await recordSongFeedback({
+      songId: body?.songId,
+      listenerUserId: user.userId,
+      feedbackType: body?.feedbackType,
     });
     return sendJson(res, 200, { ok: true, ...result });
   }

@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260519homeDeskPolishV1";
+const APP_BUILD = "20260519discoverNoIdeasV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1872,10 +1872,7 @@ const TAB_REFRESH_ACTIONS = {
     : {}),
   discover() {
     try {
-      if (_discoveryActiveSegment === "ideas") {
-        const input = document.getElementById("searchInput");
-        runSearchQuery(String(input?.value || ""));
-      } else if (_discoveryActiveSegment === "following") {
+      if (_discoveryActiveSegment === "following") {
         void refreshDiscoveryFollowingFeed();
       } else {
         void refreshDiscoverFeed();
@@ -3106,7 +3103,7 @@ let _searchActiveTemplate = null;
 let _searchInited = false;
 const DISCOVERY_SEGMENT_KEY = "mas:discoverySegment:v1";
 let _discoverySegmentBound = false;
-/** `discover` (everyone), `following` (followed creators), or `ideas` (templates + search). */
+/** `discover` (everyone) or `following` (followed creators). */
 let _discoveryActiveSegment = "discover";
 
 function startSearchHintRotator() {
@@ -4224,7 +4221,7 @@ async function refreshDiscoveryFollowingFeed() {
 }
 
 function syncDiscoveryUiToSegment(seg) {
-  const next = seg === "following" ? "following" : seg === "ideas" ? "ideas" : "discover";
+  const next = seg === "following" ? "following" : "discover";
   _discoveryActiveSegment = next;
   try {
     document.body.setAttribute("data-discovery-segment", next);
@@ -4249,13 +4246,11 @@ function bindDiscoverySegmentControls() {
   document.querySelectorAll("[data-discovery-segment]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const s = btn.getAttribute("data-discovery-segment");
-      if (s !== "discover" && s !== "following" && s !== "ideas") return;
+      if (s !== "discover" && s !== "following") return;
       try { sessionStorage.setItem(DISCOVERY_SEGMENT_KEY, s); } catch {}
       const prev = _discoveryActiveSegment;
       syncDiscoveryUiToSegment(s);
-      if (s === "ideas" && prev !== "ideas") {
-        try { onEnterSearchRoute(); } catch {}
-      } else if (s === "following" && prev !== "following") {
+      if (s === "following" && prev !== "following") {
         try { onLeaveSearchRoute(); } catch {}
         void refreshDiscoveryFollowingFeed();
       } else if (s === "discover" && prev !== "discover") {

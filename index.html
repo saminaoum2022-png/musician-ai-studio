@@ -748,7 +748,6 @@
           <header class="discoverySegmentBar" role="tablist" aria-label="Discover sections">
             <button type="button" class="discoverySegment isActive" role="tab" aria-selected="true" data-discovery-segment="discover" id="discoverySegDiscover">Discover</button>
             <button type="button" class="discoverySegment" role="tab" aria-selected="false" data-discovery-segment="following" id="discoverySegFollowing">Following</button>
-            <button type="button" class="discoverySegment" role="tab" aria-selected="false" data-discovery-segment="ideas" id="discoverySegIdeas">Ideas</button>
           </header>
           <div class="discoveryPane discoveryPaneStudio" id="discoveryPaneDiscover" data-discovery-pane="discover">
             <div class="discoveryStudioAmbient" aria-hidden="true"></div>
@@ -790,58 +789,6 @@
             </header>
             <div id="discoveryFollowingStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
             <div id="discoveryFollowingList" class="discoveryFeedList discoveryCardStack" hidden></div>
-          </div>
-          <div class="discoveryPane discoveryIdeasPane" id="discoveryPaneIdeas" data-discovery-pane="ideas" hidden>
-            <div class="discoveryIdeasAmbient" aria-hidden="true"></div>
-            <header class="discoveryIdeasHead">
-              <span class="discoveryIdeasKicker">Weekly creative prompts</span>
-              <button id="discoveryIdeasSearchToggle" class="discoveryIdeasSearchToggle" type="button" aria-label="Search ideas" aria-expanded="false" aria-controls="searchInput">
-                <svg class="discoveryIdeasSearchIcon" viewBox="0 0 24 24" width="19" height="19" aria-hidden="true">
-                  <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                </svg>
-                <svg class="discoveryIdeasCloseIcon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                  <path d="M6.75 6.75 17.25 17.25M17.25 6.75 6.75 17.25" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-              </button>
-              <h2 class="discoveryIdeasTitle appScreenTitle">This Week's Sparks</h2>
-              <p class="discoveryIdeasLead appScreenLead">Tiny challenges to get you making fast. Pick one, then bend it your way.</p>
-            </header>
-            <section class="discoveryIdeasFeature" aria-label="Weekly Sparks">
-              <div class="discoveryIdeasRail" id="discoveryIdeasRail"></div>
-            </section>
-            <section class="discoveryQuickStarts" aria-label="Quick starts">
-              <div class="discoveryQuickStartsHead">
-                <span>Quick starts</span>
-                <small>Tap and create</small>
-              </div>
-              <div class="discoveryQuickGrid" id="discoveryQuickGrid"></div>
-            </section>
-            <div class="searchBarWrap">
-              <div class="searchBar">
-                <svg class="searchBarIcon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-                  <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                </svg>
-                <input id="searchInput" class="searchBarInput" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="" aria-label="Search NabadAi" />
-                <span id="searchInputHint" class="searchBarHint" aria-hidden="true">birthday for sara</span>
-                <button id="searchInputClear" class="searchBarClear" type="button" aria-label="Clear search" hidden>
-                  <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
-                </button>
-              </div>
-            </div>
-
-            <div id="searchPeopleStrip" class="searchPeopleStrip" hidden>
-              <div class="searchPeopleHead">People</div>
-              <div id="searchPeopleRow" class="searchPeopleRow"></div>
-            </div>
-
-            <div id="searchShelves" class="searchShelves" aria-live="polite"></div>
-
-            <div id="searchEmpty" class="searchEmpty" hidden>
-              <p class="searchEmptyTitle">Nothing matches that yet.</p>
-              <p class="searchEmptyHint">Try a name, a moment, or a mood.</p>
-            </div>
           </div>
         </section>
 

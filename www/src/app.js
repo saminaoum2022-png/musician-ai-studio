@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260519homeDeskTemplatesV1";
+const APP_BUILD = "20260519homeDeskPolishV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -3324,6 +3324,56 @@ function applyDiscoveryIdeaToCreate(idea) {
 }
 
 let _homeDeskContinueTrack = null;
+let _homeMakeSeg = "occasion";
+
+function libraryTrackNeedsContinue(track) {
+  if (!track) return false;
+  if (String(track.url || "").trim()) return false;
+  const meta = track.meta && typeof track.meta === "object" ? track.meta : {};
+  return Boolean(
+    String(meta.lyricsInput || meta.finalPrompt || meta.styleInput || meta.styleSent || "").trim(),
+  );
+}
+
+function homeDeskQuickTagHtml(tags) {
+  return (Array.isArray(tags) ? tags : [])
+    .slice(0, 3)
+    .map((tag) => `<span>${escapeHtml(tag)}</span>`)
+    .join("");
+}
+
+function renderHomeDeskQuickStarts() {
+  const grid = document.getElementById("homeDeskQuickGrid");
+  if (!grid) return;
+  grid.innerHTML = DISCOVERY_QUICK_IDEAS.map((idea) => `
+    <button type="button" class="discoveryQuickIdea" data-discovery-idea="${escapeHtml(idea.id)}">
+      <span>${escapeHtml(idea.title)}</span>
+      <small>${homeDeskQuickTagHtml(idea.tags)}</small>
+    </button>
+  `).join("");
+}
+
+function syncHomeMakeSegUi() {
+  const page = document.querySelector('[data-route="challenges"]');
+  const personal = document.getElementById("homeDeskMakePersonal");
+  const versions = document.getElementById("homeDeskPresetVersions");
+  const quick = document.getElementById("homeDeskOccasionQuick");
+  const hint = document.getElementById("homeDeskMakeHint");
+  const isPersonal = _homeMakeSeg === "personal";
+  if (personal) personal.hidden = !isPersonal;
+  if (versions) versions.hidden = !isPersonal;
+  if (quick) quick.hidden = isPersonal;
+  if (hint) {
+    hint.textContent = isPersonal
+      ? "Add their name, pick occasion and sound, then choose a version."
+      : "Pick occasion and sound — no name needed.";
+  }
+  page?.querySelectorAll?.("[data-home-make-seg]")?.forEach?.((btn) => {
+    const on = String(btn.getAttribute("data-home-make-seg") || "") === _homeMakeSeg;
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+}
 
 function homeDeskGreetingName() {
   const u = String(activeProfile?.username || "").trim();
@@ -3366,7 +3416,7 @@ function renderHomeDeskContinue() {
   const artEl = document.getElementById("homeDeskContinueArt");
   if (!wrap || !titleEl || !metaEl) return;
   const lib = loadLibrary()
-    .filter((t) => String(t?.title || "").trim())
+    .filter((t) => libraryTrackNeedsContinue(t))
     .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
   const track = lib[0] || null;
   _homeDeskContinueTrack = track;
@@ -3475,12 +3525,22 @@ function bindHomeDeskOnce(page) {
       page.querySelectorAll("[data-home-poll-choice]").forEach((btn) => btn.classList.toggle("isSelected", btn === poll));
       return;
     }
-    const scrollOcc = e.target?.closest?.("[data-home-scroll-occasion]");
-    if (scrollOcc && page.contains(scrollOcc)) {
+    const ideaBtn = e.target?.closest?.("[data-discovery-idea]");
+    if (ideaBtn && page.contains(ideaBtn)) {
+      const idea = [...DISCOVERY_IDEAS, ...DISCOVERY_QUICK_IDEAS].find(
+        (row) => String(row.id) === String(ideaBtn.getAttribute("data-discovery-idea") || ""),
+      );
+      if (idea) {
+        haptic("light");
+        applyDiscoveryIdeaToCreate(idea);
+      }
+      return;
+    }
+    const segBtn = e.target?.closest?.("[data-home-make-seg]");
+    if (segBtn && page.contains(segBtn)) {
+      _homeMakeSeg = String(segBtn.getAttribute("data-home-make-seg") || "occasion");
       haptic("light");
-      const target = document.getElementById("homeDeskOccasions");
-      try { target?.scrollIntoView?.({ behavior: "smooth", block: "start" }); } catch {}
-      try { document.getElementById("challengePersonName")?.focus?.({ preventScroll: true }); } catch {}
+      syncHomeMakeSegUi();
       return;
     }
   });
@@ -3512,9 +3572,12 @@ function renderHomeDesk() {
   bindHomeDeskOnce(page);
   const greeting = document.getElementById("homeDeskGreeting");
   if (greeting) greeting.textContent = `Hey, ${homeDeskGreetingName()}`;
+  renderHomeDeskQuickStarts();
   renderHomeDeskContinue();
+  syncHomeMakeSegUi();
   void renderHomeDeskActivity();
   void refreshHomeDeskJoinCounts(page);
+  if (typeof page._refreshChallengeEntries === "function") void page._refreshChallengeEntries();
 }
 
 function bindChallengesPageOnce() {
@@ -3535,11 +3598,12 @@ function bindChallengesPageOnce() {
   const selected = (list, id) => list.find((item) => item.id === id) || list[0] || null;
   const nameForPrompt = () => String(nameInput?.value || "").trim();
   const requireChallengeName = () => {
+    if (_homeMakeSeg !== "personal") return true;
     if (nameForPrompt()) return true;
     try { nameInput?.focus?.({ preventScroll: true }); } catch {}
     try { nameInput?.scrollIntoView?.({ behavior: "smooth", block: "center" }); } catch {}
     try { nameInput?.closest?.(".challengeNameField")?.classList?.add?.("isRequired"); } catch {}
-    try { showToast("Add the person's name first", { icon: "✍", durationMs: 2600 }); } catch {}
+    try { showToast("Add their name for a personal dedication", { icon: "✍", durationMs: 2600 }); } catch {}
     return false;
   };
   const buildChallengeLyricPrompt = (occasion, genre, language, person, variant) => {
@@ -3687,8 +3751,27 @@ function bindChallengesPageOnce() {
     }).join("");
   };
   renderPresetLab();
+  syncHomeMakeSegUi();
+  page._refreshChallengeEntries = refreshChallengeEntries;
+  void refreshChallengeEntries();
   renderHomeDesk();
   page.addEventListener("click", (e) => {
+    const occCreate = e.target?.closest?.("[data-home-occasion-create]");
+    if (occCreate && page.contains(occCreate)) {
+      const occasion = selected(CHALLENGE_OCCASIONS, selectedOccasion);
+      const genre = selected(CHALLENGE_GENRES, selectedGenre);
+      if (!occasion || !genre) return;
+      haptic("light");
+      applyDiscoveryIdeaToCreate(buildPresetIdea(occasion, genre, "anthem"));
+      return;
+    }
+    const segBtn = e.target?.closest?.("[data-home-make-seg]");
+    if (segBtn && page.contains(segBtn)) {
+      _homeMakeSeg = String(segBtn.getAttribute("data-home-make-seg") || "occasion");
+      haptic("light");
+      syncHomeMakeSegUi();
+      return;
+    }
     const occasionBtn = e.target?.closest?.("[data-challenge-occasion]");
     if (occasionBtn && page.contains(occasionBtn)) {
       selectedOccasion = String(occasionBtn.getAttribute("data-challenge-occasion") || selectedOccasion);

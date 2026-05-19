@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260519homeDeskTemplatesV1" />
+    <link rel="stylesheet" href="./styles.css?v=20260519homeDeskPolishV1" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -867,6 +867,14 @@
             </button>
           </section>
 
+          <section class="homeDeskQuickStarts" aria-label="Quick starts">
+            <header class="homeDeskSectionHead homeDeskSectionHead--compact">
+              <p class="homeDeskSectionKicker">Quick starts</p>
+              <h3>Ideas to try now</h3>
+            </header>
+            <div id="homeDeskQuickGrid" class="homeDeskQuickGrid discoveryQuickGrid" aria-live="polite"></div>
+          </section>
+
           <section class="challengeFeatureCard homeDeskSpark" aria-labelledby="challengeFeaturedTitle">
             <div class="challengeFeatureTop">
               <span class="challengeLivePill"><span></span> Start here</span>
@@ -882,86 +890,107 @@
             <button type="button" class="challengeFeatureStart" data-challenge-start="hook-rush">Use this spark</button>
           </section>
 
-          <section class="homeDeskQuick" aria-label="Quick ways in">
-            <button type="button" class="homeDeskQuickBtn" data-challenge-start="hook-rush">Spark</button>
-            <button type="button" class="homeDeskQuickBtn" data-home-scroll-occasion>Occasion</button>
-            <a class="homeDeskQuickBtn homeDeskQuickBtn--ghost" href="#/discover" data-route-link="discover">Discover</a>
+          <section class="homeDeskActivity" aria-labelledby="homeDeskActivityTitle">
+            <div class="homeDeskActivityHead">
+              <div>
+                <p class="homeDeskActivityKicker">From the studio</p>
+                <h3 id="homeDeskActivityTitle">What musicians are up to</h3>
+              </div>
+              <a class="homeDeskActivityAll" href="#/discover" data-route-link="discover" data-home-open-discover="discover">Discover</a>
+            </div>
+            <div id="homeDeskActivityList" class="homeDeskActivityList" aria-live="polite"></div>
+          </section>
+
+          <section class="challengeEntriesPanel homeDeskEntries" aria-labelledby="challengeEntriesTitle">
+            <div class="challengeEntriesHead">
+              <div>
+                <p class="challengePresetKicker">Community</p>
+                <h3 id="challengeEntriesTitle">Who joined the challenge</h3>
+              </div>
+              <span id="challengeEntriesCount" class="challengeEntriesCount">0 joined</span>
+            </div>
+            <div id="challengeEntriesRail" class="challengeEntriesRail" aria-live="polite"></div>
           </section>
 
           <section class="homeDeskSection homeDeskSection--sparks" aria-labelledby="homeDeskSparksTitle">
             <header class="homeDeskSectionHead">
               <p class="homeDeskSectionKicker">Creative sparks</p>
               <h3 id="homeDeskSparksTitle">More challenges</h3>
-              <p class="homeDeskSectionLead">Same prompts as before — each opens Create ready to shape.</p>
+              <p class="homeDeskSectionLead">Swipe for more — each opens Create ready to shape.</p>
             </header>
-          <section class="challengeDeck" aria-label="Studio spark cards">
-            <article class="challengeMiniCard challengeMiniCard--violet">
-              <div class="challengeMiniIcon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M4 12h3l2-5 4 10 2-5h5"/><path d="M8 18c2.5 2 5.5 2 8 0"/></svg>
-              </div>
-              <span class="challengeMiniKicker">Spark</span>
-              <h3>Voice Note Flip</h3>
-              <p>Turn a tiny spoken phrase or hum into a chorus people can sing back.</p>
-              <span class="challengeMiniCount" data-challenge-count="voice-note-flip">0 joined</span>
-              <button type="button" data-challenge-start="voice-note-flip">Join</button>
-            </article>
-            <article class="challengeMiniCard challengeMiniCard--cyan">
-              <div class="challengeMiniIcon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M5 8h14"/><path d="M7 16h10"/><path d="M4 12h16"/></svg>
-              </div>
-              <span class="challengeMiniKicker">Party idea</span>
-              <h3>Dabke Drop</h3>
-              <p>Build a clapping chorus for weddings, parties, and group voice notes.</p>
-              <span class="challengeMiniCount" data-challenge-count="dabke-drop">0 joined</span>
-              <button type="button" data-challenge-start="dabke-drop">Join</button>
-            </article>
-            <article class="challengeMiniCard challengeMiniCard--rose">
-              <div class="challengeMiniIcon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M4 17c4-9 12-9 16 0"/><path d="M7 17c2.8-5 7.2-5 10 0"/><path d="M12 17v3"/></svg>
-              </div>
-              <span class="challengeMiniKicker">Mood flip</span>
-              <h3>Sad to Dance</h3>
-              <p>Start emotional, then make the chorus move without losing the feeling.</p>
-              <span class="challengeMiniCount" data-challenge-count="sad-to-dance-challenge">0 joined</span>
-              <button type="button" data-challenge-start="sad-to-dance-challenge">Join</button>
-            </article>
-          </section>
-
+            <div class="homeDeskChallengeCarousel">
+              <section class="challengeDeck challengeDeck--carousel" aria-label="Studio spark cards">
+                <article class="challengeMiniCard challengeMiniCard--violet">
+                  <div class="challengeMiniIcon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M4 12h3l2-5 4 10 2-5h5"/><path d="M8 18c2.5 2 5.5 2 8 0"/></svg>
+                  </div>
+                  <span class="challengeMiniKicker">Spark</span>
+                  <h3>Voice Note Flip</h3>
+                  <p>Turn a tiny spoken phrase or hum into a chorus people can sing back.</p>
+                  <span class="challengeMiniCount" data-challenge-count="voice-note-flip">0 joined</span>
+                  <button type="button" data-challenge-start="voice-note-flip">Join</button>
+                </article>
+                <article class="challengeMiniCard challengeMiniCard--cyan">
+                  <div class="challengeMiniIcon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M5 8h14"/><path d="M7 16h10"/><path d="M4 12h16"/></svg>
+                  </div>
+                  <span class="challengeMiniKicker">Party idea</span>
+                  <h3>Dabke Drop</h3>
+                  <p>Build a clapping chorus for weddings, parties, and group voice notes.</p>
+                  <span class="challengeMiniCount" data-challenge-count="dabke-drop">0 joined</span>
+                  <button type="button" data-challenge-start="dabke-drop">Join</button>
+                </article>
+                <article class="challengeMiniCard challengeMiniCard--rose">
+                  <div class="challengeMiniIcon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M4 17c4-9 12-9 16 0"/><path d="M7 17c2.8-5 7.2-5 10 0"/><path d="M12 17v3"/></svg>
+                  </div>
+                  <span class="challengeMiniKicker">Mood flip</span>
+                  <h3>Sad to Dance</h3>
+                  <p>Start emotional, then make the chorus move without losing the feeling.</p>
+                  <span class="challengeMiniCount" data-challenge-count="sad-to-dance-challenge">0 joined</span>
+                  <button type="button" data-challenge-start="sad-to-dance-challenge">Join</button>
+                </article>
+              </section>
+            </div>
           </section>
 
           <section class="homeDeskSection homeDeskSection--occasions" id="homeDeskOccasions" aria-labelledby="challengePresetTitle">
             <header class="homeDeskSectionHead">
-              <p class="homeDeskSectionKicker">Occasion songs</p>
-              <h3>Make it for someone</h3>
-              <p class="homeDeskSectionLead">Birthdays, weddings, holidays — pick occasion, sound, language, then a version.</p>
+              <p class="homeDeskSectionKicker">Song templates</p>
+              <h3 id="challengePresetTitle">Occasion &amp; dedication</h3>
             </header>
-          <section class="challengePresetLab" aria-labelledby="challengePresetTitle">
-            <div class="challengePresetHead">
-              <div>
-                <p class="challengePresetKicker">Occasion presets</p>
-                <h3 id="challengePresetTitle">Make it for someone.</h3>
+            <div class="homeDeskMakeSeg" role="tablist" aria-label="Occasion mode">
+              <button type="button" class="homeDeskMakeSegBtn active" data-home-make-seg="occasion" aria-pressed="true">Occasion</button>
+              <button type="button" class="homeDeskMakeSegBtn" data-home-make-seg="personal" aria-pressed="false">For someone</button>
+            </div>
+            <section class="challengePresetLab">
+              <p class="homeDeskMakeHint" id="homeDeskMakeHint">Pick occasion and sound — no name needed.</p>
+              <div class="homeDeskMakePersonal" id="homeDeskMakePersonal" hidden>
+                <label class="challengeNameField">
+                  <span>Who is this for?</span>
+                  <input id="challengePersonName" type="text" maxlength="36" autocomplete="off" placeholder="Their name..." />
+                  <small>We will weave their name into the lyrics.</small>
+                </label>
               </div>
-              <label class="challengeNameField">
-                <span>Who is this for?</span>
-                <input id="challengePersonName" type="text" maxlength="36" autocomplete="off" placeholder="Type a name first..." />
-                <small>Required for occasion presets.</small>
-              </label>
-            </div>
-            <div class="challengeRailBlock">
-              <div class="challengeRailLabel">Occasion</div>
-              <div id="challengeOccasionRail" class="challengeFilterRail" role="tablist" aria-label="Choose occasion"></div>
-            </div>
-            <div class="challengeRailBlock challengeRailBlock--genre">
-              <div class="challengeRailLabel">Sound</div>
-              <div id="challengeGenreRail" class="challengeFilterRail" role="tablist" aria-label="Choose music style"></div>
-            </div>
-            <div class="challengeRailBlock challengeRailBlock--language">
-              <div class="challengeRailLabel">Language</div>
-              <div id="challengeLanguageRail" class="challengeFilterRail" role="tablist" aria-label="Choose lyric language"></div>
-            </div>
-            <div id="challengePresetGrid" class="challengePresetGrid" aria-live="polite"></div>
-          </section>
-
+              <div class="challengeRailBlock">
+                <div class="challengeRailLabel">Occasion</div>
+                <div id="challengeOccasionRail" class="challengeFilterRail" role="tablist" aria-label="Choose occasion"></div>
+              </div>
+              <div class="challengeRailBlock challengeRailBlock--genre">
+                <div class="challengeRailLabel">Sound</div>
+                <div id="challengeGenreRail" class="challengeFilterRail" role="tablist" aria-label="Choose music style"></div>
+              </div>
+              <div class="challengeRailBlock challengeRailBlock--language">
+                <div class="challengeRailLabel">Language</div>
+                <div id="challengeLanguageRail" class="challengeFilterRail" role="tablist" aria-label="Choose lyric language"></div>
+              </div>
+              <div class="homeDeskOccasionQuick" id="homeDeskOccasionQuick">
+                <button type="button" class="challengesPrimaryCta" data-home-occasion-create>Start occasion song</button>
+              </div>
+              <div class="homeDeskPresetVersions" id="homeDeskPresetVersions" hidden>
+                <div id="challengePresetGrid" class="challengePresetGrid" aria-live="polite"></div>
+              </div>
+            </section>
           </section>
 
           <section class="homeDeskPoll" aria-labelledby="homeDeskPollTitle">
@@ -976,29 +1005,6 @@
             <p class="homeDeskPollNote">Preview only — votes are not saved yet.</p>
           </section>
 
-          <section class="homeDeskActivity" aria-labelledby="homeDeskActivityTitle">
-            <div class="homeDeskActivityHead">
-              <div>
-                <p class="homeDeskActivityKicker">From the studio</p>
-                <h3 id="homeDeskActivityTitle">What musicians are up to</h3>
-              </div>
-              <a class="homeDeskActivityAll" href="#/discover" data-route-link="discover" data-home-open-discover="discover">Discover</a>
-            </div>
-            <div id="homeDeskActivityList" class="homeDeskActivityList" aria-live="polite"></div>
-          </section>
-          <div class="homeDeskLegacy" hidden aria-hidden="true">
-          <section class="challengeEntriesPanel" aria-labelledby="challengeEntriesTitle">
-            <div class="challengeEntriesHead">
-              <div>
-                <p class="challengePresetKicker">Now playing</p>
-                <h3 id="challengeEntriesTitle">Latest spark entries</h3>
-              </div>
-              <span id="challengeEntriesCount" class="challengeEntriesCount">0 joined</span>
-            </div>
-            <div id="challengeEntriesRail" class="challengeEntriesRail" aria-live="polite"></div>
-          </section>
-
-          </div>
         </section>
 
         <section class="mentorPage wide" data-route="mentor">

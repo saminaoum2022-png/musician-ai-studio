@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260519discoverNoIdeasV1";
+const APP_BUILD = "20260519discoverPlaylistsV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -152,6 +152,10 @@ initLockScreenNowPlaying({
     syncLockScreenNowPlaying({ force: true });
   },
   onNext: () => {
+    if (miniSource?.type === "discover_playlist" && _discoverPlaylistQueue?.length) {
+      void playNextDiscoverPlaylistTrack(currentPlayerTrackRef?.url, { manual: true });
+      return;
+    }
     if (miniSource?.type === "discover_feed" && _discoveryFeedTracks?.length) {
       void playRandomDiscoveryFeedTrack(currentPlayerTrackRef?.url);
       return;
@@ -1591,6 +1595,7 @@ function getMiniPlayerAudio() {
   const t = miniSource?.type;
   if (
     t === "discover_feed" ||
+    t === "discover_playlist" ||
     t === "public_profile_lib" ||
     t === "library" ||
     t === "profile_hub"
@@ -2084,6 +2089,12 @@ function applyRoute() {
   const rawRoute = hash.startsWith("#/") ? hash.slice(2) : "generate";
   let route = rawRoute.split(/[?#&]/)[0].trim();
   const rawRouteQuery = String(rawRoute.split("?")[1] || "").split("#")[0];
+  let pendingDiscoverPlaylistSlug = "";
+  const playlistRouteMatch = route.match(/^discover\/playlist\/([a-z0-9_-]+)/i);
+  if (playlistRouteMatch) {
+    pendingDiscoverPlaylistSlug = String(playlistRouteMatch[1] || "").trim().toLowerCase();
+    route = "discover-playlist";
+  }
   if (route === "search") {
     try {
       const h = String(location.hash || "");
@@ -2111,7 +2122,7 @@ function applyRoute() {
   const allowedRoutes = new Set([
     "intro", "start", "auth", "generate", "library",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
-    "settings", "profile", "player", "discover", "challenges", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
+    "settings", "profile", "player", "discover", "discover-playlist", "challenges", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
   ]);
   const normalized = pendingPublicUsername ? "user" : (route === "start" ? "intro" : route);
   let wanted = allowedRoutes.has(normalized) ? normalized : "generate";
@@ -2128,13 +2139,13 @@ function applyRoute() {
   const isLoggedIn = Boolean(authSession?.user?.id);
   if (!isLoggedIn && protectedRoutes.has(wanted)) wanted = "auth";
   const prevRoute = document.body.getAttribute("data-route") || "";
-  if (prevRoute === "discover" && wanted !== "discover") {
+  if ((prevRoute === "discover" || prevRoute === "discover-playlist") && wanted !== "discover" && wanted !== "discover-playlist") {
     try { onLeaveSearchRoute(); } catch {}
   }
   document.body.classList.toggle("isIntro", wanted === "intro");
   document.body.classList.toggle("isAuth", wanted === "auth");
   document.body.setAttribute("data-route", wanted);
-  if (wanted !== "discover") {
+  if (wanted !== "discover" && wanted !== "discover-playlist") {
     try { document.body.removeAttribute("data-discovery-segment"); } catch {}
   }
   if (prevRoute === "generate" && wanted !== "generate") {
@@ -2155,7 +2166,9 @@ function applyRoute() {
     }
   } catch {}
   document.querySelectorAll("[data-route-link]").forEach((a) => {
-    a.classList.toggle("active", a.getAttribute("data-route-link") === wanted);
+    const link = a.getAttribute("data-route-link");
+    const active = link === wanted || (wanted === "discover-playlist" && link === "discover");
+    a.classList.toggle("active", active);
   });
   if (isLoggedIn) {
     void refreshNotificationsUnreadBadge({ force: wanted === "profile" || wanted === "settings" });
@@ -2280,6 +2293,7 @@ function applyRoute() {
   }
   if (wanted === "discover") {
     bindDiscoverySegmentControls();
+    bindDiscoverPlaylistScreenOnce();
     try {
       sessionStorage.setItem(DISCOVERY_SEGMENT_KEY, "discover");
     } catch {}
@@ -2288,6 +2302,20 @@ function applyRoute() {
       onLeaveSearchRoute();
     } catch {}
     void refreshDiscoverFeed();
+  }
+  if (wanted === "discover-playlist") {
+    bindDiscoverySegmentControls();
+    bindDiscoverPlaylistScreenOnce();
+    try {
+      sessionStorage.setItem(DISCOVERY_SEGMENT_KEY, "discover");
+    } catch {}
+    syncDiscoveryUiToSegment("discover");
+    const openPlaylist = () => renderDiscoverPlaylistScreen(pendingDiscoverPlaylistSlug);
+    if (!_discoveryFeedTracks.length) {
+      void refreshDiscoverFeed().finally(openPlaylist);
+    } else {
+      openPlaylist();
+    }
   }
   if (wanted === "challenges") {
     bindChallengesPageOnce();
@@ -9168,8 +9196,8 @@ function maybeRecordQualifiedPublicPlay() {
 async function supabaseFetchDiscoveryPublicSongs(limit) {
   const lim = Math.max(1, Math.min(80, Number(limit) || 48));
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
-  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_tags:meta->tags";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_tags:meta->tags";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   try {
     let r = await fetch(
@@ -9210,6 +9238,11 @@ async function supabaseFetchDiscoveryPublicSongs(limit) {
         ...(s.meta_remix_of ? { remixOf: s.meta_remix_of } : {}),
         ...(String(s.meta_release_caption || "").trim() ? { releaseCaption: String(s.meta_release_caption).trim() } : {}),
         ...(s.meta_challenge ? { challenge: s.meta_challenge } : {}),
+        ...(String(s.meta_style || "").trim() ? { styleInput: String(s.meta_style).trim() } : {}),
+        ...(String(s.meta_style_sent || "").trim() ? { styleSent: String(s.meta_style_sent).trim() } : {}),
+        ...(String(s.meta_dialect || "").trim() ? { dialect: String(s.meta_dialect).trim() } : {}),
+        ...(String(s.meta_lyrics || "").trim() ? { lyricsInput: String(s.meta_lyrics).trim() } : {}),
+        ...(Array.isArray(s.meta_tags) ? { tags: s.meta_tags } : {}),
       },
     })).sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
   } catch (e) {
@@ -9250,7 +9283,7 @@ function discoveryEmptyIllustrationSvg() {
 }
 
 function dismissDiscoverFeedPlayback() {
-  if (miniSource?.type !== "discover_feed") return;
+  if (miniSource?.type !== "discover_feed" && miniSource?.type !== "discover_playlist") return;
   try {
     if (playerEl) {
       playerEl.pause();
@@ -9263,6 +9296,8 @@ function dismissDiscoverFeedPlayback() {
   } catch {}
   miniSource = null;
   currentPlayerTrackRef = null;
+  _discoverPlaylistQueue = [];
+  _discoverPlaylistQueueSlug = "";
   try {
     syncPlayerUI();
   } catch {}
@@ -9274,6 +9309,9 @@ function dismissDiscoverFeedPlayback() {
   } catch {}
   try {
     renderHubNowPlaying();
+  } catch {}
+  try {
+    syncDiscoveryPlayingHighlights();
   } catch {}
 }
 
@@ -10058,7 +10096,7 @@ function wireTrackOptionsSheetOnce() {
 function getDiscoveryPlaybackUiForUrl(trackUrl) {
   const u = String(trackUrl || "").trim();
   if (!u) return { active: false, audible: false };
-  if (miniSource?.type !== "discover_feed") return { active: false, audible: false };
+  if (!isDiscoverStyleMiniSource()) return { active: false, audible: false };
   const cur = String(currentPlayerTrackRef?.url || "").trim();
   if (!cur || cur !== u) return { active: false, audible: false };
   const a = ensurePlayer();
@@ -10087,26 +10125,7 @@ function getPublicProfileLibPlaybackUiForUrl(trackUrl) {
 /** When Discover is already playing this URL, toggle pause/play (thumb + spotlight). */
 function toggleDiscoverFeedPlaybackIfSameUrl(rawUrl) {
   const raw = String(rawUrl || "").trim();
-  if (miniSource?.type !== "discover_feed") return false;
-  const cur = String(currentPlayerTrackRef?.url || "").trim();
-  if (!raw || !cur || raw !== cur) return false;
-  const a = ensurePlayer();
-  const dur = getPlayerDuration();
-  const ct = Number.isFinite(a.currentTime) ? a.currentTime : 0;
-  const audible = Boolean(!a.paused && !a.ended && (dur > 0 || ct > 0));
-  if (audible) {
-    try {
-      a.pause();
-    } catch {}
-  } else {
-    try {
-      void a.play();
-    } catch {}
-  }
-  try {
-    syncPlayerUI();
-  } catch {}
-  return true;
+  return toggleDiscoverStylePlaybackIfSameUrl(rawUrl);
 }
 
 function togglePublicProfileLibPlaybackIfSameUrl(rawUrl) {
@@ -10134,8 +10153,11 @@ function togglePublicProfileLibPlaybackIfSameUrl(rawUrl) {
 }
 
 function syncDiscoveryPlayingHighlights() {
-  const root = document.getElementById("discoveryPaneDiscover");
-  if (!root) return;
+  const roots = [
+    document.getElementById("discoveryPaneDiscover"),
+    document.getElementById("discoverPlaylistList"),
+  ].filter(Boolean);
+  if (!roots.length) return;
 
   const resetDiscoveryHost = (host) => {
     host.classList.remove("discoveryRowPlaying", "discoveryRowActive");
@@ -10156,11 +10178,13 @@ function syncDiscoveryPlayingHighlights() {
     }
   };
 
-  root.querySelectorAll(".discoveryRow").forEach(resetDiscoveryHost);
-  root.querySelectorAll(".discoverySpotCard").forEach(resetDiscoveryHost);
+  for (const root of roots) {
+    root.querySelectorAll(".discoveryRow").forEach(resetDiscoveryHost);
+    root.querySelectorAll(".discoverySpotCard").forEach(resetDiscoveryHost);
+  }
 
   const curRef = String(currentPlayerTrackRef?.url || "").trim();
-  if (miniSource?.type !== "discover_feed" || !curRef) return;
+  if (!isDiscoverStyleMiniSource() || !curRef) return;
 
   const paintHost = (host, urlEl) => {
     if (!urlEl) return;
@@ -10188,13 +10212,15 @@ function syncDiscoveryPlayingHighlights() {
     if (active) applyCoverGlowRgb(host, artHint);
   };
 
-  root.querySelectorAll(".discoveryRow").forEach((row) => {
-    const artBtn = row.querySelector("[data-discovery-inline-play]");
-    paintHost(row, artBtn);
-  });
-  root.querySelectorAll(".discoverySpotCard").forEach((card) => {
-    paintHost(card, card);
-  });
+  for (const root of roots) {
+    root.querySelectorAll(".discoveryRow").forEach((row) => {
+      const artBtn = row.querySelector("[data-discovery-inline-play]");
+      paintHost(row, artBtn);
+    });
+    root.querySelectorAll(".discoverySpotCard").forEach((card) => {
+      paintHost(card, card);
+    });
+  }
 }
 
 function syncUserPublicFeedPlayingHighlights() {
@@ -10245,9 +10271,122 @@ function syncUserPublicFeedPlayingHighlights() {
   });
 }
 
+/** Editorial Discover playlists (rule-matched; songs stay in the main feed too). */
+const DISCOVER_PLAYLISTS = [
+  {
+    slug: "arabic",
+    title: "Arabic & Levant",
+    subtitle: "Dabke, oud, mijwiz, and Arabic vocals",
+    emoji: "🎵",
+    theme: ["56,189,248", "167,139,250"],
+    keywords: ["arabic", "levant", "dabke", "oud", "mijwiz", "darbuka", "maqam", "khaleeji", "iraqi", "levantine", "syrian", "lebanese", "palestinian", "jordanian", "egyptian", "msa", "colloquial arabic"],
+  },
+  {
+    slug: "love",
+    title: "Love & dedications",
+    subtitle: "Romantic, anniversary, and for-someone songs",
+    emoji: "💜",
+    theme: ["244,114,182", "251,191,36"],
+    keywords: ["love", "romance", "romantic", "anniversary", "dedication", "dedicate", "valentine", "crush", "heart", "for you", "for someone", "soulmate", "together", "miss you"],
+  },
+  {
+    slug: "wedding",
+    title: "Wedding & celebration",
+    subtitle: "Entrances, dabke, and big-day energy",
+    emoji: "✨",
+    theme: ["245,158,11", "35,213,171"],
+    keywords: ["wedding", "bride", "groom", "entrance", "first dance", "zaffa", "dabke", "celebration", "party", "toast", "ceremony"],
+  },
+  {
+    slug: "trip",
+    title: "Trip & road",
+    subtitle: "Driving grooves and open-road momentum",
+    emoji: "🚗",
+    theme: ["34,211,238", "124,92,255"],
+    keywords: ["road", "drive", "driving", "trip", "highway", "journey", "travel", "windows down", "cruising", "groove", "syncopated", "afro", "funk"],
+  },
+  {
+    slug: "uplifting",
+    title: "Uplifting & hype",
+    subtitle: "Workout, drill, trap, and arena energy",
+    emoji: "⚡",
+    theme: ["251,191,36", "244,114,182"],
+    keywords: ["hype", "workout", "gym", "drill", "trap", "anthem", "arena", "stadium", "viral", "energy", "power", "motivation", "win", "champion", "808"],
+  },
+  {
+    slug: "chill",
+    title: "Late night & chill",
+    subtitle: "Ballads, piano, and slow intimate moods",
+    emoji: "🌙",
+    theme: ["99,102,241", "56,189,248"],
+    keywords: ["chill", "late night", "ballad", "piano", "acoustic", "intimate", "soft", "slow", "gentle", "sleep", "calm", "ambient", "60 bpm", "65 bpm", "68 bpm", "72 bpm"],
+  },
+  {
+    slug: "voice",
+    title: "Voice & remix",
+    subtitle: "Voice-note remixes and personal hooks",
+    emoji: "🎙",
+    theme: ["167,139,250", "56,189,248"],
+    keywords: ["voice", "voice-note", "voicenote", "remix", "vocal ref", "vocal reference", "hum", "melody", "personal hook"],
+  },
+  {
+    slug: "cinematic",
+    title: "Cinematic & epic",
+    subtitle: "Orchestral teasers and dramatic builds",
+    emoji: "🎬",
+    theme: ["124,92,255", "56,189,248"],
+    keywords: ["cinematic", "orchestral", "epic", "trailer", "teaser", "strings", "brass", "dramatic", "film", "score", "soundtrack"],
+  },
+];
+
+function getDiscoverPlaylistDef(slug) {
+  const s = String(slug || "").trim().toLowerCase();
+  return DISCOVER_PLAYLISTS.find((pl) => pl.slug === s) || null;
+}
+
+function discoverPlaylistSearchBlob(track) {
+  const m = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  const ch = m.challenge && typeof m.challenge === "object" ? m.challenge : {};
+  const tagList = Array.isArray(m.tags) ? m.tags : [];
+  const parts = [
+    track?.title,
+    m.styleInput,
+    m.styleSent,
+    m.style,
+    m.lyricsInput,
+    m.finalPrompt,
+    m.prompt,
+    m.dialect,
+    m.dialectHint,
+    ch.occasion,
+    ch.genre,
+    ch.title,
+    ch.id,
+    ...tagList,
+  ];
+  return parts.map((x) => String(x || "").toLowerCase()).join(" ");
+}
+
+function classifyDiscoverPlaylistsForTrack(track) {
+  const blob = discoverPlaylistSearchBlob(track);
+  if (!blob.trim()) return [];
+  return DISCOVER_PLAYLISTS
+    .filter((pl) => pl.keywords.some((kw) => blob.includes(String(kw).toLowerCase())))
+    .map((pl) => pl.slug);
+}
+
 let _discoveryFeedGen = 0;
 /** Playable Discover feed rows (spotlight + list) for shuffle-next on the mini player. */
 let _discoveryFeedTracks = [];
+/** Last profile map from Discover refresh (playlist screen rows). */
+let _discoveryLastProfMap = new Map();
+/** slug → raw public track rows for editorial playlists. */
+let _discoveryPlaylistBuckets = new Map();
+/** Ordered playback queue for the open editorial playlist. */
+let _discoverPlaylistQueue = [];
+let _discoverPlaylistQueueSlug = "";
+let _discoverPlaylistScreenSlug = "";
+let _discoverPlaylistScreenBound = false;
 /** Songs listed on `#/u/…` (Library public list or Hub-derived profile) for sheet shuffle. */
 let _userPublicFeedTracks = [];
 /** Public songs currently shown in Challenges latest-entry rails. */
@@ -10272,6 +10411,260 @@ function discoveryTrackPlaybackMeta(t, profMap) {
     meta: t.meta || {},
     releaseCaption: releaseCaptionForTrack(t),
   };
+}
+
+function rebuildDiscoveryPlaylistBuckets(playable) {
+  const buckets = new Map(DISCOVER_PLAYLISTS.map((pl) => [pl.slug, []]));
+  for (const track of playable || []) {
+    const slugs = classifyDiscoverPlaylistsForTrack(track);
+    for (const slug of slugs) {
+      const row = buckets.get(slug);
+      if (row) row.push(track);
+    }
+  }
+  for (const pl of DISCOVER_PLAYLISTS) {
+    const rows = buckets.get(pl.slug) || [];
+    rows.sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
+    buckets.set(pl.slug, rows);
+  }
+  _discoveryPlaylistBuckets = buckets;
+}
+
+function discoveryPlaylistCardArtHtml(tracks) {
+  const arts = (tracks || [])
+    .map((t) => {
+      const art = String(t.artUrl || "").trim();
+      return art && !art.startsWith("data:") ? art : "";
+    })
+    .filter(Boolean)
+    .slice(0, 4);
+  if (!arts.length) return `<span class="discoveryPlaylistCardArtFallback" aria-hidden="true">♪</span>`;
+  return arts.map((src) => `<img src="${escapeHtml(src)}" alt="" loading="lazy" decoding="async" />`).join("");
+}
+
+function renderDiscoveryPlaylistRails() {
+  const wrap = document.getElementById("discoveryPlaylistsSection");
+  const rail = document.getElementById("discoveryPlaylistsRail");
+  if (!wrap || !rail) return;
+  const cards = DISCOVER_PLAYLISTS.map((pl) => {
+    const tracks = _discoveryPlaylistBuckets.get(pl.slug) || [];
+    if (tracks.length < 2) return "";
+    const n = tracks.length;
+    const label = n === 1 ? "1 song" : `${n} songs`;
+    return `
+      <button type="button" class="discoveryPlaylistCard" role="listitem" data-discover-playlist="${escapeHtml(pl.slug)}" style="--pl-a:${pl.theme[0]};--pl-b:${pl.theme[1]};" aria-label="${escapeHtml(pl.title)} playlist, ${label}">
+        <span class="discoveryPlaylistCardArt">${discoveryPlaylistCardArtHtml(tracks)}</span>
+        <span class="discoveryPlaylistCardBody">
+          <span class="discoveryPlaylistCardTitle">${escapeHtml(pl.title)}</span>
+          <span class="discoveryPlaylistCardCount">${escapeHtml(label)}</span>
+        </span>
+      </button>`;
+  }).filter(Boolean);
+  if (!cards.length) {
+    wrap.hidden = true;
+    rail.innerHTML = "";
+    return;
+  }
+  wrap.hidden = false;
+  rail.innerHTML = cards.join("");
+}
+
+function renderDiscoverPlaylistScreen(slug) {
+  const pl = getDiscoverPlaylistDef(slug);
+  if (!pl) {
+    try { location.hash = "#/discover"; } catch {}
+    return;
+  }
+  _discoverPlaylistScreenSlug = pl.slug;
+  try {
+    document.body.style.setProperty("--pl-a", pl.theme[0]);
+    document.body.style.setProperty("--pl-b", pl.theme[1]);
+  } catch {}
+  const titleEl = document.getElementById("discoverPlaylistTitle");
+  const leadEl = document.getElementById("discoverPlaylistLead");
+  const countEl = document.getElementById("discoverPlaylistCount");
+  const listEl = document.getElementById("discoverPlaylistList");
+  const statusEl = document.getElementById("discoverPlaylistStatus");
+  const kickerEl = document.getElementById("discoverPlaylistKicker");
+  if (kickerEl) kickerEl.textContent = "Playlist";
+  if (titleEl) titleEl.textContent = pl.title;
+  if (leadEl) leadEl.textContent = pl.subtitle;
+  const tracks = (_discoveryPlaylistBuckets.get(pl.slug) || []).filter((t) => String(t.url || "").trim());
+  const profMap = _discoveryLastProfMap;
+  if (countEl) {
+    countEl.textContent = tracks.length
+      ? `${tracks.length} public ${tracks.length === 1 ? "song" : "songs"} · plays in order`
+      : "No songs matched this vibe yet.";
+  }
+  if (!listEl) return;
+  if (!tracks.length) {
+    listEl.innerHTML = "";
+    listEl.hidden = true;
+    if (statusEl) {
+      statusEl.hidden = false;
+      statusEl.innerHTML = `
+        <div class="discoveryEmptyWrap discoveryEmptyWrapMuted">
+          <p class="discoveryEmptyTitle">Nothing here yet</p>
+          <p class="discoveryEmptyText">When public songs match <strong>${escapeHtml(pl.title)}</strong>, they appear here and stay in the main feed too.</p>
+        </div>`;
+    }
+    return;
+  }
+  if (statusEl) {
+    statusEl.hidden = true;
+    statusEl.textContent = "";
+  }
+  listEl.hidden = false;
+  listEl.innerHTML = tracks
+    .map((t, i) => discoveryTrackRowHtml(t, profMap, i))
+    .join("");
+  try {
+    syncDiscoveryPlayingHighlights();
+  } catch {}
+}
+
+function setDiscoverPlaylistQueue(slug, tracks) {
+  const profMap = _discoveryLastProfMap;
+  _discoverPlaylistQueueSlug = String(slug || "").trim();
+  _discoverPlaylistQueue = (tracks || [])
+    .filter((t) => String(t.url || "").trim())
+    .map((t) => discoveryTrackPlaybackMeta(t, profMap));
+}
+
+async function playDiscoverPlaylistFromIndex(slug, index, opts = {}) {
+  const pl = getDiscoverPlaylistDef(slug);
+  if (!pl) return;
+  const tracks = (_discoveryPlaylistBuckets.get(pl.slug) || []).filter((t) => String(t.url || "").trim());
+  if (!tracks.length) return;
+  setDiscoverPlaylistQueue(pl.slug, tracks);
+  const idx = Math.max(0, Math.min(tracks.length - 1, Number(index) || 0));
+  const pick = _discoverPlaylistQueue[idx];
+  if (!pick?.url) return;
+  haptic("light");
+  await playLibraryUrlOnPlayer(pick.url, pick.title, pick.artUrl, {
+    discoverFeed: true,
+    discoverPlaylist: true,
+    playlistSlug: pl.slug,
+    playlistIndex: idx,
+    openPlayer: opts.openPlayer === true,
+    discoverBy: pick.byLine,
+    playSource: pick.songId && pick.ownerUserId
+      ? { type: "public_song", songId: pick.songId, ownerUserId: pick.ownerUserId, taskId: pick.taskId, audioId: pick.audioId }
+      : null,
+  });
+}
+
+async function playNextDiscoverPlaylistTrack(excludeUrl, opts = {}) {
+  if (!_discoverPlaylistQueue.length || !_discoverPlaylistQueueSlug) return;
+  const cur = String(excludeUrl || currentPlayerTrackRef?.url || "").trim();
+  let idx = _discoverPlaylistQueue.findIndex((t) => String(t.url || "").trim() === cur);
+  if (idx < 0 && Number.isFinite(miniSource?.playlistIndex)) idx = Number(miniSource.playlistIndex);
+  const nextIdx = idx + 1;
+  if (nextIdx >= _discoverPlaylistQueue.length) {
+    if (!opts.manual) return;
+    return;
+  }
+  const pick = _discoverPlaylistQueue[nextIdx];
+  if (!pick?.url) return;
+  haptic("light");
+  await playLibraryUrlOnPlayer(pick.url, pick.title, pick.artUrl, {
+    discoverFeed: true,
+    discoverPlaylist: true,
+    playlistSlug: _discoverPlaylistQueueSlug,
+    playlistIndex: nextIdx,
+    openPlayer: false,
+    discoverBy: pick.byLine,
+    playSource: pick.songId && pick.ownerUserId
+      ? { type: "public_song", songId: pick.songId, ownerUserId: pick.ownerUserId, taskId: pick.taskId, audioId: pick.audioId }
+      : null,
+  });
+}
+
+function bindDiscoverPlaylistScreenOnce() {
+  if (_discoverPlaylistScreenBound) return;
+  _discoverPlaylistScreenBound = true;
+  const discoverPane = document.getElementById("discoveryPaneDiscover");
+  if (discoverPane && !discoverPane.dataset.boundPlaylistRails) {
+    discoverPane.dataset.boundPlaylistRails = "1";
+    discoverPane.addEventListener("click", (e) => {
+      const card = e.target?.closest?.("[data-discover-playlist]");
+      if (!card || !discoverPane.contains(card)) return;
+      e.preventDefault();
+      haptic("light");
+      const slug = String(card.getAttribute("data-discover-playlist") || "").trim();
+      if (!slug) return;
+      location.hash = `#/discover/playlist/${encodeURIComponent(slug)}`;
+    });
+  }
+  const back = document.getElementById("discoverPlaylistBack");
+  if (back && !back.dataset.bound) {
+    back.dataset.bound = "1";
+    back.addEventListener("click", () => {
+      haptic("light");
+      location.hash = "#/discover";
+    });
+  }
+  const playAll = document.getElementById("discoverPlaylistPlayAll");
+  if (playAll && !playAll.dataset.bound) {
+    playAll.dataset.bound = "1";
+    playAll.addEventListener("click", () => {
+      const slug = _discoverPlaylistScreenSlug;
+      if (!slug) return;
+      haptic("medium");
+      void playDiscoverPlaylistFromIndex(slug, 0);
+    });
+  }
+  const listRoot = document.getElementById("discoverPlaylistList");
+  if (listRoot && !listRoot.dataset.boundPlaylistList) {
+    listRoot.dataset.boundPlaylistList = "1";
+    wireTrackOptionsSheetOnce();
+    listRoot.addEventListener("click", (e) => {
+      const menuBtn = e.target.closest("[data-discovery-open-sheet]");
+      if (menuBtn && listRoot.contains(menuBtn)) {
+        e.preventDefault();
+        e.stopPropagation();
+        haptic("light");
+        openDiscoverTrackSheetFromEl(menuBtn);
+        return;
+      }
+      const inline = e.target.closest("[data-discovery-inline-play]");
+      const pl = e.target.closest("[data-user-lib-play]");
+      const hit = inline || pl;
+      if (!hit || !listRoot.contains(hit)) return;
+      e.preventDefault();
+      const slug = _discoverPlaylistScreenSlug;
+      if (!slug) return;
+      const raw = decodeURIComponent(String(hit.getAttribute("data-user-lib-url") || ""));
+      const idx = (_discoveryPlaylistBuckets.get(slug) || []).findIndex(
+        (t) => String(t.url || "").trim() === String(raw || "").trim(),
+      );
+      if (toggleDiscoverStylePlaybackIfSameUrl(raw)) return;
+      void playDiscoverPlaylistFromIndex(slug, idx < 0 ? 0 : idx);
+    });
+  }
+}
+
+function isDiscoverStyleMiniSource() {
+  return miniSource?.type === "discover_feed" || miniSource?.type === "discover_playlist";
+}
+
+function toggleDiscoverStylePlaybackIfSameUrl(rawUrl) {
+  const raw = String(rawUrl || "").trim();
+  if (!isDiscoverStyleMiniSource()) return false;
+  const cur = String(currentPlayerTrackRef?.url || "").trim();
+  if (!raw || !cur || raw !== cur) return false;
+  const a = ensurePlayer();
+  const dur = getPlayerDuration();
+  const ct = Number.isFinite(a.currentTime) ? a.currentTime : 0;
+  const audible = Boolean(!a.paused && !a.ended && (dur > 0 || ct > 0));
+  if (audible) {
+    try { a.pause(); } catch {}
+  } else {
+    try { void a.play(); } catch {}
+  }
+  try { syncPlayerUI(); } catch {}
+  try { syncDiscoveryPlayingHighlights(); } catch {}
+  return true;
 }
 
 /** Mini player “next” — pick another random song from the current Discover feed. */
@@ -10499,15 +10892,18 @@ async function refreshDiscoverFeed() {
   statusEl.textContent = "";
   statusEl.hidden = true;
 
-  const rows = await supabaseFetchDiscoveryPublicSongs(48);
+  const rows = await supabaseFetchDiscoveryPublicSongs(64);
   if (gen !== _discoveryFeedGen) return;
   const playable = rows.filter((t) => String(t.url || "").trim());
   const profMap = await fetchProfilesByUserIdsMap(playable.map((t) => t.userId));
+  _discoveryLastProfMap = profMap;
   if (gen !== _discoveryFeedGen) return;
   listEl.classList.remove("isDiscoveryLoading");
 
   if (!playable.length) {
     _discoveryFeedTracks = [];
+    rebuildDiscoveryPlaylistBuckets([]);
+    renderDiscoveryPlaylistRails();
     listEl.hidden = true;
     listEl.innerHTML = "";
     if (spotlightWrap) spotlightWrap.hidden = true;
@@ -10540,6 +10936,8 @@ async function refreshDiscoverFeed() {
   const spot = playable.slice(0, 5);
   const rest = playable.slice(5);
   _discoveryFeedTracks = playable.map((t) => discoveryTrackPlaybackMeta(t, profMap));
+  rebuildDiscoveryPlaylistBuckets(playable);
+  renderDiscoveryPlaylistRails();
 
   if (rail && spotlightWrap) {
     rail.innerHTML = spot.map((t, i) => discoverySpotCardHtml(t, profMap, i)).join("");
@@ -10685,6 +11083,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   const raw = String(rawUrl || "").trim();
   if (!raw) return;
   const fromDiscover = Boolean(opts && opts.discoverFeed);
+  const fromPlaylist = Boolean(opts && opts.discoverPlaylist);
   let openPlayer = true;
   if (opts?.openPlayer === false) openPlayer = false;
   else if (opts?.openPlayer === true) openPlayer = true;
@@ -10729,9 +11128,17 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     songId: String(playSource?.songId || publicTrackMeta?.songId || publicTrackMeta?.id || "").trim(),
     ownerUserId: String(playSource?.ownerUserId || publicTrackMeta?.ownerUserId || publicTrackMeta?.userId || "").trim(),
   };
-  const publicSource = fromDiscover
-    ? { type: "discover_feed", url: playableRaw, ...(playSource || {}) }
-    : { type: "public_profile_lib", url: playableRaw, ...(playSource || {}) };
+  const publicSource = fromPlaylist
+    ? {
+      type: "discover_playlist",
+      url: playableRaw,
+      playlistSlug: String(opts?.playlistSlug || "").trim(),
+      playlistIndex: Number(opts?.playlistIndex) || 0,
+      ...(playSource || {}),
+    }
+    : fromDiscover
+      ? { type: "discover_feed", url: playableRaw, ...(playSource || {}) }
+      : { type: "public_profile_lib", url: playableRaw, ...(playSource || {}) };
   miniSource = publicSource;
   resetPublicPlayTracking(miniSource);
   libraryNowPlayingId = null;
@@ -10740,7 +11147,11 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   } catch {}
   const meta = {
     title: title || "Song",
-    subtitle: fromDiscover ? byLine || "Discover feed" : "Public profile",
+    subtitle: fromPlaylist
+      ? `${byLine || "Discover"} · ${getDiscoverPlaylistDef(opts?.playlistSlug)?.title || "Playlist"}`
+      : fromDiscover
+        ? byLine || "Discover feed"
+        : "Public profile",
     artUrl: artUrl || placeholderCoverDataUrl(),
     releaseCaption,
     remixOf,
@@ -16645,6 +17056,9 @@ function ensurePlayer() {
     try {
       syncPlayerUI();
     } catch {}
+    if (miniSource?.type === "discover_playlist" && _discoverPlaylistQueue.length) {
+      void playNextDiscoverPlaylistTrack(currentPlayerTrackRef?.url);
+    }
   });
   return playerEl;
 }
@@ -16701,7 +17115,7 @@ let lastPlayerHttpUrl = "";
  *  trim-to-clip, or Hub publish (those flows assume you own the row). */
 function playerSourceIsExternalListenOnly() {
   const ms = String(miniSource?.type || "");
-  if (ms === "discover_feed" || ms === "public_profile_lib" || ms === "profile_hub") return true;
+  if (ms === "discover_feed" || ms === "discover_playlist" || ms === "public_profile_lib" || ms === "profile_hub") return true;
   const id = String(currentPlayerTrackRef?.id || "");
   if (id.startsWith("public_")) return true;
   return false;
@@ -21389,6 +21803,10 @@ if (els.hubNowExpand && !els.hubNowExpand.dataset.boundHubExp) {
       e.stopPropagation();
     } catch {}
     haptic("light");
+    if (miniSource?.type === "discover_playlist" && _discoverPlaylistQueue.length) {
+      void playNextDiscoverPlaylistTrack(currentPlayerTrackRef?.url, { manual: true });
+      return;
+    }
     if (miniSource?.type === "discover_feed" && _discoveryFeedTracks.length) {
       void playRandomDiscoveryFeedTrack(currentPlayerTrackRef?.url);
       return;

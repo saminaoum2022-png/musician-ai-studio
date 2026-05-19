@@ -11180,6 +11180,201 @@ body.notificationsCenterOpen{
 .discoveryPage{
   gap: 14px;
 }
+.discoveryPlaylistsSection{
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.discoveryPlaylistsSection[hidden]{
+  display: none !important;
+}
+.discoveryPlaylistsHead{
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 2px;
+}
+.discoveryPlaylistsTitle{
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: rgba(240,244,255,0.94);
+}
+.discoveryPlaylistsHint{
+  font-size: 12px;
+  color: rgba(232,238,247,0.48);
+  white-space: nowrap;
+}
+.discoveryPlaylistsRail{
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 2px 2px 8px;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.discoveryPlaylistsRail::-webkit-scrollbar{ display: none; }
+.discoveryPlaylistCard{
+  flex: 0 0 auto;
+  width: min(148px, 42vw);
+  scroll-snap-align: start;
+  appearance: none;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 18px;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  cursor: pointer;
+  background:
+    linear-gradient(155deg, rgba(var(--pl-a,124,92,255),0.34), rgba(var(--pl-b,56,189,248),0.14)),
+    rgba(12,14,20,0.72);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 140ms ease, border-color 140ms ease;
+}
+.discoveryPlaylistCard:active{
+  transform: scale(0.98);
+}
+.discoveryPlaylistCardArt{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 2px;
+  aspect-ratio: 1;
+  background: rgba(0,0,0,0.22);
+}
+.discoveryPlaylistCardArt img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.discoveryPlaylistCardArtFallback{
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+  display: grid;
+  place-items: center;
+  font-size: 28px;
+  opacity: 0.55;
+}
+.discoveryPlaylistCardBody{
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 11px 12px;
+}
+.discoveryPlaylistCardTitle{
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: #f0f4ff;
+  line-height: 1.2;
+}
+.discoveryPlaylistCardCount{
+  font-size: 11px;
+  color: rgba(232,238,247,0.55);
+}
+body[data-route="discover-playlist"]::before{
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: calc(env(safe-area-inset-top, 0px) + 260px);
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 90% 70% at 50% -10%, rgba(124,92,255,0.24), transparent 56%),
+    radial-gradient(ellipse 60% 45% at 100% 20%, rgba(56,189,248,0.10), transparent 50%);
+}
+body[data-route="discover-playlist"] > .app{
+  position: relative;
+  z-index: 1;
+}
+.discoverPlaylistPage{
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: calc(100dvh - 120px);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 88px);
+}
+.discoverPlaylistAmbient{
+  position: absolute;
+  inset: -8px -12px 45%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 90% 70% at 50% -10%, rgba(var(--pl-a,124,92,255),0.32), transparent 55%),
+    radial-gradient(ellipse 60% 45% at 100% 20%, rgba(var(--pl-b,56,189,248),0.14), transparent 50%);
+  opacity: 0.95;
+}
+.discoverPlaylistTop,
+.discoverPlaylistHero,
+.discoverPlaylistList{
+  position: relative;
+  z-index: 1;
+}
+.discoverPlaylistTop{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 4px;
+}
+.discoverPlaylistBack{
+  appearance: none;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: #f0f4ff;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.discoverPlaylistPlayAll{
+  flex: 1 1 auto;
+  max-width: 200px;
+  margin-left: auto;
+}
+.discoverPlaylistHero{
+  padding: 4px 2px 0;
+}
+.discoverPlaylistKicker{
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(232,238,247,0.58);
+}
+.discoverPlaylistTitle{
+  margin: 0;
+  font-size: clamp(28px, 7vw, 36px);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+.discoverPlaylistLead{
+  margin: 10px 0 0;
+  max-width: 28em;
+  color: rgba(232,238,247,0.68);
+  font-size: 15px;
+  line-height: 1.45;
+}
+.discoverPlaylistCount{
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: rgba(232,238,247,0.48);
+}
+.discoverPlaylistList{
+  min-width: 0;
+}
 body[data-route="discover"]::before{
   content: "";
   position: fixed;

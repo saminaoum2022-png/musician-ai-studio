@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260519homeDeskPolishV1" />
+    <link rel="stylesheet" href="./styles.css?v=20260519discoverPlaylistsV1" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -763,6 +763,13 @@
                 </svg>
               </button>
             </header>
+            <section class="discoveryPlaylistsSection" id="discoveryPlaylistsSection" aria-label="Playlists" hidden>
+              <div class="discoveryPlaylistsHead">
+                <span class="discoveryPlaylistsTitle">Playlists</span>
+                <span class="discoveryPlaylistsHint">Mood &amp; vibe · plays in order</span>
+              </div>
+              <div id="discoveryPlaylistsRail" class="discoveryPlaylistsRail" role="list"></div>
+            </section>
             <div id="discoverySpotlightWrap" class="discoverySpotlightWrap" hidden>
               <div class="discoverySpotlightHead">
                 <span class="discoverySpotlightTitle">Spotlight</span>
@@ -790,6 +797,25 @@
             <div id="discoveryFollowingStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
             <div id="discoveryFollowingList" class="discoveryFeedList discoveryCardStack" hidden></div>
           </div>
+        </section>
+
+
+        <section class="discoverPlaylistPage wide" data-route="discover-playlist">
+          <div class="discoverPlaylistAmbient" aria-hidden="true"></div>
+          <header class="discoverPlaylistTop">
+            <button type="button" class="discoverPlaylistBack" id="discoverPlaylistBack" aria-label="Back to Discover">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M15 6 9 12l6 6"/></svg>
+            </button>
+            <button type="button" class="discoverPlaylistPlayAll primary" id="discoverPlaylistPlayAll">Play all</button>
+          </header>
+          <div class="discoverPlaylistHero">
+            <p class="discoverPlaylistKicker" id="discoverPlaylistKicker">Playlist</p>
+            <h1 class="discoverPlaylistTitle" id="discoverPlaylistTitle">Playlist</h1>
+            <p class="discoverPlaylistLead" id="discoverPlaylistLead"></p>
+            <p class="discoverPlaylistCount" id="discoverPlaylistCount"></p>
+          </div>
+          <div id="discoverPlaylistStatus" class="discoveryFeedStatus" role="status" aria-live="polite" hidden></div>
+          <div id="discoverPlaylistList" class="discoveryFeedList discoveryCardStack discoverPlaylistList"></div>
         </section>
 
         <section class="challengesPage wide homeDesk" data-route="challenges">
@@ -2684,6 +2710,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="./src/app.js?v=20260518homeSparksV1"></script>
+    <script type="module" src="./src/app.js?v=20260519discoverPlaylistsV1"></script>
   </body>
 </html>

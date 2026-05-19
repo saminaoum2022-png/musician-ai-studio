@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260519discoverPlaylistsV1";
+const APP_BUILD = "20260519discoverPlaylistAdvanceV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -10387,6 +10387,9 @@ let _discoverPlaylistQueue = [];
 let _discoverPlaylistQueueSlug = "";
 let _discoverPlaylistScreenSlug = "";
 let _discoverPlaylistScreenBound = false;
+let _discoverPlaylistAdvancing = false;
+let _discoverPlaylistAdvanceToken = 0;
+let _playerPlaybackSeq = 0;
 /** Songs listed on `#/u/…` (Library public list or Hub-derived profile) for sheet shuffle. */
 let _userPublicFeedTracks = [];
 /** Public songs currently shown in Challenges latest-entry rails. */
@@ -10555,18 +10558,23 @@ async function playDiscoverPlaylistFromIndex(slug, index, opts = {}) {
 }
 
 async function playNextDiscoverPlaylistTrack(excludeUrl, opts = {}) {
+  if (_discoverPlaylistAdvancing) return;
   if (!_discoverPlaylistQueue.length || !_discoverPlaylistQueueSlug) return;
-  const cur = String(excludeUrl || currentPlayerTrackRef?.url || "").trim();
-  let idx = _discoverPlaylistQueue.findIndex((t) => String(t.url || "").trim() === cur);
-  if (idx < 0 && Number.isFinite(miniSource?.playlistIndex)) idx = Number(miniSource.playlistIndex);
-  const nextIdx = idx + 1;
-  if (nextIdx >= _discoverPlaylistQueue.length) {
-    if (!opts.manual) return;
-    return;
+  if (miniSource?.type !== "discover_playlist") return;
+  const curIdx = Number.isFinite(miniSource?.playlistIndex) ? Number(miniSource.playlistIndex) : -1;
+  let idx = curIdx;
+  if (idx < 0) {
+    const cur = String(excludeUrl || currentPlayerTrackRef?.url || miniSource?.url || "").trim();
+    idx = _discoverPlaylistQueue.findIndex((t) => String(t.url || "").trim() === cur);
   }
+  const nextIdx = idx + 1;
+  if (nextIdx >= _discoverPlaylistQueue.length) return;
   const pick = _discoverPlaylistQueue[nextIdx];
   if (!pick?.url) return;
+  _discoverPlaylistAdvancing = true;
+  const token = ++_discoverPlaylistAdvanceToken;
   haptic("light");
+  try {
   await playLibraryUrlOnPlayer(pick.url, pick.title, pick.artUrl, {
     discoverFeed: true,
     discoverPlaylist: true,
@@ -10578,6 +10586,19 @@ async function playNextDiscoverPlaylistTrack(excludeUrl, opts = {}) {
       ? { type: "public_song", songId: pick.songId, ownerUserId: pick.ownerUserId, taskId: pick.taskId, audioId: pick.audioId }
       : null,
   });
+  } finally {
+    if (token === _discoverPlaylistAdvanceToken) _discoverPlaylistAdvancing = false;
+  }
+}
+
+function maybeAdvanceDiscoverPlaylistFromProgress(audio) {
+  if (!audio || miniSource?.type !== "discover_playlist") return;
+  if (_discoverPlaylistAdvancing || audio.paused || audio.ended) return;
+  const dur = getAudioDuration(audio);
+  if (!Number.isFinite(dur) || dur <= 0) return;
+  const cur = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+  if (cur < Math.max(0, dur - 0.35)) return;
+  void playNextDiscoverPlaylistTrack(currentPlayerTrackRef?.url);
 }
 
 function bindDiscoverPlaylistScreenOnce() {
@@ -11130,15 +11151,15 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   };
   const publicSource = fromPlaylist
     ? {
+      ...(playSource || {}),
       type: "discover_playlist",
       url: playableRaw,
       playlistSlug: String(opts?.playlistSlug || "").trim(),
       playlistIndex: Number(opts?.playlistIndex) || 0,
-      ...(playSource || {}),
     }
     : fromDiscover
-      ? { type: "discover_feed", url: playableRaw, ...(playSource || {}) }
-      : { type: "public_profile_lib", url: playableRaw, ...(playSource || {}) };
+      ? { ...(playSource || {}), type: "discover_feed", url: playableRaw }
+      : { ...(playSource || {}), type: "public_profile_lib", url: playableRaw };
   miniSource = publicSource;
   resetPublicPlayTracking(miniSource);
   libraryNowPlayingId = null;
@@ -17032,6 +17053,9 @@ function ensurePlayer() {
   playerEl.preload = "auto";
   playerEl.addEventListener("timeupdate", syncPlayerUI);
   playerEl.addEventListener("timeupdate", maybeRecordQualifiedPublicPlay);
+  playerEl.addEventListener("timeupdate", () => {
+    try { maybeAdvanceDiscoverPlaylistFromProgress(playerEl); } catch {}
+  });
   playerEl.addEventListener("loadedmetadata", syncPlayerUI);
   // iOS Safari often reports `duration === Infinity` on Suno-proxied audio
   // until enough is buffered. `durationchange` and `canplay` are the events
@@ -17050,6 +17074,8 @@ function ensurePlayer() {
   playerEl.addEventListener("play", () => { try { setProfileAuraAudioState(true); } catch {} });
   playerEl.addEventListener("pause", () => { try { setProfileAuraAudioState(isAnyAppAudioPlaying()); } catch {} });
   playerEl.addEventListener("ended", () => {
+    const elSeq = Number(playerEl?.dataset?.playerSeq || 0);
+    if (elSeq !== _playerPlaybackSeq) return;
     if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = false;
     if (els.btnPlayerPause) els.btnPlayerPause.disabled = true;
     try { setProfileAuraAudioState(isAnyAppAudioPlaying()); } catch {}
@@ -17135,6 +17161,8 @@ function updatePlayerSecondaryChrome() {
 
 function setPlayerSource(url, label) {
   const a = ensurePlayer();
+  _playerPlaybackSeq += 1;
+  try { a.dataset.playerSeq = String(_playerPlaybackSeq); } catch {}
   a.pause();
   // Heal legacy library URLs (relative `/api/...`) into absolute URLs so the
   // native shell can fetch them. No-op on web.

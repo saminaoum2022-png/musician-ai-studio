@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260518homeSparksV1" />
+    <link rel="stylesheet" href="./styles.css?v=20260519homeDeskTemplatesV1" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -845,27 +845,29 @@
           </div>
         </section>
 
-        <section class="challengesPage wide" data-route="challenges">
+        <section class="challengesPage wide homeDesk" data-route="challenges">
           <div class="challengesAmbient" aria-hidden="true"></div>
-          <header class="challengesHero">
-            <div class="challengesHeroCopy">
-              <p class="challengesKicker">Studio Home</p>
-              <h2 class="challengesTitle">What are we making today?</h2>
-              <p class="challengesLead">Start from a spark, dedicate a song to someone, or jump into a creative challenge. Not a blank generator, not a feed.</p>
-              <div class="challengesHeroActions">
-                <button type="button" class="challengesPrimaryCta" data-challenge-start="hook-rush">Start with a spark</button>
-                <a class="challengesGhostCta" href="#/generate">Open Create</a>
-              </div>
-            </div>
-            <div class="challengeStreakCard" aria-label="Home entry points">
-              <span class="challengeStreakRing" aria-hidden="true"></span>
-              <span class="challengeStreakLabel">Ways in</span>
-              <strong>03</strong>
-              <span class="challengeStreakSub">spark · occasion · remix</span>
-            </div>
+          <header class="homeDeskHead">
+            <p class="homeDeskKicker">Studio Home</p>
+            <h2 class="homeDeskGreeting" id="homeDeskGreeting">Welcome back</h2>
+            <p class="homeDeskSub" id="homeDeskSub">Your desk for making. Listen and play releases in Discover.</p>
           </header>
 
-          <section class="challengeFeatureCard" aria-labelledby="challengeFeaturedTitle">
+          <section class="homeDeskContinue" id="homeDeskContinue" hidden aria-label="Continue your last project">
+            <button type="button" class="homeDeskContinueBtn" id="homeDeskContinueBtn">
+              <span class="homeDeskContinueArt">
+                <img id="homeDeskContinueArt" src="./assets/nabadai-logo.png" alt="" decoding="async" />
+              </span>
+              <span class="homeDeskContinueBody">
+                <span class="homeDeskContinueKicker">Continue</span>
+                <strong id="homeDeskContinueTitle">Your last song</strong>
+                <small id="homeDeskContinueMeta">Pick up in Create</small>
+              </span>
+              <span class="homeDeskContinueChev" aria-hidden="true">→</span>
+            </button>
+          </section>
+
+          <section class="challengeFeatureCard homeDeskSpark" aria-labelledby="challengeFeaturedTitle">
             <div class="challengeFeatureTop">
               <span class="challengeLivePill"><span></span> Start here</span>
               <span class="challengeTimer"><span data-challenge-count="hook-rush">0 joined</span> · creative prompt</span>
@@ -880,44 +882,18 @@
             <button type="button" class="challengeFeatureStart" data-challenge-start="hook-rush">Use this spark</button>
           </section>
 
-          <section class="challengeEntriesPanel" aria-labelledby="challengeEntriesTitle">
-            <div class="challengeEntriesHead">
-              <div>
-                <p class="challengePresetKicker">Now playing</p>
-                <h3 id="challengeEntriesTitle">Latest spark entries</h3>
-              </div>
-              <span id="challengeEntriesCount" class="challengeEntriesCount">0 joined</span>
-            </div>
-            <div id="challengeEntriesRail" class="challengeEntriesRail" aria-live="polite"></div>
+          <section class="homeDeskQuick" aria-label="Quick ways in">
+            <button type="button" class="homeDeskQuickBtn" data-challenge-start="hook-rush">Spark</button>
+            <button type="button" class="homeDeskQuickBtn" data-home-scroll-occasion>Occasion</button>
+            <a class="homeDeskQuickBtn homeDeskQuickBtn--ghost" href="#/discover" data-route-link="discover">Discover</a>
           </section>
 
-          <section class="challengePresetLab" aria-labelledby="challengePresetTitle">
-            <div class="challengePresetHead">
-              <div>
-                <p class="challengePresetKicker">Occasion presets</p>
-                <h3 id="challengePresetTitle">Make it for someone.</h3>
-              </div>
-              <label class="challengeNameField">
-                <span>Who is this for?</span>
-                <input id="challengePersonName" type="text" maxlength="36" autocomplete="off" placeholder="Type a name first..." />
-                <small>Required for occasion presets.</small>
-              </label>
-            </div>
-            <div class="challengeRailBlock">
-              <div class="challengeRailLabel">Occasion</div>
-              <div id="challengeOccasionRail" class="challengeFilterRail" role="tablist" aria-label="Choose occasion"></div>
-            </div>
-            <div class="challengeRailBlock challengeRailBlock--genre">
-              <div class="challengeRailLabel">Sound</div>
-              <div id="challengeGenreRail" class="challengeFilterRail" role="tablist" aria-label="Choose music style"></div>
-            </div>
-            <div class="challengeRailBlock challengeRailBlock--language">
-              <div class="challengeRailLabel">Language</div>
-              <div id="challengeLanguageRail" class="challengeFilterRail" role="tablist" aria-label="Choose lyric language"></div>
-            </div>
-            <div id="challengePresetGrid" class="challengePresetGrid" aria-live="polite"></div>
-          </section>
-
+          <section class="homeDeskSection homeDeskSection--sparks" aria-labelledby="homeDeskSparksTitle">
+            <header class="homeDeskSectionHead">
+              <p class="homeDeskSectionKicker">Creative sparks</p>
+              <h3 id="homeDeskSparksTitle">More challenges</h3>
+              <p class="homeDeskSectionLead">Same prompts as before — each opens Create ready to shape.</p>
+            </header>
           <section class="challengeDeck" aria-label="Studio spark cards">
             <article class="challengeMiniCard challengeMiniCard--violet">
               <div class="challengeMiniIcon" aria-hidden="true">
@@ -951,23 +927,78 @@
             </article>
           </section>
 
-          <section class="challengeLoopCard" aria-label="How Home sparks work">
-            <div>
-              <span class="challengeLoopStep">1</span>
-              <strong>Pick a spark</strong>
-              <small>Start from a prompt, occasion, or sound idea.</small>
-            </div>
-            <div>
-              <span class="challengeLoopStep">2</span>
-              <strong>Shape in Create</strong>
-              <small>Edit lyrics, style, voice, and language.</small>
-            </div>
-            <div>
-              <span class="challengeLoopStep">3</span>
-              <strong>Release when ready</strong>
-              <small>Publish with a note when the song has a story.</small>
-            </div>
           </section>
+
+          <section class="homeDeskSection homeDeskSection--occasions" id="homeDeskOccasions" aria-labelledby="challengePresetTitle">
+            <header class="homeDeskSectionHead">
+              <p class="homeDeskSectionKicker">Occasion songs</p>
+              <h3>Make it for someone</h3>
+              <p class="homeDeskSectionLead">Birthdays, weddings, holidays — pick occasion, sound, language, then a version.</p>
+            </header>
+          <section class="challengePresetLab" aria-labelledby="challengePresetTitle">
+            <div class="challengePresetHead">
+              <div>
+                <p class="challengePresetKicker">Occasion presets</p>
+                <h3 id="challengePresetTitle">Make it for someone.</h3>
+              </div>
+              <label class="challengeNameField">
+                <span>Who is this for?</span>
+                <input id="challengePersonName" type="text" maxlength="36" autocomplete="off" placeholder="Type a name first..." />
+                <small>Required for occasion presets.</small>
+              </label>
+            </div>
+            <div class="challengeRailBlock">
+              <div class="challengeRailLabel">Occasion</div>
+              <div id="challengeOccasionRail" class="challengeFilterRail" role="tablist" aria-label="Choose occasion"></div>
+            </div>
+            <div class="challengeRailBlock challengeRailBlock--genre">
+              <div class="challengeRailLabel">Sound</div>
+              <div id="challengeGenreRail" class="challengeFilterRail" role="tablist" aria-label="Choose music style"></div>
+            </div>
+            <div class="challengeRailBlock challengeRailBlock--language">
+              <div class="challengeRailLabel">Language</div>
+              <div id="challengeLanguageRail" class="challengeFilterRail" role="tablist" aria-label="Choose lyric language"></div>
+            </div>
+            <div id="challengePresetGrid" class="challengePresetGrid" aria-live="polite"></div>
+          </section>
+
+          </section>
+
+          <section class="homeDeskPoll" aria-labelledby="homeDeskPollTitle">
+            <div class="homeDeskPollHead">
+              <p class="homeDeskPollKicker">Studio poll</p>
+              <h3 id="homeDeskPollTitle">Which hook hits harder?</h3>
+            </div>
+            <div class="homeDeskPollChoices">
+              <button type="button" class="homeDeskPollChoice" data-home-poll-choice="short">Short intro</button>
+              <button type="button" class="homeDeskPollChoice" data-home-poll-choice="instant">Instant chorus</button>
+            </div>
+            <p class="homeDeskPollNote">Preview only — votes are not saved yet.</p>
+          </section>
+
+          <section class="homeDeskActivity" aria-labelledby="homeDeskActivityTitle">
+            <div class="homeDeskActivityHead">
+              <div>
+                <p class="homeDeskActivityKicker">From the studio</p>
+                <h3 id="homeDeskActivityTitle">What musicians are up to</h3>
+              </div>
+              <a class="homeDeskActivityAll" href="#/discover" data-route-link="discover" data-home-open-discover="discover">Discover</a>
+            </div>
+            <div id="homeDeskActivityList" class="homeDeskActivityList" aria-live="polite"></div>
+          </section>
+          <div class="homeDeskLegacy" hidden aria-hidden="true">
+          <section class="challengeEntriesPanel" aria-labelledby="challengeEntriesTitle">
+            <div class="challengeEntriesHead">
+              <div>
+                <p class="challengePresetKicker">Now playing</p>
+                <h3 id="challengeEntriesTitle">Latest spark entries</h3>
+              </div>
+              <span id="challengeEntriesCount" class="challengeEntriesCount">0 joined</span>
+            </div>
+            <div id="challengeEntriesRail" class="challengeEntriesRail" aria-live="polite"></div>
+          </section>
+
+          </div>
         </section>
 
         <section class="mentorPage wide" data-route="mentor">

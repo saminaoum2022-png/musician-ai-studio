@@ -14656,6 +14656,275 @@ body[data-route="challenges"] .app{
   color: rgba(223,231,251,0.55);
   line-height: 1.35;
 }
+
+/* Studio Home — desk layout */
+.homeDeskLegacy{ display: none !important; }
+.homeDeskSection{
+  margin-top: 16px;
+}
+.homeDeskSectionHead{
+  margin-bottom: 12px;
+}
+.homeDeskSectionKicker{
+  margin: 0 0 6px;
+  color: rgba(94,234,212,0.88);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.homeDeskSectionHead h3{
+  margin: 0;
+  color: #f3f6ff;
+  font-size: 20px;
+  letter-spacing: -0.03em;
+}
+.homeDeskSectionLead{
+  margin: 8px 0 0;
+  max-width: 560px;
+  color: rgba(223,231,251,0.58);
+  font-size: 13px;
+  line-height: 1.42;
+}
+.homeDeskSection--sparks .challengeDeck{
+  margin-top: 0;
+}
+.homeDeskSection--occasions .challengePresetLab{
+  margin-top: 0;
+}
+.homeDeskHead{
+  padding: 12px 2px 4px;
+}
+.homeDeskKicker{
+  margin: 0 0 8px;
+  color: rgba(94,234,212,0.88);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.homeDeskGreeting{
+  margin: 0;
+  color: #f3f6ff;
+  font-size: clamp(28px, 7vw, 42px);
+  line-height: 0.95;
+  letter-spacing: -0.06em;
+}
+.homeDeskSub{
+  margin: 10px 0 0;
+  max-width: 520px;
+  color: rgba(223,231,251,0.62);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.homeDeskContinue{
+  margin-top: 14px;
+}
+.homeDeskContinueBtn{
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 22px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background:
+    linear-gradient(145deg, rgba(124,92,255,0.16), rgba(255,255,255,0.03)),
+    rgba(8,10,18,0.78);
+  color: #fff;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.homeDeskContinueArt{
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  overflow: hidden;
+  flex: 0 0 auto;
+  background: rgba(255,255,255,0.06);
+}
+.homeDeskContinueArt img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.homeDeskContinueBody{
+  min-width: 0;
+  flex: 1 1 auto;
+  display: grid;
+  gap: 2px;
+}
+.homeDeskContinueKicker{
+  color: rgba(94,234,212,0.9);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.homeDeskContinueBody strong{
+  font-size: 16px;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.homeDeskContinueBody small{
+  color: rgba(223,231,251,0.55);
+  font-size: 12px;
+}
+.homeDeskContinueChev{
+  flex: 0 0 auto;
+  opacity: 0.55;
+  font-size: 18px;
+}
+.homeDeskSpark{
+  margin-top: 14px;
+}
+.homeDeskQuick{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.homeDeskQuickBtn{
+  flex: 1 1 0;
+  min-width: 92px;
+  min-height: 42px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+  font-weight: 800;
+  font-size: 13px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.homeDeskQuickBtn--ghost{
+  background: transparent;
+  color: rgba(232,238,247,0.82);
+}
+.homeDeskPoll,
+.homeDeskActivity{
+  margin-top: 14px;
+  border-radius: 24px;
+  border: 1px solid rgba(255,255,255,0.11);
+  background: rgba(8,10,18,0.72);
+  padding: 18px;
+  box-shadow: 0 16px 44px rgba(0,0,0,0.28);
+}
+.homeDeskPollKicker,
+.homeDeskActivityKicker{
+  margin: 0 0 6px;
+  color: rgba(94,234,212,0.88);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.homeDeskPoll h3,
+.homeDeskActivity h3{
+  margin: 0;
+  color: #f3f6ff;
+  font-size: 18px;
+  letter-spacing: -0.03em;
+}
+.homeDeskPollChoices{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.homeDeskPollChoice{
+  flex: 1 1 120px;
+  min-height: 40px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  color: rgba(232,238,247,0.9);
+  font-weight: 800;
+  cursor: pointer;
+}
+.homeDeskPollChoice.isSelected{
+  border-color: rgba(124,92,255,0.55);
+  background: rgba(124,92,255,0.22);
+  color: #fff;
+}
+.homeDeskPollNote{
+  margin: 10px 0 0;
+  color: rgba(223,231,251,0.45);
+  font-size: 11px;
+}
+.homeDeskActivityHead{
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.homeDeskActivityAll{
+  color: rgba(94,234,212,0.95);
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.homeDeskActivityList{
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+.homeDeskActivityRow{
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.homeDeskActivityAvatar{
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
+  background: rgba(255,255,255,0.08);
+}
+.homeDeskActivityText{
+  min-width: 0;
+  flex: 1 1 auto;
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+  color: rgba(232,238,247,0.88);
+  line-height: 1.35;
+}
+.homeDeskActivityText em{
+  font-style: normal;
+  color: #fff;
+  font-weight: 800;
+}
+.homeDeskActivityText small{
+  color: rgba(223,231,251,0.48);
+  font-size: 11px;
+}
+.homeDeskActivityEmpty{
+  padding: 14px 4px;
+  color: rgba(223,231,251,0.55);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 @media (max-width: 760px){
   .challengesPage{
     overflow-x: hidden;

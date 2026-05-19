@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260519tabOrderV1";
+const APP_BUILD = "20260519homeDeskTemplatesV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2294,6 +2294,7 @@ function applyRoute() {
   }
   if (wanted === "challenges") {
     bindChallengesPageOnce();
+    renderHomeDesk();
   }
   if (wanted === "user") {
     renderUserProfile._pendingUserId = pendingPublicUserId;
@@ -3322,6 +3323,200 @@ function applyDiscoveryIdeaToCreate(idea) {
   location.hash = "#/generate";
 }
 
+let _homeDeskContinueTrack = null;
+
+function homeDeskGreetingName() {
+  const u = String(activeProfile?.username || "").trim();
+  if (u && !isPlaceholderUsername(u)) return u.replace(/^@/, "");
+  const email = String(authSession?.user?.email || "").split("@")[0].trim();
+  return email || "there";
+}
+
+function homeDeskTimeAgo(ts) {
+  const ms = Date.now() - Number(ts || 0);
+  if (!Number.isFinite(ms) || ms < 0) return "Recently";
+  if (ms < 60_000) return "Just now";
+  if (ms < 3_600_000) return `${Math.max(1, Math.floor(ms / 60_000))}m ago`;
+  if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h ago`;
+  return `${Math.floor(ms / 86_400_000)}d ago`;
+}
+
+function continueIdeaFromLibraryTrack(track) {
+  if (!track) {
+    location.hash = "#/generate";
+    return;
+  }
+  const meta = track.meta && typeof track.meta === "object" ? track.meta : {};
+  applyDiscoveryIdeaToCreate({
+    id: `continue:${String(track.id || "local")}`,
+    title: String(track.title || "Continue song").trim(),
+    style: String(meta.styleInput || meta.styleSent || meta.style || "").trim(),
+    lyrics: String(meta.lyricsInput || meta.finalPrompt || meta.prompt || "").trim(),
+    prompt: String(meta.lyricsInput || meta.finalPrompt || meta.prompt || track.title || "").trim(),
+    dialect: String(meta.dialect || "").trim(),
+    dialectHint: String(meta.dialectHint || "").trim(),
+    ...(meta.challenge ? { challenge: meta.challenge } : {}),
+  });
+}
+
+function renderHomeDeskContinue() {
+  const wrap = document.getElementById("homeDeskContinue");
+  const titleEl = document.getElementById("homeDeskContinueTitle");
+  const metaEl = document.getElementById("homeDeskContinueMeta");
+  const artEl = document.getElementById("homeDeskContinueArt");
+  if (!wrap || !titleEl || !metaEl) return;
+  const lib = loadLibrary()
+    .filter((t) => String(t?.title || "").trim())
+    .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
+  const track = lib[0] || null;
+  _homeDeskContinueTrack = track;
+  if (!track) {
+    wrap.hidden = true;
+    return;
+  }
+  wrap.hidden = false;
+  const challenge = challengeMetaForTrack(track);
+  titleEl.textContent = String(track.title || "Untitled song").trim();
+  metaEl.textContent = challenge
+    ? `${challengeAttributionText(challenge)} · open in Create`
+    : String(track.url || "").trim()
+      ? "Resume editing in Create"
+      : "Pick up where you left off";
+  if (artEl) {
+    const art = String(track.artUrl || "").trim();
+    artEl.src = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
+  }
+}
+
+async function renderHomeDeskActivity() {
+  const list = document.getElementById("homeDeskActivityList");
+  if (!list) return;
+  list.innerHTML = `<div class="homeDeskActivityEmpty">Loading studio activity…</div>`;
+  const items = [];
+  try {
+    const rows = await supabaseFetchDiscoveryPublicSongs(24);
+    const profMap = await fetchProfilesByUserIdsMap(rows.map((r) => r.userId));
+    for (const row of rows) {
+      const handle = String(profMap.get(row.userId)?.username || "").trim();
+      const avatar = String(profMap.get(row.userId)?.avatar || "").trim();
+      const challenge = challengeMetaForTrack(row);
+      const caption = releaseCaptionForTrack(row);
+      let line = "";
+      if (caption) line = `shared a release note on <em>${escapeHtml(row.title || "a song")}</em>`;
+      else if (challenge) line = `joined <em>${escapeHtml(challenge.title || "today's spark")}</em>`;
+      else line = `published <em>${escapeHtml(row.title || "a new song")}</em>`;
+      items.push({
+        key: `song:${row.id}`,
+        avatar: avatar && !avatar.startsWith("data:") ? avatar : "./assets/nabadai-logo.png",
+        handle,
+        line,
+        sub: `${homeDeskTimeAgo(row.ts)} · opens Discover`,
+        segment: "discover",
+      });
+      if (items.length >= 5) break;
+    }
+  } catch {}
+  if (authSession?.user?.id) {
+    try {
+      const data = await socialApi("/api/social?type=me");
+      const following = Array.isArray(data?.following) ? data.following : [];
+      for (const creator of following.slice(0, 3)) {
+        const userId = String(creator?.userId || creator?.user_id || creator?.following_user_id || "").trim();
+        const handle = String(creator?.username || "").trim();
+        const avatar = String(creator?.avatar || "").trim();
+        if (!userId || items.some((it) => it.key === `follow:${userId}`)) continue;
+        items.unshift({
+          key: `follow:${userId}`,
+          avatar: avatar && !avatar.startsWith("data:") ? avatar : "./assets/nabadai-logo.png",
+          handle,
+          line: "is in the studio — <em>new work may drop soon</em>",
+          sub: "Following · opens Discover",
+          segment: "following",
+        });
+      }
+    } catch {}
+  }
+  if (!items.length) {
+    list.innerHTML = `<div class="homeDeskActivityEmpty">Quiet for now. Follow creators in Discover to see what they are working on here — no songs play on Home.</div>`;
+    return;
+  }
+  list.innerHTML = items.slice(0, 5).map((it) => `
+    <button type="button" class="homeDeskActivityRow" data-home-open-discover="${escapeHtml(it.segment || "discover")}">
+      <img class="homeDeskActivityAvatar" src="${escapeHtml(it.avatar)}" alt="" loading="lazy" decoding="async" />
+      <span class="homeDeskActivityText">
+        ${it.handle ? `<span>@${escapeHtml(it.handle)}</span> ` : ""}${it.line}
+        <small>${escapeHtml(it.sub)}</small>
+      </span>
+    </button>
+  `).join("");
+}
+
+function bindHomeDeskOnce(page) {
+  if (!page || page.dataset.boundHomeDesk === "1") return;
+  page.dataset.boundHomeDesk = "1";
+  page.addEventListener("click", (e) => {
+    const cont = e.target?.closest?.("#homeDeskContinueBtn");
+    if (cont && page.contains(cont)) {
+      haptic("light");
+      continueIdeaFromLibraryTrack(_homeDeskContinueTrack);
+      return;
+    }
+    const act = e.target?.closest?.("[data-home-open-discover]");
+    if (act && page.contains(act)) {
+      haptic("light");
+      const seg = String(act.getAttribute("data-home-open-discover") || "discover");
+      try { sessionStorage.setItem(DISCOVERY_SEGMENT_KEY, seg); } catch {}
+      location.hash = "#/discover";
+      return;
+    }
+    const poll = e.target?.closest?.("[data-home-poll-choice]");
+    if (poll && page.contains(poll)) {
+      haptic("light");
+      page.querySelectorAll("[data-home-poll-choice]").forEach((btn) => btn.classList.toggle("isSelected", btn === poll));
+      return;
+    }
+    const scrollOcc = e.target?.closest?.("[data-home-scroll-occasion]");
+    if (scrollOcc && page.contains(scrollOcc)) {
+      haptic("light");
+      const target = document.getElementById("homeDeskOccasions");
+      try { target?.scrollIntoView?.({ behavior: "smooth", block: "start" }); } catch {}
+      try { document.getElementById("challengePersonName")?.focus?.({ preventScroll: true }); } catch {}
+      return;
+    }
+  });
+}
+
+async function refreshHomeDeskJoinCounts(page) {
+  if (!page) return;
+  try {
+    const rows = await supabaseFetchDiscoveryPublicSongs(80);
+    const entries = rows.filter((t) => challengeMetaForTrack(t));
+    const counts = new Map();
+    for (const track of entries) {
+      const challenge = challengeMetaForTrack(track);
+      const id = String(challenge?.id || "").trim();
+      if (!id) continue;
+      counts.set(id, (counts.get(id) || 0) + 1);
+    }
+    page.querySelectorAll("[data-challenge-count]").forEach((el) => {
+      const id = String(el.getAttribute("data-challenge-count") || "").trim();
+      const n = counts.get(id) || 0;
+      el.textContent = `${n} joined`;
+    });
+  } catch {}
+}
+
+function renderHomeDesk() {
+  const page = document.querySelector('[data-route="challenges"]');
+  if (!page) return;
+  bindHomeDeskOnce(page);
+  const greeting = document.getElementById("homeDeskGreeting");
+  if (greeting) greeting.textContent = `Hey, ${homeDeskGreetingName()}`;
+  renderHomeDeskContinue();
+  void renderHomeDeskActivity();
+  void refreshHomeDeskJoinCounts(page);
+}
+
 function bindChallengesPageOnce() {
   const page = document.querySelector('[data-route="challenges"]');
   if (!page || page.dataset.boundChallenges === "1") return;
@@ -3492,7 +3687,7 @@ function bindChallengesPageOnce() {
     }).join("");
   };
   renderPresetLab();
-  void refreshChallengeEntries();
+  renderHomeDesk();
   page.addEventListener("click", (e) => {
     const occasionBtn = e.target?.closest?.("[data-challenge-occasion]");
     if (occasionBtn && page.contains(occasionBtn)) {

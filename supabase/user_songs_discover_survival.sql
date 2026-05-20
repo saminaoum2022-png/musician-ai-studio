@@ -1,4 +1,5 @@
 -- Discover survival: 7-day public window, score starts at -100, +1 per qualified play.
+-- Also run discover_play_counts.sql (max 10 counted plays per signed-in listener per song).
 -- Run in Supabase SQL Editor after user_songs exists.
 
 alter table public.user_songs

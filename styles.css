@@ -8897,6 +8897,17 @@ input::placeholder, textarea::placeholder{
     pointer-events: none;
     transition: opacity 0.45s ease, filter 0.45s ease;
   }
+  body[data-route="discover"] .hubNowPlaying .hubNowGlass,
+  body[data-route="discover-playlist"] .hubNowPlaying .hubNowGlass{
+    padding: 6px 8px 7px 8px;
+    gap: 8px;
+  }
+  body[data-route="discover"] .hubNowPlaying .hubNowCoverWrap,
+  body[data-route="discover-playlist"] .hubNowPlaying .hubNowCoverWrap{
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
   .hubNowGlass{
     position: relative;
     z-index: 1;
@@ -11394,10 +11405,10 @@ body.notificationsCenterOpen{
 .discoverySurvivalBanner{
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  margin-top: 12px;
-  padding: 14px 16px;
-  border-radius: 18px;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
   border: 1px solid rgba(124,92,255,0.35);
   background:
     linear-gradient(135deg, rgba(124,92,255,0.18), rgba(56,189,248,0.08)),
@@ -11406,8 +11417,8 @@ body.notificationsCenterOpen{
 }
 .discoverySurvivalBannerIco{
   flex: 0 0 auto;
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
   border-radius: 12px;
@@ -11419,7 +11430,7 @@ body.notificationsCenterOpen{
 }
 .discoverySurvivalBannerTitle{
   display: block;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 750;
   letter-spacing: -0.02em;
   color: rgba(240,244,255,0.96);
@@ -11427,8 +11438,8 @@ body.notificationsCenterOpen{
 }
 .discoverySurvivalBannerLead{
   display: block;
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: 11px;
+  line-height: 1.4;
   color: rgba(232,238,247,0.62);
 }
 .discoverySurvivalBannerLead strong{
@@ -11513,24 +11524,54 @@ body.notificationsCenterOpen{
   color: rgba(232,238,247,0.5);
   line-height: 1.25;
 }
+.discoverySurvival--compact{
+  margin-top: 4px;
+  padding: 4px 8px 4px 4px;
+  gap: 6px;
+  border-radius: 10px;
+}
+.discoverySurvival--compact .discoverySurvivalRing{
+  width: 28px;
+  height: 28px;
+}
+.discoverySurvival--compact .discoverySurvivalRingInner{
+  width: 22px;
+  height: 22px;
+  font-size: 9px;
+}
+.discoverySurvival--compact .discoverySurvivalStatus{
+  display: none;
+}
+.discoverySurvival--compact .discoverySurvivalTime{
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoveryRow--survival .discoveryRowMain{
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
 .discoverySpotCardSurvival{
   display: block;
-  margin-top: 8px;
+  margin-top: 4px;
 }
 .discoverySpotCardSurvival .discoverySurvival{
   margin-top: 0;
-  padding: 6px 8px 6px 6px;
-  background: rgba(0,0,0,0.38);
-  border-color: rgba(255,255,255,0.14);
+  padding: 4px 7px 4px 4px;
+  background: rgba(0,0,0,0.42);
+  border-color: rgba(255,255,255,0.12);
+  max-width: 100%;
 }
 .discoverySpotCardSurvival .discoverySurvivalRing{
-  width: 36px;
-  height: 36px;
+  width: 26px;
+  height: 26px;
 }
 .discoverySpotCardSurvival .discoverySurvivalRingInner{
-  width: 28px;
-  height: 28px;
-  font-size: 10px;
+  width: 20px;
+  height: 20px;
+  font-size: 9px;
 }
 
 .discoveryPlaylistsSection{
@@ -12468,6 +12509,8 @@ button.discoverySpotCard{
   background: rgba(8, 11, 18, 0.96);
 }
 .discoverySpotCardArt img{
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   min-width: 100%;
@@ -12489,7 +12532,7 @@ button.discoverySpotCard{
   position: absolute;
   inset: 0;
   z-index: 1;
-  background: linear-gradient(180deg, transparent 20%, rgba(6,8,14,0.15) 45%, rgba(6,8,14,0.88) 100%);
+  background: linear-gradient(180deg, transparent 28%, rgba(6,8,14,0.12) 52%, rgba(6,8,14,0.78) 100%);
   pointer-events: none;
 }
 .discoverySpotCardArtBadge{
@@ -12536,7 +12579,7 @@ button.discoverySpotCard{
   right: 0;
   bottom: 0;
   z-index: 2;
-  padding: 10px 12px 12px;
+  padding: 8px 10px 10px;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -12898,9 +12941,12 @@ button.discoverySpotCard{
   overflow: hidden;
 }
 .discoveryRowArt img{
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center center;
   display: block;
 }
 .discoveryRowArtGlow{

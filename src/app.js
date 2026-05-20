@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521archiveSyntaxFixV1";
+const APP_BUILD = "20260521discoverCapUiV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -10485,6 +10485,8 @@ const DISCOVER_PLAYLISTS_ENABLED = false;
 const DISCOVER_SURVIVAL_START = -100;
 const DISCOVER_SURVIVAL_TARGET = 0;
 const DISCOVER_SURVIVAL_PLAYS_NEEDED = 100;
+/** Max counted plays one signed-in listener can add per song (anti-spam). */
+const DISCOVER_LISTENER_PLAY_CAP = 10;
 const DISCOVER_SURVIVAL_MS = 7 * 24 * 60 * 60 * 1000;
 
 function discoverScoreFromTrack(t) {
@@ -10536,25 +10538,35 @@ function attachDiscoverFieldsToTrack(track, row) {
   return track;
 }
 
-function discoverySurvivalMeterHtml(t) {
+function discoverySurvivalMeterHtml(t, { compact = false } = {}) {
   const m = discoverSurvivalMeta(t);
   const scoreLabel = m.score > 0 ? `+${m.score}` : String(m.score);
   const ringStyle = `--disc-prog:${m.progressPct.toFixed(1)}%;`;
   const statusText = m.survived
-    ? "Survived · stays on Discover"
+    ? "Survived"
     : m.playsNeeded === 1
-      ? "1 play to survive"
-      : `${m.playsNeeded} plays to survive`;
+      ? "1 play to go"
+      : `${m.playsNeeded} plays to go`;
   const timeText = m.survived
-    ? (m.daysLeft > 0 ? `${m.daysLeft}d left in spotlight` : "Graduated")
-    : `${m.daysLeft}d left · ${m.playsDone}/${DISCOVER_SURVIVAL_PLAYS_NEEDED} plays`;
+    ? (m.daysLeft > 0 ? `${m.daysLeft}d spotlight left` : "Graduated")
+    : `${m.daysLeft}d · ${m.playsDone}/${DISCOVER_SURVIVAL_PLAYS_NEEDED} · max ${DISCOVER_LISTENER_PLAY_CAP}/listener`;
   const ringClass = m.survived
     ? "discoverySurvivalRing discoverySurvivalRing--survived"
     : m.urgent
       ? "discoverySurvivalRing discoverySurvivalRing--urgent"
       : "discoverySurvivalRing";
+  const compactClass = compact ? " discoverySurvival--compact" : "";
+  if (compact) {
+    return `
+    <span class="discoverySurvival${compactClass}${m.survived ? " discoverySurvival--survived" : m.urgent ? " discoverySurvival--urgent" : ""}" style="${ringStyle}">
+      <span class="${ringClass}" aria-hidden="true"><span class="discoverySurvivalRingInner">${escapeHtml(scoreLabel)}</span></span>
+      <span class="discoverySurvivalText">
+        <span class="discoverySurvivalTime">${escapeHtml(timeText)}</span>
+      </span>
+    </span>`;
+  }
   return `
-    <span class="discoverySurvival${m.survived ? " discoverySurvival--survived" : m.urgent ? " discoverySurvival--urgent" : ""}" style="${ringStyle}">
+    <span class="discoverySurvival${compactClass}${m.survived ? " discoverySurvival--survived" : m.urgent ? " discoverySurvival--urgent" : ""}" style="${ringStyle}">
       <span class="${ringClass}" aria-hidden="true"><span class="discoverySurvivalRingInner">${escapeHtml(scoreLabel)}</span></span>
       <span class="discoverySurvivalText">
         <span class="discoverySurvivalStatus">${escapeHtml(statusText)}</span>
@@ -10569,7 +10581,7 @@ function discoverySurvivalBannerHtml() {
       <span class="discoverySurvivalBannerIco" aria-hidden="true">◎</span>
       <div class="discoverySurvivalBannerCopy">
         <span class="discoverySurvivalBannerTitle">7-day spotlight</span>
-        <span class="discoverySurvivalBannerLead">Each song starts at <strong>−100</strong>. Every listen adds <strong>+1</strong>. Hit <strong>0</strong> (100 plays) in a week to survive — or it leaves Discover. Your Library copy always stays.</span>
+        <span class="discoverySurvivalBannerLead">Each song starts at <strong>−100</strong>. Signed-in listeners add up to <strong>10</strong> plays each (+1 per listen). Hit <strong>0</strong> (100 total) within 7 days to stay on Discover — or it drops from the feed. Your Library copy always stays.</span>
       </div>
     </div>`;
 }
@@ -11153,8 +11165,9 @@ function discoveryTrackRowHtml(t, profMap, idx) {
   const challengeLine = challengeSourceLineHtml(t);
   const remixLine = remixSourceLineHtml(t);
   const releaseLine = releaseCaptionLineHtml(t);
-  const survivalLine = discoverySurvivalMeterHtml(t);
-  const richRowClass = challengeLine || remixLine || releaseLine ? " discoveryRow--rich" : "";
+  const survivalLine = discoverySurvivalMeterHtml(t, { compact: true });
+  const richRowClass =
+    challengeLine || remixLine || releaseLine ? " discoveryRow--rich" : " discoveryRow--survival";
   const side = `<button type="button" class="discoveryRowSide" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" ${sheetData} aria-label="Options for ${safeTitle}">⋯</button>`;
   return `
       <div class="discoveryRow${richRowClass}" style="--i:${idx}">
@@ -11218,7 +11231,7 @@ function discoverySpotCardHtml(t, profMap, idx) {
               <span class="discoverySpotCardBy">${challenge ? `${challengePillHtml()} ` : remixOf ? `${remixPillHtml()} ` : ""}${escapeHtml(byLine)}</span>
               ${challenge ? `<span class="discoverySpotCardCaption">${escapeHtml(challengeAttributionText(challenge))}</span>` : ""}
               ${releaseCaption ? `<span class="discoverySpotCardCaption">${escapeHtml(releaseCaption)}</span>` : ""}
-              <span class="discoverySpotCardSurvival">${discoverySurvivalMeterHtml(t)}</span>
+              <span class="discoverySpotCardSurvival">${discoverySurvivalMeterHtml(t, { compact: true })}</span>
             </span>
             <span class="discoverySpotCardEq" aria-hidden="true"><span></span><span></span><span></span></span>
           </span>

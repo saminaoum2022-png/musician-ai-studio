@@ -13262,6 +13262,26 @@ button.discoverySpotCard{
   padding-left: 12px;
   padding-right: 12px;
 }
+/* Friends feed: flat rows only — never inherit Discover list card chrome */
+.friendsPage .followActStack .followAct{
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  border-radius: 0;
+  border: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.friendsPage .followActStack .followAct.discoveryRowPlaying{
+  background: rgba(var(--cover-glow-rgb), 0.06);
+  box-shadow: none;
+}
+.friendsPage .followActStack .followAct.discoveryRowActive{
+  background: rgba(var(--cover-glow-rgb), 0.04);
+  box-shadow: none;
+}
 .followActTop{
   display: flex;
   align-items: flex-start;

@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521friendsXFlatBadgeV1";
+const APP_BUILD = "20260521friendsFlatFeedV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4455,7 +4455,7 @@ function followingActivityRowHtml(t, profMap, idx) {
     ? `<strong class="followActUser">@${escapeHtml(handle)}</strong>`
     : `<strong class="followActUser">A musician</strong>`;
   return `
-    <article class="followAct followAct--music discoveryRow" data-follow-act="${type}" style="--i:${idx}" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}>
+    <article class="followAct followAct--music" data-follow-act="${type}" style="--i:${idx}" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}>
       <div class="followActTop">
         <a class="followActAvatar" href="${escapeHtml(profileHref)}" data-route-link="user" aria-label="${handle ? `@${escapeHtml(handle)} profile` : "Profile"}">
           ${avatarSrc

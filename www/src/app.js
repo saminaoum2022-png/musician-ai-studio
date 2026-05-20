@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521discoverGridV1";
+const APP_BUILD = "20260521discoverGridV2";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1644,14 +1644,16 @@ function renderHubNowPlaying() {
     audio && !audio.paused && !audio.ended && hasMeta && hubSrc && (dur > 0 || cur > 0),
   );
 
+  const discoverMiniLoading = isDiscoverStyleMiniSource() && hasMeta;
   const showMini =
     hasMeta &&
-    hubSrc &&
+    (hubSrc || discoverMiniLoading) &&
     !hideHubSource &&
     !hideOnHubVisible &&
     !hideOnLibrary &&
     !hideOnPlayer &&
     !hideOnGenerate;
+  const miniShowsPause = audible || (discoverMiniLoading && hasMeta);
 
   if (!showMini) {
     els.hubNowPlaying.classList.remove("isVisible", "isPlaying");
@@ -1673,7 +1675,7 @@ function renderHubNowPlaying() {
   const syncMiniClasses = () => {
     if (!els.hubNowPlaying) return;
     els.hubNowPlaying.classList.add("isVisible");
-    if (audible) els.hubNowPlaying.classList.add("isPlaying");
+    if (miniShowsPause) els.hubNowPlaying.classList.add("isPlaying");
     else els.hubNowPlaying.classList.remove("isPlaying");
   };
   if (wasVisible) {
@@ -1712,7 +1714,7 @@ function renderHubNowPlaying() {
     els.hubNowProgBar.style.width = "0%";
   }
 
-  syncHubNowPlayPauseUi(Boolean(audible));
+  syncHubNowPlayPauseUi(Boolean(miniShowsPause));
   syncLockScreenNowPlaying();
 }
 
@@ -4346,40 +4348,25 @@ function bindDiscoverySegmentControls() {
         openDiscoverTrackSheetFromEl(menuBtn);
         return;
       }
+      const cardWrap = e.target.closest(".discoveryFeedCardWrap");
+      if (cardWrap && dPane.contains(cardWrap) && !e.target.closest("[data-discovery-open-sheet]")) {
+        const pl = cardWrap.querySelector("[data-user-lib-play]");
+        if (pl) {
+          e.preventDefault();
+          playDiscoverTarget(pl);
+          return;
+        }
+      }
       const inline = e.target.closest("[data-discovery-inline-play]");
       if (inline && dPane.contains(inline)) {
-        const u = inline.getAttribute("data-user-lib-url");
-        const title = decodeDiscoverDataAttr(inline, "data-user-lib-title") || "Song";
-        const art = decodeDiscoverDataAttr(inline, "data-user-lib-art") || "";
-        const by = decodeDiscoverDataAttr(inline, "data-discovery-by") || "";
-        if (!u) return;
-        let raw = "";
-        try {
-          raw = decodeURIComponent(u);
-        } catch {
-          raw = u;
-        }
-        haptic("light");
-        if (toggleDiscoverFeedPlaybackIfSameUrl(raw)) return;
-        void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by, playSource: publicPlaySourceFromEl(inline) });
+        e.preventDefault();
+        playDiscoverTarget(inline);
         return;
       }
       const pl = e.target.closest("[data-user-lib-play]");
       if (!pl || !dPane.contains(pl)) return;
-      const u = pl.getAttribute("data-user-lib-url");
-      const title = decodeDiscoverDataAttr(pl, "data-user-lib-title") || "Song";
-      const art = decodeDiscoverDataAttr(pl, "data-user-lib-art") || "";
-      const by = decodeDiscoverDataAttr(pl, "data-discovery-by") || "";
-      if (!u) return;
-      let raw = "";
-      try {
-        raw = decodeURIComponent(u);
-      } catch {
-        raw = u;
-      }
-      haptic("light");
-      if (toggleDiscoverFeedPlaybackIfSameUrl(raw)) return;
-      void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by, playSource: publicPlaySourceFromEl(pl) });
+      e.preventDefault();
+      playDiscoverTarget(pl);
     });
   }
   const followingPane = document.getElementById("discoveryPaneFollowing");
@@ -10366,6 +10353,55 @@ function toggleDiscoverFeedPlaybackIfSameUrl(rawUrl) {
   return toggleDiscoverStylePlaybackIfSameUrl(rawUrl);
 }
 
+function resolveDiscoverPlayTarget(el) {
+  if (!el) return null;
+  let raw = "";
+  const enc = el.getAttribute("data-user-lib-url");
+  if (enc) {
+    try {
+      raw = decodeURIComponent(enc);
+    } catch {
+      raw = enc;
+    }
+  }
+  raw = String(raw || "").trim();
+  const songId = String(decodeDiscoverDataAttr(el, "data-play-song-id") || "").trim();
+  if (!raw && songId) {
+    const hit = (_discoveryFeedTracks || []).find(
+      (t) => String(t.songId || t.id || "") === songId,
+    );
+    if (hit?.url) raw = String(hit.url).trim();
+  }
+  const title = decodeDiscoverDataAttr(el, "data-user-lib-title") || "Song";
+  const art = decodeDiscoverDataAttr(el, "data-user-lib-art") || "";
+  const by = decodeDiscoverDataAttr(el, "data-discovery-by") || "";
+  return {
+    raw,
+    title,
+    art,
+    by,
+    playSource: publicPlaySourceFromEl(el),
+    songId,
+  };
+}
+
+function playDiscoverTarget(el, opts = {}) {
+  const t = resolveDiscoverPlayTarget(el);
+  if (!t) return;
+  if (!t.raw) {
+    showToast("This song has no playable audio yet.", { durationMs: 3800 });
+    return;
+  }
+  haptic("light");
+  if (!opts.skipToggle && toggleDiscoverFeedPlaybackIfSameUrl(t.raw)) return;
+  void playLibraryUrlOnPlayer(t.raw, t.title, t.art, {
+    discoverFeed: true,
+    openPlayer: false,
+    discoverBy: t.by,
+    playSource: t.playSource,
+  });
+}
+
 function togglePublicProfileLibPlaybackIfSameUrl(rawUrl) {
   const raw = String(rawUrl || "").trim();
   if (miniSource?.type !== "public_profile_lib") return false;
@@ -10429,10 +10465,10 @@ function syncDiscoveryPlayingHighlights() {
     const trackUrl = decodeDiscoveryUserLibUrl(urlEl);
     const { active, audible } = getDiscoveryPlaybackUiForUrl(trackUrl);
     if (!active) return;
-    host.classList.toggle("discoveryRowPlaying", audible);
-    host.classList.toggle("discoveryRowActive", active && !audible);
+    host.classList.toggle("discoveryRowPlaying", active);
+    host.classList.toggle("discoveryRowActive", false);
     const badge = host.querySelector(".discoveryRowArtBadge, .discoverySpotCardArtBadge");
-    if (badge) badge.textContent = audible ? "❚❚" : "▶";
+    if (badge) badge.textContent = active ? "❚❚" : "▶";
     if (host.classList.contains("discoveryRow")) {
       const artBtn = host.querySelector("[data-discovery-inline-play]");
       if (artBtn) {
@@ -11307,10 +11343,10 @@ function discoveryFeedCardHtml(t, profMap, idx) {
         <span class="discoverySpotCardShade" aria-hidden="true"></span>
         <span class="discoverySpotCardArtBadge" aria-hidden="true">▶</span>
         <span class="discoveryFeedCardTop">
-          ${badge ? `<span class="discoveryFeedCardBadge">${badge}</span>` : "<span></span>"}
-          ${discoveryPlayCountChipHtml(t)}
+          ${badge ? `<span class="discoveryFeedCardBadge">${badge}</span>` : ""}
         </span>
         <span class="discoveryFeedCardBottom">
+          <span class="discoveryFeedCardPlays">${discoveryPlayCountChipHtml(t)}</span>
           <span class="discoveryFeedCardTitle">${safeTitle}</span>
           <span class="discoveryFeedCardBy">${escapeHtml(byLine)}</span>
           ${captionHtml}
@@ -11609,7 +11645,13 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   };
   if (!openPlayer) {
     setPlayerMeta(meta);
+    try {
+      syncDiscoveryPlayingHighlights();
+    } catch {}
     await playInline(prox, title || "Song", publicSource);
+    try {
+      syncDiscoveryPlayingHighlights();
+    } catch {}
   } else {
     await playOnPlayerPage(prox, title || "Song", meta);
   }

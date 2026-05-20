@@ -12526,12 +12526,20 @@ body[data-route="discover"] > .app{
   animation: discoverySpotIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   animation-delay: calc(var(--i, 0) * 55ms);
 }
+.discoveryFeedCardWrap{
+  position: relative;
+}
 .discoverySpotMenuOuter{
   position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 5;
+  top: 6px;
+  right: 4px;
+  z-index: 6;
   pointer-events: auto;
+}
+.discoveryFeedCardWrap .discoverySpotCard,
+.discoveryFeedCardWrap button.discoverySpotCard{
+  width: 100%;
+  min-height: 100%;
 }
 .discoverySpotMenuBtn{
   width: auto;
@@ -12587,10 +12595,6 @@ button.discoveryFeedCard.discoverySpotCard{
   font-size: 10px;
   padding: 3px 7px 3px 5px;
 }
-.discoveryFeedCardTop .discoverySurvivalChip{
-  flex: 0 1 auto;
-  max-width: 52%;
-}
 .discoveryFeedCardBottom{
   position: absolute;
   left: 0;
@@ -12600,9 +12604,18 @@ button.discoveryFeedCard.discoverySpotCard{
   padding: 28px 10px 10px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  align-items: flex-start;
+  gap: 4px;
   pointer-events: none;
   background: linear-gradient(180deg, transparent, rgba(6,8,14,0.82) 38%, rgba(6,8,14,0.94));
+}
+.discoveryFeedCardPlays{
+  display: block;
+  width: 100%;
+  padding-left: 2px;
+}
+.discoveryFeedCardPlays .discoveryPlayCountChip{
+  max-width: 100%;
 }
 .discoveryFeedCardTitle{
   font-size: 13px;
@@ -12642,8 +12655,13 @@ button.discoveryFeedCard.discoverySpotCard{
   height: 18px;
   pointer-events: none;
 }
-.discoveryFeedCard.discoveryRowPlaying .discoverySpotCardEq{
+.discoveryFeedCard.discoveryRowPlaying .discoverySpotCardEq,
+.discoveryFeedCard.discoveryRowActive .discoverySpotCardEq{
   display: inline-flex;
+}
+.discoveryFeedCard.discoveryRowPlaying .discoverySpotCardArtBadge,
+.discoveryFeedCard.discoveryRowActive .discoverySpotCardArtBadge{
+  opacity: 1;
 }
 .discoverySpotCardText{
   display: none !important;

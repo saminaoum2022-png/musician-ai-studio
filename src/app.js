@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260520voiceWizardRecorderV1";
+const APP_BUILD = "20260520voiceWizardMicFixV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5382,9 +5382,22 @@ function updateVocalRoomAvailability() {}
 let vocalRecorderContext = null;
 let voiceWizardRecBlob = null;
 
+function hideVoiceWizardForRecorder(hide) {
+  const sheet = document.getElementById("voiceWizardSheet");
+  if (!sheet || sheet.hidden) return;
+  sheet.classList.toggle("voiceWizardSheet--recorderActive", Boolean(hide));
+}
+
 function openVocalRecorderModal() {
   if (!els.vocalRecorderModal) return;
   const forWizard = vocalRecorderContext?.type === "voice_wizard";
+  if (forWizard) {
+    els.vocalRecorderModal.classList.add("recorderOverWizard");
+    hideVoiceWizardForRecorder(true);
+  } else {
+    els.vocalRecorderModal.classList.remove("recorderOverWizard");
+    hideVoiceWizardForRecorder(false);
+  }
   if (els.vocalRecorderModalTitle) {
     els.vocalRecorderModalTitle.textContent =
       vocalRecorderContext?.title ||
@@ -5399,12 +5412,14 @@ function openVocalRecorderModal() {
   els.vocalRecorderModal.style.display = "";
   setRecorderToggleRecordingUi(Boolean(vocalRefRecorder && vocalRefRecorder.state === "recording"));
   if (forWizard) {
-    setVocalRecorderStatusAll("Tap ● to record. Sing clearly for 6–30 seconds.");
+    setVocalRecorderStatusAll("Starting microphone…");
   }
 }
 function closeVocalRecorderModal() {
   if (!els.vocalRecorderModal) return;
   els.vocalRecorderModal.style.display = "none";
+  els.vocalRecorderModal.classList.remove("recorderOverWizard");
+  hideVoiceWizardForRecorder(false);
   setRecorderToggleRecordingUi(false);
   if (vocalRecorderContext?.type === "voice_wizard") {
     vocalRecorderContext = null;
@@ -5412,7 +5427,25 @@ function closeVocalRecorderModal() {
   }
 }
 
-function openVoiceWizardRecorder(step, onFile) {
+async function startVoiceWizardRecording() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error("Microphone needs the NabadAi app or a secure (HTTPS) page.");
+  }
+  try {
+    const perm = await navigator.permissions?.query?.({ name: "microphone" });
+    if (perm?.state === "denied") {
+      throw new Error(
+        "Microphone is off for NabadAi Music. Open iOS Settings → NabadAi Music → Microphone and turn it on."
+      );
+    }
+  } catch {}
+  await startVocalReferenceRecording();
+  setRecorderToggleRecordingUi(true);
+  setVocalRecorderStatusAll("Recording… tap ● to stop");
+}
+
+async function openVoiceWizardRecorder(step, onFile, opts = {}) {
+  const autoStart = opts.autoStart !== false;
   voiceWizardRecBlob = null;
   vocalRecorderContext = {
     type: "voice_wizard",
@@ -5421,6 +5454,19 @@ function openVoiceWizardRecorder(step, onFile) {
     title: step === "verify" ? "Record verification phrase" : "Record voice sample",
   };
   openVocalRecorderModal();
+  if (!autoStart) {
+    setVocalRecorderStatusAll("Tap ● to record. Sing clearly for 6–30 seconds.");
+    return;
+  }
+  try {
+    await startVoiceWizardRecording();
+  } catch (e) {
+    const msg = e?.message || String(e);
+    setVocalRecorderStatusAll(msg);
+    try {
+      showToast(msg, { durationMs: 6000, icon: "⚠" });
+    } catch {}
+  }
 }
 function setVocalRecorderStatusAll(text) {
   if (els.recorderStatus) els.recorderStatus.textContent = text;
@@ -5528,9 +5574,44 @@ async function startVocalReferenceRecording() {
     refreshVocalReferenceUi();
   }
 
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  } catch (e1) {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: { ideal: false },
+          noiseSuppression: { ideal: false },
+          autoGainControl: { ideal: false },
+        },
+        video: false,
+      });
+    } catch (e2) {
+      const hint = isSafariLikeRecorderEnv()
+        ? " Allow the mic when iOS asks, or enable it under Settings → NabadAi Music → Microphone."
+        : "";
+      throw new Error(
+        `Microphone blocked or unavailable: ${e2?.message || e1?.message || e2 || e1}${hint}`
+      );
+    }
+  }
+  if (typeof MediaRecorder === "undefined") {
+    try {
+      stream.getTracks().forEach((t) => t.stop());
+    } catch {}
+    throw new Error("Recording is not supported in this browser.");
+  }
   const mimeType = pickRecorderMimeType();
-  const rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+  let rec;
+  try {
+    rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+  } catch (e) {
+    try {
+      stream.getTracks().forEach((t) => t.stop());
+    } catch {}
+    throw new Error(`Could not start recorder: ${e?.message || String(e)}`);
+  }
   const effectiveMime = () => (rec.mimeType || mimeType || "audio/webm");
   const chunks = [];
   rec.ondataavailable = (e) => {
@@ -12869,7 +12950,13 @@ function ensureVoiceWizardSheet() {
 
 function closeVoiceWizard() {
   const sheet = document.getElementById("voiceWizardSheet");
-  if (sheet) sheet.hidden = true;
+  if (sheet) {
+    sheet.hidden = true;
+    sheet.classList.remove("voiceWizardSheet--recorderActive");
+  }
+  try {
+    closeVocalRecorderModal();
+  } catch {}
   voiceWizardState.abort = true;
 }
 
@@ -12988,7 +13075,7 @@ function wireVoiceWizardStep1() {
   renderVoiceWizardSampleStatus();
   if (recBtn) {
     recBtn.onclick = () => {
-      openVoiceWizardRecorder("sample", (file) => {
+      void openVoiceWizardRecorder("sample", (file) => {
         voiceWizardState.sampleFile = file;
         renderVoiceWizardSampleStatus();
         try {
@@ -13088,7 +13175,7 @@ function renderVoiceWizardVerifyStep(phrase, token) {
     if (submitBtn) submitBtn.disabled = !f;
   };
   document.getElementById("voiceWizardRecordVerify")?.addEventListener("click", () => {
-    openVoiceWizardRecorder("verify", (file) => {
+    void openVoiceWizardRecorder("verify", (file) => {
       setVerifyFile(file);
       try { showToast("Verification recording ready", { icon: "✓", durationMs: 2400 }); } catch {}
     });

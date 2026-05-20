@@ -7826,6 +7826,14 @@ body.trackSheetOpen .footer{
   inset: 0;
   z-index: 140;
 }
+/* Voice wizard sheet (z-index 12000) must not cover the shared recorder. */
+#vocalRecorderModal.recorderOverWizard{
+  z-index: 13050;
+}
+.voiceWizardSheet--recorderActive{
+  visibility: hidden;
+  pointer-events: none;
+}
 
 /* iOS Safari treats long-press on text as “select word” and shows the
  * Copy / Look Up / Translate bar — which fights our own long-press and

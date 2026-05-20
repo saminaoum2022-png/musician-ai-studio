@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521tabGrad";
+const APP_BUILD = "20260521discoverPlay";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1596,8 +1596,11 @@ function syncHubNowAuraFromCoverUrl(artUrl) {
 
 function syncHubNowPlayPauseUi(audible) {
   const btn = document.getElementById("hubNowPlayPause");
-  if (!btn) return;
   const playing = Boolean(audible);
+  if (els.hubNowPlaying) {
+    els.hubNowPlaying.setAttribute("data-mini-pp", playing ? "pause" : "play");
+  }
+  if (!btn) return;
   btn.classList.toggle("isPlaying", playing);
   const pPause = btn.querySelector(".hubNowPPIco--pause");
   const pPlay = btn.querySelector(".hubNowPPIco--play");
@@ -1657,6 +1660,9 @@ function renderHubNowPlaying() {
 
   if (!showMini) {
     els.hubNowPlaying.classList.remove("isVisible", "isPlaying");
+    try {
+      els.hubNowPlaying.removeAttribute("data-mini-pp");
+    } catch {}
     try {
       els.hubNowPlaying.style.removeProperty("--cover-glow-rgb");
     } catch {}
@@ -10362,7 +10368,7 @@ function getDiscoveryPlaybackUiForUrl(trackUrl) {
   if (!u) return { active: false, audible: false };
   if (!isDiscoverStyleMiniSource()) return { active: false, audible: false };
   const cur = String(currentPlayerTrackRef?.url || "").trim();
-  if (!cur || cur !== u) return { active: false, audible: false };
+  if (!cur || !audioUrlsEquivalent(cur, u)) return { active: false, audible: false };
   const a = ensurePlayer();
   if (!a) return { active: true, audible: false };
   const dur = getPlayerDuration();
@@ -10377,7 +10383,7 @@ function getPublicProfileLibPlaybackUiForUrl(trackUrl) {
   if (!u) return { active: false, audible: false };
   if (miniSource?.type !== "public_profile_lib") return { active: false, audible: false };
   const cur = String(currentPlayerTrackRef?.url || "").trim();
-  if (!cur || cur !== u) return { active: false, audible: false };
+  if (!cur || !audioUrlsEquivalent(cur, u)) return { active: false, audible: false };
   const a = ensurePlayer();
   if (!a) return { active: true, audible: false };
   const dur = getPlayerDuration();
@@ -10504,10 +10510,10 @@ function syncDiscoveryPlayingHighlights() {
     const trackUrl = decodeDiscoveryUserLibUrl(urlEl);
     const { active, audible } = getDiscoveryPlaybackUiForUrl(trackUrl);
     if (!active) return;
-    host.classList.toggle("discoveryRowPlaying", active);
-    host.classList.toggle("discoveryRowActive", false);
+    host.classList.toggle("discoveryRowPlaying", audible);
+    host.classList.toggle("discoveryRowActive", active && !audible);
     const badge = host.querySelector(".discoveryRowArtBadge, .discoverySpotCardArtBadge");
-    if (badge) badge.textContent = active ? "❚❚" : "▶";
+    if (badge) badge.textContent = audible ? "❚❚" : "▶";
     if (host.classList.contains("discoveryRow")) {
       const artBtn = host.querySelector("[data-discovery-inline-play]");
       if (artBtn) {
@@ -11628,9 +11634,11 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     audioId: playSource.audioId || "",
     url: playableRaw,
   } : null;
-  if (refreshCandidate) {
+  if (refreshCandidate && !fromDiscover && !fromPlaylist) {
     const refreshed = await tryRefreshLibraryTrackAudioFromSuno(refreshCandidate);
-    if (refreshed?.url) playableRaw = String(refreshed.url).trim() || playableRaw;
+    if (refreshed?.url) {
+      playableRaw = String(refreshed.url).trim() || playableRaw;
+    }
   }
   const prox = toAudioProxyUrl(playableRaw) || playableRaw;
   currentPlayerTrackRef = {
@@ -11687,7 +11695,24 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     try {
       syncDiscoveryPlayingHighlights();
     } catch {}
-    await playInline(prox, title || "Song", publicSource);
+    const playPromise = playInline(prox, title || "Song", publicSource);
+    if (refreshCandidate && (fromDiscover || fromPlaylist)) {
+      void tryRefreshLibraryTrackAudioFromSuno(refreshCandidate).then((refreshed) => {
+        const fresh = String(refreshed?.url || "").trim();
+        if (!fresh || audioUrlsEquivalent(fresh, playableRaw)) return;
+        if (!isDiscoverStyleMiniSource() && miniSource?.type !== "discover_playlist") return;
+        if (!audioUrlsEquivalent(currentPlayerTrackRef?.url, playableRaw)) return;
+        playableRaw = fresh;
+        currentPlayerTrackRef = { ...currentPlayerTrackRef, url: fresh };
+        if (miniSource) miniSource.url = fresh;
+        const nextProx = toAudioProxyUrl(fresh) || fresh;
+        try {
+          setPlayerSource(nextProx, title || "Song");
+          void ensurePlayer().play?.();
+        } catch {}
+      });
+    }
+    await playPromise;
     try {
       syncDiscoveryPlayingHighlights();
     } catch {}
@@ -13657,6 +13682,9 @@ function audioUrlsEquivalent(a, b) {
   const sa = String(a || "").trim();
   const sb = String(b || "").trim();
   if (!sa || !sb) return false;
+  const ca = libraryTrackCanonicalUrl(sa);
+  const cb = libraryTrackCanonicalUrl(sb);
+  if (ca && cb && ca === cb) return true;
   if (sa === sb) return true;
   try {
     return new URL(sa, location.href).href === new URL(sb, location.href).href;
@@ -18940,8 +18968,17 @@ async function playInline(url, label, source) {
   setPlayerSource(url, label);
   const a = ensurePlayer();
   const playUrl = normalizeAudioUrlForPlayback(url);
-  await primeAudioDurationHint(playUrl);
-  await waitForAudioCanPlay(a, 12000);
+  const fastDiscover = isDiscoverStyleMiniSource();
+  if (fastDiscover) {
+    void primeAudioDurationHint(playUrl);
+    try {
+      syncDiscoveryPlayingHighlights();
+      renderHubNowPlaying();
+    } catch {}
+  } else {
+    await primeAudioDurationHint(playUrl);
+  }
+  await waitForAudioCanPlay(a, fastDiscover ? 5000 : 12000);
   try {
     const ok = await hubAudioPlayWithRetry(a);
     if (!ok) throw new Error("play_failed");
@@ -18950,6 +18987,10 @@ async function playInline(url, label, source) {
   } catch (e) {
     setStatus(`In-app playback failed (${e?.name || "error"}). Tap Open Direct.`);
   }
+  try {
+    syncDiscoveryPlayingHighlights();
+    renderHubNowPlaying();
+  } catch {}
 }
 
 function formatTime(sec) {

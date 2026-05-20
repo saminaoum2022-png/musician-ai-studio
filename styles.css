@@ -8984,6 +8984,31 @@ input::placeholder, textarea::placeholder{
     height: 36px;
     border-radius: 10px;
   }
+  body[data-route="discover"] .hubNowPlaying.isVisible .hubNowCoverWrap::after,
+  body[data-route="discover-playlist"] .hubNowPlaying.isVisible .hubNowCoverWrap::after{
+    content: "▶";
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: inherit;
+    background: rgba(8, 11, 18, 0.42);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+    pointer-events: none;
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+  }
+  body[data-route="discover"] .hubNowPlaying.isVisible[data-mini-pp="pause"] .hubNowCoverWrap::after,
+  body[data-route="discover-playlist"] .hubNowPlaying.isVisible[data-mini-pp="pause"] .hubNowCoverWrap::after{
+    content: "❚❚";
+    font-size: 9px;
+    letter-spacing: -0.08em;
+  }
   .hubNowGlass{
     position: relative;
     z-index: 1;
@@ -12756,12 +12781,15 @@ button.discoveryFeedCard.discoverySpotCard{
   pointer-events: none;
 }
 .discoveryFeedCard.discoveryRowPlaying .discoverySpotCardEq,
-.discoveryFeedCard.discoveryRowActive .discoverySpotCardEq{
+.discoverySpotCard.discoveryRowPlaying .discoverySpotCardEq{
   display: inline-flex;
 }
 .discoveryFeedCard.discoveryRowPlaying .discoverySpotCardArtBadge,
-.discoveryFeedCard.discoveryRowActive .discoverySpotCardArtBadge{
+.discoveryFeedCard.discoveryRowActive .discoverySpotCardArtBadge,
+.discoverySpotCard.discoveryRowPlaying .discoverySpotCardArtBadge,
+.discoverySpotCard.discoveryRowActive .discoverySpotCardArtBadge{
   opacity: 1;
+  z-index: 5;
 }
 .discoverySpotCardText{
   display: none !important;
@@ -12847,7 +12875,7 @@ button.discoverySpotCard{
   left: 50%;
   top: 42%;
   transform: translate(-50%, -50%);
-  z-index: 3;
+  z-index: 5;
   width: 40px;
   height: 40px;
   border-radius: 999px;

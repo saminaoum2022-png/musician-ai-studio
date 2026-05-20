@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521followActV1";
+const APP_BUILD = "20260521followStatusV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -3533,69 +3533,6 @@ function renderHomeDeskContinue() {
   }
 }
 
-async function renderHomeDeskActivity() {
-  const list = document.getElementById("homeDeskActivityList");
-  if (!list) return;
-  list.innerHTML = `<div class="homeDeskActivityEmpty">Loading studio activity…</div>`;
-  const items = [];
-  try {
-    const rows = await supabaseFetchDiscoveryPublicSongs(24);
-    const profMap = await fetchProfilesByUserIdsMap(rows.map((r) => r.userId));
-    for (const row of rows) {
-      const handle = String(profMap.get(row.userId)?.username || "").trim();
-      const avatar = String(profMap.get(row.userId)?.avatar || "").trim();
-      const challenge = challengeMetaForTrack(row);
-      const caption = releaseCaptionForTrack(row);
-      let line = "";
-      if (caption) line = `shared a release note on <em>${escapeHtml(row.title || "a song")}</em>`;
-      else if (challenge) line = `joined <em>${escapeHtml(challenge.title || "today's spark")}</em>`;
-      else line = `published <em>${escapeHtml(row.title || "a new song")}</em>`;
-      items.push({
-        key: `song:${row.id}`,
-        avatar: avatar && !avatar.startsWith("data:") ? avatar : "./assets/nabadai-logo.png",
-        handle,
-        line,
-        sub: `${homeDeskTimeAgo(row.ts)} · opens Discover`,
-        segment: "discover",
-      });
-      if (items.length >= 5) break;
-    }
-  } catch {}
-  if (authSession?.user?.id) {
-    try {
-      const data = await socialApi("/api/social?type=me");
-      const following = Array.isArray(data?.following) ? data.following : [];
-      for (const creator of following.slice(0, 3)) {
-        const userId = String(creator?.userId || creator?.user_id || creator?.following_user_id || "").trim();
-        const handle = String(creator?.username || "").trim();
-        const avatar = String(creator?.avatar || "").trim();
-        if (!userId || items.some((it) => it.key === `follow:${userId}`)) continue;
-        items.unshift({
-          key: `follow:${userId}`,
-          avatar: avatar && !avatar.startsWith("data:") ? avatar : "./assets/nabadai-logo.png",
-          handle,
-          line: "is in the studio — <em>new work may drop soon</em>",
-          sub: "Following · opens Discover",
-          segment: "following",
-        });
-      }
-    } catch {}
-  }
-  if (!items.length) {
-    list.innerHTML = `<div class="homeDeskActivityEmpty">Quiet for now. Follow creators in Discover to see what they are working on here — no songs play on Home.</div>`;
-    return;
-  }
-  list.innerHTML = items.slice(0, 5).map((it) => `
-    <button type="button" class="homeDeskActivityRow" data-home-open-discover="${escapeHtml(it.segment || "discover")}">
-      <img class="homeDeskActivityAvatar" src="${escapeHtml(it.avatar)}" alt="" loading="lazy" decoding="async" />
-      <span class="homeDeskActivityText">
-        ${it.handle ? `<span>@${escapeHtml(it.handle)}</span> ` : ""}${it.line}
-        <small>${escapeHtml(it.sub)}</small>
-      </span>
-    </button>
-  `).join("");
-}
-
 function bindHomeDeskOnce(page) {
   if (!page || page.dataset.boundHomeDesk === "1") return;
   page.dataset.boundHomeDesk = "1";
@@ -3670,7 +3607,6 @@ function renderHomeDesk() {
   renderHomeDeskQuickStarts();
   renderHomeDeskContinue();
   syncHomeMakeSegUi();
-  void renderHomeDeskActivity();
   void refreshHomeDeskJoinCounts(page);
   if (typeof page._refreshChallengeEntries === "function") void page._refreshChallengeEntries();
 }
@@ -4208,6 +4144,42 @@ function onLeaveSearchRoute() {
 }
 
 let _discoveryFollowingGen = 0;
+let _followComposeType = "update";
+let _followComposeBound = false;
+
+const FOLLOWING_COMPOSE_TYPES = [
+  { id: "update", label: "Update", prompt: "What's on your mind?", placeholder: "Share a studio moment, win, or work-in-progress…" },
+  { id: "advice", label: "Ask advice", prompt: "Need a hand creating?", placeholder: "How do I nail this hook / mix / vibe? Ask your circle…" },
+  { id: "brainstorm", label: "Brainstorm", prompt: "Brainstorm with your circle", placeholder: "Throw out a hook, mood, or collab idea — no pressure to finish yet." },
+  { id: "song_request", label: "Song request", prompt: "Song for a moment?", placeholder: "Wedding, birthday, reunion… describe the occasion and feel you want." },
+  { id: "recommend", label: "Recommend", prompt: "Pass something on", placeholder: "Recommend a song, technique, or creator your friends should hear." },
+];
+
+function followingComposeMeta(typeId) {
+  return FOLLOWING_COMPOSE_TYPES.find((t) => t.id === typeId) || FOLLOWING_COMPOSE_TYPES[0];
+}
+
+function followingStatusTypeLabel(postType) {
+  const map = {
+    update: "Update",
+    advice: "Ask advice",
+    brainstorm: "Brainstorm",
+    song_request: "Song request",
+    recommend: "Recommend",
+  };
+  return map[String(postType || "").trim()] || "Update";
+}
+
+function followingStatusVerb(postType) {
+  const map = {
+    update: "shared an update",
+    advice: "is asking for advice",
+    brainstorm: "started a brainstorm",
+    song_request: "is looking for a song",
+    recommend: "recommends",
+  };
+  return map[String(postType || "").trim()] || "posted";
+}
 
 function followingActivityTypeForTrack(t) {
   if (remixAttributionForTrack(t)) return "remix";
@@ -4226,20 +4198,150 @@ function followingActivityIcoSvg(type) {
 }
 
 function followingActivityHeadHtml(type, handle, title, remixOf, challenge) {
-  const who = handle ? `@${escapeHtml(handle)}` : "A musician";
+  const who = handle
+    ? `<strong class="followActUser">@${escapeHtml(handle)}</strong>`
+    : `<strong class="followActUser">A musician</strong>`;
   const song = `<em class="followActSong">${escapeHtml(title)}</em>`;
   if (type === "remix" && remixOf) {
     const srcWho = remixOf.creatorUsername
-      ? `@${escapeHtml(remixOf.creatorUsername)}`
+      ? `<strong class="followActUser">@${escapeHtml(remixOf.creatorUsername)}</strong>`
       : "another creator";
-    const srcTitle = remixOf.title ? ` · <em class="followActSong">${escapeHtml(remixOf.title)}</em>` : "";
-    return `${who} remixed ${srcWho}${srcTitle} — ${song}`;
+    const srcTitle = remixOf.title ? ` <em class="followActSong">${escapeHtml(remixOf.title)}</em>` : "";
+    return `${who}<span class="followActVerb"> remixed </span>${srcWho}${srcTitle}<span class="followActVerb"> — </span>${song}`;
   }
   if (type === "challenge" && challenge) {
     const cName = escapeHtml(String(challenge.title || "a challenge").trim());
-    return `${who} entered <em class="followActSong">${cName}</em> — ${song}`;
+    return `${who}<span class="followActVerb"> entered </span><em class="followActSong">${cName}</em><span class="followActVerb"> — </span>${song}`;
   }
-  return `${who} released ${song}`;
+  return `${who}<span class="followActVerb"> released </span>${song}`;
+}
+
+function followingStatusIcoSvg(postType) {
+  if (postType === "advice") {
+    return `<svg class="followActIcoSvg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a7 7 0 0 1 7 7c0 2.5-1.2 4.6-3 5.8V19H8v-3.2C6.2 14.6 5 12.5 5 10a7 7 0 0 1 7-7Z"/><path d="M9 21h6"/></svg>`;
+  }
+  if (postType === "brainstorm") {
+    return `<svg class="followActIcoSvg" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a6 6 0 0 0-4 10.5c.6.5 1 1.2 1 2V17h6v-2.5c0-.8.4-1.5 1-2A6 6 0 0 0 12 2Z"/></svg>`;
+  }
+  if (postType === "song_request") {
+    return `<svg class="followActIcoSvg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="M8 7h8"/><path d="M6 21h12"/><path d="M9 17h6"/></svg>`;
+  }
+  if (postType === "recommend") {
+    return `<svg class="followActIcoSvg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.4 5.8L21 10l-4.5 4.1L18 21l-6-3.2L6 21l1.5-6.9L3 10l6.6-1.2L12 3Z"/></svg>`;
+  }
+  return `<svg class="followActIcoSvg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h14"/></svg>`;
+}
+
+function followingStatusRowHtml(post, profMap, idx) {
+  const postType = String(post?.postType || post?.post_type || "update").trim();
+  const userId = String(post?.userId || post?.user_id || "").trim();
+  const prof = userId ? profMap.get(userId) : null;
+  const handle = String(post?.username || prof?.username || "").trim();
+  const byLine = handle ? `@${handle}` : "Creator";
+  const avatarRaw = String(post?.avatar || prof?.avatar || "").trim();
+  const avatarSrc = avatarRaw ? normalizeProfileAvatarForImg(avatarRaw) : "";
+  const initials = (handle || "U").replace(/^@/, "").slice(0, 2).toUpperCase();
+  const profileHref = handle ? `#/u/${encodeURIComponent(handle)}` : "#";
+  const ts = post?.createdAt || post?.created_at;
+  const when = ts ? relativeTime(new Date(ts).getTime()) : "Just now";
+  const body = escapeHtml(String(post?.body || "").trim());
+  const who = handle
+    ? `<strong class="followActUser">@${escapeHtml(handle)}</strong>`
+    : `<strong class="followActUser">A musician</strong>`;
+  const verb = `<span class="followActVerb"> ${followingStatusVerb(postType)}</span>`;
+  const typeLabel = followingStatusTypeLabel(postType);
+  return `
+    <article class="followAct followAct--status" data-follow-act="status" data-follow-status-type="${escapeHtml(postType)}" style="--i:${idx}">
+      <span class="followActIco followActIco--${escapeHtml(postType)}" aria-hidden="true">${followingStatusIcoSvg(postType)}</span>
+      <a class="followActAvatar" href="${escapeHtml(profileHref)}" data-route-link="user" aria-label="${handle ? `@${escapeHtml(handle)} profile` : "Profile"}">
+        ${avatarSrc
+          ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
+          : `<span class="followActAvatarFallback">${escapeHtml(initials)}</span>`}
+      </a>
+      <div class="followActBody followActBody--static">
+        <span class="followActType">${escapeHtml(typeLabel)}</span>
+        <p class="followActHead followActHead--status">${who}${verb}</p>
+        <p class="followActStatusText">${body}</p>
+        <span class="followActWhen">${escapeHtml(when)}</span>
+      </div>
+    </article>`;
+}
+
+async function fetchFollowingStatusPosts(limit = 40) {
+  try {
+    const data = await socialApi(`/api/social?type=following_status&limit=${limit}`);
+    return Array.isArray(data?.posts) ? data.posts : [];
+  } catch {
+    return [];
+  }
+}
+
+function syncFollowingComposeUi() {
+  const compose = document.getElementById("discoveryFollowingCompose");
+  const input = document.getElementById("followComposeInput");
+  const postBtn = document.getElementById("followComposePost");
+  const countEl = document.getElementById("followComposeCount");
+  const promptEl = document.getElementById("followComposePrompt");
+  const signHint = document.getElementById("followComposeSignInHint");
+  const signedIn = Boolean(authSession?.user?.id);
+  if (compose) compose.classList.toggle("isSignedOut", !signedIn);
+  if (signHint) signHint.hidden = signedIn;
+  if (input) input.disabled = !signedIn;
+  if (postBtn) postBtn.disabled = !signedIn || !String(input?.value || "").trim();
+  const meta = followingComposeMeta(_followComposeType);
+  if (promptEl) promptEl.textContent = meta.prompt;
+  if (input && !input.matches(":focus")) input.placeholder = meta.placeholder;
+  document.querySelectorAll("[data-follow-compose-type]").forEach((chip) => {
+    const on = chip.getAttribute("data-follow-compose-type") === _followComposeType;
+    chip.classList.toggle("isActive", on);
+    chip.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  const len = String(input?.value || "").length;
+  if (countEl) countEl.textContent = `${len} / 320`;
+}
+
+function bindFollowingComposeOnce() {
+  if (_followComposeBound) return;
+  _followComposeBound = true;
+  const input = document.getElementById("followComposeInput");
+  const postBtn = document.getElementById("followComposePost");
+  document.querySelectorAll("[data-follow-compose-type]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      _followComposeType = String(chip.getAttribute("data-follow-compose-type") || "update");
+      haptic("light");
+      syncFollowingComposeUi();
+      try { input?.focus?.({ preventScroll: true }); } catch {}
+    });
+  });
+  input?.addEventListener("input", () => syncFollowingComposeUi());
+  postBtn?.addEventListener("click", async () => {
+    if (!authSession?.user?.id) {
+      try { showToast("Sign in to post", { icon: "👤", durationMs: 2400 }); } catch {}
+      location.hash = "#/profile";
+      return;
+    }
+    const text = String(input?.value || "").trim();
+    if (!text) return;
+    postBtn.disabled = true;
+    try {
+      await socialApi("/api/social", {
+        method: "POST",
+        body: JSON.stringify({ action: "post_status", postType: _followComposeType, body: text }),
+      });
+      if (input) input.value = "";
+      syncFollowingComposeUi();
+      haptic("success");
+      try { showToast("Posted to Following", { icon: "✓", durationMs: 2200 }); } catch {}
+      void refreshDiscoveryFollowingFeed();
+    } catch (e) {
+      haptic("error");
+      try {
+        showToast(e?.message || "Could not post — run social_status_posts.sql in Supabase", { icon: "!", durationMs: 3200 });
+      } catch {}
+      syncFollowingComposeUi();
+    }
+  });
+  syncFollowingComposeUi();
 }
 
 function followingActivityPlayAttrs(t, profMap, byLine) {
@@ -4399,12 +4501,15 @@ async function refreshDiscoveryFollowingFeed() {
       return;
     }
 
-    const tracksNested = await Promise.all(following.slice(0, 24).map(async (creator) => {
-      const userId = String(creator?.userId || creator?.user_id || creator?.following_user_id || "").trim();
-      if (!userId) return [];
-      const rows = await supabaseFetchPublicLibraryForUserId(userId);
-      return rows.map((row) => ({ ...row, userId }));
-    }));
+    const [statusPosts, tracksNested] = await Promise.all([
+      fetchFollowingStatusPosts(40),
+      Promise.all(following.slice(0, 24).map(async (creator) => {
+        const userId = String(creator?.userId || creator?.user_id || creator?.following_user_id || "").trim();
+        if (!userId) return [];
+        const rows = await supabaseFetchPublicLibraryForUserId(userId);
+        return rows.map((row) => ({ ...row, userId }));
+      })),
+    ]);
     if (gen !== _discoveryFollowingGen) return;
 
     const playable = tracksNested
@@ -4412,7 +4517,11 @@ async function refreshDiscoveryFollowingFeed() {
       .filter((t) => String(t.url || "").trim() && isDiscoverFeedActive(t))
       .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0))
       .slice(0, 60);
-    const profMap = await fetchProfilesByUserIdsMap(playable.map((t) => t.userId));
+    const profIds = [
+      ...playable.map((t) => t.userId),
+      ...statusPosts.map((p) => String(p?.userId || "").trim()).filter(Boolean),
+    ];
+    const profMap = await fetchProfilesByUserIdsMap(profIds);
     if (gen !== _discoveryFollowingGen) return;
 
     const playCountMap = await fetchDiscoverSongPlayCounts(playable.map((t) => t.id));
@@ -4421,14 +4530,30 @@ async function refreshDiscoveryFollowingFeed() {
       t.playCount = playCountMap.get(String(t.id || "")) || 0;
     }
 
+    const feedItems = [
+      ...statusPosts.map((post) => ({
+        kind: "status",
+        ts: new Date(post.createdAt || post.created_at || 0).getTime() || 0,
+        post,
+      })),
+      ...playable.map((track) => ({
+        kind: "music",
+        ts: Number(track.ts || 0),
+        track,
+      })),
+    ]
+      .filter((row) => row.ts > 0 || row.kind === "status")
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, 80);
+
     listEl.classList.remove("isDiscoveryLoading");
-    if (!playable.length) {
+    if (!feedItems.length) {
       listEl.hidden = true;
       listEl.innerHTML = "";
       renderDiscoveryFollowingEmpty(
         statusEl,
         "Quiet for now",
-        "When people you follow publish or remix, you will see it here first.",
+        "Post an update above, or wait for drops and remixes from people you follow.",
       );
       return;
     }
@@ -4437,7 +4562,11 @@ async function refreshDiscoveryFollowingFeed() {
     statusEl.textContent = "";
     _discoveryFeedTracks = playable.map((t) => discoveryTrackPlaybackMeta(t, profMap));
     listEl.hidden = false;
-    listEl.innerHTML = playable.map((t, i) => followingActivityRowHtml(t, profMap, i)).join("");
+    listEl.innerHTML = feedItems
+      .map((item, i) => (item.kind === "status"
+        ? followingStatusRowHtml(item.post, profMap, i)
+        : followingActivityRowHtml(item.track, profMap, i)))
+      .join("");
     try {
       syncDiscoveryPlayingHighlights();
     } catch {}
@@ -4475,6 +4604,7 @@ function syncDiscoveryUiToSegment(seg) {
 
 function bindDiscoverySegmentControls() {
   wireUserPublicFeedRowsOnce();
+  bindFollowingComposeOnce();
   if (_discoverySegmentBound) return;
   _discoverySegmentBound = true;
   document.querySelectorAll("[data-discovery-segment]").forEach((btn) => {
@@ -7474,6 +7604,7 @@ function saveAuthSession(sess) {
   } catch {}
   renderAuthStatus();
   try { syncMobileTabbarProfileAvatar(); } catch {}
+  try { syncFollowingComposeUi(); } catch {}
   try {
     if ((document.body.getAttribute("data-route") || "") === "library") renderLibrary();
     renderProfileHubShared();

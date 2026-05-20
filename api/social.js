@@ -463,6 +463,37 @@ async function handleGet(req, res, user) {
     return sendJson(res, 200, { ok: true, counts });
   }
 
+  if (type === "following_status") {
+    if (!user) return sendJson(res, 401, { ok: false, error: "Not signed in" });
+    const limit = Math.min(60, Math.max(1, Number(url.searchParams.get("limit")) || 40));
+    const follows = await svcFetch(
+      `social_follows?select=following_user_id&follower_user_id=eq.${encodeURIComponent(user.userId)}&limit=100`,
+    );
+    const followIds = (Array.isArray(follows.data) ? follows.data : [])
+      .map((r) => cleanUserId(r.following_user_id))
+      .filter(Boolean);
+    const authorIds = [...new Set([...followIds, user.userId])];
+    if (!authorIds.length) return sendJson(res, 200, { ok: true, posts: [] });
+    const inList = authorIds.map((id) => encodeURIComponent(id)).join(",");
+    const rows = await svcFetch(
+      `social_status_posts?select=id,user_id,post_type,body,created_at&user_id=in.(${inList})&order=created_at.desc&limit=${limit}`,
+    );
+    const rawPosts = Array.isArray(rows.data) ? rows.data : [];
+    const profiles = await Promise.all(rawPosts.map((p) => profileByUserId(p.user_id)));
+    return sendJson(res, 200, {
+      ok: true,
+      posts: rawPosts.map((p, i) => ({
+        id: p.id,
+        userId: p.user_id,
+        postType: p.post_type,
+        body: p.body,
+        createdAt: p.created_at,
+        username: profiles[i]?.username || "",
+        avatar: profiles[i]?.avatar || "",
+      })),
+    });
+  }
+
   return sendJson(res, 400, { ok: false, error: "Unknown social query" });
 }
 
@@ -551,6 +582,39 @@ async function handlePost(req, res, user) {
       remixTitle: body?.remixTitle,
     });
     return sendJson(res, 200, { ok: true, created: Boolean(created) });
+  }
+
+  if (action === "post_status") {
+    const allowed = new Set(["update", "advice", "brainstorm", "song_request", "recommend"]);
+    const postType = allowed.has(String(body?.postType || "").trim())
+      ? String(body.postType).trim()
+      : "update";
+    const text = String(body?.body || "").trim().slice(0, 320);
+    if (!text) return sendJson(res, 400, { ok: false, error: "Write something to post" });
+    const ins = await svcFetch("social_status_posts", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ user_id: user.userId, post_type: postType, body: text }),
+    });
+    if (!ins.ok) {
+      return sendJson(res, 500, { ok: false, error: "Post failed", details: ins.text });
+    }
+    const row = Array.isArray(ins.data) && ins.data[0] ? ins.data[0] : null;
+    const prof = await profileByUserId(user.userId);
+    return sendJson(res, 200, {
+      ok: true,
+      post: row
+        ? {
+            id: row.id,
+            userId: row.user_id,
+            postType: row.post_type,
+            body: row.body,
+            createdAt: row.created_at,
+            username: prof?.username || "",
+            avatar: prof?.avatar || "",
+          }
+        : null,
+    });
   }
 
   return sendJson(res, 400, { ok: false, error: "Unknown social action" });

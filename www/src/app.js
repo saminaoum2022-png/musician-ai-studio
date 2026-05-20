@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521tabIcons";
+const APP_BUILD = "20260521tabGrad";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2054,6 +2054,47 @@ function syncLibraryTabDotFromStorage() {
 let _notificationsUnreadCount = 0;
 let _notificationsUnreadFetchInFlight = false;
 let _notificationsUnreadLastFetchedAt = 0;
+/** Signed-in profile tab: photo in a teal→purple ring (matches profile hero). */
+function syncMobileTabbarProfileAvatar() {
+  const link = els.profileTabLink;
+  const slot = document.getElementById("tabProfileAvatarSlot");
+  const img = document.getElementById("tabProfileAvatarImg");
+  const fb = document.getElementById("tabProfileAvatarFallback");
+  if (!link || !slot || !img) return;
+  const signedIn = Boolean(authSession?.user?.id);
+  if (!signedIn) {
+    link.classList.remove("hasTabAvatar");
+    slot.hidden = true;
+    return;
+  }
+  const raw = String(activeProfile?.avatar || "").trim();
+  const isReal = raw && !/nabadai-logo\.png(?:$|\?)/i.test(raw);
+  const url = isReal ? normalizeProfileAvatarForImg(raw) : "";
+  const initials = String(activeProfile?.username || "U")
+    .replace(/^@/, "")
+    .slice(0, 2)
+    .toUpperCase() || "U";
+  if (fb) fb.textContent = initials;
+  link.classList.add("hasTabAvatar");
+  slot.hidden = false;
+  if (url) {
+    img.src = url;
+    img.removeAttribute("data-empty");
+    if (fb) fb.style.display = "none";
+    img.onerror = () => {
+      try {
+        img.removeAttribute("src");
+        img.setAttribute("data-empty", "true");
+        if (fb) fb.style.display = "flex";
+      } catch {}
+    };
+  } else {
+    img.removeAttribute("src");
+    img.setAttribute("data-empty", "true");
+    if (fb) fb.style.display = "flex";
+  }
+}
+
 function updateNotificationsEntryBadges(unreadCount) {
   const unread = Math.max(0, Number(unreadCount || 0));
   _notificationsUnreadCount = unread;
@@ -7329,6 +7370,7 @@ function saveAuthSession(sess) {
     else localStorage.removeItem(AUTH_SESSION_KEY);
   } catch {}
   renderAuthStatus();
+  try { syncMobileTabbarProfileAvatar(); } catch {}
   try {
     if ((document.body.getAttribute("data-route") || "") === "library") renderLibrary();
     renderProfileHubShared();
@@ -14808,6 +14850,7 @@ function renderProfilePreviewFromInputs() {
   }
   renderProfileNabadCertBadge();
   try { renderProfileVoiceTimbreInline(); } catch {}
+  try { syncMobileTabbarProfileAvatar(); } catch {}
 }
 
 /** `meta.profileVisibility === "private"` hides the release on `#/u/…`;

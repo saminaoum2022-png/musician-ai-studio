@@ -2717,6 +2717,18 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+    <script>
+      (function () {
+        function unboot() {
+          try {
+            document.body.classList.remove("booting");
+          } catch (_) {}
+        }
+        window.addEventListener("error", unboot);
+        window.addEventListener("unhandledrejection", unboot);
+        setTimeout(unboot, 3500);
+      })();
+    </script>
     <script type="module" src="./src/app.js?v=20260520discoverSurvivalV1"></script>
   </body>
 </html>

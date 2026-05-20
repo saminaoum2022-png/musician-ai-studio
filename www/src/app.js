@@ -23,6 +23,18 @@ const HUB_FEATURE_ENABLED = false;
   if (f) f.textContent = `Build ${APP_BUILD}`;
 })();
 
+/** Show `.app` as soon as routing is ready — do not wait for the rest of this ~24k-line module. */
+function dismissBootSplash() {
+  try {
+    document.body.classList.remove("booting");
+  } catch {}
+}
+try {
+  window.addEventListener("error", dismissBootSplash);
+  window.addEventListener("unhandledrejection", dismissBootSplash);
+  setTimeout(dismissBootSplash, 3500);
+} catch {}
+
 /** UUID allowlist from `/api/public-config` (env `NABAD_CERTIFIED_USER_IDS`)
  *  — interim gate for the Profile "Verified Nabad Creator" badge until
  *  `profiles.sound_certified` is live in Supabase. */
@@ -2560,6 +2572,7 @@ function resetCreateDraft() {
 window.addEventListener("hashchange", applyRoute);
 if (!location.hash) location.hash = "#/intro";
 applyRoute();
+dismissBootSplash();
 try {
   bindDiscoverySegmentControls();
 } catch {}
@@ -4472,7 +4485,7 @@ function wireUserPublicFeedRowsOnce() {
 }
 
 updateEnvironmentBadge();
-document.body.classList.remove("booting");
+dismissBootSplash();
 document.querySelectorAll("[data-route-link]").forEach((a) => {
   a.addEventListener("click", () => haptic("light"));
 });
@@ -11375,7 +11388,10 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
   if (patch && patch.ok === false && patch.reason && patch.reason !== "noop") {
     const det = String(patch.details || "").trim();
     let msg = "Saved on this device — cloud update failed.";
-    if (/public_on_profile|42703|column/i.test(det)) {
+    if (/discover_score|discover_expires_at/i.test(det)) {
+      msg =
+        "Run supabase/user_songs_discover_survival.sql in Supabase SQL Editor, then try again.";
+    } else if (/public_on_profile|42703|column/i.test(det)) {
       msg =
         "Database missing public_on_profile. In Supabase SQL Editor run: supabase/user_songs_public_on_profile.sql";
     } else if (det) {

@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260520settingsVoicesHubV1";
+const APP_BUILD = "20260520voiceWizardRecorderV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -240,6 +240,7 @@ const els = {
   btnMagicUploadVocal: document.getElementById("btnMagicUploadVocal"),
   btnMagicRecordVocal: document.getElementById("btnMagicRecordVocal"),
   vocalRecorderModal: document.getElementById("vocalRecorderModal"),
+  vocalRecorderModalTitle: document.getElementById("vocalRecorderModalTitle"),
   vocalRecorderBackdrop: document.getElementById("vocalRecorderBackdrop"),
   btnCloseVocalRecorder: document.getElementById("btnCloseVocalRecorder"),
   btnRecorderToggle: document.getElementById("btnRecorderToggle"),
@@ -5377,15 +5378,49 @@ function updateVocalRefPreviewState() {
  *  updates `mixerDownloadLink` directly. Kept so Export Mix never throws.
  */
 function updateVocalRoomAvailability() {}
+/** When set, the shared recorder modal is used for Suno Voice wizard (not hum). */
+let vocalRecorderContext = null;
+let voiceWizardRecBlob = null;
+
 function openVocalRecorderModal() {
   if (!els.vocalRecorderModal) return;
+  const forWizard = vocalRecorderContext?.type === "voice_wizard";
+  if (els.vocalRecorderModalTitle) {
+    els.vocalRecorderModalTitle.textContent =
+      vocalRecorderContext?.title ||
+      (forWizard ? "Record your voice" : "Record vocal reference");
+  }
+  if (els.btnRecorderUse) {
+    els.btnRecorderUse.textContent = forWizard ? "Use this recording" : "Use recording";
+    els.btnRecorderUse.disabled = forWizard
+      ? !(voiceWizardRecBlob && voiceWizardRecBlob.size > 0)
+      : !getVocalReferenceFile();
+  }
   els.vocalRecorderModal.style.display = "";
   setRecorderToggleRecordingUi(Boolean(vocalRefRecorder && vocalRefRecorder.state === "recording"));
+  if (forWizard) {
+    setVocalRecorderStatusAll("Tap ● to record. Sing clearly for 6–30 seconds.");
+  }
 }
 function closeVocalRecorderModal() {
   if (!els.vocalRecorderModal) return;
   els.vocalRecorderModal.style.display = "none";
   setRecorderToggleRecordingUi(false);
+  if (vocalRecorderContext?.type === "voice_wizard") {
+    vocalRecorderContext = null;
+    voiceWizardRecBlob = null;
+  }
+}
+
+function openVoiceWizardRecorder(step, onFile) {
+  voiceWizardRecBlob = null;
+  vocalRecorderContext = {
+    type: "voice_wizard",
+    step,
+    onFile,
+    title: step === "verify" ? "Record verification phrase" : "Record voice sample",
+  };
+  openVocalRecorderModal();
 }
 function setVocalRecorderStatusAll(text) {
   if (els.recorderStatus) els.recorderStatus.textContent = text;
@@ -5461,7 +5496,8 @@ function pickRecorderMimeType() {
 async function startVocalReferenceRecording() {
   vocalRecordSessionId += 1;
   const recordSession = vocalRecordSessionId;
-  const hadExisting = Boolean(getVocalReferenceFile());
+  const forWizard = vocalRecorderContext?.type === "voice_wizard";
+  const hadExisting = forWizard ? Boolean(voiceWizardRecBlob?.size) : Boolean(getVocalReferenceFile());
   // Invalidate any in-flight onstop from a previous recorder instance before
   // we touch shared state (prevents "new hum overwrote by old onstop").
   try {
@@ -5469,22 +5505,28 @@ async function startVocalReferenceRecording() {
       vocalRefRecorder.stop();
     }
   } catch {}
-  // Mic capture supersedes any prior upload. Clear JS state + the hidden
-  // file input *before* capture starts so WebKit can't glue an obsolete
-  // File object back onto the input while we're recording.
-  try {
-    if (els.sunoVocalUpload) els.sunoVocalUpload.value = "";
-  } catch {}
-  currentVocalRefFile = null;
-  vocalRefBlob = null;
-  vocalRefOrigin = null;
-  vocalRefChunks = [];
-  // Any previously cached Suno temporary upload URL must not survive a
-  // fresh recording. Otherwise the *next* generate could (in theory)
-  // see the stale URL and ask Suno to reuse the old audio.
-  lastSunoReferenceUrl = "";
-  lastVocalRefFingerprint = "";
-  refreshVocalReferenceUi();
+  if (forWizard) {
+    voiceWizardRecBlob = null;
+    vocalRefChunks = [];
+    if (els.btnRecorderUse) els.btnRecorderUse.disabled = true;
+  } else {
+    // Mic capture supersedes any prior upload. Clear JS state + the hidden
+    // file input *before* capture starts so WebKit can't glue an obsolete
+    // File object back onto the input while we're recording.
+    try {
+      if (els.sunoVocalUpload) els.sunoVocalUpload.value = "";
+    } catch {}
+    currentVocalRefFile = null;
+    vocalRefBlob = null;
+    vocalRefOrigin = null;
+    vocalRefChunks = [];
+    // Any previously cached Suno temporary upload URL must not survive a
+    // fresh recording. Otherwise the *next* generate could (in theory)
+    // see the stale URL and ask Suno to reuse the old audio.
+    lastSunoReferenceUrl = "";
+    lastVocalRefFingerprint = "";
+    refreshVocalReferenceUi();
+  }
 
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
   const mimeType = pickRecorderMimeType();
@@ -5500,6 +5542,24 @@ async function startVocalReferenceRecording() {
     const blobType = effectiveMime();
     const blob = new Blob(chunks, { type: blobType });
     vocalRefBlob = blob;
+    const wizardActive =
+      forWizard || vocalRecorderContext?.type === "voice_wizard";
+    if (wizardActive) {
+      voiceWizardRecBlob = blob;
+      const ok = Boolean(blob && blob.size > 0);
+      if (els.btnRecorderUse) els.btnRecorderUse.disabled = !ok;
+      setVocalRecorderStatusAll(
+        ok
+          ? "Recording ready. Tap Use this recording."
+          : "Recording empty. Try again."
+      );
+      if (ok) {
+        try {
+          showToast("Recording ready", { icon: "✓", durationMs: 2200 });
+        } catch {}
+      }
+      return;
+    }
     let promoted = false;
     if (blob && blob.size > 0) {
       const name = vocalReferenceFilenameForMime(blobType);
@@ -5566,14 +5626,18 @@ async function startVocalReferenceRecording() {
       throw e2 || e;
     }
   }
-  if (hadExisting) {
+  if (hadExisting && !forWizard) {
     try {
       showToast("Replacing attached audio with this recording.", { durationMs: 3800, icon: "↻" });
     } catch {}
   }
-  if (els.btnVocalRefRec) els.btnVocalRefRec.disabled = true;
-  if (els.btnVocalRefStop) els.btnVocalRefStop.disabled = false;
-  setStatus("Recording voice reference…");
+  if (!forWizard) {
+    if (els.btnVocalRefRec) els.btnVocalRefRec.disabled = true;
+    if (els.btnVocalRefStop) els.btnVocalRefStop.disabled = false;
+    setStatus("Recording voice reference…");
+  } else {
+    setVocalRecorderStatusAll("Recording… tap ● to stop");
+  }
 }
 
 function stopVocalReferenceRecording() {
@@ -12809,7 +12873,36 @@ function closeVoiceWizard() {
   voiceWizardState.abort = true;
 }
 
-let voiceWizardState = { abort: false };
+let voiceWizardState = { abort: false, sampleFile: null, verifyFile: null };
+
+async function measureMediaFileDurationSec(file) {
+  if (!file) return null;
+  const url = URL.createObjectURL(file);
+  try {
+    const isVideo = /^video\//i.test(String(file.type || ""));
+    const el = document.createElement(isVideo ? "video" : "audio");
+    el.preload = "metadata";
+    el.muted = true;
+    el.playsInline = true;
+    el.src = url;
+    await new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error("timeout")), 20000);
+      el.onloadedmetadata = () => {
+        clearTimeout(t);
+        resolve();
+      };
+      el.onerror = () => {
+        clearTimeout(t);
+        reject(new Error("Could not read media duration"));
+      };
+    });
+    return normalizeAudioDurationSec(el.duration);
+  } finally {
+    try {
+      URL.revokeObjectURL(url);
+    } catch {}
+  }
+}
 
 async function uploadAudioFileForSuno(file) {
   const token = getSupabaseAuthToken();
@@ -12878,25 +12971,194 @@ function renderVoiceWizardStep(html) {
   if (body) body.innerHTML = html;
 }
 
-async function openVoiceWizard() {
-  if (!authSession?.user?.id) {
-    try { showToast("Sign in to record your voice", { icon: "!", durationMs: 3200 }); } catch {}
-    try { location.hash = "#/auth"; } catch {}
+function renderVoiceWizardSampleStatus() {
+  const el = document.getElementById("voiceWizardSampleStatus");
+  if (!el) return;
+  const f = voiceWizardState.sampleFile;
+  el.textContent = f
+    ? `Sample ready (${Math.max(1, Math.round(f.size / 1024))} KB)`
+    : "Tap Record to capture 6–30 seconds of singing";
+}
+
+function wireVoiceWizardStep1() {
+  const recBtn = document.getElementById("voiceWizardRecordSample");
+  const pickBtn = document.getElementById("voiceWizardPickSample");
+  const fileInput = document.getElementById("voiceWizardSampleFile");
+  const startBtn = document.getElementById("voiceWizardStartBtn");
+  renderVoiceWizardSampleStatus();
+  if (recBtn) {
+    recBtn.onclick = () => {
+      openVoiceWizardRecorder("sample", (file) => {
+        voiceWizardState.sampleFile = file;
+        renderVoiceWizardSampleStatus();
+        try {
+          showToast("Sample recording attached", { icon: "✓", durationMs: 2400 });
+        } catch {}
+      });
+    };
+  }
+  if (pickBtn && fileInput) {
+    pickBtn.onclick = () => fileInput.click();
+    fileInput.onchange = () => {
+      const f = fileInput.files?.[0];
+      if (!f) return;
+      voiceWizardState.sampleFile = f;
+      renderVoiceWizardSampleStatus();
+      fileInput.value = "";
+    };
+  }
+  if (!startBtn) return;
+  startBtn.onclick = () => void runVoiceWizardFromSample(startBtn);
+}
+
+async function runVoiceWizardFromSample(startBtn) {
+  const name = String(document.getElementById("voiceWizardName")?.value || "My voice").trim();
+  const file = voiceWizardState.sampleFile;
+  const language = String(document.getElementById("voiceWizardLang")?.value || "en").trim();
+  if (!file) {
+    showToast("Record or upload a sample first", { icon: "!", durationMs: 2800 });
     return;
   }
-  voiceWizardState = { abort: false };
-  const sheet = ensureVoiceWizardSheet();
-  sheet.hidden = false;
+  try {
+    startBtn.disabled = true;
+    renderVoiceWizardStep(`<p class="hint">Uploading sample…</p>`);
+    const voiceUrl = await uploadAudioFileForSuno(file);
+    let dur = 10;
+    try {
+      const measured = await measureMediaFileDurationSec(file);
+      if (measured) dur = Math.min(30, Math.max(6, Math.round(measured)));
+    } catch {
+      dur = 10;
+    }
+    renderVoiceWizardStep(`<p class="hint">Preparing verification phrase…</p>`);
+    const token = getSupabaseAuthToken();
+    const vr = await fetch(apiUrl("/api/suno/voice-validate"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        voiceUrl,
+        vocalStartS: 0,
+        vocalEndS: dur,
+        language,
+      }),
+    });
+    const vd = await vr.json().catch(() => ({}));
+    if (!vr.ok) throw new Error(vd?.error || "Validation start failed");
+    const validateTaskId = String(vd?.taskId || vd?.data?.taskId || "").trim();
+    if (!validateTaskId) throw new Error("Missing validation task id");
+    voiceWizardState.validateTaskId = validateTaskId;
+    voiceWizardState.name = name;
+    const phrase = await pollVoiceValidatePhrase(validateTaskId);
+    renderVoiceWizardVerifyStep(phrase, token);
+  } catch (e) {
+    showToast(e?.message || String(e), { icon: "!", durationMs: 4400 });
+    startBtn.disabled = false;
+    renderVoiceWizardStep1();
+    wireVoiceWizardStep1();
+    const err = document.getElementById("voiceWizardSampleStatus");
+    if (err) err.textContent = String(e?.message || e);
+  }
+}
+
+function renderVoiceWizardVerifyStep(phrase, token) {
   renderVoiceWizardStep(`
-    <p class="hint">Upload 6–30 seconds of clear singing (solo vocal works best). We’ll ask you to sing a short phrase to verify it’s you.</p>
+    <p class="hint">Sing this phrase clearly (same recorder as humming). About 10–20 seconds.</p>
+    <div class="voiceWizardPhrase" id="voiceWizardPhrase">${escapeHtml(phrase)}</div>
+    <div class="recorderCenter voiceWizardRecPrompt">
+      <button type="button" class="recButton" id="voiceWizardRecordVerify" aria-label="Record verification">●</button>
+      <div id="voiceWizardVerifyStatus" class="hint">Tap ● to record the phrase</div>
+    </div>
+    <button type="button" class="ghost" id="voiceWizardPickVerify">Upload verification file instead</button>
+    <input type="file" id="voiceWizardVerifyFile" hidden accept="audio/*,video/*,.mp4,.m4a,.mov" />
+    <div class="voiceWizardActions">
+      <button type="button" class="primary" id="voiceWizardSubmitBtn" disabled>Create my voice</button>
+    </div>`);
+  const statusEl = document.getElementById("voiceWizardVerifyStatus");
+  const submitBtn = document.getElementById("voiceWizardSubmitBtn");
+  const setVerifyFile = (f) => {
+    voiceWizardState.verifyFile = f;
+    if (statusEl) {
+      statusEl.textContent = f
+        ? `Verification ready (${Math.max(1, Math.round(f.size / 1024))} KB)`
+        : "Tap ● to record the phrase";
+    }
+    if (submitBtn) submitBtn.disabled = !f;
+  };
+  document.getElementById("voiceWizardRecordVerify")?.addEventListener("click", () => {
+    openVoiceWizardRecorder("verify", (file) => {
+      setVerifyFile(file);
+      try { showToast("Verification recording ready", { icon: "✓", durationMs: 2400 }); } catch {}
+    });
+  });
+  const vFileInput = document.getElementById("voiceWizardVerifyFile");
+  document.getElementById("voiceWizardPickVerify")?.addEventListener("click", () => vFileInput?.click());
+  vFileInput?.addEventListener("change", () => {
+    const f = vFileInput.files?.[0];
+    if (f) setVerifyFile(f);
+    vFileInput.value = "";
+  });
+  if (!submitBtn) return;
+  submitBtn.onclick = async () => {
+    const vFile = voiceWizardState.verifyFile;
+    if (!vFile) {
+      showToast("Record or upload verification audio", { icon: "!", durationMs: 2800 });
+      return;
+    }
+    const name = voiceWizardState.name || "My voice";
+    const validateTaskId = voiceWizardState.validateTaskId;
+    try {
+      submitBtn.disabled = true;
+      renderVoiceWizardStep(`<p class="hint">Uploading verification…</p>`);
+      const verifyUrl = await uploadAudioFileForSuno(vFile);
+      renderVoiceWizardStep(`<p class="hint">Creating your voice…</p>`);
+      const cr = await fetch(apiUrl("/api/suno/voice-create"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          taskId: validateTaskId,
+          verifyUrl,
+          voiceName: name,
+          description: `Custom voice: ${name}`,
+          singerSkillLevel: "intermediate",
+        }),
+      });
+      const cd = await cr.json().catch(() => ({}));
+      if (!cr.ok) throw new Error(cd?.error || "Voice submit failed");
+      const voiceTaskId = String(cd?.taskId || cd?.data?.taskId || "").trim();
+      if (!voiceTaskId) throw new Error("Missing voice task id");
+      const voiceId = await pollVoiceRecordInfo(voiceTaskId);
+      addPersona(voiceId, name, { type: "suno_voice", personaModel: "voice_persona" });
+      closeVoiceWizard();
+      setProfilePersonaExpanded(true);
+      showToast("Your voice is saved and selected for Create", { icon: "✓", durationMs: 3600 });
+    } catch (e) {
+      showToast(e?.message || String(e), { icon: "!", durationMs: 4400 });
+      submitBtn.disabled = false;
+      renderVoiceWizardVerifyStep(phrase, token);
+    }
+  };
+}
+
+function renderVoiceWizardStep1() {
+  renderVoiceWizardStep(`
+    <p class="hint">Record 6–30 seconds of clear singing (solo vocal works best). We’ll ask you to sing a short phrase to verify it’s you.</p>
     <label class="field">
       <div class="label">Voice name</div>
-      <input id="voiceWizardName" type="text" maxlength="64" placeholder="My voice" value="My voice" />
+      <input id="voiceWizardName" type="text" maxlength="64" placeholder="My voice" value="${escapeHtml(voiceWizardState.name || "My voice")}" />
     </label>
-    <label class="field">
-      <div class="label">Sample clip (6–30s)</div>
-      <input id="voiceWizardSample" type="file" accept="audio/*" />
-    </label>
+    <div class="label">Voice sample</div>
+    <div class="recorderCenter voiceWizardRecPrompt">
+      <button type="button" class="recButton" id="voiceWizardRecordSample" aria-label="Record voice sample">●</button>
+      <div id="voiceWizardSampleStatus" class="hint">Tap ● to record your sample</div>
+    </div>
+    <button type="button" class="ghost" id="voiceWizardPickSample">Upload file instead</button>
+    <input type="file" id="voiceWizardSampleFile" hidden accept="audio/*,video/*,.mp4,.m4a,.mov" />
     <label class="field">
       <div class="label">Language</div>
       <select id="voiceWizardLang">
@@ -12909,106 +13171,26 @@ async function openVoiceWizard() {
     <div class="voiceWizardActions">
       <button type="button" class="primary" id="voiceWizardStartBtn">Continue</button>
     </div>`);
-  const startBtn = document.getElementById("voiceWizardStartBtn");
-  if (!startBtn) return;
-  startBtn.onclick = async () => {
-    const name = String(document.getElementById("voiceWizardName")?.value || "My voice").trim();
-    const file = document.getElementById("voiceWizardSample")?.files?.[0];
-    const language = String(document.getElementById("voiceWizardLang")?.value || "en").trim();
-    if (!file) {
-      showToast("Choose a sample audio file", { icon: "!", durationMs: 2800 });
-      return;
-    }
-    try {
-      startBtn.disabled = true;
-      renderVoiceWizardStep(`<p class="hint">Uploading sample…</p>`);
-      const voiceUrl = await uploadAudioFileForSuno(file);
-      let dur = 10;
-      try {
-        dur = Math.min(30, Math.max(6, Math.round(await measureAudioDurationSec(URL.createObjectURL(file)) || 10)));
-      } catch {
-        dur = 10;
-      }
-      renderVoiceWizardStep(`<p class="hint">Preparing verification phrase…</p>`);
-      const token = getSupabaseAuthToken();
-      const vr = await fetch(apiUrl("/api/suno/voice-validate"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          voiceUrl,
-          vocalStartS: 0,
-          vocalEndS: dur,
-          language,
-        }),
-      });
-      const vd = await vr.json().catch(() => ({}));
-      if (!vr.ok) throw new Error(vd?.error || "Validation start failed");
-      const validateTaskId = String(vd?.taskId || vd?.data?.taskId || "").trim();
-      if (!validateTaskId) throw new Error("Missing validation task id");
-      const phrase = await pollVoiceValidatePhrase(validateTaskId);
-      renderVoiceWizardStep(`
-        <p class="hint">Record yourself <strong>singing</strong> this phrase (about 10–20 seconds). Match the melody if you can.</p>
-        <div class="voiceWizardPhrase" id="voiceWizardPhrase">${escapeHtml(phrase)}</div>
-        <label class="field">
-          <div class="label">Verification recording</div>
-          <input id="voiceWizardVerify" type="file" accept="audio/*" />
-        </label>
-        <div class="voiceWizardActions">
-          <button type="button" class="primary" id="voiceWizardSubmitBtn">Create my voice</button>
-        </div>`);
-      const submitBtn = document.getElementById("voiceWizardSubmitBtn");
-      if (!submitBtn) return;
-      submitBtn.onclick = async () => {
-        const vFile = document.getElementById("voiceWizardVerify")?.files?.[0];
-        if (!vFile) {
-          showToast("Add your verification recording", { icon: "!", durationMs: 2800 });
-          return;
-        }
-        try {
-          submitBtn.disabled = true;
-          renderVoiceWizardStep(`<p class="hint">Uploading verification…</p>`);
-          const verifyUrl = await uploadAudioFileForSuno(vFile);
-          renderVoiceWizardStep(`<p class="hint">Creating your voice…</p>`);
-          const cr = await fetch(apiUrl("/api/suno/voice-create"), {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-            body: JSON.stringify({
-              taskId: validateTaskId,
-              verifyUrl,
-              voiceName: name,
-              description: `Custom voice: ${name}`,
-              singerSkillLevel: "intermediate",
-            }),
-          });
-          const cd = await cr.json().catch(() => ({}));
-          if (!cr.ok) throw new Error(cd?.error || "Voice submit failed");
-          const voiceTaskId = String(cd?.taskId || cd?.data?.taskId || "").trim();
-          if (!voiceTaskId) throw new Error("Missing voice task id");
-          const voiceId = await pollVoiceRecordInfo(voiceTaskId);
-          addPersona(voiceId, name, { type: "suno_voice", personaModel: "voice_persona" });
-          closeVoiceWizard();
-          setProfilePersonaExpanded(true);
-          showToast("Your voice is saved and selected for Create", { icon: "✓", durationMs: 3600 });
-        } catch (e) {
-          showToast(e?.message || String(e), { icon: "!", durationMs: 4400 });
-          submitBtn.disabled = false;
-          renderVoiceWizardStep(`
-            <p class="hint">Something went wrong. You can close and try again.</p>
-            <p class="hint">${escapeHtml(e?.message || String(e))}</p>`);
-        }
-      };
-    } catch (e) {
-      showToast(e?.message || String(e), { icon: "!", durationMs: 4400 });
-      startBtn.disabled = false;
-      renderVoiceWizardStep(`<p class="hint">${escapeHtml(e?.message || String(e))}</p>`);
-    }
+}
+
+async function openVoiceWizard() {
+  if (!authSession?.user?.id) {
+    try { showToast("Sign in to record your voice", { icon: "!", durationMs: 3200 }); } catch {}
+    try { location.hash = "#/auth"; } catch {}
+    return;
+  }
+  voiceWizardState = {
+    abort: false,
+    sampleFile: null,
+    verifyFile: null,
+    name: "My voice",
+    language: "en",
+    validateTaskId: "",
   };
+  const sheet = ensureVoiceWizardSheet();
+  sheet.hidden = false;
+  renderVoiceWizardStep1();
+  wireVoiceWizardStep1();
 }
 
 function openSettingsVoicesPanel() {
@@ -19778,6 +19960,22 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   }
   if (els.btnRecorderUse) {
     els.btnRecorderUse.addEventListener("click", () => {
+      if (vocalRecorderContext?.type === "voice_wizard") {
+        const blob = voiceWizardRecBlob;
+        if (!blob || !blob.size) return;
+        const step = vocalRecorderContext.step;
+        const nm =
+          step === "verify"
+            ? vocalReferenceFilenameForMime(blob.type).replace("vocal-reference", "voice-verify")
+            : vocalReferenceFilenameForMime(blob.type).replace("vocal-reference", "voice-sample");
+        const file = new File([blob], nm, { type: blob.type || "audio/mp4" });
+        const onFile = vocalRecorderContext.onFile;
+        vocalRecorderContext = null;
+        voiceWizardRecBlob = null;
+        closeVocalRecorderModal();
+        if (onFile) onFile(file);
+        return;
+      }
       // The recording is already promoted to currentVocalRefFile in
       // MediaRecorder.onstop. If a stale blob is still around, promote it now
       // as a safety net. Either way, just close the modal.

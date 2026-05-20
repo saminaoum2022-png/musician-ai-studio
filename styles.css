@@ -9944,6 +9944,13 @@ body.notificationsCenterOpen{
   gap: 8px;
   margin-top: 4px;
 }
+.voiceWizardRecPrompt{
+  margin: 8px 0 4px;
+  padding: 12px 0;
+}
+.voiceWizardRecPrompt .recButton{
+  margin: 0 auto;
+}
 
 .creditsPage{
   display: flex;

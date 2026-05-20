@@ -1,11 +1,12 @@
 /**
  * Upload audio to Suno's temporary file store (public URL ~3 days).
- * Used by Suno Voice setup and other flows that need a voiceUrl / verifyUrl.
+ * Video files from the camera roll are transcoded to MP3 (audio only).
  */
 const Busboy = require("busboy");
 const { verifyUser } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
 const { sendJson } = require("../_lib/suno-upstream");
+const { maybeTranscodeToMp3 } = require("../_lib/transcode-mp3");
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
@@ -21,7 +22,7 @@ module.exports = async function handler(req, res) {
     if (!user) return sendJson(res, 401, { error: "Sign in to upload audio." });
 
     const parsed = await readMultipart(req);
-    const fileBytes = parsed?.fileBytes;
+    let fileBytes = parsed?.fileBytes;
     if (!fileBytes || fileBytes.length < 512) {
       return sendJson(res, 400, { error: "Missing or empty audio file" });
     }
@@ -29,8 +30,13 @@ module.exports = async function handler(req, res) {
       return sendJson(res, 413, { error: "File too large (max 25 MB)" });
     }
 
-    const fileName = String(parsed.fileName || "voice-upload.mp3").slice(0, 120);
-    const mime = String(parsed.mime || "audio/mpeg");
+    let fileName = String(parsed.fileName || "voice-upload.mp3").slice(0, 120);
+    let mime = String(parsed.mime || "audio/mpeg");
+
+    const norm = await maybeTranscodeToMp3({ bytes: fileBytes, mime, name: fileName });
+    fileBytes = norm.bytes;
+    mime = norm.mime;
+    fileName = norm.name;
 
     const up = new FormData();
     up.set("file", new Blob([fileBytes], { type: mime }), fileName);
@@ -60,6 +66,7 @@ module.exports = async function handler(req, res) {
     return sendJson(res, 200, {
       downloadUrl: String(upData.data.downloadUrl),
       fileName,
+      transcoded: norm.mime === "audio/mpeg",
     });
   } catch (e) {
     return sendJson(res, 500, { error: e?.message || String(e) });

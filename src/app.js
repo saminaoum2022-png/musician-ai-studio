@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521discoverSchemaV1";
+const APP_BUILD = "20260521discoverCarouselV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -10592,15 +10592,59 @@ function discoverySurvivalMeterHtml(t, { compact = false } = {}) {
     </span>`;
 }
 
-function discoverySurvivalBannerHtml() {
+const DISCOVER_UPDATE_DISMISS_KEY = "nabad_discover_survival_update_v1";
+
+function discoveryUpdateCardHtml() {
   return `
-    <div class="discoverySurvivalBanner" role="note">
-      <span class="discoverySurvivalBannerIco" aria-hidden="true">◎</span>
-      <div class="discoverySurvivalBannerCopy">
-        <span class="discoverySurvivalBannerTitle">7-day spotlight</span>
-        <span class="discoverySurvivalBannerLead">Each song starts at <strong>−100</strong>. Signed-in listeners add up to <strong>10</strong> plays each (+1 per listen). Hit <strong>0</strong> (100 total) within 7 days to stay on Discover — or it drops from the feed. Your Library copy always stays.</span>
+    <div class="discoveryUpdateCardInner" role="note">
+      <span class="discoveryUpdateCardIco" aria-hidden="true">◎</span>
+      <div class="discoveryUpdateCardCopy">
+        <span class="discoveryUpdateCardTitle">New · 7-day spotlight</span>
+        <p class="discoveryUpdateCardLead">Songs start at <strong>−100</strong>. Each signed-in listener adds up to <strong>10</strong> plays. Reach <strong>0</strong> (100 total) in a week to stay on Discover. Your Library copy is never removed.</p>
       </div>
+      <button type="button" class="discoveryUpdateCardDismiss" data-discover-update-dismiss aria-label="Dismiss update">×</button>
     </div>`;
+}
+
+function shouldShowDiscoverUpdateCard() {
+  try {
+    return localStorage.getItem(DISCOVER_UPDATE_DISMISS_KEY) !== "1";
+  } catch {
+    return true;
+  }
+}
+
+function wireDiscoverUpdateCard() {
+  const el = document.getElementById("discoveryUpdateCard");
+  if (!el) return;
+  if (!shouldShowDiscoverUpdateCard()) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  if (!el.querySelector(".discoveryUpdateCardInner")) {
+    el.innerHTML = discoveryUpdateCardHtml();
+    const dismiss = el.querySelector("[data-discover-update-dismiss]");
+    if (dismiss && !dismiss.dataset.boundDiscoverUpdate) {
+      dismiss.dataset.boundDiscoverUpdate = "1";
+      dismiss.addEventListener("click", () => {
+        try {
+          localStorage.setItem(DISCOVER_UPDATE_DISMISS_KEY, "1");
+        } catch {}
+        el.hidden = true;
+      });
+    }
+  }
+  el.hidden = false;
+}
+
+function discoverySurvivalChipHtml(t) {
+  const m = discoverSurvivalMeta(t);
+  const scoreLabel = m.score > 0 ? `+${m.score}` : String(m.score);
+  const label = m.survived
+    ? `${scoreLabel} · survived`
+    : `${scoreLabel} · ${m.daysLeft}d · ${m.playsDone}/${DISCOVER_SURVIVAL_PLAYS_NEEDED}`;
+  return `<span class="discoverySurvivalChip${m.survived ? " isSurvived" : m.urgent ? " isUrgent" : ""}">${escapeHtml(label)}</span>`;
 }
 
 async function discoverMaintainExpired() {
@@ -11210,7 +11254,8 @@ function discoveryTrackRowHtml(t, profMap, idx) {
       </div>`;
 }
 
-function discoverySpotCardHtml(t, profMap, idx) {
+/** Horizontal Discover card — cover-first; badges + one caption line max. */
+function discoveryFeedCardHtml(t, profMap, idx) {
   const art = String(t.artUrl || "").trim();
   const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
   const prof = t.userId ? profMap.get(t.userId) : null;
@@ -11229,35 +11274,47 @@ function discoverySpotCardHtml(t, profMap, idx) {
   const encReleaseCaption = encodeURIComponent(releaseCaptionForTrack(t));
   const playData = `data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" data-play-task-id="${encTaskId}" data-play-audio-id="${encAudioId}" data-play-release-caption="${encReleaseCaption}"`;
   const spotIdx = Number(idx) || 0;
-  const imgLoad = spotIdx < 3 ? "eager" : "lazy";
+  const imgLoad = spotIdx < 4 ? "eager" : "lazy";
   const imgPriority = spotIdx === 0 ? ' fetchpriority="high"' : "";
   const encHandle = handle ? encodeURIComponent(handle) : "";
   const challenge = challengeMetaForTrack(t);
   const remixOf = remixAttributionForTrack(t);
   const releaseCaption = releaseCaptionForTrack(t);
+  const badge = challenge
+    ? challengePillHtml("Challenge")
+    : remixOf
+      ? remixPillHtml()
+      : "";
+  const captionRaw = releaseCaption || (challenge ? String(challenge.title || "Challenge").trim() : "");
+  const captionHtml = captionRaw
+    ? `<span class="discoveryFeedCardCaption">${escapeHtml(captionRaw)}</span>`
+    : "";
+  const richClass = badge || captionHtml ? " discoveryFeedCard--rich" : "";
   return `
-      <div class="discoverySpotCardWrap" style="--i:${spotIdx}">
-        <button type="button" class="discoverySpotCard" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
+      <div class="discoverySpotCardWrap discoveryFeedCardWrap" style="--i:${spotIdx}">
+        <button type="button" class="discoverySpotCard discoveryFeedCard${richClass}" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
         <span class="discoverySpotCardArt"><img src="${escapeHtml(artSafe)}" alt="" loading="${imgLoad}"${imgPriority} decoding="async" /></span>
         <span class="discoverySpotCardShade" aria-hidden="true"></span>
         <span class="discoverySpotCardArtBadge" aria-hidden="true">▶</span>
-        <span class="discoverySpotCardText">
-          <span class="discoverySpotCardTextRow">
-            <span class="discoverySpotCardTextCol">
-              <span class="discoverySpotCardTitle">${safeTitle}</span>
-              <span class="discoverySpotCardBy">${challenge ? `${challengePillHtml()} ` : remixOf ? `${remixPillHtml()} ` : ""}${escapeHtml(byLine)}</span>
-              ${challenge ? `<span class="discoverySpotCardCaption">${escapeHtml(challengeAttributionText(challenge))}</span>` : ""}
-              ${releaseCaption ? `<span class="discoverySpotCardCaption">${escapeHtml(releaseCaption)}</span>` : ""}
-              <span class="discoverySpotCardSurvival">${discoverySurvivalMeterHtml(t, { compact: true })}</span>
-            </span>
-            <span class="discoverySpotCardEq" aria-hidden="true"><span></span><span></span><span></span></span>
-          </span>
+        <span class="discoveryFeedCardTop">
+          ${badge ? `<span class="discoveryFeedCardBadge">${badge}</span>` : "<span></span>"}
+          ${discoverySurvivalChipHtml(t)}
         </span>
+        <span class="discoveryFeedCardBottom">
+          <span class="discoveryFeedCardTitle">${safeTitle}</span>
+          <span class="discoveryFeedCardBy">${escapeHtml(byLine)}</span>
+          ${captionHtml}
+        </span>
+        <span class="discoverySpotCardEq" aria-hidden="true"><span></span><span></span><span></span></span>
         </button>
         <span class="discoverySpotMenuOuter">
           <button type="button" class="discoverySpotMenuBtn" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" data-dp-song-id="${encSongId}" data-dp-owner-id="${encOwnerId}" data-dp-task-id="${encTaskId}" data-dp-audio-id="${encAudioId}" aria-label="Song options for ${safeTitle}">⋯</button>
         </span>
       </div>`;
+}
+
+function discoverySpotCardHtml(t, profMap, idx) {
+  return discoveryFeedCardHtml(t, profMap, idx);
 }
 
 async function refreshDiscoverFeed() {
@@ -11332,33 +11389,27 @@ async function refreshDiscoverFeed() {
 
   statusEl.hidden = true;
   statusEl.textContent = "";
-  const spot = playable.slice(0, 5);
-  const rest = playable.slice(5);
   _discoveryFeedTracks = playable.map((t) => discoveryTrackPlaybackMeta(t, profMap));
 
-  const head = document.querySelector("#discoveryPaneDiscover .discoveryStudioHead");
-  if (head && !head.querySelector(".discoverySurvivalBanner")) {
-    head.insertAdjacentHTML("beforeend", discoverySurvivalBannerHtml());
+  try {
+    wireDiscoverUpdateCard();
+  } catch {}
+
+  const hintEl = document.getElementById("discoveryCarouselHint");
+  if (hintEl) {
+    hintEl.textContent = playable.length > 1 ? `Swipe · ${playable.length} live` : "Swipe";
   }
 
   if (rail && spotlightWrap) {
-    rail.innerHTML = spot.map((t, i) => discoverySpotCardHtml(t, profMap, i)).join("");
-    spotlightWrap.hidden = spot.length === 0;
+    rail.innerHTML = playable.map((t, i) => discoveryFeedCardHtml(t, profMap, i)).join("");
+    spotlightWrap.hidden = playable.length === 0;
     try {
       wireDiscoverySpotCardImages(rail);
     } catch {}
   }
 
-  if (rest.length) {
-    listEl.hidden = false;
-    const more = rest
-      .map((t, j) => discoveryTrackRowHtml(t, profMap, j + spot.length))
-      .join("");
-    listEl.innerHTML = `<div class="discoveryMoreHead" role="presentation">More in the feed</div>${more}`;
-  } else {
-    listEl.innerHTML = "";
-    listEl.hidden = true;
-  }
+  listEl.innerHTML = "";
+  listEl.hidden = true;
   try {
     syncDiscoveryPlayingHighlights();
   } catch {}

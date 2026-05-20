@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260521discoverSchemaV1" />
+    <link rel="stylesheet" href="./styles.css?v=20260521discoverCarouselV1" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -753,11 +753,7 @@
           </header>
           <div class="discoveryPane discoveryPaneStudio" id="discoveryPaneDiscover" data-discovery-pane="discover">
             <div class="discoveryStudioAmbient" aria-hidden="true"></div>
-            <header class="discoveryStudioHead">
-              <div class="discoveryStudioTitles">
-                <h2 class="discoveryStudioH2 appScreenTitle">Listen in</h2>
-                <p class="discoveryStudioTag appScreenLead">7-day spotlight · 100 plays to survive</p>
-              </div>
+            <header class="discoveryStudioHead discoveryStudioHead--tools">
               <button type="button" class="discoveryRefreshBtn" id="discoveryRefreshBtn" aria-label="Refresh public feed">
                 <svg class="discoveryRefreshIco" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
                   <path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" d="M21 12a9 9 0 1 1-2.64-6.36"/>
@@ -765,6 +761,7 @@
                 </svg>
               </button>
             </header>
+            <section id="discoveryUpdateCard" class="discoveryUpdateCard" aria-label="Discover update" hidden></section>
             <section class="discoveryPlaylistsSection" id="discoveryPlaylistsSection" aria-label="Playlists" hidden>
               <div class="discoveryPlaylistsHead">
                 <span class="discoveryPlaylistsTitle">Playlists</span>
@@ -772,15 +769,15 @@
               </div>
               <div id="discoveryPlaylistsRail" class="discoveryPlaylistsRail" role="list"></div>
             </section>
-            <div id="discoverySpotlightWrap" class="discoverySpotlightWrap" hidden>
+            <div id="discoverySpotlightWrap" class="discoverySpotlightWrap discoveryCarouselWrap" hidden>
               <div class="discoverySpotlightHead">
-                <span class="discoverySpotlightTitle">Spotlight</span>
-                <span class="discoverySpotlightHint">Swipe</span>
+                <span class="discoverySpotlightTitle">On Discover</span>
+                <span class="discoverySpotlightHint" id="discoveryCarouselHint">Swipe</span>
               </div>
-              <div id="discoverySpotlightRail" class="discoverySpotlightRail" role="list"></div>
+              <div id="discoverySpotlightRail" class="discoverySpotlightRail discoveryDiscoverRail" role="list"></div>
             </div>
             <div id="discoveryFeedStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
-            <div id="discoveryFeedList" class="discoveryFeedList discoveryCardStack" hidden></div>
+            <div id="discoveryFeedList" class="discoveryFeedList discoveryCardStack" hidden aria-hidden="true"></div>
           </div>
           <div class="discoveryPane discoveryPaneFollowing" id="discoveryPaneFollowing" data-discovery-pane="following" hidden>
             <div class="discoveryStudioAmbient" aria-hidden="true"></div>
@@ -2729,6 +2726,6 @@
         setTimeout(unboot, 3500);
       })();
     </script>
-    <script type="module" src="./src/app.js?v=20260521discoverSchemaV1"></script>
+    <script type="module" src="./src/app.js?v=20260521discoverCarouselV1"></script>
   </body>
 </html>

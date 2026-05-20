@@ -11875,29 +11875,45 @@ body[data-route="discover-playlist"] > .app{
 .discoverPlaylistList{
   min-width: 0;
 }
+/* Purple wash only behind the status-bar + Discover|Following segment —
+   not the feed (Discover pane matches Following’s flat black). */
 body[data-route="discover"]::before{
   content: "";
   position: fixed;
   left: 0;
   right: 0;
   top: 0;
-  height: calc(env(safe-area-inset-top, 0px) + 210px);
+  height: calc(env(safe-area-inset-top, 0px) + 118px);
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 90% 70% at 50% -10%, rgba(124,92,255,0.20), transparent 56%),
-    radial-gradient(ellipse 60% 45% at 100% 20%, rgba(56,189,248,0.08), transparent 50%);
+    radial-gradient(ellipse 100% 95% at 50% 0%, rgba(124,92,255,0.28), transparent 62%),
+    radial-gradient(ellipse 55% 40% at 100% 8%, rgba(56,189,248,0.07), transparent 52%);
 }
 body[data-route="discover"] > .app{
   position: relative;
   z-index: 1;
 }
 .discoverySegmentBar{
+  position: relative;
+  z-index: 2;
   display: flex;
   gap: 8px;
   padding: 2px 0 4px;
   width: 100%;
   min-width: 0;
+}
+.discoverySegmentBar::after{
+  content: "";
+  position: absolute;
+  left: -10px;
+  right: -10px;
+  top: calc(-1 * env(safe-area-inset-top, 0px) - 28px);
+  bottom: -18px;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 110% 100% at 50% 0%, rgba(124,92,255,0.22), transparent 68%);
 }
 .discoverySegment{
   flex: 1 1 0;
@@ -11931,7 +11947,6 @@ body[data-route="discover"] > .app{
   min-width: 0;
 }
 .discoveryIdeasAmbient,
-.discoveryPaneStudio .discoveryStudioAmbient,
 .discoveryPaneFollowing .discoveryStudioAmbient{
   position: absolute;
   inset: -8px -12px 40%;
@@ -11941,6 +11956,9 @@ body[data-route="discover"] > .app{
     radial-gradient(ellipse 90% 70% at 50% -10%, rgba(124,92,255,0.28), transparent 55%),
     radial-gradient(ellipse 60% 45% at 100% 20%, rgba(56,189,248,0.12), transparent 50%);
   opacity: 0.95;
+}
+.discoveryPaneStudio .discoveryStudioAmbient{
+  display: none;
 }
 .discoveryIdeasHead,
 .discoveryIdeasFeature,
@@ -12411,6 +12429,10 @@ body[data-route="discover"] > .app{
   gap: 0;
   padding-bottom: 8px;
   min-height: 42vh;
+  background: var(--bg);
+}
+.discoveryPaneFollowing{
+  background: var(--bg);
 }
 .discoveryStudioHead,
 .discoverySpotlightWrap,

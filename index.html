@@ -712,7 +712,9 @@
                 <option value="">None (default voice)</option>
                 </select>
               </label>
-              <button id="btnCreatePersona" class="ghost advancedPersonaBtn" type="button" title="Save the voice from your last finished song as a reusable persona">Save voice as persona (from last song)</button>
+              <p class="hint personaManageHint">
+                <a href="#/settings?voices=1" id="linkManageVoices" data-open-settings-voices="1">Manage voices in Settings</a>
+              </p>
             </div>
             <div class="hint compactHint">Voice controls tone and dialect behavior.</div>
           </details>
@@ -2202,13 +2204,13 @@
                 <span class="settingsRowChev" aria-hidden="true">›</span>
               </a>
 
-              <div id="profilePersonaRow" class="profilePersonaRow profilePersonaRowSettings" style="display:none" aria-live="polite" data-expanded="false">
-                <button type="button" id="profilePersonaToggle" class="profilePersonaHead" aria-expanded="false" aria-controls="profilePersonaDetails">
+              <div id="profilePersonaRow" class="profilePersonaRow profilePersonaRowSettings settingsVoicesHub" style="display:none" aria-live="polite" data-expanded="true">
+                <button type="button" id="profilePersonaToggle" class="profilePersonaHead" aria-expanded="true" aria-controls="profilePersonaDetails">
                   <span class="profilePersonaIco" aria-hidden="true">
                     <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v4M8 22h8"/></svg>
                   </span>
                   <span class="profilePersonaHeadText">
-                    <span class="profilePersonaTitle">Voice persona</span>
+                    <span class="profilePersonaTitle">My voices</span>
                     <strong id="profilePersonaLabel">—</strong>
                   </span>
                   <span class="profilePersonaChev" aria-hidden="true">
@@ -2217,16 +2219,21 @@
                     </svg>
                   </span>
                 </button>
-                <div id="profilePersonaDetails" class="profilePersonaDetails" hidden>
-                  <div id="profilePersonaHint" class="profilePersonaHint">
-                    Save a voice as persona from any of these spots:
-                    <ul class="profilePersonaSpots">
-                      <li>After a song finishes → tap the ⋯ on the result card → <strong>Save voice as persona</strong>.</li>
-                      <li>In <a href="#/library">Library</a> → tap ⋯ on a song → <strong>Save voice as persona</strong>.</li>
-                      <li>On a published track → tap ⋯ → <strong>Save voice as persona</strong> when available.</li>
-                    </ul>
+                <div id="profilePersonaDetails" class="profilePersonaDetails settingsVoicesPanel">
+                  <p class="settingsVoicesLead">Saved voices for Create → More options → Persona.</p>
+                  <div id="settingsVoicesList" class="settingsVoicesList" role="list"></div>
+                  <p id="settingsVoicesEmpty" class="settingsVoicesEmpty" hidden>No saved voices yet.</p>
+                  <div class="settingsVoicesActions">
+                    <button type="button" id="btnSettingsVoiceWizard" class="primary settingsVoicesPrimaryBtn">Record my voice</button>
+                    <a href="#/library" class="ghost settingsVoicesSecondaryLink" data-route-link="library">Save from a song (Library)</a>
                   </div>
-                  <a href="#/generate" class="profilePersonaLink">Open Create</a>
+                  <details id="settingsVoicesFromSongHint" class="settingsVoicesFromSongHint">
+                    <summary>How to save from a finished song</summary>
+                    <ul class="profilePersonaSpots">
+                      <li>After a song finishes → ⋯ on the result → <strong>Save voice as persona</strong>.</li>
+                      <li>In <a href="#/library">Library</a> → ⋯ on a song → <strong>Save voice as persona</strong>.</li>
+                    </ul>
+                  </details>
                 </div>
               </div>
             </div>

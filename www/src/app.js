@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260519discoverPlaylistAdvanceV1";
+const APP_BUILD = "20260520settingsVoicesHubV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -185,7 +185,10 @@ const els = {
   sunoArabicAddress: document.getElementById("sunoArabicAddress"),
   sunoVoiceProfile: document.getElementById("sunoVoiceProfile"),
   sunoPersonaId: document.getElementById("sunoPersonaId"),
-  btnCreatePersona: document.getElementById("btnCreatePersona"),
+  linkManageVoices: document.getElementById("linkManageVoices"),
+  settingsVoicesList: document.getElementById("settingsVoicesList"),
+  settingsVoicesEmpty: document.getElementById("settingsVoicesEmpty"),
+  btnSettingsVoiceWizard: document.getElementById("btnSettingsVoiceWizard"),
   sunoProMode: document.getElementById("sunoProMode"),
   vocalInstrumentalOnly: document.getElementById("vocalInstrumentalOnly"),
   vocalModeFull: document.getElementById("vocalModeFull"),
@@ -2230,6 +2233,13 @@ function applyRoute() {
         focusHubPostFromShare(targetId);
       }
     } catch {}
+  }
+  if (wanted === "settings") {
+    renderPersonaSelect();
+    try { renderSettingsVoicesHub(); } catch {}
+    if (/voices=1/i.test(rawRouteQuery)) {
+      setProfilePersonaExpanded(true);
+    }
   }
   if (wanted === "profile") {
     void refreshAuthStateFromSupabase();
@@ -6276,8 +6286,13 @@ function savePersonaSelection(id) {
  *  page, and remember the user's choice across sessions. */
 const PROFILE_PERSONA_EXPANDED_KEY = "nabadai.profile.personaExpanded.v1";
 function isProfilePersonaExpanded() {
-  try { return localStorage.getItem(PROFILE_PERSONA_EXPANDED_KEY) === "1"; }
-  catch { return false; }
+  try {
+    const v = localStorage.getItem(PROFILE_PERSONA_EXPANDED_KEY);
+    if (v == null) return true;
+    return v === "1";
+  } catch {
+    return true;
+  }
 }
 function setProfilePersonaExpanded(on) {
   try { localStorage.setItem(PROFILE_PERSONA_EXPANDED_KEY, on ? "1" : "0"); } catch {}
@@ -6294,6 +6309,10 @@ function applyProfilePersonaExpandedUi(on) {
   else body.setAttribute("hidden", "");
 }
 
+function personaTypeLabel(type) {
+  return type === "suno_voice" ? "Recorded voice" : "From song";
+}
+
 function updateProfilePersonaRow() {
   if (!els.profilePersonaRow || !els.profilePersonaLabel) return;
   if (!authSession?.user?.id) {
@@ -6306,15 +6325,17 @@ function updateProfilePersonaRow() {
   const list = loadPersonas();
   const hit = list.find((x) => String(x.personaId) === id);
   els.profilePersonaRow.style.display = "";
-  const hint = document.getElementById("profilePersonaHint");
+  const n = list.length;
   if (id && hit) {
-    els.profilePersonaLabel.textContent = hit.label || id.slice(0, 12) + "…";
-    if (hint) hint.style.display = "none";
+    els.profilePersonaLabel.textContent =
+      `${n} saved · Active: ${hit.label || id.slice(0, 12) + "…"}`;
+  } else if (n) {
+    els.profilePersonaLabel.textContent = `${n} saved · None selected on Create`;
   } else {
-    els.profilePersonaLabel.textContent = "No persona selected";
-    if (hint) hint.style.display = "";
+    els.profilePersonaLabel.textContent = "None saved yet";
   }
   applyProfilePersonaExpandedUi(isProfilePersonaExpanded());
+  try { renderSettingsVoicesHub(); } catch {}
   renderActivePersonaBanner();
 }
 
@@ -12645,32 +12666,358 @@ function renderPersonaSelect() {
     "";
   const opts = ['<option value="">None (default voice)</option>']
     .concat(
-      list.map(
-        (p) =>
-          `<option value="${escapeHtml(String(p.personaId || ""))}">${escapeHtml(
-            String(p.label || p.personaId || "Persona")
-          )}</option>`
-      )
+      list.map((p) => {
+        const tag = p.type === "suno_voice" ? "Voice" : "Song";
+        const lab = String(p.label || p.personaId || "Persona");
+        return `<option value="${escapeHtml(String(p.personaId || ""))}">[${tag}] ${escapeHtml(lab)}</option>`;
+      })
     )
     .join("");
   els.sunoPersonaId.innerHTML = opts;
   if (current) els.sunoPersonaId.value = current;
   updateProfilePersonaRow();
 }
-function addPersona(personaId, label) {
+
+function removePersona(personaId) {
+  const id = String(personaId || "").trim();
+  if (!id) return;
+  const items = loadPersonas().filter((x) => String(x.personaId) !== id);
+  savePersonas(items);
+  const sel = loadPersonaSelection().trim();
+  if (sel === id) savePersonaSelection("");
+  if (String(els.sunoPersonaId?.value || "").trim() === id && els.sunoPersonaId) {
+    els.sunoPersonaId.value = "";
+  }
+  renderPersonaSelect();
+  try { renderActivePersonaBanner(); } catch {}
+}
+
+function renamePersona(personaId, nextLabel) {
+  const id = String(personaId || "").trim();
+  const label = String(nextLabel || "").trim().slice(0, 64);
+  if (!id || !label) return;
+  const items = loadPersonas().map((x) =>
+    String(x.personaId) === id ? { ...x, label } : x
+  );
+  savePersonas(items);
+  renderPersonaSelect();
+}
+
+function selectPersonaForCreate(personaId, opts = {}) {
+  const id = String(personaId || "").trim();
+  if (!id) return;
+  savePersonaSelection(id);
+  if (els.sunoPersonaId) els.sunoPersonaId.value = id;
+  renderPersonaSelect();
+  try { renderActivePersonaBanner(); } catch {}
+  if (!opts.silent) {
+    try {
+      const hit = loadPersonas().find((x) => String(x.personaId) === id);
+      showToast(
+        hit?.label ? `Using “${hit.label}” on Create` : "Voice selected for Create",
+        { icon: "✓", durationMs: 2800 }
+      );
+    } catch {}
+  }
+}
+
+function addPersona(personaId, label, meta = {}) {
   const id = String(personaId || "").trim();
   if (!id) return;
   const items = loadPersonas();
-  if (!items.some((x) => String(x.personaId) === id)) {
+  const type = meta.type === "suno_voice" ? "suno_voice" : "song";
+  const personaModel =
+    meta.personaModel === "style_persona" ? "style_persona" : "voice_persona";
+  const existing = items.find((x) => String(x.personaId) === id);
+  if (existing) {
+    existing.label = label || existing.label;
+    existing.type = type;
+    existing.personaModel = personaModel;
+    savePersonas(items.slice(0, 20));
+  } else {
     items.unshift({
       personaId: id,
       label: label || `Persona ${items.length + 1}`,
+      type,
+      personaModel,
       ts: Date.now(),
     });
     savePersonas(items.slice(0, 20));
   }
-  savePersonaSelection(id);
-  renderPersonaSelect();
+  selectPersonaForCreate(id, { silent: Boolean(meta.silentSelect) });
+}
+
+function renderSettingsVoicesHub() {
+  const listEl = els.settingsVoicesList;
+  const emptyEl = els.settingsVoicesEmpty;
+  if (!listEl) return;
+  const list = loadPersonas();
+  const activeId =
+    String(els.sunoPersonaId?.value || "").trim() || loadPersonaSelection().trim();
+  if (emptyEl) emptyEl.hidden = list.length > 0;
+  if (!list.length) {
+    listEl.innerHTML = "";
+    return;
+  }
+  listEl.innerHTML = list
+    .map((p) => {
+      const id = escapeHtml(String(p.personaId || ""));
+      const label = escapeHtml(String(p.label || "Voice"));
+      const meta = escapeHtml(personaTypeLabel(p.type));
+      const active = String(p.personaId) === activeId;
+      return `<div class="settingsVoicesRow${active ? " isActive" : ""}" role="listitem" data-persona-id="${id}">
+        <div class="settingsVoicesRowMain">
+          <div class="settingsVoicesRowTitle">${label}</div>
+          <div class="settingsVoicesRowMeta">${meta}${active ? " · Selected on Create" : ""}</div>
+        </div>
+        <div class="settingsVoicesRowActions">
+          <button type="button" class="ghost" data-voice-use="${id}">Use</button>
+          <button type="button" class="ghost" data-voice-rename="${id}">Rename</button>
+          <button type="button" class="ghost" data-voice-delete="${id}">Delete</button>
+        </div>
+      </div>`;
+    })
+    .join("");
+}
+
+function ensureVoiceWizardSheet() {
+  let sheet = document.getElementById("voiceWizardSheet");
+  if (sheet) return sheet;
+  sheet = document.createElement("div");
+  sheet.id = "voiceWizardSheet";
+  sheet.className = "voiceWizardSheet";
+  sheet.hidden = true;
+  sheet.innerHTML = `
+    <div class="voiceWizardBackdrop" data-voice-wizard-close></div>
+    <div class="voiceWizardCard" role="dialog" aria-modal="true" aria-labelledby="voiceWizardTitle">
+      <div class="voiceWizardHead">
+        <h3 id="voiceWizardTitle">Record my voice</h3>
+        <button type="button" class="ghost" data-voice-wizard-close aria-label="Close">Close</button>
+      </div>
+      <div id="voiceWizardBody" class="voiceWizardStep"></div>
+    </div>`;
+  document.body.appendChild(sheet);
+  sheet.addEventListener("click", (e) => {
+    if (e.target.closest("[data-voice-wizard-close]")) closeVoiceWizard();
+  });
+  return sheet;
+}
+
+function closeVoiceWizard() {
+  const sheet = document.getElementById("voiceWizardSheet");
+  if (sheet) sheet.hidden = true;
+  voiceWizardState.abort = true;
+}
+
+let voiceWizardState = { abort: false };
+
+async function uploadAudioFileForSuno(file) {
+  const token = getSupabaseAuthToken();
+  const fd = new FormData();
+  fd.append("file", file, file.name || "voice.mp3");
+  const r = await fetch(apiUrl("/api/suno/upload-audio"), {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: fd,
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d?.error || "Upload failed");
+  const url = String(d?.downloadUrl || "").trim();
+  if (!url) throw new Error("Upload succeeded but URL was missing");
+  return url;
+}
+
+async function pollVoiceValidatePhrase(taskId, maxMs = 120000) {
+  const token = getSupabaseAuthToken();
+  const started = Date.now();
+  while (Date.now() - started < maxMs) {
+    if (voiceWizardState.abort) throw new Error("Cancelled");
+    const r = await fetch(
+      apiUrl(`/api/suno/voice-validate-info?taskId=${encodeURIComponent(taskId)}`),
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d?.error || "Could not fetch validation phrase");
+    const status = String(d?.status || "").toLowerCase();
+    const phrase = String(d?.validateInfo || "").trim();
+    if (phrase && (status.includes("wait_validating") || status === "success")) {
+      return phrase;
+    }
+    if (status.includes("fail")) {
+      throw new Error(d?.errorMessage || d?.error || "Validation phrase failed");
+    }
+    await new Promise((r) => setTimeout(r, 2500));
+  }
+  throw new Error("Timed out waiting for validation phrase");
+}
+
+async function pollVoiceRecordInfo(taskId, maxMs = 180000) {
+  const token = getSupabaseAuthToken();
+  const started = Date.now();
+  while (Date.now() - started < maxMs) {
+    if (voiceWizardState.abort) throw new Error("Cancelled");
+    const r = await fetch(
+      apiUrl(`/api/suno/voice-record-info?taskId=${encodeURIComponent(taskId)}`),
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d?.error || "Could not fetch voice status");
+    const status = String(d?.status || "").toLowerCase();
+    const voiceId = String(d?.voiceId || "").trim();
+    if (voiceId && status === "success") return voiceId;
+    if (status.includes("fail")) {
+      throw new Error(d?.errorMessage || d?.error || "Voice creation failed");
+    }
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  throw new Error("Timed out waiting for your voice");
+}
+
+function renderVoiceWizardStep(html) {
+  const body = document.getElementById("voiceWizardBody");
+  if (body) body.innerHTML = html;
+}
+
+async function openVoiceWizard() {
+  if (!authSession?.user?.id) {
+    try { showToast("Sign in to record your voice", { icon: "!", durationMs: 3200 }); } catch {}
+    try { location.hash = "#/auth"; } catch {}
+    return;
+  }
+  voiceWizardState = { abort: false };
+  const sheet = ensureVoiceWizardSheet();
+  sheet.hidden = false;
+  renderVoiceWizardStep(`
+    <p class="hint">Upload 6–30 seconds of clear singing (solo vocal works best). We’ll ask you to sing a short phrase to verify it’s you.</p>
+    <label class="field">
+      <div class="label">Voice name</div>
+      <input id="voiceWizardName" type="text" maxlength="64" placeholder="My voice" value="My voice" />
+    </label>
+    <label class="field">
+      <div class="label">Sample clip (6–30s)</div>
+      <input id="voiceWizardSample" type="file" accept="audio/*" />
+    </label>
+    <label class="field">
+      <div class="label">Language</div>
+      <select id="voiceWizardLang">
+        <option value="en" selected>English</option>
+        <option value="ar">Arabic</option>
+        <option value="fr">French</option>
+        <option value="es">Spanish</option>
+      </select>
+    </label>
+    <div class="voiceWizardActions">
+      <button type="button" class="primary" id="voiceWizardStartBtn">Continue</button>
+    </div>`);
+  const startBtn = document.getElementById("voiceWizardStartBtn");
+  if (!startBtn) return;
+  startBtn.onclick = async () => {
+    const name = String(document.getElementById("voiceWizardName")?.value || "My voice").trim();
+    const file = document.getElementById("voiceWizardSample")?.files?.[0];
+    const language = String(document.getElementById("voiceWizardLang")?.value || "en").trim();
+    if (!file) {
+      showToast("Choose a sample audio file", { icon: "!", durationMs: 2800 });
+      return;
+    }
+    try {
+      startBtn.disabled = true;
+      renderVoiceWizardStep(`<p class="hint">Uploading sample…</p>`);
+      const voiceUrl = await uploadAudioFileForSuno(file);
+      let dur = 10;
+      try {
+        dur = Math.min(30, Math.max(6, Math.round(await measureAudioDurationSec(URL.createObjectURL(file)) || 10)));
+      } catch {
+        dur = 10;
+      }
+      renderVoiceWizardStep(`<p class="hint">Preparing verification phrase…</p>`);
+      const token = getSupabaseAuthToken();
+      const vr = await fetch(apiUrl("/api/suno/voice-validate"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          voiceUrl,
+          vocalStartS: 0,
+          vocalEndS: dur,
+          language,
+        }),
+      });
+      const vd = await vr.json().catch(() => ({}));
+      if (!vr.ok) throw new Error(vd?.error || "Validation start failed");
+      const validateTaskId = String(vd?.taskId || vd?.data?.taskId || "").trim();
+      if (!validateTaskId) throw new Error("Missing validation task id");
+      const phrase = await pollVoiceValidatePhrase(validateTaskId);
+      renderVoiceWizardStep(`
+        <p class="hint">Record yourself <strong>singing</strong> this phrase (about 10–20 seconds). Match the melody if you can.</p>
+        <div class="voiceWizardPhrase" id="voiceWizardPhrase">${escapeHtml(phrase)}</div>
+        <label class="field">
+          <div class="label">Verification recording</div>
+          <input id="voiceWizardVerify" type="file" accept="audio/*" />
+        </label>
+        <div class="voiceWizardActions">
+          <button type="button" class="primary" id="voiceWizardSubmitBtn">Create my voice</button>
+        </div>`);
+      const submitBtn = document.getElementById("voiceWizardSubmitBtn");
+      if (!submitBtn) return;
+      submitBtn.onclick = async () => {
+        const vFile = document.getElementById("voiceWizardVerify")?.files?.[0];
+        if (!vFile) {
+          showToast("Add your verification recording", { icon: "!", durationMs: 2800 });
+          return;
+        }
+        try {
+          submitBtn.disabled = true;
+          renderVoiceWizardStep(`<p class="hint">Uploading verification…</p>`);
+          const verifyUrl = await uploadAudioFileForSuno(vFile);
+          renderVoiceWizardStep(`<p class="hint">Creating your voice…</p>`);
+          const cr = await fetch(apiUrl("/api/suno/voice-create"), {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({
+              taskId: validateTaskId,
+              verifyUrl,
+              voiceName: name,
+              description: `Custom voice: ${name}`,
+              singerSkillLevel: "intermediate",
+            }),
+          });
+          const cd = await cr.json().catch(() => ({}));
+          if (!cr.ok) throw new Error(cd?.error || "Voice submit failed");
+          const voiceTaskId = String(cd?.taskId || cd?.data?.taskId || "").trim();
+          if (!voiceTaskId) throw new Error("Missing voice task id");
+          const voiceId = await pollVoiceRecordInfo(voiceTaskId);
+          addPersona(voiceId, name, { type: "suno_voice", personaModel: "voice_persona" });
+          closeVoiceWizard();
+          setProfilePersonaExpanded(true);
+          showToast("Your voice is saved and selected for Create", { icon: "✓", durationMs: 3600 });
+        } catch (e) {
+          showToast(e?.message || String(e), { icon: "!", durationMs: 4400 });
+          submitBtn.disabled = false;
+          renderVoiceWizardStep(`
+            <p class="hint">Something went wrong. You can close and try again.</p>
+            <p class="hint">${escapeHtml(e?.message || String(e))}</p>`);
+        }
+      };
+    } catch (e) {
+      showToast(e?.message || String(e), { icon: "!", durationMs: 4400 });
+      startBtn.disabled = false;
+      renderVoiceWizardStep(`<p class="hint">${escapeHtml(e?.message || String(e))}</p>`);
+    }
+  };
+}
+
+function openSettingsVoicesPanel() {
+  setProfilePersonaExpanded(true);
+  try { location.hash = "#/settings"; } catch {}
+  try {
+    els.profilePersonaRow?.scrollIntoView({ block: "start", behavior: "smooth" });
+  } catch {}
+  renderSettingsVoicesHub();
 }
 
 /**
@@ -13058,10 +13405,7 @@ async function createPersonaForSong({
     const personaId = String(d?.personaId || "").trim();
     if (!personaId) throw new Error("Persona created but ID was missing.");
 
-    addPersona(personaId, personaName);
-    if (els.sunoPersonaId) els.sunoPersonaId.value = personaId;
-    try { savePersonaSelection(personaId); } catch {}
-    try { renderPersonaSelect(); } catch {}
+    addPersona(personaId, personaName, { type: "song", personaModel: "voice_persona" });
     try { updateProfilePersonaRow(); } catch {}
     const okMsg = "Persona saved & selected for your next generations.";
     setStatus(okMsg);
@@ -19514,6 +19858,44 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       setProfilePersonaExpanded(next);
     });
   }
+  if (els.settingsVoicesList) {
+    els.settingsVoicesList.addEventListener("click", (e) => {
+      const useBtn = e.target.closest("[data-voice-use]");
+      const renBtn = e.target.closest("[data-voice-rename]");
+      const delBtn = e.target.closest("[data-voice-delete]");
+      const id = String(
+        useBtn?.getAttribute("data-voice-use") ||
+          renBtn?.getAttribute("data-voice-rename") ||
+          delBtn?.getAttribute("data-voice-delete") ||
+          ""
+      ).trim();
+      if (!id) return;
+      if (useBtn) {
+        selectPersonaForCreate(id);
+        return;
+      }
+      if (renBtn) {
+        const hit = loadPersonas().find((x) => String(x.personaId) === id);
+        const next = window.prompt("Rename this voice", hit?.label || "My voice");
+        if (next != null && String(next).trim()) renamePersona(id, String(next).trim());
+        return;
+      }
+      if (delBtn) {
+        const hit = loadPersonas().find((x) => String(x.personaId) === id);
+        const ok = window.confirm(`Delete “${hit?.label || "this voice"}”?`);
+        if (ok) removePersona(id);
+      }
+    });
+  }
+  if (els.btnSettingsVoiceWizard) {
+    els.btnSettingsVoiceWizard.addEventListener("click", () => void openVoiceWizard());
+  }
+  if (els.linkManageVoices) {
+    els.linkManageVoices.addEventListener("click", (e) => {
+      e.preventDefault();
+      openSettingsVoicesPanel();
+    });
+  }
 
   // Voice-note chip (own + public profiles) — retired. Click handlers
   // are intentionally not wired. The DOM nodes remain hidden via CSS
@@ -20340,11 +20722,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             .join(", ");
 
       const personaIdSel = (els.sunoPersonaId?.value || "").trim();
-      // Voice personas only work on V5 (Suno docs). The server will also
-      // coerce this defensively; we set it here so the client knows
-      // which engine label to display and to keep request → response in
-      // sync if a future build exposes a personaModel toggle.
-      const personaModelSel = personaIdSel ? "voice_persona" : "";
+      const personaHit = personaIdSel
+        ? loadPersonas().find((x) => String(x.personaId) === personaIdSel)
+        : null;
+      const personaModelSel = personaIdSel
+        ? String(personaHit?.personaModel || "voice_persona").trim() || "voice_persona"
+        : "";
       const modelForRequest = personaIdSel && personaModelSel === "voice_persona"
         ? "V5"
         : LATEST_SUNO_MODEL;
@@ -22868,38 +23251,6 @@ if (els.personaActiveBannerClear) {
     try {
       showToast("Voice persona cleared. Default voice will be used.", { icon: "✓", durationMs: 2200 });
     } catch {}
-  });
-}
-if (els.btnCreatePersona) {
-  els.btnCreatePersona.addEventListener("click", async () => {
-    if (!sunoTaskId) {
-      const msg = "Generate a song first, then come back and tap this.";
-      setStatus(msg);
-      showToast(msg, { icon: "♪", durationMs: 3200 });
-      return;
-    }
-    if (!sunoAudioId) {
-      const msg = "Wait until your song fully finishes, then try again.";
-      setStatus(msg);
-      showToast(msg, { icon: "!", durationMs: 3600 });
-      return;
-    }
-    try {
-      els.btnCreatePersona.disabled = true;
-      await createPersonaForSong({
-        taskId: sunoTaskId,
-        audioId: sunoAudioId,
-        audioUrl: lastSunoProxyUrl || lastSunoFullUrl,
-        title: lastSunoTitle,
-        style: els.sunoStyle?.value || lastGenerationMeta?.style,
-        voiceProfile: els.sunoVoiceProfile?.value || lastGenerationMeta?.voiceProfile,
-        dialect: els.sunoDialect?.value || lastGenerationMeta?.dialect,
-        timbre: activeProfile?.voiceTimbre,
-        source: "options",
-      });
-    } finally {
-      els.btnCreatePersona.disabled = false;
-    }
   });
 }
 if (els.btnProfileSave) {

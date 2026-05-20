@@ -5,8 +5,14 @@
     "api/suno/stems.js": {
       "includeFiles": "node_modules/ffmpeg-static/**"
     },
+    "api/suno/upload-audio.js": {
+      "includeFiles": "node_modules/ffmpeg-static/**"
+    },
     "api/render-video.js": {
       "includeFiles": "node_modules/ffmpeg-static/**",
+      "maxDuration": 60
+    },
+    "api/songs/archive.js": {
       "maxDuration": 60
     }
   },

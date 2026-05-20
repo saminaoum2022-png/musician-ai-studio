@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260520voiceWizardMicFixV1";
+const APP_BUILD = "20260520songArchiveV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -9776,6 +9776,7 @@ async function playLibraryListRowById(id, opts) {
   } catch {}
   const rawForPlay = unwrapInnermostHttpAudioUrl(t.url);
   let playSource = normalizeAudioUrlForPlayback(toAudioProxyUrl(rawForPlay) || rawForPlay);
+  if (!isArchivedSongStorageUrl(t.url)) queueArchiveLibraryTrack(t);
   const refreshed = await tryRefreshLibraryTrackAudioFromSuno(t);
   if (refreshed?.url) {
     const freshInner = String(refreshed.url).trim();
@@ -11940,11 +11941,17 @@ function shareToHub(track) {
   // empty `url` was being inserted, and a signed-in user with the
   // legacy `username: "guest"` was attributing posts to the
   // unauthenticated sentinel.
-  const initialUrl = String(track?.url || "").trim();
+  let initialUrl = String(track?.url || "").trim();
   if (!initialUrl) {
     setStatus?.("Song isn't ready to share yet — wait for the track to finish loading.");
     showToast?.("Song still loading — try again in a moment.", { durationMs: 3500 });
     return;
+  }
+  if (!isArchivedSongStorageUrl(initialUrl)) {
+    try {
+      const perm = await archiveLibraryTrackToCloud(track);
+      if (perm) initialUrl = perm;
+    } catch {}
   }
   if (creatorUserId && (!creator || creator === "guest")) {
     setStatus?.("Set a username before sharing to Hub.");
@@ -15853,6 +15860,7 @@ function addToLibrary(track) {
       setStatus(`Could not save copy to the cloud (${ins.reason}). Song is still saved on this device. ${_lastUserSongInsertFailure || ""}`.slice(0, 280));
       try { renderLibrary(); } catch {}
     }
+    queueArchiveLibraryTrack(newTrack);
   })();
   return newTrack;
 }
@@ -17851,8 +17859,18 @@ async function cacheGeneratedAudio2(url) {
     return null;
   }
 }
+/** Permanent copy in Supabase Storage — never wrap in Suno proxy. */
+function isArchivedSongStorageUrl(url) {
+  const s = String(url || "").trim();
+  if (!s) return false;
+  return /\/storage\/v1\/object\/public\/song_archive\//i.test(s);
+}
+
+const _songArchiveInflight = new Map();
+
 function toAudioProxyUrl(url) {
   if (!url || url === "#") return "";
+  if (isArchivedSongStorageUrl(url)) return normalizeAudioUrlForPlayback(url);
   // Use apiUrl() so native (Capacitor) gets an absolute URL pointing at the
   // deployed API. Relative `/api/...` resolves to `capacitor://localhost/api/...`
   // on iOS — which nothing serves — and silently breaks all audio playback.
@@ -19019,7 +19037,48 @@ function parseSunoGenerationRecordInfo(data) {
  *  `audioUrl` when status is still SUCCESS. Heals expired CDN links for
  *  older Library rows before playback.
  */
+/** Copy remote audio into Supabase `song_archive` and update Library + cloud. */
+async function archiveLibraryTrackToCloud(track) {
+  const token = getSupabaseAuthToken();
+  if (!token || !track?.id) return null;
+  const leaf = unwrapInnermostHttpAudioUrl(track.url) || String(track.url || "").trim();
+  if (!leaf || isArchivedSongStorageUrl(leaf) || isArchivedSongStorageUrl(track.url)) {
+    return isArchivedSongStorageUrl(track.url) ? String(track.url).trim() : leaf || null;
+  }
+  const r = await fetch(apiUrl("/api/songs/archive"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      sourceUrl: leaf,
+      taskId: track.taskId || "",
+      audioId: track.audioId || "",
+      libraryLocalId: track.id || "",
+    }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d?.permanentUrl) return null;
+  const permanent = String(d.permanentUrl).trim();
+  patchLibraryRowWithRefreshedUrl(String(track.id), permanent, permanent, track);
+  return permanent;
+}
+
+function queueArchiveLibraryTrack(track) {
+  const id = String(track?.id || "");
+  if (!id || isArchivedSongStorageUrl(track?.url)) return;
+  if (_songArchiveInflight.has(id)) return;
+  const job = archiveLibraryTrackToCloud(track)
+    .catch(() => null)
+    .finally(() => {
+      _songArchiveInflight.delete(id);
+    });
+  _songArchiveInflight.set(id, job);
+}
+
 async function tryRefreshLibraryTrackAudioFromSuno(t) {
+  if (isArchivedSongStorageUrl(t?.url)) return null;
   const tid = String(t?.taskId || "").trim();
   if (!tid) return null;
   try {

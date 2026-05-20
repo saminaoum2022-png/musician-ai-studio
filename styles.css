@@ -8857,6 +8857,26 @@ input::placeholder, textarea::placeholder{
   .mobileTabbar a.active .tabIcoPlay polygon{
     fill: url(#tabActiveGrad);
   }
+  .mobileTabbar a .tabIcoFriends{
+    width: 26px;
+    height: 26px;
+    stroke-width: 1.75;
+  }
+  .mobileTabbar a.active .tabIcoFriends path,
+  .mobileTabbar a.active .tabIcoFriends circle{
+    stroke: url(#tabActiveGrad);
+    stroke-width: 1.75;
+  }
+  .mobileTabbar a.friendsTab.active{
+    color: transparent;
+    background: transparent;
+  }
+  .mobileTabbar a.friendsTab.active .tabIcoFriends{
+    stroke: url(#tabActiveGrad);
+    stroke-width: 1.75;
+    opacity: 1;
+    transform: scale(1.06);
+  }
   .tabProfileLink.active .tabProfileAvatarRing{
     opacity: 1;
     transform: scale(1.04);
@@ -12523,22 +12543,24 @@ body[data-route="discover"] > .app{
 }
 .discoveryPaneFollowing,
 .friendsPage{
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0;
   padding-bottom: 8px;
-  min-height: 42vh;
+  min-height: 0;
   background: var(--bg);
 }
-.discoveryPaneFollowing .discoveryStudioAmbient,
 .friendsPage .discoveryStudioAmbient{
-  background: var(--bg);
+  display: none;
 }
 .discoveryStudioHead,
 .discoverySpotlightWrap,
 .discoveryFeedStatus,
 .discoveryCardStack,
-.discoveryStudioFooter{
+.discoveryStudioFooter,
+.friendsPage .followCompose,
+.friendsPage .followActStack{
   position: relative;
   z-index: 1;
 }
@@ -13110,9 +13132,12 @@ button.discoverySpotCard{
   margin: 0 0 14px;
   padding: 14px 14px 12px;
   border-radius: 16px;
-  border: 1px solid rgba(124,92,255,0.22);
-  background: linear-gradient(145deg, rgba(124,92,255,0.1), rgba(255,255,255,0.03));
+  border: 1px solid rgba(124,92,255,0.28);
+  background: linear-gradient(145deg, rgba(124,92,255,0.14), rgba(255,255,255,0.05));
   box-sizing: border-box;
+}
+.friendsPage .followCompose{
+  margin-top: 2px;
 }
 .followCompose.isSignedOut{
   opacity: 0.72;

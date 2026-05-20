@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521profileSongsV1";
+const APP_BUILD = "20260521friendsTabV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1901,12 +1901,14 @@ const TAB_REFRESH_ACTIONS = {
     : {}),
   discover() {
     try {
-      if (_discoveryActiveSegment === "following") {
-        void refreshDiscoveryFollowingFeed();
-      } else {
-        void refreshDiscoverFeed();
-      }
+      void refreshDiscoverFeed();
     } catch (e) { console.warn("[tabRefresh/discover]", e); }
+  },
+  friends() {
+    try {
+      syncFollowingComposeUi();
+      void refreshDiscoveryFollowingFeed();
+    } catch (e) { console.warn("[tabRefresh/friends]", e); }
   },
   mentor() {
     resetMentorSession();
@@ -2186,9 +2188,17 @@ function applyRoute() {
   const allowedRoutes = new Set([
     "intro", "start", "auth", "generate",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
-    "settings", "profile", "player", "discover", "discover-playlist", "challenges", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
+    "settings", "profile", "player", "discover", "discover-playlist", "friends", "challenges", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
   ]);
   let normalized = pendingPublicUsername ? "user" : (route === "start" ? "intro" : route);
+  if (normalized === "discover") {
+    try {
+      if (sessionStorage.getItem(DISCOVERY_SEGMENT_KEY) === "following") {
+        history.replaceState(null, "", "#/friends");
+        normalized = "friends";
+      }
+    } catch {}
+  }
   if (normalized === "library") {
     try { history.replaceState(null, "", "#/profile?seg=all"); } catch {}
     normalized = "profile";
@@ -2205,7 +2215,7 @@ function applyRoute() {
   }
   // Public profile is intentionally readable without auth so share-link
   // visitors don't hit a wall before discovering the rest of the product.
-  const protectedRoutes = new Set(["generate", "profile", "player", "vocal", "stems", "advanced", "credits", "sounds"]);
+  const protectedRoutes = new Set(["generate", "profile", "friends", "player", "vocal", "stems", "advanced", "credits", "sounds"]);
   const isLoggedIn = Boolean(authSession?.user?.id);
   if (!isLoggedIn && protectedRoutes.has(wanted)) wanted = "auth";
   const prevRoute = document.body.getAttribute("data-route") || "";
@@ -2215,7 +2225,7 @@ function applyRoute() {
   document.body.classList.toggle("isIntro", wanted === "intro");
   document.body.classList.toggle("isAuth", wanted === "auth");
   document.body.setAttribute("data-route", wanted);
-  if (wanted !== "discover" && wanted !== "discover-playlist") {
+  if (wanted !== "discover" && wanted !== "discover-playlist" && wanted !== "friends") {
     try { document.body.removeAttribute("data-discovery-segment"); } catch {}
   }
   if (prevRoute === "generate" && wanted !== "generate") {
@@ -2375,25 +2385,23 @@ function applyRoute() {
   if (wanted === "credits" || wanted === "sounds") {
     void refreshMyCredits({ silent: true });
   }
+  if (wanted === "friends") {
+    bindFriendsPageOnce();
+    try { onLeaveSearchRoute(); } catch {}
+    syncFollowingComposeUi();
+    void refreshDiscoveryFollowingFeed();
+  }
   if (wanted === "discover") {
-    bindDiscoverySegmentControls();
+    bindDiscoveryDiscoverControls();
     bindDiscoverPlaylistScreenOnce();
-    try {
-      sessionStorage.setItem(DISCOVERY_SEGMENT_KEY, "discover");
-    } catch {}
-    syncDiscoveryUiToSegment("discover");
     try {
       onLeaveSearchRoute();
     } catch {}
     void refreshDiscoverFeed();
   }
   if (wanted === "discover-playlist") {
-    bindDiscoverySegmentControls();
+    bindDiscoveryDiscoverControls();
     bindDiscoverPlaylistScreenOnce();
-    try {
-      sessionStorage.setItem(DISCOVERY_SEGMENT_KEY, "discover");
-    } catch {}
-    syncDiscoveryUiToSegment("discover");
     const openPlaylist = () => renderDiscoverPlaylistScreen(pendingDiscoverPlaylistSlug);
     if (!_discoveryFeedTracks.length) {
       void refreshDiscoverFeed().finally(openPlaylist);
@@ -2635,7 +2643,8 @@ if (!location.hash) location.hash = "#/intro";
 applyRoute();
 dismissBootSplash();
 try {
-  bindDiscoverySegmentControls();
+  bindDiscoveryDiscoverControls();
+  bindFriendsPageOnce();
 } catch {}
 try {
   wireTrackOptionsSheetOnce();
@@ -3214,10 +3223,10 @@ let _searchHintTimer = null;
 let _searchPosterIdToTemplate = new Map();
 let _searchActiveTemplate = null;
 let _searchInited = false;
+/** Legacy: used only to redirect old Discover→Following segment to #/friends. */
 const DISCOVERY_SEGMENT_KEY = "mas:discoverySegment:v1";
-let _discoverySegmentBound = false;
-/** `discover` (everyone) or `following` (followed creators). */
-let _discoveryActiveSegment = "discover";
+let _discoveryDiscoverBound = false;
+let _friendsPageBound = false;
 
 function startSearchHintRotator() {
   const hintEl = document.getElementById("searchInputHint");
@@ -3562,8 +3571,7 @@ function bindHomeDeskOnce(page) {
     if (act && page.contains(act)) {
       haptic("light");
       const seg = String(act.getAttribute("data-home-open-discover") || "discover");
-      try { sessionStorage.setItem(DISCOVERY_SEGMENT_KEY, seg); } catch {}
-      location.hash = "#/discover";
+      location.hash = seg === "following" ? "#/friends" : "#/discover";
       return;
     }
     const poll = e.target?.closest?.("[data-home-poll-choice]");
@@ -4346,7 +4354,7 @@ function bindFollowingComposeOnce() {
       if (input) input.value = "";
       syncFollowingComposeUi();
       haptic("success");
-      try { showToast("Posted to Following", { icon: "✓", durationMs: 2200 }); } catch {}
+      try { showToast("Posted to Friends", { icon: "✓", durationMs: 2200 }); } catch {}
       void refreshDiscoveryFollowingFeed();
     } catch (e) {
       haptic("error");
@@ -4592,52 +4600,16 @@ async function refreshDiscoveryFollowingFeed() {
     listEl.innerHTML = "";
     renderDiscoveryFollowingEmpty(
       statusEl,
-      "Could not load Following",
+      "Could not load Friends",
       e?.message || "Please try again in a moment.",
     );
   }
 }
 
-function syncDiscoveryUiToSegment(seg) {
-  const next = seg === "following" ? "following" : "discover";
-  _discoveryActiveSegment = next;
-  try {
-    document.body.setAttribute("data-discovery-segment", next);
-  } catch {}
-  document.querySelectorAll("[data-discovery-segment]").forEach((btn) => {
-    const isSel = btn.getAttribute("data-discovery-segment") === next;
-    btn.classList.toggle("isActive", isSel);
-    btn.setAttribute("aria-selected", isSel ? "true" : "false");
-  });
-  document.querySelectorAll("[data-discovery-pane]").forEach((pane) => {
-    const p = pane.getAttribute("data-discovery-pane");
-    const show = p === next;
-    if (show) pane.removeAttribute("hidden");
-    else pane.setAttribute("hidden", "");
-  });
-}
-
-function bindDiscoverySegmentControls() {
+function bindDiscoveryDiscoverControls() {
   wireUserPublicFeedRowsOnce();
-  bindFollowingComposeOnce();
-  if (_discoverySegmentBound) return;
-  _discoverySegmentBound = true;
-  document.querySelectorAll("[data-discovery-segment]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const s = btn.getAttribute("data-discovery-segment");
-      if (s !== "discover" && s !== "following") return;
-      try { sessionStorage.setItem(DISCOVERY_SEGMENT_KEY, s); } catch {}
-      const prev = _discoveryActiveSegment;
-      syncDiscoveryUiToSegment(s);
-      if (s === "following" && prev !== "following") {
-        try { onLeaveSearchRoute(); } catch {}
-        void refreshDiscoveryFollowingFeed();
-      } else if (s === "discover" && prev !== "discover") {
-        try { onLeaveSearchRoute(); } catch {}
-        void refreshDiscoverFeed();
-      }
-    });
-  });
+  if (_discoveryDiscoverBound) return;
+  _discoveryDiscoverBound = true;
   const rfb = document.getElementById("discoveryRefreshBtn");
   if (rfb && !rfb.dataset.boundDiscoveryRefresh) {
     rfb.dataset.boundDiscoveryRefresh = "1";
@@ -4646,17 +4618,6 @@ function bindDiscoverySegmentControls() {
       rfb.classList.add("isRefreshing");
       void refreshDiscoverFeed().finally(() => {
         try { rfb.classList.remove("isRefreshing"); } catch {}
-      });
-    });
-  }
-  const followingRefresh = document.getElementById("discoveryFollowingRefreshBtn");
-  if (followingRefresh && !followingRefresh.dataset.boundDiscoveryFollowingRefresh) {
-    followingRefresh.dataset.boundDiscoveryFollowingRefresh = "1";
-    followingRefresh.addEventListener("click", () => {
-      haptic("light");
-      followingRefresh.classList.add("isRefreshing");
-      void refreshDiscoveryFollowingFeed().finally(() => {
-        try { followingRefresh.classList.remove("isRefreshing"); } catch {}
       });
     });
   }
@@ -4694,15 +4655,32 @@ function bindDiscoverySegmentControls() {
       playDiscoverTarget(pl);
     });
   }
-  const followingPane = document.getElementById("discoveryPaneFollowing");
-  if (followingPane && !followingPane.dataset.boundDiscoverFollowingPane) {
-    followingPane.dataset.boundDiscoverFollowingPane = "1";
+}
+
+function bindFriendsPageOnce() {
+  wireUserPublicFeedRowsOnce();
+  bindFollowingComposeOnce();
+  if (_friendsPageBound) return;
+  _friendsPageBound = true;
+  const followingRefresh = document.getElementById("discoveryFollowingRefreshBtn");
+  if (followingRefresh && !followingRefresh.dataset.boundDiscoveryFollowingRefresh) {
+    followingRefresh.dataset.boundDiscoveryFollowingRefresh = "1";
+    followingRefresh.addEventListener("click", () => {
+      haptic("light");
+      followingRefresh.classList.add("isRefreshing");
+      void refreshDiscoveryFollowingFeed().finally(() => {
+        try { followingRefresh.classList.remove("isRefreshing"); } catch {}
+      });
+    });
+  }
+  const friendsPage = document.getElementById("friendsPage");
+  if (friendsPage && !friendsPage.dataset.boundFriendsPage) {
+    friendsPage.dataset.boundFriendsPage = "1";
     wireTrackOptionsSheetOnce();
-    followingPane.addEventListener("click", (e) => {
-      if (e.target.closest("[data-discovery-segment]")) return;
+    friendsPage.addEventListener("click", (e) => {
       if (e.target.closest(".followActAvatar")) return;
       const pl = e.target.closest("[data-user-lib-play]");
-      if (!pl || !followingPane.contains(pl)) return;
+      if (!pl || !friendsPage.contains(pl)) return;
       e.preventDefault();
       playDiscoverTarget(pl);
     });
@@ -9407,7 +9385,7 @@ async function toggleCurrentUserPublicFollow() {
     });
     renderUserPublicFollowButton();
     showToast(wasFollowing ? "Unfollowed creator." : "Following creator.");
-    if (wasFollowing && _discoveryActiveSegment === "following") {
+    if (wasFollowing && (document.body.getAttribute("data-route") || "") === "friends") {
       void refreshDiscoveryFollowingFeed();
     }
   } catch (e) {
@@ -10719,7 +10697,7 @@ function togglePublicProfileLibPlaybackIfSameUrl(rawUrl) {
 function syncDiscoveryPlayingHighlights() {
   const roots = [
     document.getElementById("discoveryPaneDiscover"),
-    document.getElementById("discoveryPaneFollowing"),
+    document.getElementById("friendsPage"),
     document.getElementById("discoverPlaylistList"),
   ].filter(Boolean);
   if (!roots.length) return;
@@ -11820,7 +11798,7 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     try {
       if (
         String(document.body.getAttribute("data-route") || "") === "discover" &&
-        _discoveryActiveSegment === "discover"
+        (document.body.getAttribute("data-route") || "") === "discover"
       ) {
         void refreshDiscoverFeed();
       }

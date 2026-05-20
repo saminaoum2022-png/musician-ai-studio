@@ -637,6 +637,7 @@ body[data-route="sounds"] main.grid > [data-route="sounds"],
 body[data-route="more"] main.grid > [data-route="more"],
 body[data-route="discover"] main.grid > [data-route="discover"],
 body[data-route="discover-playlist"] main.grid > [data-route="discover-playlist"],
+body[data-route="friends"] main.grid > [data-route="friends"],
 body[data-route="challenges"] main.grid > [data-route="challenges"],
 body[data-route="mentor"] main.grid > [data-route="mentor"],
 body[data-route="player"] main.grid > [data-route="player"],
@@ -12035,7 +12036,8 @@ body[data-route="discover"] > .app{
   min-width: 0;
 }
 .discoveryIdeasAmbient,
-.discoveryPaneFollowing .discoveryStudioAmbient{
+.discoveryPaneFollowing .discoveryStudioAmbient,
+.friendsPage .discoveryStudioAmbient{
   position: absolute;
   inset: -8px -12px 40%;
   z-index: 0;
@@ -12519,7 +12521,17 @@ body[data-route="discover"] > .app{
   min-height: 42vh;
   background: var(--bg);
 }
-.discoveryPaneFollowing{
+.discoveryPaneFollowing,
+.friendsPage{
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-bottom: 8px;
+  min-height: 42vh;
+  background: var(--bg);
+}
+.discoveryPaneFollowing .discoveryStudioAmbient,
+.friendsPage .discoveryStudioAmbient{
   background: var(--bg);
 }
 .discoveryStudioHead,

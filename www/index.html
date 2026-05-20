@@ -711,11 +711,7 @@
         </section>
 
         <section class="searchPage wide discoveryPage" data-route="discover">
-          <header class="discoverySegmentBar" role="tablist" aria-label="Discover sections">
-            <button type="button" class="discoverySegment isActive" role="tab" aria-selected="true" data-discovery-segment="discover" id="discoverySegDiscover">Discover</button>
-            <button type="button" class="discoverySegment" role="tab" aria-selected="false" data-discovery-segment="following" id="discoverySegFollowing">Following</button>
-          </header>
-          <div class="discoveryPane discoveryPaneStudio" id="discoveryPaneDiscover" data-discovery-pane="discover">
+          <div class="discoveryPane discoveryPaneStudio" id="discoveryPaneDiscover">
             <div class="discoveryStudioAmbient" aria-hidden="true"></div>
             <header class="discoveryStudioHead">
               <div class="discoveryStudioTitles">
@@ -740,43 +736,44 @@
             <div id="discoveryFeedStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
             <div id="discoveryFeedList" class="discoveryFeedList discoveryDiscoverGrid" hidden></div>
           </div>
-          <div class="discoveryPane discoveryPaneFollowing" id="discoveryPaneFollowing" data-discovery-pane="following" hidden>
-            <div class="discoveryStudioAmbient" aria-hidden="true"></div>
-            <header class="discoveryStudioHead">
-              <div class="discoveryStudioTitles">
-                <h2 class="discoveryStudioH2 appScreenTitle">Following</h2>
-                <p class="discoveryStudioTag appScreenLead">Updates, advice, drops, and remixes from people you follow.</p>
-              </div>
-              <button type="button" class="discoveryRefreshBtn" id="discoveryFollowingRefreshBtn" aria-label="Refresh following feed">
-                <svg class="discoveryRefreshIco" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                  <path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" d="M21 12a9 9 0 1 1-2.64-6.36"/>
-                  <path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" d="M21 3v6h-6"/>
-                </svg>
-              </button>
-            </header>
-            <section class="followCompose" id="discoveryFollowingCompose" aria-label="Share an update">
-              <p class="followComposeKicker">Your circle</p>
-              <p class="followComposePrompt" id="followComposePrompt">What&apos;s on your mind?</p>
-              <div class="followComposeChips" role="tablist" aria-label="Post type">
-                <button type="button" class="followComposeChip isActive" data-follow-compose-type="update" role="tab" aria-selected="true">Update</button>
-                <button type="button" class="followComposeChip" data-follow-compose-type="advice" role="tab" aria-selected="false">Ask advice</button>
-                <button type="button" class="followComposeChip" data-follow-compose-type="brainstorm" role="tab" aria-selected="false">Brainstorm</button>
-                <button type="button" class="followComposeChip" data-follow-compose-type="song_request" role="tab" aria-selected="false">Song request</button>
-                <button type="button" class="followComposeChip" data-follow-compose-type="recommend" role="tab" aria-selected="false">Recommend</button>
-              </div>
-              <label class="followComposeField">
-                <span class="srOnly" id="followComposeLabel">Your update</span>
-                <textarea id="followComposeInput" class="followComposeInput" rows="2" maxlength="320" placeholder="Share a studio moment, idea, or question…" aria-labelledby="followComposeLabel"></textarea>
-              </label>
-              <div class="followComposeFoot">
-                <span class="followComposeCount" id="followComposeCount" aria-live="polite">0 / 320</span>
-                <button type="button" class="followComposePost solid" id="followComposePost" disabled>Post</button>
-              </div>
-              <p class="followComposeHint" id="followComposeSignInHint" hidden>Sign in to post updates your followers will see on Following.</p>
-            </section>
-            <div id="discoveryFollowingStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
-            <div id="discoveryFollowingList" class="followActStack" hidden></div>
-          </div>
+        </section>
+
+        <section class="friendsPage wide discoveryPaneFollowing" data-route="friends" id="friendsPage">
+          <div class="discoveryStudioAmbient" aria-hidden="true"></div>
+          <header class="discoveryStudioHead">
+            <div class="discoveryStudioTitles">
+              <h2 class="discoveryStudioH2 appScreenTitle">Friends</h2>
+              <p class="discoveryStudioTag appScreenLead">Updates, advice, drops, and remixes from people you follow.</p>
+            </div>
+            <button type="button" class="discoveryRefreshBtn" id="discoveryFollowingRefreshBtn" aria-label="Refresh friends feed">
+              <svg class="discoveryRefreshIco" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                <path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" d="M21 12a9 9 0 1 1-2.64-6.36"/>
+                <path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" d="M21 3v6h-6"/>
+              </svg>
+            </button>
+          </header>
+          <section class="followCompose" id="discoveryFollowingCompose" aria-label="Share an update">
+            <p class="followComposeKicker">Your circle</p>
+            <p class="followComposePrompt" id="followComposePrompt">What&apos;s on your mind?</p>
+            <div class="followComposeChips" role="tablist" aria-label="Post type">
+              <button type="button" class="followComposeChip isActive" data-follow-compose-type="update" role="tab" aria-selected="true">Update</button>
+              <button type="button" class="followComposeChip" data-follow-compose-type="advice" role="tab" aria-selected="false">Ask advice</button>
+              <button type="button" class="followComposeChip" data-follow-compose-type="brainstorm" role="tab" aria-selected="false">Brainstorm</button>
+              <button type="button" class="followComposeChip" data-follow-compose-type="song_request" role="tab" aria-selected="false">Song request</button>
+              <button type="button" class="followComposeChip" data-follow-compose-type="recommend" role="tab" aria-selected="false">Recommend</button>
+            </div>
+            <label class="followComposeField">
+              <span class="srOnly" id="followComposeLabel">Your update</span>
+              <textarea id="followComposeInput" class="followComposeInput" rows="2" maxlength="320" placeholder="Share a studio moment, idea, or question…" aria-labelledby="followComposeLabel"></textarea>
+            </label>
+            <div class="followComposeFoot">
+              <span class="followComposeCount" id="followComposeCount" aria-live="polite">0 / 320</span>
+              <button type="button" class="followComposePost solid" id="followComposePost" disabled>Post</button>
+            </div>
+            <p class="followComposeHint" id="followComposeSignInHint" hidden>Sign in to post — your followers see it here on Friends.</p>
+          </section>
+          <div id="discoveryFollowingStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
+          <div id="discoveryFollowingList" class="followActStack" hidden></div>
         </section>
 
 
@@ -2607,6 +2604,15 @@
           </svg>
           <span class="tabLabel">Create</span>
           <span class="tabTooltip" id="tabCreateTooltip" hidden>Tap to generate ▶</span>
+        </a>
+        <a href="#/friends" data-route-link="friends" class="friendsTab" aria-label="Friends">
+          <svg class="tabIco tabIcoFriends" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="1.65"/>
+            <path fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+            <path fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          <span class="tabLabel">Friends</span>
         </a>
         <a href="#/profile" data-route-link="profile" class="tabProfileLink" aria-label="Profile">
           <span class="tabProfileAvatarSlot" id="tabProfileAvatarSlot" hidden>

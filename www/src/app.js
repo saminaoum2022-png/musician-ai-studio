@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521followStatusV1";
+const APP_BUILD = "20260521profileSongsV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -536,7 +536,7 @@ const els = {
   profilePreviewBio: document.getElementById("profilePreviewBio"),
   profilePreviewGenres: document.getElementById("profilePreviewGenres"),
   profilePreviewLinks: document.getElementById("profilePreviewLinks"),
-  profileHubSharedList: document.getElementById("profileHubSharedList"),
+  profileHubSharedList: document.getElementById("libraryList"),
   // Liquid pulse redesign nodes
   profileAuraTopRow: document.getElementById("profileAuraTopRow"),
   profileAuraNameRow: document.getElementById("profileAuraNameRow"),
@@ -650,7 +650,7 @@ function isPlayingHubPostVisible() {
 }
 function isPlayingLibraryRowVisible() {
   const route = document.body.getAttribute("data-route") || "";
-  if (route !== "library") return false;
+  if (route !== "profile" || _profileSongsSegment !== "all") return false;
   if (!playerLoadedLabel) return false;
   const key = String(playerLoadedLabel).toLowerCase();
   const rows = Array.from(document.querySelectorAll("[data-lib-row]"));
@@ -1629,7 +1629,7 @@ function renderHubNowPlaying() {
   const route = document.body.getAttribute("data-route") || "";
   const hideHubSource = miniSource?.type === "hub";
   const hideOnHubVisible = route === "hub";
-  const hideOnLibrary = route === "library" && miniSource?.type !== "library";
+  const hideOnLibrary = route === "profile" && _profileSongsSegment === "all" && miniSource?.type !== "library";
   const hideOnPlayer = route === "player";
   const hideOnGenerate = route === "generate" && miniSource?.type === "generateResult";
 
@@ -1915,10 +1915,9 @@ const TAB_REFRESH_ACTIONS = {
     void Promise.resolve(refreshMyCredits({ silent: true })).catch(() => {});
     void Promise.resolve(refreshMyHubPostsFast({ force: true })).catch(() => {});
     void Promise.resolve(refreshNotificationsUnreadBadge({ force: true })).catch(() => {});
-  },
-  library() {
+    renderProfileSongs();
     void Promise.resolve(reconcileLibraryFromCloud({ force: true }))
-      .catch((e) => console.warn("[tabRefresh/library]", e));
+      .catch((e) => console.warn("[tabRefresh/profile-songs]", e));
   },
 };
 
@@ -2040,6 +2039,9 @@ function shortenSoundTitle(raw) {
 /** Library tab red-dot persistence — fires on sound generations to nudge the
  *  user that something landed; full songs use the result card instead. */
 const LIBRARY_TAB_DOT_KEY = "mas:libraryTabDot:v1";
+const PROFILE_SONGS_SEGMENT_KEY = "mas:profileSongsSeg:v1";
+let _profileSongsSegment = "public";
+let _profileSongsSegmentBound = false;
 function markLibraryTabDot(on) {
   try {
     if (on) localStorage.setItem(LIBRARY_TAB_DOT_KEY, "1");
@@ -2047,7 +2049,7 @@ function markLibraryTabDot(on) {
   } catch {}
   if (els.libraryTabDot) {
     const route = document.body.getAttribute("data-route") || "";
-    const visible = on && route !== "library";
+    const visible = on && !(route === "profile" && _profileSongsSegment === "all");
     els.libraryTabDot.style.display = visible ? "inline-block" : "none";
   }
 }
@@ -2182,11 +2184,17 @@ function applyRoute() {
     }
   }
   const allowedRoutes = new Set([
-    "intro", "start", "auth", "generate", "library",
+    "intro", "start", "auth", "generate",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
     "settings", "profile", "player", "discover", "discover-playlist", "challenges", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
   ]);
-  const normalized = pendingPublicUsername ? "user" : (route === "start" ? "intro" : route);
+  let normalized = pendingPublicUsername ? "user" : (route === "start" ? "intro" : route);
+  if (normalized === "library") {
+    try { history.replaceState(null, "", "#/profile?seg=all"); } catch {}
+    normalized = "profile";
+    try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, "all"); } catch {}
+    _profileSongsSegment = "all";
+  }
   let wanted = allowedRoutes.has(normalized) ? normalized : "generate";
   if (!HUB_FEATURE_ENABLED && normalized === "hub") {
     wanted = "generate";
@@ -2197,7 +2205,7 @@ function applyRoute() {
   }
   // Public profile is intentionally readable without auth so share-link
   // visitors don't hit a wall before discovering the rest of the product.
-  const protectedRoutes = new Set(["generate", "library", "profile", "player", "vocal", "stems", "advanced", "credits", "sounds"]);
+  const protectedRoutes = new Set(["generate", "profile", "player", "vocal", "stems", "advanced", "credits", "sounds"]);
   const isLoggedIn = Boolean(authSession?.user?.id);
   if (!isLoggedIn && protectedRoutes.has(wanted)) wanted = "auth";
   const prevRoute = document.body.getAttribute("data-route") || "";
@@ -2301,6 +2309,31 @@ function applyRoute() {
     }
   }
   if (wanted === "profile") {
+    try {
+      const pq = new URLSearchParams(String(rawRouteQuery || ""));
+      const segQ = pq.get("seg");
+      if (segQ === "all" || segQ === "public") {
+        _profileSongsSegment = segQ;
+        sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, segQ);
+      } else {
+        const stored = sessionStorage.getItem(PROFILE_SONGS_SEGMENT_KEY);
+        _profileSongsSegment = stored === "all" ? "all" : "public";
+      }
+    } catch {
+      _profileSongsSegment = "public";
+    }
+    bindProfileSongsSegmentOnce();
+    syncProfileSongsSegmentUi();
+    markLibraryTabDot(false);
+    renderProfileSongs();
+    if (authSession?.user?.id && _profileSongsSegment === "all" && !loadLibrary().length) {
+      const run = () => void reconcileLibraryFromCloud({ force: true });
+      if (typeof requestIdleCallback === "function") {
+        requestIdleCallback(run, { timeout: 1200 });
+      } else {
+        setTimeout(run, 0);
+      }
+    }
     void refreshAuthStateFromSupabase();
     setProfileEditing(false);
     void refreshMyCredits({ silent: true });
@@ -2332,7 +2365,7 @@ function applyRoute() {
             };
             saveProfile(nextProfile);
             renderProfilePreviewFromInputs();
-            renderProfileHubShared();
+            renderProfileSongs();
           }
         } catch {}
         try { setProfileHeaderLoading(false); } catch {}
@@ -2341,24 +2374,6 @@ function applyRoute() {
   }
   if (wanted === "credits" || wanted === "sounds") {
     void refreshMyCredits({ silent: true });
-  }
-  if (wanted === "library") {
-    markLibraryTabDot(false);
-    // One synchronous paint from the in-memory + memoized local cache so
-    // the tab never flashes empty while `reconcileLibraryFromCloud` waits
-    // for idle + network (scheduled from hashchange).
-    renderLibrary();
-    // If we're logged in but local JSON is still empty (hydrate failed,
-    // storage quota, or first tap landed before boot finished), pull once
-    // with `force` so the 30s reconcile throttle doesn't block recovery.
-    if (authSession?.user?.id && !loadLibrary().length) {
-      const run = () => void reconcileLibraryFromCloud({ force: true });
-      if (typeof requestIdleCallback === "function") {
-        requestIdleCallback(run, { timeout: 1200 });
-      } else {
-        setTimeout(run, 0);
-      }
-    }
   }
   if (wanted === "discover") {
     bindDiscoverySegmentControls();
@@ -7606,8 +7621,8 @@ function saveAuthSession(sess) {
   try { syncMobileTabbarProfileAvatar(); } catch {}
   try { syncFollowingComposeUi(); } catch {}
   try {
-    if ((document.body.getAttribute("data-route") || "") === "library") renderLibrary();
-    renderProfileHubShared();
+    if ((document.body.getAttribute("data-route") || "") === "profile") renderProfileSongs();
+    else refreshOwnSongsUi();
   } catch {}
 }
 function getSupabaseAuthToken() {
@@ -8141,9 +8156,8 @@ function resetProfileUiToGuest() {
   }
   if (typeof setProfileHeaderLoading === "function") setProfileHeaderLoading(false);
   renderProfilePreviewFromInputs();
-  renderProfileHubShared();
   setProfileEditing(false);
-  renderLibrary();
+  renderProfileSongs();
   renderAuthStatus();
   if (els.profilePersonaRow) els.profilePersonaRow.style.display = "none";
 }
@@ -10132,7 +10146,7 @@ async function playLibraryListRowById(id, opts) {
   setPlayerMeta(meta);
   miniSource = { type: "library", id };
   libraryNowPlayingId = id;
-  renderLibrary();
+  refreshOwnSongsUi();
   const openPlayer = opts?.openPlayer === true;
   if (openPlayer) {
     await playOnPlayerPage(playSource, "Full song", meta);
@@ -10352,7 +10366,7 @@ function runTrackSheetAction(action, sourceEl) {
       const url =
         t.publicOnProfile && handle
           ? `${pathBase}#/u/${encodeURIComponent(handle)}`
-          : `${pathBase}#/library`;
+          : `${pathBase}#/profile?seg=all`;
       void shareHubLink({
         title: t.title ? `${t.title} — NabadAi` : "NabadAi Music",
         text: t.title || "From my library",
@@ -10476,7 +10490,7 @@ function runTrackSheetAction(action, sourceEl) {
       shut();
       const handle = String(activeProfile?.username || "").trim();
       const pathBase = `${location.origin.replace(/\/$/, "")}${location.pathname.replace(/\/$/, "")}`;
-      const url = handle ? `${pathBase}#/u/${encodeURIComponent(handle)}` : `${pathBase}#/library`;
+      const url = handle ? `${pathBase}#/u/${encodeURIComponent(handle)}` : `${pathBase}#/profile?seg=all`;
       void shareHubLink({
         title: t.title ? `${t.title} — NabadAi` : "NabadAi Music",
         text: t.title || "From my profile",
@@ -11769,10 +11783,7 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
   nextItems[idx] = next;
   saveLibrary(nextItems);
   try {
-    renderLibrary();
-  } catch {}
-  try {
-    renderProfileHubShared();
+    refreshOwnSongsUi();
   } catch {}
   if (!String(track.url || "").trim()) {
     showToast("This track has no audio URL yet — try again after it finishes saving.");
@@ -11800,7 +11811,7 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
   showToast(
     next.publicOnProfile
       ? "On Discover — listeners can find and play it."
-      : "Removed from Discover. Still in your Library.",
+      : "Removed from Discover. Still in All songs.",
   );
   if (next.publicOnProfile) {
     if (!track.publicOnProfile) {
@@ -11845,8 +11856,7 @@ async function renamePrivateLibraryTrack(trackId) {
   const nextItems = [...items];
   nextItems[idx] = next;
   saveLibrary(nextItems);
-  try { renderLibrary(); } catch {}
-  try { renderProfileHubShared(); } catch {}
+  try { refreshOwnSongsUi(); } catch {}
   const patch = await supabasePatchUserSong(track, { title: nextTitle });
   if (patch && patch.ok === false && patch.reason && patch.reason !== "noop") {
     const msg = patch.details
@@ -11925,7 +11935,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   resetPublicPlayTracking(miniSource);
   libraryNowPlayingId = null;
   try {
-    renderLibrary();
+    refreshOwnSongsUi();
   } catch {}
   const meta = {
     title: title || "Song",
@@ -12851,7 +12861,7 @@ function renderHub() {
           <div class="emptyStateIcon" aria-hidden="true">♫</div>
           <p class="emptyStateTitle">The Hub is quiet</p>
           <p class="emptyStateHint">Songs you publish from your Library will land here. Be the first to share something today.</p>
-          <a href="#/library" class="emptyStateCta" data-route-link="library">Open Library</a>
+          <a href="#/profile?seg=all" class="emptyStateCta" data-route-link="profile">Open your songs</a>
         </div>
       `;
     }
@@ -15534,8 +15544,81 @@ function queueReleaseCaptionCloudHeal(track) {
   });
 }
 
-/** Profile → songs on your public link (Hub off): **public Library rows only**.
- *  All saves (public + private) stay on `#/library`; use ⋯ there to toggle visibility. */
+function syncProfileSongsSegmentUi() {
+  const titleEl = document.getElementById("profileSongsTitle");
+  const leadEl = document.getElementById("profileSongsLead");
+  const recoverLink = document.getElementById("btnLibraryRecoverLink");
+  const recoverBanner = document.getElementById("libraryRecoverBanner");
+  const ownCount = document.getElementById("profileOwnSongCount");
+  const allCount = document.getElementById("libraryCount");
+  const isAll = _profileSongsSegment === "all";
+  document.querySelectorAll("[data-profile-songs-segment]").forEach((btn) => {
+    const on = btn.getAttribute("data-profile-songs-segment") === _profileSongsSegment;
+    btn.classList.toggle("isActive", on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  if (titleEl) titleEl.textContent = isAll ? "All songs" : "Public songs";
+  if (leadEl) {
+    leadEl.innerHTML = isAll
+      ? "<strong>⋯</strong> on a row: <strong>Remix</strong>, downloads, <strong>Publish release</strong>, and more. Songs stay private until you publish."
+      : "On Discover and your public link — switch to <strong>All songs</strong> to manage every save.";
+  }
+  if (recoverLink) recoverLink.hidden = !isAll;
+  if (recoverBanner && !isAll) recoverBanner.hidden = true;
+  if (ownCount) ownCount.hidden = isAll;
+  if (allCount) allCount.hidden = !isAll;
+  try { updateLibraryRecoverBanner(); } catch {}
+}
+
+function bindProfileSongsSegmentOnce() {
+  if (_profileSongsSegmentBound) return;
+  _profileSongsSegmentBound = true;
+  document.querySelectorAll("[data-profile-songs-segment]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const seg = btn.getAttribute("data-profile-songs-segment");
+      if (seg !== "public" && seg !== "all") return;
+      if (seg === _profileSongsSegment) return;
+      _profileSongsSegment = seg;
+      try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, seg); } catch {}
+      haptic("light");
+      syncProfileSongsSegmentUi();
+      renderProfileSongs();
+    });
+  });
+  document.getElementById("libraryList")?.addEventListener("click", (e) => {
+    const segBtn = e.target?.closest?.("[data-profile-songs-switch]");
+    if (!segBtn) return;
+    const seg = segBtn.getAttribute("data-profile-songs-switch");
+    if (seg !== "all" && seg !== "public") return;
+    _profileSongsSegment = seg;
+    try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, seg); } catch {}
+    syncProfileSongsSegmentUi();
+    renderProfileSongs();
+  });
+}
+
+function renderProfileSongs() {
+  const route = document.body.getAttribute("data-route") || "";
+  if (route !== "profile") {
+    renderLibrary();
+    return;
+  }
+  syncProfileSongsSegmentUi();
+  if (_profileSongsSegment === "all") {
+    try { renderProfileOwnStats(); } catch {}
+    renderLibrary();
+    return;
+  }
+  renderProfileHubShared();
+}
+
+function refreshOwnSongsUi() {
+  const route = document.body.getAttribute("data-route") || "";
+  if (route === "profile") renderProfileSongs();
+  else renderLibrary();
+}
+
+/** Profile → songs on your public link (Hub off): **public Library rows only**. */
 function renderProfileLibraryPublicOnLinkSection() {
   if (!els.profileHubSharedList) return;
   const withUrl = loadLibrary().filter((t) => String(t?.url || "").trim());
@@ -15579,9 +15662,9 @@ function renderProfileLibraryPublicOnLinkSection() {
     els.profileHubSharedList.innerHTML = `
       <div class="emptyState">
         <div class="emptyStateIcon" aria-hidden="true">♪</div>
-        <p class="emptyStateTitle">Nothing in Library yet</p>
-        <p class="emptyStateHint">Generated songs land in Library. Use ⋯ on a row, then <strong>Show on public profile</strong>.</p>
-        <a href="#/library" class="emptyStateCta" data-route-link="library">Open Library</a>
+        <p class="emptyStateTitle">Nothing saved yet</p>
+        <p class="emptyStateHint">Generated songs land in All songs. Use ⋯ on a row, then <strong>Show on public profile</strong>.</p>
+        <button type="button" class="emptyStateCta" data-profile-songs-switch="all">View all songs</button>
       </div>`;
     return;
   }
@@ -15590,8 +15673,8 @@ function renderProfileLibraryPublicOnLinkSection() {
       <div class="emptyState">
         <div class="emptyStateIcon" aria-hidden="true">◎</div>
         <p class="emptyStateTitle">No public songs on your profile yet</p>
-        <p class="emptyStateHint">Your saves stay private until you choose <strong>Show on public profile</strong> from ⋯ on each row in Library.</p>
-        <a href="#/library" class="emptyStateCta" data-route-link="library">Open Library</a>
+        <p class="emptyStateHint">Your saves stay private until you choose <strong>Show on public profile</strong> from ⋯ on each row in All songs.</p>
+        <button type="button" class="emptyStateCta" data-profile-songs-switch="all">View all songs</button>
       </div>`;
     return;
   }
@@ -15684,6 +15767,7 @@ function renderProfileLibraryPublicOnLinkSection() {
 
 function renderProfileHubShared() {
   if (!els.profileHubSharedList) return;
+  if ((document.body.getAttribute("data-route") || "") === "profile" && _profileSongsSegment === "all") return;
   if (!HUB_FEATURE_ENABLED) {
     renderProfileLibraryPublicOnLinkSection();
     return;
@@ -15751,7 +15835,7 @@ function renderProfileHubShared() {
         <div class="emptyStateIcon" aria-hidden="true">⏸</div>
         <p class="emptyStateTitle">Public Hub is paused</p>
         <p class="emptyStateHint">We turned off the public feed to save data costs. Your Library and creations are unchanged — sharing here may return later.</p>
-        <a href="#/library" class="emptyStateCta" data-route-link="library">Open Library</a>
+        <button type="button" class="emptyStateCta" data-profile-songs-switch="all">View all songs</button>
       </div>
     `
       : `
@@ -15759,7 +15843,7 @@ function renderProfileHubShared() {
         <div class="emptyStateIcon" aria-hidden="true">♪</div>
         <p class="emptyStateTitle">No songs on Hub yet</p>
         <p class="emptyStateHint">Share a track from your Library or Player and it'll show up here for everyone who lands on your profile.</p>
-        <a href="#/library" class="emptyStateCta" data-route-link="library">Open Library</a>
+        <button type="button" class="emptyStateCta" data-profile-songs-switch="all">View all songs</button>
       </div>
     `;
     return;
@@ -16152,7 +16236,7 @@ function patchLibraryTrack(id, patch) {
   const prev = items[idx];
   items[idx] = { ...prev, ...patch, ts: Date.now() };
   saveLibrary(items);
-  renderLibrary();
+  refreshOwnSongsUi();
   // Fire-and-forget cloud sync. The PATCH is keyed by the song_url +
   // kind of the previous row (those don't change in any current patch
   // path), so we use `prev` as the lookup. Custom-cover data: URLs are
@@ -16241,12 +16325,12 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
     if (_libraryHydrateInFlight) {
       _libraryHydrateInFlight = false;
       _libraryHydrateCompleted = true;
-      try { renderLibrary(); } catch {}
+      try { refreshOwnSongsUi(); } catch {}
     }
   }, 15000);
   // Repaint the Library tab immediately so the loading state can show
   // before the first network response lands.
-  try { renderLibrary(); } catch {}
+  try { refreshOwnSongsUi(); } catch {}
 
   // 1) Load cloud + local candidates and merge-dedupe.
   const cloudSongs =
@@ -16286,7 +16370,7 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
   _libraryHydrateCompleted = true;
   clearTimeout(safetyTimer);
   saveLibrary(merged);
-  renderLibrary();
+  refreshOwnSongsUi();
 
   if (!merged.length) return;
 
@@ -16333,7 +16417,7 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
     mergedFinal.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
     saveLibraryFor(uid, mergedFinal);
     saveLibrary(mergedFinal);
-    renderLibrary();
+    refreshOwnSongsUi();
     if (failCount > 0) {
       setStatus(`Library sync partial: ${okCount} uploaded, ${failCount} failed (${firstFail.slice(0, 90)})`);
     } else if (okCount > 0) {
@@ -16425,8 +16509,8 @@ async function reconcileLibraryFromCloud({ force = false } = {}) {
 
     merged.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
     saveLibrary(merged);
-    if ((document.body.getAttribute("data-route") || "") === "library") {
-      renderLibrary();
+    if ((document.body.getAttribute("data-route") || "") === "profile") {
+      refreshOwnSongsUi();
     }
     _libraryReconcileLastAt = Date.now();
   } catch {
@@ -16474,12 +16558,12 @@ function addToLibrary(track) {
   };
   items.unshift(newTrack);
   saveLibrary(items);
-  renderLibrary();
+  refreshOwnSongsUi();
   void (async () => {
     const ins = await supabaseInsertUserSong(newTrack);
     if (!ins?.ok) {
       setStatus(`Could not save copy to the cloud (${ins.reason}). Song is still saved on this device. ${_lastUserSongInsertFailure || ""}`.slice(0, 280));
-      try { renderLibrary(); } catch {}
+      try { refreshOwnSongsUi(); } catch {}
     }
     queueArchiveLibraryTrack(newTrack);
   })();
@@ -16490,7 +16574,7 @@ function removeFromLibrary(id) {
   const removed = prev.find((x) => x.id === id);
   const items = prev.filter((x) => x.id !== id);
   saveLibrary(items);
-  renderLibrary();
+  refreshOwnSongsUi();
   if (removed) {
     void supabaseDeleteUserSong(removed);
     // Library is the user's PRIVATE inventory; Hub is PUBLIC. Deleting
@@ -16759,7 +16843,7 @@ async function backfillLibraryThumbsLazy() {
     if (changed) {
       saveLibrary(items);
       // Re-render once so the thumbs swap in for the next paint.
-      try { renderLibrary(); } catch {}
+      try { refreshOwnSongsUi(); } catch {}
     }
   } catch {
     // Silent: backfill is purely an optimization.
@@ -16904,7 +16988,7 @@ async function runLibraryDiagnostic() {
       lines.push(`local raw bytes @ key (post-hydrate): ${rawAfter}`);
       if (afterLen > 0) {
         lines.push("→ hydrate succeeded; list refreshed below.");
-        try { renderLibrary(); } catch {}
+        try { refreshOwnSongsUi(); } catch {}
       }
     } catch (e) {
       lines.push(`forced hydrate ERR: ${e?.message || String(e)}`);
@@ -17035,7 +17119,7 @@ function applyLibRowNowPlayingChrome(row, active, audible) {
 
 function syncLibraryRowsFromPlayer() {
   const route = document.body.getAttribute("data-route") || "";
-  if (route !== "library" || !els.libraryList) return;
+  if (route !== "profile" || _profileSongsSegment !== "all" || !els.libraryList) return;
   const rows = els.libraryList.querySelectorAll(".libRow[data-lib-row]");
   if (!rows.length) return;
   rows.forEach((row) => {
@@ -17063,6 +17147,7 @@ function syncProfileHubSharedRowsFromPlayer() {
 
 function renderLibrary() {
   if (!els.libraryList) return;
+  if ((document.body.getAttribute("data-route") || "") === "profile" && _profileSongsSegment === "public") return;
   try {
     updateLibraryRecoverBanner();
   } catch {}
@@ -18445,7 +18530,7 @@ function setPlayerSource(url, label) {
   if (!miniSource) miniSource = { type: "player" };
   if (!miniSource || miniSource.type !== "library") {
     libraryNowPlayingId = null;
-    if ((document.body.getAttribute("data-route") || "") === "library") renderLibrary();
+    if ((document.body.getAttribute("data-route") || "") === "profile") renderProfileSongs();
   }
   syncPlayerUI();
   renderHubNowPlaying();
@@ -19783,7 +19868,7 @@ function patchLibraryRowWithRefreshedUrl(trackId, proxiedUrlForLibrary, rawRemot
     return null;
   }
   try {
-    renderLibrary();
+    refreshOwnSongsUi();
   } catch {}
   const forCloud = String(rawRemoteUrl || "").trim();
   if (forCloud) {
@@ -22880,7 +22965,7 @@ setTimeout(autoResizeLyricsBox, 0);
 // this after the browser has shown the initial frame keeps the route
 // swap snappy regardless of which tab the user lands on.
 const _bootInitialLists = () => {
-  try { renderLibrary(); } catch {}
+  try { refreshOwnSongsUi(); } catch {}
   try { renderHub(); } catch {}
 };
 if (typeof requestAnimationFrame === "function") {
@@ -23385,8 +23470,8 @@ if (els.btnSoundGenerate) {
 // devices once they arrive.
 window.addEventListener("hashchange", () => {
   const route = document.body.getAttribute("data-route") || "";
-  if (route !== "library") return;
-  // Paint the tab from memory/localStorage first; cloud reconcile hits
+  if (route !== "profile" || _profileSongsSegment !== "all") return;
+  // Paint from memory/localStorage first; cloud reconcile hits
   // the network and merges — scheduling it for idle keeps the route swap
   // feeling instant on slower phones.
   const run = () => void reconcileLibraryFromCloud();
@@ -23542,7 +23627,7 @@ if (els.btnPlayerBack) {
     if (history.length > 1) {
       history.back();
     } else {
-      location.hash = "#/library";
+      location.hash = "#/profile?seg=all";
     }
   });
 }
@@ -24291,11 +24376,11 @@ if (els.btnProfileSave) {
     } catch (e) {
       setStatus(`Local save done. Cloud save skipped: ${e?.message || String(e)}`);
     }
-    renderLibrary();
+    refreshOwnSongsUi();
     renderPersonaSelect();
     setStatus(`Profile saved: @${username}`);
     renderProfilePreviewFromInputs();
-    renderProfileHubShared();
+    renderProfileSongs();
     setProfileEditing(false);
     showToast("Profile saved.");
   });
@@ -24880,7 +24965,7 @@ void (async () => {
   const usedTokenFlow = !usedCodeFlow && maybeHandleMagicLinkFromHash();
   await refreshAuthStateFromSupabase();
   try {
-    if ((document.body.getAttribute("data-route") || "") === "library") renderLibrary();
+    if ((document.body.getAttribute("data-route") || "") === "profile") renderProfileSongs();
   } catch {}
   if (usedCodeFlow || usedTokenFlow) window.location.hash = "#/generate";
 
@@ -24998,10 +25083,14 @@ if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = activeP
 if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = activeProfile.bio || "";
 if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !== false;
 renderProfilePreviewFromInputs();
-renderProfileHubShared();
+try {
+  const stored = sessionStorage.getItem(PROFILE_SONGS_SEGMENT_KEY);
+  if (stored === "all" || stored === "public") _profileSongsSegment = stored;
+} catch {}
+renderProfileSongs();
 setProfileEditing(false);
 
-// Tap-active-tab to refresh (Hub / Search / Profile / Library). The
+// Tap-active-tab to refresh (Hub / Search / Profile). The
 // listener is attached once at boot and reads `body[data-route]` at
 // click time, so it stays correct across hash changes without needing
 // a rebind.

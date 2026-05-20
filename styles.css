@@ -631,7 +631,6 @@ body[data-route="auth"] main.grid > [data-route="auth"]{
   display: flex !important;
 }
 body[data-route="generate"] main.grid > [data-route="generate"],
-body[data-route="library"] main.grid > [data-route="library"],
 body[data-route="hub"] main.grid > [data-route="hub"],
 body[data-route="home"] main.grid > [data-route="home"],
 body[data-route="sounds"] main.grid > [data-route="sounds"],
@@ -1206,16 +1205,10 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
 }
 /* Library section lives directly on the page (no inner card chrome) so
  * rows go full-bleed within the .app gutter, like Apple Music. */
-.card.wide.librarySection[data-route="library"]{
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-  padding: 0;
+.profileSongsBlock{
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
-  animation: sectionFadeIn 260ms ease;
 }
 .libraryLead{
   margin: 0;
@@ -1223,8 +1216,8 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   line-height: 1.45;
   color: rgba(232, 238, 247, 0.62);
 }
-.librarySection .libraryHeader .libraryLead.appScreenLead,
-.profileSongsHeader .libraryLead.appScreenLead{
+.profileSongsHeader .libraryLead.appScreenLead,
+.profileSongsHeader .profileSongsLead.appScreenLead{
   font-size: 14px;
   line-height: 1.55;
   color: var(--muted);
@@ -2382,13 +2375,17 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
 .libraryTab{
   position: relative;
 }
-.libraryTabDot{
+.libraryTabDot,
+.profileTabDot{
   position: absolute;
   right: 22%;
   top: 6px;
   width: 7px;
   height: 7px;
   margin-left: 0;
+}
+.tabProfileLink{
+  position: relative;
 }
 .likeBurst{
   position:fixed;
@@ -13082,6 +13079,20 @@ button.discoverySpotCard{
   gap: 10px;
 }
 
+/* Profile — Public | All songs segments (library merged into profile) */
+.profileSongsBlock{
+  margin-top: 8px;
+}
+.profileSongsSegmentBar{
+  margin: 0 0 12px;
+}
+.profileSongsBlock .libraryHeader{
+  margin-top: 0;
+}
+.profileSongsBlock .libraryRecoverBanner{
+  margin-bottom: 10px;
+}
+
 /* Following — composer (status / advice / brainstorm) */
 .followCompose{
   margin: 0 0 14px;
@@ -14619,36 +14630,37 @@ button.discoverySpotCard{
     top: 6px;
     right: 6px;
   }
-  body[data-route="library"] .librarySection .libraryHeader.appScreenHeader{
+  body[data-route="profile"] .profileSongsBlock .libraryHeader.appScreenHeader{
     padding-left: 4px;
     padding-right: 4px;
   }
-  body[data-route="library"] .librarySection .libraryHeader .libraryLead.appScreenLead{
+  body[data-route="profile"] .profileSongsBlock .libraryHeader .libraryLead.appScreenLead,
+  body[data-route="profile"] .profileSongsBlock .profileSongsLead.appScreenLead{
     max-width: none;
     padding-right: 4px;
   }
-  body[data-route="library"] .libraryHeaderRow{
+  body[data-route="profile"] .libraryHeaderRow{
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
   }
-  body[data-route="library"] .libraryRecoverLink{
+  body[data-route="profile"] .libraryRecoverLink{
     align-self: stretch;
     text-align: center;
     white-space: normal;
     line-height: 1.35;
   }
-  body[data-route="library"] .libRowMain{
+  body[data-route="profile"] .libRowMain{
     padding: 10px 4px 10px 8px;
   }
-  body[data-route="library"] .libRowActions{
+  body[data-route="profile"] .libRowActions{
     padding-right: max(14px, env(safe-area-inset-right, 0px));
     gap: 4px;
   }
-  body[data-route="library"] .libRow + .libRow::before{
+  body[data-route="profile"] .libRow + .libRow::before{
     right: max(56px, calc(14px + env(safe-area-inset-right, 0px)));
   }
-  body[data-route="library"] .libRowMore{
+  body[data-route="profile"] .libRowMore{
     min-width: 36px;
     padding: 8px 2px 8px 4px;
   }

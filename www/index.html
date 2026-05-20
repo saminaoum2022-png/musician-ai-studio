@@ -69,7 +69,7 @@
           <h1 id="brandTitle" class="brandTitle" title="Start new"><span class="brandPrimary">NabadAi</span><span id="brandSecondary" class="brandSecondary">Music</span></h1>
           <div class="journeyBar">
             <a href="#/generate" class="journeyStep" data-route-link="generate">Generate</a>
-            <a href="#/library" class="journeyStep" data-route-link="library">Library</a>
+            <a href="#/profile" class="journeyStep" data-route-link="profile">Profile</a>
             <a href="#/discover" class="journeyStep" data-route-link="discover">Discover</a>
             <a href="#/challenges" class="journeyStep" data-route-link="challenges">Home</a>
             <a href="#/sounds" class="journeyStep" data-route-link="sounds">Sounds</a>
@@ -124,42 +124,6 @@
             </div>
             <p class="authLegal">By continuing you agree to our <a href="#/settings">Terms</a> &middot; <a href="#/settings">Privacy</a></p>
           </div>
-        </section>
-
-        <section class="card wide librarySection" data-route="library">
-          <header class="libraryHeader appScreenHeader">
-            <h2 class="appScreenTitle">Library</h2>
-            <p class="libraryLead appScreenLead"><strong>⋯</strong> on a row opens a bottom sheet: <strong>Remix</strong>, downloads, <strong>Publish release</strong>, and more. Songs stay private until you publish.</p>
-            <div class="libraryHeaderRow">
-              <p id="libraryCount" class="libraryCount" hidden aria-live="polite"></p>
-              <button
-                type="button"
-                id="btnLibraryRecoverLink"
-                class="libraryRecoverLink"
-                title="Recover a song from a Suno task ID"
-              >Lost a song? Recover</button>
-            </div>
-          </header>
-          <div id="libraryRecoverBanner" class="libraryRecoverBanner" hidden role="region" aria-label="Recover song">
-            <div class="libraryRecoverBannerInner">
-              <div class="libraryRecoverBannerBody">
-                <div class="libraryRecoverBannerTitle">Song finished but didn’t show up?</div>
-                <p id="libraryRecoverHint" class="libraryRecoverBannerHint">
-                  If Suno finished while the app was stuck, pull that generation into your Library here.
-                </p>
-              </div>
-              <div class="libraryRecoverBannerActions">
-                <button type="button" id="btnLibraryRecover" class="primary libraryRecoverPrimary">Recover my song</button>
-                <button type="button" id="btnLibraryRecoverById" class="ghost libraryRecoverSecondary">Enter task ID…</button>
-                <button type="button" id="btnLibraryRecoverDismiss" class="ghost libraryRecoverDismiss">Dismiss</button>
-              </div>
-            </div>
-          </div>
-          <div id="libraryList" class="libraryList"></div>
-          <p class="libraryDiagActions" hidden>
-            <button type="button" id="btnLibraryDiagnostic" class="ghost libraryDiagBtn">Run library diagnostic</button>
-          </p>
-          <pre id="libraryDiagnosticOutput" class="libraryDiagnosticOutput" hidden></pre>
         </section>
 
         <section class="card wide hubCard" data-route="hub">
@@ -1703,14 +1667,6 @@
                (Instagram pattern). Share confirmations use the global
                toast. -->
 
-          <!-- Popular this week — top 3 only, horizontal carousel. -->
-          <section class="profileTopWeek" id="profileTopWeek" hidden>
-            <header class="profileSectionHead">
-              <h3 class="profileSectionTitle">Popular this week</h3>
-            </header>
-            <div id="profileTopWeekList" class="profileTopWeekScroll" role="list"></div>
-          </section>
-
           <!-- Hidden compatibility nodes — older code paths still target
                these IDs (e.g. credit pill helpers, hub stats fallback).
                Kept off-screen so existing logic keeps working without
@@ -1720,14 +1676,56 @@
             <span id="profileOwnStats"></span>
           </div>
 
-          <!-- Songs — same Apple-Music-style row design as Library, no card chrome -->
+          <!-- Songs — Public (Discover / link) vs All (full library) -->
           <div class="profileSongsBlock">
+            <div class="profileSongsSegmentBar discoverySegmentBar" role="tablist" aria-label="Your songs">
+              <button type="button" class="discoverySegment profileSongsSegment isActive" role="tab" aria-selected="true" data-profile-songs-segment="public" id="profileSongsSegPublic">Public</button>
+              <button type="button" class="discoverySegment profileSongsSegment" role="tab" aria-selected="false" data-profile-songs-segment="all" id="profileSongsSegAll">All songs</button>
+            </div>
             <header class="libraryHeader profileSongsHeader appScreenHeader">
-              <h2 class="appScreenTitle appScreenTitle--panel">Your public songs</h2>
-              <p id="profileOwnSongCount" class="libraryCount" hidden></p>
+              <h2 class="appScreenTitle appScreenTitle--panel" id="profileSongsTitle">Public songs</h2>
+              <p class="profileSongsLead libraryLead appScreenLead" id="profileSongsLead">On Discover and your public link — use <strong>⋯</strong> on any row in All songs to publish.</p>
+              <div class="libraryHeaderRow">
+                <p id="profileOwnSongCount" class="libraryCount" hidden aria-live="polite"></p>
+                <p id="libraryCount" class="libraryCount" hidden aria-live="polite"></p>
+                <button
+                  type="button"
+                  id="btnLibraryRecoverLink"
+                  class="libraryRecoverLink"
+                  title="Recover a song from a Suno task ID"
+                  hidden
+                >Lost a song? Recover</button>
+              </div>
             </header>
-            <div id="profileHubSharedList" class="libraryList profileHubSharedList"></div>
+            <div id="libraryRecoverBanner" class="libraryRecoverBanner" hidden role="region" aria-label="Recover song">
+              <div class="libraryRecoverBannerInner">
+                <div class="libraryRecoverBannerBody">
+                  <div class="libraryRecoverBannerTitle">Song finished but didn’t show up?</div>
+                  <p id="libraryRecoverHint" class="libraryRecoverBannerHint">
+                    If Suno finished while the app was stuck, pull that generation into All songs here.
+                  </p>
+                </div>
+                <div class="libraryRecoverBannerActions">
+                  <button type="button" id="btnLibraryRecover" class="primary libraryRecoverPrimary">Recover my song</button>
+                  <button type="button" id="btnLibraryRecoverById" class="ghost libraryRecoverSecondary">Enter task ID…</button>
+                  <button type="button" id="btnLibraryRecoverDismiss" class="ghost libraryRecoverDismiss">Dismiss</button>
+                </div>
+              </div>
+            </div>
+            <div id="libraryList" class="libraryList profileHubSharedList"></div>
+            <p class="libraryDiagActions" hidden>
+              <button type="button" id="btnLibraryDiagnostic" class="ghost libraryDiagBtn">Run library diagnostic</button>
+            </p>
+            <pre id="libraryDiagnosticOutput" class="libraryDiagnosticOutput" hidden></pre>
           </div>
+
+          <!-- Popular this week — top 3 only, horizontal carousel. -->
+          <section class="profileTopWeek" id="profileTopWeek" hidden>
+            <header class="profileSectionHead">
+              <h3 class="profileSectionTitle">Popular this week</h3>
+            </header>
+            <div id="profileTopWeekList" class="profileTopWeekScroll" role="list"></div>
+          </section>
 
           <!-- Account — quiet, borderless block matching the rest of the page -->
           <div class="profileAccountBlock">
@@ -2228,13 +2226,13 @@
                   <p id="settingsVoicesEmpty" class="settingsVoicesEmpty" hidden>No saved voices yet.</p>
                   <div class="settingsVoicesActions">
                     <button type="button" id="btnSettingsVoiceWizard" class="primary settingsVoicesPrimaryBtn">Record my voice</button>
-                    <a href="#/library" class="ghost settingsVoicesSecondaryLink" data-route-link="library">Save from a song (Library)</a>
+                    <a href="#/profile?seg=all" class="ghost settingsVoicesSecondaryLink" data-route-link="profile">Save from a song (All songs)</a>
                   </div>
                   <details id="settingsVoicesFromSongHint" class="settingsVoicesFromSongHint">
                     <summary>How to save from a finished song</summary>
                     <ul class="profilePersonaSpots">
                       <li>After a song finishes → ⋯ on the result → <strong>Save voice as persona</strong>.</li>
-                      <li>In <a href="#/library">Library</a> → ⋯ on a song → <strong>Save voice as persona</strong>.</li>
+                      <li>In <a href="#/profile?seg=all" data-route-link="profile">Profile → All songs</a> → ⋯ on a song → <strong>Save voice as persona</strong>.</li>
                     </ul>
                   </details>
                 </div>
@@ -2610,15 +2608,6 @@
           <span class="tabLabel">Create</span>
           <span class="tabTooltip" id="tabCreateTooltip" hidden>Tap to generate ▶</span>
         </a>
-        <a href="#/library" data-route-link="library" class="libraryTab" aria-label="Library">
-          <svg class="tabIco" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M9 18V5l12-2v13"/>
-            <circle cx="6" cy="18" r="3"/>
-            <circle cx="18" cy="16" r="3"/>
-          </svg>
-          <span class="tabLabel">Library</span>
-          <span id="libraryTabDot" class="hubDot libraryTabDot" style="display:none"></span>
-        </a>
         <a href="#/profile" data-route-link="profile" class="tabProfileLink" aria-label="Profile">
           <span class="tabProfileAvatarSlot" id="tabProfileAvatarSlot" hidden>
             <span class="tabProfileAvatarRing" aria-hidden="true"></span>
@@ -2630,6 +2619,7 @@
             <circle cx="12" cy="7" r="4"/>
           </svg>
           <span class="tabLabel">Profile</span>
+          <span id="libraryTabDot" class="hubDot libraryTabDot profileTabDot" style="display:none" aria-hidden="true"></span>
         </a>
       </nav>
       <div id="hubNowPlaying" class="hubNowPlaying" style="display:none">

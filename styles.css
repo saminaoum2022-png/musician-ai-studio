@@ -13230,64 +13230,246 @@ button.discoverySpotCard{
   color: rgba(232,238,247,0.55);
 }
 
-/* Following — compact activity feed (Spotify-friend style, flat rows) */
+/* Following — X-style feed cards */
 .followActStack{
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
   margin-top: 4px;
   padding-bottom: 12px;
 }
 .followActStack.isDiscoveryLoading{
-  gap: 8px;
+  gap: 10px;
+  padding: 0 0 12px;
 }
 .followAct{
-  display: grid;
-  grid-template-columns: 28px 40px minmax(0, 1fr) 52px;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.03);
+  padding: 14px 14px 12px;
+  border-radius: 0;
+  border: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  background: transparent;
   box-sizing: border-box;
   min-width: 0;
   animation: discoveryRowIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   animation-delay: calc(var(--i, 0) * 40ms);
-  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+  transition: background-color 160ms ease;
 }
-.followAct:hover{
-  background: rgba(255,255,255,0.05);
-  border-color: rgba(255,255,255,0.12);
+.followAct--music,
+.followAct--status{
+  padding-left: 12px;
+  padding-right: 12px;
 }
-.followAct.discoveryRowPlaying{
-  background: linear-gradient(135deg, rgba(var(--cover-glow-rgb), 0.12), rgba(255,255,255,0.02));
-  border-color: rgba(var(--cover-glow-rgb), 0.28);
-  box-shadow: 0 8px 28px rgba(0,0,0,0.22);
+.followActTop{
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
 }
-.followActIco{
+.followActTopText{
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.followActWhoLine{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  line-height: 1.35;
+}
+.followActUserLink{
+  color: inherit;
+  text-decoration: none;
+  min-width: 0;
+}
+.followActUserLink:hover .followActUser{
+  text-decoration: underline;
+}
+.followActBadge{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  width: fit-content;
+  max-width: 100%;
+}
+.followActBadgeIco{
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 9px;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
   flex-shrink: 0;
 }
-.followActIco--release{
+.followActBadge--release .followActBadgeIco{
   color: rgba(167,139,250,0.95);
   background: rgba(124,92,255,0.14);
   border: 1px solid rgba(124,92,255,0.22);
 }
-.followActIco--remix{
+.followActBadge--remix .followActBadgeIco{
   color: rgba(94,234,212,0.95);
   background: rgba(35,213,171,0.1);
   border: 1px solid rgba(94,234,212,0.22);
 }
-.followActIco--challenge{
+.followActBadge--challenge .followActBadgeIco{
   color: rgba(251,191,36,0.95);
   background: rgba(245,158,11,0.1);
   border: 1px solid rgba(251,191,36,0.22);
+}
+.followActBadge--update .followActBadgeIco{
+  color: rgba(167,139,250,0.95);
+  background: rgba(124,92,255,0.14);
+  border: 1px solid rgba(124,92,255,0.22);
+}
+.followActBadge--advice .followActBadgeIco{
+  color: rgba(94,234,212,0.95);
+  background: rgba(35,213,171,0.1);
+  border: 1px solid rgba(94,234,212,0.22);
+}
+.followActBadge--brainstorm .followActBadgeIco{
+  color: rgba(251,191,36,0.95);
+  background: rgba(245,158,11,0.1);
+  border: 1px solid rgba(251,191,36,0.22);
+}
+.followActBadge--song_request .followActBadgeIco{
+  color: rgba(244,114,182,0.95);
+  background: rgba(236,72,153,0.1);
+  border: 1px solid rgba(244,114,182,0.22);
+}
+.followActBadge--recommend .followActBadgeIco{
+  color: rgba(96,165,250,0.95);
+  background: rgba(59,130,246,0.1);
+  border: 1px solid rgba(96,165,250,0.22);
+}
+.followActBadgeLabel{
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.followActBadge--release .followActBadgeLabel{
+  color: rgba(167,139,250,0.98);
+}
+.followActBadge--remix .followActBadgeLabel{
+  color: rgba(94,234,212,0.98);
+}
+.followActBadge--challenge .followActBadgeLabel{
+  color: rgba(251,191,36,0.98);
+}
+.followActBadge--update .followActBadgeLabel{
+  color: rgba(167,139,250,0.95);
+}
+.followActBadge--advice .followActBadgeLabel{
+  color: rgba(94,234,212,0.95);
+}
+.followActBadge--brainstorm .followActBadgeLabel{
+  color: rgba(251,191,36,0.95);
+}
+.followActBadge--song_request .followActBadgeLabel{
+  color: rgba(244,114,182,0.95);
+}
+.followActBadge--recommend .followActBadgeLabel{
+  color: rgba(96,165,250,0.95);
+}
+/* New drop / Remix — flat label (no pill), same feel as written status */
+.followActBadge--flat{
+  padding: 0;
+  gap: 5px;
+  border: none;
+  background: transparent;
+}
+.followActBadge--flat .followActBadgeIco{
+  width: auto;
+  height: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 0;
+}
+.followActContent{
+  min-width: 0;
+  padding-left: 50px;
+}
+.followActCaption{
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: rgba(232,238,247,0.78);
+}
+.followActMedia{
+  position: relative;
+  display: block;
+  width: calc(100% - 50px);
+  margin-left: 50px;
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(0,0,0,0.45);
+  aspect-ratio: 16 / 9;
+  max-height: 220px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.followActMediaImg{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.followActMediaPlay{
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8,11,18,0.55);
+  border: 2px solid rgba(255,255,255,0.85);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+  pointer-events: none;
+  transition: transform 160ms ease, background 160ms ease;
+}
+.followActFoot{
+  padding-left: 50px;
+  padding-top: 2px;
+}
+.followActFootStat{
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(232,238,247,0.45);
+}
+.followAct:hover{
+  background: rgba(255,255,255,0.02);
+}
+.followAct.discoveryRowPlaying{
+  background: rgba(var(--cover-glow-rgb), 0.06);
+}
+.followAct.discoveryRowPlaying .followActMedia{
+  box-shadow: 0 0 0 1px rgba(var(--cover-glow-rgb), 0.35);
+}
+.followAct.discoveryRowPlaying .followActMediaPlay{
+  background: rgba(var(--cover-glow-rgb), 0.75);
+  border-color: #fff;
+  transform: translate(-50%, -50%) scale(1.04);
 }
 .followActIcoSvg{
   width: 16px;
@@ -13297,6 +13479,10 @@ button.discoverySpotCard{
   stroke-width: 1.75;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+.followActBadgeIco .followActIcoSvg{
+  width: 14px;
+  height: 14px;
 }
 .followActAvatar{
   flex-shrink: 0;
@@ -13341,19 +13527,6 @@ button.discoverySpotCard{
   flex-direction: column;
   gap: 3px;
 }
-.followActType{
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(124,92,255,0.85);
-}
-.followAct[data-follow-act="remix"] .followActType{
-  color: rgba(94,234,212,0.88);
-}
-.followAct[data-follow-act="challenge"] .followActType{
-  color: rgba(251,191,36,0.9);
-}
 .followActHead{
   margin: 0;
   font-size: 13.5px;
@@ -13392,42 +13565,16 @@ button.discoverySpotCard{
   white-space: pre-wrap;
   word-break: break-word;
 }
-.followAct--status{
-  grid-template-columns: 28px 40px minmax(0, 1fr);
+.followAct--status .followActContent{
+  padding-left: 50px;
 }
 .followActBody--static{
   cursor: default;
-  padding-top: 2px;
-}
-.followActIco--update{
-  color: rgba(167,139,250,0.95);
-  background: rgba(124,92,255,0.14);
-  border: 1px solid rgba(124,92,255,0.22);
-}
-.followActIco--advice{
-  color: rgba(94,234,212,0.95);
-  background: rgba(35,213,171,0.1);
-  border: 1px solid rgba(94,234,212,0.22);
-}
-.followActIco--brainstorm{
-  color: rgba(251,191,36,0.95);
-  background: rgba(245,158,11,0.1);
-  border: 1px solid rgba(251,191,36,0.22);
-}
-.followActIco--song_request{
-  color: rgba(244,114,182,0.95);
-  background: rgba(236,72,153,0.1);
-  border: 1px solid rgba(244,114,182,0.22);
-}
-.followActIco--recommend{
-  color: rgba(96,165,250,0.95);
-  background: rgba(59,130,246,0.1);
-  border: 1px solid rgba(96,165,250,0.22);
 }
 .followActWhen{
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
-  color: rgba(232,238,247,0.48);
+  color: rgba(232,238,247,0.45);
 }
 .followActCover{
   position: relative;
@@ -13471,8 +13618,8 @@ button.discoverySpotCard{
 }
 .followAct--skel{
   pointer-events: none;
-  border-color: rgba(255,255,255,0.06);
-  background: rgba(255,255,255,0.02);
+  background: transparent;
+  border-bottom-color: rgba(255,255,255,0.05);
 }
 .followActSkel{
   border-radius: 8px;
@@ -13480,34 +13627,34 @@ button.discoverySpotCard{
   background-size: 200% 100%;
   animation: discoveryShimmer 1.15s ease-in-out infinite;
 }
-.followActSkelIco{
-  width: 28px;
-  height: 28px;
-}
 .followActSkelAvatar{
   width: 40px;
   height: 40px;
   border-radius: 999px;
+  flex-shrink: 0;
 }
 .followActSkelLines{
   display: flex;
   flex-direction: column;
   gap: 6px;
+  flex: 1 1 0;
   min-width: 0;
 }
 .followActSkelLine{
   height: 11px;
-  width: 88%;
+  width: 72%;
   border-radius: 6px;
 }
 .followActSkelLine.short{
-  width: 42%;
+  width: 38%;
   height: 9px;
 }
-.followActSkelCover{
-  width: 52px;
-  height: 52px;
-  border-radius: 10px;
+.followActSkelMedia{
+  width: calc(100% - 50px);
+  margin-left: 50px;
+  aspect-ratio: 16 / 9;
+  max-height: 180px;
+  border-radius: 16px;
 }
 .followActEmptyFaces{
   display: flex;

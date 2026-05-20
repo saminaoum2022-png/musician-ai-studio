@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521friendsFixV1";
+const APP_BUILD = "20260521friendsXFlatBadgeV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4220,6 +4220,28 @@ function followingActivityIcoSvg(type) {
   return `<svg class="followActIcoSvg" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`;
 }
 
+function followingMusicTypeLabel(type) {
+  if (type === "remix") return "Remix";
+  if (type === "challenge") return "Challenge";
+  return "New drop";
+}
+
+function followingActivityBadgeHtml(kind, type) {
+  const safeType = escapeHtml(String(type || "").trim());
+  const label = kind === "music"
+    ? followingMusicTypeLabel(type)
+    : followingStatusTypeLabel(type);
+  const ico = kind === "music"
+    ? followingActivityIcoSvg(type)
+    : followingStatusIcoSvg(type);
+  const flat = kind === "music" && (type === "release" || type === "remix");
+  const flatCls = flat ? " followActBadge--flat" : "";
+  return `<span class="followActBadge followActBadge--${safeType}${flatCls}" data-follow-badge="${safeType}">
+    <span class="followActBadgeIco followActIco followActIco--${safeType}" aria-hidden="true">${ico}</span>
+    <span class="followActBadgeLabel">${escapeHtml(label)}</span>
+  </span>`;
+}
+
 function followingActivityHeadHtml(type, handle, title, remixOf, challenge) {
   const who = handle
     ? `<strong class="followActUser">@${escapeHtml(handle)}</strong>`
@@ -4237,6 +4259,23 @@ function followingActivityHeadHtml(type, handle, title, remixOf, challenge) {
     return `${who}<span class="followActVerb"> entered </span><em class="followActSong">${cName}</em><span class="followActVerb"> — </span>${song}`;
   }
   return `${who}<span class="followActVerb"> released </span>${song}`;
+}
+
+/** Music cards (X-style): @user is in the header row — body is action + song only. */
+function followingActivityBodyHtml(type, title, remixOf, challenge) {
+  const song = `<em class="followActSong">${escapeHtml(title)}</em>`;
+  if (type === "remix" && remixOf) {
+    const srcWho = remixOf.creatorUsername
+      ? `<strong class="followActUser">@${escapeHtml(remixOf.creatorUsername)}</strong>`
+      : "another creator";
+    const srcTitle = remixOf.title ? ` <em class="followActSong">${escapeHtml(remixOf.title)}</em>` : "";
+    return `<span class="followActVerb">Remixed </span>${srcWho}${srcTitle}<span class="followActVerb"> — </span>${song}`;
+  }
+  if (type === "challenge" && challenge) {
+    const cName = escapeHtml(String(challenge.title || "a challenge").trim());
+    return `<span class="followActVerb">Entered </span><em class="followActSong">${cName}</em><span class="followActVerb"> — </span>${song}`;
+  }
+  return `<span class="followActVerb">Released </span>${song}`;
 }
 
 function followingStatusIcoSvg(postType) {
@@ -4272,20 +4311,25 @@ function followingStatusRowHtml(post, profMap, idx) {
     ? `<strong class="followActUser">@${escapeHtml(handle)}</strong>`
     : `<strong class="followActUser">A musician</strong>`;
   const verb = `<span class="followActVerb"> ${followingStatusVerb(postType)}</span>`;
-  const typeLabel = followingStatusTypeLabel(postType);
   return `
     <article class="followAct followAct--status" data-follow-act="status" data-follow-status-type="${escapeHtml(postType)}" style="--i:${idx}">
-      <span class="followActIco followActIco--${escapeHtml(postType)}" aria-hidden="true">${followingStatusIcoSvg(postType)}</span>
-      <a class="followActAvatar" href="${escapeHtml(profileHref)}" data-route-link="user" aria-label="${handle ? `@${escapeHtml(handle)} profile` : "Profile"}">
-        ${avatarSrc
-          ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
-          : `<span class="followActAvatarFallback">${escapeHtml(initials)}</span>`}
-      </a>
-      <div class="followActBody followActBody--static">
-        <span class="followActType">${escapeHtml(typeLabel)}</span>
-        <p class="followActHead followActHead--status">${who}${verb}</p>
+      <div class="followActTop">
+        <a class="followActAvatar" href="${escapeHtml(profileHref)}" data-route-link="user" aria-label="${handle ? `@${escapeHtml(handle)} profile` : "Profile"}">
+          ${avatarSrc
+            ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
+            : `<span class="followActAvatarFallback">${escapeHtml(initials)}</span>`}
+        </a>
+        <div class="followActTopText">
+          <div class="followActWhoLine">
+            <a class="followActUserLink" href="${escapeHtml(profileHref)}" data-route-link="user">${who}</a>
+            <span class="followActWhen">${escapeHtml(when)}</span>
+          </div>
+          ${followingActivityBadgeHtml("status", postType)}
+        </div>
+      </div>
+      <div class="followActContent followActBody--static">
+        <p class="followActHead followActHead--status">${verb.trim()}</p>
         <p class="followActStatusText">${body}</p>
-        <span class="followActWhen">${escapeHtml(when)}</span>
       </div>
     </article>`;
 }
@@ -4400,40 +4444,55 @@ function followingActivityRowHtml(t, profMap, idx) {
   const profileHref = handle ? `#/u/${encodeURIComponent(handle)}` : "#";
   const when = relativeTime(t.ts);
   const plays = Number(t.playCount);
-  const playBit = Number.isFinite(plays) && plays > 0
-    ? ` · ${escapeHtml(formatStatCount(plays))} ${plays === 1 ? "play" : "plays"}`
+  const playFoot = Number.isFinite(plays) && plays > 0
+    ? `<div class="followActFoot"><span class="followActFootStat">${escapeHtml(formatStatCount(plays))} ${plays === 1 ? "play" : "plays"}</span></div>`
     : "";
-  const typeLabel = type === "remix" ? "Remix" : type === "challenge" ? "Challenge" : "New drop";
+  const caption = releaseCaptionForTrack(t);
+  const captionHtml = caption
+    ? `<p class="followActCaption">${escapeHtml(caption)}</p>`
+    : "";
+  const who = handle
+    ? `<strong class="followActUser">@${escapeHtml(handle)}</strong>`
+    : `<strong class="followActUser">A musician</strong>`;
   return `
-    <article class="followAct discoveryRow" data-follow-act="${type}" style="--i:${idx}" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}>
-      <span class="followActIco followActIco--${type}" aria-hidden="true">${followingActivityIcoSvg(type)}</span>
-      <a class="followActAvatar" href="${escapeHtml(profileHref)}" data-route-link="user" aria-label="${handle ? `@${escapeHtml(handle)} profile` : "Profile"}">
-        ${avatarSrc
-          ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
-          : `<span class="followActAvatarFallback">${escapeHtml(initials)}</span>`}
-      </a>
-      <button type="button" class="followActBody" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
-        <span class="followActType">${escapeHtml(typeLabel)}</span>
-        <span class="followActHead">${followingActivityHeadHtml(type, handle, rawTitle, remixOf, challenge)}</span>
-        <span class="followActWhen">${escapeHtml(when)}${playBit}</span>
+    <article class="followAct followAct--music discoveryRow" data-follow-act="${type}" style="--i:${idx}" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}>
+      <div class="followActTop">
+        <a class="followActAvatar" href="${escapeHtml(profileHref)}" data-route-link="user" aria-label="${handle ? `@${escapeHtml(handle)} profile` : "Profile"}">
+          ${avatarSrc
+            ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
+            : `<span class="followActAvatarFallback">${escapeHtml(initials)}</span>`}
+        </a>
+        <div class="followActTopText">
+          <div class="followActWhoLine">
+            <a class="followActUserLink" href="${escapeHtml(profileHref)}" data-route-link="user">${who}</a>
+            <span class="followActWhen">${escapeHtml(when)}</span>
+          </div>
+          ${followingActivityBadgeHtml("music", type)}
+        </div>
+      </div>
+      <div class="followActContent">
+        <p class="followActHead">${followingActivityBodyHtml(type, rawTitle, remixOf, challenge)}</p>
+        ${captionHtml}
+      </div>
+      <button type="button" class="followActMedia" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
+        <img class="followActMediaImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
+        <span class="followActMediaPlay" aria-hidden="true">▶</span>
       </button>
-      <button type="button" class="followActCover" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
-        <img src="${escapeHtml(artSafe)}" alt="" width="52" height="52" decoding="async" loading="lazy" />
-        <span class="followActCoverPlay" aria-hidden="true">▶</span>
-      </button>
+      ${playFoot}
     </article>`;
 }
 
 function followingActivitySkeletonHtml() {
-  return Array.from({ length: 5 }, (_, i) => `
-    <div class="followAct followAct--skel" style="--i:${i}" aria-hidden="true">
-      <span class="followActSkel followActSkelIco"></span>
-      <span class="followActSkel followActSkelAvatar"></span>
-      <span class="followActSkel followActSkelLines">
-        <span class="followActSkelLine"></span>
-        <span class="followActSkelLine short"></span>
-      </span>
-      <span class="followActSkel followActSkelCover"></span>
+  return Array.from({ length: 4 }, (_, i) => `
+    <div class="followAct followAct--music followAct--skel" style="--i:${i}" aria-hidden="true">
+      <div class="followActTop">
+        <span class="followActSkel followActSkelAvatar"></span>
+        <span class="followActSkel followActSkelLines">
+          <span class="followActSkelLine"></span>
+          <span class="followActSkelLine short"></span>
+        </span>
+      </div>
+      <span class="followActSkel followActSkelMedia"></span>
     </div>`).join("");
 }
 
@@ -4679,10 +4738,13 @@ function bindFriendsPageOnce() {
     wireTrackOptionsSheetOnce();
     friendsPage.addEventListener("click", (e) => {
       if (e.target.closest(".followActAvatar")) return;
-      const pl = e.target.closest("[data-user-lib-play]");
+      const pl = e.target.closest("[data-user-lib-play], .followActMedia, .followActUserLink");
+      if (pl?.classList?.contains?.("followActUserLink")) return;
       if (!pl || !friendsPage.contains(pl)) return;
       e.preventDefault();
-      playDiscoverTarget(pl);
+      if (pl.classList.contains("followActMedia") || pl.hasAttribute("data-user-lib-play")) {
+        playDiscoverTarget(pl);
+      }
     });
   }
 }
@@ -10708,14 +10770,18 @@ function syncDiscoveryPlayingHighlights() {
       host.style.removeProperty("--cover-glow-rgb");
     } catch {}
     const badge = host.querySelector(
-      ".discoveryRowArtBadge, .discoverySpotCardArtBadge, .followActCoverPlay",
+      ".discoveryRowArtBadge, .discoverySpotCardArtBadge, .followActCoverPlay, .followActMediaPlay",
     );
     if (badge) badge.textContent = "▶";
     if (host.classList.contains("followAct")) {
       const title = decodeDiscoverDataAttr(host, "data-user-lib-title") || "Song";
+      const playing = host.classList.contains("discoveryRowPlaying");
+      const playLabel = playing ? "Pause" : "Play";
       host.querySelectorAll("[data-user-lib-play]").forEach((btn) => {
-        btn.setAttribute("aria-label", `Play ${title}`);
+        btn.setAttribute("aria-label", `${playLabel} ${title}`);
       });
+      const mediaPlay = host.querySelector(".followActMediaPlay");
+      if (mediaPlay) mediaPlay.textContent = playing ? "❚❚" : "▶";
     } else if (host.classList.contains("discoveryRow")) {
       const artBtn = host.querySelector("[data-discovery-inline-play]");
       if (artBtn) {
@@ -10745,7 +10811,7 @@ function syncDiscoveryPlayingHighlights() {
     host.classList.toggle("discoveryRowPlaying", audible);
     host.classList.toggle("discoveryRowActive", active && !audible);
     const badge = host.querySelector(
-      ".discoveryRowArtBadge, .discoverySpotCardArtBadge, .followActCoverPlay",
+      ".discoveryRowArtBadge, .discoverySpotCardArtBadge, .followActCoverPlay, .followActMediaPlay",
     );
     if (badge) badge.textContent = audible ? "❚❚" : "▶";
     if (host.classList.contains("followAct")) {
@@ -10753,6 +10819,8 @@ function syncDiscoveryPlayingHighlights() {
       host.querySelectorAll("[data-user-lib-play]").forEach((btn) => {
         btn.setAttribute("aria-label", audible ? `Pause ${title}` : `Play ${title}`);
       });
+      const mediaPlay = host.querySelector(".followActMediaPlay");
+      if (mediaPlay) mediaPlay.textContent = audible ? "❚❚" : "▶";
     } else if (host.classList.contains("discoveryRow")) {
       const artBtn = host.querySelector("[data-discovery-inline-play]");
       if (artBtn) {
@@ -10766,7 +10834,7 @@ function syncDiscoveryPlayingHighlights() {
     const artHint =
       String(decodeDiscoverDataAttr(host, "data-user-lib-art") || "").trim() ||
       String(decodeDiscoverDataAttr(urlEl, "data-user-lib-art") || "").trim() ||
-      String(host.querySelector?.(".followActCover img, .discoverySpotCardArt img, .discoveryRowArt img")?.getAttribute?.("src") || "").trim();
+      String(host.querySelector?.(".followActMediaImg, .followActCover img, .discoverySpotCardArt img, .discoveryRowArt img")?.getAttribute?.("src") || "").trim();
     if (active) applyCoverGlowRgb(host, artHint);
   };
 

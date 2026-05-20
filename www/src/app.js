@@ -23671,14 +23671,21 @@ if (els.agentSend && els.agentInput) {
 // Initialize agent chat lazily
 agentReset();
 
-// Intro screen (logo-only)
+// Intro splash → login (guests) or Home (signed-in). Do not jump straight to
+// #/challenges while the auth panel is still in the DOM — that stacked both UIs.
 function enterApp() {
   if (document.body.classList.contains("pageTransitioning")) return;
   const hero = document.querySelector(".introHero");
   if (hero) hero.classList.add("entering");
   document.body.classList.add("pageTransitioning");
   setTimeout(() => {
-    location.hash = "#/challenges";
+    const nextHash = authSession?.user?.id ? "#/challenges" : "#/auth";
+    try {
+      location.hash = nextHash;
+    } catch {
+      try { location.hash = "#/auth"; } catch {}
+    }
+    try { applyRoute(); } catch {}
     requestAnimationFrame(() => {
       document.body.classList.remove("pageTransitioning");
       if (hero) hero.classList.remove("entering");
@@ -24012,7 +24019,12 @@ if (els.btnAuthGateGoogle) {
 }
 if (els.btnAuthGateGuest) {
   els.btnAuthGateGuest.addEventListener("click", () => {
-    location.hash = "#/challenges";
+    try {
+      location.hash = "#/challenges";
+      applyRoute();
+    } catch {
+      try { location.hash = "#/challenges"; } catch {}
+    }
     setStatus("Guest mode enabled. Login anytime from Profile.");
   });
 }

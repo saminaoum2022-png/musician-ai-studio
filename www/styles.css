@@ -618,6 +618,39 @@ body.isAuth .footer{ display:none; }
 body.isAuth .generateOrb{ display:none !important; }
 body.isAuth .hubNowPlaying{ display:none !important; }
 
+/* Route panels: hide every screen in main.grid unless it matches
+ * body[data-route]. Backs up applyRoute() so intro + auth cannot stack
+ * (e.g. after boot races or WKWebView dropping inline display). */
+main.grid > [data-route]{
+  display: none !important;
+}
+body[data-route="intro"] main.grid > [data-route="intro"]{
+  display: flex !important;
+}
+body[data-route="auth"] main.grid > [data-route="auth"]{
+  display: flex !important;
+}
+body[data-route="generate"] main.grid > [data-route="generate"],
+body[data-route="library"] main.grid > [data-route="library"],
+body[data-route="hub"] main.grid > [data-route="hub"],
+body[data-route="home"] main.grid > [data-route="home"],
+body[data-route="sounds"] main.grid > [data-route="sounds"],
+body[data-route="more"] main.grid > [data-route="more"],
+body[data-route="discover"] main.grid > [data-route="discover"],
+body[data-route="discover-playlist"] main.grid > [data-route="discover-playlist"],
+body[data-route="challenges"] main.grid > [data-route="challenges"],
+body[data-route="mentor"] main.grid > [data-route="mentor"],
+body[data-route="player"] main.grid > [data-route="player"],
+body[data-route="user"] main.grid > [data-route="user"],
+body[data-route="profile"] main.grid > [data-route="profile"],
+body[data-route="credits"] main.grid > [data-route="credits"],
+body[data-route="vocal"] main.grid > [data-route="vocal"],
+body[data-route="stems"] main.grid > [data-route="stems"],
+body[data-route="advanced"] main.grid > [data-route="advanced"],
+body[data-route="settings"] main.grid > [data-route="settings"]{
+  display: block !important;
+}
+
 /* Brand chrome reservation:
  *
  *  Hub is the "home" tab — the brand wordmark stays there as the

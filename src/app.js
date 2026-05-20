@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260520songArchiveV1";
+const APP_BUILD = "20260520discoverSurvivalV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2096,8 +2096,8 @@ function applyRoute() {
   let pendingDiscoverPlaylistSlug = "";
   const playlistRouteMatch = route.match(/^discover\/playlist\/([a-z0-9_-]+)/i);
   if (playlistRouteMatch) {
-    pendingDiscoverPlaylistSlug = String(playlistRouteMatch[1] || "").trim().toLowerCase();
-    route = "discover-playlist";
+    pendingDiscoverPlaylistSlug = "";
+    route = "discover";
   }
   if (route === "search") {
     try {
@@ -4181,6 +4181,8 @@ async function refreshDiscoveryFollowingFeed() {
   statusEl.hidden = true;
   statusEl.textContent = "";
 
+  await discoverMaintainExpired();
+
   if (!authSession?.user?.id) {
     listEl.classList.remove("isDiscoveryLoading");
     listEl.hidden = true;
@@ -4220,7 +4222,7 @@ async function refreshDiscoveryFollowingFeed() {
 
     const playable = tracksNested
       .flat()
-      .filter((t) => String(t.url || "").trim())
+      .filter((t) => String(t.url || "").trim() && isDiscoverFeedActive(t))
       .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0))
       .slice(0, 60);
     const profMap = await fetchProfilesByUserIdsMap(playable.map((t) => t.userId));
@@ -8666,6 +8668,12 @@ async function supabasePatchUserSong(track, patch) {
   if (typeof patch?.songUrl === "string" && patch.songUrl.trim()) {
     body.song_url = patch.songUrl.trim();
   }
+  if (typeof patch?.discoverScore === "number" && Number.isFinite(patch.discoverScore)) {
+    body.discover_score = Math.round(patch.discoverScore);
+  }
+  if (typeof patch?.discoverExpiresAt === "string" && patch.discoverExpiresAt.trim()) {
+    body.discover_expires_at = patch.discoverExpiresAt.trim();
+  }
   if (Object.keys(body).length === 0) return { ok: false, reason: "noop" };
   const sendPatch = (payload) => fetch(`${SUPABASE_URL}/rest/v1/user_songs?${filter}`, {
     method: "PATCH",
@@ -8796,7 +8804,7 @@ async function supabaseFetchPublicLibraryForUserId(userId) {
   const uid = String(userId || "").trim();
   if (!uid || !SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
   const enc = encodeURIComponent(uid);
-  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
+  const colsWithPublished = "id,created_at,published_at,discover_score,discover_expires_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
   const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   try {
@@ -8818,25 +8826,33 @@ async function supabaseFetchPublicLibraryForUserId(userId) {
     if (!r.ok) return [];
     const arr = await r.json().catch(() => []);
     if (!Array.isArray(arr)) return [];
-    return arr.map((s) => ({
-      id: String(s.id || ""),
-      ts: selectedPublishedAt ? userSongPublishedTs(s) : new Date(s.created_at || Date.now()).getTime(),
-      createdTs: new Date(s.created_at || Date.now()).getTime(),
-      publishedAt: selectedPublishedAt ? userSongPublishedAtValue(s) : "",
-      title: s.title || "Generated song",
-      artUrl: s.art_url || "",
-      url: s.song_url || "",
-      taskId: s.task_id || "",
-      audioId: s.audio_id || "",
-      kind: s.kind || "full",
-      meta: {
-        ...(s.meta_remix_of ? { remixOf: s.meta_remix_of } : {}),
-        ...(String(s.meta_release_caption || "").trim() ? { releaseCaption: String(s.meta_release_caption).trim() } : {}),
-        ...(s.meta_challenge ? { challenge: s.meta_challenge } : {}),
-        ...(String(s.meta_featured_on_profile || "").toLowerCase() === "true" ? { featuredOnProfile: true } : {}),
-      },
-      publicOnProfile: true,
-    })).sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
+    return arr
+      .map((s) =>
+        attachDiscoverFieldsToTrack(
+          {
+            id: String(s.id || ""),
+            ts: selectedPublishedAt ? userSongPublishedTs(s) : new Date(s.created_at || Date.now()).getTime(),
+            createdTs: new Date(s.created_at || Date.now()).getTime(),
+            publishedAt: selectedPublishedAt ? userSongPublishedAtValue(s) : "",
+            title: s.title || "Generated song",
+            artUrl: s.art_url || "",
+            url: s.song_url || "",
+            taskId: s.task_id || "",
+            audioId: s.audio_id || "",
+            kind: s.kind || "full",
+            meta: {
+              ...(s.meta_remix_of ? { remixOf: s.meta_remix_of } : {}),
+              ...(String(s.meta_release_caption || "").trim() ? { releaseCaption: String(s.meta_release_caption).trim() } : {}),
+              ...(s.meta_challenge ? { challenge: s.meta_challenge } : {}),
+              ...(String(s.meta_featured_on_profile || "").toLowerCase() === "true" ? { featuredOnProfile: true } : {}),
+            },
+            publicOnProfile: true,
+          },
+          s,
+        ),
+      )
+      .filter((t) => isDiscoverFeedActive(t))
+      .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
   } catch {
     return [];
   }
@@ -9344,6 +9360,9 @@ function maybeRecordQualifiedPublicPlay() {
   const duration = getPlayerDuration();
   if (current < countedPlayThresholdSec(duration)) return;
   state.counted = true;
+  if (miniSource?.type === "discover_feed") {
+    void recordDiscoverSurvivalPlay(state.songId);
+  }
   void socialApi("/api/social", {
     method: "POST",
     body: JSON.stringify({
@@ -9362,7 +9381,7 @@ function maybeRecordQualifiedPublicPlay() {
 async function supabaseFetchDiscoveryPublicSongs(limit) {
   const lim = Math.max(1, Math.min(80, Number(limit) || 48));
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
-  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_tags:meta->tags";
+  const colsWithPublished = "id,created_at,published_at,discover_score,discover_expires_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_tags:meta->tags";
   const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_tags:meta->tags";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   try {
@@ -9388,29 +9407,37 @@ async function supabaseFetchDiscoveryPublicSongs(limit) {
     }
     const arr = await r.json().catch(() => []);
     if (!Array.isArray(arr)) return [];
-    return arr.map((s) => ({
-      id: String(s.id || ""),
-      ts: selectedPublishedAt ? userSongPublishedTs(s) : new Date(s.created_at || Date.now()).getTime(),
-      createdTs: new Date(s.created_at || Date.now()).getTime(),
-      publishedAt: selectedPublishedAt ? userSongPublishedAtValue(s) : "",
-      title: s.title || "Generated song",
-      artUrl: String(s.art_url || "").trim(),
-      url: String(s.song_url || "").trim(),
-      taskId: String(s.task_id || ""),
-      audioId: String(s.audio_id || ""),
-      kind: s.kind || "full",
-      userId: String(s.user_id || "").trim(),
-      meta: {
-        ...(s.meta_remix_of ? { remixOf: s.meta_remix_of } : {}),
-        ...(String(s.meta_release_caption || "").trim() ? { releaseCaption: String(s.meta_release_caption).trim() } : {}),
-        ...(s.meta_challenge ? { challenge: s.meta_challenge } : {}),
-        ...(String(s.meta_style || "").trim() ? { styleInput: String(s.meta_style).trim() } : {}),
-        ...(String(s.meta_style_sent || "").trim() ? { styleSent: String(s.meta_style_sent).trim() } : {}),
-        ...(String(s.meta_dialect || "").trim() ? { dialect: String(s.meta_dialect).trim() } : {}),
-        ...(String(s.meta_lyrics || "").trim() ? { lyricsInput: String(s.meta_lyrics).trim() } : {}),
-        ...(Array.isArray(s.meta_tags) ? { tags: s.meta_tags } : {}),
-      },
-    })).sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
+    return arr
+      .map((s) =>
+        attachDiscoverFieldsToTrack(
+          {
+            id: String(s.id || ""),
+            ts: selectedPublishedAt ? userSongPublishedTs(s) : new Date(s.created_at || Date.now()).getTime(),
+            createdTs: new Date(s.created_at || Date.now()).getTime(),
+            publishedAt: selectedPublishedAt ? userSongPublishedAtValue(s) : "",
+            title: s.title || "Generated song",
+            artUrl: String(s.art_url || "").trim(),
+            url: String(s.song_url || "").trim(),
+            taskId: String(s.task_id || ""),
+            audioId: String(s.audio_id || ""),
+            kind: s.kind || "full",
+            userId: String(s.user_id || "").trim(),
+            meta: {
+              ...(s.meta_remix_of ? { remixOf: s.meta_remix_of } : {}),
+              ...(String(s.meta_release_caption || "").trim() ? { releaseCaption: String(s.meta_release_caption).trim() } : {}),
+              ...(s.meta_challenge ? { challenge: s.meta_challenge } : {}),
+              ...(String(s.meta_style || "").trim() ? { styleInput: String(s.meta_style).trim() } : {}),
+              ...(String(s.meta_style_sent || "").trim() ? { styleSent: String(s.meta_style_sent).trim() } : {}),
+              ...(String(s.meta_dialect || "").trim() ? { dialect: String(s.meta_dialect).trim() } : {}),
+              ...(String(s.meta_lyrics || "").trim() ? { lyricsInput: String(s.meta_lyrics).trim() } : {}),
+              ...(Array.isArray(s.meta_tags) ? { tags: s.meta_tags } : {}),
+            },
+          },
+          s,
+        ),
+      )
+      .filter((t) => isDiscoverFeedActive(t))
+      .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
   } catch (e) {
     console.warn("[discovery/user_songs]", e);
     return [];
@@ -10438,7 +10465,136 @@ function syncUserPublicFeedPlayingHighlights() {
   });
 }
 
-/** Editorial Discover playlists (rule-matched; songs stay in the main feed too). */
+/** Editorial playlists removed from Discover v1 — survival feed only. */
+const DISCOVER_PLAYLISTS_ENABLED = false;
+
+/** Discover survival: starts at −100; 100 qualified plays → 0 (survived). */
+const DISCOVER_SURVIVAL_START = -100;
+const DISCOVER_SURVIVAL_TARGET = 0;
+const DISCOVER_SURVIVAL_PLAYS_NEEDED = 100;
+const DISCOVER_SURVIVAL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function discoverScoreFromTrack(t) {
+  const n = Number(t?.discoverScore ?? t?.discover_score);
+  return Number.isFinite(n) ? n : DISCOVER_SURVIVAL_START;
+}
+
+function discoverExpiresTs(t) {
+  const ex = String(t?.discoverExpiresAt || t?.discover_expires_at || "").trim();
+  if (ex) {
+    const ts = new Date(ex).getTime();
+    if (Number.isFinite(ts)) return ts;
+  }
+  const pub = String(t?.publishedAt || t?.published_at || "").trim();
+  if (pub) {
+    const ts = new Date(pub).getTime();
+    if (Number.isFinite(ts)) return ts + DISCOVER_SURVIVAL_MS;
+  }
+  const base = Number(t?.ts || t?.createdTs || 0);
+  if (base > 0) return base + DISCOVER_SURVIVAL_MS;
+  return Date.now() + DISCOVER_SURVIVAL_MS;
+}
+
+function isDiscoverFeedActive(t) {
+  const score = discoverScoreFromTrack(t);
+  if (score >= DISCOVER_SURVIVAL_TARGET) return true;
+  return discoverExpiresTs(t) > Date.now();
+}
+
+function discoverSurvivalMeta(t) {
+  const score = discoverScoreFromTrack(t);
+  const expiresTs = discoverExpiresTs(t);
+  const msLeft = Math.max(0, expiresTs - Date.now());
+  const daysLeft = Math.max(0, Math.ceil(msLeft / (24 * 60 * 60 * 1000)));
+  const playsDone = Math.max(0, score - DISCOVER_SURVIVAL_START);
+  const playsNeeded = Math.max(0, DISCOVER_SURVIVAL_TARGET - score);
+  const progressPct = Math.min(100, Math.max(0, (playsDone / DISCOVER_SURVIVAL_PLAYS_NEEDED) * 100));
+  const survived = score >= DISCOVER_SURVIVAL_TARGET;
+  const urgent = !survived && daysLeft <= 2;
+  return { score, expiresTs, msLeft, daysLeft, playsDone, playsNeeded, progressPct, survived, urgent };
+}
+
+function attachDiscoverFieldsToTrack(track, row) {
+  const scoreRaw = row?.discover_score;
+  const hasScore = scoreRaw !== null && scoreRaw !== undefined && scoreRaw !== "";
+  track.discoverScore = hasScore ? Number(scoreRaw) : DISCOVER_SURVIVAL_START;
+  if (!Number.isFinite(track.discoverScore)) track.discoverScore = DISCOVER_SURVIVAL_START;
+  track.discoverExpiresAt = String(row?.discover_expires_at || track.discoverExpiresAt || "").trim();
+  return track;
+}
+
+function discoverySurvivalMeterHtml(t) {
+  const m = discoverSurvivalMeta(t);
+  const scoreLabel = m.score > 0 ? `+${m.score}` : String(m.score);
+  const ringStyle = `--disc-prog:${m.progressPct.toFixed(1)}%;`;
+  const statusText = m.survived
+    ? "Survived · stays on Discover"
+    : m.playsNeeded === 1
+      ? "1 play to survive"
+      : `${m.playsNeeded} plays to survive`;
+  const timeText = m.survived
+    ? (m.daysLeft > 0 ? `${m.daysLeft}d left in spotlight` : "Graduated")
+    : `${m.daysLeft}d left · ${m.playsDone}/${DISCOVER_SURVIVAL_PLAYS_NEEDED} plays`;
+  const ringClass = m.survived
+    ? "discoverySurvivalRing discoverySurvivalRing--survived"
+    : m.urgent
+      ? "discoverySurvivalRing discoverySurvivalRing--urgent"
+      : "discoverySurvivalRing";
+  return `
+    <span class="discoverySurvival${m.survived ? " discoverySurvival--survived" : m.urgent ? " discoverySurvival--urgent" : ""}" style="${ringStyle}">
+      <span class="${ringClass}" aria-hidden="true"><span class="discoverySurvivalRingInner">${escapeHtml(scoreLabel)}</span></span>
+      <span class="discoverySurvivalText">
+        <span class="discoverySurvivalStatus">${escapeHtml(statusText)}</span>
+        <span class="discoverySurvivalTime">${escapeHtml(timeText)}</span>
+      </span>
+    </span>`;
+}
+
+function discoverySurvivalBannerHtml() {
+  return `
+    <div class="discoverySurvivalBanner" role="note">
+      <span class="discoverySurvivalBannerIco" aria-hidden="true">◎</span>
+      <div class="discoverySurvivalBannerCopy">
+        <span class="discoverySurvivalBannerTitle">7-day spotlight</span>
+        <span class="discoverySurvivalBannerLead">Each song starts at <strong>−100</strong>. Every listen adds <strong>+1</strong>. Hit <strong>0</strong> (100 plays) in a week to survive — or it leaves Discover. Your Library copy always stays.</span>
+      </div>
+    </div>`;
+}
+
+async function discoverMaintainExpired() {
+  try {
+    await fetch(apiUrl("/api/discover/maintain"), { method: "POST", cache: "no-store" });
+  } catch {}
+}
+
+async function recordDiscoverSurvivalPlay(songId) {
+  const sid = String(songId || "").trim();
+  if (!sid) return;
+  const tok = getSupabaseAuthToken();
+  try {
+    const r = await fetch(apiUrl("/api/discover/play"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(tok ? { Authorization: `Bearer ${tok}` } : {}),
+      },
+      body: JSON.stringify({ songId: sid }),
+      cache: "no-store",
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && d?.counted && Number.isFinite(Number(d.discoverScore))) {
+      const nextScore = Number(d.discoverScore);
+      _discoveryFeedTracks = (_discoveryFeedTracks || []).map((row) =>
+        String(row.songId) === sid ? { ...row, discoverScore: nextScore } : row,
+      );
+      try {
+        syncDiscoveryPlayingHighlights();
+      } catch {}
+    }
+  } catch {}
+}
+
+/** Editorial Discover playlists (disabled — kept for legacy route redirects). */
 const DISCOVER_PLAYLISTS = [
   {
     slug: "arabic",
@@ -10580,6 +10736,10 @@ function discoveryTrackPlaybackMeta(t, profMap) {
     audioId: String(t.audioId || ""),
     meta: t.meta || {},
     releaseCaption: releaseCaptionForTrack(t),
+    discoverScore: discoverScoreFromTrack(t),
+    discoverExpiresAt: String(t.discoverExpiresAt || "").trim(),
+    publishedAt: String(t.publishedAt || "").trim(),
+    ts: Number(t.ts || 0),
   };
 }
 
@@ -10616,6 +10776,11 @@ function renderDiscoveryPlaylistRails() {
   const wrap = document.getElementById("discoveryPlaylistsSection");
   const rail = document.getElementById("discoveryPlaylistsRail");
   if (!wrap || !rail) return;
+  if (!DISCOVER_PLAYLISTS_ENABLED) {
+    wrap.hidden = true;
+    rail.innerHTML = "";
+    return;
+  }
   const cards = DISCOVER_PLAYLISTS.map((pl) => {
     const tracks = _discoveryPlaylistBuckets.get(pl.slug) || [];
     if (tracks.length < 2) return "";
@@ -10975,6 +11140,7 @@ function discoveryTrackRowHtml(t, profMap, idx) {
   const challengeLine = challengeSourceLineHtml(t);
   const remixLine = remixSourceLineHtml(t);
   const releaseLine = releaseCaptionLineHtml(t);
+  const survivalLine = discoverySurvivalMeterHtml(t);
   const richRowClass = challengeLine || remixLine || releaseLine ? " discoveryRow--rich" : "";
   const side = `<button type="button" class="discoveryRowSide" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" ${sheetData} aria-label="Options for ${safeTitle}">⋯</button>`;
   return `
@@ -10993,6 +11159,7 @@ function discoveryTrackRowHtml(t, profMap, idx) {
             ${challengeLine}
             ${remixLine}
             ${releaseLine}
+            ${survivalLine}
           </span>
           <span class="discoveryRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
         </button>
@@ -11038,6 +11205,7 @@ function discoverySpotCardHtml(t, profMap, idx) {
               <span class="discoverySpotCardBy">${challenge ? `${challengePillHtml()} ` : remixOf ? `${remixPillHtml()} ` : ""}${escapeHtml(byLine)}</span>
               ${challenge ? `<span class="discoverySpotCardCaption">${escapeHtml(challengeAttributionText(challenge))}</span>` : ""}
               ${releaseCaption ? `<span class="discoverySpotCardCaption">${escapeHtml(releaseCaption)}</span>` : ""}
+              <span class="discoverySpotCardSurvival">${discoverySurvivalMeterHtml(t)}</span>
             </span>
             <span class="discoverySpotCardEq" aria-hidden="true"><span></span><span></span><span></span></span>
           </span>
@@ -11080,6 +11248,8 @@ async function refreshDiscoverFeed() {
   statusEl.textContent = "";
   statusEl.hidden = true;
 
+  await discoverMaintainExpired();
+
   const rows = await supabaseFetchDiscoveryPublicSongs(64);
   if (gen !== _discoveryFeedGen) return;
   const playable = rows.filter((t) => String(t.url || "").trim());
@@ -11090,8 +11260,6 @@ async function refreshDiscoverFeed() {
 
   if (!playable.length) {
     _discoveryFeedTracks = [];
-    rebuildDiscoveryPlaylistBuckets([]);
-    renderDiscoveryPlaylistRails();
     listEl.hidden = true;
     listEl.innerHTML = "";
     if (spotlightWrap) spotlightWrap.hidden = true;
@@ -11110,7 +11278,7 @@ async function refreshDiscoverFeed() {
         <div class="discoveryEmptyWrap">
           <div class="discoveryEmptyArt">${ill}</div>
           <p class="discoveryEmptyTitle">The feed is quiet</p>
-          <p class="discoveryEmptyText">When creators mark songs <strong>Public on profile</strong> in Library and they sync to the cloud, they show up here — newest first.</p>
+          <p class="discoveryEmptyText">When creators share to <strong>Discover</strong>, songs get a <strong>7-day</strong> run — <strong>100 plays</strong> to survive. Nothing live right now.</p>
         </div>`;
     }
     try {
@@ -11124,8 +11292,11 @@ async function refreshDiscoverFeed() {
   const spot = playable.slice(0, 5);
   const rest = playable.slice(5);
   _discoveryFeedTracks = playable.map((t) => discoveryTrackPlaybackMeta(t, profMap));
-  rebuildDiscoveryPlaylistBuckets(playable);
-  renderDiscoveryPlaylistRails();
+
+  const head = document.querySelector("#discoveryPaneDiscover .discoveryStudioHead");
+  if (head && !head.querySelector(".discoverySurvivalBanner")) {
+    head.insertAdjacentHTML("beforeend", discoverySurvivalBannerHtml());
+  }
 
   if (rail && spotlightWrap) {
     rail.innerHTML = spot.map((t, i) => discoverySpotCardHtml(t, profMap, i)).join("");
@@ -11165,6 +11336,12 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
   const publishedAt = willBePublic && !wasPublic
     ? new Date().toISOString()
     : userSongPublishedAtValue(track);
+  const discoverExpiresAt = willBePublic && !wasPublic
+    ? new Date(Date.now() + DISCOVER_SURVIVAL_MS).toISOString()
+    : String(track.discoverExpiresAt || "").trim();
+  const discoverScore = willBePublic && !wasPublic
+    ? DISCOVER_SURVIVAL_START
+    : discoverScoreFromTrack(track);
   const releaseCaption = String(opts?.releaseCaption || "").trim();
   const nextMeta = willBePublic && releaseCaption
     ? { ...(track.meta || {}), releaseCaption, releasedAt: publishedAt, releaseType: "public_profile" }
@@ -11173,6 +11350,7 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     ...track,
     publicOnProfile: willBePublic,
     ...(publishedAt ? { publishedAt } : {}),
+    ...(willBePublic ? { discoverScore, discoverExpiresAt } : {}),
     meta: nextMeta || null,
   };
   const nextItems = [...items];
@@ -11192,11 +11370,15 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     publicOnProfile: next.publicOnProfile,
     ...(willBePublic && publishedAt ? { publishedAt } : {}),
     ...(willBePublic && releaseCaption ? { meta: nextMeta } : {}),
+    ...(willBePublic && !wasPublic ? { discoverScore, discoverExpiresAt } : {}),
   });
   if (patch && patch.ok === false && patch.reason && patch.reason !== "noop") {
     const det = String(patch.details || "").trim();
     let msg = "Saved on this device — cloud update failed.";
-    if (/public_on_profile|42703|column/i.test(det)) {
+    if (/discover_score|discover_expires_at/i.test(det)) {
+      msg =
+        "Run supabase/user_songs_discover_survival.sql in Supabase SQL Editor, then try again.";
+    } else if (/public_on_profile|42703|column/i.test(det)) {
       msg =
         "Database missing public_on_profile. In Supabase SQL Editor run: supabase/user_songs_public_on_profile.sql";
     } else if (det) {
@@ -11208,7 +11390,9 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     return { ok: false };
   }
   showToast(
-    next.publicOnProfile ? "Release published to your public profile." : "Hidden from your public profile link.",
+    next.publicOnProfile
+      ? "On Discover for 7 days — 100 plays to survive (−100 → 0)."
+      : "Removed from Discover. Still in your Library.",
   );
   if (next.publicOnProfile) {
     if (!track.publicOnProfile) {

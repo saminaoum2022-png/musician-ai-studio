@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260521discoverCarouselV1" />
+    <link rel="stylesheet" href="./styles.css?v=20260521discoverGridV1" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -761,7 +761,6 @@
                 </svg>
               </button>
             </header>
-            <section id="discoveryUpdateCard" class="discoveryUpdateCard" aria-label="Discover update" hidden></section>
             <section class="discoveryPlaylistsSection" id="discoveryPlaylistsSection" aria-label="Playlists" hidden>
               <div class="discoveryPlaylistsHead">
                 <span class="discoveryPlaylistsTitle">Playlists</span>
@@ -769,15 +768,9 @@
               </div>
               <div id="discoveryPlaylistsRail" class="discoveryPlaylistsRail" role="list"></div>
             </section>
-            <div id="discoverySpotlightWrap" class="discoverySpotlightWrap discoveryCarouselWrap" hidden>
-              <div class="discoverySpotlightHead">
-                <span class="discoverySpotlightTitle">On Discover</span>
-                <span class="discoverySpotlightHint" id="discoveryCarouselHint">Swipe</span>
-              </div>
-              <div id="discoverySpotlightRail" class="discoverySpotlightRail discoveryDiscoverRail" role="list"></div>
-            </div>
+            <div id="discoverySpotlightWrap" class="discoverySpotlightWrap" hidden aria-hidden="true"></div>
             <div id="discoveryFeedStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
-            <div id="discoveryFeedList" class="discoveryFeedList discoveryCardStack" hidden aria-hidden="true"></div>
+            <div id="discoveryFeedList" class="discoveryFeedList discoveryDiscoverGrid" hidden></div>
           </div>
           <div class="discoveryPane discoveryPaneFollowing" id="discoveryPaneFollowing" data-discovery-pane="following" hidden>
             <div class="discoveryStudioAmbient" aria-hidden="true"></div>
@@ -2726,6 +2719,6 @@
         setTimeout(unboot, 3500);
       })();
     </script>
-    <script type="module" src="./src/app.js?v=20260521discoverCarouselV1"></script>
+    <script type="module" src="./src/app.js?v=20260521discoverGridV1"></script>
   </body>
 </html>

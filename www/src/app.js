@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521discoverCarouselV1";
+const APP_BUILD = "20260521discoverGridV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4193,8 +4193,6 @@ async function refreshDiscoveryFollowingFeed() {
     </div>`).join("")}</div>`;
   statusEl.hidden = true;
   statusEl.textContent = "";
-
-  await discoverMaintainExpired();
 
   if (!authSession?.user?.id) {
     listEl.classList.remove("isDiscoveryLoading");
@@ -8952,6 +8950,25 @@ async function fetchSocialStatsForProfile({ userId, username }) {
   }
 }
 
+async function fetchDiscoverSongPlayCounts(songIds) {
+  const ids = [...new Set((songIds || []).map((x) => String(x || "").trim()).filter(Boolean))].slice(0, 64);
+  if (!ids.length) return new Map();
+  try {
+    const qs = new URLSearchParams({ type: "song_play_counts", songIds: ids.join(",") });
+    const data = await socialApi(`/api/social?${qs.toString()}`);
+    const m = new Map();
+    const counts = data?.counts;
+    if (counts && typeof counts === "object") {
+      for (const [sid, n] of Object.entries(counts)) {
+        m.set(String(sid), Math.max(0, Number(n) || 0));
+      }
+    }
+    return m;
+  } catch {
+    return new Map();
+  }
+}
+
 function notifyPublicSongPublished(track) {
   const songId = String(track?.cloudSongId || track?.id || "").trim();
   if (!songId || !authSession?.user?.id) return;
@@ -9390,9 +9407,7 @@ function maybeRecordQualifiedPublicPlay() {
   const duration = getPlayerDuration();
   if (current < countedPlayThresholdSec(duration)) return;
   state.counted = true;
-  if (miniSource?.type === "discover_feed") {
-    void recordDiscoverSurvivalPlay(state.songId);
-  }
+  /* Discover survival scoring paused — only social play counts shown in UI for now. */
   void socialApi("/api/social", {
     method: "POST",
     body: JSON.stringify({
@@ -9466,7 +9481,6 @@ async function supabaseFetchDiscoveryPublicSongs(limit) {
           s,
         ),
       )
-      .filter((t) => isDiscoverFeedActive(t))
       .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
   } catch (e) {
     console.warn("[discovery/user_songs]", e);
@@ -10527,10 +10541,9 @@ function discoverExpiresTs(t) {
   return Date.now() + DISCOVER_SURVIVAL_MS;
 }
 
-function isDiscoverFeedActive(t) {
-  const score = discoverScoreFromTrack(t);
-  if (score >= DISCOVER_SURVIVAL_TARGET) return true;
-  return discoverExpiresTs(t) > Date.now();
+/** Survival window paused in UI — keep every public song on Discover for now. */
+function isDiscoverFeedActive() {
+  return true;
 }
 
 function discoverSurvivalMeta(t) {
@@ -10638,13 +10651,10 @@ function wireDiscoverUpdateCard() {
   el.hidden = false;
 }
 
-function discoverySurvivalChipHtml(t) {
-  const m = discoverSurvivalMeta(t);
-  const scoreLabel = m.score > 0 ? `+${m.score}` : String(m.score);
-  const label = m.survived
-    ? `${scoreLabel} · survived`
-    : `${scoreLabel} · ${m.daysLeft}d · ${m.playsDone}/${DISCOVER_SURVIVAL_PLAYS_NEEDED}`;
-  return `<span class="discoverySurvivalChip${m.survived ? " isSurvived" : m.urgent ? " isUrgent" : ""}">${escapeHtml(label)}</span>`;
+function discoveryPlayCountChipHtml(t) {
+  const n = Math.max(0, Number(t?.playCount) || 0);
+  const label = `${formatStatCount(n)} ${n === 1 ? "play" : "plays"}`;
+  return `<span class="discoveryPlayCountChip">${escapeHtml(label)}</span>`;
 }
 
 async function discoverMaintainExpired() {
@@ -10822,8 +10832,7 @@ function discoveryTrackPlaybackMeta(t, profMap) {
     audioId: String(t.audioId || ""),
     meta: t.meta || {},
     releaseCaption: releaseCaptionForTrack(t),
-    discoverScore: discoverScoreFromTrack(t),
-    discoverExpiresAt: String(t.discoverExpiresAt || "").trim(),
+    playCount: Math.max(0, Number(t.playCount) || 0),
     publishedAt: String(t.publishedAt || "").trim(),
     ts: Number(t.ts || 0),
   };
@@ -11226,9 +11235,10 @@ function discoveryTrackRowHtml(t, profMap, idx) {
   const challengeLine = challengeSourceLineHtml(t);
   const remixLine = remixSourceLineHtml(t);
   const releaseLine = releaseCaptionLineHtml(t);
-  const survivalLine = discoverySurvivalMeterHtml(t, { compact: true });
-  const richRowClass =
-    challengeLine || remixLine || releaseLine ? " discoveryRow--rich" : " discoveryRow--survival";
+  const playLine = Number.isFinite(Number(t.playCount))
+    ? `<span class="discoveryRowPlayCount">${discoveryPlayCountChipHtml(t)}</span>`
+    : "";
+  const richRowClass = challengeLine || remixLine || releaseLine || playLine ? " discoveryRow--rich" : "";
   const side = `<button type="button" class="discoveryRowSide" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" ${sheetData} aria-label="Options for ${safeTitle}">⋯</button>`;
   return `
       <div class="discoveryRow${richRowClass}" style="--i:${idx}">
@@ -11246,7 +11256,7 @@ function discoveryTrackRowHtml(t, profMap, idx) {
             ${challengeLine}
             ${remixLine}
             ${releaseLine}
-            ${survivalLine}
+            ${playLine}
           </span>
           <span class="discoveryRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
         </button>
@@ -11254,7 +11264,7 @@ function discoveryTrackRowHtml(t, profMap, idx) {
       </div>`;
 }
 
-/** Horizontal Discover card — cover-first; badges + one caption line max. */
+/** Discover grid tile — cover-first; badges + one caption line max. */
 function discoveryFeedCardHtml(t, profMap, idx) {
   const art = String(t.artUrl || "").trim();
   const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
@@ -11298,7 +11308,7 @@ function discoveryFeedCardHtml(t, profMap, idx) {
         <span class="discoverySpotCardArtBadge" aria-hidden="true">▶</span>
         <span class="discoveryFeedCardTop">
           ${badge ? `<span class="discoveryFeedCardBadge">${badge}</span>` : "<span></span>"}
-          ${discoverySurvivalChipHtml(t)}
+          ${discoveryPlayCountChipHtml(t)}
         </span>
         <span class="discoveryFeedCardBottom">
           <span class="discoveryFeedCardTitle">${safeTitle}</span>
@@ -11324,31 +11334,19 @@ async function refreshDiscoverFeed() {
   const spotlightWrap = document.getElementById("discoverySpotlightWrap");
   const rail = document.getElementById("discoverySpotlightRail");
   if (!statusEl || !listEl) return;
-  if (spotlightWrap) spotlightWrap.hidden = false;
-  if (rail) {
-    rail.innerHTML = Array.from({ length: 4 }, () => `
+  if (spotlightWrap) spotlightWrap.hidden = true;
+  listEl.classList.add("isDiscoveryLoading");
+  listEl.hidden = false;
+  listEl.innerHTML = `<div class="discoveryDiscoverGrid discoveryDiscoverGrid--loading">${Array.from({ length: 4 }, () => `
       <div class="discoverySkeletonSpotCard" aria-hidden="true">
         <div class="discoverySkeletonSpotFill"></div>
         <div class="discoverySkeletonSpotFooter">
           <div class="discoverySkeletonLine"></div>
           <div class="discoverySkeletonLine short"></div>
         </div>
-      </div>`).join("");
-  }
-  listEl.classList.add("isDiscoveryLoading");
-  listEl.hidden = false;
-  listEl.innerHTML = `<div class="discoverySkeletonMoreLabel" aria-hidden="true"></div><div class="discoverySkeletonStack">${Array.from({ length: 4 }, () => `
-    <div class="discoverySkeletonRow" aria-hidden="true">
-      <div class="discoverySkeletonArt"></div>
-      <div class="discoverySkeletonMid">
-        <div class="discoverySkeletonLine"></div>
-        <div class="discoverySkeletonLine short"></div>
-      </div>
-    </div>`).join("")}</div>`;
+      </div>`).join("")}</div>`;
   statusEl.textContent = "";
   statusEl.hidden = true;
-
-  await discoverMaintainExpired();
 
   const rows = await supabaseFetchDiscoveryPublicSongs(64);
   if (gen !== _discoveryFeedGen) return;
@@ -11378,7 +11376,7 @@ async function refreshDiscoverFeed() {
         <div class="discoveryEmptyWrap">
           <div class="discoveryEmptyArt">${ill}</div>
           <p class="discoveryEmptyTitle">The feed is quiet</p>
-          <p class="discoveryEmptyText">When creators share to <strong>Discover</strong>, songs get a <strong>7-day</strong> run — <strong>100 plays</strong> to survive. Nothing live right now.</p>
+          <p class="discoveryEmptyText">When creators publish to <strong>Discover</strong>, their songs show up here. Nothing live right now.</p>
         </div>`;
     }
     try {
@@ -11389,27 +11387,22 @@ async function refreshDiscoverFeed() {
 
   statusEl.hidden = true;
   statusEl.textContent = "";
+
+  const playCountMap = await fetchDiscoverSongPlayCounts(playable.map((t) => t.id));
+  if (gen !== _discoveryFeedGen) return;
+  for (const t of playable) {
+    t.playCount = playCountMap.get(String(t.id || "")) || 0;
+  }
+
   _discoveryFeedTracks = playable.map((t) => discoveryTrackPlaybackMeta(t, profMap));
 
+  listEl.hidden = false;
+  listEl.innerHTML = `<div class="discoveryDiscoverGrid" role="list">${playable
+    .map((t, i) => discoveryFeedCardHtml(t, profMap, i))
+    .join("")}</div>`;
   try {
-    wireDiscoverUpdateCard();
+    wireDiscoverySpotCardImages(listEl);
   } catch {}
-
-  const hintEl = document.getElementById("discoveryCarouselHint");
-  if (hintEl) {
-    hintEl.textContent = playable.length > 1 ? `Swipe · ${playable.length} live` : "Swipe";
-  }
-
-  if (rail && spotlightWrap) {
-    rail.innerHTML = playable.map((t, i) => discoveryFeedCardHtml(t, profMap, i)).join("");
-    spotlightWrap.hidden = playable.length === 0;
-    try {
-      wireDiscoverySpotCardImages(rail);
-    } catch {}
-  }
-
-  listEl.innerHTML = "";
-  listEl.hidden = true;
   try {
     syncDiscoveryPlayingHighlights();
   } catch {}
@@ -11430,12 +11423,6 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
   const publishedAt = willBePublic && !wasPublic
     ? new Date().toISOString()
     : userSongPublishedAtValue(track);
-  const discoverExpiresAt = willBePublic && !wasPublic
-    ? new Date(Date.now() + DISCOVER_SURVIVAL_MS).toISOString()
-    : String(track.discoverExpiresAt || "").trim();
-  const discoverScore = willBePublic && !wasPublic
-    ? DISCOVER_SURVIVAL_START
-    : discoverScoreFromTrack(track);
   const releaseCaption = String(opts?.releaseCaption || "").trim();
   const nextMeta = willBePublic && releaseCaption
     ? { ...(track.meta || {}), releaseCaption, releasedAt: publishedAt, releaseType: "public_profile" }
@@ -11444,7 +11431,6 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     ...track,
     publicOnProfile: willBePublic,
     ...(publishedAt ? { publishedAt } : {}),
-    ...(willBePublic ? { discoverScore, discoverExpiresAt } : {}),
     meta: nextMeta || null,
   };
   const nextItems = [...items];
@@ -11464,27 +11450,11 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     publicOnProfile: next.publicOnProfile,
     ...(willBePublic && publishedAt ? { publishedAt } : {}),
     ...(willBePublic && releaseCaption ? { meta: nextMeta } : {}),
-    ...(willBePublic && !wasPublic ? { discoverScore, discoverExpiresAt } : {}),
   });
-  if (patch && patch.ok === true && patch.reason === "discover_columns_pending") {
-    showToast(
-      "On Discover — survival timer will sync after Supabase refreshes its API schema (see steps below).",
-      { durationMs: 7200 },
-    );
-    if (next.publicOnProfile && !track.publicOnProfile) {
-      try {
-        notifyPublicSongPublished(next);
-      } catch {}
-    }
-    return { ok: true };
-  }
   if (patch && patch.ok === false && patch.reason && patch.reason !== "noop") {
     const det = String(patch.details || "").trim();
     let msg = "Saved on this device — cloud update failed.";
-    if (/discover_score|discover_expires_at|PGRST204|schema cache/i.test(det)) {
-      msg =
-        "Discover columns not visible to the API yet. In Supabase: Table Editor → user_songs → confirm discover_score & discover_expires_at exist. Then Settings → API → Reload schema. If missing, run user_songs_discover_survival.sql again.";
-    } else if (/public_on_profile|42703|column/i.test(det)) {
+    if (/public_on_profile|42703|column/i.test(det)) {
       msg =
         "Database missing public_on_profile. In Supabase SQL Editor run: supabase/user_songs_public_on_profile.sql";
     } else if (det) {
@@ -11497,7 +11467,7 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
   }
   showToast(
     next.publicOnProfile
-      ? "On Discover for 7 days — 100 plays to survive (−100 → 0)."
+      ? "On Discover — listeners can find and play it."
       : "Removed from Discover. Still in your Library.",
   );
   if (next.publicOnProfile) {

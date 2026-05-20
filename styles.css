@@ -11500,6 +11500,48 @@ body.notificationsCenterOpen{
 .discoverySurvivalChip.isUrgent{
   border-color: rgba(251,191,36,0.45);
 }
+.discoveryPlayCountChip{
+  display: inline-block;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  color: rgba(240,244,255,0.92);
+  background: rgba(8,10,16,0.72);
+  border: 1px solid rgba(255,255,255,0.14);
+  white-space: nowrap;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.discoveryDiscoverGrid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0 2px 20px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.discoveryDiscoverGrid .discoveryFeedCardWrap,
+.discoveryDiscoverGrid .discoverySpotCardWrap{
+  flex: none;
+  width: 100%;
+  max-width: none;
+}
+.discoveryDiscoverGrid--loading .discoverySkeletonSpotCard{
+  aspect-ratio: 3 / 4;
+  border-radius: 18px;
+  overflow: hidden;
+}
+.discoveryFeedList.discoveryDiscoverGrid{
+  display: block;
+  max-height: none;
+}
+.discoveryFeedList.discoveryDiscoverGrid > .discoveryDiscoverGrid{
+  margin: 0;
+}
 .discoverySurvival{
   display: inline-flex;
   align-items: center;

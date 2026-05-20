@@ -878,10 +878,9 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   transform: scale(0.997);
 }
 .libRowMain{
-  flex: 1 1 auto;
-  width: 100%;
-  max-width: 100%;
+  flex: 1 1 0;
   min-width: 0;
+  max-width: none;
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -1081,11 +1080,12 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
 }
 .libRowActions{
   flex: 0 0 auto;
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
-  padding: 0 max(10px, env(safe-area-inset-right, 0px)) 0 10px;
+  gap: 6px;
+  padding: 0 12px 0 6px;
   align-self: center;
 }
 .libRowActions .libRowChip.libRowChipProfileVis{
@@ -1212,6 +1212,9 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   border-radius: 0;
   box-shadow: none;
   padding: 0;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   animation: sectionFadeIn 260ms ease;
 }
 .libraryLead{
@@ -1237,6 +1240,8 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   gap: 10px;
   margin: 10px 0 0;
   flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
 }
 .libraryCount{
   margin: 0;
@@ -1261,6 +1266,9 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   letter-spacing: 0.01em;
   padding: 6px 12px;
   cursor: pointer;
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 100%;
   -webkit-tap-highlight-color: transparent;
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
 }
@@ -14078,22 +14086,38 @@ button.discoverySpotCard{
     top: 6px;
     right: 6px;
   }
-  .librarySection .libraryHeader.appScreenHeader{
-    padding-left: 2px;
-    padding-right: 2px;
+  body[data-route="library"] .librarySection .libraryHeader.appScreenHeader{
+    padding-left: 4px;
+    padding-right: 4px;
   }
-  .librarySection .libraryHeader .libraryLead.appScreenLead{
+  body[data-route="library"] .librarySection .libraryHeader .libraryLead.appScreenLead{
     max-width: none;
-    padding-right: 2px;
+    padding-right: 4px;
   }
-  .libRowMain{
-    padding: 10px 6px 10px 8px;
+  body[data-route="library"] .libraryHeaderRow{
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
   }
-  .libRowActions{
-    padding-right: max(12px, env(safe-area-inset-right, 0px));
+  body[data-route="library"] .libraryRecoverLink{
+    align-self: stretch;
+    text-align: center;
+    white-space: normal;
+    line-height: 1.35;
   }
-  .libRow + .libRow::before{
-    right: max(12px, env(safe-area-inset-right, 0px));
+  body[data-route="library"] .libRowMain{
+    padding: 10px 4px 10px 8px;
+  }
+  body[data-route="library"] .libRowActions{
+    padding-right: max(14px, env(safe-area-inset-right, 0px));
+    gap: 4px;
+  }
+  body[data-route="library"] .libRow + .libRow::before{
+    right: max(56px, calc(14px + env(safe-area-inset-right, 0px)));
+  }
+  body[data-route="library"] .libRowMore{
+    min-width: 36px;
+    padding: 8px 2px 8px 4px;
   }
   .libRowInfo .challengeAttributionLine,
   .libRowInfo .remixAttributionLine{

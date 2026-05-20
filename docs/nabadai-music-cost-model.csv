@@ -1,0 +1,47 @@
+NabadAi — Music engine cost model
+Suno: $5 / 1000 credits | 12 credits per generation | 2 songs delivered per generation
+
+ASSUMPTIONS,Value,Unit,Notes
+Songs per active user per month (kept),4,songs,What users save to Library
+NabadAi credits per generation (user pays),12,credits,One debit per Suno task
+Suno songs delivered per generation,2,songs,Two A/B variants (parseSunoGenerationRecordInfo)
+Suno API credits per generation,12,credits,Upstream matches user debit
+USD per Suno API credit,0.005,USD,You paid $5 for 1000 credits
+Lyria 3 Pro per API call,0.08,USD,~1 song per call (no 2-for-1)
+Avg archived MP3 size,4,MB,Per saved file
+Supabase Storage,0.021,USD/GB/mo,Ballpark
+Archive both Suno variants?,1,1=yes,Doubles storage if you keep A and B
+
+DERIVED — SUNO,,,
+Cost per generation (12 credits),0.06,USD,One Suno task
+Cost per song if you use BOTH variants,0.03,USD,12 credits ÷ 2 songs
+Cost per song if you only keep ONE variant,0.06,USD,Still paid 12 credits once
+
+DERIVED — LYRIA vs SUNO,,,
+Lyria per song,0.08,USD,
+Lyria costs vs Suno (both songs used),2.7x,more,0.08 ÷ 0.03
+Lyria costs vs Suno (one song kept),1.3x,more,0.08 ÷ 0.06
+
+MONTHLY — 4 kept songs/user = 2 Suno generations/user,,,,
+Scenario,MAU,Suno generations/mo,Songs delivered (2/gen),Suno API $,Effective $/kept song,Lyria API $ (1 call/song),Extra $ if all Lyria
+Small beta,10,20,40,1.20,0.03,3.20,+2.00
+Growing,100,200,400,12.00,0.03,32.00,+20.00
+Active,500,1000,2000,60.00,0.03,160.00,+100.00
+Busy,1000,2000,4000,120.00,0.03,320.00,+200.00
+Scale,5000,10000,20000,600.00,0.03,1600.00,+1000.00
+
+STORAGE — archive both variants (8 files per user/mo at 4 songs kept),,,,
+Scenario,MAU,Files archived/mo,New storage $/mo,After 12 mo storage $/mo,
+Growing,100,800,0.07,0.79,
+Busy,1000,8000,0.66,7.88,
+
+STORAGE — archive one variant only (4 files per user/mo),,,,
+Scenario,MAU,Files archived/mo,New storage $/mo,After 12 mo storage $/mo,
+Growing,100,400,0.03,0.39,
+Busy,1000,4000,0.33,3.94,
+
+NOTES,,,,
+1,Suno gives 2 songs per generation — your wholesale can be $0.03/song if both are used or saved.,,,
+2,User still pays 12 NabadAi credits once per generation (not per variant).,,,
+3,Lyria has no 2-for-1; switching costs ~2.7× more per kept song at your Suno pack price.,,,
+4,Fix playlists with archive — not engine swap. Suno is cheaper for you today.,,,

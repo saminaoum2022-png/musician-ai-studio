@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521discoverCapUiV1";
+const APP_BUILD = "20260521discoverSchemaV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -8702,6 +8702,23 @@ async function supabasePatchUserSong(track, patch) {
   if (!r) return { ok: false, reason: "network" };
   if (!r.ok) {
     const txt = await r.text().catch(() => "");
+    const hasDiscoverCols =
+      Object.prototype.hasOwnProperty.call(body, "discover_score") ||
+      Object.prototype.hasOwnProperty.call(body, "discover_expires_at");
+    if (hasDiscoverCols && /discover_score|discover_expires_at|PGRST204|schema cache/i.test(txt)) {
+      const retryBody = { ...body };
+      delete retryBody.discover_score;
+      delete retryBody.discover_expires_at;
+      if (Object.keys(retryBody).length > 0) {
+        r = await sendPatch(retryBody);
+        if (r?.ok) {
+          return { ok: true, reason: "discover_columns_pending", details: String(txt).slice(0, 280) };
+        }
+        if (!r) return { ok: false, reason: "network" };
+        const retryTxt = await r.text().catch(() => "");
+        return { ok: false, reason: `http_${r.status}`, details: String(retryTxt || txt).slice(0, 280) };
+      }
+    }
     if (Object.prototype.hasOwnProperty.call(body, "published_at") && /published_at|42703|column/i.test(txt)) {
       const retryBody = { ...body };
       delete retryBody.published_at;
@@ -11398,12 +11415,24 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     ...(willBePublic && releaseCaption ? { meta: nextMeta } : {}),
     ...(willBePublic && !wasPublic ? { discoverScore, discoverExpiresAt } : {}),
   });
+  if (patch && patch.ok === true && patch.reason === "discover_columns_pending") {
+    showToast(
+      "On Discover — survival timer will sync after Supabase refreshes its API schema (see steps below).",
+      { durationMs: 7200 },
+    );
+    if (next.publicOnProfile && !track.publicOnProfile) {
+      try {
+        notifyPublicSongPublished(next);
+      } catch {}
+    }
+    return { ok: true };
+  }
   if (patch && patch.ok === false && patch.reason && patch.reason !== "noop") {
     const det = String(patch.details || "").trim();
     let msg = "Saved on this device — cloud update failed.";
-    if (/discover_score|discover_expires_at/i.test(det)) {
+    if (/discover_score|discover_expires_at|PGRST204|schema cache/i.test(det)) {
       msg =
-        "Run supabase/user_songs_discover_survival.sql in Supabase SQL Editor, then try again.";
+        "Discover columns not visible to the API yet. In Supabase: Table Editor → user_songs → confirm discover_score & discover_expires_at exist. Then Settings → API → Reload schema. If missing, run user_songs_discover_survival.sql again.";
     } else if (/public_on_profile|42703|column/i.test(det)) {
       msg =
         "Database missing public_on_profile. In Supabase SQL Editor run: supabase/user_songs_public_on_profile.sql";

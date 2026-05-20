@@ -11,3 +11,8 @@ alter table public.user_songs
 create index if not exists user_songs_discover_active_idx
   on public.user_songs (discover_expires_at desc nulls last, published_at desc nulls last)
   where public_on_profile is true;
+
+-- After running: Supabase Dashboard → Project Settings → API → Reload schema
+-- (or wait ~1 min). Otherwise PATCH may fail until PostgREST picks up new columns.
+
+notify pgrst, 'reload schema';

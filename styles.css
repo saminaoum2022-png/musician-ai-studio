@@ -13081,6 +13081,265 @@ button.discoverySpotCard{
 .discoveryCardStack.isDiscoveryLoading{
   gap: 10px;
 }
+
+/* Following — compact activity feed (Spotify-friend style, flat rows) */
+.followActStack{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding-bottom: 12px;
+}
+.followActStack.isDiscoveryLoading{
+  gap: 8px;
+}
+.followAct{
+  display: grid;
+  grid-template-columns: 28px 40px minmax(0, 1fr) 52px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  box-sizing: border-box;
+  min-width: 0;
+  animation: discoveryRowIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 40ms);
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+.followAct:hover{
+  background: rgba(255,255,255,0.05);
+  border-color: rgba(255,255,255,0.12);
+}
+.followAct.discoveryRowPlaying{
+  background: linear-gradient(135deg, rgba(var(--cover-glow-rgb), 0.12), rgba(255,255,255,0.02));
+  border-color: rgba(var(--cover-glow-rgb), 0.28);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.22);
+}
+.followActIco{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  flex-shrink: 0;
+}
+.followActIco--release{
+  color: rgba(167,139,250,0.95);
+  background: rgba(124,92,255,0.14);
+  border: 1px solid rgba(124,92,255,0.22);
+}
+.followActIco--remix{
+  color: rgba(94,234,212,0.95);
+  background: rgba(35,213,171,0.1);
+  border: 1px solid rgba(94,234,212,0.22);
+}
+.followActIco--challenge{
+  color: rgba(251,191,36,0.95);
+  background: rgba(245,158,11,0.1);
+  border: 1px solid rgba(251,191,36,0.22);
+}
+.followActIcoSvg{
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.followActAvatar{
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 2px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  display: block;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+.followActAvatar img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.followActAvatarFallback{
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(232,238,247,0.55);
+}
+.followActBody{
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.followActType{
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(124,92,255,0.85);
+}
+.followAct[data-follow-act="remix"] .followActType{
+  color: rgba(94,234,212,0.88);
+}
+.followAct[data-follow-act="challenge"] .followActType{
+  color: rgba(251,191,36,0.9);
+}
+.followActHead{
+  font-size: 13.5px;
+  font-weight: 650;
+  line-height: 1.35;
+  color: rgba(244,247,255,0.94);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.followActHead em.followActSong{
+  font-style: normal;
+  font-weight: 750;
+  color: #fff;
+}
+.followActWhen{
+  font-size: 11.5px;
+  font-weight: 600;
+  color: rgba(232,238,247,0.48);
+}
+.followActCover{
+  position: relative;
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(0,0,0,0.35);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.followActCover img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.followActCoverPlay{
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8,11,18,0.38);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  opacity: 0;
+  transition: opacity 160ms ease, background 160ms ease;
+}
+.followAct:hover .followActCoverPlay,
+.followAct.discoveryRowPlaying .followActCoverPlay,
+.followAct.discoveryRowActive .followActCoverPlay{
+  opacity: 1;
+}
+.followAct--skel{
+  pointer-events: none;
+  border-color: rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.02);
+}
+.followActSkel{
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.04) 100%);
+  background-size: 200% 100%;
+  animation: discoveryShimmer 1.15s ease-in-out infinite;
+}
+.followActSkelIco{
+  width: 28px;
+  height: 28px;
+}
+.followActSkelAvatar{
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+}
+.followActSkelLines{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.followActSkelLine{
+  height: 11px;
+  width: 88%;
+  border-radius: 6px;
+}
+.followActSkelLine.short{
+  width: 42%;
+  height: 9px;
+}
+.followActSkelCover{
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+}
+.followActEmptyFaces{
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  margin: 14px 0 16px;
+}
+.followActEmptyFace{
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 2px solid rgba(124,92,255,0.45);
+  box-shadow: 0 0 20px rgba(124,92,255,0.2);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.followActEmptyFace img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.followActEmptyFaceFallback{
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 800;
+  color: rgba(232,238,247,0.7);
+  background: rgba(124,92,255,0.12);
+}
+.discoveryEmptyWrap .followActEmptyFaces + .discoveryEmptyCta,
+.discoveryEmptyWrap .followActEmptyFaces + button.discoveryEmptyCta{
+  margin-top: 4px;
+}
 .discoverySkeletonStack{
   display: flex;
   flex-direction: column;

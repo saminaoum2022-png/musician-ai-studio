@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521discoverPlay";
+const APP_BUILD = "20260521followActV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1660,6 +1660,9 @@ function renderHubNowPlaying() {
 
   if (!showMini) {
     els.hubNowPlaying.classList.remove("isVisible", "isPlaying");
+    try {
+      els.hubNowPlaying.removeAttribute("data-mini-pp");
+    } catch {}
     try {
       els.hubNowPlaying.style.removeProperty("--cover-glow-rgb");
     } catch {}
@@ -4206,6 +4209,130 @@ function onLeaveSearchRoute() {
 
 let _discoveryFollowingGen = 0;
 
+function followingActivityTypeForTrack(t) {
+  if (remixAttributionForTrack(t)) return "remix";
+  if (challengeMetaForTrack(t)) return "challenge";
+  return "release";
+}
+
+function followingActivityIcoSvg(type) {
+  if (type === "remix") {
+    return `<svg class="followActIcoSvg" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h3.4c1.6 0 3 .8 3.8 2.1l1.1 1.8"/><path d="M7 17h3.4c1.6 0 3-.8 3.8-2.1l1.1-1.8"/><path d="M17 6l3 3-3 3"/><path d="M17 12l3 3-3 3"/></svg>`;
+  }
+  if (type === "challenge") {
+    return `<svg class="followActIcoSvg" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10v3a5 5 0 0 1-10 0V4Z"/><path d="M12 12v5M9 20h6"/></svg>`;
+  }
+  return `<svg class="followActIcoSvg" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`;
+}
+
+function followingActivityHeadHtml(type, handle, title, remixOf, challenge) {
+  const who = handle ? `@${escapeHtml(handle)}` : "A musician";
+  const song = `<em class="followActSong">${escapeHtml(title)}</em>`;
+  if (type === "remix" && remixOf) {
+    const srcWho = remixOf.creatorUsername
+      ? `@${escapeHtml(remixOf.creatorUsername)}`
+      : "another creator";
+    const srcTitle = remixOf.title ? ` · <em class="followActSong">${escapeHtml(remixOf.title)}</em>` : "";
+    return `${who} remixed ${srcWho}${srcTitle} — ${song}`;
+  }
+  if (type === "challenge" && challenge) {
+    const cName = escapeHtml(String(challenge.title || "a challenge").trim());
+    return `${who} entered <em class="followActSong">${cName}</em> — ${song}`;
+  }
+  return `${who} released ${song}`;
+}
+
+function followingActivityPlayAttrs(t, profMap, byLine) {
+  const art = String(t.artUrl || "").trim();
+  const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
+  const rawTitle = String(t.title || "Untitled");
+  const encUrl = encodeURIComponent(String(t.url || ""));
+  const encTitle = encodeURIComponent(rawTitle);
+  const encBy = encodeURIComponent(byLine || "");
+  const encArt = encodeURIComponent(artSafe);
+  const encSongId = encodeURIComponent(String(t.id || t.songId || ""));
+  const encOwnerId = encodeURIComponent(String(t.userId || ""));
+  const encTaskId = encodeURIComponent(String(t.taskId || ""));
+  const encAudioId = encodeURIComponent(String(t.audioId || ""));
+  const encReleaseCaption = encodeURIComponent(releaseCaptionForTrack(t));
+  const playData = `data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" data-play-task-id="${encTaskId}" data-play-audio-id="${encAudioId}" data-play-release-caption="${encReleaseCaption}"`;
+  return { artSafe, rawTitle, encUrl, encTitle, encBy, encArt, playData };
+}
+
+function followingActivityRowHtml(t, profMap, idx) {
+  const type = followingActivityTypeForTrack(t);
+  const prof = t.userId ? profMap.get(t.userId) : null;
+  const handle = String(prof?.username || "").trim();
+  const byLine = handle ? `@${handle}` : "Creator";
+  const rawTitle = String(t.title || "Untitled");
+  const safeTitle = escapeHtml(rawTitle);
+  const remixOf = remixAttributionForTrack(t);
+  const challenge = challengeMetaForTrack(t);
+  const { artSafe, encUrl, encTitle, encBy, encArt, playData } = followingActivityPlayAttrs(t, profMap, byLine);
+  const avatarRaw = String(prof?.avatar || "").trim();
+  const avatarSrc = avatarRaw ? normalizeProfileAvatarForImg(avatarRaw) : "";
+  const initials = (handle || "U").replace(/^@/, "").slice(0, 2).toUpperCase();
+  const profileHref = handle ? `#/u/${encodeURIComponent(handle)}` : "#";
+  const when = relativeTime(t.ts);
+  const plays = Number(t.playCount);
+  const playBit = Number.isFinite(plays) && plays > 0
+    ? ` · ${escapeHtml(formatStatCount(plays))} ${plays === 1 ? "play" : "plays"}`
+    : "";
+  const typeLabel = type === "remix" ? "Remix" : type === "challenge" ? "Challenge" : "New drop";
+  return `
+    <article class="followAct discoveryRow" data-follow-act="${type}" style="--i:${idx}" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}>
+      <span class="followActIco followActIco--${type}" aria-hidden="true">${followingActivityIcoSvg(type)}</span>
+      <a class="followActAvatar" href="${escapeHtml(profileHref)}" data-route-link="user" aria-label="${handle ? `@${escapeHtml(handle)} profile` : "Profile"}">
+        ${avatarSrc
+          ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
+          : `<span class="followActAvatarFallback">${escapeHtml(initials)}</span>`}
+      </a>
+      <button type="button" class="followActBody" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
+        <span class="followActType">${escapeHtml(typeLabel)}</span>
+        <span class="followActHead">${followingActivityHeadHtml(type, handle, rawTitle, remixOf, challenge)}</span>
+        <span class="followActWhen">${escapeHtml(when)}${playBit}</span>
+      </button>
+      <button type="button" class="followActCover" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
+        <img src="${escapeHtml(artSafe)}" alt="" width="52" height="52" decoding="async" loading="lazy" />
+        <span class="followActCoverPlay" aria-hidden="true">▶</span>
+      </button>
+    </article>`;
+}
+
+function followingActivitySkeletonHtml() {
+  return Array.from({ length: 5 }, (_, i) => `
+    <div class="followAct followAct--skel" style="--i:${i}" aria-hidden="true">
+      <span class="followActSkel followActSkelIco"></span>
+      <span class="followActSkel followActSkelAvatar"></span>
+      <span class="followActSkel followActSkelLines">
+        <span class="followActSkelLine"></span>
+        <span class="followActSkelLine short"></span>
+      </span>
+      <span class="followActSkel followActSkelCover"></span>
+    </div>`).join("");
+}
+
+async function fetchFollowingEmptySuggestCreators(limit = 3) {
+  const out = [];
+  try {
+    const rows = await supabaseFetchDiscoveryPublicSongs(24);
+    const profMap = await fetchProfilesByUserIdsMap(rows.map((r) => r.userId));
+    const seen = new Set();
+    for (const t of rows) {
+      const uid = String(t.userId || "").trim();
+      if (!uid || seen.has(uid)) continue;
+      seen.add(uid);
+      const prof = profMap.get(uid);
+      const handle = String(prof?.username || "").trim();
+      if (!handle) continue;
+      const avatar = normalizeProfileAvatarForImg(String(prof?.avatar || "").trim());
+      out.push({ userId: uid, handle, avatar });
+      if (out.length >= limit) break;
+    }
+  } catch {}
+  return out;
+}
+
 function renderDiscoveryFollowingEmpty(statusEl, title, text, actionHtml = "") {
   if (!statusEl) return;
   statusEl.hidden = false;
@@ -4226,14 +4353,7 @@ async function refreshDiscoveryFollowingFeed() {
 
   listEl.classList.add("isDiscoveryLoading");
   listEl.hidden = false;
-  listEl.innerHTML = `<div class="discoverySkeletonStack">${Array.from({ length: 4 }, () => `
-    <div class="discoverySkeletonRow" aria-hidden="true">
-      <div class="discoverySkeletonArt"></div>
-      <div class="discoverySkeletonMid">
-        <div class="discoverySkeletonLine"></div>
-        <div class="discoverySkeletonLine short"></div>
-      </div>
-    </div>`).join("")}</div>`;
+  listEl.innerHTML = followingActivitySkeletonHtml();
   statusEl.hidden = true;
   statusEl.textContent = "";
 
@@ -4243,8 +4363,8 @@ async function refreshDiscoveryFollowingFeed() {
     listEl.innerHTML = "";
     renderDiscoveryFollowingEmpty(
       statusEl,
-      "Sign in to build your feed",
-      "Follow creators from public profiles, then their newest public songs will show here.",
+      "Sign in to see activity",
+      "Follow musicians from Discover — their drops and remixes show up here.",
       `<a class="solid discoveryEmptyCta" href="#/profile">Sign in</a>`,
     );
     return;
@@ -4258,10 +4378,23 @@ async function refreshDiscoveryFollowingFeed() {
       listEl.classList.remove("isDiscoveryLoading");
       listEl.hidden = true;
       listEl.innerHTML = "";
+      const suggests = await fetchFollowingEmptySuggestCreators(3);
+      const faces = suggests.length
+        ? `<div class="followActEmptyFaces">${suggests
+            .map((c) => {
+              const href = `#/u/${encodeURIComponent(c.handle)}`;
+              const av = c.avatar
+                ? `<img src="${escapeHtml(c.avatar)}" alt="" width="44" height="44" decoding="async" />`
+                : `<span class="followActEmptyFaceFallback">${escapeHtml(c.handle.slice(0, 2).toUpperCase())}</span>`;
+              return `<a class="followActEmptyFace" href="${escapeHtml(href)}" data-route-link="user" title="@${escapeHtml(c.handle)}">${av}</a>`;
+            })
+            .join("")}</div>`
+        : "";
       renderDiscoveryFollowingEmpty(
         statusEl,
-        "Follow creators to build your feed",
-        "Open a creator profile from Discover and tap Follow. Their public songs will collect here.",
+        "Follow musicians to see activity",
+        "Pick a few creators on Discover — new songs, remixes, and challenges land here.",
+        `${faces}<a class="solid discoveryEmptyCta" href="#/discover" data-route-link="discover">Browse Discover</a>`,
       );
       return;
     }
@@ -4282,14 +4415,20 @@ async function refreshDiscoveryFollowingFeed() {
     const profMap = await fetchProfilesByUserIdsMap(playable.map((t) => t.userId));
     if (gen !== _discoveryFollowingGen) return;
 
+    const playCountMap = await fetchDiscoverSongPlayCounts(playable.map((t) => t.id));
+    if (gen !== _discoveryFollowingGen) return;
+    for (const t of playable) {
+      t.playCount = playCountMap.get(String(t.id || "")) || 0;
+    }
+
     listEl.classList.remove("isDiscoveryLoading");
     if (!playable.length) {
       listEl.hidden = true;
       listEl.innerHTML = "";
       renderDiscoveryFollowingEmpty(
         statusEl,
-        "No songs from your follows yet",
-        "When creators you follow publish public songs, they will appear here.",
+        "Quiet for now",
+        "When people you follow publish or remix, you will see it here first.",
       );
       return;
     }
@@ -4298,7 +4437,7 @@ async function refreshDiscoveryFollowingFeed() {
     statusEl.textContent = "";
     _discoveryFeedTracks = playable.map((t) => discoveryTrackPlaybackMeta(t, profMap));
     listEl.hidden = false;
-    listEl.innerHTML = playable.map((t, i) => discoveryTrackRowHtml(t, profMap, i)).join("");
+    listEl.innerHTML = playable.map((t, i) => followingActivityRowHtml(t, profMap, i)).join("");
     try {
       syncDiscoveryPlayingHighlights();
     } catch {}
@@ -4415,48 +4554,12 @@ function bindDiscoverySegmentControls() {
     followingPane.dataset.boundDiscoverFollowingPane = "1";
     wireTrackOptionsSheetOnce();
     followingPane.addEventListener("click", (e) => {
-      const menuBtn = e.target.closest("[data-discovery-open-sheet]");
-      if (menuBtn && followingPane.contains(menuBtn)) {
-        e.preventDefault();
-        e.stopPropagation();
-        haptic("light");
-        openDiscoverTrackSheetFromEl(menuBtn);
-        return;
-      }
-      const inline = e.target.closest("[data-discovery-inline-play]");
-      if (inline && followingPane.contains(inline)) {
-        const u = inline.getAttribute("data-user-lib-url");
-        const title = decodeDiscoverDataAttr(inline, "data-user-lib-title") || "Song";
-        const art = decodeDiscoverDataAttr(inline, "data-user-lib-art") || "";
-        const by = decodeDiscoverDataAttr(inline, "data-discovery-by") || "";
-        if (!u) return;
-        let raw = "";
-        try {
-          raw = decodeURIComponent(u);
-        } catch {
-          raw = u;
-        }
-        haptic("light");
-        if (toggleDiscoverFeedPlaybackIfSameUrl(raw)) return;
-        void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by, playSource: publicPlaySourceFromEl(inline) });
-        return;
-      }
+      if (e.target.closest("[data-discovery-segment]")) return;
+      if (e.target.closest(".followActAvatar")) return;
       const pl = e.target.closest("[data-user-lib-play]");
       if (!pl || !followingPane.contains(pl)) return;
-      const u = pl.getAttribute("data-user-lib-url");
-      const title = decodeDiscoverDataAttr(pl, "data-user-lib-title") || "Song";
-      const art = decodeDiscoverDataAttr(pl, "data-user-lib-art") || "";
-      const by = decodeDiscoverDataAttr(pl, "data-discovery-by") || "";
-      if (!u) return;
-      let raw = "";
-      try {
-        raw = decodeURIComponent(u);
-      } catch {
-        raw = u;
-      }
-      haptic("light");
-      if (toggleDiscoverFeedPlaybackIfSameUrl(raw)) return;
-      void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by, playSource: publicPlaySourceFromEl(pl) });
+      e.preventDefault();
+      playDiscoverTarget(pl);
     });
   }
 }
@@ -10471,6 +10574,7 @@ function togglePublicProfileLibPlaybackIfSameUrl(rawUrl) {
 function syncDiscoveryPlayingHighlights() {
   const roots = [
     document.getElementById("discoveryPaneDiscover"),
+    document.getElementById("discoveryPaneFollowing"),
     document.getElementById("discoverPlaylistList"),
   ].filter(Boolean);
   if (!roots.length) return;
@@ -10480,9 +10584,16 @@ function syncDiscoveryPlayingHighlights() {
     try {
       host.style.removeProperty("--cover-glow-rgb");
     } catch {}
-    const badge = host.querySelector(".discoveryRowArtBadge, .discoverySpotCardArtBadge");
+    const badge = host.querySelector(
+      ".discoveryRowArtBadge, .discoverySpotCardArtBadge, .followActCoverPlay",
+    );
     if (badge) badge.textContent = "▶";
-    if (host.classList.contains("discoveryRow")) {
+    if (host.classList.contains("followAct")) {
+      const title = decodeDiscoverDataAttr(host, "data-user-lib-title") || "Song";
+      host.querySelectorAll("[data-user-lib-play]").forEach((btn) => {
+        btn.setAttribute("aria-label", `Play ${title}`);
+      });
+    } else if (host.classList.contains("discoveryRow")) {
       const artBtn = host.querySelector("[data-discovery-inline-play]");
       if (artBtn) {
         const name = String(artBtn.getAttribute("data-user-lib-title") || "").trim() || "Song";
@@ -10497,6 +10608,7 @@ function syncDiscoveryPlayingHighlights() {
   for (const root of roots) {
     root.querySelectorAll(".discoveryRow").forEach(resetDiscoveryHost);
     root.querySelectorAll(".discoverySpotCard").forEach(resetDiscoveryHost);
+    root.querySelectorAll(".followAct").forEach(resetDiscoveryHost);
   }
 
   const curRef = String(currentPlayerTrackRef?.url || "").trim();
@@ -10509,9 +10621,16 @@ function syncDiscoveryPlayingHighlights() {
     if (!active) return;
     host.classList.toggle("discoveryRowPlaying", audible);
     host.classList.toggle("discoveryRowActive", active && !audible);
-    const badge = host.querySelector(".discoveryRowArtBadge, .discoverySpotCardArtBadge");
+    const badge = host.querySelector(
+      ".discoveryRowArtBadge, .discoverySpotCardArtBadge, .followActCoverPlay",
+    );
     if (badge) badge.textContent = audible ? "❚❚" : "▶";
-    if (host.classList.contains("discoveryRow")) {
+    if (host.classList.contains("followAct")) {
+      const title = decodeDiscoverDataAttr(urlEl, "data-user-lib-title") || "Song";
+      host.querySelectorAll("[data-user-lib-play]").forEach((btn) => {
+        btn.setAttribute("aria-label", audible ? `Pause ${title}` : `Play ${title}`);
+      });
+    } else if (host.classList.contains("discoveryRow")) {
       const artBtn = host.querySelector("[data-discovery-inline-play]");
       if (artBtn) {
         const name = String(artBtn.getAttribute("data-user-lib-title") || "").trim() || "Song";
@@ -10524,12 +10643,16 @@ function syncDiscoveryPlayingHighlights() {
     const artHint =
       String(decodeDiscoverDataAttr(host, "data-user-lib-art") || "").trim() ||
       String(decodeDiscoverDataAttr(urlEl, "data-user-lib-art") || "").trim() ||
-      String(host.querySelector?.(".discoverySpotCardArt img, .discoveryRowArt img")?.getAttribute?.("src") || "").trim();
+      String(host.querySelector?.(".followActCover img, .discoverySpotCardArt img, .discoveryRowArt img")?.getAttribute?.("src") || "").trim();
     if (active) applyCoverGlowRgb(host, artHint);
   };
 
   for (const root of roots) {
+    root.querySelectorAll(".followAct").forEach((row) => {
+      paintHost(row, row);
+    });
     root.querySelectorAll(".discoveryRow").forEach((row) => {
+      if (row.classList.contains("followAct")) return;
       const artBtn = row.querySelector("[data-discovery-inline-play]");
       paintHost(row, artBtn);
     });

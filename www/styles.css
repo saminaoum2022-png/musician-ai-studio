@@ -4545,7 +4545,7 @@ body[data-route="moment"] .imageMoodKicker,
   color: rgba(183,139,255,0.9);
 }
 
-/* Moments — vinyl disc (circle, groove ring, spindle) */
+/* Moments — vinyl disc: grooved outer ring, photo label center, spindle */
 .friendsMomentsRail{
   margin: 0 0 18px;
   padding: 0 2px;
@@ -4605,58 +4605,67 @@ body[data-route="moment"] .imageMoodKicker,
   width: 72px;
   height: 72px;
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 42%, rgba(40,44,58,0.95) 0%, rgba(12,14,22,0.98) 68%, rgba(4,5,10,1) 100%);
+  background:
+    radial-gradient(circle at 50% 50%, #050508 0%, #0a0a10 52%, #14141c 100%);
+  border: 1px solid rgba(255,255,255,0.14);
   box-shadow:
-    0 2px 10px rgba(0,0,0,0.45),
-    inset 0 0 0 1px rgba(255,255,255,0.08);
+    0 3px 14px rgba(0,0,0,0.55),
+    inset 0 0 0 1px rgba(255,255,255,0.06);
 }
-.momentPickShell::after{
-  content: "";
-  position: absolute;
-  inset: 1px;
-  border-radius: 50%;
-  box-shadow: inset 0 0 14px rgba(0,0,0,0.55);
-  pointer-events: none;
-  z-index: 4;
-}
-.momentPickShape{
-  position: absolute;
-  inset: 5px;
-  border-radius: 50%;
-  background: rgba(8,10,18,0.92);
-  border: 1px solid rgba(255,255,255,0.1);
-  overflow: hidden;
-  z-index: 2;
-}
-.momentPickShape::before{
+/* Grooved vinyl ring — outside the photo label (matches reference mockup). */
+.momentPickShell::before{
   content: "";
   position: absolute;
   inset: 0;
   border-radius: 50%;
   background: repeating-radial-gradient(
-    circle at center,
-    transparent 0,
-    transparent 3px,
-    rgba(255,255,255,0.035) 3px,
-    rgba(255,255,255,0.035) 4px
+    circle at 50% 50%,
+    #2a2a34 0,
+    #1a1a22 1.2px,
+    #32323e 2.4px,
+    #121218 3.6px
   );
+  -webkit-mask: radial-gradient(circle, transparent 0 66%, #000 67% 100%);
+  mask: radial-gradient(circle, transparent 0 66%, #000 67% 100%);
   pointer-events: none;
-  z-index: 2;
-  opacity: 0.65;
+  z-index: 1;
+}
+.momentPickShell::after{
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 10px rgba(0,0,0,0.65),
+    inset 0 0 0 1px rgba(255,255,255,0.05);
+  pointer-events: none;
+  z-index: 4;
+}
+.momentPickShape{
+  position: absolute;
+  inset: 11px;
+  border-radius: 50%;
+  background: #08080c;
+  border: 1px solid rgba(0,0,0,0.65);
+  overflow: hidden;
+  z-index: 3;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.08),
+    inset 0 0 12px rgba(0,0,0,0.35);
 }
 .momentPickShape::after{
   content: "";
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 9px;
-  height: 9px;
-  margin: -4.5px 0 0 -4.5px;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, rgba(28,32,44,1) 0%, rgba(6,8,14,1) 100%);
-  border: 1px solid rgba(255,255,255,0.16);
-  box-shadow: 0 0 0 1px rgba(0,0,0,0.5);
-  z-index: 3;
+  background: radial-gradient(circle at 35% 30%, #2a2a34 0%, #06060a 100%);
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.55);
+  z-index: 2;
   pointer-events: none;
 }
 .momentPickShape img{
@@ -4666,31 +4675,29 @@ body[data-route="moment"] .imageMoodKicker,
   display: block;
   border-radius: 50%;
 }
+/* Thin expiry arc on the vinyl lip (profile palette, not a thick teal ring). */
 .momentPickCountdown{
   position: absolute;
   inset: 0;
   border-radius: 50%;
   background: conic-gradient(
     from -90deg,
-    rgba(94,234,212,0.95) 0deg,
-    rgba(94,234,212,0.95) calc(var(--moment-pct, 1) * 360deg),
-    rgba(255,255,255,0.08) calc(var(--moment-pct, 1) * 360deg),
-    rgba(255,255,255,0.08) 360deg
+    #b78bff 0deg,
+    #7c5cff calc(var(--moment-pct, 1) * 360deg),
+    rgba(255,255,255,0.07) calc(var(--moment-pct, 1) * 360deg),
+    rgba(255,255,255,0.07) 360deg
   );
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
-  mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
   pointer-events: none;
-  opacity: 0.95;
-  z-index: 1;
+  opacity: 0.9;
+  z-index: 2;
 }
 .momentPickTile.isOwn .momentPickShape{
-  background: rgba(255,255,255,0.06);
+  background: rgba(12,12,18,0.95);
   display: flex;
   align-items: center;
   justify-content: center;
-}
-.momentPickTile.isOwn .momentPickShape::before{
-  opacity: 0.35;
 }
 .momentPickAdd{
   font-size: 28px;
@@ -4766,28 +4773,49 @@ body[data-route="moment"] .imageMoodKicker,
   height: min(240px, 72vw);
   margin: 8px auto 14px;
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 42%, rgba(40,44,58,0.95) 0%, rgba(12,14,22,0.98) 68%, rgba(4,5,10,1) 100%);
+  background:
+    radial-gradient(circle at 50% 50%, #050508 0%, #0a0a10 52%, #14141c 100%);
+  border: 1px solid rgba(255,255,255,0.14);
   box-shadow:
-    0 4px 24px rgba(0,0,0,0.5),
-    inset 0 0 0 1px rgba(255,255,255,0.08);
+    0 6px 28px rgba(0,0,0,0.55),
+    inset 0 0 0 1px rgba(255,255,255,0.06);
+}
+.momentViewerPickFrame::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: repeating-radial-gradient(
+    circle at 50% 50%,
+    #2a2a34 0,
+    #1a1a22 1.4px,
+    #32323e 2.8px,
+    #121218 4.2px
+  );
+  -webkit-mask: radial-gradient(circle, transparent 0 66%, #000 67% 100%);
+  mask: radial-gradient(circle, transparent 0 66%, #000 67% 100%);
+  pointer-events: none;
+  z-index: 1;
 }
 .momentViewerPickFrame::after{
   content: "";
   position: absolute;
-  inset: 2px;
+  inset: 3px;
   border-radius: 50%;
-  box-shadow: inset 0 0 22px rgba(0,0,0,0.55);
+  box-shadow:
+    inset 0 0 18px rgba(0,0,0,0.65),
+    inset 0 0 0 1px rgba(255,255,255,0.05);
   pointer-events: none;
   z-index: 4;
 }
 .momentViewerPickFrame .momentPickShape{
   position: absolute;
-  inset: 8px;
+  inset: 36px;
 }
 .momentViewerPickFrame .momentPickShape::after{
-  width: 14px;
-  height: 14px;
-  margin: -7px 0 0 -7px;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
 }
 .momentViewerImg{
   width: 100%;
@@ -4801,15 +4829,15 @@ body[data-route="moment"] .imageMoodKicker,
   border-radius: 50%;
   background: conic-gradient(
     from -90deg,
-    rgba(94,234,212,0.95) 0deg,
-    rgba(94,234,212,0.95) calc(var(--moment-pct, 1) * 360deg),
-    rgba(255,255,255,0.08) calc(var(--moment-pct, 1) * 360deg),
-    rgba(255,255,255,0.08) 360deg
+    #b78bff 0deg,
+    #7c5cff calc(var(--moment-pct, 1) * 360deg),
+    rgba(255,255,255,0.07) calc(var(--moment-pct, 1) * 360deg),
+    rgba(255,255,255,0.07) 360deg
   );
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 5px));
-  mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 5px));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 2px));
   pointer-events: none;
-  z-index: 1;
+  z-index: 2;
 }
 .momentViewerWho{
   margin: 0 0 8px;

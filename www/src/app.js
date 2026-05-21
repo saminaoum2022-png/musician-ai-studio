@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521momentsComposeV1";
+const APP_BUILD = "20260521momentPageV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2609,7 +2609,7 @@ function applyRoute() {
     })();
   }
   if (wanted === "moment") {
-    try { syncImageMoodModalMode(); } catch {}
+    try { syncMomentPageUi(); } catch {}
   }
   if (wanted === "discover") {
     bindDiscoveryDiscoverControls();
@@ -2800,6 +2800,7 @@ function resetCreateDraft() {
   imageMoodAppliedForNextGen = false;
   imageMoodData = null;
   imageMoodCoverDataUrl = "";
+  momentPhotoDataUrl = "";
   setCreatePhotoAttachmentPreview("");
   sunoTaskId = null;
   sunoAudioId = null;
@@ -2870,7 +2871,7 @@ try {
   bindDiscoveryDiscoverControls();
   wireCreateChooserSheetOnce();
   wireRouteLinkHapticsOnce();
-  wireImageMoodMomentOnce();
+  wireMomentPageOnce();
   wireMomentViewerOnce();
   bindFriendsPageOnce();
   wireFriendsComposeFabOnce();
@@ -5012,7 +5013,7 @@ function navigateFromCreateChooser(action) {
 
     if (kind === "moment") {
       const onMoment = String(location.hash || "") === "#/moment";
-      openMomentCreatePage("moment");
+      openMomentCreatePage();
       if (onMoment) scheduleApplyRoute();
       return;
     }
@@ -5080,28 +5081,24 @@ function isCreateMomentIntent() {
   return getCreateEntryIntent() === "moment";
 }
 
+let momentPhotoDataUrl = "";
+
 function resetMomentComposeForm() {
   const cap = document.getElementById("momentCaptionInput");
-  const count = document.getElementById("momentCaptionCount");
   if (cap) cap.value = "";
-  if (count) count.textContent = "0";
-  imageMoodData = null;
-  imageMoodCoverDataUrl = "";
+  momentPhotoDataUrl = "";
+  const pick = document.getElementById("momentPhotoPick");
+  const preview = document.getElementById("momentPhotoPreview");
+  const upload = document.getElementById("momentPhotoUpload");
   try {
-    if (els.imageMoodUpload) els.imageMoodUpload.value = "";
+    if (upload) upload.value = "";
   } catch {}
-  if (els.imageMoodPreview) {
-    els.imageMoodPreview.removeAttribute("src");
-    els.imageMoodPreview.style.display = "none";
+  if (preview) {
+    preview.removeAttribute("src");
+    preview.hidden = true;
   }
-  try {
-    renderImageMoodEmpty();
-  } catch {}
-}
-
-function renderImageMoodEmpty() {
-  if (!els.imageMoodOutput) return;
-  els.imageMoodOutput.innerHTML = `<div class="imageMoodEmpty">No analysis yet.</div>`;
+  if (pick) pick.classList.remove("hasPhoto");
+  syncMomentPageUi();
 }
 
 function getMomentCaptionText() {
@@ -5109,86 +5106,50 @@ function getMomentCaptionText() {
   return String(el?.value || "").trim().slice(0, 320);
 }
 
-function updateMomentCaptionCount() {
-  const count = document.getElementById("momentCaptionCount");
-  if (!count) return;
-  count.textContent = String(getMomentCaptionText().length);
+function syncMomentPageUi() {
+  const publishBtn = document.getElementById("btnMomentPublish");
+  const hasPhoto = Boolean(String(momentPhotoDataUrl || "").trim());
+  if (publishBtn) publishBtn.disabled = !hasPhoto;
 }
 
-function mountImageMoodAnalyzeControls(momentMode) {
-  const output = document.getElementById("imageMoodOutput");
-  const analyzeBtn = document.getElementById("btnAnalyzeImageMood");
-  const songSlot = document.getElementById("imageMoodSongAnalyze");
-  const momentSlot = document.getElementById("momentAnalyzeInner");
-  if (!output || !analyzeBtn || !songSlot || !momentSlot) return;
-  const slot = momentMode ? momentSlot : songSlot;
-  if (output.parentElement !== slot) slot.appendChild(output);
-  if (analyzeBtn.parentElement !== slot) slot.appendChild(analyzeBtn);
-}
-
-function openMomentCreatePage(intent = "moment") {
-  setCreateEntryIntent(intent);
-  if (intent === "moment") resetMomentComposeForm();
-  try { syncImageMoodModalMode(); } catch {}
+function openMomentCreatePage() {
+  setCreateEntryIntent("moment");
+  resetMomentComposeForm();
   try { location.hash = "#/moment"; } catch {}
 }
 
-function leaveMomentPage(targetHash = "#/generate") {
+function leaveMomentPage(targetHash = "#/friends") {
   if ((document.body.getAttribute("data-route") || "") !== "moment") return;
   try { location.hash = targetHash; } catch {}
 }
 
-function closeImageMoodModalGlobal() {
-  const shell = document.getElementById("imageMoodModal");
-  if (shell) shell.classList.remove("imageMoodModal--moment");
-  leaveMomentPage("#/generate");
+function openImageMoodSheet() {
+  setCreateEntryIntent("song");
+  if (String(location.hash || "") !== "#/generate") {
+    try { location.hash = "#/generate"; } catch {}
+  }
+  const sheet = document.getElementById("imageMoodModal");
+  if (!sheet) return;
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  syncImageMoodSheetUi();
 }
 
-function syncImageMoodModalMode() {
-  const momentMode = isCreateMomentIntent();
-  const modal = document.getElementById("imageMoodModal");
-  const momentActions = document.getElementById("imageMoodMomentActions");
-  const momentCompose = document.getElementById("momentComposeBlock");
-  const momentAnalyzeDetails = document.getElementById("momentAnalyzeDetails");
-  const songAnalyze = document.getElementById("imageMoodSongAnalyze");
+function closeImageMoodSheet() {
+  const sheet = document.getElementById("imageMoodModal");
+  if (!sheet) return;
+  sheet.hidden = true;
+  sheet.setAttribute("aria-hidden", "true");
+}
+
+function renderImageMoodEmpty() {
+  if (!els.imageMoodOutput) return;
+  els.imageMoodOutput.innerHTML = `<div class="imageMoodEmpty">No analysis yet.</div>`;
+}
+
+function syncImageMoodSheetUi() {
   const applyBtn = document.getElementById("btnApplyImageMood");
-  const coverRow = document.getElementById("imageMoodCoverRow");
-  const songActions = document.querySelector(".imageMoodActions");
-  const kicker = document.querySelector(".imageMoodKicker");
-  const lead = document.getElementById("imageMoodLead");
-  const title = document.querySelector(".imageMoodCard .modalTitle");
-  const hasAnalysis = Boolean(imageMoodData);
-  const hasPhoto = Boolean(String(imageMoodCoverDataUrl || "").trim());
-  const hasCaption = Boolean(getMomentCaptionText());
-
-  mountImageMoodAnalyzeControls(momentMode);
-
-  if (modal) modal.classList.toggle("imageMoodModal--moment", momentMode);
-  if (momentCompose) momentCompose.hidden = !momentMode;
-  if (momentActions) momentActions.hidden = !momentMode;
-  if (momentAnalyzeDetails) momentAnalyzeDetails.hidden = !momentMode;
-  if (songAnalyze) songAnalyze.hidden = momentMode;
-  if (songActions) songActions.hidden = momentMode;
-  if (applyBtn) applyBtn.hidden = momentMode;
-  if (coverRow) coverRow.hidden = momentMode;
-
-  if (kicker) kicker.textContent = momentMode ? "Create moment" : "Photo mood";
-  if (title) title.textContent = momentMode ? "Share a moment" : "Image Mood Assistant";
-  if (lead) {
-    lead.textContent = momentMode
-      ? "Pick a photo, write your caption, and share — no AI analysis required. Your circle sees it for 24 hours."
-      : "Upload cover/art/photo and NabadAi suggests mood, tags, and optional lyric seed.";
-  }
-
-  const turnBtn = document.getElementById("btnMomentTurnIntoSong");
-  const publishBtn = document.getElementById("btnMomentPublish");
-  if (momentMode) {
-    if (publishBtn) publishBtn.disabled = !hasPhoto || !hasCaption;
-    if (turnBtn) turnBtn.disabled = !hasAnalysis || !hasPhoto;
-  } else if (applyBtn) {
-    applyBtn.disabled = !hasAnalysis;
-  }
-  updateMomentCaptionCount();
+  if (applyBtn) applyBtn.disabled = !imageMoodData;
 }
 
 function applyImageMoodToSongFields() {
@@ -5230,25 +5191,6 @@ function buildMomentCaption() {
   if (seed && parts.join(" ").length < 200) parts.push(seed);
   const text = parts.join(" · ").replace(/\s+/g, " ").trim().slice(0, 320);
   return text || "Studio moment";
-}
-
-function momentTurnIntoSong() {
-  if (!imageMoodData) {
-    try { showToast("Analyze your photo first", { icon: "📷", durationMs: 2200 }); } catch {}
-    return;
-  }
-  applyImageMoodToSongFields();
-  setCreateEntryIntent("song");
-  leaveMomentPage("#/generate");
-  window.setTimeout(() => {
-    try { if (typeof setActiveCreateTab === "function") setActiveCreateTab("lyrics"); } catch {}
-  }, 80);
-  try { els.sunoPrompt?.focus?.({ preventScroll: true }); } catch {}
-  try {
-    showToast("Mood applied — write lyrics or tap Generate", { icon: "🎵", durationMs: 2800 });
-  } catch {}
-  setStatus("Moment mood applied to your song. Add lyrics, then generate.");
-  try { syncGenerateOrbVisibility(); } catch {}
 }
 
 function momentStorageKey(uid, ext) {
@@ -5528,16 +5470,11 @@ async function renderUserProfileMomentsRail(userId, username = "") {
 }
 
 async function publishMoment() {
-  if (!imageMoodCoverDataUrl) {
+  if (!momentPhotoDataUrl) {
     try { showToast("Add a photo first", { icon: "📷", durationMs: 2200 }); } catch {}
     return;
   }
-  const body = getMomentCaptionText();
-  if (!body) {
-    try { showToast("Write a caption for your moment", { icon: "✎", durationMs: 2200 }); } catch {}
-    try { document.getElementById("momentCaptionInput")?.focus?.({ preventScroll: true }); } catch {}
-    return;
-  }
+  const body = getMomentCaptionText() || "Studio moment";
   if (!authSession?.user?.id) {
     requireAuthForCreate(() => publishMoment());
     return;
@@ -5545,7 +5482,7 @@ async function publishMoment() {
   const publishBtn = document.getElementById("btnMomentPublish");
   if (publishBtn) publishBtn.disabled = true;
   try {
-    const cover = await prepareMomentCoverDataUrl(imageMoodCoverDataUrl);
+    const cover = await prepareMomentCoverDataUrl(momentPhotoDataUrl);
     const blob = await dataUrlToBlob(cover);
     const imageUrl = await uploadMomentBlob(blob);
     await socialApi("/api/social", {
@@ -5562,23 +5499,50 @@ async function publishMoment() {
   } catch (e) {
     try { showToast(e?.message || "Could not publish moment", { durationMs: 3200 }); } catch {}
   } finally {
-    try { syncImageMoodModalMode(); } catch {}
+    try { syncMomentPageUi(); } catch {}
   }
 }
 
-function wireImageMoodMomentOnce() {
-  if (document.documentElement.dataset.wiredImageMoodMoment) return;
-  document.documentElement.dataset.wiredImageMoodMoment = "1";
-  document.getElementById("momentCaptionInput")?.addEventListener("input", () => {
-    try { syncImageMoodModalMode(); } catch {}
-  });
-  document.getElementById("btnMomentTurnIntoSong")?.addEventListener("click", () => {
+function wireMomentPageOnce() {
+  if (document.documentElement.dataset.wiredMomentPage) return;
+  document.documentElement.dataset.wiredMomentPage = "1";
+  document.getElementById("btnMomentBack")?.addEventListener("click", () => {
     try { haptic("light"); } catch {}
-    momentTurnIntoSong();
+    leaveMomentPage("#/friends");
   });
   document.getElementById("btnMomentPublish")?.addEventListener("click", () => {
     try { haptic("light"); } catch {}
     void publishMoment();
+  });
+  document.getElementById("momentPhotoUpload")?.addEventListener("change", async () => {
+    const file = document.getElementById("momentPhotoUpload")?.files?.[0];
+    const pick = document.getElementById("momentPhotoPick");
+    const preview = document.getElementById("momentPhotoPreview");
+    if (!file) {
+      momentPhotoDataUrl = "";
+      if (preview) {
+        preview.removeAttribute("src");
+        preview.hidden = true;
+      }
+      if (pick) pick.classList.remove("hasPhoto");
+      syncMomentPageUi();
+      return;
+    }
+    try {
+      const dataUrl = await prepareMomentCoverDataUrl(file);
+      momentPhotoDataUrl = dataUrl;
+      if (preview) {
+        preview.src = dataUrl;
+        preview.hidden = false;
+      }
+      if (pick) pick.classList.add("hasPhoto");
+      syncMomentPageUi();
+      try { document.getElementById("momentCaptionInput")?.focus?.({ preventScroll: true }); } catch {}
+    } catch (e) {
+      momentPhotoDataUrl = "";
+      try { showToast(e?.message || "Could not load photo", { durationMs: 2600 }); } catch {}
+      syncMomentPageUi();
+    }
   });
 }
 
@@ -6125,7 +6089,7 @@ function bindFriendsPageOnce() {
   bindFollowingComposeOnce();
   wireFriendsComposeSheetOnce();
   wireCreateChooserSheetOnce();
-  wireImageMoodMomentOnce();
+  wireMomentPageOnce();
   wireMomentViewerOnce();
   wireFriendsComposeFabOnce();
   if (!_friendsStatusMenuDocBound) {
@@ -22318,10 +22282,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   };
 
   const openImageMoodModal = () => {
-    openMomentCreatePage(isCreateMomentIntent() ? "moment" : "song");
+    openImageMoodSheet();
   };
   const closeImageMoodModal = () => {
-    closeImageMoodModalGlobal();
+    closeImageMoodSheet();
   };
   const fileToDataUrl = (file) => new Promise((resolve, reject) => {
     const fr = new FileReader();
@@ -22402,16 +22366,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (!r.ok) throw new Error(d?.error || "Image analysis failed");
       imageMoodData = d || null;
       renderImageMood(imageMoodData);
-      try { syncImageMoodModalMode(); } catch {}
+      try { syncImageMoodSheetUi(); } catch {}
       if (els.imageMoodSummary) {
         const tags = Array.isArray(d?.tags) ? d.tags.slice(0, 4).join(", ") : "";
         els.imageMoodSummary.textContent = tags || String(d?.concept || "Image mood ready.");
       }
-      setStatus(
-        isCreateMomentIntent()
-          ? "Moment mood ready — publish on Friends or turn into a song."
-          : "Image mood ready. Tap apply to use it."
-      );
+      setStatus("Image mood ready. Tap apply to use it.");
     } catch (e) {
       setStatus(`Image mood failed: ${e?.message || String(e)}`);
     } finally {
@@ -22422,10 +22382,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   };
   const applyImageMood = () => {
     if (!imageMoodData) return;
-    if (isCreateMomentIntent()) {
-      momentTurnIntoSong();
-      return;
-    }
     applyImageMoodToSongFields();
     closeImageMoodModal();
     setStatus("Image mood applied. If no lyrics are provided, generation will be instrumental.");
@@ -22484,13 +22440,16 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   if (els.btnCloseImageMood) {
     els.btnCloseImageMood.addEventListener("click", closeImageMoodModal);
   }
+  document.querySelectorAll("[data-image-mood-dismiss]").forEach((el) => {
+    el.addEventListener("click", closeImageMoodModal);
+  });
   if (els.imageMoodUpload) {
     els.imageMoodUpload.addEventListener("change", () => {
       const file = els.imageMoodUpload.files?.[0];
       if (!file) return;
       imageMoodData = null;
       renderImageMood(null);
-      try { syncImageMoodModalMode(); } catch {}
+      try { syncImageMoodSheetUi(); } catch {}
       const preview = URL.createObjectURL(file);
       if (els.imageMoodPreview) {
         els.imageMoodPreview.src = preview;
@@ -22499,17 +22458,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       prepareMomentCoverDataUrl(file)
         .then((v) => {
           imageMoodCoverDataUrl = v;
-          try { syncImageMoodModalMode(); } catch {}
+          try { syncImageMoodSheetUi(); } catch {}
         })
         .catch(() => {
           imageMoodCoverDataUrl = "";
-          try { syncImageMoodModalMode(); } catch {}
+          try { syncImageMoodSheetUi(); } catch {}
         });
-      if (isCreateMomentIntent()) {
-        window.setTimeout(() => {
-          try { document.getElementById("momentCaptionInput")?.focus?.({ preventScroll: true }); } catch {}
-        }, 80);
-      }
     });
   }
   if (els.btnAnalyzeImageMood) {
@@ -26995,7 +26949,7 @@ if (createTabEls.hum) {
 const createPhotoCtaBtn = document.getElementById("createPhotoCta");
 if (createPhotoCtaBtn) {
   createPhotoCtaBtn.addEventListener("click", () => {
-    openMomentCreatePage("song");
+    openImageMoodSheet();
   });
 }
 

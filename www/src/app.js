@@ -5237,9 +5237,45 @@ function momentRemainingPct(expiresAt) {
 let _friendsMomentsById = new Map();
 let _momentViewerTimer = 0;
 let _momentViewerOpen = null;
+const MOMENTS_SEEN_STORAGE_KEY = "nabad_moments_seen_v1";
+
+function readSeenMomentIds() {
+  try {
+    const raw = localStorage.getItem(MOMENTS_SEEN_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed.map((id) => String(id || "").trim()).filter(Boolean) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeSeenMomentIds(seen) {
+  try {
+    localStorage.setItem(MOMENTS_SEEN_STORAGE_KEY, JSON.stringify([...seen].slice(-200)));
+  } catch {}
+}
+
+function isMomentSeen(momentId) {
+  const id = String(momentId || "").trim();
+  return id ? readSeenMomentIds().has(id) : false;
+}
+
+function markMomentSeen(momentId) {
+  const id = String(momentId || "").trim();
+  if (!id) return;
+  const seen = readSeenMomentIds();
+  if (seen.has(id)) return;
+  seen.add(id);
+  writeSeenMomentIds(seen);
+  const esc = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(id) : id.replace(/"/g, '\\"');
+  document.querySelectorAll(`[data-moment-id="${esc}"]`).forEach((tile) => {
+    tile.classList.add("isViewed");
+  });
+  const frame = document.getElementById("momentViewerPickFrame");
+  if (frame && String(_momentViewerOpen?.id || "") === id) frame.classList.add("isViewed");
+}
 
 function momentPickTileHtml(m, { isOwn = false, label = "" } = {}) {
-  const pct = momentRemainingPct(m?.expiresAt);
   const handle = String(m?.username || "").replace(/^@/, "").trim() || "user";
   const lbl = label || (isOwn ? "Your moment" : handle);
   if (isOwn && !String(m?.imageUrl || "").trim()) {
@@ -5251,9 +5287,10 @@ function momentPickTileHtml(m, { isOwn = false, label = "" } = {}) {
     </button>`;
   }
   const img = escapeHtml(String(m?.imageUrl || "").trim());
-  return `<button type="button" class="momentPickTile${isOwn ? " isOwn" : ""}" data-moment-id="${escapeHtml(String(m?.id || ""))}" aria-label="Moment from ${escapeHtml(lbl)}">
+  const viewed = !isOwn && isMomentSeen(m?.id);
+  return `<button type="button" class="momentPickTile${isOwn ? " isOwn" : ""}${viewed ? " isViewed" : ""}" data-moment-id="${escapeHtml(String(m?.id || ""))}" aria-label="Moment from ${escapeHtml(lbl)}">
     <span class="momentPickShell">
-      <span class="momentPickCountdown" style="--moment-pct:${pct}"></span>
+      <span class="momentPickCountdown" aria-hidden="true"></span>
       <span class="momentPickShape"><img src="${img}" alt="" width="72" height="72" decoding="async" loading="lazy" /></span>
     </span>
     <span class="momentPickLabel">${escapeHtml(lbl)}</span>
@@ -5284,8 +5321,6 @@ function bindMomentsRailClicks(container) {
 function updateMomentViewerCountdown() {
   if (!_momentViewerOpen) return;
   const pct = momentRemainingPct(_momentViewerOpen.expiresAt);
-  const ring = document.getElementById("momentViewerCountdown");
-  if (ring) ring.style.setProperty("--moment-pct", String(pct));
   if (pct <= 0) closeMomentViewerSheet();
 }
 
@@ -5293,6 +5328,12 @@ function openMomentViewerSheet(moment) {
   const sheet = document.getElementById("momentViewerSheet");
   if (!sheet || !moment) return;
   _momentViewerOpen = moment;
+  const own = String(moment.userId || "") === String(authSession?.user?.id || "");
+  const frame = document.getElementById("momentViewerPickFrame");
+  if (frame) {
+    frame.classList.toggle("isViewed", !own && isMomentSeen(moment.id));
+  }
+  if (!own) markMomentSeen(moment.id);
   const img = document.getElementById("momentViewerImg");
   const who = document.getElementById("momentViewerWho");
   const caption = document.getElementById("momentViewerCaption");
@@ -5309,7 +5350,6 @@ function openMomentViewerSheet(moment) {
     profileLink.href = `#/u/${encodeURIComponent(handle)}`;
     profileLink.textContent = "Profile";
   }
-  const own = String(moment.userId || "") === String(authSession?.user?.id || "");
   if (delBtn) delBtn.hidden = !own;
   updateMomentViewerCountdown();
   sheet.hidden = false;

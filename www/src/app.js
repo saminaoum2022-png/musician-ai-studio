@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521tabIconsFlatChallengeV1";
+const APP_BUILD = "20260521songCoversUploadV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -3553,8 +3553,7 @@ function renderHomeDeskContinue() {
       ? "Resume editing in Create"
       : "Pick up where you left off";
   if (artEl) {
-    const art = String(track.artUrl || "").trim();
-    artEl.src = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
+    artEl.src = trackCoverArtForFeed(track);
   }
 }
 
@@ -3790,8 +3789,7 @@ function bindChallengesPageOnce() {
       const challenge = challengeMetaForTrack(track);
       const prof = track.userId ? profMap.get(track.userId) : null;
       const handle = String(prof?.username || "").trim();
-      const art = String(track.artUrl || "").trim();
-      const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
+      const artSafe = trackCoverArtForFeed(track);
       return `
         <button type="button" class="challengeEntryCard" data-challenge-entry-play="${encodeURIComponent(track.url || "")}" data-challenge-entry-title="${encodeURIComponent(track.title || "Song")}" data-challenge-entry-art="${encodeURIComponent(artSafe)}" data-challenge-entry-by="${encodeURIComponent(handle ? `@${handle}` : "Creator")}" data-play-song-id="${encodeURIComponent(track.id || "")}" data-play-owner-id="${encodeURIComponent(track.userId || "")}" data-play-task-id="${encodeURIComponent(track.taskId || "")}" data-play-audio-id="${encodeURIComponent(track.audioId || "")}">
           <span class="challengeEntryArt"><img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" /></span>
@@ -4762,8 +4760,7 @@ function bindFollowingComposeOnce() {
 }
 
 function followingActivityPlayAttrs(t, profMap, byLine) {
-  const art = String(t.artUrl || "").trim();
-  const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
+  const artSafe = trackCoverArtForFeed(t);
   const rawTitle = String(t.title || "Untitled");
   const encUrl = encodeURIComponent(String(t.url || ""));
   const encTitle = encodeURIComponent(rawTitle);
@@ -6803,6 +6800,127 @@ async function deleteCallingCardObject(storageKey) {
       Authorization: `Bearer ${token}`,
     },
   }).catch(() => {});
+}
+
+function songCoverStorageKey(uid, trackId, suffix, ext) {
+  const base = String(trackId || "").trim().replace(/[^\w.-]+/g, "_").slice(0, 80) || "track";
+  const suf = suffix ? `_${suffix}` : "";
+  return `${uid}/${base}${suf}.${ext}`;
+}
+
+function extFromCoverMime(mime) {
+  const m = String(mime || "").toLowerCase();
+  if (m.includes("png")) return "png";
+  if (m.includes("webp")) return "webp";
+  return "jpg";
+}
+
+async function dataUrlToBlob(dataUrl) {
+  const r = await fetch(String(dataUrl || ""));
+  if (!r.ok) throw new Error("Could not read cover image");
+  return r.blob();
+}
+
+async function uploadSongCoverBlob(blob, trackId, suffix = "") {
+  const token = getSupabaseAuthToken();
+  const uid = authSession?.user?.id;
+  if (!token || !uid) throw new Error("Login required");
+  if (!SUPABASE_URL) throw new Error("Supabase not configured");
+  const ext = extFromCoverMime(blob.type);
+  const key = songCoverStorageKey(uid, trackId, suffix, ext);
+  const r = await fetch(`${SUPABASE_URL}/storage/v1/object/song_covers/${key}`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": blob.type || "image/jpeg",
+      "x-upsert": "true",
+      "Cache-Control": "public, max-age=31536000",
+    },
+    body: blob,
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(`Cover upload failed (${r.status}): ${t.slice(0, 140)}`);
+  }
+  const ts = Date.now();
+  return `${SUPABASE_URL}/storage/v1/object/public/song_covers/${key}?v=${ts}`;
+}
+
+/** Prefer thumb → full meta image → artUrl. */
+function trackCoverArtCandidates(track) {
+  const m = track?.meta || {};
+  return [
+    String(m.imageThumb || "").trim(),
+    String(m.imageUrl || "").trim(),
+    String(track?.artUrl || "").trim(),
+  ].filter(Boolean);
+}
+
+/** For Discover / Friends / Activity feeds — only HTTP URLs (no data: blobs). */
+function trackCoverArtForFeed(track) {
+  for (const c of trackCoverArtCandidates(track)) {
+    if (c && !c.startsWith("data:")) return c;
+  }
+  return "./assets/nabadai-logo.png";
+}
+
+const _coverUploadInflight = new Map();
+
+/** Upload custom data: covers to Supabase Storage and patch library + cloud. */
+async function persistTrackCoverIfNeeded(track) {
+  const id = String(track?.id || "").trim();
+  if (!id || !authSession?.user?.id) return null;
+  const fullData = String(track?.meta?.imageUrl || track?.artUrl || "").trim();
+  const thumbData = String(track?.meta?.imageThumb || "").trim();
+  const hasData =
+    fullData.startsWith("data:") || (thumbData.startsWith("data:") && !fullData);
+  if (!hasData) return null;
+  if (_coverUploadInflight.has(id)) return _coverUploadInflight.get(id);
+  const job = (async () => {
+    try {
+      const mainSrc = fullData.startsWith("data:") ? fullData : thumbData;
+      const mainBlob = await dataUrlToBlob(mainSrc);
+      const imageUrl = await uploadSongCoverBlob(mainBlob, id, "");
+      let imageThumb = imageUrl;
+      if (thumbData.startsWith("data:") && thumbData !== mainSrc) {
+        try {
+          const thumbBlob = await dataUrlToBlob(thumbData);
+          imageThumb = await uploadSongCoverBlob(thumbBlob, id, "thumb");
+        } catch {
+          imageThumb = imageUrl;
+        }
+      }
+      const items = loadLibrary();
+      const idx = items.findIndex((x) => String(x.id) === id);
+      if (idx < 0) return imageUrl;
+      const prev = items[idx];
+      const nextMeta = {
+        ...(prev.meta || {}),
+        imageUrl,
+        imageThumb,
+        ...(prev.meta?.photoMode || track?.meta?.photoMode ? { photoMode: true } : {}),
+      };
+      items[idx] = { ...prev, artUrl: imageUrl, meta: nextMeta, ts: Date.now() };
+      saveLibrary(items);
+      try {
+        refreshOwnSongsUi();
+      } catch {}
+      void supabasePatchUserSong(prev, { artUrl: imageUrl, meta: nextMeta });
+      return imageUrl;
+    } catch (e) {
+      try {
+        console.warn("[song_covers]", e?.message || e);
+      } catch {}
+      return null;
+    }
+  })();
+  _coverUploadInflight.set(id, job);
+  try {
+    return await job;
+  } finally {
+    _coverUploadInflight.delete(id);
+  }
 }
 
 async function saveCallingCard() {
@@ -11647,8 +11765,7 @@ let _userPublicFeedTracks = [];
 let _challengeEntryTracks = [];
 
 function discoveryTrackPlaybackMeta(t, profMap) {
-  const art = String(t.artUrl || "").trim();
-  const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
+  const artSafe = trackCoverArtForFeed(t);
   const prof = t.userId ? profMap.get(t.userId) : null;
   const handle = String(prof?.username || "").trim();
   const byLine = handle ? `@${handle}` : "Creator";
@@ -11690,8 +11807,8 @@ function rebuildDiscoveryPlaylistBuckets(playable) {
 function discoveryPlaylistCardArtHtml(tracks) {
   const arts = (tracks || [])
     .map((t) => {
-      const art = String(t.artUrl || "").trim();
-      return art && !art.startsWith("data:") ? art : "";
+      const art = trackCoverArtForFeed(t);
+      return art && !/nabadai-logo\.png/i.test(art) ? art : "";
     })
     .filter(Boolean)
     .slice(0, 4);
@@ -11981,8 +12098,7 @@ async function playRandomUserPublicFeedTrack(excludeUrl) {
 
 /** Discover-style row for `#/u/…` public song lists (⋯ opens Discover sheet; no View profile). */
 function userPublicDiscoveryRowHtml(t, idx, pub) {
-  const art = String(t.artUrl || "").trim();
-  const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
+  const artSafe = trackCoverArtForFeed(t);
   const rawTitle = String(t.title || "Untitled");
   const safeTitle = escapeHtml(rawTitle);
   const encUrl = encodeURIComponent(String(t.url || ""));
@@ -12045,8 +12161,7 @@ function wireDiscoverySpotCardImages(root) {
 }
 
 function discoveryTrackRowHtml(t, profMap, idx) {
-  const art = String(t.artUrl || "").trim();
-  const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
+  const artSafe = trackCoverArtForFeed(t);
   const prof = t.userId ? profMap.get(t.userId) : null;
   const handle = String(prof?.username || "").trim();
   const byLine = handle ? `@${handle}` : "Creator";
@@ -12098,8 +12213,7 @@ function discoveryTrackRowHtml(t, profMap, idx) {
 
 /** Discover grid tile — cover-first; badges + one caption line max. */
 function discoveryFeedCardHtml(t, profMap, idx) {
-  const art = String(t.artUrl || "").trim();
-  const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
+  const artSafe = trackCoverArtForFeed(t);
   const prof = t.userId ? profMap.get(t.userId) : null;
   const handle = String(prof?.username || "").trim();
   const byLine = handle ? `@${handle}` : "Creator";
@@ -12246,10 +12360,16 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     showToast("Sign in to change visibility.");
     return { ok: false };
   }
-  const items = loadLibrary();
-  const idx = items.findIndex((x) => String(x.id) === id);
+  let items = loadLibrary();
+  let idx = items.findIndex((x) => String(x.id) === id);
   if (idx < 0) return { ok: false };
-  const track = items[idx];
+  let track = items[idx];
+  if (wantPublic) {
+    await persistTrackCoverIfNeeded(track);
+    items = loadLibrary();
+    idx = items.findIndex((x) => String(x.id) === id);
+    if (idx >= 0) track = items[idx];
+  }
   const wasPublic = Boolean(track.publicOnProfile);
   const willBePublic = Boolean(wantPublic);
   const publishedAt = willBePublic && !wasPublic
@@ -12606,8 +12726,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
       els.userPublicSongs.innerHTML = `${profileFeaturedSongHtml(featured, "public")}${els.userPublicSongs.innerHTML}`;
     }
     _userPublicFeedTracks = slice.map((t) => {
-      const art = String(t.artUrl || "").trim();
-      const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
+      const artSafe = trackCoverArtForFeed(t);
       return {
         url: String(t.url || "").trim(),
         title: String(t.title || "Untitled"),
@@ -15759,8 +15878,11 @@ function renderUserProfile(rawUsername) {
       )
       .join("");
     _userPublicFeedTracks = slice.map((p) => {
-      const art = String(p.artUrl || p.creatorAvatar || "").trim();
-      const artSafe = art && !art.startsWith("data:") ? art : "./assets/nabadai-logo.png";
+      const artSafe = trackCoverArtForFeed(p) !== "./assets/nabadai-logo.png"
+        ? trackCoverArtForFeed(p)
+        : (String(p.artUrl || p.creatorAvatar || "").trim() && !String(p.artUrl || "").startsWith("data:")
+          ? String(p.artUrl || p.creatorAvatar || "").trim()
+          : "./assets/nabadai-logo.png");
       return {
         url: String(p.url || "").trim(),
         title: String(p.title || "Untitled"),
@@ -17102,6 +17224,7 @@ function addToLibrary(track) {
       setStatus(`Could not save copy to the cloud (${ins.reason}). Song is still saved on this device. ${_lastUserSongInsertFailure || ""}`.slice(0, 280));
       try { refreshOwnSongsUi(); } catch {}
     }
+    await persistTrackCoverIfNeeded(newTrack);
     queueArchiveLibraryTrack(newTrack);
   })();
   return newTrack;
@@ -21923,6 +22046,16 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           generatePollTimer = null;
           setGenerateBtn("Regenerate", false, "generate");
           showResultCard(true);
+          let genMeta = lastGenerationMeta;
+          if (pendingGeneratedCoverDataUrl) {
+            const coverMeta = {
+              imageUrl: pendingGeneratedCoverDataUrl,
+              photoMode: true,
+            };
+            genMeta = genMeta && typeof genMeta === "object"
+              ? { ...genMeta, ...coverMeta }
+              : coverMeta;
+          }
           const variantAEntry = addToLibrary({
             title: lastSunoTitle,
             artUrl: lastSunoArtUrl,
@@ -21930,7 +22063,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             taskId: sunoTaskId || "",
             audioId: sunoAudioId || "",
             kind: "full",
-            meta: lastGenerationMeta,
+            meta: genMeta,
           });
           if (lastSunoProxyUrl2 || lastSunoFullUrl2) {
             addToLibrary({
@@ -21940,7 +22073,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               taskId: sunoTaskId || "",
               audioId: lastSunoAudioId2 || "",
               kind: "full",
-              meta: lastGenerationMeta,
+              meta: genMeta,
             });
           }
           pendingGeneratedCoverDataUrl = "";
@@ -24432,15 +24565,37 @@ if (els.playerCoverUpload) {
       ...(thumb ? { imageThumb: thumb } : {}),
     };
     patchLibraryTrack(currentPlayerTrackRef.id, { artUrl: url, meta: newMeta });
-    currentPlayerTrackRef = { ...currentPlayerTrackRef, artUrl: url, meta: newMeta };
+    const trackRef = { ...currentPlayerTrackRef, artUrl: url, meta: newMeta };
+    currentPlayerTrackRef = trackRef;
     setPlayerMeta({
-      title: els.playerTitle?.textContent || currentPlayerTrackRef.title || "Library song",
+      title: els.playerTitle?.textContent || trackRef.title || "Library song",
       subtitle: els.playerSubtitle?.textContent || "Library • Full song",
       artUrl: url,
     });
     flashPlayerCover();
     showShareToast("Cover updated");
-    void syncHubCoverForTrack(currentPlayerTrackRef, url);
+    void (async () => {
+      const publicUrl = await persistTrackCoverIfNeeded(trackRef);
+      const coverForHub = publicUrl || url;
+      if (publicUrl) {
+        const fresh = loadLibrary().find((x) => String(x.id) === String(trackRef.id));
+        if (fresh) {
+          currentPlayerTrackRef = fresh;
+          setPlayerMeta({
+            title: els.playerTitle?.textContent || fresh.title || "Library song",
+            subtitle: els.playerSubtitle?.textContent || "Library • Full song",
+            artUrl: trackCoverArtForFeed(fresh),
+          });
+        }
+        try {
+          const route = String(document.body.getAttribute("data-route") || "");
+          if (route === "profile" && _profileSongsSegment === "activities") void renderProfileActivities();
+          if (route === "discover") void refreshDiscoverFeed();
+          if (route === "friends") void refreshDiscoveryFollowingFeed();
+        } catch {}
+      }
+      void syncHubCoverForTrack(currentPlayerTrackRef || trackRef, coverForHub);
+    })();
   });
 }
 if (els.playerSeek) {

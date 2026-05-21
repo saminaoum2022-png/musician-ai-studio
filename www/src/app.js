@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521profilePlayFixV1";
+const APP_BUILD = "20260521friendsYouPinV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4168,6 +4168,8 @@ function onLeaveSearchRoute() {
 }
 
 let _discoveryFollowingGen = 0;
+/** Latest status post by you — pinned at top of Friends after compose (not in following API). */
+let _friendsOwnPostPin = null;
 let _followComposeType = "update";
 let _followComposeBound = false;
 
@@ -4311,15 +4313,20 @@ function followingStatusRowHtml(post, profMap, idx) {
   const ts = post?.createdAt || post?.created_at;
   const when = ts ? relativeTime(new Date(ts).getTime()) : "Just now";
   const body = escapeHtml(String(post?.body || "").trim());
-  const who = handle
-    ? `<strong class="followActUser">@${escapeHtml(handle)}</strong>`
-    : `<strong class="followActUser">A musician</strong>`;
   const isOwn = Boolean(
     postId &&
     userId &&
     authSession?.user?.id &&
     userId === String(authSession.user.id),
   );
+  const who = isOwn
+    ? `<span class="followActYouLabel">You</span>`
+    : handle
+      ? `<strong class="followActUser">@${escapeHtml(handle)}</strong>`
+      : `<strong class="followActUser">A musician</strong>`;
+  const whoLineInner = isOwn
+    ? `${who}<span class="followActWhen">${escapeHtml(when)}</span>`
+    : `<a class="followActUserLink" href="${escapeHtml(profileHref)}" data-route-link="user">${who}</a><span class="followActWhen">${escapeHtml(when)}</span>`;
   const menuBtn = isOwn
     ? `<div class="followActMenuWrap">
         <button type="button" class="followActMore" data-follow-status-menu="${escapeHtml(postId)}" aria-label="Post options" aria-haspopup="true" aria-expanded="false">
@@ -4334,18 +4341,18 @@ function followingStatusRowHtml(post, profMap, idx) {
         </div>
       </div>`
     : "";
+  const ownCls = isOwn ? " followAct--own" : "";
   return `
-    <article class="followAct followAct--status" data-follow-act="status" data-follow-status-type="${escapeHtml(postType)}" data-follow-status-id="${escapeHtml(postId)}" style="--i:${idx}">
+    <article class="followAct followAct--status${ownCls}" data-follow-act="status" data-follow-status-type="${escapeHtml(postType)}" data-follow-status-id="${escapeHtml(postId)}" style="--i:${idx}">
       <div class="followActTop">
-        <a class="followActAvatar" href="${escapeHtml(profileHref)}" data-route-link="user" aria-label="${handle ? `@${escapeHtml(handle)} profile` : "Profile"}">
+        <a class="followActAvatar" href="${escapeHtml(profileHref)}" data-route-link="user" aria-label="${isOwn ? "Your profile" : handle ? `@${escapeHtml(handle)} profile` : "Profile"}">
           ${avatarSrc
             ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
             : `<span class="followActAvatarFallback">${escapeHtml(initials)}</span>`}
         </a>
         <div class="followActTopText">
           <div class="followActWhoLine">
-            <a class="followActUserLink" href="${escapeHtml(profileHref)}" data-route-link="user">${who}</a>
-            <span class="followActWhen">${escapeHtml(when)}</span>
+            ${whoLineInner}
           </div>
           ${followingActivityBadgeHtml("status", postType)}
         </div>
@@ -4368,9 +4375,52 @@ function closeAllFollowStatusMenus() {
   });
 }
 
+function normalizeFriendsOwnPost(post, fallbackBody, fallbackType) {
+  const uid = String(authSession?.user?.id || "");
+  return {
+    id: String(post?.id || `temp_${Date.now()}`),
+    userId: String(post?.userId || post?.user_id || uid),
+    postType: String(post?.postType || post?.post_type || fallbackType || "update").trim(),
+    body: String(post?.body || fallbackBody || "").trim(),
+    createdAt: post?.createdAt || post?.created_at || new Date().toISOString(),
+    username: String(post?.username || activeProfile?.username || "").trim(),
+    avatar: String(post?.avatar || activeProfile?.avatar || "").trim(),
+  };
+}
+
+function mergeFriendsOwnPostPin(feedItems) {
+  if (!_friendsOwnPostPin) return feedItems;
+  const pinId = String(_friendsOwnPostPin.id || "");
+  const pinTs = new Date(_friendsOwnPostPin.createdAt || Date.now()).getTime() || Date.now();
+  const rest = feedItems.filter(
+    (row) => !(row.kind === "status" && String(row.post?.id || "") === pinId),
+  );
+  return [{ kind: "status", ts: pinTs, post: _friendsOwnPostPin }, ...rest].sort((a, b) => b.ts - a.ts);
+}
+
+async function prependFriendsOwnPost(pin) {
+  const listEl = document.getElementById("discoveryFollowingList");
+  const statusEl = document.getElementById("discoveryFollowingStatus");
+  if (!listEl || !pin) return;
+  if (statusEl) {
+    statusEl.hidden = true;
+    statusEl.textContent = "";
+  }
+  const uid = String(authSession?.user?.id || "");
+  const profMap = await fetchProfilesByUserIdsMap([uid]);
+  const rowHtml = followingStatusRowHtml(pin, profMap, 0);
+  listEl.classList.remove("isDiscoveryLoading");
+  listEl.hidden = false;
+  const escId = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(String(pin.id)) : String(pin.id).replace(/"/g, "");
+  const existing = listEl.querySelector(`[data-follow-status-id="${escId}"]`);
+  if (existing) existing.remove();
+  listEl.insertAdjacentHTML("afterbegin", rowHtml);
+}
+
 async function deleteFollowingStatusPost(postId) {
   const id = String(postId || "").trim();
   if (!id || !authSession?.user?.id) return;
+  if (_friendsOwnPostPin && String(_friendsOwnPostPin.id) === id) _friendsOwnPostPin = null;
   let ok = false;
   try {
     ok = window.confirm("Remove this post from Friends?");
@@ -4685,15 +4735,17 @@ function bindFollowingComposeOnce() {
     if (!text) return;
     postBtn.disabled = true;
     try {
-      await socialApi("/api/social", {
+      const res = await socialApi("/api/social", {
         method: "POST",
         body: JSON.stringify({ action: "post_status", postType: _followComposeType, body: text }),
       });
+      _friendsOwnPostPin = normalizeFriendsOwnPost(res?.post, text, _followComposeType);
       if (input) input.value = "";
       syncFollowingComposeUi();
       haptic("success");
-      try { showToast("Posted to Friends", { icon: "✓", durationMs: 2200 }); } catch {}
+      try { showToast("Posted — followers will see it", { icon: "✓", durationMs: 2200 }); } catch {}
       closeFriendsComposeSheet();
+      await prependFriendsOwnPost(_friendsOwnPostPin);
       void refreshDiscoveryFollowingFeed();
       if (
         (document.body.getAttribute("data-route") || "") === "profile" &&
@@ -4873,9 +4925,10 @@ async function refreshDiscoveryFollowingFeed() {
   const listEl = document.getElementById("discoveryFollowingList");
   if (!statusEl || !listEl) return;
 
+  const keepFeed = Boolean(_friendsOwnPostPin && listEl.querySelector(".followAct"));
   listEl.classList.add("isDiscoveryLoading");
   listEl.hidden = false;
-  listEl.innerHTML = followingActivitySkeletonHtml();
+  if (!keepFeed) listEl.innerHTML = followingActivitySkeletonHtml();
   statusEl.hidden = true;
   statusEl.textContent = "";
 
@@ -4908,6 +4961,15 @@ async function refreshDiscoveryFollowingFeed() {
     if (gen !== _discoveryFollowingGen) return;
     const following = Array.isArray(data?.following) ? data.following : [];
     if (!following.length) {
+      if (_friendsOwnPostPin) {
+        if (gen !== _discoveryFollowingGen) return;
+        const profMap = await fetchProfilesByUserIdsMap([String(authSession.user.id)]);
+        listEl.classList.remove("isDiscoveryLoading");
+        statusEl.hidden = true;
+        listEl.hidden = false;
+        listEl.innerHTML = followingStatusRowHtml(_friendsOwnPostPin, profMap, 0);
+        return;
+      }
       listEl.classList.remove("isDiscoveryLoading");
       listEl.hidden = true;
       listEl.innerHTML = "";
@@ -4978,11 +5040,11 @@ async function refreshDiscoveryFollowingFeed() {
       })),
     ]
       .filter((row) => row.ts > 0 || row.kind === "status")
-      .sort((a, b) => b.ts - a.ts)
-      .slice(0, 80);
+      .sort((a, b) => b.ts - a.ts);
+    const mergedItems = mergeFriendsOwnPostPin(feedItems).slice(0, 80);
 
     listEl.classList.remove("isDiscoveryLoading");
-    if (!feedItems.length) {
+    if (!mergedItems.length) {
       listEl.hidden = true;
       listEl.innerHTML = "";
       renderDiscoveryFollowingEmpty(
@@ -4997,7 +5059,7 @@ async function refreshDiscoveryFollowingFeed() {
     statusEl.textContent = "";
     _discoveryFeedTracks = playable.map((t) => discoveryTrackPlaybackMeta(t, profMap));
     listEl.hidden = false;
-    listEl.innerHTML = feedItems
+    listEl.innerHTML = mergedItems
       .map((item, i) => (item.kind === "status"
         ? followingStatusRowHtml(item.post, profMap, i)
         : followingActivityRowHtml(item.track, profMap, i)))

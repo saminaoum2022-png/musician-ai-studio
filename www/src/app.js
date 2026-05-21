@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521songCoversUploadV1";
+const APP_BUILD = "20260521momentsComposeV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5080,8 +5080,55 @@ function isCreateMomentIntent() {
   return getCreateEntryIntent() === "moment";
 }
 
+function resetMomentComposeForm() {
+  const cap = document.getElementById("momentCaptionInput");
+  const count = document.getElementById("momentCaptionCount");
+  if (cap) cap.value = "";
+  if (count) count.textContent = "0";
+  imageMoodData = null;
+  imageMoodCoverDataUrl = "";
+  try {
+    if (els.imageMoodUpload) els.imageMoodUpload.value = "";
+  } catch {}
+  if (els.imageMoodPreview) {
+    els.imageMoodPreview.removeAttribute("src");
+    els.imageMoodPreview.style.display = "none";
+  }
+  try {
+    renderImageMoodEmpty();
+  } catch {}
+}
+
+function renderImageMoodEmpty() {
+  if (!els.imageMoodOutput) return;
+  els.imageMoodOutput.innerHTML = `<div class="imageMoodEmpty">No analysis yet.</div>`;
+}
+
+function getMomentCaptionText() {
+  const el = document.getElementById("momentCaptionInput");
+  return String(el?.value || "").trim().slice(0, 320);
+}
+
+function updateMomentCaptionCount() {
+  const count = document.getElementById("momentCaptionCount");
+  if (!count) return;
+  count.textContent = String(getMomentCaptionText().length);
+}
+
+function mountImageMoodAnalyzeControls(momentMode) {
+  const output = document.getElementById("imageMoodOutput");
+  const analyzeBtn = document.getElementById("btnAnalyzeImageMood");
+  const songSlot = document.getElementById("imageMoodSongAnalyze");
+  const momentSlot = document.getElementById("momentAnalyzeInner");
+  if (!output || !analyzeBtn || !songSlot || !momentSlot) return;
+  const slot = momentMode ? momentSlot : songSlot;
+  if (output.parentElement !== slot) slot.appendChild(output);
+  if (analyzeBtn.parentElement !== slot) slot.appendChild(analyzeBtn);
+}
+
 function openMomentCreatePage(intent = "moment") {
   setCreateEntryIntent(intent);
+  if (intent === "moment") resetMomentComposeForm();
   try { syncImageMoodModalMode(); } catch {}
   try { location.hash = "#/moment"; } catch {}
 }
@@ -5101,36 +5148,47 @@ function syncImageMoodModalMode() {
   const momentMode = isCreateMomentIntent();
   const modal = document.getElementById("imageMoodModal");
   const momentActions = document.getElementById("imageMoodMomentActions");
+  const momentCompose = document.getElementById("momentComposeBlock");
+  const momentAnalyzeDetails = document.getElementById("momentAnalyzeDetails");
+  const songAnalyze = document.getElementById("imageMoodSongAnalyze");
   const applyBtn = document.getElementById("btnApplyImageMood");
   const coverRow = document.getElementById("imageMoodCoverRow");
   const songActions = document.querySelector(".imageMoodActions");
   const kicker = document.querySelector(".imageMoodKicker");
   const lead = document.getElementById("imageMoodLead");
   const title = document.querySelector(".imageMoodCard .modalTitle");
-  const hasData = Boolean(imageMoodData);
+  const hasAnalysis = Boolean(imageMoodData);
+  const hasPhoto = Boolean(String(imageMoodCoverDataUrl || "").trim());
+  const hasCaption = Boolean(getMomentCaptionText());
+
+  mountImageMoodAnalyzeControls(momentMode);
 
   if (modal) modal.classList.toggle("imageMoodModal--moment", momentMode);
+  if (momentCompose) momentCompose.hidden = !momentMode;
   if (momentActions) momentActions.hidden = !momentMode;
+  if (momentAnalyzeDetails) momentAnalyzeDetails.hidden = !momentMode;
+  if (songAnalyze) songAnalyze.hidden = momentMode;
   if (songActions) songActions.hidden = momentMode;
   if (applyBtn) applyBtn.hidden = momentMode;
   if (coverRow) coverRow.hidden = momentMode;
 
   if (kicker) kicker.textContent = momentMode ? "Create moment" : "Photo mood";
-  if (title) title.textContent = momentMode ? "Moment from your photo" : "Image Mood Assistant";
+  if (title) title.textContent = momentMode ? "Share a moment" : "Image Mood Assistant";
   if (lead) {
     lead.textContent = momentMode
-      ? "Upload a photo — we read the mood, then publish a 24h pick on Friends or turn it into a song."
+      ? "Pick a photo, write your caption, and share — no AI analysis required. Your circle sees it for 24 hours."
       : "Upload cover/art/photo and NabadAi suggests mood, tags, and optional lyric seed.";
   }
 
   const turnBtn = document.getElementById("btnMomentTurnIntoSong");
   const publishBtn = document.getElementById("btnMomentPublish");
   if (momentMode) {
-    if (turnBtn) turnBtn.disabled = !hasData || !imageMoodCoverDataUrl;
-    if (publishBtn) publishBtn.disabled = !hasData || !imageMoodCoverDataUrl;
+    if (publishBtn) publishBtn.disabled = !hasPhoto || !hasCaption;
+    if (turnBtn) turnBtn.disabled = !hasAnalysis || !hasPhoto;
   } else if (applyBtn) {
-    applyBtn.disabled = !hasData;
+    applyBtn.disabled = !hasAnalysis;
   }
+  updateMomentCaptionCount();
 }
 
 function applyImageMoodToSongFields() {
@@ -5470,8 +5528,14 @@ async function renderUserProfileMomentsRail(userId, username = "") {
 }
 
 async function publishMoment() {
-  if (!imageMoodData || !imageMoodCoverDataUrl) {
-    try { showToast("Analyze your photo first", { icon: "📷", durationMs: 2200 }); } catch {}
+  if (!imageMoodCoverDataUrl) {
+    try { showToast("Add a photo first", { icon: "📷", durationMs: 2200 }); } catch {}
+    return;
+  }
+  const body = getMomentCaptionText();
+  if (!body) {
+    try { showToast("Write a caption for your moment", { icon: "✎", durationMs: 2200 }); } catch {}
+    try { document.getElementById("momentCaptionInput")?.focus?.({ preventScroll: true }); } catch {}
     return;
   }
   if (!authSession?.user?.id) {
@@ -5484,7 +5548,6 @@ async function publishMoment() {
     const cover = await prepareMomentCoverDataUrl(imageMoodCoverDataUrl);
     const blob = await dataUrlToBlob(cover);
     const imageUrl = await uploadMomentBlob(blob);
-    const body = buildMomentCaption();
     await socialApi("/api/social", {
       method: "POST",
       body: JSON.stringify({ action: "post_moment", body, imageUrl }),
@@ -5499,13 +5562,16 @@ async function publishMoment() {
   } catch (e) {
     try { showToast(e?.message || "Could not publish moment", { durationMs: 3200 }); } catch {}
   } finally {
-    if (publishBtn) publishBtn.disabled = !imageMoodData || !imageMoodCoverDataUrl;
+    try { syncImageMoodModalMode(); } catch {}
   }
 }
 
 function wireImageMoodMomentOnce() {
   if (document.documentElement.dataset.wiredImageMoodMoment) return;
   document.documentElement.dataset.wiredImageMoodMoment = "1";
+  document.getElementById("momentCaptionInput")?.addEventListener("input", () => {
+    try { syncImageMoodModalMode(); } catch {}
+  });
   document.getElementById("btnMomentTurnIntoSong")?.addEventListener("click", () => {
     try { haptic("light"); } catch {}
     momentTurnIntoSong();
@@ -22431,8 +22497,19 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         els.imageMoodPreview.style.display = "";
       }
       prepareMomentCoverDataUrl(file)
-        .then((v) => { imageMoodCoverDataUrl = v; })
-        .catch(() => { imageMoodCoverDataUrl = ""; });
+        .then((v) => {
+          imageMoodCoverDataUrl = v;
+          try { syncImageMoodModalMode(); } catch {}
+        })
+        .catch(() => {
+          imageMoodCoverDataUrl = "";
+          try { syncImageMoodModalMode(); } catch {}
+        });
+      if (isCreateMomentIntent()) {
+        window.setTimeout(() => {
+          try { document.getElementById("momentCaptionInput")?.focus?.({ preventScroll: true }); } catch {}
+        }, 80);
+      }
     });
   }
   if (els.btnAnalyzeImageMood) {

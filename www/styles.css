@@ -4524,6 +4524,48 @@ body[data-route="moment"] .footer{
 .imageMoodActions{
   gap:10px;
 }
+.momentComposeBlock{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.momentComposeBlock[hidden]{
+  display: none !important;
+}
+.momentCaptionLabel{
+  margin: 0;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(183,139,255,0.88);
+}
+.momentCaptionInput{
+  width: 100%;
+  min-height: 88px;
+  resize: vertical;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(4,7,14,0.55);
+  color: rgba(244,247,255,0.94);
+  padding: 12px 14px;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.momentCaptionInput::placeholder{
+  color: rgba(223,231,251,0.42);
+}
+.momentCaptionInput:focus{
+  outline: none;
+  border-color: rgba(124,92,255,0.55);
+  box-shadow: 0 0 0 3px rgba(124,92,255,0.18);
+}
+.momentCaptionMeta{
+  margin: 0;
+  font-size: 12px;
+  color: rgba(223,231,251,0.48);
+}
 .imageMoodMomentActions{
   display: flex;
   flex-direction: column;
@@ -4535,6 +4577,58 @@ body[data-route="moment"] .footer{
 }
 .imageMoodMomentActions .primary,
 .imageMoodMomentActions .ghost{
+  width: 100%;
+  min-height: 46px;
+  border-radius: 14px;
+  font-weight: 800;
+}
+.momentAnalyzeDetails{
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(4,7,14,0.42);
+  padding: 8px 10px 10px;
+}
+.momentAnalyzeDetails[hidden]{
+  display: none !important;
+}
+.momentAnalyzeSummary{
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(223,231,251,0.78);
+  list-style: none;
+  padding: 4px 2px;
+}
+.momentAnalyzeSummary::-webkit-details-marker{
+  display: none;
+}
+.momentAnalyzeSummaryHint{
+  font-weight: 700;
+  color: rgba(223,231,251,0.42);
+}
+.momentAnalyzeInner{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+.momentAnalyzeInner .imageMoodOutput{
+  min-height: 72px;
+}
+.momentAnalyzeInner #btnAnalyzeImageMood{
+  width: 100%;
+  min-height: 42px;
+  border-radius: 14px;
+}
+.imageMoodSongAnalyze{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.imageMoodSongAnalyze[hidden]{
+  display: none !important;
+}
+.imageMoodSongAnalyze #btnAnalyzeImageMood{
   width: 100%;
   min-height: 46px;
   border-radius: 14px;

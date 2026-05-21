@@ -774,18 +774,29 @@
             <div class="imageMoodPreviewWrap">
               <img id="imageMoodPreview" alt="Mood preview" style="display:none" />
             </div>
-            <div id="imageMoodOutput" class="imageMoodOutput">No analysis yet.</div>
+            <div id="momentComposeBlock" class="momentComposeBlock" hidden>
+              <label class="momentCaptionLabel" for="momentCaptionInput">Caption</label>
+              <textarea id="momentCaptionInput" class="momentCaptionInput" rows="3" maxlength="320" placeholder="What's this moment about? Your circle sees it for 24 hours."></textarea>
+              <p class="momentCaptionMeta"><span id="momentCaptionCount">0</span> / 320</p>
+            </div>
+            <div id="imageMoodMomentActions" class="imageMoodMomentActions" hidden>
+              <button id="btnMomentPublish" class="primary" type="button" disabled>Share moment</button>
+              <button id="btnMomentTurnIntoSong" class="ghost" type="button" disabled>Turn into song</button>
+            </div>
+            <details id="momentAnalyzeDetails" class="momentAnalyzeDetails" hidden>
+              <summary class="momentAnalyzeSummary">Analyze photo for song ideas <span class="momentAnalyzeSummaryHint">optional</span></summary>
+              <div id="momentAnalyzeInner" class="momentAnalyzeInner"></div>
+            </details>
+            <div id="imageMoodSongAnalyze" class="imageMoodSongAnalyze">
+              <div id="imageMoodOutput" class="imageMoodOutput">No analysis yet.</div>
+              <button id="btnAnalyzeImageMood" class="primary" type="button">Analyze</button>
+            </div>
             <label id="imageMoodCoverRow" class="proToggleRow" for="imageMoodUseAsCover" style="margin-top:2px">
               <input id="imageMoodUseAsCover" type="checkbox" checked />
               <span>Use uploaded image as generated song cover</span>
             </label>
             <div class="row imageMoodActions">
-              <button id="btnAnalyzeImageMood" class="primary" type="button">Analyze</button>
               <button id="btnApplyImageMood" class="ghost" type="button" disabled>Apply to song</button>
-            </div>
-            <div id="imageMoodMomentActions" class="imageMoodMomentActions" hidden>
-              <button id="btnMomentTurnIntoSong" class="primary" type="button" disabled>Turn into song</button>
-              <button id="btnMomentPublish" class="ghost" type="button" disabled>Publish moment</button>
             </div>
           </div>
         </section>

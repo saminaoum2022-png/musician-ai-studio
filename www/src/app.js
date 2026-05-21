@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521friendsFeedPolishV1";
+const APP_BUILD = "20260521friendsUiFixV2";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4316,10 +4316,19 @@ function followingStatusRowHtml(post, profMap, idx) {
     authSession?.user?.id &&
     userId === String(authSession.user.id),
   );
-  const deleteBtn = isOwn
-    ? `<button type="button" class="followActDelete" data-follow-status-delete="${escapeHtml(postId)}" aria-label="Remove post">
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></svg>
-      </button>`
+  const menuBtn = isOwn
+    ? `<div class="followActMenuWrap">
+        <button type="button" class="followActMore" data-follow-status-menu="${escapeHtml(postId)}" aria-label="Post options" aria-haspopup="true" aria-expanded="false">
+          <svg class="followActMoreIco" viewBox="0 0 20 6" width="18" height="5" aria-hidden="true">
+            <circle cx="3" cy="3" r="1.35" fill="currentColor"/>
+            <circle cx="10" cy="3" r="1.35" fill="currentColor"/>
+            <circle cx="17" cy="3" r="1.35" fill="currentColor"/>
+          </svg>
+        </button>
+        <div class="followActMenu" hidden role="menu">
+          <button type="button" class="followActMenuItem followActMenuItem--danger" data-follow-status-delete="${escapeHtml(postId)}" role="menuitem">Remove post</button>
+        </div>
+      </div>`
     : "";
   return `
     <article class="followAct followAct--status" data-follow-act="status" data-follow-status-type="${escapeHtml(postType)}" data-follow-status-id="${escapeHtml(postId)}" style="--i:${idx}">
@@ -4336,12 +4345,23 @@ function followingStatusRowHtml(post, profMap, idx) {
           </div>
           ${followingActivityBadgeHtml("status", postType)}
         </div>
-        ${deleteBtn}
+        ${menuBtn}
       </div>
       <div class="followActContent followActBody--static">
         <p class="followActStatusText">${body}</p>
       </div>
     </article>`;
+}
+
+function closeAllFollowStatusMenus() {
+  document.querySelectorAll(".followActMenu").forEach((m) => {
+    m.hidden = true;
+  });
+  document.querySelectorAll(".followAct--statusMenuOpen").forEach((row) => {
+    row.classList.remove("followAct--statusMenuOpen");
+    const btn = row.querySelector("[data-follow-status-menu]");
+    if (btn) btn.setAttribute("aria-expanded", "false");
+  });
 }
 
 async function deleteFollowingStatusPost(postId) {
@@ -4816,6 +4836,14 @@ function bindFriendsPageOnce() {
   wireUserPublicFeedRowsOnce();
   bindFollowingComposeOnce();
   wireFriendsComposeSheetOnce();
+  if (!_friendsStatusMenuDocBound) {
+    _friendsStatusMenuDocBound = true;
+    document.addEventListener("click", (e) => {
+      if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
+      if (e.target.closest(".followActMenuWrap")) return;
+      closeAllFollowStatusMenus();
+    });
+  }
   if (_friendsPageBound) return;
   _friendsPageBound = true;
   const composeOpen = document.getElementById("friendsComposeOpenBtn");
@@ -4833,10 +4861,26 @@ function bindFriendsPageOnce() {
     friendsPage.dataset.boundFriendsPage = "1";
     wireTrackOptionsSheetOnce();
     friendsPage.addEventListener("click", (e) => {
+      const menuBtn = e.target.closest("[data-follow-status-menu]");
+      if (menuBtn && friendsPage.contains(menuBtn)) {
+        e.preventDefault();
+        e.stopPropagation();
+        const row = menuBtn.closest(".followAct--status");
+        const menu = row?.querySelector(".followActMenu");
+        const wasOpen = row?.classList.contains("followAct--statusMenuOpen");
+        closeAllFollowStatusMenus();
+        if (!wasOpen && row && menu) {
+          row.classList.add("followAct--statusMenuOpen");
+          menu.hidden = false;
+          menuBtn.setAttribute("aria-expanded", "true");
+        }
+        return;
+      }
       const delBtn = e.target.closest("[data-follow-status-delete]");
       if (delBtn && friendsPage.contains(delBtn)) {
         e.preventDefault();
         e.stopPropagation();
+        closeAllFollowStatusMenus();
         void deleteFollowingStatusPost(delBtn.getAttribute("data-follow-status-delete"));
         return;
       }

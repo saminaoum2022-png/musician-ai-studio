@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521momentPageV1";
+const APP_BUILD = "20260522momentViewerV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5334,8 +5334,11 @@ function openMomentViewerSheet(moment) {
   const who = document.getElementById("momentViewerWho");
   const caption = document.getElementById("momentViewerCaption");
   const profileLink = document.getElementById("momentViewerProfileLink");
+  const avatarImg = document.getElementById("momentViewerAvatarImg");
+  const avatarFallback = document.getElementById("momentViewerAvatarFallback");
   const delBtn = document.getElementById("momentViewerDelete");
   const handle = String(moment.username || "user").replace(/^@/, "").trim() || "user";
+  const initials = handle.replace(/^@/, "").slice(0, 2).toUpperCase() || "U";
   if (img) {
     img.src = String(moment.imageUrl || "").trim();
     img.alt = `Moment by @${handle}`;
@@ -5344,7 +5347,26 @@ function openMomentViewerSheet(moment) {
   if (caption) caption.textContent = String(moment.body || "").trim();
   if (profileLink) {
     profileLink.href = `#/u/${encodeURIComponent(handle)}`;
-    profileLink.textContent = "Profile";
+    profileLink.setAttribute("aria-label", `@${handle} profile`);
+  }
+  const avatarRaw = String(moment.avatar || "").trim();
+  const avatarSrc = avatarRaw ? normalizeProfileAvatarForImg(avatarRaw) : "";
+  if (avatarImg) {
+    if (avatarSrc) {
+      avatarImg.src = avatarSrc;
+      avatarImg.hidden = false;
+      if (avatarFallback) {
+        avatarFallback.textContent = "";
+        avatarFallback.hidden = true;
+      }
+    } else {
+      avatarImg.removeAttribute("src");
+      avatarImg.hidden = true;
+      if (avatarFallback) {
+        avatarFallback.textContent = initials;
+        avatarFallback.hidden = false;
+      }
+    }
   }
   if (delBtn) delBtn.hidden = !own;
   updateMomentViewerCountdown();
@@ -5375,6 +5397,9 @@ function wireMomentViewerOnce() {
   document.documentElement.dataset.wiredMomentViewer = "1";
   document.querySelectorAll("[data-moment-viewer-dismiss]").forEach((el) => {
     el.addEventListener("click", () => closeMomentViewerSheet());
+  });
+  document.getElementById("momentViewerProfileLink")?.addEventListener("click", () => {
+    closeMomentViewerSheet();
   });
   document.getElementById("momentViewerDelete")?.addEventListener("click", async () => {
     const m = _momentViewerOpen;

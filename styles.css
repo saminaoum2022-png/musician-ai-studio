@@ -4766,9 +4766,9 @@ button.vocalRefClearBtn{
   inset: 0;
   z-index: 130;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
-  padding: 16px 14px max(20px, env(safe-area-inset-bottom));
+  padding: max(20px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
   pointer-events: none;
 }
 .momentViewerSheet[hidden]{ display: none !important; }
@@ -4776,8 +4776,8 @@ button.vocalRefClearBtn{
 .momentViewerBackdrop{
   position: absolute;
   inset: 0;
-  background: rgba(3,5,10,0.72);
-  backdrop-filter: blur(12px);
+  background: rgba(3,5,10,0.78);
+  backdrop-filter: blur(14px);
   opacity: 0;
   transition: opacity 240ms ease;
 }
@@ -4785,16 +4785,22 @@ button.vocalRefClearBtn{
 .momentViewerCard{
   position: relative;
   width: min(380px, 100%);
-  border-radius: 22px;
-  padding: 16px 16px 18px;
-  background: rgba(8,10,18,0.94);
-  border: 1px solid rgba(255,255,255,0.12);
-  transform: translateY(20px);
+  border-radius: 24px;
+  padding: 18px 18px 20px;
+  background:
+    radial-gradient(110% 90% at 8% 0%, rgba(94,234,212,0.22), transparent 52%),
+    radial-gradient(120% 100% at 92% 0%, rgba(124,92,255,0.28), transparent 54%),
+    linear-gradient(165deg, rgba(14,22,38,0.97), rgba(7,10,18,0.98));
+  border: 1px solid rgba(255,255,255,0.14);
+  box-shadow:
+    0 24px 64px rgba(0,0,0,0.55),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+  transform: scale(0.94);
   opacity: 0;
   transition: transform 320ms cubic-bezier(0.22,1,0.36,1), opacity 240ms ease;
 }
 .momentViewerSheet.isOpen .momentViewerCard{
-  transform: translateY(0);
+  transform: scale(1);
   opacity: 1;
 }
 .momentViewerClose{
@@ -4858,29 +4864,78 @@ button.vocalRefClearBtn{
   box-shadow: none;
   opacity: 0.72;
 }
-.momentViewerWho{
-  margin: 0 0 8px;
+.momentViewerProfileRow{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 auto 10px;
+  padding: 4px 6px;
+  border-radius: 999px;
+  text-decoration: none;
+  color: inherit;
+  width: fit-content;
+  max-width: 100%;
+}
+.momentViewerProfileRow:active{
+  opacity: 0.88;
+}
+.momentViewerAvatar{
+  position: relative;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 2px solid rgba(124,92,255,0.45);
+  background: rgba(255,255,255,0.08);
+}
+.momentViewerAvatarImg{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.momentViewerAvatarImg[hidden]{
+  display: none !important;
+}
+.momentViewerAvatarFallback{
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
   font-size: 13px;
+  font-weight: 900;
+  color: rgba(244,247,255,0.92);
+  background: linear-gradient(135deg, rgba(35,213,171,0.35), rgba(124,92,255,0.45));
+}
+.momentViewerAvatarFallback[hidden]{
+  display: none !important;
+}
+.momentViewerWho{
+  margin: 0;
+  font-size: 14px;
   font-weight: 800;
-  color: rgba(167,139,250,0.95);
-  text-align: center;
+  color: rgba(167,139,250,0.98);
+  letter-spacing: -0.01em;
 }
 .momentViewerCaption{
-  margin: 0 0 14px;
+  margin: 0 0 12px;
   font-size: 15px;
   line-height: 1.45;
-  color: rgba(232,238,247,0.9);
+  color: rgba(232,238,247,0.92);
   text-align: center;
 }
-.momentViewerActions{
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-}
-.momentViewerActions .ghost{
+.momentViewerDelete{
+  display: block;
+  width: 100%;
   min-height: 42px;
-  padding: 0 16px;
   border-radius: 12px;
+  font-weight: 800;
+}
+.momentViewerDelete[hidden]{
+  display: none !important;
 }
 .vocalQuickRow .ghost{
   min-height:34px;

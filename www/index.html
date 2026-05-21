@@ -2404,12 +2404,15 @@
                 <img id="momentViewerImg" class="momentViewerImg" alt="" decoding="async" />
               </span>
             </div>
-            <p id="momentViewerWho" class="momentViewerWho"></p>
+            <a id="momentViewerProfileLink" class="momentViewerProfileRow" href="#" data-route-link="user">
+              <span class="momentViewerAvatar">
+                <img id="momentViewerAvatarImg" class="momentViewerAvatarImg" alt="" width="40" height="40" decoding="async" />
+                <span id="momentViewerAvatarFallback" class="momentViewerAvatarFallback" aria-hidden="true"></span>
+              </span>
+              <span id="momentViewerWho" class="momentViewerWho"></span>
+            </a>
             <p id="momentViewerCaption" class="momentViewerCaption"></p>
-            <div class="momentViewerActions">
-              <a id="momentViewerProfileLink" class="ghost" href="#" data-route-link="user">Profile</a>
-              <button id="momentViewerDelete" class="ghost" type="button" hidden>Remove</button>
-            </div>
+            <button id="momentViewerDelete" class="momentViewerDelete ghost" type="button" hidden>Remove</button>
           </div>
         </div>
 

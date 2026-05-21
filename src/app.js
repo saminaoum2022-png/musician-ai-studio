@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521profileActFlatV1";
+const APP_BUILD = "20260521friendsStatusFlatV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4236,6 +4236,7 @@ function followingActivityBadgeHtml(kind, type, opts = {}) {
     : followingStatusIcoSvg(type);
   const flat =
     Boolean(opts.flat) ||
+    kind === "status" ||
     (kind === "music" && (type === "release" || type === "remix"));
   const flatCls = flat ? " followActBadge--flat" : "";
   return `<span class="followActBadge followActBadge--${safeType}${flatCls}" data-follow-badge="${safeType}">
@@ -4428,7 +4429,7 @@ function profileActivityRowHtml(post, idx) {
   return `
     <article class="profileActRow" data-profile-act-id="${escapeHtml(postId)}" style="--i:${idx}">
       <div class="profileActRowTop">
-        ${followingActivityBadgeHtml("status", postType, { flat: true })}
+        ${followingActivityBadgeHtml("status", postType)}
         <span class="profileActRowWhen">${escapeHtml(when)}</span>
         ${menuBtn}
       </div>

@@ -4484,6 +4484,25 @@ button.vocalRefClearBtn{
 .imageMoodActions{
   gap:10px;
 }
+.imageMoodStoryActions{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 2px;
+}
+.imageMoodStoryActions[hidden]{
+  display: none !important;
+}
+.imageMoodStoryActions .primary,
+.imageMoodStoryActions .ghost{
+  width: 100%;
+  min-height: 46px;
+  border-radius: 14px;
+  font-weight: 800;
+}
+.imageMoodModal--story .imageMoodKicker{
+  color: rgba(183,139,255,0.9);
+}
 .vocalQuickRow .ghost{
   min-height:34px;
   border-radius:10px;
@@ -13440,12 +13459,200 @@ body.trackSheetOpen #friendsComposeFabRoot{
   background: transparent;
   box-shadow: none;
 }
-body.friendsComposeSheetOpen .footer{
+body.friendsComposeSheetOpen .footer,
+body.createChooserSheetOpen .footer{
   opacity: 0;
   pointer-events: none;
 }
 @media (max-width: 720px){
-  body.friendsComposeSheetOpen .mobileTabbar{ display: none !important; }
+  body.friendsComposeSheetOpen .mobileTabbar,
+  body.createChooserSheetOpen .mobileTabbar{ display: none !important; }
+}
+
+/* Create tab — premium floating stacked pills (no sheet card) */
+.createChooserSheet{
+  --create-chooser-gap: max(12px, env(safe-area-inset-bottom, 0px));
+  position: fixed;
+  inset: 0;
+  z-index: 122;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 16px calc(28px + var(--create-chooser-gap));
+  pointer-events: none;
+  touch-action: none;
+}
+.createChooserSheet[hidden]{ display: none !important; }
+.createChooserSheet.isOpen{ pointer-events: auto; }
+.createChooserBackdrop{
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(70% 55% at 50% 88%, rgba(124,92,255,0.14), transparent 62%),
+    radial-gradient(55% 40% at 20% 75%, rgba(35,213,171,0.08), transparent 55%),
+    rgba(3, 5, 10, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  opacity: 0;
+  transition: opacity 280ms ease;
+}
+.createChooserSheet.isOpen .createChooserBackdrop{ opacity: 1; }
+.createChooserShell{
+  position: relative;
+  width: min(360px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  transform: translateY(18px);
+  opacity: 0;
+  transition:
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 300ms ease;
+}
+.createChooserSheet.isOpen .createChooserShell{
+  transform: translateY(0);
+  opacity: 1;
+}
+.createChooserClose{
+  position: absolute;
+  top: -6px;
+  right: 0;
+  z-index: 8;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(8, 10, 18, 0.55);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: rgba(232,238,247,0.92);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.35);
+  -webkit-tap-highlight-color: transparent;
+}
+.createChooserClose:active{ transform: scale(0.94); }
+.createChooserKicker{
+  margin: 0 0 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(167,139,250,0.88);
+}
+.createChooserTitle{
+  margin: 0 0 22px;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: rgba(232,238,247,0.97);
+  text-shadow: 0 8px 32px rgba(0,0,0,0.45);
+}
+.createChooserStack{
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 20px;
+  width: min(320px, 88vw);
+  margin: 0 auto;
+  padding: 2px 0 6px;
+}
+.createChooserPill{
+  --pill-scale: 1;
+  position: relative;
+  width: 100%;
+  height: 58px;
+  margin: 0;
+  padding: 0 22px 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  border: none;
+  border-radius: 999px;
+  color: rgba(248,250,252,0.96);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transform: translateY(0) scale(var(--pill-scale));
+  opacity: 0;
+  background: transparent;
+  box-shadow: none;
+  isolation: isolate;
+}
+.createChooserPill--song{ --pill-scale: 1; z-index: 3; }
+.createChooserPill--story{ --pill-scale: 1; z-index: 2; }
+.createChooserPill--status{ --pill-scale: 1; z-index: 1; }
+.createChooserPillAura{
+  display: none;
+}
+.createChooserPill::after{
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(6, 9, 16, 0.78);
+  backdrop-filter: blur(22px) saturate(1.35);
+  -webkit-backdrop-filter: blur(22px) saturate(1.35);
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.28);
+  z-index: -1;
+}
+.createChooserPillIcon{
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.createChooserPill--song .createChooserPillIcon{ color: #5ee9d3; }
+.createChooserPill--story .createChooserPillIcon{ color: #c4a8ff; }
+.createChooserPill--status .createChooserPillIcon{ color: rgba(232,238,247,0.9); }
+.createChooserPillLabel{
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+.createChooserSheet.isOpen .createChooserPill{
+  animation:
+    createChooserPillIn 520ms cubic-bezier(0.22, 1, 0.36, 1) calc(var(--pill-i, 0) * 70ms + 40ms) both,
+    createChooserPillFloat 4.8s ease-in-out calc(var(--pill-i, 0) * 0.35s + 600ms) infinite;
+}
+.createChooserPill:active{
+  animation: none;
+  transform: translateY(0) scale(0.97);
+  transition: transform 120ms ease;
+}
+@keyframes createChooserPillIn{
+  0%{
+    opacity: 0;
+    transform: translateY(22px) scale(0.94);
+  }
+  100%{
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes createChooserPillFloat{
+  0%, 100%{
+    transform: translateY(0) scale(1);
+  }
+  50%{
+    transform: translateY(-4px) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce){
+  .createChooserSheet.isOpen .createChooserPill{
+    animation: createChooserPillIn 280ms ease calc(var(--pill-i, 0) * 40ms) both;
+  }
 }
 .followCompose.isSignedOut{
   opacity: 0.72;

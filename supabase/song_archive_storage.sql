@@ -1,12 +1,15 @@
 -- song_archive — permanent audio copies (see api/songs/archive.js)
 -- Run in Supabase SQL Editor after creating the bucket (or use the insert below).
+--
+-- file_size_limit = 52428800 (50 MB per file). Typical songs are ~3–5 MB.
+-- api/songs/archive.js uses the same 50 MB cap before upload.
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'song_archive',
   'song_archive',
   true,
-  52428800,
+  52428800, -- 50 MB per archived song (only limit at bucket level)
   array['audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/x-m4a', 'audio/wav', 'audio/webm', 'audio/ogg', 'application/octet-stream']
 )
 on conflict (id) do update set

@@ -4636,6 +4636,273 @@ function openFriendsComposeSheet() {
   }
 }
 
+function lockPageForCreateChooserSheet() {
+  document.body.classList.add("createChooserSheetOpen");
+}
+
+function unlockPageForCreateChooserSheet() {
+  document.body.classList.remove("createChooserSheetOpen");
+}
+
+function openCreateChooserSheet() {
+  const sheet = document.getElementById("createChooserSheet");
+  if (!sheet) return;
+  if (!authSession?.user?.id) {
+    try { showToast("Sign in to create", { icon: "👤", durationMs: 2400 }); } catch {}
+    try { location.hash = "#/auth"; } catch {}
+    return;
+  }
+  try { closeFriendsComposeSheet(); } catch {}
+  sheet.classList.remove("isOpen");
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  lockPageForCreateChooserSheet();
+  requestAnimationFrame(() => {
+    void sheet.offsetWidth;
+    sheet.classList.add("isOpen");
+  });
+}
+
+function closeCreateChooserSheet() {
+  const sheet = document.getElementById("createChooserSheet");
+  if (!sheet) return;
+  sheet.classList.remove("isOpen");
+  unlockPageForCreateChooserSheet();
+  window.setTimeout(() => {
+    sheet.hidden = true;
+    sheet.setAttribute("aria-hidden", "true");
+  }, 260);
+}
+
+const CREATE_ENTRY_INTENT_KEY = "nabadai_create_entry_intent_v1";
+
+function setCreateEntryIntent(intent) {
+  try {
+    if (!intent) sessionStorage.removeItem(CREATE_ENTRY_INTENT_KEY);
+    else sessionStorage.setItem(CREATE_ENTRY_INTENT_KEY, String(intent));
+  } catch {}
+}
+
+function getCreateEntryIntent() {
+  try { return String(sessionStorage.getItem(CREATE_ENTRY_INTENT_KEY) || "").trim(); } catch {}
+  return "";
+}
+
+function requireAuthForCreate(onAuthed) {
+  if (authSession?.user?.id) {
+    try { onAuthed?.(); } catch {}
+    return true;
+  }
+  closeCreateChooserSheet();
+  try { showToast("Sign in to create", { icon: "👤", durationMs: 2400 }); } catch {}
+  try { location.hash = "#/auth"; } catch {}
+  return false;
+}
+
+/** Single router for Create chooser → existing engines (no new API routes). */
+function navigateFromCreateChooser(action) {
+  const kind = String(action || "").trim();
+  if (!kind) return;
+  if (!requireAuthForCreate(() => navigateFromCreateChooser(kind))) return;
+
+  closeCreateChooserSheet();
+  try { haptic("light"); } catch {}
+
+  if (kind === "song") {
+    setCreateEntryIntent("song");
+    try { location.hash = "#/generate"; } catch {}
+    window.setTimeout(() => {
+      try { if (typeof setActiveCreateTab === "function") setActiveCreateTab("lyrics"); } catch {}
+      try { els.sunoPrompt?.focus?.({ preventScroll: true }); } catch {}
+    }, 100);
+    return;
+  }
+
+  if (kind === "story") {
+    setCreateEntryIntent("story");
+    try { location.hash = "#/generate"; } catch {}
+    window.setTimeout(() => {
+      try { if (typeof setActiveCreateTab === "function") setActiveCreateTab("photo"); } catch {}
+      window.setTimeout(() => {
+        const modal = document.getElementById("imageMoodModal");
+        if (modal) {
+          modal.style.display = "";
+          modal.setAttribute("aria-hidden", "false");
+          try { syncImageMoodModalMode(); } catch {}
+        } else {
+          try { document.getElementById("createPhotoCta")?.click?.(); } catch {}
+        }
+      }, 200);
+    }, 100);
+    return;
+  }
+
+  if (kind === "status") {
+    setCreateEntryIntent("");
+    _followComposeType = "update";
+    try { syncFollowingComposeUi(); } catch {}
+    try { location.hash = "#/friends"; } catch {}
+    window.setTimeout(() => {
+      try { openFriendsComposeSheet(); } catch {}
+    }, 260);
+  }
+}
+
+function wireCreateChooserSheetOnce() {
+  const sheet = document.getElementById("createChooserSheet");
+  if (!sheet || sheet.dataset.wiredCreateChooserSheet) return;
+  sheet.dataset.wiredCreateChooserSheet = "1";
+  sheet.querySelectorAll("[data-create-chooser-dismiss]").forEach((el) => {
+    el.addEventListener("click", () => closeCreateChooserSheet());
+  });
+  sheet.querySelectorAll("[data-create-chooser]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      navigateFromCreateChooser(btn.getAttribute("data-create-chooser"));
+    });
+  });
+}
+
+function isCreateStoryIntent() {
+  return getCreateEntryIntent() === "story";
+}
+
+function closeImageMoodModalGlobal() {
+  const modal = document.getElementById("imageMoodModal");
+  if (!modal) return;
+  modal.style.display = "none";
+  modal.setAttribute("aria-hidden", "true");
+  modal.classList.remove("imageMoodModal--story");
+}
+
+function syncImageMoodModalMode() {
+  const story = isCreateStoryIntent();
+  const modal = document.getElementById("imageMoodModal");
+  const storyActions = document.getElementById("imageMoodStoryActions");
+  const applyBtn = document.getElementById("btnApplyImageMood");
+  const coverRow = document.getElementById("imageMoodCoverRow");
+  const songActions = document.querySelector(".imageMoodActions");
+  const kicker = document.querySelector(".imageMoodKicker");
+  const lead = document.getElementById("imageMoodLead");
+  const title = document.querySelector(".imageMoodCard .modalTitle");
+  const hasData = Boolean(imageMoodData);
+
+  if (modal) modal.classList.toggle("imageMoodModal--story", story);
+  if (storyActions) storyActions.hidden = !story;
+  if (songActions) songActions.hidden = story;
+  if (applyBtn) applyBtn.hidden = story;
+  if (coverRow) coverRow.hidden = story;
+
+  if (kicker) kicker.textContent = story ? "Create story" : "Photo mood";
+  if (title) title.textContent = story ? "Story from your photo" : "Image Mood Assistant";
+  if (lead) {
+    lead.textContent = story
+      ? "Upload a photo — we read the mood, then you can share it on Friends or turn it into a song."
+      : "Upload cover/art/photo and NabadAi suggests mood, tags, and optional lyric seed.";
+  }
+
+  const turnBtn = document.getElementById("btnStoryTurnIntoSong");
+  const postBtn = document.getElementById("btnStoryPostFriends");
+  if (story) {
+    if (turnBtn) turnBtn.disabled = !hasData;
+    if (postBtn) postBtn.disabled = !hasData;
+  } else if (applyBtn) {
+    applyBtn.disabled = !hasData;
+  }
+}
+
+function applyImageMoodToSongFields() {
+  if (!imageMoodData) return;
+  const tags = Array.isArray(imageMoodData.tags) ? imageMoodData.tags.filter(Boolean) : [];
+  if (els.sunoStyle && tags.length) {
+    const existing = String(els.sunoStyle.value || "").trim();
+    const current = existing ? existing.split(",").map((s) => s.trim()).filter(Boolean) : [];
+    const merged = [...new Set([...current, ...tags])].slice(0, 12);
+    els.sunoStyle.value = merged.join(", ");
+  }
+  imageMoodAppliedForNextGen = true;
+  if (els.sunoArtworkStyle && imageMoodData.artworkHint) {
+    const cur = String(els.sunoArtworkStyle.value || "").trim();
+    if (!cur) els.sunoArtworkStyle.value = String(imageMoodData.artworkHint).trim();
+  }
+  if (els.imageMoodUseAsCover?.checked && imageMoodCoverDataUrl) {
+    pendingGeneratedCoverDataUrl = imageMoodCoverDataUrl;
+    if (els.imageMoodSummary) {
+      els.imageMoodSummary.textContent = "Image mood ready • cover will be used for next generation.";
+    }
+  } else {
+    pendingGeneratedCoverDataUrl = "";
+  }
+  setCreatePhotoAttachmentPreview(
+    imageMoodCoverDataUrl,
+    String(imageMoodData.concept || tags.slice(0, 4).join(", ") || "Image mood applied.").trim()
+  );
+}
+
+function buildStoryStatusDraft() {
+  if (!imageMoodData) return "";
+  const parts = [];
+  const concept = String(imageMoodData.concept || "").trim();
+  if (concept) parts.push(concept);
+  const tags = Array.isArray(imageMoodData.tags) ? imageMoodData.tags.filter(Boolean).slice(0, 5) : [];
+  if (tags.length) parts.push(tags.join(", "));
+  const seed = String(imageMoodData.lyricSeed || "").trim();
+  if (seed && parts.join(" ").length < 200) parts.push(seed);
+  return parts.join(" · ").replace(/\s+/g, " ").trim().slice(0, 320);
+}
+
+function storyTurnIntoSong() {
+  if (!imageMoodData) {
+    try { showToast("Analyze your photo first", { icon: "📷", durationMs: 2200 }); } catch {}
+    return;
+  }
+  applyImageMoodToSongFields();
+  setCreateEntryIntent("song");
+  closeImageMoodModalGlobal();
+  try { if (typeof setActiveCreateTab === "function") setActiveCreateTab("lyrics"); } catch {}
+  try { els.sunoPrompt?.focus?.({ preventScroll: true }); } catch {}
+  try {
+    showToast("Mood applied — write lyrics or tap Generate", { icon: "🎵", durationMs: 2800 });
+  } catch {}
+  setStatus("Story mood applied to your song. Add lyrics, then generate.");
+  try { syncGenerateOrbVisibility(); } catch {}
+}
+
+function storyPostToFriends() {
+  if (!imageMoodData) {
+    try { showToast("Analyze your photo first", { icon: "📷", durationMs: 2200 }); } catch {}
+    return;
+  }
+  const draft = buildStoryStatusDraft();
+  setCreateEntryIntent("");
+  closeImageMoodModalGlobal();
+  _followComposeType = "update";
+  try { syncFollowingComposeUi(); } catch {}
+  try { location.hash = "#/friends"; } catch {}
+  window.setTimeout(() => {
+    try { openFriendsComposeSheet(); } catch {}
+    const input = document.getElementById("followComposeInput");
+    if (input && draft) {
+      input.value = draft;
+      try { syncFollowingComposeUi(); } catch {}
+      try { input.focus?.({ preventScroll: true }); } catch {}
+    }
+  }, 280);
+  try { showToast("Share your story with your circle", { icon: "✓", durationMs: 2200 }); } catch {}
+}
+
+function wireImageMoodStoryOnce() {
+  if (document.documentElement.dataset.wiredImageMoodStory) return;
+  document.documentElement.dataset.wiredImageMoodStory = "1";
+  document.getElementById("btnStoryTurnIntoSong")?.addEventListener("click", () => {
+    try { haptic("light"); } catch {}
+    storyTurnIntoSong();
+  });
+  document.getElementById("btnStoryPostFriends")?.addEventListener("click", () => {
+    try { haptic("light"); } catch {}
+    storyPostToFriends();
+  });
+}
+
 function closeFriendsComposeSheet() {
   const sheet = document.getElementById("friendsComposeSheet");
   const openBtn = document.getElementById("friendsComposeOpenBtn");
@@ -5129,6 +5396,8 @@ function bindFriendsPageOnce() {
   wireUserPublicFeedRowsOnce();
   bindFollowingComposeOnce();
   wireFriendsComposeSheetOnce();
+  wireCreateChooserSheetOnce();
+  wireImageMoodStoryOnce();
   wireFriendsComposeFabOnce();
   if (!_friendsStatusMenuDocBound) {
     _friendsStatusMenuDocBound = true;
@@ -21280,11 +21549,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (!els.imageMoodModal) return;
     els.imageMoodModal.style.display = "";
     els.imageMoodModal.setAttribute("aria-hidden", "false");
+    try { syncImageMoodModalMode(); } catch {}
   };
   const closeImageMoodModal = () => {
-    if (!els.imageMoodModal) return;
-    els.imageMoodModal.style.display = "none";
-    els.imageMoodModal.setAttribute("aria-hidden", "true");
+    closeImageMoodModalGlobal();
   };
   const fileToDataUrl = (file) => new Promise((resolve, reject) => {
     const fr = new FileReader();
@@ -21364,12 +21632,16 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (!r.ok) throw new Error(d?.error || "Image analysis failed");
       imageMoodData = d || null;
       renderImageMood(imageMoodData);
-      if (els.btnApplyImageMood) els.btnApplyImageMood.disabled = !imageMoodData;
+      try { syncImageMoodModalMode(); } catch {}
       if (els.imageMoodSummary) {
         const tags = Array.isArray(d?.tags) ? d.tags.slice(0, 4).join(", ") : "";
         els.imageMoodSummary.textContent = tags || String(d?.concept || "Image mood ready.");
       }
-      setStatus("Image mood ready. Tap apply to use it.");
+      setStatus(
+        isCreateStoryIntent()
+          ? "Story mood ready — share on Friends or turn into a song."
+          : "Image mood ready. Tap apply to use it."
+      );
     } catch (e) {
       setStatus(`Image mood failed: ${e?.message || String(e)}`);
     } finally {
@@ -21380,30 +21652,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   };
   const applyImageMood = () => {
     if (!imageMoodData) return;
-    const tags = Array.isArray(imageMoodData.tags) ? imageMoodData.tags.filter(Boolean) : [];
-    if (els.sunoStyle && tags.length) {
-      const existing = String(els.sunoStyle.value || "").trim();
-      const current = existing ? existing.split(",").map((s) => s.trim()).filter(Boolean) : [];
-      const merged = [...new Set([...current, ...tags])].slice(0, 12);
-      els.sunoStyle.value = merged.join(", ");
+    if (isCreateStoryIntent()) {
+      storyTurnIntoSong();
+      return;
     }
-    // Do not auto-fill lyric seed into the main lyrics box.
-    // This can be sung literally by the model and sounds like prompt leakage.
-    imageMoodAppliedForNextGen = true;
-    if (els.sunoArtworkStyle && imageMoodData.artworkHint) {
-      const cur = String(els.sunoArtworkStyle.value || "").trim();
-      if (!cur) els.sunoArtworkStyle.value = String(imageMoodData.artworkHint).trim();
-    }
-    if (els.imageMoodUseAsCover?.checked && imageMoodCoverDataUrl) {
-      pendingGeneratedCoverDataUrl = imageMoodCoverDataUrl;
-      if (els.imageMoodSummary) els.imageMoodSummary.textContent = "Image mood ready • cover will be used for next generation.";
-    } else {
-      pendingGeneratedCoverDataUrl = "";
-    }
-    setCreatePhotoAttachmentPreview(
-      imageMoodCoverDataUrl,
-      String(imageMoodData.concept || tags.slice(0, 4).join(", ") || "Image mood applied.").trim()
-    );
+    applyImageMoodToSongFields();
     closeImageMoodModal();
     setStatus("Image mood applied. If no lyrics are provided, generation will be instrumental.");
     syncGenerateOrbVisibility();
@@ -21472,7 +21725,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (!file) return;
       imageMoodData = null;
       renderImageMood(null);
-      if (els.btnApplyImageMood) els.btnApplyImageMood.disabled = true;
+      try { syncImageMoodModalMode(); } catch {}
       const preview = URL.createObjectURL(file);
       if (els.imageMoodPreview) {
         els.imageMoodPreview.src = preview;
@@ -23507,36 +23760,42 @@ try {
 } catch {}
 syncCreateTabMorph();
 
-(function wireCreateTabMorphClick() {
+(function wireCreateTabClick() {
   const tab = document.getElementById("tabCreate");
   if (!tab) return;
   tab.addEventListener("click", (ev) => {
     const route = document.body.getAttribute("data-route");
-    if (route !== "generate") return; // let normal navigation happen
-    if (tab.classList.contains("tabIsGenerating")) {
-      ev.preventDefault();
-      return;
-    }
-    if (tab.classList.contains("tabIsListen")) {
-      ev.preventDefault();
-      try { haptic("impact"); } catch {}
-      const playA = document.getElementById("btnResultPlay");
-      if (playA) {
-        playA.click();
-        try { playA.scrollIntoView({ behavior: "smooth", block: "center" }); } catch {}
+    if (route === "generate") {
+      if (tab.classList.contains("tabIsGenerating")) {
+        ev.preventDefault();
+        return;
       }
-      return;
-    }
-    if (tab.classList.contains("tabIsReady")) {
-      ev.preventDefault();
-      try { haptic("impact"); } catch {}
-      try { localStorage.setItem(TAB_TIP_KEY, "1"); } catch {}
-      const tooltip = document.getElementById("tabCreateTooltip");
-      if (tooltip) tooltip.hidden = true;
-      if (els.btnSunoGenerate && !els.btnSunoGenerate.disabled) {
-        els.btnSunoGenerate.click();
+      if (tab.classList.contains("tabIsListen")) {
+        ev.preventDefault();
+        try { haptic("impact"); } catch {}
+        const playA = document.getElementById("btnResultPlay");
+        if (playA) {
+          playA.click();
+          try { playA.scrollIntoView({ behavior: "smooth", block: "center" }); } catch {}
+        }
+        return;
+      }
+      if (tab.classList.contains("tabIsReady")) {
+        ev.preventDefault();
+        try { haptic("impact"); } catch {}
+        try { localStorage.setItem(TAB_TIP_KEY, "1"); } catch {}
+        const tooltip = document.getElementById("tabCreateTooltip");
+        if (tooltip) tooltip.hidden = true;
+        if (els.btnSunoGenerate && !els.btnSunoGenerate.disabled) {
+          els.btnSunoGenerate.click();
+        }
+        return;
       }
     }
+    ev.preventDefault();
+    ev.stopPropagation();
+    try { haptic("light"); } catch {}
+    openCreateChooserSheet();
   }, true);
 })();
 

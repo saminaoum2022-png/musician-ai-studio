@@ -15,7 +15,8 @@ const { verifyUser, sendJson, readJsonBody } = require("../_lib/credits-auth");
 const { uploadObject, patchUserSongUrl } = require("../_lib/supabase-storage");
 
 const BUCKET = "song_archive";
-const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+/** Must match `file_size_limit` on storage.buckets `song_archive` (50 MB). */
+const MAX_AUDIO_BYTES = 50 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 45000;
 
 function unwrapProxyUrl(raw) {

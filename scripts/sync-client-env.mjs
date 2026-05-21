@@ -16,9 +16,10 @@ const vercelProtectionBypass = String(
 ).trim();
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error("Missing env. Set SUPABASE_URL and SUPABASE_ANON_KEY (from Vercel project env).");
-  console.error("Optional: API_BASE (your live web app URL), VERCEL_PROTECTION_BYPASS.");
-  process.exit(1);
+  console.warn(
+    "[sync-client-env] Skip: set SUPABASE_URL + SUPABASE_ANON_KEY (and optional VERCEL_PROTECTION_BYPASS) on Vercel to bake env.client.js into deploys.",
+  );
+  process.exit(0);
 }
 
 const out = join(process.cwd(), "www", "env.client.js");

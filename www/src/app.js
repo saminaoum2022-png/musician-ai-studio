@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522momentViewerV1";
+const APP_BUILD = "20260522friends403FixV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1908,6 +1908,10 @@ async function fetchPublicConfigOnce(base) {
       cachePublicConfigPayload(base);
       return true;
     }
+    if (r.status === 403) {
+      lastPublicConfigError = "403_deployment_protection";
+      return loadPublicConfigFromCache() || applyClientEnvBootstrap();
+    }
     if (r.ok) {
       applyPublicConfigPayload(d);
       setResolvedApiBase(base);
@@ -1965,6 +1969,9 @@ async function loadPublicConfig() {
 
 function loginConfigFailureMessage() {
   if (loadPublicConfigFromCache() || applyClientEnvBootstrap()) return "";
+  if (lastPublicConfigError === "403_deployment_protection") {
+    return "Vercel blocked API (403). Turn off Deployment Protection for Production, or set VERCEL_PROTECTION_BYPASS and redeploy.";
+  }
   return "Could not load login settings. Check your connection and try again.";
 }
 const _addedPreconnects = new Set();
@@ -5355,18 +5362,14 @@ function openMomentViewerSheet(moment) {
     if (avatarSrc) {
       avatarImg.src = avatarSrc;
       avatarImg.hidden = false;
-      if (avatarFallback) {
-        avatarFallback.textContent = "";
-        avatarFallback.hidden = true;
-      }
     } else {
       avatarImg.removeAttribute("src");
       avatarImg.hidden = true;
-      if (avatarFallback) {
-        avatarFallback.textContent = initials;
-        avatarFallback.hidden = false;
-      }
     }
+  }
+  if (avatarFallback) {
+    avatarFallback.textContent = initials;
+    avatarFallback.hidden = Boolean(avatarSrc);
   }
   if (delBtn) delBtn.hidden = !own;
   updateMomentViewerCountdown();
@@ -6053,8 +6056,17 @@ async function refreshDiscoveryFollowingFeed() {
     renderDiscoveryFollowingEmpty(
       statusEl,
       "Could not load Friends",
-      e?.message || "Please try again in a moment.",
+      socialApiErrorMessage(e),
+      `<button type="button" class="solid discoveryEmptyCta" id="friendsFeedRetryBtn">Try again</button>`,
     );
+    const retry = document.getElementById("friendsFeedRetryBtn");
+    if (retry && !retry.dataset.boundFriendsRetry) {
+      retry.dataset.boundFriendsRetry = "1";
+      retry.addEventListener("click", () => {
+        try { haptic("light"); } catch {}
+        void refreshDiscoveryFollowingFeed();
+      });
+    }
   }
 }
 
@@ -10785,6 +10797,18 @@ async function supabaseFetchPublicSongRemixMeta({ songId, ownerUserId }) {
 let currentUserPublicProfileId = "";
 let currentUserPublicSocialStats = { followers: 0, following: 0, isFollowing: false, followsViewer: false };
 
+function socialApiErrorMessage(err) {
+  const status = Number(err?.status || 0);
+  const msg = String(err?.message || "").trim();
+  if (status === 403 || /403|forbidden/i.test(msg)) {
+    return "Vercel blocked the API (403). Turn off Deployment Protection for Production in Vercel Settings, or add VERCEL_PROTECTION_BYPASS to the project and redeploy (see docs/LOGIN_403_VERCEL.md).";
+  }
+  if (/failed to fetch|load failed|networkerror|aborted/i.test(msg)) {
+    return "Network error loading Friends. If you use Vercel protection, the API may be blocked — check docs/LOGIN_403_VERCEL.md.";
+  }
+  return msg || "Please try again in a moment.";
+}
+
 async function socialApi(path, opts = {}) {
   const timeoutMs = Math.max(4000, Number(opts?.timeoutMs) || 12000);
   const { timeoutMs: _drop, ...fetchOpts } = opts;
@@ -10803,7 +10827,11 @@ async function socialApi(path, opts = {}) {
       signal,
     });
     const data = await r.json().catch(() => null);
-    if (!r.ok) throw new Error(data?.error || `Social request failed (${r.status})`);
+    if (!r.ok) {
+      const err = new Error(data?.error || `Social request failed (${r.status})`);
+      err.status = r.status;
+      throw err;
+    }
     return data;
   };
   const ctrl = new AbortController();

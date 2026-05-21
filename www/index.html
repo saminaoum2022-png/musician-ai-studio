@@ -1723,9 +1723,8 @@
             <div id="profileTopWeekList" class="profileTopWeekScroll" role="list"></div>
           </section>
 
-          <!-- Account — quiet, borderless block matching the rest of the page -->
-          <div class="profileAccountBlock">
-            <h3 class="profileAccountSectionTitle">Account</h3>
+          <!-- Auth controls kept in DOM for scripts; not shown on Profile (use Settings). -->
+          <div class="profileAccountBlock" hidden aria-hidden="true">
             <div id="authLoginControls" class="profileOwnAuthRow">
               <button id="btnAuthGoogle" class="ghost" type="button">Continue with Google</button>
             </div>
@@ -2757,6 +2756,6 @@
         setTimeout(unboot, 3500);
       })();
     </script>
-    <script type="module" src="./src/app.js?v=20260521profileActivityTabsV1"></script>
+    <script type="module" src="./src/app.js?v=20260521profileActFlatV1"></script>
   </body>
 </html>

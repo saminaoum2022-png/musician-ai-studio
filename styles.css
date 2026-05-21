@@ -13252,6 +13252,30 @@ button.discoverySpotCard{
 .profileActRow.followAct--statusMenuOpen{
   z-index: 20;
 }
+/* Activity — flat badge like Friends “New drop” (icon + label, no pill boxes) */
+.profileActivitiesList .followActBadge--flat{
+  padding: 0;
+  gap: 5px;
+  border: none;
+  background: transparent;
+}
+.profileActivitiesList .followActBadge--flat .followActBadgeIco{
+  width: auto;
+  height: auto;
+  padding: 0;
+  border: none !important;
+  background: transparent !important;
+  border-radius: 0;
+}
+.profileActivitiesList .followActBadge--flat .followActIcoSvg{
+  width: 15px;
+  height: 15px;
+}
+.profileActivitiesList .followActBadge--flat .followActBadgeLabel{
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+}
 
 /* Following — composer (status / advice / brainstorm) */
 .followCompose{

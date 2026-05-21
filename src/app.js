@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521profileTabsFixV1";
+const APP_BUILD = "20260521profileActFlatV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4226,7 +4226,7 @@ function followingMusicTypeLabel(type) {
   return "New drop";
 }
 
-function followingActivityBadgeHtml(kind, type) {
+function followingActivityBadgeHtml(kind, type, opts = {}) {
   const safeType = escapeHtml(String(type || "").trim());
   const label = kind === "music"
     ? followingMusicTypeLabel(type)
@@ -4234,7 +4234,9 @@ function followingActivityBadgeHtml(kind, type) {
   const ico = kind === "music"
     ? followingActivityIcoSvg(type)
     : followingStatusIcoSvg(type);
-  const flat = kind === "music" && (type === "release" || type === "remix");
+  const flat =
+    Boolean(opts.flat) ||
+    (kind === "music" && (type === "release" || type === "remix"));
   const flatCls = flat ? " followActBadge--flat" : "";
   return `<span class="followActBadge followActBadge--${safeType}${flatCls}" data-follow-badge="${safeType}">
     <span class="followActBadgeIco followActIco followActIco--${safeType}" aria-hidden="true">${ico}</span>
@@ -4426,7 +4428,7 @@ function profileActivityRowHtml(post, idx) {
   return `
     <article class="profileActRow" data-profile-act-id="${escapeHtml(postId)}" style="--i:${idx}">
       <div class="profileActRowTop">
-        ${followingActivityBadgeHtml("status", postType)}
+        ${followingActivityBadgeHtml("status", postType, { flat: true })}
         <span class="profileActRowWhen">${escapeHtml(when)}</span>
         ${menuBtn}
       </div>

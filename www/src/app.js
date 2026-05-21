@@ -4226,7 +4226,7 @@ function followingMusicTypeLabel(type) {
   return "New drop";
 }
 
-function followingActivityBadgeHtml(kind, type) {
+function followingActivityBadgeHtml(kind, type, opts = {}) {
   const safeType = escapeHtml(String(type || "").trim());
   const label = kind === "music"
     ? followingMusicTypeLabel(type)
@@ -4234,7 +4234,9 @@ function followingActivityBadgeHtml(kind, type) {
   const ico = kind === "music"
     ? followingActivityIcoSvg(type)
     : followingStatusIcoSvg(type);
-  const flat = kind === "music" && (type === "release" || type === "remix");
+  const flat =
+    Boolean(opts.flat) ||
+    (kind === "music" && (type === "release" || type === "remix"));
   const flatCls = flat ? " followActBadge--flat" : "";
   return `<span class="followActBadge followActBadge--${safeType}${flatCls}" data-follow-badge="${safeType}">
     <span class="followActBadgeIco followActIco followActIco--${safeType}" aria-hidden="true">${ico}</span>
@@ -4426,7 +4428,7 @@ function profileActivityRowHtml(post, idx) {
   return `
     <article class="profileActRow" data-profile-act-id="${escapeHtml(postId)}" style="--i:${idx}">
       <div class="profileActRowTop">
-        ${followingActivityBadgeHtml("status", postType)}
+        ${followingActivityBadgeHtml("status", postType, { flat: true })}
         <span class="profileActRowWhen">${escapeHtml(when)}</span>
         ${menuBtn}
       </div>
@@ -4456,7 +4458,7 @@ async function renderProfileActivities() {
   const posts = await fetchMyStatusPosts(60);
   if (countEl) {
     const n = posts.length;
-    countEl.textContent = n ? `${n} ${n === 1 ? "post" : "posts"}` : "";
+    countEl.textContent = n ? `${n} ${n === 1 ? "POST" : "POSTS"}` : "";
     countEl.hidden = !n;
   }
   if (!posts.length) {
@@ -16056,10 +16058,8 @@ function renderProfileLibraryPublicOnLinkSection() {
   if (countEl) {
     const totalSaved = withUrl.length;
     const pubN = allLib.length;
-    if (totalSaved) {
-      countEl.textContent = pubN
-        ? `${pubN} public · ${totalSaved} in library`
-        : `0 public · ${totalSaved} in library`;
+    if (pubN) {
+      countEl.textContent = `${pubN} PUBLIC`;
       countEl.hidden = false;
     } else {
       countEl.textContent = "";
@@ -17580,11 +17580,14 @@ function renderLibrary() {
   const hasMore = totalCount > visibleItems.length;
   const countEl = document.getElementById("libraryCount");
   if (countEl) {
+    const onProfileAll =
+      (document.body.getAttribute("data-route") || "") === "profile" &&
+      _profileSongsSegment === "all";
     if (!totalCount) {
       countEl.textContent = "";
       countEl.hidden = true;
     } else {
-      countEl.textContent = `${totalCount} saved`;
+      countEl.textContent = onProfileAll ? String(totalCount) : `${totalCount} saved`;
       countEl.hidden = false;
     }
   }

@@ -1828,7 +1828,13 @@ function addPreconnectHint(url) {
     document.head.appendChild(link);
   } catch {}
 }
+let _lastHapticAt = 0;
+const HAPTIC_MIN_GAP_MS = 140;
+
 function haptic(kind = "light") {
+  const now = Date.now();
+  if (now - _lastHapticAt < HAPTIC_MIN_GAP_MS) return;
+  _lastHapticAt = now;
   try {
     const cap = window?.Capacitor;
     const isNative = Boolean(
@@ -2666,13 +2672,14 @@ function resetCreateDraft() {
   } catch {}
 }
 
-window.addEventListener("hashchange", applyRoute);
+window.addEventListener("hashchange", safeApplyRoute);
 if (!location.hash) location.hash = "#/intro";
-applyRoute();
+safeApplyRoute();
 dismissBootSplash();
 try {
   bindDiscoveryDiscoverControls();
   wireCreateChooserSheetOnce();
+  wireRouteLinkHapticsOnce();
   wireImageMoodMomentOnce();
   wireMomentViewerOnce();
   bindFriendsPageOnce();
@@ -4678,7 +4685,6 @@ function unlockPageForCreateChooserSheet() {
 }
 
 function openCreateChooserSheet() {
-  wireCreateChooserSheetOnce();
   const sheet = document.getElementById("createChooserSheet");
   if (!sheet) return;
   if (!authSession?.user?.id) {
@@ -4737,11 +4743,19 @@ function requireAuthForCreate(onAuthed) {
   return false;
 }
 
+let _createChooserNavLock = false;
+
 /** Single router for Create chooser → existing engines (no new API routes). */
 function navigateFromCreateChooser(action) {
   const kind = String(action || "").trim();
   if (!kind) return;
+  if (_createChooserNavLock) return;
   if (!requireAuthForCreate(() => navigateFromCreateChooser(kind))) return;
+
+  _createChooserNavLock = true;
+  window.setTimeout(() => {
+    _createChooserNavLock = false;
+  }, 450);
 
   closeCreateChooserSheet({ immediate: true });
 
@@ -4784,10 +4798,27 @@ function wireCreateChooserSheetOnce() {
     el.addEventListener("click", () => closeCreateChooserSheet());
   });
   sheet.querySelectorAll("[data-create-chooser]").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       navigateFromCreateChooser(btn.getAttribute("data-create-chooser"));
     });
   });
+}
+
+function wireRouteLinkHapticsOnce() {
+  if (document.documentElement.dataset.wiredRouteLinkHaptics) return;
+  document.documentElement.dataset.wiredRouteLinkHaptics = "1";
+  document.addEventListener(
+    "click",
+    (e) => {
+      const a = e.target?.closest?.("a[data-route-link]");
+      if (!a) return;
+      if (!a.closest(".mobileTabbar") && !a.closest(".journeyBar")) return;
+      haptic("light");
+    },
+    true,
+  );
 }
 
 function isCreateMomentIntent() {
@@ -5791,9 +5822,6 @@ function wireUserPublicFeedRowsOnce() {
 
 updateEnvironmentBadge();
 dismissBootSplash();
-document.querySelectorAll("[data-route-link]").forEach((a) => {
-  a.addEventListener("click", () => haptic("light"));
-});
 
 function normalizeMaqamValue(v) {
   return String(v || "")
@@ -23870,7 +23898,15 @@ var _tabListenFlashedForRun = false;
 var _tabLastHasResult = false;
 var TAB_TIP_KEY = "nabadai_tab_generate_tip_v1";
 var _tabTipTimer = null;
+let _syncCreateTabMorphRaf = 0;
 function syncCreateTabMorph() {
+  if (_syncCreateTabMorphRaf) return;
+  _syncCreateTabMorphRaf = requestAnimationFrame(() => {
+    _syncCreateTabMorphRaf = 0;
+    syncCreateTabMorphNow();
+  });
+}
+function syncCreateTabMorphNow() {
   const tab = document.getElementById("tabCreate");
   if (!tab) return;
   const tooltip = document.getElementById("tabCreateTooltip");

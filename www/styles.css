@@ -13224,6 +13224,7 @@ body.trackSheetOpen #friendsComposeFabRoot{
 /* Friends compose bottom sheet */
 .friendsComposeSheet{
   --friends-compose-sheet-gap: max(8px, env(safe-area-inset-bottom, 0px));
+  --friends-keyboard-inset: 0px;
   position: fixed;
   inset: 0;
   z-index: 121;
@@ -13231,9 +13232,10 @@ body.trackSheetOpen #friendsComposeFabRoot{
   align-items: flex-end;
   justify-content: center;
   box-sizing: border-box;
-  padding: 0 10px var(--friends-compose-sheet-gap);
+  padding: 0 10px calc(var(--friends-compose-sheet-gap) + var(--friends-keyboard-inset, 0px));
   pointer-events: none;
   touch-action: none;
+  transition: padding-bottom 220ms ease;
 }
 .friendsComposeSheet.isOpen{ pointer-events: auto; }
 .friendsComposeSheet[hidden]{ display: none !important; }
@@ -13253,7 +13255,10 @@ body.trackSheetOpen #friendsComposeFabRoot{
   isolation: isolate;
   width: 100%;
   max-width: 520px;
-  max-height: min(88dvh, calc(100dvh - var(--friends-compose-sheet-gap) - 24px - env(safe-area-inset-top, 0px)));
+  max-height: min(
+    88dvh,
+    calc(100dvh - var(--friends-compose-sheet-gap) - var(--friends-keyboard-inset, 0px) - 24px - env(safe-area-inset-top, 0px))
+  );
   margin: 0;
   border-radius: 24px 24px 16px 16px;
   background:

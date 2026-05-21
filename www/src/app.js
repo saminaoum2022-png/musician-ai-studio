@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521friendsFeedLoadFabV1";
+const APP_BUILD = "20260521friendsComposeKbV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4405,30 +4405,71 @@ function unlockPageForFriendsComposeSheet() {
   document.body.classList.remove("friendsComposeSheetOpen");
 }
 
+function shouldAutofocusFriendsComposeInput() {
+  try {
+    if (window.matchMedia("(max-width: 720px)").matches) return false;
+    if (window.matchMedia("(pointer: coarse)").matches) return false;
+  } catch {}
+  return true;
+}
+
+function syncFriendsComposeSheetKeyboardInset() {
+  const sheet = document.getElementById("friendsComposeSheet");
+  if (!sheet?.classList.contains("isOpen")) {
+    try { sheet?.style.removeProperty("--friends-keyboard-inset"); } catch {}
+    return;
+  }
+  const vv = window.visualViewport;
+  if (!vv) {
+    sheet.style.setProperty("--friends-keyboard-inset", "0px");
+    return;
+  }
+  const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+  sheet.style.setProperty("--friends-keyboard-inset", `${inset}px`);
+}
+
+function wireFriendsComposeSheetKeyboardOnce() {
+  if (document.documentElement.dataset.friendsComposeKbWired) return;
+  document.documentElement.dataset.friendsComposeKbWired = "1";
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const onViewportChange = () => syncFriendsComposeSheetKeyboardInset();
+  vv.addEventListener("resize", onViewportChange);
+  vv.addEventListener("scroll", onViewportChange);
+}
+
 function openFriendsComposeSheet() {
   const sheet = document.getElementById("friendsComposeSheet");
   const openBtn = document.getElementById("friendsComposeOpenBtn");
   if (!sheet) return;
+  wireFriendsComposeSheetKeyboardOnce();
   syncFollowingComposeUi();
   sheet.hidden = false;
   sheet.setAttribute("aria-hidden", "false");
   if (openBtn) openBtn.setAttribute("aria-expanded", "true");
   lockPageForFriendsComposeSheet();
+  sheet.style.setProperty("--friends-keyboard-inset", "0px");
   requestAnimationFrame(() => sheet.classList.add("isOpen"));
-  window.setTimeout(() => {
-    try {
-      document.getElementById("followComposeInput")?.focus?.({ preventScroll: true });
-    } catch {}
-  }, 320);
+  if (shouldAutofocusFriendsComposeInput()) {
+    window.setTimeout(() => {
+      try {
+        document.getElementById("followComposeInput")?.focus?.({ preventScroll: true });
+      } catch {}
+    }, 320);
+  }
 }
 
 function closeFriendsComposeSheet() {
   const sheet = document.getElementById("friendsComposeSheet");
   const openBtn = document.getElementById("friendsComposeOpenBtn");
   if (!sheet) return;
+  try {
+    document.getElementById("followComposeInput")?.blur?.();
+  } catch {}
   sheet.classList.remove("isOpen");
   if (openBtn) openBtn.setAttribute("aria-expanded", "false");
   unlockPageForFriendsComposeSheet();
+  sheet.style.setProperty("--friends-keyboard-inset", "0px");
   window.setTimeout(() => {
     sheet.hidden = true;
     sheet.setAttribute("aria-hidden", "true");
@@ -4439,6 +4480,16 @@ function wireFriendsComposeSheetOnce() {
   const sheet = document.getElementById("friendsComposeSheet");
   if (!sheet || sheet.dataset.wiredFriendsComposeSheet) return;
   sheet.dataset.wiredFriendsComposeSheet = "1";
+  wireFriendsComposeSheetKeyboardOnce();
+  const input = document.getElementById("followComposeInput");
+  input?.addEventListener("focus", () => {
+    syncFriendsComposeSheetKeyboardInset();
+    window.setTimeout(syncFriendsComposeSheetKeyboardInset, 80);
+    window.setTimeout(syncFriendsComposeSheetKeyboardInset, 320);
+  });
+  input?.addEventListener("blur", () => {
+    window.setTimeout(syncFriendsComposeSheetKeyboardInset, 60);
+  });
   sheet.addEventListener("click", (e) => {
     const t = e.target;
     if (t?.closest?.("[data-friends-compose-dismiss]")) {

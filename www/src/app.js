@@ -1753,7 +1753,16 @@ const API_BASE = (() => {
   } catch {}
   return "";
 })();
-const apiUrl = (p) => (API_BASE ? `${API_BASE}${p}` : p);
+/** Host that successfully served `/api/public-config` (Friends/social need the same origin). */
+let _resolvedApiBase = API_BASE;
+function setResolvedApiBase(base) {
+  const b = String(base || "").trim().replace(/\/$/, "");
+  _resolvedApiBase = b;
+}
+function apiUrl(p) {
+  const base = _resolvedApiBase || API_BASE;
+  return base ? `${base}${p}` : p;
+}
 const PUBLIC_CONFIG_CACHE_KEY = "mas:public-config:v1";
 let lastPublicConfigStatus = 0;
 let lastPublicConfigError = "";
@@ -1801,7 +1810,9 @@ function loadPublicConfigFromCache() {
   try {
     const raw = localStorage.getItem(PUBLIC_CONFIG_CACHE_KEY);
     if (!raw) return false;
-    applyPublicConfigPayload(JSON.parse(raw));
+    const parsed = JSON.parse(raw);
+    applyPublicConfigPayload(parsed);
+    if (parsed?.apiBase) setResolvedApiBase(parsed.apiBase);
     return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
   } catch {
     return false;
@@ -1856,7 +1867,7 @@ function updateEnvironmentBadge() {
   if (!els.envBadge) return;
   els.envBadge.textContent = `Build ${APP_BUILD}`;
 }
-function cachePublicConfigPayload() {
+function cachePublicConfigPayload(apiBase = "") {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
   try {
     localStorage.setItem(
@@ -1865,6 +1876,7 @@ function cachePublicConfigPayload() {
         supabaseUrl: SUPABASE_URL,
         supabaseAnonKey: SUPABASE_ANON_KEY,
         nabadCertifiedUserIds: [..._nabadCertifiedUserIds],
+        apiBase: String(apiBase || _resolvedApiBase || API_BASE || "").trim(),
       }),
     );
   } catch {}
@@ -1883,12 +1895,14 @@ async function fetchPublicConfigOnce(base) {
     const d = await r.json().catch(() => ({}));
     if (d?.supabaseUrl && d?.supabaseAnonKey) {
       applyPublicConfigPayload(d);
-      cachePublicConfigPayload();
+      setResolvedApiBase(base);
+      cachePublicConfigPayload(base);
       return true;
     }
     if (r.ok) {
       applyPublicConfigPayload(d);
-      cachePublicConfigPayload();
+      setResolvedApiBase(base);
+      cachePublicConfigPayload(base);
     }
     return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
   } finally {
@@ -2555,7 +2569,7 @@ function applyRoute() {
   }
   if (wanted === "friends") {
     try { onLeaveSearchRoute(); } catch {}
-    enterFriendsRoute();
+    void refreshAuthStateFromSupabase().finally(() => enterFriendsRoute());
   }
   if (wanted === "moment") {
     try { syncImageMoodModalMode(); } catch {}
@@ -5675,19 +5689,24 @@ let _friendsRouteEnterToken = 0;
 
 let _enterFriendsDebounce = 0;
 
+function runFriendsRouteRefresh(token) {
+  if (token !== _friendsRouteEnterToken) return;
+  if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
+  void refreshFriendsMomentsRail();
+  void refreshDiscoveryFollowingFeed();
+}
+
 function enterFriendsRoute() {
   const token = ++_friendsRouteEnterToken;
   bindFriendsPageOnce();
   wireFriendsComposeFabOnce();
   syncFollowingComposeUi();
+  runFriendsRouteRefresh(token);
   if (_enterFriendsDebounce) clearTimeout(_enterFriendsDebounce);
   _enterFriendsDebounce = window.setTimeout(() => {
     _enterFriendsDebounce = 0;
-    if (token !== _friendsRouteEnterToken) return;
-    if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
-    void refreshFriendsMomentsRail();
-    void refreshDiscoveryFollowingFeed();
-  }, 50);
+    runFriendsRouteRefresh(token);
+  }, 120);
 }
 
 function wireFriendsComposeFabOnce() {
@@ -5724,27 +5743,36 @@ async function refreshDiscoveryFollowingFeed() {
   statusEl.textContent = "";
 
   if (!authSession?.user?.id) {
+    const token = getSupabaseAuthToken();
     if (
-      String(document.body.getAttribute("data-route") || "") === "friends" &&
-      getSupabaseAuthToken()
+      token &&
+      String(document.body.getAttribute("data-route") || "") === "friends"
     ) {
-      window.setTimeout(() => {
-        if (gen !== _discoveryFollowingGen) return;
-        if ((document.body.getAttribute("data-route") || "") !== "friends") return;
-        void refreshDiscoveryFollowingFeed();
-      }, 160);
+      try {
+        await refreshAuthStateFromSupabase();
+      } catch {}
+      if (authSession?.user?.id) {
+        /* fall through — session hydrated after login */
+      } else {
+        window.setTimeout(() => {
+          if (gen !== _discoveryFollowingGen) return;
+          if ((document.body.getAttribute("data-route") || "") !== "friends") return;
+          void refreshDiscoveryFollowingFeed();
+        }, 200);
+        return;
+      }
+    } else {
+      listEl.classList.remove("isDiscoveryLoading");
+      listEl.hidden = true;
+      listEl.innerHTML = "";
+      renderDiscoveryFollowingEmpty(
+        statusEl,
+        "Sign in to see activity",
+        "Follow musicians from Discover — their drops and remixes show up here.",
+        `<a class="solid discoveryEmptyCta" href="#/profile">Sign in</a>`,
+      );
       return;
     }
-    listEl.classList.remove("isDiscoveryLoading");
-    listEl.hidden = true;
-    listEl.innerHTML = "";
-    renderDiscoveryFollowingEmpty(
-      statusEl,
-      "Sign in to see activity",
-      "Follow musicians from Discover — their drops and remixes show up here.",
-      `<a class="solid discoveryEmptyCta" href="#/profile">Sign in</a>`,
-    );
-    return;
   }
 
   try {

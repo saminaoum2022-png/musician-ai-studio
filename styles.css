@@ -13737,7 +13737,7 @@ body.createChooserSheetOpen .footer{
   --create-chooser-gap: max(12px, env(safe-area-inset-bottom, 0px));
   position: fixed;
   inset: 0;
-  z-index: 122;
+  z-index: 13000;
   display: flex;
   align-items: flex-end;
   justify-content: center;

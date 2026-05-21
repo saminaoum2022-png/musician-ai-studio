@@ -2245,6 +2245,9 @@ function applyRoute() {
   const isLoggedIn = Boolean(authSession?.user?.id);
   if (!isLoggedIn && protectedRoutes.has(wanted)) wanted = "auth";
   const prevRoute = document.body.getAttribute("data-route") || "";
+  if (prevRoute !== wanted) {
+    closeCreateChooserSheet({ immediate: true });
+  }
   if ((prevRoute === "discover" || prevRoute === "discover-playlist") && wanted !== "discover" && wanted !== "discover-playlist") {
     try { onLeaveSearchRoute(); } catch {}
   }
@@ -2672,11 +2675,15 @@ function resetCreateDraft() {
   } catch {}
 }
 
-window.addEventListener("hashchange", safeApplyRoute);
+window.addEventListener("hashchange", () => {
+  closeCreateChooserSheet({ immediate: true });
+  safeApplyRoute();
+});
 if (!location.hash) location.hash = "#/intro";
 safeApplyRoute();
 dismissBootSplash();
 try {
+  mountFixedOverlaysToBody();
   bindDiscoveryDiscoverControls();
   wireCreateChooserSheetOnce();
   wireRouteLinkHapticsOnce();
@@ -4676,6 +4683,22 @@ function openFriendsComposeSheet() {
   }
 }
 
+const FIXED_OVERLAY_IDS = ["createChooserSheet", "friendsComposeSheet"];
+
+/** Keep full-screen sheets on `body` — `main.grid.routeSwap` uses transform and breaks `position:fixed` hit-testing on iOS. */
+function mountFixedOverlaysToBody() {
+  for (const id of FIXED_OVERLAY_IDS) {
+    const el = document.getElementById(id);
+    if (!el || el.parentElement === document.body) continue;
+    document.body.appendChild(el);
+  }
+}
+
+function isCreateChooserOpen() {
+  const sheet = document.getElementById("createChooserSheet");
+  return Boolean(sheet && !sheet.hidden && sheet.classList.contains("isOpen"));
+}
+
 function lockPageForCreateChooserSheet() {
   document.body.classList.add("createChooserSheetOpen");
 }
@@ -4685,6 +4708,8 @@ function unlockPageForCreateChooserSheet() {
 }
 
 function openCreateChooserSheet() {
+  mountFixedOverlaysToBody();
+  wireCreateChooserSheetOnce();
   const sheet = document.getElementById("createChooserSheet");
   if (!sheet) return;
   if (!authSession?.user?.id) {
@@ -4787,40 +4812,45 @@ function navigateFromCreateChooser(action) {
   if (!requireAuthForCreate(() => navigateFromCreateChooser(kind), kind)) return;
 
   _createChooserNavLock = true;
-  window.setTimeout(() => {
-    _createChooserNavLock = false;
-  }, 450);
-
   closeCreateChooserSheet({ immediate: true });
 
-  if (kind === "song") {
-    setCreateEntryIntent("song");
-    try { location.hash = "#/generate"; } catch {}
-    window.setTimeout(() => {
-      try { if (typeof setActiveCreateTab === "function") setActiveCreateTab("lyrics"); } catch {}
-      try { els.sunoPrompt?.focus?.({ preventScroll: true }); } catch {}
-    }, 100);
-    try { haptic("light"); } catch {}
-    return;
-  }
+  try {
+    if (kind === "song") {
+      setCreateEntryIntent("song");
+      try { location.hash = "#/generate"; } catch {}
+      safeApplyRoute();
+      window.setTimeout(() => {
+        try { if (typeof setActiveCreateTab === "function") setActiveCreateTab("lyrics"); } catch {}
+        try { els.sunoPrompt?.focus?.({ preventScroll: true }); } catch {}
+      }, 100);
+      try { haptic("light"); } catch {}
+      return;
+    }
 
-  if (kind === "moment") {
-    openMomentCreatePage("moment");
-    try { haptic("light"); } catch {}
-    return;
-  }
+    if (kind === "moment") {
+      openMomentCreatePage("moment");
+      safeApplyRoute();
+      try { haptic("light"); } catch {}
+      return;
+    }
 
-  if (kind === "status") {
-    setCreateEntryIntent("");
-    _followComposeType = "update";
-    try { syncFollowingComposeUi(); } catch {}
-    try { location.hash = "#/friends"; } catch {}
-    requestAnimationFrame(() => {
+    if (kind === "status") {
+      setCreateEntryIntent("");
+      _followComposeType = "update";
+      try { syncFollowingComposeUi(); } catch {}
+      try { location.hash = "#/friends"; } catch {}
+      safeApplyRoute();
       requestAnimationFrame(() => {
-        try { openFriendsComposeSheet(); } catch {}
+        requestAnimationFrame(() => {
+          try { openFriendsComposeSheet(); } catch {}
+        });
       });
-    });
-    try { haptic("light"); } catch {}
+      try { haptic("light"); } catch {}
+    }
+  } finally {
+    window.setTimeout(() => {
+      _createChooserNavLock = false;
+    }, 320);
   }
 }
 
@@ -4828,15 +4858,19 @@ function wireCreateChooserSheetOnce() {
   const sheet = document.getElementById("createChooserSheet");
   if (!sheet || sheet.dataset.wiredCreateChooserSheet) return;
   sheet.dataset.wiredCreateChooserSheet = "1";
-  sheet.querySelectorAll("[data-create-chooser-dismiss]").forEach((el) => {
-    el.addEventListener("click", () => closeCreateChooserSheet());
-  });
-  sheet.querySelectorAll("[data-create-chooser]").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
+  sheet.addEventListener("click", (e) => {
+    const dismiss = e.target?.closest?.("[data-create-chooser-dismiss]");
+    if (dismiss) {
       e.preventDefault();
       e.stopPropagation();
-      navigateFromCreateChooser(btn.getAttribute("data-create-chooser"));
-    });
+      closeCreateChooserSheet();
+      return;
+    }
+    const btn = e.target?.closest?.("[data-create-chooser]");
+    if (!btn || !sheet.contains(btn)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    navigateFromCreateChooser(btn.getAttribute("data-create-chooser"));
   });
 }
 
@@ -24161,6 +24195,10 @@ syncCreateTabMorph();
     }
     ev.preventDefault();
     ev.stopPropagation();
+    if (isCreateChooserOpen()) {
+      closeCreateChooserSheet({ immediate: true });
+      return;
+    }
     openCreateChooserSheet();
   }, true);
 })();

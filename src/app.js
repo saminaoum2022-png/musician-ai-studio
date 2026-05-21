@@ -1819,11 +1819,20 @@ function loadPublicConfigFromCache() {
   }
 }
 
+function isNativeShell() {
+  try {
+    return Boolean(window.Capacitor?.isNativePlatform?.());
+  } catch {
+    return false;
+  }
+}
+
 function applyClientEnvBootstrap() {
   try {
     const env = window.__NABAD_CLIENT_ENV__;
     if (!env || typeof env !== "object") return false;
     applyPublicConfigPayload(env);
+    if (env.apiBase) setResolvedApiBase(env.apiBase);
     return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
   } catch {
     return false;
@@ -1890,7 +1899,7 @@ async function fetchPublicConfigOnce(base) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 6000);
   try {
-    const r = await fetch(url, { signal: ctrl.signal });
+    const r = await fetch(url, { signal: ctrl.signal, headers: getApiFetchHeaders() });
     lastPublicConfigStatus = r.status;
     const d = await r.json().catch(() => ({}));
     if (d?.supabaseUrl && d?.supabaseAnonKey) {
@@ -1910,29 +1919,48 @@ async function fetchPublicConfigOnce(base) {
   }
 }
 
-async function loadPublicConfig() {
-  applyClientEnvBootstrap();
-  if (SUPABASE_URL && SUPABASE_ANON_KEY) return true;
-  if (loadPublicConfigFromCache()) return true;
-
-  lastPublicConfigStatus = 0;
-  lastPublicConfigError = "";
-  const bases = [];
-  try {
-    if (window.Capacitor?.isNativePlatform?.()) bases.push(...nativeApiBaseCandidates());
-    else bases.push("");
-  } catch {
-    bases.push("");
+/** Native needs the same Vercel host for /api/social as for public-config (Discover uses Supabase only). */
+async function ensureNativeApiBaseResolved() {
+  if (!isNativeShell()) return true;
+  if (_resolvedApiBase) {
+    try {
+      if (await fetchPublicConfigOnce(_resolvedApiBase)) return true;
+    } catch {}
   }
-
-  for (const base of bases) {
+  for (const base of nativeApiBaseCandidates()) {
     try {
       if (await fetchPublicConfigOnce(base)) return true;
-    } catch (e) {
-      lastPublicConfigError = e?.name === "AbortError" ? "timeout" : "network";
-    }
+    } catch {}
   }
-  return loadPublicConfigFromCache();
+  return Boolean(_resolvedApiBase);
+}
+
+async function loadPublicConfig() {
+  applyClientEnvBootstrap();
+  let ok = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+  if (!ok) ok = loadPublicConfigFromCache();
+
+  if (!ok) {
+    lastPublicConfigStatus = 0;
+    lastPublicConfigError = "";
+    const bases = isNativeShell() ? nativeApiBaseCandidates() : [""];
+    for (const base of bases) {
+      try {
+        if (await fetchPublicConfigOnce(base)) {
+          ok = true;
+          break;
+        }
+      } catch (e) {
+        lastPublicConfigError = e?.name === "AbortError" ? "timeout" : "network";
+      }
+    }
+    if (!ok) ok = loadPublicConfigFromCache();
+  }
+
+  if (ok && isNativeShell()) {
+    await ensureNativeApiBaseResolved();
+  }
+  return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 }
 
 function loginConfigFailureMessage() {
@@ -2533,7 +2561,10 @@ function applyRoute() {
     // "songs / likes" section doesn't blank-out until the full Hub
     // feed arrives. Cheap query, scoped to one user.
     void refreshMyHubPostsFast();
-    void refreshOwnProfileSocialStats({ force: true });
+    void (async () => {
+      if (isNativeShell()) await ensureNativeApiBaseResolved();
+      await refreshOwnProfileSocialStats({ force: true });
+    })();
     renderPersonaSelect();
     renderProfileCallingCardHint();
     if (authSession?.user?.id && shouldShowProfileHeaderSkeleton()) {
@@ -2569,7 +2600,13 @@ function applyRoute() {
   }
   if (wanted === "friends") {
     try { onLeaveSearchRoute(); } catch {}
-    void refreshAuthStateFromSupabase().finally(() => enterFriendsRoute());
+    void (async () => {
+      try {
+        await loadPublicConfig();
+        await refreshAuthStateFromSupabase();
+      } catch {}
+      enterFriendsRoute();
+    })();
   }
   if (wanted === "moment") {
     try { syncImageMoodModalMode(); } catch {}
@@ -10627,21 +10664,32 @@ let currentUserPublicProfileId = "";
 let currentUserPublicSocialStats = { followers: 0, following: 0, isFollowing: false, followsViewer: false };
 
 async function socialApi(path, opts) {
-  const token = getSupabaseAuthToken();
-  const headers = {
-    Accept: "application/json",
-    ...(opts?.headers || {}),
+  const run = async () => {
+    const token = getSupabaseAuthToken();
+    const headers = {
+      Accept: "application/json",
+      ...(opts?.headers || {}),
+    };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (opts?.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+    const r = await apiFetch(path, {
+      ...(opts || {}),
+      headers,
+      cache: "no-store",
+    });
+    const data = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(data?.error || `Social request failed (${r.status})`);
+    return data;
   };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  if (opts?.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
-  const r = await apiFetch(path, {
-    ...(opts || {}),
-    headers,
-    cache: "no-store",
-  });
-  const data = await r.json().catch(() => null);
-  if (!r.ok) throw new Error(data?.error || `Social request failed (${r.status})`);
-  return data;
+  try {
+    return await run();
+  } catch (e) {
+    if (isNativeShell()) {
+      const fixed = await ensureNativeApiBaseResolved();
+      if (fixed) return await run();
+    }
+    throw e;
+  }
 }
 
 async function fetchSocialStatsForProfile({ userId, username }) {

@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522friends403FixV1";
+const APP_BUILD = "20260522momentStoryV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5351,7 +5351,11 @@ function openMomentViewerSheet(moment) {
     img.alt = `Moment by @${handle}`;
   }
   if (who) who.textContent = `@${handle}`;
-  if (caption) caption.textContent = String(moment.body || "").trim();
+  const captionText = String(moment.body || "").trim();
+  if (caption) {
+    caption.textContent = captionText;
+    caption.hidden = !captionText;
+  }
   if (profileLink) {
     profileLink.href = `#/u/${encodeURIComponent(handle)}`;
     profileLink.setAttribute("aria-label", `@${handle} profile`);
@@ -5449,6 +5453,43 @@ async function fetchUserMoments(userId, username = "") {
 
 let _friendsMomentsGen = 0;
 
+function applyMomentToFriendsRail(moment) {
+  const rail = document.getElementById("friendsMomentsRail");
+  const scroll = document.getElementById("friendsMomentsRailScroll");
+  if (!rail || !scroll || !moment || !authSession?.user?.id) return;
+  _friendsMomentsById.set(String(moment.id), moment);
+  const ownId = String(authSession.user.id);
+  const ownMoment = String(moment.userId) === ownId
+    ? moment
+    : [..._friendsMomentsById.values()].find((m) => String(m.userId) === ownId) || null;
+  const others = [..._friendsMomentsById.values()].filter(
+    (m) => String(m.userId) !== ownId && String(m.id) !== String(moment.id),
+  );
+  if (String(moment.userId) !== ownId) others.unshift(moment);
+  const tiles = [
+    momentPickTileHtml(ownMoment || { userId: ownId }, { isOwn: true }),
+    ...others.map((m) => momentPickTileHtml(m)),
+  ];
+  scroll.innerHTML = tiles.join("");
+  bindMomentsRailClicks(scroll);
+  rail.hidden = false;
+}
+
+async function recoverMomentAfterPublishError() {
+  try {
+    const moments = await socialApi("/api/social?type=moments_rail", { timeoutMs: 20000 });
+    const list = Array.isArray(moments?.moments) ? moments.moments : [];
+    const ownId = String(authSession?.user?.id || "");
+    const recent = list.find((m) => String(m.userId) === ownId);
+    if (!recent) return null;
+    const created = new Date(recent.createdAt || recent.created_at || 0).getTime();
+    if (!created || Date.now() - created > 3 * 60 * 1000) return null;
+    return recent;
+  } catch {
+    return null;
+  }
+}
+
 async function refreshFriendsMomentsRail() {
   const gen = ++_friendsMomentsGen;
   const rail = document.getElementById("friendsMomentsRail");
@@ -5513,19 +5554,34 @@ async function publishMoment() {
     const cover = await prepareMomentCoverDataUrl(momentPhotoDataUrl);
     const blob = await dataUrlToBlob(cover);
     const imageUrl = await uploadMomentBlob(blob);
-    await socialApi("/api/social", {
+    const data = await socialApi("/api/social", {
       method: "POST",
       body: JSON.stringify({ action: "post_moment", body, imageUrl }),
+      timeoutMs: 45000,
     });
+    if (data?.moment) applyMomentToFriendsRail(data.moment);
     setCreateEntryIntent("");
+    momentPhotoDataUrl = "";
     leaveMomentPage("#/friends");
     try { showToast("Moment live for 24 hours", { icon: "✓", durationMs: 2400 }); } catch {}
-    window.setTimeout(() => {
-      void refreshFriendsMomentsRail();
-      void refreshDiscoveryFollowingFeed();
-    }, 200);
+    window.setTimeout(() => void refreshFriendsMomentsRail(), 400);
+    window.setTimeout(() => void refreshDiscoveryFollowingFeed(), 900);
   } catch (e) {
-    try { showToast(e?.message || "Could not publish moment", { durationMs: 3200 }); } catch {}
+    const recovered = await recoverMomentAfterPublishError();
+    if (recovered) {
+      applyMomentToFriendsRail(recovered);
+      setCreateEntryIntent("");
+      momentPhotoDataUrl = "";
+      leaveMomentPage("#/friends");
+      try { showToast("Moment live for 24 hours", { icon: "✓", durationMs: 2400 }); } catch {}
+      window.setTimeout(() => void refreshFriendsMomentsRail(), 400);
+      return;
+    }
+    const msg = String(e?.message || "").trim();
+    const friendly = /failed to fetch|load failed|networkerror|aborted|timed out/i.test(msg)
+      ? "Connection dropped — check Friends in a moment."
+      : (msg || "Could not publish moment");
+    try { showToast(friendly, { durationMs: 3200 }); } catch {}
   } finally {
     try { syncMomentPageUi(); } catch {}
   }

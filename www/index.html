@@ -2397,22 +2397,26 @@
         <div id="momentViewerSheet" class="momentViewerSheet" aria-hidden="true" hidden>
           <div class="momentViewerBackdrop" data-moment-viewer-dismiss="1"></div>
           <div class="momentViewerCard" role="dialog" aria-modal="true" aria-labelledby="momentViewerCaption">
-            <button type="button" class="momentViewerClose" data-moment-viewer-dismiss="1" aria-label="Close">×</button>
             <div id="momentViewerPickFrame" class="momentViewerPickFrame">
+              <img id="momentViewerImg" class="momentViewerImg" alt="" decoding="async" />
               <span id="momentViewerCountdown" class="momentViewerCountdown" aria-hidden="true"></span>
-              <span class="momentPickShape">
-                <img id="momentViewerImg" class="momentViewerImg" alt="" decoding="async" />
-              </span>
+              <div class="momentViewerOverlay">
+                <div class="momentViewerOverlayTop">
+                  <a id="momentViewerProfileLink" class="momentViewerProfileRow" href="#" data-route-link="user">
+                    <span class="momentViewerAvatar">
+                      <img id="momentViewerAvatarImg" class="momentViewerAvatarImg" alt="" width="36" height="36" decoding="async" />
+                      <span id="momentViewerAvatarFallback" class="momentViewerAvatarFallback" aria-hidden="true"></span>
+                    </span>
+                    <span id="momentViewerWho" class="momentViewerWho"></span>
+                  </a>
+                  <button type="button" class="momentViewerClose" data-moment-viewer-dismiss="1" aria-label="Close">×</button>
+                </div>
+                <div class="momentViewerOverlayBottom">
+                  <p id="momentViewerCaption" class="momentViewerCaption"></p>
+                  <button id="momentViewerDelete" class="momentViewerDelete ghost" type="button" hidden>Remove</button>
+                </div>
+              </div>
             </div>
-            <a id="momentViewerProfileLink" class="momentViewerProfileRow" href="#" data-route-link="user">
-              <span class="momentViewerAvatar">
-                <img id="momentViewerAvatarImg" class="momentViewerAvatarImg" alt="" width="40" height="40" decoding="async" />
-                <span id="momentViewerAvatarFallback" class="momentViewerAvatarFallback" aria-hidden="true"></span>
-              </span>
-              <span id="momentViewerWho" class="momentViewerWho"></span>
-            </a>
-            <p id="momentViewerCaption" class="momentViewerCaption"></p>
-            <button id="momentViewerDelete" class="momentViewerDelete ghost" type="button" hidden>Remove</button>
           </div>
         </div>
 
@@ -2841,6 +2845,6 @@
       })();
     </script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260522friends403FixV1"></script>
+    <script type="module" src="./src/app.js?v=20260522momentStoryV1"></script>
   </body>
 </html>

@@ -4545,7 +4545,7 @@ body[data-route="moment"] .imageMoodKicker,
   color: rgba(183,139,255,0.9);
 }
 
-/* Moments — guitar-pick shape (not circle / square / cushion) */
+/* Moments — vinyl disc (circle, groove ring, spindle) */
 .friendsMomentsRail{
   margin: 0 0 18px;
   padding: 0 2px;
@@ -4591,7 +4591,7 @@ body[data-route="moment"] .imageMoodKicker,
   flex-direction: column;
   align-items: center;
   gap: 7px;
-  width: 78px;
+  width: 72px;
   background: none;
   border: none;
   padding: 0;
@@ -4603,26 +4603,73 @@ body[data-route="moment"] .imageMoodKicker,
 .momentPickShell{
   position: relative;
   width: 72px;
-  height: 88px;
+  height: 72px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 42%, rgba(40,44,58,0.95) 0%, rgba(12,14,22,0.98) 68%, rgba(4,5,10,1) 100%);
+  box-shadow:
+    0 2px 10px rgba(0,0,0,0.45),
+    inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+.momentPickShell::after{
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 14px rgba(0,0,0,0.55);
+  pointer-events: none;
+  z-index: 4;
 }
 .momentPickShape{
   position: absolute;
-  inset: 0;
-  clip-path: polygon(50% 0%, 88% 22%, 100% 52%, 72% 100%, 28% 100%, 0% 52%, 12% 22%);
-  background: rgba(8,10,18,0.85);
-  border: 1px solid rgba(255,255,255,0.14);
+  inset: 5px;
+  border-radius: 50%;
+  background: rgba(8,10,18,0.92);
+  border: 1px solid rgba(255,255,255,0.1);
   overflow: hidden;
+  z-index: 2;
+}
+.momentPickShape::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: repeating-radial-gradient(
+    circle at center,
+    transparent 0,
+    transparent 3px,
+    rgba(255,255,255,0.035) 3px,
+    rgba(255,255,255,0.035) 4px
+  );
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0.65;
+}
+.momentPickShape::after{
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgba(28,32,44,1) 0%, rgba(6,8,14,1) 100%);
+  border: 1px solid rgba(255,255,255,0.16);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.5);
+  z-index: 3;
+  pointer-events: none;
 }
 .momentPickShape img{
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  border-radius: 50%;
 }
 .momentPickCountdown{
   position: absolute;
-  inset: -3px;
-  clip-path: polygon(50% 0%, 88% 22%, 100% 52%, 72% 100%, 28% 100%, 0% 52%, 12% 22%);
+  inset: 0;
+  border-radius: 50%;
   background: conic-gradient(
     from -90deg,
     rgba(94,234,212,0.95) 0deg,
@@ -4630,14 +4677,20 @@ body[data-route="moment"] .imageMoodKicker,
     rgba(255,255,255,0.08) calc(var(--moment-pct, 1) * 360deg),
     rgba(255,255,255,0.08) 360deg
   );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
   pointer-events: none;
-  opacity: 0.92;
+  opacity: 0.95;
+  z-index: 1;
 }
 .momentPickTile.isOwn .momentPickShape{
   background: rgba(255,255,255,0.06);
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.momentPickTile.isOwn .momentPickShape::before{
+  opacity: 0.35;
 }
 .momentPickAdd{
   font-size: 28px;
@@ -4649,7 +4702,7 @@ body[data-route="moment"] .imageMoodKicker,
   font-size: 11px;
   font-weight: 800;
   color: rgba(232,238,247,0.72);
-  max-width: 78px;
+  max-width: 72px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4709,30 +4762,54 @@ body[data-route="moment"] .imageMoodKicker,
 }
 .momentViewerPickFrame{
   position: relative;
-  width: min(220px, 70vw);
-  height: 270px;
+  width: min(240px, 72vw);
+  height: min(240px, 72vw);
   margin: 8px auto 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 42%, rgba(40,44,58,0.95) 0%, rgba(12,14,22,0.98) 68%, rgba(4,5,10,1) 100%);
+  box-shadow:
+    0 4px 24px rgba(0,0,0,0.5),
+    inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+.momentViewerPickFrame::after{
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 22px rgba(0,0,0,0.55);
+  pointer-events: none;
+  z-index: 4;
 }
 .momentViewerPickFrame .momentPickShape{
   position: absolute;
-  inset: 0;
+  inset: 8px;
+}
+.momentViewerPickFrame .momentPickShape::after{
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
 }
 .momentViewerImg{
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: 50%;
 }
 .momentViewerCountdown{
   position: absolute;
-  inset: -4px;
-  clip-path: polygon(50% 0%, 88% 22%, 100% 52%, 72% 100%, 28% 100%, 0% 52%, 12% 22%);
+  inset: 0;
+  border-radius: 50%;
   background: conic-gradient(
     from -90deg,
     rgba(94,234,212,0.95) 0deg,
     rgba(94,234,212,0.95) calc(var(--moment-pct, 1) * 360deg),
-    rgba(255,255,255,0.08) calc(var(--moment-pct, 1) * 360deg)
+    rgba(255,255,255,0.08) calc(var(--moment-pct, 1) * 360deg),
+    rgba(255,255,255,0.08) 360deg
   );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 5px));
   pointer-events: none;
+  z-index: 1;
 }
 .momentViewerWho{
   margin: 0 0 8px;

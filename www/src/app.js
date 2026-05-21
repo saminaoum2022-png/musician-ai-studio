@@ -5254,7 +5254,7 @@ function momentPickTileHtml(m, { isOwn = false, label = "" } = {}) {
   return `<button type="button" class="momentPickTile${isOwn ? " isOwn" : ""}" data-moment-id="${escapeHtml(String(m?.id || ""))}" aria-label="Moment from ${escapeHtml(lbl)}">
     <span class="momentPickShell">
       <span class="momentPickCountdown" style="--moment-pct:${pct}"></span>
-      <span class="momentPickShape"><img src="${img}" alt="" width="72" height="88" decoding="async" loading="lazy" /></span>
+      <span class="momentPickShape"><img src="${img}" alt="" width="72" height="72" decoding="async" loading="lazy" /></span>
     </span>
     <span class="momentPickLabel">${escapeHtml(lbl)}</span>
   </button>`;

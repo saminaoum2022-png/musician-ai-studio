@@ -33,5 +33,11 @@ create policy "social_status_posts_insert_own"
   to authenticated
   with check (auth.uid() = user_id);
 
+drop policy if exists "social_status_posts_delete_own" on public.social_status_posts;
+create policy "social_status_posts_delete_own"
+  on public.social_status_posts for delete
+  to authenticated
+  using (auth.uid() = user_id);
+
 comment on table public.social_status_posts is
   'Following feed text posts: status, advice requests, brainstorm, song requests, recommendations.';

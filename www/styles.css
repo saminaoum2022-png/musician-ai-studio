@@ -13135,26 +13135,48 @@ button.discoverySpotCard{
   background: linear-gradient(145deg, rgba(124,92,255,0.14), rgba(255,255,255,0.05));
   box-sizing: border-box;
 }
-/* Friends header — gradient-ring + pill (opens compose sheet) */
-.friendsComposeOpenBtn{
+/* Friends — floating + (compose sheet), visible on Friends route only */
+.friendsComposeFabRoot{
+  position: fixed;
+  right: 14px;
+  bottom: calc(78px + env(safe-area-inset-bottom, 0px));
+  z-index: 58;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease, visibility 200ms ease;
+}
+body[data-route="friends"] #friendsComposeFabRoot{
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+body.friendsComposeSheetOpen #friendsComposeFabRoot,
+body.trackSheetOpen #friendsComposeFabRoot{
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+.friendsComposeFab{
   position: relative;
-  flex: 0 0 auto;
-  width: 46px;
-  height: 46px;
+  width: 52px;
+  height: 52px;
   border: none;
   border-radius: 999px;
   padding: 0;
-  background: rgba(8, 10, 18, 0.92);
+  background: rgba(8, 10, 18, 0.94);
   color: rgba(248, 250, 255, 0.96);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
-  transition: transform 160ms ease, box-shadow 200ms ease;
+  box-shadow:
+    0 8px 26px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transition: transform 160ms ease, box-shadow 200ms ease, background 200ms ease;
 }
-.friendsComposeOpenBtnRing{
+.friendsComposeFabRing{
   position: absolute;
   inset: -2px;
   border-radius: inherit;
@@ -13173,23 +13195,15 @@ button.discoverySpotCard{
     0 0 18px -4px rgba(35, 213, 171, 0.28),
     0 0 20px -4px rgba(124, 92, 255, 0.36);
 }
-.friendsComposeOpenBtnIco{
+.friendsComposeFabIco{
   position: relative;
   z-index: 1;
 }
-.friendsComposeOpenBtn:hover{
-  box-shadow:
-    0 6px 22px rgba(0, 0, 0, 0.4),
-    0 0 24px -6px rgba(124, 92, 255, 0.35);
-}
-.friendsComposeOpenBtn:active{
+.friendsComposeFab:active{
   transform: scale(0.94);
 }
-.friendsComposeOpenBtn[aria-expanded="true"]{
-  background: rgba(124, 92, 255, 0.22);
-}
-.friendsComposeOpenBtn[aria-expanded="true"] .friendsComposeOpenBtnRing{
-  opacity: 1;
+.friendsComposeFab[aria-expanded="true"]{
+  background: rgba(124, 92, 255, 0.28);
 }
 
 /* Friends compose bottom sheet */
@@ -13420,12 +13434,18 @@ body.friendsComposeSheetOpen .footer{
   display: flex;
   flex-direction: column;
   align-items: stretch;
+  padding: 12px 14px 12px 6px;
   border-radius: 0;
   border: 0;
   border-bottom: 1px solid rgba(255,255,255,0.07);
   background: transparent;
   box-shadow: none;
   overflow: visible;
+}
+.friendsPage .followActStack .followAct--music,
+.friendsPage .followActStack .followAct--status{
+  padding-left: 6px;
+  padding-right: 14px;
 }
 .friendsPage .followActStack .followAct.discoveryRowPlaying{
   background: rgba(var(--cover-glow-rgb), 0.06);
@@ -13440,6 +13460,35 @@ body.friendsComposeSheetOpen .footer{
   align-items: flex-start;
   gap: 10px;
   min-width: 0;
+}
+.friendsPage .followActTop{
+  gap: 8px;
+}
+.followActDelete{
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-left: auto;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 999px;
+  background: rgba(0,0,0,0.25);
+  color: rgba(232,238,247,0.55);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+.followActDelete:hover{
+  color: rgba(248,250,255,0.92);
+  border-color: rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.06);
+}
+.followActDelete:active{
+  transform: scale(0.94);
 }
 .followActTopText{
   flex: 1 1 0;
@@ -13728,6 +13777,9 @@ body.friendsComposeSheetOpen .footer{
   font-style: italic;
   font-weight: 650;
   color: rgba(248,250,255,0.98);
+}
+.friendsPage .followAct--status .followActContent{
+  padding-left: 48px;
 }
 .followActStatusText{
   margin: 4px 0 0;

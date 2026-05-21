@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521friendsComposeSheetV1";
+const APP_BUILD = "20260521friendsFeedPolishV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4296,10 +4296,10 @@ function followingStatusIcoSvg(postType) {
 
 function followingStatusRowHtml(post, profMap, idx) {
   const postType = String(post?.postType || post?.post_type || "update").trim();
+  const postId = String(post?.id || "").trim();
   const userId = String(post?.userId || post?.user_id || "").trim();
   const prof = userId ? profMap.get(userId) : null;
   const handle = String(post?.username || prof?.username || "").trim();
-  const byLine = handle ? `@${handle}` : "Creator";
   const avatarRaw = String(post?.avatar || prof?.avatar || "").trim();
   const avatarSrc = avatarRaw ? normalizeProfileAvatarForImg(avatarRaw) : "";
   const initials = (handle || "U").replace(/^@/, "").slice(0, 2).toUpperCase();
@@ -4310,9 +4310,19 @@ function followingStatusRowHtml(post, profMap, idx) {
   const who = handle
     ? `<strong class="followActUser">@${escapeHtml(handle)}</strong>`
     : `<strong class="followActUser">A musician</strong>`;
-  const verb = `<span class="followActVerb"> ${followingStatusVerb(postType)}</span>`;
+  const isOwn = Boolean(
+    postId &&
+    userId &&
+    authSession?.user?.id &&
+    userId === String(authSession.user.id),
+  );
+  const deleteBtn = isOwn
+    ? `<button type="button" class="followActDelete" data-follow-status-delete="${escapeHtml(postId)}" aria-label="Remove post">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>`
+    : "";
   return `
-    <article class="followAct followAct--status" data-follow-act="status" data-follow-status-type="${escapeHtml(postType)}" style="--i:${idx}">
+    <article class="followAct followAct--status" data-follow-act="status" data-follow-status-type="${escapeHtml(postType)}" data-follow-status-id="${escapeHtml(postId)}" style="--i:${idx}">
       <div class="followActTop">
         <a class="followActAvatar" href="${escapeHtml(profileHref)}" data-route-link="user" aria-label="${handle ? `@${escapeHtml(handle)} profile` : "Profile"}">
           ${avatarSrc
@@ -4326,12 +4336,36 @@ function followingStatusRowHtml(post, profMap, idx) {
           </div>
           ${followingActivityBadgeHtml("status", postType)}
         </div>
+        ${deleteBtn}
       </div>
       <div class="followActContent followActBody--static">
-        <p class="followActHead followActHead--status">${verb.trim()}</p>
         <p class="followActStatusText">${body}</p>
       </div>
     </article>`;
+}
+
+async function deleteFollowingStatusPost(postId) {
+  const id = String(postId || "").trim();
+  if (!id || !authSession?.user?.id) return;
+  let ok = false;
+  try {
+    ok = window.confirm("Remove this post from Friends?");
+  } catch {
+    ok = true;
+  }
+  if (!ok) return;
+  try {
+    await socialApi("/api/social", {
+      method: "POST",
+      body: JSON.stringify({ action: "delete_status", postId: id }),
+    });
+    haptic("success");
+    try { showToast("Post removed", { icon: "✓", durationMs: 2000 }); } catch {}
+    void refreshDiscoveryFollowingFeed();
+  } catch (e) {
+    haptic("error");
+    try { showToast(e?.message || "Could not remove post", { icon: "!", durationMs: 2800 }); } catch {}
+  }
 }
 
 async function fetchFollowingStatusPosts(limit = 40) {
@@ -4439,6 +4473,7 @@ function bindFollowingComposeOnce() {
   input?.addEventListener("input", () => syncFollowingComposeUi());
   postBtn?.addEventListener("click", async () => {
     if (!authSession?.user?.id) {
+      closeFriendsComposeSheet();
       try { showToast("Sign in to post", { icon: "👤", durationMs: 2400 }); } catch {}
       location.hash = "#/profile";
       return;
@@ -4653,7 +4688,11 @@ async function refreshDiscoveryFollowingFeed() {
 
     const playable = tracksNested
       .flat()
-      .filter((t) => String(t.url || "").trim() && isDiscoverFeedActive(t))
+      .filter((t) => {
+        if (!String(t.url || "").trim()) return false;
+        if (t.publicOnProfile === false) return false;
+        return isDiscoverFeedActive(t);
+      })
       .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0))
       .slice(0, 60);
     const profIds = [
@@ -4692,7 +4731,7 @@ async function refreshDiscoveryFollowingFeed() {
       renderDiscoveryFollowingEmpty(
         statusEl,
         "Quiet for now",
-        "Post an update above, or wait for drops and remixes from people you follow.",
+        "Tap + to share an update, or wait for drops and remixes from people you follow.",
       );
       return;
     }
@@ -4794,6 +4833,13 @@ function bindFriendsPageOnce() {
     friendsPage.dataset.boundFriendsPage = "1";
     wireTrackOptionsSheetOnce();
     friendsPage.addEventListener("click", (e) => {
+      const delBtn = e.target.closest("[data-follow-status-delete]");
+      if (delBtn && friendsPage.contains(delBtn)) {
+        e.preventDefault();
+        e.stopPropagation();
+        void deleteFollowingStatusPost(delBtn.getAttribute("data-follow-status-delete"));
+        return;
+      }
       if (e.target.closest(".followActAvatar")) return;
       const pl = e.target.closest("[data-user-lib-play], .followActMedia, .followActUserLink");
       if (pl?.classList?.contains?.("followActUserLink")) return;
@@ -11920,15 +11966,12 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     if (!track.publicOnProfile) {
       notifyPublicSongPublished(next);
     }
-    try {
-      if (
-        String(document.body.getAttribute("data-route") || "") === "discover" &&
-        (document.body.getAttribute("data-route") || "") === "discover"
-      ) {
-        void refreshDiscoverFeed();
-      }
-    } catch {}
   }
+  try {
+    const route = String(document.body.getAttribute("data-route") || "");
+    if (route === "discover") void refreshDiscoverFeed();
+    if (route === "friends") void refreshDiscoveryFollowingFeed();
+  } catch {}
   return { ok: true };
 }
 

@@ -44,6 +44,10 @@ function cleanUserId(v) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s) ? s : "";
 }
 
+function cleanPostId(v) {
+  return cleanUserId(v);
+}
+
 function cleanUsername(v) {
   return String(v || "").replace(/^@/, "").trim().slice(0, 64);
 }
@@ -615,6 +619,17 @@ async function handlePost(req, res, user) {
           }
         : null,
     });
+  }
+
+  if (action === "delete_status") {
+    const postId = cleanPostId(body?.postId);
+    if (!postId) return sendJson(res, 400, { ok: false, error: "Invalid post" });
+    const del = await svcFetch(
+      `social_status_posts?id=eq.${encodeURIComponent(postId)}&user_id=eq.${encodeURIComponent(user.userId)}`,
+      { method: "DELETE", headers: { Prefer: "return=minimal" } },
+    );
+    if (!del.ok) return sendJson(res, 500, { ok: false, error: "Delete failed", details: del.text });
+    return sendJson(res, 200, { ok: true });
   }
 
   return sendJson(res, 400, { ok: false, error: "Unknown social action" });

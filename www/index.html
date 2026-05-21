@@ -745,12 +745,6 @@
               <h2 class="discoveryStudioH2 appScreenTitle">Friends</h2>
               <p class="discoveryStudioTag appScreenLead">Updates, advice, drops, and remixes from people you follow.</p>
             </div>
-            <button type="button" class="friendsComposeOpenBtn" id="friendsComposeOpenBtn" aria-label="Post to your circle" aria-expanded="false" aria-controls="friendsComposeSheet">
-              <span class="friendsComposeOpenBtnRing" aria-hidden="true"></span>
-              <svg class="friendsComposeOpenBtnIco" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                <path fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" d="M12 5v14M5 12h14"/>
-              </svg>
-            </button>
           </header>
           <div id="discoveryFollowingStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
           <div id="discoveryFollowingList" class="followActStack" hidden></div>
@@ -2719,6 +2713,21 @@
           </svg>
         </a>
       </div>
+    </div>
+    <div id="friendsComposeFabRoot" class="friendsComposeFabRoot" aria-hidden="true">
+      <button
+        type="button"
+        class="friendsComposeFab"
+        id="friendsComposeOpenBtn"
+        aria-label="Post to your circle"
+        aria-expanded="false"
+        aria-controls="friendsComposeSheet"
+      >
+        <span class="friendsComposeFabRing" aria-hidden="true"></span>
+        <svg class="friendsComposeFabIco" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+          <path fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" d="M12 5v14M5 12h14"/>
+        </svg>
+      </button>
     </div>
     <div id="notificationsCenter" class="notificationsCenter" hidden aria-hidden="true">
       <div class="notificationsCenterBackdrop" data-notifications-close="1"></div>

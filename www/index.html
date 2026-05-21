@@ -2400,7 +2400,6 @@
             <div id="momentViewerPickFrame" class="momentViewerPickFrame">
               <img id="momentViewerImg" class="momentViewerImg" alt="" decoding="async" />
               <span id="momentViewerCountdown" class="momentViewerCountdown" aria-hidden="true"></span>
-              <span id="momentViewerTimePill" class="momentViewerTimePill" aria-hidden="true"></span>
               <div class="momentViewerOverlay">
                 <div class="momentViewerOverlayTop">
                   <a id="momentViewerProfileLink" class="momentViewerProfileRow" href="#" data-route-link="user">
@@ -2409,12 +2408,15 @@
                       <span id="momentViewerAvatarFallback" class="momentViewerAvatarFallback" aria-hidden="true"></span>
                     </span>
                     <span id="momentViewerWho" class="momentViewerWho"></span>
+                    <span id="momentViewerTimePill" class="momentViewerTimePill" aria-hidden="true"></span>
                   </a>
                   <button type="button" class="momentViewerClose" data-moment-viewer-dismiss="1" aria-label="Close">×</button>
                 </div>
                 <div class="momentViewerOverlayBottom">
-                  <p id="momentViewerCaption" class="momentViewerCaption"></p>
-                  <button id="momentViewerDelete" class="momentViewerDelete ghost" type="button" hidden>Remove</button>
+                  <div class="momentViewerCaptionBanner">
+                    <p id="momentViewerCaption" class="momentViewerCaption"></p>
+                    <button id="momentViewerDelete" class="momentViewerDelete ghost" type="button" hidden>Remove</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2846,6 +2848,6 @@
       })();
     </script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260522momentHoursPillV1"></script>
+    <script type="module" src="./src/app.js?v=20260522momentViewerLayoutV1"></script>
   </body>
 </html>

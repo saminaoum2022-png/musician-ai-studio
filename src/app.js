@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522momentHoursPillV1";
+const APP_BUILD = "20260522momentViewerLayoutV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5417,6 +5417,8 @@ function openMomentViewerSheet(moment) {
     avatarFallback.hidden = Boolean(avatarSrc);
   }
   if (delBtn) delBtn.hidden = !own;
+  const overlayBottom = document.querySelector(".momentViewerOverlayBottom");
+  if (overlayBottom) overlayBottom.hidden = !captionText && !own;
   updateMomentViewerCountdown();
   sheet.hidden = false;
   sheet.setAttribute("aria-hidden", "false");

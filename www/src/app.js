@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521friendsYouPinV1";
+const APP_BUILD = "20260521tabIconsFlatChallengeV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4237,10 +4237,7 @@ function followingActivityBadgeHtml(kind, type, opts = {}) {
   const ico = kind === "music"
     ? followingActivityIcoSvg(type)
     : followingStatusIcoSvg(type);
-  const flat =
-    Boolean(opts.flat) ||
-    kind === "status" ||
-    (kind === "music" && (type === "release" || type === "remix"));
+  const flat = Boolean(opts.flat) || kind === "status" || kind === "music";
   const flatCls = flat ? " followActBadge--flat" : "";
   return `<span class="followActBadge followActBadge--${safeType}${flatCls}" data-follow-badge="${safeType}">
     <span class="followActBadgeIco followActIco followActIco--${safeType}" aria-hidden="true">${ico}</span>

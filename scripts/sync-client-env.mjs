@@ -22,12 +22,15 @@ if (!supabaseUrl || !supabaseAnonKey) {
   process.exit(0);
 }
 
-const out = join(process.cwd(), "www", "env.client.js");
 const body = `window.__NABAD_CLIENT_ENV__ = ${JSON.stringify(
   { supabaseUrl, supabaseAnonKey, apiBase, vercelProtectionBypass },
   null,
   2,
 )};\n`;
 
-writeFileSync(out, body, "utf8");
-console.log(`Wrote ${out}`);
+const root = process.cwd();
+for (const rel of ["env.client.js", "www/env.client.js"]) {
+  const out = join(root, rel);
+  writeFileSync(out, body, "utf8");
+  console.log(`Wrote ${out}`);
+}

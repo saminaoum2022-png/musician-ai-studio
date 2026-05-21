@@ -1,4 +1,6 @@
 {
+  "buildCommand": "node scripts/sync-client-env.mjs",
+  "outputDirectory": ".",
   "cleanUrls": true,
   "trailingSlash": false,
   "functions": {

@@ -1,5 +1,6 @@
 .DS_Store
 .vercel
+env.client.js
 www/env.client.js
 
 node_modules/ffmpeg-static/ffmpeg

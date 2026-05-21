@@ -8,19 +8,22 @@ import { join } from "node:path";
 
 const supabaseUrl = String(process.env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
 const supabaseAnonKey = String(process.env.SUPABASE_ANON_KEY || "").trim();
+const apiBase = String(
+  process.env.API_BASE || process.env.VERCEL_API_BASE || "https://nabad-ai.vercel.app",
+).trim().replace(/\/+$/, "");
 const vercelProtectionBypass = String(
   process.env.VERCEL_PROTECTION_BYPASS || process.env.VERCEL_AUTOMATION_BYPASS_SECRET || "",
 ).trim();
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error("Missing env. Set SUPABASE_URL and SUPABASE_ANON_KEY (from Vercel project env).");
-  console.error("Optional: VERCEL_PROTECTION_BYPASS if Deployment Protection stays ON.");
+  console.error("Optional: API_BASE (your live web app URL), VERCEL_PROTECTION_BYPASS.");
   process.exit(1);
 }
 
 const out = join(process.cwd(), "www", "env.client.js");
 const body = `window.__NABAD_CLIENT_ENV__ = ${JSON.stringify(
-  { supabaseUrl, supabaseAnonKey, vercelProtectionBypass },
+  { supabaseUrl, supabaseAnonKey, apiBase, vercelProtectionBypass },
   null,
   2,
 )};\n`;

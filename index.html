@@ -1713,10 +1713,6 @@
             </div>
             <div id="libraryList" class="libraryList profileHubSharedList"></div>
             <div id="profileActivitiesList" class="profileActivitiesList" hidden aria-live="polite"></div>
-            <p class="libraryDiagActions" hidden>
-              <button type="button" id="btnLibraryDiagnostic" class="ghost libraryDiagBtn">Run library diagnostic</button>
-            </p>
-            <pre id="libraryDiagnosticOutput" class="libraryDiagnosticOutput" hidden></pre>
           </div>
 
           <!-- Popular this week — top 3 only, horizontal carousel. -->
@@ -1727,9 +1723,8 @@
             <div id="profileTopWeekList" class="profileTopWeekScroll" role="list"></div>
           </section>
 
-          <!-- Account — quiet, borderless block matching the rest of the page -->
-          <div class="profileAccountBlock">
-            <h3 class="profileAccountSectionTitle">Account</h3>
+          <!-- Auth controls kept in DOM for scripts; not shown on Profile (use Settings). -->
+          <div class="profileAccountBlock" hidden aria-hidden="true">
             <div id="authLoginControls" class="profileOwnAuthRow">
               <button id="btnAuthGoogle" class="ghost" type="button">Continue with Google</button>
             </div>
@@ -2761,6 +2756,6 @@
         setTimeout(unboot, 3500);
       })();
     </script>
-    <script type="module" src="./src/app.js?v=20260521profileActivityTabsV1"></script>
+    <script type="module" src="./src/app.js?v=20260521profileTabsFixV1"></script>
   </body>
 </html>

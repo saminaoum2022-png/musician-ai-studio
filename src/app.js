@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521profileActivityTabsV1";
+const APP_BUILD = "20260521profileTabsFixV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4456,7 +4456,7 @@ async function renderProfileActivities() {
   const posts = await fetchMyStatusPosts(60);
   if (countEl) {
     const n = posts.length;
-    countEl.textContent = n ? `${n} ${n === 1 ? "post" : "posts"}` : "";
+    countEl.textContent = n ? `${n} ${n === 1 ? "POST" : "POSTS"}` : "";
     countEl.hidden = !n;
   }
   if (!posts.length) {
@@ -14832,8 +14832,8 @@ function renderProfileOwnStats() {
         els.profileOwnSongCount.textContent = "";
         els.profileOwnSongCount.hidden = true;
       }
-    } else if (lib.length) {
-      els.profileOwnSongCount.textContent = `${pubLibCount} public · ${lib.length} saved`;
+    } else if (pubLibCount) {
+      els.profileOwnSongCount.textContent = `${pubLibCount} PUBLIC`;
       els.profileOwnSongCount.hidden = false;
     } else {
       els.profileOwnSongCount.textContent = "";
@@ -15924,6 +15924,7 @@ function syncProfileSongsSegmentUi() {
   const allCount = document.getElementById("libraryCount");
   const actCount = document.getElementById("profileActivitiesCount");
   const activitiesList = document.getElementById("profileActivitiesList");
+  const libList = document.getElementById("libraryList");
   const isAll = _profileSongsSegment === "all";
   const isActivities = _profileSongsSegment === "activities";
   document.querySelectorAll("[data-profile-songs-segment]").forEach((btn) => {
@@ -15937,6 +15938,7 @@ function syncProfileSongsSegmentUi() {
   if (allCount) allCount.hidden = !isAll;
   if (actCount) actCount.hidden = !isActivities;
   if (activitiesList) activitiesList.hidden = !isActivities;
+  if (libList) libList.hidden = isActivities;
   try { updateLibraryRecoverBanner(); } catch {}
 }
 
@@ -16054,10 +16056,8 @@ function renderProfileLibraryPublicOnLinkSection() {
   if (countEl) {
     const totalSaved = withUrl.length;
     const pubN = allLib.length;
-    if (totalSaved) {
-      countEl.textContent = pubN
-        ? `${pubN} public · ${totalSaved} in library`
-        : `0 public · ${totalSaved} in library`;
+    if (pubN) {
+      countEl.textContent = `${pubN} PUBLIC`;
       countEl.hidden = false;
     } else {
       countEl.textContent = "";
@@ -17578,11 +17578,14 @@ function renderLibrary() {
   const hasMore = totalCount > visibleItems.length;
   const countEl = document.getElementById("libraryCount");
   if (countEl) {
+    const onProfileAll =
+      (document.body.getAttribute("data-route") || "") === "profile" &&
+      _profileSongsSegment === "all";
     if (!totalCount) {
       countEl.textContent = "";
       countEl.hidden = true;
     } else {
-      countEl.textContent = `${totalCount} saved`;
+      countEl.textContent = onProfileAll ? String(totalCount) : `${totalCount} saved`;
       countEl.hidden = false;
     }
   }

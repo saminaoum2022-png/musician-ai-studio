@@ -13190,6 +13190,11 @@ button.discoverySpotCard{
 .profileSongsToolbar .libraryCount:only-child{
   margin: 0;
 }
+.profileSongsToolbar .libraryCount{
+  color: rgba(232, 238, 247, 0.58);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
 .profileSongsBlock .libraryRecoverBanner{
   margin-bottom: 10px;
 }

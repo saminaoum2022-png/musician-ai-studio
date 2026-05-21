@@ -638,6 +638,7 @@ body[data-route="more"] main.grid > [data-route="more"],
 body[data-route="discover"] main.grid > [data-route="discover"],
 body[data-route="discover-playlist"] main.grid > [data-route="discover-playlist"],
 body[data-route="friends"] main.grid > [data-route="friends"],
+body[data-route="moment"] main.grid > [data-route="moment"],
 body[data-route="challenges"] main.grid > [data-route="challenges"],
 body[data-route="mentor"] main.grid > [data-route="mentor"],
 body[data-route="player"] main.grid > [data-route="player"],
@@ -4342,9 +4343,17 @@ button.vocalRefClearBtn{
   display:none;
 }
 .momentCreatePage{
-  min-height: calc(100dvh - env(safe-area-inset-top, 0px) - 72px);
-  padding: calc(env(safe-area-inset-top, 0px) + 8px) 14px 24px;
+  min-height: calc(100dvh - env(safe-area-inset-top, 0px) - 24px);
+  padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px 28px;
   box-sizing: border-box;
+  animation: momentPageIn 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes momentPageIn{
+  from{ opacity: 0; transform: translateY(12px); }
+  to{ opacity: 1; transform: translateY(0); }
+}
+body[data-route="moment"]{
+  background: #05070d;
 }
 .momentCreatePage .imageMoodPageShell{
   display: flex;
@@ -13668,6 +13677,14 @@ body.trackSheetOpen #friendsComposeFabRoot{
   transform: translateY(0) scale(1);
   opacity: 1;
 }
+.friendsComposeSheet.isClosing .friendsComposeSheetBackdrop,
+.friendsComposeSheet.isClosing .friendsComposeSheetCard{
+  opacity: 0;
+  transition-duration: 200ms;
+}
+.friendsComposeSheet.isClosing .friendsComposeSheetCard{
+  transform: translateY(20px) scale(0.99);
+}
 .friendsComposeSheetGrab{
   width: 40px;
   height: 5px;
@@ -13745,6 +13762,11 @@ body.createChooserSheetOpen .footer{
   transition: opacity 280ms ease;
 }
 .createChooserSheet.isOpen .createChooserBackdrop{ opacity: 1; }
+.createChooserSheet.isClosing .createChooserBackdrop,
+.createChooserSheet.isClosing .createChooserShell{
+  opacity: 0;
+  transition-duration: 180ms;
+}
 .createChooserShell{
   position: relative;
   width: min(360px, 100%);
@@ -13755,8 +13777,8 @@ body.createChooserSheetOpen .footer{
   transform: translateY(18px);
   opacity: 0;
   transition:
-    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 300ms ease;
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms ease;
 }
 .createChooserSheet.isOpen .createChooserShell{
   transform: translateY(0);

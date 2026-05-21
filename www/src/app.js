@@ -2258,7 +2258,10 @@ function applyRoute() {
   const main = document.querySelector("main.grid");
   if (main) {
     main.classList.remove("routeSwap");
-    requestAnimationFrame(() => main.classList.add("routeSwap"));
+    if (!_suppressRouteSwapAnim) {
+      requestAnimationFrame(() => main.classList.add("routeSwap"));
+    }
+    _suppressRouteSwapAnim = false;
   }
   // Hub audio is bound to the Hub view only. Any route swap away from
   // Hub fully stops Hub playback so nothing keeps streaming silently
@@ -4172,6 +4175,7 @@ function onLeaveSearchRoute() {
 }
 
 let _discoveryFollowingGen = 0;
+let _suppressRouteSwapAnim = false;
 /** Latest status post by you — pinned at top of Friends after compose (not in following API). */
 let _friendsOwnPostPin = null;
 let _followComposeType = "update";
@@ -4627,18 +4631,19 @@ function openFriendsComposeSheet() {
   if (!sheet) return;
   wireFriendsComposeSheetKeyboardOnce();
   syncFollowingComposeUi();
+  sheet.classList.remove("isClosing");
   sheet.hidden = false;
   sheet.setAttribute("aria-hidden", "false");
   if (openBtn) openBtn.setAttribute("aria-expanded", "true");
   lockPageForFriendsComposeSheet();
   sheet.style.setProperty("--friends-keyboard-inset", "0px");
-  requestAnimationFrame(() => sheet.classList.add("isOpen"));
+  sheet.classList.add("isOpen");
   if (shouldAutofocusFriendsComposeInput()) {
     window.setTimeout(() => {
       try {
         document.getElementById("followComposeInput")?.focus?.({ preventScroll: true });
       } catch {}
-    }, 320);
+    }, 380);
   }
 }
 
@@ -4666,15 +4671,23 @@ function openCreateChooserSheet() {
   sheet.classList.add("isOpen");
 }
 
-function closeCreateChooserSheet() {
+function closeCreateChooserSheet({ immediate = false } = {}) {
   const sheet = document.getElementById("createChooserSheet");
   if (!sheet) return;
   sheet.classList.remove("isOpen");
   unlockPageForCreateChooserSheet();
-  window.setTimeout(() => {
+  if (immediate) {
+    sheet.classList.remove("isClosing");
     sheet.hidden = true;
     sheet.setAttribute("aria-hidden", "true");
-  }, 260);
+    return;
+  }
+  sheet.classList.add("isClosing");
+  window.setTimeout(() => {
+    sheet.classList.remove("isClosing");
+    sheet.hidden = true;
+    sheet.setAttribute("aria-hidden", "true");
+  }, 200);
 }
 
 const CREATE_ENTRY_INTENT_KEY = "nabadai_create_entry_intent_v1";
@@ -4708,8 +4721,7 @@ function navigateFromCreateChooser(action) {
   if (!kind) return;
   if (!requireAuthForCreate(() => navigateFromCreateChooser(kind))) return;
 
-  closeCreateChooserSheet();
-  try { haptic("light"); } catch {}
+  closeCreateChooserSheet({ immediate: true });
 
   if (kind === "song") {
     setCreateEntryIntent("song");
@@ -4718,11 +4730,14 @@ function navigateFromCreateChooser(action) {
       try { if (typeof setActiveCreateTab === "function") setActiveCreateTab("lyrics"); } catch {}
       try { els.sunoPrompt?.focus?.({ preventScroll: true }); } catch {}
     }, 100);
+    try { haptic("light"); } catch {}
     return;
   }
 
   if (kind === "moment") {
+    _suppressRouteSwapAnim = true;
     openMomentCreatePage("moment");
+    try { haptic("light"); } catch {}
     return;
   }
 
@@ -4730,10 +4745,14 @@ function navigateFromCreateChooser(action) {
     setCreateEntryIntent("");
     _followComposeType = "update";
     try { syncFollowingComposeUi(); } catch {}
+    _suppressRouteSwapAnim = true;
     try { location.hash = "#/friends"; } catch {}
-    window.setTimeout(() => {
-      try { openFriendsComposeSheet(); } catch {}
-    }, 260);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        try { openFriendsComposeSheet(); } catch {}
+      });
+    });
+    try { haptic("light"); } catch {}
   }
 }
 
@@ -4757,10 +4776,8 @@ function isCreateMomentIntent() {
 
 function openMomentCreatePage(intent = "moment") {
   setCreateEntryIntent(intent);
+  try { syncImageMoodModalMode(); } catch {}
   try { location.hash = "#/moment"; } catch {}
-  window.setTimeout(() => {
-    try { syncImageMoodModalMode(); } catch {}
-  }, 60);
 }
 
 function leaveMomentPage(targetHash = "#/generate") {
@@ -5161,13 +5178,15 @@ function closeFriendsComposeSheet() {
     document.getElementById("followComposeInput")?.blur?.();
   } catch {}
   sheet.classList.remove("isOpen");
+  sheet.classList.add("isClosing");
   if (openBtn) openBtn.setAttribute("aria-expanded", "false");
   unlockPageForFriendsComposeSheet();
   sheet.style.setProperty("--friends-keyboard-inset", "0px");
   window.setTimeout(() => {
+    sheet.classList.remove("isClosing");
     sheet.hidden = true;
     sheet.setAttribute("aria-hidden", "true");
-  }, 260);
+  }, 220);
 }
 
 function wireFriendsComposeSheetOnce() {
@@ -24052,7 +24071,6 @@ syncCreateTabMorph();
     }
     ev.preventDefault();
     ev.stopPropagation();
-    try { haptic("light"); } catch {}
     openCreateChooserSheet();
   }, true);
 })();

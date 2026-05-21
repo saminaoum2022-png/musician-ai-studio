@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260521momentsV1" />
+    <link rel="stylesheet" href="./styles.css?v=20260521momentsV2" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -433,7 +433,7 @@
                   <span class="createPaneCtaTitle">Add a photo</span>
                   <span class="createPaneCtaSub">We'll catch the mood and feed it into your song.</span>
                 </button>
-                <p class="hint createPaneFoot">Great for stories and posts — your music for this moment.</p>
+                <p class="hint createPaneFoot">Great for moments and posts — your music for this beat.</p>
               </div>
 
               <div class="createPane createPane--hum" data-mode="hum" hidden>
@@ -756,6 +756,39 @@
           <div id="discoveryFollowingList" class="followActStack" hidden></div>
         </section>
 
+        <section class="card wide momentCreatePage" data-route="moment" id="momentCreatePage">
+          <div id="imageMoodModal" class="imageMoodPageShell imageMoodCard" aria-hidden="false">
+            <div class="imageMoodHead">
+              <button type="button" id="btnCloseImageMood" class="imageMoodBack" aria-label="Back">
+                <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M15 6 9 12l6 6"/></svg>
+              </button>
+              <div class="imageMoodHeadTitles">
+                <p class="imageMoodKicker">Photo mood</p>
+                <div class="modalTitle">Image Mood Assistant</div>
+              </div>
+            </div>
+            <div id="imageMoodLead" class="imageMoodLead">Upload cover/art/photo and NabadAi suggests mood, tags, and optional lyric seed.</div>
+            <label class="field imageMoodField">
+              <input id="imageMoodUpload" type="file" accept="image/*" />
+            </label>
+            <div class="imageMoodPreviewWrap">
+              <img id="imageMoodPreview" alt="Mood preview" style="display:none" />
+            </div>
+            <div id="imageMoodOutput" class="imageMoodOutput">No analysis yet.</div>
+            <label id="imageMoodCoverRow" class="proToggleRow" for="imageMoodUseAsCover" style="margin-top:2px">
+              <input id="imageMoodUseAsCover" type="checkbox" checked />
+              <span>Use uploaded image as generated song cover</span>
+            </label>
+            <div class="row imageMoodActions">
+              <button id="btnAnalyzeImageMood" class="primary" type="button">Analyze</button>
+              <button id="btnApplyImageMood" class="ghost" type="button" disabled>Apply to song</button>
+            </div>
+            <div id="imageMoodMomentActions" class="imageMoodMomentActions" hidden>
+              <button id="btnMomentTurnIntoSong" class="primary" type="button" disabled>Turn into song</button>
+              <button id="btnMomentPublish" class="ghost" type="button" disabled>Publish moment</button>
+            </div>
+          </div>
+        </section>
 
         <section class="discoverPlaylistPage wide" data-route="discover-playlist">
           <div class="discoverPlaylistAmbient" aria-hidden="true"></div>
@@ -2348,38 +2381,6 @@
       </main>
       </div>
 
-      <div id="imageMoodModal" class="modal imageMoodModal" style="display:none" aria-hidden="true">
-        <div class="modalCard imageMoodCard">
-          <div class="imageMoodHead">
-            <div>
-              <p class="imageMoodKicker">Photo mood</p>
-              <div class="modalTitle">Image Mood Assistant</div>
-            </div>
-            <button id="btnCloseImageMood" class="imageMoodClose" type="button">Close</button>
-          </div>
-          <div id="imageMoodLead" class="imageMoodLead">Upload cover/art/photo and NabadAi suggests mood, tags, and optional lyric seed.</div>
-          <label class="field imageMoodField">
-            <input id="imageMoodUpload" type="file" accept="image/*" />
-          </label>
-          <div class="imageMoodPreviewWrap">
-            <img id="imageMoodPreview" alt="Mood preview" style="display:none" />
-          </div>
-          <div id="imageMoodOutput" class="imageMoodOutput">No analysis yet.</div>
-          <label id="imageMoodCoverRow" class="proToggleRow" for="imageMoodUseAsCover" style="margin-top:2px">
-            <input id="imageMoodUseAsCover" type="checkbox" checked />
-            <span>Use uploaded image as generated song cover</span>
-          </label>
-          <div class="row imageMoodActions">
-            <button id="btnAnalyzeImageMood" class="primary" type="button">Analyze</button>
-            <button id="btnApplyImageMood" class="ghost" type="button" disabled>Apply to song</button>
-          </div>
-          <div id="imageMoodMomentActions" class="imageMoodMomentActions" hidden>
-            <button id="btnMomentTurnIntoSong" class="primary" type="button" disabled>Turn into song</button>
-            <button id="btnMomentPublish" class="ghost" type="button" disabled>Publish moment</button>
-          </div>
-        </div>
-      </div>
-
         <div id="momentViewerSheet" class="momentViewerSheet" aria-hidden="true" hidden>
           <div class="momentViewerBackdrop" data-moment-viewer-dismiss="1"></div>
           <div class="momentViewerCard" role="dialog" aria-modal="true" aria-labelledby="momentViewerCaption">
@@ -2823,6 +2824,6 @@
         setTimeout(unboot, 3500);
       })();
     </script>
-    <script type="module" src="./src/app.js?v=20260521momentsV1"></script>
+    <script type="module" src="./src/app.js?v=20260521momentsV2"></script>
   </body>
 </html>

@@ -2186,7 +2186,7 @@ function applyRoute() {
     }
   }
   const allowedRoutes = new Set([
-    "intro", "start", "auth", "generate",
+    "intro", "start", "auth", "generate", "moment",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
     "settings", "profile", "player", "discover", "discover-playlist", "friends", "challenges", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
   ]);
@@ -2215,7 +2215,7 @@ function applyRoute() {
   }
   // Public profile is intentionally readable without auth so share-link
   // visitors don't hit a wall before discovering the rest of the product.
-  const protectedRoutes = new Set(["generate", "profile", "friends", "player", "vocal", "stems", "advanced", "credits", "sounds"]);
+  const protectedRoutes = new Set(["generate", "moment", "profile", "friends", "player", "vocal", "stems", "advanced", "credits", "sounds"]);
   const isLoggedIn = Boolean(authSession?.user?.id);
   if (!isLoggedIn && protectedRoutes.has(wanted)) wanted = "auth";
   const prevRoute = document.body.getAttribute("data-route") || "";
@@ -2389,6 +2389,9 @@ function applyRoute() {
   if (wanted === "friends") {
     try { onLeaveSearchRoute(); } catch {}
     enterFriendsRoute();
+  }
+  if (wanted === "moment") {
+    try { syncImageMoodModalMode(); } catch {}
   }
   if (wanted === "discover") {
     bindDiscoveryDiscoverControls();
@@ -2643,6 +2646,9 @@ applyRoute();
 dismissBootSplash();
 try {
   bindDiscoveryDiscoverControls();
+  wireCreateChooserSheetOnce();
+  wireImageMoodMomentOnce();
+  wireMomentViewerOnce();
   bindFriendsPageOnce();
   wireFriendsComposeFabOnce();
 } catch {}
@@ -4645,6 +4651,7 @@ function unlockPageForCreateChooserSheet() {
 }
 
 function openCreateChooserSheet() {
+  wireCreateChooserSheetOnce();
   const sheet = document.getElementById("createChooserSheet");
   if (!sheet) return;
   if (!authSession?.user?.id) {
@@ -4653,14 +4660,10 @@ function openCreateChooserSheet() {
     return;
   }
   try { closeFriendsComposeSheet(); } catch {}
-  sheet.classList.remove("isOpen");
   sheet.hidden = false;
   sheet.setAttribute("aria-hidden", "false");
   lockPageForCreateChooserSheet();
-  requestAnimationFrame(() => {
-    void sheet.offsetWidth;
-    sheet.classList.add("isOpen");
-  });
+  sheet.classList.add("isOpen");
 }
 
 function closeCreateChooserSheet() {
@@ -4719,21 +4722,7 @@ function navigateFromCreateChooser(action) {
   }
 
   if (kind === "moment") {
-    setCreateEntryIntent("moment");
-    try { location.hash = "#/generate"; } catch {}
-    window.setTimeout(() => {
-      try { if (typeof setActiveCreateTab === "function") setActiveCreateTab("photo"); } catch {}
-      window.setTimeout(() => {
-        const modal = document.getElementById("imageMoodModal");
-        if (modal) {
-          modal.style.display = "";
-          modal.setAttribute("aria-hidden", "false");
-          try { syncImageMoodModalMode(); } catch {}
-        } else {
-          try { document.getElementById("createPhotoCta")?.click?.(); } catch {}
-        }
-      }, 200);
-    }, 100);
+    openMomentCreatePage("moment");
     return;
   }
 
@@ -4766,12 +4755,23 @@ function isCreateMomentIntent() {
   return getCreateEntryIntent() === "moment";
 }
 
+function openMomentCreatePage(intent = "moment") {
+  setCreateEntryIntent(intent);
+  try { location.hash = "#/moment"; } catch {}
+  window.setTimeout(() => {
+    try { syncImageMoodModalMode(); } catch {}
+  }, 60);
+}
+
+function leaveMomentPage(targetHash = "#/generate") {
+  if ((document.body.getAttribute("data-route") || "") !== "moment") return;
+  try { location.hash = targetHash; } catch {}
+}
+
 function closeImageMoodModalGlobal() {
-  const modal = document.getElementById("imageMoodModal");
-  if (!modal) return;
-  modal.style.display = "none";
-  modal.setAttribute("aria-hidden", "true");
-  modal.classList.remove("imageMoodModal--moment");
+  const shell = document.getElementById("imageMoodModal");
+  if (shell) shell.classList.remove("imageMoodModal--moment");
+  leaveMomentPage("#/generate");
 }
 
 function syncImageMoodModalMode() {
@@ -4858,8 +4858,10 @@ function momentTurnIntoSong() {
   }
   applyImageMoodToSongFields();
   setCreateEntryIntent("song");
-  closeImageMoodModalGlobal();
-  try { if (typeof setActiveCreateTab === "function") setActiveCreateTab("lyrics"); } catch {}
+  leaveMomentPage("#/generate");
+  window.setTimeout(() => {
+    try { if (typeof setActiveCreateTab === "function") setActiveCreateTab("lyrics"); } catch {}
+  }, 80);
   try { els.sunoPrompt?.focus?.({ preventScroll: true }); } catch {}
   try {
     showToast("Mood applied — write lyrics or tap Generate", { icon: "🎵", durationMs: 2800 });
@@ -5116,7 +5118,8 @@ async function publishMoment() {
   const publishBtn = document.getElementById("btnMomentPublish");
   if (publishBtn) publishBtn.disabled = true;
   try {
-    const blob = await dataUrlToBlob(imageMoodCoverDataUrl);
+    const cover = await prepareMomentCoverDataUrl(imageMoodCoverDataUrl);
+    const blob = await dataUrlToBlob(cover);
     const imageUrl = await uploadMomentBlob(blob);
     const body = buildMomentCaption();
     await socialApi("/api/social", {
@@ -5124,9 +5127,8 @@ async function publishMoment() {
       body: JSON.stringify({ action: "post_moment", body, imageUrl }),
     });
     setCreateEntryIntent("");
-    closeImageMoodModalGlobal();
+    leaveMomentPage("#/friends");
     try { showToast("Moment live for 24 hours", { icon: "✓", durationMs: 2400 }); } catch {}
-    try { location.hash = "#/friends"; } catch {}
     window.setTimeout(() => {
       void refreshFriendsMomentsRail();
       void refreshDiscoveryFollowingFeed();
@@ -19986,7 +19988,15 @@ async function fileToCoverDataUrl(file) {
   if (!file || !String(file.type || "").startsWith("image/")) {
     throw new Error("Choose an image file.");
   }
-  let dataUrl = await readFileAsDataUrl(file);
+  return prepareMomentCoverDataUrl(await readFileAsDataUrl(file));
+}
+
+/** JPEG downscale for moment uploads (Supabase bucket max 2MB). */
+async function prepareMomentCoverDataUrl(fileOrDataUrl) {
+  let dataUrl = typeof fileOrDataUrl === "string"
+    ? String(fileOrDataUrl || "")
+    : await readFileAsDataUrl(fileOrDataUrl);
+  if (!dataUrl.startsWith("data:image/")) return dataUrl;
   dataUrl = await downscaleImageDataUrl(dataUrl, 1024, 0.78);
   if (dataUrl.length > 450_000) dataUrl = await downscaleImageDataUrl(dataUrl, 800, 0.72);
   if (dataUrl.length > 280_000) dataUrl = await downscaleImageDataUrl(dataUrl, 640, 0.68);
@@ -21799,10 +21809,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   };
 
   const openImageMoodModal = () => {
-    if (!els.imageMoodModal) return;
-    els.imageMoodModal.style.display = "";
-    els.imageMoodModal.setAttribute("aria-hidden", "false");
-    try { syncImageMoodModalMode(); } catch {}
+    openMomentCreatePage(isCreateMomentIntent() ? "moment" : "song");
   };
   const closeImageMoodModal = () => {
     closeImageMoodModalGlobal();
@@ -21876,6 +21883,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (dataUrl.length > 1_800_000) {
         dataUrl = await downscaleImageDataUrl(dataUrl, 1280, 0.72);
       }
+      imageMoodCoverDataUrl = await prepareMomentCoverDataUrl(dataUrl);
       const r = await fetch(apiUrl("/api/image-mood"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -21967,11 +21975,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   if (els.btnCloseImageMood) {
     els.btnCloseImageMood.addEventListener("click", closeImageMoodModal);
   }
-  if (els.imageMoodModal) {
-    els.imageMoodModal.addEventListener("click", (e) => {
-      if (e.target === els.imageMoodModal) closeImageMoodModal();
-    });
-  }
   if (els.imageMoodUpload) {
     els.imageMoodUpload.addEventListener("change", () => {
       const file = els.imageMoodUpload.files?.[0];
@@ -21984,7 +21987,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         els.imageMoodPreview.src = preview;
         els.imageMoodPreview.style.display = "";
       }
-      fileToDataUrl(file).then((v) => { imageMoodCoverDataUrl = v; }).catch(() => { imageMoodCoverDataUrl = ""; });
+      prepareMomentCoverDataUrl(file)
+        .then((v) => { imageMoodCoverDataUrl = v; })
+        .catch(() => { imageMoodCoverDataUrl = ""; });
     });
   }
   if (els.btnAnalyzeImageMood) {
@@ -26441,10 +26446,7 @@ if (createTabEls.hum) {
 const createPhotoCtaBtn = document.getElementById("createPhotoCta");
 if (createPhotoCtaBtn) {
   createPhotoCtaBtn.addEventListener("click", () => {
-    const modal = document.getElementById("imageMoodModal");
-    if (!modal) return;
-    modal.style.display = "";
-    modal.setAttribute("aria-hidden", "false");
+    openMomentCreatePage("song");
   });
 }
 

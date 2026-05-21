@@ -4484,24 +4484,238 @@ button.vocalRefClearBtn{
 .imageMoodActions{
   gap:10px;
 }
-.imageMoodStoryActions{
+.imageMoodMomentActions{
   display: flex;
   flex-direction: column;
   gap: 10px;
   margin-top: 2px;
 }
-.imageMoodStoryActions[hidden]{
+.imageMoodMomentActions[hidden]{
   display: none !important;
 }
-.imageMoodStoryActions .primary,
-.imageMoodStoryActions .ghost{
+.imageMoodMomentActions .primary,
+.imageMoodMomentActions .ghost{
   width: 100%;
   min-height: 46px;
   border-radius: 14px;
   font-weight: 800;
 }
-.imageMoodModal--story .imageMoodKicker{
+.imageMoodModal--moment .imageMoodKicker{
   color: rgba(183,139,255,0.9);
+}
+
+/* Moments — guitar-pick shape (not circle / square / cushion) */
+.friendsMomentsRail{
+  margin: 0 0 18px;
+  padding: 0 2px;
+}
+.friendsMomentsRailHead{
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 10px;
+  padding: 0 4px;
+}
+.friendsMomentsRailTitle{
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(167,139,250,0.92);
+}
+.friendsMomentsRailHint{
+  font-size: 11px;
+  color: rgba(232,238,247,0.45);
+}
+.friendsMomentsRailScroll{
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 8px 4px 12px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.friendsMomentsRailScroll::-webkit-scrollbar{ display: none; }
+.friendsMomentsRail--profile{
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.userPublicMomentsWrap{
+  margin: 0 0 14px;
+}
+.momentPickTile{
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  width: 78px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.momentPickTile:active{ transform: scale(0.96); }
+.momentPickShell{
+  position: relative;
+  width: 72px;
+  height: 88px;
+}
+.momentPickShape{
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(50% 0%, 88% 22%, 100% 52%, 72% 100%, 28% 100%, 0% 52%, 12% 22%);
+  background: rgba(8,10,18,0.85);
+  border: 1px solid rgba(255,255,255,0.14);
+  overflow: hidden;
+}
+.momentPickShape img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.momentPickCountdown{
+  position: absolute;
+  inset: -3px;
+  clip-path: polygon(50% 0%, 88% 22%, 100% 52%, 72% 100%, 28% 100%, 0% 52%, 12% 22%);
+  background: conic-gradient(
+    from -90deg,
+    rgba(94,234,212,0.95) 0deg,
+    rgba(94,234,212,0.95) calc(var(--moment-pct, 1) * 360deg),
+    rgba(255,255,255,0.08) calc(var(--moment-pct, 1) * 360deg),
+    rgba(255,255,255,0.08) 360deg
+  );
+  pointer-events: none;
+  opacity: 0.92;
+}
+.momentPickTile.isOwn .momentPickShape{
+  background: rgba(255,255,255,0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.momentPickAdd{
+  font-size: 28px;
+  font-weight: 300;
+  color: rgba(232,238,247,0.88);
+  line-height: 1;
+}
+.momentPickLabel{
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(232,238,247,0.72);
+  max-width: 78px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.momentPickTile.isOwn .momentPickLabel{ color: rgba(167,139,250,0.95); }
+
+.momentViewerSheet{
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px 14px max(20px, env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+.momentViewerSheet[hidden]{ display: none !important; }
+.momentViewerSheet.isOpen{ pointer-events: auto; }
+.momentViewerBackdrop{
+  position: absolute;
+  inset: 0;
+  background: rgba(3,5,10,0.72);
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+.momentViewerSheet.isOpen .momentViewerBackdrop{ opacity: 1; }
+.momentViewerCard{
+  position: relative;
+  width: min(380px, 100%);
+  border-radius: 22px;
+  padding: 16px 16px 18px;
+  background: rgba(8,10,18,0.94);
+  border: 1px solid rgba(255,255,255,0.12);
+  transform: translateY(20px);
+  opacity: 0;
+  transition: transform 320ms cubic-bezier(0.22,1,0.36,1), opacity 240ms ease;
+}
+.momentViewerSheet.isOpen .momentViewerCard{
+  transform: translateY(0);
+  opacity: 1;
+}
+.momentViewerClose{
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.35);
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.momentViewerPickFrame{
+  position: relative;
+  width: min(220px, 70vw);
+  height: 270px;
+  margin: 8px auto 14px;
+}
+.momentViewerPickFrame .momentPickShape{
+  position: absolute;
+  inset: 0;
+}
+.momentViewerImg{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.momentViewerCountdown{
+  position: absolute;
+  inset: -4px;
+  clip-path: polygon(50% 0%, 88% 22%, 100% 52%, 72% 100%, 28% 100%, 0% 52%, 12% 22%);
+  background: conic-gradient(
+    from -90deg,
+    rgba(94,234,212,0.95) 0deg,
+    rgba(94,234,212,0.95) calc(var(--moment-pct, 1) * 360deg),
+    rgba(255,255,255,0.08) calc(var(--moment-pct, 1) * 360deg)
+  );
+  pointer-events: none;
+}
+.momentViewerWho{
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(167,139,250,0.95);
+  text-align: center;
+}
+.momentViewerCaption{
+  margin: 0 0 14px;
+  font-size: 15px;
+  line-height: 1.45;
+  color: rgba(232,238,247,0.9);
+  text-align: center;
+}
+.momentViewerActions{
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.momentViewerActions .ghost{
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 12px;
 }
 .vocalQuickRow .ghost{
   min-height:34px;
@@ -13584,7 +13798,6 @@ body.createChooserSheetOpen .footer{
   isolation: isolate;
 }
 .createChooserPill--song{ --pill-scale: 1; z-index: 3; }
-.createChooserPill--story{ --pill-scale: 1; z-index: 2; }
 .createChooserPill--status{ --pill-scale: 1; z-index: 1; }
 .createChooserPillAura{
   display: none;
@@ -13613,7 +13826,11 @@ body.createChooserSheetOpen .footer{
   border: 1px solid rgba(255,255,255,0.1);
 }
 .createChooserPill--song .createChooserPillIcon{ color: #5ee9d3; }
-.createChooserPill--story .createChooserPillIcon{ color: #c4a8ff; }
+.createChooserPill--moment .createChooserPillIcon{ color: #c4a8ff; }
+.createChooserPillAura--moment{
+  background: linear-gradient(135deg, rgba(124,92,255,0.28), rgba(183,139,255,0.22));
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.12), 0 6px 16px rgba(124,92,255,0.1);
+}
 .createChooserPill--status .createChooserPillIcon{ color: rgba(232,238,247,0.9); }
 .createChooserPillLabel{
   font-size: 16px;

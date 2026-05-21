@@ -4718,8 +4718,8 @@ function navigateFromCreateChooser(action) {
     return;
   }
 
-  if (kind === "story") {
-    setCreateEntryIntent("story");
+  if (kind === "moment") {
+    setCreateEntryIntent("moment");
     try { location.hash = "#/generate"; } catch {}
     window.setTimeout(() => {
       try { if (typeof setActiveCreateTab === "function") setActiveCreateTab("photo"); } catch {}
@@ -4762,8 +4762,8 @@ function wireCreateChooserSheetOnce() {
   });
 }
 
-function isCreateStoryIntent() {
-  return getCreateEntryIntent() === "story";
+function isCreateMomentIntent() {
+  return getCreateEntryIntent() === "moment";
 }
 
 function closeImageMoodModalGlobal() {
@@ -4771,13 +4771,13 @@ function closeImageMoodModalGlobal() {
   if (!modal) return;
   modal.style.display = "none";
   modal.setAttribute("aria-hidden", "true");
-  modal.classList.remove("imageMoodModal--story");
+  modal.classList.remove("imageMoodModal--moment");
 }
 
 function syncImageMoodModalMode() {
-  const story = isCreateStoryIntent();
+  const momentMode = isCreateMomentIntent();
   const modal = document.getElementById("imageMoodModal");
-  const storyActions = document.getElementById("imageMoodStoryActions");
+  const momentActions = document.getElementById("imageMoodMomentActions");
   const applyBtn = document.getElementById("btnApplyImageMood");
   const coverRow = document.getElementById("imageMoodCoverRow");
   const songActions = document.querySelector(".imageMoodActions");
@@ -4786,25 +4786,25 @@ function syncImageMoodModalMode() {
   const title = document.querySelector(".imageMoodCard .modalTitle");
   const hasData = Boolean(imageMoodData);
 
-  if (modal) modal.classList.toggle("imageMoodModal--story", story);
-  if (storyActions) storyActions.hidden = !story;
-  if (songActions) songActions.hidden = story;
-  if (applyBtn) applyBtn.hidden = story;
-  if (coverRow) coverRow.hidden = story;
+  if (modal) modal.classList.toggle("imageMoodModal--moment", momentMode);
+  if (momentActions) momentActions.hidden = !momentMode;
+  if (songActions) songActions.hidden = momentMode;
+  if (applyBtn) applyBtn.hidden = momentMode;
+  if (coverRow) coverRow.hidden = momentMode;
 
-  if (kicker) kicker.textContent = story ? "Create story" : "Photo mood";
-  if (title) title.textContent = story ? "Story from your photo" : "Image Mood Assistant";
+  if (kicker) kicker.textContent = momentMode ? "Create moment" : "Photo mood";
+  if (title) title.textContent = momentMode ? "Moment from your photo" : "Image Mood Assistant";
   if (lead) {
-    lead.textContent = story
-      ? "Upload a photo — we read the mood, then you can share it on Friends or turn it into a song."
+    lead.textContent = momentMode
+      ? "Upload a photo — we read the mood, then publish a 24h pick on Friends or turn it into a song."
       : "Upload cover/art/photo and NabadAi suggests mood, tags, and optional lyric seed.";
   }
 
-  const turnBtn = document.getElementById("btnStoryTurnIntoSong");
-  const postBtn = document.getElementById("btnStoryPostFriends");
-  if (story) {
-    if (turnBtn) turnBtn.disabled = !hasData;
-    if (postBtn) postBtn.disabled = !hasData;
+  const turnBtn = document.getElementById("btnMomentTurnIntoSong");
+  const publishBtn = document.getElementById("btnMomentPublish");
+  if (momentMode) {
+    if (turnBtn) turnBtn.disabled = !hasData || !imageMoodCoverDataUrl;
+    if (publishBtn) publishBtn.disabled = !hasData || !imageMoodCoverDataUrl;
   } else if (applyBtn) {
     applyBtn.disabled = !hasData;
   }
@@ -4838,7 +4838,7 @@ function applyImageMoodToSongFields() {
   );
 }
 
-function buildStoryStatusDraft() {
+function buildMomentCaption() {
   if (!imageMoodData) return "";
   const parts = [];
   const concept = String(imageMoodData.concept || "").trim();
@@ -4847,10 +4847,11 @@ function buildStoryStatusDraft() {
   if (tags.length) parts.push(tags.join(", "));
   const seed = String(imageMoodData.lyricSeed || "").trim();
   if (seed && parts.join(" ").length < 200) parts.push(seed);
-  return parts.join(" · ").replace(/\s+/g, " ").trim().slice(0, 320);
+  const text = parts.join(" · ").replace(/\s+/g, " ").trim().slice(0, 320);
+  return text || "Studio moment";
 }
 
-function storyTurnIntoSong() {
+function momentTurnIntoSong() {
   if (!imageMoodData) {
     try { showToast("Analyze your photo first", { icon: "📷", durationMs: 2200 }); } catch {}
     return;
@@ -4863,43 +4864,290 @@ function storyTurnIntoSong() {
   try {
     showToast("Mood applied — write lyrics or tap Generate", { icon: "🎵", durationMs: 2800 });
   } catch {}
-  setStatus("Story mood applied to your song. Add lyrics, then generate.");
+  setStatus("Moment mood applied to your song. Add lyrics, then generate.");
   try { syncGenerateOrbVisibility(); } catch {}
 }
 
-function storyPostToFriends() {
-  if (!imageMoodData) {
+function momentStorageKey(uid, ext) {
+  return `${uid}/${Date.now()}.${ext}`;
+}
+
+async function uploadMomentBlob(blob) {
+  const token = getSupabaseAuthToken();
+  const uid = authSession?.user?.id;
+  if (!token || !uid) throw new Error("Login required");
+  if (!SUPABASE_URL) throw new Error("Supabase not configured");
+  const ext = extFromCoverMime(blob.type);
+  const key = momentStorageKey(uid, ext);
+  const r = await fetch(`${SUPABASE_URL}/storage/v1/object/moments/${key}`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": blob.type || "image/jpeg",
+      "x-upsert": "true",
+      "Cache-Control": "public, max-age=86400",
+    },
+    body: blob,
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(`Moment upload failed (${r.status}): ${t.slice(0, 140)}`);
+  }
+  return `${SUPABASE_URL}/storage/v1/object/public/moments/${key}?v=${Date.now()}`;
+}
+
+function momentRemainingPct(expiresAt) {
+  const end = new Date(expiresAt || 0).getTime();
+  const start = end - 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  if (!end || end <= now) return 0;
+  return Math.max(0, Math.min(1, (end - now) / Math.max(1, end - start)));
+}
+
+let _friendsMomentsById = new Map();
+let _momentViewerTimer = 0;
+let _momentViewerOpen = null;
+
+function momentPickTileHtml(m, { isOwn = false, label = "" } = {}) {
+  const pct = momentRemainingPct(m?.expiresAt);
+  const handle = String(m?.username || "").replace(/^@/, "").trim() || "user";
+  const lbl = label || (isOwn ? "Your moment" : handle);
+  if (isOwn && !String(m?.imageUrl || "").trim()) {
+    return `<button type="button" class="momentPickTile isOwn momentPickAddTile" data-moment-add="1" aria-label="Create moment">
+      <span class="momentPickShell">
+        <span class="momentPickShape"><span class="momentPickAdd">+</span></span>
+      </span>
+      <span class="momentPickLabel">Add moment</span>
+    </button>`;
+  }
+  const img = escapeHtml(String(m?.imageUrl || "").trim());
+  return `<button type="button" class="momentPickTile${isOwn ? " isOwn" : ""}" data-moment-id="${escapeHtml(String(m?.id || ""))}" aria-label="Moment from ${escapeHtml(lbl)}">
+    <span class="momentPickShell">
+      <span class="momentPickCountdown" style="--moment-pct:${pct}"></span>
+      <span class="momentPickShape"><img src="${img}" alt="" width="72" height="88" decoding="async" loading="lazy" /></span>
+    </span>
+    <span class="momentPickLabel">${escapeHtml(lbl)}</span>
+  </button>`;
+}
+
+function bindMomentsRailClicks(container) {
+  if (!container || container.dataset.wiredMomentsRail) return;
+  container.dataset.wiredMomentsRail = "1";
+  container.addEventListener("click", (e) => {
+    const addBtn = e.target.closest("[data-moment-add]");
+    if (addBtn) {
+      e.preventDefault();
+      try { haptic("light"); } catch {}
+      if (!requireAuthForCreate(() => navigateFromCreateChooser("moment"))) return;
+      navigateFromCreateChooser("moment");
+      return;
+    }
+    const tile = e.target.closest("[data-moment-id]");
+    if (!tile) return;
+    e.preventDefault();
+    const id = tile.getAttribute("data-moment-id");
+    const m = _friendsMomentsById.get(String(id || ""));
+    if (m) openMomentViewerSheet(m);
+  });
+}
+
+function updateMomentViewerCountdown() {
+  if (!_momentViewerOpen) return;
+  const pct = momentRemainingPct(_momentViewerOpen.expiresAt);
+  const ring = document.getElementById("momentViewerCountdown");
+  if (ring) ring.style.setProperty("--moment-pct", String(pct));
+  if (pct <= 0) closeMomentViewerSheet();
+}
+
+function openMomentViewerSheet(moment) {
+  const sheet = document.getElementById("momentViewerSheet");
+  if (!sheet || !moment) return;
+  _momentViewerOpen = moment;
+  const img = document.getElementById("momentViewerImg");
+  const who = document.getElementById("momentViewerWho");
+  const caption = document.getElementById("momentViewerCaption");
+  const profileLink = document.getElementById("momentViewerProfileLink");
+  const delBtn = document.getElementById("momentViewerDelete");
+  const handle = String(moment.username || "user").replace(/^@/, "").trim() || "user";
+  if (img) {
+    img.src = String(moment.imageUrl || "").trim();
+    img.alt = `Moment by @${handle}`;
+  }
+  if (who) who.textContent = `@${handle}`;
+  if (caption) caption.textContent = String(moment.body || "").trim();
+  if (profileLink) {
+    profileLink.href = `#/u/${encodeURIComponent(handle)}`;
+    profileLink.textContent = "Profile";
+  }
+  const own = String(moment.userId || "") === String(authSession?.user?.id || "");
+  if (delBtn) delBtn.hidden = !own;
+  updateMomentViewerCountdown();
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  requestAnimationFrame(() => sheet.classList.add("isOpen"));
+  if (_momentViewerTimer) window.clearInterval(_momentViewerTimer);
+  _momentViewerTimer = window.setInterval(updateMomentViewerCountdown, 30000);
+}
+
+function closeMomentViewerSheet() {
+  const sheet = document.getElementById("momentViewerSheet");
+  if (!sheet) return;
+  sheet.classList.remove("isOpen");
+  sheet.setAttribute("aria-hidden", "true");
+  if (_momentViewerTimer) {
+    window.clearInterval(_momentViewerTimer);
+    _momentViewerTimer = 0;
+  }
+  _momentViewerOpen = null;
+  window.setTimeout(() => {
+    sheet.hidden = true;
+  }, 280);
+}
+
+function wireMomentViewerOnce() {
+  if (document.documentElement.dataset.wiredMomentViewer) return;
+  document.documentElement.dataset.wiredMomentViewer = "1";
+  document.querySelectorAll("[data-moment-viewer-dismiss]").forEach((el) => {
+    el.addEventListener("click", () => closeMomentViewerSheet());
+  });
+  document.getElementById("momentViewerDelete")?.addEventListener("click", async () => {
+    const m = _momentViewerOpen;
+    if (!m?.id || !authSession?.user?.id) return;
+    try { haptic("light"); } catch {}
+    try {
+      await socialApi("/api/social", {
+        method: "POST",
+        body: JSON.stringify({ action: "delete_moment", momentId: m.id }),
+      });
+      closeMomentViewerSheet();
+      void refreshFriendsMomentsRail();
+      if (currentUserPublicProfileId === authSession.user.id) {
+        void renderUserProfileMomentsRail(authSession.user.id, authSession.user.user_metadata?.username || "");
+      }
+      try { showToast("Moment removed", { icon: "✓", durationMs: 2000 }); } catch {}
+    } catch (e) {
+      try { showToast(e?.message || "Could not remove moment", { durationMs: 2600 }); } catch {}
+    }
+  });
+}
+
+async function fetchMomentsRail() {
+  if (!authSession?.user?.id) return [];
+  try {
+    const data = await socialApi("/api/social?type=moments_rail");
+    return Array.isArray(data?.moments) ? data.moments : [];
+  } catch {
+    return [];
+  }
+}
+
+async function fetchUserMoments(userId, username = "") {
+  const qs = new URLSearchParams({ type: "user_moments" });
+  if (userId) qs.set("userId", userId);
+  else if (username) qs.set("username", username);
+  try {
+    const data = await socialApi(`/api/social?${qs.toString()}`);
+    return Array.isArray(data?.moments) ? data.moments : [];
+  } catch {
+    return [];
+  }
+}
+
+let _friendsMomentsGen = 0;
+
+async function refreshFriendsMomentsRail() {
+  const gen = ++_friendsMomentsGen;
+  const rail = document.getElementById("friendsMomentsRail");
+  const scroll = document.getElementById("friendsMomentsRailScroll");
+  if (!rail || !scroll) return;
+  if (!authSession?.user?.id) {
+    rail.hidden = true;
+    scroll.innerHTML = "";
+    return;
+  }
+  const moments = await fetchMomentsRail();
+  if (gen !== _friendsMomentsGen) return;
+  _friendsMomentsById = new Map(moments.map((m) => [String(m.id), m]));
+  const ownId = String(authSession.user.id);
+  const ownMoment = moments.find((m) => String(m.userId) === ownId) || null;
+  const tiles = [
+    momentPickTileHtml(ownMoment || { userId: ownId }, { isOwn: true }),
+    ...moments
+      .filter((m) => String(m.userId) !== ownId)
+      .map((m) => momentPickTileHtml(m)),
+  ];
+  scroll.innerHTML = tiles.join("");
+  bindMomentsRailClicks(scroll);
+  rail.hidden = false;
+}
+
+async function renderUserProfileMomentsRail(userId, username = "") {
+  const wrap = document.getElementById("userPublicMomentsWrap");
+  const rail = document.getElementById("userPublicMomentsRail");
+  if (!wrap || !rail) return;
+  const uid = String(userId || "").trim();
+  if (!uid) {
+    wrap.hidden = true;
+    rail.innerHTML = "";
+    return;
+  }
+  const moments = await fetchUserMoments(uid, username);
+  if (!moments.length) {
+    wrap.hidden = true;
+    rail.innerHTML = "";
+    return;
+  }
+  moments.forEach((m) => _friendsMomentsById.set(String(m.id), m));
+  rail.innerHTML = moments.map((m) => momentPickTileHtml(m)).join("");
+  bindMomentsRailClicks(rail);
+  wrap.hidden = false;
+}
+
+async function publishMoment() {
+  if (!imageMoodData || !imageMoodCoverDataUrl) {
     try { showToast("Analyze your photo first", { icon: "📷", durationMs: 2200 }); } catch {}
     return;
   }
-  const draft = buildStoryStatusDraft();
-  setCreateEntryIntent("");
-  closeImageMoodModalGlobal();
-  _followComposeType = "update";
-  try { syncFollowingComposeUi(); } catch {}
-  try { location.hash = "#/friends"; } catch {}
-  window.setTimeout(() => {
-    try { openFriendsComposeSheet(); } catch {}
-    const input = document.getElementById("followComposeInput");
-    if (input && draft) {
-      input.value = draft;
-      try { syncFollowingComposeUi(); } catch {}
-      try { input.focus?.({ preventScroll: true }); } catch {}
-    }
-  }, 280);
-  try { showToast("Share your story with your circle", { icon: "✓", durationMs: 2200 }); } catch {}
+  if (!authSession?.user?.id) {
+    requireAuthForCreate(() => publishMoment());
+    return;
+  }
+  const publishBtn = document.getElementById("btnMomentPublish");
+  if (publishBtn) publishBtn.disabled = true;
+  try {
+    const blob = await dataUrlToBlob(imageMoodCoverDataUrl);
+    const imageUrl = await uploadMomentBlob(blob);
+    const body = buildMomentCaption();
+    await socialApi("/api/social", {
+      method: "POST",
+      body: JSON.stringify({ action: "post_moment", body, imageUrl }),
+    });
+    setCreateEntryIntent("");
+    closeImageMoodModalGlobal();
+    try { showToast("Moment live for 24 hours", { icon: "✓", durationMs: 2400 }); } catch {}
+    try { location.hash = "#/friends"; } catch {}
+    window.setTimeout(() => {
+      void refreshFriendsMomentsRail();
+      void refreshDiscoveryFollowingFeed();
+    }, 200);
+  } catch (e) {
+    try { showToast(e?.message || "Could not publish moment", { durationMs: 3200 }); } catch {}
+  } finally {
+    if (publishBtn) publishBtn.disabled = !imageMoodData || !imageMoodCoverDataUrl;
+  }
 }
 
-function wireImageMoodStoryOnce() {
-  if (document.documentElement.dataset.wiredImageMoodStory) return;
-  document.documentElement.dataset.wiredImageMoodStory = "1";
-  document.getElementById("btnStoryTurnIntoSong")?.addEventListener("click", () => {
+function wireImageMoodMomentOnce() {
+  if (document.documentElement.dataset.wiredImageMoodMoment) return;
+  document.documentElement.dataset.wiredImageMoodMoment = "1";
+  document.getElementById("btnMomentTurnIntoSong")?.addEventListener("click", () => {
     try { haptic("light"); } catch {}
-    storyTurnIntoSong();
+    momentTurnIntoSong();
   });
-  document.getElementById("btnStoryPostFriends")?.addEventListener("click", () => {
+  document.getElementById("btnMomentPublish")?.addEventListener("click", () => {
     try { haptic("light"); } catch {}
-    storyPostToFriends();
+    void publishMoment();
   });
 }
 
@@ -5153,6 +5401,7 @@ function enterFriendsRoute() {
   const run = () => {
     if (token !== _friendsRouteEnterToken) return;
     if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
+    void refreshFriendsMomentsRail();
     void refreshDiscoveryFollowingFeed();
   };
   run();
@@ -5397,7 +5646,8 @@ function bindFriendsPageOnce() {
   bindFollowingComposeOnce();
   wireFriendsComposeSheetOnce();
   wireCreateChooserSheetOnce();
-  wireImageMoodStoryOnce();
+  wireImageMoodMomentOnce();
+  wireMomentViewerOnce();
   wireFriendsComposeFabOnce();
   if (!_friendsStatusMenuDocBound) {
     _friendsStatusMenuDocBound = true;
@@ -12891,6 +13141,8 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
     if (els.userPublicStats) els.userPublicStats.style.display = "none";
     if (els.userPublicSongsCount) els.userPublicSongsCount.textContent = "";
     if (els.userPublicSongs) els.userPublicSongs.innerHTML = "";
+    const momentsWrap = document.getElementById("userPublicMomentsWrap");
+    if (momentsWrap) momentsWrap.hidden = true;
     currentUserPublicProfileId = "";
     currentUserPublicSocialStats = { followers: 0, following: 0, isFollowing: false, followsViewer: false };
     renderUserPublicFollowButton();
@@ -12949,6 +13201,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
   currentUserPublicSocialStats = resolvedSocialStats || { followers: 0, following: 0, isFollowing: false, followsViewer: false };
   renderUserPublicSocialStats({ songCount: songs.length, stats: currentUserPublicSocialStats });
   renderUserPublicFollowButton();
+  void renderUserProfileMomentsRail(prof.user_id, displayName);
   if (els.userPublicSongsCount) {
     els.userPublicSongsCount.textContent = songs.length ? String(songs.length) : "";
   }
@@ -21638,8 +21891,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         els.imageMoodSummary.textContent = tags || String(d?.concept || "Image mood ready.");
       }
       setStatus(
-        isCreateStoryIntent()
-          ? "Story mood ready — share on Friends or turn into a song."
+        isCreateMomentIntent()
+          ? "Moment mood ready — publish on Friends or turn into a song."
           : "Image mood ready. Tap apply to use it."
       );
     } catch (e) {
@@ -21652,8 +21905,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   };
   const applyImageMood = () => {
     if (!imageMoodData) return;
-    if (isCreateStoryIntent()) {
-      storyTurnIntoSong();
+    if (isCreateMomentIntent()) {
+      momentTurnIntoSong();
       return;
     }
     applyImageMoodToSongFields();

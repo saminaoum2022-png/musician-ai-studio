@@ -520,6 +520,58 @@ async function handleGet(req, res, user) {
     });
   }
 
+  if (type === "moments_rail" || type === "user_moments") {
+    if (!user && type === "moments_rail") {
+      return sendJson(res, 401, { ok: false, error: "Not signed in" });
+    }
+    const nowIso = new Date().toISOString();
+    let userIds = [];
+    if (type === "user_moments") {
+      const target = await resolveTarget({
+        userId: url.searchParams.get("userId"),
+        username: url.searchParams.get("username"),
+      });
+      if (!target?.user_id) return sendJson(res, 404, { ok: false, error: "Profile not found" });
+      userIds = [target.user_id];
+    } else {
+      const follows = await svcFetch(
+        `social_follows?select=following_user_id&follower_user_id=eq.${encodeURIComponent(user.userId)}&limit=100`,
+      );
+      const followIds = (Array.isArray(follows.data) ? follows.data : [])
+        .map((r) => cleanUserId(r.following_user_id))
+        .filter(Boolean);
+      userIds = [...new Set([user.userId, ...followIds])];
+    }
+    if (!userIds.length) return sendJson(res, 200, { ok: true, moments: [] });
+    const inList = userIds.map((id) => encodeURIComponent(id)).join(",");
+    const limit = Math.min(120, Math.max(1, Number(url.searchParams.get("limit")) || 48));
+    const rows = await svcFetch(
+      `social_moments?select=id,user_id,body,image_url,created_at,expires_at&user_id=in.(${inList})&expires_at=gt.${encodeURIComponent(nowIso)}&order=created_at.desc&limit=${limit}`,
+    );
+    const raw = Array.isArray(rows.data) ? rows.data : [];
+    const latestByUser = new Map();
+    for (const row of raw) {
+      const uid = cleanUserId(row.user_id);
+      if (!uid || latestByUser.has(uid)) continue;
+      latestByUser.set(uid, row);
+    }
+    const picked = [...latestByUser.values()];
+    const profiles = await Promise.all(picked.map((m) => profileByUserId(m.user_id)));
+    return sendJson(res, 200, {
+      ok: true,
+      moments: picked.map((m, i) => ({
+        id: m.id,
+        userId: m.user_id,
+        body: m.body,
+        imageUrl: m.image_url,
+        createdAt: m.created_at,
+        expiresAt: m.expires_at,
+        username: profiles[i]?.username || "",
+        avatar: profiles[i]?.avatar || "",
+      })),
+    });
+  }
+
   return sendJson(res, 400, { ok: false, error: "Unknown social query" });
 }
 
@@ -648,6 +700,57 @@ async function handlePost(req, res, user) {
     if (!postId) return sendJson(res, 400, { ok: false, error: "Invalid post" });
     const del = await svcFetch(
       `social_status_posts?id=eq.${encodeURIComponent(postId)}&user_id=eq.${encodeURIComponent(user.userId)}`,
+      { method: "DELETE", headers: { Prefer: "return=minimal" } },
+    );
+    if (!del.ok) return sendJson(res, 500, { ok: false, error: "Delete failed", details: del.text });
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (action === "post_moment") {
+    const text = String(body?.body || "").trim().slice(0, 320);
+    const imageUrl = String(body?.imageUrl || body?.image_url || "").trim().slice(0, 2048);
+    if (!text) return sendJson(res, 400, { ok: false, error: "Write a caption for your moment" });
+    if (!imageUrl || !/^https?:\/\//i.test(imageUrl)) {
+      return sendJson(res, 400, { ok: false, error: "Missing moment image" });
+    }
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const ins = await svcFetch("social_moments", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({
+        user_id: user.userId,
+        body: text,
+        image_url: imageUrl,
+        expires_at: expiresAt,
+      }),
+    });
+    if (!ins.ok) {
+      return sendJson(res, 500, { ok: false, error: "Moment failed", details: ins.text });
+    }
+    const row = Array.isArray(ins.data) && ins.data[0] ? ins.data[0] : null;
+    const prof = await profileByUserId(user.userId);
+    return sendJson(res, 200, {
+      ok: true,
+      moment: row
+        ? {
+            id: row.id,
+            userId: row.user_id,
+            body: row.body,
+            imageUrl: row.image_url,
+            createdAt: row.created_at,
+            expiresAt: row.expires_at,
+            username: prof?.username || "",
+            avatar: prof?.avatar || "",
+          }
+        : null,
+    });
+  }
+
+  if (action === "delete_moment") {
+    const momentId = cleanPostId(body?.momentId || body?.postId);
+    if (!momentId) return sendJson(res, 400, { ok: false, error: "Invalid moment" });
+    const del = await svcFetch(
+      `social_moments?id=eq.${encodeURIComponent(momentId)}&user_id=eq.${encodeURIComponent(user.userId)}`,
       { method: "DELETE", headers: { Prefer: "return=minimal" } },
     );
     if (!del.ok) return sendJson(res, 500, { ok: false, error: "Delete failed", details: del.text });

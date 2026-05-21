@@ -49,7 +49,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260521createStoryV1" />
+    <link rel="stylesheet" href="./styles.css?v=20260521momentsV1" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -745,6 +745,13 @@
               <p class="discoveryStudioTag appScreenLead">Updates, advice, drops, and remixes from people you follow.</p>
             </div>
           </header>
+          <div id="friendsMomentsRail" class="friendsMomentsRail" hidden>
+            <div class="friendsMomentsRailHead">
+              <span class="friendsMomentsRailTitle">Moments</span>
+              <span class="friendsMomentsRailHint">24h picks from your circle</span>
+            </div>
+            <div id="friendsMomentsRailScroll" class="friendsMomentsRailScroll" role="list" aria-label="Active moments"></div>
+          </div>
           <div id="discoveryFollowingStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
           <div id="discoveryFollowingList" class="followActStack" hidden></div>
         </section>
@@ -1270,13 +1277,13 @@
                 </span>
                 <span class="createChooserPillLabel">Create song</span>
               </button>
-              <button type="button" class="createChooserPill createChooserPill--story" data-create-chooser="story" style="--pill-i:1" role="listitem">
-                <span class="createChooserPillAura createChooserPillAura--story" aria-hidden="true"></span>
-                <span class="createChooserPillIcon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M4 5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5zm11 1v4h4M8 13h8M8 16h6"/></svg>
-                </span>
-                <span class="createChooserPillLabel">Create story</span>
-              </button>
+                <button type="button" class="createChooserPill createChooserPill--moment" data-create-chooser="moment" style="--pill-i:1" role="listitem">
+                  <span class="createChooserPillAura createChooserPillAura--moment" aria-hidden="true"></span>
+                  <span class="createChooserPillIcon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 2l7.5 8.2L15 22H9L4.5 10.2 12 2z"/></svg>
+                  </span>
+                  <span class="createChooserPillLabel">Create moment</span>
+                </button>
               <button type="button" class="createChooserPill createChooserPill--status" data-create-chooser="status" style="--pill-i:2" role="listitem">
                 <span class="createChooserPillAura createChooserPillAura--status" aria-hidden="true"></span>
                 <span class="createChooserPillIcon" aria-hidden="true">
@@ -1491,6 +1498,9 @@
 
         <section class="card wide" data-route="user">
           <div class="userPublic" id="userPublicCard">
+            <div id="userPublicMomentsWrap" class="userPublicMomentsWrap" hidden>
+              <div id="userPublicMomentsRail" class="friendsMomentsRail friendsMomentsRail--profile" role="list" aria-label="Profile moments"></div>
+            </div>
             <div class="userPublicHead">
               <img id="userPublicAvatar" class="userPublicAvatar" alt="avatar" draggable="false" />
               <div class="userPublicMeta">
@@ -2363,12 +2373,31 @@
             <button id="btnAnalyzeImageMood" class="primary" type="button">Analyze</button>
             <button id="btnApplyImageMood" class="ghost" type="button" disabled>Apply to song</button>
           </div>
-          <div id="imageMoodStoryActions" class="imageMoodStoryActions" hidden>
-            <button id="btnStoryTurnIntoSong" class="primary" type="button" disabled>Turn into song</button>
-            <button id="btnStoryPostFriends" class="ghost" type="button" disabled>Share on Friends</button>
+          <div id="imageMoodMomentActions" class="imageMoodMomentActions" hidden>
+            <button id="btnMomentTurnIntoSong" class="primary" type="button" disabled>Turn into song</button>
+            <button id="btnMomentPublish" class="ghost" type="button" disabled>Publish moment</button>
           </div>
         </div>
       </div>
+
+        <div id="momentViewerSheet" class="momentViewerSheet" aria-hidden="true" hidden>
+          <div class="momentViewerBackdrop" data-moment-viewer-dismiss="1"></div>
+          <div class="momentViewerCard" role="dialog" aria-modal="true" aria-labelledby="momentViewerCaption">
+            <button type="button" class="momentViewerClose" data-moment-viewer-dismiss="1" aria-label="Close">×</button>
+            <div class="momentViewerPickFrame">
+              <span id="momentViewerCountdown" class="momentViewerCountdown" aria-hidden="true"></span>
+              <span class="momentPickShape">
+                <img id="momentViewerImg" class="momentViewerImg" alt="" decoding="async" />
+              </span>
+            </div>
+            <p id="momentViewerWho" class="momentViewerWho"></p>
+            <p id="momentViewerCaption" class="momentViewerCaption"></p>
+            <div class="momentViewerActions">
+              <a id="momentViewerProfileLink" class="ghost" href="#" data-route-link="user">Profile</a>
+              <button id="momentViewerDelete" class="ghost" type="button" hidden>Remove</button>
+            </div>
+          </div>
+        </div>
 
       <footer class="footer"><span id="footerBuild" class="hint" style="opacity:.5;font-size:11px"></span></footer>
       <div id="songDetailsModal" class="songDetailsModal" style="display:none">
@@ -2794,6 +2823,6 @@
         setTimeout(unboot, 3500);
       })();
     </script>
-    <script type="module" src="./src/app.js?v=20260521createStoryV1"></script>
+    <script type="module" src="./src/app.js?v=20260521momentsV1"></script>
   </body>
 </html>

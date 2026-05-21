@@ -12559,7 +12559,6 @@ body[data-route="discover"] > .app{
 .discoveryFeedStatus,
 .discoveryCardStack,
 .discoveryStudioFooter,
-.friendsPage .followCompose,
 .friendsPage .followActStack{
   position: relative;
   z-index: 1;
@@ -13136,8 +13135,162 @@ button.discoverySpotCard{
   background: linear-gradient(145deg, rgba(124,92,255,0.14), rgba(255,255,255,0.05));
   box-sizing: border-box;
 }
-.friendsPage .followCompose{
-  margin-top: 2px;
+/* Friends header — gradient-ring + pill (opens compose sheet) */
+.friendsComposeOpenBtn{
+  position: relative;
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  border: none;
+  border-radius: 999px;
+  padding: 0;
+  background: rgba(8, 10, 18, 0.92);
+  color: rgba(248, 250, 255, 0.96);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+  transition: transform 160ms ease, box-shadow 200ms ease;
+}
+.friendsComposeOpenBtnRing{
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  pointer-events: none;
+  padding: 2px;
+  background: linear-gradient(135deg, #23d5ab 0%, #4ad6c8 28%, #7c5cff 72%, #b78bff 100%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+          mask-composite: exclude;
+  box-shadow:
+    0 0 18px -4px rgba(35, 213, 171, 0.28),
+    0 0 20px -4px rgba(124, 92, 255, 0.36);
+}
+.friendsComposeOpenBtnIco{
+  position: relative;
+  z-index: 1;
+}
+.friendsComposeOpenBtn:hover{
+  box-shadow:
+    0 6px 22px rgba(0, 0, 0, 0.4),
+    0 0 24px -6px rgba(124, 92, 255, 0.35);
+}
+.friendsComposeOpenBtn:active{
+  transform: scale(0.94);
+}
+.friendsComposeOpenBtn[aria-expanded="true"]{
+  background: rgba(124, 92, 255, 0.22);
+}
+.friendsComposeOpenBtn[aria-expanded="true"] .friendsComposeOpenBtnRing{
+  opacity: 1;
+}
+
+/* Friends compose bottom sheet */
+.friendsComposeSheet{
+  --friends-compose-sheet-gap: max(8px, env(safe-area-inset-bottom, 0px));
+  position: fixed;
+  inset: 0;
+  z-index: 121;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 0 10px var(--friends-compose-sheet-gap);
+  pointer-events: none;
+  touch-action: none;
+}
+.friendsComposeSheet.isOpen{ pointer-events: auto; }
+.friendsComposeSheet[hidden]{ display: none !important; }
+.friendsComposeSheetBackdrop{
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(90% 70% at 50% 100%, rgba(124,92,255,0.04), transparent 64%),
+    rgba(3, 5, 10, 0.72);
+  opacity: 0;
+  transition: opacity 260ms ease;
+  touch-action: none;
+}
+.friendsComposeSheet.isOpen .friendsComposeSheetBackdrop{ opacity: 1; }
+.friendsComposeSheetCard{
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  max-width: 520px;
+  max-height: min(88dvh, calc(100dvh - var(--friends-compose-sheet-gap) - 24px - env(safe-area-inset-top, 0px)));
+  margin: 0;
+  border-radius: 24px 24px 16px 16px;
+  background:
+    radial-gradient(110% 72% at 8% 0%, rgba(124,92,255,0.08), transparent 58%),
+    linear-gradient(180deg, rgba(10,13,21,0.99), rgba(5,7,13,0.995));
+  border: 1px solid rgba(255,255,255,0.12);
+  padding: 10px 14px calc(16px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  transform: translateY(28px) scale(0.985);
+  opacity: 0;
+  transition:
+    transform 300ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 240ms ease;
+  box-shadow:
+    0 -16px 54px rgba(0, 0, 0, 0.46),
+    inset 0 1px 0 rgba(255,255,255,0.1);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: auto;
+}
+.friendsComposeSheet.isOpen .friendsComposeSheetCard{
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+.friendsComposeSheetGrab{
+  width: 40px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(232,238,247,0.22);
+  align-self: center;
+  margin: 4px 0 8px;
+  flex-shrink: 0;
+}
+.friendsComposeSheetClose{
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.35);
+  color: rgba(232,238,247,0.9);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.friendsComposeSheetClose:active{ transform: scale(0.94); }
+.followCompose--sheet{
+  margin: 0;
+  padding: 4px 2px 8px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+body.friendsComposeSheetOpen .footer{
+  opacity: 0;
+  pointer-events: none;
+}
+@media (max-width: 720px){
+  body.friendsComposeSheetOpen .mobileTabbar{ display: none !important; }
 }
 .followCompose.isSignedOut{
   opacity: 0.72;

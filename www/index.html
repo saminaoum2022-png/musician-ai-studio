@@ -745,33 +745,13 @@
               <h2 class="discoveryStudioH2 appScreenTitle">Friends</h2>
               <p class="discoveryStudioTag appScreenLead">Updates, advice, drops, and remixes from people you follow.</p>
             </div>
-            <button type="button" class="discoveryRefreshBtn" id="discoveryFollowingRefreshBtn" aria-label="Refresh friends feed">
-              <svg class="discoveryRefreshIco" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                <path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" d="M21 12a9 9 0 1 1-2.64-6.36"/>
-                <path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" d="M21 3v6h-6"/>
+            <button type="button" class="friendsComposeOpenBtn" id="friendsComposeOpenBtn" aria-label="Post to your circle" aria-expanded="false" aria-controls="friendsComposeSheet">
+              <span class="friendsComposeOpenBtnRing" aria-hidden="true"></span>
+              <svg class="friendsComposeOpenBtnIco" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                <path fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" d="M12 5v14M5 12h14"/>
               </svg>
             </button>
           </header>
-          <section class="followCompose" id="discoveryFollowingCompose" aria-label="Share an update">
-            <p class="followComposeKicker">Your circle</p>
-            <p class="followComposePrompt" id="followComposePrompt">What&apos;s on your mind?</p>
-            <div class="followComposeChips" role="tablist" aria-label="Post type">
-              <button type="button" class="followComposeChip isActive" data-follow-compose-type="update" role="tab" aria-selected="true">Update</button>
-              <button type="button" class="followComposeChip" data-follow-compose-type="advice" role="tab" aria-selected="false">Ask advice</button>
-              <button type="button" class="followComposeChip" data-follow-compose-type="brainstorm" role="tab" aria-selected="false">Brainstorm</button>
-              <button type="button" class="followComposeChip" data-follow-compose-type="song_request" role="tab" aria-selected="false">Song request</button>
-              <button type="button" class="followComposeChip" data-follow-compose-type="recommend" role="tab" aria-selected="false">Recommend</button>
-            </div>
-            <label class="followComposeField">
-              <span class="srOnly" id="followComposeLabel">Your update</span>
-              <textarea id="followComposeInput" class="followComposeInput" rows="2" maxlength="320" placeholder="Share a studio moment, idea, or question…" aria-labelledby="followComposeLabel"></textarea>
-            </label>
-            <div class="followComposeFoot">
-              <span class="followComposeCount" id="followComposeCount" aria-live="polite">0 / 320</span>
-              <button type="button" class="followComposePost solid" id="followComposePost" disabled>Post</button>
-            </div>
-            <p class="followComposeHint" id="followComposeSignInHint" hidden>Sign in to post — your followers see it here on Friends.</p>
-          </section>
           <div id="discoveryFollowingStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
           <div id="discoveryFollowingList" class="followActStack" hidden></div>
         </section>
@@ -1277,6 +1257,37 @@
               <input id="searchRemixName" type="text" autocomplete="off" maxlength="40" placeholder="Sara" />
             </label>
             <button id="searchRemixCta" class="searchRemixCta" type="button">Make it mine</button>
+          </div>
+        </div>
+
+        <!-- Friends — compose bottom sheet (+ in header opens this) -->
+        <div id="friendsComposeSheet" class="friendsComposeSheet" aria-hidden="true" hidden>
+          <div class="friendsComposeSheetBackdrop" data-friends-compose-dismiss="1"></div>
+          <div class="friendsComposeSheetCard" role="dialog" aria-modal="true" aria-labelledby="followComposePrompt">
+            <div class="friendsComposeSheetGrab" aria-hidden="true"></div>
+            <button type="button" class="friendsComposeSheetClose" data-friends-compose-dismiss="1" aria-label="Close">
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
+            </button>
+            <section class="followCompose followCompose--sheet" id="discoveryFollowingCompose" aria-label="Share an update">
+              <p class="followComposeKicker">Your circle</p>
+              <p class="followComposePrompt" id="followComposePrompt">What&apos;s on your mind?</p>
+              <div class="followComposeChips" role="tablist" aria-label="Post type">
+                <button type="button" class="followComposeChip isActive" data-follow-compose-type="update" role="tab" aria-selected="true">Update</button>
+                <button type="button" class="followComposeChip" data-follow-compose-type="advice" role="tab" aria-selected="false">Ask advice</button>
+                <button type="button" class="followComposeChip" data-follow-compose-type="brainstorm" role="tab" aria-selected="false">Brainstorm</button>
+                <button type="button" class="followComposeChip" data-follow-compose-type="song_request" role="tab" aria-selected="false">Song request</button>
+                <button type="button" class="followComposeChip" data-follow-compose-type="recommend" role="tab" aria-selected="false">Recommend</button>
+              </div>
+              <label class="followComposeField">
+                <span class="srOnly" id="followComposeLabel">Your update</span>
+                <textarea id="followComposeInput" class="followComposeInput" rows="3" maxlength="320" placeholder="Share a studio moment, idea, or question…" aria-labelledby="followComposeLabel"></textarea>
+              </label>
+              <div class="followComposeFoot">
+                <span class="followComposeCount" id="followComposeCount" aria-live="polite">0 / 320</span>
+                <button type="button" class="followComposePost solid" id="followComposePost" disabled>Post</button>
+              </div>
+              <p class="followComposeHint" id="followComposeSignInHint" hidden>Sign in to post — your followers see it here on Friends.</p>
+            </section>
           </div>
         </div>
 

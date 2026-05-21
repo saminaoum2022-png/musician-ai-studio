@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521friendsFlatFeedV1";
+const APP_BUILD = "20260521friendsComposeSheetV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4343,6 +4343,62 @@ async function fetchFollowingStatusPosts(limit = 40) {
   }
 }
 
+function lockPageForFriendsComposeSheet() {
+  document.body.classList.add("friendsComposeSheetOpen");
+}
+
+function unlockPageForFriendsComposeSheet() {
+  document.body.classList.remove("friendsComposeSheetOpen");
+}
+
+function openFriendsComposeSheet() {
+  const sheet = document.getElementById("friendsComposeSheet");
+  const openBtn = document.getElementById("friendsComposeOpenBtn");
+  if (!sheet) return;
+  syncFollowingComposeUi();
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  if (openBtn) openBtn.setAttribute("aria-expanded", "true");
+  lockPageForFriendsComposeSheet();
+  requestAnimationFrame(() => sheet.classList.add("isOpen"));
+  window.setTimeout(() => {
+    try {
+      document.getElementById("followComposeInput")?.focus?.({ preventScroll: true });
+    } catch {}
+  }, 320);
+}
+
+function closeFriendsComposeSheet() {
+  const sheet = document.getElementById("friendsComposeSheet");
+  const openBtn = document.getElementById("friendsComposeOpenBtn");
+  if (!sheet) return;
+  sheet.classList.remove("isOpen");
+  if (openBtn) openBtn.setAttribute("aria-expanded", "false");
+  unlockPageForFriendsComposeSheet();
+  window.setTimeout(() => {
+    sheet.hidden = true;
+    sheet.setAttribute("aria-hidden", "true");
+  }, 260);
+}
+
+function wireFriendsComposeSheetOnce() {
+  const sheet = document.getElementById("friendsComposeSheet");
+  if (!sheet || sheet.dataset.wiredFriendsComposeSheet) return;
+  sheet.dataset.wiredFriendsComposeSheet = "1";
+  sheet.addEventListener("click", (e) => {
+    const t = e.target;
+    if (t?.closest?.("[data-friends-compose-dismiss]")) {
+      e.preventDefault();
+      closeFriendsComposeSheet();
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (!sheet.classList.contains("isOpen")) return;
+    closeFriendsComposeSheet();
+  });
+}
+
 function syncFollowingComposeUi() {
   const compose = document.getElementById("discoveryFollowingCompose");
   const input = document.getElementById("followComposeInput");
@@ -4399,6 +4455,7 @@ function bindFollowingComposeOnce() {
       syncFollowingComposeUi();
       haptic("success");
       try { showToast("Posted to Friends", { icon: "✓", durationMs: 2200 }); } catch {}
+      closeFriendsComposeSheet();
       void refreshDiscoveryFollowingFeed();
     } catch (e) {
       haptic("error");
@@ -4719,17 +4776,17 @@ function bindDiscoveryDiscoverControls() {
 function bindFriendsPageOnce() {
   wireUserPublicFeedRowsOnce();
   bindFollowingComposeOnce();
+  wireFriendsComposeSheetOnce();
   if (_friendsPageBound) return;
   _friendsPageBound = true;
-  const followingRefresh = document.getElementById("discoveryFollowingRefreshBtn");
-  if (followingRefresh && !followingRefresh.dataset.boundDiscoveryFollowingRefresh) {
-    followingRefresh.dataset.boundDiscoveryFollowingRefresh = "1";
-    followingRefresh.addEventListener("click", () => {
+  const composeOpen = document.getElementById("friendsComposeOpenBtn");
+  if (composeOpen && !composeOpen.dataset.boundFriendsComposeOpen) {
+    composeOpen.dataset.boundFriendsComposeOpen = "1";
+    composeOpen.addEventListener("click", () => {
       haptic("light");
-      followingRefresh.classList.add("isRefreshing");
-      void refreshDiscoveryFollowingFeed().finally(() => {
-        try { followingRefresh.classList.remove("isRefreshing"); } catch {}
-      });
+      const sheet = document.getElementById("friendsComposeSheet");
+      if (sheet?.classList.contains("isOpen")) closeFriendsComposeSheet();
+      else openFriendsComposeSheet();
     });
   }
   const friendsPage = document.getElementById("friendsPage");

@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522webFriendsApiV1";
+const APP_BUILD = "20260522momentHoursPillV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5246,6 +5246,31 @@ function momentRemainingPct(expiresAt) {
   return Math.max(0, Math.min(1, (end - now) / Math.max(1, end - start)));
 }
 
+function momentRemainingHoursLabel(expiresAt) {
+  const end = new Date(expiresAt || 0).getTime();
+  const ms = end - Date.now();
+  if (!end || ms <= 0) return "0h";
+  const hours = Math.floor(ms / (60 * 60 * 1000));
+  if (hours < 1) return "<1h";
+  if (hours >= 24) return "24h";
+  return `${hours}h`;
+}
+
+let _momentRailTimer = 0;
+
+function syncMomentRailTimePills() {
+  document.querySelectorAll("[data-moment-expires]").forEach((pill) => {
+    const exp = pill.getAttribute("data-moment-expires") || "";
+    pill.textContent = momentRemainingHoursLabel(exp);
+  });
+}
+
+function startMomentRailCountdownTimer() {
+  syncMomentRailTimePills();
+  if (_momentRailTimer) return;
+  _momentRailTimer = window.setInterval(syncMomentRailTimePills, 60000);
+}
+
 let _friendsMomentsById = new Map();
 let _momentViewerTimer = 0;
 let _momentViewerOpen = null;
@@ -5299,11 +5324,15 @@ function momentPickTileHtml(m, { isOwn = false, label = "" } = {}) {
     </button>`;
   }
   const img = escapeHtml(String(m?.imageUrl || "").trim());
+  const expiresAt = String(m?.expiresAt || m?.expires_at || "").trim();
+  const hoursLbl = momentRemainingHoursLabel(expiresAt);
   const viewed = !isOwn && isMomentSeen(m?.id);
-  return `<button type="button" class="momentPickTile${isOwn ? " isOwn" : ""}${viewed ? " isViewed" : ""}" data-moment-id="${escapeHtml(String(m?.id || ""))}" aria-label="Moment from ${escapeHtml(lbl)}">
+  const timeAria = expiresAt ? `, ${hoursLbl} left` : "";
+  return `<button type="button" class="momentPickTile${isOwn ? " isOwn" : ""}${viewed ? " isViewed" : ""}" data-moment-id="${escapeHtml(String(m?.id || ""))}" aria-label="Moment from ${escapeHtml(lbl)}${escapeHtml(timeAria)}">
     <span class="momentPickShell">
       <span class="momentPickCountdown" aria-hidden="true"></span>
       <span class="momentPickShape"><img src="${img}" alt="" width="72" height="72" decoding="async" loading="lazy" /></span>
+      <span class="momentPickTimePill" data-moment-expires="${escapeHtml(expiresAt)}" aria-hidden="true">${escapeHtml(hoursLbl)}</span>
     </span>
     <span class="momentPickLabel">${escapeHtml(lbl)}</span>
   </button>`;
@@ -5332,7 +5361,10 @@ function bindMomentsRailClicks(container) {
 
 function updateMomentViewerCountdown() {
   if (!_momentViewerOpen) return;
-  const pct = momentRemainingPct(_momentViewerOpen.expiresAt);
+  const exp = _momentViewerOpen.expiresAt || _momentViewerOpen.expires_at;
+  const pill = document.getElementById("momentViewerTimePill");
+  if (pill) pill.textContent = momentRemainingHoursLabel(exp);
+  const pct = momentRemainingPct(exp);
   if (pct <= 0) closeMomentViewerSheet();
 }
 
@@ -5478,6 +5510,7 @@ function applyMomentToFriendsRail(moment) {
   scroll.innerHTML = tiles.join("");
   bindMomentsRailClicks(scroll);
   rail.hidden = false;
+  startMomentRailCountdownTimer();
 }
 
 async function recoverMomentAfterPublishError() {
@@ -5519,6 +5552,7 @@ async function refreshFriendsMomentsRail() {
   scroll.innerHTML = tiles.join("");
   bindMomentsRailClicks(scroll);
   rail.hidden = false;
+  startMomentRailCountdownTimer();
 }
 
 async function renderUserProfileMomentsRail(userId, username = "") {
@@ -5541,6 +5575,7 @@ async function renderUserProfileMomentsRail(userId, username = "") {
   rail.innerHTML = moments.map((m) => momentPickTileHtml(m)).join("");
   bindMomentsRailClicks(rail);
   wrap.hidden = false;
+  startMomentRailCountdownTimer();
 }
 
 async function publishMoment() {

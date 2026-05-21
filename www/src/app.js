@@ -1829,11 +1829,21 @@ function addPreconnectHint(url) {
   } catch {}
 }
 let _lastHapticAt = 0;
-const HAPTIC_MIN_GAP_MS = 140;
+let _hapticBurstWindowStart = 0;
+let _hapticBurstCount = 0;
+const HAPTIC_MIN_GAP_MS = 280;
+const HAPTIC_BURST_MAX = 6;
+const HAPTIC_BURST_WINDOW_MS = 2500;
 
 function haptic(kind = "light") {
   const now = Date.now();
   if (now - _lastHapticAt < HAPTIC_MIN_GAP_MS) return;
+  if (!_hapticBurstWindowStart || now - _hapticBurstWindowStart > HAPTIC_BURST_WINDOW_MS) {
+    _hapticBurstWindowStart = now;
+    _hapticBurstCount = 0;
+  }
+  if (_hapticBurstCount >= HAPTIC_BURST_MAX) return;
+  _hapticBurstCount += 1;
   _lastHapticAt = now;
   try {
     const cap = window?.Capacitor;
@@ -2168,12 +2178,23 @@ function routeApplyFallback(err) {
   if (main) main.classList.remove("routeSwap");
 }
 
+let _applyRouteRaf = 0;
+
 function safeApplyRoute() {
-  try {
-    applyRoute();
-  } catch (e) {
-    routeApplyFallback(e);
-  }
+  scheduleApplyRoute();
+}
+
+/** Coalesce hashchange + navigate so applyRoute does not run in a tight loop. */
+function scheduleApplyRoute() {
+  if (_applyRouteRaf) cancelAnimationFrame(_applyRouteRaf);
+  _applyRouteRaf = requestAnimationFrame(() => {
+    _applyRouteRaf = 0;
+    try {
+      applyRoute();
+    } catch (e) {
+      routeApplyFallback(e);
+    }
+  });
 }
 
 function applyRoute() {
@@ -2677,7 +2698,7 @@ function resetCreateDraft() {
 
 window.addEventListener("hashchange", () => {
   closeCreateChooserSheet({ immediate: true });
-  safeApplyRoute();
+  scheduleApplyRoute();
 });
 if (!location.hash) location.hash = "#/intro";
 safeApplyRoute();
@@ -4817,41 +4838,49 @@ function navigateFromCreateChooser(action) {
   try {
     if (kind === "song") {
       setCreateEntryIntent("song");
-      try { location.hash = "#/generate"; } catch {}
-      safeApplyRoute();
+      const onGenerate = String(location.hash || "") === "#/generate";
+      if (!onGenerate) try { location.hash = "#/generate"; } catch {}
+      else scheduleApplyRoute();
       window.setTimeout(() => {
         try { if (typeof setActiveCreateTab === "function") setActiveCreateTab("lyrics"); } catch {}
         try { els.sunoPrompt?.focus?.({ preventScroll: true }); } catch {}
       }, 100);
-      try { haptic("light"); } catch {}
       return;
     }
 
     if (kind === "moment") {
+      const onMoment = String(location.hash || "") === "#/moment";
       openMomentCreatePage("moment");
-      safeApplyRoute();
-      try { haptic("light"); } catch {}
+      if (onMoment) scheduleApplyRoute();
       return;
     }
 
     if (kind === "status") {
-      setCreateEntryIntent("");
-      _followComposeType = "update";
-      try { syncFollowingComposeUi(); } catch {}
-      try { location.hash = "#/friends"; } catch {}
-      safeApplyRoute();
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          try { openFriendsComposeSheet(); } catch {}
-        });
-      });
-      try { haptic("light"); } catch {}
+      openFriendsForStatusCompose();
+      return;
     }
   } finally {
     window.setTimeout(() => {
       _createChooserNavLock = false;
     }, 320);
   }
+}
+
+function openFriendsForStatusCompose() {
+  setCreateEntryIntent("");
+  _followComposeType = "update";
+  try { syncFollowingComposeUi(); } catch {}
+  const onFriends = String(location.hash || "") === "#/friends";
+  if (!onFriends) {
+    try { location.hash = "#/friends"; } catch {}
+  } else {
+    enterFriendsRoute();
+  }
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      try { openFriendsComposeSheet(); } catch {}
+    });
+  });
 }
 
 function wireCreateChooserSheetOnce() {
@@ -5533,20 +5562,21 @@ function renderDiscoveryFollowingEmpty(statusEl, title, text, actionHtml = "") {
 
 let _friendsRouteEnterToken = 0;
 
+let _enterFriendsDebounce = 0;
+
 function enterFriendsRoute() {
   const token = ++_friendsRouteEnterToken;
   bindFriendsPageOnce();
   wireFriendsComposeFabOnce();
   syncFollowingComposeUi();
-  const run = () => {
+  if (_enterFriendsDebounce) clearTimeout(_enterFriendsDebounce);
+  _enterFriendsDebounce = window.setTimeout(() => {
+    _enterFriendsDebounce = 0;
     if (token !== _friendsRouteEnterToken) return;
     if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
     void refreshFriendsMomentsRail();
     void refreshDiscoveryFollowingFeed();
-  };
-  run();
-  requestAnimationFrame(run);
-  window.setTimeout(run, 100);
+  }, 50);
 }
 
 function wireFriendsComposeFabOnce() {
@@ -9511,8 +9541,10 @@ async function maybeHandleAuthCodeFromQuery() {
     if (!code) return false;
     const ok = await exchangeOAuthCodeForSession(code);
     if (!ok) return false;
-    window.history.replaceState({}, document.title, window.location.pathname + "#/challenges");
-    finishPostAuthNavigation();
+    try {
+      const path = window.location.pathname || "/";
+      window.history.replaceState({}, document.title, path);
+    } catch {}
     return true;
   } catch (e) {
     lastAuthDebug = `code flow error: ${e?.message || String(e)}`;
@@ -9731,7 +9763,7 @@ async function supabaseGoogleLoginUrl() {
   const challenge = await sha256Base64Url(verifier);
   const redirectTarget = isCapacitorNativeAuth()
     ? OAUTH_NATIVE_REDIRECT
-    : `${window.location.origin}${window.location.pathname}`;
+    : `${window.location.origin}/`;
   const redirectTo = encodeURIComponent(redirectTarget);
   return `${SUPABASE_URL}/auth/v1/authorize?provider=google&response_type=code&scope=email%20profile&code_challenge=${encodeURIComponent(challenge)}&code_challenge_method=S256&redirect_to=${redirectTo}`;
 }
@@ -26348,7 +26380,9 @@ void (async () => {
     if ((document.body.getAttribute("data-route") || "") === "profile") renderProfileSongs();
     else if ((document.body.getAttribute("data-route") || "") === "friends") enterFriendsRoute();
   } catch {}
-  if (usedCodeFlow || usedTokenFlow) window.location.hash = "#/generate";
+  if (usedCodeFlow || usedTokenFlow) {
+    try { finishPostAuthNavigation(); } catch {}
+  }
 
   // Always hydrate from cloud when a valid session exists (not only callback flows).
   if (authSession?.user?.id) {

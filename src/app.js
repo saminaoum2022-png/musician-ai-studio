@@ -4719,6 +4719,7 @@ function closeCreateChooserSheet({ immediate = false } = {}) {
 }
 
 const CREATE_ENTRY_INTENT_KEY = "nabadai_create_entry_intent_v1";
+const PENDING_CREATE_ACTION_KEY = "nabadai_pending_create_action_v1";
 
 function setCreateEntryIntent(intent) {
   try {
@@ -4732,11 +4733,44 @@ function getCreateEntryIntent() {
   return "";
 }
 
-function requireAuthForCreate(onAuthed) {
+function setPendingCreateAction(action) {
+  try {
+    const kind = String(action || "").trim();
+    if (!kind) sessionStorage.removeItem(PENDING_CREATE_ACTION_KEY);
+    else sessionStorage.setItem(PENDING_CREATE_ACTION_KEY, kind);
+  } catch {}
+}
+
+function getPendingCreateAction() {
+  try { return String(sessionStorage.getItem(PENDING_CREATE_ACTION_KEY) || "").trim(); } catch {}
+  return "";
+}
+
+function finishPostAuthNavigation() {
+  const pending = getPendingCreateAction();
+  setPendingCreateAction("");
+  if (pending === "song" || pending === "moment" || pending === "status") {
+    window.setTimeout(() => {
+      try { navigateFromCreateChooser(pending); } catch {}
+    }, 80);
+    return;
+  }
+  const intent = getCreateEntryIntent();
+  if (intent === "moment") {
+    try { location.hash = "#/moment"; } catch {}
+    safeApplyRoute();
+    return;
+  }
+  try { location.hash = "#/challenges"; } catch {}
+  safeApplyRoute();
+}
+
+function requireAuthForCreate(onAuthed, pendingAction = "") {
   if (authSession?.user?.id) {
     try { onAuthed?.(); } catch {}
     return true;
   }
+  setPendingCreateAction(pendingAction);
   closeCreateChooserSheet();
   try { showToast("Sign in to create", { icon: "👤", durationMs: 2400 }); } catch {}
   try { location.hash = "#/auth"; } catch {}
@@ -4750,7 +4784,7 @@ function navigateFromCreateChooser(action) {
   const kind = String(action || "").trim();
   if (!kind) return;
   if (_createChooserNavLock) return;
-  if (!requireAuthForCreate(() => navigateFromCreateChooser(kind))) return;
+  if (!requireAuthForCreate(() => navigateFromCreateChooser(kind), kind)) return;
 
   _createChooserNavLock = true;
   window.setTimeout(() => {
@@ -9443,8 +9477,8 @@ async function maybeHandleAuthCodeFromQuery() {
     if (!code) return false;
     const ok = await exchangeOAuthCodeForSession(code);
     if (!ok) return false;
-    window.history.replaceState({}, document.title, window.location.pathname + "#/profile");
-    applyRoute();
+    window.history.replaceState({}, document.title, window.location.pathname + "#/challenges");
+    finishPostAuthNavigation();
     return true;
   } catch (e) {
     lastAuthDebug = `code flow error: ${e?.message || String(e)}`;
@@ -25745,12 +25779,15 @@ function resetGoogleAuthButton() {
     els.btnAuthGoogle.textContent = "Continue with Google";
   }
 }
+let _lastOAuthCodeHandled = "";
+
 async function handleNativeAuthDeepLink(url) {
   try {
     const raw = String(url || "");
     if (!raw) return false;
     const lower = raw.toLowerCase();
     if (!lower.startsWith("com.nabadai.music://")) return false;
+    if (!lower.includes("auth-callback")) return false;
     let code = "";
     try {
       const u = new URL(raw);
@@ -25764,12 +25801,22 @@ async function handleNativeAuthDeepLink(url) {
       resetGoogleAuthButton();
       return false;
     }
+    if (code === _lastOAuthCodeHandled) {
+      try { await getCapacitorBrowserPlugin()?.close?.(); } catch {}
+      return true;
+    }
+    const pkceReady = Boolean(localStorage.getItem(AUTH_PKCE_KEY));
+    if (!pkceReady && authSession?.user?.id) {
+      try { await getCapacitorBrowserPlugin()?.close?.(); } catch {}
+      return true;
+    }
     setStatus("Finishing Google login…");
     const ok = await exchangeOAuthCodeForSession(code);
     try { await getCapacitorBrowserPlugin()?.close?.(); } catch {}
     if (ok) {
-      location.hash = "#/profile";
-      applyRoute();
+      _lastOAuthCodeHandled = code;
+      try { await refreshAuthStateFromSupabase(); } catch {}
+      finishPostAuthNavigation();
     } else {
       setStatus(`Google login failed: ${lastAuthDebug || "exchange error"}`);
     }

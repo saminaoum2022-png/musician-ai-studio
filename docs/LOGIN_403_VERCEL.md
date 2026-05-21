@@ -1,34 +1,41 @@
-# Fix "403: Forbidden" when signing in (web / Vercel)
+# Fix login: Vercel 403 Forbidden
 
-If Google login shows a plain white page with **403: Forbidden** and an ID like `1779382476-…`, the request never reached the NabadAi app. **Vercel Deployment Protection** (or similar) is blocking the OAuth return URL.
+If you see **403: Forbidden** in the browser, or the app says **"Could not load login settings"**, the whole Vercel deployment is locked. The app cannot load `/api/public-config` (Supabase URL + anon key), so Google sign-in never starts.
 
-## Fix in Vercel (required)
+Verified: `https://musician-ai-studio.vercel.app/` and `/api/public-config` return **403** while Deployment Protection is on.
 
-1. Open [Vercel Dashboard](https://vercel.com) → your **musician-ai-studio** project.
+## Fix A — Turn off protection (simplest)
+
+1. [Vercel Dashboard](https://vercel.com) → **musician-ai-studio** project.
 2. **Settings** → **Deployment Protection**.
-3. For **Production** (and Preview if you test there):
-   - Either **turn off** protection for the deployment you use for real users, **or**
-   - Enable **Protection Bypass for Automation** and use a bypass token only in CI (not for end users).
-4. Redeploy or wait for the setting to apply, then try **Continue with Google** again.
+3. For **Production** (and **Preview** if you test there): set protection to **Off** / not enabled for public traffic.
+4. **Redeploy** Production (Deployments → … → Redeploy).
+5. Open `https://musician-ai-studio.vercel.app/` — you should see NabadAi, not a white 403 page.
+6. In **Supabase** → Authentication → URL configuration, add redirect URLs:
+   - `https://musician-ai-studio.vercel.app/`
+   - `com.nabadai.music://auth-callback` (iOS)
 
-The OAuth callback lands on:
+Then try **Continue with Google** again on web and in the iOS app.
 
-`https://YOUR_DOMAIN/?code=...`
+## Fix B — Keep protection, use bypass token (iOS / automation)
 
-That URL must load `index.html`, not a Vercel 403 page.
+1. Vercel → **Settings** → **Deployment Protection** → **Protection Bypass for Automation** → create/copy the secret.
+2. On your Mac, from the repo root (with values from Vercel **Environment Variables**):
 
-## Fix in Supabase (required)
+```bash
+export SUPABASE_URL="https://YOUR_PROJECT.supabase.co"
+export SUPABASE_ANON_KEY="your_anon_key"
+export VERCEL_PROTECTION_BYPASS="your_bypass_secret"
+node scripts/sync-client-env.mjs
+npx cap sync ios
+```
 
-1. Supabase → **Authentication** → **URL configuration**.
-2. **Site URL**: your live app origin, e.g. `https://your-app.vercel.app`
-3. **Redirect URLs** — add every origin you use:
-   - `https://your-app.vercel.app/`
-   - `https://your-app.vercel.app/**`
-   - `http://localhost:3000/` (local dev)
-   - `com.nabadai.music://auth-callback` (iOS app)
+3. Clean build in Xcode and run. The app sends `x-vercel-protection-bypass` on API requests.
 
-Save, then retry login.
+You can also copy `www/env.client.example.js` → `www/env.client.js` and paste the same values by hand.
 
-## iOS app
+## After it works
 
-Native login uses `com.nabadai.music://auth-callback` and is not affected by Vercel 403. If only the **website** fails, focus on Vercel + Supabase steps above.
+- Web: hard refresh or clear site data once.
+- iOS: Product → Clean Build Folder, then Run.
+- Bundle should load `app.js?v=20260521momentsV9` or newer.

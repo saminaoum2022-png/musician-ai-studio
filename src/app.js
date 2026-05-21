@@ -1746,6 +1746,71 @@ const API_BASE = (() => {
   return "";
 })();
 const apiUrl = (p) => API_BASE ? `${API_BASE}${p}` : p;
+const PUBLIC_CONFIG_CACHE_KEY = "mas:public-config:v1";
+let lastPublicConfigStatus = 0;
+let lastPublicConfigError = "";
+
+function getVercelProtectionBypass() {
+  try {
+    return String(
+      window.__VERCEL_PROTECTION_BYPASS__ ||
+        window.__NABAD_CLIENT_ENV__?.vercelProtectionBypass ||
+        "",
+    ).trim();
+  } catch {
+    return "";
+  }
+}
+
+/** Headers for native/web calls to Vercel `/api/*` (optional deployment-protection bypass). */
+function getApiFetchHeaders(extra = {}) {
+  const headers = { ...(extra || {}) };
+  const bypass = getVercelProtectionBypass();
+  if (bypass) headers["x-vercel-protection-bypass"] = bypass;
+  return headers;
+}
+
+function apiFetch(path, opts = {}) {
+  const headers = getApiFetchHeaders(opts.headers || {});
+  return fetch(apiUrl(path), { ...opts, headers });
+}
+
+function applyPublicConfigPayload(d) {
+  let rawUrl = String(d?.supabaseUrl || "").trim();
+  rawUrl = rawUrl.replace(/\/+$/, "");
+  rawUrl = rawUrl.replace(/\/rest\/v1$/i, "");
+  rawUrl = rawUrl.replace(/\/auth\/v1$/i, "");
+  SUPABASE_URL = rawUrl;
+  SUPABASE_ANON_KEY = String(d?.supabaseAnonKey || "");
+  const ids = Array.isArray(d?.nabadCertifiedUserIds) ? d.nabadCertifiedUserIds : [];
+  _nabadCertifiedUserIds = new Set(
+    ids.map((x) => String(x || "").trim()).filter(Boolean),
+  );
+  if (SUPABASE_URL) addPreconnectHint(SUPABASE_URL);
+}
+
+function loadPublicConfigFromCache() {
+  try {
+    const raw = localStorage.getItem(PUBLIC_CONFIG_CACHE_KEY);
+    if (!raw) return false;
+    applyPublicConfigPayload(JSON.parse(raw));
+    return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+  } catch {
+    return false;
+  }
+}
+
+function applyClientEnvBootstrap() {
+  try {
+    const env = window.__NABAD_CLIENT_ENV__;
+    if (!env || typeof env !== "object") return false;
+    applyPublicConfigPayload(env);
+    return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+  } catch {
+    return false;
+  }
+}
+
 let SUPABASE_URL = "";
 let SUPABASE_ANON_KEY = "";
 let lastHubUpdateAt = 0;
@@ -1784,35 +1849,65 @@ function updateEnvironmentBadge() {
   els.envBadge.textContent = `Build ${APP_BUILD}`;
 }
 async function loadPublicConfig() {
+  applyClientEnvBootstrap();
+  if (SUPABASE_URL && SUPABASE_ANON_KEY) return true;
+
   // 6s timeout — without it, a stalled `/api/public-config` (cold native
   // start on flaky mobile data) hangs the entire boot IIFE, which in
   // turn leaves the profile header skeleton stuck on forever.
+  lastPublicConfigStatus = 0;
+  lastPublicConfigError = "";
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 6000);
     let r;
     try {
-      r = await fetch(apiUrl("/api/public-config"), { signal: ctrl.signal });
+      r = await apiFetch("/api/public-config", { signal: ctrl.signal });
     } finally {
       clearTimeout(timer);
     }
+    lastPublicConfigStatus = r.status;
     const d = await r.json().catch(() => ({}));
-    let rawUrl = String(d?.supabaseUrl || "").trim();
-    // Accept either project root URL or mistakenly pasted REST URL.
-    rawUrl = rawUrl.replace(/\/+$/, "");
-    rawUrl = rawUrl.replace(/\/rest\/v1$/i, "");
-    rawUrl = rawUrl.replace(/\/auth\/v1$/i, "");
-    SUPABASE_URL = rawUrl;
-    SUPABASE_ANON_KEY = String(d?.supabaseAnonKey || "");
-    const ids = Array.isArray(d?.nabadCertifiedUserIds) ? d.nabadCertifiedUserIds : [];
-    _nabadCertifiedUserIds = new Set(
-      ids.map((x) => String(x || "").trim()).filter(Boolean),
+    if (!r.ok) {
+      lastPublicConfigError =
+        r.status === 403
+          ? "vercel_forbidden"
+          : `http_${r.status}`;
+      if (r.status === 403) return loadPublicConfigFromCache();
+      return false;
+    }
+    applyPublicConfigPayload(d);
+    try {
+      localStorage.setItem(
+        PUBLIC_CONFIG_CACHE_KEY,
+        JSON.stringify({
+          supabaseUrl: SUPABASE_URL,
+          supabaseAnonKey: SUPABASE_ANON_KEY,
+          nabadCertifiedUserIds: [..._nabadCertifiedUserIds],
+        }),
+      );
+    } catch {}
+    return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+  } catch (e) {
+    lastPublicConfigError = e?.name === "AbortError" ? "timeout" : "network";
+    return loadPublicConfigFromCache();
+  }
+}
+
+function loginConfigFailureMessage() {
+  if (lastPublicConfigError === "vercel_forbidden" || lastPublicConfigStatus === 403) {
+    return (
+      "Vercel is blocking this app (403 Forbidden). In Vercel → Project → Settings → Deployment Protection, " +
+      "turn OFF protection for Production (or add a bypass token — see docs/LOGIN_403_VERCEL.md), then redeploy."
     );
-    // Once we know the Supabase host, hint the browser so the very first
-    // hub_posts query opens TLS instantly. Idempotent — multiple calls
-    // just stack identical <link> tags which the browser collapses.
-    if (SUPABASE_URL) addPreconnectHint(SUPABASE_URL);
-  } catch {}
+  }
+  if (loadPublicConfigFromCache() || applyClientEnvBootstrap()) {
+    return "";
+  }
+  return (
+    "Could not load login settings from the server. Check Wi‑Fi, fix Vercel 403 if the website is blocked, " +
+    "or run: node scripts/sync-client-env.mjs (then rebuild the iOS app)."
+  );
 }
 const _addedPreconnects = new Set();
 function addPreconnectHint(url) {
@@ -5562,20 +5657,21 @@ function renderDiscoveryFollowingEmpty(statusEl, title, text, actionHtml = "") {
 
 let _friendsRouteEnterToken = 0;
 
+let _enterFriendsDebounce = 0;
+
 function enterFriendsRoute() {
   const token = ++_friendsRouteEnterToken;
   bindFriendsPageOnce();
   wireFriendsComposeFabOnce();
   syncFollowingComposeUi();
-  const run = () => {
+  if (_enterFriendsDebounce) clearTimeout(_enterFriendsDebounce);
+  _enterFriendsDebounce = window.setTimeout(() => {
+    _enterFriendsDebounce = 0;
     if (token !== _friendsRouteEnterToken) return;
     if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
     void refreshFriendsMomentsRail();
     void refreshDiscoveryFollowingFeed();
-  };
-  run();
-  requestAnimationFrame(run);
-  window.setTimeout(run, 100);
+  }, 50);
 }
 
 function wireFriendsComposeFabOnce() {
@@ -10490,7 +10586,7 @@ async function socialApi(path, opts) {
   };
   if (token) headers.Authorization = `Bearer ${token}`;
   if (opts?.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
-  const r = await fetch(apiUrl(path), {
+  const r = await apiFetch(path, {
     ...(opts || {}),
     headers,
     cache: "no-store",
@@ -25912,8 +26008,10 @@ async function runGoogleOAuthLogin() {
     await loadPublicConfig();
   }
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    const msg = loginConfigFailureMessage();
     notifyLoginFeedback(
-      "Could not load login settings from the server. Check Wi‑Fi or open the web app once, then try again."
+      msg ||
+        "Could not load login settings from the server. Check Wi‑Fi or open the web app once, then try again.",
     );
     resetGoogleAuthButton();
     return;

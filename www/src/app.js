@@ -39,6 +39,8 @@ try {
  *  — interim gate for the Profile "Verified Nabad Creator" badge until
  *  `profiles.sound_certified` is live in Supabase. */
 let _nabadCertifiedUserIds = new Set();
+/** Set before applyRoute() to skip the grid blur animation (Create chooser handoff). */
+let _suppressRouteSwapAnim = false;
 
 /** Verified badges are gated by `profiles.sound_certified` or the optional UUID allowlist only. */
 const INTERIM_ALWAYS_SHOW_PUBLIC_PROFILE_VERIFIED = false;

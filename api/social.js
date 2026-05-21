@@ -467,6 +467,28 @@ async function handleGet(req, res, user) {
     return sendJson(res, 200, { ok: true, counts });
   }
 
+  if (type === "my_status") {
+    if (!user) return sendJson(res, 401, { ok: false, error: "Not signed in" });
+    const limit = Math.min(80, Math.max(1, Number(url.searchParams.get("limit")) || 40));
+    const rows = await svcFetch(
+      `social_status_posts?select=id,user_id,post_type,body,created_at&user_id=eq.${encodeURIComponent(user.userId)}&order=created_at.desc&limit=${limit}`,
+    );
+    const rawPosts = Array.isArray(rows.data) ? rows.data : [];
+    const prof = await profileByUserId(user.userId);
+    return sendJson(res, 200, {
+      ok: true,
+      posts: rawPosts.map((p) => ({
+        id: p.id,
+        userId: p.user_id,
+        postType: p.post_type,
+        body: p.body,
+        createdAt: p.created_at,
+        username: prof?.username || "",
+        avatar: prof?.avatar || "",
+      })),
+    });
+  }
+
   if (type === "following_status") {
     if (!user) return sendJson(res, 401, { ok: false, error: "Not signed in" });
     const limit = Math.min(60, Math.max(1, Number(url.searchParams.get("limit")) || 40));

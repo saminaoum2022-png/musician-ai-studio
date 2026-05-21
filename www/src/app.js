@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521friendsTypePolishV1";
+const APP_BUILD = "20260521profileActivityTabsV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2322,12 +2322,12 @@ function applyRoute() {
     try {
       const pq = new URLSearchParams(String(rawRouteQuery || ""));
       const segQ = pq.get("seg");
-      if (segQ === "all" || segQ === "public") {
+      if (segQ === "all" || segQ === "public" || segQ === "activities") {
         _profileSongsSegment = segQ;
         sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, segQ);
       } else {
         const stored = sessionStorage.getItem(PROFILE_SONGS_SEGMENT_KEY);
-        _profileSongsSegment = stored === "all" ? "all" : "public";
+        _profileSongsSegment = stored === "all" || stored === "activities" ? stored : "public";
       }
     } catch {
       _profileSongsSegment = "public";
@@ -4382,10 +4382,92 @@ async function deleteFollowingStatusPost(postId) {
     haptic("success");
     try { showToast("Post removed", { icon: "✓", durationMs: 2000 }); } catch {}
     void refreshDiscoveryFollowingFeed();
+    if (
+      (document.body.getAttribute("data-route") || "") === "profile" &&
+      _profileSongsSegment === "activities"
+    ) {
+      void renderProfileActivities();
+    }
   } catch (e) {
     haptic("error");
     try { showToast(e?.message || "Could not remove post", { icon: "!", durationMs: 2800 }); } catch {}
   }
+}
+
+async function fetchMyStatusPosts(limit = 60) {
+  try {
+    const data = await socialApi(`/api/social?type=my_status&limit=${limit}`);
+    return Array.isArray(data?.posts) ? data.posts : [];
+  } catch {
+    return [];
+  }
+}
+
+function profileActivityRowHtml(post, idx) {
+  const postType = String(post?.postType || post?.post_type || "update").trim();
+  const postId = String(post?.id || "").trim();
+  const ts = post?.createdAt || post?.created_at;
+  const when = ts ? relativeTime(new Date(ts).getTime()) : "Just now";
+  const body = escapeHtml(String(post?.body || "").trim());
+  const menuBtn = postId
+    ? `<div class="followActMenuWrap">
+        <button type="button" class="followActMore" data-follow-status-menu="${escapeHtml(postId)}" aria-label="Post options" aria-haspopup="true" aria-expanded="false">
+          <svg class="followActMoreIco" viewBox="0 0 20 6" width="18" height="5" aria-hidden="true">
+            <circle cx="3" cy="3" r="1.35" fill="currentColor"/>
+            <circle cx="10" cy="3" r="1.35" fill="currentColor"/>
+            <circle cx="17" cy="3" r="1.35" fill="currentColor"/>
+          </svg>
+        </button>
+        <div class="followActMenu" hidden role="menu">
+          <button type="button" class="followActMenuItem followActMenuItem--danger" data-follow-status-delete="${escapeHtml(postId)}" role="menuitem">Remove post</button>
+        </div>
+      </div>`
+    : "";
+  return `
+    <article class="profileActRow" data-profile-act-id="${escapeHtml(postId)}" style="--i:${idx}">
+      <div class="profileActRowTop">
+        ${followingActivityBadgeHtml("status", postType)}
+        <span class="profileActRowWhen">${escapeHtml(when)}</span>
+        ${menuBtn}
+      </div>
+      <p class="profileActRowBody">${body}</p>
+    </article>`;
+}
+
+async function renderProfileActivities() {
+  const listEl = document.getElementById("profileActivitiesList");
+  const libEl = document.getElementById("libraryList");
+  const countEl = document.getElementById("profileActivitiesCount");
+  const recoverBanner = document.getElementById("libraryRecoverBanner");
+  if (!listEl) return;
+  if (libEl) libEl.hidden = true;
+  listEl.hidden = false;
+  if (recoverBanner) recoverBanner.hidden = true;
+  listEl.innerHTML = `<div class="profileActRow profileActRow--skel" aria-hidden="true" style="min-height:72px"></div>`;
+  if (!authSession?.user?.id) {
+    listEl.innerHTML = `
+      <div class="profileActEmpty">
+        <p class="profileActEmptyTitle">Sign in to see your activity</p>
+        <p class="profileActEmptyText">Updates you post on Friends show up here.</p>
+      </div>`;
+    if (countEl) countEl.hidden = true;
+    return;
+  }
+  const posts = await fetchMyStatusPosts(60);
+  if (countEl) {
+    const n = posts.length;
+    countEl.textContent = n ? `${n} ${n === 1 ? "post" : "posts"}` : "";
+    countEl.hidden = !n;
+  }
+  if (!posts.length) {
+    listEl.innerHTML = `
+      <div class="profileActEmpty">
+        <p class="profileActEmptyTitle">No activity yet</p>
+        <p class="profileActEmptyText">Tap <strong>+</strong> on Friends to share an update — it appears here and in your followers’ feed.</p>
+      </div>`;
+    return;
+  }
+  listEl.innerHTML = posts.map((p, i) => profileActivityRowHtml(p, i)).join("");
 }
 
 async function fetchFollowingStatusPosts(limit = 40) {
@@ -4563,6 +4645,12 @@ function bindFollowingComposeOnce() {
       try { showToast("Posted to Friends", { icon: "✓", durationMs: 2200 }); } catch {}
       closeFriendsComposeSheet();
       void refreshDiscoveryFollowingFeed();
+      if (
+        (document.body.getAttribute("data-route") || "") === "profile" &&
+        _profileSongsSegment === "activities"
+      ) {
+        void renderProfileActivities();
+      }
     } catch (e) {
       haptic("error");
       try {
@@ -15830,28 +15918,25 @@ function queueReleaseCaptionCloudHeal(track) {
 }
 
 function syncProfileSongsSegmentUi() {
-  const titleEl = document.getElementById("profileSongsTitle");
-  const leadEl = document.getElementById("profileSongsLead");
   const recoverLink = document.getElementById("btnLibraryRecoverLink");
   const recoverBanner = document.getElementById("libraryRecoverBanner");
   const ownCount = document.getElementById("profileOwnSongCount");
   const allCount = document.getElementById("libraryCount");
+  const actCount = document.getElementById("profileActivitiesCount");
+  const activitiesList = document.getElementById("profileActivitiesList");
   const isAll = _profileSongsSegment === "all";
+  const isActivities = _profileSongsSegment === "activities";
   document.querySelectorAll("[data-profile-songs-segment]").forEach((btn) => {
     const on = btn.getAttribute("data-profile-songs-segment") === _profileSongsSegment;
     btn.classList.toggle("isActive", on);
     btn.setAttribute("aria-selected", on ? "true" : "false");
   });
-  if (titleEl) titleEl.textContent = isAll ? "All songs" : "Public songs";
-  if (leadEl) {
-    leadEl.innerHTML = isAll
-      ? "<strong>⋯</strong> on a row: <strong>Remix</strong>, downloads, <strong>Publish release</strong>, and more. Songs stay private until you publish."
-      : "On Discover and your public link — switch to <strong>All songs</strong> to manage every save.";
-  }
   if (recoverLink) recoverLink.hidden = !isAll;
   if (recoverBanner && !isAll) recoverBanner.hidden = true;
-  if (ownCount) ownCount.hidden = isAll;
+  if (ownCount) ownCount.hidden = isAll || isActivities;
   if (allCount) allCount.hidden = !isAll;
+  if (actCount) actCount.hidden = !isActivities;
+  if (activitiesList) activitiesList.hidden = !isActivities;
   try { updateLibraryRecoverBanner(); } catch {}
 }
 
@@ -15861,7 +15946,7 @@ function bindProfileSongsSegmentOnce() {
   document.querySelectorAll("[data-profile-songs-segment]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const seg = btn.getAttribute("data-profile-songs-segment");
-      if (seg !== "public" && seg !== "all") return;
+      if (seg !== "public" && seg !== "all" && seg !== "activities") return;
       if (seg === _profileSongsSegment) return;
       _profileSongsSegment = seg;
       try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, seg); } catch {}
@@ -15870,16 +15955,46 @@ function bindProfileSongsSegmentOnce() {
       renderProfileSongs();
     });
   });
+  const onProfileStatusMenuClick = (e) => {
+    const host = e.currentTarget;
+    const menuBtn = e.target.closest("[data-follow-status-menu]");
+    if (menuBtn && host.contains(menuBtn)) {
+      e.preventDefault();
+      e.stopPropagation();
+      const row = menuBtn.closest(".profileActRow");
+      const menu = row?.querySelector(".followActMenu");
+      const wasOpen = row?.classList.contains("followAct--statusMenuOpen");
+      closeAllFollowStatusMenus();
+      if (!wasOpen && row && menu) {
+        row.classList.add("followAct--statusMenuOpen");
+        menu.hidden = false;
+        menuBtn.setAttribute("aria-expanded", "true");
+      }
+      return;
+    }
+    const delBtn = e.target.closest("[data-follow-status-delete]");
+    if (delBtn && host.contains(delBtn)) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeAllFollowStatusMenus();
+      void deleteFollowingStatusPost(delBtn.getAttribute("data-follow-status-delete"));
+    }
+  };
   document.getElementById("libraryList")?.addEventListener("click", (e) => {
     const segBtn = e.target?.closest?.("[data-profile-songs-switch]");
     if (!segBtn) return;
     const seg = segBtn.getAttribute("data-profile-songs-switch");
-    if (seg !== "all" && seg !== "public") return;
+    if (seg !== "all" && seg !== "public" && seg !== "activities") return;
     _profileSongsSegment = seg;
     try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, seg); } catch {}
     syncProfileSongsSegmentUi();
     renderProfileSongs();
   });
+  const actList = document.getElementById("profileActivitiesList");
+  if (actList && !actList.dataset.boundProfileActMenu) {
+    actList.dataset.boundProfileActMenu = "1";
+    actList.addEventListener("click", onProfileStatusMenuClick);
+  }
 }
 
 function renderProfileSongs() {
@@ -15889,6 +16004,12 @@ function renderProfileSongs() {
     return;
   }
   syncProfileSongsSegmentUi();
+  const actList = document.getElementById("profileActivitiesList");
+  if (_profileSongsSegment === "activities") {
+    void renderProfileActivities();
+    return;
+  }
+  if (actList) actList.hidden = true;
   if (_profileSongsSegment === "all") {
     try { renderProfileOwnStats(); } catch {}
     renderLibrary();
@@ -25371,7 +25492,9 @@ if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !=
 renderProfilePreviewFromInputs();
 try {
   const stored = sessionStorage.getItem(PROFILE_SONGS_SEGMENT_KEY);
-  if (stored === "all" || stored === "public") _profileSongsSegment = stored;
+  if (stored === "all" || stored === "public" || stored === "activities") {
+    _profileSongsSegment = stored;
+  }
 } catch {}
 renderProfileSongs();
 setProfileEditing(false);

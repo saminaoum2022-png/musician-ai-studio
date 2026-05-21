@@ -1679,25 +1679,23 @@
 
           <!-- Songs — Public (Discover / link) vs All (full library) -->
           <div class="profileSongsBlock">
-            <div class="profileSongsSegmentBar discoverySegmentBar" role="tablist" aria-label="Your songs">
-              <button type="button" class="discoverySegment profileSongsSegment isActive" role="tab" aria-selected="true" data-profile-songs-segment="public" id="profileSongsSegPublic">Public</button>
-              <button type="button" class="discoverySegment profileSongsSegment" role="tab" aria-selected="false" data-profile-songs-segment="all" id="profileSongsSegAll">All songs</button>
+            <div class="profileTabBar" role="tablist" aria-label="Profile content">
+              <button type="button" class="profileTab isActive" role="tab" aria-selected="true" data-profile-songs-segment="public" id="profileSongsSegPublic">Songs</button>
+              <button type="button" class="profileTab" role="tab" aria-selected="false" data-profile-songs-segment="all" id="profileSongsSegAll">All songs</button>
+              <button type="button" class="profileTab" role="tab" aria-selected="false" data-profile-songs-segment="activities" id="profileSongsSegActivity">Activity</button>
             </div>
-            <header class="libraryHeader profileSongsHeader appScreenHeader">
-              <h2 class="appScreenTitle appScreenTitle--panel" id="profileSongsTitle">Public songs</h2>
-              <p class="profileSongsLead libraryLead appScreenLead" id="profileSongsLead">On Discover and your public link — use <strong>⋯</strong> on any row in All songs to publish.</p>
-              <div class="libraryHeaderRow">
-                <p id="profileOwnSongCount" class="libraryCount" hidden aria-live="polite"></p>
-                <p id="libraryCount" class="libraryCount" hidden aria-live="polite"></p>
-                <button
-                  type="button"
-                  id="btnLibraryRecoverLink"
-                  class="libraryRecoverLink"
-                  title="Recover a song from a Suno task ID"
-                  hidden
-                >Lost a song? Recover</button>
-              </div>
-            </header>
+            <div class="profileSongsToolbar libraryHeaderRow">
+              <p id="profileOwnSongCount" class="libraryCount" hidden aria-live="polite"></p>
+              <p id="libraryCount" class="libraryCount" hidden aria-live="polite"></p>
+              <p id="profileActivitiesCount" class="libraryCount" hidden aria-live="polite"></p>
+              <button
+                type="button"
+                id="btnLibraryRecoverLink"
+                class="libraryRecoverLink"
+                title="Recover a song from a Suno task ID"
+                hidden
+              >Lost a song? Recover</button>
+            </div>
             <div id="libraryRecoverBanner" class="libraryRecoverBanner" hidden role="region" aria-label="Recover song">
               <div class="libraryRecoverBannerInner">
                 <div class="libraryRecoverBannerBody">
@@ -1714,6 +1712,7 @@
               </div>
             </div>
             <div id="libraryList" class="libraryList profileHubSharedList"></div>
+            <div id="profileActivitiesList" class="profileActivitiesList" hidden aria-live="polite"></div>
             <p class="libraryDiagActions" hidden>
               <button type="button" id="btnLibraryDiagnostic" class="ghost libraryDiagBtn">Run library diagnostic</button>
             </p>
@@ -2762,6 +2761,6 @@
         setTimeout(unboot, 3500);
       })();
     </script>
-    <script type="module" src="./src/app.js?v=20260521friendsTypePolishV1"></script>
+    <script type="module" src="./src/app.js?v=20260521profileActivityTabsV1"></script>
   </body>
 </html>

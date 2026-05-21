@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521friendsStatusFlatV1";
+const APP_BUILD = "20260521profileActivityFeedV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2042,7 +2042,7 @@ function shortenSoundTitle(raw) {
  *  user that something landed; full songs use the result card instead. */
 const LIBRARY_TAB_DOT_KEY = "mas:libraryTabDot:v1";
 const PROFILE_SONGS_SEGMENT_KEY = "mas:profileSongsSeg:v1";
-let _profileSongsSegment = "public";
+let _profileSongsSegment = "activities";
 let _profileSongsSegmentBound = false;
 function markLibraryTabDot(on) {
   try {
@@ -2322,15 +2322,16 @@ function applyRoute() {
     try {
       const pq = new URLSearchParams(String(rawRouteQuery || ""));
       const segQ = pq.get("seg");
-      if (segQ === "all" || segQ === "public" || segQ === "activities") {
-        _profileSongsSegment = segQ;
-        sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, segQ);
+      if (segQ === "all" || segQ === "activities" || segQ === "public") {
+        _profileSongsSegment = segQ === "public" ? "activities" : segQ;
+        sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, _profileSongsSegment);
       } else {
         const stored = sessionStorage.getItem(PROFILE_SONGS_SEGMENT_KEY);
-        _profileSongsSegment = stored === "all" || stored === "activities" ? stored : "public";
+        _profileSongsSegment =
+          stored === "public" ? "activities" : stored === "all" || stored === "activities" ? stored : "activities";
       }
     } catch {
-      _profileSongsSegment = "public";
+      _profileSongsSegment = "activities";
     }
     bindProfileSongsSegmentOnce();
     syncProfileSongsSegmentUi();
@@ -4442,35 +4443,80 @@ async function renderProfileActivities() {
   const libEl = document.getElementById("libraryList");
   const countEl = document.getElementById("profileActivitiesCount");
   const recoverBanner = document.getElementById("libraryRecoverBanner");
+  const recoverLink = document.getElementById("btnLibraryRecoverLink");
   if (!listEl) return;
   if (libEl) libEl.hidden = true;
   listEl.hidden = false;
   if (recoverBanner) recoverBanner.hidden = true;
-  listEl.innerHTML = `<div class="profileActRow profileActRow--skel" aria-hidden="true" style="min-height:72px"></div>`;
+  if (recoverLink) recoverLink.hidden = true;
+  listEl.innerHTML = followingActivitySkeletonHtml();
   if (!authSession?.user?.id) {
     listEl.innerHTML = `
       <div class="profileActEmpty">
         <p class="profileActEmptyTitle">Sign in to see your activity</p>
-        <p class="profileActEmptyText">Updates you post on Friends show up here.</p>
+        <p class="profileActEmptyText">Public drops and Friends updates show up here.</p>
       </div>`;
     if (countEl) countEl.hidden = true;
     return;
   }
-  const posts = await fetchMyStatusPosts(60);
+  const uid = String(authSession.user.id);
+  const [posts, libRows] = await Promise.all([
+    fetchMyStatusPosts(60),
+    Promise.resolve(
+      loadLibrary()
+        .filter((t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile))
+        .map((t) => ({ ...t, userId: String(t.userId || uid) })),
+    ),
+  ]);
+  const pubN = libRows.length;
+  const postN = posts.length;
   if (countEl) {
-    const n = posts.length;
-    countEl.textContent = n ? `${n} ${n === 1 ? "POST" : "POSTS"}` : "";
-    countEl.hidden = !n;
+    const bits = [];
+    if (pubN) bits.push(`${pubN} PUBLIC`);
+    if (postN) bits.push(`${postN} ${postN === 1 ? "POST" : "POSTS"}`);
+    countEl.textContent = bits.join(" · ");
+    countEl.hidden = !bits.length;
   }
-  if (!posts.length) {
+  const profMap = await fetchProfilesByUserIdsMap([uid]);
+  const playCountMap = libRows.length
+    ? await fetchDiscoverSongPlayCounts(libRows.map((t) => t.id))
+    : new Map();
+  for (const t of libRows) {
+    t.playCount = playCountMap.get(String(t.id || "")) || 0;
+  }
+  const feedItems = [
+    ...posts.map((post) => ({
+      kind: "status",
+      ts: new Date(post.createdAt || post.created_at || 0).getTime() || 0,
+      post,
+    })),
+    ...libRows.map((track) => ({
+      kind: "music",
+      ts: libraryTrackPublicTs(track) || Number(track.ts || 0),
+      track,
+    })),
+  ]
+    .filter((row) => row.ts > 0 || row.kind === "status")
+    .sort((a, b) => b.ts - a.ts);
+  if (!feedItems.length) {
     listEl.innerHTML = `
       <div class="profileActEmpty">
         <p class="profileActEmptyTitle">No activity yet</p>
-        <p class="profileActEmptyText">Tap <strong>+</strong> on Friends to share an update — it appears here and in your followers’ feed.</p>
+        <p class="profileActEmptyText">Tap <strong>+</strong> on Friends to post, or use <strong>Show on public profile</strong> on a song in All songs.</p>
+        <button type="button" class="emptyStateCta" data-profile-songs-switch="all">View all songs</button>
       </div>`;
     return;
   }
-  listEl.innerHTML = posts.map((p, i) => profileActivityRowHtml(p, i)).join("");
+  listEl.innerHTML = feedItems
+    .map((item, i) =>
+      item.kind === "status"
+        ? followingStatusRowHtml(item.post, profMap, i)
+        : followingActivityRowHtml(item.track, profMap, i),
+    )
+    .join("");
+  try {
+    syncDiscoveryPlayingHighlights();
+  } catch {}
 }
 
 async function fetchFollowingStatusPosts(limit = 40) {
@@ -12201,6 +12247,7 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     const route = String(document.body.getAttribute("data-route") || "");
     if (route === "discover") void refreshDiscoverFeed();
     if (route === "friends") void refreshDiscoveryFollowingFeed();
+    if (route === "profile" && _profileSongsSegment === "activities") void renderProfileActivities();
   } catch {}
   return { ok: true };
 }
@@ -15923,7 +15970,6 @@ function queueReleaseCaptionCloudHeal(track) {
 function syncProfileSongsSegmentUi() {
   const recoverLink = document.getElementById("btnLibraryRecoverLink");
   const recoverBanner = document.getElementById("libraryRecoverBanner");
-  const ownCount = document.getElementById("profileOwnSongCount");
   const allCount = document.getElementById("libraryCount");
   const actCount = document.getElementById("profileActivitiesCount");
   const activitiesList = document.getElementById("profileActivitiesList");
@@ -15937,7 +15983,6 @@ function syncProfileSongsSegmentUi() {
   });
   if (recoverLink) recoverLink.hidden = !isAll;
   if (recoverBanner && !isAll) recoverBanner.hidden = true;
-  if (ownCount) ownCount.hidden = isAll || isActivities;
   if (allCount) allCount.hidden = !isAll;
   if (actCount) actCount.hidden = !isActivities;
   if (activitiesList) activitiesList.hidden = !isActivities;
@@ -15951,7 +15996,7 @@ function bindProfileSongsSegmentOnce() {
   document.querySelectorAll("[data-profile-songs-segment]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const seg = btn.getAttribute("data-profile-songs-segment");
-      if (seg !== "public" && seg !== "all" && seg !== "activities") return;
+      if (seg !== "all" && seg !== "activities") return;
       if (seg === _profileSongsSegment) return;
       _profileSongsSegment = seg;
       try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, seg); } catch {}
@@ -15966,7 +16011,7 @@ function bindProfileSongsSegmentOnce() {
     if (menuBtn && host.contains(menuBtn)) {
       e.preventDefault();
       e.stopPropagation();
-      const row = menuBtn.closest(".profileActRow");
+      const row = menuBtn.closest(".followAct--status");
       const menu = row?.querySelector(".followActMenu");
       const wasOpen = row?.classList.contains("followAct--statusMenuOpen");
       closeAllFollowStatusMenus();
@@ -15989,7 +16034,7 @@ function bindProfileSongsSegmentOnce() {
     const segBtn = e.target?.closest?.("[data-profile-songs-switch]");
     if (!segBtn) return;
     const seg = segBtn.getAttribute("data-profile-songs-switch");
-    if (seg !== "all" && seg !== "public" && seg !== "activities") return;
+    if (seg !== "all" && seg !== "activities") return;
     _profileSongsSegment = seg;
     try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, seg); } catch {}
     syncProfileSongsSegmentUi();
@@ -15999,6 +16044,15 @@ function bindProfileSongsSegmentOnce() {
   if (actList && !actList.dataset.boundProfileActMenu) {
     actList.dataset.boundProfileActMenu = "1";
     actList.addEventListener("click", onProfileStatusMenuClick);
+    wireTrackOptionsSheetOnce();
+    actList.addEventListener("click", (e) => {
+      if (e.target.closest(".followActMenuWrap, [data-follow-status-menu], [data-follow-status-delete]")) return;
+      if (e.target.closest(".followActAvatar, .followActUserLink")) return;
+      const pl = e.target.closest("[data-user-lib-play], .followActMedia");
+      if (!pl || !actList.contains(pl)) return;
+      e.preventDefault();
+      playDiscoverTarget(pl);
+    });
   }
 }
 
@@ -16010,17 +16064,17 @@ function renderProfileSongs() {
   }
   syncProfileSongsSegmentUi();
   const actList = document.getElementById("profileActivitiesList");
+  const libEl = document.getElementById("libraryList");
   if (_profileSongsSegment === "activities") {
     void renderProfileActivities();
     return;
   }
   if (actList) actList.hidden = true;
+  if (libEl) libEl.hidden = false;
   if (_profileSongsSegment === "all") {
     try { renderProfileOwnStats(); } catch {}
     renderLibrary();
-    return;
   }
-  renderProfileHubShared();
 }
 
 function refreshOwnSongsUi() {
@@ -16066,6 +16120,9 @@ function renderProfileLibraryPublicOnLinkSection() {
       countEl.textContent = "";
       countEl.hidden = true;
     }
+  }
+  if ((document.body.getAttribute("data-route") || "") === "profile") {
+    return;
   }
   if (!withUrl.length) {
     els.profileHubSharedList.innerHTML = `
@@ -17556,7 +17613,7 @@ function syncProfileHubSharedRowsFromPlayer() {
 
 function renderLibrary() {
   if (!els.libraryList) return;
-  if ((document.body.getAttribute("data-route") || "") === "profile" && _profileSongsSegment === "public") return;
+  if ((document.body.getAttribute("data-route") || "") === "profile" && _profileSongsSegment !== "all") return;
   try {
     updateLibraryRecoverBanner();
   } catch {}
@@ -20365,6 +20422,13 @@ async function recoverSongFromTaskId(taskId, { silent = false } = {}) {
 function updateLibraryRecoverBanner() {
   const wrap = els.libraryRecoverBanner;
   if (!wrap) return;
+  const route = document.body.getAttribute("data-route") || "";
+  if (route === "profile" && _profileSongsSegment !== "all") {
+    wrap.hidden = true;
+    const recoverLink = document.getElementById("btnLibraryRecoverLink");
+    if (recoverLink) recoverLink.hidden = true;
+    return;
+  }
   const rec = loadRecoverableGenerationTask();
   const hint = els.libraryRecoverHint;
   if (!rec?.taskId) {
@@ -25499,7 +25563,7 @@ renderProfilePreviewFromInputs();
 try {
   const stored = sessionStorage.getItem(PROFILE_SONGS_SEGMENT_KEY);
   if (stored === "all" || stored === "public" || stored === "activities") {
-    _profileSongsSegment = stored;
+    _profileSongsSegment = stored === "public" ? "activities" : stored;
   }
 } catch {}
 renderProfileSongs();

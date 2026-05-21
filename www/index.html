@@ -1680,12 +1680,10 @@
           <!-- Songs — Public (Discover / link) vs All (full library) -->
           <div class="profileSongsBlock">
             <div class="profileTabBar" role="tablist" aria-label="Profile content">
-              <button type="button" class="profileTab isActive" role="tab" aria-selected="true" data-profile-songs-segment="public" id="profileSongsSegPublic">Songs</button>
+              <button type="button" class="profileTab isActive" role="tab" aria-selected="true" data-profile-songs-segment="activities" id="profileSongsSegActivity">Activity</button>
               <button type="button" class="profileTab" role="tab" aria-selected="false" data-profile-songs-segment="all" id="profileSongsSegAll">All songs</button>
-              <button type="button" class="profileTab" role="tab" aria-selected="false" data-profile-songs-segment="activities" id="profileSongsSegActivity">Activity</button>
             </div>
             <div class="profileSongsToolbar libraryHeaderRow">
-              <p id="profileOwnSongCount" class="libraryCount" hidden aria-live="polite"></p>
               <p id="libraryCount" class="libraryCount" hidden aria-live="polite"></p>
               <p id="profileActivitiesCount" class="libraryCount" hidden aria-live="polite"></p>
               <button
@@ -1712,7 +1710,7 @@
               </div>
             </div>
             <div id="libraryList" class="libraryList profileHubSharedList"></div>
-            <div id="profileActivitiesList" class="profileActivitiesList" hidden aria-live="polite"></div>
+            <div id="profileActivitiesList" class="profileActivitiesList followActStack" hidden aria-live="polite"></div>
           </div>
 
           <!-- Popular this week — top 3 only, horizontal carousel. -->
@@ -2756,6 +2754,6 @@
         setTimeout(unboot, 3500);
       })();
     </script>
-    <script type="module" src="./src/app.js?v=20260521friendsStatusFlatV1"></script>
+    <script type="module" src="./src/app.js?v=20260521profileActivityFeedV1"></script>
   </body>
 </html>

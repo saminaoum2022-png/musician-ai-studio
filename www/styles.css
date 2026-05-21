@@ -11518,6 +11518,7 @@ body.notificationsCenterOpen{
 
 .discoveryPage{
   gap: 14px;
+  background: transparent;
 }
 
 /* Discover survival (−100 → 0 in 7 days) */
@@ -11983,21 +11984,6 @@ body[data-route="discover-playlist"] > .app{
 }
 .discoverPlaylistList{
   min-width: 0;
-}
-/* Purple wash only behind the status-bar + Discover|Following segment —
-   not the feed (Discover pane matches Following’s flat black). */
-body[data-route="discover"]::before{
-  content: "";
-  position: fixed;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: calc(env(safe-area-inset-top, 0px) + 118px);
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(ellipse 100% 95% at 50% 0%, rgba(124,92,255,0.28), transparent 62%),
-    radial-gradient(ellipse 55% 40% at 100% 8%, rgba(56,189,248,0.07), transparent 52%);
 }
 body[data-route="discover"] > .app{
   position: relative;
@@ -12539,7 +12525,7 @@ body[data-route="discover"] > .app{
   gap: 0;
   padding-bottom: 8px;
   min-height: 42vh;
-  background: var(--bg);
+  background: transparent;
 }
 .discoveryPaneFollowing{
   position: relative;
@@ -12548,7 +12534,7 @@ body[data-route="discover"] > .app{
   gap: 0;
   padding-bottom: 8px;
   min-height: 0;
-  background: var(--bg);
+  background: transparent;
 }
 /* Friends: transparent pane so body gradient matches Home / Create / Profile */
 .friendsPage{
@@ -13203,6 +13189,10 @@ button.discoverySpotCard{
   flex-direction: column;
   gap: 0;
   min-width: 0;
+}
+.profileActivitiesList.followActStack .followAct{
+  padding: 12px 14px 12px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 .profileActivitiesList[hidden]{
   display: none !important;

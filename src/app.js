@@ -5610,22 +5610,21 @@ function bindFollowingComposeOnce() {
     }
     const text = String(input?.value || "").trim();
     if (!text) return;
+    const prevPostLabel = postBtn.textContent || "Post";
     postBtn.disabled = true;
+    postBtn.textContent = "Posting…";
     try {
       const res = await socialApi("/api/social", {
         method: "POST",
+        timeoutMs: 12000,
         body: JSON.stringify({ action: "post_status", postType: _followComposeType, body: text }),
       });
       _friendsOwnPostPin = normalizeFriendsOwnPost(res?.post, text, _followComposeType);
       if (input) input.value = "";
-      syncFollowingComposeUi();
+      closeFriendsComposeSheet();
       haptic("success");
       try { showToast("Posted — followers will see it", { icon: "✓", durationMs: 2200 }); } catch {}
-      closeFriendsComposeSheet();
       await prependFriendsOwnPost(_friendsOwnPostPin);
-      if ((document.body.getAttribute("data-route") || "") === "friends") {
-        void refreshDiscoveryFollowingFeed();
-      }
       if (
         (document.body.getAttribute("data-route") || "") === "profile" &&
         _profileSongsSegment === "activities"
@@ -5637,6 +5636,8 @@ function bindFollowingComposeOnce() {
       try {
         showToast(e?.message || "Could not post — run social_status_posts.sql in Supabase", { icon: "!", durationMs: 3200 });
       } catch {}
+    } finally {
+      postBtn.textContent = prevPostLabel;
       syncFollowingComposeUi();
     }
   });
@@ -5972,7 +5973,7 @@ async function refreshDiscoveryFollowingFeed() {
       renderDiscoveryFollowingEmpty(
         statusEl,
         "Quiet for now",
-        "Tap + to share an update, or wait for drops and remixes from people you follow.",
+        "Use Create in the tab bar to share an update, or wait for drops from people you follow.",
       );
       return;
     }
@@ -10729,32 +10730,50 @@ async function supabaseFetchPublicSongRemixMeta({ songId, ownerUserId }) {
 let currentUserPublicProfileId = "";
 let currentUserPublicSocialStats = { followers: 0, following: 0, isFollowing: false, followsViewer: false };
 
-async function socialApi(path, opts) {
-  const run = async () => {
+async function socialApi(path, opts = {}) {
+  const timeoutMs = Math.max(4000, Number(opts?.timeoutMs) || 12000);
+  const { timeoutMs: _drop, ...fetchOpts } = opts;
+  const run = async (signal) => {
     const token = getSupabaseAuthToken();
     const headers = {
       Accept: "application/json",
-      ...(opts?.headers || {}),
+      ...(fetchOpts?.headers || {}),
     };
     if (token) headers.Authorization = `Bearer ${token}`;
-    if (opts?.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+    if (fetchOpts?.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
     const r = await apiFetch(path, {
-      ...(opts || {}),
+      ...fetchOpts,
       headers,
       cache: "no-store",
+      signal,
     });
     const data = await r.json().catch(() => null);
     if (!r.ok) throw new Error(data?.error || `Social request failed (${r.status})`);
     return data;
   };
+  const ctrl = new AbortController();
+  const timer = window.setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    return await run();
+    return await run(ctrl.signal);
   } catch (e) {
-    if (isNativeShell()) {
+    if (e?.name === "AbortError") {
+      throw new Error("Request timed out — check your connection and try again.");
+    }
+    if (isNativeShell() && !_resolvedApiBase) {
       const fixed = await ensureNativeApiBaseResolved();
-      if (fixed) return await run();
+      if (fixed) {
+        const retry = new AbortController();
+        const retryTimer = window.setTimeout(() => retry.abort(), timeoutMs);
+        try {
+          return await run(retry.signal);
+        } finally {
+          window.clearTimeout(retryTimer);
+        }
+      }
     }
     throw e;
+  } finally {
+    window.clearTimeout(timer);
   }
 }
 

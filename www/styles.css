@@ -13613,9 +13613,10 @@ body[data-profile-songs-seg="activities"] #libraryRecoverBanner{
   transition: opacity 200ms ease, visibility 200ms ease;
 }
 body[data-route="friends"] #friendsComposeFabRoot{
-  visibility: visible;
-  opacity: 1;
-  pointer-events: auto;
+  display: none !important;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 body.friendsComposeSheetOpen #friendsComposeFabRoot,
 body.trackSheetOpen #friendsComposeFabRoot{

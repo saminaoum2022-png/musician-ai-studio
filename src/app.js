@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521friendsUiFixV2";
+const APP_BUILD = "20260521friendsFeedLoadFabV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2386,10 +2386,8 @@ function applyRoute() {
     void refreshMyCredits({ silent: true });
   }
   if (wanted === "friends") {
-    bindFriendsPageOnce();
     try { onLeaveSearchRoute(); } catch {}
-    syncFollowingComposeUi();
-    void refreshDiscoveryFollowingFeed();
+    enterFriendsRoute();
   }
   if (wanted === "discover") {
     bindDiscoveryDiscoverControls();
@@ -2645,6 +2643,7 @@ dismissBootSplash();
 try {
   bindDiscoveryDiscoverControls();
   bindFriendsPageOnce();
+  wireFriendsComposeFabOnce();
 } catch {}
 try {
   wireTrackOptionsSheetOnce();
@@ -4642,6 +4641,43 @@ function renderDiscoveryFollowingEmpty(statusEl, title, text, actionHtml = "") {
     </div>`;
 }
 
+let _friendsRouteEnterToken = 0;
+
+function enterFriendsRoute() {
+  const token = ++_friendsRouteEnterToken;
+  bindFriendsPageOnce();
+  wireFriendsComposeFabOnce();
+  syncFollowingComposeUi();
+  const run = () => {
+    if (token !== _friendsRouteEnterToken) return;
+    if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
+    void refreshDiscoveryFollowingFeed();
+  };
+  run();
+  requestAnimationFrame(run);
+  window.setTimeout(run, 100);
+}
+
+function wireFriendsComposeFabOnce() {
+  if (document.documentElement.dataset.friendsComposeFabWired) return;
+  document.documentElement.dataset.friendsComposeFabWired = "1";
+  document.addEventListener(
+    "click",
+    (e) => {
+      const btn = e.target.closest("#friendsComposeOpenBtn");
+      if (!btn) return;
+      if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
+      e.preventDefault();
+      e.stopPropagation();
+      haptic("light");
+      const sheet = document.getElementById("friendsComposeSheet");
+      if (sheet?.classList.contains("isOpen")) closeFriendsComposeSheet();
+      else openFriendsComposeSheet();
+    },
+    true,
+  );
+}
+
 async function refreshDiscoveryFollowingFeed() {
   const gen = ++_discoveryFollowingGen;
   const statusEl = document.getElementById("discoveryFollowingStatus");
@@ -4655,6 +4691,17 @@ async function refreshDiscoveryFollowingFeed() {
   statusEl.textContent = "";
 
   if (!authSession?.user?.id) {
+    if (
+      String(document.body.getAttribute("data-route") || "") === "friends" &&
+      getSupabaseAuthToken()
+    ) {
+      window.setTimeout(() => {
+        if (gen !== _discoveryFollowingGen) return;
+        if ((document.body.getAttribute("data-route") || "") !== "friends") return;
+        void refreshDiscoveryFollowingFeed();
+      }, 160);
+      return;
+    }
     listEl.classList.remove("isDiscoveryLoading");
     listEl.hidden = true;
     listEl.innerHTML = "";
@@ -4837,6 +4884,7 @@ function bindFriendsPageOnce() {
   wireUserPublicFeedRowsOnce();
   bindFollowingComposeOnce();
   wireFriendsComposeSheetOnce();
+  wireFriendsComposeFabOnce();
   if (!_friendsStatusMenuDocBound) {
     _friendsStatusMenuDocBound = true;
     document.addEventListener("click", (e) => {
@@ -4847,16 +4895,6 @@ function bindFriendsPageOnce() {
   }
   if (_friendsPageBound) return;
   _friendsPageBound = true;
-  const composeOpen = document.getElementById("friendsComposeOpenBtn");
-  if (composeOpen && !composeOpen.dataset.boundFriendsComposeOpen) {
-    composeOpen.dataset.boundFriendsComposeOpen = "1";
-    composeOpen.addEventListener("click", () => {
-      haptic("light");
-      const sheet = document.getElementById("friendsComposeSheet");
-      if (sheet?.classList.contains("isOpen")) closeFriendsComposeSheet();
-      else openFriendsComposeSheet();
-    });
-  }
   const friendsPage = document.getElementById("friendsPage");
   if (friendsPage && !friendsPage.dataset.boundFriendsPage) {
     friendsPage.dataset.boundFriendsPage = "1";
@@ -7811,6 +7849,11 @@ function saveAuthSession(sess) {
   try {
     if ((document.body.getAttribute("data-route") || "") === "profile") renderProfileSongs();
     else refreshOwnSongsUi();
+  } catch {}
+  try {
+    if ((document.body.getAttribute("data-route") || "") === "friends") {
+      void refreshDiscoveryFollowingFeed();
+    }
   } catch {}
 }
 function getSupabaseAuthToken() {
@@ -25157,6 +25200,7 @@ void (async () => {
   await refreshAuthStateFromSupabase();
   try {
     if ((document.body.getAttribute("data-route") || "") === "profile") renderProfileSongs();
+    else if ((document.body.getAttribute("data-route") || "") === "friends") enterFriendsRoute();
   } catch {}
   if (usedCodeFlow || usedTokenFlow) window.location.hash = "#/generate";
 

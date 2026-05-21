@@ -13151,7 +13151,8 @@ button.discoverySpotCard{
   position: fixed;
   top: calc(env(safe-area-inset-top, 0px) + 10px);
   right: 14px;
-  z-index: 58;
+  z-index: 70;
+  pointer-events: none;
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
@@ -13167,6 +13168,9 @@ body.trackSheetOpen #friendsComposeFabRoot{
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
+}
+.friendsComposeFabRoot .friendsComposeFab{
+  pointer-events: auto;
 }
 .friendsComposeFab{
   position: relative;
@@ -13826,6 +13830,29 @@ body.friendsComposeSheetOpen .footer{
   font-weight: 800;
   color: #fff;
 }
+.friendsPage .followActWhoLine .followActUser{
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.friendsPage .followActBadge{
+  padding: 2px 7px 2px 4px;
+  gap: 4px;
+}
+.friendsPage .followActBadgeIco{
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+}
+.friendsPage .followActBadgeLabel{
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+}
+.friendsPage .followActBadgeIco .followActIcoSvg{
+  width: 11px;
+  height: 11px;
+}
 .followActVerb{
   font-weight: 500;
   color: rgba(232,238,247,0.72);
@@ -13846,6 +13873,13 @@ body.friendsComposeSheetOpen .footer{
   color: rgba(244,247,255,0.9);
   white-space: pre-wrap;
   word-break: break-word;
+}
+.friendsPage .followAct--status .followActStatusText{
+  margin: 2px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: rgba(248,250,255,0.96);
 }
 .followAct--status .followActContent{
   padding-left: 50px;

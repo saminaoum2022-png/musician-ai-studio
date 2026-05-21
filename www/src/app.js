@@ -39,8 +39,6 @@ try {
  *  — interim gate for the Profile "Verified Nabad Creator" badge until
  *  `profiles.sound_certified` is live in Supabase. */
 let _nabadCertifiedUserIds = new Set();
-/** Set before applyRoute() to skip the grid blur animation (Create chooser handoff). */
-let _suppressRouteSwapAnim = false;
 
 /** Verified badges are gated by `profiles.sound_certified` or the optional UUID allowlist only. */
 const INTERIM_ALWAYS_SHOW_PUBLIC_PROFILE_VERIFIED = false;
@@ -2152,6 +2150,26 @@ async function refreshNotificationsUnreadBadge({ force = false } = {}) {
   }
 }
 
+function routeApplyFallback(err) {
+  console.error("[route] applyRoute failed", err);
+  try { dismissBootSplash(); } catch {}
+  const fb = authSession?.user?.id ? "challenges" : "intro";
+  document.body.setAttribute("data-route", fb);
+  document.body.classList.toggle("isIntro", fb === "intro");
+  document.body.classList.toggle("isAuth", fb === "auth");
+  document.body.classList.remove("pageTransitioning", "booting");
+  const main = document.querySelector("main.grid");
+  if (main) main.classList.remove("routeSwap");
+}
+
+function safeApplyRoute() {
+  try {
+    applyRoute();
+  } catch (e) {
+    routeApplyFallback(e);
+  }
+}
+
 function applyRoute() {
   const hash = String(location.hash || "");
   const rawRoute = hash.startsWith("#/") ? hash.slice(2) : "generate";
@@ -2227,6 +2245,7 @@ function applyRoute() {
   document.body.classList.toggle("isIntro", wanted === "intro");
   document.body.classList.toggle("isAuth", wanted === "auth");
   document.body.setAttribute("data-route", wanted);
+  try { document.body.dataset.route = wanted; } catch {}
   if (wanted !== "discover" && wanted !== "discover-playlist" && wanted !== "friends") {
     try { document.body.removeAttribute("data-discovery-segment"); } catch {}
   }
@@ -2260,10 +2279,12 @@ function applyRoute() {
   const main = document.querySelector("main.grid");
   if (main) {
     main.classList.remove("routeSwap");
-    if (!_suppressRouteSwapAnim) {
-      requestAnimationFrame(() => main.classList.add("routeSwap"));
-    }
-    _suppressRouteSwapAnim = false;
+    requestAnimationFrame(() => {
+      main.classList.remove("routeSwap");
+      void main.offsetWidth;
+      main.classList.add("routeSwap");
+      window.setTimeout(() => main.classList.remove("routeSwap"), 320);
+    });
   }
   // Hub audio is bound to the Hub view only. Any route swap away from
   // Hub fully stops Hub playback so nothing keeps streaming silently
@@ -4177,7 +4198,6 @@ function onLeaveSearchRoute() {
 }
 
 let _discoveryFollowingGen = 0;
-let _suppressRouteSwapAnim = false;
 /** Latest status post by you — pinned at top of Friends after compose (not in following API). */
 let _friendsOwnPostPin = null;
 let _followComposeType = "update";
@@ -4737,7 +4757,6 @@ function navigateFromCreateChooser(action) {
   }
 
   if (kind === "moment") {
-    _suppressRouteSwapAnim = true;
     openMomentCreatePage("moment");
     try { haptic("light"); } catch {}
     return;
@@ -4747,7 +4766,6 @@ function navigateFromCreateChooser(action) {
     setCreateEntryIntent("");
     _followComposeType = "update";
     try { syncFollowingComposeUi(); } catch {}
-    _suppressRouteSwapAnim = true;
     try { location.hash = "#/friends"; } catch {}
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {

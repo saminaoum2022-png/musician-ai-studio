@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522momentStoryV1";
+const APP_BUILD = "20260522webFriendsApiV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1735,8 +1735,8 @@ function scheduleRenderHubNowPlaying() {
 const LATEST_SUNO_MODEL = "V5_5";
 /** Production API origins for native (try in order if one host fails). */
 const NATIVE_API_BASE_CANDIDATES = [
-  "https://nabad-ai.vercel.app",
   "https://musician-ai-studio.vercel.app",
+  "https://nabad-ai.vercel.app",
 ];
 function nativeApiBaseCandidates() {
   const out = [];
@@ -1756,14 +1756,21 @@ const API_BASE = (() => {
 /** Host that successfully served `/api/public-config` (Friends/social need the same origin). */
 let _resolvedApiBase = API_BASE;
 function setResolvedApiBase(base) {
+  if (!isNativeShell()) {
+    _resolvedApiBase = "";
+    return;
+  }
   const b = String(base || "").trim().replace(/\/$/, "");
   _resolvedApiBase = b;
 }
+/** Web always hits same-origin `/api/*`. Native uses resolved Vercel host (env.client.js). */
 function apiUrl(p) {
+  const path = String(p || "").startsWith("/") ? p : `/${p}`;
+  if (!isNativeShell()) return path;
   const base = _resolvedApiBase || API_BASE;
-  return base ? `${base}${p}` : p;
+  return base ? `${base.replace(/\/$/, "")}${path}` : path;
 }
-const PUBLIC_CONFIG_CACHE_KEY = "mas:public-config:v1";
+const PUBLIC_CONFIG_CACHE_KEY = "mas:public-config:v2";
 let lastPublicConfigStatus = 0;
 let lastPublicConfigError = "";
 
@@ -1812,7 +1819,8 @@ function loadPublicConfigFromCache() {
     if (!raw) return false;
     const parsed = JSON.parse(raw);
     applyPublicConfigPayload(parsed);
-    if (parsed?.apiBase) setResolvedApiBase(parsed.apiBase);
+    if (isNativeShell() && parsed?.apiBase) setResolvedApiBase(parsed.apiBase);
+    else _resolvedApiBase = "";
     return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
   } catch {
     return false;
@@ -1832,7 +1840,8 @@ function applyClientEnvBootstrap() {
     const env = window.__NABAD_CLIENT_ENV__;
     if (!env || typeof env !== "object") return false;
     applyPublicConfigPayload(env);
-    if (env.apiBase) setResolvedApiBase(env.apiBase);
+    if (isNativeShell() && env.apiBase) setResolvedApiBase(env.apiBase);
+    else _resolvedApiBase = "";
     return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
   } catch {
     return false;
@@ -5459,13 +5468,9 @@ function applyMomentToFriendsRail(moment) {
   if (!rail || !scroll || !moment || !authSession?.user?.id) return;
   _friendsMomentsById.set(String(moment.id), moment);
   const ownId = String(authSession.user.id);
-  const ownMoment = String(moment.userId) === ownId
-    ? moment
-    : [..._friendsMomentsById.values()].find((m) => String(m.userId) === ownId) || null;
-  const others = [..._friendsMomentsById.values()].filter(
-    (m) => String(m.userId) !== ownId && String(m.id) !== String(moment.id),
-  );
-  if (String(moment.userId) !== ownId) others.unshift(moment);
+  const all = [..._friendsMomentsById.values()];
+  const ownMoment = all.find((m) => String(m.userId) === ownId) || null;
+  const others = all.filter((m) => String(m.userId) !== ownId);
   const tiles = [
     momentPickTileHtml(ownMoment || { userId: ownId }, { isOwn: true }),
     ...others.map((m) => momentPickTileHtml(m)),
@@ -10860,6 +10865,9 @@ function socialApiErrorMessage(err) {
     return "Vercel blocked the API (403). Turn off Deployment Protection for Production in Vercel Settings, or add VERCEL_PROTECTION_BYPASS to the project and redeploy (see docs/LOGIN_403_VERCEL.md).";
   }
   if (/failed to fetch|load failed|networkerror|aborted/i.test(msg)) {
+    if (!isNativeShell()) {
+      return "Network error loading Friends. Hard-refresh the page (Cmd+Shift+R). If it persists, check docs/LOGIN_403_VERCEL.md.";
+    }
     return "Network error loading Friends. If you use Vercel protection, the API may be blocked — check docs/LOGIN_403_VERCEL.md.";
   }
   return msg || "Please try again in a moment.";

@@ -9,7 +9,7 @@ import { join } from "node:path";
 const supabaseUrl = String(process.env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
 const supabaseAnonKey = String(process.env.SUPABASE_ANON_KEY || "").trim();
 const apiBase = String(
-  process.env.API_BASE || process.env.VERCEL_API_BASE || "https://nabad-ai.vercel.app",
+  process.env.API_BASE || process.env.VERCEL_API_BASE || "https://musician-ai-studio.vercel.app",
 ).trim().replace(/\/+$/, "");
 const vercelProtectionBypass = String(
   process.env.VERCEL_PROTECTION_BYPASS || process.env.VERCEL_AUTOMATION_BYPASS_SECRET || "",

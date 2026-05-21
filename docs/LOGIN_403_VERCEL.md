@@ -4,6 +4,8 @@ If you see **403: Forbidden** in the browser, or the app says **"Could not load 
 
 Verified: `https://musician-ai-studio.vercel.app/` and `/api/public-config` return **403** while Deployment Protection is on.
 
+**Web Friends “network error” after login:** If the browser cached `apiBase: https://nabad-ai.vercel.app` (old default), API calls leave your live site and fail. Builds from `20260522webFriendsApiV1` always use same-origin `/api/*` on web. Hard-refresh once after deploy.
+
 ## Fix A — Turn off protection (simplest)
 
 1. [Vercel Dashboard](https://vercel.com) → **musician-ai-studio** project.

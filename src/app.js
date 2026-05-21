@@ -5030,6 +5030,7 @@ function navigateFromCreateChooser(action) {
 
 function openFriendsForStatusCompose() {
   setCreateEntryIntent("");
+  _friendsStatusComposePending = true;
   _followComposeType = "update";
   try { syncFollowingComposeUi(); } catch {}
   const onFriends = String(location.hash || "") === "#/friends";
@@ -5038,11 +5039,6 @@ function openFriendsForStatusCompose() {
   } else {
     enterFriendsRoute();
   }
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      try { openFriendsComposeSheet(); } catch {}
-    });
-  });
 }
 
 function wireCreateChooserSheetOnce() {
@@ -5627,7 +5623,9 @@ function bindFollowingComposeOnce() {
       try { showToast("Posted — followers will see it", { icon: "✓", durationMs: 2200 }); } catch {}
       closeFriendsComposeSheet();
       await prependFriendsOwnPost(_friendsOwnPostPin);
-      void refreshDiscoveryFollowingFeed();
+      if ((document.body.getAttribute("data-route") || "") === "friends") {
+        void refreshDiscoveryFollowingFeed();
+      }
       if (
         (document.body.getAttribute("data-route") || "") === "profile" &&
         _profileSongsSegment === "activities"
@@ -5763,8 +5761,9 @@ function renderDiscoveryFollowingEmpty(statusEl, title, text, actionHtml = "") {
 }
 
 let _friendsRouteEnterToken = 0;
-
 let _enterFriendsDebounce = 0;
+let _friendsStatusComposePending = false;
+let _friendsFeedAuthRetry = 0;
 
 function runFriendsRouteRefresh(token) {
   if (token !== _friendsRouteEnterToken) return;
@@ -5778,6 +5777,17 @@ function enterFriendsRoute() {
   bindFriendsPageOnce();
   wireFriendsComposeFabOnce();
   syncFollowingComposeUi();
+  if (_friendsStatusComposePending) {
+    void refreshFriendsMomentsRail();
+    if (_enterFriendsDebounce) clearTimeout(_enterFriendsDebounce);
+    _enterFriendsDebounce = window.setTimeout(() => {
+      _enterFriendsDebounce = 0;
+      if (token !== _friendsRouteEnterToken) return;
+      _friendsStatusComposePending = false;
+      try { openFriendsComposeSheet(); } catch {}
+    }, 80);
+    return;
+  }
   runFriendsRouteRefresh(token);
   if (_enterFriendsDebounce) clearTimeout(_enterFriendsDebounce);
   _enterFriendsDebounce = window.setTimeout(() => {
@@ -5811,6 +5821,7 @@ async function refreshDiscoveryFollowingFeed() {
   const statusEl = document.getElementById("discoveryFollowingStatus");
   const listEl = document.getElementById("discoveryFollowingList");
   if (!statusEl || !listEl) return;
+  if (authSession?.user?.id) _friendsFeedAuthRetry = 0;
 
   const keepFeed = Boolean(_friendsOwnPostPin && listEl.querySelector(".followAct"));
   listEl.classList.add("isDiscoveryLoading");
@@ -5829,16 +5840,31 @@ async function refreshDiscoveryFollowingFeed() {
         await refreshAuthStateFromSupabase();
       } catch {}
       if (authSession?.user?.id) {
+        _friendsFeedAuthRetry = 0;
         /* fall through — session hydrated after login */
-      } else {
+      } else if (_friendsFeedAuthRetry < 12) {
+        _friendsFeedAuthRetry += 1;
         window.setTimeout(() => {
           if (gen !== _discoveryFollowingGen) return;
           if ((document.body.getAttribute("data-route") || "") !== "friends") return;
           void refreshDiscoveryFollowingFeed();
         }, 200);
         return;
+      } else {
+        _friendsFeedAuthRetry = 0;
+        listEl.classList.remove("isDiscoveryLoading");
+        listEl.hidden = true;
+        listEl.innerHTML = "";
+        renderDiscoveryFollowingEmpty(
+          statusEl,
+          "Sign in to see activity",
+          "Follow musicians from Discover — their drops and remixes show up here.",
+          `<a class="solid discoveryEmptyCta" href="#/profile">Sign in</a>`,
+        );
+        return;
       }
     } else {
+      _friendsFeedAuthRetry = 0;
       listEl.classList.remove("isDiscoveryLoading");
       listEl.hidden = true;
       listEl.innerHTML = "";

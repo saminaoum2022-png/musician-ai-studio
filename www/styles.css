@@ -9164,33 +9164,33 @@ input::placeholder, textarea::placeholder{
     color: rgba(223, 231, 251, 0.85);
   }
   .mobileTabbar a.active{
-    color: #b78bff;
+    color: rgba(232, 238, 247, 0.92);
     background: transparent;
   }
   .mobileTabbar a.active .tabIco{
-    stroke: url(#tabActiveGrad);
+    stroke: rgba(232, 238, 247, 0.92);
     stroke-width: 1.85;
     opacity: 1;
     transform: scale(1.06);
   }
   .mobileTabbar a.active .tabIcoDiscover circle[fill="none"]{
-    stroke: url(#tabActiveGrad);
+    stroke: rgba(232, 238, 247, 0.92);
   }
   .mobileTabbar a.active .tabIcoDiscover path[fill="currentColor"],
   .mobileTabbar a.active .tabIcoDiscover circle[fill="currentColor"]{
-    fill: url(#tabActiveGrad);
+    fill: rgba(232, 238, 247, 0.92);
     stroke: none;
   }
   .mobileTabbar a.active .tabIcoPlay polygon{
-    fill: url(#tabActiveGrad);
+    fill: rgba(232, 238, 247, 0.92);
   }
   .mobileTabbar a.active .tabIcoFriends path,
   .mobileTabbar a.active .tabIcoFriends circle{
-    stroke: url(#tabActiveGrad);
+    stroke: rgba(232, 238, 247, 0.92);
     stroke-width: 1.85;
   }
   .mobileTabbar a.friendsTab.active{
-    color: transparent;
+    color: rgba(232, 238, 247, 0.92);
     background: transparent;
   }
   .tabProfileLink.active .tabProfileAvatarRing{

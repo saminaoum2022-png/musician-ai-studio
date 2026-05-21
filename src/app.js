@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522momentViewerLayoutV1";
+const APP_BUILD = "20260522momentComposeFlowV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5099,21 +5099,22 @@ function isCreateMomentIntent() {
 
 let momentPhotoDataUrl = "";
 
+function clearMomentPhotoInputs() {
+  for (const id of ["momentPhotoLibrary", "momentPhotoCamera", "momentPhotoFile"]) {
+    try {
+      const el = document.getElementById(id);
+      if (el) el.value = "";
+    } catch {}
+  }
+}
+
 function resetMomentComposeForm() {
   const cap = document.getElementById("momentCaptionInput");
   if (cap) cap.value = "";
   momentPhotoDataUrl = "";
-  const pick = document.getElementById("momentPhotoPick");
   const preview = document.getElementById("momentPhotoPreview");
-  const upload = document.getElementById("momentPhotoUpload");
-  try {
-    if (upload) upload.value = "";
-  } catch {}
-  if (preview) {
-    preview.removeAttribute("src");
-    preview.hidden = true;
-  }
-  if (pick) pick.classList.remove("hasPhoto");
+  clearMomentPhotoInputs();
+  if (preview) preview.removeAttribute("src");
   syncMomentPageUi();
 }
 
@@ -5123,9 +5124,42 @@ function getMomentCaptionText() {
 }
 
 function syncMomentPageUi() {
-  const publishBtn = document.getElementById("btnMomentPublish");
   const hasPhoto = Boolean(String(momentPhotoDataUrl || "").trim());
+  const source = document.getElementById("momentSourceStage");
+  const compose = document.getElementById("momentComposeStage");
+  if (source) source.hidden = hasPhoto;
+  if (compose) compose.hidden = !hasPhoto;
+  const publishBtn = document.getElementById("btnMomentPublish");
   if (publishBtn) publishBtn.disabled = !hasPhoto;
+}
+
+async function applyMomentPhotoFromFile(file) {
+  if (!file) return;
+  const preview = document.getElementById("momentPhotoPreview");
+  try {
+    const dataUrl = await prepareMomentCoverDataUrl(file);
+    momentPhotoDataUrl = dataUrl;
+    if (preview) preview.src = dataUrl;
+    syncMomentPageUi();
+    try { document.getElementById("momentCaptionInput")?.focus?.({ preventScroll: true }); } catch {}
+  } catch (e) {
+    momentPhotoDataUrl = "";
+    syncMomentPageUi();
+    try { showToast(e?.message || "Could not load photo", { durationMs: 2600 }); } catch {}
+  }
+}
+
+function openMomentPhotoSource(kind) {
+  const map = {
+    library: "momentPhotoLibrary",
+    camera: "momentPhotoCamera",
+    file: "momentPhotoFile",
+  };
+  const id = map[kind] || map.library;
+  const input = document.getElementById(id);
+  if (!input) return;
+  try { input.value = ""; } catch {}
+  input.click();
 }
 
 function openMomentCreatePage() {
@@ -5640,36 +5674,33 @@ function wireMomentPageOnce() {
     try { haptic("light"); } catch {}
     void publishMoment();
   });
-  document.getElementById("momentPhotoUpload")?.addEventListener("change", async () => {
-    const file = document.getElementById("momentPhotoUpload")?.files?.[0];
-    const pick = document.getElementById("momentPhotoPick");
+  document.getElementById("btnMomentChangePhoto")?.addEventListener("click", () => {
+    try { haptic("light"); } catch {}
+    momentPhotoDataUrl = "";
     const preview = document.getElementById("momentPhotoPreview");
-    if (!file) {
-      momentPhotoDataUrl = "";
-      if (preview) {
-        preview.removeAttribute("src");
-        preview.hidden = true;
-      }
-      if (pick) pick.classList.remove("hasPhoto");
-      syncMomentPageUi();
-      return;
-    }
-    try {
-      const dataUrl = await prepareMomentCoverDataUrl(file);
-      momentPhotoDataUrl = dataUrl;
-      if (preview) {
-        preview.src = dataUrl;
-        preview.hidden = false;
-      }
-      if (pick) pick.classList.add("hasPhoto");
-      syncMomentPageUi();
-      try { document.getElementById("momentCaptionInput")?.focus?.({ preventScroll: true }); } catch {}
-    } catch (e) {
-      momentPhotoDataUrl = "";
-      try { showToast(e?.message || "Could not load photo", { durationMs: 2600 }); } catch {}
-      syncMomentPageUi();
-    }
+    if (preview) preview.removeAttribute("src");
+    clearMomentPhotoInputs();
+    syncMomentPageUi();
   });
+  const bindSource = (btnId, kind) => {
+    document.getElementById(btnId)?.addEventListener("click", () => {
+      try { haptic("light"); } catch {}
+      openMomentPhotoSource(kind);
+    });
+  };
+  bindSource("btnMomentPhotoLibrary", "library");
+  bindSource("btnMomentTakePhoto", "camera");
+  bindSource("btnMomentChooseFile", "file");
+  const onPhotoInput = (inputId) => {
+    document.getElementById(inputId)?.addEventListener("change", async () => {
+      const file = document.getElementById(inputId)?.files?.[0];
+      if (!file) return;
+      await applyMomentPhotoFromFile(file);
+    });
+  };
+  onPhotoInput("momentPhotoLibrary");
+  onPhotoInput("momentPhotoCamera");
+  onPhotoInput("momentPhotoFile");
 }
 
 function closeFriendsComposeSheet() {

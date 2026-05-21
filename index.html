@@ -794,13 +794,29 @@
             </button>
             <h1 class="momentPageTitle">New moment</h1>
           </header>
-          <label class="momentPhotoPick" id="momentPhotoPick" for="momentPhotoUpload">
-            <input id="momentPhotoUpload" type="file" accept="image/*" hidden />
-            <img id="momentPhotoPreview" class="momentPhotoPreview" alt="" hidden />
-            <span class="momentPhotoPickText" id="momentPhotoPickText">Choose photo</span>
-          </label>
-          <textarea id="momentCaptionInput" class="momentCaptionInput" rows="3" maxlength="320" placeholder="Write a caption…"></textarea>
-          <button type="button" id="btnMomentPublish" class="primary momentPublishBtn" disabled>Share moment</button>
+          <div class="momentPageBody">
+            <div id="momentSourceStage" class="momentComposeStage">
+              <p class="momentSourceLead">Add a photo for your 24h moment</p>
+              <div class="momentSourceActions" role="group" aria-label="Choose photo source">
+                <button type="button" class="momentSourceBtn" id="btnMomentPhotoLibrary" data-moment-source="library">Photo Library</button>
+                <button type="button" class="momentSourceBtn" id="btnMomentTakePhoto" data-moment-source="camera">Take Photo</button>
+                <button type="button" class="momentSourceBtn" id="btnMomentChooseFile" data-moment-source="file">Choose File</button>
+              </div>
+              <input id="momentPhotoLibrary" type="file" accept="image/*" hidden />
+              <input id="momentPhotoCamera" type="file" accept="image/*" capture="environment" hidden />
+              <input id="momentPhotoFile" type="file" accept="image/*" hidden />
+            </div>
+            <div id="momentComposeStage" class="momentComposeStage" hidden>
+              <div class="momentComposeCenter">
+                <div class="momentPhotoPick hasPhoto" id="momentPhotoPick" aria-hidden="true">
+                  <img id="momentPhotoPreview" class="momentPhotoPreview" alt="Moment preview" />
+                </div>
+                <button type="button" class="ghost momentChangePhotoBtn" id="btnMomentChangePhoto">Change photo</button>
+                <textarea id="momentCaptionInput" class="momentCaptionInput" rows="3" maxlength="320" placeholder="Write a caption…"></textarea>
+                <button type="button" id="btnMomentPublish" class="primary momentPublishBtn">Share moment</button>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section class="discoverPlaylistPage wide" data-route="discover-playlist">
@@ -2848,6 +2864,6 @@
       })();
     </script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260522momentViewerLayoutV1"></script>
+    <script type="module" src="./src/app.js?v=20260522momentComposeFlowV1"></script>
   </body>
 </html>

@@ -13181,6 +13181,14 @@ button.discoverySpotCard{
   font-weight: 600;
   letter-spacing: 0.06em;
 }
+.profileAllSongsExtras{
+  margin: 0 0 10px;
+}
+.profileAllSongsExtras[hidden],
+body[data-profile-songs-seg="activities"] .profileAllSongsExtras,
+body[data-profile-songs-seg="activities"] #libraryRecoverBanner{
+  display: none !important;
+}
 .profileSongsBlock .libraryRecoverBanner{
   margin-bottom: 10px;
 }

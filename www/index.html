@@ -1686,12 +1686,13 @@
             <div class="profileSongsToolbar libraryHeaderRow">
               <p id="libraryCount" class="libraryCount" hidden aria-live="polite"></p>
               <p id="profileActivitiesCount" class="libraryCount" hidden aria-live="polite"></p>
+            </div>
+            <div id="profileAllSongsExtras" class="profileAllSongsExtras" hidden>
               <button
                 type="button"
                 id="btnLibraryRecoverLink"
                 class="libraryRecoverLink"
                 title="Recover a song from a Suno task ID"
-                hidden
               >Lost a song? Recover</button>
             </div>
             <div id="libraryRecoverBanner" class="libraryRecoverBanner" hidden role="region" aria-label="Recover song">
@@ -2754,6 +2755,6 @@
         setTimeout(unboot, 3500);
       })();
     </script>
-    <script type="module" src="./src/app.js?v=20260521profileActivityFeedV1"></script>
+    <script type="module" src="./src/app.js?v=20260521profilePlayFixV1"></script>
   </body>
 </html>

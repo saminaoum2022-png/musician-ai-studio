@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260521profileActivityFeedV1";
+const APP_BUILD = "20260521profilePlayFixV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4443,13 +4443,14 @@ async function renderProfileActivities() {
   const libEl = document.getElementById("libraryList");
   const countEl = document.getElementById("profileActivitiesCount");
   const recoverBanner = document.getElementById("libraryRecoverBanner");
-  const recoverLink = document.getElementById("btnLibraryRecoverLink");
+  const allExtras = document.getElementById("profileAllSongsExtras");
   if (!listEl) return;
   if (libEl) libEl.hidden = true;
   listEl.hidden = false;
   if (recoverBanner) recoverBanner.hidden = true;
-  if (recoverLink) recoverLink.hidden = true;
-  listEl.innerHTML = followingActivitySkeletonHtml();
+  if (allExtras) allExtras.hidden = true;
+  const hadFeed = listEl.querySelector(".followAct");
+  if (!hadFeed) listEl.innerHTML = followingActivitySkeletonHtml();
   if (!authSession?.user?.id) {
     listEl.innerHTML = `
       <div class="profileActEmpty">
@@ -11139,6 +11140,7 @@ function syncDiscoveryPlayingHighlights() {
   const roots = [
     document.getElementById("discoveryPaneDiscover"),
     document.getElementById("friendsPage"),
+    document.getElementById("profileActivitiesList"),
     document.getElementById("discoverPlaylistList"),
   ].filter(Boolean);
   if (!roots.length) return;
@@ -12358,7 +12360,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   resetPublicPlayTracking(miniSource);
   libraryNowPlayingId = null;
   try {
-    refreshOwnSongsUi();
+    refreshOwnSongsUi({ soft: fromDiscover || fromPlaylist });
   } catch {}
   const meta = {
     title: title || "Song",
@@ -15968,7 +15970,7 @@ function queueReleaseCaptionCloudHeal(track) {
 }
 
 function syncProfileSongsSegmentUi() {
-  const recoverLink = document.getElementById("btnLibraryRecoverLink");
+  const allExtras = document.getElementById("profileAllSongsExtras");
   const recoverBanner = document.getElementById("libraryRecoverBanner");
   const allCount = document.getElementById("libraryCount");
   const actCount = document.getElementById("profileActivitiesCount");
@@ -15976,12 +15978,15 @@ function syncProfileSongsSegmentUi() {
   const libList = document.getElementById("libraryList");
   const isAll = _profileSongsSegment === "all";
   const isActivities = _profileSongsSegment === "activities";
+  try {
+    document.body.setAttribute("data-profile-songs-seg", _profileSongsSegment);
+  } catch {}
   document.querySelectorAll("[data-profile-songs-segment]").forEach((btn) => {
     const on = btn.getAttribute("data-profile-songs-segment") === _profileSongsSegment;
     btn.classList.toggle("isActive", on);
     btn.setAttribute("aria-selected", on ? "true" : "false");
   });
-  if (recoverLink) recoverLink.hidden = !isAll;
+  if (allExtras) allExtras.hidden = !isAll;
   if (recoverBanner && !isAll) recoverBanner.hidden = true;
   if (allCount) allCount.hidden = !isAll;
   if (actCount) actCount.hidden = !isActivities;
@@ -16077,10 +16082,17 @@ function renderProfileSongs() {
   }
 }
 
-function refreshOwnSongsUi() {
+function refreshOwnSongsUi(opts = {}) {
   const route = document.body.getAttribute("data-route") || "";
-  if (route === "profile") renderProfileSongs();
-  else renderLibrary();
+  if (route === "profile") {
+    if (_profileSongsSegment === "activities" && opts.soft) {
+      try {
+        syncDiscoveryPlayingHighlights();
+      } catch {}
+      return;
+    }
+    renderProfileSongs();
+  } else renderLibrary();
 }
 
 /** Profile → songs on your public link (Hub off): **public Library rows only**. */
@@ -20425,10 +20437,12 @@ function updateLibraryRecoverBanner() {
   const route = document.body.getAttribute("data-route") || "";
   if (route === "profile" && _profileSongsSegment !== "all") {
     wrap.hidden = true;
-    const recoverLink = document.getElementById("btnLibraryRecoverLink");
-    if (recoverLink) recoverLink.hidden = true;
+    const allExtras = document.getElementById("profileAllSongsExtras");
+    if (allExtras) allExtras.hidden = true;
     return;
   }
+  const allExtras = document.getElementById("profileAllSongsExtras");
+  if (allExtras) allExtras.hidden = false;
   const rec = loadRecoverableGenerationTask();
   const hint = els.libraryRecoverHint;
   if (!rec?.taskId) {

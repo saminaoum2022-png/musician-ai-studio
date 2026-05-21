@@ -498,7 +498,7 @@ async function handleGet(req, res, user) {
     const followIds = (Array.isArray(follows.data) ? follows.data : [])
       .map((r) => cleanUserId(r.following_user_id))
       .filter(Boolean);
-    const authorIds = [...new Set([...followIds, user.userId])];
+    const authorIds = [...new Set(followIds)];
     if (!authorIds.length) return sendJson(res, 200, { ok: true, posts: [] });
     const inList = authorIds.map((id) => encodeURIComponent(id)).join(",");
     const rows = await svcFetch(

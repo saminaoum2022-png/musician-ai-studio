@@ -1733,19 +1733,27 @@ function scheduleRenderHubNowPlaying() {
   });
 }
 const LATEST_SUNO_MODEL = "V5_5";
-/** Production API origin for native shells — relative `/api/*` has no server on-device. */
-const DEFAULT_NATIVE_API_BASE = "https://musician-ai-studio.vercel.app";
+/** Production API origins for native (try in order if one host fails). */
+const NATIVE_API_BASE_CANDIDATES = [
+  "https://nabad-ai.vercel.app",
+  "https://musician-ai-studio.vercel.app",
+];
+function nativeApiBaseCandidates() {
+  const out = [];
+  const custom = String(window.__API_BASE__ || "").trim().replace(/\/$/, "");
+  if (custom) out.push(custom);
+  for (const u of NATIVE_API_BASE_CANDIDATES) out.push(u.replace(/\/$/, ""));
+  return [...new Set(out.filter(Boolean))];
+}
 const API_BASE = (() => {
-  let b = String(window.__API_BASE__ || "").trim().replace(/\/$/, "");
-  if (b) return b;
   try {
     if (window.Capacitor?.isNativePlatform?.()) {
-      return DEFAULT_NATIVE_API_BASE.replace(/\/$/, "");
+      return nativeApiBaseCandidates()[0] || "";
     }
   } catch {}
   return "";
 })();
-const apiUrl = (p) => API_BASE ? `${API_BASE}${p}` : p;
+const apiUrl = (p) => (API_BASE ? `${API_BASE}${p}` : p);
 const PUBLIC_CONFIG_CACHE_KEY = "mas:public-config:v1";
 let lastPublicConfigStatus = 0;
 let lastPublicConfigError = "";
@@ -1848,66 +1856,74 @@ function updateEnvironmentBadge() {
   if (!els.envBadge) return;
   els.envBadge.textContent = `Build ${APP_BUILD}`;
 }
-async function loadPublicConfig() {
-  applyClientEnvBootstrap();
-  if (SUPABASE_URL && SUPABASE_ANON_KEY) return true;
-
-  // 6s timeout — without it, a stalled `/api/public-config` (cold native
-  // start on flaky mobile data) hangs the entire boot IIFE, which in
-  // turn leaves the profile header skeleton stuck on forever.
-  lastPublicConfigStatus = 0;
-  lastPublicConfigError = "";
+function cachePublicConfigPayload() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
   try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 6000);
-    let r;
-    try {
-      r = await apiFetch("/api/public-config", { signal: ctrl.signal });
-    } finally {
-      clearTimeout(timer);
-    }
+    localStorage.setItem(
+      PUBLIC_CONFIG_CACHE_KEY,
+      JSON.stringify({
+        supabaseUrl: SUPABASE_URL,
+        supabaseAnonKey: SUPABASE_ANON_KEY,
+        nabadCertifiedUserIds: [..._nabadCertifiedUserIds],
+      }),
+    );
+  } catch {}
+}
+
+/** Fetch `/api/public-config` from one origin (relative on web). */
+async function fetchPublicConfigOnce(base) {
+  const url = base
+    ? `${String(base).replace(/\/$/, "")}/api/public-config`
+    : "/api/public-config";
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 6000);
+  try {
+    const r = await fetch(url, { signal: ctrl.signal });
     lastPublicConfigStatus = r.status;
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      lastPublicConfigError =
-        r.status === 403
-          ? "vercel_forbidden"
-          : `http_${r.status}`;
-      if (r.status === 403) return loadPublicConfigFromCache();
-      return false;
+    if (d?.supabaseUrl && d?.supabaseAnonKey) {
+      applyPublicConfigPayload(d);
+      cachePublicConfigPayload();
+      return true;
     }
-    applyPublicConfigPayload(d);
-    try {
-      localStorage.setItem(
-        PUBLIC_CONFIG_CACHE_KEY,
-        JSON.stringify({
-          supabaseUrl: SUPABASE_URL,
-          supabaseAnonKey: SUPABASE_ANON_KEY,
-          nabadCertifiedUserIds: [..._nabadCertifiedUserIds],
-        }),
-      );
-    } catch {}
+    if (r.ok) {
+      applyPublicConfigPayload(d);
+      cachePublicConfigPayload();
+    }
     return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
-  } catch (e) {
-    lastPublicConfigError = e?.name === "AbortError" ? "timeout" : "network";
-    return loadPublicConfigFromCache();
+  } finally {
+    clearTimeout(timer);
   }
 }
 
+async function loadPublicConfig() {
+  applyClientEnvBootstrap();
+  if (SUPABASE_URL && SUPABASE_ANON_KEY) return true;
+  if (loadPublicConfigFromCache()) return true;
+
+  lastPublicConfigStatus = 0;
+  lastPublicConfigError = "";
+  const bases = [];
+  try {
+    if (window.Capacitor?.isNativePlatform?.()) bases.push(...nativeApiBaseCandidates());
+    else bases.push("");
+  } catch {
+    bases.push("");
+  }
+
+  for (const base of bases) {
+    try {
+      if (await fetchPublicConfigOnce(base)) return true;
+    } catch (e) {
+      lastPublicConfigError = e?.name === "AbortError" ? "timeout" : "network";
+    }
+  }
+  return loadPublicConfigFromCache();
+}
+
 function loginConfigFailureMessage() {
-  if (lastPublicConfigError === "vercel_forbidden" || lastPublicConfigStatus === 403) {
-    return (
-      "Vercel is blocking this app (403 Forbidden). In Vercel → Project → Settings → Deployment Protection, " +
-      "turn OFF protection for Production (or add a bypass token — see docs/LOGIN_403_VERCEL.md), then redeploy."
-    );
-  }
-  if (loadPublicConfigFromCache() || applyClientEnvBootstrap()) {
-    return "";
-  }
-  return (
-    "Could not load login settings from the server. Check Wi‑Fi, fix Vercel 403 if the website is blocked, " +
-    "or run: node scripts/sync-client-env.mjs (then rebuild the iOS app)."
-  );
+  if (loadPublicConfigFromCache() || applyClientEnvBootstrap()) return "";
+  return "Could not load login settings. Check your connection and try again.";
 }
 const _addedPreconnects = new Set();
 function addPreconnectHint(url) {
@@ -9637,9 +9653,13 @@ async function maybeHandleAuthCodeFromQuery() {
     const ok = await exchangeOAuthCodeForSession(code);
     if (!ok) return false;
     try {
-      const path = window.location.pathname || "/";
-      window.history.replaceState({}, document.title, path);
+      window.history.replaceState(
+        {},
+        document.title,
+        `${window.location.pathname || "/"}#/challenges`,
+      );
     } catch {}
+    finishPostAuthNavigation();
     return true;
   } catch (e) {
     lastAuthDebug = `code flow error: ${e?.message || String(e)}`;
@@ -9858,7 +9878,7 @@ async function supabaseGoogleLoginUrl() {
   const challenge = await sha256Base64Url(verifier);
   const redirectTarget = isCapacitorNativeAuth()
     ? OAUTH_NATIVE_REDIRECT
-    : `${window.location.origin}/`;
+    : `${window.location.origin}${window.location.pathname || "/"}`;
   const redirectTo = encodeURIComponent(redirectTarget);
   return `${SUPABASE_URL}/auth/v1/authorize?provider=google&response_type=code&scope=email%20profile&code_challenge=${encodeURIComponent(challenge)}&code_challenge_method=S256&redirect_to=${redirectTo}`;
 }
@@ -26202,7 +26222,7 @@ function _profileShareUrl() {
   // public host in that case.
   const origin = (location.origin || "").replace(/\/$/, "");
   const isWebOrigin = /^https?:\/\//i.test(origin);
-  const base = isWebOrigin ? origin : "https://nabad-ai.vercel.app";
+  const base = isWebOrigin ? origin : (NATIVE_API_BASE_CANDIDATES[0] || "https://nabad-ai.vercel.app");
   if (!handle || handle === "guest") return base;
   return `${base}/#/u/${encodeURIComponent(handle)}`;
 }
@@ -26478,7 +26498,8 @@ void (async () => {
     else if ((document.body.getAttribute("data-route") || "") === "friends") enterFriendsRoute();
   } catch {}
   if (usedCodeFlow || usedTokenFlow) {
-    try { finishPostAuthNavigation(); } catch {}
+    try { location.hash = "#/generate"; } catch {}
+    scheduleApplyRoute();
   }
 
   // Always hydrate from cloud when a valid session exists (not only callback flows).

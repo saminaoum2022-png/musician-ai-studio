@@ -32,35 +32,43 @@ public class StoryCameraPlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
 
-            AVCaptureDevice.requestAccess(for: .video) { granted in
-                DispatchQueue.main.async {
-                    if !granted {
-                        call.reject("Camera permission denied")
-                        return
+            let present = {
+                let camera = StoryCameraViewController(
+                    lensPosition: position == "front" ? .front : .back,
+                    jpegQuality: CGFloat(quality) / 100.0
+                ) { outcome in
+                    switch outcome {
+                    case .capturedFile(let path):
+                        call.resolve(["cancelled": false, "path": path])
+                    case .cancelled:
+                        call.resolve(["cancelled": true])
+                    case .failed(let message):
+                        call.reject(message)
                     }
-                    let camera = StoryCameraViewController(
-                        lensPosition: position == "front" ? .front : .back,
-                        jpegQuality: CGFloat(quality) / 100.0
-                    ) { outcome in
-                        switch outcome {
-                        case .capturedFile(let path):
-                            call.resolve(["cancelled": false, "path": path])
-                        case .cancelled:
-                            call.resolve(["cancelled": true])
-                        case .failed(let message):
-                            call.reject(message)
-                        }
-                    }
-                    camera.modalPresentationStyle = .fullScreen
-                    camera.modalTransitionStyle = .coverVertical
-                    host.present(camera, animated: true)
                 }
+                camera.modalPresentationStyle = .fullScreen
+                camera.modalTransitionStyle = .coverVertical
+                host.present(camera, animated: true)
+            }
+
+            switch AVCaptureDevice.authorizationStatus(for: .video) {
+            case .authorized:
+                present()
+            case .notDetermined:
+                AVCaptureDevice.requestAccess(for: .video) { granted in
+                    DispatchQueue.main.async {
+                        if granted { present() }
+                        else { call.reject("Camera permission denied") }
+                    }
+                }
+            default:
+                call.reject("Camera permission denied — enable in Settings")
             }
         }
     }
 }
 
-// MARK: - Native story camera UI
+// MARK: - Outcomes
 
 private enum StoryCameraOutcome {
     case capturedFile(String)
@@ -68,10 +76,15 @@ private enum StoryCameraOutcome {
     case failed(String)
 }
 
-private final class StoryCameraViewController: UIViewController {
+// MARK: - Camera + native crop (single full-screen flow)
+
+private final class StoryCameraViewController: UIViewController, UIScrollViewDelegate {
+    private enum Mode { case camera, crop }
+
     private let lensPosition: AVCaptureDevice.Position
     private let jpegQuality: CGFloat
     private let onFinish: (StoryCameraOutcome) -> Void
+    private let sessionQueue = DispatchQueue(label: "nabad.story.camera.session")
 
     private let session = AVCaptureSession()
     private let photoOutput = AVCapturePhotoOutput()
@@ -79,11 +92,23 @@ private final class StoryCameraViewController: UIViewController {
     private var currentInput: AVCaptureDeviceInput?
     private var currentPosition: AVCaptureDevice.Position
     private var isCapturing = false
+    private var mode: Mode = .camera
+    private var capturedImage: UIImage?
 
+    // Camera chrome
     private let closeButton = UIButton(type: .system)
     private let flipButton = UIButton(type: .system)
     private let shutterButton = UIButton(type: .custom)
     private let shutterRing = UIView()
+
+    // Crop chrome
+    private let cropOverlay = UIView()
+    private let cropGuide = UIView()
+    private let cropScroll = UIScrollView()
+    private let cropImageView = UIImageView()
+    private let cropBackButton = UIButton(type: .system)
+    private let cropNextButton = UIButton(type: .system)
+    private let cropHintLabel = UILabel()
 
     init(lensPosition: AVCaptureDevice.Position, jpegQuality: CGFloat, onFinish: @escaping (StoryCameraOutcome) -> Void) {
         self.lensPosition = lensPosition
@@ -101,13 +126,15 @@ private final class StoryCameraViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        setupChrome()
+        setupCameraChrome()
+        setupCropChrome()
+        setMode(.camera)
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        if previewLayer == nil {
-            setupSession()
+        if mode == .camera, previewLayer == nil {
+            startCameraSession()
         }
     }
 
@@ -117,24 +144,24 @@ private final class StoryCameraViewController: UIViewController {
         if let connection = previewLayer?.connection, connection.isVideoOrientationSupported {
             connection.videoOrientation = .portrait
         }
+        layoutCropGuide()
+        if mode == .crop, cropScroll.frame == .zero || cropScroll.bounds.size != cropGuide.bounds.size {
+            layoutCropScroll()
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         if isBeingDismissed || isMovingFromParent {
-            stopSession()
-        }
-    }
-
-    private func stopSession() {
-        if session.isRunning {
-            session.stopRunning()
+            stopCameraSession()
         }
     }
 
     override var prefersStatusBarHidden: Bool { true }
 
-    private func setupChrome() {
+    // MARK: Camera
+
+    private func setupCameraChrome() {
         let safe = view.safeAreaLayoutGuide
 
         closeButton.translatesAutoresizingMaskIntoConstraints = false
@@ -157,7 +184,6 @@ private final class StoryCameraViewController: UIViewController {
         shutterRing.layer.cornerRadius = 40
         shutterRing.layer.borderWidth = 4
         shutterRing.layer.borderColor = UIColor.white.cgColor
-        shutterRing.backgroundColor = .clear
         shutterRing.isUserInteractionEnabled = false
         view.addSubview(shutterRing)
 
@@ -190,54 +216,41 @@ private final class StoryCameraViewController: UIViewController {
         ])
     }
 
-    private func setupSession() {
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized:
-            break
-        case .notDetermined:
-            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
-                DispatchQueue.main.async {
-                    if granted { self?.setupSession() }
-                    else { self?.finish(.failed("Camera permission denied")) }
-                }
-            }
-            return
-        default:
-            finish(.failed("Camera permission denied — enable in Settings"))
-            return
-        }
-
-        session.beginConfiguration()
-        session.sessionPreset = .photo
-
-        guard configureInput(position: currentPosition) else {
-            session.commitConfiguration()
-            finish(.failed("Could not open camera"))
-            return
-        }
-
-        if session.canAddOutput(photoOutput) {
-            session.addOutput(photoOutput)
-            photoOutput.isHighResolutionCaptureEnabled = false
-        }
-        session.commitConfiguration()
-
-        let layer = AVCaptureVideoPreviewLayer(session: session)
-        layer.videoGravity = .resizeAspectFill
-        layer.frame = view.bounds
-        view.layer.insertSublayer(layer, at: 0)
-        previewLayer = layer
-
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+    private func startCameraSession() {
+        sessionQueue.async { [weak self] in
             guard let self = self else { return }
-            self.session.startRunning()
+            self.session.beginConfiguration()
+            self.session.sessionPreset = .photo
+            let ok = self.configureInputLocked(position: self.currentPosition)
+            if ok, self.session.canAddOutput(self.photoOutput) {
+                self.session.addOutput(self.photoOutput)
+                self.photoOutput.isHighResolutionCaptureEnabled = false
+            }
+            self.session.commitConfiguration()
+            guard ok else {
+                DispatchQueue.main.async { self.finish(.failed("Could not open camera")) }
+                return
+            }
+            if !self.session.isRunning { self.session.startRunning() }
             DispatchQueue.main.async {
-                self.previewLayer?.frame = self.view.bounds
+                guard self.previewLayer == nil else { return }
+                let layer = AVCaptureVideoPreviewLayer(session: self.session)
+                layer.videoGravity = .resizeAspectFill
+                layer.frame = self.view.bounds
+                self.view.layer.insertSublayer(layer, at: 0)
+                self.previewLayer = layer
             }
         }
     }
 
-    private func configureInput(position: AVCaptureDevice.Position) -> Bool {
+    private func stopCameraSession() {
+        sessionQueue.async { [weak self] in
+            guard let self = self, self.session.isRunning else { return }
+            self.session.stopRunning()
+        }
+    }
+
+    private func configureInputLocked(position: AVCaptureDevice.Position) -> Bool {
         if let existing = currentInput {
             session.removeInput(existing)
             currentInput = nil
@@ -258,28 +271,190 @@ private final class StoryCameraViewController: UIViewController {
     }
 
     @objc private func flipTapped() {
+        guard mode == .camera else { return }
         let next: AVCaptureDevice.Position = currentPosition == .front ? .back : .front
-        session.beginConfiguration()
-        let ok = configureInput(position: next)
-        session.commitConfiguration()
-        if !ok {
-            return
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.session.beginConfiguration()
+            let ok = self.configureInputLocked(position: next)
+            self.session.commitConfiguration()
         }
     }
 
     @objc private func shutterTapped() {
-        guard !isCapturing else { return }
+        guard mode == .camera, !isCapturing else { return }
         isCapturing = true
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-
         let settings = AVCapturePhotoSettings()
         if photoOutput.supportedFlashModes.contains(.auto) {
             settings.flashMode = .auto
         }
         photoOutput.capturePhoto(with: settings, delegate: self)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
+            self?.isCapturing = false
+        }
+    }
+
+    // MARK: Crop UI
+
+    private func setupCropChrome() {
+        cropOverlay.translatesAutoresizingMaskIntoConstraints = false
+        cropOverlay.backgroundColor = .black
+        cropOverlay.isHidden = true
+        view.addSubview(cropOverlay)
+
+        cropGuide.translatesAutoresizingMaskIntoConstraints = false
+        cropGuide.backgroundColor = .clear
+        cropGuide.layer.borderColor = UIColor.white.withAlphaComponent(0.85).cgColor
+        cropGuide.layer.borderWidth = 2
+        cropGuide.clipsToBounds = true
+        cropOverlay.addSubview(cropGuide)
+
+        cropScroll.delegate = self
+        cropScroll.showsHorizontalScrollIndicator = false
+        cropScroll.showsVerticalScrollIndicator = false
+        cropScroll.bounces = true
+        cropScroll.bouncesZoom = true
+        cropScroll.decelerationRate = .fast
+        cropScroll.backgroundColor = .clear
+        cropGuide.addSubview(cropScroll)
+
+        cropImageView.contentMode = .scaleAspectFill
+        cropImageView.isUserInteractionEnabled = true
+        cropScroll.addSubview(cropImageView)
+
+        cropHintLabel.translatesAutoresizingMaskIntoConstraints = false
+        cropHintLabel.text = "Pinch to zoom · drag to reposition"
+        cropHintLabel.textColor = UIColor.white.withAlphaComponent(0.75)
+        cropHintLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        cropHintLabel.textAlignment = .center
+        cropOverlay.addSubview(cropHintLabel)
+
+        cropBackButton.translatesAutoresizingMaskIntoConstraints = false
+        cropBackButton.setTitle("Back", for: .normal)
+        cropBackButton.setTitleColor(.white, for: .normal)
+        cropBackButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
+        cropBackButton.addTarget(self, action: #selector(cropBackTapped), for: .touchUpInside)
+        cropOverlay.addSubview(cropBackButton)
+
+        cropNextButton.translatesAutoresizingMaskIntoConstraints = false
+        cropNextButton.setTitle("Next", for: .normal)
+        cropNextButton.setTitleColor(UIColor(red: 0.55, green: 0.38, blue: 1, alpha: 1), for: .normal)
+        cropNextButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .bold)
+        cropNextButton.addTarget(self, action: #selector(cropNextTapped), for: .touchUpInside)
+        cropOverlay.addSubview(cropNextButton)
+
+        let safe = view.safeAreaLayoutGuide
+        NSLayoutConstraint.activate([
+            cropOverlay.topAnchor.constraint(equalTo: view.topAnchor),
+            cropOverlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            cropOverlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            cropOverlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            cropBackButton.topAnchor.constraint(equalTo: safe.topAnchor, constant: 8),
+            cropBackButton.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 16),
+
+            cropNextButton.centerYAnchor.constraint(equalTo: cropBackButton.centerYAnchor),
+            cropNextButton.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -16),
+
+            cropHintLabel.bottomAnchor.constraint(equalTo: safe.bottomAnchor, constant: -18),
+            cropHintLabel.centerXAnchor.constraint(equalTo: safe.centerXAnchor),
+        ])
+    }
+
+    private func layoutCropGuide() {
+        guard cropGuide.superview != nil else { return }
+        let safe = view.safeAreaInsets
+        let w = view.bounds.width
+        let maxH = view.bounds.height - safe.top - safe.bottom - 120
+        var guideW = w - 32
+        var guideH = guideW * 16 / 9
+        if guideH > maxH {
+            guideH = maxH
+            guideW = guideH * 9 / 16
+        }
+        let x = (w - guideW) / 2
+        let y = safe.top + 52 + (maxH - guideH) / 2
+        cropGuide.frame = CGRect(x: x, y: y, width: guideW, height: guideH)
+    }
+
+    private func layoutCropScroll() {
+        guard let image = capturedImage else { return }
+        let bounds = cropGuide.bounds
+        guard bounds.width > 0, bounds.height > 0 else { return }
+
+        cropScroll.frame = bounds
+        cropScroll.contentInset = .zero
+
+        let imageSize = StoryCameraImageEncoder.pixelSize(image)
+        let widthScale = bounds.width / imageSize.width
+        let heightScale = bounds.height / imageSize.height
+        let minScale = max(widthScale, heightScale)
+        let maxScale = max(minScale * 4, minScale + 0.01)
+
+        cropImageView.image = image
+        cropImageView.frame = CGRect(origin: .zero, size: imageSize)
+        cropScroll.contentSize = imageSize
+        cropScroll.minimumZoomScale = minScale
+        cropScroll.maximumZoomScale = maxScale
+        cropScroll.zoomScale = minScale
+
+        let offsetX = max(0, (imageSize.width * minScale - bounds.width) / 2)
+        let offsetY = max(0, (imageSize.height * minScale - bounds.height) / 2)
+        cropScroll.contentOffset = CGPoint(x: offsetX, y: offsetY)
+    }
+
+    func viewForZooming(in scrollView: UIScrollView) -> UIView? {
+        cropImageView
+    }
+
+    private func setMode(_ newMode: Mode) {
+        mode = newMode
+        let isCamera = newMode == .camera
+        closeButton.isHidden = !isCamera
+        flipButton.isHidden = !isCamera
+        shutterButton.isHidden = !isCamera
+        shutterRing.isHidden = !isCamera
+        cropOverlay.isHidden = isCamera
+    }
+
+    private func showCrop(with image: UIImage) {
+        capturedImage = StoryCameraImageEncoder.downscale(image, maxSide: 2048)
+        stopCameraSession()
+        previewLayer?.removeFromSuperlayer()
+        previewLayer = nil
+        setMode(.crop)
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
+        layoutCropScroll()
+    }
+
+    @objc private func cropBackTapped() {
+        capturedImage = nil
+        cropScroll.zoomScale = cropScroll.minimumZoomScale
+        setMode(.camera)
+        startCameraSession()
+    }
+
+    @objc private func cropNextTapped() {
+        guard let image = capturedImage else {
+            finish(.failed("No photo to crop"))
+            return
+        }
+        guard let path = StoryCameraImageEncoder.exportCrop(
+            image: image,
+            scrollView: cropScroll,
+            imageView: cropImageView,
+            quality: jpegQuality
+        ) else {
+            finish(.failed("Could not export crop"))
+            return
+        }
+        finish(.capturedFile(path))
     }
 
     private func finish(_ outcome: StoryCameraOutcome) {
+        stopCameraSession()
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             self.dismiss(animated: true) {
@@ -289,68 +464,98 @@ private final class StoryCameraViewController: UIViewController {
     }
 }
 
+// MARK: - Photo capture
+
 extension StoryCameraViewController: AVCapturePhotoCaptureDelegate {
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        isCapturing = false
-        if let error = error {
-            finish(.failed(error.localizedDescription))
-            return
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.isCapturing = false
+            if let error = error {
+                self.finish(.failed(error.localizedDescription))
+                return
+            }
+            guard let data = photo.fileDataRepresentation(),
+                  let image = UIImage(data: data) else {
+                self.finish(.failed("Could not read photo"))
+                return
+            }
+            self.showCrop(with: StoryCameraImageEncoder.normalizeOrientation(image))
         }
-        guard let data = photo.fileDataRepresentation() else {
-            finish(.failed("Could not read photo"))
-            return
-        }
-        guard let path = StoryCameraImageEncoder.writeTempJPEG(from: data, maxSide: 1080, quality: jpegQuality) else {
-            finish(.failed("Could not prepare photo"))
-            return
-        }
-        finish(.capturedFile(path))
     }
 }
 
-// MARK: - Resize + temp file (avoid huge base64 over the Capacitor bridge / WKWebView decode)
+// MARK: - Image helpers
 
 private enum StoryCameraImageEncoder {
-    static func writeTempJPEG(from data: Data, maxSide: CGFloat, quality: CGFloat) -> String? {
-        guard let image = UIImage(data: data) else { return nil }
-        let resized = resize(normalizeOrientation(image), maxSide: maxSide)
-        guard let jpeg = resized.jpegData(compressionQuality: quality) else { return nil }
+    static func pixelSize(_ image: UIImage) -> CGSize {
+        if let cg = image.cgImage {
+            return CGSize(width: CGFloat(cg.width), height: CGFloat(cg.height))
+        }
+        return image.size
+    }
+
+    static func downscale(_ image: UIImage, maxSide: CGFloat) -> UIImage {
+        let size = pixelSize(image)
+        let longEdge = max(size.width, size.height)
+        guard longEdge > maxSide, longEdge > 0 else { return image }
+        let scale = maxSide / longEdge
+        let target = CGSize(width: floor(size.width * scale), height: floor(size.height * scale))
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: target, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: target))
+        }
+    }
+
+    static func normalizeOrientation(_ image: UIImage) -> UIImage {
+        if image.imageOrientation == .up { return image }
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let size = pixelSize(image)
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
+    }
+
+    static func exportCrop(image: UIImage, scrollView: UIScrollView, imageView: UIImageView, quality: CGFloat) -> String? {
+        let zoom = scrollView.zoomScale
+        let bounds = scrollView.bounds
+        let offset = scrollView.contentOffset
+        let imageSize = pixelSize(image)
+
+        guard imageView.frame.width > 0, imageView.frame.height > 0 else { return nil }
+
+        let scale = imageSize.width / imageView.frame.width
+        var cropRect = CGRect(
+            x: offset.x / zoom * scale,
+            y: offset.y / zoom * scale,
+            width: bounds.width / zoom * scale,
+            height: bounds.height / zoom * scale
+        )
+        cropRect = cropRect.intersection(CGRect(origin: .zero, size: imageSize))
+        guard cropRect.width > 1, cropRect.height > 1,
+              let cg = image.cgImage?.cropping(to: cropRect) else { return nil }
+
+        let cropped = UIImage(cgImage: cg, scale: 1, orientation: .up)
+        let outW: CGFloat = 1080
+        let outH: CGFloat = 1920
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: outW, height: outH), format: format)
+        let final = renderer.image { _ in
+            cropped.draw(in: CGRect(x: 0, y: 0, width: outW, height: outH))
+        }
+        guard let jpeg = final.jpegData(compressionQuality: quality) else { return nil }
+
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("nabad_story_\(UUID().uuidString).jpg")
+            .appendingPathComponent("nabad_story_crop_\(UUID().uuidString).jpg")
         do {
             try jpeg.write(to: url, options: .atomic)
             return url.path
         } catch {
             return nil
-        }
-    }
-
-    private static func normalizeOrientation(_ image: UIImage) -> UIImage {
-        if image.imageOrientation == .up { return image }
-        let format = UIGraphicsImageRendererFormat.default()
-        format.scale = 1
-        let renderer = UIGraphicsImageRenderer(size: image.size, format: format)
-        return renderer.image { _ in
-            image.draw(in: CGRect(origin: .zero, size: image.size))
-        }
-    }
-
-    private static func resize(_ image: UIImage, maxSide: CGFloat) -> UIImage {
-        let pxSize: CGSize
-        if let cg = image.cgImage {
-            pxSize = CGSize(width: CGFloat(cg.width), height: CGFloat(cg.height))
-        } else {
-            pxSize = image.size
-        }
-        let longEdge = max(pxSize.width, pxSize.height)
-        guard longEdge > maxSide, longEdge > 0 else { return image }
-        let scale = maxSide / longEdge
-        let target = CGSize(width: floor(pxSize.width * scale), height: floor(pxSize.height * scale))
-        let format = UIGraphicsImageRendererFormat.default()
-        format.scale = 1
-        let renderer = UIGraphicsImageRenderer(size: target, format: format)
-        return renderer.image { _ in
-            image.draw(in: CGRect(origin: .zero, size: target))
         }
     }
 }

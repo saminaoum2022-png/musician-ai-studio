@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522nativeStoryCamV5";
+const APP_BUILD = "20260522nativeStoryCamV6";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5569,6 +5569,50 @@ function resolveStoryCameraCaptureSrc(result) {
   return dataUrl.startsWith("data:image/") ? dataUrl : "";
 }
 
+async function capacitorImageSrcToDataUrl(src) {
+  const res = await fetch(String(src || ""));
+  if (!res.ok) throw new Error("Could not read photo");
+  const blob = await res.blob();
+  return await new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result || ""));
+    fr.onerror = () => reject(new Error("Could not read photo"));
+    fr.readAsDataURL(blob);
+  });
+}
+
+/** Native camera already cropped — go straight to share (skip WKWebView crop). */
+async function enterMomentShareFromNativeCapture(imageSrc) {
+  if (!isMomentImageSrc(imageSrc)) return false;
+  setMomentStudioLoading(true);
+  try {
+    let dataUrl = String(imageSrc || "").trim();
+    if (!dataUrl.startsWith("data:image/")) {
+      dataUrl = await capacitorImageSrcToDataUrl(dataUrl);
+    }
+    dataUrl = await prepareMomentCoverDataUrl(dataUrl);
+    momentPhotoDataUrl = dataUrl;
+    momentCropSourceUrl = "";
+    momentStudioPhase = "share";
+    const preview = document.getElementById("momentPhotoPreview");
+    if (preview) {
+      preview.src = dataUrl;
+      preview.hidden = false;
+    }
+    await saveMomentRecent(dataUrl);
+    syncMomentPageUi();
+    return true;
+  } catch (e) {
+    momentPhotoDataUrl = "";
+    momentStudioPhase = "pick";
+    syncMomentPageUi();
+    try { showToast(e?.message || "Could not use photo", { durationMs: 3200 }); } catch {}
+    return false;
+  } finally {
+    setMomentStudioLoading(false);
+  }
+}
+
 async function presentNativeStoryCamera({ leaveOnCancel = false } = {}) {
   const plugin = getStoryCameraPlugin();
   if (!plugin?.capture) return false;
@@ -5583,37 +5627,17 @@ async function presentNativeStoryCamera({ leaveOnCancel = false } = {}) {
       if (leaveOnCancel) leaveMomentPage("#/friends");
       return false;
     }
-    let src = resolveStoryCameraCaptureSrc(result);
+    const src = resolveStoryCameraCaptureSrc(result);
     if (!src) throw new Error("Capture failed");
-    if (src.startsWith("data:image/")) {
-      try {
-        src = await prepareMomentCoverDataUrl(src);
-      } catch {
-        try {
-          src = await downscaleImageDataUrl(src, 1080, 0.78);
-        } catch {}
-      }
-    }
-    const cropped = await enterMomentCropPhase(src);
-    if (!cropped) {
-      try { showToast("Could not open crop — try again", { durationMs: 3200 }); } catch {}
-      if ((document.body.getAttribute("data-route") || "") === "moment" && momentStudioPhase === "pick") {
-        await presentNativeStoryCamera({ leaveOnCancel: false });
-      }
-      return false;
-    }
+    const ok = await enterMomentShareFromNativeCapture(src);
+    if (!ok) return false;
     return true;
   } catch (e) {
     const msg = String(e?.message || "").trim();
     const friendly = /not implemented|requires the nabadai app/i.test(msg)
-      ? "Story camera failed to load — rebuild the app in Xcode (Build 20260522nativeStoryCamV5)."
+      ? "Story camera failed to load — rebuild the app in Xcode (Build 20260522nativeStoryCamV6)."
       : (msg || "Camera unavailable");
     try { showToast(friendly, { durationMs: 3600 }); } catch {}
-    if ((document.body.getAttribute("data-route") || "") === "moment" && momentStudioPhase === "pick") {
-      try {
-        await presentNativeStoryCamera({ leaveOnCancel: false });
-      } catch {}
-    }
     return false;
   } finally {
     setMomentStudioLoading(false);
@@ -5779,8 +5803,12 @@ function leaveMomentCropPhase() {
   momentCropSourceUrl = "";
   momentStudioPhase = "pick";
   syncMomentPageUi();
-  if (momentStudioUsesNativeStoryCamera()) void beginMomentPickPhase();
-  else void startMomentCamera();
+  if (momentStudioUsesNativeStoryCamera()) {
+    momentPhotoDataUrl = "";
+    void beginMomentPickPhase();
+  } else {
+    void startMomentCamera();
+  }
 }
 
 async function exportMomentCropImage() {

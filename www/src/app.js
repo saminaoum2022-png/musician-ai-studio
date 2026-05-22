@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522nativeStoryCamV2";
+const APP_BUILD = "20260522nativeStoryCamV3";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -135,6 +135,21 @@ function isFounderBadgeEmail(raw) {
           },
         }),
       });
+    }
+    if (cap.isNativePlatform?.() && cap.getPlatform?.() === "ios") {
+      const storyCam = cap.Plugins?.StoryCamera;
+      if (storyCam?.isAvailable) {
+        storyCam
+          .isAvailable()
+          .then((r) => {
+            cap.__nabadStoryCameraNative = Boolean(r?.value);
+          })
+          .catch(() => {
+            cap.__nabadStoryCameraNative = false;
+          });
+      } else {
+        cap.__nabadStoryCameraNative = false;
+      }
     }
     const CapApp = cap.Plugins?.App;
     if (CapApp?.addListener && !cap.__nabadMomentAppStateWired) {
@@ -5204,9 +5219,34 @@ function getStoryCameraPlugin() {
   }
 }
 
+async function refreshNativeStoryCameraAvailability() {
+  try {
+    const cap = window.Capacitor;
+    if (!cap?.isNativePlatform?.() || cap.getPlatform?.() !== "ios") return false;
+    const plugin = getStoryCameraPlugin();
+    if (!plugin?.isAvailable) {
+      cap.__nabadStoryCameraNative = false;
+      return false;
+    }
+    const r = await plugin.isAvailable();
+    const ok = Boolean(r?.value);
+    cap.__nabadStoryCameraNative = ok;
+    return ok;
+  } catch {
+    try {
+      window.Capacitor.__nabadStoryCameraNative = false;
+    } catch {}
+    return false;
+  }
+}
+
 /** Full-screen native AVFoundation story camera (iOS). */
 function momentStudioUsesNativeStoryCamera() {
-  return isNativeShell() && momentStudioNativePlatform() === "ios" && Boolean(getStoryCameraPlugin()?.capture);
+  if (!isNativeShell() || momentStudioNativePlatform() !== "ios") return false;
+  const flag = window.Capacitor?.__nabadStoryCameraNative;
+  if (flag === true) return true;
+  if (flag === false) return false;
+  return false;
 }
 
 /** Fallback when StoryCamera plugin is unavailable on iOS. */
@@ -5531,7 +5571,11 @@ async function presentNativeStoryCamera({ leaveOnCancel = false } = {}) {
     await enterMomentCropPhase(dataUrl);
     return true;
   } catch (e) {
-    try { showToast(e?.message || "Camera unavailable", { durationMs: 2800 }); } catch {}
+    const msg = String(e?.message || "").trim();
+    const friendly = /not implemented|requires the nabadai app/i.test(msg)
+      ? "Story camera failed to load — rebuild the app in Xcode (Build 20260522nativeStoryCamV3)."
+      : (msg || "Camera unavailable");
+    try { showToast(friendly, { durationMs: 3600 }); } catch {}
     if (leaveOnCancel) leaveMomentPage("#/friends");
     return false;
   } finally {
@@ -5542,6 +5586,9 @@ async function presentNativeStoryCamera({ leaveOnCancel = false } = {}) {
 async function beginMomentPickPhase() {
   if (momentStudioPhase !== "pick") return;
   if ((document.body.getAttribute("data-route") || "") !== "moment") return;
+  if (isNativeShell() && momentStudioNativePlatform() === "ios") {
+    await refreshNativeStoryCameraAvailability();
+  }
   if (momentStudioUsesNativeStoryCamera()) {
     await presentNativeStoryCamera({ leaveOnCancel: true });
     return;

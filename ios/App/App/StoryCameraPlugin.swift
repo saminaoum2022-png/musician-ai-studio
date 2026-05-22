@@ -102,20 +102,33 @@ private final class StoryCameraViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .black
         setupChrome()
-        setupSession()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        if previewLayer == nil {
+            setupSession()
+        }
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         previewLayer?.frame = view.bounds
+        if let connection = previewLayer?.connection, connection.isVideoOrientationSupported {
+            connection.videoOrientation = .portrait
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        if isBeingDismissed || isMovingFromParent {
+            stopSession()
+        }
+    }
+
+    private func stopSession() {
         if session.isRunning {
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                self?.session.stopRunning()
-            }
+            session.stopRunning()
         }
     }
 
@@ -178,6 +191,22 @@ private final class StoryCameraViewController: UIViewController {
     }
 
     private func setupSession() {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            break
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+                DispatchQueue.main.async {
+                    if granted { self?.setupSession() }
+                    else { self?.finish(.failed("Camera permission denied")) }
+                }
+            }
+            return
+        default:
+            finish(.failed("Camera permission denied — enable in Settings"))
+            return
+        }
+
         session.beginConfiguration()
         session.sessionPreset = .photo
 
@@ -200,7 +229,11 @@ private final class StoryCameraViewController: UIViewController {
         previewLayer = layer
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.session.startRunning()
+            guard let self = self else { return }
+            self.session.startRunning()
+            DispatchQueue.main.async {
+                self.previewLayer?.frame = self.view.bounds
+            }
         }
     }
 

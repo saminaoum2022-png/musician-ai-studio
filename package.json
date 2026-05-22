@@ -6,7 +6,7 @@
   "scripts": {
     "postinstall": "node -e \"try{require('fs').existsSync('node_modules/ffmpeg-static/install.js')&&require('child_process').execSync('node node_modules/ffmpeg-static/install.js',{stdio:'inherit'})}catch(e){console.error('ffmpeg-static postinstall skipped:',e.message)}\"",
     "sync:client-env": "node scripts/sync-client-env.mjs",
-    "sync:ios": "npx cap sync ios",
+    "sync:ios": "npx cap sync ios && node scripts/patch-ios-capacitor-plugins.mjs",
     "open:ios": "npx cap open ios"
   },
   "dependencies": {

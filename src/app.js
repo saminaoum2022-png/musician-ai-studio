@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522momentIosVideoV1";
+const APP_BUILD = "20260522momentIosCaptureV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5058,7 +5058,7 @@ function navigateFromCreateChooser(action) {
     if (kind === "moment") {
       openMomentCreatePage();
       scheduleApplyRoute();
-      kickMomentCameraFromUserGesture();
+      if (!momentStudioUsesIosPickFlow()) kickMomentCameraFromUserGesture();
       return;
     }
 
@@ -5185,14 +5185,20 @@ function momentStudioNativePlatform() {
   }
 }
 
-/** Android only — iOS uses inline WKWebView video (toBack preview stays black behind opaque layers). */
+/** iOS app: live WKWebView preview cannot snapshot reliably — use system camera on shutter. */
+function momentStudioUsesIosPickFlow() {
+  return isNativeShell() && momentStudioNativePlatform() === "ios";
+}
+
+/** Android only — native preview behind WebView. */
 function momentStudioUsesNativeCameraPreview() {
-  if (!isNativeShell()) return false;
+  if (!isNativeShell() || momentStudioUsesIosPickFlow()) return false;
   if (momentStudioNativePlatform() !== "android") return false;
   return Boolean(getMomentCameraPreviewPlugin());
 }
 
 function momentStudioUsesWebLiveCamera() {
+  if (momentStudioUsesIosPickFlow()) return false;
   try {
     return Boolean(navigator.mediaDevices?.getUserMedia);
   } catch {
@@ -5215,9 +5221,11 @@ function syncMomentPickStageMode() {
   const isPick = momentStudioPhase === "pick";
   const nativeLive = isPick && _momentNativePreviewActive;
   const webLive = isPick && momentStudioUsesWebLiveCamera() && !_momentNativePreviewActive;
+  const iosPick = isPick && momentStudioUsesIosPickFlow();
   if (page) {
     page.classList.toggle("momentStudio--webLive", webLive);
-    page.classList.toggle("momentStudio--nativePick", isPick && !nativeLive && !webLive);
+    page.classList.toggle("momentStudio--iosPick", iosPick);
+    page.classList.toggle("momentStudio--nativePick", isPick && !nativeLive && !webLive && !iosPick);
   }
   if (video) video.hidden = !webLive;
   if (flipBtn) flipBtn.hidden = !(nativeLive || webLive);
@@ -5456,11 +5464,18 @@ function openMomentCameraInput() {
   const input = document.getElementById("momentPhotoCamera");
   if (!input) return;
   try { input.value = ""; } catch {}
+  try {
+    input.setAttribute("capture", momentCameraFacing === "user" ? "user" : "environment");
+  } catch {}
   input.click();
 }
 
 async function captureMomentFromCamera() {
   try { haptic("medium"); } catch {}
+  if (momentStudioUsesIosPickFlow()) {
+    openMomentCameraInput();
+    return;
+  }
   if (_momentNativePreviewActive) {
     const CameraPreview = getMomentCameraPreviewPlugin();
     if (!CameraPreview?.capture) {
@@ -6800,9 +6815,16 @@ function wireMomentPageOnce() {
       try { document.getElementById("momentCaptionInput")?.blur?.(); } catch {}
     }
   });
-  document.getElementById("btnMomentCapture")?.addEventListener("click", () => {
+  const onMomentShutter = (e) => {
+    try {
+      e?.preventDefault?.();
+      e?.stopPropagation?.();
+    } catch {}
     void captureMomentFromCamera();
-  });
+  };
+  const shutter = document.getElementById("btnMomentCapture");
+  shutter?.addEventListener("click", onMomentShutter);
+  shutter?.addEventListener("touchend", onMomentShutter, { passive: false });
   document.getElementById("btnMomentFlipCamera")?.addEventListener("click", () => {
     try { haptic("light"); } catch {}
     void flipMomentCamera();

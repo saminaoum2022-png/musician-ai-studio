@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522momentStudioV2";
+const APP_BUILD = "20260522momentStoriesV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5403,8 +5403,18 @@ function wireMomentCropGesturesOnce() {
 
   const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 
+  frame.addEventListener(
+    "touchmove",
+    (e) => {
+      if (momentStudioPhase === "crop" && pointers.size) e.preventDefault();
+    },
+    { passive: false }
+  );
+
   frame.addEventListener("pointerdown", (e) => {
     if (momentStudioPhase !== "crop") return;
+    e.preventDefault();
+    frame.classList.add("isDragging");
     try { frame.setPointerCapture(e.pointerId); } catch {}
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.size === 1) {
@@ -5446,6 +5456,7 @@ function wireMomentCropGesturesOnce() {
   const endPointer = (e) => {
     pointers.delete(e.pointerId);
     try { frame.releasePointerCapture(e.pointerId); } catch {}
+    if (!pointers.size) frame.classList.remove("isDragging");
     if (pointers.size === 1) {
       const rem = [...pointers.entries()][0];
       dragStartX = rem[1].x;
@@ -5724,9 +5735,17 @@ function startMomentRailCountdownTimer() {
 }
 
 let _friendsMomentsById = new Map();
+let _momentStoriesByUserId = new Map();
+let _momentStoryOrder = [];
 let _momentViewerTimer = 0;
+let _momentViewerProgressTimer = 0;
 let _momentViewerOpen = null;
+let _momentViewerStories = [];
+let _momentViewerStoryIndex = 0;
+let _momentViewerSlideIndex = 0;
+let _momentViewerSwipe = null;
 const MOMENTS_SEEN_STORAGE_KEY = "nabad_moments_seen_v1";
+const MOMENT_STORY_SLIDE_MS = 5200;
 
 function readSeenMomentIds() {
   try {
@@ -5760,14 +5779,98 @@ function markMomentSeen(momentId) {
   document.querySelectorAll(`[data-moment-id="${esc}"]`).forEach((tile) => {
     tile.classList.add("isViewed");
   });
-  const frame = document.getElementById("momentViewerPickFrame");
-  if (frame && String(_momentViewerOpen?.id || "") === id) frame.classList.add("isViewed");
+  document.querySelectorAll("[data-moment-user-id]").forEach((tile) => {
+    const uid = tile.getAttribute("data-moment-user-id");
+    const story = _momentStoriesByUserId.get(String(uid || ""));
+    if (story && isStoryFullySeen(story)) tile.classList.add("isViewed");
+  });
 }
 
-function momentPickTileHtml(m, { isOwn = false, label = "" } = {}) {
-  const handle = String(m?.username || "").replace(/^@/, "").trim() || "user";
-  const lbl = label || (isOwn ? "Your moment" : handle);
-  if (isOwn && !String(m?.imageUrl || "").trim()) {
+function normalizeMomentSlide(m) {
+  return {
+    id: String(m?.id || ""),
+    userId: String(m?.userId || m?.user_id || ""),
+    body: String(m?.body || ""),
+    imageUrl: String(m?.imageUrl || m?.image_url || "").trim(),
+    createdAt: m?.createdAt || m?.created_at || "",
+    expiresAt: m?.expiresAt || m?.expires_at || "",
+    username: String(m?.username || ""),
+    avatar: String(m?.avatar || ""),
+  };
+}
+
+function normalizeMomentStory(raw) {
+  const userId = String(raw?.userId || raw?.user_id || "").trim();
+  const moments = (Array.isArray(raw?.moments) ? raw.moments : [])
+    .map(normalizeMomentSlide)
+    .filter((m) => m.id && m.imageUrl);
+  if (!moments.length && raw?.imageUrl) {
+    moments.push(normalizeMomentSlide(raw));
+  }
+  return {
+    userId,
+    username: String(raw?.username || ""),
+    avatar: String(raw?.avatar || ""),
+    moments,
+  };
+}
+
+function buildMomentStoriesFromApi(data) {
+  if (Array.isArray(data?.stories) && data.stories.length) {
+    return data.stories.map(normalizeMomentStory).filter((s) => s.userId && s.moments.length);
+  }
+  const flat = Array.isArray(data?.moments) ? data.moments : [];
+  const byUser = new Map();
+  flat.forEach((m) => {
+    const slide = normalizeMomentSlide(m);
+    if (!slide.userId) return;
+    if (!byUser.has(slide.userId)) {
+      byUser.set(slide.userId, {
+        userId: slide.userId,
+        username: slide.username,
+        avatar: slide.avatar,
+        moments: [],
+      });
+    }
+    byUser.get(slide.userId).moments.push(slide);
+  });
+  return [...byUser.values()].filter((s) => s.moments.length);
+}
+
+function isStoryFullySeen(story) {
+  const moments = story?.moments || [];
+  return moments.length > 0 && moments.every((m) => isMomentSeen(m.id));
+}
+
+function momentPickShapeHtml(moments) {
+  const list = (moments || []).slice(0, 3);
+  const n = list.length;
+  if (n <= 1) {
+    const img = escapeHtml(String(list[0]?.imageUrl || ""));
+    return `<span class="momentPickShape"><img src="${img}" alt="" width="72" height="72" decoding="async" loading="lazy" /></span>`;
+  }
+  if (n === 2) {
+    return `<span class="momentPickShape momentPickShape--split2">${list
+      .map(
+        (m) =>
+          `<span class="momentPickSplitCell"><img src="${escapeHtml(String(m.imageUrl || ""))}" alt="" decoding="async" loading="lazy" /></span>`
+      )
+      .join("")}</span>`;
+  }
+  return `<span class="momentPickShape momentPickShape--split3">${list
+    .map(
+      (m) =>
+        `<span class="momentPickSplitCell"><img src="${escapeHtml(String(m.imageUrl || ""))}" alt="" decoding="async" loading="lazy" /></span>`
+    )
+    .join("")}</span>`;
+}
+
+function momentPickTileHtml(story, { isOwn = false, label = "" } = {}) {
+  const s = normalizeMomentStory(story);
+  const handle = String(s.username || "").replace(/^@/, "").trim() || "user";
+  const lbl = label || (isOwn ? "Your story" : handle);
+  const moments = s.moments || [];
+  if (isOwn && !moments.length) {
     return `<button type="button" class="momentPickTile isOwn momentPickAddTile" data-moment-add="1" aria-label="Create moment">
       <span class="momentPickShell">
         <span class="momentPickShape"><span class="momentPickAdd">+</span></span>
@@ -5775,19 +5878,35 @@ function momentPickTileHtml(m, { isOwn = false, label = "" } = {}) {
       <span class="momentPickLabel">Add moment</span>
     </button>`;
   }
-  const img = escapeHtml(String(m?.imageUrl || "").trim());
-  const expiresAt = String(m?.expiresAt || m?.expires_at || "").trim();
+  const latest = moments[0];
+  const expiresAt = String(latest?.expiresAt || "").trim();
   const hoursLbl = momentRemainingHoursLabel(expiresAt);
-  const viewed = !isOwn && isMomentSeen(m?.id);
+  const viewed = !isOwn && isStoryFullySeen(s);
+  const count = moments.length;
+  const countBadge = count > 1 ? `<span class="momentPickStoryCount" aria-hidden="true">${count}</span>` : "";
   const timeAria = expiresAt ? `, ${hoursLbl} left` : "";
-  return `<button type="button" class="momentPickTile${isOwn ? " isOwn" : ""}${viewed ? " isViewed" : ""}" data-moment-id="${escapeHtml(String(m?.id || ""))}" aria-label="Moment from ${escapeHtml(lbl)}${escapeHtml(timeAria)}">
+  return `<button type="button" class="momentPickTile${isOwn ? " isOwn" : ""}${viewed ? " isViewed" : ""}" data-moment-user-id="${escapeHtml(s.userId)}" data-moment-id="${escapeHtml(String(latest?.id || ""))}" aria-label="Story from ${escapeHtml(lbl)}${escapeHtml(timeAria)}">
     <span class="momentPickShell">
       <span class="momentPickCountdown" aria-hidden="true"></span>
-      <span class="momentPickShape"><img src="${img}" alt="" width="72" height="72" decoding="async" loading="lazy" /></span>
+      ${momentPickShapeHtml(moments)}
+      ${countBadge}
       <span class="momentPickTimePill" data-moment-expires="${escapeHtml(expiresAt)}" aria-hidden="true">${escapeHtml(hoursLbl)}</span>
     </span>
     <span class="momentPickLabel">${escapeHtml(lbl)}</span>
   </button>`;
+}
+
+function indexMomentStories(stories) {
+  _momentStoriesByUserId = new Map();
+  _friendsMomentsById = new Map();
+  _momentStoryOrder = [];
+  stories.forEach((raw) => {
+    const story = normalizeMomentStory(raw);
+    if (!story.userId || !story.moments.length) return;
+    _momentStoriesByUserId.set(story.userId, story);
+    _momentStoryOrder.push(story.userId);
+    story.moments.forEach((m) => _friendsMomentsById.set(String(m.id), m));
+  });
 }
 
 function bindMomentsRailClicks(container) {
@@ -5802,49 +5921,115 @@ function bindMomentsRailClicks(container) {
       navigateFromCreateChooser("moment");
       return;
     }
-    const tile = e.target.closest("[data-moment-id]");
+    const tile = e.target.closest("[data-moment-user-id]");
     if (!tile) return;
     e.preventDefault();
-    const id = tile.getAttribute("data-moment-id");
-    const m = _friendsMomentsById.get(String(id || ""));
-    if (m) openMomentViewerSheet(m);
+    try { haptic("light"); } catch {}
+    const userId = tile.getAttribute("data-moment-user-id");
+    const story = _momentStoriesByUserId.get(String(userId || ""));
+    if (story) openMomentViewerStoryDeck(story, 0);
   });
 }
 
-function updateMomentViewerCountdown() {
-  if (!_momentViewerOpen) return;
-  const exp = _momentViewerOpen.expiresAt || _momentViewerOpen.expires_at;
-  const pill = document.getElementById("momentViewerTimePill");
-  if (pill) pill.textContent = momentRemainingHoursLabel(exp);
-  const pct = momentRemainingPct(exp);
-  if (pct <= 0) closeMomentViewerSheet();
+function getCurrentViewerStory() {
+  return _momentViewerStories[_momentViewerStoryIndex] || null;
 }
 
-function openMomentViewerSheet(moment) {
-  const sheet = document.getElementById("momentViewerSheet");
-  if (!sheet || !moment) return;
-  _momentViewerOpen = moment;
-  const own = String(moment.userId || "") === String(authSession?.user?.id || "");
-  const frame = document.getElementById("momentViewerPickFrame");
-  if (frame) {
-    frame.classList.toggle("isViewed", !own && isMomentSeen(moment.id));
+function getCurrentViewerSlide() {
+  const story = getCurrentViewerStory();
+  if (!story) return null;
+  return story.moments[_momentViewerSlideIndex] || null;
+}
+
+function stopMomentViewerProgress() {
+  if (_momentViewerProgressTimer) {
+    window.clearInterval(_momentViewerProgressTimer);
+    _momentViewerProgressTimer = 0;
   }
-  if (!own) markMomentSeen(moment.id);
+}
+
+function renderMomentViewerProgress() {
+  const bar = document.getElementById("momentViewerProgress");
+  const story = getCurrentViewerStory();
+  if (!bar || !story) return;
+  const n = story.moments.length;
+  bar.innerHTML = story.moments
+    .map((_, i) => {
+      const cls =
+        i < _momentViewerSlideIndex
+          ? "momentViewerProgressSeg isDone"
+          : i === _momentViewerSlideIndex
+            ? "momentViewerProgressSeg isActive"
+            : "momentViewerProgressSeg";
+      return `<span class="${cls}" data-progress-idx="${i}"><span class="momentViewerProgressFill"></span></span>`;
+    })
+    .join("");
+  bar.hidden = n <= 1;
+  bar.setAttribute("aria-hidden", n <= 1 ? "true" : "false");
+}
+
+function tickMomentViewerProgress() {
+  const active = document.querySelector(".momentViewerProgressSeg.isActive .momentViewerProgressFill");
+  if (!active) return;
+  const start = active.dataset.progressStart || String(Date.now());
+  if (!active.dataset.progressStart) active.dataset.progressStart = start;
+  const elapsed = Date.now() - Number(start);
+  const pct = Math.min(100, (elapsed / MOMENT_STORY_SLIDE_MS) * 100);
+  active.style.width = `${pct}%`;
+  if (pct >= 100) advanceMomentViewerSlide(1);
+}
+
+function startMomentViewerProgress() {
+  stopMomentViewerProgress();
+  document.querySelectorAll(".momentViewerProgressFill").forEach((el) => {
+    el.style.width = el.closest(".momentViewerProgressSeg")?.classList.contains("isDone") ? "100%" : "0%";
+    delete el.dataset.progressStart;
+  });
+  const active = document.querySelector(".momentViewerProgressSeg.isActive .momentViewerProgressFill");
+  if (active) active.dataset.progressStart = String(Date.now());
+  _momentViewerProgressTimer = window.setInterval(tickMomentViewerProgress, 50);
+}
+
+function updateMomentViewerCountdown() {
+  const slide = getCurrentViewerSlide();
+  if (!slide) return;
+  const exp = slide.expiresAt;
+  const pill = document.getElementById("momentViewerTimePill");
+  if (pill) pill.textContent = momentRemainingHoursLabel(exp);
+  if (momentRemainingPct(exp) <= 0) closeMomentViewerSheet();
+}
+
+function syncMomentViewerSlideUi({ animate = true } = {}) {
+  const slide = getCurrentViewerSlide();
+  const story = getCurrentViewerStory();
+  if (!slide || !story) return;
+  _momentViewerOpen = slide;
+  const own = String(story.userId) === String(authSession?.user?.id || "");
+  const frame = document.getElementById("momentViewerPickFrame");
+  if (frame) frame.classList.toggle("isViewed", !own && isStoryFullySeen(story));
+  if (!own) markMomentSeen(slide.id);
   const img = document.getElementById("momentViewerImg");
   const who = document.getElementById("momentViewerWho");
   const caption = document.getElementById("momentViewerCaption");
   const profileLink = document.getElementById("momentViewerProfileLink");
   const avatarImg = document.getElementById("momentViewerAvatarImg");
   const avatarFallback = document.getElementById("momentViewerAvatarFallback");
+  const menuBtn = document.getElementById("momentViewerMenuBtn");
   const delBtn = document.getElementById("momentViewerDelete");
-  const handle = String(moment.username || "user").replace(/^@/, "").trim() || "user";
-  const initials = handle.replace(/^@/, "").slice(0, 2).toUpperCase() || "U";
+  const handle = String(story.username || slide.username || "user").replace(/^@/, "").trim() || "user";
+  const initials = handle.slice(0, 2).toUpperCase() || "U";
   if (img) {
-    img.src = String(moment.imageUrl || "").trim();
-    img.alt = `Moment by @${handle}`;
+    if (animate) img.classList.add("isChanging");
+    img.src = String(slide.imageUrl || "").trim();
+    img.alt = `Story by @${handle}`;
+    if (animate) {
+      requestAnimationFrame(() => {
+        img.classList.remove("isChanging");
+      });
+    }
   }
   if (who) who.textContent = `@${handle}`;
-  const captionText = String(moment.body || "").trim();
+  const captionText = String(slide.body || "").trim();
   if (caption) {
     caption.textContent = captionText;
     caption.hidden = !captionText;
@@ -5853,7 +6038,7 @@ function openMomentViewerSheet(moment) {
     profileLink.href = `#/u/${encodeURIComponent(handle)}`;
     profileLink.setAttribute("aria-label", `@${handle} profile`);
   }
-  const avatarRaw = String(moment.avatar || "").trim();
+  const avatarRaw = String(story.avatar || slide.avatar || "").trim();
   const avatarSrc = avatarRaw ? normalizeProfileAvatarForImg(avatarRaw) : "";
   if (avatarImg) {
     if (avatarSrc) {
@@ -5868,10 +6053,63 @@ function openMomentViewerSheet(moment) {
     avatarFallback.textContent = initials;
     avatarFallback.hidden = Boolean(avatarSrc);
   }
+  if (menuBtn) menuBtn.hidden = !own;
   if (delBtn) delBtn.hidden = !own;
   const overlayBottom = document.querySelector(".momentViewerOverlayBottom");
-  if (overlayBottom) overlayBottom.hidden = !captionText && !own;
+  if (overlayBottom) overlayBottom.hidden = !captionText;
+  renderMomentViewerProgress();
+  startMomentViewerProgress();
   updateMomentViewerCountdown();
+}
+
+function advanceMomentViewerSlide(dir = 1) {
+  const story = getCurrentViewerStory();
+  if (!story) {
+    closeMomentViewerSheet();
+    return;
+  }
+  let si = _momentViewerSlideIndex + dir;
+  let sti = _momentViewerStoryIndex;
+  if (si >= story.moments.length) {
+    sti += 1;
+    si = 0;
+  } else if (si < 0) {
+    sti -= 1;
+    if (sti < 0) {
+      closeMomentViewerSheet();
+      return;
+    }
+    const prev = _momentViewerStories[sti];
+    si = Math.max(0, (prev?.moments?.length || 1) - 1);
+  }
+  if (!_momentViewerStories[sti]) {
+    closeMomentViewerSheet();
+    return;
+  }
+  _momentViewerStoryIndex = sti;
+  _momentViewerSlideIndex = si;
+  syncMomentViewerSlideUi({ animate: true });
+}
+
+function openMomentViewerStoryDeck(story, slideIndex = 0) {
+  const sheet = document.getElementById("momentViewerSheet");
+  const normalized = normalizeMomentStory(story);
+  if (!sheet || !normalized.moments.length) return;
+  _momentViewerStories = _momentStoryOrder
+    .map((uid) => _momentStoriesByUserId.get(uid))
+    .filter((s) => s && s.moments.length);
+  if (!_momentViewerStories.length) _momentViewerStories = [normalized];
+  _momentViewerStoryIndex = Math.max(
+    0,
+    _momentViewerStories.findIndex((s) => s.userId === normalized.userId)
+  );
+  if (_momentViewerStoryIndex < 0) {
+    _momentViewerStories.unshift(normalized);
+    _momentViewerStoryIndex = 0;
+  }
+  _momentViewerSlideIndex = Math.max(0, Math.min(slideIndex, normalized.moments.length - 1));
+  closeMomentViewerMenu();
+  syncMomentViewerSlideUi({ animate: false });
   sheet.hidden = false;
   sheet.setAttribute("aria-hidden", "false");
   requestAnimationFrame(() => sheet.classList.add("isOpen"));
@@ -5879,16 +6117,45 @@ function openMomentViewerSheet(moment) {
   _momentViewerTimer = window.setInterval(updateMomentViewerCountdown, 30000);
 }
 
+function openMomentViewerSheet(moment) {
+  const slide = normalizeMomentSlide(moment);
+  const story = _momentStoriesByUserId.get(slide.userId) || {
+    userId: slide.userId,
+    username: slide.username,
+    avatar: slide.avatar,
+    moments: [slide],
+  };
+  const idx = story.moments.findIndex((m) => m.id === slide.id);
+  openMomentViewerStoryDeck(story, Math.max(0, idx));
+}
+
+function closeMomentViewerMenu() {
+  const menu = document.getElementById("momentViewerMenu");
+  const btn = document.getElementById("momentViewerMenuBtn");
+  if (menu) menu.hidden = true;
+  if (btn) btn.setAttribute("aria-expanded", "false");
+}
+
 function closeMomentViewerSheet() {
   const sheet = document.getElementById("momentViewerSheet");
   if (!sheet) return;
-  sheet.classList.remove("isOpen");
+  stopMomentViewerProgress();
+  closeMomentViewerMenu();
+  sheet.classList.remove("isOpen", "isDraggingDown");
   sheet.setAttribute("aria-hidden", "true");
+  const card = document.getElementById("momentViewerCard");
+  if (card) {
+    card.style.transform = "";
+    card.style.opacity = "";
+  }
   if (_momentViewerTimer) {
     window.clearInterval(_momentViewerTimer);
     _momentViewerTimer = 0;
   }
   _momentViewerOpen = null;
+  _momentViewerStories = [];
+  _momentViewerStoryIndex = 0;
+  _momentViewerSlideIndex = 0;
   window.setTimeout(() => {
     sheet.hidden = true;
   }, 280);
@@ -5897,30 +6164,127 @@ function closeMomentViewerSheet() {
 function wireMomentViewerOnce() {
   if (document.documentElement.dataset.wiredMomentViewer) return;
   document.documentElement.dataset.wiredMomentViewer = "1";
+
   document.querySelectorAll("[data-moment-viewer-dismiss]").forEach((el) => {
     el.addEventListener("click", () => closeMomentViewerSheet());
   });
+
+  document.getElementById("momentViewerTapPrev")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    try { haptic("light"); } catch {}
+    advanceMomentViewerSlide(-1);
+  });
+  document.getElementById("momentViewerTapNext")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    try { haptic("light"); } catch {}
+    advanceMomentViewerSlide(1);
+  });
+
   document.getElementById("momentViewerProfileLink")?.addEventListener("click", () => {
     closeMomentViewerSheet();
   });
-  document.getElementById("momentViewerDelete")?.addEventListener("click", async () => {
-    const m = _momentViewerOpen;
-    if (!m?.id || !authSession?.user?.id) return;
+
+  document.getElementById("momentViewerMenuBtn")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const menu = document.getElementById("momentViewerMenu");
+    const btn = document.getElementById("momentViewerMenuBtn");
+    if (!menu || !btn) return;
+    const open = menu.hidden;
+    menu.hidden = !open;
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    try { haptic("light"); } catch {}
+  });
+
+  document.getElementById("momentViewerDelete")?.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    const slide = getCurrentViewerSlide();
+    if (!slide?.id || !authSession?.user?.id) return;
+    closeMomentViewerMenu();
     try { haptic("light"); } catch {}
     try {
       await socialApi("/api/social", {
         method: "POST",
-        body: JSON.stringify({ action: "delete_moment", momentId: m.id }),
+        body: JSON.stringify({ action: "delete_moment", momentId: slide.id }),
       });
-      closeMomentViewerSheet();
+      const story = getCurrentViewerStory();
+      if (story) {
+        story.moments = story.moments.filter((m) => m.id !== slide.id);
+        _momentStoriesByUserId.set(story.userId, story);
+        if (!story.moments.length) {
+          closeMomentViewerSheet();
+          void refreshFriendsMomentsRail();
+          return;
+        }
+        if (_momentViewerSlideIndex >= story.moments.length) {
+          _momentViewerSlideIndex = story.moments.length - 1;
+        }
+        syncMomentViewerSlideUi({ animate: false });
+      }
       void refreshFriendsMomentsRail();
       if (currentUserPublicProfileId === authSession.user.id) {
         void renderUserProfileMomentsRail(authSession.user.id, authSession.user.user_metadata?.username || "");
       }
-      try { showToast("Moment removed", { icon: "✓", durationMs: 2000 }); } catch {}
-    } catch (e) {
-      try { showToast(e?.message || "Could not remove moment", { durationMs: 2600 }); } catch {}
+      try { showToast("Story removed", { icon: "✓", durationMs: 2000 }); } catch {}
+    } catch (err) {
+      try { showToast(err?.message || "Could not remove story", { durationMs: 2600 }); } catch {}
     }
+  });
+
+  const card = document.getElementById("momentViewerCard");
+  if (card) {
+    card.addEventListener(
+      "touchstart",
+      (e) => {
+        if (!document.getElementById("momentViewerSheet")?.classList.contains("isOpen")) return;
+        const t = e.touches?.[0];
+        if (!t) return;
+        _momentViewerSwipe = { x: t.clientX, y: t.clientY, at: Date.now() };
+      },
+      { passive: true }
+    );
+    card.addEventListener(
+      "touchend",
+      (e) => {
+        if (!_momentViewerSwipe) return;
+        const t = e.changedTouches?.[0];
+        if (!t) {
+          _momentViewerSwipe = null;
+          return;
+        }
+        const dx = t.clientX - _momentViewerSwipe.x;
+        const dy = t.clientY - _momentViewerSwipe.y;
+        _momentViewerSwipe = null;
+        if (dy > 72 && Math.abs(dy) > Math.abs(dx)) {
+          closeMomentViewerSheet();
+          return;
+        }
+        if (Math.abs(dx) > 56 && Math.abs(dx) > Math.abs(dy)) {
+          advanceMomentViewerSlide(dx < 0 ? 1 : -1);
+        }
+      },
+      { passive: true }
+    );
+    card.addEventListener(
+      "touchmove",
+      (e) => {
+        if (!_momentViewerSwipe) return;
+        const t = e.touches?.[0];
+        if (!t) return;
+        const dy = t.clientY - _momentViewerSwipe.y;
+        if (dy > 12) {
+          const sheet = document.getElementById("momentViewerSheet");
+          sheet?.classList.add("isDraggingDown");
+          card.style.transform = `translateY(${Math.min(dy * 0.55, 120)}px)`;
+          card.style.opacity = String(Math.max(0.55, 1 - dy / 280));
+        }
+      },
+      { passive: true }
+    );
+  }
+
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("#momentViewerMenuBtn, #momentViewerMenu")) return;
+    closeMomentViewerMenu();
   });
 }
 
@@ -5928,7 +6292,7 @@ async function fetchMomentsRail() {
   if (!authSession?.user?.id) return [];
   try {
     const data = await socialApi("/api/social?type=moments_rail");
-    return Array.isArray(data?.moments) ? data.moments : [];
+    return buildMomentStoriesFromApi(data);
   } catch {
     return [];
   }
@@ -5940,7 +6304,8 @@ async function fetchUserMoments(userId, username = "") {
   else if (username) qs.set("username", username);
   try {
     const data = await socialApi(`/api/social?${qs.toString()}`);
-    return Array.isArray(data?.moments) ? data.moments : [];
+    const stories = buildMomentStoriesFromApi(data);
+    return stories[0]?.moments || [];
   } catch {
     return [];
   }
@@ -5949,22 +6314,7 @@ async function fetchUserMoments(userId, username = "") {
 let _friendsMomentsGen = 0;
 
 function applyMomentToFriendsRail(moment) {
-  const rail = document.getElementById("friendsMomentsRail");
-  const scroll = document.getElementById("friendsMomentsRailScroll");
-  if (!rail || !scroll || !moment || !authSession?.user?.id) return;
-  _friendsMomentsById.set(String(moment.id), moment);
-  const ownId = String(authSession.user.id);
-  const all = [..._friendsMomentsById.values()];
-  const ownMoment = all.find((m) => String(m.userId) === ownId) || null;
-  const others = all.filter((m) => String(m.userId) !== ownId);
-  const tiles = [
-    momentPickTileHtml(ownMoment || { userId: ownId }, { isOwn: true }),
-    ...others.map((m) => momentPickTileHtml(m)),
-  ];
-  scroll.innerHTML = tiles.join("");
-  bindMomentsRailClicks(scroll);
-  rail.hidden = false;
-  startMomentRailCountdownTimer();
+  void refreshFriendsMomentsRail();
 }
 
 async function recoverMomentAfterPublishError() {
@@ -5992,16 +6342,18 @@ async function refreshFriendsMomentsRail() {
     scroll.innerHTML = "";
     return;
   }
-  const moments = await fetchMomentsRail();
+  const stories = await fetchMomentsRail();
   if (gen !== _friendsMomentsGen) return;
-  _friendsMomentsById = new Map(moments.map((m) => [String(m.id), m]));
+  indexMomentStories(stories);
   const ownId = String(authSession.user.id);
-  const ownMoment = moments.find((m) => String(m.userId) === ownId) || null;
+  const ownStory = _momentStoriesByUserId.get(ownId) || { userId: ownId, moments: [] };
+  const others = _momentStoryOrder
+    .filter((uid) => uid !== ownId)
+    .map((uid) => _momentStoriesByUserId.get(uid))
+    .filter(Boolean);
   const tiles = [
-    momentPickTileHtml(ownMoment || { userId: ownId }, { isOwn: true }),
-    ...moments
-      .filter((m) => String(m.userId) !== ownId)
-      .map((m) => momentPickTileHtml(m)),
+    momentPickTileHtml(ownStory, { isOwn: true }),
+    ...others.map((s) => momentPickTileHtml(s)),
   ];
   scroll.innerHTML = tiles.join("");
   bindMomentsRailClicks(scroll);
@@ -6025,8 +6377,15 @@ async function renderUserProfileMomentsRail(userId, username = "") {
     rail.innerHTML = "";
     return;
   }
-  moments.forEach((m) => _friendsMomentsById.set(String(m.id), m));
-  rail.innerHTML = moments.map((m) => momentPickTileHtml(m)).join("");
+  const story = {
+    userId: uid,
+    username: String(username || moments[0]?.username || "").replace(/^@/, ""),
+    avatar: moments[0]?.avatar || "",
+    moments: moments.map(normalizeMomentSlide),
+  };
+  story.moments.forEach((m) => _friendsMomentsById.set(String(m.id), m));
+  _momentStoriesByUserId.set(uid, story);
+  rail.innerHTML = momentPickTileHtml(story);
   bindMomentsRailClicks(rail);
   wrap.hidden = false;
   startMomentRailCountdownTimer();

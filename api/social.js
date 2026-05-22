@@ -549,19 +549,26 @@ async function handleGet(req, res, user) {
       `social_moments?select=id,user_id,body,image_url,created_at,expires_at&user_id=in.(${inList})&expires_at=gt.${encodeURIComponent(nowIso)}&order=created_at.desc&limit=${limit}`,
     );
     const raw = Array.isArray(rows.data) ? rows.data : [];
-    const latestByUser = new Map();
+    const byUser = new Map();
     for (const row of raw) {
       const uid = cleanUserId(row.user_id);
-      if (!uid || latestByUser.has(uid)) continue;
-      latestByUser.set(uid, row);
+      if (!uid) continue;
+      if (!byUser.has(uid)) byUser.set(uid, []);
+      byUser.get(uid).push(row);
     }
-    const picked = [...latestByUser.values()];
-    const profiles = await Promise.all(picked.map((m) => profileByUserId(m.user_id)));
-    return sendJson(res, 200, {
-      ok: true,
-      moments: picked.map((m, i) => ({
+    const sortedUsers = [...byUser.entries()].sort((a, b) => {
+      const ta = new Date(a[1][0]?.created_at || 0).getTime();
+      const tb = new Date(b[1][0]?.created_at || 0).getTime();
+      return tb - ta;
+    });
+    const profiles = await Promise.all(sortedUsers.map(([uid]) => profileByUserId(uid)));
+    const stories = sortedUsers.map(([uid, rows], i) => ({
+      userId: uid,
+      username: profiles[i]?.username || "",
+      avatar: profiles[i]?.avatar || "",
+      moments: rows.map((m) => ({
         id: m.id,
-        userId: m.user_id,
+        userId: uid,
         body: m.body,
         imageUrl: m.image_url,
         createdAt: m.created_at,
@@ -569,6 +576,11 @@ async function handleGet(req, res, user) {
         username: profiles[i]?.username || "",
         avatar: profiles[i]?.avatar || "",
       })),
+    }));
+    return sendJson(res, 200, {
+      ok: true,
+      stories,
+      moments: stories.map((s) => s.moments[0]).filter(Boolean),
     });
   }
 

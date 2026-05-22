@@ -4452,15 +4452,26 @@ body[data-route="moment"] main.grid > [data-route="moment"]{
 .momentStudioCropStage{
   position: absolute;
   inset: 0;
+  z-index: 5;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: calc(env(safe-area-inset-top, 0px) + 56px) 0 calc(env(safe-area-inset-bottom, 0px) + 120px);
   background: #000;
+  pointer-events: auto;
+  touch-action: none;
 }
 .momentStudioCropStage[hidden]{
   display: none !important;
+}
+.momentStudio.isCrop .momentStudioChrome{
+  pointer-events: none;
+}
+.momentStudio.isCrop .momentStudioTop{
+  pointer-events: auto;
+  position: relative;
+  z-index: 6;
 }
 .momentStudioCropFrame{
   width: min(100%, 420px);
@@ -4473,6 +4484,10 @@ body[data-route="moment"] main.grid > [data-route="moment"]{
   background: #111;
   touch-action: none;
   box-shadow: 0 0 0 1px rgba(255,255,255,0.08);
+  cursor: grab;
+}
+.momentStudioCropFrame.isDragging{
+  cursor: grabbing;
 }
 .momentStudioCropImg{
   position: absolute;
@@ -5115,6 +5130,64 @@ body[data-route="moment"] main.grid > [data-route="moment"]{
   display: block;
   border-radius: 17px;
 }
+.momentPickShape--split2{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  background: #000;
+}
+.momentPickShape--split3{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 2px;
+  background: #000;
+}
+.momentPickSplitCell{
+  overflow: hidden;
+  background: rgba(255,255,255,0.06);
+  min-height: 0;
+}
+.momentPickShape--split2 .momentPickSplitCell{
+  border-radius: 4px 0 0 4px;
+}
+.momentPickShape--split2 .momentPickSplitCell:last-child{
+  border-radius: 0 4px 4px 0;
+}
+.momentPickShape--split3 .momentPickSplitCell:first-child{
+  border-radius: 4px 0 0 0;
+}
+.momentPickShape--split3 .momentPickSplitCell:nth-child(2){
+  border-radius: 0 4px 0 0;
+}
+.momentPickShape--split3 .momentPickSplitCell:nth-child(3){
+  grid-column: 1 / -1;
+  border-radius: 0 0 12px 12px;
+}
+.momentPickSplitCell img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 0;
+}
+.momentPickStoryCount{
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 4;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 18px;
+  text-align: center;
+  color: #fff;
+  background: rgba(0,0,0,0.55);
+  pointer-events: none;
+}
 .momentPickTimePill{
   position: absolute;
   right: 5px;
@@ -5223,6 +5296,61 @@ body[data-route="moment"] main.grid > [data-route="moment"]{
   transform: scale(1);
   opacity: 1;
 }
+.momentViewerSheet.isDraggingDown .momentViewerCard{
+  transition: none;
+}
+.momentViewerProgress{
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 8;
+  display: flex;
+  gap: 4px;
+  padding: max(10px, env(safe-area-inset-top)) 10px 8px;
+  pointer-events: none;
+}
+.momentViewerProgressSeg{
+  flex: 1;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.28);
+  overflow: hidden;
+}
+.momentViewerProgressFill{
+  display: block;
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: #fff;
+  transition: width 80ms linear;
+}
+.momentViewerProgressSeg.isDone .momentViewerProgressFill{
+  width: 100%;
+  transition: none;
+}
+.momentViewerProgressSeg.isActive .momentViewerProgressFill{
+  transition: width 50ms linear;
+}
+.momentViewerTapZones{
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  pointer-events: none;
+}
+.momentViewerTapZone{
+  flex: 1;
+  border: 0;
+  background: transparent;
+  pointer-events: auto;
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+}
+.momentViewerImg.isChanging{
+  opacity: 0.4;
+  transition: opacity 180ms ease;
+}
 .momentViewerPickFrame{
   position: relative;
   width: 100%;
@@ -5318,18 +5446,61 @@ body[data-route="moment"] main.grid > [data-route="moment"]{
   -webkit-backdrop-filter: blur(10px);
   border-top: 1px solid rgba(255,255,255,0.08);
 }
-.momentViewerClose{
+.momentViewerMenuWrap{
+  position: relative;
   flex: 0 0 auto;
+}
+.momentViewerMenuBtn{
   width: 36px;
   height: 36px;
   border-radius: 999px;
   border: 1px solid rgba(255,255,255,0.16);
   background: rgba(0,0,0,0.42);
   color: #fff;
-  font-size: 22px;
+  font-size: 20px;
+  font-weight: 900;
   line-height: 1;
+  letter-spacing: 0.12em;
   cursor: pointer;
   backdrop-filter: blur(8px);
+  -webkit-tap-highlight-color: transparent;
+}
+.momentViewerMenuBtn[hidden]{
+  display: none !important;
+}
+.momentViewerMenu{
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 160px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(18,22,32,0.96);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+  padding: 6px;
+  z-index: 12;
+}
+.momentViewerMenu[hidden]{
+  display: none !important;
+}
+.momentViewerMenuItem{
+  width: 100%;
+  min-height: 40px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #ff6b6b;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: left;
+  padding: 0 12px;
+  cursor: pointer;
+}
+.momentViewerMenuItem:active{
+  background: rgba(255,255,255,0.08);
+}
+.momentViewerMenuItem[hidden]{
+  display: none !important;
 }
 .momentViewerProfileRow{
   display: flex;
@@ -5402,20 +5573,6 @@ body[data-route="moment"] main.grid > [data-route="moment"]{
   display: none;
 }
 .momentViewerOverlayBottom[hidden]{
-  display: none !important;
-}
-.momentViewerDelete{
-  display: block;
-  width: 100%;
-  max-width: 220px;
-  margin: 12px auto 0;
-  min-height: 40px;
-  border-radius: 12px;
-  font-weight: 800;
-  background: rgba(0,0,0,0.28);
-  border-color: rgba(255,255,255,0.12);
-}
-.momentViewerDelete[hidden]{
   display: none !important;
 }
 .vocalQuickRow .ghost{

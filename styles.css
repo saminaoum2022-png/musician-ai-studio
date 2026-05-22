@@ -4375,6 +4375,9 @@ body.momentRouteCameraLive .momentStudioMedia,
 body.momentRouteCameraLive .momentStudioPickStage{
   background: transparent !important;
 }
+body.momentRouteCameraLive .momentStudioChrome{
+  background: transparent !important;
+}
 .momentStudio--liveNative{
   background: transparent !important;
 }

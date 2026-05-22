@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522momentLiveCamV1";
+const APP_BUILD = "20260522momentLiveCamV2";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -107,6 +107,20 @@ function isFounderBadgeEmail(raw) {
           async addListener() {
             return { remove: async () => {} };
           },
+        }),
+      });
+    }
+    if (!cap.Plugins?.CameraPreview) {
+      cap.registerPlugin("CameraPreview", {
+        web: () => ({
+          async start() {
+            throw new Error("Camera preview requires the NabadAi app");
+          },
+          async stop() {},
+          async capture() {
+            throw new Error("Camera preview requires the NabadAi app");
+          },
+          async flip() {},
         }),
       });
     }
@@ -5133,7 +5147,12 @@ function getMomentCameraPreviewPlugin() {
 }
 
 function momentStudioUsesNativeCameraPreview() {
-  return isNativeShell() && Boolean(getMomentCameraPreviewPlugin());
+  if (!isNativeShell()) return false;
+  try {
+    const cap = window.Capacitor;
+    if (cap?.getPlatform?.() === "ios" || cap?.getPlatform?.() === "android") return true;
+  } catch {}
+  return Boolean(getMomentCameraPreviewPlugin());
 }
 
 function momentStudioUsesWebLiveCamera() {
@@ -5280,13 +5299,17 @@ function stopMomentCamera() {
 async function startMomentNativeCameraPreview() {
   const CameraPreview = getMomentCameraPreviewPlugin();
   if (!CameraPreview || _momentNativePreviewActive) return false;
+  setMomentCameraLiveChrome(true);
+  syncMomentPickStageMode();
   try {
+    const w = Math.round(window.screen?.width || window.innerWidth || 390);
+    const h = Math.round(window.screen?.height || window.innerHeight || 844);
     await CameraPreview.start({
       position: momentCameraFacing === "user" ? "front" : "rear",
       toBack: true,
       disableAudio: true,
-      width: Math.round(window.screen.width || 390),
-      height: Math.round(window.screen.height || 844),
+      width: w,
+      height: h,
     });
     _momentNativePreviewActive = true;
     syncMomentPickStageMode();
@@ -5294,6 +5317,7 @@ async function startMomentNativeCameraPreview() {
   } catch (e) {
     _momentNativePreviewActive = false;
     setMomentCameraLiveChrome(false);
+    syncMomentPickStageMode();
     try { showToast("Camera access needed for stories", { durationMs: 2800 }); } catch {}
     return false;
   }
@@ -5676,7 +5700,7 @@ function scheduleMomentStudioStart() {
     if ((document.body.getAttribute("data-route") || "") !== "moment") return;
     setMomentStudioLoading(false);
     if (momentStudioPhase === "pick") void startMomentCamera();
-  }, 160);
+  }, 320);
 }
 
 async function applyMomentPhotoFromFile(file) {

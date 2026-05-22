@@ -43,8 +43,8 @@ public class StoryCameraPlugin: CAPPlugin, CAPBridgedPlugin {
                         jpegQuality: CGFloat(quality) / 100.0
                     ) { outcome in
                         switch outcome {
-                        case .captured(let dataUrl):
-                            call.resolve(["cancelled": false, "dataUrl": dataUrl])
+                        case .capturedFile(let path):
+                            call.resolve(["cancelled": false, "path": path])
                         case .cancelled:
                             call.resolve(["cancelled": true])
                         case .failed(let message):
@@ -63,7 +63,7 @@ public class StoryCameraPlugin: CAPPlugin, CAPBridgedPlugin {
 // MARK: - Native story camera UI
 
 private enum StoryCameraOutcome {
-    case captured(String)
+    case capturedFile(String)
     case cancelled
     case failed(String)
 }
@@ -300,22 +300,39 @@ extension StoryCameraViewController: AVCapturePhotoCaptureDelegate {
             finish(.failed("Could not read photo"))
             return
         }
-        guard let dataUrl = StoryCameraImageEncoder.dataUrl(from: data, maxSide: 1280, quality: jpegQuality) else {
+        guard let path = StoryCameraImageEncoder.writeTempJPEG(from: data, maxSide: 1080, quality: jpegQuality) else {
             finish(.failed("Could not prepare photo"))
             return
         }
-        finish(.captured(dataUrl))
+        finish(.capturedFile(path))
     }
 }
 
-// MARK: - Resize before crossing the WebView bridge (full-res JPEG crashes WKWebView decode)
+// MARK: - Resize + temp file (avoid huge base64 over the Capacitor bridge / WKWebView decode)
 
 private enum StoryCameraImageEncoder {
-    static func dataUrl(from data: Data, maxSide: CGFloat, quality: CGFloat) -> String? {
+    static func writeTempJPEG(from data: Data, maxSide: CGFloat, quality: CGFloat) -> String? {
         guard let image = UIImage(data: data) else { return nil }
-        let resized = resize(image, maxSide: maxSide)
+        let resized = resize(normalizeOrientation(image), maxSide: maxSide)
         guard let jpeg = resized.jpegData(compressionQuality: quality) else { return nil }
-        return "data:image/jpeg;base64,\(jpeg.base64EncodedString())"
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nabad_story_\(UUID().uuidString).jpg")
+        do {
+            try jpeg.write(to: url, options: .atomic)
+            return url.path
+        } catch {
+            return nil
+        }
+    }
+
+    private static func normalizeOrientation(_ image: UIImage) -> UIImage {
+        if image.imageOrientation == .up { return image }
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: image.size, format: format)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: image.size))
+        }
     }
 
     private static func resize(_ image: UIImage, maxSide: CGFloat) -> UIImage {

@@ -22,6 +22,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
   process.exit(0);
 }
 
+if (!vercelProtectionBypass) {
+  console.warn(
+    "[sync-client-env] WARNING: VERCEL_PROTECTION_BYPASS is empty. If Deployment Protection is on, /api/* returns 403 and Friends/login break until you disable protection or set the bypass secret on Vercel and redeploy.",
+  );
+}
+
 const body = `window.__NABAD_CLIENT_ENV__ = ${JSON.stringify(
   { supabaseUrl, supabaseAnonKey, apiBase, vercelProtectionBypass },
   null,

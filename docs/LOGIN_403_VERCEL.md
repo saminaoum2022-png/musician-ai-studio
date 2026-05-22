@@ -6,6 +6,8 @@ Verified: `https://musician-ai-studio.vercel.app/` and `/api/public-config` retu
 
 **Web Friends “network error” after login:** If the browser cached `apiBase: https://nabad-ai.vercel.app` (old default), API calls leave your live site and fail. Builds from `20260522webFriendsApiV1` always use same-origin `/api/*` on web. Hard-refresh once after deploy.
 
+**Friends tab stuck on “Sign in” with 403:** That is the same issue — Vercel returns **403** for `/api/public-config` and `/api/social`, so the app cannot load settings or your feed. Fix A or B below, then **Redeploy Production** and hard-refresh.
+
 ## Fix A — Turn off protection (simplest)
 
 1. [Vercel Dashboard](https://vercel.com) → **musician-ai-studio** project.

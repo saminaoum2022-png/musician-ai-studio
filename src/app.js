@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522nativeStoryCamV9";
+const APP_BUILD = "20260522friends403FixV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1888,12 +1888,42 @@ function applyClientEnvBootstrap() {
     const env = window.__NABAD_CLIENT_ENV__;
     if (!env || typeof env !== "object") return false;
     applyPublicConfigPayload(env);
+    const bypass = String(env.vercelProtectionBypass || "").trim();
+    if (bypass) {
+      try {
+        window.__VERCEL_PROTECTION_BYPASS__ = bypass;
+      } catch {}
+    }
     if (isNativeShell() && env.apiBase) setResolvedApiBase(env.apiBase);
     else _resolvedApiBase = "";
     return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
   } catch {
     return false;
   }
+}
+
+/** Shown on Friends when Vercel blocks /api/* (Deployment Protection 403). */
+function friendsFeedBlockedMessage() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    const m = loginConfigFailureMessage();
+    return m || "App settings could not load. Hard-refresh or check your connection.";
+  }
+  if (lastPublicConfigError === "403_deployment_protection" || lastPublicConfigStatus === 403) {
+    return loginConfigFailureMessage();
+  }
+  return "";
+}
+
+async function ensureFriendsFeedPrerequisites() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    await loadPublicConfig();
+  }
+  if (getSupabaseAuthToken() && !authSession?.user?.id) {
+    try {
+      await refreshAuthStateFromSupabase();
+    } catch {}
+  }
+  return !friendsFeedBlockedMessage();
 }
 
 let SUPABASE_URL = "";
@@ -8498,6 +8528,13 @@ function enterFriendsRoute() {
   bindFriendsPageOnce();
   wireFriendsComposeFabOnce();
   syncFollowingComposeUi();
+  void (async () => {
+    if (token !== _friendsRouteEnterToken) return;
+    await ensureFriendsFeedPrerequisites();
+    if (token !== _friendsRouteEnterToken) return;
+    if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
+    runFriendsRouteRefresh(token);
+  })();
   if (_friendsStatusComposePending) {
     void refreshFriendsMomentsRail();
     if (_enterFriendsDebounce) clearTimeout(_enterFriendsDebounce);
@@ -8550,6 +8587,32 @@ async function refreshDiscoveryFollowingFeed() {
   if (!keepFeed) listEl.innerHTML = followingActivitySkeletonHtml();
   statusEl.hidden = true;
   statusEl.textContent = "";
+
+  await ensureFriendsFeedPrerequisites();
+  if (gen !== _discoveryFollowingGen) return;
+  const apiBlock = friendsFeedBlockedMessage();
+  if (apiBlock) {
+    listEl.classList.remove("isDiscoveryLoading");
+    listEl.hidden = true;
+    listEl.innerHTML = "";
+    renderDiscoveryFollowingEmpty(
+      statusEl,
+      "Friends unavailable",
+      apiBlock,
+      `<button type="button" class="solid discoveryEmptyCta" id="friendsFeedRetryBtn">Try again</button>`,
+    );
+    const retry = document.getElementById("friendsFeedRetryBtn");
+    if (retry && !retry.dataset.boundFriendsRetry) {
+      retry.dataset.boundFriendsRetry = "1";
+      retry.addEventListener("click", () => {
+        try { haptic("light"); } catch {}
+        lastPublicConfigError = "";
+        lastPublicConfigStatus = 0;
+        void loadPublicConfig().then(() => void refreshDiscoveryFollowingFeed());
+      });
+    }
+    return;
+  }
 
   if (!authSession?.user?.id) {
     const token = getSupabaseAuthToken();

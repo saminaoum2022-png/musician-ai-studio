@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522voiceStatusV2";
+const APP_BUILD = "20260522momentCamRestoreV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2681,6 +2681,8 @@ function applyRoute() {
     try { syncMomentPageUi(); } catch {}
     if (momentStudioPhase === "songShare" && pendingSongStoryTrack) {
       try { setupSongStoryShareUi(); } catch {}
+    } else if (momentStudioPhase === "pick") {
+      void beginMomentPickPhase();
     }
   }
   if (wanted === "discover") {
@@ -5594,10 +5596,8 @@ function navigateFromCreateChooser(action) {
     }
 
     if (kind === "moment") {
-      try { location.hash = "#/profile?seg=all"; } catch {}
-      try {
-        showToast("Library → ⋯ on a song → Share to story", { durationMs: 3600 });
-      } catch {}
+      openMomentCreatePage();
+      scheduleApplyRoute();
       return;
     }
 
@@ -7279,8 +7279,9 @@ function bindMomentsRailClicks(container) {
     if (addBtn) {
       e.preventDefault();
       try { haptic("light"); } catch {}
-      if (!requireAuthForCreate(() => navigateFromCreateChooser("moment"))) return;
-      navigateFromCreateChooser("moment");
+      if (!requireAuthForCreate(() => openMomentCreatePage(), "moment")) return;
+      openMomentCreatePage();
+      scheduleApplyRoute();
       return;
     }
     const tile = e.target.closest("[data-moment-user-id]");

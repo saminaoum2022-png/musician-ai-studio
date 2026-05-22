@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522momentLiveCamV2";
+const APP_BUILD = "20260522momentCamTeardownV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -122,6 +122,13 @@ function isFounderBadgeEmail(raw) {
           },
           async flip() {},
         }),
+      });
+    }
+    const CapApp = cap.Plugins?.App;
+    if (CapApp?.addListener && !cap.__nabadMomentAppStateWired) {
+      cap.__nabadMomentAppStateWired = true;
+      CapApp.addListener("appStateChange", ({ isActive }) => {
+        if (!isActive) void teardownMomentStudio();
       });
     }
   } catch {
@@ -2507,13 +2514,8 @@ function applyRoute() {
   if (prevRoute === "hub" && wanted !== "hub") {
     try { pauseHubForRouteChange(); } catch {}
   }
-  if (prevRoute === "moment" && wanted !== "moment") {
-    try { stopMomentCamera(); } catch {}
-    _momentStudioStarted = false;
-    setMomentCameraLiveChrome(false);
-  }
-  if (wanted === "moment") {
-    try { document.documentElement.classList.remove("momentRouteCameraLive"); } catch {}
+  if (wanted !== "moment") {
+    void teardownMomentStudio();
   }
   if (wanted === "hub") {
     markAllHubSeen();
@@ -5140,6 +5142,9 @@ const momentCropState = {
 };
 
 let _momentNativePreviewActive = false;
+let _momentStudioStartTimer = 0;
+/** Bumps when moment camera should stop; invalidates in-flight native start(). */
+let _momentCameraOp = 0;
 
 function getMomentCameraPreviewPlugin() {
   try {
@@ -5212,7 +5217,7 @@ function resetMomentComposeForm() {
   const preview = document.getElementById("momentPhotoPreview");
   clearMomentPhotoInputs();
   if (preview) preview.removeAttribute("src");
-  try { stopMomentCamera(); } catch {}
+  void stopMomentCamera();
   setMomentStudioLoading(false);
   syncMomentPageUi();
 }
@@ -5274,17 +5279,29 @@ function renderMomentRecentsRail() {
   });
 }
 
+function cancelMomentStudioStart() {
+  if (_momentStudioStartTimer) {
+    window.clearTimeout(_momentStudioStartTimer);
+    _momentStudioStartTimer = 0;
+  }
+}
+
 async function stopMomentNativeCameraPreview() {
+  _momentCameraOp += 1;
   const CameraPreview = getMomentCameraPreviewPlugin();
-  if (CameraPreview && _momentNativePreviewActive) {
+  if (CameraPreview) {
     try { await CameraPreview.stop(); } catch {}
   }
   _momentNativePreviewActive = false;
   setMomentCameraLiveChrome(false);
+  try {
+    document.documentElement.classList.remove("momentRouteCameraLive");
+    document.body.classList.remove("momentRouteCameraLive");
+  } catch {}
 }
 
-function stopMomentCamera() {
-  void stopMomentNativeCameraPreview();
+async function stopMomentCamera() {
+  await stopMomentNativeCameraPreview();
   if (momentCameraStream) {
     try {
       momentCameraStream.getTracks().forEach((t) => t.stop());
@@ -5299,9 +5316,17 @@ function stopMomentCamera() {
   syncMomentPickStageMode();
 }
 
+async function teardownMomentStudio() {
+  cancelMomentStudioStart();
+  _momentStudioStarted = false;
+  await stopMomentCamera();
+}
+
 async function startMomentNativeCameraPreview() {
   const CameraPreview = getMomentCameraPreviewPlugin();
   if (!CameraPreview || _momentNativePreviewActive) return false;
+  if ((document.body.getAttribute("data-route") || "") !== "moment") return false;
+  const op = ++_momentCameraOp;
   setMomentCameraLiveChrome(true);
   syncMomentPickStageMode();
   try {
@@ -5314,6 +5339,13 @@ async function startMomentNativeCameraPreview() {
       width: w,
       height: h,
     });
+    if (op !== _momentCameraOp || (document.body.getAttribute("data-route") || "") !== "moment") {
+      try { await CameraPreview.stop(); } catch {}
+      _momentNativePreviewActive = false;
+      setMomentCameraLiveChrome(false);
+      syncMomentPickStageMode();
+      return false;
+    }
     _momentNativePreviewActive = true;
     syncMomentPickStageMode();
     return true;
@@ -5327,7 +5359,8 @@ async function startMomentNativeCameraPreview() {
 }
 
 async function startMomentCamera() {
-  stopMomentCamera();
+  if ((document.body.getAttribute("data-route") || "") !== "moment") return;
+  await stopMomentCamera();
   if (momentStudioPhase !== "pick") return;
   if (momentStudioUsesNativeCameraPreview()) {
     const ok = await startMomentNativeCameraPreview();
@@ -5465,7 +5498,7 @@ async function enterMomentCropPhase(dataUrl) {
   const imgEl = document.getElementById("momentCropImg");
   const frame = document.getElementById("momentCropFrame");
   if (!imgEl || !frame) return;
-  stopMomentCamera();
+  await stopMomentCamera();
   syncMomentPageUi();
   const loaded = await loadMomentCropImage(dataUrl);
   momentCropState.nw = loaded.naturalWidth || loaded.width;
@@ -5697,13 +5730,15 @@ function setMomentStudioLoading(on) {
 let _momentStudioStarted = false;
 
 function scheduleMomentStudioStart() {
+  cancelMomentStudioStart();
   if (_momentStudioStarted) return;
   _momentStudioStarted = true;
-  window.setTimeout(() => {
+  _momentStudioStartTimer = window.setTimeout(() => {
+    _momentStudioStartTimer = 0;
     if ((document.body.getAttribute("data-route") || "") !== "moment") return;
     setMomentStudioLoading(false);
     if (momentStudioPhase === "pick") void startMomentCamera();
-  }, 320);
+  }, 60);
 }
 
 async function applyMomentPhotoFromFile(file) {
@@ -5746,15 +5781,13 @@ function openMomentPhotoSource() {
 
 function openMomentCreatePage() {
   setCreateEntryIntent("moment");
-  _momentStudioStarted = false;
+  void teardownMomentStudio();
   resetMomentComposeForm();
   try { location.hash = "#/moment"; } catch {}
 }
 
 function leaveMomentPage(targetHash = "#/friends") {
-  if ((document.body.getAttribute("data-route") || "") !== "moment") return;
-  try { stopMomentCamera(); } catch {}
-  _momentStudioStarted = false;
+  void teardownMomentStudio();
   try { location.hash = targetHash; } catch {}
 }
 
@@ -25898,9 +25931,17 @@ window.addEventListener("focus", () => {
   void refreshHubFromSupabase();
 });
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) return;
+  if (document.hidden) {
+    if (_momentNativePreviewActive || (document.body.getAttribute("data-route") || "") === "moment") {
+      void teardownMomentStudio();
+    }
+    return;
+  }
   if ((document.body.getAttribute("data-route") || "") !== "hub") return;
   void refreshHubFromSupabase();
+});
+window.addEventListener("pagehide", () => {
+  void teardownMomentStudio();
 });
 // Hub feed sort segment: Latest | Trending. The genre dropdown
 // (Arabic / Instrumental / Remix / Demo) was removed in 20260509k —

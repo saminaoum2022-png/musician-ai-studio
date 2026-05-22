@@ -252,6 +252,12 @@ private final class StoryCameraViewController: UIViewController, UIScrollViewDel
             if ok, !self.session.outputs.contains(self.photoOutput), self.session.canAddOutput(self.photoOutput) {
                 self.session.addOutput(self.photoOutput)
                 self.photoOutput.isHighResolutionCaptureEnabled = false
+                if let conn = self.photoOutput.connection(with: .video), conn.isVideoOrientationSupported {
+                    conn.videoOrientation = .portrait
+                }
+            }
+            if let previewConn = self.previewLayer?.connection, previewConn.isVideoOrientationSupported {
+                previewConn.videoOrientation = .portrait
             }
             self.session.commitConfiguration()
 
@@ -268,6 +274,9 @@ private final class StoryCameraViewController: UIViewController, UIScrollViewDel
                 guard self.previewLayer == nil else { return }
                 let layer = AVCaptureVideoPreviewLayer(session: self.session)
                 layer.videoGravity = .resizeAspectFill
+                if let conn = layer.connection, conn.isVideoOrientationSupported {
+                    conn.videoOrientation = .portrait
+                }
                 layer.frame = self.view.bounds
                 self.view.layer.insertSublayer(layer, at: 0)
                 self.previewLayer = layer
@@ -441,8 +450,9 @@ private final class StoryCameraViewController: UIViewController, UIScrollViewDel
         let imageSize = StoryCameraImageEncoder.pixelSize(image)
         let widthScale = bounds.width / imageSize.width
         let heightScale = bounds.height / imageSize.height
-        let minScale = max(widthScale, heightScale)
-        let maxScale = max(minScale * 4, minScale + 0.01)
+        // Start with full photo visible (aspect fit); user can pinch to zoom in.
+        let minScale = min(widthScale, heightScale)
+        let maxScale = max(max(widthScale, heightScale) * 4, minScale * 2.5)
 
         cropImageView.image = image
         cropImageView.frame = CGRect(origin: .zero, size: imageSize)
@@ -451,9 +461,26 @@ private final class StoryCameraViewController: UIViewController, UIScrollViewDel
         cropScroll.maximumZoomScale = maxScale
         cropScroll.zoomScale = minScale
 
-        let offsetX = max(0, (imageSize.width * minScale - bounds.width) / 2)
-        let offsetY = max(0, (imageSize.height * minScale - bounds.height) / 2)
-        cropScroll.contentOffset = CGPoint(x: offsetX, y: offsetY)
+        let scaledW = imageSize.width * minScale
+        let scaledH = imageSize.height * minScale
+        let insetX = max(0, (bounds.width - scaledW) / 2)
+        let insetY = max(0, (bounds.height - scaledH) / 2)
+        cropScroll.contentInset = UIEdgeInsets(top: insetY, left: insetX, bottom: insetY, right: insetX)
+        cropScroll.contentOffset = CGPoint(x: -insetX, y: -insetY)
+    }
+
+    func scrollViewDidZoom(_ scrollView: UIScrollView) {
+        guard scrollView === cropScroll else { return }
+        centerCropImageInScroll()
+    }
+
+    private func centerCropImageInScroll() {
+        let bounds = cropScroll.bounds.size
+        let content = cropScroll.contentSize
+        let zoom = cropScroll.zoomScale
+        let insetX = max(0, (bounds.width - content.width * zoom) / 2)
+        let insetY = max(0, (bounds.height - content.height * zoom) / 2)
+        cropScroll.contentInset = UIEdgeInsets(top: insetY, left: insetX, bottom: insetY, right: insetX)
     }
 
     func viewForZooming(in scrollView: UIScrollView) -> UIView? {
@@ -568,43 +595,58 @@ private enum StoryCameraImageEncoder {
     }
 
     static func normalizeOrientation(_ image: UIImage) -> UIImage {
-        if image.imageOrientation == .up { return image }
+        guard image.imageOrientation != .up else { return image }
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
-        let size = pixelSize(image)
-        let renderer = UIGraphicsImageRenderer(size: size, format: format)
-        return renderer.image { _ in
-            image.draw(in: CGRect(origin: .zero, size: size))
+        var output = CGSize(width: image.size.width, height: image.size.height)
+        switch image.imageOrientation {
+        case .left, .right, .leftMirrored, .rightMirrored:
+            output = CGSize(width: image.size.height, height: image.size.width)
+        default:
+            break
+        }
+        return UIGraphicsImageRenderer(size: output, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: output))
         }
     }
 
     static func exportCrop(image: UIImage, scrollView: UIScrollView, imageView: UIImageView, quality: CGFloat) -> String? {
-        let zoom = scrollView.zoomScale
-        let bounds = scrollView.bounds
-        let offset = scrollView.contentOffset
+        _ = imageView
+        let zoom = max(scrollView.zoomScale, 0.0001)
         let imageSize = pixelSize(image)
+        guard imageSize.width > 1, imageSize.height > 1 else { return nil }
 
-        guard imageView.frame.width > 0, imageView.frame.height > 0 else { return nil }
-
-        let scale = imageSize.width / imageView.frame.width
         var cropRect = CGRect(
-            x: offset.x / zoom * scale,
-            y: offset.y / zoom * scale,
-            width: bounds.width / zoom * scale,
-            height: bounds.height / zoom * scale
-        )
+            x: scrollView.contentOffset.x / zoom,
+            y: scrollView.contentOffset.y / zoom,
+            width: scrollView.bounds.width / zoom,
+            height: scrollView.bounds.height / zoom
+        ).integral
         cropRect = cropRect.intersection(CGRect(origin: .zero, size: imageSize))
         guard cropRect.width > 1, cropRect.height > 1,
               let cg = image.cgImage?.cropping(to: cropRect) else { return nil }
 
         let cropped = UIImage(cgImage: cg, scale: 1, orientation: .up)
-        let outW: CGFloat = 1080
-        let outH: CGFloat = 1920
+        let target = CGSize(width: 1080, height: 1920)
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: outW, height: outH), format: format)
+        let renderer = UIGraphicsImageRenderer(size: target, format: format)
         let final = renderer.image { _ in
-            cropped.draw(in: CGRect(x: 0, y: 0, width: outW, height: outH))
+            let ar = cropped.size.width / cropped.size.height
+            let tar = target.width / target.height
+            var draw = CGRect(origin: .zero, size: target)
+            if abs(ar - tar) > 0.01 {
+                if ar > tar {
+                    let h = target.height
+                    let w = h * ar
+                    draw = CGRect(x: (target.width - w) / 2, y: 0, width: w, height: h)
+                } else {
+                    let w = target.width
+                    let h = w / ar
+                    draw = CGRect(x: 0, y: (target.height - h) / 2, width: w, height: h)
+                }
+            }
+            cropped.draw(in: draw)
         }
         guard let jpeg = final.jpegData(compressionQuality: quality) else { return nil }
 

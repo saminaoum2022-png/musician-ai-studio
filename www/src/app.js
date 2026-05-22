@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522nativeStoryCamV7";
+const APP_BUILD = "20260522nativeStoryCamV8";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5599,7 +5599,9 @@ async function enterMomentShareFromNativeCapture(imageSrc) {
     if (!dataUrl.startsWith("data:image/")) {
       dataUrl = await capacitorImageSrcToDataUrl(dataUrl);
     }
-    dataUrl = await prepareMomentCoverDataUrl(dataUrl);
+    if (dataUrl.length > 520_000) {
+      dataUrl = await downscaleImageDataUrl(dataUrl, 1080, 0.85);
+    }
     momentPhotoDataUrl = dataUrl;
     momentCropSourceUrl = "";
     momentStudioPhase = "share";

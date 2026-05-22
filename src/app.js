@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522friends403FixV1";
+const APP_BUILD = "20260522friendsSupabaseV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1902,14 +1902,11 @@ function applyClientEnvBootstrap() {
   }
 }
 
-/** Shown on Friends when Vercel blocks /api/* (Deployment Protection 403). */
+/** Shown on Friends only when Supabase settings are missing (Friends reads feed via Supabase, not /api). */
 function friendsFeedBlockedMessage() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     const m = loginConfigFailureMessage();
     return m || "App settings could not load. Hard-refresh or check your connection.";
-  }
-  if (lastPublicConfigError === "403_deployment_protection" || lastPublicConfigStatus === 403) {
-    return loginConfigFailureMessage();
   }
   return "";
 }
@@ -1997,7 +1994,12 @@ async function fetchPublicConfigOnce(base) {
     }
     if (r.status === 403) {
       lastPublicConfigError = "403_deployment_protection";
-      return loadPublicConfigFromCache() || applyClientEnvBootstrap();
+      const recovered = loadPublicConfigFromCache() || applyClientEnvBootstrap();
+      if (recovered) {
+        lastPublicConfigStatus = 0;
+        lastPublicConfigError = "";
+      }
+      return recovered;
     }
     if (r.ok) {
       applyPublicConfigPayload(d);
@@ -5642,13 +5644,163 @@ async function renderProfileActivities() {
   } catch {}
 }
 
+function normalizeStatusWaveformPeaks(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .slice(0, 64)
+    .map((n) => Math.max(0, Math.min(1, Number(n) || 0)));
+}
+
+function mapStatusPostFromSupabaseRow(p, prof) {
+  const audioUrl = String(p?.audio_url || "").trim();
+  return {
+    id: p.id,
+    userId: p.user_id,
+    postType: p.post_type,
+    body: p.body,
+    audioUrl,
+    durationMs: Number(p?.duration_ms) || 0,
+    waveformPeaks: normalizeStatusWaveformPeaks(p?.waveform_peaks),
+    createdAt: p.created_at,
+    username: prof?.username || "",
+    avatar: prof?.avatar || "",
+  };
+}
+
+async function supabaseRestWithAuth(path, opts = {}) {
+  const token = getSupabaseAuthToken();
+  if (!token || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  try {
+    return await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      method: opts.method || "GET",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+        ...(opts.prefer ? { Prefer: opts.prefer } : {}),
+        ...(opts.body ? { "Content-Type": "application/json" } : {}),
+        ...(opts.headers || {}),
+      },
+      body: opts.body,
+      cache: "no-store",
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** Following list from Supabase RLS (no Vercel /api). Returns null if auth/config missing. */
+async function fetchFollowingListViaSupabase() {
+  const uid = String(authSession?.user?.id || "").trim();
+  if (!uid) return null;
+  const r = await supabaseRestWithAuth(
+    `social_follows?follower_user_id=eq.${encodeURIComponent(uid)}&select=following_user_id,created_at&order=created_at.desc&limit=100`,
+  );
+  if (!r) return null;
+  if (!r.ok) return null;
+  const rows = await r.json().catch(() => []);
+  if (!Array.isArray(rows)) return [];
+  const ids = rows.map((x) => String(x?.following_user_id || "").trim()).filter(Boolean);
+  const profMap = await fetchProfilesByUserIdsMap(ids);
+  return rows.map((row) => {
+    const userId = String(row.following_user_id || "").trim();
+    const prof = profMap.get(userId);
+    return {
+      userId,
+      createdAt: row.created_at,
+      username: prof?.username || "",
+      avatar: prof?.avatar || "",
+    };
+  });
+}
+
+async function fetchFollowingListForFeed() {
+  const direct = await fetchFollowingListViaSupabase();
+  if (direct !== null) return direct;
+  const data = await socialApi("/api/social?type=me");
+  return Array.isArray(data?.following) ? data.following : [];
+}
+
+async function fetchFollowingStatusPostsFromSupabase(limit = 40) {
+  const following = await fetchFollowingListViaSupabase();
+  if (following === null) return null;
+  const authorIds = [...new Set(following.map((f) => f.userId).filter(Boolean))];
+  if (!authorIds.length) return [];
+  const lim = Math.min(60, Math.max(1, Number(limit) || 40));
+  const inList = authorIds.map((id) => encodeURIComponent(id)).join(",");
+  const cols = "id,user_id,post_type,body,audio_url,duration_ms,waveform_peaks,created_at";
+  const r = await supabaseRestWithAuth(
+    `social_status_posts?user_id=in.(${inList})&select=${cols}&order=created_at.desc&limit=${lim}`,
+  );
+  if (!r || !r.ok) return null;
+  const rawPosts = await r.json().catch(() => []);
+  if (!Array.isArray(rawPosts)) return [];
+  const profMap = await fetchProfilesByUserIdsMap(
+    rawPosts.map((p) => String(p?.user_id || "").trim()).filter(Boolean),
+  );
+  return rawPosts.map((p) =>
+    mapStatusPostFromSupabaseRow(p, profMap.get(String(p?.user_id || "").trim())),
+  );
+}
+
 async function fetchFollowingStatusPosts(limit = 40) {
+  const direct = await fetchFollowingStatusPostsFromSupabase(limit);
+  if (direct !== null) return direct;
   try {
     const data = await socialApi(`/api/social?type=following_status&limit=${limit}`);
     return Array.isArray(data?.posts) ? data.posts : [];
   } catch {
     return [];
   }
+}
+
+async function postStatusViaSupabase({ postType, body, audioUrl, durationMs, waveformPeaks }) {
+  const uid = String(authSession?.user?.id || "").trim();
+  if (!uid) return null;
+  const allowed = new Set(["update", "advice", "brainstorm", "song_request", "recommend"]);
+  const pt = allowed.has(String(postType || "").trim()) ? String(postType).trim() : "update";
+  const text = String(body || "").trim().slice(0, 320);
+  const audio = String(audioUrl || "").trim().slice(0, 2048);
+  const dur = Math.min(60000, Math.max(0, Math.round(Number(durationMs) || 0)));
+  const peaks = normalizeStatusWaveformPeaks(waveformPeaks);
+  if (!text && !audio) throw new Error("Add a voice note or write something to post");
+  if (audio && !/^https?:\/\//i.test(audio)) throw new Error("Invalid voice audio URL");
+  const finalBody = text || (audio ? "🎤 Voice note" : "");
+  const r = await supabaseRestWithAuth("social_status_posts", {
+    method: "POST",
+    prefer: "return=representation",
+    body: JSON.stringify({
+      user_id: uid,
+      post_type: pt,
+      body: finalBody,
+      audio_url: audio || null,
+      duration_ms: audio ? (dur || null) : null,
+      waveform_peaks: audio && peaks.length ? peaks : null,
+    }),
+  });
+  if (!r || !r.ok) return null;
+  const arr = await r.json().catch(() => []);
+  const row = Array.isArray(arr) && arr[0] ? arr[0] : null;
+  if (!row) return null;
+  const profMap = await fetchProfilesByUserIdsMap([uid]);
+  return { post: mapStatusPostFromSupabaseRow(row, profMap.get(uid)) };
+}
+
+async function postFriendsStatus(payload, opts = {}) {
+  const direct = await postStatusViaSupabase(payload);
+  if (direct) return direct;
+  return socialApi("/api/social", {
+    method: "POST",
+    timeoutMs: opts.timeoutMs || 12000,
+    body: JSON.stringify({
+      action: "post_status",
+      postType: payload.postType,
+      body: payload.body,
+      audioUrl: payload.audioUrl,
+      durationMs: payload.durationMs,
+      waveformPeaks: payload.waveformPeaks,
+    }),
+  });
 }
 
 function lockPageForFriendsComposeSheet() {
@@ -8350,18 +8502,16 @@ function bindFollowingComposeOnce() {
         durationMs = statusVoiceDurationMs;
         waveformPeaks = statusVoicePeaks.length ? statusVoicePeaks : await computeStatusWaveformPeaks(statusVoiceBlob);
       }
-      const res = await socialApi("/api/social", {
-        method: "POST",
-        timeoutMs: hasVoice ? 45000 : 12000,
-        body: JSON.stringify({
-          action: "post_status",
+      const res = await postFriendsStatus(
+        {
           postType: _followComposeType,
           body: text,
           audioUrl,
           durationMs,
           waveformPeaks,
-        }),
-      });
+        },
+        { timeoutMs: hasVoice ? 45000 : 12000 },
+      );
       const fallbackBody = text || (hasVoice ? STATUS_VOICE_DEFAULT_BODY : "");
       _friendsOwnPostPin = normalizeFriendsOwnPost(res?.post, fallbackBody, _followComposeType);
       if (input) input.value = "";
@@ -8663,9 +8813,8 @@ async function refreshDiscoveryFollowingFeed() {
   }
 
   try {
-    const data = await socialApi("/api/social?type=me");
+    const following = await fetchFollowingListForFeed();
     if (gen !== _discoveryFollowingGen) return;
-    const following = Array.isArray(data?.following) ? data.following : [];
     if (!following.length) {
       if (_friendsOwnPostPin) {
         if (gen !== _discoveryFollowingGen) return;
@@ -13527,7 +13676,10 @@ function socialApiErrorMessage(err) {
   const status = Number(err?.status || 0);
   const msg = String(err?.message || "").trim();
   if (status === 403 || /403|forbidden/i.test(msg)) {
-    return "Vercel blocked the API (403). Turn off Deployment Protection for Production in Vercel Settings, or add VERCEL_PROTECTION_BYPASS to the project and redeploy (see docs/LOGIN_403_VERCEL.md).";
+    if (SUPABASE_URL && SUPABASE_ANON_KEY && getSupabaseAuthToken()) {
+      return "Could not load Friends. Check your connection and try again.";
+    }
+    return "App settings could not load. Hard-refresh the page or reopen the app.";
   }
   if (/failed to fetch|load failed|networkerror|aborted/i.test(msg)) {
     if (!isNativeShell()) {
@@ -13796,8 +13948,7 @@ async function showFollowingSummary() {
     return;
   }
   try {
-    const data = await socialApi("/api/social?type=me");
-    const list = Array.isArray(data?.following) ? data.following : [];
+    const list = await fetchFollowingListForFeed();
     if (!list.length) {
       alert("Following\n\nYou are not following any creators yet.");
       return;

@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522voiceWaveV1";
+const APP_BUILD = "20260522nativeStoryCamV9";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5994,12 +5994,17 @@ function momentStudioUsesNativeStoryCamera() {
   const flag = window.Capacitor?.__nabadStoryCameraNative;
   if (flag === true) return true;
   if (flag === false) return false;
-  return false;
+  // Before isAvailable() resolves, do not flash the web placeholder — open native camera.
+  return true;
 }
 
-/** Fallback when StoryCamera plugin is unavailable on iOS. */
+/** Fallback when StoryCamera plugin is confirmed missing (packageClassList / rebuild). */
 function momentStudioUsesIosPickFlow() {
-  return isNativeShell() && momentStudioNativePlatform() === "ios" && !momentStudioUsesNativeStoryCamera();
+  return (
+    isNativeShell() &&
+    momentStudioNativePlatform() === "ios" &&
+    window.Capacitor?.__nabadStoryCameraNative === false
+  );
 }
 
 /** Android only — native preview behind WebView. */
@@ -6412,6 +6417,18 @@ async function beginMomentPickPhase() {
   if ((document.body.getAttribute("data-route") || "") !== "moment") return;
   if (isNativeShell() && momentStudioNativePlatform() === "ios") {
     await refreshNativeStoryCameraAvailability();
+    const opened = await presentNativeStoryCamera({ leaveOnCancel: true });
+    if (opened) return;
+    if (window.Capacitor?.__nabadStoryCameraNative === false) {
+      try {
+        showToast("Story camera not in app build — run npm run sync:ios, then rebuild in Xcode.", {
+          durationMs: 4200,
+        });
+      } catch {}
+      scheduleMomentStudioStart();
+      return;
+    }
+    return;
   }
   if (momentStudioUsesNativeStoryCamera()) {
     await presentNativeStoryCamera({ leaveOnCancel: true });

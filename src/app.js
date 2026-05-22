@@ -2263,7 +2263,7 @@ function syncLibraryTabDotFromStorage() {
 let _notificationsUnreadCount = 0;
 let _notificationsUnreadFetchInFlight = false;
 let _notificationsUnreadLastFetchedAt = 0;
-/** Signed-in profile tab: photo in a teal→purple ring (matches profile hero). */
+/** Signed-in profile tab: squircle photo; gradient ring only when you have a live story. */
 function syncMobileTabbarProfileAvatar() {
   const link = els.profileTabLink;
   const slot = document.getElementById("tabProfileAvatarSlot");
@@ -2286,6 +2286,7 @@ function syncMobileTabbarProfileAvatar() {
   if (fb) fb.textContent = initials;
   link.classList.add("hasTabAvatar");
   slot.hidden = false;
+  try { applyStoryRingToEl(slot, authSession.user.id); } catch {}
   if (url) {
     img.src = url;
     img.removeAttribute("data-empty");
@@ -2603,6 +2604,7 @@ function applyRoute() {
       if (isNativeShell()) await ensureNativeApiBaseResolved();
       await refreshOwnProfileSocialStats({ force: true });
     })();
+    void prefetchMomentsStoryIndex();
     renderPersonaSelect();
     renderProfileCallingCardHint();
     if (authSession?.user?.id && shouldShowProfileHeaderSkeleton()) {
@@ -4609,7 +4611,8 @@ function followingStatusRowHtml(post, profMap, idx) {
   return `
     <article class="followAct followAct--status${ownCls}" data-follow-act="status" data-follow-status-type="${escapeHtml(postType)}" data-follow-status-id="${escapeHtml(postId)}" style="--i:${idx}">
       <div class="followActTop">
-        <a class="followActAvatar" href="${escapeHtml(profileHref)}" data-route-link="user" aria-label="${isOwn ? "Your profile" : handle ? `@${escapeHtml(handle)} profile` : "Profile"}">
+        <a class="followActAvatar${userStoryRingClasses(userId)}" href="${escapeHtml(profileHref)}" data-route-link="user" data-avatar-user-id="${escapeHtml(userId)}" aria-label="${isOwn ? "Your profile" : handle ? `@${escapeHtml(handle)} profile` : "Profile"}">
+          <span class="followActAvatarRing" aria-hidden="true"></span>
           ${avatarSrc
             ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
             : `<span class="followActAvatarFallback">${escapeHtml(initials)}</span>`}
@@ -5937,6 +5940,7 @@ function markMomentSeen(momentId) {
     const story = _momentStoriesByUserId.get(String(uid || ""));
     if (story && isStoryFullySeen(story)) tile.classList.add("isViewed");
   });
+  try { syncAvatarStoryRings(); } catch {}
 }
 
 function normalizeMomentSlide(m) {
@@ -5993,6 +5997,50 @@ function buildMomentStoriesFromApi(data) {
 function isStoryFullySeen(story) {
   const moments = story?.moments || [];
   return moments.length > 0 && moments.every((m) => isMomentSeen(m.id));
+}
+
+function userHasActiveStory(userId) {
+  const story = _momentStoriesByUserId.get(String(userId || "").trim());
+  return Boolean(story?.moments?.length);
+}
+
+function userStoryRingClasses(userId) {
+  const uid = String(userId || "").trim();
+  if (!uid || !userHasActiveStory(uid)) return "";
+  const story = _momentStoriesByUserId.get(uid);
+  return isStoryFullySeen(story) ? " hasActiveStory isStoryViewed" : " hasActiveStory";
+}
+
+function applyStoryRingToEl(el, userId) {
+  if (!el) return;
+  const uid = String(userId || "").trim();
+  const has = userHasActiveStory(uid);
+  el.classList.toggle("hasActiveStory", has);
+  el.classList.toggle(
+    "isStoryViewed",
+    has && isStoryFullySeen(_momentStoriesByUserId.get(uid)),
+  );
+}
+
+function syncAvatarStoryRings() {
+  applyStoryRingToEl(document.getElementById("profileAuraAvatarWrap"), authSession?.user?.id);
+  applyStoryRingToEl(document.getElementById("tabProfileAvatarSlot"), authSession?.user?.id);
+  const pubWrap = document.getElementById("userPublicAvatarWrap");
+  if (pubWrap && currentUserPublicProfileId) {
+    applyStoryRingToEl(pubWrap, currentUserPublicProfileId);
+  }
+  document.querySelectorAll(".followActAvatar[data-avatar-user-id]").forEach((a) => {
+    applyStoryRingToEl(a, a.getAttribute("data-avatar-user-id"));
+  });
+}
+
+async function prefetchMomentsStoryIndex() {
+  if (!authSession?.user?.id) return;
+  try {
+    const stories = await fetchMomentsRail();
+    indexMomentStories(stories);
+    syncAvatarStoryRings();
+  } catch {}
 }
 
 function momentPickShapeHtml(moments) {
@@ -6512,6 +6560,7 @@ async function refreshFriendsMomentsRail() {
   bindMomentsRailClicks(scroll);
   rail.hidden = false;
   startMomentRailCountdownTimer();
+  try { syncAvatarStoryRings(); } catch {}
 }
 
 async function renderUserProfileMomentsRail(userId, username = "") {
@@ -6528,6 +6577,8 @@ async function renderUserProfileMomentsRail(userId, username = "") {
   if (!moments.length) {
     wrap.hidden = true;
     rail.innerHTML = "";
+    _momentStoriesByUserId.delete(uid);
+    try { syncAvatarStoryRings(); } catch {}
     return;
   }
   const story = {
@@ -6542,6 +6593,7 @@ async function renderUserProfileMomentsRail(userId, username = "") {
   bindMomentsRailClicks(rail);
   wrap.hidden = false;
   startMomentRailCountdownTimer();
+  try { syncAvatarStoryRings(); } catch {}
 }
 
 async function publishMoment() {
@@ -6852,7 +6904,8 @@ function followingActivityRowHtml(t, profMap, idx) {
   return `
     <article class="followAct followAct--music" data-follow-act="${type}" style="--i:${idx}" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}>
       <div class="followActTop">
-        <a class="followActAvatar" href="${escapeHtml(profileHref)}" data-route-link="user" aria-label="${handle ? `@${escapeHtml(handle)} profile` : "Profile"}">
+        <a class="followActAvatar${userStoryRingClasses(t.userId)}" href="${escapeHtml(profileHref)}" data-route-link="user" data-avatar-user-id="${escapeHtml(String(t.userId || ""))}" aria-label="${handle ? `@${escapeHtml(handle)} profile` : "Profile"}">
+          <span class="followActAvatarRing" aria-hidden="true"></span>
           ${avatarSrc
             ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
             : `<span class="followActAvatarFallback">${escapeHtml(initials)}</span>`}
@@ -7153,6 +7206,7 @@ async function refreshDiscoveryFollowingFeed() {
     try {
       syncDiscoveryPlayingHighlights();
     } catch {}
+    try { syncAvatarStoryRings(); } catch {}
   } catch (e) {
     if (gen !== _discoveryFollowingGen) return;
     listEl.classList.remove("isDiscoveryLoading");
@@ -17898,6 +17952,7 @@ function renderProfilePreviewFromInputs() {
   renderProfileNabadCertBadge();
   try { renderProfileVoiceTimbreInline(); } catch {}
   try { syncMobileTabbarProfileAvatar(); } catch {}
+  try { syncAvatarStoryRings(); } catch {}
 }
 
 /** `meta.profileVisibility === "private"` hides the release on `#/u/…`;

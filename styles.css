@@ -7941,7 +7941,16 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   box-shadow:
     0 0 24px -8px rgba(35, 213, 171, 0.22),
     0 0 28px -10px rgba(124, 92, 255, 0.28);
+  opacity: 0;
+  transition: opacity 220ms ease, box-shadow 220ms ease;
+}
+.userPublicAvatarWrap.hasActiveStory .userPublicAvatarRing{
   opacity: 0.78;
+}
+.userPublicAvatarWrap.hasActiveStory.isStoryViewed .userPublicAvatarRing{
+  background: rgba(255,255,255,0.14);
+  box-shadow: none;
+  opacity: 0.72;
 }
 .userPublicAvatar{
   position: relative;
@@ -9791,8 +9800,16 @@ input::placeholder, textarea::placeholder{
     box-shadow:
       0 0 16px -6px rgba(35, 213, 171, 0.22),
       0 0 18px -6px rgba(124, 92, 255, 0.28);
-    opacity: 0.72;
+    opacity: 0;
     transition: opacity 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+  }
+  .tabProfileAvatarSlot.hasActiveStory .tabProfileAvatarRing{
+    opacity: 0.72;
+  }
+  .tabProfileAvatarSlot.hasActiveStory.isStoryViewed .tabProfileAvatarRing{
+    background: rgba(255,255,255,0.14);
+    box-shadow: none;
+    opacity: 0.65;
   }
   .tabProfileAvatarImg{
     position: relative;
@@ -9978,7 +9995,7 @@ input::placeholder, textarea::placeholder{
     color: rgba(232, 238, 247, 0.92);
     background: transparent;
   }
-  .tabProfileLink.active .tabProfileAvatarRing{
+  .tabProfileLink.active .tabProfileAvatarSlot.hasActiveStory .tabProfileAvatarRing{
     opacity: 1;
     transform: scale(1.04);
     box-shadow:
@@ -11772,9 +11789,9 @@ body.notificationsCenterOpen{
   height: 100%;
   display: block;
 }
-/* ---------- Profile avatar — story squircle, gradient ring, "Na" fallback ----------
-   Same rounded-square language as story tiles; teal→purple ring when
-   the profile is "alive". Grey "Na" when no photo is uploaded. */
+/* ---------- Profile avatar — story squircle, "Na" fallback ----------
+   Same rounded-square language as story tiles. Teal→purple ring only
+   when this user has a live story (muted grey ring once fully seen). */
 .profileAuraTopRowCentered{
   width: 100%;
   justify-content: center;
@@ -11848,8 +11865,19 @@ body.notificationsCenterOpen{
   box-shadow:
     0 0 30px -10px rgba(35, 213, 171, 0.26),
     0 0 36px -12px rgba(124, 92, 255, 0.32);
+  animation: none;
+  opacity: 0;
+  transition: opacity 220ms ease, box-shadow 220ms ease;
+}
+.profileAuraAvatarWrapNeon.hasActiveStory .profileAuraRingPulse{
   animation: profileAuraPulseRing 2.6s ease-in-out infinite;
   opacity: 0.82;
+}
+.profileAuraAvatarWrapNeon.hasActiveStory.isStoryViewed .profileAuraRingPulse{
+  background: rgba(255,255,255,0.14);
+  box-shadow: none;
+  animation: none;
+  opacity: 0.72;
 }
 @keyframes profileAuraPulseRing{
   0%   { transform: scale(1);     opacity: 0.55; }
@@ -15221,16 +15249,53 @@ body.createChooserSheetOpen .footer{
   height: 14px;
 }
 .followActAvatar{
+  position: relative;
   flex-shrink: 0;
   width: 40px;
   height: 40px;
   border-radius: var(--nabad-squircle-radius);
-  overflow: hidden;
+  overflow: visible;
   border: 2px solid rgba(255,255,255,0.1);
   background: rgba(255,255,255,0.04);
   display: block;
   text-decoration: none;
   box-sizing: border-box;
+}
+.followActAvatarRing{
+  position: absolute;
+  inset: -3px;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  padding: 1.5px;
+  background: var(--nabad-squircle-gradient);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+          mask-composite: exclude;
+  box-shadow:
+    0 0 14px -6px rgba(35, 213, 171, 0.2),
+    0 0 16px -6px rgba(124, 92, 255, 0.26);
+  opacity: 0;
+  transition: opacity 200ms ease, box-shadow 200ms ease;
+}
+.followActAvatar.hasActiveStory .followActAvatarRing{
+  opacity: 1;
+}
+.followActAvatar.hasActiveStory.isStoryViewed .followActAvatarRing{
+  background: rgba(255,255,255,0.14);
+  box-shadow: none;
+  opacity: 0.72;
+}
+.followActAvatar img,
+.followActAvatarFallback{
+  position: relative;
+  z-index: 1;
+  border-radius: inherit;
 }
 .followActAvatar img{
   width: 100%;

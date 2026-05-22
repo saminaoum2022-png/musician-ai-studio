@@ -546,7 +546,7 @@ async function handleGet(req, res, user) {
     const inList = userIds.map((id) => encodeURIComponent(id)).join(",");
     const limit = Math.min(120, Math.max(1, Number(url.searchParams.get("limit")) || 48));
     const rows = await svcFetch(
-      `social_moments?select=id,user_id,body,image_url,created_at,expires_at&user_id=in.(${inList})&expires_at=gt.${encodeURIComponent(nowIso)}&order=created_at.desc&limit=${limit}`,
+      `social_moments?select=id,user_id,body,image_url,created_at,expires_at,kind,song_title,song_audio_url&user_id=in.(${inList})&expires_at=gt.${encodeURIComponent(nowIso)}&order=created_at.desc&limit=${limit}`,
     );
     const raw = Array.isArray(rows.data) ? rows.data : [];
     const byUser = new Map();
@@ -573,6 +573,9 @@ async function handleGet(req, res, user) {
         imageUrl: m.image_url,
         createdAt: m.created_at,
         expiresAt: m.expires_at,
+        kind: m.kind || "photo",
+        songTitle: m.song_title || "",
+        songAudioUrl: m.song_audio_url || "",
         username: profiles[i]?.username || "",
         avatar: profiles[i]?.avatar || "",
       })),
@@ -721,9 +724,15 @@ async function handlePost(req, res, user) {
   if (action === "post_moment") {
     const text = String(body?.body || "").trim().slice(0, 320);
     const imageUrl = String(body?.imageUrl || body?.image_url || "").trim().slice(0, 2048);
+    const kind = String(body?.kind || "photo").trim().toLowerCase() === "song" ? "song" : "photo";
+    const songTitle = String(body?.songTitle || body?.song_title || "").trim().slice(0, 200);
+    const songAudioUrl = String(body?.songAudioUrl || body?.song_audio_url || "").trim().slice(0, 2048);
     if (!text) return sendJson(res, 400, { ok: false, error: "Write a caption for your moment" });
     if (!imageUrl || !/^https?:\/\//i.test(imageUrl)) {
       return sendJson(res, 400, { ok: false, error: "Missing moment image" });
+    }
+    if (kind === "song" && (!songTitle || !songAudioUrl || !/^https?:\/\//i.test(songAudioUrl))) {
+      return sendJson(res, 400, { ok: false, error: "Song story needs title and audio" });
     }
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const ins = await svcFetch("social_moments", {
@@ -734,6 +743,9 @@ async function handlePost(req, res, user) {
         body: text,
         image_url: imageUrl,
         expires_at: expiresAt,
+        kind,
+        song_title: kind === "song" ? songTitle : null,
+        song_audio_url: kind === "song" ? songAudioUrl : null,
       }),
     });
     if (!ins.ok) {
@@ -751,6 +763,9 @@ async function handlePost(req, res, user) {
             imageUrl: row.image_url,
             createdAt: row.created_at,
             expiresAt: row.expires_at,
+            kind: row.kind || "photo",
+            songTitle: row.song_title || "",
+            songAudioUrl: row.song_audio_url || "",
             username: prof?.username || "",
             avatar: prof?.avatar || "",
           }

@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522nativeStoryCamV8";
+const APP_BUILD = "20260522songStoryV2";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2679,7 +2679,9 @@ function applyRoute() {
   }
   if (wanted === "moment") {
     try { syncMomentPageUi(); } catch {}
-    void beginMomentPickPhase();
+    if (momentStudioPhase === "songShare" && pendingSongStoryTrack) {
+      try { setupSongStoryShareUi(); } catch {}
+    }
   }
   if (wanted === "discover") {
     bindDiscoveryDiscoverControls();
@@ -5083,8 +5085,10 @@ function navigateFromCreateChooser(action) {
     }
 
     if (kind === "moment") {
-      openMomentCreatePage();
-      scheduleApplyRoute();
+      try { location.hash = "#/profile?seg=all"; } catch {}
+      try {
+        showToast("Library → ⋯ on a song → Share to story", { durationMs: 3600 });
+      } catch {}
       return;
     }
 
@@ -5152,6 +5156,8 @@ function isCreateMomentIntent() {
 }
 
 let momentPhotoDataUrl = "";
+/** Library track queued for song-story composer (`#/moment`). */
+let pendingSongStoryTrack = null;
 let momentStudioPhase = "pick";
 let momentCropSourceUrl = "";
 let momentCameraStream = null;
@@ -5312,6 +5318,8 @@ function clearMomentPhotoInputs() {
 function resetMomentComposeForm() {
   const cap = document.getElementById("momentCaptionInput");
   if (cap) cap.value = "";
+  stopMomentSongPreview();
+  pendingSongStoryTrack = null;
   momentPhotoDataUrl = "";
   momentCropSourceUrl = "";
   momentStudioPhase = "pick";
@@ -5433,6 +5441,8 @@ async function teardownMomentStudio() {
   _momentTeardownPromise = (async () => {
     cancelMomentStudioStart();
     _momentStudioStarted = false;
+    stopMomentSongPreview();
+    pendingSongStoryTrack = null;
     await stopMomentCamera();
   })();
   try {
@@ -5975,9 +5985,12 @@ function syncMomentPageUi() {
   const isPick = momentStudioPhase === "pick";
   const isCrop = momentStudioPhase === "crop";
   const isShare = momentStudioPhase === "share";
+  const isSongShare = momentStudioPhase === "songShare";
   const hasPhoto = Boolean(String(momentPhotoDataUrl || "").trim());
+  const hasSong = Boolean(pendingSongStoryTrack?.id);
   const pickStage = document.getElementById("momentPickStage");
   const cropStage = document.getElementById("momentCropStage");
+  const songStage = document.getElementById("momentSongStage");
   const pickDock = document.getElementById("momentPickDock");
   const shareTools = document.getElementById("momentShareTools");
   const changeBtn = document.getElementById("btnMomentChangePhoto");
@@ -5990,18 +6003,22 @@ function syncMomentPageUi() {
   if (page) {
     page.classList.toggle("isPick", isPick);
     page.classList.toggle("isCrop", isCrop);
-    page.classList.toggle("isPreview", isShare);
+    page.classList.toggle("isPreview", isShare || isSongShare);
+    page.classList.toggle("isSongShare", isSongShare);
   }
-  if (pickStage) pickStage.hidden = !isPick;
+  if (pickStage) pickStage.hidden = !isPick || isSongShare;
   if (cropStage) cropStage.hidden = !isCrop;
-  if (pickDock) pickDock.hidden = !isPick;
-  if (shareTools) shareTools.hidden = !isShare;
+  if (songStage) songStage.hidden = !isSongShare;
+  if (pickDock) pickDock.hidden = !isPick || isSongShare;
+  if (shareTools) shareTools.hidden = !(isShare || isSongShare);
   if (changeBtn) changeBtn.hidden = !isShare;
   if (cropBack) cropBack.hidden = !isCrop;
   if (cropNext) cropNext.hidden = !isCrop;
-  if (preview) preview.hidden = !isShare;
-  if (topTitle) topTitle.textContent = isCrop ? "Crop" : "New story";
-  if (!isShare) {
+  if (preview) preview.hidden = !(isShare && hasPhoto);
+  if (topTitle) {
+    topTitle.textContent = isCrop ? "Crop" : isSongShare ? "Song story" : "New story";
+  }
+  if (!isShare && !isSongShare) {
     if (captionPanel) captionPanel.hidden = true;
     if (captionToggle) {
       captionToggle.classList.remove("isActive");
@@ -6009,7 +6026,7 @@ function syncMomentPageUi() {
     }
   }
   const publishBtn = document.getElementById("btnMomentPublish");
-  if (publishBtn) publishBtn.disabled = !isShare || !hasPhoto;
+  if (publishBtn) publishBtn.disabled = isSongShare ? !hasSong : !isShare || !hasPhoto;
   try { syncMomentShareAvatar(); } catch {}
   try { syncMomentPickStageMode(); } catch {}
 }
@@ -6248,6 +6265,10 @@ let _momentViewerSlideIndex = 0;
 let _momentViewerSwipe = null;
 const MOMENTS_SEEN_STORAGE_KEY = "nabad_moments_seen_v1";
 const MOMENT_STORY_SLIDE_MS = 5200;
+const MOMENT_SONG_PREVIEW_MS = 15000;
+const MOMENT_SONG_SLIDE_MS = 15000;
+let _momentSongPreviewAudio = null;
+let _momentViewerAudioClipTimer = 0;
 
 function readSeenMomentIds() {
   try {
@@ -6290,6 +6311,7 @@ function markMomentSeen(momentId) {
 }
 
 function normalizeMomentSlide(m) {
+  const kind = String(m?.kind || "photo").trim().toLowerCase() === "song" ? "song" : "photo";
   return {
     id: String(m?.id || ""),
     userId: String(m?.userId || m?.user_id || ""),
@@ -6297,9 +6319,293 @@ function normalizeMomentSlide(m) {
     imageUrl: String(m?.imageUrl || m?.image_url || "").trim(),
     createdAt: m?.createdAt || m?.created_at || "",
     expiresAt: m?.expiresAt || m?.expires_at || "",
+    kind,
+    songTitle: String(m?.songTitle || m?.song_title || "").trim(),
+    songAudioUrl: String(m?.songAudioUrl || m?.song_audio_url || "").trim(),
     username: String(m?.username || ""),
     avatar: String(m?.avatar || ""),
   };
+}
+
+function isSongMomentSlide(slide) {
+  return String(slide?.kind || "") === "song" && Boolean(String(slide?.songAudioUrl || "").trim());
+}
+
+function momentSlideDurationMs(slide) {
+  return isSongMomentSlide(slide) ? MOMENT_SONG_SLIDE_MS : MOMENT_STORY_SLIDE_MS;
+}
+
+function stopMomentViewerStoryAudio() {
+  if (_momentViewerAudioClipTimer) {
+    window.clearTimeout(_momentViewerAudioClipTimer);
+    _momentViewerAudioClipTimer = 0;
+  }
+  const audio = document.getElementById("momentViewerAudio");
+  if (audio) {
+    try {
+      audio.pause();
+    } catch {}
+    audio.removeAttribute("src");
+    try {
+      audio.load();
+    } catch {}
+  }
+  const playing = document.getElementById("momentViewerSongPlaying");
+  if (playing) playing.hidden = true;
+}
+
+async function playMomentViewerSongAudio(slide) {
+  stopMomentViewerStoryAudio();
+  const url = String(slide?.songAudioUrl || "").trim();
+  if (!url) return;
+  const audio = document.getElementById("momentViewerAudio");
+  if (!audio) return;
+  const playing = document.getElementById("momentViewerSongPlaying");
+  audio.src = url;
+  audio.currentTime = 0;
+  if (playing) playing.hidden = false;
+  try {
+    await audio.play();
+  } catch {
+    if (playing) playing.hidden = true;
+  }
+  _momentViewerAudioClipTimer = window.setTimeout(() => {
+    try {
+      audio.pause();
+    } catch {}
+    if (playing) playing.hidden = true;
+  }, MOMENT_SONG_PREVIEW_MS);
+}
+
+async function resolveLibraryTrackPlayUrl(track) {
+  if (!track?.url) return "";
+  let t = track;
+  const rawForPlay = unwrapInnermostHttpAudioUrl(t.url);
+  let playSource = normalizeAudioUrlForPlayback(toAudioProxyUrl(rawForPlay) || rawForPlay);
+  try {
+    const refreshed = await tryRefreshLibraryTrackAudioFromSuno(t);
+    if (refreshed?.url) {
+      const freshInner = String(refreshed.url).trim();
+      playSource = normalizeAudioUrlForPlayback(toAudioProxyUrl(freshInner) || freshInner);
+    }
+  } catch {}
+  return String(playSource || "").trim();
+}
+
+function loadImageElement(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Could not load cover"));
+    img.src = String(src || "");
+  });
+}
+
+async function buildSongStoryCardDataUrl(track) {
+  const art = String(
+    (track?.meta && (track.meta.imageUrl || track.meta.imageThumb)) || track?.artUrl || ""
+  ).trim();
+  const title = String(track?.title || "My song").trim() || "My song";
+  let coverSrc = art;
+  if (coverSrc.startsWith("data:")) {
+    coverSrc = coverSrc;
+  } else if (coverSrc && !/^https?:\/\//i.test(coverSrc)) {
+    coverSrc = new URL(coverSrc, location.href).href;
+  }
+  const cover = coverSrc ? await loadImageElement(coverSrc).catch(() => null) : null;
+  const w = 1080;
+  const h = 1920;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not build story card");
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, "#12141f");
+  grad.addColorStop(0.45, "#0a0c14");
+  grad.addColorStop(1, "#05070d");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, w, h);
+  const glow = ctx.createRadialGradient(w * 0.5, h * 0.38, 40, w * 0.5, h * 0.38, w * 0.42);
+  glow.addColorStop(0, "rgba(124,92,255,0.28)");
+  glow.addColorStop(1, "rgba(124,92,255,0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, w, h);
+  if (cover) {
+    const side = Math.min(w, h) * 0.52;
+    const dx = (w - side) / 2;
+    const dy = (h - side) / 2 - h * 0.06;
+    const r = 28;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(dx + r, dy);
+    ctx.lineTo(dx + side - r, dy);
+    ctx.quadraticCurveTo(dx + side, dy, dx + side, dy + r);
+    ctx.lineTo(dx + side, dy + side - r);
+    ctx.quadraticCurveTo(dx + side, dy + side, dx + side - r, dy + side);
+    ctx.lineTo(dx + r, dy + side);
+    ctx.quadraticCurveTo(dx, dy + side, dx, dy + side - r);
+    ctx.lineTo(dx, dy + r);
+    ctx.quadraticCurveTo(dx, dy, dx + r, dy);
+    ctx.closePath();
+    ctx.clip();
+    const scale = Math.max(side / cover.width, side / cover.height);
+    const dw = cover.width * scale;
+    const dh = cover.height * scale;
+    ctx.drawImage(cover, dx + (side - dw) / 2, dy + (side - dh) / 2, dw, dh);
+    ctx.restore();
+  }
+  ctx.fillStyle = "rgba(255,255,255,0.92)";
+  ctx.font = "bold 44px system-ui, -apple-system, sans-serif";
+  ctx.textAlign = "center";
+  const lines = title.length > 36 ? [title.slice(0, 36) + "…"] : [title];
+  ctx.fillText(lines[0], w / 2, h - 120);
+  return canvas.toDataURL("image/jpeg", 0.88);
+}
+
+function stopMomentSongPreview() {
+  if (_momentSongPreviewAudio) {
+    try {
+      _momentSongPreviewAudio.pause();
+    } catch {}
+    _momentSongPreviewAudio = null;
+  }
+  const btn = document.getElementById("btnMomentSongPreview");
+  if (btn) btn.classList.remove("isPlaying");
+}
+
+async function toggleMomentSongPreview() {
+  if (!pendingSongStoryTrack) return;
+  const btn = document.getElementById("btnMomentSongPreview");
+  if (_momentSongPreviewAudio && !_momentSongPreviewAudio.paused) {
+    stopMomentSongPreview();
+    return;
+  }
+  stopMomentSongPreview();
+  const url = await resolveLibraryTrackPlayUrl(pendingSongStoryTrack);
+  if (!url) {
+    try { showToast("No playable audio for this song", { durationMs: 2800 }); } catch {}
+    return;
+  }
+  const audio = new Audio(url);
+  audio.preload = "auto";
+  _momentSongPreviewAudio = audio;
+  if (btn) btn.classList.add("isPlaying");
+  audio.addEventListener("ended", () => stopMomentSongPreview());
+  audio.addEventListener("pause", () => {
+    if (audio.currentTime > 0 && audio.ended) stopMomentSongPreview();
+  });
+  try {
+    await audio.play();
+    window.setTimeout(() => {
+      try {
+        if (_momentSongPreviewAudio === audio) {
+          audio.pause();
+          stopMomentSongPreview();
+        }
+      } catch {}
+    }, MOMENT_SONG_PREVIEW_MS);
+  } catch {
+    stopMomentSongPreview();
+    try { showToast("Tap again to play preview", { durationMs: 2400 }); } catch {}
+  }
+}
+
+function setupSongStoryShareUi() {
+  const track = pendingSongStoryTrack;
+  if (!track) return;
+  const art = String(
+    (track.meta && (track.meta.imageThumb || track.meta.imageUrl)) || track.artUrl || "./assets/nabadai-logo.png"
+  );
+  const title = String(track.title || "").trim() || "My song";
+  const img = document.getElementById("momentSongCoverImg");
+  const titleEl = document.getElementById("momentSongStageTitle");
+  const cap = document.getElementById("momentCaptionInput");
+  if (img) img.src = art;
+  if (titleEl) titleEl.textContent = title;
+  if (cap && !String(cap.value || "").trim()) {
+    cap.value = `🎵 ${title}`;
+  }
+  const publishBtn = document.getElementById("btnMomentPublish");
+  if (publishBtn) publishBtn.disabled = false;
+}
+
+function openSongStoryComposer(track) {
+  if (!track?.id) return;
+  if (!requireAuthForCreate(() => openSongStoryComposer(track), "moment")) return;
+  stopMomentSongPreview();
+  pendingSongStoryTrack = track;
+  momentPhotoDataUrl = "";
+  momentCropSourceUrl = "";
+  momentStudioPhase = "songShare";
+  cancelMomentStudioStart();
+  _momentStudioStarted = true;
+  setCreateEntryIntent("moment");
+  try { syncMomentPageUi(); } catch {}
+  try { setupSongStoryShareUi(); } catch {}
+  try { location.hash = "#/moment"; } catch {}
+  scheduleApplyRoute();
+}
+
+async function publishSongMoment() {
+  const track = pendingSongStoryTrack;
+  if (!track?.id) {
+    try { showToast("Pick a song from Library first", { durationMs: 2600 }); } catch {}
+    return;
+  }
+  if (!authSession?.user?.id) {
+    requireAuthForCreate(() => publishSongMoment());
+    return;
+  }
+  const title = String(track.title || "").trim() || "My song";
+  const body = getMomentCaptionText() || `🎵 ${title}`;
+  const playUrl = await resolveLibraryTrackPlayUrl(track);
+  if (!playUrl) {
+    try { showToast("This song has no playable audio", { durationMs: 2800 }); } catch {}
+    return;
+  }
+  const publishBtn = document.getElementById("btnMomentPublish");
+  const shareSpinner = document.getElementById("momentShareSpinner");
+  if (publishBtn) {
+    publishBtn.disabled = true;
+    publishBtn.classList.add("isPublishing");
+  }
+  if (shareSpinner) shareSpinner.hidden = false;
+  stopMomentSongPreview();
+  try {
+    const cardDataUrl = await buildSongStoryCardDataUrl(track);
+    const blob = await dataUrlToBlob(cardDataUrl);
+    const imageUrl = await uploadMomentBlob(blob);
+    const data = await socialApi("/api/social", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "post_moment",
+        kind: "song",
+        body,
+        imageUrl,
+        songTitle: title,
+        songAudioUrl: playUrl.slice(0, 2048),
+      }),
+      timeoutMs: 45000,
+    });
+    if (data?.moment) applyMomentToFriendsRail(data.moment);
+    pendingSongStoryTrack = null;
+    momentStudioPhase = "pick";
+    setCreateEntryIntent("");
+    leaveMomentPage("#/friends");
+    try { showToast("Song story live for 24 hours", { icon: "✓", durationMs: 2400 }); } catch {}
+    window.setTimeout(() => void refreshFriendsMomentsRail(), 400);
+  } catch (e) {
+    try { showToast(e?.message || "Could not share song story", { durationMs: 3200 }); } catch {}
+  } finally {
+    if (publishBtn) {
+      publishBtn.disabled = false;
+      publishBtn.classList.remove("isPublishing");
+    }
+    if (shareSpinner) shareSpinner.hidden = true;
+    try { syncMomentPageUi(); } catch {}
+  }
 }
 
 function normalizeMomentStory(raw) {
@@ -6521,7 +6827,9 @@ function tickMomentViewerProgress() {
   const start = active.dataset.progressStart || String(Date.now());
   if (!active.dataset.progressStart) active.dataset.progressStart = start;
   const elapsed = Date.now() - Number(start);
-  const pct = Math.min(100, (elapsed / MOMENT_STORY_SLIDE_MS) * 100);
+  const slide = getCurrentViewerSlide();
+  const dur = momentSlideDurationMs(slide);
+  const pct = Math.min(100, (elapsed / dur) * 100);
   active.style.width = `${pct}%`;
   if (pct >= 100) advanceMomentViewerSlide(1);
 }
@@ -6604,6 +6912,23 @@ function syncMomentViewerSlideUi({ animate = true } = {}) {
   if (delBtn) delBtn.hidden = !own;
   const overlayBottom = document.querySelector(".momentViewerOverlayBottom");
   if (overlayBottom) overlayBottom.hidden = !captionText;
+  const isSong = isSongMomentSlide(slide);
+  const plate = document.getElementById("momentViewerSongPlate");
+  const songCover = document.getElementById("momentViewerSongCover");
+  const songTitleEl = document.getElementById("momentViewerSongTitle");
+  if (frame) frame.classList.toggle("isSongSlide", isSong);
+  if (plate) plate.hidden = !isSong;
+  if (isSong) {
+    const title = String(slide.songTitle || "").trim() || captionText.replace(/^🎵\s*/, "").trim();
+    if (songTitleEl) songTitleEl.textContent = title || "Song";
+    if (songCover) {
+      songCover.src = String(slide.imageUrl || "").trim();
+      songCover.alt = title ? `Cover for ${title}` : "Song cover";
+    }
+    void playMomentViewerSongAudio(slide);
+  } else {
+    stopMomentViewerStoryAudio();
+  }
   renderMomentViewerProgress();
   startMomentViewerProgress();
   updateMomentViewerCountdown();
@@ -6687,6 +7012,11 @@ function closeMomentViewerSheet() {
   const sheet = document.getElementById("momentViewerSheet");
   if (!sheet) return;
   stopMomentViewerProgress();
+  stopMomentViewerStoryAudio();
+  const frame = document.getElementById("momentViewerPickFrame");
+  if (frame) frame.classList.remove("isSongSlide");
+  const plate = document.getElementById("momentViewerSongPlate");
+  if (plate) plate.hidden = true;
   closeMomentViewerMenu();
   sheet.classList.remove("isOpen", "isDraggingDown");
   sheet.setAttribute("aria-hidden", "true");
@@ -6943,6 +7273,9 @@ async function renderUserProfileMomentsRail(userId, username = "") {
 }
 
 async function publishMoment() {
+  if (momentStudioPhase === "songShare") {
+    return publishSongMoment();
+  }
   if (!momentPhotoDataUrl) {
     try { showToast("Add a photo first", { icon: "📷", durationMs: 2200 }); } catch {}
     return;
@@ -7009,7 +7342,18 @@ function wireMomentPageOnce() {
       leaveMomentCropPhase();
       return;
     }
+    if (momentStudioPhase === "songShare") {
+      stopMomentSongPreview();
+      pendingSongStoryTrack = null;
+      momentStudioPhase = "pick";
+      setCreateEntryIntent("");
+      syncMomentPageUi();
+    }
     leaveMomentPage("#/friends");
+  });
+  document.getElementById("btnMomentSongPreview")?.addEventListener("click", () => {
+    try { haptic("light"); } catch {}
+    void toggleMomentSongPreview();
   });
   document.getElementById("btnMomentCropBack")?.addEventListener("click", () => {
     try { haptic("light"); } catch {}
@@ -13104,6 +13448,7 @@ function renderTrackSheetLibrary(track) {
   const isInstrumental = kind === "instrumental";
   const isSound = kind === "sound";
   const remixEligible = !isSound && Boolean(track?.url && String(track.url).trim());
+  const storyEligible = remixEligible;
   const personaEligible = !isInstrumental && !isSound && Boolean(track?.taskId) && Boolean(track?.audioId);
   const profilePublic = Boolean(track.publicOnProfile);
   const pubTo = profilePublic ? "private" : "public";
@@ -13120,6 +13465,7 @@ function renderTrackSheetLibrary(track) {
     <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="library_share">Share</button>
   `;
   l.innerHTML = `
+    ${storyEligible ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_share_story">Share to story</button>` : ""}
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_audio">Download audio</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_video">Download video</button>
     ${HUB_FEATURE_ENABLED ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_share_hub">Share to Hub</button>` : ""}
@@ -13516,6 +13862,15 @@ function runTrackSheetAction(action, sourceEl) {
     if (action === "library_player") {
       shut();
       void playLibraryListRowById(t.id, { openPlayer: true });
+      return;
+    }
+    if (action === "library_share_story") {
+      shut();
+      if (!t?.url || !String(t.url).trim()) {
+        showToast("This song needs audio before sharing to story", { durationMs: 2800 });
+        return;
+      }
+      openSongStoryComposer(t);
       return;
     }
     if (action === "library_share") {

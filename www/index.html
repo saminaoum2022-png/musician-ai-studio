@@ -797,6 +797,18 @@
                   <p class="momentStudioIosPickHint">Tap the shutter for your camera · gallery on the right</p>
                 </div>
               </div>
+              <div class="momentStudioSongStage" id="momentSongStage" hidden>
+                <div class="momentSongStageBg" aria-hidden="true"></div>
+                <div class="momentSongCoverFrame">
+                  <img id="momentSongCoverImg" class="momentSongCoverImg" alt="" decoding="async" />
+                  <button type="button" class="momentSongPreviewBtn" id="btnMomentSongPreview" aria-label="Preview clip">
+                    <span class="momentSongPreviewIcon" aria-hidden="true">▶</span>
+                    <span class="momentSongPreviewLabel">Preview</span>
+                  </button>
+                </div>
+                <p class="momentSongStageTitle" id="momentSongStageTitle"></p>
+                <p class="momentSongStageHint">Cover centered · ~15s plays in story</p>
+              </div>
               <div class="momentStudioCropStage" id="momentCropStage" hidden>
                 <div class="momentStudioCropFrame" id="momentCropFrame">
                   <img id="momentCropImg" class="momentStudioCropImg" alt="" draggable="false" />
@@ -2448,6 +2460,14 @@
             <div id="momentViewerProgress" class="momentViewerProgress" aria-hidden="true"></div>
             <div id="momentViewerPickFrame" class="momentViewerPickFrame">
               <img id="momentViewerImg" class="momentViewerImg" alt="" decoding="async" />
+              <div id="momentViewerSongPlate" class="momentViewerSongPlate" hidden>
+                <div class="momentViewerSongCoverWrap">
+                  <img id="momentViewerSongCover" class="momentViewerSongCover" alt="" decoding="async" />
+                </div>
+                <p id="momentViewerSongTitle" class="momentViewerSongTitle"></p>
+                <p id="momentViewerSongPlaying" class="momentViewerSongPlaying" hidden>Playing preview…</p>
+              </div>
+              <audio id="momentViewerAudio" class="momentViewerAudio" preload="metadata" playsinline></audio>
               <div class="momentViewerTapZones" aria-hidden="true">
                 <button type="button" class="momentViewerTapZone momentViewerTapZone--prev" id="momentViewerTapPrev" tabindex="-1" aria-label="Previous"></button>
                 <button type="button" class="momentViewerTapZone momentViewerTapZone--next" id="momentViewerTapNext" tabindex="-1" aria-label="Next"></button>

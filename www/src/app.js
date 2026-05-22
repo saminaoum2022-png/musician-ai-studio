@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522momentCamRestoreV1";
+const APP_BUILD = "20260522voiceWaveV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4504,6 +4504,14 @@ let statusVoiceStartedAt = 0;
 let _statusVoiceFeedAudio = null;
 let _statusVoiceFeedPlayingId = "";
 let _statusVoiceFeedProgressTimer = 0;
+let _statusVoiceFeedActiveCard = null;
+let _statusVoiceFeedCtx = null;
+let _statusVoiceFeedAnalyser = null;
+let _statusVoiceFeedSource = null;
+let _statusVoiceFeedRaf = 0;
+let _statusVoiceComposeCtx = null;
+let _statusVoiceComposeAnalyser = null;
+const STATUS_VOICE_BAR_COUNT = 36;
 
 function isStatusVoicePost(post) {
   return Boolean(String(post?.audioUrl || post?.audio_url || "").trim());
@@ -4516,25 +4524,234 @@ function formatMsAsVoiceTime(ms) {
   return `${m}:${String(r).padStart(2, "0")}`;
 }
 
-function statusVoicePeaksFromPost(post) {
-  const raw = post?.waveformPeaks ?? post?.waveform_peaks;
-  return Array.isArray(raw) && raw.length ? raw : [];
+function statusVoiceFallbackPeaks() {
+  return Array.from({ length: STATUS_VOICE_BAR_COUNT }, (_, i) => {
+    const t = i / Math.max(1, STATUS_VOICE_BAR_COUNT - 1);
+    return Math.round((0.16 + 0.62 * Math.abs(Math.sin(t * 6.2) * Math.cos(t * 3.7))) * 1000) / 1000;
+  });
 }
 
-function statusVoiceWaveHtml(peaks, { live = false, playing = false } = {}) {
-  const list =
+function statusVoiceNormalizePeaks(peaks, count = STATUS_VOICE_BAR_COUNT) {
+  const src =
     Array.isArray(peaks) && peaks.length
-      ? peaks
-      : [0.25, 0.4, 0.55, 0.7, 0.5, 0.35, 0.6, 0.8, 0.45, 0.3, 0.5, 0.65, 0.4, 0.55, 0.72, 0.38];
-  const cls = ["statusVoiceWave", live ? "isLive" : "", playing ? "isActive" : ""].filter(Boolean).join(" ");
-  const bars = list
-    .slice(0, 48)
+      ? peaks.map((n) => Math.max(0, Math.min(1, Number(n) || 0)))
+      : statusVoiceFallbackPeaks();
+  if (src.length === count) return src;
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const pos = (i / Math.max(1, count - 1)) * (src.length - 1);
+    const lo = Math.floor(pos);
+    const hi = Math.min(src.length - 1, lo + 1);
+    const frac = pos - lo;
+    out.push(Math.round((src[lo] * (1 - frac) + src[hi] * frac) * 1000) / 1000);
+  }
+  return out;
+}
+
+function statusVoicePeaksFromPost(post) {
+  const raw = post?.waveformPeaks ?? post?.waveform_peaks;
+  return statusVoiceNormalizePeaks(Array.isArray(raw) ? raw : []);
+}
+
+function statusVoicePeaksFromCard(card) {
+  if (!card) return statusVoiceFallbackPeaks();
+  try {
+    const raw = decodeURIComponent(String(card.getAttribute("data-status-voice-peaks") || ""));
+    const parsed = raw ? JSON.parse(raw) : [];
+    return statusVoiceNormalizePeaks(parsed);
+  } catch {
+    return statusVoiceFallbackPeaks();
+  }
+}
+
+function statusVoiceWaveBarsInnerHtml(peaks) {
+  return statusVoiceNormalizePeaks(peaks)
     .map((h) => {
-      const ht = Math.max(0.12, Math.min(1, Number(h) || 0.35));
-      return `<span style="--bar-h:${(ht * 100).toFixed(1)}%"></span>`;
+      const ht = Math.max(0.1, Math.min(1, Number(h) || 0.3));
+      return `<span class="statusVoiceBar" style="--bar-h:${(ht * 100).toFixed(1)}%"></span>`;
     })
     .join("");
-  return `<div class="${cls}" aria-hidden="true">${bars}</div>`;
+}
+
+function statusVoiceApplyBarHeights(card, heights) {
+  const wave = card?.querySelector?.("[data-status-voice-wave]");
+  if (!wave) return;
+  const bars = wave.querySelectorAll(".statusVoiceBar");
+  heights.forEach((h, i) => {
+    const bar = bars[i];
+    if (!bar) return;
+    const ht = Math.max(0.08, Math.min(1, Number(h) || 0.2));
+    bar.style.setProperty("--bar-h", `${(ht * 100).toFixed(1)}%`);
+  });
+}
+
+function statusVoiceResetCardVisual(card) {
+  if (!card) return;
+  statusVoiceApplyBarHeights(card, statusVoicePeaksFromCard(card));
+  const scrub = card.querySelector("[data-status-voice-scrub]");
+  if (scrub) scrub.style.width = "0%";
+  const pill = card.querySelector("[data-status-voice-pill]");
+  if (pill) pill.hidden = true;
+  const durMs = Number(card.getAttribute("data-status-voice-duration")) || 0;
+  const durEl = card.querySelector("[data-status-voice-dur]");
+  if (durEl) durEl.textContent = formatMsAsVoiceTime(durMs);
+  card.querySelectorAll(".statusVoiceBar").forEach((b) => {
+    b.classList.remove("isPast", "isActive");
+  });
+}
+
+function statusVoiceBucketFrequency(bins, barCount) {
+  const out = [];
+  const step = Math.max(1, Math.floor(bins.length / barCount));
+  for (let i = 0; i < barCount; i++) {
+    let sum = 0;
+    let n = 0;
+    const start = i * step;
+    const end = Math.min(bins.length, start + step);
+    for (let j = start; j < end; j++) {
+      sum += bins[j];
+      n++;
+    }
+    out.push(n ? sum / n : 0);
+  }
+  return out;
+}
+
+function stopStatusVoiceFeedVisualizer() {
+  if (_statusVoiceFeedRaf) {
+    try {
+      cancelAnimationFrame(_statusVoiceFeedRaf);
+    } catch {}
+    _statusVoiceFeedRaf = 0;
+  }
+  try {
+    _statusVoiceFeedSource?.disconnect?.();
+  } catch {}
+  _statusVoiceFeedSource = null;
+  _statusVoiceFeedAnalyser = null;
+  if (_statusVoiceFeedCtx) {
+    try {
+      void _statusVoiceFeedCtx.close();
+    } catch {}
+    _statusVoiceFeedCtx = null;
+  }
+  if (_statusVoiceFeedActiveCard) {
+    statusVoiceResetCardVisual(_statusVoiceFeedActiveCard);
+    _statusVoiceFeedActiveCard = null;
+  }
+}
+
+function stopStatusVoiceComposeVisualizer() {
+  try {
+    _statusVoiceComposeAnalyser?.disconnect?.();
+  } catch {}
+  _statusVoiceComposeAnalyser = null;
+  if (_statusVoiceComposeCtx) {
+    try {
+      void _statusVoiceComposeCtx.close();
+    } catch {}
+    _statusVoiceComposeCtx = null;
+  }
+}
+
+async function attachStatusVoiceComposeAnalyser(stream) {
+  stopStatusVoiceComposeVisualizer();
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx || !stream) return;
+  try {
+    const ctx = new Ctx();
+    await ctx.resume();
+    const source = ctx.createMediaStreamSource(stream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 128;
+    analyser.smoothingTimeConstant = 0.72;
+    source.connect(analyser);
+    _statusVoiceComposeCtx = ctx;
+    _statusVoiceComposeAnalyser = analyser;
+  } catch {}
+}
+
+function sampleStatusVoiceComposeLivePeaks(basePeaks) {
+  const base = statusVoiceNormalizePeaks(basePeaks);
+  if (!_statusVoiceComposeAnalyser) return base;
+  const bins = new Uint8Array(_statusVoiceComposeAnalyser.frequencyBinCount);
+  _statusVoiceComposeAnalyser.getByteFrequencyData(bins);
+  const live = statusVoiceBucketFrequency(bins, base.length);
+  return base.map((b, i) => Math.min(1, b * (0.22 + 0.78 * ((live[i] || 0) / 255))));
+}
+
+async function attachStatusVoiceFeedAnalyser(audio) {
+  stopStatusVoiceFeedVisualizer();
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx || !audio) return false;
+  try {
+    const ctx = new Ctx();
+    await ctx.resume();
+    const source = ctx.createMediaElementSource(audio);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 128;
+    analyser.smoothingTimeConstant = 0.78;
+    source.connect(analyser);
+    analyser.connect(ctx.destination);
+    _statusVoiceFeedCtx = ctx;
+    _statusVoiceFeedSource = source;
+    _statusVoiceFeedAnalyser = analyser;
+    return true;
+  } catch {
+    stopStatusVoiceFeedVisualizer();
+    return false;
+  }
+}
+
+function statusVoiceFeedVisualizerTick() {
+  _statusVoiceFeedRaf = 0;
+  const audio = _statusVoiceFeedAudio;
+  const card = _statusVoiceFeedActiveCard;
+  if (!audio || !card || audio.paused || audio.ended) return;
+
+  const base = statusVoicePeaksFromCard(card);
+  let heights;
+  if (_statusVoiceFeedAnalyser) {
+    const bins = new Uint8Array(_statusVoiceFeedAnalyser.frequencyBinCount);
+    _statusVoiceFeedAnalyser.getByteFrequencyData(bins);
+    const live = statusVoiceBucketFrequency(bins, base.length);
+    heights = base.map((b, i) => Math.min(1, b * (0.2 + 0.8 * ((live[i] || 0) / 255))));
+  } else {
+    const t = audio.currentTime || 0;
+    heights = base.map((b, i) => Math.min(1, b * (0.35 + 0.65 * Math.abs(Math.sin(t * 9 + i * 0.55)))));
+  }
+  statusVoiceApplyBarHeights(card, heights);
+
+  const durMs =
+    Number(card.getAttribute("data-status-voice-duration")) ||
+    Math.round((audio.duration || 0) * 1000) ||
+    0;
+  const elapsedMs = Math.round((audio.currentTime || 0) * 1000);
+  const pct = durMs > 0 ? Math.min(1, elapsedMs / durMs) : 0;
+  const scrub = card.querySelector("[data-status-voice-scrub]");
+  if (scrub) scrub.style.width = `${(pct * 100).toFixed(2)}%`;
+  const durEl = card.querySelector("[data-status-voice-dur]");
+  if (durEl) {
+    durEl.textContent = `${formatMsAsVoiceTime(elapsedMs)} / ${formatMsAsVoiceTime(durMs)}`;
+  }
+  const pill = card.querySelector("[data-status-voice-pill]");
+  if (pill) pill.hidden = false;
+  const playhead = Math.floor(pct * base.length);
+  card.querySelectorAll(".statusVoiceBar").forEach((bar, i) => {
+    bar.classList.toggle("isPast", i < playhead);
+    bar.classList.toggle("isActive", i === playhead);
+  });
+
+  _statusVoiceFeedRaf = requestAnimationFrame(statusVoiceFeedVisualizerTick);
+}
+
+function startStatusVoiceFeedVisualizer(audio, card) {
+  _statusVoiceFeedActiveCard = card;
+  void attachStatusVoiceFeedAnalyser(audio).then(() => {
+    if (_statusVoiceFeedAudio !== audio || _statusVoiceFeedActiveCard !== card) return;
+    if (_statusVoiceFeedRaf) cancelAnimationFrame(_statusVoiceFeedRaf);
+    statusVoiceFeedVisualizerTick();
+  });
 }
 
 function statusVoiceCaptionHtml(post) {
@@ -4549,33 +4766,41 @@ function statusVoiceCardHtml(post) {
   if (!postId || !url) return "";
   const durationMs = Number(post?.durationMs || post?.duration_ms) || 0;
   const peaks = statusVoicePeaksFromPost(post);
+  const peaksEnc = encodeURIComponent(JSON.stringify(peaks));
   const dur = formatMsAsVoiceTime(durationMs);
   const playing = _statusVoiceFeedPlayingId === postId;
-  return `<button type="button" class="statusVoiceCard${playing ? " isPlaying" : ""}" data-status-voice-play="1" data-status-voice-id="${escapeHtml(postId)}" data-status-voice-url="${escapeHtml(url)}" data-status-voice-duration="${durationMs}" aria-label="Play voice note, ${escapeHtml(dur)}">
-    <span class="statusVoicePlay" aria-hidden="true">${playing ? "❚❚" : "▶"}</span>
-    ${statusVoiceWaveHtml(peaks, { playing })}
-    <span class="statusVoiceDur" data-status-voice-dur>${escapeHtml(dur)}</span>
+  return `<button type="button" class="statusVoiceCard${playing ? " isPlaying" : ""}" data-status-voice-play="1" data-status-voice-id="${escapeHtml(postId)}" data-status-voice-url="${escapeHtml(url)}" data-status-voice-duration="${durationMs}" data-status-voice-peaks="${escapeHtml(peaksEnc)}" aria-label="Play voice note, ${escapeHtml(dur)}">
+    <span class="statusVoicePlay" data-status-voice-play-ico aria-hidden="true">${playing ? "❚❚" : "▶"}</span>
+    <span class="statusVoiceBody">
+      <span class="statusVoiceWaveWrap">
+        <span class="statusVoiceWave" data-status-voice-wave aria-hidden="true">${statusVoiceWaveBarsInnerHtml(peaks)}</span>
+        <span class="statusVoiceScrubTrack" aria-hidden="true"><span class="statusVoiceScrubFill" data-status-voice-scrub></span></span>
+      </span>
+      <span class="statusVoiceMeta">
+        <span class="statusVoiceLivePill" data-status-voice-pill hidden>Playing</span>
+        <span class="statusVoiceDur" data-status-voice-dur>${escapeHtml(dur)}</span>
+      </span>
+    </span>
   </button>`;
 }
 
 function renderFollowComposeVoiceWave({ live = false } = {}) {
   const wave = document.getElementById("followComposeVoiceWave");
   if (!wave) return;
-  const list =
-    statusVoicePeaks.length
-      ? statusVoicePeaks
-      : [0.25, 0.4, 0.55, 0.7, 0.5, 0.35, 0.6, 0.8, 0.45, 0.3, 0.5, 0.65, 0.4, 0.55, 0.72, 0.38];
+  const heights = live
+    ? sampleStatusVoiceComposeLivePeaks(statusVoicePeaks)
+    : statusVoiceNormalizePeaks(statusVoicePeaks);
   wave.className = ["statusVoiceWave", "followComposeVoiceWave", live ? "isLive" : ""].filter(Boolean).join(" ");
-  wave.innerHTML = list
-    .slice(0, 48)
+  wave.innerHTML = heights
     .map((h) => {
-      const ht = Math.max(0.12, Math.min(1, Number(h) || 0.35));
-      return `<span style="--bar-h:${(ht * 100).toFixed(1)}%"></span>`;
+      const ht = Math.max(0.1, Math.min(1, Number(h) || 0.3));
+      return `<span class="statusVoiceBar" style="--bar-h:${(ht * 100).toFixed(1)}%"></span>`;
     })
     .join("");
 }
 
 function resetStatusVoiceCompose() {
+  stopStatusVoiceComposeVisualizer();
   if (statusVoiceRecState === "recording") {
     try {
       stopStatusVoiceRecording();
@@ -4636,7 +4861,7 @@ function resetStatusVoiceCompose() {
   renderFollowComposeVoiceWave();
 }
 
-async function computeStatusWaveformPeaks(blob, barCount = 40) {
+async function computeStatusWaveformPeaks(blob, barCount = STATUS_VOICE_BAR_COUNT) {
   if (!blob?.size) return [];
   try {
     const arrayBuffer = await blob.arrayBuffer();
@@ -4815,6 +5040,7 @@ async function startStatusVoiceRecording() {
   };
   statusVoiceStream = stream;
   statusVoiceRecorder = rec;
+  void attachStatusVoiceComposeAnalyser(stream);
   try {
     rec.start();
   } catch {
@@ -4832,6 +5058,7 @@ async function startStatusVoiceRecording() {
   syncFollowingComposeUi();
   const tick = () => {
     if (statusVoiceRecState !== "recording") return;
+    renderFollowComposeVoiceWave({ live: true });
     syncStatusVoiceComposeUi();
     if (performance.now() - statusVoiceStartedAt < STATUS_VOICE_MAX_MS) {
       statusVoiceTickRaf = requestAnimationFrame(tick);
@@ -4914,6 +5141,7 @@ function stopStatusVoiceFeedPlayback() {
     window.clearInterval(_statusVoiceFeedProgressTimer);
     _statusVoiceFeedProgressTimer = 0;
   }
+  stopStatusVoiceFeedVisualizer();
   if (_statusVoiceFeedAudio) {
     try {
       _statusVoiceFeedAudio.pause();
@@ -4923,10 +5151,12 @@ function stopStatusVoiceFeedPlayback() {
   const prevId = _statusVoiceFeedPlayingId;
   _statusVoiceFeedPlayingId = "";
   if (prevId) {
-    document.querySelectorAll(`[data-status-voice-id="${CSS.escape ? CSS.escape(prevId) : prevId}"]`).forEach((card) => {
+    const esc = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(prevId) : prevId.replace(/"/g, '\\"');
+    document.querySelectorAll(`[data-status-voice-id="${esc}"]`).forEach((card) => {
       card.classList.remove("isPlaying");
-      const play = card.querySelector(".statusVoicePlay");
+      const play = card.querySelector("[data-status-voice-play-ico]");
       if (play) play.textContent = "▶";
+      statusVoiceResetCardVisual(card);
     });
   }
 }
@@ -4948,10 +5178,12 @@ async function toggleStatusVoiceFeedPlayback(btn) {
   const playUrl = normalizeAudioUrlForPlayback(toAudioProxyUrl(url) || url) || url;
   const audio = new Audio(playUrl);
   audio.preload = "auto";
+  audio.crossOrigin = "anonymous";
+  audio.setAttribute("playsinline", "");
   _statusVoiceFeedAudio = audio;
   _statusVoiceFeedPlayingId = postId;
   card.classList.add("isPlaying");
-  const playIco = card.querySelector(".statusVoicePlay");
+  const playIco = card.querySelector("[data-status-voice-play-ico]");
   if (playIco) playIco.textContent = "❚❚";
   audio.addEventListener("ended", () => stopStatusVoiceFeedPlayback());
   audio.addEventListener("pause", () => {
@@ -4960,6 +5192,7 @@ async function toggleStatusVoiceFeedPlayback(btn) {
   try {
     haptic("light");
     await audio.play();
+    startStatusVoiceFeedVisualizer(audio, card);
   } catch {
     stopStatusVoiceFeedPlayback();
     try {

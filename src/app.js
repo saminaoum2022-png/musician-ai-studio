@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522momentStoriesV1";
+const APP_BUILD = "20260522momentPickFixV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5118,11 +5118,34 @@ const momentCropState = {
   nh: 0,
 };
 
-function clearMomentPhotoInputs() {
+function momentStudioUsesLiveCamera() {
+  if (isNativeShell()) return false;
   try {
-    const el = document.getElementById("momentPhotoLibrary");
-    if (el) el.value = "";
-  } catch {}
+    return Boolean(navigator.mediaDevices?.getUserMedia);
+  } catch {
+    return false;
+  }
+}
+
+function syncMomentPickStageMode() {
+  const page = document.getElementById("momentPage");
+  const video = document.getElementById("momentCameraVideo");
+  const fallback = document.getElementById("momentCameraFallback");
+  const flipBtn = document.getElementById("btnMomentFlipCamera");
+  const useLive = momentStudioUsesLiveCamera() && momentStudioPhase === "pick";
+  if (page) page.classList.toggle("momentStudio--nativePick", !useLive && momentStudioPhase === "pick");
+  if (video) video.hidden = !useLive;
+  if (fallback) fallback.hidden = useLive;
+  if (flipBtn) flipBtn.hidden = !useLive;
+}
+
+function clearMomentPhotoInputs() {
+  for (const id of ["momentPhotoLibrary", "momentPhotoCamera"]) {
+    try {
+      const el = document.getElementById(id);
+      if (el) el.value = "";
+    } catch {}
+  }
 }
 
 function resetMomentComposeForm() {
@@ -5138,6 +5161,7 @@ function resetMomentComposeForm() {
   clearMomentPhotoInputs();
   if (preview) preview.removeAttribute("src");
   try { stopMomentCamera(); } catch {}
+  setMomentStudioLoading(false);
   syncMomentPageUi();
 }
 
@@ -5214,30 +5238,29 @@ function stopMomentCamera() {
 }
 
 async function startMomentCamera() {
+  stopMomentCamera();
+  syncMomentPickStageMode();
+  if (!momentStudioUsesLiveCamera()) return;
   const video = document.getElementById("momentCameraVideo");
   const fallback = document.getElementById("momentCameraFallback");
   const flipBtn = document.getElementById("btnMomentFlipCamera");
-  stopMomentCamera();
   if (!video || !navigator.mediaDevices?.getUserMedia) {
-    if (fallback) fallback.hidden = false;
-    if (video) video.hidden = true;
-    if (flipBtn) flipBtn.hidden = true;
+    syncMomentPickStageMode();
     return;
   }
   try {
     momentCameraStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: momentCameraFacing }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      video: { facingMode: { ideal: momentCameraFacing }, width: { ideal: 1280 }, height: { ideal: 720 } },
       audio: false,
     });
     video.srcObject = momentCameraStream;
-    video.hidden = false;
     if (fallback) fallback.hidden = true;
     if (flipBtn) flipBtn.hidden = false;
+    video.hidden = false;
     await video.play();
+    syncMomentPickStageMode();
   } catch {
-    if (fallback) fallback.hidden = false;
-    video.hidden = true;
-    if (flipBtn) flipBtn.hidden = true;
+    syncMomentPickStageMode();
   }
 }
 
@@ -5246,14 +5269,25 @@ async function flipMomentCamera() {
   await startMomentCamera();
 }
 
+function openMomentCameraInput() {
+  const input = document.getElementById("momentPhotoCamera");
+  if (!input) return;
+  try { input.value = ""; } catch {}
+  input.click();
+}
+
 async function captureMomentFromCamera() {
-  const video = document.getElementById("momentCameraVideo");
-  if (!video || video.readyState < 2 || !video.videoWidth) {
-    try { showToast("Camera not ready — try gallery", { durationMs: 2200 }); } catch {}
-    openMomentPhotoSource();
+  try { haptic("medium"); } catch {}
+  if (!momentStudioUsesLiveCamera()) {
+    openMomentCameraInput();
     return;
   }
-  try { haptic("medium"); } catch {}
+  const video = document.getElementById("momentCameraVideo");
+  if (!video || video.readyState < 2 || !video.videoWidth) {
+    try { showToast("Camera not ready — opening camera", { durationMs: 2200 }); } catch {}
+    openMomentCameraInput();
+    return;
+  }
   const w = video.videoWidth;
   const h = video.videoHeight;
   const canvas = document.createElement("canvas");
@@ -5337,7 +5371,8 @@ function leaveMomentCropPhase() {
   momentCropSourceUrl = "";
   momentStudioPhase = "pick";
   syncMomentPageUi();
-  void startMomentCamera();
+  if (momentStudioUsesLiveCamera()) void startMomentCamera();
+  else syncMomentPickStageMode();
 }
 
 async function exportMomentCropImage() {
@@ -5529,6 +5564,7 @@ function syncMomentPageUi() {
   const publishBtn = document.getElementById("btnMomentPublish");
   if (publishBtn) publishBtn.disabled = !isShare || !hasPhoto;
   try { syncMomentShareAvatar(); } catch {}
+  try { syncMomentPickStageMode(); } catch {}
 }
 
 function setMomentStudioLoading(on) {
@@ -5545,8 +5581,10 @@ function scheduleMomentStudioStart() {
   _momentStudioStarted = true;
   window.setTimeout(() => {
     if ((document.body.getAttribute("data-route") || "") !== "moment") return;
+    setMomentStudioLoading(false);
     try { renderMomentRecentsRail(); } catch {}
-    if (momentStudioPhase === "pick") void startMomentCamera();
+    try { syncMomentPickStageMode(); } catch {}
+    if (momentStudioPhase === "pick" && momentStudioUsesLiveCamera()) void startMomentCamera();
   }, 120);
 }
 
@@ -6512,12 +6550,17 @@ function wireMomentPageOnce() {
     try { haptic("light"); } catch {}
     openMomentPhotoSource();
   });
-  document.getElementById("momentPhotoLibrary")?.addEventListener("change", async (e) => {
-    const input = e.target;
-    const files = [...(input?.files || [])];
+  const onPhotoPicked = async (input) => {
+    const files = [...(input?.files || [])].filter((f) => f && String(f.type || "").startsWith("image/"));
     if (!files.length) return;
     if (files.length > 1) await applyMomentPhotoFilesFromInput(input);
     else await applyMomentPhotoFromFile(files[0]);
+  };
+  document.getElementById("momentPhotoLibrary")?.addEventListener("change", async (e) => {
+    await onPhotoPicked(e.target);
+  });
+  document.getElementById("momentPhotoCamera")?.addEventListener("change", async (e) => {
+    await onPhotoPicked(e.target);
   });
 }
 

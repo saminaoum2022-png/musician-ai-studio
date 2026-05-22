@@ -793,8 +793,8 @@
               <div class="momentStudioPickStage" id="momentPickStage">
                 <video id="momentCameraVideo" class="momentStudioCameraVideo" autoplay playsinline muted></video>
                 <div class="momentStudioCameraFallback" id="momentCameraFallback" hidden>
-                  <p class="momentStudioPickTitle">Camera unavailable</p>
-                  <p class="momentStudioPickHint">Choose from gallery or recent photos</p>
+                  <p class="momentStudioPickTitle">Add to your story</p>
+                  <p class="momentStudioPickHint">Tap the shutter for camera · gallery on the right</p>
                 </div>
               </div>
               <div class="momentStudioCropStage" id="momentCropStage" hidden>
@@ -848,6 +848,7 @@
             </div>
           </div>
           <input id="momentPhotoLibrary" type="file" accept="image/*" multiple hidden />
+          <input id="momentPhotoCamera" type="file" accept="image/*" capture="environment" hidden />
         </section>
 
         <section class="discoverPlaylistPage wide" data-route="discover-playlist">

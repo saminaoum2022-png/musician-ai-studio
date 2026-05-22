@@ -4390,6 +4390,7 @@ body[data-route="moment"] main.grid > [data-route="moment"]{
 .momentStudioMedia{
   position: absolute;
   inset: 0;
+  z-index: 1;
   background: #05070d;
   overflow: hidden;
 }
@@ -4433,6 +4434,13 @@ body[data-route="moment"] main.grid > [data-route="moment"]{
   object-fit: cover;
   object-position: center;
   background: #000;
+  pointer-events: none;
+}
+.momentStudio--nativePick .momentStudioCameraVideo{
+  display: none !important;
+}
+.momentStudio--nativePick .momentStudioCameraFallback{
+  display: flex !important;
 }
 .momentStudioCameraFallback{
   position: absolute;
@@ -4543,12 +4551,14 @@ body[data-route="moment"] main.grid > [data-route="moment"]{
 .momentStudioSpinner{
   position: absolute;
   inset: 0;
+  z-index: 4;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(0,0,0,0.35);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
+  pointer-events: none;
 }
 .momentStudioSpinner[hidden]{
   display: none !important;
@@ -4563,7 +4573,7 @@ body[data-route="moment"] main.grid > [data-route="moment"]{
 }
 .momentStudioChrome{
   position: relative;
-  z-index: 2;
+  z-index: 10;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -4575,6 +4585,15 @@ body[data-route="moment"] main.grid > [data-route="moment"]{
   pointer-events: none;
 }
 .momentStudioChrome > *{
+  pointer-events: auto;
+}
+.momentStudioBottom,
+.momentStudioTop,
+.momentStudioDock,
+.momentStudioCaptureRow,
+.momentStudioRecents,
+.momentStudioSideBtn,
+.momentStudioShutter{
   pointer-events: auto;
 }
 .momentStudioTop{

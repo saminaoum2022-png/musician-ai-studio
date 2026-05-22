@@ -82,7 +82,7 @@ private final class StoryCameraViewController: UIViewController {
 
     private let closeButton = UIButton(type: .system)
     private let flipButton = UIButton(type: .system)
-    private let shutterButton = UIButton(type: .button)
+    private let shutterButton = UIButton(type: .custom)
     private let shutterRing = UIView()
 
     init(lensPosition: AVCaptureDevice.Position, jpegQuality: CGFloat, onFinish: @escaping (StoryCameraOutcome) -> Void) {

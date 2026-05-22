@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522voiceStatusV1";
+const APP_BUILD = "20260522voiceStatusV2";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4661,19 +4661,30 @@ async function computeStatusWaveformPeaks(blob, barCount = 40) {
   }
 }
 
+function storageContentTypeForAudioBlob(blob) {
+  const raw = String(blob?.type || "").toLowerCase().trim();
+  if (raw.includes("mp4") || raw.includes("m4a") || raw.includes("aac")) return "audio/mp4";
+  if (raw.includes("mpeg") || raw.includes("mp3")) return "audio/mpeg";
+  if (raw.includes("ogg")) return "audio/ogg";
+  if (raw.includes("wav")) return "audio/wav";
+  if (raw.includes("webm")) return "audio/webm";
+  return "audio/mp4";
+}
+
 async function uploadStatusVoiceBlob(blob) {
   const token = getSupabaseAuthToken();
   const uid = authSession?.user?.id;
   if (!token || !uid) throw new Error("Login required");
   if (!SUPABASE_URL) throw new Error("Supabase not configured");
-  const ext = callingCardExtensionFromMime(blob.type);
+  const contentType = storageContentTypeForAudioBlob(blob);
+  const ext = callingCardExtensionFromMime(contentType);
   const key = `${uid}/${Date.now()}.${ext}`;
   const r = await fetch(`${SUPABASE_URL}/storage/v1/object/status_audio/${key}`, {
     method: "POST",
     headers: {
       apikey: SUPABASE_ANON_KEY,
       Authorization: `Bearer ${token}`,
-      "Content-Type": blob.type || "audio/webm",
+      "Content-Type": contentType,
       "x-upsert": "true",
       "Cache-Control": "max-age=3600",
     },
@@ -4727,7 +4738,7 @@ async function startStatusVoiceRecording() {
     } catch {}
     return;
   }
-  const mimeType = pickCallingCardMimeType();
+  const mimeType = pickRecorderMimeType();
   let rec;
   try {
     rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);

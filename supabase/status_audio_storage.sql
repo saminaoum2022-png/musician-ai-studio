@@ -5,7 +5,17 @@ values (
   'status_audio',
   true,
   524288,
-  array['audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/x-m4a', 'audio/m4a']
+  array[
+    'audio/webm',
+    'audio/webm;codecs=opus',
+    'audio/mp4',
+    'audio/mp4;codecs=mp4a.40.2',
+    'audio/mpeg',
+    'audio/ogg',
+    'audio/wav',
+    'audio/x-m4a',
+    'audio/m4a'
+  ]
 )
 on conflict (id) do update set
   public = excluded.public,

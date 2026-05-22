@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522momentCamStopFixV1";
+const APP_BUILD = "20260522momentIosVideoV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5056,9 +5056,9 @@ function navigateFromCreateChooser(action) {
     }
 
     if (kind === "moment") {
-      const onMoment = String(location.hash || "") === "#/moment";
       openMomentCreatePage();
-      if (onMoment) scheduleApplyRoute();
+      scheduleApplyRoute();
+      kickMomentCameraFromUserGesture();
       return;
     }
 
@@ -5177,17 +5177,22 @@ function getMomentCameraPreviewPlugin() {
   }
 }
 
+function momentStudioNativePlatform() {
+  try {
+    return String(window.Capacitor?.getPlatform?.() || "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+/** Android only — iOS uses inline WKWebView video (toBack preview stays black behind opaque layers). */
 function momentStudioUsesNativeCameraPreview() {
   if (!isNativeShell()) return false;
-  try {
-    const cap = window.Capacitor;
-    if (cap?.getPlatform?.() === "ios" || cap?.getPlatform?.() === "android") return true;
-  } catch {}
+  if (momentStudioNativePlatform() !== "android") return false;
   return Boolean(getMomentCameraPreviewPlugin());
 }
 
 function momentStudioUsesWebLiveCamera() {
-  if (isNativeShell()) return false;
   try {
     return Boolean(navigator.mediaDevices?.getUserMedia);
   } catch {
@@ -5385,37 +5390,49 @@ async function startMomentNativeCameraPreview() {
   }
 }
 
+async function startMomentWebCameraPreview() {
+  const video = document.getElementById("momentCameraVideo");
+  if (!video || !navigator.mediaDevices?.getUserMedia) return false;
+  if ((document.body.getAttribute("data-route") || "") !== "moment") return false;
+  const op = ++_momentCameraOp;
+  try {
+    momentCameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: momentCameraFacing }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false,
+    });
+    if (op !== _momentCameraOp || (document.body.getAttribute("data-route") || "") !== "moment") {
+      try {
+        momentCameraStream.getTracks().forEach((t) => t.stop());
+      } catch {}
+      momentCameraStream = null;
+      return false;
+    }
+    video.srcObject = momentCameraStream;
+    video.hidden = false;
+    await video.play();
+    return true;
+  } catch {
+    try { showToast("Allow camera to preview your shot", { durationMs: 2800 }); } catch {}
+    return false;
+  }
+}
+
 async function startMomentCamera() {
   if ((document.body.getAttribute("data-route") || "") !== "moment") return;
   if (_momentNativePreviewActive || momentCameraStream) {
     await stopMomentCamera();
-  } else {
-    _momentCameraOp += 1;
   }
   if (momentStudioPhase !== "pick") return;
   if (momentStudioUsesNativeCameraPreview()) {
     const ok = await startMomentNativeCameraPreview();
     if (ok) return;
   }
-  if (!momentStudioUsesWebLiveCamera()) {
-    syncMomentPickStageMode();
-    return;
-  }
-  const video = document.getElementById("momentCameraVideo");
-  if (!video || !navigator.mediaDevices?.getUserMedia) {
-    syncMomentPickStageMode();
-    return;
-  }
-  try {
-    momentCameraStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: momentCameraFacing }, width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: false,
-    });
-    video.srcObject = momentCameraStream;
-    video.hidden = false;
-    await video.play();
-  } catch {
-    try { showToast("Allow camera to preview your shot", { durationMs: 2600 }); } catch {}
+  if (momentStudioUsesWebLiveCamera()) {
+    const ok = await startMomentWebCameraPreview();
+    if (ok) {
+      syncMomentPickStageMode();
+      return;
+    }
   }
   syncMomentPickStageMode();
 }
@@ -5760,6 +5777,16 @@ function setMomentStudioLoading(on) {
 
 let _momentStudioStarted = false;
 
+function kickMomentCameraFromUserGesture() {
+  requestAnimationFrame(() => {
+    if ((document.body.getAttribute("data-route") || "") !== "moment") return;
+    cancelMomentStudioStart();
+    _momentStudioStarted = true;
+    setMomentStudioLoading(false);
+    if (momentStudioPhase === "pick") void startMomentCamera();
+  });
+}
+
 function scheduleMomentStudioStart() {
   cancelMomentStudioStart();
   if (_momentStudioStarted) return;
@@ -5769,7 +5796,7 @@ function scheduleMomentStudioStart() {
     if ((document.body.getAttribute("data-route") || "") !== "moment") return;
     setMomentStudioLoading(false);
     if (momentStudioPhase === "pick") void startMomentCamera();
-  }, 60);
+  }, 0);
 }
 
 async function applyMomentPhotoFromFile(file) {

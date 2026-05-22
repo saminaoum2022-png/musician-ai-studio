@@ -4464,12 +4464,19 @@ body[data-route="moment"] main.grid > [data-route="moment"]{
 .momentStudioCameraVideo{
   position: absolute;
   inset: 0;
+  z-index: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: center;
   background: #000;
   pointer-events: none;
+}
+.momentStudio--webLive .momentStudioPickStage{
+  background: #000;
+}
+.momentStudio--webLive .momentStudioMedia{
+  background: #000;
 }
 .momentStudio--nativePick .momentStudioCameraVideo{
   display: none !important;

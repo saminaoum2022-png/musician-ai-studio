@@ -92,6 +92,8 @@ private final class StoryCameraViewController: UIViewController, UIScrollViewDel
     private var currentInput: AVCaptureDeviceInput?
     private var currentPosition: AVCaptureDevice.Position
     private var isCapturing = false
+    private var isSessionBusy = false
+    private var sessionConfigured = false
     private var mode: Mode = .camera
     private var capturedImage: UIImage?
 
@@ -216,23 +218,53 @@ private final class StoryCameraViewController: UIViewController, UIScrollViewDel
         ])
     }
 
-    private func startCameraSession() {
+    /// All AVCaptureSession work runs here so stopRunning never races beginConfiguration.
+    private func runOnSessionQueue(_ work: @escaping () -> Void) {
         sessionQueue.async { [weak self] in
             guard let self = self else { return }
+            work()
+        }
+    }
+
+    private func haltSessionLocked() {
+        if session.isRunning {
+            session.stopRunning()
+        }
+    }
+
+    private func startCameraSession() {
+        runOnSessionQueue { [weak self] in
+            guard let self = self else { return }
+            guard !self.isSessionBusy else { return }
+            self.isSessionBusy = true
+            defer { self.isSessionBusy = false }
+
+            self.haltSessionLocked()
             self.session.beginConfiguration()
             self.session.sessionPreset = .photo
-            let ok = self.configureInputLocked(position: self.currentPosition)
-            if ok, self.session.canAddOutput(self.photoOutput) {
+
+            for input in self.session.inputs {
+                self.session.removeInput(input)
+            }
+            self.currentInput = nil
+
+            let ok = self.addCameraInputLocked(position: self.currentPosition)
+            if ok, !self.session.outputs.contains(self.photoOutput), self.session.canAddOutput(self.photoOutput) {
                 self.session.addOutput(self.photoOutput)
                 self.photoOutput.isHighResolutionCaptureEnabled = false
             }
             self.session.commitConfiguration()
+
             guard ok else {
                 DispatchQueue.main.async { self.finish(.failed("Could not open camera")) }
                 return
             }
-            if !self.session.isRunning { self.session.startRunning() }
-            DispatchQueue.main.async {
+            if !self.session.isRunning {
+                self.session.startRunning()
+            }
+            self.sessionConfigured = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self, self.mode == .camera else { return }
                 guard self.previewLayer == nil else { return }
                 let layer = AVCaptureVideoPreviewLayer(session: self.session)
                 layer.videoGravity = .resizeAspectFill
@@ -243,18 +275,26 @@ private final class StoryCameraViewController: UIViewController, UIScrollViewDel
         }
     }
 
-    private func stopCameraSession() {
-        sessionQueue.async { [weak self] in
-            guard let self = self, self.session.isRunning else { return }
-            self.session.stopRunning()
+    private func stopCameraSession(completion: (() -> Void)? = nil) {
+        runOnSessionQueue { [weak self] in
+            guard let self = self else { return }
+            if self.isSessionBusy {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                    self?.stopCameraSession(completion: completion)
+                }
+                return
+            }
+            self.isSessionBusy = true
+            defer { self.isSessionBusy = false }
+            self.haltSessionLocked()
+            self.sessionConfigured = false
+            if let completion = completion {
+                DispatchQueue.main.async { completion() }
+            }
         }
     }
 
-    private func configureInputLocked(position: AVCaptureDevice.Position) -> Bool {
-        if let existing = currentInput {
-            session.removeInput(existing)
-            currentInput = nil
-        }
+    private func addCameraInputLocked(position: AVCaptureDevice.Position) -> Bool {
         guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position),
               let input = try? AVCaptureDeviceInput(device: device),
               session.canAddInput(input) else {
@@ -273,11 +313,23 @@ private final class StoryCameraViewController: UIViewController, UIScrollViewDel
     @objc private func flipTapped() {
         guard mode == .camera else { return }
         let next: AVCaptureDevice.Position = currentPosition == .front ? .back : .front
-        sessionQueue.async { [weak self] in
+        runOnSessionQueue { [weak self] in
             guard let self = self else { return }
+            guard !self.isSessionBusy, self.sessionConfigured else { return }
+            self.isSessionBusy = true
+            defer { self.isSessionBusy = false }
+
+            self.haltSessionLocked()
             self.session.beginConfiguration()
-            let ok = self.configureInputLocked(position: next)
+            for input in self.session.inputs {
+                self.session.removeInput(input)
+            }
+            self.currentInput = nil
+            let ok = self.addCameraInputLocked(position: next)
             self.session.commitConfiguration()
+            if ok, self.mode == .camera, !self.session.isRunning {
+                self.session.startRunning()
+            }
         }
     }
 
@@ -420,18 +472,24 @@ private final class StoryCameraViewController: UIViewController, UIScrollViewDel
 
     private func showCrop(with image: UIImage) {
         capturedImage = StoryCameraImageEncoder.downscale(image, maxSide: 2048)
-        stopCameraSession()
-        previewLayer?.removeFromSuperlayer()
-        previewLayer = nil
-        setMode(.crop)
-        view.setNeedsLayout()
-        view.layoutIfNeeded()
-        layoutCropScroll()
+        stopCameraSession { [weak self] in
+            guard let self = self else { return }
+            DispatchQueue.main.async {
+                self.previewLayer?.removeFromSuperlayer()
+                self.previewLayer = nil
+                self.setMode(.crop)
+                self.view.setNeedsLayout()
+                self.view.layoutIfNeeded()
+                self.layoutCropScroll()
+            }
+        }
     }
 
     @objc private func cropBackTapped() {
         capturedImage = nil
         cropScroll.zoomScale = cropScroll.minimumZoomScale
+        previewLayer?.removeFromSuperlayer()
+        previewLayer = nil
         setMode(.camera)
         startCameraSession()
     }
@@ -454,11 +512,12 @@ private final class StoryCameraViewController: UIViewController, UIScrollViewDel
     }
 
     private func finish(_ outcome: StoryCameraOutcome) {
-        stopCameraSession()
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            self.dismiss(animated: true) {
-                self.onFinish(outcome)
+        stopCameraSession { [weak self] in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.dismiss(animated: true) {
+                    self.onFinish(outcome)
+                }
             }
         }
     }

@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522nativeStoryCamV6";
+const APP_BUILD = "20260522nativeStoryCamV7";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5391,6 +5391,15 @@ function cancelMomentStudioStart() {
 
 async function stopMomentNativeCameraPreview() {
   _momentCameraOp += 1;
+  if (momentStudioUsesNativeStoryCamera() || (isNativeShell() && momentStudioNativePlatform() === "ios")) {
+    _momentNativePreviewActive = false;
+    setMomentCameraLiveChrome(false);
+    try {
+      document.documentElement.classList.remove("momentRouteCameraLive");
+      document.body.classList.remove("momentRouteCameraLive");
+    } catch {}
+    return;
+  }
   const CameraPreview = getMomentCameraPreviewPlugin();
   try {
     await invokeNativeCameraStop(CameraPreview);
@@ -5635,7 +5644,7 @@ async function presentNativeStoryCamera({ leaveOnCancel = false } = {}) {
   } catch (e) {
     const msg = String(e?.message || "").trim();
     const friendly = /not implemented|requires the nabadai app/i.test(msg)
-      ? "Story camera failed to load — rebuild the app in Xcode (Build 20260522nativeStoryCamV6)."
+      ? "Story camera failed to load — rebuild the app in Xcode (Build 20260522nativeStoryCamV7)."
       : (msg || "Camera unavailable");
     try { showToast(friendly, { durationMs: 3600 }); } catch {}
     return false;

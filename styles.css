@@ -4504,6 +4504,13 @@ body[data-route="moment"] main.grid > [data-route="moment"]{
 .momentStudio--iosPick .momentStudioIosPickHero{
   display: flex;
 }
+.momentStudio--nativeStoryCam .momentStudioMedia,
+.momentStudio--nativeStoryCam .momentStudioPickStage{
+  background: #000;
+}
+.momentStudio--nativeStoryCam .momentStudioCameraVideo{
+  display: none !important;
+}
 .momentStudioIosPickTitle{
   margin: 0;
   font-size: 22px;

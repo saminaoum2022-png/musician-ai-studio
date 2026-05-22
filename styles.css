@@ -4342,155 +4342,505 @@ button.vocalRefClearBtn{
 .imageMoodSummary:empty{
   display:none;
 }
-.momentCreatePage{
-  min-height: calc(100dvh - env(safe-area-inset-top, 0px) - 24px);
-  padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px 28px;
-  box-sizing: border-box;
-  animation: momentPageIn 320ms cubic-bezier(0.22, 1, 0.36, 1);
+/* Moment story studio — full-screen Instagram-style compose */
+@keyframes momentStudioIn{
+  from{ opacity: 0; transform: scale(1.02); }
+  to{ opacity: 1; transform: scale(1); }
 }
-.momentPage{
+@keyframes momentStudioSpin{
+  to{ transform: rotate(360deg); }
+}
+body[data-route="moment"] .header,
+body[data-route="moment"] .footer,
+body[data-route="moment"] .generateOrb,
+body[data-route="moment"] .hubNowPlaying{
+  display: none !important;
+}
+body[data-route="moment"] .mobileTabbar{
+  display: none !important;
+}
+body[data-route="moment"] .app{
+  padding: 0 !important;
+  min-height: 100dvh;
+}
+body[data-route="moment"] main.grid{
+  padding: 0 !important;
+  margin: 0 !important;
+  max-width: none !important;
+}
+body[data-route="moment"] main.grid > [data-route="moment"]{
+  display: block !important;
+  min-height: 100dvh;
+}
+.momentStudio{
+  position: fixed;
+  inset: 0;
+  z-index: 48;
+  background: #000;
+  color: #fff;
+  overflow: hidden;
+  animation: momentStudioIn 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.momentStudioViewport{
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  gap: 0;
-  padding: 8px 4px 24px;
-  max-width: 560px;
-  margin: 0 auto;
-  min-height: calc(100dvh - env(safe-area-inset-top, 0px) - 80px);
 }
-.momentPageBody{
-  flex: 1;
+.momentStudioMedia{
+  position: absolute;
+  inset: 0;
+  background: #05070d;
+  overflow: hidden;
+}
+.momentStudioPreviewImg{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  opacity: 0;
+  transform: scale(1.04);
+  transition: opacity 320ms ease, transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.momentStudio.isPreview .momentStudioPreviewImg{
+  opacity: 1;
+  transform: scale(1);
+}
+.momentStudio.isCrop .momentStudioPickStage,
+.momentStudio.isPreview .momentStudioPickStage{
+  visibility: hidden;
+  pointer-events: none;
+}
+.momentStudio.isPick .momentStudioPreviewImg{
+  opacity: 0;
+}
+.momentStudioPickStage{
+  position: absolute;
+  inset: 0;
+  background: #000;
+}
+.momentStudioPickStage[hidden]{
+  display: none !important;
+}
+.momentStudioCameraVideo{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  background: #000;
+}
+.momentStudioCameraFallback{
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+  background: #05070d;
+}
+.momentStudioCameraFallback[hidden]{
+  display: none !important;
+}
+.momentStudioCropStage{
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: calc(env(safe-area-inset-top, 0px) + 56px) 0 calc(env(safe-area-inset-bottom, 0px) + 120px);
+  background: #000;
+}
+.momentStudioCropStage[hidden]{
+  display: none !important;
+}
+.momentStudioCropFrame{
+  width: min(100%, 420px);
+  max-height: min(72dvh, 640px);
+  aspect-ratio: 9 / 16;
+  margin: 0 auto;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+  background: #111;
+  touch-action: none;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.08);
+}
+.momentStudioCropImg{
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  max-width: none;
+  transform-origin: center center;
+  will-change: transform;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+.momentStudioCropHint{
+  margin: 12px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.5);
+  text-align: center;
+}
+.momentStudioPickTitle{
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.momentStudioPickHint{
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.55);
+}
+.momentStudioShade{
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 34%;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 280ms ease;
+}
+.momentStudio.isPreview .momentStudioShade{
+  opacity: 1;
+}
+.momentStudioShade--top{
+  top: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0.62) 0%, transparent 100%);
+}
+.momentStudioShade--bottom{
+  bottom: 0;
+  height: 42%;
+  background: linear-gradient(0deg, rgba(0,0,0,0.72) 0%, transparent 100%);
+}
+.momentStudioSpinner{
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 12px 0 20px;
-  min-height: min(72vh, 640px);
+  background: rgba(0,0,0,0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
-.momentComposeStage{
-  width: 100%;
-  max-width: 380px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 14px;
-}
-.momentComposeStage[hidden]{
+.momentStudioSpinner[hidden]{
   display: none !important;
 }
-.momentSourceLead{
-  margin: 0 0 4px;
-  text-align: center;
-  font-size: 15px;
-  font-weight: 700;
-  color: rgba(223,231,251,0.78);
-  line-height: 1.4;
+.momentStudioSpinner > span{
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.2);
+  border-top-color: #fff;
+  animation: momentStudioSpin 0.75s linear infinite;
 }
-.momentSourceActions{
+.momentStudioChrome{
+  position: relative;
+  z-index: 2;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  width: 100%;
+  justify-content: space-between;
+  min-height: 100dvh;
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 8px)
+    14px
+    calc(env(safe-area-inset-bottom, 0px) + 14px);
+  pointer-events: none;
 }
-.momentSourceBtn{
-  width: 100%;
-  min-height: 52px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.07);
-  color: rgba(244,247,255,0.96);
-  font-size: 15px;
-  font-weight: 800;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
+.momentStudioChrome > *{
+  pointer-events: auto;
 }
-.momentSourceBtn:active{
-  transform: scale(0.98);
-  background: rgba(255,255,255,0.11);
-}
-.momentComposeCenter{
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 12px;
-}
-.momentPageTop{
-  display: flex;
+.momentStudioTop{
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
-.momentPageBack{
-  flex: 0 0 auto;
+.momentStudio.isCrop .momentStudioTop{
+  grid-template-columns: 44px 1fr auto auto;
+}
+.momentStudioTextBtn--accent{
+  background: rgba(255,255,255,0.92);
+  color: #05070d;
+}
+.momentStudioIconBtn{
   width: 44px;
   height: 44px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.07);
-  color: rgba(244,247,255,0.94);
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.38);
+  color: #fff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
-.momentPageTitle{
-  margin: 0;
-  font-size: 22px;
+.momentStudioIconBtn:active{
+  transform: scale(0.94);
+}
+.momentStudioTopTitle{
+  text-align: center;
+  font-size: 16px;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
+  color: rgba(255,255,255,0.94);
+  text-shadow: 0 1px 8px rgba(0,0,0,0.45);
 }
-.momentPhotoPick{
-  display: block;
-  width: 100%;
-  max-width: 320px;
-  margin: 0 auto;
-  aspect-ratio: 9 / 16;
-  max-height: min(52vh, 480px);
-  border-radius: 20px;
+.momentStudioTextBtn{
+  justify-self: end;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.38);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.momentStudioTextBtn[hidden]{
+  display: none !important;
+}
+.momentStudioBottom{
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.momentStudioCaptionPanel{
+  border-radius: 16px;
+  background: rgba(0,0,0,0.42);
   border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.04);
-  overflow: hidden;
-  position: relative;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  padding: 10px 12px;
+  animation: momentStudioIn 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.momentPhotoPreview{
+.momentStudioCaptionPanel[hidden]{
+  display: none !important;
+}
+.momentStudioCaptionInput{
+  width: 100%;
+  min-height: 44px;
+  max-height: 96px;
+  resize: none;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  padding: 0;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.4;
+  outline: none;
+}
+.momentStudioCaptionInput::placeholder{
+  color: rgba(255,255,255,0.45);
+}
+.momentStudioDock[hidden]{
+  display: none !important;
+}
+.momentStudioRecentsWrap{
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+.momentStudioRecents{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 2px 6px;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.momentStudioRecents::-webkit-scrollbar{
+  display: none;
+}
+.momentStudioRecentTile{
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  overflow: hidden;
+  padding: 0;
+  cursor: pointer;
+  background: rgba(255,255,255,0.12);
+  scroll-snap-align: start;
+  -webkit-tap-highlight-color: transparent;
+}
+.momentStudioRecentTile.isActive{
+  border-color: #fff;
+}
+.momentStudioRecentTile img{
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
-.momentChangePhotoBtn{
-  align-self: center;
-  min-height: 36px;
-  padding: 6px 14px;
-  font-size: 13px;
-  font-weight: 700;
-  border-radius: 999px;
-  opacity: 0.88;
+.momentStudioRecentGallery{
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  border: 2px solid rgba(255,255,255,0.35);
+  background: rgba(0,0,0,0.35);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
-.momentCaptionInput{
-  width: 100%;
-  min-height: 96px;
-  resize: vertical;
-  border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.05);
-  color: rgba(244,247,255,0.94);
-  padding: 12px 14px;
-  font: inherit;
-  font-size: 15px;
-  line-height: 1.45;
+.momentStudioRecentGallery:active{
+  transform: scale(0.96);
 }
-.momentCaptionInput::placeholder{
-  color: rgba(223,231,251,0.42);
+.momentStudioCaptureRow{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 36px;
 }
-.momentPublishBtn{
-  width: 100%;
+.momentStudioSideBtn{
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.38);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.momentStudioSideBtn:active{
+  transform: scale(0.94);
+}
+.momentStudioSideBtn[hidden]{
+  display: none !important;
+}
+.momentStudioShutter{
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  border: 4px solid #fff;
+  background: transparent;
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.28);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  position: relative;
+}
+.momentStudioShutter::after{
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 120ms ease, background 120ms ease;
+}
+.momentStudioShutter:active::after{
+  transform: scale(0.9);
+  background: rgba(255,255,255,0.85);
+}
+.momentStudio.isCrop .momentStudioShade--bottom,
+.momentStudio.isPick .momentStudioShade--bottom{
+  opacity: 1;
+  height: 48%;
+}
+.momentStudioShareRow{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.momentStudioShareRow[hidden]{
+  display: none !important;
+}
+.momentStudioCaptionToggle{
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(0,0,0,0.38);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 900;
+  font-family: Georgia, "Times New Roman", serif;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.momentStudioCaptionToggle.isActive{
+  background: rgba(255,255,255,0.18);
+}
+.momentStudioShareBtn{
+  flex: 1;
   min-height: 48px;
-  border-radius: 14px;
-  font-weight: 800;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #5ee9d3 0%, #7c5cff 100%);
+  color: #05070d;
+  font-size: 15px;
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 18px;
+  cursor: pointer;
+  box-shadow: 0 8px 28px rgba(94,233,212,0.28);
+  -webkit-tap-highlight-color: transparent;
 }
-.momentPublishBtn:disabled{
-  opacity: 0.45;
+.momentStudioShareBtn:disabled{
+  opacity: 0.42;
+  box-shadow: none;
+  cursor: default;
+}
+.momentStudioShareBtn.isPublishing{
+  opacity: 0.88;
+  pointer-events: none;
+}
+.momentStudioShareAvatar{
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(5,7,13,0.35);
+  background: rgba(5,7,13,0.2) center/cover no-repeat;
+  flex-shrink: 0;
+}
+.momentStudioShareSpinner{
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(5,7,13,0.25);
+  border-top-color: #05070d;
+  animation: momentStudioSpin 0.7s linear infinite;
+}
+.momentStudioShareSpinner[hidden]{
+  display: none !important;
+}
+.momentStudioShareBtn.isPublishing .momentStudioShareLabel{
+  opacity: 0.7;
 }
 .imageMoodSheet{
   position: fixed;

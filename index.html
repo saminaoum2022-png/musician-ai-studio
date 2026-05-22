@@ -787,36 +787,67 @@
           <div id="discoveryFollowingList" class="followActStack" hidden></div>
         </section>
 
-        <section class="momentPage wide" data-route="moment" id="momentPage">
-          <header class="momentPageTop">
-            <button type="button" class="momentPageBack" id="btnMomentBack" aria-label="Back">
-              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M15 6 9 12l6 6"/></svg>
-            </button>
-            <h1 class="momentPageTitle">New moment</h1>
-          </header>
-          <div class="momentPageBody">
-            <div id="momentSourceStage" class="momentComposeStage">
-              <p class="momentSourceLead">Add a photo for your 24h moment</p>
-              <div class="momentSourceActions" role="group" aria-label="Choose photo source">
-                <button type="button" class="momentSourceBtn" id="btnMomentPhotoLibrary" data-moment-source="library">Photo Library</button>
-                <button type="button" class="momentSourceBtn" id="btnMomentTakePhoto" data-moment-source="camera">Take Photo</button>
-                <button type="button" class="momentSourceBtn" id="btnMomentChooseFile" data-moment-source="file">Choose File</button>
-              </div>
-              <input id="momentPhotoLibrary" type="file" accept="image/*" hidden />
-              <input id="momentPhotoCamera" type="file" accept="image/*" capture="environment" hidden />
-              <input id="momentPhotoFile" type="file" accept="image/*" hidden />
-            </div>
-            <div id="momentComposeStage" class="momentComposeStage" hidden>
-              <div class="momentComposeCenter">
-                <div class="momentPhotoPick hasPhoto" id="momentPhotoPick" aria-hidden="true">
-                  <img id="momentPhotoPreview" class="momentPhotoPreview" alt="Moment preview" />
+        <section class="momentStudio wide" data-route="moment" id="momentPage">
+          <div class="momentStudioViewport">
+            <div class="momentStudioMedia" id="momentStudioMedia">
+              <div class="momentStudioPickStage" id="momentPickStage">
+                <video id="momentCameraVideo" class="momentStudioCameraVideo" autoplay playsinline muted></video>
+                <div class="momentStudioCameraFallback" id="momentCameraFallback" hidden>
+                  <p class="momentStudioPickTitle">Camera unavailable</p>
+                  <p class="momentStudioPickHint">Choose from gallery or recent photos</p>
                 </div>
-                <button type="button" class="ghost momentChangePhotoBtn" id="btnMomentChangePhoto">Change photo</button>
-                <textarea id="momentCaptionInput" class="momentCaptionInput" rows="3" maxlength="320" placeholder="Write a caption…"></textarea>
-                <button type="button" id="btnMomentPublish" class="primary momentPublishBtn">Share moment</button>
+              </div>
+              <div class="momentStudioCropStage" id="momentCropStage" hidden>
+                <div class="momentStudioCropFrame" id="momentCropFrame">
+                  <img id="momentCropImg" class="momentStudioCropImg" alt="" draggable="false" />
+                </div>
+                <p class="momentStudioCropHint">Pinch to zoom · drag to reposition</p>
+              </div>
+              <img id="momentPhotoPreview" class="momentStudioPreviewImg" alt="" hidden />
+              <div class="momentStudioShade momentStudioShade--top" aria-hidden="true"></div>
+              <div class="momentStudioShade momentStudioShade--bottom" aria-hidden="true"></div>
+              <div class="momentStudioSpinner" id="momentStudioSpinner" hidden aria-hidden="true"><span></span></div>
+            </div>
+            <div class="momentStudioChrome">
+              <header class="momentStudioTop">
+                <button type="button" class="momentStudioIconBtn" id="btnMomentBack" aria-label="Close">
+                  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></svg>
+                </button>
+                <span class="momentStudioTopTitle" id="momentStudioTopTitle">New story</span>
+                <button type="button" class="momentStudioTextBtn" id="btnMomentChangePhoto" hidden>Change</button>
+                <button type="button" class="momentStudioTextBtn" id="btnMomentCropBack" hidden>Back</button>
+                <button type="button" class="momentStudioTextBtn momentStudioTextBtn--accent" id="btnMomentCropNext" hidden>Next</button>
+              </header>
+              <div class="momentStudioBottom">
+                <div id="momentCaptionPanel" class="momentStudioCaptionPanel" hidden>
+                  <textarea id="momentCaptionInput" class="momentStudioCaptionInput" maxlength="320" placeholder="Add a caption…" rows="2" autocomplete="off" autocorrect="on"></textarea>
+                </div>
+                <div class="momentStudioDock" id="momentPickDock">
+                  <div class="momentStudioRecentsWrap">
+                    <div class="momentStudioRecents" id="momentRecentsRail" role="list" aria-label="Recent photos"></div>
+                  </div>
+                  <div class="momentStudioCaptureRow">
+                    <button type="button" class="momentStudioSideBtn" id="btnMomentFlipCamera" aria-label="Flip camera">
+                      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" d="M3 9h13l-3-3m3 12H6l3 3M21 9h-4m0 0 2-2m-2 2 2 2M3 15h4m0 0-2 2m2-2-2-2"/></svg>
+                    </button>
+                    <button type="button" class="momentStudioShutter" id="btnMomentCapture" aria-label="Take photo"></button>
+                    <button type="button" class="momentStudioSideBtn" id="btnMomentOpenGallery" aria-label="Open gallery">
+                      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" d="M4 7.5h16v11H4zm4-4h8l2 4H6z"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="momentStudioShareRow" id="momentShareTools" hidden>
+                  <button type="button" class="momentStudioCaptionToggle" id="btnMomentCaptionToggle" aria-label="Add caption" aria-expanded="false">Aa</button>
+                  <button type="button" class="momentStudioShareBtn" id="btnMomentPublish" disabled>
+                    <span class="momentStudioShareAvatar" id="momentShareAvatar" aria-hidden="true"></span>
+                    <span class="momentStudioShareLabel">Share to story</span>
+                    <span class="momentStudioShareSpinner" id="momentShareSpinner" hidden aria-hidden="true"></span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
+          <input id="momentPhotoLibrary" type="file" accept="image/*" multiple hidden />
         </section>
 
         <section class="discoverPlaylistPage wide" data-route="discover-playlist">

@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522momentComposeFlowV1";
+const APP_BUILD = "20260522momentStudioV2";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2492,6 +2492,10 @@ function applyRoute() {
   if (prevRoute === "hub" && wanted !== "hub") {
     try { pauseHubForRouteChange(); } catch {}
   }
+  if (prevRoute === "moment" && wanted !== "moment") {
+    try { stopMomentCamera(); } catch {}
+    _momentStudioStarted = false;
+  }
   if (wanted === "hub") {
     markAllHubSeen();
     renderHubDots();
@@ -2626,6 +2630,7 @@ function applyRoute() {
   }
   if (wanted === "moment") {
     try { syncMomentPageUi(); } catch {}
+    try { scheduleMomentStudioStart(); } catch {}
   }
   if (wanted === "discover") {
     bindDiscoveryDiscoverControls();
@@ -5098,24 +5103,359 @@ function isCreateMomentIntent() {
 }
 
 let momentPhotoDataUrl = "";
+let momentStudioPhase = "pick";
+let momentCropSourceUrl = "";
+let momentCameraStream = null;
+let momentCameraFacing = "environment";
+const MOMENT_RECENTS_KEY = "nabad_moment_recent_v1";
+const MOMENT_RECENTS_MAX = 12;
+const momentCropState = {
+  scale: 1,
+  x: 0,
+  y: 0,
+  baseScale: 1,
+  nw: 0,
+  nh: 0,
+};
 
 function clearMomentPhotoInputs() {
-  for (const id of ["momentPhotoLibrary", "momentPhotoCamera", "momentPhotoFile"]) {
-    try {
-      const el = document.getElementById(id);
-      if (el) el.value = "";
-    } catch {}
-  }
+  try {
+    const el = document.getElementById("momentPhotoLibrary");
+    if (el) el.value = "";
+  } catch {}
 }
 
 function resetMomentComposeForm() {
   const cap = document.getElementById("momentCaptionInput");
   if (cap) cap.value = "";
   momentPhotoDataUrl = "";
+  momentCropSourceUrl = "";
+  momentStudioPhase = "pick";
+  momentCropState.scale = 1;
+  momentCropState.x = 0;
+  momentCropState.y = 0;
   const preview = document.getElementById("momentPhotoPreview");
   clearMomentPhotoInputs();
   if (preview) preview.removeAttribute("src");
+  try { stopMomentCamera(); } catch {}
   syncMomentPageUi();
+}
+
+function loadMomentRecents() {
+  try {
+    const raw = localStorage.getItem(MOMENT_RECENTS_KEY) || "[]";
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? list.filter((x) => x && x.thumb) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveMomentRecent(dataUrl) {
+  if (!String(dataUrl || "").startsWith("data:image/")) return;
+  try {
+    const thumb = await downscaleImageDataUrl(dataUrl, 128, 0.7);
+    const full = await downscaleImageDataUrl(dataUrl, 720, 0.78);
+    let list = loadMomentRecents();
+    list = list.filter((x) => x.thumb !== thumb);
+    list.unshift({ id: Date.now(), thumb, full });
+    list = list.slice(0, MOMENT_RECENTS_MAX);
+    localStorage.setItem(MOMENT_RECENTS_KEY, JSON.stringify(list));
+  } catch {}
+  try { renderMomentRecentsRail(); } catch {}
+}
+
+function renderMomentRecentsRail() {
+  const rail = document.getElementById("momentRecentsRail");
+  if (!rail) return;
+  const list = loadMomentRecents();
+  rail.innerHTML = "";
+  const gal = document.createElement("button");
+  gal.type = "button";
+  gal.className = "momentStudioRecentGallery";
+  gal.setAttribute("aria-label", "Open gallery");
+  gal.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" d="M4 7.5h16v11H4zm4-4h8l2 4H6z"/></svg>`;
+  gal.addEventListener("click", () => {
+    try { haptic("light"); } catch {}
+    openMomentPhotoSource();
+  });
+  rail.appendChild(gal);
+  list.forEach((item) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "momentStudioRecentTile";
+    btn.setAttribute("aria-label", "Recent photo");
+    btn.dataset.momentRecentId = String(item.id);
+    const img = document.createElement("img");
+    img.src = String(item.thumb || "");
+    img.alt = "";
+    btn.appendChild(img);
+    btn.addEventListener("click", () => {
+      try { haptic("light"); } catch {}
+      const src = String(item.full || item.thumb || "");
+      if (src) void enterMomentCropPhase(src);
+    });
+    rail.appendChild(btn);
+  });
+}
+
+function stopMomentCamera() {
+  if (momentCameraStream) {
+    try {
+      momentCameraStream.getTracks().forEach((t) => t.stop());
+    } catch {}
+    momentCameraStream = null;
+  }
+  const video = document.getElementById("momentCameraVideo");
+  if (video) {
+    try { video.pause(); } catch {}
+    video.srcObject = null;
+  }
+}
+
+async function startMomentCamera() {
+  const video = document.getElementById("momentCameraVideo");
+  const fallback = document.getElementById("momentCameraFallback");
+  const flipBtn = document.getElementById("btnMomentFlipCamera");
+  stopMomentCamera();
+  if (!video || !navigator.mediaDevices?.getUserMedia) {
+    if (fallback) fallback.hidden = false;
+    if (video) video.hidden = true;
+    if (flipBtn) flipBtn.hidden = true;
+    return;
+  }
+  try {
+    momentCameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: momentCameraFacing }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false,
+    });
+    video.srcObject = momentCameraStream;
+    video.hidden = false;
+    if (fallback) fallback.hidden = true;
+    if (flipBtn) flipBtn.hidden = false;
+    await video.play();
+  } catch {
+    if (fallback) fallback.hidden = false;
+    video.hidden = true;
+    if (flipBtn) flipBtn.hidden = true;
+  }
+}
+
+async function flipMomentCamera() {
+  momentCameraFacing = momentCameraFacing === "user" ? "environment" : "user";
+  await startMomentCamera();
+}
+
+async function captureMomentFromCamera() {
+  const video = document.getElementById("momentCameraVideo");
+  if (!video || video.readyState < 2 || !video.videoWidth) {
+    try { showToast("Camera not ready — try gallery", { durationMs: 2200 }); } catch {}
+    openMomentPhotoSource();
+    return;
+  }
+  try { haptic("medium"); } catch {}
+  const w = video.videoWidth;
+  const h = video.videoHeight;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not capture photo");
+  if (momentCameraFacing === "user") {
+    ctx.translate(w, 0);
+    ctx.scale(-1, 1);
+  }
+  ctx.drawImage(video, 0, 0, w, h);
+  await enterMomentCropPhase(canvas.toDataURL("image/jpeg", 0.9));
+}
+
+function applyMomentCropTransform() {
+  const img = document.getElementById("momentCropImg");
+  if (!img) return;
+  const s = momentCropState.baseScale * momentCropState.scale;
+  img.style.width = `${momentCropState.nw}px`;
+  img.style.height = `${momentCropState.nh}px`;
+  img.style.transform = `translate(calc(-50% + ${momentCropState.x}px), calc(-50% + ${momentCropState.y}px)) scale(${s})`;
+}
+
+function clampMomentCropTransform() {
+  const frame = document.getElementById("momentCropFrame");
+  if (!frame) return;
+  const fr = frame.getBoundingClientRect();
+  const s = momentCropState.baseScale * momentCropState.scale;
+  const iw = momentCropState.nw * s;
+  const ih = momentCropState.nh * s;
+  const maxX = Math.max(0, (iw - fr.width) / 2);
+  const maxY = Math.max(0, (ih - fr.height) / 2);
+  momentCropState.x = Math.max(-maxX, Math.min(maxX, momentCropState.x));
+  momentCropState.y = Math.max(-maxY, Math.min(maxY, momentCropState.y));
+  const minRel = 1;
+  const maxRel = 4;
+  momentCropState.scale = Math.max(minRel, Math.min(maxRel, momentCropState.scale));
+}
+
+async function loadMomentCropImage(src) {
+  return new Promise((resolve, reject) => {
+    const i = new Image();
+    i.onload = () => resolve(i);
+    i.onerror = () => reject(new Error("Could not load image"));
+    i.src = src;
+  });
+}
+
+async function enterMomentCropPhase(dataUrl) {
+  if (!String(dataUrl || "").startsWith("data:image/")) return;
+  momentCropSourceUrl = dataUrl;
+  momentStudioPhase = "crop";
+  const imgEl = document.getElementById("momentCropImg");
+  const frame = document.getElementById("momentCropFrame");
+  if (!imgEl || !frame) return;
+  stopMomentCamera();
+  syncMomentPageUi();
+  const loaded = await loadMomentCropImage(dataUrl);
+  momentCropState.nw = loaded.naturalWidth || loaded.width;
+  momentCropState.nh = loaded.naturalHeight || loaded.height;
+  imgEl.src = dataUrl;
+  await new Promise((resolve) => {
+    if (imgEl.complete) resolve();
+    else imgEl.onload = () => resolve();
+  });
+  await new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+  const fr = frame.getBoundingClientRect();
+  const fw = fr.width || 320;
+  const fh = fr.height || Math.round(fw * 16 / 9);
+  momentCropState.baseScale = Math.max(fw / momentCropState.nw, fh / momentCropState.nh);
+  momentCropState.scale = 1;
+  momentCropState.x = 0;
+  momentCropState.y = 0;
+  applyMomentCropTransform();
+}
+
+function leaveMomentCropPhase() {
+  momentCropSourceUrl = "";
+  momentStudioPhase = "pick";
+  syncMomentPageUi();
+  void startMomentCamera();
+}
+
+async function exportMomentCropImage() {
+  const frame = document.getElementById("momentCropFrame");
+  if (!frame || !momentCropSourceUrl) throw new Error("Nothing to crop");
+  const img = await loadMomentCropImage(momentCropSourceUrl);
+  const fr = frame.getBoundingClientRect();
+  const s = momentCropState.baseScale * momentCropState.scale;
+  const outW = 1080;
+  const outH = 1920;
+  const canvas = document.createElement("canvas");
+  canvas.width = outW;
+  canvas.height = outH;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not export crop");
+  const imgW = momentCropState.nw * s;
+  const imgH = momentCropState.nh * s;
+  const cx = fr.width / 2 + momentCropState.x;
+  const cy = fr.height / 2 + momentCropState.y;
+  const left = cx - imgW / 2;
+  const top = cy - imgH / 2;
+  const srcX = Math.max(0, (0 - left) / s);
+  const srcY = Math.max(0, (0 - top) / s);
+  const srcW = Math.min(momentCropState.nw - srcX, fr.width / s);
+  const srcH = Math.min(momentCropState.nh - srcY, fr.height / s);
+  ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, outW, outH);
+  return canvas.toDataURL("image/jpeg", 0.88);
+}
+
+async function finishMomentCrop() {
+  setMomentStudioLoading(true);
+  try {
+    const cropped = await exportMomentCropImage();
+    const prepared = await prepareMomentCoverDataUrl(cropped);
+    momentPhotoDataUrl = prepared;
+    const preview = document.getElementById("momentPhotoPreview");
+    if (preview) {
+      preview.src = prepared;
+      preview.hidden = false;
+    }
+    momentCropSourceUrl = "";
+    momentStudioPhase = "share";
+    await saveMomentRecent(prepared);
+    syncMomentPageUi();
+  } catch (e) {
+    try { showToast(e?.message || "Could not crop photo", { durationMs: 2600 }); } catch {}
+  } finally {
+    setMomentStudioLoading(false);
+  }
+}
+
+function wireMomentCropGesturesOnce() {
+  const frame = document.getElementById("momentCropFrame");
+  if (!frame || frame.dataset.wiredMomentCrop) return;
+  frame.dataset.wiredMomentCrop = "1";
+  let pointers = new Map();
+  let pinchStartDist = 0;
+  let pinchStartScale = 1;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let panStartX = 0;
+  let panStartY = 0;
+
+  const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+
+  frame.addEventListener("pointerdown", (e) => {
+    if (momentStudioPhase !== "crop") return;
+    try { frame.setPointerCapture(e.pointerId); } catch {}
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 1) {
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+      panStartX = momentCropState.x;
+      panStartY = momentCropState.y;
+    } else if (pointers.size === 2) {
+      const pts = [...pointers.values()];
+      pinchStartDist = dist(
+        { clientX: pts[0].x, clientY: pts[0].y },
+        { clientX: pts[1].x, clientY: pts[1].y }
+      );
+      pinchStartScale = momentCropState.scale;
+    }
+  });
+
+  frame.addEventListener("pointermove", (e) => {
+    if (momentStudioPhase !== "crop" || !pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size >= 2) {
+      const pts = [...pointers.values()];
+      const a = { clientX: pts[0].x, clientY: pts[0].y };
+      const b = { clientX: pts[1].x, clientY: pts[1].y };
+      const d = dist(a, b);
+      if (pinchStartDist > 0) {
+        momentCropState.scale = pinchStartScale * (d / pinchStartDist);
+        clampMomentCropTransform();
+        applyMomentCropTransform();
+      }
+    } else {
+      momentCropState.x = panStartX + (e.clientX - dragStartX);
+      momentCropState.y = panStartY + (e.clientY - dragStartY);
+      clampMomentCropTransform();
+      applyMomentCropTransform();
+    }
+  });
+
+  const endPointer = (e) => {
+    pointers.delete(e.pointerId);
+    try { frame.releasePointerCapture(e.pointerId); } catch {}
+    if (pointers.size === 1) {
+      const rem = [...pointers.entries()][0];
+      dragStartX = rem[1].x;
+      dragStartY = rem[1].y;
+      panStartX = momentCropState.x;
+      panStartY = momentCropState.y;
+    }
+  };
+  frame.addEventListener("pointerup", endPointer);
+  frame.addEventListener("pointercancel", endPointer);
 }
 
 function getMomentCaptionText() {
@@ -5123,40 +5463,115 @@ function getMomentCaptionText() {
   return String(el?.value || "").trim().slice(0, 320);
 }
 
+function syncMomentShareAvatar() {
+  const slot = document.getElementById("momentShareAvatar");
+  if (!slot) return;
+  const raw = String(activeProfile?.avatar || "").trim();
+  const isReal = raw && !/nabadai-logo\.png(?:$|\?)/i.test(raw);
+  const url = isReal ? normalizeProfileAvatarForImg(raw) : "";
+  if (url) {
+    slot.style.backgroundImage = `url("${url.replace(/"/g, "%22")}")`;
+  } else {
+    slot.style.backgroundImage = "";
+    slot.style.backgroundColor = "rgba(5,7,13,0.35)";
+  }
+}
+
 function syncMomentPageUi() {
+  const page = document.getElementById("momentPage");
+  const isPick = momentStudioPhase === "pick";
+  const isCrop = momentStudioPhase === "crop";
+  const isShare = momentStudioPhase === "share";
   const hasPhoto = Boolean(String(momentPhotoDataUrl || "").trim());
-  const source = document.getElementById("momentSourceStage");
-  const compose = document.getElementById("momentComposeStage");
-  if (source) source.hidden = hasPhoto;
-  if (compose) compose.hidden = !hasPhoto;
+  const pickStage = document.getElementById("momentPickStage");
+  const cropStage = document.getElementById("momentCropStage");
+  const pickDock = document.getElementById("momentPickDock");
+  const shareTools = document.getElementById("momentShareTools");
+  const changeBtn = document.getElementById("btnMomentChangePhoto");
+  const cropBack = document.getElementById("btnMomentCropBack");
+  const cropNext = document.getElementById("btnMomentCropNext");
+  const preview = document.getElementById("momentPhotoPreview");
+  const captionPanel = document.getElementById("momentCaptionPanel");
+  const captionToggle = document.getElementById("btnMomentCaptionToggle");
+  const topTitle = document.getElementById("momentStudioTopTitle");
+  if (page) {
+    page.classList.toggle("isPick", isPick);
+    page.classList.toggle("isCrop", isCrop);
+    page.classList.toggle("isPreview", isShare);
+  }
+  if (pickStage) pickStage.hidden = !isPick;
+  if (cropStage) cropStage.hidden = !isCrop;
+  if (pickDock) pickDock.hidden = !isPick;
+  if (shareTools) shareTools.hidden = !isShare;
+  if (changeBtn) changeBtn.hidden = !isShare;
+  if (cropBack) cropBack.hidden = !isCrop;
+  if (cropNext) cropNext.hidden = !isCrop;
+  if (preview) preview.hidden = !isShare;
+  if (topTitle) topTitle.textContent = isCrop ? "Crop" : "New story";
+  if (!isShare) {
+    if (captionPanel) captionPanel.hidden = true;
+    if (captionToggle) {
+      captionToggle.classList.remove("isActive");
+      captionToggle.setAttribute("aria-expanded", "false");
+    }
+  }
   const publishBtn = document.getElementById("btnMomentPublish");
-  if (publishBtn) publishBtn.disabled = !hasPhoto;
+  if (publishBtn) publishBtn.disabled = !isShare || !hasPhoto;
+  try { syncMomentShareAvatar(); } catch {}
+}
+
+function setMomentStudioLoading(on) {
+  const page = document.getElementById("momentPage");
+  const spinner = document.getElementById("momentStudioSpinner");
+  if (page) page.classList.toggle("isLoading", Boolean(on));
+  if (spinner) spinner.hidden = !on;
+}
+
+let _momentStudioStarted = false;
+
+function scheduleMomentStudioStart() {
+  if (_momentStudioStarted) return;
+  _momentStudioStarted = true;
+  window.setTimeout(() => {
+    if ((document.body.getAttribute("data-route") || "") !== "moment") return;
+    try { renderMomentRecentsRail(); } catch {}
+    if (momentStudioPhase === "pick") void startMomentCamera();
+  }, 120);
 }
 
 async function applyMomentPhotoFromFile(file) {
   if (!file) return;
-  const preview = document.getElementById("momentPhotoPreview");
+  setMomentStudioLoading(true);
   try {
     const dataUrl = await prepareMomentCoverDataUrl(file);
-    momentPhotoDataUrl = dataUrl;
-    if (preview) preview.src = dataUrl;
-    syncMomentPageUi();
-    try { document.getElementById("momentCaptionInput")?.focus?.({ preventScroll: true }); } catch {}
+    await saveMomentRecent(dataUrl);
+    await enterMomentCropPhase(dataUrl);
   } catch (e) {
-    momentPhotoDataUrl = "";
-    syncMomentPageUi();
     try { showToast(e?.message || "Could not load photo", { durationMs: 2600 }); } catch {}
+  } finally {
+    setMomentStudioLoading(false);
   }
 }
 
-function openMomentPhotoSource(kind) {
-  const map = {
-    library: "momentPhotoLibrary",
-    camera: "momentPhotoCamera",
-    file: "momentPhotoFile",
-  };
-  const id = map[kind] || map.library;
-  const input = document.getElementById(id);
+async function applyMomentPhotoFilesFromInput(input) {
+  const files = [...(input?.files || [])].filter((f) => f && String(f.type || "").startsWith("image/"));
+  if (!files.length) return;
+  setMomentStudioLoading(true);
+  try {
+    for (let i = 0; i < files.length; i++) {
+      const dataUrl = await prepareMomentCoverDataUrl(files[i]);
+      await saveMomentRecent(dataUrl);
+      if (i === 0) await enterMomentCropPhase(dataUrl);
+    }
+  } catch (e) {
+    try { showToast(e?.message || "Could not load photos", { durationMs: 2600 }); } catch {}
+  } finally {
+    setMomentStudioLoading(false);
+  }
+}
+
+function openMomentPhotoSource() {
+  const input = document.getElementById("momentPhotoLibrary");
   if (!input) return;
   try { input.value = ""; } catch {}
   input.click();
@@ -5164,12 +5579,15 @@ function openMomentPhotoSource(kind) {
 
 function openMomentCreatePage() {
   setCreateEntryIntent("moment");
+  _momentStudioStarted = false;
   resetMomentComposeForm();
   try { location.hash = "#/moment"; } catch {}
 }
 
 function leaveMomentPage(targetHash = "#/friends") {
   if ((document.body.getAttribute("data-route") || "") !== "moment") return;
+  try { stopMomentCamera(); } catch {}
+  _momentStudioStarted = false;
   try { location.hash = targetHash; } catch {}
 }
 
@@ -5625,10 +6043,14 @@ async function publishMoment() {
     return;
   }
   const publishBtn = document.getElementById("btnMomentPublish");
-  if (publishBtn) publishBtn.disabled = true;
+  const shareSpinner = document.getElementById("momentShareSpinner");
+  if (publishBtn) {
+    publishBtn.disabled = true;
+    publishBtn.classList.add("isPublishing");
+  }
+  if (shareSpinner) shareSpinner.hidden = false;
   try {
-    const cover = await prepareMomentCoverDataUrl(momentPhotoDataUrl);
-    const blob = await dataUrlToBlob(cover);
+    const blob = await dataUrlToBlob(momentPhotoDataUrl);
     const imageUrl = await uploadMomentBlob(blob);
     const data = await socialApi("/api/social", {
       method: "POST",
@@ -5659,6 +6081,10 @@ async function publishMoment() {
       : (msg || "Could not publish moment");
     try { showToast(friendly, { durationMs: 3200 }); } catch {}
   } finally {
+    const btn = document.getElementById("btnMomentPublish");
+    const spin = document.getElementById("momentShareSpinner");
+    if (btn) btn.classList.remove("isPublishing");
+    if (spin) spin.hidden = true;
     try { syncMomentPageUi(); } catch {}
   }
 }
@@ -5666,9 +6092,22 @@ async function publishMoment() {
 function wireMomentPageOnce() {
   if (document.documentElement.dataset.wiredMomentPage) return;
   document.documentElement.dataset.wiredMomentPage = "1";
+  wireMomentCropGesturesOnce();
   document.getElementById("btnMomentBack")?.addEventListener("click", () => {
     try { haptic("light"); } catch {}
+    if (momentStudioPhase === "crop") {
+      leaveMomentCropPhase();
+      return;
+    }
     leaveMomentPage("#/friends");
+  });
+  document.getElementById("btnMomentCropBack")?.addEventListener("click", () => {
+    try { haptic("light"); } catch {}
+    leaveMomentCropPhase();
+  });
+  document.getElementById("btnMomentCropNext")?.addEventListener("click", () => {
+    try { haptic("light"); } catch {}
+    void finishMomentCrop();
   });
   document.getElementById("btnMomentPublish")?.addEventListener("click", () => {
     try { haptic("light"); } catch {}
@@ -5678,29 +6117,49 @@ function wireMomentPageOnce() {
     try { haptic("light"); } catch {}
     momentPhotoDataUrl = "";
     const preview = document.getElementById("momentPhotoPreview");
-    if (preview) preview.removeAttribute("src");
+    if (preview) {
+      preview.removeAttribute("src");
+      preview.hidden = true;
+    }
     clearMomentPhotoInputs();
+    momentStudioPhase = "pick";
+    _momentStudioStarted = false;
     syncMomentPageUi();
+    scheduleMomentStudioStart();
   });
-  const bindSource = (btnId, kind) => {
-    document.getElementById(btnId)?.addEventListener("click", () => {
-      try { haptic("light"); } catch {}
-      openMomentPhotoSource(kind);
-    });
-  };
-  bindSource("btnMomentPhotoLibrary", "library");
-  bindSource("btnMomentTakePhoto", "camera");
-  bindSource("btnMomentChooseFile", "file");
-  const onPhotoInput = (inputId) => {
-    document.getElementById(inputId)?.addEventListener("change", async () => {
-      const file = document.getElementById(inputId)?.files?.[0];
-      if (!file) return;
-      await applyMomentPhotoFromFile(file);
-    });
-  };
-  onPhotoInput("momentPhotoLibrary");
-  onPhotoInput("momentPhotoCamera");
-  onPhotoInput("momentPhotoFile");
+  document.getElementById("btnMomentCaptionToggle")?.addEventListener("click", () => {
+    try { haptic("light"); } catch {}
+    const panel = document.getElementById("momentCaptionPanel");
+    const toggle = document.getElementById("btnMomentCaptionToggle");
+    if (!panel || !toggle) return;
+    const open = panel.hidden;
+    panel.hidden = !open;
+    toggle.classList.toggle("isActive", open);
+    toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) {
+      try { document.getElementById("momentCaptionInput")?.focus?.({ preventScroll: true }); } catch {}
+    } else {
+      try { document.getElementById("momentCaptionInput")?.blur?.(); } catch {}
+    }
+  });
+  document.getElementById("btnMomentCapture")?.addEventListener("click", () => {
+    void captureMomentFromCamera();
+  });
+  document.getElementById("btnMomentFlipCamera")?.addEventListener("click", () => {
+    try { haptic("light"); } catch {}
+    void flipMomentCamera();
+  });
+  document.getElementById("btnMomentOpenGallery")?.addEventListener("click", () => {
+    try { haptic("light"); } catch {}
+    openMomentPhotoSource();
+  });
+  document.getElementById("momentPhotoLibrary")?.addEventListener("change", async (e) => {
+    const input = e.target;
+    const files = [...(input?.files || [])];
+    if (!files.length) return;
+    if (files.length > 1) await applyMomentPhotoFilesFromInput(input);
+    else await applyMomentPhotoFromFile(files[0]);
+  });
 }
 
 function closeFriendsComposeSheet() {

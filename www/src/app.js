@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522momentPickFixV1";
+const APP_BUILD = "20260522momentLiveCamV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5118,7 +5118,21 @@ const momentCropState = {
   nh: 0,
 };
 
-function momentStudioUsesLiveCamera() {
+let _momentNativePreviewActive = false;
+
+function getMomentCameraPreviewPlugin() {
+  try {
+    return window.Capacitor?.Plugins?.CameraPreview ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function momentStudioUsesNativeCameraPreview() {
+  return isNativeShell() && Boolean(getMomentCameraPreviewPlugin());
+}
+
+function momentStudioUsesWebLiveCamera() {
   if (isNativeShell()) return false;
   try {
     return Boolean(navigator.mediaDevices?.getUserMedia);
@@ -5127,16 +5141,28 @@ function momentStudioUsesLiveCamera() {
   }
 }
 
+function setMomentCameraLiveChrome(on) {
+  const onLive = Boolean(on);
+  document.documentElement.classList.toggle("momentRouteCameraLive", onLive);
+  document.body.classList.toggle("momentRouteCameraLive", onLive);
+  const page = document.getElementById("momentPage");
+  if (page) page.classList.toggle("momentStudio--liveNative", onLive);
+}
+
 function syncMomentPickStageMode() {
   const page = document.getElementById("momentPage");
   const video = document.getElementById("momentCameraVideo");
-  const fallback = document.getElementById("momentCameraFallback");
   const flipBtn = document.getElementById("btnMomentFlipCamera");
-  const useLive = momentStudioUsesLiveCamera() && momentStudioPhase === "pick";
-  if (page) page.classList.toggle("momentStudio--nativePick", !useLive && momentStudioPhase === "pick");
-  if (video) video.hidden = !useLive;
-  if (fallback) fallback.hidden = useLive;
-  if (flipBtn) flipBtn.hidden = !useLive;
+  const isPick = momentStudioPhase === "pick";
+  const nativeLive = isPick && _momentNativePreviewActive;
+  const webLive = isPick && momentStudioUsesWebLiveCamera() && !_momentNativePreviewActive;
+  if (page) {
+    page.classList.toggle("momentStudio--webLive", webLive);
+    page.classList.toggle("momentStudio--nativePick", isPick && !nativeLive && !webLive);
+  }
+  if (video) video.hidden = !webLive;
+  if (flipBtn) flipBtn.hidden = !(nativeLive || webLive);
+  setMomentCameraLiveChrome(nativeLive);
 }
 
 function clearMomentPhotoInputs() {
@@ -5161,6 +5187,7 @@ function resetMomentComposeForm() {
   clearMomentPhotoInputs();
   if (preview) preview.removeAttribute("src");
   try { stopMomentCamera(); } catch {}
+  setMomentStudioLoading(false);
   syncMomentPageUi();
 }
 
@@ -5222,7 +5249,17 @@ function renderMomentRecentsRail() {
   });
 }
 
+async function stopMomentNativeCameraPreview() {
+  const CameraPreview = getMomentCameraPreviewPlugin();
+  if (CameraPreview && _momentNativePreviewActive) {
+    try { await CameraPreview.stop(); } catch {}
+  }
+  _momentNativePreviewActive = false;
+  setMomentCameraLiveChrome(false);
+}
+
 function stopMomentCamera() {
+  void stopMomentNativeCameraPreview();
   if (momentCameraStream) {
     try {
       momentCameraStream.getTracks().forEach((t) => t.stop());
@@ -5234,15 +5271,43 @@ function stopMomentCamera() {
     try { video.pause(); } catch {}
     video.srcObject = null;
   }
+  syncMomentPickStageMode();
+}
+
+async function startMomentNativeCameraPreview() {
+  const CameraPreview = getMomentCameraPreviewPlugin();
+  if (!CameraPreview || _momentNativePreviewActive) return false;
+  try {
+    await CameraPreview.start({
+      position: momentCameraFacing === "user" ? "front" : "rear",
+      toBack: true,
+      disableAudio: true,
+      width: Math.round(window.screen.width || 390),
+      height: Math.round(window.screen.height || 844),
+    });
+    _momentNativePreviewActive = true;
+    syncMomentPickStageMode();
+    return true;
+  } catch (e) {
+    _momentNativePreviewActive = false;
+    setMomentCameraLiveChrome(false);
+    try { showToast("Camera access needed for stories", { durationMs: 2800 }); } catch {}
+    return false;
+  }
 }
 
 async function startMomentCamera() {
   stopMomentCamera();
-  syncMomentPickStageMode();
-  if (!momentStudioUsesLiveCamera()) return;
+  if (momentStudioPhase !== "pick") return;
+  if (momentStudioUsesNativeCameraPreview()) {
+    const ok = await startMomentNativeCameraPreview();
+    if (ok) return;
+  }
+  if (!momentStudioUsesWebLiveCamera()) {
+    syncMomentPickStageMode();
+    return;
+  }
   const video = document.getElementById("momentCameraVideo");
-  const fallback = document.getElementById("momentCameraFallback");
-  const flipBtn = document.getElementById("btnMomentFlipCamera");
   if (!video || !navigator.mediaDevices?.getUserMedia) {
     syncMomentPickStageMode();
     return;
@@ -5253,17 +5318,25 @@ async function startMomentCamera() {
       audio: false,
     });
     video.srcObject = momentCameraStream;
-    if (fallback) fallback.hidden = true;
-    if (flipBtn) flipBtn.hidden = false;
     video.hidden = false;
     await video.play();
-    syncMomentPickStageMode();
   } catch {
-    syncMomentPickStageMode();
+    try { showToast("Allow camera to preview your shot", { durationMs: 2600 }); } catch {}
   }
+  syncMomentPickStageMode();
 }
 
 async function flipMomentCamera() {
+  if (_momentNativePreviewActive) {
+    const CameraPreview = getMomentCameraPreviewPlugin();
+    if (CameraPreview?.flip) {
+      try {
+        await CameraPreview.flip();
+        momentCameraFacing = momentCameraFacing === "user" ? "environment" : "user";
+        return;
+      } catch {}
+    }
+  }
   momentCameraFacing = momentCameraFacing === "user" ? "environment" : "user";
   await startMomentCamera();
 }
@@ -5277,29 +5350,48 @@ function openMomentCameraInput() {
 
 async function captureMomentFromCamera() {
   try { haptic("medium"); } catch {}
-  if (!momentStudioUsesLiveCamera()) {
-    openMomentCameraInput();
+  if (_momentNativePreviewActive) {
+    const CameraPreview = getMomentCameraPreviewPlugin();
+    if (!CameraPreview?.capture) {
+      openMomentCameraInput();
+      return;
+    }
+    setMomentStudioLoading(true);
+    try {
+      const result = await CameraPreview.capture({ quality: 88 });
+      let dataUrl = String(result?.value || "").trim();
+      if (!dataUrl) throw new Error("Capture failed");
+      if (!dataUrl.startsWith("data:image/")) dataUrl = `data:image/jpeg;base64,${dataUrl}`;
+      await enterMomentCropPhase(dataUrl);
+    } catch (e) {
+      try { showToast(e?.message || "Could not capture photo", { durationMs: 2600 }); } catch {}
+    } finally {
+      setMomentStudioLoading(false);
+    }
     return;
   }
-  const video = document.getElementById("momentCameraVideo");
-  if (!video || video.readyState < 2 || !video.videoWidth) {
-    try { showToast("Camera not ready — opening camera", { durationMs: 2200 }); } catch {}
-    openMomentCameraInput();
+  if (momentStudioUsesWebLiveCamera()) {
+    const video = document.getElementById("momentCameraVideo");
+    if (!video || video.readyState < 2 || !video.videoWidth) {
+      try { showToast("Camera starting…", { durationMs: 2000 }); } catch {}
+      return;
+    }
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Could not capture photo");
+    if (momentCameraFacing === "user") {
+      ctx.translate(w, 0);
+      ctx.scale(-1, 1);
+    }
+    ctx.drawImage(video, 0, 0, w, h);
+    await enterMomentCropPhase(canvas.toDataURL("image/jpeg", 0.9));
     return;
   }
-  const w = video.videoWidth;
-  const h = video.videoHeight;
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Could not capture photo");
-  if (momentCameraFacing === "user") {
-    ctx.translate(w, 0);
-    ctx.scale(-1, 1);
-  }
-  ctx.drawImage(video, 0, 0, w, h);
-  await enterMomentCropPhase(canvas.toDataURL("image/jpeg", 0.9));
+  openMomentCameraInput();
 }
 
 function applyMomentCropTransform() {
@@ -5580,10 +5672,8 @@ function scheduleMomentStudioStart() {
   window.setTimeout(() => {
     if ((document.body.getAttribute("data-route") || "") !== "moment") return;
     setMomentStudioLoading(false);
-    try { renderMomentRecentsRail(); } catch {}
-    try { syncMomentPickStageMode(); } catch {}
-    if (momentStudioPhase === "pick" && momentStudioUsesLiveCamera()) void startMomentCamera();
-  }, 120);
+    if (momentStudioPhase === "pick") void startMomentCamera();
+  }, 160);
 }
 
 async function applyMomentPhotoFromFile(file) {

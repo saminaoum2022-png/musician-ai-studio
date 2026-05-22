@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522nativeStoryCamV3";
+const APP_BUILD = "20260522nativeStoryCamV4";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5566,8 +5566,15 @@ async function presentNativeStoryCamera({ leaveOnCancel = false } = {}) {
       if (leaveOnCancel) leaveMomentPage("#/friends");
       return false;
     }
-    const dataUrl = normalizeStoryCameraDataUrl(result);
+    let dataUrl = normalizeStoryCameraDataUrl(result);
     if (!dataUrl) throw new Error("Capture failed");
+    try {
+      dataUrl = await prepareMomentCoverDataUrl(dataUrl);
+    } catch {
+      try {
+        dataUrl = await downscaleImageDataUrl(dataUrl, 1280, 0.78);
+      } catch {}
+    }
     await enterMomentCropPhase(dataUrl);
     return true;
   } catch (e) {
@@ -5686,32 +5693,54 @@ async function loadMomentCropImage(src) {
 
 async function enterMomentCropPhase(dataUrl) {
   if (!String(dataUrl || "").startsWith("data:image/")) return;
-  momentCropSourceUrl = dataUrl;
-  momentStudioPhase = "crop";
   const imgEl = document.getElementById("momentCropImg");
   const frame = document.getElementById("momentCropFrame");
   if (!imgEl || !frame) return;
-  await stopMomentCamera();
-  syncMomentPageUi();
-  const loaded = await loadMomentCropImage(dataUrl);
-  momentCropState.nw = loaded.naturalWidth || loaded.width;
-  momentCropState.nh = loaded.naturalHeight || loaded.height;
-  imgEl.src = dataUrl;
-  await new Promise((resolve) => {
-    if (imgEl.complete) resolve();
-    else imgEl.onload = () => resolve();
-  });
-  await new Promise((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(resolve));
-  });
-  const fr = frame.getBoundingClientRect();
-  const fw = fr.width || 320;
-  const fh = fr.height || Math.round(fw * 16 / 9);
-  momentCropState.baseScale = Math.max(fw / momentCropState.nw, fh / momentCropState.nh);
-  momentCropState.scale = 1;
-  momentCropState.x = 0;
-  momentCropState.y = 0;
-  applyMomentCropTransform();
+  setMomentStudioLoading(true);
+  try {
+    let safeUrl = dataUrl;
+    if (safeUrl.length > 400_000) {
+      try {
+        safeUrl = await prepareMomentCoverDataUrl(safeUrl);
+      } catch {
+        safeUrl = await downscaleImageDataUrl(safeUrl, 1280, 0.75);
+      }
+    }
+    momentCropSourceUrl = safeUrl;
+    momentStudioPhase = "crop";
+    await stopMomentCamera();
+    syncMomentPageUi();
+    const loaded = await loadMomentCropImage(safeUrl);
+    momentCropState.nw = loaded.naturalWidth || loaded.width;
+    momentCropState.nh = loaded.naturalHeight || loaded.height;
+    imgEl.src = safeUrl;
+    await new Promise((resolve, reject) => {
+      if (imgEl.complete && imgEl.naturalWidth) resolve();
+      else {
+        imgEl.onload = () => resolve();
+        imgEl.onerror = () => reject(new Error("Could not display photo"));
+      }
+    });
+    await new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    });
+    const fr = frame.getBoundingClientRect();
+    const fw = fr.width || 320;
+    const fh = fr.height || Math.round(fw * 16 / 9);
+    momentCropState.baseScale = Math.max(fw / momentCropState.nw, fh / momentCropState.nh);
+    momentCropState.scale = 1;
+    momentCropState.x = 0;
+    momentCropState.y = 0;
+    applyMomentCropTransform();
+  } catch (e) {
+    momentCropSourceUrl = "";
+    momentStudioPhase = "pick";
+    syncMomentPageUi();
+    try { showToast(e?.message || "Could not load photo — try again", { durationMs: 3200 }); } catch {}
+    throw e;
+  } finally {
+    setMomentStudioLoading(false);
+  }
 }
 
 function leaveMomentCropPhase() {

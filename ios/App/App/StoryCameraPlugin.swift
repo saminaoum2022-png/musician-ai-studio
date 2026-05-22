@@ -218,7 +218,7 @@ private final class StoryCameraViewController: UIViewController {
 
         if session.canAddOutput(photoOutput) {
             session.addOutput(photoOutput)
-            photoOutput.isHighResolutionCaptureEnabled = true
+            photoOutput.isHighResolutionCaptureEnabled = false
         }
         session.commitConfiguration()
 
@@ -300,7 +300,40 @@ extension StoryCameraViewController: AVCapturePhotoCaptureDelegate {
             finish(.failed("Could not read photo"))
             return
         }
-        let base64 = data.base64EncodedString()
-        finish(.captured("data:image/jpeg;base64,\(base64)"))
+        guard let dataUrl = StoryCameraImageEncoder.dataUrl(from: data, maxSide: 1280, quality: jpegQuality) else {
+            finish(.failed("Could not prepare photo"))
+            return
+        }
+        finish(.captured(dataUrl))
+    }
+}
+
+// MARK: - Resize before crossing the WebView bridge (full-res JPEG crashes WKWebView decode)
+
+private enum StoryCameraImageEncoder {
+    static func dataUrl(from data: Data, maxSide: CGFloat, quality: CGFloat) -> String? {
+        guard let image = UIImage(data: data) else { return nil }
+        let resized = resize(image, maxSide: maxSide)
+        guard let jpeg = resized.jpegData(compressionQuality: quality) else { return nil }
+        return "data:image/jpeg;base64,\(jpeg.base64EncodedString())"
+    }
+
+    private static func resize(_ image: UIImage, maxSide: CGFloat) -> UIImage {
+        let pxSize: CGSize
+        if let cg = image.cgImage {
+            pxSize = CGSize(width: CGFloat(cg.width), height: CGFloat(cg.height))
+        } else {
+            pxSize = image.size
+        }
+        let longEdge = max(pxSize.width, pxSize.height)
+        guard longEdge > maxSide, longEdge > 0 else { return image }
+        let scale = maxSide / longEdge
+        let target = CGSize(width: floor(pxSize.width * scale), height: floor(pxSize.height * scale))
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: target, format: format)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: target))
+        }
     }
 }

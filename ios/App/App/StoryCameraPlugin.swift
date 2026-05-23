@@ -489,23 +489,25 @@ private final class StoryCameraViewController: UIViewController, UIScrollViewDel
         let imageSize = StoryCameraImageEncoder.pixelSize(image)
         let widthScale = bounds.width / imageSize.width
         let heightScale = bounds.height / imageSize.height
-        // Match live preview (resizeAspectFill): fill the 9:16 frame, not letterbox.
+        // Show the full captured photo first; pinch to zoom in if you want to crop tighter.
         let fitScale = min(widthScale, heightScale)
         let fillScale = max(widthScale, heightScale)
-        let maxScale = max(fillScale * 4, fitScale * 2.5)
+        let maxScale = max(fillScale * 4, fitScale * 3)
 
         cropImageView.image = image
-        cropImageView.contentMode = .scaleAspectFill
-        cropImageView.clipsToBounds = true
+        cropImageView.contentMode = .scaleToFill
         cropImageView.frame = CGRect(origin: .zero, size: imageSize)
         cropScroll.contentSize = imageSize
         cropScroll.minimumZoomScale = fitScale
         cropScroll.maximumZoomScale = maxScale
-        cropScroll.zoomScale = fillScale
+        cropScroll.zoomScale = fitScale
 
-        let offsetX = max(0, (imageSize.width - bounds.width / fillScale) / 2)
-        let offsetY = max(0, (imageSize.height - bounds.height / fillScale) / 2)
-        cropScroll.contentOffset = CGPoint(x: offsetX, y: offsetY)
+        let scaledW = imageSize.width * fitScale
+        let scaledH = imageSize.height * fitScale
+        let insetX = max(0, (bounds.width - scaledW) / 2)
+        let insetY = max(0, (bounds.height - scaledH) / 2)
+        cropScroll.contentInset = UIEdgeInsets(top: insetY, left: insetX, bottom: insetY, right: insetX)
+        cropScroll.contentOffset = CGPoint(x: -insetX, y: -insetY)
     }
 
     func scrollViewDidZoom(_ scrollView: UIScrollView) {
@@ -555,8 +557,7 @@ private final class StoryCameraViewController: UIViewController, UIScrollViewDel
     private func showCrop(with image: UIImage) {
         var upright = StoryCameraImageEncoder.normalizeOrientation(image)
         upright = StoryCameraImageEncoder.downscale(upright, maxSide: 2048)
-        // Same center crop the live preview shows (aspect fill in 9:16).
-        capturedImage = StoryCameraImageEncoder.centerCropToStoryAspect(upright)
+        capturedImage = upright
         stopCameraSession { [weak self] in
             guard let self = self else { return }
             DispatchQueue.main.async {
@@ -624,7 +625,7 @@ extension StoryCameraViewController: AVCapturePhotoCaptureDelegate {
                 self.finish(.failed("Could not read photo"))
                 return
             }
-            self.showCrop(with: StoryCameraImageEncoder.normalizeOrientation(image))
+            self.showCrop(with: image)
         }
     }
 }

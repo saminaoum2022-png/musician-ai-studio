@@ -65,6 +65,35 @@ function peaksHtml(peaks, extraClass = "") {
     .join("");
 }
 
+/** Same URL normalization as Friends voice drops (Capacitor-safe proxy). */
+function echoResolvePlayUrl(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+  const proxy = c().toAudioProxyUrl?.(raw);
+  return c().normalizeAudioUrlForPlayback?.(proxy || raw) || raw;
+}
+
+function paintEchoViewerWave(slide) {
+  const wave = document.getElementById("echoViewerWave");
+  if (!wave || !slide) return;
+  wave.innerHTML = peaksHtml(slide.waveformPeaks);
+}
+
+function updateEchoViewerProgress() {
+  const timer = document.getElementById("echoViewerTimer");
+  const progress = document.getElementById("echoViewerProgressFill");
+  const slide = currentEchoSlide();
+  if (!slide || !_echoAudio) return;
+  const cur = Math.floor(_echoAudio.currentTime || 0);
+  const dur = Math.floor(_echoAudio.duration || slide.durationMs / 1000 || 0);
+  if (timer) {
+    timer.textContent = `${c().formatMsAsVoiceTime(cur * 1000)} · ${c().formatMsAsVoiceTime((dur || 1) * 1000)}`;
+  }
+  if (progress && _echoAudio.duration) {
+    progress.style.width = `${Math.min(100, (_echoAudio.currentTime / _echoAudio.duration) * 100)}%`;
+  }
+}
+
 function loadHeardLocal() {
   try {
     const raw = localStorage.getItem(ECHO_HEARD_KEY);
@@ -344,7 +373,7 @@ function syncEchoViewerUi() {
     avatarFb.textContent = handle.slice(0, 2).toUpperCase();
     avatarFb.hidden = Boolean(av);
   }
-  if (wave) wave.innerHTML = peaksHtml(slide.waveformPeaks);
+  paintEchoViewerWave(slide);
   if (caption) {
     caption.textContent = slide.body || "";
     caption.hidden = !slide.body;
@@ -353,14 +382,7 @@ function syncEchoViewerUi() {
   const heard = isEchoHeard(slide) || _echoListenMarked;
   const ended = sheet.classList.contains("isEnded");
   if (reactions) reactions.hidden = !(heard || ended);
-  if (timer && _echoAudio) {
-    const cur = Math.floor(_echoAudio.currentTime || 0);
-    const dur = Math.floor(_echoAudio.duration || slide.durationMs / 1000 || 0);
-    timer.textContent = `${c().formatMsAsVoiceTime(cur * 1000)} · ${c().formatMsAsVoiceTime((dur || 1) * 1000)}`;
-  }
-  if (progress && _echoAudio && _echoAudio.duration) {
-    progress.style.width = `${Math.min(100, (_echoAudio.currentTime / _echoAudio.duration) * 100)}%`;
-  }
+  updateEchoViewerProgress();
   document.querySelectorAll("[data-echo-react]").forEach((btn) => {
     btn.classList.toggle("isActive", btn.getAttribute("data-echo-react") === slide.reaction);
   });
@@ -370,24 +392,27 @@ function echoViewerTick() {
   const sheet = document.getElementById("echoViewerSheet");
   const mic = document.getElementById("echoViewerMicPulse");
   const wave = document.getElementById("echoViewerWave");
-  if (!sheet?.classList.contains("isOpen") || !_echoAnalyser || !wave) {
+  if (!sheet?.classList.contains("isOpen") || !_echoAudio || !wave) {
     _echoRaf = 0;
     return;
   }
-  const data = new Uint8Array(_echoAnalyser.frequencyBinCount);
-  _echoAnalyser.getByteFrequencyData(data);
+  if (_echoAudio.paused || _echoAudio.ended) {
+    _echoRaf = 0;
+    return;
+  }
+  const slide = currentEchoSlide();
+  const base = normalizePeaks(slide?.waveformPeaks);
   const bars = wave.querySelectorAll(".echoBar");
-  const step = Math.max(1, Math.floor(data.length / bars.length));
+  const t = _echoAudio.currentTime || 0;
   let sum = 0;
   bars.forEach((bar, i) => {
-    const v = data[Math.min(data.length - 1, i * step)] / 255;
-    sum += v;
-    const base = parseFloat(bar.style.getPropertyValue("--bar-h")) / 100 || 0.3;
-    const h = Math.max(0.12, Math.min(1, base * 0.55 + v * 0.65));
+    const b = base[i] ?? base[i % Math.max(1, base.length)] ?? 0.3;
+    const h = Math.min(1, b * (0.32 + 0.68 * Math.abs(Math.sin(t * 8.5 + i * 0.52))));
     bar.style.setProperty("--bar-h", `${(h * 100).toFixed(1)}%`);
+    sum += h;
   });
-  if (mic) mic.style.setProperty("--echo-mic", String(Math.min(1, sum / Math.max(1, bars.length * 0.85))));
-  syncEchoViewerUi();
+  if (mic) mic.style.setProperty("--echo-mic", String(Math.min(1, sum / Math.max(1, bars.length * 0.72))));
+  updateEchoViewerProgress();
   _echoRaf = requestAnimationFrame(echoViewerTick);
 }
 
@@ -425,39 +450,47 @@ async function playEchoSlide(slide) {
     syncEchoViewerUi();
     return;
   }
-  sheet.classList.remove("isLocked", "isEnded");
+  sheet.classList.remove("isLocked", "isEnded", "needsEchoTap");
   _echoListenMarked = false;
-  const audio = new Audio(slide.audioUrl);
-  audio.playsInline = true;
+  paintEchoViewerWave(slide);
+
+  const playUrl = echoResolvePlayUrl(slide.audioUrl);
+  if (!playUrl) {
+    try {
+      c().showToast("Echo audio missing", { durationMs: 2600 });
+    } catch {}
+    return;
+  }
+
+  const audio = new Audio(playUrl);
+  audio.preload = "auto";
+  audio.crossOrigin = "anonymous";
+  audio.setAttribute("playsinline", "");
+  audio.volume = 1;
   _echoAudio = audio;
-  try {
-    const ac = new AudioContext();
-    _echoCtx = ac;
-    _echoAnalyser = ac.createAnalyser();
-    _echoAnalyser.fftSize = 128;
-    _echoSource = ac.createMediaElementSource(audio);
-    _echoSource.connect(_echoAnalyser);
-    _echoAnalyser.connect(ac.destination);
-  } catch {}
+
   audio.addEventListener("play", () => {
+    sheet.classList.remove("needsEchoTap");
     void markEchoListened(slide);
     if (!_echoRaf) _echoRaf = requestAnimationFrame(echoViewerTick);
   });
-  audio.addEventListener("timeupdate", () => syncEchoViewerUi());
+  audio.addEventListener("timeupdate", () => updateEchoViewerProgress());
   audio.addEventListener("ended", () => {
     sheet.classList.add("isEnded");
     if (listenOnce) sheet.classList.add("isLocked");
     stopEchoPlayback();
     syncEchoViewerUi();
   });
+
   try {
     await audio.play();
   } catch {
+    sheet.classList.add("needsEchoTap");
     try {
-      c().showToast("Tap to listen", { durationMs: 2200 });
+      c().showToast("Tap center to listen", { durationMs: 2400 });
     } catch {}
   }
-  _echoProgressTimer = window.setInterval(() => syncEchoViewerUi(), 200);
+  _echoProgressTimer = window.setInterval(() => updateEchoViewerProgress(), 200);
   syncEchoViewerUi();
 }
 
@@ -478,12 +511,11 @@ export function openEchoViewer(userId, slideIndex = 0) {
   sheet.hidden = false;
   sheet.setAttribute("aria-hidden", "false");
   sheet.classList.remove("isLocked", "isEnded");
-  requestAnimationFrame(() => {
-    sheet.classList.add("isOpen");
-    void playEchoSlide(slide);
-  });
+  sheet.classList.add("isOpen");
   _echoViewerOpen = true;
   document.body.classList.add("echoViewerOpen");
+  syncEchoViewerUi();
+  void playEchoSlide(slide);
 }
 
 export function closeEchoViewer() {
@@ -791,7 +823,22 @@ function wireEchoOnce() {
     try {
       c().haptic("light");
     } catch {}
+    try {
+      const prime = new Audio();
+      c().primeAudioElementInGesture?.(prime);
+    } catch {}
     openEchoViewer(tile.getAttribute("data-echo-user-id"), 0);
+  });
+
+  document.getElementById("echoViewerCore")?.addEventListener("click", async (e) => {
+    if (e.target.closest(".echoViewerClose, .echoReactBtn, #btnEchoReply")) return;
+    const sheet = document.getElementById("echoViewerSheet");
+    if (!sheet?.classList.contains("needsEchoTap") || !_echoAudio) return;
+    try {
+      await _echoAudio.play();
+      sheet.classList.remove("needsEchoTap");
+      if (!_echoRaf) _echoRaf = requestAnimationFrame(echoViewerTick);
+    } catch {}
   });
 
   document.getElementById("echoViewerBackdrop")?.addEventListener("click", () => closeEchoViewer());

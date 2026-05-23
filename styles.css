@@ -5645,8 +5645,15 @@ body[data-route="moment"] .momentStudio{
 .echoViewerWave .echoBar{
   max-width: 6px;
   height: calc(12px + var(--bar-h, 35%) * 88px);
-  opacity: 0.65;
+  opacity: 0.92;
   animation: none;
+  box-shadow: 0 0 10px rgba(124,92,255,0.22);
+}
+.echoViewerSheet.needsEchoTap .echoViewerCore{
+  cursor: pointer;
+}
+.echoViewerSheet.needsEchoTap .echoViewerWave{
+  opacity: 0.55;
 }
 .echoViewerOnceBadge{
   font-size: 10px;

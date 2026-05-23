@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522friendsSupabaseV1";
+const APP_BUILD = "20260522storyVoiceV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4521,7 +4521,7 @@ function followingComposeMeta(typeId) {
 
 const STATUS_VOICE_MAX_MS = 30000;
 const STATUS_VOICE_MAX_BYTES = 512 * 1024;
-const STATUS_VOICE_DEFAULT_BODY = "🎤 Voice note";
+const STATUS_VOICE_DEFAULT_BODY = "Voice drop";
 let statusVoiceRecState = "idle";
 let statusVoiceRecorder = null;
 let statusVoiceStream = null;
@@ -4543,7 +4543,7 @@ let _statusVoiceFeedSource = null;
 let _statusVoiceFeedRaf = 0;
 let _statusVoiceComposeCtx = null;
 let _statusVoiceComposeAnalyser = null;
-const STATUS_VOICE_BAR_COUNT = 36;
+const STATUS_VOICE_BAR_COUNT = 52;
 
 function isStatusVoicePost(post) {
   return Boolean(String(post?.audioUrl || post?.audio_url || "").trim());
@@ -4559,25 +4559,36 @@ function formatMsAsVoiceTime(ms) {
 function statusVoiceFallbackPeaks() {
   return Array.from({ length: STATUS_VOICE_BAR_COUNT }, (_, i) => {
     const t = i / Math.max(1, STATUS_VOICE_BAR_COUNT - 1);
-    return Math.round((0.16 + 0.62 * Math.abs(Math.sin(t * 6.2) * Math.cos(t * 3.7))) * 1000) / 1000;
+    const w1 = Math.abs(Math.sin(t * 7.1 + 0.4) * Math.cos(t * 2.9));
+    const w2 = Math.abs(Math.sin(t * 13.3) * 0.35);
+    return Math.round((0.14 + 0.86 * Math.max(w1, w2)) * 1000) / 1000;
   });
 }
 
 function statusVoiceNormalizePeaks(peaks, count = STATUS_VOICE_BAR_COUNT) {
-  const src =
+  let src =
     Array.isArray(peaks) && peaks.length
       ? peaks.map((n) => Math.max(0, Math.min(1, Number(n) || 0)))
       : statusVoiceFallbackPeaks();
-  if (src.length === count) return src;
-  const out = [];
-  for (let i = 0; i < count; i++) {
-    const pos = (i / Math.max(1, count - 1)) * (src.length - 1);
-    const lo = Math.floor(pos);
-    const hi = Math.min(src.length - 1, lo + 1);
-    const frac = pos - lo;
-    out.push(Math.round((src[lo] * (1 - frac) + src[hi] * frac) * 1000) / 1000);
+  if (src.length !== count) {
+    const resampled = [];
+    for (let i = 0; i < count; i++) {
+      const pos = (i / Math.max(1, count - 1)) * (src.length - 1);
+      const lo = Math.floor(pos);
+      const hi = Math.min(src.length - 1, lo + 1);
+      const frac = pos - lo;
+      resampled.push(src[lo] * (1 - frac) + src[hi] * frac);
+    }
+    src = resampled;
   }
-  return out;
+  const max = Math.max(...src, 0.001);
+  const min = Math.min(...src);
+  const span = Math.max(0.001, max - min);
+  return src.map((p) => {
+    const n = (p - min) / span;
+    const shaped = Math.pow(n, 0.58);
+    return Math.round((0.1 + shaped * 0.9) * 1000) / 1000;
+  });
 }
 
 function statusVoicePeaksFromPost(post) {
@@ -4598,9 +4609,10 @@ function statusVoicePeaksFromCard(card) {
 
 function statusVoiceWaveBarsInnerHtml(peaks) {
   return statusVoiceNormalizePeaks(peaks)
-    .map((h) => {
-      const ht = Math.max(0.1, Math.min(1, Number(h) || 0.3));
-      return `<span class="statusVoiceBar" style="--bar-h:${(ht * 100).toFixed(1)}%"></span>`;
+    .map((h, i) => {
+      const ht = Math.max(0.12, Math.min(1, Number(h) || 0.3));
+      const tint = i % 3 === 0 ? "statusVoiceBar--hi" : "";
+      return `<span class="statusVoiceBar ${tint}" style="--bar-h:${(ht * 100).toFixed(1)}%"></span>`;
     })
     .join("");
 }
@@ -4801,7 +4813,7 @@ function statusVoiceCardHtml(post) {
   const peaksEnc = encodeURIComponent(JSON.stringify(peaks));
   const dur = formatMsAsVoiceTime(durationMs);
   const playing = _statusVoiceFeedPlayingId === postId;
-  return `<button type="button" class="statusVoiceCard${playing ? " isPlaying" : ""}" data-status-voice-play="1" data-status-voice-id="${escapeHtml(postId)}" data-status-voice-url="${escapeHtml(url)}" data-status-voice-duration="${durationMs}" data-status-voice-peaks="${escapeHtml(peaksEnc)}" aria-label="Play voice note, ${escapeHtml(dur)}">
+  return `<button type="button" class="statusVoiceCard${playing ? " isPlaying" : ""}" data-status-voice-play="1" data-status-voice-id="${escapeHtml(postId)}" data-status-voice-url="${escapeHtml(url)}" data-status-voice-duration="${durationMs}" data-status-voice-peaks="${escapeHtml(peaksEnc)}" aria-label="Play voice drop, ${escapeHtml(dur)}">
     <span class="statusVoicePlay" data-status-voice-play-ico aria-hidden="true">${playing ? "❚❚" : "▶"}</span>
     <span class="statusVoiceBody">
       <span class="statusVoiceWaveWrap">
@@ -4809,6 +4821,7 @@ function statusVoiceCardHtml(post) {
         <span class="statusVoiceScrubTrack" aria-hidden="true"><span class="statusVoiceScrubFill" data-status-voice-scrub></span></span>
       </span>
       <span class="statusVoiceMeta">
+        <span class="statusVoiceKind">Voice drop</span>
         <span class="statusVoiceLivePill" data-status-voice-pill hidden>Playing</span>
         <span class="statusVoiceDur" data-status-voice-dur>${escapeHtml(dur)}</span>
       </span>
@@ -4882,7 +4895,7 @@ function resetStatusVoiceCompose() {
   if (mic) {
     mic.classList.remove("isRecording");
     mic.setAttribute("aria-pressed", "false");
-    mic.setAttribute("aria-label", "Record voice note");
+    mic.setAttribute("aria-label", "Record voice drop");
   }
   if (preview) {
     try {
@@ -4905,18 +4918,24 @@ async function computeStatusWaveformPeaks(blob, barCount = STATUS_VOICE_BAR_COUN
     const samplesPerBar = Math.max(1, Math.floor(channel.length / barCount));
     const peaks = [];
     for (let i = 0; i < barCount; i++) {
-      let max = 0;
+      let sumSq = 0;
+      let n = 0;
       const start = i * samplesPerBar;
       const end = Math.min(channel.length, start + samplesPerBar);
-      for (let j = start; j < end; j++) max = Math.max(max, Math.abs(channel[j]));
-      peaks.push(Math.round(max * 1000) / 1000);
+      for (let j = start; j < end; j++) {
+        const s = channel[j];
+        sumSq += s * s;
+        n++;
+      }
+      const rms = n ? Math.sqrt(sumSq / n) : 0;
+      peaks.push(rms);
     }
     try {
       await ctx.close();
     } catch {}
-    return peaks;
+    return statusVoiceNormalizePeaks(peaks, barCount);
   } catch {
-    return Array.from({ length: barCount }, (_, i) => 0.2 + ((i * 17) % 11) / 20);
+    return statusVoiceFallbackPeaks();
   }
 }
 
@@ -4970,7 +4989,7 @@ function syncStatusVoiceComposeUi() {
   if (mic) {
     mic.classList.toggle("isRecording", recording);
     mic.setAttribute("aria-pressed", recording ? "true" : "false");
-    mic.setAttribute("aria-label", recording ? "Stop recording" : "Record voice note");
+    mic.setAttribute("aria-label", recording ? "Stop recording" : "Record voice drop");
   }
   if (statusEl) {
     if (recording) {
@@ -5113,7 +5132,7 @@ function stopStatusVoiceRecording() {
 function toggleStatusVoiceMicTap() {
   if (!authSession?.user?.id) {
     try {
-      showToast("Sign in to record a voice note.", { durationMs: 2600 });
+      showToast("Sign in to record a voice drop.", { durationMs: 2600 });
     } catch {}
     return;
   }
@@ -5228,7 +5247,7 @@ async function toggleStatusVoiceFeedPlayback(btn) {
   } catch {
     stopStatusVoiceFeedPlayback();
     try {
-      showToast("Could not play voice note.", { durationMs: 2600 });
+      showToast("Could not play voice drop.", { durationMs: 2600 });
     } catch {}
   }
 }
@@ -5246,7 +5265,7 @@ function wireStatusVoicePlaybackOnce() {
 }
 
 function followingStatusTypeLabel(postType, post) {
-  if (isStatusVoicePost(post)) return "Voice";
+  if (isStatusVoicePost(post)) return "Voice drop";
   const map = {
     update: "Update",
     advice: "Ask advice",
@@ -5258,7 +5277,7 @@ function followingStatusTypeLabel(postType, post) {
 }
 
 function followingStatusVerb(postType, post) {
-  if (isStatusVoicePost(post)) return "shared a voice note";
+  if (isStatusVoicePost(post)) return "shared a voice drop";
   const map = {
     update: "shared an update",
     advice: "is asking for advice",
@@ -5763,9 +5782,9 @@ async function postStatusViaSupabase({ postType, body, audioUrl, durationMs, wav
   const audio = String(audioUrl || "").trim().slice(0, 2048);
   const dur = Math.min(60000, Math.max(0, Math.round(Number(durationMs) || 0)));
   const peaks = normalizeStatusWaveformPeaks(waveformPeaks);
-  if (!text && !audio) throw new Error("Add a voice note or write something to post");
+  if (!text && !audio) throw new Error("Add a voice drop or write something to post");
   if (audio && !/^https?:\/\//i.test(audio)) throw new Error("Invalid voice audio URL");
-  const finalBody = text || (audio ? "🎤 Voice note" : "");
+  const finalBody = text || (audio ? STATUS_VOICE_DEFAULT_BODY : "");
   const r = await supabaseRestWithAuth("social_status_posts", {
     method: "POST",
     prefer: "return=representation",
@@ -8437,7 +8456,7 @@ function syncFollowingComposeUi() {
   if (postBtn) postBtn.disabled = !signedIn || (!hasText && !hasVoice) || recording;
   const meta = followingComposeMeta(_followComposeType);
   if (promptEl) {
-    promptEl.textContent = hasVoice || recording ? "Voice note — add an optional caption" : meta.prompt;
+    promptEl.textContent = hasVoice || recording ? "Voice drop — add an optional caption" : meta.prompt;
   }
   if (input && !input.matches(":focus")) {
     input.placeholder = hasVoice ? "Optional caption…" : meta.placeholder;

@@ -98,6 +98,9 @@ private final class StoryCameraViewController: UIViewController, UIScrollViewDel
     private var capturedImage: UIImage?
 
     // Camera chrome
+    private let cameraGuide = UIView()
+    private let topLetterbox = UIView()
+    private let bottomLetterbox = UIView()
     private let closeButton = UIButton(type: .system)
     private let flipButton = UIButton(type: .system)
     private let shutterButton = UIButton(type: .custom)
@@ -142,11 +145,10 @@ private final class StoryCameraViewController: UIViewController, UIScrollViewDel
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        previewLayer?.frame = view.bounds
+        layoutStoryGuideFrames()
         if let connection = previewLayer?.connection, connection.isVideoOrientationSupported {
             connection.videoOrientation = .portrait
         }
-        layoutCropGuide()
         if mode == .crop, cropScroll.frame == .zero || cropScroll.bounds.size != cropGuide.bounds.size {
             layoutCropScroll()
         }
@@ -165,6 +167,21 @@ private final class StoryCameraViewController: UIViewController, UIScrollViewDel
 
     private func setupCameraChrome() {
         let safe = view.safeAreaLayoutGuide
+
+        cameraGuide.backgroundColor = .black
+        cameraGuide.clipsToBounds = true
+        cameraGuide.layer.borderColor = UIColor.white.withAlphaComponent(0.35).cgColor
+        cameraGuide.layer.borderWidth = 1
+        cameraGuide.isUserInteractionEnabled = false
+        view.addSubview(cameraGuide)
+
+        topLetterbox.backgroundColor = .black
+        topLetterbox.isUserInteractionEnabled = false
+        view.addSubview(topLetterbox)
+
+        bottomLetterbox.backgroundColor = .black
+        bottomLetterbox.isUserInteractionEnabled = false
+        view.addSubview(bottomLetterbox)
 
         closeButton.translatesAutoresizingMaskIntoConstraints = false
         closeButton.setImage(UIImage(systemName: "xmark", withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .bold)), for: .normal)
@@ -277,8 +294,9 @@ private final class StoryCameraViewController: UIViewController, UIScrollViewDel
                 if let conn = layer.connection, conn.isVideoOrientationSupported {
                     conn.videoOrientation = .portrait
                 }
-                layer.frame = self.view.bounds
-                self.view.layer.insertSublayer(layer, at: 0)
+                self.layoutStoryGuideFrames()
+                layer.frame = self.cameraGuide.bounds
+                self.cameraGuide.layer.insertSublayer(layer, at: 0)
                 self.previewLayer = layer
             }
         }
@@ -423,8 +441,8 @@ private final class StoryCameraViewController: UIViewController, UIScrollViewDel
         ])
     }
 
-    private func layoutCropGuide() {
-        guard cropGuide.superview != nil else { return }
+    /// Shared 9:16 frame for live preview and crop — WYSIWYG between shutter and crop step.
+    private func storyGuideFrame() -> CGRect {
         let safe = view.safeAreaInsets
         let w = view.bounds.width
         let maxH = view.bounds.height - safe.top - safe.bottom - 120
@@ -436,7 +454,28 @@ private final class StoryCameraViewController: UIViewController, UIScrollViewDel
         }
         let x = (w - guideW) / 2
         let y = safe.top + 52 + (maxH - guideH) / 2
-        cropGuide.frame = CGRect(x: x, y: y, width: guideW, height: guideH)
+        return CGRect(x: x, y: y, width: guideW, height: guideH)
+    }
+
+    private func layoutStoryGuideFrames() {
+        let guide = storyGuideFrame()
+        cameraGuide.frame = guide
+        topLetterbox.frame = CGRect(x: 0, y: 0, width: view.bounds.width, height: max(0, guide.minY))
+        bottomLetterbox.frame = CGRect(
+            x: 0,
+            y: guide.maxY,
+            width: view.bounds.width,
+            height: max(0, view.bounds.height - guide.maxY)
+        )
+        previewLayer?.frame = cameraGuide.bounds
+        if cropGuide.superview != nil {
+            cropGuide.frame = guide
+        }
+    }
+
+    private func layoutCropGuide() {
+        guard cropGuide.superview != nil else { return }
+        cropGuide.frame = storyGuideFrame()
     }
 
     private func layoutCropScroll() {
@@ -490,6 +529,9 @@ private final class StoryCameraViewController: UIViewController, UIScrollViewDel
     private func setMode(_ newMode: Mode) {
         mode = newMode
         let isCamera = newMode == .camera
+        cameraGuide.isHidden = !isCamera
+        topLetterbox.isHidden = !isCamera
+        bottomLetterbox.isHidden = !isCamera
         closeButton.isHidden = !isCamera
         flipButton.isHidden = !isCamera
         shutterButton.isHidden = !isCamera
@@ -616,9 +658,10 @@ private enum StoryCameraImageEncoder {
         let imageSize = pixelSize(image)
         guard imageSize.width > 1, imageSize.height > 1 else { return nil }
 
+        let inset = scrollView.contentInset
         var cropRect = CGRect(
-            x: scrollView.contentOffset.x / zoom,
-            y: scrollView.contentOffset.y / zoom,
+            x: (scrollView.contentOffset.x + inset.left) / zoom,
+            y: (scrollView.contentOffset.y + inset.top) / zoom,
             width: scrollView.bounds.width / zoom,
             height: scrollView.bounds.height / zoom
         ).integral

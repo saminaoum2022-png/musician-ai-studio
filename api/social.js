@@ -699,7 +699,7 @@ async function handlePost(req, res, user) {
     if (audioUrl && !/^https?:\/\//i.test(audioUrl)) {
       return sendJson(res, 400, { ok: false, error: "Invalid voice audio URL" });
     }
-    const finalBody = text || (audioUrl ? "🎤 Voice note" : "");
+    const finalBody = text || (audioUrl ? "Voice drop" : "");
     const ins = await svcFetch("social_status_posts", {
       method: "POST",
       headers: { Prefer: "return=representation" },

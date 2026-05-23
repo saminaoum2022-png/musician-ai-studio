@@ -9,10 +9,11 @@ import {
   initLockScreenNowPlaying,
   syncLockScreenNowPlaying,
 } from "./lockScreenNowPlaying.js";
+import { initEcho, onEnterFriendsRoute, openEchoFromCreateChooser } from "./echo.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260524noMomentsV1";
+const APP_BUILD = "20260522echoV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2921,6 +2922,26 @@ try {
   wireRouteLinkHapticsOnce();
   bindFriendsPageOnce();
   wireFriendsComposeFabOnce();
+} catch {}
+try {
+  initEcho({
+    getAuthSession: () => authSession,
+    escapeHtml,
+    statusVoiceNormalizePeaks,
+    statusVoiceFallbackPeaks,
+    supabaseRestWithAuth,
+    fetchFollowingListViaSupabase,
+    fetchProfilesByUserIdsMap,
+    normalizeProfileAvatarForImg,
+    uploadStatusVoiceBlob,
+    computeStatusWaveformPeaks,
+    formatMsAsVoiceTime,
+    haptic,
+    showToast,
+    socialApi,
+    enterFriendsRoute,
+    pickRecorderMimeType,
+  });
 } catch {}
 try {
   wireTrackOptionsSheetOnce();
@@ -5917,7 +5938,7 @@ function getPendingCreateAction() {
 function finishPostAuthNavigation() {
   const pending = getPendingCreateAction();
   setPendingCreateAction("");
-  if (pending === "song" || pending === "status") {
+  if (pending === "song" || pending === "status" || pending === "echo") {
     window.setTimeout(() => {
       try { navigateFromCreateChooser(pending); } catch {}
     }, 80);
@@ -5966,6 +5987,11 @@ function navigateFromCreateChooser(action) {
 
     if (kind === "status") {
       openFriendsForStatusCompose();
+      return;
+    }
+
+    if (kind === "echo") {
+      openEchoFromCreateChooser();
       return;
     }
   } finally {
@@ -6337,6 +6363,9 @@ function enterFriendsRoute() {
   bindFriendsPageOnce();
   wireFriendsComposeFabOnce();
   syncFollowingComposeUi();
+  try {
+    onEnterFriendsRoute();
+  } catch {}
   void (async () => {
     if (token !== _friendsRouteEnterToken) return;
     await ensureFriendsFeedPrerequisites();

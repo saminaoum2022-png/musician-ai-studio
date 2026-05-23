@@ -776,6 +776,13 @@
               <p class="discoveryStudioTag appScreenLead">Updates, advice, drops, and remixes from people you follow.</p>
             </div>
           </header>
+          <div id="friendsEchoRail" class="friendsEchoRail" hidden>
+            <div class="friendsEchoRailHead">
+              <span class="friendsEchoRailTitle">Echo</span>
+              <span class="friendsEchoRailHint">Raw ideas · 24h</span>
+            </div>
+            <div id="friendsEchoRailScroll" class="friendsEchoRailScroll" role="list" aria-label="Echoes from your circle"></div>
+          </div>
           <div id="discoveryFollowingStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
           <div id="discoveryFollowingList" class="followActStack" hidden></div>
         </section>
@@ -1300,7 +1307,14 @@
                 </span>
                 <span class="createChooserPillLabel">Create song</span>
               </button>
-              <button type="button" class="createChooserPill createChooserPill--status" data-create-chooser="status" style="--pill-i:1" role="listitem">
+              <button type="button" class="createChooserPill createChooserPill--echo" data-create-chooser="echo" style="--pill-i:1" role="listitem">
+                <span class="createChooserPillAura createChooserPillAura--echo" aria-hidden="true"></span>
+                <span class="createChooserPillIcon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 3a3 3 0 0 0-3 3v6.2l-2.6 2.6a1 1 0 0 0 .7 1.7H9v2.5a2.5 2.5 0 0 0 2.5 2.5h1a2.5 2.5 0 0 0 2.5-2.5V16h1.9a1 1 0 0 0 .7-1.7L16 11.2V6a3 3 0 0 0-3-3zm0 2a1 1 0 0 1 1 1v5.3a1 1 0 0 1-.3.7L10 14.6V16h4v-1.4l-1.7-1.6a1 1 0 0 1-.3-.7V6a1 1 0 0 1 1-1z"/></svg>
+                </span>
+                <span class="createChooserPillLabel">Drop Echo</span>
+              </button>
+              <button type="button" class="createChooserPill createChooserPill--status" data-create-chooser="status" style="--pill-i:2" role="listitem">
                 <span class="createChooserPillAura createChooserPillAura--status" aria-hidden="true"></span>
                 <span class="createChooserPillIcon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M4 4h16v2H4V4zm0 7h10v2H4v-2zm0 7h14v2H4v-2z"/></svg>
@@ -2808,7 +2822,68 @@
         setTimeout(unboot, 3500);
       })();
     </script>
+    <div id="echoViewerSheet" class="echoViewerSheet" aria-hidden="true" hidden>
+      <div class="echoViewerBackdrop" id="echoViewerBackdrop"></div>
+      <div class="echoViewerStage" id="echoViewerStage">
+        <div class="echoViewerAmbient" aria-hidden="true"></div>
+        <button type="button" class="echoViewerClose" id="btnEchoViewerClose" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+        <div class="echoViewerTapZones" aria-hidden="true">
+          <button type="button" class="echoViewerTapZone echoViewerTapZone--prev" id="echoViewerTapPrev" tabindex="-1"></button>
+          <button type="button" class="echoViewerTapZone echoViewerTapZone--next" id="echoViewerTapNext" tabindex="-1"></button>
+        </div>
+        <div class="echoViewerCore">
+          <div class="echoViewerMicPulse" id="echoViewerMicPulse" aria-hidden="true"></div>
+          <div class="echoViewerWave echoWave" id="echoViewerWave" aria-hidden="true"></div>
+          <span class="echoViewerOnceBadge" id="echoViewerOnceBadge" hidden>Listen once</span>
+        </div>
+        <header class="echoViewerHead">
+          <div class="echoViewerProfile">
+            <span class="echoViewerAvatar">
+              <img id="echoViewerAvatarImg" class="echoViewerAvatarImg" alt="" width="36" height="36" decoding="async" />
+              <span id="echoViewerAvatarFallback" class="echoViewerAvatarFallback" aria-hidden="true"></span>
+            </span>
+            <span id="echoViewerWho" class="echoViewerWho"></span>
+          </div>
+          <span id="echoViewerTimer" class="echoViewerTimer">0:00</span>
+        </header>
+        <div class="echoViewerProgress" aria-hidden="true"><span id="echoViewerProgressFill" class="echoViewerProgressFill"></span></div>
+        <p id="echoViewerCaption" class="echoViewerCaption" hidden></p>
+        <div id="echoViewerReactions" class="echoViewerReactions" hidden>
+          <button type="button" class="echoReactBtn" data-echo-react="fire" aria-label="Fire">🔥</button>
+          <button type="button" class="echoReactBtn" data-echo-react="heart" aria-label="Love">❤️</button>
+          <button type="button" class="echoReactBtn" data-echo-react="cry" aria-label="Moved">😭</button>
+          <button type="button" class="echoReactBtn" data-echo-react="eyes" aria-label="Eyes">👀</button>
+          <button type="button" class="echoReactBtn echoReactBtn--reply" id="btnEchoReply">Reply with Echo</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="echoComposeSheet" class="echoComposeSheet" aria-hidden="true" hidden>
+      <div class="echoComposeBackdrop" id="echoComposeBackdrop"></div>
+      <div class="echoComposeCard" role="dialog" aria-modal="true" aria-labelledby="echoComposeTitle">
+        <button type="button" class="echoComposeClose" id="btnEchoComposeClose" aria-label="Close">×</button>
+        <p class="echoComposeKicker">Echo</p>
+        <h2 id="echoComposeTitle" class="echoComposeTitle">Share a raw moment</h2>
+        <p class="echoComposeLead">Unfinished hooks, hums, late-night thoughts — gone in 24h.</p>
+        <div class="echoComposeWave echoWave" id="echoComposeWave" aria-hidden="true"></div>
+        <p id="echoComposeStatus" class="echoComposeStatus">Hold the mic — hum, sing, or speak a raw idea</p>
+        <button type="button" class="echoComposeMic" id="btnEchoRecord" aria-label="Record Echo">
+          <span class="echoComposeMicRing" aria-hidden="true"></span>
+          <span class="echoComposeMicDot" aria-hidden="true"></span>
+        </button>
+        <label class="echoListenOnceToggle">
+          <input type="checkbox" id="echoListenOnce" />
+          <span>Listen once</span>
+          <span class="echoListenOnceHint">Listeners hear it a single time</span>
+        </label>
+        <textarea id="echoComposeCaption" class="echoComposeCaption" maxlength="200" rows="2" placeholder="Optional whisper…"></textarea>
+        <button type="button" class="echoComposePublish" id="btnEchoPublish" disabled>Release Echo</button>
+      </div>
+    </div>
+
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260522nativeStoryCamV8"></script>
+    <script type="module" src="./src/app.js?v=20260522echoV1"></script>
   </body>
 </html>

@@ -48,6 +48,49 @@ function cleanPostId(v) {
   return cleanUserId(v);
 }
 
+function normalizeWaveformPeaks(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .slice(0, 64)
+    .map((n) => Math.max(0, Math.min(1, Number(n) || 0)));
+}
+
+function mapStatusPostRow(p, prof) {
+  const audioUrl = String(p?.audio_url || "").trim();
+  return {
+    id: p.id,
+    userId: p.user_id,
+    postType: p.post_type,
+    body: p.body,
+    audioUrl,
+    durationMs: Number(p?.duration_ms) || 0,
+    waveformPeaks: normalizeWaveformPeaks(p?.waveform_peaks),
+    createdAt: p.created_at,
+    username: prof?.username || "",
+    avatar: prof?.avatar || "",
+  };
+}
+
+function mapEchoRow(row, prof, extras = {}) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    audioUrl: String(row.audio_url || "").trim(),
+    durationMs: Number(row.duration_ms) || 0,
+    waveformPeaks: normalizeWaveformPeaks(row.waveform_peaks),
+    body: String(row.body || "").trim(),
+    listenOnce: Boolean(row.listen_once),
+    replyTo: row.reply_to || null,
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+    username: prof?.username || "",
+    avatar: prof?.avatar || "",
+    listened: Boolean(extras.listened),
+    reaction: String(extras.reaction || "").trim(),
+    reactionCounts: extras.reactionCounts || {},
+  };
+}
+
 function cleanUsername(v) {
   return String(v || "").replace(/^@/, "").trim().slice(0, 64);
 }
@@ -471,21 +514,13 @@ async function handleGet(req, res, user) {
     if (!user) return sendJson(res, 401, { ok: false, error: "Not signed in" });
     const limit = Math.min(80, Math.max(1, Number(url.searchParams.get("limit")) || 40));
     const rows = await svcFetch(
-      `social_status_posts?select=id,user_id,post_type,body,created_at&user_id=eq.${encodeURIComponent(user.userId)}&order=created_at.desc&limit=${limit}`,
+      `social_status_posts?select=id,user_id,post_type,body,audio_url,duration_ms,waveform_peaks,created_at&user_id=eq.${encodeURIComponent(user.userId)}&order=created_at.desc&limit=${limit}`,
     );
     const rawPosts = Array.isArray(rows.data) ? rows.data : [];
     const prof = await profileByUserId(user.userId);
     return sendJson(res, 200, {
       ok: true,
-      posts: rawPosts.map((p) => ({
-        id: p.id,
-        userId: p.user_id,
-        postType: p.post_type,
-        body: p.body,
-        createdAt: p.created_at,
-        username: prof?.username || "",
-        avatar: prof?.avatar || "",
-      })),
+      posts: rawPosts.map((p) => mapStatusPostRow(p, prof)),
     });
   }
 
@@ -502,21 +537,13 @@ async function handleGet(req, res, user) {
     if (!authorIds.length) return sendJson(res, 200, { ok: true, posts: [] });
     const inList = authorIds.map((id) => encodeURIComponent(id)).join(",");
     const rows = await svcFetch(
-      `social_status_posts?select=id,user_id,post_type,body,created_at&user_id=in.(${inList})&order=created_at.desc&limit=${limit}`,
+      `social_status_posts?select=id,user_id,post_type,body,audio_url,duration_ms,waveform_peaks,created_at&user_id=in.(${inList})&order=created_at.desc&limit=${limit}`,
     );
     const rawPosts = Array.isArray(rows.data) ? rows.data : [];
     const profiles = await Promise.all(rawPosts.map((p) => profileByUserId(p.user_id)));
     return sendJson(res, 200, {
       ok: true,
-      posts: rawPosts.map((p, i) => ({
-        id: p.id,
-        userId: p.user_id,
-        postType: p.post_type,
-        body: p.body,
-        createdAt: p.created_at,
-        username: profiles[i]?.username || "",
-        avatar: profiles[i]?.avatar || "",
-      })),
+      posts: rawPosts.map((p, i) => mapStatusPostRow(p, profiles[i])),
     });
   }
 
@@ -546,7 +573,7 @@ async function handleGet(req, res, user) {
     const inList = userIds.map((id) => encodeURIComponent(id)).join(",");
     const limit = Math.min(120, Math.max(1, Number(url.searchParams.get("limit")) || 48));
     const rows = await svcFetch(
-      `social_moments?select=id,user_id,body,image_url,created_at,expires_at&user_id=in.(${inList})&expires_at=gt.${encodeURIComponent(nowIso)}&order=created_at.desc&limit=${limit}`,
+      `social_moments?select=id,user_id,body,image_url,created_at,expires_at,kind,song_title,song_audio_url&user_id=in.(${inList})&expires_at=gt.${encodeURIComponent(nowIso)}&order=created_at.desc&limit=${limit}`,
     );
     const raw = Array.isArray(rows.data) ? rows.data : [];
     const byUser = new Map();
@@ -573,6 +600,9 @@ async function handleGet(req, res, user) {
         imageUrl: m.image_url,
         createdAt: m.created_at,
         expiresAt: m.expires_at,
+        kind: m.kind || "photo",
+        songTitle: m.song_title || "",
+        songAudioUrl: m.song_audio_url || "",
         username: profiles[i]?.username || "",
         avatar: profiles[i]?.avatar || "",
       })),
@@ -582,6 +612,74 @@ async function handleGet(req, res, user) {
       stories,
       moments: stories.map((s) => s.moments[0]).filter(Boolean),
     });
+  }
+
+  if (type === "echo_rail") {
+    if (!user) return sendJson(res, 401, { ok: false, error: "Not signed in" });
+    const nowIso = new Date().toISOString();
+    const follows = await svcFetch(
+      `social_follows?select=following_user_id&follower_user_id=eq.${encodeURIComponent(user.userId)}&limit=100`,
+    );
+    const followIds = (Array.isArray(follows.data) ? follows.data : [])
+      .map((r) => cleanUserId(r.following_user_id))
+      .filter(Boolean);
+    const userIds = [...new Set([user.userId, ...followIds])];
+    if (!userIds.length) return sendJson(res, 200, { ok: true, echoes: [] });
+    const inList = userIds.map((id) => encodeURIComponent(id)).join(",");
+    const limit = Math.min(80, Math.max(1, Number(url.searchParams.get("limit")) || 40));
+    const rows = await svcFetch(
+      `social_echoes?select=id,user_id,audio_url,duration_ms,waveform_peaks,body,listen_once,reply_to,created_at,expires_at&user_id=in.(${inList})&expires_at=gt.${encodeURIComponent(nowIso)}&order=created_at.desc&limit=${limit}`,
+    );
+    const raw = Array.isArray(rows.data) ? rows.data : [];
+    const echoIds = raw.map((r) => r.id).filter(Boolean);
+    let listenedSet = new Set();
+    let reactionByEcho = new Map();
+    if (echoIds.length) {
+      const inEcho = echoIds.map((id) => encodeURIComponent(id)).join(",");
+      const listens = await svcFetch(
+        `social_echo_listens?select=echo_id&user_id=eq.${encodeURIComponent(user.userId)}&echo_id=in.(${inEcho})`,
+      );
+      listenedSet = new Set(
+        (Array.isArray(listens.data) ? listens.data : []).map((r) => r.echo_id).filter(Boolean),
+      );
+      const reacts = await svcFetch(
+        `social_echo_reactions?select=echo_id,reaction,user_id&echo_id=in.(${inEcho})`,
+      );
+      const reactRows = Array.isArray(reacts.data) ? reacts.data : [];
+      for (const rr of reactRows) {
+        if (!reactionByEcho.has(rr.echo_id)) reactionByEcho.set(rr.echo_id, { counts: {}, mine: "" });
+        const bucket = reactionByEcho.get(rr.echo_id);
+        const k = String(rr.reaction || "");
+        bucket.counts[k] = (bucket.counts[k] || 0) + 1;
+        if (rr.user_id === user.userId) bucket.mine = k;
+      }
+    }
+    const byUser = new Map();
+    for (const row of raw) {
+      const uid = cleanUserId(row.user_id);
+      if (!uid) continue;
+      if (!byUser.has(uid)) byUser.set(uid, []);
+      byUser.get(uid).push(row);
+    }
+    const sortedUsers = [...byUser.entries()].sort((a, b) => {
+      const ta = new Date(a[1][0]?.created_at || 0).getTime();
+      const tb = new Date(b[1][0]?.created_at || 0).getTime();
+      return tb - ta;
+    });
+    const profiles = await Promise.all(sortedUsers.map(([uid]) => profileByUserId(uid)));
+    const echoes = sortedUsers.map(([uid, userRows], i) => {
+      const prof = profiles[i];
+      const slides = userRows.map((row) => {
+        const rx = reactionByEcho.get(row.id) || { counts: {}, mine: "" };
+        return mapEchoRow(row, prof, {
+          listened: listenedSet.has(row.id),
+          reaction: rx.mine,
+          reactionCounts: rx.counts,
+        });
+      });
+      return { userId: uid, username: prof?.username || "", avatar: prof?.avatar || "", echoes: slides };
+    });
+    return sendJson(res, 200, { ok: true, echoes });
   }
 
   return sendJson(res, 400, { ok: false, error: "Unknown social query" });
@@ -680,11 +778,27 @@ async function handlePost(req, res, user) {
       ? String(body.postType).trim()
       : "update";
     const text = String(body?.body || "").trim().slice(0, 320);
-    if (!text) return sendJson(res, 400, { ok: false, error: "Write something to post" });
+    const audioUrl = String(body?.audioUrl || body?.audio_url || "").trim().slice(0, 2048);
+    const durationMs = Math.min(60000, Math.max(0, Math.round(Number(body?.durationMs || body?.duration_ms) || 0)));
+    const waveformPeaks = normalizeWaveformPeaks(body?.waveformPeaks || body?.waveform_peaks);
+    if (!text && !audioUrl) {
+      return sendJson(res, 400, { ok: false, error: "Add a voice note or write something to post" });
+    }
+    if (audioUrl && !/^https?:\/\//i.test(audioUrl)) {
+      return sendJson(res, 400, { ok: false, error: "Invalid voice audio URL" });
+    }
+    const finalBody = text || (audioUrl ? "Voice drop" : "");
     const ins = await svcFetch("social_status_posts", {
       method: "POST",
       headers: { Prefer: "return=representation" },
-      body: JSON.stringify({ user_id: user.userId, post_type: postType, body: text }),
+      body: JSON.stringify({
+        user_id: user.userId,
+        post_type: postType,
+        body: finalBody,
+        audio_url: audioUrl || null,
+        duration_ms: audioUrl ? (durationMs || null) : null,
+        waveform_peaks: audioUrl && waveformPeaks.length ? waveformPeaks : null,
+      }),
     });
     if (!ins.ok) {
       return sendJson(res, 500, { ok: false, error: "Post failed", details: ins.text });
@@ -693,17 +807,7 @@ async function handlePost(req, res, user) {
     const prof = await profileByUserId(user.userId);
     return sendJson(res, 200, {
       ok: true,
-      post: row
-        ? {
-            id: row.id,
-            userId: row.user_id,
-            postType: row.post_type,
-            body: row.body,
-            createdAt: row.created_at,
-            username: prof?.username || "",
-            avatar: prof?.avatar || "",
-          }
-        : null,
+      post: row ? mapStatusPostRow(row, prof) : null,
     });
   }
 
@@ -721,9 +825,15 @@ async function handlePost(req, res, user) {
   if (action === "post_moment") {
     const text = String(body?.body || "").trim().slice(0, 320);
     const imageUrl = String(body?.imageUrl || body?.image_url || "").trim().slice(0, 2048);
+    const kind = String(body?.kind || "photo").trim().toLowerCase() === "song" ? "song" : "photo";
+    const songTitle = String(body?.songTitle || body?.song_title || "").trim().slice(0, 200);
+    const songAudioUrl = String(body?.songAudioUrl || body?.song_audio_url || "").trim().slice(0, 2048);
     if (!text) return sendJson(res, 400, { ok: false, error: "Write a caption for your moment" });
     if (!imageUrl || !/^https?:\/\//i.test(imageUrl)) {
       return sendJson(res, 400, { ok: false, error: "Missing moment image" });
+    }
+    if (kind === "song" && (!songTitle || !songAudioUrl || !/^https?:\/\//i.test(songAudioUrl))) {
+      return sendJson(res, 400, { ok: false, error: "Song story needs title and audio" });
     }
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const ins = await svcFetch("social_moments", {
@@ -734,6 +844,9 @@ async function handlePost(req, res, user) {
         body: text,
         image_url: imageUrl,
         expires_at: expiresAt,
+        kind,
+        song_title: kind === "song" ? songTitle : null,
+        song_audio_url: kind === "song" ? songAudioUrl : null,
       }),
     });
     if (!ins.ok) {
@@ -751,6 +864,9 @@ async function handlePost(req, res, user) {
             imageUrl: row.image_url,
             createdAt: row.created_at,
             expiresAt: row.expires_at,
+            kind: row.kind || "photo",
+            songTitle: row.song_title || "",
+            songAudioUrl: row.song_audio_url || "",
             username: prof?.username || "",
             avatar: prof?.avatar || "",
           }
@@ -763,6 +879,81 @@ async function handlePost(req, res, user) {
     if (!momentId) return sendJson(res, 400, { ok: false, error: "Invalid moment" });
     const del = await svcFetch(
       `social_moments?id=eq.${encodeURIComponent(momentId)}&user_id=eq.${encodeURIComponent(user.userId)}`,
+      { method: "DELETE", headers: { Prefer: "return=minimal" } },
+    );
+    if (!del.ok) return sendJson(res, 500, { ok: false, error: "Delete failed", details: del.text });
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (action === "post_echo") {
+    const audioUrl = String(body?.audioUrl || body?.audio_url || "").trim().slice(0, 2048);
+    const durationMs = Math.min(120000, Math.max(0, Math.round(Number(body?.durationMs || body?.duration_ms) || 0)));
+    const peaks = normalizeWaveformPeaks(body?.waveformPeaks || body?.waveform_peaks);
+    const text = String(body?.body || "").trim().slice(0, 200);
+    const listenOnce = Boolean(body?.listenOnce ?? body?.listen_once);
+    const replyTo = cleanPostId(body?.replyTo || body?.reply_to) || null;
+    if (!audioUrl || !/^https?:\/\//i.test(audioUrl)) {
+      return sendJson(res, 400, { ok: false, error: "Missing echo audio" });
+    }
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const ins = await svcFetch("social_echoes", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({
+        user_id: user.userId,
+        audio_url: audioUrl,
+        duration_ms: durationMs || null,
+        waveform_peaks: peaks.length ? peaks : null,
+        body: text || null,
+        listen_once: listenOnce,
+        reply_to: replyTo,
+        expires_at: expiresAt,
+      }),
+    });
+    if (!ins.ok) return sendJson(res, 500, { ok: false, error: "Echo failed", details: ins.text });
+    const row = Array.isArray(ins.data) && ins.data[0] ? ins.data[0] : null;
+    const prof = await profileByUserId(user.userId);
+    return sendJson(res, 200, {
+      ok: true,
+      echo: row ? mapEchoRow(row, prof, { listened: false, reaction: "", reactionCounts: {} }) : null,
+    });
+  }
+
+  if (action === "echo_listen") {
+    const echoId = cleanPostId(body?.echoId);
+    if (!echoId) return sendJson(res, 400, { ok: false, error: "Invalid echo" });
+    const ins = await svcFetch("social_echo_listens", {
+      method: "POST",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ echo_id: echoId, user_id: user.userId }),
+    });
+    if (!ins.ok && ins.status !== 409) {
+      return sendJson(res, 500, { ok: false, error: "Listen record failed", details: ins.text });
+    }
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (action === "echo_react") {
+    const echoId = cleanPostId(body?.echoId);
+    const reaction = String(body?.reaction || "").trim().toLowerCase();
+    const allowed = new Set(["fire", "heart", "cry", "eyes"]);
+    if (!echoId || !allowed.has(reaction)) {
+      return sendJson(res, 400, { ok: false, error: "Invalid reaction" });
+    }
+    const ins = await svcFetch("social_echo_reactions", {
+      method: "POST",
+      headers: { Prefer: "return=representation,resolution=merge-duplicates" },
+      body: JSON.stringify({ echo_id: echoId, user_id: user.userId, reaction }),
+    });
+    if (!ins.ok) return sendJson(res, 500, { ok: false, error: "Reaction failed", details: ins.text });
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (action === "delete_echo") {
+    const echoId = cleanPostId(body?.echoId);
+    if (!echoId) return sendJson(res, 400, { ok: false, error: "Invalid echo" });
+    const del = await svcFetch(
+      `social_echoes?id=eq.${encodeURIComponent(echoId)}&user_id=eq.${encodeURIComponent(user.userId)}`,
       { method: "DELETE", headers: { Prefer: "return=minimal" } },
     );
     if (!del.ok) return sendJson(res, 500, { ok: false, error: "Delete failed", details: del.text });

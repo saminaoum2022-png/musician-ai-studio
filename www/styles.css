@@ -5331,6 +5331,676 @@ body[data-route="moment"] .momentStudio{
   overflow-x: auto;
   padding-bottom: 4px;
 }
+
+/* Echo — ephemeral creator audio moments */
+.friendsEchoRail{
+  margin: 0 0 18px;
+  padding: 0 2px;
+}
+.friendsEchoRailHead{
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 10px;
+  padding: 0 4px;
+}
+.friendsEchoRailTitle{
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(167,139,250,0.92);
+}
+.friendsEchoRailHint{
+  font-size: 11px;
+  color: rgba(232,238,247,0.45);
+}
+.friendsEchoRailScroll{
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 8px 4px 12px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.friendsEchoRailScroll::-webkit-scrollbar{ display: none; }
+
+.echoTile{
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  width: 76px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.echoTile:active{ transform: scale(0.96); }
+.echoTileShell{
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: rgba(8,10,18,0.92);
+  box-shadow:
+    0 4px 18px rgba(0,0,0,0.42),
+    inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+.echoTileShell--pulse::before{
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(124,92,255,0.55), rgba(167,139,250,0.35), rgba(35,213,171,0.2));
+  opacity: 0.85;
+  z-index: 0;
+  animation: echoTileGlow 2.8s ease-in-out infinite;
+}
+@keyframes echoTileGlow{
+  0%, 100%{ opacity: 0.55; transform: scale(1); }
+  50%{ opacity: 0.95; transform: scale(1.02); }
+}
+.echoTile.isViewed .echoTileShell--pulse::before{
+  opacity: 0;
+  animation: none;
+}
+.echoTileShell--add{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    linear-gradient(145deg, rgba(124,92,255,0.18), rgba(6,9,16,0.95));
+  border: 1px dashed rgba(167,139,250,0.45);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+}
+.echoTileShell--add::before{ display: none; }
+.echoTileAddIcon{
+  font-size: 28px;
+  font-weight: 300;
+  line-height: 1;
+  color: rgba(167,139,250,0.95);
+}
+.echoTileMedia{
+  position: absolute;
+  inset: 3px;
+  border-radius: 17px;
+  overflow: hidden;
+  z-index: 2;
+}
+.echoTileAvatar,
+.echoTileAvatarFallback{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 17px;
+}
+.echoTileAvatarFallback{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: rgba(232,238,247,0.88);
+  background: linear-gradient(145deg, rgba(124,92,255,0.35), rgba(6,9,16,0.9));
+}
+.echoTileWave{
+  position: absolute;
+  inset: auto 4px 4px;
+  left: 4px;
+  right: 4px;
+  height: 22px;
+  z-index: 3;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  pointer-events: none;
+  mask-image: linear-gradient(180deg, transparent, #000 35%);
+}
+.echoTileOnce{
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  z-index: 4;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  padding: 2px 5px;
+  border-radius: 6px;
+  color: rgba(255,255,255,0.92);
+  background: rgba(6,9,16,0.72);
+  border: 1px solid rgba(167,139,250,0.45);
+  backdrop-filter: blur(8px);
+}
+.echoTileLabel{
+  font-size: 11px;
+  font-weight: 700;
+  max-width: 76px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(232,238,247,0.72);
+}
+.echoTile.isActive .echoTileLabel{ color: rgba(167,139,250,0.95); }
+.echoTile--add .echoTileLabel{ color: rgba(167,139,250,0.88); }
+
+.echoWave{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5px;
+  min-width: 0;
+}
+.echoBar{
+  flex: 1;
+  max-width: 5px;
+  min-width: 2px;
+  height: calc(8px + var(--bar-h, 35%) * 48px);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(200,180,255,0.95) 0%, rgba(124,92,255,0.9) 50%, rgba(35,213,171,0.75) 100%);
+  transform-origin: center bottom;
+  opacity: 0.52;
+  transition: height 70ms ease, opacity 120ms ease, box-shadow 120ms ease;
+  animation: echoBarBreathe 3.2s ease-in-out infinite;
+  animation-delay: calc(var(--bar-i, 0) * 40ms);
+}
+.echoBar--hi{ filter: saturate(1.12); opacity: 0.62; }
+.echoBar--tile{
+  max-width: 3px;
+  min-width: 1.5px;
+  height: calc(4px + var(--bar-h, 35%) * 14px);
+  animation-duration: 2.6s;
+}
+.echoBar--live{
+  opacity: 0.88;
+  animation: none;
+}
+@keyframes echoBarBreathe{
+  0%, 100%{ transform: scaleY(0.92); opacity: 0.48; }
+  50%{ transform: scaleY(1.06); opacity: 0.72; }
+}
+
+.echoViewerSheet{
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  pointer-events: none;
+}
+.echoViewerSheet[hidden]{ display: none !important; }
+.echoViewerSheet.isOpen{ pointer-events: auto; }
+.echoViewerBackdrop{
+  position: absolute;
+  inset: 0;
+  background: rgba(2,4,10,0.82);
+  backdrop-filter: blur(18px) saturate(1.1);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+  opacity: 0;
+  transition: opacity 320ms ease;
+}
+.echoViewerSheet.isOpen .echoViewerBackdrop{ opacity: 1; }
+.echoViewerStage{
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding:
+    max(16px, env(safe-area-inset-top))
+    16px
+    max(24px, env(safe-area-inset-bottom));
+  transform: scale(0.96);
+  opacity: 0;
+  transition:
+    transform 420ms cubic-bezier(0.22, 1, 0.32, 1),
+    opacity 320ms ease;
+}
+.echoViewerSheet.isOpen .echoViewerStage{
+  transform: scale(1);
+  opacity: 1;
+}
+.echoViewerAmbient{
+  position: absolute;
+  inset: 10% 8%;
+  border-radius: 40%;
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(124,92,255,0.22), transparent 62%),
+    radial-gradient(ellipse at 30% 70%, rgba(35,213,171,0.08), transparent 55%);
+  filter: blur(28px);
+  opacity: 0.9;
+  animation: echoAmbientFloat 8s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes echoAmbientFloat{
+  0%, 100%{ transform: translateY(0) scale(1); }
+  50%{ transform: translateY(-12px) scale(1.03); }
+}
+.echoViewerClose{
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  right: 14px;
+  z-index: 12;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.06);
+  color: rgba(232,238,247,0.9);
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+}
+.echoViewerTapZones{
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  pointer-events: none;
+}
+.echoViewerTapZone{
+  flex: 1;
+  border: none;
+  background: transparent;
+  pointer-events: auto;
+  cursor: default;
+}
+.echoViewerCore{
+  position: relative;
+  width: min(320px, 88vw);
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  z-index: 4;
+}
+.echoViewerMicPulse{
+  position: absolute;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(124,92,255,calc(0.18 + var(--echo-mic, 0) * 0.35)), transparent 68%);
+  transform: scale(calc(0.85 + var(--echo-mic, 0) * 0.35));
+  transition: transform 80ms ease, opacity 120ms ease;
+  pointer-events: none;
+}
+.echoViewerWave.echoWave{
+  position: relative;
+  width: 100%;
+  height: 120px;
+  align-items: flex-end;
+  padding: 0 4px;
+  z-index: 2;
+}
+.echoViewerWave .echoBar{
+  max-width: 6px;
+  height: calc(12px + var(--bar-h, 35%) * 88px);
+  opacity: 0.65;
+  animation: none;
+}
+.echoViewerOnceBadge{
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(167,139,250,0.92);
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(167,139,250,0.35);
+  background: rgba(6,9,16,0.55);
+  backdrop-filter: blur(10px);
+}
+.echoViewerHead{
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  left: 16px;
+  right: 72px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.echoViewerProfile{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.echoViewerAvatar{
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.06);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.1);
+}
+.echoViewerAvatarImg,
+.echoViewerAvatarFallback{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.echoViewerAvatarFallback{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(232,238,247,0.9);
+}
+.echoViewerWho{
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: rgba(232,238,247,0.92);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.echoViewerTimer{
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: rgba(232,238,247,0.5);
+  flex-shrink: 0;
+}
+.echoViewerProgress{
+  position: absolute;
+  bottom: max(100px, calc(88px + env(safe-area-inset-bottom)));
+  left: 24px;
+  right: 24px;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  overflow: hidden;
+  z-index: 8;
+}
+.echoViewerProgressFill{
+  display: block;
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(124,92,255,0.95), rgba(167,139,250,0.85));
+  transition: width 80ms linear;
+}
+.echoViewerCaption{
+  position: absolute;
+  bottom: max(120px, calc(108px + env(safe-area-inset-bottom)));
+  left: 24px;
+  right: 24px;
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.45;
+  color: rgba(232,238,247,0.72);
+  z-index: 8;
+}
+.echoViewerReactions{
+  position: absolute;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  left: 16px;
+  right: 16px;
+  z-index: 12;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  animation: echoReactionsIn 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes echoReactionsIn{
+  from{ opacity: 0; transform: translateY(12px); }
+  to{ opacity: 1; transform: translateY(0); }
+}
+.echoReactBtn{
+  min-width: 44px;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(6,9,16,0.72);
+  backdrop-filter: blur(14px);
+  font-size: 18px;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+.echoReactBtn:active{ transform: scale(0.94); }
+.echoReactBtn.isActive{
+  border-color: rgba(167,139,250,0.55);
+  background: rgba(124,92,255,0.22);
+}
+.echoReactBtn--reply{
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: rgba(167,139,250,0.95);
+  padding: 0 14px;
+}
+.echoViewerSheet.isLocked .echoViewerCore{
+  opacity: 0.35;
+  filter: blur(6px);
+  transition: opacity 480ms ease, filter 480ms ease;
+}
+.echoViewerSheet.isLocked .echoViewerWave::after{
+  content: "Heard";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(232,238,247,0.55);
+}
+.echoViewerSheet.isEnded .echoViewerCore{
+  animation: echoDissolve 520ms ease forwards;
+}
+@keyframes echoDissolve{
+  to{ opacity: 0.55; transform: scale(0.98); }
+}
+body.echoViewerOpen,
+body.echoComposeOpen{
+  overflow: hidden;
+}
+
+.echoComposeSheet{
+  position: fixed;
+  inset: 0;
+  z-index: 145;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+}
+.echoComposeSheet[hidden]{ display: none !important; }
+.echoComposeSheet.isOpen{ pointer-events: auto; }
+.echoComposeBackdrop{
+  position: absolute;
+  inset: 0;
+  background: rgba(2,4,10,0.72);
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+.echoComposeSheet.isOpen .echoComposeBackdrop{ opacity: 1; }
+.echoComposeCard{
+  position: relative;
+  width: min(440px, 100%);
+  margin: 0;
+  padding: 22px 20px max(28px, env(safe-area-inset-bottom));
+  border-radius: 24px 24px 0 0;
+  background: linear-gradient(180deg, rgba(14,18,30,0.98), rgba(6,9,16,0.99));
+  border: 1px solid rgba(255,255,255,0.1);
+  border-bottom: none;
+  box-shadow: 0 -12px 48px rgba(0,0,0,0.45);
+  transform: translateY(100%);
+  transition: transform 360ms cubic-bezier(0.22, 1, 0.32, 1);
+}
+.echoComposeSheet.isOpen .echoComposeCard{
+  transform: translateY(0);
+}
+.echoComposeClose{
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.06);
+  color: rgba(232,238,247,0.8);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.echoComposeKicker{
+  margin: 0 0 4px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(167,139,250,0.88);
+}
+.echoComposeTitle{
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+.echoComposeLead{
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(232,238,247,0.55);
+}
+.echoComposeWave{
+  height: 72px;
+  margin: 0 0 12px;
+  padding: 8px 4px;
+  border-radius: 16px;
+  background: rgba(0,0,0,0.22);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+}
+.echoComposeStatus{
+  margin: 0 0 14px;
+  text-align: center;
+  font-size: 13px;
+  color: rgba(232,238,247,0.62);
+}
+.echoComposeMic{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  height: 76px;
+  margin: 0 auto 18px;
+  padding: 0;
+  border: none;
+  border-radius: 22px;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+}
+.echoComposeMicRing{
+  position: absolute;
+  inset: 0;
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(124,92,255,0.35), rgba(6,9,16,0.2));
+  box-shadow:
+    0 0 0 1px rgba(167,139,250,0.35),
+    0 12px 32px rgba(124,92,255,0.18);
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+.echoComposeMicDot{
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #a78bfa, #7c5cff);
+  box-shadow: 0 4px 16px rgba(124,92,255,0.45);
+  z-index: 1;
+}
+.echoComposeMic.isRecording .echoComposeMicRing{
+  animation: echoMicPulse 1.2s ease-in-out infinite;
+  box-shadow:
+    0 0 0 1px rgba(167,139,250,0.55),
+    0 0 28px rgba(124,92,255,0.35);
+}
+@keyframes echoMicPulse{
+  0%, 100%{ transform: scale(1); }
+  50%{ transform: scale(1.06); }
+}
+.echoListenOnceToggle{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.echoListenOnceToggle input{
+  width: 18px;
+  height: 18px;
+  accent-color: #7c5cff;
+}
+.echoListenOnceHint{
+  flex: 1 1 100%;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(232,238,247,0.45);
+}
+.echoComposeCaption{
+  width: 100%;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.25);
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  resize: none;
+}
+.echoComposePublish{
+  width: 100%;
+  padding: 14px 18px;
+  border: none;
+  border-radius: 16px;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #fff;
+  background: linear-gradient(135deg, #7c5cff, #5b3fd4);
+  box-shadow: 0 10px 28px rgba(124,92,255,0.28);
+  cursor: pointer;
+}
+.echoComposePublish:disabled{
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .userPublicMomentsWrap{
   margin: 0 0 14px;
 }
@@ -15000,6 +15670,7 @@ body.createChooserSheetOpen .footer{
   isolation: isolate;
 }
 .createChooserPill--song{ --pill-scale: 1; z-index: 3; }
+.createChooserPill--echo{ --pill-scale: 1; z-index: 2; }
 .createChooserPill--status{ --pill-scale: 1; z-index: 1; }
 .createChooserPillAura{
   display: none;
@@ -15028,6 +15699,16 @@ body.createChooserSheetOpen .footer{
   border: 1px solid rgba(255,255,255,0.1);
 }
 .createChooserPill--song .createChooserPillIcon{ color: #5ee9d3; }
+.createChooserPill--echo .createChooserPillIcon{ color: #c4a8ff; }
+.createChooserPillAura--echo{
+  display: block;
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(124,92,255,0.2), rgba(167,139,250,0.12));
+  opacity: 0.85;
+  z-index: -2;
+}
 .createChooserPill--moment .createChooserPillIcon{ color: #c4a8ff; }
 .createChooserPillAura--moment{
   background: linear-gradient(135deg, rgba(124,92,255,0.28), rgba(183,139,255,0.22));

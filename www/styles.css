@@ -4400,14 +4400,16 @@ body[data-route="moment"] main.grid{
   margin: 0 !important;
   max-width: none !important;
 }
-body[data-route="moment"] main.grid > [data-route="moment"]{
+body[data-route="moment"] main.grid > [data-route="moment"],
+body[data-route="moment"] #momentPage{
   display: block !important;
   min-height: 100dvh;
 }
 .momentStudio{
   position: fixed;
   inset: 0;
-  z-index: 48;
+  z-index: 12500;
+  touch-action: manipulation;
   background: #000;
   color: #fff;
   overflow: hidden;
@@ -4851,7 +4853,8 @@ body[data-route="moment"] main.grid > [data-route="moment"]{
     calc(env(safe-area-inset-top, 0px) + 8px)
     14px
     calc(env(safe-area-inset-bottom, 0px) + 14px);
-  pointer-events: none;
+  pointer-events: auto;
+  touch-action: manipulation;
 }
 .momentStudioChrome > *{
   pointer-events: auto;

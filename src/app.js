@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260523storyCapCameraV1";
+const APP_BUILD = "20260523storyTouchFixV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2546,7 +2546,8 @@ function applyRoute() {
     updateNotificationsEntryBadges(0);
   }
   const main = document.querySelector("main.grid");
-  if (main) {
+  const skipRouteSwapAnim = wanted === "moment" || prevRoute === "moment";
+  if (main && !skipRouteSwapAnim) {
     main.classList.remove("routeSwap");
     requestAnimationFrame(() => {
       main.classList.remove("routeSwap");
@@ -2554,6 +2555,8 @@ function applyRoute() {
       main.classList.add("routeSwap");
       window.setTimeout(() => main.classList.remove("routeSwap"), 320);
     });
+  } else if (main) {
+    main.classList.remove("routeSwap");
   }
   // Hub audio is bound to the Hub view only. Any route swap away from
   // Hub fully stops Hub playback so nothing keeps streaming silently
@@ -2699,6 +2702,7 @@ function applyRoute() {
     })();
   }
   if (wanted === "moment") {
+    prepareMomentRouteEntry();
     try { syncMomentPageUi(); } catch {}
     if (momentStudioPhase === "songShare" && pendingSongStoryTrack) {
       try { setupSongStoryShareUi(); } catch {}
@@ -5874,15 +5878,26 @@ function openFriendsComposeSheet() {
   }
 }
 
-const FIXED_OVERLAY_IDS = ["createChooserSheet", "friendsComposeSheet"];
+const FIXED_OVERLAY_IDS = ["createChooserSheet", "friendsComposeSheet", "momentPage"];
 
-/** Keep full-screen sheets on `body` — `main.grid.routeSwap` uses transform and breaks `position:fixed` hit-testing on iOS. */
+/** Keep full-screen overlays on `body` — `main.grid.routeSwap` transform breaks iOS touch on fixed children. */
 function mountFixedOverlaysToBody() {
   for (const id of FIXED_OVERLAY_IDS) {
     const el = document.getElementById(id);
     if (!el || el.parentElement === document.body) continue;
     document.body.appendChild(el);
   }
+}
+
+function prepareMomentRouteEntry() {
+  mountFixedOverlaysToBody();
+  closeCreateChooserSheet({ immediate: true });
+  closeFriendsComposeSheet();
+  unlockPageForCreateChooserSheet();
+  setMomentStudioLoading(false);
+  try {
+    document.body.classList.remove("pageTransitioning", "booting");
+  } catch {}
 }
 
 function isCreateChooserOpen() {
@@ -7140,6 +7155,7 @@ function openMomentPhotoSource() {
 
 function openMomentCreatePage() {
   setCreateEntryIntent("moment");
+  prepareMomentRouteEntry();
   if (_momentNativePreviewActive) void teardownMomentStudio();
   else {
     cancelMomentStudioStart();

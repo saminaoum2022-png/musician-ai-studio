@@ -117,6 +117,7 @@ function indexEchoStories(stories) {
     const uid = String(story.userId || "");
     if (!uid) continue;
     const slides = (story.echoes || []).map(mapEchoFromApi);
+    slides.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
     _echoStoriesByUser.set(uid, { ...story, echoes: slides });
     slides.forEach((e) => _echoById.set(String(e.id), e));
   }
@@ -263,7 +264,12 @@ function renderEchoRail(stories) {
   const uid = String(c().getAuthSession()?.user?.id || "");
   const own = _echoStoriesByUser.get(uid) || { userId: uid, username: "", avatar: "", echoes: [] };
   const others = _echoStories.filter((s) => String(s.userId) !== uid);
-  const tiles = [echoTileShellHtml(own, { isOwn: true, addTile: true }), ...others.map((s) => echoTileShellHtml(s))];
+  // Always show "+" to drop another Echo; when you have live echoes, also show your playable tile.
+  const tiles = [echoTileShellHtml(own, { isOwn: true, addTile: true })];
+  if ((own.echoes || []).length > 0) {
+    tiles.push(echoTileShellHtml(own, { isOwn: true, addTile: false }));
+  }
+  tiles.push(...others.map((s) => echoTileShellHtml(s)));
   scroll.innerHTML = tiles.join("");
   rail.hidden = !uid;
 }
@@ -723,7 +729,7 @@ async function publishEcho() {
     try {
       c().showToast("Echo is live for 24 hours", { icon: "✓", durationMs: 2400 });
     } catch {}
-    void refreshEchoRail();
+    await refreshEchoRail();
   } catch (e) {
     try {
       c().showToast(e?.message || "Could not post Echo", { durationMs: 3200 });

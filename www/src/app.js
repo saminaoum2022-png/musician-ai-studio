@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260523storyOverlayFixV1";
+const APP_BUILD = "20260524storyIosTapFixV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -6268,7 +6268,7 @@ function syncMomentPickStageMode() {
   if (video) video.hidden = !webLive;
   if (flipBtn) flipBtn.hidden = !(nativeLive || webLive);
   const pickDock = document.getElementById("momentPickDock");
-  if (pickDock) pickDock.hidden = !isPick || nativeStory;
+  if (pickDock) pickDock.hidden = !isPick || nativeStory || iosPick;
   setMomentCameraLiveChrome(nativeLive);
 }
 
@@ -7091,7 +7091,7 @@ function syncMomentPageUi() {
   if (pickStage) pickStage.hidden = !isPick || isSongShare;
   if (cropStage) cropStage.hidden = !isCrop;
   if (songStage) songStage.hidden = !isSongShare;
-  if (pickDock) pickDock.hidden = !isPick || isSongShare;
+  if (pickDock) pickDock.hidden = !isPick || isSongShare || (isPick && momentStudioUsesIosPickFlow());
   if (shareTools) shareTools.hidden = !(isShare || isSongShare);
   if (changeBtn) changeBtn.hidden = !isShare;
   if (cropBack) cropBack.hidden = !isCrop;
@@ -8424,7 +8424,7 @@ function wireMomentPageOnce() {
   if (document.documentElement.dataset.wiredMomentPage) return;
   document.documentElement.dataset.wiredMomentPage = "1";
   wireMomentCropGesturesOnce();
-  document.getElementById("btnMomentBack")?.addEventListener("click", () => {
+  const onMomentBack = () => {
     try { haptic("light"); } catch {}
     if (momentStudioPhase === "crop") {
       leaveMomentCropPhase();
@@ -8438,7 +8438,13 @@ function wireMomentPageOnce() {
       syncMomentPageUi();
     }
     leaveMomentPage("#/friends");
-  });
+  };
+  const backBtn = document.getElementById("btnMomentBack");
+  backBtn?.addEventListener("click", onMomentBack);
+  backBtn?.addEventListener("touchend", (e) => {
+    try { e.preventDefault(); } catch {}
+    onMomentBack();
+  }, { passive: false });
   document.getElementById("btnMomentSongPreview")?.addEventListener("click", () => {
     try { haptic("light"); } catch {}
     void toggleMomentSongPreview();

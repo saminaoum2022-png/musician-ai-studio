@@ -4654,6 +4654,20 @@ body[data-route="moment"] .momentStudio{
 }
 .momentStudio--iosPick .momentStudioIosPickHero{
   display: flex;
+  z-index: 12;
+}
+/* iOS pick buttons live in .momentStudioMedia; chrome is z-index 10 and was blocking center taps. */
+.momentStudio--iosPick .momentStudioChrome{
+  pointer-events: none;
+}
+.momentStudio--iosPick .momentStudioChrome > *{
+  pointer-events: auto;
+}
+.momentStudio--iosPick .momentStudioMedia,
+.momentStudio--iosPick .momentStudioPickStage,
+.momentStudio--iosPick .momentStudioIosPickHero,
+.momentStudio--iosPick .momentIosPickBtn{
+  pointer-events: auto;
 }
 .momentIosPickActions{
   display: flex;
@@ -4862,7 +4876,8 @@ body[data-route="moment"] .momentStudio{
   animation: momentStudioSpin 0.75s linear infinite;
 }
 .momentStudioChrome{
-  position: relative;
+  position: absolute;
+  inset: 0;
   z-index: 10;
   display: flex;
   flex-direction: column;

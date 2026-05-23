@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260523storyTouchFixV1";
+const APP_BUILD = "20260523storyCamPermV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -6505,11 +6505,26 @@ function momentCameraCapacitorCancelled(err) {
   );
 }
 
+async function ensureCapacitorCameraPermissions(source = "CAMERA") {
+  const Camera = window.Capacitor?.Plugins?.Camera;
+  if (!Camera?.checkPermissions || !Camera?.requestPermissions) return;
+  const need = source === "PHOTOS" ? ["photos"] : ["camera"];
+  const cur = await Camera.checkPermissions();
+  const ok = need.every((p) => cur?.[p] === "granted" || cur?.[p] === "limited");
+  if (ok) return;
+  const req = await Camera.requestPermissions({ permissions: need });
+  const granted = need.every((p) => req?.[p] === "granted" || req?.[p] === "limited");
+  if (!granted) {
+    throw new Error("Camera or photo access denied — allow in Settings → NabadAi Music.");
+  }
+}
+
 async function capacitorCameraGetPhotoDataUrl(source = "CAMERA") {
   const Camera = window.Capacitor?.Plugins?.Camera;
   if (!Camera?.getPhoto) {
     throw new Error("Camera plugin not loaded — run npm run sync:ios and rebuild in Xcode.");
   }
+  await ensureCapacitorCameraPermissions(source);
   const photo = await Camera.getPhoto({
     quality: 90,
     allowEditing: false,
@@ -6527,6 +6542,10 @@ async function capacitorCameraGetPhotoDataUrl(source = "CAMERA") {
 async function captureMomentViaCapacitorCamera(source = "CAMERA") {
   if ((document.body.getAttribute("data-route") || "") !== "moment") return;
   if (momentStudioPhase !== "pick") return;
+  try { haptic("light"); } catch {}
+  try {
+    showToast(source === "PHOTOS" ? "Opening library…" : "Opening camera…", { durationMs: 1400 });
+  } catch {}
   setMomentStudioLoading(true);
   try {
     const dataUrl = await capacitorCameraGetPhotoDataUrl(source);
@@ -7060,6 +7079,10 @@ function syncMomentPageUi() {
   if (preview) preview.hidden = !(isShare && hasPhoto);
   if (topTitle) {
     topTitle.textContent = isCrop ? "Crop" : isSongShare ? "Song story" : "New story";
+  }
+  const iosBuild = document.getElementById("momentIosPickBuild");
+  if (iosBuild) {
+    iosBuild.textContent = momentStudioUsesIosPickFlow() && isPick ? `Build ${APP_BUILD}` : "";
   }
   if (!isShare && !isSongShare) {
     if (captionPanel) captionPanel.hidden = true;

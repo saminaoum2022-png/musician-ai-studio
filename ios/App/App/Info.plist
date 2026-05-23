@@ -57,6 +57,8 @@
 	<string>NabadAi Music uses the camera so you can capture photos for 24-hour stories.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>NabadAi Music accesses your photo library so you can choose images for stories and song covers.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>NabadAi Music saves story photos you capture to your library when you choose to.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

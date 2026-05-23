@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260523storyIosPickV1";
+const APP_BUILD = "20260523storyCapCameraV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -6480,7 +6480,58 @@ async function flipMomentCamera() {
   await startMomentCamera();
 }
 
+function momentCameraCapacitorCancelled(err) {
+  const msg = String(err?.message || err || "").toLowerCase();
+  return (
+    msg.includes("cancel")
+    || msg.includes("dismiss")
+    || msg.includes("user denied")
+    || String(err?.code || "") === "USER_CANCELLED"
+  );
+}
+
+async function capacitorCameraGetPhotoDataUrl(source = "CAMERA") {
+  const Camera = window.Capacitor?.Plugins?.Camera;
+  if (!Camera?.getPhoto) {
+    throw new Error("Camera plugin not loaded — run npm run sync:ios and rebuild in Xcode.");
+  }
+  const photo = await Camera.getPhoto({
+    quality: 90,
+    allowEditing: false,
+    resultType: "base64",
+    source: source === "PHOTOS" ? "PHOTOS" : "CAMERA",
+    direction: momentCameraFacing === "user" ? "FRONT" : "REAR",
+    correctOrientation: true,
+  });
+  const fmt = String(photo?.format || "jpeg").toLowerCase().replace("jpg", "jpeg");
+  const b64 = String(photo?.base64String || "").trim();
+  if (!b64) throw new Error("No photo returned");
+  return `data:image/${fmt};base64,${b64}`;
+}
+
+async function captureMomentViaCapacitorCamera(source = "CAMERA") {
+  if ((document.body.getAttribute("data-route") || "") !== "moment") return;
+  if (momentStudioPhase !== "pick") return;
+  setMomentStudioLoading(true);
+  try {
+    const dataUrl = await capacitorCameraGetPhotoDataUrl(source);
+    const ok = await enterMomentCropPhase(dataUrl);
+    if (!ok) throw new Error("Could not open crop");
+  } catch (e) {
+    if (momentCameraCapacitorCancelled(e)) return;
+    try {
+      showToast(e?.message || "Could not open camera", { durationMs: 3200 });
+    } catch {}
+  } finally {
+    setMomentStudioLoading(false);
+  }
+}
+
 function openMomentCameraInput() {
+  if (momentStudioUsesIosPickFlow()) {
+    void captureMomentViaCapacitorCamera("CAMERA");
+    return;
+  }
   const input = document.getElementById("momentPhotoCamera");
   if (!input) return;
   try { input.value = ""; } catch {}
@@ -7077,6 +7128,10 @@ async function applyMomentPhotoFilesFromInput(input) {
 }
 
 function openMomentPhotoSource() {
+  if (momentStudioUsesIosPickFlow()) {
+    void captureMomentViaCapacitorCamera("PHOTOS");
+    return;
+  }
   const input = document.getElementById("momentPhotoLibrary");
   if (!input) return;
   try { input.value = ""; } catch {}
@@ -8374,16 +8429,32 @@ function wireMomentPageOnce() {
       try { document.getElementById("momentCaptionInput")?.blur?.(); } catch {}
     }
   });
+  let momentShutterLock = 0;
   const onMomentShutter = (e) => {
+    const now = Date.now();
+    if (now - momentShutterLock < 500) return;
+    momentShutterLock = now;
     try {
       e?.preventDefault?.();
       e?.stopPropagation?.();
     } catch {}
+    if (momentStudioUsesIosPickFlow()) {
+      void captureMomentViaCapacitorCamera("CAMERA");
+      return;
+    }
     void captureMomentFromCamera();
   };
   const shutter = document.getElementById("btnMomentCapture");
   shutter?.addEventListener("click", onMomentShutter);
   shutter?.addEventListener("touchend", onMomentShutter, { passive: false });
+  document.getElementById("btnMomentIosOpenCamera")?.addEventListener("click", (e) => {
+    try { e?.preventDefault?.(); } catch {}
+    void captureMomentViaCapacitorCamera("CAMERA");
+  });
+  document.getElementById("btnMomentIosOpenGallery")?.addEventListener("click", (e) => {
+    try { e?.preventDefault?.(); } catch {}
+    void captureMomentViaCapacitorCamera("PHOTOS");
+  });
   document.getElementById("btnMomentFlipCamera")?.addEventListener("click", () => {
     try { haptic("light"); } catch {}
     void flipMomentCamera();

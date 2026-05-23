@@ -2826,37 +2826,69 @@
       <div class="echoViewerBackdrop" id="echoViewerBackdrop"></div>
       <div class="echoViewerStage" id="echoViewerStage">
         <div class="echoViewerAmbient" aria-hidden="true"></div>
-        <button type="button" class="echoViewerClose" id="btnEchoViewerClose" aria-label="Close">
-          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></svg>
-        </button>
+        <div class="echoViewerStars" aria-hidden="true"></div>
+        <header class="echoViewerTop">
+          <div class="echoViewerProfile">
+            <span class="echoViewerAvatar">
+              <img id="echoViewerAvatarImg" class="echoViewerAvatarImg" alt="" width="40" height="40" decoding="async" />
+              <span id="echoViewerAvatarFallback" class="echoViewerAvatarFallback" aria-hidden="true"></span>
+            </span>
+            <span class="echoViewerMeta">
+              <span id="echoViewerWho" class="echoViewerWho"></span>
+              <span id="echoViewerWhen" class="echoViewerWhen">Just now</span>
+            </span>
+          </div>
+          <div class="echoViewerTopActions">
+            <span id="echoViewerTimerTop" class="echoViewerTimerTop">0:00 · 0:00</span>
+            <button type="button" class="echoViewerDelete" id="btnEchoDelete" hidden aria-label="Remove Echo">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M9 3h6l1 2h5v2H4V5h5l1-2zm1 6h2v9h-2V9zm4 0h2v9h-2V9zM7 9h2v9H7V9z"/></svg>
+            </button>
+            <button type="button" class="echoViewerClose" id="btnEchoViewerClose" aria-label="Close">
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></svg>
+            </button>
+          </div>
+        </header>
+        <div class="echoViewerOnceBlock" id="echoViewerOnceBlock" hidden>
+          <span class="echoViewerOncePill">
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M17 9h-1V7a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zm-3 0H10V7a2 2 0 1 1 4 0v2z"/></svg>
+            Listen once
+          </span>
+          <p class="echoViewerOnceSub">You can hear this only one time.</p>
+        </div>
         <div class="echoViewerTapZones" aria-hidden="true">
           <button type="button" class="echoViewerTapZone echoViewerTapZone--prev" id="echoViewerTapPrev" tabindex="-1"></button>
           <button type="button" class="echoViewerTapZone echoViewerTapZone--next" id="echoViewerTapNext" tabindex="-1"></button>
         </div>
-        <div class="echoViewerCore">
-          <div class="echoViewerMicPulse" id="echoViewerMicPulse" aria-hidden="true"></div>
-          <div class="echoViewerWave echoWave" id="echoViewerWave" aria-hidden="true"></div>
-          <span class="echoViewerOnceBadge" id="echoViewerOnceBadge" hidden>Listen once</span>
-        </div>
-        <header class="echoViewerHead">
-          <div class="echoViewerProfile">
-            <span class="echoViewerAvatar">
-              <img id="echoViewerAvatarImg" class="echoViewerAvatarImg" alt="" width="36" height="36" decoding="async" />
-              <span id="echoViewerAvatarFallback" class="echoViewerAvatarFallback" aria-hidden="true"></span>
+        <div class="echoViewerCore" id="echoViewerCore">
+          <div class="echoViewerOrbits" aria-hidden="true"><span></span><span></span><span></span></div>
+          <div class="echoViewerWaveHorizon echoWave" id="echoViewerWave" aria-hidden="true"></div>
+          <div class="echoViewerMicBox" aria-hidden="true">
+            <span class="echoViewerMicIcon">
+              <svg viewBox="0 0 24 24" width="32" height="32"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V19H8v2h8v-2h-3v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
             </span>
-            <span id="echoViewerWho" class="echoViewerWho"></span>
           </div>
-          <span id="echoViewerTimer" class="echoViewerTimer">0:00</span>
-        </header>
-        <div class="echoViewerProgress" aria-hidden="true"><span id="echoViewerProgressFill" class="echoViewerProgressFill"></span></div>
-        <p id="echoViewerCaption" class="echoViewerCaption" hidden></p>
-        <div id="echoViewerReactions" class="echoViewerReactions" hidden>
-          <button type="button" class="echoReactBtn" data-echo-react="fire" aria-label="Fire">🔥</button>
-          <button type="button" class="echoReactBtn" data-echo-react="heart" aria-label="Love">❤️</button>
-          <button type="button" class="echoReactBtn" data-echo-react="cry" aria-label="Moved">😭</button>
-          <button type="button" class="echoReactBtn" data-echo-react="eyes" aria-label="Eyes">👀</button>
-          <button type="button" class="echoReactBtn echoReactBtn--reply" id="btnEchoReply">Reply with Echo</button>
+          <div class="echoViewerMicPulse" id="echoViewerMicPulse" aria-hidden="true"></div>
         </div>
+        <p id="echoViewerCenterTimer" class="echoViewerCenterTimer">0:00 / 0:00</p>
+        <blockquote id="echoViewerCaption" class="echoViewerCaption" hidden></blockquote>
+        <div id="echoViewerDots" class="echoViewerDots" hidden role="tablist" aria-label="Echo slides"></div>
+        <footer class="echoViewerFooter">
+          <div class="echoViewerScrub" aria-hidden="true">
+            <span id="echoViewerProgressFill" class="echoViewerProgressFill"></span>
+            <span id="echoViewerScrubThumb" class="echoViewerScrubThumb"></span>
+          </div>
+          <div id="echoViewerReactions" class="echoViewerReactions" hidden>
+            <button type="button" class="echoReactBtn" data-echo-react="fire" aria-label="Fire">🔥</button>
+            <button type="button" class="echoReactBtn" data-echo-react="heart" aria-label="Love">❤️</button>
+            <button type="button" class="echoReactBtn" data-echo-react="cry" aria-label="Moved">😭</button>
+            <button type="button" class="echoReactBtn" data-echo-react="eyes" aria-label="Eyes">👀</button>
+            <button type="button" class="echoReactBtn echoReactBtn--reply" id="btnEchoReply">
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 3a3 3 0 0 0-3 3v6.2l-2.6 2.6a1 1 0 0 0 .7 1.7H9v2.5a2.5 2.5 0 0 0 2.5 2.5h1a2.5 2.5 0 0 0 2.5-2.5V16h1.9a1 1 0 0 0 .7-1.7L16 11.2V6a3 3 0 0 0-3-3z"/></svg>
+              Reply with Echo
+            </button>
+          </div>
+          <p id="echoViewerReactTip" class="echoViewerReactTip" hidden>Tip: Your reaction means a lot to creators</p>
+        </footer>
       </div>
     </div>
 
@@ -2942,6 +2974,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260522echoComposeV1"></script>
+    <script type="module" src="./src/app.js?v=20260522echoPlayerV1"></script>
   </body>
 </html>

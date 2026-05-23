@@ -40,6 +40,9 @@ let _echoProgressTimer = 0;
 let _echoListenMarked = false;
 let _echoReplyToId = "";
 let _pendingEchoCompose = false;
+let _echoRailCache = null;
+let _echoRailCacheAt = 0;
+const ECHO_RAIL_CACHE_MS = 20000;
 
 function c() {
   return ctx;
@@ -81,19 +84,88 @@ function paintEchoViewerWave(slide) {
   wave.innerHTML = peaksHtml(slide.waveformPeaks);
 }
 
+function echoRelativeTime(iso) {
+  const ts = new Date(iso || 0).getTime();
+  if (!ts) return "Just now";
+  const diff = Date.now() - ts;
+  if (diff < 60_000) return "Just now";
+  const min = Math.floor(diff / 60_000);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  return `${Math.floor(hr / 24)}d ago`;
+}
+
+function isOwnEchoSlide(slide) {
+  const uid = String(c().getAuthSession()?.user?.id || "");
+  return uid && String(slide?.userId || "") === uid;
+}
+
+function invalidateEchoRailCache() {
+  _echoRailCache = null;
+  _echoRailCacheAt = 0;
+}
+
 function updateEchoViewerProgress() {
-  const timer = document.getElementById("echoViewerTimer");
+  const timerTop = document.getElementById("echoViewerTimerTop");
+  const centerTimer = document.getElementById("echoViewerCenterTimer");
   const progress = document.getElementById("echoViewerProgressFill");
+  const thumb = document.getElementById("echoViewerScrubThumb");
   const slide = currentEchoSlide();
-  if (!slide || !_echoAudio) return;
-  const cur = Math.floor(_echoAudio.currentTime || 0);
-  const dur = Math.floor(_echoAudio.duration || slide.durationMs / 1000 || 0);
-  if (timer) {
-    timer.textContent = `${c().formatMsAsVoiceTime(cur * 1000)} · ${c().formatMsAsVoiceTime((dur || 1) * 1000)}`;
+  if (!slide) return;
+
+  const curSec = _echoAudio ? _echoAudio.currentTime || 0 : 0;
+  const durSec = _echoAudio?.duration || slide.durationMs / 1000 || 0;
+  const curFmt = c().formatMsAsVoiceTime(Math.floor(curSec * 1000));
+  const durFmt = c().formatMsAsVoiceTime(Math.floor((durSec || 1) * 1000));
+  const line = `${curFmt} · ${durFmt}`;
+
+  if (timerTop) timerTop.textContent = line;
+  if (centerTimer) centerTimer.textContent = `${curFmt} / ${durFmt}`;
+
+  const pct = durSec > 0 ? Math.min(100, (curSec / durSec) * 100) : 0;
+  if (progress) progress.style.width = `${pct}%`;
+  if (thumb) thumb.style.left = `${pct}%`;
+}
+
+function renderEchoViewerDots() {
+  const wrap = document.getElementById("echoViewerDots");
+  const story = _echoDeck[_echoDeckIndex];
+  const slides = story?.echoes || [];
+  if (!wrap) return;
+  if (slides.length <= 1) {
+    wrap.hidden = true;
+    wrap.innerHTML = "";
+    return;
   }
-  if (progress && _echoAudio.duration) {
-    progress.style.width = `${Math.min(100, (_echoAudio.currentTime / _echoAudio.duration) * 100)}%`;
-  }
+  wrap.hidden = false;
+  wrap.innerHTML = slides
+    .map(
+      (_, i) =>
+        `<button type="button" class="echoViewerDot${i === _echoSlideIndex ? " isActive" : ""}" data-echo-dot="${i}" aria-label="Echo ${i + 1}"></button>`,
+    )
+    .join("");
+}
+
+function mergeEchoIntoRail(echo, prof) {
+  const uid = String(echo.userId || "");
+  if (!uid) return;
+  const story = _echoStoriesByUser.get(uid) || {
+    userId: uid,
+    username: prof?.username || echo.username || "",
+    avatar: prof?.avatar || echo.avatar || "",
+    echoes: [],
+  };
+  story.echoes = [echo, ...(story.echoes || []).filter((e) => String(e.id) !== String(echo.id))];
+  const stories = [..._echoStories.filter((s) => String(s.userId) !== uid), story].sort((a, b) => {
+    const ta = new Date(a.echoes?.[0]?.createdAt || 0).getTime();
+    const tb = new Date(b.echoes?.[0]?.createdAt || 0).getTime();
+    return tb - ta;
+  });
+  indexEchoStories(stories);
+  _echoRailCache = stories;
+  _echoRailCacheAt = Date.now();
+  renderEchoRail(stories);
 }
 
 function loadHeardLocal() {
@@ -154,102 +226,119 @@ function indexEchoStories(stories) {
   }
 }
 
-async function fetchEchoRail() {
+async function fetchEchoRailDirect() {
   const uid = c().getAuthSession()?.user?.id;
   if (!uid) return [];
-  try {
-    const following = await c().fetchFollowingListViaSupabase();
-    if (following === null) throw new Error("no direct");
-    const authorIds = [...new Set([uid, ...following.map((f) => f.userId).filter(Boolean)])];
-    if (!authorIds.length) return [];
-    const nowIso = new Date().toISOString();
-    const inList = authorIds.map((id) => encodeURIComponent(id)).join(",");
-    const cols =
-      "id,user_id,audio_url,duration_ms,waveform_peaks,body,listen_once,reply_to,created_at,expires_at";
-    const r = await c().supabaseRestWithAuth(
-      `social_echoes?user_id=in.(${inList})&expires_at=gt.${encodeURIComponent(nowIso)}&select=${cols}&order=created_at.desc&limit=60`,
-    );
-    if (!r?.ok) throw new Error("fetch");
-    const raw = await r.json().catch(() => []);
-    if (!Array.isArray(raw)) return [];
-    const profIds = [...new Set(raw.map((row) => String(row.user_id || "").trim()).filter(Boolean))];
-    const profMap = await c().fetchProfilesByUserIdsMap(profIds);
-    const echoIds = raw.map((row) => row.id).filter(Boolean);
-    let listenedSet = new Set();
-    const reactMap = new Map();
-    if (echoIds.length) {
-      const inEcho = echoIds.map((id) => encodeURIComponent(id)).join(",");
-      const lr = await c().supabaseRestWithAuth(
+  const following = await c().fetchFollowingListViaSupabase();
+  if (following === null) throw new Error("no direct");
+  const authorIds = [...new Set([uid, ...following.map((f) => f.userId).filter(Boolean)])];
+  if (!authorIds.length) return [];
+  const nowIso = new Date().toISOString();
+  const inList = authorIds.map((id) => encodeURIComponent(id)).join(",");
+  const cols =
+    "id,user_id,audio_url,duration_ms,waveform_peaks,body,listen_once,reply_to,created_at,expires_at";
+  const r = await c().supabaseRestWithAuth(
+    `social_echoes?user_id=in.(${inList})&expires_at=gt.${encodeURIComponent(nowIso)}&select=${cols}&order=created_at.desc&limit=48`,
+  );
+  if (!r?.ok) throw new Error("fetch");
+  const raw = await r.json().catch(() => []);
+  if (!Array.isArray(raw)) return [];
+  const profIds = [...new Set(raw.map((row) => String(row.user_id || "").trim()).filter(Boolean))];
+  const profMap = await c().fetchProfilesByUserIdsMap(profIds);
+  const echoIds = raw.map((row) => row.id).filter(Boolean);
+  let listenedSet = new Set();
+  const reactMap = new Map();
+  if (echoIds.length) {
+    const inEcho = echoIds.map((id) => encodeURIComponent(id)).join(",");
+    const [lr, rr] = await Promise.all([
+      c().supabaseRestWithAuth(
         `social_echo_listens?echo_id=in.(${inEcho})&user_id=eq.${encodeURIComponent(uid)}&select=echo_id`,
-      );
-      if (lr?.ok) {
-        const listens = await lr.json().catch(() => []);
-        if (Array.isArray(listens)) listenedSet = new Set(listens.map((x) => x.echo_id));
-      }
-      const rr = await c().supabaseRestWithAuth(
+      ),
+      c().supabaseRestWithAuth(
         `social_echo_reactions?echo_id=in.(${inEcho})&select=echo_id,reaction,user_id`,
-      );
-      if (rr?.ok) {
-        const reacts = await rr.json().catch(() => []);
-        if (Array.isArray(reacts)) {
-          for (const row of reacts) {
-            if (!reactMap.has(row.echo_id)) reactMap.set(row.echo_id, { counts: {}, mine: "" });
-            const b = reactMap.get(row.echo_id);
-            const k = String(row.reaction || "");
-            b.counts[k] = (b.counts[k] || 0) + 1;
-            if (row.user_id === uid) b.mine = k;
-          }
+      ),
+    ]);
+    if (lr?.ok) {
+      const listens = await lr.json().catch(() => []);
+      if (Array.isArray(listens)) listenedSet = new Set(listens.map((x) => x.echo_id));
+    }
+    if (rr?.ok) {
+      const reacts = await rr.json().catch(() => []);
+      if (Array.isArray(reacts)) {
+        for (const row of reacts) {
+          if (!reactMap.has(row.echo_id)) reactMap.set(row.echo_id, { counts: {}, mine: "" });
+          const b = reactMap.get(row.echo_id);
+          const k = String(row.reaction || "");
+          b.counts[k] = (b.counts[k] || 0) + 1;
+          if (row.user_id === uid) b.mine = k;
         }
       }
     }
-    const byUser = new Map();
-    for (const row of raw) {
-      const userId = String(row.user_id || "");
-      if (!userId) continue;
-      if (!byUser.has(userId)) byUser.set(userId, []);
+  }
+  const byUser = new Map();
+  for (const row of raw) {
+    const userId = String(row.user_id || "");
+    if (!userId) continue;
+    if (!byUser.has(userId)) byUser.set(userId, []);
+    const prof = profMap.get(userId);
+    const rx = reactMap.get(row.id) || { counts: {}, mine: "" };
+    byUser.get(userId).push(
+      mapEchoFromApi({
+        id: row.id,
+        userId,
+        audioUrl: row.audio_url,
+        durationMs: row.duration_ms,
+        waveformPeaks: row.waveform_peaks,
+        body: row.body,
+        listenOnce: row.listen_once,
+        replyTo: row.reply_to,
+        createdAt: row.created_at,
+        expiresAt: row.expires_at,
+        username: prof?.username || "",
+        avatar: prof?.avatar || "",
+        listened: listenedSet.has(row.id),
+        reaction: rx.mine,
+        reactionCounts: rx.counts,
+      }),
+    );
+  }
+  return [...byUser.entries()]
+    .sort((a, b) => {
+      const ta = new Date(a[1][0]?.createdAt || 0).getTime();
+      const tb = new Date(b[1][0]?.createdAt || 0).getTime();
+      return tb - ta;
+    })
+    .map(([userId, echoes]) => {
       const prof = profMap.get(userId);
-      const rx = reactMap.get(row.id) || { counts: {}, mine: "" };
-      byUser.get(userId).push(
-        mapEchoFromApi({
-          id: row.id,
-          userId,
-          audioUrl: row.audio_url,
-          durationMs: row.duration_ms,
-          waveformPeaks: row.waveform_peaks,
-          body: row.body,
-          listenOnce: row.listen_once,
-          replyTo: row.reply_to,
-          createdAt: row.created_at,
-          expiresAt: row.expires_at,
-          username: prof?.username || "",
-          avatar: prof?.avatar || "",
-          listened: listenedSet.has(row.id),
-          reaction: rx.mine,
-          reactionCounts: rx.counts,
-        }),
-      );
-    }
-    return [...byUser.entries()]
-      .sort((a, b) => {
-        const ta = new Date(a[1][0]?.createdAt || 0).getTime();
-        const tb = new Date(b[1][0]?.createdAt || 0).getTime();
-        return tb - ta;
-      })
-      .map(([userId, echoes]) => {
-        const prof = profMap.get(userId);
-        return {
-          userId,
-          username: prof?.username || "",
-          avatar: prof?.avatar || "",
-          echoes,
-        };
-      });
+      return {
+        userId,
+        username: prof?.username || "",
+        avatar: prof?.avatar || "",
+        echoes,
+      };
+    });
+}
+
+async function fetchEchoRail() {
+  const uid = c().getAuthSession()?.user?.id;
+  if (!uid) return [];
+  if (_echoRailCache && Date.now() - _echoRailCacheAt < ECHO_RAIL_CACHE_MS) {
+    return _echoRailCache;
+  }
+  try {
+    const data = await c().socialApi("/api/social?type=echo_rail&limit=48");
+    const stories = Array.isArray(data?.echoes) ? data.echoes : [];
+    _echoRailCache = stories;
+    _echoRailCacheAt = Date.now();
+    return stories;
   } catch {
     try {
-      const data = await c().socialApi("/api/social?type=echo_rail&limit=48");
-      return Array.isArray(data?.echoes) ? data.echoes : [];
+      const stories = await fetchEchoRailDirect();
+      _echoRailCache = stories;
+      _echoRailCacheAt = Date.now();
+      return stories;
     } catch {
-      return [];
+      return _echoRailCache || [];
     }
   }
 }
@@ -305,12 +394,17 @@ function renderEchoRail(stories) {
   rail.hidden = !uid;
 }
 
-export async function refreshEchoRail() {
+export async function refreshEchoRail(opts = {}) {
   const gen = ++_echoRailGen;
-  if (!c().getAuthSession()?.user?.id) {
+  const uid = c().getAuthSession()?.user?.id;
+  if (!uid) {
     const rail = document.getElementById("friendsEchoRail");
     if (rail) rail.hidden = true;
     return;
+  }
+  if (opts.useCache && _echoRailCache) {
+    indexEchoStories(_echoRailCache);
+    renderEchoRail(_echoRailCache);
   }
   const stories = await fetchEchoRail();
   if (gen !== _echoRailGen) return;
@@ -349,13 +443,13 @@ function currentEchoSlide() {
 
 function syncEchoViewerUi() {
   const sheet = document.getElementById("echoViewerSheet");
-  const wave = document.getElementById("echoViewerWave");
   const who = document.getElementById("echoViewerWho");
-  const timer = document.getElementById("echoViewerTimer");
+  const when = document.getElementById("echoViewerWhen");
   const caption = document.getElementById("echoViewerCaption");
   const reactions = document.getElementById("echoViewerReactions");
-  const onceBadge = document.getElementById("echoViewerOnceBadge");
-  const progress = document.getElementById("echoViewerProgressFill");
+  const reactTip = document.getElementById("echoViewerReactTip");
+  const onceBlock = document.getElementById("echoViewerOnceBlock");
+  const deleteBtn = document.getElementById("btnEchoDelete");
   const avatarImg = document.getElementById("echoViewerAvatarImg");
   const avatarFb = document.getElementById("echoViewerAvatarFallback");
   const slide = currentEchoSlide();
@@ -364,6 +458,7 @@ function syncEchoViewerUi() {
 
   const handle = String(slide.username || story?.username || "").replace(/^@/, "") || "Creator";
   if (who) who.textContent = `@${handle}`;
+  if (when) when.textContent = echoRelativeTime(slide.createdAt);
   const av = c().normalizeProfileAvatarForImg(String(slide.avatar || story?.avatar || "").trim());
   if (avatarImg) {
     if (av) {
@@ -376,14 +471,18 @@ function syncEchoViewerUi() {
     avatarFb.hidden = Boolean(av);
   }
   paintEchoViewerWave(slide);
+  renderEchoViewerDots();
   if (caption) {
     caption.textContent = slide.body || "";
     caption.hidden = !slide.body;
   }
-  if (onceBadge) onceBadge.hidden = !slide.listenOnce;
+  if (onceBlock) onceBlock.hidden = !slide.listenOnce;
+  if (deleteBtn) deleteBtn.hidden = !isOwnEchoSlide(slide);
   const heard = isEchoHeard(slide) || _echoListenMarked;
   const ended = sheet.classList.contains("isEnded");
-  if (reactions) reactions.hidden = !(heard || ended);
+  const showReact = heard || ended;
+  if (reactions) reactions.hidden = !showReact;
+  if (reactTip) reactTip.hidden = !showReact;
   updateEchoViewerProgress();
   document.querySelectorAll("[data-echo-react]").forEach((btn) => {
     btn.classList.toggle("isActive", btn.getAttribute("data-echo-react") === slide.reaction);
@@ -532,6 +631,44 @@ export function closeEchoViewer() {
     sheet.classList.remove("isLocked", "isEnded");
   }, 280);
   _echoViewerOpen = false;
+  void refreshEchoRail({ useCache: true });
+}
+
+async function deleteCurrentEcho() {
+  const slide = currentEchoSlide();
+  if (!slide?.id || !isOwnEchoSlide(slide)) return;
+  const echoId = String(slide.id);
+  closeEchoViewer();
+  invalidateEchoRailCache();
+  const uid = String(c().getAuthSession()?.user?.id || "");
+  const story = _echoStoriesByUser.get(uid);
+  if (story) {
+    story.echoes = (story.echoes || []).filter((e) => String(e.id) !== echoId);
+    indexEchoStories([..._echoStoriesByUser.values()].filter((s) => (s.echoes || []).length > 0));
+    renderEchoRail();
+  }
+  try {
+    c().haptic("light");
+  } catch {}
+  let ok = false;
+  try {
+    const r = await c().supabaseRestWithAuth(
+      `social_echoes?id=eq.${encodeURIComponent(echoId)}&user_id=eq.${encodeURIComponent(uid)}`,
+      { method: "DELETE", prefer: "return=minimal" },
+    );
+    ok = r?.ok;
+  } catch {}
+  if (!ok) {
+    try {
+      await c().socialApi("/api/social", {
+        method: "POST",
+        body: JSON.stringify({ action: "delete_echo", echoId }),
+      });
+    } catch {}
+  }
+  try {
+    c().showToast("Echo removed", { icon: "✓", durationMs: 2200 });
+  } catch {}
   void refreshEchoRail();
 }
 
@@ -816,56 +953,91 @@ async function publishEcho() {
   const onceEl = document.getElementById("echoListenOnce");
   const caption = String(document.getElementById("echoComposeCaption")?.value || "").trim().slice(0, ECHO_CAPTION_MAX);
   const listenOnce = Boolean(onceEl?.checked);
-  if (publish) publish.disabled = true;
+  const uid = c().getAuthSession()?.user?.id;
+  if (!uid) return;
+  if (publish) {
+    publish.disabled = true;
+    publish.textContent = "Releasing…";
+  }
+  const peaks = echoPeaks.length ? echoPeaks : await c().computeStatusWaveformPeaks(echoBlob, ECHO_BAR_COUNT);
   try {
     const uploaded = await c().uploadStatusVoiceBlob(echoBlob);
-    const peaks = echoPeaks.length ? echoPeaks : await c().computeStatusWaveformPeaks(echoBlob, ECHO_BAR_COUNT);
-    const payload = {
-      action: "post_echo",
-      audioUrl: uploaded.url,
-      durationMs: echoDurationMs,
-      waveformPeaks: peaks,
-      body: caption,
-      listenOnce,
-      replyTo: _echoReplyToId || null,
+    const expiresAt = new Date(Date.now() + 86400000).toISOString();
+    const rowBody = {
+      user_id: uid,
+      audio_url: uploaded.url,
+      duration_ms: echoDurationMs,
+      waveform_peaks: peaks,
+      body: caption || null,
+      listen_once: listenOnce,
+      reply_to: _echoReplyToId || null,
+      expires_at: expiresAt,
     };
-    let ok = false;
-    try {
-      const data = await c().socialApi("/api/social", { method: "POST", body: JSON.stringify(payload) });
-      ok = Boolean(data?.echo?.id);
-    } catch {}
-    if (!ok) {
-      const uid = c().getAuthSession()?.user?.id;
-      if (uid) {
-        const expiresAt = new Date(Date.now() + 86400000).toISOString();
-        const r = await c().supabaseRestWithAuth("social_echoes", {
-          method: "POST",
-          prefer: "return=representation",
-          body: JSON.stringify({
-            user_id: uid,
-            audio_url: uploaded.url,
-            duration_ms: echoDurationMs,
-            waveform_peaks: peaks,
-            body: caption || null,
-            listen_once: listenOnce,
-            reply_to: _echoReplyToId || null,
-            expires_at: expiresAt,
-          }),
-        });
-        ok = r?.ok;
-      }
+    let row = null;
+    const r = await c().supabaseRestWithAuth("social_echoes", {
+      method: "POST",
+      prefer: "return=representation",
+      body: JSON.stringify(rowBody),
+    });
+    if (r?.ok) {
+      const data = await r.json().catch(() => []);
+      row = Array.isArray(data) && data[0] ? data[0] : null;
     }
+    if (!row) {
+      const data = await c().socialApi("/api/social", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "post_echo",
+          audioUrl: uploaded.url,
+          durationMs: echoDurationMs,
+          waveformPeaks: peaks,
+          body: caption,
+          listenOnce,
+          replyTo: _echoReplyToId || null,
+        }),
+      });
+      if (data?.echo) {
+        mergeEchoIntoRail(data.echo, { username: data.echo.username, avatar: data.echo.avatar });
+      }
+    } else {
+      const profMap = await c().fetchProfilesByUserIdsMap([uid]);
+      const prof = profMap.get(uid);
+      mergeEchoIntoRail(
+        mapEchoFromApi({
+          id: row.id,
+          userId: uid,
+          audioUrl: row.audio_url,
+          durationMs: row.duration_ms,
+          waveformPeaks: row.waveform_peaks,
+          body: row.body,
+          listenOnce: row.listen_once,
+          replyTo: row.reply_to,
+          createdAt: row.created_at,
+          expiresAt: row.expires_at,
+          username: prof?.username || "",
+          avatar: prof?.avatar || "",
+          listened: false,
+          reaction: "",
+          reactionCounts: {},
+        }),
+        prof,
+      );
+    }
+    invalidateEchoRailCache();
     closeEchoComposeSheet();
     try {
       c().showToast("Echo is live for 24 hours", { icon: "✓", durationMs: 2400 });
     } catch {}
-    await refreshEchoRail();
+    void refreshEchoRail();
   } catch (e) {
     try {
       c().showToast(e?.message || "Could not post Echo", { durationMs: 3200 });
     } catch {}
   } finally {
-    if (publish) publish.disabled = false;
+    if (publish) {
+      publish.disabled = false;
+      publish.innerHTML = '<span class="echoComposePublishSpark" aria-hidden="true">✦</span> Release Echo';
+    }
   }
 }
 
@@ -888,7 +1060,7 @@ export function openEchoFromCreateChooser() {
 }
 
 export function onEnterFriendsRoute() {
-  void refreshEchoRail();
+  void refreshEchoRail({ useCache: true });
   if (_pendingEchoCompose) {
     _pendingEchoCompose = false;
     window.setTimeout(() => openEchoComposeSheet(), 160);
@@ -928,8 +1100,24 @@ function wireEchoOnce() {
     openEchoViewer(tile.getAttribute("data-echo-user-id"), 0);
   });
 
+  document.getElementById("btnEchoDelete")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    void deleteCurrentEcho();
+  });
+
+  document.getElementById("echoViewerDots")?.addEventListener("click", (e) => {
+    const dot = e.target.closest("[data-echo-dot]");
+    if (!dot) return;
+    e.preventDefault();
+    const idx = Number(dot.getAttribute("data-echo-dot"));
+    if (!Number.isFinite(idx)) return;
+    _echoSlideIndex = idx;
+    void playEchoSlide(currentEchoSlide());
+  });
+
   document.getElementById("echoViewerCore")?.addEventListener("click", async (e) => {
-    if (e.target.closest(".echoViewerClose, .echoReactBtn, #btnEchoReply")) return;
+    if (e.target.closest(".echoViewerClose, .echoViewerDelete, .echoReactBtn, #btnEchoReply")) return;
     const sheet = document.getElementById("echoViewerSheet");
     if (!sheet?.classList.contains("needsEchoTap") || !_echoAudio) return;
     try {

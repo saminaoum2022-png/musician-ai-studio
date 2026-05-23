@@ -625,7 +625,24 @@ extension StoryCameraViewController: AVCapturePhotoCaptureDelegate {
                 self.finish(.failed("Could not read photo"))
                 return
             }
-            self.showCrop(with: image)
+            self.deliverCapturedPhoto(image)
+        }
+    }
+}
+
+extension StoryCameraViewController {
+    /// Return the full photo to the app — same crop UI as web (`enterMomentCropPhase`).
+    private func deliverCapturedPhoto(_ image: UIImage) {
+        var upright = StoryCameraImageEncoder.normalizeOrientation(image)
+        upright = StoryCameraImageEncoder.downscale(upright, maxSide: 2048)
+        guard let path = StoryCameraImageEncoder.writeJPEG(upright, quality: jpegQuality) else {
+            finish(.failed("Could not save photo"))
+            return
+        }
+        stopCameraSession { [weak self] in
+            DispatchQueue.main.async {
+                self?.finish(.capturedFile(path))
+            }
         }
     }
 }
@@ -638,6 +655,18 @@ private enum StoryCameraImageEncoder {
             return CGSize(width: CGFloat(cg.width), height: CGFloat(cg.height))
         }
         return image.size
+    }
+
+    static func writeJPEG(_ image: UIImage, quality: CGFloat) -> String? {
+        guard let jpeg = image.jpegData(compressionQuality: quality) else { return nil }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nabad_story_full_\(UUID().uuidString).jpg")
+        do {
+            try jpeg.write(to: url, options: .atomic)
+            return url.path
+        } catch {
+            return nil
+        }
     }
 
     static func downscale(_ image: UIImage, maxSide: CGFloat) -> UIImage {

@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260523storyCamFitV2";
+const APP_BUILD = "20260523storyCamWebCropV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -6548,7 +6548,7 @@ async function capacitorImageSrcToDataUrl(src) {
   });
 }
 
-/** Native camera already cropped — go straight to share (skip WKWebView crop). */
+/** Legacy: native capture used to skip web crop. Prefer enterMomentCropPhase. */
 async function enterMomentShareFromNativeCapture(imageSrc) {
   if (!isMomentImageSrc(imageSrc)) return false;
   setMomentStudioLoading(true);
@@ -6598,7 +6598,7 @@ async function presentNativeStoryCamera({ leaveOnCancel = false } = {}) {
     }
     const src = resolveStoryCameraCaptureSrc(result);
     if (!src) throw new Error("Capture failed");
-    const ok = await enterMomentShareFromNativeCapture(src);
+    const ok = await enterMomentCropPhase(src);
     if (!ok) return false;
     return true;
   } catch (e) {
@@ -6712,7 +6712,7 @@ function clampMomentCropTransform() {
   const maxY = Math.max(0, (ih - fr.height) / 2);
   momentCropState.x = Math.max(-maxX, Math.min(maxX, momentCropState.x));
   momentCropState.y = Math.max(-maxY, Math.min(maxY, momentCropState.y));
-  const minRel = 1;
+  const minRel = 0.92;
   const maxRel = 4;
   momentCropState.scale = Math.max(minRel, Math.min(maxRel, momentCropState.scale));
 }
@@ -6763,7 +6763,7 @@ async function enterMomentCropPhase(imageSrc) {
     const fr = frame.getBoundingClientRect();
     const fw = fr.width || 320;
     const fh = fr.height || Math.round(fw * 16 / 9);
-    momentCropState.baseScale = Math.max(fw / momentCropState.nw, fh / momentCropState.nh);
+    momentCropState.baseScale = Math.min(fw / momentCropState.nw, fh / momentCropState.nh);
     momentCropState.scale = 1;
     momentCropState.x = 0;
     momentCropState.y = 0;

@@ -7,6 +7,7 @@ const ECHO_BAR_COUNT = 48;
 const ECHO_MAX_MS = 60000;
 const ECHO_MAX_BYTES = 768 * 1024;
 const ECHO_HEARD_KEY = "nabad_echo_heard_v1";
+const ECHO_CAPTION_MAX = 60;
 
 let ctx = null;
 let echoRecState = "idle";
@@ -20,6 +21,7 @@ let echoPeaks = [];
 let echoStartedAt = 0;
 let echoAutostopTimer = 0;
 let echoTickRaf = 0;
+let echoComposeTickRaf = 0;
 
 let _echoStories = [];
 let _echoStoriesByUser = new Map();
@@ -560,7 +562,61 @@ async function postEchoReaction(reaction) {
   }
 }
 
+function formatRecordingTimer(ms) {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function stopEchoComposeTick() {
+  if (echoComposeTickRaf) {
+    cancelAnimationFrame(echoComposeTickRaf);
+    echoComposeTickRaf = 0;
+  }
+}
+
+function echoComposeTick() {
+  echoComposeTickRaf = 0;
+  if (echoRecState !== "recording") return;
+  const timer = document.getElementById("echoComposeTimer");
+  if (timer) timer.textContent = formatRecordingTimer(performance.now() - echoStartedAt);
+  echoComposeTickRaf = requestAnimationFrame(echoComposeTick);
+}
+
+function paintIdleComposeWave() {
+  const wave = document.getElementById("echoComposeWave");
+  if (!wave) return;
+  wave.innerHTML = peaksHtml(normalizePeaks([]));
+}
+
+function syncEchoCaptionCount() {
+  const cap = document.getElementById("echoComposeCaption");
+  const count = document.getElementById("echoComposeCaptionCount");
+  if (!cap || !count) return;
+  count.textContent = `${cap.value.length}/${ECHO_CAPTION_MAX}`;
+}
+
+function openEchoListenOnceInfo() {
+  const sheet = document.getElementById("echoListenOnceInfoSheet");
+  if (!sheet) return;
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  requestAnimationFrame(() => sheet.classList.add("isOpen"));
+}
+
+function closeEchoListenOnceInfo() {
+  const sheet = document.getElementById("echoListenOnceInfoSheet");
+  if (!sheet) return;
+  sheet.classList.remove("isOpen");
+  window.setTimeout(() => {
+    sheet.hidden = true;
+    sheet.setAttribute("aria-hidden", "true");
+  }, 260);
+}
+
 function resetEchoCompose() {
+  stopEchoComposeTick();
   echoRecState = "idle";
   echoChunks = [];
   echoDurationMs = 0;
@@ -588,27 +644,64 @@ function resetEchoCompose() {
 }
 
 function syncEchoComposeUi() {
-  const status = document.getElementById("echoComposeStatus");
+  const sheet = document.getElementById("echoComposeSheet");
   const wave = document.getElementById("echoComposeWave");
   const publish = document.getElementById("btnEchoPublish");
   const mic = document.getElementById("btnEchoRecord");
   const hasBlob = Boolean(echoBlob?.size);
   const recording = echoRecState === "recording";
+
+  if (sheet) {
+    sheet.classList.toggle("isRecording", recording);
+    sheet.classList.toggle("hasEchoReady", hasBlob && !recording);
+  }
+
+  const hud = document.getElementById("echoComposeRecHud");
+  if (hud) hud.hidden = !recording;
+
+  const timer = document.getElementById("echoComposeTimer");
+  if (timer && recording) timer.textContent = formatRecordingTimer(performance.now() - echoStartedAt);
+
+  const primary = document.getElementById("echoComposeStatusPrimary");
+  const sub = document.getElementById("echoComposeStatusSub");
+  const releaseCue = document.getElementById("echoComposeReleaseCue");
+  const tip = document.getElementById("echoComposeTip");
+
+  if (primary) {
+    if (recording) primary.hidden = true;
+    else {
+      primary.hidden = false;
+      primary.textContent = hasBlob ? "Echo ready" : "Hold to record";
+    }
+  }
+  if (sub) {
+    sub.hidden = recording;
+    if (!recording) {
+      sub.textContent = hasBlob
+        ? `${c().formatMsAsVoiceTime(echoDurationMs)} — tap Release Echo`
+        : "Hum, sing, or speak a raw idea";
+    }
+  }
+  if (releaseCue) releaseCue.hidden = !recording;
+  if (tip) tip.hidden = !recording;
+
   if (mic) {
     mic.classList.toggle("isRecording", recording);
     mic.setAttribute("aria-pressed", recording ? "true" : "false");
-  }
-  if (status) {
-    status.textContent = recording
-      ? `Recording… ${c().formatMsAsVoiceTime(performance.now() - echoStartedAt)}`
-      : hasBlob
-        ? `Echo ready · ${c().formatMsAsVoiceTime(echoDurationMs)}`
-        : "Hold the mic — hum, sing, or speak a raw idea";
+    mic.setAttribute(
+      "aria-label",
+      recording ? "Release to stop recording" : hasBlob ? "Hold to record again" : "Hold to record Echo",
+    );
   }
   if (publish) publish.disabled = !hasBlob || recording;
   if (wave) {
-    wave.innerHTML = peaksHtml(hasBlob || recording ? echoPeaks : normalizePeaks([]), recording ? "echoBar--live" : "");
+    if (recording || hasBlob) {
+      wave.innerHTML = peaksHtml(echoPeaks.length || recording ? echoPeaks : normalizePeaks([]), recording ? "echoBar--live" : "");
+    } else if (!wave.querySelector(".echoBar")) {
+      paintIdleComposeWave();
+    }
   }
+  syncEchoCaptionCount();
 }
 
 async function startEchoRecording() {
@@ -664,6 +757,8 @@ async function startEchoRecording() {
   };
   rec.start(200);
   syncEchoComposeUi();
+  stopEchoComposeTick();
+  echoComposeTickRaf = requestAnimationFrame(echoComposeTick);
   echoAutostopTimer = window.setTimeout(() => {
     if (echoRecState === "recording") stopEchoRecording();
   }, ECHO_MAX_MS);
@@ -694,12 +789,15 @@ export function openEchoComposeSheet({ replyTo = "" } = {}) {
   if (cap) cap.value = "";
   sheet.hidden = false;
   sheet.setAttribute("aria-hidden", "false");
+  sheet.classList.remove("isRecording", "hasEchoReady");
   sheet.classList.add("isOpen");
   document.body.classList.add("echoComposeOpen");
+  paintIdleComposeWave();
   syncEchoComposeUi();
 }
 
 export function closeEchoComposeSheet() {
+  closeEchoListenOnceInfo();
   resetEchoCompose();
   const sheet = document.getElementById("echoComposeSheet");
   if (!sheet) return;
@@ -716,7 +814,7 @@ async function publishEcho() {
   if (!echoBlob?.size) return;
   const publish = document.getElementById("btnEchoPublish");
   const onceEl = document.getElementById("echoListenOnce");
-  const caption = String(document.getElementById("echoComposeCaption")?.value || "").trim().slice(0, 200);
+  const caption = String(document.getElementById("echoComposeCaption")?.value || "").trim().slice(0, ECHO_CAPTION_MAX);
   const listenOnce = Boolean(onceEl?.checked);
   if (publish) publish.disabled = true;
   try {
@@ -872,16 +970,60 @@ function wireEchoOnce() {
 
   document.getElementById("echoComposeBackdrop")?.addEventListener("click", () => closeEchoComposeSheet());
   document.getElementById("btnEchoComposeClose")?.addEventListener("click", () => closeEchoComposeSheet());
-  document.getElementById("btnEchoRecord")?.addEventListener("click", () => {
-    if (echoRecState === "recording") stopEchoRecording();
-    else void startEchoRecording();
+  wireEchoRecordHold();
+  document.getElementById("echoComposeCaption")?.addEventListener("input", () => syncEchoCaptionCount());
+  document.getElementById("btnEchoListenOnceInfo")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openEchoListenOnceInfo();
   });
+  document.getElementById("btnEchoListenOnceInfoOk")?.addEventListener("click", () => closeEchoListenOnceInfo());
+  document.getElementById("echoListenOnceInfoBackdrop")?.addEventListener("click", () => closeEchoListenOnceInfo());
   document.getElementById("btnEchoPublish")?.addEventListener("click", () => void publishEcho());
 
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
-    if (document.getElementById("echoComposeSheet")?.classList.contains("isOpen")) closeEchoComposeSheet();
+    if (document.getElementById("echoListenOnceInfoSheet")?.classList.contains("isOpen")) closeEchoListenOnceInfo();
+    else if (document.getElementById("echoComposeSheet")?.classList.contains("isOpen")) closeEchoComposeSheet();
     else if (document.getElementById("echoViewerSheet")?.classList.contains("isOpen")) closeEchoViewer();
+  });
+}
+
+function wireEchoRecordHold() {
+  const mic = document.getElementById("btnEchoRecord");
+  if (!mic || mic.dataset.echoHoldWired) return;
+  mic.dataset.echoHoldWired = "1";
+
+  let holdActive = false;
+
+  const startHold = (e) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    holdActive = true;
+    try {
+      mic.setPointerCapture(e.pointerId);
+    } catch {}
+    if (echoRecState === "recording") return;
+    void startEchoRecording();
+  };
+
+  const endHold = () => {
+    if (!holdActive) return;
+    holdActive = false;
+    if (echoRecState === "recording") stopEchoRecording();
+  };
+
+  mic.addEventListener("pointerdown", startHold);
+  mic.addEventListener("pointerup", endHold);
+  mic.addEventListener("pointercancel", endHold);
+  mic.addEventListener("lostpointercapture", endHold);
+
+  mic.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (echoRecState !== "recording" && !echoBlob) {
+      try {
+        c().showToast("Hold the mic to record", { durationMs: 2200 });
+      } catch {}
+    }
   });
 }
 

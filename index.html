@@ -2863,27 +2863,85 @@
     <div id="echoComposeSheet" class="echoComposeSheet" aria-hidden="true" hidden>
       <div class="echoComposeBackdrop" id="echoComposeBackdrop"></div>
       <div class="echoComposeCard" role="dialog" aria-modal="true" aria-labelledby="echoComposeTitle">
-        <button type="button" class="echoComposeClose" id="btnEchoComposeClose" aria-label="Close">×</button>
-        <p class="echoComposeKicker">Echo</p>
-        <h2 id="echoComposeTitle" class="echoComposeTitle">Share a raw moment</h2>
-        <p class="echoComposeLead">Unfinished hooks, hums, late-night thoughts — gone in 24h.</p>
-        <div class="echoComposeWave echoWave" id="echoComposeWave" aria-hidden="true"></div>
-        <p id="echoComposeStatus" class="echoComposeStatus">Hold the mic — hum, sing, or speak a raw idea</p>
-        <button type="button" class="echoComposeMic" id="btnEchoRecord" aria-label="Record Echo">
-          <span class="echoComposeMicRing" aria-hidden="true"></span>
-          <span class="echoComposeMicDot" aria-hidden="true"></span>
+        <div class="echoComposeAmbient" aria-hidden="true"></div>
+        <button type="button" class="echoComposeClose" id="btnEchoComposeClose" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></svg>
         </button>
-        <label class="echoListenOnceToggle">
-          <input type="checkbox" id="echoListenOnce" />
-          <span>Listen once</span>
-          <span class="echoListenOnceHint">Listeners hear it a single time</span>
+        <header class="echoComposeHead">
+          <p class="echoComposeKicker">Echo</p>
+          <h2 id="echoComposeTitle" class="echoComposeTitle">Share a raw moment</h2>
+          <p class="echoComposeLead">Unfinished hooks, hums, late-night thoughts. Gone in 24h.</p>
+        </header>
+        <div class="echoComposeRecHud" id="echoComposeRecHud" hidden>
+          <span class="echoComposeRecPill"><span class="echoComposeRecDot" aria-hidden="true"></span>Recording…</span>
+          <span id="echoComposeTimer" class="echoComposeTimer">00:00</span>
+        </div>
+        <div class="echoComposeMicStage">
+          <div class="echoComposeWaveHorizon echoWave" id="echoComposeWave" aria-hidden="true"></div>
+          <button type="button" class="echoComposeMic" id="btnEchoRecord" aria-label="Hold to record Echo">
+            <span class="echoComposeMicGlow" aria-hidden="true"></span>
+            <span class="echoComposeMicRing" aria-hidden="true"></span>
+            <span class="echoComposeMicIcon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V19H8v2h8v-2h-3v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
+            </span>
+          </button>
+        </div>
+        <div class="echoComposeCue">
+          <p id="echoComposeStatusPrimary" class="echoComposeStatusPrimary">Hold to record</p>
+          <p id="echoComposeStatusSub" class="echoComposeStatusSub">Hum, sing, or speak a raw idea</p>
+          <p id="echoComposeReleaseCue" class="echoComposeReleaseCue" hidden>
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 8l-6 6h4v4h4v-4h4l-6-6z"/></svg>
+            Release to send
+          </p>
+        </div>
+        <p id="echoComposeTip" class="echoComposeTip" hidden>Tip: Close to the mic for better sound</p>
+        <div class="echoComposeOptions">
+          <label class="echoListenOnceCard">
+            <span class="echoListenOnceLock" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M17 9h-1V7a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zm-3 0H10V7a2 2 0 1 1 4 0v2z"/></svg>
+            </span>
+            <span class="echoListenOnceCopy">
+              <strong>Listen once</strong>
+              <small>Listeners hear it a single time</small>
+            </span>
+            <input type="checkbox" id="echoListenOnce" class="echoListenOnceInput" />
+            <span class="echoListenOnceSwitch" aria-hidden="true"></span>
+          </label>
+          <button type="button" class="echoListenOnceInfoBtn" id="btnEchoListenOnceInfo" aria-label="What is listen once?">?</button>
+        </div>
+        <label class="echoComposeCaptionWrap">
+          <span class="echoComposeCaptionIcon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.2L4 17.2V4h16v12z"/></svg>
+          </span>
+          <textarea id="echoComposeCaption" class="echoComposeCaption" maxlength="60" rows="2" placeholder="Optional whisper…"></textarea>
+          <span id="echoComposeCaptionCount" class="echoComposeCaptionCount">0/60</span>
         </label>
-        <textarea id="echoComposeCaption" class="echoComposeCaption" maxlength="200" rows="2" placeholder="Optional whisper…"></textarea>
-        <button type="button" class="echoComposePublish" id="btnEchoPublish" disabled>Release Echo</button>
+        <button type="button" class="echoComposePublish" id="btnEchoPublish" disabled>
+          <span class="echoComposePublishSpark" aria-hidden="true">✦</span>
+          Release Echo
+        </button>
+      </div>
+    </div>
+
+    <div id="echoListenOnceInfoSheet" class="echoListenOnceInfoSheet" aria-hidden="true" hidden>
+      <div class="echoListenOnceInfoBackdrop" id="echoListenOnceInfoBackdrop"></div>
+      <div class="echoListenOnceInfoCard" role="dialog" aria-modal="true" aria-labelledby="echoListenOnceInfoTitle">
+        <div class="echoListenOnceInfoLock" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="32" height="32"><path fill="currentColor" d="M17 9h-1V7a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zm-3 0H10V7a2 2 0 1 1 4 0v2z"/></svg>
+        </div>
+        <h3 id="echoListenOnceInfoTitle" class="echoListenOnceInfoTitle">Listen once</h3>
+        <p class="echoListenOnceInfoLead">They'll hear it only once. Then it disappears.</p>
+        <ul class="echoListenOnceInfoList">
+          <li><span aria-hidden="true">👂</span><span><strong>One time only</strong><small>No replay after it's heard</small></span></li>
+          <li><span aria-hidden="true">❤️</span><span><strong>React after listening</strong><small>Show how it made you feel</small></span></li>
+          <li><span aria-hidden="true">🎙️</span><span><strong>Reply with Echo</strong><small>Answer with your own sound</small></span></li>
+        </ul>
+        <button type="button" class="echoListenOnceInfoOk" id="btnEchoListenOnceInfoOk">Got it</button>
+        <p class="echoListenOnceInfoFoot">This helps keep ideas safe</p>
       </div>
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260522echoSoundV1"></script>
+    <script type="module" src="./src/app.js?v=20260522echoComposeV1"></script>
   </body>
 </html>

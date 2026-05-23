@@ -489,23 +489,23 @@ private final class StoryCameraViewController: UIViewController, UIScrollViewDel
         let imageSize = StoryCameraImageEncoder.pixelSize(image)
         let widthScale = bounds.width / imageSize.width
         let heightScale = bounds.height / imageSize.height
-        // Start with full photo visible (aspect fit); user can pinch to zoom in.
-        let minScale = min(widthScale, heightScale)
-        let maxScale = max(max(widthScale, heightScale) * 4, minScale * 2.5)
+        // Match live preview (resizeAspectFill): fill the 9:16 frame, not letterbox.
+        let fitScale = min(widthScale, heightScale)
+        let fillScale = max(widthScale, heightScale)
+        let maxScale = max(fillScale * 4, fitScale * 2.5)
 
         cropImageView.image = image
+        cropImageView.contentMode = .scaleAspectFill
+        cropImageView.clipsToBounds = true
         cropImageView.frame = CGRect(origin: .zero, size: imageSize)
         cropScroll.contentSize = imageSize
-        cropScroll.minimumZoomScale = minScale
+        cropScroll.minimumZoomScale = fitScale
         cropScroll.maximumZoomScale = maxScale
-        cropScroll.zoomScale = minScale
+        cropScroll.zoomScale = fillScale
 
-        let scaledW = imageSize.width * minScale
-        let scaledH = imageSize.height * minScale
-        let insetX = max(0, (bounds.width - scaledW) / 2)
-        let insetY = max(0, (bounds.height - scaledH) / 2)
-        cropScroll.contentInset = UIEdgeInsets(top: insetY, left: insetX, bottom: insetY, right: insetX)
-        cropScroll.contentOffset = CGPoint(x: -insetX, y: -insetY)
+        let offsetX = max(0, (imageSize.width - bounds.width / fillScale) / 2)
+        let offsetY = max(0, (imageSize.height - bounds.height / fillScale) / 2)
+        cropScroll.contentOffset = CGPoint(x: offsetX, y: offsetY)
     }
 
     func scrollViewDidZoom(_ scrollView: UIScrollView) {
@@ -514,12 +514,25 @@ private final class StoryCameraViewController: UIViewController, UIScrollViewDel
     }
 
     private func centerCropImageInScroll() {
+        let zoom = max(cropScroll.zoomScale, 0.0001)
         let bounds = cropScroll.bounds.size
-        let content = cropScroll.contentSize
-        let zoom = cropScroll.zoomScale
-        let insetX = max(0, (bounds.width - content.width * zoom) / 2)
-        let insetY = max(0, (bounds.height - content.height * zoom) / 2)
-        cropScroll.contentInset = UIEdgeInsets(top: insetY, left: insetX, bottom: insetY, right: insetX)
+        let contentW = cropScroll.contentSize.width * zoom
+        let contentH = cropScroll.contentSize.height * zoom
+
+        if contentW <= bounds.width + 0.5 && contentH <= bounds.height + 0.5 {
+            let insetX = max(0, (bounds.width - contentW) / 2)
+            let insetY = max(0, (bounds.height - contentH) / 2)
+            cropScroll.contentInset = UIEdgeInsets(top: insetY, left: insetX, bottom: insetY, right: insetX)
+            return
+        }
+
+        cropScroll.contentInset = .zero
+        let maxX = max(0, cropScroll.contentSize.width - bounds.width / zoom)
+        let maxY = max(0, cropScroll.contentSize.height - bounds.height / zoom)
+        var off = cropScroll.contentOffset
+        off.x = min(max(0, off.x), maxX)
+        off.y = min(max(0, off.y), maxY)
+        cropScroll.contentOffset = off
     }
 
     func viewForZooming(in scrollView: UIScrollView) -> UIView? {
@@ -540,7 +553,10 @@ private final class StoryCameraViewController: UIViewController, UIScrollViewDel
     }
 
     private func showCrop(with image: UIImage) {
-        capturedImage = StoryCameraImageEncoder.downscale(image, maxSide: 2048)
+        var upright = StoryCameraImageEncoder.normalizeOrientation(image)
+        upright = StoryCameraImageEncoder.downscale(upright, maxSide: 2048)
+        // Same center crop the live preview shows (aspect fill in 9:16).
+        capturedImage = StoryCameraImageEncoder.centerCropToStoryAspect(upright)
         stopCameraSession { [weak self] in
             guard let self = self else { return }
             DispatchQueue.main.async {
@@ -640,16 +656,29 @@ private enum StoryCameraImageEncoder {
         guard image.imageOrientation != .up else { return image }
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
-        var output = CGSize(width: image.size.width, height: image.size.height)
-        switch image.imageOrientation {
-        case .left, .right, .leftMirrored, .rightMirrored:
-            output = CGSize(width: image.size.height, height: image.size.width)
-        default:
-            break
+        let bounds = CGRect(origin: .zero, size: image.size)
+        return UIGraphicsImageRenderer(size: bounds.size, format: format).image { _ in
+            image.draw(in: bounds)
         }
-        return UIGraphicsImageRenderer(size: output, format: format).image { _ in
-            image.draw(in: CGRect(origin: .zero, size: output))
+    }
+
+    /// Center crop to 9:16 (width:height) — matches `resizeAspectFill` in the preview frame.
+    static func centerCropToStoryAspect(_ image: UIImage) -> UIImage {
+        let size = pixelSize(image)
+        guard size.width > 1, size.height > 1, let cg = image.cgImage else { return image }
+        let targetAspect: CGFloat = 9.0 / 16.0
+        let imageAspect = size.width / size.height
+        var crop = CGRect(origin: .zero, size: size)
+        if imageAspect > targetAspect + 0.001 {
+            let w = floor(size.height * targetAspect)
+            crop = CGRect(x: floor((size.width - w) / 2), y: 0, width: w, height: size.height)
+        } else if imageAspect < targetAspect - 0.001 {
+            let h = floor(size.width / targetAspect)
+            crop = CGRect(x: 0, y: floor((size.height - h) / 2), width: size.width, height: h)
         }
+        crop = crop.integral.intersection(CGRect(origin: .zero, size: size))
+        guard crop.width > 1, crop.height > 1, let cropped = cg.cropping(to: crop) else { return image }
+        return UIImage(cgImage: cropped, scale: 1, orientation: .up)
     }
 
     static func exportCrop(image: UIImage, scrollView: UIScrollView, imageView: UIImageView, quality: CGFloat) -> String? {
@@ -675,21 +704,7 @@ private enum StoryCameraImageEncoder {
         format.scale = 1
         let renderer = UIGraphicsImageRenderer(size: target, format: format)
         let final = renderer.image { _ in
-            let ar = cropped.size.width / cropped.size.height
-            let tar = target.width / target.height
-            var draw = CGRect(origin: .zero, size: target)
-            if abs(ar - tar) > 0.01 {
-                if ar > tar {
-                    let h = target.height
-                    let w = h * ar
-                    draw = CGRect(x: (target.width - w) / 2, y: 0, width: w, height: h)
-                } else {
-                    let w = target.width
-                    let h = w / ar
-                    draw = CGRect(x: 0, y: (target.height - h) / 2, width: w, height: h)
-                }
-            }
-            cropped.draw(in: draw)
+            cropped.draw(in: CGRect(origin: .zero, size: target))
         }
         guard let jpeg = final.jpegData(compressionQuality: quality) else { return nil }
 

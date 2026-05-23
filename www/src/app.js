@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260523storyCamWebCropV1";
+const APP_BUILD = "20260523storyIosPickV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -137,19 +137,8 @@ function isFounderBadgeEmail(raw) {
       });
     }
     if (cap.isNativePlatform?.() && cap.getPlatform?.() === "ios") {
-      const storyCam = cap.Plugins?.StoryCamera;
-      if (storyCam?.isAvailable) {
-        storyCam
-          .isAvailable()
-          .then((r) => {
-            cap.__nabadStoryCameraNative = Boolean(r?.value);
-          })
-          .catch(() => {
-            cap.__nabadStoryCameraNative = false;
-          });
-      } else {
-        cap.__nabadStoryCameraNative = false;
-      }
+      // Custom StoryCamera froze WKWebView after capture; iOS uses system picker + web crop.
+      cap.__nabadStoryCameraNative = false;
     }
     const CapApp = cap.Plugins?.App;
     if (CapApp?.addListener && !cap.__nabadMomentAppStateWired) {
@@ -6189,23 +6178,14 @@ async function refreshNativeStoryCameraAvailability() {
   }
 }
 
-/** Full-screen native AVFoundation story camera (iOS). */
+/** Retired on iOS — custom AVFoundation camera froze the app after capture. */
 function momentStudioUsesNativeStoryCamera() {
-  if (!isNativeShell() || momentStudioNativePlatform() !== "ios") return false;
-  const flag = window.Capacitor?.__nabadStoryCameraNative;
-  if (flag === true) return true;
-  if (flag === false) return false;
-  // Before isAvailable() resolves, do not flash the web placeholder — open native camera.
-  return true;
+  return false;
 }
 
-/** Fallback when StoryCamera plugin is confirmed missing (packageClassList / rebuild). */
+/** iOS: system camera/gallery file picker + same in-app crop as web. */
 function momentStudioUsesIosPickFlow() {
-  return (
-    isNativeShell() &&
-    momentStudioNativePlatform() === "ios" &&
-    window.Capacitor?.__nabadStoryCameraNative === false
-  );
+  return isNativeShell() && momentStudioNativePlatform() === "ios";
 }
 
 /** Android only — native preview behind WebView. */
@@ -6537,14 +6517,57 @@ function resolveStoryCameraCaptureSrc(result) {
 }
 
 async function capacitorImageSrcToDataUrl(src) {
-  const res = await fetch(String(src || ""));
-  if (!res.ok) throw new Error("Could not read photo");
-  const blob = await res.blob();
-  return await new Promise((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onload = () => resolve(String(fr.result || ""));
-    fr.onerror = () => reject(new Error("Could not read photo"));
-    fr.readAsDataURL(blob);
+  const url = String(src || "").trim();
+  if (!url) throw new Error("Could not read photo");
+  if (url.startsWith("data:image/")) return url;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Could not read photo");
+    const blob = await res.blob();
+    return await new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(String(fr.result || ""));
+      fr.onerror = () => reject(new Error("Could not read photo"));
+      fr.readAsDataURL(blob);
+    });
+  } catch (e) {
+    const Filesystem = window.Capacitor?.Plugins?.Filesystem;
+    const path = url.replace(/^capacitor:\/\/[^/]+\/_capacitor_file_/, "");
+    if (Filesystem?.readFile && path && path !== url) {
+      const r = await Filesystem.readFile({ path });
+      const b64 = String(r?.data || "").trim();
+      if (b64) return `data:image/jpeg;base64,${b64}`;
+    }
+    throw e;
+  }
+}
+
+async function momentImageSrcToCropDataUrl(imageSrc) {
+  const s = String(imageSrc || "").trim();
+  if (!s) throw new Error("Missing photo");
+  if (s.startsWith("data:image/")) return s;
+  return capacitorImageSrcToDataUrl(s);
+}
+
+function waitForMomentCropImage(imgEl, timeoutMs = 15000) {
+  return new Promise((resolve, reject) => {
+    if (imgEl.complete && imgEl.naturalWidth > 0) {
+      resolve();
+      return;
+    }
+    let done = false;
+    const finish = (fn) => {
+      if (done) return;
+      done = true;
+      window.clearTimeout(timer);
+      fn();
+    };
+    const timer = window.setTimeout(
+      () => finish(() => reject(new Error("Photo took too long to load"))),
+      timeoutMs,
+    );
+    imgEl.onload = () => finish(resolve);
+    imgEl.onerror = () => finish(() => reject(new Error("Could not display photo")));
   });
 }
 
@@ -6583,6 +6606,10 @@ async function enterMomentShareFromNativeCapture(imageSrc) {
 }
 
 async function presentNativeStoryCamera({ leaveOnCancel = false } = {}) {
+  if (momentStudioUsesIosPickFlow()) {
+    openMomentCameraInput();
+    return true;
+  }
   const plugin = getStoryCameraPlugin();
   if (!plugin?.capture) return false;
   if ((document.body.getAttribute("data-route") || "") !== "moment") return false;
@@ -6596,15 +6623,17 @@ async function presentNativeStoryCamera({ leaveOnCancel = false } = {}) {
       if (leaveOnCancel) leaveMomentPage("#/friends");
       return false;
     }
-    const src = resolveStoryCameraCaptureSrc(result);
+    let src = resolveStoryCameraCaptureSrc(result);
     if (!src) throw new Error("Capture failed");
+    src = await momentImageSrcToCropDataUrl(src);
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     const ok = await enterMomentCropPhase(src);
     if (!ok) return false;
     return true;
   } catch (e) {
     const msg = String(e?.message || "").trim();
     const friendly = /not implemented|requires the nabadai app/i.test(msg)
-      ? "Story camera failed to load — rebuild the app in Xcode (Build 20260522nativeStoryCamV7)."
+      ? "Story camera failed to load — rebuild the app in Xcode."
       : (msg || "Camera unavailable");
     try { showToast(friendly, { durationMs: 3600 }); } catch {}
     return false;
@@ -6616,19 +6645,9 @@ async function presentNativeStoryCamera({ leaveOnCancel = false } = {}) {
 async function beginMomentPickPhase() {
   if (momentStudioPhase !== "pick") return;
   if ((document.body.getAttribute("data-route") || "") !== "moment") return;
-  if (isNativeShell() && momentStudioNativePlatform() === "ios") {
-    await refreshNativeStoryCameraAvailability();
-    const opened = await presentNativeStoryCamera({ leaveOnCancel: true });
-    if (opened) return;
-    if (window.Capacitor?.__nabadStoryCameraNative === false) {
-      try {
-        showToast("Story camera not in app build — run npm run sync:ios, then rebuild in Xcode.", {
-          durationMs: 4200,
-        });
-      } catch {}
-      scheduleMomentStudioStart();
-      return;
-    }
+  if (momentStudioUsesIosPickFlow()) {
+    setMomentStudioLoading(false);
+    syncMomentPageUi();
     return;
   }
   if (momentStudioUsesNativeStoryCamera()) {
@@ -6640,12 +6659,12 @@ async function beginMomentPickPhase() {
 
 async function captureMomentFromCamera() {
   try { haptic("medium"); } catch {}
-  if (momentStudioUsesNativeStoryCamera()) {
-    await presentNativeStoryCamera({ leaveOnCancel: false });
-    return;
-  }
   if (momentStudioUsesIosPickFlow()) {
     openMomentCameraInput();
+    return;
+  }
+  if (momentStudioUsesNativeStoryCamera()) {
+    await presentNativeStoryCamera({ leaveOnCancel: false });
     return;
   }
   if (_momentNativePreviewActive) {
@@ -6733,8 +6752,8 @@ async function enterMomentCropPhase(imageSrc) {
   if (!imgEl || !frame) return false;
   setMomentStudioLoading(true);
   try {
-    let safeUrl = String(imageSrc || "").trim();
-    if (safeUrl.startsWith("data:image/") && safeUrl.length > 400_000) {
+    let safeUrl = await momentImageSrcToCropDataUrl(imageSrc);
+    if (safeUrl.length > 400_000) {
       try {
         safeUrl = await prepareMomentCoverDataUrl(safeUrl);
       } catch {
@@ -6750,13 +6769,7 @@ async function enterMomentCropPhase(imageSrc) {
     momentCropState.nh = loaded.naturalHeight || loaded.height;
     imgEl.removeAttribute("src");
     imgEl.src = safeUrl;
-    await new Promise((resolve, reject) => {
-      if (imgEl.complete && imgEl.naturalWidth) resolve();
-      else {
-        imgEl.onload = () => resolve();
-        imgEl.onerror = () => reject(new Error("Could not display photo"));
-      }
-    });
+    await waitForMomentCropImage(imgEl);
     await new Promise((resolve) => {
       requestAnimationFrame(() => requestAnimationFrame(resolve));
     });
@@ -6784,6 +6797,10 @@ function leaveMomentCropPhase() {
   momentCropSourceUrl = "";
   momentStudioPhase = "pick";
   syncMomentPageUi();
+  if (momentStudioUsesIosPickFlow()) {
+    momentPhotoDataUrl = "";
+    return;
+  }
   if (momentStudioUsesNativeStoryCamera()) {
     momentPhotoDataUrl = "";
     void beginMomentPickPhase();

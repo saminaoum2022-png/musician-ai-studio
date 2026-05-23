@@ -12,7 +12,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260523storyCamPermV1";
+const APP_BUILD = "20260523storyOverlayFixV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2703,6 +2703,13 @@ function applyRoute() {
   }
   if (wanted === "moment") {
     prepareMomentRouteEntry();
+    try {
+      const mp = document.getElementById("momentPage");
+      if (mp) {
+        mp.hidden = false;
+        mp.removeAttribute("hidden");
+      }
+    } catch {}
     try { syncMomentPageUi(); } catch {}
     if (momentStudioPhase === "songShare" && pendingSongStoryTrack) {
       try { setupSongStoryShareUi(); } catch {}
@@ -5889,15 +5896,31 @@ function mountFixedOverlaysToBody() {
   }
 }
 
-function prepareMomentRouteEntry() {
+function dismissBlockingOverlaysForMoment() {
   mountFixedOverlaysToBody();
   closeCreateChooserSheet({ immediate: true });
-  closeFriendsComposeSheet();
+  closeFriendsComposeSheet({ immediate: true });
   unlockPageForCreateChooserSheet();
+  unlockPageForFriendsComposeSheet();
   setMomentStudioLoading(false);
   try {
-    document.body.classList.remove("pageTransitioning", "booting");
+    const chooser = document.getElementById("createChooserSheet");
+    if (chooser) {
+      chooser.classList.remove("isOpen", "isClosing");
+      chooser.hidden = true;
+      chooser.setAttribute("aria-hidden", "true");
+    }
   } catch {}
+  try {
+    if (els.globalLoading) els.globalLoading.style.display = "none";
+  } catch {}
+  try {
+    document.body.classList.remove("pageTransitioning", "booting", "createChooserSheetOpen", "friendsComposeSheetOpen");
+  } catch {}
+}
+
+function prepareMomentRouteEntry() {
+  dismissBlockingOverlaysForMoment();
 }
 
 function isCreateChooserOpen() {
@@ -6543,9 +6566,6 @@ async function captureMomentViaCapacitorCamera(source = "CAMERA") {
   if ((document.body.getAttribute("data-route") || "") !== "moment") return;
   if (momentStudioPhase !== "pick") return;
   try { haptic("light"); } catch {}
-  try {
-    showToast(source === "PHOTOS" ? "Opening library…" : "Opening camera…", { durationMs: 1400 });
-  } catch {}
   setMomentStudioLoading(true);
   try {
     const dataUrl = await capacitorCameraGetPhotoDataUrl(source);
@@ -7079,10 +7099,6 @@ function syncMomentPageUi() {
   if (preview) preview.hidden = !(isShare && hasPhoto);
   if (topTitle) {
     topTitle.textContent = isCrop ? "Crop" : isSongShare ? "Song story" : "New story";
-  }
-  const iosBuild = document.getElementById("momentIosPickBuild");
-  if (iosBuild) {
-    iosBuild.textContent = momentStudioUsesIosPickFlow() && isPick ? `Build ${APP_BUILD}` : "";
   }
   if (!isShare && !isSongShare) {
     if (captionPanel) captionPanel.hidden = true;
@@ -8486,14 +8502,20 @@ function wireMomentPageOnce() {
   const shutter = document.getElementById("btnMomentCapture");
   shutter?.addEventListener("click", onMomentShutter);
   shutter?.addEventListener("touchend", onMomentShutter, { passive: false });
-  document.getElementById("btnMomentIosOpenCamera")?.addEventListener("click", (e) => {
-    try { e?.preventDefault?.(); } catch {}
+  const onIosOpenCamera = (e) => {
+    try { e?.preventDefault?.(); e?.stopPropagation?.(); } catch {}
     void captureMomentViaCapacitorCamera("CAMERA");
-  });
-  document.getElementById("btnMomentIosOpenGallery")?.addEventListener("click", (e) => {
-    try { e?.preventDefault?.(); } catch {}
+  };
+  const onIosOpenGallery = (e) => {
+    try { e?.preventDefault?.(); e?.stopPropagation?.(); } catch {}
     void captureMomentViaCapacitorCamera("PHOTOS");
-  });
+  };
+  const iosCam = document.getElementById("btnMomentIosOpenCamera");
+  const iosGal = document.getElementById("btnMomentIosOpenGallery");
+  iosCam?.addEventListener("click", onIosOpenCamera);
+  iosCam?.addEventListener("touchend", onIosOpenCamera, { passive: false });
+  iosGal?.addEventListener("click", onIosOpenGallery);
+  iosGal?.addEventListener("touchend", onIosOpenGallery, { passive: false });
   document.getElementById("btnMomentFlipCamera")?.addEventListener("click", () => {
     try { haptic("light"); } catch {}
     void flipMomentCamera();
@@ -8516,7 +8538,7 @@ function wireMomentPageOnce() {
   });
 }
 
-function closeFriendsComposeSheet() {
+function closeFriendsComposeSheet({ immediate = false } = {}) {
   const sheet = document.getElementById("friendsComposeSheet");
   const openBtn = document.getElementById("friendsComposeOpenBtn");
   if (!sheet) return;
@@ -8525,10 +8547,16 @@ function closeFriendsComposeSheet() {
     document.getElementById("followComposeInput")?.blur?.();
   } catch {}
   sheet.classList.remove("isOpen");
-  sheet.classList.add("isClosing");
-  if (openBtn) openBtn.setAttribute("aria-expanded", "false");
   unlockPageForFriendsComposeSheet();
   sheet.style.setProperty("--friends-keyboard-inset", "0px");
+  if (openBtn) openBtn.setAttribute("aria-expanded", "false");
+  if (immediate) {
+    sheet.classList.remove("isClosing");
+    sheet.hidden = true;
+    sheet.setAttribute("aria-hidden", "true");
+    return;
+  }
+  sheet.classList.add("isClosing");
   window.setTimeout(() => {
     sheet.classList.remove("isClosing");
     sheet.hidden = true;

@@ -776,13 +776,6 @@
               <p class="discoveryStudioTag appScreenLead">Updates, advice, drops, and remixes from people you follow.</p>
             </div>
           </header>
-          <div id="friendsMomentsRail" class="friendsMomentsRail" hidden>
-            <div class="friendsMomentsRailHead">
-              <span class="friendsMomentsRailTitle">Moments</span>
-              <span class="friendsMomentsRailHint">24h from your circle</span>
-            </div>
-            <div id="friendsMomentsRailScroll" class="friendsMomentsRailScroll" role="list" aria-label="Active moments"></div>
-          </div>
           <div id="discoveryFollowingStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
           <div id="discoveryFollowingList" class="followActStack" hidden></div>
         </section>
@@ -1307,14 +1300,7 @@
                 </span>
                 <span class="createChooserPillLabel">Create song</span>
               </button>
-                <button type="button" class="createChooserPill createChooserPill--moment" data-create-chooser="moment" style="--pill-i:1" role="listitem">
-                  <span class="createChooserPillAura createChooserPillAura--moment" aria-hidden="true"></span>
-                  <span class="createChooserPillIcon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 2l7.5 8.2L15 22H9L4.5 10.2 12 2z"/></svg>
-                  </span>
-                  <span class="createChooserPillLabel">Create moment</span>
-                </button>
-              <button type="button" class="createChooserPill createChooserPill--status" data-create-chooser="status" style="--pill-i:2" role="listitem">
+              <button type="button" class="createChooserPill createChooserPill--status" data-create-chooser="status" style="--pill-i:1" role="listitem">
                 <span class="createChooserPillAura createChooserPillAura--status" aria-hidden="true"></span>
                 <span class="createChooserPillIcon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M4 4h16v2H4V4zm0 7h10v2H4v-2zm0 7h14v2H4v-2z"/></svg>
@@ -1548,9 +1534,6 @@
 
         <section class="card wide" data-route="user">
           <div class="userPublic" id="userPublicCard">
-            <div id="userPublicMomentsWrap" class="userPublicMomentsWrap" hidden>
-              <div id="userPublicMomentsRail" class="friendsMomentsRail friendsMomentsRail--profile" role="list" aria-label="Profile moments"></div>
-            </div>
             <div class="userPublicHead">
               <div class="userPublicAvatarWrap" id="userPublicAvatarWrap">
                 <span class="userPublicAvatarRing" aria-hidden="true"></span>
@@ -2401,53 +2384,6 @@
       </main>
       </div>
 
-        <div id="momentViewerSheet" class="momentViewerSheet" aria-hidden="true" hidden>
-          <div class="momentViewerBackdrop" data-moment-viewer-dismiss="1"></div>
-          <div class="momentViewerCard" id="momentViewerCard" role="dialog" aria-modal="true" aria-labelledby="momentViewerCaption">
-            <div id="momentViewerProgress" class="momentViewerProgress" aria-hidden="true"></div>
-            <div id="momentViewerPickFrame" class="momentViewerPickFrame">
-              <img id="momentViewerImg" class="momentViewerImg" alt="" decoding="async" />
-              <div id="momentViewerSongPlate" class="momentViewerSongPlate" hidden>
-                <div class="momentViewerSongCoverWrap">
-                  <img id="momentViewerSongCover" class="momentViewerSongCover" alt="" decoding="async" />
-                </div>
-                <p id="momentViewerSongTitle" class="momentViewerSongTitle"></p>
-                <p id="momentViewerSongPlaying" class="momentViewerSongPlaying" hidden>Playing preview…</p>
-              </div>
-              <audio id="momentViewerAudio" class="momentViewerAudio" preload="metadata" playsinline></audio>
-              <div class="momentViewerTapZones" aria-hidden="true">
-                <button type="button" class="momentViewerTapZone momentViewerTapZone--prev" id="momentViewerTapPrev" tabindex="-1" aria-label="Previous"></button>
-                <button type="button" class="momentViewerTapZone momentViewerTapZone--next" id="momentViewerTapNext" tabindex="-1" aria-label="Next"></button>
-              </div>
-              <div class="momentViewerOverlay">
-                <div class="momentViewerOverlayTop">
-                  <a id="momentViewerProfileLink" class="momentViewerProfileRow" href="#" data-route-link="user">
-                    <span class="momentViewerAvatar">
-                      <img id="momentViewerAvatarImg" class="momentViewerAvatarImg" alt="" width="36" height="36" decoding="async" />
-                      <span id="momentViewerAvatarFallback" class="momentViewerAvatarFallback" aria-hidden="true"></span>
-                    </span>
-                    <span id="momentViewerWho" class="momentViewerWho"></span>
-                    <span id="momentViewerTimePill" class="momentViewerTimePill" aria-hidden="true"></span>
-                  </a>
-                  <div class="momentViewerMenuWrap">
-                    <button type="button" class="momentViewerMenuBtn" id="momentViewerMenuBtn" aria-label="Story options" aria-haspopup="true" aria-expanded="false" hidden>
-                      <span aria-hidden="true">⋯</span>
-                    </button>
-                    <div id="momentViewerMenu" class="momentViewerMenu" hidden role="menu">
-                      <button type="button" class="momentViewerMenuItem" id="momentViewerDelete" role="menuitem" hidden>Remove story</button>
-                    </div>
-                  </div>
-                </div>
-                <div class="momentViewerOverlayBottom">
-                  <div class="momentViewerCaptionBanner">
-                    <p id="momentViewerCaption" class="momentViewerCaption"></p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
       <footer class="footer"><span id="footerBuild" class="hint" style="opacity:.5;font-size:11px"></span></footer>
       <div id="songDetailsModal" class="songDetailsModal" style="display:none">
         <div class="songDetailsBackdrop" id="songDetailsBackdrop"></div>
@@ -2872,84 +2808,6 @@
         setTimeout(unboot, 3500);
       })();
     </script>
-    <!-- Moment studio on body (not inside main.grid) — iOS WKWebView loses touches on fixed layers inside transformed ancestors. -->
-    <section class="momentStudio wide" data-route="moment" id="momentPage" style="display:none">
-      <div class="momentStudioViewport">
-        <div class="momentStudioMedia" id="momentStudioMedia">
-          <div class="momentStudioPickStage" id="momentPickStage">
-            <video id="momentCameraVideo" class="momentStudioCameraVideo" autoplay playsinline muted></video>
-            <div class="momentStudioIosPickHero" id="momentIosPickHero" aria-hidden="true">
-              <p class="momentStudioIosPickTitle">New story</p>
-              <p class="momentStudioIosPickHint">Take a photo or pick from your library</p>
-              <div class="momentIosPickActions">
-                <button type="button" class="momentIosPickBtn momentIosPickBtn--primary" id="btnMomentIosOpenCamera">Open camera</button>
-                <button type="button" class="momentIosPickBtn" id="btnMomentIosOpenGallery">Photo library</button>
-              </div>
-            </div>
-          </div>
-          <div class="momentStudioSongStage" id="momentSongStage" hidden>
-            <div class="momentSongStageBg" aria-hidden="true"></div>
-            <div class="momentSongCoverFrame">
-              <img id="momentSongCoverImg" class="momentSongCoverImg" alt="" decoding="async" />
-              <button type="button" class="momentSongPreviewBtn" id="btnMomentSongPreview" aria-label="Preview clip">
-                <span class="momentSongPreviewIcon" aria-hidden="true">▶</span>
-                <span class="momentSongPreviewLabel">Preview</span>
-              </button>
-            </div>
-            <p class="momentSongStageTitle" id="momentSongStageTitle"></p>
-            <p class="momentSongStageHint">Cover centered · ~15s plays in story</p>
-          </div>
-          <div class="momentStudioCropStage" id="momentCropStage" hidden>
-            <div class="momentStudioCropFrame" id="momentCropFrame">
-              <img id="momentCropImg" class="momentStudioCropImg" alt="" draggable="false" />
-            </div>
-            <p class="momentStudioCropHint">Pinch to zoom · drag to reposition</p>
-          </div>
-          <img id="momentPhotoPreview" class="momentStudioPreviewImg" alt="" hidden />
-          <div class="momentStudioShade momentStudioShade--top" aria-hidden="true"></div>
-          <div class="momentStudioShade momentStudioShade--bottom" aria-hidden="true"></div>
-          <div class="momentStudioSpinner" id="momentStudioSpinner" hidden aria-hidden="true"><span></span></div>
-        </div>
-        <div class="momentStudioChrome">
-          <header class="momentStudioTop">
-            <button type="button" class="momentStudioIconBtn" id="btnMomentBack" aria-label="Close">
-              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></svg>
-            </button>
-            <span class="momentStudioTopTitle" id="momentStudioTopTitle">New story</span>
-            <button type="button" class="momentStudioTextBtn" id="btnMomentChangePhoto" hidden>Change</button>
-            <button type="button" class="momentStudioTextBtn" id="btnMomentCropBack" hidden>Back</button>
-            <button type="button" class="momentStudioTextBtn momentStudioTextBtn--accent" id="btnMomentCropNext" hidden>Next</button>
-          </header>
-          <div class="momentStudioBottom">
-            <div id="momentCaptionPanel" class="momentStudioCaptionPanel" hidden>
-              <textarea id="momentCaptionInput" class="momentStudioCaptionInput" maxlength="320" placeholder="Add a caption…" rows="2" autocomplete="off" autocorrect="on"></textarea>
-            </div>
-            <div class="momentStudioDock" id="momentPickDock">
-              <div class="momentStudioCaptureRow">
-                <button type="button" class="momentStudioSideBtn" id="btnMomentFlipCamera" aria-label="Flip camera">
-                  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" d="M3 9h13l-3-3m3 12H6l3 3M21 9h-4m0 0 2-2m-2 2 2 2M3 15h4m0 0-2 2m2-2-2-2"/></svg>
-                </button>
-                <button type="button" class="momentStudioShutter" id="btnMomentCapture" aria-label="Take photo"></button>
-                <button type="button" class="momentStudioSideBtn" id="btnMomentOpenGallery" aria-label="Open gallery">
-                  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" d="M4 7.5h16v11H4zm4-4h8l2 4H6z"/></svg>
-                </button>
-              </div>
-            </div>
-            <div class="momentStudioShareRow" id="momentShareTools" hidden>
-              <button type="button" class="momentStudioCaptionToggle" id="btnMomentCaptionToggle" aria-label="Add caption" aria-expanded="false">Aa</button>
-              <button type="button" class="momentStudioShareBtn" id="btnMomentPublish" disabled>
-                <span class="momentStudioShareAvatar" id="momentShareAvatar" aria-hidden="true"></span>
-                <span class="momentStudioShareLabel">Share to story</span>
-                <span class="momentStudioShareSpinner" id="momentShareSpinner" hidden aria-hidden="true"></span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-      <input id="momentPhotoLibrary" type="file" accept="image/*" multiple hidden />
-      <input id="momentPhotoCamera" type="file" accept="image/*" capture="environment" hidden />
-    </section>
-
     <script src="./env.client.js" onerror="void 0"></script>
     <script type="module" src="./src/app.js?v=20260522nativeStoryCamV8"></script>
   </body>

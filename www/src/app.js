@@ -13,7 +13,7 @@ import { initEcho, onEnterFriendsRoute, openEchoFromCreateChooser } from "./echo
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522echoPostFlowV1";
+const APP_BUILD = "20260522friendsFastV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2653,13 +2653,7 @@ function applyRoute() {
   }
   if (wanted === "friends") {
     try { onLeaveSearchRoute(); } catch {}
-    void (async () => {
-      try {
-        await loadPublicConfig();
-        await refreshAuthStateFromSupabase();
-      } catch {}
-      enterFriendsRoute();
-    })();
+    enterFriendsRoute();
   }
   if (wanted === "discover") {
     bindDiscoveryDiscoverControls();
@@ -2931,6 +2925,7 @@ try {
     statusVoiceFallbackPeaks,
     supabaseRestWithAuth,
     fetchFollowingListViaSupabase,
+    fetchFollowingListForFeed,
     fetchProfilesByUserIdsMap,
     normalizeProfileAvatarForImg,
     uploadStatusVoiceBlob,
@@ -6374,7 +6369,28 @@ let _followingListCacheAt = 0;
 let _friendsFeedSnapshot = null;
 const FOLLOWING_LIST_CACHE_MS = 45000;
 const FRIENDS_FEED_SNAPSHOT_MS = 90000;
+const FRIENDS_MIN_FETCH_GAP_MS = 30000;
+const FRIENDS_FEED_SNAPSHOT_KEY = "nabad_friends_feed_snap_v1";
 const FRIENDS_FEED_LIBRARY_USERS = 12;
+
+function hydrateFriendsFeedSnapshotFromStorage() {
+  if (_friendsFeedSnapshot) return;
+  try {
+    const raw = sessionStorage.getItem(FRIENDS_FEED_SNAPSHOT_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (parsed?.at && Date.now() - parsed.at < FRIENDS_FEED_SNAPSHOT_MS) {
+      _friendsFeedSnapshot = parsed;
+    }
+  } catch {}
+}
+
+function persistFriendsFeedSnapshot() {
+  if (!_friendsFeedSnapshot) return;
+  try {
+    sessionStorage.setItem(FRIENDS_FEED_SNAPSHOT_KEY, JSON.stringify(_friendsFeedSnapshot));
+  } catch {}
+}
 
 function runFriendsRouteRefresh(token) {
   if (token !== _friendsRouteEnterToken) return;
@@ -6387,6 +6403,7 @@ function enterFriendsRoute() {
   bindFriendsPageOnce();
   wireFriendsComposeFabOnce();
   syncFollowingComposeUi();
+  hydrateFriendsFeedSnapshotFromStorage();
   try {
     onEnterFriendsRoute();
   } catch {}
@@ -6405,9 +6422,7 @@ function enterFriendsRoute() {
       _friendsStatusComposePending = false;
       try { openFriendsComposeSheet(); } catch {}
     }, 80);
-    return;
   }
-  runFriendsRouteRefresh(token);
 }
 
 function wireFriendsComposeFabOnce() {
@@ -6430,8 +6445,10 @@ function wireFriendsComposeFabOnce() {
   );
 }
 
-async function refreshDiscoveryFollowingFeed() {
+async function refreshDiscoveryFollowingFeed(opts = {}) {
+  const force = Boolean(opts.force);
   const gen = ++_discoveryFollowingGen;
+  hydrateFriendsFeedSnapshotFromStorage();
   const statusEl = document.getElementById("discoveryFollowingStatus");
   const listEl = document.getElementById("discoveryFollowingList");
   if (!statusEl || !listEl) return;
@@ -6450,6 +6467,9 @@ async function refreshDiscoveryFollowingFeed() {
     try {
       syncDiscoveryPlayingHighlights();
     } catch {}
+    if (!force && Date.now() - snap.at < FRIENDS_MIN_FETCH_GAP_MS) {
+      return;
+    }
   } else {
     listEl.classList.add("isDiscoveryLoading");
     listEl.hidden = false;
@@ -6649,6 +6669,7 @@ async function refreshDiscoveryFollowingFeed() {
       html: feedHtml,
       tracks: _discoveryFeedTracks,
     };
+    persistFriendsFeedSnapshot();
     try {
       syncDiscoveryPlayingHighlights();
     } catch {}
@@ -9804,7 +9825,9 @@ function loadAuthSession() {
   }
 }
 function saveAuthSession(sess) {
+  const prevUserId = String(authSession?.user?.id || "");
   authSession = sess || null;
+  const nextUserId = String(authSession?.user?.id || "");
   try {
     if (authSession) localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(authSession));
     else localStorage.removeItem(AUTH_SESSION_KEY);
@@ -9817,8 +9840,12 @@ function saveAuthSession(sess) {
     else refreshOwnSongsUi();
   } catch {}
   try {
-    if ((document.body.getAttribute("data-route") || "") === "friends") {
-      void refreshDiscoveryFollowingFeed();
+    if (
+      (document.body.getAttribute("data-route") || "") === "friends" &&
+      nextUserId &&
+      nextUserId !== prevUserId
+    ) {
+      void refreshDiscoveryFollowingFeed({ force: true });
     }
   } catch {}
 }
@@ -27381,10 +27408,6 @@ void (async () => {
   const usedCodeFlow = await maybeHandleAuthCodeFromQuery();
   const usedTokenFlow = !usedCodeFlow && maybeHandleMagicLinkFromHash();
   await refreshAuthStateFromSupabase();
-  try {
-    if ((document.body.getAttribute("data-route") || "") === "profile") renderProfileSongs();
-    else if ((document.body.getAttribute("data-route") || "") === "friends") enterFriendsRoute();
-  } catch {}
   if (usedCodeFlow || usedTokenFlow) {
     try { location.hash = "#/generate"; } catch {}
     scheduleApplyRoute();

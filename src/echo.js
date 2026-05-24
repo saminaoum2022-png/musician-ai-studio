@@ -55,6 +55,30 @@ let _echoComposeIgnoreInputUntil = 0;
 let _echoRailCache = null;
 let _echoRailCacheAt = 0;
 const ECHO_RAIL_CACHE_MS = 45000;
+const ECHO_RAIL_SNAPSHOT_KEY = "nabad_echo_rail_v1";
+
+function hydrateEchoRailCacheFromStorage() {
+  if (_echoRailCache) return;
+  try {
+    const raw = sessionStorage.getItem(ECHO_RAIL_SNAPSHOT_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (parsed?.at && Date.now() - parsed.at < ECHO_RAIL_CACHE_MS && Array.isArray(parsed.stories)) {
+      _echoRailCache = parsed.stories;
+      _echoRailCacheAt = parsed.at;
+    }
+  } catch {}
+}
+
+function persistEchoRailCache() {
+  if (!_echoRailCache) return;
+  try {
+    sessionStorage.setItem(
+      ECHO_RAIL_SNAPSHOT_KEY,
+      JSON.stringify({ at: _echoRailCacheAt || Date.now(), stories: _echoRailCache }),
+    );
+  } catch {}
+}
 
 function c() {
   return ctx;
@@ -329,7 +353,8 @@ function indexEchoStories(stories) {
 async function fetchEchoRailDirect() {
   const uid = c().getAuthSession()?.user?.id;
   if (!uid) return [];
-  const following = await c().fetchFollowingListViaSupabase();
+  const fetchFollowing = c().fetchFollowingListForFeed || c().fetchFollowingListViaSupabase;
+  const following = await fetchFollowing();
   if (following === null) throw new Error("no direct");
   const authorIds = [...new Set([uid, ...following.map((f) => f.userId).filter(Boolean)])];
   if (!authorIds.length) return [];
@@ -502,6 +527,7 @@ export async function refreshEchoRail(opts = {}) {
     if (rail) rail.hidden = true;
     return;
   }
+  hydrateEchoRailCacheFromStorage();
   const cacheFresh = _echoRailCache && Date.now() - _echoRailCacheAt < ECHO_RAIL_CACHE_MS;
   if (opts.useCache && _echoRailCache) {
     indexEchoStories(_echoRailCache);
@@ -510,6 +536,9 @@ export async function refreshEchoRail(opts = {}) {
   }
   const stories = await fetchEchoRail();
   if (gen !== _echoRailGen) return;
+  _echoRailCache = stories;
+  _echoRailCacheAt = Date.now();
+  persistEchoRailCache();
   indexEchoStories(stories);
   renderEchoRail(stories);
 }
@@ -782,7 +811,6 @@ export function closeEchoViewer() {
     sheet.classList.remove("isLocked", "isGhost", "isEnded", "isDissolving");
   }, 320);
   _echoViewerOpen = false;
-  void refreshEchoRail({ useCache: true });
 }
 
 async function deleteCurrentEcho() {

@@ -81,8 +81,7 @@ function gentleMusicalCenter(hz, pull = 0.22) {
   const nearest = Math.round(midi);
   const target = 440 * 2 ** ((nearest - 69) / 12);
   const cents = 1200 * Math.log2(target / hz);
-  const snap = pull > 0.55 ? 50 : 18;
-  const clamped = Math.max(-snap, Math.min(snap, cents));
+  const clamped = Math.max(-18, Math.min(18, cents));
   return hz * 2 ** ((clamped * pull) / 1200);
 }
 
@@ -99,18 +98,17 @@ function resampleGrain(grain, ratio) {
   return out;
 }
 
-function overlapAddPitchShift(channel, sampleRate, ratios, hop, winSize, ratioClamp = 0.07) {
+function overlapAddPitchShift(channel, sampleRate, ratios, hop, winSize) {
   const win = hannWindow(winSize);
   const out = new Float32Array(channel.length);
   const norm = new Float32Array(channel.length);
   const nGrains = ratios.length;
-  const clamp = Math.max(0.05, Math.min(0.18, ratioClamp));
 
   for (let g = 0; g < nGrains; g++) {
     const pos = g * hop;
     if (pos + winSize > channel.length) break;
     const grain = channel.subarray(pos, pos + winSize);
-    const ratio = Math.max(1 - clamp, Math.min(1 + clamp, ratios[g] || 1));
+    const ratio = Math.max(0.93, Math.min(1.07, ratios[g] || 1));
     const shifted = resampleGrain(grain, ratio);
     const start = pos;
     for (let j = 0; j < shifted.length && start + j < out.length; j++) {
@@ -144,22 +142,15 @@ function smoothMicroCracks(channel, strength = 0.45) {
  */
 export function applyNaturalPitchStabilization(buffer, opts = {}) {
   if (!buffer?.numberOfChannels) return buffer;
-  const robotic = Boolean(opts.robotic);
   const humming = Boolean(opts.humming);
-  const notePull = Math.max(0, Math.min(0.95, Number(opts.notePull) ?? (robotic ? 0.8 : 0.22)));
-  const strength = robotic
-    ? Math.max(0, Math.min(0.58, Number(opts.strength) ?? 0))
-    : Math.max(0, Math.min(0.15, Number(opts.strength) ?? 0));
-  if (strength <= 0.05) return buffer;
-  if (!robotic && !humming) return buffer;
+  const strength = Math.max(0, Math.min(0.15, Number(opts.strength) ?? 0));
+  if (strength <= 0.05 || !humming) return buffer;
 
   const ch = buffer.getChannelData(0);
   const sr = buffer.sampleRate;
-  const winSize = Math.floor(sr * (robotic ? 0.055 : 0.07));
+  const winSize = Math.floor(sr * 0.07);
   const hop = Math.floor(winSize * 0.5);
-  const maxCents = robotic
-    ? Math.min(55, Number(opts.maxCents) || 48)
-    : Math.min(14, Number(opts.maxCents) || 12);
+  const maxCents = Math.min(14, Number(opts.maxCents) || 12);
   const nGrains = Math.max(1, Math.floor((ch.length - winSize) / hop));
 
   const f0s = [];
@@ -169,33 +160,26 @@ export function applyNaturalPitchStabilization(buffer, opts = {}) {
   }
 
   const voiced = f0s.filter((f) => f > 60).length / Math.max(1, f0s.length);
-  if (voiced < (robotic ? 0.04 : 0.1)) return buffer;
+  if (voiced < 0.1) return buffer;
 
-  let smoothed = smoothF0Track(f0s, robotic ? 16 : 4);
-  if (robotic) {
-    smoothed = smoothed.map((f) => (f > 60 ? gentleMusicalCenter(f, notePull) : f));
-  }
+  const smoothed = smoothF0Track(f0s, 4);
 
-  const blend = robotic ? Math.min(1, strength * 1.2) : strength;
   const ratios = f0s.map((f, i) => {
     if (f < 60 || smoothed[i] < 60) return 1;
-    let target = smoothed[i];
-    if (robotic && target > 60) target = gentleMusicalCenter(target, notePull);
-    let cents = 1200 * Math.log2(target / f);
+    let cents = 1200 * Math.log2(smoothed[i] / f);
     cents = Math.max(-maxCents, Math.min(maxCents, cents));
     const ratio = 2 ** (cents / 1200);
-    return 1 + (ratio - 1) * blend;
+    return 1 + (ratio - 1) * strength;
   });
 
   const dry = ch.slice();
-  overlapAddPitchShift(ch, sr, ratios, hop, winSize, robotic ? 0.16 : 0.07);
+  overlapAddPitchShift(ch, sr, ratios, hop, winSize);
 
-  const wetMix = robotic ? Math.min(0.92, strength + 0.12) : strength;
   for (let i = 0; i < ch.length; i++) {
-    ch[i] = dry[i] * (1 - wetMix) + ch[i] * wetMix;
+    ch[i] = dry[i] * (1 - strength) + ch[i] * strength;
   }
 
-  smoothMicroCracks(ch, strength * (robotic ? 0.35 : humming ? 0.65 : 0.4));
+  smoothMicroCracks(ch, strength * (humming ? 0.65 : 0.4));
   return buffer;
 }
 

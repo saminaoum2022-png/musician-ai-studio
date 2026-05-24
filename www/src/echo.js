@@ -27,6 +27,103 @@ let echoStartedAt = 0;
 let echoComposeIdleRaf = 0;
 let _echoSwipeX = 0;
 let _echoPublishing = false;
+let echoMicTouching = false;
+let _echoSfxCtx = null;
+const COMPOSE_ORBIT_BARS = 48;
+
+function echoSfxCtx() {
+  if (!_echoSfxCtx) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (Ctx) _echoSfxCtx = new Ctx();
+  }
+  return _echoSfxCtx;
+}
+
+/** Soft emotional UI pulses — never harsh */
+function playEchoSfx(kind) {
+  const ctx = echoSfxCtx();
+  if (!ctx) return;
+  if (ctx.state === "suspended") void ctx.resume().catch(() => {});
+  const t = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  const filter = ctx.createBiquadFilter();
+  filter.type = "lowpass";
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(ctx.destination);
+  const tail = (dur) => {
+    osc.start(t);
+    osc.stop(t + dur);
+  };
+  if (kind === "open") {
+    filter.frequency.value = 820;
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(160, t);
+    osc.frequency.exponentialRampToValueAtTime(340, t + 0.42);
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.038, t + 0.06);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+    tail(0.56);
+  } else if (kind === "touch") {
+    filter.frequency.value = 1200;
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(240, t);
+    osc.frequency.exponentialRampToValueAtTime(380, t + 0.12);
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.032, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    tail(0.22);
+  } else if (kind === "release") {
+    filter.frequency.value = 680;
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(320, t);
+    osc.frequency.exponentialRampToValueAtTime(140, t + 0.35);
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.04, t + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.48);
+    tail(0.5);
+  } else if (kind === "lock") {
+    filter.frequency.value = 950;
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(420, t);
+    osc.frequency.exponentialRampToValueAtTime(520, t + 0.1);
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.028, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+    tail(0.24);
+  }
+}
+
+function idleOrbitPeaks() {
+  const out = [];
+  for (let i = 0; i < COMPOSE_ORBIT_BARS; i++) {
+    out.push(0.2 + 0.14 * Math.sin(i * 0.38 + 0.4));
+  }
+  return normalizePeaks(out);
+}
+
+function peaksHtmlOrbit(peaks, extraClass = "") {
+  const norm = normalizePeaks(peaks);
+  const n = Math.max(norm.length, COMPOSE_ORBIT_BARS);
+  return Array.from({ length: n }, (_, i) => {
+    const h = norm[i % norm.length] ?? 0.28;
+    const ht = Math.max(0.08, Math.min(1, Number(h) || 0.28));
+    const deg = (i / n) * 360;
+    const tint = i % 6 === 0 ? "echoBar--hi" : "";
+    return `<span class="echoBar echoBar--orbit ${tint} ${extraClass}" style="--bar-h:${(ht * 100).toFixed(1)}%;--orbit-deg:${deg.toFixed(2)}deg;--bar-i:${i}"></span>`;
+  }).join("");
+}
+
+function setComposeAtmosphere(voice = 0, pressure = 0) {
+  const card = document.querySelector(".echoComposeCard");
+  if (!card) return;
+  const v = Math.max(0, Math.min(1, Number(voice) || 0));
+  const p = Math.max(0, Math.min(1, Number(pressure) || 0));
+  card.style.setProperty("--echo-voice", String(v));
+  card.style.setProperty("--echo-aura", String(v * 0.82 + p * 0.18));
+  card.style.setProperty("--echo-pressure", String(p));
+}
 let echoAutostopTimer = 0;
 let echoTickRaf = 0;
 let echoComposeTickRaf = 0;
@@ -932,13 +1029,14 @@ function updateComposeWaveBars(peaks, extraClass = "") {
   const wave = document.getElementById("echoComposeWave");
   if (!wave) return;
   const norm = normalizePeaks(peaks);
-  let bars = wave.querySelectorAll(".echoBar");
-  if (bars.length !== ECHO_BAR_COUNT) {
-    wave.innerHTML = peaksHtml(norm, extraClass);
+  let bars = wave.querySelectorAll(".echoBar--orbit");
+  if (!bars.length) bars = wave.querySelectorAll(".echoBar");
+  if (bars.length !== norm.length || !bars[0]?.classList.contains("echoBar--orbit")) {
+    wave.innerHTML = peaksHtmlOrbit(norm, extraClass);
     return;
   }
   bars.forEach((bar, i) => {
-    const ht = Math.max(0.1, Math.min(1, Number(norm[i]) || 0.3));
+    const ht = Math.max(0.08, Math.min(1, Number(norm[i]) || 0.28));
     bar.style.setProperty("--bar-h", `${(ht * 100).toFixed(1)}%`);
     bar.classList.toggle("echoBar--live", extraClass.includes("live"));
     bar.classList.toggle("echoBar--breathe", extraClass.includes("breathe"));
@@ -951,11 +1049,16 @@ function tickLiveEchoWaveform() {
   echoPeaks = peaksFromAnalyser(_echoAnalyser);
   updateComposeWaveBars(echoPeaks, "echoBar--live");
   const mic = document.getElementById("echoComposeMicPulse");
-  if (mic && echoPeaks.length) {
+  let voice = 0;
+  if (echoPeaks.length) {
     let sum = 0;
     for (let i = 0; i < echoPeaks.length; i++) sum += echoPeaks[i];
-    mic.style.setProperty("--echo-mic", String(Math.min(1, (sum / echoPeaks.length) * 1.55)));
+    voice = Math.min(1, (sum / echoPeaks.length) * 1.5);
+    if (mic) mic.style.setProperty("--echo-mic", String(voice));
   }
+  const elapsed = Math.max(0, performance.now() - echoStartedAt);
+  const pressure = Math.min(1, elapsed / 42000);
+  setComposeAtmosphere(voice, pressure);
   echoComposeLiveRaf = requestAnimationFrame(tickLiveEchoWaveform);
 }
 
@@ -1013,7 +1116,8 @@ function echoComposeTick() {
 function paintIdleComposeWave() {
   const wave = document.getElementById("echoComposeWave");
   if (!wave) return;
-  wave.innerHTML = peaksHtml(normalizePeaks([]), "echoBar--breathe");
+  wave.innerHTML = peaksHtmlOrbit(idleOrbitPeaks(), "echoBar--breathe");
+  setComposeAtmosphere(0, 0);
 }
 
 function startComposeIdleMotion() {
@@ -1092,6 +1196,7 @@ function resetEchoCompose() {
   stopEchoComposeTick();
   stopLiveEchoWaveform();
   stopComposeIdleMotion();
+  echoMicTouching = false;
   echoRecState = "idle";
   echoChunks = [];
   echoDurationMs = 0;
@@ -1126,6 +1231,7 @@ function syncEchoComposeUi() {
   const arming = echoRecState === "arming";
 
   if (sheet) {
+    sheet.classList.toggle("isTouching", echoMicTouching && !busy);
     sheet.classList.toggle("isRecording", recording || arming);
     sheet.classList.toggle("isProcessing", busy);
     sheet.classList.toggle("isReleasing", releasing);
@@ -1136,14 +1242,12 @@ function syncEchoComposeUi() {
   if (primary) {
     if (releasing) primary.textContent = "Sending…";
     else if (processing) primary.textContent = "Polishing…";
-    else if (recording) primary.textContent = "Listening…";
-    else if (arming) primary.textContent = "…";
     else primary.textContent = "Hold";
   }
   if (sub) {
-    sub.hidden = !busy;
-    if (busy) sub.textContent = releasing ? "Almost there" : "Warm velvet polish";
+    sub.hidden = true;
   }
+  if (!recording && !busy) setComposeAtmosphere(0, 0);
 
   if (mic) {
     mic.classList.toggle("isRecording", recording || arming);
@@ -1171,7 +1275,7 @@ function syncEchoComposeUi() {
 function dismissEchoComposeSheet() {
   const sheet = document.getElementById("echoComposeSheet");
   if (sheet) {
-    sheet.classList.remove("isOpen", "isRecording", "isProcessing", "isReleasing");
+    sheet.classList.remove("isOpen", "isRecording", "isProcessing", "isReleasing", "isTouching");
     sheet.hidden = true;
     sheet.setAttribute("aria-hidden", "true");
   }
@@ -1256,6 +1360,8 @@ async function startEchoRecording() {
       syncEchoComposeUi();
       return;
     }
+    echoMicTouching = false;
+    playEchoSfx("release");
     echoRecState = "processing";
     syncEchoComposeUi();
     echoEnhancePromise = (async () => {
@@ -1319,6 +1425,7 @@ export function openEchoComposeSheet({ replyTo = "" } = {}) {
   document.body.classList.add("echoComposeOpen");
   paintIdleComposeWave();
   syncEchoComposeUi();
+  playEchoSfx("open");
   try {
     c().haptic("light");
   } catch {}
@@ -1655,6 +1762,7 @@ function wireEchoOnce() {
     if (!once) return;
     once.checked = !once.checked;
     syncEchoListenOnceToggle();
+    if (once.checked) playEchoSfx("lock");
     try {
       c().haptic("light");
     } catch {}
@@ -1684,9 +1792,15 @@ function wireEchoRecordHold() {
       return;
     }
     holdActive = true;
+    echoMicTouching = true;
+    sheet?.classList.add("isTouching");
     try {
       mic.setPointerCapture(e.pointerId);
     } catch {}
+    try {
+      c().haptic("light");
+    } catch {}
+    playEchoSfx("touch");
     if (echoRecState === "recording") return;
     void startEchoRecording();
   };
@@ -1694,6 +1808,9 @@ function wireEchoRecordHold() {
   const endHold = () => {
     if (!holdActive) return;
     holdActive = false;
+    echoMicTouching = false;
+    sheet?.classList.remove("isTouching");
+    syncEchoComposeUi();
     if (echoRecState === "recording") stopEchoRecording();
   };
 

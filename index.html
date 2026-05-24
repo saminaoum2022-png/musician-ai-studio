@@ -2897,16 +2897,23 @@
     <div id="echoComposeSheet" class="echoComposeSheet" aria-hidden="true" hidden>
       <div class="echoComposeBackdrop" id="echoComposeBackdrop"></div>
       <div class="echoComposeCard" role="dialog" aria-modal="true" aria-label="Echo">
+        <div class="echoComposeDrift" aria-hidden="true"></div>
         <div class="echoComposeAmbient" aria-hidden="true"></div>
+        <div class="echoComposeGrain" aria-hidden="true"></div>
+        <div class="echoComposeMotes" aria-hidden="true"></div>
         <button type="button" class="echoComposeClose" id="btnEchoComposeClose" aria-label="Close">
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></svg>
         </button>
         <div class="echoComposeHero">
           <span id="echoComposeTimer" class="echoComposeTimer" hidden aria-hidden="true">00:00</span>
           <div class="echoComposeMicStage">
-            <div class="echoComposeWaveHorizon echoWave" id="echoComposeWave" aria-hidden="true"></div>
+            <div class="echoComposeAura" id="echoComposeAura" aria-hidden="true">
+              <div class="echoComposeWaveHorizon echoWave echoComposeWaveHorizon--orbit" id="echoComposeWave"></div>
+            </div>
             <button type="button" class="echoComposeMic" id="btnEchoRecord" aria-label="Hold to record">
+              <span class="echoComposeMicHalo" aria-hidden="true"></span>
               <span class="echoComposeMicGlow" aria-hidden="true"></span>
+              <span class="echoComposeMicBreath" aria-hidden="true"></span>
               <span class="echoComposeMicRing" aria-hidden="true"></span>
               <span class="echoComposeMicPulse" id="echoComposeMicPulse" aria-hidden="true"></span>
               <span class="echoComposeMicIcon" aria-hidden="true">
@@ -2918,17 +2925,19 @@
           <p id="echoComposeStatusSub" class="echoComposeStatusSub" hidden aria-live="polite"></p>
         </div>
         <div class="echoComposeFooter echoComposeFooter--minimal">
-          <input type="checkbox" id="echoListenOnce" class="echoListenOnceInput" hidden />
-          <button type="button" class="echoListenOnceToggle" id="btnEchoListenOnceToggle" aria-pressed="false" aria-label="Listen once off">
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M17 9h-1V7a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zm-3 0H10V7a2 2 0 1 1 4 0v2z"/></svg>
-          </button>
-          <input type="text" id="echoComposeCaption" class="echoComposeCaption" maxlength="60" placeholder="whisper…" autocomplete="off" />
+          <div class="echoComposeWhisperDock">
+            <input type="checkbox" id="echoListenOnce" class="echoListenOnceInput" hidden />
+            <button type="button" class="echoListenOnceGlass" id="btnEchoListenOnceToggle" aria-pressed="false" aria-label="Listen once off">
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M17 9h-1V7a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zm-3 0H10V7a2 2 0 1 1 4 0v2z"/></svg>
+            </button>
+            <input type="text" id="echoComposeCaption" class="echoComposeCaption" maxlength="60" placeholder="whisper…" autocomplete="off" />
+          </div>
           <input type="radio" name="echoTone" value="natural" checked hidden />
         </div>
       </div>
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260522friendsFastV1"></script>
+    <script type="module" src="./src/app.js?v=20260522echoAliveV1"></script>
   </body>
 </html>

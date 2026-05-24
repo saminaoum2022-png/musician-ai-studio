@@ -6,11 +6,13 @@
 export const ECHO_TONE_IDS = ["raw", "soft", "dreamy"];
 export const ECHO_TONE_DEFAULT = "soft";
 export const ECHO_UPLOAD_MAX_BYTES = 480 * 1024;
-const ECHO_RENDER_SAMPLE_RATE = 24000;
+/** Full-rate render — 24kHz was making voice thin / “phone mic” */
+const ECHO_RENDER_SAMPLE_RATE = 44100;
 
 /**
  * @typedef {object} EchoTonePreset
  * @property {number} highpass
+ * @property {number} lowShelfGain
  * @property {number} mudCutGain
  * @property {number} bodyGain
  * @property {number} nasalCutGain
@@ -33,78 +35,81 @@ const ECHO_RENDER_SAMPLE_RATE = 24000;
  * @property {number} doublerMix
  * @property {number} [doublerMs]
  * @property {number} warmthDrive
+ * @property {number} [masterLp]
  */
 
 /** @type {Record<string, EchoTonePreset>} */
 const PRESETS = {
   raw: {
-    highpass: 78,
-    mudCutGain: -1.2,
-    bodyGain: 1.2,
-    nasalCutGain: -0.8,
-    presenceGain: 1.4,
-    airGain: -0.4,
-    deEssThreshold: -22,
-    deEssRatio: 2.5,
-    compThreshold: -22,
-    compKnee: 12,
-    compRatio: 2.2,
-    compAttack: 0.006,
-    compRelease: 0.18,
-    makeupGain: 1.04,
+    highpass: 68,
+    lowShelfGain: 1.2,
+    mudCutGain: -0.6,
+    bodyGain: 1,
+    nasalCutGain: -0.4,
+    presenceGain: 0.6,
+    airGain: -1,
+    deEssThreshold: -18,
+    deEssRatio: 2,
+    compThreshold: -18,
+    compKnee: 14,
+    compRatio: 1.5,
+    compAttack: 0.014,
+    compRelease: 0.32,
+    makeupGain: 1.01,
     reverbMix: 0,
     doublerMix: 0,
-    warmthDrive: 0.04,
+    warmthDrive: 0.02,
+    masterLp: 12000,
   },
   soft: {
-    highpass: 82,
-    mudCutGain: -2.8,
-    bodyGain: 3.2,
-    nasalCutGain: -2.2,
-    presenceGain: 2.2,
-    airGain: 1.2,
-    deEssThreshold: -30,
-    deEssRatio: 4,
-    compThreshold: -32,
-    compKnee: 18,
-    compRatio: 3.2,
-    compAttack: 0.003,
-    compRelease: 0.28,
-    glueThreshold: -18,
-    glueRatio: 1.8,
-    makeupGain: 1.12,
-    reverbMix: 0.14,
-    delayTime: 0.034,
-    delayFeedback: 0.18,
-    delayLp: 4600,
-    doublerMix: 0.11,
-    doublerMs: 0.014,
-    warmthDrive: 0.09,
+    highpass: 62,
+    lowShelfGain: 3.6,
+    mudCutGain: -1,
+    bodyGain: 1.8,
+    nasalCutGain: -0.6,
+    presenceGain: 0.5,
+    airGain: -1.2,
+    deEssThreshold: -20,
+    deEssRatio: 2.2,
+    compThreshold: -19,
+    compKnee: 16,
+    compRatio: 1.55,
+    compAttack: 0.016,
+    compRelease: 0.42,
+    makeupGain: 1.02,
+    reverbMix: 0.07,
+    delayTime: 0.032,
+    delayFeedback: 0.12,
+    delayLp: 2600,
+    doublerMix: 0.03,
+    doublerMs: 0.011,
+    warmthDrive: 0.035,
+    masterLp: 11200,
   },
   dreamy: {
-    highpass: 88,
-    mudCutGain: -2.2,
-    bodyGain: 2.4,
-    nasalCutGain: -1.6,
-    presenceGain: 1.6,
-    airGain: 2.8,
-    deEssThreshold: -28,
-    deEssRatio: 3.5,
-    compThreshold: -34,
-    compKnee: 20,
-    compRatio: 3.4,
-    compAttack: 0.004,
-    compRelease: 0.34,
-    glueThreshold: -16,
-    glueRatio: 2,
-    makeupGain: 1.1,
-    reverbMix: 0.24,
-    delayTime: 0.056,
-    delayFeedback: 0.28,
-    delayLp: 3200,
-    doublerMix: 0.15,
-    doublerMs: 0.018,
-    warmthDrive: 0.07,
+    highpass: 66,
+    lowShelfGain: 2.8,
+    mudCutGain: -0.8,
+    bodyGain: 1.4,
+    nasalCutGain: -0.5,
+    presenceGain: 0.4,
+    airGain: 0.6,
+    deEssThreshold: -20,
+    deEssRatio: 2.4,
+    compThreshold: -20,
+    compKnee: 16,
+    compRatio: 1.6,
+    compAttack: 0.012,
+    compRelease: 0.4,
+    makeupGain: 1.02,
+    reverbMix: 0.12,
+    delayTime: 0.048,
+    delayFeedback: 0.14,
+    delayLp: 2400,
+    doublerMix: 0.05,
+    doublerMs: 0.013,
+    warmthDrive: 0.03,
+    masterLp: 11000,
   },
 };
 
@@ -150,9 +155,16 @@ function connectVocalEq(offline, input, preset) {
   const hp = offline.createBiquadFilter();
   hp.type = "highpass";
   hp.frequency.value = preset.highpass;
-  hp.Q.value = 0.65;
+  hp.Q.value = 0.45;
   node.connect(hp);
   node = hp;
+
+  const lowShelf = offline.createBiquadFilter();
+  lowShelf.type = "lowshelf";
+  lowShelf.frequency.value = 155;
+  lowShelf.gain.value = preset.lowShelfGain ?? 0;
+  node.connect(lowShelf);
+  node = lowShelf;
 
   const mud = offline.createBiquadFilter();
   mud.type = "peaking";
@@ -203,15 +215,15 @@ function connectDeEsser(offline, input, preset) {
   input.connect(split);
 
   const dry = offline.createGain();
-  dry.gain.value = 0.82;
+  dry.gain.value = 0.94;
 
   const wet = offline.createGain();
-  wet.gain.value = 0.18;
+  wet.gain.value = 0.06;
 
   const hp = offline.createBiquadFilter();
   hp.type = "highpass";
-  hp.frequency.value = 5200;
-  hp.Q.value = 0.5;
+  hp.frequency.value = 6200;
+  hp.Q.value = 0.35;
 
   const ess = offline.createDynamicsCompressor();
   ess.threshold.value = preset.deEssThreshold;
@@ -247,7 +259,7 @@ function connectDoubler(offline, input, preset) {
   const thicken = offline.createBiquadFilter();
   thicken.type = "peaking";
   thicken.frequency.value = 2100;
-  thicken.gain.value = 1.4;
+  thicken.gain.value = 0.6;
   thicken.Q.value = 0.55;
 
   input.connect(dry);
@@ -271,22 +283,22 @@ function connectDynamics(offline, input, preset) {
   comp.release.value = preset.compRelease;
   input.connect(comp);
 
-  let out = comp;
-  if (preset.glueThreshold != null) {
-    const glue = offline.createDynamicsCompressor();
-    glue.threshold.value = preset.glueThreshold;
-    glue.knee.value = 10;
-    glue.ratio.value = preset.glueRatio ?? 1.8;
-    glue.attack.value = 0.01;
-    glue.release.value = 0.12;
-    comp.connect(glue);
-    out = glue;
-  }
-
   const makeup = offline.createGain();
   makeup.gain.value = preset.makeupGain ?? 1;
-  out.connect(makeup);
+  comp.connect(makeup);
   return makeup;
+}
+
+/** Rolls off harsh “helicopter” highs before space */
+function connectMasterWarmth(offline, input, preset) {
+  const hz = Number(preset.masterLp) || 0;
+  if (hz <= 0) return input;
+  const lp = offline.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.value = hz;
+  lp.Q.value = 0.35;
+  input.connect(lp);
+  return lp;
 }
 
 function connectSpace(offline, input, preset) {
@@ -346,6 +358,7 @@ async function renderPolishedBuffer(audioBuffer, tone) {
   chain = connectDeEsser(offline, chain, preset);
   chain = connectDoubler(offline, chain, preset) || chain;
   chain = connectDynamics(offline, chain, preset);
+  chain = connectMasterWarmth(offline, chain, preset);
   connectSpace(offline, chain, preset);
 
   src.start(0);
@@ -368,7 +381,7 @@ async function audioBufferToCompressedBlob(buffer, pickMime) {
     const chunks = [];
     const rec = new MediaRecorder(dest.stream, {
       mimeType: mime,
-      audioBitsPerSecond: 64000,
+      audioBitsPerSecond: 112000,
     });
 
     const blob = await new Promise((resolve, reject) => {
@@ -474,5 +487,5 @@ export function echoToneHint(tone) {
   const id = normalizeToneId(tone);
   if (id === "raw") return "Light cleanup — closest to your real voice";
   if (id === "dreamy") return "Airy space — emotional and soft";
-  return "Warm & smooth — the flattering voice-note sound";
+  return "Full & warm — natural body, easy on the ears";
 }

@@ -2848,30 +2848,34 @@
             </button>
           </div>
         </header>
-        <div class="echoViewerOnceBlock" id="echoViewerOnceBlock" hidden>
-          <span class="echoViewerOncePill">
-            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M17 9h-1V7a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zm-3 0H10V7a2 2 0 1 1 4 0v2z"/></svg>
-            Listen once
-          </span>
-          <p class="echoViewerOnceSub">You can hear this only one time.</p>
-        </div>
-        <div class="echoViewerTapZones" aria-hidden="true">
-          <button type="button" class="echoViewerTapZone echoViewerTapZone--prev" id="echoViewerTapPrev" tabindex="-1"></button>
-          <button type="button" class="echoViewerTapZone echoViewerTapZone--next" id="echoViewerTapNext" tabindex="-1"></button>
-        </div>
-        <div class="echoViewerCore" id="echoViewerCore">
-          <div class="echoViewerOrbits" aria-hidden="true"><span></span><span></span><span></span></div>
-          <div class="echoViewerWaveHorizon echoWave" id="echoViewerWave" aria-hidden="true"></div>
-          <div class="echoViewerMicBox" aria-hidden="true">
-            <span class="echoViewerMicIcon">
-              <svg viewBox="0 0 24 24" width="32" height="32"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V19H8v2h8v-2h-3v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
+        <div class="echoViewerHero">
+          <div class="echoViewerOnceBlock" id="echoViewerOnceBlock" hidden>
+            <span class="echoViewerOncePill">
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M17 9h-1V7a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zm-3 0H10V7a2 2 0 1 1 4 0v2z"/></svg>
+              Listen once
             </span>
+            <p class="echoViewerOnceSub">You can hear this only one time.</p>
           </div>
-          <div class="echoViewerMicPulse" id="echoViewerMicPulse" aria-hidden="true"></div>
+          <div class="echoViewerTapZones" aria-hidden="true">
+            <button type="button" class="echoViewerTapZone echoViewerTapZone--prev" id="echoViewerTapPrev" tabindex="-1"></button>
+            <button type="button" class="echoViewerTapZone echoViewerTapZone--next" id="echoViewerTapNext" tabindex="-1"></button>
+          </div>
+          <div class="echoViewerCore" id="echoViewerCore">
+            <div class="echoViewerOrbits" aria-hidden="true"><span></span><span></span><span></span></div>
+            <div class="echoViewerWaveHorizon echoWave" id="echoViewerWave" aria-hidden="true"></div>
+            <div class="echoViewerMicBox" aria-hidden="true">
+              <span class="echoViewerMicIcon">
+                <svg viewBox="0 0 24 24" width="32" height="32"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V19H8v2h8v-2h-3v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
+              </span>
+            </div>
+            <div class="echoViewerMicPulse" id="echoViewerMicPulse" aria-hidden="true"></div>
+            <button type="button" class="echoViewerTapPlay" id="btnEchoTapPlay" hidden>Tap to listen</button>
+          </div>
+          <p id="echoViewerStatus" class="echoViewerStatus">Starting…</p>
+          <p id="echoViewerCenterTimer" class="echoViewerCenterTimer">0:00 / 0:00</p>
+          <blockquote id="echoViewerCaption" class="echoViewerCaption" hidden></blockquote>
+          <div id="echoViewerDots" class="echoViewerDots" hidden role="tablist" aria-label="Echo slides"></div>
         </div>
-        <p id="echoViewerCenterTimer" class="echoViewerCenterTimer">0:00 / 0:00</p>
-        <blockquote id="echoViewerCaption" class="echoViewerCaption" hidden></blockquote>
-        <div id="echoViewerDots" class="echoViewerDots" hidden role="tablist" aria-label="Echo slides"></div>
         <footer class="echoViewerFooter">
           <div class="echoViewerScrub" aria-hidden="true">
             <span id="echoViewerProgressFill" class="echoViewerProgressFill"></span>
@@ -2974,6 +2978,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260522echoComposeLayoutV1"></script>
+    <script type="module" src="./src/app.js?v=20260522echoPlayV1"></script>
   </body>
 </html>

@@ -32,6 +32,8 @@ let _echoDeck = [];
 let _echoDeckIndex = 0;
 let _echoSlideIndex = 0;
 let _echoAudio = null;
+let _echoViewerAudioEl = null;
+let _echoViewerListenersBound = false;
 let _echoCtx = null;
 let _echoAnalyser = null;
 let _echoSource = null;
@@ -70,18 +72,97 @@ function peaksHtml(peaks, extraClass = "") {
     .join("");
 }
 
-/** Same URL normalization as Friends voice drops (Capacitor-safe proxy). */
-function echoResolvePlayUrl(url) {
+/** Direct public storage URL (fastest on device). */
+function echoDirectPlayUrl(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+  return c().normalizeAudioUrlForPlayback?.(raw) || raw;
+}
+
+/** Proxied URL fallback when direct fetch fails. */
+function echoProxyPlayUrl(url) {
   const raw = String(url || "").trim();
   if (!raw) return "";
   const proxy = c().toAudioProxyUrl?.(raw);
   return c().normalizeAudioUrlForPlayback?.(proxy || raw) || raw;
 }
 
+/** Prefer direct Supabase public audio; proxy only as fallback. */
+function echoResolvePlayUrl(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+  if (/storage\/v1\/object\/public\/status_audio\//i.test(raw)) {
+    return echoDirectPlayUrl(raw);
+  }
+  return echoProxyPlayUrl(raw);
+}
+
+function getEchoViewerAudio() {
+  if (!_echoViewerAudioEl) {
+    const audio = new Audio();
+    audio.preload = "auto";
+    audio.crossOrigin = "anonymous";
+    audio.setAttribute("playsinline", "");
+    audio.volume = 1;
+    _echoViewerAudioEl = audio;
+  }
+  return _echoViewerAudioEl;
+}
+
+function preloadEchoAudio(url) {
+  const playUrl = echoResolvePlayUrl(url);
+  if (!playUrl) return;
+  const audio = getEchoViewerAudio();
+  if (audio.dataset.echoSrc === playUrl) return;
+  audio.dataset.echoSrc = playUrl;
+  audio.src = playUrl;
+  try {
+    audio.load();
+  } catch {}
+}
+
+function bindEchoViewerAudioOnce() {
+  if (_echoViewerListenersBound) return;
+  _echoViewerListenersBound = true;
+  const audio = getEchoViewerAudio();
+  audio.addEventListener("play", () => {
+    const sheet = document.getElementById("echoViewerSheet");
+    const slide = currentEchoSlide();
+    if (!sheet || !slide) return;
+    sheet.classList.remove("isLoading", "needsEchoTap");
+    sheet.classList.add("isPlaying");
+    const tap = document.getElementById("btnEchoTapPlay");
+    if (tap) tap.hidden = true;
+    void markEchoListened(slide);
+    if (!_echoRaf) _echoRaf = requestAnimationFrame(echoViewerTick);
+    syncEchoViewerUi();
+  });
+  audio.addEventListener("timeupdate", () => updateEchoViewerProgress());
+  audio.addEventListener("ended", () => {
+    const sheet = document.getElementById("echoViewerSheet");
+    const slide = currentEchoSlide();
+    if (!sheet) return;
+    sheet.classList.remove("isPlaying", "isLoading");
+    sheet.classList.add("isEnded");
+    if (slide?.listenOnce) sheet.classList.add("isLocked");
+    stopEchoPlayback();
+    syncEchoViewerUi();
+  });
+  audio.addEventListener("pause", () => {
+    const sheet = document.getElementById("echoViewerSheet");
+    if (!sheet?.classList.contains("isOpen") || audio.ended) return;
+    if (!sheet.classList.contains("needsEchoTap")) {
+      sheet.classList.remove("isPlaying");
+      syncEchoViewerUi();
+    }
+  });
+}
+
 function paintEchoViewerWave(slide) {
   const wave = document.getElementById("echoViewerWave");
   if (!wave || !slide) return;
-  wave.innerHTML = peaksHtml(slide.waveformPeaks);
+  const peaks = slide.waveformPeaks?.length ? slide.waveformPeaks : normalizePeaks([]);
+  wave.innerHTML = peaksHtml(peaks);
 }
 
 function echoRelativeTime(iso) {
@@ -421,19 +502,13 @@ function stopEchoPlayback() {
     cancelAnimationFrame(_echoRaf);
     _echoRaf = 0;
   }
-  try {
-    _echoAudio?.pause?.();
-  } catch {}
+  const audio = _echoAudio || _echoViewerAudioEl;
+  if (audio) {
+    try {
+      audio.pause();
+    } catch {}
+  }
   _echoAudio = null;
-  try {
-    _echoSource?.disconnect?.();
-  } catch {}
-  _echoSource = null;
-  try {
-    _echoCtx?.close?.();
-  } catch {}
-  _echoCtx = null;
-  _echoAnalyser = null;
 }
 
 function currentEchoSlide() {
@@ -483,6 +558,24 @@ function syncEchoViewerUi() {
   const showReact = heard || ended;
   if (reactions) reactions.hidden = !showReact;
   if (reactTip) reactTip.hidden = !showReact;
+
+  const status = document.getElementById("echoViewerStatus");
+  const tapPlay = document.getElementById("btnEchoTapPlay");
+  const audio = _echoAudio || getEchoViewerAudio();
+  if (status) {
+    if (sheet.classList.contains("isLocked")) status.textContent = "Already heard";
+    else if (sheet.classList.contains("needsEchoTap")) status.textContent = "Tap to listen";
+    else if (sheet.classList.contains("isLoading")) status.textContent = "Starting…";
+    else if (sheet.classList.contains("isEnded")) status.textContent = "Finished";
+    else if (sheet.classList.contains("isPlaying") || (audio && !audio.paused && !audio.ended)) {
+      status.textContent = "Playing";
+    } else status.textContent = "Listen";
+  }
+  if (tapPlay) {
+    tapPlay.hidden = !sheet.classList.contains("needsEchoTap");
+  }
+  sheet.classList.toggle("hasCaption", Boolean(slide.body));
+
   updateEchoViewerProgress();
   document.querySelectorAll("[data-echo-react]").forEach((btn) => {
     btn.classList.toggle("isActive", btn.getAttribute("data-echo-react") === slide.reaction);
@@ -540,59 +633,74 @@ async function markEchoListened(slide) {
   }
 }
 
-async function playEchoSlide(slide) {
-  stopEchoPlayback();
+function playEchoSlide(slide) {
+  bindEchoViewerAudioOnce();
   const sheet = document.getElementById("echoViewerSheet");
   if (!slide?.audioUrl || !sheet) return;
   const listenOnce = Boolean(slide.listenOnce);
   const alreadyHeard = isEchoHeard(slide);
   if (listenOnce && alreadyHeard) {
+    sheet.classList.remove("isPlaying", "isLoading", "needsEchoTap");
     sheet.classList.add("isLocked");
+    paintEchoViewerWave(slide);
     syncEchoViewerUi();
     return;
   }
-  sheet.classList.remove("isLocked", "isEnded", "needsEchoTap");
+
+  sheet.classList.remove("isLocked", "isEnded", "needsEchoTap", "isPlaying");
+  sheet.classList.add("isLoading");
   _echoListenMarked = false;
   paintEchoViewerWave(slide);
+  syncEchoViewerUi();
 
-  const playUrl = echoResolvePlayUrl(slide.audioUrl);
-  if (!playUrl) {
+  const directUrl = echoResolvePlayUrl(slide.audioUrl);
+  const proxyUrl = echoProxyPlayUrl(slide.audioUrl);
+  if (!directUrl) {
     try {
       c().showToast("Echo audio missing", { durationMs: 2600 });
     } catch {}
     return;
   }
 
-  const audio = new Audio(playUrl);
-  audio.preload = "auto";
-  audio.crossOrigin = "anonymous";
-  audio.setAttribute("playsinline", "");
-  audio.volume = 1;
+  const audio = getEchoViewerAudio();
   _echoAudio = audio;
 
-  audio.addEventListener("play", () => {
-    sheet.classList.remove("needsEchoTap");
-    void markEchoListened(slide);
-    if (!_echoRaf) _echoRaf = requestAnimationFrame(echoViewerTick);
-  });
-  audio.addEventListener("timeupdate", () => updateEchoViewerProgress());
-  audio.addEventListener("ended", () => {
-    sheet.classList.add("isEnded");
-    if (listenOnce) sheet.classList.add("isLocked");
-    stopEchoPlayback();
-    syncEchoViewerUi();
-  });
+  const applyUrl = (url) => {
+    if (audio.dataset.echoSrc !== url) {
+      audio.dataset.echoSrc = url;
+      audio.src = url;
+      try {
+        audio.load();
+      } catch {}
+    }
+  };
 
-  try {
-    await audio.play();
-  } catch {
+  const attempt = (url) => {
+    applyUrl(url);
+    return audio.play();
+  };
+
+  const onPlaying = () => {
+    if (_echoProgressTimer) window.clearInterval(_echoProgressTimer);
+    _echoProgressTimer = window.setInterval(() => updateEchoViewerProgress(), 200);
+    syncEchoViewerUi();
+  };
+
+  const showTapFallback = () => {
+    sheet.classList.remove("isLoading", "isPlaying");
     sheet.classList.add("needsEchoTap");
-    try {
-      c().showToast("Tap center to listen", { durationMs: 2400 });
-    } catch {}
-  }
-  _echoProgressTimer = window.setInterval(() => updateEchoViewerProgress(), 200);
-  syncEchoViewerUi();
+    syncEchoViewerUi();
+  };
+
+  attempt(directUrl)
+    .then(onPlaying)
+    .catch(() => {
+      if (proxyUrl && proxyUrl !== directUrl) {
+        attempt(proxyUrl).then(onPlaying).catch(showTapFallback);
+      } else {
+        showTapFallback();
+      }
+    });
 }
 
 function buildDeckForUser(userId, slideIndex = 0) {
@@ -616,7 +724,7 @@ export function openEchoViewer(userId, slideIndex = 0) {
   _echoViewerOpen = true;
   document.body.classList.add("echoViewerOpen");
   syncEchoViewerUi();
-  void playEchoSlide(slide);
+  playEchoSlide(slide);
 }
 
 export function closeEchoViewer() {
@@ -1091,17 +1199,34 @@ function wireEchoOnce() {
       return;
     }
     const tile = e.target.closest("[data-echo-user-id]");
-    if (!tile) return;
+    if (!tile || tile.closest("[data-echo-add]")) return;
     e.preventDefault();
     try {
       c().haptic("light");
     } catch {}
+    const userId = tile.getAttribute("data-echo-user-id");
+    const story = _echoStoriesByUser.get(String(userId || ""));
+    const slide = story?.echoes?.[0];
+    const audio = getEchoViewerAudio();
     try {
-      const prime = new Audio();
-      c().primeAudioElementInGesture?.(prime);
+      c().primeAudioElementInGesture?.(audio);
     } catch {}
-    openEchoViewer(tile.getAttribute("data-echo-user-id"), 0);
+    if (slide?.audioUrl) preloadEchoAudio(slide.audioUrl);
+    openEchoViewer(userId, 0);
   });
+
+  document.getElementById("friendsEchoRailScroll")?.addEventListener(
+    "pointerdown",
+    (e) => {
+      const tile = e.target.closest("[data-echo-user-id]");
+      if (!tile || tile.closest("[data-echo-add]")) return;
+      const uid = tile.getAttribute("data-echo-user-id");
+      const story = _echoStoriesByUser.get(String(uid || ""));
+      const slide = story?.echoes?.[0];
+      if (slide?.audioUrl) preloadEchoAudio(slide.audioUrl);
+    },
+    { passive: true },
+  );
 
   document.getElementById("btnEchoDelete")?.addEventListener("click", (e) => {
     e.preventDefault();
@@ -1116,18 +1241,41 @@ function wireEchoOnce() {
     const idx = Number(dot.getAttribute("data-echo-dot"));
     if (!Number.isFinite(idx)) return;
     _echoSlideIndex = idx;
-    void playEchoSlide(currentEchoSlide());
+    playEchoSlide(currentEchoSlide());
   });
 
-  document.getElementById("echoViewerCore")?.addEventListener("click", async (e) => {
-    if (e.target.closest(".echoViewerClose, .echoViewerDelete, .echoReactBtn, #btnEchoReply")) return;
+  const retryEchoPlay = () => {
     const sheet = document.getElementById("echoViewerSheet");
-    if (!sheet?.classList.contains("needsEchoTap") || !_echoAudio) return;
-    try {
-      await _echoAudio.play();
-      sheet.classList.remove("needsEchoTap");
-      if (!_echoRaf) _echoRaf = requestAnimationFrame(echoViewerTick);
-    } catch {}
+    const slide = currentEchoSlide();
+    if (!sheet || !slide || !sheet.classList.contains("needsEchoTap")) return;
+    const audio = _echoAudio || getEchoViewerAudio();
+    sheet.classList.add("isLoading");
+    sheet.classList.remove("needsEchoTap");
+    syncEchoViewerUi();
+    audio
+      .play()
+      .then(() => {
+        if (_echoProgressTimer) window.clearInterval(_echoProgressTimer);
+        _echoProgressTimer = window.setInterval(() => updateEchoViewerProgress(), 200);
+      })
+      .catch(() => {
+        sheet.classList.add("needsEchoTap");
+        syncEchoViewerUi();
+      });
+  };
+
+  document.getElementById("btnEchoTapPlay")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    retryEchoPlay();
+  });
+
+  document.getElementById("echoViewerCore")?.addEventListener("click", (e) => {
+    if (e.target.closest(".echoViewerClose, .echoViewerDelete, .echoReactBtn, #btnEchoReply, #btnEchoTapPlay")) {
+      return;
+    }
+    const sheet = document.getElementById("echoViewerSheet");
+    if (sheet?.classList.contains("needsEchoTap")) retryEchoPlay();
   });
 
   document.getElementById("echoViewerBackdrop")?.addEventListener("click", () => closeEchoViewer());
@@ -1135,14 +1283,14 @@ function wireEchoOnce() {
   document.getElementById("echoViewerTapPrev")?.addEventListener("click", () => {
     if (_echoSlideIndex > 0) {
       _echoSlideIndex -= 1;
-      void playEchoSlide(currentEchoSlide());
+      playEchoSlide(currentEchoSlide());
     }
   });
   document.getElementById("echoViewerTapNext")?.addEventListener("click", () => {
     const story = _echoDeck[_echoDeckIndex];
     if (_echoSlideIndex < (story?.echoes?.length || 1) - 1) {
       _echoSlideIndex += 1;
-      void playEchoSlide(currentEchoSlide());
+      playEchoSlide(currentEchoSlide());
     } else {
       closeEchoViewer();
     }

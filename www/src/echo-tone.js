@@ -1,6 +1,6 @@
 /**
- * Echo Tone — broadcast interview / close-mic polish + natural pitch stabilization.
- * Chain: cleanup → de-ess → comp → EQ → space → pitch stabilize → loudness norm.
+ * Echo Tone — velvety late-night condenser polish + natural pitch stabilization.
+ * Warm, soft, intimate — not podcast-crisp or heavily compressed.
  */
 import {
   applyNaturalPitchStabilization,
@@ -11,8 +11,8 @@ export const ECHO_TONE_IDS = ["raw", "natural", "dreamy"];
 export const ECHO_TONE_DEFAULT = "natural";
 export const ECHO_UPLOAD_MAX_BYTES = 480 * 1024;
 const ECHO_RENDER_SAMPLE_RATE = 44100;
-/** Target RMS for consistent Echo playback (~−22 dBFS feel) */
-const TARGET_RMS = 0.085;
+/** Gentle loudness target — avoids “squashed loud” feel */
+const TARGET_RMS = 0.076;
 
 /**
  * @typedef {object} EchoTonePreset
@@ -40,84 +40,92 @@ const TARGET_RMS = 0.085;
  * @property {number} warmthDrive
  * @property {number} pitchStrength
  * @property {number} [pitchMaxCents]
+ * @property {number} [velvetLp]
+ * @property {number} [transientSoft]
  */
 
 /** @type {Record<string, EchoTonePreset>} */
 const PRESETS = {
   raw: {
-    highpass: 74,
-    rumbleCutGain: -1.5,
-    lowShelfGain: 0.4,
-    mudCutGain: -0.5,
-    harshMidCutGain: -0.4,
-    bodyGain: 0.4,
-    presenceGain: 0.3,
-    phoneCutGain: -0.8,
-    deEssThreshold: -16,
-    deEssRatio: 1.8,
-    compThreshold: -17,
-    compRatio: 1.35,
-    compAttack: 0.018,
-    compRelease: 0.38,
+    highpass: 68,
+    rumbleCutGain: -1,
+    lowShelfGain: 1,
+    mudCutGain: -0.4,
+    harshMidCutGain: -0.8,
+    bodyGain: 0.8,
+    presenceGain: -0.5,
+    phoneCutGain: -1.2,
+    deEssThreshold: -12,
+    deEssRatio: 1.5,
+    compThreshold: -14,
+    compRatio: 1.2,
+    compAttack: 0.022,
+    compRelease: 0.48,
     reverbMix: 0,
     noiseGateFloor: 0.004,
-    noiseReduceAmount: 0.35,
+    noiseReduceAmount: 0.18,
     tonalBlendMix: 0,
-    warmthDrive: 0,
-    pitchStrength: 0.06,
-    pitchMaxCents: 12,
+    warmthDrive: 0.02,
+    pitchStrength: 0.1,
+    pitchMaxCents: 14,
+    velvetLp: 11000,
+    transientSoft: 0.25,
   },
   natural: {
-    highpass: 70,
-    rumbleCutGain: -2.2,
-    lowShelfGain: 2.2,
-    mudCutGain: -1.4,
-    harshMidCutGain: -1.8,
-    bodyGain: 1.4,
-    presenceGain: 0.9,
-    phoneCutGain: -1.4,
-    deEssThreshold: -19,
-    deEssRatio: 2,
-    compThreshold: -20,
-    compRatio: 1.45,
-    compAttack: 0.014,
-    compRelease: 0.44,
-    reverbMix: 0.035,
-    delayTime: 0.028,
-    delayFeedback: 0.08,
-    delayLp: 2200,
+    highpass: 58,
+    rumbleCutGain: -0.8,
+    lowShelfGain: 4.2,
+    mudCutGain: -0.5,
+    harshMidCutGain: -2.6,
+    bodyGain: 2.6,
+    presenceGain: -1.2,
+    phoneCutGain: -2.8,
+    deEssThreshold: -11,
+    deEssRatio: 1.45,
+    compThreshold: -12,
+    compRatio: 1.18,
+    compAttack: 0.032,
+    compRelease: 0.58,
+    reverbMix: 0.062,
+    delayTime: 0.036,
+    delayFeedback: 0.1,
+    delayLp: 1650,
     noiseGateFloor: 0.003,
-    noiseReduceAmount: 0.55,
-    tonalBlendMix: 0.04,
-    warmthDrive: 0.025,
-    pitchStrength: 0.22,
-    pitchMaxCents: 22,
+    noiseReduceAmount: 0.2,
+    tonalBlendMix: 0,
+    warmthDrive: 0.048,
+    pitchStrength: 0.34,
+    pitchMaxCents: 32,
+    velvetLp: 9200,
+    transientSoft: 0.42,
   },
   dreamy: {
-    highpass: 70,
-    rumbleCutGain: -2,
-    lowShelfGain: 2,
-    mudCutGain: -1.2,
-    harshMidCutGain: -1.5,
-    bodyGain: 1.2,
-    presenceGain: 0.7,
-    phoneCutGain: -1.2,
-    deEssThreshold: -19,
-    deEssRatio: 2,
-    compThreshold: -20,
-    compRatio: 1.45,
-    compAttack: 0.014,
-    compRelease: 0.44,
-    reverbMix: 0.09,
-    delayTime: 0.042,
-    delayFeedback: 0.1,
-    delayLp: 2000,
+    highpass: 58,
+    rumbleCutGain: -0.6,
+    lowShelfGain: 3.8,
+    mudCutGain: -0.4,
+    harshMidCutGain: -2.2,
+    bodyGain: 2.2,
+    presenceGain: -1,
+    phoneCutGain: -2.4,
+    deEssThreshold: -11,
+    deEssRatio: 1.45,
+    compThreshold: -12,
+    compRatio: 1.18,
+    compAttack: 0.03,
+    compRelease: 0.56,
+    reverbMix: 0.11,
+    delayTime: 0.05,
+    delayFeedback: 0.12,
+    delayLp: 1500,
     noiseGateFloor: 0.003,
-    noiseReduceAmount: 0.5,
-    tonalBlendMix: 0.05,
-    warmthDrive: 0.02,
-    pitchStrength: 0.24,
-    pitchMaxCents: 26,
+    noiseReduceAmount: 0.18,
+    tonalBlendMix: 0,
+    warmthDrive: 0.04,
+    pitchStrength: 0.38,
+    pitchMaxCents: 34,
+    velvetLp: 8800,
+    transientSoft: 0.45,
   },
 };
 
@@ -163,13 +171,13 @@ function connectBackgroundCleanup(offline, input, preset) {
 }
 
 function connectWarmth(offline, input, drive) {
-  const d = Math.max(0, Math.min(0.08, Number(drive) || 0));
+  const d = Math.max(0, Math.min(0.1, Number(drive) || 0));
   if (d <= 0.001) return input;
   const shaper = offline.createWaveShaper();
   const curve = new Float32Array(256);
   for (let i = 0; i < 256; i++) {
-    const x = (i / 128 - 1) * (1 + d * 2);
-    curve[i] = Math.tanh(x) / Math.tanh(1 + d * 2);
+    const x = (i / 128 - 1) * (1 + d * 1.6);
+    curve[i] = Math.tanh(x) / Math.tanh(1 + d * 1.6);
   }
   shaper.curve = curve;
   shaper.oversample = "2x";
@@ -177,13 +185,13 @@ function connectWarmth(offline, input, drive) {
   return shaper;
 }
 
-/** Interview EQ — warmth, less phone sharpness, soft presence */
+/** Velvety condenser EQ — body, no podcast brightness */
 function connectInterviewEq(offline, input, preset) {
   let node = input;
 
   const lowShelf = offline.createBiquadFilter();
   lowShelf.type = "lowshelf";
-  lowShelf.frequency.value = 168;
+  lowShelf.frequency.value = 142;
   lowShelf.gain.value = preset.lowShelfGain;
   node.connect(lowShelf);
   node = lowShelf;
@@ -198,63 +206,75 @@ function connectInterviewEq(offline, input, preset) {
 
   const body = offline.createBiquadFilter();
   body.type = "peaking";
-  body.frequency.value = 210;
-  body.Q.value = 0.65;
+  body.frequency.value = 248;
+  body.Q.value = 0.55;
   body.gain.value = preset.bodyGain;
   node.connect(body);
   node = body;
 
   const harsh = offline.createBiquadFilter();
   harsh.type = "peaking";
-  harsh.frequency.value = 3200;
-  harsh.Q.value = 1.1;
+  harsh.frequency.value = 2900;
+  harsh.Q.value = 0.75;
   harsh.gain.value = preset.harshMidCutGain;
   node.connect(harsh);
   node = harsh;
 
   const phone = offline.createBiquadFilter();
   phone.type = "peaking";
-  phone.frequency.value = 4800;
-  phone.Q.value = 0.85;
+  phone.frequency.value = 5200;
+  phone.Q.value = 0.65;
   phone.gain.value = preset.phoneCutGain;
   node.connect(phone);
   node = phone;
 
   const presence = offline.createBiquadFilter();
   presence.type = "peaking";
-  presence.frequency.value = 2650;
-  presence.Q.value = 0.55;
-  presence.gain.value = preset.presenceGain;
-  node.connect(presence);
-  node = presence;
+  if (Math.abs(preset.presenceGain) > 0.05) {
+    const presence = offline.createBiquadFilter();
+    presence.type = "peaking";
+    presence.frequency.value = 2400;
+    presence.Q.value = 0.45;
+    presence.gain.value = preset.presenceGain;
+    node.connect(presence);
+    node = presence;
+  }
 
   const air = offline.createBiquadFilter();
   air.type = "highshelf";
-  air.frequency.value = 9000;
-  air.gain.value = -0.8;
+  air.frequency.value = 7500;
+  air.gain.value = -2.4;
   node.connect(air);
   node = air;
+
+  const sibilance = offline.createBiquadFilter();
+  sibilance.type = "peaking";
+  sibilance.frequency.value = 6800;
+  sibilance.Q.value = 0.5;
+  sibilance.gain.value = -1.6;
+  node.connect(sibilance);
+  node = sibilance;
 
   return connectWarmth(offline, node, preset.warmthDrive);
 }
 
 function connectDeEsser(offline, input, preset) {
   const dry = offline.createGain();
-  dry.gain.value = 0.95;
+  dry.gain.value = 0.975;
   const wet = offline.createGain();
-  wet.gain.value = 0.05;
+  wet.gain.value = 0.025;
 
   const hp = offline.createBiquadFilter();
   hp.type = "highpass";
-  hp.frequency.value = 5800;
-  hp.Q.value = 0.35;
+  hp.frequency.value = 6500;
+  hp.Q.value = 0.3;
 
   const ess = offline.createDynamicsCompressor();
   ess.threshold.value = preset.deEssThreshold;
-  ess.knee.value = 10;
+  ess.knee.value = 14;
   ess.ratio.value = preset.deEssRatio;
-  ess.attack.value = 0.002;
-  ess.release.value = 0.05;
+  ess.attack.value = 0.006;
+  ess.release.value = 0.09;
 
   input.connect(dry);
   input.connect(hp);
@@ -271,12 +291,26 @@ function connectDeEsser(offline, input, preset) {
 function connectDynamics(offline, input, preset) {
   const comp = offline.createDynamicsCompressor();
   comp.threshold.value = preset.compThreshold;
-  comp.knee.value = 18;
+  comp.knee.value = 24;
   comp.ratio.value = preset.compRatio;
   comp.attack.value = preset.compAttack;
   comp.release.value = preset.compRelease;
   input.connect(comp);
   return comp;
+}
+
+function connectVelvetTop(offline, input, hz) {
+  const f = Number(hz) || 0;
+  if (f <= 0) {
+    input.connect(offline.destination);
+    return;
+  }
+  const lp = offline.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.value = f;
+  lp.Q.value = 0.28;
+  input.connect(lp);
+  lp.connect(offline.destination);
 }
 
 /** Barely-there thickening for sustained hum/sing — not pitch correction */
@@ -299,13 +333,13 @@ function connectTonalBlend(offline, input, mix) {
 }
 
 function connectSpace(offline, input, preset) {
-  const mix = Math.max(0, Math.min(0.12, Number(preset.reverbMix) || 0));
+  const mix = Math.max(0, Math.min(0.14, Number(preset.reverbMix) || 0));
   if (mix <= 0.001) {
-    input.connect(offline.destination);
+    connectVelvetTop(offline, input, preset.velvetLp);
     return;
   }
   const dry = offline.createGain();
-  dry.gain.value = 1 - mix * 0.75;
+  dry.gain.value = 1 - mix * 0.7;
   const wet = offline.createGain();
   wet.gain.value = mix;
   const delay = offline.createDelay(0.12);
@@ -321,8 +355,28 @@ function connectSpace(offline, input, preset) {
   lp.connect(fb);
   fb.connect(delay);
   delay.connect(wet);
-  dry.connect(offline.destination);
-  wet.connect(offline.destination);
+  const merge = offline.createGain();
+  dry.connect(merge);
+  wet.connect(merge);
+  connectVelvetTop(offline, merge, preset.velvetLp);
+}
+
+/** Softens crispy consonants — keeps breath and body */
+function softenTransientsInPlace(channel, amount = 0.35) {
+  const a = Math.max(0, Math.min(0.55, amount));
+  if (a <= 0.01) return;
+  let env = 0;
+  const atk = 0.0008;
+  const rel = 0.04;
+  for (let i = 0; i < channel.length; i++) {
+    const x = channel[i];
+    const level = Math.abs(x);
+    env = level > env ? env + (level - env) * atk : env + (level - env) * rel;
+    if (level > env * 1.8 + 0.04) {
+      const soften = 1 - a * 0.35;
+      channel[i] = x * soften;
+    }
+  }
 }
 
 function gentleNoiseReduceInPlace(channel, preset) {
@@ -361,19 +415,17 @@ function normalizeLoudness(buffer, targetRms = TARGET_RMS) {
   for (let i = 0; i < ch.length; i++) sumSq += ch[i] * ch[i];
   const rms = Math.sqrt(sumSq / Math.max(1, ch.length));
   if (rms < 0.0006) return buffer;
-  const gain = Math.min(1.85, targetRms / rms);
+  const gain = Math.min(1.55, targetRms / rms);
   for (let i = 0; i < ch.length; i++) {
     ch[i] = Math.max(-0.98, Math.min(0.98, ch[i] * gain));
   }
   return buffer;
 }
 
-function postProcessBuffer(buffer, preset, { applyTonalBlend = false } = {}) {
+function postProcessBuffer(buffer, preset) {
   const ch = buffer.getChannelData(0);
+  softenTransientsInPlace(ch, preset.transientSoft ?? 0.35);
   gentleNoiseReduceInPlace(ch, preset);
-  if (applyTonalBlend && preset.tonalBlendMix > 0) {
-    /* tonal blend already in graph when humming detected */
-  }
   normalizeLoudness(buffer);
   return buffer;
 }
@@ -397,7 +449,6 @@ async function decodeBlobToBuffer(blob) {
 async function renderPolishedBuffer(audioBuffer, tone) {
   const preset = PRESETS[normalizeToneId(tone)] || PRESETS.natural;
   const humming = isLikelyHumOrSingBuffer(audioBuffer);
-  const tonalBlend = preset.tonalBlendMix > 0 && humming ? preset.tonalBlendMix : 0;
 
   const frames = Math.max(1, Math.ceil(audioBuffer.duration * ECHO_RENDER_SAMPLE_RATE));
   const offline = new OfflineAudioContext(1, frames, ECHO_RENDER_SAMPLE_RATE);
@@ -406,10 +457,9 @@ async function renderPolishedBuffer(audioBuffer, tone) {
 
   let chain = src;
   chain = connectBackgroundCleanup(offline, chain, preset);
+  chain = connectInterviewEq(offline, chain, preset);
   chain = connectDeEsser(offline, chain, preset);
   chain = connectDynamics(offline, chain, preset);
-  chain = connectInterviewEq(offline, chain, preset);
-  chain = connectTonalBlend(offline, chain, tonalBlend) || chain;
   connectSpace(offline, chain, preset);
 
   src.start(0);
@@ -418,8 +468,8 @@ async function renderPolishedBuffer(audioBuffer, tone) {
   if (preset.pitchStrength > 0.01) {
     const hum = humming || isLikelyHumOrSingBuffer(rendered);
     applyNaturalPitchStabilization(rendered, {
-      strength: preset.pitchStrength * (hum ? 1.12 : 1),
-      maxCents: preset.pitchMaxCents ?? (hum ? 28 : 18),
+      strength: preset.pitchStrength,
+      maxCents: preset.pitchMaxCents ?? (hum ? 32 : 20),
       humming: hum,
     });
   }
@@ -537,5 +587,5 @@ export function echoToneHint(tone) {
   const id = normalizeToneId(tone);
   if (id === "raw") return "Cleanup and even volume only";
   if (id === "dreamy") return "Natural Tone with a whisper of space";
-  return "Studio warmth + soft pitch stability — felt, not heard";
+  return "Velvety, warm, intimate — naturally beautiful";
 }

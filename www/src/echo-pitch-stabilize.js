@@ -1,15 +1,7 @@
 /**
- * Natural Pitch Stabilization — transparent drift correction, not robotic autotune.
- * Granular overlap-add with very small ratio changes toward a smoothed pitch contour.
+ * Natural Pitch Stabilization — emotionally musical drift glue, not robotic autotune.
  */
 
-/**
- * @param {Float32Array} samples
- * @param {number} sampleRate
- * @param {number} minHz
- * @param {number} maxHz
- * @returns {number} 0 if unvoiced
- */
 export function estimatePitchHz(samples, sampleRate, minHz = 72, maxHz = 520) {
   const n = samples.length;
   if (n < 256) return 0;
@@ -35,7 +27,7 @@ export function estimatePitchHz(samples, sampleRate, minHz = 72, maxHz = 520) {
       bestLag = lag;
     }
   }
-  if (bestCorr < 0.35 || !bestLag) return 0;
+  if (bestCorr < 0.32 || !bestLag) return 0;
   return sampleRate / bestLag;
 }
 
@@ -54,22 +46,22 @@ function medianOf(arr) {
   return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
 }
 
-function smoothF0Track(f0s, maxCentsPerStep = 7) {
+/** Slow pitch contour — notes feel like they float and lock gently */
+function smoothF0Track(f0s, maxCentsPerStep = 5) {
   const out = f0s.slice();
-  const valid = f0s.filter((f) => f > 60);
-  const globalMed = medianOf(valid);
-  for (let i = 0; i < out.length; i++) {
-    if (out[i] < 60) continue;
-    const start = Math.max(0, i - 2);
-    const end = Math.min(f0s.length, i + 3);
-    let local = medianOf(f0s.slice(start, end));
-    if (!local) local = globalMed;
-    if (!local) continue;
-    const cents = 1200 * Math.log2(local / out[i]);
-    const clamped = Math.max(-maxCentsPerStep, Math.min(maxCentsPerStep, cents));
-    out[i] = out[i] * 2 ** (clamped / 1200);
-  }
-  for (let pass = 0; pass < 2; pass++) {
+  const globalMed = medianOf(f0s);
+  for (let pass = 0; pass < 3; pass++) {
+    for (let i = 0; i < out.length; i++) {
+      if (out[i] < 60) continue;
+      const start = Math.max(0, i - 3);
+      const end = Math.min(f0s.length, i + 4);
+      let local = medianOf(f0s.slice(start, end));
+      if (!local) local = globalMed;
+      if (!local) continue;
+      const cents = 1200 * Math.log2(local / out[i]);
+      const clamped = Math.max(-maxCentsPerStep, Math.min(maxCentsPerStep, cents));
+      out[i] = out[i] * 2 ** (clamped / 1200);
+    }
     for (let i = 1; i < out.length; i++) {
       if (out[i] < 60 || out[i - 1] < 60) continue;
       const cents = 1200 * Math.log2(out[i] / out[i - 1]);
@@ -80,6 +72,17 @@ function smoothF0Track(f0s, maxCentsPerStep = 7) {
     }
   }
   return out;
+}
+
+/** Barely nudge toward nearest note — only for sustained hum (not speech) */
+function gentleMusicalCenter(hz, pull = 0.22) {
+  if (hz < 65 || pull <= 0) return hz;
+  const midi = 69 + 12 * Math.log2(hz / 440);
+  const nearest = Math.round(midi);
+  const target = 440 * 2 ** ((nearest - 69) / 12);
+  const cents = 1200 * Math.log2(target / hz);
+  const clamped = Math.max(-18, Math.min(18, cents));
+  return hz * 2 ** ((clamped * pull) / 1200);
 }
 
 function resampleGrain(grain, ratio) {
@@ -95,9 +98,6 @@ function resampleGrain(grain, ratio) {
   return out;
 }
 
-/**
- * Overlap-add pitch shift with per-grain ratios (1.0 = no change).
- */
 function overlapAddPitchShift(channel, sampleRate, ratios, hop, winSize) {
   const win = hannWindow(winSize);
   const out = new Float32Array(channel.length);
@@ -108,7 +108,7 @@ function overlapAddPitchShift(channel, sampleRate, ratios, hop, winSize) {
     const pos = g * hop;
     if (pos + winSize > channel.length) break;
     const grain = channel.subarray(pos, pos + winSize);
-    const ratio = Math.max(0.94, Math.min(1.06, ratios[g] || 1));
+    const ratio = Math.max(0.93, Math.min(1.07, ratios[g] || 1));
     const shifted = resampleGrain(grain, ratio);
     const start = pos;
     for (let j = 0; j < shifted.length && start + j < out.length; j++) {
@@ -123,38 +123,37 @@ function overlapAddPitchShift(channel, sampleRate, ratios, hop, winSize) {
   }
 }
 
-/** Soften micro-cracks via 3-sample median on voiced low-amplitude glitches */
-function smoothMicroCracks(channel, strength = 0.35) {
+function smoothMicroCracks(channel, strength = 0.45) {
   if (strength <= 0) return;
   const tmp = channel.slice();
-  for (let i = 1; i < channel.length - 1; i++) {
-    const a = tmp[i - 1];
+  for (let i = 2; i < channel.length - 2; i++) {
     const b = tmp[i];
-    const c = tmp[i + 1];
-    const med = a < b ? (b < c ? b : a < c ? c : a) : b > c ? b : b > a ? a : c;
-    if (Math.abs(b - med) > 0.02 && Math.abs(b) < 0.15) {
+    const med =
+      [tmp[i - 2], tmp[i - 1], tmp[i], tmp[i + 1], tmp[i + 2]].sort((a, c) => a - c)[2];
+    if (Math.abs(b - med) > 0.015) {
       channel[i] = b * (1 - strength) + med * strength;
     }
   }
 }
 
 /**
- * @param {AudioBuffer} buffer mono
+ * @param {AudioBuffer} buffer
  * @param {object} opts
- * @param {number} [opts.strength] 0–1 blend of stabilized signal
- * @param {number} [opts.maxCents] max correction per grain
- * @param {boolean} [opts.humming] stronger for hum/sing
  */
 export function applyNaturalPitchStabilization(buffer, opts = {}) {
   if (!buffer?.numberOfChannels) return buffer;
-  const strength = Math.max(0, Math.min(0.45, Number(opts.strength) ?? 0.2));
+  const humming = Boolean(opts.humming);
+  const strength = Math.max(
+    0,
+    Math.min(0.52, Number(opts.strength) ?? (humming ? 0.36 : 0.24)),
+  );
   if (strength <= 0.005) return buffer;
 
   const ch = buffer.getChannelData(0);
   const sr = buffer.sampleRate;
-  const winSize = Math.floor(sr * 0.06);
-  const hop = Math.floor(winSize * 0.5);
-  const maxCents = Number(opts.maxCents) ?? (opts.humming ? 32 : 18);
+  const winSize = Math.floor(sr * (humming ? 0.085 : 0.065));
+  const hop = Math.floor(winSize * 0.45);
+  const maxCents = Number(opts.maxCents) ?? (humming ? 34 : 20);
   const nGrains = Math.max(1, Math.floor((ch.length - winSize) / hop));
 
   const f0s = [];
@@ -164,9 +163,13 @@ export function applyNaturalPitchStabilization(buffer, opts = {}) {
   }
 
   const voiced = f0s.filter((f) => f > 60).length / Math.max(1, f0s.length);
-  if (voiced < 0.12) return buffer;
+  if (voiced < 0.1) return buffer;
 
-  const smoothed = smoothF0Track(f0s, opts.humming ? 9 : 6);
+  let smoothed = smoothF0Track(f0s, humming ? 5 : 4);
+  if (humming) {
+    smoothed = smoothed.map((f) => (f > 60 ? gentleMusicalCenter(f, 0.28) : f));
+  }
+
   const ratios = f0s.map((f, i) => {
     if (f < 60 || smoothed[i] < 60) return 1;
     let cents = 1200 * Math.log2(smoothed[i] / f);
@@ -182,7 +185,7 @@ export function applyNaturalPitchStabilization(buffer, opts = {}) {
     ch[i] = dry[i] * (1 - strength) + ch[i] * strength;
   }
 
-  smoothMicroCracks(ch, strength * 0.5);
+  smoothMicroCracks(ch, strength * (humming ? 0.65 : 0.4));
   return buffer;
 }
 

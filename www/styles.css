@@ -6126,6 +6126,9 @@ body.echoComposeOpen{
   margin: 0 0 12px;
   flex-shrink: 0;
 }
+.echoComposeRecHud[hidden]{
+  display: none !important;
+}
 .echoComposeRecPill{
   display: inline-flex;
   align-items: center;

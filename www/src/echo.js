@@ -42,6 +42,7 @@ let _echoProgressTimer = 0;
 let _echoListenMarked = false;
 let _echoReplyToId = "";
 let _pendingEchoCompose = false;
+let _echoComposeIgnoreInputUntil = 0;
 let _echoRailCache = null;
 let _echoRailCacheAt = 0;
 const ECHO_RAIL_CACHE_MS = 20000;
@@ -902,7 +903,12 @@ function syncEchoComposeUi() {
   }
 
   const hud = document.getElementById("echoComposeRecHud");
-  if (hud) hud.hidden = !recording;
+  if (hud) {
+    const showHud = recording && echoRecState === "recording";
+    hud.hidden = !showHud;
+    if (!showHud) hud.setAttribute("hidden", "");
+    else hud.removeAttribute("hidden");
+  }
 
   const timer = document.getElementById("echoComposeTimer");
   if (timer && recording) timer.textContent = formatRecordingTimer(performance.now() - echoStartedAt);
@@ -912,11 +918,8 @@ function syncEchoComposeUi() {
   const tip = document.getElementById("echoComposeTip");
 
   if (primary) {
-    if (recording) {
-      primary.hidden = false;
-      primary.textContent = "Recording…";
-    } else {
-      primary.hidden = false;
+    primary.hidden = recording;
+    if (!recording) {
       primary.textContent = hasBlob ? "Echo ready" : "Hold to record";
     }
   }
@@ -1028,6 +1031,7 @@ function stopEchoRecording() {
 
 export function openEchoComposeSheet({ replyTo = "" } = {}) {
   _echoReplyToId = String(replyTo || "").trim();
+  _echoComposeIgnoreInputUntil = performance.now() + 450;
   resetEchoCompose();
   const sheet = document.getElementById("echoComposeSheet");
   if (!sheet) return;
@@ -1035,6 +1039,11 @@ export function openEchoComposeSheet({ replyTo = "" } = {}) {
   if (once) once.checked = false;
   const cap = document.getElementById("echoComposeCaption");
   if (cap) cap.value = "";
+  const hud = document.getElementById("echoComposeRecHud");
+  if (hud) {
+    hud.hidden = true;
+    hud.setAttribute("hidden", "");
+  }
   sheet.hidden = false;
   sheet.setAttribute("aria-hidden", "false");
   sheet.classList.remove("isRecording", "hasEchoReady");
@@ -1337,6 +1346,9 @@ function wireEchoRecordHold() {
 
   const startHold = (e) => {
     if (e.button !== undefined && e.button !== 0) return;
+    const sheet = document.getElementById("echoComposeSheet");
+    if (!sheet?.classList.contains("isOpen")) return;
+    if (performance.now() < _echoComposeIgnoreInputUntil) return;
     holdActive = true;
     try {
       mic.setPointerCapture(e.pointerId);

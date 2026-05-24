@@ -2928,7 +2928,13 @@
             <p id="echoComposeStatusSub" class="echoComposeStatusSub">Hum, sing, or speak a raw idea</p>
           </div>
           <p id="echoComposeTip" class="echoComposeTip" hidden>Tip: Stay close to the mic</p>
-          <p id="echoComposeNoPreview" class="echoComposeNoPreview" hidden>Release first. Hear it after.</p>
+          <div id="echoComposePreview" class="echoComposePreview" hidden>
+            <button type="button" class="echoComposePreviewBtn" id="btnEchoComposePreview" disabled aria-label="Play preview">
+              <span class="echoComposePreviewIcon" aria-hidden="true">▶</span>
+              <span class="echoComposePreviewLabel">Listen before release</span>
+            </button>
+            <audio id="echoComposePreviewAudio" class="echoComposePreviewAudio" preload="auto" playsinline></audio>
+          </div>
         </div>
         <div class="echoComposeFooter">
           <div class="echoTonePicker" id="echoTonePicker" hidden>

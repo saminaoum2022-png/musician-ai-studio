@@ -23,6 +23,8 @@ let echoDurationMs = 0;
 let echoPeaks = [];
 let echoUploadPromise = null;
 let echoUploadedUrl = "";
+let echoPreviewUrl = "";
+let echoPreviewPlaying = false;
 let echoStartedAt = 0;
 let echoAutostopTimer = 0;
 let echoTickRaf = 0;
@@ -928,8 +930,87 @@ async function applyEchoToneToCapture(tone) {
   echoRecState = "idle";
   resetEchoUploadState();
   echoPeaks = await c().computeStatusWaveformPeaks(echoBlob, ECHO_BAR_COUNT);
+  updateEchoPreviewUrl();
   startEchoUploadEarly();
   syncEchoComposeUi();
+}
+
+function stopEchoComposePreview() {
+  const audio = document.getElementById("echoComposePreviewAudio");
+  if (audio) {
+    audio.pause();
+    audio.currentTime = 0;
+    audio.onended = null;
+  }
+  echoPreviewPlaying = false;
+}
+
+function revokeEchoPreviewUrl() {
+  stopEchoComposePreview();
+  if (echoPreviewUrl) {
+    try {
+      URL.revokeObjectURL(echoPreviewUrl);
+    } catch {}
+    echoPreviewUrl = "";
+  }
+  const audio = document.getElementById("echoComposePreviewAudio");
+  if (audio) audio.removeAttribute("src");
+}
+
+function updateEchoPreviewUrl() {
+  revokeEchoPreviewUrl();
+  if (!echoBlob?.size) return;
+  try {
+    echoPreviewUrl = URL.createObjectURL(echoBlob);
+    const audio = document.getElementById("echoComposePreviewAudio");
+    if (audio) audio.src = echoPreviewUrl;
+  } catch {}
+}
+
+function syncEchoComposePreviewUi() {
+  const wrap = document.getElementById("echoComposePreview");
+  const btn = document.getElementById("btnEchoComposePreview");
+  const processing = echoRecState === "processing";
+  const hasBlob = Boolean(echoBlob?.size) && !processing;
+  if (wrap) {
+    if (!hasBlob) wrap.setAttribute("hidden", "");
+    else wrap.removeAttribute("hidden");
+  }
+  if (btn) {
+    const label = btn.querySelector(".echoComposePreviewLabel");
+    const icon = btn.querySelector(".echoComposePreviewIcon");
+    if (label) {
+      label.textContent = echoPreviewPlaying ? "Playing… tap to stop" : "Listen before release";
+    }
+    if (icon) icon.textContent = echoPreviewPlaying ? "■" : "▶";
+    btn.classList.toggle("isPlaying", echoPreviewPlaying);
+    btn.disabled = !hasBlob || !echoPreviewUrl;
+  }
+}
+
+async function toggleEchoComposePreview() {
+  if (!echoBlob?.size || !echoPreviewUrl) return;
+  const audio = document.getElementById("echoComposePreviewAudio");
+  if (!audio) return;
+  if (echoPreviewPlaying) {
+    stopEchoComposePreview();
+    syncEchoComposePreviewUi();
+    return;
+  }
+  audio.src = echoPreviewUrl;
+  audio.onended = () => {
+    echoPreviewPlaying = false;
+    syncEchoComposePreviewUi();
+  };
+  try {
+    await audio.play();
+    echoPreviewPlaying = true;
+  } catch {
+    try {
+      c().showToast("Could not play preview", { durationMs: 2200 });
+    } catch {}
+  }
+  syncEchoComposePreviewUi();
 }
 
 function scheduleEchoToneRework(tone) {
@@ -1028,6 +1109,7 @@ function startEchoUploadEarly() {
 function resetEchoCompose() {
   stopEchoComposeTick();
   stopLiveEchoWaveform();
+  revokeEchoPreviewUrl();
   echoRecState = "idle";
   echoChunks = [];
   echoDurationMs = 0;
@@ -1056,7 +1138,6 @@ function syncEchoComposeUi() {
   const wave = document.getElementById("echoComposeWave");
   const publish = document.getElementById("btnEchoPublish");
   const mic = document.getElementById("btnEchoRecord");
-  const noPreview = document.getElementById("echoComposeNoPreview");
   const processing = echoRecState === "processing";
   const hasBlob = Boolean(echoBlob?.size) && !processing;
   const recording = echoRecState === "recording";
@@ -1099,12 +1180,12 @@ function syncEchoComposeUi() {
     } else {
       sub.hidden = false;
       sub.textContent = hasBlob
-        ? `${c().formatMsAsVoiceTime(echoDurationMs)} · ready to release`
+        ? `${c().formatMsAsVoiceTime(echoDurationMs)} · listen, then release`
         : "Capture the moment — no need to perfect it";
     }
   }
   if (tip) tip.hidden = !recording;
-  if (noPreview) noPreview.hidden = !hasBlob || recording || processing;
+  syncEchoComposePreviewUi();
 
   if (mic) {
     mic.classList.toggle("isRecording", recording);
@@ -1129,6 +1210,7 @@ function syncEchoComposeUi() {
 async function startEchoRecording() {
   if (echoRecState === "recording" || echoRecState === "processing") return;
   if (echoRawBlob || echoBlob) {
+    revokeEchoPreviewUrl();
     echoBlob = null;
     echoRawBlob = null;
     echoPeaks = [];
@@ -1252,6 +1334,7 @@ function ownEchoProfileFromRail(uid) {
 }
 
 async function publishEcho() {
+  stopEchoComposePreview();
   if (echoEnhancePromise) {
     try {
       await echoEnhancePromise;
@@ -1548,6 +1631,7 @@ function wireEchoOnce() {
   document.getElementById("btnEchoListenOnceInfoOk")?.addEventListener("click", () => closeEchoListenOnceInfo());
   document.getElementById("echoListenOnceInfoBackdrop")?.addEventListener("click", () => closeEchoListenOnceInfo());
   document.getElementById("btnEchoPublish")?.addEventListener("click", () => void publishEcho());
+  document.getElementById("btnEchoComposePreview")?.addEventListener("click", () => void toggleEchoComposePreview());
 
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;

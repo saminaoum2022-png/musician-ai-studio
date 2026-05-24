@@ -6293,20 +6293,51 @@ body.echoComposeOpen{
   text-align: center;
   max-width: 280px;
 }
-.echoComposeNoPreview{
+.echoComposePreview{
   flex-shrink: 0;
   margin: 12px auto 0;
-  padding: 0;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+.echoComposePreview[hidden]{
+  display: none !important;
+}
+.echoComposePreviewBtn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(167,139,250,0.35);
+  background: rgba(124,92,255,0.14);
+  color: rgba(232,225,255,0.96);
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  text-align: center;
-  color: rgba(167,139,250,0.92);
-  max-width: 22em;
-  line-height: 1.45;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  max-width: 100%;
 }
-.echoComposeNoPreview[hidden]{
-  display: none !important;
+.echoComposePreviewBtn:disabled{
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.echoComposePreviewBtn.isPlaying{
+  border-color: rgba(35,213,171,0.45);
+  background: rgba(35,213,171,0.12);
+}
+.echoComposePreviewIcon{
+  font-size: 11px;
+  line-height: 1;
+}
+.echoComposePreviewAudio{
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 .echoComposeSheet.isProcessing .echoComposeMic{
   opacity: 0.55;

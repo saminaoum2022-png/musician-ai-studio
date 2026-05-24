@@ -2,7 +2,7 @@
  * Echo — ephemeral creator audio moments (24h).
  * Wired from app.js via initEcho(ctx).
  */
-import { applyEchoTone, echoToneHint, ECHO_TONE_DEFAULT, ECHO_TONE_IDS } from "./echo-tone.js";
+import { applyEchoTone, ECHO_TONE_DEFAULT, ECHO_TONE_IDS } from "./echo-tone.js";
 
 const ECHO_BAR_COUNT = 48;
 const ECHO_MAX_MS = 60000;
@@ -23,9 +23,10 @@ let echoDurationMs = 0;
 let echoPeaks = [];
 let echoUploadPromise = null;
 let echoUploadedUrl = "";
-let echoPreviewUrl = "";
-let echoPreviewPlaying = false;
 let echoStartedAt = 0;
+let echoComposeIdleRaf = 0;
+let _echoSwipeX = 0;
+let _echoPublishing = false;
 let echoAutostopTimer = 0;
 let echoTickRaf = 0;
 let echoComposeTickRaf = 0;
@@ -76,7 +77,7 @@ function peaksHtml(peaks, extraClass = "") {
     .map((h, i) => {
       const ht = Math.max(0.1, Math.min(1, Number(h) || 0.3));
       const tint = i % 4 === 0 ? "echoBar--hi" : "";
-      return `<span class="echoBar ${tint} ${extraClass}" style="--bar-h:${(ht * 100).toFixed(1)}%"></span>`;
+      return `<span class="echoBar ${tint} ${extraClass}" style="--bar-h:${(ht * 100).toFixed(1)}%;--bar-i:${i}"></span>`;
     })
     .join("");
 }
@@ -152,10 +153,19 @@ function bindEchoViewerAudioOnce() {
     const slide = currentEchoSlide();
     if (!sheet) return;
     sheet.classList.remove("isPlaying", "isLoading");
-    sheet.classList.add("isEnded");
-    if (slide?.listenOnce && !isOwnEchoSlide(slide)) sheet.classList.add("isLocked");
+    sheet.classList.add("isDissolving");
     stopEchoPlayback();
-    syncEchoViewerUi();
+    try {
+      c().haptic("light");
+    } catch {}
+    window.setTimeout(() => {
+      sheet.classList.remove("isDissolving");
+      sheet.classList.add("isEnded");
+      if (slide?.listenOnce && !isOwnEchoSlide(slide)) {
+        sheet.classList.add("isLocked", "isGhost");
+      }
+      syncEchoViewerUi();
+    }, 880);
   });
   audio.addEventListener("pause", () => {
     const sheet = document.getElementById("echoViewerSheet");
@@ -527,13 +537,34 @@ function currentEchoSlide() {
   return story?.echoes?.[_echoSlideIndex] || null;
 }
 
+function slideEchoWithMotion(dir) {
+  const sheet = document.getElementById("echoViewerSheet");
+  const story = _echoDeck[_echoDeckIndex];
+  const max = (story?.echoes?.length || 1) - 1;
+  const nextIdx = _echoSlideIndex + dir;
+  if (nextIdx < 0) return;
+  if (nextIdx > max) {
+    closeEchoViewer();
+    return;
+  }
+  if (sheet) sheet.classList.add(dir > 0 ? "isSwipeNext" : "isSwipePrev");
+  try {
+    c().haptic("light");
+  } catch {}
+  window.setTimeout(() => {
+    _echoSlideIndex = nextIdx;
+    playEchoSlide(currentEchoSlide());
+    sheet?.classList.remove("isSwipeNext", "isSwipePrev");
+  }, 200);
+}
+
 function syncEchoViewerUi() {
   const sheet = document.getElementById("echoViewerSheet");
   const who = document.getElementById("echoViewerWho");
   const when = document.getElementById("echoViewerWhen");
   const caption = document.getElementById("echoViewerCaption");
   const reactions = document.getElementById("echoViewerReactions");
-  const reactTip = document.getElementById("echoViewerReactTip");
+  const replyRow = document.getElementById("echoViewerReplyRow");
   const onceBlock = document.getElementById("echoViewerOnceBlock");
   const deleteBtn = document.getElementById("btnEchoDelete");
   const avatarImg = document.getElementById("echoViewerAvatarImg");
@@ -565,22 +596,23 @@ function syncEchoViewerUi() {
   if (onceBlock) onceBlock.hidden = !slide.listenOnce;
   if (deleteBtn) deleteBtn.hidden = !isOwnEchoSlide(slide);
   const heard = isEchoHeard(slide) || _echoListenMarked;
-  const ended = sheet.classList.contains("isEnded");
-  const showReact = heard || ended;
+  const showReact =
+    !sheet.classList.contains("needsEchoTap") && (isOwnEchoSlide(slide) || heard || _echoListenMarked);
   if (reactions) reactions.hidden = !showReact;
-  if (reactTip) reactTip.hidden = !showReact;
+  if (replyRow) replyRow.hidden = false;
 
   const status = document.getElementById("echoViewerStatus");
   const tapPlay = document.getElementById("btnEchoTapPlay");
   const audio = _echoAudio || getEchoViewerAudio();
   if (status) {
-    if (sheet.classList.contains("isLocked")) status.textContent = "Already heard";
-    else if (sheet.classList.contains("needsEchoTap")) status.textContent = "Tap to listen";
-    else if (sheet.classList.contains("isLoading")) status.textContent = "Starting…";
-    else if (sheet.classList.contains("isEnded")) status.textContent = "Finished";
+    if (sheet.classList.contains("isGhost") || sheet.classList.contains("isLocked")) status.textContent = "";
+    else if (sheet.classList.contains("needsEchoTap")) status.textContent = "Tap";
+    else if (sheet.classList.contains("isLoading")) status.textContent = "";
+    else if (sheet.classList.contains("isDissolving")) status.textContent = "";
+    else if (sheet.classList.contains("isEnded")) status.textContent = "";
     else if (sheet.classList.contains("isPlaying") || (audio && !audio.paused && !audio.ended)) {
-      status.textContent = "Playing";
-    } else status.textContent = "Listen";
+      status.textContent = "";
+    } else status.textContent = "";
   }
   if (tapPlay) {
     tapPlay.hidden = !sheet.classList.contains("needsEchoTap");
@@ -651,14 +683,14 @@ function playEchoSlide(slide) {
   const listenOnce = Boolean(slide.listenOnce);
   const alreadyHeard = isEchoHeard(slide);
   if (listenOnce && alreadyHeard && !isOwnEchoSlide(slide)) {
-    sheet.classList.remove("isPlaying", "isLoading", "needsEchoTap");
-    sheet.classList.add("isLocked");
+    sheet.classList.remove("isPlaying", "isLoading", "needsEchoTap", "isDissolving");
+    sheet.classList.add("isLocked", "isGhost");
     paintEchoViewerWave(slide);
     syncEchoViewerUi();
     return;
   }
 
-  sheet.classList.remove("isLocked", "isEnded", "needsEchoTap", "isPlaying");
+  sheet.classList.remove("isLocked", "isGhost", "isEnded", "isDissolving", "needsEchoTap", "isPlaying");
   sheet.classList.add("isLoading");
   _echoListenMarked = false;
   paintEchoViewerWave(slide);
@@ -730,7 +762,7 @@ export function openEchoViewer(userId, slideIndex = 0) {
   if (!sheet) return;
   sheet.hidden = false;
   sheet.setAttribute("aria-hidden", "false");
-  sheet.classList.remove("isLocked", "isEnded");
+  sheet.classList.remove("isLocked", "isGhost", "isEnded", "isDissolving");
   sheet.classList.add("isOpen");
   _echoViewerOpen = true;
   document.body.classList.add("echoViewerOpen");
@@ -747,8 +779,8 @@ export function closeEchoViewer() {
   window.setTimeout(() => {
     sheet.hidden = true;
     sheet.setAttribute("aria-hidden", "true");
-    sheet.classList.remove("isLocked", "isEnded");
-  }, 280);
+    sheet.classList.remove("isLocked", "isGhost", "isEnded", "isDissolving");
+  }, 320);
   _echoViewerOpen = false;
   void refreshEchoRail({ useCache: true });
 }
@@ -874,6 +906,12 @@ function tickLiveEchoWaveform() {
   echoPeaks = peaksFromAnalyser(_echoAnalyser);
   const wave = document.getElementById("echoComposeWave");
   if (wave) wave.innerHTML = peaksHtml(echoPeaks, "echoBar--live");
+  const mic = document.getElementById("echoComposeMicPulse");
+  if (mic && echoPeaks.length) {
+    let sum = 0;
+    for (let i = 0; i < echoPeaks.length; i++) sum += echoPeaks[i];
+    mic.style.setProperty("--echo-mic", String(Math.min(1, (sum / echoPeaks.length) * 1.55)));
+  }
   echoComposeLiveRaf = requestAnimationFrame(tickLiveEchoWaveform);
 }
 
@@ -900,23 +938,6 @@ function getEchoToneFromUi() {
   return ECHO_TONE_IDS.includes(id) ? id : ECHO_TONE_DEFAULT;
 }
 
-function syncEchoToneUi() {
-  const wrap = document.getElementById("echoTonePicker");
-  const hint = document.getElementById("echoToneHint");
-  if (!wrap) return;
-  const hasBlob = Boolean(echoRawBlob?.size);
-  const processing = echoRecState === "processing";
-  wrap.hidden = !hasBlob || processing;
-  wrap.querySelectorAll(".echoToneChip").forEach((chip) => {
-    const input = chip.querySelector('input[name="echoTone"]');
-    chip.classList.toggle("isActive", input?.checked);
-  });
-  if (hint && hasBlob && !processing) {
-    hint.textContent = echoToneHint(getEchoToneFromUi());
-    hint.hidden = false;
-  } else if (hint) hint.hidden = true;
-}
-
 async function applyEchoToneToCapture(tone) {
   if (!echoRawBlob?.size) return;
   echoTone = tone;
@@ -930,103 +951,8 @@ async function applyEchoToneToCapture(tone) {
   echoRecState = "idle";
   resetEchoUploadState();
   echoPeaks = await c().computeStatusWaveformPeaks(echoBlob, ECHO_BAR_COUNT);
-  updateEchoPreviewUrl();
   startEchoUploadEarly();
   syncEchoComposeUi();
-}
-
-function stopEchoComposePreview() {
-  const audio = document.getElementById("echoComposePreviewAudio");
-  if (audio) {
-    audio.pause();
-    audio.currentTime = 0;
-    audio.onended = null;
-  }
-  echoPreviewPlaying = false;
-}
-
-function revokeEchoPreviewUrl() {
-  stopEchoComposePreview();
-  if (echoPreviewUrl) {
-    try {
-      URL.revokeObjectURL(echoPreviewUrl);
-    } catch {}
-    echoPreviewUrl = "";
-  }
-  const audio = document.getElementById("echoComposePreviewAudio");
-  if (audio) audio.removeAttribute("src");
-}
-
-function updateEchoPreviewUrl() {
-  revokeEchoPreviewUrl();
-  if (!echoBlob?.size) return;
-  try {
-    echoPreviewUrl = URL.createObjectURL(echoBlob);
-    const audio = document.getElementById("echoComposePreviewAudio");
-    if (audio) audio.src = echoPreviewUrl;
-  } catch {}
-}
-
-function syncEchoComposePreviewUi() {
-  const wrap = document.getElementById("echoComposePreview");
-  const btn = document.getElementById("btnEchoComposePreview");
-  const processing = echoRecState === "processing";
-  const hasBlob = Boolean(echoBlob?.size) && !processing;
-  if (wrap) {
-    if (!hasBlob) wrap.setAttribute("hidden", "");
-    else wrap.removeAttribute("hidden");
-  }
-  if (btn) {
-    const label = btn.querySelector(".echoComposePreviewLabel");
-    const icon = btn.querySelector(".echoComposePreviewIcon");
-    if (label) {
-      label.textContent = echoPreviewPlaying ? "Playing… tap to stop" : "Listen before release";
-    }
-    if (icon) icon.textContent = echoPreviewPlaying ? "■" : "▶";
-    btn.classList.toggle("isPlaying", echoPreviewPlaying);
-    btn.disabled = !hasBlob || !echoPreviewUrl;
-  }
-}
-
-async function toggleEchoComposePreview() {
-  if (!echoBlob?.size || !echoPreviewUrl) return;
-  const audio = document.getElementById("echoComposePreviewAudio");
-  if (!audio) return;
-  if (echoPreviewPlaying) {
-    stopEchoComposePreview();
-    syncEchoComposePreviewUi();
-    return;
-  }
-  audio.src = echoPreviewUrl;
-  audio.onended = () => {
-    echoPreviewPlaying = false;
-    syncEchoComposePreviewUi();
-  };
-  try {
-    await audio.play();
-    echoPreviewPlaying = true;
-  } catch {
-    try {
-      c().showToast("Could not play preview", { durationMs: 2200 });
-    } catch {}
-  }
-  syncEchoComposePreviewUi();
-}
-
-function scheduleEchoToneRework(tone) {
-  if (!echoRawBlob?.size || echoRecState === "recording") return;
-  void (async () => {
-    if (echoEnhancePromise) {
-      try {
-        await echoEnhancePromise;
-      } catch {}
-    }
-    if (getEchoToneFromUi() !== tone) return;
-    echoEnhancePromise = applyEchoToneToCapture(tone);
-    try {
-      await echoEnhancePromise;
-    } catch {}
-  })();
 }
 
 function echoComposeTick() {
@@ -1040,32 +966,41 @@ function echoComposeTick() {
 function paintIdleComposeWave() {
   const wave = document.getElementById("echoComposeWave");
   if (!wave) return;
-  wave.innerHTML = peaksHtml(normalizePeaks([]));
+  wave.innerHTML = peaksHtml(normalizePeaks([]), "echoBar--breathe");
 }
 
-function syncEchoCaptionCount() {
-  const cap = document.getElementById("echoComposeCaption");
-  const count = document.getElementById("echoComposeCaptionCount");
-  if (!cap || !count) return;
-  count.textContent = `${cap.value.length}/${ECHO_CAPTION_MAX}`;
+function startComposeIdleMotion() {
+  stopComposeIdleMotion();
+  const tick = () => {
+    echoComposeIdleRaf = 0;
+    const sheet = document.getElementById("echoComposeSheet");
+    if (!sheet?.classList.contains("isOpen") || echoRecState !== "idle") return;
+    const wave = document.getElementById("echoComposeWave");
+    if (wave && !wave.querySelector(".echoBar--live")) {
+      if (!wave.querySelector(".echoBar--breathe")) {
+        wave.innerHTML = peaksHtml(normalizePeaks([]), "echoBar--breathe");
+      }
+    }
+    echoComposeIdleRaf = requestAnimationFrame(tick);
+  };
+  echoComposeIdleRaf = requestAnimationFrame(tick);
 }
 
-function openEchoListenOnceInfo() {
-  const sheet = document.getElementById("echoListenOnceInfoSheet");
-  if (!sheet) return;
-  sheet.hidden = false;
-  sheet.setAttribute("aria-hidden", "false");
-  requestAnimationFrame(() => sheet.classList.add("isOpen"));
+function stopComposeIdleMotion() {
+  if (echoComposeIdleRaf) {
+    cancelAnimationFrame(echoComposeIdleRaf);
+    echoComposeIdleRaf = 0;
+  }
 }
 
-function closeEchoListenOnceInfo() {
-  const sheet = document.getElementById("echoListenOnceInfoSheet");
-  if (!sheet) return;
-  sheet.classList.remove("isOpen");
-  window.setTimeout(() => {
-    sheet.hidden = true;
-    sheet.setAttribute("aria-hidden", "true");
-  }, 260);
+function syncEchoListenOnceToggle() {
+  const once = document.getElementById("echoListenOnce");
+  const btn = document.getElementById("btnEchoListenOnceToggle");
+  if (!once || !btn) return;
+  const on = Boolean(once.checked);
+  btn.classList.toggle("isOn", on);
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+  btn.setAttribute("aria-label", on ? "Listen once on" : "Listen once off");
 }
 
 function resetEchoUploadState() {
@@ -1109,7 +1044,7 @@ function startEchoUploadEarly() {
 function resetEchoCompose() {
   stopEchoComposeTick();
   stopLiveEchoWaveform();
-  revokeEchoPreviewUrl();
+  stopComposeIdleMotion();
   echoRecState = "idle";
   echoChunks = [];
   echoDurationMs = 0;
@@ -1136,81 +1071,42 @@ function resetEchoCompose() {
 function syncEchoComposeUi() {
   const sheet = document.getElementById("echoComposeSheet");
   const wave = document.getElementById("echoComposeWave");
-  const publish = document.getElementById("btnEchoPublish");
   const mic = document.getElementById("btnEchoRecord");
   const processing = echoRecState === "processing";
-  const hasBlob = Boolean(echoBlob?.size) && !processing;
+  const releasing = sheet?.classList.contains("isReleasing");
   const recording = echoRecState === "recording";
 
   if (sheet) {
     sheet.classList.toggle("isRecording", recording);
-    sheet.classList.toggle("isProcessing", processing);
-    sheet.classList.toggle("hasEchoReady", hasBlob && !recording);
+    sheet.classList.toggle("isProcessing", processing || releasing);
   }
-
-  const hud = document.getElementById("echoComposeRecHud");
-  if (hud) {
-    const showHud = recording && echoRecState === "recording";
-    hud.hidden = !showHud;
-    if (!showHud) hud.setAttribute("hidden", "");
-    else hud.removeAttribute("hidden");
-  }
-
-  const timer = document.getElementById("echoComposeTimer");
-  if (timer && recording) timer.textContent = formatRecordingTimer(performance.now() - echoStartedAt);
 
   const primary = document.getElementById("echoComposeStatusPrimary");
-  const sub = document.getElementById("echoComposeStatusSub");
-  const tip = document.getElementById("echoComposeTip");
-
   if (primary) {
-    primary.hidden = recording;
-    if (!recording) {
-      if (processing) primary.textContent = "Natural Tone polish…";
-      else primary.textContent = hasBlob ? "Echo captured" : "Hold to record";
-    }
+    if (recording) primary.textContent = "…";
+    else if (processing || releasing) primary.textContent = "…";
+    else primary.textContent = "Hold";
   }
-  if (sub) {
-    if (recording) {
-      sub.hidden = false;
-      sub.textContent = "Let go when you're done";
-    } else if (processing) {
-      sub.hidden = false;
-      sub.textContent = "Clean polish — no harsh distortion";
-    } else {
-      sub.hidden = false;
-      sub.textContent = hasBlob
-        ? `${c().formatMsAsVoiceTime(echoDurationMs)} · listen, then release`
-        : "Capture the moment — no need to perfect it";
-    }
-  }
-  if (tip) tip.hidden = !recording;
-  syncEchoComposePreviewUi();
 
   if (mic) {
     mic.classList.toggle("isRecording", recording);
     mic.setAttribute("aria-pressed", recording ? "true" : "false");
-    mic.setAttribute(
-      "aria-label",
-      recording ? "Release to stop recording" : hasBlob ? "Hold to record again" : "Hold to record Echo",
-    );
+    mic.setAttribute("aria-label", recording ? "Release to send" : "Hold to record");
   }
-  if (publish) publish.disabled = !hasBlob || recording || processing;
-  syncEchoToneUi();
   if (wave) {
-    if (recording || hasBlob) {
-      wave.innerHTML = peaksHtml(echoPeaks.length || recording ? echoPeaks : normalizePeaks([]), recording ? "echoBar--live" : "");
-    } else if (!wave.querySelector(".echoBar")) {
+    if (recording) {
+      wave.innerHTML = peaksHtml(echoPeaks, "echoBar--live");
+    } else if (!processing && !releasing) {
       paintIdleComposeWave();
+      startComposeIdleMotion();
     }
   }
-  syncEchoCaptionCount();
+  syncEchoListenOnceToggle();
 }
 
 async function startEchoRecording() {
   if (echoRecState === "recording" || echoRecState === "processing") return;
   if (echoRawBlob || echoBlob) {
-    revokeEchoPreviewUrl();
     echoBlob = null;
     echoRawBlob = null;
     echoPeaks = [];
@@ -1241,6 +1137,9 @@ async function startEchoRecording() {
   echoChunks = [];
   echoRecState = "recording";
   echoStartedAt = performance.now();
+  try {
+    c().haptic("light");
+  } catch {}
   rec.ondataavailable = (e) => {
     if (e.data?.size) echoChunks.push(e.data);
   };
@@ -1253,6 +1152,9 @@ async function startEchoRecording() {
     echoBlob = null;
     echoTone = getEchoToneFromUi();
     try {
+      c().haptic("medium");
+    } catch {}
+    try {
       echoStream?.getTracks?.().forEach((t) => t.stop());
     } catch {}
     echoStream = null;
@@ -1261,7 +1163,10 @@ async function startEchoRecording() {
       syncEchoComposeUi();
       return;
     }
-    echoEnhancePromise = applyEchoToneToCapture(echoTone);
+    echoEnhancePromise = (async () => {
+      await applyEchoToneToCapture(echoTone);
+      if (echoBlob?.size) await publishEcho({ auto: true });
+    })();
   };
   startLiveEchoWaveform(stream);
   rec.start(200);
@@ -1300,24 +1205,22 @@ export function openEchoComposeSheet({ replyTo = "" } = {}) {
   if (cap) cap.value = "";
   const naturalTone = document.querySelector('input[name="echoTone"][value="natural"]');
   if (naturalTone) naturalTone.checked = true;
-  const hud = document.getElementById("echoComposeRecHud");
-  if (hud) {
-    hud.hidden = true;
-    hud.setAttribute("hidden", "");
-  }
   sheet.hidden = false;
   sheet.setAttribute("aria-hidden", "false");
-  sheet.classList.remove("isRecording", "hasEchoReady");
+  sheet.classList.remove("isRecording", "isReleasing", "isProcessing");
   sheet.classList.add("isOpen");
   document.body.classList.add("echoComposeOpen");
   paintIdleComposeWave();
   syncEchoComposeUi();
+  try {
+    c().haptic("light");
+  } catch {}
 }
 
 export function closeEchoComposeSheet() {
-  closeEchoListenOnceInfo();
-  resetEchoCompose();
   const sheet = document.getElementById("echoComposeSheet");
+  if (sheet?.classList.contains("isProcessing") || sheet?.classList.contains("isReleasing")) return;
+  resetEchoCompose();
   if (!sheet) return;
   sheet.classList.remove("isOpen");
   document.body.classList.remove("echoComposeOpen");
@@ -1333,23 +1236,26 @@ function ownEchoProfileFromRail(uid) {
   return story ? { username: story.username || "", avatar: story.avatar || "" } : null;
 }
 
-async function publishEcho() {
-  stopEchoComposePreview();
+async function publishEcho(opts = {}) {
+  if (_echoPublishing) return;
   if (echoEnhancePromise) {
     try {
       await echoEnhancePromise;
     } catch {}
   }
   if (!echoBlob?.size) return;
-  const publish = document.getElementById("btnEchoPublish");
+  _echoPublishing = true;
+  const sheet = document.getElementById("echoComposeSheet");
+  if (sheet) sheet.classList.add("isReleasing");
+  syncEchoComposeUi();
   const onceEl = document.getElementById("echoListenOnce");
   const caption = String(document.getElementById("echoComposeCaption")?.value || "").trim().slice(0, ECHO_CAPTION_MAX);
   const listenOnce = Boolean(onceEl?.checked);
   const uid = c().getAuthSession()?.user?.id;
-  if (!uid) return;
-  if (publish) {
-    publish.disabled = true;
-    publish.textContent = "Releasing…";
+  if (!uid) {
+    _echoPublishing = false;
+    if (sheet) sheet.classList.remove("isReleasing");
+    return;
   }
   const peaksP = echoPeaks.length
     ? Promise.resolve(echoPeaks)
@@ -1382,8 +1288,13 @@ async function publishEcho() {
     );
     closeEchoComposeSheet();
     try {
-      c().showToast("Echo is live — tap your tile anytime to hear it", { icon: "✓", durationMs: 3200 });
+      c().haptic("medium");
     } catch {}
+    if (!opts.auto) {
+      try {
+        c().showToast("Echo", { icon: "✓", durationMs: 1800 });
+      } catch {}
+    }
     const rowBody = {
       user_id: uid,
       audio_url: uploaded.url,
@@ -1452,10 +1363,9 @@ async function publishEcho() {
       c().showToast((msg || "Could not post Echo") + hint, { durationMs: 3600 });
     } catch {}
   } finally {
-    if (publish) {
-      publish.disabled = false;
-      publish.innerHTML = '<span class="echoComposePublishSpark" aria-hidden="true">✦</span> Release Echo';
-    }
+    _echoPublishing = false;
+    const s = document.getElementById("echoComposeSheet");
+    if (s) s.classList.remove("isReleasing");
   }
 }
 
@@ -1587,21 +1497,32 @@ function wireEchoOnce() {
 
   document.getElementById("echoViewerBackdrop")?.addEventListener("click", () => closeEchoViewer());
   document.getElementById("btnEchoViewerClose")?.addEventListener("click", () => closeEchoViewer());
-  document.getElementById("echoViewerTapPrev")?.addEventListener("click", () => {
-    if (_echoSlideIndex > 0) {
-      _echoSlideIndex -= 1;
-      playEchoSlide(currentEchoSlide());
-    }
-  });
-  document.getElementById("echoViewerTapNext")?.addEventListener("click", () => {
-    const story = _echoDeck[_echoDeckIndex];
-    if (_echoSlideIndex < (story?.echoes?.length || 1) - 1) {
-      _echoSlideIndex += 1;
-      playEchoSlide(currentEchoSlide());
-    } else {
-      closeEchoViewer();
-    }
-  });
+  document.getElementById("echoViewerTapPrev")?.addEventListener("click", () => slideEchoWithMotion(-1));
+  document.getElementById("echoViewerTapNext")?.addEventListener("click", () => slideEchoWithMotion(1));
+
+  const viewerStage = document.getElementById("echoViewerStage");
+  if (viewerStage && !viewerStage.dataset.echoSwipeWired) {
+    viewerStage.dataset.echoSwipeWired = "1";
+    viewerStage.addEventListener(
+      "pointerdown",
+      (e) => {
+        if (e.target.closest("button, .echoViewerFooter, .echoViewerTop")) return;
+        _echoSwipeX = e.clientX;
+      },
+      { passive: true },
+    );
+    viewerStage.addEventListener(
+      "pointerup",
+      (e) => {
+        if (!_echoSwipeX) return;
+        const dx = e.clientX - _echoSwipeX;
+        _echoSwipeX = 0;
+        if (Math.abs(dx) < 56) return;
+        slideEchoWithMotion(dx < 0 ? 1 : -1);
+      },
+      { passive: true },
+    );
+  }
 
   document.querySelectorAll("[data-echo-react]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -1610,33 +1531,29 @@ function wireEchoOnce() {
   });
   document.getElementById("btnEchoReply")?.addEventListener("click", () => {
     const slide = currentEchoSlide();
+    try {
+      c().haptic("light");
+    } catch {}
     closeEchoViewer();
     openEchoComposeSheet({ replyTo: slide?.id || "" });
   });
 
   document.getElementById("echoComposeBackdrop")?.addEventListener("click", () => closeEchoComposeSheet());
   document.getElementById("btnEchoComposeClose")?.addEventListener("click", () => closeEchoComposeSheet());
+  document.getElementById("btnEchoListenOnceToggle")?.addEventListener("click", () => {
+    const once = document.getElementById("echoListenOnce");
+    if (!once) return;
+    once.checked = !once.checked;
+    syncEchoListenOnceToggle();
+    try {
+      c().haptic("light");
+    } catch {}
+  });
   wireEchoRecordHold();
-  document.getElementById("echoComposeCaption")?.addEventListener("input", () => syncEchoCaptionCount());
-  document.getElementById("echoTonePicker")?.addEventListener("change", (e) => {
-    const input = e.target.closest('input[name="echoTone"]');
-    if (!input) return;
-    scheduleEchoToneRework(String(input.value || ECHO_TONE_DEFAULT));
-  });
-  document.getElementById("btnEchoListenOnceInfo")?.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    openEchoListenOnceInfo();
-  });
-  document.getElementById("btnEchoListenOnceInfoOk")?.addEventListener("click", () => closeEchoListenOnceInfo());
-  document.getElementById("echoListenOnceInfoBackdrop")?.addEventListener("click", () => closeEchoListenOnceInfo());
-  document.getElementById("btnEchoPublish")?.addEventListener("click", () => void publishEcho());
-  document.getElementById("btnEchoComposePreview")?.addEventListener("click", () => void toggleEchoComposePreview());
 
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
-    if (document.getElementById("echoListenOnceInfoSheet")?.classList.contains("isOpen")) closeEchoListenOnceInfo();
-    else if (document.getElementById("echoComposeSheet")?.classList.contains("isOpen")) closeEchoComposeSheet();
+    if (document.getElementById("echoComposeSheet")?.classList.contains("isOpen")) closeEchoComposeSheet();
     else if (document.getElementById("echoViewerSheet")?.classList.contains("isOpen")) closeEchoViewer();
   });
 }
@@ -1653,6 +1570,7 @@ function wireEchoRecordHold() {
     const sheet = document.getElementById("echoComposeSheet");
     if (!sheet?.classList.contains("isOpen")) return;
     if (performance.now() < _echoComposeIgnoreInputUntil) return;
+    if (echoRecState === "processing" || sheet.classList.contains("isReleasing")) return;
     holdActive = true;
     try {
       mic.setPointerCapture(e.pointerId);
@@ -1674,9 +1592,9 @@ function wireEchoRecordHold() {
 
   mic.addEventListener("click", (e) => {
     e.preventDefault();
-    if (echoRecState !== "recording" && !echoBlob) {
+    if (echoRecState !== "recording" && echoRecState !== "processing") {
       try {
-        c().showToast("Hold the mic to record", { durationMs: 2200 });
+        c().haptic("light");
       } catch {}
     }
   });

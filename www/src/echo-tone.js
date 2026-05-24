@@ -12,7 +12,7 @@ export const ECHO_TONE_DEFAULT = "natural";
 export const ECHO_UPLOAD_MAX_BYTES = 480 * 1024;
 const ECHO_RENDER_SAMPLE_RATE = 44100;
 /** Gentle loudness target — avoids “squashed loud” feel */
-const TARGET_RMS = 0.076;
+const TARGET_RMS = 0.064;
 
 /**
  * @typedef {object} EchoTonePreset
@@ -74,33 +74,33 @@ const PRESETS = {
     headroom: 0.92,
   },
   natural: {
-    highpass: 68,
+    highpass: 66,
     rumbleCutGain: -1,
-    lowShelfGain: 1.4,
-    mudCutGain: -0.8,
-    harshMidCutGain: -1.2,
-    bodyGain: 0.9,
-    presenceGain: -0.6,
-    phoneCutGain: -1.4,
-    deEssThreshold: -15,
-    deEssRatio: 1.7,
-    compThreshold: -18,
-    compRatio: 1.28,
-    compAttack: 0.022,
-    compRelease: 0.5,
-    reverbMix: 0.04,
-    delayTime: 0.03,
-    delayFeedback: 0.07,
-    delayLp: 2000,
+    lowShelfGain: 1.55,
+    mudCutGain: -0.7,
+    harshMidCutGain: -1.4,
+    bodyGain: 1,
+    presenceGain: -1.2,
+    phoneCutGain: -1.6,
+    deEssThreshold: -16,
+    deEssRatio: 1.42,
+    compThreshold: -21,
+    compRatio: 1.14,
+    compAttack: 0.028,
+    compRelease: 0.62,
+    reverbMix: 0.035,
+    delayTime: 0.028,
+    delayFeedback: 0.06,
+    delayLp: 1850,
     noiseGateFloor: 0.003,
     noiseReduceAmount: 0,
-    tonalBlendMix: 0.025,
+    tonalBlendMix: 0.032,
     warmthDrive: 0,
-    pitchStrength: 0,
-    pitchMaxCents: 0,
-    velvetLp: 10500,
-    transientSoft: 0,
-    headroom: 0.88,
+    pitchStrength: 0.055,
+    pitchMaxCents: 10,
+    velvetLp: 9400,
+    transientSoft: 0.08,
+    headroom: 0.9,
   },
   dreamy: {
     highpass: 68,
@@ -450,7 +450,7 @@ function normalizeLoudness(buffer, targetRms = TARGET_RMS) {
   for (let i = 0; i < ch.length; i++) sumSq += ch[i] * ch[i];
   const rms = Math.sqrt(sumSq / Math.max(1, ch.length));
   if (rms < 0.0006) return buffer;
-  const gain = Math.min(1.35, targetRms / rms);
+  const gain = Math.min(1.22, targetRms / rms);
   for (let i = 0; i < ch.length; i++) {
     ch[i] = softLimitSample(ch[i] * gain);
   }

@@ -5541,9 +5541,11 @@ body[data-route="moment"] .momentStudio{
 .echoViewerBackdrop{
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, #0a0812 0%, #05070d 48%, #060912 100%);
+  background: linear-gradient(180deg, rgba(10,8,18,0.92) 0%, rgba(5,7,13,0.96) 48%, rgba(6,9,18,0.94) 100%);
+  backdrop-filter: blur(20px) saturate(1.1);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
   opacity: 0;
-  transition: opacity 320ms ease;
+  transition: opacity 420ms ease;
 }
 .echoViewerSheet.isOpen .echoViewerBackdrop{ opacity: 1; }
 .echoViewerStage{
@@ -5780,6 +5782,11 @@ body[data-route="moment"] .momentStudio{
 .echoViewerSheet.needsEchoTap .echoViewerWaveHorizon .echoBar{
   animation: echoBarBreathe 2.2s ease-in-out infinite;
 }
+.echoViewerCenterTimer,
+.echoViewerTimerTop{
+  opacity: 0.45;
+  font-size: 11px;
+}
 .echoViewerStatus{
   margin: 12px 0 4px;
   font-size: 12px;
@@ -5984,12 +5991,41 @@ body[data-route="moment"] .momentStudio{
   color: rgba(238,244,255,0.65);
   z-index: 5;
 }
-.echoViewerSheet.isEnded .echoViewerCore{
-  animation: echoDissolve 520ms ease forwards;
+.echoViewerSheet.isDissolving .echoViewerCore,
+.echoViewerSheet.isDissolving .echoViewerWaveHorizon{
+  animation: echoDissolveOut 880ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
-@keyframes echoDissolve{
-  to{ opacity: 0.5; transform: scale(0.98); }
+@keyframes echoDissolveOut{
+  0%{ opacity: 1; filter: blur(0); transform: scale(1); }
+  100%{ opacity: 0.2; filter: blur(14px); transform: scale(0.94); }
 }
+.echoViewerSheet.isGhost .echoViewerCore,
+.echoViewerSheet.isGhost .echoViewerWaveHorizon{
+  opacity: 0.22;
+  filter: blur(10px) grayscale(0.35);
+  transition: opacity 600ms ease, filter 600ms ease;
+}
+.echoViewerSheet.isGhost .echoViewerMicBox{
+  opacity: 0.35;
+}
+.echoViewerSheet.isSwipeNext .echoViewerCore,
+.echoViewerSheet.isSwipePrev .echoViewerCore{
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease;
+}
+.echoViewerSheet.isSwipeNext .echoViewerCore{
+  transform: translateX(-28px);
+  opacity: 0.35;
+}
+.echoViewerSheet.isSwipePrev .echoViewerCore{
+  transform: translateX(28px);
+  opacity: 0.35;
+}
+.echoViewerReplyRow{
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+.echoViewerReplyRow[hidden]{ display: none !important; }
 body.echoViewerOpen,
 body.echoComposeOpen{
   overflow: hidden;
@@ -6009,37 +6045,42 @@ body.echoComposeOpen{
 .echoComposeBackdrop{
   position: absolute;
   inset: 0;
-  background: rgba(2,4,10,0.88);
-  backdrop-filter: blur(16px);
+  background: rgba(2,4,10,0.78);
+  backdrop-filter: blur(24px) saturate(1.08);
+  -webkit-backdrop-filter: blur(24px) saturate(1.08);
   opacity: 0;
-  transition: opacity 280ms ease;
+  transition: opacity 380ms ease;
 }
 .echoComposeSheet.isOpen .echoComposeBackdrop{ opacity: 1; }
 .echoComposeCard{
   position: relative;
-  width: min(480px, 100%);
-  margin: 0 auto;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
   padding:
-    max(18px, env(safe-area-inset-top))
-    20px
-    max(24px, env(safe-area-inset-bottom));
+    max(12px, env(safe-area-inset-top))
+    16px
+    max(20px, env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   min-height: 100%;
   min-height: 100dvh;
-  background: linear-gradient(180deg, #0a0d14 0%, #05070d 55%, #060912 100%);
+  background: transparent;
   border: none;
   box-shadow: none;
-  transform: translateY(8%);
+  transform: scale(0.96);
   opacity: 0;
+  filter: blur(8px);
   transition:
-    transform 420ms cubic-bezier(0.22, 1, 0.32, 1),
-    opacity 320ms ease;
+    transform 480ms cubic-bezier(0.22, 1, 0.32, 1),
+    opacity 380ms ease,
+    filter 480ms ease;
   overflow: hidden;
 }
 .echoComposeSheet.isOpen .echoComposeCard{
-  transform: translateY(0);
+  transform: scale(1);
   opacity: 1;
+  filter: blur(0);
 }
 .echoComposeAmbient{
   position: absolute;
@@ -6189,10 +6230,24 @@ body.echoComposeOpen{
   background: linear-gradient(180deg, rgba(183,139,255,0.95), rgba(124,92,255,0.9) 45%, rgba(35,213,171,0.75) 100%);
   box-shadow: 0 0 14px rgba(124,92,255,0.35);
 }
+.echoComposeWaveHorizon .echoBar.echoBar--breathe{
+  animation: echoBarBreathe 3.4s ease-in-out infinite;
+  animation-delay: calc(var(--bar-i, 0) * 45ms);
+}
 .echoComposeSheet.isRecording .echoComposeWaveHorizon .echoBar,
-.echoComposeSheet.hasEchoReady .echoComposeWaveHorizon .echoBar{
+.echoComposeSheet.isProcessing .echoComposeWaveHorizon .echoBar{
   opacity: 0.92;
   animation: none;
+}
+.echoComposeMicPulse{
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: calc(0.25 + var(--echo-mic, 0) * 0.75);
+  transform: scale(calc(1 + var(--echo-mic, 0) * 0.14));
+  background: radial-gradient(circle, rgba(167,139,250,0.45), transparent 68%);
+  transition: opacity 60ms linear, transform 60ms linear;
 }
 .echoComposeMic{
   position: relative;
@@ -6577,9 +6632,71 @@ body.echoComposeOpen{
   box-shadow: none;
   filter: grayscale(0.35);
 }
-.echoComposeSheet.isRecording .echoComposeFooter{
-  opacity: 0.35;
+.echoComposeSheet.isRecording .echoComposeFooter,
+.echoComposeSheet.isProcessing .echoComposeFooter{
+  opacity: 0.2;
   pointer-events: none;
+}
+.echoComposeFooter--minimal{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 4px 8px;
+  flex-shrink: 0;
+}
+.echoListenOnceToggle{
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.05);
+  color: rgba(151,165,186,0.7);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 200ms ease, background 200ms ease, box-shadow 200ms ease;
+}
+.echoListenOnceToggle.isOn{
+  color: rgba(167,139,250,0.98);
+  background: rgba(124,92,255,0.18);
+  box-shadow: 0 0 0 1px rgba(167,139,250,0.35);
+}
+.echoComposeFooter--minimal .echoComposeCaption{
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.05);
+  color: rgba(238,244,255,0.92);
+  font-size: 15px;
+  font-family: inherit;
+  outline: none;
+}
+.echoComposeFooter--minimal .echoComposeCaption::placeholder{
+  color: rgba(151,165,186,0.55);
+}
+.echoComposeStatusPrimary{
+  margin: 14px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(167,139,250,0.75);
+}
+.echoComposeStatusSub[hidden],
+.echoComposeHead,
+.echoComposePreview,
+.echoComposePublish,
+.echoTonePicker,
+.echoComposeOptions,
+.echoComposeCaptionWrap,
+.echoComposeRecHud,
+.echoComposeTip{
+  display: none !important;
 }
 
 .echoListenOnceInfoSheet{

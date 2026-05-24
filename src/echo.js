@@ -900,12 +900,28 @@ function peaksFromAnalyser(analyser) {
   return c().statusVoiceNormalizePeaks?.(out, ECHO_BAR_COUNT) || out;
 }
 
+function updateComposeWaveBars(peaks, extraClass = "") {
+  const wave = document.getElementById("echoComposeWave");
+  if (!wave) return;
+  const norm = normalizePeaks(peaks);
+  let bars = wave.querySelectorAll(".echoBar");
+  if (bars.length !== ECHO_BAR_COUNT) {
+    wave.innerHTML = peaksHtml(norm, extraClass);
+    return;
+  }
+  bars.forEach((bar, i) => {
+    const ht = Math.max(0.1, Math.min(1, Number(norm[i]) || 0.3));
+    bar.style.setProperty("--bar-h", `${(ht * 100).toFixed(1)}%`);
+    bar.classList.toggle("echoBar--live", extraClass.includes("live"));
+    bar.classList.toggle("echoBar--breathe", extraClass.includes("breathe"));
+  });
+}
+
 function tickLiveEchoWaveform() {
   echoComposeLiveRaf = 0;
   if (echoRecState !== "recording" || !_echoAnalyser) return;
   echoPeaks = peaksFromAnalyser(_echoAnalyser);
-  const wave = document.getElementById("echoComposeWave");
-  if (wave) wave.innerHTML = peaksHtml(echoPeaks, "echoBar--live");
+  updateComposeWaveBars(echoPeaks, "echoBar--live");
   const mic = document.getElementById("echoComposeMicPulse");
   if (mic && echoPeaks.length) {
     let sum = 0;
@@ -938,7 +954,7 @@ function getEchoToneFromUi() {
   return ECHO_TONE_IDS.includes(id) ? id : ECHO_TONE_DEFAULT;
 }
 
-async function applyEchoToneToCapture(tone) {
+async function applyEchoToneToCapture(tone, opts = {}) {
   if (!echoRawBlob?.size) return;
   echoTone = tone;
   echoRecState = "processing";
@@ -948,11 +964,14 @@ async function applyEchoToneToCapture(tone) {
   } catch {
     echoBlob = echoRawBlob;
   }
-  echoRecState = "idle";
+  if (!opts.keepBusy) {
+    echoRecState = "idle";
+    syncEchoComposeUi();
+  }
   resetEchoUploadState();
   echoPeaks = await c().computeStatusWaveformPeaks(echoBlob, ECHO_BAR_COUNT);
   startEchoUploadEarly();
-  syncEchoComposeUi();
+  if (!opts.keepBusy) syncEchoComposeUi();
 }
 
 function echoComposeTick() {
@@ -1075,27 +1094,27 @@ function syncEchoComposeUi() {
   const processing = echoRecState === "processing";
   const releasing = sheet?.classList.contains("isReleasing");
   const recording = echoRecState === "recording";
+  const arming = echoRecState === "arming";
 
   if (sheet) {
-    sheet.classList.toggle("isRecording", recording);
+    sheet.classList.toggle("isRecording", recording || arming);
     sheet.classList.toggle("isProcessing", processing || releasing);
   }
 
   const primary = document.getElementById("echoComposeStatusPrimary");
   if (primary) {
-    if (recording) primary.textContent = "…";
-    else if (processing || releasing) primary.textContent = "…";
+    if (recording || arming || processing || releasing) primary.textContent = "…";
     else primary.textContent = "Hold";
   }
 
   if (mic) {
-    mic.classList.toggle("isRecording", recording);
-    mic.setAttribute("aria-pressed", recording ? "true" : "false");
-    mic.setAttribute("aria-label", recording ? "Release to send" : "Hold to record");
+    mic.classList.toggle("isRecording", recording || arming);
+    mic.setAttribute("aria-pressed", recording || arming ? "true" : "false");
+    mic.setAttribute("aria-label", recording || arming ? "Release to send" : "Hold to record");
   }
   if (wave) {
     if (recording) {
-      wave.innerHTML = peaksHtml(echoPeaks, "echoBar--live");
+      updateComposeWaveBars(echoPeaks.length ? echoPeaks : normalizePeaks([]), "echoBar--live");
     } else if (!processing && !releasing) {
       paintIdleComposeWave();
       startComposeIdleMotion();
@@ -1105,19 +1124,29 @@ function syncEchoComposeUi() {
 }
 
 async function startEchoRecording() {
-  if (echoRecState === "recording" || echoRecState === "processing") return;
+  if (echoRecState === "recording" || echoRecState === "processing" || echoRecState === "arming") return;
   if (echoRawBlob || echoBlob) {
     echoBlob = null;
     echoRawBlob = null;
     echoPeaks = [];
     resetEchoUploadState();
   }
+  echoRecState = "arming";
+  syncEchoComposeUi();
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
   } catch {
+    echoRecState = "idle";
+    syncEchoComposeUi();
     try {
       c().showToast("Microphone permission needed.", { durationMs: 2800 });
+    } catch {}
+    return;
+  }
+  if (echoRecState !== "arming") {
+    try {
+      stream.getTracks().forEach((t) => t.stop());
     } catch {}
     return;
   }
@@ -1163,9 +1192,23 @@ async function startEchoRecording() {
       syncEchoComposeUi();
       return;
     }
+    echoRecState = "processing";
+    syncEchoComposeUi();
     echoEnhancePromise = (async () => {
-      await applyEchoToneToCapture(echoTone);
-      if (echoBlob?.size) await publishEcho({ auto: true });
+      try {
+        await applyEchoToneToCapture(echoTone, { keepBusy: true });
+        if (echoBlob?.size) await publishEcho({ auto: true, fromEnhance: true });
+        else throw new Error("No recording");
+      } catch (e) {
+        echoRecState = "idle";
+        const sheet = document.getElementById("echoComposeSheet");
+        if (sheet) sheet.classList.remove("isReleasing", "isProcessing");
+        _echoPublishing = false;
+        syncEchoComposeUi();
+        try {
+          c().showToast(String(e?.message || "Could not post Echo"), { durationMs: 3200 });
+        } catch {}
+      }
     })();
   };
   startLiveEchoWaveform(stream);
@@ -1238,7 +1281,7 @@ function ownEchoProfileFromRail(uid) {
 
 async function publishEcho(opts = {}) {
   if (_echoPublishing) return;
-  if (echoEnhancePromise) {
+  if (echoEnhancePromise && !opts.fromEnhance) {
     try {
       await echoEnhancePromise;
     } catch {}
@@ -1364,8 +1407,10 @@ async function publishEcho(opts = {}) {
     } catch {}
   } finally {
     _echoPublishing = false;
+    echoRecState = "idle";
     const s = document.getElementById("echoComposeSheet");
-    if (s) s.classList.remove("isReleasing");
+    if (s) s.classList.remove("isReleasing", "isProcessing");
+    syncEchoComposeUi();
   }
 }
 
@@ -1570,7 +1615,9 @@ function wireEchoRecordHold() {
     const sheet = document.getElementById("echoComposeSheet");
     if (!sheet?.classList.contains("isOpen")) return;
     if (performance.now() < _echoComposeIgnoreInputUntil) return;
-    if (echoRecState === "processing" || sheet.classList.contains("isReleasing")) return;
+    if (echoRecState === "arming" || echoRecState === "processing" || sheet.classList.contains("isReleasing")) {
+      return;
+    }
     holdActive = true;
     try {
       mic.setPointerCapture(e.pointerId);

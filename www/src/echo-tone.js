@@ -64,7 +64,7 @@ const PRESETS = {
     compRelease: 0.45,
     reverbMix: 0,
     noiseGateFloor: 0.004,
-    noiseReduceAmount: 0.12,
+    noiseReduceAmount: 0,
     tonalBlendMix: 0,
     warmthDrive: 0,
     pitchStrength: 0,
@@ -93,7 +93,7 @@ const PRESETS = {
     delayFeedback: 0.07,
     delayLp: 2000,
     noiseGateFloor: 0.003,
-    noiseReduceAmount: 0.1,
+    noiseReduceAmount: 0,
     tonalBlendMix: 0.025,
     warmthDrive: 0,
     pitchStrength: 0,
@@ -122,7 +122,7 @@ const PRESETS = {
     delayFeedback: 0.08,
     delayLp: 1900,
     noiseGateFloor: 0.003,
-    noiseReduceAmount: 0.1,
+    noiseReduceAmount: 0,
     tonalBlendMix: 0.03,
     warmthDrive: 0,
     pitchStrength: 0,
@@ -439,7 +439,6 @@ function postProcessBuffer(buffer, preset) {
     for (let i = 0; i < ch.length; i++) ch[i] *= head;
   }
   if ((preset.transientSoft ?? 0) > 0.01) softenTransientsInPlace(ch, preset.transientSoft);
-  gentleNoiseReduceInPlace(ch, preset);
   normalizeLoudness(buffer);
   return buffer;
 }

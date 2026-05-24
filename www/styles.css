@@ -6038,6 +6038,28 @@ body.echoComposeOpen .footer{
 body.echoComposeOpen #friendsEchoRail{
   display: none !important;
 }
+body.echoSentFlash #friendsEchoRail{
+  animation: echoRailSentFlash 1.4s cubic-bezier(0.22, 1, 0.32, 1);
+}
+@keyframes echoRailSentFlash{
+  0%{ transform: scale(1); filter: brightness(1); }
+  35%{ transform: scale(1.02); filter: brightness(1.35); }
+  100%{ transform: scale(1); filter: brightness(1); }
+}
+body.echoSentFlash::after{
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 144;
+  pointer-events: none;
+  background: radial-gradient(ellipse 70% 45% at 50% 38%, rgba(124,92,255,0.22), transparent 68%);
+  animation: echoSentOverlay 1.2s ease-out forwards;
+}
+@keyframes echoSentOverlay{
+  0%{ opacity: 0; }
+  25%{ opacity: 1; }
+  100%{ opacity: 0; }
+}
 body.echoComposeOpen .mobileTabbar{
   visibility: hidden;
   pointer-events: none;

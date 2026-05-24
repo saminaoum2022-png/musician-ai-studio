@@ -34,6 +34,8 @@ let echoMicTouching = false;
 let _echoHoldWanted = false;
 let _echoHoldPointerId = null;
 let _echoArmGen = 0;
+let _echoDeletedOptIds = new Set();
+let _echoSentFlashTimer = 0;
 let _echoSfxCtx = null;
 const COMPOSE_ORBIT_BARS = 48;
 
@@ -110,6 +112,60 @@ function playEchoSfx(kind) {
     gain.gain.linearRampToValueAtTime(0.028, t + 0.02);
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
     tail(0.24);
+  } else if (kind === "sent") {
+    filter.frequency.value = 1100;
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(392, t);
+    osc.frequency.exponentialRampToValueAtTime(523, t + 0.14);
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.034, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.32);
+    tail(0.34);
+  }
+}
+
+function showEchoSentCelebration() {
+  try {
+    c().haptic("medium");
+  } catch {}
+  try {
+    c().showToast("Echo sent", { icon: "✓", durationMs: 2600 });
+  } catch {}
+  playEchoSfx("sent");
+  if (_echoSentFlashTimer) window.clearTimeout(_echoSentFlashTimer);
+  document.body.classList.add("echoSentFlash");
+  _echoSentFlashTimer = window.setTimeout(() => {
+    _echoSentFlashTimer = 0;
+    document.body.classList.remove("echoSentFlash");
+  }, 1500);
+}
+
+function isOptimisticEchoId(id) {
+  return /^opt-/i.test(String(id || ""));
+}
+
+function isServerEchoId(id) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id || ""));
+}
+
+async function deleteEchoFromServer(echoId, uid) {
+  const id = String(echoId || "");
+  if (!isServerEchoId(id) || !uid) return false;
+  try {
+    const r = await c().supabaseRestWithAuth(
+      `social_echoes?id=eq.${encodeURIComponent(id)}&user_id=eq.${encodeURIComponent(uid)}`,
+      { method: "DELETE", prefer: "return=minimal" },
+    );
+    if (r?.ok) return true;
+  } catch {}
+  try {
+    await c().socialApi("/api/social", {
+      method: "POST",
+      body: JSON.stringify({ action: "delete_echo", echoId: id }),
+    });
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -388,6 +444,7 @@ function renderEchoViewerDots() {
 
 function patchEchoInRail(echoId, patch) {
   const id = String(echoId || "");
+  if (_echoDeletedOptIds.has(id)) return;
   const echo = _echoById.get(id);
   if (!echo) return;
   Object.assign(echo, patch);
@@ -402,6 +459,7 @@ function patchEchoInRail(echoId, patch) {
 function mergeEchoIntoRail(echo, prof) {
   const uid = String(echo.userId || "");
   if (!uid) return;
+  if (_echoDeletedOptIds.has(String(echo.id || ""))) return;
   const story = _echoStoriesByUser.get(uid) || {
     userId: uid,
     username: prof?.username || echo.username || "",
@@ -945,38 +1003,29 @@ async function deleteCurrentEcho() {
   const slide = currentEchoSlide();
   if (!slide?.id || !isOwnEchoSlide(slide)) return;
   const echoId = String(slide.id);
+  const uid = String(c().getAuthSession()?.user?.id || "");
+  const optimistic = isOptimisticEchoId(echoId);
+  if (optimistic) _echoDeletedOptIds.add(echoId);
   closeEchoViewer();
   invalidateEchoRailCache();
-  const uid = String(c().getAuthSession()?.user?.id || "");
-  const story = _echoStoriesByUser.get(uid);
-  if (story) {
-    story.echoes = (story.echoes || []).filter((e) => String(e.id) !== echoId);
-    indexEchoStories([..._echoStoriesByUser.values()].filter((s) => (s.echoes || []).length > 0));
-    renderEchoRail();
-  }
+  removeEchoFromRail(echoId);
   try {
     c().haptic("light");
   } catch {}
-  let ok = false;
-  try {
-    const r = await c().supabaseRestWithAuth(
-      `social_echoes?id=eq.${encodeURIComponent(echoId)}&user_id=eq.${encodeURIComponent(uid)}`,
-      { method: "DELETE", prefer: "return=minimal" },
-    );
-    ok = r?.ok;
-  } catch {}
-  if (!ok) {
+  if (optimistic) {
     try {
-      await c().socialApi("/api/social", {
-        method: "POST",
-        body: JSON.stringify({ action: "delete_echo", echoId }),
-      });
+      c().showToast("Echo removed", { icon: "✓", durationMs: 2200 });
     } catch {}
+    return;
   }
+  const ok = await deleteEchoFromServer(echoId, uid);
   try {
-    c().showToast("Echo removed", { icon: "✓", durationMs: 2200 });
+    c().showToast(
+      ok ? "Echo removed" : "Could not remove Echo — try again",
+      { icon: ok ? "✓" : undefined, durationMs: ok ? 2200 : 2800 },
+    );
   } catch {}
-  void refreshEchoRail();
+  if (!ok) void refreshEchoRail();
 }
 
 async function postEchoReaction(reaction) {
@@ -1631,7 +1680,10 @@ async function finishEchoPublishBackground({
       remoteUrl = String(uploaded?.url || "").trim();
     }
     if (!remoteUrl) throw new Error("Voice upload failed");
-    patchEchoInRail(optimisticId, { audioUrl: remoteUrl });
+    const wasDeleted = _echoDeletedOptIds.has(optimisticId);
+    if (!wasDeleted) {
+      patchEchoInRail(optimisticId, { audioUrl: remoteUrl });
+    }
     const expiresAt = new Date(Date.now() + 86400000).toISOString();
     const rowBody = {
       user_id: uid,
@@ -1653,6 +1705,7 @@ async function finishEchoPublishBackground({
       const data = await r.json().catch(() => []);
       row = Array.isArray(data) && data[0] ? data[0] : null;
     }
+    let serverEchoId = "";
     if (!row) {
       const data = await c().socialApi("/api/social", {
         method: "POST",
@@ -1666,23 +1719,23 @@ async function finishEchoPublishBackground({
           replyTo: _echoReplyToId || null,
         }),
       });
-      if (data?.echo) {
-        patchEchoInRail(optimisticId, {
-          id: data.echo.id,
-          audioUrl: data.echo.audioUrl || remoteUrl,
-          waveformPeaks: data.echo.waveformPeaks || peaks,
-        });
-      }
+      if (data?.echo) serverEchoId = String(data.echo.id || "");
     } else {
+      serverEchoId = String(row.id || "");
+    }
+    if (wasDeleted) {
+      _echoDeletedOptIds.delete(optimisticId);
+      if (serverEchoId) await deleteEchoFromServer(serverEchoId, uid);
+      removeEchoFromRail(optimisticId);
+      if (serverEchoId) removeEchoFromRail(serverEchoId);
+    } else if (serverEchoId) {
       patchEchoInRail(optimisticId, {
-        id: row.id,
-        audioUrl: row.audio_url || remoteUrl,
-        waveformPeaks: row.waveform_peaks || peaks,
-        body: row.body,
-        listenOnce: row.listen_once,
-        replyTo: row.reply_to,
-        createdAt: row.created_at,
-        expiresAt: row.expires_at,
+        id: serverEchoId,
+        audioUrl: remoteUrl,
+        waveformPeaks: peaks,
+        body: caption,
+        listenOnce,
+        expiresAt,
       });
     }
     uploadedOk = true;
@@ -1764,14 +1817,7 @@ async function publishEcho(opts = {}) {
   dismissEchoComposeSheet();
   landOnFriendsAfterEcho();
   _echoPublishing = false;
-  try {
-    c().haptic("medium");
-  } catch {}
-  if (!opts.auto) {
-    try {
-      c().showToast("Echo", { icon: "✓", durationMs: 1800 });
-    } catch {}
-  }
+  showEchoSentCelebration();
   void finishEchoPublishBackground({
     optimisticId,
     localUrl,

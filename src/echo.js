@@ -873,6 +873,7 @@ function tickLiveEchoWaveform() {
   const wave = document.getElementById("echoComposeWave");
   if (wave) wave.innerHTML = peaksHtml(echoPeaks, "echoBar--live");
   echoComposeLiveRaf = requestAnimationFrame(tickLiveEchoWaveform);
+}
 
 function startLiveEchoWaveform(stream) {
   stopLiveEchoWaveform();

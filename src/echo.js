@@ -2,11 +2,13 @@
  * Echo — ephemeral creator audio moments (24h).
  * Wired from app.js via initEcho(ctx).
  */
-import { applyEchoTone, ECHO_TONE_DEFAULT, ECHO_TONE_IDS } from "./echo-tone.js";
+import { ECHO_TONE_DEFAULT, ECHO_TONE_IDS } from "./echo-tone.js";
 
 const ECHO_BAR_COUNT = 48;
-const ECHO_MAX_MS = 60000;
-const ECHO_MAX_BYTES = 768 * 1024;
+/** Match status voice — keeps clips small and upload fast */
+const ECHO_MAX_MS = 30000;
+const ECHO_STORAGE_MAX_BYTES = 2 * 1024 * 1024 - 4096;
+const ECHO_REC_BITRATE = 56000;
 const ECHO_MIN_RECORD_MS = 420;
 const ECHO_HEARD_KEY = "nabad_echo_heard_v1";
 const ECHO_CAPTION_MAX = 60;
@@ -1134,51 +1136,41 @@ function getEchoToneFromUi() {
   return ECHO_TONE_IDS.includes(id) ? id : ECHO_TONE_DEFAULT;
 }
 
-async function applyEchoToneToCapture(tone, opts = {}) {
-  if (!echoRawBlob?.size) return;
-  echoTone = tone;
-  echoRecState = "processing";
-  syncEchoComposeUi();
-  suspendEchoSfx();
-  const livePeaks = echoPeaks.length >= 12 ? normalizePeaks([...echoPeaks]) : null;
-  try {
-    const out = await applyEchoTone(echoRawBlob, echoTone, {
-      pickMime: c().pickRecorderMimeType,
-      fast: true,
-      peakCount: ECHO_BAR_COUNT,
-    });
-    if (out && typeof out === "object" && out.blob) {
-      echoBlob = out.blob;
-      echoPeaks =
-        out.peaks?.length && c().statusVoiceNormalizePeaks
-          ? c().statusVoiceNormalizePeaks(out.peaks, ECHO_BAR_COUNT)
-          : livePeaks || c().statusVoiceFallbackPeaks?.() || [];
-    } else {
-      echoBlob = out;
-      echoPeaks =
-        livePeaks ||
-        (await c().computeStatusWaveformPeaks(echoBlob, ECHO_BAR_COUNT)) ||
-        c().statusVoiceFallbackPeaks?.() ||
-        [];
-    }
-  } catch {
-    echoBlob = echoRawBlob;
-    echoPeaks =
-      livePeaks ||
-      (await c().computeStatusWaveformPeaks(echoBlob, ECHO_BAR_COUNT).catch(() => [])) ||
-      c().statusVoiceFallbackPeaks?.() ||
-      [];
+/** Instant path — raw mic upload, no offline polish (fast + reliable on iOS) */
+function prepareEchoFromRawRecording() {
+  if (!echoRawBlob?.size) return false;
+  if (echoRawBlob.size > ECHO_STORAGE_MAX_BYTES) {
+    try {
+      c().showToast("Echo too large — keep it under 30 seconds.", { durationMs: 3400 });
+    } catch {}
+    return false;
   }
-  if (!echoBlob?.size && echoRawBlob?.size) {
-    echoBlob = echoRawBlob;
+  echoBlob = echoRawBlob;
+  echoTone = getEchoToneFromUi();
+  if (echoPeaks.length < 8) {
+    echoPeaks = c().statusVoiceFallbackPeaks?.() || normalizePeaks(idleOrbitPeaks());
+  } else {
+    echoPeaks = normalizePeaks([...echoPeaks]);
   }
-  if (!opts.keepBusy) {
-    echoRecState = "idle";
-    syncEchoComposeUi();
-  }
-  resetEchoUploadState();
-  startEchoUploadEarly();
-  if (!opts.keepBusy) syncEchoComposeUi();
+  return true;
+}
+
+function removeEchoFromRail(echoId) {
+  const id = String(echoId || "");
+  const echo = _echoById.get(id);
+  if (!echo) return;
+  const uid = String(echo.userId || "");
+  const story = _echoStoriesByUser.get(uid);
+  if (!story) return;
+  story.echoes = (story.echoes || []).filter((e) => String(e.id) !== id);
+  _echoById.delete(id);
+  const stories = [..._echoStories.filter((s) => String(s.userId) !== uid), story].filter(
+    (s) => (s.echoes || []).length > 0,
+  );
+  indexEchoStories(stories);
+  _echoRailCache = stories;
+  _echoRailCacheAt = Date.now();
+  renderEchoRail(stories);
 }
 
 function echoComposeTick() {
@@ -1320,7 +1312,7 @@ function syncEchoComposeUi() {
   const primary = document.getElementById("echoComposeStatusPrimary");
   const sub = document.getElementById("echoComposeStatusSub");
   if (primary) {
-    if (releasing || processing) primary.textContent = "Sending your echo…";
+    if (releasing || processing) primary.textContent = "Sending…";
     else if (recording) primary.textContent = "Release to send";
     else if (arming) primary.textContent = "Starting mic…";
     else primary.textContent = "Hold";
@@ -1433,8 +1425,18 @@ async function startEchoRecording() {
   const mimeType = c().pickRecorderMimeType?.() || "";
   let rec;
   try {
-    rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+    const recOpts = mimeType
+      ? { mimeType, audioBitsPerSecond: ECHO_REC_BITRATE }
+      : { audioBitsPerSecond: ECHO_REC_BITRATE };
+    rec = new MediaRecorder(stream, recOpts);
   } catch {
+    try {
+      rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+    } catch {
+      rec = null;
+    }
+  }
+  if (!rec) {
     try {
       c().showToast("Recording not supported here.", { durationMs: 2600 });
     } catch {}
@@ -1484,9 +1486,14 @@ async function startEchoRecording() {
     syncEchoComposeUi();
     echoEnhancePromise = (async () => {
       try {
-        await applyEchoToneToCapture(echoTone, { keepBusy: true });
-        if (echoBlob?.size) await publishEcho({ auto: true, fromEnhance: true });
-        else throw new Error("No recording");
+        if (!prepareEchoFromRawRecording()) {
+          echoRecState = "idle";
+          syncEchoComposeUi();
+          return;
+        }
+        resetEchoUploadState();
+        startEchoUploadEarly();
+        await publishEcho({ auto: true, fromEnhance: true });
       } catch (e) {
         echoRecState = "idle";
         const sheet = document.getElementById("echoComposeSheet");
@@ -1599,6 +1606,7 @@ async function finishEchoPublishBackground({
 }) {
   const sendBlob = blob?.size ? blob : rawFallback?.size ? rawFallback : null;
   if (!sendBlob?.size) {
+    removeEchoFromRail(optimisticId);
     try {
       c().showToast("No recording to upload — try holding the mic a little longer.", { durationMs: 3200 });
     } catch {}
@@ -1609,6 +1617,7 @@ async function finishEchoPublishBackground({
     }
     return;
   }
+  let uploadedOk = false;
   try {
     let remoteUrl = String(uploadedUrl || "").trim();
     if (!remoteUrl && uploadPromise) {
@@ -1676,17 +1685,19 @@ async function finishEchoPublishBackground({
         expiresAt: row.expires_at,
       });
     }
+    uploadedOk = true;
     resetEchoUploadState();
   } catch (e) {
+    removeEchoFromRail(optimisticId);
     try {
       const msg = String(e?.message || "");
-      const hint = /upload failed|413|payload/i.test(msg)
-        ? " Voice clip may be too large — try a shorter Echo."
+      const hint = /upload failed|413|payload|too large/i.test(msg)
+        ? " Try a shorter Echo (under 30s)."
         : "";
       c().showToast((msg || "Could not post Echo") + hint, { durationMs: 3600 });
     } catch {}
   } finally {
-    if (localUrl) {
+    if (localUrl && uploadedOk) {
       try {
         URL.revokeObjectURL(localUrl);
       } catch {}
@@ -1722,11 +1733,7 @@ async function publishEcho(opts = {}) {
   const publishUploadPromise = echoUploadPromise;
   const publishUploadedUrl = echoUploadedUrl;
   const peaks =
-    echoPeaks.length >= 8
-      ? [...echoPeaks]
-      : (await c().computeStatusWaveformPeaks(publishBlob, ECHO_BAR_COUNT).catch(() => [])) ||
-        c().statusVoiceFallbackPeaks?.() ||
-        [];
+    echoPeaks.length >= 8 ? [...echoPeaks] : c().statusVoiceFallbackPeaks?.() || normalizePeaks(idleOrbitPeaks());
   const expiresAt = new Date(Date.now() + 86400000).toISOString();
   const prof = ownEchoProfileFromRail(uid);
   const optimisticId = `opt-${Date.now()}`;

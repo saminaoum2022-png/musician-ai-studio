@@ -801,25 +801,28 @@ function syncEchoComposeUi() {
 
   const primary = document.getElementById("echoComposeStatusPrimary");
   const sub = document.getElementById("echoComposeStatusSub");
-  const releaseCue = document.getElementById("echoComposeReleaseCue");
   const tip = document.getElementById("echoComposeTip");
 
   if (primary) {
-    if (recording) primary.hidden = true;
-    else {
+    if (recording) {
+      primary.hidden = false;
+      primary.textContent = "Recording…";
+    } else {
       primary.hidden = false;
       primary.textContent = hasBlob ? "Echo ready" : "Hold to record";
     }
   }
   if (sub) {
-    sub.hidden = recording;
-    if (!recording) {
+    if (recording) {
+      sub.hidden = false;
+      sub.textContent = "Let go when you're done";
+    } else {
+      sub.hidden = false;
       sub.textContent = hasBlob
-        ? `${c().formatMsAsVoiceTime(echoDurationMs)} — tap Release Echo`
+        ? `${c().formatMsAsVoiceTime(echoDurationMs)} recorded`
         : "Hum, sing, or speak a raw idea";
     }
   }
-  if (releaseCue) releaseCue.hidden = !recording;
   if (tip) tip.hidden = !recording;
 
   if (mic) {

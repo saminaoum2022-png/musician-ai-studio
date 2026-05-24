@@ -2,7 +2,7 @@
  * Echo — ephemeral creator audio moments (24h).
  * Wired from app.js via initEcho(ctx).
  */
-import { applyEchoTone, ECHO_TONE_DEFAULT, ECHO_TONE_IDS } from "./echo-tone.js";
+import { applyEchoTone, echoToneHint, ECHO_TONE_DEFAULT, ECHO_TONE_IDS } from "./echo-tone.js";
 
 const ECHO_BAR_COUNT = 48;
 const ECHO_MAX_MS = 60000;
@@ -900,6 +900,7 @@ function getEchoToneFromUi() {
 
 function syncEchoToneUi() {
   const wrap = document.getElementById("echoTonePicker");
+  const hint = document.getElementById("echoToneHint");
   if (!wrap) return;
   const hasBlob = Boolean(echoRawBlob?.size);
   const processing = echoRecState === "processing";
@@ -908,6 +909,10 @@ function syncEchoToneUi() {
     const input = chip.querySelector('input[name="echoTone"]');
     chip.classList.toggle("isActive", input?.checked);
   });
+  if (hint && hasBlob && !processing) {
+    hint.textContent = echoToneHint(getEchoToneFromUi());
+    hint.hidden = false;
+  } else if (hint) hint.hidden = true;
 }
 
 async function applyEchoToneToCapture(tone) {
@@ -1080,7 +1085,7 @@ function syncEchoComposeUi() {
   if (primary) {
     primary.hidden = recording;
     if (!recording) {
-      if (processing) primary.textContent = "Polishing your voice…";
+      if (processing) primary.textContent = "Making your voice shine…";
       else primary.textContent = hasBlob ? "Echo captured" : "Hold to record";
     }
   }
@@ -1090,7 +1095,7 @@ function syncEchoComposeUi() {
       sub.textContent = "Let go when you're done";
     } else if (processing) {
       sub.hidden = false;
-      sub.textContent = "Echo Tone is adding warmth";
+      sub.textContent = "Warmth, smooth levels, less harsh edge";
     } else {
       sub.hidden = false;
       sub.textContent = hasBlob

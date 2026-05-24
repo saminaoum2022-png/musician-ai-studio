@@ -6335,6 +6335,16 @@ body.echoComposeOpen{
   text-transform: uppercase;
   color: rgba(151,165,186,0.88);
 }
+.echoToneHint{
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(167,139,250,0.88);
+  text-align: center;
+}
+.echoToneHint[hidden]{
+  display: none !important;
+}
 .echoToneChips{
   display: grid;
   grid-template-columns: repeat(3, 1fr);

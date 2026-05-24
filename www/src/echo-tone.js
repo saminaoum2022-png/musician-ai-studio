@@ -117,20 +117,23 @@ const PRESETS = {
     compRatio: 1.28,
     compAttack: 0.02,
     compRelease: 0.48,
-    reverbMix: 0.11,
-    delayTime: 0.052,
-    delayFeedback: 0.12,
-    delayLp: 2600,
-    studioSlapMix: 0.035,
+    spaceMixCap: 0.28,
+    reverbMix: 0.22,
+    delayTime: 0.092,
+    delayFeedback: 0.28,
+    delayLp: 3800,
+    dreamHallMix: 0.16,
+    studioSlapMix: 0.072,
     noiseGateFloor: 0.003,
     noiseReduceAmount: 0,
-    tonalBlendMix: 0.048,
+    tonalBlendMix: 0.075,
     warmthDrive: 0,
-    pitchStrength: 0.09,
-    pitchMaxCents: 12,
-    velvetLp: 9800,
+    pitchStrength: 0.48,
+    pitchMaxCents: 48,
+    pitchRobotic: true,
+    velvetLp: 9200,
     transientSoft: 0,
-    headroom: 0.88,
+    headroom: 0.86,
   },
 };
 
@@ -338,22 +341,54 @@ function connectTonalBlend(offline, input, mix) {
 }
 
 function connectSpace(offline, input, preset) {
-  const mix = Math.max(0, Math.min(0.14, Number(preset.reverbMix) || 0));
+  const cap = Number(preset.spaceMixCap) > 0 ? preset.spaceMixCap : 0.14;
+  const mix = Math.max(0, Math.min(cap, Number(preset.reverbMix) || 0));
   if (mix <= 0.001) {
+    connectDreamHall(offline, input, preset);
+    return;
+  }
+  const dry = offline.createGain();
+  dry.gain.value = 1 - mix * 0.62;
+  const wet = offline.createGain();
+  wet.gain.value = mix;
+  const delay = offline.createDelay(0.22);
+  delay.delayTime.value = preset.delayTime || 0.03;
+  const fb = offline.createGain();
+  fb.gain.value = Math.min(0.42, preset.delayFeedback || 0.08);
+  const lp = offline.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.value = preset.delayLp || 2200;
+  input.connect(dry);
+  input.connect(delay);
+  delay.connect(lp);
+  lp.connect(fb);
+  fb.connect(delay);
+  delay.connect(wet);
+  const merge = offline.createGain();
+  dry.connect(merge);
+  wet.connect(merge);
+  connectDreamHall(offline, merge, preset);
+}
+
+/** Longer hall wash — Dreamy */
+function connectDreamHall(offline, input, preset) {
+  const hm = Math.max(0, Math.min(0.2, Number(preset.dreamHallMix) || 0));
+  if (hm <= 0.001) {
     connectVelvetTop(offline, input, preset.velvetLp);
     return;
   }
   const dry = offline.createGain();
-  dry.gain.value = 1 - mix * 0.7;
+  dry.gain.value = 1 - hm * 0.5;
   const wet = offline.createGain();
-  wet.gain.value = mix;
-  const delay = offline.createDelay(0.14);
-  delay.delayTime.value = preset.delayTime || 0.03;
+  wet.gain.value = hm;
+  const delay = offline.createDelay(0.4);
+  delay.delayTime.value = 0.21;
   const fb = offline.createGain();
-  fb.gain.value = preset.delayFeedback || 0.08;
+  fb.gain.value = 0.4;
   const lp = offline.createBiquadFilter();
   lp.type = "lowpass";
-  lp.frequency.value = preset.delayLp || 2200;
+  lp.frequency.value = 4200;
+  lp.Q.value = 0.4;
   input.connect(dry);
   input.connect(delay);
   delay.connect(lp);
@@ -368,7 +403,7 @@ function connectSpace(offline, input, preset) {
 
 /** Extra short studio slap — Dreamy only, stays under the vocal */
 function connectStudioSlap(offline, input, mix) {
-  const m = Math.max(0, Math.min(0.05, Number(mix) || 0));
+  const m = Math.max(0, Math.min(0.1, Number(mix) || 0));
   if (m <= 0.001) return input;
   const dry = offline.createGain();
   dry.gain.value = 1 - m * 0.85;
@@ -502,7 +537,8 @@ async function renderPolishedBuffer(audioBuffer, tone) {
   chain = connectInterviewEq(offline, chain, preset);
   chain = connectDeEsser(offline, chain, preset);
   chain = connectDynamics(offline, chain, preset);
-  const glue = preset.tonalBlendMix > 0 && humming ? preset.tonalBlendMix : 0;
+  const glue =
+    preset.tonalBlendMix > 0 && (humming || preset.pitchRobotic) ? preset.tonalBlendMix : 0;
   chain = connectTonalBlend(offline, chain, glue) || chain;
   if (preset.studioSlapMix > 0.001) {
     chain = connectStudioSlap(offline, chain, preset.studioSlapMix) || chain;
@@ -512,11 +548,13 @@ async function renderPolishedBuffer(audioBuffer, tone) {
   src.start(0);
   const rendered = await offline.startRendering();
 
-  /* Granular pitch-shift was causing “broken speaker” warble — use glue only */
-  if (preset.pitchStrength > 0.05 && humming) {
+  if (preset.pitchStrength > 0.05 && (humming || preset.pitchRobotic)) {
+    const robotic = Boolean(preset.pitchRobotic);
     applyNaturalPitchStabilization(rendered, {
-      strength: Math.min(0.1, preset.pitchStrength),
-      maxCents: Math.min(12, preset.pitchMaxCents || 12),
+      strength: robotic ? preset.pitchStrength : Math.min(0.1, preset.pitchStrength),
+      maxCents: robotic ? preset.pitchMaxCents || 48 : Math.min(12, preset.pitchMaxCents || 12),
+      notePull: robotic ? 0.82 : 0.22,
+      robotic,
       humming: true,
     });
   }
@@ -633,6 +671,6 @@ export function echoToneLabel(tone) {
 export function echoToneHint(tone) {
   const id = normalizeToneId(tone);
   if (id === "raw") return "Cleanup and even volume only";
-  if (id === "dreamy") return "Studio space — light echo, reverb, gentle pitch glue on hums";
+  if (id === "dreamy") return "Heavy echo & hall — strong autotune (can sound robotic)";
   return "Clean, warm close-mic — natural and undistorted";
 }

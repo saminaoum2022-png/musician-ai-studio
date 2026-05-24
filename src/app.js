@@ -13,7 +13,7 @@ import { initEcho, onEnterFriendsRoute, openEchoFromCreateChooser } from "./echo
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522echoSyntaxFixV1";
+const APP_BUILD = "20260522echoUploadFixV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -8165,6 +8165,8 @@ function callingCardExtensionFromMime(mime) {
   const m = String(mime || "").toLowerCase();
   if (m.includes("mp4")) return "m4a";
   if (m.includes("mpeg")) return "mp3";
+  if (m.includes("wav")) return "wav";
+  if (m.includes("ogg")) return "ogg";
   return "webm";
 }
 

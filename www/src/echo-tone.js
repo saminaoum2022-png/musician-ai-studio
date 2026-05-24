@@ -1,10 +1,13 @@
 /**
  * Subtle offline vocal polish for Echo — no robotic autotune, preset-driven only.
+ * Output is compressed (webm/mp4) to fit status_audio bucket limits.
  */
-import { encodeWav16 } from "./wav.js";
 
 export const ECHO_TONE_IDS = ["raw", "soft", "dreamy"];
 export const ECHO_TONE_DEFAULT = "soft";
+/** Stay under Supabase status_audio default 512KB limit with headroom */
+export const ECHO_UPLOAD_MAX_BYTES = 480 * 1024;
+const ECHO_RENDER_SAMPLE_RATE = 24000;
 
 /** @type {Record<string, object>} */
 const PRESETS = {
@@ -58,6 +61,21 @@ const PRESETS = {
 function normalizeToneId(tone) {
   const id = String(tone || "").trim().toLowerCase();
   return ECHO_TONE_IDS.includes(id) ? id : ECHO_TONE_DEFAULT;
+}
+
+function pickEchoRecorderMime(pickMime) {
+  const preferred = typeof pickMime === "function" ? pickMime() : "";
+  const candidates = [
+    preferred,
+    "audio/mp4",
+    "audio/mp4;codecs=mp4a.40.2",
+    "audio/webm;codecs=opus",
+    "audio/webm",
+  ].filter(Boolean);
+  for (const m of candidates) {
+    if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported?.(m)) return m;
+  }
+  return "";
 }
 
 function connectDynamics(offline, input, preset) {
@@ -160,37 +178,27 @@ function connectDoubler(offline, input, preset) {
   return merge;
 }
 
-/**
- * Apply Echo Tone polish and return a WAV blob (upload-friendly).
- * @param {Blob} blob
- * @param {string} tone
- * @returns {Promise<Blob>}
- */
-export async function applyEchoTone(blob, tone = ECHO_TONE_DEFAULT) {
-  if (!blob?.size) return blob;
-  const preset = PRESETS[normalizeToneId(tone)] || PRESETS[ECHO_TONE_DEFAULT];
+async function decodeBlobToBuffer(blob) {
   const Ctx = window.AudioContext || window.webkitAudioContext;
-  if (!Ctx) return blob;
-
-  const decodeCtx = new Ctx();
-  let audioBuffer;
+  if (!Ctx) return null;
+  const ctx = new Ctx();
   try {
     const ab = await blob.arrayBuffer();
-    audioBuffer = await decodeCtx.decodeAudioData(ab.slice(0));
+    const buf = await ctx.decodeAudioData(ab.slice(0));
+    return buf;
   } catch {
+    return null;
+  } finally {
     try {
-      await decodeCtx.close();
+      await ctx.close();
     } catch {}
-    return blob;
   }
-  try {
-    await decodeCtx.close();
-  } catch {}
+}
 
-  const channels = Math.min(2, Math.max(1, audioBuffer.numberOfChannels));
-  const length = audioBuffer.length;
-  const sampleRate = audioBuffer.sampleRate;
-  const offline = new OfflineAudioContext(channels, length, sampleRate);
+async function renderPolishedBuffer(audioBuffer, tone) {
+  const preset = PRESETS[normalizeToneId(tone)] || PRESETS[ECHO_TONE_DEFAULT];
+  const frames = Math.max(1, Math.ceil(audioBuffer.duration * ECHO_RENDER_SAMPLE_RATE));
+  const offline = new OfflineAudioContext(1, frames, ECHO_RENDER_SAMPLE_RATE);
   const src = offline.createBufferSource();
   src.buffer = audioBuffer;
 
@@ -201,11 +209,113 @@ export async function applyEchoTone(blob, tone = ECHO_TONE_DEFAULT) {
   connectSpace(offline, chain, preset);
 
   src.start(0);
-  const rendered = await offline.startRendering();
-  const ch0 = rendered.getChannelData(0);
-  const ch1 = channels > 1 ? rendered.getChannelData(1) : null;
-  const out = ch1 ? [ch0, ch1] : [ch0];
-  return new Blob([encodeWav16(out, sampleRate)], { type: "audio/wav" });
+  return offline.startRendering();
+}
+
+/**
+ * Encode AudioBuffer to a small compressed blob via MediaRecorder (iOS-safe mp4/webm).
+ */
+async function audioBufferToCompressedBlob(buffer, pickMime) {
+  const mime = pickEchoRecorderMime(pickMime);
+  if (!mime || typeof MediaRecorder === "undefined") return null;
+
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  const ctx = new Ctx({ sampleRate: buffer.sampleRate });
+  try {
+    const dest = ctx.createMediaStreamDestination();
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(dest);
+
+    const chunks = [];
+    const rec = new MediaRecorder(dest.stream, {
+      mimeType: mime,
+      audioBitsPerSecond: 56000,
+    });
+
+    const blob = await new Promise((resolve, reject) => {
+      const stopTimer = window.setTimeout(() => {
+        try {
+          if (rec.state === "recording") rec.stop();
+        } catch {}
+      }, Math.ceil((buffer.duration + 0.35) * 1000));
+
+      rec.ondataavailable = (e) => {
+        if (e.data?.size) chunks.push(e.data);
+      };
+      rec.onerror = () => {
+        window.clearTimeout(stopTimer);
+        reject(new Error("recorder"));
+      };
+      rec.onstop = () => {
+        window.clearTimeout(stopTimer);
+        const out = new Blob(chunks, { type: mime });
+        resolve(out.size ? out : null);
+      };
+
+      try {
+        rec.start(200);
+        src.start(0);
+        src.onended = () => {
+          window.setTimeout(() => {
+            try {
+              if (rec.state === "recording") rec.stop();
+            } catch {
+              resolve(null);
+            }
+          }, 80);
+        };
+      } catch (e) {
+        window.clearTimeout(stopTimer);
+        reject(e);
+      }
+    });
+
+    return blob;
+  } catch {
+    return null;
+  } finally {
+    try {
+      await ctx.close();
+    } catch {}
+  }
+}
+
+/**
+ * Apply Echo Tone polish; returns compressed audio under upload size limits when possible.
+ * @param {Blob} blob
+ * @param {string} tone
+ * @param {{ pickMime?: () => string }} [opts]
+ * @returns {Promise<Blob>}
+ */
+export async function applyEchoTone(blob, tone = ECHO_TONE_DEFAULT, opts = {}) {
+  if (!blob?.size) return blob;
+  const pickMime = opts.pickMime;
+
+  if (blob.size <= ECHO_UPLOAD_MAX_BYTES && normalizeToneId(tone) === "raw") {
+    return blob;
+  }
+
+  const audioBuffer = await decodeBlobToBuffer(blob);
+  if (!audioBuffer) return blob;
+
+  let polished;
+  try {
+    polished = await renderPolishedBuffer(audioBuffer, tone);
+  } catch {
+    return blob.size <= ECHO_UPLOAD_MAX_BYTES ? blob : blob;
+  }
+
+  let out = await audioBufferToCompressedBlob(polished, pickMime);
+  if (out?.size && out.size <= ECHO_UPLOAD_MAX_BYTES) return out;
+
+  if (blob.size <= ECHO_UPLOAD_MAX_BYTES) return blob;
+
+  out = await audioBufferToCompressedBlob(polished, () => "audio/webm");
+  if (out?.size && out.size <= ECHO_UPLOAD_MAX_BYTES) return out;
+
+  return blob.size <= ECHO_UPLOAD_MAX_BYTES ? blob : blob;
 }
 
 export function echoToneLabel(tone) {

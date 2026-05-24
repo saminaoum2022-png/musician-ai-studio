@@ -916,7 +916,7 @@ async function applyEchoToneToCapture(tone) {
   echoRecState = "processing";
   syncEchoComposeUi();
   try {
-    echoBlob = await applyEchoTone(echoRawBlob, echoTone);
+    echoBlob = await applyEchoTone(echoRawBlob, echoTone, { pickMime: c().pickRecorderMimeType });
   } catch {
     echoBlob = echoRawBlob;
   }
@@ -988,16 +988,36 @@ function resetEchoUploadState() {
   echoEnhancePromise = null;
 }
 
+async function doUploadEchoBlob(blob) {
+  const uploaded = await c().uploadStatusVoiceBlob(blob);
+  const url = String(uploaded?.url || "").trim();
+  if (!url) throw new Error("Voice upload failed");
+  echoUploadedUrl = url;
+  return uploaded;
+}
+
+async function uploadEchoBlobForRelease(blob) {
+  if (!blob?.size) throw new Error("No recording to upload");
+  if (echoUploadedUrl) return { url: echoUploadedUrl };
+  if (echoUploadPromise) {
+    try {
+      const early = await echoUploadPromise;
+      if (early?.url) return early;
+    } catch {
+      echoUploadPromise = null;
+      echoUploadedUrl = "";
+    }
+  }
+  return doUploadEchoBlob(blob);
+}
+
 function startEchoUploadEarly() {
-  resetEchoUploadState();
   if (!echoBlob?.size) return;
-  echoUploadPromise = c()
-    .uploadStatusVoiceBlob(echoBlob)
-    .then((uploaded) => {
-      echoUploadedUrl = String(uploaded?.url || "").trim();
-      return uploaded;
-    })
-    .catch(() => null);
+  echoUploadPromise = doUploadEchoBlob(echoBlob).catch((err) => {
+    echoUploadPromise = null;
+    echoUploadedUrl = "";
+    throw err;
+  });
 }
 
 function resetEchoCompose() {
@@ -1247,12 +1267,7 @@ async function publishEcho() {
     ? Promise.resolve(echoPeaks)
     : c().computeStatusWaveformPeaks(echoBlob, ECHO_BAR_COUNT);
   try {
-    const [peaks, uploaded] = await Promise.all([
-      peaksP,
-      echoUploadedUrl
-        ? Promise.resolve({ url: echoUploadedUrl })
-        : echoUploadPromise || c().uploadStatusVoiceBlob(echoBlob),
-    ]);
+    const [peaks, uploaded] = await Promise.all([peaksP, uploadEchoBlobForRelease(echoBlob)]);
     if (!uploaded?.url) throw new Error("Voice upload failed");
     const expiresAt = new Date(Date.now() + 86400000).toISOString();
     const prof = ownEchoProfileFromRail(uid);
@@ -1342,7 +1357,11 @@ async function publishEcho() {
     resetEchoUploadState();
   } catch (e) {
     try {
-      c().showToast(e?.message || "Could not post Echo", { durationMs: 3200 });
+      const msg = String(e?.message || "");
+      const hint = /upload failed|413|payload/i.test(msg)
+        ? " Voice clip may be too large — try a shorter Echo."
+        : "";
+      c().showToast((msg || "Could not post Echo") + hint, { durationMs: 3600 });
     } catch {}
   } finally {
     if (publish) {

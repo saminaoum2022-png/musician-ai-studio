@@ -4,7 +4,7 @@ values (
   'status_audio',
   'status_audio',
   true,
-  524288,
+  2097152,
   array[
     'audio/webm',
     'audio/webm;codecs=opus',

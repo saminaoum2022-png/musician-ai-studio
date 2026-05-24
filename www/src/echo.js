@@ -1093,34 +1093,70 @@ function syncEchoComposeUi() {
   const mic = document.getElementById("btnEchoRecord");
   const processing = echoRecState === "processing";
   const releasing = sheet?.classList.contains("isReleasing");
+  const busy = processing || releasing;
   const recording = echoRecState === "recording";
   const arming = echoRecState === "arming";
 
   if (sheet) {
     sheet.classList.toggle("isRecording", recording || arming);
-    sheet.classList.toggle("isProcessing", processing || releasing);
+    sheet.classList.toggle("isProcessing", busy);
+    sheet.classList.toggle("isReleasing", releasing);
   }
 
   const primary = document.getElementById("echoComposeStatusPrimary");
+  const sub = document.getElementById("echoComposeStatusSub");
   if (primary) {
-    if (recording || arming || processing || releasing) primary.textContent = "…";
+    if (releasing) primary.textContent = "Sending…";
+    else if (processing) primary.textContent = "Polishing…";
+    else if (recording) primary.textContent = "Listening…";
+    else if (arming) primary.textContent = "…";
     else primary.textContent = "Hold";
+  }
+  if (sub) {
+    sub.hidden = !busy;
+    if (busy) sub.textContent = releasing ? "Almost there" : "Warm velvet polish";
   }
 
   if (mic) {
     mic.classList.toggle("isRecording", recording || arming);
+    mic.classList.toggle("isBusy", busy);
     mic.setAttribute("aria-pressed", recording || arming ? "true" : "false");
-    mic.setAttribute("aria-label", recording || arming ? "Release to send" : "Hold to record");
+    mic.setAttribute(
+      "aria-label",
+      busy ? "Processing Echo" : recording || arming ? "Release to send" : "Hold to record",
+    );
   }
   if (wave) {
     if (recording) {
       updateComposeWaveBars(echoPeaks.length ? echoPeaks : normalizePeaks([]), "echoBar--live");
-    } else if (!processing && !releasing) {
+    } else if (busy) {
+      stopComposeIdleMotion();
+      if (echoPeaks.length) updateComposeWaveBars(echoPeaks, "echoBar--live");
+    } else {
       paintIdleComposeWave();
       startComposeIdleMotion();
     }
   }
   syncEchoListenOnceToggle();
+}
+
+function dismissEchoComposeSheet() {
+  const sheet = document.getElementById("echoComposeSheet");
+  if (sheet) {
+    sheet.classList.remove("isOpen", "isRecording", "isProcessing", "isReleasing");
+    sheet.hidden = true;
+    sheet.setAttribute("aria-hidden", "true");
+  }
+  document.body.classList.remove("echoComposeOpen");
+  resetEchoCompose();
+  _echoReplyToId = "";
+}
+
+function landOnFriendsAfterEcho() {
+  try {
+    if (String(location.hash || "") !== "#/friends") location.hash = "#/friends";
+    c().enterFriendsRoute?.();
+  } catch {}
 }
 
 async function startEchoRecording() {
@@ -1260,18 +1296,15 @@ export function openEchoComposeSheet({ replyTo = "" } = {}) {
   } catch {}
 }
 
-export function closeEchoComposeSheet() {
+export function closeEchoComposeSheet(opts = {}) {
   const sheet = document.getElementById("echoComposeSheet");
-  if (sheet?.classList.contains("isProcessing") || sheet?.classList.contains("isReleasing")) return;
-  resetEchoCompose();
-  if (!sheet) return;
-  sheet.classList.remove("isOpen");
-  document.body.classList.remove("echoComposeOpen");
-  window.setTimeout(() => {
-    sheet.hidden = true;
-    sheet.setAttribute("aria-hidden", "true");
-  }, 240);
-  _echoReplyToId = "";
+  if (
+    !opts.force &&
+    (sheet?.classList.contains("isProcessing") || sheet?.classList.contains("isReleasing"))
+  ) {
+    return;
+  }
+  dismissEchoComposeSheet();
 }
 
 function ownEchoProfileFromRail(uid) {
@@ -1329,7 +1362,8 @@ async function publishEcho(opts = {}) {
       }),
       prof,
     );
-    closeEchoComposeSheet();
+    dismissEchoComposeSheet();
+    landOnFriendsAfterEcho();
     try {
       c().haptic("medium");
     } catch {}
@@ -1407,10 +1441,13 @@ async function publishEcho(opts = {}) {
     } catch {}
   } finally {
     _echoPublishing = false;
-    echoRecState = "idle";
+    echoEnhancePromise = null;
     const s = document.getElementById("echoComposeSheet");
     if (s) s.classList.remove("isReleasing", "isProcessing");
-    syncEchoComposeUi();
+    if (s?.classList.contains("isOpen")) {
+      echoRecState = "idle";
+      syncEchoComposeUi();
+    }
   }
 }
 

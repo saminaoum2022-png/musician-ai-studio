@@ -1,10 +1,14 @@
 /**
- * Echo Tone — broadcast interview / close-mic polish (not autotune).
- * Chain: cleanup → de-ess → gentle comp → light EQ → optional hum warmth → subtle space → loudness norm.
+ * Echo Tone — broadcast interview / close-mic polish + natural pitch stabilization.
+ * Chain: cleanup → de-ess → comp → EQ → space → pitch stabilize → loudness norm.
  */
+import {
+  applyNaturalPitchStabilization,
+  isLikelyHumOrSingBuffer,
+} from "./echo-pitch-stabilize.js";
 
-export const ECHO_TONE_IDS = ["raw", "clean", "dreamy"];
-export const ECHO_TONE_DEFAULT = "clean";
+export const ECHO_TONE_IDS = ["raw", "natural", "dreamy"];
+export const ECHO_TONE_DEFAULT = "natural";
 export const ECHO_UPLOAD_MAX_BYTES = 480 * 1024;
 const ECHO_RENDER_SAMPLE_RATE = 44100;
 /** Target RMS for consistent Echo playback (~−22 dBFS feel) */
@@ -34,6 +38,8 @@ const TARGET_RMS = 0.085;
  * @property {number} noiseReduceAmount
  * @property {number} tonalBlendMix
  * @property {number} warmthDrive
+ * @property {number} pitchStrength
+ * @property {number} [pitchMaxCents]
  */
 
 /** @type {Record<string, EchoTonePreset>} */
@@ -58,8 +64,10 @@ const PRESETS = {
     noiseReduceAmount: 0.35,
     tonalBlendMix: 0,
     warmthDrive: 0,
+    pitchStrength: 0.06,
+    pitchMaxCents: 12,
   },
-  clean: {
+  natural: {
     highpass: 70,
     rumbleCutGain: -2.2,
     lowShelfGain: 2.2,
@@ -82,6 +90,8 @@ const PRESETS = {
     noiseReduceAmount: 0.55,
     tonalBlendMix: 0.04,
     warmthDrive: 0.025,
+    pitchStrength: 0.22,
+    pitchMaxCents: 22,
   },
   dreamy: {
     highpass: 70,
@@ -106,12 +116,14 @@ const PRESETS = {
     noiseReduceAmount: 0.5,
     tonalBlendMix: 0.05,
     warmthDrive: 0.02,
+    pitchStrength: 0.24,
+    pitchMaxCents: 26,
   },
 };
 
 function normalizeToneId(tone) {
   let id = String(tone || "").trim().toLowerCase();
-  if (id === "soft") id = "clean";
+  if (id === "soft" || id === "clean") id = "natural";
   return ECHO_TONE_IDS.includes(id) ? id : ECHO_TONE_DEFAULT;
 }
 
@@ -313,21 +325,6 @@ function connectSpace(offline, input, preset) {
   wet.connect(offline.destination);
 }
 
-/** Heuristic: sustained tonal audio (hum/sing) vs speech */
-function isLikelyHumOrSing(buffer) {
-  const ch = buffer.getChannelData(0);
-  if (ch.length < 2048) return false;
-  let crossings = 0;
-  let absSum = 0;
-  for (let i = 1; i < ch.length; i++) {
-    if ((ch[i] >= 0) !== (ch[i - 1] >= 0)) crossings++;
-    absSum += Math.abs(ch[i]);
-  }
-  const zcr = crossings / ch.length;
-  const avg = absSum / ch.length;
-  return zcr < 0.11 && avg > 0.012;
-}
-
 function gentleNoiseReduceInPlace(channel, preset) {
   const amount = Math.max(0, Math.min(1, Number(preset.noiseReduceAmount) || 0));
   if (amount <= 0.01) return;
@@ -398,9 +395,9 @@ async function decodeBlobToBuffer(blob) {
 }
 
 async function renderPolishedBuffer(audioBuffer, tone) {
-  const preset = PRESETS[normalizeToneId(tone)] || PRESETS.clean;
-  const tonalBlend =
-    preset.tonalBlendMix > 0 && isLikelyHumOrSing(audioBuffer) ? preset.tonalBlendMix : 0;
+  const preset = PRESETS[normalizeToneId(tone)] || PRESETS.natural;
+  const humming = isLikelyHumOrSingBuffer(audioBuffer);
+  const tonalBlend = preset.tonalBlendMix > 0 && humming ? preset.tonalBlendMix : 0;
 
   const frames = Math.max(1, Math.ceil(audioBuffer.duration * ECHO_RENDER_SAMPLE_RATE));
   const offline = new OfflineAudioContext(1, frames, ECHO_RENDER_SAMPLE_RATE);
@@ -417,6 +414,16 @@ async function renderPolishedBuffer(audioBuffer, tone) {
 
   src.start(0);
   const rendered = await offline.startRendering();
+
+  if (preset.pitchStrength > 0.01) {
+    const hum = humming || isLikelyHumOrSingBuffer(rendered);
+    applyNaturalPitchStabilization(rendered, {
+      strength: preset.pitchStrength * (hum ? 1.12 : 1),
+      maxCents: preset.pitchMaxCents ?? (hum ? 28 : 18),
+      humming: hum,
+    });
+  }
+
   return postProcessBuffer(rendered, preset);
 }
 
@@ -523,12 +530,12 @@ export function echoToneLabel(tone) {
   const id = normalizeToneId(tone);
   if (id === "raw") return "Raw";
   if (id === "dreamy") return "Dreamy";
-  return "Clean Mic";
+  return "Natural Tone";
 }
 
 export function echoToneHint(tone) {
   const id = normalizeToneId(tone);
   if (id === "raw") return "Cleanup and even volume only";
-  if (id === "dreamy") return "Clean Mic with a whisper of space";
-  return "Soft studio polish for raw voice, hums, and ideas";
+  if (id === "dreamy") return "Natural Tone with a whisper of space";
+  return "Studio warmth + soft pitch stability — felt, not heard";
 }

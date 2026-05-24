@@ -1085,7 +1085,7 @@ function syncEchoComposeUi() {
   if (primary) {
     primary.hidden = recording;
     if (!recording) {
-      if (processing) primary.textContent = "Clean Mic polish…";
+      if (processing) primary.textContent = "Natural Tone polish…";
       else primary.textContent = hasBlob ? "Echo captured" : "Hold to record";
     }
   }
@@ -1095,7 +1095,7 @@ function syncEchoComposeUi() {
       sub.textContent = "Let go when you're done";
     } else if (processing) {
       sub.hidden = false;
-      sub.textContent = "Interview mic warmth — felt, not heard";
+      sub.textContent = "Warm, stable, musical — never robotic";
     } else {
       sub.hidden = false;
       sub.textContent = hasBlob
@@ -1216,8 +1216,8 @@ export function openEchoComposeSheet({ replyTo = "" } = {}) {
   if (once) once.checked = false;
   const cap = document.getElementById("echoComposeCaption");
   if (cap) cap.value = "";
-  const cleanTone = document.querySelector('input[name="echoTone"][value="clean"]');
-  if (cleanTone) cleanTone.checked = true;
+  const naturalTone = document.querySelector('input[name="echoTone"][value="natural"]');
+  if (naturalTone) naturalTone.checked = true;
   const hud = document.getElementById("echoComposeRecHud");
   if (hud) {
     hud.hidden = true;

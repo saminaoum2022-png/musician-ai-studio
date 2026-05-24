@@ -6038,6 +6038,10 @@ body.echoComposeOpen .footer{
 body.echoComposeOpen #friendsEchoRail{
   display: none !important;
 }
+body.echoComposeOpen .mobileTabbar{
+  visibility: hidden;
+  pointer-events: none;
+}
 
 .echoComposeSheet{
   position: fixed;
@@ -6324,11 +6328,16 @@ body.echoComposeOpen #friendsEchoRail{
   50%{ opacity: 0.45; transform: scale(0.88); }
 }
 .echoComposeTimer{
+  display: block;
+  margin: 0 auto 10px;
   font-size: 14px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: rgba(238,244,255,0.88);
   letter-spacing: 0.06em;
+}
+.echoComposeTimer[hidden]{
+  display: none !important;
 }
 .echoComposeMicStage{
   position: relative;
@@ -6881,13 +6890,24 @@ body.echoComposeOpen #friendsEchoRail{
     transform 420ms ease,
     letter-spacing 520ms ease;
 }
-.echoComposeSheet.isTouching .echoComposeStatusPrimary,
-.echoComposeSheet.isRecording .echoComposeStatusPrimary,
-.echoComposeSheet.isProcessing .echoComposeStatusPrimary,
-.echoComposeSheet.isReleasing .echoComposeStatusPrimary{
+.echoComposeSheet.isTouching:not(.isRecording):not(.isProcessing):not(.isReleasing) .echoComposeStatusPrimary{
   opacity: 0;
   transform: translateY(6px);
   pointer-events: none;
+}
+.echoComposeSheet.isRecording .echoComposeStatusPrimary,
+.echoComposeSheet.isProcessing .echoComposeStatusPrimary,
+.echoComposeSheet.isReleasing .echoComposeStatusPrimary{
+  opacity: 1;
+  transform: translateY(0);
+  letter-spacing: 0.12em;
+  text-transform: none;
+  font-size: 15px;
+  font-weight: 700;
+  color: rgba(238,244,255,0.95);
+}
+.echoComposeSheet.isRecording .echoComposeStatusSub{
+  display: block !important;
 }
 .echoComposeWhisperDock{
   display: flex;

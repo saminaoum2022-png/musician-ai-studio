@@ -7,6 +7,7 @@ import { applyEchoTone, ECHO_TONE_DEFAULT, ECHO_TONE_IDS } from "./echo-tone.js"
 const ECHO_BAR_COUNT = 48;
 const ECHO_MAX_MS = 60000;
 const ECHO_MAX_BYTES = 768 * 1024;
+const ECHO_MIN_RECORD_MS = 420;
 const ECHO_HEARD_KEY = "nabad_echo_heard_v1";
 const ECHO_CAPTION_MAX = 60;
 
@@ -29,6 +30,8 @@ let _echoSwipeX = 0;
 let _echoPublishing = false;
 let echoMicTouching = false;
 let _echoHoldWanted = false;
+let _echoHoldPointerId = null;
+let _echoArmGen = 0;
 let _echoSfxCtx = null;
 const COMPOSE_ORBIT_BARS = 48;
 
@@ -982,6 +985,25 @@ async function postEchoReaction(reaction) {
   }
 }
 
+async function echoRequestMicStream() {
+  try {
+    return await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  } catch (e1) {
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: { ideal: true },
+          noiseSuppression: { ideal: true },
+          autoGainControl: { ideal: true },
+        },
+        video: false,
+      });
+    } catch (e2) {
+      throw new Error(e2?.message || e1?.message || "Microphone unavailable");
+    }
+  }
+}
+
 function formatRecordingTimer(ms) {
   const totalSec = Math.max(0, Math.floor(ms / 1000));
   const m = Math.floor(totalSec / 60);
@@ -1205,6 +1227,8 @@ function resetEchoCompose() {
   stopComposeIdleMotion();
   echoMicTouching = false;
   _echoHoldWanted = false;
+  _echoHoldPointerId = null;
+  _echoArmGen += 1;
   echoRecState = "idle";
   echoChunks = [];
   echoDurationMs = 0;
@@ -1250,10 +1274,29 @@ function syncEchoComposeUi() {
   if (primary) {
     if (releasing) primary.textContent = "Sending…";
     else if (processing) primary.textContent = "Polishing…";
+    else if (recording) primary.textContent = "Release to send";
+    else if (arming) primary.textContent = "Starting mic…";
     else primary.textContent = "Hold";
   }
   if (sub) {
-    sub.hidden = true;
+    if (recording && !busy) {
+      sub.hidden = false;
+      sub.textContent = "Recording";
+    } else {
+      sub.hidden = true;
+      sub.textContent = "";
+    }
+  }
+  const timer = document.getElementById("echoComposeTimer");
+  if (timer) {
+    const showTimer = recording || arming || busy;
+    timer.hidden = !showTimer;
+    timer.setAttribute("aria-hidden", showTimer ? "false" : "true");
+    if (recording && !busy) {
+      timer.textContent = formatRecordingTimer(performance.now() - echoStartedAt);
+    } else if (!recording) {
+      timer.textContent = "00:00";
+    }
   }
   if (!recording && !busy) setComposeAtmosphere(0, 0);
 
@@ -1307,12 +1350,14 @@ async function startEchoRecording() {
     echoPeaks = [];
     resetEchoUploadState();
   }
+  const armGen = ++_echoArmGen;
   echoRecState = "arming";
   syncEchoComposeUi();
   let stream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    stream = await echoRequestMicStream();
   } catch {
+    if (armGen !== _echoArmGen) return;
     echoRecState = "idle";
     syncEchoComposeUi();
     try {
@@ -1320,11 +1365,11 @@ async function startEchoRecording() {
     } catch {}
     return;
   }
-  if (echoRecState !== "arming" || !_echoHoldWanted) {
+  if (armGen !== _echoArmGen || echoRecState !== "arming" || !_echoHoldWanted) {
     try {
       stream.getTracks().forEach((t) => t.stop());
     } catch {}
-    if (echoRecState === "arming") {
+    if (armGen === _echoArmGen && echoRecState === "arming") {
       echoRecState = "idle";
       syncEchoComposeUi();
     }
@@ -1338,7 +1383,11 @@ async function startEchoRecording() {
     try {
       c().showToast("Recording not supported here.", { durationMs: 2600 });
     } catch {}
-    stream.getTracks().forEach((t) => t.stop());
+    try {
+      stream.getTracks().forEach((t) => t.stop());
+    } catch {}
+    echoRecState = "idle";
+    syncEchoComposeUi();
     return;
   }
   echoStream = stream;
@@ -1370,6 +1419,9 @@ async function startEchoRecording() {
     if (!echoRawBlob) {
       echoRecState = "idle";
       syncEchoComposeUi();
+      try {
+        c().showToast("Hold a little longer, then release.", { durationMs: 2800 });
+      } catch {}
       return;
     }
     echoMicTouching = false;
@@ -1394,7 +1446,19 @@ async function startEchoRecording() {
     })();
   };
   startLiveEchoWaveform(stream);
-  rec.start(200);
+  try {
+    rec.start();
+  } catch {
+    try {
+      stream.getTracks().forEach((t) => t.stop());
+    } catch {}
+    echoRecState = "idle";
+    syncEchoComposeUi();
+    try {
+      c().showToast("Could not start recording.", { durationMs: 2600 });
+    } catch {}
+    return;
+  }
   syncEchoComposeUi();
   stopEchoComposeTick();
   echoComposeTickRaf = requestAnimationFrame(echoComposeTick);
@@ -1405,6 +1469,13 @@ async function startEchoRecording() {
 
 function stopEchoRecording() {
   if (echoRecState !== "recording" || !echoRecorder) return;
+  const elapsed = performance.now() - echoStartedAt;
+  if (elapsed < ECHO_MIN_RECORD_MS) {
+    window.setTimeout(() => {
+      if (echoRecState === "recording") stopEchoRecording();
+    }, ECHO_MIN_RECORD_MS - elapsed);
+    return;
+  }
   stopLiveEchoWaveform();
   if (echoAutostopTimer) {
     window.clearTimeout(echoAutostopTimer);
@@ -1420,7 +1491,7 @@ function stopEchoRecording() {
 
 export function openEchoComposeSheet({ replyTo = "" } = {}) {
   _echoReplyToId = String(replyTo || "").trim();
-  _echoComposeIgnoreInputUntil = performance.now() + 220;
+  _echoComposeIgnoreInputUntil = performance.now() + 80;
   resetEchoCompose();
   const sheet = document.getElementById("echoComposeSheet");
   if (!sheet) return;
@@ -1786,38 +1857,17 @@ function wireEchoRecordHold() {
   if (!mic || mic.dataset.echoHoldWired) return;
   mic.dataset.echoHoldWired = "1";
 
-  let holdActive = false;
-
-  const startHold = (e) => {
-    if (e.button !== undefined && e.button !== 0) return;
-    const sheet = document.getElementById("echoComposeSheet");
-    if (!sheet?.classList.contains("isOpen")) return;
-    if (performance.now() < _echoComposeIgnoreInputUntil) return;
-    if (echoRecState === "arming" || echoRecState === "processing" || sheet.classList.contains("isReleasing")) {
+  const endHold = (pointerId) => {
+    if (_echoHoldPointerId === null || (pointerId !== undefined && pointerId !== _echoHoldPointerId)) {
       return;
     }
-    holdActive = true;
-    _echoHoldWanted = true;
-    echoMicTouching = true;
-    sheet?.classList.add("isTouching");
-    try {
-      mic.setPointerCapture(e.pointerId);
-    } catch {}
-    try {
-      c().haptic("light");
-    } catch {}
-    playEchoSfx("touch");
-    if (echoRecState === "recording") return;
-    void startEchoRecording();
-  };
-
-  const endHold = () => {
-    if (!holdActive) return;
-    holdActive = false;
+    _echoHoldPointerId = null;
     _echoHoldWanted = false;
     echoMicTouching = false;
+    const sheet = document.getElementById("echoComposeSheet");
     sheet?.classList.remove("isTouching");
     if (echoRecState === "arming") {
+      _echoArmGen += 1;
       echoRecState = "idle";
       try {
         echoStream?.getTracks?.().forEach((t) => t.stop());
@@ -1830,10 +1880,39 @@ function wireEchoRecordHold() {
     if (echoRecState === "recording") stopEchoRecording();
   };
 
+  if (!document.documentElement.dataset.echoHoldDocWired) {
+    document.documentElement.dataset.echoHoldDocWired = "1";
+    document.addEventListener(
+      "pointerup",
+      (e) => endHold(e.pointerId),
+      true,
+    );
+    document.addEventListener(
+      "pointercancel",
+      (e) => endHold(e.pointerId),
+      true,
+    );
+  }
+
+  const startHold = (e) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    const sheet = document.getElementById("echoComposeSheet");
+    if (!sheet?.classList.contains("isOpen")) return;
+    if (performance.now() < _echoComposeIgnoreInputUntil) return;
+    if (echoRecState === "arming" || echoRecState === "processing" || sheet.classList.contains("isReleasing")) {
+      return;
+    }
+    _echoHoldPointerId = e.pointerId;
+    _echoHoldWanted = true;
+    echoMicTouching = true;
+    sheet.classList.add("isTouching");
+    try {
+      c().haptic("light");
+    } catch {}
+    if (echoRecState !== "recording") void startEchoRecording();
+  };
+
   mic.addEventListener("pointerdown", startHold);
-  mic.addEventListener("pointerup", endHold);
-  mic.addEventListener("pointercancel", endHold);
-  mic.addEventListener("lostpointercapture", endHold);
 
   mic.addEventListener("click", (e) => {
     e.preventDefault();

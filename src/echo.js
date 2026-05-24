@@ -28,6 +28,7 @@ let echoComposeIdleRaf = 0;
 let _echoSwipeX = 0;
 let _echoPublishing = false;
 let echoMicTouching = false;
+let _echoHoldWanted = false;
 let _echoSfxCtx = null;
 const COMPOSE_ORBIT_BARS = 48;
 
@@ -37,6 +38,12 @@ function echoSfxCtx() {
     if (Ctx) _echoSfxCtx = new Ctx();
   }
   return _echoSfxCtx;
+}
+
+/** iOS: only play UI SFX after a real touch — avoids glitch on sheet open */
+function playEchoSfxAfterGesture(kind) {
+  if (!echoMicTouching && echoRecState === "idle") return;
+  playEchoSfx(kind);
 }
 
 /** Soft emotional UI pulses — never harsh */
@@ -1197,6 +1204,7 @@ function resetEchoCompose() {
   stopLiveEchoWaveform();
   stopComposeIdleMotion();
   echoMicTouching = false;
+  _echoHoldWanted = false;
   echoRecState = "idle";
   echoChunks = [];
   echoDurationMs = 0;
@@ -1312,10 +1320,14 @@ async function startEchoRecording() {
     } catch {}
     return;
   }
-  if (echoRecState !== "arming") {
+  if (echoRecState !== "arming" || !_echoHoldWanted) {
     try {
       stream.getTracks().forEach((t) => t.stop());
     } catch {}
+    if (echoRecState === "arming") {
+      echoRecState = "idle";
+      syncEchoComposeUi();
+    }
     return;
   }
   const mimeType = c().pickRecorderMimeType?.() || "";
@@ -1408,7 +1420,7 @@ function stopEchoRecording() {
 
 export function openEchoComposeSheet({ replyTo = "" } = {}) {
   _echoReplyToId = String(replyTo || "").trim();
-  _echoComposeIgnoreInputUntil = performance.now() + 450;
+  _echoComposeIgnoreInputUntil = performance.now() + 220;
   resetEchoCompose();
   const sheet = document.getElementById("echoComposeSheet");
   if (!sheet) return;
@@ -1425,7 +1437,6 @@ export function openEchoComposeSheet({ replyTo = "" } = {}) {
   document.body.classList.add("echoComposeOpen");
   paintIdleComposeWave();
   syncEchoComposeUi();
-  playEchoSfx("open");
   try {
     c().haptic("light");
   } catch {}
@@ -1595,12 +1606,6 @@ export function openEchoFromCreateChooser() {
     } catch {}
   } else {
     c().enterFriendsRoute?.();
-    window.setTimeout(() => {
-      if (_pendingEchoCompose) {
-        _pendingEchoCompose = false;
-        openEchoComposeSheet();
-      }
-    }, 120);
   }
 }
 
@@ -1762,7 +1767,7 @@ function wireEchoOnce() {
     if (!once) return;
     once.checked = !once.checked;
     syncEchoListenOnceToggle();
-    if (once.checked) playEchoSfx("lock");
+    if (once.checked) playEchoSfxAfterGesture("lock");
     try {
       c().haptic("light");
     } catch {}
@@ -1792,6 +1797,7 @@ function wireEchoRecordHold() {
       return;
     }
     holdActive = true;
+    _echoHoldWanted = true;
     echoMicTouching = true;
     sheet?.classList.add("isTouching");
     try {
@@ -1808,8 +1814,18 @@ function wireEchoRecordHold() {
   const endHold = () => {
     if (!holdActive) return;
     holdActive = false;
+    _echoHoldWanted = false;
     echoMicTouching = false;
     sheet?.classList.remove("isTouching");
+    if (echoRecState === "arming") {
+      echoRecState = "idle";
+      try {
+        echoStream?.getTracks?.().forEach((t) => t.stop());
+      } catch {}
+      echoStream = null;
+      syncEchoComposeUi();
+      return;
+    }
     syncEchoComposeUi();
     if (echoRecState === "recording") stopEchoRecording();
   };

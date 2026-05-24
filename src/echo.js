@@ -1835,7 +1835,14 @@ async function publishEcho(opts = {}) {
 }
 
 export function openEchoFromCreateChooser() {
-  _pendingEchoCompose = true;
+  if (!c().getAuthSession()?.user?.id) {
+    try {
+      c().showToast("Sign in to drop an Echo", { durationMs: 2400 });
+    } catch {}
+    return;
+  }
+  openEchoComposeSheet();
+  _pendingEchoCompose = false;
   const onFriends = String(location.hash || "") === "#/friends";
   if (!onFriends) {
     try {
@@ -1848,9 +1855,10 @@ export function openEchoFromCreateChooser() {
 
 export function onEnterFriendsRoute() {
   void refreshEchoRail({ useCache: true });
+  const sheet = document.getElementById("echoComposeSheet");
   if (_pendingEchoCompose) {
     _pendingEchoCompose = false;
-    window.setTimeout(() => openEchoComposeSheet(), 160);
+    if (!sheet?.classList.contains("isOpen")) openEchoComposeSheet();
   }
 }
 

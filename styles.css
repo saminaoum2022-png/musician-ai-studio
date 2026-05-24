@@ -6989,85 +6989,88 @@ body.echoComposeOpen .mobileTabbar{
 .echoComposeSheet.isRecording .echoComposeStatusSub{
   display: block !important;
 }
+.echoComposeWhisperBlock{
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 0 4px;
+}
+.echoComposeWhisperKicker{
+  display: block;
+  margin: 0 0 8px 2px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(167,139,250,0.88);
+}
+.echoComposeWhisperOpt{
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: rgba(151,165,186,0.5);
+}
 .echoComposeWhisperDock{
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 8px 6px 6px;
-  border-radius: 20px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.07);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow:
-    0 8px 32px rgba(0,0,0,0.2),
-    inset 0 1px 0 rgba(255,255,255,0.05);
-  animation: echoWhisperFloat 5s ease-in-out infinite;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.28);
+  overflow: hidden;
+  transition:
+    border-color 200ms ease,
+    box-shadow 200ms ease;
 }
-@keyframes echoWhisperFloat{
-  0%, 100%{ transform: translateY(0); }
-  50%{ transform: translateY(-2px); }
+.echoComposeWhisperDock:focus-within{
+  border-color: rgba(124,92,255,0.45);
+  box-shadow: 0 0 0 2px rgba(124,92,255,0.15);
 }
 .echoListenOnceGlass{
   flex-shrink: 0;
-  width: 38px;
-  height: 38px;
+  width: 46px;
+  min-height: 46px;
   border: none;
-  border-radius: 12px;
-  background: rgba(124,92,255,0.08);
-  color: rgba(151,165,186,0.55);
+  border-radius: 0;
+  border-right: 1px solid rgba(255,255,255,0.08);
+  background: rgba(124,92,255,0.06);
+  color: rgba(151,165,186,0.5);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition:
-    color 280ms ease,
-    background 280ms ease,
-    box-shadow 280ms ease,
-    transform 200ms ease;
+    color 200ms ease,
+    background 200ms ease;
 }
 .echoListenOnceGlass.isOn{
   color: rgba(220,205,255,0.95);
-  background: rgba(124,92,255,0.22);
-  box-shadow:
-    0 0 20px rgba(124,92,255,0.2),
-    inset 0 0 12px rgba(167,139,250,0.12);
+  background: rgba(124,92,255,0.18);
 }
 .echoComposeFooter--minimal .echoComposeCaption{
   flex: 1;
   min-width: 0;
   margin: 0;
-  padding: 10px 4px 10px 0;
+  padding: 12px 14px;
   border: none;
   border-radius: 0;
   background: transparent;
-  color: rgba(238,244,255,0.9);
-  font-size: 15px;
+  color: rgba(248,250,255,0.95);
+  font-size: 14px;
+  line-height: 1.4;
   font-family: inherit;
   outline: none;
   box-shadow: none;
 }
 .echoComposeFooter--minimal .echoComposeCaption::placeholder{
-  color: rgba(167,139,250,0.45);
-  animation: echoWhisperPlaceholder 4s ease-in-out infinite;
+  color: rgba(151,165,186,0.45);
 }
 .echoComposeFooter--minimal .echoComposeCaption:focus{
   outline: none;
 }
-.echoComposeFooter--minimal .echoComposeCaption:focus::placeholder,
-.echoComposeFooter--minimal .echoComposeCaption:not(:placeholder-shown)::placeholder{
-  animation: none;
-  opacity: 0.35;
-}
-.echoComposeWhisperDock:focus-within{
-  border-color: rgba(167,139,250,0.22);
-  box-shadow:
-    0 8px 36px rgba(124,92,255,0.12),
-    inset 0 0 24px rgba(124,92,255,0.06);
-}
-@keyframes echoWhisperPlaceholder{
-  0%, 100%{ opacity: 0.45; }
-  50%{ opacity: 0.72; }
+.echoComposeFooter{
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
 }
 .echoListenOnceToggle,
 .echoComposeFooter--minimal > .echoListenOnceToggle{

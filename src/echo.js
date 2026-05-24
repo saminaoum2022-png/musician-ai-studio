@@ -1599,7 +1599,7 @@ function stopEchoRecording() {
   }
 }
 
-export function openEchoComposeSheet({ replyTo = "" } = {}) {
+export function openEchoComposeSheet({ replyTo = "", haptic: wantHaptic = true } = {}) {
   _echoReplyToId = String(replyTo || "").trim();
   _echoComposeIgnoreInputUntil = performance.now() + 80;
   resetEchoCompose();
@@ -1618,9 +1618,11 @@ export function openEchoComposeSheet({ replyTo = "" } = {}) {
   document.body.classList.add("echoComposeOpen");
   paintIdleComposeWave();
   syncEchoComposeUi();
-  try {
-    c().haptic("light");
-  } catch {}
+  if (wantHaptic) {
+    try {
+      c().haptic("light");
+    } catch {}
+  }
 }
 
 export function closeEchoComposeSheet(opts = {}) {
@@ -1841,7 +1843,7 @@ export function openEchoFromCreateChooser() {
     } catch {}
     return;
   }
-  openEchoComposeSheet();
+  openEchoComposeSheet({ haptic: false });
   _pendingEchoCompose = false;
   const onFriends = String(location.hash || "") === "#/friends";
   if (!onFriends) {
@@ -1851,6 +1853,11 @@ export function openEchoFromCreateChooser() {
   } else {
     c().enterFriendsRoute?.();
   }
+  window.requestAnimationFrame(() => {
+    try {
+      c().haptic("light");
+    } catch {}
+  });
 }
 
 export function onEnterFriendsRoute() {

@@ -13,7 +13,7 @@ import { initEcho, onEnterFriendsRoute, openEchoFromCreateChooser } from "./echo
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522echoLaunchV1";
+const APP_BUILD = "20260522echoHapticV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5983,9 +5983,16 @@ function navigateFromCreateChooser(action) {
   if (!requireAuthForCreate(() => navigateFromCreateChooser(kind), kind)) return;
 
   _createChooserNavLock = true;
-  closeCreateChooserSheet({ immediate: true });
 
   try {
+    if (kind === "echo") {
+      openEchoFromCreateChooser();
+      closeCreateChooserSheet({ immediate: true });
+      return;
+    }
+
+    closeCreateChooserSheet({ immediate: true });
+
     if (kind === "song") {
       setCreateEntryIntent("song");
       const onGenerate = String(location.hash || "") === "#/generate";
@@ -6000,11 +6007,6 @@ function navigateFromCreateChooser(action) {
 
     if (kind === "status") {
       openFriendsForStatusCompose();
-      return;
-    }
-
-    if (kind === "echo") {
-      openEchoFromCreateChooser();
       return;
     }
   } finally {
@@ -6056,6 +6058,7 @@ function wireRouteLinkHapticsOnce() {
       const a = e.target?.closest?.("a[data-route-link]");
       if (!a) return;
       if (!a.closest(".mobileTabbar") && !a.closest(".journeyBar")) return;
+      if (document.body.classList.contains("echoComposeOpen")) return;
       haptic("light");
     },
     true,

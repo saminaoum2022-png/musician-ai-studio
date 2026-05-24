@@ -143,17 +143,14 @@ function smoothMicroCracks(channel, strength = 0.45) {
 export function applyNaturalPitchStabilization(buffer, opts = {}) {
   if (!buffer?.numberOfChannels) return buffer;
   const humming = Boolean(opts.humming);
-  const strength = Math.max(
-    0,
-    Math.min(0.52, Number(opts.strength) ?? (humming ? 0.36 : 0.24)),
-  );
-  if (strength <= 0.005) return buffer;
+  const strength = Math.max(0, Math.min(0.15, Number(opts.strength) ?? 0));
+  if (strength <= 0.05 || !humming) return buffer;
 
   const ch = buffer.getChannelData(0);
   const sr = buffer.sampleRate;
-  const winSize = Math.floor(sr * (humming ? 0.085 : 0.065));
-  const hop = Math.floor(winSize * 0.45);
-  const maxCents = Number(opts.maxCents) ?? (humming ? 34 : 20);
+  const winSize = Math.floor(sr * 0.07);
+  const hop = Math.floor(winSize * 0.5);
+  const maxCents = Math.min(14, Number(opts.maxCents) || 12);
   const nGrains = Math.max(1, Math.floor((ch.length - winSize) / hop));
 
   const f0s = [];
@@ -165,10 +162,7 @@ export function applyNaturalPitchStabilization(buffer, opts = {}) {
   const voiced = f0s.filter((f) => f > 60).length / Math.max(1, f0s.length);
   if (voiced < 0.1) return buffer;
 
-  let smoothed = smoothF0Track(f0s, humming ? 5 : 4);
-  if (humming) {
-    smoothed = smoothed.map((f) => (f > 60 ? gentleMusicalCenter(f, 0.28) : f));
-  }
+  const smoothed = smoothF0Track(f0s, 4);
 
   const ratios = f0s.map((f, i) => {
     if (f < 60 || smoothed[i] < 60) return 1;

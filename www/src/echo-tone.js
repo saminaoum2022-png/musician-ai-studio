@@ -42,90 +42,94 @@ const TARGET_RMS = 0.076;
  * @property {number} [pitchMaxCents]
  * @property {number} [velvetLp]
  * @property {number} [transientSoft]
+ * @property {number} [headroom]
  */
 
 /** @type {Record<string, EchoTonePreset>} */
 const PRESETS = {
   raw: {
-    highpass: 68,
-    rumbleCutGain: -1,
-    lowShelfGain: 1,
-    mudCutGain: -0.4,
-    harshMidCutGain: -0.8,
-    bodyGain: 0.8,
-    presenceGain: -0.5,
-    phoneCutGain: -1.2,
-    deEssThreshold: -12,
-    deEssRatio: 1.5,
-    compThreshold: -14,
-    compRatio: 1.2,
-    compAttack: 0.022,
-    compRelease: 0.48,
+    highpass: 72,
+    rumbleCutGain: -1.2,
+    lowShelfGain: 0.6,
+    mudCutGain: -0.5,
+    harshMidCutGain: -0.6,
+    bodyGain: 0.5,
+    presenceGain: -0.4,
+    phoneCutGain: -0.9,
+    deEssThreshold: -14,
+    deEssRatio: 1.6,
+    compThreshold: -16,
+    compRatio: 1.25,
+    compAttack: 0.02,
+    compRelease: 0.45,
     reverbMix: 0,
     noiseGateFloor: 0.004,
-    noiseReduceAmount: 0.18,
+    noiseReduceAmount: 0.12,
     tonalBlendMix: 0,
-    warmthDrive: 0.02,
-    pitchStrength: 0.1,
-    pitchMaxCents: 14,
-    velvetLp: 11000,
-    transientSoft: 0.25,
+    warmthDrive: 0,
+    pitchStrength: 0,
+    pitchMaxCents: 0,
+    velvetLp: 11500,
+    transientSoft: 0,
+    headroom: 0.92,
   },
   natural: {
-    highpass: 58,
-    rumbleCutGain: -0.8,
-    lowShelfGain: 4.2,
-    mudCutGain: -0.5,
-    harshMidCutGain: -2.6,
-    bodyGain: 2.6,
-    presenceGain: -1.2,
-    phoneCutGain: -2.8,
-    deEssThreshold: -11,
-    deEssRatio: 1.45,
-    compThreshold: -12,
-    compRatio: 1.18,
-    compAttack: 0.032,
-    compRelease: 0.58,
-    reverbMix: 0.062,
-    delayTime: 0.036,
-    delayFeedback: 0.1,
-    delayLp: 1650,
+    highpass: 68,
+    rumbleCutGain: -1,
+    lowShelfGain: 1.4,
+    mudCutGain: -0.8,
+    harshMidCutGain: -1.2,
+    bodyGain: 0.9,
+    presenceGain: -0.6,
+    phoneCutGain: -1.4,
+    deEssThreshold: -15,
+    deEssRatio: 1.7,
+    compThreshold: -18,
+    compRatio: 1.28,
+    compAttack: 0.022,
+    compRelease: 0.5,
+    reverbMix: 0.04,
+    delayTime: 0.03,
+    delayFeedback: 0.07,
+    delayLp: 2000,
     noiseGateFloor: 0.003,
-    noiseReduceAmount: 0.2,
-    tonalBlendMix: 0,
-    warmthDrive: 0.048,
-    pitchStrength: 0.34,
-    pitchMaxCents: 32,
-    velvetLp: 9200,
-    transientSoft: 0.42,
+    noiseReduceAmount: 0.1,
+    tonalBlendMix: 0.025,
+    warmthDrive: 0,
+    pitchStrength: 0,
+    pitchMaxCents: 0,
+    velvetLp: 10500,
+    transientSoft: 0,
+    headroom: 0.88,
   },
   dreamy: {
-    highpass: 58,
-    rumbleCutGain: -0.6,
-    lowShelfGain: 3.8,
-    mudCutGain: -0.4,
-    harshMidCutGain: -2.2,
-    bodyGain: 2.2,
-    presenceGain: -1,
-    phoneCutGain: -2.4,
-    deEssThreshold: -11,
-    deEssRatio: 1.45,
-    compThreshold: -12,
-    compRatio: 1.18,
-    compAttack: 0.03,
-    compRelease: 0.56,
-    reverbMix: 0.11,
-    delayTime: 0.05,
-    delayFeedback: 0.12,
-    delayLp: 1500,
+    highpass: 68,
+    rumbleCutGain: -0.8,
+    lowShelfGain: 1.2,
+    mudCutGain: -0.6,
+    harshMidCutGain: -1,
+    bodyGain: 0.7,
+    presenceGain: -0.5,
+    phoneCutGain: -1.2,
+    deEssThreshold: -15,
+    deEssRatio: 1.7,
+    compThreshold: -18,
+    compRatio: 1.28,
+    compAttack: 0.02,
+    compRelease: 0.48,
+    reverbMix: 0.065,
+    delayTime: 0.038,
+    delayFeedback: 0.08,
+    delayLp: 1900,
     noiseGateFloor: 0.003,
-    noiseReduceAmount: 0.18,
-    tonalBlendMix: 0,
-    warmthDrive: 0.04,
-    pitchStrength: 0.38,
-    pitchMaxCents: 34,
-    velvetLp: 8800,
-    transientSoft: 0.45,
+    noiseReduceAmount: 0.1,
+    tonalBlendMix: 0.03,
+    warmthDrive: 0,
+    pitchStrength: 0,
+    pitchMaxCents: 0,
+    velvetLp: 10200,
+    transientSoft: 0,
+    headroom: 0.88,
   },
 };
 
@@ -409,22 +413,32 @@ function gentleNoiseReduceInPlace(channel, preset) {
   }
 }
 
+function softLimitSample(x) {
+  const a = Math.abs(x);
+  if (a <= 0.85) return x;
+  return Math.sign(x) * (0.85 + 0.15 * Math.tanh((a - 0.85) * 4));
+}
+
 function normalizeLoudness(buffer, targetRms = TARGET_RMS) {
   const ch = buffer.getChannelData(0);
   let sumSq = 0;
   for (let i = 0; i < ch.length; i++) sumSq += ch[i] * ch[i];
   const rms = Math.sqrt(sumSq / Math.max(1, ch.length));
   if (rms < 0.0006) return buffer;
-  const gain = Math.min(1.55, targetRms / rms);
+  const gain = Math.min(1.35, targetRms / rms);
   for (let i = 0; i < ch.length; i++) {
-    ch[i] = Math.max(-0.98, Math.min(0.98, ch[i] * gain));
+    ch[i] = softLimitSample(ch[i] * gain);
   }
   return buffer;
 }
 
 function postProcessBuffer(buffer, preset) {
   const ch = buffer.getChannelData(0);
-  softenTransientsInPlace(ch, preset.transientSoft ?? 0.35);
+  const head = Number(preset.headroom) || 1;
+  if (head < 1) {
+    for (let i = 0; i < ch.length; i++) ch[i] *= head;
+  }
+  if ((preset.transientSoft ?? 0) > 0.01) softenTransientsInPlace(ch, preset.transientSoft);
   gentleNoiseReduceInPlace(ch, preset);
   normalizeLoudness(buffer);
   return buffer;
@@ -455,22 +469,28 @@ async function renderPolishedBuffer(audioBuffer, tone) {
   const src = offline.createBufferSource();
   src.buffer = audioBuffer;
 
-  let chain = src;
+  const headIn = offline.createGain();
+  headIn.gain.value = Number(preset.headroom) || 0.88;
+  src.connect(headIn);
+
+  let chain = headIn;
   chain = connectBackgroundCleanup(offline, chain, preset);
   chain = connectInterviewEq(offline, chain, preset);
   chain = connectDeEsser(offline, chain, preset);
   chain = connectDynamics(offline, chain, preset);
+  const glue = preset.tonalBlendMix > 0 && humming ? preset.tonalBlendMix : 0;
+  chain = connectTonalBlend(offline, chain, glue) || chain;
   connectSpace(offline, chain, preset);
 
   src.start(0);
   const rendered = await offline.startRendering();
 
-  if (preset.pitchStrength > 0.01) {
-    const hum = humming || isLikelyHumOrSingBuffer(rendered);
+  /* Granular pitch-shift was causing “broken speaker” warble — use glue only */
+  if (preset.pitchStrength > 0.05 && humming) {
     applyNaturalPitchStabilization(rendered, {
-      strength: preset.pitchStrength,
-      maxCents: preset.pitchMaxCents ?? (hum ? 32 : 20),
-      humming: hum,
+      strength: Math.min(0.12, preset.pitchStrength),
+      maxCents: Math.min(14, preset.pitchMaxCents || 14),
+      humming: true,
     });
   }
 
@@ -587,5 +607,5 @@ export function echoToneHint(tone) {
   const id = normalizeToneId(tone);
   if (id === "raw") return "Cleanup and even volume only";
   if (id === "dreamy") return "Natural Tone with a whisper of space";
-  return "Velvety, warm, intimate — naturally beautiful";
+  return "Clean, warm close-mic — natural and undistorted";
 }

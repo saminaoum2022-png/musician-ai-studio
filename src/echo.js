@@ -1095,7 +1095,7 @@ function syncEchoComposeUi() {
       sub.textContent = "Let go when you're done";
     } else if (processing) {
       sub.hidden = false;
-      sub.textContent = "Velvety warmth — soft, floating, human";
+      sub.textContent = "Clean polish — no harsh distortion";
     } else {
       sub.hidden = false;
       sub.textContent = hasBlob

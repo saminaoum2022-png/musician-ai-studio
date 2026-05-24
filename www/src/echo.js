@@ -2,6 +2,7 @@
  * Echo — ephemeral creator audio moments (24h).
  * Wired from app.js via initEcho(ctx).
  */
+import { applyEchoTone, ECHO_TONE_DEFAULT, ECHO_TONE_IDS } from "./echo-tone.js";
 
 const ECHO_BAR_COUNT = 48;
 const ECHO_MAX_MS = 60000;
@@ -15,7 +16,9 @@ let echoRecorder = null;
 let echoStream = null;
 let echoChunks = [];
 let echoBlob = null;
-let echoBlobUrl = "";
+let echoRawBlob = null;
+let echoTone = ECHO_TONE_DEFAULT;
+let echoEnhancePromise = null;
 let echoDurationMs = 0;
 let echoPeaks = [];
 let echoUploadPromise = null;
@@ -24,6 +27,7 @@ let echoStartedAt = 0;
 let echoAutostopTimer = 0;
 let echoTickRaf = 0;
 let echoComposeTickRaf = 0;
+let echoComposeLiveRaf = 0;
 
 let _echoStories = [];
 let _echoStoriesByUser = new Map();
@@ -136,7 +140,7 @@ function bindEchoViewerAudioOnce() {
     sheet.classList.add("isPlaying");
     const tap = document.getElementById("btnEchoTapPlay");
     if (tap) tap.hidden = true;
-    void markEchoListened(slide);
+    if (!isOwnEchoSlide(slide)) void markEchoListened(slide);
     if (!_echoRaf) _echoRaf = requestAnimationFrame(echoViewerTick);
     syncEchoViewerUi();
   });
@@ -147,7 +151,7 @@ function bindEchoViewerAudioOnce() {
     if (!sheet) return;
     sheet.classList.remove("isPlaying", "isLoading");
     sheet.classList.add("isEnded");
-    if (slide?.listenOnce) sheet.classList.add("isLocked");
+    if (slide?.listenOnce && !isOwnEchoSlide(slide)) sheet.classList.add("isLocked");
     stopEchoPlayback();
     syncEchoViewerUi();
   });
@@ -644,7 +648,7 @@ function playEchoSlide(slide) {
   if (!slide?.audioUrl || !sheet) return;
   const listenOnce = Boolean(slide.listenOnce);
   const alreadyHeard = isEchoHeard(slide);
-  if (listenOnce && alreadyHeard) {
+  if (listenOnce && alreadyHeard && !isOwnEchoSlide(slide)) {
     sheet.classList.remove("isPlaying", "isLoading", "needsEchoTap");
     sheet.classList.add("isLocked");
     paintEchoViewerWave(slide);
@@ -826,6 +830,118 @@ function stopEchoComposeTick() {
   }
 }
 
+function stopLiveEchoWaveform() {
+  if (echoComposeLiveRaf) {
+    cancelAnimationFrame(echoComposeLiveRaf);
+    echoComposeLiveRaf = 0;
+  }
+  try {
+    _echoSource?.disconnect();
+  } catch {}
+  _echoSource = null;
+  _echoAnalyser = null;
+  try {
+    _echoCtx?.close();
+  } catch {}
+  _echoCtx = null;
+}
+
+function peaksFromAnalyser(analyser) {
+  const bins = analyser.frequencyBinCount;
+  const data = new Uint8Array(bins);
+  analyser.getByteFrequencyData(data);
+  const out = [];
+  const step = Math.max(1, Math.floor(bins / ECHO_BAR_COUNT));
+  for (let i = 0; i < ECHO_BAR_COUNT; i++) {
+    let sum = 0;
+    let n = 0;
+    const start = i * step;
+    const end = Math.min(bins, start + step);
+    for (let j = start; j < end; j++) {
+      sum += data[j];
+      n++;
+    }
+    out.push(n ? sum / n / 255 : 0);
+  }
+  return c().statusVoiceNormalizePeaks?.(out, ECHO_BAR_COUNT) || out;
+}
+
+function tickLiveEchoWaveform() {
+  echoComposeLiveRaf = 0;
+  if (echoRecState !== "recording" || !_echoAnalyser) return;
+  echoPeaks = peaksFromAnalyser(_echoAnalyser);
+  const wave = document.getElementById("echoComposeWave");
+  if (wave) wave.innerHTML = peaksHtml(echoPeaks, "echoBar--live");
+  echoComposeLiveRaf = requestAnimationFrame(tickLiveEchoWaveform);
+
+function startLiveEchoWaveform(stream) {
+  stopLiveEchoWaveform();
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx || !stream) return;
+  try {
+    _echoCtx = new Ctx();
+    _echoSource = _echoCtx.createMediaStreamSource(stream);
+    _echoAnalyser = _echoCtx.createAnalyser();
+    _echoAnalyser.fftSize = 256;
+    _echoAnalyser.smoothingTimeConstant = 0.78;
+    _echoSource.connect(_echoAnalyser);
+    echoComposeLiveRaf = requestAnimationFrame(tickLiveEchoWaveform);
+  } catch {
+    stopLiveEchoWaveform();
+  }
+}
+
+function getEchoToneFromUi() {
+  const picked = document.querySelector('input[name="echoTone"]:checked');
+  const id = String(picked?.value || "").trim().toLowerCase();
+  return ECHO_TONE_IDS.includes(id) ? id : ECHO_TONE_DEFAULT;
+}
+
+function syncEchoToneUi() {
+  const wrap = document.getElementById("echoTonePicker");
+  if (!wrap) return;
+  const hasBlob = Boolean(echoRawBlob?.size);
+  const processing = echoRecState === "processing";
+  wrap.hidden = !hasBlob || processing;
+  wrap.querySelectorAll(".echoToneChip").forEach((chip) => {
+    const input = chip.querySelector('input[name="echoTone"]');
+    chip.classList.toggle("isActive", input?.checked);
+  });
+}
+
+async function applyEchoToneToCapture(tone) {
+  if (!echoRawBlob?.size) return;
+  echoTone = tone;
+  echoRecState = "processing";
+  syncEchoComposeUi();
+  try {
+    echoBlob = await applyEchoTone(echoRawBlob, echoTone);
+  } catch {
+    echoBlob = echoRawBlob;
+  }
+  echoRecState = "idle";
+  resetEchoUploadState();
+  echoPeaks = await c().computeStatusWaveformPeaks(echoBlob, ECHO_BAR_COUNT);
+  startEchoUploadEarly();
+  syncEchoComposeUi();
+}
+
+function scheduleEchoToneRework(tone) {
+  if (!echoRawBlob?.size || echoRecState === "recording") return;
+  void (async () => {
+    if (echoEnhancePromise) {
+      try {
+        await echoEnhancePromise;
+      } catch {}
+    }
+    if (getEchoToneFromUi() !== tone) return;
+    echoEnhancePromise = applyEchoToneToCapture(tone);
+    try {
+      await echoEnhancePromise;
+    } catch {}
+  })();
+}
+
 function echoComposeTick() {
   echoComposeTickRaf = 0;
   if (echoRecState !== "recording") return;
@@ -868,6 +984,7 @@ function closeEchoListenOnceInfo() {
 function resetEchoUploadState() {
   echoUploadPromise = null;
   echoUploadedUrl = "";
+  echoEnhancePromise = null;
 }
 
 function startEchoUploadEarly() {
@@ -884,18 +1001,15 @@ function startEchoUploadEarly() {
 
 function resetEchoCompose() {
   stopEchoComposeTick();
+  stopLiveEchoWaveform();
   echoRecState = "idle";
   echoChunks = [];
   echoDurationMs = 0;
   echoPeaks = [];
+  echoTone = ECHO_TONE_DEFAULT;
   resetEchoUploadState();
-  if (echoBlobUrl) {
-    try {
-      URL.revokeObjectURL(echoBlobUrl);
-    } catch {}
-  }
-  echoBlobUrl = "";
   echoBlob = null;
+  echoRawBlob = null;
   if (echoAutostopTimer) {
     window.clearTimeout(echoAutostopTimer);
     echoAutostopTimer = 0;
@@ -916,11 +1030,14 @@ function syncEchoComposeUi() {
   const wave = document.getElementById("echoComposeWave");
   const publish = document.getElementById("btnEchoPublish");
   const mic = document.getElementById("btnEchoRecord");
-  const hasBlob = Boolean(echoBlob?.size);
+  const noPreview = document.getElementById("echoComposeNoPreview");
+  const processing = echoRecState === "processing";
+  const hasBlob = Boolean(echoBlob?.size) && !processing;
   const recording = echoRecState === "recording";
 
   if (sheet) {
     sheet.classList.toggle("isRecording", recording);
+    sheet.classList.toggle("isProcessing", processing);
     sheet.classList.toggle("hasEchoReady", hasBlob && !recording);
   }
 
@@ -942,21 +1059,26 @@ function syncEchoComposeUi() {
   if (primary) {
     primary.hidden = recording;
     if (!recording) {
-      primary.textContent = hasBlob ? "Echo ready" : "Hold to record";
+      if (processing) primary.textContent = "Polishing your voice…";
+      else primary.textContent = hasBlob ? "Echo captured" : "Hold to record";
     }
   }
   if (sub) {
     if (recording) {
       sub.hidden = false;
       sub.textContent = "Let go when you're done";
+    } else if (processing) {
+      sub.hidden = false;
+      sub.textContent = "Echo Tone is adding warmth";
     } else {
       sub.hidden = false;
       sub.textContent = hasBlob
-        ? `${c().formatMsAsVoiceTime(echoDurationMs)} recorded`
-        : "Hum, sing, or speak a raw idea";
+        ? `${c().formatMsAsVoiceTime(echoDurationMs)} · ready to release`
+        : "Capture the moment — no need to perfect it";
     }
   }
   if (tip) tip.hidden = !recording;
+  if (noPreview) noPreview.hidden = !hasBlob || recording || processing;
 
   if (mic) {
     mic.classList.toggle("isRecording", recording);
@@ -966,7 +1088,8 @@ function syncEchoComposeUi() {
       recording ? "Release to stop recording" : hasBlob ? "Hold to record again" : "Hold to record Echo",
     );
   }
-  if (publish) publish.disabled = !hasBlob || recording;
+  if (publish) publish.disabled = !hasBlob || recording || processing;
+  syncEchoToneUi();
   if (wave) {
     if (recording || hasBlob) {
       wave.innerHTML = peaksHtml(echoPeaks.length || recording ? echoPeaks : normalizePeaks([]), recording ? "echoBar--live" : "");
@@ -978,7 +1101,13 @@ function syncEchoComposeUi() {
 }
 
 async function startEchoRecording() {
-  if (echoRecState === "recording") return;
+  if (echoRecState === "recording" || echoRecState === "processing") return;
+  if (echoRawBlob || echoBlob) {
+    echoBlob = null;
+    echoRawBlob = null;
+    echoPeaks = [];
+    resetEchoUploadState();
+  }
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -1008,27 +1137,25 @@ async function startEchoRecording() {
     if (e.data?.size) echoChunks.push(e.data);
   };
   rec.onstop = () => {
-    echoRecState = "idle";
-    const blob = new Blob(echoChunks, { type: rec.mimeType || "audio/webm" });
-    echoBlob = blob.size ? blob : null;
-    if (echoBlobUrl) {
-      try {
-        URL.revokeObjectURL(echoBlobUrl);
-      } catch {}
-    }
-    echoBlobUrl = echoBlob ? URL.createObjectURL(echoBlob) : "";
+    stopLiveEchoWaveform();
+    stopEchoComposeTick();
     echoDurationMs = Math.min(ECHO_MAX_MS, performance.now() - echoStartedAt);
-    void c().computeStatusWaveformPeaks(echoBlob, ECHO_BAR_COUNT).then((peaks) => {
-      echoPeaks = peaks;
-      syncEchoComposeUi();
-    });
-    startEchoUploadEarly();
+    const raw = new Blob(echoChunks, { type: rec.mimeType || "audio/webm" });
+    echoRawBlob = raw.size ? raw : null;
+    echoBlob = null;
+    echoTone = getEchoToneFromUi();
     try {
       echoStream?.getTracks?.().forEach((t) => t.stop());
     } catch {}
     echoStream = null;
-    syncEchoComposeUi();
+    if (!echoRawBlob) {
+      echoRecState = "idle";
+      syncEchoComposeUi();
+      return;
+    }
+    echoEnhancePromise = applyEchoToneToCapture(echoTone);
   };
+  startLiveEchoWaveform(stream);
   rec.start(200);
   syncEchoComposeUi();
   stopEchoComposeTick();
@@ -1040,6 +1167,7 @@ async function startEchoRecording() {
 
 function stopEchoRecording() {
   if (echoRecState !== "recording" || !echoRecorder) return;
+  stopLiveEchoWaveform();
   if (echoAutostopTimer) {
     window.clearTimeout(echoAutostopTimer);
     echoAutostopTimer = 0;
@@ -1062,6 +1190,8 @@ export function openEchoComposeSheet({ replyTo = "" } = {}) {
   if (once) once.checked = false;
   const cap = document.getElementById("echoComposeCaption");
   if (cap) cap.value = "";
+  const softTone = document.querySelector('input[name="echoTone"][value="soft"]');
+  if (softTone) softTone.checked = true;
   const hud = document.getElementById("echoComposeRecHud");
   if (hud) {
     hud.hidden = true;
@@ -1096,6 +1226,11 @@ function ownEchoProfileFromRail(uid) {
 }
 
 async function publishEcho() {
+  if (echoEnhancePromise) {
+    try {
+      await echoEnhancePromise;
+    } catch {}
+  }
   if (!echoBlob?.size) return;
   const publish = document.getElementById("btnEchoPublish");
   const onceEl = document.getElementById("echoListenOnce");
@@ -1143,7 +1278,7 @@ async function publishEcho() {
     );
     closeEchoComposeSheet();
     try {
-      c().showToast("Echo is live for 24 hours", { icon: "✓", durationMs: 2400 });
+      c().showToast("Echo is live — tap your tile anytime to hear it", { icon: "✓", durationMs: 3200 });
     } catch {}
     const rowBody = {
       user_id: uid,
@@ -1375,6 +1510,11 @@ function wireEchoOnce() {
   document.getElementById("btnEchoComposeClose")?.addEventListener("click", () => closeEchoComposeSheet());
   wireEchoRecordHold();
   document.getElementById("echoComposeCaption")?.addEventListener("input", () => syncEchoCaptionCount());
+  document.getElementById("echoTonePicker")?.addEventListener("change", (e) => {
+    const input = e.target.closest('input[name="echoTone"]');
+    if (!input) return;
+    scheduleEchoToneRework(String(input.value || ECHO_TONE_DEFAULT));
+  });
   document.getElementById("btnEchoListenOnceInfo")?.addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();

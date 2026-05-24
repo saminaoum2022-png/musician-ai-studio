@@ -13,7 +13,7 @@ import { initEcho, onEnterFriendsRoute, openEchoFromCreateChooser } from "./echo
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522friendsPerfV1";
+const APP_BUILD = "20260522echoToneV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */

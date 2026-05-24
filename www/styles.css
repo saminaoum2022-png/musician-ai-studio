@@ -6293,6 +6293,91 @@ body.echoComposeOpen{
   text-align: center;
   max-width: 280px;
 }
+.echoComposeNoPreview{
+  flex-shrink: 0;
+  margin: 12px auto 0;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+  color: rgba(167,139,250,0.92);
+  max-width: 22em;
+  line-height: 1.45;
+}
+.echoComposeNoPreview[hidden]{
+  display: none !important;
+}
+.echoComposeSheet.isProcessing .echoComposeMic{
+  opacity: 0.55;
+  pointer-events: none;
+}
+.echoComposeSheet.isProcessing .echoComposeWaveHorizon .echoBar{
+  animation: echoBarPulse 1.2s ease-in-out infinite;
+}
+@keyframes echoBarPulse{
+  0%, 100%{ opacity: 0.45; }
+  50%{ opacity: 0.95; }
+}
+.echoTonePicker{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.echoTonePicker[hidden]{
+  display: none !important;
+}
+.echoTonePickerLabel{
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(151,165,186,0.88);
+}
+.echoToneChips{
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.echoToneChip{
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  cursor: pointer;
+  transition:
+    border-color 200ms ease,
+    background 200ms ease,
+    box-shadow 200ms ease;
+}
+.echoToneChip input{
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.echoToneChip span{
+  font-size: 14px;
+  font-weight: 800;
+  color: rgba(220,228,245,0.82);
+  letter-spacing: 0.02em;
+}
+.echoToneChip.isActive,
+.echoToneChip:has(input:checked){
+  border-color: rgba(167,139,250,0.55);
+  background: linear-gradient(165deg, rgba(124,92,255,0.22), rgba(35,213,171,0.08));
+  box-shadow: 0 0 24px rgba(124,92,255,0.18);
+}
+.echoToneChip.isActive span,
+.echoToneChip:has(input:checked) span{
+  color: #f4f0ff;
+}
 .echoComposeOptions{
   display: flex;
   align-items: stretch;

@@ -2905,8 +2905,8 @@
         </button>
         <header class="echoComposeHead">
           <p class="echoComposeKicker">Echo</p>
-          <h2 id="echoComposeTitle" class="echoComposeTitle">Share a raw moment</h2>
-          <p class="echoComposeLead">Unfinished hooks, hums, late-night thoughts. Gone in 24h.</p>
+          <h2 id="echoComposeTitle" class="echoComposeTitle">Capture the moment</h2>
+          <p class="echoComposeLead">Spontaneous, honest, gone in 24h. Release first — hear the magic after.</p>
         </header>
         <div class="echoComposeHero">
           <div class="echoComposeRecHud" id="echoComposeRecHud" hidden>
@@ -2928,8 +2928,26 @@
             <p id="echoComposeStatusSub" class="echoComposeStatusSub">Hum, sing, or speak a raw idea</p>
           </div>
           <p id="echoComposeTip" class="echoComposeTip" hidden>Tip: Stay close to the mic</p>
+          <p id="echoComposeNoPreview" class="echoComposeNoPreview" hidden>Release first. Hear it after.</p>
         </div>
         <div class="echoComposeFooter">
+          <div class="echoTonePicker" id="echoTonePicker" hidden>
+            <p class="echoTonePickerLabel">Echo Tone</p>
+            <div class="echoToneChips" role="radiogroup" aria-label="Echo Tone">
+              <label class="echoToneChip">
+                <input type="radio" name="echoTone" value="raw" />
+                <span>Raw</span>
+              </label>
+              <label class="echoToneChip isActive">
+                <input type="radio" name="echoTone" value="soft" checked />
+                <span>Soft</span>
+              </label>
+              <label class="echoToneChip">
+                <input type="radio" name="echoTone" value="dreamy" />
+                <span>Dreamy</span>
+              </label>
+            </div>
+          </div>
           <div class="echoComposeOptions">
             <label class="echoListenOnceCard">
               <span class="echoListenOnceLock" aria-hidden="true">
@@ -2978,6 +2996,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260522friendsPerfV1"></script>
+    <script type="module" src="./src/app.js?v=20260522echoToneV1"></script>
   </body>
 </html>

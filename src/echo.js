@@ -1169,6 +1169,9 @@ async function applyEchoToneToCapture(tone, opts = {}) {
       c().statusVoiceFallbackPeaks?.() ||
       [];
   }
+  if (!echoBlob?.size && echoRawBlob?.size) {
+    echoBlob = echoRawBlob;
+  }
   if (!opts.keepBusy) {
     echoRecState = "idle";
     syncEchoComposeUi();
@@ -1257,8 +1260,9 @@ async function uploadEchoBlobForRelease(blob) {
 }
 
 function startEchoUploadEarly() {
-  if (!echoBlob?.size) return;
-  echoUploadPromise = doUploadEchoBlob(echoBlob).catch((err) => {
+  const blob = echoBlob;
+  if (!blob?.size) return;
+  echoUploadPromise = doUploadEchoBlob(blob).catch((err) => {
     echoUploadPromise = null;
     echoUploadedUrl = "";
     throw err;
@@ -1587,17 +1591,43 @@ async function finishEchoPublishBackground({
   listenOnce,
   uid,
   prof,
+  blob,
+  rawFallback,
+  durationMs,
+  uploadPromise,
+  uploadedUrl,
 }) {
+  const sendBlob = blob?.size ? blob : rawFallback?.size ? rawFallback : null;
+  if (!sendBlob?.size) {
+    try {
+      c().showToast("No recording to upload — try holding the mic a little longer.", { durationMs: 3200 });
+    } catch {}
+    if (localUrl) {
+      try {
+        URL.revokeObjectURL(localUrl);
+      } catch {}
+    }
+    return;
+  }
   try {
-    const uploaded = await uploadEchoBlobForRelease(echoBlob);
-    if (!uploaded?.url) throw new Error("Voice upload failed");
-    const remoteUrl = uploaded.url;
+    let remoteUrl = String(uploadedUrl || "").trim();
+    if (!remoteUrl && uploadPromise) {
+      try {
+        const early = await uploadPromise;
+        remoteUrl = String(early?.url || "").trim();
+      } catch {}
+    }
+    if (!remoteUrl) {
+      const uploaded = await c().uploadStatusVoiceBlob(sendBlob);
+      remoteUrl = String(uploaded?.url || "").trim();
+    }
+    if (!remoteUrl) throw new Error("Voice upload failed");
     patchEchoInRail(optimisticId, { audioUrl: remoteUrl });
     const expiresAt = new Date(Date.now() + 86400000).toISOString();
     const rowBody = {
       user_id: uid,
       audio_url: remoteUrl,
-      duration_ms: echoDurationMs,
+      duration_ms: durationMs,
       waveform_peaks: peaks,
       body: caption || null,
       listen_once: listenOnce,
@@ -1620,7 +1650,7 @@ async function finishEchoPublishBackground({
         body: JSON.stringify({
           action: "post_echo",
           audioUrl: remoteUrl,
-          durationMs: echoDurationMs,
+          durationMs,
           waveformPeaks: peaks,
           body: caption,
           listenOnce,
@@ -1672,7 +1702,8 @@ async function publishEcho(opts = {}) {
       await echoEnhancePromise;
     } catch {}
   }
-  if (!echoBlob?.size) return;
+  const publishBlob = echoBlob?.size ? echoBlob : echoRawBlob?.size ? echoRawBlob : null;
+  if (!publishBlob?.size) return;
   _echoPublishing = true;
   const sheet = document.getElementById("echoComposeSheet");
   if (sheet) sheet.classList.add("isReleasing");
@@ -1686,10 +1717,14 @@ async function publishEcho(opts = {}) {
     if (sheet) sheet.classList.remove("isReleasing");
     return;
   }
+  const publishDurationMs = echoDurationMs;
+  const publishRaw = echoRawBlob?.size ? echoRawBlob : null;
+  const publishUploadPromise = echoUploadPromise;
+  const publishUploadedUrl = echoUploadedUrl;
   const peaks =
     echoPeaks.length >= 8
-      ? echoPeaks
-      : (await c().computeStatusWaveformPeaks(echoBlob, ECHO_BAR_COUNT).catch(() => [])) ||
+      ? [...echoPeaks]
+      : (await c().computeStatusWaveformPeaks(publishBlob, ECHO_BAR_COUNT).catch(() => [])) ||
         c().statusVoiceFallbackPeaks?.() ||
         [];
   const expiresAt = new Date(Date.now() + 86400000).toISOString();
@@ -1697,14 +1732,14 @@ async function publishEcho(opts = {}) {
   const optimisticId = `opt-${Date.now()}`;
   let localUrl = "";
   try {
-    localUrl = URL.createObjectURL(echoBlob);
+    localUrl = URL.createObjectURL(publishBlob);
   } catch {}
   mergeEchoIntoRail(
     mapEchoFromApi({
       id: optimisticId,
       userId: uid,
       audioUrl: localUrl || "",
-      durationMs: echoDurationMs,
+      durationMs: publishDurationMs,
       waveformPeaks: peaks,
       body: caption,
       listenOnce,
@@ -1738,6 +1773,11 @@ async function publishEcho(opts = {}) {
     listenOnce,
     uid,
     prof,
+    blob: publishBlob,
+    rawFallback: publishRaw,
+    durationMs: publishDurationMs,
+    uploadPromise: publishUploadPromise,
+    uploadedUrl: publishUploadedUrl,
   });
 }
 

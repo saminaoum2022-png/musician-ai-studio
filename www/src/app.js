@@ -13,7 +13,7 @@ import { initEcho, onEnterFriendsRoute, openEchoFromCreateChooser } from "./echo
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260522echoRecHudFixV1";
+const APP_BUILD = "20260522friendsPerfV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5698,14 +5698,29 @@ async function fetchFollowingListViaSupabase() {
 }
 
 async function fetchFollowingListForFeed() {
+  if (_followingListCache && Date.now() - _followingListCacheAt < FOLLOWING_LIST_CACHE_MS) {
+    return _followingListCache;
+  }
   const direct = await fetchFollowingListViaSupabase();
-  if (direct !== null) return direct;
+  if (direct !== null) {
+    _followingListCache = direct;
+    _followingListCacheAt = Date.now();
+    return direct;
+  }
   const data = await socialApi("/api/social?type=me");
-  return Array.isArray(data?.following) ? data.following : [];
+  const list = Array.isArray(data?.following) ? data.following : [];
+  _followingListCache = list;
+  _followingListCacheAt = Date.now();
+  return list;
 }
 
-async function fetchFollowingStatusPostsFromSupabase(limit = 40) {
-  const following = await fetchFollowingListViaSupabase();
+function invalidateFollowingListCache() {
+  _followingListCache = null;
+  _followingListCacheAt = 0;
+}
+
+async function fetchFollowingStatusPostsFromSupabase(limit = 40, followingIn = null) {
+  const following = followingIn ?? (await fetchFollowingListViaSupabase());
   if (following === null) return null;
   const authorIds = [...new Set(following.map((f) => f.userId).filter(Boolean))];
   if (!authorIds.length) return [];
@@ -5726,8 +5741,8 @@ async function fetchFollowingStatusPostsFromSupabase(limit = 40) {
   );
 }
 
-async function fetchFollowingStatusPosts(limit = 40) {
-  const direct = await fetchFollowingStatusPostsFromSupabase(limit);
+async function fetchFollowingStatusPosts(limit = 40, followingIn = null) {
+  const direct = await fetchFollowingStatusPostsFromSupabase(limit, followingIn);
   if (direct !== null) return direct;
   try {
     const data = await socialApi(`/api/social?type=following_status&limit=${limit}`);
@@ -6354,6 +6369,12 @@ let _friendsRouteEnterToken = 0;
 let _enterFriendsDebounce = 0;
 let _friendsStatusComposePending = false;
 let _friendsFeedAuthRetry = 0;
+let _followingListCache = null;
+let _followingListCacheAt = 0;
+let _friendsFeedSnapshot = null;
+const FOLLOWING_LIST_CACHE_MS = 45000;
+const FRIENDS_FEED_SNAPSHOT_MS = 90000;
+const FRIENDS_FEED_LIBRARY_USERS = 12;
 
 function runFriendsRouteRefresh(token) {
   if (token !== _friendsRouteEnterToken) return;
@@ -6387,11 +6408,6 @@ function enterFriendsRoute() {
     return;
   }
   runFriendsRouteRefresh(token);
-  if (_enterFriendsDebounce) clearTimeout(_enterFriendsDebounce);
-  _enterFriendsDebounce = window.setTimeout(() => {
-    _enterFriendsDebounce = 0;
-    runFriendsRouteRefresh(token);
-  }, 120);
 }
 
 function wireFriendsComposeFabOnce() {
@@ -6422,13 +6438,29 @@ async function refreshDiscoveryFollowingFeed() {
   if (authSession?.user?.id) _friendsFeedAuthRetry = 0;
 
   const keepFeed = Boolean(_friendsOwnPostPin && listEl.querySelector(".followAct"));
-  listEl.classList.add("isDiscoveryLoading");
-  listEl.hidden = false;
-  if (!keepFeed) listEl.innerHTML = followingActivitySkeletonHtml();
-  statusEl.hidden = true;
-  statusEl.textContent = "";
+  const snap = _friendsFeedSnapshot;
+  const snapFresh = snap && Date.now() - snap.at < FRIENDS_FEED_SNAPSHOT_MS;
+  if (snapFresh && snap.html && !keepFeed) {
+    listEl.classList.remove("isDiscoveryLoading");
+    listEl.hidden = false;
+    listEl.innerHTML = snap.html;
+    statusEl.hidden = true;
+    statusEl.textContent = "";
+    if (Array.isArray(snap.tracks)) _discoveryFeedTracks = snap.tracks;
+    try {
+      syncDiscoveryPlayingHighlights();
+    } catch {}
+  } else {
+    listEl.classList.add("isDiscoveryLoading");
+    listEl.hidden = false;
+    if (!keepFeed) listEl.innerHTML = followingActivitySkeletonHtml();
+    statusEl.hidden = true;
+    statusEl.textContent = "";
+  }
 
-  await ensureFriendsFeedPrerequisites();
+  const prereqReady = ensureFriendsFeedPrerequisites();
+  if (!snapFresh) await prereqReady;
+  else void prereqReady;
   if (gen !== _discoveryFollowingGen) return;
   const apiBlock = friendsFeedBlockedMessage();
   if (apiBlock) {
@@ -6539,15 +6571,17 @@ async function refreshDiscoveryFollowingFeed() {
       return;
     }
 
-    const [statusPosts, tracksNested] = await Promise.all([
-      fetchFollowingStatusPosts(40),
-      Promise.all(following.slice(0, 24).map(async (creator) => {
-        const userId = String(creator?.userId || creator?.user_id || creator?.following_user_id || "").trim();
-        if (!userId) return [];
-        const rows = await supabaseFetchPublicLibraryForUserId(userId);
-        return rows.map((row) => ({ ...row, userId }));
-      })),
+    const libraryUserIds = following
+      .slice(0, FRIENDS_FEED_LIBRARY_USERS)
+      .map((creator) => String(creator?.userId || creator?.user_id || creator?.following_user_id || "").trim())
+      .filter(Boolean);
+    const [statusPosts, tracksByUser] = await Promise.all([
+      fetchFollowingStatusPosts(40, following),
+      supabaseFetchPublicLibraryForUserIds(libraryUserIds),
     ]);
+    const tracksNested = libraryUserIds.map((userId) =>
+      (tracksByUser.get(userId) || []).map((row) => ({ ...row, userId })),
+    );
     if (gen !== _discoveryFollowingGen) return;
 
     const playable = tracksNested
@@ -6604,11 +6638,17 @@ async function refreshDiscoveryFollowingFeed() {
     statusEl.textContent = "";
     _discoveryFeedTracks = playable.map((t) => discoveryTrackPlaybackMeta(t, profMap));
     listEl.hidden = false;
-    listEl.innerHTML = mergedItems
+    const feedHtml = mergedItems
       .map((item, i) => (item.kind === "status"
         ? followingStatusRowHtml(item.post, profMap, i)
         : followingActivityRowHtml(item.track, profMap, i)))
       .join("");
+    listEl.innerHTML = feedHtml;
+    _friendsFeedSnapshot = {
+      at: Date.now(),
+      html: feedHtml,
+      tracks: _discoveryFeedTracks,
+    };
     try {
       syncDiscoveryPlayingHighlights();
     } catch {}
@@ -11265,17 +11305,48 @@ async function fetchPublicProfileRowByUsername(username) {
   );
 }
 
-/** Library songs the owner marked `public_on_profile` (separate RLS policy). */
-async function supabaseFetchPublicLibraryForUserId(userId) {
-  const uid = String(userId || "").trim();
-  if (!uid || !SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
-  const enc = encodeURIComponent(uid);
-  const colsWithPublished = "id,created_at,published_at,discover_score,discover_expires_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
+function mapPublicLibrarySongRows(arr, selectedPublishedAt) {
+  if (!Array.isArray(arr)) return [];
+  return arr
+    .map((s) =>
+      attachDiscoverFieldsToTrack(
+        {
+          id: String(s.id || ""),
+          ts: selectedPublishedAt ? userSongPublishedTs(s) : new Date(s.created_at || Date.now()).getTime(),
+          createdTs: new Date(s.created_at || Date.now()).getTime(),
+          publishedAt: selectedPublishedAt ? userSongPublishedAtValue(s) : "",
+          title: s.title || "Generated song",
+          artUrl: s.art_url || "",
+          url: s.song_url || "",
+          taskId: s.task_id || "",
+          audioId: s.audio_id || "",
+          kind: s.kind || "full",
+          meta: {
+            ...(s.meta_remix_of ? { remixOf: s.meta_remix_of } : {}),
+            ...(String(s.meta_release_caption || "").trim() ? { releaseCaption: String(s.meta_release_caption).trim() } : {}),
+            ...(s.meta_challenge ? { challenge: s.meta_challenge } : {}),
+            ...(String(s.meta_featured_on_profile || "").toLowerCase() === "true" ? { featuredOnProfile: true } : {}),
+          },
+          publicOnProfile: true,
+        },
+        s,
+      ),
+    )
+    .filter((t) => isDiscoverFeedActive(t))
+    .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
+}
+
+async function supabaseFetchPublicLibraryRowsForFilter(filterQuery, perUserLimit = 80) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !filterQuery) return new Map();
+  const lim = Math.min(120, Math.max(12, Number(perUserLimit) || 80));
+  const colsWithPublished =
+    "user_id,id,created_at,published_at,discover_score,discover_expires_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
+  const colsLegacy =
+    "user_id,id,created_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   try {
     let r = await fetch(
-      `${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${enc}&public_on_profile=eq.true&select=${colsWithPublished}&order=published_at.desc.nullslast,created_at.desc&limit=80${artUrlGuard}`,
+      `${SUPABASE_URL}/rest/v1/user_songs?${filterQuery}&public_on_profile=eq.true&select=${colsWithPublished}&order=published_at.desc.nullslast,created_at.desc&limit=${lim}${artUrlGuard}`,
       { headers: { apikey: SUPABASE_ANON_KEY }, cache: "no-store" },
     );
     let selectedPublishedAt = true;
@@ -11284,44 +11355,48 @@ async function supabaseFetchPublicLibraryForUserId(userId) {
       if (/published_at|42703|column/i.test(txt)) {
         selectedPublishedAt = false;
         r = await fetch(
-          `${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${enc}&public_on_profile=eq.true&select=${colsLegacy}&order=created_at.desc&limit=80${artUrlGuard}`,
+          `${SUPABASE_URL}/rest/v1/user_songs?${filterQuery}&public_on_profile=eq.true&select=${colsLegacy}&order=created_at.desc&limit=${lim}${artUrlGuard}`,
           { headers: { apikey: SUPABASE_ANON_KEY }, cache: "no-store" },
         );
       }
     }
-    if (!r.ok) return [];
+    if (!r.ok) return new Map();
     const arr = await r.json().catch(() => []);
-    if (!Array.isArray(arr)) return [];
-    return arr
-      .map((s) =>
-        attachDiscoverFieldsToTrack(
-          {
-            id: String(s.id || ""),
-            ts: selectedPublishedAt ? userSongPublishedTs(s) : new Date(s.created_at || Date.now()).getTime(),
-            createdTs: new Date(s.created_at || Date.now()).getTime(),
-            publishedAt: selectedPublishedAt ? userSongPublishedAtValue(s) : "",
-            title: s.title || "Generated song",
-            artUrl: s.art_url || "",
-            url: s.song_url || "",
-            taskId: s.task_id || "",
-            audioId: s.audio_id || "",
-            kind: s.kind || "full",
-            meta: {
-              ...(s.meta_remix_of ? { remixOf: s.meta_remix_of } : {}),
-              ...(String(s.meta_release_caption || "").trim() ? { releaseCaption: String(s.meta_release_caption).trim() } : {}),
-              ...(s.meta_challenge ? { challenge: s.meta_challenge } : {}),
-              ...(String(s.meta_featured_on_profile || "").toLowerCase() === "true" ? { featuredOnProfile: true } : {}),
-            },
-            publicOnProfile: true,
-          },
-          s,
-        ),
-      )
-      .filter((t) => isDiscoverFeedActive(t))
-      .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
+    const byUser = new Map();
+    for (const s of Array.isArray(arr) ? arr : []) {
+      const uid = String(s.user_id || "").trim();
+      if (!uid) continue;
+      if (!byUser.has(uid)) byUser.set(uid, []);
+      byUser.get(uid).push(s);
+    }
+    const out = new Map();
+    for (const [uid, rows] of byUser) {
+      out.set(uid, mapPublicLibrarySongRows(rows, selectedPublishedAt));
+    }
+    return out;
   } catch {
-    return [];
+    return new Map();
   }
+}
+
+/** Library songs the owner marked `public_on_profile` (separate RLS policy). */
+async function supabaseFetchPublicLibraryForUserId(userId) {
+  const uid = String(userId || "").trim();
+  if (!uid) return [];
+  const batch = await supabaseFetchPublicLibraryForUserIds([uid]);
+  return batch.get(uid) || [];
+}
+
+/** One request for many followed creators' public libraries (Friends feed). */
+async function supabaseFetchPublicLibraryForUserIds(userIds) {
+  const ids = [...new Set((userIds || []).map((id) => String(id || "").trim()).filter(Boolean))];
+  if (!ids.length) return new Map();
+  if (ids.length === 1) {
+    const one = await supabaseFetchPublicLibraryForUserId(ids[0]);
+    return new Map([[ids[0], one]]);
+  }
+  const inList = ids.map((id) => encodeURIComponent(id)).join(",");
+  return supabaseFetchPublicLibraryRowsForFilter(`user_id=in.(${inList})`, ids.length * 12);
 }
 
 function remixMetaFromSongMeta(meta) {

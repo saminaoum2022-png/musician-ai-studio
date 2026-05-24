@@ -18,6 +18,8 @@ let echoBlob = null;
 let echoBlobUrl = "";
 let echoDurationMs = 0;
 let echoPeaks = [];
+let echoUploadPromise = null;
+let echoUploadedUrl = "";
 let echoStartedAt = 0;
 let echoAutostopTimer = 0;
 let echoTickRaf = 0;
@@ -45,7 +47,7 @@ let _pendingEchoCompose = false;
 let _echoComposeIgnoreInputUntil = 0;
 let _echoRailCache = null;
 let _echoRailCacheAt = 0;
-const ECHO_RAIL_CACHE_MS = 20000;
+const ECHO_RAIL_CACHE_MS = 45000;
 
 function c() {
   return ctx;
@@ -408,14 +410,14 @@ async function fetchEchoRail() {
     return _echoRailCache;
   }
   try {
-    const data = await c().socialApi("/api/social?type=echo_rail&limit=48");
-    const stories = Array.isArray(data?.echoes) ? data.echoes : [];
+    const stories = await fetchEchoRailDirect();
     _echoRailCache = stories;
     _echoRailCacheAt = Date.now();
     return stories;
   } catch {
     try {
-      const stories = await fetchEchoRailDirect();
+      const data = await c().socialApi("/api/social?type=echo_rail&limit=48");
+      const stories = Array.isArray(data?.echoes) ? data.echoes : [];
       _echoRailCache = stories;
       _echoRailCacheAt = Date.now();
       return stories;
@@ -484,9 +486,11 @@ export async function refreshEchoRail(opts = {}) {
     if (rail) rail.hidden = true;
     return;
   }
+  const cacheFresh = _echoRailCache && Date.now() - _echoRailCacheAt < ECHO_RAIL_CACHE_MS;
   if (opts.useCache && _echoRailCache) {
     indexEchoStories(_echoRailCache);
     renderEchoRail(_echoRailCache);
+    if (cacheFresh && !opts.force) return;
   }
   const stories = await fetchEchoRail();
   if (gen !== _echoRailGen) return;
@@ -861,12 +865,30 @@ function closeEchoListenOnceInfo() {
   }, 260);
 }
 
+function resetEchoUploadState() {
+  echoUploadPromise = null;
+  echoUploadedUrl = "";
+}
+
+function startEchoUploadEarly() {
+  resetEchoUploadState();
+  if (!echoBlob?.size) return;
+  echoUploadPromise = c()
+    .uploadStatusVoiceBlob(echoBlob)
+    .then((uploaded) => {
+      echoUploadedUrl = String(uploaded?.url || "").trim();
+      return uploaded;
+    })
+    .catch(() => null);
+}
+
 function resetEchoCompose() {
   stopEchoComposeTick();
   echoRecState = "idle";
   echoChunks = [];
   echoDurationMs = 0;
   echoPeaks = [];
+  resetEchoUploadState();
   if (echoBlobUrl) {
     try {
       URL.revokeObjectURL(echoBlobUrl);
@@ -1000,6 +1022,7 @@ async function startEchoRecording() {
       echoPeaks = peaks;
       syncEchoComposeUi();
     });
+    startEchoUploadEarly();
     try {
       echoStream?.getTracks?.().forEach((t) => t.stop());
     } catch {}
@@ -1067,6 +1090,11 @@ export function closeEchoComposeSheet() {
   _echoReplyToId = "";
 }
 
+function ownEchoProfileFromRail(uid) {
+  const story = _echoStoriesByUser.get(String(uid || ""));
+  return story ? { username: story.username || "", avatar: story.avatar || "" } : null;
+}
+
 async function publishEcho() {
   if (!echoBlob?.size) return;
   const publish = document.getElementById("btnEchoPublish");
@@ -1079,10 +1107,44 @@ async function publishEcho() {
     publish.disabled = true;
     publish.textContent = "Releasing…";
   }
-  const peaks = echoPeaks.length ? echoPeaks : await c().computeStatusWaveformPeaks(echoBlob, ECHO_BAR_COUNT);
+  const peaksP = echoPeaks.length
+    ? Promise.resolve(echoPeaks)
+    : c().computeStatusWaveformPeaks(echoBlob, ECHO_BAR_COUNT);
   try {
-    const uploaded = await c().uploadStatusVoiceBlob(echoBlob);
+    const [peaks, uploaded] = await Promise.all([
+      peaksP,
+      echoUploadedUrl
+        ? Promise.resolve({ url: echoUploadedUrl })
+        : echoUploadPromise || c().uploadStatusVoiceBlob(echoBlob),
+    ]);
+    if (!uploaded?.url) throw new Error("Voice upload failed");
     const expiresAt = new Date(Date.now() + 86400000).toISOString();
+    const prof = ownEchoProfileFromRail(uid);
+    const optimisticId = `opt-${Date.now()}`;
+    mergeEchoIntoRail(
+      mapEchoFromApi({
+        id: optimisticId,
+        userId: uid,
+        audioUrl: uploaded.url,
+        durationMs: echoDurationMs,
+        waveformPeaks: peaks,
+        body: caption,
+        listenOnce,
+        replyTo: _echoReplyToId || null,
+        createdAt: new Date().toISOString(),
+        expiresAt,
+        username: prof?.username || "",
+        avatar: prof?.avatar || "",
+        listened: false,
+        reaction: "",
+        reactionCounts: {},
+      }),
+      prof,
+    );
+    closeEchoComposeSheet();
+    try {
+      c().showToast("Echo is live for 24 hours", { icon: "✓", durationMs: 2400 });
+    } catch {}
     const rowBody = {
       user_id: uid,
       audio_url: uploaded.url,
@@ -1120,8 +1182,6 @@ async function publishEcho() {
         mergeEchoIntoRail(data.echo, { username: data.echo.username, avatar: data.echo.avatar });
       }
     } else {
-      const profMap = await c().fetchProfilesByUserIdsMap([uid]);
-      const prof = profMap.get(uid);
       mergeEchoIntoRail(
         mapEchoFromApi({
           id: row.id,
@@ -1143,12 +1203,7 @@ async function publishEcho() {
         prof,
       );
     }
-    invalidateEchoRailCache();
-    closeEchoComposeSheet();
-    try {
-      c().showToast("Echo is live for 24 hours", { icon: "✓", durationMs: 2400 });
-    } catch {}
-    void refreshEchoRail();
+    resetEchoUploadState();
   } catch (e) {
     try {
       c().showToast(e?.message || "Could not post Echo", { durationMs: 3200 });

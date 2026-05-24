@@ -43,6 +43,12 @@ function echoSfxCtx() {
   return _echoSfxCtx;
 }
 
+function suspendEchoSfx() {
+  try {
+    if (_echoSfxCtx?.state === "running") void _echoSfxCtx.suspend();
+  } catch {}
+}
+
 /** iOS: only play UI SFX after a real touch — avoids glitch on sheet open */
 function playEchoSfxAfterGesture(kind) {
   if (!echoMicTouching && echoRecState === "idle") return;
@@ -376,6 +382,19 @@ function renderEchoViewerDots() {
         `<button type="button" class="echoViewerDot${i === _echoSlideIndex ? " isActive" : ""}" data-echo-dot="${i}" aria-label="Echo ${i + 1}"></button>`,
     )
     .join("");
+}
+
+function patchEchoInRail(echoId, patch) {
+  const id = String(echoId || "");
+  const echo = _echoById.get(id);
+  if (!echo) return;
+  Object.assign(echo, patch);
+  const uid = String(echo.userId || "");
+  const story = _echoStoriesByUser.get(uid);
+  mergeEchoIntoRail(echo, {
+    username: story?.username || echo.username || "",
+    avatar: story?.avatar || echo.avatar || "",
+  });
 }
 
 function mergeEchoIntoRail(echo, prof) {
@@ -1032,6 +1051,7 @@ function stopLiveEchoWaveform() {
     _echoCtx?.close();
   } catch {}
   _echoCtx = null;
+  suspendEchoSfx();
 }
 
 function peaksFromAnalyser(analyser) {
@@ -1119,17 +1139,41 @@ async function applyEchoToneToCapture(tone, opts = {}) {
   echoTone = tone;
   echoRecState = "processing";
   syncEchoComposeUi();
+  suspendEchoSfx();
+  const livePeaks = echoPeaks.length >= 12 ? normalizePeaks([...echoPeaks]) : null;
   try {
-    echoBlob = await applyEchoTone(echoRawBlob, echoTone, { pickMime: c().pickRecorderMimeType });
+    const out = await applyEchoTone(echoRawBlob, echoTone, {
+      pickMime: c().pickRecorderMimeType,
+      fast: true,
+      peakCount: ECHO_BAR_COUNT,
+    });
+    if (out && typeof out === "object" && out.blob) {
+      echoBlob = out.blob;
+      echoPeaks =
+        out.peaks?.length && c().statusVoiceNormalizePeaks
+          ? c().statusVoiceNormalizePeaks(out.peaks, ECHO_BAR_COUNT)
+          : livePeaks || c().statusVoiceFallbackPeaks?.() || [];
+    } else {
+      echoBlob = out;
+      echoPeaks =
+        livePeaks ||
+        (await c().computeStatusWaveformPeaks(echoBlob, ECHO_BAR_COUNT)) ||
+        c().statusVoiceFallbackPeaks?.() ||
+        [];
+    }
   } catch {
     echoBlob = echoRawBlob;
+    echoPeaks =
+      livePeaks ||
+      (await c().computeStatusWaveformPeaks(echoBlob, ECHO_BAR_COUNT).catch(() => [])) ||
+      c().statusVoiceFallbackPeaks?.() ||
+      [];
   }
   if (!opts.keepBusy) {
     echoRecState = "idle";
     syncEchoComposeUi();
   }
   resetEchoUploadState();
-  echoPeaks = await c().computeStatusWaveformPeaks(echoBlob, ECHO_BAR_COUNT);
   startEchoUploadEarly();
   if (!opts.keepBusy) syncEchoComposeUi();
 }
@@ -1272,8 +1316,7 @@ function syncEchoComposeUi() {
   const primary = document.getElementById("echoComposeStatusPrimary");
   const sub = document.getElementById("echoComposeStatusSub");
   if (primary) {
-    if (releasing) primary.textContent = "Sending…";
-    else if (processing) primary.textContent = "Polishing…";
+    if (releasing || processing) primary.textContent = "Sending your echo…";
     else if (recording) primary.textContent = "Release to send";
     else if (arming) primary.textContent = "Starting mic…";
     else primary.textContent = "Hold";
@@ -1287,11 +1330,19 @@ function syncEchoComposeUi() {
       sub.textContent = "";
     }
   }
+  const recHud = document.getElementById("echoComposeRecHud");
   const timer = document.getElementById("echoComposeTimer");
+  const showRecHud = recording && !busy;
+  if (recHud) {
+    recHud.hidden = !showRecHud;
+    recHud.setAttribute("aria-hidden", showRecHud ? "false" : "true");
+  }
   if (timer) {
     const showTimer = recording || arming || busy;
-    timer.hidden = !showTimer;
-    timer.setAttribute("aria-hidden", showTimer ? "false" : "true");
+    if (!recHud) {
+      timer.hidden = !showTimer;
+      timer.setAttribute("aria-hidden", showTimer ? "false" : "true");
+    }
     if (recording && !busy) {
       timer.textContent = formatRecordingTimer(performance.now() - echoStartedAt);
     } else if (!recording) {
@@ -1425,7 +1476,6 @@ async function startEchoRecording() {
       return;
     }
     echoMicTouching = false;
-    playEchoSfx("release");
     echoRecState = "processing";
     syncEchoComposeUi();
     echoEnhancePromise = (async () => {
@@ -1529,69 +1579,24 @@ function ownEchoProfileFromRail(uid) {
   return story ? { username: story.username || "", avatar: story.avatar || "" } : null;
 }
 
-async function publishEcho(opts = {}) {
-  if (_echoPublishing) return;
-  if (echoEnhancePromise && !opts.fromEnhance) {
-    try {
-      await echoEnhancePromise;
-    } catch {}
-  }
-  if (!echoBlob?.size) return;
-  _echoPublishing = true;
-  const sheet = document.getElementById("echoComposeSheet");
-  if (sheet) sheet.classList.add("isReleasing");
-  syncEchoComposeUi();
-  const onceEl = document.getElementById("echoListenOnce");
-  const caption = String(document.getElementById("echoComposeCaption")?.value || "").trim().slice(0, ECHO_CAPTION_MAX);
-  const listenOnce = Boolean(onceEl?.checked);
-  const uid = c().getAuthSession()?.user?.id;
-  if (!uid) {
-    _echoPublishing = false;
-    if (sheet) sheet.classList.remove("isReleasing");
-    return;
-  }
-  const peaksP = echoPeaks.length
-    ? Promise.resolve(echoPeaks)
-    : c().computeStatusWaveformPeaks(echoBlob, ECHO_BAR_COUNT);
+async function finishEchoPublishBackground({
+  optimisticId,
+  localUrl,
+  peaks,
+  caption,
+  listenOnce,
+  uid,
+  prof,
+}) {
   try {
-    const [peaks, uploaded] = await Promise.all([peaksP, uploadEchoBlobForRelease(echoBlob)]);
+    const uploaded = await uploadEchoBlobForRelease(echoBlob);
     if (!uploaded?.url) throw new Error("Voice upload failed");
+    const remoteUrl = uploaded.url;
+    patchEchoInRail(optimisticId, { audioUrl: remoteUrl });
     const expiresAt = new Date(Date.now() + 86400000).toISOString();
-    const prof = ownEchoProfileFromRail(uid);
-    const optimisticId = `opt-${Date.now()}`;
-    mergeEchoIntoRail(
-      mapEchoFromApi({
-        id: optimisticId,
-        userId: uid,
-        audioUrl: uploaded.url,
-        durationMs: echoDurationMs,
-        waveformPeaks: peaks,
-        body: caption,
-        listenOnce,
-        replyTo: _echoReplyToId || null,
-        createdAt: new Date().toISOString(),
-        expiresAt,
-        username: prof?.username || "",
-        avatar: prof?.avatar || "",
-        listened: false,
-        reaction: "",
-        reactionCounts: {},
-      }),
-      prof,
-    );
-    dismissEchoComposeSheet();
-    landOnFriendsAfterEcho();
-    try {
-      c().haptic("medium");
-    } catch {}
-    if (!opts.auto) {
-      try {
-        c().showToast("Echo", { icon: "✓", durationMs: 1800 });
-      } catch {}
-    }
     const rowBody = {
       user_id: uid,
-      audio_url: uploaded.url,
+      audio_url: remoteUrl,
       duration_ms: echoDurationMs,
       waveform_peaks: peaks,
       body: caption || null,
@@ -1614,7 +1619,7 @@ async function publishEcho(opts = {}) {
         method: "POST",
         body: JSON.stringify({
           action: "post_echo",
-          audioUrl: uploaded.url,
+          audioUrl: remoteUrl,
           durationMs: echoDurationMs,
           waveformPeaks: peaks,
           body: caption,
@@ -1623,29 +1628,23 @@ async function publishEcho(opts = {}) {
         }),
       });
       if (data?.echo) {
-        mergeEchoIntoRail(data.echo, { username: data.echo.username, avatar: data.echo.avatar });
+        patchEchoInRail(optimisticId, {
+          id: data.echo.id,
+          audioUrl: data.echo.audioUrl || remoteUrl,
+          waveformPeaks: data.echo.waveformPeaks || peaks,
+        });
       }
     } else {
-      mergeEchoIntoRail(
-        mapEchoFromApi({
-          id: row.id,
-          userId: uid,
-          audioUrl: row.audio_url,
-          durationMs: row.duration_ms,
-          waveformPeaks: row.waveform_peaks,
-          body: row.body,
-          listenOnce: row.listen_once,
-          replyTo: row.reply_to,
-          createdAt: row.created_at,
-          expiresAt: row.expires_at,
-          username: prof?.username || "",
-          avatar: prof?.avatar || "",
-          listened: false,
-          reaction: "",
-          reactionCounts: {},
-        }),
-        prof,
-      );
+      patchEchoInRail(optimisticId, {
+        id: row.id,
+        audioUrl: row.audio_url || remoteUrl,
+        waveformPeaks: row.waveform_peaks || peaks,
+        body: row.body,
+        listenOnce: row.listen_once,
+        replyTo: row.reply_to,
+        createdAt: row.created_at,
+        expiresAt: row.expires_at,
+      });
     }
     resetEchoUploadState();
   } catch (e) {
@@ -1657,15 +1656,89 @@ async function publishEcho(opts = {}) {
       c().showToast((msg || "Could not post Echo") + hint, { durationMs: 3600 });
     } catch {}
   } finally {
-    _echoPublishing = false;
-    echoEnhancePromise = null;
-    const s = document.getElementById("echoComposeSheet");
-    if (s) s.classList.remove("isReleasing", "isProcessing");
-    if (s?.classList.contains("isOpen")) {
-      echoRecState = "idle";
-      syncEchoComposeUi();
+    if (localUrl) {
+      try {
+        URL.revokeObjectURL(localUrl);
+      } catch {}
     }
+    echoEnhancePromise = null;
   }
+}
+
+async function publishEcho(opts = {}) {
+  if (_echoPublishing) return;
+  if (echoEnhancePromise && !opts.fromEnhance) {
+    try {
+      await echoEnhancePromise;
+    } catch {}
+  }
+  if (!echoBlob?.size) return;
+  _echoPublishing = true;
+  const sheet = document.getElementById("echoComposeSheet");
+  if (sheet) sheet.classList.add("isReleasing");
+  syncEchoComposeUi();
+  const onceEl = document.getElementById("echoListenOnce");
+  const caption = String(document.getElementById("echoComposeCaption")?.value || "").trim().slice(0, ECHO_CAPTION_MAX);
+  const listenOnce = Boolean(onceEl?.checked);
+  const uid = c().getAuthSession()?.user?.id;
+  if (!uid) {
+    _echoPublishing = false;
+    if (sheet) sheet.classList.remove("isReleasing");
+    return;
+  }
+  const peaks =
+    echoPeaks.length >= 8
+      ? echoPeaks
+      : (await c().computeStatusWaveformPeaks(echoBlob, ECHO_BAR_COUNT).catch(() => [])) ||
+        c().statusVoiceFallbackPeaks?.() ||
+        [];
+  const expiresAt = new Date(Date.now() + 86400000).toISOString();
+  const prof = ownEchoProfileFromRail(uid);
+  const optimisticId = `opt-${Date.now()}`;
+  let localUrl = "";
+  try {
+    localUrl = URL.createObjectURL(echoBlob);
+  } catch {}
+  mergeEchoIntoRail(
+    mapEchoFromApi({
+      id: optimisticId,
+      userId: uid,
+      audioUrl: localUrl || "",
+      durationMs: echoDurationMs,
+      waveformPeaks: peaks,
+      body: caption,
+      listenOnce,
+      replyTo: _echoReplyToId || null,
+      createdAt: new Date().toISOString(),
+      expiresAt,
+      username: prof?.username || "",
+      avatar: prof?.avatar || "",
+      listened: false,
+      reaction: "",
+      reactionCounts: {},
+    }),
+    prof,
+  );
+  dismissEchoComposeSheet();
+  landOnFriendsAfterEcho();
+  _echoPublishing = false;
+  try {
+    c().haptic("medium");
+  } catch {}
+  if (!opts.auto) {
+    try {
+      c().showToast("Echo", { icon: "✓", durationMs: 1800 });
+    } catch {}
+  }
+  void finishEchoPublishBackground({
+    optimisticId,
+    localUrl,
+    peaks,
+    caption,
+    listenOnce,
+    uid,
+    prof,
+  });
 }
 
 export function openEchoFromCreateChooser() {

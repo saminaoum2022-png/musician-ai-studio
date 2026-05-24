@@ -11,6 +11,7 @@ export const ECHO_TONE_IDS = ["raw", "natural", "dreamy"];
 export const ECHO_TONE_DEFAULT = "natural";
 export const ECHO_UPLOAD_MAX_BYTES = 480 * 1024;
 const ECHO_RENDER_SAMPLE_RATE = 44100;
+const ECHO_FAST_SAMPLE_RATE = 24000;
 /** Gentle loudness target — avoids “squashed loud” feel */
 const TARGET_RMS = 0.064;
 
@@ -484,12 +485,35 @@ async function decodeBlobToBuffer(blob) {
   }
 }
 
-async function renderPolishedBuffer(audioBuffer, tone) {
-  const preset = PRESETS[normalizeToneId(tone)] || PRESETS.natural;
-  const humming = isLikelyHumOrSingBuffer(audioBuffer);
+/** RMS peaks from decoded audio — avoids a second full decode in Echo publish */
+export function peaksFromAudioBuffer(buffer, barCount = 48) {
+  if (!buffer) return [];
+  const channel = buffer.getChannelData(0);
+  const samplesPerBar = Math.max(1, Math.floor(channel.length / barCount));
+  const peaks = [];
+  for (let i = 0; i < barCount; i++) {
+    let sumSq = 0;
+    let n = 0;
+    const start = i * samplesPerBar;
+    const end = Math.min(channel.length, start + samplesPerBar);
+    for (let j = start; j < end; j++) {
+      const s = channel[j];
+      sumSq += s * s;
+      n++;
+    }
+    peaks.push(n ? Math.sqrt(sumSq / n) : 0);
+  }
+  return peaks;
+}
 
-  const frames = Math.max(1, Math.ceil(audioBuffer.duration * ECHO_RENDER_SAMPLE_RATE));
-  const offline = new OfflineAudioContext(1, frames, ECHO_RENDER_SAMPLE_RATE);
+async function renderPolishedBuffer(audioBuffer, tone, opts = {}) {
+  const preset = PRESETS[normalizeToneId(tone)] || PRESETS.natural;
+  const fast = Boolean(opts.fast);
+  const sampleRate = fast ? ECHO_FAST_SAMPLE_RATE : ECHO_RENDER_SAMPLE_RATE;
+  const humming = !fast && isLikelyHumOrSingBuffer(audioBuffer);
+
+  const frames = Math.max(1, Math.ceil(audioBuffer.duration * sampleRate));
+  const offline = new OfflineAudioContext(1, frames, sampleRate);
   const src = offline.createBufferSource();
   src.buffer = audioBuffer;
 
@@ -523,13 +547,14 @@ async function renderPolishedBuffer(audioBuffer, tone) {
   return postProcessBuffer(rendered, preset);
 }
 
-async function audioBufferToCompressedBlob(buffer, pickMime) {
+async function audioBufferToCompressedBlob(buffer, pickMime, opts = {}) {
   const mime = pickEchoRecorderMime(pickMime);
   if (!mime || typeof MediaRecorder === "undefined") return null;
 
   const Ctx = window.AudioContext || window.webkitAudioContext;
   if (!Ctx) return null;
   const ctx = new Ctx({ sampleRate: buffer.sampleRate });
+  const fast = Boolean(opts.fast);
   try {
     const dest = ctx.createMediaStreamDestination();
     const src = ctx.createBufferSource();
@@ -539,7 +564,7 @@ async function audioBufferToCompressedBlob(buffer, pickMime) {
     const chunks = [];
     const rec = new MediaRecorder(dest.stream, {
       mimeType: mime,
-      audioBitsPerSecond: 96000,
+      audioBitsPerSecond: fast ? 72000 : 96000,
     });
 
     const blob = await new Promise((resolve, reject) => {
@@ -572,7 +597,7 @@ async function audioBufferToCompressedBlob(buffer, pickMime) {
             } catch {
               resolve(null);
             }
-          }, 80);
+          }, fast ? 36 : 80);
         };
       } catch (e) {
         window.clearTimeout(stopTimer);
@@ -593,33 +618,44 @@ async function audioBufferToCompressedBlob(buffer, pickMime) {
 /**
  * @param {Blob} blob
  * @param {string} tone
- * @param {{ pickMime?: () => string }} [opts]
- * @returns {Promise<Blob>}
+ * @param {{ pickMime?: () => string, fast?: boolean, peakCount?: number }} [opts]
+ * @returns {Promise<Blob|{ blob: Blob, peaks: number[] }>}
  */
 export async function applyEchoTone(blob, tone = ECHO_TONE_DEFAULT, opts = {}) {
   if (!blob?.size) return blob;
   const pickMime = opts.pickMime;
   const toneId = normalizeToneId(tone);
+  const fast = opts.fast !== false && toneId === "natural";
+  const wantPeaks = Number(opts.peakCount) > 0;
 
   const audioBuffer = await decodeBlobToBuffer(blob);
   if (!audioBuffer) return blob;
 
   let polished;
   try {
-    polished = await renderPolishedBuffer(audioBuffer, toneId);
+    polished = await renderPolishedBuffer(audioBuffer, toneId, { fast });
   } catch {
     return blob.size <= ECHO_UPLOAD_MAX_BYTES ? blob : blob;
   }
 
-  let out = await audioBufferToCompressedBlob(polished, pickMime);
-  if (out?.size && out.size <= ECHO_UPLOAD_MAX_BYTES) return out;
+  const peaks = wantPeaks ? peaksFromAudioBuffer(polished, opts.peakCount) : null;
 
-  if (blob.size <= ECHO_UPLOAD_MAX_BYTES && toneId === "raw") return blob;
+  let out = await audioBufferToCompressedBlob(polished, pickMime, { fast });
+  if (out?.size && out.size <= ECHO_UPLOAD_MAX_BYTES) {
+    return wantPeaks ? { blob: out, peaks: peaks || [] } : out;
+  }
 
-  out = await audioBufferToCompressedBlob(polished, () => "audio/webm");
-  if (out?.size && out.size <= ECHO_UPLOAD_MAX_BYTES) return out;
+  if (blob.size <= ECHO_UPLOAD_MAX_BYTES && toneId === "raw") {
+    return wantPeaks ? { blob, peaks: peaks || [] } : blob;
+  }
 
-  return blob.size <= ECHO_UPLOAD_MAX_BYTES ? blob : blob;
+  out = await audioBufferToCompressedBlob(polished, () => "audio/webm", { fast });
+  if (out?.size && out.size <= ECHO_UPLOAD_MAX_BYTES) {
+    return wantPeaks ? { blob: out, peaks: peaks || [] } : out;
+  }
+
+  const fallback = blob.size <= ECHO_UPLOAD_MAX_BYTES ? blob : blob;
+  return wantPeaks ? { blob: fallback, peaks: peaks || [] } : fallback;
 }
 
 export function echoToneLabel(tone) {

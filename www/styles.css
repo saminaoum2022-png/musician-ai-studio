@@ -6057,8 +6057,12 @@ body.echoComposeOpen .mobileTabbar{
 .echoComposeBackdrop{
   position: absolute;
   inset: 0;
-  background: #04050c;
-  background: rgba(4,5,12, calc(0.97 + var(--echo-pressure) * 0.02));
+  background:
+    radial-gradient(ellipse 95% 65% at 50% 12%, rgba(124,92,255,0.2), transparent 58%),
+    radial-gradient(ellipse 55% 45% at 88% 78%, rgba(35,213,171,0.1), transparent 52%),
+    radial-gradient(ellipse 40% 35% at 8% 62%, rgba(167,139,250,0.08), transparent 50%),
+    #03040a;
+  background-color: rgba(3,4,10, calc(0.98 + var(--echo-pressure) * 0.01));
   backdrop-filter: blur(28px) saturate(calc(1.08 + var(--echo-pressure) * 0.06));
   -webkit-backdrop-filter: blur(28px) saturate(calc(1.08 + var(--echo-pressure) * 0.06));
   opacity: 0;
@@ -6069,7 +6073,24 @@ body.echoComposeOpen .mobileTabbar{
 .echoComposeSheet.isOpen .echoComposeBackdrop{ opacity: 1; }
 .echoComposeSheet.isTouching .echoComposeBackdrop,
 .echoComposeSheet.isRecording .echoComposeBackdrop{
-  background: rgba(2,3,10, calc(0.98 + var(--echo-pressure) * 0.01));
+  background-color: rgba(2,3,12, calc(0.99 + var(--echo-pressure) * 0.005));
+}
+.echoComposeSheet.isRecording .echoComposeBackdrop{
+  background-image:
+    radial-gradient(ellipse 100% 70% at 50% 38%, rgba(124,92,255,0.28), transparent 62%),
+    radial-gradient(ellipse 50% 40% at 82% 80%, rgba(255,77,109,0.08), transparent 55%),
+    radial-gradient(ellipse 40% 35% at 12% 55%, rgba(35,213,171,0.1), transparent 50%);
+}
+.echoComposeSheet.isProcessing .echoComposeBackdrop,
+.echoComposeSheet.isReleasing .echoComposeBackdrop{
+  background-image:
+    radial-gradient(ellipse 90% 60% at 50% 42%, rgba(124,92,255,0.32), transparent 60%),
+    radial-gradient(ellipse 45% 40% at 70% 75%, rgba(35,213,171,0.12), transparent 55%);
+  animation: echoBackdropSend 2.4s ease-in-out infinite;
+}
+@keyframes echoBackdropSend{
+  0%, 100%{ opacity: 1; filter: brightness(1); }
+  50%{ opacity: 0.92; filter: brightness(1.08); }
 }
 .echoComposeDrift{
   position: absolute;
@@ -6482,8 +6503,35 @@ body.echoComposeOpen .mobileTabbar{
     inset 0 0 32px rgba(255,255,255,0.08);
 }
 .echoComposeSheet.isRecording .echoComposeMicGlow{
-  opacity: calc(0.75 + var(--echo-voice, 0) * 0.25);
-  animation: echoMicPulse 2.4s ease-in-out infinite;
+  opacity: calc(0.85 + var(--echo-voice, 0) * 0.25);
+  animation: echoMicPulse 1.6s ease-in-out infinite;
+}
+.echoComposeSheet.isRecording .echoComposeMicRing{
+  animation: echoRecordRing 1.2s ease-in-out infinite;
+}
+@keyframes echoRecordRing{
+  0%, 100%{
+    box-shadow:
+      0 0 0 1px rgba(255,120,160,0.45),
+      0 0 56px rgba(255,77,109,0.35),
+      0 0 72px rgba(124,92,255,0.28),
+      inset 0 0 32px rgba(255,255,255,0.08);
+  }
+  50%{
+    box-shadow:
+      0 0 0 2px rgba(255,140,180,0.55),
+      0 0 72px rgba(255,77,109,0.5),
+      0 0 96px rgba(124,92,255,0.38),
+      inset 0 0 36px rgba(255,255,255,0.1);
+  }
+}
+.echoComposeSheet.isProcessing .echoComposeAura,
+.echoComposeSheet.isReleasing .echoComposeAura{
+  animation: echoAuraSend 2s ease-in-out infinite;
+}
+@keyframes echoAuraSend{
+  0%, 100%{ transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  50%{ transform: translate(-50%, -50%) scale(1.06); opacity: 0.92; }
 }
 .echoComposeSheet.isRecording .echoComposeMicBreath{
   animation-duration: 1.8s;
@@ -6900,11 +6948,21 @@ body.echoComposeOpen .mobileTabbar{
 .echoComposeSheet.isReleasing .echoComposeStatusPrimary{
   opacity: 1;
   transform: translateY(0);
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: none;
   font-size: 15px;
   font-weight: 700;
-  color: rgba(238,244,255,0.95);
+  color: rgba(255,230,245,0.96);
+  text-shadow: 0 0 24px rgba(124,92,255,0.35);
+}
+.echoComposeSheet.isProcessing .echoComposeStatusPrimary,
+.echoComposeSheet.isReleasing .echoComposeStatusPrimary{
+  color: rgba(200,220,255,0.95);
+  animation: echoStatusPulse 1.6s ease-in-out infinite;
+}
+@keyframes echoStatusPulse{
+  0%, 100%{ opacity: 0.88; }
+  50%{ opacity: 1; }
 }
 .echoComposeSheet.isRecording .echoComposeStatusSub{
   display: block !important;

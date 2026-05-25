@@ -25,7 +25,11 @@ const ECHO_BEAT_DEFS = {
 };
 const ECHO_BEAT_SPEED = { slowed: 0.85, normal: 1.0, fast: 1.15 };
 /** Beat level at playback time, mixed under the voice. */
-const ECHO_BEAT_PLAYBACK_GAIN = 0.6;
+// Background bed level. The recorded voice typically peaks at ~0.7-0.9 so
+// 0.22 puts the beat clearly under the voice while staying audible. Apply
+// the same level in preview AND playback so the compose preview is an
+// honest representation of what listeners will hear.
+const ECHO_BEAT_PLAYBACK_GAIN = 0.22;
 
 let ctx = null;
 let echoRecState = "idle";
@@ -1386,7 +1390,9 @@ async function startEchoBeatPreview() {
   gain.connect(ctx.destination);
   try { src.start(0); } catch {}
   const t = ctx.currentTime;
-  gain.gain.linearRampToValueAtTime(0.55, t + 0.25);
+  // Match the listener-side playback level exactly so the compose preview
+  // is an honest representation of what listeners will hear.
+  gain.gain.linearRampToValueAtTime(ECHO_BEAT_PLAYBACK_GAIN, t + 0.25);
   _echoBeatPreview = { src, gain };
 }
 

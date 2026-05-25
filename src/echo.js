@@ -784,12 +784,37 @@ export async function refreshEchoRail(opts = {}) {
 }
 
 function stopEchoBeatPlayback() {
+  if (_echoBeatVolumeRampTimer) {
+    window.clearInterval(_echoBeatVolumeRampTimer);
+    _echoBeatVolumeRampTimer = 0;
+  }
   if (!_echoBeatPlayback) return;
-  const { src, gain } = _echoBeatPlayback;
+  const { audio } = _echoBeatPlayback;
   _echoBeatPlayback = null;
-  try { src.stop(); } catch {}
-  try { src.disconnect(); } catch {}
-  try { gain.disconnect(); } catch {}
+  try { audio.pause(); } catch {}
+  try { audio.currentTime = 0; } catch {}
+  try { audio.volume = 0; } catch {}
+}
+
+let _echoBeatVolumeRampTimer = 0;
+function rampEchoBeatAudioVolume(audio, target, durationMs) {
+  if (_echoBeatVolumeRampTimer) {
+    window.clearInterval(_echoBeatVolumeRampTimer);
+    _echoBeatVolumeRampTimer = 0;
+  }
+  const start = Number(audio.volume) || 0;
+  const delta = target - start;
+  const steps = Math.max(1, Math.ceil(durationMs / 30));
+  let i = 0;
+  _echoBeatVolumeRampTimer = window.setInterval(() => {
+    i++;
+    const v = start + delta * (i / steps);
+    try { audio.volume = Math.max(0, Math.min(1, v)); } catch {}
+    if (i >= steps) {
+      window.clearInterval(_echoBeatVolumeRampTimer);
+      _echoBeatVolumeRampTimer = 0;
+    }
+  }, 30);
 }
 
 function stopEchoPlayback() {
@@ -966,30 +991,39 @@ async function markEchoListened(slide) {
 }
 
 async function startEchoBeatPlaybackFor(slide) {
-  stopEchoBeatPlayback();
   const beat = slide?.beat;
   if (!beat?.id || !ECHO_BEAT_DEFS[beat.id]) return;
+  // Always use a fresh <audio> for the beat layer at playback time —
+  // two simultaneous <audio> elements work on iOS where Web Audio gets
+  // muted while another <audio> element is playing.
+  const a = getEchoBeatAudio();
   const url = echoBeatVariantUrl(beat.id, beat.v | 0);
-  const buf = await loadEchoBeatBuffer(url);
-  if (!buf) return;
-  if (currentEchoSlide() !== slide) return;
-  const ctx = ensureEchoSharedAudioCtx();
-  if (!ctx || ctx.state === "closed") return;
-  if (ctx.state === "suspended") {
-    try { await ctx.resume(); } catch {}
+  if (a.dataset.echoBeatSrc !== url) {
+    a.dataset.echoBeatSrc = url;
+    a.src = url;
+    try { a.load(); } catch {}
   }
-  const src = ctx.createBufferSource();
-  src.buffer = buf;
-  src.loop = true;
-  src.playbackRate.value = ECHO_BEAT_SPEED[beat.s] || 1.0;
-  const gain = ctx.createGain();
-  gain.gain.value = 0;
-  src.connect(gain);
-  gain.connect(ctx.destination);
-  try { src.start(0); } catch {}
-  const t = ctx.currentTime;
-  gain.gain.linearRampToValueAtTime(ECHO_BEAT_PLAYBACK_GAIN, t + 0.18);
-  _echoBeatPlayback = { src, gain };
+  a.loop = true;
+  a.playbackRate = ECHO_BEAT_SPEED[beat.s] || 1.0;
+  try { a.preservesPitch = false; } catch {}
+  try { a.mozPreservesPitch = false; } catch {}
+  try { a.webkitPreservesPitch = false; } catch {}
+  if (a.paused) {
+    try { a.currentTime = 0; } catch {}
+    a.volume = 0;
+    try {
+      await a.play();
+    } catch {
+      // iOS rejected — caller can retry via the tap-to-listen flow.
+      return;
+    }
+  }
+  if (currentEchoSlide() !== slide) {
+    try { a.pause(); } catch {}
+    return;
+  }
+  _echoBeatPlayback = { audio: a };
+  rampEchoBeatAudioVolume(a, ECHO_BEAT_PLAYBACK_GAIN, 220);
 }
 
 function playEchoSlide(slide) {
@@ -1232,27 +1266,56 @@ function primeEchoSharedAudioCtx() {
       ctx._echoUnlockDone = true;
     } catch {}
   }
-  // If the viewer audio element already exists, wire it through this
-  // context so voice + beat play through the same audio session and
-  // iOS doesn't silence one of them.
-  ensureEchoViewerAudioRoutedThroughCtx();
   return ctx;
 }
 
-let _echoViewerAudioMES = null;
-
-function ensureEchoViewerAudioRoutedThroughCtx() {
-  if (_echoViewerAudioMES) return _echoViewerAudioMES;
-  const ctx = _echoSharedAudioCtx;
-  if (!ctx || ctx.state === "closed") return null;
-  if (!_echoViewerAudioEl) return null;
-  try {
-    _echoViewerAudioMES = ctx.createMediaElementSource(_echoViewerAudioEl);
-    _echoViewerAudioMES.connect(ctx.destination);
-  } catch {
-    _echoViewerAudioMES = null;
+/**
+ * A dedicated <audio> element for the beat layer at playback time.
+ * iOS WKWebView silences Web Audio output while a separate <audio> element
+ * is playing voice, but two <audio> elements happily play simultaneously
+ * through the same audio session. So the beat layer on the listener side
+ * uses this element, not Web Audio.
+ */
+let _echoBeatAudioEl = null;
+function getEchoBeatAudio() {
+  if (!_echoBeatAudioEl) {
+    const a = new Audio();
+    a.preload = "auto";
+    a.crossOrigin = "anonymous";
+    a.setAttribute("playsinline", "");
+    a.loop = true;
+    a.volume = 0;
+    _echoBeatAudioEl = a;
   }
-  return _echoViewerAudioMES;
+  return _echoBeatAudioEl;
+}
+
+/**
+ * Unlock the beat <audio> element so iOS allows it to play later when
+ * the voice's onPlaying callback fires (which is out of gesture). Called
+ * from the tile-click gesture handler for echoes that carry a beat.
+ */
+function primeEchoBeatAudio(slide) {
+  const a = getEchoBeatAudio();
+  const beat = slide?.beat;
+  if (!beat?.id || !ECHO_BEAT_DEFS[beat.id]) return a;
+  const url = echoBeatVariantUrl(beat.id, beat.v | 0);
+  if (a.dataset.echoBeatSrc !== url) {
+    a.dataset.echoBeatSrc = url;
+    a.src = url;
+    try { a.load(); } catch {}
+  }
+  a.loop = true;
+  a.playbackRate = ECHO_BEAT_SPEED[beat.s] || 1.0;
+  try { a.preservesPitch = false; } catch {}
+  try { a.mozPreservesPitch = false; } catch {}
+  try { a.webkitPreservesPitch = false; } catch {}
+  a.currentTime = 0;
+  a.volume = 0;
+  // Try to start it silently in the gesture so iOS marks it as user-allowed.
+  // If iOS rejects, no harm — we'll try again from onPlaying.
+  try { void a.play().catch(() => {}); } catch {}
+  return a;
 }
 
 async function loadEchoBeatBuffer(url) {
@@ -2267,9 +2330,9 @@ function wireEchoOnce() {
     try {
       c().primeAudioElementInGesture?.(audio);
     } catch {}
-    // Unlock the shared AudioContext synchronously in this gesture so the
-    // beat layer (Web Audio) can play if this echo has one.
-    if (slide?.beat) primeEchoSharedAudioCtx();
+    // Unlock the beat <audio> element in this gesture so iOS allows the
+    // async startEchoBeatPlaybackFor() call later to actually play.
+    if (slide?.beat) primeEchoBeatAudio(slide);
     if (slide?.audioUrl) preloadEchoAudio(slide.audioUrl);
     openEchoViewer(userId, 0);
   });
@@ -2308,8 +2371,8 @@ function wireEchoOnce() {
     const slide = currentEchoSlide();
     if (!sheet || !slide || !sheet.classList.contains("needsEchoTap")) return;
     // This is a real user gesture (the Tap to Listen button). Prime the
-    // shared AudioContext here so the beat layer can play afterward.
-    if (slide.beat) primeEchoSharedAudioCtx();
+    // beat <audio> element here so iOS lets it play afterward.
+    if (slide.beat) primeEchoBeatAudio(slide);
     const audio = _echoAudio || getEchoViewerAudio();
     sheet.classList.add("isLoading");
     sheet.classList.remove("needsEchoTap");

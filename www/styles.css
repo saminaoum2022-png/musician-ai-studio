@@ -22182,7 +22182,7 @@ section.mentorPage{
  * Hairline dividers between posts, no card chrome.
  * =================================================================== */
 
-.friendsPage .followActStack .followAct--xstyle{
+.followAct--xstyle{
   display: grid;
   grid-template-columns: 40px 1fr;
   gap: 10px;
@@ -22192,9 +22192,24 @@ section.mentorPage{
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   background: transparent;
   border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
 }
-.friendsPage .followActStack .followAct--xstyle:hover{
+.followAct--xstyle:hover{
   background: rgba(255, 255, 255, 0.02);
+}
+/* The profile activities list has scoped overrides that override
+ * `.followAct` padding / borders — make sure xstyle wins there too. */
+.profileActivitiesList.followActStack .followAct.followAct--xstyle{
+  padding: 12px 14px;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background: transparent;
+  border-radius: 0;
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 10px;
+  align-items: flex-start;
 }
 .followAct--xstyle > .followActAvatar{
   width: 40px;

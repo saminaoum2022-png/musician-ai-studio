@@ -13,7 +13,7 @@ import { initEcho, onEnterFriendsRoute, openEchoFromCreateChooser } from "./echo
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260525friendsXstyleV1";
+const APP_BUILD = "20260525friendsXstyleV2";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5640,8 +5640,8 @@ async function renderProfileActivities() {
   listEl.innerHTML = feedItems
     .map((item, i) =>
       item.kind === "status"
-        ? followingStatusRowHtml(item.post, profMap, i)
-        : followingActivityRowHtml(item.track, profMap, i),
+        ? followingStatusRowHtml(item.post, profMap, i, { xstyle: true })
+        : followingActivityRowHtml(item.track, profMap, i, { xstyle: true }),
     )
     .join("");
   try {

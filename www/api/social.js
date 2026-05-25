@@ -159,6 +159,199 @@ function cleanSongId(v) {
   return String(v || "").trim().slice(0, 140);
 }
 
+const SOCIAL_TARGET_KINDS = new Set(["song", "status", "echo"]);
+const REPLY_BODY_MAX = 280;
+
+function cleanTargetKind(v) {
+  const s = String(v || "").trim().toLowerCase();
+  return SOCIAL_TARGET_KINDS.has(s) ? s : "";
+}
+
+function cleanTargetId(v) {
+  return cleanUserId(v);
+}
+
+function cleanReplyBody(v) {
+  return String(v || "").replace(/\s+\n/g, "\n").trim().slice(0, REPLY_BODY_MAX);
+}
+
+/**
+ * Resolve the owner user id for a feed target so we can notify them when
+ * they get a like / reply. Returns null if the target doesn't exist or
+ * isn't a known kind.
+ */
+async function resolveSocialTargetOwner(targetKind, targetId) {
+  const kind = cleanTargetKind(targetKind);
+  const tid = cleanTargetId(targetId);
+  if (!kind || !tid) return null;
+  if (kind === "song") {
+    const r = await svcFetch(
+      `user_songs?select=id,user_id,title,public_on_profile&id=eq.${encodeURIComponent(tid)}&limit=1`,
+    );
+    const row = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
+    const isPublic = row?.public_on_profile === true || row?.public_on_profile === "t" || row?.public_on_profile === "true";
+    if (!row || !isPublic) return null;
+    return { kind, id: row.id, ownerUserId: cleanUserId(row.user_id), title: row.title || "" };
+  }
+  if (kind === "status") {
+    const r = await svcFetch(
+      `social_status_posts?select=id,user_id,body&id=eq.${encodeURIComponent(tid)}&limit=1`,
+    );
+    const row = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
+    if (!row) return null;
+    return { kind, id: row.id, ownerUserId: cleanUserId(row.user_id), title: String(row.body || "").slice(0, 80) };
+  }
+  if (kind === "echo") {
+    const r = await svcFetch(
+      `social_echoes?select=id,user_id,body,expires_at&id=eq.${encodeURIComponent(tid)}&limit=1`,
+    );
+    const row = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
+    if (!row) return null;
+    return { kind, id: row.id, ownerUserId: cleanUserId(row.user_id), title: String(row.body || "").slice(0, 80) };
+  }
+  return null;
+}
+
+/**
+ * Batch-fetch like + reply stats for a set of feed items. Splits the ids
+ * by kind, hits Supabase REST with one `in.(...)` query per kind, then
+ * aggregates counts (and the viewer's own liked-state) in memory.
+ */
+async function fetchFeedSocialStats({ songIds, statusIds, echoIds, viewerId }) {
+  const stats = {
+    likes: { song: {}, status: {}, echo: {} },
+    replies: { song: {}, status: {}, echo: {} },
+  };
+  const idGroups = {
+    song: Array.isArray(songIds) ? songIds.map(cleanTargetId).filter(Boolean).slice(0, 64) : [],
+    status: Array.isArray(statusIds) ? statusIds.map(cleanTargetId).filter(Boolean).slice(0, 64) : [],
+    echo: Array.isArray(echoIds) ? echoIds.map(cleanTargetId).filter(Boolean).slice(0, 64) : [],
+  };
+  const viewer = cleanUserId(viewerId);
+
+  await Promise.all(
+    Object.entries(idGroups).map(async ([kind, ids]) => {
+      if (!ids.length) return;
+      const inList = ids.map((id) => encodeURIComponent(id)).join(",");
+
+      const [likeRows, replyRows] = await Promise.all([
+        svcFetch(
+          `social_likes?select=target_id,user_id&target_kind=eq.${encodeURIComponent(kind)}&target_id=in.(${inList})&limit=10000`,
+        ),
+        svcFetch(
+          `social_replies?select=target_id&target_kind=eq.${encodeURIComponent(kind)}&target_id=in.(${inList})&limit=10000`,
+        ),
+      ]);
+
+      const likeBucket = stats.likes[kind];
+      for (const id of ids) likeBucket[id] = { count: 0, liked: false };
+      for (const row of Array.isArray(likeRows.data) ? likeRows.data : []) {
+        const id = String(row.target_id || "");
+        if (!likeBucket[id]) continue;
+        likeBucket[id].count += 1;
+        if (viewer && cleanUserId(row.user_id) === viewer) likeBucket[id].liked = true;
+      }
+
+      const replyBucket = stats.replies[kind];
+      for (const id of ids) replyBucket[id] = { count: 0 };
+      for (const row of Array.isArray(replyRows.data) ? replyRows.data : []) {
+        const id = String(row.target_id || "");
+        if (!replyBucket[id]) continue;
+        replyBucket[id].count += 1;
+      }
+    }),
+  );
+
+  return stats;
+}
+
+async function fetchRepliesForTarget({ targetKind, targetId, limit = 50 }) {
+  const kind = cleanTargetKind(targetKind);
+  const tid = cleanTargetId(targetId);
+  if (!kind || !tid) return [];
+  const max = Math.min(200, Math.max(1, Number(limit) || 50));
+  const rows = await svcFetch(
+    `social_replies?select=id,user_id,body,created_at&target_kind=eq.${encodeURIComponent(kind)}&target_id=eq.${encodeURIComponent(tid)}&order=created_at.asc&limit=${max}`,
+  );
+  const raw = Array.isArray(rows.data) ? rows.data : [];
+  if (!raw.length) return [];
+  const profiles = await Promise.all(raw.map((r) => profileByUserId(r.user_id)));
+  return raw.map((row, i) => ({
+    id: row.id,
+    userId: row.user_id,
+    body: row.body,
+    createdAt: row.created_at,
+    username: profiles[i]?.username || "",
+    avatar: profiles[i]?.avatar || "",
+  }));
+}
+
+async function countLikesForTarget(targetKind, targetId) {
+  const kind = cleanTargetKind(targetKind);
+  const tid = cleanTargetId(targetId);
+  if (!kind || !tid) return 0;
+  return countRows(
+    `social_likes?select=id&target_kind=eq.${encodeURIComponent(kind)}&target_id=eq.${encodeURIComponent(tid)}&limit=10000`,
+  );
+}
+
+async function countRepliesForTarget(targetKind, targetId) {
+  const kind = cleanTargetKind(targetKind);
+  const tid = cleanTargetId(targetId);
+  if (!kind || !tid) return 0;
+  return countRows(
+    `social_replies?select=id&target_kind=eq.${encodeURIComponent(kind)}&target_id=eq.${encodeURIComponent(tid)}&limit=10000`,
+  );
+}
+
+async function createSocialLikeNotification({ target, actorUserId }) {
+  if (!target?.ownerUserId) return false;
+  const owner = cleanUserId(target.ownerUserId);
+  const actor = cleanUserId(actorUserId);
+  if (!owner || !actor || owner === actor) return false;
+  const entityId = `${target.kind}:${target.id}:like:${actor}`;
+  if (await notificationExists({ userId: owner, type: "social_like", entityId })) return false;
+  const actorProfile = await profileByUserId(actor);
+  return insertNotification({
+    userId: owner,
+    type: "social_like",
+    actorUserId: actor,
+    entityId,
+    metadata: {
+      actor_username: actorProfile?.username || "",
+      actor_avatar: actorProfile?.avatar || "",
+      target_kind: target.kind,
+      target_id: target.id,
+      target_title: target.title || "",
+    },
+  });
+}
+
+async function createSocialReplyNotification({ target, actorUserId, replyId, body }) {
+  if (!target?.ownerUserId) return false;
+  const owner = cleanUserId(target.ownerUserId);
+  const actor = cleanUserId(actorUserId);
+  if (!owner || !actor || owner === actor) return false;
+  const entityId = `${target.kind}:${target.id}:reply:${replyId}`;
+  if (await notificationExists({ userId: owner, type: "social_reply", entityId })) return false;
+  const actorProfile = await profileByUserId(actor);
+  return insertNotification({
+    userId: owner,
+    type: "social_reply",
+    actorUserId: actor,
+    entityId,
+    metadata: {
+      actor_username: actorProfile?.username || "",
+      actor_avatar: actorProfile?.avatar || "",
+      target_kind: target.kind,
+      target_id: target.id,
+      target_title: target.title || "",
+      reply_id: replyId,
+      reply_preview: String(body || "").slice(0, 140),
+    },
+  });
+}
+
 const FEEDBACK_TYPES = new Set(["hook", "lyrics", "replay", "remix"]);
 
 function cleanFeedbackType(v) {
@@ -682,6 +875,45 @@ async function handleGet(req, res, user) {
     return sendJson(res, 200, { ok: true, echoes });
   }
 
+  if (type === "feed_social_stats") {
+    const songIds = String(url.searchParams.get("song_ids") || "")
+      .split(",")
+      .map((x) => cleanTargetId(x))
+      .filter(Boolean)
+      .slice(0, 64);
+    const statusIds = String(url.searchParams.get("status_ids") || "")
+      .split(",")
+      .map((x) => cleanTargetId(x))
+      .filter(Boolean)
+      .slice(0, 64);
+    const echoIds = String(url.searchParams.get("echo_ids") || "")
+      .split(",")
+      .map((x) => cleanTargetId(x))
+      .filter(Boolean)
+      .slice(0, 64);
+    const stats = await fetchFeedSocialStats({
+      songIds,
+      statusIds,
+      echoIds,
+      viewerId: user?.userId || "",
+    });
+    return sendJson(res, 200, { ok: true, ...stats });
+  }
+
+  if (type === "replies") {
+    const targetKind = cleanTargetKind(url.searchParams.get("targetKind"));
+    const targetId = cleanTargetId(url.searchParams.get("targetId"));
+    if (!targetKind || !targetId) {
+      return sendJson(res, 400, { ok: false, error: "Missing targetKind / targetId" });
+    }
+    const replies = await fetchRepliesForTarget({
+      targetKind,
+      targetId,
+      limit: Number(url.searchParams.get("limit")) || 50,
+    });
+    return sendJson(res, 200, { ok: true, replies });
+  }
+
   return sendJson(res, 400, { ok: false, error: "Unknown social query" });
 }
 
@@ -947,6 +1179,109 @@ async function handlePost(req, res, user) {
     });
     if (!ins.ok) return sendJson(res, 500, { ok: false, error: "Reaction failed", details: ins.text });
     return sendJson(res, 200, { ok: true });
+  }
+
+  if (action === "like" || action === "unlike") {
+    const targetKind = cleanTargetKind(body?.targetKind);
+    const targetId = cleanTargetId(body?.targetId);
+    if (!targetKind || !targetId) {
+      return sendJson(res, 400, { ok: false, error: "Missing targetKind / targetId" });
+    }
+    const target = await resolveSocialTargetOwner(targetKind, targetId);
+    if (!target) return sendJson(res, 404, { ok: false, error: "Target not found" });
+
+    if (action === "like") {
+      const ins = await svcFetch("social_likes", {
+        method: "POST",
+        headers: {
+          Prefer: "return=minimal,resolution=ignore-duplicates",
+        },
+        body: JSON.stringify({
+          target_kind: targetKind,
+          target_id: targetId,
+          user_id: user.userId,
+        }),
+      });
+      if (!ins.ok && ins.status !== 409) {
+        return sendJson(res, 500, { ok: false, error: "Like failed", details: ins.text });
+      }
+      const count = await countLikesForTarget(targetKind, targetId);
+      void createSocialLikeNotification({ target, actorUserId: user.userId });
+      return sendJson(res, 200, { ok: true, liked: true, count });
+    }
+    await svcFetch(
+      `social_likes?target_kind=eq.${encodeURIComponent(targetKind)}&target_id=eq.${encodeURIComponent(targetId)}&user_id=eq.${encodeURIComponent(user.userId)}`,
+      { method: "DELETE", headers: { Prefer: "return=minimal" } },
+    );
+    const count = await countLikesForTarget(targetKind, targetId);
+    return sendJson(res, 200, { ok: true, liked: false, count });
+  }
+
+  if (action === "reply") {
+    const targetKind = cleanTargetKind(body?.targetKind);
+    const targetId = cleanTargetId(body?.targetId);
+    const text = cleanReplyBody(body?.body);
+    if (!targetKind || !targetId) {
+      return sendJson(res, 400, { ok: false, error: "Missing targetKind / targetId" });
+    }
+    if (!text) {
+      return sendJson(res, 400, { ok: false, error: "Reply text is empty" });
+    }
+    const target = await resolveSocialTargetOwner(targetKind, targetId);
+    if (!target) return sendJson(res, 404, { ok: false, error: "Target not found" });
+
+    const ins = await svcFetch("social_replies", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({
+        target_kind: targetKind,
+        target_id: targetId,
+        user_id: user.userId,
+        body: text,
+      }),
+    });
+    if (!ins.ok) {
+      return sendJson(res, 500, { ok: false, error: "Reply failed", details: ins.text });
+    }
+    const row = Array.isArray(ins.data) && ins.data[0] ? ins.data[0] : null;
+    if (!row) return sendJson(res, 500, { ok: false, error: "Reply not returned" });
+    const profile = await profileByUserId(user.userId);
+    const count = await countRepliesForTarget(targetKind, targetId);
+    void createSocialReplyNotification({
+      target,
+      actorUserId: user.userId,
+      replyId: row.id,
+      body: text,
+    });
+    return sendJson(res, 200, {
+      ok: true,
+      count,
+      reply: {
+        id: row.id,
+        userId: row.user_id,
+        body: row.body,
+        createdAt: row.created_at,
+        username: profile?.username || "",
+        avatar: profile?.avatar || "",
+      },
+    });
+  }
+
+  if (action === "delete_reply") {
+    const replyId = cleanTargetId(body?.replyId);
+    if (!replyId) return sendJson(res, 400, { ok: false, error: "Invalid reply" });
+    const existing = await svcFetch(
+      `social_replies?select=target_kind,target_id&id=eq.${encodeURIComponent(replyId)}&user_id=eq.${encodeURIComponent(user.userId)}&limit=1`,
+    );
+    const row = Array.isArray(existing.data) && existing.data[0] ? existing.data[0] : null;
+    if (!row) return sendJson(res, 404, { ok: false, error: "Reply not found" });
+    const del = await svcFetch(
+      `social_replies?id=eq.${encodeURIComponent(replyId)}&user_id=eq.${encodeURIComponent(user.userId)}`,
+      { method: "DELETE", headers: { Prefer: "return=minimal" } },
+    );
+    if (!del.ok) return sendJson(res, 500, { ok: false, error: "Delete failed", details: del.text });
+    const count = await countRepliesForTarget(row.target_kind, row.target_id);
+    return sendJson(res, 200, { ok: true, count, targetKind: row.target_kind, targetId: row.target_id });
   }
 
   if (action === "delete_echo") {

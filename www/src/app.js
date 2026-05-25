@@ -13,7 +13,7 @@ import { initEcho, onEnterFriendsRoute, openEchoFromCreateChooser } from "./echo
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260526friendsXstyleV3";
+const APP_BUILD = "20260526friendsLikesRepliesV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5647,6 +5647,8 @@ async function renderProfileActivities() {
   try {
     syncDiscoveryPlayingHighlights();
   } catch {}
+  applyFeedSocialStatsToDom(listEl);
+  void hydrateFeedSocialStatsForFeed(listEl);
 }
 
 function normalizeStatusWaveformPeaks(raw) {
@@ -6289,14 +6291,23 @@ function followingActivityPlayAttrs(t, profMap, byLine) {
 }
 
 /**
- * X-style actions row: Reply / Like / Plays. Like and Reply are placeholder
- * UI for now — taps stop propagation (don't trigger play) and call a
- * lightweight handler that pulses + toasts "Coming soon" until backing
- * tables exist. Plays is read-only.
+ * X-style actions row: Reply / Like / Plays.
+ *
+ * Like + Reply are wired to the social API on tap. Counts and the
+ * viewer's liked-state are loaded lazily after the feed renders by
+ * `hydrateFeedSocialStatsForFeed()`, which then calls
+ * `applyFeedSocialStatsToDom()` to fill in the counts and the filled
+ * heart for items the viewer already liked.
+ *
+ * `kind` here is "music" or "status" (UI kind). The DB target kind is
+ * derived: music → "song", status → "status".
  */
 function followActActionsRowHtml({ kind, targetId, targetUserId, plays } = {}) {
   const safeId = escapeHtml(String(targetId || ""));
   const safeUid = escapeHtml(String(targetUserId || ""));
+  const safeKind = escapeHtml(String(kind || ""));
+  const targetKind = kind === "music" ? "song" : kind === "status" ? "status" : (kind || "");
+  const safeTargetKind = escapeHtml(targetKind);
   const playsBlock = kind === "music" && Number.isFinite(Number(plays)) && Number(plays) > 0
     ? `<span class="followActAct followActAct--stat" data-friends-act="plays" aria-label="${escapeHtml(formatStatCount(plays))} plays">
         <svg class="followActActIco" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16l14-8L5 4Z"/></svg>
@@ -6304,17 +6315,122 @@ function followActActionsRowHtml({ kind, targetId, targetUserId, plays } = {}) {
       </span>`
     : `<span class="followActAct followActAct--stat" aria-hidden="true"></span>`;
   return `
-    <div class="followActActions" data-friends-act-row="1" data-friends-act-kind="${escapeHtml(kind || "")}" data-friends-act-id="${safeId}" data-friends-act-uid="${safeUid}">
+    <div class="followActActions" data-friends-act-row="1" data-friends-act-kind="${safeKind}" data-friends-act-target-kind="${safeTargetKind}" data-friends-act-id="${safeId}" data-friends-act-uid="${safeUid}">
       <button type="button" class="followActAct" data-friends-act="reply" aria-label="Reply">
         <svg class="followActActIco" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10H8l-4 4V5Z"/></svg>
-        <span class="followActActCount"></span>
+        <span class="followActActCount" data-friends-act-count="reply"></span>
       </button>
-      <button type="button" class="followActAct" data-friends-act="like" aria-label="Like">
+      <button type="button" class="followActAct" data-friends-act="like" aria-label="Like" aria-pressed="false">
         <svg class="followActActIco" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-4.5-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9Z"/></svg>
-        <span class="followActActCount"></span>
+        <span class="followActActCount" data-friends-act-count="like"></span>
       </button>
       ${playsBlock}
     </div>`;
+}
+
+/* ---------------------------------------------------------------------
+ * Feed social stats (likes + replies) — batched fetch, optimistic UI
+ * ------------------------------------------------------------------- */
+
+// Map<"kind:id", { likeCount, liked, replyCount }> — survives feed snapshot
+// hydrations so when we re-paint from a cached snapshot the counts are
+// re-applied immediately.
+const _feedSocialStats = new Map();
+let _feedSocialStatsGen = 0;
+let _feedSocialStatsLastFetchAt = 0;
+
+function feedSocialStatsKey(targetKind, targetId) {
+  return `${targetKind}:${targetId}`;
+}
+
+function getFeedSocialStat(targetKind, targetId) {
+  return (
+    _feedSocialStats.get(feedSocialStatsKey(targetKind, targetId)) ||
+    { likeCount: 0, liked: false, replyCount: 0 }
+  );
+}
+
+function setFeedSocialStat(targetKind, targetId, partial) {
+  const key = feedSocialStatsKey(targetKind, targetId);
+  const prev = _feedSocialStats.get(key) || { likeCount: 0, liked: false, replyCount: 0 };
+  _feedSocialStats.set(key, { ...prev, ...partial });
+  return _feedSocialStats.get(key);
+}
+
+/**
+ * Render the current stats into all `.followActActions` rows inside the
+ * given scope. Safe to call multiple times — idempotent.
+ */
+function applyFeedSocialStatsToDom(scope) {
+  const root = scope || document;
+  const rows = root.querySelectorAll(".followActActions[data-friends-act-row]");
+  rows.forEach((row) => {
+    const targetKind = row.getAttribute("data-friends-act-target-kind") || "";
+    const targetId = row.getAttribute("data-friends-act-id") || "";
+    if (!targetKind || !targetId) return;
+    const stat = getFeedSocialStat(targetKind, targetId);
+    const likeBtn = row.querySelector('[data-friends-act="like"]');
+    const likeCount = row.querySelector('[data-friends-act-count="like"]');
+    const replyCount = row.querySelector('[data-friends-act-count="reply"]');
+    if (likeBtn) {
+      likeBtn.classList.toggle("isLiked", Boolean(stat.liked));
+      likeBtn.setAttribute("aria-pressed", stat.liked ? "true" : "false");
+    }
+    if (likeCount) likeCount.textContent = stat.likeCount > 0 ? formatStatCount(stat.likeCount) : "";
+    if (replyCount) replyCount.textContent = stat.replyCount > 0 ? formatStatCount(stat.replyCount) : "";
+  });
+}
+
+/**
+ * Collect ids in the current feed DOM, then batch-fetch stats from the
+ * API and write them into the local map + DOM. Only the freshest call
+ * mutates state (gen guard).
+ */
+async function hydrateFeedSocialStatsForFeed(listEl) {
+  if (!listEl) return;
+  const rows = listEl.querySelectorAll(".followActActions[data-friends-act-row]");
+  const songIds = [];
+  const statusIds = [];
+  rows.forEach((row) => {
+    const targetKind = row.getAttribute("data-friends-act-target-kind") || "";
+    const targetId = row.getAttribute("data-friends-act-id") || "";
+    if (!targetKind || !targetId) return;
+    if (targetKind === "song") songIds.push(targetId);
+    else if (targetKind === "status") statusIds.push(targetId);
+  });
+  if (!songIds.length && !statusIds.length) return;
+  const gen = ++_feedSocialStatsGen;
+  try {
+    const params = new URLSearchParams();
+    params.set("type", "feed_social_stats");
+    if (songIds.length) params.set("song_ids", songIds.join(","));
+    if (statusIds.length) params.set("status_ids", statusIds.join(","));
+    const data = await socialApi(`/api/social?${params.toString()}`);
+    if (gen !== _feedSocialStatsGen) return;
+    if (data?.likes) {
+      for (const [kind, bucket] of Object.entries(data.likes)) {
+        for (const [id, info] of Object.entries(bucket || {})) {
+          setFeedSocialStat(kind, id, {
+            likeCount: Number(info?.count) || 0,
+            liked: Boolean(info?.liked),
+          });
+        }
+      }
+    }
+    if (data?.replies) {
+      for (const [kind, bucket] of Object.entries(data.replies)) {
+        for (const [id, info] of Object.entries(bucket || {})) {
+          setFeedSocialStat(kind, id, {
+            replyCount: Number(info?.count) || 0,
+          });
+        }
+      }
+    }
+    _feedSocialStatsLastFetchAt = Date.now();
+    applyFeedSocialStatsToDom(listEl);
+  } catch {
+    /* swallow — counts stay empty, taps still work */
+  }
 }
 
 function followingActivityRowHtml(t, profMap, idx, opts = {}) {
@@ -6490,6 +6606,315 @@ function whoToFollowSectionHtml(creators) {
     </section>`;
 }
 
+/**
+ * Toggle the like state on a feed item. Optimistic UI: flip the heart
+ * and bump the count immediately, POST in the background, revert if the
+ * call fails. Bound to both Friends and Profile activity click handlers.
+ */
+async function handleFeedLikeTap(btn) {
+  const row = btn.closest(".followActActions");
+  if (!row) return;
+  const targetKind = row.getAttribute("data-friends-act-target-kind") || "";
+  const targetId = row.getAttribute("data-friends-act-id") || "";
+  if (!targetKind || !targetId) return;
+  if (!authSession?.user?.id || !getSupabaseAuthToken()) {
+    showToast("Sign in to like posts.");
+    location.hash = "#/auth";
+    return;
+  }
+  if (btn.dataset.likeBusy === "1") return;
+  btn.dataset.likeBusy = "1";
+
+  const prev = getFeedSocialStat(targetKind, targetId);
+  const nextLiked = !prev.liked;
+  const nextCount = Math.max(0, prev.likeCount + (nextLiked ? 1 : -1));
+  setFeedSocialStat(targetKind, targetId, { liked: nextLiked, likeCount: nextCount });
+  // Apply optimistic UI to every row that displays this target.
+  document.querySelectorAll(
+    `.followActActions[data-friends-act-target-kind="${targetKind}"][data-friends-act-id="${targetId}"]`,
+  ).forEach((r) => applyFeedSocialStatsToDom(r.parentElement || r));
+  try { haptic("light"); } catch {}
+  btn.classList.add("isPulse");
+  window.setTimeout(() => btn.classList.remove("isPulse"), 320);
+
+  try {
+    const data = await socialApi("/api/social", {
+      method: "POST",
+      body: JSON.stringify({
+        action: nextLiked ? "like" : "unlike",
+        targetKind,
+        targetId,
+      }),
+    });
+    if (data?.ok && typeof data.count === "number") {
+      setFeedSocialStat(targetKind, targetId, {
+        liked: Boolean(data.liked),
+        likeCount: Number(data.count) || 0,
+      });
+      applyFeedSocialStatsToDom(document);
+    }
+  } catch (e) {
+    // Revert.
+    setFeedSocialStat(targetKind, targetId, { liked: prev.liked, likeCount: prev.likeCount });
+    applyFeedSocialStatsToDom(document);
+    showToast(e?.message || "Could not update like.");
+  } finally {
+    delete btn.dataset.likeBusy;
+  }
+}
+
+/* ---------------------------------------------------------------------
+ * Feed Reply sheet (X-style thread modal)
+ * ------------------------------------------------------------------- */
+
+let _feedReplyContext = null;
+let _feedReplyBound = false;
+
+function openFeedReplySheetFromButton(btn) {
+  const row = btn.closest(".followActActions");
+  const article = btn.closest(".followAct");
+  if (!row || !article) return;
+  const targetKind = row.getAttribute("data-friends-act-target-kind") || "";
+  const targetId = row.getAttribute("data-friends-act-id") || "";
+  if (!targetKind || !targetId) return;
+
+  const handleEl = article.querySelector(".followActUser");
+  const handle = String(handleEl?.textContent || "").trim();
+  const subEl =
+    article.querySelector(".followActStatusText") ||
+    article.querySelector(".followActQuoteTitle") ||
+    article.querySelector(".followActHead");
+  const sub = String(subEl?.textContent || "").trim();
+
+  openFeedReplySheet({
+    targetKind,
+    targetId,
+    handle,
+    sub,
+  });
+}
+
+function openFeedReplySheet({ targetKind, targetId, handle, sub }) {
+  if (!authSession?.user?.id || !getSupabaseAuthToken()) {
+    showToast("Sign in to reply.");
+    location.hash = "#/auth";
+    return;
+  }
+  const sheet = document.getElementById("feedReplySheet");
+  if (!sheet) return;
+  bindFeedReplySheetOnce();
+  _feedReplyContext = { targetKind, targetId };
+
+  const header = document.getElementById("feedReplyHeader");
+  const subEl = document.getElementById("feedReplySub");
+  if (header) header.textContent = handle ? `Reply to ${handle}` : "Replies";
+  if (subEl) subEl.textContent = sub ? sub.slice(0, 200) : "";
+
+  const list = document.getElementById("feedReplyList");
+  if (list) list.innerHTML = `<div class="feedReplyRowLoading" aria-hidden="true" style="padding:24px;text-align:center;color:rgba(232,238,247,0.4);font-size:13px;">Loading…</div>`;
+
+  const input = document.getElementById("feedReplyInput");
+  if (input) input.value = "";
+  updateFeedReplyFormState();
+
+  sheet.hidden = false;
+  // Allow the layout to settle before triggering the transition.
+  window.requestAnimationFrame(() => {
+    sheet.setAttribute("aria-hidden", "false");
+    if (input) {
+      try { input.focus({ preventScroll: false }); } catch { input.focus(); }
+    }
+  });
+
+  void loadFeedReplyList();
+}
+
+function closeFeedReplySheet() {
+  const sheet = document.getElementById("feedReplySheet");
+  if (!sheet) return;
+  sheet.setAttribute("aria-hidden", "true");
+  window.setTimeout(() => {
+    sheet.hidden = true;
+    _feedReplyContext = null;
+  }, 220);
+}
+
+async function loadFeedReplyList() {
+  const ctx = _feedReplyContext;
+  if (!ctx) return;
+  const list = document.getElementById("feedReplyList");
+  if (!list) return;
+  try {
+    const params = new URLSearchParams();
+    params.set("type", "replies");
+    params.set("targetKind", ctx.targetKind);
+    params.set("targetId", ctx.targetId);
+    params.set("limit", "100");
+    const data = await socialApi(`/api/social?${params.toString()}`);
+    if (!_feedReplyContext || _feedReplyContext.targetId !== ctx.targetId) return;
+    const replies = Array.isArray(data?.replies) ? data.replies : [];
+    list.innerHTML = replies.map((r) => feedReplyRowHtml(r)).join("");
+    // Update count in the underlying feed row optimistically.
+    setFeedSocialStat(ctx.targetKind, ctx.targetId, { replyCount: replies.length });
+    applyFeedSocialStatsToDom(document);
+  } catch (e) {
+    list.innerHTML = `<div style="padding:24px;text-align:center;color:rgba(255,100,130,0.85);font-size:13px;">${escapeHtml(e?.message || "Could not load replies.")}</div>`;
+  }
+}
+
+function feedReplyRowHtml(reply) {
+  const handle = String(reply?.username || "").trim();
+  const safeHandle = escapeHtml(handle);
+  const initials = (handle || "U").replace(/^@/, "").slice(0, 2).toUpperCase();
+  const avatarRaw = String(reply?.avatar || "").trim();
+  const avatarSrc = avatarRaw ? normalizeProfileAvatarForImg(avatarRaw) : "";
+  const href = handle ? `#/u/${encodeURIComponent(handle)}` : "#";
+  const ts = reply?.createdAt ? new Date(reply.createdAt).getTime() : 0;
+  const when = ts ? relativeTime(ts) : "Just now";
+  const body = escapeHtml(String(reply?.body || "").trim());
+  const replyId = escapeHtml(String(reply?.id || ""));
+  const isOwn = Boolean(
+    reply?.userId &&
+    authSession?.user?.id &&
+    String(reply.userId) === String(authSession.user.id),
+  );
+  const deleteBtn = isOwn
+    ? `<button type="button" class="feedReplyDelete" data-feed-reply-delete="${replyId}">Remove</button>`
+    : "";
+  return `
+    <article class="feedReplyRow" data-feed-reply-id="${replyId}">
+      <a class="feedReplyAvatar" href="${escapeHtml(href)}" data-route-link="user" aria-label="${handle ? `@${safeHandle} profile` : "Profile"}">
+        ${avatarSrc
+          ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="36" height="36" decoding="async" loading="lazy" />`
+          : `<span class="feedReplyAvatarFallback">${escapeHtml(initials)}</span>`}
+      </a>
+      <div>
+        <div class="feedReplyMeta">
+          <a class="feedReplyName" href="${escapeHtml(href)}" data-route-link="user">${handle ? `@${safeHandle}` : "A musician"}</a>
+          <span aria-hidden="true">·</span>
+          <span class="feedReplyWhen">${escapeHtml(when)}</span>
+        </div>
+        <p class="feedReplyBody">${body}</p>
+        ${deleteBtn}
+      </div>
+    </article>`;
+}
+
+function updateFeedReplyFormState() {
+  const input = document.getElementById("feedReplyInput");
+  const submit = document.getElementById("feedReplySubmit");
+  const counter = document.getElementById("feedReplyCount");
+  if (!input || !submit || !counter) return;
+  const len = (input.value || "").trim().length;
+  const total = (input.value || "").length;
+  submit.disabled = len === 0 || len > 280 || submit.dataset.busy === "1";
+  counter.textContent = `${total} / 280`;
+  counter.classList.toggle("isNear", total > 240 && total <= 280);
+  counter.classList.toggle("isOver", total > 280);
+}
+
+async function submitFeedReply() {
+  const ctx = _feedReplyContext;
+  if (!ctx) return;
+  const input = document.getElementById("feedReplyInput");
+  const submit = document.getElementById("feedReplySubmit");
+  if (!input || !submit) return;
+  const body = String(input.value || "").trim();
+  if (!body || body.length > 280) return;
+  submit.dataset.busy = "1";
+  submit.disabled = true;
+  try {
+    const data = await socialApi("/api/social", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "reply",
+        targetKind: ctx.targetKind,
+        targetId: ctx.targetId,
+        body,
+      }),
+    });
+    if (data?.ok && data.reply) {
+      const list = document.getElementById("feedReplyList");
+      if (list) list.insertAdjacentHTML("beforeend", feedReplyRowHtml(data.reply));
+      input.value = "";
+      setFeedSocialStat(ctx.targetKind, ctx.targetId, {
+        replyCount: Number(data.count) || (getFeedSocialStat(ctx.targetKind, ctx.targetId).replyCount + 1),
+      });
+      applyFeedSocialStatsToDom(document);
+      try { haptic("light"); } catch {}
+      // Scroll list to the new reply.
+      if (list) list.scrollTop = list.scrollHeight;
+    }
+  } catch (e) {
+    showToast(e?.message || "Could not post reply.");
+  } finally {
+    delete submit.dataset.busy;
+    updateFeedReplyFormState();
+  }
+}
+
+async function deleteFeedReply(replyId) {
+  const ctx = _feedReplyContext;
+  if (!ctx || !replyId) return;
+  let ok = true;
+  try { ok = window.confirm("Remove this reply?"); } catch { ok = true; }
+  if (!ok) return;
+  try {
+    const data = await socialApi("/api/social", {
+      method: "POST",
+      body: JSON.stringify({ action: "delete_reply", replyId }),
+    });
+    if (data?.ok) {
+      const row = document.querySelector(`[data-feed-reply-id="${CSS.escape(String(replyId))}"]`);
+      if (row) row.remove();
+      const newCount = Number(data.count);
+      if (Number.isFinite(newCount)) {
+        setFeedSocialStat(ctx.targetKind, ctx.targetId, { replyCount: newCount });
+        applyFeedSocialStatsToDom(document);
+      }
+    }
+  } catch (e) {
+    showToast(e?.message || "Could not remove reply.");
+  }
+}
+
+function bindFeedReplySheetOnce() {
+  if (_feedReplyBound) return;
+  _feedReplyBound = true;
+  const sheet = document.getElementById("feedReplySheet");
+  const form = document.getElementById("feedReplyForm");
+  const input = document.getElementById("feedReplyInput");
+  const list = document.getElementById("feedReplyList");
+  if (!sheet || !form || !input || !list) return;
+
+  sheet.addEventListener("click", (e) => {
+    if (e.target.closest("[data-feed-reply-dismiss]")) {
+      e.preventDefault();
+      closeFeedReplySheet();
+    }
+  });
+
+  input.addEventListener("input", updateFeedReplyFormState);
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    void submitFeedReply();
+  });
+
+  list.addEventListener("click", (e) => {
+    const del = e.target.closest("[data-feed-reply-delete]");
+    if (del) {
+      e.preventDefault();
+      void deleteFeedReply(del.getAttribute("data-feed-reply-delete"));
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (sheet.getAttribute("aria-hidden") === "false") closeFeedReplySheet();
+  });
+}
+
 async function handleFriendsWtfFollow(btn) {
   const targetUserId = String(btn.getAttribute("data-friends-follow") || "").trim();
   const handle = String(btn.getAttribute("data-friends-follow-handle") || "").trim();
@@ -6654,6 +7079,8 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
     try {
       syncDiscoveryPlayingHighlights();
     } catch {}
+    applyFeedSocialStatsToDom(listEl);
+    void hydrateFeedSocialStatsForFeed(listEl);
     if (!force && Date.now() - snap.at < FRIENDS_MIN_FETCH_GAP_MS) {
       return;
     }
@@ -6867,6 +7294,10 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
       tracks: _discoveryFeedTracks,
     };
     persistFriendsFeedSnapshot();
+    // Apply any stats we already have from a previous fetch, then kick
+    // off a fresh batch fetch to update counts and the liked-state.
+    applyFeedSocialStatsToDom(listEl);
+    void hydrateFeedSocialStatsForFeed(listEl);
     try {
       syncDiscoveryPlayingHighlights();
     } catch {}
@@ -6997,14 +7428,11 @@ function bindFriendsPageOnce() {
       const actBtn = e.target.closest("[data-friends-act]");
       if (actBtn && friendsPage.contains(actBtn)) {
         const kind = actBtn.getAttribute("data-friends-act");
-        // Plays is read-only.
         if (kind === "plays") return;
         e.preventDefault();
         e.stopPropagation();
-        try { haptic("light"); } catch {}
-        actBtn.classList.add("isPulse");
-        window.setTimeout(() => actBtn.classList.remove("isPulse"), 320);
-        showToast(kind === "like" ? "Likes are coming soon." : "Replies are coming soon.");
+        if (kind === "like") void handleFeedLikeTap(actBtn);
+        else if (kind === "reply") void openFeedReplySheetFromButton(actBtn);
         return;
       }
       if (e.target.closest(".followActAvatar")) return;
@@ -18171,7 +18599,17 @@ function bindProfileSongsSegmentOnce() {
     actList.addEventListener("click", (e) => {
       if (e.target.closest(".followActMenuWrap, [data-follow-status-menu], [data-follow-status-delete]")) return;
       if (e.target.closest(".followActAvatar, .followActUserLink")) return;
-      const pl = e.target.closest("[data-user-lib-play], .followActMedia");
+      const actBtn = e.target.closest("[data-friends-act]");
+      if (actBtn && actList.contains(actBtn)) {
+        const kind = actBtn.getAttribute("data-friends-act");
+        if (kind === "plays") return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (kind === "like") void handleFeedLikeTap(actBtn);
+        else if (kind === "reply") void openFeedReplySheetFromButton(actBtn);
+        return;
+      }
+      const pl = e.target.closest("[data-user-lib-play], .followActMedia, .followActQuoteCard");
       if (!pl || !actList.contains(pl)) return;
       e.preventDefault();
       playDiscoverTarget(pl);

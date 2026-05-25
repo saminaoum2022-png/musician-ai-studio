@@ -24,10 +24,12 @@ const ECHO_BEAT_DEFS = {
   oud: { label: "Oud", variants: ["oud-a.mp3", "oud-b.mp3"] },
 };
 const ECHO_BEAT_SPEED = { slowed: 0.85, normal: 1.0, fast: 1.15 };
-/** Beat level baked into the uploaded mix (sits well below voice). */
-const ECHO_BEAT_DUCK_LEVEL = 0.22;
-/** Beat level played to the user's ears while recording (so they can perform to it). */
-const ECHO_BEAT_MONITOR_LEVEL = 0.55;
+/** Beat level baked into the uploaded mix (sits below voice). */
+const ECHO_BEAT_DUCK_LEVEL = 0.32;
+/** Voice level in the offline mix. */
+const ECHO_MIX_VOICE_GAIN = 1.0;
+/** Render sample rate for the offline mix — mono, voice-friendly, keeps WAV under 2MB. */
+const ECHO_MIX_SAMPLE_RATE = 22050;
 
 let ctx = null;
 let echoRecState = "idle";
@@ -58,7 +60,6 @@ let _echoBeatVariant = 0;
 let _echoBeatSpeed = "normal";
 let _echoBeatBufferCache = new Map();
 let _echoBeatPreview = null;
-let _echoBeatMixer = null;
 /**
  * iOS Safari/WKWebView creates AudioContexts in "suspended" state and only
  * allows resume() to actually take effect when called synchronously inside a
@@ -1229,82 +1230,126 @@ function updateEchoBeatPreviewSpeed() {
   } catch {}
 }
 
-function stopEchoBeatMixer() {
-  if (!_echoBeatMixer) return;
-  const { src, beatGain, monitorGain, micSrcNode, micGainNode, destNode } = _echoBeatMixer;
-  const ctx = _echoSharedAudioCtx;
-  _echoBeatMixer = null;
-  if (ctx && ctx.state !== "closed") {
-    try {
-      const t = ctx.currentTime;
-      beatGain.gain.cancelScheduledValues(t);
-      beatGain.gain.setValueAtTime(beatGain.gain.value, t);
-      beatGain.gain.linearRampToValueAtTime(0, t + 0.4);
-      monitorGain.gain.cancelScheduledValues(t);
-      monitorGain.gain.setValueAtTime(monitorGain.gain.value, t);
-      monitorGain.gain.linearRampToValueAtTime(0, t + 0.4);
-    } catch {}
-  }
-  setTimeout(() => {
-    try { src.stop(); } catch {}
-    try { src.disconnect(); } catch {}
-    try { beatGain.disconnect(); } catch {}
-    try { monitorGain.disconnect(); } catch {}
-    try { micGainNode?.disconnect(); } catch {}
-    try { micSrcNode?.disconnect(); } catch {}
-    try { destNode?.disconnect?.(); } catch {}
-  }, 520);
-}
-
-async function buildEchoBeatMixer(micStream) {
-  if (_echoBeatId === "none") return null;
-  const url = echoBeatVariantUrl(_echoBeatId, _echoBeatVariant);
-  const buf = await loadEchoBeatBuffer(url);
-  if (!buf) return null;
+async function decodeAudioBlobToBuffer(blob) {
+  if (!blob?.size) return null;
   const ctx = ensureEchoSharedAudioCtx();
-  if (!ctx || ctx.state === "closed") return null;
-  if (ctx.state === "suspended") {
-    try { await ctx.resume(); } catch {}
-  }
-  let micSrcNode;
+  if (!ctx) return null;
   try {
-    micSrcNode = ctx.createMediaStreamSource(micStream);
+    const ab = await blob.arrayBuffer();
+    return await new Promise((resolve, reject) => {
+      try {
+        ctx.decodeAudioData(ab.slice(0), resolve, reject);
+      } catch (err) {
+        reject(err);
+      }
+    });
   } catch {
     return null;
   }
-  const micGainNode = ctx.createGain();
-  micGainNode.gain.value = 1.0;
-  micSrcNode.connect(micGainNode);
-  const src = ctx.createBufferSource();
-  src.buffer = buf;
-  src.loop = true;
-  src.playbackRate.value = ECHO_BEAT_SPEED[_echoBeatSpeed] || 1.0;
-  const beatGain = ctx.createGain();
-  beatGain.gain.value = 0;
-  src.connect(beatGain);
-  // Monitor path so the user hears the beat while recording (for performing).
-  // The mic stream has echoCancellation on, so speaker bleed is suppressed.
-  // The mix uploaded to friends comes from the clean buffer path, not the mic.
-  const monitorGain = ctx.createGain();
-  monitorGain.gain.value = 0;
-  src.connect(monitorGain);
-  monitorGain.connect(ctx.destination);
-  const destNode = ctx.createMediaStreamDestination();
-  micGainNode.connect(destNode);
-  beatGain.connect(destNode);
-  try { src.start(0); } catch {}
-  const t = ctx.currentTime;
-  beatGain.gain.linearRampToValueAtTime(ECHO_BEAT_DUCK_LEVEL, t + 0.22);
-  monitorGain.gain.linearRampToValueAtTime(ECHO_BEAT_MONITOR_LEVEL, t + 0.22);
-  return {
-    src,
-    beatGain,
-    monitorGain,
-    micSrcNode,
-    micGainNode,
-    destNode,
-    stream: destNode.stream,
+}
+
+/**
+ * Encode an AudioBuffer as a 16-bit PCM mono WAV blob. Channels are averaged
+ * down to mono. iOS Safari and every other browser can play this directly,
+ * and our storage bucket accepts WAV.
+ */
+function audioBufferToMonoWavBlob(buffer) {
+  const sampleRate = buffer.sampleRate;
+  const length = buffer.length;
+  const channels = buffer.numberOfChannels;
+  const mono = new Float32Array(length);
+  for (let c = 0; c < channels; c++) {
+    const data = buffer.getChannelData(c);
+    for (let i = 0; i < length; i++) mono[i] += data[i];
+  }
+  if (channels > 1) {
+    for (let i = 0; i < length; i++) mono[i] /= channels;
+  }
+  const bytesPerSample = 2;
+  const dataSize = length * bytesPerSample;
+  const headerSize = 44;
+  const buf = new ArrayBuffer(headerSize + dataSize);
+  const view = new DataView(buf);
+  let offset = 0;
+  const writeString = (s) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(offset++, s.charCodeAt(i));
   };
+  const writeUint32 = (n) => { view.setUint32(offset, n, true); offset += 4; };
+  const writeUint16 = (n) => { view.setUint16(offset, n, true); offset += 2; };
+  writeString("RIFF");
+  writeUint32(headerSize + dataSize - 8);
+  writeString("WAVE");
+  writeString("fmt ");
+  writeUint32(16);
+  writeUint16(1);
+  writeUint16(1);
+  writeUint32(sampleRate);
+  writeUint32(sampleRate * bytesPerSample);
+  writeUint16(bytesPerSample);
+  writeUint16(16);
+  writeString("data");
+  writeUint32(dataSize);
+  for (let i = 0; i < length; i++) {
+    const s = Math.max(-1, Math.min(1, mono[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    offset += 2;
+  }
+  return new Blob([buf], { type: "audio/wav" });
+}
+
+/**
+ * Offline-mix the recorded voice blob with the selected beat buffer and
+ * return a WAV blob ready to upload. Done after the user releases the mic
+ * so we sidestep iOS Safari quirks with mixing buffer sources into a live
+ * MediaStreamAudioDestinationNode.
+ */
+async function mixVoiceWithBeatBlob({ voiceBlob, beatBuffer, beatLevel, beatRate }) {
+  if (!voiceBlob?.size || !beatBuffer) return null;
+  const voiceBuffer = await decodeAudioBlobToBuffer(voiceBlob);
+  if (!voiceBuffer) return null;
+  const sr = ECHO_MIX_SAMPLE_RATE;
+  const dur = voiceBuffer.duration;
+  if (!(dur > 0)) return null;
+  const sampleCount = Math.max(1, Math.ceil(dur * sr));
+  let offline;
+  try {
+    offline = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, sampleCount, sr);
+  } catch {
+    return null;
+  }
+  const v = offline.createBufferSource();
+  v.buffer = voiceBuffer;
+  const vGain = offline.createGain();
+  vGain.gain.value = ECHO_MIX_VOICE_GAIN;
+  v.connect(vGain).connect(offline.destination);
+  v.start(0);
+  const b = offline.createBufferSource();
+  b.buffer = beatBuffer;
+  b.loop = true;
+  b.playbackRate.value = beatRate;
+  const bGain = offline.createGain();
+  const fadeIn = 0.22;
+  const fadeOut = 0.42;
+  bGain.gain.setValueAtTime(0, 0);
+  bGain.gain.linearRampToValueAtTime(beatLevel, Math.min(fadeIn, dur));
+  if (dur > fadeOut + 0.05) {
+    bGain.gain.setValueAtTime(beatLevel, dur - fadeOut);
+    bGain.gain.linearRampToValueAtTime(0, dur);
+  }
+  b.connect(bGain).connect(offline.destination);
+  try {
+    b.start(0);
+  } catch {}
+  try {
+    b.stop(dur + 0.05);
+  } catch {}
+  let rendered;
+  try {
+    rendered = await offline.startRendering();
+  } catch {
+    return null;
+  }
+  return audioBufferToMonoWavBlob(rendered);
 }
 
 function syncEchoBeatPickerUi() {
@@ -1627,7 +1672,6 @@ function resetEchoCompose() {
   stopLiveEchoWaveform();
   stopComposeIdleMotion();
   stopEchoBeatPreview();
-  stopEchoBeatMixer();
   echoMicTouching = false;
   _echoHoldWanted = false;
   _echoHoldPointerId = null;
@@ -1789,46 +1833,28 @@ async function startEchoRecording() {
     }
     return;
   }
-  // Stop the in-compose preview before we wire the same beat into the
-  // recording mixer — avoids double-playing the loop through speakers.
-  stopEchoBeatPreview();
-  let recStream = stream;
-  if (_echoBeatId !== "none") {
-    try {
-      const mixer = await buildEchoBeatMixer(stream);
-      if (mixer) {
-        if (armGen !== _echoArmGen || echoRecState !== "arming" || !_echoHoldWanted) {
-          // User released before the mixer finished arming — tear it down.
-          _echoBeatMixer = mixer;
-          stopEchoBeatMixer();
-          try { stream.getTracks().forEach((t) => t.stop()); } catch {}
-          if (armGen === _echoArmGen && echoRecState === "arming") {
-            echoRecState = "idle";
-            syncEchoComposeUi();
-          }
-          return;
-        }
-        _echoBeatMixer = mixer;
-        recStream = mixer.stream;
-      }
-    } catch {}
-  }
+  // We intentionally do NOT live-mix the beat into MediaRecorder here.
+  // iOS Safari/WKWebView has known quirks mixing AudioBufferSourceNodes into
+  // a MediaStreamAudioDestinationNode — the buffer often plays through the
+  // speaker but never gets captured. Instead we record the mic stream clean
+  // and mix voice+beat offline in `rec.onstop` (see mixVoiceWithBeatBlob).
+  // The preview loop keeps playing through the shared AudioContext so the
+  // user can still perform to the beat.
   const mimeType = c().pickRecorderMimeType?.() || "";
   let rec;
   try {
     const recOpts = mimeType
       ? { mimeType, audioBitsPerSecond: ECHO_REC_BITRATE }
       : { audioBitsPerSecond: ECHO_REC_BITRATE };
-    rec = new MediaRecorder(recStream, recOpts);
+    rec = new MediaRecorder(stream, recOpts);
   } catch {
     try {
-      rec = mimeType ? new MediaRecorder(recStream, { mimeType }) : new MediaRecorder(recStream);
+      rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
     } catch {
       rec = null;
     }
   }
   if (!rec) {
-    stopEchoBeatMixer();
     try {
       c().showToast("Recording not supported here.", { durationMs: 2600 });
     } catch {}
@@ -1853,7 +1879,7 @@ async function startEchoRecording() {
   rec.onstop = () => {
     stopLiveEchoWaveform();
     stopEchoComposeTick();
-    stopEchoBeatMixer();
+    stopEchoBeatPreview();
     echoDurationMs = Math.min(ECHO_MAX_MS, performance.now() - echoStartedAt);
     const raw = new Blob(echoChunks, { type: rec.mimeType || "audio/webm" });
     echoRawBlob = raw.size ? raw : null;
@@ -1879,6 +1905,23 @@ async function startEchoRecording() {
     syncEchoComposeUi();
     echoEnhancePromise = (async () => {
       try {
+        if (_echoBeatId !== "none" && echoRawBlob) {
+          try {
+            const beatUrl = echoBeatVariantUrl(_echoBeatId, _echoBeatVariant);
+            const beatBuf = await loadEchoBeatBuffer(beatUrl);
+            if (beatBuf) {
+              const mixed = await mixVoiceWithBeatBlob({
+                voiceBlob: echoRawBlob,
+                beatBuffer: beatBuf,
+                beatLevel: ECHO_BEAT_DUCK_LEVEL,
+                beatRate: ECHO_BEAT_SPEED[_echoBeatSpeed] || 1.0,
+              });
+              if (mixed?.size && mixed.size <= ECHO_STORAGE_MAX_BYTES) {
+                echoRawBlob = mixed;
+              }
+            }
+          } catch {}
+        }
         if (!prepareEchoFromRawRecording()) {
           echoRecState = "idle";
           syncEchoComposeUi();
@@ -1903,7 +1946,6 @@ async function startEchoRecording() {
   try {
     rec.start();
   } catch {
-    stopEchoBeatMixer();
     try {
       stream.getTracks().forEach((t) => t.stop());
     } catch {}

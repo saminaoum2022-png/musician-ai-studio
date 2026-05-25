@@ -22182,6 +22182,13 @@ section.mentorPage{
  * Hairline dividers between posts, no card chrome.
  * =================================================================== */
 
+/* Both selectors target the same element to beat the higher-specificity
+ * legacy rules on `.friendsPage .followActStack .followAct` (3 classes)
+ * and `.profileActivitiesList.followActStack .followAct` (3 classes).
+ * Stacking three classes on the same element gives us specificity 3 and
+ * lets source order break the tie in our favour. */
+.followAct.followAct--xstyle.followActStack,
+.followActStack .followAct.followAct--xstyle,
 .followAct--xstyle{
   display: grid;
   grid-template-columns: 40px 1fr;
@@ -22195,21 +22202,34 @@ section.mentorPage{
   box-shadow: none;
   overflow: visible;
 }
+.followActStack .followAct.followAct--xstyle:hover,
 .followAct--xstyle:hover{
   background: rgba(255, 255, 255, 0.02);
 }
-/* The profile activities list has scoped overrides that override
- * `.followAct` padding / borders — make sure xstyle wins there too. */
+/* Explicit overrides for the two scopes that previously beat us. */
+.friendsPage .followActStack .followAct.followAct--xstyle,
 .profileActivitiesList.followActStack .followAct.followAct--xstyle{
-  padding: 12px 14px;
-  border: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-  background: transparent;
-  border-radius: 0;
   display: grid;
   grid-template-columns: 40px 1fr;
   gap: 10px;
   align-items: flex-start;
+  padding: 12px 14px;
+  padding-left: 14px;
+  padding-right: 14px;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+/* And undo the `.followAct--music/--status` left/right padding override
+ * that the friends scope applies, which would otherwise pull the row
+ * out of alignment with the new grid edges. */
+.friendsPage .followActStack .followAct.followAct--xstyle.followAct--music,
+.friendsPage .followActStack .followAct.followAct--xstyle.followAct--status{
+  padding-left: 14px;
+  padding-right: 14px;
 }
 .followAct--xstyle > .followActAvatar{
   width: 40px;

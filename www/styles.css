@@ -6995,6 +6995,138 @@ body.echoComposeOpen .mobileTabbar{
   margin: 0 auto;
   padding: 0 4px;
 }
+.echoComposeBeatBlock{
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto 14px;
+  padding: 0 4px;
+}
+.echoComposeBeatKicker{
+  display: block;
+  margin: 0 0 8px 2px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(167,139,250,0.88);
+}
+.echoComposeBeatOpt{
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: rgba(151,165,186,0.5);
+}
+.echoComposeBeatRow{
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 2px 6px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.echoComposeBeatRow::-webkit-scrollbar{ display: none; }
+.echoBeatChip{
+  flex-shrink: 0;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  min-height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.28);
+  color: rgba(220,225,235,0.85);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    color 180ms ease,
+    background 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+.echoBeatChip:hover{
+  color: rgba(248,250,255,0.96);
+  border-color: rgba(255,255,255,0.18);
+}
+.echoBeatChip:active{ transform: scale(0.96); }
+.echoBeatChip.is-active{
+  color: rgba(255,255,255,1);
+  background: linear-gradient(135deg, rgba(124,92,255,0.34), rgba(167,139,250,0.2));
+  border-color: rgba(167,139,250,0.55);
+  box-shadow: 0 0 0 2px rgba(124,92,255,0.18), 0 6px 18px rgba(124,92,255,0.22);
+  animation: echoBeatChipPulse 2400ms ease-in-out infinite;
+}
+@keyframes echoBeatChipPulse{
+  0%, 100%{ box-shadow: 0 0 0 2px rgba(124,92,255,0.18), 0 6px 18px rgba(124,92,255,0.22); }
+  50%{ box-shadow: 0 0 0 3px rgba(124,92,255,0.30), 0 8px 22px rgba(124,92,255,0.32); }
+}
+.echoBeatChipDots{
+  display: none;
+  align-items: center;
+  gap: 3px;
+  margin-left: 2px;
+}
+.echoBeatChip.is-active .echoBeatChipDots{
+  display: inline-flex;
+}
+.echoBeatChipDots::before,
+.echoBeatChipDots::after{
+  content: '';
+  display: block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.35);
+  transition: background 180ms ease;
+}
+.echoBeatChip.is-variant-0 .echoBeatChipDots::before{ background: rgba(255,255,255,0.95); }
+.echoBeatChip.is-variant-1 .echoBeatChipDots::after{ background: rgba(255,255,255,0.95); }
+.echoComposeSpeedRow{
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 2px 0;
+}
+.echoSpeedChip{
+  flex-shrink: 0;
+  padding: 6px 12px;
+  min-height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.22);
+  color: rgba(200,210,225,0.75);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    color 180ms ease,
+    background 180ms ease,
+    border-color 180ms ease;
+}
+.echoSpeedChip:hover{
+  color: rgba(248,250,255,0.95);
+  border-color: rgba(255,255,255,0.16);
+}
+.echoSpeedChip.is-active{
+  color: rgba(255,255,255,1);
+  background: rgba(167,139,250,0.22);
+  border-color: rgba(167,139,250,0.5);
+}
+.echoComposeSheet.isRecording .echoComposeBeatBlock,
+.echoComposeSheet.isProcessing .echoComposeBeatBlock,
+.echoComposeSheet.isReleasing .echoComposeBeatBlock{
+  pointer-events: none;
+  opacity: 0.55;
+}
 .echoComposeWhisperKicker{
   display: block;
   margin: 0 0 8px 2px;

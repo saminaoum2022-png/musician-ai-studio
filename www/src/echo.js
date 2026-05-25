@@ -13,6 +13,22 @@ const ECHO_MIN_RECORD_MS = 420;
 const ECHO_HEARD_KEY = "nabad_echo_heard_v1";
 const ECHO_CAPTION_MAX = 60;
 
+const ECHO_BEAT_ASSET_BASE = "./assets/echo-beats/";
+const ECHO_BEAT_DEFS = {
+  none: { label: "None", variants: [] },
+  lofi: { label: "Lo-fi", variants: ["lofi-a.mp3", "lofi-b.mp3"] },
+  soul: { label: "Soul", variants: ["soul-a.mp3", "soul-b.mp3"] },
+  eight08: { label: "808", variants: ["eight08-a.mp3", "eight08-b.mp3"] },
+  piano: { label: "Piano", variants: ["piano-a.mp3", "piano-b.mp3"] },
+  ambient: { label: "Ambient", variants: ["ambient-a.mp3", "ambient-b.mp3"] },
+  oud: { label: "Oud", variants: ["oud-a.mp3", "oud-b.mp3"] },
+};
+const ECHO_BEAT_SPEED = { slowed: 0.85, normal: 1.0, fast: 1.15 };
+/** Beat level baked into the uploaded mix (sits well below voice). */
+const ECHO_BEAT_DUCK_LEVEL = 0.22;
+/** Beat level played to the user's ears while recording (so they can perform to it). */
+const ECHO_BEAT_MONITOR_LEVEL = 0.55;
+
 let ctx = null;
 let echoRecState = "idle";
 let echoRecorder = null;
@@ -37,6 +53,12 @@ let _echoArmGen = 0;
 let _echoDeletedOptIds = new Set();
 let _echoSentFlashTimer = 0;
 let _echoSfxCtx = null;
+let _echoBeatId = "none";
+let _echoBeatVariant = 0;
+let _echoBeatSpeed = "normal";
+let _echoBeatBufferCache = new Map();
+let _echoBeatPreview = null;
+let _echoBeatMixer = null;
 const COMPOSE_ORBIT_BARS = 48;
 
 function echoSfxCtx() {
@@ -1056,21 +1078,255 @@ async function postEchoReaction(reaction) {
 }
 
 async function echoRequestMicStream() {
+  /**
+   * Prefer constraints that keep beat-bleed out of the mic when the user is
+   * recording with a background loop playing through the device speaker.
+   * Fall back to plain audio if the device rejects the constraints object.
+   */
   try {
-    return await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    return await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: { ideal: true },
+        noiseSuppression: { ideal: true },
+        autoGainControl: { ideal: true },
+      },
+      video: false,
+    });
   } catch (e1) {
     try {
-      return await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: { ideal: true },
-          noiseSuppression: { ideal: true },
-          autoGainControl: { ideal: true },
-        },
-        video: false,
-      });
+      return await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     } catch (e2) {
       throw new Error(e2?.message || e1?.message || "Microphone unavailable");
     }
+  }
+}
+
+function echoBeatVariantUrl(beatId, variant) {
+  const def = ECHO_BEAT_DEFS[beatId];
+  if (!def || !def.variants?.length) return "";
+  const idx = Math.max(0, Math.min(def.variants.length - 1, variant | 0));
+  return ECHO_BEAT_ASSET_BASE + def.variants[idx];
+}
+
+async function loadEchoBeatBuffer(url) {
+  if (!url) return null;
+  if (_echoBeatBufferCache.has(url)) return _echoBeatBufferCache.get(url);
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("beat fetch " + res.status);
+    const ab = await res.arrayBuffer();
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    const tmp = new Ctx();
+    const buf = await new Promise((resolve, reject) => {
+      try {
+        tmp.decodeAudioData(ab.slice(0), resolve, reject);
+      } catch (err) {
+        reject(err);
+      }
+    });
+    try { tmp.close(); } catch {}
+    _echoBeatBufferCache.set(url, buf);
+    return buf;
+  } catch {
+    return null;
+  }
+}
+
+function stopEchoBeatPreview() {
+  if (!_echoBeatPreview) return;
+  const { ctx, src, gain } = _echoBeatPreview;
+  _echoBeatPreview = null;
+  try {
+    const t = ctx.currentTime;
+    gain.gain.cancelScheduledValues(t);
+    gain.gain.setValueAtTime(gain.gain.value, t);
+    gain.gain.linearRampToValueAtTime(0, t + 0.18);
+  } catch {}
+  setTimeout(() => {
+    try { src.stop(); } catch {}
+    try { ctx.close(); } catch {}
+  }, 240);
+}
+
+async function startEchoBeatPreview() {
+  stopEchoBeatPreview();
+  if (_echoBeatId === "none") return;
+  const beatAtRequest = _echoBeatId;
+  const variantAtRequest = _echoBeatVariant;
+  const url = echoBeatVariantUrl(beatAtRequest, variantAtRequest);
+  const buf = await loadEchoBeatBuffer(url);
+  if (!buf) return;
+  if (_echoBeatId !== beatAtRequest || _echoBeatVariant !== variantAtRequest) return;
+  if (echoRecState !== "idle") return;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return;
+  const ctx = new Ctx();
+  try {
+    if (ctx.state === "suspended") await ctx.resume();
+  } catch {}
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.loop = true;
+  src.playbackRate.value = ECHO_BEAT_SPEED[_echoBeatSpeed] || 1.0;
+  const gain = ctx.createGain();
+  gain.gain.value = 0;
+  src.connect(gain);
+  gain.connect(ctx.destination);
+  try { src.start(0); } catch {}
+  const t = ctx.currentTime;
+  gain.gain.linearRampToValueAtTime(0.42, t + 0.25);
+  _echoBeatPreview = { ctx, src, gain };
+}
+
+function updateEchoBeatPreviewSpeed() {
+  if (!_echoBeatPreview) return;
+  try {
+    _echoBeatPreview.src.playbackRate.value = ECHO_BEAT_SPEED[_echoBeatSpeed] || 1.0;
+  } catch {}
+}
+
+function stopEchoBeatMixer() {
+  if (!_echoBeatMixer) return;
+  const { ctx, src, beatGain, monitorGain } = _echoBeatMixer;
+  _echoBeatMixer = null;
+  try {
+    const t = ctx.currentTime;
+    beatGain.gain.cancelScheduledValues(t);
+    beatGain.gain.setValueAtTime(beatGain.gain.value, t);
+    beatGain.gain.linearRampToValueAtTime(0, t + 0.4);
+    monitorGain.gain.cancelScheduledValues(t);
+    monitorGain.gain.setValueAtTime(monitorGain.gain.value, t);
+    monitorGain.gain.linearRampToValueAtTime(0, t + 0.4);
+  } catch {}
+  setTimeout(() => {
+    try { src.stop(); } catch {}
+    try { ctx.close(); } catch {}
+  }, 520);
+}
+
+async function buildEchoBeatMixer(micStream) {
+  if (_echoBeatId === "none") return null;
+  const url = echoBeatVariantUrl(_echoBeatId, _echoBeatVariant);
+  const buf = await loadEchoBeatBuffer(url);
+  if (!buf) return null;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  let ctx;
+  try {
+    ctx = new Ctx();
+  } catch {
+    return null;
+  }
+  try {
+    if (ctx.state === "suspended") await ctx.resume();
+  } catch {}
+  let micSrc;
+  try {
+    micSrc = ctx.createMediaStreamSource(micStream);
+  } catch {
+    try { ctx.close(); } catch {}
+    return null;
+  }
+  const micGain = ctx.createGain();
+  micGain.gain.value = 1.0;
+  micSrc.connect(micGain);
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.loop = true;
+  src.playbackRate.value = ECHO_BEAT_SPEED[_echoBeatSpeed] || 1.0;
+  const beatGain = ctx.createGain();
+  beatGain.gain.value = 0;
+  src.connect(beatGain);
+  // Monitor path so the user hears the beat while recording (for performing).
+  // The mic stream has echoCancellation on, so speaker bleed is suppressed.
+  // The mix uploaded to friends comes from the clean buffer path, not the mic.
+  const monitorGain = ctx.createGain();
+  monitorGain.gain.value = 0;
+  src.connect(monitorGain);
+  monitorGain.connect(ctx.destination);
+  const dest = ctx.createMediaStreamDestination();
+  micGain.connect(dest);
+  beatGain.connect(dest);
+  try { src.start(0); } catch {}
+  const t = ctx.currentTime;
+  beatGain.gain.linearRampToValueAtTime(ECHO_BEAT_DUCK_LEVEL, t + 0.22);
+  monitorGain.gain.linearRampToValueAtTime(ECHO_BEAT_MONITOR_LEVEL, t + 0.22);
+  return { ctx, src, beatGain, monitorGain, dest, stream: dest.stream };
+}
+
+function syncEchoBeatPickerUi() {
+  const row = document.getElementById("echoComposeBeatRow");
+  const speedRow = document.getElementById("echoComposeSpeedRow");
+  if (row) {
+    row.querySelectorAll(".echoBeatChip").forEach((chip) => {
+      const id = chip.getAttribute("data-echo-beat");
+      const active = id === _echoBeatId;
+      chip.classList.toggle("is-active", active);
+      chip.setAttribute("aria-pressed", active ? "true" : "false");
+      chip.classList.toggle("is-variant-0", active && _echoBeatVariant === 0);
+      chip.classList.toggle("is-variant-1", active && _echoBeatVariant === 1);
+    });
+  }
+  if (speedRow) {
+    speedRow.hidden = _echoBeatId === "none";
+    speedRow.querySelectorAll(".echoSpeedChip").forEach((chip) => {
+      const s = chip.getAttribute("data-echo-speed");
+      const active = s === _echoBeatSpeed;
+      chip.classList.toggle("is-active", active);
+      chip.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+  }
+}
+
+function handleEchoBeatChipTap(beatId) {
+  const def = ECHO_BEAT_DEFS[beatId];
+  if (!def) return;
+  if (beatId === "none") {
+    _echoBeatId = "none";
+    _echoBeatVariant = 0;
+    stopEchoBeatPreview();
+  } else if (_echoBeatId === beatId && def.variants.length > 1) {
+    _echoBeatVariant = (_echoBeatVariant + 1) % def.variants.length;
+    try { c().haptic("light"); } catch {}
+    void startEchoBeatPreview();
+  } else {
+    _echoBeatId = beatId;
+    _echoBeatVariant = 0;
+    try { c().haptic("light"); } catch {}
+    void startEchoBeatPreview();
+  }
+  syncEchoBeatPickerUi();
+}
+
+function handleEchoSpeedChipTap(speed) {
+  if (!ECHO_BEAT_SPEED[speed]) return;
+  _echoBeatSpeed = speed;
+  updateEchoBeatPreviewSpeed();
+  try { c().haptic("light"); } catch {}
+  syncEchoBeatPickerUi();
+}
+
+function wireEchoBeatPickerOnce() {
+  const row = document.getElementById("echoComposeBeatRow");
+  const speedRow = document.getElementById("echoComposeSpeedRow");
+  if (row && !row.dataset.echoBeatBound) {
+    row.dataset.echoBeatBound = "1";
+    row.addEventListener("click", (e) => {
+      const chip = e.target.closest(".echoBeatChip");
+      if (!chip) return;
+      e.preventDefault();
+      handleEchoBeatChipTap(String(chip.getAttribute("data-echo-beat") || "none"));
+    });
+  }
+  if (speedRow && !speedRow.dataset.echoBeatBound) {
+    speedRow.dataset.echoBeatBound = "1";
+    speedRow.addEventListener("click", (e) => {
+      const chip = e.target.closest(".echoSpeedChip");
+      if (!chip) return;
+      e.preventDefault();
+      handleEchoSpeedChipTap(String(chip.getAttribute("data-echo-speed") || "normal"));
+    });
   }
 }
 
@@ -1314,6 +1570,8 @@ function resetEchoCompose() {
   stopEchoComposeTick();
   stopLiveEchoWaveform();
   stopComposeIdleMotion();
+  stopEchoBeatPreview();
+  stopEchoBeatMixer();
   echoMicTouching = false;
   _echoHoldWanted = false;
   _echoHoldPointerId = null;
@@ -1323,6 +1581,10 @@ function resetEchoCompose() {
   echoDurationMs = 0;
   echoPeaks = [];
   echoTone = ECHO_TONE_DEFAULT;
+  _echoBeatId = "none";
+  _echoBeatVariant = 0;
+  _echoBeatSpeed = "normal";
+  syncEchoBeatPickerUi();
   resetEchoUploadState();
   echoBlob = null;
   echoRawBlob = null;
@@ -1471,21 +1733,46 @@ async function startEchoRecording() {
     }
     return;
   }
+  // Stop the in-compose preview before we wire the same beat into the
+  // recording mixer — avoids double-playing the loop through speakers.
+  stopEchoBeatPreview();
+  let recStream = stream;
+  if (_echoBeatId !== "none") {
+    try {
+      const mixer = await buildEchoBeatMixer(stream);
+      if (mixer) {
+        if (armGen !== _echoArmGen || echoRecState !== "arming" || !_echoHoldWanted) {
+          // User released before the mixer finished arming — tear it down.
+          _echoBeatMixer = mixer;
+          stopEchoBeatMixer();
+          try { stream.getTracks().forEach((t) => t.stop()); } catch {}
+          if (armGen === _echoArmGen && echoRecState === "arming") {
+            echoRecState = "idle";
+            syncEchoComposeUi();
+          }
+          return;
+        }
+        _echoBeatMixer = mixer;
+        recStream = mixer.stream;
+      }
+    } catch {}
+  }
   const mimeType = c().pickRecorderMimeType?.() || "";
   let rec;
   try {
     const recOpts = mimeType
       ? { mimeType, audioBitsPerSecond: ECHO_REC_BITRATE }
       : { audioBitsPerSecond: ECHO_REC_BITRATE };
-    rec = new MediaRecorder(stream, recOpts);
+    rec = new MediaRecorder(recStream, recOpts);
   } catch {
     try {
-      rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      rec = mimeType ? new MediaRecorder(recStream, { mimeType }) : new MediaRecorder(recStream);
     } catch {
       rec = null;
     }
   }
   if (!rec) {
+    stopEchoBeatMixer();
     try {
       c().showToast("Recording not supported here.", { durationMs: 2600 });
     } catch {}
@@ -1510,6 +1797,7 @@ async function startEchoRecording() {
   rec.onstop = () => {
     stopLiveEchoWaveform();
     stopEchoComposeTick();
+    stopEchoBeatMixer();
     echoDurationMs = Math.min(ECHO_MAX_MS, performance.now() - echoStartedAt);
     const raw = new Blob(echoChunks, { type: rec.mimeType || "audio/webm" });
     echoRawBlob = raw.size ? raw : null;
@@ -1559,6 +1847,7 @@ async function startEchoRecording() {
   try {
     rec.start();
   } catch {
+    stopEchoBeatMixer();
     try {
       stream.getTracks().forEach((t) => t.stop());
     } catch {}
@@ -1618,6 +1907,7 @@ export function openEchoComposeSheet({ replyTo = "", haptic: wantHaptic = true }
   document.body.classList.add("echoComposeOpen");
   paintIdleComposeWave();
   syncEchoComposeUi();
+  syncEchoBeatPickerUi();
   if (wantHaptic) {
     try {
       c().haptic("light");
@@ -2108,4 +2398,5 @@ function wireEchoRecordHold() {
 export function initEcho(appCtx) {
   ctx = appCtx;
   wireEchoOnce();
+  wireEchoBeatPickerOnce();
 }

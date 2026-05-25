@@ -2928,6 +2928,23 @@
           <p id="echoComposeStatusSub" class="echoComposeStatusSub" hidden aria-live="polite"></p>
         </div>
         <div class="echoComposeFooter echoComposeFooter--minimal">
+          <div class="echoComposeBeatBlock" id="echoComposeBeatBlock">
+            <span class="echoComposeBeatKicker">Beat <span class="echoComposeBeatOpt">optional</span></span>
+            <div class="echoComposeBeatRow" id="echoComposeBeatRow" role="tablist" aria-label="Background beat">
+              <button type="button" class="echoBeatChip is-active" data-echo-beat="none" aria-pressed="true">None</button>
+              <button type="button" class="echoBeatChip" data-echo-beat="lofi" aria-pressed="false"><span class="echoBeatChipLabel">Lo-fi</span><span class="echoBeatChipDots" aria-hidden="true"></span></button>
+              <button type="button" class="echoBeatChip" data-echo-beat="soul" aria-pressed="false"><span class="echoBeatChipLabel">Soul</span><span class="echoBeatChipDots" aria-hidden="true"></span></button>
+              <button type="button" class="echoBeatChip" data-echo-beat="eight08" aria-pressed="false"><span class="echoBeatChipLabel">808</span><span class="echoBeatChipDots" aria-hidden="true"></span></button>
+              <button type="button" class="echoBeatChip" data-echo-beat="piano" aria-pressed="false"><span class="echoBeatChipLabel">Piano</span><span class="echoBeatChipDots" aria-hidden="true"></span></button>
+              <button type="button" class="echoBeatChip" data-echo-beat="ambient" aria-pressed="false"><span class="echoBeatChipLabel">Ambient</span><span class="echoBeatChipDots" aria-hidden="true"></span></button>
+              <button type="button" class="echoBeatChip" data-echo-beat="oud" aria-pressed="false"><span class="echoBeatChipLabel">Oud</span><span class="echoBeatChipDots" aria-hidden="true"></span></button>
+            </div>
+            <div class="echoComposeSpeedRow" id="echoComposeSpeedRow" hidden role="tablist" aria-label="Beat speed">
+              <button type="button" class="echoSpeedChip" data-echo-speed="slowed" aria-pressed="false">Slowed</button>
+              <button type="button" class="echoSpeedChip is-active" data-echo-speed="normal" aria-pressed="true">Normal</button>
+              <button type="button" class="echoSpeedChip" data-echo-speed="fast" aria-pressed="false">Fast</button>
+            </div>
+          </div>
           <div class="echoComposeWhisperBlock">
             <label class="echoComposeWhisperKicker" for="echoComposeCaption">
               Whisper <span class="echoComposeWhisperOpt">optional</span>
@@ -2946,6 +2963,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260522echoHapticV1"></script>
+    <script type="module" src="./src/app.js?v=20260525echoBeatV1"></script>
   </body>
 </html>

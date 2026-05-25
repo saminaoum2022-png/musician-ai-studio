@@ -1085,21 +1085,33 @@ async function postEchoReaction(reaction) {
   }
 }
 
-async function echoRequestMicStream() {
+async function echoRequestMicStream({ allowSpeakerBleed = false } = {}) {
   /**
-   * Prefer constraints that keep beat-bleed out of the mic when the user is
-   * recording with a background loop playing through the device speaker.
-   * Fall back to plain audio if the device rejects the constraints object.
+   * When recording WITHOUT a beat, prefer echoCancellation/noise suppression
+   * so we get clean voice. When recording WITH a beat, we WANT the loop
+   * playing out the phone speaker to be picked up by the mic — so turn all
+   * suppression off. The single mic recording then naturally contains
+   * voice + beat in one file, no offline mixing required.
    */
+  const constraints = allowSpeakerBleed
+    ? {
+        audio: {
+          echoCancellation: { ideal: false },
+          noiseSuppression: { ideal: false },
+          autoGainControl: { ideal: false },
+        },
+        video: false,
+      }
+    : {
+        audio: {
+          echoCancellation: { ideal: true },
+          noiseSuppression: { ideal: true },
+          autoGainControl: { ideal: true },
+        },
+        video: false,
+      };
   try {
-    return await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: { ideal: true },
-        noiseSuppression: { ideal: true },
-        autoGainControl: { ideal: true },
-      },
-      video: false,
-    });
+    return await navigator.mediaDevices.getUserMedia(constraints);
   } catch (e1) {
     try {
       return await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -1107,6 +1119,48 @@ async function echoRequestMicStream() {
       throw new Error(e2?.message || e1?.message || "Microphone unavailable");
     }
   }
+}
+
+/**
+ * Make sure the selected beat is decoded and audibly playing through the
+ * shared AudioContext speaker output, then resolve. The mic recording will
+ * then capture the speaker bleed naturally. Called right before recording
+ * starts so the beat is already audible when the mic opens.
+ */
+async function ensureEchoBeatPlayingForRecord() {
+  if (_echoBeatId === "none") return false;
+  const beatAtRequest = _echoBeatId;
+  const variantAtRequest = _echoBeatVariant;
+  const url = echoBeatVariantUrl(beatAtRequest, variantAtRequest);
+  const buf = await loadEchoBeatBuffer(url);
+  if (!buf) return false;
+  if (_echoBeatId !== beatAtRequest || _echoBeatVariant !== variantAtRequest) return false;
+  const ctx = ensureEchoSharedAudioCtx();
+  if (!ctx || ctx.state === "closed") return false;
+  if (ctx.state === "suspended") {
+    try { await ctx.resume(); } catch {}
+  }
+  // If a preview is already running with the right buffer/rate, just leave it.
+  if (_echoBeatPreview) {
+    try {
+      _echoBeatPreview.src.playbackRate.value = ECHO_BEAT_SPEED[_echoBeatSpeed] || 1.0;
+      _echoBeatPreview.gain.gain.setTargetAtTime(0.85, ctx.currentTime, 0.05);
+    } catch {}
+    return true;
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.loop = true;
+  src.playbackRate.value = ECHO_BEAT_SPEED[_echoBeatSpeed] || 1.0;
+  const gain = ctx.createGain();
+  gain.gain.value = 0;
+  src.connect(gain);
+  gain.connect(ctx.destination);
+  try { src.start(0); } catch {}
+  const t = ctx.currentTime;
+  gain.gain.linearRampToValueAtTime(0.85, t + 0.12);
+  _echoBeatPreview = { src, gain };
+  return true;
 }
 
 function echoBeatVariantUrl(beatId, variant) {
@@ -1811,9 +1865,27 @@ async function startEchoRecording() {
   const armGen = ++_echoArmGen;
   echoRecState = "arming";
   syncEchoComposeUi();
+  // STEP 1: If a beat is selected, make sure it's loaded and audibly playing
+  // through the speaker BEFORE we open the mic. The mic recording will then
+  // capture both voice and the beat (speaker bleed) in a single track — no
+  // mixing afterward. Skip suppression so we don't accidentally cancel the
+  // beat back out of the mic.
+  const withBeat = _echoBeatId !== "none";
+  if (withBeat) {
+    try {
+      await ensureEchoBeatPlayingForRecord();
+    } catch {}
+    if (armGen !== _echoArmGen || echoRecState !== "arming" || !_echoHoldWanted) {
+      if (armGen === _echoArmGen && echoRecState === "arming") {
+        echoRecState = "idle";
+        syncEchoComposeUi();
+      }
+      return;
+    }
+  }
   let stream;
   try {
-    stream = await echoRequestMicStream();
+    stream = await echoRequestMicStream({ allowSpeakerBleed: withBeat });
   } catch {
     if (armGen !== _echoArmGen) return;
     echoRecState = "idle";
@@ -1833,13 +1905,6 @@ async function startEchoRecording() {
     }
     return;
   }
-  // We intentionally do NOT live-mix the beat into MediaRecorder here.
-  // iOS Safari/WKWebView has known quirks mixing AudioBufferSourceNodes into
-  // a MediaStreamAudioDestinationNode — the buffer often plays through the
-  // speaker but never gets captured. Instead we record the mic stream clean
-  // and mix voice+beat offline in `rec.onstop` (see mixVoiceWithBeatBlob).
-  // The preview loop keeps playing through the shared AudioContext so the
-  // user can still perform to the beat.
   const mimeType = c().pickRecorderMimeType?.() || "";
   let rec;
   try {
@@ -1905,23 +1970,6 @@ async function startEchoRecording() {
     syncEchoComposeUi();
     echoEnhancePromise = (async () => {
       try {
-        if (_echoBeatId !== "none" && echoRawBlob) {
-          try {
-            const beatUrl = echoBeatVariantUrl(_echoBeatId, _echoBeatVariant);
-            const beatBuf = await loadEchoBeatBuffer(beatUrl);
-            if (beatBuf) {
-              const mixed = await mixVoiceWithBeatBlob({
-                voiceBlob: echoRawBlob,
-                beatBuffer: beatBuf,
-                beatLevel: ECHO_BEAT_DUCK_LEVEL,
-                beatRate: ECHO_BEAT_SPEED[_echoBeatSpeed] || 1.0,
-              });
-              if (mixed?.size && mixed.size <= ECHO_STORAGE_MAX_BYTES) {
-                echoRawBlob = mixed;
-              }
-            }
-          } catch {}
-        }
         if (!prepareEchoFromRawRecording()) {
           echoRecState = "idle";
           syncEchoComposeUi();

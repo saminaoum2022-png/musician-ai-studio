@@ -59,6 +59,13 @@ let _echoBeatSpeed = "normal";
 let _echoBeatBufferCache = new Map();
 let _echoBeatPreview = null;
 let _echoBeatMixer = null;
+/**
+ * iOS Safari/WKWebView creates AudioContexts in "suspended" state and only
+ * allows resume() to actually take effect when called synchronously inside a
+ * user gesture. So we lazily create one shared context on the first chip tap
+ * (which IS a gesture) and reuse it for preview + mixer — never close it.
+ */
+let _echoSharedAudioCtx = null;
 const COMPOSE_ORBIT_BARS = 48;
 
 function echoSfxCtx() {
@@ -1108,6 +1115,41 @@ function echoBeatVariantUrl(beatId, variant) {
   return ECHO_BEAT_ASSET_BASE + def.variants[idx];
 }
 
+/**
+ * Get (or lazily create) the one shared AudioContext.
+ * Safe to call out of gesture — won't start playing. Will be unlocked by
+ * primeEchoSharedAudioCtx() which MUST be called inside a real gesture.
+ */
+function ensureEchoSharedAudioCtx() {
+  if (_echoSharedAudioCtx && _echoSharedAudioCtx.state !== "closed") {
+    return _echoSharedAudioCtx;
+  }
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  try {
+    _echoSharedAudioCtx = new Ctx();
+  } catch {
+    return null;
+  }
+  return _echoSharedAudioCtx;
+}
+
+/**
+ * Unlock the shared AudioContext from inside a user-gesture handler. iOS
+ * Safari needs resume() to be called synchronously in the same task as the
+ * touch/click event — awaits afterward are fine, the context stays running.
+ */
+function primeEchoSharedAudioCtx() {
+  const ctx = ensureEchoSharedAudioCtx();
+  if (!ctx) return null;
+  if (ctx.state === "suspended") {
+    try {
+      void ctx.resume().catch(() => {});
+    } catch {}
+  }
+  return ctx;
+}
+
 async function loadEchoBeatBuffer(url) {
   if (!url) return null;
   if (_echoBeatBufferCache.has(url)) return _echoBeatBufferCache.get(url);
@@ -1115,17 +1157,15 @@ async function loadEchoBeatBuffer(url) {
     const res = await fetch(url);
     if (!res.ok) throw new Error("beat fetch " + res.status);
     const ab = await res.arrayBuffer();
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return null;
-    const tmp = new Ctx();
+    const ctx = ensureEchoSharedAudioCtx();
+    if (!ctx) return null;
     const buf = await new Promise((resolve, reject) => {
       try {
-        tmp.decodeAudioData(ab.slice(0), resolve, reject);
+        ctx.decodeAudioData(ab.slice(0), resolve, reject);
       } catch (err) {
         reject(err);
       }
     });
-    try { tmp.close(); } catch {}
     _echoBeatBufferCache.set(url, buf);
     return buf;
   } catch {
@@ -1135,17 +1175,21 @@ async function loadEchoBeatBuffer(url) {
 
 function stopEchoBeatPreview() {
   if (!_echoBeatPreview) return;
-  const { ctx, src, gain } = _echoBeatPreview;
+  const { src, gain } = _echoBeatPreview;
+  const ctx = _echoSharedAudioCtx;
   _echoBeatPreview = null;
-  try {
-    const t = ctx.currentTime;
-    gain.gain.cancelScheduledValues(t);
-    gain.gain.setValueAtTime(gain.gain.value, t);
-    gain.gain.linearRampToValueAtTime(0, t + 0.18);
-  } catch {}
+  if (ctx && ctx.state !== "closed") {
+    try {
+      const t = ctx.currentTime;
+      gain.gain.cancelScheduledValues(t);
+      gain.gain.setValueAtTime(gain.gain.value, t);
+      gain.gain.linearRampToValueAtTime(0, t + 0.18);
+    } catch {}
+  }
   setTimeout(() => {
     try { src.stop(); } catch {}
-    try { ctx.close(); } catch {}
+    try { src.disconnect(); } catch {}
+    try { gain.disconnect(); } catch {}
   }, 240);
 }
 
@@ -1159,12 +1203,11 @@ async function startEchoBeatPreview() {
   if (!buf) return;
   if (_echoBeatId !== beatAtRequest || _echoBeatVariant !== variantAtRequest) return;
   if (echoRecState !== "idle") return;
-  const Ctx = window.AudioContext || window.webkitAudioContext;
-  if (!Ctx) return;
-  const ctx = new Ctx();
-  try {
-    if (ctx.state === "suspended") await ctx.resume();
-  } catch {}
+  const ctx = ensureEchoSharedAudioCtx();
+  if (!ctx || ctx.state === "closed") return;
+  if (ctx.state === "suspended") {
+    try { await ctx.resume(); } catch {}
+  }
   const src = ctx.createBufferSource();
   src.buffer = buf;
   src.loop = true;
@@ -1175,8 +1218,8 @@ async function startEchoBeatPreview() {
   gain.connect(ctx.destination);
   try { src.start(0); } catch {}
   const t = ctx.currentTime;
-  gain.gain.linearRampToValueAtTime(0.42, t + 0.25);
-  _echoBeatPreview = { ctx, src, gain };
+  gain.gain.linearRampToValueAtTime(0.55, t + 0.25);
+  _echoBeatPreview = { src, gain };
 }
 
 function updateEchoBeatPreviewSpeed() {
@@ -1188,20 +1231,28 @@ function updateEchoBeatPreviewSpeed() {
 
 function stopEchoBeatMixer() {
   if (!_echoBeatMixer) return;
-  const { ctx, src, beatGain, monitorGain } = _echoBeatMixer;
+  const { src, beatGain, monitorGain, micSrcNode, micGainNode, destNode } = _echoBeatMixer;
+  const ctx = _echoSharedAudioCtx;
   _echoBeatMixer = null;
-  try {
-    const t = ctx.currentTime;
-    beatGain.gain.cancelScheduledValues(t);
-    beatGain.gain.setValueAtTime(beatGain.gain.value, t);
-    beatGain.gain.linearRampToValueAtTime(0, t + 0.4);
-    monitorGain.gain.cancelScheduledValues(t);
-    monitorGain.gain.setValueAtTime(monitorGain.gain.value, t);
-    monitorGain.gain.linearRampToValueAtTime(0, t + 0.4);
-  } catch {}
+  if (ctx && ctx.state !== "closed") {
+    try {
+      const t = ctx.currentTime;
+      beatGain.gain.cancelScheduledValues(t);
+      beatGain.gain.setValueAtTime(beatGain.gain.value, t);
+      beatGain.gain.linearRampToValueAtTime(0, t + 0.4);
+      monitorGain.gain.cancelScheduledValues(t);
+      monitorGain.gain.setValueAtTime(monitorGain.gain.value, t);
+      monitorGain.gain.linearRampToValueAtTime(0, t + 0.4);
+    } catch {}
+  }
   setTimeout(() => {
     try { src.stop(); } catch {}
-    try { ctx.close(); } catch {}
+    try { src.disconnect(); } catch {}
+    try { beatGain.disconnect(); } catch {}
+    try { monitorGain.disconnect(); } catch {}
+    try { micGainNode?.disconnect(); } catch {}
+    try { micSrcNode?.disconnect(); } catch {}
+    try { destNode?.disconnect?.(); } catch {}
   }, 520);
 }
 
@@ -1210,27 +1261,20 @@ async function buildEchoBeatMixer(micStream) {
   const url = echoBeatVariantUrl(_echoBeatId, _echoBeatVariant);
   const buf = await loadEchoBeatBuffer(url);
   if (!buf) return null;
-  const Ctx = window.AudioContext || window.webkitAudioContext;
-  if (!Ctx) return null;
-  let ctx;
+  const ctx = ensureEchoSharedAudioCtx();
+  if (!ctx || ctx.state === "closed") return null;
+  if (ctx.state === "suspended") {
+    try { await ctx.resume(); } catch {}
+  }
+  let micSrcNode;
   try {
-    ctx = new Ctx();
+    micSrcNode = ctx.createMediaStreamSource(micStream);
   } catch {
     return null;
   }
-  try {
-    if (ctx.state === "suspended") await ctx.resume();
-  } catch {}
-  let micSrc;
-  try {
-    micSrc = ctx.createMediaStreamSource(micStream);
-  } catch {
-    try { ctx.close(); } catch {}
-    return null;
-  }
-  const micGain = ctx.createGain();
-  micGain.gain.value = 1.0;
-  micSrc.connect(micGain);
+  const micGainNode = ctx.createGain();
+  micGainNode.gain.value = 1.0;
+  micSrcNode.connect(micGainNode);
   const src = ctx.createBufferSource();
   src.buffer = buf;
   src.loop = true;
@@ -1245,14 +1289,22 @@ async function buildEchoBeatMixer(micStream) {
   monitorGain.gain.value = 0;
   src.connect(monitorGain);
   monitorGain.connect(ctx.destination);
-  const dest = ctx.createMediaStreamDestination();
-  micGain.connect(dest);
-  beatGain.connect(dest);
+  const destNode = ctx.createMediaStreamDestination();
+  micGainNode.connect(destNode);
+  beatGain.connect(destNode);
   try { src.start(0); } catch {}
   const t = ctx.currentTime;
   beatGain.gain.linearRampToValueAtTime(ECHO_BEAT_DUCK_LEVEL, t + 0.22);
   monitorGain.gain.linearRampToValueAtTime(ECHO_BEAT_MONITOR_LEVEL, t + 0.22);
-  return { ctx, src, beatGain, monitorGain, dest, stream: dest.stream };
+  return {
+    src,
+    beatGain,
+    monitorGain,
+    micSrcNode,
+    micGainNode,
+    destNode,
+    stream: destNode.stream,
+  };
 }
 
 function syncEchoBeatPickerUi() {
@@ -1282,6 +1334,9 @@ function syncEchoBeatPickerUi() {
 function handleEchoBeatChipTap(beatId) {
   const def = ECHO_BEAT_DEFS[beatId];
   if (!def) return;
+  // CRITICAL: must happen synchronously inside the click handler so iOS
+  // Safari/WKWebView accepts the resume() and lets us play audio later.
+  primeEchoSharedAudioCtx();
   if (beatId === "none") {
     _echoBeatId = "none";
     _echoBeatVariant = 0;
@@ -1301,6 +1356,7 @@ function handleEchoBeatChipTap(beatId) {
 
 function handleEchoSpeedChipTap(speed) {
   if (!ECHO_BEAT_SPEED[speed]) return;
+  primeEchoSharedAudioCtx();
   _echoBeatSpeed = speed;
   updateEchoBeatPreviewSpeed();
   try { c().haptic("light"); } catch {}
@@ -2373,6 +2429,10 @@ function wireEchoRecordHold() {
     if (echoRecState === "arming" || echoRecState === "processing" || sheet.classList.contains("isReleasing")) {
       return;
     }
+    // Unlock the shared AudioContext synchronously here too, so the mixer
+    // built later (after async getUserMedia) finds a running context even
+    // when the user never previewed a beat first.
+    if (_echoBeatId !== "none") primeEchoSharedAudioCtx();
     _echoHoldPointerId = e.pointerId;
     _echoHoldWanted = true;
     echoMicTouching = true;

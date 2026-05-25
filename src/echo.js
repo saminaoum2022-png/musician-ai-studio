@@ -25,7 +25,7 @@ const ECHO_BEAT_DEFS = {
 };
 const ECHO_BEAT_SPEED = { slowed: 0.85, normal: 1.0, fast: 1.15 };
 /** Beat level at playback time, mixed under the voice. */
-const ECHO_BEAT_PLAYBACK_GAIN = 0.32;
+const ECHO_BEAT_PLAYBACK_GAIN = 0.6;
 
 let ctx = null;
 let echoRecState = "idle";
@@ -855,6 +855,16 @@ function syncEchoViewerUi() {
   const handle = String(slide.username || story?.username || "").replace(/^@/, "") || "Creator";
   if (who) who.textContent = `@${handle}`;
   if (when) when.textContent = echoRelativeTime(slide.createdAt);
+  const beatPill = document.getElementById("echoViewerBeatPill");
+  if (beatPill) {
+    if (slide.beat?.id && ECHO_BEAT_DEFS[slide.beat.id]) {
+      beatPill.textContent = ECHO_BEAT_DEFS[slide.beat.id].label;
+      beatPill.hidden = false;
+    } else {
+      beatPill.hidden = true;
+      beatPill.textContent = "";
+    }
+  }
   const av = c().normalizeProfileAvatarForImg(String(slide.avatar || story?.avatar || "").trim());
   if (avatarImg) {
     if (av) {
@@ -1209,7 +1219,40 @@ function primeEchoSharedAudioCtx() {
       void ctx.resume().catch(() => {});
     } catch {}
   }
+  // iOS Safari/WKWebView only fully unlocks Web Audio output when a buffer
+  // source is .start()ed inside a real user gesture. A one-sample silent
+  // buffer is enough; we only need to do it once per context.
+  if (!ctx._echoUnlockDone) {
+    try {
+      const silent = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = silent;
+      src.connect(ctx.destination);
+      src.start(0);
+      ctx._echoUnlockDone = true;
+    } catch {}
+  }
+  // If the viewer audio element already exists, wire it through this
+  // context so voice + beat play through the same audio session and
+  // iOS doesn't silence one of them.
+  ensureEchoViewerAudioRoutedThroughCtx();
   return ctx;
+}
+
+let _echoViewerAudioMES = null;
+
+function ensureEchoViewerAudioRoutedThroughCtx() {
+  if (_echoViewerAudioMES) return _echoViewerAudioMES;
+  const ctx = _echoSharedAudioCtx;
+  if (!ctx || ctx.state === "closed") return null;
+  if (!_echoViewerAudioEl) return null;
+  try {
+    _echoViewerAudioMES = ctx.createMediaElementSource(_echoViewerAudioEl);
+    _echoViewerAudioMES.connect(ctx.destination);
+  } catch {
+    _echoViewerAudioMES = null;
+  }
+  return _echoViewerAudioMES;
 }
 
 async function loadEchoBeatBuffer(url) {
@@ -2264,6 +2307,9 @@ function wireEchoOnce() {
     const sheet = document.getElementById("echoViewerSheet");
     const slide = currentEchoSlide();
     if (!sheet || !slide || !sheet.classList.contains("needsEchoTap")) return;
+    // This is a real user gesture (the Tap to Listen button). Prime the
+    // shared AudioContext here so the beat layer can play afterward.
+    if (slide.beat) primeEchoSharedAudioCtx();
     const audio = _echoAudio || getEchoViewerAudio();
     sheet.classList.add("isLoading");
     sheet.classList.remove("needsEchoTap");
@@ -2273,6 +2319,7 @@ function wireEchoOnce() {
       .then(() => {
         if (_echoProgressTimer) window.clearInterval(_echoProgressTimer);
         _echoProgressTimer = window.setInterval(() => updateEchoViewerProgress(), 200);
+        if (slide.beat) void startEchoBeatPlaybackFor(slide);
       })
       .catch(() => {
         sheet.classList.add("needsEchoTap");

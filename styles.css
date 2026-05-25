@@ -22173,3 +22173,418 @@ section.mentorPage{
     background: linear-gradient(180deg, rgba(18, 25, 39, 0.70), rgba(10, 14, 22, 0.62));
   }
 }
+
+/* =====================================================================
+ * Friends feed — X / Twitter style row
+ *
+ * Single column, avatar pinned left, everything else (meta, body, quoted
+ * track card, actions row) stacks in a single column to the right of it.
+ * Hairline dividers between posts, no card chrome.
+ * =================================================================== */
+
+.friendsPage .followActStack .followAct--xstyle{
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background: transparent;
+  border-radius: 0;
+}
+.friendsPage .followActStack .followAct--xstyle:hover{
+  background: rgba(255, 255, 255, 0.02);
+}
+.followAct--xstyle > .followActAvatar{
+  width: 40px;
+  height: 40px;
+  margin: 0;
+}
+.followAct--xstyle .followActColumn{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Meta row — @handle · 2h · [badge] ........... [menu] */
+.followAct--xstyle .followActMeta{
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  color: rgba(232, 238, 247, 0.55);
+  font-size: 13px;
+  line-height: 1.2;
+}
+.followAct--xstyle .followActMeta .followActUser{
+  font-size: 14px;
+  font-weight: 800;
+  color: rgba(248, 250, 255, 0.98);
+  letter-spacing: -0.01em;
+}
+.followAct--xstyle .followActUserLink{
+  text-decoration: none;
+  min-width: 0;
+  color: inherit;
+}
+.followAct--xstyle .followActWhen{
+  font-size: 13px;
+  color: rgba(232, 238, 247, 0.48);
+  font-weight: 500;
+}
+.followAct--xstyle .followActMetaDot{
+  color: rgba(232, 238, 247, 0.35);
+  font-weight: 600;
+  user-select: none;
+  pointer-events: none;
+}
+.followAct--xstyle .followActMenuWrap{
+  margin-left: auto;
+  align-self: center;
+}
+
+/* Tighter inline badge inside the meta row (just icon + tiny label) */
+.followAct--xstyle .followActMeta .followActBadge{
+  padding: 0;
+  border: 0;
+  background: transparent;
+  gap: 4px;
+}
+.followAct--xstyle .followActMeta .followActBadgeIco{
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+.followAct--xstyle .followActMeta .followActIcoSvg{
+  width: 13px;
+  height: 13px;
+}
+.followAct--xstyle .followActMeta .followActBadgeLabel{
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+/* Content body — kill the legacy 50px indent, we're already in the column */
+.followAct--xstyle .followActContent{
+  padding-left: 0;
+  margin: 0;
+}
+.followAct--xstyle .followActHead{
+  font-size: 14.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: rgba(244, 247, 255, 0.94);
+  margin: 0;
+}
+.followAct--xstyle .followActCaption{
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: rgba(232, 238, 247, 0.78);
+}
+.followAct--xstyle .followActStatusText{
+  font-size: 15px;
+  line-height: 1.45;
+  color: rgba(244, 247, 255, 0.96);
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Quoted-track card — bordered mini-card with art + title + sub + play */
+.followActQuoteCard{
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  margin: 4px 0 0;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+.followActQuoteCard:hover,
+.followActQuoteCard:focus-visible{
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.followActQuoteArt{
+  position: relative;
+  display: block;
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.45);
+  flex-shrink: 0;
+}
+.followActQuoteImg{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.followActQuotePlay{
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.32);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+.followActQuoteCard:hover .followActQuotePlay,
+.followAct.discoveryRowPlaying .followActQuotePlay,
+.followAct.discoveryRowActive .followActQuotePlay{
+  opacity: 1;
+}
+.followAct.discoveryRowPlaying .followActQuoteArt{
+  box-shadow: 0 0 0 2px rgba(var(--cover-glow-rgb), 0.55);
+}
+.followAct.discoveryRowPlaying .followActQuotePlay{
+  background: rgba(var(--cover-glow-rgb), 0.65);
+}
+.followActQuoteBody{
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.followActQuoteTitle{
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(248, 250, 255, 0.98);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.followActQuoteSub{
+  font-size: 12.5px;
+  color: rgba(232, 238, 247, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Actions row — Reply / Like / Plays at the bottom of every post */
+.followActActions{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px -4px 0;
+  padding: 0;
+  max-width: 360px;
+}
+.followActAct{
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(232, 238, 247, 0.55);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+.followActAct:hover{
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(232, 238, 247, 0.88);
+}
+.followActAct[data-friends-act="like"]:hover{
+  color: rgba(244, 114, 182, 0.95);
+  background: rgba(236, 72, 153, 0.10);
+}
+.followActAct[data-friends-act="reply"]:hover{
+  color: rgba(96, 165, 250, 0.95);
+  background: rgba(59, 130, 246, 0.10);
+}
+.followActAct--stat{
+  pointer-events: none;
+  color: rgba(232, 238, 247, 0.45);
+}
+.followActActIco{
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  display: block;
+}
+.followActAct[data-friends-act="plays"] .followActActIco{
+  fill: currentColor;
+  stroke: none;
+}
+.followActActCount{
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  font-weight: 600;
+  min-width: 8px;
+}
+.followActActCount:empty{
+  display: none;
+}
+.followActAct.isPulse{
+  animation: followActPulse 320ms ease;
+}
+@keyframes followActPulse {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
+/* End-of-list "Who to follow" — vertical X-style suggestion list */
+.friendsWhoToFollow{
+  margin: 16px 14px 28px;
+  padding: 14px 14px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(20, 26, 38, 0.55), rgba(12, 16, 24, 0.55));
+}
+.friendsWtfTitle{
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: rgba(248, 250, 255, 0.98);
+}
+.friendsWtfList{
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.friendsWtfRow{
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  transition: opacity 240ms ease, transform 240ms ease;
+}
+.friendsWtfRow:last-child{
+  border-bottom: 0;
+}
+.friendsWtfRow.isLeaving{
+  opacity: 0;
+  transform: translateX(8px);
+}
+.friendsWtfAvatar{
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: block;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.friendsWtfAvatar img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.friendsWtfFallback{
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 800;
+  color: rgba(232, 238, 247, 0.6);
+}
+.friendsWtfText{
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+}
+.friendsWtfName{
+  font-size: 14.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: rgba(248, 250, 255, 0.98);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.friendsWtfSub{
+  font-size: 12.5px;
+  color: rgba(232, 238, 247, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.friendsWtfFollow{
+  appearance: none;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 0;
+  background: rgba(248, 250, 255, 0.98);
+  color: #0b1020;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 160ms ease, transform 160ms ease, color 160ms ease;
+}
+.friendsWtfFollow:hover{
+  background: #fff;
+  transform: translateY(-0.5px);
+}
+.friendsWtfFollow:active{
+  transform: translateY(0);
+}
+.friendsWtfFollow:disabled{
+  opacity: 0.6;
+  cursor: default;
+}
+.friendsWtfFollow.isFollowed{
+  background: transparent;
+  color: rgba(232, 238, 247, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+.friendsWtfMore{
+  display: inline-block;
+  margin: 10px 0 4px;
+  padding: 4px 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(94, 234, 212, 0.95);
+  text-decoration: none;
+}
+.friendsWtfMore:hover{
+  text-decoration: underline;
+}

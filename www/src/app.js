@@ -13,7 +13,7 @@ import { initEcho, onEnterFriendsRoute, openEchoFromCreateChooser } from "./echo
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260525echoBeatV8";
+const APP_BUILD = "20260525friendsXstyleV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5340,7 +5340,8 @@ function followingStatusIcoSvg(postType, post) {
   return `<svg class="followActIcoSvg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h14"/></svg>`;
 }
 
-function followingStatusRowHtml(post, profMap, idx) {
+function followingStatusRowHtml(post, profMap, idx, opts = {}) {
+  const xstyle = Boolean(opts && opts.xstyle);
   const postType = String(post?.postType || post?.post_type || "update").trim();
   const postId = String(post?.id || "").trim();
   const userId = String(post?.userId || post?.user_id || "").trim();
@@ -5386,6 +5387,32 @@ function followingStatusRowHtml(post, profMap, idx) {
       </div>`
     : "";
   const ownCls = isOwn ? " followAct--own" : "";
+  if (xstyle) {
+    const metaInner = isOwn
+      ? `${who}<span class="followActMetaDot" aria-hidden="true">·</span><span class="followActWhen">${escapeHtml(when)}</span>`
+      : `<a class="followActUserLink" href="${escapeHtml(profileHref)}" data-route-link="user">${who}</a><span class="followActMetaDot" aria-hidden="true">·</span><span class="followActWhen">${escapeHtml(when)}</span>`;
+    return `
+      <article class="followAct followAct--status followAct--xstyle${ownCls}" data-follow-act="status" data-follow-status-type="${escapeHtml(postType)}" data-follow-status-id="${escapeHtml(postId)}" style="--i:${idx}">
+        <a class="followActAvatar" href="${escapeHtml(profileHref)}" data-route-link="user" data-avatar-user-id="${escapeHtml(userId)}" aria-label="${isOwn ? "Your profile" : handle ? `@${escapeHtml(handle)} profile` : "Profile"}">
+          <span class="followActAvatarRing" aria-hidden="true"></span>
+          ${avatarSrc
+            ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
+            : `<span class="followActAvatarFallback">${escapeHtml(initials)}</span>`}
+        </a>
+        <div class="followActColumn">
+          <div class="followActMeta">
+            ${metaInner}
+            <span class="followActMetaDot" aria-hidden="true">·</span>
+            ${followingActivityBadgeHtml("status", postType, { post })}
+            ${menuBtn}
+          </div>
+          <div class="followActContent followActBody--static">
+            ${contentHtml}
+          </div>
+          ${followActActionsRowHtml({ kind: "status", targetId: postId, targetUserId: userId })}
+        </div>
+      </article>`;
+  }
   return `
     <article class="followAct followAct--status${ownCls}" data-follow-act="status" data-follow-status-type="${escapeHtml(postType)}" data-follow-status-id="${escapeHtml(postId)}" style="--i:${idx}">
       <div class="followActTop">
@@ -5456,7 +5483,7 @@ async function prependFriendsOwnPost(pin) {
   }
   const uid = String(authSession?.user?.id || "");
   const profMap = await fetchProfilesByUserIdsMap([uid]);
-  const rowHtml = followingStatusRowHtml(pin, profMap, 0);
+  const rowHtml = followingStatusRowHtml(pin, profMap, 0, { xstyle: true });
   listEl.classList.remove("isDiscoveryLoading");
   listEl.hidden = false;
   const escId = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(String(pin.id)) : String(pin.id).replace(/"/g, "");
@@ -6261,7 +6288,37 @@ function followingActivityPlayAttrs(t, profMap, byLine) {
   return { artSafe, rawTitle, encUrl, encTitle, encBy, encArt, playData };
 }
 
-function followingActivityRowHtml(t, profMap, idx) {
+/**
+ * X-style actions row: Reply / Like / Plays. Like and Reply are placeholder
+ * UI for now — taps stop propagation (don't trigger play) and call a
+ * lightweight handler that pulses + toasts "Coming soon" until backing
+ * tables exist. Plays is read-only.
+ */
+function followActActionsRowHtml({ kind, targetId, targetUserId, plays } = {}) {
+  const safeId = escapeHtml(String(targetId || ""));
+  const safeUid = escapeHtml(String(targetUserId || ""));
+  const playsBlock = kind === "music" && Number.isFinite(Number(plays)) && Number(plays) > 0
+    ? `<span class="followActAct followActAct--stat" data-friends-act="plays" aria-label="${escapeHtml(formatStatCount(plays))} plays">
+        <svg class="followActActIco" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16l14-8L5 4Z"/></svg>
+        <span class="followActActCount">${escapeHtml(formatStatCount(plays))}</span>
+      </span>`
+    : `<span class="followActAct followActAct--stat" aria-hidden="true"></span>`;
+  return `
+    <div class="followActActions" data-friends-act-row="1" data-friends-act-kind="${escapeHtml(kind || "")}" data-friends-act-id="${safeId}" data-friends-act-uid="${safeUid}">
+      <button type="button" class="followActAct" data-friends-act="reply" aria-label="Reply">
+        <svg class="followActActIco" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10H8l-4 4V5Z"/></svg>
+        <span class="followActActCount"></span>
+      </button>
+      <button type="button" class="followActAct" data-friends-act="like" aria-label="Like">
+        <svg class="followActActIco" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-4.5-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9Z"/></svg>
+        <span class="followActActCount"></span>
+      </button>
+      ${playsBlock}
+    </div>`;
+}
+
+function followingActivityRowHtml(t, profMap, idx, opts = {}) {
+  const xstyle = Boolean(opts && opts.xstyle);
   const type = followingActivityTypeForTrack(t);
   const prof = t.userId ? profMap.get(t.userId) : null;
   const handle = String(prof?.username || "").trim();
@@ -6277,12 +6334,51 @@ function followingActivityRowHtml(t, profMap, idx) {
   const profileHref = handle ? `#/u/${encodeURIComponent(handle)}` : "#";
   const when = relativeTime(t.ts);
   const plays = Number(t.playCount);
-  const playFoot = Number.isFinite(plays) && plays > 0
-    ? `<div class="followActFoot"><span class="followActFootStat">${escapeHtml(formatStatCount(plays))} ${plays === 1 ? "play" : "plays"}</span></div>`
-    : "";
   const caption = releaseCaptionForTrack(t);
   const captionHtml = caption
     ? `<p class="followActCaption">${escapeHtml(caption)}</p>`
+    : "";
+  const verbHtml = followingActivityBodyHtml(type, rawTitle, remixOf, challenge);
+  const subtitle = handle ? `@${handle}` : "Musician";
+  if (xstyle) {
+    return `
+      <article class="followAct followAct--music followAct--xstyle" data-follow-act="${type}" style="--i:${idx}" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}>
+        <a class="followActAvatar" href="${escapeHtml(profileHref)}" data-route-link="user" data-avatar-user-id="${escapeHtml(String(t.userId || ""))}" aria-label="${handle ? `@${escapeHtml(handle)} profile` : "Profile"}">
+          <span class="followActAvatarRing" aria-hidden="true"></span>
+          ${avatarSrc
+            ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
+            : `<span class="followActAvatarFallback">${escapeHtml(initials)}</span>`}
+        </a>
+        <div class="followActColumn">
+          <div class="followActMeta">
+            <a class="followActUserLink" href="${escapeHtml(profileHref)}" data-route-link="user">${handle ? `<strong class="followActUser">@${escapeHtml(handle)}</strong>` : `<strong class="followActUser">A musician</strong>`}</a>
+            <span class="followActMetaDot" aria-hidden="true">·</span>
+            <span class="followActWhen">${escapeHtml(when)}</span>
+            <span class="followActMetaDot" aria-hidden="true">·</span>
+            ${followingActivityBadgeHtml("music", type)}
+          </div>
+          <div class="followActContent">
+            <p class="followActHead">${verbHtml}</p>
+            ${captionHtml}
+          </div>
+          <button type="button" class="followActQuoteCard" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
+            <span class="followActQuoteArt">
+              <img class="followActQuoteImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
+              <span class="followActQuotePlay" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M5 4v16l14-8L5 4Z" fill="currentColor"/></svg>
+              </span>
+            </span>
+            <span class="followActQuoteBody">
+              <span class="followActQuoteTitle">${safeTitle}</span>
+              <span class="followActQuoteSub">${escapeHtml(subtitle)}</span>
+            </span>
+          </button>
+          ${followActActionsRowHtml({ kind: "music", targetId: t.id, targetUserId: t.userId, plays })}
+        </div>
+      </article>`;
+  }
+  const playFoot = Number.isFinite(plays) && plays > 0
+    ? `<div class="followActFoot"><span class="followActFootStat">${escapeHtml(formatStatCount(plays))} ${plays === 1 ? "play" : "plays"}</span></div>`
     : "";
   const who = handle
     ? `<strong class="followActUser">@${escapeHtml(handle)}</strong>`
@@ -6330,15 +6426,20 @@ function followingActivitySkeletonHtml() {
     </div>`).join("");
 }
 
-async function fetchFollowingEmptySuggestCreators(limit = 3) {
+async function fetchFollowingEmptySuggestCreators(limit = 3, excludeUserIds = []) {
   const out = [];
+  const blocked = new Set(
+    [...(excludeUserIds || []), authSession?.user?.id]
+      .map((u) => String(u || "").trim())
+      .filter(Boolean),
+  );
   try {
-    const rows = await supabaseFetchDiscoveryPublicSongs(24);
+    const rows = await supabaseFetchDiscoveryPublicSongs(48);
     const profMap = await fetchProfilesByUserIdsMap(rows.map((r) => r.userId));
     const seen = new Set();
     for (const t of rows) {
       const uid = String(t.userId || "").trim();
-      if (!uid || seen.has(uid)) continue;
+      if (!uid || seen.has(uid) || blocked.has(uid)) continue;
       seen.add(uid);
       const prof = profMap.get(uid);
       const handle = String(prof?.username || "").trim();
@@ -6349,6 +6450,89 @@ async function fetchFollowingEmptySuggestCreators(limit = 3) {
     }
   } catch {}
   return out;
+}
+
+/**
+ * End-of-list "Who to follow" — X-style vertical list with 3 rows visible
+ * and a "Show more" link that routes to Discover for the long tail.
+ */
+function whoToFollowSectionHtml(creators) {
+  if (!Array.isArray(creators) || !creators.length) return "";
+  const rows = creators.slice(0, 3).map((c) => {
+    const handle = String(c.handle || "").trim();
+    const userId = String(c.userId || "").trim();
+    if (!handle || !userId) return "";
+    const safeHandle = escapeHtml(handle);
+    const safeUid = escapeHtml(userId);
+    const initials = handle.replace(/^@/, "").slice(0, 2).toUpperCase();
+    const href = `#/u/${encodeURIComponent(handle)}`;
+    const avatarHtml = c.avatar
+      ? `<img src="${escapeHtml(c.avatar)}" alt="" width="44" height="44" decoding="async" loading="lazy" />`
+      : `<span class="friendsWtfFallback">${escapeHtml(initials)}</span>`;
+    return `
+      <li class="friendsWtfRow" data-friends-wtf-row="${safeUid}">
+        <a class="friendsWtfAvatar" href="${escapeHtml(href)}" data-route-link="user" aria-label="@${safeHandle} profile">
+          ${avatarHtml}
+        </a>
+        <a class="friendsWtfText" href="${escapeHtml(href)}" data-route-link="user">
+          <strong class="friendsWtfName">@${safeHandle}</strong>
+          <span class="friendsWtfSub">Musician on Nabadai</span>
+        </a>
+        <button type="button" class="friendsWtfFollow" data-friends-follow="${safeUid}" data-friends-follow-handle="${safeHandle}">Follow</button>
+      </li>`;
+  }).filter(Boolean).join("");
+  if (!rows) return "";
+  return `
+    <section class="friendsWhoToFollow" aria-label="Who to follow">
+      <h3 class="friendsWtfTitle">Who to follow</h3>
+      <ul class="friendsWtfList" role="list">${rows}</ul>
+      <a class="friendsWtfMore" href="#/discover" data-route-link="discover">Show more</a>
+    </section>`;
+}
+
+async function handleFriendsWtfFollow(btn) {
+  const targetUserId = String(btn.getAttribute("data-friends-follow") || "").trim();
+  const handle = String(btn.getAttribute("data-friends-follow-handle") || "").trim();
+  if (!targetUserId) return;
+  if (!authSession?.user?.id || !getSupabaseAuthToken()) {
+    showToast("Sign in to follow creators.");
+    location.hash = "#/auth";
+    return;
+  }
+  if (btn.dataset.followBusy === "1") return;
+  btn.dataset.followBusy = "1";
+  btn.disabled = true;
+  const prevLabel = btn.textContent;
+  btn.textContent = "Following…";
+  try {
+    haptic("light");
+  } catch {}
+  try {
+    await socialApi("/api/social", {
+      method: "POST",
+      body: JSON.stringify({ action: "follow", targetUserId }),
+    });
+    btn.textContent = "Following";
+    btn.classList.add("isFollowed");
+    // Slide the row out, then refresh the feed so the new follow gets
+    // pulled into the timeline and a fresh suggestion takes its place.
+    const row = btn.closest(".friendsWtfRow");
+    if (row) {
+      row.classList.add("isLeaving");
+      window.setTimeout(() => {
+        row.remove();
+        void refreshDiscoveryFollowingFeed({ force: true });
+      }, 280);
+    } else {
+      void refreshDiscoveryFollowingFeed({ force: true });
+    }
+    showToast(handle ? `Following @${handle}.` : "Following creator.");
+  } catch (e) {
+    btn.textContent = prevLabel || "Follow";
+    btn.disabled = false;
+    delete btn.dataset.followBusy;
+    showToast(e?.message || "Could not follow.");
+  }
 }
 
 function renderDiscoveryFollowingEmpty(statusEl, title, text, actionHtml = "") {
@@ -6567,7 +6751,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
         listEl.classList.remove("isDiscoveryLoading");
         statusEl.hidden = true;
         listEl.hidden = false;
-        listEl.innerHTML = followingStatusRowHtml(_friendsOwnPostPin, profMap, 0);
+        listEl.innerHTML = followingStatusRowHtml(_friendsOwnPostPin, profMap, 0, { xstyle: true });
         return;
       }
       listEl.classList.remove("isDiscoveryLoading");
@@ -6663,13 +6847,23 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
     listEl.hidden = false;
     const feedHtml = mergedItems
       .map((item, i) => (item.kind === "status"
-        ? followingStatusRowHtml(item.post, profMap, i)
-        : followingActivityRowHtml(item.track, profMap, i)))
+        ? followingStatusRowHtml(item.post, profMap, i, { xstyle: true })
+        : followingActivityRowHtml(item.track, profMap, i, { xstyle: true })))
       .join("");
-    listEl.innerHTML = feedHtml;
+    // X-style end-of-list "Who to follow": surface 3 musicians the viewer
+    // doesn't already follow. Excludes self + everyone in their following
+    // list so we never recommend somebody they already follow.
+    const followedIds = following
+      .map((f) => String(f?.userId || f?.user_id || f?.following_user_id || "").trim())
+      .filter(Boolean);
+    const suggestList = await fetchFollowingEmptySuggestCreators(3, followedIds);
+    if (gen !== _discoveryFollowingGen) return;
+    const wtfHtml = whoToFollowSectionHtml(suggestList);
+    const fullHtml = `${feedHtml}${wtfHtml}`;
+    listEl.innerHTML = fullHtml;
     _friendsFeedSnapshot = {
       at: Date.now(),
-      html: feedHtml,
+      html: fullHtml,
       tracks: _discoveryFeedTracks,
     };
     persistFriendsFeedSnapshot();
@@ -6793,12 +6987,32 @@ function bindFriendsPageOnce() {
         void deleteFollowingStatusPost(delBtn.getAttribute("data-follow-status-delete"));
         return;
       }
+      const followBtn = e.target.closest("[data-friends-follow]");
+      if (followBtn && friendsPage.contains(followBtn)) {
+        e.preventDefault();
+        e.stopPropagation();
+        void handleFriendsWtfFollow(followBtn);
+        return;
+      }
+      const actBtn = e.target.closest("[data-friends-act]");
+      if (actBtn && friendsPage.contains(actBtn)) {
+        const kind = actBtn.getAttribute("data-friends-act");
+        // Plays is read-only.
+        if (kind === "plays") return;
+        e.preventDefault();
+        e.stopPropagation();
+        try { haptic("light"); } catch {}
+        actBtn.classList.add("isPulse");
+        window.setTimeout(() => actBtn.classList.remove("isPulse"), 320);
+        showToast(kind === "like" ? "Likes are coming soon." : "Replies are coming soon.");
+        return;
+      }
       if (e.target.closest(".followActAvatar")) return;
-      const pl = e.target.closest("[data-user-lib-play], .followActMedia, .followActUserLink");
+      const pl = e.target.closest("[data-user-lib-play], .followActMedia, .followActQuoteCard, .followActUserLink");
       if (pl?.classList?.contains?.("followActUserLink")) return;
       if (!pl || !friendsPage.contains(pl)) return;
       e.preventDefault();
-      if (pl.classList.contains("followActMedia") || pl.hasAttribute("data-user-lib-play")) {
+      if (pl.classList.contains("followActMedia") || pl.classList.contains("followActQuoteCard") || pl.hasAttribute("data-user-lib-play")) {
         playDiscoverTarget(pl);
       }
     });

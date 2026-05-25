@@ -13,7 +13,7 @@ import { initEcho, onEnterFriendsRoute, openEchoFromCreateChooser } from "./echo
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260526friendsLikesRepliesV2";
+const APP_BUILD = "20260526friendsSkeletonXstyleV1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -6529,17 +6529,54 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
 }
 
 function followingActivitySkeletonHtml() {
-  return Array.from({ length: 4 }, (_, i) => `
-    <div class="followAct followAct--music followAct--skel" style="--i:${i}" aria-hidden="true">
-      <div class="followActTop">
-        <span class="followActSkel followActSkelAvatar"></span>
-        <span class="followActSkel followActSkelLines">
-          <span class="followActSkelLine"></span>
-          <span class="followActSkelLine short"></span>
-        </span>
+  // Mix two music rows (with quoted track card) and two status rows (text only),
+  // matching the X-style layout the real feed renders. Avatar on the left,
+  // meta + body + actions stacked in the right column, divider between rows.
+  const musicRow = (i) => `
+    <article class="followAct followAct--xstyle followAct--music followAct--skel" style="--i:${i}" aria-hidden="true">
+      <span class="followActAvatar followActSkel followActSkelAvatar"></span>
+      <div class="followActColumn">
+        <div class="followActMeta">
+          <span class="followActSkel followActSkelMetaLine"></span>
+        </div>
+        <div class="followActContent">
+          <span class="followActSkel followActSkelHeadLine"></span>
+          <span class="followActSkel followActSkelHeadLine short"></span>
+        </div>
+        <div class="followActQuoteCard followActQuoteCard--skel">
+          <span class="followActQuoteArt followActSkel"></span>
+          <span class="followActQuoteBody">
+            <span class="followActSkel followActSkelQuoteTitle"></span>
+            <span class="followActSkel followActSkelQuoteSub"></span>
+          </span>
+        </div>
+        <div class="followActActions">
+          <span class="followActAct followActAct--skel followActSkel"></span>
+          <span class="followActAct followActAct--skel followActSkel"></span>
+          <span class="followActAct followActAct--skel followActSkel"></span>
+        </div>
       </div>
-      <span class="followActSkel followActSkelMedia"></span>
-    </div>`).join("");
+    </article>`;
+  const statusRow = (i) => `
+    <article class="followAct followAct--xstyle followAct--status followAct--skel" style="--i:${i}" aria-hidden="true">
+      <span class="followActAvatar followActSkel followActSkelAvatar"></span>
+      <div class="followActColumn">
+        <div class="followActMeta">
+          <span class="followActSkel followActSkelMetaLine"></span>
+        </div>
+        <div class="followActContent">
+          <span class="followActSkel followActSkelTextLine"></span>
+          <span class="followActSkel followActSkelTextLine"></span>
+          <span class="followActSkel followActSkelTextLine short"></span>
+        </div>
+        <div class="followActActions">
+          <span class="followActAct followActAct--skel followActSkel"></span>
+          <span class="followActAct followActAct--skel followActSkel"></span>
+          <span class="followActAct followActAct--skel followActSkel"></span>
+        </div>
+      </div>
+    </article>`;
+  return [musicRow(0), statusRow(1), musicRow(2), statusRow(3)].join("");
 }
 
 async function fetchFollowingEmptySuggestCreators(limit = 3, excludeUserIds = []) {

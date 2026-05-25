@@ -18057,6 +18057,88 @@ body.createChooserSheetOpen .footer{
   max-height: 180px;
   border-radius: 16px;
 }
+
+/* =====================================================================
+ * X-style skeleton — mirrors the real .followAct--xstyle structure so the
+ * loading state lines up with the rendered rows (no visual snap).
+ * Outer .followAct--skel is already pointer-events:none above.
+ * =================================================================== */
+.followAct.followAct--xstyle.followAct--skel,
+.followActStack .followAct.followAct--xstyle.followAct--skel{
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: transparent;
+}
+.followAct--xstyle.followAct--skel .followActAvatar.followActSkelAvatar{
+  border: 0;
+  background: transparent;
+}
+.followAct--xstyle.followAct--skel .followActColumn{
+  gap: 8px;
+}
+.followActSkelMetaLine{
+  display: block;
+  height: 12px;
+  width: 42%;
+  max-width: 180px;
+  border-radius: 6px;
+}
+.followActSkelHeadLine{
+  display: block;
+  height: 12px;
+  width: 88%;
+  border-radius: 6px;
+  margin-top: 4px;
+}
+.followActSkelHeadLine + .followActSkelHeadLine{
+  margin-top: 6px;
+}
+.followActSkelHeadLine.short{
+  width: 54%;
+}
+.followActSkelTextLine{
+  display: block;
+  height: 13px;
+  width: 96%;
+  border-radius: 6px;
+  margin-top: 4px;
+}
+.followActSkelTextLine + .followActSkelTextLine{
+  margin-top: 6px;
+}
+.followActSkelTextLine.short{
+  width: 58%;
+}
+.followActQuoteCard--skel{
+  pointer-events: none;
+  cursor: default;
+  border-color: rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.025);
+}
+.followActQuoteCard--skel .followActQuoteArt{
+  background: transparent;
+}
+.followActSkelQuoteTitle{
+  display: block;
+  height: 13px;
+  width: 72%;
+  border-radius: 6px;
+}
+.followActSkelQuoteSub{
+  display: block;
+  height: 11px;
+  width: 46%;
+  border-radius: 5px;
+  margin-top: 6px;
+}
+.followActAct.followActAct--skel{
+  pointer-events: none;
+  width: 56px;
+  height: 18px;
+  padding: 0;
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.04) 100%);
+  background-size: 200% 100%;
+  border-radius: 10px;
+}
 .followActEmptyFaces{
   display: flex;
   justify-content: center;

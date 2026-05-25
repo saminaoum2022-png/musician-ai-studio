@@ -13,7 +13,7 @@ import { initEcho, onEnterFriendsRoute, openEchoFromCreateChooser } from "./echo
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260526friendsLikesRepliesV1";
+const APP_BUILD = "20260526friendsLikesRepliesV2";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -12400,9 +12400,25 @@ function notificationIconForType(type) {
   if (t === "follow") return "+";
   if (t === "remix") return "R";
   if (t === "song_feedback") return "♪";
+  if (t === "social_like") return "♥";
+  if (t === "social_reply") return "💬";
   if (t === "play_milestone") return "10";
   if (t === "public_song") return "P";
   return ".";
+}
+
+function notificationTargetLabel(metadata) {
+  const kind = String(metadata?.target_kind || "").trim();
+  const title = String(metadata?.target_title || "").trim();
+  if (title) {
+    if (kind === "song") return `your song "${title}"`;
+    if (kind === "echo") return `your echo`;
+    if (kind === "status") return `your post: "${title.slice(0, 60)}${title.length > 60 ? "…" : ""}"`;
+  }
+  if (kind === "song") return "your song";
+  if (kind === "echo") return "your echo";
+  if (kind === "status") return "your post";
+  return "your post";
 }
 
 function notificationMessage(n) {
@@ -12446,6 +12462,23 @@ function notificationMessage(n) {
     return {
       title: username ? `@${username} published a song` : "A creator published a song",
       body: `${title} is now available from your Following feed.`,
+      action: username ? "View profile" : "",
+    };
+  }
+  if (n?.type === "social_like") {
+    const target = notificationTargetLabel(n?.metadata);
+    return {
+      title: username ? `@${username} liked ${target}` : `Someone liked ${target}`,
+      body: "Likes show up next to the heart on your post.",
+      action: username ? "View profile" : "",
+    };
+  }
+  if (n?.type === "social_reply") {
+    const target = notificationTargetLabel(n?.metadata);
+    const preview = String(n?.metadata?.reply_preview || "").trim();
+    return {
+      title: username ? `@${username} replied to ${target}` : `Someone replied to ${target}`,
+      body: preview ? `"${preview.slice(0, 140)}${preview.length > 140 ? "…" : ""}"` : "Open the thread to read the reply.",
       action: username ? "View profile" : "",
     };
   }

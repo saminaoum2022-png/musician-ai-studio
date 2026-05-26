@@ -2960,10 +2960,19 @@
           <p id="echoComposeStatusSub" class="echoComposeStatusSub" hidden aria-live="polite"></p>
         </div>
         <div class="echoComposeFooter echoComposeFooter--minimal">
+          <div class="echoComposeOptionRow">
+            <input type="checkbox" id="echoListenOnce" class="echoListenOnceInput" hidden />
+            <button type="button" class="echoListenOncePill" id="btnEchoListenOnceToggle" aria-pressed="false" aria-label="Listen once off">
+              <span class="echoListenOncePillIcon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M17 9h-1V7a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zm-3 0H10V7a2 2 0 1 1 4 0v2z"/></svg>
+              </span>
+              <span class="echoListenOncePillLabel">Listen once</span>
+            </button>
+          </div>
           <div class="echoComposeBeatBlock" id="echoComposeBeatBlock">
             <span class="echoComposeBeatKicker">Beat <span class="echoComposeBeatOpt">tap to preview</span></span>
             <div class="echoComposeBeatRow" id="echoComposeBeatRow" role="tablist" aria-label="Background beat">
-              <button type="button" class="echoBeatChip echoBeatChip--suggest" id="echoComposeBeatSuggest" aria-label="Suggest a beat based on your voice">
+              <button type="button" class="echoBeatChip echoBeatChip--suggest is-empty" id="echoComposeBeatSuggest" aria-label="Suggest a beat based on your voice — record first">
                 <span class="echoBeatChipSparkle" aria-hidden="true">✨</span>
                 <span class="echoBeatChipLabel">Suggest</span>
               </button>
@@ -2983,13 +2992,9 @@
           </div>
           <div class="echoComposeWhisperBlock">
             <label class="echoComposeWhisperKicker" for="echoComposeCaption">
-              Whisper <span class="echoComposeWhisperOpt">optional</span>
+              Whisper <span class="echoComposeWhisperOpt">optional caption</span>
             </label>
             <div class="echoComposeWhisperDock">
-              <input type="checkbox" id="echoListenOnce" class="echoListenOnceInput" hidden />
-              <button type="button" class="echoListenOnceGlass" id="btnEchoListenOnceToggle" aria-pressed="false" aria-label="Listen once off" title="Listen once">
-                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M17 9h-1V7a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zm-3 0H10V7a2 2 0 1 1 4 0v2z"/></svg>
-              </button>
               <input type="text" id="echoComposeCaption" class="echoComposeCaption" maxlength="60" placeholder="Add a short line…" autocomplete="off" />
             </div>
           </div>
@@ -2999,6 +3004,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260526echoSuggestBeatV1"></script>
+    <script type="module" src="./src/app.js?v=20260526echoComposePolishV1"></script>
   </body>
 </html>

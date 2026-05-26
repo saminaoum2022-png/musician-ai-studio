@@ -1461,45 +1461,79 @@ function handleEchoSpeedChipTap(speed) {
 }
 
 let _echoSuggestBusy = false;
+/**
+ * "Armed" means: when the user releases the mic, run the analyser and
+ * auto-apply a beat before publishing. The chip is a toggle until a
+ * recording exists; once one does, tapping the chip re-runs the analyser
+ * on it immediately.
+ */
+let _echoSuggestArmed = false;
+
+function applyEchoBeatPick(pick) {
+  if (!pick || !ECHO_BEAT_DEFS[pick.beatId]) return false;
+  _echoBeatId = pick.beatId;
+  _echoBeatVariant = pick.variant | 0;
+  if (ECHO_BEAT_SPEED[pick.speed]) _echoBeatSpeed = pick.speed;
+  try { c().haptic("light"); } catch {}
+  syncEchoBeatPickerUi();
+  return true;
+}
+
+async function analyseAndApplyEchoSuggestion(blob, { previewOnApply = true } = {}) {
+  if (!blob?.size) return null;
+  const pick = await suggestEchoBeatFromBlob(blob);
+  if (!pick || !applyEchoBeatPick(pick)) return null;
+  if (previewOnApply) void startEchoBeatPreview();
+  try { c().showToast(`✨ ${pick.reason}`, { durationMs: 2800 }); } catch {}
+  return pick;
+}
+
 async function handleEchoSuggestBeat() {
   if (_echoSuggestBusy) return;
   const btn = document.getElementById("echoComposeBeatSuggest");
+  // Always prime the audio ctx inside the user gesture so iOS lets us play later.
+  primeEchoSharedAudioCtx();
   const blob = echoRawBlob?.size ? echoRawBlob : echoBlob?.size ? echoBlob : null;
-  if (!blob) {
-    try { c().showToast("Record an Echo first, then I'll suggest a beat.", { durationMs: 2800 }); } catch {}
+
+  if (blob) {
+    // Recording exists — analyse and apply immediately.
+    _echoSuggestBusy = true;
+    if (btn) {
+      btn.classList.add("is-busy");
+      btn.setAttribute("aria-busy", "true");
+    }
+    try {
+      const pick = await analyseAndApplyEchoSuggestion(blob);
+      if (!pick) {
+        try { c().showToast("Couldn't read your voice. Try a longer Echo.", { durationMs: 2600 }); } catch {}
+      }
+      _echoSuggestArmed = false;
+    } catch {
+      try { c().showToast("Beat suggestion failed.", { durationMs: 2400 }); } catch {}
+    } finally {
+      _echoSuggestBusy = false;
+      if (btn) {
+        btn.classList.remove("is-busy");
+        btn.removeAttribute("aria-busy");
+      }
+      syncEchoSuggestChipState();
+    }
     return;
   }
-  _echoSuggestBusy = true;
-  if (btn) {
-    btn.classList.add("is-busy");
-    btn.setAttribute("aria-busy", "true");
-    btn.disabled = true;
-  }
-  // Must happen inside the user gesture so iOS allows the preview audio later.
-  primeEchoSharedAudioCtx();
+
+  // No recording yet — toggle the armed state so the next recording
+  // triggers an auto-pick before publish.
+  _echoSuggestArmed = !_echoSuggestArmed;
+  try { c().haptic("light"); } catch {}
+  syncEchoSuggestChipState();
   try {
-    const pick = await suggestEchoBeatFromBlob(blob);
-    if (!pick || !ECHO_BEAT_DEFS[pick.beatId]) {
-      try { c().showToast("Couldn't read your voice. Try a longer Echo.", { durationMs: 2600 }); } catch {}
-      return;
-    }
-    _echoBeatId = pick.beatId;
-    _echoBeatVariant = pick.variant | 0;
-    if (ECHO_BEAT_SPEED[pick.speed]) _echoBeatSpeed = pick.speed;
-    try { c().haptic("light"); } catch {}
-    syncEchoBeatPickerUi();
-    void startEchoBeatPreview();
-    try { c().showToast(`✨ ${pick.reason}`, { durationMs: 2800 }); } catch {}
-  } catch {
-    try { c().showToast("Beat suggestion failed.", { durationMs: 2400 }); } catch {}
-  } finally {
-    _echoSuggestBusy = false;
-    if (btn) {
-      btn.classList.remove("is-busy");
-      btn.removeAttribute("aria-busy");
-      btn.disabled = false;
-    }
-  }
+    c().showToast(
+      _echoSuggestArmed
+        ? "✨ Auto-pick armed — record an Echo and I'll choose a beat."
+        : "Auto-pick off.",
+      { durationMs: 2400 },
+    );
+  } catch {}
 }
 
 function wireEchoBeatPickerOnce() {
@@ -1786,7 +1820,10 @@ function resetEchoCompose() {
   _echoBeatId = "none";
   _echoBeatVariant = 0;
   _echoBeatSpeed = "normal";
+  _echoSuggestArmed = false;
+  _echoSuggestBusy = false;
   syncEchoBeatPickerUi();
+  syncEchoSuggestChipState();
   resetEchoUploadState();
   echoBlob = null;
   echoRawBlob = null;
@@ -1805,6 +1842,28 @@ function resetEchoCompose() {
   echoRecorder = null;
 }
 
+function syncEchoSuggestChipState() {
+  const btn = document.getElementById("echoComposeBeatSuggest");
+  if (!btn) return;
+  if (_echoSuggestBusy) return; // handler owns the state during analysis
+  const hasRec = Boolean(echoRawBlob?.size || echoBlob?.size);
+  const armed = _echoSuggestArmed && !hasRec;
+  btn.classList.toggle("is-empty", !hasRec && !armed);
+  btn.classList.toggle("is-armed", armed);
+  btn.classList.toggle("is-ready", hasRec);
+  btn.setAttribute("aria-pressed", armed ? "true" : "false");
+  btn.setAttribute(
+    "aria-label",
+    armed
+      ? "Auto-pick beat armed — tap to disarm"
+      : hasRec
+        ? "Suggest a beat based on your voice"
+        : "Arm auto-pick — record next, beat picked automatically",
+  );
+  const labelEl = btn.querySelector(".echoBeatChipLabel");
+  if (labelEl) labelEl.textContent = armed ? "Armed" : "Suggest";
+}
+
 function syncEchoComposeUi() {
   const sheet = document.getElementById("echoComposeSheet");
   const wave = document.getElementById("echoComposeWave");
@@ -1814,6 +1873,8 @@ function syncEchoComposeUi() {
   const busy = processing || releasing;
   const recording = echoRecState === "recording";
   const arming = echoRecState === "arming";
+
+  syncEchoSuggestChipState();
 
   if (sheet) {
     sheet.classList.toggle("isTouching", echoMicTouching && !busy);
@@ -2004,6 +2065,16 @@ async function startEchoRecording() {
           echoRecState = "idle";
           syncEchoComposeUi();
           return;
+        }
+        // Auto-pick a beat if Suggest is armed and the user hasn't already
+        // picked one. Runs before publish so the beat is baked into the
+        // posted echo (no re-upload needed). Failure is non-fatal.
+        if (_echoSuggestArmed && _echoBeatId === "none" && echoRawBlob?.size) {
+          try {
+            await analyseAndApplyEchoSuggestion(echoRawBlob, { previewOnApply: false });
+          } catch {}
+          _echoSuggestArmed = false;
+          syncEchoSuggestChipState();
         }
         resetEchoUploadState();
         startEchoUploadEarly();

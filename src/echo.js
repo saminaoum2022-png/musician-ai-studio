@@ -2137,12 +2137,11 @@ async function finishEchoPublishBackground({
           action: "post_echo",
           audioUrl: remoteUrl,
           durationMs,
-          // /api/social normalizes peaks to a flat array, so the beat
-          // metadata can only ride on the direct REST path above. This
-          // fallback still works (no beat baked in for friends on this
-          // path), and the sender's optimistic rail entry has the beat
-          // locally regardless.
           waveformPeaks: peaks,
+          // Pass the beat through so the API can pack { p, b } into
+          // waveform_peaks just like the direct REST path. Without this
+          // friends would hear voice only when the direct insert fails.
+          beat: beat ? { id: beat.id, v: beat.v | 0, s: beat.s || "normal" } : null,
           body: caption,
           listenOnce,
           replyTo: _echoReplyToId || null,

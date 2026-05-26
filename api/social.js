@@ -49,10 +49,47 @@ function cleanPostId(v) {
 }
 
 function normalizeWaveformPeaks(raw) {
-  if (!Array.isArray(raw)) return [];
-  return raw
+  // Echo waveform_peaks can be either:
+  //   - a flat number[] (older rows, or status posts)
+  //   - { p: number[], b: { id, v, s } } (echoes uploaded with a beat —
+  //     we tuck beat metadata into the same JSONB column so we don't
+  //     have to migrate the table)
+  // We accept both and return a flat clamped array.
+  let arr = raw;
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    arr = Array.isArray(raw.p) ? raw.p : Array.isArray(raw.peaks) ? raw.peaks : [];
+  }
+  if (!Array.isArray(arr)) return [];
+  return arr
     .slice(0, 64)
     .map((n) => Math.max(0, Math.min(1, Number(n) || 0)));
+}
+
+const ECHO_BEAT_IDS_API = new Set([
+  "lofi",
+  "ambient",
+  "oud",
+  "piano",
+  "soul",
+  "eight08",
+]);
+const ECHO_BEAT_SPEEDS_API = new Set(["slow", "normal", "fast"]);
+
+function normalizeEchoBeatMeta(raw) {
+  // Pull a beat descriptor out of either the JSONB envelope on
+  // waveform_peaks or a top-level body field. Returns null if invalid.
+  if (!raw || typeof raw !== "object") return null;
+  const id = String(raw.id || "").trim().toLowerCase();
+  if (!ECHO_BEAT_IDS_API.has(id)) return null;
+  const v = Number.isFinite(Number(raw.v)) ? Math.max(0, Number(raw.v) | 0) : 0;
+  const sRaw = String(raw.s || "normal").trim().toLowerCase();
+  const s = ECHO_BEAT_SPEEDS_API.has(sRaw) ? sRaw : "normal";
+  return { id, v, s };
+}
+
+function extractEchoBeatFromRow(rawPeaks) {
+  if (!rawPeaks || typeof rawPeaks !== "object" || Array.isArray(rawPeaks)) return null;
+  return normalizeEchoBeatMeta(rawPeaks.b || rawPeaks.beat || null);
 }
 
 function mapStatusPostRow(p, prof) {
@@ -78,6 +115,7 @@ function mapEchoRow(row, prof, extras = {}) {
     audioUrl: String(row.audio_url || "").trim(),
     durationMs: Number(row.duration_ms) || 0,
     waveformPeaks: normalizeWaveformPeaks(row.waveform_peaks),
+    beat: extractEchoBeatFromRow(row.waveform_peaks),
     body: String(row.body || "").trim(),
     listenOnce: Boolean(row.listen_once),
     replyTo: row.reply_to || null,
@@ -1121,6 +1159,7 @@ async function handlePost(req, res, user) {
     const audioUrl = String(body?.audioUrl || body?.audio_url || "").trim().slice(0, 2048);
     const durationMs = Math.min(120000, Math.max(0, Math.round(Number(body?.durationMs || body?.duration_ms) || 0)));
     const peaks = normalizeWaveformPeaks(body?.waveformPeaks || body?.waveform_peaks);
+    const beat = normalizeEchoBeatMeta(body?.beat);
     const text = String(body?.body || "").trim().slice(0, 200);
     const listenOnce = Boolean(body?.listenOnce ?? body?.listen_once);
     const replyTo = cleanPostId(body?.replyTo || body?.reply_to) || null;
@@ -1128,6 +1167,8 @@ async function handlePost(req, res, user) {
       return sendJson(res, 400, { ok: false, error: "Missing echo audio" });
     }
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    let peaksPayload = peaks.length ? peaks : null;
+    if (beat) peaksPayload = { p: peaks, b: beat };
     const ins = await svcFetch("social_echoes", {
       method: "POST",
       headers: { Prefer: "return=representation" },
@@ -1135,7 +1176,7 @@ async function handlePost(req, res, user) {
         user_id: user.userId,
         audio_url: audioUrl,
         duration_ms: durationMs || null,
-        waveform_peaks: peaks.length ? peaks : null,
+        waveform_peaks: peaksPayload,
         body: text || null,
         listen_once: listenOnce,
         reply_to: replyTo,

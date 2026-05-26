@@ -7087,6 +7087,41 @@ body.echoComposeOpen .mobileTabbar{
 }
 .echoBeatChip.is-variant-0 .echoBeatChipDots::before{ background: rgba(255,255,255,0.95); }
 .echoBeatChip.is-variant-1 .echoBeatChipDots::after{ background: rgba(255,255,255,0.95); }
+/* Suggest chip — visually leads the row, slight glow */
+.echoBeatChip--suggest{
+  color: rgba(248,250,255,0.95);
+  background: linear-gradient(135deg, rgba(124,92,255,0.18), rgba(244,114,182,0.14));
+  border-color: rgba(167,139,250,0.36);
+  box-shadow: 0 0 0 1px rgba(167,139,250,0.18), 0 4px 14px -8px rgba(124,92,255,0.45);
+  gap: 5px;
+  font-weight: 700;
+}
+.echoBeatChip--suggest:hover{
+  background: linear-gradient(135deg, rgba(124,92,255,0.26), rgba(244,114,182,0.20));
+  border-color: rgba(167,139,250,0.5);
+}
+.echoBeatChip--suggest .echoBeatChipSparkle{
+  display: inline-block;
+  font-size: 13px;
+  line-height: 1;
+  transform-origin: center;
+  animation: echoSuggestSparkle 2.8s ease-in-out infinite;
+}
+@keyframes echoSuggestSparkle {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.92; }
+  50%      { transform: scale(1.12) rotate(8deg); opacity: 1; }
+}
+.echoBeatChip--suggest.is-busy{
+  opacity: 0.78;
+  cursor: progress;
+}
+.echoBeatChip--suggest.is-busy .echoBeatChipSparkle{
+  animation: echoSuggestBusy 0.9s linear infinite;
+}
+@keyframes echoSuggestBusy {
+  0%   { transform: rotate(0deg);   }
+  100% { transform: rotate(360deg); }
+}
 .echoComposeSpeedRow{
   display: flex;
   justify-content: center;

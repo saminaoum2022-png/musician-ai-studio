@@ -3,6 +3,7 @@
  * Wired from app.js via initEcho(ctx).
  */
 import { ECHO_TONE_DEFAULT, ECHO_TONE_IDS } from "./echo-tone.js";
+import { suggestEchoBeatFromBlob } from "./echo-suggest.js";
 
 const ECHO_BAR_COUNT = 48;
 /** Match status voice — keeps clips small and upload fast */
@@ -1459,6 +1460,48 @@ function handleEchoSpeedChipTap(speed) {
   syncEchoBeatPickerUi();
 }
 
+let _echoSuggestBusy = false;
+async function handleEchoSuggestBeat() {
+  if (_echoSuggestBusy) return;
+  const btn = document.getElementById("echoComposeBeatSuggest");
+  const blob = echoRawBlob?.size ? echoRawBlob : echoBlob?.size ? echoBlob : null;
+  if (!blob) {
+    try { c().showToast("Record an Echo first, then I'll suggest a beat.", { durationMs: 2800 }); } catch {}
+    return;
+  }
+  _echoSuggestBusy = true;
+  if (btn) {
+    btn.classList.add("is-busy");
+    btn.setAttribute("aria-busy", "true");
+    btn.disabled = true;
+  }
+  // Must happen inside the user gesture so iOS allows the preview audio later.
+  primeEchoSharedAudioCtx();
+  try {
+    const pick = await suggestEchoBeatFromBlob(blob);
+    if (!pick || !ECHO_BEAT_DEFS[pick.beatId]) {
+      try { c().showToast("Couldn't read your voice. Try a longer Echo.", { durationMs: 2600 }); } catch {}
+      return;
+    }
+    _echoBeatId = pick.beatId;
+    _echoBeatVariant = pick.variant | 0;
+    if (ECHO_BEAT_SPEED[pick.speed]) _echoBeatSpeed = pick.speed;
+    try { c().haptic("light"); } catch {}
+    syncEchoBeatPickerUi();
+    void startEchoBeatPreview();
+    try { c().showToast(`✨ ${pick.reason}`, { durationMs: 2800 }); } catch {}
+  } catch {
+    try { c().showToast("Beat suggestion failed.", { durationMs: 2400 }); } catch {}
+  } finally {
+    _echoSuggestBusy = false;
+    if (btn) {
+      btn.classList.remove("is-busy");
+      btn.removeAttribute("aria-busy");
+      btn.disabled = false;
+    }
+  }
+}
+
 function wireEchoBeatPickerOnce() {
   const row = document.getElementById("echoComposeBeatRow");
   const speedRow = document.getElementById("echoComposeSpeedRow");
@@ -1478,6 +1521,14 @@ function wireEchoBeatPickerOnce() {
       if (!chip) return;
       e.preventDefault();
       handleEchoSpeedChipTap(String(chip.getAttribute("data-echo-speed") || "normal"));
+    });
+  }
+  const suggestBtn = document.getElementById("echoComposeBeatSuggest");
+  if (suggestBtn && !suggestBtn.dataset.echoBeatBound) {
+    suggestBtn.dataset.echoBeatBound = "1";
+    suggestBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      void handleEchoSuggestBeat();
     });
   }
 }

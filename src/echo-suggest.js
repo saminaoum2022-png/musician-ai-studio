@@ -125,51 +125,110 @@ function analyseVoice(audioBuffer) {
 }
 
 /**
- * Pick a beat id from the analysed features. Decision order matters —
- * more specific categories first.
+ * Pick a beat id from the analysed features. Uses a scored-vote system
+ * (each beat gets a score based on how well features match its ideal
+ * profile, plus a small random tilt to break near-ties so two similar
+ * voices don't always land on the exact same loop).
+ *
+ * Tuned for the typical voice ranges observed on phone mics:
+ *   rms      ≈ 0.02–0.20 (whisper to loud)
+ *   zcr      ≈ 0.03–0.18 (warm/dark to bright/sibilant)
+ *   drange   ≈ 0.01–0.20 (flat narration to dynamic singing)
+ *   onset    ≈ 0.5–6/s   (sustained vowels to rapid speech)
+ *   pitchVar ≈ 10–200 Hz (monotone to wide melodic range)
  */
 function pickBeatFromFeatures(f) {
   const { rms, zcr, drange, onset, pitchVar } = f;
 
-  if (rms < 0.04 && drange < 0.05) {
-    return {
-      beatId: "ambient",
-      reason: "Quiet, calm voice → Ambient",
-    };
-  }
+  const isWhisper = rms < 0.028;
+  const isQuiet = rms < 0.055;
+  const isLoud = rms > 0.13;
 
-  if (pitchVar > 55 && zcr < 0.085 && rms < 0.11) {
-    return {
-      beatId: "oud",
-      reason: "Warm, expressive tone → Oud",
-    };
-  }
+  const isFlat = drange < 0.035;
+  const isDynamic = drange > 0.09;
 
-  if (drange > 0.07 && pitchVar > 35 && rms > 0.06) {
-    return {
-      beatId: "soul",
-      reason: "Expressive & dynamic → Soul",
-    };
-  }
+  const isWarm = zcr < 0.07;
+  const isBright = zcr > 0.11;
 
-  if (onset >= 2.6 || (rms > 0.12 && onset > 1.8)) {
-    return {
-      beatId: "eight08",
-      reason: "Energetic, rhythmic delivery → 808",
-    };
-  }
+  const isMonotone = pitchVar < 28;
+  const isMelodic = pitchVar > 75;
 
-  if (drange < 0.04 && onset < 1.6 && pitchVar < 30) {
-    return {
-      beatId: "piano",
-      reason: "Calm, steady voice → Piano",
-    };
-  }
+  const isSparse = onset < 1.3;
+  const isRapid = onset > 2.6;
 
-  return {
-    beatId: "lofi",
-    reason: "Chill, mid-energy vibe → Lo-fi",
+  // Build a score for each beat. Higher = better match.
+  const scores = {
+    ambient: 0,
+    piano: 0,
+    lofi: 0,
+    oud: 0,
+    soul: 0,
+    eight08: 0,
   };
+
+  // Ambient — whisper-quiet, flat, sparse
+  if (isWhisper) scores.ambient += 5;
+  if (isQuiet) scores.ambient += 2;
+  if (isFlat) scores.ambient += 2;
+  if (isSparse) scores.ambient += 1.5;
+  if (isMonotone) scores.ambient += 1;
+
+  // Piano — calm steady narration: not loud, monotone, sparse, no dynamics
+  if (isMonotone) scores.piano += 3;
+  if (isSparse) scores.piano += 2.5;
+  if (isFlat) scores.piano += 2;
+  if (!isLoud && !isQuiet) scores.piano += 1;
+  if (isBright) scores.piano += 0.5;
+
+  // Lo-fi — chill mid-energy conversational baseline. Generous catcher
+  // so it doesn't only fire as a fallback.
+  if (rms >= 0.04 && rms <= 0.12) scores.lofi += 2.5;
+  if (drange >= 0.03 && drange <= 0.09) scores.lofi += 2;
+  if (pitchVar >= 25 && pitchVar <= 75) scores.lofi += 1.5;
+  if (onset >= 1.2 && onset <= 2.6) scores.lofi += 1.5;
+
+  // Oud — warm dark voice + wide pitch range (sung/expressive Arabic-leaning)
+  if (isWarm) scores.oud += 2.5;
+  if (isMelodic) scores.oud += 3;
+  if (drange > 0.04) scores.oud += 1;
+  if (rms < 0.13) scores.oud += 0.5;
+
+  // Soul — dynamic & emotional. Wide drange is the key, not just pitch.
+  if (isDynamic) scores.soul += 4;
+  if (pitchVar > 50) scores.soul += 2;
+  if (rms > 0.07) scores.soul += 1;
+  if (!isMonotone) scores.soul += 0.5;
+
+  // 808 — energetic, rapid, projected
+  if (isRapid) scores.eight08 += 3.5;
+  if (isLoud) scores.eight08 += 2.5;
+  if (isBright) scores.eight08 += 1;
+  if (onset > 2.0 && rms > 0.09) scores.eight08 += 1.5;
+
+  // Small random tilt (0–0.6) so near-ties pick different beats across
+  // sessions. Keeps it deterministic-ish but adds variety.
+  for (const k of Object.keys(scores)) {
+    scores[k] += Math.random() * 0.6;
+  }
+
+  let bestId = "lofi";
+  let bestScore = -Infinity;
+  for (const [k, v] of Object.entries(scores)) {
+    if (v > bestScore) {
+      bestScore = v;
+      bestId = k;
+    }
+  }
+
+  const reasons = {
+    ambient: "Soft, whispered voice → Ambient",
+    piano: "Calm, steady voice → Piano",
+    lofi: "Chill, mid-energy vibe → Lo-fi",
+    oud: "Warm, expressive tone → Oud",
+    soul: "Expressive & dynamic → Soul",
+    eight08: "Energetic, rhythmic delivery → 808",
+  };
+  return { beatId: bestId, reason: reasons[bestId], scores };
 }
 
 function pickSpeedFromFeatures(f) {
@@ -206,6 +265,21 @@ export function suggestEchoBeatFromBuffer(audioBuffer) {
   const pick = pickBeatFromFeatures(features);
   const speed = pickSpeedFromFeatures(features);
   const variant = Math.floor(Math.random() * 2);
+  // Debug — visible in the WebView inspector. Helps tune cutoffs from
+  // real-world voice samples without showing numbers to the user.
+  try {
+    // eslint-disable-next-line no-console
+    console.log("[echo-suggest]", {
+      pick: pick.beatId,
+      speed,
+      rms: features.rms.toFixed(3),
+      zcr: features.zcr.toFixed(3),
+      drange: features.drange.toFixed(3),
+      onset: features.onset.toFixed(2),
+      pitchVar: features.pitchVar.toFixed(1),
+      scores: pick.scores,
+    });
+  } catch {}
   return {
     beatId: pick.beatId,
     variant,

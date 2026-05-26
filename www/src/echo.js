@@ -27,10 +27,11 @@ const ECHO_BEAT_DEFS = {
 const ECHO_BEAT_SPEED = { slowed: 0.85, normal: 1.0, fast: 1.15 };
 /** Beat level at playback time, mixed under the voice. */
 // Background bed level. The recorded voice typically peaks at ~0.7-0.9 so
-// 0.22 puts the beat clearly under the voice while staying audible. Apply
-// the same level in preview AND playback so the compose preview is an
-// honest representation of what listeners will hear.
-const ECHO_BEAT_PLAYBACK_GAIN = 0.22;
+// 0.16 puts the beat clearly under the voice while staying audible. We
+// dropped this from 0.22 after listener feedback that the loop was
+// fighting the voice. Apply the same level in preview AND playback so the
+// compose preview is an honest representation of what listeners will hear.
+const ECHO_BEAT_PLAYBACK_GAIN = 0.16;
 
 let ctx = null;
 let echoRecState = "idle";

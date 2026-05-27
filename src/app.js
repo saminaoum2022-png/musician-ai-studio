@@ -13,7 +13,7 @@ import { initEcho, onEnterFriendsRoute, openEchoFromCreateChooser } from "./echo
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260527tabMorphTdZFix";
+const APP_BUILD = "20260527friendsFeedStackFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -12104,7 +12104,10 @@ async function supabaseFetchPublicLibraryRowsForFilter(filterQuery, perUserLimit
 async function supabaseFetchPublicLibraryForUserId(userId) {
   const uid = String(userId || "").trim();
   if (!uid) return [];
-  const batch = await supabaseFetchPublicLibraryForUserIds([uid]);
+  const batch = await supabaseFetchPublicLibraryRowsForFilter(
+    `user_id=eq.${encodeURIComponent(uid)}`,
+    80,
+  );
   return batch.get(uid) || [];
 }
 
@@ -12113,8 +12116,10 @@ async function supabaseFetchPublicLibraryForUserIds(userIds) {
   const ids = [...new Set((userIds || []).map((id) => String(id || "").trim()).filter(Boolean))];
   if (!ids.length) return new Map();
   if (ids.length === 1) {
-    const one = await supabaseFetchPublicLibraryForUserId(ids[0]);
-    return new Map([[ids[0], one]]);
+    return supabaseFetchPublicLibraryRowsForFilter(
+      `user_id=eq.${encodeURIComponent(ids[0])}`,
+      12,
+    );
   }
   const inList = ids.map((id) => encodeURIComponent(id)).join(",");
   return supabaseFetchPublicLibraryRowsForFilter(`user_id=in.(${inList})`, ids.length * 12);

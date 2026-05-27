@@ -13,7 +13,7 @@ import { initEcho, onEnterFriendsRoute, openEchoFromCreateChooser } from "./echo
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260527echoBeatFriendsFix";
+const APP_BUILD = "20260527tabMorphTdZFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2907,7 +2907,6 @@ window.addEventListener("hashchange", () => {
   scheduleApplyRoute();
 });
 if (!location.hash) location.hash = "#/intro";
-safeApplyRoute();
 dismissBootSplash();
 try {
   mountFixedOverlaysToBody();
@@ -25740,31 +25739,17 @@ if (els.btnGenerateOrb && els.btnSunoGenerate) {
   });
 }
 
-function syncGenerateOrbVisibility() {
-  if (els.btnGenerateOrb) {
-    const route = document.body.getAttribute("data-route");
-    const hasInput = Boolean(
-      String(els.sunoPrompt?.value || "").trim() ||
-      String(els.sunoStyle?.value || "").trim() ||
-      imageMoodAppliedForNextGen
-    );
-    const generating = Boolean(els.btnSunoGenerate?.disabled);
-    const hasResult = (els.resultCard?.style.display || "none") !== "none";
-    const visible = route === "generate" && hasInput && !generating && !hasResult;
-    els.btnGenerateOrb.style.display = visible ? "inline-flex" : "none";
-  }
-  syncCreateTabMorph();
-}
-
 // Subtle morph of the bottom Create tab into a Generate / Listen button when
 // the user is on the Create page and inputs are ready. The tab's underlying
-// route navigation is preserved on every other page.
+// route navigation is preserved on every other page. Declared before
+// syncGenerateOrbVisibility so applyRoute (scheduled early via safeApplyRoute)
+// never hits TDZ on _syncCreateTabMorphRaf.
 var _tabListenTimer = null;
 var _tabListenFlashedForRun = false;
 var _tabLastHasResult = false;
 var TAB_TIP_KEY = "nabadai_tab_generate_tip_v1";
 var _tabTipTimer = null;
-let _syncCreateTabMorphRaf = 0;
+var _syncCreateTabMorphRaf = 0;
 function syncCreateTabMorph() {
   if (_syncCreateTabMorphRaf) return;
   _syncCreateTabMorphRaf = requestAnimationFrame(() => {
@@ -25843,6 +25828,23 @@ function syncCreateTabMorphNow() {
   }
   if (!ready && tooltip) tooltip.hidden = true;
 }
+
+function syncGenerateOrbVisibility() {
+  if (els.btnGenerateOrb) {
+    const route = document.body.getAttribute("data-route");
+    const hasInput = Boolean(
+      String(els.sunoPrompt?.value || "").trim() ||
+      String(els.sunoStyle?.value || "").trim() ||
+      imageMoodAppliedForNextGen
+    );
+    const generating = Boolean(els.btnSunoGenerate?.disabled);
+    const hasResult = (els.resultCard?.style.display || "none") !== "none";
+    const visible = route === "generate" && hasInput && !generating && !hasResult;
+    els.btnGenerateOrb.style.display = visible ? "inline-flex" : "none";
+  }
+  syncCreateTabMorph();
+}
+
 function autoResizeLyricsBox() {
   if (!els.sunoPrompt) return;
   const el = els.sunoPrompt;
@@ -25958,6 +25960,7 @@ try {
   if (els.btnSunoGenerate) _tabMo.observe(els.btnSunoGenerate, { attributes: true, attributeFilter: ["disabled"] });
 } catch {}
 syncCreateTabMorph();
+safeApplyRoute();
 
 (function wireCreateTabClick() {
   const tab = document.getElementById("tabCreate");

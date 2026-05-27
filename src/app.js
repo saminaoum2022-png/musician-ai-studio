@@ -13,7 +13,7 @@ import { initEcho, onEnterFriendsRoute, openEchoFromCreateChooser } from "./echo
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260526echoSuggestScoringV2";
+const APP_BUILD = "20260527echoBeatFriendsFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5583,8 +5583,8 @@ async function renderProfileActivities() {
   if (!authSession?.user?.id) {
     listEl.innerHTML = `
       <div class="profileActEmpty">
-        <p class="profileActEmptyTitle">Sign in to see your activity</p>
-        <p class="profileActEmptyText">Public drops and Friends updates show up here.</p>
+        <p class="profileActEmptyTitle">Sign in to see your posts</p>
+        <p class="profileActEmptyText">Your public song drops and Friends updates land here.</p>
       </div>`;
     if (countEl) countEl.hidden = true;
     return;
@@ -5631,9 +5631,9 @@ async function renderProfileActivities() {
   if (!feedItems.length) {
     listEl.innerHTML = `
       <div class="profileActEmpty">
-        <p class="profileActEmptyTitle">No activity yet</p>
-        <p class="profileActEmptyText">Tap <strong>+</strong> on Friends to post, or use <strong>Show on public profile</strong> on a song in All songs.</p>
-        <button type="button" class="emptyStateCta" data-profile-songs-switch="all">View all songs</button>
+        <p class="profileActEmptyTitle">No posts yet</p>
+        <p class="profileActEmptyText">Drop a song from <strong>Create</strong>, or share an update from <strong>Friends</strong> — both land here.</p>
+        <button type="button" class="emptyStateCta" data-profile-songs-switch="all">View your songs</button>
       </div>`;
     return;
   }
@@ -7019,7 +7019,7 @@ let _friendsFeedSnapshot = null;
 const FOLLOWING_LIST_CACHE_MS = 45000;
 const FRIENDS_FEED_SNAPSHOT_MS = 90000;
 const FRIENDS_MIN_FETCH_GAP_MS = 30000;
-const FRIENDS_FEED_SNAPSHOT_KEY = "nabad_friends_feed_snap_v1";
+const FRIENDS_FEED_SNAPSHOT_KEY = "nabad_friends_feed_snap_v2";
 const FRIENDS_FEED_LIBRARY_USERS = 12;
 
 function hydrateFriendsFeedSnapshotFromStorage() {
@@ -7105,8 +7105,12 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
 
   const keepFeed = Boolean(_friendsOwnPostPin && listEl.querySelector(".followAct"));
   const snap = _friendsFeedSnapshot;
-  const snapFresh = snap && Date.now() - snap.at < FRIENDS_FEED_SNAPSHOT_MS;
-  if (snapFresh && snap.html && !keepFeed) {
+  const snapFresh =
+    snap &&
+    Date.now() - snap.at < FRIENDS_FEED_SNAPSHOT_MS &&
+    snap.html &&
+    !snap.html.includes("followAct--skel");
+  if (snapFresh && !keepFeed) {
     listEl.classList.remove("isDiscoveryLoading");
     listEl.hidden = false;
     listEl.innerHTML = snap.html;
@@ -12055,10 +12059,17 @@ async function supabaseFetchPublicLibraryRowsForFilter(filterQuery, perUserLimit
   const colsLegacy =
     "user_id,id,created_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
+  const authHeaders = () => {
+    const token = getSupabaseAuthToken();
+    return {
+      apikey: SUPABASE_ANON_KEY,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  };
   try {
     let r = await fetch(
       `${SUPABASE_URL}/rest/v1/user_songs?${filterQuery}&public_on_profile=eq.true&select=${colsWithPublished}&order=published_at.desc.nullslast,created_at.desc&limit=${lim}${artUrlGuard}`,
-      { headers: { apikey: SUPABASE_ANON_KEY }, cache: "no-store" },
+      { headers: authHeaders(), cache: "no-store" },
     );
     let selectedPublishedAt = true;
     if (!r.ok) {
@@ -12067,7 +12078,7 @@ async function supabaseFetchPublicLibraryRowsForFilter(filterQuery, perUserLimit
         selectedPublishedAt = false;
         r = await fetch(
           `${SUPABASE_URL}/rest/v1/user_songs?${filterQuery}&public_on_profile=eq.true&select=${colsLegacy}&order=created_at.desc&limit=${lim}${artUrlGuard}`,
-          { headers: { apikey: SUPABASE_ANON_KEY }, cache: "no-store" },
+          { headers: authHeaders(), cache: "no-store" },
         );
       }
     }

@@ -259,7 +259,7 @@ let _echoComposeIgnoreInputUntil = 0;
 let _echoRailCache = null;
 let _echoRailCacheAt = 0;
 const ECHO_RAIL_CACHE_MS = 45000;
-const ECHO_RAIL_SNAPSHOT_KEY = "nabad_echo_rail_v1";
+const ECHO_RAIL_SNAPSHOT_KEY = "nabad_echo_rail_v2";
 
 function hydrateEchoRailCacheFromStorage() {
   if (_echoRailCache) return;
@@ -544,8 +544,8 @@ function mapEchoFromApi(e) {
   //   - an object { p: [..peaks..], b: { id, v, s } } (echoes with a beat)
   // mapEchoFromApi normalizes this back into a flat array + optional beat.
   let peaks = [];
-  let beat = e.beat || null;
-  const raw = e.waveformPeaks;
+  let beat = e.beat || e.beat_meta || null;
+  const raw = e.waveformPeaks ?? e.waveform_peaks;
   if (Array.isArray(raw)) {
     peaks = raw;
   } else if (raw && typeof raw === "object") {
@@ -996,14 +996,51 @@ async function markEchoListened(slide) {
   }
 }
 
+function echoBeatUrlForSlide(slide) {
+  const beat = slide?.beat;
+  if (!beat?.id || !ECHO_BEAT_DEFS[beat.id]) return "";
+  return echoBeatVariantUrl(beat.id, beat.v | 0);
+}
+
+/** True when the beat <audio> is already loaded/playing for this slide. */
+function echoBeatAudioMatchesSlide(slide) {
+  const url = echoBeatUrlForSlide(slide);
+  if (!url) return false;
+  const a = _echoBeatPlayback?.audio || _echoBeatAudioEl;
+  return Boolean(a && a.dataset.echoBeatSrc === url);
+}
+
+function resumeEchoBeatPlaybackFor(slide) {
+  const beat = slide?.beat;
+  if (!beat?.id || !ECHO_BEAT_DEFS[beat.id]) return false;
+  const a = _echoBeatPlayback?.audio || getEchoBeatAudio();
+  const url = echoBeatUrlForSlide(slide);
+  if (!url || a.dataset.echoBeatSrc !== url) return false;
+  a.loop = true;
+  a.playbackRate = ECHO_BEAT_SPEED[beat.s] || 1.0;
+  _echoBeatPlayback = { audio: a };
+  if (a.paused) {
+    a.volume = 0;
+    try {
+      void a.play().catch(() => {});
+    } catch {}
+  }
+  rampEchoBeatAudioVolume(a, ECHO_BEAT_PLAYBACK_GAIN, 220);
+  return true;
+}
+
 async function startEchoBeatPlaybackFor(slide) {
   const beat = slide?.beat;
   if (!beat?.id || !ECHO_BEAT_DEFS[beat.id]) return;
-  // Always use a fresh <audio> for the beat layer at playback time —
+  // If we already primed this beat in the tap gesture, don't tear it down —
+  // ramp volume instead (web autoplay often blocks a second play() call).
+  if (resumeEchoBeatPlaybackFor(slide)) return;
+  // Always use a dedicated <audio> for the beat layer at playback time —
   // two simultaneous <audio> elements work on iOS where Web Audio gets
   // muted while another <audio> element is playing.
   const a = getEchoBeatAudio();
-  const url = echoBeatVariantUrl(beat.id, beat.v | 0);
+  const url = echoBeatUrlForSlide(slide);
+  if (!url) return;
   if (a.dataset.echoBeatSrc !== url) {
     a.dataset.echoBeatSrc = url;
     a.src = url;
@@ -1019,8 +1056,10 @@ async function startEchoBeatPlaybackFor(slide) {
     a.volume = 0;
     try {
       await a.play();
-    } catch {
-      // iOS rejected — caller can retry via the tap-to-listen flow.
+    } catch (err) {
+      try {
+        console.warn("[echo-beat] play blocked", err);
+      } catch {}
       return;
     }
   }
@@ -1085,7 +1124,9 @@ function playEchoSlide(slide) {
     syncEchoViewerUi();
     // Voice is now playing. Start the beat layer in parallel — they don't
     // need sample-accurate alignment because the beat is a looping bed.
-    if (slide.beat) void startEchoBeatPlaybackFor(slide);
+    if (slide.beat) {
+      if (!resumeEchoBeatPlaybackFor(slide)) void startEchoBeatPlaybackFor(slide);
+    }
   };
 
   const showTapFallback = () => {
@@ -1094,8 +1135,10 @@ function playEchoSlide(slide) {
     syncEchoViewerUi();
   };
 
-  // Stop any beat layer left over from the previous slide before we start.
-  stopEchoBeatPlayback();
+  // Only stop a beat from a *different* slide. If we primed this slide's beat
+  // in the tile-tap gesture, keep it alive — playEchoSlide used to call
+  // stopEchoBeatPlayback() here and kill the loop before onPlaying fired.
+  if (!echoBeatAudioMatchesSlide(slide)) stopEchoBeatPlayback();
   attempt(directUrl)
     .then(onPlaying)
     .catch(() => {

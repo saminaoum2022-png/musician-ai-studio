@@ -14,7 +14,8 @@ const ECHO_MIN_RECORD_MS = 420;
 const ECHO_HEARD_KEY = "nabad_echo_heard_v1";
 const ECHO_CAPTION_MAX = 60;
 
-const ECHO_BEAT_ASSET_BASE = "./assets/echo-beats/";
+/** Absolute path — Vercel serves repo root (`/assets/`), not only `www/assets/`. */
+const ECHO_BEAT_ASSET_BASE = "/assets/echo-beats/";
 const ECHO_BEAT_DEFS = {
   none: { label: "None", variants: [] },
   lofi: { label: "Lo-fi", variants: ["lofi-a.mp3", "lofi-b.mp3"] },
@@ -359,11 +360,16 @@ function preloadEchoAudio(url) {
   } catch {}
 }
 
+function ensureEchoBeatLayerPlaying(slide) {
+  if (!slide?.beat?.id || !ECHO_BEAT_DEFS[slide.beat.id]) return;
+  if (!resumeEchoBeatPlaybackFor(slide)) void startEchoBeatPlaybackFor(slide);
+}
+
 function bindEchoViewerAudioOnce() {
   if (_echoViewerListenersBound) return;
   _echoViewerListenersBound = true;
   const audio = getEchoViewerAudio();
-  audio.addEventListener("play", () => {
+  const onVoiceAudible = () => {
     const sheet = document.getElementById("echoViewerSheet");
     const slide = currentEchoSlide();
     if (!sheet || !slide) return;
@@ -373,8 +379,11 @@ function bindEchoViewerAudioOnce() {
     if (tap) tap.hidden = true;
     if (!isOwnEchoSlide(slide)) void markEchoListened(slide);
     if (!_echoRaf) _echoRaf = requestAnimationFrame(echoViewerTick);
+    ensureEchoBeatLayerPlaying(slide);
     syncEchoViewerUi();
-  });
+  };
+  audio.addEventListener("play", onVoiceAudible);
+  audio.addEventListener("playing", onVoiceAudible);
   audio.addEventListener("timeupdate", () => updateEchoViewerProgress());
   audio.addEventListener("ended", () => {
     const sheet = document.getElementById("echoViewerSheet");
@@ -1140,12 +1149,8 @@ function playEchoSlide(slide) {
   const onPlaying = () => {
     if (_echoProgressTimer) window.clearInterval(_echoProgressTimer);
     _echoProgressTimer = window.setInterval(() => updateEchoViewerProgress(), 200);
+    ensureEchoBeatLayerPlaying(slide);
     syncEchoViewerUi();
-    // Voice is now playing. Start the beat layer in parallel — they don't
-    // need sample-accurate alignment because the beat is a looping bed.
-    if (slide.beat) {
-      if (!resumeEchoBeatPlaybackFor(slide)) void startEchoBeatPlaybackFor(slide);
-    }
   };
 
   const showTapFallback = () => {
@@ -1349,10 +1354,14 @@ function getEchoBeatAudio() {
   if (!_echoBeatAudioEl) {
     const a = new Audio();
     a.preload = "auto";
-    a.crossOrigin = "anonymous";
     a.setAttribute("playsinline", "");
     a.loop = true;
     a.volume = 0;
+    a.addEventListener("error", () => {
+      try {
+        console.warn("[echo-beat] load failed", a.src);
+      } catch {}
+    });
     _echoBeatAudioEl = a;
   }
   return _echoBeatAudioEl;
@@ -2540,6 +2549,7 @@ function wireEchoOnce() {
       const uid = tile.getAttribute("data-echo-user-id");
       const story = _echoStoriesByUser.get(String(uid || ""));
       const slide = story?.echoes?.[0];
+      if (slide?.beat) primeEchoBeatAudio(slide);
       if (slide?.audioUrl) preloadEchoAudio(slide.audioUrl);
     },
     { passive: true },

@@ -48,6 +48,17 @@ function cleanPostId(v) {
   return cleanUserId(v);
 }
 
+function coerceJsonbField(raw) {
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return raw;
+    }
+  }
+  return raw;
+}
+
 function normalizeWaveformPeaks(raw) {
   // Echo waveform_peaks can be either:
   //   - a flat number[] (older rows, or status posts)
@@ -55,9 +66,10 @@ function normalizeWaveformPeaks(raw) {
   //     we tuck beat metadata into the same JSONB column so we don't
   //     have to migrate the table)
   // We accept both and return a flat clamped array.
-  let arr = raw;
-  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-    arr = Array.isArray(raw.p) ? raw.p : Array.isArray(raw.peaks) ? raw.peaks : [];
+  const parsed = coerceJsonbField(raw);
+  let arr = parsed;
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    arr = Array.isArray(parsed.p) ? parsed.p : Array.isArray(parsed.peaks) ? parsed.peaks : [];
   }
   if (!Array.isArray(arr)) return [];
   return arr
@@ -73,7 +85,7 @@ const ECHO_BEAT_IDS_API = new Set([
   "soul",
   "eight08",
 ]);
-const ECHO_BEAT_SPEEDS_API = new Set(["slow", "normal", "fast"]);
+const ECHO_BEAT_SPEEDS_API = new Set(["slow", "slowed", "normal", "fast"]);
 
 function normalizeEchoBeatMeta(raw) {
   // Pull a beat descriptor out of either the JSONB envelope on
@@ -88,8 +100,9 @@ function normalizeEchoBeatMeta(raw) {
 }
 
 function extractEchoBeatFromRow(rawPeaks) {
-  if (!rawPeaks || typeof rawPeaks !== "object" || Array.isArray(rawPeaks)) return null;
-  return normalizeEchoBeatMeta(rawPeaks.b || rawPeaks.beat || null);
+  const parsed = coerceJsonbField(rawPeaks);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  return normalizeEchoBeatMeta(parsed.b || parsed.beat || null);
 }
 
 function mapStatusPostRow(p, prof) {
@@ -1158,8 +1171,12 @@ async function handlePost(req, res, user) {
   if (action === "post_echo") {
     const audioUrl = String(body?.audioUrl || body?.audio_url || "").trim().slice(0, 2048);
     const durationMs = Math.min(120000, Math.max(0, Math.round(Number(body?.durationMs || body?.duration_ms) || 0)));
-    const peaks = normalizeWaveformPeaks(body?.waveformPeaks || body?.waveform_peaks);
-    const beat = normalizeEchoBeatMeta(body?.beat);
+    const rawPeaks = coerceJsonbField(body?.waveformPeaks || body?.waveform_peaks);
+    const peaks = normalizeWaveformPeaks(rawPeaks);
+    let beat = normalizeEchoBeatMeta(body?.beat);
+    if (!beat && rawPeaks && typeof rawPeaks === "object" && !Array.isArray(rawPeaks)) {
+      beat = normalizeEchoBeatMeta(rawPeaks.b || rawPeaks.beat);
+    }
     const text = String(body?.body || "").trim().slice(0, 200);
     const listenOnce = Boolean(body?.listenOnce ?? body?.listen_once);
     const replyTo = cleanPostId(body?.replyTo || body?.reply_to) || null;
@@ -1169,6 +1186,15 @@ async function handlePost(req, res, user) {
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     let peaksPayload = peaks.length ? peaks : null;
     if (beat) peaksPayload = { p: peaks, b: beat };
+    else if (
+      rawPeaks &&
+      typeof rawPeaks === "object" &&
+      !Array.isArray(rawPeaks) &&
+      (rawPeaks.b || rawPeaks.beat)
+    ) {
+      const recovered = normalizeEchoBeatMeta(rawPeaks.b || rawPeaks.beat);
+      if (recovered) peaksPayload = { p: peaks, b: recovered };
+    }
     const ins = await svcFetch("social_echoes", {
       method: "POST",
       headers: { Prefer: "return=representation" },

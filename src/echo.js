@@ -24,7 +24,7 @@ const ECHO_BEAT_DEFS = {
   ambient: { label: "Ambient", variants: ["ambient-a.mp3", "ambient-b.mp3"] },
   oud: { label: "Oud", variants: ["oud-a.mp3", "oud-b.mp3"] },
 };
-const ECHO_BEAT_SPEED = { slowed: 0.85, normal: 1.0, fast: 1.15 };
+const ECHO_BEAT_SPEED = { slowed: 0.85, slow: 0.85, normal: 1.0, fast: 1.15 };
 /** Beat level at playback time, mixed under the voice. */
 // Background bed level. The recorded voice typically peaks at ~0.7-0.9 so
 // 0.16 puts the beat clearly under the voice while staying audible. We
@@ -259,7 +259,7 @@ let _echoComposeIgnoreInputUntil = 0;
 let _echoRailCache = null;
 let _echoRailCacheAt = 0;
 const ECHO_RAIL_CACHE_MS = 45000;
-const ECHO_RAIL_SNAPSHOT_KEY = "nabad_echo_rail_v2";
+const ECHO_RAIL_SNAPSHOT_KEY = "nabad_echo_rail_v3";
 
 function hydrateEchoRailCacheFromStorage() {
   if (_echoRailCache) return;
@@ -398,13 +398,13 @@ function bindEchoViewerAudioOnce() {
   audio.addEventListener("pause", () => {
     const sheet = document.getElementById("echoViewerSheet");
     if (!sheet?.classList.contains("isOpen") || audio.ended) return;
-    // If the voice element pauses for any reason, kill the beat layer too
-    // so we never end up with a beat looping while the voice is silent.
+    // Voice emits pause while swapping src during load — don't kill a beat
+    // we primed in the tile tap or that onPlaying is about to resume.
+    if (sheet.classList.contains("isLoading") || sheet.classList.contains("needsEchoTap")) return;
+    if (!sheet.classList.contains("isPlaying")) return;
     stopEchoBeatPlayback();
-    if (!sheet.classList.contains("needsEchoTap")) {
-      sheet.classList.remove("isPlaying");
-      syncEchoViewerUi();
-    }
+    sheet.classList.remove("isPlaying");
+    syncEchoViewerUi();
   });
 }
 
@@ -538,14 +538,38 @@ function isEchoHeard(echo) {
   return loadHeardLocal().has(String(echo.id));
 }
 
+/** JSONB occasionally arrives double-encoded as a string from REST. */
+function coerceEchoWaveformRaw(raw) {
+  let v = raw;
+  if (typeof v === "string") {
+    try {
+      v = JSON.parse(v);
+    } catch {
+      return null;
+    }
+  }
+  return v;
+}
+
+function normalizeEchoBeatMeta(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const id = String(raw.id || "").trim().toLowerCase();
+  if (!id || id === "none" || !ECHO_BEAT_DEFS[id]) return null;
+  const v = Number.isFinite(Number(raw.v)) ? Math.max(0, Number(raw.v) | 0) : 0;
+  let s = String(raw.s || "normal").trim().toLowerCase();
+  if (s === "slow") s = "slowed";
+  if (!ECHO_BEAT_SPEED[s]) s = "normal";
+  return { id, v, s };
+}
+
 function mapEchoFromApi(e) {
   // waveformPeaks can be:
   //   - a flat array (old echoes, or echoes without a beat)
   //   - an object { p: [..peaks..], b: { id, v, s } } (echoes with a beat)
   // mapEchoFromApi normalizes this back into a flat array + optional beat.
   let peaks = [];
-  let beat = e.beat || e.beat_meta || null;
-  const raw = e.waveformPeaks ?? e.waveform_peaks;
+  let beat = normalizeEchoBeatMeta(e.beat || e.beat_meta);
+  const raw = coerceEchoWaveformRaw(e.waveformPeaks ?? e.waveform_peaks);
   if (Array.isArray(raw)) {
     peaks = raw;
   } else if (raw && typeof raw === "object") {
@@ -554,12 +578,7 @@ function mapEchoFromApi(e) {
       : Array.isArray(raw.peaks)
         ? raw.peaks
         : [];
-    if (!beat) {
-      const b = raw.b || raw.beat;
-      if (b && b.id) {
-        beat = { id: String(b.id), v: Number(b.v) | 0, s: String(b.s || "normal") };
-      }
-    }
+    if (!beat) beat = normalizeEchoBeatMeta(raw.b || raw.beat);
   }
   if (beat && !ECHO_BEAT_DEFS[beat.id]) beat = null;
   return {
@@ -2335,6 +2354,11 @@ async function finishEchoPublishBackground({
     }
     uploadedOk = true;
     resetEchoUploadState();
+    invalidateEchoRailCache();
+    try {
+      sessionStorage.removeItem(ECHO_RAIL_SNAPSHOT_KEY);
+    } catch {}
+    void refreshEchoRail({ force: true });
   } catch (e) {
     removeEchoFromRail(optimisticId);
     try {

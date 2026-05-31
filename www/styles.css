@@ -22880,18 +22880,58 @@ body[data-route="challenges"] .app{
   flex-shrink: 0;
   overflow: visible;
 }
-.homeDeskPromoVisual--echo .onboardingEchoTileWrap{
+.homeDeskPromoVisual--echo .onboardingEchoTileWrap,
+.homeDeskPromoVisual--persona .homeDeskPersonaTileWrap{
   transform: scale(0.68);
   transform-origin: center center;
 }
-.homeDeskPromoVisual--persona .homeDeskPersonaScene{
-  transform: scale(0.38);
-  transform-origin: center center;
-  min-width: 0;
-  padding: 24px 32px 28px;
+.homeDeskPersonaTileWrap{
+  position: relative;
+  width: 108px;
+  height: 108px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.homeDeskPromoVisual--persona .onboardingPersonaLabel{
-  display: none;
+.homeDeskPersonaPulse{
+  position: absolute;
+  inset: -14px;
+  border-radius: 30px;
+  border: 2px solid rgba(124,92,255,0.42);
+  animation: homeDeskPersonaPulse 2.4s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes homeDeskPersonaPulse{
+  0%{ transform: scale(0.92); opacity: 0.75; }
+  70%{ transform: scale(1.18); opacity: 0; }
+  100%{ transform: scale(1.18); opacity: 0; }
+}
+.homeDeskPersonaTile{
+  position: relative;
+  width: 108px;
+  height: 108px;
+  border-radius: 22px;
+  padding: 3px;
+  background: linear-gradient(135deg, #7c5cff, #23d5ab);
+  box-shadow: 0 20px 48px -20px rgba(124,92,255,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.homeDeskPersonaTile::before{
+  content:"";
+  position: absolute;
+  inset: 3px;
+  border-radius: 19px;
+  background: linear-gradient(160deg, #141028 0%, #0a0c14 100%);
+}
+.homeDeskPersonaMicIco{
+  position: relative;
+  z-index: 1;
+  width: 36px;
+  height: 36px;
+  color: rgba(168,150,255,0.92);
+  display: block;
 }
 .homeDeskPromoCopy h3{
   margin: 4px 0 6px;

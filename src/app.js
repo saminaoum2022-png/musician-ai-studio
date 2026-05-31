@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531profilePersonaNotif";
+const APP_BUILD = "20260531personaTileNoStatus";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5965,7 +5965,7 @@ async function renderProfileActivities(opts = {}) {
     listEl.innerHTML = `
       <div class="profileActEmpty">
         <p class="profileActEmptyTitle">Sign in to see your posts</p>
-        <p class="profileActEmptyText">Your public song drops and Friends updates land here.</p>
+        <p class="profileActEmptyText">Your published songs and challenge entries land here.</p>
       </div>`;
     if (countEl) countEl.hidden = true;
     return;
@@ -5982,22 +5982,13 @@ async function renderProfileActivities(opts = {}) {
   else if (!hadFeed && !snapFresh) listEl.innerHTML = followingActivitySkeletonHtml();
   if (snapFresh && !force && Date.now() - snap.at < PROFILE_ACT_MIN_FETCH_GAP_MS) return;
   const uid = String(authSession.user.id);
-  const [posts, libRows] = await Promise.all([
-    fetchMyStatusPosts(60),
-    Promise.resolve(
-      loadLibrary()
-        .filter((t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile))
-        .map((t) => ({ ...t, userId: String(t.userId || uid) })),
-    ),
-  ]);
+  const libRows = loadLibrary()
+    .filter((t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile))
+    .map((t) => ({ ...t, userId: String(t.userId || uid) }));
   const pubN = libRows.length;
-  const postN = posts.length;
   if (countEl) {
-    const bits = [];
-    if (pubN) bits.push(`${pubN} PUBLIC`);
-    if (postN) bits.push(`${postN} ${postN === 1 ? "POST" : "POSTS"}`);
-    countEl.textContent = bits.join(" · ");
-    countEl.hidden = !bits.length;
+    countEl.textContent = pubN ? `${pubN} PUBLIC` : "";
+    countEl.hidden = !pubN;
   }
   const profMap = await fetchProfilesByUserIdsMap([uid]);
   const playCountMap = libRows.length
@@ -6006,25 +5997,19 @@ async function renderProfileActivities(opts = {}) {
   for (const t of libRows) {
     t.playCount = playCountMap.get(String(t.id || "")) || 0;
   }
-  const feedItems = [
-    ...posts.map((post) => ({
-      kind: "status",
-      ts: new Date(post.createdAt || post.created_at || 0).getTime() || 0,
-      post,
-    })),
-    ...libRows.map((track) => ({
+  const feedItems = libRows
+    .map((track) => ({
       kind: "music",
       ts: libraryTrackPublicTs(track) || Number(track.ts || 0),
       track,
-    })),
-  ]
-    .filter((row) => row.ts > 0 || row.kind === "status")
+    }))
+    .filter((row) => row.ts > 0)
     .sort((a, b) => b.ts - a.ts);
   if (!feedItems.length) {
     listEl.innerHTML = `
       <div class="profileActEmpty">
         <p class="profileActEmptyTitle">No posts yet</p>
-        <p class="profileActEmptyText">Drop a song from <strong>Create</strong>, or share an update from <strong>Friends</strong> — both land here.</p>
+        <p class="profileActEmptyText">Publish a song from <strong>Create</strong> — releases and challenge entries show up here.</p>
         <button type="button" class="emptyStateCta" data-profile-songs-switch="all">View your songs</button>
       </div>`;
     _profileActSnapshot = { at: Date.now(), html: listEl.innerHTML };
@@ -6032,11 +6017,7 @@ async function renderProfileActivities(opts = {}) {
     return;
   }
   listEl.innerHTML = feedItems
-    .map((item, i) =>
-      item.kind === "status"
-        ? followingStatusRowHtml(item.post, profMap, i, { xstyle: true })
-        : followingActivityRowHtml(item.track, profMap, i, { xstyle: true }),
-    )
+    .map((item, i) => followingActivityRowHtml(item.track, profMap, i, { xstyle: true }))
     .join("");
   _profileActSnapshot = { at: Date.now(), html: listEl.innerHTML };
   persistProfileActSnapshot();
@@ -6447,10 +6428,6 @@ function navigateFromCreateChooser(action) {
       return;
     }
 
-    if (kind === "status") {
-      openFriendsForStatusCompose();
-      return;
-    }
   } finally {
     window.setTimeout(() => {
       _createChooserNavLock = false;
@@ -7488,7 +7465,7 @@ function resetProfileActivitiesGuestUi() {
     listEl.innerHTML = `
       <div class="profileActEmpty">
         <p class="profileActEmptyTitle">Sign in to see your posts</p>
-        <p class="profileActEmptyText">Your public song drops and Friends updates land here.</p>
+        <p class="profileActEmptyText">Your published songs and challenge entries land here.</p>
       </div>`;
   }
   if (countEl) countEl.hidden = true;

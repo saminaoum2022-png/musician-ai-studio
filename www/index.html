@@ -63,6 +63,21 @@
     <meta name="twitter:image" content="./assets/nabadai-logo.png" />
 </head>
   <body class="booting">
+    <script>
+      (function () {
+        var done = false;
+        try { done = localStorage.getItem("nabadai_onboarding_v1_done") === "1"; } catch (e) {}
+        var h = String(location.hash || "").replace(/^#\/?/, "").split(/[?#&]/)[0] || "";
+        if (h === "hub" || h === "home" || h === "start" || h === "sparks") h = "challenges";
+        if (!h) h = done ? "challenges" : "intro";
+        var ok = /^(intro|onboarding|auth|generate|challenges|discover|friends|profile|settings|player|sounds|user|vocal|stems|advanced|credits|mentor)$/.test(h);
+        if (!ok) h = done ? "challenges" : "intro";
+        document.body.setAttribute("data-route", h);
+        document.body.classList.toggle("isIntro", h === "intro");
+        document.body.classList.toggle("isOnboarding", h === "onboarding");
+        document.body.classList.toggle("isAuth", h === "auth");
+      })();
+    </script>
     <div class="app">
       <header class="header">
         <div class="headerMain">
@@ -191,7 +206,7 @@
           </div>
         </section>
 
-        <section class="card wide hubCard" data-route="hub">
+        <section class="card wide hubCard" data-route="hub" hidden aria-hidden="true">
           <div class="hubTop">
             <button type="button" id="hubBrand" class="hubBrand" aria-label="NabadAi Music — scroll to top">
               <span class="hubBrandWordmark">
@@ -206,41 +221,10 @@
           <div id="hubList" class="code" style="max-height:none"></div>
         </section>
 
-        <section class="card wide" data-route="home">
-          <h2>Home</h2>
-          <div class="hint" style="margin-top:0">Choose what you want to do.</div>
-          <div class="homeGrid">
-            <a class="homeCard" href="#/generate">
-              <div class="homeTitle">Generate song</div>
-              <div class="homeSub">Create a full song with AI</div>
-            </a>
-            <a class="homeCard" href="#/sounds">
-              <div class="homeTitle">Sounds</div>
-              <div class="homeSub">Loops &amp; ambience · 2.5 credits</div>
-            </a>
-            <a class="homeCard" href="#/player">
-              <div class="homeTitle">Player</div>
-              <div class="homeSub">Listen like Apple Music</div>
-            </a>
-            <a class="homeCard" href="#/discover">
-              <div class="homeTitle">Discover</div>
-              <div class="homeSub">Public songs from creators</div>
-            </a>
-            <a class="homeCard" href="#/challenges">
-              <div class="homeTitle">Home Sparks</div>
-              <div class="homeSub">Prompts · occasions · creator ideas</div>
-            </a>
-            <a class="homeCard" href="#/more">
-              <div class="homeTitle">Studio & More</div>
-              <div class="homeSub">Stems, mixer, settings</div>
-            </a>
-          </div>
-        </section>
-
         <section class="wide soundsPage soundsPageNeon" data-route="sounds">
           <div class="soundsNeonDecor" aria-hidden="true"></div>
           <header class="soundsHeroHeader creditsHeader">
-            <a href="#/home" class="creditsBack soundsHeroBack" aria-label="Back to Home">
+            <a href="#/challenges" class="creditsBack soundsHeroBack" aria-label="Back to Home">
               <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
               <span>Home</span>
             </a>
@@ -3057,6 +3041,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260531nativeFix"></script>
+    <script type="module" src="./src/app.js?v=20260531routeFix"></script>
   </body>
 </html>

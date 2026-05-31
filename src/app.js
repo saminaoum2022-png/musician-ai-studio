@@ -21,7 +21,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531createFlow";
+const APP_BUILD = "20260531routeFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2421,14 +2421,35 @@ async function refreshNotificationsUnreadBadge({ force = false } = {}) {
   }
 }
 
+function syncRoutePanelVisibility(wanted) {
+  const route = String(wanted || "").trim();
+  if (!route) return;
+  document.body.setAttribute("data-route", route);
+  try { document.body.dataset.route = route; } catch {}
+  document.body.classList.toggle("isIntro", route === "intro");
+  document.body.classList.toggle("isOnboarding", route === "onboarding");
+  document.body.classList.toggle("isAuth", route === "auth");
+  document.querySelectorAll("[data-route]").forEach((el) => {
+    const key = el.getAttribute("data-route");
+    const show = key === route;
+    if (show && route === "onboarding") {
+      el.style.display = "flex";
+    } else {
+      el.style.display = show ? "" : "none";
+    }
+  });
+  document.querySelectorAll("[data-route-link]").forEach((a) => {
+    const link = a.getAttribute("data-route-link");
+    const active = link === route || (route === "discover-playlist" && link === "discover");
+    a.classList.toggle("active", active);
+  });
+}
+
 function routeApplyFallback(err) {
   console.error("[route] applyRoute failed", err);
   try { dismissBootSplash(); } catch {}
   const fb = authSession?.user?.id ? "challenges" : (shouldSkipIntroOrOnboardingRoute() ? "auth" : "intro");
-  document.body.setAttribute("data-route", fb);
-  document.body.classList.toggle("isIntro", fb === "intro");
-  document.body.classList.toggle("isOnboarding", fb === "onboarding");
-  document.body.classList.toggle("isAuth", fb === "auth");
+  syncRoutePanelVisibility(fb);
   document.body.classList.remove("pageTransitioning", "booting");
   const main = document.querySelector("main.grid");
   if (main) main.classList.remove("routeSwap");
@@ -2521,6 +2542,14 @@ function applyRoute() {
     try { history.replaceState(null, "", "#/challenges"); } catch {}
     normalized = "challenges";
   }
+  if (normalized === "home") {
+    try { history.replaceState(null, "", "#/challenges"); } catch {}
+    normalized = "challenges";
+  }
+  if (normalized === "more") {
+    try { history.replaceState(null, "", "#/settings"); } catch {}
+    normalized = "settings";
+  }
   let wanted = allowedRoutes.has(normalized) ? normalized : "generate";
   const isLoggedIn = isAppLoggedIn();
   if (shouldSkipIntroOrOnboardingRoute() && (wanted === "intro" || wanted === "onboarding")) {
@@ -2530,10 +2559,9 @@ function applyRoute() {
     } catch {}
   }
   if (!HUB_FEATURE_ENABLED && normalized === "hub") {
-    wanted = "generate";
+    wanted = isLoggedIn ? "challenges" : (shouldSkipIntroOrOnboardingRoute() ? "auth" : "intro");
     try {
-      const h = String(location.hash || "");
-      if (/\/hub\b/.test(h)) history.replaceState(null, "", "#/generate");
+      history.replaceState(null, "", `#/${wanted}`);
     } catch {}
   }
   // Public profile is intentionally readable without auth so share-link
@@ -2547,11 +2575,8 @@ function applyRoute() {
   if ((prevRoute === "discover" || prevRoute === "discover-playlist") && wanted !== "discover" && wanted !== "discover-playlist") {
     try { onLeaveSearchRoute(); } catch {}
   }
-  document.body.classList.toggle("isIntro", wanted === "intro");
-  document.body.classList.toggle("isOnboarding", wanted === "onboarding");
-  document.body.classList.toggle("isAuth", wanted === "auth");
-  document.body.setAttribute("data-route", wanted);
-  try { document.body.dataset.route = wanted; } catch {}
+  syncRoutePanelVisibility(wanted);
+  try { dismissBootSplash(); } catch {}
   if (wanted !== "discover" && wanted !== "discover-playlist" && wanted !== "friends") {
     try { document.body.removeAttribute("data-discovery-segment"); } catch {}
   }
@@ -2566,26 +2591,12 @@ function applyRoute() {
     try { onOnboardingRouteActive(route); } catch {}
   }
 
-  document.querySelectorAll("[data-route]").forEach((el) => {
-    const key = el.getAttribute("data-route");
-    const show = key === wanted;
-    if (show && wanted === "onboarding") {
-      el.style.display = "flex";
-    } else {
-      el.style.display = show ? "" : "none";
-    }
-  });
   try {
     const profileChrome = document.getElementById("profileAuraHeaderChromeRoot");
     if (profileChrome) {
       profileChrome.setAttribute("aria-hidden", wanted === "profile" ? "false" : "true");
     }
   } catch {}
-  document.querySelectorAll("[data-route-link]").forEach((a) => {
-    const link = a.getAttribute("data-route-link");
-    const active = link === wanted || (wanted === "discover-playlist" && link === "discover");
-    a.classList.toggle("active", active);
-  });
   if (isLoggedIn) {
     void refreshNotificationsUnreadBadge({ force: wanted === "profile" || wanted === "settings" });
   } else {
@@ -6214,11 +6225,9 @@ function finishPostAuthNavigation() {
     }, 80);
     return;
   }
-  if (shouldSkipIntroOrOnboardingRoute()) {
-    try { location.hash = "#/challenges"; } catch {}
-  } else {
-    try { location.hash = "#/intro"; } catch {}
-  }
+  const target = shouldSkipIntroOrOnboardingRoute() ? "challenges" : "intro";
+  try { location.hash = `#/${target}`; } catch {}
+  syncRoutePanelVisibility(target);
   safeApplyRoute();
 }
 
@@ -28714,9 +28723,8 @@ void (async () => {
   const usedCodeFlow = await maybeHandleAuthCodeFromQuery();
   const usedTokenFlow = !usedCodeFlow && maybeHandleMagicLinkFromHash();
   await refreshAuthStateFromSupabase();
-  if (usedCodeFlow || usedTokenFlow) {
-    try { location.hash = "#/generate"; } catch {}
-    scheduleApplyRoute();
+  if (usedTokenFlow) {
+    finishPostAuthNavigation();
   }
 
   // Always hydrate from cloud when a valid session exists (not only callback flows).

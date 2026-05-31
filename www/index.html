@@ -95,6 +95,13 @@
         <span class="bootSplashDots introDots" aria-hidden="true"><i></i><i></i><i></i></span>
       </div>
     </div>
+    <div id="loginSettlingOverlay" class="loginSettlingOverlay" hidden aria-hidden="true">
+      <div class="loginSettlingInner">
+        <span class="loginSettlingMark" aria-hidden="true"></span>
+        <p id="loginSettlingMsg" class="loginSettlingMsg">Signing you in…</p>
+        <span class="loginSettlingDots introDots" aria-hidden="true"><i></i><i></i><i></i></span>
+      </div>
+    </div>
     <script>
       (function () {
         var done = false;
@@ -3134,6 +3141,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260531authRouteFix"></script>
+    <script type="module" src="./src/app.js?v=20260531loginSettling"></script>
   </body>
 </html>

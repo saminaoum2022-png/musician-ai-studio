@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531authRouteFix";
+const APP_BUILD = "20260531loginSettling";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2523,16 +2523,15 @@ function safeApplyRoute() {
 
 /** Coalesce hashchange + navigate so applyRoute does not run in a tight loop. */
 function scheduleApplyRoute() {
+  if (isLoginSettling()) return;
   if (_applyRouteRaf) cancelAnimationFrame(_applyRouteRaf);
   _applyRouteRaf = requestAnimationFrame(() => {
     _applyRouteRaf = 0;
     void (async () => {
       try {
+        loadAuthSession();
+        ensureAuthSessionUserFromToken();
         if (!_authBootDone) await ensureAuthBoot();
-        else {
-          loadAuthSession();
-          ensureAuthSessionUserFromToken();
-        }
         applyRoute();
       } catch (e) {
         routeApplyFallback(e);
@@ -2618,6 +2617,21 @@ function applyRoute() {
   const isLoggedIn = isAppLoggedIn();
   ensureAuthSessionUserFromToken();
   const hasAuthToken = Boolean(getSupabaseAuthToken());
+  if (isLoginSettling()) {
+    if (hasAuthToken || isLoggedIn) {
+      if (wanted === "auth" || wanted === "intro" || wanted === "onboarding") {
+        wanted = "challenges";
+        try {
+          history.replaceState(null, "", "#/challenges");
+        } catch {}
+      }
+    } else if (wanted !== "auth") {
+      wanted = "auth";
+      try {
+        history.replaceState(null, "", "#/auth");
+      } catch {}
+    }
+  }
   // Keychain session often loads after first paint — never keep a signed-in user on #/auth.
   if (wanted === "auth" && shouldSkipIntroOrOnboardingRoute() && (isLoggedIn || hasAuthToken)) {
     wanted = "challenges";
@@ -6345,27 +6359,34 @@ function getPendingCreateAction() {
   return "";
 }
 
-function finishPostAuthNavigation() {
-  void (async () => {
-    const pending = getPendingCreateAction();
-    setPendingCreateAction("");
-    try {
-      await ensureAuthBoot({ force: true });
-      ensureAuthSessionUserFromToken();
-    } catch (e) {
-      console.warn("[auth] post-auth navigation boot failed", e);
-    }
-    if (pending === "song" || pending === "status" || pending === "echo") {
-      window.setTimeout(() => {
-        try { navigateFromCreateChooser(pending); } catch {}
-      }, 80);
-      return;
-    }
-    const target = shouldSkipIntroOrOnboardingRoute() ? "challenges" : "intro";
-    try { location.hash = `#/${target}`; } catch {}
-    syncRoutePanelVisibility(target);
+async function finishPostAuthNavigation() {
+  const pending = getPendingCreateAction();
+  setPendingCreateAction("");
+  try {
+    await ensureAuthBoot({ force: true });
+    loadAuthSession();
+    ensureAuthSessionUserFromToken();
+  } catch (e) {
+    console.warn("[auth] post-auth navigation boot failed", e);
+  }
+  if (pending === "song" || pending === "status" || pending === "echo") {
+    endLoginSettling();
+    window.setTimeout(() => {
+      try { navigateFromCreateChooser(pending); } catch {}
+    }, 80);
+    return;
+  }
+  const target = shouldSkipIntroOrOnboardingRoute() ? "challenges" : "intro";
+  try {
+    location.hash = `#/${target}`;
+  } catch {}
+  syncRoutePanelVisibility(target);
+  try {
+    applyRoute();
+  } catch {
     scheduleApplyRoute();
-  })();
+  }
+  endLoginSettling();
 }
 
 function requireAuthForCreate(onAuthed, pendingAction = "") {
@@ -10527,6 +10548,47 @@ async function waitForNativeAuthHydration(maxMs = 2800) {
 }
 
 let _oauthBrowserOpen = false;
+let _loginSettling = false;
+let _loginSettlingStartedAt = 0;
+const LOGIN_SETTLING_MAX_MS = 18000;
+
+function isLoginSettling() {
+  if (!_loginSettling) return false;
+  if (Date.now() - _loginSettlingStartedAt > LOGIN_SETTLING_MAX_MS) {
+    endLoginSettling();
+    return false;
+  }
+  return true;
+}
+
+function beginLoginSettling(message = "Signing you in…") {
+  _loginSettling = true;
+  _loginSettlingStartedAt = Date.now();
+  setOAuthPendingUi(true);
+  try {
+    document.body.classList.add("loginSettling");
+  } catch {}
+  const overlay = document.getElementById("loginSettlingOverlay");
+  const msg = document.getElementById("loginSettlingMsg");
+  if (overlay) {
+    overlay.hidden = false;
+    overlay.setAttribute("aria-hidden", "false");
+  }
+  if (msg) msg.textContent = String(message || "Signing you in…");
+}
+
+function endLoginSettling() {
+  _loginSettling = false;
+  setOAuthPendingUi(false);
+  try {
+    document.body.classList.remove("loginSettling");
+  } catch {}
+  const overlay = document.getElementById("loginSettlingOverlay");
+  if (overlay) {
+    overlay.hidden = true;
+    overlay.setAttribute("aria-hidden", "true");
+  }
+}
 
 function setOAuthPendingUi(on) {
   try {
@@ -10534,12 +10596,12 @@ function setOAuthPendingUi(on) {
   } catch {}
 }
 
-async function closeOAuthBrowser() {
+async function closeOAuthBrowser({ keepPending = false } = {}) {
   try {
     await getCapacitorBrowserPlugin()?.close?.();
   } catch {}
   _oauthBrowserOpen = false;
-  setOAuthPendingUi(false);
+  if (!keepPending && !isLoginSettling()) setOAuthPendingUi(false);
 }
 
 function ensureAuthBoot({ force = false } = {}) {
@@ -28543,10 +28605,11 @@ async function handleNativeAuthDeepLink(url) {
       try { location.hash = "#/auth"; syncRoutePanelVisibility("auth"); safeApplyRoute(); } catch {}
       return false;
     }
+    beginLoginSettling("Finishing sign in…");
     setStatus("Finishing Google login…");
     notifyLoginFeedback("Finishing Google login…");
     const ok = await exchangeOAuthCodeForSession(code);
-    await closeOAuthBrowser();
+    await closeOAuthBrowser({ keepPending: true });
     if (ok) {
       _lastOAuthCodeHandled = code;
       if (authSession) {
@@ -28558,8 +28621,9 @@ async function handleNativeAuthDeepLink(url) {
       }
       invalidateAuthBoot();
       await ensureAuthBoot({ force: true });
-      finishPostAuthNavigation();
+      await finishPostAuthNavigation();
     } else {
+      endLoginSettling();
       const msg = `Google login failed: ${lastAuthDebug || "exchange error"}`;
       setStatus(msg);
       notifyLoginFeedback(msg);
@@ -28573,6 +28637,7 @@ async function handleNativeAuthDeepLink(url) {
     notifyLoginFeedback(msg);
     resetGoogleAuthButton();
     await closeOAuthBrowser();
+    endLoginSettling();
     try { location.hash = "#/auth"; syncRoutePanelVisibility("auth"); safeApplyRoute(); } catch {}
     return false;
   }
@@ -28596,7 +28661,7 @@ if (isCapacitorNativeAuth()) {
           }
           return;
         }
-        if (_oauthBrowserOpen) return;
+        if (_oauthBrowserOpen || isLoginSettling()) return;
         if (Date.now() - _appResumeRefreshAt < APP_RESUME_REFRESH_GAP_MS) return;
         if (_appResumeRefreshTimer) clearTimeout(_appResumeRefreshTimer);
         _appResumeRefreshTimer = window.setTimeout(() => {

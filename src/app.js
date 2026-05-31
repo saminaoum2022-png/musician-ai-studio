@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531onboardingSlides";
+const APP_BUILD = "20260531authRouteFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2465,6 +2465,22 @@ async function refreshNotificationsUnreadBadge({ force = false } = {}) {
   }
 }
 
+function resolveEmptyHashRoute() {
+  if (!shouldSkipIntroOrOnboardingRoute()) return "intro";
+  ensureAuthSessionUserFromToken();
+  if (isAppLoggedIn() || getSupabaseAuthToken()) return "challenges";
+  return "auth";
+}
+
+/** Keep splash up while route is still settling (session restore / OAuth). */
+function shouldHoldBootSplashForRoute(wanted) {
+  if (!document.body.classList.contains("booting")) return false;
+  if (!shouldSkipIntroOrOnboardingRoute() && wanted === "auth") return true;
+  if (wanted === "auth" && getSupabaseAuthToken()) return true;
+  if (wanted === "auth" && !_authBootDone) return true;
+  return false;
+}
+
 function syncRoutePanelVisibility(wanted) {
   const route = String(wanted || "").trim();
   if (!route) return;
@@ -2527,7 +2543,7 @@ function scheduleApplyRoute() {
 
 function applyRoute() {
   const hash = String(location.hash || "");
-  const rawRoute = hash.startsWith("#/") ? hash.slice(2) : "generate";
+  const rawRoute = hash.startsWith("#/") ? hash.slice(2) : resolveEmptyHashRoute();
   let route = rawRoute.split(/[?#&]/)[0].trim();
   const rawRouteQuery = String(rawRoute.split("?")[1] || "").split("#")[0];
   let pendingDiscoverPlaylistSlug = "";
@@ -2600,8 +2616,10 @@ function applyRoute() {
   }
   let wanted = allowedRoutes.has(normalized) ? normalized : "generate";
   const isLoggedIn = isAppLoggedIn();
-  // Keychain session often loads after first paint — never keep a logged-in user on #/auth.
-  if (wanted === "auth" && isLoggedIn && shouldSkipIntroOrOnboardingRoute()) {
+  ensureAuthSessionUserFromToken();
+  const hasAuthToken = Boolean(getSupabaseAuthToken());
+  // Keychain session often loads after first paint — never keep a signed-in user on #/auth.
+  if (wanted === "auth" && shouldSkipIntroOrOnboardingRoute() && (isLoggedIn || hasAuthToken)) {
     wanted = "challenges";
     try {
       history.replaceState(null, "", "#/challenges");
@@ -2631,7 +2649,9 @@ function applyRoute() {
     try { onLeaveSearchRoute(); } catch {}
   }
   syncRoutePanelVisibility(wanted);
-  try { dismissBootSplash(); } catch {}
+  if (!shouldHoldBootSplashForRoute(wanted)) {
+    try { dismissBootSplash(); } catch {}
+  }
   if (wanted !== "discover" && wanted !== "discover-playlist" && wanted !== "friends") {
     try { document.body.removeAttribute("data-discovery-segment"); } catch {}
   }
@@ -6326,18 +6346,26 @@ function getPendingCreateAction() {
 }
 
 function finishPostAuthNavigation() {
-  const pending = getPendingCreateAction();
-  setPendingCreateAction("");
-  if (pending === "song" || pending === "status" || pending === "echo") {
-    window.setTimeout(() => {
-      try { navigateFromCreateChooser(pending); } catch {}
-    }, 80);
-    return;
-  }
-  const target = shouldSkipIntroOrOnboardingRoute() ? "challenges" : "intro";
-  try { location.hash = `#/${target}`; } catch {}
-  syncRoutePanelVisibility(target);
-  safeApplyRoute();
+  void (async () => {
+    const pending = getPendingCreateAction();
+    setPendingCreateAction("");
+    try {
+      await ensureAuthBoot({ force: true });
+      ensureAuthSessionUserFromToken();
+    } catch (e) {
+      console.warn("[auth] post-auth navigation boot failed", e);
+    }
+    if (pending === "song" || pending === "status" || pending === "echo") {
+      window.setTimeout(() => {
+        try { navigateFromCreateChooser(pending); } catch {}
+      }, 80);
+      return;
+    }
+    const target = shouldSkipIntroOrOnboardingRoute() ? "challenges" : "intro";
+    try { location.hash = `#/${target}`; } catch {}
+    syncRoutePanelVisibility(target);
+    scheduleApplyRoute();
+  })();
 }
 
 function requireAuthForCreate(onAuthed, pendingAction = "") {
@@ -26847,7 +26875,8 @@ try {
   if (els.btnSunoGenerate) _tabMo.observe(els.btnSunoGenerate, { attributes: true, attributeFilter: ["disabled"] });
 } catch {}
 syncCreateTabMorph();
-safeApplyRoute();
+// First route apply runs after loadAuthSession() below — not here — so empty
+// hash does not briefly bounce through #/auth before Welcome / Get Started.
 
 (function wireCreateTabClick() {
   const tab = document.getElementById("tabCreate");
@@ -29037,6 +29066,7 @@ loadProfile();
 loadAuthSession();
 syncActiveProfileIdFromSession();
 renderAuthStatus();
+safeApplyRoute();
 // `ensureAuthBoot()` (Preferences / native restore) runs before each route apply.
 // Light the profile header shimmer NOW if we already know a sign-in
 // is on its way and the handle is still the boot placeholder ("guest").

@@ -101,9 +101,30 @@
         try { done = localStorage.getItem("nabadai_onboarding_v1_done") === "1"; } catch (e) {}
         var h = String(location.hash || "").replace(/^#\/?/, "").split(/[?#&]/)[0] || "";
         if (h === "hub" || h === "home" || h === "start" || h === "sparks") h = "challenges";
-        if (!h) h = done ? "challenges" : "intro";
+        if (!h) {
+          if (!done) {
+            h = "intro";
+          } else {
+            var hasSession = false;
+            try {
+              var raw = localStorage.getItem("mas:supabase:session:v1");
+              hasSession = !!(raw && raw.indexOf("access_token") !== -1);
+            } catch (e) {}
+            h = hasSession ? "challenges" : "auth";
+          }
+        }
         var ok = /^(intro|onboarding|auth|generate|challenges|discover|friends|profile|settings|player|sounds|user|vocal|stems|advanced|credits|mentor)$/.test(h);
-        if (!ok) h = done ? "challenges" : "intro";
+        if (!ok) {
+          if (!done) h = "intro";
+          else {
+            var hasSessionFallback = false;
+            try {
+              var rawFb = localStorage.getItem("mas:supabase:session:v1");
+              hasSessionFallback = !!(rawFb && rawFb.indexOf("access_token") !== -1);
+            } catch (e) {}
+            h = hasSessionFallback ? "challenges" : "auth";
+          }
+        }
         document.body.setAttribute("data-route", h);
         document.body.classList.toggle("isIntro", h === "intro");
         document.body.classList.toggle("isOnboarding", h === "onboarding");
@@ -3113,6 +3134,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260531onboardingSlides"></script>
+    <script type="module" src="./src/app.js?v=20260531authRouteFix"></script>
   </body>
 </html>

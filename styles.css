@@ -93,18 +93,22 @@ body.booting .bootSplash{
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   transform: translateY(-4vh);
 }
 .bootSplashMark{
-  width: min(36vw, 156px);
+  width: min(26vw, 108px);
   aspect-ratio: 1;
   background:
     radial-gradient(78% 78% at 50% 50%, rgba(124,92,255,0.14), transparent 72%),
     url("./assets/icons/splash-mark.png") center / contain no-repeat;
 }
+.bootSplashWordmark{
+  margin: 0;
+  font-size: clamp(22px, 5.8vw, 32px);
+}
 body.booting .bootSplashDots{
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 /* -------------------------------------------------------------------

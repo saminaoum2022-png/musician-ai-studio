@@ -21,7 +21,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531authPersist";
+const APP_BUILD = "20260531authFixB";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -118,6 +118,25 @@ function isFounderBadgeEmail(raw) {
           },
         }),
       });
+    }
+    if (!cap.Plugins?.Preferences) {
+      cap.registerPlugin("Preferences", {
+        web: () => ({
+          async get({ key }) {
+            return { value: localStorage.getItem(key) };
+          },
+          async set({ key, value }) {
+            if (value == null) localStorage.removeItem(key);
+            else localStorage.setItem(key, value);
+          },
+          async remove({ key }) {
+            localStorage.removeItem(key);
+          },
+        }),
+      });
+    }
+    if (!cap.Plugins?.Filesystem) {
+      cap.registerPlugin("Filesystem");
     }
   } catch {
     /* Already registered elsewhere */
@@ -9963,10 +9982,18 @@ function renderActivePersonaBanner() {
 }
 const AUTH_SESSION_KEY = "mas:supabase:session:v1";
 const AUTH_SESSION_BACKUP_KEY = "mas:supabase:session:backup:v1";
-/** Native iOS/Android store — survives WKWebView localStorage loss on force-quit. */
+/** Legacy path (migration only) — first native persist attempt used CDN Filesystem and often never ran. */
 const AUTH_NATIVE_FS_PATH = "NabadAi/auth/session.json";
+const CAP_FS_DIRECTORY_DATA = "DATA";
 let _authBootPromise = null;
-let _capFsModPromise = null;
+
+function getCapPreferencesPlugin() {
+  return window?.Capacitor?.Plugins?.Preferences || null;
+}
+
+function getCapFilesystemPlugin() {
+  return window?.Capacitor?.Plugins?.Filesystem || null;
+}
 
 function decodeJwtPayload(token) {
   try {
@@ -10001,67 +10028,104 @@ function isAppLoggedIn() {
   return Boolean(authSession?.user?.id);
 }
 
-async function getCapFilesystemMod() {
-  if (!_capFsModPromise) {
-    const core = "8.3.1";
-    _capFsModPromise = import(
-      /* webpackIgnore: true */ `https://esm.sh/@capacitor/filesystem@8.1.2?deps=@capacitor/core@${core}`,
-    );
-  }
-  return _capFsModPromise;
+function jwtExpiresAtMs(token) {
+  const p = decodeJwtPayload(token);
+  const exp = Number(p?.exp || 0);
+  return exp > 0 ? exp * 1000 : 0;
+}
+
+function writeAuthSessionToLocalStores(jsonPayload) {
+  if (!jsonPayload) return;
+  try {
+    localStorage.setItem(AUTH_SESSION_KEY, jsonPayload);
+    localStorage.setItem(AUTH_SESSION_BACKUP_KEY, jsonPayload);
+  } catch {}
 }
 
 async function writeAuthSessionToNativeStore(jsonPayload) {
-  if (!isCapacitorNativeAuth() || !jsonPayload) return;
+  if (!jsonPayload) return;
+  writeAuthSessionToLocalStores(jsonPayload);
+  const prefs = getCapPreferencesPlugin();
+  if (prefs?.set) {
+    try {
+      await prefs.set({ key: AUTH_SESSION_KEY, value: jsonPayload });
+    } catch (e) {
+      console.warn("[auth] Preferences.set failed", e);
+    }
+  }
+  if (!isCapacitorNativeAuth()) return;
+  const fs = getCapFilesystemPlugin();
+  if (!fs?.writeFile) return;
   try {
-    const fsMod = await getCapFilesystemMod();
-    const { Filesystem, Directory } = fsMod;
-    await Filesystem.writeFile({
+    await fs.writeFile({
       path: AUTH_NATIVE_FS_PATH,
       data: jsonPayload,
-      directory: Directory.Data,
+      directory: CAP_FS_DIRECTORY_DATA,
       encoding: "utf8",
       recursive: true,
     });
-  } catch (e) {
-    console.warn("[auth] native persist failed", e);
+  } catch {
+    /* optional legacy mirror */
   }
 }
 
 async function clearAuthSessionNativeStore() {
-  if (!isCapacitorNativeAuth()) return;
   try {
-    const fsMod = await getCapFilesystemMod();
-    const { Filesystem, Directory } = fsMod;
-    await Filesystem.deleteFile({
-      path: AUTH_NATIVE_FS_PATH,
-      directory: Directory.Data,
-    });
-  } catch {
-    /* already gone */
+    localStorage.removeItem(AUTH_SESSION_KEY);
+    localStorage.removeItem(AUTH_SESSION_BACKUP_KEY);
+  } catch {}
+  const prefs = getCapPreferencesPlugin();
+  if (prefs?.remove) {
+    try {
+      await prefs.remove({ key: AUTH_SESSION_KEY });
+    } catch {}
+  }
+  const fs = getCapFilesystemPlugin();
+  if (fs?.deleteFile) {
+    try {
+      await fs.deleteFile({
+        path: AUTH_NATIVE_FS_PATH,
+        directory: CAP_FS_DIRECTORY_DATA,
+      });
+    } catch {}
   }
 }
 
-async function restoreAuthSessionFromNativeStore() {
-  if (!isCapacitorNativeAuth()) return;
+async function readAuthSessionRawFromNativeStores() {
+  let best = "";
   try {
-    const fsMod = await getCapFilesystemMod();
-    const { Filesystem, Directory } = fsMod;
-    const r = await Filesystem.readFile({
-      path: AUTH_NATIVE_FS_PATH,
-      directory: Directory.Data,
-      encoding: "utf8",
-    });
-    const raw = String(r?.data || "").trim();
-    if (!raw) return;
-    const local = localStorage.getItem(AUTH_SESSION_KEY) || "";
-    if (!local || raw.length >= local.length) {
-      localStorage.setItem(AUTH_SESSION_KEY, raw);
-      localStorage.setItem(AUTH_SESSION_BACKUP_KEY, raw);
+    best = localStorage.getItem(AUTH_SESSION_KEY) || localStorage.getItem(AUTH_SESSION_BACKUP_KEY) || "";
+  } catch {}
+  const prefs = getCapPreferencesPlugin();
+  if (prefs?.get) {
+    try {
+      const { value } = await prefs.get({ key: AUTH_SESSION_KEY });
+      const prefRaw = String(value || "").trim();
+      if (prefRaw && prefRaw.length >= best.length) best = prefRaw;
+    } catch (e) {
+      console.warn("[auth] Preferences.get failed", e);
     }
-  } catch {
-    /* first launch — no native session file yet */
   }
+  if (!best && isCapacitorNativeAuth()) {
+    const fs = getCapFilesystemPlugin();
+    if (fs?.readFile) {
+      try {
+        const r = await fs.readFile({
+          path: AUTH_NATIVE_FS_PATH,
+          directory: CAP_FS_DIRECTORY_DATA,
+          encoding: "utf8",
+        });
+        const legacy = String(r?.data || "").trim();
+        if (legacy) best = legacy;
+      } catch {}
+    }
+  }
+  if (best) writeAuthSessionToLocalStores(best);
+  return best;
+}
+
+async function restoreAuthSessionFromNativeStore() {
+  await readAuthSessionRawFromNativeStores();
 }
 
 function ensureAuthBoot() {
@@ -10817,10 +10881,14 @@ function normalizeAuthSession(sess) {
   if (!sess || !sess.access_token) return null;
   const now = Date.now();
   const expiresIn = Math.max(60, Number(sess.expires_in || 3600));
-  const issuedAt = Number(sess.issued_at || now);
-  const expiresAt = Number(sess.expires_at || issuedAt + expiresIn * 1000);
+  const jwtExp = jwtExpiresAtMs(sess.access_token);
+  const issuedAt = Number(sess.issued_at || 0) || (jwtExp ? jwtExp - expiresIn * 1000 : now);
+  const expiresAt =
+    Number(sess.expires_at || 0) || jwtExp || issuedAt + expiresIn * 1000;
+  const rt = String(sess.refresh_token || "").trim();
   return hydrateAuthUserFromJwt({
     ...sess,
+    ...(rt ? { refresh_token: rt } : {}),
     expires_in: expiresIn,
     issued_at: issuedAt,
     expires_at: expiresAt,
@@ -10829,6 +10897,8 @@ function normalizeAuthSession(sess) {
 
 function authSessionExpiresAtMs(sess = authSession) {
   if (!sess) return 0;
+  const jwtExp = jwtExpiresAtMs(sess.access_token);
+  if (jwtExp) return jwtExp;
   const at = Number(sess.expires_at || 0);
   if (at > 0) return at;
   const issued = Number(sess.issued_at || 0);
@@ -10854,18 +10924,13 @@ function saveAuthSession(sess) {
   const prevUserId = String(authSession?.user?.id || "");
   authSession = sess ? normalizeAuthSession(sess) : null;
   const nextUserId = String(authSession?.user?.id || "");
-  try {
-    if (authSession) {
-      const payload = JSON.stringify(authSession);
-      localStorage.setItem(AUTH_SESSION_KEY, payload);
-      localStorage.setItem(AUTH_SESSION_BACKUP_KEY, payload);
-      void writeAuthSessionToNativeStore(payload);
-    } else {
-      localStorage.removeItem(AUTH_SESSION_KEY);
-      localStorage.removeItem(AUTH_SESSION_BACKUP_KEY);
-      void clearAuthSessionNativeStore();
-    }
-  } catch {}
+  if (authSession) {
+    const payload = JSON.stringify(authSession);
+    writeAuthSessionToLocalStores(payload);
+    void writeAuthSessionToNativeStore(payload);
+  } else {
+    void clearAuthSessionNativeStore();
+  }
   renderAuthStatus();
   try { syncMobileTabbarProfileAvatar(); } catch {}
   try { syncFollowingComposeUi(); } catch {}
@@ -11312,11 +11377,8 @@ async function refreshSupabaseSessionIfNeeded() {
     const d = await r.json().catch(() => ({}));
     if (!r.ok || !d?.access_token) {
       lastAuthDebug = `refresh ${r.status}: ${String(JSON.stringify(d)).slice(0, 80)}`;
-      const errCode = String(d?.error || "").toLowerCase();
-      _authRefreshRevoked = r.status === 400 && errCode === "invalid_grant";
       return false;
     }
-    _authRefreshRevoked = false;
     saveAuthSession({
       ...(authSession || {}),
       access_token: d.access_token,
@@ -11324,6 +11386,7 @@ async function refreshSupabaseSessionIfNeeded() {
       expires_in: Number(d.expires_in || 3600),
       token_type: d.token_type || authSession.token_type || "bearer",
       user: d.user || authSession.user,
+      issued_at: Date.now(),
     });
     lastAuthDebug = "";
     return true;
@@ -11333,10 +11396,7 @@ async function refreshSupabaseSessionIfNeeded() {
   }
 }
 
-let _authRefreshRevoked = false;
-
 async function refreshAuthStateFromSupabase() {
-  _authRefreshRevoked = false;
   await refreshSupabaseSessionIfNeeded();
   let token = getSupabaseAuthToken();
   if (!token && authSession?.refresh_token) {
@@ -11360,15 +11420,12 @@ async function refreshAuthStateFromSupabase() {
     void refreshMyCredits({ silent: true });
     return remoteUser;
   }
-  if (authSession?.user?.id) {
+  if (authSession?.user?.id || getSupabaseAuthToken()) {
     renderAuthStatus();
-    return authSession.user;
-  }
-  if (authSession?.refresh_token && _authRefreshRevoked) {
-    saveAuthSession(null);
+    return authSession?.user || null;
   }
   renderAuthStatus();
-  return authSession?.user || null;
+  return null;
 }
 function renderAuthStatus() {
   if (!els.authStatus) return;
@@ -11525,6 +11582,7 @@ function maybeHandleMagicLinkFromHash() {
       expires_in,
       token_type,
       user,
+      issued_at: Date.now(),
     });
     window.location.hash = "#/profile";
     setStatus("Logged in via magic link.");
@@ -11562,6 +11620,7 @@ async function exchangeOAuthCodeForSession(code) {
       expires_in: Number(d.expires_in || 3600),
       token_type: d.token_type || "bearer",
       user,
+      issued_at: Date.now(),
     });
     setStatus("Logged in via Google.");
     return true;
@@ -28067,12 +28126,7 @@ if (isCapacitorNativeAuth()) {
       CapApp.addListener("appStateChange", ({ isActive }) => {
         if (!isActive) {
           if (authSession) {
-            try {
-              const payload = JSON.stringify(authSession);
-              localStorage.setItem(AUTH_SESSION_KEY, payload);
-              localStorage.setItem(AUTH_SESSION_BACKUP_KEY, payload);
-              void writeAuthSessionToNativeStore(payload);
-            } catch {}
+            void writeAuthSessionToNativeStore(JSON.stringify(authSession));
           }
           return;
         }
@@ -28514,8 +28568,10 @@ function clampNum(n, min, max) {
 void refreshSunoCredits();
 renderCreditsHistory();
 loadProfile();
-// Auth + route: `ensureAuthBoot()` runs inside `scheduleApplyRoute` (incl.
-// `safeApplyRoute` at module load) so native session restores before routing.
+loadAuthSession();
+syncActiveProfileIdFromSession();
+renderAuthStatus();
+// `ensureAuthBoot()` (Preferences / native restore) runs before each route apply.
 // Light the profile header shimmer NOW if we already know a sign-in
 // is on its way and the handle is still the boot placeholder ("guest").
 // This avoids the "M logo + @guest" flash on cold opens with slow mobile

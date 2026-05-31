@@ -13,6 +13,8 @@ SRC = Path(
     "D93B54B5-41B4-40B7-ADC3-44B9A81E4EA2-34b8d744-4d4d-40fb-ae2b-ee0094867438.png"
 )
 SIZE = 1024
+# Slightly over-fill so the colorful card reaches iOS icon edges (cover crop).
+ZOOM_COVER = 1.10
 # Gradient sampled from the artwork (purple → blue → cyan)
 C_TL = (176, 48, 245)
 C_BR = (24, 168, 218)
@@ -40,7 +42,7 @@ def make_bleed_background(size: int) -> Image.Image:
 
 
 def is_foreground(r: int, g: int, b: int) -> bool:
-    return (r + g + b) > 48
+    return (r + g + b) > 38
 
 
 def alpha_from_rgb(r: int, g: int, b: int) -> int:
@@ -66,8 +68,7 @@ def build_icon(src: Path, size: int = SIZE) -> Image.Image:
                 maxx = max(maxx, x)
                 maxy = max(maxy, y)
     crop = im.crop((minx, miny, maxx + 1, maxy + 1))
-    target = int(size * 0.96)
-    scale = target / max(crop.size)
+    scale = max(size / crop.width, size / crop.height) * ZOOM_COVER
     new_w = max(1, int(crop.width * scale))
     new_h = max(1, int(crop.height * scale))
     fg = crop.resize((new_w, new_h), Image.Resampling.LANCZOS)
@@ -79,10 +80,11 @@ def build_icon(src: Path, size: int = SIZE) -> Image.Image:
             r, g, b, _a = fpx[x, y]
             apx[x, y] = alpha_from_rgb(r, g, b)
     fg.putalpha(alpha)
+    left = max(0, (new_w - size) // 2)
+    top = max(0, (new_h - size) // 2)
+    fg = fg.crop((left, top, left + size, top + size))
     bg = make_bleed_background(size)
-    ox = (size - fg.width) // 2
-    oy = (size - fg.height) // 2
-    bg.paste(fg, (ox, oy), fg)
+    bg.paste(fg, (0, 0), fg)
     out = Image.new("RGB", (size, size))
     out.paste(bg, mask=bg.split()[3])
     return out

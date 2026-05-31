@@ -953,6 +953,18 @@
               <h2 class="discoveryStudioH2 appScreenTitle">Friends</h2>
               <p class="discoveryStudioTag appScreenLead">Updates, advice, drops, and remixes from people you follow.</p>
             </div>
+            <button
+              type="button"
+              class="discoveryRefreshBtn friendsNotifBtn"
+              id="btnFriendsNotifications"
+              aria-label="Notifications"
+              title="Notifications"
+            >
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                <path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/>
+                <path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" d="M13.7 21a2 2 0 0 1-3.4 0"/>
+              </svg>
+            </button>
           </header>
           <div id="friendsEchoRail" class="friendsEchoRail" hidden>
             <div class="friendsEchoRailHead">
@@ -1833,6 +1845,12 @@
                   <span id="profileAvatarFallback" class="profileAuraAvatarFallback" aria-hidden="true">Na</span>
                   <span class="profileAuraAvatarSkeleton" aria-hidden="true"></span>
                   <span id="profileAvatarEditHint" class="profileAuraAvatarHint" style="display:none">Photo</span>
+                  <span id="profilePersonaAvatarBadge" class="profilePersonaAvatarBadge" hidden aria-hidden="true" title="Persona voice saved">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"/>
+                      <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M19 11a7 7 0 0 1-14 0"/>
+                    </svg>
+                  </span>
                 </div>
               </div>
 
@@ -2966,18 +2984,6 @@
         <strong id="profileCreditsBalance" class="profileCreditsPillValue">0</strong>
       </a>
       <div class="profileAuraToolbar" role="toolbar" aria-label="Profile actions">
-        <button
-          type="button"
-          id="btnProfileNotifications"
-          class="profileAuraIconBtn"
-          aria-label="Notifications"
-          title="Notifications"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/>
-            <path d="M13.7 21a2 2 0 0 1-3.4 0"/>
-          </svg>
-        </button>
         <div id="profileEditActions" class="profileAuraEditActions" style="display:none" aria-hidden="true">
           <button type="button" id="btnProfileCancel" class="profileAuraEditBtn profileAuraEditBtn--cancel" aria-label="Cancel editing">Cancel</button>
           <button type="button" id="btnProfileSave" class="profileAuraEditBtn profileAuraEditBtn--save" aria-label="Save profile">Save</button>
@@ -3184,6 +3190,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260531homePersonaEcho"></script>
+    <script type="module" src="./src/app.js?v=20260531profilePersonaNotif"></script>
   </body>
 </html>

@@ -505,6 +505,13 @@ html[data-theme="light"] .discoveryRefreshBtn{
   color: var(--text);
 }
 
+html[data-theme="light"] .profilePersonaAvatarBadge{
+  border-color: rgba(255, 255, 255, 0.96);
+  box-shadow:
+    0 6px 16px -6px rgba(124, 92, 255, 0.38),
+    0 0 0 1px rgba(124, 92, 255, 0.12);
+}
+
 /* Light mode — Create, player, sheets, auth (Echo viewer stays cinematic dark). */
 html[data-theme="light"] .createTabs{
   border-color: rgba(15, 23, 40, 0.08);
@@ -16211,6 +16218,36 @@ body.notificationsCenterOpen{
 }
 .profileAuraAvatarWrapNeon .profileAuraAvatarSkeleton{ z-index: 3; }
 .profileAuraAvatarWrapNeon .profileAuraAvatarHint{ z-index: 4; }
+.profilePersonaAvatarBadge{
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  z-index: 5;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: linear-gradient(145deg, #7c5cff 0%, #23d5ab 100%);
+  border: 2.5px solid rgba(10, 12, 20, 0.94);
+  box-shadow:
+    0 6px 18px -6px rgba(124, 92, 255, 0.62),
+    0 0 0 1px rgba(255, 255, 255, 0.10) inset;
+  pointer-events: none;
+}
+.profilePersonaAvatarBadge svg{
+  width: 13px;
+  height: 13px;
+  display: block;
+}
+.profileAuraAvatarWrapNeon.hasPersona .profilePersonaAvatarBadge{
+  display: flex;
+}
+.profileAuraAvatarWrapNeon.hasPersona .profilePersonaAvatarBadge[hidden]{
+  display: none;
+}
 .profileAuraEditing .profileAuraAvatarWrapNeon{
   cursor: pointer;
 }
@@ -17965,6 +18002,25 @@ body[data-route="friends"] .friendsPage .discoveryStudioHead{
 }
 .discoveryRefreshBtn:active{
   transform: scale(0.94);
+}
+.discoveryRefreshBtn.hasNotice::after{
+  content: "";
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ff4d6d, #ff8aa2);
+  box-shadow:
+    0 0 0 2px rgba(5, 7, 13, 0.94),
+    0 0 12px rgba(255, 77, 109, 0.72);
+}
+.friendsNotifBtn{
+  position: relative;
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-top: 2px;
 }
 .discoveryRefreshBtn.isRefreshing .discoveryRefreshIco{
   animation: discoveryRefreshSpin 0.72s linear infinite;

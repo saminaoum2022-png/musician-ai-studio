@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531homePersonaEcho";
+const APP_BUILD = "20260531profilePersonaNotif";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -595,7 +595,8 @@ const els = {
   profileIsPublic: document.getElementById("profileIsPublic"),
   btnProfileSave: document.getElementById("btnProfileSave"),
   btnProfileEdit: document.getElementById("btnProfileEdit"),
-  btnProfileNotifications: document.getElementById("btnProfileNotifications"),
+  btnFriendsNotifications: document.getElementById("btnFriendsNotifications"),
+  profilePersonaAvatarBadge: document.getElementById("profilePersonaAvatarBadge"),
   profileEditActions: document.getElementById("profileEditActions"),
   btnProfileCancel: document.getElementById("btnProfileCancel"),
   profileOwnStats: document.getElementById("profileOwnStats"),
@@ -2429,8 +2430,8 @@ function updateNotificationsEntryBadges(unreadCount) {
     els.profileTabLink?.setAttribute?.("aria-label", label);
   } catch {}
   try {
-    els.btnProfileNotifications?.classList?.toggle?.("hasNotice", hasUnread);
-    els.btnProfileNotifications?.setAttribute?.(
+    els.btnFriendsNotifications?.classList?.toggle?.("hasNotice", hasUnread);
+    els.btnFriendsNotifications?.setAttribute?.(
       "aria-label",
       hasUnread
         ? `Notifications, ${unread} unread`
@@ -2687,7 +2688,7 @@ function applyRoute() {
     }
   } catch {}
   if (isLoggedIn) {
-    void refreshNotificationsUnreadBadge({ force: wanted === "profile" || wanted === "settings" });
+    void refreshNotificationsUnreadBadge({ force: wanted === "friends" || wanted === "settings" });
   } else {
     updateNotificationsEntryBadges(0);
   }
@@ -10283,6 +10284,20 @@ function updateProfilePersonaRow() {
   applyProfilePersonaExpandedUi(isProfilePersonaExpanded());
   try { renderSettingsVoicesHub(); } catch {}
   renderActivePersonaBanner();
+  syncProfilePersonaAvatarBadge();
+}
+
+function syncProfilePersonaAvatarBadge() {
+  const wrap = els.profileAuraAvatarWrap;
+  const badge = els.profilePersonaAvatarBadge;
+  if (!wrap || !badge) return;
+  let hasPersona = false;
+  try {
+    hasPersona = authSession?.user?.id && loadPersonas().length > 0;
+  } catch {}
+  wrap.classList.toggle("hasPersona", hasPersona);
+  badge.hidden = !hasPersona;
+  badge.setAttribute("aria-hidden", hasPersona ? "false" : "true");
 }
 
 /**
@@ -12119,6 +12134,7 @@ function resetProfileUiToGuest() {
   renderAuthStatus();
   try { syncMobileTabbarProfileAvatar(); } catch {}
   if (els.profilePersonaRow) els.profilePersonaRow.style.display = "none";
+  try { syncProfilePersonaAvatarBadge(); } catch {}
 }
 async function supabaseSendOtp(email) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase config missing");
@@ -18488,7 +18504,6 @@ function setProfileEditing(on) {
   if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.disabled = !profileEditing;
   if (els.profilePreviewBioInput) els.profilePreviewBioInput.disabled = !profileEditing;
   if (els.btnProfileEdit) els.btnProfileEdit.style.display = profileEditing ? "none" : "";
-  if (els.btnProfileNotifications) els.btnProfileNotifications.style.display = profileEditing ? "none" : "";
   if (els.profileEditActions) {
     els.profileEditActions.style.display = profileEditing ? "flex" : "none";
     els.profileEditActions.setAttribute("aria-hidden", profileEditing ? "false" : "true");
@@ -28619,8 +28634,8 @@ if (els.btnProfileEdit) {
     setStatus("Editing profile — adjust fields, then Save.");
   });
 }
-if (els.btnProfileNotifications) {
-  els.btnProfileNotifications.addEventListener("click", () => void showNotificationsSummary());
+if (els.btnFriendsNotifications) {
+  els.btnFriendsNotifications.addEventListener("click", () => void showNotificationsSummary());
 }
 if (els.notificationsCenter) {
   els.notificationsCenter.addEventListener("click", (e) => {

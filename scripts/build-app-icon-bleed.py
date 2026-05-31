@@ -55,39 +55,54 @@ def alpha_from_rgb(r: int, g: int, b: int) -> int:
 
 
 def is_white_mark(r: int, g: int, b: int, a: int) -> bool:
-    return a > 48 and r > 205 and g > 205 and b > 225
+    return a > 48 and r > 210 and g > 210 and b > 228
 
 
-def mark_centroid(im: Image.Image) -> tuple[float, float]:
-    """Visual center of the white N (not the gradient card bbox)."""
+def apply_alpha_mask(im: Image.Image) -> Image.Image:
+    im = im.convert("RGBA")
     px = im.load()
     w, h = im.size
-    sx = sy = n = 0
+    for y in range(h):
+        for x in range(w):
+            r, g, b, _a = px[x, y]
+            a = alpha_from_rgb(r, g, b)
+            px[x, y] = (r, g, b, a)
+    return im
+
+
+def white_mark_bbox(im: Image.Image) -> tuple[int, int, int, int] | None:
+    px = im.load()
+    w, h = im.size
+    minx, miny, maxx, maxy = w, h, 0, 0
+    found = False
     for y in range(h):
         for x in range(w):
             r, g, b, a = px[x, y]
             if is_white_mark(r, g, b, a):
-                sx += x
-                sy += y
-                n += 1
-    if n:
-        return sx / n, sy / n
-    for y in range(h):
-        for x in range(w):
-            r, g, b, a = px[x, y]
-            if a > 40 and (r + g + b) > 80:
-                sx += x
-                sy += y
-                n += 1
-    return (sx / n, sy / n) if n else (w / 2, h / 2)
+                minx = min(minx, x)
+                miny = min(miny, y)
+                maxx = max(maxx, x)
+                maxy = max(maxy, y)
+                found = True
+    if not found:
+        return None
+    return minx, miny, maxx, maxy
 
 
-def center_layer_on_canvas(layer: Image.Image, size: int) -> Image.Image:
-    cx, cy = mark_centroid(layer)
-    out = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    ox = int(round(size / 2 - cx))
-    oy = int(round(size / 2 - cy))
-    out.paste(layer, (ox, oy), layer)
+def align_white_mark_center(crop: Image.Image) -> Image.Image:
+    """Shift artwork so the white N bbox sits on the crop center (not centroid)."""
+    wb = white_mark_bbox(crop)
+    if not wb:
+        return crop
+    minx, miny, maxx, maxy = wb
+    wcx = (minx + maxx) / 2
+    wcy = (miny + maxy) / 2
+    ccx = crop.width / 2
+    ccy = crop.height / 2
+    shift_x = round(ccx - wcx)
+    shift_y = round(ccy - wcy)
+    out = Image.new("RGBA", (crop.width, crop.height), (0, 0, 0, 0))
+    out.paste(crop, (shift_x, shift_y), crop)
     return out
 
 
@@ -104,23 +119,15 @@ def build_icon(src: Path, size: int = SIZE) -> Image.Image:
                 miny = min(miny, y)
                 maxx = max(maxx, x)
                 maxy = max(maxy, y)
-    crop = im.crop((minx, miny, maxx + 1, maxy + 1))
+    crop = apply_alpha_mask(im.crop((minx, miny, maxx + 1, maxy + 1)))
+    crop = align_white_mark_center(crop)
     scale = max(size / crop.width, size / crop.height) * ZOOM_COVER
     new_w = max(1, int(crop.width * scale))
     new_h = max(1, int(crop.height * scale))
     fg = crop.resize((new_w, new_h), Image.Resampling.LANCZOS)
-    alpha = Image.new("L", fg.size, 0)
-    apx = alpha.load()
-    fpx = fg.load()
-    for y in range(fg.height):
-        for x in range(fg.width):
-            r, g, b, _a = fpx[x, y]
-            apx[x, y] = alpha_from_rgb(r, g, b)
-    fg.putalpha(alpha)
     left = max(0, (new_w - size) // 2)
     top = max(0, (new_h - size) // 2)
     fg = fg.crop((left, top, left + size, top + size))
-    fg = center_layer_on_canvas(fg, size)
     bg = make_bleed_background(size)
     bg.paste(fg, (0, 0), fg)
     out = Image.new("RGB", (size, size))

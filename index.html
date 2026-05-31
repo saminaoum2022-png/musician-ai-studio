@@ -94,11 +94,76 @@
 
       <main class="grid">
         <section class="card wide introScreen" data-route="intro">
-          <div class="introInner" id="introTap">
-            <div class="introHero">
-              <h1 class="introWordmark" aria-label="NabadAi Music"><span class="brandPrimary">NabadAi</span><span class="brandSecondary introBrandSecondary">Music</span></h1>
-              <div class="introDots" aria-hidden="true"><i></i><i></i><i></i></div>
+          <div class="introInner introWelcome">
+            <div class="introWelcomeDecor" aria-hidden="true">
+              <span class="introWelcomeTile introWelcomeTile--a"></span>
+              <span class="introWelcomeTile introWelcomeTile--b"></span>
+              <span class="introWelcomeTile introWelcomeTile--c"></span>
+              <span class="introWelcomeTile introWelcomeTile--d"></span>
             </div>
+            <div class="introWelcomeBody">
+              <span class="introWelcomeMark" aria-hidden="true"></span>
+              <h1 class="introWelcomeTitle">Welcome to <span class="brandPrimary">NabadAi</span> <span class="brandSecondary introBrandSecondary">Music</span></h1>
+              <p class="introWelcomeLead">Music from a hum. Voice sparks for your circle. Share what you make.</p>
+              <button id="btnIntroGetStarted" class="introGetStartedBtn" type="button">Get Started</button>
+              <p class="introWelcomeLegal">By tapping Get Started you agree to our <a href="#/settings">Terms</a> &middot; <a href="#/settings">Privacy</a></p>
+            </div>
+          </div>
+        </section>
+
+        <section class="card wide onboardingScreen" data-route="onboarding" data-onboarding-root>
+          <div class="onboardingInner">
+            <button type="button" id="btnOnboardingSkip" class="onboardingSkip">Skip</button>
+            <div class="onboardingSlides">
+              <article class="onboardingSlide is-active" data-onboarding-slide="0" aria-hidden="false">
+                <div class="onboardingMock onboardingMock--create" aria-hidden="true">
+                  <div class="onboardingMockTabs">
+                    <span>Photo</span><span>Hum</span><span class="is-on">Lyrics</span>
+                  </div>
+                  <div class="onboardingMockField"></div>
+                  <div class="onboardingMockChips"><i></i><i></i><i></i></div>
+                </div>
+                <h2 class="onboardingTitle">Create with AI</h2>
+                <p class="onboardingLead">Turn a hum, photo, or a few words into a full song — studio-quality, yours to share.</p>
+              </article>
+              <article class="onboardingSlide" data-onboarding-slide="1" aria-hidden="true">
+                <div class="onboardingMock onboardingMock--echo" aria-hidden="true">
+                  <div class="onboardingEchoTile">
+                    <span class="onboardingEchoWave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+                  </div>
+                </div>
+                <h2 class="onboardingTitle">Echo</h2>
+                <p class="onboardingLead">24-hour voice sparks — raw hooks, late-night ideas, and emotion for the people you follow.</p>
+              </article>
+              <article class="onboardingSlide" data-onboarding-slide="2" aria-hidden="true">
+                <div class="onboardingMock onboardingMock--friends" aria-hidden="true">
+                  <div class="onboardingFriendRow"><span class="onboardingFriendAv"></span><span class="onboardingFriendLine"></span></div>
+                  <div class="onboardingFriendRow"><span class="onboardingFriendAv"></span><span class="onboardingFriendLine onboardingFriendLine--short"></span></div>
+                  <div class="onboardingFriendRow"><span class="onboardingFriendAv"></span><span class="onboardingFriendLine"></span></div>
+                </div>
+                <h2 class="onboardingTitle">Friends</h2>
+                <p class="onboardingLead">Updates, advice, drops, and remixes — a feed built for creators, not noise.</p>
+              </article>
+              <article class="onboardingSlide" data-onboarding-slide="3" aria-hidden="true">
+                <div class="onboardingMock onboardingMock--persona" aria-hidden="true">
+                  <div class="onboardingPersonaCard">
+                    <span class="onboardingPersonaMic" aria-hidden="true"></span>
+                    <span class="onboardingPersonaLabel">Your voice</span>
+                  </div>
+                </div>
+                <h2 class="onboardingTitle">Persona</h2>
+                <p class="onboardingLead">Save your voice once — hear it on every track you generate, like a signature.</p>
+              </article>
+            </div>
+            <footer class="onboardingFooter">
+              <div class="onboardingDots" role="tablist" aria-label="Onboarding progress">
+                <button type="button" class="onboardingDot is-active" data-onboarding-dot="0" aria-current="step" aria-label="Slide 1 of 4"></button>
+                <button type="button" class="onboardingDot" data-onboarding-dot="1" aria-label="Slide 2 of 4"></button>
+                <button type="button" class="onboardingDot" data-onboarding-dot="2" aria-label="Slide 3 of 4"></button>
+                <button type="button" class="onboardingDot" data-onboarding-dot="3" aria-label="Slide 4 of 4"></button>
+              </div>
+              <button type="button" id="btnOnboardingNext" class="onboardingPrimaryBtn">Next</button>
+            </footer>
           </div>
         </section>
 
@@ -2363,6 +2428,16 @@
           <section class="settingsGroup" aria-labelledby="settingsPrefsTitle">
             <h3 id="settingsPrefsTitle" class="settingsGroupTitle">Preferences</h3>
             <div class="settingsList">
+              <button class="settingsRow settingsRowLink" type="button" id="btnSettingsReplayOnboarding">
+                <span class="settingsRowIco" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.3-5.9"/><path d="M17 3v5h-5"/><path d="M20 12a8 8 0 0 1-13.3 5.9"/><path d="M7 21v-5H2"/></svg>
+                </span>
+                <span class="settingsRowBody">
+                  <span class="settingsRowTitle">Show introduction again</span>
+                  <span class="settingsRowSub">Replay the welcome screen and feature tour.</span>
+                </span>
+                <span class="settingsRowChev" aria-hidden="true">›</span>
+              </button>
               <label class="settingsRow settingsToggleRow" for="settingsCallingCardAutoplay">
                 <span class="settingsRowIco" aria-hidden="true">
                   <svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
@@ -3004,6 +3079,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260527echoBeatAssetsFix"></script>
+    <script type="module" src="./src/app.js?v=20260531onboardingC"></script>
   </body>
 </html>

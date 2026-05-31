@@ -10,10 +10,18 @@ import {
   syncLockScreenNowPlaying,
 } from "./lockScreenNowPlaying.js";
 import { initEcho, onEnterFriendsRoute, openEchoFromCreateChooser } from "./echo.js";
+import {
+  getInitialBootHash,
+  getPostOnboardingHash,
+  initOnboarding,
+  onOnboardingRouteActive,
+  parseOnboardingRoute,
+  shouldSkipIntroOrOnboardingRoute,
+} from "./onboarding.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260527echoBeatAssetsFix";
+const APP_BUILD = "20260531onboardingC";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -427,7 +435,6 @@ const els = {
   startHelp: document.getElementById("startHelp"),
 
   // Intro
-  introTap: document.getElementById("introTap"),
 
   // Generate mode switch + agent
   genModeSimple: document.getElementById("genModeSimple"),
@@ -2371,9 +2378,10 @@ async function refreshNotificationsUnreadBadge({ force = false } = {}) {
 function routeApplyFallback(err) {
   console.error("[route] applyRoute failed", err);
   try { dismissBootSplash(); } catch {}
-  const fb = authSession?.user?.id ? "challenges" : "intro";
+  const fb = authSession?.user?.id ? "challenges" : (shouldSkipIntroOrOnboardingRoute() ? "auth" : "intro");
   document.body.setAttribute("data-route", fb);
   document.body.classList.toggle("isIntro", fb === "intro");
+  document.body.classList.toggle("isOnboarding", fb === "onboarding");
   document.body.classList.toggle("isAuth", fb === "auth");
   document.body.classList.remove("pageTransitioning", "booting");
   const main = document.querySelector("main.grid");
@@ -2435,11 +2443,13 @@ function applyRoute() {
     }
   }
   const allowedRoutes = new Set([
-    "intro", "start", "auth", "generate",
+    "intro", "onboarding", "start", "auth", "generate",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
     "settings", "profile", "player", "discover", "discover-playlist", "friends", "challenges", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
   ]);
+  const onboardingParsed = parseOnboardingRoute(route);
   let normalized = pendingPublicUsername ? "user" : (route === "start" ? "intro" : route);
+  if (onboardingParsed) normalized = "onboarding";
   if (normalized === "discover") {
     try {
       if (sessionStorage.getItem(DISCOVERY_SEGMENT_KEY) === "following") {
@@ -2459,6 +2469,13 @@ function applyRoute() {
     normalized = "friends";
   }
   let wanted = allowedRoutes.has(normalized) ? normalized : "generate";
+  const isLoggedIn = Boolean(authSession?.user?.id);
+  if (shouldSkipIntroOrOnboardingRoute() && (wanted === "intro" || wanted === "onboarding")) {
+    wanted = isLoggedIn ? "challenges" : "auth";
+    try {
+      history.replaceState(null, "", `#/${wanted}`);
+    } catch {}
+  }
   if (!HUB_FEATURE_ENABLED && normalized === "hub") {
     wanted = "generate";
     try {
@@ -2469,7 +2486,6 @@ function applyRoute() {
   // Public profile is intentionally readable without auth so share-link
   // visitors don't hit a wall before discovering the rest of the product.
   const protectedRoutes = new Set(["generate", "profile", "friends", "player", "vocal", "stems", "advanced", "credits", "sounds"]);
-  const isLoggedIn = Boolean(authSession?.user?.id);
   if (!isLoggedIn && protectedRoutes.has(wanted)) wanted = "auth";
   const prevRoute = document.body.getAttribute("data-route") || "";
   if (prevRoute !== wanted) {
@@ -2479,6 +2495,7 @@ function applyRoute() {
     try { onLeaveSearchRoute(); } catch {}
   }
   document.body.classList.toggle("isIntro", wanted === "intro");
+  document.body.classList.toggle("isOnboarding", wanted === "onboarding");
   document.body.classList.toggle("isAuth", wanted === "auth");
   document.body.setAttribute("data-route", wanted);
   try { document.body.dataset.route = wanted; } catch {}
@@ -2492,9 +2509,18 @@ function applyRoute() {
   if (els.brandSecondary) {
     els.brandSecondary.textContent = wanted === "hub" ? "Hub" : wanted === "challenges" ? "Home" : "Music";
   }
+  if (wanted === "onboarding") {
+    try { onOnboardingRouteActive(route); } catch {}
+  }
 
   document.querySelectorAll("[data-route]").forEach((el) => {
-    el.style.display = el.getAttribute("data-route") === wanted ? "" : "none";
+    const key = el.getAttribute("data-route");
+    const show = key === wanted;
+    if (show && wanted === "onboarding") {
+      el.style.display = "flex";
+    } else {
+      el.style.display = show ? "" : "none";
+    }
   });
   try {
     const profileChrome = document.getElementById("profileAuraHeaderChromeRoot");
@@ -2906,8 +2932,22 @@ window.addEventListener("hashchange", () => {
   closeCreateChooserSheet({ immediate: true });
   scheduleApplyRoute();
 });
-if (!location.hash) location.hash = "#/intro";
+if (!location.hash) {
+  try {
+    location.hash = getInitialBootHash(() => authSession);
+  } catch {
+    location.hash = "#/intro";
+  }
+}
 dismissBootSplash();
+try {
+  initOnboarding({
+    getAuthSession: () => authSession,
+    applyRoute,
+  });
+} catch (e) {
+  console.error("[onboarding] init failed", e);
+}
 try {
   mountFixedOverlaysToBody();
   bindDiscoveryDiscoverControls();
@@ -5985,7 +6025,11 @@ function finishPostAuthNavigation() {
     }, 80);
     return;
   }
-  try { location.hash = "#/challenges"; } catch {}
+  if (shouldSkipIntroOrOnboardingRoute()) {
+    try { location.hash = "#/challenges"; } catch {}
+  } else {
+    try { location.hash = "#/intro"; } catch {}
+  }
   safeApplyRoute();
 }
 
@@ -27366,34 +27410,6 @@ if (els.agentSend && els.agentInput) {
 // Initialize agent chat lazily
 agentReset();
 
-// Intro splash → login (guests) or Home (signed-in). Do not jump straight to
-// #/challenges while the auth panel is still in the DOM — that stacked both UIs.
-function enterApp() {
-  if (document.body.classList.contains("pageTransitioning")) return;
-  const hero = document.querySelector(".introHero");
-  if (hero) hero.classList.add("entering");
-  document.body.classList.add("pageTransitioning");
-  setTimeout(() => {
-    const nextHash = authSession?.user?.id ? "#/challenges" : "#/auth";
-    try {
-      location.hash = nextHash;
-    } catch {
-      try { location.hash = "#/auth"; } catch {}
-    }
-    try { applyRoute(); } catch {}
-    requestAnimationFrame(() => {
-      document.body.classList.remove("pageTransitioning");
-      if (hero) hero.classList.remove("entering");
-    });
-  }, 260);
-}
-if (els.introTap) {
-  els.introTap.addEventListener("click", () => enterApp());
-}
-setTimeout(() => {
-  if (location.hash === "#/intro") enterApp();
-}, 1900);
-
 if (els.btnCreditsHistoryRefresh) {
   els.btnCreditsHistoryRefresh.addEventListener("click", () => renderCreditsHistory());
 }
@@ -28256,7 +28272,9 @@ void (async () => {
     // Never leak previous user visuals when session is not valid.
     resetProfileUiToGuest();
     setProfileHeaderLoading(false);
-    if ((location.hash || "") === "#/intro") location.hash = "#/auth";
+    if ((location.hash || "") === "#/intro" && shouldSkipIntroOrOnboardingRoute()) {
+      try { location.hash = getPostOnboardingHash(() => authSession); } catch {}
+    }
   }
   } finally {
     // Defense in depth — the success paths above already dismiss the

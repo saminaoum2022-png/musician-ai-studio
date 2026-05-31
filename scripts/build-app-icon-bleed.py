@@ -10,16 +10,16 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[1]
 SRC = Path(
     "/Users/samynaoum/.cursor/projects/Users-samynaoum-Desktop-musician-ai-studio/assets/"
-    "D93B54B5-41B4-40B7-ADC3-44B9A81E4EA2-34b8d744-4d4d-40fb-ae2b-ee0094867438.png"
+    "30BE2907-D5AB-4A9C-A815-CE22E55DC0D1-d67c8c1c-57e5-4cf4-bdbb-94ae81ce4174.png"
 )
 SIZE = 1024
 # Slightly over-fill so the colorful card reaches iOS icon edges (cover crop).
-ZOOM_COVER = 1.10
-# Gradient sampled from the artwork (purple → blue → cyan)
-C_TL = (176, 48, 245)
-C_BR = (24, 168, 218)
-C_TR = (52, 118, 232)
-C_BL = (108, 42, 198)
+ZOOM_COVER = 1.12
+# Gradient sampled from the white-N app icon artwork (purple → blue → cyan)
+C_TL = (155, 21, 242)
+C_TR = (10, 108, 215)
+C_BL = (140, 21, 237)
+C_BR = (4, 136, 218)
 
 
 def lerp(a: tuple[int, ...], b: tuple[int, ...], t: float) -> tuple[int, int, int]:

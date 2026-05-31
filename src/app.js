@@ -2468,6 +2468,10 @@ function applyRoute() {
     try { history.replaceState(null, "", "#/friends"); } catch {}
     normalized = "friends";
   }
+  if (normalized === "sparks") {
+    try { history.replaceState(null, "", "#/challenges"); } catch {}
+    normalized = "challenges";
+  }
   let wanted = allowedRoutes.has(normalized) ? normalized : "generate";
   const isLoggedIn = Boolean(authSession?.user?.id);
   if (shouldSkipIntroOrOnboardingRoute() && (wanted === "intro" || wanted === "onboarding")) {

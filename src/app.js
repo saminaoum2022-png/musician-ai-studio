@@ -21,7 +21,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531appIconCenterN";
+const APP_BUILD = "20260531bootSplashMin";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -32,16 +32,47 @@ const HUB_FEATURE_ENABLED = false;
   if (f) f.textContent = `Build ${APP_BUILD}`;
 })();
 
-/** Show `.app` as soon as routing is ready — do not wait for the rest of this ~24k-line module. */
-function dismissBootSplash() {
+/** Boot splash: logo + dots — keep visible at least this long even when session restores instantly. */
+const BOOT_SPLASH_MIN_MS = 2400;
+const BOOT_SPLASH_MAX_MS = 5500;
+const _bootSplashStartedAt = Date.now();
+let _bootSplashCanDismiss = false;
+let _bootSplashMinTimer = 0;
+
+function tryDismissBootSplash() {
+  if (!_bootSplashCanDismiss) return;
   try {
+    if (!document.body.classList.contains("booting")) return;
+    const elapsed = Date.now() - _bootSplashStartedAt;
+    if (elapsed < BOOT_SPLASH_MIN_MS) {
+      if (!_bootSplashMinTimer) {
+        _bootSplashMinTimer = window.setTimeout(() => {
+          _bootSplashMinTimer = 0;
+          tryDismissBootSplash();
+        }, BOOT_SPLASH_MIN_MS - elapsed);
+      }
+      return;
+    }
     document.body.classList.remove("booting");
   } catch {}
 }
+
+/** Route is ready — reveal home after the minimum splash duration. */
+function dismissBootSplash() {
+  _bootSplashCanDismiss = true;
+  tryDismissBootSplash();
+}
 try {
-  window.addEventListener("error", dismissBootSplash);
-  window.addEventListener("unhandledrejection", dismissBootSplash);
-  setTimeout(dismissBootSplash, 3500);
+  const forceBootSplashEnd = () => {
+    _bootSplashCanDismiss = true;
+    try {
+      if (_bootSplashMinTimer) clearTimeout(_bootSplashMinTimer);
+      document.body.classList.remove("booting");
+    } catch {}
+  };
+  window.addEventListener("error", forceBootSplashEnd);
+  window.addEventListener("unhandledrejection", forceBootSplashEnd);
+  setTimeout(forceBootSplashEnd, BOOT_SPLASH_MAX_MS);
 } catch {}
 
 /** UUID allowlist from `/api/public-config` (env `NABAD_CERTIFIED_USER_IDS`)
@@ -3060,7 +3091,6 @@ function scheduleInitialHash() {
   })();
 }
 scheduleInitialHash();
-dismissBootSplash();
 try {
   initOnboarding({
     getAuthSession: () => authSession,
@@ -7895,7 +7925,6 @@ function wireUserPublicFeedRowsOnce() {
 }
 
 updateEnvironmentBadge();
-dismissBootSplash();
 
 function normalizeMaqamValue(v) {
   return String(v || "")

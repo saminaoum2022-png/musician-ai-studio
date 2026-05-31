@@ -63,6 +63,12 @@
     <meta name="twitter:image" content="./assets/nabadai-logo.png" />
 </head>
   <body class="booting">
+    <div id="bootSplash" class="bootSplash" aria-hidden="true">
+      <div class="bootSplashInner">
+        <span class="bootSplashMark" aria-hidden="true"></span>
+        <span class="bootSplashDots introDots" aria-hidden="true"><i></i><i></i><i></i></span>
+      </div>
+    </div>
     <script>
       (function () {
         var done = false;
@@ -2883,18 +2889,6 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script>
-      (function () {
-        function unboot() {
-          try {
-            document.body.classList.remove("booting");
-          } catch (_) {}
-        }
-        window.addEventListener("error", unboot);
-        window.addEventListener("unhandledrejection", unboot);
-        setTimeout(unboot, 3500);
-      })();
-    </script>
     <div id="echoViewerSheet" class="echoViewerSheet" aria-hidden="true" hidden>
       <div class="echoViewerBackdrop" id="echoViewerBackdrop"></div>
       <div class="echoViewerStage" id="echoViewerStage">
@@ -3046,6 +3040,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260531appIconCenterN"></script>
+    <script type="module" src="./src/app.js?v=20260531bootSplashMin"></script>
   </body>
 </html>

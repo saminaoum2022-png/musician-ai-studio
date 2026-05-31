@@ -77,15 +77,34 @@ body.booting::before{
   background: #05070d;
   pointer-events: none;
 }
-body.booting::after{
-  content: "";
+.bootSplash{
+  display: none;
   position: fixed;
   inset: 0;
   z-index: 10000;
+  align-items: center;
+  justify-content: center;
   pointer-events: none;
+}
+body.booting .bootSplash{
+  display: flex;
+}
+.bootSplashInner{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  transform: translateY(-4vh);
+}
+.bootSplashMark{
+  width: min(36vw, 156px);
+  aspect-ratio: 1;
   background:
-    radial-gradient(78% 78% at 50% 42%, rgba(124,92,255,0.14), transparent 72%),
-    url("./assets/icons/splash-mark.png") center 42% / min(36vw, 156px) no-repeat;
+    radial-gradient(78% 78% at 50% 50%, rgba(124,92,255,0.14), transparent 72%),
+    url("./assets/icons/splash-mark.png") center / contain no-repeat;
+}
+body.booting .bootSplashDots{
+  margin-top: 2px;
 }
 
 /* -------------------------------------------------------------------

@@ -92,6 +92,8 @@ let _echoBeatId = "none";
 let _echoBeatVariant = 0;
 let _echoBeatSpeed = "normal";
 let _echoBeatBufferCache = new Map();
+/** Decoded beat buffers are large on iOS — keep a small LRU to avoid Jetsam. */
+const ECHO_BEAT_BUFFER_CACHE_MAX = 2;
 let _echoBeatPreview = null;
 let _echoBeatPlayback = null;
 /**
@@ -1440,6 +1442,11 @@ async function loadEchoBeatBuffer(url) {
       }
     });
     _echoBeatBufferCache.set(url, buf);
+    while (_echoBeatBufferCache.size > ECHO_BEAT_BUFFER_CACHE_MAX) {
+      const oldest = _echoBeatBufferCache.keys().next().value;
+      if (!oldest) break;
+      _echoBeatBufferCache.delete(oldest);
+    }
     return buf;
   } catch {
     return null;
@@ -1627,10 +1634,9 @@ function updateEchoBeatPreviewSpeed() {
 function prefetchEchoBeatBuffersForCompose() {
   if (!isEchoCapNative()) return;
   primeEchoSharedAudioCtx();
-  for (const id of Object.keys(ECHO_BEAT_DEFS)) {
-    if (id === "none") continue;
-    void loadEchoBeatBufferForBeat(id, 0);
-  }
+  // Loading every loop at once decoded ~10MB+ and Jetsam-killed the app when
+  // opening Echo from the Create "+" while also mounting Friends.
+  void loadEchoBeatBufferForBeat("lofi", 0);
 }
 
 function syncEchoBeatPickerUi() {
@@ -2633,15 +2639,16 @@ export function openEchoFromCreateChooser() {
     } catch {}
     return;
   }
-  openEchoComposeSheet({ haptic: false });
-  _pendingEchoCompose = false;
+  _pendingEchoCompose = true;
   const onFriends = String(location.hash || "") === "#/friends";
   if (!onFriends) {
     try {
       location.hash = "#/friends";
     } catch {}
   } else {
-    c().enterFriendsRoute?.();
+    try {
+      onEnterFriendsRoute();
+    } catch {}
   }
   window.requestAnimationFrame(() => {
     try {

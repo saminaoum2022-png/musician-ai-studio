@@ -1100,7 +1100,6 @@ body[data-route="discover-playlist"] main.grid > [data-route="discover-playlist"
 body[data-route="friends"] main.grid > [data-route="friends"],
 body[data-route="moment"] main.grid > [data-route="moment"],
 body[data-route="challenges"] main.grid > [data-route="challenges"],
-body[data-route="sparks"] main.grid > [data-route="sparks"],
 body[data-route="mentor"] main.grid > [data-route="mentor"],
 body[data-route="player"] main.grid > [data-route="player"],
 body[data-route="user"] main.grid > [data-route="user"],
@@ -20672,8 +20671,7 @@ section.challengesPage{
   padding: 0 max(18px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)) 78px;
   box-sizing: border-box;
 }
-body[data-route="challenges"] .app,
-body[data-route="sparks"] .app{
+body[data-route="challenges"] .app{
   padding-left: 0;
   padding-right: 0;
 }
@@ -21235,6 +21233,9 @@ body[data-route="sparks"] .app{
 .challengeMiniCard--violet{ --challenge-rgb: 124,92,255; }
 .challengeMiniCard--cyan{ --challenge-rgb: 34,211,238; }
 .challengeMiniCard--rose{ --challenge-rgb: 244,114,182; }
+.challengeMiniCard--gold{ --challenge-rgb: 251,191,36; }
+.challengeMiniCard--mint{ --challenge-rgb: 52,211,153; }
+.challengeMiniCard--amber{ --challenge-rgb: 245,158,11; }
 .challengeMiniIcon{
   position: relative;
   display: grid;
@@ -21451,97 +21452,127 @@ body[data-route="sparks"] .app{
 .homeDeskMakePersonal .challengeNameField{
   margin: 0;
 }
-.homeDesk--calm{
-  padding-bottom: 24px;
+.homeDeskHead--seg{
+  padding: 14px 2px 6px;
 }
-.homeDeskHead--calm{
-  padding: 16px 2px 8px;
-}
-.homeDeskHead--calm .homeDeskGreeting{
+.homeDeskHead--seg .homeDeskGreeting{
   font-size: clamp(30px, 8vw, 44px);
 }
-.homeDeskCalmActions{
+.homeDeskSeg{
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 8px;
+  gap: 8px;
+  margin: 12px 0 16px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
 }
-.homeDeskCreateCta{
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  min-height: 54px;
-  padding: 0 22px;
+.homeDeskSegBtn{
+  flex: 1 1 0;
+  min-height: 40px;
   border: none;
   border-radius: 999px;
-  background: #fff;
-  color: #0b1320;
-  font-size: 16px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  text-decoration: none;
-  text-align: center;
-  box-shadow: 0 14px 36px -12px rgba(255,255,255,0.28);
+  background: transparent;
+  color: rgba(223,231,251,0.55);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 180ms ease, color 180ms ease;
   -webkit-tap-highlight-color: transparent;
 }
-.homeDeskCreateCta:active{ transform: scale(0.98); }
-.homeDeskSparkTeaser{
-  margin-top: 20px;
+.homeDeskSegBtn.is-active{
+  background: rgba(255,255,255,0.92);
+  color: #0b1320;
+  box-shadow: 0 8px 24px -12px rgba(255,255,255,0.35);
 }
-.homeDeskSparkTeaserLead{
+.homeDeskSegPanels{
+  display: block;
+}
+.homeDeskSegPanel{
+  display: none;
+}
+.homeDeskSegPanel.is-active{
+  display: block;
+}
+.homeDeskSegPanel[hidden]{
+  display: none !important;
+}
+.discoverChallengeSpotlight{
+  margin: 0 0 18px;
+  padding: 0 2px;
+}
+.discoverChallengeSpotlightHead{
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.discoverChallengeSpotlightTitle{
   margin: 0;
-  color: rgba(223,231,251,0.58);
-  font-size: 14px;
-  line-height: 1.45;
-}
-.homeDeskSparkMore{
-  display: inline-block;
-  margin-top: 12px;
-  font-size: 13px;
-  font-weight: 700;
-  color: rgba(168,130,255,0.95);
-  text-decoration: none;
-}
-.homeDeskSparkMore:hover{ color: #fff; }
-.homeDeskSparksPage{
-  padding-bottom: 32px;
-}
-.homeDeskSparksHead{
-  padding: 8px 2px 16px;
-}
-.homeDeskSparksBack{
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 14px;
-  color: rgba(223,231,251,0.62);
-  font-size: 14px;
-  font-weight: 600;
-  text-decoration: none;
-}
-.homeDeskSparksBack svg{
-  width: 20px;
-  height: 20px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.homeDeskSparksHead .appScreenTitle{
-  margin: 0;
-  font-size: clamp(26px, 7vw, 32px);
+  font-size: 15px;
   font-weight: 800;
-  letter-spacing: -0.04em;
-  color: #f2f6ff;
+  letter-spacing: -0.02em;
+  color: rgba(240,244,255,0.92);
 }
-.homeDeskSparksLead{
-  margin: 8px 0 0;
-  font-size: 14px;
-  line-height: 1.45;
-  color: rgba(223,231,251,0.55);
-  max-width: 420px;
+.discoverChallengeSpotlightCount{
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(223,231,251,0.45);
+}
+.discoverChallengeSpotlightRail{
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.discoverChallengeSpotlightRail::-webkit-scrollbar{ display: none; }
+.discoverChallengeSpotCard{
+  flex: 0 0 auto;
+  width: 108px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverChallengeSpotArt{
+  width: 108px;
+  height: 108px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.discoverChallengeSpotArt img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.discoverChallengeSpotMeta{
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.discoverChallengeSpotMeta strong{
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoverChallengeSpotMeta small{
+  font-size: 11px;
+  color: rgba(223,231,251,0.5);
 }
 .homeDeskHead{
   padding: 12px 2px 4px;

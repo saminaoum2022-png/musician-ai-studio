@@ -21,7 +21,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531homeCalmB";
+const APP_BUILD = "20260531homeSegB";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2445,7 +2445,7 @@ function applyRoute() {
   const allowedRoutes = new Set([
     "intro", "onboarding", "start", "auth", "generate",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
-    "settings", "profile", "player", "discover", "discover-playlist", "friends", "challenges", "sparks", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
+    "settings", "profile", "player", "discover", "discover-playlist", "friends", "challenges", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
   ]);
   const onboardingParsed = parseOnboardingRoute(route);
   let normalized = pendingPublicUsername ? "user" : (route === "start" ? "intro" : route);
@@ -2700,11 +2700,8 @@ function applyRoute() {
     }
   }
   if (wanted === "challenges") {
-    renderHomeDesk();
-  }
-  if (wanted === "sparks") {
     bindChallengesPageOnce();
-    renderSparksDesk();
+    renderHomeDesk();
   }
   if (wanted === "user") {
     renderUserProfile._pendingUserId = pendingPublicUserId;
@@ -3269,7 +3266,51 @@ const CHALLENGE_IDEAS = [
     prompt: "Flip a sad idea into motion without losing the emotion.",
     tags: ["Mood flip", "Dance", "Heart"],
   },
+  {
+    id: "arabic-trend-byte",
+    title: "Arabic Trend Byte",
+    style: "modern Arabic pop, TikTok-ready hook, glossy 808s, mahraganat energy, 104 bpm",
+    lyrics: "[Verse]\nقليل كلام كتير إحساس\nالليلة الصوت بيعمل مزاج\nمن جملة وحدة طلع نغمة\nصارت أغنية على السريع\n\n[Chorus]\nيلا يلا اسمع المقطع\nصغير بس يضرب قوي\nمن الترند للقلب مباشرة\nهيدا هو الترند تبعي",
+    prompt: "Turn a tiny Arabic phrase into a trend-sized hook under 20 seconds.",
+    tags: ["Arabic", "Trend", "Short"],
+  },
+  {
+    id: "roast-song",
+    title: "Roast Song",
+    style: "playful comedy pop, punchy brass stabs, talk-sing verse, catchy roast chorus, 118 bpm",
+    lyrics: "[Verse]\nYou said you would be on time again\nYour excuses got a perfect ten\nI am not mad, I am impressed\nYou turned lateness into art, I guess\n\n[Chorus]\nThis is your roast, keep it light\nWe still love you tonight\nSay it with a smile, not a fight\nFunny but it feels alright",
+    prompt: "Write a playful roast song for a friend — funny, never cruel.",
+    tags: ["Roast", "Fun", "Friends"],
+  },
+  {
+    id: "three-word-hook",
+    title: "3-Word Hook",
+    style: "hyper-catchy pop, minimal lyrics, huge chorus, clap stack, 110 bpm",
+    lyrics: "[Chorus]\nLights go up now\nFeel it right now\nSay it out loud\nLights go up now",
+    prompt: "Only three words in the chorus — make them impossible to forget.",
+    tags: ["Short", "Hook", "Minimal"],
+  },
+  {
+    id: "wrong-genre-party",
+    title: "Wrong Genre",
+    style: "death metal drums with sugary K-pop chorus, ironic contrast, 132 bpm",
+    lyrics: "[Verse]\nYou wanted soft and sweet and slow\nI brought thunder just for show\nThe verse sounds like a battle cry\nThen the chorus floats up to the sky\n\n[Chorus]\nWrong genre, right feeling\nStill dancing on the ceiling\nIf it should not work, it works tonight\nWrong genre, holding tight",
+    prompt: "Pick two genres that should not match — make the chorus win anyway.",
+    tags: ["Weird", "Contrast", "Fun"],
+  },
 ];
+
+const HOME_SEG_STORAGE_KEY = "nabadai_home_seg_v1";
+const CHALLENGE_SPARK_KICKERS = {
+  "voice-note-flip": "Spark",
+  "dabke-drop": "Party",
+  "sad-to-dance-challenge": "Mood",
+  "arabic-trend-byte": "Arabic",
+  "roast-song": "Roast",
+  "three-word-hook": "Tiny",
+  "wrong-genre-party": "Weird",
+};
+const CHALLENGE_SPARK_TONES = ["violet", "cyan", "rose", "gold", "mint", "amber"];
 
 const CHALLENGE_OCCASIONS = [
   {
@@ -3781,6 +3822,7 @@ function applyDiscoveryIdeaToCreate(idea) {
 }
 
 let _homeDeskContinueTrack = null;
+let _homeSeg = "start";
 let _homeMakeSeg = "occasion";
 
 function libraryTrackNeedsContinue(track) {
@@ -3810,8 +3852,35 @@ function renderHomeDeskQuickStarts() {
   `).join("");
 }
 
+function readHomeSeg() {
+  try {
+    const s = String(sessionStorage.getItem(HOME_SEG_STORAGE_KEY) || "").trim();
+    if (s === "start" || s === "sparks" || s === "templates") return s;
+  } catch {}
+  return "start";
+}
+
+function syncHomeSegUi() {
+  _homeSeg = readHomeSeg();
+  const page = document.querySelector('[data-route="challenges"]');
+  page?.querySelectorAll?.("[data-home-seg]")?.forEach?.((btn) => {
+    const key = String(btn.getAttribute("data-home-seg") || "");
+    const on = key === _homeSeg;
+    btn.classList.toggle("is-active", on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  page?.querySelectorAll?.("[data-home-panel]")?.forEach?.((panel) => {
+    const on = String(panel.getAttribute("data-home-panel") || "") === _homeSeg;
+    panel.classList.toggle("is-active", on);
+    panel.hidden = !on;
+  });
+  try {
+    sessionStorage.setItem(HOME_SEG_STORAGE_KEY, _homeSeg);
+  } catch {}
+}
+
 function syncHomeMakeSegUi() {
-  const page = document.querySelector('[data-route="sparks"]');
+  const page = document.querySelector('[data-route="challenges"]');
   const personal = document.getElementById("homeDeskMakePersonal");
   const versions = document.getElementById("homeDeskPresetVersions");
   const quick = document.getElementById("homeDeskOccasionQuick");
@@ -3894,40 +3963,126 @@ function renderHomeDeskContinue() {
   }
 }
 
+function applyChallengeStartById(id, challengesMap) {
+  const challenge = challengesMap?.get?.(id) || CHALLENGE_IDEAS.find((row) => String(row.id) === id);
+  if (!challenge) return;
+  haptic("light");
+  applyDiscoveryIdeaToCreate({
+    ...challenge,
+    id: `challenge:${challenge.id}`,
+    title: `${challenge.title} Challenge`,
+    prompt: String(challenge.prompt || challenge.lyrics || "").trim(),
+    lyrics: String(challenge.prompt || challenge.lyrics || "").trim(),
+    dialect: "",
+    dialectHint: "",
+    challenge: {
+      id: challenge.id,
+      title: challenge.title,
+      type: "daily",
+      occasion: "",
+      genre: "",
+      personName: "",
+      variant: "daily",
+    },
+  });
+}
+
+function renderHomeDeskSparksDeck() {
+  const deck = document.getElementById("homeDeskSparksDeck");
+  if (!deck) return;
+  const sparks = CHALLENGE_IDEAS.filter((c) => c.id !== "hook-rush");
+  deck.innerHTML = sparks.map((c, i) => {
+    const tone = CHALLENGE_SPARK_TONES[i % CHALLENGE_SPARK_TONES.length];
+    const kicker = CHALLENGE_SPARK_KICKERS[c.id] || "Spark";
+    const blurb = String(c.prompt || "").trim() || "Open Create with this challenge ready.";
+    return `
+      <article class="challengeMiniCard challengeMiniCard--${tone}">
+        <span class="challengeMiniKicker">${escapeHtml(kicker)}</span>
+        <h3>${escapeHtml(c.title)}</h3>
+        <p>${escapeHtml(blurb)}</p>
+        <span class="challengeMiniCount" data-challenge-count="${escapeHtml(c.id)}">0 joined</span>
+        <button type="button" data-challenge-start="${escapeHtml(c.id)}">Join</button>
+      </article>`;
+  }).join("");
+}
+
+async function refreshDiscoverChallengeSpotlight() {
+  const wrap = document.getElementById("discoverChallengeSpotlight");
+  const rail = document.getElementById("discoverChallengeSpotlightRail");
+  const countEl = document.getElementById("discoverChallengeSpotlightCount");
+  if (!wrap || !rail) return;
+  try {
+    const rows = await supabaseFetchDiscoveryPublicSongs(80);
+    const entries = rows.filter((t) => challengeMetaForTrack(t) && String(t.url || "").trim());
+    if (!entries.length) {
+      wrap.hidden = true;
+      rail.innerHTML = "";
+      if (countEl) countEl.textContent = "";
+      return;
+    }
+    const profMap = await fetchProfilesByUserIdsMap(entries.map((t) => t.userId));
+    const spotlight = entries.slice(0, 5);
+    wrap.hidden = false;
+    if (countEl) countEl.textContent = `${entries.length} this week`;
+    rail.innerHTML = spotlight.map((track) => {
+      const prof = track.userId ? profMap.get(track.userId) : null;
+      const handle = String(prof?.username || "").trim();
+      const artSafe = trackCoverArtForFeed(track);
+      const title = String(track.title || "Song").trim();
+      return `
+        <button type="button" class="discoverChallengeSpotCard" data-challenge-entry-play="${encodeURIComponent(track.url || "")}" data-challenge-entry-title="${encodeURIComponent(title)}" data-challenge-entry-art="${encodeURIComponent(artSafe)}" data-challenge-entry-by="${encodeURIComponent(handle ? `@${handle}` : "Creator")}" data-play-song-id="${encodeURIComponent(track.id || "")}" data-play-owner-id="${encodeURIComponent(track.userId || "")}" data-play-task-id="${encodeURIComponent(track.taskId || "")}" data-play-audio-id="${encodeURIComponent(track.audioId || "")}">
+          <span class="discoverChallengeSpotArt"><img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" /></span>
+          <span class="discoverChallengeSpotMeta">
+            <strong>${escapeHtml(title)}</strong>
+            ${handle ? `<small>@${escapeHtml(handle)}</small>` : ""}
+          </span>
+        </button>`;
+    }).join("");
+  } catch {
+    wrap.hidden = true;
+    rail.innerHTML = "";
+  }
+}
+
 function bindHomeDeskOnce(page) {
   if (!page || page.dataset.boundHomeDesk === "1") return;
   page.dataset.boundHomeDesk = "1";
+  _homeSeg = readHomeSeg();
+  syncHomeSegUi();
   page.addEventListener("click", (e) => {
+    const segBtn = e.target?.closest?.("[data-home-seg]");
+    if (segBtn && page.contains(segBtn)) {
+      _homeSeg = String(segBtn.getAttribute("data-home-seg") || "start");
+      haptic("light");
+      syncHomeSegUi();
+      return;
+    }
     const cont = e.target?.closest?.("#homeDeskContinueBtn");
     if (cont && page.contains(cont)) {
       haptic("light");
       continueIdeaFromLibraryTrack(_homeDeskContinueTrack);
       return;
     }
+    const poll = e.target?.closest?.("[data-home-poll-choice]");
+    if (poll && page.contains(poll)) {
+      haptic("light");
+      page.querySelectorAll("[data-home-poll-choice]").forEach((btn) => btn.classList.toggle("isSelected", btn === poll));
+      return;
+    }
+    const ideaBtn = e.target?.closest?.("[data-discovery-idea]");
+    if (ideaBtn && page.contains(ideaBtn)) {
+      const idea = [...DISCOVERY_IDEAS, ...DISCOVERY_QUICK_IDEAS].find(
+        (row) => String(row.id) === String(ideaBtn.getAttribute("data-discovery-idea") || ""),
+      );
+      if (idea) {
+        haptic("light");
+        applyDiscoveryIdeaToCreate(idea);
+      }
+      return;
+    }
     const sparkBtn = e.target?.closest?.("[data-challenge-start]");
     if (sparkBtn && page.contains(sparkBtn)) {
-      const id = String(sparkBtn.getAttribute("data-challenge-start") || "");
-      const challenge = CHALLENGE_IDEAS.find((row) => String(row.id) === id);
-      if (!challenge) return;
-      haptic("light");
-      applyDiscoveryIdeaToCreate({
-        ...challenge,
-        id: `challenge:${challenge.id}`,
-        title: `${challenge.title} Challenge`,
-        prompt: String(challenge.prompt || challenge.lyrics || "").trim(),
-        lyrics: String(challenge.prompt || challenge.lyrics || "").trim(),
-        dialect: "",
-        dialectHint: "",
-        challenge: {
-          id: challenge.id,
-          title: challenge.title,
-          type: "daily",
-          occasion: "",
-          genre: "",
-          personName: "",
-          variant: "daily",
-        },
-      });
+      applyChallengeStartById(String(sparkBtn.getAttribute("data-challenge-start") || ""), null);
     }
   });
 }
@@ -3958,21 +4113,17 @@ function renderHomeDesk() {
   bindHomeDeskOnce(page);
   const greeting = document.getElementById("homeDeskGreeting");
   if (greeting) greeting.textContent = `Hey, ${homeDeskGreetingName()}`;
-  renderHomeDeskContinue();
-  void refreshHomeDeskJoinCounts(page);
-}
-
-function renderSparksDesk() {
-  const page = document.querySelector('[data-route="sparks"]');
-  if (!page) return;
   renderHomeDeskQuickStarts();
+  renderHomeDeskSparksDeck();
+  renderHomeDeskContinue();
+  syncHomeSegUi();
   syncHomeMakeSegUi();
   void refreshHomeDeskJoinCounts(page);
   if (typeof page._refreshChallengeEntries === "function") void page._refreshChallengeEntries();
 }
 
 function bindChallengesPageOnce() {
-  const page = document.querySelector('[data-route="sparks"]');
+  const page = document.querySelector('[data-route="challenges"]');
   if (!page || page.dataset.boundChallenges === "1") return;
   page.dataset.boundChallenges = "1";
   const challenges = new Map(CHALLENGE_IDEAS.map((idea) => [String(idea.id), idea]));
@@ -3981,8 +4132,6 @@ function bindChallengesPageOnce() {
   const languageRail = document.getElementById("challengeLanguageRail");
   const presetGrid = document.getElementById("challengePresetGrid");
   const nameInput = document.getElementById("challengePersonName");
-  const entriesRail = document.getElementById("challengeEntriesRail");
-  const entriesCount = document.getElementById("challengeEntriesCount");
   let selectedOccasion = CHALLENGE_OCCASIONS[0]?.id || "";
   let selectedGenre = CHALLENGE_GENRES[0]?.id || "";
   let selectedLanguage = CHALLENGE_LANGUAGES[0]?.id || "auto";
@@ -4098,53 +4247,28 @@ function bindChallengesPageOnce() {
       if (!id) continue;
       counts.set(id, (counts.get(id) || 0) + 1);
     }
-    page.querySelectorAll("[data-challenge-count]").forEach((el) => {
+    document.querySelectorAll("[data-challenge-count]").forEach((el) => {
       const id = String(el.getAttribute("data-challenge-count") || "").trim();
       const n = counts.get(id) || 0;
       el.textContent = `${n} joined`;
     });
   };
   const refreshChallengeEntries = async () => {
-    if (!entriesRail) return;
-    entriesRail.innerHTML = `<div class="challengeEntriesEmpty">Loading challenge entries...</div>`;
     const rows = await supabaseFetchDiscoveryPublicSongs(80);
     const entries = rows.filter((track) => challengeMetaForTrack(track));
     updateChallengeJoinCounts(entries);
-    if (entriesCount) entriesCount.textContent = `${entries.length} joined`;
-    if (!entries.length) {
-      _challengeEntryTracks = [];
-      entriesRail.innerHTML = `<div class="challengeEntriesEmpty">No published challenge entries yet. Be the first to join.</div>`;
-      return;
-    }
-    const profMap = await fetchProfilesByUserIdsMap(entries.map((t) => t.userId));
     _challengeEntryTracks = entries.map((t) => ({
       ...t,
       songId: String(t.id || ""),
       ownerUserId: String(t.userId || ""),
     }));
-    entriesRail.innerHTML = entries.slice(0, 16).map((track) => {
-      const challenge = challengeMetaForTrack(track);
-      const prof = track.userId ? profMap.get(track.userId) : null;
-      const handle = String(prof?.username || "").trim();
-      const artSafe = trackCoverArtForFeed(track);
-      return `
-        <button type="button" class="challengeEntryCard" data-challenge-entry-play="${encodeURIComponent(track.url || "")}" data-challenge-entry-title="${encodeURIComponent(track.title || "Song")}" data-challenge-entry-art="${encodeURIComponent(artSafe)}" data-challenge-entry-by="${encodeURIComponent(handle ? `@${handle}` : "Creator")}" data-play-song-id="${encodeURIComponent(track.id || "")}" data-play-owner-id="${encodeURIComponent(track.userId || "")}" data-play-task-id="${encodeURIComponent(track.taskId || "")}" data-play-audio-id="${encodeURIComponent(track.audioId || "")}">
-          <span class="challengeEntryArt"><img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" /></span>
-          <span class="challengeEntryOverlay" aria-hidden="true"></span>
-          <span class="challengeEntryPill">${challengePillHtml()}</span>
-          <span class="challengeEntryText">
-            <strong>${escapeHtml(track.title || "Song")}</strong>
-            <small>${escapeHtml(challengeAttributionText(challenge))}</small>
-            ${handle ? `<em>@${escapeHtml(handle)}</em>` : ""}
-          </span>
-        </button>`;
-    }).join("");
+    void refreshDiscoverChallengeSpotlight();
   };
   renderPresetLab();
   syncHomeMakeSegUi();
   page._refreshChallengeEntries = refreshChallengeEntries;
   void refreshChallengeEntries();
-  renderSparksDesk();
+  renderHomeDesk();
   page.addEventListener("click", (e) => {
     const occCreate = e.target?.closest?.("[data-home-occasion-create]");
     if (occCreate && page.contains(occCreate)) {
@@ -4194,41 +4318,10 @@ function bindChallengesPageOnce() {
       applyDiscoveryIdeaToCreate(buildPresetIdea(occasion, genre, variant || "anthem"));
       return;
     }
-    const entryBtn = e.target?.closest?.("[data-challenge-entry-play]");
-    if (entryBtn && page.contains(entryBtn)) {
-      const raw = decodeDiscoverDataAttr(entryBtn, "data-challenge-entry-play");
-      const title = decodeDiscoverDataAttr(entryBtn, "data-challenge-entry-title") || "Song";
-      const art = decodeDiscoverDataAttr(entryBtn, "data-challenge-entry-art") || "";
-      const by = decodeDiscoverDataAttr(entryBtn, "data-challenge-entry-by") || "";
-      if (!raw) return;
-      haptic("light");
-      void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by, playSource: publicPlaySourceFromEl(entryBtn) });
-      return;
-    }
     const btn = e.target?.closest?.("[data-challenge-start]");
-    if (!btn || !page.contains(btn)) return;
-    const id = String(btn.getAttribute("data-challenge-start") || "");
-    const challenge = challenges.get(id);
-    if (!challenge) return;
-    haptic("light");
-    applyDiscoveryIdeaToCreate({
-      ...challenge,
-      id: `challenge:${challenge.id}`,
-      title: `${challenge.title} Challenge`,
-      prompt: String(challenge.prompt || challenge.lyrics || "").trim(),
-      lyrics: String(challenge.prompt || challenge.lyrics || "").trim(),
-      dialect: "",
-      dialectHint: "",
-      challenge: {
-        id: challenge.id,
-        title: challenge.title,
-        type: "daily",
-        occasion: "",
-        genre: "",
-        personName: "",
-        variant: "daily",
-      },
-    });
+    if (btn && page.contains(btn)) {
+      applyChallengeStartById(String(btn.getAttribute("data-challenge-start") || ""), challenges);
+    }
   });
   nameInput?.addEventListener?.("input", () => {
     try { nameInput.closest?.(".challengeNameField")?.classList?.remove?.("isRequired"); } catch {}
@@ -7430,6 +7523,18 @@ function bindDiscoveryDiscoverControls() {
     dPane.dataset.boundDiscoverPane = "1";
     wireTrackOptionsSheetOnce();
     dPane.addEventListener("click", (e) => {
+      const challengePlay = e.target.closest("[data-challenge-entry-play]");
+      if (challengePlay && document.getElementById("discoverChallengeSpotlight")?.contains(challengePlay)) {
+        const raw = decodeDiscoverDataAttr(challengePlay, "data-challenge-entry-play");
+        const title = decodeDiscoverDataAttr(challengePlay, "data-challenge-entry-title") || "Song";
+        const art = decodeDiscoverDataAttr(challengePlay, "data-challenge-entry-art") || "";
+        const by = decodeDiscoverDataAttr(challengePlay, "data-challenge-entry-by") || "";
+        if (!raw) return;
+        e.preventDefault();
+        haptic("light");
+        void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by, playSource: publicPlaySourceFromEl(challengePlay) });
+        return;
+      }
       const menuBtn = e.target.closest("[data-discovery-open-sheet]");
       if (menuBtn && dPane.contains(menuBtn)) {
         e.preventDefault();
@@ -14796,6 +14901,7 @@ async function refreshDiscoverFeed() {
   _discoveryLastProfMap = profMap;
   if (gen !== _discoveryFeedGen) return;
   listEl.classList.remove("isDiscoveryLoading");
+  void refreshDiscoverChallengeSpotlight();
 
   if (!playable.length) {
     _discoveryFeedTracks = [];

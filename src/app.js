@@ -18,10 +18,11 @@ import {
   parseOnboardingRoute,
   shouldSkipIntroOrOnboardingRoute,
 } from "./onboarding.js";
+import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531bootSplashBrand";
+const APP_BUILD = "20260531lightTheme";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -31,6 +32,11 @@ const HUB_FEATURE_ENABLED = false;
   const f = document.getElementById("footerBuild");
   if (f) f.textContent = `Build ${APP_BUILD}`;
 })();
+try {
+  initTheme();
+} catch (e) {
+  console.warn("[theme] init failed", e);
+}
 
 /** Boot splash: logo + dots — keep visible at least this long even when session restores instantly. */
 const BOOT_SPLASH_MIN_MS = 2400;

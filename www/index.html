@@ -167,16 +167,27 @@
                   <div class="onboardingMockTabs">
                     <span>Photo</span><span>Hum</span><span class="is-on">Lyrics</span>
                   </div>
-                  <div class="onboardingMockField"></div>
-                  <div class="onboardingMockChips"><i></i><i></i><i></i></div>
+                  <div class="onboardingMockField">
+                    <span class="onboardingMockFieldGlow" aria-hidden="true"></span>
+                    <span class="onboardingMockFieldLine"></span>
+                    <span class="onboardingMockFieldLine onboardingMockFieldLine--short"></span>
+                  </div>
+                  <div class="onboardingMockChips">
+                    <span class="onboardingMoodChip onboardingMoodChip--chill">Chill</span>
+                    <span class="onboardingMoodChip onboardingMoodChip--happy is-on">Happy</span>
+                    <span class="onboardingMoodChip onboardingMoodChip--dreamy">Dreamy</span>
+                  </div>
                 </div>
                 <h2 class="onboardingTitle">Create with AI</h2>
                 <p class="onboardingLead">Turn a hum, photo, or a few words into a full song — studio-quality, yours to share.</p>
               </article>
               <article class="onboardingSlide" data-onboarding-slide="1" aria-hidden="true">
                 <div class="onboardingMock onboardingMock--echo" aria-hidden="true">
-                  <div class="onboardingEchoTile">
-                    <span class="onboardingEchoWave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+                  <div class="onboardingEchoTileWrap">
+                    <span class="onboardingEchoPulse" aria-hidden="true"></span>
+                    <div class="onboardingEchoTile">
+                      <span class="onboardingEchoWave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+                    </div>
                   </div>
                 </div>
                 <h2 class="onboardingTitle">Echo</h2>
@@ -184,17 +195,39 @@
               </article>
               <article class="onboardingSlide" data-onboarding-slide="2" aria-hidden="true">
                 <div class="onboardingMock onboardingMock--friends" aria-hidden="true">
-                  <div class="onboardingFriendRow"><span class="onboardingFriendAv"></span><span class="onboardingFriendLine"></span></div>
-                  <div class="onboardingFriendRow"><span class="onboardingFriendAv"></span><span class="onboardingFriendLine onboardingFriendLine--short"></span></div>
-                  <div class="onboardingFriendRow"><span class="onboardingFriendAv"></span><span class="onboardingFriendLine"></span></div>
+                  <div class="onboardingFriendRow">
+                    <span class="onboardingFriendAv onboardingFriendAv--purple"></span>
+                    <div class="onboardingFriendBody">
+                      <span class="onboardingFriendBadge onboardingFriendBadge--echo">Echo</span>
+                      <span class="onboardingFriendLine"></span>
+                    </div>
+                  </div>
+                  <div class="onboardingFriendRow">
+                    <span class="onboardingFriendAv onboardingFriendAv--teal"></span>
+                    <div class="onboardingFriendBody">
+                      <span class="onboardingFriendBadge onboardingFriendBadge--drop">Drop</span>
+                      <span class="onboardingFriendLine onboardingFriendLine--short"></span>
+                    </div>
+                  </div>
+                  <div class="onboardingFriendRow">
+                    <span class="onboardingFriendAv onboardingFriendAv--pink"></span>
+                    <div class="onboardingFriendBody">
+                      <span class="onboardingFriendLine"></span>
+                    </div>
+                  </div>
                 </div>
                 <h2 class="onboardingTitle">Friends</h2>
                 <p class="onboardingLead">Updates, advice, drops, and remixes — a feed built for creators, not noise.</p>
               </article>
               <article class="onboardingSlide" data-onboarding-slide="3" aria-hidden="true">
                 <div class="onboardingMock onboardingMock--persona" aria-hidden="true">
-                  <div class="onboardingPersonaCard">
-                    <span class="onboardingPersonaMic" aria-hidden="true"></span>
+                  <div class="onboardingPersonaScene">
+                    <span class="onboardingPersonaWaves" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+                    <div class="onboardingPersonaSilhouette" aria-hidden="true">
+                      <span class="onboardingPersonaHead"></span>
+                      <span class="onboardingPersonaShoulders"></span>
+                      <span class="onboardingPersonaMicBadge"></span>
+                    </div>
                     <span class="onboardingPersonaLabel">Your voice</span>
                   </div>
                 </div>
@@ -3080,6 +3113,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260531lightThemeScreensUi"></script>
+    <script type="module" src="./src/app.js?v=20260531onboardingSlides"></script>
   </body>
 </html>

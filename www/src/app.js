@@ -21,7 +21,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531authFix";
+const APP_BUILD = "20260531authFixB";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2552,6 +2552,13 @@ function applyRoute() {
   }
   let wanted = allowedRoutes.has(normalized) ? normalized : "generate";
   const isLoggedIn = isAppLoggedIn();
+  // Keychain session often loads after first paint — never keep a logged-in user on #/auth.
+  if (wanted === "auth" && isLoggedIn && shouldSkipIntroOrOnboardingRoute()) {
+    wanted = "challenges";
+    try {
+      history.replaceState(null, "", "#/challenges");
+    } catch {}
+  }
   if (shouldSkipIntroOrOnboardingRoute() && (wanted === "intro" || wanted === "onboarding")) {
     wanted = isLoggedIn ? "challenges" : "auth";
     try {
@@ -2996,13 +3003,35 @@ window.addEventListener("hashchange", () => {
   closeCreateChooserSheet({ immediate: true });
   scheduleApplyRoute();
 });
-if (!location.hash) {
-  try {
-    location.hash = getInitialBootHash(() => authSession);
-  } catch {
-    location.hash = "#/intro";
-  }
+/** Do not set #/auth before Keychain/native session restore — that was kicking users off Home. */
+function scheduleInitialHash() {
+  void (async () => {
+    try {
+      await waitForNativeAuthHydration(3200);
+      loadAuthSession();
+      ensureAuthSessionUserFromToken();
+      if (!location.hash) {
+        try {
+          location.hash = getInitialBootHash(() => authSession);
+        } catch {
+          location.hash = "#/intro";
+        }
+      } else if (isAppLoggedIn() && String(location.hash || "").replace(/^#\/?/, "").split(/[?#&]/)[0] === "auth") {
+        try {
+          location.hash = "#/challenges";
+        } catch {}
+      }
+      scheduleApplyRoute();
+    } catch (e) {
+      console.warn("[boot] initial hash failed", e);
+      if (!location.hash) {
+        try { location.hash = "#/intro"; } catch {}
+      }
+      scheduleApplyRoute();
+    }
+  })();
 }
+scheduleInitialHash();
 dismissBootSplash();
 try {
   initOnboarding({
@@ -28337,9 +28366,11 @@ async function runGoogleOAuthLogin() {
     if (!url) throw new Error("Could not create Google auth URL");
     const Browser = getCapacitorBrowserPlugin();
     if (isCapacitorNativeAuth() && Browser?.open) {
+      await closeOAuthBrowser();
+      await new Promise((r) => setTimeout(r, 280));
       _oauthBrowserOpen = true;
       setOAuthPendingUi(true);
-      await Browser.open({ url, presentationStyle: "fullscreen" });
+      await Browser.open({ url, presentationStyle: "popover" });
       // Button is reset by the appUrlOpen handler once the deep link returns.
     } else if (isCapacitorNativeAuth() && !Browser?.open) {
       notifyLoginFeedback(

@@ -21,7 +21,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531nativeFix";
+const APP_BUILD = "20260531createFlow";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -7810,8 +7810,10 @@ function applyMaqamToStyleInput() {
       const rootOnly = current.replace(/\s+(Major|Minor)$/i, "").trim();
       if (rootOnly && rootOnly !== current) els.sunoSongKey.value = rootOnly;
       els.sunoKeyHint.textContent = "Maqam active: Song key acts as tonic/root note only.";
+      els.sunoKeyHint.hidden = false;
     } else {
-      els.sunoKeyHint.textContent = "Tip: with Maqam selected, Song key is treated as tonic/root note only.";
+      els.sunoKeyHint.textContent = "";
+      els.sunoKeyHint.hidden = true;
     }
   }
 }
@@ -7950,12 +7952,12 @@ function refreshVocalReferenceUi() {
     if (nameEl) nameEl.textContent = "";
     if (metaEl) metaEl.textContent = "";
     if (emptyHint) {
-      emptyHint.style.display = "";
-      emptyHint.textContent = "No vocal reference attached.";
+      emptyHint.hidden = true;
+      emptyHint.textContent = "";
     }
   } else {
     if (strip) strip.hidden = false;
-    if (emptyHint) emptyHint.style.display = "none";
+    if (emptyHint) emptyHint.hidden = true;
     if (nameEl) nameEl.textContent = f.name || "audio";
     const kb = Math.max(1, Math.round(f.size / 1024));
     let originLabel = "Attached";
@@ -7981,7 +7983,8 @@ function setVocalRefFile(file, label, origin) {
     vocalRefOrigin = origin;
   }
   if (els.sunoVocalUploadName && !file) {
-    els.sunoVocalUploadName.textContent = "No vocal reference attached.";
+    els.sunoVocalUploadName.hidden = true;
+    els.sunoVocalUploadName.textContent = "";
   }
   // ROOT CAUSE FIX for "Suno used an OLD voice on my new recording":
   //   Suno's upload-cover (Full Song) re-sings the new melody using the
@@ -26474,7 +26477,19 @@ function getReferenceHints() {
 
 function renderReferenceHints() {
   const hasRef = Boolean(getVocalReferenceFile() || vocalRefBlob);
-  if (els.vocalRefHint) els.vocalRefHint.style.display = hasRef ? "" : "none";
+  if (els.vocalRefHint) {
+    const hints = hasRef ? getReferenceHints() : [];
+    if (!hints.length) {
+      els.vocalRefHint.hidden = true;
+      els.vocalRefHint.textContent = "";
+      els.vocalRefHint.classList.remove("isCritical");
+    } else {
+      const hasCritical = hints.some((h) => h?.severity === "critical");
+      els.vocalRefHint.classList.toggle("isCritical", hasCritical);
+      els.vocalRefHint.hidden = false;
+      els.vocalRefHint.textContent = hints.map((h, i) => `${i + 1}. ${h.text}`).join(" ");
+    }
+  }
   if (!els.sunoReferenceHint) return;
   const hints = getReferenceHints();
   if (!hints.length) {

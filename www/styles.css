@@ -3987,6 +3987,71 @@ textarea{
   gap: 14px;
   margin-bottom: 10px;
 }
+.createFlow{
+  display:flex;
+  flex-direction:column;
+  gap: 20px;
+}
+.createFlowStep{
+  display:flex;
+  flex-direction:column;
+  gap: 12px;
+}
+.createFlowStepHead{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  margin: 0 0 2px;
+}
+.createFlowStepNum{
+  flex:0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(232,238,247,0.95);
+  background: rgba(124,92,255,0.22);
+  border: 1px solid rgba(124,92,255,0.38);
+}
+.createFlowStepTitle{
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: rgba(248,250,252,0.96);
+}
+.createFlowExtras{
+  margin-top: 2px;
+}
+.createFlowExtras > summary{
+  font-size: 13px;
+  color: rgba(200,214,232,0.88);
+  cursor: pointer;
+}
+.createFlowStep--generate .createFlowStepHead{
+  margin-bottom: 4px;
+}
+.vocalRefCard--compact{
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+.vocalRefCard--compact .vocalQuickRow{
+  margin-bottom: 0;
+}
+.createInlineHint{
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.createInlineHint.isCritical{
+  color: #fca5a5;
+}
 .remixSourceBanner{
   display:flex;
   align-items:flex-start;

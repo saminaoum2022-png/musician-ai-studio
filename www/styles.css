@@ -12657,7 +12657,7 @@ input::placeholder, textarea::placeholder{
     border: 0;
     border-top: 1px solid rgba(255,255,255,0.075);
     border-radius: 0;
-    padding: 8px 6px max(8px, env(safe-area-inset-bottom)) 6px;
+    padding: 6px 4px max(6px, env(safe-area-inset-bottom)) 4px;
     background:
       radial-gradient(72% 140% at 50% 0%, rgba(124,92,255,0.06), transparent 62%),
       rgba(3, 5, 10, 0.94);
@@ -12667,43 +12667,44 @@ input::placeholder, textarea::placeholder{
   }
   .mobileTabbar a{
     text-decoration:none;
-    color: rgba(223, 231, 251, 0.42);
-    font-size:12px;
-    font-weight:700;
-    letter-spacing: 0.15px;
+    color: rgba(223, 231, 251, 0.48);
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: 0.02em;
     text-align:center;
     border: 0;
     border-radius: 14px;
-    padding: 10px 6px;
-    min-height: 46px;
+    padding: 5px 2px 4px;
+    min-height: 52px;
     transition:
       color 200ms ease,
       transform 120ms ease;
     display:flex;
     flex-direction:column;
     align-items:center;
-    justify-content:center;
-    gap: 0;
+    justify-content:flex-end;
+    gap: 3px;
     position: relative;
     -webkit-tap-highlight-color: transparent;
   }
   .mobileTabbar a .tabIco{
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     fill: none;
     stroke: currentColor;
     stroke-width: 1.75;
     stroke-linecap: round;
     stroke-linejoin: round;
     flex: 0 0 auto;
+    display: block;
     transition: transform 200ms cubic-bezier(0.22, 0.61, 0.36, 1), stroke 200ms ease, opacity 200ms ease, fill 200ms ease;
-    opacity: 0.88;
+    opacity: 0.9;
   }
   .tabProfileAvatarSlot{
     position: relative;
     flex: 0 0 auto;
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     border-radius: var(--nabad-squircle-radius);
     display: none;
   }
@@ -12715,12 +12716,12 @@ input::placeholder, textarea::placeholder{
   }
   .tabProfileAvatarRing{
     position: absolute;
-    inset: -3px;
+    inset: -2px;
     z-index: 0;
     border-radius: inherit;
     pointer-events: none;
-    padding: 1.5px;
-    background: var(--nabad-squircle-gradient);
+    padding: 1px;
+    background: rgba(255, 255, 255, 0.08);
     -webkit-mask:
       linear-gradient(#000 0 0) content-box,
       linear-gradient(#000 0 0);
@@ -12729,10 +12730,7 @@ input::placeholder, textarea::placeholder{
       linear-gradient(#000 0 0) content-box,
       linear-gradient(#000 0 0);
             mask-composite: exclude;
-    box-shadow:
-      0 0 16px -6px rgba(35, 213, 171, 0.22),
-      0 0 18px -6px rgba(124, 92, 255, 0.28);
-    opacity: 0;
+    opacity: 1;
     transition: opacity 200ms ease, box-shadow 200ms ease, transform 200ms ease;
   }
   .tabProfileAvatarSlot.hasActiveStory .tabProfileAvatarRing{
@@ -12751,8 +12749,8 @@ input::placeholder, textarea::placeholder{
     height: 100%;
     border-radius: inherit;
     object-fit: cover;
-    background: rgba(255,255,255,0.04);
-    border: 2px solid rgba(5, 7, 13, 0.88);
+    background: rgba(255,255,255,0.06);
+    border: 2px solid rgba(255,255,255,0.06);
     box-sizing: border-box;
   }
   .tabProfileAvatarImg[data-empty="true"]{
@@ -12767,7 +12765,7 @@ input::placeholder, textarea::placeholder{
     justify-content: center;
     border-radius: inherit;
     background: rgba(255,255,255,0.05);
-    border: 2px solid rgba(5, 7, 13, 0.88);
+    border: 2px solid rgba(255,255,255,0.06);
     color: rgba(232, 238, 247, 0.55);
     font-size: 11px;
     font-weight: 800;
@@ -12780,15 +12778,21 @@ input::placeholder, textarea::placeholder{
     display: flex;
   }
   .mobileTabbar a .tabLabel{
-    position: absolute;
-    width: 1px;
-    height: 1px;
+    position: static;
+    width: auto;
+    height: auto;
     padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
+    margin: 0;
+    overflow: visible;
+    clip: auto;
     white-space: nowrap;
     border: 0;
+    font-size: 10px;
+    font-weight: 650;
+    line-height: 1.1;
+    letter-spacing: 0.02em;
+    color: inherit;
+    opacity: 0.92;
   }
   /* Create tab — subtle morph when on Create with inputs ready */
   .mobileTabbar a.tabCreate .tabIcoPlay,
@@ -12903,14 +12907,20 @@ input::placeholder, textarea::placeholder{
   }
   .mobileTabbar a.active .tabIco{
     stroke: rgba(232, 238, 247, 0.92);
-    stroke-width: 1.85;
+    stroke-width: 1.75;
     opacity: 1;
-    transform: scale(1.06);
+    transform: scale(1.04);
+  }
+  .mobileTabbar a.active .tabLabel{
+    opacity: 1;
+    font-weight: 750;
   }
   .mobileTabbar a.active .tabIcoDiscover circle[fill="none"]{
     stroke: rgba(232, 238, 247, 0.92);
   }
-  .mobileTabbar a.active .tabIcoDiscover path[fill="currentColor"],
+  .mobileTabbar a.active .tabIcoDiscover path[fill="none"]{
+    stroke: rgba(232, 238, 247, 0.92);
+  }
   .mobileTabbar a.active .tabIcoDiscover circle[fill="currentColor"]{
     fill: rgba(232, 238, 247, 0.92);
     stroke: none;
@@ -12927,7 +12937,15 @@ input::placeholder, textarea::placeholder{
     color: rgba(232, 238, 247, 0.92);
     background: transparent;
   }
+  .tabProfileLink.active .tabProfileAvatarImg{
+    border-color: rgba(255,255,255,0.12);
+  }
+  .tabProfileLink.active .tabProfileAvatarRing{
+    background: rgba(255, 255, 255, 0.1);
+    opacity: 1;
+  }
   .tabProfileLink.active .tabProfileAvatarSlot.hasActiveStory .tabProfileAvatarRing{
+    background: var(--nabad-squircle-gradient);
     opacity: 1;
     transform: scale(1.04);
     box-shadow:

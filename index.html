@@ -2709,29 +2709,27 @@
       <nav class="mobileTabbar" aria-label="Primary navigation">
         <a href="#/challenges" data-route-link="challenges" class="challengesTab" aria-label="Home">
           <svg class="tabIco tabIcoHome" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M4 12 12 5 20 12"/>
-            <path d="M7 12v8h10v-8"/>
+            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M4 12 12 5 20 12"/>
+            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M7 12v8h10v-8"/>
           </svg>
           <span class="tabLabel">Home</span>
         </a>
         <a href="#/discover" data-route-link="discover" aria-label="Discover">
           <svg class="tabIco tabIcoDiscover" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.65"/>
-            <path fill="currentColor" d="M12 5.4 13.85 12H10.15L12 5.4z"/>
-            <path fill="currentColor" opacity="0.38" d="M12 18.6 10.15 12h3.7L12 18.6z"/>
-            <circle cx="12" cy="12" r="1.55" fill="currentColor"/>
+            <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.75"/>
+            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M12 4v3.5l2.75 2.75"/>
+            <circle cx="12" cy="12" r="1.35" fill="currentColor" stroke="none"/>
           </svg>
           <span class="tabLabel">Discover</span>
         </a>
         <a href="#/generate" data-route-link="generate" id="tabCreate" class="tabCreate" aria-label="Create">
           <span class="tabIcoSpinner" aria-hidden="true"></span>
           <svg class="tabIco tabIcoCreate" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="9"/>
-            <line x1="12" y1="8" x2="12" y2="16"/>
-            <line x1="8" y1="12" x2="16" y2="12"/>
+            <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.75"/>
+            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M12 8v8M8 12h8"/>
           </svg>
           <svg class="tabIco tabIcoPlay" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="9"/>
+            <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.75"/>
             <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"/>
           </svg>
           <span class="tabLabel">Create</span>
@@ -2739,10 +2737,10 @@
         </a>
         <a href="#/friends" data-route-link="friends" class="friendsTab" aria-label="Friends">
           <svg class="tabIco tabIcoFriends" viewBox="0 0 24 24" aria-hidden="true">
-            <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-            <circle cx="9" cy="7" r="4" fill="none" stroke="currentColor"/>
-            <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-            <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="1.75"/>
+            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M16 3.13a4 4 0 0 1 0 7.75"/>
           </svg>
           <span class="tabLabel">Friends</span>
         </a>
@@ -2753,8 +2751,8 @@
             <span class="tabProfileAvatarFallback" id="tabProfileAvatarFallback" aria-hidden="true"></span>
           </span>
           <svg class="tabIco tabIcoProfile tabIcoProfileGuest" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-            <circle cx="12" cy="7" r="4"/>
+            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="1.75"/>
           </svg>
           <span class="tabLabel">Profile</span>
           <span id="libraryTabDot" class="hubDot libraryTabDot profileTabDot" style="display:none" aria-hidden="true"></span>
@@ -3041,6 +3039,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260531authFixB"></script>
+    <script type="module" src="./src/app.js?v=20260531tabBarFix"></script>
   </body>
 </html>

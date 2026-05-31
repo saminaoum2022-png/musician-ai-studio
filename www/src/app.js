@@ -21,7 +21,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531authFixB";
+const APP_BUILD = "20260531tabBarFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2170,6 +2170,13 @@ const TAB_REFRESH_ACTIONS = {
       },
     }
     : {}),
+  challenges() {
+    try {
+      renderHomeDesk();
+      const page = document.querySelector('[data-route="challenges"]');
+      if (page) void refreshHomeDeskJoinCounts(page);
+    } catch (e) { console.warn("[tabRefresh/challenges]", e); }
+  },
   discover() {
     try {
       void refreshDiscoverFeed();
@@ -2468,7 +2475,11 @@ function scheduleApplyRoute() {
     _applyRouteRaf = 0;
     void (async () => {
       try {
-        await ensureAuthBoot();
+        if (!_authBootDone) await ensureAuthBoot();
+        else {
+          loadAuthSession();
+          ensureAuthSessionUserFromToken();
+        }
         applyRoute();
       } catch (e) {
         routeApplyFallback(e);
@@ -2610,13 +2621,20 @@ function applyRoute() {
     updateNotificationsEntryBadges(0);
   }
   const main = document.querySelector("main.grid");
-  if (main) {
+  if (main && prevRoute !== wanted) {
     main.classList.remove("routeSwap");
     requestAnimationFrame(() => {
       main.classList.remove("routeSwap");
       void main.offsetWidth;
-      main.classList.add("routeSwap");
-      window.setTimeout(() => main.classList.remove("routeSwap"), 320);
+      const reduceMotion =
+        typeof window !== "undefined" &&
+        window.matchMedia &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const isMobile = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(max-width: 720px)").matches;
+      if (!reduceMotion && !isMobile) {
+        main.classList.add("routeSwap");
+        window.setTimeout(() => main.classList.remove("routeSwap"), 180);
+      }
     });
   }
   // Hub audio is bound to the Hub view only. Any route swap away from
@@ -2694,55 +2712,54 @@ function applyRoute() {
     }
     bindProfileSongsSegmentOnce();
     syncProfileSongsSegmentUi();
-    markLibraryTabDot(false);
     renderProfileSongs();
-    if (authSession?.user?.id && _profileSongsSegment === "all" && !loadLibrary().length) {
-      const run = () => void reconcileLibraryFromCloud({ force: true });
-      if (typeof requestIdleCallback === "function") {
-        requestIdleCallback(run, { timeout: 1200 });
-      } else {
-        setTimeout(run, 0);
-      }
-    }
-    void refreshAuthStateFromSupabase();
     setProfileEditing(false);
-    void refreshMyCredits({ silent: true });
-    // Pull the user's own Hub posts in parallel with credits so the
-    // "songs / likes" section doesn't blank-out until the full Hub
-    // feed arrives. Cheap query, scoped to one user.
-    void refreshMyHubPostsFast();
-    void (async () => {
-      if (isNativeShell()) await ensureNativeApiBaseResolved();
-      await refreshOwnProfileSocialStats({ force: true });
-    })();
-    renderPersonaSelect();
-    renderProfileCallingCardHint();
-    if (authSession?.user?.id && shouldShowProfileHeaderSkeleton()) {
-      setProfileHeaderLoading(true);
-      // Active retry: if the boot-time cloud profile load missed (slow
-      // network, fetch threw, race with auth), the route handler used
-      // to just arm the shimmer and rely on the boot IIFE having
-      // already run. That's how the "always loading + @guest" bug
-      // happened. Kick a fresh fetch now, with the same timeout, and
-      // dismiss the shimmer either way.
+    try { syncMobileTabbarProfileAvatar(); } catch {}
+    const profileHeavy = !shouldSkipRouteHeavy("profile");
+    if (profileHeavy) markRouteHeavy("profile");
+    if (profileHeavy) {
+      markLibraryTabDot(false);
+      if (authSession?.user?.id && _profileSongsSegment === "all" && !loadLibrary().length) {
+        const run = () => void reconcileLibraryFromCloud({ force: true });
+        if (typeof requestIdleCallback === "function") {
+          requestIdleCallback(run, { timeout: 1200 });
+        } else {
+          setTimeout(run, 0);
+        }
+      }
+      void refreshAuthStateFromSupabase();
+      void refreshMyCredits({ silent: true });
+      void refreshMyHubPostsFast();
       void (async () => {
-        try {
-          const cloud = await supabaseLoadProfile();
-          if (cloud && authSession?.user?.id) {
-            const localFilled = localProfileFilledForCloudMerge();
-            const nextProfile = {
-              ...cloud,
-              ...localFilled,
-              id: String(authSession.user.id),
-              email: localFilled.email || cloud.email || authSession.user.email || "",
-            };
-            saveProfile(nextProfile);
-            renderProfilePreviewFromInputs();
-            renderProfileSongs();
-          }
-        } catch {}
-        try { setProfileHeaderLoading(false); } catch {}
+        if (isNativeShell()) await ensureNativeApiBaseResolved();
+        await refreshOwnProfileSocialStats({ force: true });
       })();
+      renderPersonaSelect();
+      renderProfileCallingCardHint();
+      if (authSession?.user?.id && shouldShowProfileHeaderSkeleton()) {
+        setProfileHeaderLoading(true);
+        void (async () => {
+          try {
+            const cloud = await supabaseLoadProfile();
+            if (cloud && authSession?.user?.id) {
+              const localFilled = localProfileFilledForCloudMerge();
+              const nextProfile = {
+                ...cloud,
+                ...localFilled,
+                id: String(authSession.user.id),
+                email: localFilled.email || cloud.email || authSession.user.email || "",
+              };
+              saveProfile(nextProfile);
+              renderProfilePreviewFromInputs();
+              renderProfileSongs();
+            }
+          } catch {}
+          try { setProfileHeaderLoading(false); } catch {}
+        })();
+      }
+    } else {
+      try { setProfileHeaderLoading(false); } catch {}
+      try { renderProfilePreviewFromInputs(); } catch {}
     }
   }
   if (wanted === "credits" || wanted === "sounds") {
@@ -2750,7 +2767,15 @@ function applyRoute() {
   }
   if (wanted === "friends") {
     try { onLeaveSearchRoute(); } catch {}
-    enterFriendsRoute();
+    bindFriendsPageOnce();
+    wireFriendsComposeFabOnce();
+    syncFollowingComposeUi();
+    hydrateFriendsFeedSnapshotFromStorage();
+    try { onEnterFriendsRoute(); } catch {}
+    if (!shouldSkipRouteHeavy("friends")) {
+      markRouteHeavy("friends");
+      enterFriendsRoute();
+    }
   }
   if (wanted === "discover") {
     bindDiscoveryDiscoverControls();
@@ -2758,7 +2783,10 @@ function applyRoute() {
     try {
       onLeaveSearchRoute();
     } catch {}
-    void refreshDiscoverFeed();
+    if (!shouldSkipRouteHeavy("discover") || !_discoveryFeedTracks.length) {
+      markRouteHeavy("discover");
+      void refreshDiscoverFeed();
+    }
   }
   if (wanted === "discover-playlist") {
     bindDiscoveryDiscoverControls();
@@ -10054,6 +10082,9 @@ const AUTH_SESSION_BACKUP_KEY = "mas:supabase:session:backup:v1";
 const AUTH_NATIVE_FS_PATH = "NabadAi/auth/session.json";
 const CAP_FS_DIRECTORY_DATA = "DATA";
 let _authBootPromise = null;
+let _authBootDone = false;
+const ROUTE_HEAVY_TTL_MS = 20000;
+const _routeHeavyAt = { profile: 0, discover: 0, friends: 0 };
 
 function getCapAuthVaultPlugin() {
   return window?.Capacitor?.Plugins?.AuthVault || null;
@@ -10251,6 +10282,16 @@ async function restoreAuthSessionFromAllStores() {
 
 function invalidateAuthBoot() {
   _authBootPromise = null;
+  _authBootDone = false;
+}
+
+function shouldSkipRouteHeavy(route) {
+  const t = _routeHeavyAt[route] || 0;
+  return Boolean(t && Date.now() - t < ROUTE_HEAVY_TTL_MS);
+}
+
+function markRouteHeavy(route) {
+  _routeHeavyAt[route] = Date.now();
 }
 
 /** On native, Keychain inject can land after the first empty ensureAuthBoot — retry briefly. */
@@ -10291,6 +10332,7 @@ function ensureAuthBoot({ force = false } = {}) {
       ensureAuthSessionUserFromToken();
       syncActiveProfileIdFromSession();
       renderAuthStatus();
+      _authBootDone = true;
     })();
   }
   return _authBootPromise;
@@ -18789,8 +18831,9 @@ function renderProfilePreviewFromInputs() {
   if (els.profilePreviewAvatar) {
     const raw = String(activeProfile.avatar || "").trim();
     const isReal = raw && !/nabadai-logo\.png(?:$|\?)/.test(raw);
-    if (isReal) {
-      els.profilePreviewAvatar.src = raw;
+    const url = isReal ? normalizeProfileAvatarForImg(raw) : "";
+    if (url) {
+      els.profilePreviewAvatar.src = url;
       els.profilePreviewAvatar.removeAttribute("data-empty");
     } else {
       els.profilePreviewAvatar.removeAttribute("src");

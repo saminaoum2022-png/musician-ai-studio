@@ -64,6 +64,25 @@ export function applyTheme(resolved) {
     }
     meta.setAttribute("content", colors.bg);
   } catch {}
+  try {
+    const appleBar = document.querySelector(
+      'meta[name="apple-mobile-web-app-status-bar-style"]'
+    );
+    if (appleBar) {
+      appleBar.setAttribute(
+        "content",
+        theme === "light" ? "default" : "black-translucent"
+      );
+    }
+  } catch {}
+  try {
+    const critical = document.getElementById("themeCritical");
+    if (critical) {
+      critical.textContent =
+        `html,body{background-color:${colors.bg};color:${colors.text};margin:0}` +
+        `html{color-scheme:${colors.scheme}}`;
+    }
+  } catch {}
 }
 
 /** Inline boot — same logic without module load. */

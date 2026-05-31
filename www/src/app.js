@@ -21,7 +21,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531echoStart";
+const APP_BUILD = "20260531nativeFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -156,6 +156,19 @@ function isFounderBadgeEmail(raw) {
     /* Already registered elsewhere */
   }
 })();
+
+if (typeof window !== "undefined") {
+  window.addEventListener("nabad-auth-injected", () => {
+    try {
+      _authBootPromise = null;
+      void ensureAuthBoot().then(() => {
+        try {
+          scheduleApplyRoute();
+        } catch {}
+      });
+    } catch {}
+  });
+}
 
 initLockScreenNowPlaying({
   getAudio: () => {
@@ -28681,6 +28694,7 @@ void (async () => {
   // throw or a hung fetch would leave it stuck on with @guest visible.
   try {
   await ensureAuthBoot();
+  if (isAppLoggedIn()) scheduleApplyRoute();
   await loadPublicConfig();
   const usedCodeFlow = await maybeHandleAuthCodeFromQuery();
   const usedTokenFlow = !usedCodeFlow && maybeHandleMagicLinkFromHash();

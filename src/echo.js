@@ -16,6 +16,36 @@ const ECHO_CAPTION_MAX = 60;
 
 /** Absolute path — Vercel serves repo root (`/assets/`), not only `www/assets/`. */
 const ECHO_BEAT_ASSET_BASE = "/assets/echo-beats/";
+
+function isEchoCapNative() {
+  return Boolean(window?.Capacitor?.isNativePlatform?.());
+}
+
+function echoBeatFileName(beatId, variant) {
+  const def = ECHO_BEAT_DEFS[beatId];
+  if (!def?.variants?.length) return "";
+  const idx = Math.max(0, Math.min(def.variants.length - 1, variant | 0));
+  return def.variants[idx];
+}
+
+/** Web + Capacitor WKWebView URL candidates (fetch/audio can fail on one form). */
+function echoBeatUrlCandidates(beatId, variant) {
+  const file = echoBeatFileName(beatId, variant);
+  if (!file) return [];
+  const out = [];
+  const push = (u) => {
+    const s = String(u || "").trim();
+    if (s && !out.includes(s)) out.push(s);
+  };
+  push(ECHO_BEAT_ASSET_BASE + file);
+  if (isEchoCapNative()) {
+    try {
+      push(new URL(`assets/echo-beats/${file}`, window.location.href).href);
+      push(`${window.location.origin || ""}/assets/echo-beats/${file}`);
+    } catch {}
+  }
+  return out;
+}
 const ECHO_BEAT_DEFS = {
   none: { label: "None", variants: [] },
   lofi: { label: "Lo-fi", variants: ["lofi-a.mp3", "lofi-b.mp3"] },
@@ -1288,10 +1318,8 @@ async function echoRequestMicStream() {
 }
 
 function echoBeatVariantUrl(beatId, variant) {
-  const def = ECHO_BEAT_DEFS[beatId];
-  if (!def || !def.variants?.length) return "";
-  const idx = Math.max(0, Math.min(def.variants.length - 1, variant | 0));
-  return ECHO_BEAT_ASSET_BASE + def.variants[idx];
+  const urls = echoBeatUrlCandidates(beatId, variant);
+  return urls[0] || "";
 }
 
 /**
@@ -1418,12 +1446,36 @@ async function loadEchoBeatBuffer(url) {
   }
 }
 
+async function loadEchoBeatBufferForBeat(beatId, variant) {
+  const urls = echoBeatUrlCandidates(beatId, variant);
+  for (const url of urls) {
+    const buf = await loadEchoBeatBuffer(url);
+    if (buf) return buf;
+  }
+  return null;
+}
+
+let _echoBeatPreviewRampTimer = 0;
+
 function stopEchoBeatPreview() {
+  if (_echoBeatPreviewRampTimer) {
+    window.clearInterval(_echoBeatPreviewRampTimer);
+    _echoBeatPreviewRampTimer = 0;
+  }
   if (!_echoBeatPreview) return;
-  const { src, gain } = _echoBeatPreview;
-  const ctx = _echoSharedAudioCtx;
+  const prev = _echoBeatPreview;
   _echoBeatPreview = null;
-  if (ctx && ctx.state !== "closed") {
+  if (prev.mode === "audio" && prev.audio) {
+    try {
+      prev.audio.pause();
+      prev.audio.removeAttribute("src");
+      prev.audio.load();
+    } catch {}
+    return;
+  }
+  const { src, gain } = prev;
+  const ctx = _echoSharedAudioCtx;
+  if (ctx && ctx.state !== "closed" && gain) {
     try {
       const t = ctx.currentTime;
       gain.gain.cancelScheduledValues(t);
@@ -1432,10 +1484,90 @@ function stopEchoBeatPreview() {
     } catch {}
   }
   setTimeout(() => {
-    try { src.stop(); } catch {}
-    try { src.disconnect(); } catch {}
-    try { gain.disconnect(); } catch {}
+    try { src?.stop?.(); } catch {}
+    try { src?.disconnect?.(); } catch {}
+    try { gain?.disconnect?.(); } catch {}
   }, 240);
+}
+
+let _echoBeatPreviewAudioEl = null;
+function getEchoBeatPreviewAudio() {
+  if (!_echoBeatPreviewAudioEl) {
+    const a = new Audio();
+    a.preload = "auto";
+    a.setAttribute("playsinline", "");
+    a.loop = true;
+    _echoBeatPreviewAudioEl = a;
+  }
+  return _echoBeatPreviewAudioEl;
+}
+
+async function startEchoBeatPreviewViaAudio(beatAtRequest, variantAtRequest) {
+  const candidates = echoBeatUrlCandidates(beatAtRequest, variantAtRequest);
+  if (!candidates.length) return false;
+  const a = getEchoBeatPreviewAudio();
+  a.loop = true;
+  a.volume = 0;
+  a.playbackRate = ECHO_BEAT_SPEED[_echoBeatSpeed] || 1.0;
+  try { a.preservesPitch = false; } catch {}
+  try { a.mozPreservesPitch = false; } catch {}
+  try { a.webkitPreservesPitch = false; } catch {}
+
+  const trySrc = (src) =>
+    new Promise((resolve) => {
+      let settled = false;
+      const finish = (ok) => {
+        if (settled) return;
+        settled = true;
+        a.removeEventListener("canplaythrough", onReady);
+        a.removeEventListener("error", onErr);
+        resolve(ok);
+      };
+      const onReady = () => finish(true);
+      const onErr = () => finish(false);
+      a.addEventListener("canplaythrough", onReady, { once: true });
+      a.addEventListener("error", onErr, { once: true });
+      a.dataset.echoBeatSrc = src;
+      a.src = src;
+      try { a.load(); } catch { finish(false); }
+      window.setTimeout(() => finish(false), 9000);
+    });
+
+  let loaded = false;
+  for (const src of candidates) {
+    if (await trySrc(src)) {
+      loaded = true;
+      break;
+    }
+  }
+  if (!loaded) return false;
+  if (_echoBeatId !== beatAtRequest || _echoBeatVariant !== variantAtRequest || echoRecState !== "idle") {
+    return false;
+  }
+  try {
+    await a.play();
+  } catch {
+    return false;
+  }
+  const target = ECHO_BEAT_PLAYBACK_GAIN;
+  a.volume = 0;
+  let step = 0;
+  if (_echoBeatPreviewRampTimer) window.clearInterval(_echoBeatPreviewRampTimer);
+  _echoBeatPreviewRampTimer = window.setInterval(() => {
+    if (_echoBeatPreview?.mode !== "audio" || _echoBeatPreview.audio !== a) {
+      window.clearInterval(_echoBeatPreviewRampTimer);
+      _echoBeatPreviewRampTimer = 0;
+      return;
+    }
+    step += 1;
+    a.volume = Math.min(target, (step / 12) * target);
+    if (step >= 12) {
+      window.clearInterval(_echoBeatPreviewRampTimer);
+      _echoBeatPreviewRampTimer = 0;
+    }
+  }, 22);
+  _echoBeatPreview = { mode: "audio", audio: a };
+  return true;
 }
 
 async function startEchoBeatPreview() {
@@ -1443,9 +1575,20 @@ async function startEchoBeatPreview() {
   if (_echoBeatId === "none") return;
   const beatAtRequest = _echoBeatId;
   const variantAtRequest = _echoBeatVariant;
-  const url = echoBeatVariantUrl(beatAtRequest, variantAtRequest);
-  const buf = await loadEchoBeatBuffer(url);
-  if (!buf) return;
+  primeEchoSharedAudioCtx();
+
+  if (isEchoCapNative()) {
+    const viaAudio = await startEchoBeatPreviewViaAudio(beatAtRequest, variantAtRequest);
+    if (viaAudio) return;
+  }
+
+  const buf = await loadEchoBeatBufferForBeat(beatAtRequest, variantAtRequest);
+  if (!buf) {
+    if (isEchoCapNative()) {
+      await startEchoBeatPreviewViaAudio(beatAtRequest, variantAtRequest);
+    }
+    return;
+  }
   if (_echoBeatId !== beatAtRequest || _echoBeatVariant !== variantAtRequest) return;
   if (echoRecState !== "idle") return;
   const ctx = ensureEchoSharedAudioCtx();
@@ -1463,17 +1606,31 @@ async function startEchoBeatPreview() {
   gain.connect(ctx.destination);
   try { src.start(0); } catch {}
   const t = ctx.currentTime;
-  // Match the listener-side playback level exactly so the compose preview
-  // is an honest representation of what listeners will hear.
   gain.gain.linearRampToValueAtTime(ECHO_BEAT_PLAYBACK_GAIN, t + 0.25);
-  _echoBeatPreview = { src, gain };
+  _echoBeatPreview = { mode: "webaudio", src, gain };
 }
 
 function updateEchoBeatPreviewSpeed() {
   if (!_echoBeatPreview) return;
+  const rate = ECHO_BEAT_SPEED[_echoBeatSpeed] || 1.0;
+  if (_echoBeatPreview.mode === "audio" && _echoBeatPreview.audio) {
+    try {
+      _echoBeatPreview.audio.playbackRate = rate;
+    } catch {}
+    return;
+  }
   try {
-    _echoBeatPreview.src.playbackRate.value = ECHO_BEAT_SPEED[_echoBeatSpeed] || 1.0;
+    _echoBeatPreview.src.playbackRate.value = rate;
   } catch {}
+}
+
+function prefetchEchoBeatBuffersForCompose() {
+  if (!isEchoCapNative()) return;
+  primeEchoSharedAudioCtx();
+  for (const id of Object.keys(ECHO_BEAT_DEFS)) {
+    if (id === "none") continue;
+    void loadEchoBeatBufferForBeat(id, 0);
+  }
 }
 
 function syncEchoBeatPickerUi() {
@@ -2227,6 +2384,7 @@ export function openEchoComposeSheet({ replyTo = "", haptic: wantHaptic = true }
   paintIdleComposeWave();
   syncEchoComposeUi();
   syncEchoBeatPickerUi();
+  prefetchEchoBeatBuffersForCompose();
   if (wantHaptic) {
     try {
       c().haptic("light");

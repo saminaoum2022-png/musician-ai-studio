@@ -98,6 +98,24 @@
     <div id="loginSettlingOverlay" class="loginSettlingOverlay" hidden aria-hidden="true">
       <div class="loginSettlingInner">
         <span class="loginSettlingMark" aria-hidden="true"></span>
+        <div class="loginSettlingCarousel" id="loginSettlingCarousel" aria-hidden="true">
+          <article class="loginSettlingSlide is-active" data-settle-slide="0">
+            <span class="loginSettlingIcon loginSettlingIcon--create" aria-hidden="true"></span>
+            <span class="loginSettlingLabel">Create</span>
+          </article>
+          <article class="loginSettlingSlide" data-settle-slide="1">
+            <span class="loginSettlingIcon loginSettlingIcon--echo" aria-hidden="true"></span>
+            <span class="loginSettlingLabel">Echo</span>
+          </article>
+          <article class="loginSettlingSlide" data-settle-slide="2">
+            <span class="loginSettlingIcon loginSettlingIcon--friends" aria-hidden="true"></span>
+            <span class="loginSettlingLabel">Friends</span>
+          </article>
+          <article class="loginSettlingSlide" data-settle-slide="3">
+            <span class="loginSettlingIcon loginSettlingIcon--persona" aria-hidden="true"></span>
+            <span class="loginSettlingLabel">Persona</span>
+          </article>
+        </div>
         <p id="loginSettlingMsg" class="loginSettlingMsg">Signing you in…</p>
         <span class="loginSettlingDots introDots" aria-hidden="true"><i></i><i></i><i></i></span>
       </div>
@@ -3141,6 +3159,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260531loginSettling"></script>
+    <script type="module" src="./src/app.js?v=20260531logoutSettlingCarousel"></script>
   </body>
 </html>

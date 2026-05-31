@@ -2103,6 +2103,135 @@ body.oauthPending .app{
   color: rgba(240,244,255,0.88);
   letter-spacing: 0.01em;
 }
+.loginSettlingCarousel{
+  position: relative;
+  width: min(100%, 220px);
+  height: 88px;
+  margin: 0 auto 2px;
+}
+.loginSettlingSlide{
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  opacity: 0;
+  transform: translateY(6px) scale(0.96);
+  transition: opacity 220ms ease, transform 260ms ease;
+  pointer-events: none;
+}
+.loginSettlingSlide.is-active{
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+.loginSettlingLabel{
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(232,238,255,0.82);
+}
+.loginSettlingIcon{
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  position: relative;
+}
+.loginSettlingIcon--create{
+  background:
+    radial-gradient(120% 100% at 20% 0%, rgba(124,92,255,0.35), transparent 58%),
+    linear-gradient(145deg, rgba(35,213,171,0.35), rgba(124,92,255,0.28));
+  border: 1px solid rgba(255,255,255,0.14);
+  box-shadow: 0 12px 28px -14px rgba(124,92,255,0.55);
+}
+.loginSettlingIcon--create::after{
+  content:"";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 18px;
+  height: 4px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.55);
+  box-shadow: 0 10px 0 rgba(255,255,255,0.22);
+}
+.loginSettlingIcon--echo{
+  padding: 3px;
+  background: linear-gradient(135deg, #a855f7, #ec4899, #f59e0b);
+  box-shadow: 0 14px 32px -16px rgba(168,85,247,0.6);
+}
+.loginSettlingIcon--echo::before{
+  content:"";
+  position: absolute;
+  inset: 3px;
+  border-radius: 13px;
+  background: linear-gradient(160deg, #1a1030 0%, #0d0a14 100%);
+}
+.loginSettlingIcon--echo::after{
+  content:"";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22px;
+  height: 14px;
+  margin: -7px 0 0 -11px;
+  background:
+    linear-gradient(90deg, transparent 0%, rgba(168,130,255,0.85) 20%, rgba(168,130,255,0.85) 35%, transparent 35%, transparent 45%, rgba(168,130,255,0.7) 45%, rgba(168,130,255,0.7) 60%, transparent 60%, transparent 70%, rgba(168,130,255,0.55) 70%, rgba(168,130,255,0.55) 85%, transparent 85%);
+  animation: loginSettlingWave 900ms ease-in-out infinite;
+}
+@keyframes loginSettlingWave{
+  0%, 100%{ transform: scaleY(0.65); opacity: 0.55; }
+  50%{ transform: scaleY(1); opacity: 1; }
+}
+.loginSettlingIcon--friends{
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.loginSettlingIcon--friends::before,
+.loginSettlingIcon--friends::after{
+  content:"";
+  width: 14px;
+  height: 14px;
+  border-radius: 5px;
+}
+.loginSettlingIcon--friends::before{
+  background: linear-gradient(145deg, #7c5cff, #4c2fd4);
+}
+.loginSettlingIcon--friends::after{
+  background: linear-gradient(145deg, #23d5ab, #0e9a82);
+}
+.loginSettlingIcon--persona{
+  background: rgba(124,92,255,0.14);
+  border: 1px solid rgba(124,92,255,0.32);
+}
+.loginSettlingIcon--persona::before{
+  content:"";
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  margin-left: -9px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.88);
+}
+.loginSettlingIcon--persona::after{
+  content:"";
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  width: 30px;
+  height: 16px;
+  margin-left: -15px;
+  border-radius: 16px 16px 0 0;
+  background: rgba(255,255,255,0.78);
+}
 body.loginSettling .authActions,
 body.loginSettling .authLegal{
   visibility: hidden;

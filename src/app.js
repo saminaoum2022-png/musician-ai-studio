@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531loginSettling";
+const APP_BUILD = "20260531logoutSettlingCarousel";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5947,6 +5947,15 @@ async function renderProfileActivities(opts = {}) {
   listEl.hidden = false;
   if (recoverBanner) recoverBanner.hidden = true;
   if (allExtras) allExtras.hidden = true;
+  if (!authSession?.user?.id) {
+    listEl.innerHTML = `
+      <div class="profileActEmpty">
+        <p class="profileActEmptyTitle">Sign in to see your posts</p>
+        <p class="profileActEmptyText">Your public song drops and Friends updates land here.</p>
+      </div>`;
+    if (countEl) countEl.hidden = true;
+    return;
+  }
   hydrateProfileActSnapshotFromStorage();
   const hadFeed = listEl.querySelector(".followAct");
   const snap = _profileActSnapshot;
@@ -5958,15 +5967,6 @@ async function renderProfileActivities(opts = {}) {
   if (snapFresh && !hadFeed) listEl.innerHTML = snap.html;
   else if (!hadFeed && !snapFresh) listEl.innerHTML = followingActivitySkeletonHtml();
   if (snapFresh && !force && Date.now() - snap.at < PROFILE_ACT_MIN_FETCH_GAP_MS) return;
-  if (!authSession?.user?.id) {
-    listEl.innerHTML = `
-      <div class="profileActEmpty">
-        <p class="profileActEmptyTitle">Sign in to see your posts</p>
-        <p class="profileActEmptyText">Your public song drops and Friends updates land here.</p>
-      </div>`;
-    if (countEl) countEl.hidden = true;
-    return;
-  }
   const uid = String(authSession.user.id);
   const [posts, libRows] = await Promise.all([
     fetchMyStatusPosts(60),
@@ -7449,6 +7449,53 @@ function invalidateProfileActivitiesCache() {
   try {
     sessionStorage.removeItem(PROFILE_ACT_SNAPSHOT_KEY);
   } catch {}
+}
+
+function clearSignedInUiCaches() {
+  invalidateProfileActivitiesCache();
+  _friendsFeedSnapshot = null;
+  try {
+    sessionStorage.removeItem(FRIENDS_FEED_SNAPSHOT_KEY);
+  } catch {}
+  _followingListCache = null;
+  _followingListCacheAt = 0;
+  _ownSocialStatsLastUserId = "";
+  _ownSocialStatsFollowers = null;
+  _ownSocialStatsPlays = null;
+  _ownSocialStatsInFlight = false;
+}
+
+function resetProfileActivitiesGuestUi() {
+  const listEl = document.getElementById("profileActivitiesList");
+  const countEl = document.getElementById("profileActivitiesCount");
+  const libEl = document.getElementById("libraryList");
+  if (listEl) {
+    listEl.hidden = false;
+    listEl.innerHTML = `
+      <div class="profileActEmpty">
+        <p class="profileActEmptyTitle">Sign in to see your posts</p>
+        <p class="profileActEmptyText">Your public song drops and Friends updates land here.</p>
+      </div>`;
+  }
+  if (countEl) countEl.hidden = true;
+  if (libEl) {
+    libEl.hidden = true;
+    libEl.innerHTML = "";
+  }
+}
+
+function resetProfileStatsGuestUi() {
+  if (els.profileStatPillSongsValue) els.profileStatPillSongsValue.textContent = "0";
+  if (els.profileStatPillPublicValue) els.profileStatPillPublicValue.textContent = "0";
+  if (els.profileStatPillLikesValue) els.profileStatPillLikesValue.textContent = "0";
+  if (els.profileAuraSongsValue) els.profileAuraSongsValue.textContent = "0";
+  if (els.profileAuraLikesValue) els.profileAuraLikesValue.textContent = "0";
+  if (els.profileAuraStatLine) els.profileAuraStatLine.textContent = "No saves yet";
+  if (els.profileOwnStats) els.profileOwnStats.innerHTML = "";
+  if (els.profileOwnSongCount) {
+    els.profileOwnSongCount.textContent = "";
+    els.profileOwnSongCount.hidden = true;
+  }
 }
 const FRIENDS_FEED_LIBRARY_USERS = 12;
 
@@ -10550,7 +10597,50 @@ async function waitForNativeAuthHydration(maxMs = 2800) {
 let _oauthBrowserOpen = false;
 let _loginSettling = false;
 let _loginSettlingStartedAt = 0;
+let _loginSettlingCarouselTimer = 0;
+let _loginSettlingCarouselStep = 0;
 const LOGIN_SETTLING_MAX_MS = 18000;
+const LOGIN_SETTLING_SLIDE_MS = 780;
+const LOGIN_SETTLING_LABELS = ["Create", "Echo", "Friends", "Persona"];
+
+function setLoginSettlingCarouselStep(step) {
+  _loginSettlingCarouselStep = Math.max(0, Math.min(3, step));
+  const root = document.getElementById("loginSettlingCarousel");
+  if (root) {
+    root.querySelectorAll("[data-settle-slide]").forEach((el) => {
+      const idx = Number(el.getAttribute("data-settle-slide"));
+      el.classList.toggle("is-active", idx === _loginSettlingCarouselStep);
+    });
+  }
+  const msg = document.getElementById("loginSettlingMsg");
+  if (msg) {
+    msg.textContent = `Loading ${LOGIN_SETTLING_LABELS[_loginSettlingCarouselStep]}…`;
+  }
+}
+
+function startLoginSettlingCarousel() {
+  stopLoginSettlingCarousel();
+  setLoginSettlingCarouselStep(0);
+  const reduceMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduceMotion) {
+    const msg = document.getElementById("loginSettlingMsg");
+    if (msg) msg.textContent = "Signing you in…";
+    return;
+  }
+  _loginSettlingCarouselTimer = window.setInterval(() => {
+    setLoginSettlingCarouselStep((_loginSettlingCarouselStep + 1) % LOGIN_SETTLING_LABELS.length);
+  }, LOGIN_SETTLING_SLIDE_MS);
+}
+
+function stopLoginSettlingCarousel() {
+  if (_loginSettlingCarouselTimer) {
+    clearInterval(_loginSettlingCarouselTimer);
+    _loginSettlingCarouselTimer = 0;
+  }
+}
 
 function isLoginSettling() {
   if (!_loginSettling) return false;
@@ -10569,16 +10659,18 @@ function beginLoginSettling(message = "Signing you in…") {
     document.body.classList.add("loginSettling");
   } catch {}
   const overlay = document.getElementById("loginSettlingOverlay");
-  const msg = document.getElementById("loginSettlingMsg");
   if (overlay) {
     overlay.hidden = false;
     overlay.setAttribute("aria-hidden", "false");
   }
+  const msg = document.getElementById("loginSettlingMsg");
   if (msg) msg.textContent = String(message || "Signing you in…");
+  startLoginSettlingCarousel();
 }
 
 function endLoginSettling() {
   _loginSettling = false;
+  stopLoginSettlingCarousel();
   setOAuthPendingUi(false);
   try {
     document.body.classList.remove("loginSettling");
@@ -11982,6 +12074,9 @@ function resetProfileUiToGuest() {
   // skeletons until the new account's posts have been fetched.
   _myHubPostsFirstLoadDone = false;
   _myHubPostsLastFetchMs = 0;
+  clearSignedInUiCaches();
+  resetProfileActivitiesGuestUi();
+  resetProfileStatsGuestUi();
   // Wipe every personal balance/badge so a logged-out screen never
   // leaks the previous account's state. Without this, the Profile
   // credits pill kept showing the last balance (e.g. 326) after Logout
@@ -12009,6 +12104,7 @@ function resetProfileUiToGuest() {
   setProfileEditing(false);
   renderProfileSongs();
   renderAuthStatus();
+  try { syncMobileTabbarProfileAvatar(); } catch {}
   if (els.profilePersonaRow) els.profilePersonaRow.style.display = "none";
 }
 async function supabaseSendOtp(email) {
@@ -28777,6 +28873,15 @@ function logoutCurrentUser() {
     els.btnAuthGoogle.textContent = "Continue with Google";
   }
   renderAuthStatus();
+  try {
+    location.hash = "#/auth";
+  } catch {}
+  syncRoutePanelVisibility("auth");
+  try {
+    applyRoute();
+  } catch {
+    scheduleApplyRoute();
+  }
   setStatus("Logged out.");
 }
 if (els.settingsBtnSignIn) {

@@ -21,7 +21,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531routeFix";
+const APP_BUILD = "20260531authFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -160,8 +160,8 @@ function isFounderBadgeEmail(raw) {
 if (typeof window !== "undefined") {
   window.addEventListener("nabad-auth-injected", () => {
     try {
-      _authBootPromise = null;
-      void ensureAuthBoot().then(() => {
+      invalidateAuthBoot();
+      void ensureAuthBoot({ force: true }).then(() => {
         try {
           scheduleApplyRoute();
         } catch {}
@@ -10220,7 +10220,41 @@ async function restoreAuthSessionFromAllStores() {
   await readAuthSessionRawFromAllStores();
 }
 
-function ensureAuthBoot() {
+function invalidateAuthBoot() {
+  _authBootPromise = null;
+}
+
+/** On native, Keychain inject can land after the first empty ensureAuthBoot — retry briefly. */
+async function waitForNativeAuthHydration(maxMs = 2800) {
+  if (!isCapacitorNativeAuth()) return;
+  const deadline = Date.now() + maxMs;
+  while (Date.now() < deadline) {
+    await restoreAuthSessionFromAllStores();
+    loadAuthSession();
+    ensureAuthSessionUserFromToken();
+    if (authSession?.access_token) return;
+    await new Promise((r) => setTimeout(r, 60));
+  }
+}
+
+let _oauthBrowserOpen = false;
+
+function setOAuthPendingUi(on) {
+  try {
+    document.body.classList.toggle("oauthPending", Boolean(on));
+  } catch {}
+}
+
+async function closeOAuthBrowser() {
+  try {
+    await getCapacitorBrowserPlugin()?.close?.();
+  } catch {}
+  _oauthBrowserOpen = false;
+  setOAuthPendingUi(false);
+}
+
+function ensureAuthBoot({ force = false } = {}) {
+  if (force) invalidateAuthBoot();
   if (!_authBootPromise) {
     _authBootPromise = (async () => {
       await restoreAuthSessionFromAllStores();
@@ -11014,14 +11048,14 @@ function loadAuthSession() {
     authSession = null;
   }
 }
-function saveAuthSession(sess) {
+function saveAuthSession(sess, { persist = true } = {}) {
   const prevUserId = String(authSession?.user?.id || "");
   authSession = sess ? normalizeAuthSession(sess) : null;
   const nextUserId = String(authSession?.user?.id || "");
   if (authSession) {
     const payload = JSON.stringify(authSession);
     writeAuthSessionToLocalStores(payload);
-    void persistAuthSessionEverywhere(payload);
+    if (persist) void persistAuthSessionEverywhere(payload);
   } else {
     void clearAuthSessionEverywhere();
   }
@@ -28193,21 +28227,28 @@ async function handleNativeAuthDeepLink(url) {
     }
     if (!code) {
       setStatus(`Google login failed: no code in callback`);
+      notifyLoginFeedback("Google login failed: no code returned.");
       resetGoogleAuthButton();
+      await closeOAuthBrowser();
+      try { location.hash = "#/auth"; syncRoutePanelVisibility("auth"); safeApplyRoute(); } catch {}
       return false;
     }
     if (code === _lastOAuthCodeHandled) {
-      try { await getCapacitorBrowserPlugin()?.close?.(); } catch {}
+      await closeOAuthBrowser();
       return true;
     }
     const pkceReady = Boolean(localStorage.getItem(AUTH_PKCE_KEY));
-    if (!pkceReady && authSession?.user?.id) {
-      try { await getCapacitorBrowserPlugin()?.close?.(); } catch {}
-      return true;
+    if (!pkceReady) {
+      notifyLoginFeedback("Sign-in expired — tap Continue with Google again.");
+      resetGoogleAuthButton();
+      await closeOAuthBrowser();
+      try { location.hash = "#/auth"; syncRoutePanelVisibility("auth"); safeApplyRoute(); } catch {}
+      return false;
     }
     setStatus("Finishing Google login…");
+    notifyLoginFeedback("Finishing Google login…");
     const ok = await exchangeOAuthCodeForSession(code);
-    try { await getCapacitorBrowserPlugin()?.close?.(); } catch {}
+    await closeOAuthBrowser();
     if (ok) {
       _lastOAuthCodeHandled = code;
       if (authSession) {
@@ -28217,15 +28258,24 @@ async function handleNativeAuthDeepLink(url) {
       if (authSession) {
         await persistAuthSessionEverywhere(JSON.stringify(authSession));
       }
+      invalidateAuthBoot();
+      await ensureAuthBoot({ force: true });
       finishPostAuthNavigation();
     } else {
-      setStatus(`Google login failed: ${lastAuthDebug || "exchange error"}`);
+      const msg = `Google login failed: ${lastAuthDebug || "exchange error"}`;
+      setStatus(msg);
+      notifyLoginFeedback(msg);
+      try { location.hash = "#/auth"; syncRoutePanelVisibility("auth"); safeApplyRoute(); } catch {}
     }
     resetGoogleAuthButton();
     return ok;
   } catch (e) {
-    setStatus(`Login callback error: ${e?.message || String(e)}`);
+    const msg = `Login callback error: ${e?.message || String(e)}`;
+    setStatus(msg);
+    notifyLoginFeedback(msg);
     resetGoogleAuthButton();
+    await closeOAuthBrowser();
+    try { location.hash = "#/auth"; syncRoutePanelVisibility("auth"); safeApplyRoute(); } catch {}
     return false;
   }
 }
@@ -28245,10 +28295,11 @@ if (isCapacitorNativeAuth()) {
           }
           return;
         }
+        if (_oauthBrowserOpen) return;
         void (async () => {
           try {
-            await restoreAuthSessionFromAllStores();
-            loadAuthSession();
+            invalidateAuthBoot();
+            await ensureAuthBoot({ force: true });
             await refreshAuthStateFromSupabase();
             scheduleApplyRoute();
           } catch (e) {
@@ -28278,10 +28329,16 @@ async function runGoogleOAuthLogin() {
       els.btnAuthGoogle.textContent = "Opening Google…";
     }
     notifyLoginFeedback("Opening Google login…");
+    try {
+      location.hash = "#/auth";
+      syncRoutePanelVisibility("auth");
+    } catch {}
     const url = await supabaseGoogleLoginUrl();
     if (!url) throw new Error("Could not create Google auth URL");
     const Browser = getCapacitorBrowserPlugin();
     if (isCapacitorNativeAuth() && Browser?.open) {
+      _oauthBrowserOpen = true;
+      setOAuthPendingUi(true);
       await Browser.open({ url, presentationStyle: "fullscreen" });
       // Button is reset by the appUrlOpen handler once the deep link returns.
     } else if (isCapacitorNativeAuth() && !Browser?.open) {
@@ -28294,8 +28351,10 @@ async function runGoogleOAuthLogin() {
       setTimeout(resetGoogleAuthButton, 3500);
     }
   } catch (e) {
+    await closeOAuthBrowser();
     resetGoogleAuthButton();
     notifyLoginFeedback(`Google login failed to start: ${e?.message || String(e)}`);
+    try { location.hash = "#/auth"; syncRoutePanelVisibility("auth"); safeApplyRoute(); } catch {}
   }
 }
 if (els.btnAuthGoogle) {
@@ -28717,7 +28776,9 @@ void (async () => {
   // matter what fails inside the boot chain. Pre-fix, an unhandled
   // throw or a hung fetch would leave it stuck on with @guest visible.
   try {
-  await ensureAuthBoot();
+  await waitForNativeAuthHydration();
+  invalidateAuthBoot();
+  await ensureAuthBoot({ force: true });
   if (isAppLoggedIn()) scheduleApplyRoute();
   await loadPublicConfig();
   const usedCodeFlow = await maybeHandleAuthCodeFromQuery();
@@ -28823,10 +28884,18 @@ void (async () => {
     }
     renderPersonaSelect();
   } else if (!isAppLoggedIn() && !getSupabaseAuthToken()) {
-    resetProfileUiToGuest();
-    setProfileHeaderLoading(false);
-    if ((location.hash || "") === "#/intro" && shouldSkipIntroOrOnboardingRoute()) {
-      try { location.hash = getPostOnboardingHash(() => authSession); } catch {}
+    await waitForNativeAuthHydration(1200);
+    invalidateAuthBoot();
+    await ensureAuthBoot({ force: true });
+    if (!isAppLoggedIn() && !getSupabaseAuthToken()) {
+      resetProfileUiToGuest();
+      setProfileHeaderLoading(false);
+      if ((location.hash || "") === "#/intro" && shouldSkipIntroOrOnboardingRoute()) {
+        try { location.hash = getPostOnboardingHash(() => authSession); } catch {}
+      }
+      try { scheduleApplyRoute(); } catch {}
+    } else {
+      scheduleApplyRoute();
     }
   } else {
     ensureAuthSessionUserFromToken();

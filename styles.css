@@ -890,7 +890,7 @@ body.isOnboarding .generateOrb{ display:none !important; }
   align-items:center;
   justify-content:center;
   border: 0 !important;
-  background: transparent !important;
+  background: #05070d !important;
   box-shadow: none !important;
 }
 .authInner{
@@ -1039,6 +1039,7 @@ body.isAuth{
   overflow: hidden;
   height: 100dvh;
   height: 100svh;
+  background: #05070d;
 }
 body.isAuth .app{
   margin: 0;
@@ -1053,6 +1054,13 @@ body.isAuth .app{
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: #05070d;
+}
+body.oauthPending{
+  background: #05070d;
+}
+body.oauthPending .app{
+  background: #05070d;
 }
 body.isAuth main.grid{
   flex: 1 1 auto;

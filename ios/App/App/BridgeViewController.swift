@@ -47,8 +47,10 @@ final class BridgeViewController: CAPBridgeViewController {
           } catch(e) {}
         })();
         """
-        webView.evaluateJavaScript(script) { [weak self] _, _ in
-            self?.didInjectAuthSession = true
+        webView.evaluateJavaScript(script) { [weak self] _, error in
+            if error == nil {
+                self?.didInjectAuthSession = true
+            }
         }
     }
 

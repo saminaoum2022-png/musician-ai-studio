@@ -77,6 +77,16 @@ body.booting::before{
   background: #05070d;
   pointer-events: none;
 }
+body.booting::after{
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  pointer-events: none;
+  background:
+    radial-gradient(78% 78% at 50% 42%, rgba(124,92,255,0.14), transparent 72%),
+    url("./assets/icons/splash-mark.png") center 42% / min(36vw, 156px) no-repeat;
+}
 
 /* -------------------------------------------------------------------
  *  Tap-active-tab to refresh — when the user taps the tab they're

@@ -2193,8 +2193,17 @@ function dismissEchoComposeSheet() {
 
 function landOnFriendsAfterEcho() {
   try {
-    if (String(location.hash || "") !== "#/friends") location.hash = "#/friends";
-    c().enterFriendsRoute?.();
+    const onFriends = String(location.hash || "") === "#/friends";
+    if (!onFriends) {
+      location.hash = "#/friends";
+      return;
+    }
+    // Already on Friends — the rail was updated optimistically; don't
+    // re-run enterFriendsRoute() (full feed refetch + skeleton flash).
+    try {
+      c().markRouteHeavy?.("friends");
+    } catch {}
+    void refreshEchoRail({ useCache: true });
   } catch {}
 }
 
@@ -2527,11 +2536,15 @@ async function finishEchoPublishBackground({
     }
     uploadedOk = true;
     resetEchoUploadState();
-    invalidateEchoRailCache();
     try {
-      sessionStorage.removeItem(ECHO_RAIL_SNAPSHOT_KEY);
+      c().invalidateProfileActivitiesCache?.();
     } catch {}
-    void refreshEchoRail({ force: true });
+    // Defer server reconcile — optimistic rail already painted; immediate
+    // force refresh was wiping caches and reloading the whole Friends UI.
+    window.setTimeout(() => {
+      invalidateEchoRailCache();
+      void refreshEchoRail({ force: true });
+    }, 12000);
   } catch (e) {
     removeEchoFromRail(optimisticId);
     try {

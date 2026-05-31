@@ -21,7 +21,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531echoCreateFix";
+const APP_BUILD = "20260531echoRefreshFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -3095,6 +3095,8 @@ try {
     showToast,
     socialApi,
     enterFriendsRoute,
+    markRouteHeavy,
+    invalidateProfileActivitiesCache,
     pickRecorderMimeType,
     toAudioProxyUrl,
     normalizeAudioUrlForPlayback,
@@ -5863,7 +5865,8 @@ function profileActivityRowHtml(post, idx) {
     </article>`;
 }
 
-async function renderProfileActivities() {
+async function renderProfileActivities(opts = {}) {
+  const force = Boolean(opts.force);
   const listEl = document.getElementById("profileActivitiesList");
   const libEl = document.getElementById("libraryList");
   const countEl = document.getElementById("profileActivitiesCount");
@@ -5874,8 +5877,17 @@ async function renderProfileActivities() {
   listEl.hidden = false;
   if (recoverBanner) recoverBanner.hidden = true;
   if (allExtras) allExtras.hidden = true;
+  hydrateProfileActSnapshotFromStorage();
   const hadFeed = listEl.querySelector(".followAct");
-  if (!hadFeed) listEl.innerHTML = followingActivitySkeletonHtml();
+  const snap = _profileActSnapshot;
+  const snapFresh =
+    snap &&
+    Date.now() - snap.at < PROFILE_ACT_SNAPSHOT_MS &&
+    snap.html &&
+    !snap.html.includes("followAct--skel");
+  if (snapFresh && !hadFeed) listEl.innerHTML = snap.html;
+  else if (!hadFeed && !snapFresh) listEl.innerHTML = followingActivitySkeletonHtml();
+  if (snapFresh && !force && Date.now() - snap.at < PROFILE_ACT_MIN_FETCH_GAP_MS) return;
   if (!authSession?.user?.id) {
     listEl.innerHTML = `
       <div class="profileActEmpty">
@@ -5931,6 +5943,8 @@ async function renderProfileActivities() {
         <p class="profileActEmptyText">Drop a song from <strong>Create</strong>, or share an update from <strong>Friends</strong> — both land here.</p>
         <button type="button" class="emptyStateCta" data-profile-songs-switch="all">View your songs</button>
       </div>`;
+    _profileActSnapshot = { at: Date.now(), html: listEl.innerHTML };
+    persistProfileActSnapshot();
     return;
   }
   listEl.innerHTML = feedItems
@@ -5940,6 +5954,8 @@ async function renderProfileActivities() {
         : followingActivityRowHtml(item.track, profMap, i, { xstyle: true }),
     )
     .join("");
+  _profileActSnapshot = { at: Date.now(), html: listEl.innerHTML };
+  persistProfileActSnapshot();
   try {
     syncDiscoveryPlayingHighlights();
   } catch {}
@@ -7318,6 +7334,37 @@ const FOLLOWING_LIST_CACHE_MS = 45000;
 const FRIENDS_FEED_SNAPSHOT_MS = 90000;
 const FRIENDS_MIN_FETCH_GAP_MS = 30000;
 const FRIENDS_FEED_SNAPSHOT_KEY = "nabad_friends_feed_snap_v2";
+
+let _profileActSnapshot = null;
+const PROFILE_ACT_SNAPSHOT_MS = 120000;
+const PROFILE_ACT_MIN_FETCH_GAP_MS = 45000;
+const PROFILE_ACT_SNAPSHOT_KEY = "nabad_profile_act_snap_v1";
+
+function hydrateProfileActSnapshotFromStorage() {
+  if (_profileActSnapshot) return;
+  try {
+    const raw = sessionStorage.getItem(PROFILE_ACT_SNAPSHOT_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (parsed?.at && Date.now() - parsed.at < PROFILE_ACT_SNAPSHOT_MS && parsed.html) {
+      _profileActSnapshot = parsed;
+    }
+  } catch {}
+}
+
+function persistProfileActSnapshot() {
+  if (!_profileActSnapshot) return;
+  try {
+    sessionStorage.setItem(PROFILE_ACT_SNAPSHOT_KEY, JSON.stringify(_profileActSnapshot));
+  } catch {}
+}
+
+function invalidateProfileActivitiesCache() {
+  _profileActSnapshot = null;
+  try {
+    sessionStorage.removeItem(PROFILE_ACT_SNAPSHOT_KEY);
+  } catch {}
+}
 const FRIENDS_FEED_LIBRARY_USERS = 12;
 
 function hydrateFriendsFeedSnapshotFromStorage() {
@@ -28359,6 +28406,9 @@ if (isCapacitorNativeAuth()) {
         void handleNativeAuthDeepLink(event?.url);
       });
     } catch {}
+    let _appResumeRefreshTimer = 0;
+    let _appResumeRefreshAt = 0;
+    const APP_RESUME_REFRESH_GAP_MS = 15000;
     try {
       CapApp.addListener("appStateChange", ({ isActive }) => {
         if (!isActive) {
@@ -28368,16 +28418,34 @@ if (isCapacitorNativeAuth()) {
           return;
         }
         if (_oauthBrowserOpen) return;
-        void (async () => {
-          try {
-            invalidateAuthBoot();
-            await ensureAuthBoot({ force: true });
-            await refreshAuthStateFromSupabase();
-            scheduleApplyRoute();
-          } catch (e) {
-            console.warn("[auth] resume refresh failed", e);
-          }
-        })();
+        if (Date.now() - _appResumeRefreshAt < APP_RESUME_REFRESH_GAP_MS) return;
+        if (_appResumeRefreshTimer) clearTimeout(_appResumeRefreshTimer);
+        _appResumeRefreshTimer = window.setTimeout(() => {
+          _appResumeRefreshTimer = 0;
+          _appResumeRefreshAt = Date.now();
+          void (async () => {
+            try {
+              await restoreAuthSessionFromAllStores();
+              loadAuthSession();
+              ensureAuthSessionUserFromToken();
+              if (!authSession?.access_token) {
+                invalidateAuthBoot();
+                await ensureAuthBoot({ force: true });
+                scheduleApplyRoute();
+                return;
+              }
+              const route = String(document.body.getAttribute("data-route") || "");
+              if (route === "friends") {
+                hydrateFriendsFeedSnapshotFromStorage();
+                void refreshDiscoveryFollowingFeed();
+              } else if (route === "profile" && _profileSongsSegment === "activities") {
+                void renderProfileActivities();
+              }
+            } catch (e) {
+              console.warn("[auth] resume refresh failed", e);
+            }
+          })();
+        }, 500);
       });
     } catch {}
   }

@@ -21,7 +21,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531echoRefreshFix";
+const APP_BUILD = "20260531photoMoodFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -6200,7 +6200,7 @@ function openFriendsComposeSheet() {
   }
 }
 
-const FIXED_OVERLAY_IDS = ["createChooserSheet", "friendsComposeSheet"];
+const FIXED_OVERLAY_IDS = ["createChooserSheet", "friendsComposeSheet", "imageMoodModal"];
 
 /** Keep full-screen overlays on `body` — `main.grid.routeSwap` transform breaks iOS touch on fixed children. */
 function mountFixedOverlaysToBody() {
@@ -8024,6 +8024,97 @@ function setCreatePhotoAttachmentPreview(dataUrl = "", summary = "") {
         : "We'll catch the mood and feed it into your song.";
     }
   }
+}
+
+function openImageMoodSheet({ promptPick = false } = {}) {
+  setCreateEntryIntent("song");
+  try {
+    setActiveCreateTab("photo");
+  } catch {}
+  if (String(location.hash || "") !== "#/generate") {
+    try {
+      location.hash = "#/generate";
+    } catch {}
+    try {
+      scheduleApplyRoute();
+    } catch {}
+  }
+  mountFixedOverlaysToBody();
+  const sheet = els.imageMoodModal || document.getElementById("imageMoodModal");
+  if (!sheet) return;
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  try {
+    document.body.classList.add("imageMoodSheetOpen");
+  } catch {}
+  syncImageMoodSheetUi();
+  if (promptPick && els.imageMoodUpload) {
+    window.requestAnimationFrame(() => {
+      try {
+        els.imageMoodUpload.click();
+      } catch {}
+    });
+  }
+}
+
+function closeImageMoodSheet() {
+  const sheet = els.imageMoodModal || document.getElementById("imageMoodModal");
+  if (!sheet) return;
+  sheet.hidden = true;
+  sheet.setAttribute("aria-hidden", "true");
+  try {
+    document.body.classList.remove("imageMoodSheetOpen");
+  } catch {}
+}
+
+function syncImageMoodSheetUi() {
+  const applyBtn = document.getElementById("btnApplyImageMood");
+  const analyzeBtn = document.getElementById("btnAnalyzeImageMood");
+  const hasFile = Boolean(els.imageMoodUpload?.files?.[0]);
+  if (applyBtn) applyBtn.disabled = !imageMoodData;
+  if (analyzeBtn) analyzeBtn.disabled = !hasFile;
+}
+
+function applyImageMoodToSongFields() {
+  if (!imageMoodData) return;
+  const tags = Array.isArray(imageMoodData.tags) ? imageMoodData.tags.filter(Boolean) : [];
+  if (els.sunoStyle && tags.length) {
+    const existing = String(els.sunoStyle.value || "").trim();
+    const current = existing ? existing.split(",").map((s) => s.trim()).filter(Boolean) : [];
+    const merged = [...new Set([...current, ...tags])].slice(0, 12);
+    els.sunoStyle.value = merged.join(", ");
+  }
+  const lyricSeed = String(imageMoodData.lyricSeed || "").trim();
+  if (els.sunoPrompt && lyricSeed && !String(els.sunoPrompt.value || "").trim()) {
+    els.sunoPrompt.value = lyricSeed;
+    try {
+      autoResizeLyricsBox();
+    } catch {}
+  }
+  imageMoodAppliedForNextGen = true;
+  if (els.sunoArtworkStyle && imageMoodData.artworkHint) {
+    const cur = String(els.sunoArtworkStyle.value || "").trim();
+    if (!cur) els.sunoArtworkStyle.value = String(imageMoodData.artworkHint).trim();
+  }
+  const summaryTags = tags.slice(0, 4).join(", ");
+  const summaryText = String(imageMoodData.concept || summaryTags || "Image mood applied.").trim();
+  if (els.imageMoodUseAsCover?.checked && imageMoodCoverDataUrl) {
+    pendingGeneratedCoverDataUrl = imageMoodCoverDataUrl;
+    if (els.imageMoodSummary) {
+      els.imageMoodSummary.textContent = `${summaryText} · cover ready for next song`;
+      els.imageMoodSummary.hidden = false;
+    }
+  } else {
+    pendingGeneratedCoverDataUrl = "";
+    if (els.imageMoodSummary) {
+      els.imageMoodSummary.textContent = summaryText;
+      els.imageMoodSummary.hidden = false;
+    }
+  }
+  setCreatePhotoAttachmentPreview(imageMoodCoverDataUrl, summaryText);
+  try {
+    syncGenerateOrbVisibility();
+  } catch {}
 }
 let pendingGeneratedCoverDataUrl = "";
 let pendingBackendTaskId = "";
@@ -24553,7 +24644,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (els.imageMoodSummary) {
         const tags = Array.isArray(d?.tags) ? d.tags.slice(0, 4).join(", ") : "";
         els.imageMoodSummary.textContent = tags || String(d?.concept || "Image mood ready.");
+        els.imageMoodSummary.hidden = false;
       }
+      if (els.btnApplyImageMood) els.btnApplyImageMood.disabled = false;
       setStatus("Image mood ready. Tap apply to use it.");
     } catch (e) {
       setStatus(`Image mood failed: ${e?.message || String(e)}`);
@@ -24647,6 +24740,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           imageMoodCoverDataUrl = "";
           try { syncImageMoodSheetUi(); } catch {}
         });
+      void analyzeImageMood();
     });
   }
   if (els.btnAnalyzeImageMood) {
@@ -29199,7 +29293,7 @@ if (createTabEls.hum) {
 const createPhotoCtaBtn = document.getElementById("createPhotoCta");
 if (createPhotoCtaBtn) {
   createPhotoCtaBtn.addEventListener("click", () => {
-    openImageMoodSheet();
+    openImageMoodSheet({ promptPick: true });
   });
 }
 

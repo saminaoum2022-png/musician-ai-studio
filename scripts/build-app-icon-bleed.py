@@ -54,6 +54,43 @@ def alpha_from_rgb(r: int, g: int, b: int) -> int:
     return min(255, int((lum - 18) * 6.2))
 
 
+def is_white_mark(r: int, g: int, b: int, a: int) -> bool:
+    return a > 48 and r > 185 and g > 185 and b > 205
+
+
+def mark_centroid(im: Image.Image) -> tuple[float, float]:
+    """Visual center of the white N (not the gradient card bbox)."""
+    px = im.load()
+    w, h = im.size
+    sx = sy = n = 0
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if is_white_mark(r, g, b, a):
+                sx += x
+                sy += y
+                n += 1
+    if n:
+        return sx / n, sy / n
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if a > 40 and (r + g + b) > 80:
+                sx += x
+                sy += y
+                n += 1
+    return (sx / n, sy / n) if n else (w / 2, h / 2)
+
+
+def center_layer_on_canvas(layer: Image.Image, size: int) -> Image.Image:
+    cx, cy = mark_centroid(layer)
+    out = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    ox = int(round(size / 2 - cx))
+    oy = int(round(size / 2 - cy))
+    out.paste(layer, (ox, oy), layer)
+    return out
+
+
 def build_icon(src: Path, size: int = SIZE) -> Image.Image:
     im = Image.open(src).convert("RGBA")
     w, h = im.size
@@ -83,6 +120,7 @@ def build_icon(src: Path, size: int = SIZE) -> Image.Image:
     left = max(0, (new_w - size) // 2)
     top = max(0, (new_h - size) // 2)
     fg = fg.crop((left, top, left + size, top + size))
+    fg = center_layer_on_canvas(fg, size)
     bg = make_bleed_background(size)
     bg.paste(fg, (0, 0), fg)
     out = Image.new("RGB", (size, size))

@@ -21,7 +21,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531onboardingC";
+const APP_BUILD = "20260531homeCalmB";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2445,7 +2445,7 @@ function applyRoute() {
   const allowedRoutes = new Set([
     "intro", "onboarding", "start", "auth", "generate",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
-    "settings", "profile", "player", "discover", "discover-playlist", "friends", "challenges", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
+    "settings", "profile", "player", "discover", "discover-playlist", "friends", "challenges", "sparks", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
   ]);
   const onboardingParsed = parseOnboardingRoute(route);
   let normalized = pendingPublicUsername ? "user" : (route === "start" ? "intro" : route);
@@ -2700,8 +2700,11 @@ function applyRoute() {
     }
   }
   if (wanted === "challenges") {
-    bindChallengesPageOnce();
     renderHomeDesk();
+  }
+  if (wanted === "sparks") {
+    bindChallengesPageOnce();
+    renderSparksDesk();
   }
   if (wanted === "user") {
     renderUserProfile._pendingUserId = pendingPublicUserId;
@@ -3808,7 +3811,7 @@ function renderHomeDeskQuickStarts() {
 }
 
 function syncHomeMakeSegUi() {
-  const page = document.querySelector('[data-route="challenges"]');
+  const page = document.querySelector('[data-route="sparks"]');
   const personal = document.getElementById("homeDeskMakePersonal");
   const versions = document.getElementById("homeDeskPresetVersions");
   const quick = document.getElementById("homeDeskOccasionQuick");
@@ -3901,36 +3904,30 @@ function bindHomeDeskOnce(page) {
       continueIdeaFromLibraryTrack(_homeDeskContinueTrack);
       return;
     }
-    const act = e.target?.closest?.("[data-home-open-discover]");
-    if (act && page.contains(act)) {
+    const sparkBtn = e.target?.closest?.("[data-challenge-start]");
+    if (sparkBtn && page.contains(sparkBtn)) {
+      const id = String(sparkBtn.getAttribute("data-challenge-start") || "");
+      const challenge = CHALLENGE_IDEAS.find((row) => String(row.id) === id);
+      if (!challenge) return;
       haptic("light");
-      const seg = String(act.getAttribute("data-home-open-discover") || "discover");
-      location.hash = seg === "following" ? "#/friends" : "#/discover";
-      return;
-    }
-    const poll = e.target?.closest?.("[data-home-poll-choice]");
-    if (poll && page.contains(poll)) {
-      haptic("light");
-      page.querySelectorAll("[data-home-poll-choice]").forEach((btn) => btn.classList.toggle("isSelected", btn === poll));
-      return;
-    }
-    const ideaBtn = e.target?.closest?.("[data-discovery-idea]");
-    if (ideaBtn && page.contains(ideaBtn)) {
-      const idea = [...DISCOVERY_IDEAS, ...DISCOVERY_QUICK_IDEAS].find(
-        (row) => String(row.id) === String(ideaBtn.getAttribute("data-discovery-idea") || ""),
-      );
-      if (idea) {
-        haptic("light");
-        applyDiscoveryIdeaToCreate(idea);
-      }
-      return;
-    }
-    const segBtn = e.target?.closest?.("[data-home-make-seg]");
-    if (segBtn && page.contains(segBtn)) {
-      _homeMakeSeg = String(segBtn.getAttribute("data-home-make-seg") || "occasion");
-      haptic("light");
-      syncHomeMakeSegUi();
-      return;
+      applyDiscoveryIdeaToCreate({
+        ...challenge,
+        id: `challenge:${challenge.id}`,
+        title: `${challenge.title} Challenge`,
+        prompt: String(challenge.prompt || challenge.lyrics || "").trim(),
+        lyrics: String(challenge.prompt || challenge.lyrics || "").trim(),
+        dialect: "",
+        dialectHint: "",
+        challenge: {
+          id: challenge.id,
+          title: challenge.title,
+          type: "daily",
+          occasion: "",
+          genre: "",
+          personName: "",
+          variant: "daily",
+        },
+      });
     }
   });
 }
@@ -3961,15 +3958,21 @@ function renderHomeDesk() {
   bindHomeDeskOnce(page);
   const greeting = document.getElementById("homeDeskGreeting");
   if (greeting) greeting.textContent = `Hey, ${homeDeskGreetingName()}`;
-  renderHomeDeskQuickStarts();
   renderHomeDeskContinue();
+  void refreshHomeDeskJoinCounts(page);
+}
+
+function renderSparksDesk() {
+  const page = document.querySelector('[data-route="sparks"]');
+  if (!page) return;
+  renderHomeDeskQuickStarts();
   syncHomeMakeSegUi();
   void refreshHomeDeskJoinCounts(page);
   if (typeof page._refreshChallengeEntries === "function") void page._refreshChallengeEntries();
 }
 
 function bindChallengesPageOnce() {
-  const page = document.querySelector('[data-route="challenges"]');
+  const page = document.querySelector('[data-route="sparks"]');
   if (!page || page.dataset.boundChallenges === "1") return;
   page.dataset.boundChallenges = "1";
   const challenges = new Map(CHALLENGE_IDEAS.map((idea) => [String(idea.id), idea]));
@@ -4141,7 +4144,7 @@ function bindChallengesPageOnce() {
   syncHomeMakeSegUi();
   page._refreshChallengeEntries = refreshChallengeEntries;
   void refreshChallengeEntries();
-  renderHomeDesk();
+  renderSparksDesk();
   page.addEventListener("click", (e) => {
     const occCreate = e.target?.closest?.("[data-home-occasion-create]");
     if (occCreate && page.contains(occCreate)) {

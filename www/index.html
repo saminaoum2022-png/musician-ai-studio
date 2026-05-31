@@ -870,12 +870,10 @@
           <div id="discoverPlaylistList" class="discoveryFeedList discoveryCardStack discoverPlaylistList"></div>
         </section>
 
-        <section class="challengesPage wide homeDesk" data-route="challenges">
+        <section class="challengesPage wide homeDesk homeDesk--calm" data-route="challenges">
           <div class="challengesAmbient" aria-hidden="true"></div>
-          <header class="homeDeskHead">
-            <p class="homeDeskKicker">Studio Home</p>
+          <header class="homeDeskHead homeDeskHead--calm">
             <h2 class="homeDeskGreeting" id="homeDeskGreeting">Welcome back</h2>
-            <p class="homeDeskSub" id="homeDeskSub">Your desk for making. Listen and play releases in Discover.</p>
           </header>
 
           <section class="homeDeskContinue" id="homeDeskContinue" hidden aria-label="Continue your last project">
@@ -892,6 +890,36 @@
             </button>
           </section>
 
+          <section class="homeDeskCalmActions" aria-label="Start creating">
+            <a href="#/generate" class="homeDeskCreateCta" data-route-link="generate">Create a song</a>
+            <div class="homeDeskQuick">
+              <a href="#/sparks" class="homeDeskQuickBtn" data-route-link="sparks">Sparks &amp; templates</a>
+              <a href="#/discover" class="homeDeskQuickBtn homeDeskQuickBtn--ghost" data-route-link="discover">Discover</a>
+            </div>
+          </section>
+
+          <section class="challengeFeatureCard homeDeskSpark homeDeskSparkTeaser" aria-labelledby="challengeFeaturedTitle">
+            <div class="challengeFeatureTop">
+              <span class="challengeLivePill"><span></span> Today</span>
+              <span class="challengeTimer"><span data-challenge-count="hook-rush">0 joined</span></span>
+            </div>
+            <h3 id="challengeFeaturedTitle">Hook Rush</h3>
+            <p class="homeDeskSparkTeaserLead">Make the first 15 seconds impossible to skip.</p>
+            <button type="button" class="challengeFeatureStart" data-challenge-start="hook-rush">Use this spark</button>
+            <a href="#/sparks" class="homeDeskSparkMore" data-route-link="sparks">All sparks &amp; occasion songs</a>
+          </section>
+        </section>
+
+        <section class="challengesPage wide homeDeskSparksPage" data-route="sparks">
+          <header class="homeDeskSparksHead">
+            <a href="#/challenges" class="homeDeskSparksBack" data-route-link="challenges" aria-label="Back to Home">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+              <span>Home</span>
+            </a>
+            <h2 class="appScreenTitle">Sparks</h2>
+            <p class="homeDeskSparksLead">Creative prompts, challenges, and occasion songs.</p>
+          </header>
+
           <section class="homeDeskQuickStarts" aria-label="Quick starts">
             <header class="homeDeskSectionHead homeDeskSectionHead--compact">
               <p class="homeDeskSectionKicker">Quick starts</p>
@@ -900,12 +928,12 @@
             <div id="homeDeskQuickGrid" class="homeDeskQuickGrid discoveryQuickGrid" aria-live="polite"></div>
           </section>
 
-          <section class="challengeFeatureCard homeDeskSpark" aria-labelledby="challengeFeaturedTitle">
+          <section class="challengeFeatureCard homeDeskSpark" aria-labelledby="challengeFeaturedTitleSparks">
             <div class="challengeFeatureTop">
               <span class="challengeLivePill"><span></span> Start here</span>
               <span class="challengeTimer"><span data-challenge-count="hook-rush">0 joined</span> · creative prompt</span>
             </div>
-            <h3 id="challengeFeaturedTitle">Today’s Spark</h3>
+            <h3 id="challengeFeaturedTitleSparks">Today’s Spark</h3>
             <p>Make the first 15 seconds impossible to skip. No long intro, no warm-up, just the part people replay.</p>
             <div class="challengeTagRow">
               <span>15 sec hook</span>
@@ -1018,7 +1046,6 @@
             </div>
             <p class="homeDeskPollNote">Preview only — votes are not saved yet.</p>
           </section>
-
         </section>
 
         <section class="mentorPage wide" data-route="mentor">
@@ -3079,6 +3106,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260531onboardingC"></script>
+    <script type="module" src="./src/app.js?v=20260531homeCalmB"></script>
   </body>
 </html>

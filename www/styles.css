@@ -1100,6 +1100,7 @@ body[data-route="discover-playlist"] main.grid > [data-route="discover-playlist"
 body[data-route="friends"] main.grid > [data-route="friends"],
 body[data-route="moment"] main.grid > [data-route="moment"],
 body[data-route="challenges"] main.grid > [data-route="challenges"],
+body[data-route="sparks"] main.grid > [data-route="sparks"],
 body[data-route="mentor"] main.grid > [data-route="mentor"],
 body[data-route="player"] main.grid > [data-route="player"],
 body[data-route="user"] main.grid > [data-route="user"],
@@ -20671,7 +20672,8 @@ section.challengesPage{
   padding: 0 max(18px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)) 78px;
   box-sizing: border-box;
 }
-body[data-route="challenges"] .app{
+body[data-route="challenges"] .app,
+body[data-route="sparks"] .app{
   padding-left: 0;
   padding-right: 0;
 }
@@ -21448,6 +21450,98 @@ body[data-route="challenges"] .app{
 }
 .homeDeskMakePersonal .challengeNameField{
   margin: 0;
+}
+.homeDesk--calm{
+  padding-bottom: 24px;
+}
+.homeDeskHead--calm{
+  padding: 16px 2px 8px;
+}
+.homeDeskHead--calm .homeDeskGreeting{
+  font-size: clamp(30px, 8vw, 44px);
+}
+.homeDeskCalmActions{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+.homeDeskCreateCta{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 54px;
+  padding: 0 22px;
+  border: none;
+  border-radius: 999px;
+  background: #fff;
+  color: #0b1320;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  text-align: center;
+  box-shadow: 0 14px 36px -12px rgba(255,255,255,0.28);
+  -webkit-tap-highlight-color: transparent;
+}
+.homeDeskCreateCta:active{ transform: scale(0.98); }
+.homeDeskSparkTeaser{
+  margin-top: 20px;
+}
+.homeDeskSparkTeaserLead{
+  margin: 0;
+  color: rgba(223,231,251,0.58);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.homeDeskSparkMore{
+  display: inline-block;
+  margin-top: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(168,130,255,0.95);
+  text-decoration: none;
+}
+.homeDeskSparkMore:hover{ color: #fff; }
+.homeDeskSparksPage{
+  padding-bottom: 32px;
+}
+.homeDeskSparksHead{
+  padding: 8px 2px 16px;
+}
+.homeDeskSparksBack{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+  color: rgba(223,231,251,0.62);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.homeDeskSparksBack svg{
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.homeDeskSparksHead .appScreenTitle{
+  margin: 0;
+  font-size: clamp(26px, 7vw, 32px);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: #f2f6ff;
+}
+.homeDeskSparksLead{
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: rgba(223,231,251,0.55);
+  max-width: 420px;
 }
 .homeDeskHead{
   padding: 12px 2px 4px;

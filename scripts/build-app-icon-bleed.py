@@ -10,16 +10,16 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[1]
 SRC = Path(
     "/Users/samynaoum/.cursor/projects/Users-samynaoum-Desktop-musician-ai-studio/assets/"
-    "30BE2907-D5AB-4A9C-A815-CE22E55DC0D1-d67c8c1c-57e5-4cf4-bdbb-94ae81ce4174.png"
+    "8437DDDF-8464-4438-8744-A00C67B02C9A-74b4c8dc-c97b-47b7-9578-aeb62391723d.png"
 )
 SIZE = 1024
 # Slightly over-fill so the colorful card reaches iOS icon edges (cover crop).
 ZOOM_COVER = 1.12
 # Gradient sampled from the white-N app icon artwork (purple → blue → cyan)
-C_TL = (155, 21, 242)
-C_TR = (10, 108, 215)
-C_BL = (140, 21, 237)
-C_BR = (4, 136, 218)
+C_TL = (132, 25, 241)
+C_TR = (2, 123, 227)
+C_BL = (118, 22, 236)
+C_BR = (2, 132, 218)
 
 
 def lerp(a: tuple[int, ...], b: tuple[int, ...], t: float) -> tuple[int, int, int]:
@@ -55,7 +55,7 @@ def alpha_from_rgb(r: int, g: int, b: int) -> int:
 
 
 def is_white_mark(r: int, g: int, b: int, a: int) -> bool:
-    return a > 48 and r > 185 and g > 185 and b > 205
+    return a > 48 and r > 205 and g > 205 and b > 225
 
 
 def mark_centroid(im: Image.Image) -> tuple[float, float]:

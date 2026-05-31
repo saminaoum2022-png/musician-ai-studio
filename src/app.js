@@ -21,7 +21,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531homeSegB";
+const APP_BUILD = "20260531homeSegFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -3864,9 +3864,18 @@ function readHomeSeg() {
   return "start";
 }
 
+function setHomeSeg(seg) {
+  const next = String(seg || "").trim();
+  if (next !== "start" && next !== "sparks" && next !== "templates") return;
+  _homeSeg = next;
+  try {
+    sessionStorage.setItem(HOME_SEG_STORAGE_KEY, _homeSeg);
+  } catch {}
+  syncHomeSegUi();
+}
+
 function syncHomeSegUi() {
-  _homeSeg = readHomeSeg();
-  const page = document.querySelector('[data-route="challenges"]');
+  const page = document.getElementById("homeDeskPage") || document.querySelector('[data-route="challenges"]');
   page?.querySelectorAll?.("[data-home-seg]")?.forEach?.((btn) => {
     const key = String(btn.getAttribute("data-home-seg") || "");
     const on = key === _homeSeg;
@@ -3878,9 +3887,22 @@ function syncHomeSegUi() {
     panel.classList.toggle("is-active", on);
     panel.hidden = !on;
   });
-  try {
-    sessionStorage.setItem(HOME_SEG_STORAGE_KEY, _homeSeg);
-  } catch {}
+}
+
+function wireHomeDeskSegOnce() {
+  const nav = document.querySelector(".homeDeskSeg");
+  if (!nav || nav.dataset.boundHomeSeg === "1") return;
+  nav.dataset.boundHomeSeg = "1";
+  nav.querySelectorAll("[data-home-seg]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const seg = String(btn.getAttribute("data-home-seg") || "start");
+      if (seg === _homeSeg) return;
+      haptic("light");
+      setHomeSeg(seg);
+    });
+  });
 }
 
 function syncHomeMakeSegUi() {
@@ -4051,16 +4073,8 @@ async function refreshDiscoverChallengeSpotlight() {
 function bindHomeDeskOnce(page) {
   if (!page || page.dataset.boundHomeDesk === "1") return;
   page.dataset.boundHomeDesk = "1";
-  _homeSeg = readHomeSeg();
-  syncHomeSegUi();
+  wireHomeDeskSegOnce();
   page.addEventListener("click", (e) => {
-    const segBtn = e.target?.closest?.("[data-home-seg]");
-    if (segBtn && page.contains(segBtn)) {
-      _homeSeg = String(segBtn.getAttribute("data-home-seg") || "start");
-      haptic("light");
-      syncHomeSegUi();
-      return;
-    }
     const cont = e.target?.closest?.("#homeDeskContinueBtn");
     if (cont && page.contains(cont)) {
       haptic("light");
@@ -4115,12 +4129,13 @@ function renderHomeDesk() {
   const page = document.querySelector('[data-route="challenges"]');
   if (!page) return;
   bindHomeDeskOnce(page);
+  _homeSeg = readHomeSeg();
+  syncHomeSegUi();
   const greeting = document.getElementById("homeDeskGreeting");
   if (greeting) greeting.textContent = `Hey, ${homeDeskGreetingName()}`;
   renderHomeDeskQuickStarts();
   renderHomeDeskSparksDeck();
   renderHomeDeskContinue();
-  syncHomeSegUi();
   syncHomeMakeSegUi();
   void refreshHomeDeskJoinCounts(page);
   if (typeof page._refreshChallengeEntries === "function") void page._refreshChallengeEntries();
@@ -10657,17 +10672,40 @@ async function refreshMyHubPostsFast({ force = false } = {}) {
     _myHubPostsFirstLoadDone = true;
   }
 }
+function normalizeAuthSession(sess) {
+  if (!sess || !sess.access_token) return null;
+  const now = Date.now();
+  const expiresIn = Math.max(60, Number(sess.expires_in || 3600));
+  const issuedAt = Number(sess.issued_at || now);
+  const expiresAt = Number(sess.expires_at || issuedAt + expiresIn * 1000);
+  return {
+    ...sess,
+    expires_in: expiresIn,
+    issued_at: issuedAt,
+    expires_at: expiresAt,
+  };
+}
+
+function authSessionExpiresAtMs(sess = authSession) {
+  if (!sess) return 0;
+  const at = Number(sess.expires_at || 0);
+  if (at > 0) return at;
+  const issued = Number(sess.issued_at || 0);
+  const expIn = Number(sess.expires_in || 0);
+  return issued > 0 && expIn > 0 ? issued + expIn * 1000 : 0;
+}
+
 function loadAuthSession() {
   try {
     const raw = localStorage.getItem(AUTH_SESSION_KEY);
-    authSession = raw ? JSON.parse(raw) : null;
+    authSession = raw ? normalizeAuthSession(JSON.parse(raw)) : null;
   } catch {
     authSession = null;
   }
 }
 function saveAuthSession(sess) {
   const prevUserId = String(authSession?.user?.id || "");
-  authSession = sess || null;
+  authSession = sess ? normalizeAuthSession(sess) : null;
   const nextUserId = String(authSession?.user?.id || "");
   try {
     if (authSession) localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(authSession));
@@ -11107,17 +11145,68 @@ async function supabaseFetchUser(token) {
   lastAuthDebug = "";
   return await r.json().catch(() => null);
 }
+async function refreshSupabaseSessionIfNeeded() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return false;
+  if (!authSession?.refresh_token) return Boolean(getSupabaseAuthToken());
+  const expAt = authSessionExpiresAtMs();
+  const skewMs = 5 * 60 * 1000;
+  if (expAt && expAt > Date.now() + skewMs) return true;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ refresh_token: authSession.refresh_token }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d?.access_token) {
+      lastAuthDebug = `refresh ${r.status}: ${String(JSON.stringify(d)).slice(0, 80)}`;
+      return false;
+    }
+    saveAuthSession({
+      ...(authSession || {}),
+      access_token: d.access_token,
+      refresh_token: d.refresh_token || authSession.refresh_token,
+      expires_in: Number(d.expires_in || 3600),
+      token_type: d.token_type || authSession.token_type || "bearer",
+      user: d.user || authSession.user,
+    });
+    lastAuthDebug = "";
+    return true;
+  } catch (e) {
+    lastAuthDebug = `refresh error: ${e?.message || String(e)}`;
+    return false;
+  }
+}
+
 async function refreshAuthStateFromSupabase() {
-  const token = getSupabaseAuthToken();
+  if (!getSupabaseAuthToken() && authSession?.refresh_token) {
+    await refreshSupabaseSessionIfNeeded();
+  } else {
+    await refreshSupabaseSessionIfNeeded();
+  }
+  let token = getSupabaseAuthToken();
   if (!token) {
     renderAuthStatus();
     return null;
   }
-  const remoteUser = await supabaseFetchUser(token);
+  let remoteUser = await supabaseFetchUser(token);
+  if (!remoteUser && authSession?.refresh_token) {
+    const refreshed = await refreshSupabaseSessionIfNeeded();
+    if (refreshed) {
+      token = getSupabaseAuthToken();
+      remoteUser = token ? await supabaseFetchUser(token) : null;
+    }
+  }
   if (remoteUser) {
     saveAuthSession({ ...(authSession || {}), access_token: token, user: remoteUser });
     void refreshMyCredits({ silent: true });
     return remoteUser;
+  }
+  if (authSession?.refresh_token) {
+    saveAuthSession(null);
   }
   renderAuthStatus();
   return null;
@@ -27807,6 +27896,20 @@ if (isCapacitorNativeAuth()) {
     try {
       CapApp.addListener("appUrlOpen", (event) => {
         void handleNativeAuthDeepLink(event?.url);
+      });
+    } catch {}
+    try {
+      CapApp.addListener("appStateChange", ({ isActive }) => {
+        if (!isActive) return;
+        void (async () => {
+          try {
+            loadAuthSession();
+            await refreshAuthStateFromSupabase();
+            scheduleApplyRoute();
+          } catch (e) {
+            console.warn("[auth] resume refresh failed", e);
+          }
+        })();
       });
     } catch {}
   }

@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531logoutSettlingCarousel";
+const APP_BUILD = "20260531loginSettlingUi";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -10621,6 +10621,15 @@ function setLoginSettlingCarouselStep(step) {
 function startLoginSettlingCarousel() {
   stopLoginSettlingCarousel();
   setLoginSettlingCarouselStep(0);
+  const reduceMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduceMotion) {
+    const msg = document.getElementById("loginSettlingMsg");
+    if (msg) msg.textContent = "Signing you in…";
+    return;
+  }
   _loginSettlingCarouselTimer = window.setInterval(() => {
     setLoginSettlingCarouselStep((_loginSettlingCarouselStep + 1) % LOGIN_SETTLING_LABELS.length);
   }, LOGIN_SETTLING_SLIDE_MS);
@@ -28664,6 +28673,8 @@ async function handleNativeAuthDeepLink(url) {
     const lower = raw.toLowerCase();
     if (!lower.startsWith("com.nabadai.music://")) return false;
     if (!lower.includes("auth-callback")) return false;
+    beginLoginSettling("Finishing sign in…");
+    void closeOAuthBrowser({ keepPending: true });
     let code = "";
     try {
       const u = new URL(raw);
@@ -28673,6 +28684,7 @@ async function handleNativeAuthDeepLink(url) {
       code = new URLSearchParams(q).get("code") || "";
     }
     if (!code) {
+      endLoginSettling();
       setStatus(`Google login failed: no code in callback`);
       notifyLoginFeedback("Google login failed: no code returned.");
       resetGoogleAuthButton();
@@ -28681,22 +28693,22 @@ async function handleNativeAuthDeepLink(url) {
       return false;
     }
     if (code === _lastOAuthCodeHandled) {
-      await closeOAuthBrowser();
+      await closeOAuthBrowser({ keepPending: true });
       return true;
     }
     const pkceReady = Boolean(localStorage.getItem(AUTH_PKCE_KEY));
     if (!pkceReady) {
+      endLoginSettling();
       notifyLoginFeedback("Sign-in expired — tap Continue with Google again.");
       resetGoogleAuthButton();
       await closeOAuthBrowser();
       try { location.hash = "#/auth"; syncRoutePanelVisibility("auth"); safeApplyRoute(); } catch {}
       return false;
     }
-    beginLoginSettling("Finishing sign in…");
     setStatus("Finishing Google login…");
     notifyLoginFeedback("Finishing Google login…");
-    const ok = await exchangeOAuthCodeForSession(code);
     await closeOAuthBrowser({ keepPending: true });
+    const ok = await exchangeOAuthCodeForSession(code);
     if (ok) {
       _lastOAuthCodeHandled = code;
       if (authSession) {

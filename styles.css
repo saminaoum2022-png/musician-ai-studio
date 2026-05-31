@@ -2088,13 +2088,8 @@ body.oauthPending .app{
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   text-align: center;
-}
-.loginSettlingMark{
-  width: min(20vw, 80px);
-  aspect-ratio: 1;
-  background: url("./assets/icons/splash-mark.png") center / contain no-repeat;
 }
 .loginSettlingMsg{
   margin: 0;
@@ -2105,9 +2100,9 @@ body.oauthPending .app{
 }
 .loginSettlingCarousel{
   position: relative;
-  width: min(100%, 220px);
-  height: 88px;
-  margin: 0 auto 2px;
+  width: min(100%, 260px);
+  height: 112px;
+  margin: 0 auto 4px;
 }
 .loginSettlingSlide{
   position: absolute;
@@ -2127,16 +2122,16 @@ body.oauthPending .app{
   transform: translateY(0) scale(1);
 }
 .loginSettlingLabel{
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: rgba(232,238,255,0.82);
 }
 .loginSettlingIcon{
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
   position: relative;
 }
 .loginSettlingIcon--create{
@@ -2149,13 +2144,13 @@ body.oauthPending .app{
 .loginSettlingIcon--create::after{
   content:"";
   position: absolute;
-  left: 12px;
-  right: 12px;
-  top: 18px;
-  height: 4px;
+  left: 16px;
+  right: 16px;
+  top: 26px;
+  height: 5px;
   border-radius: 4px;
   background: rgba(255,255,255,0.55);
-  box-shadow: 0 10px 0 rgba(255,255,255,0.22);
+  box-shadow: 0 12px 0 rgba(255,255,255,0.22);
 }
 .loginSettlingIcon--echo{
   padding: 3px;
@@ -2166,7 +2161,7 @@ body.oauthPending .app{
   content:"";
   position: absolute;
   inset: 3px;
-  border-radius: 13px;
+  border-radius: 17px;
   background: linear-gradient(160deg, #1a1030 0%, #0d0a14 100%);
 }
 .loginSettlingIcon--echo::after{
@@ -2174,9 +2169,9 @@ body.oauthPending .app{
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 22px;
-  height: 14px;
-  margin: -7px 0 0 -11px;
+  width: 28px;
+  height: 18px;
+  margin: -9px 0 0 -14px;
   background:
     linear-gradient(90deg, transparent 0%, rgba(168,130,255,0.85) 20%, rgba(168,130,255,0.85) 35%, transparent 35%, transparent 45%, rgba(168,130,255,0.7) 45%, rgba(168,130,255,0.7) 60%, transparent 60%, transparent 70%, rgba(168,130,255,0.55) 70%, rgba(168,130,255,0.55) 85%, transparent 85%);
   animation: loginSettlingWave 900ms ease-in-out infinite;
@@ -2196,9 +2191,9 @@ body.oauthPending .app{
 .loginSettlingIcon--friends::before,
 .loginSettlingIcon--friends::after{
   content:"";
-  width: 14px;
-  height: 14px;
-  border-radius: 5px;
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
 }
 .loginSettlingIcon--friends::before{
   background: linear-gradient(145deg, #7c5cff, #4c2fd4);
@@ -2213,23 +2208,23 @@ body.oauthPending .app{
 .loginSettlingIcon--persona::before{
   content:"";
   position: absolute;
-  top: 10px;
+  top: 14px;
   left: 50%;
-  width: 18px;
-  height: 18px;
-  margin-left: -9px;
+  width: 22px;
+  height: 22px;
+  margin-left: -11px;
   border-radius: 50%;
   background: rgba(255,255,255,0.88);
 }
 .loginSettlingIcon--persona::after{
   content:"";
   position: absolute;
-  bottom: 8px;
+  bottom: 10px;
   left: 50%;
-  width: 30px;
-  height: 16px;
-  margin-left: -15px;
-  border-radius: 16px 16px 0 0;
+  width: 38px;
+  height: 20px;
+  margin-left: -19px;
+  border-radius: 20px 20px 0 0;
   background: rgba(255,255,255,0.78);
 }
 body.loginSettling .authActions,

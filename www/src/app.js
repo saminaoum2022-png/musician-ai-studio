@@ -21,7 +21,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531homeSparksAuth";
+const APP_BUILD = "20260531authPersist";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2399,11 +2399,14 @@ function scheduleApplyRoute() {
   if (_applyRouteRaf) cancelAnimationFrame(_applyRouteRaf);
   _applyRouteRaf = requestAnimationFrame(() => {
     _applyRouteRaf = 0;
-    try {
-      applyRoute();
-    } catch (e) {
-      routeApplyFallback(e);
-    }
+    void (async () => {
+      try {
+        await ensureAuthBoot();
+        applyRoute();
+      } catch (e) {
+        routeApplyFallback(e);
+      }
+    })();
   });
 }
 
@@ -2473,7 +2476,7 @@ function applyRoute() {
     normalized = "challenges";
   }
   let wanted = allowedRoutes.has(normalized) ? normalized : "generate";
-  const isLoggedIn = Boolean(authSession?.user?.id);
+  const isLoggedIn = isAppLoggedIn();
   if (shouldSkipIntroOrOnboardingRoute() && (wanted === "intro" || wanted === "onboarding")) {
     wanted = isLoggedIn ? "challenges" : "auth";
     try {
@@ -9960,6 +9963,118 @@ function renderActivePersonaBanner() {
 }
 const AUTH_SESSION_KEY = "mas:supabase:session:v1";
 const AUTH_SESSION_BACKUP_KEY = "mas:supabase:session:backup:v1";
+/** Native iOS/Android store — survives WKWebView localStorage loss on force-quit. */
+const AUTH_NATIVE_FS_PATH = "NabadAi/auth/session.json";
+let _authBootPromise = null;
+let _capFsModPromise = null;
+
+function decodeJwtPayload(token) {
+  try {
+    const part = String(token || "").split(".")[1];
+    if (!part) return null;
+    const pad = part.length % 4 === 0 ? part : `${part}${"=".repeat(4 - (part.length % 4))}`;
+    const json = atob(pad.replace(/-/g, "+").replace(/_/g, "/"));
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+function hydrateAuthUserFromJwt(sess) {
+  if (!sess?.access_token) return sess;
+  const u = sess.user && typeof sess.user === "object" ? { ...sess.user } : {};
+  if (u.id) return { ...sess, user: u };
+  const p = decodeJwtPayload(sess.access_token);
+  const sub = String(p?.sub || "").trim();
+  if (!sub) return sess;
+  return {
+    ...sess,
+    user: {
+      ...u,
+      id: sub,
+      email: u.email || String(p?.email || "").trim(),
+    },
+  };
+}
+
+function isAppLoggedIn() {
+  return Boolean(authSession?.user?.id);
+}
+
+async function getCapFilesystemMod() {
+  if (!_capFsModPromise) {
+    const core = "8.3.1";
+    _capFsModPromise = import(
+      /* webpackIgnore: true */ `https://esm.sh/@capacitor/filesystem@8.1.2?deps=@capacitor/core@${core}`,
+    );
+  }
+  return _capFsModPromise;
+}
+
+async function writeAuthSessionToNativeStore(jsonPayload) {
+  if (!isCapacitorNativeAuth() || !jsonPayload) return;
+  try {
+    const fsMod = await getCapFilesystemMod();
+    const { Filesystem, Directory } = fsMod;
+    await Filesystem.writeFile({
+      path: AUTH_NATIVE_FS_PATH,
+      data: jsonPayload,
+      directory: Directory.Data,
+      encoding: "utf8",
+      recursive: true,
+    });
+  } catch (e) {
+    console.warn("[auth] native persist failed", e);
+  }
+}
+
+async function clearAuthSessionNativeStore() {
+  if (!isCapacitorNativeAuth()) return;
+  try {
+    const fsMod = await getCapFilesystemMod();
+    const { Filesystem, Directory } = fsMod;
+    await Filesystem.deleteFile({
+      path: AUTH_NATIVE_FS_PATH,
+      directory: Directory.Data,
+    });
+  } catch {
+    /* already gone */
+  }
+}
+
+async function restoreAuthSessionFromNativeStore() {
+  if (!isCapacitorNativeAuth()) return;
+  try {
+    const fsMod = await getCapFilesystemMod();
+    const { Filesystem, Directory } = fsMod;
+    const r = await Filesystem.readFile({
+      path: AUTH_NATIVE_FS_PATH,
+      directory: Directory.Data,
+      encoding: "utf8",
+    });
+    const raw = String(r?.data || "").trim();
+    if (!raw) return;
+    const local = localStorage.getItem(AUTH_SESSION_KEY) || "";
+    if (!local || raw.length >= local.length) {
+      localStorage.setItem(AUTH_SESSION_KEY, raw);
+      localStorage.setItem(AUTH_SESSION_BACKUP_KEY, raw);
+    }
+  } catch {
+    /* first launch — no native session file yet */
+  }
+}
+
+function ensureAuthBoot() {
+  if (!_authBootPromise) {
+    _authBootPromise = (async () => {
+      await restoreAuthSessionFromNativeStore();
+      loadAuthSession();
+      syncActiveProfileIdFromSession();
+      renderAuthStatus();
+    })();
+  }
+  return _authBootPromise;
+}
 const AUTH_PKCE_KEY = "mas:supabase:pkce:v1";
 let activeProfile = { id: "guest", username: "guest", email: "", soundCertified: false };
 let lastAuthDebug = "";
@@ -10704,12 +10819,12 @@ function normalizeAuthSession(sess) {
   const expiresIn = Math.max(60, Number(sess.expires_in || 3600));
   const issuedAt = Number(sess.issued_at || now);
   const expiresAt = Number(sess.expires_at || issuedAt + expiresIn * 1000);
-  return {
+  return hydrateAuthUserFromJwt({
     ...sess,
     expires_in: expiresIn,
     issued_at: issuedAt,
     expires_at: expiresAt,
-  };
+  });
 }
 
 function authSessionExpiresAtMs(sess = authSession) {
@@ -10744,9 +10859,11 @@ function saveAuthSession(sess) {
       const payload = JSON.stringify(authSession);
       localStorage.setItem(AUTH_SESSION_KEY, payload);
       localStorage.setItem(AUTH_SESSION_BACKUP_KEY, payload);
+      void writeAuthSessionToNativeStore(payload);
     } else {
       localStorage.removeItem(AUTH_SESSION_KEY);
       localStorage.removeItem(AUTH_SESSION_BACKUP_KEY);
+      void clearAuthSessionNativeStore();
     }
   } catch {}
   renderAuthStatus();
@@ -11195,13 +11312,8 @@ async function refreshSupabaseSessionIfNeeded() {
     const d = await r.json().catch(() => ({}));
     if (!r.ok || !d?.access_token) {
       lastAuthDebug = `refresh ${r.status}: ${String(JSON.stringify(d)).slice(0, 80)}`;
-      const msg = String(d?.error_description || d?.msg || d?.error || "").toLowerCase();
-      _authRefreshRevoked =
-        (r.status === 400 || r.status === 401) &&
-        (msg.includes("invalid") ||
-          msg.includes("revoked") ||
-          msg.includes("expired") ||
-          msg.includes("refresh_token"));
+      const errCode = String(d?.error || "").toLowerCase();
+      _authRefreshRevoked = r.status === 400 && errCode === "invalid_grant";
       return false;
     }
     _authRefreshRevoked = false;
@@ -11262,7 +11374,7 @@ function renderAuthStatus() {
   if (!els.authStatus) return;
   const email = authSession?.user?.email || "";
   const hasToken = Boolean(getSupabaseAuthToken());
-  const isAuthed = Boolean(email);
+  const isAuthed = isAppLoggedIn();
   let msg = email
     ? ""
     : hasToken
@@ -27953,9 +28065,20 @@ if (isCapacitorNativeAuth()) {
     } catch {}
     try {
       CapApp.addListener("appStateChange", ({ isActive }) => {
-        if (!isActive) return;
+        if (!isActive) {
+          if (authSession) {
+            try {
+              const payload = JSON.stringify(authSession);
+              localStorage.setItem(AUTH_SESSION_KEY, payload);
+              localStorage.setItem(AUTH_SESSION_BACKUP_KEY, payload);
+              void writeAuthSessionToNativeStore(payload);
+            } catch {}
+          }
+          return;
+        }
         void (async () => {
           try {
+            await restoreAuthSessionFromNativeStore();
             loadAuthSession();
             await refreshAuthStateFromSupabase();
             scheduleApplyRoute();
@@ -28025,6 +28148,7 @@ if (els.btnAuthGateGuest) {
 }
 function logoutCurrentUser() {
   saveAuthSession(null);
+  void clearAuthSessionNativeStore();
   resetProfileUiToGuest();
   setProfileEditing(false);
   // A pending generation belongs to the previous user — wipe it so a
@@ -28390,19 +28514,8 @@ function clampNum(n, min, max) {
 void refreshSunoCredits();
 renderCreditsHistory();
 loadProfile();
-loadAuthSession();
-syncActiveProfileIdFromSession();
-renderAuthStatus();
-// `applyRoute()` already ran once at module load (before this block). At
-// that moment `authSession` was still null, so protected routes mis-routed
-// and `renderLibrary()` never saw a signed-in session — Library rows had
-// no Public/Private chip and the ⋯ menu omitted "Show on public profile".
-// Re-run routing after localStorage hydration so Library paints correctly.
-try {
-  applyRoute();
-} catch (e) {
-  console.warn("[boot] applyRoute after loadAuthSession", e);
-}
+// Auth + route: `ensureAuthBoot()` runs inside `scheduleApplyRoute` (incl.
+// `safeApplyRoute` at module load) so native session restores before routing.
 // Light the profile header shimmer NOW if we already know a sign-in
 // is on its way and the handle is still the boot placeholder ("guest").
 // This avoids the "M logo + @guest" flash on cold opens with slow mobile
@@ -28433,6 +28546,7 @@ void (async () => {
   // matter what fails inside the boot chain. Pre-fix, an unhandled
   // throw or a hung fetch would leave it stuck on with @guest visible.
   try {
+  await ensureAuthBoot();
   await loadPublicConfig();
   const usedCodeFlow = await maybeHandleAuthCodeFromQuery();
   const usedTokenFlow = !usedCodeFlow && maybeHandleMagicLinkFromHash();

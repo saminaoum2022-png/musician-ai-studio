@@ -913,6 +913,21 @@
                 <div id="homeDeskQuickGrid" class="homeDeskQuickGrid discoveryQuickGrid" aria-live="polite"></div>
               </section>
 
+              <section class="homeDeskEchoPromo" aria-labelledby="homeDeskEchoPromoTitle">
+                <div class="homeDeskEchoPromoVisual" aria-hidden="true">
+                  <span class="homeDeskEchoPromoWave"><i></i><i></i><i></i><i></i><i></i></span>
+                </div>
+                <div class="homeDeskEchoPromoCopy">
+                  <p class="homeDeskSectionKicker">Voice moments</p>
+                  <h3 id="homeDeskEchoPromoTitle">About Echo</h3>
+                  <p>Drop a short voice clip for your circle — it plays for 24 hours, then disappears.</p>
+                  <div class="homeDeskEchoPromoActions">
+                    <button type="button" class="homeDeskEchoPromoBtn" data-home-echo-learn>See Echoes</button>
+                    <button type="button" class="homeDeskEchoPromoBtn homeDeskEchoPromoBtn--primary" data-home-echo-record>Record an Echo</button>
+                  </div>
+                </div>
+              </section>
+
               <section class="challengeFeatureCard homeDeskSpark" aria-labelledby="challengeFeaturedTitle">
                 <div class="challengeFeatureTop">
                   <span class="challengeLivePill"><span></span> Today’s spark</span>
@@ -937,21 +952,6 @@
             </div>
 
             <div class="homeDeskSegPanel" id="homeDeskPanelTemplates" data-home-panel="templates" role="tabpanel" hidden>
-          <section class="homeDeskEchoPromo" aria-labelledby="homeDeskEchoPromoTitle">
-            <div class="homeDeskEchoPromoVisual" aria-hidden="true">
-              <span class="homeDeskEchoPromoWave"><i></i><i></i><i></i><i></i><i></i></span>
-            </div>
-            <div class="homeDeskEchoPromoCopy">
-              <p class="homeDeskSectionKicker">Voice moments</p>
-              <h3 id="homeDeskEchoPromoTitle">About Echo</h3>
-              <p>Drop a short voice clip for your circle — it plays for 24 hours, then disappears.</p>
-              <div class="homeDeskEchoPromoActions">
-                <button type="button" class="homeDeskEchoPromoBtn" data-home-echo-learn>See Echoes</button>
-                <button type="button" class="homeDeskEchoPromoBtn homeDeskEchoPromoBtn--primary" data-home-echo-record>Record an Echo</button>
-              </div>
-            </div>
-          </section>
-
           <section class="homeDeskSection homeDeskSection--occasions" id="homeDeskOccasions" aria-labelledby="challengePresetTitle">
             <header class="homeDeskSectionHead">
               <p class="homeDeskSectionKicker">Song templates</p>
@@ -3052,6 +3052,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260531authKeychain"></script>
+    <script type="module" src="./src/app.js?v=20260531echoStart"></script>
   </body>
 </html>

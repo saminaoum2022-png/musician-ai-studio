@@ -21,7 +21,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531homeSegFix";
+const APP_BUILD = "20260531homeSparksAuth";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4081,10 +4081,35 @@ function bindHomeDeskOnce(page) {
       continueIdeaFromLibraryTrack(_homeDeskContinueTrack);
       return;
     }
-    const poll = e.target?.closest?.("[data-home-poll-choice]");
-    if (poll && page.contains(poll)) {
+    const echoLearn = e.target?.closest?.("[data-home-echo-learn]");
+    if (echoLearn && page.contains(echoLearn)) {
       haptic("light");
-      page.querySelectorAll("[data-home-poll-choice]").forEach((btn) => btn.classList.toggle("isSelected", btn === poll));
+      try {
+        location.hash = "#/friends";
+      } catch {}
+      scheduleApplyRoute();
+      return;
+    }
+    const echoRecord = e.target?.closest?.("[data-home-echo-record]");
+    if (echoRecord && page.contains(echoRecord)) {
+      haptic("light");
+      if (!authSession?.user?.id) {
+        try {
+          location.hash = "#/profile";
+        } catch {}
+        scheduleApplyRoute();
+        setStatus("Sign in to record an Echo.");
+        return;
+      }
+      try {
+        location.hash = "#/friends";
+      } catch {}
+      scheduleApplyRoute();
+      setTimeout(() => {
+        try {
+          openEchoFromCreateChooser();
+        } catch {}
+      }, 120);
       return;
     }
     const ideaBtn = e.target?.closest?.("[data-discovery-idea]");
@@ -9934,6 +9959,7 @@ function renderActivePersonaBanner() {
   }
 }
 const AUTH_SESSION_KEY = "mas:supabase:session:v1";
+const AUTH_SESSION_BACKUP_KEY = "mas:supabase:session:backup:v1";
 const AUTH_PKCE_KEY = "mas:supabase:pkce:v1";
 let activeProfile = { id: "guest", username: "guest", email: "", soundCertified: false };
 let lastAuthDebug = "";
@@ -10697,8 +10723,14 @@ function authSessionExpiresAtMs(sess = authSession) {
 
 function loadAuthSession() {
   try {
-    const raw = localStorage.getItem(AUTH_SESSION_KEY);
+    let raw = localStorage.getItem(AUTH_SESSION_KEY);
+    if (!raw) raw = localStorage.getItem(AUTH_SESSION_BACKUP_KEY);
     authSession = raw ? normalizeAuthSession(JSON.parse(raw)) : null;
+    if (authSession && !localStorage.getItem(AUTH_SESSION_KEY)) {
+      try {
+        localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(authSession));
+      } catch {}
+    }
   } catch {
     authSession = null;
   }
@@ -10708,8 +10740,14 @@ function saveAuthSession(sess) {
   authSession = sess ? normalizeAuthSession(sess) : null;
   const nextUserId = String(authSession?.user?.id || "");
   try {
-    if (authSession) localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(authSession));
-    else localStorage.removeItem(AUTH_SESSION_KEY);
+    if (authSession) {
+      const payload = JSON.stringify(authSession);
+      localStorage.setItem(AUTH_SESSION_KEY, payload);
+      localStorage.setItem(AUTH_SESSION_BACKUP_KEY, payload);
+    } else {
+      localStorage.removeItem(AUTH_SESSION_KEY);
+      localStorage.removeItem(AUTH_SESSION_BACKUP_KEY);
+    }
   } catch {}
   renderAuthStatus();
   try { syncMobileTabbarProfileAvatar(); } catch {}
@@ -11134,12 +11172,6 @@ async function supabaseFetchUser(token) {
   if (!r.ok) {
     const t = await r.text().catch(() => "");
     lastAuthDebug = `user fetch ${r.status}: ${String(t || "").slice(0, 120)}`;
-    if (r.status === 401 || r.status === 403) {
-      const lower = String(t || "").toLowerCase();
-      if (lower.includes("token") || lower.includes("jwt")) {
-        saveAuthSession(null);
-      }
-    }
     return null;
   }
   lastAuthDebug = "";
@@ -11163,8 +11195,16 @@ async function refreshSupabaseSessionIfNeeded() {
     const d = await r.json().catch(() => ({}));
     if (!r.ok || !d?.access_token) {
       lastAuthDebug = `refresh ${r.status}: ${String(JSON.stringify(d)).slice(0, 80)}`;
+      const msg = String(d?.error_description || d?.msg || d?.error || "").toLowerCase();
+      _authRefreshRevoked =
+        (r.status === 400 || r.status === 401) &&
+        (msg.includes("invalid") ||
+          msg.includes("revoked") ||
+          msg.includes("expired") ||
+          msg.includes("refresh_token"));
       return false;
     }
+    _authRefreshRevoked = false;
     saveAuthSession({
       ...(authSession || {}),
       access_token: d.access_token,
@@ -11181,16 +11221,19 @@ async function refreshSupabaseSessionIfNeeded() {
   }
 }
 
+let _authRefreshRevoked = false;
+
 async function refreshAuthStateFromSupabase() {
-  if (!getSupabaseAuthToken() && authSession?.refresh_token) {
-    await refreshSupabaseSessionIfNeeded();
-  } else {
-    await refreshSupabaseSessionIfNeeded();
-  }
+  _authRefreshRevoked = false;
+  await refreshSupabaseSessionIfNeeded();
   let token = getSupabaseAuthToken();
+  if (!token && authSession?.refresh_token) {
+    await refreshSupabaseSessionIfNeeded();
+    token = getSupabaseAuthToken();
+  }
   if (!token) {
     renderAuthStatus();
-    return null;
+    return authSession?.user || null;
   }
   let remoteUser = await supabaseFetchUser(token);
   if (!remoteUser && authSession?.refresh_token) {
@@ -11205,11 +11248,15 @@ async function refreshAuthStateFromSupabase() {
     void refreshMyCredits({ silent: true });
     return remoteUser;
   }
-  if (authSession?.refresh_token) {
+  if (authSession?.user?.id) {
+    renderAuthStatus();
+    return authSession.user;
+  }
+  if (authSession?.refresh_token && _authRefreshRevoked) {
     saveAuthSession(null);
   }
   renderAuthStatus();
-  return null;
+  return authSession?.user || null;
 }
 function renderAuthStatus() {
   if (!els.authStatus) return;
@@ -11360,7 +11407,13 @@ function maybeHandleMagicLinkFromHash() {
       saveAuthSession(null);
       return false;
     }
-    saveAuthSession({ access_token, refresh_token, expires_in, token_type, user });
+    saveAuthSession({
+      access_token,
+      refresh_token: refresh_token || undefined,
+      expires_in,
+      token_type,
+      user,
+    });
     window.location.hash = "#/profile";
     setStatus("Logged in via magic link.");
     return true;

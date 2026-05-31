@@ -21,7 +21,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531photoMoodFix";
+const APP_BUILD = "20260531photoMoodUi";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -8073,6 +8073,24 @@ function syncImageMoodSheetUi() {
   const hasFile = Boolean(els.imageMoodUpload?.files?.[0]);
   if (applyBtn) applyBtn.disabled = !imageMoodData;
   if (analyzeBtn) analyzeBtn.disabled = !hasFile;
+  const pickLabel = document.querySelector(".imageMoodPickLabel");
+  const file = els.imageMoodUpload?.files?.[0];
+  if (pickLabel) {
+    pickLabel.textContent = file?.name ? `Change photo · ${file.name}` : "Choose photo";
+  }
+}
+
+function syncImageMoodPreviewUi(show) {
+  const wrap = els.imageMoodPreview?.closest?.(".imageMoodPreviewWrap");
+  if (!els.imageMoodPreview) return;
+  if (show) {
+    els.imageMoodPreview.removeAttribute("hidden");
+    wrap?.classList.add("hasPreview");
+  } else {
+    els.imageMoodPreview.setAttribute("hidden", "");
+    els.imageMoodPreview.removeAttribute("src");
+    wrap?.classList.remove("hasPreview");
+  }
 }
 
 function applyImageMoodToSongFields() {
@@ -24729,8 +24747,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const preview = URL.createObjectURL(file);
       if (els.imageMoodPreview) {
         els.imageMoodPreview.src = preview;
-        els.imageMoodPreview.style.display = "";
+        syncImageMoodPreviewUi(true);
       }
+      try {
+        syncImageMoodSheetUi();
+      } catch {}
       prepareMomentCoverDataUrl(file)
         .then((v) => {
           imageMoodCoverDataUrl = v;

@@ -757,7 +757,7 @@
           <div id="imageMoodModal" class="imageMoodSheet" hidden aria-hidden="true">
             <div class="imageMoodSheetBackdrop" data-image-mood-dismiss="1"></div>
             <div class="imageMoodCard modalCard" role="dialog" aria-modal="true" aria-labelledby="imageMoodSheetTitle">
-              <div class="imageMoodHead">
+              <header class="imageMoodHead">
                 <button type="button" id="btnCloseImageMood" class="imageMoodBack" aria-label="Close">
                   <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></svg>
                 </button>
@@ -765,23 +765,30 @@
                   <p class="imageMoodKicker">Photo mood</p>
                   <div class="modalTitle" id="imageMoodSheetTitle">Image Mood Assistant</div>
                 </div>
+              </header>
+              <div class="imageMoodBody">
+                <p id="imageMoodLead" class="imageMoodLead">Pick a photo — we’ll read the mood and suggest tags for your song.</p>
+                <label class="imageMoodPick field">
+                  <span class="imageMoodPickLabel">Choose photo</span>
+                  <input id="imageMoodUpload" class="imageMoodUploadInput" type="file" accept="image/*" />
+                </label>
+                <div class="imageMoodPreviewWrap">
+                  <img id="imageMoodPreview" alt="Mood preview" hidden />
+                </div>
+                <div id="imageMoodOutput" class="imageMoodOutput">
+                  <div class="imageMoodEmpty">Choose a photo, then tap Analyze.</div>
+                </div>
               </div>
-              <div id="imageMoodLead" class="imageMoodLead">Upload a photo and NabadAi suggests mood, tags, and optional lyric seed.</div>
-              <label class="field imageMoodField">
-                <input id="imageMoodUpload" type="file" accept="image/*" />
-              </label>
-              <div class="imageMoodPreviewWrap">
-                <img id="imageMoodPreview" alt="Mood preview" style="display:none" />
-              </div>
-              <div id="imageMoodOutput" class="imageMoodOutput">No analysis yet.</div>
-              <label id="imageMoodCoverRow" class="proToggleRow" for="imageMoodUseAsCover" style="margin-top:2px">
-                <input id="imageMoodUseAsCover" type="checkbox" checked />
-                <span>Use uploaded image as generated song cover</span>
-              </label>
-              <div class="row imageMoodActions">
-                <button id="btnAnalyzeImageMood" class="primary" type="button">Analyze</button>
-                <button id="btnApplyImageMood" class="ghost" type="button" disabled>Apply to song</button>
-              </div>
+              <footer class="imageMoodFooter">
+                <label id="imageMoodCoverRow" class="imageMoodCoverRow proToggleRow" for="imageMoodUseAsCover">
+                  <input id="imageMoodUseAsCover" type="checkbox" checked />
+                  <span>Use this image as the song cover</span>
+                </label>
+                <div class="imageMoodActions">
+                  <button id="btnAnalyzeImageMood" class="primary" type="button">Analyze</button>
+                  <button id="btnApplyImageMood" class="ghost" type="button" disabled>Apply to song</button>
+                </div>
+              </footer>
             </div>
           </div>
         </section>
@@ -3039,6 +3046,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260531photoMoodFix"></script>
+    <script type="module" src="./src/app.js?v=20260531photoMoodUi"></script>
   </body>
 </html>

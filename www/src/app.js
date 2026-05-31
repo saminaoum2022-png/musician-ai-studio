@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531loginSettlingUi";
+const APP_BUILD = "20260531homePersonaEcho";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4268,6 +4268,19 @@ function bindHomeDeskOnce(page) {
     if (cont && page.contains(cont)) {
       haptic("light");
       continueIdeaFromLibraryTrack(_homeDeskContinueTrack);
+      return;
+    }
+    const personaLearn = e.target?.closest?.("[data-home-persona-learn]");
+    if (personaLearn && page.contains(personaLearn)) {
+      haptic("light");
+      openSettingsVoicesPanel();
+      scheduleApplyRoute();
+      return;
+    }
+    const personaCreate = e.target?.closest?.("[data-home-persona-create]");
+    if (personaCreate && page.contains(personaCreate)) {
+      haptic("light");
+      void openVoiceWizard();
       return;
     }
     const echoLearn = e.target?.closest?.("[data-home-echo-learn]");
@@ -28760,7 +28773,12 @@ if (isCapacitorNativeAuth()) {
           }
           return;
         }
-        if (_oauthBrowserOpen || isLoginSettling()) return;
+        if (_oauthBrowserOpen) {
+          beginLoginSettling("Finishing sign in…");
+          void closeOAuthBrowser({ keepPending: true });
+          return;
+        }
+        if (isLoginSettling()) return;
         if (Date.now() - _appResumeRefreshAt < APP_RESUME_REFRESH_GAP_MS) return;
         if (_appResumeRefreshTimer) clearTimeout(_appResumeRefreshTimer);
         _appResumeRefreshTimer = window.setTimeout(() => {

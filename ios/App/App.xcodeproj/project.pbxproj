@@ -12,6 +12,7 @@
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
 		A1B2C3D41FED79650016851F /* NowPlayingPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D31FED79650016851F /* NowPlayingPlugin.swift */; };
+		D1E2F351FED79650016851F /* AuthVaultPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F341FED79650016851F /* AuthVaultPlugin.swift */; };
 		B2C3D411FED79650016851F /* BridgeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D401FED79650016851F /* BridgeViewController.swift */; };
 		C1C2C3D41FED79650016851F /* StoryCameraPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C2C3D31FED79650016851F /* StoryCameraPlugin.swift */; };
 		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
@@ -26,6 +27,7 @@
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		504EC3071FED79650016851F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		A1B2C3D31FED79650016851F /* NowPlayingPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingPlugin.swift; sourceTree = "<group>"; };
+		D1E2F341FED79650016851F /* AuthVaultPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthVaultPlugin.swift; sourceTree = "<group>"; };
 		B2C3D401FED79650016851F /* BridgeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeViewController.swift; sourceTree = "<group>"; };
 		C1C2C3D31FED79650016851F /* StoryCameraPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryCameraPlugin.swift; sourceTree = "<group>"; };
 		504EC30C1FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
@@ -71,6 +73,7 @@
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				A1B2C3D31FED79650016851F /* NowPlayingPlugin.swift */,
+				D1E2F341FED79650016851F /* AuthVaultPlugin.swift */,
 				B2C3D401FED79650016851F /* BridgeViewController.swift */,
 				C1C2C3D31FED79650016851F /* StoryCameraPlugin.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
@@ -167,6 +170,7 @@
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				A1B2C3D41FED79650016851F /* NowPlayingPlugin.swift in Sources */,
+				D1E2F351FED79650016851F /* AuthVaultPlugin.swift in Sources */,
 				B2C3D411FED79650016851F /* BridgeViewController.swift in Sources */,
 				C1C2C3D41FED79650016851F /* StoryCameraPlugin.swift in Sources */,
 			);

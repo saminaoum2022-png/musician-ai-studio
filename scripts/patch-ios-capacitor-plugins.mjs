@@ -9,7 +9,7 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const configPath = path.join(__dirname, "../ios/App/App/capacitor.config.json");
-const LOCAL_PLUGINS = ["NowPlayingPlugin", "StoryCameraPlugin"];
+const LOCAL_PLUGINS = ["NowPlayingPlugin", "StoryCameraPlugin", "AuthVaultPlugin"];
 
 if (!fs.existsSync(configPath)) {
   console.error("patch-ios-capacitor-plugins: missing", configPath);

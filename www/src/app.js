@@ -21,7 +21,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531authFixB";
+const APP_BUILD = "20260531authKeychain";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -119,7 +119,10 @@ function isFounderBadgeEmail(raw) {
         }),
       });
     }
-    if (!cap.Plugins?.Preferences) {
+    // On iOS/Android, never register Preferences with a localStorage web stub
+    // before the native bridge loads — that was wiping sessions on force-quit.
+    const isNative = Boolean(cap.isNativePlatform?.());
+    if (!isNative && !cap.Plugins?.Preferences) {
       cap.registerPlugin("Preferences", {
         web: () => ({
           async get({ key }) {
@@ -132,6 +135,17 @@ function isFounderBadgeEmail(raw) {
           async remove({ key }) {
             localStorage.removeItem(key);
           },
+        }),
+      });
+    }
+    if (!isNative && !cap.Plugins?.AuthVault) {
+      cap.registerPlugin("AuthVault", {
+        web: () => ({
+          async get() {
+            return { value: null };
+          },
+          async set() {},
+          async remove() {},
         }),
       });
     }
@@ -9987,12 +10001,29 @@ const AUTH_NATIVE_FS_PATH = "NabadAi/auth/session.json";
 const CAP_FS_DIRECTORY_DATA = "DATA";
 let _authBootPromise = null;
 
+function getCapAuthVaultPlugin() {
+  return window?.Capacitor?.Plugins?.AuthVault || null;
+}
+
 function getCapPreferencesPlugin() {
   return window?.Capacitor?.Plugins?.Preferences || null;
 }
 
 function getCapFilesystemPlugin() {
   return window?.Capacitor?.Plugins?.Filesystem || null;
+}
+
+async function waitForCapPlugin(name, maxMs = 4000) {
+  const cap = window?.Capacitor;
+  if (!cap) return null;
+  if (!cap.isNativePlatform?.()) return cap.Plugins?.[name] || null;
+  const deadline = Date.now() + maxMs;
+  while (Date.now() < deadline) {
+    const plugin = cap.Plugins?.[name];
+    if (plugin?.get || plugin?.set) return plugin;
+    await new Promise((r) => setTimeout(r, 40));
+  }
+  return cap.Plugins?.[name] || null;
 }
 
 function decodeJwtPayload(token) {
@@ -10024,7 +10055,17 @@ function hydrateAuthUserFromJwt(sess) {
   };
 }
 
+function ensureAuthSessionUserFromToken() {
+  if (authSession?.user?.id) return authSession;
+  const tok = getSupabaseAuthToken();
+  if (!tok) return authSession;
+  const hydrated = normalizeAuthSession({ ...(authSession || {}), access_token: tok });
+  if (hydrated) authSession = hydrated;
+  return authSession;
+}
+
 function isAppLoggedIn() {
+  ensureAuthSessionUserFromToken();
   return Boolean(authSession?.user?.id);
 }
 
@@ -10042,10 +10083,18 @@ function writeAuthSessionToLocalStores(jsonPayload) {
   } catch {}
 }
 
-async function writeAuthSessionToNativeStore(jsonPayload) {
+async function persistAuthSessionEverywhere(jsonPayload) {
   if (!jsonPayload) return;
   writeAuthSessionToLocalStores(jsonPayload);
-  const prefs = getCapPreferencesPlugin();
+  const vault = await waitForCapPlugin("AuthVault", 5000);
+  if (vault?.set) {
+    try {
+      await vault.set({ value: jsonPayload });
+    } catch (e) {
+      console.warn("[auth] AuthVault.set failed", e);
+    }
+  }
+  const prefs = await waitForCapPlugin("Preferences", 3000);
   if (prefs?.set) {
     try {
       await prefs.set({ key: AUTH_SESSION_KEY, value: jsonPayload });
@@ -10053,28 +10102,34 @@ async function writeAuthSessionToNativeStore(jsonPayload) {
       console.warn("[auth] Preferences.set failed", e);
     }
   }
-  if (!isCapacitorNativeAuth()) return;
-  const fs = getCapFilesystemPlugin();
-  if (!fs?.writeFile) return;
-  try {
-    await fs.writeFile({
-      path: AUTH_NATIVE_FS_PATH,
-      data: jsonPayload,
-      directory: CAP_FS_DIRECTORY_DATA,
-      encoding: "utf8",
-      recursive: true,
-    });
-  } catch {
-    /* optional legacy mirror */
+  if (isCapacitorNativeAuth()) {
+    const fs = getCapFilesystemPlugin();
+    if (fs?.writeFile) {
+      try {
+        await fs.writeFile({
+          path: AUTH_NATIVE_FS_PATH,
+          data: jsonPayload,
+          directory: CAP_FS_DIRECTORY_DATA,
+          encoding: "utf8",
+          recursive: true,
+        });
+      } catch {}
+    }
   }
 }
 
-async function clearAuthSessionNativeStore() {
+async function clearAuthSessionEverywhere() {
   try {
     localStorage.removeItem(AUTH_SESSION_KEY);
     localStorage.removeItem(AUTH_SESSION_BACKUP_KEY);
   } catch {}
-  const prefs = getCapPreferencesPlugin();
+  const vault = await waitForCapPlugin("AuthVault", 3000);
+  if (vault?.remove) {
+    try {
+      await vault.remove();
+    } catch {}
+  }
+  const prefs = await waitForCapPlugin("Preferences", 2000);
   if (prefs?.remove) {
     try {
       await prefs.remove({ key: AUTH_SESSION_KEY });
@@ -10091,16 +10146,28 @@ async function clearAuthSessionNativeStore() {
   }
 }
 
-async function readAuthSessionRawFromNativeStores() {
+async function readAuthSessionRawFromAllStores() {
   let best = "";
+  const vault = await waitForCapPlugin("AuthVault", 5000);
+  if (vault?.get) {
+    try {
+      const { value } = await vault.get();
+      const v = value == null ? "" : String(value).trim();
+      if (v) best = v;
+    } catch (e) {
+      console.warn("[auth] AuthVault.get failed", e);
+    }
+  }
   try {
-    best = localStorage.getItem(AUTH_SESSION_KEY) || localStorage.getItem(AUTH_SESSION_BACKUP_KEY) || "";
+    const local =
+      localStorage.getItem(AUTH_SESSION_KEY) || localStorage.getItem(AUTH_SESSION_BACKUP_KEY) || "";
+    if (local && local.length >= best.length) best = local;
   } catch {}
-  const prefs = getCapPreferencesPlugin();
+  const prefs = await waitForCapPlugin("Preferences", 3000);
   if (prefs?.get) {
     try {
       const { value } = await prefs.get({ key: AUTH_SESSION_KEY });
-      const prefRaw = String(value || "").trim();
+      const prefRaw = value == null ? "" : String(value).trim();
       if (prefRaw && prefRaw.length >= best.length) best = prefRaw;
     } catch (e) {
       console.warn("[auth] Preferences.get failed", e);
@@ -10124,15 +10191,16 @@ async function readAuthSessionRawFromNativeStores() {
   return best;
 }
 
-async function restoreAuthSessionFromNativeStore() {
-  await readAuthSessionRawFromNativeStores();
+async function restoreAuthSessionFromAllStores() {
+  await readAuthSessionRawFromAllStores();
 }
 
 function ensureAuthBoot() {
   if (!_authBootPromise) {
     _authBootPromise = (async () => {
-      await restoreAuthSessionFromNativeStore();
+      await restoreAuthSessionFromAllStores();
       loadAuthSession();
+      ensureAuthSessionUserFromToken();
       syncActiveProfileIdFromSession();
       renderAuthStatus();
     })();
@@ -10911,6 +10979,7 @@ function loadAuthSession() {
     let raw = localStorage.getItem(AUTH_SESSION_KEY);
     if (!raw) raw = localStorage.getItem(AUTH_SESSION_BACKUP_KEY);
     authSession = raw ? normalizeAuthSession(JSON.parse(raw)) : null;
+    ensureAuthSessionUserFromToken();
     if (authSession && !localStorage.getItem(AUTH_SESSION_KEY)) {
       try {
         localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(authSession));
@@ -10927,9 +10996,9 @@ function saveAuthSession(sess) {
   if (authSession) {
     const payload = JSON.stringify(authSession);
     writeAuthSessionToLocalStores(payload);
-    void writeAuthSessionToNativeStore(payload);
+    void persistAuthSessionEverywhere(payload);
   } else {
-    void clearAuthSessionNativeStore();
+    void clearAuthSessionEverywhere();
   }
   renderAuthStatus();
   try { syncMobileTabbarProfileAvatar(); } catch {}
@@ -11622,6 +11691,9 @@ async function exchangeOAuthCodeForSession(code) {
       user,
       issued_at: Date.now(),
     });
+    if (authSession) {
+      await persistAuthSessionEverywhere(JSON.stringify(authSession));
+    }
     setStatus("Logged in via Google.");
     return true;
   } catch (e) {
@@ -28101,7 +28173,13 @@ async function handleNativeAuthDeepLink(url) {
     try { await getCapacitorBrowserPlugin()?.close?.(); } catch {}
     if (ok) {
       _lastOAuthCodeHandled = code;
+      if (authSession) {
+        await persistAuthSessionEverywhere(JSON.stringify(authSession));
+      }
       try { await refreshAuthStateFromSupabase(); } catch {}
+      if (authSession) {
+        await persistAuthSessionEverywhere(JSON.stringify(authSession));
+      }
       finishPostAuthNavigation();
     } else {
       setStatus(`Google login failed: ${lastAuthDebug || "exchange error"}`);
@@ -28126,13 +28204,13 @@ if (isCapacitorNativeAuth()) {
       CapApp.addListener("appStateChange", ({ isActive }) => {
         if (!isActive) {
           if (authSession) {
-            void writeAuthSessionToNativeStore(JSON.stringify(authSession));
+            void persistAuthSessionEverywhere(JSON.stringify(authSession));
           }
           return;
         }
         void (async () => {
           try {
-            await restoreAuthSessionFromNativeStore();
+            await restoreAuthSessionFromAllStores();
             loadAuthSession();
             await refreshAuthStateFromSupabase();
             scheduleApplyRoute();
@@ -28202,7 +28280,7 @@ if (els.btnAuthGateGuest) {
 }
 function logoutCurrentUser() {
   saveAuthSession(null);
-  void clearAuthSessionNativeStore();
+  void clearAuthSessionEverywhere();
   resetProfileUiToGuest();
   setProfileEditing(false);
   // A pending generation belongs to the previous user — wipe it so a
@@ -28707,13 +28785,17 @@ void (async () => {
       setTimeout(startDeferredQueries, 250);
     }
     renderPersonaSelect();
-  } else {
-    // Never leak previous user visuals when session is not valid.
+  } else if (!isAppLoggedIn() && !getSupabaseAuthToken()) {
     resetProfileUiToGuest();
     setProfileHeaderLoading(false);
     if ((location.hash || "") === "#/intro" && shouldSkipIntroOrOnboardingRoute()) {
       try { location.hash = getPostOnboardingHash(() => authSession); } catch {}
     }
+  } else {
+    ensureAuthSessionUserFromToken();
+    syncActiveProfileIdFromSession();
+    setProfileHeaderLoading(false);
+    scheduleApplyRoute();
   }
   } finally {
     // Defense in depth — the success paths above already dismiss the

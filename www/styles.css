@@ -235,6 +235,263 @@ html[data-theme="light"] .settingsThemeOpt.is-active{
   }
 }
 
+/* Light mode — readable copy + elevated cards (purple/teal washes, not flat white). */
+html[data-theme="light"] input,
+html[data-theme="light"] select,
+html[data-theme="light"] textarea{
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(15, 23, 40, 0.12);
+  color: var(--text);
+}
+
+html[data-theme="light"] .homeDeskGreeting,
+html[data-theme="light"] .homeDeskSectionHead h3,
+html[data-theme="light"] .challengesTitle{
+  color: var(--text);
+}
+
+html[data-theme="light"] .homeDeskSub,
+html[data-theme="light"] .homeDeskSectionLead,
+html[data-theme="light"] .discoveryStudioTag.appScreenLead,
+html[data-theme="light"] .challengesLead{
+  color: var(--muted);
+}
+
+html[data-theme="light"] .homeDeskKicker,
+html[data-theme="light"] .challengeMiniKicker,
+html[data-theme="light"] .challengesKicker{
+  color: rgba(18, 184, 150, 0.92);
+}
+
+html[data-theme="light"] .discoverChallengeSpotlightTitle,
+html[data-theme="light"] .discoverChallengeSpotMeta strong{
+  color: var(--text);
+}
+
+html[data-theme="light"] .discoverChallengeSpotlightCount,
+html[data-theme="light"] .discoverChallengeSpotMeta small{
+  color: var(--muted);
+}
+
+html[data-theme="light"] .discoveryQuickStartsHead span{
+  color: var(--text);
+}
+
+html[data-theme="light"] .discoveryQuickStartsHead small{
+  color: var(--muted);
+}
+
+html[data-theme="light"] .discoveryQuickIdea,
+html[data-theme="light"] .challengeMiniCard,
+html[data-theme="light"] .challengeStreakCard,
+html[data-theme="light"] .challengeFeatureCard,
+html[data-theme="light"] .challengeLoopCard,
+html[data-theme="light"] .challengesHeroCopy,
+html[data-theme="light"] .homeDeskEntries{
+  border-color: rgba(15, 23, 40, 0.09);
+  background:
+    radial-gradient(120% 100% at 8% 0%, rgba(124, 92, 255, 0.12), transparent 58%),
+    radial-gradient(95% 85% at 100% 12%, rgba(35, 213, 171, 0.09), transparent 62%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 247, 252, 0.94));
+  box-shadow:
+    0 12px 32px rgba(88, 104, 140, 0.10),
+    0 2px 6px rgba(124, 92, 255, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  color: var(--text);
+}
+
+html[data-theme="light"] .discoveryQuickIdea span,
+html[data-theme="light"] .challengeMiniCard h3{
+  color: var(--text);
+}
+
+html[data-theme="light"] .discoveryQuickIdea small span,
+html[data-theme="light"] .discoveryIdeaTags span{
+  background: rgba(124, 92, 255, 0.08);
+  color: rgba(15, 23, 40, 0.62);
+  border: 1px solid rgba(124, 92, 255, 0.12);
+}
+
+html[data-theme="light"] .challengeMiniCard p,
+html[data-theme="light"] .challengeMiniCount{
+  color: var(--muted);
+}
+
+html[data-theme="light"] .challengeMiniCard button,
+html[data-theme="light"] .challengesGhostCta{
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(15, 23, 40, 0.10);
+  color: var(--text);
+}
+
+html[data-theme="light"] .homeDeskSeg{
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(15, 23, 40, 0.08);
+}
+
+html[data-theme="light"] .homeDeskSegBtn{
+  color: var(--muted);
+}
+
+html[data-theme="light"] .homeDeskSegBtn.is-active{
+  background: #fff;
+  color: var(--text);
+  box-shadow: 0 6px 20px rgba(88, 104, 140, 0.12);
+}
+
+html[data-theme="light"] .homeDeskEchoPromo{
+  border-color: rgba(35, 213, 171, 0.28);
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(35, 213, 171, 0.12), transparent 55%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(236, 248, 255, 0.92));
+  box-shadow: 0 14px 36px rgba(88, 104, 140, 0.10);
+}
+
+html[data-theme="light"] .homeDeskEchoPromoCopy h3{
+  color: var(--text);
+}
+
+html[data-theme="light"] .homeDeskEchoPromoCopy p{
+  color: var(--muted);
+}
+
+html[data-theme="light"] .homeDeskEchoPromoBtn{
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(15, 23, 40, 0.10);
+  color: var(--text);
+}
+
+html[data-theme="light"] .homeDeskEchoPromoBtn--primary{
+  border-color: rgba(35, 213, 171, 0.35);
+  color: rgba(18, 140, 118, 0.95);
+}
+
+html[data-theme="light"] .friendsEchoRailHint{
+  color: var(--muted);
+}
+
+html[data-theme="light"] .echoTileLabel{
+  color: var(--muted);
+}
+
+html[data-theme="light"] .echoTile.isActive .echoTileLabel,
+html[data-theme="light"] .echoTile--add .echoTileLabel{
+  color: var(--primary);
+}
+
+html[data-theme="light"] .friendsPage .followActStack .followAct,
+html[data-theme="light"] .profileActivitiesList.followActStack .followAct,
+html[data-theme="light"] .profileActRow{
+  border-bottom-color: rgba(15, 23, 40, 0.08);
+}
+
+html[data-theme="light"] .followActHead,
+html[data-theme="light"] .followActUser,
+html[data-theme="light"] .friendsPage .followActWhoLine .followActUser{
+  color: var(--text);
+}
+
+html[data-theme="light"] .followActYouLabel{
+  color: var(--primary2);
+}
+
+html[data-theme="light"] .followActWhen,
+html[data-theme="light"] .profileActRowWhen{
+  color: var(--muted);
+}
+
+html[data-theme="light"] .profileActRowBody,
+html[data-theme="light"] .followActStatusCaption{
+  color: rgba(15, 23, 40, 0.78);
+}
+
+html[data-theme="light"] .followActMore{
+  color: var(--muted);
+}
+
+html[data-theme="light"] .followActMore:hover,
+html[data-theme="light"] .followActMore:focus-visible{
+  color: var(--text);
+  background: rgba(124, 92, 255, 0.08);
+}
+
+html[data-theme="light"] .profileAuraNameInput,
+html[data-theme="light"] .profileAuraNameInput:disabled{
+  color: var(--text);
+  -webkit-text-fill-color: var(--text);
+}
+
+html[data-theme="light"] .profileVoiceTimbreInline,
+html[data-theme="light"] .profileAuraIdentity > .profileIdentityLine,
+html[data-theme="light"] .profileHeroBioText{
+  color: var(--muted);
+}
+
+html[data-theme="light"] .profileIdentityLine strong{
+  color: var(--text);
+}
+
+html[data-theme="light"] .profileStatsPills{
+  border-color: rgba(15, 23, 40, 0.08);
+  background:
+    radial-gradient(115% 140% at 8% 0%, rgba(124, 92, 255, 0.10), transparent 58%),
+    radial-gradient(100% 130% at 92% 18%, rgba(35, 213, 171, 0.08), transparent 60%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 247, 252, 0.94));
+  box-shadow: 0 12px 30px rgba(88, 104, 140, 0.10);
+}
+
+html[data-theme="light"] .profileStatPill{
+  color: var(--text);
+}
+
+html[data-theme="light"] .profileStatPillValue{
+  color: transparent;
+  background: linear-gradient(135deg, #6d4df5, #12b896);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+}
+
+html[data-theme="light"] .profileStatPillLabel{
+  color: var(--muted);
+}
+
+html[data-theme="light"] .profileStatPill:not(:last-child)::after{
+  background: linear-gradient(180deg, transparent, rgba(15, 23, 40, 0.12), transparent);
+}
+
+html[data-theme="light"] .profileTab{
+  color: var(--muted);
+}
+
+html[data-theme="light"] .profileTab.isActive{
+  color: var(--text);
+}
+
+html[data-theme="light"] .profileActEmptyTitle{
+  color: var(--text);
+}
+
+html[data-theme="light"] .profileActEmptyText{
+  color: var(--muted);
+}
+
+html[data-theme="light"] .profileAuraStatStrip{
+  border-color: rgba(15, 23, 40, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 247, 252, 0.92));
+}
+
+html[data-theme="light"] .profileAuraStatLabel{
+  color: var(--muted);
+}
+
+html[data-theme="light"] .discoveryRefreshBtn{
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(15, 23, 40, 0.10);
+  color: var(--text);
+}
+
 *{ box-sizing:border-box; }
 html,body{ height:100%; }
 body{

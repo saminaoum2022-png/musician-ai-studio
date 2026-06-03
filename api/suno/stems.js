@@ -512,6 +512,14 @@ module.exports = async function handler(req, res) {
 
 // === helpers ===
 
+/** True when the user's style asks for speech / VO instead of sung delivery. */
+function wantsSpokenDelivery(text) {
+  const s = String(text || "").toLowerCase();
+  return /\b(spoken(?:\s+word)?|voice[- ]?over|voiceover|narrat(?:ion|ed|or)?|monologue|ad\s+read|documentary|podcast|no\s+singing|non[- ]?melodic|reads?\s+(?:the\s+)?script)\b/.test(
+    s
+  );
+}
+
 /**
  * For cover mode, fold delivery hints (dialect, timbre, vocal gender) into
  * the `style` field. We deliberately avoid rigid timing/key/groove locks so
@@ -520,8 +528,9 @@ module.exports = async function handler(req, res) {
 function buildCoverStyle({ baseStyle, dialect, dialectHint, voiceTimbre, vocalGender }) {
   const parts = [];
   const base = String(baseStyle || "").trim();
+  const spoken = wantsSpokenDelivery(base);
   if (base) parts.push(base);
-  else parts.push("modern pop, polished full song arrangement");
+  else parts.push(spoken ? "spoken word voice-over, clear narration" : "modern pop, polished full song arrangement");
 
   const dialectClean = String(dialect || "").trim();
   if (dialectClean) parts.push(`dialect: ${dialectClean}`);
@@ -533,7 +542,21 @@ function buildCoverStyle({ baseStyle, dialect, dialectHint, voiceTimbre, vocalGe
   const timbreLower = timbreClean.toLowerCase();
   const gender = String(vocalGender || "").trim().toLowerCase();
   let timbreClause = "";
-  if (timbreLower.includes("baritone")) {
+  if (spoken) {
+    if (timbreLower.includes("baritone")) {
+      timbreClause = "male baritone narrator, warm clear speech, controlled dynamics";
+    } else if (timbreLower.includes("bass")) {
+      timbreClause = "male bass narrator, deep clear speech, no high belt";
+    } else if (timbreLower.includes("tenor")) {
+      timbreClause = "male tenor narrator, clear conversational speech";
+    } else if (timbreLower.includes("alto")) {
+      timbreClause = "female alto narrator, warm clear speech";
+    } else if (timbreLower.includes("mezzo")) {
+      timbreClause = "female mezzo narrator, balanced clear speech";
+    } else if (timbreLower.includes("soprano")) {
+      timbreClause = "female soprano narrator, bright clear speech";
+    }
+  } else if (timbreLower.includes("baritone")) {
     timbreClause = "male baritone lead, warm chest resonance, controlled dynamics";
   } else if (timbreLower.includes("bass")) {
     timbreClause = "male bass lead, deep low register, dark warm tone";
@@ -547,10 +570,14 @@ function buildCoverStyle({ baseStyle, dialect, dialectHint, voiceTimbre, vocalGe
     timbreClause = "female soprano lead, bright clear upper range";
   }
   if (timbreClause) parts.push(timbreClause);
-  else if (gender === "m") parts.push("male lead vocal");
-  else if (gender === "f") parts.push("female lead vocal");
+  else if (gender === "m") parts.push(spoken ? "male narrator voice" : "male lead vocal");
+  else if (gender === "f") parts.push(spoken ? "female narrator voice" : "female lead vocal");
 
-  parts.push("expressive melodic phrasing");
+  parts.push(
+    spoken
+      ? "spoken word delivery, clear narration, no melodic singing"
+      : "expressive melodic phrasing"
+  );
 
   let merged = parts.filter(Boolean).join(", ");
   if (merged.length > 980) merged = merged.slice(0, 977) + "...";

@@ -10197,6 +10197,29 @@ function profileStorageKey(forId) {
   const id = String(forId || activeProfile?.id || authSession?.user?.id || "guest");
   return id === "guest" ? PROFILE_KEY_GUEST : `${PROFILE_KEY}:${id}`;
 }
+
+/** Guest library/profile on this device must not merge into a signed-in account. */
+function clearGuestLocalData() {
+  try {
+    localStorage.removeItem(PROFILE_KEY_GUEST);
+    localStorage.removeItem(profileLibraryKeyFor("guest"));
+  } catch {}
+}
+
+/** Drop on-device profile + library blobs for one Supabase user id. */
+function wipeLocalStorageForUserId(userId) {
+  const uid = String(userId || "").trim();
+  if (!uid) return;
+  try {
+    localStorage.removeItem(profileStorageKey(uid));
+    localStorage.removeItem(profileLibraryKeyFor(uid));
+  } catch {}
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    const p = raw ? JSON.parse(raw) : null;
+    if (String(p?.id || "") === uid) localStorage.removeItem(PROFILE_KEY);
+  } catch {}
+}
 const PROFILE_PERSONAS_KEY = "mas:personas:v1";
 const PERSONA_SELECTED_KEY = "mas:personaSelected:v1";
 function personaSelectedStorageKey() {
@@ -10786,6 +10809,7 @@ function onAuthAccountSwitched(prevUserId, nextUserId) {
   saveProfile(activeProfile);
   saveLibraryFor(nextUserId, []);
   saveLibrary([]);
+  clearGuestLocalData();
   try {
     console.info("[auth] account switched", { from: prevUserId, to: nextUserId });
   } catch {}
@@ -12132,7 +12156,7 @@ function resetProfileUiToGuest() {
     soundCertified: false,
   };
   resetProfileReleasesPagination();
-  try { localStorage.setItem(PROFILE_KEY, JSON.stringify(activeProfile)); } catch {}
+  saveProfile(activeProfile);
   if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = "@guest";
   if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = "";
   if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = "";
@@ -20841,13 +20865,9 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
   const cloudSongs =
     prefetchedCloud !== undefined ? prefetchedCloud : await supabaseLoadUserSongs();
   const localForUser = loadLibraryFor(uid);
-  const guestSongs = loadLibraryFor("guest");
-  // Never merge every `mas:library:v1:*` key on device — that leaked the
-  // previous account's songs into a brand-new email sign-up.
-  let localCandidates = localForUser;
-  if (!cloudSongs.length && !localForUser.length && guestSongs.length) {
-    localCandidates = guestSongs;
-  }
+  // Never merge guest or other users' library keys — that leaked a prior
+  // account's songs into a new sign-up on the same device.
+  const localCandidates = localForUser;
 
   const sigOf = (row) => {
     const url = String(row?.url || "").trim();
@@ -29234,9 +29254,11 @@ function logoutCurrentUser() {
   saveAuthSession(null);
   void clearAuthSessionEverywhere();
   if (prevUserId) {
+    wipeLocalStorageForUserId(prevUserId);
     saveLibraryFor(prevUserId, []);
     saveHubFeed([]);
   }
+  clearGuestLocalData();
   resetProfileUiToGuest();
   setProfileEditing(false);
   // A pending generation belongs to the previous user — wipe it so a
@@ -29261,6 +29283,47 @@ function logoutCurrentUser() {
     scheduleApplyRoute();
   }
   setStatus("Logged out.");
+}
+
+/** "Delete profile data" — wipe this account on device, then sign out so
+ *  auth boot cannot immediately re-hydrate another user's library. */
+async function deleteLocalProfileDataOnDevice() {
+  const uid = String(authSession?.user?.id || "").trim();
+  const msg = uid
+    ? "Remove this account's saved profile and library data on this device and sign out?\n\nSongs stored in your online account are not deleted."
+    : "Remove saved guest profile data on this device?";
+  if (!window.confirm(msg)) return;
+  const btn = els.btnProfileDelete;
+  const prevLabel = btn?.textContent || "";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Deleting…";
+  }
+  try {
+    if (uid) {
+      wipeLocalStorageForUserId(uid);
+      saveHubFeed([]);
+      invalidateLibraryMemCache();
+      clearSignedInUiCaches();
+      _libraryHydrateCompleted = false;
+      _libraryHydrateInFlight = false;
+      logoutCurrentUser();
+      setStatus("Device data removed. Signed out.");
+      return;
+    }
+    clearGuestLocalData();
+    resetProfileUiToGuest();
+    setProfileEditing(false);
+    setStatus("Local profile data deleted.");
+  } catch (e) {
+    console.error("[profile] delete local data failed", e);
+    setStatus(`Could not delete profile data: ${e?.message || "error"}`);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = prevLabel || "Delete profile data";
+    }
+  }
 }
 if (els.settingsBtnSignIn) {
   els.settingsBtnSignIn.addEventListener("click", () => void runGoogleOAuthLogin());
@@ -29293,23 +29356,7 @@ if (els.btnLoadingDismiss) {
 }
 if (els.btnProfileDelete) {
   els.btnProfileDelete.addEventListener("click", () => {
-    if (!window.confirm("Delete local profile data on this device?")) return;
-    activeProfile = {
-      id: "guest",
-      username: "guest",
-      email: "",
-      gender: "",
-      voiceTimbre: "",
-      bio: "",
-      avatar: "",
-      genres: "",
-      links: {},
-      isPublic: true,
-      soundCertified: false,
-    };
-    saveProfile(activeProfile);
-    resetProfileUiToGuest();
-    setStatus("Local profile data deleted.");
+    void deleteLocalProfileDataOnDevice();
   });
 }
 if (els.profileAvatarFile) {

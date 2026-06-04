@@ -29096,25 +29096,26 @@ if (els.btnProfileCancel) {
     setStatus("Edits cancelled.");
   });
 }
+function setAuthSocialGateLabel(btn, provider, busy) {
+  if (!btn) return;
+  const label = oauthProviderLabel(provider);
+  btn.disabled = Boolean(busy);
+  btn.classList.toggle("is-busy", Boolean(busy));
+  btn.setAttribute("aria-busy", busy ? "true" : "false");
+  btn.setAttribute("aria-label", busy ? `Opening ${label}…` : `Continue with ${label}`);
+}
+
 function resetAuthGateButtons() {
   if (els.btnAuthApple) {
     els.btnAuthApple.disabled = false;
     els.btnAuthApple.textContent = "Continue with Apple";
   }
-  if (els.btnAuthGateApple) {
-    els.btnAuthGateApple.disabled = false;
-    const appleLabel = els.btnAuthGateApple.querySelector("span");
-    if (appleLabel) appleLabel.textContent = "Continue with Apple";
-  }
+  setAuthSocialGateLabel(els.btnAuthGateApple, "apple", false);
   if (els.btnAuthGoogle) {
     els.btnAuthGoogle.disabled = false;
     els.btnAuthGoogle.textContent = "Continue with Google";
   }
-  if (els.btnAuthGateGoogle) {
-    els.btnAuthGateGoogle.disabled = false;
-    const label = els.btnAuthGateGoogle.querySelector("span");
-    if (label) label.textContent = "Continue with Google";
-  }
+  setAuthSocialGateLabel(els.btnAuthGateGoogle, "google", false);
   setAuthEmailSubmitting(false);
 }
 
@@ -29260,11 +29261,7 @@ function setOAuthGateBusy(provider, busy) {
   const label = oauthProviderLabel(provider);
   const gateBtn = provider === "apple" ? els.btnAuthGateApple : els.btnAuthGateGoogle;
   const legacyBtn = provider === "apple" ? els.btnAuthApple : els.btnAuthGoogle;
-  if (gateBtn) {
-    gateBtn.disabled = busy;
-    const span = gateBtn.querySelector("span");
-    if (span) span.textContent = busy ? `Opening ${label}…` : `Continue with ${label}`;
-  }
+  setAuthSocialGateLabel(gateBtn, provider, busy);
   if (legacyBtn) {
     legacyBtn.disabled = busy;
     legacyBtn.textContent = busy ? `Opening ${label}…` : `Continue with ${label}`;

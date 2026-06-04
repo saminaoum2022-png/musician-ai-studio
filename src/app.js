@@ -616,6 +616,12 @@ const els = {
   authLoggedInEmailInline: document.getElementById("authLoggedInEmailInline"),
   btnAuthGoogle: document.getElementById("btnAuthGoogle"),
   btnAuthGateGoogle: document.getElementById("btnAuthGateGoogle"),
+  authEmailForm: document.getElementById("authEmailForm"),
+  authEmailInput: document.getElementById("authEmailInput"),
+  authPasswordInput: document.getElementById("authPasswordInput"),
+  authEmailMsg: document.getElementById("authEmailMsg"),
+  btnAuthEmailSubmit: document.getElementById("btnAuthEmailSubmit"),
+  btnAuthToggleMode: document.getElementById("btnAuthToggleMode"),
   btnAuthGateGuest: document.getElementById("btnAuthGateGuest"),
   btnAuthLogout: document.getElementById("btnAuthLogout"),
   btnProfileDelete: document.getElementById("btnProfileDelete"),
@@ -12113,6 +12119,197 @@ function resetProfileUiToGuest() {
   if (els.profilePersonaRow) els.profilePersonaRow.style.display = "none";
   try { syncProfilePersonaAvatarBadge(); } catch {}
 }
+let _authEmailMode = "signin";
+let _authEmailSubmitInFlight = false;
+
+function setAuthEmailMode(mode) {
+  _authEmailMode = mode === "signup" ? "signup" : "signin";
+  if (els.btnAuthEmailSubmit) {
+    els.btnAuthEmailSubmit.textContent = _authEmailMode === "signup" ? "Create account" : "Sign in";
+  }
+  if (els.btnAuthToggleMode) {
+    els.btnAuthToggleMode.textContent =
+      _authEmailMode === "signup"
+        ? "Already have an account? Sign in"
+        : "New here? Create account";
+  }
+  if (els.authPasswordInput) {
+    els.authPasswordInput.autocomplete =
+      _authEmailMode === "signup" ? "new-password" : "current-password";
+    els.authPasswordInput.placeholder =
+      _authEmailMode === "signup" ? "At least 8 characters" : "Your password";
+  }
+}
+
+function setAuthEmailMessage(text, { ok = false } = {}) {
+  const el = els.authEmailMsg;
+  if (!el) return;
+  const msg = String(text || "").trim();
+  if (!msg) {
+    el.hidden = true;
+    el.textContent = "";
+    el.classList.remove("isOk");
+    return;
+  }
+  el.hidden = false;
+  el.textContent = msg;
+  el.classList.toggle("isOk", Boolean(ok));
+}
+
+function parseSupabaseAuthError(data, status) {
+  const raw =
+    data?.error_description ||
+    data?.msg ||
+    data?.message ||
+    data?.error ||
+    "";
+  const s = String(raw || "").trim();
+  const lower = s.toLowerCase();
+  if (status === 400 && lower.includes("invalid login")) {
+    return "Wrong email or password.";
+  }
+  if (lower.includes("already registered") || lower.includes("already exists")) {
+    return "That email already has an account. Sign in instead.";
+  }
+  if (lower.includes("password") && lower.includes("short")) {
+    return "Use a password with at least 8 characters.";
+  }
+  if (lower.includes("email") && lower.includes("invalid")) {
+    return "Enter a valid email address.";
+  }
+  if (lower.includes("email not confirmed")) {
+    return "Confirm your email first (check your inbox), then sign in.";
+  }
+  return s || `Sign-in failed (${status || "error"})`;
+}
+
+async function applySupabaseAuthTokenPayload(d) {
+  if (!d?.access_token) return false;
+  saveAuthSession({
+    access_token: d.access_token,
+    refresh_token: d.refresh_token || "",
+    expires_in: Number(d.expires_in || 3600),
+    token_type: d.token_type || "bearer",
+    user: d.user || { id: "", email: "" },
+    issued_at: Date.now(),
+  });
+  if (authSession) {
+    await persistAuthSessionEverywhere(JSON.stringify(authSession));
+  }
+  await refreshAuthStateFromSupabase();
+  return true;
+}
+
+async function supabaseSignUpWithPassword(email, password) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase config missing");
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ email, password }),
+  });
+  const d = await r.json().catch(() => ({}));
+  return { ok: r.ok, status: r.status, data: d };
+}
+
+async function supabaseSignInWithPassword(email, password) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase config missing");
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ email, password }),
+  });
+  const d = await r.json().catch(() => ({}));
+  return { ok: r.ok, status: r.status, data: d };
+}
+
+function setAuthEmailSubmitting(on) {
+  _authEmailSubmitInFlight = Boolean(on);
+  const busy = _authEmailSubmitInFlight;
+  if (els.btnAuthEmailSubmit) els.btnAuthEmailSubmit.disabled = busy;
+  if (els.btnAuthGateGoogle) els.btnAuthGateGoogle.disabled = busy;
+  if (els.btnAuthToggleMode) els.btnAuthToggleMode.disabled = busy;
+}
+
+async function runEmailPasswordAuth() {
+  if (_authEmailSubmitInFlight) return;
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    await loadPublicConfig();
+  }
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    setAuthEmailMessage(loginConfigFailureMessage() || "Could not load login settings.");
+    return;
+  }
+
+  const email = String(els.authEmailInput?.value || "")
+    .trim()
+    .toLowerCase();
+  const password = String(els.authPasswordInput?.value || "");
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    setAuthEmailMessage("Enter a valid email address.");
+    try { els.authEmailInput?.focus?.(); } catch {}
+    return;
+  }
+  if (password.length < 8) {
+    setAuthEmailMessage("Password must be at least 8 characters.");
+    try { els.authPasswordInput?.focus?.(); } catch {}
+    return;
+  }
+
+  setAuthEmailSubmitting(true);
+  setAuthEmailMessage("");
+  beginLoginSettling(_authEmailMode === "signup" ? "Creating your account…" : "Signing you in…");
+
+  try {
+    if (_authEmailMode === "signup") {
+      const { ok, status, data } = await supabaseSignUpWithPassword(email, password);
+      if (data?.access_token) {
+        const applied = await applySupabaseAuthTokenPayload(data);
+        if (!applied) throw new Error("Could not save session");
+        notifyLoginFeedback("Account created — welcome!");
+        await finishPostAuthNavigation();
+        return;
+      }
+      if (data?.user && !data?.access_token) {
+        endLoginSettling();
+        setAuthEmailMode("signin");
+        setAuthEmailMessage(
+          "We sent a confirmation link to your email. Open it, then sign in here.",
+          { ok: true },
+        );
+        notifyLoginFeedback("Check your inbox — confirm your email, then sign in.");
+        return;
+      }
+      if (!ok) {
+        throw new Error(parseSupabaseAuthError(data, status));
+      }
+      throw new Error("Sign up did not return a session. Try signing in.");
+    }
+
+    const { ok, status, data } = await supabaseSignInWithPassword(email, password);
+    if (!ok || !data?.access_token) {
+      throw new Error(parseSupabaseAuthError(data, status));
+    }
+    const applied = await applySupabaseAuthTokenPayload(data);
+    if (!applied) throw new Error("Could not save session");
+    notifyLoginFeedback("Signed in.");
+    await finishPostAuthNavigation();
+  } catch (e) {
+    endLoginSettling();
+    const msg = e?.message || String(e);
+    setAuthEmailMessage(msg);
+    notifyLoginFeedback(msg);
+  } finally {
+    setAuthEmailSubmitting(false);
+    resetAuthGateButtons();
+  }
+}
+
 async function supabaseSendOtp(email) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase config missing");
   const r = await fetch(`${SUPABASE_URL}/auth/v1/otp`, {
@@ -28663,11 +28860,22 @@ if (els.btnProfileCancel) {
     setStatus("Edits cancelled.");
   });
 }
-function resetGoogleAuthButton() {
+function resetAuthGateButtons() {
   if (els.btnAuthGoogle) {
     els.btnAuthGoogle.disabled = false;
     els.btnAuthGoogle.textContent = "Continue with Google";
   }
+  if (els.btnAuthGateGoogle) {
+    els.btnAuthGateGoogle.disabled = false;
+    const label = els.btnAuthGateGoogle.querySelector("span");
+    if (label) label.textContent = "Continue with Google";
+  }
+  setAuthEmailSubmitting(false);
+}
+
+/** @deprecated use resetAuthGateButtons */
+function resetGoogleAuthButton() {
+  resetAuthGateButtons();
 }
 let _lastOAuthCodeHandled = "";
 
@@ -28867,6 +29075,19 @@ if (els.btnAuthGateGuest) {
       try { location.hash = "#/challenges"; } catch {}
     }
     setStatus("Guest mode enabled. Login anytime from Profile.");
+  });
+}
+setAuthEmailMode("signin");
+if (els.btnAuthToggleMode) {
+  els.btnAuthToggleMode.addEventListener("click", () => {
+    setAuthEmailMode(_authEmailMode === "signup" ? "signin" : "signup");
+    setAuthEmailMessage("");
+  });
+}
+if (els.authEmailForm) {
+  els.authEmailForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    void runEmailPasswordAuth();
   });
 }
 function logoutCurrentUser() {

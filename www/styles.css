@@ -775,6 +775,27 @@ html[data-theme="light"] .authHero{
   color: var(--text);
 }
 
+html[data-theme="light"] .authFieldLabel{
+  color: rgba(15, 23, 40, 0.58);
+}
+html[data-theme="light"] .authFieldInput{
+  border-color: rgba(15, 23, 40, 0.12);
+  background: rgba(255,255,255,0.92);
+  color: #0f1728;
+}
+html[data-theme="light"] .authFieldInput::placeholder{
+  color: rgba(15, 23, 40, 0.34);
+}
+html[data-theme="light"] .authDivider{
+  color: rgba(15, 23, 40, 0.38);
+}
+html[data-theme="light"] .authDivider::before,
+html[data-theme="light"] .authDivider::after{
+  background: rgba(15, 23, 40, 0.10);
+}
+html[data-theme="light"] .authEmailToggle{
+  color: rgba(15, 23, 40, 0.55);
+}
 html[data-theme="light"] .authSub,
 html[data-theme="light"] .authLegal{
   color: var(--muted);
@@ -2045,6 +2066,108 @@ body.isOnboarding .generateOrb{ display:none !important; }
   background: rgba(255,255,255,0.04);
 }
 .authGhostBtn:active{ transform: scale(0.98); }
+.authDivider{
+  display:flex;
+  align-items:center;
+  gap: 12px;
+  width: 100%;
+  margin: 2px 0;
+  color: rgba(223, 231, 251, 0.38);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.authDivider::before,
+.authDivider::after{
+  content:"";
+  flex:1;
+  height: 1px;
+  background: rgba(255,255,255,0.10);
+}
+.authEmailForm{
+  display:flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+}
+.authField{
+  display:flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  text-align: left;
+}
+.authFieldLabel{
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: rgba(223, 231, 251, 0.62);
+}
+.authFieldInput{
+  width: 100%;
+  height: 46px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: #f0f4ff;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.authFieldInput::placeholder{
+  color: rgba(223, 231, 251, 0.34);
+}
+.authFieldInput:focus{
+  border-color: rgba(124,92,255,0.55);
+  box-shadow: 0 0 0 3px rgba(124,92,255,0.18);
+}
+.authEmailMsg{
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: rgba(255, 198, 120, 0.95);
+  text-align: left;
+}
+.authEmailMsg.isOk{
+  color: rgba(120, 220, 180, 0.95);
+}
+.authEmailBtn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width: 100%;
+  height: 48px;
+  margin-top: 2px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(124,92,255,0.55);
+  background: linear-gradient(135deg, rgba(124,92,255,0.95), rgba(35,213,171,0.88));
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 120ms ease, opacity 180ms ease;
+}
+.authEmailBtn:hover{ opacity: 0.96; }
+.authEmailBtn:active{ transform: scale(0.98); }
+.authEmailBtn[disabled]{
+  opacity: 0.55;
+  cursor: wait;
+}
+.authEmailToggle{
+  border: none;
+  background: transparent;
+  color: rgba(223, 231, 251, 0.58);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0 0;
+  text-align: center;
+}
+.authEmailToggle:hover{ color: #fff; }
 .authLegal{
   margin: 6px 0 0;
   font-size: 11.5px;

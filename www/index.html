@@ -71,7 +71,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260521tabsNeutralV1" />
+    <link rel="stylesheet" href="./styles.css?v=20260604authEmailV1" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -310,6 +310,40 @@
                 </svg>
                 <span>Continue with Google</span>
               </button>
+              <div class="authDivider" aria-hidden="true"><span>or</span></div>
+              <form id="authEmailForm" class="authEmailForm" novalidate>
+                <label class="authField">
+                  <span class="authFieldLabel">Email</span>
+                  <input
+                    id="authEmailInput"
+                    class="authFieldInput"
+                    type="email"
+                    name="email"
+                    inputmode="email"
+                    autocomplete="email"
+                    autocapitalize="off"
+                    spellcheck="false"
+                    placeholder="you@example.com"
+                    required
+                  />
+                </label>
+                <label class="authField">
+                  <span class="authFieldLabel">Password</span>
+                  <input
+                    id="authPasswordInput"
+                    class="authFieldInput"
+                    type="password"
+                    name="password"
+                    autocomplete="current-password"
+                    minlength="8"
+                    placeholder="At least 8 characters"
+                    required
+                  />
+                </label>
+                <p id="authEmailMsg" class="authEmailMsg" hidden role="status"></p>
+                <button id="btnAuthEmailSubmit" class="authEmailBtn" type="submit">Sign in</button>
+                <button id="btnAuthToggleMode" class="authEmailToggle" type="button">New here? Create account</button>
+              </form>
               <button id="btnAuthGateGuest" class="authGhostBtn" type="button">Continue as guest</button>
             </div>
             <p class="authLegal">By continuing you agree to our <a href="#/settings">Terms</a> &middot; <a href="#/settings">Privacy</a></p>

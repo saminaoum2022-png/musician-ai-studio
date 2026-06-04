@@ -831,16 +831,6 @@ html[data-theme="light"] .authScreen{
   background: var(--bg) !important;
 }
 
-html[data-theme="light"] .authBrandName{
-  color: var(--text);
-  -webkit-text-fill-color: var(--text);
-  background: none;
-}
-
-html[data-theme="light"] .authBrandTag{
-  color: var(--muted);
-}
-
 html[data-theme="light"] .authHero{
   color: var(--text);
 }
@@ -2346,56 +2336,19 @@ body.isOnboarding .generateOrb{ display:none !important; }
   overflow: visible;
   box-sizing: border-box;
 }
+/* Same logo + wordmark as #bootSplash (bootSplashMark + introWordmark). */
 .authBrand{
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   justify-content: center;
   width: 100%;
   max-width: 100%;
-  overflow: visible;
+  margin: 0 0 4px;
 }
-.authBrandMark{
-  display: block;
-  width: 72px;
-  height: 72px;
-  flex: 0 0 auto;
-  object-fit: cover;
-  border-radius: 16px;
-  box-shadow:
-    0 0 0 1px rgba(255,255,255,0.08),
-    0 12px 32px -16px rgba(124,92,255,0.45);
-  pointer-events: none;
-  -webkit-user-drag: none;
-  user-select: none;
-}
-.authBrandWordmark{
+.authBrand .introWordmark{
   margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  max-width: 100%;
-  text-align: center;
-}
-.authBrandName{
-  display: block;
-  font-size: clamp(30px, 8vw, 36px);
-  line-height: 1;
-  letter-spacing: -0.04em;
-}
-.authBrandTag{
-  display: block;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: rgba(223, 231, 251, 0.55);
-  transform: none;
-  line-height: 1;
 }
 .authHero{
   margin: 8px 0 0;

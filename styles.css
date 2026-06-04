@@ -2336,31 +2336,53 @@ body.isOnboarding .generateOrb{ display:none !important; }
   width: 100%;
   max-width: 380px;
   margin: 0 auto;
-  padding: 18px 24px;
+  padding: max(18px, env(safe-area-inset-top)) 20px max(18px, env(safe-area-inset-bottom));
   display:flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
   gap: 14px;
+  overflow: visible;
+  box-sizing: border-box;
 }
 .authBrand{
-  display: inline-flex;
+  display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   justify-content: center;
+  width: 100%;
+  max-width: 100%;
+  overflow: visible;
+}
+.authBrandMark{
+  display: block;
+  width: 80px;
+  height: 80px;
+  flex: 0 0 auto;
+  object-fit: contain;
+  border-radius: 18px;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.06),
+    0 16px 40px -18px rgba(124,92,255,0.55);
+  pointer-events: none;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+.authBrandWordmark{
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0;
+  max-width: 100%;
   font-size: 30px;
   font-weight: 900;
   letter-spacing: -0.045em;
-  line-height: 1;
-}
-.authBrandMark{
-  width: min(24vw, 95px);
-  aspect-ratio: 1 / 1;
-  background:
-    radial-gradient(75% 75% at 50% 50%, rgba(124,92,255,0.10), transparent 70%),
-    url("./assets/icons/splash-mark.png") center / contain no-repeat;
-  pointer-events: none;
+  line-height: 1.1;
+  overflow: visible;
 }
 .authBrandText{
   background: none;
@@ -2501,6 +2523,15 @@ body.isOnboarding .generateOrb{ display:none !important; }
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+.authDividerSocial{
+  margin: 8px 0 4px;
+  letter-spacing: 0.06em;
+  text-transform: none;
+  font-size: 11.5px;
+}
+.authDividerSocial span{
+  white-space: nowrap;
 }
 .authDivider::before,
 .authDivider::after{

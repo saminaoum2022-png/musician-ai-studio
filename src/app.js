@@ -12156,6 +12156,26 @@ function setAuthEmailMessage(text, { ok = false } = {}) {
   el.classList.toggle("isOk", Boolean(ok));
 }
 
+function getAuthEmailRedirectTo() {
+  try {
+    const o = String(location.origin || "").replace(/\/$/, "");
+    if (/^https?:\/\//i.test(o) && !/localhost|127\.0\.0\.1|capacitor/i.test(o)) {
+      return `${o}/`;
+    }
+  } catch {}
+  return "https://musician-ai-studio.vercel.app/";
+}
+
+/** Sign-up with confirm-email may return `user` nested or flat `{ id, email }`. */
+function supabaseSignupPendingUser(data) {
+  if (!data || data.access_token) return null;
+  const u = data.user && typeof data.user === "object" ? data.user : data;
+  const email = String(u?.email || data?.email || "").trim();
+  const id = String(u?.id || data?.id || "").trim();
+  if (!email && !id) return null;
+  return { id, email };
+}
+
 function parseSupabaseAuthError(data, status) {
   const raw =
     data?.error_description ||
@@ -12169,7 +12189,18 @@ function parseSupabaseAuthError(data, status) {
     return "Wrong email or password.";
   }
   if (lower.includes("already registered") || lower.includes("already exists")) {
-    return "That email already has an account. Sign in instead.";
+    return "That email already has an account — try Continue with Google or Sign in.";
+  }
+  if (
+    lower.includes("error sending confirmation") ||
+    lower.includes("sending confirmation email") ||
+    lower.includes("smtp") ||
+    lower.includes("mailer")
+  ) {
+    return "Could not send confirmation email. In Supabase enable SMTP (Auth → SMTP), or use Continue with Google.";
+  }
+  if (lower.includes("rate limit") || lower.includes("too many")) {
+    return "Too many attempts — wait a minute and try again.";
   }
   if (lower.includes("password") && lower.includes("short")) {
     return "Use a password with at least 8 characters.";
@@ -12179,6 +12210,9 @@ function parseSupabaseAuthError(data, status) {
   }
   if (lower.includes("email not confirmed")) {
     return "Confirm your email first (check your inbox), then sign in.";
+  }
+  if (lower.includes("invalid credentials")) {
+    return "Wrong email or password — or use Continue with Google if you signed up that way.";
   }
   return s || `Sign-in failed (${status || "error"})`;
 }
@@ -12208,7 +12242,29 @@ async function supabaseSignUpWithPassword(email, password) {
       "Content-Type": "application/json",
       apikey: SUPABASE_ANON_KEY,
     },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({
+      email,
+      password,
+      options: { emailRedirectTo: getAuthEmailRedirectTo() },
+    }),
+  });
+  const d = await r.json().catch(() => ({}));
+  return { ok: r.ok, status: r.status, data: d };
+}
+
+async function supabaseResendSignupConfirmation(email) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase config missing");
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/resend`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: getAuthEmailRedirectTo() },
+    }),
   });
   const d = await r.json().catch(() => ({}));
   return { ok: r.ok, status: r.status, data: d };
@@ -12275,20 +12331,30 @@ async function runEmailPasswordAuth() {
         await finishPostAuthNavigation();
         return;
       }
-      if (data?.user && !data?.access_token) {
+      const pending = supabaseSignupPendingUser(data);
+      if (pending) {
         endLoginSettling();
         setAuthEmailMode("signin");
         setAuthEmailMessage(
-          "We sent a confirmation link to your email. Open it, then sign in here.",
+          "If this email is new, we sent a confirmation link — check inbox and spam. No email? You may already use Google with this address — tap Continue with Google.",
           { ok: true },
         );
-        notifyLoginFeedback("Check your inbox — confirm your email, then sign in.");
+        notifyLoginFeedback("Check your inbox, or sign in with Google.");
         return;
       }
       if (!ok) {
         throw new Error(parseSupabaseAuthError(data, status));
       }
-      throw new Error("Sign up did not return a session. Try signing in.");
+      // Supabase returns 200 without a user when the email is already on a Google
+      // account (anti-enumeration) — no confirmation email is sent.
+      endLoginSettling();
+      setAuthEmailMode("signin");
+      setAuthEmailMessage(
+        "No confirmation email for this address usually means you already have an account. Try Continue with Google, or Sign in with your password.",
+        { ok: true },
+      );
+      notifyLoginFeedback("Try Continue with Google for this email.");
+      return;
     }
 
     const { ok, status, data } = await supabaseSignInWithPassword(email, password);

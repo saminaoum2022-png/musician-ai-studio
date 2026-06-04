@@ -5703,12 +5703,15 @@ textarea{
 .createFlow{
   display:flex;
   flex-direction:column;
-  gap: 20px;
+  gap: 14px;
 }
 .createFlowStep{
   display:flex;
   flex-direction:column;
   gap: 12px;
+}
+#createFlow > .createFlowStep:first-child{
+  gap: 10px;
 }
 .createFlowStepHead{
   display:flex;

@@ -12120,6 +12120,8 @@ function renderAuthStatus() {
   }
   if (els.settingsBtnSignIn) els.settingsBtnSignIn.hidden = isAuthed;
   if (els.settingsBtnLogout) els.settingsBtnLogout.hidden = !isAuthed;
+  const settingsDelete = document.getElementById("settingsBtnDeleteAccount");
+  if (settingsDelete) settingsDelete.hidden = !isAuthed;
   // Hide the Credits pill entirely when logged-out. A "0 credits" badge
   // on a guest profile is meaningless and was where the previous user's
   // balance kept leaking through (e.g. "326" after Logout). The pill
@@ -29292,43 +29294,125 @@ function logoutCurrentUser() {
   setStatus("Logged out.");
 }
 
-/** "Delete profile data" — wipe this account on device, then sign out so
- *  auth boot cannot immediately re-hydrate another user's library. */
-async function deleteLocalProfileDataOnDevice() {
+function openLegalPage(kind) {
+  const path = kind === "terms" ? "./terms.html" : "./privacy.html";
+  let url = path;
+  try {
+    url = new URL(path, location.href).href;
+  } catch {}
+  try {
+    const Browser = window.Capacitor?.Plugins?.Browser;
+    if (Browser?.open) {
+      void Browser.open({ url, presentationStyle: "fullscreen" });
+      return;
+    }
+  } catch {}
+  try {
+    location.assign(path);
+  } catch {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+}
+
+function wireLegalLinks() {
+  document.querySelectorAll("[data-legal-link]").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      const kind = el.getAttribute("data-legal-link") || "privacy";
+      openLegalPage(kind);
+    });
+  });
+}
+wireLegalLinks();
+
+/** Permanently delete signed-in account (server + device). Guests only clear local data. */
+async function deleteAccountAndData(opts = {}) {
   const uid = String(authSession?.user?.id || "").trim();
-  const msg = uid
-    ? "Remove this account's saved profile and library data on this device and sign out?\n\nSongs stored in your online account are not deleted."
-    : "Remove saved guest profile data on this device?";
-  if (!window.confirm(msg)) return;
-  const btn = els.btnProfileDelete;
+  const fromSettings = Boolean(opts.fromSettings);
+  const btn = fromSettings
+    ? document.getElementById("settingsBtnDeleteAccount")
+    : els.btnProfileDelete;
   const prevLabel = btn?.textContent || "";
+
+  if (!uid) {
+    if (!window.confirm("Remove saved guest profile data on this device?")) return;
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Deleting…";
+    }
+    try {
+      clearGuestLocalData();
+      resetProfileUiToGuest();
+      setProfileEditing(false);
+      setStatus("Local profile data deleted.");
+    } catch (e) {
+      setStatus(`Could not delete data: ${e?.message || "error"}`);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = prevLabel || "Delete account";
+      }
+    }
+    return;
+  }
+
+  if (
+    !window.confirm(
+      "Delete your NabadAi account permanently?\n\nThis removes your account and associated data from our servers. This cannot be undone."
+    )
+  ) {
+    return;
+  }
+  const typed = window.prompt('Type DELETE (all caps) to confirm account deletion.');
+  if (typed !== "DELETE") {
+    setStatus("Account deletion cancelled.");
+    return;
+  }
+
+  const token = getSupabaseAuthToken();
+  if (!token) {
+    setStatus("Sign in again, then try deleting your account.");
+    return;
+  }
+
   if (btn) {
     btn.disabled = true;
     btn.textContent = "Deleting…";
   }
   try {
-    if (uid) {
-      wipeLocalStorageForUserId(uid);
-      saveHubFeed([]);
-      invalidateLibraryMemCache();
-      clearSignedInUiCaches();
-      _libraryHydrateCompleted = false;
-      _libraryHydrateInFlight = false;
-      logoutCurrentUser();
-      setStatus("Device data removed. Signed out.");
-      return;
-    }
-    clearGuestLocalData();
-    resetProfileUiToGuest();
-    setProfileEditing(false);
-    setStatus("Local profile data deleted.");
+    const r = await fetch(apiUrl("/api/account/delete"), {
+      method: "POST",
+      headers: {
+        ...getApiFetchHeaders(),
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ confirm: "DELETE" }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d?.error || `Delete failed (${r.status})`);
+
+    wipeLocalStorageForUserId(uid);
+    saveHubFeed([]);
+    invalidateLibraryMemCache();
+    clearSignedInUiCaches();
+    _libraryHydrateCompleted = false;
+    _libraryHydrateInFlight = false;
+    logoutCurrentUser();
+    setStatus("Account deleted. You have been signed out.");
+    try {
+      showToast("Account deleted", { icon: "✓", durationMs: 3200 });
+    } catch {}
   } catch (e) {
-    console.error("[profile] delete local data failed", e);
-    setStatus(`Could not delete profile data: ${e?.message || "error"}`);
+    console.error("[account] delete failed", e);
+    setStatus(`Could not delete account: ${e?.message || "error"}`);
+    try {
+      showToast(`Delete failed: ${e?.message || "error"}`, { icon: "!", durationMs: 4400 });
+    } catch {}
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.textContent = prevLabel || "Delete profile data";
+      btn.textContent = prevLabel || "Delete account";
     }
   }
 }
@@ -29371,12 +29455,12 @@ function wireSettingsSupportLinks() {
   }
 }
 wireSettingsSupportLinks();
-document.querySelectorAll("[data-settings-placeholder]").forEach((el) => {
-  el.addEventListener("click", () => {
-    const label = el.getAttribute("data-settings-placeholder") || "This section";
-    showToast(`${label} will be available before launch.`);
+const settingsBtnDeleteAccount = document.getElementById("settingsBtnDeleteAccount");
+if (settingsBtnDeleteAccount) {
+  settingsBtnDeleteAccount.addEventListener("click", () => {
+    void deleteAccountAndData({ fromSettings: true });
   });
-});
+}
 if (els.btnLoadingDismiss) {
   els.btnLoadingDismiss.addEventListener("click", () => {
     dismissPendingBackendTask();
@@ -29384,7 +29468,7 @@ if (els.btnLoadingDismiss) {
 }
 if (els.btnProfileDelete) {
   els.btnProfileDelete.addEventListener("click", () => {
-    void deleteLocalProfileDataOnDevice();
+    void deleteAccountAndData({ fromSettings: false });
   });
 }
 if (els.profileAvatarFile) {

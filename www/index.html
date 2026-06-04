@@ -198,7 +198,7 @@
               <h1 class="introWelcomeTitle">Welcome to <span class="brandPrimary">NabadAi</span> <span class="brandSecondary introBrandSecondary">Music</span></h1>
               <p class="introWelcomeLead">Music from a hum. Voice sparks for your circle. Share what you make.</p>
               <button id="btnIntroGetStarted" class="introGetStartedBtn" type="button">Get Started</button>
-              <p class="introWelcomeLegal">By tapping Get Started you agree to our <a href="#/settings">Terms</a> &middot; <a href="#/settings">Privacy</a></p>
+              <p class="introWelcomeLegal">By tapping Get Started you agree to our <a href="./terms.html" data-legal-link="terms">Terms</a> &middot; <a href="./privacy.html" data-legal-link="privacy">Privacy</a></p>
             </div>
           </div>
         </section>
@@ -346,7 +346,7 @@
               </form>
               <button id="btnAuthGateGuest" class="authGhostBtn" type="button">Continue as guest</button>
             </div>
-            <p class="authLegal">By continuing you agree to our <a href="#/settings">Terms</a> &middot; <a href="#/settings">Privacy</a></p>
+            <p class="authLegal">By continuing you agree to our <a href="./terms.html" data-legal-link="terms">Terms</a> &middot; <a href="./privacy.html" data-legal-link="privacy">Privacy</a></p>
           </div>
         </section>
 
@@ -2120,7 +2120,7 @@
             <input id="profileIsPublic" type="checkbox" checked style="display:none" />
             <div id="authLoggedInRow" class="profileAccountActions profileOwnAccountActions" style="display:none">
               <button id="btnAuthLogout" class="ghost profileActionBtn" type="button">Logout</button>
-              <button id="btnProfileDelete" class="ghost profileActionBtn profileActionBtnDanger" type="button">Delete profile data</button>
+              <button id="btnProfileDelete" class="ghost profileActionBtn profileActionBtnDanger" type="button">Delete account</button>
             </div>
           </div>
 
@@ -2514,6 +2514,15 @@
                   <span class="settingsRowSub">Remove this account session from the device.</span>
                 </span>
               </button>
+              <button id="settingsBtnDeleteAccount" class="settingsRow settingsRowLink settingsRowDanger" type="button" hidden>
+                <span class="settingsRowIco" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+                </span>
+                <span class="settingsRowBody">
+                  <span class="settingsRowTitle">Delete account</span>
+                  <span class="settingsRowSub">Permanently remove your account and server data. Cannot be undone.</span>
+                </span>
+              </button>
             </div>
           </section>
 
@@ -2628,15 +2637,23 @@
           <section class="settingsGroup" aria-labelledby="settingsLegalTitle">
             <h3 id="settingsLegalTitle" class="settingsGroupTitle">Legal & app info</h3>
             <div class="settingsList">
-              <button class="settingsRow settingsRowLink" type="button" data-settings-placeholder="Terms of Service">
+              <button class="settingsRow settingsRowLink" type="button" data-legal-link="terms">
+                <span class="settingsRowIco" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M6 4h12v16H6z"/><path d="M8 8h8M8 12h6"/></svg>
+                </span>
                 <span class="settingsRowBody">
                   <span class="settingsRowTitle">Terms of Service</span>
+                  <span class="settingsRowSub">Rules for using NabadAi Music.</span>
                 </span>
                 <span class="settingsRowChev" aria-hidden="true">›</span>
               </button>
-              <button class="settingsRow settingsRowLink" type="button" data-settings-placeholder="Privacy Policy">
+              <button class="settingsRow settingsRowLink" type="button" data-legal-link="privacy">
+                <span class="settingsRowIco" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M12 3a5 5 0 0 0-5 5v2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-2V8a5 5 0 0 0-5-5Z"/></svg>
+                </span>
                 <span class="settingsRowBody">
                   <span class="settingsRowTitle">Privacy Policy</span>
+                  <span class="settingsRowSub">How we collect and use your data.</span>
                 </span>
                 <span class="settingsRowChev" aria-hidden="true">›</span>
               </button>

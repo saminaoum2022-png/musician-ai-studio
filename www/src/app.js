@@ -2761,10 +2761,6 @@ function applyRoute() {
   }
   if (wanted === "settings") {
     renderPersonaSelect();
-    try { renderSettingsVoicesHub(); } catch {}
-    if (/voices=1/i.test(rawRouteQuery)) {
-      setProfilePersonaExpanded(true);
-    }
   }
   if (wanted === "profile") {
     try {
@@ -2784,6 +2780,15 @@ function applyRoute() {
     bindProfileSongsSegmentOnce();
     syncProfileSongsSegmentUi();
     renderProfileSongs();
+    if (/persona=1|voices=1/i.test(rawRouteQuery)) {
+      setProfilePersonaExpanded(true);
+      try { renderSettingsVoicesHub(); } catch {}
+      requestAnimationFrame(() => {
+        try {
+          els.profilePersonaRow?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        } catch {}
+      });
+    }
     setProfileEditing(false);
     try { syncMobileTabbarProfileAvatar(); } catch {}
     const profileHeavy = !shouldSkipRouteHeavy("profile");
@@ -10254,9 +10259,11 @@ function applyProfilePersonaExpandedUi(on) {
   const row = els.profilePersonaRow;
   const btn = els.profilePersonaToggle;
   const body = els.profilePersonaDetails;
+  const voicesBtn = document.getElementById("profilePersonaVoicesBtn");
   if (!row || !btn || !body) return;
   row.dataset.expanded = on ? "true" : "false";
   btn.setAttribute("aria-expanded", on ? "true" : "false");
+  if (voicesBtn) voicesBtn.setAttribute("aria-expanded", on ? "true" : "false");
   if (on) body.removeAttribute("hidden");
   else body.setAttribute("hidden", "");
 }
@@ -10268,7 +10275,7 @@ function personaTypeLabel(type) {
 function updateProfilePersonaRow() {
   if (!els.profilePersonaRow || !els.profilePersonaLabel) return;
   if (!authSession?.user?.id) {
-    els.profilePersonaRow.style.display = "none";
+    els.profilePersonaRow.hidden = true;
     return;
   }
   const idFromSelect = String(els.sunoPersonaId?.value || "").trim();
@@ -10276,15 +10283,17 @@ function updateProfilePersonaRow() {
   const id = idFromSelect || idSaved;
   const list = loadPersonas();
   const hit = list.find((x) => String(x.personaId) === id);
-  els.profilePersonaRow.style.display = "";
+  els.profilePersonaRow.hidden = false;
   const n = list.length;
   if (id && hit) {
-    els.profilePersonaLabel.textContent =
-      `${n} saved · Active: ${hit.label || id.slice(0, 12) + "…"}`;
-  } else if (n) {
-    els.profilePersonaLabel.textContent = `${n} saved · None selected on Create`;
+    const name = String(hit.label || "").trim() || "Active on Create";
+    els.profilePersonaLabel.textContent = n > 1 ? `${name} · ${n} voices` : name;
+  } else if (n === 1) {
+    els.profilePersonaLabel.textContent = "1 voice saved";
+  } else if (n > 1) {
+    els.profilePersonaLabel.textContent = `${n} voices saved`;
   } else {
-    els.profilePersonaLabel.textContent = "None saved yet";
+    els.profilePersonaLabel.textContent = "Not set up";
   }
   applyProfilePersonaExpandedUi(isProfilePersonaExpanded());
   try { renderSettingsVoicesHub(); } catch {}
@@ -12132,6 +12141,7 @@ function renderAuthStatus() {
     els.btnProfileShareIcon.setAttribute("aria-hidden", isAuthed ? "false" : "true");
   }
   document.body.setAttribute("data-logged-in", isAuthed ? "true" : "false");
+  try { updateProfilePersonaRow(); } catch {}
 }
 function resetProfileUiToGuest() {
   activeProfile = {
@@ -12196,7 +12206,7 @@ function resetProfileUiToGuest() {
   renderProfileSongs();
   renderAuthStatus();
   try { syncMobileTabbarProfileAvatar(); } catch {}
-  if (els.profilePersonaRow) els.profilePersonaRow.style.display = "none";
+  if (els.profilePersonaRow) els.profilePersonaRow.hidden = true;
   try { syncProfilePersonaAvatarBadge(); } catch {}
 }
 let _authEmailMode = "signin";
@@ -18360,13 +18370,22 @@ async function openVoiceWizard() {
   wireVoiceWizardStep1();
 }
 
-function openSettingsVoicesPanel() {
+function openProfilePersonaPanel() {
   setProfilePersonaExpanded(true);
-  try { location.hash = "#/settings"; } catch {}
   try {
-    els.profilePersonaRow?.scrollIntoView({ block: "start", behavior: "smooth" });
+    if ((document.body.getAttribute("data-route") || "") !== "profile") {
+      location.hash = "#/profile?persona=1";
+    } else {
+      history.replaceState(null, "", "#/profile?persona=1");
+      applyProfilePersonaExpandedUi(true);
+      try { renderSettingsVoicesHub(); } catch {}
+      els.profilePersonaRow?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
   } catch {}
   renderSettingsVoicesHub();
+}
+function openSettingsVoicesPanel() {
+  openProfilePersonaPanel();
 }
 
 /**
@@ -25441,11 +25460,16 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   // Profile persona card — collapsed by default; tap header to
   // expand the multi-line hint + Open Create CTA. Choice persists
   // across sessions via localStorage.
+  const toggleProfilePersonaVoices = () => {
+    const next = !(els.profilePersonaRow?.dataset.expanded === "true");
+    setProfilePersonaExpanded(next);
+  };
   if (els.profilePersonaToggle) {
-    els.profilePersonaToggle.addEventListener("click", () => {
-      const next = !(els.profilePersonaRow?.dataset.expanded === "true");
-      setProfilePersonaExpanded(next);
-    });
+    els.profilePersonaToggle.addEventListener("click", toggleProfilePersonaVoices);
+  }
+  const personaVoicesBtn = document.getElementById("profilePersonaVoicesBtn");
+  if (personaVoicesBtn) {
+    personaVoicesBtn.addEventListener("click", toggleProfilePersonaVoices);
   }
   if (els.settingsVoicesList) {
     els.settingsVoicesList.addEventListener("click", (e) => {

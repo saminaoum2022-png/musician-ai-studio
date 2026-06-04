@@ -71,7 +71,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260605settingsV1" />
+    <link rel="stylesheet" href="./styles.css?v=20260605profilePersonaV1" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -874,7 +874,7 @@
                 </select>
               </label>
               <p class="hint personaManageHint">
-                <a href="#/settings?voices=1" id="linkManageVoices" data-open-settings-voices="1">Manage voices in Settings</a>
+                <a href="#/profile?persona=1" id="linkManageVoices" data-open-profile-persona="1">Manage voices</a>
               </p>
             </div>
           </details>
@@ -2019,6 +2019,51 @@
             <span id="profileOwnStats"></span>
           </div>
 
+          <section
+            id="profilePersonaRow"
+            class="profilePersonaSignature profilePersonaRow settingsVoicesHub"
+            hidden
+            aria-labelledby="profilePersonaSignatureTitle"
+            data-expanded="false"
+            aria-live="polite"
+          >
+            <div class="profilePersonaSignatureTop">
+              <div class="profilePersonaSignatureMark" aria-hidden="true">
+                <span class="profilePersonaSignatureMarkInner">
+                  <svg class="profilePersonaSignatureMic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"/>
+                    <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M19 11a7 7 0 0 1-14 0"/>
+                  </svg>
+                </span>
+              </div>
+              <div class="profilePersonaSignatureCopy">
+                <p class="profilePersonaSignatureKicker">Your signature</p>
+                <h3 id="profilePersonaSignatureTitle" class="profilePersonaSignatureTitle">Persona</h3>
+                <p id="profilePersonaLabel" class="profilePersonaSignatureStatus">Not set up</p>
+              </div>
+              <button
+                type="button"
+                id="profilePersonaToggle"
+                class="profilePersonaSignatureExpand"
+                aria-expanded="false"
+                aria-controls="profilePersonaDetails"
+                aria-label="Saved voices"
+              >
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true">
+                  <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </div>
+            <div class="profilePersonaSignatureBtns">
+              <button type="button" id="btnSettingsVoiceWizard" class="profilePersonaSigBtn profilePersonaSigBtn--fill">Record</button>
+              <button type="button" id="profilePersonaVoicesBtn" class="profilePersonaSigBtn">Voices</button>
+            </div>
+            <div id="profilePersonaDetails" class="profilePersonaSignaturePanel profilePersonaDetails" hidden>
+              <div id="settingsVoicesList" class="settingsVoicesList" role="list"></div>
+              <p id="settingsVoicesEmpty" class="settingsVoicesEmpty" hidden>No voices yet</p>
+            </div>
+          </section>
+
           <!-- Songs — Public (Discover / link) vs All (full library) -->
           <div class="profileSongsBlock">
             <div class="profileTabBar" role="tablist" aria-label="Profile content">
@@ -2520,39 +2565,6 @@
                 </span>
                 <span class="settingsRowChev" aria-hidden="true">›</span>
               </a>
-
-              <div id="profilePersonaRow" class="profilePersonaRow profilePersonaRowSettings settingsVoicesHub" style="display:none" aria-live="polite" data-expanded="true">
-                <button type="button" id="profilePersonaToggle" class="profilePersonaHead" aria-expanded="true" aria-controls="profilePersonaDetails">
-                  <span class="profilePersonaIco" aria-hidden="true">
-                    <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v4M8 22h8"/></svg>
-                  </span>
-                  <span class="profilePersonaHeadText">
-                    <span class="profilePersonaTitle">My voices</span>
-                    <strong id="profilePersonaLabel">—</strong>
-                  </span>
-                  <span class="profilePersonaChev" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
-                      <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </span>
-                </button>
-                <div id="profilePersonaDetails" class="profilePersonaDetails settingsVoicesPanel">
-                  <p class="settingsVoicesLead">Saved voices for Create → More options → Persona.</p>
-                  <div id="settingsVoicesList" class="settingsVoicesList" role="list"></div>
-                  <p id="settingsVoicesEmpty" class="settingsVoicesEmpty" hidden>No saved voices yet.</p>
-                  <div class="settingsVoicesActions">
-                    <button type="button" id="btnSettingsVoiceWizard" class="primary settingsVoicesPrimaryBtn">Record my voice</button>
-                    <a href="#/profile?seg=all" class="ghost settingsVoicesSecondaryLink" data-route-link="profile">Save from a song (All songs)</a>
-                  </div>
-                  <details id="settingsVoicesFromSongHint" class="settingsVoicesFromSongHint">
-                    <summary>How to save from a finished song</summary>
-                    <ul class="profilePersonaSpots">
-                      <li>After a song finishes → ⋯ on the result → <strong>Save voice as persona</strong>.</li>
-                      <li>In <a href="#/profile?seg=all" data-route-link="profile">Profile → All songs</a> → ⋯ on a song → <strong>Save voice as persona</strong>.</li>
-                    </ul>
-                  </details>
-                </div>
-              </div>
             </div>
           </section>
 
@@ -3188,6 +3200,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260531personaTileNoStatus"></script>
+    <script type="module" src="./src/app.js?v=20260605profilePersonaV1"></script>
   </body>
 </html>

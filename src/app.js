@@ -613,6 +613,8 @@ const els = {
   authLoggedInRow: document.getElementById("authLoggedInRow"),
   authLoggedInEmail: document.getElementById("authLoggedInEmail"),
   authLoggedInEmailInline: document.getElementById("authLoggedInEmailInline"),
+  btnAuthApple: document.getElementById("btnAuthApple"),
+  btnAuthGateApple: document.getElementById("btnAuthGateApple"),
   btnAuthGoogle: document.getElementById("btnAuthGoogle"),
   btnAuthGateGoogle: document.getElementById("btnAuthGateGoogle"),
   authEmailForm: document.getElementById("authEmailForm"),
@@ -10753,6 +10755,9 @@ function ensureAuthBoot({ force = false } = {}) {
   return _authBootPromise;
 }
 const AUTH_PKCE_KEY = "mas:supabase:pkce:v1";
+const AUTH_APPLE_NONCE_KEY = "mas:supabase:apple-nonce:v1";
+const OAUTH_NATIVE_REDIRECT = "com.nabadai.music://auth-callback";
+const APPLE_NATIVE_BUNDLE_ID = "com.nabadai.music";
 let activeProfile = { id: "guest", username: "guest", email: "", soundCertified: false };
 let lastAuthDebug = "";
 function loadProfile() {
@@ -11843,7 +11848,7 @@ function setCreditsRedeemMsg(text, kind) {
 async function redeemPromoCode(rawCode) {
   const token = getSupabaseAuthToken();
   if (!token) {
-    setCreditsRedeemMsg("Sign in with Google first to redeem a code.", "err");
+    setCreditsRedeemMsg("Sign in first to redeem a code.", "err");
     return;
   }
   const code = String(rawCode || "").trim().toUpperCase();
@@ -11995,6 +12000,13 @@ async function sha256Base64Url(input) {
   const enc = new TextEncoder().encode(input);
   const buf = await crypto.subtle.digest("SHA-256", enc);
   return b64urlFromBytes(new Uint8Array(buf));
+}
+async function sha256Hex(input) {
+  const enc = new TextEncoder().encode(input);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 function randomVerifier(len = 64) {
   const bytes = new Uint8Array(len);
@@ -12281,7 +12293,7 @@ function parseSupabaseAuthError(data, status) {
     return "Wrong email or password.";
   }
   if (lower.includes("already registered") || lower.includes("already exists")) {
-    return "That email already has an account — try Continue with Google or Sign in.";
+    return "That email already has an account — try Apple/Google sign-in or Sign in.";
   }
   if (
     lower.includes("error sending confirmation") ||
@@ -12289,7 +12301,7 @@ function parseSupabaseAuthError(data, status) {
     lower.includes("smtp") ||
     lower.includes("mailer")
   ) {
-    return "Could not send confirmation email. In Supabase enable SMTP (Auth → SMTP), or use Continue with Google.";
+    return "Could not send confirmation email. In Supabase enable SMTP (Auth → SMTP), or use Apple/Google sign-in.";
   }
   if (lower.includes("rate limit") || lower.includes("too many")) {
     return "Too many attempts — wait a minute and try again.";
@@ -12304,7 +12316,7 @@ function parseSupabaseAuthError(data, status) {
     return "Confirm your email first (check your inbox), then sign in.";
   }
   if (lower.includes("invalid credentials")) {
-    return "Wrong email or password — or use Continue with Google if you signed up that way.";
+    return "Wrong email or password — or use Apple/Google if you signed up that way.";
   }
   return s || `Sign-in failed (${status || "error"})`;
 }
@@ -12381,6 +12393,7 @@ function setAuthEmailSubmitting(on) {
   const busy = _authEmailSubmitInFlight;
   if (els.btnAuthEmailSubmit) els.btnAuthEmailSubmit.disabled = busy;
   if (els.btnAuthGateGoogle) els.btnAuthGateGoogle.disabled = busy;
+  if (els.btnAuthGateApple) els.btnAuthGateApple.disabled = busy;
   if (els.btnAuthToggleMode) els.btnAuthToggleMode.disabled = busy;
 }
 
@@ -12428,7 +12441,7 @@ async function runEmailPasswordAuth() {
         endLoginSettling();
         setAuthEmailMode("signin");
         setAuthEmailMessage(
-          "If this email is new, we sent a confirmation link — check inbox and spam. No email? You may already use Google with this address — tap Continue with Google.",
+          "If this email is new, we sent a confirmation link — check inbox and spam. No email? You may already use Apple or Google with this address.",
           { ok: true },
         );
         notifyLoginFeedback("Check your inbox, or sign in with Google.");
@@ -12442,10 +12455,10 @@ async function runEmailPasswordAuth() {
       endLoginSettling();
       setAuthEmailMode("signin");
       setAuthEmailMessage(
-        "No confirmation email for this address usually means you already have an account. Try Continue with Google, or Sign in with your password.",
+        "No confirmation email for this address usually means you already have an account. Try Apple/Google sign-in, or Sign in with your password.",
         { ok: true },
       );
-      notifyLoginFeedback("Try Continue with Google for this email.");
+      notifyLoginFeedback("Try Apple or Google sign-in for this email.");
       return;
     }
 
@@ -12562,10 +12575,52 @@ async function exchangeOAuthCodeForSession(code) {
     if (authSession) {
       await persistAuthSessionEverywhere(JSON.stringify(authSession));
     }
-    setStatus("Logged in via Google.");
+    setStatus("Signed in.");
     return true;
   } catch (e) {
     lastAuthDebug = `code flow error: ${e?.message || String(e)}`;
+    return false;
+  }
+}
+async function exchangeAppleIdTokenForSession(idToken) {
+  const token = String(idToken || "").trim();
+  if (!token) return false;
+  const nonce = localStorage.getItem(AUTH_APPLE_NONCE_KEY) || "";
+  localStorage.removeItem(AUTH_APPLE_NONCE_KEY);
+  try {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=id_token`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({
+        provider: "apple",
+        id_token: token,
+        ...(nonce ? { nonce } : {}),
+      }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d?.access_token) {
+      lastAuthDebug = `apple id_token ${r.status}: ${String(JSON.stringify(d)).slice(0, 120)}`;
+      return false;
+    }
+    const user = d?.user || { id: "", email: "" };
+    saveAuthSession({
+      access_token: d.access_token,
+      refresh_token: d.refresh_token || "",
+      expires_in: Number(d.expires_in || 3600),
+      token_type: d.token_type || "bearer",
+      user,
+      issued_at: Date.now(),
+    });
+    if (authSession) {
+      await persistAuthSessionEverywhere(JSON.stringify(authSession));
+    }
+    setStatus("Signed in with Apple.");
+    return true;
+  } catch (e) {
+    lastAuthDebug = `apple id_token error: ${e?.message || String(e)}`;
     return false;
   }
 }
@@ -12608,9 +12663,32 @@ async function supabaseVerifyOtp(email, token) {
   if (!r.ok) throw new Error(d?.msg || `OTP verify failed (${r.status})`);
   return d;
 }
-const OAUTH_NATIVE_REDIRECT = "com.nabadai.music://auth-callback";
 function isCapacitorNativeAuth() {
   return Boolean(window?.Capacitor?.isNativePlatform?.());
+}
+function oauthProviderLabel(provider) {
+  return provider === "apple" ? "Apple" : "Google";
+}
+function getCapacitorAppleSignInPlugin() {
+  return window?.Capacitor?.Plugins?.SignInWithApple || null;
+}
+async function supabaseOAuthLoginUrl(provider) {
+  const verifier = randomVerifier(64);
+  localStorage.setItem(AUTH_PKCE_KEY, verifier);
+  const challenge = await sha256Base64Url(verifier);
+  const redirectTarget = isCapacitorNativeAuth()
+    ? OAUTH_NATIVE_REDIRECT
+    : `${window.location.origin}${window.location.pathname || "/"}`;
+  const redirectTo = encodeURIComponent(redirectTarget);
+  const scope =
+    provider === "apple"
+      ? encodeURIComponent("name email")
+      : encodeURIComponent("email profile");
+  return `${SUPABASE_URL}/auth/v1/authorize?provider=${encodeURIComponent(provider)}&response_type=code&scope=${scope}&code_challenge=${encodeURIComponent(challenge)}&code_challenge_method=S256&redirect_to=${redirectTo}`;
+}
+/** @deprecated use supabaseOAuthLoginUrl('google') */
+async function supabaseGoogleLoginUrl() {
+  return supabaseOAuthLoginUrl("google");
 }
 
 /** Base64 body only (no data: prefix) for Capacitor Filesystem.writeFile on native. */
@@ -12795,16 +12873,6 @@ function getCapacitorBrowserPlugin() {
 }
 function getCapacitorAppPlugin() {
   return window?.Capacitor?.Plugins?.App || null;
-}
-async function supabaseGoogleLoginUrl() {
-  const verifier = randomVerifier(64);
-  localStorage.setItem(AUTH_PKCE_KEY, verifier);
-  const challenge = await sha256Base64Url(verifier);
-  const redirectTarget = isCapacitorNativeAuth()
-    ? OAUTH_NATIVE_REDIRECT
-    : `${window.location.origin}${window.location.pathname || "/"}`;
-  const redirectTo = encodeURIComponent(redirectTarget);
-  return `${SUPABASE_URL}/auth/v1/authorize?provider=google&response_type=code&scope=email%20profile&code_challenge=${encodeURIComponent(challenge)}&code_challenge_method=S256&redirect_to=${redirectTo}`;
 }
 async function supabaseUpsertProfile(profile) {
   const token = getSupabaseAuthToken();
@@ -27969,7 +28037,7 @@ if (els.btnSoundGenerate) {
     }
     const token = getSupabaseAuthToken();
     if (!token) {
-      setStatus("Sign in with Google to generate sounds.");
+      setStatus("Sign in to generate sounds.");
       location.hash = "#/auth";
       return;
     }
@@ -29029,6 +29097,15 @@ if (els.btnProfileCancel) {
   });
 }
 function resetAuthGateButtons() {
+  if (els.btnAuthApple) {
+    els.btnAuthApple.disabled = false;
+    els.btnAuthApple.textContent = "Continue with Apple";
+  }
+  if (els.btnAuthGateApple) {
+    els.btnAuthGateApple.disabled = false;
+    const appleLabel = els.btnAuthGateApple.querySelector("span");
+    if (appleLabel) appleLabel.textContent = "Continue with Apple";
+  }
   if (els.btnAuthGoogle) {
     els.btnAuthGoogle.disabled = false;
     els.btnAuthGoogle.textContent = "Continue with Google";
@@ -29066,8 +29143,8 @@ async function handleNativeAuthDeepLink(url) {
     }
     if (!code) {
       endLoginSettling();
-      setStatus(`Google login failed: no code in callback`);
-      notifyLoginFeedback("Google login failed: no code returned.");
+      setStatus(`Sign-in failed: no code in callback`);
+      notifyLoginFeedback("Sign-in failed: no code returned.");
       resetGoogleAuthButton();
       await closeOAuthBrowser();
       try { location.hash = "#/auth"; syncRoutePanelVisibility("auth"); safeApplyRoute(); } catch {}
@@ -29080,14 +29157,14 @@ async function handleNativeAuthDeepLink(url) {
     const pkceReady = Boolean(localStorage.getItem(AUTH_PKCE_KEY));
     if (!pkceReady) {
       endLoginSettling();
-      notifyLoginFeedback("Sign-in expired — tap Continue with Google again.");
+      notifyLoginFeedback("Sign-in expired — tap Apple or Google again.");
       resetGoogleAuthButton();
       await closeOAuthBrowser();
       try { location.hash = "#/auth"; syncRoutePanelVisibility("auth"); safeApplyRoute(); } catch {}
       return false;
     }
-    setStatus("Finishing Google login…");
-    notifyLoginFeedback("Finishing Google login…");
+    setStatus("Finishing sign in…");
+    notifyLoginFeedback("Finishing sign in…");
     await closeOAuthBrowser({ keepPending: true });
     const ok = await exchangeOAuthCodeForSession(code);
     if (ok) {
@@ -29104,7 +29181,7 @@ async function handleNativeAuthDeepLink(url) {
       await finishPostAuthNavigation();
     } else {
       endLoginSettling();
-      const msg = `Google login failed: ${lastAuthDebug || "exchange error"}`;
+      const msg = `Sign-in failed: ${lastAuthDebug || "exchange error"}`;
       setStatus(msg);
       notifyLoginFeedback(msg);
       try { location.hash = "#/auth"; syncRoutePanelVisibility("auth"); safeApplyRoute(); } catch {}
@@ -29179,7 +29256,23 @@ if (isCapacitorNativeAuth()) {
     } catch {}
   }
 }
-async function runGoogleOAuthLogin() {
+function setOAuthGateBusy(provider, busy) {
+  const label = oauthProviderLabel(provider);
+  const gateBtn = provider === "apple" ? els.btnAuthGateApple : els.btnAuthGateGoogle;
+  const legacyBtn = provider === "apple" ? els.btnAuthApple : els.btnAuthGoogle;
+  if (gateBtn) {
+    gateBtn.disabled = busy;
+    const span = gateBtn.querySelector("span");
+    if (span) span.textContent = busy ? `Opening ${label}…` : `Continue with ${label}`;
+  }
+  if (legacyBtn) {
+    legacyBtn.disabled = busy;
+    legacyBtn.textContent = busy ? `Opening ${label}…` : `Continue with ${label}`;
+  }
+}
+
+async function runOAuthLogin(provider) {
+  const label = oauthProviderLabel(provider);
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     await loadPublicConfig();
   }
@@ -29189,21 +29282,18 @@ async function runGoogleOAuthLogin() {
       msg ||
         "Could not load login settings from the server. Check Wi‑Fi or open the web app once, then try again.",
     );
-    resetGoogleAuthButton();
+    resetAuthGateButtons();
     return;
   }
   try {
-    if (els.btnAuthGoogle) {
-      els.btnAuthGoogle.disabled = true;
-      els.btnAuthGoogle.textContent = "Opening Google…";
-    }
-    notifyLoginFeedback("Opening Google login…");
+    setOAuthGateBusy(provider, true);
+    notifyLoginFeedback(`Opening ${label} sign-in…`);
     try {
       location.hash = "#/auth";
       syncRoutePanelVisibility("auth");
     } catch {}
-    const url = await supabaseGoogleLoginUrl();
-    if (!url) throw new Error("Could not create Google auth URL");
+    const url = await supabaseOAuthLoginUrl(provider);
+    if (!url) throw new Error(`Could not create ${label} auth URL`);
     const Browser = getCapacitorBrowserPlugin();
     if (isCapacitorNativeAuth() && Browser?.open) {
       await closeOAuthBrowser();
@@ -29211,22 +29301,96 @@ async function runGoogleOAuthLogin() {
       _oauthBrowserOpen = true;
       setOAuthPendingUi(true);
       await Browser.open({ url, presentationStyle: "popover" });
-      // Button is reset by the appUrlOpen handler once the deep link returns.
     } else if (isCapacitorNativeAuth() && !Browser?.open) {
       notifyLoginFeedback(
-        "Could not open the sign-in browser. Product → Clean Build Folder in Xcode, then Run again."
+        "Could not open the sign-in browser. Product → Clean Build Folder in Xcode, then Run again.",
       );
-      resetGoogleAuthButton();
+      resetAuthGateButtons();
     } else {
       window.location.assign(url);
-      setTimeout(resetGoogleAuthButton, 3500);
+      setTimeout(resetAuthGateButtons, 3500);
     }
   } catch (e) {
     await closeOAuthBrowser();
-    resetGoogleAuthButton();
-    notifyLoginFeedback(`Google login failed to start: ${e?.message || String(e)}`);
+    resetAuthGateButtons();
+    notifyLoginFeedback(`${label} sign-in failed to start: ${e?.message || String(e)}`);
     try { location.hash = "#/auth"; syncRoutePanelVisibility("auth"); safeApplyRoute(); } catch {}
   }
+}
+
+async function runNativeAppleLogin() {
+  const Apple = getCapacitorAppleSignInPlugin();
+  if (!Apple?.authorize) return false;
+  const rawNonce = randomVerifier(32);
+  localStorage.setItem(AUTH_APPLE_NONCE_KEY, rawNonce);
+  const hashedNonce = await sha256Hex(rawNonce);
+  const redirectURI = `${String(SUPABASE_URL || "").replace(/\/$/, "")}/auth/v1/callback`;
+  const result = await Apple.authorize({
+    clientId: APPLE_NATIVE_BUNDLE_ID,
+    redirectURI,
+    scopes: "email name",
+    nonce: hashedNonce,
+  });
+  const idToken = String(result?.response?.identityToken || "").trim();
+  if (!idToken) throw new Error("Apple did not return an identity token");
+  beginLoginSettling("Finishing Apple sign in…");
+  const ok = await exchangeAppleIdTokenForSession(idToken);
+  if (!ok) throw new Error(lastAuthDebug || "Apple token exchange failed");
+  invalidateAuthBoot();
+  await ensureAuthBoot({ force: true });
+  await finishPostAuthNavigation();
+  return true;
+}
+
+async function runAppleLogin() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    await loadPublicConfig();
+  }
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    const msg = loginConfigFailureMessage();
+    notifyLoginFeedback(
+      msg ||
+        "Could not load login settings from the server. Check Wi‑Fi or open the web app once, then try again.",
+    );
+    resetAuthGateButtons();
+    return;
+  }
+  try {
+    setOAuthGateBusy("apple", true);
+    notifyLoginFeedback("Opening Apple sign-in…");
+    try {
+      location.hash = "#/auth";
+      syncRoutePanelVisibility("auth");
+    } catch {}
+    if (isCapacitorNativeAuth()) {
+      try {
+        const ok = await runNativeAppleLogin();
+        if (ok) {
+          resetAuthGateButtons();
+          return;
+        }
+      } catch (e) {
+        console.warn("[auth] native Apple sign-in failed, falling back to browser", e);
+      }
+    }
+    await runOAuthLogin("apple");
+  } catch (e) {
+    endLoginSettling();
+    resetAuthGateButtons();
+    notifyLoginFeedback(`Apple sign-in failed: ${e?.message || String(e)}`);
+    try { location.hash = "#/auth"; syncRoutePanelVisibility("auth"); safeApplyRoute(); } catch {}
+  }
+}
+
+async function runGoogleOAuthLogin() {
+  return runOAuthLogin("google");
+}
+
+if (els.btnAuthApple) {
+  els.btnAuthApple.addEventListener("click", () => void runAppleLogin());
+}
+if (els.btnAuthGateApple) {
+  els.btnAuthGateApple.addEventListener("click", () => void runAppleLogin());
 }
 if (els.btnAuthGoogle) {
   els.btnAuthGoogle.addEventListener("click", () => void runGoogleOAuthLogin());

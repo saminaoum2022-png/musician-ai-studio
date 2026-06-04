@@ -9,6 +9,7 @@ Use this checklist when submitting **NabadAi Music** to App Store Connect.
 | Privacy Policy | `/privacy.html` — linked from intro, auth, Settings |
 | Terms of Service | `/terms.html` — linked from intro, auth, Settings |
 | Delete account | Settings → **Delete account** (signed-in) → `POST /api/account/delete` |
+| Sign in with Apple | Auth screen → **Continue with Apple** (see [SUPABASE_APPLE_SIGNIN.md](./SUPABASE_APPLE_SIGNIN.md)) |
 | Permission strings | `ios/App/App/Info.plist` |
 | Privacy manifest | `ios/App/App/PrivacyInfo.xcprivacy` |
 
@@ -88,4 +89,6 @@ Ensure production has:
 - [ ] Confirm `help@nabadai.com` and `support@nabadai.com` inboxes exist
 - [ ] Complete App Privacy using [APP_STORE_PRIVACY_LABELS.md](./APP_STORE_PRIVACY_LABELS.md)
 - [ ] Add Privacy Policy URL in App Store Connect
+- [ ] Configure Apple provider in Supabase ([SUPABASE_APPLE_SIGNIN.md](./SUPABASE_APPLE_SIGNIN.md))
+- [ ] Test **Continue with Apple** on a physical iPhone
 - [ ] Archive build after `npx cap sync ios`

@@ -301,6 +301,12 @@
             <h1 class="authHero">Music, from a hum.</h1>
             <p class="authSub">Generate full songs from your voice, share them, and listen everywhere.</p>
             <div class="authActions">
+              <button id="btnAuthGateApple" class="authAppleBtn" type="button">
+                <svg class="authAppleIcon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="currentColor" d="M17.05 20.28c-.98.95-2.05 1.88-3.71 1.9-1.6.02-2.12-.94-3.96-.94s-2.36.92-3.96.9c-1.55-.02-2.72-1.12-3.7-2.07C2.29 17.25.97 12.34 2.43 9.01c.95-2.09 2.85-3.41 4.89-3.45 1.53-.03 2.98 1.02 3.96 1.02.98 0 2.83-1.26 4.77-1.08.81.03 3.08.33 4.54 2.48-3.81 2.07-3.2 7.46.64 9.18-.53 1.54-1.22 3.06-2.18 4.12zM12.03 4.5c-.13-2.22 1.68-4.14 3.74-4.5.32 2.38-2.18 4.44-3.74 4.5z"/>
+                </svg>
+                <span>Continue with Apple</span>
+              </button>
               <button id="btnAuthGateGoogle" class="authPrimaryBtn" type="button">
                 <svg class="authGoogleIcon" viewBox="0 0 24 24" aria-hidden="true">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -2113,6 +2119,7 @@
           <!-- Auth controls kept in DOM for scripts; not shown on Profile (use Settings). -->
           <div class="profileAccountBlock" hidden aria-hidden="true">
             <div id="authLoginControls" class="profileOwnAuthRow">
+              <button id="btnAuthApple" class="ghost" type="button">Continue with Apple</button>
               <button id="btnAuthGoogle" class="ghost" type="button">Continue with Google</button>
             </div>
             <div id="authStatus" class="hint profileOwnAuthStatus" style="margin-top:4px">Not logged in.</div>

@@ -822,6 +822,328 @@ html[data-theme="light"] .discoveryFeedStatus{
   color: var(--muted);
 }
 
+/* Light mode — premium polish: Friends empty, Home spark, profile, settings */
+html[data-theme="light"] .discoveryEmptyTitle{
+  color: var(--text);
+}
+html[data-theme="light"] .discoveryEmptyText{
+  color: var(--muted);
+}
+html[data-theme="light"] .discoveryEmptyWrapMuted .discoveryEmptyTitle{
+  color: var(--muted);
+}
+html[data-theme="light"] .discoveryEmptyCta,
+html[data-theme="light"] a.discoveryEmptyCta,
+html[data-theme="light"] button.discoveryEmptyCta{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin-top: 4px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #7c5cff 0%, #5b8dee 48%, #12b896 100%);
+  color: #fff !important;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+  box-shadow: 0 12px 28px rgba(124, 92, 255, 0.26);
+  -webkit-tap-highlight-color: transparent;
+}
+html[data-theme="light"] .friendsPage .discoveryStudioAmbient{
+  opacity: 0.5;
+  background:
+    radial-gradient(ellipse 90% 70% at 50% -10%, rgba(124, 92, 255, 0.12), transparent 55%),
+    radial-gradient(ellipse 60% 45% at 100% 20%, rgba(35, 213, 171, 0.08), transparent 50%);
+}
+html[data-theme="light"] .friendsEchoRailTitle{
+  color: rgba(88, 64, 200, 0.95);
+}
+html[data-theme="light"] .discoveryRefreshBtn,
+html[data-theme="light"] .friendsNotifBtn.discoveryRefreshBtn{
+  border-color: rgba(15, 23, 40, 0.10);
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--text);
+  box-shadow: 0 8px 22px rgba(88, 104, 140, 0.10);
+}
+html[data-theme="light"] .discoveryRefreshBtn:hover,
+html[data-theme="light"] .friendsNotifBtn.discoveryRefreshBtn:hover{
+  border-color: rgba(124, 92, 255, 0.28);
+  background: #fff;
+}
+html[data-theme="light"] .discoveryRefreshBtn.hasNotice::after{
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.98),
+    0 0 12px rgba(230, 61, 92, 0.55);
+}
+html[data-theme="light"] .followActEmptyFace{
+  border-color: rgba(124, 92, 255, 0.32);
+  box-shadow: 0 8px 20px rgba(124, 92, 255, 0.12);
+}
+html[data-theme="light"] .followActEmptyFaceFallback{
+  color: var(--muted);
+  background: rgba(124, 92, 255, 0.10);
+}
+html[data-theme="light"] .challengeFeatureCard::before{
+  background:
+    linear-gradient(90deg, rgba(124, 92, 255, 0.14), transparent 48%),
+    radial-gradient(circle at 88% 18%, rgba(35, 213, 171, 0.12), transparent 34%);
+}
+html[data-theme="light"] .challengeFeatureCard h3,
+html[data-theme="light"] .homeDeskSpark.challengeFeatureCard h3{
+  color: var(--text);
+}
+html[data-theme="light"] .challengeFeatureCard p{
+  color: var(--muted);
+}
+html[data-theme="light"] .challengeLivePill,
+html[data-theme="light"] .challengeTimer,
+html[data-theme="light"] .challengeTagRow span{
+  border-color: rgba(15, 23, 40, 0.10);
+  background: rgba(124, 92, 255, 0.08);
+  color: rgba(15, 23, 40, 0.72);
+}
+html[data-theme="light"] .challengeMiniCard h3{
+  color: var(--text);
+}
+html[data-theme="light"] .challengeMiniCard p,
+html[data-theme="light"] .challengeMiniCount{
+  color: var(--muted);
+}
+html[data-theme="light"] .challengeMiniIcon{
+  color: var(--primary);
+  background: rgba(124, 92, 255, 0.10);
+  border-color: rgba(124, 92, 255, 0.18);
+}
+html[data-theme="light"] .challengeMiniCard button{
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.92);
+}
+html[data-theme="light"] .challengeFeatureStart{
+  color: #fff;
+}
+html[data-theme="light"] .profileAuraAvatarFallback{
+  color: rgba(15, 23, 40, 0.22);
+  background: rgba(124, 92, 255, 0.06);
+  border-color: rgba(15, 23, 40, 0.08);
+}
+html[data-theme="light"] .profileAuraAvatar{
+  background: rgba(124, 92, 255, 0.06);
+  border-color: rgba(15, 23, 40, 0.08);
+}
+html[data-theme="light"] .profileActionBtn{
+  border: 1px solid rgba(15, 23, 40, 0.10);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--text);
+  box-shadow: 0 10px 28px rgba(88, 104, 140, 0.10);
+}
+html[data-theme="light"] .profileActionBtn:hover{
+  border-color: rgba(124, 92, 255, 0.22);
+  background: #fff;
+}
+html[data-theme="light"] .profileActionBtnDanger{
+  border-color: rgba(230, 61, 92, 0.32);
+  color: #b83252;
+  background: rgba(230, 61, 92, 0.08);
+}
+html[data-theme="light"] .profileActionBtnDanger:hover{
+  color: #9e2844;
+  background: rgba(230, 61, 92, 0.12);
+}
+html[data-theme="light"] .settingsToggleTitle{
+  color: var(--text);
+}
+html[data-theme="light"] .settingsToggleSub{
+  color: var(--muted);
+}
+html[data-theme="light"] .settingsToggleRow input[type="checkbox"]{
+  width: 20px;
+  height: 20px;
+  accent-color: var(--primary);
+}
+html[data-theme="light"] .echoTileShell{
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow:
+    0 8px 22px rgba(88, 104, 140, 0.12),
+    inset 0 0 0 1px rgba(15, 23, 40, 0.08);
+}
+html[data-theme="light"] .echoTileShell--add{
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(124, 92, 255, 0.12), transparent 58%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(244, 247, 252, 0.94));
+  border-color: rgba(124, 92, 255, 0.28);
+  box-shadow: 0 8px 22px rgba(88, 104, 140, 0.10);
+}
+html[data-theme="light"] .echoTileAddIcon{
+  color: var(--primary);
+}
+html[data-theme="light"] .tabProfileAvatarFallback{
+  color: rgba(15, 23, 40, 0.55);
+  background: rgba(124, 92, 255, 0.08);
+  border-color: rgba(15, 23, 40, 0.08);
+}
+html[data-theme="light"] .tabProfileAvatarImg{
+  background: rgba(124, 92, 255, 0.06);
+  border-color: rgba(15, 23, 40, 0.08);
+}
+html[data-theme="light"] .tabProfileLink.active .tabLabel{
+  color: var(--primary);
+  font-weight: 800;
+}
+html[data-theme="light"] .mentorPageLead,
+html[data-theme="light"] .appScreenLead{
+  color: var(--muted);
+}
+
+/* Light mode — Home promos, Hook Rush, sparks, Templates occasion lab */
+html[data-theme="light"] .homeDeskPersonaTile::before,
+html[data-theme="light"] .onboardingEchoTile::before{
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.99) 0%, rgba(244, 247, 252, 0.94) 100%);
+}
+html[data-theme="light"] .homeDeskPersonaTile,
+html[data-theme="light"] .onboardingEchoTile{
+  box-shadow:
+    0 12px 28px rgba(124, 92, 255, 0.16),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+}
+html[data-theme="light"] .homeDeskPersonaMicIco{
+  color: var(--primary);
+}
+html[data-theme="light"] .onboardingEchoWave i{
+  background: rgba(109, 77, 245, 0.62);
+}
+html[data-theme="light"] .homeDeskPersonaPulse{
+  border-color: rgba(124, 92, 255, 0.26);
+}
+html[data-theme="light"] .onboardingEchoPulse{
+  border-color: rgba(168, 85, 247, 0.26);
+}
+html[data-theme="light"] .homeDeskSpark.challengeFeatureCard,
+html[data-theme="light"] .challengeFeatureCard.homeDeskSpark{
+  border-color: rgba(35, 213, 171, 0.26);
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(35, 213, 171, 0.12), transparent 55%),
+    radial-gradient(100% 100% at 100% 18%, rgba(124, 92, 255, 0.10), transparent 58%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.99), rgba(242, 252, 250, 0.94));
+  box-shadow:
+    0 14px 36px rgba(88, 104, 140, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.98);
+}
+html[data-theme="light"] .homeDeskSpark.challengeFeatureCard::before{
+  opacity: 0.85;
+  background:
+    linear-gradient(90deg, rgba(35, 213, 171, 0.10), transparent 48%),
+    radial-gradient(circle at 88% 18%, rgba(124, 92, 255, 0.08), transparent 34%);
+}
+html[data-theme="light"] .homeDeskSpark.challengeFeatureCard h3,
+html[data-theme="light"] .homeDeskSpark.challengeFeatureCard p{
+  color: var(--text);
+}
+html[data-theme="light"] .homeDeskSpark.challengeFeatureCard p{
+  color: var(--muted);
+}
+html[data-theme="light"] .challengeMiniCard{
+  border-color: rgba(15, 23, 40, 0.12);
+  box-shadow:
+    0 14px 32px rgba(88, 104, 140, 0.11),
+    inset 0 1px 0 rgba(255, 255, 255, 0.96);
+}
+html[data-theme="light"] .challengeMiniCard::before{
+  opacity: 1;
+  background: radial-gradient(
+    circle at 18% 0%,
+    rgba(var(--challenge-rgb, 124, 92, 255), 0.24),
+    transparent 52%
+  );
+}
+html[data-theme="light"] .discoveryQuickIdea{
+  border-color: rgba(15, 23, 40, 0.12);
+  box-shadow:
+    0 10px 26px rgba(88, 104, 140, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.96);
+}
+html[data-theme="light"] .discoveryQuickIdea small span,
+html[data-theme="light"] .discoveryIdeaTags span{
+  background: rgba(124, 92, 255, 0.10);
+  border-color: rgba(124, 92, 255, 0.16);
+  color: rgba(15, 23, 40, 0.68);
+}
+html[data-theme="light"] .challengePresetLab{
+  border-color: rgba(15, 23, 40, 0.10);
+  background:
+    radial-gradient(120% 100% at 8% 0%, rgba(35, 213, 171, 0.10), transparent 58%),
+    radial-gradient(95% 85% at 100% 12%, rgba(124, 92, 255, 0.08), transparent 62%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(244, 247, 252, 0.94));
+  box-shadow:
+    0 14px 36px rgba(88, 104, 140, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.98);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+html[data-theme="light"] .challengePresetLab::before{
+  background:
+    radial-gradient(circle at 12% 0%, rgba(35, 213, 171, 0.10), transparent 36%),
+    radial-gradient(circle at 85% 10%, rgba(124, 92, 255, 0.08), transparent 38%);
+}
+html[data-theme="light"] .homeDeskMakeSeg{
+  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(15, 23, 40, 0.10);
+}
+html[data-theme="light"] .homeDeskMakeSegBtn{
+  color: var(--muted);
+}
+html[data-theme="light"] .homeDeskMakeSegBtn.active{
+  color: #fff;
+}
+html[data-theme="light"] .homeDeskMakeHint,
+html[data-theme="light"] .challengeRailLabel,
+html[data-theme="light"] .challengePresetKicker{
+  color: var(--muted);
+}
+html[data-theme="light"] .challengePresetHead h3,
+html[data-theme="light"] .challengePresetCard h3{
+  color: var(--text);
+}
+html[data-theme="light"] .challengePresetCard p,
+html[data-theme="light"] .challengeNameField{
+  color: var(--muted);
+}
+html[data-theme="light"] .challengeNameField input{
+  border-color: rgba(15, 23, 40, 0.12);
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--text);
+}
+html[data-theme="light"] .challengeFilterChip{
+  border-color: rgba(15, 23, 40, 0.10);
+  background: rgba(255, 255, 255, 0.90);
+  color: var(--muted);
+}
+html[data-theme="light"] .challengeFilterChip.active{
+  color: #fff;
+}
+html[data-theme="light"] .challengePresetCard{
+  border-color: rgba(15, 23, 40, 0.10);
+  background:
+    radial-gradient(120% 100% at 0% 0%, rgba(var(--challenge-rgb, 124, 92, 255), 0.08), transparent 58%),
+    rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 20px rgba(88, 104, 140, 0.08);
+}
+html[data-theme="light"] .challengePresetChip{
+  background: rgba(18, 184, 150, 0.12);
+  color: rgba(12, 120, 98, 0.95);
+}
+html[data-theme="light"] .challengePresetTags span{
+  background: rgba(124, 92, 255, 0.08);
+  color: var(--muted);
+}
+html[data-theme="light"] .challengePresetCard button{
+  border: 1px solid rgba(15, 23, 40, 0.10);
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--text);
+}
+
 *{ box-sizing:border-box; }
 html,body{ height:100%; }
 body{

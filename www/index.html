@@ -71,7 +71,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260606createNoSteps" />
+    <link rel="stylesheet" href="./styles.css?v=20260606createOptionsV1" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -711,61 +711,74 @@
 
           <section class="createFlowStep createFlowStep--generate" aria-label="Generate">
 
-          <details class="details stepDetails miniMoreOptions" id="advancedSheet">
-            <summary>More options <button id="btnCloseAdvancedSheet" type="button" class="ghost">Close</button></summary>
-            <div class="stepCard compactOptions">
-          <div class="row optionsPresetRow">
-            <button id="presetPopClean" class="ghost" type="button">Pop Clean</button>
-            <button id="presetBalladWarm" class="ghost" type="button">Ballad Warm</button>
-            <button id="presetClubPunch" class="ghost" type="button">Club Punch</button>
+          <details class="details stepDetails miniMoreOptions createOptionsSheet" id="advancedSheet">
+            <summary class="createOptionsSummary">
+              <span class="createOptionsSummaryLabel">Options</span>
+              <span class="createOptionsSummaryChev" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              </span>
+              <button id="btnCloseAdvancedSheet" type="button" class="createOptionsClose" aria-label="Close options">×</button>
+            </summary>
+            <div class="stepCard compactOptions createOptionsPanel">
+          <div class="createOptionsPresets">
+            <p class="createOptionsKicker">Presets</p>
+            <div class="row optionsPresetRow createOptionsPillRow">
+              <button id="presetPopClean" class="createOptionsPill" type="button">Pop</button>
+              <button id="presetBalladWarm" class="createOptionsPill" type="button">Ballad</button>
+              <button id="presetClubPunch" class="createOptionsPill" type="button">Club</button>
+            </div>
           </div>
-          <details class="details fineTuneDetails" id="fineTuneDetails" open>
-            <summary>Fine tune</summary>
 
-            <div class="stepHead">Feel</div>
-            <div class="row advancedGrid compactGrid">
-              <label class="field">
-                <div class="label">Groove pace</div>
+          <div class="createOptionsFine" id="fineTuneDetails">
+            <details class="createOptionsGroup" open>
+              <summary class="createOptionsGroupHead">Feel</summary>
+              <div class="createOptionsGrid advancedGrid compactGrid">
+              <label class="field createOptionsField">
+                <span class="createOptionsFieldLabel">Groove</span>
                 <select id="sunoGroovePace">
-                  <option value="" selected>Off (auto)</option>
+                  <option value="" selected>Auto</option>
                   <option value="balanced">Balanced</option>
                   <option value="slow">Slow</option>
                   <option value="energetic">Energetic</option>
                 </select>
               </label>
-              <label class="field">
-                <div class="label">Prosody strictness</div>
+              <label class="field createOptionsField">
+                <span class="createOptionsFieldLabel">Prosody</span>
                 <select id="sunoProsody">
-                  <option value="" selected>Off (auto)</option>
+                  <option value="" selected>Auto</option>
                   <option value="tight">Tight</option>
                   <option value="natural">Natural</option>
-                  <option value="ultra">Ultra Tight</option>
+                  <option value="ultra">Ultra</option>
                 </select>
               </label>
-              <label class="field">
-                <div class="label">Beat stability</div>
+              <label class="field createOptionsField">
+                <span class="createOptionsFieldLabel">Beat</span>
                 <select id="sunoBeatStability">
-                  <option value="" selected>Off (auto)</option>
+                  <option value="" selected>Auto</option>
                   <option value="stable">Stable</option>
                   <option value="flexible">Flexible</option>
                   <option value="locked">Locked</option>
                 </select>
               </label>
-            </div>
-            <div class="stepHead">Theory</div>
-            <div class="row">
-              <label class="proToggleRow" for="sunoProMode">
-                <input id="sunoProMode" type="checkbox" />
-                <span>Pro key & maqam</span>
+              </div>
+            </details>
+
+            <details class="createOptionsGroup">
+              <summary class="createOptionsGroupHead createOptionsGroupHead--theory">
+                <span>Theory</span>
+                <label class="createOptionsSwitch proToggleRow" for="sunoProMode">
+                  <input id="sunoProMode" type="checkbox" />
+                  <span class="createOptionsSwitchTrack" aria-hidden="true"></span>
+                  <span class="createOptionsSwitchText">Pro</span>
+                </label>
+              </summary>
+              <div class="createOptionsGrid advancedGrid compactGrid">
+              <label class="field createOptionsField createOptionsField--wide">
+                <span class="createOptionsFieldLabel">Timing</span>
+                <input id="sunoTiming" type="text" placeholder="BPM, time signature…" />
               </label>
-            </div>
-            <div class="row advancedGrid compactGrid">
-              <label class="field grow">
-                <div class="label">Timing</div>
-                <input id="sunoTiming" type="text" placeholder="96 BPM • 4/4 • balanced groove" />
-              </label>
-              <label class="field proField">
-                <div class="label">Song key</div>
+              <label class="field createOptionsField proField">
+                <span class="createOptionsFieldLabel">Key</span>
                 <select id="sunoSongKey">
                 <option value="" selected>Auto</option>
                 <option value="Do Major">Do Major</option>
@@ -794,10 +807,10 @@
                 <option value="Si Minor">Si Minor</option>
                 </select>
               </label>
-              <label class="field proField">
-                <div class="label">Maqam</div>
+              <label class="field createOptionsField proField">
+                <span class="createOptionsFieldLabel">Maqam</span>
                 <select id="sunoMaqam">
-                <option value="" selected>Auto / none</option>
+                <option value="" selected>Auto</option>
                 <option value="Rast">Rast</option>
                 <option value="Bayati">Bayati</option>
                 <option value="Hijaz">Hijaz</option>
@@ -821,25 +834,27 @@
                 <option value="Nawruz">Nawruz</option>
                 </select>
               </label>
-            </div>
-            <div id="sunoKeyHint" class="hint advancedHint" hidden></div>
+              <div id="sunoKeyHint" class="hint advancedHint createOptionsHint" hidden></div>
+              </div>
+            </details>
 
-            <div class="stepHead">Voice</div>
-            <div class="row advancedGrid compactGrid">
-              <label class="field">
-                <div class="label">Voice profile</div>
+            <details class="createOptionsGroup">
+              <summary class="createOptionsGroupHead">Voice</summary>
+              <div class="createOptionsGrid advancedGrid compactGrid">
+              <label class="field createOptionsField">
+                <span class="createOptionsFieldLabel">Range</span>
                 <select id="sunoVoiceProfile">
                   <option value="" selected>Auto</option>
-                  <option value="f|Soprano">Female • Soprano</option>
-                  <option value="f|Mezzo-Soprano">Female • Mezzo-Soprano</option>
-                  <option value="f|Alto">Female • Alto</option>
-                  <option value="m|Tenor">Male • Tenor</option>
-                  <option value="m|Baritone">Male • Baritone</option>
-                  <option value="m|Bass">Male • Bass</option>
+                  <option value="f|Soprano">Soprano</option>
+                  <option value="f|Mezzo-Soprano">Mezzo</option>
+                  <option value="f|Alto">Alto</option>
+                  <option value="m|Tenor">Tenor</option>
+                  <option value="m|Baritone">Baritone</option>
+                  <option value="m|Bass">Bass</option>
                 </select>
               </label>
-              <label class="field">
-                <div class="label">Accent / Dialect</div>
+              <label class="field createOptionsField">
+                <span class="createOptionsFieldLabel">Dialect</span>
                 <select id="sunoDialect">
                 <option value="" selected>Auto</option>
                 <option value="Levantine Arabic">Levantine</option>
@@ -850,31 +865,30 @@
                 <option value="Modern Standard Arabic">MSA</option>
                 </select>
               </label>
-              <label class="field grow">
-                <div class="label">Dialect hint (optional)</div>
-                <input id="sunoDialectHint" type="text" placeholder="Example line in desired dialect..." />
+              <label class="field createOptionsField createOptionsField--wide">
+                <span class="createOptionsFieldLabel">Hint</span>
+                <input id="sunoDialectHint" type="text" placeholder="Optional dialect line…" />
               </label>
-              <label class="field grow">
-                <div class="label">Persona</div>
+              <label class="field createOptionsField createOptionsField--wide">
+                <span class="createOptionsFieldLabel">Persona</span>
                 <select id="sunoPersonaId">
-                <option value="">None (default voice)</option>
+                <option value="">Default voice</option>
                 </select>
               </label>
-              <p class="hint personaManageHint">
-                <a href="#/profile?persona=1" id="linkManageVoices" data-open-profile-persona="1">Manage voices</a>
-              </p>
-            </div>
-          </details>
-
-          <div class="row optionsActions">
-            <button id="btnAdvancedReset" class="ghost" type="button">Reset</button>
-            <button id="btnAdvancedApply" class="primary" type="button">Apply</button>
+              <a href="#/profile?persona=1" id="linkManageVoices" class="createOptionsLink" data-open-profile-persona="1">Manage voices</a>
+              </div>
+            </details>
           </div>
 
+          <footer class="createOptionsFooter optionsActions">
+            <button id="btnAdvancedReset" class="createOptionsFooterBtn createOptionsFooterBtn--ghost" type="button">Reset</button>
+            <button id="btnAdvancedApply" class="createOptionsFooterBtn createOptionsFooterBtn--done" type="button">Done</button>
+          </footer>
+
           </div>
           </details>
 
-          <button id="btnOpenAdvancedSheet" class="ghost mobileAdvancedBtn" type="button">More options</button>
+          <button id="btnOpenAdvancedSheet" class="ghost mobileAdvancedBtn createOptionsMobileTrigger" type="button">Options</button>
           <div class="stepCard generateDock">
           <div class="row generateRow">
             <button id="btnSunoGenerate" class="primary aiGenerate">Generate song</button>

@@ -28855,10 +28855,14 @@ if (els.btnBetaTopup) {
 if (els.btnOpenBilling) {
   els.btnOpenBilling.addEventListener("click", () => openBilling());
 }
+function openFineTunePanelIfPresent() {
+  const el = els.fineTuneDetails;
+  if (el && "open" in el) el.open = true;
+}
 if (els.btnOpenAdvancedSheet && els.advancedSheet) {
   els.btnOpenAdvancedSheet.addEventListener("click", () => {
     els.advancedSheet.open = true;
-    if (els.fineTuneDetails) els.fineTuneDetails.open = true;
+    openFineTunePanelIfPresent();
     els.advancedSheet.scrollTop = 0;
     const first = els.advancedSheet.querySelector("select, input");
     if (first) setTimeout(() => first.focus(), 120);
@@ -28875,7 +28879,7 @@ if (els.personaActiveBannerChange && els.advancedSheet) {
   els.personaActiveBannerChange.addEventListener("click", () => {
     // Same opening behavior as the main "Open advanced options" button.
     els.advancedSheet.open = true;
-    if (els.fineTuneDetails) els.fineTuneDetails.open = true;
+    openFineTunePanelIfPresent();
     els.advancedSheet.scrollTop = 0;
     if (els.sunoPersonaId) {
       try {
@@ -29530,10 +29534,15 @@ if (els.btnProfileShareIcon) {
   el.addEventListener("change", renderProfilePreviewFromInputs);
 });
 if (els.btnCloseAdvancedSheet && els.advancedSheet) {
-  els.btnCloseAdvancedSheet.addEventListener("click", () => {
+  els.btnCloseAdvancedSheet.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     els.advancedSheet.open = false;
   });
 }
+document.querySelectorAll(".createOptionsSwitch").forEach((el) => {
+  el.addEventListener("click", (e) => e.stopPropagation());
+});
 
 // Studio mixer
 if (els.btnMixerLoad) {

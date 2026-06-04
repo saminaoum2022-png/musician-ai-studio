@@ -25922,3 +25922,325 @@ section.mentorPage{
 .friendsWtfMore:hover{
   text-decoration: underline;
 }
+
+/* -----------------------------------------------------------------
+ *  Create — Options panel (premium, grouped, minimal copy)
+ * ----------------------------------------------------------------- */
+.createOptionsSheet > summary{
+  list-style: none;
+}
+.createOptionsSheet > summary::-webkit-details-marker{
+  display: none;
+}
+.createOptionsSummary{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(124, 92, 255, 0.22);
+  background:
+    radial-gradient(120% 100% at 0% 0%, rgba(124, 92, 255, 0.14), transparent 58%),
+    linear-gradient(165deg, rgba(22, 28, 44, 0.92), rgba(10, 12, 22, 0.88));
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.createOptionsSummaryLabel{
+  font-size: 15px;
+  font-weight: 850;
+  letter-spacing: -0.02em;
+  color: rgba(183, 168, 255, 0.98);
+}
+.createOptionsSummaryChev{
+  margin-left: auto;
+  color: rgba(223, 231, 251, 0.45);
+  transition: transform 200ms ease, color 200ms ease;
+}
+.createOptionsSheet[open] .createOptionsSummaryChev{
+  transform: rotate(180deg);
+  color: rgba(124, 92, 255, 0.9);
+}
+.createOptionsClose{
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  margin-left: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(223, 231, 251, 0.7);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.createOptionsPanel{
+  margin-top: 10px;
+  padding: 14px 14px 12px !important;
+  border-radius: 22px !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background:
+    radial-gradient(100% 80% at 100% 0%, rgba(35, 213, 171, 0.06), transparent 55%),
+    rgba(8, 11, 20, 0.72) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.createOptionsKicker{
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(94, 234, 212, 0.82);
+}
+.createOptionsPillRow{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+}
+.createOptionsPill{
+  flex: 1 1 0;
+  min-width: 72px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(238, 244, 255, 0.9);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+.createOptionsPill:hover,
+.createOptionsPill:focus-visible{
+  border-color: rgba(124, 92, 255, 0.35);
+  background: rgba(124, 92, 255, 0.12);
+}
+.createOptionsPill:active{
+  background: rgba(124, 92, 255, 0.2);
+}
+.createOptionsFine{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.createOptionsGroup{
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+}
+.createOptionsGroup > summary{
+  list-style: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.createOptionsGroup > summary::-webkit-details-marker{
+  display: none;
+}
+.createOptionsGroupHead{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: rgba(238, 244, 255, 0.92);
+}
+.createOptionsGroupHead--theory .createOptionsSwitch{
+  margin-left: auto;
+}
+.createOptionsGroup[open] .createOptionsGroupHead{
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.createOptionsGrid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 12px 14px 14px;
+}
+.createOptionsField{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  min-width: 0;
+}
+.createOptionsField--wide{
+  grid-column: 1 / -1;
+}
+.createOptionsFieldLabel{
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(188, 201, 222, 0.62);
+}
+.createOptionsField select,
+.createOptionsField input{
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  background: rgba(0, 0, 0, 0.28) !important;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(236, 242, 255, 0.94);
+  box-shadow: none !important;
+}
+.createOptionsField select.isDefaultOption{
+  color: rgba(168, 180, 199, 0.65) !important;
+}
+.createOptionsHint{
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12px;
+}
+.createOptionsLink{
+  grid-column: 1 / -1;
+  justify-self: start;
+  padding: 6px 0;
+  font-size: 13px;
+  font-weight: 750;
+  color: rgba(94, 234, 212, 0.92);
+  text-decoration: none;
+}
+.createOptionsSwitch{
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.createOptionsSwitch input{
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+}
+.createOptionsSwitchTrack{
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: background 180ms ease, box-shadow 180ms ease;
+  position: relative;
+}
+.createOptionsSwitchTrack::after{
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+  transition: transform 180ms ease;
+}
+.createOptionsSwitch input:checked + .createOptionsSwitchTrack{
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.95), rgba(35, 213, 171, 0.65));
+  border-color: rgba(124, 92, 255, 0.4);
+}
+.createOptionsSwitch input:checked + .createOptionsSwitchTrack::after{
+  transform: translateX(18px);
+}
+.createOptionsSwitchText{
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(183, 168, 255, 0.95);
+}
+.createOptionsFooter{
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.createOptionsFooterBtn{
+  flex: 1 1 0;
+  min-height: 44px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.createOptionsFooterBtn--ghost{
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: transparent;
+  color: rgba(223, 231, 251, 0.65);
+}
+.createOptionsFooterBtn--done{
+  border: 0;
+  color: #fff;
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.95), rgba(35, 213, 171, 0.55));
+  box-shadow: 0 10px 24px rgba(124, 92, 255, 0.28);
+}
+.createOptionsMobileTrigger{
+  width: 100%;
+  min-height: 44px;
+  margin-top: 8px;
+  border-radius: 18px !important;
+  border: 1px solid rgba(124, 92, 255, 0.2) !important;
+  background: rgba(124, 92, 255, 0.08) !important;
+  color: rgba(183, 168, 255, 0.95) !important;
+  font-weight: 800 !important;
+}
+.miniMoreOptions .fineTuneDetails > summary{
+  display: none;
+}
+.createOptionsSheet .stepHead{
+  display: none;
+}
+@media (max-width: 520px){
+  .createOptionsGrid{
+    grid-template-columns: 1fr;
+  }
+}
+html[data-theme="light"] .createOptionsSummary{
+  border-color: rgba(124, 92, 255, 0.18);
+  background:
+    radial-gradient(120% 100% at 0% 0%, rgba(124, 92, 255, 0.1), transparent 58%),
+    linear-gradient(165deg, #fff, #f4f7fc);
+  box-shadow: 0 12px 28px rgba(88, 104, 140, 0.1);
+}
+html[data-theme="light"] .createOptionsSummaryLabel{
+  color: var(--primary);
+}
+html[data-theme="light"] .createOptionsPanel{
+  background: rgba(255, 255, 255, 0.92) !important;
+  border-color: rgba(15, 23, 40, 0.08) !important;
+}
+html[data-theme="light"] .createOptionsGroup{
+  background: rgba(248, 250, 255, 0.88);
+  border-color: rgba(15, 23, 40, 0.08);
+}
+html[data-theme="light"] .createOptionsField select,
+html[data-theme="light"] .createOptionsField input{
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(15, 23, 40, 0.1) !important;
+  color: var(--text);
+}
+html[data-theme="light"] .createOptionsPill{
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(15, 23, 40, 0.1);
+  color: var(--text);
+}

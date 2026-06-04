@@ -29294,23 +29294,51 @@ function logoutCurrentUser() {
   setStatus("Logged out.");
 }
 
-function openLegalPage(kind) {
-  const path = kind === "terms" ? "./terms.html" : "./privacy.html";
-  let url = path;
+/** Public HTTPS legal pages (SFSafariViewController cannot open capacitor:// URLs). */
+function getLegalPageUrl(kind) {
+  const slug = kind === "terms" ? "terms" : "privacy";
+  const localPath = kind === "terms" ? "./terms.html" : "./privacy.html";
+  if (isNativeShell()) {
+    const base = String(_resolvedApiBase || API_BASE || NATIVE_API_BASE_CANDIDATES[0] || "")
+      .trim()
+      .replace(/\/$/, "");
+    if (base) return `${base}/${slug}`;
+  }
   try {
-    url = new URL(path, location.href).href;
-  } catch {}
-  try {
-    const Browser = window.Capacitor?.Plugins?.Browser;
-    if (Browser?.open) {
-      void Browser.open({ url, presentationStyle: "fullscreen" });
-      return;
-    }
-  } catch {}
-  try {
-    location.assign(path);
+    return new URL(localPath, location.href).href;
   } catch {
-    window.open(url, "_blank", "noopener,noreferrer");
+    return localPath;
+  }
+}
+
+async function openLegalPage(kind) {
+  const localPath = kind === "terms" ? "./terms.html" : "./privacy.html";
+  const url = getLegalPageUrl(kind);
+
+  if (isNativeShell()) {
+    const Browser = getCapacitorBrowserPlugin();
+    if (Browser?.open) {
+      try {
+        await Browser.open({ url, presentationStyle: "fullscreen" });
+        return;
+      } catch (e) {
+        console.warn("[legal] Browser.open failed, falling back", e);
+      }
+    }
+    try {
+      location.assign(localPath);
+      return;
+    } catch {}
+  }
+
+  try {
+    location.assign(localPath);
+  } catch {
+    try {
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch {
+      location.href = url;
+    }
   }
 }
 
@@ -29319,7 +29347,7 @@ function wireLegalLinks() {
     el.addEventListener("click", (e) => {
       e.preventDefault();
       const kind = el.getAttribute("data-legal-link") || "privacy";
-      openLegalPage(kind);
+      void openLegalPage(kind);
     });
   });
 }

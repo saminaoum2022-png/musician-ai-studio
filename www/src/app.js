@@ -9851,7 +9851,7 @@ async function saveCallingCard() {
   // Persist on the profile row so visitors can read it back.
   activeProfile.callingCardUrl = result.url;
   activeProfile.callingCardUpdatedAt = result.updatedAt;
-  try { localStorage.setItem(PROFILE_KEY, JSON.stringify(activeProfile)); } catch {}
+  saveProfile(activeProfile);
   try { await supabaseUpsertProfile(activeProfile); } catch (e) {
     showToast("Saved on this device. Cloud sync failed.");
   }
@@ -9878,7 +9878,7 @@ async function deleteExistingCallingCard() {
   } catch {}
   activeProfile.callingCardUrl = "";
   activeProfile.callingCardUpdatedAt = 0;
-  try { localStorage.setItem(PROFILE_KEY, JSON.stringify(activeProfile)); } catch {}
+  saveProfile(activeProfile);
   try { await supabaseUpsertProfile(activeProfile); } catch {}
   showToast("Calling card removed.");
   renderProfileCallingCardHint();
@@ -10191,6 +10191,12 @@ let lastSunoReferenceUrl = "";
 let libraryNowPlayingId = null;
 let lastGenerationMeta = null;
 const PROFILE_KEY = "mas:profile:v1";
+const PROFILE_KEY_GUEST = "mas:profile:v1:guest";
+
+function profileStorageKey(forId) {
+  const id = String(forId || activeProfile?.id || authSession?.user?.id || "guest");
+  return id === "guest" ? PROFILE_KEY_GUEST : `${PROFILE_KEY}:${id}`;
+}
 const PROFILE_PERSONAS_KEY = "mas:personas:v1";
 const PERSONA_SELECTED_KEY = "mas:personaSelected:v1";
 function personaSelectedStorageKey() {
@@ -10726,14 +10732,63 @@ let activeProfile = { id: "guest", username: "guest", email: "", soundCertified:
 let lastAuthDebug = "";
 function loadProfile() {
   try {
-    const raw = localStorage.getItem(PROFILE_KEY);
-    const p = raw ? JSON.parse(raw) : null;
-    if (p && p.id) activeProfile = p;
+    const uid = String(authSession?.user?.id || "").trim();
+    const keys = uid
+      ? [profileStorageKey(uid), PROFILE_KEY]
+      : [PROFILE_KEY_GUEST, PROFILE_KEY];
+    for (const key of keys) {
+      const raw = localStorage.getItem(key);
+      const p = raw ? JSON.parse(raw) : null;
+      if (!p?.id) continue;
+      if (uid && String(p.id) !== uid && key === PROFILE_KEY) continue;
+      activeProfile = p;
+      return;
+    }
   } catch {}
 }
 function saveProfile(p) {
   activeProfile = p;
-  try { localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); } catch {}
+  try {
+    localStorage.setItem(profileStorageKey(p?.id), JSON.stringify(p));
+  } catch {}
+}
+
+/** Wipe in-memory + UI caches when the signed-in Supabase user changes. */
+function onAuthAccountSwitched(prevUserId, nextUserId) {
+  saveHubFeed([]);
+  _hubKnownNewestIsoTs = "";
+  _hubLastFetchAtMs = 0;
+  _hubLastFullFetchAtMs = 0;
+  _myHubPostsFirstLoadDone = false;
+  _myHubPostsLastFetchMs = 0;
+  _libraryHydrateCompleted = false;
+  _libraryHydrateInFlight = false;
+  _libraryReconcileLastAt = 0;
+  invalidateLibraryMemCache();
+  invalidateProfileActivitiesCache();
+  clearSignedInUiCaches();
+  const user = authSession?.user;
+  activeProfile = {
+    id: nextUserId,
+    username: deriveUsernameFromAuth(user) || "guest",
+    email: String(user?.email || ""),
+    gender: "",
+    voiceTimbre: "",
+    bio: "",
+    avatar: "",
+    genres: "",
+    links: {},
+    isPublic: true,
+    callingCardUrl: "",
+    callingCardUpdatedAt: 0,
+    soundCertified: false,
+  };
+  saveProfile(activeProfile);
+  saveLibraryFor(nextUserId, []);
+  saveLibrary([]);
+  try {
+    console.info("[auth] account switched", { from: prevUserId, to: nextUserId });
+  } catch {}
 }
 
 function localProfileBelongsToAuthUser() {
@@ -11407,10 +11462,13 @@ async function supabaseSelectMyHubPosts({ uid, username } = {}) {
 function ingestMyHubPostsRows(rows) {
   if (!Array.isArray(rows) || !rows.length) return;
   const mapped = rows.map((r) => mapHubRestRowToPost(r, { includeProof: true }));
-  const prev = loadHubFeed();
+  const uid = String(authSession?.user?.id || "");
+  const prev = loadHubFeed().filter((p) => {
+    if (!uid) return true;
+    return String(p?.meta?.creatorUserId || "") !== uid;
+  });
   const byId = new Map();
   prev.forEach((p) => byId.set(String(p.id), p));
-  // Mine wins on conflict — they're freshly fetched.
   mapped.forEach((p) => byId.set(String(p.id), p));
   const merged = Array.from(byId.values()).sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0)).slice(0, 300);
   saveHubFeed(merged);
@@ -11434,7 +11492,9 @@ async function refreshMyHubPostsFast({ force = false } = {}) {
   }
   try {
     const uid = String(authSession?.user?.id || "");
-    const username = String(activeProfile?.username || "");
+    const username = localProfileBelongsToAuthUser()
+      ? String(activeProfile?.username || "")
+      : "";
     if (!uid && !username) return;
     const now = Date.now();
     if (!force && now - _myHubPostsLastFetchMs < 8000) return;
@@ -11507,6 +11567,9 @@ function saveAuthSession(sess, { persist = true } = {}) {
   const prevUserId = String(authSession?.user?.id || "");
   authSession = sess ? normalizeAuthSession(sess) : null;
   const nextUserId = String(authSession?.user?.id || "");
+  if (prevUserId && nextUserId && prevUserId !== nextUserId) {
+    onAuthAccountSwitched(prevUserId, nextUserId);
+  }
   if (authSession) {
     const payload = JSON.stringify(authSession);
     writeAuthSessionToLocalStores(payload);
@@ -20394,7 +20457,12 @@ function invalidateLibraryMemCache() {
 function syncActiveProfileIdFromSession() {
   const uid = authSession?.user?.id;
   if (!uid) return;
-  if (String(activeProfile?.id || "guest") === String(uid)) return;
+  const cur = String(activeProfile?.id || "guest");
+  if (cur === String(uid)) return;
+  if (cur && cur !== "guest" && cur !== String(uid)) {
+    onAuthAccountSwitched(cur, String(uid));
+    return;
+  }
   saveProfile({
     ...activeProfile,
     id: String(uid),
@@ -20772,9 +20840,14 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
   // 1) Load cloud + local candidates and merge-dedupe.
   const cloudSongs =
     prefetchedCloud !== undefined ? prefetchedCloud : await supabaseLoadUserSongs();
+  const localForUser = loadLibraryFor(uid);
   const guestSongs = loadLibraryFor("guest");
-  const allLocalSongs = loadAllLocalSongsDeduped();
-  const localCandidates = guestSongs.length ? guestSongs : allLocalSongs;
+  // Never merge every `mas:library:v1:*` key on device — that leaked the
+  // previous account's songs into a brand-new email sign-up.
+  let localCandidates = localForUser;
+  if (!cloudSongs.length && !localForUser.length && guestSongs.length) {
+    localCandidates = guestSongs;
+  }
 
   const sigOf = (row) => {
     const url = String(row?.url || "").trim();
@@ -29157,8 +29230,13 @@ if (els.authEmailForm) {
   });
 }
 function logoutCurrentUser() {
+  const prevUserId = String(authSession?.user?.id || "");
   saveAuthSession(null);
   void clearAuthSessionEverywhere();
+  if (prevUserId) {
+    saveLibraryFor(prevUserId, []);
+    saveHubFeed([]);
+  }
   resetProfileUiToGuest();
   setProfileEditing(false);
   // A pending generation belongs to the previous user — wipe it so a

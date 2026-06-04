@@ -71,7 +71,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260605lightHomeV1" />
+    <link rel="stylesheet" href="./styles.css?v=20260605settingsV1" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -2424,7 +2424,7 @@
           <header class="settingsHeader">
             <p class="settingsKicker">App settings</p>
             <h2>Settings</h2>
-            <p class="settingsLead">Manage your account, creator tools, preferences, and app information.</p>
+            <p class="settingsLead">Account, creator tools, appearance, and support for NabadAi Music.</p>
           </header>
 
           <section class="settingsGroup" aria-labelledby="settingsAccountTitle">
@@ -2449,26 +2449,6 @@
                 </span>
                 <span class="settingsRowChev" aria-hidden="true">›</span>
               </a>
-              <button id="settingsFollowingRow" class="settingsRow settingsRowLink" type="button">
-                <span class="settingsRowIco" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 11h-6M20 8v6"/></svg>
-                </span>
-                <span class="settingsRowBody">
-                  <span class="settingsRowTitle">Following</span>
-                  <span class="settingsRowSub">Manage creators you follow and unfollow them later.</span>
-                </span>
-                <span class="settingsRowChev" aria-hidden="true">›</span>
-              </button>
-              <button id="settingsNotificationsRow" class="settingsRow settingsRowLink" type="button">
-                <span class="settingsRowIco" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
-                </span>
-                <span class="settingsRowBody">
-                  <span class="settingsRowTitle">Notifications</span>
-                  <span id="settingsNotificationsSub" class="settingsRowSub">In-app alerts from follows and creator activity.</span>
-                </span>
-                <span class="settingsRowChev" aria-hidden="true">›</span>
-              </button>
               <button id="settingsBtnSignIn" class="settingsRow settingsRowLink" type="button">
                 <span class="settingsRowIco" aria-hidden="true">
                   <svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5M15 12H3"/></svg>
@@ -2603,42 +2583,32 @@
                 </span>
                 <span class="settingsRowChev" aria-hidden="true">›</span>
               </button>
-              <label class="settingsRow settingsToggleRow" for="settingsCallingCardAutoplay">
-                <span class="settingsRowIco" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
-                </span>
-                <span class="settingsRowBody">
-                  <span class="settingsRowTitle">Auto-play voice notes</span>
-                  <span class="settingsRowSub">Play a creator’s 8-second calling card once when you open their profile.</span>
-                </span>
-                <input id="settingsCallingCardAutoplay" type="checkbox" checked />
-              </label>
             </div>
           </section>
 
           <section class="settingsGroup" aria-labelledby="settingsSupportTitle">
             <h3 id="settingsSupportTitle" class="settingsGroupTitle">Support</h3>
             <div class="settingsList">
-              <button class="settingsRow settingsRowLink" type="button" data-settings-placeholder="Help & support">
+              <a id="settingsHelpRow" class="settingsRow settingsRowLink" href="mailto:help@nabadai.com?subject=NabadAi%20Music%20%E2%80%94%20Help">
                 <span class="settingsRowIco" aria-hidden="true">
                   <svg viewBox="0 0 24 24"><path d="M12 18h.01"/><path d="M9.1 9a3 3 0 1 1 5.8 1c-.6 1.2-1.9 1.7-2.5 2.7-.3.5-.4.9-.4 1.3"/><circle cx="12" cy="12" r="10"/></svg>
                 </span>
                 <span class="settingsRowBody">
-                  <span class="settingsRowTitle">Help & support</span>
-                  <span class="settingsRowSub">Get help with your account or generated music.</span>
+                  <span class="settingsRowTitle">Help &amp; support</span>
+                  <span class="settingsRowSub">Email <strong>help@nabadai.com</strong> — account, billing, or how to use the app.</span>
                 </span>
                 <span class="settingsRowChev" aria-hidden="true">›</span>
-              </button>
-              <button class="settingsRow settingsRowLink" type="button" data-settings-placeholder="Report a problem">
+              </a>
+              <a id="settingsReportRow" class="settingsRow settingsRowLink" href="mailto:support@nabadai.com?subject=NabadAi%20Music%20%E2%80%94%20Problem%20report">
                 <span class="settingsRowIco" aria-hidden="true">
                   <svg viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
                 </span>
                 <span class="settingsRowBody">
                   <span class="settingsRowTitle">Report a problem</span>
-                  <span class="settingsRowSub">Send feedback about a bug or unexpected result.</span>
+                  <span class="settingsRowSub">Email <strong>support@nabadai.com</strong> — describe the bug and what you expected.</span>
                 </span>
                 <span class="settingsRowChev" aria-hidden="true">›</span>
-              </button>
+              </a>
             </div>
           </section>
 

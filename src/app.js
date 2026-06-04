@@ -381,9 +381,8 @@ const els = {
   settingsBtnSignIn: document.getElementById("settingsBtnSignIn"),
   settingsBtnLogout: document.getElementById("settingsBtnLogout"),
   settingsEditProfileRow: document.getElementById("settingsEditProfileRow"),
-  settingsFollowingRow: document.getElementById("settingsFollowingRow"),
-  settingsNotificationsRow: document.getElementById("settingsNotificationsRow"),
-  settingsNotificationsSub: document.getElementById("settingsNotificationsSub"),
+  settingsHelpRow: document.getElementById("settingsHelpRow"),
+  settingsReportRow: document.getElementById("settingsReportRow"),
   notificationsCenter: document.getElementById("notificationsCenter"),
   notificationsCenterLead: document.getElementById("notificationsCenterLead"),
   notificationsCenterStatus: document.getElementById("notificationsCenterStatus"),
@@ -695,7 +694,6 @@ const els = {
   profileAuraVoiceChipSlot: document.getElementById("profileAuraVoiceChipSlot"),
   profilePreviewVoiceChipBtn: document.getElementById("profilePreviewVoiceChipBtn"),
   userPublicCallingCardAudio: document.getElementById("userPublicCallingCardAudio"),
-  settingsCallingCardAutoplay: document.getElementById("settingsCallingCardAutoplay"),
   shareLiveModal: document.getElementById("shareLiveModal"),
   shareLiveBackdrop: document.getElementById("shareLiveBackdrop"),
   btnCloseShareLive: document.getElementById("btnCloseShareLive"),
@@ -2444,11 +2442,6 @@ function updateNotificationsEntryBadges(unreadCount) {
         : "Notifications",
     );
   } catch {}
-  if (els.settingsNotificationsSub) {
-    els.settingsNotificationsSub.textContent = hasUnread
-      ? `${unread} unread ${unread === 1 ? "notification" : "notifications"}.`
-      : "You are all caught up.";
-  }
 }
 
 async function refreshNotificationsUnreadBadge({ force = false } = {}) {
@@ -14036,11 +14029,6 @@ async function refreshNotificationsCenter() {
       els.notificationsCenterStatus.textContent = "";
     }
     renderNotificationRows(list);
-    if (els.settingsNotificationsSub) {
-      els.settingsNotificationsSub.textContent = unread
-        ? `${unread} unread ${unread === 1 ? "notification" : "notifications"}.`
-        : "You are all caught up.";
-    }
     updateNotificationsEntryBadges(unread);
     if (unread) void socialApi("/api/social", {
       method: "POST",
@@ -25501,15 +25489,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   // Voice-note chip (own + public profiles) — retired. Click handlers
   // are intentionally not wired. The DOM nodes remain hidden via CSS
   // / renderProfileAuraVoiceChip so storage code keeps working.
-  // Settings auto-play preference toggle.
-  if (els.settingsCallingCardAutoplay) {
-    try {
-      els.settingsCallingCardAutoplay.checked = isCallingCardAutoplayEnabled();
-    } catch {}
-    els.settingsCallingCardAutoplay.addEventListener("change", () => {
-      setCallingCardAutoplayEnabled(Boolean(els.settingsCallingCardAutoplay.checked));
-    });
-  }
   if (els.btnPreviewVocalRef) {
     els.btnPreviewVocalRef.addEventListener("click", async () => {
       const f = getVocalReferenceFile();
@@ -29337,12 +29316,33 @@ if (els.settingsBtnLogout) {
 if (els.btnUserPublicFollow) {
   els.btnUserPublicFollow.addEventListener("click", () => void toggleCurrentUserPublicFollow());
 }
-if (els.settingsFollowingRow) {
-  els.settingsFollowingRow.addEventListener("click", () => void showFollowingSummary());
+function nabadaiSupportMailtoHref(kind) {
+  const report = kind === "report";
+  const email = report ? "support@nabadai.com" : "help@nabadai.com";
+  const subject = report ? "NabadAi Music — problem report" : "NabadAi Music — help";
+  const build = String(document.getElementById("footerBuild")?.textContent || "").trim();
+  const account =
+    String(authSession?.user?.email || activeProfile?.email || "").trim() || "guest";
+  const body = ["", "", "---", "App: NabadAi Music", build ? `Build: ${build}` : "", `Account: ${account}`]
+    .filter(Boolean)
+    .join("\n");
+  return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
-if (els.settingsNotificationsRow) {
-  els.settingsNotificationsRow.addEventListener("click", () => void showNotificationsSummary());
+function wireSettingsSupportLinks() {
+  const pairs = [
+    [els.settingsHelpRow, "help"],
+    [els.settingsReportRow, "report"],
+  ];
+  for (const [el, kind] of pairs) {
+    if (!el) continue;
+    el.addEventListener("click", () => {
+      try {
+        el.href = nabadaiSupportMailtoHref(kind);
+      } catch {}
+    });
+  }
 }
+wireSettingsSupportLinks();
 document.querySelectorAll("[data-settings-placeholder]").forEach((el) => {
   el.addEventListener("click", () => {
     const label = el.getAttribute("data-settings-placeholder") || "This section";

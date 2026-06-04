@@ -147,6 +147,36 @@ html[data-theme="light"] .settingsList{
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 247, 252, 0.96));
   box-shadow: 0 14px 40px rgba(88, 104, 140, 0.10);
 }
+html[data-theme="light"] .settingsPage.card{
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+html[data-theme="light"] .settingsHeader h2{
+  color: var(--text);
+  text-shadow: 0 0 36px rgba(124, 92, 255, 0.14);
+}
+html[data-theme="light"] .settingsKicker{
+  color: rgba(18, 140, 118, 0.92);
+}
+html[data-theme="light"] .settingsLead{
+  color: var(--muted);
+}
+html[data-theme="light"] .settingsGroupTitle{
+  color: rgba(15, 23, 40, 0.52);
+}
+html[data-theme="light"] .settingsStatusPill{
+  border-color: rgba(18, 184, 150, 0.32);
+  background: rgba(18, 184, 150, 0.12);
+  color: rgba(12, 120, 98, 0.95);
+}
+html[data-theme="light"] .settingsRowLink:hover{
+  background: rgba(124, 92, 255, 0.06);
+}
+html[data-theme="light"] .settingsRowSub strong{
+  color: var(--primary);
+  font-weight: 800;
+}
 
 .settingsThemeRow{
   flex-wrap: wrap;

@@ -31,8 +31,8 @@ html[data-theme="light"]{
   --card: #ffffff;
   --card2: #f4f7fc;
   --text: #0f1728;
-  --muted: #5a6b82;
-  --border: rgba(15, 23, 40, 0.10);
+  --muted: #47586e;
+  --border: rgba(15, 23, 40, 0.12);
   --primary: #6d4df5;
   --primary2: #12b896;
   --danger: #e63d5c;

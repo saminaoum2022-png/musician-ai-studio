@@ -2,7 +2,22 @@
 
 NabadAi Music supports **Continue with Apple** on the auth screen (native iOS sheet when available, otherwise Supabase OAuth in the browser).
 
-## 1. Apple Developer
+## Personal Team vs paid Apple Developer Program
+
+| Account | Sign in with Apple in Xcode | What works in the app |
+|---------|----------------------------|------------------------|
+| **Personal Team** (free, “Sami Naoum” in Xcode) | **Not supported** — you will see provisioning errors if the entitlement is enabled | **Google**, email/password, and **Apple via browser OAuth** (in-app Safari sheet) still work |
+| **Apple Developer Program** ($99/year) | Supported — enable entitlement + capability | Native Apple sheet **and** browser OAuth |
+
+If Xcode shows:
+
+> *Personal development teams do not support the Sign In with Apple capability*
+
+the repo ships with an **empty** `App.entitlements` so you can build on a Personal Team. When you enroll in the paid program, copy `App.entitlements.apple-sign-in` → `App.entitlements`, add the **Sign In with Apple** capability in Xcode, and enable it on App ID `com.nabadai.music` in the developer portal.
+
+**In Xcode now (Personal Team):** remove **Sign In with Apple** from **Signing & Capabilities** if you added it manually (click the **−** on that capability row), then **Product → Clean Build Folder** and build again.
+
+## 1. Apple Developer (paid program)
 
 1. [Apple Developer](https://developer.apple.com/account) → **Certificates, Identifiers & Profiles**.
 2. **Identifiers → App IDs** → `com.nabadai.music`:
@@ -28,11 +43,14 @@ NabadAi Music supports **Continue with Apple** on the auth screen (native iOS sh
    - `com.nabadai.music://auth-callback` (iOS OAuth fallback)
 4. Save.
 
-## 3. Xcode (repo already wired)
+## 3. Xcode (after paid Developer Program)
 
-- `ios/App/App/App.entitlements` — Sign In with Apple entitlement
-- `CODE_SIGN_ENTITLEMENTS` in the App target
-- Plugin: `@capacitor-community/apple-sign-in`
+1. Copy entitlements:
+   ```bash
+   cp ios/App/App/App.entitlements.apple-sign-in ios/App/App/App.entitlements
+   ```
+2. Xcode → **Signing & Capabilities** → **+ Capability** → **Sign In with Apple**
+3. Plugin already in repo: `@capacitor-community/apple-sign-in`
 
 After pulling:
 

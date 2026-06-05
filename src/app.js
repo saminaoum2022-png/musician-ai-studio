@@ -16493,24 +16493,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     try {
       syncDiscoveryPlayingHighlights();
     } catch {}
-    const playPromise = playInline(prox, title || "Song", publicSource);
-    if (refreshCandidate && (fromDiscover || fromPlaylist)) {
-      void tryRefreshLibraryTrackAudioFromSuno(refreshCandidate).then((refreshed) => {
-        const fresh = String(refreshed?.url || "").trim();
-        if (!fresh || audioUrlsEquivalent(fresh, playableRaw)) return;
-        if (!isDiscoverStyleMiniSource() && miniSource?.type !== "discover_playlist") return;
-        if (!audioUrlsEquivalent(currentPlayerTrackRef?.url, playableRaw)) return;
-        playableRaw = fresh;
-        currentPlayerTrackRef = { ...currentPlayerTrackRef, url: fresh };
-        if (miniSource) miniSource.url = fresh;
-        const nextProx = toAudioProxyUrl(fresh) || fresh;
-        try {
-          setPlayerSource(nextProx, title || "Song");
-          void ensurePlayer().play?.();
-        } catch {}
-      });
-    }
-    await playPromise;
+    await playInline(prox, title || "Song", publicSource);
     try {
       syncDiscoveryPlayingHighlights();
     } catch {}
@@ -20219,15 +20202,17 @@ function renderProfileSongs() {
 
 function refreshOwnSongsUi(opts = {}) {
   const route = document.body.getAttribute("data-route") || "";
+  if (opts.soft && (route === "profile" || route === "friends" || route === "discover" || route === "discover-playlist")) {
+    try {
+      syncDiscoveryPlayingHighlights();
+    } catch {}
+    return;
+  }
   if (route === "profile") {
-    if (_profileSongsSegment === "activities" && opts.soft) {
-      try {
-        syncDiscoveryPlayingHighlights();
-      } catch {}
-      return;
-    }
     renderProfileSongs();
-  } else renderLibrary();
+  } else {
+    renderLibrary();
+  }
 }
 
 /** Profile → songs on your public link (Hub off): **public Library rows only**. */
@@ -23151,7 +23136,11 @@ function setPlayerSource(url, label) {
   if (!miniSource) miniSource = { type: "player" };
   if (!miniSource || miniSource.type !== "library") {
     libraryNowPlayingId = null;
-    if ((document.body.getAttribute("data-route") || "") === "profile") renderProfileSongs();
+    // Never re-render Profile/Friends lists here — that ran mid-playback and
+    // raced the async Suno refresh, making songs die after ~1s on iOS.
+    try {
+      syncDiscoveryPlayingHighlights();
+    } catch {}
   }
   syncPlayerUI();
   renderHubNowPlaying();

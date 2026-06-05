@@ -2764,6 +2764,13 @@ function applyRoute() {
   if (wanted === "settings") {
     renderPersonaSelect();
   }
+  if (wanted === "player") {
+    try {
+      const pq = new URLSearchParams(String(rawRouteQuery || ""));
+      const trackId = String(pq.get("track") || "").trim();
+      if (trackId) void focusTrackFromShare(trackId);
+    } catch {}
+  }
   if (wanted === "profile") {
     try {
       const pq = new URLSearchParams(String(rawRouteQuery || ""));
@@ -23612,18 +23619,53 @@ function triggerHubPulse(el) {
   }, 720);
 }
 
-/** Build the public link for a Hub post. Points at the dynamic share
- * page (`/s/POST_ID`) so chat apps + social platforms unfurl a real
- * preview card with cover art, title, and creator. The share page
- * client-side-redirects real users to `#/hub?post=ID` so the actual
- * playback experience works the same as before. */
-function buildHubShareUrl(postId) {
-  if (!postId) return "";
-  try {
-    return `${location.origin}/s/${encodeURIComponent(postId)}`;
-  } catch {
-    return `/s/${encodeURIComponent(postId)}`;
+/** UUID v4-ish — cloud song / hub post ids for `/s/:id` share pages. */
+function isShareUuid(id) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(id || "").trim(),
+  );
+}
+
+/** Supabase `user_songs.id` when the row has synced to cloud. */
+function trackCloudShareId(track) {
+  if (!track) return "";
+  for (const raw of [track.cloudSongId, track.songId, track.id]) {
+    const s = String(raw || "").trim();
+    if (isShareUuid(s)) return s;
   }
+  return "";
+}
+
+/** Public link with Open Graph preview (`/s/:id`) — not a raw .mp3 URL. */
+function buildPublicShareUrl(id) {
+  if (!id) return "";
+  try {
+    return `${location.origin}/s/${encodeURIComponent(id)}`;
+  } catch {
+    return `/s/${encodeURIComponent(id)}`;
+  }
+}
+
+/** @deprecated alias */
+function buildHubShareUrl(postId) {
+  return buildPublicShareUrl(postId);
+}
+
+async function sharePublicTrackLink(track, { title, byLine } = {}) {
+  const cloudId = trackCloudShareId(track);
+  if (!cloudId) return false;
+  const trackTitle = String(title || track?.title || "Listen on Nabadai").trim();
+  const url = buildPublicShareUrl(cloudId);
+  const by = String(byLine || track?.byLine || "").trim();
+  const text = by
+    ? `“${trackTitle}” · ${by} on Nabadai`
+    : `Listen to “${trackTitle}” on Nabadai`;
+  await shareHubLink({
+    title: `${trackTitle} — Nabadai`,
+    text,
+    url,
+  });
+  return true;
 }
 
 /** Show a small floating toast above the bottom tab bar. Auto-dismisses
@@ -23780,11 +23822,11 @@ function flashPlayerCover() {
 async function shareHubLink({ title, text, url }) {
   const safeUrl = String(url || "").trim();
   if (!safeUrl) return false;
-  const payload = {
-    title: title || "Listen on Nabadai",
-    text: text || "Made on Nabadai. Take a listen.",
-    url: safeUrl,
-  };
+  // Prefer a single clean URL so WhatsApp/iMessage unfurl `/s/:id` (cover + title)
+  // instead of dumping a long .mp3 link into the message body.
+  const payload = { url: safeUrl };
+  if (title) payload.title = title;
+  if (text && !String(text).includes(safeUrl)) payload.text = text;
   if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
     try {
       await navigator.share(payload);
@@ -23813,6 +23855,52 @@ async function shareHubPost(post) {
     ? `“${post.title || "this song"}” by @${post.creator} on Nabadai`
     : `“${post.title || "this song"}” on Nabadai`;
   await shareHubLink({ title, text, url });
+}
+
+/** Open a shared library track (`/#/player?track=UUID`). */
+let pendingShareFocusTrackId = "";
+async function focusTrackFromShare(trackId) {
+  const id = String(trackId || "").trim();
+  if (!id || !isShareUuid(id)) return;
+  pendingShareFocusTrackId = id;
+  const tryPlay = async () => {
+    let row = loadLibrary().find((t) => trackCloudShareId(t) === id);
+    if (!row?.url && SUPABASE_URL) {
+      try {
+        const cols = "id,title,art_url,song_url";
+        const r = await supabaseRestWithAuth(
+          `user_songs?id=eq.${encodeURIComponent(id)}&select=${encodeURIComponent(cols)}&limit=1`,
+          { method: "GET" },
+        );
+        if (r?.ok) {
+          const rows = await r.json().catch(() => []);
+          const cloud = Array.isArray(rows) && rows[0] ? rows[0] : null;
+          if (cloud?.song_url) {
+            row = {
+              id: String(cloud.id || id),
+              cloudSongId: String(cloud.id || id),
+              title: cloud.title || "Song",
+              artUrl: cloud.art_url || "",
+              url: cloud.song_url || "",
+            };
+          }
+        }
+      } catch {}
+    }
+    if (!row?.url) return false;
+    await playLibraryListRowById(row.id, { openPlayer: true });
+    pendingShareFocusTrackId = "";
+    return true;
+  };
+  if (await tryPlay()) return;
+  void ensureUserLibraryHydrated().then(() => tryPlay());
+  let n = 0;
+  const poll = setInterval(() => {
+    n += 1;
+    void tryPlay().then((ok) => {
+      if (ok || n >= 12) clearInterval(poll);
+    });
+  }, 500);
 }
 
 /** When landing on `#/hub?post=ID`, scroll the post into view and start it
@@ -23981,15 +24069,20 @@ async function shareGeneratedTrack(variant) {
       ? lastSunoFullUrl2 || lastSunoProxyUrl2 || ""
       : lastSunoFullUrl || lastSunoProxyUrl || "";
   const trimmed = String(rawUrl || "").trim();
-  const url =
-    trimmed && /^https?:\/\//i.test(trimmed)
-      ? trimmed
-      : String(lastPlayerHttpUrl || "").trim() || window.location.href;
-  const ver = variant === "b" ? "Version B" : "Version A";
+  const libRow = getOwnSongs().find((t) => {
+    const u = String(t?.url || "").trim();
+    return u && (u === trimmed || audioUrlsEquivalent(u, trimmed));
+  });
+  if (libRow && (await sharePublicTrackLink(libRow, { title }))) return;
+  if (trimmed && /^https?:\/\//i.test(trimmed)) {
+    showToast("Syncing to cloud… try Share again in a moment.", { icon: "…", durationMs: 3200 });
+    queueArchiveLibraryTrack({ url: trimmed, title });
+    return;
+  }
   await shareHubLink({
     title: `${title} — Nabadai`,
-    text: `Made with NabadAi (${ver})`,
-    url,
+    text: `Made with NabadAi`,
+    url: String(lastPlayerHttpUrl || "").trim() || window.location.href,
   });
 }
 
@@ -28305,25 +28398,29 @@ if (els.btnPlayerShare) {
       showToast("Open a song first, then share.");
       return;
     }
-    // Share is for sending to friends (WhatsApp, Messenger, IG…).
-    // Hub publishing is a separate, deliberate action — never auto-publish
-    // here. If the song is already on Hub, prefer that link (rich preview);
-    // otherwise share the raw playable audio URL.
     const hubMatch = loadHubFeed().find((p) => {
       const sameUrl = trackUrl && String(p?.url || "").trim() === trackUrl;
       const sameTitle = trackTitle && String(p?.title || "").trim().toLowerCase() === trackTitle.toLowerCase();
       return sameUrl || sameTitle;
     });
-    if (hubMatch) {
+    if (hubMatch?.id && isShareUuid(hubMatch.id)) {
       await shareHubPost(hubMatch);
       return;
     }
-    const ok = await shareHubLink({
-      title: `${trackTitle} — Nabadai`,
-      text: `Listen to “${trackTitle}” on Nabadai`,
-      url: trackUrl,
+    if (await sharePublicTrackLink(currentPlayerTrackRef, { title: trackTitle })) {
+      showShareToast("Sharing…");
+      return;
+    }
+    const libRow = getOwnSongs().find((t) => {
+      const u = String(t?.url || "").trim();
+      return u && (u === trackUrl || audioUrlsEquivalent(u, trackUrl));
     });
-    if (ok) showShareToast("Sharing…");
+    if (libRow && (await sharePublicTrackLink(libRow, { title: trackTitle }))) {
+      showShareToast("Sharing…");
+      return;
+    }
+    showToast("Saving link preview… try Share again in a few seconds.", { icon: "…", durationMs: 3600 });
+    if (libRow) queueArchiveLibraryTrack(libRow);
   });
 }
 if (els.btnPlayerDownloadVideo) {

@@ -1,13 +1,8 @@
-// Dynamic share landing page for Hub posts. Returns HTML with proper
-// Open Graph + Twitter Card meta tags so chat apps (iMessage, WhatsApp,
-// Discord, Slack), social platforms (X, Facebook), and link unfurlers
-// fetch a real preview card with cover art, song title, and creator.
+// Dynamic share landing page for Hub posts and library tracks (`user_songs`).
+// Returns HTML with Open Graph + Twitter Card meta so WhatsApp/iMessage/etc.
+// unfurl cover art, title, and creator — not a raw .mp3 URL.
 //
-// Real users (browsers running JS) auto-redirect to the SPA hub with
-// `?post=ID` so the actual playback experience is reached. Crawlers
-// just read the meta tags and stop — that's the whole point.
-//
-// Routed via vercel.json rewrite from /s/:id (short URL).
+// Routed via vercel.json rewrite: /s/:id → /api/share?id=:id
 
 const SITE_NAME = "Nabadai";
 const DEFAULT_TITLE = "Listen on Nabadai";
@@ -38,10 +33,29 @@ function absoluteUrl(req, path) {
   return `${proto}://${host}${slash}${path}`;
 }
 
-async function fetchPost(id) {
-  const supaUrl = process.env.SUPABASE_URL || "";
-  const supaKey = process.env.SUPABASE_ANON_KEY || "";
-  if (!supaUrl || !supaKey || !id) return null;
+function supaHeaders() {
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    "";
+  return key ? { apikey: key, Authorization: `Bearer ${key}` } : null;
+}
+
+async function supaGet(path, { signal } = {}) {
+  const supaUrl = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
+  const headers = supaHeaders();
+  if (!supaUrl || !headers) return null;
+  try {
+    const r = await fetch(`${supaUrl}/rest/v1/${path}`, { headers, signal });
+    if (!r.ok) return null;
+    const rows = await r.json();
+    return Array.isArray(rows) && rows.length ? rows[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchHubPost(id, signal) {
   const cols = [
     "id",
     "title",
@@ -49,27 +63,71 @@ async function fetchPost(id) {
     "song_url",
     "creator_username",
     "creator_avatar",
-    "kind",
-    "remix_of",
   ].join(",");
+  const row = await supaGet(
+    `hub_posts?select=${encodeURIComponent(cols)}&id=eq.${encodeURIComponent(id)}&limit=1`,
+    { signal },
+  );
+  if (!row) return null;
+  return {
+    kind: "hub",
+    title: row.title || "",
+    cover_url: row.cover_url || "",
+    song_url: row.song_url || "",
+    creator_username: row.creator_username || "",
+    creator_avatar: row.creator_avatar || "",
+  };
+}
+
+async function fetchLibraryTrack(id, signal) {
+  const cols = ["id", "title", "art_url", "song_url", "user_id"].join(",");
+  const row = await supaGet(
+    `user_songs?select=${encodeURIComponent(cols)}&id=eq.${encodeURIComponent(id)}&limit=1`,
+    { signal },
+  );
+  if (!row) return null;
+  let creator_username = "";
+  let creator_avatar = "";
+  const uid = String(row.user_id || "").trim();
+  if (uid) {
+    const prof = await supaGet(
+      `profiles?select=username,avatar&user_id=eq.${encodeURIComponent(uid)}&limit=1`,
+      { signal },
+    );
+    creator_username = String(prof?.username || "").trim();
+    creator_avatar = String(prof?.avatar || "").trim();
+  }
+  return {
+    kind: "track",
+    title: row.title || "",
+    cover_url: row.art_url || "",
+    song_url: row.song_url || "",
+    creator_username,
+    creator_avatar,
+  };
+}
+
+async function fetchShareRecord(id) {
+  if (!id) return null;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 4500);
   try {
-    const r = await fetch(
-      `${supaUrl}/rest/v1/hub_posts?select=${encodeURIComponent(cols)}&id=eq.${encodeURIComponent(id)}&limit=1`,
-      {
-        headers: { apikey: supaKey },
-        signal: ctrl.signal,
-      }
-    );
-    clearTimeout(timer);
-    if (!r.ok) return null;
-    const rows = await r.json();
-    return Array.isArray(rows) && rows.length ? rows[0] : null;
+    const hub = await fetchHubPost(id, ctrl.signal);
+    if (hub) return hub;
+    return await fetchLibraryTrack(id, ctrl.signal);
   } catch {
-    clearTimeout(timer);
     return null;
+  } finally {
+    clearTimeout(timer);
   }
+}
+
+function shareRedirectFor(record, id) {
+  if (!id) return "/#/generate";
+  if (record?.kind === "hub") {
+    return `/#/hub?post=${encodeURIComponent(id)}`;
+  }
+  return `/#/player?track=${encodeURIComponent(id)}`;
 }
 
 function renderHtml({ title, description, image, url, redirectTo, creator, songUrl }) {
@@ -117,22 +175,14 @@ ${audioTag}
   .hint{font-size:12px;color:rgba(223,231,251,0.55);max-width:300px;line-height:1.4;}
 </style>
 <script>
-  // Always redirect on the client. Bots don't execute JavaScript, so they
-  // stop at the meta tags above (which is the whole point — that's how
-  // they generate the preview card). Sniffing the UA to "skip the bot"
-  // was actively harmful: WhatsApp/Telegram/etc in-app browsers can have
-  // their app name in the UA string, and we'd refuse to redirect a real
-  // user who tapped a link from chat.
   (function(){
     var url = ${JSON.stringify(redirectTo)};
     try { location.replace(url); }
     catch (e) {
       try { location.href = url; } catch (e2) {}
     }
-    // Fallback: if for any reason `replace` doesn't navigate (very old
-    // WebView quirks), force the navigation after a short tick.
     setTimeout(function(){
-      try { if (location.pathname !== "/") location.href = url; } catch (e) {}
+      try { if (location.pathname.indexOf("/s/") === 0) location.href = url; } catch (e) {}
     }, 600);
   })();
 </script>
@@ -150,8 +200,6 @@ ${audioTag}
 }
 
 module.exports = async function handler(req, res) {
-  // Accept id from /api/share?id=POST_ID, /api/share/POST_ID rewrites,
-  // or path segment fallbacks.
   let id = "";
   try {
     if (req.query && typeof req.query.id === "string") id = req.query.id;
@@ -165,22 +213,23 @@ module.exports = async function handler(req, res) {
   }
   id = String(id || "").trim();
 
-  const post = id ? await fetchPost(id) : null;
+  const record = id ? await fetchShareRecord(id) : null;
 
-  const title = post?.title
-    ? `${post.title}${post.creator_username ? ` — by @${post.creator_username}` : ""} · ${SITE_NAME}`
+  const plainTitle = String(record?.title || "").trim() || "this song";
+  const title = record?.title
+    ? `${plainTitle}${record.creator_username ? ` — by @${record.creator_username}` : ""} · ${SITE_NAME}`
     : DEFAULT_TITLE;
-  const description = post?.creator_username
-    ? `“${post.title || "this song"}” by @${post.creator_username} on Nabadai`
-    : DEFAULT_DESCRIPTION;
+  const description = record?.creator_username
+    ? `“${plainTitle}” by @${record.creator_username} on Nabadai`
+    : record?.title
+      ? `Listen to “${plainTitle}” on Nabadai`
+      : DEFAULT_DESCRIPTION;
 
-  let image = post?.cover_url || post?.creator_avatar || DEFAULT_IMAGE;
+  let image = record?.cover_url || record?.creator_avatar || DEFAULT_IMAGE;
   if (!/^https?:\/\//i.test(image)) image = absoluteUrl(req, image);
 
   const url = absoluteUrl(req, id ? `/s/${encodeURIComponent(id)}` : "/");
-  const redirectTo = id
-    ? `/#/generate`
-    : `/#/generate`;
+  const redirectTo = shareRedirectFor(record, id);
 
   const html = renderHtml({
     title,
@@ -188,17 +237,15 @@ module.exports = async function handler(req, res) {
     image,
     url,
     redirectTo,
-    creator: post?.creator_username || "",
-    songUrl: post?.song_url || "",
+    creator: record?.creator_username || "",
+    songUrl: record?.song_url || "",
   });
 
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/html; charset=utf-8");
-  // Short cache: lets bots see fresh meta if a post is edited, while still
-  // taking the load off the function for repeated unfurls.
   res.setHeader(
     "Cache-Control",
-    post ? "public, max-age=120, s-maxage=300, stale-while-revalidate=600" : "no-store"
+    record ? "public, max-age=120, s-maxage=300, stale-while-revalidate=600" : "no-store",
   );
   res.end(html);
 };

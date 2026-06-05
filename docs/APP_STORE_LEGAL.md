@@ -2,6 +2,8 @@
 
 Use this checklist when submitting **NabadAi Music** to App Store Connect.
 
+**Master launch tracker (screenshots, metadata, phases):** [LAUNCH_CHECKLIST.md](./LAUNCH_CHECKLIST.md)
+
 ## In-app (shipped in repo)
 
 | Item | Location |

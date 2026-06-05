@@ -78,4 +78,4 @@ Open Xcode → **Signing & Capabilities** → confirm **Sign In with Apple** app
 | Browser OAuth loops / no callback | Add `com.nabadai.music://auth-callback` to Supabase redirect URLs |
 | Email missing on repeat login | Normal for Apple — email only on first authorization |
 
-See also: [APP_STORE_LEGAL.md](./APP_STORE_LEGAL.md)
+See also: [LAUNCH_CHECKLIST.md](./LAUNCH_CHECKLIST.md) · [APP_STORE_LEGAL.md](./APP_STORE_LEGAL.md)

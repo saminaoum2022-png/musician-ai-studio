@@ -227,9 +227,12 @@ export function syncLockScreenNowPlaying({ force = false } = {}) {
     void pushPayload(payload);
     return;
   }
+  // iOS WKWebView: frequent native Now Playing updates re-touch AVAudioSession
+  // and can pause inline HTML5 audio — sync less aggressively on native.
+  const throttleMs = isNativeIos() ? 2500 : 400;
   if (_throttleTimer) return;
   _throttleTimer = window.setTimeout(() => {
     _throttleTimer = 0;
     void pushPayload(buildPayload());
-  }, 400);
+  }, throttleMs);
 }

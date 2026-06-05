@@ -16438,7 +16438,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
       playableRaw = String(refreshed.url).trim() || playableRaw;
     }
   }
-  const prox = toAudioProxyUrl(playableRaw) || playableRaw;
+  const prox = inlinePlaybackUrl(playableRaw);
   currentPlayerTrackRef = {
     id: `public_${String(title || "").slice(0, 24)}`,
     url: playableRaw,
@@ -18587,15 +18587,22 @@ async function primeAudioDurationHint(rawUrl) {
   if (!audioUrlsEquivalent(url, audioDurationHint.url)) {
     resetAudioDurationHintForUrl(url);
   }
+  // Native inline feed play: a second Audio() probe + lock-screen refresh
+  // was interrupting WKWebView playback ~1s in (web is unaffected).
+  if (isCapacitorNativeAuth() && (isDiscoverStyleMiniSource() || miniSource?.type === "public_profile_lib")) {
+    return;
+  }
   const probed = await measureAudioDurationSec(url);
   if (audioUrlsEquivalent(url, audioDurationHint.url)) {
     applyAudioDurationHint(probed);
     try {
       syncPlayerUI();
     } catch {}
-    try {
-      renderHubNowPlaying();
-    } catch {}
+    if (!isCapacitorNativeAuth()) {
+      try {
+        renderHubNowPlaying();
+      } catch {}
+    }
   }
 }
 
@@ -23125,6 +23132,11 @@ function setPlayerSource(url, label) {
   resetAudioDurationHintForUrl(playUrl);
   a.src = playUrl;
   a.currentTime = 0;
+  if (isCapacitorNativeAuth()) {
+    try {
+      a.load();
+    } catch {}
+  }
   playerLoadedLabel = label || "";
   if (els.playerSource) els.playerSource.textContent = label ? `Loaded: ${label}` : "";
   if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = false;
@@ -23483,6 +23495,19 @@ function preferDirectAudioUrl(url) {
     }
   } catch {}
   return s;
+}
+
+/** Friends / Profile / Discover inline play — native WKWebView needs the proxy. */
+function inlinePlaybackUrl(raw) {
+  const leaf = unwrapInnermostHttpAudioUrl(String(raw || "").trim()) || String(raw || "").trim();
+  if (!leaf) return "";
+  if (!isCapacitorNativeAuth()) {
+    return normalizeAudioUrlForPlayback(toAudioProxyUrl(leaf) || leaf);
+  }
+  if (leaf.startsWith("blob:") || leaf.startsWith("data:")) return leaf;
+  if (isArchivedSongStorageUrl(leaf)) return normalizeAudioUrlForPlayback(leaf);
+  if (leaf.includes("/api/suno/audio")) return normalizeAudioUrlForPlayback(leaf);
+  return normalizeAudioUrlForPlayback(toAudioProxyUrl(leaf) || leaf);
 }
 
 function hubPlaybackSrcForPost(postId, p) {

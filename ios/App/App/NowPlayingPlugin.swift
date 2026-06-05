@@ -14,6 +14,7 @@ public class NowPlayingPlugin: CAPPlugin, CAPBridgedPlugin {
     private var artworkTask: URLSessionDataTask?
     private var lastArtworkUrl = ""
     private static var remoteCommandsReady = false
+    private static var audioSessionConfigured = false
 
     public override func load() {
         NowPlayingPlugin.ensureRemoteCommands(plugin: self)
@@ -29,7 +30,6 @@ public class NowPlayingPlugin: CAPPlugin, CAPBridgedPlugin {
         let isPlaying = call.getBool("isPlaying") ?? false
 
         DispatchQueue.main.async {
-            NowPlayingPlugin.configureAudioSession()
             var info: [String: Any] = [
                 MPMediaItemPropertyTitle: title,
                 MPMediaItemPropertyArtist: artist,
@@ -77,10 +77,14 @@ public class NowPlayingPlugin: CAPPlugin, CAPBridgedPlugin {
         artworkTask?.resume()
     }
 
-    private static func configureAudioSession() {
+    /// Configure once — repeated `setActive(true)` on every metadata tick was
+    /// stealing the session from WKWebView `<audio>` and cutting songs off ~1s in.
+    private static func configureAudioSessionIfNeeded() {
+        guard !audioSessionConfigured else { return }
+        audioSessionConfigured = true
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playback, mode: .default, options: [])
+            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
             try session.setActive(true)
         } catch {
             CAPLog.print("NowPlaying: AVAudioSession error \(error)")
@@ -90,7 +94,7 @@ public class NowPlayingPlugin: CAPPlugin, CAPBridgedPlugin {
     private static func ensureRemoteCommands(plugin: NowPlayingPlugin) {
         guard !remoteCommandsReady else { return }
         remoteCommandsReady = true
-        configureAudioSession()
+        configureAudioSessionIfNeeded()
         let center = MPRemoteCommandCenter.shared()
         center.playCommand.isEnabled = true
         center.pauseCommand.isEnabled = true

@@ -1481,13 +1481,20 @@ function pauseHubForRouteChange() {
 async function resumeHubAfterRouteChange() {}
 
 function stopHubPlayback() {
+  const isHubSession = miniSource?.type === "hub" || Boolean(hubAudioPostId);
+  // Never pause `playerEl` here — Friends / Profile / Library use it for inline
+  // playback. A stale Hub `ended` event used to stomp discover playback when
+  // `setPlayerSource` aliased `hubAudio` to the same element.
   try {
-    if (hubAudio) hubAudio.pause();
+    const dedicatedHub = hubAudio && hubAudio !== playerEl ? hubAudio : null;
+    if (dedicatedHub) dedicatedHub.pause();
+    else if (isHubSession && hubAudio) hubAudio.pause();
   } catch {}
+  if (!isHubSession) return;
   hubAudioPostId = null;
   hubAudioCurrentPost = null;
   hubNowMeta = null;
-  miniSource = null;
+  if (miniSource?.type === "hub") miniSource = null;
   hubPlayingPostProminent = false;
   const root = els.hubList;
   if (root) {
@@ -15220,7 +15227,7 @@ function togglePublicProfileLibPlaybackIfSameUrl(rawUrl) {
   const raw = String(rawUrl || "").trim();
   if (miniSource?.type !== "public_profile_lib") return false;
   const cur = String(currentPlayerTrackRef?.url || "").trim();
-  if (!raw || !cur || raw !== cur) return false;
+  if (!raw || !cur || !audioUrlsEquivalent(raw, cur)) return false;
   const a = ensurePlayer();
   const dur = getPlayerDuration();
   const ct = Number.isFinite(a.currentTime) ? a.currentTime : 0;
@@ -15230,9 +15237,7 @@ function togglePublicProfileLibPlaybackIfSameUrl(rawUrl) {
       a.pause();
     } catch {}
   } else {
-    try {
-      void a.play();
-    } catch {}
+    void hubAudioPlayWithRetry(a);
   }
   try {
     syncPlayerUI();
@@ -15976,7 +15981,7 @@ function toggleDiscoverStylePlaybackIfSameUrl(rawUrl) {
   const raw = String(rawUrl || "").trim();
   if (!isDiscoverStyleMiniSource()) return false;
   const cur = String(currentPlayerTrackRef?.url || "").trim();
-  if (!raw || !cur || raw !== cur) return false;
+  if (!raw || !cur || !audioUrlsEquivalent(raw, cur)) return false;
   const a = ensurePlayer();
   const dur = getPlayerDuration();
   const ct = Number.isFinite(a.currentTime) ? a.currentTime : 0;
@@ -15984,7 +15989,7 @@ function toggleDiscoverStylePlaybackIfSameUrl(rawUrl) {
   if (audible) {
     try { a.pause(); } catch {}
   } else {
-    try { void a.play(); } catch {}
+    void hubAudioPlayWithRetry(a);
   }
   try { syncPlayerUI(); } catch {}
   try { syncDiscoveryPlayingHighlights(); } catch {}
@@ -23143,8 +23148,6 @@ function setPlayerSource(url, label) {
   // Refresh the visible toggle button immediately; loadedmetadata fires
   // a moment later but we don't want a flash of "disabled".
   if (typeof syncPlayerToggleUI === "function") syncPlayerToggleUI();
-  hubAudio = a;
-  hubAudioPostId = null;
   if (!miniSource) miniSource = { type: "player" };
   if (!miniSource || miniSource.type !== "library") {
     libraryNowPlayingId = null;
@@ -23636,14 +23639,24 @@ function trackCloudShareId(track) {
   return "";
 }
 
+/** Deployed https origin for share links — not `capacitor://localhost` in the native shell. */
+function publicWebOrigin() {
+  try {
+    const origin = String(location.origin || "").replace(/\/$/, "");
+    if (/^https?:\/\//i.test(origin) && !/localhost|127\.0\.0\.1|capacitor/i.test(origin)) {
+      return origin;
+    }
+  } catch {}
+  const base = String(_resolvedApiBase || API_BASE || NATIVE_API_BASE_CANDIDATES[0] || "")
+    .trim()
+    .replace(/\/$/, "");
+  return base || "https://musician-ai-studio.vercel.app";
+}
+
 /** Public link with Open Graph preview (`/s/:id`) — not a raw .mp3 URL. */
 function buildPublicShareUrl(id) {
   if (!id) return "";
-  try {
-    return `${location.origin}/s/${encodeURIComponent(id)}`;
-  } catch {
-    return `/s/${encodeURIComponent(id)}`;
-  }
+  return `${publicWebOrigin()}/s/${encodeURIComponent(id)}`;
 }
 
 /** @deprecated alias */
@@ -23660,12 +23673,11 @@ async function sharePublicTrackLink(track, { title, byLine } = {}) {
   const text = by
     ? `“${trackTitle}” · ${by} on Nabadai`
     : `Listen to “${trackTitle}” on Nabadai`;
-  await shareHubLink({
+  return shareHubLink({
     title: `${trackTitle} — Nabadai`,
     text,
     url,
   });
-  return true;
 }
 
 /** Show a small floating toast above the bottom tab bar. Auto-dismisses
@@ -23817,8 +23829,12 @@ function flashPlayerCover() {
   setTimeout(() => img.classList.remove("playerCoverFlash"), 900);
 }
 
-/** Native share via Web Share API; falls back to copying the link to the
- * clipboard with a toast. Used by Hub posts and the Player page. */
+function getCapacitorSharePlugin() {
+  return window?.Capacitor?.Plugins?.Share || null;
+}
+
+/** Native share via Capacitor Share / Web Share API; falls back to clipboard.
+ * Used by Hub posts and the Player page. */
 async function shareHubLink({ title, text, url }) {
   const safeUrl = String(url || "").trim();
   if (!safeUrl) return false;
@@ -23827,6 +23843,24 @@ async function shareHubLink({ title, text, url }) {
   const payload = { url: safeUrl };
   if (title) payload.title = title;
   if (text && !String(text).includes(safeUrl)) payload.text = text;
+
+  if (isCapacitorNativeAuth()) {
+    const Share = getCapacitorSharePlugin();
+    if (Share?.share) {
+      try {
+        await Share.share({
+          title: payload.title,
+          text: payload.text,
+          url: safeUrl,
+        });
+        return true;
+      } catch (e) {
+        if (shareSheetCanceledError(e)) return false;
+        console.warn("[shareHubLink] Capacitor Share", e);
+      }
+    }
+  }
+
   if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
     try {
       await navigator.share(payload);
@@ -23842,7 +23876,7 @@ async function shareHubLink({ title, text, url }) {
     showShareToast("Link copied");
     return true;
   } catch {
-    showShareToast("Couldn't copy. Long-press the URL bar to share manually.");
+    showShareToast("Couldn't share. Try again.");
     return false;
   }
 }
@@ -24069,7 +24103,7 @@ async function shareGeneratedTrack(variant) {
       ? lastSunoFullUrl2 || lastSunoProxyUrl2 || ""
       : lastSunoFullUrl || lastSunoProxyUrl || "";
   const trimmed = String(rawUrl || "").trim();
-  const libRow = getOwnSongs().find((t) => {
+  const libRow = loadLibrary().find((t) => {
     const u = String(t?.url || "").trim();
     return u && (u === trimmed || audioUrlsEquivalent(u, trimmed));
   });
@@ -28006,11 +28040,14 @@ if (els.hubNowPlayPause && !els.hubNowPlayPause.dataset.boundHubPp) {
     if (!a) return;
     haptic("light");
     try {
-      if (a.paused || a.ended) void a.play();
+      if (a.paused || a.ended) void hubAudioPlayWithRetry(a);
       else a.pause();
     } catch {}
     try {
       syncPlayerUI();
+    } catch {}
+    try {
+      syncDiscoveryPlayingHighlights();
     } catch {}
     try {
       renderHubNowPlaying();
@@ -28407,18 +28444,12 @@ if (els.btnPlayerShare) {
       await shareHubPost(hubMatch);
       return;
     }
-    if (await sharePublicTrackLink(currentPlayerTrackRef, { title: trackTitle })) {
-      showShareToast("Sharing…");
-      return;
-    }
-    const libRow = getOwnSongs().find((t) => {
+    if (await sharePublicTrackLink(currentPlayerTrackRef, { title: trackTitle })) return;
+    const libRow = loadLibrary().find((t) => {
       const u = String(t?.url || "").trim();
       return u && (u === trackUrl || audioUrlsEquivalent(u, trackUrl));
     });
-    if (libRow && (await sharePublicTrackLink(libRow, { title: trackTitle }))) {
-      showShareToast("Sharing…");
-      return;
-    }
+    if (libRow && (await sharePublicTrackLink(libRow, { title: trackTitle }))) return;
     showToast("Saving link preview… try Share again in a few seconds.", { icon: "…", durationMs: 3600 });
     if (libRow) queueArchiveLibraryTrack(libRow);
   });

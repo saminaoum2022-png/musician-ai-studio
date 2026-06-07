@@ -4457,6 +4457,21 @@ function bindHomeDeskOnce(page) {
       }, 120);
       return;
     }
+    const songTemplates = e.target?.closest?.("[data-home-song-templates]");
+    if (songTemplates && page.contains(songTemplates)) {
+      haptic("light");
+      setHomeSeg("templates");
+      return;
+    }
+    const songCreate = e.target?.closest?.("[data-home-song-create]");
+    if (songCreate && page.contains(songCreate)) {
+      haptic("light");
+      try {
+        location.hash = "#/generate";
+      } catch {}
+      scheduleApplyRoute();
+      return;
+    }
     const ideaBtn = e.target?.closest?.("[data-discovery-idea]");
     if (ideaBtn && page.contains(ideaBtn)) {
       const idea = [...DISCOVERY_IDEAS, ...DISCOVERY_QUICK_IDEAS].find(

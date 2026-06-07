@@ -2872,9 +2872,6 @@ function applyRoute() {
   if (wanted === "discover") {
     bindDiscoveryDiscoverControls();
     bindDiscoverPlaylistScreenOnce();
-    try {
-      onLeaveSearchRoute();
-    } catch {}
     if (!shouldSkipRouteHeavy("discover") || !_discoveryFeedTracks.length) {
       markRouteHeavy("discover");
       void refreshDiscoverFeed();
@@ -3815,6 +3812,7 @@ let _searchHintTimer = null;
 let _searchPosterIdToTemplate = new Map();
 let _searchActiveTemplate = null;
 let _searchInited = false;
+let _discoverSearchOpen = false;
 /** Legacy: used only to redirect old Discover→Following segment to #/friends. */
 const DISCOVERY_SEGMENT_KEY = "mas:discoverySegment:v1";
 let _discoveryDiscoverBound = false;
@@ -3921,7 +3919,7 @@ function renderSearchShelves(query) {
     });
 
   root.innerHTML = html;
-  if (emptyEl) emptyEl.hidden = anyMatch || !qNorm;
+  updateSearchEmptyState(query);
 
   root.querySelectorAll("[data-search-poster]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -4004,9 +4002,81 @@ function renderSearchPeople(query) {
   })();
 }
 
+function searchTrackMatchesQuery(track, qNorm) {
+  if (!qNorm || !track) return false;
+  const prof = _discoveryLastProfMap?.get?.(track.userId);
+  const handle = String(prof?.username || "").trim();
+  const hay = [
+    track.title,
+    track.creator,
+    track.by,
+    track.style,
+    track.caption,
+    handle,
+    track.meta?.styleInput,
+    track.meta?.finalPrompt,
+    track.meta?.lyricsInput,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return hay.includes(qNorm);
+}
+
+function renderSearchTracks(query) {
+  const section = document.getElementById("searchTracksSection");
+  const grid = document.getElementById("searchTracksGrid");
+  if (!section || !grid) return;
+  const qNorm = String(query || "").trim().toLowerCase();
+  if (!qNorm) {
+    section.hidden = true;
+    grid.innerHTML = "";
+    return;
+  }
+  if (!_discoveryFeedTracks.length) {
+    section.hidden = false;
+    grid.innerHTML = `<div class="searchTracksLoading">Loading songs…</div>`;
+    void refreshDiscoverFeed().then(() => renderSearchTracks(query));
+    return;
+  }
+  const profMap = _discoveryLastProfMap || new Map();
+  const matched = (_discoveryFeedTracks || []).filter((t) => searchTrackMatchesQuery(t, qNorm)).slice(0, 24);
+  if (!matched.length) {
+    section.hidden = true;
+    grid.innerHTML = "";
+    return;
+  }
+  section.hidden = false;
+  grid.innerHTML = matched.map((t, i) => discoveryFeedCardHtml(t, profMap, i)).join("");
+  try {
+    wireDiscoverySpotCardImages(grid);
+  } catch {}
+  try {
+    syncDiscoveryPlayingHighlights();
+  } catch {}
+}
+
+function updateSearchEmptyState(query) {
+  const emptyEl = document.getElementById("searchEmpty");
+  const trendingEl = document.getElementById("searchTrendingLabel");
+  if (!emptyEl) return;
+  const qNorm = String(query || "").trim().toLowerCase();
+  if (trendingEl) trendingEl.hidden = Boolean(qNorm);
+  if (!qNorm) {
+    emptyEl.hidden = true;
+    return;
+  }
+  const hasPeople = !document.getElementById("searchPeopleStrip")?.hidden;
+  const hasTracks = !document.getElementById("searchTracksSection")?.hidden;
+  const shelvesHtml = document.getElementById("searchShelves")?.innerHTML?.trim();
+  emptyEl.hidden = hasPeople || hasTracks || Boolean(shelvesHtml);
+}
+
 function runSearchQuery(query) {
   renderSearchPeople(query);
+  renderSearchTracks(query);
   renderSearchShelves(query);
+  updateSearchEmptyState(query);
 }
 
 function applyDiscoveryIdeaToCreate(idea) {
@@ -4760,12 +4830,74 @@ function applyRemixTemplateToCreate(tpl, name) {
   try { setStatus?.(`Loaded ${tpl.title} — tap Generate when ready.`); } catch {}
 }
 
+function openDiscoverSearch() {
+  const pane = document.getElementById("discoveryPaneDiscover");
+  const panel = document.getElementById("discoverySearchPanel");
+  const btn = document.getElementById("discoverySearchBtn");
+  if (!pane || !panel) return;
+  initSearchPageOnce();
+  _discoverSearchOpen = true;
+  pane.classList.add("isSearchOpen");
+  panel.hidden = false;
+  panel.setAttribute("aria-hidden", "false");
+  if (btn) {
+    btn.classList.add("isActive");
+    btn.setAttribute("aria-expanded", "true");
+    btn.setAttribute("aria-label", "Close search");
+  }
+  startSearchHintRotator();
+  if (!_discoveryFeedTracks.length) void refreshDiscoverFeed();
+  void refreshSearchTemplates().then(() => {
+    const input = document.getElementById("searchInput");
+    runSearchQuery(input?.value || "");
+  });
+  requestAnimationFrame(() => {
+    window.setTimeout(() => document.getElementById("searchInput")?.focus(), 40);
+  });
+}
+
+function closeDiscoverSearch() {
+  const pane = document.getElementById("discoveryPaneDiscover");
+  const panel = document.getElementById("discoverySearchPanel");
+  const btn = document.getElementById("discoverySearchBtn");
+  const input = document.getElementById("searchInput");
+  const clearBtn = document.getElementById("searchInputClear");
+  if (!pane) return;
+  _discoverSearchOpen = false;
+  pane.classList.remove("isSearchOpen");
+  if (panel) {
+    panel.hidden = true;
+    panel.setAttribute("aria-hidden", "true");
+  }
+  if (btn) {
+    btn.classList.remove("isActive");
+    btn.setAttribute("aria-expanded", "false");
+    btn.setAttribute("aria-label", "Search Discover");
+  }
+  if (input) {
+    input.value = "";
+    const bar = input.closest(".searchBar");
+    if (bar) bar.classList.remove("hasValue");
+  }
+  if (clearBtn) clearBtn.hidden = true;
+  stopSearchHintRotator();
+  closeSearchRemixSheet();
+  runSearchQuery("");
+}
+
 function initSearchPageOnce() {
   if (_searchInited) return;
   _searchInited = true;
   const input = document.getElementById("searchInput");
   const bar = input?.closest(".searchBar");
   const clearBtn = document.getElementById("searchInputClear");
+  const closeBtn = document.getElementById("discoverySearchClose");
+  if (closeBtn) {
+    closeBtn.addEventListener("click", () => {
+      haptic("light");
+      closeDiscoverSearch();
+    });
+  }
   if (input) {
     input.addEventListener("input", () => {
       const v = input.value;
@@ -4849,17 +4981,10 @@ function initSearchPageOnce() {
 }
 
 function onEnterSearchRoute() {
-  initSearchPageOnce();
-  renderDiscoveryIdeasOnce();
-  startSearchHintRotator();
-  void refreshSearchTemplates().then(() => {
-    const input = document.getElementById("searchInput");
-    runSearchQuery(input?.value || "");
-  });
+  openDiscoverSearch();
 }
 function onLeaveSearchRoute() {
-  stopSearchHintRotator();
-  closeSearchRemixSheet();
+  closeDiscoverSearch();
 }
 
 let _discoveryFollowingGen = 0;
@@ -7856,15 +7981,13 @@ function bindDiscoveryDiscoverControls() {
   wireUserPublicFeedRowsOnce();
   if (_discoveryDiscoverBound) return;
   _discoveryDiscoverBound = true;
-  const rfb = document.getElementById("discoveryRefreshBtn");
-  if (rfb && !rfb.dataset.boundDiscoveryRefresh) {
-    rfb.dataset.boundDiscoveryRefresh = "1";
-    rfb.addEventListener("click", () => {
+  const searchBtn = document.getElementById("discoverySearchBtn");
+  if (searchBtn && !searchBtn.dataset.boundDiscoverySearch) {
+    searchBtn.dataset.boundDiscoverySearch = "1";
+    searchBtn.addEventListener("click", () => {
       haptic("light");
-      rfb.classList.add("isRefreshing");
-      void refreshDiscoverFeed().finally(() => {
-        try { rfb.classList.remove("isRefreshing"); } catch {}
-      });
+      if (_discoverSearchOpen) closeDiscoverSearch();
+      else openDiscoverSearch();
     });
   }
   const dPane = document.getElementById("discoveryPaneDiscover");
@@ -16285,6 +16408,12 @@ async function refreshDiscoverFeed() {
   try {
     syncDiscoveryPlayingHighlights();
   } catch {}
+  if (_discoverSearchOpen) {
+    const input = document.getElementById("searchInput");
+    const q = input?.value || "";
+    renderSearchTracks(q);
+    updateSearchEmptyState(q);
+  }
 }
 
 async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {

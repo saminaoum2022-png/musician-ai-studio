@@ -21556,6 +21556,125 @@ body.createChooserSheetOpen .footer{
   font-size: 13px;
 }
 
+/* Discover inline search (TikTok-style overlay on Discover tab) */
+.discoveryPaneStudio.isSearchOpen .discoveryMainContent{
+  display: none;
+}
+.discoverySearchPanel{
+  display: none;
+  flex-direction: column;
+  min-height: 0;
+  animation: discoverySearchIn 220ms ease;
+}
+.discoveryPaneStudio.isSearchOpen .discoverySearchPanel{
+  display: flex;
+}
+.discoverySearchPanelInner{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.discoverySearchBarWrap{
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0 8px;
+  background: linear-gradient(180deg, rgba(11,13,18,0.98) 72%, rgba(11,13,18,0));
+}
+.discoverySearchClose{
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  color: rgba(232,238,247,0.92);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverySearchClose:active{ transform: scale(0.96); }
+.discoverySearchBarWrap .searchBar{
+  flex: 1 1 0;
+  min-width: 0;
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.12);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.discoverySearchResults{
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-bottom: 24px;
+}
+.searchSectionHead{
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 2px 4px;
+}
+.searchTracksSection[hidden]{ display: none !important; }
+.searchTracksGrid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0;
+}
+.searchTracksGrid .discoveryFeedCardWrap{
+  width: 100%;
+  min-width: 0;
+}
+.searchTracksGrid .discoverySpotCard{
+  width: 100%;
+  aspect-ratio: 3 / 4.2;
+  min-height: 210px;
+}
+.searchTracksLoading{
+  grid-column: 1 / -1;
+  padding: 18px 8px;
+  text-align: center;
+  color: rgba(232,238,247,0.55);
+  font-size: 14px;
+}
+.searchTrendingLabel{
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(232,238,247,0.5);
+  padding: 0 2px;
+}
+.searchTrendingLabel[hidden]{ display: none !important; }
+.discoveryRefreshBtn.isActive{
+  border-color: rgba(124,92,255,0.45);
+  background: rgba(124,92,255,0.14);
+  color: #c4b5fd;
+}
+html[data-theme="light"] .discoverySearchBarWrap{
+  background: linear-gradient(180deg, rgba(236,240,247,0.98) 72%, rgba(236,240,247,0));
+}
+html[data-theme="light"] .discoverySearchClose{
+  background: rgba(15,23,40,0.04);
+  border-color: rgba(15,23,40,0.08);
+  color: rgba(15,23,40,0.85);
+}
+html[data-theme="light"] .discoverySearchBarWrap .searchBar{
+  background: rgba(15,23,40,0.04);
+  border-color: rgba(15,23,40,0.08);
+}
+@keyframes discoverySearchIn{
+  from{ opacity: 0; transform: translateY(6px); }
+  to{ opacity: 1; transform: translateY(0); }
+}
+
 /* Remix bottom sheet ---------------------------------------- */
 .searchRemixSheet{
   position: fixed;

@@ -975,13 +975,54 @@
                 <h2 class="discoveryStudioH2 appScreenTitle">Discover</h2>
                 <p class="discoveryStudioTag appScreenLead">Public songs from creators on NabadAi.</p>
               </div>
-              <button type="button" class="discoveryRefreshBtn" id="discoveryRefreshBtn" aria-label="Refresh public feed">
+              <button type="button" class="discoveryRefreshBtn" id="discoverySearchBtn" aria-label="Search Discover" aria-expanded="false" aria-controls="discoverySearchPanel">
                 <svg class="discoveryRefreshIco" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                  <path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" d="M21 12a9 9 0 1 1-2.64-6.36"/>
-                  <path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" d="M21 3v6h-6"/>
+                  <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.85"/>
+                  <path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" d="M20 20l-4.2-4.2"/>
                 </svg>
               </button>
             </header>
+
+            <div id="discoverySearchPanel" class="discoverySearchPanel" hidden aria-hidden="true">
+              <div class="discoverySearchPanelInner">
+                <div class="searchBarWrap discoverySearchBarWrap">
+                  <button type="button" class="discoverySearchClose" id="discoverySearchClose" aria-label="Close search">
+                    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M15 6 9 12l6 6"/></svg>
+                  </button>
+                  <div class="searchBar">
+                    <svg class="searchBarIcon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                      <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                    </svg>
+                    <input id="searchInput" class="searchBarInput" type="search" enterkeyhint="search" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="" aria-label="Search songs, creators, and ideas" />
+                    <span id="searchInputHint" class="searchBarHint" aria-hidden="true">birthday for sara</span>
+                    <button id="searchInputClear" class="searchBarClear" type="button" aria-label="Clear search" hidden>
+                      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="discoverySearchResults">
+                  <div id="searchPeopleStrip" class="searchPeopleStrip" hidden>
+                    <div class="searchPeopleHead">Creators</div>
+                    <div id="searchPeopleRow" class="searchPeopleRow"></div>
+                  </div>
+                  <section id="searchTracksSection" class="searchTracksSection" hidden aria-label="Song results">
+                    <header class="searchSectionHead">
+                      <h3 class="searchShelfTitle">Songs</h3>
+                    </header>
+                    <div id="searchTracksGrid" class="discoveryFeedList discoveryDiscoverGrid searchTracksGrid" role="list"></div>
+                  </section>
+                  <div id="searchTrendingLabel" class="searchTrendingLabel">Try these ideas</div>
+                  <div id="searchShelves" class="searchShelves" aria-live="polite"></div>
+                  <div id="searchEmpty" class="searchEmpty" hidden>
+                    <p class="searchEmptyTitle">Nothing matches that yet.</p>
+                    <p class="searchEmptyHint">Try a song title, @creator, or a mood like wedding or hype.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="discoveryMainContent" class="discoveryMainContent">
             <section class="discoveryPlaylistsSection" id="discoveryPlaylistsSection" aria-label="Playlists" hidden>
               <div class="discoveryPlaylistsHead">
                 <span class="discoveryPlaylistsTitle">Playlists</span>
@@ -999,6 +1040,7 @@
             </section>
             <div id="discoveryFeedStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
             <div id="discoveryFeedList" class="discoveryFeedList discoveryDiscoverGrid" hidden></div>
+            </div>
           </div>
         </section>
 

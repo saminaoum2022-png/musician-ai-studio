@@ -21653,6 +21653,46 @@ body.createChooserSheetOpen .footer{
   padding: 0 2px;
 }
 .searchTrendingLabel[hidden]{ display: none !important; }
+.searchShelves[hidden]{ display: none !important; }
+.searchDiscoverHints{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.searchDiscoverHints[hidden]{ display: none !important; }
+.searchDiscoverHintsLabel{
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(232,238,247,0.5);
+  padding: 0 2px;
+}
+.searchDiscoverHintsRow{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.searchDiscoverHintChip{
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.05);
+  color: rgba(232,238,247,0.88);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.searchDiscoverHintChip:active{ transform: scale(0.98); }
+html[data-theme="light"] .searchDiscoverHintChip{
+  border-color: rgba(15,23,40,0.08);
+  background: rgba(15,23,40,0.04);
+  color: rgba(15,23,40,0.82);
+}
 .discoveryRefreshBtn.isActive{
   border-color: rgba(124,92,255,0.45);
   background: rgba(124,92,255,0.14);
@@ -21741,6 +21781,12 @@ html[data-theme="light"] .discoverySearchBarWrap .searchBar{
   border-radius: 14px;
   overflow: hidden;
   background: #1a1f2e;
+}
+.searchRemixCover.isPlaceholder{
+  background:
+    radial-gradient(120% 80% at 0% 0%, rgba(124,92,255,0.55), transparent 60%),
+    radial-gradient(120% 80% at 100% 100%, rgba(35,213,171,0.42), transparent 65%),
+    linear-gradient(160deg, #1a1f2e 0%, #0f1320 100%);
 }
 .searchRemixCover img{
   width: 100%;

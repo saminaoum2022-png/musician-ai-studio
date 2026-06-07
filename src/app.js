@@ -3345,6 +3345,9 @@ const SEARCH_SHELVES = [
   { id: "heart",      title: "From the heart",           hint: "Heartbreak · gratitude" },
 ];
 
+/** Occasion poster shelves need cover art + preview URLs — off in Discover until assets exist. */
+const DISCOVER_SEARCH_SHOW_IDEA_SHELVES = false;
+
 const DISCOVERY_IDEAS = [
   {
     id: "voice-note-remix",
@@ -3878,8 +3881,17 @@ function renderSearchPosterHTML(tpl) {
 
 function renderSearchShelves(query) {
   const root = document.getElementById("searchShelves");
-  const emptyEl = document.getElementById("searchEmpty");
+  const trendingEl = document.getElementById("searchTrendingLabel");
   if (!root) return;
+  if (!DISCOVER_SEARCH_SHOW_IDEA_SHELVES) {
+    root.innerHTML = "";
+    root.hidden = true;
+    root.setAttribute("aria-hidden", "true");
+    if (trendingEl) trendingEl.hidden = true;
+    return;
+  }
+  root.hidden = false;
+  root.setAttribute("aria-hidden", "false");
   const qNorm = String(query || "").trim().toLowerCase();
   _searchPosterIdToTemplate = new Map();
 
@@ -4056,23 +4068,63 @@ function renderSearchTracks(query) {
   } catch {}
 }
 
+function renderSearchDiscoverHints(query) {
+  const wrap = document.getElementById("searchDiscoverHints");
+  const row = document.getElementById("searchDiscoverHintsRow");
+  if (!wrap || !row) return;
+  const qNorm = String(query || "").trim();
+  if (qNorm) {
+    wrap.hidden = true;
+    return;
+  }
+  wrap.hidden = false;
+  if (row.dataset.boundHints !== "1") {
+    row.dataset.boundHints = "1";
+    row.addEventListener("click", (e) => {
+      const chip = e.target?.closest?.("[data-search-hint]");
+      if (!chip) return;
+      const input = document.getElementById("searchInput");
+      if (!input) return;
+      const hint = String(chip.getAttribute("data-search-hint") || "").trim();
+      if (!hint) return;
+      haptic("light");
+      input.value = hint;
+      const bar = input.closest(".searchBar");
+      if (bar) bar.classList.add("hasValue");
+      const clearBtn = document.getElementById("searchInputClear");
+      if (clearBtn) clearBtn.hidden = false;
+      stopSearchHintRotator();
+      runSearchQuery(hint);
+    });
+  }
+  row.innerHTML = SEARCH_HINT_EXAMPLES.slice(0, 6)
+    .map(
+      (hint) =>
+        `<button type="button" class="searchDiscoverHintChip" data-search-hint="${escapeHtml(hint)}">${escapeHtml(hint)}</button>`,
+    )
+    .join("");
+}
+
 function updateSearchEmptyState(query) {
   const emptyEl = document.getElementById("searchEmpty");
   const trendingEl = document.getElementById("searchTrendingLabel");
   if (!emptyEl) return;
   const qNorm = String(query || "").trim().toLowerCase();
-  if (trendingEl) trendingEl.hidden = Boolean(qNorm);
+  if (trendingEl) trendingEl.hidden = Boolean(qNorm) || !DISCOVER_SEARCH_SHOW_IDEA_SHELVES;
   if (!qNorm) {
     emptyEl.hidden = true;
     return;
   }
   const hasPeople = !document.getElementById("searchPeopleStrip")?.hidden;
   const hasTracks = !document.getElementById("searchTracksSection")?.hidden;
-  const shelvesHtml = document.getElementById("searchShelves")?.innerHTML?.trim();
+  const shelvesHtml = DISCOVER_SEARCH_SHOW_IDEA_SHELVES
+    ? document.getElementById("searchShelves")?.innerHTML?.trim()
+    : "";
   emptyEl.hidden = hasPeople || hasTracks || Boolean(shelvesHtml);
 }
 
 function runSearchQuery(query) {
+  renderSearchDiscoverHints(query);
   renderSearchPeople(query);
   renderSearchTracks(query);
   renderSearchShelves(query);
@@ -4759,13 +4811,17 @@ function openSearchRemixSheet(tpl) {
   const audio = document.getElementById("searchRemixPreviewAudio");
   const coverUrl = String(tpl.coverUrl || "").trim();
   const previewUrl = String(tpl.previewUrl || "").trim();
+  const coverWrap = document.querySelector(".searchRemixCover");
   if (coverImg) {
     if (coverUrl) {
       coverImg.hidden = false;
+      coverImg.removeAttribute("data-placeholder");
       coverImg.src = coverUrl;
+      coverWrap?.classList.remove("isPlaceholder");
     } else {
       try { coverImg.removeAttribute("src"); } catch {}
       coverImg.hidden = true;
+      coverWrap?.classList.add("isPlaceholder");
     }
   }
   if (audio) {
@@ -4847,10 +4903,14 @@ function openDiscoverSearch() {
   }
   startSearchHintRotator();
   if (!_discoveryFeedTracks.length) void refreshDiscoverFeed();
-  void refreshSearchTemplates().then(() => {
-    const input = document.getElementById("searchInput");
-    runSearchQuery(input?.value || "");
-  });
+  if (DISCOVER_SEARCH_SHOW_IDEA_SHELVES) {
+    void refreshSearchTemplates().then(() => {
+      const input = document.getElementById("searchInput");
+      runSearchQuery(input?.value || "");
+    });
+  } else {
+    runSearchQuery("");
+  }
   requestAnimationFrame(() => {
     window.setTimeout(() => document.getElementById("searchInput")?.focus(), 40);
   });

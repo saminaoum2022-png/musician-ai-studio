@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260608navActivityCreateHub";
+const APP_BUILD = "20260608removeFriendsNotifBtn";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -599,7 +599,6 @@ const els = {
   profileIsPublic: document.getElementById("profileIsPublic"),
   btnProfileSave: document.getElementById("btnProfileSave"),
   btnProfileEdit: document.getElementById("btnProfileEdit"),
-  btnFriendsNotifications: document.getElementById("btnFriendsNotifications"),
   profilePersonaAvatarBadge: document.getElementById("profilePersonaAvatarBadge"),
   profileEditActions: document.getElementById("profileEditActions"),
   btnProfileCancel: document.getElementById("btnProfileCancel"),
@@ -2457,15 +2456,6 @@ function updateNotificationsEntryBadges(unreadCount) {
   try {
     els.profileTabLink?.classList?.remove?.("hasNotice");
     els.profileTabLink?.setAttribute?.("aria-label", "Profile");
-  } catch {}
-  try {
-    els.btnFriendsNotifications?.classList?.toggle?.("hasNotice", hasUnread);
-    els.btnFriendsNotifications?.setAttribute?.(
-      "aria-label",
-      hasUnread
-        ? `Activity, ${unread} unread`
-        : "Activity",
-    );
   } catch {}
 }
 
@@ -29582,11 +29572,6 @@ if (els.btnProfileEdit) {
     setProfileEditing(true);
     if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.focus();
     setStatus("Editing profile — adjust fields, then Save.");
-  });
-}
-if (els.btnFriendsNotifications) {
-  els.btnFriendsNotifications.addEventListener("click", () => {
-    location.hash = "#/activity";
   });
 }
 if (els.notificationsCenter) {

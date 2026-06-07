@@ -1123,8 +1123,35 @@
           </nav>
 
           <div class="homeDeskSegPanels">
-            <div class="homeDeskSegPanel is-active" id="homeDeskPanelStart" data-home-panel="start" role="tabpanel">
-              <section class="homeDeskPersonaPromo" aria-labelledby="homeDeskPersonaPromoTitle">
+            <div class="homeDeskSegPanel homeDeskCreatePanel is-active" id="homeDeskPanelStart" data-home-panel="start" role="tabpanel">
+              <div class="homeDeskCreateStack">
+              <section class="homeDeskSongPromo homeDeskSongPromo--hero" aria-labelledby="homeDeskSongPromoTitle">
+                <div class="homeDeskPromoVisual homeDeskPromoVisual--song homeDeskPromoVisual--hero" aria-hidden="true">
+                  <div class="homeDeskSongTileWrap">
+                    <span class="homeDeskSongPulse" aria-hidden="true"></span>
+                    <div class="homeDeskSongTile">
+                      <span class="homeDeskSongOrbit" aria-hidden="true"></span>
+                      <svg class="homeDeskSongNoteIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path fill="currentColor" d="M9 18.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z"/>
+                        <path fill="currentColor" d="M16 16.5a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z"/>
+                        <path fill="currentColor" d="M11.5 15.2V5.8l6.5-1.8v9.4"/>
+                        <path fill="currentColor" d="M11.5 5.8 6 4.2v9.6"/>
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+                <div class="homeDeskPromoCopy">
+                  <p class="homeDeskSectionKicker">Full tracks</p>
+                  <h3 id="homeDeskSongPromoTitle">Create Song</h3>
+                  <p>Write lyrics, pick a style, or hum a melody — generate a complete song with cover art.</p>
+                  <div class="homeDeskPromoActions">
+                    <button type="button" class="homeDeskPromoBtn" data-home-song-templates>Templates</button>
+                    <button type="button" class="homeDeskPromoBtn homeDeskPromoBtn--primary" data-home-song-create>Create song</button>
+                  </div>
+                </div>
+              </section>
+
+              <section class="homeDeskPersonaPromo homeDeskPromo--compact" aria-labelledby="homeDeskPersonaPromoTitle">
                 <div class="homeDeskPromoVisual homeDeskPromoVisual--persona" aria-hidden="true">
                   <div class="homeDeskPersonaTileWrap">
                     <span class="homeDeskPersonaPulse" aria-hidden="true"></span>
@@ -1147,7 +1174,7 @@
                 </div>
               </section>
 
-              <section class="homeDeskEchoPromo" aria-labelledby="homeDeskEchoPromoTitle">
+              <section class="homeDeskEchoPromo homeDeskPromo--compact" aria-labelledby="homeDeskEchoPromoTitle">
                 <div class="homeDeskPromoVisual homeDeskPromoVisual--echo" aria-hidden="true">
                   <div class="onboardingEchoTileWrap">
                     <span class="onboardingEchoPulse" aria-hidden="true"></span>
@@ -1166,26 +1193,7 @@
                   </div>
                 </div>
               </section>
-
-              <section class="homeDeskSongPromo" aria-labelledby="homeDeskSongPromoTitle">
-                <div class="homeDeskPromoVisual homeDeskPromoVisual--song" aria-hidden="true">
-                  <div class="homeDeskSongTileWrap">
-                    <span class="homeDeskSongPulse" aria-hidden="true"></span>
-                    <div class="homeDeskSongTile">
-                      <span class="homeDeskSongWave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
-                    </div>
-                  </div>
-                </div>
-                <div class="homeDeskPromoCopy">
-                  <p class="homeDeskSectionKicker">Full tracks</p>
-                  <h3 id="homeDeskSongPromoTitle">Create Song</h3>
-                  <p>Write lyrics, pick a style, or hum a melody — generate a complete song with cover art.</p>
-                  <div class="homeDeskPromoActions">
-                    <button type="button" class="homeDeskPromoBtn" data-home-song-templates>Templates</button>
-                    <button type="button" class="homeDeskPromoBtn homeDeskPromoBtn--primary" data-home-song-create>Create song</button>
-                  </div>
-                </div>
-              </section>
+              </div>
             </div>
 
             <div class="homeDeskSegPanel" id="homeDeskPanelSparks" data-home-panel="sparks" role="tabpanel" hidden>

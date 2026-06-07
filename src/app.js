@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260608removeFriendsNotifBtn";
+const APP_BUILD = "20260608fixMiniPlayerClose";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -14754,6 +14754,7 @@ function dismissDiscoverFeedPlayback() {
   } catch {}
   miniSource = null;
   currentPlayerTrackRef = null;
+  hubNowMeta = null;
   _discoverPlaylistQueue = [];
   _discoverPlaylistQueueSlug = "";
   try {
@@ -14770,6 +14771,59 @@ function dismissDiscoverFeedPlayback() {
   } catch {}
   try {
     syncDiscoveryPlayingHighlights();
+  } catch {}
+}
+
+function dismissMiniPlayer({ muteHubAutoplay = true } = {}) {
+  const srcType = miniSource?.type;
+  const mutedHubId = hubAudioPostId;
+
+  if (srcType === "hub" || hubAudioPostId) {
+    stopHubPlayback();
+    if (muteHubAutoplay && mutedHubId) hubAutoplayMutedPostId = mutedHubId;
+    return;
+  }
+
+  if (srcType === "discover_feed" || srcType === "discover_playlist") {
+    dismissDiscoverFeedPlayback();
+    hubNowMeta = null;
+    try {
+      renderHubNowPlaying();
+    } catch {}
+    return;
+  }
+
+  try {
+    const a = getMiniPlayerAudio();
+    if (a) a.pause();
+    if (playerEl && playerEl !== a) playerEl.pause();
+  } catch {}
+
+  hubNowMeta = null;
+  miniSource = null;
+  currentPlayerTrackRef = null;
+  libraryNowPlayingId = null;
+
+  try {
+    refreshOwnSongsUi({ soft: true });
+  } catch {}
+  try {
+    syncPlayerUI();
+  } catch {}
+  try {
+    syncPlayerToggleUI();
+  } catch {}
+  try {
+    updateBrandPulse();
+  } catch {}
+  try {
+    renderHubNowPlaying();
+  } catch {}
+  try {
+    syncDiscoveryPlayingHighlights();
+  } catch {}
+  try {
+    void clearLockScreenNowPlaying();
   } catch {}
 }
 
@@ -28424,11 +28478,10 @@ if (els.hubTabLink) {
 if (els.hubNowClose) {
   els.hubNowClose.addEventListener("click", (e) => {
     try {
+      e.preventDefault();
       e.stopPropagation();
     } catch {}
-    const mutedId = hubAudioPostId;
-    stopHubPlayback();
-    if (mutedId) hubAutoplayMutedPostId = mutedId;
+    dismissMiniPlayer();
   });
 }
 if (els.hubNowPlayPause && !els.hubNowPlayPause.dataset.boundHubPp) {

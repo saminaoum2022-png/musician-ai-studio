@@ -1095,14 +1095,12 @@ html[data-theme="light"] .appScreenLead{
 /* Light mode — Home promos, Hook Rush, sparks, Templates occasion lab */
 html[data-theme="light"] .homeDeskPersonaTile::before,
 html[data-theme="light"] .onboardingEchoTile::before,
-html[data-theme="light"] .homeDeskSongTile::before,
-html[data-theme="light"] .homeDeskSongModeTile::before{
+html[data-theme="light"] .homeDeskSongTile::before{
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.99) 0%, rgba(244, 247, 252, 0.94) 100%);
 }
 html[data-theme="light"] .homeDeskPersonaTile,
 html[data-theme="light"] .onboardingEchoTile,
-html[data-theme="light"] .homeDeskSongTile,
-html[data-theme="light"] .homeDeskSongModeTile{
+html[data-theme="light"] .homeDeskSongTile{
   box-shadow:
     0 12px 28px rgba(124, 92, 255, 0.16),
     inset 0 0 0 1px rgba(255, 255, 255, 0.65);
@@ -23748,32 +23746,39 @@ body[data-route="challenges"] .app{
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  gap: clamp(8px, 1.4vh, 12px);
-  min-height: calc(100dvh - 248px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  justify-content: space-between;
+  gap: 10px;
+  min-height: calc(100dvh - 236px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
 }
-.homeDeskSongPromo--hero{
-  flex: 1.45 1 0;
+.homeDeskCreateStack .homeDeskPromo--compact{
+  flex: 0 0 auto;
   margin: 0;
-  min-height: 0;
+  padding: 14px 16px;
   grid-template-columns: 72px 1fr;
-  gap: 12px;
-  padding: clamp(16px, 2.4vh, 22px) clamp(14px, 4vw, 18px);
-  align-content: center;
+  gap: 16px;
+  align-items: center;
+}
+.homeDeskCreateStack .homeDeskPromoCopy .homeDeskSectionKicker{
+  margin: 0 0 4px;
+}
+.homeDeskCreateStack .homeDeskPromoCopy h3{
+  margin: 0 0 5px;
 }
 .homeDeskPromo--compact{
-  flex: 1 1 0;
+  flex: 0 0 auto;
   margin: 0;
   min-height: 0;
-  padding: clamp(12px, 1.8vh, 16px);
+  padding: 14px 16px;
   grid-template-columns: 72px 1fr;
-  gap: 12px;
+  gap: 16px;
 }
 .homeDeskPromo--compact .homeDeskPromoVisual{
   width: 72px;
   height: 72px;
 }
 .homeDeskPromo--compact .homeDeskPromoVisual--echo .onboardingEchoTileWrap,
-.homeDeskPromo--compact .homeDeskPromoVisual--persona .homeDeskPersonaTileWrap{
+.homeDeskPromo--compact .homeDeskPromoVisual--persona .homeDeskPersonaTileWrap,
+.homeDeskPromo--compact .homeDeskPromoVisual--song .homeDeskSongTileWrap{
   transform: scale(0.58);
 }
 .homeDeskPromo--compact .homeDeskPromoCopy h3{
@@ -23788,86 +23793,6 @@ body[data-route="challenges"] .app{
   min-height: 36px;
   padding: 0 12px;
   font-size: 12px;
-}
-.homeDeskSongPromo--hero .homeDeskPromoCopy h3{
-  font-size: clamp(20px, 5vw, 24px);
-}
-.homeDeskSongPromo--hero .homeDeskPromoCopy p{
-  font-size: clamp(13px, 3.2vw, 14px);
-  line-height: 1.5;
-  margin-bottom: clamp(10px, 1.5vh, 14px);
-}
-.homeDeskPromoVisual--modes{
-  width: 72px;
-  height: 72px;
-  align-self: center;
-}
-.homeDeskSongModes{
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  gap: 5px;
-  width: 100%;
-  height: 100%;
-}
-.homeDeskSongModeTile{
-  position: relative;
-  border-radius: 11px;
-  padding: 2px;
-  background: linear-gradient(135deg, #22d3ee, #7c5cff, #23d5ab);
-  box-shadow: 0 8px 20px -12px rgba(34,211,238,0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-  min-height: 0;
-}
-.homeDeskSongModeTile::before{
-  content:"";
-  position: absolute;
-  inset: 2px;
-  border-radius: 9px;
-  background: linear-gradient(160deg, #0f1828 0%, #0a0c14 100%);
-}
-.homeDeskSongModeTile svg{
-  position: relative;
-  z-index: 1;
-  width: 14px;
-  height: 14px;
-  display: block;
-}
-.homeDeskSongModeTile--hum{
-  grid-column: 1;
-  grid-row: 1;
-  color: rgba(94,234,212,0.92);
-  animation: homeDeskSongModeHum 2.4s ease-in-out infinite;
-}
-.homeDeskSongModeTile--lyrics{
-  grid-column: 2;
-  grid-row: 1;
-  color: rgba(167,139,250,0.95);
-  animation: homeDeskSongModeLyrics 2.8s ease-in-out infinite;
-}
-.homeDeskSongModeTile--photo{
-  grid-column: 1 / -1;
-  grid-row: 2;
-  width: calc(50% - 2.5px);
-  justify-self: center;
-  color: rgba(125,211,252,0.95);
-  animation: homeDeskSongModePhoto 3s ease-in-out infinite;
-}
-@keyframes homeDeskSongModeHum{
-  0%, 100%{ transform: scale(1); }
-  50%{ transform: scale(1.04); }
-}
-@keyframes homeDeskSongModeLyrics{
-  0%, 100%{ transform: rotate(0deg); }
-  35%{ transform: rotate(-4deg); }
-  65%{ transform: rotate(2deg); }
-}
-@keyframes homeDeskSongModePhoto{
-  0%, 100%{ box-shadow: 0 8px 20px -12px rgba(34,211,238,0.45); }
-  50%{ box-shadow: 0 8px 22px -8px rgba(34,211,238,0.62); }
 }
 .homeDeskPersonaPromo{
   margin-top: 0;
@@ -23943,6 +23868,20 @@ body[data-route="challenges"] .app{
   inset: 3px;
   border-radius: 19px;
   background: linear-gradient(160deg, #0f1828 0%, #0a0c14 100%);
+}
+.homeDeskSongPenIco{
+  position: relative;
+  z-index: 1;
+  width: 36px;
+  height: 36px;
+  color: rgba(94,234,212,0.92);
+  display: block;
+  animation: homeDeskSongPenBob 2.8s ease-in-out infinite;
+}
+@keyframes homeDeskSongPenBob{
+  0%, 100%{ transform: rotate(0deg); }
+  35%{ transform: rotate(-4deg); }
+  65%{ transform: rotate(2deg); }
 }
 .homeDeskSongOrbit{
   position: absolute;

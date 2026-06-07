@@ -105,7 +105,7 @@ node scripts/test-account-delete.mjs          # actually delete
 
 - [ ] Point **`nabadai.com`** → Vercel (cleaner emails, OAuth, share links)
 - [ ] Simple support page at `https://nabadai.com/support` or `/support` on Vercel (Apple prefers HTTPS over `mailto:` alone)
-- [ ] Soften in-app **“closed friends beta / Ask Samy”** copy if shipping to the public App Store
+- [x] Soften in-app **“closed friends beta / Ask Samy”** copy if shipping to the public App Store
 
 ---
 

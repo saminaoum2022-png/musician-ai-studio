@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260531personaTileNoStatus";
+const APP_BUILD = "20260608navActivityCreateHub";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -388,6 +388,11 @@ const els = {
   notificationsCenterStatus: document.getElementById("notificationsCenterStatus"),
   notificationsCenterList: document.getElementById("notificationsCenterList"),
   notificationsCenterClose: document.getElementById("notificationsCenterClose"),
+  activityFeed: document.getElementById("activityFeed"),
+  activityLead: document.getElementById("activityLead"),
+  activityStatus: document.getElementById("activityStatus"),
+  activityLoadMore: document.getElementById("activityLoadMore"),
+  activityTabLink: document.querySelector('.mobileTabbar [data-route-link="activity"]'),
   profileCreditsBalance: document.getElementById("profileCreditsBalance"),
   profileCreditsNote: document.getElementById("profileCreditsNote"),
   profileCreditsLink: document.getElementById("profileCreditsLink"),
@@ -2228,6 +2233,11 @@ const TAB_REFRESH_ACTIONS = {
       if (page) void refreshHomeDeskJoinCounts(page);
     } catch (e) { console.warn("[tabRefresh/challenges]", e); }
   },
+  activity() {
+    try {
+      void enterActivityRoute({ reset: true });
+    } catch (e) { console.warn("[tabRefresh/activity]", e); }
+  },
   discover() {
     try {
       void refreshDiscoverFeed();
@@ -2435,20 +2445,26 @@ function updateNotificationsEntryBadges(unreadCount) {
   const unread = Math.max(0, Number(unreadCount || 0));
   _notificationsUnreadCount = unread;
   const hasUnread = unread > 0;
-  const label = hasUnread
-    ? `Profile, ${unread} unread ${unread === 1 ? "notification" : "notifications"}`
-    : "Profile";
+  const activityLabel = hasUnread
+    ? `Activity, ${unread} unread ${unread === 1 ? "notification" : "notifications"}`
+    : "Activity";
   try {
-    els.profileTabLink?.classList?.toggle?.("hasNotice", hasUnread);
-    els.profileTabLink?.setAttribute?.("aria-label", label);
+    els.activityTabLink?.classList?.toggle?.("hasNotice", hasUnread);
+    els.activityTabLink?.setAttribute?.("aria-label", activityLabel);
+    const dot = document.getElementById("activityTabDot");
+    if (dot) dot.style.display = hasUnread ? "" : "none";
+  } catch {}
+  try {
+    els.profileTabLink?.classList?.remove?.("hasNotice");
+    els.profileTabLink?.setAttribute?.("aria-label", "Profile");
   } catch {}
   try {
     els.btnFriendsNotifications?.classList?.toggle?.("hasNotice", hasUnread);
     els.btnFriendsNotifications?.setAttribute?.(
       "aria-label",
       hasUnread
-        ? `Notifications, ${unread} unread`
-        : "Notifications",
+        ? `Activity, ${unread} unread`
+        : "Activity",
     );
   } catch {}
 }
@@ -2509,7 +2525,9 @@ function syncRoutePanelVisibility(wanted) {
   });
   document.querySelectorAll("[data-route-link]").forEach((a) => {
     const link = a.getAttribute("data-route-link");
-    const active = link === route || (route === "discover-playlist" && link === "discover");
+    const active = link === route
+      || (route === "discover-playlist" && link === "discover")
+      || (route === "generate" && link === "challenges");
     a.classList.toggle("active", active);
   });
 }
@@ -2587,7 +2605,7 @@ function applyRoute() {
   const allowedRoutes = new Set([
     "intro", "onboarding", "start", "auth", "generate",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
-    "settings", "profile", "player", "discover", "discover-playlist", "friends", "challenges", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
+    "settings", "profile", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
   ]);
   const onboardingParsed = parseOnboardingRoute(route);
   let normalized = pendingPublicUsername ? "user" : (route === "start" ? "intro" : route);
@@ -2617,6 +2635,10 @@ function applyRoute() {
   if (normalized === "home") {
     try { history.replaceState(null, "", "#/challenges"); } catch {}
     normalized = "challenges";
+  }
+  if (normalized === "notifications") {
+    try { history.replaceState(null, "", "#/activity"); } catch {}
+    normalized = "activity";
   }
   if (normalized === "more") {
     try { history.replaceState(null, "", "#/settings"); } catch {}
@@ -2662,7 +2684,7 @@ function applyRoute() {
   }
   // Public profile is intentionally readable without auth so share-link
   // visitors don't hit a wall before discovering the rest of the product.
-  const protectedRoutes = new Set(["generate", "profile", "friends", "player", "vocal", "stems", "advanced", "credits", "sounds"]);
+  const protectedRoutes = new Set(["generate", "profile", "friends", "activity", "player", "vocal", "stems", "advanced", "credits", "sounds"]);
   if (!isLoggedIn && protectedRoutes.has(wanted)) wanted = "auth";
   const prevRoute = document.body.getAttribute("data-route") || "";
   if (prevRoute !== wanted) {
@@ -2683,7 +2705,7 @@ function applyRoute() {
     setCreateChallengeHint(null);
   }
   if (els.brandSecondary) {
-    els.brandSecondary.textContent = wanted === "hub" ? "Hub" : wanted === "challenges" ? "Home" : "Music";
+    els.brandSecondary.textContent = wanted === "hub" ? "Hub" : wanted === "challenges" ? "Create" : "Music";
   }
   if (wanted === "onboarding") {
     try { onOnboardingRouteActive(route); } catch {}
@@ -2696,7 +2718,7 @@ function applyRoute() {
     }
   } catch {}
   if (isLoggedIn) {
-    void refreshNotificationsUnreadBadge({ force: wanted === "friends" || wanted === "settings" });
+    void refreshNotificationsUnreadBadge({ force: wanted === "friends" || wanted === "activity" || wanted === "settings" });
   } else {
     updateNotificationsEntryBadges(0);
   }
@@ -2890,6 +2912,10 @@ function applyRoute() {
   if (wanted === "challenges") {
     bindChallengesPageOnce();
     renderHomeDesk();
+  }
+  if (wanted === "activity") {
+    bindActivityPageOnce();
+    void enterActivityRoute({ reset: prevRoute !== "activity" });
   }
   if (wanted === "user") {
     renderUserProfile._pendingUserId = pendingPublicUserId;
@@ -14272,6 +14298,205 @@ function renderNotificationRows(list) {
         ${unread ? `<span class="notificationsUnreadDot" aria-label="Unread"></span>` : ""}
       </article>`;
   }).join("");
+}
+
+const ACTIVITY_PAGE_SIZE = 20;
+let _activityFeedState = {
+  items: [],
+  offset: 0,
+  hasMore: true,
+  loading: false,
+  bound: false,
+  observer: null,
+};
+
+function activityDayBucket(ts) {
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "earlier";
+  const now = new Date();
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startYesterday = new Date(startToday);
+  startYesterday.setDate(startYesterday.getDate() - 1);
+  if (d >= startToday) return "today";
+  if (d >= startYesterday) return "yesterday";
+  return "earlier";
+}
+
+function activityDayLabel(bucket) {
+  if (bucket === "today") return "Today";
+  if (bucket === "yesterday") return "Yesterday";
+  return "Earlier";
+}
+
+function notificationActivityHref(n) {
+  const meta = n?.metadata || {};
+  const username = String(meta.actor_username || "").replace(/^@/, "").trim();
+  const actorUserId = String(n?.actor_user_id || "").trim();
+  const songId = String(meta.song_id || "").trim();
+  const targetKind = String(meta.target_kind || "").trim();
+  const targetId = String(meta.target_id || "").trim();
+  const t = String(n?.type || "").trim();
+
+  if (t === "play_milestone" && songId) return `#/player?track=${encodeURIComponent(songId)}`;
+  if (t === "song_feedback" && songId) return `#/player?track=${encodeURIComponent(songId)}`;
+  if (t === "remix") {
+    const sid = songId || targetId;
+    if (sid) return `#/player?track=${encodeURIComponent(sid)}`;
+  }
+  if ((t === "social_like" || t === "social_reply") && targetKind === "song" && targetId) {
+    return `#/player?track=${encodeURIComponent(targetId)}`;
+  }
+  if ((t === "social_like" || t === "social_reply") && (targetKind === "echo" || targetKind === "status")) {
+    return "#/friends";
+  }
+  if ((t === "follow" || t === "public_song") && username) {
+    return `#/u/${encodeURIComponent(username)}${actorUserId ? `?uid=${encodeURIComponent(actorUserId)}` : ""}`;
+  }
+  if (username) {
+    return `#/u/${encodeURIComponent(username)}${actorUserId ? `?uid=${encodeURIComponent(actorUserId)}` : ""}`;
+  }
+  return "";
+}
+
+function activityItemHtml(n) {
+  const msg = notificationMessage(n);
+  const avatar = String(n?.metadata?.actor_avatar || "").trim() || "./assets/nabadai-logo.png";
+  const icon = notificationIconForType(n?.type);
+  const unread = !n?.read_at;
+  const time = relativeTime(new Date(n?.created_at || Date.now()).getTime());
+  const href = notificationActivityHref(n);
+  const tag = href ? "button" : "article";
+  const typeAttr = href ? ' type="button"' : "";
+  const dataHref = href ? ` data-activity-href="${escapeHtml(href)}"` : "";
+  return `
+    <${tag} class="activityRow${unread ? " isUnread" : ""}"${typeAttr}${dataHref}>
+      <div class="activityRowAvatarWrap">
+        <img class="activityRowAvatar" src="${escapeHtml(avatar)}" alt="" loading="lazy" decoding="async" />
+        <span class="activityRowBadge" aria-hidden="true">${escapeHtml(icon)}</span>
+      </div>
+      <div class="activityRowBody">
+        <div class="activityRowTop">
+          <strong>${escapeHtml(msg.title)}</strong>
+          <span>${escapeHtml(time)}</span>
+        </div>
+        <p>${escapeHtml(msg.body)}</p>
+      </div>
+      ${unread ? `<span class="activityRowDot" aria-label="Unread"></span>` : ""}
+    </${tag}>`;
+}
+
+function renderActivityFeedFromState() {
+  const feed = els.activityFeed;
+  if (!feed) return;
+  const list = _activityFeedState.items;
+  if (!list.length) {
+    feed.innerHTML = `
+      <div class="activityEmpty">
+        <div class="activityEmptyIcon" aria-hidden="true">♪</div>
+        <strong>No activity yet</strong>
+        <span>When people follow you, like your songs, reply to Echoes, or you hit play milestones, it shows up here.</span>
+      </div>`;
+    return;
+  }
+  const buckets = ["today", "yesterday", "earlier"];
+  const grouped = { today: [], yesterday: [], earlier: [] };
+  list.forEach((n) => {
+    grouped[activityDayBucket(new Date(n?.created_at || 0).getTime())].push(n);
+  });
+  feed.innerHTML = buckets.filter((b) => grouped[b].length).map((b) => `
+    <section class="activityDayGroup" aria-label="${activityDayLabel(b)}">
+      <h3 class="activityDayLabel">${activityDayLabel(b)}</h3>
+      ${grouped[b].map((n) => activityItemHtml(n)).join("")}
+    </section>`).join("");
+}
+
+async function fetchActivityBatch() {
+  if (_activityFeedState.loading || !_activityFeedState.hasMore) return;
+  _activityFeedState.loading = true;
+  if (els.activityLoadMore) els.activityLoadMore.hidden = false;
+  try {
+    const limit = ACTIVITY_PAGE_SIZE;
+    const offset = _activityFeedState.offset;
+    const data = await socialApi(`/api/social?type=notifications&limit=${limit}&offset=${offset}`);
+    const batch = Array.isArray(data?.notifications) ? data.notifications : [];
+    if (!batch.length) {
+      _activityFeedState.hasMore = false;
+    } else {
+      _activityFeedState.items.push(...batch);
+      _activityFeedState.offset += batch.length;
+      if (batch.length < limit) _activityFeedState.hasMore = false;
+    }
+    renderActivityFeedFromState();
+    const unread = _activityFeedState.items.filter((n) => !n?.read_at).length;
+    if (els.activityLead) {
+      els.activityLead.textContent = unread
+        ? `${unread} unread ${unread === 1 ? "update" : "updates"} from your music circle.`
+        : "Follows, likes, comments, milestones, and remixes.";
+    }
+    updateNotificationsEntryBadges(unread);
+  } catch (e) {
+    if (els.activityStatus) {
+      els.activityStatus.hidden = false;
+      els.activityStatus.textContent = e?.message || "Could not load activity.";
+    }
+  } finally {
+    _activityFeedState.loading = false;
+    if (els.activityLoadMore) els.activityLoadMore.hidden = !_activityFeedState.hasMore;
+  }
+}
+
+async function enterActivityRoute({ reset = false } = {}) {
+  if (!authSession?.user?.id) {
+    location.hash = "#/auth";
+    return;
+  }
+  if (reset) {
+    _activityFeedState.items = [];
+    _activityFeedState.offset = 0;
+    _activityFeedState.hasMore = true;
+    _activityFeedState.loading = false;
+    if (els.activityFeed) {
+      els.activityFeed.innerHTML = `<div class="activityLoadMore"><span class="activityLoadMoreSpinner"></span></div>`;
+    }
+  }
+  if (els.activityStatus) {
+    els.activityStatus.hidden = true;
+    els.activityStatus.textContent = "";
+  }
+  await fetchActivityBatch();
+  const unread = _activityFeedState.items.filter((n) => !n?.read_at).length;
+  if (unread) {
+    void socialApi("/api/social", {
+      method: "POST",
+      body: JSON.stringify({ action: "mark_notifications_read" }),
+    }).then(() => {
+      _activityFeedState.items.forEach((n) => {
+        if (!n.read_at) n.read_at = new Date().toISOString();
+      });
+      updateNotificationsEntryBadges(0);
+      renderActivityFeedFromState();
+      if (els.activityLead) els.activityLead.textContent = "Follows, likes, comments, milestones, and remixes.";
+    }).catch(() => {});
+  }
+}
+
+function bindActivityPageOnce() {
+  if (_activityFeedState.bound) return;
+  _activityFeedState.bound = true;
+  els.activityFeed?.addEventListener("click", (ev) => {
+    const row = ev.target.closest("[data-activity-href]");
+    if (!row) return;
+    const href = row.getAttribute("data-activity-href") || "";
+    if (!href) return;
+    ev.preventDefault();
+    location.hash = href.startsWith("#") ? href : `#${href}`;
+  });
+  if (els.activityLoadMore && typeof IntersectionObserver !== "undefined") {
+    _activityFeedState.observer = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) void fetchActivityBatch();
+    }, { root: null, rootMargin: "160px", threshold: 0 });
+    _activityFeedState.observer.observe(els.activityLoadMore);
+  }
 }
 
 function openNotificationsCenterShell() {
@@ -27819,41 +28044,10 @@ syncCreateTabMorph();
   const tab = document.getElementById("tabCreate");
   if (!tab) return;
   tab.addEventListener("click", (ev) => {
-    const route = document.body.getAttribute("data-route");
-    if (route === "generate") {
-      if (tab.classList.contains("tabIsGenerating")) {
-        ev.preventDefault();
-        return;
-      }
-      if (tab.classList.contains("tabIsListen")) {
-        ev.preventDefault();
-        try { haptic("impact"); } catch {}
-        const playA = document.getElementById("btnResultPlay");
-        if (playA) {
-          playA.click();
-          try { playA.scrollIntoView({ behavior: "smooth", block: "center" }); } catch {}
-        }
-        return;
-      }
-      if (tab.classList.contains("tabIsReady")) {
-        ev.preventDefault();
-        try { haptic("impact"); } catch {}
-        try { localStorage.setItem(TAB_TIP_KEY, "1"); } catch {}
-        const tooltip = document.getElementById("tabCreateTooltip");
-        if (tooltip) tooltip.hidden = true;
-        if (els.btnSunoGenerate && !els.btnSunoGenerate.disabled) {
-          els.btnSunoGenerate.click();
-        }
-        return;
-      }
-    }
-    ev.preventDefault();
-    ev.stopPropagation();
     if (isCreateChooserOpen()) {
+      ev.preventDefault();
       closeCreateChooserSheet({ immediate: true });
-      return;
     }
-    openCreateChooserSheet();
   }, true);
 })();
 
@@ -29391,7 +29585,9 @@ if (els.btnProfileEdit) {
   });
 }
 if (els.btnFriendsNotifications) {
-  els.btnFriendsNotifications.addEventListener("click", () => void showNotificationsSummary());
+  els.btnFriendsNotifications.addEventListener("click", () => {
+    location.hash = "#/activity";
+  });
 }
 if (els.notificationsCenter) {
   els.notificationsCenter.addEventListener("click", (e) => {

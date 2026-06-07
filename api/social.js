@@ -720,8 +720,10 @@ async function handleGet(req, res, user) {
 
   if (type === "notifications") {
     if (!user) return sendJson(res, 401, { ok: false, error: "Not signed in" });
+    const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit")) || 30));
+    const offset = Math.max(0, Number(url.searchParams.get("offset")) || 0);
     const rows = await svcFetch(
-      `social_notifications?select=id,type,actor_user_id,entity_id,metadata,read_at,created_at&user_id=eq.${encodeURIComponent(user.userId)}&order=created_at.desc&limit=50`,
+      `social_notifications?select=id,type,actor_user_id,entity_id,metadata,read_at,created_at&user_id=eq.${encodeURIComponent(user.userId)}&order=created_at.desc&limit=${limit}&offset=${offset}`,
     );
     return sendJson(res, 200, {
       ok: true,

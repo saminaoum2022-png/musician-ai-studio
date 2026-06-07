@@ -137,7 +137,7 @@
             h = hasSession ? "challenges" : "auth";
           }
         }
-        var ok = /^(intro|onboarding|auth|generate|challenges|discover|friends|profile|settings|player|sounds|user|vocal|stems|advanced|credits|mentor)$/.test(h);
+        var ok = /^(intro|onboarding|auth|generate|challenges|activity|discover|friends|profile|settings|player|sounds|user|vocal|stems|advanced|credits|mentor)$/.test(h);
         if (!ok) {
           if (!done) h = "intro";
           else {
@@ -163,7 +163,8 @@
             <a href="#/generate" class="journeyStep" data-route-link="generate">Generate</a>
             <a href="#/profile" class="journeyStep" data-route-link="profile">Profile</a>
             <a href="#/discover" class="journeyStep" data-route-link="discover">Discover</a>
-            <a href="#/challenges" class="journeyStep" data-route-link="challenges">Home</a>
+            <a href="#/activity" class="journeyStep" data-route-link="activity">Activity</a>
+            <a href="#/challenges" class="journeyStep" data-route-link="challenges">Create</a>
             <a href="#/sounds" class="journeyStep" data-route-link="sounds">Sounds</a>
             <a href="#/player" class="journeyStep" data-route-link="player">Player</a>
           </div>
@@ -1048,6 +1049,19 @@
           </div>
         </section>
 
+        <section class="activityPage wide" data-route="activity" id="activityPage">
+          <header class="activityHead">
+            <p class="activityKicker">Your circle</p>
+            <h2 class="activityTitle" id="activityTitle">Activity</h2>
+            <p class="activityLead" id="activityLead">Follows, likes, comments, milestones, and remixes.</p>
+          </header>
+          <div id="activityStatus" class="activityStatus" role="status" aria-live="polite" hidden></div>
+          <div id="activityFeed" class="activityFeed" aria-label="Activity feed"></div>
+          <div id="activityLoadMore" class="activityLoadMore" hidden aria-hidden="true">
+            <span class="activityLoadMoreSpinner"></span>
+          </div>
+        </section>
+
         <section class="friendsPage wide" data-route="friends" id="friendsPage">
           <header class="discoveryStudioHead">
             <div class="discoveryStudioTitles">
@@ -1116,7 +1130,7 @@
             </button>
           </section>
 
-          <nav class="homeDeskSeg" role="tablist" aria-label="Home sections">
+          <nav class="homeDeskSeg" role="tablist" aria-label="Create sections">
             <button type="button" class="homeDeskSegBtn is-active" data-home-seg="start" role="tab" aria-selected="true" aria-controls="homeDeskPanelStart">Create</button>
             <button type="button" class="homeDeskSegBtn" data-home-seg="sparks" role="tab" aria-selected="false" aria-controls="homeDeskPanelSparks">Sparks</button>
             <button type="button" class="homeDeskSegBtn" data-home-seg="templates" role="tab" aria-selected="false" aria-controls="homeDeskPanelTemplates">Templates</button>
@@ -3000,12 +3014,15 @@
         </defs>
       </svg>
       <nav class="mobileTabbar" aria-label="Primary navigation">
-        <a href="#/challenges" data-route-link="challenges" class="challengesTab" aria-label="Home">
-          <svg class="tabIco tabIcoHome" viewBox="0 0 24 24" aria-hidden="true">
-            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M4 12 12 5 20 12"/>
-            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M7 12v8h10v-8"/>
+        <a href="#/activity" data-route-link="activity" class="activityTab" aria-label="Activity">
+          <svg class="tabIco tabIcoActivity" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="1.75"/>
+            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M22 11v6"/>
+            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M19 14h6"/>
           </svg>
-          <span class="tabLabel">Home</span>
+          <span class="tabLabel">Activity</span>
+          <span id="activityTabDot" class="hubDot activityTabDot" style="display:none" aria-hidden="true"></span>
         </a>
         <a href="#/discover" data-route-link="discover" aria-label="Discover">
           <svg class="tabIco tabIcoDiscover" viewBox="0 0 24 24" aria-hidden="true">
@@ -3015,7 +3032,7 @@
           </svg>
           <span class="tabLabel">Discover</span>
         </a>
-        <a href="#/generate" data-route-link="generate" id="tabCreate" class="tabCreate" aria-label="Create">
+        <a href="#/challenges" data-route-link="challenges" id="tabCreate" class="tabCreate challengesTab" aria-label="Create">
           <span class="tabIcoSpinner" aria-hidden="true"></span>
           <svg class="tabIco tabIcoCreate" viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.75"/>
@@ -3026,7 +3043,6 @@
             <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"/>
           </svg>
           <span class="tabLabel">Create</span>
-          <span class="tabTooltip" id="tabCreateTooltip" hidden>Tap to generate ▶</span>
         </a>
         <a href="#/friends" data-route-link="friends" class="friendsTab" aria-label="Friends">
           <svg class="tabIco tabIcoFriends" viewBox="0 0 24 24" aria-hidden="true">

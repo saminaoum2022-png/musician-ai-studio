@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260608fixShareLinks";
+const APP_BUILD = "20260609fixShareSplash";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2490,9 +2490,39 @@ function resolveEmptyHashRoute() {
   return "auth";
 }
 
+/** `/#/player?track=UUID` or `/s/:uuid` — WhatsApp share listeners must not hit auth walls. */
+function parseSharedTrackIdFromLocation() {
+  try {
+    const hash = String(location.hash || "");
+    if (hash.startsWith("#/player")) {
+      const q = String(hash.split("?")[1] || "").split("#")[0];
+      const id = String(new URLSearchParams(q).get("track") || "").trim();
+      if (isShareUuid(id)) return id;
+    }
+    const m = String(location.pathname || "").match(
+      /^\/s\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/?$/i,
+    );
+    if (m) return m[1];
+  } catch {}
+  return "";
+}
+
+/** Normalize `/s/:id` landing URLs into the in-app player route before routing. */
+(() => {
+  const shareId = parseSharedTrackIdFromLocation();
+  if (!shareId) return;
+  const hash = String(location.hash || "");
+  if (hash.startsWith("#/player") && hash.includes("track=")) return;
+  try {
+    const target = `#/player?track=${encodeURIComponent(shareId)}`;
+    if (location.hash !== target) location.replace(target);
+  } catch {}
+})();
+
 /** Keep splash up while route is still settling (session restore / OAuth). */
 function shouldHoldBootSplashForRoute(wanted) {
   if (!document.body.classList.contains("booting")) return false;
+  if (parseSharedTrackIdFromLocation()) return false;
   if (!shouldSkipIntroOrOnboardingRoute() && wanted === "auth") return true;
   if (wanted === "auth" && getSupabaseAuthToken()) return true;
   if (wanted === "auth" && !_authBootDone) return true;
@@ -2553,6 +2583,10 @@ function scheduleApplyRoute() {
         ensureAuthSessionUserFromToken();
         if (!_authBootDone) await ensureAuthBoot();
         applyRoute();
+        try {
+          const route = document.body.getAttribute("data-route") || "";
+          if (!shouldHoldBootSplashForRoute(route)) dismissBootSplash();
+        } catch {}
       } catch (e) {
         routeApplyFallback(e);
       }
@@ -2677,8 +2711,21 @@ function applyRoute() {
   }
   // Public profile is intentionally readable without auth so share-link
   // visitors don't hit a wall before discovering the rest of the product.
+  const sharedTrackId = parseSharedTrackIdFromLocation();
   const protectedRoutes = new Set(["generate", "profile", "friends", "activity", "player", "vocal", "stems", "advanced", "credits", "sounds"]);
-  if (!isLoggedIn && protectedRoutes.has(wanted)) wanted = "auth";
+  if (!isLoggedIn && protectedRoutes.has(wanted)) {
+    if (wanted === "player" && sharedTrackId) {
+      // Listen-only share links — do not bounce guests to sign-in.
+    } else {
+      wanted = "auth";
+    }
+  }
+  if (sharedTrackId && (wanted === "intro" || wanted === "onboarding")) {
+    wanted = "player";
+    try {
+      history.replaceState(null, "", `#/player?track=${encodeURIComponent(sharedTrackId)}`);
+    } catch {}
+  }
   const prevRoute = document.body.getAttribute("data-route") || "";
   if (prevRoute !== wanted) {
     closeCreateChooserSheet({ immediate: true });

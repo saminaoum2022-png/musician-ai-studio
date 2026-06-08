@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260608removeStatusPosts";
+const APP_BUILD = "20260608fixShareLinks";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -15521,16 +15521,10 @@ function runTrackSheetAction(action, sourceEl) {
     if (action === "library_share") {
       shut();
       const handle = String(activeProfile?.username || "").trim();
-      const pathBase = `${location.origin.replace(/\/$/, "")}${location.pathname.replace(/\/$/, "")}`;
-      const url =
-        t.publicOnProfile && handle
-          ? `${pathBase}#/u/${encodeURIComponent(handle)}`
-          : `${pathBase}#/profile?seg=all`;
-      void shareHubLink({
-        title: t.title ? `${t.title} — NabadAi` : "NabadAi Music",
-        text: t.title || "From my library",
-        url,
-      });
+      const byLine = handle ? `@${handle}` : "";
+      if (await sharePublicTrackLink(t, { title: t.title, byLine })) return;
+      showToast("Saving to cloud… try Share again in a few seconds.", { icon: "…", durationMs: 3600 });
+      queueArchiveLibraryTrack(t);
       return;
     }
     if (action === "library_dl_audio") {
@@ -15648,13 +15642,10 @@ function runTrackSheetAction(action, sourceEl) {
     if (action === "profile_lib_share") {
       shut();
       const handle = String(activeProfile?.username || "").trim();
-      const pathBase = `${location.origin.replace(/\/$/, "")}${location.pathname.replace(/\/$/, "")}`;
-      const url = handle ? `${pathBase}#/u/${encodeURIComponent(handle)}` : `${pathBase}#/profile?seg=all`;
-      void shareHubLink({
-        title: t.title ? `${t.title} — NabadAi` : "NabadAi Music",
-        text: t.title || "From my profile",
-        url,
-      });
+      const byLine = handle ? `@${handle}` : "";
+      if (await sharePublicTrackLink(t, { title: t.title, byLine })) return;
+      showToast("Saving to cloud… try Share again in a few seconds.", { icon: "…", durationMs: 3600 });
+      queueArchiveLibraryTrack(t);
       return;
     }
     if (action === "profile_lib_featured") {
@@ -24695,40 +24686,124 @@ async function shareHubPost(post) {
   await shareHubLink({ title, text, url });
 }
 
+/** Fetch a shared `user_songs` row for `/#/player?track=UUID` (guests allowed). */
+async function fetchSharedSongByCloudId(cloudId) {
+  const id = String(cloudId || "").trim();
+  if (!isShareUuid(id)) return null;
+
+  const local = loadLibrary().find((t) => trackCloudShareId(t) === id);
+  if (local?.url) {
+    return {
+      id,
+      title: local.title || "Song",
+      art_url: local.artUrl || "",
+      song_url: local.url,
+      user_id: String(authSession?.user?.id || local.userId || ""),
+      fromLocal: true,
+      localId: local.id,
+    };
+  }
+
+  if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+    try {
+      const token = getSupabaseAuthToken();
+      const headers = { apikey: SUPABASE_ANON_KEY, Accept: "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const cols = "id,user_id,title,art_url,song_url";
+      const r = await fetch(
+        `${SUPABASE_URL}/rest/v1/user_songs?id=eq.${encodeURIComponent(id)}&select=${encodeURIComponent(cols)}&limit=1`,
+        { headers, cache: "no-store" },
+      );
+      if (r.ok) {
+        const rows = await r.json().catch(() => []);
+        const row = Array.isArray(rows) && rows[0] ? rows[0] : null;
+        if (row?.song_url) return row;
+      }
+    } catch {}
+  }
+
+  try {
+    const r = await fetch(apiUrl(`/api/songs/shared?id=${encodeURIComponent(id)}`), { cache: "no-store" });
+    if (r.ok) {
+      const data = await r.json().catch(() => ({}));
+      if (data?.ok && data?.song?.song_url) return data.song;
+    }
+  } catch {}
+
+  return null;
+}
+
+/** Play a shared cloud row for a visitor who does not have it in local Library. */
+async function playSharedCloudSong(row, opts = {}) {
+  const url = String(row?.song_url || "").trim();
+  if (!url) return false;
+  const songId = String(row.id || "").trim();
+  const ownerId = String(row.user_id || "").trim();
+  let handle = String(row.creator_username || "").trim();
+  if (!handle && ownerId) {
+    const profMap = await fetchProfilesByUserIdsMap([ownerId]);
+    handle = String(profMap.get(ownerId)?.username || "").trim();
+  }
+  const byLine = handle ? `@${handle}` : "Nabadai";
+  const title = String(row.title || "Song").trim();
+  const artUrl = String(row.art_url || "").trim() || placeholderCoverDataUrl();
+
+  if (row.fromLocal && row.localId) {
+    await playLibraryListRowById(row.localId, { openPlayer: opts.openPlayer !== false });
+    return true;
+  }
+
+  currentPlayerTrackRef = {
+    id: `public_${songId}`,
+    cloudSongId: songId,
+    songId,
+    ownerUserId: ownerId,
+    title,
+    artUrl,
+    url,
+    publicOnProfile: true,
+  };
+  miniSource = { type: "public_profile_lib", url, songId, ownerUserId: ownerId };
+  libraryNowPlayingId = null;
+  updatePlayerSecondaryChrome();
+
+  const rawForPlay = unwrapInnermostHttpAudioUrl(url);
+  const playSource = normalizeAudioUrlForPlayback(toAudioProxyUrl(rawForPlay) || rawForPlay);
+  const meta = {
+    title,
+    subtitle: `${byLine} · Shared link`,
+    artUrl,
+    songId,
+    ownerUserId: ownerId,
+  };
+  const openPlayer = opts.openPlayer !== false;
+  if (openPlayer) {
+    await playOnPlayerPage(playSource, "Full song", meta);
+  } else {
+    setPlayerMeta(meta);
+    await playInline(playSource, "Full song", miniSource);
+  }
+  return true;
+}
+
 /** Open a shared library track (`/#/player?track=UUID`). */
 let pendingShareFocusTrackId = "";
 async function focusTrackFromShare(trackId) {
   const id = String(trackId || "").trim();
   if (!id || !isShareUuid(id)) return;
   pendingShareFocusTrackId = id;
+  if (els.playerTitle && (document.body.getAttribute("data-route") || "") === "player") {
+    els.playerTitle.textContent = "Loading shared song…";
+  }
   const tryPlay = async () => {
-    let row = loadLibrary().find((t) => trackCloudShareId(t) === id);
-    if (!row?.url && SUPABASE_URL) {
-      try {
-        const cols = "id,title,art_url,song_url";
-        const r = await supabaseRestWithAuth(
-          `user_songs?id=eq.${encodeURIComponent(id)}&select=${encodeURIComponent(cols)}&limit=1`,
-          { method: "GET" },
-        );
-        if (r?.ok) {
-          const rows = await r.json().catch(() => []);
-          const cloud = Array.isArray(rows) && rows[0] ? rows[0] : null;
-          if (cloud?.song_url) {
-            row = {
-              id: String(cloud.id || id),
-              cloudSongId: String(cloud.id || id),
-              title: cloud.title || "Song",
-              artUrl: cloud.art_url || "",
-              url: cloud.song_url || "",
-            };
-          }
-        }
-      } catch {}
+    const row = await fetchSharedSongByCloudId(id);
+    if (!row?.song_url) return false;
+    const ok = await playSharedCloudSong(row, { openPlayer: true });
+    if (ok) {
+      pendingShareFocusTrackId = "";
+      return true;
     }
-    if (!row?.url) return false;
-    await playLibraryListRowById(row.id, { openPlayer: true });
-    pendingShareFocusTrackId = "";
-    return true;
+    return false;
   };
   if (await tryPlay()) return;
   void ensureUserLibraryHydrated().then(() => tryPlay());
@@ -24736,7 +24811,17 @@ async function focusTrackFromShare(trackId) {
   const poll = setInterval(() => {
     n += 1;
     void tryPlay().then((ok) => {
-      if (ok || n >= 12) clearInterval(poll);
+      if (ok || n >= 16) {
+        clearInterval(poll);
+        if (!ok && pendingShareFocusTrackId === id) {
+          pendingShareFocusTrackId = "";
+          if (els.playerTitle) els.playerTitle.textContent = "No track loaded";
+          showToast(
+            "Could not load this shared song. Ask them to tap Share on the player after the song finishes saving.",
+            { icon: "!", durationMs: 4600 },
+          );
+        }
+      }
     });
   }, 500);
 }

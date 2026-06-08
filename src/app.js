@@ -6596,18 +6596,14 @@ function getPendingCreateAction() {
 async function finishPostAuthNavigation() {
   const pending = getPendingCreateAction();
   setPendingCreateAction("");
-  try {
-    await ensureAuthBoot({ force: true });
-    loadAuthSession();
-    ensureAuthSessionUserFromToken();
-  } catch (e) {
-    console.warn("[auth] post-auth navigation boot failed", e);
-  }
+  loadAuthSession();
+  ensureAuthSessionUserFromToken();
+  endLoginSettling();
   if (pending === "song" || pending === "status" || pending === "echo") {
-    endLoginSettling();
     window.setTimeout(() => {
       try { navigateFromCreateChooser(pending); } catch {}
     }, 80);
+    void ensureAuthBoot({ force: true, fast: true });
     return;
   }
   const target = shouldSkipIntroOrOnboardingRoute() ? "challenges" : "intro";
@@ -6620,7 +6616,8 @@ async function finishPostAuthNavigation() {
   } catch {
     scheduleApplyRoute();
   }
-  endLoginSettling();
+  void ensureAuthBoot({ force: true, fast: true });
+  void refreshAuthStateFromSupabase().catch(() => null);
 }
 
 function requireAuthForCreate(onAuthed, pendingAction = "") {
@@ -10808,14 +10805,24 @@ async function clearAuthSessionEverywhere() {
   }
 }
 
-async function readAuthSessionRawFromAllStores() {
+async function readAuthSessionRawFromAllStores(opts = {}) {
   let best = "";
-  const vault = await waitForCapPlugin("AuthVault", 5000);
+  try {
+    const local =
+      localStorage.getItem(AUTH_SESSION_KEY) || localStorage.getItem(AUTH_SESSION_BACKUP_KEY) || "";
+    if (local) best = local;
+  } catch {}
+  const fastOnly = Boolean(opts.fastOnly);
+  if (fastOnly && best) return best;
+
+  const vaultWaitMs = best ? 800 : 5000;
+  const prefsWaitMs = best ? 500 : 3000;
+  const vault = await waitForCapPlugin("AuthVault", vaultWaitMs);
   if (vault?.get) {
     try {
       const { value } = await vault.get();
       const v = value == null ? "" : String(value).trim();
-      if (v) best = v;
+      if (v && v.length >= best.length) best = v;
     } catch (e) {
       console.warn("[auth] AuthVault.get failed", e);
     }
@@ -10825,7 +10832,7 @@ async function readAuthSessionRawFromAllStores() {
       localStorage.getItem(AUTH_SESSION_KEY) || localStorage.getItem(AUTH_SESSION_BACKUP_KEY) || "";
     if (local && local.length >= best.length) best = local;
   } catch {}
-  const prefs = await waitForCapPlugin("Preferences", 3000);
+  const prefs = await waitForCapPlugin("Preferences", prefsWaitMs);
   if (prefs?.get) {
     try {
       const { value } = await prefs.get({ key: AUTH_SESSION_KEY });
@@ -10859,8 +10866,8 @@ async function readAuthSessionRawFromAllStores() {
   return best;
 }
 
-async function restoreAuthSessionFromAllStores() {
-  await readAuthSessionRawFromAllStores();
+async function restoreAuthSessionFromAllStores(opts = {}) {
+  await readAuthSessionRawFromAllStores(opts);
 }
 
 function invalidateAuthBoot() {
@@ -10896,7 +10903,7 @@ let _loginSettlingStartedAt = 0;
 let _loginSettlingCarouselTimer = 0;
 let _loginSettlingForceEndTimer = 0;
 let _loginSettlingCarouselStep = 0;
-const LOGIN_SETTLING_MAX_MS = 18000;
+const LOGIN_SETTLING_MAX_MS = isCapacitorNativeAuth() ? 45000 : 18000;
 const LOGIN_SETTLING_SLIDE_MS = 780;
 const LOGIN_SETTLING_LABELS = ["Create", "Echo", "Friends", "Persona"];
 
@@ -11011,13 +11018,22 @@ async function closeOAuthBrowser({ keepPending = false } = {}) {
   if (!keepPending && !isLoginSettling()) setOAuthPendingUi(false);
 }
 
-function ensureAuthBoot({ force = false } = {}) {
+function ensureAuthBoot({ force = false, fast = false } = {}) {
   if (force) invalidateAuthBoot();
   if (!_authBootPromise) {
     _authBootPromise = (async () => {
-      await restoreAuthSessionFromAllStores();
-      loadAuthSession();
-      ensureAuthSessionUserFromToken();
+      const hasLive =
+        Boolean(authSession?.access_token) || Boolean(getSupabaseAuthToken());
+      if (hasLive && fast) {
+        loadAuthSession();
+        ensureAuthSessionUserFromToken();
+      } else {
+        await restoreAuthSessionFromAllStores({
+          fastOnly: Boolean(hasLive && fast),
+        });
+        loadAuthSession();
+        ensureAuthSessionUserFromToken();
+      }
       syncActiveProfileIdFromSession();
       renderAuthStatus();
       _authBootDone = true;
@@ -12618,27 +12634,18 @@ async function applySupabaseAuthTokenPayload(d) {
     user: d.user || { id: "", email: "" },
     issued_at: Date.now(),
   });
+  ensureAuthSessionUserFromToken();
   if (authSession) {
     void persistAuthSessionEverywhere(JSON.stringify(authSession));
   }
-  try {
-    await Promise.race([
-      refreshAuthStateFromSupabase(),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("auth refresh timeout")), 12000)
-      ),
-    ]);
-  } catch (e) {
-    console.warn("[auth] post-login refresh skipped", e?.message || e);
-    renderAuthStatus();
-  }
+  renderAuthStatus();
   return true;
 }
 
 async function supabaseSignUpWithPassword(email, password) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase config missing");
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 12000);
+  const timer = setTimeout(() => ctrl.abort(), authFetchTimeoutMs());
   let r;
   try {
     r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
@@ -12682,7 +12689,7 @@ async function supabaseResendSignupConfirmation(email) {
 async function supabaseSignInWithPassword(email, password) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase config missing");
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 12000);
+  const timer = setTimeout(() => ctrl.abort(), authFetchTimeoutMs());
   let r;
   try {
     r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
@@ -12785,7 +12792,11 @@ async function runEmailPasswordAuth() {
     await finishPostAuthNavigation();
   } catch (e) {
     endLoginSettling();
-    const msg = e?.message || String(e);
+    let msg = e?.message || String(e);
+    if (e?.name === "AbortError" || /aborted|timeout/i.test(msg)) {
+      msg =
+        "Could not reach sign-in from the app. Check Wi‑Fi, or sign in at www.nabadai.com in Safari first.";
+    }
     setAuthEmailMessage(msg);
     notifyLoginFeedback(msg);
   } finally {
@@ -12886,7 +12897,7 @@ async function exchangeOAuthCodeForSession(code) {
       issued_at: Date.now(),
     });
     if (authSession) {
-      await persistAuthSessionEverywhere(JSON.stringify(authSession));
+      void persistAuthSessionEverywhere(JSON.stringify(authSession));
     }
     setStatus("Signed in.");
     return true;
@@ -12928,7 +12939,7 @@ async function exchangeAppleIdTokenForSession(idToken) {
       issued_at: Date.now(),
     });
     if (authSession) {
-      await persistAuthSessionEverywhere(JSON.stringify(authSession));
+      void persistAuthSessionEverywhere(JSON.stringify(authSession));
     }
     setStatus("Signed in with Apple.");
     return true;
@@ -12978,6 +12989,9 @@ async function supabaseVerifyOtp(email, token) {
 }
 function isCapacitorNativeAuth() {
   return Boolean(window?.Capacitor?.isNativePlatform?.());
+}
+function authFetchTimeoutMs() {
+  return isCapacitorNativeAuth() ? 20000 : 12000;
 }
 function oauthProviderLabel(provider) {
   return provider === "apple" ? "Apple" : "Google";
@@ -29904,14 +29918,9 @@ async function handleNativeAuthDeepLink(url) {
     if (ok) {
       _lastOAuthCodeHandled = code;
       if (authSession) {
-        await persistAuthSessionEverywhere(JSON.stringify(authSession));
-      }
-      try { await refreshAuthStateFromSupabase(); } catch {}
-      if (authSession) {
-        await persistAuthSessionEverywhere(JSON.stringify(authSession));
+        void persistAuthSessionEverywhere(JSON.stringify(authSession));
       }
       invalidateAuthBoot();
-      await ensureAuthBoot({ force: true });
       await finishPostAuthNavigation();
     } else {
       endLoginSettling();
@@ -30095,7 +30104,6 @@ async function runNativeAppleLogin() {
   const ok = await exchangeAppleIdTokenForSession(idToken);
   if (!ok) throw new Error(lastAuthDebug || "Apple token exchange failed");
   invalidateAuthBoot();
-  await ensureAuthBoot({ force: true });
   await finishPostAuthNavigation();
   return true;
 }
@@ -30722,6 +30730,8 @@ function clampNum(n, min, max) {
 }
 
 // Initial credits fetch (best effort)
+applyClientEnvBootstrap();
+loadPublicConfigFromCache();
 void refreshSunoCredits();
 renderCreditsHistory();
 loadProfile();

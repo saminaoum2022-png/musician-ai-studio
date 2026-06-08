@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260609fixShareSplash";
+const APP_BUILD = "20260609fixAwaitSyntax";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -15567,11 +15567,13 @@ function runTrackSheetAction(action, sourceEl) {
     }
     if (action === "library_share") {
       shut();
-      const handle = String(activeProfile?.username || "").trim();
-      const byLine = handle ? `@${handle}` : "";
-      if (await sharePublicTrackLink(t, { title: t.title, byLine })) return;
-      showToast("Saving to cloud… try Share again in a few seconds.", { icon: "…", durationMs: 3600 });
-      queueArchiveLibraryTrack(t);
+      void (async () => {
+        const handle = String(activeProfile?.username || "").trim();
+        const byLine = handle ? `@${handle}` : "";
+        if (await sharePublicTrackLink(t, { title: t.title, byLine })) return;
+        showToast("Saving to cloud… try Share again in a few seconds.", { icon: "…", durationMs: 3600 });
+        queueArchiveLibraryTrack(t);
+      })();
       return;
     }
     if (action === "library_dl_audio") {
@@ -15688,11 +15690,13 @@ function runTrackSheetAction(action, sourceEl) {
     }
     if (action === "profile_lib_share") {
       shut();
-      const handle = String(activeProfile?.username || "").trim();
-      const byLine = handle ? `@${handle}` : "";
-      if (await sharePublicTrackLink(t, { title: t.title, byLine })) return;
-      showToast("Saving to cloud… try Share again in a few seconds.", { icon: "…", durationMs: 3600 });
-      queueArchiveLibraryTrack(t);
+      void (async () => {
+        const handle = String(activeProfile?.username || "").trim();
+        const byLine = handle ? `@${handle}` : "";
+        if (await sharePublicTrackLink(t, { title: t.title, byLine })) return;
+        showToast("Saving to cloud… try Share again in a few seconds.", { icon: "…", durationMs: 3600 });
+        queueArchiveLibraryTrack(t);
+      })();
       return;
     }
     if (action === "profile_lib_featured") {

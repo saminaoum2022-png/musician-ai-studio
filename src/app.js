@@ -28102,6 +28102,26 @@ syncCreateTabMorph();
     if (isCreateChooserOpen()) {
       ev.preventDefault();
       closeCreateChooserSheet({ immediate: true });
+      return;
+    }
+    const route = document.body.getAttribute("data-route") || "";
+    if (route !== "generate") return;
+    const hasInput = Boolean(
+      String(els.sunoPrompt?.value || "").trim() ||
+      String(els.sunoStyle?.value || "").trim() ||
+      imageMoodAppliedForNextGen
+    );
+    const generating = Boolean(els.btnSunoGenerate?.disabled);
+    const hasResult = (els.resultCard?.style.display || "none") !== "none";
+    // On the song form, the Create tab morphs into Generate — don't send users
+    // back to the home desk (#/challenges) when they meant to start a run.
+    if (generating || (hasInput && !hasResult)) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (!generating && els.btnSunoGenerate) {
+        haptic("impact");
+        els.btnSunoGenerate.click();
+      }
     }
   }, true);
 })();

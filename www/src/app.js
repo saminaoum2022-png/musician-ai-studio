@@ -2923,6 +2923,9 @@ function applyRoute() {
     setLoading(false);
     showResultCard(true);
   }
+  if (wanted === "generate") {
+    try { renderPersonaSelect(); } catch {}
+  }
   syncGenerateOrbVisibility();
   renderGenerateReadyDot();
   updateProfilePersonaRow();
@@ -10468,6 +10471,17 @@ function savePersonaSelection(id) {
     else localStorage.removeItem(k);
   } catch {}
 }
+/** Active persona for Create — select DOM value with saved localStorage fallback.
+ *  Banner/profile UI already used both; generate must too or a cold resume
+ *  can show "My voice" while submitting with no personaId. */
+function getActivePersonaId() {
+  const fromSelect = String(els.sunoPersonaId?.value || "").trim();
+  const saved = loadPersonaSelection().trim();
+  const id = fromSelect || saved;
+  if (!id) return "";
+  const hit = loadPersonas().find((x) => String(x.personaId) === id);
+  return hit ? id : "";
+}
 /** Persisted expand/collapse state for the persona card on Profile.
  *  We keep it compact by default so the card doesn't dominate the
  *  page, and remember the user's choice across sessions. */
@@ -10508,9 +10522,7 @@ function updateProfilePersonaRow() {
     els.profilePersonaRow.hidden = true;
     return;
   }
-  const idFromSelect = String(els.sunoPersonaId?.value || "").trim();
-  const idSaved = loadPersonaSelection().trim();
-  const id = idFromSelect || idSaved;
+  const id = getActivePersonaId();
   const list = loadPersonas();
   const hit = list.find((x) => String(x.personaId) === id);
   els.profilePersonaRow.hidden = false;
@@ -10599,11 +10611,7 @@ function updateProfilePersonaInlineChip() {
 function renderActivePersonaBanner() {
   try {
     if (!els.personaActiveBanner || !els.personaActiveBannerLabel) return;
-    const idFromSelect = String(els.sunoPersonaId?.value || "").trim();
-    const idSaved = (() => {
-      try { return loadPersonaSelection().trim(); } catch { return ""; }
-    })();
-    const id = idFromSelect || idSaved;
+    const id = getActivePersonaId();
     if (!id) {
       els.personaActiveBanner.hidden = true;
       return;
@@ -27030,7 +27038,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             .filter(Boolean)
             .join(", ");
 
-      const personaIdSel = (els.sunoPersonaId?.value || "").trim();
+      try { renderPersonaSelect(); } catch {}
+      const personaIdSel = getActivePersonaId();
       const personaHit = personaIdSel
         ? loadPersonas().find((x) => String(x.personaId) === personaIdSel)
         : null;
@@ -28000,7 +28009,7 @@ function getReferenceHints() {
   const dialect = String(els.sunoDialect?.value || "").trim();
   const dialectHint = String(els.sunoDialectHint?.value || "").trim();
   const vp = String(els.sunoVoiceProfile?.value || "").trim().toLowerCase();
-  const persona = String(els.sunoPersonaId?.value || "").trim();
+  const persona = getActivePersonaId();
   const hasRef = Boolean(getVocalReferenceFile());
   const refOn = hasRef;
 
@@ -28102,6 +28111,26 @@ syncCreateTabMorph();
     if (isCreateChooserOpen()) {
       ev.preventDefault();
       closeCreateChooserSheet({ immediate: true });
+      return;
+    }
+    const route = document.body.getAttribute("data-route") || "";
+    if (route !== "generate") return;
+    const hasInput = Boolean(
+      String(els.sunoPrompt?.value || "").trim() ||
+      String(els.sunoStyle?.value || "").trim() ||
+      imageMoodAppliedForNextGen
+    );
+    const generating = Boolean(els.btnSunoGenerate?.disabled);
+    const hasResult = (els.resultCard?.style.display || "none") !== "none";
+    // On the song form, the Create tab morphs into Generate — don't send users
+    // back to the home desk (#/challenges) when they meant to start a run.
+    if (generating || (hasInput && !hasResult)) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (!generating && els.btnSunoGenerate) {
+        haptic("impact");
+        els.btnSunoGenerate.click();
+      }
     }
   }, true);
 })();
@@ -30758,6 +30787,7 @@ void (async () => {
     ensureAuthSessionUserFromToken();
     syncActiveProfileIdFromSession();
     setProfileHeaderLoading(false);
+    try { renderPersonaSelect(); } catch {}
     scheduleApplyRoute();
   }
   } finally {

@@ -10910,6 +10910,7 @@ async function waitForNativeAuthHydration(maxMs = 2800) {
 }
 
 let _oauthBrowserOpen = false;
+let _oauthBrowserFinishedListener = false;
 let _loginSettling = false;
 let _loginSettlingStartedAt = 0;
 let _loginSettlingCarouselTimer = 0;
@@ -11028,6 +11029,42 @@ async function closeOAuthBrowser({ keepPending = false } = {}) {
   } catch {}
   _oauthBrowserOpen = false;
   if (!keepPending && !isLoginSettling()) setOAuthPendingUi(false);
+}
+
+/** OAuth must finish via appUrlOpen (deep link), not on app resume — closing the
+ *  in-app browser early was killing Google sign-in before the password step. */
+function ensureOAuthBrowserFinishedListener() {
+  if (_oauthBrowserFinishedListener) return;
+  const Browser = getCapacitorBrowserPlugin();
+  if (!Browser?.addListener) return;
+  _oauthBrowserFinishedListener = true;
+  void Browser.addListener("browserFinished", () => {
+    if (!_oauthBrowserOpen) return;
+    _oauthBrowserOpen = false;
+    endLoginSettling();
+    setOAuthPendingUi(false);
+    resetAuthGateButtons();
+    void (async () => {
+      try {
+        await restoreAuthSessionFromAllStores();
+        loadAuthSession();
+        ensureAuthSessionUserFromToken();
+        if (authSession?.access_token) {
+          invalidateAuthBoot();
+          await finishPostAuthNavigation();
+          return;
+        }
+      } catch (e) {
+        console.warn("[auth] browserFinished session check failed", e);
+      }
+      notifyLoginFeedback("Sign-in cancelled — tap Google or Apple to try again.");
+      try {
+        location.hash = "#/auth";
+        syncRoutePanelVisibility("auth");
+        scheduleApplyRoute();
+      } catch {}
+    })();
+  });
 }
 
 function ensureAuthBoot({ force = false, fast = false } = {}) {
@@ -30079,6 +30116,7 @@ async function handleNativeAuthDeepLink(url) {
     setStatus("Finishing sign in…");
     notifyLoginFeedback("Finishing sign in…");
     await closeOAuthBrowser({ keepPending: true });
+    _oauthBrowserOpen = false;
     const ok = await exchangeOAuthCodeForSession(code);
     if (ok) {
       _lastOAuthCodeHandled = code;
@@ -30126,39 +30164,9 @@ if (isCapacitorNativeAuth()) {
           }
           return;
         }
-        if (_oauthBrowserOpen) {
-          if (!isLoginSettling()) beginLoginSettling("Finishing sign in…");
-          void closeOAuthBrowser({ keepPending: true });
-          void (async () => {
-            await new Promise((res) => setTimeout(res, 2500));
-            try {
-              await restoreAuthSessionFromAllStores();
-              loadAuthSession();
-              ensureAuthSessionUserFromToken();
-              if (authSession?.access_token) {
-                _oauthBrowserOpen = false;
-                invalidateAuthBoot();
-                await ensureAuthBoot({ force: true });
-                await finishPostAuthNavigation();
-                return;
-              }
-            } catch (e) {
-              console.warn("[auth] oauth resume check failed", e);
-            }
-            if (_oauthBrowserOpen && isLoginSettling()) {
-              _oauthBrowserOpen = false;
-              endLoginSettling();
-              resetAuthGateButtons();
-              notifyLoginFeedback("Sign-in was cancelled or timed out — tap Apple or Google to try again.");
-              try {
-                location.hash = "#/auth";
-                syncRoutePanelVisibility("auth");
-                scheduleApplyRoute();
-              } catch {}
-            }
-          })();
-          return;
-        }
+        // While Google/Apple OAuth browser is open, ignore resume — deep link
+        // (`appUrlOpen`) or `browserFinished` handles completion.
+        if (_oauthBrowserOpen) return;
         if (isLoginSettling()) return;
         if (Date.now() - _appResumeRefreshAt < APP_RESUME_REFRESH_GAP_MS) return;
         if (_appResumeRefreshTimer) clearTimeout(_appResumeRefreshTimer);
@@ -30228,11 +30236,12 @@ async function runOAuthLogin(provider) {
     if (!url) throw new Error(`Could not create ${label} auth URL`);
     const Browser = getCapacitorBrowserPlugin();
     if (isCapacitorNativeAuth() && Browser?.open) {
+      ensureOAuthBrowserFinishedListener();
       await closeOAuthBrowser();
       await new Promise((r) => setTimeout(r, 280));
       _oauthBrowserOpen = true;
       setOAuthPendingUi(true);
-      await Browser.open({ url, presentationStyle: "popover" });
+      await Browser.open({ url, presentationStyle: "fullscreen" });
     } else if (isCapacitorNativeAuth() && !Browser?.open) {
       notifyLoginFeedback(
         "Could not open the sign-in browser. Product → Clean Build Folder in Xcode, then Run again.",

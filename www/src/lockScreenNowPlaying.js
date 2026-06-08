@@ -1,6 +1,6 @@
 /** Lock screen / Control Center metadata for in-app HTML5 audio. */
 
-const DEFAULT_ORIGIN = "https://musician-ai-studio.vercel.app";
+const DEFAULT_ORIGIN = "https://nabadai.com";
 
 let _handlers = null;
 let _nativeListener = null;

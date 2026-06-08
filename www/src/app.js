@@ -1844,7 +1844,7 @@ function scheduleRenderHubNowPlaying() {
 const LATEST_SUNO_MODEL = "V5_5";
 /** Production API origins for native (try in order if one host fails). */
 const NATIVE_API_BASE_CANDIDATES = [
-  "https://musician-ai-studio.vercel.app",
+  "https://nabadai.com",
   "https://nabad-ai.vercel.app",
 ];
 function nativeApiBaseCandidates() {
@@ -12495,7 +12495,7 @@ function getAuthEmailRedirectTo() {
       return `${o}/`;
     }
   } catch {}
-  return "https://musician-ai-studio.vercel.app/";
+  return "https://nabadai.com/";
 }
 
 /** Sign-up with confirm-email may return `user` nested or flat `{ id, email }`. */
@@ -23706,7 +23706,7 @@ function unwrapInnermostHttpAudioUrl(url) {
   const originBase =
     API_BASE ||
     (typeof location !== "undefined" && location.origin ? location.origin : "") ||
-    "https://musician-ai-studio.vercel.app";
+    "https://nabadai.com";
   for (let i = 0; i < 8; i++) {
     if (!cur.toLowerCase().includes("api/suno/audio")) break;
     try {
@@ -24137,7 +24137,7 @@ function publicWebOrigin() {
   const base = String(_resolvedApiBase || API_BASE || NATIVE_API_BASE_CANDIDATES[0] || "")
     .trim()
     .replace(/\/$/, "");
-  return base || "https://musician-ai-studio.vercel.app";
+  return base || "https://nabadai.com";
 }
 
 /** Public link with Open Graph preview (`/s/:id`) — not a raw .mp3 URL. */

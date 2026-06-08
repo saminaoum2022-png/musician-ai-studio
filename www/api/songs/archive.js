@@ -21,7 +21,7 @@ const FETCH_TIMEOUT_MS = 45000;
 function unwrapProxyUrl(raw) {
   let cur = String(raw || "").trim();
   if (!cur) return "";
-  const base = (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://musician-ai-studio.vercel.app");
+  const base = (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://nabadai.com");
   for (let i = 0; i < 8; i++) {
     if (!cur.toLowerCase().includes("api/suno/audio")) break;
     try {

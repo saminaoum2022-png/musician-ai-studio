@@ -11,7 +11,7 @@
  *   export TEST_PASSWORD="your-test-password"
  *   # optional — verify user removed from Auth admin API
  *   export SUPABASE_SERVICE_ROLE_KEY="eyJ..."
- *   export API_BASE="https://musician-ai-studio.vercel.app"
+ *   export API_BASE="https://nabadai.com"
  *   node scripts/test-account-delete.mjs
  *
  * Or with an existing access token (skips password sign-in):
@@ -22,7 +22,7 @@
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "";
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-const API_BASE = (process.env.API_BASE || "https://musician-ai-studio.vercel.app").replace(/\/$/, "");
+const API_BASE = (process.env.API_BASE || "https://nabadai.com").replace(/\/$/, "");
 const TEST_EMAIL = (process.env.TEST_EMAIL || "").trim();
 const TEST_PASSWORD = process.env.TEST_PASSWORD || "";
 const ACCESS_TOKEN = (process.env.ACCESS_TOKEN || "").trim();

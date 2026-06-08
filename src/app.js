@@ -10837,8 +10837,14 @@ async function readAuthSessionRawFromAllStores() {
   }
   if (!best && isCapacitorNativeAuth()) {
     const fs = getCapFilesystemPlugin();
-    if (fs?.readFile) {
+    // Legacy CDN Filesystem path — only read when the file exists so iOS
+    // doesn't spam OS-PLUG-FILE-0008 on every cold open before first sign-in.
+    if (fs?.stat && fs?.readFile) {
       try {
+        await fs.stat({
+          path: AUTH_NATIVE_FS_PATH,
+          directory: CAP_FS_DIRECTORY_DATA,
+        });
         const r = await fs.readFile({
           path: AUTH_NATIVE_FS_PATH,
           directory: CAP_FS_DIRECTORY_DATA,
@@ -10888,6 +10894,7 @@ let _oauthBrowserOpen = false;
 let _loginSettling = false;
 let _loginSettlingStartedAt = 0;
 let _loginSettlingCarouselTimer = 0;
+let _loginSettlingForceEndTimer = 0;
 let _loginSettlingCarouselStep = 0;
 const LOGIN_SETTLING_MAX_MS = 18000;
 const LOGIN_SETTLING_SLIDE_MS = 780;
@@ -10956,10 +10963,28 @@ function beginLoginSettling(message = "Signing you in…") {
   const msg = document.getElementById("loginSettlingMsg");
   if (msg) msg.textContent = String(message || "Signing you in…");
   startLoginSettlingCarousel();
+  if (_loginSettlingForceEndTimer) clearTimeout(_loginSettlingForceEndTimer);
+  _loginSettlingForceEndTimer = window.setTimeout(() => {
+    _loginSettlingForceEndTimer = 0;
+    if (!_loginSettling) return;
+    _oauthBrowserOpen = false;
+    endLoginSettling();
+    resetAuthGateButtons();
+    notifyLoginFeedback("Sign-in is taking too long — check your connection and try again.");
+    try {
+      location.hash = "#/auth";
+      syncRoutePanelVisibility("auth");
+      scheduleApplyRoute();
+    } catch {}
+  }, LOGIN_SETTLING_MAX_MS);
 }
 
 function endLoginSettling() {
   _loginSettling = false;
+  if (_loginSettlingForceEndTimer) {
+    clearTimeout(_loginSettlingForceEndTimer);
+    _loginSettlingForceEndTimer = 0;
+  }
   stopLoginSettlingCarousel();
   setOAuthPendingUi(false);
   try {
@@ -12306,6 +12331,8 @@ async function refreshSupabaseSessionIfNeeded() {
   const expAt = authSessionExpiresAtMs();
   const skewMs = 5 * 60 * 1000;
   if (expAt && expAt > Date.now() + skewMs) return true;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
   try {
     const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
       method: "POST",
@@ -12314,6 +12341,7 @@ async function refreshSupabaseSessionIfNeeded() {
         apikey: SUPABASE_ANON_KEY,
       },
       body: JSON.stringify({ refresh_token: authSession.refresh_token }),
+      signal: ctrl.signal,
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok || !d?.access_token) {
@@ -12334,6 +12362,8 @@ async function refreshSupabaseSessionIfNeeded() {
   } catch (e) {
     lastAuthDebug = `refresh error: ${e?.message || String(e)}`;
     return false;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -12589,26 +12619,44 @@ async function applySupabaseAuthTokenPayload(d) {
     issued_at: Date.now(),
   });
   if (authSession) {
-    await persistAuthSessionEverywhere(JSON.stringify(authSession));
+    void persistAuthSessionEverywhere(JSON.stringify(authSession));
   }
-  await refreshAuthStateFromSupabase();
+  try {
+    await Promise.race([
+      refreshAuthStateFromSupabase(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("auth refresh timeout")), 12000)
+      ),
+    ]);
+  } catch (e) {
+    console.warn("[auth] post-login refresh skipped", e?.message || e);
+    renderAuthStatus();
+  }
   return true;
 }
 
 async function supabaseSignUpWithPassword(email, password) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase config missing");
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-    },
-    body: JSON.stringify({
-      email,
-      password,
-      options: { emailRedirectTo: getAuthEmailRedirectTo() },
-    }),
-  });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 12000);
+  let r;
+  try {
+    r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({
+        email,
+        password,
+        options: { emailRedirectTo: getAuthEmailRedirectTo() },
+      }),
+      signal: ctrl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   const d = await r.json().catch(() => ({}));
   return { ok: r.ok, status: r.status, data: d };
 }
@@ -12633,14 +12681,22 @@ async function supabaseResendSignupConfirmation(email) {
 
 async function supabaseSignInWithPassword(email, password) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase config missing");
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-    },
-    body: JSON.stringify({ email, password }),
-  });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 12000);
+  let r;
+  try {
+    r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ email, password }),
+      signal: ctrl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   const d = await r.json().catch(() => ({}));
   return { ok: r.ok, status: r.status, data: d };
 }
@@ -29897,8 +29953,36 @@ if (isCapacitorNativeAuth()) {
           return;
         }
         if (_oauthBrowserOpen) {
-          beginLoginSettling("Finishing sign in…");
+          if (!isLoginSettling()) beginLoginSettling("Finishing sign in…");
           void closeOAuthBrowser({ keepPending: true });
+          void (async () => {
+            await new Promise((res) => setTimeout(res, 2500));
+            try {
+              await restoreAuthSessionFromAllStores();
+              loadAuthSession();
+              ensureAuthSessionUserFromToken();
+              if (authSession?.access_token) {
+                _oauthBrowserOpen = false;
+                invalidateAuthBoot();
+                await ensureAuthBoot({ force: true });
+                await finishPostAuthNavigation();
+                return;
+              }
+            } catch (e) {
+              console.warn("[auth] oauth resume check failed", e);
+            }
+            if (_oauthBrowserOpen && isLoginSettling()) {
+              _oauthBrowserOpen = false;
+              endLoginSettling();
+              resetAuthGateButtons();
+              notifyLoginFeedback("Sign-in was cancelled or timed out — tap Apple or Google to try again.");
+              try {
+                location.hash = "#/auth";
+                syncRoutePanelVisibility("auth");
+                scheduleApplyRoute();
+              } catch {}
+            }
+          })();
           return;
         }
         if (isLoginSettling()) return;

@@ -871,10 +871,11 @@ html[data-theme="light"] .authSocialIconBtn{
   background: rgba(255,255,255,0.72);
 }
 html[data-theme="light"] .authSocialIconBtn--apple{
-  color: #0b1320;
+  color: #fff;
+  background: #000;
 }
 html[data-theme="light"] .authSocialIconBtn--apple:hover{
-  background: #fff;
+  background: #111;
 }
 html[data-theme="light"] .authSocialIconBtn--google{
   background: #fff;
@@ -2446,10 +2447,12 @@ body.isOnboarding .generateOrb{ display:none !important; }
   border-radius: 14px 0 0 14px;
   border-right: none;
   color: #fff;
+  background: #000;
+  border-color: rgba(255,255,255,0.22);
 }
 .authSocialIconBtn--apple:hover{
-  background: rgba(255,255,255,0.08);
-  border-color: rgba(255,255,255,0.18);
+  background: #111;
+  border-color: rgba(255,255,255,0.32);
 }
 .authSocialIconBtn--google{
   border-radius: 0 14px 14px 0;
@@ -2489,6 +2492,10 @@ body.isOnboarding .generateOrb{ display:none !important; }
   height: 22px;
   flex: 0 0 auto;
   display: block;
+}
+.authSocialIconSvg--apple{
+  width: 20px;
+  height: 24px;
 }
 .authGhostBtn{
   display:inline-flex;

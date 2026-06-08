@@ -6618,6 +6618,15 @@ async function finishPostAuthNavigation() {
   }
   void ensureAuthBoot({ force: true, fast: true });
   void refreshAuthStateFromSupabase().catch(() => null);
+  void (async () => {
+    try {
+      const cloud = await supabaseLoadProfile();
+      if (cloud?.savedPersonas?.length) hydratePersonasFromCloud(cloud.savedPersonas);
+      else if (loadPersonas().length) schedulePersonasCloudSync({ delayMs: 400 });
+    } catch (e) {
+      console.warn("[personas] post-login hydrate failed", e);
+    }
+  })();
 }
 
 function requireAuthForCreate(onAuthed, pendingAction = "") {
@@ -10450,6 +10459,9 @@ function wipeLocalStorageForUserId(userId) {
 }
 const PROFILE_PERSONAS_KEY = "mas:personas:v1";
 const PERSONA_SELECTED_KEY = "mas:personaSelected:v1";
+const MAX_SAVED_PERSONAS = 20;
+let _personasCloudSyncTimer = null;
+let _personasCloudSyncInFlight = false;
 function personaSelectedStorageKey() {
   const uid = authSession?.user?.id || activeProfile?.id || "guest";
   return `${PERSONA_SELECTED_KEY}:${uid}`;
@@ -13302,6 +13314,7 @@ async function supabaseLoadProfile() {
       ? Date.parse(p.calling_card_updated_at) || 0
       : 0,
     soundCertified: p.sound_certified === true || p.sound_certified === "t" || p.sound_certified === "true",
+    savedPersonas: parseSavedPersonasFromCloud(p.saved_personas),
   };
 }
 /** Last status of the most recent `supabaseLoadUserSongs` call. The
@@ -18510,6 +18523,142 @@ function startHubLiveSync() {
     void refreshHubFromSupabase();
   }, interval);
 }
+function normalizePersonaRecord(item) {
+  if (!item || typeof item !== "object") return null;
+  const personaId = String(item.personaId || item.persona_id || "").trim();
+  if (!personaId) return null;
+  const type = item.type === "suno_voice" ? "suno_voice" : "song";
+  let personaModel = String(item.personaModel || item.persona_model || "").trim();
+  if (personaModel !== "style_persona" && personaModel !== "voice_persona") {
+    personaModel = type === "suno_voice" ? "voice_persona" : "style_persona";
+  }
+  return {
+    personaId,
+    label: String(item.label || "My voice").trim().slice(0, 64) || "My voice",
+    type,
+    personaModel,
+    ts: Number(item.ts || item.updated_at || 0) || Date.now(),
+  };
+}
+
+function parseSavedPersonasFromCloud(raw) {
+  if (!raw) return [];
+  let arr = raw;
+  if (typeof raw === "string") {
+    try {
+      arr = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(arr)) return [];
+  return arr.map(normalizePersonaRecord).filter(Boolean);
+}
+
+function mergePersonaLists(...lists) {
+  const map = new Map();
+  for (const list of lists) {
+    for (const item of list || []) {
+      const norm = normalizePersonaRecord(item);
+      if (!norm) continue;
+      const prev = map.get(norm.personaId);
+      if (!prev || Number(norm.ts || 0) >= Number(prev.ts || 0)) map.set(norm.personaId, norm);
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
+}
+
+function trimPersonasToLimit(items, { notify = false } = {}) {
+  const list = (items || []).map(normalizePersonaRecord).filter(Boolean);
+  if (list.length <= MAX_SAVED_PERSONAS) return list;
+  const kept = list.slice(0, MAX_SAVED_PERSONAS);
+  if (notify) {
+    const evicted = list.slice(MAX_SAVED_PERSONAS);
+    const names = evicted
+      .map((p) => String(p.label || "").trim())
+      .filter(Boolean)
+      .slice(0, 2)
+      .join(", ");
+    try {
+      showToast(
+        `You can save up to ${MAX_SAVED_PERSONAS} voices. Removed oldest${names ? `: ${names}` : ""}. Delete unused voices to make room.`,
+        { icon: "!", durationMs: 5200 }
+      );
+    } catch {}
+  }
+  return kept;
+}
+
+async function supabaseUpsertSavedPersonas(items) {
+  const token = getSupabaseAuthToken();
+  if (!token || !authSession?.user?.id) return false;
+  const payload = {
+    user_id: authSession.user.id,
+    saved_personas: trimPersonasToLimit(items).map((p) => ({
+      personaId: p.personaId,
+      label: p.label,
+      type: p.type,
+      personaModel: p.personaModel,
+      ts: p.ts,
+    })),
+    updated_at: new Date().toISOString(),
+  };
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      Prefer: "resolution=merge-duplicates,return=minimal",
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!r.ok) {
+    const txt = await r.text().catch(() => "");
+    if (/saved_personas|column|schema cache/i.test(txt)) {
+      console.warn("[personas] cloud column missing — run supabase/profiles_saved_personas.sql");
+    }
+    throw new Error(`Persona cloud save failed (${r.status}): ${txt.slice(0, 120)}`);
+  }
+  return true;
+}
+
+function schedulePersonasCloudSync({ delayMs = 500 } = {}) {
+  if (_personasCloudSyncTimer) clearTimeout(_personasCloudSyncTimer);
+  _personasCloudSyncTimer = setTimeout(async () => {
+    _personasCloudSyncTimer = null;
+    if (_personasCloudSyncInFlight) {
+      schedulePersonasCloudSync({ delayMs: 800 });
+      return;
+    }
+    if (!authSession?.user?.id) return;
+    _personasCloudSyncInFlight = true;
+    try {
+      await supabaseUpsertSavedPersonas(loadPersonas());
+    } catch (e) {
+      console.warn("[personas] cloud sync failed (local copy kept)", e?.message || e);
+    } finally {
+      _personasCloudSyncInFlight = false;
+    }
+  }, Math.max(50, delayMs));
+}
+
+function hydratePersonasFromCloud(cloudItems) {
+  const cloud = parseSavedPersonasFromCloud(cloudItems);
+  const local = loadPersonas();
+  const merged = trimPersonasToLimit(mergePersonaLists(local, cloud));
+  const localJson = JSON.stringify(local);
+  const mergedJson = JSON.stringify(merged);
+  const cloudJson = JSON.stringify(cloud);
+  if (mergedJson === localJson && mergedJson === cloudJson) return false;
+  savePersonas(merged, { skipCloudSync: mergedJson === cloudJson });
+  if (mergedJson !== cloudJson) schedulePersonasCloudSync({ delayMs: 300 });
+  try { renderPersonaSelect(); } catch {}
+  try { renderActivePersonaBanner(); } catch {}
+  try { renderSettingsVoicesHub(); } catch {}
+  return true;
+}
+
 function profilePersonasKey() {
   return `${PROFILE_PERSONAS_KEY}:${activeProfile.id || "guest"}`;
 }
@@ -18522,10 +18671,14 @@ function loadPersonas() {
     return [];
   }
 }
-function savePersonas(items) {
+function savePersonas(items, opts = {}) {
+  const list = trimPersonasToLimit(items);
   try {
-    localStorage.setItem(profilePersonasKey(), JSON.stringify(items || []));
+    localStorage.setItem(profilePersonasKey(), JSON.stringify(list));
   } catch {}
+  if (!opts.skipCloudSync && authSession?.user?.id) {
+    schedulePersonasCloudSync();
+  }
 }
 function renderPersonaSelect() {
   if (!els.sunoPersonaId) return;
@@ -18609,16 +18762,21 @@ function addPersona(personaId, label, meta = {}) {
     existing.label = label || existing.label;
     existing.type = type;
     existing.personaModel = personaModel;
-    savePersonas(items.slice(0, 20));
+    existing.ts = Date.now();
+    savePersonas(items);
   } else {
-    items.unshift({
-      personaId: id,
-      label: label || `Persona ${items.length + 1}`,
-      type,
-      personaModel,
-      ts: Date.now(),
-    });
-    savePersonas(items.slice(0, 20));
+    const next = [
+      {
+        personaId: id,
+        label: label || `Persona ${items.length + 1}`,
+        type,
+        personaModel,
+        ts: Date.now(),
+      },
+      ...items,
+    ];
+    const over = next.length > MAX_SAVED_PERSONAS;
+    savePersonas(trimPersonasToLimit(next, { notify: over }));
   }
   selectPersonaForCreate(id, { silent: Boolean(meta.silentSelect) });
 }
@@ -18630,7 +18788,14 @@ function renderSettingsVoicesHub() {
   const list = loadPersonas();
   const activeId =
     String(els.sunoPersonaId?.value || "").trim() || loadPersonaSelection().trim();
-  if (emptyEl) emptyEl.hidden = list.length > 0;
+  if (emptyEl) {
+    emptyEl.hidden = list.length > 0;
+    if (!list.length) {
+      emptyEl.textContent = authSession?.user?.id
+        ? "No voices saved yet. Tap Record — your voices sync to your account and return on a new phone."
+        : "Sign in to save voices. Personas sync to your account across devices.";
+    }
+  }
   if (!list.length) {
     listEl.innerHTML = "";
     return;
@@ -30862,6 +31027,16 @@ void (async () => {
     if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !== false;
     renderProfilePreviewFromInputs();
     renderProfileHubShared();
+
+    try {
+      if (cloud?.savedPersonas?.length) {
+        hydratePersonasFromCloud(cloud.savedPersonas);
+      } else if (loadPersonas().length) {
+        schedulePersonasCloudSync({ delayMs: 600 });
+      }
+    } catch (e) {
+      console.warn("[personas] hydrate from cloud failed", e);
+    }
 
     syncActiveProfileIdFromSession();
     // Defer Library hydration to idle so the first Generate paint wins the

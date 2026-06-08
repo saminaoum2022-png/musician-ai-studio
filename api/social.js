@@ -756,41 +756,9 @@ async function handleGet(req, res, user) {
     return sendJson(res, 200, { ok: true, counts });
   }
 
-  if (type === "my_status") {
+  if (type === "my_status" || type === "following_status") {
     if (!user) return sendJson(res, 401, { ok: false, error: "Not signed in" });
-    const limit = Math.min(80, Math.max(1, Number(url.searchParams.get("limit")) || 40));
-    const rows = await svcFetch(
-      `social_status_posts?select=id,user_id,post_type,body,audio_url,duration_ms,waveform_peaks,created_at&user_id=eq.${encodeURIComponent(user.userId)}&order=created_at.desc&limit=${limit}`,
-    );
-    const rawPosts = Array.isArray(rows.data) ? rows.data : [];
-    const prof = await profileByUserId(user.userId);
-    return sendJson(res, 200, {
-      ok: true,
-      posts: rawPosts.map((p) => mapStatusPostRow(p, prof)),
-    });
-  }
-
-  if (type === "following_status") {
-    if (!user) return sendJson(res, 401, { ok: false, error: "Not signed in" });
-    const limit = Math.min(60, Math.max(1, Number(url.searchParams.get("limit")) || 40));
-    const follows = await svcFetch(
-      `social_follows?select=following_user_id&follower_user_id=eq.${encodeURIComponent(user.userId)}&limit=100`,
-    );
-    const followIds = (Array.isArray(follows.data) ? follows.data : [])
-      .map((r) => cleanUserId(r.following_user_id))
-      .filter(Boolean);
-    const authorIds = [...new Set(followIds)];
-    if (!authorIds.length) return sendJson(res, 200, { ok: true, posts: [] });
-    const inList = authorIds.map((id) => encodeURIComponent(id)).join(",");
-    const rows = await svcFetch(
-      `social_status_posts?select=id,user_id,post_type,body,audio_url,duration_ms,waveform_peaks,created_at&user_id=in.(${inList})&order=created_at.desc&limit=${limit}`,
-    );
-    const rawPosts = Array.isArray(rows.data) ? rows.data : [];
-    const profiles = await Promise.all(rawPosts.map((p) => profileByUserId(p.user_id)));
-    return sendJson(res, 200, {
-      ok: true,
-      posts: rawPosts.map((p, i) => mapStatusPostRow(p, profiles[i])),
-    });
+    return sendJson(res, 200, { ok: true, posts: [] });
   }
 
   if (type === "moments_rail" || type === "user_moments") {
@@ -1058,42 +1026,7 @@ async function handlePost(req, res, user) {
   }
 
   if (action === "post_status") {
-    const allowed = new Set(["update", "advice", "brainstorm", "song_request", "recommend"]);
-    const postType = allowed.has(String(body?.postType || "").trim())
-      ? String(body.postType).trim()
-      : "update";
-    const text = String(body?.body || "").trim().slice(0, 320);
-    const audioUrl = String(body?.audioUrl || body?.audio_url || "").trim().slice(0, 2048);
-    const durationMs = Math.min(60000, Math.max(0, Math.round(Number(body?.durationMs || body?.duration_ms) || 0)));
-    const waveformPeaks = normalizeWaveformPeaks(body?.waveformPeaks || body?.waveform_peaks);
-    if (!text && !audioUrl) {
-      return sendJson(res, 400, { ok: false, error: "Add a voice note or write something to post" });
-    }
-    if (audioUrl && !/^https?:\/\//i.test(audioUrl)) {
-      return sendJson(res, 400, { ok: false, error: "Invalid voice audio URL" });
-    }
-    const finalBody = text || (audioUrl ? "Voice drop" : "");
-    const ins = await svcFetch("social_status_posts", {
-      method: "POST",
-      headers: { Prefer: "return=representation" },
-      body: JSON.stringify({
-        user_id: user.userId,
-        post_type: postType,
-        body: finalBody,
-        audio_url: audioUrl || null,
-        duration_ms: audioUrl ? (durationMs || null) : null,
-        waveform_peaks: audioUrl && waveformPeaks.length ? waveformPeaks : null,
-      }),
-    });
-    if (!ins.ok) {
-      return sendJson(res, 500, { ok: false, error: "Post failed", details: ins.text });
-    }
-    const row = Array.isArray(ins.data) && ins.data[0] ? ins.data[0] : null;
-    const prof = await profileByUserId(user.userId);
-    return sendJson(res, 200, {
-      ok: true,
-      post: row ? mapStatusPostRow(row, prof) : null,
-    });
+    return sendJson(res, 410, { ok: false, error: "Status posts are no longer available" });
   }
 
   if (action === "delete_status") {

@@ -22,11 +22,14 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260608fixMiniPlayerClose";
+const APP_BUILD = "20260608removeStatusPosts";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
 const HUB_FEATURE_ENABLED = false;
+
+/** Retired — text/voice status posts (UPDATE, SONG REQUEST, etc.) are no longer shown or created. */
+const STATUS_POSTS_FEATURE_ENABLED = false;
 
 (() => {
   const f = document.getElementById("footerBuild");
@@ -6145,6 +6148,7 @@ async function deleteFollowingStatusPost(postId) {
 }
 
 async function fetchMyStatusPosts(limit = 60) {
+  if (!STATUS_POSTS_FEATURE_ENABLED) return [];
   try {
     const data = await socialApi(`/api/social?type=my_status&limit=${limit}`);
     return Array.isArray(data?.posts) ? data.posts : [];
@@ -6382,6 +6386,7 @@ async function fetchFollowingStatusPostsFromSupabase(limit = 40, followingIn = n
 }
 
 async function fetchFollowingStatusPosts(limit = 40, followingIn = null) {
+  if (!STATUS_POSTS_FEATURE_ENABLED) return [];
   const direct = await fetchFollowingStatusPostsFromSupabase(limit, followingIn);
   if (direct !== null) return direct;
   try {
@@ -6425,6 +6430,7 @@ async function postStatusViaSupabase({ postType, body, audioUrl, durationMs, wav
 }
 
 async function postFriendsStatus(payload, opts = {}) {
+  if (!STATUS_POSTS_FEATURE_ENABLED) throw new Error("Status posts are no longer available");
   const direct = await postStatusViaSupabase(payload);
   if (direct) return direct;
   return socialApi("/api/social", {
@@ -6483,6 +6489,7 @@ function wireFriendsComposeSheetKeyboardOnce() {
 }
 
 function openFriendsComposeSheet() {
+  if (!STATUS_POSTS_FEATURE_ENABLED) return;
   const sheet = document.getElementById("friendsComposeSheet");
   const openBtn = document.getElementById("friendsComposeOpenBtn");
   if (!sheet) return;
@@ -7654,7 +7661,7 @@ let _friendsFeedSnapshot = null;
 const FOLLOWING_LIST_CACHE_MS = 45000;
 const FRIENDS_FEED_SNAPSHOT_MS = 90000;
 const FRIENDS_MIN_FETCH_GAP_MS = 30000;
-const FRIENDS_FEED_SNAPSHOT_KEY = "nabad_friends_feed_snap_v2";
+const FRIENDS_FEED_SNAPSHOT_KEY = "nabad_friends_feed_snap_v3";
 
 let _profileActSnapshot = null;
 const PROFILE_ACT_SNAPSHOT_MS = 120000;
@@ -7738,10 +7745,14 @@ const FRIENDS_FEED_LIBRARY_USERS = 12;
 function hydrateFriendsFeedSnapshotFromStorage() {
   if (_friendsFeedSnapshot) return;
   try {
+    sessionStorage.removeItem("nabad_friends_feed_snap_v2");
+    sessionStorage.removeItem("nabad_friends_feed_snap_v1");
+  } catch {}
+  try {
     const raw = sessionStorage.getItem(FRIENDS_FEED_SNAPSHOT_KEY);
     if (!raw) return;
     const parsed = JSON.parse(raw);
-    if (parsed?.at && Date.now() - parsed.at < FRIENDS_FEED_SNAPSHOT_MS) {
+    if (parsed?.at && Date.now() - parsed.at < FRIENDS_FEED_SNAPSHOT_MS && !parsed.html?.includes("followAct--status")) {
       _friendsFeedSnapshot = parsed;
     }
   } catch {}
@@ -7816,13 +7827,14 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
   if (!statusEl || !listEl) return;
   if (authSession?.user?.id) _friendsFeedAuthRetry = 0;
 
-  const keepFeed = Boolean(_friendsOwnPostPin && listEl.querySelector(".followAct"));
+  const keepFeed = Boolean(STATUS_POSTS_FEATURE_ENABLED && _friendsOwnPostPin && listEl.querySelector(".followAct"));
   const snap = _friendsFeedSnapshot;
   const snapFresh =
     snap &&
     Date.now() - snap.at < FRIENDS_FEED_SNAPSHOT_MS &&
     snap.html &&
-    !snap.html.includes("followAct--skel");
+    !snap.html.includes("followAct--skel") &&
+    (!STATUS_POSTS_FEATURE_ENABLED || !snap.html.includes("followAct--status"));
   if (snapFresh && !keepFeed) {
     listEl.classList.remove("isDiscoveryLoading");
     listEl.hidden = false;
@@ -7926,7 +7938,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
     const following = await fetchFollowingListForFeed();
     if (gen !== _discoveryFollowingGen) return;
     if (!following.length) {
-      if (_friendsOwnPostPin) {
+      if (STATUS_POSTS_FEATURE_ENABLED && _friendsOwnPostPin) {
         if (gen !== _discoveryFollowingGen) return;
         const profMap = await fetchProfilesByUserIdsMap([String(authSession.user.id)]);
         listEl.classList.remove("isDiscoveryLoading");
@@ -7963,10 +7975,10 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
       .slice(0, FRIENDS_FEED_LIBRARY_USERS)
       .map((creator) => String(creator?.userId || creator?.user_id || creator?.following_user_id || "").trim())
       .filter(Boolean);
-    const [statusPosts, tracksByUser] = await Promise.all([
-      fetchFollowingStatusPosts(40, following),
-      supabaseFetchPublicLibraryForUserIds(libraryUserIds),
-    ]);
+    const statusPosts = STATUS_POSTS_FEATURE_ENABLED
+      ? await fetchFollowingStatusPosts(40, following)
+      : [];
+    const tracksByUser = await supabaseFetchPublicLibraryForUserIds(libraryUserIds);
     const tracksNested = libraryUserIds.map((userId) =>
       (tracksByUser.get(userId) || []).map((row) => ({ ...row, userId })),
     );
@@ -8017,7 +8029,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
       renderDiscoveryFollowingEmpty(
         statusEl,
         "Quiet for now",
-        "Use Create in the tab bar to share an update, or wait for drops from people you follow.",
+        "New song drops from people you follow will show up here.",
       );
       return;
     }

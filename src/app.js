@@ -12040,15 +12040,26 @@ async function refreshAdminCreditsView() {
       els.adminCodesRedeemed.textContent = `${s.codesRedeemed || 0} / ${s.codesTotal || 0}`;
     if (els.adminCodesList) {
       const codes = Array.isArray(d.codes) ? d.codes : [];
-      els.adminCodesList.innerHTML = codes.length
-        ? codes
+      const sorted = [...codes].sort((a, b) => {
+        const aUsed = Number(a?.redemptions || 0) >= Number(a?.max_redemptions || 1);
+        const bUsed = Number(b?.redemptions || 0) >= Number(b?.max_redemptions || 1);
+        if (aUsed !== bUsed) return aUsed ? 1 : -1;
+        return String(b?.created_at || "").localeCompare(String(a?.created_at || ""));
+      });
+      els.adminCodesList.innerHTML = sorted.length
+        ? sorted
             .map((c) => {
               const used = Number(c?.redemptions || 0) >= Number(c?.max_redemptions || 1);
               const cls = !c?.active || used ? "isUsed" : "isOpen";
+              const copyHint = cls === "isOpen" ? " · tap to copy" : "";
+              const copyAttrs =
+                cls === "isOpen"
+                  ? ` role="button" tabindex="0" aria-label="Copy promo code ${escapeHtml(c.code)}"`
+                  : "";
               return `
-                <div class="creditsAdminCodeRow ${cls}">
+                <div class="creditsAdminCodeRow ${cls}"${copyAttrs}>
                   <div class="creditsAdminCodeText">${escapeHtml(c.code)}</div>
-                  <div class="creditsAdminCodeMeta">${Number(c.credits || 0)} cr · ${Number(c.redemptions || 0)}/${Number(c.max_redemptions || 1)}${c.active ? "" : " · inactive"}</div>
+                  <div class="creditsAdminCodeMeta">${Number(c.credits || 0)} cr · ${Number(c.redemptions || 0)}/${Number(c.max_redemptions || 1)}${c.active ? "" : " · inactive"}${copyHint}</div>
                 </div>`;
             })
             .join("")
@@ -28587,6 +28598,49 @@ window.addEventListener("hashchange", () => {
   const route = document.body.getAttribute("data-route") || "";
   if (route === "profile" || route === "credits" || route === "sounds") void refreshMyCredits({ silent: true });
 });
+
+async function copyAdminPromoCode(code) {
+  const c = String(code || "").trim();
+  if (!c) return;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(c);
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = c;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    showToast(`Copied ${c}`, { icon: "✓", durationMs: 2000 });
+  } catch {
+    showToast("Could not copy — select the code and copy manually.", { durationMs: 2800 });
+  }
+}
+
+function wireAdminCodesListCopy() {
+  if (!els.adminCodesList || els.adminCodesList.dataset.copyWired === "1") return;
+  els.adminCodesList.dataset.copyWired = "1";
+  els.adminCodesList.addEventListener("click", (e) => {
+    const row = e.target.closest(".creditsAdminCodeRow.isOpen");
+    if (!row) return;
+    const code = row.querySelector(".creditsAdminCodeText")?.textContent?.trim();
+    if (code) void copyAdminPromoCode(code);
+  });
+  els.adminCodesList.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const row = e.target.closest(".creditsAdminCodeRow.isOpen");
+    if (!row) return;
+    e.preventDefault();
+    const code = row.querySelector(".creditsAdminCodeText")?.textContent?.trim();
+    if (code) void copyAdminPromoCode(code);
+  });
+}
+wireAdminCodesListCopy();
 
 if (els.btnCreditsRedeem) {
   els.btnCreditsRedeem.addEventListener("click", () => {

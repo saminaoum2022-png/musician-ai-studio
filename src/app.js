@@ -10482,6 +10482,16 @@ function getActivePersonaId() {
   const hit = loadPersonas().find((x) => String(x.personaId) === id);
   return hit ? id : "";
 }
+/** Suno treats song-derived personas (generate-persona) and recorded voices
+ *  (voice wizard) differently — wrong model = persona accepted but voice ignored. */
+function effectivePersonaModel(hit) {
+  if (!hit) return "";
+  if (hit.type === "suno_voice") return "voice_persona";
+  if (hit.type === "song") return "style_persona";
+  const stored = String(hit.personaModel || "").trim();
+  if (stored === "style_persona" || stored === "voice_persona") return stored;
+  return "style_persona";
+}
 /** Persisted expand/collapse state for the persona card on Profile.
  *  We keep it compact by default so the card doesn't dominate the
  *  page, and remember the user's choice across sessions. */
@@ -18519,7 +18529,11 @@ function addPersona(personaId, label, meta = {}) {
   const items = loadPersonas();
   const type = meta.type === "suno_voice" ? "suno_voice" : "song";
   const personaModel =
-    meta.personaModel === "style_persona" ? "style_persona" : "voice_persona";
+    meta.personaModel === "style_persona" || meta.personaModel === "voice_persona"
+      ? meta.personaModel
+      : type === "suno_voice"
+      ? "voice_persona"
+      : "style_persona";
   const existing = items.find((x) => String(x.personaId) === id);
   if (existing) {
     existing.label = label || existing.label;
@@ -19340,7 +19354,7 @@ async function createPersonaForSong({
     const personaId = String(d?.personaId || "").trim();
     if (!personaId) throw new Error("Persona created but ID was missing.");
 
-    addPersona(personaId, personaName, { type: "song", personaModel: "voice_persona" });
+    addPersona(personaId, personaName, { type: "song", personaModel: "style_persona" });
     try { updateProfilePersonaRow(); } catch {}
     const okMsg = "Persona saved & selected for your next generations.";
     setStatus(okMsg);
@@ -27043,16 +27057,15 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const personaHit = personaIdSel
         ? loadPersonas().find((x) => String(x.personaId) === personaIdSel)
         : null;
-      const personaModelSel = personaIdSel
-        ? String(personaHit?.personaModel || "voice_persona").trim() || "voice_persona"
-        : "";
-      const modelForRequest = personaIdSel && personaModelSel === "voice_persona"
-        ? "V5"
-        : LATEST_SUNO_MODEL;
-      if (personaIdSel && modelForRequest !== LATEST_SUNO_MODEL) {
+      const personaModelSel = personaIdSel ? effectivePersonaModel(personaHit) : "";
+      const modelForRequest = LATEST_SUNO_MODEL;
+      if (personaIdSel) {
         try {
+          const isRecordedVoice = personaHit?.type === "suno_voice";
           showToast(
-            "Using V5 for this song so your voice persona can sing it. (Voice personas don't work on V5.5 yet.)",
+            isRecordedVoice
+              ? "Using your recorded voice on this song."
+              : "Using voice style from your saved song persona.",
             { icon: "♪", durationMs: 4200 }
           );
         } catch {}
@@ -27070,7 +27083,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       };
       const vp = String(els.sunoVoiceProfile?.value || "").trim();
       let vocalProfileClause = "";
-      if (vp.includes("|")) {
+      // Voice profile / gender hints fight Suno personas — skip when one is active.
+      if (!personaIdSel && vp.includes("|")) {
         const [gender, timbre] = vp.split("|");
         payload.vocalGender = gender || undefined;
         payload.voiceTimbre = timbre || undefined;

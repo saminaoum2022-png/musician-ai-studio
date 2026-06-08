@@ -12,7 +12,7 @@ window.__NABAD_CLIENT_ENV__ = {
   supabaseUrl: "https://YOUR_PROJECT.supabase.co",
   supabaseAnonKey: "YOUR_SUPABASE_ANON_KEY",
   /** Must match the Vercel URL that serves /api/social (same as your live web app). */
-  apiBase: "https://nabadai.com",
+  apiBase: "https://www.nabadai.com",
   /** From Vercel → Settings → Deployment Protection → Protection Bypass for Automation */
   vercelProtectionBypass: "",
 };

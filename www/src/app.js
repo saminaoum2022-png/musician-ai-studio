@@ -1844,8 +1844,8 @@ function scheduleRenderHubNowPlaying() {
 const LATEST_SUNO_MODEL = "V5_5";
 /** Production API origins for native (try in order if one host fails). */
 const NATIVE_API_BASE_CANDIDATES = [
-  "https://nabadai.com",
-  "https://nabad-ai.vercel.app",
+  "https://www.nabadai.com",
+  "https://musician-ai-studio.vercel.app",
 ];
 function nativeApiBaseCandidates() {
   const out = [];

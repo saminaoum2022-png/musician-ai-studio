@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260611remixPair";
+const APP_BUILD = "20260611remixOverlay";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -9339,11 +9339,52 @@ async function fetchAudioForRemix(rawUrl) {
   }
 }
 
+// ─── Remix loading overlay ─────────────────────────────────────────────
+// Preparing a remix (meta fetch + audio download) takes a few seconds.
+// A bottom toast was easy to miss — this is a centered, full-screen
+// overlay that stays up until the Create page opens or the load fails.
+let _remixLoadingOverlayEl = null;
+
+function showRemixLoadingOverlay(title) {
+  let el = _remixLoadingOverlayEl;
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "remixLoadingOverlay";
+    el.className = "remixLoadingOverlay";
+    el.innerHTML = `
+      <div class="remixLoadingCard" role="status" aria-live="polite">
+        <span class="remixLoadingSpinner" aria-hidden="true"></span>
+        <strong class="remixLoadingTitle">Loading remix</strong>
+        <span class="remixLoadingSub"></span>
+      </div>`;
+    document.body.appendChild(el);
+    _remixLoadingOverlayEl = el;
+  }
+  const sub = el.querySelector(".remixLoadingSub");
+  if (sub) {
+    const t = String(title || "").trim();
+    sub.textContent = t ? `Preparing "${t.slice(0, 48)}"…` : "Fetching the source audio…";
+  }
+  el.hidden = false;
+  requestAnimationFrame(() => el.classList.add("isOpen"));
+}
+
+function hideRemixLoadingOverlay() {
+  const el = _remixLoadingOverlayEl;
+  if (!el || el.hidden) return;
+  el.classList.remove("isOpen");
+  setTimeout(() => {
+    el.hidden = true;
+  }, 200);
+}
+
 async function startHubRemix(post) {
   if (!post || !post.url) {
     showToast("Cannot remix: this post has no audio.", { icon: "!", durationMs: 3200 });
     return;
   }
+  showRemixLoadingOverlay(post.title);
+  try {
   // Hub list rows ship a minimal `meta` (egress saver). When the user
   // actually opens Remix we need the heavy keys (lyricsInput, styleInput,
   // dialect, etc.) — fetch them on demand for this single post.
@@ -9357,7 +9398,6 @@ async function startHubRemix(post) {
   }
   try {
     setStatus("Loading remix source…");
-    showToast("Loading remix source…", { icon: "♪", durationMs: 1600 });
     let remixAudioUrl = String(post.url || "").trim();
     try {
       const refreshed = await tryRefreshLibraryTrackAudioFromSuno({
@@ -9410,6 +9450,9 @@ async function startHubRemix(post) {
       : baseMsg;
     showToast(`Could not load remix source: ${friendly}`, { icon: "!", durationMs: 3600 });
     setStatus("Remix could not be loaded.");
+  }
+  } finally {
+    hideRemixLoadingOverlay();
   }
 }
 
@@ -15672,38 +15715,45 @@ async function startLibraryRemixForLibraryTrack(t) {
     } catch {}
     return;
   }
-  let track = t;
+  // Overlay covers the whole prep (audio refresh + lyric recovery +
+  // source download in startHubRemix). startHubRemix hides it when done.
+  showRemixLoadingOverlay(t.title);
   try {
-    const refreshed = await tryRefreshLibraryTrackAudioFromSuno(t);
-    if (refreshed?.url) track = { ...t, ...refreshed };
-  } catch {}
-  const rawInner = unwrapInnermostHttpAudioUrl(track.url);
-  if (!String(rawInner || "").trim()) {
-    showToast("Could not resolve audio for remix.", { icon: "!", durationMs: 3400 });
-    return;
+    let track = t;
+    try {
+      const refreshed = await tryRefreshLibraryTrackAudioFromSuno(t);
+      if (refreshed?.url) track = { ...t, ...refreshed };
+    } catch {}
+    const rawInner = unwrapInnermostHttpAudioUrl(track.url);
+    if (!String(rawInner || "").trim()) {
+      showToast("Could not resolve audio for remix.", { icon: "!", durationMs: 3400 });
+      return;
+    }
+    const remixUrl =
+      normalizeAudioUrlForPlayback(toAudioProxyUrl(rawInner) || rawInner) || rawInner;
+    const art =
+      String((track.meta && (track.meta.imageThumb || track.meta.imageUrl)) || track.artUrl || "").trim() ||
+      "./assets/nabadai-logo.png";
+    const handle = String(activeProfile?.username || "").trim();
+    let lyricsInput = String(track?.meta?.lyricsInput || track?.meta?.finalPrompt || "").trim();
+    if (!lyricsInput) {
+      // Cloud-hydrated Library rows ship without lyrics — recover them
+      // (cloud row → Suno record-info) so the remix starts pre-filled.
+      lyricsInput = await resolveLyricsForTrackRef(track);
+    }
+    await startHubRemix({
+      url: remixUrl,
+      title: track.title || "Library song",
+      creator: handle,
+      artUrl: art,
+      meta: {
+        lyricsInput,
+        styleInput: String(track?.meta?.styleInput || track?.meta?.styleSent || "").trim(),
+      },
+    });
+  } finally {
+    hideRemixLoadingOverlay();
   }
-  const remixUrl =
-    normalizeAudioUrlForPlayback(toAudioProxyUrl(rawInner) || rawInner) || rawInner;
-  const art =
-    String((track.meta && (track.meta.imageThumb || track.meta.imageUrl)) || track.artUrl || "").trim() ||
-    "./assets/nabadai-logo.png";
-  const handle = String(activeProfile?.username || "").trim();
-  let lyricsInput = String(track?.meta?.lyricsInput || track?.meta?.finalPrompt || "").trim();
-  if (!lyricsInput) {
-    // Cloud-hydrated Library rows ship without lyrics — recover them
-    // (cloud row → Suno record-info) so the remix starts pre-filled.
-    lyricsInput = await resolveLyricsForTrackRef(track);
-  }
-  await startHubRemix({
-    url: remixUrl,
-    title: track.title || "Library song",
-    creator: handle,
-    artUrl: art,
-    meta: {
-      lyricsInput,
-      styleInput: String(track?.meta?.styleInput || track?.meta?.styleSent || "").trim(),
-    },
-  });
 }
 
 async function runLibraryInstrumentalForTrack(t) {

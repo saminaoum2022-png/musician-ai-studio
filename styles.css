@@ -5479,6 +5479,70 @@ body.hubJumpingToTop #hubList .hubRow{
   cursor: default;
   transform: none;
 }
+
+/* Centered full-screen overlay shown while a remix source is being
+   prepared (audio download + lyric recovery). Sits above the maximized
+   player and sheets so the user always sees what's happening. */
+.remixLoadingOverlay{
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(4, 6, 12, 0.62);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+.remixLoadingOverlay.isOpen{ opacity: 1; }
+.remixLoadingOverlay[hidden]{ display: none !important; }
+.remixLoadingCard{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: min(86vw, 320px);
+  padding: 26px 22px 22px;
+  border-radius: 22px;
+  border: 1px solid rgba(255,255,255,0.13);
+  background:
+    linear-gradient(160deg, rgba(34, 40, 58, 0.96), rgba(14, 17, 28, 0.96)),
+    radial-gradient(circle at 22% 0%, rgba(124, 92, 255, 0.22), transparent 64%);
+  box-shadow: 0 28px 70px rgba(0,0,0,0.5);
+  text-align: center;
+  transform: translateY(8px) scale(0.97);
+  transition: transform 220ms ease;
+}
+.remixLoadingOverlay.isOpen .remixLoadingCard{
+  transform: translateY(0) scale(1);
+}
+.remixLoadingSpinner{
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid rgba(255,255,255,0.14);
+  border-top-color: rgba(167, 139, 250, 0.95);
+  animation: remixLoadingSpin 0.8s linear infinite;
+}
+@keyframes remixLoadingSpin{
+  to{ transform: rotate(360deg); }
+}
+.remixLoadingTitle{
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  color: rgba(240, 244, 255, 0.96);
+}
+.remixLoadingSub{
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: rgba(226, 232, 246, 0.6);
+  overflow-wrap: anywhere;
+}
 .playerReleaseNote,
 .playerRemixAttribution,
 .playerChallengeAttribution{

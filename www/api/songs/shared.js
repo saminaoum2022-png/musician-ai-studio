@@ -42,11 +42,17 @@ module.exports = async function handler(req, res) {
   if (!UUID_RE.test(id)) return sendJson(res, 400, { ok: false, error: "Invalid song id" });
 
   const row = await svcGet(
-    `user_songs?select=id,user_id,title,art_url,song_url&id=eq.${encodeURIComponent(id)}&limit=1`,
+    `user_songs?select=id,user_id,title,art_url,song_url,meta&id=eq.${encodeURIComponent(id)}&limit=1`,
   );
   if (!row?.id || !String(row.song_url || "").trim()) {
     return sendJson(res, 404, { ok: false, error: "Song not found" });
   }
+
+  // Remix needs the original lyrics/style. Only expose those two fields,
+  // not the whole meta blob.
+  const meta = row.meta && typeof row.meta === "object" ? row.meta : {};
+  const lyrics_input = String(meta.lyricsInput || meta.finalPrompt || meta.prompt || "").trim();
+  const style_input = String(meta.styleInput || meta.styleSent || meta.styleTags || meta.style || "").trim();
 
   let creator_username = "";
   const uid = String(row.user_id || "").trim();
@@ -66,6 +72,8 @@ module.exports = async function handler(req, res) {
       art_url: row.art_url || "",
       song_url: row.song_url || "",
       creator_username,
+      lyrics_input,
+      style_input,
     },
   });
 };

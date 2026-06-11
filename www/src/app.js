@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260611playerRemix";
+const APP_BUILD = "20260611remixLyrics";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -24767,7 +24767,7 @@ async function fetchSharedSongByCloudId(cloudId) {
       const token = getSupabaseAuthToken();
       const headers = { apikey: SUPABASE_ANON_KEY, Accept: "application/json" };
       if (token) headers.Authorization = `Bearer ${token}`;
-      const cols = "id,user_id,title,art_url,song_url";
+      const cols = "id,user_id,title,art_url,song_url,meta";
       const r = await fetch(
         `${SUPABASE_URL}/rest/v1/user_songs?id=eq.${encodeURIComponent(id)}&select=${encodeURIComponent(cols)}&limit=1`,
         { headers, cache: "no-store" },
@@ -24784,7 +24784,15 @@ async function fetchSharedSongByCloudId(cloudId) {
     const r = await fetch(apiUrl(`/api/songs/shared?id=${encodeURIComponent(id)}`), { cache: "no-store" });
     if (r.ok) {
       const data = await r.json().catch(() => ({}));
-      if (data?.ok && data?.song?.song_url) return data.song;
+      if (data?.ok && data?.song?.song_url) {
+        const song = data.song;
+        // Server exposes only the remix fields, not the whole meta blob.
+        song.meta = {
+          lyricsInput: String(song.lyrics_input || "").trim(),
+          styleInput: String(song.style_input || "").trim(),
+        };
+        return song;
+      }
     }
   } catch {}
 
@@ -24819,6 +24827,10 @@ async function playSharedCloudSong(row, opts = {}) {
     title,
     artUrl,
     url,
+    byLine,
+    // Original lyrics/style ride along so Remix can pre-fill them even
+    // when the song is not public-on-profile (link-only share).
+    meta: row.meta && typeof row.meta === "object" ? row.meta : {},
     publicOnProfile: true,
   };
   miniSource = { type: "public_profile_lib", url, songId, ownerUserId: ownerId };
@@ -29454,12 +29466,16 @@ if (els.btnPlayerRemix) {
         // post): same flow as the Discover sheet's Remix action.
         const songId = String(t?.songId || t?.cloudSongId || "").trim();
         const ownerUserId = String(t?.ownerUserId || "").trim();
-        const remixMeta = songId && ownerUserId
+        const fetched = songId && ownerUserId
           ? await supabaseFetchPublicSongRemixMeta({ songId, ownerUserId })
-          : {
-              lyricsInput: String(t?.meta?.lyricsInput || "").trim(),
-              styleInput: String(t?.meta?.styleInput || "").trim(),
-            };
+          : { lyricsInput: "", styleInput: "" };
+        // The public fetch only covers public-on-profile songs; link-only
+        // shares and hub posts carry their lyrics on the track ref instead.
+        const local = remixMetaFromSongMeta(t?.meta);
+        const remixMeta = {
+          lyricsInput: fetched.lyricsInput || local.lyricsInput,
+          styleInput: fetched.styleInput || local.styleInput,
+        };
         await startHubRemix({
           url,
           id: songId || String(t?.id || ""),

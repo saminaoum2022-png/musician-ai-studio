@@ -19374,6 +19374,71 @@ button.discoverySpotCard{
   font-weight: 600;
   letter-spacing: 0.06em;
 }
+/* Multi-select mode for the Songs list (Select → tap rows → Delete (n)) */
+.librarySelectControls{
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.librarySelectToggleBtn,
+.librarySelectDeleteBtn{
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.05);
+  color: rgba(232,238,247,0.85);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, transform 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.librarySelectToggleBtn:active,
+.librarySelectDeleteBtn:active{ transform: scale(0.96); }
+.librarySelectDeleteBtn{
+  border-color: rgba(255, 99, 99, 0.45);
+  color: #ff7b7b;
+  background: rgba(255, 80, 80, 0.08);
+}
+.librarySelectDeleteBtn:disabled{
+  opacity: 0.45;
+  cursor: default;
+  transform: none;
+}
+.librarySelectToggleBtn[hidden],
+.librarySelectDeleteBtn[hidden]{ display: none !important; }
+.libRowCheck{
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.32);
+  margin-right: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.libRowSelected .libRowCheck{
+  border-color: #7c5cff;
+  background: #7c5cff;
+}
+.libRowSelected .libRowCheck::after{
+  content: "";
+  width: 5px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translateY(-1px);
+}
+.libRowSelected{
+  background: rgba(124, 92, 255, 0.10);
+  border-radius: 14px;
+}
+
 .profileAllSongsExtras{
   margin: 0 0 10px;
 }

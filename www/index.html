@@ -2178,6 +2178,10 @@
             <div class="profileSongsToolbar libraryHeaderRow">
               <p id="libraryCount" class="libraryCount" hidden aria-live="polite"></p>
               <p id="profileActivitiesCount" class="libraryCount" hidden aria-live="polite"></p>
+              <div class="librarySelectControls">
+                <button type="button" id="btnLibraryDeleteSelected" class="librarySelectDeleteBtn" hidden disabled>Delete</button>
+                <button type="button" id="btnLibrarySelectMode" class="librarySelectToggleBtn" hidden>Select</button>
+              </div>
             </div>
             <div id="profileAllSongsExtras" class="profileAllSongsExtras" hidden>
               <button
@@ -3310,6 +3314,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260611deleteFix"></script>
+    <script type="module" src="./src/app.js?v=20260611multiDelete"></script>
   </body>
 </html>

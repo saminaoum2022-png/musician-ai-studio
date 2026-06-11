@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260611deleteFix";
+const APP_BUILD = "20260611multiDelete";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -21054,6 +21054,12 @@ function syncProfileSongsSegmentUi() {
   if (actCount) actCount.hidden = !isActivities;
   if (activitiesList) activitiesList.hidden = !isActivities;
   if (libList) libList.hidden = isActivities;
+  // Leaving the Songs segment cancels any in-progress multi-select.
+  if (!isAll && _librarySelectMode) {
+    _librarySelectMode = false;
+    _librarySelectedIds.clear();
+  }
+  try { updateLibrarySelectToolbar(); } catch {}
   try { updateLibraryRecoverBanner(); } catch {}
 }
 
@@ -22561,12 +22567,107 @@ let _libraryListenersBound = false;
  *  the previous render-time loop that attached ~9 listeners per row.
  *  Bound exactly once for the lifetime of the page.
  */
+// ─── Multi-select delete (Songs list) ──────────────────────────────────
+let _librarySelectMode = false;
+const _librarySelectedIds = new Set();
+
+function updateLibrarySelectToolbar() {
+  const toggle = document.getElementById("btnLibrarySelectMode");
+  const del = document.getElementById("btnLibraryDeleteSelected");
+  const onAllSongs =
+    (document.body.getAttribute("data-route") || "") === "profile" &&
+    _profileSongsSegment === "all";
+  const hasSongs = loadLibrary().length > 0;
+  if (toggle) {
+    toggle.hidden = !(onAllSongs && hasSongs);
+    toggle.textContent = _librarySelectMode ? "Cancel" : "Select";
+  }
+  if (del) {
+    del.hidden = !(onAllSongs && hasSongs && _librarySelectMode);
+    del.disabled = !_librarySelectedIds.size;
+    del.textContent = _librarySelectedIds.size
+      ? `Delete (${_librarySelectedIds.size})`
+      : "Delete";
+  }
+}
+
+function setLibrarySelectMode(on) {
+  _librarySelectMode = Boolean(on);
+  _librarySelectedIds.clear();
+  updateLibrarySelectToolbar();
+  renderLibrary();
+}
+
+/** Bulk delete: one localStorage write, tombstones for every track, then
+ *  the cloud DELETEs in the background (same permanence as single delete). */
+function removeManyFromLibrary(ids) {
+  const idSet = new Set((Array.isArray(ids) ? ids : []).map((v) => String(v)));
+  if (!idSet.size) return 0;
+  const prev = loadLibrary();
+  const removed = prev.filter((x) => idSet.has(String(x.id)));
+  if (!removed.length) return 0;
+  saveLibrary(prev.filter((x) => !idSet.has(String(x.id))));
+  for (const t of removed) addLibraryTombstoneForTrack(t);
+  refreshOwnSongsUi();
+  void (async () => {
+    for (const t of removed) {
+      // eslint-disable-next-line no-await-in-loop
+      await supabaseDeleteUserSong(t);
+    }
+  })();
+  return removed.length;
+}
+
+function bindLibrarySelectControls() {
+  const toggle = document.getElementById("btnLibrarySelectMode");
+  if (toggle && !toggle.dataset.bound) {
+    toggle.dataset.bound = "1";
+    toggle.addEventListener("click", () => {
+      haptic("light");
+      setLibrarySelectMode(!_librarySelectMode);
+    });
+  }
+  const del = document.getElementById("btnLibraryDeleteSelected");
+  if (del && !del.dataset.bound) {
+    del.dataset.bound = "1";
+    del.addEventListener("click", () => {
+      const n = _librarySelectedIds.size;
+      if (!n) return;
+      const ok = window.confirm(
+        `Delete ${n} song${n > 1 ? "s" : ""} permanently? This can't be undone.`,
+      );
+      if (!ok) return;
+      haptic("medium");
+      const count = removeManyFromLibrary([..._librarySelectedIds]);
+      setLibrarySelectMode(false);
+      showToast(count ? `Deleted ${count} song${count > 1 ? "s" : ""}.` : "Nothing deleted.");
+    });
+  }
+}
+
 function bindLibraryDelegatedListeners() {
   if (_libraryListenersBound || !els.libraryList) return;
   _libraryListenersBound = true;
+  bindLibrarySelectControls();
   els.libraryList.addEventListener("click", async (e) => {
     const target = e.target;
     if (!(target instanceof Element)) return;
+
+    // Select mode swallows every row tap: toggle selection, never play
+    // and never open the ⋯ sheet.
+    if (_librarySelectMode) {
+      const row = target.closest("[data-lib-row]");
+      if (row && els.libraryList.contains(row)) {
+        const id = String(row.getAttribute("data-lib-row") || "");
+        if (!id) return;
+        if (_librarySelectedIds.has(id)) _librarySelectedIds.delete(id);
+        else _librarySelectedIds.add(id);
+        row.classList.toggle("libRowSelected", _librarySelectedIds.has(id));
+        updateLibrarySelectToolbar();
+        haptic("light");
+      }
+      return;
+    }
 
     const menuBtn = target.closest("[data-lib-menu]");
     if (menuBtn && els.libraryList.contains(menuBtn)) {
@@ -22887,6 +22988,12 @@ function renderLibrary() {
       countEl.hidden = false;
     }
   }
+  // Selection can't outlive the rows it points at.
+  if (!totalCount && _librarySelectMode) {
+    _librarySelectMode = false;
+    _librarySelectedIds.clear();
+  }
+  updateLibrarySelectToolbar();
   if (!totalCount) {
     // PWA cold start: localStorage is empty, hydrate hasn't completed
     // yet. Show a "Loading…" state so the user doesn't see the "Nothing
@@ -23001,9 +23108,11 @@ function renderLibrary() {
         const loadingAttr = isFirst
           ? `loading="eager" fetchpriority="high"`
           : `loading="lazy" fetchpriority="low"`;
+        const isSelected = _librarySelectMode && _librarySelectedIds.has(String(t.id));
         return `
-          <li class="libRow ${libAudible ? "libRowPlaying" : ""}${libActive && !libAudible ? " libRowActive" : ""}" data-lib-row="${t.id}">
-            <button class="libRowMain" type="button" data-lib-play="${t.id}" aria-label="${libAudible ? "Pause" : "Play"} ${safeTitle}">
+          <li class="libRow ${libAudible ? "libRowPlaying" : ""}${libActive && !libAudible ? " libRowActive" : ""}${isSelected ? " libRowSelected" : ""}" data-lib-row="${t.id}">
+            <button class="libRowMain" type="button" data-lib-play="${t.id}" aria-label="${_librarySelectMode ? `Select ${safeTitle}` : `${libAudible ? "Pause" : "Play"} ${safeTitle}`}">
+              ${_librarySelectMode ? `<span class="libRowCheck" aria-hidden="true"></span>` : ""}
               <span class="libRowArt">
                 <img src="${escapeHtml(art)}" alt="" width="56" height="56" decoding="async" ${loadingAttr} />
                 <span class="libRowArtBadge" aria-hidden="true">${libAudible ? "❚❚" : "▶"}</span>
@@ -23014,10 +23123,11 @@ function renderLibrary() {
               </span>
               <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
             </button>
+            ${_librarySelectMode ? "" : `
             <div class="libRowActions">
               ${libRowProfileVisChipHtml(profilePublic)}
               <button class="libRowMore" type="button" data-lib-menu="${t.id}" aria-label="More options for ${safeTitle}">⋯</button>
-            </div>
+            </div>`}
           </li>
         `;
       }).join("")}

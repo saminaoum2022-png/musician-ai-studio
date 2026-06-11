@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260612voiceAccuracy";
+const APP_BUILD = "20260612singerSkill";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -20125,6 +20125,9 @@ async function runVoiceWizardFromSample(startBtn) {
   const name = String(document.getElementById("voiceWizardName")?.value || "My voice").trim();
   const file = voiceWizardState.sampleFile;
   const language = String(document.getElementById("voiceWizardLang")?.value || "en").trim();
+  // Captured now because the create call happens on the verify step,
+  // after this select has left the DOM.
+  voiceWizardState.skill = String(document.getElementById("voiceWizardSkill")?.value || "intermediate").trim();
   if (!file) {
     showToast("Record or upload a sample first", { icon: "!", durationMs: 2800 });
     return;
@@ -20235,7 +20238,7 @@ function renderVoiceWizardVerifyStep(phrase, token) {
           verifyUrl,
           voiceName: name,
           description: `Custom voice: ${name}`,
-          singerSkillLevel: "intermediate",
+          singerSkillLevel: voiceWizardState.skill || "intermediate",
         }),
       });
       const cd = await cr.json().catch(() => ({}));
@@ -20289,6 +20292,16 @@ function renderVoiceWizardStep1() {
       </select>
     </label>
     <p class="hint">This only sets the language of the short phrase you’ll sing to verify your voice — your sample stays in whatever language you sang.</p>
+    <label class="field">
+      <div class="label">Your singing level</div>
+      <select id="voiceWizardSkill">
+        <option value="beginner">Casual — I sing for fun</option>
+        <option value="intermediate" selected>Confident — I can hold a tune</option>
+        <option value="advanced">Trained — I sing seriously</option>
+        <option value="professional">Professional singer</option>
+      </select>
+    </label>
+    <p class="hint">Be honest — this tells Suno how much to polish versus preserve your natural voice.</p>
     <div class="voiceWizardActions">
       <button type="button" class="primary" id="voiceWizardStartBtn">Continue</button>
     </div>`);

@@ -42,7 +42,7 @@ module.exports = async function handler(req, res) {
   if (!UUID_RE.test(id)) return sendJson(res, 400, { ok: false, error: "Invalid song id" });
 
   const row = await svcGet(
-    `user_songs?select=id,user_id,title,art_url,song_url,meta&id=eq.${encodeURIComponent(id)}&limit=1`,
+    `user_songs?select=id,user_id,title,art_url,song_url,task_id,audio_id,meta&id=eq.${encodeURIComponent(id)}&limit=1`,
   );
   if (!row?.id || !String(row.song_url || "").trim()) {
     return sendJson(res, 404, { ok: false, error: "Song not found" });
@@ -72,6 +72,8 @@ module.exports = async function handler(req, res) {
       art_url: row.art_url || "",
       song_url: row.song_url || "",
       creator_username,
+      task_id: row.task_id || "",
+      audio_id: row.audio_id || "",
       lyrics_input,
       style_input,
     },

@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260611lyricsView";
+const APP_BUILD = "20260611lyricsRecover";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -13773,7 +13773,35 @@ async function supabasePatchUserSong(track, patch) {
     body.art_url = patch.artUrl;
   }
   if (patch?.meta && typeof patch.meta === "object") {
-    body.meta = sanitizeMetaForCloud(patch.meta);
+    let nextMeta = sanitizeMetaForCloud(patch.meta) || {};
+    // PATCH replaces the whole JSONB. Local meta is usually the slim
+    // hydrated copy (no lyricsInput/styleInput/…), and shipping it raw
+    // used to wipe those creation-time keys from the cloud row. Pull the
+    // current row and keep any heavy keys the patch doesn't carry.
+    // UI flags (featuredOnProfile, releaseCaption, …) are NOT preserved
+    // this way on purpose — deleting them locally must delete them in
+    // the cloud too.
+    try {
+      const r0 = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?${filter}&select=meta&limit=1`, {
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (r0.ok) {
+        const rows = await r0.json().catch(() => []);
+        const cur = Array.isArray(rows) ? rows[0]?.meta : null;
+        if (cur && typeof cur === "object") {
+          const HEAVY_META_KEYS = [
+            "lyricsInput", "finalPrompt", "prompt", "lyrics", "generatedLyrics",
+            "styleInput", "styleSent", "style", "styleTags", "dialect", "tags",
+            "mode", "voiceProfile", "timbre", "taskId", "audioId",
+          ];
+          for (const k of HEAVY_META_KEYS) {
+            if (nextMeta[k] == null && cur[k] != null) nextMeta[k] = cur[k];
+          }
+        }
+      }
+    } catch {}
+    body.meta = nextMeta;
   }
   if (typeof patch?.publicOnProfile === "boolean") {
     body.public_on_profile = patch.publicOnProfile;
@@ -15393,13 +15421,19 @@ async function startLibraryRemixForLibraryTrack(t) {
     String((track.meta && (track.meta.imageThumb || track.meta.imageUrl)) || track.artUrl || "").trim() ||
     "./assets/nabadai-logo.png";
   const handle = String(activeProfile?.username || "").trim();
+  let lyricsInput = String(track?.meta?.lyricsInput || track?.meta?.finalPrompt || "").trim();
+  if (!lyricsInput) {
+    // Cloud-hydrated Library rows ship without lyrics — recover them
+    // (cloud row → Suno record-info) so the remix starts pre-filled.
+    lyricsInput = await resolveLyricsForTrackRef(track);
+  }
   await startHubRemix({
     url: remixUrl,
     title: track.title || "Library song",
     creator: handle,
     artUrl: art,
     meta: {
-      lyricsInput: String(track?.meta?.lyricsInput || track?.meta?.finalPrompt || "").trim(),
+      lyricsInput,
       styleInput: String(track?.meta?.styleInput || track?.meta?.styleSent || "").trim(),
     },
   });
@@ -15492,6 +15526,8 @@ function runTrackSheetAction(action, sourceEl) {
           id: ctx.songId || "",
           songId: ctx.songId || "",
           ownerUserId: ctx.ownerUserId || "",
+          taskId: ctx.taskId || "",
+          audioId: ctx.audioId || "",
           meta: ctx.meta || null,
         });
         openLyricsViewer({
@@ -17153,6 +17189,8 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     challenge,
     songId: String(playSource?.songId || publicTrackMeta?.songId || publicTrackMeta?.id || "").trim(),
     ownerUserId: String(playSource?.ownerUserId || publicTrackMeta?.ownerUserId || publicTrackMeta?.userId || "").trim(),
+    taskId: String(playSource?.taskId || publicTrackMeta?.taskId || "").trim(),
+    audioId: String(playSource?.audioId || publicTrackMeta?.audioId || "").trim(),
   };
   const publicSource = fromPlaylist
     ? {
@@ -22868,19 +22906,95 @@ function songDetailsRow(label, value) {
   `;
 }
 
-/** Resolve lyrics for any playable track ref: local meta first, then the
- *  public song row, then the hub post meta (all best-effort). */
+/** Cloud `user_songs.meta` by row id. Unlike the public-only remix-meta
+ *  fetch this works for your own private rows too (RLS decides access). */
+async function supabaseFetchSongMetaById(songId) {
+  const sid = String(songId || "").trim();
+  if (!isShareUuid(sid) || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  try {
+    const token = getSupabaseAuthToken();
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/user_songs?id=eq.${encodeURIComponent(sid)}&select=meta&limit=1`,
+      {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        cache: "no-store",
+      },
+    );
+    if (!r.ok) return null;
+    const arr = await r.json().catch(() => []);
+    return Array.isArray(arr) ? arr[0]?.meta || null : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Last-resort lyric recovery: Suno's record-info keeps the generation
+ *  `prompt` (the lyrics) long after creation — same trick the audio-URL
+ *  refresh uses. Works for old songs whose cloud meta lost the lyrics. */
+async function fetchSunoLyricsForTrack(t) {
+  const tid = String(t?.taskId || t?.meta?.taskId || "").trim();
+  if (!tid) return "";
+  try {
+    const r = await fetch(apiUrl(`/api/suno/status?taskId=${encodeURIComponent(tid)}`), { cache: "no-store" });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) return "";
+    const clips = data?.data?.response?.sunoData || data?.data?.response?.suno_data || [];
+    const arr = Array.isArray(clips) ? clips : [];
+    const wantAid = String(t?.audioId || t?.meta?.audioId || "").trim();
+    let clip = wantAid
+      ? arr.find((c) => String(c?.id || c?.audioId || c?.audio_id || "").trim() === wantAid)
+      : null;
+    if (!clip) clip = arr[0];
+    return String(clip?.prompt || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+/** Persist recovered lyrics on the matching local Library row so the next
+ *  open (and Remix prefill) is instant. */
+function healLibraryLyricsForTrack(t, lyrics) {
+  const text = String(lyrics || "").trim();
+  if (!text) return;
+  try {
+    const ids = new Set(
+      [t?.id, t?.cloudSongId, t?.songId].map((v) => String(v || "").trim()).filter(Boolean),
+    );
+    if (!ids.size) return;
+    const items = loadLibrary();
+    const idx = items.findIndex(
+      (x) => ids.has(String(x.id || "")) || ids.has(String(x.cloudSongId || "")),
+    );
+    if (idx < 0) return;
+    if (String(items[idx]?.meta?.lyricsInput || "").trim()) return;
+    items[idx] = { ...items[idx], meta: { ...(items[idx].meta || {}), lyricsInput: text } };
+    saveLibrary(items);
+  } catch {}
+}
+
+/** Resolve lyrics for any playable track ref. Order: local meta → cloud
+ *  song row by id → hub post meta → Suno record-info. Recovered lyrics
+ *  are healed back onto the local Library row when one matches. */
 async function resolveLyricsForTrackRef(t) {
   if (!t) return "";
   const local = songDetailsLyricsForTrack(t);
   if (local) return local;
-  const songId = String(t?.songId || t?.cloudSongId || "").trim();
-  const ownerUserId = String(t?.ownerUserId || "").trim();
-  if (songId && ownerUserId) {
-    try {
-      const fetched = await supabaseFetchPublicSongRemixMeta({ songId, ownerUserId });
-      if (fetched?.lyricsInput) return fetched.lyricsInput;
-    } catch {}
+  const found = (text) => {
+    healLibraryLyricsForTrack(t, text);
+    return text;
+  };
+  // Cloud row by id — own Library rows hydrate from a slim list select
+  // that strips lyrics, so go back for the full meta.
+  const cloudId = trackCloudShareId(t);
+  if (cloudId) {
+    const meta = await supabaseFetchSongMetaById(cloudId);
+    const fromCloud = songDetailsFirstText(
+      meta?.lyricsInput, meta?.finalPrompt, meta?.prompt, meta?.lyrics, meta?.generatedLyrics,
+    );
+    if (fromCloud) return found(fromCloud);
   }
   // Hub posts ship trimmed meta in list rows; fetch the full blob on demand.
   const rawId = String(t?.id || "").trim();
@@ -22888,9 +23002,13 @@ async function resolveLyricsForTrackRef(t) {
     try {
       const full = await hubFetchPostMetaFull(rawId);
       const fromHub = songDetailsFirstText(full?.lyricsInput, full?.finalPrompt, full?.prompt);
-      if (fromHub) return fromHub;
+      if (fromHub) return found(fromHub);
     } catch {}
   }
+  // Old songs: cloud meta may have lost the lyrics entirely — Suno still
+  // has the generation prompt.
+  const fromSuno = await fetchSunoLyricsForTrack(t);
+  if (fromSuno) return found(fromSuno);
   return "";
 }
 
@@ -23041,6 +23159,21 @@ function openSongDetailsModal(track) {
   }
   const feedbackCtx = publicFeedbackContextForTrack(track);
   if (feedbackCtx?.songId) void hydrateSongFeedbackPanels(feedbackCtx.songId);
+  // Cloud-hydrated rows ship without lyrics — recover them in the
+  // background and swap the placeholder once they arrive.
+  if (!hasLyrics) {
+    const detailsToken = `${String(track?.id || "")}_${Date.now()}`;
+    els.songDetailsContent.dataset.detailsToken = detailsToken;
+    void (async () => {
+      const recovered = await resolveLyricsForTrackRef(track);
+      if (!recovered) return;
+      if (els.songDetailsContent.dataset.detailsToken !== detailsToken) return;
+      const box = els.songDetailsContent.querySelector(".songDetailsLyricsBox");
+      if (!box) return;
+      box.classList.remove("isEmpty");
+      box.textContent = recovered;
+    })();
+  }
   els.songDetailsModal.style.display = "";
   try {
     document.body.style.overflow = "hidden";
@@ -24857,7 +24990,7 @@ async function fetchSharedSongByCloudId(cloudId) {
       const token = getSupabaseAuthToken();
       const headers = { apikey: SUPABASE_ANON_KEY, Accept: "application/json" };
       if (token) headers.Authorization = `Bearer ${token}`;
-      const cols = "id,user_id,title,art_url,song_url,meta";
+      const cols = "id,user_id,title,art_url,song_url,task_id,audio_id,meta";
       const r = await fetch(
         `${SUPABASE_URL}/rest/v1/user_songs?id=eq.${encodeURIComponent(id)}&select=${encodeURIComponent(cols)}&limit=1`,
         { headers, cache: "no-store" },
@@ -24918,6 +25051,8 @@ async function playSharedCloudSong(row, opts = {}) {
     artUrl,
     url,
     byLine,
+    taskId: String(row.task_id || "").trim(),
+    audioId: String(row.audio_id || "").trim(),
     // Original lyrics/style ride along so Remix can pre-fill them even
     // when the song is not public-on-profile (link-only share).
     meta: row.meta && typeof row.meta === "object" ? row.meta : {},
@@ -29566,6 +29701,11 @@ if (els.btnPlayerRemix) {
           lyricsInput: fetched.lyricsInput || local.lyricsInput,
           styleInput: fetched.styleInput || local.styleInput,
         };
+        // Old songs: cloud meta may have lost the lyrics — run the full
+        // recovery chain (cloud row → hub post → Suno record-info).
+        if (!remixMeta.lyricsInput) {
+          remixMeta.lyricsInput = await resolveLyricsForTrackRef(t);
+        }
         await startHubRemix({
           url,
           id: songId || String(t?.id || ""),

@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260611remixLyrics";
+const APP_BUILD = "20260611lyricsView";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -446,6 +446,7 @@ const els = {
   playerRemixAttributionText: document.getElementById("playerRemixAttributionText"),
   playerRemixRow: document.getElementById("playerRemixRow"),
   btnPlayerRemix: document.getElementById("btnPlayerRemix"),
+  btnPlayerLyrics: document.getElementById("btnPlayerLyrics"),
   playerReleaseNote: document.getElementById("playerReleaseNote"),
   playerReleaseNoteText: document.getElementById("playerReleaseNoteText"),
   playerFeedbackPanel: document.getElementById("playerFeedbackPanel"),
@@ -15136,6 +15137,7 @@ function renderTrackSheetDiscover(ctx) {
     : "Play another from Discover";
   l.innerHTML = `
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="profile" id="discoverSheetRowProfile"${hideProfileRow ? " hidden" : ""}>View profile</button>
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="lyrics">View lyrics</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="copy">Copy link</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="shuffle">${escapeHtml(shuffleLabel)}</button>
   `;
@@ -15479,6 +15481,23 @@ function runTrackSheetAction(action, sourceEl) {
           taskId: ctx.taskId || "",
           audioId: ctx.audioId || "",
           meta: remixMeta,
+        });
+      })();
+      return;
+    }
+    if (action === "lyrics") {
+      shut();
+      void (async () => {
+        const lyrics = await resolveLyricsForTrackRef({
+          id: ctx.songId || "",
+          songId: ctx.songId || "",
+          ownerUserId: ctx.ownerUserId || "",
+          meta: ctx.meta || null,
+        });
+        openLyricsViewer({
+          title: ctx.title || "Lyrics",
+          subtitle: ctx.by || (ctx.handle ? `@${ctx.handle}` : ""),
+          lyrics,
         });
       })();
       return;
@@ -22849,8 +22868,79 @@ function songDetailsRow(label, value) {
   `;
 }
 
+/** Resolve lyrics for any playable track ref: local meta first, then the
+ *  public song row, then the hub post meta (all best-effort). */
+async function resolveLyricsForTrackRef(t) {
+  if (!t) return "";
+  const local = songDetailsLyricsForTrack(t);
+  if (local) return local;
+  const songId = String(t?.songId || t?.cloudSongId || "").trim();
+  const ownerUserId = String(t?.ownerUserId || "").trim();
+  if (songId && ownerUserId) {
+    try {
+      const fetched = await supabaseFetchPublicSongRemixMeta({ songId, ownerUserId });
+      if (fetched?.lyricsInput) return fetched.lyricsInput;
+    } catch {}
+  }
+  // Hub posts ship trimmed meta in list rows; fetch the full blob on demand.
+  const rawId = String(t?.id || "").trim();
+  if (rawId && isShareUuid(rawId)) {
+    try {
+      const full = await hubFetchPostMetaFull(rawId);
+      const fromHub = songDetailsFirstText(full?.lyricsInput, full?.finalPrompt, full?.prompt);
+      if (fromHub) return fromHub;
+    } catch {}
+  }
+  return "";
+}
+
+/** Lightweight lyrics-only view reusing the song details sheet shell. */
+function openLyricsViewer({ title, subtitle, lyrics } = {}) {
+  if (!els.songDetailsModal || !els.songDetailsContent) return;
+  const kicker = els.songDetailsModal.querySelector(".songDetailsKicker");
+  if (kicker) kicker.textContent = "Lyrics";
+  const headTitle = document.getElementById("songDetailsTitle");
+  if (headTitle) headTitle.textContent = String(title || "Lyrics").trim() || "Lyrics";
+  const text = String(lyrics || "").trim();
+  const hasLyrics = Boolean(text);
+  els.songDetailsContent.innerHTML = `
+    ${subtitle ? `
+    <section class="songDetailsSection songDetailsSectionHero">
+      <div class="songDetailsMetaLine">${escapeHtml(subtitle)}</div>
+    </section>
+    ` : ""}
+    <section class="songDetailsSection">
+      <div class="songDetailsSectionHead">
+        <div class="songDetailsSectionTitle">Lyrics</div>
+        ${hasLyrics ? `<button type="button" class="songDetailsCopyBtn" data-song-details-copy-lyrics="1">Copy</button>` : ""}
+      </div>
+      <div class="songDetailsLyricsBox ${hasLyrics ? "" : "isEmpty"}">${hasLyrics ? escapeHtml(text) : "No lyrics were saved for this song. Instrumentals, sounds, and some older songs may not have lyrics metadata."}</div>
+    </section>
+  `;
+  const copyBtn = els.songDetailsContent.querySelector("[data-song-details-copy-lyrics]");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast("Lyrics copied.");
+      } catch {
+        showToast("Could not copy lyrics.");
+      }
+    });
+  }
+  els.songDetailsModal.style.display = "";
+  try {
+    document.body.style.overflow = "hidden";
+  } catch {}
+}
+
 function openSongDetailsModal(track) {
   if (!els.songDetailsModal || !els.songDetailsContent) return;
+  // The lyrics viewer reuses this sheet and rewrites the header — restore it.
+  const kicker = els.songDetailsModal.querySelector(".songDetailsKicker");
+  if (kicker) kicker.textContent = "Library";
+  const headTitle = document.getElementById("songDetailsTitle");
+  if (headTitle) headTitle.textContent = "Song details";
   const meta = track?.meta || {};
   const title = String(track?.title || "Song details").trim() || "Song details";
   const createdAt = track?.ts ? new Date(Number(track.ts)).toLocaleString() : "";
@@ -29495,6 +29585,27 @@ if (els.btnPlayerRemix) {
       }
     } finally {
       els.btnPlayerRemix.disabled = false;
+    }
+  });
+}
+if (els.btnPlayerLyrics) {
+  els.btnPlayerLyrics.addEventListener("click", async () => {
+    haptic("light");
+    const t = currentPlayerTrackRef;
+    if (!t) {
+      showToast("Open a song first.", { icon: "!", durationMs: 2800 });
+      return;
+    }
+    els.btnPlayerLyrics.disabled = true;
+    try {
+      const lyrics = await resolveLyricsForTrackRef(t);
+      openLyricsViewer({
+        title: t.title || els.playerTitle?.textContent || "Lyrics",
+        subtitle: String(t.byLine || t.creator || "").trim(),
+        lyrics,
+      });
+    } finally {
+      els.btnPlayerLyrics.disabled = false;
     }
   });
 }

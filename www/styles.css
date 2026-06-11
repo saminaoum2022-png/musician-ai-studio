@@ -5439,6 +5439,7 @@ body.hubJumpingToTop #hubList .hubRow{
 .playerRemixRow{
   display:flex;
   justify-content: center;
+  gap: 8px;
   margin-top: 12px;
 }
 .playerRemixRow[hidden]{

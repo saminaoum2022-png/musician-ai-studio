@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260611lyricsRecover";
+const APP_BUILD = "20260611deleteFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -13677,6 +13677,11 @@ async function supabaseInsertUserSong(track) {
   if (!token || !authSession?.user?.id) {
     return { ok: false, reason: "no_auth" };
   }
+  // Never re-create a song the user deleted. (Explicit re-adds clear the
+  // tombstone in addToLibrary before reaching this insert.)
+  if (isTrackTombstoned(track)) {
+    return { ok: false, reason: "tombstoned" };
+  }
   const rawArt = String(track.artUrl || "");
   const payload = {
     user_id: authSession.user.id,
@@ -13874,20 +13879,51 @@ async function supabaseDeleteUserSong(track) {
   if (!token || !authSession?.user?.id) return;
   const uid = encodeURIComponent(authSession.user.id);
   const songUrl = String(track?.url || "").trim();
-  const encUrl = encodeURIComponent(songUrl);
   const kind = encodeURIComponent(String(track?.kind || "full"));
   const rowRef =
     String(track?.cloudSongId || "").trim() ||
     (isPostgresUuidString(track?.id) ? String(track.id).trim() : "");
-  let filter;
+  // The same logical song can exist as several cloud rows (URL drift used
+  // to duplicate them), so delete by EVERY identity we know: row id,
+  // audio id, raw URL, and the canonical (unwrapped) URL.
+  const filters = [];
   if (rowRef && isPostgresUuidString(rowRef)) {
-    filter = `user_id=eq.${uid}&id=eq.${encodeURIComponent(rowRef)}`;
-  } else if (songUrl) {
-    filter = `user_id=eq.${uid}&song_url=eq.${encUrl}&kind=eq.${kind}`;
-  } else {
-    return;
+    filters.push(`user_id=eq.${uid}&id=eq.${encodeURIComponent(rowRef)}`);
   }
-  await fetch(`${SUPABASE_URL}/rest/v1/user_songs?${filter}`, {
+  const audioId = String(track?.audioId || "").trim();
+  if (audioId) {
+    filters.push(`user_id=eq.${uid}&audio_id=eq.${encodeURIComponent(audioId)}&kind=eq.${kind}`);
+  }
+  if (songUrl) {
+    filters.push(`user_id=eq.${uid}&song_url=eq.${encodeURIComponent(songUrl)}&kind=eq.${kind}`);
+    const leaf = libraryTrackCanonicalUrl(songUrl);
+    if (leaf && leaf !== songUrl) {
+      filters.push(`user_id=eq.${uid}&song_url=eq.${encodeURIComponent(leaf)}&kind=eq.${kind}`);
+    }
+  }
+  if (!filters.length) return;
+  await Promise.all(
+    filters.map((filter) =>
+      fetch(`${SUPABASE_URL}/rest/v1/user_songs?${filter}`, {
+        method: "DELETE",
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${token}`,
+          Prefer: "return=minimal",
+        },
+      }).catch(() => null),
+    ),
+  );
+}
+
+/** Delete ONE cloud row by id — used by the duplicate-row cleanup so the
+ *  kept copy of the same song is never touched. */
+async function supabaseDeleteUserSongRowById(rowId) {
+  const token = getSupabaseAuthToken();
+  const rid = String(rowId || "").trim();
+  if (!token || !authSession?.user?.id || !isPostgresUuidString(rid)) return;
+  const uid = encodeURIComponent(authSession.user.id);
+  await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${uid}&id=eq.${encodeURIComponent(rid)}`, {
     method: "DELETE",
     headers: {
       apikey: SUPABASE_ANON_KEY,
@@ -13994,6 +14030,26 @@ function mapPublicLibrarySongRows(arr, selectedPublishedAt) {
     .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
 }
 
+/** Drop duplicate public rows of the same song (same audio_id + kind per
+ *  user). Legacy URL-drift duplicates can linger in the cloud until the
+ *  owner's app cleans them up — viewers should never see them twice.
+ *  Rows arrive published-first, so the first occurrence wins. */
+function dedupePublicSongRowsRaw(arr) {
+  const seen = new Set();
+  const out = [];
+  for (const s of Array.isArray(arr) ? arr : []) {
+    const aid = String(s?.audio_id || "").trim();
+    const kind = String(s?.kind || "full").trim();
+    const key = aid
+      ? `aid:${aid}|${kind}|${String(s?.user_id || "")}`
+      : `id:${String(s?.id || "")}`;
+    if (key !== "id:" && seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out;
+}
+
 async function supabaseFetchPublicLibraryRowsForFilter(filterQuery, perUserLimit = 80) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !filterQuery) return new Map();
   const lim = Math.min(120, Math.max(12, Number(perUserLimit) || 80));
@@ -14026,7 +14082,7 @@ async function supabaseFetchPublicLibraryRowsForFilter(filterQuery, perUserLimit
       }
     }
     if (!r.ok) return new Map();
-    const arr = await r.json().catch(() => []);
+    const arr = dedupePublicSongRowsRaw(await r.json().catch(() => []));
     const byUser = new Map();
     for (const s of Array.isArray(arr) ? arr : []) {
       const uid = String(s.user_id || "").trim();
@@ -14910,7 +14966,7 @@ async function supabaseFetchDiscoveryPublicSongs(limit) {
       console.warn("[discovery/user_songs]", r.status, det.slice(0, 280));
       return [];
     }
-    const arr = await r.json().catch(() => []);
+    const arr = dedupePublicSongRowsRaw(await r.json().catch(() => []));
     if (!Array.isArray(arr)) return [];
     return arr
       .map((s) =>
@@ -21430,6 +21486,114 @@ function capLibraryItems(items) {
   return Array.isArray(items) ? items.slice(0, LIBRARY_MAX_TRACKS) : [];
 }
 
+/** Sync identity for a track. The song URL changes over a track's life
+ *  (Suno CDN → refreshed CDN → archived storage URL), so URL-based
+ *  signatures made the same song look "new" after every URL change —
+ *  that re-uploaded deleted songs, duplicated rows in the cloud, and
+ *  re-dated them to today. The Suno audio id never changes; key on it
+ *  whenever we have one. */
+function librarySyncSigOf(t) {
+  const kind = String(t?.kind || "full").trim();
+  const aid = String(t?.audioId || "").trim();
+  if (aid) return `aid:${aid}|${kind}`;
+  return `url:${libraryTrackCanonicalUrl(t?.url)}|${kind}`;
+}
+
+// ─── Deletion tombstones ───────────────────────────────────────────────
+// When the user deletes a song it must STAY deleted. Cloud DELETE can
+// miss (URL drift, duplicate rows) and a stale local copy used to get
+// re-uploaded on the next sign-in with a fresh created_at. Tombstones
+// record the deleted identities per user; hydrate/reconcile skip them
+// and re-issue the cloud DELETE when a tombstoned row resurfaces.
+const LIBRARY_TOMBSTONES_MAX = 500;
+
+function libraryTombstoneStorageKey() {
+  const uid = authSession?.user?.id || activeProfile?.id || "guest";
+  return `mas:library:deleted:v1:${uid}`;
+}
+function loadLibraryTombstones() {
+  try {
+    const raw = localStorage.getItem(libraryTombstoneStorageKey());
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+function saveLibraryTombstones(list) {
+  try {
+    const capped = (Array.isArray(list) ? list : [])
+      .sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0))
+      .slice(0, LIBRARY_TOMBSTONES_MAX);
+    localStorage.setItem(libraryTombstoneStorageKey(), JSON.stringify(capped));
+  } catch {}
+}
+function libraryTombstoneKeysForTrack(t) {
+  const kind = String(t?.kind || "full").trim();
+  const out = [];
+  const aid = String(t?.audioId || "").trim();
+  if (aid) out.push(`aid:${aid}|${kind}`);
+  const urlKey = libraryTrackCanonicalUrl(t?.url);
+  if (urlKey) out.push(`url:${urlKey}|${kind}`);
+  const cid = String(t?.cloudSongId || "").trim() || (isShareUuid(t?.id) ? String(t.id).trim() : "");
+  if (cid) out.push(`cid:${cid}`);
+  return out;
+}
+function addLibraryTombstoneForTrack(t) {
+  const keys = libraryTombstoneKeysForTrack(t);
+  if (!keys.length) return;
+  const now = Date.now();
+  const list = loadLibraryTombstones();
+  const have = new Set(list.map((x) => String(x?.k || "")));
+  for (const k of keys) {
+    if (!have.has(k)) list.push({ k, ts: now });
+  }
+  saveLibraryTombstones(list);
+}
+function clearLibraryTombstonesForTrack(t) {
+  const keys = new Set(libraryTombstoneKeysForTrack(t));
+  if (!keys.size) return;
+  const list = loadLibraryTombstones();
+  const next = list.filter((x) => !keys.has(String(x?.k || "")));
+  if (next.length !== list.length) saveLibraryTombstones(next);
+}
+function loadLibraryTombstoneKeySet() {
+  return new Set(loadLibraryTombstones().map((x) => String(x?.k || "")).filter(Boolean));
+}
+function isTrackTombstoned(t, keySet) {
+  const keys = keySet || loadLibraryTombstoneKeySet();
+  if (!keys.size) return false;
+  return libraryTombstoneKeysForTrack(t).some((k) => keys.has(k));
+}
+
+/** Collapse cloud rows that are the same logical song (sync signature).
+ *  Keeps the best copy — archived storage URL preferred, then earliest
+ *  created_at so the song keeps its original date — and returns the
+ *  redundant rows so the caller can delete them from the cloud. */
+function dedupeCloudSongRows(rows) {
+  const bySig = new Map();
+  for (const r of Array.isArray(rows) ? rows : []) {
+    const sig = librarySyncSigOf(r);
+    const cur = bySig.get(sig);
+    if (!cur) {
+      bySig.set(sig, r);
+      continue;
+    }
+    const curArch = isArchivedSongStorageUrl(cur?.url);
+    const rArch = isArchivedSongStorageUrl(r?.url);
+    let best = cur;
+    if (curArch !== rArch) best = curArch ? cur : r;
+    else best = Number(cur?.ts || 0) <= Number(r?.ts || 0) ? cur : r;
+    bySig.set(sig, best);
+  }
+  const keep = [...bySig.values()];
+  const keptIds = new Set(keep.map((r) => String(r?.cloudSongId || r?.id || "")));
+  const extras = (Array.isArray(rows) ? rows : []).filter(
+    (r) => !keptIds.has(String(r?.cloudSongId || r?.id || "")),
+  );
+  return { keep, extras };
+}
+
 /** Parsed Library JSON — `loadLibrary()` can run many times per tick
  *  (render, reconcile, handlers). Re-parsing a multi-megabyte string
  *  (custom covers as base64 in meta) was a major source of jank.
@@ -21834,19 +21998,33 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
   try { refreshOwnSongsUi(); } catch {}
 
   // 1) Load cloud + local candidates and merge-dedupe.
-  const cloudSongs =
+  const cloudSongsRaw =
     prefetchedCloud !== undefined ? prefetchedCloud : await supabaseLoadUserSongs();
-  const localForUser = loadLibraryFor(uid);
+  const tombstones = loadLibraryTombstoneKeySet();
+  // Deleted songs must stay deleted: drop tombstoned rows everywhere and
+  // re-issue the cloud DELETE for any that are still in the cloud.
+  const cloudAlive = (Array.isArray(cloudSongsRaw) ? cloudSongsRaw : []).filter((row) => {
+    if (!isTrackTombstoned(row, tombstones)) return true;
+    void supabaseDeleteUserSong(row);
+    return false;
+  });
+  // Collapse duplicate cloud rows of the same song (URL drift used to
+  // re-insert them with a fresh created_at) and delete the extras.
+  const { keep: cloudSongs, extras: cloudDupExtras } = dedupeCloudSongRows(cloudAlive);
+  if (cloudDupExtras.length) {
+    void (async () => {
+      for (const extra of cloudDupExtras) {
+        // eslint-disable-next-line no-await-in-loop
+        await supabaseDeleteUserSongRowById(extra?.cloudSongId || extra?.id);
+      }
+    })();
+  }
+  const localForUser = loadLibraryFor(uid).filter((row) => !isTrackTombstoned(row, tombstones));
   // Never merge guest or other users' library keys — that leaked a prior
   // account's songs into a new sign-up on the same device.
   const localCandidates = localForUser;
 
-  const sigOf = (row) => {
-    const url = String(row?.url || "").trim();
-    const aid = String(row?.audioId || "").trim();
-    const kind = String(row?.kind || "full").trim();
-    return `${url}|${aid}|${kind}`;
-  };
+  const sigOf = librarySyncSigOf;
   const cloudSigs = new Set(cloudSongs.map(sigOf));
   const cloudStableKeys = new Set(cloudSongs.map(libraryTrackStableKey));
 
@@ -21902,7 +22080,10 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
         if (!firstFail) firstFail = `${ins?.reason || "insert_failed"}${ins?.details ? `: ${ins.details}` : ""}`;
       }
     }
-    const cloudAfter = await supabaseLoadUserSongs();
+    const tombsAfter = loadLibraryTombstoneKeySet();
+    const cloudAfter = dedupeCloudSongRows(
+      (await supabaseLoadUserSongs()).filter((row) => !isTrackTombstoned(row, tombsAfter)),
+    ).keep;
     // Do not replace a full merged list with a shorter/partial cloud
     // snapshot (RLS hiccup, transient HTTP empty body, etc.) — union by
     // signature so local-only rows stay until the server confirms them.
@@ -21947,15 +22128,29 @@ async function reconcileLibraryFromCloud({ force = false } = {}) {
   if (!force && Date.now() - _libraryReconcileLastAt < LIBRARY_RECONCILE_MIN_INTERVAL_MS) return;
   _libraryReconcileInFlight = true;
   try {
-    const cloud = await supabaseLoadUserSongs();
-    if (!Array.isArray(cloud)) return;
-    const local = loadLibrary();
+    const cloudRaw = await supabaseLoadUserSongs();
+    if (!Array.isArray(cloudRaw)) return;
+    const tombstones = loadLibraryTombstoneKeySet();
+    const cloudAlive = cloudRaw.filter((row) => {
+      if (!isTrackTombstoned(row, tombstones)) return true;
+      void supabaseDeleteUserSong(row);
+      return false;
+    });
+    const { keep: cloud, extras: dupExtras } = dedupeCloudSongRows(cloudAlive);
+    if (dupExtras.length) {
+      void (async () => {
+        for (const extra of dupExtras) {
+          // eslint-disable-next-line no-await-in-loop
+          await supabaseDeleteUserSongRowById(extra?.cloudSongId || extra?.id);
+        }
+      })();
+    }
+    const local = loadLibrary().filter((row) => !isTrackTombstoned(row, tombstones));
 
-    // Two indices for the merge. Signature pins a logical track
-    // (song URL + audio id + kind) without depending on the DB id
-    // (cloud rows use UUIDs, local rows use timestamp+random).
-    const sigOf = (t) =>
-      `${String(t?.url || "").trim()}|${String(t?.audioId || "").trim()}|${String(t?.kind || "full").trim()}`;
+    // Identity pins a logical track (audio id, falling back to canonical
+    // URL) without depending on the DB id (cloud rows use UUIDs, local
+    // rows use timestamp+random) or on URL drift.
+    const sigOf = librarySyncSigOf;
     const localBySig = new Map();
     for (const t of local) localBySig.set(sigOf(t), t);
     const cloudSigs = new Set(cloud.map(sigOf));
@@ -22046,6 +22241,9 @@ function addToLibrary(track) {
   // row they want to patch even when the same generation was
   // re-resolved (poll + recover).
   if (duplicate) return duplicate;
+  // An explicit add (generation, recovery by task id) is the user asking
+  // for this song again — lift any deletion tombstone for it.
+  clearLibraryTombstonesForTrack(track);
   const newTrack = {
     id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     ts: Date.now(),
@@ -22079,6 +22277,9 @@ function removeFromLibrary(id) {
   saveLibrary(items);
   refreshOwnSongsUi();
   if (removed) {
+    // Tombstone FIRST so no concurrent reconcile can re-upload the row
+    // while the cloud DELETE is in flight. Deletion must be final.
+    addLibraryTombstoneForTrack(removed);
     void supabaseDeleteUserSong(removed);
     // Library is the user's PRIVATE inventory; Hub is PUBLIC. Deleting
     // here only takes the song off this account's Library — any Hub

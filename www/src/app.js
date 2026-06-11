@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260611weeklyChart";
+const APP_BUILD = "20260611chartCollapse";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4889,6 +4889,7 @@ function bindCampaignUiOnce() {
 
 // ─── Weekly chart (Top songs of the week) ───────────────────────────────
 let _weeklyChartCache = { ts: 0, chart: null };
+let _weeklyChartExpanded = false;
 
 async function fetchWeeklyChart() {
   if (_weeklyChartCache.chart && Date.now() - _weeklyChartCache.ts < 5 * 60_000) {
@@ -4964,13 +4965,35 @@ async function refreshDiscoverWeeklyChart() {
         </button>`;
       })
       .join("");
+    // Only the #1 hero shows by default; the rest of the top 10 lives
+    // behind a "View top 10" expander to keep Discover compact.
     wrap.innerHTML = `
       <div class="chartHead">
         <h3 class="chartTitle"><span class="chartTitleBadge" aria-hidden="true">📈</span> Top songs this week</h3>
         <span class="chartSub">Real plays &amp; reactions · resets weekly</span>
       </div>
       ${heroHtml}
-      ${rowsHtml ? `<div class="chartRows">${rowsHtml}</div>` : ""}`;
+      ${rowsHtml ? `
+        <div class="chartRows" id="chartRowsCollapse" ${_weeklyChartExpanded ? "" : "hidden"}>${rowsHtml}</div>
+        <button type="button" class="chartToggleBtn" id="chartToggleBtn" aria-expanded="${_weeklyChartExpanded ? "true" : "false"}" aria-controls="chartRowsCollapse">
+          <span>${_weeklyChartExpanded ? "Show less" : `View top ${chart.length}`}</span>
+          <svg class="chartToggleChev" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></svg>
+        </button>` : ""}`;
+    const toggle = wrap.querySelector("#chartToggleBtn");
+    if (toggle) {
+      toggle.addEventListener("click", (e) => {
+        e.stopPropagation();
+        haptic("light");
+        _weeklyChartExpanded = !_weeklyChartExpanded;
+        const rows = wrap.querySelector("#chartRowsCollapse");
+        if (rows) rows.hidden = !_weeklyChartExpanded;
+        toggle.setAttribute("aria-expanded", _weeklyChartExpanded ? "true" : "false");
+        toggle.classList.toggle("isOpen", _weeklyChartExpanded);
+        const label = toggle.querySelector("span");
+        if (label) label.textContent = _weeklyChartExpanded ? "Show less" : `View top ${chart.length}`;
+      });
+      toggle.classList.toggle("isOpen", _weeklyChartExpanded);
+    }
     wrap.hidden = false;
   } catch {
     wrap.hidden = true;

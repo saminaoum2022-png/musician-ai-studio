@@ -15059,16 +15059,11 @@ input::placeholder, textarea::placeholder{
   .mobileTabbar a.hubTab.active{
     background: transparent;
   }
+  /* The teal hasNotice dot doubled up with the red tab dots
+     (#activityTabDot / #libraryTabDot) — the red dot is the only
+     notification indicator on the tab bar. */
   .mobileTabbar a.hasNotice::after{
-    content:"";
-    position:absolute;
-    top:6px;
-    right:calc(50% - 16px);
-    width:7px;
-    height:7px;
-    border-radius:999px;
-    background:#35d5ab;
-    box-shadow:0 0 8px rgba(53,213,171,0.85);
+    content: none;
   }
   .mobileTabbar a[data-route-link="profile"].hasNotice::after{
     top: 5px;

@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260611remixOverlay";
+const APP_BUILD = "20260611remixOverlay2";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -9365,17 +9365,14 @@ function showRemixLoadingOverlay(title) {
     const t = String(title || "").trim();
     sub.textContent = t ? `Preparing "${t.slice(0, 48)}"…` : "Fetching the source audio…";
   }
+  // Show synchronously — no rAF/transition dance. The remix prep saturates
+  // the main thread right after this call, so a class added "next frame"
+  // could be delayed for seconds, leaving the overlay invisible.
   el.hidden = false;
-  requestAnimationFrame(() => el.classList.add("isOpen"));
 }
 
 function hideRemixLoadingOverlay() {
-  const el = _remixLoadingOverlayEl;
-  if (!el || el.hidden) return;
-  el.classList.remove("isOpen");
-  setTimeout(() => {
-    el.hidden = true;
-  }, 200);
+  if (_remixLoadingOverlayEl) _remixLoadingOverlayEl.hidden = true;
 }
 
 async function startHubRemix(post) {
@@ -9432,12 +9429,38 @@ async function startHubRemix(post) {
       originalUrl: remixAudioUrl || post.url || "",
       meta: post.meta || null,
     });
-    if (els.sunoPrompt) els.sunoPrompt.value = String(post?.meta?.lyricsInput || "").trim();
+    if (els.sunoPrompt) {
+      els.sunoPrompt.value = String(post?.meta?.lyricsInput || "").trim();
+      try { autoResizeLyricsBox(); } catch {}
+    }
     if (els.sunoStyle) els.sunoStyle.value = String(post?.meta?.styleInput || "").trim();
     if (els.sunoTitle) els.sunoTitle.value = `${post.title || "Track"} Remix`;
     location.hash = "#/generate";
     setStatus(`Remix ready: ${post.title || "Track"} — adjust lyrics and tap Generate.`);
     try { syncGenerateOrbVisibility(); } catch {}
+    // Late lyric rescue: if the prefill came up empty (slim feed meta,
+    // cloud hiccup, missing local meta), retry the full resolution chain
+    // in the background and fill the box — but only if the user hasn't
+    // typed anything in the meantime.
+    if (els.sunoPrompt && !String(els.sunoPrompt.value || "").trim()) {
+      void (async () => {
+        try {
+          const text = await resolveLyricsForTrackRef({
+            id: post.id || "",
+            songId: post.songId || "",
+            cloudSongId: post.songId || "",
+            taskId: post.taskId || post?.meta?.taskId || "",
+            audioId: post.audioId || post?.meta?.audioId || "",
+            meta: post.meta || {},
+          });
+          if (text && els.sunoPrompt && !String(els.sunoPrompt.value || "").trim()) {
+            els.sunoPrompt.value = text;
+            try { autoResizeLyricsBox(); } catch {}
+            showToast("Original lyrics loaded.", { icon: "♪", durationMs: 2200 });
+          }
+        } catch {}
+      })();
+    }
   } catch (e) {
     console.error("[hub remix] failed", e);
     const baseMsg = String(e?.message || "error");
@@ -15735,17 +15758,27 @@ async function startLibraryRemixForLibraryTrack(t) {
       String((track.meta && (track.meta.imageThumb || track.meta.imageUrl)) || track.artUrl || "").trim() ||
       "./assets/nabadai-logo.png";
     const handle = String(activeProfile?.username || "").trim();
-    let lyricsInput = String(track?.meta?.lyricsInput || track?.meta?.finalPrompt || "").trim();
+    let lyricsInput = songDetailsLyricsForTrack(track);
     if (!lyricsInput) {
       // Cloud-hydrated Library rows ship without lyrics — recover them
       // (cloud row → Suno record-info) so the remix starts pre-filled.
-      lyricsInput = await resolveLyricsForTrackRef(track);
+      // Never let a failed lookup abort the remix; startHubRemix retries
+      // lyric resolution in the background after navigation.
+      try {
+        lyricsInput = await resolveLyricsForTrackRef(track);
+      } catch {
+        lyricsInput = "";
+      }
     }
     await startHubRemix({
       url: remixUrl,
       title: track.title || "Library song",
       creator: handle,
       artUrl: art,
+      songId: trackCloudShareId(track),
+      ownerUserId: String(authSession?.user?.id || ""),
+      taskId: String(track.taskId || track?.meta?.taskId || "").trim(),
+      audioId: String(track.audioId || track?.meta?.audioId || "").trim(),
       meta: {
         lyricsInput,
         styleInput: String(track?.meta?.styleInput || track?.meta?.styleSent || "").trim(),

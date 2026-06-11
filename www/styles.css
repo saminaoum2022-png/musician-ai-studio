@@ -5482,7 +5482,12 @@ body.hubJumpingToTop #hubList .hubRow{
 
 /* Centered full-screen overlay shown while a remix source is being
    prepared (audio download + lyric recovery). Sits above the maximized
-   player and sheets so the user always sees what's happening. */
+   player and sheets so the user always sees what's happening.
+   NO backdrop-filter here — blurring the whole page while the main
+   thread is busy downloading/parsing froze the spinner on iOS. Entry
+   uses keyframe animations (they start on display change, no JS frame
+   needed) and the spinner is promoted to its own compositor layer so
+   it keeps turning even when JS is blocked. */
 .remixLoadingOverlay{
   position: fixed;
   inset: 0;
@@ -5491,14 +5496,14 @@ body.hubJumpingToTop #hubList .hubRow{
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(4, 6, 12, 0.62);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  opacity: 0;
-  transition: opacity 200ms ease;
+  background: rgba(4, 6, 12, 0.78);
+  animation: remixOverlayIn 160ms ease-out;
 }
-.remixLoadingOverlay.isOpen{ opacity: 1; }
 .remixLoadingOverlay[hidden]{ display: none !important; }
+@keyframes remixOverlayIn{
+  from{ opacity: 0; }
+  to{ opacity: 1; }
+}
 .remixLoadingCard{
   display: flex;
   flex-direction: column;
@@ -5509,15 +5514,15 @@ body.hubJumpingToTop #hubList .hubRow{
   border-radius: 22px;
   border: 1px solid rgba(255,255,255,0.13);
   background:
-    linear-gradient(160deg, rgba(34, 40, 58, 0.96), rgba(14, 17, 28, 0.96)),
+    linear-gradient(160deg, rgba(34, 40, 58, 0.97), rgba(14, 17, 28, 0.97)),
     radial-gradient(circle at 22% 0%, rgba(124, 92, 255, 0.22), transparent 64%);
   box-shadow: 0 28px 70px rgba(0,0,0,0.5);
   text-align: center;
-  transform: translateY(8px) scale(0.97);
-  transition: transform 220ms ease;
+  animation: remixCardIn 200ms ease-out;
 }
-.remixLoadingOverlay.isOpen .remixLoadingCard{
-  transform: translateY(0) scale(1);
+@keyframes remixCardIn{
+  from{ transform: translateY(10px) scale(0.96); opacity: 0; }
+  to{ transform: translateY(0) scale(1); opacity: 1; }
 }
 .remixLoadingSpinner{
   width: 34px;
@@ -5525,10 +5530,12 @@ body.hubJumpingToTop #hubList .hubRow{
   border-radius: 50%;
   border: 3px solid rgba(255,255,255,0.14);
   border-top-color: rgba(167, 139, 250, 0.95);
+  will-change: transform;
   animation: remixLoadingSpin 0.8s linear infinite;
 }
 @keyframes remixLoadingSpin{
-  to{ transform: rotate(360deg); }
+  from{ transform: rotate(0deg) translateZ(0); }
+  to{ transform: rotate(360deg) translateZ(0); }
 }
 .remixLoadingTitle{
   font-size: 16px;

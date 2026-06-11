@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260611addressPills";
+const APP_BUILD = "20260611singerCard";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -290,6 +290,8 @@ const els = {
   sunoDialect: document.getElementById("sunoDialect"),
   sunoDialectHint: document.getElementById("sunoDialectHint"),
   sunoArabicAddress: document.getElementById("sunoArabicAddress"),
+  sunoSingerGender: document.getElementById("sunoSingerGender"),
+  singerPersonaRow: document.getElementById("singerPersonaRow"),
   sunoVoiceProfile: document.getElementById("sunoVoiceProfile"),
   sunoPersonaId: document.getElementById("sunoPersonaId"),
   linkManageVoices: document.getElementById("linkManageVoices"),
@@ -3053,6 +3055,58 @@ function syncArabicAddressPills() {
   });
 }
 
+/** Mirror the hidden #sunoSingerGender input onto the Singer pills, and dim
+ *  them when a saved voice persona is active (the persona owns the voice). */
+function syncSingerGenderPills() {
+  const v = String(els.sunoSingerGender?.value || "").trim();
+  document.querySelectorAll("#singerGenderPills .addressPill").forEach((b) => {
+    const on = String(b.getAttribute("data-singer-value") || "") === v;
+    b.classList.toggle("isActive", on);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  let overridden = false;
+  try { overridden = Boolean(getActivePersonaId()); } catch {}
+  const wrap = document.getElementById("singerGenderPills");
+  if (wrap) wrap.classList.toggle("isOverridden", overridden);
+}
+
+/** Saved-voice chips under the Singer pills on Create: pick one of your
+ *  personas (or Default), or jump to the voices panel to create one. */
+function renderSingerPersonaRow() {
+  const row = els.singerPersonaRow || document.getElementById("singerPersonaRow");
+  if (!row) return;
+  if (!authSession?.user?.id) {
+    row.hidden = true;
+    row.innerHTML = "";
+    syncSingerGenderPills();
+    return;
+  }
+  let list = [];
+  try { list = loadPersonas(); } catch {}
+  let active = "";
+  try { active = getActivePersonaId(); } catch {}
+  if (!list.length) {
+    row.innerHTML = `
+      <span class="singerPersonaNote">My voices</span>
+      <button type="button" class="singerPersonaChip singerPersonaChip--create" data-singer-persona-create="1">＋ Create your voice</button>
+    `;
+  } else {
+    const chips = [
+      `<button type="button" class="singerPersonaChip ${active ? "" : "isActive"}" data-singer-persona-id="" aria-pressed="${active ? "false" : "true"}">Default</button>`,
+      ...list.map((p) => {
+        const id = escapeHtml(String(p.personaId || ""));
+        const lab = escapeHtml(String(p.label || "Voice").trim().slice(0, 24) || "Voice");
+        const on = String(p.personaId || "") === active;
+        return `<button type="button" class="singerPersonaChip ${on ? "isActive" : ""}" data-singer-persona-id="${id}" aria-pressed="${on ? "true" : "false"}">${lab}</button>`;
+      }),
+      `<button type="button" class="singerPersonaChip singerPersonaChip--create" data-singer-persona-create="1" aria-label="Create a new voice">＋</button>`,
+    ];
+    row.innerHTML = `<span class="singerPersonaNote">My voices</span>${chips.join("")}`;
+  }
+  row.hidden = false;
+  syncSingerGenderPills();
+}
+
 function resetAdvancedOptionsToDefaults() {
   if (els.sunoGroovePace) els.sunoGroovePace.value = "";
   if (els.sunoProsody) els.sunoProsody.value = "";
@@ -3062,6 +3116,8 @@ function resetAdvancedOptionsToDefaults() {
   if (els.sunoSongKey) els.sunoSongKey.value = "";
   if (els.sunoMaqam) els.sunoMaqam.value = "";
   if (els.sunoVoiceProfile) els.sunoVoiceProfile.value = "";
+  if (els.sunoSingerGender) els.sunoSingerGender.value = "";
+  try { syncSingerGenderPills(); } catch {}
   if (els.sunoDialect) els.sunoDialect.value = "";
   if (els.sunoDialectHint) els.sunoDialectHint.value = "";
   if (els.sunoArabicAddress) els.sunoArabicAddress.value = "";
@@ -10814,6 +10870,7 @@ function updateProfilePersonaRow() {
   try { renderSettingsVoicesHub(); } catch {}
   renderActivePersonaBanner();
   syncProfilePersonaAvatarBadge();
+  try { renderSingerPersonaRow(); } catch {}
 }
 
 function syncProfilePersonaAvatarBadge() {
@@ -28227,6 +28284,63 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
   }
 
+  // Singer pills (Auto / Male / Female) + saved-voice persona chips.
+  {
+    const pills = document.getElementById("singerGenderPills");
+    if (pills && els.sunoSingerGender) {
+      pills.addEventListener("click", (e) => {
+        const btn = e.target?.closest?.("[data-singer-value]");
+        if (!btn || !pills.contains(btn)) return;
+        haptic("light");
+        const v = String(btn.getAttribute("data-singer-value") || "");
+        els.sunoSingerGender.value = v;
+        // A conflicting Range pick in Options (e.g. Soprano while choosing
+        // Male) would fight this — reset the range to Auto.
+        const vp = String(els.sunoVoiceProfile?.value || "").trim();
+        if (v && vp.includes("|") && !vp.startsWith(`${v}|`)) {
+          els.sunoVoiceProfile.value = "";
+          try { els.sunoVoiceProfile.dispatchEvent(new Event("change", { bubbles: true })); } catch {}
+        }
+        syncSingerGenderPills();
+        try { renderReferenceHints(); } catch {}
+      });
+      // Keep pills in sync when a Range is picked in Options (its value
+      // encodes the gender as an "m|"/"f|" prefix).
+      if (els.sunoVoiceProfile) {
+        els.sunoVoiceProfile.addEventListener("change", () => {
+          const vp = String(els.sunoVoiceProfile.value || "").trim();
+          if (vp.includes("|")) {
+            els.sunoSingerGender.value = vp.split("|")[0] === "f" ? "f" : "m";
+          }
+          syncSingerGenderPills();
+        });
+      }
+      syncSingerGenderPills();
+    }
+    if (els.singerPersonaRow) {
+      els.singerPersonaRow.addEventListener("click", (e) => {
+        const create = e.target?.closest?.("[data-singer-persona-create]");
+        if (create) {
+          haptic("light");
+          openProfilePersonaPanel();
+          return;
+        }
+        const chip = e.target?.closest?.("[data-singer-persona-id]");
+        if (!chip) return;
+        haptic("light");
+        const id = String(chip.getAttribute("data-singer-persona-id") || "").trim();
+        if (!id) {
+          clearActiveVoicePersona({ silent: true });
+          showToast("Back to default voice.", { icon: "♪", durationMs: 2200 });
+        } else {
+          selectPersonaForCreate(id);
+        }
+        renderSingerPersonaRow();
+      });
+      renderSingerPersonaRow();
+    }
+  }
+
   function sanitizeLyricsPrompt(raw) {
     const txt = String(raw || "").replace(/\r/g, "");
     if (!txt.trim()) return "";
@@ -28440,6 +28554,16 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           vocalProfileClause =
             "female lead, smooth controlled phrasing, avoid harsh or shouty delivery";
         }
+      } else if (!personaIdSel && !vp) {
+        // Singer pills on the Create page: gender only, no forced timbre.
+        const singerGender = String(els.sunoSingerGender?.value || "").trim();
+        if (singerGender === "m" || singerGender === "f") {
+          payload.vocalGender = singerGender;
+          vocalProfileClause =
+            singerGender === "m"
+              ? "male lead vocal, natural masculine tone"
+              : "female lead vocal, natural feminine tone";
+        }
       }
       if (!hasReference && vocalProfileClause) payload.style = `${payload.style}, ${vocalProfileClause}`;
       payload.style = compactStyleForProvider(payload.style, 980);
@@ -28468,6 +28592,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         songKey: (els.sunoSongKey?.value || "").trim(),
         maqam: (els.sunoMaqam?.value || "").trim(),
         voiceProfile: (els.sunoVoiceProfile?.value || "").trim(),
+        singerGender: (els.sunoSingerGender?.value || "").trim(),
         model: payload.model,
         imageOnlyInstrumental,
         instrumentalSelected,
@@ -29361,6 +29486,7 @@ function getReferenceHints() {
   const dialect = String(els.sunoDialect?.value || "").trim();
   const dialectHint = String(els.sunoDialectHint?.value || "").trim();
   const vp = String(els.sunoVoiceProfile?.value || "").trim().toLowerCase();
+  const singerGenderHint = String(els.sunoSingerGender?.value || "").trim();
   const persona = getActivePersonaId();
   const hasRef = Boolean(getVocalReferenceFile());
   const refOn = hasRef;
@@ -29368,7 +29494,7 @@ function getReferenceHints() {
   if (hasRef && !lyrics) {
     pushHint("For better accuracy, add at least 2–4 lyric lines.", "critical");
   }
-  if (refOn && (dialect || vp || String(els.sunoSongKey?.value || "").trim() || persona)) {
+  if (refOn && (dialect || vp || singerGenderHint || String(els.sunoSongKey?.value || "").trim() || persona)) {
     pushHint("For cleaner melody follow, keep Accent, Voice Profile, Song Key, and Persona on Auto first.", "critical");
   }
   if (dialect && !dialectHint) {

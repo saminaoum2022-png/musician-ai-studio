@@ -6498,6 +6498,67 @@ textarea{
 .addressPill.isActive .addressPillSub{
   color: rgba(232,226,255,0.78);
 }
+.addressPills--three{
+  grid-template-columns: repeat(3, 1fr);
+}
+/* When a saved voice persona is active it controls the singer entirely. */
+.addressPills.isOverridden{
+  opacity: 0.4;
+  pointer-events: none;
+}
+/* Saved-voice (persona) chips under the Singer pills. */
+.singerPersonaRow{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+}
+.singerPersonaRow[hidden]{ display: none !important; }
+.singerPersonaNote{
+  flex-basis: 100%;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: rgba(226,232,246,0.42);
+}
+.singerPersonaChip{
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 46%;
+  min-height: 32px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.045);
+  color: rgba(232,238,247,0.8);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease,
+    transform 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.singerPersonaChip:active{ transform: scale(0.96); }
+.singerPersonaChip.isActive{
+  border-color: rgba(167,139,250,0.65);
+  background: linear-gradient(150deg, rgba(124,92,255,0.24), rgba(124,92,255,0.1));
+  color: #fff;
+}
+.singerPersonaChip--create{
+  border-style: dashed;
+  border-color: rgba(255,255,255,0.22);
+  background: transparent;
+  color: rgba(226,232,246,0.62);
+}
 .lyricsAttachBtn{
   align-self:flex-start;
   position: relative;

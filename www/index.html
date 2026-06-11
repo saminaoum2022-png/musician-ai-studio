@@ -699,9 +699,28 @@
               <div class="label inPanelLabel">Song title</div>
               <input id="sunoTitle" type="text" placeholder="My new song" />
             </label>
-            <details class="details createFlowExtras">
-              <summary>More song details</summary>
-              <div class="field grow inputPanel inputPanel--style">
+            <div class="field grow inputPanel inputPanel--style">
+              <div class="label inPanelLabel">Singer</div>
+              <!-- Hidden input is the form state; pills are the visible control.
+                   A saved voice persona (chips below) overrides the gender. -->
+              <input type="hidden" id="sunoSingerGender" value="" />
+              <div id="singerGenderPills" class="addressPills addressPills--three" role="group" aria-label="Singer voice">
+                <button type="button" class="addressPill isActive" data-singer-value="" aria-pressed="true">
+                  <span class="addressPillMain">Auto</span>
+                  <span class="addressPillSub">let AI pick</span>
+                </button>
+                <button type="button" class="addressPill" data-singer-value="m" aria-pressed="false">
+                  <span class="addressPillMain">Male</span>
+                  <span class="addressPillSub">مغني</span>
+                </button>
+                <button type="button" class="addressPill" data-singer-value="f" aria-pressed="false">
+                  <span class="addressPillMain">Female</span>
+                  <span class="addressPillSub">مغنية</span>
+                </button>
+              </div>
+              <div id="singerPersonaRow" class="singerPersonaRow" hidden></div>
+            </div>
+            <div class="field grow inputPanel inputPanel--style">
                 <div class="label inPanelLabel">Arabic address</div>
                 <!-- Hidden select keeps the existing form state/JS contract;
                      the pills below are the visible control. -->
@@ -734,7 +753,6 @@
                 <div class="label inPanelLabel">Artwork style</div>
                 <input id="sunoArtworkStyle" type="text" placeholder="Neon desert, cinematic portrait…" />
               </label>
-            </details>
           </section>
 
           <section class="createFlowStep createFlowStep--generate" aria-label="Generate">
@@ -3334,6 +3352,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260611addressPills"></script>
+    <script type="module" src="./src/app.js?v=20260611singerCard"></script>
   </body>
 </html>

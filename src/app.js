@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260611advancedOptions";
+const APP_BUILD = "20260611worldCup";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4541,6 +4541,396 @@ async function refreshDiscoverChallengeSpotlight() {
   }
 }
 
+// ─── Live event campaigns ───────────────────────────────────────────────
+// One config drives a time-boxed campaign: Home hero banner, a join sheet
+// (team + vibe + language → prefilled Create), a Discover rail of entries,
+// campaign badges on feed cards, and a team leaderboard. When this event
+// ends, swap the config for the next one (Christmas, Eid, Easter, …).
+const LIVE_CAMPAIGN = {
+  id: "worldcup2026",
+  title: "World Cup Anthems",
+  shortTitle: "World Cup",
+  emoji: "🏆",
+  sub: "The world is playing. Pick your team, pick a vibe, drop your anthem.",
+  cta: "Make your team's anthem",
+  startTs: Date.UTC(2026, 4, 25),
+  endTs: Date.UTC(2026, 6, 19, 23, 59, 59),
+  teams: [
+    { id: "morocco", name: "Morocco", ar: "المغرب", flag: "🇲🇦" },
+    { id: "saudi", name: "Saudi Arabia", ar: "السعودية", flag: "🇸🇦" },
+    { id: "egypt", name: "Egypt", ar: "مصر", flag: "🇪🇬" },
+    { id: "qatar", name: "Qatar", ar: "قطر", flag: "🇶🇦" },
+    { id: "jordan", name: "Jordan", ar: "الأردن", flag: "🇯🇴" },
+    { id: "tunisia", name: "Tunisia", ar: "تونس", flag: "🇹🇳" },
+    { id: "algeria", name: "Algeria", ar: "الجزائر", flag: "🇩🇿" },
+    { id: "iraq", name: "Iraq", ar: "العراق", flag: "🇮🇶" },
+    { id: "brazil", name: "Brazil", ar: "البرازيل", flag: "🇧🇷" },
+    { id: "argentina", name: "Argentina", ar: "الأرجنتين", flag: "🇦🇷" },
+    { id: "france", name: "France", ar: "فرنسا", flag: "🇫🇷" },
+    { id: "germany", name: "Germany", ar: "ألمانيا", flag: "🇩🇪" },
+    { id: "spain", name: "Spain", ar: "إسبانيا", flag: "🇪🇸" },
+    { id: "portugal", name: "Portugal", ar: "البرتغال", flag: "🇵🇹" },
+    { id: "england", name: "England", ar: "إنجلترا", flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿" },
+    { id: "italy", name: "Italy", ar: "إيطاليا", flag: "🇮🇹" },
+    { id: "usa", name: "USA", ar: "أمريكا", flag: "🇺🇸" },
+    { id: "mexico", name: "Mexico", ar: "المكسيك", flag: "🇲🇽" },
+  ],
+  vibes: [
+    {
+      id: "chant",
+      label: "Stadium chant",
+      emoji: "📣",
+      style: "stadium anthem, crowd chants, big drums, claps, brass, epic energy",
+      en: `[Intro – crowd chanting]\n{team}! {team}! Olé olé olé!\n\n[Verse 1]\nLights on the stadium, hearts beating loud\nMillions of voices, one name in the crowd\nWe carried this dream through the years and the rain\nTonight we rise — say it again!\n\n[Chorus]\n{team}, {team} — raise the flag high\nOne heart, one roar, we touch the sky\nWin or lose, we sing as one\n{team} forever — we've already won!\n\n[Bridge – drums only]\nClap! Clap! Let them hear our sound\nThis is our moment, this is our ground`,
+      ar: `[مقدمة – هتاف الجمهور]\n{team}! {team}! أولي أولي أولي!\n\n[المقطع الأول]\nالأضواء عالملعب والقلب يدق\nملايين الأصوات وباسمك تنطق\nحملنا الحلم سنين وسنين\nالليلة نرفع الراية عالين\n\n[اللازمة]\nيا {team} ارفع العلم\nقلب واحد وصوت واحد للقمم\nفزنا أو خسرنا نغني سوا\n{team} للأبد ومعاك الهوى\n\n[الجسر – طبول فقط]\nصفقوا! خلي العالم يسمع الصدى\nهذي لحظتنا وهذا ملعبنا`,
+    },
+    {
+      id: "rap",
+      label: "Hype rap",
+      emoji: "🔥",
+      style: "arabic trap, hype rap, heavy 808s, stadium crowd shouts, energetic",
+      en: `[Intro]\nYeah… you know whose year this is\n{team}!\n\n[Verse 1]\nWe roll deep like thunder when the whistle blows\nGreen grass battlefield, everybody knows\nNumber on the back but the name's in the heart\n{team} on the rise — we been hungry from the start\n\n[Hook]\n{team} gang, put your scarves in the air\nChampions energy, see the fire in the stare\nThey can talk, they can doubt, we don't care\nTrophy's coming home — say it loud if you're there!`,
+      ar: `[مقدمة]\nإيه… السنة هذي لمين؟\n{team}!\n\n[المقطع الأول]\nندخل الملعب زي الرعد إذا صفّر الحكم\nأرض خضرا ومعركة والكل يعلم\nالرقم على الظهر بس الاسم في القلب\n{team} صاعد وجوعان من أول لعب\n\n[الهوك]\nيا جمهور {team} ارفعوا الشالات\nطاقة أبطال وعيون فيها ثبات\nخلهم يحكوا خلهم يشكوا ما نهتم\nالكاس جاي لعنا — قولها بصوت أعلى وأهم!`,
+    },
+    {
+      id: "dabke",
+      label: "Dabke party",
+      emoji: "🪘",
+      style: "dabke, mijwiz, davul drums, fast 6/8, wedding celebration energy, zaghrouta",
+      en: `[Intro – mijwiz melody]\nHey! Hey! Everybody hold hands!\n\n[Verse 1]\nThe night is ours and the drums are calling\nFlags are flying and the stars are falling\nFrom every street to the stadium floor\nWe dance for {team} — hear the people roar!\n\n[Chorus]\nDabke for {team}, stomp the ground\nThe whole world's moving to our sound\nHands up high and voices strong\n{team} tonight, this is our song!`,
+      ar: `[مقدمة – لحن المجوز]\nهيه! هيه! كلنا إيد بإيد!\n\n[المقطع الأول]\nالليلة لينا والطبل عم بينادي\nالأعلام عالية والفرحة زيادة\nمن كل حارة لأرض الملعب\nنرقص لـ{team} والصوت يلهب\n\n[اللازمة]\nدبكة لـ{team} دقوا عالأرض\nكل العالم يرقص معنا فرض\nإيدين عالية وصوت قوي\n{team} الليلة والفرح حي!`,
+    },
+    {
+      id: "heart",
+      label: "Heartfelt",
+      emoji: "💚",
+      style: "emotional anthem, warm strings, piano build, choir lift, cinematic",
+      en: `[Verse 1]\nI remember the radio, my father's voice\nEvery match we believed — it was never a choice\nThrough the years and the heartbreak, the hope never died\nIt's more than a game, it's the tears in our eyes\n\n[Chorus]\n{team}, this one's for you\nFor every dream we carried through\nWherever we are, however far\nWe rise with you — you're who we are`,
+      ar: `[المقطع الأول]\nبتذكر الراديو وصوت أبويا\nكل مباراة نآمن وما في غيرها\nسنين ودموع والأمل ما مات\nأكتر من لعبة هي حكاية حياة\n\n[اللازمة]\nيا {team} هاي الأغنية إلك\nلكل حلم حملناه معك\nوين ما كنا ومهما بعدنا\nمنقوم معك — إنت إحنا`,
+    },
+  ],
+};
+
+function liveCampaignNow() {
+  const c = LIVE_CAMPAIGN;
+  if (!c) return null;
+  const now = Date.now();
+  if (now < Number(c.startTs || 0) || now > Number(c.endTs || 0)) return null;
+  return c;
+}
+
+function campaignDaysLeftLabel(c) {
+  const days = Math.max(0, Math.ceil((Number(c.endTs || 0) - Date.now()) / 86400000));
+  if (days <= 0) return "last hours";
+  if (days === 1) return "1 day left";
+  return `${days} days left`;
+}
+
+function renderCampaignBanner() {
+  const wrap = document.getElementById("campaignBanner");
+  if (!wrap) return;
+  const c = liveCampaignNow();
+  if (!c) {
+    wrap.hidden = true;
+    return;
+  }
+  const set = (id, text) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  };
+  set("campaignBannerTitle", c.title);
+  set("campaignBannerSub", c.sub);
+  set("campaignBannerCta", c.cta);
+  set("campaignBannerDays", campaignDaysLeftLabel(c));
+  set("campaignBannerEmoji", c.emoji);
+  wrap.hidden = false;
+}
+
+// Sheet state
+let _campaignTeam = "";
+let _campaignVibe = "chant";
+let _campaignLang = "ar";
+let _campaignSongsCache = { ts: 0, rows: [] };
+
+/** Public campaign entries (songs whose challenge meta carries this
+ *  campaign id), newest first. Cached for 5 minutes — shared between the
+ *  Discover rail and the sheet leaderboard. */
+async function fetchCampaignSongs(campaignId) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
+  if (_campaignSongsCache.rows.length && Date.now() - _campaignSongsCache.ts < 5 * 60_000) {
+    return _campaignSongsCache.rows;
+  }
+  const filter = `public_on_profile=eq.true&meta->challenge->>campaign=eq.${encodeURIComponent(campaignId)}`;
+  const cols = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_challenge:meta->challenge";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_challenge:meta->challenge";
+  try {
+    let r = await fetch(
+      `${SUPABASE_URL}/rest/v1/user_songs?${filter}&select=${cols}&order=published_at.desc.nullslast,created_at.desc&limit=200`,
+      { headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" }, cache: "no-store" },
+    );
+    if (!r.ok) {
+      const txt = await r.clone().text().catch(() => "");
+      if (/published_at|42703|column/i.test(txt)) {
+        r = await fetch(
+          `${SUPABASE_URL}/rest/v1/user_songs?${filter}&select=${colsLegacy}&order=created_at.desc&limit=200`,
+          { headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" }, cache: "no-store" },
+        );
+      }
+    }
+    if (!r.ok) return [];
+    const arr = await r.json().catch(() => []);
+    if (!Array.isArray(arr)) return [];
+    const rows = dedupePublicSongRowsRaw(arr).map((s) => ({
+      id: String(s.id || ""),
+      ts: new Date(s.published_at || s.created_at || Date.now()).getTime(),
+      title: s.title || "Anthem",
+      artUrl: String(s.art_url || "").trim(),
+      url: String(s.song_url || "").trim(),
+      taskId: String(s.task_id || ""),
+      audioId: String(s.audio_id || ""),
+      kind: s.kind || "full",
+      userId: String(s.user_id || "").trim(),
+      meta: s.meta_challenge ? { challenge: s.meta_challenge } : {},
+    }));
+    _campaignSongsCache = { ts: Date.now(), rows };
+    return rows;
+  } catch {
+    return [];
+  }
+}
+
+function campaignTeamCounts(rows) {
+  const counts = new Map();
+  for (const t of rows || []) {
+    const team = String(challengeMetaForTrack(t)?.team || "").trim();
+    if (team) counts.set(team, (counts.get(team) || 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+}
+
+function renderCampaignLeaderboard(rows) {
+  const el = document.getElementById("campaignLeaderboard");
+  const c = liveCampaignNow();
+  if (!el || !c) return;
+  const board = campaignTeamCounts(rows).slice(0, 3);
+  if (!board.length) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  const medals = ["🥇", "🥈", "🥉"];
+  el.innerHTML = board
+    .map(([teamId, n], i) => {
+      const team = c.teams.find((t) => t.id === teamId);
+      if (!team) return "";
+      return `<span class="campaignBoardItem">${medals[i] || ""} ${escapeHtml(team.flag)} ${escapeHtml(team.name)} <b>${n}</b></span>`;
+    })
+    .filter(Boolean)
+    .join("");
+  el.hidden = false;
+}
+
+function syncCampaignSheetSelections() {
+  const c = liveCampaignNow();
+  document.querySelectorAll("#campaignTeamGrid [data-campaign-team]").forEach((b) => {
+    const on = String(b.getAttribute("data-campaign-team") || "") === _campaignTeam;
+    b.classList.toggle("isActive", on);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  document.querySelectorAll("#campaignVibeRow [data-campaign-vibe]").forEach((b) => {
+    const on = String(b.getAttribute("data-campaign-vibe") || "") === _campaignVibe;
+    b.classList.toggle("isActive", on);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  document.querySelectorAll("#campaignLangRow [data-campaign-lang]").forEach((b) => {
+    const on = String(b.getAttribute("data-campaign-lang") || "") === _campaignLang;
+    b.classList.toggle("isActive", on);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  const cta = document.getElementById("btnCampaignCreate");
+  if (cta && c) {
+    const team = c.teams.find((t) => t.id === _campaignTeam);
+    cta.disabled = !team;
+    cta.textContent = team ? `Create my ${team.flag} ${team.name} anthem` : "Pick your team to start";
+  }
+}
+
+function openCampaignSheet() {
+  const c = liveCampaignNow();
+  const sheet = document.getElementById("campaignSheet");
+  if (!c || !sheet) return;
+  const set = (id, text) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  };
+  set("campaignSheetTitle", c.title);
+  set("campaignSheetSub", c.sub);
+  set("campaignSheetDays", campaignDaysLeftLabel(c));
+  set("campaignSheetEmoji", c.emoji);
+  const teamGrid = document.getElementById("campaignTeamGrid");
+  if (teamGrid && !teamGrid.dataset.rendered) {
+    teamGrid.dataset.rendered = "1";
+    teamGrid.innerHTML = c.teams
+      .map(
+        (t) => `
+        <button type="button" class="campaignTeamChip" data-campaign-team="${escapeHtml(t.id)}" aria-pressed="false">
+          <span class="campaignTeamFlag">${escapeHtml(t.flag)}</span>
+          <span class="campaignTeamName">${escapeHtml(t.name)}</span>
+          <span class="campaignTeamAr">${escapeHtml(t.ar)}</span>
+        </button>`,
+      )
+      .join("");
+  }
+  const vibeRow = document.getElementById("campaignVibeRow");
+  if (vibeRow && !vibeRow.dataset.rendered) {
+    vibeRow.dataset.rendered = "1";
+    vibeRow.innerHTML = c.vibes
+      .map(
+        (v) =>
+          `<button type="button" class="optChip" data-campaign-vibe="${escapeHtml(v.id)}" aria-pressed="false">${escapeHtml(v.emoji)} ${escapeHtml(v.label)}</button>`,
+      )
+      .join("");
+  }
+  syncCampaignSheetSelections();
+  sheet.style.display = "";
+  try { document.body.style.overflow = "hidden"; } catch {}
+  void fetchCampaignSongs(c.id).then((rows) => renderCampaignLeaderboard(rows));
+}
+
+function closeCampaignSheet() {
+  const sheet = document.getElementById("campaignSheet");
+  if (sheet) sheet.style.display = "none";
+  try { document.body.style.overflow = ""; } catch {}
+}
+
+function startCampaignCreate() {
+  const c = liveCampaignNow();
+  if (!c) return;
+  const team = c.teams.find((t) => t.id === _campaignTeam);
+  const vibe = c.vibes.find((v) => v.id === _campaignVibe) || c.vibes[0];
+  if (!team || !vibe) return;
+  const teamDisplay = _campaignLang === "ar" ? team.ar : team.name;
+  const lyrics = String(vibe[_campaignLang] || vibe.en || "").replaceAll("{team}", teamDisplay);
+  closeCampaignSheet();
+  applyDiscoveryIdeaToCreate({
+    id: `campaign:${c.id}:${team.id}:${vibe.id}`,
+    title: `${team.name} Anthem ${c.emoji}`,
+    style: vibe.style,
+    lyrics,
+    prompt: lyrics,
+    dialect: "",
+    dialectHint: "",
+    challenge: {
+      id: `${c.id}:${team.id}`,
+      title: `${c.shortTitle} Anthem`,
+      type: "campaign",
+      campaign: c.id,
+      team: team.id,
+      teamName: team.name,
+      teamFlag: team.flag,
+      occasion: c.shortTitle,
+      genre: vibe.label,
+      personName: "",
+      variant: vibe.id,
+    },
+  });
+}
+
+function bindCampaignUiOnce() {
+  const bannerBtn = document.getElementById("campaignBannerBtn");
+  if (bannerBtn && !bannerBtn.dataset.bound) {
+    bannerBtn.dataset.bound = "1";
+    bannerBtn.addEventListener("click", () => {
+      haptic("light");
+      openCampaignSheet();
+    });
+  }
+  const sheet = document.getElementById("campaignSheet");
+  if (sheet && !sheet.dataset.bound) {
+    sheet.dataset.bound = "1";
+    document.getElementById("campaignSheetBackdrop")?.addEventListener("click", closeCampaignSheet);
+    document.getElementById("btnCloseCampaignSheet")?.addEventListener("click", closeCampaignSheet);
+    document.getElementById("btnCampaignCreate")?.addEventListener("click", () => {
+      haptic("impact");
+      startCampaignCreate();
+    });
+    sheet.addEventListener("click", (e) => {
+      const teamBtn = e.target?.closest?.("[data-campaign-team]");
+      if (teamBtn) {
+        haptic("light");
+        _campaignTeam = String(teamBtn.getAttribute("data-campaign-team") || "");
+        syncCampaignSheetSelections();
+        return;
+      }
+      const vibeBtn = e.target?.closest?.("[data-campaign-vibe]");
+      if (vibeBtn) {
+        haptic("light");
+        _campaignVibe = String(vibeBtn.getAttribute("data-campaign-vibe") || "");
+        syncCampaignSheetSelections();
+        return;
+      }
+      const langBtn = e.target?.closest?.("[data-campaign-lang]");
+      if (langBtn) {
+        haptic("light");
+        _campaignLang = String(langBtn.getAttribute("data-campaign-lang") || "");
+        syncCampaignSheetSelections();
+      }
+    });
+  }
+  const railJoin = document.getElementById("discoverCampaignTitleBtn");
+  if (railJoin && !railJoin.dataset.bound) {
+    railJoin.dataset.bound = "1";
+    railJoin.addEventListener("click", () => {
+      haptic("light");
+      openCampaignSheet();
+    });
+  }
+}
+
+async function refreshDiscoverCampaignRail() {
+  const wrap = document.getElementById("discoverCampaignRail");
+  const row = document.getElementById("discoverCampaignRailRow");
+  const countEl = document.getElementById("discoverCampaignCount");
+  const titleEl = document.getElementById("discoverCampaignTitle");
+  if (!wrap || !row) return;
+  const c = liveCampaignNow();
+  if (!c) {
+    wrap.hidden = true;
+    row.innerHTML = "";
+    return;
+  }
+  if (titleEl) titleEl.textContent = `${c.emoji} ${c.title}`;
+  try {
+    const rows = (await fetchCampaignSongs(c.id)).filter((t) => String(t.url || "").trim());
+    if (countEl) countEl.textContent = rows.length ? `${rows.length} anthem${rows.length === 1 ? "" : "s"}` : "Be the first!";
+    wrap.hidden = false;
+    if (!rows.length) {
+      row.innerHTML = "";
+      return;
+    }
+    const profMap = await fetchProfilesByUserIdsMap(rows.slice(0, 10).map((t) => t.userId));
+    row.innerHTML = rows.slice(0, 10).map((track) => {
+      const prof = track.userId ? profMap.get(track.userId) : null;
+      const handle = String(prof?.username || "").trim();
+      const artSafe = trackCoverArtForFeed(track);
+      const title = String(track.title || "Anthem").trim();
+      const ch = challengeMetaForTrack(track);
+      const flag = String(ch?.teamFlag || "").trim();
+      return `
+        <button type="button" class="discoverChallengeSpotCard" data-challenge-entry-play="${encodeURIComponent(track.url || "")}" data-challenge-entry-title="${encodeURIComponent(title)}" data-challenge-entry-art="${encodeURIComponent(artSafe)}" data-challenge-entry-by="${encodeURIComponent(handle ? `@${handle}` : "Creator")}" data-play-song-id="${encodeURIComponent(track.id || "")}" data-play-owner-id="${encodeURIComponent(track.userId || "")}" data-play-task-id="${encodeURIComponent(track.taskId || "")}" data-play-audio-id="${encodeURIComponent(track.audioId || "")}">
+          <span class="discoverChallengeSpotArt">${flag ? `<span class="discoverCampaignFlag">${escapeHtml(flag)}</span>` : ""}<img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" /></span>
+          <span class="discoverChallengeSpotMeta">
+            <strong>${escapeHtml(title)}</strong>
+            ${handle ? `<small>@${escapeHtml(handle)}</small>` : ""}
+          </span>
+        </button>`;
+    }).join("");
+  } catch {
+    wrap.hidden = true;
+    row.innerHTML = "";
+  }
+}
+
 function bindHomeDeskOnce(page) {
   if (!page || page.dataset.boundHomeDesk === "1") return;
   page.dataset.boundHomeDesk = "1";
@@ -4657,6 +5047,8 @@ function renderHomeDesk() {
   syncHomeSegUi();
   const greeting = document.getElementById("homeDeskGreeting");
   if (greeting) greeting.textContent = `Hey, ${homeDeskGreetingName()}`;
+  renderCampaignBanner();
+  bindCampaignUiOnce();
   renderHomeDeskQuickStarts();
   renderHomeDeskSparksDeck();
   renderHomeDeskContinue();
@@ -8277,7 +8669,11 @@ function bindDiscoveryDiscoverControls() {
     wireTrackOptionsSheetOnce();
     dPane.addEventListener("click", (e) => {
       const challengePlay = e.target.closest("[data-challenge-entry-play]");
-      if (challengePlay && document.getElementById("discoverChallengeSpotlight")?.contains(challengePlay)) {
+      if (
+        challengePlay &&
+        (document.getElementById("discoverChallengeSpotlight")?.contains(challengePlay) ||
+          document.getElementById("discoverCampaignRail")?.contains(challengePlay))
+      ) {
         const raw = decodeDiscoverDataAttr(challengePlay, "data-challenge-entry-play");
         const title = decodeDiscoverDataAttr(challengePlay, "data-challenge-entry-title") || "Song";
         const art = decodeDiscoverDataAttr(challengePlay, "data-challenge-entry-art") || "";
@@ -9034,6 +9430,12 @@ function challengePillHtml(label = "Challenge") {
 function challengeAttributionText(challenge) {
   if (!challenge) return "";
   const title = String(challenge.title || "Challenge").trim();
+  // Live-event entries (World Cup etc.): show the event + team instead of
+  // the generic "Joined …" copy.
+  if (String(challenge.campaign || "").trim()) {
+    const team = `${String(challenge.teamFlag || "").trim()} ${String(challenge.teamName || "").trim()}`.trim();
+    return `${title}${team ? ` · ${team}` : ""}`;
+  }
   const bits = [challenge.occasion, challenge.genre, challenge.language && challenge.language !== "Auto" ? challenge.language : ""].map((x) => String(x || "").trim()).filter(Boolean);
   const forWho = challenge.personName ? ` · For ${challenge.personName}` : "";
   return `Joined ${title}${bits.length ? ` · ${bits.join(" / ")}` : ""}${forWho}`;
@@ -9042,6 +9444,10 @@ function challengeAttributionText(challenge) {
 function challengeSourceLineHtml(track) {
   const challenge = challengeMetaForTrack(track);
   if (!challenge) return "";
+  if (String(challenge.campaign || "").trim()) {
+    const team = `${String(challenge.teamFlag || "").trim()} ${String(challenge.teamName || "").trim()}`.trim();
+    return `<span class="challengeAttributionLine campaignAttributionLine"><span class="challengeAttributionPill campaignAttributionPill"><span>🏆</span><span>${escapeHtml(String(challenge.title || "Live event"))}</span></span>${team ? `<span>${escapeHtml(team)}</span>` : ""}</span>`;
+  }
   return `<span class="challengeAttributionLine">${challengePillHtml("Challenge entry")}<span>${escapeHtml(challengeAttributionText(challenge))}</span></span>`;
 }
 
@@ -17379,6 +17785,8 @@ async function refreshDiscoverFeed() {
   if (gen !== _discoveryFeedGen) return;
   listEl.classList.remove("isDiscoveryLoading");
   void refreshDiscoverChallengeSpotlight();
+  bindCampaignUiOnce();
+  void refreshDiscoverCampaignRail();
 
   if (!playable.length) {
     _discoveryFeedTracks = [];

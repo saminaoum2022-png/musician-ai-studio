@@ -27241,6 +27241,311 @@ section.mentorPage{
   background: linear-gradient(150deg, rgba(124,92,255,0.24), rgba(124,92,255,0.1));
   color: #fff;
 }
+
+/* ─── Live event campaign (World Cup → Christmas → …) ─────────────────── */
+.campaignBanner{ margin: 4px 0 14px; }
+.campaignBanner[hidden]{ display: none !important; }
+.campaignBannerBtn{
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(74, 222, 128, 0.28);
+  background:
+    radial-gradient(130% 160% at 100% 0%, rgba(250, 204, 21, 0.16), transparent 55%),
+    linear-gradient(135deg, rgba(6, 78, 59, 0.92), rgba(8, 24, 18, 0.96));
+  color: #eafff3;
+  text-align: start;
+  cursor: pointer;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+.campaignBannerBtn:active{ transform: scale(0.99); }
+.campaignBannerGlow{
+  position: absolute;
+  inset: -40% -20%;
+  background: radial-gradient(50% 60% at 30% 20%, rgba(74, 222, 128, 0.22), transparent 70%);
+  animation: campaignGlowDrift 6s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+@keyframes campaignGlowDrift{
+  from{ transform: translateX(-6%); }
+  to{ transform: translateX(10%); }
+}
+.campaignBannerBody{
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.campaignBannerKicker{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(134, 239, 172, 0.92);
+}
+.campaignLiveDot{
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.6);
+  animation: campaignLivePulse 1.6s ease-out infinite;
+}
+@keyframes campaignLivePulse{
+  0%{ box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.55); }
+  70%{ box-shadow: 0 0 0 7px rgba(74, 222, 128, 0); }
+  100%{ box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+}
+.campaignBannerTitle{
+  font-size: 19px;
+  font-weight: 900;
+  letter-spacing: 0.2px;
+  color: #fff;
+}
+.campaignBannerSub{
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: rgba(220, 252, 231, 0.72);
+}
+.campaignBannerCta{
+  margin-top: 7px;
+  align-self: flex-start;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #facc15, #f59e0b);
+  color: #1c1408;
+  font-size: 12.5px;
+  font-weight: 900;
+}
+.campaignBannerEmoji{
+  position: relative;
+  font-size: 44px;
+  line-height: 1;
+  filter: drop-shadow(0 6px 14px rgba(250, 204, 21, 0.35));
+}
+
+/* Campaign sheet */
+.campaignSheet{
+  position: fixed;
+  inset: 0;
+  z-index: 13060;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.campaignSheetBackdrop{
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 6, 10, 0.66);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+.campaignSheetCard{
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 560px);
+  max-height: 86dvh;
+  border-radius: 24px 24px 0 0;
+  border: 1px solid rgba(74, 222, 128, 0.22);
+  border-bottom: none;
+  background:
+    radial-gradient(120% 70% at 100% 0%, rgba(250, 204, 21, 0.1), transparent 55%),
+    linear-gradient(170deg, rgba(7, 40, 28, 0.99), rgba(7, 12, 18, 0.99));
+  box-shadow: 0 -18px 60px rgba(0,0,0,0.55);
+  animation: campaignSheetUp 240ms ease-out;
+}
+@keyframes campaignSheetUp{
+  from{ transform: translateY(28px); opacity: 0; }
+  to{ transform: translateY(0); opacity: 1; }
+}
+.campaignSheetHead{
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 18px 12px;
+}
+.campaignSheetEmoji{ font-size: 36px; line-height: 1.1; }
+.campaignSheetHeadText{ flex: 1; min-width: 0; }
+.campaignSheetKicker{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 3px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(134, 239, 172, 0.9);
+}
+.campaignSheetHead h3{
+  margin: 0;
+  font-size: 20px;
+  font-weight: 900;
+  color: #fff;
+}
+.campaignSheetSub{
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: rgba(220, 252, 231, 0.66);
+}
+.campaignSheetClose{
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.85);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.campaignSheetScroll{
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 18px;
+}
+.campaignLeaderboard{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.campaignLeaderboard[hidden]{ display: none !important; }
+.campaignBoardItem{
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(250, 204, 21, 0.3);
+  background: rgba(250, 204, 21, 0.09);
+  color: rgba(254, 249, 195, 0.95);
+  font-size: 12px;
+  font-weight: 700;
+}
+.campaignBoardItem b{ font-weight: 900; }
+.campaignSheetSection{ margin-bottom: 14px; }
+.campaignSheetLabel{
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(220, 252, 231, 0.5);
+}
+.campaignTeamGrid{
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.campaignTeamChip{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 6px 8px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: rgba(236, 253, 245, 0.85);
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 150ms ease, background 150ms ease, transform 120ms ease;
+}
+.campaignTeamChip:active{ transform: scale(0.96); }
+.campaignTeamChip.isActive{
+  border-color: rgba(74, 222, 128, 0.7);
+  background: linear-gradient(160deg, rgba(34, 197, 94, 0.24), rgba(34, 197, 94, 0.08));
+  color: #fff;
+}
+.campaignTeamFlag{ font-size: 24px; line-height: 1.1; }
+.campaignTeamName{
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.campaignTeamAr{
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(220, 252, 231, 0.55);
+}
+.campaignTeamChip.isActive .campaignTeamAr{ color: rgba(220, 252, 231, 0.85); }
+.campaignSheetFoot{
+  padding: 12px 18px calc(14px + env(safe-area-inset-bottom));
+}
+.campaignCreateBtn{
+  width: 100%;
+  min-height: 50px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #facc15, #f59e0b);
+  color: #1c1408;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 900;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.campaignCreateBtn:active{ transform: scale(0.98); }
+.campaignCreateBtn:disabled{
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.4);
+  cursor: default;
+}
+
+/* Discover rail extras */
+.discoverCampaignTitleBtn{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverCampaignJoin{
+  font-size: 12px;
+  font-weight: 800;
+  color: #facc15;
+  white-space: nowrap;
+}
+.discoverCampaignRail .discoverChallengeSpotArt{ position: relative; }
+.discoverCampaignFlag{
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 1;
+  font-size: 15px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.6));
+}
+
+/* Campaign badge on feed cards */
+.campaignAttributionPill{
+  border-color: rgba(250, 204, 21, 0.4) !important;
+  background: rgba(250, 204, 21, 0.1) !important;
+  color: rgba(254, 240, 138, 0.95) !important;
+}
 .createOptionsField{
   display: flex;
   flex-direction: column;

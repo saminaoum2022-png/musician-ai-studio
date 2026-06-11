@@ -1064,6 +1064,16 @@
               <div id="discoveryPlaylistsRail" class="discoveryPlaylistsRail" role="list"></div>
             </section>
             <div id="discoverySpotlightWrap" class="discoverySpotlightWrap" hidden aria-hidden="true"></div>
+            <section id="discoverCampaignRail" class="discoverChallengeSpotlight discoverCampaignRail" hidden aria-label="Live event songs">
+              <div class="discoverChallengeSpotlightHead">
+                <button type="button" class="discoverCampaignTitleBtn" id="discoverCampaignTitleBtn">
+                  <span class="discoverChallengeSpotlightTitle" id="discoverCampaignTitle">🏆 World Cup Anthems</span>
+                  <span class="discoverCampaignJoin">Join →</span>
+                </button>
+                <span id="discoverCampaignCount" class="discoverChallengeSpotlightCount"></span>
+              </div>
+              <div id="discoverCampaignRailRow" class="discoverChallengeSpotlightRail" role="list" aria-live="polite"></div>
+            </section>
             <section id="discoverChallengeSpotlight" class="discoverChallengeSpotlight" hidden aria-label="Challenge spotlight">
               <div class="discoverChallengeSpotlightHead">
                 <h3 class="discoverChallengeSpotlightTitle">Challenge spotlight</h3>
@@ -1131,6 +1141,19 @@
           <header class="homeDeskHead homeDeskHead--seg">
             <h2 class="homeDeskGreeting" id="homeDeskGreeting">Hey, there</h2>
           </header>
+
+          <section class="campaignBanner" id="campaignBanner" hidden aria-label="Live event">
+            <button type="button" class="campaignBannerBtn" id="campaignBannerBtn">
+              <span class="campaignBannerGlow" aria-hidden="true"></span>
+              <span class="campaignBannerBody">
+                <span class="campaignBannerKicker"><span class="campaignLiveDot" aria-hidden="true"></span> Live event · <span id="campaignBannerDays"></span></span>
+                <strong class="campaignBannerTitle" id="campaignBannerTitle">World Cup Anthems</strong>
+                <span class="campaignBannerSub" id="campaignBannerSub"></span>
+                <span class="campaignBannerCta" id="campaignBannerCta"></span>
+              </span>
+              <span class="campaignBannerEmoji" id="campaignBannerEmoji" aria-hidden="true">🏆</span>
+            </button>
+          </section>
 
           <section class="homeDeskContinue" id="homeDeskContinue" hidden aria-label="Continue your last project">
             <button type="button" class="homeDeskContinueBtn" id="homeDeskContinueBtn">
@@ -2805,6 +2828,41 @@
       </div>
 
       <footer class="footer"><span id="footerBuild" class="hint" style="opacity:.5;font-size:11px"></span></footer>
+      <div id="campaignSheet" class="campaignSheet" style="display:none" role="dialog" aria-modal="true" aria-labelledby="campaignSheetTitle">
+        <div class="campaignSheetBackdrop" id="campaignSheetBackdrop"></div>
+        <div class="campaignSheetCard">
+          <header class="campaignSheetHead">
+            <span class="campaignSheetEmoji" id="campaignSheetEmoji" aria-hidden="true">🏆</span>
+            <div class="campaignSheetHeadText">
+              <p class="campaignSheetKicker"><span class="campaignLiveDot" aria-hidden="true"></span> Live event · <span id="campaignSheetDays"></span></p>
+              <h3 id="campaignSheetTitle">World Cup Anthems</h3>
+              <p class="campaignSheetSub" id="campaignSheetSub"></p>
+            </div>
+            <button type="button" class="campaignSheetClose" id="btnCloseCampaignSheet" aria-label="Close">×</button>
+          </header>
+          <div class="campaignSheetScroll">
+            <div id="campaignLeaderboard" class="campaignLeaderboard" hidden></div>
+            <div class="campaignSheetSection">
+              <p class="campaignSheetLabel">Your team</p>
+              <div id="campaignTeamGrid" class="campaignTeamGrid"></div>
+            </div>
+            <div class="campaignSheetSection">
+              <p class="campaignSheetLabel">Vibe</p>
+              <div id="campaignVibeRow" class="campaignVibeRow optChipRow"></div>
+            </div>
+            <div class="campaignSheetSection">
+              <p class="campaignSheetLabel">Language</p>
+              <div id="campaignLangRow" class="campaignLangRow optChipRow">
+                <button type="button" class="optChip isActive" data-campaign-lang="ar" aria-pressed="true">عربي</button>
+                <button type="button" class="optChip" data-campaign-lang="en" aria-pressed="false">English</button>
+              </div>
+            </div>
+          </div>
+          <footer class="campaignSheetFoot">
+            <button type="button" class="campaignCreateBtn" id="btnCampaignCreate" disabled>Pick your team to start</button>
+          </footer>
+        </div>
+      </div>
       <div id="songDetailsModal" class="songDetailsModal" style="display:none">
         <div class="songDetailsBackdrop" id="songDetailsBackdrop"></div>
         <div class="songDetailsSheet" role="dialog" aria-modal="true" aria-labelledby="songDetailsTitle">
@@ -3355,6 +3413,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260611advancedOptions"></script>
+    <script type="module" src="./src/app.js?v=20260611worldCup"></script>
   </body>
 </html>

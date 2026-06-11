@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260611photoMood";
+const APP_BUILD = "20260611postedCreated";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -7140,7 +7140,18 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
   const avatarSrc = avatarRaw ? normalizeProfileAvatarForImg(avatarRaw) : "";
   const initials = (handle || "U").replace(/^@/, "").slice(0, 2).toUpperCase();
   const profileHref = handle ? `#/u/${encodeURIComponent(handle)}` : "#";
-  const when = relativeTime(t.ts);
+  // The feed event is the PUBLISH, so the main timestamp is the publish
+  // moment (matches the row's position in the feed). When the song itself
+  // is meaningfully older — e.g. published from the archive — a secondary
+  // "created Xd ago" chip keeps the creation date honest.
+  const postedTs = libraryTrackPublicTs(t) || Number(t.ts || 0);
+  const createdTsRaw = Number(t.createdTs || t.ts || 0);
+  const when = relativeTime(postedTs || t.ts);
+  const CREATED_CHIP_MIN_GAP_MS = 48 * 60 * 60 * 1000;
+  const createdChipHtml =
+    createdTsRaw && postedTs && postedTs - createdTsRaw > CREATED_CHIP_MIN_GAP_MS
+      ? `<span class="followActMetaDot" aria-hidden="true">·</span><span class="followActWhen followActWhenCreated">created ${escapeHtml(relativeTime(createdTsRaw))}</span>`
+      : "";
   const plays = Number(t.playCount);
   const caption = releaseCaptionForTrack(t);
   const captionHtml = caption
@@ -7162,6 +7173,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
             <a class="followActUserLink" href="${escapeHtml(profileHref)}" data-route-link="user">${handle ? `<strong class="followActUser">@${escapeHtml(handle)}</strong>` : `<strong class="followActUser">A musician</strong>`}</a>
             <span class="followActMetaDot" aria-hidden="true">·</span>
             <span class="followActWhen">${escapeHtml(when)}</span>
+            ${createdChipHtml}
             <span class="followActMetaDot" aria-hidden="true">·</span>
             ${followingActivityBadgeHtml("music", type)}
           </div>
@@ -7204,6 +7216,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
           <div class="followActWhoLine">
             <a class="followActUserLink" href="${escapeHtml(profileHref)}" data-route-link="user">${who}</a>
             <span class="followActWhen">${escapeHtml(when)}</span>
+            ${createdChipHtml}
           </div>
           ${followingActivityBadgeHtml("music", type)}
         </div>

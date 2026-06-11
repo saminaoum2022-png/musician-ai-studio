@@ -20830,6 +20830,14 @@ body.createChooserSheetOpen .footer{
   font-weight: 600;
   color: rgba(232,238,247,0.45);
 }
+/* Secondary "created Xd ago" chip next to the posted time — only renders
+   when the song is meaningfully older than the post. */
+.followActWhenCreated{
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(232,238,247,0.32);
+  white-space: nowrap;
+}
 .followActCover{
   position: relative;
   flex-shrink: 0;

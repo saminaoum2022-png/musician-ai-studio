@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260609darkOnly";
+const APP_BUILD = "20260611playerRemix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -444,6 +444,8 @@ const els = {
   playerChallengeAttributionText: document.getElementById("playerChallengeAttributionText"),
   playerRemixAttribution: document.getElementById("playerRemixAttribution"),
   playerRemixAttributionText: document.getElementById("playerRemixAttributionText"),
+  playerRemixRow: document.getElementById("playerRemixRow"),
+  btnPlayerRemix: document.getElementById("btnPlayerRemix"),
   playerReleaseNote: document.getElementById("playerReleaseNote"),
   playerReleaseNoteText: document.getElementById("playerReleaseNoteText"),
   playerFeedbackPanel: document.getElementById("playerFeedbackPanel"),
@@ -23931,6 +23933,11 @@ function updatePlayerSecondaryChrome() {
   const card = document.querySelector(".playerCard");
   if (card) card.dataset.readOnlyListen = ro ? "1" : "0";
   if (ro && els.trimSheet) els.trimSheet.style.display = "none";
+  // Remix CTA: any loaded track with audio is remixable — own songs and
+  // listen-only ones alike (the handler routes each to the right flow).
+  if (els.playerRemixRow) {
+    els.playerRemixRow.hidden = !String(currentPlayerTrackRef?.url || "").trim();
+  }
 }
 
 function setPlayerSource(url, label) {
@@ -29424,6 +29431,55 @@ if (els.btnPlayerShare) {
     if (libRow && (await sharePublicTrackLink(libRow, { title: trackTitle }))) return;
     showToast("Saving link preview… try Share again in a few seconds.", { icon: "…", durationMs: 3600 });
     if (libRow) queueArchiveLibraryTrack(libRow);
+  });
+}
+if (els.btnPlayerRemix) {
+  els.btnPlayerRemix.addEventListener("click", async () => {
+    haptic("light");
+    const t = currentPlayerTrackRef;
+    const url = String(t?.url || "").trim();
+    if (!url) {
+      showToast("Open a song first, then remix.", { icon: "!", durationMs: 3200 });
+      return;
+    }
+    if (!authSession?.user?.id) {
+      showToast("Sign in to remix songs.", { icon: "!", durationMs: 3800 });
+      try { location.hash = "#/auth"; } catch {}
+      return;
+    }
+    els.btnPlayerRemix.disabled = true;
+    try {
+      if (playerSourceIsExternalListenOnly()) {
+        // Someone else's song (Discover / public profile / shared link / hub
+        // post): same flow as the Discover sheet's Remix action.
+        const songId = String(t?.songId || t?.cloudSongId || "").trim();
+        const ownerUserId = String(t?.ownerUserId || "").trim();
+        const remixMeta = songId && ownerUserId
+          ? await supabaseFetchPublicSongRemixMeta({ songId, ownerUserId })
+          : {
+              lyricsInput: String(t?.meta?.lyricsInput || "").trim(),
+              styleInput: String(t?.meta?.styleInput || "").trim(),
+            };
+        await startHubRemix({
+          url,
+          id: songId || String(t?.id || ""),
+          songId,
+          ownerUserId,
+          title: t?.title || els.playerTitle?.textContent || "Song",
+          creator: String(t?.byLine || t?.creator || "").replace(/^@/, ""),
+          artUrl: t?.artUrl || els.playerArt?.src || "",
+          taskId: t?.taskId || t?.meta?.taskId || "",
+          audioId: t?.audioId || t?.meta?.audioId || "",
+          meta: remixMeta,
+        });
+      } else {
+        // Own song from Library: reuse the Library remix flow (refreshes the
+        // audio URL and carries lyrics/style metadata over).
+        await startLibraryRemixForLibraryTrack(t);
+      }
+    } finally {
+      els.btnPlayerRemix.disabled = false;
+    }
   });
 }
 if (els.btnPlayerDownloadVideo) {

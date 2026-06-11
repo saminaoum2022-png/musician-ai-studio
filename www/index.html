@@ -1796,6 +1796,22 @@
                   <span>Publish</span>
                 </button>
               </div>
+              <!-- Remix CTA: visible for any loaded track (own or someone
+                   else's) — listen-only mode hides the secondary row above,
+                   so this row is the remix entry point there. -->
+              <div id="playerRemixRow" class="playerRemixRow" hidden>
+                <button id="btnPlayerRemix" class="playerRemixBtn" type="button" aria-label="Remix this song">
+                  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M7 7h3.4c1.6 0 3 .8 3.8 2.1l1.1 1.8"/>
+                    <path d="M7 17h3.4c1.6 0 3-.8 3.8-2.1l1.1-1.8"/>
+                    <path d="M17 6l3 3-3 3"/>
+                    <path d="M17 12l3 3-3 3"/>
+                    <path d="M4 7h3"/>
+                    <path d="M4 17h3"/>
+                  </svg>
+                  <span>Remix</span>
+                </button>
+              </div>
               <div id="playerChallengeAttribution" class="playerChallengeAttribution" hidden>
                 <div class="playerChallengeBadge">
                   <svg class="challengeIcon" viewBox="0 0 24 24" aria-hidden="true">
@@ -3285,6 +3301,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260609darkOnly"></script>
+    <script type="module" src="./src/app.js?v=20260611playerRemix"></script>
   </body>
 </html>

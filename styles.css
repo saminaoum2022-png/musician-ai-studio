@@ -5434,6 +5434,50 @@ body.hubJumpingToTop #hubList .hubRow{
   display: none !important;
   margin-top: 0;
 }
+/* Standalone Remix CTA under the transport. Stays visible in listen-only
+   mode (where the secondary row above is hidden). */
+.playerRemixRow{
+  display:flex;
+  justify-content: center;
+  margin-top: 12px;
+}
+.playerRemixRow[hidden]{
+  display: none !important;
+  margin-top: 0;
+}
+.playerRemixBtn{
+  display:inline-flex;
+  align-items:center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.13);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.075), rgba(255,255,255,0.028)),
+    radial-gradient(circle at 18% 0%, rgba(var(--cover-glow-rgb), 0.20), transparent 62%);
+  color: rgba(232, 238, 251, 0.88);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  transition:
+    color 180ms ease,
+    border-color 180ms ease,
+    transform 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.playerRemixBtn .ico{ width: 15px; height: 15px; opacity: 0.9; }
+.playerRemixBtn:hover{
+  color: #fff;
+  border-color: rgba(255,255,255,0.24);
+}
+.playerRemixBtn:active{ transform: scale(0.96); }
+.playerRemixBtn:disabled{
+  opacity: 0.55;
+  cursor: default;
+  transform: none;
+}
 .playerReleaseNote,
 .playerRemixAttribution,
 .playerChallengeAttribution{

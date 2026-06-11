@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260611activityPolish";
+const APP_BUILD = "20260611remixPair";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -6290,6 +6290,7 @@ async function renderProfileActivities(opts = {}) {
   for (const t of libRows) {
     t.playCount = playCountMap.get(String(t.id || "")) || 0;
   }
+  await hydrateRemixOriginalsForTracks(libRows);
   const feedItems = libRows
     .map((track) => ({
       kind: "music",
@@ -7159,6 +7160,40 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
     : "";
   const verbHtml = followingActivityBodyHtml(type, rawTitle, remixOf, challenge);
   const subtitle = handle ? `@${handle}` : "Musician";
+  // Remix posts with a playable public original render BOTH songs as two
+  // square tiles side by side — original left, remix right — so listeners
+  // can compare them and the original creator gets plays too.
+  const orig = t._remixOriginal && String(t._remixOriginal.url || "").trim() ? t._remixOriginal : null;
+  let remixPairHtml = "";
+  if (orig) {
+    const origBy = orig.username ? `@${orig.username}` : "Original";
+    const o = followingActivityPlayAttrs(orig, profMap, origBy);
+    remixPairHtml = `
+      <div class="followActRemixPair" role="group" aria-label="Original and remix">
+        <button type="button" class="followActRemixTile" data-user-lib-play="1" data-user-lib-url="${o.encUrl}" data-user-lib-title="${o.encTitle}" data-user-lib-art="${o.encArt}" data-discovery-by="${encodeURIComponent(origBy)}" ${o.playData} aria-label="Play original ${escapeHtml(orig.title)}">
+          <img class="followActRemixTileImg" src="${escapeHtml(o.artSafe)}" alt="" decoding="async" loading="lazy" />
+          <span class="followActRemixTileChip">Original</span>
+          <span class="followActRemixTilePlay" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M5 4v16l14-8L5 4Z" fill="currentColor"/></svg>
+          </span>
+          <span class="followActRemixTileFoot">
+            <span class="followActRemixTileTitle">${escapeHtml(orig.title)}</span>
+            <span class="followActRemixTileBy">${escapeHtml(origBy)}</span>
+          </span>
+        </button>
+        <button type="button" class="followActRemixTile followActRemixTile--remix" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play remix ${safeTitle}">
+          <img class="followActRemixTileImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
+          <span class="followActRemixTileChip followActRemixTileChip--remix">${remixIconSvgHtml()}<span>Remix</span></span>
+          <span class="followActRemixTilePlay" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M5 4v16l14-8L5 4Z" fill="currentColor"/></svg>
+          </span>
+          <span class="followActRemixTileFoot">
+            <span class="followActRemixTileTitle">${safeTitle}</span>
+            <span class="followActRemixTileBy">${escapeHtml(subtitle)}</span>
+          </span>
+        </button>
+      </div>`;
+  }
   if (xstyle) {
     return `
       <article class="followAct followAct--music followAct--xstyle" data-follow-act="${type}" style="--i:${idx}" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}>
@@ -7181,6 +7216,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
             <p class="followActHead">${verbHtml}</p>
             ${captionHtml}
           </div>
+          ${remixPairHtml || `
           <button type="button" class="followActQuoteCard" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
             <span class="followActQuoteArt">
               <img class="followActQuoteImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
@@ -7192,7 +7228,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
               <span class="followActQuoteTitle">${safeTitle}</span>
               <span class="followActQuoteSub">${escapeHtml(subtitle)}</span>
             </span>
-          </button>
+          </button>`}
           ${followActActionsRowHtml({ kind: "music", targetId: t.id, targetUserId: t.userId, plays })}
         </div>
       </article>`;
@@ -7225,10 +7261,11 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
         <p class="followActHead">${followingActivityBodyHtml(type, rawTitle, remixOf, challenge)}</p>
         ${captionHtml}
       </div>
+      ${remixPairHtml || `
       <button type="button" class="followActMedia" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
         <img class="followActMediaImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
         <span class="followActMediaPlay" aria-hidden="true">▶</span>
-      </button>
+      </button>`}
       ${playFoot}
     </article>`;
 }
@@ -8068,6 +8105,8 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
     for (const t of playable) {
       t.playCount = playCountMap.get(String(t.id || "")) || 0;
     }
+    await hydrateRemixOriginalsForTracks(playable);
+    if (gen !== _discoveryFollowingGen) return;
 
     const feedItems = [
       ...statusPosts.map((post) => ({
@@ -8834,6 +8873,51 @@ function remixAttributionForTrack(track) {
   const ownerUserId = String(remixOf.ownerUserId || remixOf.userId || "").trim();
   if (!title && !creatorUsername && !songId && !ownerUserId) return null;
   return { ...remixOf, title: title || "Original song", creatorUsername, songId, ownerUserId };
+}
+
+/** Fetch the public rows for remix originals referenced by `meta.remixOf`
+ *  and attach them to the remix tracks (`t._remixOriginal`) so feeds can
+ *  render original + remix side by side. Originals that are private,
+ *  deleted, or missing audio simply keep the existing text credit. */
+async function hydrateRemixOriginalsForTracks(tracks) {
+  const list = Array.isArray(tracks) ? tracks : [];
+  const wantedIds = new Set();
+  for (const t of list) {
+    const remixOf = remixAttributionForTrack(t);
+    const sid = String(remixOf?.songId || "").trim();
+    if (sid && isShareUuid(sid)) wantedIds.add(sid);
+  }
+  if (!wantedIds.size || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+  try {
+    const inList = [...wantedIds].map((id) => encodeURIComponent(id)).join(",");
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/user_songs?id=in.(${inList})&public_on_profile=eq.true&select=id,title,art_url,song_url,user_id,task_id,audio_id`,
+      { headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" }, cache: "no-store" },
+    );
+    if (!r.ok) return;
+    const rows = await r.json().catch(() => []);
+    const byId = new Map();
+    for (const s of Array.isArray(rows) ? rows : []) {
+      if (String(s?.song_url || "").trim()) byId.set(String(s.id), s);
+    }
+    for (const t of list) {
+      const remixOf = remixAttributionForTrack(t);
+      const s = remixOf?.songId ? byId.get(String(remixOf.songId)) : null;
+      if (!s) continue;
+      t._remixOriginal = {
+        id: String(s.id || ""),
+        title: String(s.title || remixOf.title || "Original song").trim(),
+        artUrl: String(s.art_url || ""),
+        url: String(s.song_url || ""),
+        userId: String(s.user_id || remixOf.ownerUserId || ""),
+        taskId: String(s.task_id || ""),
+        audioId: String(s.audio_id || ""),
+        kind: "full",
+        username: String(remixOf.creatorUsername || "").trim(),
+        publicOnProfile: true,
+      };
+    }
+  } catch {}
 }
 
 function remixIconSvgHtml() {

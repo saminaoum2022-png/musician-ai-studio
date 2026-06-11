@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260611multiDelete";
+const APP_BUILD = "20260611photoMood";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -8453,7 +8453,7 @@ function setCreatePhotoAttachmentPreview(dataUrl = "", summary = "") {
   }
 }
 
-function openImageMoodSheet({ promptPick = false } = {}) {
+function openImageMoodSheet() {
   setCreateEntryIntent("song");
   try {
     setActiveCreateTab("photo");
@@ -8475,13 +8475,9 @@ function openImageMoodSheet({ promptPick = false } = {}) {
     document.body.classList.add("imageMoodSheetOpen");
   } catch {}
   syncImageMoodSheetUi();
-  if (promptPick && els.imageMoodUpload) {
-    window.requestAnimationFrame(() => {
-      try {
-        els.imageMoodUpload.click();
-      } catch {}
-    });
-  }
+  // Deliberately no auto-opening of the file input here: triggering the
+  // iOS photo picker while the sheet is still sliding in stacked the
+  // native menu on top of a half-open sheet. The user taps "Choose photo".
 }
 
 function closeImageMoodSheet() {
@@ -10123,6 +10119,28 @@ async function persistTrackCoverIfNeeded(track) {
     return await job;
   } finally {
     _coverUploadInflight.delete(id);
+  }
+}
+
+/** Retry cover uploads that never reached the cloud (offline at
+ *  generation time, app killed mid-upload, transient storage error).
+ *  Without this the custom cover lives only in this device's
+ *  localStorage and every cloud-hydrated surface falls back to the
+ *  placeholder logo. Runs once per session, off the boot hydrate. */
+let _coverBackfillRan = false;
+async function backfillPendingCoverUploads(items) {
+  if (_coverBackfillRan || !authSession?.user?.id) return;
+  _coverBackfillRan = true;
+  const pending = (Array.isArray(items) ? items : [])
+    .filter(
+      (t) =>
+        String(t?.artUrl || "").startsWith("data:") ||
+        String(t?.meta?.imageUrl || "").startsWith("data:"),
+    )
+    .slice(0, 8);
+  for (const t of pending) {
+    // eslint-disable-next-line no-await-in-loop
+    await persistTrackCoverIfNeeded(t);
   }
 }
 
@@ -22033,6 +22051,8 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
   const sigOf = librarySyncSigOf;
   const cloudSigs = new Set(cloudSongs.map(sigOf));
   const cloudStableKeys = new Set(cloudSongs.map(libraryTrackStableKey));
+  const localBySig = new Map();
+  for (const t of localCandidates) localBySig.set(sigOf(t), t);
 
   const merged = [];
   const seen = new Set();
@@ -22042,7 +22062,33 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
     seen.add(sig);
     merged.push(row);
   };
-  cloudSongs.forEach(addMerged);
+  // Cloud rows win, but NEVER at the cost of a custom cover: the slim
+  // cloud select carries no `meta`, and replacing the local copy wholesale
+  // used to wipe data: covers (photo-mood art) until the upload had
+  // landed — the song then showed the placeholder logo. Merge like the
+  // reconcile path: keep local id, custom art, and local meta.
+  cloudSongs.forEach((c) => {
+    const localCopy = localBySig.get(sigOf(c));
+    if (!localCopy) {
+      addMerged(c);
+      return;
+    }
+    const localArtIsCustom = String(localCopy.artUrl || "").startsWith("data:");
+    const localImgIsCustom = String(localCopy.meta?.imageUrl || "").startsWith("data:");
+    addMerged({
+      ...c,
+      id: localCopy.id || c.id,
+      cloudSongId: String(c.id || c.cloudSongId || "").trim(),
+      artUrl: localArtIsCustom ? localCopy.artUrl : (c.artUrl || localCopy.artUrl || ""),
+      meta: {
+        ...(c.meta || {}),
+        ...(localCopy.meta || {}),
+        ...(localImgIsCustom
+          ? { imageUrl: localCopy.meta.imageUrl, ...(localCopy.meta.imageThumb ? { imageThumb: localCopy.meta.imageThumb } : {}) }
+          : {}),
+      },
+    });
+  });
   localCandidates.forEach(addMerged);
   merged.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
 
@@ -22059,6 +22105,10 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
   refreshOwnSongsUi();
 
   if (!merged.length) return;
+
+  // Heal covers that never made it to the cloud (kept as data: URLs
+  // locally) so they stop reverting to the placeholder logo.
+  void backfillPendingCoverUploads(merged);
 
   // Background: only upload local-only rows (the ones not already in
   // the cloud snapshot we just fetched). The previous version pushed
@@ -22101,8 +22151,11 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
       seenFinal.add(s);
       mergedFinal.push(row);
     };
-    if (Array.isArray(cloudAfter)) cloudAfter.forEach(addFinal);
+    // `merged` first: those copies carry custom data: covers and full
+    // local meta that the slim cloud snapshot lacks. cloudAfter then only
+    // contributes rows that are genuinely new (e.g. from another device).
     merged.forEach(addFinal);
+    if (Array.isArray(cloudAfter)) cloudAfter.forEach(addFinal);
     mergedFinal.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
     saveLibraryFor(uid, mergedFinal);
     saveLibrary(mergedFinal);
@@ -27042,7 +27095,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           imageMoodCoverDataUrl = "";
           try { syncImageMoodSheetUi(); } catch {}
         });
-      void analyzeImageMood();
+      // No auto-analyze: the user reviews the photo and taps Analyze
+      // themselves (analysis costs a network round-trip they may not want
+      // yet — e.g. when they picked the wrong photo).
+      if (els.imageMoodOutput) {
+        els.imageMoodOutput.innerHTML = `<div class="imageMoodEmpty">Photo ready — tap Analyze.</div>`;
+      }
     });
   }
   if (els.btnAnalyzeImageMood) {
@@ -32018,7 +32076,7 @@ if (createTabEls.hum) {
 const createPhotoCtaBtn = document.getElementById("createPhotoCta");
 if (createPhotoCtaBtn) {
   createPhotoCtaBtn.addEventListener("click", () => {
-    openImageMoodSheet({ promptPick: true });
+    openImageMoodSheet();
   });
 }
 

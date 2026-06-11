@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260611personaChips";
+const APP_BUILD = "20260611advancedOptions";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -326,9 +326,6 @@ const els = {
   btnVocalRefRec: document.getElementById("btnVocalRefRec"),
   btnVocalRefStop: document.getElementById("btnVocalRefStop"),
   btnSunoGenerate: document.getElementById("btnSunoGenerate"),
-  presetPopClean: document.getElementById("presetPopClean"),
-  presetBalladWarm: document.getElementById("presetBalladWarm"),
-  presetClubPunch: document.getElementById("presetClubPunch"),
   btnAdvancedReset: document.getElementById("btnAdvancedReset"),
   btnAdvancedApply: document.getElementById("btnAdvancedApply"),
   fineTuneDetails: document.getElementById("fineTuneDetails"),
@@ -3126,6 +3123,8 @@ function resetAdvancedOptionsToDefaults() {
   if (els.sunoPersonaId) els.sunoPersonaId.value = "";
   savePersonaSelection("");
   document.body.classList.remove("proMode");
+  try { syncAllOptionChipRows(); } catch {}
+  try { clearMoodPresetSelection(); } catch {}
   if (els.advancedSheet) els.advancedSheet.open = false;
   updateProfilePersonaRow();
 }
@@ -29301,29 +29300,122 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
 if (els.btnSunoCredits) {
   els.btnSunoCredits.addEventListener("click", () => void refreshSunoCredits());
 }
-if (els.presetPopClean) {
-  els.presetPopClean.addEventListener("click", () => {
-    if (els.sunoGroovePace) els.sunoGroovePace.value = "balanced";
-    if (els.sunoProsody) els.sunoProsody.value = "tight";
-    if (els.sunoBeatStability) els.sunoBeatStability.value = "stable";
-    setStatus("Preset applied: Pop Clean");
+// ─── Advanced options: chip rows + mood presets ────────────────────────
+// Every chip row mirrors a hidden <select> (the form state every other
+// reader — generate payload, reset, presets — already uses).
+const _optionChipRowSyncs = [];
+
+function bindOptionChipRow(rowId, selectEl) {
+  const row = document.getElementById(rowId);
+  if (!row || !selectEl) return;
+  const sync = () => {
+    const v = String(selectEl.value || "");
+    row.querySelectorAll("[data-opt-value]").forEach((b) => {
+      const on = String(b.getAttribute("data-opt-value") || "") === v;
+      b.classList.toggle("isActive", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  };
+  row.addEventListener("click", (e) => {
+    const btn = e.target?.closest?.("[data-opt-value]");
+    if (!btn || !row.contains(btn)) return;
+    haptic("light");
+    selectEl.value = String(btn.getAttribute("data-opt-value") || "");
+    selectEl.dispatchEvent(new Event("change", { bubbles: true }));
+    sync();
+  });
+  selectEl.addEventListener("change", sync);
+  _optionChipRowSyncs.push(sync);
+  sync();
+}
+
+function syncAllOptionChipRows() {
+  for (const f of _optionChipRowSyncs) {
+    try { f(); } catch {}
+  }
+}
+
+bindOptionChipRow("grooveChipRow", els.sunoGroovePace);
+bindOptionChipRow("prosodyChipRow", els.sunoProsody);
+bindOptionChipRow("beatChipRow", els.sunoBeatStability);
+bindOptionChipRow("voiceRangeChipRow", els.sunoVoiceProfile);
+bindOptionChipRow("dialectChipRow", els.sunoDialect);
+
+// Mood presets: set the Feel knobs AND seed matching style tags. Tags are
+// append-only into Style/Tags (never overwrite what the user typed) and
+// switching moods swaps out the previous mood's tags.
+const MOOD_PRESETS = {
+  romantic: { groove: "slow", prosody: "natural", beat: "stable", label: "Romantic", tags: ["romantic", "warm strings", "soft percussion"] },
+  sad: { groove: "slow", prosody: "natural", beat: "flexible", label: "Sad", tags: ["sad", "emotional", "melancholic piano"] },
+  party: { groove: "energetic", prosody: "tight", beat: "locked", label: "Party", tags: ["upbeat", "dance", "festive"] },
+  chill: { groove: "balanced", prosody: "natural", beat: "stable", label: "Chill", tags: ["chill", "laid-back", "mellow groove"] },
+  tarab: { groove: "balanced", prosody: "ultra", beat: "flexible", label: "Tarab", tags: ["classic Arabic tarab", "oud and strings", "ornamented vocals"] },
+  dabke: { groove: "energetic", prosody: "tight", beat: "locked", label: "Dabke", tags: ["dabke", "mijwiz", "wedding celebration"] },
+};
+let _activeMoodPreset = "";
+
+function styleTagsListFromInput() {
+  return String(els.sunoStyle?.value || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+function writeStyleTagsToInput(list) {
+  if (els.sunoStyle) els.sunoStyle.value = list.join(", ");
+}
+function removeStyleTags(tags) {
+  const drop = new Set((tags || []).map((t) => String(t).toLowerCase()));
+  writeStyleTagsToInput(styleTagsListFromInput().filter((t) => !drop.has(t.toLowerCase())));
+}
+function addStyleTags(tags) {
+  const cur = styleTagsListFromInput();
+  const have = new Set(cur.map((t) => t.toLowerCase()));
+  for (const t of tags || []) {
+    if (!have.has(String(t).toLowerCase())) cur.push(String(t));
+  }
+  writeStyleTagsToInput(cur.slice(0, 14));
+}
+function syncMoodPresetPills() {
+  document.querySelectorAll("#moodPresetRow [data-mood]").forEach((b) => {
+    b.classList.toggle("isActive", String(b.getAttribute("data-mood") || "") === _activeMoodPreset);
   });
 }
-if (els.presetBalladWarm) {
-  els.presetBalladWarm.addEventListener("click", () => {
-    if (els.sunoGroovePace) els.sunoGroovePace.value = "slow";
-    if (els.sunoProsody) els.sunoProsody.value = "tight";
-    if (els.sunoBeatStability) els.sunoBeatStability.value = "stable";
-    setStatus("Preset applied: Ballad Warm");
-  });
+function clearMoodPresetSelection() {
+  _activeMoodPreset = "";
+  syncMoodPresetPills();
 }
-if (els.presetClubPunch) {
-  els.presetClubPunch.addEventListener("click", () => {
-    if (els.sunoGroovePace) els.sunoGroovePace.value = "energetic";
-    if (els.sunoProsody) els.sunoProsody.value = "tight";
-    if (els.sunoBeatStability) els.sunoBeatStability.value = "locked";
-    setStatus("Preset applied: Club Punch");
-  });
+
+{
+  const moodRow = document.getElementById("moodPresetRow");
+  if (moodRow) {
+    moodRow.addEventListener("click", (e) => {
+      const btn = e.target?.closest?.("[data-mood]");
+      if (!btn || !moodRow.contains(btn)) return;
+      haptic("light");
+      const id = String(btn.getAttribute("data-mood") || "");
+      const p = MOOD_PRESETS[id];
+      if (!p) return;
+      if (_activeMoodPreset === id) {
+        // Tapping the active mood again turns it off.
+        removeStyleTags(p.tags);
+        clearMoodPresetSelection();
+        setStatus("Mood cleared.");
+        return;
+      }
+      if (_activeMoodPreset && MOOD_PRESETS[_activeMoodPreset]) {
+        removeStyleTags(MOOD_PRESETS[_activeMoodPreset].tags);
+      }
+      if (els.sunoGroovePace) els.sunoGroovePace.value = p.groove;
+      if (els.sunoProsody) els.sunoProsody.value = p.prosody;
+      if (els.sunoBeatStability) els.sunoBeatStability.value = p.beat;
+      syncAllOptionChipRows();
+      addStyleTags(p.tags);
+      _activeMoodPreset = id;
+      syncMoodPresetPills();
+      setStatus(`Mood applied: ${p.label}`);
+      showToast(`Mood: ${p.label} — feel and style tags set`, { icon: "♪", durationMs: 2400 });
+    });
+  }
 }
 if (els.btnAdvancedReset) {
   els.btnAdvancedReset.addEventListener("click", () => {

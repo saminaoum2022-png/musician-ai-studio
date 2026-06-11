@@ -27987,6 +27987,74 @@ section.mentorPage{
 .chartToggleBtn:active{ background: rgba(250, 204, 21, 0.13); }
 .chartToggleChev{ transition: transform 180ms ease; }
 .chartToggleBtn.isOpen .chartToggleChev{ transform: rotate(180deg); }
+
+/* ─── Late-section entrance (campaign rail + weekly chart) ───────────────
+   Spring slide-up for the section itself, then a staggered cascade for its
+   contents — motion-first, not a plain fade. */
+@keyframes discoverSectionIn{
+  0%{ opacity: 0; transform: translateY(30px) scale(0.965); }
+  55%{ opacity: 1; }
+  78%{ transform: translateY(-4px) scale(1.006); }
+  100%{ opacity: 1; transform: translateY(0) scale(1); }
+}
+.discoverSectionEnter{
+  animation: discoverSectionIn 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform;
+}
+/* Campaign rail: cards sweep in from the right, one after another. */
+@keyframes discoverCardSweep{
+  from{ opacity: 0; transform: translateX(34px); }
+  to{ opacity: 1; transform: translateX(0); }
+}
+.discoverSectionEnter .discoverChallengeSpotCard{
+  animation: discoverCardSweep 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.discoverSectionEnter .discoverChallengeSpotCard:nth-child(1){ animation-delay: 140ms; }
+.discoverSectionEnter .discoverChallengeSpotCard:nth-child(2){ animation-delay: 210ms; }
+.discoverSectionEnter .discoverChallengeSpotCard:nth-child(3){ animation-delay: 280ms; }
+.discoverSectionEnter .discoverChallengeSpotCard:nth-child(4){ animation-delay: 350ms; }
+.discoverSectionEnter .discoverChallengeSpotCard:nth-child(5){ animation-delay: 420ms; }
+.discoverSectionEnter .discoverChallengeSpotCard:nth-child(n+6){ animation-delay: 480ms; }
+/* Weekly chart: head slides in, the #1 hero springs up a beat later and
+   the crown drops onto the artwork last. */
+@keyframes chartHeadIn{
+  from{ opacity: 0; transform: translateY(14px); }
+  to{ opacity: 1; transform: translateY(0); }
+}
+.discoverSectionEnter .chartHead{
+  animation: chartHeadIn 420ms cubic-bezier(0.22, 1, 0.36, 1) 80ms both;
+}
+@keyframes chartHeroSpring{
+  0%{ opacity: 0; transform: translateY(22px) scale(0.93); }
+  60%{ opacity: 1; }
+  80%{ transform: translateY(-3px) scale(1.015); }
+  100%{ opacity: 1; transform: translateY(0) scale(1); }
+}
+.discoverSectionEnter .chartHero{
+  animation: chartHeroSpring 620ms cubic-bezier(0.34, 1.3, 0.64, 1) 180ms both;
+  will-change: transform;
+}
+@keyframes chartCrownDrop{
+  0%{ opacity: 0; transform: translateY(-14px) rotate(-18deg) scale(0.6); }
+  65%{ opacity: 1; transform: translateY(2px) rotate(4deg) scale(1.08); }
+  100%{ opacity: 1; transform: translateY(0) rotate(0deg) scale(1); }
+}
+.discoverSectionEnter .chartHeroCrown{
+  animation: chartCrownDrop 520ms cubic-bezier(0.34, 1.4, 0.64, 1) 560ms both;
+}
+.discoverSectionEnter .chartToggleBtn{
+  animation: chartHeadIn 380ms ease-out 420ms both;
+}
+@media (prefers-reduced-motion: reduce){
+  .discoverSectionEnter,
+  .discoverSectionEnter .discoverChallengeSpotCard,
+  .discoverSectionEnter .chartHead,
+  .discoverSectionEnter .chartHero,
+  .discoverSectionEnter .chartHeroCrown,
+  .discoverSectionEnter .chartToggleBtn{
+    animation: none;
+  }
+}
 .chartRow{
   display: flex;
   align-items: center;

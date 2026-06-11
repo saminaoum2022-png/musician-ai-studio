@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260612voiceWizardUi";
+const APP_BUILD = "20260612discoverEnter";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4913,9 +4913,24 @@ function chartEntryPlayAttrs(e) {
   return `data-challenge-entry-play="${encodeURIComponent(e.url || "")}" data-challenge-entry-title="${encodeURIComponent(e.title || "Song")}" data-challenge-entry-art="${encodeURIComponent(artSafe)}" data-challenge-entry-by="${encodeURIComponent(by)}" data-play-song-id="${encodeURIComponent(e.songId || "")}" data-play-owner-id="${encodeURIComponent(e.userId || "")}" data-play-task-id="${encodeURIComponent(e.taskId || "")}" data-play-audio-id="${encodeURIComponent(e.audioId || "")}"`;
 }
 
+/** Spring slide-up entrance for late-loading Discover sections (campaign
+ *  rail, weekly chart). Plays only on the hidden→visible transition so
+ *  background refreshes never re-trigger it. */
+function playDiscoverSectionEnter(wrap) {
+  if (!wrap) return;
+  wrap.classList.remove("discoverSectionEnter");
+  // Force reflow so re-adding the class restarts the keyframes.
+  void wrap.offsetWidth;
+  wrap.classList.add("discoverSectionEnter");
+  setTimeout(() => {
+    try { wrap.classList.remove("discoverSectionEnter"); } catch {}
+  }, 1600);
+}
+
 async function refreshDiscoverWeeklyChart() {
   const wrap = document.getElementById("discoverWeeklyChart");
   if (!wrap) return;
+  const wasHidden = wrap.hidden;
   try {
     const chart = await fetchWeeklyChart();
     if (!chart.length) {
@@ -4989,6 +5004,7 @@ async function refreshDiscoverWeeklyChart() {
       toggle.classList.toggle("isOpen", _weeklyChartExpanded);
     }
     wrap.hidden = false;
+    if (wasHidden) playDiscoverSectionEnter(wrap);
   } catch {
     wrap.hidden = true;
     wrap.innerHTML = "";
@@ -5008,12 +5024,14 @@ async function refreshDiscoverCampaignRail() {
     return;
   }
   if (titleEl) titleEl.textContent = `${c.emoji} ${c.title}`;
+  const wasHidden = wrap.hidden;
   try {
     const rows = (await fetchCampaignSongs(c.id)).filter((t) => String(t.url || "").trim());
     if (countEl) countEl.textContent = rows.length ? `${rows.length} anthem${rows.length === 1 ? "" : "s"}` : "Be the first!";
     wrap.hidden = false;
     if (!rows.length) {
       row.innerHTML = "";
+      if (wasHidden) playDiscoverSectionEnter(wrap);
       return;
     }
     const profMap = await fetchProfilesByUserIdsMap(rows.slice(0, 10).map((t) => t.userId));
@@ -5033,6 +5051,7 @@ async function refreshDiscoverCampaignRail() {
           </span>
         </button>`;
     }).join("");
+    if (wasHidden) playDiscoverSectionEnter(wrap);
   } catch {
     wrap.hidden = true;
     row.innerHTML = "";

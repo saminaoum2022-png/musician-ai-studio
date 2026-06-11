@@ -24717,6 +24717,50 @@ button.activityRow{
   background: rgba(255,255,255,0.08);
   display: block;
 }
+/* Person silhouette for actors without a profile photo (activity rows +
+   notifications center) — replaces the old app-logo placeholder. */
+.activityAvatarSilhouette{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    linear-gradient(150deg, rgba(124,92,255,0.30), rgba(34,211,238,0.14)),
+    rgba(255,255,255,0.05);
+  color: rgba(232,238,247,0.62);
+  border: 1px solid rgba(255,255,255,0.10);
+}
+.activityAvatarSilhouette svg{
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+/* Loading skeleton for the first Activity fetch. */
+.activityRowSkel{
+  pointer-events: none;
+  box-shadow: none;
+}
+.activitySkelBlock{
+  display: block;
+  flex: 0 0 auto;
+  animation: activitySkelPulse 1.3s ease-in-out infinite;
+}
+.activitySkelLine{
+  display: block;
+  height: 11px;
+  width: 72%;
+  margin: 5px 0;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.07);
+  animation: activitySkelPulse 1.3s ease-in-out infinite;
+}
+.activitySkelLine.short{
+  width: 46%;
+  animation-delay: 120ms;
+}
+@keyframes activitySkelPulse{
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
 .activityRowBadge{
   position: absolute;
   right: -4px;

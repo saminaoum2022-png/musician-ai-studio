@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260611postedCreated";
+const APP_BUILD = "20260611activityPolish";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -14587,7 +14587,6 @@ function renderNotificationRows(list) {
     const msg = notificationMessage(n);
     const username = String(n?.metadata?.actor_username || "").replace(/^@/, "").trim();
     const actorUserId = String(n?.actor_user_id || "").trim();
-    const avatar = String(n?.metadata?.actor_avatar || "").trim() || "./assets/nabadai-logo.png";
     const icon = notificationIconForType(n?.type);
     const unread = !n?.read_at;
     const time = relativeTime(new Date(n?.created_at || Date.now()).getTime());
@@ -14600,7 +14599,7 @@ function renderNotificationRows(list) {
     return `
       <article class="notificationsItem${unread ? " isUnread" : ""}">
         <div class="notificationsItemAvatarWrap">
-          <img class="notificationsItemAvatar" src="${escapeHtml(avatar)}" alt="" loading="lazy" decoding="async" />
+          ${activityActorAvatarHtml(n, "notificationsItemAvatar")}
           <span class="notificationsItemBadge" aria-hidden="true">${escapeHtml(icon)}</span>
         </div>
         <div class="notificationsItemBody">
@@ -14633,15 +14632,90 @@ function activityDayBucket(ts) {
   const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const startYesterday = new Date(startToday);
   startYesterday.setDate(startYesterday.getDate() - 1);
+  const startWeek = new Date(startToday);
+  startWeek.setDate(startWeek.getDate() - 6);
   if (d >= startToday) return "today";
   if (d >= startYesterday) return "yesterday";
+  if (d >= startWeek) return "week";
   return "earlier";
 }
 
 function activityDayLabel(bucket) {
   if (bucket === "today") return "Today";
   if (bucket === "yesterday") return "Yesterday";
+  if (bucket === "week") return "This week";
   return "Earlier";
+}
+
+/** Avatar for an activity/notification row. Real photo when the actor has
+ *  one; otherwise a neutral person silhouette — never the app logo (that
+ *  read as "NabadAi did this" and looked like a placeholder bug). */
+function activityActorAvatarHtml(n, cls) {
+  const raw = String(n?.metadata?.actor_avatar || "").trim();
+  if (raw) {
+    return `<img class="${cls}" src="${escapeHtml(normalizeProfileAvatarForImg(raw))}" alt="" loading="lazy" decoding="async" />`;
+  }
+  return `<span class="${cls} activityAvatarSilhouette" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.4" r="3.7" fill="currentColor"/><path d="M4.4 19.6c.9-3.6 4-5.8 7.6-5.8s6.7 2.2 7.6 5.8c.1.5-.3.9-.8.9H5.2c-.5 0-.9-.4-.8-.9Z" fill="currentColor"/></svg></span>`;
+}
+
+/** Skeleton rows for the initial Activity load (replaces the old floating
+ *  spinner — the bottom infinite-scroll spinner stays for paging only). */
+function activitySkeletonHtml(count = 4) {
+  return Array.from({ length: count }, () => `
+    <div class="activityRow activityRowSkel" aria-hidden="true">
+      <span class="activityRowAvatar activitySkelBlock"></span>
+      <div class="activityRowBody">
+        <span class="activitySkelLine"></span>
+        <span class="activitySkelLine short"></span>
+      </div>
+    </div>`).join("");
+}
+
+/** Collapse bursts of near-identical rows inside one day bucket so the
+ *  feed reads like a digest instead of a raw event log:
+ *  - several "published a song" from the same creator → one row listing titles
+ *  - several reactions/replies from the same person on the same target →
+ *    one row with the messages joined.
+ *  Rows arrive newest-first, so the kept row carries the newest timestamp;
+ *  it stays unread if ANY member was unread. */
+function collapseActivityRows(rows) {
+  const out = [];
+  const byKey = new Map();
+  for (const n of rows) {
+    const t = String(n?.type || "").trim();
+    const actor = String(n?.actor_user_id || n?.metadata?.actor_username || "").trim();
+    let key = "";
+    if (t === "public_song" && actor) key = `pub|${actor}`;
+    else if ((t === "song_feedback" || t === "social_like" || t === "social_reply") && actor) {
+      key = `${t}|${actor}|${String(n?.metadata?.target_id || n?.metadata?.song_id || "").trim()}`;
+    }
+    if (!key) {
+      out.push(n);
+      continue;
+    }
+    const detail =
+      t === "song_feedback"
+        ? String(n?.metadata?.feedback_label || "").trim()
+        : String(n?.metadata?.reply_preview || "").trim();
+    const songTitle = String(n?.metadata?.song_title || "").trim();
+    const existing = byKey.get(key);
+    if (!existing) {
+      const g = {
+        ...n,
+        _groupCount: 1,
+        _groupTitles: songTitle ? [songTitle] : [],
+        _groupDetails: detail ? [detail] : [],
+      };
+      byKey.set(key, g);
+      out.push(g);
+    } else {
+      existing._groupCount += 1;
+      if (songTitle && !existing._groupTitles.includes(songTitle)) existing._groupTitles.push(songTitle);
+      if (detail) existing._groupDetails.push(detail);
+      if (!n?.read_at) existing.read_at = null;
+    }
+  }
+  return out;
 }
 
 function notificationActivityHref(n) {
@@ -14676,7 +14750,23 @@ function notificationActivityHref(n) {
 
 function activityItemHtml(n) {
   const msg = notificationMessage(n);
-  const avatar = String(n?.metadata?.actor_avatar || "").trim() || "./assets/nabadai-logo.png";
+  // Grouped rows get digest copy instead of repeating the same line N times.
+  const gc = Number(n?._groupCount || 0);
+  if (gc > 1) {
+    const username = String(n?.metadata?.actor_username || "").replace(/^@/, "").trim();
+    const t = String(n?.type || "").trim();
+    if (t === "public_song") {
+      msg.title = username ? `@${username} published ${gc} songs` : `A creator published ${gc} songs`;
+      const titles = (n._groupTitles || []).slice(0, 3).join(" · ");
+      const more = (n._groupTitles || []).length > 3 ? ` +${n._groupTitles.length - 3} more` : "";
+      msg.body = titles ? `${titles}${more}` : `${gc} new songs in your Following feed.`;
+    } else if (t === "song_feedback" || t === "social_reply") {
+      const details = (n._groupDetails || []).slice(0, 3).map((d) => `"${d.slice(0, 60)}${d.length > 60 ? "…" : ""}"`);
+      if (details.length) msg.body = details.join(" · ");
+    } else if (t === "social_like") {
+      msg.body = `${gc} likes on this.`;
+    }
+  }
   const icon = notificationIconForType(n?.type);
   const unread = !n?.read_at;
   const time = relativeTime(new Date(n?.created_at || Date.now()).getTime());
@@ -14687,7 +14777,7 @@ function activityItemHtml(n) {
   return `
     <${tag} class="activityRow${unread ? " isUnread" : ""}"${typeAttr}${dataHref}>
       <div class="activityRowAvatarWrap">
-        <img class="activityRowAvatar" src="${escapeHtml(avatar)}" alt="" loading="lazy" decoding="async" />
+        ${activityActorAvatarHtml(n, "activityRowAvatar")}
         <span class="activityRowBadge" aria-hidden="true">${escapeHtml(icon)}</span>
       </div>
       <div class="activityRowBody">
@@ -14714,22 +14804,24 @@ function renderActivityFeedFromState() {
       </div>`;
     return;
   }
-  const buckets = ["today", "yesterday", "earlier"];
-  const grouped = { today: [], yesterday: [], earlier: [] };
+  const buckets = ["today", "yesterday", "week", "earlier"];
+  const grouped = { today: [], yesterday: [], week: [], earlier: [] };
   list.forEach((n) => {
     grouped[activityDayBucket(new Date(n?.created_at || 0).getTime())].push(n);
   });
   feed.innerHTML = buckets.filter((b) => grouped[b].length).map((b) => `
     <section class="activityDayGroup" aria-label="${activityDayLabel(b)}">
       <h3 class="activityDayLabel">${activityDayLabel(b)}</h3>
-      ${grouped[b].map((n) => activityItemHtml(n)).join("")}
+      ${collapseActivityRows(grouped[b]).map((n) => activityItemHtml(n)).join("")}
     </section>`).join("");
 }
 
 async function fetchActivityBatch() {
   if (_activityFeedState.loading || !_activityFeedState.hasMore) return;
   _activityFeedState.loading = true;
-  if (els.activityLoadMore) els.activityLoadMore.hidden = false;
+  // Bottom spinner only when PAGING — the initial load already shows the
+  // skeleton in the feed, and two spinners stacked looked broken.
+  if (els.activityLoadMore) els.activityLoadMore.hidden = !_activityFeedState.items.length;
   try {
     const limit = ACTIVITY_PAGE_SIZE;
     const offset = _activityFeedState.offset;
@@ -14755,6 +14847,10 @@ async function fetchActivityBatch() {
       els.activityStatus.hidden = false;
       els.activityStatus.textContent = e?.message || "Could not load activity.";
     }
+    // Don't leave the loading skeleton up under an error message.
+    if (!_activityFeedState.items.length && els.activityFeed) {
+      els.activityFeed.innerHTML = "";
+    }
   } finally {
     _activityFeedState.loading = false;
     if (els.activityLoadMore) els.activityLoadMore.hidden = !_activityFeedState.hasMore;
@@ -14772,7 +14868,7 @@ async function enterActivityRoute({ reset = false } = {}) {
     _activityFeedState.hasMore = true;
     _activityFeedState.loading = false;
     if (els.activityFeed) {
-      els.activityFeed.innerHTML = `<div class="activityLoadMore"><span class="activityLoadMoreSpinner"></span></div>`;
+      els.activityFeed.innerHTML = activitySkeletonHtml();
     }
   }
   if (els.activityStatus) {

@@ -701,15 +701,35 @@
             </label>
             <details class="details createFlowExtras">
               <summary>More song details</summary>
-              <label class="field grow inputPanel inputPanel--style">
+              <div class="field grow inputPanel inputPanel--style">
                 <div class="label inPanelLabel">Arabic address</div>
-                <select id="sunoArabicAddress">
+                <!-- Hidden select keeps the existing form state/JS contract;
+                     the pills below are the visible control. -->
+                <select id="sunoArabicAddress" hidden aria-hidden="true" tabindex="-1">
                   <option value="" selected>Auto</option>
                   <option value="male">To a man · إنتَ / حبيبي</option>
                   <option value="female">To a woman · إنتِ / حبيبتي</option>
                   <option value="group">To a group · إنتو / حبايبي</option>
                 </select>
-              </label>
+                <div id="arabicAddressPills" class="addressPills" role="group" aria-label="Arabic address">
+                  <button type="button" class="addressPill isActive" data-address-value="" aria-pressed="true">
+                    <span class="addressPillMain">Auto</span>
+                    <span class="addressPillSub">match the lyrics</span>
+                  </button>
+                  <button type="button" class="addressPill" data-address-value="male" aria-pressed="false">
+                    <span class="addressPillMain">To a man</span>
+                    <span class="addressPillSub">إنتَ · حبيبي</span>
+                  </button>
+                  <button type="button" class="addressPill" data-address-value="female" aria-pressed="false">
+                    <span class="addressPillMain">To a woman</span>
+                    <span class="addressPillSub">إنتِ · حبيبتي</span>
+                  </button>
+                  <button type="button" class="addressPill" data-address-value="group" aria-pressed="false">
+                    <span class="addressPillMain">To a group</span>
+                    <span class="addressPillSub">إنتو · حبايبي</span>
+                  </button>
+                </div>
+              </div>
               <label class="field grow inputPanel inputPanel--style">
                 <div class="label inPanelLabel">Artwork style</div>
                 <input id="sunoArtworkStyle" type="text" placeholder="Neon desert, cinematic portrait…" />
@@ -3314,6 +3334,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260611remixOverlay2"></script>
+    <script type="module" src="./src/app.js?v=20260611addressPills"></script>
   </body>
 </html>

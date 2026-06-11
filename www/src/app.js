@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260611remixOverlay2";
+const APP_BUILD = "20260611addressPills";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -3043,6 +3043,16 @@ function setGenerateFieldsLocked(locked) {
   document.body.classList.toggle("generateLocked", Boolean(locked));
 }
 
+/** Mirror the hidden #sunoArabicAddress select onto the visible pills. */
+function syncArabicAddressPills() {
+  const v = String(els.sunoArabicAddress?.value || "").trim();
+  document.querySelectorAll("#arabicAddressPills .addressPill").forEach((b) => {
+    const on = String(b.getAttribute("data-address-value") || "") === v;
+    b.classList.toggle("isActive", on);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+}
+
 function resetAdvancedOptionsToDefaults() {
   if (els.sunoGroovePace) els.sunoGroovePace.value = "";
   if (els.sunoProsody) els.sunoProsody.value = "";
@@ -3055,6 +3065,7 @@ function resetAdvancedOptionsToDefaults() {
   if (els.sunoDialect) els.sunoDialect.value = "";
   if (els.sunoDialectHint) els.sunoDialectHint.value = "";
   if (els.sunoArabicAddress) els.sunoArabicAddress.value = "";
+  try { syncArabicAddressPills(); } catch {}
   if (els.sunoPersonaId) els.sunoPersonaId.value = "";
   savePersonaSelection("");
   document.body.classList.remove("proMode");
@@ -28197,6 +28208,24 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     syncDefaultSelectVisual(sel);
     sel.addEventListener("change", () => syncDefaultSelectVisual(sel));
   });
+
+  // Arabic address pills — the visible control; the hidden
+  // #sunoArabicAddress select stays the single source of truth so every
+  // existing reader/reset keeps working unchanged.
+  {
+    const wrap = document.getElementById("arabicAddressPills");
+    if (wrap && els.sunoArabicAddress) {
+      wrap.addEventListener("click", (e) => {
+        const btn = e.target?.closest?.("[data-address-value]");
+        if (!btn || !wrap.contains(btn)) return;
+        haptic("light");
+        els.sunoArabicAddress.value = String(btn.getAttribute("data-address-value") || "");
+        els.sunoArabicAddress.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      els.sunoArabicAddress.addEventListener("change", syncArabicAddressPills);
+      syncArabicAddressPills();
+    }
+  }
 
   function sanitizeLyricsPrompt(raw) {
     const txt = String(raw || "").replace(/\r/g, "");

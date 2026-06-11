@@ -6447,6 +6447,57 @@ textarea{
 .inputPanel--style select{
   min-height:44px;
 }
+/* Arabic address: four visible pills replacing the old dropdown. */
+.addressPills{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+.addressPill{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 52px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.045);
+  color: rgba(232,238,247,0.82);
+  font: inherit;
+  cursor: pointer;
+  text-align: center;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease,
+    transform 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.addressPill:active{ transform: scale(0.97); }
+.addressPillMain{
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+.addressPillSub{
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(226,232,246,0.5);
+  direction: rtl;
+}
+.addressPill.isActive{
+  border-color: rgba(167,139,250,0.65);
+  background:
+    linear-gradient(150deg, rgba(124,92,255,0.22), rgba(124,92,255,0.08));
+  color: #fff;
+  box-shadow: 0 0 0 1px rgba(167,139,250,0.25) inset;
+}
+.addressPill.isActive .addressPillSub{
+  color: rgba(232,226,255,0.78);
+}
 .lyricsAttachBtn{
   align-self:flex-start;
   position: relative;

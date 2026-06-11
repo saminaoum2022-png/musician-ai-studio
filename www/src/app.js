@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260612playerCleanup";
+const APP_BUILD = "20260612voiceAccuracy";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -19629,11 +19629,13 @@ function normalizePersonaRecord(item) {
   if (personaModel !== "style_persona" && personaModel !== "voice_persona") {
     personaModel = type === "suno_voice" ? "voice_persona" : "style_persona";
   }
+  const voiceTaskId = String(item.voiceTaskId || item.voice_task_id || "").trim();
   return {
     personaId,
     label: String(item.label || "My voice").trim().slice(0, 64) || "My voice",
     type,
     personaModel,
+    ...(voiceTaskId ? { voiceTaskId } : {}),
     ts: Number(item.ts || item.updated_at || 0) || Date.now(),
   };
 }
@@ -19696,6 +19698,7 @@ async function supabaseUpsertSavedPersonas(items) {
       label: p.label,
       type: p.type,
       personaModel: p.personaModel,
+      ...(p.voiceTaskId ? { voiceTaskId: p.voiceTaskId } : {}),
       ts: p.ts,
     })),
     updated_at: new Date().toISOString(),
@@ -19854,11 +19857,13 @@ function addPersona(personaId, label, meta = {}) {
       : type === "suno_voice"
       ? "voice_persona"
       : "style_persona";
+  const voiceTaskId = String(meta.voiceTaskId || "").trim();
   const existing = items.find((x) => String(x.personaId) === id);
   if (existing) {
     existing.label = label || existing.label;
     existing.type = type;
     existing.personaModel = personaModel;
+    if (voiceTaskId) existing.voiceTaskId = voiceTaskId;
     existing.ts = Date.now();
     savePersonas(items);
   } else {
@@ -19868,6 +19873,7 @@ function addPersona(personaId, label, meta = {}) {
         label: label || `Persona ${items.length + 1}`,
         type,
         personaModel,
+        ...(voiceTaskId ? { voiceTaskId } : {}),
         ts: Date.now(),
       },
       ...items,
@@ -20022,6 +20028,30 @@ async function pollVoiceValidatePhrase(taskId, maxMs = 120000) {
     await new Promise((r) => setTimeout(r, 2500));
   }
   throw new Error("Timed out waiting for validation phrase");
+}
+
+/** Suno voice availability (docs: check-voice before generating with a
+ *  recorded voice). Returns true/false, or null when the check itself
+ *  failed (network etc.) — callers treat null as "don't block". */
+async function checkSunoVoiceAvailability(voiceTaskId) {
+  const t = String(voiceTaskId || "").trim();
+  if (!t) return null;
+  try {
+    const token = getSupabaseAuthToken();
+    const r = await fetch(apiUrl("/api/suno/voice-check"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ taskId: t }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) return null;
+    return typeof d?.isAvailable === "boolean" ? d.isAvailable : null;
+  } catch {
+    return null;
+  }
 }
 
 async function pollVoiceRecordInfo(taskId, maxMs = 180000) {
@@ -20213,10 +20243,18 @@ function renderVoiceWizardVerifyStep(phrase, token) {
       const voiceTaskId = String(cd?.taskId || cd?.data?.taskId || "").trim();
       if (!voiceTaskId) throw new Error("Missing voice task id");
       const voiceId = await pollVoiceRecordInfo(voiceTaskId);
-      addPersona(voiceId, name, { type: "suno_voice", personaModel: "voice_persona" });
+      addPersona(voiceId, name, { type: "suno_voice", personaModel: "voice_persona", voiceTaskId });
       closeVoiceWizard();
       setProfilePersonaExpanded(true);
-      showToast("Your voice is saved and selected for Create", { icon: "✓", durationMs: 3600 });
+      // Per Suno docs, the voice may need a little more processing after
+      // record-info reports success — tell the user the truth either way.
+      const ready = await checkSunoVoiceAvailability(voiceTaskId);
+      showToast(
+        ready === false
+          ? "Voice saved! Suno is still processing it — it'll be ready to sing in a minute."
+          : "Your voice is saved and selected for Create",
+        { icon: "✓", durationMs: 3600 }
+      );
     } catch (e) {
       showToast(e?.message || String(e), { icon: "!", durationMs: 4400 });
       submitBtn.disabled = false;
@@ -20227,7 +20265,7 @@ function renderVoiceWizardVerifyStep(phrase, token) {
 
 function renderVoiceWizardStep1() {
   renderVoiceWizardStep(`
-    <p class="hint">Record 6–30 seconds of clear singing (solo vocal works best). We’ll ask you to sing a short phrase to verify it’s you.</p>
+    <p class="hint">Record 15–30 seconds of clear solo singing — no background music, no reverb, one voice only. Sing in any language (Arabic works great). We’ll then ask you to sing a short phrase to verify it’s you.</p>
     <label class="field">
       <div class="label">Voice name</div>
       <input id="voiceWizardName" type="text" maxlength="64" placeholder="My voice" value="${escapeHtml(voiceWizardState.name || "My voice")}" />
@@ -20240,14 +20278,17 @@ function renderVoiceWizardStep1() {
     <button type="button" class="ghost" id="voiceWizardPickSample">Upload file instead</button>
     <input type="file" id="voiceWizardSampleFile" hidden accept="audio/*,video/*,.mp4,.m4a,.mov" />
     <label class="field">
-      <div class="label">Language</div>
+      <div class="label">Verification phrase language</div>
+      <!-- Suno only supports these for the verification phrase (no Arabic);
+           the SAMPLE itself can be sung in any language. -->
       <select id="voiceWizardLang">
         <option value="en" selected>English</option>
-        <option value="ar">Arabic</option>
         <option value="fr">French</option>
         <option value="es">Spanish</option>
+        <option value="hi">Hindi</option>
       </select>
     </label>
+    <p class="hint">This only sets the language of the short phrase you’ll sing to verify your voice — your sample stays in whatever language you sang.</p>
     <div class="voiceWizardActions">
       <button type="button" class="primary" id="voiceWizardStartBtn">Continue</button>
     </div>`);
@@ -29035,6 +29076,23 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         : null;
       const personaModelSel = personaIdSel ? effectivePersonaModel(personaHit) : "";
       const modelForRequest = LATEST_SUNO_MODEL;
+      // Recorded voices: Suno's docs say to verify availability before any
+      // generation that depends on the voice — otherwise it silently renders
+      // with a generic voice and the credits are gone. Only an explicit
+      // "false" blocks; if the check itself fails we don't get in the way.
+      if (personaIdSel && personaModelSel === "voice_persona" && personaHit?.voiceTaskId) {
+        const voiceReady = await checkSunoVoiceAvailability(personaHit.voiceTaskId);
+        if (voiceReady === false) {
+          setLoading(false);
+          setGenerateBtn("Generate song", false, "generate");
+          showToast(
+            "Your voice is still processing on Suno — try again in a minute, or tap your persona chip to switch it off.",
+            { icon: "!", durationMs: 5600 }
+          );
+          setStatus("Generation paused: your recorded voice isn't ready on Suno yet.");
+          return;
+        }
+      }
       if (personaIdSel) {
         try {
           const isRecordedVoice = personaHit?.type === "suno_voice";

@@ -20,7 +20,11 @@ module.exports = async function handler(req, res) {
     const voiceUrl = String(body?.voiceUrl || "").trim();
     const vocalStartS = Math.max(0, Math.floor(Number(body?.vocalStartS) || 0));
     const vocalEndS = Math.max(vocalStartS + 1, Math.floor(Number(body?.vocalEndS) || 10));
-    const language = String(body?.language || "en").trim() || "en";
+    // Suno's documented validation-phrase languages — anything else (e.g.
+    // "ar", which we used to offer) degrades or breaks the voice capture.
+    const SUPPORTED_LANGS = new Set(["en", "zh", "es", "fr", "pt", "de", "ja", "ko", "hi", "ru"]);
+    let language = String(body?.language || "en").trim().toLowerCase() || "en";
+    if (!SUPPORTED_LANGS.has(language)) language = "en";
 
     if (!voiceUrl) return sendJson(res, 400, { error: "Missing voiceUrl" });
     if (vocalEndS - vocalStartS < 6) {

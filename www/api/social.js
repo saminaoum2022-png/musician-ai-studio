@@ -756,6 +756,111 @@ async function handleGet(req, res, user) {
     return sendJson(res, 200, { ok: true, counts });
   }
 
+  if (type === "weekly_chart") {
+    // Top songs of the week: rank public songs by real engagement in the
+    // last 7 days (plays + reactions, reactions weighted x2). The previous
+    // 7-day window provides movement arrows (▲ ▼ NEW). Best-effort
+    // "your song charted" notifications are deduped per ISO week.
+    const now = Date.now();
+    const weekAgoIso = new Date(now - 7 * 86400000).toISOString();
+    const twoWeeksAgoIso = new Date(now - 14 * 86400000).toISOString();
+    const [playsR, feedbackR] = await Promise.all([
+      svcFetch(
+        `social_song_plays?select=song_id,created_at&created_at=gte.${encodeURIComponent(twoWeeksAgoIso)}&limit=10000`,
+      ),
+      svcFetch(
+        `social_song_feedback?select=song_id,created_at&created_at=gte.${encodeURIComponent(twoWeeksAgoIso)}&limit=10000`,
+      ),
+    ]);
+    const curScore = new Map();
+    const curPlays = new Map();
+    const prevScore = new Map();
+    const bump = (map, sid, w) => map.set(sid, (map.get(sid) || 0) + w);
+    for (const row of Array.isArray(playsR.data) ? playsR.data : []) {
+      const sid = cleanSongId(row?.song_id);
+      if (!sid) continue;
+      if (String(row?.created_at || "") >= weekAgoIso) {
+        bump(curScore, sid, 1);
+        bump(curPlays, sid, 1);
+      } else {
+        bump(prevScore, sid, 1);
+      }
+    }
+    for (const row of Array.isArray(feedbackR.data) ? feedbackR.data : []) {
+      const sid = cleanSongId(row?.song_id);
+      if (!sid) continue;
+      if (String(row?.created_at || "") >= weekAgoIso) bump(curScore, sid, 2);
+      else bump(prevScore, sid, 2);
+    }
+    const rankEntries = (map) => [...map.entries()].sort((a, b) => b[1] - a[1]);
+    const curRanked = rankEntries(curScore).slice(0, 20);
+    const prevRankMap = new Map(rankEntries(prevScore).map(([sid], i) => [sid, i + 1]));
+    if (!curRanked.length) return sendJson(res, 200, { ok: true, chart: [] });
+
+    const candidateIds = curRanked.map(([sid]) => sid);
+    const songsR = await svcFetch(
+      `user_songs?select=id,title,song_url,art_url,user_id,task_id,audio_id&id=in.(${candidateIds.map(encodeURIComponent).join(",")})&public_on_profile=eq.true&limit=20`,
+    );
+    const songById = new Map(
+      (Array.isArray(songsR.data) ? songsR.data : []).map((s) => [String(s.id), s]),
+    );
+    const chart = [];
+    for (const [sid, score] of curRanked) {
+      if (chart.length >= 10) break;
+      const song = songById.get(sid);
+      if (!song || !String(song.song_url || "").trim()) continue;
+      const rank = chart.length + 1;
+      const prevRank = prevRankMap.get(sid) || 0;
+      const delta = prevRank ? prevRank - rank : 0;
+      chart.push({
+        songId: sid,
+        rank,
+        prevRank,
+        movement: !prevRank ? "new" : delta > 0 ? "up" : delta < 0 ? "down" : "same",
+        delta: Math.abs(delta),
+        score,
+        weeklyPlays: curPlays.get(sid) || 0,
+        title: String(song.title || "Song").trim(),
+        artUrl: String(song.art_url || "").trim(),
+        url: String(song.song_url || "").trim(),
+        taskId: String(song.task_id || ""),
+        audioId: String(song.audio_id || ""),
+        userId: cleanUserId(song.user_id),
+      });
+    }
+    const profiles = await Promise.all(chart.map((e) => profileByUserId(e.userId)));
+    chart.forEach((e, i) => {
+      e.username = profiles[i]?.username || "";
+      e.avatar = profiles[i]?.avatar || "";
+    });
+
+    const monday = new Date(now);
+    monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
+    const weekKey = monday.toISOString().slice(0, 10);
+    await Promise.all(
+      chart.map(async (e) => {
+        try {
+          if (!e.userId) return;
+          const entityId = `chart:${weekKey}:${e.songId}`;
+          if (await notificationExists({ userId: e.userId, type: "chart_rank", entityId })) return;
+          await insertNotification({
+            userId: e.userId,
+            type: "chart_rank",
+            entityId,
+            metadata: {
+              song_id: e.songId,
+              song_title: e.title,
+              rank: e.rank,
+              weekly_plays: e.weeklyPlays,
+              week_key: weekKey,
+            },
+          });
+        } catch {}
+      }),
+    );
+    return sendJson(res, 200, { ok: true, weekKey, chart });
+  }
+
   if (type === "my_status" || type === "following_status") {
     if (!user) return sendJson(res, 401, { ok: false, error: "Not signed in" });
     return sendJson(res, 200, { ok: true, posts: [] });

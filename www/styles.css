@@ -27546,6 +27546,220 @@ section.mentorPage{
   background: rgba(250, 204, 21, 0.1) !important;
   color: rgba(254, 240, 138, 0.95) !important;
 }
+
+/* ─── Weekly chart (Top songs of the week) ────────────────────────────── */
+.discoverWeeklyChart{
+  margin: 4px 0 18px;
+  padding: 16px 14px 12px;
+  border-radius: 22px;
+  border: 1px solid rgba(250, 204, 21, 0.16);
+  background:
+    radial-gradient(120% 90% at 0% 0%, rgba(250, 204, 21, 0.08), transparent 50%),
+    linear-gradient(170deg, rgba(24, 18, 6, 0.55), rgba(10, 12, 18, 0.4));
+}
+.discoverWeeklyChart[hidden]{ display: none !important; }
+.chartHead{
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.chartTitle{
+  margin: 0;
+  font-size: 16px;
+  font-weight: 900;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.chartTitleBadge{ font-size: 17px; }
+.chartSub{
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.42);
+  white-space: nowrap;
+}
+.chartHero{
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 10px;
+  border-radius: 18px;
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.13), rgba(245, 158, 11, 0.05));
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.chartHero:active{ transform: scale(0.99); }
+.chartHeroArtWrap{
+  position: relative;
+  flex: none;
+}
+.chartHeroCrown{
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%) rotate(-8deg);
+  font-size: 20px;
+  z-index: 1;
+  filter: drop-shadow(0 3px 6px rgba(0,0,0,0.5));
+}
+.chartHeroArt{
+  width: 84px;
+  height: 84px;
+  border-radius: 16px;
+  object-fit: cover;
+  border: 2px solid rgba(250, 204, 21, 0.65);
+  box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.14), 0 10px 26px rgba(0,0,0,0.45);
+}
+.chartHeroMeta{
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+.chartHeroRankRow{
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.chartHeroRank{
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  color: #facc15;
+}
+.chartHeroTitle{
+  font-size: 16px;
+  font-weight: 800;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chartHeroBy{
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.55);
+}
+.chartHeroPlays{
+  margin-top: 3px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: rgba(254, 240, 138, 0.9);
+}
+.chartHeroPlayIco{
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #facc15, #f59e0b);
+  color: #1c1408;
+  box-shadow: 0 6px 16px rgba(250, 204, 21, 0.3);
+}
+.chartRows{
+  display: flex;
+  flex-direction: column;
+}
+.chartRow{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 6px;
+  border: none;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.chartRow:last-child{ border-bottom: none; }
+.chartRow:active{ background: rgba(255,255,255,0.04); border-radius: 12px; }
+.chartRowRank{
+  flex: none;
+  width: 26px;
+  font-size: 17px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: rgba(255,255,255,0.38);
+}
+.chartRowRank--2{ color: #d4d4d8; }
+.chartRowRank--3{ color: #d6a05c; }
+.chartRowArt{
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.chartRowArt img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.chartRowMeta{
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.chartRowMeta strong{
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chartRowMeta small{
+  font-size: 11.5px;
+  color: rgba(255,255,255,0.48);
+}
+.chartRowPlays{
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255,255,255,0.45);
+}
+.chartMove{
+  flex: none;
+  min-width: 24px;
+  font-size: 10.5px;
+  font-weight: 900;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+.chartMove--up{ color: #4ade80; }
+.chartMove--down{ color: #f87171; }
+.chartMove--same{ color: rgba(255,255,255,0.25); font-size: 7px; }
+.chartMove--new{
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(250, 204, 21, 0.16);
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  color: #fde047;
+  font-size: 9px;
+}
 .createOptionsField{
   display: flex;
   flex-direction: column;

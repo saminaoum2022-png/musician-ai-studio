@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260611worldCup";
+const APP_BUILD = "20260611weeklyChart";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4887,6 +4887,97 @@ function bindCampaignUiOnce() {
   }
 }
 
+// ─── Weekly chart (Top songs of the week) ───────────────────────────────
+let _weeklyChartCache = { ts: 0, chart: null };
+
+async function fetchWeeklyChart() {
+  if (_weeklyChartCache.chart && Date.now() - _weeklyChartCache.ts < 5 * 60_000) {
+    return _weeklyChartCache.chart;
+  }
+  try {
+    const data = await socialApi("/api/social?type=weekly_chart");
+    const chart = Array.isArray(data?.chart) ? data.chart : [];
+    _weeklyChartCache = { ts: Date.now(), chart };
+    return chart;
+  } catch {
+    return _weeklyChartCache.chart || [];
+  }
+}
+
+function chartMovementHtml(entry) {
+  const m = String(entry?.movement || "same");
+  if (m === "new") return `<span class="chartMove chartMove--new">NEW</span>`;
+  if (m === "up") return `<span class="chartMove chartMove--up">▲${entry.delta > 1 ? entry.delta : ""}</span>`;
+  if (m === "down") return `<span class="chartMove chartMove--down">▼${entry.delta > 1 ? entry.delta : ""}</span>`;
+  return `<span class="chartMove chartMove--same">●</span>`;
+}
+
+function chartEntryPlayAttrs(e) {
+  const artSafe = trackCoverArtForFeed({ artUrl: e.artUrl, meta: {} });
+  const by = e.username ? `@${e.username}` : "Creator";
+  return `data-challenge-entry-play="${encodeURIComponent(e.url || "")}" data-challenge-entry-title="${encodeURIComponent(e.title || "Song")}" data-challenge-entry-art="${encodeURIComponent(artSafe)}" data-challenge-entry-by="${encodeURIComponent(by)}" data-play-song-id="${encodeURIComponent(e.songId || "")}" data-play-owner-id="${encodeURIComponent(e.userId || "")}" data-play-task-id="${encodeURIComponent(e.taskId || "")}" data-play-audio-id="${encodeURIComponent(e.audioId || "")}"`;
+}
+
+async function refreshDiscoverWeeklyChart() {
+  const wrap = document.getElementById("discoverWeeklyChart");
+  if (!wrap) return;
+  try {
+    const chart = await fetchWeeklyChart();
+    if (!chart.length) {
+      wrap.hidden = true;
+      wrap.innerHTML = "";
+      return;
+    }
+    const [hero, ...rest] = chart;
+    const heroArt = trackCoverArtForFeed({ artUrl: hero.artUrl, meta: {} });
+    const heroPlays = Number(hero.weeklyPlays || 0);
+    const heroHtml = `
+      <button type="button" class="chartHero" ${chartEntryPlayAttrs(hero)}>
+        <span class="chartHeroArtWrap">
+          <span class="chartHeroCrown" aria-hidden="true">👑</span>
+          <img class="chartHeroArt" src="${escapeHtml(heroArt)}" alt="" loading="lazy" decoding="async" />
+        </span>
+        <span class="chartHeroMeta">
+          <span class="chartHeroRankRow"><span class="chartHeroRank">#1</span>${chartMovementHtml(hero)}</span>
+          <strong class="chartHeroTitle">${escapeHtml(hero.title)}</strong>
+          ${hero.username ? `<small class="chartHeroBy">@${escapeHtml(hero.username)}</small>` : ""}
+          ${heroPlays ? `<span class="chartHeroPlays">🔥 ${escapeHtml(formatStatCount(heroPlays))} play${heroPlays === 1 ? "" : "s"} this week</span>` : ""}
+        </span>
+        <span class="chartHeroPlayIco" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M8 5.5v13l11-6.5-11-6.5Z"/></svg>
+        </span>
+      </button>`;
+    const rowsHtml = rest
+      .map((e) => {
+        const art = trackCoverArtForFeed({ artUrl: e.artUrl, meta: {} });
+        const plays = Number(e.weeklyPlays || 0);
+        return `
+        <button type="button" class="chartRow" ${chartEntryPlayAttrs(e)}>
+          <span class="chartRowRank chartRowRank--${e.rank}">${e.rank}</span>
+          ${chartMovementHtml(e)}
+          <span class="chartRowArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" /></span>
+          <span class="chartRowMeta">
+            <strong>${escapeHtml(e.title)}</strong>
+            ${e.username ? `<small>@${escapeHtml(e.username)}</small>` : ""}
+          </span>
+          ${plays ? `<span class="chartRowPlays">${escapeHtml(formatStatCount(plays))}</span>` : ""}
+        </button>`;
+      })
+      .join("");
+    wrap.innerHTML = `
+      <div class="chartHead">
+        <h3 class="chartTitle"><span class="chartTitleBadge" aria-hidden="true">📈</span> Top songs this week</h3>
+        <span class="chartSub">Real plays &amp; reactions · resets weekly</span>
+      </div>
+      ${heroHtml}
+      ${rowsHtml ? `<div class="chartRows">${rowsHtml}</div>` : ""}`;
+    wrap.hidden = false;
+  } catch {
+    wrap.hidden = true;
+    wrap.innerHTML = "";
+  }
+}
+
 async function refreshDiscoverCampaignRail() {
   const wrap = document.getElementById("discoverCampaignRail");
   const row = document.getElementById("discoverCampaignRailRow");
@@ -8672,7 +8763,8 @@ function bindDiscoveryDiscoverControls() {
       if (
         challengePlay &&
         (document.getElementById("discoverChallengeSpotlight")?.contains(challengePlay) ||
-          document.getElementById("discoverCampaignRail")?.contains(challengePlay))
+          document.getElementById("discoverCampaignRail")?.contains(challengePlay) ||
+          document.getElementById("discoverWeeklyChart")?.contains(challengePlay))
       ) {
         const raw = decodeDiscoverDataAttr(challengePlay, "data-challenge-entry-play");
         const title = decodeDiscoverDataAttr(challengePlay, "data-challenge-entry-title") || "Song";
@@ -15110,6 +15202,7 @@ function notificationIconForType(type) {
   if (t === "social_like") return "♥";
   if (t === "social_reply") return "💬";
   if (t === "play_milestone") return "10";
+  if (t === "chart_rank") return "🏆";
   if (t === "public_song") return "P";
   return ".";
 }
@@ -15161,6 +15254,15 @@ function notificationMessage(n) {
     return {
       title: count ? `${title} hit ${formatStatCount(count)} plays` : `${title} hit a play milestone`,
       body: "A public song reached a new listener milestone.",
+      action: "",
+    };
+  }
+  if (n?.type === "chart_rank") {
+    const rank = Number(n?.metadata?.rank || 0);
+    const title = String(n?.metadata?.song_title || "Your song").trim();
+    return {
+      title: rank ? `${title} hit #${rank} on the weekly chart 🏆` : `${title} entered the weekly chart 🏆`,
+      body: "Top songs of the week on Discover — keep the plays coming.",
       action: "",
     };
   }
@@ -15352,6 +15454,7 @@ function notificationActivityHref(n) {
   const t = String(n?.type || "").trim();
 
   if (t === "play_milestone" && songId) return `#/player?track=${encodeURIComponent(songId)}`;
+  if (t === "chart_rank" && songId) return `#/player?track=${encodeURIComponent(songId)}`;
   if (t === "song_feedback" && songId) return `#/player?track=${encodeURIComponent(songId)}`;
   if (t === "remix") {
     const sid = songId || targetId;
@@ -17787,6 +17890,7 @@ async function refreshDiscoverFeed() {
   void refreshDiscoverChallengeSpotlight();
   bindCampaignUiOnce();
   void refreshDiscoverCampaignRail();
+  void refreshDiscoverWeeklyChart();
 
   if (!playable.length) {
     _discoveryFeedTracks = [];

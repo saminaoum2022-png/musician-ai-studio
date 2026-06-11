@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260611singerCard";
+const APP_BUILD = "20260611personaChips";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -3087,21 +3087,22 @@ function renderSingerPersonaRow() {
   try { active = getActivePersonaId(); } catch {}
   if (!list.length) {
     row.innerHTML = `
-      <span class="singerPersonaNote">My voices</span>
-      <button type="button" class="singerPersonaChip singerPersonaChip--create" data-singer-persona-create="1">＋ Create your voice</button>
+      <span class="singerPersonaNote">Persona</span>
+      <button type="button" class="singerPersonaChip singerPersonaChip--create" data-singer-persona-create="1">＋ Create your persona</button>
     `;
   } else {
+    // No "Default" chip: tapping the active persona again deselects it
+    // and the song falls back to the default voice.
     const chips = [
-      `<button type="button" class="singerPersonaChip ${active ? "" : "isActive"}" data-singer-persona-id="" aria-pressed="${active ? "false" : "true"}">Default</button>`,
       ...list.map((p) => {
         const id = escapeHtml(String(p.personaId || ""));
-        const lab = escapeHtml(String(p.label || "Voice").trim().slice(0, 24) || "Voice");
+        const lab = escapeHtml(String(p.label || "Persona").trim().slice(0, 24) || "Persona");
         const on = String(p.personaId || "") === active;
         return `<button type="button" class="singerPersonaChip ${on ? "isActive" : ""}" data-singer-persona-id="${id}" aria-pressed="${on ? "true" : "false"}">${lab}</button>`;
       }),
-      `<button type="button" class="singerPersonaChip singerPersonaChip--create" data-singer-persona-create="1" aria-label="Create a new voice">＋</button>`,
+      `<button type="button" class="singerPersonaChip singerPersonaChip--create" data-singer-persona-create="1" aria-label="Create a new persona">＋</button>`,
     ];
-    row.innerHTML = `<span class="singerPersonaNote">My voices</span>${chips.join("")}`;
+    row.innerHTML = `<span class="singerPersonaNote">Persona</span>${chips.join("")}`;
   }
   row.hidden = false;
   syncSingerGenderPills();
@@ -28329,9 +28330,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         if (!chip) return;
         haptic("light");
         const id = String(chip.getAttribute("data-singer-persona-id") || "").trim();
-        if (!id) {
+        let active = "";
+        try { active = getActivePersonaId(); } catch {}
+        if (!id || id === active) {
+          // Tapping the selected persona again turns it off.
           clearActiveVoicePersona({ silent: true });
-          showToast("Back to default voice.", { icon: "♪", durationMs: 2200 });
+          showToast("Persona off — back to default voice.", { icon: "♪", durationMs: 2200 });
         } else {
           selectPersonaForCreate(id);
         }

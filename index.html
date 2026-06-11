@@ -1830,7 +1830,7 @@
                 </button>
               </div>
 
-              <!-- Secondary mini row: Cover · Trim · Publish -->
+              <!-- Secondary mini row: Cover · Publish -->
               <div class="playerSecondaryRow">
                 <button id="btnPlayerChangeCover" class="playerMiniBtn" type="button" aria-label="Change cover">
                   <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
@@ -1839,17 +1839,6 @@
                     <polyline points="21 15 16 10 5 21"/>
                   </svg>
                   <span>Cover</span>
-                </button>
-                <span class="playerMiniDot" aria-hidden="true"></span>
-                <button id="btnOpenTrimSheet" class="playerMiniBtn" type="button" aria-label="Trim clip">
-                  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
-                    <circle cx="6" cy="6" r="3"/>
-                    <circle cx="6" cy="18" r="3"/>
-                    <line x1="20" y1="4" x2="8.12" y2="15.88"/>
-                    <line x1="14.47" y1="14.48" x2="20" y2="20"/>
-                    <line x1="8.12" y1="8.12" x2="12" y2="12"/>
-                  </svg>
-                  <span>Trim</span>
                 </button>
                 <span class="playerMiniDot" aria-hidden="true"></span>
                 <button id="btnShareFullHub" class="playerMiniBtn" type="button" aria-label="Publish release">
@@ -1928,17 +1917,6 @@
                     <button id="playerConfirmCancel" class="ghost playerConfirmBtn" type="button">Cancel</button>
                     <button id="playerConfirmOk" class="primary playerConfirmBtn" type="button">Confirm</button>
                   </div>
-                </div>
-              </div>
-
-              <div id="trimSheet" class="playerTrimSheet" style="display:none">
-                <div class="playerTrimRow">
-                  <label class="small">In</label>
-                  <input id="clipStartSec" type="number" min="0" step="1" value="0" />
-                  <label class="small">Out</label>
-                  <input id="clipEndSec" type="number" min="0" step="1" value="30" />
-                  <button id="btnShareClipHub" class="primary" type="button" hidden>Publish clip</button>
-                  <button id="btnCloseTrimSheet" class="ghost" type="button">Cancel</button>
                 </div>
               </div>
 
@@ -3414,6 +3392,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260611redDotOnly"></script>
+    <script type="module" src="./src/app.js?v=20260612playerCleanup"></script>
   </body>
 </html>

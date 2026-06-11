@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260611redDotOnly";
+const APP_BUILD = "20260612playerCleanup";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -452,13 +452,7 @@ const els = {
   btnLoadFull: document.getElementById("btnLoadFull"),
   btnLoadVocals: document.getElementById("btnLoadVocals"),
   btnLoadInstrumental: document.getElementById("btnLoadInstrumental"),
-  clipStartSec: document.getElementById("clipStartSec"),
-  clipEndSec: document.getElementById("clipEndSec"),
-  btnShareClipHub: document.getElementById("btnShareClipHub"),
-  btnOpenTrimSheet: document.getElementById("btnOpenTrimSheet"),
-  btnCloseTrimSheet: document.getElementById("btnCloseTrimSheet"),
   btnShareFullHub: document.getElementById("btnShareFullHub"),
-  trimSheet: document.getElementById("trimSheet"),
   btnPlayerChangeCover: document.getElementById("btnPlayerChangeCover"),
   playerCoverUpload: document.getElementById("playerCoverUpload"),
   playerConfirm: document.getElementById("playerConfirm"),
@@ -9756,7 +9750,7 @@ async function submitSongFeedback(songId, feedbackType) {
 function setPlayerFeedback(track) {
   if (!els.playerFeedbackPanel) return;
   const ctx = publicFeedbackContextForTrack(track);
-  if (!ctx?.songId) {
+  if (!ctx?.songId || track?.fromSharedLink) {
     els.playerFeedbackPanel.hidden = true;
     els.playerFeedbackPanel.innerHTML = "";
     return;
@@ -25398,7 +25392,9 @@ function updatePlayerSecondaryChrome() {
   }
   const card = document.querySelector(".playerCard");
   if (card) card.dataset.readOnlyListen = ro ? "1" : "0";
-  if (ro && els.trimSheet) els.trimSheet.style.display = "none";
+  // Download is owner-only: listening to someone else's song (Discover,
+  // public profiles, shared links) hides the video download entirely.
+  if (els.btnPlayerDownloadVideo) els.btnPlayerDownloadVideo.hidden = ro;
   // Remix CTA: any loaded track with audio is remixable — own songs and
   // listen-only ones alike (the handler routes each to the right flow).
   if (els.playerRemixRow) {
@@ -26300,6 +26296,8 @@ async function playSharedCloudSong(row, opts = {}) {
     // when the song is not public-on-profile (link-only share).
     meta: row.meta && typeof row.meta === "object" ? row.meta : {},
     publicOnProfile: true,
+    // Shared-link listeners get a clean player: no feedback/replies panel.
+    fromSharedLink: true,
   };
   miniSource = { type: "public_profile_lib", url, songId, ownerUserId: ownerId };
   libraryNowPlayingId = null;
@@ -26653,18 +26651,6 @@ function syncPlayerUI() {
     syncProfileHubSharedRowsFromPlayer();
   } catch {}
   syncLockScreenNowPlaying();
-}
-
-function clampClipRange(startSec, endSec, durationSec) {
-  const dur = Math.max(0, Number(durationSec || 0));
-  let s = Math.max(0, Math.floor(Number(startSec || 0)));
-  let e = Math.max(0, Math.floor(Number(endSec || 0)));
-  if (dur > 0) {
-    s = Math.min(s, Math.max(0, Math.floor(dur) - 1));
-    e = Math.min(e, Math.floor(dur));
-  }
-  if (e <= s) e = Math.min((dur || s + 1), s + 1);
-  return { startSec: s, endSec: e };
 }
 
 function getParams() {
@@ -31182,6 +31168,10 @@ if (els.btnPlayerLyrics) {
 }
 if (els.btnPlayerDownloadVideo) {
   els.btnPlayerDownloadVideo.addEventListener("click", async () => {
+    if (playerSourceIsExternalListenOnly()) {
+      showToast("Only the creator can download this song.");
+      return;
+    }
     haptic("light");
     // The server needs a real http(s) URL it can fetch from. blob:/data:
     // URLs (which we sometimes use for in-app caching) are unfetchable from
@@ -31267,61 +31257,6 @@ if (els.playerVol) {
   els.playerVol.addEventListener("input", () => {
     const a = ensurePlayer();
     a.volume = clampNum(Number(els.playerVol.value), 0, 1);
-  });
-}
-if (els.btnShareClipHub) {
-  els.btnShareClipHub.addEventListener("click", async () => {
-    if (!HUB_FEATURE_ENABLED) {
-      showToast("Hub sharing is paused.", { durationMs: 3200 });
-      return;
-    }
-    if (!currentPlayerTrackRef?.url) {
-      setStatus("Open a library song first, then publish a clip.");
-      return;
-    }
-    const a = ensurePlayer();
-    const range = clampClipRange(
-      Number(els.clipStartSec?.value || 0),
-      Number(els.clipEndSec?.value || 0),
-      getPlayerDuration()
-    );
-    if (range.endSec <= range.startSec) {
-      showToast("Pick an end time after the start.");
-      return;
-    }
-    const ok = await playerInlineConfirm({
-      text: `Publish this ${range.endSec - range.startSec}s clip (${range.startSec}s → ${range.endSec}s) to Hub?`,
-      confirmLabel: "Publish clip",
-      cancelLabel: "Cancel",
-      thumbUrl: currentPlayerTrackRef.artUrl || els.playerArt?.src || "",
-    });
-    if (!ok) return;
-    const clipTrack = {
-      ...currentPlayerTrackRef,
-      title: `${currentPlayerTrackRef.title || "Song"} [${range.startSec}s-${range.endSec}s]`,
-      meta: {
-        ...(currentPlayerTrackRef.meta || {}),
-        clip: range,
-      },
-    };
-    try {
-      shareToHub(clipTrack);
-      if (els.trimSheet) els.trimSheet.style.display = "none";
-      showShareToast(`Clip published (${range.startSec}s → ${range.endSec}s)`);
-    } catch (e) {
-      showToast("Couldn't publish the clip. Try again.");
-    }
-  });
-}
-if (els.btnOpenTrimSheet) {
-  els.btnOpenTrimSheet.addEventListener("click", () => {
-    if (playerSourceIsExternalListenOnly()) return;
-    if (els.trimSheet) els.trimSheet.style.display = "";
-  });
-}
-if (els.btnCloseTrimSheet) {
-  els.btnCloseTrimSheet.addEventListener("click", () => {
-    if (els.trimSheet) els.trimSheet.style.display = "none";
   });
 }
 if (els.btnShareFullHub) {

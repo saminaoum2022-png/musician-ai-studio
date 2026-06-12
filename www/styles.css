@@ -6634,11 +6634,18 @@ textarea{
   width:100%;
   transition: box-shadow 240ms ease, filter 240ms ease;
 }
-.lyricsPanelHead{
+.lyricsPanelHead,
+.stylePanelHead{
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:10px;
+}
+/* Boost button is reused as Undo right after a boost. */
+.styleBoostBtn.undoMode{
+  border-color: rgba(35,213,171,0.55);
+  background: linear-gradient(180deg, rgba(35,213,171,0.30), rgba(124,92,255,0.16));
+  box-shadow: 0 6px 18px rgba(35,213,171,0.25);
 }
 .lyricsModePill{
   margin-top:0;

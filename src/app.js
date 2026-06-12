@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260612musicVideo";
+const APP_BUILD = "20260612boostStyle";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -276,6 +276,7 @@ initLockScreenNowPlaying({
 const els = {
   sunoPrompt: document.getElementById("sunoPrompt"),
   sunoStyle: document.getElementById("sunoStyle"),
+  btnBoostStyle: document.getElementById("btnBoostStyle"),
   sunoArtworkStyle: document.getElementById("sunoArtworkStyle"),
   sunoMaqam: document.getElementById("sunoMaqam"),
   sunoTitle: document.getElementById("sunoTitle"),
@@ -3021,6 +3022,7 @@ function setGenerateFieldsLocked(locked) {
   const instrumentalOnly = String(els.vocalInstrumentalOnly?.value || "0") === "1";
   if (els.sunoPrompt) els.sunoPrompt.disabled = locked;
   if (els.sunoStyle) els.sunoStyle.disabled = locked;
+  if (els.btnBoostStyle) els.btnBoostStyle.disabled = locked;
   if (els.sunoTitle) els.sunoTitle.disabled = locked;
   if (els.sunoReferenceMode) els.sunoReferenceMode.disabled = locked;
   if (els.sunoVocalUpload) els.sunoVocalUpload.disabled = locked;
@@ -30686,6 +30688,88 @@ if (typeof requestAnimationFrame === "function") {
 }
 els.sunoPrompt?.addEventListener("focus", showReferenceHintsPopupOnce, { once: true });
 els.sunoStyle?.addEventListener("focus", showReferenceHintsPopupOnce, { once: true });
+
+// "Boost style": send the user's short style words to /api/music/boost-style
+// (Suno's style/generate behind a provider-neutral path) and replace the
+// field with the richer produced description. The button doubles as Undo
+// for a few seconds after a boost so an unwanted rewrite is one tap away.
+if (els.btnBoostStyle && els.sunoStyle) {
+  let boostBusy = false;
+  let boostUndoValue = null;
+  let boostUndoTimer = null;
+
+  const exitUndoMode = () => {
+    if (boostUndoTimer) {
+      try { clearTimeout(boostUndoTimer); } catch {}
+      boostUndoTimer = null;
+    }
+    boostUndoValue = null;
+    els.btnBoostStyle.textContent = "✦";
+    els.btnBoostStyle.title = "Boost style with AI";
+    els.btnBoostStyle.classList.remove("undoMode");
+  };
+
+  // Manual edits to the field invalidate the undo snapshot.
+  els.sunoStyle.addEventListener("input", () => {
+    if (boostUndoValue != null && !boostBusy) exitUndoMode();
+  });
+
+  els.btnBoostStyle.addEventListener("click", async () => {
+    if (boostBusy) return;
+
+    if (boostUndoValue != null) {
+      els.sunoStyle.value = boostUndoValue;
+      exitUndoMode();
+      showToast("Restored your style", { icon: "↩" });
+      return;
+    }
+
+    const content = String(els.sunoStyle.value || "").trim();
+    if (!content) {
+      showToast("Type a few style words first (e.g. dabke pop, wedding energy)");
+      try { els.sunoStyle.focus(); } catch {}
+      return;
+    }
+    const authToken = getSupabaseAuthToken();
+    if (!authToken) {
+      showToast("Sign in to boost styles", { icon: "✦" });
+      return;
+    }
+
+    boostBusy = true;
+    els.btnBoostStyle.disabled = true;
+    els.btnBoostStyle.textContent = "…";
+    els.sunoStyle.readOnly = true;
+    try {
+      const r = await fetch(apiUrl("/api/music/boost-style"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ content }),
+      });
+      const d = await r.json().catch(() => ({}));
+      const result = String(d?.result || "").trim();
+      if (!r.ok || !result) throw new Error(d?.error || "Style boost failed — try again.");
+
+      boostUndoValue = content;
+      els.sunoStyle.value = result;
+      els.btnBoostStyle.textContent = "↩";
+      els.btnBoostStyle.title = "Undo style boost";
+      els.btnBoostStyle.classList.add("undoMode");
+      boostUndoTimer = setTimeout(exitUndoMode, 8000);
+      showToast("Style boosted — tap ↩ to undo", { icon: "✦" });
+    } catch (e) {
+      showToast(e?.message || "Style boost failed — try again.");
+    } finally {
+      boostBusy = false;
+      els.btnBoostStyle.disabled = false;
+      els.sunoStyle.readOnly = false;
+      if (boostUndoValue == null) els.btnBoostStyle.textContent = "✦";
+    }
+  });
+}
 els.sunoPrompt?.addEventListener("input", () => {
   const lyricsBoxEl = els.sunoPrompt?.closest?.(".lyricsBox");
   if (lyricsBoxEl?.classList.contains("wandGenerated")) {

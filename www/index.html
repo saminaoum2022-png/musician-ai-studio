@@ -692,7 +692,10 @@
 
           <section class="createFlowStep" aria-label="Sound and title">
             <label class="field grow inputPanel inputPanel--style">
-              <div class="label inPanelLabel">Style / Tags</div>
+              <div class="label inPanelLabel stylePanelHead">
+                <span>Style / Tags</span>
+                <button id="btnBoostStyle" class="lyricsMagicBtn styleBoostBtn" type="button" title="Boost style with AI" aria-label="Boost style with AI">✦</button>
+              </div>
               <input id="sunoStyle" type="text" placeholder="Hijaz, darbuka, 6/8" />
             </label>
             <label class="field grow inputPanel inputPanel--style">
@@ -3400,6 +3403,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260612musicVideo"></script>
+    <script type="module" src="./src/app.js?v=20260612boostStyle"></script>
   </body>
 </html>

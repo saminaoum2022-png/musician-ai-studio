@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260612videoViewer";
+const APP_BUILD = "20260612karaokeLyrics";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -433,6 +433,13 @@ const els = {
   btnPlayerShare: document.getElementById("btnPlayerShare"),
   btnPlayerDownloadVideo: document.getElementById("btnPlayerDownloadVideo"),
   btnPlayerMusicVideo: document.getElementById("btnPlayerMusicVideo"),
+  playerLyricsOverlay: document.getElementById("playerLyricsOverlay"),
+  playerLyricsBg: document.getElementById("playerLyricsBg"),
+  playerLyricsTitle: document.getElementById("playerLyricsTitle"),
+  playerLyricsSub: document.getElementById("playerLyricsSub"),
+  playerLyricsScroll: document.getElementById("playerLyricsScroll"),
+  playerLyricsList: document.getElementById("playerLyricsList"),
+  btnClosePlayerLyrics: document.getElementById("btnClosePlayerLyrics"),
   musicVideoModal: document.getElementById("musicVideoModal"),
   musicVideoBackdrop: document.getElementById("musicVideoBackdrop"),
   musicVideoPlayer: document.getElementById("musicVideoPlayer"),
@@ -24644,6 +24651,185 @@ async function resolveLyricsForTrackRef(t) {
 }
 
 /** Lightweight lyrics-only view reusing the song details sheet shell. */
+/* ─── Synced (karaoke) lyrics ──────────────────────────────────────────────
+   Word-level timing from /api/music/timestamped-lyrics, grouped into lines
+   and rendered as a full-screen overlay over the player. The active line
+   follows playback; tapping a line seeks. Falls back to the static lyrics
+   sheet when no timing data exists (instrumentals, imports, old songs). */
+
+const TIMED_LYRICS_LS_KEY = "nabad_timed_lyrics_v1";
+const timedLyricsMemCache = new Map();
+
+function loadTimedLyricsStore() {
+  try {
+    const raw = localStorage.getItem(TIMED_LYRICS_LS_KEY);
+    const obj = raw ? JSON.parse(raw) : null;
+    return obj && typeof obj === "object" ? obj : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveTimedLyricsToStore(audioId, words) {
+  try {
+    const store = loadTimedLyricsStore();
+    store[audioId] = { words, ts: Date.now() };
+    // Keep only the 10 most recent tracks so we never bloat localStorage.
+    const ids = Object.keys(store).sort((a, b) => Number(store[b]?.ts || 0) - Number(store[a]?.ts || 0));
+    for (const id of ids.slice(10)) delete store[id];
+    localStorage.setItem(TIMED_LYRICS_LS_KEY, JSON.stringify(store));
+  } catch {}
+}
+
+async function fetchTimedLyrics(taskId, audioId) {
+  if (timedLyricsMemCache.has(audioId)) return timedLyricsMemCache.get(audioId);
+  const stored = loadTimedLyricsStore()[audioId];
+  if (Array.isArray(stored?.words) && stored.words.length) {
+    timedLyricsMemCache.set(audioId, stored.words);
+    return stored.words;
+  }
+  const token = getSupabaseAuthToken();
+  const r = await fetch(apiUrl("/api/music/timestamped-lyrics"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ taskId, audioId }),
+  });
+  const d = await r.json().catch(() => ({}));
+  const words = Array.isArray(d?.alignedWords) ? d.alignedWords : [];
+  if (!r.ok || !words.length) return null;
+  timedLyricsMemCache.set(audioId, words);
+  saveTimedLyricsToStore(audioId, words);
+  return words;
+}
+
+/** Group word tokens into renderable lines. Tokens may embed newlines and
+ *  section tags (e.g. "[Verse]\nWaggin'"); tags become section labels. */
+function groupTimedLyricsIntoLines(words) {
+  const lines = [];
+  let current = null;
+  const push = () => {
+    if (current && current.text.trim()) lines.push(current);
+    current = null;
+  };
+  const append = (text, startS, endS) => {
+    const seg = String(text);
+    if (!seg.trim()) return;
+    if (/^\[[^\]]+\]$/.test(seg.trim())) {
+      push();
+      lines.push({ text: seg.trim().replace(/^\[|\]$/g, ""), startS, endS, isSection: true });
+      return;
+    }
+    if (!current) current = { text: "", startS, endS, isSection: false };
+    current.text += (current.text ? " " : "") + seg.trim();
+    current.endS = Math.max(current.endS, endS);
+  };
+  for (const w of words) {
+    const parts = String(w.word ?? "").split("\n");
+    parts.forEach((part, i) => {
+      if (i > 0) push();
+      append(part, Number(w.startS) || 0, Number(w.endS) || 0);
+    });
+  }
+  push();
+  return lines;
+}
+
+let playerLyricsState = null; // { lines, activeIdx, userScrollUntil }
+
+function closePlayerLyricsOverlay() {
+  playerLyricsState = null;
+  if (els.playerLyricsOverlay) els.playerLyricsOverlay.style.display = "none";
+  try { document.body.style.overflow = ""; } catch {}
+}
+
+function syncPlayerLyricsHighlight() {
+  const st = playerLyricsState;
+  if (!st || !playerEl || !els.playerLyricsList) return;
+  const t = Number(playerEl.currentTime) || 0;
+  // Active line = last non-section line that has started (small lead so the
+  // highlight lands as the word is sung, not after).
+  let idx = -1;
+  for (let i = 0; i < st.lines.length; i++) {
+    if (!st.lines[i].isSection && st.lines[i].startS <= t + 0.25) idx = i;
+  }
+  if (idx === st.activeIdx) return;
+  st.activeIdx = idx;
+  const rows = els.playerLyricsList.children;
+  for (let i = 0; i < rows.length; i++) {
+    rows[i].classList.toggle("isActive", i === idx);
+    rows[i].classList.toggle("isPast", i < idx && !st.lines[i]?.isSection);
+  }
+  const active = idx >= 0 ? rows[idx] : null;
+  if (active && Date.now() > (st.userScrollUntil || 0)) {
+    try { active.scrollIntoView({ block: "center", behavior: "smooth" }); } catch {}
+  }
+}
+
+function openPlayerLyricsOverlay({ title, subtitle, words }) {
+  if (!els.playerLyricsOverlay || !els.playerLyricsList) return false;
+  const lines = groupTimedLyricsIntoLines(words);
+  if (!lines.some((l) => !l.isSection)) return false;
+  playerLyricsState = { lines, activeIdx: -2, userScrollUntil: 0 };
+
+  if (els.playerLyricsTitle) els.playerLyricsTitle.textContent = String(title || "Lyrics");
+  if (els.playerLyricsSub) els.playerLyricsSub.textContent = String(subtitle || "");
+  // Blurred cover as the backdrop so the overlay inherits the song's mood.
+  const art = String(els.playerArt?.src || "").trim();
+  if (els.playerLyricsBg) {
+    els.playerLyricsBg.style.backgroundImage = art ? `url("${art.replace(/"/g, '\\"')}")` : "";
+  }
+
+  els.playerLyricsList.innerHTML = lines
+    .map((l, i) =>
+      l.isSection
+        ? `<div class="playerLyricsSection" data-line="${i}">${escapeHtml(l.text)}</div>`
+        : `<button type="button" class="playerLyricsLine" data-line="${i}" dir="auto">${escapeHtml(l.text)}</button>`
+    )
+    .join("");
+
+  els.playerLyricsOverlay.style.display = "";
+  try { document.body.style.overflow = "hidden"; } catch {}
+  try { els.playerLyricsScroll.scrollTop = 0; } catch {}
+
+  const a = ensurePlayer();
+  a.removeEventListener("timeupdate", syncPlayerLyricsHighlight);
+  a.addEventListener("timeupdate", syncPlayerLyricsHighlight);
+  syncPlayerLyricsHighlight();
+  return true;
+}
+
+els.btnClosePlayerLyrics?.addEventListener("click", closePlayerLyricsOverlay);
+els.playerLyricsScroll?.addEventListener(
+  "touchstart",
+  () => {
+    // A manual scroll pauses auto-follow briefly so the user can read ahead.
+    if (playerLyricsState) playerLyricsState.userScrollUntil = Date.now() + 4000;
+  },
+  { passive: true }
+);
+els.playerLyricsScroll?.addEventListener(
+  "wheel",
+  () => {
+    if (playerLyricsState) playerLyricsState.userScrollUntil = Date.now() + 4000;
+  },
+  { passive: true }
+);
+els.playerLyricsList?.addEventListener("click", (ev) => {
+  const row = ev.target?.closest?.(".playerLyricsLine");
+  const st = playerLyricsState;
+  if (!row || !st) return;
+  const line = st.lines[Number(row.dataset.line)];
+  if (!line) return;
+  const a = ensurePlayer();
+  try {
+    a.currentTime = Math.max(0, Number(line.startS) || 0);
+    void a.play();
+  } catch {}
+});
+
 function openLyricsViewer({ title, subtitle, lyrics } = {}) {
   if (!els.songDetailsModal || !els.songDetailsContent) return;
   const kicker = els.songDetailsModal.querySelector(".songDetailsKicker");
@@ -31648,12 +31834,29 @@ if (els.btnPlayerLyrics) {
     }
     els.btnPlayerLyrics.disabled = true;
     try {
+      // Prefer the synced karaoke view when we have generation ids. The
+      // player ref can be slim, so resolve the full Library row first.
+      const lib = loadLibrary();
+      const currentId = String(t?.id || "").trim();
+      const canonical = libraryTrackCanonicalUrl(String(t?.url || playerEl?.src || ""));
+      const full =
+        (currentId ? lib.find((x) => String(x.id) === currentId) : null) ||
+        lib.find((x) => libraryTrackCanonicalUrl(x?.url) === canonical) ||
+        t;
+      const taskId = String(full?.taskId || full?.meta?.taskId || t?.taskId || "").trim();
+      const audioId = String(full?.audioId || full?.meta?.audioId || t?.audioId || "").trim();
+      const isInstrumental = String(full?.kind || t?.kind || "") === "instrumental";
+      const title = t.title || full?.title || els.playerTitle?.textContent || "Lyrics";
+      const subtitle = String(t.byLine || t.creator || full?.byLine || "").trim();
+      if (taskId && audioId && !isInstrumental) {
+        try {
+          const words = await fetchTimedLyrics(taskId, audioId);
+          if (words && openPlayerLyricsOverlay({ title, subtitle, words })) return;
+        } catch {}
+      }
+      // No timing data — fall back to the static lyrics sheet.
       const lyrics = await resolveLyricsForTrackRef(t);
-      openLyricsViewer({
-        title: t.title || els.playerTitle?.textContent || "Lyrics",
-        subtitle: String(t.byLine || t.creator || "").trim(),
-        lyrics,
-      });
+      openLyricsViewer({ title, subtitle, lyrics });
     } finally {
       els.btnPlayerLyrics.disabled = false;
     }

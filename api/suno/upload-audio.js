@@ -57,7 +57,7 @@ module.exports = async function handler(req, res) {
     }
     if (!upRes.ok || !upData?.success || !upData?.data?.downloadUrl) {
       return sendJson(res, 502, {
-        error: "Suno temporary upload failed",
+        error: "Temporary audio upload failed",
         status: upRes.status || 502,
         details: upData || upText,
       });

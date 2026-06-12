@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260612boostStyle";
+const APP_BUILD = "20260612videoViewer";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -433,6 +433,12 @@ const els = {
   btnPlayerShare: document.getElementById("btnPlayerShare"),
   btnPlayerDownloadVideo: document.getElementById("btnPlayerDownloadVideo"),
   btnPlayerMusicVideo: document.getElementById("btnPlayerMusicVideo"),
+  musicVideoModal: document.getElementById("musicVideoModal"),
+  musicVideoBackdrop: document.getElementById("musicVideoBackdrop"),
+  musicVideoPlayer: document.getElementById("musicVideoPlayer"),
+  musicVideoTitle: document.getElementById("musicVideoTitle"),
+  btnCloseMusicVideo: document.getElementById("btnCloseMusicVideo"),
+  btnSaveMusicVideo: document.getElementById("btnSaveMusicVideo"),
   btnPlayerBack: document.getElementById("btnPlayerBack"),
   playerSeek: document.getElementById("playerSeek"),
   playerVol: document.getElementById("playerVol"),
@@ -12856,10 +12862,10 @@ function paintCreditsDisplays() {
   if (admin) {
     if (sunoCreditsLive != null && Number.isFinite(sunoCreditsLive)) {
       disp = formatCreditsAmount(sunoCreditsLive);
-      aria = `Suno balance ${disp} credits`;
+      aria = `Engine balance ${disp} credits`;
     } else {
       disp = "—";
-      aria = "Suno balance loading or unavailable";
+      aria = "Engine balance loading or unavailable";
     }
   } else {
     const v = Number.isFinite(Number(creditsState.balance)) ? Math.max(0, Number(creditsState.balance)) : 0;
@@ -13164,7 +13170,7 @@ function startSoundGenerationPolling(meta) {
       }
       if (status === "FAILED" || status === "ERROR") {
         stopSoundGenerationPolling();
-        setStatus("Sound generation failed on Suno's side. Check Recent activity for charges.");
+        setStatus("Sound generation failed upstream. Check Recent activity for charges.");
         setLoading(false);
         if (els.btnSoundGenerate) els.btnSoundGenerate.disabled = false;
         return;
@@ -16134,6 +16140,14 @@ function renderTrackSheetLibrary(track) {
   const remixEligible = !isSound && Boolean(track?.url && String(track.url).trim());
   const personaEligible = !isInstrumental && !isSound && Boolean(track?.taskId) && Boolean(track?.audioId);
   const musicVideoEligible = !isSound && Boolean(track?.taskId) && Boolean(track?.audioId);
+  const mvCached = track?.meta?.musicVideo;
+  const mvWatchable = Boolean(
+    mvCached &&
+      String(mvCached.videoUrl || "").trim() &&
+      mvCached.createdAt &&
+      Date.now() - Number(mvCached.createdAt) < MUSIC_VIDEO_FRESH_MS
+  );
+  const musicVideoLabel = mvWatchable ? "Watch music video" : "Create music video";
   const profilePublic = Boolean(track.publicOnProfile);
   const pubTo = profilePublic ? "private" : "public";
   const pubLabel = profilePublic ? "Hide from public profile" : "Publish release";
@@ -16151,7 +16165,7 @@ function renderTrackSheetLibrary(track) {
   l.innerHTML = `
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_audio">Download audio</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_video">Download video</button>
-    ${musicVideoEligible ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_music_video">Create music video</button>` : ""}
+    ${musicVideoEligible ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_music_video">${musicVideoLabel}</button>` : ""}
     ${HUB_FEATURE_ENABLED ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_share_hub">Share to Hub</button>` : ""}
     ${personaEligible ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_persona">Save voice as persona</button>` : ""}
     ${renameRow}
@@ -16634,11 +16648,10 @@ function runTrackSheetAction(action, sourceEl) {
           await createSunoMusicVideoForTrack(t, {
             onStatus: (m) => {
               setStatus(m);
-              try { showToast(m, { icon: "♪", durationMs: 3600 }); } catch {}
+              try { showToast(m, { icon: "♪", durationMs: 5200 }); } catch {}
             },
           });
-          setStatus("Music video saved.");
-          showToast("Music video saved to your device.", { icon: "✓", durationMs: 3600 });
+          setStatus("Music video ready.");
         } catch (err) {
           const m = err?.message || String(err);
           setStatus(`Music video failed: ${m}`);
@@ -20376,7 +20389,7 @@ function renderVoiceWizardVerifyStep(phrase, token) {
       const ready = await checkSunoVoiceAvailability(voiceTaskId);
       showToast(
         ready === false
-          ? "Voice saved! Suno is still processing it — it'll be ready to sing in a minute."
+          ? "Voice saved! It's still processing — it'll be ready to sing in a minute."
           : "Your voice is saved and selected for Create",
         { icon: "✓", durationMs: 3600 }
       );
@@ -20862,10 +20875,10 @@ async function createPersonaForSong({
       if (/failed to generate persona|Current music failed/i.test(baseMsg)) {
         if (probeDurSec && probeDurSec < 11) {
           hint =
-            " — Suno needs about 10+ seconds of analyzable audio. This track is too short.";
+            " — we need about 10+ seconds of analyzable audio. This track is too short.";
         } else {
           hint =
-            " — Suno couldn’t analyze this track’s vocals. Try a different song with clearer singing for at least 10s.";
+            " — we couldn’t analyze this track’s vocals. Try a different song with clearer singing for at least 10s.";
         }
       } else if (/internal error|code 500|Suno hit/i.test(baseMsg)) {
         hint = " — Wait a minute and retry, or try another track.";
@@ -23520,9 +23533,10 @@ function saveMusicVideoMetaForTrack(track, mv) {
   } catch {}
 }
 
-async function pollSunoMusicVideo(videoTaskId, maxMs = 240000) {
+async function pollSunoMusicVideo(videoTaskId, { maxMs = 240000, onStatus } = {}) {
   const token = getSupabaseAuthToken();
   const started = Date.now();
+  let ticks = 0;
   while (Date.now() - started < maxMs) {
     const r = await fetch(apiUrl(`/api/suno/video?taskId=${encodeURIComponent(videoTaskId)}`), {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -23536,10 +23550,68 @@ async function pollSunoMusicVideo(videoTaskId, maxMs = 240000) {
         throw new Error(d?.errorMessage || "Video generation failed");
       }
     }
+    ticks += 1;
+    // Reassure every ~25s; a render typically takes one to a few minutes.
+    if (onStatus && ticks % 5 === 0) {
+      const sec = Math.round((Date.now() - started) / 1000);
+      try { onStatus(`Still rendering your music video… (${sec}s — usually 1–3 minutes)`); } catch {}
+    }
     await new Promise((resolve) => setTimeout(resolve, 5000));
   }
   throw new Error("Timed out waiting for the video — try again in a minute");
 }
+
+/* ── In-app viewer: the video opens inside Nabad first; saving to the
+   device is an explicit button inside the sheet. ── */
+let musicVideoViewerCtx = null;
+
+function closeMusicVideoViewer() {
+  musicVideoViewerCtx = null;
+  try { els.musicVideoPlayer?.pause(); } catch {}
+  try { if (els.musicVideoPlayer) els.musicVideoPlayer.removeAttribute("src"); } catch {}
+  try { els.musicVideoPlayer?.load(); } catch {}
+  if (els.musicVideoModal) els.musicVideoModal.style.display = "none";
+}
+
+function openMusicVideoViewer(videoUrl, title) {
+  const url = String(videoUrl || "").trim();
+  if (!url) return;
+  if (!els.musicVideoModal || !els.musicVideoPlayer) {
+    // Viewer markup missing (stale shell) — fall back to the old save flow.
+    void deliverMusicVideoUrl(url, title);
+    return;
+  }
+  musicVideoViewerCtx = { videoUrl: url, title: String(title || "song") };
+  if (els.musicVideoTitle) els.musicVideoTitle.textContent = String(title || "Music video");
+  const proxied = apiUrl(`/api/suno/audio?url=${encodeURIComponent(url)}`);
+  els.musicVideoPlayer.onerror = () => {
+    // CDN refused direct playback (CORS/expiry) — retry through our proxy.
+    if (els.musicVideoPlayer.src !== proxied) els.musicVideoPlayer.src = proxied;
+  };
+  els.musicVideoPlayer.src = url;
+  els.musicVideoModal.style.display = "";
+  try { void els.musicVideoPlayer.play(); } catch {}
+}
+
+els.btnCloseMusicVideo?.addEventListener("click", closeMusicVideoViewer);
+els.musicVideoBackdrop?.addEventListener("click", closeMusicVideoViewer);
+els.btnSaveMusicVideo?.addEventListener("click", async () => {
+  const ctx = musicVideoViewerCtx;
+  if (!ctx) return;
+  const btn = els.btnSaveMusicVideo;
+  btn.disabled = true;
+  const prevLabel = btn.textContent;
+  btn.textContent = "Saving…";
+  try {
+    await deliverMusicVideoUrl(ctx.videoUrl, ctx.title);
+    showToast("Music video saved to your device.", { icon: "✓", durationMs: 3600 });
+  } catch (e) {
+    showToast(e?.message || "Couldn't save the video", { icon: "!", durationMs: 4400 });
+  } finally {
+    btn.disabled = false;
+    btn.textContent = prevLabel;
+  }
+});
 
 /** Fetch the finished MP4 (via our proxy to dodge CDN CORS) and hand it to
  *  the device with the usual save/share flow. */
@@ -23565,9 +23637,9 @@ async function deliverMusicVideoUrl(videoUrl, title) {
 }
 
 /**
- * Full flow: reuse a cached video when fresh, otherwise create the Suno
+ * Full flow: reuse a cached video when fresh, otherwise create the render
  * task (or resume a pending one), poll to completion, cache the URL in the
- * song meta, and save the MP4 to the device.
+ * song meta, and open the in-app viewer (saving is a button in the viewer).
  */
 async function createSunoMusicVideoForTrack(track, { onStatus } = {}) {
   const t = track || {};
@@ -23580,15 +23652,14 @@ async function createSunoMusicVideoForTrack(track, { onStatus } = {}) {
   const cached = t?.meta?.musicVideo && typeof t.meta.musicVideo === "object" ? t.meta.musicVideo : null;
   const cachedFresh = cached?.createdAt && Date.now() - Number(cached.createdAt) < MUSIC_VIDEO_FRESH_MS;
   if (cachedFresh && String(cached?.videoUrl || "").trim()) {
-    say("Fetching your music video…");
-    await deliverMusicVideoUrl(String(cached.videoUrl).trim(), t.title);
+    openMusicVideoViewer(String(cached.videoUrl).trim(), t.title);
     return;
   }
   let videoTaskId = cachedFresh ? String(cached?.taskId || "").trim() : "";
   if (videoTaskId) {
     say("Resuming your music video…");
   } else {
-    say("Creating your music video — Suno is rendering visuals synced to the beat…");
+    say("Creating your music video — rendering visuals synced to the beat…");
     const token = getSupabaseAuthToken();
     const rawHandle = String(activeProfile?.username || "").trim().replace(/^@+/, "");
     const r = await fetch(apiUrl("/api/suno/video"), {
@@ -23618,10 +23689,9 @@ async function createSunoMusicVideoForTrack(track, { onStatus } = {}) {
       saveMusicVideoMetaForTrack(t, { taskId: videoTaskId, videoUrl: "", createdAt: Date.now() });
     }
   }
-  const videoUrl = await pollSunoMusicVideo(videoTaskId);
+  const videoUrl = await pollSunoMusicVideo(videoTaskId, { onStatus: say });
   saveMusicVideoMetaForTrack(t, { taskId: videoTaskId, videoUrl, createdAt: Date.now() });
-  say("Video ready — saving to your device…");
-  await deliverMusicVideoUrl(videoUrl, t.title);
+  openMusicVideoViewer(videoUrl, t.title);
 }
 
 async function downloadLibraryVideoTrack(track) {
@@ -24778,7 +24848,7 @@ if (els.btnLibraryRecover) {
 if (els.btnLibraryRecoverById) {
   els.btnLibraryRecoverById.addEventListener("click", async () => {
     const raw = window.prompt(
-      "Paste the Suno task ID (from your API/Suno log, or the long id from the app debug output):",
+      "Paste the task ID (from your generation log, or the long id from the app debug output):",
       loadRecoverableGenerationTask()?.taskId || ""
     );
     const tid = String(raw || "").trim();
@@ -24813,7 +24883,7 @@ if (els.btnLibraryRecoverLink) {
   els.btnLibraryRecoverLink.addEventListener("click", async () => {
     const seed = loadRecoverableGenerationTask()?.taskId || "";
     const raw = window.prompt(
-      "Paste the Suno task ID (from your Suno log or Vercel logs):",
+      "Paste the task ID (from your generation log or server logs):",
       seed
     );
     const tid = String(raw || "").trim();
@@ -27122,7 +27192,7 @@ function dismissPendingBackendTask({ silent = false, skipRecoverSave = false } =
     try { setStatus("Cleared. You can start a new generation."); } catch {}
     try {
       showToast(
-        "Spinner cleared. Open Library → Recover my song if Suno already finished that generation.",
+        "Spinner cleared. Open Library → Recover my song if that generation already finished.",
         { icon: "✓", durationMs: 4500 }
       );
     } catch {}
@@ -27371,19 +27441,19 @@ async function recoverSongFromTaskId(taskId, { silent = false } = {}) {
 
   const r = await fetch(apiUrl(`/api/suno/status?taskId=${encodeURIComponent(tid)}`));
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data?.error || "Could not check Suno status.");
+  if (!r.ok) throw new Error(data?.error || "Could not check the generation status.");
 
   const parsed = parseSunoGenerationRecordInfo(data);
   const st = parsed.status;
 
   if (st === "FAILED") {
-    throw new Error("That generation failed on Suno's side.");
+    throw new Error("That generation failed upstream.");
   }
 
   if (st !== "SUCCESS" || !parsed.hasAudio) {
     if (!silent) {
       showToast(
-        "Suno is still processing this task — wait a bit and tap Recover again.",
+        "This task is still processing — wait a bit and tap Recover again.",
         { icon: "♪", durationMs: 4200 }
       );
     }
@@ -27427,7 +27497,7 @@ async function recoverSongFromTaskId(taskId, { silent = false } = {}) {
   if (!silent) {
     showToast("Song added to your Library.", { icon: "✓", durationMs: 3200 });
     try {
-      setStatus("Recovered from Suno — check Library.");
+      setStatus("Song recovered — check Library.");
     } catch {}
   }
   return true;
@@ -27656,7 +27726,7 @@ function buildCreditRecoveryPayload() {
   const items = loadCreditsHistory();
   const latest = items[0] || null;
   const ts = latest?.ts ? new Date(latest.ts).toISOString() : new Date().toISOString();
-  const action = latest?.action || "Suno: generate song";
+  const action = latest?.action || "Generate song";
   const before = latest?.before ?? "unknown";
   const after = latest?.after ?? "unknown";
   const delta = latest?.delta ?? "unknown";
@@ -28081,7 +28151,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const debugSuno = String(data?.debug?.suno || "").trim();
       const debugGemini = String(data?.debug?.gemini || "").trim();
       const providerNote = provider === "fallback" ? " (fallback mode)" : provider ? ` (${provider})` : "";
-      const debugNote = debugSuno || debugGemini ? ` [suno:${debugSuno || "-"} gemini:${debugGemini || "-"}]` : "";
+      const debugNote = debugSuno || debugGemini ? ` [engine:${debugSuno || "-"} gemini:${debugGemini || "-"}]` : "";
       setStatus(`Lyrics ready${providerNote}${debugNote}. Review and then generate song.`);
     } catch (e) {
       setStatus(`Lyrics assist failed: ${e?.message || String(e)}`);
@@ -28576,19 +28646,19 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (looksCopyright) {
       return {
         kind: "copyright",
-        headline: "Suno's filter flagged this take — tap Generate again",
+        headline: "The content filter flagged this take — tap Generate again",
         detail:
-          "This is almost always a false positive. Suno caches every audio "
+          "This is almost always a false positive. The engine caches every audio "
           + "upload for ~14 days, and when you record + retry the same melody "
           + "it sometimes matches its own cached fingerprint and rejects it as "
           + "\"copyrighted\".\n\n"
           + "Fix:\n"
           + "• Tap Generate again — we apply a small random pitch/tempo nudge "
-          + "to every upload, so the next try sends a fresh fingerprint Suno "
+          + "to every upload, so the next try sends a fresh fingerprint it "
           + "hasn't seen.\n"
           + "• If it keeps failing, re-record (don't reuse the same take) and "
           + "vary the phrasing slightly."
-          + (msg ? `\n\nSuno raw: ${msg}` : ""),
+          + (msg ? `\n\nDetails: ${msg}` : ""),
       };
     }
     if (looksSensitive) {
@@ -28596,8 +28666,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         kind: "sensitive",
         headline: "Couldn't generate — content policy",
         detail:
-          "Suno's content policy blocked this request. Please adjust the lyrics, style tags, or vocal reference and try again."
-          + (msg ? `\n\nSuno: ${msg}` : ""),
+          "The content policy blocked this request. Please adjust the lyrics, style tags, or vocal reference and try again."
+          + (msg ? `\n\nDetails: ${msg}` : ""),
       };
     }
     // 531 with "extending lyrics" almost always means upload-cover ran with
@@ -28611,25 +28681,25 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         kind: "needsLyricsOrInstrumental",
         headline: "Wrong mode for hum-only — add lyrics or use Add Instrumental",
         detail:
-          "Suno rejected this because Full song mode needs lyrics in the Lyrics box. "
+          "Full song mode needs lyrics in the Lyrics box. "
           + "For a melody-only recording, tap Add Instrumental on the Hum tab (no lyrics needed)."
-          + (msg ? `\n\nSuno: ${msg}` : ""),
+          + (msg ? `\n\nDetails: ${msg}` : ""),
       };
     }
     if (code === 413 || m.includes("too long")) {
       return {
         kind: "tooLong",
         headline: "Couldn't generate — too long",
-        detail: "Lyrics or style tags exceeded Suno's length limit. Shorten them and try again."
-          + (msg ? `\n\nSuno: ${msg}` : ""),
+        detail: "Lyrics or style tags exceeded the length limit. Shorten them and try again."
+          + (msg ? `\n\nDetails: ${msg}` : ""),
       };
     }
     if (code === 429 || flag === "INSUFFICIENT_CREDITS" || m.includes("insufficient credit")) {
       return {
         kind: "credits",
         headline: "Couldn't generate — insufficient credits",
-        detail: "Your Suno-side budget ran out. Top up credits and try again."
-          + (msg ? `\n\nSuno: ${msg}` : ""),
+        detail: "The generation budget ran out. Top up credits and try again."
+          + (msg ? `\n\nDetails: ${msg}` : ""),
       };
     }
     if (
@@ -28640,16 +28710,16 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     ) {
       return {
         kind: "transient",
-        headline: "Generation failed on Suno's side",
-        detail: "Suno couldn't complete the task. This is usually a temporary upstream issue — please try again."
-          + (msg ? `\n\nSuno: ${msg}` : ""),
+        headline: "Generation failed upstream",
+        detail: "The engine couldn't complete the task. This is usually a temporary issue — please try again."
+          + (msg ? `\n\nDetails: ${msg}` : ""),
       };
     }
     if (flag || msg || code) {
       return {
         kind: "generic",
         headline: "Generation failed",
-        detail: msg || `Suno returned ${flag || `code ${code}`}.`,
+        detail: msg || `The engine returned ${flag || `code ${code}`}.`,
       };
     }
     return { kind: null, headline: "", detail: "" };
@@ -29283,7 +29353,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       // "gemini_drafted" only when /api/lyrics returned text that we
       // ended up sending to Suno.
       let engine = "suno_only";
-      let engineLabel = "Suno";
+      let engineLabel = "Nabad AI";
       setGenerateBtn("Generating…", true, "generate");
       setGenerateFieldsLocked(true);
       showResultCard(false);
@@ -29321,7 +29391,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       // for no-reference generations — Gemini drafts lyrics from style.
       if (!finalPrompt && !shouldGenerateInstrumental) {
         try {
-          setStatus("Preparing prompt with Gemini… (Engine: Gemini assisted + Suno render)");
+          setStatus("Preparing prompt with Gemini… (Engine: Gemini assisted)");
           const rr = await fetch(apiUrl("/api/lyrics"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -29331,7 +29401,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           if (rr.ok && dd?.lyrics) {
             finalPrompt = sanitizeLyricsPrompt(dd.lyrics);
             engine = "gemini_drafted";
-            engineLabel = "Suno + Gemini lyrics draft";
+            engineLabel = "Nabad AI + Gemini lyrics draft";
           }
         } catch {}
       }
@@ -29369,10 +29439,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           setLoading(false);
           setGenerateBtn("Generate song", false, "generate");
           showToast(
-            "Your voice is still processing on Suno — try again in a minute, or tap your persona chip to switch it off.",
+            "Your voice is still processing — try again in a minute, or tap your persona chip to switch it off.",
             { icon: "!", durationMs: 5600 }
           );
-          setStatus("Generation paused: your recorded voice isn't ready on Suno yet.");
+          setStatus("Generation paused: your recorded voice isn't ready yet.");
           return;
         }
       }
@@ -29476,7 +29546,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         );
       }
       const data = await trackCreditsAround(
-        hasReference ? "Suno: upload reference song" : "Suno: generate song",
+        hasReference ? "Upload reference song" : "Generate song",
         async () => {
           if (hasReference) {
             const fd = new FormData();
@@ -29587,7 +29657,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                 e._friendly = intent;
                 throw e;
               }
-              throw new Error(`Suno rejected reference upload: ${bodyErr}`);
+              throw new Error(`Reference upload was rejected: ${bodyErr}`);
             }
             if (dd?.data && typeof dd.data?.code !== "undefined" && Number(dd.data.code) !== 200) {
               const nestedErr = dd?.data?.msg || dd?.data?.message || dd?.data?.error || "Reference upload failed";
@@ -29597,7 +29667,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                 e._friendly = intent;
                 throw e;
               }
-              throw new Error(`Suno rejected reference upload: ${nestedErr}`);
+              throw new Error(`Reference upload was rejected: ${nestedErr}`);
             }
             try {
               if (typeof refreshMyCredits === "function") void refreshMyCredits({ silent: true });
@@ -29637,19 +29707,19 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           }
           if (!r.ok) {
             const more = d?.detailMessage || d?.details?.message || d?.details?.error || "";
-            throw new Error(`${d?.error || "Suno generate failed"}${more ? `: ${more}` : ""}`);
+            throw new Error(`${d?.error || "Song generation failed"}${more ? `: ${more}` : ""}`);
           }
           if (d?._credits && Number.isFinite(Number(d._credits.balance))) {
             setCreditsBalance(Number(d._credits.balance));
             creditsState.loaded = true;
           }
           if (typeof d?.code !== "undefined" && Number(d.code) !== 200) {
-            const bodyErr = d?.msg || d?.message || d?.error || "Suno generate failed";
-            throw new Error(`Suno rejected request: ${bodyErr}`);
+            const bodyErr = d?.msg || d?.message || d?.error || "Song generation failed";
+            throw new Error(`Request was rejected: ${bodyErr}`);
           }
           if (d?.data && typeof d.data?.code !== "undefined" && Number(d.data.code) !== 200) {
-            const nestedErr = d?.data?.msg || d?.data?.message || d?.data?.error || "Suno generate failed";
-            throw new Error(`Suno rejected request: ${nestedErr}`);
+            const nestedErr = d?.data?.msg || d?.data?.message || d?.data?.error || "Song generation failed";
+            throw new Error(`Request was rejected: ${nestedErr}`);
           }
           return d;
         },
@@ -29730,7 +29800,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         );
         try {
           showToast(
-            `No task id from Suno — generation did not start.${providerMsg ? ` ${providerMsg}` : ""}`,
+            `No task id returned — generation did not start.${providerMsg ? ` ${providerMsg}` : ""}`,
             { icon: "⚠", durationMs: 9000 }
           );
         } catch {}
@@ -29933,7 +30003,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
       const directUrl = lastSunoReferenceUrl;
       const proxiedUrl = toAudioProxyUrl(directUrl) || directUrl;
-      setStatus("Opening reference audio Suno used…");
+      setStatus("Opening the reference audio that was used…");
       const a = document.createElement("a");
       a.href = proxiedUrl;
       a.target = "_blank";
@@ -30043,7 +30113,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       setLoading(true, { title: "Getting your instrumental version…", sub: "Processing your track now." });
 
       const data = await trackCreditsAround(
-        "Suno: instrumental version",
+        "Instrumental version",
         async () => {
           const stemsTok = getSupabaseAuthToken();
           const r = await fetch(apiUrl("/api/suno/stems"), {
@@ -30107,7 +30177,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         setLoading(true, { title: "Extracting multi-stems…", sub: "Drums, bass, strings… This can take longer." });
 
         const data = await trackCreditsAround(
-          "Suno: multi-stems",
+          "Multi-stems",
           async () => {
             const stemsTok = getSupabaseAuthToken();
             const r = await fetch(apiUrl("/api/suno/stems"), {
@@ -31231,7 +31301,7 @@ if (els.btnSoundGenerate) {
       els.btnSoundGenerate.disabled = true;
       setLoading(true, {
         title: "Creating sound…",
-        sub: `${formatCreditsAmount(SOUND_CREDIT_COST)} credits · Suno Sounds`,
+        sub: `${formatCreditsAmount(SOUND_CREDIT_COST)} credits · Sounds`,
       });
       const payload = {
         prompt,
@@ -31695,17 +31765,18 @@ if (els.btnPlayerMusicVideo) {
       lib.find((x) => libraryTrackCanonicalUrl(x?.url) === canonical) ||
       currentPlayerTrackRef;
     btn.disabled = true;
+    btn.classList.add("busyPulse");
     try {
       await createSunoMusicVideoForTrack(track, {
         onStatus: (m) => {
-          try { showToast(m, { icon: "♪", durationMs: 3600 }); } catch {}
+          try { showToast(m, { icon: "♪", durationMs: 5200 }); } catch {}
         },
       });
-      showToast("Music video saved to your device.", { icon: "✓", durationMs: 3600 });
     } catch (e) {
       showToast(e?.message || String(e), { icon: "!", durationMs: 4400 });
     } finally {
       btn.disabled = false;
+      btn.classList.remove("busyPulse");
     }
   });
 }
@@ -31855,7 +31926,7 @@ if (els.btnLoadVocals) {
     const url = lastSunoVocalUrl || (els.sunoVocalLink?.classList.contains("disabled") ? "" : els.sunoVocalLink?.href);
     if (url && url !== "#") {
       setPlayerSource(url, "Vocals");
-      setPlayerMeta({ title: lastSunoTitle || "Generated song", subtitle: "Suno • Vocals", artUrl: lastSunoArtUrl });
+      setPlayerMeta({ title: lastSunoTitle || "Generated song", subtitle: "Nabad • Vocals", artUrl: lastSunoArtUrl });
       location.hash = "#/player";
     }
   });
@@ -31865,7 +31936,7 @@ if (els.btnLoadInstrumental) {
     const url = lastSunoInstUrl || (els.sunoInstLink?.classList.contains("disabled") ? "" : els.sunoInstLink?.href);
     if (url && url !== "#") {
       setPlayerSource(url, "Instrumental");
-      setPlayerMeta({ title: lastSunoTitle || "Generated song", subtitle: "Suno • Instrumental", artUrl: lastSunoArtUrl });
+      setPlayerMeta({ title: lastSunoTitle || "Generated song", subtitle: "Nabad • Instrumental", artUrl: lastSunoArtUrl });
       location.hash = "#/player";
     }
   });

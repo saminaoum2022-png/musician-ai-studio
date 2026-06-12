@@ -386,7 +386,7 @@
             </div>
           </header>
           <p class="hint soundsLead soundsLeadNeon">
-            Loops and ambience (games, podcasts, backgrounds). Priced at <strong>2.5 credits</strong> per generation — same as Suno.
+            Loops and ambience (games, podcasts, backgrounds). Priced at <strong>2.5 credits</strong> per generation.
           </p>
           <div class="soundsCard soundsCardNeon">
             <label class="field grow">
@@ -434,9 +434,9 @@
             </label>
             <label class="soundOptRow">
               <input id="soundGrabLyrics" type="checkbox" />
-              <span>Capture lyric subtitles if Suno returns them</span>
+              <span>Capture lyric subtitles when available</span>
             </label>
-            <p class="soundCostHint">Each sound costs <strong>2.5 credits</strong> (mirrors Suno API).</p>
+            <p class="soundCostHint">Each sound costs <strong>2.5 credits</strong>.</p>
             <button id="btnSoundGenerate" class="primary soundGenerateBtn" type="button">Generate sound (2.5 credits)</button>
           </div>
         </section>
@@ -2242,7 +2242,7 @@
                 type="button"
                 id="btnLibraryRecoverLink"
                 class="libraryRecoverLink"
-                title="Recover a song from a Suno task ID"
+                title="Recover a song from a task ID"
               >Lost a song? Recover</button>
             </div>
             <div id="libraryRecoverBanner" class="libraryRecoverBanner" hidden role="region" aria-label="Recover song">
@@ -2250,7 +2250,7 @@
                 <div class="libraryRecoverBannerBody">
                   <div class="libraryRecoverBannerTitle">Song finished but didn’t show up?</div>
                   <p id="libraryRecoverHint" class="libraryRecoverBannerHint">
-                    If Suno finished while the app was stuck, pull that generation into All songs here.
+                    If a generation finished while the app was stuck, pull it into All songs here.
                   </p>
                 </div>
                 <div class="libraryRecoverBannerActions">
@@ -2329,7 +2329,7 @@
             <h3 class="creditsCardTitle">How it works</h3>
             <ul class="creditsRules">
               <li><strong>1 full song = 12 credits</strong> (returns 2 variations).</li>
-              <li><strong>1 sound</strong> (loop / ambience) = <strong>2.5 credits</strong> — same rate as Suno.</li>
+              <li><strong>1 sound</strong> (loop / ambience) = <strong>2.5 credits</strong>.</li>
               <li><strong>Lyrics are free</strong> — write as many drafts as you like.</li>
               <li>Each promo code can be redeemed <strong>once per account</strong>.</li>
               <li>If a generation fails, your credits are <strong>refunded automatically</strong>.</li>
@@ -2348,7 +2348,7 @@
             <h3 class="creditsCardTitle">Admin</h3>
             <div class="creditsAdminGrid">
               <div class="creditsAdminStat">
-                <div class="creditsAdminStatLabel">Master Suno balance</div>
+                <div class="creditsAdminStatLabel">Master engine balance</div>
                 <div class="creditsAdminStatValue" id="adminMasterSuno">—</div>
               </div>
               <div class="creditsAdminStat">
@@ -2386,7 +2386,7 @@
           <details class="details" open>
             <summary>Session</summary>
             <div class="row" style="margin-top:10px">
-              <button id="btnSessionLoadSuno" class="ghost" type="button">Load Suno multi-stems</button>
+              <button id="btnSessionLoadSuno" class="ghost" type="button">Load multi-stems</button>
               <label class="ghost" style="cursor:pointer">
                 <input id="sessionUploadStems" type="file" multiple accept="audio/*" style="display:none" />
                 Upload stems…
@@ -2618,7 +2618,7 @@
         <section class="card wide">
           <h2>4) Voice AI (legacy)</h2>
           <p class="small">
-            Legacy endpoint for speech/TTS. If you use Suno vocals, you likely don’t need this.
+            Legacy endpoint for speech/TTS. If you use AI vocals, you likely don’t need this.
           </p>
           <div class="row">
             <button id="btnVoice" class="ghost">Generate voice</button>
@@ -2931,6 +2931,21 @@
           <div class="hint" id="shareLiveText" style="margin-top:10px">Your song was saved locally.</div>
           <div class="row" style="justify-content:flex-end; margin-top:14px">
             <button id="btnGoHub" class="primary" type="button">Continue</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="musicVideoModal" class="songDetailsModal" style="display:none">
+        <div class="songDetailsBackdrop" id="musicVideoBackdrop"></div>
+        <div class="songDetailsSheet musicVideoSheet">
+          <div class="row" style="justify-content:space-between;align-items:center">
+            <h2 style="margin:0" id="musicVideoTitle">Music video</h2>
+            <button id="btnCloseMusicVideo" class="ghost" type="button">Close</button>
+          </div>
+          <video id="musicVideoPlayer" class="musicVideoPlayer" controls playsinline preload="metadata"></video>
+          <div class="hint" style="margin-top:8px">Your video stays on this song — reopen it anytime from the song's menu.</div>
+          <div class="row" style="justify-content:flex-end; margin-top:14px">
+            <button id="btnSaveMusicVideo" class="primary" type="button">Save to device</button>
           </div>
         </div>
       </div>
@@ -3403,6 +3418,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260612boostStyle"></script>
+    <script type="module" src="./src/app.js?v=20260612videoViewer"></script>
   </body>
 </html>

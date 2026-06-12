@@ -22,7 +22,7 @@ module.exports = async function handler(req, res) {
 
     const text = await r.text().catch(() => "");
     const data = safeJson(text);
-    if (!r.ok) return json(res, 502, { error: "Upstream Suno error", status: r.status, details: data || text });
+    if (!r.ok) return json(res, 502, { error: "Upstream engine error", status: r.status, details: data || text });
     return json(res, 200, data || { raw: text });
   } catch (e) {
     return json(res, 500, { error: e?.message || String(e) });

@@ -193,7 +193,7 @@ module.exports = async function handler(req, res) {
       if (!upRes.ok || !upData?.success || !upData?.data?.downloadUrl) {
         await refund("suno_upload_failed");
         return json(res, 502, {
-          error: "Suno temporary upload failed",
+          error: "Temporary audio upload failed",
           status: upRes.status || 502,
           details: upData || upText,
         });
@@ -495,11 +495,11 @@ module.exports = async function handler(req, res) {
     const data = safeJson(text);
     if (!r.ok) {
       await refund(`suno_http_${r.status}`);
-      return json(res, 502, { error: "Upstream Suno error", status: r.status, details: data || text });
+      return json(res, 502, { error: "Upstream engine error", status: r.status, details: data || text });
     }
     if (data && typeof data === "object" && "code" in data && data.code !== 200) {
       await refund(`suno_code_${data.code}`);
-      return json(res, 502, { error: "Suno rejected request", details: data });
+      return json(res, 502, { error: "Request was rejected upstream", details: data });
     }
     return json(res, 200, {
       ...(data || { raw: text }),

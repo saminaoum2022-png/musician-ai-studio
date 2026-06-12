@@ -6641,6 +6641,27 @@ textarea{
   justify-content:space-between;
   gap:10px;
 }
+/* In-app music video viewer */
+.musicVideoSheet{
+  max-width: 560px;
+}
+.musicVideoPlayer{
+  display:block;
+  width:100%;
+  max-height:60vh;
+  margin-top:12px;
+  border-radius:14px;
+  background:#000;
+}
+/* Player action buttons pulse while a long render is in flight. */
+.playerMiniBtn.busyPulse{
+  animation: miniBtnBusyPulse 1.5s ease-in-out infinite;
+}
+@keyframes miniBtnBusyPulse{
+  0%,100%{ opacity:1; }
+  50%{ opacity:0.40; }
+}
+
 /* Boost button is reused as Undo right after a boost. */
 .styleBoostBtn.undoMode{
   border-color: rgba(35,213,171,0.55);

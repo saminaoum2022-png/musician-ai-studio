@@ -169,14 +169,14 @@ module.exports = async function handler(req, res) {
       if (!isAdmin) {
         await refund(user.userId, FULL_SONG_COST, "refund_full_song", "suno_http_error").catch(() => null);
       }
-      return json(res, 502, { error: "Upstream Suno error", status: r.status, details: data || text });
+      return json(res, 502, { error: "Upstream engine error", status: r.status, details: data || text });
     }
     const sunoCode = data && typeof data === "object" && "code" in data ? Number(data.code) : 200;
     if (Number.isFinite(sunoCode) && sunoCode !== 200) {
       if (!isAdmin) {
         await refund(user.userId, FULL_SONG_COST, "refund_full_song", `suno_code_${sunoCode}`).catch(() => null);
       }
-      const msg = data?.msg || data?.message || data?.error || "Suno rejected request";
+      const msg = data?.msg || data?.message || data?.error || "Request was rejected upstream";
       return json(res, 502, { error: msg, details: data });
     }
 

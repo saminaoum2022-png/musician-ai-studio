@@ -107,7 +107,7 @@ module.exports = async function handler(req, res) {
     }
 
     return json(res, 502, {
-      error: `Lyrics providers unavailable (Suno/Gemini): suno=${debug.suno || "-"} gemini=${debug.gemini || "-"}`,
+      error: `Lyrics providers unavailable: engine=${debug.suno || "-"} gemini=${debug.gemini || "-"}`,
       provider: "none",
       debug: { ...debug, nonce },
     });

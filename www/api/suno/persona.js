@@ -167,8 +167,8 @@ module.exports = async function handler(req, res) {
       await refund(`suno_http_${r.status}`);
       return json(res, r.status, {
         error: upstreamMsg
-          ? `Upstream Suno persona error: ${String(upstreamMsg).slice(0, 200)}`
-          : "Upstream Suno persona error",
+          ? `Upstream persona error: ${String(upstreamMsg).slice(0, 200)}`
+          : "Upstream persona error",
         status: r.status,
         details: data || text,
         attempts: attempt,
@@ -178,7 +178,7 @@ module.exports = async function handler(req, res) {
     if (upstreamCode !== 200) {
       const friendly = mapPersonaCode(upstreamCode, data?.msg);
       const detailedMsg = data?.msg && !friendly.includes(data.msg)
-        ? `${friendly} (Suno: ${String(data.msg).slice(0, 160)})`
+        ? `${friendly} (Details: ${String(data.msg).slice(0, 160)})`
         : friendly;
       await refund(`suno_code_${upstreamCode}`);
       return json(res, 502, {
@@ -213,15 +213,15 @@ module.exports = async function handler(req, res) {
 
 function mapPersonaCode(code, msg) {
   switch (Number(code)) {
-    case 401: return "Suno authentication failed (check SUNO_API_KEY).";
-    case 402: return "Suno account is out of credits for persona creation.";
+    case 401: return "Engine authentication failed (check SUNO_API_KEY).";
+    case 402: return "The engine account is out of credits for persona creation.";
     case 404: return "That song isn't ready or audioId is wrong. Wait until the song fully finishes, then try again.";
     case 409: return "A persona was already created from this song. Each audio can be turned into a persona only once.";
     case 422: return msg || "Persona request failed validation. Check the song info and try again.";
     case 429: return "Too many persona requests right now. Wait a moment and retry.";
-    case 451: return "Suno couldn't fetch this song's audio. Try again in a minute.";
-    case 455: return "Suno is under maintenance. Try again shortly.";
-    case 500: return "Suno hit an internal error. Try again.";
+    case 451: return "The engine couldn't fetch this song's audio. Try again in a minute.";
+    case 455: return "The engine is under maintenance. Try again shortly.";
+    case 500: return "The engine hit an internal error. Try again.";
     default:  return msg || `Persona failed (code ${code})`;
   }
 }

@@ -59,7 +59,7 @@ module.exports = async function handler(req, res) {
     const audioId = String(body?.audioId || "").trim();
     const author = String(body?.author || "").trim().slice(0, 50);
     if (!taskId || !audioId) {
-      return sendJson(res, 400, { error: "Music videos need the song's Suno taskId and audioId." });
+      return sendJson(res, 400, { error: "Music videos are only available for songs generated in the app." });
     }
 
     const { host, proto } = getHostProto(req);
@@ -95,7 +95,7 @@ module.exports = async function handler(req, res) {
     }
 
     const videoTaskId = String(upstream.data?.data?.taskId || "").trim();
-    if (!videoTaskId) return sendJson(res, 502, { error: "Suno did not return a video task id" });
+    if (!videoTaskId) return sendJson(res, 502, { error: "The video engine did not return a task id" });
     return sendJson(res, 200, { taskId: videoTaskId });
   } catch (e) {
     return sendJson(res, 500, { error: e?.message || String(e) });

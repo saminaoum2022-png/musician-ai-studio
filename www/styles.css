@@ -6733,13 +6733,14 @@ textarea{
   text-transform:uppercase;
   color: rgba(124,92,255,0.85);
   margin-top:10px;
+  text-align:center;
 }
 .playerLyricsLine{
   appearance:none;
   border:0;
   background:transparent;
   padding:0;
-  text-align:start;
+  text-align:center;
   cursor:pointer;
   font-size:24px;
   line-height:1.35;
@@ -6747,9 +6748,8 @@ textarea{
   letter-spacing:0.005em;
   color: rgba(231,238,248,0.38);
   transition: color 260ms ease, transform 260ms ease, text-shadow 260ms ease;
-  transform-origin: 0 50%;
+  transform-origin: 50% 50%;
 }
-.playerLyricsLine[dir="auto"]:dir(rtl){ transform-origin: 100% 50%; }
 .playerLyricsLine.isPast{ color: rgba(231,238,248,0.55); }
 .playerLyricsLine.isActive{
   color:#ffffff;

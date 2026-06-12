@@ -1105,7 +1105,7 @@
             <div class="mashupHeadCopy">
               <p class="mashupKicker">Blend two tracks</p>
               <h2 class="mashupTitle">Mashup</h2>
-              <p class="mashupLead" id="mashupLead">Pick two songs from your library — we blend them into one new track.</p>
+              <p class="mashupLead" id="mashupLead">Pick two songs from your library or Discover — we blend them into one new track.</p>
             </div>
           </header>
           <div class="mashupPair" aria-label="Mashup sources">
@@ -1132,10 +1132,32 @@
             </div>
             <p id="mashupBlendStatus" class="mashupBlendStatus">Blending your tracks…</p>
           </div>
-          <label class="mashupPromptField">
+          <div class="mashupModeRow" role="group" aria-label="Mashup mode">
+            <button type="button" class="mashupModeBtn isActive" id="mashupModeSimple" data-mashup-mode="simple">Simple</button>
+            <button type="button" class="mashupModeBtn" id="mashupModeCustom" data-mashup-mode="custom">Custom</button>
+          </div>
+          <label class="mashupPromptField" id="mashupSimpleField">
             <span class="mashupPromptLabel">Blend direction <small>(optional)</small></span>
             <input id="mashupPromptInput" type="text" maxlength="500" placeholder="A dynamic mashup blending these two songs" autocomplete="off" />
           </label>
+          <div id="mashupCustomFields" class="mashupCustomFields" hidden>
+            <label class="mashupPromptField">
+              <span class="mashupPromptLabel">Title</span>
+              <input id="mashupTitleInput" type="text" maxlength="100" placeholder="My mashup title" autocomplete="off" />
+            </label>
+            <label class="mashupPromptField">
+              <span class="mashupPromptLabel">Style / tags</span>
+              <input id="mashupStyleInput" type="text" maxlength="1000" placeholder="Electronic, high energy, Arabic pop" autocomplete="off" />
+            </label>
+            <label class="mashupPromptField">
+              <span class="mashupPromptLabel">Lyrics <small>(required unless instrumental)</small></span>
+              <textarea id="mashupLyricsInput" rows="4" maxlength="5000" placeholder="Lyrics for the mashup…"></textarea>
+            </label>
+            <label class="mashupCheckRow">
+              <input id="mashupInstrumentalInput" type="checkbox" />
+              <span>Instrumental only</span>
+            </label>
+          </div>
           <div class="mashupActions">
             <button type="button" class="mashupGenerateBtn primary" id="btnMashupGenerate" disabled>Mashup · 12 credits</button>
           </div>
@@ -1154,7 +1176,11 @@
               <h3 id="mashupPickerTitle">Choose a song</h3>
               <button type="button" class="mashupPickerClose" data-mashup-picker-dismiss="1" aria-label="Close">×</button>
             </header>
-            <div id="mashupPickerList" class="mashupPickerList" role="listbox" aria-label="Library songs"></div>
+            <div class="mashupPickerTabs" role="tablist" aria-label="Song source">
+              <button type="button" class="mashupPickerTab isActive" id="mashupPickerTabLibrary" data-mashup-picker-tab="library" role="tab" aria-selected="true">Library</button>
+              <button type="button" class="mashupPickerTab" id="mashupPickerTabDiscover" data-mashup-picker-tab="discover" role="tab" aria-selected="false">Discover</button>
+            </div>
+            <div id="mashupPickerList" class="mashupPickerList" role="listbox" aria-label="Songs"></div>
           </div>
         </div>
 
@@ -1949,6 +1975,14 @@
                     <path d="M4 17h3"/>
                   </svg>
                   <span>Remix</span>
+                </button>
+                <button id="btnPlayerMashup" class="playerRemixBtn" type="button" aria-label="Mashup with another song">
+                  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="8" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                    <circle cx="16" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                    <path d="M12 8v8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                  </svg>
+                  <span>Mashup</span>
                 </button>
                 <button id="btnPlayerLyrics" class="playerRemixBtn" type="button" aria-label="View lyrics">
                   <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">

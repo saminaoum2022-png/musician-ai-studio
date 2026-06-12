@@ -2,12 +2,12 @@
  * Mashup proxy (provider-neutral path; currently backed by Suno).
  *
  * POST /api/music/mashup
- *   { songIdA, songIdB, prompt? }
+ *   { sourceA, sourceB, prompt?, customMode?, style?, title?, instrumental? }
+ *   OR legacy { songIdA, songIdB, prompt? } (library-only)
  *   -> Suno POST /api/v1/generate/mashup
  *
- * v1: library-only — both song IDs must belong to the signed-in user's
- * `user_songs` rows. Audio URLs are resolved server-side (proxy unwrap +
- * optional Suno record-info refresh).
+ * Sources: `{ type: "library", songId }` (caller must own row) or
+ * `{ type: "public", songId, ownerUserId }` (public_on_profile row).
  */
 const { verifyUser, callRpc, isAdminEmail, selectFromTable } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
@@ -15,7 +15,7 @@ const { readJson, sendJson, sunoJsonRequest } = require("../_lib/suno-upstream")
 
 const MASHUP_COST = 12;
 const DEFAULT_MODEL = "V5_5";
-const DEFAULT_PROMPT = "A dynamic mashup blending two songs from my library";
+const DEFAULT_PROMPT = "A dynamic mashup blending two songs together";
 
 module.exports = async function handler(req, res) {
   if (applyCors(req, res)) return;
@@ -57,20 +57,20 @@ module.exports = async function handler(req, res) {
     }
 
     const body = await readJson(req);
-    const songIdA = cleanSongId(body?.songIdA);
-    const songIdB = cleanSongId(body?.songIdB);
-    if (!songIdA || !songIdB) {
+    const sourceA = parseMashupSource(body?.sourceA, body?.songIdA);
+    const sourceB = parseMashupSource(body?.sourceB, body?.songIdB);
+    if (!sourceA || !sourceB) {
       if (!isAdmin) await refund(user.userId, MASHUP_COST, "refund_mashup", "missing_ids");
-      return sendJson(res, 400, { error: "Pick two songs from your library." });
+      return sendJson(res, 400, { error: "Pick two songs to mash up." });
     }
-    if (songIdA === songIdB) {
+    if (sameMashupSource(sourceA, sourceB)) {
       if (!isAdmin) await refund(user.userId, MASHUP_COST, "refund_mashup", "same_song");
       return sendJson(res, 400, { error: "Choose two different songs." });
     }
 
     const [resolvedA, resolvedB] = await Promise.all([
-      resolveLibrarySongForMashup(user.userId, songIdA, apiKey),
-      resolveLibrarySongForMashup(user.userId, songIdB, apiKey),
+      resolveMashupSource(user.userId, sourceA, apiKey),
+      resolveMashupSource(user.userId, sourceB, apiKey),
     ]);
     if (resolvedA.error) {
       if (!isAdmin) await refund(user.userId, MASHUP_COST, "refund_mashup", "song_a");
@@ -81,24 +81,55 @@ module.exports = async function handler(req, res) {
       return sendJson(res, 400, { error: resolvedB.error });
     }
 
+    const customMode = Boolean(body?.customMode);
+    const instrumental = Boolean(body?.instrumental);
+    const style = String(body?.style || "").trim().slice(0, 1000);
+    const title = String(body?.title || "").trim().slice(0, 100);
+    let prompt = String(body?.prompt || "").trim();
+    if (!prompt) prompt = DEFAULT_PROMPT;
+    if (customMode) {
+      if (!style) {
+        if (!isAdmin) await refund(user.userId, MASHUP_COST, "refund_mashup", "custom_style");
+        return sendJson(res, 400, { error: "Custom mashup needs a style." });
+      }
+      if (!title) {
+        if (!isAdmin) await refund(user.userId, MASHUP_COST, "refund_mashup", "custom_title");
+        return sendJson(res, 400, { error: "Custom mashup needs a title." });
+      }
+      if (!instrumental && !prompt) {
+        if (!isAdmin) await refund(user.userId, MASHUP_COST, "refund_mashup", "custom_prompt");
+        return sendJson(res, 400, { error: "Custom mashup needs lyrics unless instrumental." });
+      }
+      prompt = prompt.slice(0, 5000);
+    } else {
+      prompt = prompt.slice(0, 500);
+    }
+
     const uploadUrlList = [resolvedA.song.audioUrl, resolvedB.song.audioUrl];
-    const prompt = String(body?.prompt || DEFAULT_PROMPT).trim().slice(0, 500);
     const { host, proto } = getHostProto(req);
     const callBackUrl = `${proto}://${host}/api/suno/callback`;
 
     const payload = {
       uploadUrlList,
-      customMode: false,
-      prompt,
-      model: String(body?.model || DEFAULT_MODEL).trim() || DEFAULT_MODEL,
+      customMode,
       callBackUrl,
+      model: String(body?.model || DEFAULT_MODEL).trim() || DEFAULT_MODEL,
+      instrumental,
     };
+    if (customMode) {
+      payload.style = style;
+      payload.title = title;
+      if (prompt) payload.prompt = prompt;
+    } else {
+      payload.prompt = prompt;
+    }
 
     try {
       console.info("[music/mashup] →", {
         model: payload.model,
-        songA: resolvedA.song.id,
-        songB: resolvedB.song.id,
+        customMode: payload.customMode,
+        sourceA: resolvedA.song.id,
+        sourceB: resolvedB.song.id,
       });
     } catch {}
 
@@ -145,6 +176,31 @@ module.exports = async function handler(req, res) {
   }
 };
 
+function parseMashupSource(raw, legacySongId) {
+  if (raw && typeof raw === "object") {
+    const type = String(raw.type || "library").trim().toLowerCase();
+    const songId = cleanSongId(raw.songId || raw.id);
+    if (!songId) return null;
+    if (type === "public") {
+      const ownerUserId = String(raw.ownerUserId || "").trim();
+      if (!ownerUserId) return null;
+      return { type: "public", songId, ownerUserId };
+    }
+    return { type: "library", songId };
+  }
+  const sid = cleanSongId(legacySongId);
+  if (sid) return { type: "library", songId: sid };
+  return null;
+}
+
+function sameMashupSource(a, b) {
+  if (!a || !b) return false;
+  if (a.type !== b.type) return false;
+  if (a.songId !== b.songId) return false;
+  if (a.type === "public") return a.ownerUserId === b.ownerUserId;
+  return true;
+}
+
 function pickSourceMeta(song) {
   return {
     songId: song.id,
@@ -152,6 +208,9 @@ function pickSourceMeta(song) {
     artUrl: song.artUrl,
     taskId: song.taskId,
     audioId: song.audioId,
+    sourceType: song.sourceType || "library",
+    ownerUserId: song.ownerUserId || undefined,
+    creatorUsername: song.creatorUsername || undefined,
   };
 }
 
@@ -159,6 +218,13 @@ function cleanSongId(v) {
   const s = String(v || "").trim();
   if (!s || s.length > 80) return "";
   return s;
+}
+
+async function resolveMashupSource(callerUserId, source, apiKey) {
+  if (source.type === "public") {
+    return resolvePublicSongForMashup(source.songId, source.ownerUserId, apiKey);
+  }
+  return resolveLibrarySongForMashup(callerUserId, source.songId, apiKey);
 }
 
 async function resolveLibrarySongForMashup(userId, songId, apiKey) {
@@ -173,6 +239,53 @@ async function resolveLibrarySongForMashup(userId, songId, apiKey) {
   const row = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
   if (!row) return { error: "Song not found in your library." };
 
+  const urlResult = await resolveSongAudioUrl(row, apiKey);
+  if (urlResult.error) return urlResult;
+
+  return {
+    song: {
+      id: String(row.id || sid),
+      title: String(row.title || "Song").trim() || "Song",
+      artUrl: String(row.art_url || "").trim(),
+      audioUrl: urlResult.url,
+      taskId: String(row.task_id || "").trim(),
+      audioId: String(row.audio_id || "").trim(),
+      sourceType: "library",
+    },
+  };
+}
+
+async function resolvePublicSongForMashup(songId, ownerUserId, apiKey) {
+  const sid = cleanSongId(songId);
+  const uid = String(ownerUserId || "").trim();
+  if (!sid || !uid) return { error: "Missing public song reference." };
+
+  const q =
+    `user_songs?select=id,user_id,title,art_url,song_url,task_id,audio_id,kind` +
+    `&id=eq.${encodeURIComponent(sid)}&user_id=eq.${encodeURIComponent(uid)}` +
+    `&public_on_profile=eq.true&limit=1`;
+  const r = await selectFromTable(q);
+  const row = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
+  if (!row) return { error: "That public song is not available for mashup." };
+
+  const urlResult = await resolveSongAudioUrl(row, apiKey);
+  if (urlResult.error) return urlResult;
+
+  return {
+    song: {
+      id: String(row.id || sid),
+      title: String(row.title || "Song").trim() || "Song",
+      artUrl: String(row.art_url || "").trim(),
+      audioUrl: urlResult.url,
+      taskId: String(row.task_id || "").trim(),
+      audioId: String(row.audio_id || "").trim(),
+      sourceType: "public",
+      ownerUserId: uid,
+    },
+  };
+}
+
+async function resolveSongAudioUrl(row, apiKey) {
   let url = unwrapAudioUrl(row.song_url);
   if (!isHttpUrl(url) && row.task_id) {
     url = await refreshAudioFromSuno(apiKey, row.task_id, row.audio_id);
@@ -180,20 +293,10 @@ async function resolveLibrarySongForMashup(userId, songId, apiKey) {
   if (!isHttpUrl(url)) {
     const label = String(row.title || "Song").trim() || "Song";
     return {
-      error: `${label} needs a fresh audio link — open it in Library, play it once, then try again.`,
+      error: `${label} needs a fresh audio link — open it once to refresh, then try again.`,
     };
   }
-
-  return {
-    song: {
-      id: String(row.id || sid),
-      title: String(row.title || "Song").trim() || "Song",
-      artUrl: String(row.art_url || "").trim(),
-      audioUrl: url,
-      taskId: String(row.task_id || "").trim(),
-      audioId: String(row.audio_id || "").trim(),
-    },
-  };
+  return { url };
 }
 
 async function refreshAudioFromSuno(apiKey, taskId, audioId) {

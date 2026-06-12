@@ -26041,7 +26041,8 @@ body[data-route="mashup"] .app{
   color: rgba(223,231,251,0.38);
   font-weight: 600;
 }
-.mashupPromptField input{
+.mashupPromptField input,
+.mashupPromptField textarea{
   width: 100%;
   padding: 12px 14px;
   border-radius: 14px;
@@ -26049,6 +26050,76 @@ body[data-route="mashup"] .app{
   background: rgba(255,255,255,0.04);
   color: #f3f6ff;
   font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+}
+.mashupModeRow{
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.mashupModeBtn{
+  flex: 1 1 0;
+  min-height: 40px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  color: rgba(223,231,251,0.72);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.mashupModeBtn.isActive{
+  border-color: rgba(35,213,171,0.45);
+  background: linear-gradient(180deg, rgba(35,213,171,0.18), rgba(124,92,255,0.10));
+  color: #f3f6ff;
+}
+.mashupCustomFields{
+  display: grid;
+  gap: 0;
+  margin-bottom: 4px;
+}
+.mashupCheckRow{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+  color: rgba(223,231,251,0.72);
+  font-size: 13px;
+  font-weight: 600;
+}
+.mashupCheckRow input{
+  width: 18px;
+  height: 18px;
+}
+.mashupSlotSource{
+  display: block;
+  margin-top: 4px;
+  color: rgba(223,231,251,0.42);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.mashupPickerTabs{
+  display: flex;
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+.mashupPickerTab{
+  flex: 1 1 0;
+  min-height: 36px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  color: rgba(223,231,251,0.68);
+  font-size: 12px;
+  font-weight: 800;
+}
+.mashupPickerTab.isActive{
+  border-color: rgba(35,213,171,0.42);
+  background: rgba(35,213,171,0.12);
+  color: #f3f6ff;
 }
 .mashupActions{ margin-bottom: 12px; }
 .mashupGenerateBtn{

@@ -1097,6 +1097,56 @@
           </div>
         </section>
 
+        <section class="mashupPage wide" data-route="mashup" id="mashupPage">
+          <header class="mashupHead">
+            <button type="button" class="mashupBack" id="btnMashupBack" aria-label="Back to Create">
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><polyline points="15 18 9 12 15 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="mashupHeadCopy">
+              <p class="mashupKicker">Blend two tracks</p>
+              <h2 class="mashupTitle">Mashup</h2>
+              <p class="mashupLead" id="mashupLead">Pick two songs from your library — we blend them into one new track.</p>
+            </div>
+          </header>
+          <div class="mashupPair" aria-label="Mashup sources">
+            <button type="button" class="mashupSlot" id="mashupSlotA" data-mashup-slot="a" aria-label="Choose first song">
+              <span class="mashupSlotLabel">Track A</span>
+              <span class="mashupSlotArt" id="mashupSlotArtA" aria-hidden="true"></span>
+              <strong class="mashupSlotTitle" id="mashupSlotTitleA">Tap to choose</strong>
+            </button>
+            <span class="mashupPairX" aria-hidden="true">×</span>
+            <button type="button" class="mashupSlot" id="mashupSlotB" data-mashup-slot="b" aria-label="Choose second song">
+              <span class="mashupSlotLabel">Track B</span>
+              <span class="mashupSlotArt" id="mashupSlotArtB" aria-hidden="true"></span>
+              <strong class="mashupSlotTitle" id="mashupSlotTitleB">Tap to choose</strong>
+            </button>
+          </div>
+          <label class="mashupPromptField">
+            <span class="mashupPromptLabel">Blend direction <small>(optional)</small></span>
+            <input id="mashupPromptInput" type="text" maxlength="500" placeholder="A dynamic mashup blending these two songs" autocomplete="off" />
+          </label>
+          <div class="mashupActions">
+            <button type="button" class="mashupGenerateBtn primary" id="btnMashupGenerate" disabled>Mashup · 12 credits</button>
+          </div>
+          <div id="mashupStatus" class="mashupStatus" role="status" aria-live="polite" hidden></div>
+          <div id="mashupProgress" class="mashupProgress" hidden aria-hidden="true">
+            <span class="mashupProgressSpinner" aria-hidden="true"></span>
+            <span id="mashupProgressText">Blending your tracks…</span>
+          </div>
+        </section>
+
+        <div id="mashupPickerSheet" class="mashupPickerSheet" aria-hidden="true" hidden>
+          <div class="mashupPickerBackdrop" data-mashup-picker-dismiss="1"></div>
+          <div class="mashupPickerCard" role="dialog" aria-modal="true" aria-labelledby="mashupPickerTitle">
+            <div class="mashupPickerGrab" aria-hidden="true"></div>
+            <header class="mashupPickerHead">
+              <h3 id="mashupPickerTitle">Choose a song</h3>
+              <button type="button" class="mashupPickerClose" data-mashup-picker-dismiss="1" aria-label="Close">×</button>
+            </header>
+            <div id="mashupPickerList" class="mashupPickerList" role="listbox" aria-label="Library songs"></div>
+          </div>
+        </div>
+
         <section class="friendsPage wide" data-route="friends" id="friendsPage">
           <header class="discoveryStudioHead">
             <div class="discoveryStudioTitles">
@@ -1237,6 +1287,26 @@
                   <div class="homeDeskPromoActions">
                     <button type="button" class="homeDeskPromoBtn" data-home-echo-learn>See Echoes</button>
                     <button type="button" class="homeDeskPromoBtn homeDeskPromoBtn--primary" data-home-echo-record>Record an Echo</button>
+                  </div>
+                </div>
+              </section>
+
+              <section class="homeDeskMashupPromo homeDeskPromo--compact" aria-labelledby="homeDeskMashupPromoTitle">
+                <div class="homeDeskPromoVisual homeDeskPromoVisual--mashup" aria-hidden="true">
+                  <div class="homeDeskMashupTileWrap">
+                    <span class="homeDeskMashupPulse" aria-hidden="true"></span>
+                    <div class="homeDeskMashupTile">
+                      <span class="homeDeskMashupDisc homeDeskMashupDisc--a" aria-hidden="true"></span>
+                      <span class="homeDeskMashupDisc homeDeskMashupDisc--b" aria-hidden="true"></span>
+                    </div>
+                  </div>
+                </div>
+                <div class="homeDeskPromoCopy">
+                  <p class="homeDeskSectionKicker">Two become one</p>
+                  <h3 id="homeDeskMashupPromoTitle">Mashup</h3>
+                  <p>Blend two songs from your library into a fresh track — hooks, energy, and vibe combined.</p>
+                  <div class="homeDeskPromoActions">
+                    <button type="button" class="homeDeskPromoBtn homeDeskPromoBtn--primary" data-home-mashup-start>Start mashup</button>
                   </div>
                 </div>
               </section>
@@ -3458,6 +3528,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260612videoPremium"></script>
+    <script type="module" src="./src/app.js?v=20260612discoverSkeleton"></script>
   </body>
 </html>

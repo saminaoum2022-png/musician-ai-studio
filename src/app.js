@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260612activityStream";
+const APP_BUILD = "20260612mashup";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -396,6 +396,23 @@ const els = {
   activityStatus: document.getElementById("activityStatus"),
   activityLoadMore: document.getElementById("activityLoadMore"),
   activityTabLink: document.querySelector('.mobileTabbar [data-route-link="activity"]'),
+  mashupPage: document.getElementById("mashupPage"),
+  mashupLead: document.getElementById("mashupLead"),
+  mashupSlotA: document.getElementById("mashupSlotA"),
+  mashupSlotB: document.getElementById("mashupSlotB"),
+  mashupSlotArtA: document.getElementById("mashupSlotArtA"),
+  mashupSlotArtB: document.getElementById("mashupSlotArtB"),
+  mashupSlotTitleA: document.getElementById("mashupSlotTitleA"),
+  mashupSlotTitleB: document.getElementById("mashupSlotTitleB"),
+  mashupPromptInput: document.getElementById("mashupPromptInput"),
+  btnMashupGenerate: document.getElementById("btnMashupGenerate"),
+  btnMashupBack: document.getElementById("btnMashupBack"),
+  mashupStatus: document.getElementById("mashupStatus"),
+  mashupProgress: document.getElementById("mashupProgress"),
+  mashupProgressText: document.getElementById("mashupProgressText"),
+  mashupPickerSheet: document.getElementById("mashupPickerSheet"),
+  mashupPickerList: document.getElementById("mashupPickerList"),
+  mashupPickerTitle: document.getElementById("mashupPickerTitle"),
   profileCreditsBalance: document.getElementById("profileCreditsBalance"),
   profileCreditsNote: document.getElementById("profileCreditsNote"),
   profileCreditsLink: document.getElementById("profileCreditsLink"),
@@ -2649,7 +2666,7 @@ function applyRoute() {
   const allowedRoutes = new Set([
     "intro", "onboarding", "start", "auth", "generate",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
-    "settings", "profile", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
+    "settings", "profile", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
   ]);
   const onboardingParsed = parseOnboardingRoute(route);
   let normalized = pendingPublicUsername ? "user" : (route === "start" ? "intro" : route);
@@ -2729,7 +2746,7 @@ function applyRoute() {
   // Public profile is intentionally readable without auth so share-link
   // visitors don't hit a wall before discovering the rest of the product.
   const sharedTrackId = parseSharedTrackIdFromLocation();
-  const protectedRoutes = new Set(["generate", "profile", "friends", "activity", "player", "vocal", "stems", "advanced", "credits", "sounds"]);
+  const protectedRoutes = new Set(["generate", "profile", "friends", "activity", "mashup", "player", "vocal", "stems", "advanced", "credits", "sounds"]);
   if (!isLoggedIn && protectedRoutes.has(wanted)) {
     if (wanted === "player" && sharedTrackId) {
       // Listen-only share links — do not bounce guests to sign-in.
@@ -2973,6 +2990,11 @@ function applyRoute() {
   if (wanted === "activity") {
     bindActivityPageOnce();
     void enterActivityRoute({ reset: prevRoute !== "activity" });
+  }
+  if (wanted === "mashup") {
+    bindMashupPageOnce();
+    renderMashupPage();
+    void ensureUserLibraryHydrated().then(() => renderMashupPage());
   }
   if (wanted === "user") {
     renderUserProfile._pendingUserId = pendingPublicUserId;
@@ -5175,6 +5197,18 @@ function bindHomeDeskOnce(page) {
       try {
         location.hash = "#/generate";
       } catch {}
+      scheduleApplyRoute();
+      return;
+    }
+    const mashupStart = e.target?.closest?.("[data-home-mashup-start]");
+    if (mashupStart && page.contains(mashupStart)) {
+      haptic("light");
+      if (!authSession?.user?.id) {
+        try { location.hash = "#/auth"; } catch {}
+        scheduleApplyRoute();
+        return;
+      }
+      try { location.hash = "#/mashup"; } catch {}
       scheduleApplyRoute();
       return;
     }
@@ -15808,6 +15842,369 @@ function bindActivityPageOnce() {
     }, { root: null, rootMargin: "160px", threshold: 0 });
     _activityFeedState.observer.observe(els.activityLoadMore);
   }
+}
+
+const _mashupState = {
+  slotA: null,
+  slotB: null,
+  pickerSlot: "",
+  generating: false,
+  taskId: "",
+  pollTimer: null,
+  bound: false,
+};
+
+function mashupSongCloudId(track) {
+  const cloud = String(track?.cloudSongId || "").trim();
+  if (cloud && isShareUuid(cloud)) return cloud;
+  const id = String(track?.id || "").trim();
+  if (isShareUuid(id)) return id;
+  return "";
+}
+
+function mashupEligibleLibraryTracks() {
+  return loadLibrary()
+    .filter((t) => String(t?.kind || "full") === "full")
+    .filter((t) => String(t?.url || "").trim())
+    .filter((t) => mashupSongCloudId(t))
+    .sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
+}
+
+function mashupCoverForTrack(t) {
+  const raw = String(t?.artUrl || t?.meta?.imageUrl || "").trim();
+  return raw && /^https?:\/\//i.test(raw) ? raw : "./assets/nabadai-logo.png";
+}
+
+function mashupSlotEls(slot) {
+  if (slot === "b") {
+    return {
+      btn: els.mashupSlotB,
+      art: els.mashupSlotArtB,
+      title: els.mashupSlotTitleB,
+    };
+  }
+  return {
+    btn: els.mashupSlotA,
+    art: els.mashupSlotArtA,
+    title: els.mashupSlotTitleA,
+  };
+}
+
+function renderMashupSlot(slot, track) {
+  const { btn, art, title } = mashupSlotEls(slot);
+  if (!btn || !art || !title) return;
+  if (!track) {
+    btn.classList.remove("isFilled");
+    art.style.backgroundImage = "";
+    title.textContent = "Tap to choose";
+    return;
+  }
+  btn.classList.add("isFilled");
+  const cover = mashupCoverForTrack(track);
+  art.style.backgroundImage = `url("${cover.replace(/"/g, '\\"')}")`;
+  title.textContent = String(track.title || "Song").trim() || "Song";
+}
+
+function renderMashupPage() {
+  renderMashupSlot("a", _mashupState.slotA);
+  renderMashupSlot("b", _mashupState.slotB);
+  const ready = Boolean(_mashupState.slotA && _mashupState.slotB) && !_mashupState.generating;
+  if (els.btnMashupGenerate) els.btnMashupGenerate.disabled = !ready;
+  if (els.mashupLead && !_mashupState.generating) {
+    const n = mashupEligibleLibraryTracks().length;
+    els.mashupLead.textContent = n >= 2
+      ? "Pick two songs from your library — we blend them into one new track."
+      : "You need at least two saved songs in Library before you can mash up.";
+  }
+}
+
+function setMashupStatus(msg, { show = true } = {}) {
+  if (!els.mashupStatus) return;
+  const text = String(msg || "").trim();
+  if (!text || !show) {
+    els.mashupStatus.hidden = true;
+    els.mashupStatus.textContent = "";
+    return;
+  }
+  els.mashupStatus.hidden = false;
+  els.mashupStatus.textContent = text;
+}
+
+function setMashupProgress(active, text = "") {
+  if (els.mashupProgress) {
+    els.mashupProgress.hidden = !active;
+    els.mashupProgress.setAttribute("aria-hidden", active ? "false" : "true");
+  }
+  if (els.mashupProgressText && text) els.mashupProgressText.textContent = text;
+  if (els.btnMashupGenerate) {
+    els.btnMashupGenerate.disabled = active || !_mashupState.slotA || !_mashupState.slotB;
+    els.btnMashupGenerate.textContent = active ? "Blending…" : "Mashup · 12 credits";
+  }
+}
+
+function openMashupPicker(slot) {
+  _mashupState.pickerSlot = slot === "b" ? "b" : "a";
+  if (els.mashupPickerTitle) {
+    els.mashupPickerTitle.textContent = _mashupState.pickerSlot === "b" ? "Choose track B" : "Choose track A";
+  }
+  const tracks = mashupEligibleLibraryTracks();
+  const other = _mashupState.pickerSlot === "a" ? _mashupState.slotB : _mashupState.slotA;
+  const otherId = mashupSongCloudId(other);
+  const list = tracks.filter((t) => mashupSongCloudId(t) !== otherId);
+  if (els.mashupPickerList) {
+    if (!list.length) {
+      els.mashupPickerList.innerHTML = `<div class="mashupPickerEmpty">No eligible songs yet. Generate a couple of tracks first — they'll show up here once saved to Library.</div>`;
+    } else {
+      els.mashupPickerList.innerHTML = list.map((t) => {
+        const sid = mashupSongCloudId(t);
+        const selected =
+          (_mashupState.pickerSlot === "a" ? mashupSongCloudId(_mashupState.slotA) : mashupSongCloudId(_mashupState.slotB)) === sid;
+        return `
+          <button type="button" class="mashupPickerRow${selected ? " isSelected" : ""}" data-mashup-pick="${escapeHtml(sid)}" role="option">
+            <img class="mashupPickerRowArt" src="${escapeHtml(mashupCoverForTrack(t))}" alt="" loading="lazy" decoding="async" />
+            <span class="mashupPickerRowBody">
+              <strong>${escapeHtml(String(t.title || "Song").trim() || "Song")}</strong>
+              <span>Library · full track</span>
+            </span>
+          </button>`;
+      }).join("");
+    }
+  }
+  if (els.mashupPickerSheet) {
+    els.mashupPickerSheet.hidden = false;
+    els.mashupPickerSheet.setAttribute("aria-hidden", "false");
+  }
+}
+
+function closeMashupPicker() {
+  _mashupState.pickerSlot = "";
+  if (els.mashupPickerSheet) {
+    els.mashupPickerSheet.hidden = true;
+    els.mashupPickerSheet.setAttribute("aria-hidden", "true");
+  }
+}
+
+function selectMashupTrack(songId) {
+  const sid = String(songId || "").trim();
+  const track = mashupEligibleLibraryTracks().find((t) => mashupSongCloudId(t) === sid);
+  if (!track || !_mashupState.pickerSlot) return;
+  if (_mashupState.pickerSlot === "a") _mashupState.slotA = track;
+  else _mashupState.slotB = track;
+  closeMashupPicker();
+  renderMashupPage();
+  setMashupStatus("");
+}
+
+function stopMashupPolling() {
+  if (_mashupState.pollTimer) clearInterval(_mashupState.pollTimer);
+  _mashupState.pollTimer = null;
+}
+
+async function pollMashupTask(taskId, metaBase) {
+  const tid = String(taskId || "").trim();
+  if (!tid) return;
+  stopMashupPolling();
+  let tries = 0;
+  const maxTries = 160;
+  _mashupState.pollTimer = setInterval(async () => {
+    tries += 1;
+    try {
+      const r = await fetch(apiUrl(`/api/suno/status?taskId=${encodeURIComponent(tid)}`), { cache: "no-store" });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data?.error || "Status check failed");
+      const parsed = parseSunoGenerationRecordInfo(data);
+      if (parsed.status === "FAILED") {
+        stopMashupPolling();
+        _mashupState.generating = false;
+        setMashupProgress(false);
+        setMashupStatus("Mashup generation failed. Try different songs or tweak the blend direction.");
+        renderMashupPage();
+        return;
+      }
+      if (parsed.status === "SUCCESS" && parsed.hasAudio) {
+        stopMashupPolling();
+        _mashupState.generating = false;
+        _mashupState.taskId = "";
+        const titleA = String(_mashupState.slotA?.title || "Song A").trim();
+        const titleB = String(_mashupState.slotB?.title || "Song B").trim();
+        const mashupTitle = `${titleA} × ${titleB}`.slice(0, 100);
+        const genMeta = {
+          ...(metaBase || {}),
+          engine: "mashup",
+          model: LATEST_SUNO_MODEL,
+          customMode: false,
+        };
+        const saved = [];
+        if (parsed.first?.audioUrl) {
+          saved.push(addToLibrary({
+            title: parsed.first.title || mashupTitle,
+            artUrl: parsed.first.imageUrl || mashupCoverForTrack(_mashupState.slotA),
+            url: toAudioProxyUrl(parsed.first.audioUrl) || parsed.first.audioUrl,
+            taskId: tid,
+            audioId: parsed.first.audioId || "",
+            kind: "full",
+            meta: genMeta,
+          }));
+        }
+        if (parsed.second?.audioUrl) {
+          saved.push(addToLibrary({
+            title: parsed.second.title || `${mashupTitle} B`,
+            artUrl: parsed.second.imageUrl || mashupCoverForTrack(_mashupState.slotB),
+            url: toAudioProxyUrl(parsed.second.audioUrl) || parsed.second.audioUrl,
+            taskId: tid,
+            audioId: parsed.second.audioId || "",
+            kind: "full",
+            meta: genMeta,
+          }));
+        }
+        setMashupProgress(false);
+        setMashupStatus("Mashup ready — saved to Library.");
+        renderMashupPage();
+        void refreshSunoCredits();
+        showToast("Mashup saved to Library.", { icon: "♪", durationMs: 3600 });
+        const playTrack = saved[0];
+        if (playTrack?.url) {
+          setPlayerMeta({
+            title: playTrack.title || mashupTitle,
+            subtitle: "Mashup",
+            artUrl: playTrack.artUrl || mashupCoverForTrack(_mashupState.slotA),
+          });
+          location.hash = "#/player";
+          await playInline(normalizeAudioUrlForPlayback(playTrack.url), playTrack.title || mashupTitle, {
+            type: "library",
+            trackId: playTrack.id,
+          });
+        }
+        return;
+      }
+      if (tries >= maxTries) {
+        stopMashupPolling();
+        _mashupState.generating = false;
+        setMashupProgress(false);
+        setMashupStatus("Still blending in the background — check Library in a minute, or try again.");
+        renderMashupPage();
+      }
+    } catch {
+      if (tries >= 10) {
+        stopMashupPolling();
+        _mashupState.generating = false;
+        setMashupProgress(false);
+        setMashupStatus("Lost connection while checking mashup status. Try again in a moment.");
+        renderMashupPage();
+      }
+    }
+  }, 4500);
+}
+
+async function startMashupGeneration() {
+  if (_mashupState.generating) return;
+  if (!authSession?.user?.id) {
+    location.hash = "#/auth";
+    return;
+  }
+  const songIdA = mashupSongCloudId(_mashupState.slotA);
+  const songIdB = mashupSongCloudId(_mashupState.slotB);
+  if (!songIdA || !songIdB) {
+    setMashupStatus("Pick two library songs first.");
+    return;
+  }
+  if (songIdA === songIdB) {
+    setMashupStatus("Choose two different songs.");
+    return;
+  }
+  const prompt = String(els.mashupPromptInput?.value || "").trim()
+    || "A dynamic mashup blending two songs from my library";
+  _mashupState.generating = true;
+  setMashupStatus("");
+  setMashupProgress(true, "Sending both tracks to the engine…");
+  renderMashupPage();
+  haptic("medium");
+  try {
+    const token = getSupabaseAuthToken();
+    const r = await fetch(apiUrl("/api/music/mashup"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ songIdA, songIdB, prompt }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.status === 402 || d?.code === "insufficient_credits") {
+      const need = Number(d?.needed ?? FULL_SONG_CREDIT_COST);
+      const have = Number(d?.balance || 0);
+      throw new Error(`Not enough credits (you have ${formatCreditsAmount(have)}, need ${formatCreditsAmount(need)}).`);
+    }
+    if (r.status === 401) throw new Error("Sign in to create a mashup.");
+    if (!r.ok) throw new Error(d?.error || "Mashup failed to start");
+    if (d?._credits && Number.isFinite(Number(d._credits.balance))) {
+      setCreditsBalance(Number(d._credits.balance));
+      creditsState.loaded = true;
+    }
+    const taskId = String(d?.taskId || d?.data?.taskId || extractTaskIdLoose(d) || "").trim();
+    if (!taskId) throw new Error("Mashup started but no task id came back.");
+    _mashupState.taskId = taskId;
+    saveRecoverableGenerationTask(taskId, `${_mashupState.slotA?.title || "A"} × ${_mashupState.slotB?.title || "B"}`);
+    const metaBase = {
+      mashupOf: [
+        {
+          songId: songIdA,
+          title: _mashupState.slotA?.title || "",
+          artUrl: mashupCoverForTrack(_mashupState.slotA),
+          localId: _mashupState.slotA?.id || "",
+        },
+        {
+          songId: songIdB,
+          title: _mashupState.slotB?.title || "",
+          artUrl: mashupCoverForTrack(_mashupState.slotB),
+          localId: _mashupState.slotB?.id || "",
+        },
+      ],
+      mashupPrompt: prompt,
+    };
+    setMashupProgress(true, "Blending your tracks — this usually takes a couple of minutes…");
+    pollMashupTask(taskId, metaBase);
+  } catch (e) {
+    _mashupState.generating = false;
+    _mashupState.taskId = "";
+    setMashupProgress(false);
+    setMashupStatus(e?.message || "Mashup failed.");
+    renderMashupPage();
+    showToast(String(e?.message || "Mashup failed"), { icon: "!", durationMs: 4200 });
+  }
+}
+
+function bindMashupPageOnce() {
+  if (_mashupState.bound) return;
+  _mashupState.bound = true;
+  els.btnMashupBack?.addEventListener("click", () => {
+    haptic("light");
+    location.hash = "#/challenges";
+  });
+  els.mashupSlotA?.addEventListener("click", () => {
+    if (_mashupState.generating) return;
+    haptic("light");
+    openMashupPicker("a");
+  });
+  els.mashupSlotB?.addEventListener("click", () => {
+    if (_mashupState.generating) return;
+    haptic("light");
+    openMashupPicker("b");
+  });
+  els.btnMashupGenerate?.addEventListener("click", () => {
+    void startMashupGeneration();
+  });
+  els.mashupPickerSheet?.addEventListener("click", (ev) => {
+    const dismiss = ev.target?.closest?.("[data-mashup-picker-dismiss]");
+    if (dismiss) {
+      ev.preventDefault();
+      closeMashupPicker();
+      return;
+    }
+    const pick = ev.target?.closest?.("[data-mashup-pick]");
+    if (!pick) return;
+    selectMashupTrack(pick.getAttribute("data-mashup-pick"));
+  });
 }
 
 function openNotificationsCenterShell() {

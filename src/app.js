@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260613createCards";
+const APP_BUILD = "20260613libraryFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -14430,8 +14430,8 @@ async function supabaseLoadUserSongs() {
   // happens to be a legacy `data:` URL*, same trick we use on `hub_posts`
   // for cover_url / creator_avatar. The cheap `art_url is null` branch
   // covers freshly inserted rows where we deliberately wrote null.
-  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_deleted_at:meta->>deletedAt";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_deleted_at:meta->>deletedAt";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
@@ -14481,7 +14481,9 @@ async function supabaseLoadUserSongs() {
   }
   _lastUserSongsLoadStatus = "ok";
   _lastUserSongsLoadDetails = "";
-  return rows.map((s) => {
+  return rows
+    .filter((s) => !String(s?.meta_deleted_at || "").trim())
+    .map((s) => {
     const cid = String(s.id || "").trim();
     return {
       id: cid || `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -14744,6 +14746,16 @@ async function supabasePatchUserSong(track, patch) {
   return { ok: true };
 }
 
+async function supabaseSoftDeleteUserSong(track) {
+  const deletedAt = new Date().toISOString();
+  const meta = { ...(track?.meta && typeof track.meta === "object" ? track.meta : {}), deletedAt };
+  return supabasePatchUserSong(track, {
+    meta,
+    publicOnProfile: false,
+    publishedAt: null,
+  });
+}
+
 async function supabaseDeleteUserSong(track) {
   const token = getSupabaseAuthToken();
   if (!token || !authSession?.user?.id) return;
@@ -14755,7 +14767,7 @@ async function supabaseDeleteUserSong(track) {
     (isPostgresUuidString(track?.id) ? String(track.id).trim() : "");
   // The same logical song can exist as several cloud rows (URL drift used
   // to duplicate them), so delete by EVERY identity we know: row id,
-  // audio id, raw URL, and the canonical (unwrapped) URL.
+  // audio id, task id, raw URL, and the canonical (unwrapped) URL.
   const filters = [];
   if (rowRef && isPostgresUuidString(rowRef)) {
     filters.push(`user_id=eq.${uid}&id=eq.${encodeURIComponent(rowRef)}`);
@@ -14763,6 +14775,10 @@ async function supabaseDeleteUserSong(track) {
   const audioId = String(track?.audioId || "").trim();
   if (audioId) {
     filters.push(`user_id=eq.${uid}&audio_id=eq.${encodeURIComponent(audioId)}&kind=eq.${kind}`);
+  }
+  const taskId = String(track?.taskId || "").trim();
+  if (taskId) {
+    filters.push(`user_id=eq.${uid}&task_id=eq.${encodeURIComponent(taskId)}&kind=eq.${kind}`);
   }
   if (songUrl) {
     filters.push(`user_id=eq.${uid}&song_url=eq.${encodeURIComponent(songUrl)}&kind=eq.${kind}`);
@@ -23217,6 +23233,10 @@ function libraryTombstoneKeysForTrack(t) {
   if (aid) out.push(`aid:${aid}|${kind}`);
   const urlKey = libraryTrackCanonicalUrl(t?.url);
   if (urlKey) out.push(`url:${urlKey}|${kind}`);
+  const stable = libraryTrackStableKey(t);
+  if (stable && stable !== "|${kind}") out.push(`stk:${stable}`);
+  const tid = String(t?.taskId || "").trim();
+  if (tid) out.push(`tid:${tid}|${kind}`);
   const cid = String(t?.cloudSongId || "").trim() || (isShareUuid(t?.id) ? String(t.id).trim() : "");
   if (cid) out.push(`cid:${cid}`);
   return out;
@@ -23245,13 +23265,25 @@ function loadLibraryTombstoneKeySet() {
 function isTrackTombstoned(t, keySet) {
   const keys = keySet || loadLibraryTombstoneKeySet();
   if (!keys.size) return false;
-  return libraryTombstoneKeysForTrack(t).some((k) => keys.has(k));
+  if (libraryTombstoneKeysForTrack(t).some((k) => keys.has(k))) return true;
+  // Older tombstones may predate stk:/tid: keys — cross-match sync sig too.
+  return keys.has(librarySyncSigOf(t));
 }
 
 /** Collapse cloud rows that are the same logical song (sync signature).
  *  Keeps the best copy — archived storage URL preferred, then earliest
  *  created_at so the song keeps its original date — and returns the
  *  redundant rows so the caller can delete them from the cloud. */
+function cloudRowDedupeScore(r) {
+  let score = 0;
+  if (Boolean(r?.publicOnProfile)) score += 1_000_000;
+  if (isArchivedSongStorageUrl(r?.url)) score += 100_000;
+  if (String(r?.audioId || "").trim()) score += 10_000;
+  // Prefer the original created_at so re-uploaded duplicates don't steal the date.
+  score -= Number(r?.ts || 0) / 1000;
+  return score;
+}
+
 function dedupeCloudSongRows(rows) {
   const bySig = new Map();
   for (const r of Array.isArray(rows) ? rows : []) {
@@ -23261,12 +23293,7 @@ function dedupeCloudSongRows(rows) {
       bySig.set(sig, r);
       continue;
     }
-    const curArch = isArchivedSongStorageUrl(cur?.url);
-    const rArch = isArchivedSongStorageUrl(r?.url);
-    let best = cur;
-    if (curArch !== rArch) best = curArch ? cur : r;
-    else best = Number(cur?.ts || 0) <= Number(r?.ts || 0) ? cur : r;
-    bySig.set(sig, best);
+    bySig.set(sig, cloudRowDedupeScore(cur) >= cloudRowDedupeScore(r) ? cur : r);
   }
   const keep = [...bySig.values()];
   const keptIds = new Set(keep.map((r) => String(r?.cloudSongId || r?.id || "")));
@@ -23274,6 +23301,37 @@ function dedupeCloudSongRows(rows) {
     (r) => !keptIds.has(String(r?.cloudSongId || r?.id || "")),
   );
   return { keep, extras };
+}
+
+/** Merge a cloud row with its local twin without dropping public profile
+ *  visibility when duplicate cloud rows disagree. */
+function mergeLibraryCloudWithLocal(cloudRow, localCopy) {
+  if (!localCopy) return cloudRow;
+  const localArtIsCustom = String(localCopy.artUrl || "").startsWith("data:");
+  const localImgIsCustom = String(localCopy.meta?.imageUrl || "").startsWith("data:");
+  const publicOnProfile = Boolean(cloudRow?.publicOnProfile || localCopy.publicOnProfile);
+  const publishedAt =
+    userSongPublishedAtValue(localCopy) ||
+    userSongPublishedAtValue(cloudRow) ||
+    "";
+  return {
+    ...cloudRow,
+    id: localCopy.id || cloudRow.id,
+    cloudSongId: String(cloudRow.id || cloudRow.cloudSongId || "").trim(),
+    publicOnProfile,
+    ...(publishedAt ? { publishedAt } : {}),
+    artUrl: localArtIsCustom ? localCopy.artUrl : (cloudRow.artUrl || localCopy.artUrl || ""),
+    meta: {
+      ...(cloudRow.meta || {}),
+      ...(localCopy.meta || {}),
+      ...(localImgIsCustom
+        ? {
+            imageUrl: localCopy.meta.imageUrl,
+            ...(localCopy.meta.imageThumb ? { imageThumb: localCopy.meta.imageThumb } : {}),
+          }
+        : {}),
+    },
+  };
 }
 
 /** Parsed Library JSON — `loadLibrary()` can run many times per tick
@@ -23493,7 +23551,8 @@ function freeUpLocalStorage() {
       const k = String(localStorage.key(i) || "");
       const v = String(localStorage.getItem(k) || "");
       beforeBytes += k.length + v.length;
-      if (!keepKeys.has(k)) toDelete.push(k);
+      if (keepKeys.has(k) || k.startsWith("mas:library:deleted:v1:")) continue;
+      toDelete.push(k);
     }
   } catch {}
   for (const k of toDelete) {
@@ -23687,7 +23746,10 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
   // re-issue the cloud DELETE for any that are still in the cloud.
   const cloudAlive = (Array.isArray(cloudSongsRaw) ? cloudSongsRaw : []).filter((row) => {
     if (!isTrackTombstoned(row, tombstones)) return true;
-    void supabaseDeleteUserSong(row);
+    void (async () => {
+      await supabaseSoftDeleteUserSong(row);
+      await supabaseDeleteUserSong(row);
+    })();
     return false;
   });
   // Collapse duplicate cloud rows of the same song (URL drift used to
@@ -23731,21 +23793,7 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
       addMerged(c);
       return;
     }
-    const localArtIsCustom = String(localCopy.artUrl || "").startsWith("data:");
-    const localImgIsCustom = String(localCopy.meta?.imageUrl || "").startsWith("data:");
-    addMerged({
-      ...c,
-      id: localCopy.id || c.id,
-      cloudSongId: String(c.id || c.cloudSongId || "").trim(),
-      artUrl: localArtIsCustom ? localCopy.artUrl : (c.artUrl || localCopy.artUrl || ""),
-      meta: {
-        ...(c.meta || {}),
-        ...(localCopy.meta || {}),
-        ...(localImgIsCustom
-          ? { imageUrl: localCopy.meta.imageUrl, ...(localCopy.meta.imageThumb ? { imageThumb: localCopy.meta.imageThumb } : {}) }
-          : {}),
-      },
-    });
+    addMerged(mergeLibraryCloudWithLocal(c, localCopy));
   });
   localCandidates.forEach(addMerged);
   merged.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
@@ -23786,6 +23834,7 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
     let failCount = 0;
     let firstFail = "";
     for (const t of localOnly) {
+      if (isTrackTombstoned(t)) continue;
       // eslint-disable-next-line no-await-in-loop
       const ins = await supabaseInsertUserSong(t);
       if (ins?.ok) okCount += 1;
@@ -23850,7 +23899,10 @@ async function reconcileLibraryFromCloud({ force = false } = {}) {
     const tombstones = loadLibraryTombstoneKeySet();
     const cloudAlive = cloudRaw.filter((row) => {
       if (!isTrackTombstoned(row, tombstones)) return true;
-      void supabaseDeleteUserSong(row);
+      void (async () => {
+        await supabaseSoftDeleteUserSong(row);
+        await supabaseDeleteUserSong(row);
+      })();
       return false;
     });
     const { keep: cloud, extras: dupExtras } = dedupeCloudSongRows(cloudAlive);
@@ -23886,21 +23938,7 @@ async function reconcileLibraryFromCloud({ force = false } = {}) {
       seen.add(sig);
       const localCopy = localBySig.get(sig);
       if (localCopy) {
-        const localArtIsCustom = String(localCopy.artUrl || "").startsWith("data:");
-        const localImgIsCustom = String(localCopy.meta?.imageUrl || "").startsWith("data:");
-        merged.push({
-          ...c,
-          id: localCopy.id || c.id,
-          cloudSongId: String(c.id || c.cloudSongId || "").trim(),
-          artUrl: localArtIsCustom ? localCopy.artUrl : (c.artUrl || localCopy.artUrl || ""),
-          meta: {
-            ...(c.meta || {}),
-            ...(localCopy.meta || {}),
-            ...(localImgIsCustom
-              ? { imageUrl: localCopy.meta.imageUrl, ...(localCopy.meta.imageThumb ? { imageThumb: localCopy.meta.imageThumb } : {}) }
-              : {}),
-          },
-        });
+        merged.push(mergeLibraryCloudWithLocal(c, localCopy));
       } else {
         merged.push(c);
       }
@@ -23918,7 +23956,7 @@ async function reconcileLibraryFromCloud({ force = false } = {}) {
       seen.add(sig);
       seenStable.add(stable);
       merged.push(t);
-      if (t.url) void supabaseInsertUserSong(t);
+      if (t.url && !isTrackTombstoned(t)) void supabaseInsertUserSong(t);
     }
 
     merged.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
@@ -23997,7 +24035,10 @@ function removeFromLibrary(id) {
     // Tombstone FIRST so no concurrent reconcile can re-upload the row
     // while the cloud DELETE is in flight. Deletion must be final.
     addLibraryTombstoneForTrack(removed);
-    void supabaseDeleteUserSong(removed);
+    void (async () => {
+      await supabaseSoftDeleteUserSong(removed);
+      await supabaseDeleteUserSong(removed);
+    })();
     // Library is the user's PRIVATE inventory; Hub is PUBLIC. Deleting
     // here only takes the song off this account's Library — any Hub
     // post stays live so the public feed isn't surprise-edited by a

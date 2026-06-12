@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260613mashupFix";
+const APP_BUILD = "20260613mashupBlend";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -404,6 +404,10 @@ const els = {
   mashupSlotArtB: document.getElementById("mashupSlotArtB"),
   mashupSlotTitleA: document.getElementById("mashupSlotTitleA"),
   mashupSlotTitleB: document.getElementById("mashupSlotTitleB"),
+  mashupBlendStage: document.getElementById("mashupBlendStage"),
+  mashupBlendCoverA: document.getElementById("mashupBlendCoverA"),
+  mashupBlendCoverB: document.getElementById("mashupBlendCoverB"),
+  mashupBlendStatus: document.getElementById("mashupBlendStatus"),
   mashupPromptInput: document.getElementById("mashupPromptInput"),
   btnMashupGenerate: document.getElementById("btnMashupGenerate"),
   btnMashupBack: document.getElementById("btnMashupBack"),
@@ -2994,7 +2998,7 @@ function applyRoute() {
   }
   if (wanted === "mashup") {
     bindMashupPageOnce();
-    renderMashupPage();
+    enterMashupRoute();
     void ensureUserLibraryHydrated().then(() => renderMashupPage());
   }
   if (wanted === "user") {
@@ -15850,6 +15854,7 @@ const _mashupState = {
   slotB: null,
   pickerSlot: "",
   generating: false,
+  starting: false,
   taskId: "",
   pollTimer: null,
   bound: false,
@@ -15909,13 +15914,53 @@ function renderMashupSlot(slot, track) {
 function renderMashupPage() {
   renderMashupSlot("a", _mashupState.slotA);
   renderMashupSlot("b", _mashupState.slotB);
-  const ready = Boolean(_mashupState.slotA && _mashupState.slotB) && !_mashupState.generating;
-  if (els.btnMashupGenerate) els.btnMashupGenerate.disabled = !ready;
-  if (els.mashupLead && !_mashupState.generating) {
+  const ready = Boolean(_mashupState.slotA && _mashupState.slotB) && !_mashupState.generating && !_mashupState.starting;
+  if (els.btnMashupGenerate) {
+    els.btnMashupGenerate.disabled = !ready;
+    if (!_mashupState.generating && !_mashupState.starting) {
+      els.btnMashupGenerate.textContent = "Mashup · 12 credits";
+      els.btnMashupGenerate.classList.remove("isStarting");
+    }
+  }
+  if (els.mashupLead && !_mashupState.generating && !_mashupState.starting) {
     const n = mashupEligibleLibraryTracks().length;
     els.mashupLead.textContent = n >= 2
       ? "Pick two songs from your library — we blend them into one new track."
       : "You need at least two saved songs in Library before you can mash up.";
+  }
+}
+
+function enterMashupRoute() {
+  if (!_mashupState.pollTimer && !_mashupState.taskId) {
+    _mashupState.generating = false;
+    _mashupState.starting = false;
+    setMashupBlending(false);
+    setMashupProgress(false);
+    setMashupStatus("");
+  }
+  renderMashupPage();
+}
+
+function setMashupBlending(active, message = "") {
+  const on = Boolean(active);
+  els.mashupPage?.classList.toggle("isBlending", on);
+  if (els.mashupBlendStage) {
+    els.mashupBlendStage.hidden = !on;
+    els.mashupBlendStage.classList.toggle("isActive", on);
+    els.mashupBlendStage.setAttribute("aria-hidden", on ? "false" : "true");
+  }
+  if (on) {
+    const coverA = mashupCoverForTrack(_mashupState.slotA);
+    const coverB = mashupCoverForTrack(_mashupState.slotB);
+    if (els.mashupBlendCoverA) els.mashupBlendCoverA.src = coverA;
+    if (els.mashupBlendCoverB) els.mashupBlendCoverB.src = coverB;
+  }
+  if (els.mashupBlendStatus) {
+    els.mashupBlendStatus.textContent = String(message || "Blending your tracks…").trim();
+  }
+  if (els.btnMashupGenerate) {
+    els.btnMashupGenerate.disabled = on || _mashupState.starting || !_mashupState.slotA || !_mashupState.slotB;
+    if (on) els.btnMashupGenerate.textContent = "Blending…";
   }
 }
 
@@ -15933,14 +15978,10 @@ function setMashupStatus(msg, { show = true } = {}) {
 
 function setMashupProgress(active, text = "") {
   if (els.mashupProgress) {
-    els.mashupProgress.hidden = !active;
-    els.mashupProgress.setAttribute("aria-hidden", active ? "false" : "true");
+    els.mashupProgress.hidden = true;
+    els.mashupProgress.setAttribute("aria-hidden", "true");
   }
   if (els.mashupProgressText && text) els.mashupProgressText.textContent = text;
-  if (els.btnMashupGenerate) {
-    els.btnMashupGenerate.disabled = active || !_mashupState.slotA || !_mashupState.slotB;
-    els.btnMashupGenerate.textContent = active ? "Blending…" : "Mashup · 12 credits";
-  }
 }
 
 function openMashupPicker(slot) {
@@ -16017,6 +16058,7 @@ async function pollMashupTask(taskId, metaBase) {
       if (parsed.status === "FAILED") {
         stopMashupPolling();
         _mashupState.generating = false;
+        setMashupBlending(false);
         setMashupProgress(false);
         setMashupStatus("Mashup generation failed. Try different songs or tweak the blend direction.");
         renderMashupPage();
@@ -16026,6 +16068,7 @@ async function pollMashupTask(taskId, metaBase) {
         stopMashupPolling();
         _mashupState.generating = false;
         _mashupState.taskId = "";
+        setMashupBlending(false, "Mashup ready");
         const titleA = String(_mashupState.slotA?.title || "Song A").trim();
         const titleB = String(_mashupState.slotB?.title || "Song B").trim();
         const mashupTitle = `${titleA} × ${titleB}`.slice(0, 100);
@@ -16081,6 +16124,7 @@ async function pollMashupTask(taskId, metaBase) {
       if (tries >= maxTries) {
         stopMashupPolling();
         _mashupState.generating = false;
+        setMashupBlending(false);
         setMashupProgress(false);
         setMashupStatus("Still blending in the background — check Library in a minute, or try again.");
         renderMashupPage();
@@ -16089,6 +16133,7 @@ async function pollMashupTask(taskId, metaBase) {
       if (tries >= 10) {
         stopMashupPolling();
         _mashupState.generating = false;
+        setMashupBlending(false);
         setMashupProgress(false);
         setMashupStatus("Lost connection while checking mashup status. Try again in a moment.");
         renderMashupPage();
@@ -16098,7 +16143,7 @@ async function pollMashupTask(taskId, metaBase) {
 }
 
 async function startMashupGeneration() {
-  if (_mashupState.generating) return;
+  if (_mashupState.generating || _mashupState.starting) return;
   if (!authSession?.user?.id) {
     location.hash = "#/auth";
     return;
@@ -16115,9 +16160,16 @@ async function startMashupGeneration() {
   }
   const prompt = String(els.mashupPromptInput?.value || "").trim()
     || "A dynamic mashup blending two songs from my library";
-  _mashupState.generating = true;
+  _mashupState.starting = true;
+  _mashupState.generating = false;
+  setMashupBlending(false);
+  setMashupProgress(false);
   setMashupStatus("");
-  setMashupProgress(true, "Sending both tracks to the engine…");
+  if (els.btnMashupGenerate) {
+    els.btnMashupGenerate.disabled = true;
+    els.btnMashupGenerate.textContent = "Starting…";
+    els.btnMashupGenerate.classList.add("isStarting");
+  }
   renderMashupPage();
   haptic("medium");
   try {
@@ -16145,6 +16197,9 @@ async function startMashupGeneration() {
     const taskId = String(d?.taskId || d?.data?.taskId || extractTaskIdLoose(d) || "").trim();
     if (!taskId) throw new Error("Mashup started but no task id came back.");
     _mashupState.taskId = taskId;
+    _mashupState.starting = false;
+    _mashupState.generating = true;
+    if (els.btnMashupGenerate) els.btnMashupGenerate.classList.remove("isStarting");
     saveRecoverableGenerationTask(taskId, `${_mashupState.slotA?.title || "A"} × ${_mashupState.slotB?.title || "B"}`);
     const metaBase = {
       mashupOf: [
@@ -16163,12 +16218,15 @@ async function startMashupGeneration() {
       ],
       mashupPrompt: prompt,
     };
-    setMashupProgress(true, "Blending your tracks — this usually takes a couple of minutes…");
+    setMashupBlending(true, "Blending your tracks — weaving A and B together…");
     pollMashupTask(taskId, metaBase);
   } catch (e) {
     _mashupState.generating = false;
+    _mashupState.starting = false;
     _mashupState.taskId = "";
+    setMashupBlending(false);
     setMashupProgress(false);
+    if (els.btnMashupGenerate) els.btnMashupGenerate.classList.remove("isStarting");
     setMashupStatus(e?.message || "Mashup failed.");
     renderMashupPage();
     showToast(String(e?.message || "Mashup failed"), { icon: "!", durationMs: 4200 });
@@ -16183,12 +16241,12 @@ function bindMashupPageOnce() {
     location.hash = "#/challenges";
   });
   els.mashupSlotA?.addEventListener("click", () => {
-    if (_mashupState.generating) return;
+    if (_mashupState.generating || _mashupState.starting) return;
     haptic("light");
     openMashupPicker("a");
   });
   els.mashupSlotB?.addEventListener("click", () => {
-    if (_mashupState.generating) return;
+    if (_mashupState.generating || _mashupState.starting) return;
     haptic("light");
     openMashupPicker("b");
   });

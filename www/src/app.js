@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260613mashupUx";
+const APP_BUILD = "20260613mashupPub";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -424,6 +424,9 @@ const els = {
   mashupPickerTabLibrary: document.getElementById("mashupPickerTabLibrary"),
   mashupPickerTabDiscover: document.getElementById("mashupPickerTabDiscover"),
   btnPlayerMashup: document.getElementById("btnPlayerMashup"),
+  playerMashupAttribution: document.getElementById("playerMashupAttribution"),
+  playerMashupAttributionText: document.getElementById("playerMashupAttributionText"),
+  playerMashupSources: document.getElementById("playerMashupSources"),
   btnMashupGenerate: document.getElementById("btnMashupGenerate"),
   btnMashupBack: document.getElementById("btnMashupBack"),
   mashupStatus: document.getElementById("mashupStatus"),
@@ -6611,12 +6614,16 @@ function followingStatusVerb(postType, post) {
 }
 
 function followingActivityTypeForTrack(t) {
+  if (mashupAttributionForTrack(t)) return "mashup";
   if (remixAttributionForTrack(t)) return "remix";
   if (challengeMetaForTrack(t)) return "challenge";
   return "release";
 }
 
 function followingActivityIcoSvg(type) {
+  if (type === "mashup") {
+    return `<svg class="followActIcoSvg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="16" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+  }
   if (type === "remix") {
     return `<svg class="followActIcoSvg" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h3.4c1.6 0 3 .8 3.8 2.1l1.1 1.8"/><path d="M7 17h3.4c1.6 0 3-.8 3.8-2.1l1.1-1.8"/><path d="M17 6l3 3-3 3"/><path d="M17 12l3 3-3 3"/></svg>`;
   }
@@ -6627,6 +6634,7 @@ function followingActivityIcoSvg(type) {
 }
 
 function followingMusicTypeLabel(type) {
+  if (type === "mashup") return "Mashup";
   if (type === "remix") return "Remix";
   if (type === "challenge") return "Challenge";
   return "New drop";
@@ -6648,11 +6656,16 @@ function followingActivityBadgeHtml(kind, type, opts = {}) {
   </span>`;
 }
 
-function followingActivityHeadHtml(type, handle, title, remixOf, challenge) {
+function followingActivityHeadHtml(type, handle, title, remixOf, challenge, mashupOf) {
   const who = handle
     ? `<strong class="followActUser">@${escapeHtml(handle)}</strong>`
     : `<strong class="followActUser">A musician</strong>`;
   const song = `<em class="followActSong">${escapeHtml(title)}</em>`;
+  if (type === "mashup" && mashupOf) {
+    const a = escapeHtml(mashupOf.a?.title || "Track A");
+    const b = escapeHtml(mashupOf.b?.title || "Track B");
+    return `${who}<span class="followActVerb"> blended </span><em class="followActSong">${a}</em><span class="followActVerb"> × </span><em class="followActSong">${b}</em><span class="followActVerb"> — </span>${song}`;
+  }
   if (type === "remix" && remixOf) {
     const srcWho = remixOf.creatorUsername
       ? `<strong class="followActUser">@${escapeHtml(remixOf.creatorUsername)}</strong>`
@@ -6668,8 +6681,13 @@ function followingActivityHeadHtml(type, handle, title, remixOf, challenge) {
 }
 
 /** Music cards (X-style): @user is in the header row — body is action + song only. */
-function followingActivityBodyHtml(type, title, remixOf, challenge) {
+function followingActivityBodyHtml(type, title, remixOf, challenge, mashupOf) {
   const song = `<em class="followActSong">${escapeHtml(title)}</em>`;
+  if (type === "mashup" && mashupOf) {
+    const a = escapeHtml(mashupOf.a?.title || "Track A");
+    const b = escapeHtml(mashupOf.b?.title || "Track B");
+    return `<span class="followActVerb">Blended </span><em class="followActSong">${a}</em><span class="followActVerb"> × </span><em class="followActSong">${b}</em>`;
+  }
   if (type === "remix" && remixOf) {
     const srcWho = remixOf.creatorUsername
       ? `<strong class="followActUser">@${escapeHtml(remixOf.creatorUsername)}</strong>`
@@ -6980,6 +6998,7 @@ async function renderProfileActivities(opts = {}) {
     t.playCount = playCountMap.get(String(t.id || "")) || 0;
   }
   await hydrateRemixOriginalsForTracks(libRows);
+  await hydrateMashupSourcesForTracks(libRows);
   const feedItems = libRows
     .map((track) => ({
       kind: "music",
@@ -7824,6 +7843,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
   const rawTitle = String(t.title || "Untitled");
   const safeTitle = escapeHtml(rawTitle);
   const remixOf = remixAttributionForTrack(t);
+  const mashupOf = mashupAttributionForTrack(t);
   const challenge = challengeMetaForTrack(t);
   const { artSafe, encUrl, encTitle, encBy, encArt, playData } = followingActivityPlayAttrs(t, profMap, byLine);
   const avatarRaw = String(prof?.avatar || "").trim();
@@ -7847,12 +7867,23 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
   const captionHtml = caption
     ? `<p class="followActCaption">${escapeHtml(caption)}</p>`
     : "";
-  const verbHtml = followingActivityBodyHtml(type, rawTitle, remixOf, challenge);
+  const verbHtml = followingActivityBodyHtml(type, rawTitle, remixOf, challenge, mashupOf);
   const subtitle = handle ? `@${handle}` : "Musician";
+  const mashupBlockHtml = followActMashupBlockHtml(t, profMap, {
+    encUrl,
+    encTitle,
+    encArt,
+    encBy,
+    playData,
+    artSafe,
+    safeTitle,
+    subtitle,
+    xstyle,
+  });
   // Remix posts with a playable public original render BOTH songs as two
   // square tiles side by side — original left, remix right — so listeners
   // can compare them and the original creator gets plays too.
-  const orig = t._remixOriginal && String(t._remixOriginal.url || "").trim() ? t._remixOriginal : null;
+  const orig = !mashupBlockHtml && t._remixOriginal && String(t._remixOriginal.url || "").trim() ? t._remixOriginal : null;
   let remixPairHtml = "";
   if (orig) {
     const origBy = orig.username ? `@${orig.username}` : "Original";
@@ -7905,7 +7936,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
             <p class="followActHead">${verbHtml}</p>
             ${captionHtml}
           </div>
-          ${remixPairHtml || `
+          ${mashupBlockHtml || remixPairHtml || `
           <button type="button" class="followActQuoteCard" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
             <span class="followActQuoteArt">
               <img class="followActQuoteImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
@@ -7947,10 +7978,10 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
         </div>
       </div>
       <div class="followActContent">
-        <p class="followActHead">${followingActivityBodyHtml(type, rawTitle, remixOf, challenge)}</p>
+        <p class="followActHead">${followingActivityBodyHtml(type, rawTitle, remixOf, challenge, mashupOf)}</p>
         ${captionHtml}
       </div>
-      ${remixPairHtml || `
+      ${mashupBlockHtml || remixPairHtml || `
       <button type="button" class="followActMedia" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
         <img class="followActMediaImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
         <span class="followActMediaPlay" aria-hidden="true">▶</span>
@@ -8795,6 +8826,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
       t.playCount = playCountMap.get(String(t.id || "")) || 0;
     }
     await hydrateRemixOriginalsForTracks(playable);
+    await hydrateMashupSourcesForTracks(playable);
     if (gen !== _discoveryFollowingGen) return;
 
     const feedItems = [
@@ -9568,6 +9600,214 @@ function remixAttributionForTrack(track) {
   return { ...remixOf, title: title || "Original song", creatorUsername, songId, ownerUserId };
 }
 
+function mashupMetaEntrySource(entry) {
+  if (!entry || typeof entry !== "object") return null;
+  const title = String(entry.title || "").trim();
+  const songId = String(entry.songId || entry.id || "").trim();
+  const ownerUserId = String(entry.ownerUserId || entry.userId || "").trim();
+  const creatorUsername = normalizeRemixCreatorHandle(entry.creatorUsername || entry.creator || entry.handle);
+  const artUrl = String(entry.artUrl || entry.coverUrl || "").trim();
+  if (!title && !songId && !creatorUsername && !artUrl) return null;
+  return { ...entry, title: title || "Track", songId, ownerUserId, creatorUsername, artUrl };
+}
+
+function mashupAttributionForTrack(track) {
+  const meta = track?.meta || {};
+  const raw = meta?.mashupOf || meta?.mashup_of || null;
+  if (!raw) return null;
+  let a = null;
+  let b = null;
+  if (Array.isArray(raw)) {
+    a = raw[0];
+    b = raw[1];
+  } else if (typeof raw === "object") {
+    a = raw.a || raw.sourceA || raw[0];
+    b = raw.b || raw.sourceB || raw[1];
+  }
+  const na = mashupMetaEntrySource(a);
+  const nb = mashupMetaEntrySource(b);
+  if (!na || !nb) return null;
+  return { a: na, b: nb };
+}
+
+function mashupSourceFromMetaEntry(entry) {
+  if (!entry) return null;
+  return {
+    id: String(entry.songId || ""),
+    title: String(entry.title || "Track").trim(),
+    artUrl: String(entry.artUrl || "./assets/nabadai-logo.png").trim() || "./assets/nabadai-logo.png",
+    url: "",
+    userId: String(entry.ownerUserId || ""),
+    username: String(entry.creatorUsername || "").trim(),
+    kind: "full",
+    publicOnProfile: false,
+  };
+}
+
+function mashupSourceFromDb(entry, row) {
+  const base = mashupSourceFromMetaEntry(entry) || {};
+  return {
+    ...base,
+    id: String(row?.id || base.id || ""),
+    title: String(row?.title || base.title || "Track").trim(),
+    artUrl: String(row?.art_url || base.artUrl || "./assets/nabadai-logo.png").trim() || "./assets/nabadai-logo.png",
+    url: String(row?.song_url || "").trim(),
+    userId: String(row?.user_id || base.userId || ""),
+    taskId: String(row?.task_id || ""),
+    audioId: String(row?.audio_id || ""),
+    kind: "full",
+    publicOnProfile: Boolean(String(row?.song_url || "").trim()),
+  };
+}
+
+function attachMashupSourcesFromMeta(tracks) {
+  for (const t of Array.isArray(tracks) ? tracks : []) {
+    const mashupOf = mashupAttributionForTrack(t);
+    if (!mashupOf) continue;
+    if (!t._mashupSourceA) t._mashupSourceA = mashupSourceFromMetaEntry(mashupOf.a);
+    if (!t._mashupSourceB) t._mashupSourceB = mashupSourceFromMetaEntry(mashupOf.b);
+  }
+}
+
+/** Fetch public rows for mashup sources referenced by `meta.mashupOf` and attach
+ *  playable copies on `_mashupSourceA` / `_mashupSourceB` for feed tiles. */
+async function hydrateMashupSourcesForTracks(tracks) {
+  const list = Array.isArray(tracks) ? tracks : [];
+  attachMashupSourcesFromMeta(list);
+  const wantedIds = new Set();
+  for (const t of list) {
+    const mashupOf = mashupAttributionForTrack(t);
+    for (const src of [mashupOf?.a, mashupOf?.b]) {
+      const sid = String(src?.songId || "").trim();
+      if (sid && isShareUuid(sid)) wantedIds.add(sid);
+    }
+  }
+  if (!wantedIds.size || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+  try {
+    const inList = [...wantedIds].map((id) => encodeURIComponent(id)).join(",");
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/user_songs?id=in.(${inList})&public_on_profile=eq.true&select=id,title,art_url,song_url,user_id,task_id,audio_id`,
+      { headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" }, cache: "no-store" },
+    );
+    if (!r.ok) return;
+    const rows = await r.json().catch(() => []);
+    const byId = new Map();
+    for (const s of Array.isArray(rows) ? rows : []) {
+      if (String(s?.song_url || "").trim()) byId.set(String(s.id), s);
+    }
+    for (const t of list) {
+      const mashupOf = mashupAttributionForTrack(t);
+      if (!mashupOf) continue;
+      const sa = mashupOf.a?.songId ? byId.get(String(mashupOf.a.songId)) : null;
+      const sb = mashupOf.b?.songId ? byId.get(String(mashupOf.b.songId)) : null;
+      if (sa) t._mashupSourceA = mashupSourceFromDb(mashupOf.a, sa);
+      if (sb) t._mashupSourceB = mashupSourceFromDb(mashupOf.b, sb);
+    }
+  } catch {}
+}
+
+function mashupIconSvgHtml() {
+  return `<svg class="mashupIcon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="16" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+}
+
+function mashupPillHtml(label = "Mashup") {
+  return `<span class="mashupAttributionPill">${mashupIconSvgHtml()}<span>${escapeHtml(label)}</span></span>`;
+}
+
+function mashupAttributionText(mashupOf) {
+  if (!mashupOf?.a || !mashupOf?.b) return "";
+  const a = String(mashupOf.a.title || "Track A").trim();
+  const b = String(mashupOf.b.title || "Track B").trim();
+  return `Blended ${a} × ${b}`;
+}
+
+function mashupSourceLineHtml(track) {
+  const mashupOf = mashupAttributionForTrack(track);
+  if (!mashupOf) return "";
+  return `<span class="mashupAttributionLine">${mashupPillHtml()}<span>${escapeHtml(mashupAttributionText(mashupOf))}</span></span>`;
+}
+
+function mashupSourceTileHtml(source, label, profMap) {
+  const title = escapeHtml(String(source?.title || "Track").trim() || "Track");
+  const art = escapeHtml(String(source?.artUrl || "./assets/nabadai-logo.png"));
+  const url = String(source?.url || "").trim();
+  const handle = String(source?.username || "").trim();
+  const by = handle ? `@${handle}` : "Source";
+  if (!url) {
+    return `
+      <div class="followActMashupSource followActMashupSource--static" aria-label="${escapeHtml(label)} ${title}">
+        <img class="followActMashupSourceImg" src="${art}" alt="" loading="lazy" decoding="async" />
+        <span class="followActMashupSourceChip">${escapeHtml(label)}</span>
+        <span class="followActMashupSourceFoot"><span class="followActMashupSourceTitle">${title}</span></span>
+      </div>`;
+  }
+  const o = followingActivityPlayAttrs(source, profMap, by);
+  return `
+    <button type="button" class="followActMashupSource" data-user-lib-play="1" data-user-lib-url="${o.encUrl}" data-user-lib-title="${o.encTitle}" data-user-lib-art="${o.encArt}" data-discovery-by="${encodeURIComponent(by)}" ${o.playData} aria-label="Play source ${escapeHtml(label.toLowerCase())} ${title}">
+      <img class="followActMashupSourceImg" src="${art}" alt="" loading="lazy" decoding="async" />
+      <span class="followActMashupSourceChip">${escapeHtml(label)}</span>
+      <span class="followActMashupSourcePlay" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M5 4v16l14-8L5 4Z" fill="currentColor"/></svg>
+      </span>
+      <span class="followActMashupSourceFoot">
+        <span class="followActMashupSourceTitle">${title}</span>
+        <span class="followActMashupSourceBy">${escapeHtml(by)}</span>
+      </span>
+    </button>`;
+}
+
+function followActMashupBlockHtml(t, profMap, main) {
+  const mashupOf = mashupAttributionForTrack(t);
+  const a = t._mashupSourceA || mashupSourceFromMetaEntry(mashupOf?.a);
+  const b = t._mashupSourceB || mashupSourceFromMetaEntry(mashupOf?.b);
+  if (!mashupOf || !a || !b) return "";
+  const {
+    encUrl,
+    encTitle,
+    encArt,
+    encBy,
+    playData,
+    artSafe,
+    safeTitle,
+    subtitle,
+    xstyle,
+  } = main;
+  const sourcesHtml = `
+    <div class="followActMashupSources" role="group" aria-label="Mashup sources">
+      ${mashupSourceTileHtml(a, "A", profMap)}
+      <span class="followActMashupX" aria-hidden="true">×</span>
+      ${mashupSourceTileHtml(b, "B", profMap)}
+    </div>`;
+  if (xstyle) {
+    return `
+      <div class="followActMashup" role="group" aria-label="Mashup sources and result">
+        ${sourcesHtml}
+        <button type="button" class="followActQuoteCard followActQuoteCard--mashup" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play mashup ${safeTitle}">
+          <span class="followActQuoteArt">
+            <img class="followActQuoteImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
+            <span class="followActQuotePlay" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M5 4v16l14-8L5 4Z" fill="currentColor"/></svg>
+            </span>
+          </span>
+          <span class="followActQuoteBody">
+            <span class="followActQuoteChip followActQuoteChip--mashup">${mashupPillHtml()}</span>
+            <span class="followActQuoteTitle">${safeTitle}</span>
+            <span class="followActQuoteSub">${escapeHtml(subtitle)}</span>
+          </span>
+        </button>
+      </div>`;
+  }
+  return `
+    <div class="followActMashup" role="group" aria-label="Mashup sources and result">
+      ${sourcesHtml}
+      <button type="button" class="followActMedia followActMedia--mashup" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play mashup ${safeTitle}">
+        <img class="followActMediaImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
+        <span class="followActMediaPlay" aria-hidden="true">▶</span>
+        <span class="followActMediaChip">${mashupPillHtml()}</span>
+      </button>
+    </div>`;
+}
+
 /** Fetch the public rows for remix originals referenced by `meta.remixOf`
  *  and attach them to the remix tracks (`t._remixOriginal`) so feeds can
  *  render original + remix side by side. Originals that are private,
@@ -9891,6 +10131,26 @@ function setPlayerRemixAttribution(remixOf) {
   const text = remixAttributionText(remixOf);
   if (els.playerRemixAttributionText) els.playerRemixAttributionText.textContent = text;
   if (els.playerRemixAttribution) els.playerRemixAttribution.hidden = !text;
+}
+
+function setPlayerMashupAttribution(mashupOf) {
+  const text = mashupAttributionText(mashupOf);
+  if (els.playerMashupAttributionText) els.playerMashupAttributionText.textContent = text;
+  if (els.playerMashupAttribution) els.playerMashupAttribution.hidden = !text;
+  if (els.playerMashupSources) {
+    if (!text) {
+      els.playerMashupSources.innerHTML = "";
+      els.playerMashupSources.hidden = true;
+      return;
+    }
+    const artA = escapeHtml(String(mashupOf.a?.artUrl || placeholderCoverDataUrl()));
+    const artB = escapeHtml(String(mashupOf.b?.artUrl || placeholderCoverDataUrl()));
+    els.playerMashupSources.innerHTML = `
+      <img class="playerMashupSourceImg" src="${artA}" alt="" decoding="async" loading="lazy" />
+      <span class="playerMashupX" aria-hidden="true">×</span>
+      <img class="playerMashupSourceImg" src="${artB}" alt="" decoding="async" loading="lazy" />`;
+    els.playerMashupSources.hidden = false;
+  }
 }
 
 function setPlayerChallengeAttribution(challenge) {
@@ -18850,9 +19110,10 @@ function userPublicDiscoveryRowHtml(t, idx, pub) {
   const extra = pub.extraMeta ? ` · ${escapeHtml(String(pub.extraMeta))}` : "";
   const metaInner = `${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}${extra}`;
   const challengeLine = challengeSourceLineHtml(t);
+  const mashupLine = mashupSourceLineHtml(t);
   const remixLine = remixSourceLineHtml(t);
   const releaseLine = releaseCaptionLineHtml(t);
-  const richRowClass = challengeLine || remixLine || releaseLine ? " discoveryRow--rich" : "";
+  const richRowClass = challengeLine || mashupLine || remixLine || releaseLine ? " discoveryRow--rich" : "";
   const sheetData = `data-dp-song-id="${encSongId}" data-dp-owner-id="${encOwnerId}" data-dp-task-id="${encTaskId}" data-dp-audio-id="${encAudioId}"`;
   const side = `<button type="button" class="discoveryRowSide" data-discovery-open-sheet="1" data-dp-hide-profile="1" data-dp-use-public-shuffle="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" ${sheetData} aria-label="Options for ${safeTitle}">⋯</button>`;
   return `
@@ -18869,6 +19130,7 @@ function userPublicDiscoveryRowHtml(t, idx, pub) {
             <span class="discoveryRowTitle">${safeTitle}</span>
             <span class="discoveryRowMeta">${metaInner}</span>
             ${challengeLine}
+            ${mashupLine}
             ${remixLine}
             ${releaseLine}
           </span>
@@ -18913,12 +19175,13 @@ function discoveryTrackRowHtml(t, profMap, idx) {
   const encHandle = handle ? encodeURIComponent(handle) : "";
   const sheetData = `data-dp-song-id="${encSongId}" data-dp-owner-id="${encOwnerId}" data-dp-task-id="${encTaskId}" data-dp-audio-id="${encAudioId}"`;
   const challengeLine = challengeSourceLineHtml(t);
+  const mashupLine = mashupSourceLineHtml(t);
   const remixLine = remixSourceLineHtml(t);
   const releaseLine = releaseCaptionLineHtml(t);
   const playLine = Number.isFinite(Number(t.playCount))
     ? `<span class="discoveryRowPlayCount">${discoveryPlayCountChipHtml(t)}</span>`
     : "";
-  const richRowClass = challengeLine || remixLine || releaseLine || playLine ? " discoveryRow--rich" : "";
+  const richRowClass = challengeLine || mashupLine || remixLine || releaseLine || playLine ? " discoveryRow--rich" : "";
   const side = `<button type="button" class="discoveryRowSide" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" ${sheetData} aria-label="Options for ${safeTitle}">⋯</button>`;
   return `
       <div class="discoveryRow${richRowClass}" style="--i:${idx}">
@@ -18934,6 +19197,7 @@ function discoveryTrackRowHtml(t, profMap, idx) {
             <span class="discoveryRowTitle">${safeTitle}</span>
             <span class="discoveryRowMeta">${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}</span>
             ${challengeLine}
+            ${mashupLine}
             ${remixLine}
             ${releaseLine}
             ${playLine}
@@ -23426,6 +23690,7 @@ function renderProfileLibraryPublicOnLinkSection() {
           const dateLabel = formatLibraryDate(t.ts);
           const subBits = [];
           if (dateLabel) subBits.push(`<span class="libRowDot">${esc(dateLabel)}</span>`);
+          const mashupLine = mashupSourceLineHtml(t);
           const remixLine = remixSourceLineHtml(t);
           const releaseLine = releaseCaptionLineHtml(t);
           const tid = esc(String(t.id));
@@ -23439,6 +23704,7 @@ function renderProfileLibraryPublicOnLinkSection() {
               <span class="libRowInfo">
                 <span class="libRowTitle">${safeTitle}</span>
                 <span class="libRowSub">${subBits.join("")}</span>
+                ${mashupLine}
                 ${remixLine}
                 ${releaseLine}
               </span>
@@ -27087,13 +27353,19 @@ function placeholderCoverDataUrl() {
   return "./assets/nabadai-logo.png";
 }
 
-function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, challenge } = {}) {
+function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, challenge, mashupOf } = {}) {
   const hasTrack = Boolean(artUrl);
   if (els.playerTitle) els.playerTitle.textContent = title || "Now Playing";
   if (els.playerSubtitle) els.playerSubtitle.textContent = subtitle || "";
   if (els.playerArt) els.playerArt.src = artUrl || placeholderCoverDataUrl();
   setPlayerChallengeAttribution(challenge || challengeMetaForTrack(currentPlayerTrackRef));
-  setPlayerRemixAttribution(remixOf || remixAttributionForTrack(currentPlayerTrackRef));
+  const mashup = mashupOf || mashupAttributionForTrack(currentPlayerTrackRef);
+  setPlayerMashupAttribution(mashup);
+  if (mashup) {
+    setPlayerRemixAttribution(null);
+  } else {
+    setPlayerRemixAttribution(remixOf || remixAttributionForTrack(currentPlayerTrackRef));
+  }
   setPlayerReleaseNote(releaseCaption);
   setPlayerFeedback(currentPlayerTrackRef);
   const artWrap = document.querySelector(".playerArtWrap");

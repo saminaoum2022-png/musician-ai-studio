@@ -3216,6 +3216,7 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   font-weight: 600;
 }
 .remixAttributionLine,
+.mashupAttributionLine,
 .challengeAttributionLine{
   display: inline-flex;
   align-items: center;
@@ -3231,6 +3232,7 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   text-overflow: ellipsis;
 }
 .remixAttributionLine > span:last-child,
+.mashupAttributionLine > span:last-child,
 .challengeAttributionLine > span:last-child{
   min-width: 0;
   overflow: hidden;
@@ -3249,6 +3251,7 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
   text-overflow: ellipsis;
 }
 .remixAttributionPill,
+.mashupAttributionPill,
 .challengeAttributionPill{
   display: inline-flex;
   align-items: center;
@@ -3276,7 +3279,15 @@ body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-rou
     rgba(255,255,255,0.045);
   box-shadow: 0 0 16px rgba(34,211,238,0.14);
 }
+.mashupAttributionPill{
+  border-color: rgba(244,114,182,0.34);
+  background:
+    linear-gradient(135deg, rgba(236,72,153,0.28), rgba(124,92,255,0.16)),
+    rgba(255,255,255,0.045);
+  box-shadow: 0 0 16px rgba(236,72,153,0.14);
+}
 .remixIcon,
+.mashupIcon,
 .challengeIcon{
   width: 12px;
   height: 12px;
@@ -5553,6 +5564,7 @@ body.hubJumpingToTop #hubList .hubRow{
 }
 .playerReleaseNote,
 .playerRemixAttribution,
+.playerMashupAttribution,
 .playerChallengeAttribution{
   width: min(100%, 420px);
   margin: 14px auto 0;
@@ -5567,16 +5579,22 @@ body.hubJumpingToTop #hubList .hubRow{
 }
 .playerReleaseNote[hidden],
 .playerRemixAttribution[hidden],
+.playerMashupAttribution[hidden],
 .playerChallengeAttribution[hidden]{
   display: none !important;
 }
 .playerRemixAttribution,
+.playerMashupAttribution,
 .playerChallengeAttribution{
   display: flex;
   align-items: center;
   gap: 10px;
 }
+.playerMashupAttribution{
+  flex-wrap: wrap;
+}
 .playerRemixAttributionBadge,
+.playerMashupAttributionBadge,
 .playerChallengeBadge{
   display: inline-flex;
   align-items: center;
@@ -5603,12 +5621,21 @@ body.hubJumpingToTop #hubList .hubRow{
     rgba(255,255,255,0.045);
   box-shadow: 0 0 18px rgba(34,211,238,0.15);
 }
+.playerMashupAttributionBadge{
+  border-color: rgba(244,114,182,0.34);
+  background:
+    linear-gradient(135deg, rgba(236,72,153,0.28), rgba(124,92,255,0.18)),
+    rgba(255,255,255,0.045);
+  box-shadow: 0 0 18px rgba(236,72,153,0.15);
+}
 .playerRemixAttributionBadge .remixIcon,
+.playerMashupAttributionBadge .mashupIcon,
 .playerChallengeBadge .challengeIcon{
   width: 13px;
   height: 13px;
 }
 .playerRemixAttributionText,
+.playerMashupAttributionText,
 .playerChallengeAttributionText{
   min-width: 0;
   color: rgba(232,238,247,0.80);
@@ -5618,6 +5645,25 @@ body.hubJumpingToTop #hubList .hubRow{
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.playerMashupSources{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 100%;
+  margin-top: 2px;
+}
+.playerMashupSourceImg{
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.playerMashupX{
+  color: rgba(232,238,247,0.72);
+  font-size: 14px;
+  font-weight: 800;
 }
 .playerReleaseNoteLabel{
   margin-bottom: 5px;
@@ -21318,6 +21364,11 @@ body.createChooserSheetOpen .footer{
   background: rgba(35,213,171,0.1);
   border: 1px solid rgba(94,234,212,0.22);
 }
+.followActBadge--mashup .followActBadgeIco{
+  color: rgba(244,114,182,0.95);
+  background: rgba(236,72,153,0.1);
+  border: 1px solid rgba(244,114,182,0.22);
+}
 .followActBadge--challenge .followActBadgeIco{
   color: rgba(251,191,36,0.95);
   background: rgba(245,158,11,0.1);
@@ -21359,6 +21410,9 @@ body.createChooserSheetOpen .footer{
 }
 .followActBadge--remix .followActBadgeLabel{
   color: rgba(94,234,212,0.98);
+}
+.followActBadge--mashup .followActBadgeLabel{
+  color: rgba(244,114,182,0.98);
 }
 .followActBadge--challenge .followActBadgeLabel{
   color: rgba(251,191,36,0.98);
@@ -22180,12 +22234,15 @@ body.createChooserSheetOpen .footer{
   text-overflow: ellipsis;
 }
 .discoveryRowMeta + .remixAttributionLine,
+.discoveryRowMeta + .mashupAttributionLine,
 .discoveryRowMeta + .challengeAttributionLine{
   margin-top: -1px;
 }
 .discoveryRowMeta + .releaseCaptionLine,
 .remixAttributionLine + .releaseCaptionLine,
+.mashupAttributionLine + .releaseCaptionLine,
 .challengeAttributionLine + .remixAttributionLine,
+.challengeAttributionLine + .mashupAttributionLine,
 .challengeAttributionLine + .releaseCaptionLine{
   margin-top: -1px;
 }
@@ -23201,6 +23258,7 @@ html[data-theme="light"] .discoverySearchBarWrap .searchBar{
     padding: 8px 2px 8px 4px;
   }
   .libRowInfo .challengeAttributionLine,
+  .libRowInfo .mashupAttributionLine,
   .libRowInfo .remixAttributionLine{
     white-space: normal;
     flex-wrap: wrap;
@@ -23208,6 +23266,7 @@ html[data-theme="light"] .discoverySearchBarWrap .searchBar{
     text-overflow: unset;
   }
   .libRowInfo .challengeAttributionLine > span:last-child,
+  .libRowInfo .mashupAttributionLine > span:last-child,
   .libRowInfo .remixAttributionLine > span:last-child{
     overflow: visible;
     text-overflow: unset;
@@ -27809,6 +27868,134 @@ section.mentorPage{
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Mashup: source strip A × B + main playable result card. */
+.followActMashup{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin: 8px 0 0;
+}
+.followActMashupSources{
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px;
+  align-items: center;
+}
+.followActMashupX{
+  color: rgba(232,238,247,0.72);
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+}
+.followActMashupSource{
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms ease, border-color 160ms ease;
+}
+.followActMashupSource--static{
+  cursor: default;
+}
+.followActMashupSource:active{ transform: scale(0.97); }
+.followActMashupSource--static:active{ transform: none; }
+.followActMashupSourceImg{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.followActMashupSourceChip{
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(8,10,18,0.74);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  color: rgba(232,238,247,0.92);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+.followActMashupSourcePlay{
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(8,10,18,0.66);
+  color: #fff;
+}
+.followActMashupSourceFoot{
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 18px 8px 7px;
+  background: linear-gradient(180deg, transparent, rgba(4,6,12,0.90));
+  text-align: left;
+}
+.followActMashupSourceTitle{
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.followActMashupSourceBy{
+  color: rgba(232,238,247,0.62);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.followActQuoteCard--mashup{
+  border-color: rgba(244,114,182,0.28);
+  background:
+    linear-gradient(145deg, rgba(236,72,153,0.08), rgba(124,92,255,0.05)),
+    rgba(255,255,255,0.03);
+}
+.followActQuoteChip{
+  display: inline-flex;
+  margin-bottom: 4px;
+}
+.followActQuoteChip--mashup .mashupAttributionPill{
+  height: 20px;
+}
+.followActMedia--mashup{
+  position: relative;
+  border-color: rgba(244,114,182,0.28);
+}
+.followActMediaChip{
+  position: absolute;
+  top: 10px;
+  left: 10px;
 }
 
 .followActQuoteCard{

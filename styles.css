@@ -28221,6 +28221,77 @@ section.mentorPage{
     linear-gradient(170deg, rgba(24, 18, 6, 0.55), rgba(10, 12, 18, 0.4));
 }
 .discoverWeeklyChart[hidden]{ display: none !important; }
+.discoverWeeklyChart.isLoading,
+.discoverCampaignRail.isLoading{
+  pointer-events: none;
+}
+.discoverChartSkeletonTitle{
+  width: 168px;
+  height: 18px;
+  border-radius: 8px;
+  background: linear-gradient(110deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.14) 42%, rgba(255,255,255,0.06) 88%);
+  background-size: 200% 100%;
+  animation: discoveryShimmer 1.15s ease-in-out infinite;
+}
+.discoverChartSkeletonSub{
+  width: 112px;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(110deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.11) 42%, rgba(255,255,255,0.05) 88%);
+  background-size: 200% 100%;
+  animation: discoveryShimmer 1.15s ease-in-out infinite;
+}
+.chartHeroSkeleton{
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
+.chartHeroSkeletonArt{
+  flex: none;
+  width: 84px;
+  height: 84px;
+  border-radius: 16px;
+  background: linear-gradient(110deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.12) 42%, rgba(255,255,255,0.05) 88%);
+  background-size: 200% 100%;
+  animation: discoveryShimmer 1.15s ease-in-out infinite;
+}
+.chartHeroSkeletonMeta{
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.discoverCampaignSkeletonCard{
+  flex: 0 0 auto;
+  width: 108px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.discoverCampaignSkeletonArt{
+  width: 108px;
+  height: 108px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: linear-gradient(110deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.12) 42%, rgba(255,255,255,0.05) 88%);
+  background-size: 200% 100%;
+  animation: discoveryShimmer 1.15s ease-in-out infinite;
+}
+.discoverCampaignSkeletonCount{
+  display: inline-block;
+  width: 72px;
+  height: 12px;
+  border-radius: 6px;
+}
+.discoverCampaignRail.isLoading .discoverCampaignSkeletonCard .discoverSkeletonLine{
+  height: 10px;
+  border-radius: 6px;
+}
 .chartHead{
   display: flex;
   align-items: baseline;

@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260612videoPremium";
+const APP_BUILD = "20260612discoverSkeleton";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -4519,44 +4519,62 @@ function renderHomeDeskSparksDeck() {
   }).join("");
 }
 
-async function refreshDiscoverChallengeSpotlight() {
-  const wrap = document.getElementById("discoverChallengeSpotlight");
-  const rail = document.getElementById("discoverChallengeSpotlightRail");
-  const countEl = document.getElementById("discoverChallengeSpotlightCount");
-  if (!wrap || !rail) return;
-  try {
-    const rows = await supabaseFetchDiscoveryPublicSongs(80);
-    const entries = rows.filter((t) => challengeMetaForTrack(t) && String(t.url || "").trim());
-    if (!entries.length) {
-      wrap.hidden = true;
-      rail.innerHTML = "";
-      if (countEl) countEl.textContent = "";
-      return;
-    }
-    const profMap = await fetchProfilesByUserIdsMap(entries.map((t) => t.userId));
-    const spotlight = entries.slice(0, 5);
-    wrap.hidden = false;
-    if (countEl) countEl.textContent = `${entries.length} this week`;
-    rail.innerHTML = spotlight.map((track) => {
-      const prof = track.userId ? profMap.get(track.userId) : null;
-      const handle = String(prof?.username || "").trim();
-      const artSafe = trackCoverArtForFeed(track);
-      const title = String(track.title || "Song").trim();
-      return `
-        <button type="button" class="discoverChallengeSpotCard" data-challenge-entry-play="${encodeURIComponent(track.url || "")}" data-challenge-entry-title="${encodeURIComponent(title)}" data-challenge-entry-art="${encodeURIComponent(artSafe)}" data-challenge-entry-by="${encodeURIComponent(handle ? `@${handle}` : "Creator")}" data-play-song-id="${encodeURIComponent(track.id || "")}" data-play-owner-id="${encodeURIComponent(track.userId || "")}" data-play-task-id="${encodeURIComponent(track.taskId || "")}" data-play-audio-id="${encodeURIComponent(track.audioId || "")}">
-          <span class="discoverChallengeSpotArt"><img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" /></span>
-          <span class="discoverChallengeSpotMeta">
-            <strong>${escapeHtml(title)}</strong>
-            ${handle ? `<small>@${escapeHtml(handle)}</small>` : ""}
-          </span>
-        </button>`;
-    }).join("");
-  } catch {
-    wrap.hidden = true;
-    rail.innerHTML = "";
+/** Shimmer placeholders while the World Cup rail and weekly chart load. */
+function discoverCampaignRailSkeletonHtml() {
+  const cards = Array.from({ length: 4 }, () => `
+    <div class="discoverCampaignSkeletonCard" aria-hidden="true">
+      <div class="discoverCampaignSkeletonArt"></div>
+      <div class="discoverSkeletonLine"></div>
+      <div class="discoverSkeletonLine short"></div>
+    </div>`).join("");
+  return cards;
+}
+
+function discoverWeeklyChartSkeletonHtml() {
+  return `
+    <div class="chartHead">
+      <div class="discoverChartSkeletonTitle" aria-hidden="true"></div>
+      <div class="discoverChartSkeletonSub" aria-hidden="true"></div>
+    </div>
+    <div class="chartHeroSkeleton" aria-hidden="true">
+      <div class="chartHeroSkeletonArt"></div>
+      <div class="chartHeroSkeletonMeta">
+        <div class="discoverSkeletonLine short"></div>
+        <div class="discoverSkeletonLine"></div>
+        <div class="discoverSkeletonLine short"></div>
+      </div>
+    </div>`;
+}
+
+function paintDiscoverTopSectionsLoading() {
+  const chartWrap = document.getElementById("discoverWeeklyChart");
+  if (chartWrap) {
+    chartWrap.hidden = false;
+    chartWrap.classList.add("isLoading");
+    chartWrap.setAttribute("aria-busy", "true");
+    chartWrap.innerHTML = discoverWeeklyChartSkeletonHtml();
+  }
+  const campaignWrap = document.getElementById("discoverCampaignRail");
+  const row = document.getElementById("discoverCampaignRailRow");
+  const countEl = document.getElementById("discoverCampaignCount");
+  const titleEl = document.getElementById("discoverCampaignTitle");
+  const c = liveCampaignNow();
+  if (campaignWrap && row && c) {
+    campaignWrap.hidden = false;
+    campaignWrap.classList.add("isLoading");
+    campaignWrap.setAttribute("aria-busy", "true");
+    if (titleEl) titleEl.textContent = `${c.emoji} ${c.title}`;
+    if (countEl) countEl.innerHTML = `<span class="discoverSkeletonLine short discoverCampaignSkeletonCount" aria-hidden="true"></span>`;
+    row.innerHTML = discoverCampaignRailSkeletonHtml();
+  } else if (campaignWrap) {
+    campaignWrap.hidden = true;
+    campaignWrap.classList.remove("isLoading");
+    campaignWrap.removeAttribute("aria-busy");
   }
 }
 
+// Challenge spotlight removed — World Cup anthems rail + main feed already surface
+// the same songs; a third rail duplicated entries on Discover.
 // ─── Live event campaigns ───────────────────────────────────────────────
 // One config drives a time-boxed campaign: Home hero banner, a join sheet
 // (team + vibe + language → prefilled Create), a Discover rail of entries,
@@ -4955,6 +4973,8 @@ async function refreshDiscoverWeeklyChart() {
   const wasHidden = wrap.hidden;
   try {
     const chart = await fetchWeeklyChart();
+    wrap.classList.remove("isLoading");
+    wrap.removeAttribute("aria-busy");
     if (!chart.length) {
       wrap.hidden = true;
       wrap.innerHTML = "";
@@ -5028,6 +5048,8 @@ async function refreshDiscoverWeeklyChart() {
     wrap.hidden = false;
     if (wasHidden) playDiscoverSectionEnter(wrap);
   } catch {
+    wrap.classList.remove("isLoading");
+    wrap.removeAttribute("aria-busy");
     wrap.hidden = true;
     wrap.innerHTML = "";
   }
@@ -5042,6 +5064,8 @@ async function refreshDiscoverCampaignRail() {
   const c = liveCampaignNow();
   if (!c) {
     wrap.hidden = true;
+    wrap.classList.remove("isLoading");
+    wrap.removeAttribute("aria-busy");
     row.innerHTML = "";
     return;
   }
@@ -5049,6 +5073,8 @@ async function refreshDiscoverCampaignRail() {
   const wasHidden = wrap.hidden;
   try {
     const rows = (await fetchCampaignSongs(c.id)).filter((t) => String(t.url || "").trim());
+    wrap.classList.remove("isLoading");
+    wrap.removeAttribute("aria-busy");
     if (countEl) countEl.textContent = rows.length ? `${rows.length} anthem${rows.length === 1 ? "" : "s"}` : "Be the first!";
     wrap.hidden = false;
     if (!rows.length) {
@@ -5075,6 +5101,8 @@ async function refreshDiscoverCampaignRail() {
     }).join("");
     if (wasHidden) playDiscoverSectionEnter(wrap);
   } catch {
+    wrap.classList.remove("isLoading");
+    wrap.removeAttribute("aria-busy");
     wrap.hidden = true;
     row.innerHTML = "";
   }
@@ -5346,7 +5374,6 @@ function bindChallengesPageOnce() {
       songId: String(t.id || ""),
       ownerUserId: String(t.userId || ""),
     }));
-    void refreshDiscoverChallengeSpotlight();
   };
   renderPresetLab();
   syncHomeMakeSegUi();
@@ -8820,8 +8847,7 @@ function bindDiscoveryDiscoverControls() {
       const challengePlay = e.target.closest("[data-challenge-entry-play]");
       if (
         challengePlay &&
-        (document.getElementById("discoverChallengeSpotlight")?.contains(challengePlay) ||
-          document.getElementById("discoverCampaignRail")?.contains(challengePlay) ||
+        (document.getElementById("discoverCampaignRail")?.contains(challengePlay) ||
           document.getElementById("discoverWeeklyChart")?.contains(challengePlay))
       ) {
         const raw = decodeDiscoverDataAttr(challengePlay, "data-challenge-entry-play");
@@ -17949,6 +17975,7 @@ async function refreshDiscoverFeed() {
   const rail = document.getElementById("discoverySpotlightRail");
   if (!statusEl || !listEl) return;
   if (spotlightWrap) spotlightWrap.hidden = true;
+  paintDiscoverTopSectionsLoading();
   listEl.classList.add("isDiscoveryLoading");
   listEl.hidden = false;
   listEl.innerHTML = `<div class="discoveryDiscoverGrid discoveryDiscoverGrid--loading">${Array.from({ length: 4 }, () => `
@@ -17969,7 +17996,6 @@ async function refreshDiscoverFeed() {
   _discoveryLastProfMap = profMap;
   if (gen !== _discoveryFeedGen) return;
   listEl.classList.remove("isDiscoveryLoading");
-  void refreshDiscoverChallengeSpotlight();
   bindCampaignUiOnce();
   void refreshDiscoverCampaignRail();
   void refreshDiscoverWeeklyChart();

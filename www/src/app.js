@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260612discoverSkeleton";
+const APP_BUILD = "20260612activityStream";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -15478,7 +15478,93 @@ function activitySkeletonHtml(count = 4) {
         <span class="activitySkelLine"></span>
         <span class="activitySkelLine short"></span>
       </div>
+      <span class="activityRowCover activitySkelBlock activitySkelCover" aria-hidden="true"></span>
     </div>`).join("");
+}
+
+const _activitySongArtCache = new Map();
+
+function activitySongIdForNotification(n) {
+  const meta = n?.metadata || {};
+  const t = String(n?.type || "").trim();
+  const songId = String(meta.song_id || "").trim();
+  if (songId) return songId;
+  if ((t === "social_like" || t === "social_reply") && String(meta.target_kind || "") === "song") {
+    return String(meta.target_id || "").trim();
+  }
+  return "";
+}
+
+function activityNotificationHasSongCover(n) {
+  const t = String(n?.type || "").trim();
+  if (t === "follow") return false;
+  if (t === "social_like" || t === "social_reply") {
+    return String(n?.metadata?.target_kind || "") === "song";
+  }
+  return ["play_milestone", "chart_rank", "song_feedback", "public_song"].includes(t);
+}
+
+function activitySongArtFromLocalPools(songId) {
+  const sid = String(songId || "").trim();
+  if (!sid) return "";
+  if (_activitySongArtCache.has(sid)) return _activitySongArtCache.get(sid);
+  const pools = [loadLibrary(), _discoveryFeedTracks || [], _userPublicFeedTracks || []];
+  for (const pool of pools) {
+    const hit = pool.find((t) => String(t?.id || "") === sid);
+    const art = String(hit?.artUrl || hit?.art_url || hit?.coverUrl || "").trim();
+    if (art && /^https?:\/\//i.test(art)) {
+      _activitySongArtCache.set(sid, art);
+      return art;
+    }
+  }
+  return "";
+}
+
+function activitySongCoverUrl(n) {
+  const meta = n?.metadata || {};
+  const fromMeta = String(meta.song_art_url || meta.target_art_url || "").trim();
+  if (fromMeta && /^https?:\/\//i.test(fromMeta)) return fromMeta;
+  return activitySongArtFromLocalPools(activitySongIdForNotification(n));
+}
+
+function activitySongCoverHtml(n) {
+  if (!activityNotificationHasSongCover(n)) return "";
+  const url = activitySongCoverUrl(n);
+  if (url) {
+    return `<img class="activityRowCover" src="${escapeHtml(url)}" alt="" loading="lazy" decoding="async" />`;
+  }
+  return `<span class="activityRowCover activityRowCoverPlaceholder" aria-hidden="true">♪</span>`;
+}
+
+async function enrichActivitySongArt(notifications) {
+  const wanted = new Set();
+  for (const n of notifications) {
+    if (!activityNotificationHasSongCover(n)) continue;
+    if (activitySongCoverUrl(n)) continue;
+    const sid = activitySongIdForNotification(n);
+    if (sid) wanted.add(sid);
+  }
+  if (!wanted.size || !SUPABASE_URL || !SUPABASE_ANON_KEY) return false;
+  try {
+    const inList = [...wanted].slice(0, 32).map((id) => encodeURIComponent(id)).join(",");
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/user_songs?id=in.(${inList})&public_on_profile=eq.true&select=id,art_url`,
+      { headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" }, cache: "no-store" },
+    );
+    if (!r.ok) return false;
+    const rows = await r.json().catch(() => []);
+    let added = false;
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const art = String(row?.art_url || "").trim();
+      if (art && /^https?:\/\//i.test(art)) {
+        _activitySongArtCache.set(String(row.id), art);
+        added = true;
+      }
+    }
+    return added;
+  } catch {
+    return false;
+  }
 }
 
 /** Collapse bursts of near-identical rows inside one day bucket so the
@@ -15598,7 +15684,7 @@ function activityItemHtml(n) {
         </div>
         <p>${escapeHtml(msg.body)}</p>
       </div>
-      ${unread ? `<span class="activityRowDot" aria-label="Unread"></span>` : ""}
+      ${activitySongCoverHtml(n)}
     </${tag}>`;
 }
 
@@ -15646,6 +15732,8 @@ async function fetchActivityBatch() {
       if (batch.length < limit) _activityFeedState.hasMore = false;
     }
     renderActivityFeedFromState();
+    const enriched = await enrichActivitySongArt(_activityFeedState.items);
+    if (enriched) renderActivityFeedFromState();
     const unread = _activityFeedState.items.filter((n) => !n?.read_at).length;
     if (els.activityLead) {
       els.activityLead.textContent = unread

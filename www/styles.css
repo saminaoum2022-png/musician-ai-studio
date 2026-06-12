@@ -25501,15 +25501,15 @@ body[data-route="activity"] .app{
 .activityFeed{
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 22px;
 }
 .activityDayGroup{
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
 }
 .activityDayLabel{
-  margin: 0;
+  margin: 0 0 6px;
   padding: 0 4px;
   color: rgba(223,231,251,0.42);
   font-size: 11px;
@@ -25519,35 +25519,33 @@ body[data-route="activity"] .app{
 }
 .activityRow{
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 14px 14px;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 20px;
-  background:
-    radial-gradient(120% 100% at 0% 0%, rgba(124,92,255,0.08), transparent 58%),
-    rgba(8,10,18,0.72);
-  box-shadow: 0 12px 32px rgba(0,0,0,0.22);
+  padding: 13px 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   color: inherit;
   text-align: left;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  transition: border-color 160ms ease, background 160ms ease;
+  transition: background 160ms ease;
+}
+.activityRow + .activityRow{
+  border-top: 1px solid rgba(255,255,255,0.075);
 }
 button.activityRow{
   appearance: none;
   font: inherit;
 }
 .activityRow:active{
-  transform: scale(0.992);
+  background: rgba(255,255,255,0.03);
 }
 .activityRow.isUnread{
-  border-color: rgba(94,234,212,0.22);
-  background:
-    radial-gradient(120% 100% at 0% 0%, rgba(34,211,238,0.10), transparent 58%),
-    rgba(10,16,28,0.82);
+  background: linear-gradient(90deg, rgba(94,234,212,0.10), transparent 54%);
 }
 .activityRowAvatarWrap{
   position: relative;
@@ -25657,14 +25655,35 @@ button.activityRow{
   font-size: 13px;
   line-height: 1.45;
 }
-.activityRowDot{
+.activityRowCover{
   flex: 0 0 auto;
-  width: 8px;
-  height: 8px;
-  margin-top: 6px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  background: #5eead4;
-  box-shadow: 0 0 10px rgba(94,234,212,0.55);
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.06);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.24);
+}
+.activityRowCoverPlaceholder{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(167,139,250,0.88);
+  font-size: 16px;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(34,211,238,0.16), transparent 58%),
+    rgba(124,92,255,0.18);
+}
+.activityRow.isUnread .activityRowCover{
+  box-shadow:
+    0 0 0 2px rgba(94,234,212,0.34),
+    0 6px 18px rgba(0,0,0,0.24);
+}
+.activitySkelCover{
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
 }
 .activityEmpty{
   display: flex;

@@ -237,12 +237,18 @@ async function resolveSocialTargetOwner(targetKind, targetId) {
   if (!kind || !tid) return null;
   if (kind === "song") {
     const r = await svcFetch(
-      `user_songs?select=id,user_id,title,public_on_profile&id=eq.${encodeURIComponent(tid)}&limit=1`,
+      `user_songs?select=id,user_id,title,art_url,public_on_profile&id=eq.${encodeURIComponent(tid)}&limit=1`,
     );
     const row = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
     const isPublic = row?.public_on_profile === true || row?.public_on_profile === "t" || row?.public_on_profile === "true";
     if (!row || !isPublic) return null;
-    return { kind, id: row.id, ownerUserId: cleanUserId(row.user_id), title: row.title || "" };
+    return {
+      kind,
+      id: row.id,
+      ownerUserId: cleanUserId(row.user_id),
+      title: row.title || "",
+      artUrl: String(row.art_url || "").trim(),
+    };
   }
   if (kind === "status") {
     const r = await svcFetch(
@@ -374,6 +380,7 @@ async function createSocialLikeNotification({ target, actorUserId }) {
       target_kind: target.kind,
       target_id: target.id,
       target_title: target.title || "",
+      ...(target.kind === "song" && target.artUrl ? { song_art_url: target.artUrl } : {}),
     },
   });
 }
@@ -399,6 +406,7 @@ async function createSocialReplyNotification({ target, actorUserId, replyId, bod
       target_title: target.title || "",
       reply_id: replyId,
       reply_preview: String(body || "").slice(0, 140),
+      ...(target.kind === "song" && target.artUrl ? { song_art_url: target.artUrl } : {}),
     },
   });
 }
@@ -433,7 +441,7 @@ async function resolvePublicSong(songId) {
   if (!sid) return null;
   const eq = encodeURIComponent(sid);
   const r = await svcFetch(
-    `user_songs?select=id,user_id,title,public_on_profile&id=eq.${eq}&limit=1`,
+    `user_songs?select=id,user_id,title,art_url,public_on_profile&id=eq.${eq}&limit=1`,
   );
   const row = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
   const isPublic = row?.public_on_profile === true || row?.public_on_profile === "t" || row?.public_on_profile === "true";
@@ -604,6 +612,7 @@ async function createFeedbackNotification({ song, ownerUserId, actorUserId, feed
       actor_avatar: actor?.avatar || "",
       song_id: sid,
       song_title: song?.title || "your song",
+      song_art_url: String(song?.art_url || "").trim(),
       feedback_type: type,
       feedback_label: feedbackLabel(type),
     },
@@ -625,6 +634,7 @@ async function createPlayMilestoneNotification({ song, ownerUserId, playCount })
     metadata: {
       song_id: sid,
       song_title: song?.title || "Your song",
+      song_art_url: String(song?.art_url || "").trim(),
       play_count: count,
     },
   });
@@ -635,6 +645,8 @@ async function createPublicSongNotifications({ actorUserId, songId, title }) {
   const followers = await followersForUser(actorUserId);
   const sid = cleanSongId(songId);
   if (!sid || !followers.length) return 0;
+  const songRow = await resolvePublicSong(sid);
+  const songArtUrl = String(songRow?.art_url || "").trim();
   let created = 0;
   for (const followerId of followers) {
     if (!followerId || followerId === actorUserId) continue;
@@ -650,6 +662,7 @@ async function createPublicSongNotifications({ actorUserId, songId, title }) {
         actor_avatar: actor?.avatar || "",
         song_id: sid,
         song_title: String(title || "New song").trim().slice(0, 120),
+        song_art_url: songArtUrl,
       },
     });
     if (ok) created += 1;
@@ -850,6 +863,7 @@ async function handleGet(req, res, user) {
             metadata: {
               song_id: e.songId,
               song_title: e.title,
+              song_art_url: e.artUrl,
               rank: e.rank,
               weekly_plays: e.weeklyPlays,
               week_key: weekKey,

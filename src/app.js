@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260613mashupP2";
+const APP_BUILD = "20260613mashupUx";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -417,6 +417,10 @@ const els = {
   mashupStyleInput: document.getElementById("mashupStyleInput"),
   mashupLyricsInput: document.getElementById("mashupLyricsInput"),
   mashupInstrumentalInput: document.getElementById("mashupInstrumentalInput"),
+  mashupBlendRecap: document.getElementById("mashupBlendRecap"),
+  mashupBlendRecapMode: document.getElementById("mashupBlendRecapMode"),
+  mashupBlendLyrics: document.getElementById("mashupBlendLyrics"),
+  mashupControls: document.getElementById("mashupControls"),
   mashupPickerTabLibrary: document.getElementById("mashupPickerTabLibrary"),
   mashupPickerTabDiscover: document.getElementById("mashupPickerTabDiscover"),
   btnPlayerMashup: document.getElementById("btnPlayerMashup"),
@@ -15927,6 +15931,7 @@ function mashupRefFromLibraryTrack(t) {
     taskId: String(t?.taskId || "").trim(),
     audioId: String(t?.audioId || "").trim(),
     kind: String(t?.kind || "full"),
+    meta: t?.meta || null,
   };
 }
 
@@ -16154,6 +16159,134 @@ function enterMashupRoute() {
   renderMashupPage();
 }
 
+function mashupLyricsLookupRef(ref) {
+  if (!ref) return null;
+  return {
+    id: ref.id || ref.songId || "",
+    songId: ref.songId || "",
+    ownerUserId: ref.ownerUserId || (ref.sourceType === "library" ? authSession?.user?.id : ""),
+    url: ref.url || "",
+    title: ref.title || "",
+    taskId: ref.taskId || "",
+    audioId: ref.audioId || "",
+    meta: ref.meta || null,
+  };
+}
+
+function mashupStyleFromRef(ref) {
+  const meta = ref?.meta && typeof ref.meta === "object" ? ref.meta : {};
+  return String(meta.styleInput || meta.styleSent || meta.style || "").trim();
+}
+
+function mergeMashupSourceLyrics(titleA, titleB, lyricsA, lyricsB, hint = "") {
+  const parts = [];
+  const direction = String(hint || "").trim();
+  if (direction) parts.push(direction);
+  parts.push(`[Mashup of "${titleA}" × "${titleB}"]`);
+  parts.push(`--- ${titleA} ---`);
+  parts.push(String(lyricsA || "").trim());
+  parts.push(`--- ${titleB} ---`);
+  parts.push(String(lyricsB || "").trim());
+  return parts.join("\n\n").slice(0, 5000);
+}
+
+function mashupDefaultTitle() {
+  const titleA = String(_mashupState.slotA?.title || "Song A").trim() || "Song A";
+  const titleB = String(_mashupState.slotB?.title || "Song B").trim() || "Song B";
+  return `${titleA} × ${titleB}`.slice(0, 100);
+}
+
+async function resolveMashupTrackLyrics(ref) {
+  const row = mashupLyricsLookupRef(ref);
+  if (!row) return "";
+  try {
+    return String(await resolveLyricsForTrackRef(row)).trim();
+  } catch {
+    return "";
+  }
+}
+
+async function buildSimpleMashupRequest(directionPrompt) {
+  const titleA = String(_mashupState.slotA?.title || "Song A").trim() || "Song A";
+  const titleB = String(_mashupState.slotB?.title || "Song B").trim() || "Song B";
+  const mashupTitle = mashupDefaultTitle();
+  const direction = String(directionPrompt || "").trim()
+    || `A mashup blending "${titleA}" with "${titleB}" — weave both melodies together.`;
+  const [lyricsA, lyricsB] = await Promise.all([
+    resolveMashupTrackLyrics(_mashupState.slotA),
+    resolveMashupTrackLyrics(_mashupState.slotB),
+  ]);
+  const styleBits = [mashupStyleFromRef(_mashupState.slotA), mashupStyleFromRef(_mashupState.slotB)]
+    .filter(Boolean);
+  const mergedStyle = (styleBits.length
+    ? `${styleBits.join(", ")}, mashup blend`
+    : "Mashup blend, energetic crossover"
+  ).slice(0, 1000);
+
+  if (lyricsA && lyricsB) {
+    return {
+      customMode: true,
+      title: mashupTitle,
+      style: mergedStyle,
+      prompt: mergeMashupSourceLyrics(titleA, titleB, lyricsA, lyricsB, direction),
+      instrumental: false,
+      lyricsMerged: true,
+    };
+  }
+  return {
+    customMode: false,
+    title: "",
+    style: "",
+    prompt: direction,
+    instrumental: false,
+    lyricsMerged: false,
+  };
+}
+
+async function populateMashupBlendRecap() {
+  if (!els.mashupBlendRecap || !els.mashupBlendLyrics) return;
+  els.mashupBlendRecap.hidden = false;
+  els.mashupBlendRecap.setAttribute("aria-hidden", "false");
+  if (els.mashupBlendRecapMode) {
+    els.mashupBlendRecapMode.textContent = _mashupState.mode === "custom" ? "Custom blend" : "Simple blend";
+  }
+  els.mashupBlendLyrics.innerHTML = `<p class="mashupBlendLyricsLoading">Loading lyrics from both tracks…</p>`;
+  const titleA = String(_mashupState.slotA?.title || "Track A").trim() || "Track A";
+  const titleB = String(_mashupState.slotB?.title || "Track B").trim() || "Track B";
+  const [lyricsA, lyricsB] = await Promise.all([
+    resolveMashupTrackLyrics(_mashupState.slotA),
+    resolveMashupTrackLyrics(_mashupState.slotB),
+  ]);
+  if (!lyricsA && !lyricsB) {
+    els.mashupBlendLyrics.innerHTML = `<p class="mashupBlendLyricsEmpty">No saved lyrics for these tracks — Suno will write fresh words for the blend.</p>`;
+    return;
+  }
+  const blocks = [];
+  if (lyricsA) {
+    blocks.push(`
+      <div class="mashupBlendLyricsBlock">
+        <strong>${escapeHtml(titleA)}</strong>
+        <pre>${escapeHtml(lyricsA.slice(0, 1800))}${lyricsA.length > 1800 ? "…" : ""}</pre>
+      </div>`);
+  }
+  if (lyricsB) {
+    blocks.push(`
+      <div class="mashupBlendLyricsBlock">
+        <strong>${escapeHtml(titleB)}</strong>
+        <pre>${escapeHtml(lyricsB.slice(0, 1800))}${lyricsB.length > 1800 ? "…" : ""}</pre>
+      </div>`);
+  }
+  els.mashupBlendLyrics.innerHTML = blocks.join("");
+}
+
+function clearMashupBlendRecap() {
+  if (els.mashupBlendRecap) {
+    els.mashupBlendRecap.hidden = true;
+    els.mashupBlendRecap.setAttribute("aria-hidden", "true");
+  }
+  if (els.mashupBlendLyrics) els.mashupBlendLyrics.innerHTML = "";
+}
+
 function setMashupBlending(active, message = "") {
   const on = Boolean(active);
   els.mashupPage?.classList.toggle("isBlending", on);
@@ -16167,6 +16300,9 @@ function setMashupBlending(active, message = "") {
     const coverB = mashupCoverForTrack(_mashupState.slotB);
     if (els.mashupBlendCoverA) els.mashupBlendCoverA.src = coverA;
     if (els.mashupBlendCoverB) els.mashupBlendCoverB.src = coverB;
+    void populateMashupBlendRecap();
+  } else {
+    clearMashupBlendRecap();
   }
   if (els.mashupBlendStatus) {
     els.mashupBlendStatus.textContent = String(message || "Blending your tracks…").trim();
@@ -16328,9 +16464,7 @@ async function pollMashupTask(taskId, metaBase) {
         _mashupState.generating = false;
         _mashupState.taskId = "";
         setMashupBlending(false, "Mashup ready");
-        const titleA = String(_mashupState.slotA?.title || "Song A").trim();
-        const titleB = String(_mashupState.slotB?.title || "Song B").trim();
-        const mashupTitle = `${titleA} × ${titleB}`.slice(0, 100);
+        const mashupTitle = mashupDefaultTitle();
         const genMeta = {
           ...(metaBase || {}),
           engine: "mashup",
@@ -16340,7 +16474,7 @@ async function pollMashupTask(taskId, metaBase) {
         const saved = [];
         if (parsed.first?.audioUrl) {
           saved.push(addToLibrary({
-            title: parsed.first.title || mashupTitle,
+            title: mashupTitle,
             artUrl: parsed.first.imageUrl || mashupCoverForTrack(_mashupState.slotA),
             url: toAudioProxyUrl(parsed.first.audioUrl) || parsed.first.audioUrl,
             taskId: tid,
@@ -16351,7 +16485,7 @@ async function pollMashupTask(taskId, metaBase) {
         }
         if (parsed.second?.audioUrl) {
           saved.push(addToLibrary({
-            title: parsed.second.title || `${mashupTitle} B`,
+            title: `${mashupTitle} B`.slice(0, 100),
             artUrl: parsed.second.imageUrl || mashupCoverForTrack(_mashupState.slotB),
             url: toAudioProxyUrl(parsed.second.audioUrl) || parsed.second.audioUrl,
             taskId: tid,
@@ -16424,6 +16558,14 @@ async function startMashupGeneration() {
   const lyrics = String(els.mashupLyricsInput?.value || "").trim();
   let prompt = String(els.mashupPromptInput?.value || "").trim()
     || "A dynamic mashup blending two songs together";
+  let requestPayload = {
+    customMode: false,
+    prompt,
+    style: "",
+    title: "",
+    instrumental: false,
+    lyricsMerged: false,
+  };
   if (customMode) {
     if (!style) {
       setMashupStatus("Custom mashup needs a style.");
@@ -16437,7 +16579,16 @@ async function startMashupGeneration() {
       setMashupStatus("Add lyrics or choose instrumental.");
       return;
     }
-    prompt = lyrics || prompt;
+    requestPayload = {
+      customMode: true,
+      prompt: lyrics || prompt,
+      style,
+      title,
+      instrumental,
+      lyricsMerged: false,
+    };
+  } else {
+    requestPayload = await buildSimpleMashupRequest(prompt);
   }
   _mashupState.starting = true;
   _mashupState.generating = false;
@@ -16462,11 +16613,11 @@ async function startMashupGeneration() {
       body: JSON.stringify({
         sourceA,
         sourceB,
-        prompt,
-        customMode,
-        style: customMode ? style : "",
-        title: customMode ? title : "",
-        instrumental: customMode ? instrumental : false,
+        prompt: requestPayload.prompt,
+        customMode: requestPayload.customMode,
+        style: requestPayload.style,
+        title: requestPayload.title,
+        instrumental: requestPayload.instrumental,
       }),
     });
     const d = await r.json().catch(() => ({}));
@@ -16490,9 +16641,10 @@ async function startMashupGeneration() {
     saveRecoverableGenerationTask(taskId, `${_mashupState.slotA?.title || "A"} × ${_mashupState.slotB?.title || "B"}`);
     const metaBase = {
       mashupOf: [mashupMetaEntry(_mashupState.slotA), mashupMetaEntry(_mashupState.slotB)],
-      mashupPrompt: prompt,
-      customMode,
-      ...(customMode && style ? { styleInput: style } : {}),
+      mashupPrompt: requestPayload.prompt,
+      customMode: requestPayload.customMode,
+      mashupLyricsMerged: Boolean(requestPayload.lyricsMerged),
+      ...(requestPayload.customMode && requestPayload.style ? { styleInput: requestPayload.style } : {}),
     };
     setMashupBlending(true, "Blending your tracks — weaving A and B together…");
     pollMashupTask(taskId, metaBase);

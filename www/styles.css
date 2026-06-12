@@ -25823,11 +25823,78 @@ body[data-route="mashup"] .app{
   align-items: stretch;
   margin-bottom: 18px;
 }
-.mashupPage.isBlending .mashupPair,
-.mashupPage.isBlending .mashupPromptField,
-.mashupPage.isBlending .mashupActions,
-.mashupPage.isBlending .mashupProgress{
+.mashupPage.isBlending .mashupControls{
   display: none !important;
+}
+.mashupPage.isBlending .mashupPair{
+  opacity: 0.42;
+  pointer-events: none;
+  filter: saturate(0.65);
+}
+.mashupPage.isBlending .mashupSlot{
+  cursor: default;
+}
+.mashupPage.isBlending .mashupBlendRecap{
+  display: block;
+}
+.mashupBlendRecap{
+  display: none;
+  margin-bottom: 16px;
+  padding: 14px 16px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
+.mashupBlendRecapKicker{
+  margin: 0 0 10px;
+  color: rgba(251,191,36,0.88);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.mashupBlendLyrics{
+  display: grid;
+  gap: 12px;
+  max-height: min(42dvh, 320px);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.mashupBlendLyricsBlock{
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.07);
+  background: rgba(0,0,0,0.18);
+}
+.mashupBlendLyricsBlock strong{
+  display: block;
+  margin-bottom: 8px;
+  color: rgba(223,231,251,0.82);
+  font-size: 12px;
+  font-weight: 800;
+}
+.mashupBlendLyricsBlock pre{
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: rgba(223,231,251,0.58);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.mashupBlendLyricsEmpty,
+.mashupBlendLyricsLoading{
+  margin: 0;
+  color: rgba(223,231,251,0.48);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.mashupPromptHint{
+  display: block;
+  margin-top: 6px;
+  color: rgba(223,231,251,0.42);
+  font-size: 11px;
+  line-height: 1.45;
 }
 .mashupBlendStage{
   display: none;

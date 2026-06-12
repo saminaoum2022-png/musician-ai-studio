@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260612karaokeLyrics";
+const APP_BUILD = "20260612videoPremium";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -441,11 +441,17 @@ const els = {
   playerLyricsList: document.getElementById("playerLyricsList"),
   btnClosePlayerLyrics: document.getElementById("btnClosePlayerLyrics"),
   musicVideoModal: document.getElementById("musicVideoModal"),
-  musicVideoBackdrop: document.getElementById("musicVideoBackdrop"),
+  musicVideoBg: document.getElementById("musicVideoBg"),
+  musicVideoCover: document.getElementById("musicVideoCover"),
   musicVideoPlayer: document.getElementById("musicVideoPlayer"),
   musicVideoTitle: document.getElementById("musicVideoTitle"),
   btnCloseMusicVideo: document.getElementById("btnCloseMusicVideo"),
   btnSaveMusicVideo: document.getElementById("btnSaveMusicVideo"),
+  videoRenderCard: document.getElementById("videoRenderCard"),
+  videoRenderArt: document.getElementById("videoRenderArt"),
+  videoRenderTitle: document.getElementById("videoRenderTitle"),
+  videoRenderStatus: document.getElementById("videoRenderStatus"),
+  btnVideoRenderHide: document.getElementById("btnVideoRenderHide"),
   btnPlayerBack: document.getElementById("btnPlayerBack"),
   playerSeek: document.getElementById("playerSeek"),
   playerVol: document.getElementById("playerVol"),
@@ -16652,12 +16658,7 @@ function runTrackSheetAction(action, sourceEl) {
       shut();
       void (async () => {
         try {
-          await createSunoMusicVideoForTrack(t, {
-            onStatus: (m) => {
-              setStatus(m);
-              try { showToast(m, { icon: "♪", durationMs: 5200 }); } catch {}
-            },
-          });
+          await createSunoMusicVideoForTrack(t, { onStatus: (m) => setStatus(m) });
           setStatus("Music video ready.");
         } catch (err) {
           const m = err?.message || String(err);
@@ -23568,8 +23569,49 @@ async function pollSunoMusicVideo(videoTaskId, { maxMs = 240000, onStatus } = {}
   throw new Error("Timed out waiting for the video — try again in a minute");
 }
 
-/* ── In-app viewer: the video opens inside Nabad first; saving to the
-   device is an explicit button inside the sheet. ── */
+/* ── Render progress card: a pinned card (like the song-generation bar)
+   with the song's cover, so the user always sees WHICH song is rendering.
+   Hiding it does not cancel the render. ── */
+function videoCardCoverForTrack(t) {
+  const isHttp = (s) => /^https?:\/\//i.test(String(s || "").trim());
+  const candidates = [t?.meta?.imageUrl, t?.artUrl, t?.coverUrl, t?.cover_url];
+  return String(candidates.find(isHttp) || "").trim();
+}
+
+function showVideoRenderCard(track) {
+  if (!els.videoRenderCard) return;
+  const cover = videoCardCoverForTrack(track);
+  if (els.videoRenderArt) {
+    els.videoRenderArt.src = cover || "./assets/nabadai-logo.png";
+  }
+  if (els.videoRenderTitle) {
+    els.videoRenderTitle.textContent = String(track?.title || "Your song").trim() || "Your song";
+  }
+  if (els.videoRenderStatus) {
+    els.videoRenderStatus.textContent = "Starting the render…";
+  }
+  els.videoRenderCard.style.display = "";
+}
+
+function updateVideoRenderCard(message) {
+  if (els.videoRenderStatus && message) els.videoRenderStatus.textContent = String(message);
+}
+
+function hideVideoRenderCard() {
+  if (els.videoRenderCard) els.videoRenderCard.style.display = "none";
+}
+
+els.btnVideoRenderHide?.addEventListener("click", () => {
+  hideVideoRenderCard();
+  showToast("Still rendering in the background — we'll open it when it's ready.", {
+    icon: "♪",
+    durationMs: 3600,
+  });
+});
+
+/* ── In-app viewer: full-screen, the song's cover holds the frame while the
+   MP4 buffers (no size jump), then the video fades in over it. Saving or
+   sharing is one button → the system share sheet. ── */
 let musicVideoViewerCtx = null;
 
 function closeMusicVideoViewer() {
@@ -23578,9 +23620,10 @@ function closeMusicVideoViewer() {
   try { if (els.musicVideoPlayer) els.musicVideoPlayer.removeAttribute("src"); } catch {}
   try { els.musicVideoPlayer?.load(); } catch {}
   if (els.musicVideoModal) els.musicVideoModal.style.display = "none";
+  try { document.body.style.overflow = ""; } catch {}
 }
 
-function openMusicVideoViewer(videoUrl, title) {
+function openMusicVideoViewer(videoUrl, title, { coverUrl } = {}) {
   const url = String(videoUrl || "").trim();
   if (!url) return;
   if (!els.musicVideoModal || !els.musicVideoPlayer) {
@@ -23590,33 +23633,53 @@ function openMusicVideoViewer(videoUrl, title) {
   }
   musicVideoViewerCtx = { videoUrl: url, title: String(title || "song") };
   if (els.musicVideoTitle) els.musicVideoTitle.textContent = String(title || "Music video");
+
+  const cover = String(coverUrl || "").trim();
+  if (els.musicVideoCover) els.musicVideoCover.src = cover || "./assets/nabadai-logo.png";
+  if (els.musicVideoBg) {
+    els.musicVideoBg.style.backgroundImage = cover ? `url("${cover.replace(/"/g, '\\"')}")` : "";
+  }
+
+  const frame = els.musicVideoPlayer.closest(".musicVideoFrame");
+  frame?.classList.remove("isReady");
+  if (frame) frame.style.aspectRatio = "";
+
   const proxied = apiUrl(`/api/suno/audio?url=${encodeURIComponent(url)}`);
   els.musicVideoPlayer.onerror = () => {
     // CDN refused direct playback (CORS/expiry) — retry through our proxy.
     if (els.musicVideoPlayer.src !== proxied) els.musicVideoPlayer.src = proxied;
   };
+  els.musicVideoPlayer.onloadedmetadata = () => {
+    // Adopt the real aspect ratio while the cover still holds the frame.
+    const w = Number(els.musicVideoPlayer.videoWidth) || 0;
+    const h = Number(els.musicVideoPlayer.videoHeight) || 0;
+    if (frame && w > 0 && h > 0) frame.style.aspectRatio = `${w} / ${h}`;
+  };
+  els.musicVideoPlayer.oncanplay = () => {
+    frame?.classList.add("isReady");
+  };
   els.musicVideoPlayer.src = url;
   els.musicVideoModal.style.display = "";
+  try { document.body.style.overflow = "hidden"; } catch {}
   try { void els.musicVideoPlayer.play(); } catch {}
 }
 
 els.btnCloseMusicVideo?.addEventListener("click", closeMusicVideoViewer);
-els.musicVideoBackdrop?.addEventListener("click", closeMusicVideoViewer);
 els.btnSaveMusicVideo?.addEventListener("click", async () => {
   const ctx = musicVideoViewerCtx;
   if (!ctx) return;
   const btn = els.btnSaveMusicVideo;
+  const label = btn.querySelector("span");
   btn.disabled = true;
-  const prevLabel = btn.textContent;
-  btn.textContent = "Saving…";
+  const prevLabel = label ? label.textContent : "";
+  if (label) label.textContent = "Preparing…";
   try {
     await deliverMusicVideoUrl(ctx.videoUrl, ctx.title);
-    showToast("Music video saved to your device.", { icon: "✓", durationMs: 3600 });
   } catch (e) {
     showToast(e?.message || "Couldn't save the video", { icon: "!", durationMs: 4400 });
   } finally {
     btn.disabled = false;
-    btn.textContent = prevLabel;
+    if (label) label.textContent = prevLabel;
   }
 });
 
@@ -23650,55 +23713,66 @@ async function deliverMusicVideoUrl(videoUrl, title) {
  */
 async function createSunoMusicVideoForTrack(track, { onStatus } = {}) {
   const t = track || {};
-  const say = (m) => { try { onStatus?.(m); } catch {} };
+  const say = (m) => {
+    updateVideoRenderCard(m);
+    try { onStatus?.(m); } catch {}
+  };
   const taskId = String(t.taskId || t?.meta?.taskId || "").trim();
   const audioId = String(t.audioId || t?.meta?.audioId || "").trim();
   if (!taskId || !audioId) {
     throw new Error("Music videos are only available for songs generated in the app.");
   }
+  const coverUrl = videoCardCoverForTrack(t);
   const cached = t?.meta?.musicVideo && typeof t.meta.musicVideo === "object" ? t.meta.musicVideo : null;
   const cachedFresh = cached?.createdAt && Date.now() - Number(cached.createdAt) < MUSIC_VIDEO_FRESH_MS;
   if (cachedFresh && String(cached?.videoUrl || "").trim()) {
-    openMusicVideoViewer(String(cached.videoUrl).trim(), t.title);
+    openMusicVideoViewer(String(cached.videoUrl).trim(), t.title, { coverUrl });
     return;
   }
-  let videoTaskId = cachedFresh ? String(cached?.taskId || "").trim() : "";
-  if (videoTaskId) {
-    say("Resuming your music video…");
-  } else {
-    say("Creating your music video — rendering visuals synced to the beat…");
-    const token = getSupabaseAuthToken();
-    const rawHandle = String(activeProfile?.username || "").trim().replace(/^@+/, "");
-    const r = await fetch(apiUrl("/api/suno/video"), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({
-        taskId,
-        audioId,
-        ...(rawHandle ? { author: `@${rawHandle}`.slice(0, 50) } : {}),
-      }),
-    });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      if (Number(d?.code) === 409 && String(cached?.taskId || "").trim()) {
-        // Suno already has an MP4 for this track; fall back to the last
-        // known task even if our freshness window said it was stale.
-        videoTaskId = String(cached.taskId).trim();
-      } else {
-        throw new Error(d?.error || "Could not start the music video");
-      }
+  showVideoRenderCard(t);
+  try {
+    let videoTaskId = cachedFresh ? String(cached?.taskId || "").trim() : "";
+    if (videoTaskId) {
+      say("Resuming your music video…");
     } else {
-      videoTaskId = String(d?.taskId || "").trim();
-      if (!videoTaskId) throw new Error("Missing video task id");
-      saveMusicVideoMetaForTrack(t, { taskId: videoTaskId, videoUrl: "", createdAt: Date.now() });
+      say("Creating your music video — rendering visuals synced to the beat…");
+      const token = getSupabaseAuthToken();
+      const rawHandle = String(activeProfile?.username || "").trim().replace(/^@+/, "");
+      const r = await fetch(apiUrl("/api/suno/video"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          taskId,
+          audioId,
+          ...(rawHandle ? { author: `@${rawHandle}`.slice(0, 50) } : {}),
+        }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        if (Number(d?.code) === 409 && String(cached?.taskId || "").trim()) {
+          // The provider already has an MP4 for this track; fall back to the
+          // last known task even if our freshness window said it was stale.
+          videoTaskId = String(cached.taskId).trim();
+        } else {
+          throw new Error(d?.error || "Could not start the music video");
+        }
+      } else {
+        videoTaskId = String(d?.taskId || "").trim();
+        if (!videoTaskId) throw new Error("Missing video task id");
+        saveMusicVideoMetaForTrack(t, { taskId: videoTaskId, videoUrl: "", createdAt: Date.now() });
+      }
     }
+    const videoUrl = await pollSunoMusicVideo(videoTaskId, { onStatus: say });
+    saveMusicVideoMetaForTrack(t, { taskId: videoTaskId, videoUrl, createdAt: Date.now() });
+    hideVideoRenderCard();
+    openMusicVideoViewer(videoUrl, t.title, { coverUrl });
+  } catch (e) {
+    hideVideoRenderCard();
+    throw e;
   }
-  const videoUrl = await pollSunoMusicVideo(videoTaskId, { onStatus: say });
-  saveMusicVideoMetaForTrack(t, { taskId: videoTaskId, videoUrl, createdAt: Date.now() });
-  openMusicVideoViewer(videoUrl, t.title);
 }
 
 async function downloadLibraryVideoTrack(track) {
@@ -31970,11 +32044,8 @@ if (els.btnPlayerMusicVideo) {
     btn.disabled = true;
     btn.classList.add("busyPulse");
     try {
-      await createSunoMusicVideoForTrack(track, {
-        onStatus: (m) => {
-          try { showToast(m, { icon: "♪", durationMs: 5200 }); } catch {}
-        },
-      });
+      // Progress lives in the pinned render card (cover + live status).
+      await createSunoMusicVideoForTrack(track, { onStatus: (m) => setStatus(m) });
     } catch (e) {
       showToast(e?.message || String(e), { icon: "!", durationMs: 4400 });
     } finally {

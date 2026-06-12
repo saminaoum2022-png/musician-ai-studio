@@ -24728,6 +24728,9 @@ body[data-route="challenges"] .app{
 .homeDeskCreatePanel.is-active{
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .homeDeskCreateStack{
   flex: 1 1 auto;
@@ -24735,7 +24738,8 @@ body[data-route="challenges"] .app{
   flex-direction: column;
   justify-content: flex-start;
   gap: 12px;
-  min-height: calc(100dvh - 236px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  min-height: 0;
+  padding-bottom: 12px;
 }
 .homeDeskCreateStack .homeDeskPromo--compact,
 .homeDeskCreateStack .homeDeskSongPromo,
@@ -24744,13 +24748,14 @@ body[data-route="challenges"] .app{
 .homeDeskCreateStack .homeDeskMashupPromo{
   display: flex;
   flex-direction: row;
-  align-items: stretch;
-  flex: 1 1 0;
+  align-items: center;
+  flex: 0 0 auto;
+  width: 100%;
   margin: 0;
   min-height: 0;
-  padding: 18px 18px 20px;
-  gap: 16px;
-  border-radius: 26px;
+  padding: 16px 16px 16px;
+  gap: 14px;
+  border-radius: 22px;
   overflow: hidden;
   box-sizing: border-box;
 }
@@ -24786,15 +24791,15 @@ body[data-route="challenges"] .app{
   flex: 0 0 auto;
 }
 .homeDeskCreateStack .homeDeskPromoCopy p{
-  margin: 0;
+  margin: 0 0 12px;
   font-size: 13px;
   line-height: 1.52;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
 }
 .homeDeskCreateStack .homeDeskPromoActions{
-  gap: 10px;
-  margin-top: auto;
-  padding-top: 14px;
+  gap: 8px;
+  margin-top: 0;
+  padding-top: 0;
   flex: 0 0 auto;
 }
 .homeDeskCreateStack .homeDeskPromoBtn{

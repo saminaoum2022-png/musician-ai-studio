@@ -99,26 +99,21 @@ module.exports = async function handler(req, res) {
     // Persona / model coercion. Per Suno's docs:
     //   - personaId is only honored when customMode is true.
     //   - personaModel selects which dimension of the persona to apply:
-    //       style_persona (default): apply style/genre characteristics.
-    //       voice_persona: apply the saved voice timbre.
-    //         "voice_persona" is ONLY supported on the V5 model.
-    // Our app's persona is created from a finished song's vocals, so the
-    // user's intent is always "sing in this voice" → voice_persona. If
-    // the client didn't say otherwise we default to voice_persona, and
-    // we coerce the model to V5 so Suno actually accepts it. Without
-    // this coercion Suno returns a taskId but the task silently never
-    // completes (no callback, no log on their side).
+    //       style_persona (default): IDs from generate-persona (saved from a song).
+    //       voice_persona: voiceId from Suno Voice wizard (recorded voice).
+    //   - voice_persona is supported on V5 and V5_5.
     const cleanPersonaId = personaId ? String(personaId).trim() : "";
     let personaModel = "";
     if (cleanPersonaId) {
-      personaModel = String(requestedPersonaModel || "voice_persona").trim();
+      personaModel = String(requestedPersonaModel || "style_persona").trim();
       if (personaModel !== "style_persona" && personaModel !== "voice_persona") {
-        personaModel = "voice_persona";
+        personaModel = "style_persona";
       }
     }
     let chosenModel = String(requestedModel || "V5_5").trim() || "V5_5";
-    if (cleanPersonaId && personaModel === "voice_persona" && chosenModel !== "V5") {
-      chosenModel = "V5";
+    if (cleanPersonaId && personaModel === "voice_persona") {
+      const voiceOk = chosenModel === "V5" || chosenModel === "V5_5";
+      if (!voiceOk) chosenModel = "V5_5";
     }
 
     const payload = {

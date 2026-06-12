@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260612discoverEnter";
+const APP_BUILD = "20260612musicVideo";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -431,6 +431,7 @@ const els = {
   playerTimeTotal: document.getElementById("playerTimeTotal"),
   btnPlayerShare: document.getElementById("btnPlayerShare"),
   btnPlayerDownloadVideo: document.getElementById("btnPlayerDownloadVideo"),
+  btnPlayerMusicVideo: document.getElementById("btnPlayerMusicVideo"),
   btnPlayerBack: document.getElementById("btnPlayerBack"),
   playerSeek: document.getElementById("playerSeek"),
   playerVol: document.getElementById("playerVol"),
@@ -16130,6 +16131,7 @@ function renderTrackSheetLibrary(track) {
   const isSound = kind === "sound";
   const remixEligible = !isSound && Boolean(track?.url && String(track.url).trim());
   const personaEligible = !isInstrumental && !isSound && Boolean(track?.taskId) && Boolean(track?.audioId);
+  const musicVideoEligible = !isSound && Boolean(track?.taskId) && Boolean(track?.audioId);
   const profilePublic = Boolean(track.publicOnProfile);
   const pubTo = profilePublic ? "private" : "public";
   const pubLabel = profilePublic ? "Hide from public profile" : "Publish release";
@@ -16147,6 +16149,7 @@ function renderTrackSheetLibrary(track) {
   l.innerHTML = `
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_audio">Download audio</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_video">Download video</button>
+    ${musicVideoEligible ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_music_video">Create music video</button>` : ""}
     ${HUB_FEATURE_ENABLED ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_share_hub">Share to Hub</button>` : ""}
     ${personaEligible ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_persona">Save voice as persona</button>` : ""}
     ${renameRow}
@@ -16618,6 +16621,26 @@ function runTrackSheetAction(action, sourceEl) {
           setStatus("Video download is ready.");
         } catch (err) {
           setStatus(`Video download failed: ${err?.message || String(err)}`);
+        }
+      })();
+      return;
+    }
+    if (action === "library_music_video") {
+      shut();
+      void (async () => {
+        try {
+          await createSunoMusicVideoForTrack(t, {
+            onStatus: (m) => {
+              setStatus(m);
+              try { showToast(m, { icon: "♪", durationMs: 3600 }); } catch {}
+            },
+          });
+          setStatus("Music video saved.");
+          showToast("Music video saved to your device.", { icon: "✓", durationMs: 3600 });
+        } catch (err) {
+          const m = err?.message || String(err);
+          setStatus(`Music video failed: ${m}`);
+          try { showToast(m, { icon: "!", durationMs: 4400 }); } catch {}
         }
       })();
       return;
@@ -23469,6 +23492,136 @@ async function downloadLibraryAudioTrack(track) {
 }
 
 /** Server-side render (same as player) — canvas `MediaRecorder` fails on iOS WKWebView. */
+/* ─── Suno music video (beat-synced MP4 visualizer) ───────────────────────
+   Separate from the quick "Download video" below (which renders a static
+   cover + audio MP4 on our own server). This one calls Suno's mp4/generate
+   for a real visualizer, branded with the creator handle + nabadai.com. */
+
+// Suno retains generated MP4s for 15 days; treat cached URLs as fresh for 13.
+const MUSIC_VIDEO_FRESH_MS = 13 * 24 * 60 * 60 * 1000;
+
+/** Persist the music-video task/url into the song's meta (local + cloud) so
+ *  re-taps inside Suno's retention window never pay for a second render. */
+function saveMusicVideoMetaForTrack(track, mv) {
+  try {
+    const id = String(track?.id || "").trim();
+    if (!id) return;
+    const lib = loadLibrary();
+    const row = lib.find((x) => String(x?.id || "") === id);
+    if (!row) return;
+    const merged = { ...(((row.meta || {}).musicVideo) || {}), ...mv };
+    row.meta = { ...(row.meta || {}), musicVideo: merged };
+    saveLibrary(lib);
+    if (track.meta && typeof track.meta === "object") track.meta.musicVideo = merged;
+    else track.meta = { musicVideo: merged };
+    try { void supabasePatchUserSong(row, { meta: { musicVideo: merged } }); } catch {}
+  } catch {}
+}
+
+async function pollSunoMusicVideo(videoTaskId, maxMs = 240000) {
+  const token = getSupabaseAuthToken();
+  const started = Date.now();
+  while (Date.now() - started < maxMs) {
+    const r = await fetch(apiUrl(`/api/suno/video?taskId=${encodeURIComponent(videoTaskId)}`), {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok) {
+      const st = String(d?.status || "").toUpperCase();
+      const url = String(d?.videoUrl || "").trim();
+      if (st === "SUCCESS" && url) return url;
+      if (st.includes("FAILED") || st === "CALLBACK_EXCEPTION") {
+        throw new Error(d?.errorMessage || "Video generation failed");
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+  }
+  throw new Error("Timed out waiting for the video — try again in a minute");
+}
+
+/** Fetch the finished MP4 (via our proxy to dodge CDN CORS) and hand it to
+ *  the device with the usual save/share flow. */
+async function deliverMusicVideoUrl(videoUrl, title) {
+  let blob = null;
+  try {
+    const r = await fetch(apiUrl(`/api/suno/audio?url=${encodeURIComponent(videoUrl)}`));
+    if (r.ok) blob = await r.blob();
+  } catch {}
+  if (!blob) {
+    try {
+      const r2 = await fetch(videoUrl);
+      if (r2.ok) blob = await r2.blob();
+    } catch {}
+  }
+  if (!blob || !blob.size) throw new Error("Couldn't download the video file");
+  const safeTitle = String(title || "song").replace(/[\\/:*?"<>|]/g, "").trim() || "song";
+  await deliverDownloadBlobToDevice(blob, {
+    filename: `${safeTitle}-music-video.mp4`,
+    title: safeTitle,
+    isVideo: true,
+  });
+}
+
+/**
+ * Full flow: reuse a cached video when fresh, otherwise create the Suno
+ * task (or resume a pending one), poll to completion, cache the URL in the
+ * song meta, and save the MP4 to the device.
+ */
+async function createSunoMusicVideoForTrack(track, { onStatus } = {}) {
+  const t = track || {};
+  const say = (m) => { try { onStatus?.(m); } catch {} };
+  const taskId = String(t.taskId || t?.meta?.taskId || "").trim();
+  const audioId = String(t.audioId || t?.meta?.audioId || "").trim();
+  if (!taskId || !audioId) {
+    throw new Error("Music videos are only available for songs generated in the app.");
+  }
+  const cached = t?.meta?.musicVideo && typeof t.meta.musicVideo === "object" ? t.meta.musicVideo : null;
+  const cachedFresh = cached?.createdAt && Date.now() - Number(cached.createdAt) < MUSIC_VIDEO_FRESH_MS;
+  if (cachedFresh && String(cached?.videoUrl || "").trim()) {
+    say("Fetching your music video…");
+    await deliverMusicVideoUrl(String(cached.videoUrl).trim(), t.title);
+    return;
+  }
+  let videoTaskId = cachedFresh ? String(cached?.taskId || "").trim() : "";
+  if (videoTaskId) {
+    say("Resuming your music video…");
+  } else {
+    say("Creating your music video — Suno is rendering visuals synced to the beat…");
+    const token = getSupabaseAuthToken();
+    const rawHandle = String(activeProfile?.username || "").trim().replace(/^@+/, "");
+    const r = await fetch(apiUrl("/api/suno/video"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        taskId,
+        audioId,
+        ...(rawHandle ? { author: `@${rawHandle}`.slice(0, 50) } : {}),
+      }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      if (Number(d?.code) === 409 && String(cached?.taskId || "").trim()) {
+        // Suno already has an MP4 for this track; fall back to the last
+        // known task even if our freshness window said it was stale.
+        videoTaskId = String(cached.taskId).trim();
+      } else {
+        throw new Error(d?.error || "Could not start the music video");
+      }
+    } else {
+      videoTaskId = String(d?.taskId || "").trim();
+      if (!videoTaskId) throw new Error("Missing video task id");
+      saveMusicVideoMetaForTrack(t, { taskId: videoTaskId, videoUrl: "", createdAt: Date.now() });
+    }
+  }
+  const videoUrl = await pollSunoMusicVideo(videoTaskId);
+  saveMusicVideoMetaForTrack(t, { taskId: videoTaskId, videoUrl, createdAt: Date.now() });
+  say("Video ready — saving to your device…");
+  await deliverMusicVideoUrl(videoUrl, t.title);
+}
+
 async function downloadLibraryVideoTrack(track) {
   const isHttpUrl = (u) => /^https?:\/\//i.test(String(u || "").trim());
   let t = track;
@@ -31436,6 +31589,39 @@ if (els.btnPlayerDownloadVideo) {
       btn.disabled = false;
       btn.innerHTML = originalHtml;
       btn.setAttribute("aria-label", "Download as video");
+    }
+  });
+}
+if (els.btnPlayerMusicVideo) {
+  els.btnPlayerMusicVideo.addEventListener("click", async () => {
+    if (playerSourceIsExternalListenOnly()) {
+      showToast("Only the creator can create a video for this song.");
+      return;
+    }
+    haptic("light");
+    const btn = els.btnPlayerMusicVideo;
+    if (btn.disabled) return;
+    // Resolve the full Library row so we get taskId/audioId/meta even when
+    // the player ref is a slim object.
+    const lib = loadLibrary();
+    const currentId = String(currentPlayerTrackRef?.id || "").trim();
+    const canonical = libraryTrackCanonicalUrl(String(currentPlayerTrackRef?.url || playerEl?.src || ""));
+    const track =
+      (currentId ? lib.find((x) => String(x.id) === currentId) : null) ||
+      lib.find((x) => libraryTrackCanonicalUrl(x?.url) === canonical) ||
+      currentPlayerTrackRef;
+    btn.disabled = true;
+    try {
+      await createSunoMusicVideoForTrack(track, {
+        onStatus: (m) => {
+          try { showToast(m, { icon: "♪", durationMs: 3600 }); } catch {}
+        },
+      });
+      showToast("Music video saved to your device.", { icon: "✓", durationMs: 3600 });
+    } catch (e) {
+      showToast(e?.message || String(e), { icon: "!", durationMs: 4400 });
+    } finally {
+      btn.disabled = false;
     }
   });
 }

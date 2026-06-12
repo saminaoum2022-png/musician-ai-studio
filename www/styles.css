@@ -2884,6 +2884,7 @@ body[data-route="discover"] main.grid > [data-route="discover"],
 body[data-route="discover-playlist"] main.grid > [data-route="discover-playlist"],
 body[data-route="friends"] main.grid > [data-route="friends"],
 body[data-route="activity"] main.grid > [data-route="activity"],
+body[data-route="mashup"] main.grid > [data-route="mashup"],
 body[data-route="moment"] main.grid > [data-route="moment"],
 body[data-route="challenges"] main.grid > [data-route="challenges"],
 body[data-route="mentor"] main.grid > [data-route="mentor"],
@@ -24740,15 +24741,16 @@ body[data-route="challenges"] .app{
   flex: 1 1 0;
   margin: 0;
   min-height: 0;
-  padding: 20px 20px;
+  padding: 20px 20px 26px;
   grid-template-columns: 80px 1fr;
   gap: 18px;
-  align-items: center;
+  align-items: start;
   border-radius: 26px;
 }
 .homeDeskCreateStack .homeDeskPromoVisual{
   width: 80px;
   height: 80px;
+  align-self: center;
 }
 .homeDeskCreateStack .homeDeskPromoVisual--echo .onboardingEchoTileWrap,
 .homeDeskCreateStack .homeDeskPromoVisual--persona .homeDeskPersonaTileWrap,
@@ -24759,8 +24761,10 @@ body[data-route="challenges"] .app{
 .homeDeskCreateStack .homeDeskPromoCopy{
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   min-width: 0;
+  min-height: 100%;
+  height: 100%;
 }
 .homeDeskCreateStack .homeDeskPromoCopy .homeDeskSectionKicker{
   margin: 0 0 6px;
@@ -24771,12 +24775,14 @@ body[data-route="challenges"] .app{
   font-size: 18px;
 }
 .homeDeskCreateStack .homeDeskPromoCopy p{
-  margin: 0 0 14px;
+  margin: 0 0 0;
   font-size: 13px;
   line-height: 1.52;
 }
 .homeDeskCreateStack .homeDeskPromoActions{
   gap: 10px;
+  margin-top: auto;
+  padding-top: 16px;
 }
 .homeDeskCreateStack .homeDeskPromoBtn{
   min-height: 38px;

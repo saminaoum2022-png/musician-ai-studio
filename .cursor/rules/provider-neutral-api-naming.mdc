@@ -1,0 +1,13 @@
+---
+description: Name new music API endpoints provider-neutrally to avoid locking the shipped iOS client to Suno
+alwaysApply: true
+---
+
+# Provider-neutral API naming
+
+We plan to eventually abstract Suno behind a swappable music-provider layer. Full abstraction is deferred, but **naming discipline applies now**, because shipped iOS clients keep calling old paths for a long time.
+
+- When adding **new frontend-facing API endpoints** for music features, name them provider-neutrally: `/api/music/...` — NOT `/api/suno/...`.
+- Existing `/api/suno/*` endpoints stay as they are; do not rename or break them without an explicit request.
+- Inside the backend, keep Suno-specific request/response handling in the endpoint or in `api/_lib/` helpers (e.g. `suno-upstream.js`); a new neutral endpoint may still call Suno upstream — neutrality is about the client-facing path and response shape, not the implementation.
+- When adding new DB tables/columns that reference generation tasks, prefer provider-aware fields (`provider`, `provider_task_id`) over Suno-specific names.

@@ -6929,12 +6929,11 @@ async function renderProfileActivities(opts = {}) {
   const libEl = document.getElementById("libraryList");
   const countEl = document.getElementById("profileActivitiesCount");
   const recoverBanner = document.getElementById("libraryRecoverBanner");
-  const allExtras = document.getElementById("profileAllSongsExtras");
   if (!listEl) return;
   if (libEl) libEl.hidden = true;
   listEl.hidden = false;
   if (recoverBanner) recoverBanner.hidden = true;
-  if (allExtras) allExtras.hidden = true;
+  if (els.btnLibraryRecoverLink) els.btnLibraryRecoverLink.hidden = true;
   if (!authSession?.user?.id) {
     listEl.innerHTML = `
       <div class="profileActEmpty">
@@ -23505,7 +23504,6 @@ function queueReleaseCaptionCloudHeal(track) {
 }
 
 function syncProfileSongsSegmentUi() {
-  const allExtras = document.getElementById("profileAllSongsExtras");
   const recoverBanner = document.getElementById("libraryRecoverBanner");
   const allCount = document.getElementById("libraryCount");
   const actCount = document.getElementById("profileActivitiesCount");
@@ -23513,6 +23511,7 @@ function syncProfileSongsSegmentUi() {
   const libList = document.getElementById("libraryList");
   const isAll = _profileSongsSegment === "all";
   const isActivities = _profileSongsSegment === "activities";
+  const onProfile = (document.body.getAttribute("data-route") || "") === "profile";
   try {
     document.body.setAttribute("data-profile-songs-seg", _profileSongsSegment);
   } catch {}
@@ -23521,7 +23520,9 @@ function syncProfileSongsSegmentUi() {
     btn.classList.toggle("isActive", on);
     btn.setAttribute("aria-selected", on ? "true" : "false");
   });
-  if (allExtras) allExtras.hidden = !isAll;
+  if (els.btnLibraryRecoverLink) {
+    els.btnLibraryRecoverLink.hidden = !(onProfile && isAll);
+  }
   if (recoverBanner && !isAll) recoverBanner.hidden = true;
   if (allCount) allCount.hidden = !isAll;
   if (actCount) actCount.hidden = !isActivities;
@@ -29169,12 +29170,12 @@ function updateLibraryRecoverBanner() {
   const route = document.body.getAttribute("data-route") || "";
   if (route === "profile" && _profileSongsSegment !== "all") {
     wrap.hidden = true;
-    const allExtras = document.getElementById("profileAllSongsExtras");
-    if (allExtras) allExtras.hidden = true;
+    if (els.btnLibraryRecoverLink) els.btnLibraryRecoverLink.hidden = true;
     return;
   }
-  const allExtras = document.getElementById("profileAllSongsExtras");
-  if (allExtras) allExtras.hidden = false;
+  if (els.btnLibraryRecoverLink && route === "profile" && _profileSongsSegment === "all") {
+    els.btnLibraryRecoverLink.hidden = false;
+  }
   const rec = loadRecoverableGenerationTask();
   const hint = els.libraryRecoverHint;
   if (!rec?.taskId) {

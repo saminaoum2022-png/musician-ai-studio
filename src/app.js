@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260613mashupEasy";
+const APP_BUILD = "20260613mashupLyrics";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -16115,6 +16115,8 @@ const _mashupState = {
   pickerCandidates: [],
   discoverCache: null,
   lastSuggestedTitle: "",
+  lyricsPreviewGen: 0,
+  lyricsCache: new Map(),
   generating: false,
   starting: false,
   taskId: "",
@@ -16368,6 +16370,7 @@ function renderMashupPage() {
       ? "Pick two songs from Library or Discover — we blend them into one new track."
       : "Choose any two full tracks from Library or Discover to mash up.";
   }
+  void syncMashupLyricsPreview();
 }
 
 function enterMashupRoute() {
@@ -16429,6 +16432,64 @@ async function resolveMashupTrackLyrics(ref) {
   }
 }
 
+async function resolveMashupTrackLyricsCached(ref) {
+  const key = mashupTrackKey(ref);
+  if (!key) return "";
+  if (_mashupState.lyricsCache.has(key)) {
+    return String(_mashupState.lyricsCache.get(key) || "").trim();
+  }
+  const lyrics = await resolveMashupTrackLyrics(ref);
+  _mashupState.lyricsCache.set(key, lyrics);
+  return lyrics;
+}
+
+function renderMashupLyricsPreviewHtml(titleA, titleB, lyricsA, lyricsB) {
+  if (!lyricsA && !lyricsB) {
+    return `<p class="mashupBlendLyricsEmpty">No saved lyrics for these tracks — Suno will write fresh words for the blend.</p>`;
+  }
+  const blocks = [];
+  if (lyricsA) {
+    blocks.push(`
+      <div class="mashupBlendLyricsBlock">
+        <strong>${escapeHtml(titleA)}</strong>
+        <pre>${escapeHtml(lyricsA.slice(0, 1800))}${lyricsA.length > 1800 ? "…" : ""}</pre>
+      </div>`);
+  }
+  if (lyricsB) {
+    blocks.push(`
+      <div class="mashupBlendLyricsBlock">
+        <strong>${escapeHtml(titleB)}</strong>
+        <pre>${escapeHtml(lyricsB.slice(0, 1800))}${lyricsB.length > 1800 ? "…" : ""}</pre>
+      </div>`);
+  }
+  return blocks.join("");
+}
+
+async function syncMashupLyricsPreview() {
+  if (!els.mashupBlendRecap || !els.mashupBlendLyrics) return;
+  if (!_mashupState.slotA || !_mashupState.slotB) {
+    clearMashupBlendRecap();
+    return;
+  }
+  const gen = ++_mashupState.lyricsPreviewGen;
+  els.mashupBlendRecap.hidden = false;
+  els.mashupBlendRecap.setAttribute("aria-hidden", "false");
+  if (els.mashupBlendRecapMode) {
+    els.mashupBlendRecapMode.textContent = _mashupState.generating || _mashupState.starting
+      ? "Your blend"
+      : "Source lyrics";
+  }
+  els.mashupBlendLyrics.innerHTML = `<p class="mashupBlendLyricsLoading">Loading lyrics from both tracks…</p>`;
+  const titleA = String(_mashupState.slotA?.title || "Track A").trim() || "Track A";
+  const titleB = String(_mashupState.slotB?.title || "Track B").trim() || "Track B";
+  const [lyricsA, lyricsB] = await Promise.all([
+    resolveMashupTrackLyricsCached(_mashupState.slotA),
+    resolveMashupTrackLyricsCached(_mashupState.slotB),
+  ]);
+  if (gen !== _mashupState.lyricsPreviewGen) return;
+  els.mashupBlendLyrics.innerHTML = renderMashupLyricsPreviewHtml(titleA, titleB, lyricsA, lyricsB);
+}
+
 async function buildSimpleMashupRequest(directionPrompt) {
   const titleA = String(_mashupState.slotA?.title || "Song A").trim() || "Song A";
   const titleB = String(_mashupState.slotB?.title || "Song B").trim() || "Song B";
@@ -16436,8 +16497,8 @@ async function buildSimpleMashupRequest(directionPrompt) {
   const direction = String(directionPrompt || "").trim()
     || `A mashup blending "${titleA}" with "${titleB}" — weave both melodies together.`;
   const [lyricsA, lyricsB] = await Promise.all([
-    resolveMashupTrackLyrics(_mashupState.slotA),
-    resolveMashupTrackLyrics(_mashupState.slotB),
+    resolveMashupTrackLyricsCached(_mashupState.slotA),
+    resolveMashupTrackLyricsCached(_mashupState.slotB),
   ]);
   const styleBits = [mashupStyleFromRef(_mashupState.slotA), mashupStyleFromRef(_mashupState.slotB)]
     .filter(Boolean);
@@ -16467,39 +16528,7 @@ async function buildSimpleMashupRequest(directionPrompt) {
 }
 
 async function populateMashupBlendRecap() {
-  if (!els.mashupBlendRecap || !els.mashupBlendLyrics) return;
-  els.mashupBlendRecap.hidden = false;
-  els.mashupBlendRecap.setAttribute("aria-hidden", "false");
-  if (els.mashupBlendRecapMode) {
-    els.mashupBlendRecapMode.textContent = "Your blend";
-  }
-  els.mashupBlendLyrics.innerHTML = `<p class="mashupBlendLyricsLoading">Loading lyrics from both tracks…</p>`;
-  const titleA = String(_mashupState.slotA?.title || "Track A").trim() || "Track A";
-  const titleB = String(_mashupState.slotB?.title || "Track B").trim() || "Track B";
-  const [lyricsA, lyricsB] = await Promise.all([
-    resolveMashupTrackLyrics(_mashupState.slotA),
-    resolveMashupTrackLyrics(_mashupState.slotB),
-  ]);
-  if (!lyricsA && !lyricsB) {
-    els.mashupBlendLyrics.innerHTML = `<p class="mashupBlendLyricsEmpty">No saved lyrics for these tracks — Suno will write fresh words for the blend.</p>`;
-    return;
-  }
-  const blocks = [];
-  if (lyricsA) {
-    blocks.push(`
-      <div class="mashupBlendLyricsBlock">
-        <strong>${escapeHtml(titleA)}</strong>
-        <pre>${escapeHtml(lyricsA.slice(0, 1800))}${lyricsA.length > 1800 ? "…" : ""}</pre>
-      </div>`);
-  }
-  if (lyricsB) {
-    blocks.push(`
-      <div class="mashupBlendLyricsBlock">
-        <strong>${escapeHtml(titleB)}</strong>
-        <pre>${escapeHtml(lyricsB.slice(0, 1800))}${lyricsB.length > 1800 ? "…" : ""}</pre>
-      </div>`);
-  }
-  els.mashupBlendLyrics.innerHTML = blocks.join("");
+  await syncMashupLyricsPreview();
 }
 
 function clearMashupBlendRecap() {
@@ -16524,6 +16553,8 @@ function setMashupBlending(active, message = "") {
     if (els.mashupBlendCoverA) els.mashupBlendCoverA.src = coverA;
     if (els.mashupBlendCoverB) els.mashupBlendCoverB.src = coverB;
     void populateMashupBlendRecap();
+  } else if (_mashupState.slotA && _mashupState.slotB) {
+    void syncMashupLyricsPreview();
   } else {
     clearMashupBlendRecap();
   }

@@ -2278,9 +2278,10 @@
             hidden
             aria-labelledby="profilePersonaSignatureTitle"
             data-expanded="false"
+            data-voices-open="false"
             aria-live="polite"
           >
-            <div class="profilePersonaSignatureTop">
+            <div class="profilePersonaSignatureTop" role="button" tabindex="0" aria-controls="profilePersonaSignatureActions profilePersonaDetails" aria-expanded="false" id="profilePersonaSignatureTop">
               <div class="profilePersonaSignatureMark" aria-hidden="true">
                 <span class="profilePersonaSignatureMarkInner">
                   <svg class="profilePersonaSignatureMic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -2291,23 +2292,20 @@
               </div>
               <div class="profilePersonaSignatureCopy">
                 <p class="profilePersonaSignatureKicker">Your signature</p>
-                <h3 id="profilePersonaSignatureTitle" class="profilePersonaSignatureTitle">Persona</h3>
-                <p id="profilePersonaLabel" class="profilePersonaSignatureStatus">Not set up</p>
+                <h3 id="profilePersonaSignatureTitle" class="profilePersonaSignatureTitle">Create your persona now</h3>
+                <p id="profilePersonaLabel" class="profilePersonaSignatureStatus">Tap to set up your voice</p>
               </div>
-              <button
-                type="button"
+              <span
                 id="profilePersonaToggle"
                 class="profilePersonaSignatureExpand"
-                aria-expanded="false"
-                aria-controls="profilePersonaDetails"
-                aria-label="Saved voices"
+                aria-hidden="true"
               >
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true">
                   <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-              </button>
+              </span>
             </div>
-            <div class="profilePersonaSignatureBtns">
+            <div id="profilePersonaSignatureActions" class="profilePersonaSignatureBtns" hidden>
               <button type="button" id="btnSettingsVoiceWizard" class="profilePersonaSigBtn profilePersonaSigBtn--fill">Record</button>
               <button type="button" id="profilePersonaVoicesBtn" class="profilePersonaSigBtn">Voices</button>
             </div>

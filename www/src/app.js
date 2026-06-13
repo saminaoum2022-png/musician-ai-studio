@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260613mashupLyrics";
+const APP_BUILD = "20260613personaCard";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -431,6 +431,9 @@ const els = {
   profileCreditsLink: document.getElementById("profileCreditsLink"),
   profilePersonaRow: document.getElementById("profilePersonaRow"),
   profilePersonaLabel: document.getElementById("profilePersonaLabel"),
+  profilePersonaSignatureTitle: document.getElementById("profilePersonaSignatureTitle"),
+  profilePersonaSignatureTop: document.getElementById("profilePersonaSignatureTop"),
+  profilePersonaSignatureActions: document.getElementById("profilePersonaSignatureActions"),
   profilePersonaToggle: document.getElementById("profilePersonaToggle"),
   profilePersonaDetails: document.getElementById("profilePersonaDetails"),
   creditsBalanceBig: document.getElementById("creditsBalanceBig"),
@@ -2908,12 +2911,15 @@ function applyRoute() {
     renderProfileSongs();
     if (/persona=1|voices=1/i.test(rawRouteQuery)) {
       setProfilePersonaExpanded(true);
+      setProfilePersonaVoicesOpen(true);
       try { renderSettingsVoicesHub(); } catch {}
       requestAnimationFrame(() => {
         try {
           els.profilePersonaRow?.scrollIntoView({ block: "nearest", behavior: "smooth" });
         } catch {}
       });
+    } else {
+      collapseProfilePersonaCard();
     }
     setProfileEditing(false);
     try { syncMobileTabbarProfileAvatar(); } catch {}
@@ -11674,34 +11680,52 @@ function effectivePersonaModel(hit) {
   if (stored === "style_persona" || stored === "voice_persona") return stored;
   return "style_persona";
 }
-/** Persisted expand/collapse state for the persona card on Profile.
- *  We keep it compact by default so the card doesn't dominate the
- *  page, and remember the user's choice across sessions. */
-const PROFILE_PERSONA_EXPANDED_KEY = "nabadai.profile.personaExpanded.v1";
+/** Collapsed by default on Profile — tap the card to reveal Record / Voices. */
 function isProfilePersonaExpanded() {
-  try {
-    const v = localStorage.getItem(PROFILE_PERSONA_EXPANDED_KEY);
-    if (v == null) return true;
-    return v === "1";
-  } catch {
-    return true;
-  }
+  return els.profilePersonaRow?.dataset.expanded === "true";
 }
-function setProfilePersonaExpanded(on) {
-  try { localStorage.setItem(PROFILE_PERSONA_EXPANDED_KEY, on ? "1" : "0"); } catch {}
-  applyProfilePersonaExpandedUi(on);
+function isProfilePersonaVoicesOpen() {
+  return isProfilePersonaExpanded() && els.profilePersonaRow?.dataset.voicesOpen === "true";
 }
-function applyProfilePersonaExpandedUi(on) {
+function applyProfilePersonaCardUi() {
   const row = els.profilePersonaRow;
-  const btn = els.profilePersonaToggle;
+  const header = els.profilePersonaSignatureTop;
+  const actions = els.profilePersonaSignatureActions;
   const body = els.profilePersonaDetails;
   const voicesBtn = document.getElementById("profilePersonaVoicesBtn");
-  if (!row || !btn || !body) return;
-  row.dataset.expanded = on ? "true" : "false";
-  btn.setAttribute("aria-expanded", on ? "true" : "false");
-  if (voicesBtn) voicesBtn.setAttribute("aria-expanded", on ? "true" : "false");
-  if (on) body.removeAttribute("hidden");
-  else body.setAttribute("hidden", "");
+  if (!row) return;
+  const cardOpen = isProfilePersonaExpanded();
+  const voicesOpen = isProfilePersonaVoicesOpen();
+  if (header) header.setAttribute("aria-expanded", cardOpen ? "true" : "false");
+  if (actions) {
+    if (cardOpen) actions.removeAttribute("hidden");
+    else actions.setAttribute("hidden", "");
+  }
+  if (body) {
+    if (voicesOpen) body.removeAttribute("hidden");
+    else body.setAttribute("hidden", "");
+  }
+  if (voicesBtn) voicesBtn.setAttribute("aria-expanded", voicesOpen ? "true" : "false");
+}
+function setProfilePersonaExpanded(on) {
+  if (!els.profilePersonaRow) return;
+  els.profilePersonaRow.dataset.expanded = on ? "true" : "false";
+  if (!on) els.profilePersonaRow.dataset.voicesOpen = "false";
+  applyProfilePersonaCardUi();
+}
+function setProfilePersonaVoicesOpen(on) {
+  if (!els.profilePersonaRow) return;
+  if (on && !isProfilePersonaExpanded()) {
+    els.profilePersonaRow.dataset.expanded = "true";
+  }
+  els.profilePersonaRow.dataset.voicesOpen = on ? "true" : "false";
+  applyProfilePersonaCardUi();
+}
+function collapseProfilePersonaCard() {
+  if (!els.profilePersonaRow) return;
+  els.profilePersonaRow.dataset.expanded = "false";
+  els.profilePersonaRow.dataset.voicesOpen = "false";
+  applyProfilePersonaCardUi();
 }
 
 function personaTypeLabel(type) {
@@ -11717,19 +11741,29 @@ function updateProfilePersonaRow() {
   const id = getActivePersonaId();
   const list = loadPersonas();
   const hit = list.find((x) => String(x.personaId) === id);
-  els.profilePersonaRow.hidden = false;
+  const primary = hit || (list.length === 1 ? list[0] : null);
+  const titleEl = els.profilePersonaSignatureTitle;
   const n = list.length;
-  if (id && hit) {
-    const name = String(hit.label || "").trim() || "Active on Create";
-    els.profilePersonaLabel.textContent = n > 1 ? `${name} · ${n} voices` : name;
-  } else if (n === 1) {
-    els.profilePersonaLabel.textContent = "1 voice saved";
-  } else if (n > 1) {
+  els.profilePersonaRow.hidden = false;
+  if (primary && titleEl) {
+    titleEl.textContent = String(primary.label || "").trim() || "My voice";
+    if (id && hit) {
+      els.profilePersonaLabel.textContent = n > 1 ? `${n} voices · active on Create` : "Active on Create";
+    } else if (n > 1) {
+      els.profilePersonaLabel.textContent = `${n} voices saved`;
+    } else {
+      els.profilePersonaLabel.textContent = "Tap to manage your voice";
+    }
+  } else if (n > 0 && titleEl) {
+    titleEl.textContent = n === 1
+      ? (String(list[0]?.label || "").trim() || "My voice")
+      : "Your voices";
     els.profilePersonaLabel.textContent = `${n} voices saved`;
   } else {
-    els.profilePersonaLabel.textContent = "Not set up";
+    if (titleEl) titleEl.textContent = "Create your persona now";
+    els.profilePersonaLabel.textContent = "Tap to set up your voice";
   }
-  applyProfilePersonaExpandedUi(isProfilePersonaExpanded());
+  applyProfilePersonaCardUi();
   try { renderSettingsVoicesHub(); } catch {}
   renderActivePersonaBanner();
   syncProfilePersonaAvatarBadge();
@@ -21763,12 +21797,13 @@ async function openVoiceWizard() {
 
 function openProfilePersonaPanel() {
   setProfilePersonaExpanded(true);
+  setProfilePersonaVoicesOpen(true);
   try {
     if ((document.body.getAttribute("data-route") || "") !== "profile") {
       location.hash = "#/profile?persona=1";
     } else {
       history.replaceState(null, "", "#/profile?persona=1");
-      applyProfilePersonaExpandedUi(true);
+      applyProfilePersonaCardUi();
       try { renderSettingsVoicesHub(); } catch {}
       els.profilePersonaRow?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
@@ -30032,19 +30067,27 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     );
   }
 
-  // Profile persona card — collapsed by default; tap header to
-  // expand the multi-line hint + Open Create CTA. Choice persists
-  // across sessions via localStorage.
-  const toggleProfilePersonaVoices = () => {
-    const next = !(els.profilePersonaRow?.dataset.expanded === "true");
+  const toggleProfilePersonaCard = () => {
+    const next = !isProfilePersonaExpanded();
     setProfilePersonaExpanded(next);
   };
-  if (els.profilePersonaToggle) {
-    els.profilePersonaToggle.addEventListener("click", toggleProfilePersonaVoices);
+  if (els.profilePersonaSignatureTop) {
+    els.profilePersonaSignatureTop.addEventListener("click", toggleProfilePersonaCard);
+    els.profilePersonaSignatureTop.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggleProfilePersonaCard();
+      }
+    });
   }
   const personaVoicesBtn = document.getElementById("profilePersonaVoicesBtn");
   if (personaVoicesBtn) {
-    personaVoicesBtn.addEventListener("click", toggleProfilePersonaVoices);
+    personaVoicesBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const next = !isProfilePersonaVoicesOpen();
+      setProfilePersonaVoicesOpen(next);
+      if (next) try { renderSettingsVoicesHub(); } catch {}
+    });
   }
   if (els.settingsVoicesList) {
     els.settingsVoicesList.addEventListener("click", (e) => {
@@ -30076,7 +30119,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     });
   }
   if (els.btnSettingsVoiceWizard) {
-    els.btnSettingsVoiceWizard.addEventListener("click", () => void openVoiceWizard());
+    els.btnSettingsVoiceWizard.addEventListener("click", (e) => {
+      e.stopPropagation();
+      void openVoiceWizard();
+    });
   }
   if (els.linkManageVoices) {
     els.linkManageVoices.addEventListener("click", (e) => {

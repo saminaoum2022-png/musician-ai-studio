@@ -16518,6 +16518,13 @@ body.notificationsCenterOpen{
   display: flex;
   align-items: center;
   gap: 14px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.profilePersonaSignatureTop:focus-visible{
+  outline: 2px solid rgba(124, 92, 255, 0.55);
+  outline-offset: 3px;
+  border-radius: 16px;
 }
 .profilePersonaSignatureMark{
   flex: 0 0 auto;
@@ -16582,17 +16589,19 @@ body.notificationsCenterOpen{
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.05);
   color: rgba(223, 231, 251, 0.55);
-  cursor: pointer;
+  pointer-events: none;
   transition: transform 180ms ease, color 180ms ease, background 160ms ease;
-  -webkit-tap-highlight-color: transparent;
 }
-.profilePersonaSignatureExpand:active{
-  background: rgba(124, 92, 255, 0.12);
+.profilePersonaRow[data-expanded="true"] .profilePersonaSignatureExpand{
+  color: rgba(124, 92, 255, 0.95);
 }
 .profilePersonaSignatureBtns{
   display: flex;
   gap: 10px;
   margin-top: 16px;
+}
+.profilePersonaSignatureBtns[hidden]{
+  display: none !important;
 }
 .profilePersonaSigBtn{
   flex: 1 1 0;

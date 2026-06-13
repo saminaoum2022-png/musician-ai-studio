@@ -25839,7 +25839,7 @@ body[data-route="activity"] .app{
 .activityFeed{
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 10px;
 }
 .activityDayGroup{
   display: flex;
@@ -25847,22 +25847,23 @@ body[data-route="activity"] .app{
   gap: 0;
 }
 .activityDayLabel{
-  margin: 0 0 6px;
-  padding: 0 4px;
-  color: rgba(223,231,251,0.42);
-  font-size: 11px;
+  margin: 0 0 4px;
+  padding: 8px 4px 4px;
+  color: rgba(223,231,251,0.38);
+  font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 .activityRow{
+  position: relative;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   width: 100%;
-  padding: 13px 4px;
+  padding: 12px 6px;
   border: 0;
-  border-radius: 0;
+  border-radius: 12px;
   background: transparent;
   box-shadow: none;
   color: inherit;
@@ -25873,24 +25874,44 @@ body[data-route="activity"] .app{
   transition: background 160ms ease;
 }
 .activityRow + .activityRow{
-  border-top: 1px solid rgba(255,255,255,0.075);
+  border-top: 0;
+  margin-top: 0;
+}
+.activityDayGroup .activityRow + .activityRow{
+  border-top: 1px solid rgba(255,255,255,0.06);
 }
 button.activityRow{
   appearance: none;
   font: inherit;
 }
 .activityRow:active{
-  background: rgba(255,255,255,0.03);
+  background: rgba(255,255,255,0.04);
 }
 .activityRow.isUnread{
-  background: linear-gradient(90deg, rgba(94,234,212,0.10), transparent 54%);
+  background: rgba(94,234,212,0.07);
+}
+.activityRowUnreadDot{
+  position: absolute;
+  left: 0;
+  top: 18px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #5eead4;
+  box-shadow: 0 0 10px rgba(94,234,212,0.55);
 }
 .activityRow--unavailable{
-  opacity: 0.72;
+  opacity: 0.68;
   cursor: default;
 }
+.activityRow--unavailable .activityRowBody p,
+.activityRow--unavailable .activityRowTop strong{
+  color: rgba(223,231,251,0.46);
+}
+.activityRow--unavailable .activityRowTop strong{
+  font-style: normal;
+}
 .activityRow--unavailable .activityRowBody p{
-  color: rgba(223,231,251,0.48);
   font-style: italic;
 }
 button.activityRow--unavailable{
@@ -25956,31 +25977,62 @@ button.activityRow--unavailable{
 }
 .activityRowBadge{
   position: absolute;
-  right: -4px;
-  bottom: -4px;
+  right: -3px;
+  bottom: -3px;
   min-width: 18px;
   height: 18px;
   padding: 0 4px;
   border-radius: 999px;
   border: 2px solid rgba(8,10,18,0.95);
-  background: linear-gradient(135deg, #22d3ee, #7c5cff);
-  color: #fff;
+  background: rgba(10,14,24,0.92);
+  color: rgba(238,244,255,0.94);
   font-size: 10px;
   font-weight: 900;
   display: flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.28);
+}
+.activityRowBadge--chart_rank{
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  color: #1a1200;
+}
+.activityRowBadge--play_milestone{
+  background: linear-gradient(135deg, #22d3ee, #14b8a6);
+  color: #042f2e;
+}
+.activityRowBadge--remix{
+  background: linear-gradient(135deg, #7c5cff, #6366f1);
+  color: #fff;
+}
+.activityRowBadge--social_like{
+  background: linear-gradient(135deg, #ec4899, #f472b6);
+  color: #fff;
+}
+.activityRowBadge--social_reply{
+  background: linear-gradient(135deg, #60a5fa, #3b82f6);
+  color: #fff;
+}
+.activityRowBadge--follow{
+  background: linear-gradient(135deg, #34d399, #10b981);
+  color: #042f2e;
+}
+.activityRowBadge--song_feedback,
+.activityRowBadge--public_song{
+  background: linear-gradient(135deg, rgba(124,92,255,0.95), rgba(34,211,238,0.82));
+  color: #fff;
 }
 .activityRowBody{
   min-width: 0;
   flex: 1 1 auto;
   display: grid;
-  gap: 4px;
+  gap: 3px;
+  padding-top: 1px;
 }
 .activityRowTop{
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
 }
@@ -25997,54 +26049,72 @@ button.activityRow--unavailable{
   -webkit-line-clamp: 2;
   overflow: hidden;
 }
-.activityRowTop span{
+.activityRowTime{
   flex: 0 0 auto;
-  color: rgba(223,231,251,0.42);
+  color: rgba(223,231,251,0.40);
   font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
   padding-left: 8px;
+  padding-top: 2px;
 }
 .activityRowBody p{
   margin: 0;
-  color: rgba(223,231,251,0.58);
+  color: rgba(223,231,251,0.56);
   font-size: 12px;
   line-height: 1.4;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: 2;
   overflow: hidden;
+}
+.activityRowStat{
+  color: rgba(94,234,212,0.88) !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.01em;
+  -webkit-line-clamp: 1 !important;
+}
+.activityRowPreview{
+  color: rgba(223,231,251,0.62) !important;
+  font-style: italic;
+}
+.activityRow--chart_rank .activityRowAvatar,
+.activityRow--play_milestone .activityRowAvatar{
+  border-radius: 10px;
+  box-shadow: 0 8px 18px rgba(0,0,0,0.22);
 }
 .activityRowLeadPlaceholder{
   width: 44px;
   height: 44px;
-  border-radius: var(--nabad-squircle-radius);
+  border-radius: 10px;
   font-size: 18px;
 }
 .activityRowCover{
   flex: 0 0 auto;
   width: 44px;
   height: 44px;
+  margin-top: 1px;
   border-radius: 50%;
   object-fit: cover;
   border: 1px solid rgba(255,255,255,0.10);
   background: rgba(255,255,255,0.06);
-  box-shadow: 0 6px 18px rgba(0,0,0,0.24);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.22);
 }
 .activityRowCoverPlaceholder{
   display: flex;
   align-items: center;
   justify-content: center;
   color: rgba(167,139,250,0.88);
-  font-size: 16px;
+  font-size: 15px;
   background:
-    radial-gradient(circle at 30% 20%, rgba(34,211,238,0.16), transparent 58%),
-    rgba(124,92,255,0.18);
+    radial-gradient(circle at 30% 20%, rgba(34,211,238,0.14), transparent 58%),
+    rgba(124,92,255,0.16);
 }
 .activityRow.isUnread .activityRowCover{
   box-shadow:
-    0 0 0 2px rgba(94,234,212,0.34),
-    0 6px 18px rgba(0,0,0,0.24);
+    0 0 0 2px rgba(94,234,212,0.30),
+    0 6px 16px rgba(0,0,0,0.22);
 }
 .activitySkelCover{
   width: 44px;
@@ -28048,8 +28118,11 @@ section.mentorPage{
   color: rgba(244, 247, 255, 0.94);
   margin: 0;
 }
+.followAct--xstyle .followActContent:empty{
+  display: none;
+}
 .followAct--xstyle .followActCaption{
-  margin: 4px 0 0;
+  margin: 0;
   font-size: 14px;
   line-height: 1.45;
   color: rgba(232, 238, 247, 0.78);

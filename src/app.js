@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260613mashupFeed";
+const APP_BUILD = "20260613activityPolish";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -7861,6 +7861,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
   // square tiles side by side — original left, remix right.
   const orig = !mashupBlockHtml && t._remixOriginal && String(t._remixOriginal.url || "").trim() ? t._remixOriginal : null;
   let remixPairHtml = "";
+  let showHeadLine = !mashupBlockHtml;
   if (orig) {
     const origBy = orig.username ? `@${orig.username}` : "Original";
     const o = followingActivityPlayAttrs(orig, profMap, origBy);
@@ -7889,6 +7890,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
           </span>
         </button>
       </div>`;
+    showHeadLine = false;
   }
   if (xstyle) {
     return `
@@ -7908,10 +7910,10 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
             <span class="followActMetaDot" aria-hidden="true">·</span>
             ${followingActivityBadgeHtml("music", type)}
           </div>
-          <div class="followActContent">
-            <p class="followActHead">${verbHtml}</p>
+          ${showHeadLine || caption ? `<div class="followActContent">
+            ${showHeadLine ? `<p class="followActHead">${verbHtml}</p>` : ""}
             ${captionHtml}
-          </div>
+          </div>` : ""}
           ${mashupBlockHtml || remixPairHtml || `
           <button type="button" class="followActQuoteCard" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
             <span class="followActQuoteArt">
@@ -7953,10 +7955,10 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
           ${followingActivityBadgeHtml("music", type)}
         </div>
       </div>
-      <div class="followActContent">
-        <p class="followActHead">${followingActivityBodyHtml(type, rawTitle, remixOf, challenge, mashupOf)}</p>
+      ${showHeadLine || caption ? `<div class="followActContent">
+        ${showHeadLine ? `<p class="followActHead">${followingActivityBodyHtml(type, rawTitle, remixOf, challenge, mashupOf)}</p>` : ""}
         ${captionHtml}
-      </div>
+      </div>` : ""}
       ${mashupBlockHtml || remixPairHtml || `
       <button type="button" class="followActMedia" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
         <img class="followActMediaImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
@@ -15681,11 +15683,17 @@ function notificationIconForType(type) {
   if (t === "remix") return "R";
   if (t === "song_feedback") return "♪";
   if (t === "social_like") return "♥";
-  if (t === "social_reply") return "💬";
-  if (t === "play_milestone") return "10";
-  if (t === "chart_rank") return "🏆";
+  if (t === "social_reply") return "↩";
+  if (t === "play_milestone") return "▶";
+  if (t === "chart_rank") return "★";
   if (t === "public_song") return "P";
-  return ".";
+  return "•";
+}
+
+function activityTypeBadgeHtml(type) {
+  const t = String(type || "").trim() || "default";
+  const icon = notificationIconForType(t);
+  return `<span class="activityRowBadge activityRowBadge--${escapeHtml(t)}" aria-hidden="true">${escapeHtml(icon)}</span>`;
 }
 
 function notificationTargetLabel(metadata) {
@@ -15716,7 +15724,7 @@ function notificationMessage(n) {
     const remix = String(n?.metadata?.remix_title || "a new remix").trim();
     return {
       title: username ? `@${username} remixed your song` : "Someone remixed your song",
-      body: `${remix} was made from ${original}.`,
+      body: `${remix} · from ${original}`,
       action: username ? "View creator" : "",
     };
   }
@@ -15733,8 +15741,8 @@ function notificationMessage(n) {
     const count = Number(n?.metadata?.play_count || 0);
     const title = String(n?.metadata?.song_title || "Your song").trim();
     return {
-      title: count ? `${title} · ${formatStatCount(count)} plays` : `${title} · play milestone`,
-      body: "Tap to listen on the player.",
+      title,
+      body: count ? `${formatStatCount(count)} plays` : "Play milestone",
       action: "",
     };
   }
@@ -15742,8 +15750,8 @@ function notificationMessage(n) {
     const rank = Number(n?.metadata?.rank || 0);
     const title = String(n?.metadata?.song_title || "Your song").trim();
     return {
-      title: rank ? `${title} · #${rank} on this week's chart` : `${title} · weekly chart`,
-      body: "Tap to listen on the player.",
+      title,
+      body: rank ? `#${rank} on this week's chart` : "Weekly chart",
       action: "",
     };
   }
@@ -15751,7 +15759,7 @@ function notificationMessage(n) {
     const title = String(n?.metadata?.song_title || "a new public song").trim();
     return {
       title: username ? `@${username} published a song` : "A creator published a song",
-      body: `${title} is now available from your Following feed.`,
+      body: title,
       action: username ? "View profile" : "",
     };
   }
@@ -15759,7 +15767,7 @@ function notificationMessage(n) {
     const target = notificationTargetLabel(n?.metadata);
     return {
       title: username ? `@${username} liked ${target}` : `Someone liked ${target}`,
-      body: "Likes show up next to the heart on your post.",
+      body: "",
       action: username ? "View profile" : "",
     };
   }
@@ -16245,6 +16253,21 @@ async function openActivityTargetFromHref(href) {
   location.hash = raw.startsWith("#") ? raw : `#${raw}`;
 }
 
+function activityItemBodyHtml(n, msg) {
+  const body = String(msg?.body || "").trim();
+  if (!body) return "";
+  const t = String(n?.type || "").trim();
+  const cls =
+    t === "chart_rank" || t === "play_milestone"
+      ? "activityRowStat"
+      : t === "song_feedback" || t === "social_reply"
+        ? "activityRowPreview"
+        : "";
+  return cls
+    ? `<p class="${cls}">${escapeHtml(body)}</p>`
+    : `<p>${escapeHtml(body)}</p>`;
+}
+
 function activityItemHtml(n) {
   const msg = notificationMessage(n);
   const unavailable = activityNotificationIsUnavailable(n);
@@ -16268,28 +16291,30 @@ function activityItemHtml(n) {
       msg.body = `${gc} likes on this.`;
     }
   }
-  const icon = notificationIconForType(n?.type);
   const unread = !n?.read_at;
   const time = relativeTime(new Date(n?.created_at || Date.now()).getTime());
   const href = unavailable ? "" : notificationActivityHref(n);
   const tag = href ? "button" : "article";
   const typeAttr = href ? ' type="button"' : "";
+  const notifType = String(n?.type || "").trim() || "default";
   const notifId = String(n?.id || "").trim();
   const dataHref = href
     ? ` data-activity-href="${escapeHtml(href)}"${notifId ? ` data-activity-id="${escapeHtml(notifId)}"` : ""}`
     : "";
+  const unreadDot = unread ? `<span class="activityRowUnreadDot" aria-hidden="true"></span>` : "";
   return `
-    <${tag} class="activityRow${unread ? " isUnread" : ""}${unavailable ? " activityRow--unavailable" : ""}"${typeAttr}${dataHref}>
+    <${tag} class="activityRow activityRow--${escapeHtml(notifType)}${unread ? " isUnread" : ""}${unavailable ? " activityRow--unavailable" : ""}"${typeAttr}${dataHref}>
+      ${unreadDot}
       <div class="activityRowAvatarWrap">
         ${activityRowLeadVisualHtml(n, "activityRowAvatar")}
-        <span class="activityRowBadge" aria-hidden="true">${escapeHtml(icon)}</span>
+        ${activityTypeBadgeHtml(notifType)}
       </div>
       <div class="activityRowBody">
         <div class="activityRowTop">
           <strong>${escapeHtml(msg.title)}</strong>
-          <span>${escapeHtml(time)}</span>
+          <span class="activityRowTime">${escapeHtml(time)}</span>
         </div>
-        <p>${escapeHtml(msg.body)}</p>
+        ${activityItemBodyHtml(n, msg)}
       </div>
       ${activitySongCoverHtml(n)}
     </${tag}>`;

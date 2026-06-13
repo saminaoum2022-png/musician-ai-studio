@@ -25019,6 +25019,11 @@ body[data-route="challenges"] .app{
   display: block;
   animation: homeDeskSongPenBob 2.8s ease-in-out infinite;
 }
+.homeDeskCreateStack .homeDeskSongPenIco,
+.homeDeskPromo--compact .homeDeskSongPenIco{
+  width: 50px;
+  height: 50px;
+}
 @keyframes homeDeskSongPenBob{
   0%, 100%{ transform: rotate(0deg); }
   35%{ transform: rotate(-4deg); }

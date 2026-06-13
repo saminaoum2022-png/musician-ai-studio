@@ -25019,6 +25019,11 @@ body[data-route="challenges"] .app{
   display: block;
   animation: homeDeskSongPenBob 2.8s ease-in-out infinite;
 }
+.homeDeskCreateStack .homeDeskSongPenIco,
+.homeDeskPromo--compact .homeDeskSongPenIco{
+  width: 50px;
+  height: 50px;
+}
 @keyframes homeDeskSongPenBob{
   0%, 100%{ transform: rotate(0deg); }
   35%{ transform: rotate(-4deg); }
@@ -25110,6 +25115,11 @@ body[data-route="challenges"] .app{
   height: 36px;
   color: rgba(168,150,255,0.92);
   display: block;
+}
+.homeDeskCreateStack .homeDeskPersonaMicIco,
+.homeDeskPromo--compact .homeDeskPersonaMicIco{
+  width: 50px;
+  height: 50px;
 }
 .homeDeskPromoCopy h3,
 .homeDeskPromoCopy .homeDeskPromoTitle{
@@ -26500,6 +26510,16 @@ body[data-route="mashup"] .app{
   right: 4px;
   bottom: 10px;
   background: linear-gradient(145deg, rgba(251,191,36,0.55), rgba(244,114,182,0.28));
+}
+.homeDeskCreateStack .homeDeskMashupDisc--a,
+.homeDeskPromo--compact .homeDeskMashupDisc--a{
+  left: 14px;
+  top: 19px;
+}
+.homeDeskCreateStack .homeDeskMashupDisc--b,
+.homeDeskPromo--compact .homeDeskMashupDisc--b{
+  right: 14px;
+  bottom: 19px;
 }
 
 @media (max-width: 760px){

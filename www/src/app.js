@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260613createIcons";
+const APP_BUILD = "20260613desktopNav";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2601,7 +2601,8 @@ function syncRoutePanelVisibility(wanted) {
     const active = link === route
       || (route === "discover-playlist" && link === "discover")
       || (route === "generate" && link === "challenges")
-      || (route === "mashup" && link === "challenges");
+      || (route === "mashup" && link === "challenges")
+      || (route === "vocal" && link === "challenges");
     a.classList.toggle("active", active);
   });
 }

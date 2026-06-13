@@ -1442,6 +1442,40 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
   gap:8px;
   margin-top:12px;
 }
+@media (min-width: 721px){
+  .header{
+    align-items:center;
+    gap:20px;
+    margin-bottom:20px;
+    padding-bottom:14px;
+    border-bottom:1px solid rgba(255,255,255,0.07);
+  }
+  .headerMain{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:20px;
+    flex:1 1 auto;
+    width:100%;
+  }
+  .journeyBar{
+    display:flex;
+    flex:1 1 auto;
+    flex-wrap:nowrap;
+    justify-content:flex-end;
+    align-items:center;
+    gap:6px;
+    margin-top:0;
+    min-width:0;
+  }
+  .journeyStep{
+    flex:0 0 auto;
+    padding:8px 14px;
+    border-radius:999px;
+    font-size:13px;
+    white-space:nowrap;
+  }
+}
 .journeyStep{
   border:1px solid var(--border);
   background: rgba(10,14,22,0.55);
@@ -2909,13 +2943,24 @@ body[data-route="settings"] main.grid > [data-route="settings"]{
  *  thing competing for attention. Pattern matches Instagram /
  *  Anghami where the wordmark sits on the home feed only.
  *
- *  Desktop still needs top-level navigation, so we hide ONLY the
- *  brand title there and keep the .journeyBar visible. On mobile
- *  the bottom .mobileTabbar handles navigation, so the whole
- *  .header can collapse off non-hub routes.
+ *  Desktop shows brand + a single-row nav bar. Mobile uses the
+ *  bottom .mobileTabbar and hides this header on non-hub routes.
  */
-body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-route="onboarding"]):not([data-route="auth"]) .brandTitle{
-  display: none;
+@media (max-width: 720px){
+  body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-route="onboarding"]):not([data-route="auth"]) .brandTitle{
+    display: none;
+  }
+}
+@media (min-width: 721px){
+  body[data-route]:not([data-route="intro"]):not([data-route="onboarding"]):not([data-route="auth"]) .brandTitle{
+    display: flex;
+    flex: 0 0 auto;
+    margin: 0;
+    font-size: 24px;
+  }
+  body[data-route]:not([data-route="intro"]):not([data-route="onboarding"]):not([data-route="auth"]) .brandSecondary{
+    font-size: 12px;
+  }
 }
 @media (max-width: 720px){
   body[data-route]:not([data-route="hub"]):not([data-route="intro"]):not([data-route="onboarding"]):not([data-route="auth"]) .header{

@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260613founderHandle";
+const APP_BUILD = "20260613profileSync2";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2932,10 +2932,14 @@ function applyRoute() {
     if (profileHeavy) markRouteHeavy("profile");
     if (profileHeavy) {
       markLibraryTabDot(false);
-      if (authSession?.user?.id && _profileSongsSegment === "all" && !loadLibrary().length) {
-        const run = () => void reconcileLibraryFromCloud({ force: true });
+      if (authSession?.user?.id) {
+        const run = () => {
+          void mergeCloudSongsIntoLocalLibrary().then(() => {
+            try { refreshOwnSongsUi({ soft: false }); } catch {}
+          });
+        };
         if (typeof requestIdleCallback === "function") {
-          requestIdleCallback(run, { timeout: 1200 });
+          requestIdleCallback(run, { timeout: 800 });
         } else {
           setTimeout(run, 0);
         }
@@ -6928,6 +6932,68 @@ function profileActivityRowHtml(post, idx) {
     </article>`;
 }
 
+async function mergeCloudSongsIntoLocalLibrary() {
+  if (!authSession?.user?.id) return false;
+  syncActiveProfileIdFromSession();
+  if (!_libraryHydrateCompleted || _libraryHydrateInFlight) {
+    await ensureUserLibraryHydrated();
+  }
+  const cloudRows = await supabaseLoadUserSongs();
+  if (!Array.isArray(cloudRows) || !cloudRows.length) return false;
+  let tombstones = loadLibraryTombstoneKeySet();
+  const blockedPublic = cloudRows.filter(
+    (row) => Boolean(row?.publicOnProfile) && isTrackTombstoned(row, tombstones),
+  );
+  if (blockedPublic.length) {
+    blockedPublic.forEach((row) => clearLibraryTombstonesForTrack(row));
+    tombstones = loadLibraryTombstoneKeySet();
+  }
+  const { keep: cloudSongs } = dedupeCloudSongRows(
+    cloudRows.filter((row) => !isTrackTombstoned(row, tombstones)),
+  );
+  if (!cloudSongs.length) return false;
+
+  const sigOf = librarySyncSigOf;
+  const local = loadLibrary();
+  const localBySig = new Map();
+  for (const t of local) localBySig.set(sigOf(t), t);
+
+  const merged = [];
+  const seen = new Set();
+  let changed = false;
+  for (const c of cloudSongs) {
+    const sig = sigOf(c);
+    if (seen.has(sig)) continue;
+    seen.add(sig);
+    const localCopy = localBySig.get(sig);
+    if (localCopy) {
+      const next = mergeLibraryCloudWithLocal(c, localCopy);
+      if (
+        Boolean(next.publicOnProfile) !== Boolean(localCopy.publicOnProfile) ||
+        String(next.url || "") !== String(localCopy.url || "") ||
+        String(next.title || "") !== String(localCopy.title || "")
+      ) {
+        changed = true;
+      }
+      merged.push(next);
+      continue;
+    }
+    merged.push(c);
+    changed = true;
+  }
+  for (const t of local) {
+    const sig = sigOf(t);
+    if (seen.has(sig)) continue;
+    seen.add(sig);
+    merged.push(t);
+  }
+  if (!changed) return false;
+  merged.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
+  saveLibrary(merged);
+  invalidateProfileActivitiesCache();
+  return true;
+}
+
 async function renderProfileActivities(opts = {}) {
   const force = Boolean(opts.force);
   const listEl = document.getElementById("profileActivitiesList");
@@ -6958,7 +7024,16 @@ async function renderProfileActivities(opts = {}) {
     !snap.html.includes("followAct--skel");
   if (snapFresh && !hadFeed) listEl.innerHTML = snap.html;
   else if (!hadFeed && !snapFresh) listEl.innerHTML = followingActivitySkeletonHtml();
-  if (snapFresh && !force && Date.now() - snap.at < PROFILE_ACT_MIN_FETCH_GAP_MS) return;
+  await mergeCloudSongsIntoLocalLibrary();
+  const snapStillValid =
+    Boolean(_profileActSnapshot) &&
+    snapFresh &&
+    !force &&
+    Date.now() - snap.at < PROFILE_ACT_MIN_FETCH_GAP_MS;
+  const snapHasPosts = Boolean(
+    snap?.html && (snap.html.includes("profileActRow") || snap.html.includes('class="followAct"')),
+  );
+  if (snapStillValid && snapHasPosts) return;
   const uid = String(authSession.user.id);
   const libRows = loadLibrary()
     .filter((t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile))
@@ -24046,13 +24121,18 @@ function renderProfileSongs() {
   const actList = document.getElementById("profileActivitiesList");
   const libEl = document.getElementById("libraryList");
   if (_profileSongsSegment === "activities") {
-    void renderProfileActivities();
+    void renderProfileActivities({ force: !loadLibrary().length });
     return;
   }
   if (actList) actList.hidden = true;
   if (libEl) libEl.hidden = false;
   if (_profileSongsSegment === "all") {
     try { renderProfileOwnStats(); } catch {}
+    if (authSession?.user?.id) {
+      const hadLocal = loadLibrary().length > 0;
+      void mergeCloudSongsIntoLocalLibrary().then(() => renderLibrary());
+      if (!hadLocal) return;
+    }
     renderLibrary();
   }
 }

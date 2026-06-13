@@ -44,8 +44,13 @@ module.exports = async function handler(req, res) {
   const row = await svcGet(
     `user_songs?select=id,user_id,title,art_url,song_url,task_id,audio_id,meta&id=eq.${encodeURIComponent(id)}&limit=1`,
   );
-  if (!row?.id || !String(row.song_url || "").trim()) {
+  if (!row?.id) {
     return sendJson(res, 404, { ok: false, error: "Song not found" });
+  }
+  const songUrl = String(row.song_url || "").trim();
+  const taskId = String(row.task_id || "").trim();
+  if (!songUrl && !taskId) {
+    return sendJson(res, 404, { ok: false, error: "Song has no playable audio" });
   }
 
   // Remix needs the original lyrics/style. Only expose those two fields,

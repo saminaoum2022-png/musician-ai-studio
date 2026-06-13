@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260613activityPlay";
+const APP_BUILD = "20260613activityPlay2";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -16102,6 +16102,31 @@ async function openActivityNotificationTarget(n) {
   location.hash = href.startsWith("#") ? href : `#${href}`;
 }
 
+/** Fallback when the feed row lost its notification object (e.g. regrouped DOM). */
+async function openActivityTargetFromHref(href) {
+  const raw = String(href || "").trim();
+  if (!raw) return;
+  const hash = raw.startsWith("#") ? raw.slice(1) : raw;
+  const qIdx = hash.indexOf("?");
+  const query = qIdx >= 0 ? hash.slice(qIdx + 1) : "";
+  const sp = new URLSearchParams(query);
+  const trackId = String(sp.get("track") || "").trim();
+  const hubId = String(sp.get("hub") || "").trim();
+  if (trackId && isShareUuid(trackId)) {
+    if (await resolveAndPlayActivityTrack(trackId)) return;
+    location.hash = raw.startsWith("#") ? raw : `#${raw}`;
+    void focusTrackFromShare(trackId);
+    return;
+  }
+  if (hubId && isShareUuid(hubId)) {
+    if (await resolveAndPlayHubPost(hubId)) return;
+    location.hash = raw.startsWith("#") ? raw : `#${raw}`;
+    void focusHubTrackFromShare(hubId);
+    return;
+  }
+  location.hash = raw.startsWith("#") ? raw : `#${raw}`;
+}
+
 function activityItemHtml(n) {
   const msg = notificationMessage(n);
   // Grouped rows get digest copy instead of repeating the same line N times.
@@ -16264,7 +16289,7 @@ function bindActivityPageOnce() {
     const notifId = row.getAttribute("data-activity-id") || "";
     const n = notifId ? _activityFeedState.items.find((item) => String(item?.id || "") === notifId) : null;
     if (n) void openActivityNotificationTarget(n);
-    else location.hash = href.startsWith("#") ? href : `#${href}`;
+    else void openActivityTargetFromHref(href);
   });
   if (els.activityLoadMore && typeof IntersectionObserver !== "undefined") {
     _activityFeedState.observer = new IntersectionObserver((entries) => {
@@ -28515,7 +28540,7 @@ async function fetchSharedSongByCloudId(cloudId) {
       if (r.ok) {
         const rows = await r.json().catch(() => []);
         const row = Array.isArray(rows) && rows[0] ? rows[0] : null;
-        if (row?.song_url) return row;
+        if (row?.id) return row;
       }
     } catch {}
   }
@@ -28526,14 +28551,11 @@ async function fetchSharedSongByCloudId(cloudId) {
       const data = await r.json().catch(() => ({}));
       if (data?.ok && data?.song) {
         const song = data.song;
-        if (String(song.song_url || "").trim()) {
-          // Server exposes only the remix fields, not the whole meta blob.
-          song.meta = {
-            lyricsInput: String(song.lyrics_input || "").trim(),
-            styleInput: String(song.style_input || "").trim(),
-          };
-          return song;
-        }
+        song.meta = {
+          lyricsInput: String(song.lyrics_input || "").trim(),
+          styleInput: String(song.style_input || "").trim(),
+        };
+        return song;
       }
     }
   } catch {}

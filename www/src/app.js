@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260613remixRevert";
+const APP_BUILD = "20260613mashupFeed";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -8462,7 +8462,7 @@ const FRIENDS_FEED_SNAPSHOT_KEY = "nabad_friends_feed_snap_v3";
 let _profileActSnapshot = null;
 const PROFILE_ACT_SNAPSHOT_MS = 120000;
 const PROFILE_ACT_MIN_FETCH_GAP_MS = 45000;
-const PROFILE_ACT_SNAPSHOT_KEY = "nabad_profile_act_snap_v1";
+const PROFILE_ACT_SNAPSHOT_KEY = "nabad_profile_act_snap_v2";
 
 function hydrateProfileActSnapshotFromStorage() {
   if (_profileActSnapshot) return;
@@ -9650,6 +9650,33 @@ function attachMashupSourcesFromMeta(tracks) {
 async function hydrateMashupSourcesForTracks(tracks) {
   const list = Array.isArray(tracks) ? tracks : [];
   attachMashupSourcesFromMeta(list);
+  const libByCloud = new Map();
+  for (const row of loadLibrary()) {
+    const cid = trackCloudShareId(row);
+    if (cid) libByCloud.set(cid, row);
+    const id = String(row?.id || "").trim();
+    if (id) libByCloud.set(id, row);
+  }
+  for (const t of list) {
+    const mashupOf = mashupAttributionForTrack(t);
+    if (!mashupOf) continue;
+    for (const [slot, entry] of [["a", mashupOf.a], ["b", mashupOf.b]]) {
+      const sid = String(entry?.songId || "").trim();
+      const local = sid ? libByCloud.get(sid) : null;
+      if (!local?.url) continue;
+      const src = mashupSourceFromDb(entry, {
+        id: sid,
+        title: local.title,
+        art_url: local.artUrl,
+        song_url: local.url,
+        user_id: local.userId || t.userId,
+        task_id: local.taskId,
+        audio_id: local.audioId,
+      });
+      if (slot === "a") t._mashupSourceA = src;
+      else t._mashupSourceB = src;
+    }
+  }
   const wantedIds = new Set();
   for (const t of list) {
     const mashupOf = mashupAttributionForTrack(t);
@@ -9661,9 +9688,12 @@ async function hydrateMashupSourcesForTracks(tracks) {
   if (!wantedIds.size || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
   try {
     const inList = [...wantedIds].map((id) => encodeURIComponent(id)).join(",");
+    const headers = { apikey: SUPABASE_ANON_KEY, Accept: "application/json" };
+    const token = getSupabaseAuthToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/user_songs?id=in.(${inList})&public_on_profile=eq.true&select=id,title,art_url,song_url,user_id,task_id,audio_id`,
-      { headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" }, cache: "no-store" },
+      `${SUPABASE_URL}/rest/v1/user_songs?id=in.(${inList})&select=id,title,art_url,song_url,user_id,task_id,audio_id`,
+      { headers, cache: "no-store" },
     );
     if (!r.ok) return;
     const rows = await r.json().catch(() => []);
@@ -14737,8 +14767,8 @@ async function supabaseLoadUserSongs() {
   // happens to be a legacy `data:` URL*, same trick we use on `hub_posts`
   // for cover_url / creator_avatar. The cheap `art_url is null` branch
   // covers freshly inserted rows where we deliberately wrote null.
-  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_deleted_at:meta->>deletedAt";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_deleted_at:meta->>deletedAt";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_deleted_at:meta->>deletedAt";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_deleted_at:meta->>deletedAt";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
@@ -14804,6 +14834,7 @@ async function supabaseLoadUserSongs() {
       kind: s.kind || "full",
       meta: {
         ...(s.meta_remix_of ? { remixOf: s.meta_remix_of } : {}),
+        ...(s.meta_mashup_of ? { mashupOf: s.meta_mashup_of } : {}),
         ...(String(s.meta_release_caption || "").trim() ? { releaseCaption: String(s.meta_release_caption).trim() } : {}),
         ...(s.meta_challenge ? { challenge: s.meta_challenge } : {}),
         ...(String(s.meta_featured_on_profile || "").toLowerCase() === "true" ? { featuredOnProfile: true } : {}),
@@ -15210,6 +15241,7 @@ function mapPublicLibrarySongRows(arr, selectedPublishedAt) {
           kind: s.kind || "full",
           meta: {
             ...(s.meta_remix_of ? { remixOf: s.meta_remix_of } : {}),
+            ...(s.meta_mashup_of ? { mashupOf: s.meta_mashup_of } : {}),
             ...(String(s.meta_release_caption || "").trim() ? { releaseCaption: String(s.meta_release_caption).trim() } : {}),
             ...(s.meta_challenge ? { challenge: s.meta_challenge } : {}),
             ...(String(s.meta_featured_on_profile || "").toLowerCase() === "true" ? { featuredOnProfile: true } : {}),
@@ -15247,9 +15279,9 @@ async function supabaseFetchPublicLibraryRowsForFilter(filterQuery, perUserLimit
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !filterQuery) return new Map();
   const lim = Math.min(120, Math.max(12, Number(perUserLimit) || 80));
   const colsWithPublished =
-    "user_id,id,created_at,published_at,discover_score,discover_expires_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
+    "user_id,id,created_at,published_at,discover_score,discover_expires_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
   const colsLegacy =
-    "user_id,id,created_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
+    "user_id,id,created_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   const authHeaders = () => {
     const token = getSupabaseAuthToken();
@@ -17359,8 +17391,8 @@ function maybeRecordQualifiedPublicPlay() {
 async function supabaseFetchDiscoveryPublicSongs(limit) {
   const lim = Math.max(1, Math.min(80, Number(limit) || 48));
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
-  const colsWithPublished = "id,created_at,published_at,discover_score,discover_expires_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_tags:meta->tags";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_tags:meta->tags";
+  const colsWithPublished = "id,created_at,published_at,discover_score,discover_expires_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_tags:meta->tags";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_tags:meta->tags";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   try {
     let r = await fetch(
@@ -17402,6 +17434,7 @@ async function supabaseFetchDiscoveryPublicSongs(limit) {
             userId: String(s.user_id || "").trim(),
             meta: {
               ...(s.meta_remix_of ? { remixOf: s.meta_remix_of } : {}),
+              ...(s.meta_mashup_of ? { mashupOf: s.meta_mashup_of } : {}),
               ...(String(s.meta_release_caption || "").trim() ? { releaseCaption: String(s.meta_release_caption).trim() } : {}),
               ...(s.meta_challenge ? { challenge: s.meta_challenge } : {}),
               ...(String(s.meta_style || "").trim() ? { styleInput: String(s.meta_style).trim() } : {}),
@@ -24484,6 +24517,7 @@ function normalizeTrackRow(row) {
   const url = String(row?.url || row?.song_url || "").trim();
   const meta = row?.meta || {
     ...(row?.meta_remix_of ? { remixOf: row.meta_remix_of } : {}),
+    ...(row?.meta_mashup_of ? { mashupOf: row.meta_mashup_of } : {}),
     ...(String(row?.meta_release_caption || "").trim() ? { releaseCaption: String(row.meta_release_caption).trim() } : {}),
     ...(row?.meta_challenge ? { challenge: row.meta_challenge } : {}),
   };

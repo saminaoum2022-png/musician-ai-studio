@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260613activityPolish";
+const APP_BUILD = "20260613discoverIdentity";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2965,6 +2965,7 @@ function applyRoute() {
               saveProfile(nextProfile);
               renderProfilePreviewFromInputs();
               renderProfileSongs();
+              void ensurePersonalizedUsernameSyncedToCloud();
             }
           } catch {}
           try { setProfileHeaderLoading(false); } catch {}
@@ -5131,7 +5132,7 @@ async function refreshDiscoverCampaignRail() {
     }
     const profMap = await fetchProfilesByUserIdsMap(rows.slice(0, 10).map((t) => t.userId));
     row.innerHTML = rows.slice(0, 10).map((track) => {
-      const prof = track.userId ? profMap.get(track.userId) : null;
+      const prof = resolveProfileForFeedCreator(track.userId, profMap);
       const handle = String(prof?.username || "").trim();
       const artSafe = trackCoverArtForFeed(track);
       const title = String(track.title || "Anthem").trim();
@@ -6704,7 +6705,7 @@ function followingStatusRowHtml(post, profMap, idx, opts = {}) {
   const postType = String(post?.postType || post?.post_type || "update").trim();
   const postId = String(post?.id || "").trim();
   const userId = String(post?.userId || post?.user_id || "").trim();
-  const prof = userId ? profMap.get(userId) : null;
+  const prof = resolveProfileForFeedCreator(userId, profMap);
   const handle = String(post?.username || prof?.username || "").trim();
   const avatarRaw = String(post?.avatar || prof?.avatar || "").trim();
   const avatarSrc = avatarRaw ? normalizeProfileAvatarForImg(avatarRaw) : "";
@@ -7067,7 +7068,7 @@ async function fetchFollowingListViaSupabase() {
   const profMap = await fetchProfilesByUserIdsMap(ids);
   return rows.map((row) => {
     const userId = String(row.following_user_id || "").trim();
-    const prof = profMap.get(userId);
+    const prof = resolveProfileForFeedCreator(userId, profMap);
     return {
       userId,
       createdAt: row.created_at,
@@ -7814,7 +7815,7 @@ async function hydrateFeedSocialStatsForFeed(listEl) {
 function followingActivityRowHtml(t, profMap, idx, opts = {}) {
   const xstyle = Boolean(opts && opts.xstyle);
   const type = followingActivityTypeForTrack(t);
-  const prof = t.userId ? profMap.get(t.userId) : null;
+  const prof = resolveProfileForFeedCreator(t.userId, profMap);
   const handle = String(prof?.username || "").trim();
   const byLine = handle ? `@${handle}` : "Creator";
   const rawTitle = String(t.title || "Untitled");
@@ -8034,7 +8035,7 @@ async function fetchFollowingEmptySuggestCreators(limit = 3, excludeUserIds = []
       const uid = String(t.userId || "").trim();
       if (!uid || seen.has(uid) || blocked.has(uid)) continue;
       seen.add(uid);
-      const prof = profMap.get(uid);
+      const prof = resolveProfileForFeedCreator(uid, profMap);
       const handle = String(prof?.username || "").trim();
       if (!handle) continue;
       const avatar = normalizeProfileAvatarForImg(String(prof?.avatar || "").trim());
@@ -13231,6 +13232,7 @@ function saveAuthSession(sess, { persist = true } = {}) {
       void refreshDiscoveryFollowingFeed({ force: true });
     }
   } catch {}
+  if (nextUserId) void ensurePersonalizedUsernameSyncedToCloud();
 }
 function getSupabaseAuthToken() {
   return authSession?.access_token || "";
@@ -15265,12 +15267,19 @@ function dedupePublicSongRowsRaw(arr) {
   const seen = new Set();
   const out = [];
   for (const s of Array.isArray(arr) ? arr : []) {
+    const uid = String(s?.user_id || "").trim();
     const aid = String(s?.audio_id || "").trim();
     const kind = String(s?.kind || "full").trim();
-    const key = aid
-      ? `aid:${aid}|${kind}|${String(s?.user_id || "")}`
-      : `id:${String(s?.id || "")}`;
-    if (key !== "id:" && seen.has(key)) continue;
+    const taskId = String(s?.task_id || "").trim();
+    const url = libraryTrackCanonicalUrl(String(s?.song_url || "").trim());
+    const key = aid && uid
+      ? `aid:${aid}|${kind}|${uid}`
+      : taskId && uid
+        ? `tid:${taskId}|${kind}|${uid}`
+        : url && uid
+          ? `url:${url}|${kind}|${uid}`
+          : `id:${String(s?.id || "")}`;
+    if (!key.startsWith("id:") && seen.has(key)) continue;
     seen.add(key);
     out.push(s);
   }
@@ -16955,7 +16964,7 @@ async function renderMashupPickerList() {
       const ids = raw.map((t) => String(t.userId || "").trim()).filter(Boolean);
       const profMap = await fetchProfilesByUserIdsMap(ids);
       tracks = raw
-        .map((t) => mashupRefFromDiscoverTrack(t, profMap.get(String(t.userId || ""))?.username || ""))
+        .map((t) => mashupRefFromDiscoverTrack(t, resolveProfileForFeedCreator(String(t.userId || ""), profMap)?.username || ""))
         .filter(Boolean);
       _mashupState.discoverCache = tracks;
     }
@@ -17499,6 +17508,58 @@ async function fetchProfilesByUserIdsMap(userIds) {
   } catch {
     return new Map();
   }
+}
+
+function autoUsernameMatchesAuthUser(username, userId) {
+  if (!isAutoGeneratedUsername(username)) return false;
+  const seed = String(userId || "").replace(/-/g, "").slice(0, 6).toLowerCase();
+  return String(username || "").trim().toLowerCase() === `user_${seed}`;
+}
+
+function personalizedUsernameForAuthUser() {
+  const name = String(activeProfile?.username || "").trim();
+  return !isPlaceholderUsername(name) ? name : "";
+}
+
+/** Discover/Friends read usernames from cloud profiles. When the cloud row
+ *  is still the auto `user_683f93` default but this device already picked
+ *  @samynaoum, show the chosen handle so all public songs read as one creator. */
+function resolveProfileForFeedCreator(userId, profMap) {
+  const uid = String(userId || "").trim();
+  if (!uid) return null;
+  const prof = profMap?.get?.(uid) || null;
+  const authId = String(authSession?.user?.id || "").trim();
+  const chosen = authId && uid === authId ? personalizedUsernameForAuthUser() : "";
+  if (!chosen) return prof;
+  const cloudName = String(prof?.username || "").trim();
+  if (!cloudName || isPlaceholderUsername(cloudName) || autoUsernameMatchesAuthUser(cloudName, authId)) {
+    return {
+      ...(prof || {}),
+      user_id: uid,
+      username: chosen,
+      avatar: String(activeProfile?.avatar || prof?.avatar || "").trim() || prof?.avatar || "",
+    };
+  }
+  return prof;
+}
+
+async function ensurePersonalizedUsernameSyncedToCloud() {
+  if (!authSession?.user?.id) return;
+  const chosen = personalizedUsernameForAuthUser();
+  if (!chosen) return;
+  try {
+    const cloud = await supabaseLoadProfile();
+    const cloudName = String(cloud?.username || "").trim();
+    if (cloudName === chosen) return;
+    if (
+      cloudName &&
+      !isPlaceholderUsername(cloudName) &&
+      !autoUsernameMatchesAuthUser(cloudName, authSession.user.id)
+    ) {
+      return;
+    }
+    await supabaseUpsertProfile({ ...activeProfile, username: chosen });
+  } catch {}
 }
 
 function discoveryEmptyIllustrationSvg() {
@@ -19046,7 +19107,7 @@ let _challengeEntryTracks = [];
 
 function discoveryTrackPlaybackMeta(t, profMap) {
   const artSafe = trackCoverArtForFeed(t);
-  const prof = t.userId ? profMap.get(t.userId) : null;
+  const prof = resolveProfileForFeedCreator(t.userId, profMap);
   const handle = String(prof?.username || "").trim();
   const byLine = handle ? `@${handle}` : "Creator";
   return {
@@ -19444,7 +19505,7 @@ function wireDiscoverySpotCardImages(root) {
 
 function discoveryTrackRowHtml(t, profMap, idx) {
   const artSafe = trackCoverArtForFeed(t);
-  const prof = t.userId ? profMap.get(t.userId) : null;
+  const prof = resolveProfileForFeedCreator(t.userId, profMap);
   const handle = String(prof?.username || "").trim();
   const byLine = handle ? `@${handle}` : "Creator";
   const rawTitle = String(t.title || "Untitled");
@@ -19498,7 +19559,7 @@ function discoveryTrackRowHtml(t, profMap, idx) {
 /** Discover grid tile — cover-first; badges + one caption line max. */
 function discoveryFeedCardHtml(t, profMap, idx) {
   const artSafe = trackCoverArtForFeed(t);
-  const prof = t.userId ? profMap.get(t.userId) : null;
+  const prof = resolveProfileForFeedCreator(t.userId, profMap);
   const handle = String(prof?.username || "").trim();
   const byLine = handle ? `@${handle}` : "Creator";
   const rawTitle = String(t.title || "Untitled");
@@ -28729,7 +28790,7 @@ async function playSharedCloudSong(row, opts = {}) {
   let handle = String(row.creator_username || "").trim();
   if (!handle && ownerId) {
     const profMap = await fetchProfilesByUserIdsMap([ownerId]);
-    handle = String(profMap.get(ownerId)?.username || "").trim();
+    handle = String(resolveProfileForFeedCreator(ownerId, profMap)?.username || "").trim();
   }
   const byLine = handle ? `@${handle}` : "Nabadai";
   const title = String(row.title || "Song").trim();

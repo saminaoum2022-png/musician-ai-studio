@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260613discoverIdentity";
+const APP_BUILD = "20260613founderHandle";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -17516,23 +17516,55 @@ function autoUsernameMatchesAuthUser(username, userId) {
   return String(username || "").trim().toLowerCase() === `user_${seed}`;
 }
 
+function chosenUsernameForAuthUser() {
+  const local = String(activeProfile?.username || "").trim();
+  if (!isPlaceholderUsername(local)) return local;
+  if (isFounderBadgeEmail(authSession?.user?.email)) return "samynaoum";
+  return "";
+}
+
 function personalizedUsernameForAuthUser() {
-  const name = String(activeProfile?.username || "").trim();
-  return !isPlaceholderUsername(name) ? name : "";
+  return chosenUsernameForAuthUser();
+}
+
+/** Founder account — cloud profile can still say user_683f93 while public
+ *  handle is @samynaoum. Used so Discover shows one name for everyone. */
+function isFounderUserId(userId) {
+  const uid = String(userId || "").trim().toLowerCase().replace(/-/g, "");
+  if (!uid) return false;
+  if (uid.startsWith("683f93")) return true;
+  const authId = String(authSession?.user?.id || "").trim().toLowerCase().replace(/-/g, "");
+  if (authId && uid === authId) {
+    return isFounderBadgeEmail(authSession?.user?.email) || isFounderBadgeUsername(activeProfile?.username);
+  }
+  return false;
+}
+
+function founderPublicUsername() {
+  return "samynaoum";
 }
 
 /** Discover/Friends read usernames from cloud profiles. When the cloud row
- *  is still the auto `user_683f93` default but this device already picked
- *  @samynaoum, show the chosen handle so all public songs read as one creator. */
+ *  is still the auto `user_683f93` default, show @samynaoum for the founder
+ *  account (every viewer), and use the chosen handle for the signed-in owner. */
 function resolveProfileForFeedCreator(userId, profMap) {
   const uid = String(userId || "").trim();
   if (!uid) return null;
   const prof = profMap?.get?.(uid) || null;
-  const authId = String(authSession?.user?.id || "").trim();
-  const chosen = authId && uid === authId ? personalizedUsernameForAuthUser() : "";
-  if (!chosen) return prof;
   const cloudName = String(prof?.username || "").trim();
-  if (!cloudName || isPlaceholderUsername(cloudName) || autoUsernameMatchesAuthUser(cloudName, authId)) {
+  const authId = String(authSession?.user?.id || "").trim();
+
+  if (prof && autoUsernameMatchesAuthUser(cloudName, uid) && isFounderUserId(uid)) {
+    return {
+      ...prof,
+      user_id: uid,
+      username: founderPublicUsername(),
+      avatar: String(prof?.avatar || "").trim(),
+    };
+  }
+
+  const chosen = authId && uid === authId ? chosenUsernameForAuthUser() : "";
+  if (chosen && (!cloudName || isPlaceholderUsername(cloudName) || autoUsernameMatchesAuthUser(cloudName, authId))) {
     return {
       ...(prof || {}),
       user_id: uid,
@@ -17545,9 +17577,14 @@ function resolveProfileForFeedCreator(userId, profMap) {
 
 async function ensurePersonalizedUsernameSyncedToCloud() {
   if (!authSession?.user?.id) return;
-  const chosen = personalizedUsernameForAuthUser();
+  const chosen = chosenUsernameForAuthUser();
   if (!chosen) return;
   try {
+    if (isPlaceholderUsername(activeProfile?.username) || activeProfile?.username !== chosen) {
+      activeProfile = { ...activeProfile, username: chosen };
+      saveProfile(activeProfile);
+      try { renderProfilePreviewFromInputs(); } catch {}
+    }
     const cloud = await supabaseLoadProfile();
     const cloudName = String(cloud?.username || "").trim();
     if (cloudName === chosen) return;
@@ -17559,6 +17596,9 @@ async function ensurePersonalizedUsernameSyncedToCloud() {
       return;
     }
     await supabaseUpsertProfile({ ...activeProfile, username: chosen });
+    if ((document.body.getAttribute("data-route") || "") === "discover") {
+      void refreshDiscoverFeed();
+    }
   } catch {}
 }
 
@@ -19620,6 +19660,7 @@ function discoverySpotCardHtml(t, profMap, idx) {
 
 async function refreshDiscoverFeed() {
   const gen = ++_discoveryFeedGen;
+  void ensurePersonalizedUsernameSyncedToCloud();
   const statusEl = document.getElementById("discoveryFeedStatus");
   const listEl = document.getElementById("discoveryFeedList");
   const spotlightWrap = document.getElementById("discoverySpotlightWrap");

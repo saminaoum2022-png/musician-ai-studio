@@ -15697,8 +15697,8 @@ function notificationMessage(n) {
     const count = Number(n?.metadata?.play_count || 0);
     const title = String(n?.metadata?.song_title || "Your song").trim();
     return {
-      title: count ? `${title} hit ${formatStatCount(count)} plays` : `${title} hit a play milestone`,
-      body: "A public song reached a new listener milestone.",
+      title: count ? `${title} · ${formatStatCount(count)} plays` : `${title} · play milestone`,
+      body: "Tap to listen on the player.",
       action: "",
     };
   }
@@ -15706,8 +15706,8 @@ function notificationMessage(n) {
     const rank = Number(n?.metadata?.rank || 0);
     const title = String(n?.metadata?.song_title || "Your song").trim();
     return {
-      title: rank ? `${title} hit #${rank} on the weekly chart 🏆` : `${title} entered the weekly chart 🏆`,
-      body: "Top songs of the week on Discover — keep the plays coming.",
+      title: rank ? `${title} · #${rank} on this week's chart` : `${title} · weekly chart`,
+      body: "Tap to listen on the player.",
       action: "",
     };
   }
@@ -15829,6 +15829,28 @@ function activityActorAvatarHtml(n, cls) {
   return `<span class="${cls} activityAvatarSilhouette" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.4" r="3.7" fill="currentColor"/><path d="M4.4 19.6c.9-3.6 4-5.8 7.6-5.8s6.7 2.2 7.6 5.8c.1.5-.3.9-.8.9H5.2c-.5 0-.9-.4-.8-.9Z" fill="currentColor"/></svg></span>`;
 }
 
+/** Milestone rows are about your songs — lead with cover art, not a blank silhouette. */
+function activityRowUsesSongLeadVisual(n) {
+  const t = String(n?.type || "").trim();
+  return t === "chart_rank" || t === "play_milestone";
+}
+
+function activityNotificationShowRightCover(n) {
+  if (activityRowUsesSongLeadVisual(n)) return false;
+  return activityNotificationHasSongCover(n);
+}
+
+function activityRowLeadVisualHtml(n, cls) {
+  if (activityRowUsesSongLeadVisual(n)) {
+    const url = activitySongCoverUrl(n);
+    if (url) {
+      return `<img class="${cls}" src="${escapeHtml(url)}" alt="" loading="lazy" decoding="async" />`;
+    }
+    return `<span class="${cls} activityRowCover activityRowCoverPlaceholder activityRowLeadPlaceholder" aria-hidden="true">♪</span>`;
+  }
+  return activityActorAvatarHtml(n, cls);
+}
+
 /** Skeleton rows for the initial Activity load (replaces the old floating
  *  spinner — the bottom infinite-scroll spinner stays for paging only). */
 function activitySkeletonHtml(count = 4) {
@@ -15844,6 +15866,18 @@ function activitySkeletonHtml(count = 4) {
 }
 
 const _activitySongArtCache = new Map();
+
+function cacheActivitySongArtFromNotification(n) {
+  const sid = activitySongIdForNotification(n);
+  const art = String(n?.metadata?.song_art_url || n?.metadata?.target_art_url || "").trim();
+  if (sid && art && /^https?:\/\//i.test(art)) _activitySongArtCache.set(sid, art);
+}
+
+function findLibraryTrackByCloudOrLocalId(songId) {
+  const sid = String(songId || "").trim();
+  if (!sid) return null;
+  return loadLibrary().find((x) => x.id === sid || trackCloudShareId(x) === sid) || null;
+}
 
 function activitySongIdForNotification(n) {
   const meta = n?.metadata || {};
@@ -15871,7 +15905,7 @@ function activitySongArtFromLocalPools(songId) {
   if (_activitySongArtCache.has(sid)) return _activitySongArtCache.get(sid);
   const pools = [loadLibrary(), _discoveryFeedTracks || [], _userPublicFeedTracks || []];
   for (const pool of pools) {
-    const hit = pool.find((t) => String(t?.id || "") === sid);
+    const hit = pool.find((t) => String(t?.id || "") === sid || trackCloudShareId(t) === sid);
     const art = String(hit?.artUrl || hit?.art_url || hit?.coverUrl || "").trim();
     if (art && /^https?:\/\//i.test(art)) {
       _activitySongArtCache.set(sid, art);
@@ -15889,7 +15923,7 @@ function activitySongCoverUrl(n) {
 }
 
 function activitySongCoverHtml(n) {
-  if (!activityNotificationHasSongCover(n)) return "";
+  if (!activityNotificationShowRightCover(n)) return "";
   const url = activitySongCoverUrl(n);
   if (url) {
     return `<img class="activityRowCover" src="${escapeHtml(url)}" alt="" loading="lazy" decoding="async" />`;
@@ -15908,9 +15942,12 @@ async function enrichActivitySongArt(notifications) {
   if (!wanted.size || !SUPABASE_URL || !SUPABASE_ANON_KEY) return false;
   try {
     const inList = [...wanted].slice(0, 32).map((id) => encodeURIComponent(id)).join(",");
+    const headers = { apikey: SUPABASE_ANON_KEY, Accept: "application/json" };
+    const token = getSupabaseAuthToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/user_songs?id=in.(${inList})&public_on_profile=eq.true&select=id,art_url`,
-      { headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" }, cache: "no-store" },
+      `${SUPABASE_URL}/rest/v1/user_songs?id=in.(${inList})&select=id,art_url`,
+      { headers, cache: "no-store" },
     );
     if (!r.ok) return false;
     const rows = await r.json().catch(() => []);
@@ -16006,6 +16043,42 @@ function notificationActivityHref(n) {
   return "";
 }
 
+async function openActivityNotificationTarget(n) {
+  const href = notificationActivityHref(n);
+  if (!href) return;
+  const songId = activitySongIdForNotification(n);
+  const t = String(n?.type || "").trim();
+  const songLinked =
+    songId &&
+    (t === "chart_rank" ||
+      t === "play_milestone" ||
+      t === "song_feedback" ||
+      t === "remix" ||
+      ((t === "social_like" || t === "social_reply") && String(n?.metadata?.target_kind || "") === "song"));
+
+  if (songLinked) {
+    const tryLocalPlay = async () => {
+      await ensureUserLibraryHydrated();
+      const local = findLibraryTrackByCloudOrLocalId(songId);
+      if (local?.url) {
+        location.hash = "#/player";
+        await playLibraryListRowById(local.id, { openPlayer: true });
+        return true;
+      }
+      return false;
+    };
+    if (await tryLocalPlay()) return;
+  }
+
+  const hash = href.startsWith("#") ? href : `#${href}`;
+  if (location.hash === hash) {
+    if (songId && isShareUuid(songId)) void focusTrackFromShare(songId);
+    else void safeApplyRoute();
+  } else {
+    location.hash = hash;
+  }
+}
+
 function activityItemHtml(n) {
   const msg = notificationMessage(n);
   // Grouped rows get digest copy instead of repeating the same line N times.
@@ -16031,11 +16104,14 @@ function activityItemHtml(n) {
   const href = notificationActivityHref(n);
   const tag = href ? "button" : "article";
   const typeAttr = href ? ' type="button"' : "";
-  const dataHref = href ? ` data-activity-href="${escapeHtml(href)}"` : "";
+  const notifId = String(n?.id || "").trim();
+  const dataHref = href
+    ? ` data-activity-href="${escapeHtml(href)}"${notifId ? ` data-activity-id="${escapeHtml(notifId)}"` : ""}`
+    : "";
   return `
     <${tag} class="activityRow${unread ? " isUnread" : ""}"${typeAttr}${dataHref}>
       <div class="activityRowAvatarWrap">
-        ${activityActorAvatarHtml(n, "activityRowAvatar")}
+        ${activityRowLeadVisualHtml(n, "activityRowAvatar")}
         <span class="activityRowBadge" aria-hidden="true">${escapeHtml(icon)}</span>
       </div>
       <div class="activityRowBody">
@@ -16090,6 +16166,7 @@ async function fetchActivityBatch() {
     } else {
       _activityFeedState.items.push(...batch);
       _activityFeedState.offset += batch.length;
+      batch.forEach((n) => cacheActivitySongArtFromNotification(n));
       if (batch.length < limit) _activityFeedState.hasMore = false;
     }
     renderActivityFeedFromState();
@@ -16161,7 +16238,10 @@ function bindActivityPageOnce() {
     const href = row.getAttribute("data-activity-href") || "";
     if (!href) return;
     ev.preventDefault();
-    location.hash = href.startsWith("#") ? href : `#${href}`;
+    const notifId = row.getAttribute("data-activity-id") || "";
+    const n = notifId ? _activityFeedState.items.find((item) => String(item?.id || "") === notifId) : null;
+    if (n) void openActivityNotificationTarget(n);
+    else location.hash = href.startsWith("#") ? href : `#${href}`;
   });
   if (els.activityLoadMore && typeof IntersectionObserver !== "undefined") {
     _activityFeedState.observer = new IntersectionObserver((entries) => {
@@ -28298,7 +28378,7 @@ async function fetchSharedSongByCloudId(cloudId) {
   const id = String(cloudId || "").trim();
   if (!isShareUuid(id)) return null;
 
-  const local = loadLibrary().find((t) => trackCloudShareId(t) === id);
+  const local = findLibraryTrackByCloudOrLocalId(id);
   if (local?.url) {
     return {
       id,
@@ -28411,14 +28491,25 @@ async function playSharedCloudSong(row, opts = {}) {
 
 /** Open a shared library track (`/#/player?track=UUID`). */
 let pendingShareFocusTrackId = "";
+let _shareFocusPollTimer = 0;
 async function focusTrackFromShare(trackId) {
   const id = String(trackId || "").trim();
   if (!id || !isShareUuid(id)) return;
+  if (_shareFocusPollTimer) {
+    clearInterval(_shareFocusPollTimer);
+    _shareFocusPollTimer = 0;
+  }
   pendingShareFocusTrackId = id;
   if (els.playerTitle && (document.body.getAttribute("data-route") || "") === "player") {
     els.playerTitle.textContent = "Loading shared song…";
   }
   const tryPlay = async () => {
+    const local = findLibraryTrackByCloudOrLocalId(id);
+    if (local?.url) {
+      await playLibraryListRowById(local.id, { openPlayer: true });
+      pendingShareFocusTrackId = "";
+      return true;
+    }
     const row = await fetchSharedSongByCloudId(id);
     if (!row?.song_url) return false;
     const ok = await playSharedCloudSong(row, { openPlayer: true });
@@ -28431,16 +28522,17 @@ async function focusTrackFromShare(trackId) {
   if (await tryPlay()) return;
   void ensureUserLibraryHydrated().then(() => tryPlay());
   let n = 0;
-  const poll = setInterval(() => {
+  _shareFocusPollTimer = setInterval(() => {
     n += 1;
     void tryPlay().then((ok) => {
       if (ok || n >= 16) {
-        clearInterval(poll);
+        clearInterval(_shareFocusPollTimer);
+        _shareFocusPollTimer = 0;
         if (!ok && pendingShareFocusTrackId === id) {
           pendingShareFocusTrackId = "";
           if (els.playerTitle) els.playerTitle.textContent = "No track loaded";
           showToast(
-            "Could not load this shared song. Ask them to tap Share on the player after the song finishes saving.",
+            "Could not load this song. Open it from your Library or try again in a moment.",
             { icon: "!", durationMs: 4600 },
           );
         }

@@ -5164,75 +5164,51 @@ function bindHomeDeskOnce(page) {
       continueIdeaFromLibraryTrack(_homeDeskContinueTrack);
       return;
     }
-    const personaLearn = e.target?.closest?.("[data-home-persona-learn]");
-    if (personaLearn && page.contains(personaLearn)) {
+    const promoCard = e.target?.closest?.("[data-home-card]");
+    if (promoCard && page.contains(promoCard)) {
       haptic("light");
-      openSettingsVoicesPanel();
-      scheduleApplyRoute();
-      return;
-    }
-    const personaCreate = e.target?.closest?.("[data-home-persona-create]");
-    if (personaCreate && page.contains(personaCreate)) {
-      haptic("light");
-      void openVoiceWizard();
-      return;
-    }
-    const echoLearn = e.target?.closest?.("[data-home-echo-learn]");
-    if (echoLearn && page.contains(echoLearn)) {
-      haptic("light");
-      try {
-        location.hash = "#/friends";
-      } catch {}
-      scheduleApplyRoute();
-      return;
-    }
-    const echoRecord = e.target?.closest?.("[data-home-echo-record]");
-    if (echoRecord && page.contains(echoRecord)) {
-      haptic("light");
-      if (!authSession?.user?.id) {
+      const card = String(promoCard.getAttribute("data-home-card") || "").trim();
+      if (card === "song") {
         try {
-          location.hash = "#/profile";
+          location.hash = "#/generate";
         } catch {}
-        scheduleApplyRoute();
-        setStatus("Sign in to record an Echo.");
-        return;
-      }
-      try {
-        location.hash = "#/friends";
-      } catch {}
-      scheduleApplyRoute();
-      setTimeout(() => {
-        try {
-          openEchoFromCreateChooser();
-        } catch {}
-      }, 120);
-      return;
-    }
-    const songTemplates = e.target?.closest?.("[data-home-song-templates]");
-    if (songTemplates && page.contains(songTemplates)) {
-      haptic("light");
-      setHomeSeg("templates");
-      return;
-    }
-    const songCreate = e.target?.closest?.("[data-home-song-create]");
-    if (songCreate && page.contains(songCreate)) {
-      haptic("light");
-      try {
-        location.hash = "#/generate";
-      } catch {}
-      scheduleApplyRoute();
-      return;
-    }
-    const mashupStart = e.target?.closest?.("[data-home-mashup-start]");
-    if (mashupStart && page.contains(mashupStart)) {
-      haptic("light");
-      if (!authSession?.user?.id) {
-        try { location.hash = "#/auth"; } catch {}
         scheduleApplyRoute();
         return;
       }
-      try { location.hash = "#/mashup"; } catch {}
-      scheduleApplyRoute();
+      if (card === "persona") {
+        void openVoiceWizard();
+        return;
+      }
+      if (card === "echo") {
+        if (!authSession?.user?.id) {
+          try {
+            location.hash = "#/profile";
+          } catch {}
+          scheduleApplyRoute();
+          setStatus("Sign in to record an Echo.");
+          return;
+        }
+        try {
+          location.hash = "#/friends";
+        } catch {}
+        scheduleApplyRoute();
+        setTimeout(() => {
+          try {
+            openEchoFromCreateChooser();
+          } catch {}
+        }, 120);
+        return;
+      }
+      if (card === "mashup") {
+        if (!authSession?.user?.id) {
+          try { location.hash = "#/auth"; } catch {}
+          scheduleApplyRoute();
+          return;
+        }
+        try { location.hash = "#/mashup"; } catch {}
+        scheduleApplyRoute();
+        return;
+      }
       return;
     }
     const ideaBtn = e.target?.closest?.("[data-discovery-idea]");

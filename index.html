@@ -1269,91 +1269,80 @@
           <div class="homeDeskSegPanels">
             <div class="homeDeskSegPanel homeDeskCreatePanel is-active" id="homeDeskPanelStart" data-home-panel="start" role="tabpanel">
               <div class="homeDeskCreateStack">
-              <section class="homeDeskSongPromo homeDeskPromo--compact" aria-labelledby="homeDeskSongPromoTitle">
-                <div class="homeDeskPromoVisual homeDeskPromoVisual--song" aria-hidden="true">
-                  <div class="homeDeskSongTileWrap">
+              <button type="button" class="homeDeskPromoCard homeDeskSongPromo homeDeskPromo--compact" data-home-card="song" aria-label="Create Song — write lyrics, pick a style, or hum a melody">
+                <span class="homeDeskPromoVisual homeDeskPromoVisual--song" aria-hidden="true">
+                  <span class="homeDeskSongTileWrap">
                     <span class="homeDeskSongPulse" aria-hidden="true"></span>
-                    <div class="homeDeskSongTile">
+                    <span class="homeDeskSongTile">
                       <svg class="homeDeskSongPenIco" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
                         <path d="M12 20h9"/>
                         <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"/>
                       </svg>
-                    </div>
-                  </div>
-                </div>
-                <div class="homeDeskPromoCopy">
-                  <p class="homeDeskSectionKicker">Full tracks</p>
-                  <h3 id="homeDeskSongPromoTitle">Create Song</h3>
-                  <p>Write lyrics, pick a style, or hum a melody — generate a complete song with cover art.</p>
-                  <div class="homeDeskPromoActions">
-                    <button type="button" class="homeDeskPromoBtn" data-home-song-templates>Templates</button>
-                    <button type="button" class="homeDeskPromoBtn homeDeskPromoBtn--primary" data-home-song-create>Create song</button>
-                  </div>
-                </div>
-              </section>
+                    </span>
+                  </span>
+                </span>
+                <span class="homeDeskPromoCopy">
+                  <span class="homeDeskSectionKicker">Full tracks</span>
+                  <span class="homeDeskPromoTitle" id="homeDeskSongPromoTitle">Create Song</span>
+                  <span class="homeDeskPromoDesc">Write lyrics, pick a style, or hum a melody — generate a complete song with cover art.</span>
+                </span>
+                <span class="homeDeskPromoChev" aria-hidden="true">→</span>
+              </button>
 
-              <section class="homeDeskPersonaPromo homeDeskPromo--compact" aria-labelledby="homeDeskPersonaPromoTitle">
-                <div class="homeDeskPromoVisual homeDeskPromoVisual--persona" aria-hidden="true">
-                  <div class="homeDeskPersonaTileWrap">
+              <button type="button" class="homeDeskPromoCard homeDeskPersonaPromo homeDeskPromo--compact" data-home-card="persona" aria-label="Persona — save your voice and hear it on every track">
+                <span class="homeDeskPromoVisual homeDeskPromoVisual--persona" aria-hidden="true">
+                  <span class="homeDeskPersonaTileWrap">
                     <span class="homeDeskPersonaPulse" aria-hidden="true"></span>
-                    <div class="homeDeskPersonaTile">
+                    <span class="homeDeskPersonaTile">
                       <svg class="homeDeskPersonaMicIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                         <path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"/>
                         <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M19 11a7 7 0 0 1-14 0"/>
                       </svg>
-                    </div>
-                  </div>
-                </div>
-                <div class="homeDeskPromoCopy">
-                  <p class="homeDeskSectionKicker">Your signature</p>
-                  <h3 id="homeDeskPersonaPromoTitle">Persona</h3>
-                  <p>Save your voice once — hear it on every track you generate, like a signature.</p>
-                  <div class="homeDeskPromoActions">
-                    <button type="button" class="homeDeskPromoBtn" data-home-persona-learn>My voices</button>
-                    <button type="button" class="homeDeskPromoBtn homeDeskPromoBtn--primary" data-home-persona-create>Record voice</button>
-                  </div>
-                </div>
-              </section>
+                    </span>
+                  </span>
+                </span>
+                <span class="homeDeskPromoCopy">
+                  <span class="homeDeskSectionKicker">Your signature</span>
+                  <span class="homeDeskPromoTitle" id="homeDeskPersonaPromoTitle">Persona</span>
+                  <span class="homeDeskPromoDesc">Save your voice once — hear it on every track you generate, like a signature.</span>
+                </span>
+                <span class="homeDeskPromoChev" aria-hidden="true">→</span>
+              </button>
 
-              <section class="homeDeskEchoPromo homeDeskPromo--compact" aria-labelledby="homeDeskEchoPromoTitle">
-                <div class="homeDeskPromoVisual homeDeskPromoVisual--echo" aria-hidden="true">
-                  <div class="onboardingEchoTileWrap">
+              <button type="button" class="homeDeskPromoCard homeDeskEchoPromo homeDeskPromo--compact" data-home-card="echo" aria-label="Echo — drop a short voice clip for your circle">
+                <span class="homeDeskPromoVisual homeDeskPromoVisual--echo" aria-hidden="true">
+                  <span class="onboardingEchoTileWrap">
                     <span class="onboardingEchoPulse" aria-hidden="true"></span>
-                    <div class="onboardingEchoTile">
+                    <span class="onboardingEchoTile">
                       <span class="onboardingEchoWave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
-                    </div>
-                  </div>
-                </div>
-                <div class="homeDeskPromoCopy">
-                  <p class="homeDeskSectionKicker">Voice moments</p>
-                  <h3 id="homeDeskEchoPromoTitle">Echo</h3>
-                  <p>Drop a short voice clip for your circle — it plays for 24 hours, then disappears.</p>
-                  <div class="homeDeskPromoActions">
-                    <button type="button" class="homeDeskPromoBtn" data-home-echo-learn>See Echoes</button>
-                    <button type="button" class="homeDeskPromoBtn homeDeskPromoBtn--primary" data-home-echo-record>Record an Echo</button>
-                  </div>
-                </div>
-              </section>
+                    </span>
+                  </span>
+                </span>
+                <span class="homeDeskPromoCopy">
+                  <span class="homeDeskSectionKicker">Voice moments</span>
+                  <span class="homeDeskPromoTitle" id="homeDeskEchoPromoTitle">Echo</span>
+                  <span class="homeDeskPromoDesc">Drop a short voice clip for your circle — it plays for 24 hours, then disappears.</span>
+                </span>
+                <span class="homeDeskPromoChev" aria-hidden="true">→</span>
+              </button>
 
-              <section class="homeDeskMashupPromo homeDeskPromo--compact" aria-labelledby="homeDeskMashupPromoTitle">
-                <div class="homeDeskPromoVisual homeDeskPromoVisual--mashup" aria-hidden="true">
-                  <div class="homeDeskMashupTileWrap">
+              <button type="button" class="homeDeskPromoCard homeDeskMashupPromo homeDeskPromo--compact" data-home-card="mashup" aria-label="Mashup — blend two songs from your library">
+                <span class="homeDeskPromoVisual homeDeskPromoVisual--mashup" aria-hidden="true">
+                  <span class="homeDeskMashupTileWrap">
                     <span class="homeDeskMashupPulse" aria-hidden="true"></span>
-                    <div class="homeDeskMashupTile">
+                    <span class="homeDeskMashupTile">
                       <span class="homeDeskMashupDisc homeDeskMashupDisc--a" aria-hidden="true"></span>
                       <span class="homeDeskMashupDisc homeDeskMashupDisc--b" aria-hidden="true"></span>
-                    </div>
-                  </div>
-                </div>
-                <div class="homeDeskPromoCopy">
-                  <p class="homeDeskSectionKicker">Two become one</p>
-                  <h3 id="homeDeskMashupPromoTitle">Mashup</h3>
-                  <p>Blend two songs from your library into a fresh track — hooks, energy, and vibe combined.</p>
-                  <div class="homeDeskPromoActions">
-                    <button type="button" class="homeDeskPromoBtn homeDeskPromoBtn--primary" data-home-mashup-start>Start mashup</button>
-                  </div>
-                </div>
-              </section>
+                    </span>
+                  </span>
+                </span>
+                <span class="homeDeskPromoCopy">
+                  <span class="homeDeskSectionKicker">Two become one</span>
+                  <span class="homeDeskPromoTitle" id="homeDeskMashupPromoTitle">Mashup</span>
+                  <span class="homeDeskPromoDesc">Blend two songs from your library into a fresh track — hooks, energy, and vibe combined.</span>
+                </span>
+                <span class="homeDeskPromoChev" aria-hidden="true">→</span>
+              </button>
               </div>
             </div>
 

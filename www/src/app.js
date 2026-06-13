@@ -21310,7 +21310,12 @@ function ensureVoiceWizardSheet() {
       <div class="voiceWizardHero">
         <button type="button" class="voiceWizardClose" data-voice-wizard-close aria-label="Close">✕</button>
         <div class="voiceWizardHeroArt" aria-hidden="true">
-          <span class="vwEqBar"></span><span class="vwEqBar"></span><span class="vwEqBar"></span><span class="vwEqBar"></span><span class="vwEqBar"></span><span class="vwEqBar"></span><span class="vwEqBar"></span>
+          <span class="vwHeroGlow"></span>
+          <span class="vwHeroMic" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="28" height="28" focusable="false">
+              <path fill="currentColor" d="M12 14.25a3.5 3.5 0 0 0 3.5-3.5V6.5a3.5 3.5 0 1 0-7 0v4.25a3.5 3.5 0 0 0 3.5 3.5Zm5.75-3.5a.75.75 0 0 1 1.5 0 7.25 7.25 0 0 1-6.5 7.21V20a.75.75 0 0 1-1.5 0v-2.04a7.25 7.25 0 0 1-6.5-7.21.75.75 0 0 1 1.5 0 5.75 5.75 0 0 0 11.5 0Z"/>
+            </svg>
+          </span>
         </div>
         <h3 id="voiceWizardTitle">Create your voice</h3>
         <p class="voiceWizardHeroSub">Sing once — every song you generate can sound like you.</p>
@@ -21495,8 +21500,8 @@ function bindVoiceWizardChipRow(rowId, inputId, stateKey) {
   });
 }
 
-/** Premium processing screen: animated equalizer + step checklist. */
-function renderVoiceWizardProcessing(title, items) {
+/** Premium processing screen — loader variant differs from hero mic art. */
+function renderVoiceWizardProcessing(title, items, variant = "listen") {
   const rows = (items || [])
     .map((it) => {
       const cls = it.state === "done" ? "done" : it.state === "active" ? "active" : "todo";
@@ -21504,9 +21509,13 @@ function renderVoiceWizardProcessing(title, items) {
       return `<li class="${cls}"><span class="vwMark">${mark}</span>${escapeHtml(it.label)}</li>`;
     })
     .join("");
+  const loader =
+    variant === "build"
+      ? `<div class="vwBuildLoader" aria-hidden="true"><span class="vwBuildRing"></span><span class="vwBuildCore">♪</span></div>`
+      : `<div class="vwListenLoader" aria-hidden="true"><span class="vwListenRing"></span><span class="vwListenRing"></span><span class="vwListenRing"></span><span class="vwListenDot"></span></div>`;
   renderVoiceWizardStep(`
     <div class="vwCard vwProcessing">
-      <div class="vwEqLoader" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+      ${loader}
       <div class="vwProcessingTitle">${escapeHtml(title)}</div>
       <ul class="vwProcessingList">${rows}</ul>
       <p class="vwCardSub">Keep the app open — this only takes a moment.</p>
@@ -21522,17 +21531,54 @@ function renderVoiceWizardSampleStatus() {
     : "Tap Record to capture 6–30 seconds of singing";
 }
 
-function wireVoiceWizardStep1() {
+function voiceWizardLangSkillHtml() {
+  const lang = voiceWizardState.language || "en";
+  const skill = voiceWizardState.skill || "intermediate";
+  const langChip = (val, label) =>
+    `<button type="button" class="optChip${val === lang ? " isActive" : ""}" data-val="${val}">${label}</button>`;
+  const skillChip = (val, label, sub) =>
+    `<button type="button" class="optChip vwSkillChip${val === skill ? " isActive" : ""}" data-val="${val}"><b>${label}</b><span>${sub}</span></button>`;
+  return `
+    <div class="vwCard">
+      <div class="vwCardTitle">Verification phrase language</div>
+      <p class="vwCardSub">For step 2 only — the short phrase you’ll sing to verify it’s you. Your sample can stay in Arabic or any language.</p>
+      <input type="hidden" id="voiceWizardLang" value="${escapeHtml(lang)}" />
+      <div class="vwChipRow" id="voiceWizardLangRow">
+        ${langChip("en", "English")}
+        ${langChip("fr", "French")}
+        ${langChip("es", "Spanish")}
+        ${langChip("hi", "Hindi")}
+      </div>
+    </div>
+    <div class="vwCard">
+      <div class="vwCardTitle">Your singing level</div>
+      <p class="vwCardSub">Be honest — this tells the AI how much to polish versus preserve your natural voice.</p>
+      <input type="hidden" id="voiceWizardSkill" value="${escapeHtml(skill)}" />
+      <div class="vwChipRow vwChipRow--stack" id="voiceWizardSkillRow">
+        ${skillChip("beginner", "Casual", "I sing for fun")}
+        ${skillChip("intermediate", "Confident", "I can hold a tune")}
+        ${skillChip("advanced", "Trained", "I sing seriously")}
+        ${skillChip("professional", "Professional", "Singing is my craft")}
+      </div>
+    </div>`;
+}
+
+function wireVoiceWizardStep1Sample() {
   const recBtn = document.getElementById("voiceWizardRecordSample");
   const pickBtn = document.getElementById("voiceWizardPickSample");
   const fileInput = document.getElementById("voiceWizardSampleFile");
-  const startBtn = document.getElementById("voiceWizardStartBtn");
+  const continueBtn = document.getElementById("voiceWizardSampleContinueBtn");
+  const syncContinue = () => {
+    if (continueBtn) continueBtn.disabled = !voiceWizardState.sampleFile;
+  };
   renderVoiceWizardSampleStatus();
+  syncContinue();
   if (recBtn) {
     recBtn.onclick = () => {
       void openVoiceWizardRecorder("sample", (file) => {
         voiceWizardState.sampleFile = file;
         renderVoiceWizardSampleStatus();
+        syncContinue();
         try {
           showToast("Sample recording attached", { icon: "✓", durationMs: 2400 });
         } catch {}
@@ -21547,10 +21593,36 @@ function wireVoiceWizardStep1() {
       voiceWizardState.sampleFile = f;
       renderVoiceWizardSampleStatus();
       fileInput.value = "";
+      syncContinue();
     };
   }
-  if (!startBtn) return;
-  startBtn.onclick = () => void runVoiceWizardFromSample(startBtn);
+  if (continueBtn) {
+    continueBtn.onclick = () => {
+      if (!voiceWizardState.sampleFile) {
+        showToast("Record or upload a sample first", { icon: "!", durationMs: 2800 });
+        return;
+      }
+      voiceWizardState.name = String(document.getElementById("voiceWizardName")?.value || "My voice").trim() || "My voice";
+      renderVoiceWizardStep1Setup();
+      wireVoiceWizardStep1Setup();
+    };
+  }
+}
+
+function wireVoiceWizardStep1Setup() {
+  bindVoiceWizardChipRow("voiceWizardLangRow", "voiceWizardLang", "language");
+  bindVoiceWizardChipRow("voiceWizardSkillRow", "voiceWizardSkill", "skill");
+  const backBtn = document.getElementById("voiceWizardSetupBackBtn");
+  const startBtn = document.getElementById("voiceWizardStartBtn");
+  if (backBtn) {
+    backBtn.onclick = () => {
+      renderVoiceWizardStep1Sample();
+      wireVoiceWizardStep1Sample();
+    };
+  }
+  if (startBtn) {
+    startBtn.onclick = () => void runVoiceWizardFromSample(startBtn);
+  }
 }
 
 async function runVoiceWizardFromSample(startBtn) {
@@ -21608,11 +21680,9 @@ async function runVoiceWizardFromSample(startBtn) {
     renderVoiceWizardVerifyStep(phrase, token);
   } catch (e) {
     showToast(e?.message || String(e), { icon: "!", durationMs: 4400 });
-    startBtn.disabled = false;
-    renderVoiceWizardStep1();
-    wireVoiceWizardStep1();
-    const err = document.getElementById("voiceWizardSampleStatus");
-    if (err) err.textContent = String(e?.message || e);
+    if (startBtn) startBtn.disabled = false;
+    renderVoiceWizardStep1Setup();
+    wireVoiceWizardStep1Setup();
   }
 }
 
@@ -21672,12 +21742,12 @@ function renderVoiceWizardVerifyStep(phrase, token) {
       renderVoiceWizardProcessing("Building your voice…", [
         { label: "Uploading your verification", state: "active" },
         { label: "Creating your custom voice", state: "todo" },
-      ]);
+      ], "build");
       const verifyUrl = await uploadAudioFileForSuno(vFile);
       renderVoiceWizardProcessing("Building your voice…", [
         { label: "Uploading your verification", state: "done" },
         { label: "Creating your custom voice", state: "active" },
-      ]);
+      ], "build");
       const cr = await fetch(apiUrl("/api/suno/voice-create"), {
         method: "POST",
         headers: {
@@ -21717,17 +21787,12 @@ function renderVoiceWizardVerifyStep(phrase, token) {
   };
 }
 
-function renderVoiceWizardStep1() {
+function renderVoiceWizardStep1Sample() {
   setVoiceWizardStage(1);
-  const lang = voiceWizardState.language || "en";
-  const skill = voiceWizardState.skill || "intermediate";
-  const langChip = (val, label) =>
-    `<button type="button" class="optChip${val === lang ? " isActive" : ""}" data-val="${val}">${label}</button>`;
-  const skillChip = (val, label, sub) =>
-    `<button type="button" class="optChip vwSkillChip${val === skill ? " isActive" : ""}" data-val="${val}"><b>${label}</b><span>${sub}</span></button>`;
+  const hasSample = Boolean(voiceWizardState.sampleFile);
   renderVoiceWizardStep(`
     <div class="vwCard vwStudioCard">
-      <div class="vwCardTitle">Your voice sample</div>
+      <div class="vwCardTitle">Step 1 · Record your voice</div>
       <p class="vwCardSub">15–30 seconds of clear solo singing — one voice, no background music, no echo. Any language (Arabic works great).</p>
       <div class="vwTipRow" aria-hidden="true">
         <span class="vwTip">Quiet room</span>
@@ -21745,34 +21810,27 @@ function renderVoiceWizardStep1() {
       <div class="vwCardTitle">Voice name</div>
       <input id="voiceWizardName" class="vwInput" type="text" maxlength="64" placeholder="My voice" value="${escapeHtml(voiceWizardState.name || "My voice")}" />
     </div>
-    <div class="vwCard">
-      <div class="vwCardTitle">Verification phrase language</div>
-      <p class="vwCardSub">Only for the short phrase you’ll sing next to verify it’s you — your sample stays in whatever language you sang.</p>
-      <!-- Suno only supports these for the verification phrase (no Arabic). -->
-      <input type="hidden" id="voiceWizardLang" value="${escapeHtml(lang)}" />
-      <div class="vwChipRow" id="voiceWizardLangRow">
-        ${langChip("en", "English")}
-        ${langChip("fr", "French")}
-        ${langChip("es", "Spanish")}
-        ${langChip("hi", "Hindi")}
-      </div>
-    </div>
-    <div class="vwCard">
-      <div class="vwCardTitle">Your singing level</div>
-      <p class="vwCardSub">Be honest — this tells the AI how much to polish versus preserve your natural voice.</p>
-      <input type="hidden" id="voiceWizardSkill" value="${escapeHtml(skill)}" />
-      <div class="vwChipRow vwChipRow--stack" id="voiceWizardSkillRow">
-        ${skillChip("beginner", "Casual", "I sing for fun")}
-        ${skillChip("intermediate", "Confident", "I can hold a tune")}
-        ${skillChip("advanced", "Trained", "I sing seriously")}
-        ${skillChip("professional", "Professional", "Singing is my craft")}
-      </div>
-    </div>
     <div class="voiceWizardActions">
+      <button type="button" class="primary vwPrimary" id="voiceWizardSampleContinueBtn" ${hasSample ? "" : "disabled"}>Continue</button>
+    </div>`);
+}
+
+function renderVoiceWizardStep1Setup() {
+  setVoiceWizardStage(1);
+  renderVoiceWizardStep(`
+    <div class="vwCard vwStudioCard vwCard--compact">
+      <div class="vwCardTitle">Before step 2 · Verify</div>
+      <p class="vwCardSub">Choose the verification phrase language and your singing level — then we’ll prepare the phrase you’ll sing next.</p>
+    </div>
+    ${voiceWizardLangSkillHtml()}
+    <div class="voiceWizardActions voiceWizardActions--split">
+      <button type="button" class="vwSecondaryBtn" id="voiceWizardSetupBackBtn">Back</button>
       <button type="button" class="primary vwPrimary" id="voiceWizardStartBtn">Continue</button>
     </div>`);
-  bindVoiceWizardChipRow("voiceWizardLangRow", "voiceWizardLang", "language");
-  bindVoiceWizardChipRow("voiceWizardSkillRow", "voiceWizardSkill", "skill");
+}
+
+function renderVoiceWizardStep1() {
+  renderVoiceWizardStep1Sample();
 }
 
 async function openVoiceWizard() {
@@ -21792,8 +21850,8 @@ async function openVoiceWizard() {
   };
   const sheet = ensureVoiceWizardSheet();
   sheet.hidden = false;
-  renderVoiceWizardStep1();
-  wireVoiceWizardStep1();
+  renderVoiceWizardStep1Sample();
+  wireVoiceWizardStep1Sample();
 }
 
 function openProfilePersonaPanel() {

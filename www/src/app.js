@@ -348,6 +348,8 @@ const els = {
   btnMagicRecordVocal: document.getElementById("btnMagicRecordVocal"),
   vocalRecorderModal: document.getElementById("vocalRecorderModal"),
   vocalRecorderModalTitle: document.getElementById("vocalRecorderModalTitle"),
+  vocalRecorderPhraseWrap: document.getElementById("vocalRecorderPhraseWrap"),
+  vocalRecorderPhrasePrompt: document.getElementById("vocalRecorderPhrasePrompt"),
   vocalRecorderBackdrop: document.getElementById("vocalRecorderBackdrop"),
   btnCloseVocalRecorder: document.getElementById("btnCloseVocalRecorder"),
   btnRecorderToggle: document.getElementById("btnRecorderToggle"),
@@ -10444,6 +10446,20 @@ function hideVoiceWizardForRecorder(hide) {
   sheet.classList.toggle("voiceWizardSheet--recorderActive", Boolean(hide));
 }
 
+function syncVocalRecorderPhrasePrompt() {
+  const forWizard = vocalRecorderContext?.type === "voice_wizard";
+  const step = vocalRecorderContext?.step;
+  const phrase = String(voiceWizardState.verifyPhrase || "").trim();
+  const show = forWizard && step === "verify" && phrase;
+  if (els.vocalRecorderPhraseWrap) els.vocalRecorderPhraseWrap.hidden = !show;
+  if (els.vocalRecorderPhrasePrompt) {
+    els.vocalRecorderPhrasePrompt.textContent = show ? phrase : "";
+  }
+  if (els.vocalRecorderModal) {
+    els.vocalRecorderModal.classList.toggle("recorderOverWizard--verify", Boolean(show));
+  }
+}
+
 function openVocalRecorderModal() {
   if (!els.vocalRecorderModal) return;
   const forWizard = vocalRecorderContext?.type === "voice_wizard";
@@ -10452,8 +10468,10 @@ function openVocalRecorderModal() {
     hideVoiceWizardForRecorder(true);
   } else {
     els.vocalRecorderModal.classList.remove("recorderOverWizard");
+    els.vocalRecorderModal.classList.remove("recorderOverWizard--verify");
     hideVoiceWizardForRecorder(false);
   }
+  syncVocalRecorderPhrasePrompt();
   if (els.vocalRecorderModalTitle) {
     els.vocalRecorderModalTitle.textContent =
       vocalRecorderContext?.title ||
@@ -10468,13 +10486,20 @@ function openVocalRecorderModal() {
   els.vocalRecorderModal.style.display = "";
   setRecorderToggleRecordingUi(Boolean(vocalRefRecorder && vocalRefRecorder.state === "recording"));
   if (forWizard) {
-    setVocalRecorderStatusAll("Starting microphone…");
+    const isVerify = vocalRecorderContext?.step === "verify";
+    setVocalRecorderStatusAll(
+      isVerify
+        ? "Read the phrase above, then tap ● to record"
+        : "Starting microphone…"
+    );
   }
 }
 function closeVocalRecorderModal() {
   if (!els.vocalRecorderModal) return;
   els.vocalRecorderModal.style.display = "none";
   els.vocalRecorderModal.classList.remove("recorderOverWizard");
+  els.vocalRecorderModal.classList.remove("recorderOverWizard--verify");
+  if (els.vocalRecorderPhraseWrap) els.vocalRecorderPhraseWrap.hidden = true;
   hideVoiceWizardForRecorder(false);
   setRecorderToggleRecordingUi(false);
   if (vocalRecorderContext?.type === "voice_wizard") {
@@ -10497,7 +10522,12 @@ async function startVoiceWizardRecording() {
   } catch {}
   await startVocalReferenceRecording();
   setRecorderToggleRecordingUi(true);
-  setVocalRecorderStatusAll("Recording… tap ● to stop");
+  const isVerify = vocalRecorderContext?.step === "verify";
+  setVocalRecorderStatusAll(
+    isVerify
+      ? "Recording… sing the phrase above, tap ● to stop"
+      : "Recording… tap ● to stop"
+  );
 }
 
 async function openVoiceWizardRecorder(step, onFile, opts = {}) {
@@ -21347,7 +21377,7 @@ function closeVoiceWizard() {
   voiceWizardState.abort = true;
 }
 
-let voiceWizardState = { abort: false, sampleFile: null, verifyFile: null };
+let voiceWizardState = { abort: false, sampleFile: null, verifyFile: null, verifyPhrase: "" };
 
 async function measureMediaFileDurationSec(file) {
   if (!file) return null;
@@ -21687,6 +21717,7 @@ async function runVoiceWizardFromSample(startBtn) {
 
 function renderVoiceWizardVerifyStep(phrase, token) {
   setVoiceWizardStage(2);
+  voiceWizardState.verifyPhrase = String(phrase || "").trim();
   renderVoiceWizardStep(`
     <div class="vwCard vwStudioCard">
       <div class="vwCardTitle">Sing this phrase</div>
@@ -21842,6 +21873,7 @@ async function openVoiceWizard() {
     abort: false,
     sampleFile: null,
     verifyFile: null,
+    verifyPhrase: "",
     name: "My voice",
     language: "en",
     skill: "intermediate",

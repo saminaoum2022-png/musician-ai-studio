@@ -25885,6 +25885,17 @@ button.activityRow{
 .activityRow.isUnread{
   background: linear-gradient(90deg, rgba(94,234,212,0.10), transparent 54%);
 }
+.activityRow--unavailable{
+  opacity: 0.72;
+  cursor: default;
+}
+.activityRow--unavailable .activityRowBody p{
+  color: rgba(223,231,251,0.48);
+  font-style: italic;
+}
+button.activityRow--unavailable{
+  pointer-events: none;
+}
 .activityRowAvatarWrap{
   position: relative;
   flex: 0 0 auto;
@@ -28149,6 +28160,18 @@ section.mentorPage{
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Remix stack: original source strip on top, remix result card below (matches mashup rhythm). */
+.followActRemixStack .followActRemixSources{
+  grid-template-columns: minmax(0, 52%);
+  max-width: 100%;
+}
+.followActRemixStack .followActMedia--remix{
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 16px;
+  border-color: rgba(124,92,255,0.38);
 }
 
 /* Mashup: source strip A × B + main playable result card. */

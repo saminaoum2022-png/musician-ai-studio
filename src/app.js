@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260613activityPlay2";
+const APP_BUILD = "20260613profileFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -7857,37 +7857,32 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
     subtitle,
     xstyle,
   });
-  // Remix posts with a playable public original render BOTH songs as two
-  // square tiles side by side — original left, remix right — so listeners
-  // can compare them and the original creator gets plays too.
+  // Remix posts with a playable public original: original source on top,
+  // remix result below (same vertical rhythm as mashup A × B → result).
   const orig = !mashupBlockHtml && t._remixOriginal && String(t._remixOriginal.url || "").trim() ? t._remixOriginal : null;
   let remixPairHtml = "";
   if (orig) {
     const origBy = orig.username ? `@${orig.username}` : "Original";
     const o = followingActivityPlayAttrs(orig, profMap, origBy);
     remixPairHtml = `
-      <div class="followActRemixPair" role="group" aria-label="Original and remix">
-        <button type="button" class="followActRemixTile" data-user-lib-play="1" data-user-lib-url="${o.encUrl}" data-user-lib-title="${o.encTitle}" data-user-lib-art="${o.encArt}" data-discovery-by="${encodeURIComponent(origBy)}" ${o.playData} aria-label="Play original ${escapeHtml(orig.title)}">
-          <img class="followActRemixTileImg" src="${escapeHtml(o.artSafe)}" alt="" decoding="async" loading="lazy" />
-          <span class="followActRemixTileChip">Original</span>
-          <span class="followActRemixTilePlay" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M5 4v16l14-8L5 4Z" fill="currentColor"/></svg>
-          </span>
-          <span class="followActRemixTileFoot">
-            <span class="followActRemixTileTitle">${escapeHtml(orig.title)}</span>
-            <span class="followActRemixTileBy">${escapeHtml(origBy)}</span>
-          </span>
-        </button>
-        <button type="button" class="followActRemixTile followActRemixTile--remix" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play remix ${safeTitle}">
-          <img class="followActRemixTileImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
-          <span class="followActRemixTileChip followActRemixTileChip--remix">${remixIconSvgHtml()}<span>Remix</span></span>
-          <span class="followActRemixTilePlay" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M5 4v16l14-8L5 4Z" fill="currentColor"/></svg>
-          </span>
-          <span class="followActRemixTileFoot">
-            <span class="followActRemixTileTitle">${safeTitle}</span>
-            <span class="followActRemixTileBy">${escapeHtml(subtitle)}</span>
-          </span>
+      <div class="followActMashup followActRemixStack" role="group" aria-label="Original and remix">
+        <div class="followActMashupSources followActRemixSources">
+          <button type="button" class="followActMashupSource" data-user-lib-play="1" data-user-lib-url="${o.encUrl}" data-user-lib-title="${o.encTitle}" data-user-lib-art="${o.encArt}" data-discovery-by="${encodeURIComponent(origBy)}" ${o.playData} aria-label="Play original ${escapeHtml(orig.title)}">
+            <img class="followActMashupSourceImg" src="${escapeHtml(o.artSafe)}" alt="" decoding="async" loading="lazy" />
+            <span class="followActMashupSourceChip">Original</span>
+            <span class="followActMashupSourcePlay" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M5 4v16l14-8L5 4Z" fill="currentColor"/></svg>
+            </span>
+            <span class="followActMashupSourceFoot">
+              <span class="followActMashupSourceTitle">${escapeHtml(orig.title)}</span>
+              <span class="followActMashupSourceBy">${escapeHtml(origBy)}</span>
+            </span>
+          </button>
+        </div>
+        <button type="button" class="followActMedia followActMedia--remix" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play remix ${safeTitle}">
+          <img class="followActMediaImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
+          <span class="followActMediaPlay" aria-hidden="true">▶</span>
+          <span class="followActMediaChip">${remixPillHtml()}</span>
         </button>
       </div>`;
   }
@@ -15871,6 +15866,89 @@ function activitySkeletonHtml(count = 4) {
 }
 
 const _activitySongArtCache = new Map();
+const _activityUnavailableKeys = new Set();
+
+function activityUnavailableKey(kind, id) {
+  return `${kind}:${String(id || "").trim()}`;
+}
+
+function activityNotificationIsUnavailable(n) {
+  const t = String(n?.type || "").trim();
+  const meta = n?.metadata || {};
+  const sid = activitySongIdForNotification(n);
+  if (sid && _activityUnavailableKeys.has(activityUnavailableKey("song", sid))) return true;
+  const remixPostId = String(meta.remix_post_id || "").trim();
+  if (t === "remix" && remixPostId && _activityUnavailableKeys.has(activityUnavailableKey("hub", remixPostId))) {
+    return true;
+  }
+  return false;
+}
+
+async function validateActivityNotificationsAvailability(notifications) {
+  const songIds = new Set();
+  const hubIds = new Set();
+  for (const n of notifications) {
+    const t = String(n?.type || "").trim();
+    const meta = n?.metadata || {};
+    const sid = activitySongIdForNotification(n);
+    const songLinked =
+      sid &&
+      isShareUuid(sid) &&
+      (t === "chart_rank" ||
+        t === "play_milestone" ||
+        t === "song_feedback" ||
+        t === "remix" ||
+        ((t === "social_like" || t === "social_reply") && String(meta.target_kind || "") === "song"));
+    if (songLinked) songIds.add(sid);
+    if (t === "remix") {
+      const remixPostId = String(meta.remix_post_id || "").trim();
+      const remixSongId = String(meta.remix_song_id || meta.song_id || "").trim();
+      if (remixPostId && isShareUuid(remixPostId) && !remixSongId) hubIds.add(remixPostId);
+    }
+  }
+  if (!songIds.size && !hubIds.size) return false;
+  let changed = false;
+  if (songIds.size && SUPABASE_URL && SUPABASE_ANON_KEY) {
+    try {
+      const inList = [...songIds].slice(0, 32).map((id) => encodeURIComponent(id)).join(",");
+      const headers = { apikey: SUPABASE_ANON_KEY, Accept: "application/json" };
+      const token = getSupabaseAuthToken();
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const r = await fetch(
+        `${SUPABASE_URL}/rest/v1/user_songs?id=in.(${inList})&select=id,song_url,task_id,meta`,
+        { headers, cache: "no-store" },
+      );
+      if (r.ok) {
+        const rows = await r.json().catch(() => []);
+        const live = new Map();
+        for (const row of Array.isArray(rows) ? rows : []) {
+          const id = String(row?.id || "").trim();
+          if (!id) continue;
+          const meta = row?.meta && typeof row.meta === "object" ? row.meta : {};
+          if (String(meta.deletedAt || meta.deleted_at || "").trim()) continue;
+          const hasAudio = String(row?.song_url || "").trim() || String(row?.task_id || "").trim();
+          if (hasAudio) live.set(id, true);
+        }
+        for (const sid of songIds) {
+          if (!live.has(sid) && !_activityUnavailableKeys.has(activityUnavailableKey("song", sid))) {
+            _activityUnavailableKeys.add(activityUnavailableKey("song", sid));
+            changed = true;
+          }
+        }
+      }
+    } catch {}
+  }
+  for (const hid of [...hubIds].slice(0, 16)) {
+    const row = await fetchHubPostRowById(hid);
+    if (!row || !String(row.song_url || "").trim()) {
+      if (!_activityUnavailableKeys.has(activityUnavailableKey("hub", hid))) {
+        _activityUnavailableKeys.add(activityUnavailableKey("hub", hid));
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
 
 function cacheActivitySongArtFromNotification(n) {
   const sid = activitySongIdForNotification(n);
@@ -16058,6 +16136,10 @@ function notificationActivityHref(n) {
 }
 
 async function openActivityNotificationTarget(n) {
+  if (activityNotificationIsUnavailable(n)) {
+    showToast("This post is not available anymore.", { icon: "!", durationMs: 3800 });
+    return;
+  }
   const href = notificationActivityHref(n);
   if (!href) return;
   const t = String(n?.type || "").trim();
@@ -16129,6 +16211,10 @@ async function openActivityTargetFromHref(href) {
 
 function activityItemHtml(n) {
   const msg = notificationMessage(n);
+  const unavailable = activityNotificationIsUnavailable(n);
+  if (unavailable) {
+    msg.body = "This post is not available anymore.";
+  }
   // Grouped rows get digest copy instead of repeating the same line N times.
   const gc = Number(n?._groupCount || 0);
   if (gc > 1) {
@@ -16149,7 +16235,7 @@ function activityItemHtml(n) {
   const icon = notificationIconForType(n?.type);
   const unread = !n?.read_at;
   const time = relativeTime(new Date(n?.created_at || Date.now()).getTime());
-  const href = notificationActivityHref(n);
+  const href = unavailable ? "" : notificationActivityHref(n);
   const tag = href ? "button" : "article";
   const typeAttr = href ? ' type="button"' : "";
   const notifId = String(n?.id || "").trim();
@@ -16157,7 +16243,7 @@ function activityItemHtml(n) {
     ? ` data-activity-href="${escapeHtml(href)}"${notifId ? ` data-activity-id="${escapeHtml(notifId)}"` : ""}`
     : "";
   return `
-    <${tag} class="activityRow${unread ? " isUnread" : ""}"${typeAttr}${dataHref}>
+    <${tag} class="activityRow${unread ? " isUnread" : ""}${unavailable ? " activityRow--unavailable" : ""}"${typeAttr}${dataHref}>
       <div class="activityRowAvatarWrap">
         ${activityRowLeadVisualHtml(n, "activityRowAvatar")}
         <span class="activityRowBadge" aria-hidden="true">${escapeHtml(icon)}</span>
@@ -16220,6 +16306,8 @@ async function fetchActivityBatch() {
     renderActivityFeedFromState();
     const enriched = await enrichActivitySongArt(_activityFeedState.items);
     if (enriched) renderActivityFeedFromState();
+    const validated = await validateActivityNotificationsAvailability(_activityFeedState.items);
+    if (validated) renderActivityFeedFromState();
     const unread = _activityFeedState.items.filter((n) => !n?.read_at).length;
     if (els.activityLead) {
       els.activityLead.textContent = unread
@@ -16252,6 +16340,7 @@ async function enterActivityRoute({ reset = false } = {}) {
     _activityFeedState.offset = 0;
     _activityFeedState.hasMore = true;
     _activityFeedState.loading = false;
+    _activityUnavailableKeys.clear();
     if (els.activityFeed) {
       els.activityFeed.innerHTML = activitySkeletonHtml();
     }
@@ -25865,8 +25954,13 @@ function getProfileHubRowPlaybackUi(postId) {
 }
 
 function applyLibRowNowPlayingChrome(row, active, audible) {
-  row.classList.toggle("libRowPlaying", audible);
-  row.classList.toggle("libRowActive", active && !audible);
+  const wantPlaying = Boolean(audible);
+  const wantActive = Boolean(active && !audible);
+  if (row.classList.contains("libRowPlaying") === wantPlaying && row.classList.contains("libRowActive") === wantActive) {
+    return;
+  }
+  row.classList.toggle("libRowPlaying", wantPlaying);
+  row.classList.toggle("libRowActive", wantActive);
   if (audible || active) {
     const img = row.querySelector(".libRowArt img");
     applyCoverGlowRgb(row, img?.getAttribute?.("src") || "");
@@ -25968,7 +26062,7 @@ function renderLibrary() {
     // completed yet during this session" flag — the latter covers the
     // window between page boot and the IIFE actually firing hydrate.
     const isLoggedIn = Boolean(authSession?.user?.id);
-    if (_libraryHydrateInFlight || (isLoggedIn && !_libraryHydrateCompleted)) {
+    if ((_libraryHydrateInFlight || (isLoggedIn && !_libraryHydrateCompleted)) && !totalCount) {
       els.libraryList.innerHTML = getLibraryHydratingSkeletonHtml();
       return;
     }

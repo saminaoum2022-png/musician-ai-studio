@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260613mashupPub";
+const APP_BUILD = "20260613mashupEasy";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -409,14 +409,7 @@ const els = {
   mashupBlendCoverB: document.getElementById("mashupBlendCoverB"),
   mashupBlendStatus: document.getElementById("mashupBlendStatus"),
   mashupPromptInput: document.getElementById("mashupPromptInput"),
-  mashupModeSimple: document.getElementById("mashupModeSimple"),
-  mashupModeCustom: document.getElementById("mashupModeCustom"),
-  mashupSimpleField: document.getElementById("mashupSimpleField"),
-  mashupCustomFields: document.getElementById("mashupCustomFields"),
   mashupTitleInput: document.getElementById("mashupTitleInput"),
-  mashupStyleInput: document.getElementById("mashupStyleInput"),
-  mashupLyricsInput: document.getElementById("mashupLyricsInput"),
-  mashupInstrumentalInput: document.getElementById("mashupInstrumentalInput"),
   mashupBlendRecap: document.getElementById("mashupBlendRecap"),
   mashupBlendRecapMode: document.getElementById("mashupBlendRecapMode"),
   mashupBlendLyrics: document.getElementById("mashupBlendLyrics"),
@@ -430,8 +423,6 @@ const els = {
   btnMashupGenerate: document.getElementById("btnMashupGenerate"),
   btnMashupBack: document.getElementById("btnMashupBack"),
   mashupStatus: document.getElementById("mashupStatus"),
-  mashupProgress: document.getElementById("mashupProgress"),
-  mashupProgressText: document.getElementById("mashupProgressText"),
   mashupPickerSheet: document.getElementById("mashupPickerSheet"),
   mashupPickerList: document.getElementById("mashupPickerList"),
   mashupPickerTitle: document.getElementById("mashupPickerTitle"),
@@ -16123,7 +16114,7 @@ const _mashupState = {
   pickerTab: "library",
   pickerCandidates: [],
   discoverCache: null,
-  mode: "simple",
+  lastSuggestedTitle: "",
   generating: false,
   starting: false,
   taskId: "",
@@ -16289,7 +16280,7 @@ function applyMashupPrefillFromSession() {
     if (!track?.songId) return;
     if (slot === "a") _mashupState.slotA = track;
     else _mashupState.slotB = track;
-    maybeSuggestMashupCustomTitle();
+    maybeSuggestMashupTitle();
   } catch {}
 }
 
@@ -16343,23 +16334,20 @@ function renderMashupSlot(slot, track) {
   title.innerHTML = `${escapeHtml(name)}<span class="mashupSlotSource">${escapeHtml(source)}</span>`;
 }
 
-function setMashupMode(mode) {
-  const custom = mode === "custom";
-  _mashupState.mode = custom ? "custom" : "simple";
-  els.mashupModeSimple?.classList.toggle("isActive", !custom);
-  els.mashupModeCustom?.classList.toggle("isActive", custom);
-  if (els.mashupSimpleField) els.mashupSimpleField.hidden = custom;
-  if (els.mashupCustomFields) els.mashupCustomFields.hidden = !custom;
-  maybeSuggestMashupCustomTitle();
-}
-
-function maybeSuggestMashupCustomTitle() {
-  if (_mashupState.mode !== "custom" || !els.mashupTitleInput) return;
-  if (String(els.mashupTitleInput.value || "").trim()) return;
-  const a = String(_mashupState.slotA?.title || "A").trim() || "A";
-  const b = String(_mashupState.slotB?.title || "B").trim() || "B";
-  if (_mashupState.slotA && _mashupState.slotB) {
-    els.mashupTitleInput.value = `${a} × ${b}`.slice(0, 100);
+function maybeSuggestMashupTitle() {
+  if (!els.mashupTitleInput) return;
+  if (!_mashupState.slotA || !_mashupState.slotB) {
+    if (!String(els.mashupTitleInput.value || "").trim()) {
+      els.mashupTitleInput.value = "";
+      _mashupState.lastSuggestedTitle = "";
+    }
+    return;
+  }
+  const suggested = mashupDefaultTitle();
+  const current = String(els.mashupTitleInput.value || "").trim();
+  if (!current || current === _mashupState.lastSuggestedTitle) {
+    els.mashupTitleInput.value = suggested;
+    _mashupState.lastSuggestedTitle = suggested;
   }
 }
 
@@ -16387,11 +16375,10 @@ function enterMashupRoute() {
     _mashupState.generating = false;
     _mashupState.starting = false;
     setMashupBlending(false);
-    setMashupProgress(false);
     setMashupStatus("");
   }
   applyMashupPrefillFromSession();
-  setMashupMode(_mashupState.mode || "simple");
+  maybeSuggestMashupTitle();
   renderMashupPage();
 }
 
@@ -16445,7 +16432,7 @@ async function resolveMashupTrackLyrics(ref) {
 async function buildSimpleMashupRequest(directionPrompt) {
   const titleA = String(_mashupState.slotA?.title || "Song A").trim() || "Song A";
   const titleB = String(_mashupState.slotB?.title || "Song B").trim() || "Song B";
-  const mashupTitle = mashupDefaultTitle();
+  const mashupTitle = String(els.mashupTitleInput?.value || "").trim() || mashupDefaultTitle();
   const direction = String(directionPrompt || "").trim()
     || `A mashup blending "${titleA}" with "${titleB}" — weave both melodies together.`;
   const [lyricsA, lyricsB] = await Promise.all([
@@ -16484,7 +16471,7 @@ async function populateMashupBlendRecap() {
   els.mashupBlendRecap.hidden = false;
   els.mashupBlendRecap.setAttribute("aria-hidden", "false");
   if (els.mashupBlendRecapMode) {
-    els.mashupBlendRecapMode.textContent = _mashupState.mode === "custom" ? "Custom blend" : "Simple blend";
+    els.mashupBlendRecapMode.textContent = "Your blend";
   }
   els.mashupBlendLyrics.innerHTML = `<p class="mashupBlendLyricsLoading">Loading lyrics from both tracks…</p>`;
   const titleA = String(_mashupState.slotA?.title || "Track A").trim() || "Track A";
@@ -16561,13 +16548,7 @@ function setMashupStatus(msg, { show = true } = {}) {
   els.mashupStatus.textContent = text;
 }
 
-function setMashupProgress(active, text = "") {
-  if (els.mashupProgress) {
-    els.mashupProgress.hidden = true;
-    els.mashupProgress.setAttribute("aria-hidden", "true");
-  }
-  if (els.mashupProgressText && text) els.mashupProgressText.textContent = text;
-}
+function setMashupProgress() {}
 
 function openMashupPicker(slot, tab = _mashupState.pickerTab || "library") {
   _mashupState.pickerSlot = slot === "b" ? "b" : "a";
@@ -16663,7 +16644,7 @@ function selectMashupTrackByIndex(idx) {
   if (_mashupState.pickerSlot === "a") _mashupState.slotA = track;
   else _mashupState.slotB = track;
   closeMashupPicker();
-  maybeSuggestMashupCustomTitle();
+  maybeSuggestMashupTitle();
   renderMashupPage();
   setMashupStatus("");
 }
@@ -16700,7 +16681,7 @@ async function pollMashupTask(taskId, metaBase) {
         _mashupState.generating = false;
         _mashupState.taskId = "";
         setMashupBlending(false, "Mashup ready");
-        const mashupTitle = mashupDefaultTitle();
+        const mashupTitle = String(els.mashupTitleInput?.value || "").trim() || mashupDefaultTitle();
         const genMeta = {
           ...(metaBase || {}),
           engine: "mashup",
@@ -16787,45 +16768,9 @@ async function startMashupGeneration() {
     setMashupStatus("Choose two different songs.");
     return;
   }
-  const customMode = _mashupState.mode === "custom";
-  const instrumental = Boolean(els.mashupInstrumentalInput?.checked);
-  const style = String(els.mashupStyleInput?.value || "").trim();
-  const title = String(els.mashupTitleInput?.value || "").trim();
-  const lyrics = String(els.mashupLyricsInput?.value || "").trim();
-  let prompt = String(els.mashupPromptInput?.value || "").trim()
+  const prompt = String(els.mashupPromptInput?.value || "").trim()
     || "A dynamic mashup blending two songs together";
-  let requestPayload = {
-    customMode: false,
-    prompt,
-    style: "",
-    title: "",
-    instrumental: false,
-    lyricsMerged: false,
-  };
-  if (customMode) {
-    if (!style) {
-      setMashupStatus("Custom mashup needs a style.");
-      return;
-    }
-    if (!title) {
-      setMashupStatus("Custom mashup needs a title.");
-      return;
-    }
-    if (!instrumental && !lyrics) {
-      setMashupStatus("Add lyrics or choose instrumental.");
-      return;
-    }
-    requestPayload = {
-      customMode: true,
-      prompt: lyrics || prompt,
-      style,
-      title,
-      instrumental,
-      lyricsMerged: false,
-    };
-  } else {
-    requestPayload = await buildSimpleMashupRequest(prompt);
-  }
+  const requestPayload = await buildSimpleMashupRequest(prompt);
   _mashupState.starting = true;
   _mashupState.generating = false;
   setMashupBlending(false);
@@ -16916,14 +16861,6 @@ function bindMashupPageOnce() {
   });
   els.btnMashupGenerate?.addEventListener("click", () => {
     void startMashupGeneration();
-  });
-  els.mashupModeSimple?.addEventListener("click", () => {
-    haptic("light");
-    setMashupMode("simple");
-  });
-  els.mashupModeCustom?.addEventListener("click", () => {
-    haptic("light");
-    setMashupMode("custom");
   });
   els.mashupPickerTabLibrary?.addEventListener("click", () => {
     haptic("light");

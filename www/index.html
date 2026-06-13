@@ -1133,46 +1133,24 @@
             <p id="mashupBlendStatus" class="mashupBlendStatus">Blending your tracks…</p>
           </div>
           <div id="mashupBlendRecap" class="mashupBlendRecap" hidden aria-hidden="true">
-            <p class="mashupBlendRecapKicker" id="mashupBlendRecapMode">Simple blend</p>
+            <p class="mashupBlendRecapKicker" id="mashupBlendRecapMode">Your blend</p>
             <div id="mashupBlendLyrics" class="mashupBlendLyrics" aria-live="polite"></div>
           </div>
           <div id="mashupControls" class="mashupControls">
-          <div class="mashupModeRow" role="group" aria-label="Mashup mode">
-            <button type="button" class="mashupModeBtn isActive" id="mashupModeSimple" data-mashup-mode="simple">Simple</button>
-            <button type="button" class="mashupModeBtn" id="mashupModeCustom" data-mashup-mode="custom">Custom</button>
-          </div>
-          <label class="mashupPromptField" id="mashupSimpleField">
+          <label class="mashupPromptField">
             <span class="mashupPromptLabel">Blend direction <small>(optional)</small></span>
             <input id="mashupPromptInput" type="text" maxlength="500" placeholder="Keep the energy upbeat — weave both melodies together" autocomplete="off" />
-            <span class="mashupPromptHint">Blends the music of both songs. When we find lyrics for both tracks, Simple mode weaves them together automatically.</span>
+            <span class="mashupPromptHint">Blends the music of both songs. Lyrics are woven together automatically when we find them on both tracks.</span>
           </label>
-          <div id="mashupCustomFields" class="mashupCustomFields" hidden>
-            <label class="mashupPromptField">
-              <span class="mashupPromptLabel">Title</span>
-              <input id="mashupTitleInput" type="text" maxlength="100" placeholder="My mashup title" autocomplete="off" />
-            </label>
-            <label class="mashupPromptField">
-              <span class="mashupPromptLabel">Style / tags</span>
-              <input id="mashupStyleInput" type="text" maxlength="1000" placeholder="Electronic, high energy, Arabic pop" autocomplete="off" />
-            </label>
-            <label class="mashupPromptField">
-              <span class="mashupPromptLabel">Lyrics <small>(required unless instrumental)</small></span>
-              <textarea id="mashupLyricsInput" rows="4" maxlength="5000" placeholder="Lyrics for the mashup…"></textarea>
-            </label>
-            <label class="mashupCheckRow">
-              <input id="mashupInstrumentalInput" type="checkbox" />
-              <span>Instrumental only</span>
-            </label>
-          </div>
+          <label class="mashupPromptField">
+            <span class="mashupPromptLabel">Title</span>
+            <input id="mashupTitleInput" type="text" maxlength="100" placeholder="Track A × Track B" autocomplete="off" />
+          </label>
           <div class="mashupActions">
             <button type="button" class="mashupGenerateBtn primary" id="btnMashupGenerate" disabled>Mashup · 12 credits</button>
           </div>
           </div>
           <div id="mashupStatus" class="mashupStatus" role="status" aria-live="polite" hidden></div>
-          <div id="mashupProgress" class="mashupProgress" hidden aria-hidden="true">
-            <span class="mashupProgressSpinner" aria-hidden="true"></span>
-            <span id="mashupProgressText">Blending your tracks…</span>
-          </div>
         </section>
 
         <div id="mashupPickerSheet" class="mashupPickerSheet" aria-hidden="true" hidden>

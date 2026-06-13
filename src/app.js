@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260613profileFix";
+const APP_BUILD = "20260613remixRevert";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -7857,32 +7857,36 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
     subtitle,
     xstyle,
   });
-  // Remix posts with a playable public original: original source on top,
-  // remix result below (same vertical rhythm as mashup A × B → result).
+  // Remix posts with a playable public original render BOTH songs as two
+  // square tiles side by side — original left, remix right.
   const orig = !mashupBlockHtml && t._remixOriginal && String(t._remixOriginal.url || "").trim() ? t._remixOriginal : null;
   let remixPairHtml = "";
   if (orig) {
     const origBy = orig.username ? `@${orig.username}` : "Original";
     const o = followingActivityPlayAttrs(orig, profMap, origBy);
     remixPairHtml = `
-      <div class="followActMashup followActRemixStack" role="group" aria-label="Original and remix">
-        <div class="followActMashupSources followActRemixSources">
-          <button type="button" class="followActMashupSource" data-user-lib-play="1" data-user-lib-url="${o.encUrl}" data-user-lib-title="${o.encTitle}" data-user-lib-art="${o.encArt}" data-discovery-by="${encodeURIComponent(origBy)}" ${o.playData} aria-label="Play original ${escapeHtml(orig.title)}">
-            <img class="followActMashupSourceImg" src="${escapeHtml(o.artSafe)}" alt="" decoding="async" loading="lazy" />
-            <span class="followActMashupSourceChip">Original</span>
-            <span class="followActMashupSourcePlay" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M5 4v16l14-8L5 4Z" fill="currentColor"/></svg>
-            </span>
-            <span class="followActMashupSourceFoot">
-              <span class="followActMashupSourceTitle">${escapeHtml(orig.title)}</span>
-              <span class="followActMashupSourceBy">${escapeHtml(origBy)}</span>
-            </span>
-          </button>
-        </div>
-        <button type="button" class="followActMedia followActMedia--remix" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play remix ${safeTitle}">
-          <img class="followActMediaImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
-          <span class="followActMediaPlay" aria-hidden="true">▶</span>
-          <span class="followActMediaChip">${remixPillHtml()}</span>
+      <div class="followActRemixPair" role="group" aria-label="Original and remix">
+        <button type="button" class="followActRemixTile" data-user-lib-play="1" data-user-lib-url="${o.encUrl}" data-user-lib-title="${o.encTitle}" data-user-lib-art="${o.encArt}" data-discovery-by="${encodeURIComponent(origBy)}" ${o.playData} aria-label="Play original ${escapeHtml(orig.title)}">
+          <img class="followActRemixTileImg" src="${escapeHtml(o.artSafe)}" alt="" decoding="async" loading="lazy" />
+          <span class="followActRemixTileChip">Original</span>
+          <span class="followActRemixTilePlay" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M5 4v16l14-8L5 4Z" fill="currentColor"/></svg>
+          </span>
+          <span class="followActRemixTileFoot">
+            <span class="followActRemixTileTitle">${escapeHtml(orig.title)}</span>
+            <span class="followActRemixTileBy">${escapeHtml(origBy)}</span>
+          </span>
+        </button>
+        <button type="button" class="followActRemixTile followActRemixTile--remix" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play remix ${safeTitle}">
+          <img class="followActRemixTileImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
+          <span class="followActRemixTileChip followActRemixTileChip--remix">${remixIconSvgHtml()}<span>Remix</span></span>
+          <span class="followActRemixTilePlay" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M5 4v16l14-8L5 4Z" fill="currentColor"/></svg>
+          </span>
+          <span class="followActRemixTileFoot">
+            <span class="followActRemixTileTitle">${safeTitle}</span>
+            <span class="followActRemixTileBy">${escapeHtml(subtitle)}</span>
+          </span>
         </button>
       </div>`;
   }

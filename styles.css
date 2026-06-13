@@ -28162,18 +28162,6 @@ section.mentorPage{
   text-overflow: ellipsis;
 }
 
-/* Remix stack: original source strip on top, remix result card below (matches mashup rhythm). */
-.followActRemixStack .followActRemixSources{
-  grid-template-columns: minmax(0, 52%);
-  max-width: 100%;
-}
-.followActRemixStack .followActMedia--remix{
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  border-radius: 16px;
-  border-color: rgba(124,92,255,0.38);
-}
-
 /* Mashup: source strip A × B + main playable result card. */
 .followActMashup{
   display: flex;

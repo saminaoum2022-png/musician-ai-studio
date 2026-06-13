@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260613activityFix";
+const APP_BUILD = "20260613activityPlay";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2891,7 +2891,9 @@ function applyRoute() {
     try {
       const pq = new URLSearchParams(String(rawRouteQuery || ""));
       const trackId = String(pq.get("track") || "").trim();
+      const hubId = String(pq.get("hub") || "").trim();
       if (trackId) void focusTrackFromShare(trackId);
+      else if (hubId) void focusHubTrackFromShare(hubId);
     } catch {}
   }
   if (wanted === "profile") {
@@ -15464,9 +15466,10 @@ function notifyPublicSongPublished(track) {
   }).catch(() => {});
 }
 
-function notifyRemixPublished({ originalPostId, remixPostId, remixTitle }) {
+function notifyRemixPublished({ originalPostId, remixPostId, remixTitle, originalSongId, remixSongId }) {
   const original = String(originalPostId || "").trim();
-  if (!original || !authSession?.user?.id) return;
+  const origSong = String(originalSongId || "").trim();
+  if ((!original && !origSong) || !authSession?.user?.id) return;
   void socialApi("/api/social", {
     method: "POST",
     body: JSON.stringify({
@@ -15474,6 +15477,8 @@ function notifyRemixPublished({ originalPostId, remixPostId, remixTitle }) {
       originalPostId: original,
       remixPostId: String(remixPostId || "").trim(),
       remixTitle: String(remixTitle || "Remix").trim(),
+      originalSongId: origSong,
+      remixSongId: String(remixSongId || "").trim(),
     }),
   }).catch(() => {});
 }
@@ -15884,6 +15889,9 @@ function activitySongIdForNotification(n) {
   const t = String(n?.type || "").trim();
   const songId = String(meta.song_id || "").trim();
   if (songId) return songId;
+  if (t === "remix") {
+    return String(meta.remix_song_id || meta.remix_post_id || "").trim();
+  }
   if ((t === "social_like" || t === "social_reply") && String(meta.target_kind || "") === "song") {
     return String(meta.target_id || "").trim();
   }
@@ -15896,7 +15904,7 @@ function activityNotificationHasSongCover(n) {
   if (t === "social_like" || t === "social_reply") {
     return String(n?.metadata?.target_kind || "") === "song";
   }
-  return ["play_milestone", "chart_rank", "song_feedback", "public_song"].includes(t);
+  return ["play_milestone", "chart_rank", "song_feedback", "public_song", "remix"].includes(t);
 }
 
 function activitySongArtFromLocalPools(songId) {
@@ -16025,8 +16033,14 @@ function notificationActivityHref(n) {
   if (t === "chart_rank" && songId) return `#/player?track=${encodeURIComponent(songId)}`;
   if (t === "song_feedback" && songId) return `#/player?track=${encodeURIComponent(songId)}`;
   if (t === "remix") {
-    const sid = songId || targetId;
-    if (sid) return `#/player?track=${encodeURIComponent(sid)}`;
+    const remixSongId = String(meta.remix_song_id || meta.song_id || "").trim();
+    if (remixSongId && isShareUuid(remixSongId)) {
+      return `#/player?track=${encodeURIComponent(remixSongId)}`;
+    }
+    const remixPostId = String(meta.remix_post_id || "").trim();
+    if (remixPostId && isShareUuid(remixPostId)) {
+      return `#/player?hub=${encodeURIComponent(remixPostId)}`;
+    }
   }
   if ((t === "social_like" || t === "social_reply") && targetKind === "song" && targetId) {
     return `#/player?track=${encodeURIComponent(targetId)}`;
@@ -16046,37 +16060,46 @@ function notificationActivityHref(n) {
 async function openActivityNotificationTarget(n) {
   const href = notificationActivityHref(n);
   if (!href) return;
-  const songId = activitySongIdForNotification(n);
   const t = String(n?.type || "").trim();
+  const meta = n?.metadata || {};
+
+  if (t === "remix") {
+    const remixSongId = String(meta.remix_song_id || meta.song_id || "").trim();
+    const remixPostId = String(meta.remix_post_id || "").trim();
+    if (remixSongId && isShareUuid(remixSongId)) {
+      if (await resolveAndPlayActivityTrack(remixSongId)) return;
+    }
+    if (remixPostId && isShareUuid(remixPostId)) {
+      if (await resolveAndPlayHubPost(remixPostId)) return;
+    }
+    const username = String(meta.actor_username || "").replace(/^@/, "").trim();
+    if (username) {
+      location.hash = href.startsWith("#") ? href : `#${href}`;
+      showToast("Could not load this remix — open it from the creator's profile.", {
+        icon: "!",
+        durationMs: 4200,
+      });
+    }
+    return;
+  }
+
+  const songId = activitySongIdForNotification(n);
   const songLinked =
     songId &&
+    isShareUuid(songId) &&
     (t === "chart_rank" ||
       t === "play_milestone" ||
       t === "song_feedback" ||
-      t === "remix" ||
-      ((t === "social_like" || t === "social_reply") && String(n?.metadata?.target_kind || "") === "song"));
+      ((t === "social_like" || t === "social_reply") && String(meta.target_kind || "") === "song"));
 
   if (songLinked) {
-    const tryLocalPlay = async () => {
-      await ensureUserLibraryHydrated();
-      const local = findLibraryTrackByCloudOrLocalId(songId);
-      if (local?.url) {
-        location.hash = "#/player";
-        await playLibraryListRowById(local.id, { openPlayer: true });
-        return true;
-      }
-      return false;
-    };
-    if (await tryLocalPlay()) return;
+    if (await resolveAndPlayActivityTrack(songId)) return;
+    location.hash = href.startsWith("#") ? href : `#${href}`;
+    void focusTrackFromShare(songId);
+    return;
   }
 
-  const hash = href.startsWith("#") ? href : `#${href}`;
-  if (location.hash === hash) {
-    if (songId && isShareUuid(songId)) void focusTrackFromShare(songId);
-    else void safeApplyRoute();
-  } else {
-    location.hash = hash;
-  }
+  location.hash = href.startsWith("#") ? href : `#${href}`;
 }
 
 function activityItemHtml(n) {
@@ -19517,6 +19540,15 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
   if (next.publicOnProfile) {
     if (!track.publicOnProfile) {
       notifyPublicSongPublished(next);
+      const remixOf = remixAttributionForTrack(next);
+      const remixCloudId = trackCloudShareId(next);
+      if (remixOf?.songId && remixOf?.ownerUserId && remixOf.ownerUserId !== authSession.user.id) {
+        notifyRemixPublished({
+          originalSongId: remixOf.songId,
+          remixSongId: remixCloudId,
+          remixTitle: next.title,
+        });
+      }
     }
   }
   try {
@@ -20343,6 +20375,7 @@ async function shareToHub(track) {
       originalPostId: cur[idx]?.meta?.remixOfHubPostId,
       remixPostId: cloudId,
       remixTitle: cur[idx]?.title,
+      originalSongId: String(cur[idx]?.meta?.remixOf?.songId || "").trim(),
     });
   }).catch(() => {});
   renderHub();
@@ -28373,6 +28406,84 @@ async function shareHubPost(post) {
   await shareHubLink({ title, text, url });
 }
 
+/** Fetch a legacy hub post row for Activity remix deep links (Hub tab may be off). */
+async function fetchHubPostRowById(postId) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  const id = String(postId || "").trim();
+  if (!isShareUuid(id)) return null;
+  try {
+    const headers = { apikey: SUPABASE_ANON_KEY, Accept: "application/json" };
+    const token = getSupabaseAuthToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/hub_posts?id=eq.${encodeURIComponent(id)}&select=id,title,song_url,cover_url,creator_username,meta&limit=1`,
+      { headers, cache: "no-store" },
+    );
+    if (!r.ok) return null;
+    const rows = await r.json().catch(() => []);
+    return Array.isArray(rows) && rows[0] ? rows[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+async function hydrateSharedSongPlaybackRow(row) {
+  if (!row) return null;
+  let songUrl = String(row.song_url || row.url || "").trim();
+  const taskId = String(row.task_id || row.taskId || row?.meta?.taskId || "").trim();
+  const audioId = String(row.audio_id || row.audioId || row?.meta?.audioId || "").trim();
+  if (!songUrl && taskId) {
+    const refreshed = await tryRefreshLibraryTrackAudioFromSuno({ taskId, audioId, url: songUrl });
+    if (refreshed?.url) songUrl = String(refreshed.url).trim();
+  }
+  if (!songUrl) return null;
+  return { ...row, song_url: songUrl };
+}
+
+async function resolveAndPlayActivityTrack(trackId) {
+  const id = String(trackId || "").trim();
+  if (!id || !isShareUuid(id)) return false;
+  try {
+    await ensureNativeApiBaseResolved();
+  } catch {}
+  await ensureUserLibraryHydrated();
+  const local = findLibraryTrackByCloudOrLocalId(id);
+  if (local?.url) {
+    location.hash = "#/player";
+    await playLibraryListRowById(local.id, { openPlayer: true });
+    return true;
+  }
+  let row = await fetchSharedSongByCloudId(id);
+  row = await hydrateSharedSongPlaybackRow(row);
+  if (row?.song_url) {
+    location.hash = `#/player?track=${encodeURIComponent(id)}`;
+    return await playSharedCloudSong(row, { openPlayer: true });
+  }
+  return false;
+}
+
+async function resolveAndPlayHubPost(postId) {
+  const id = String(postId || "").trim();
+  if (!id || !isShareUuid(id)) return false;
+  const hubRow = await fetchHubPostRowById(id);
+  if (!hubRow) return false;
+  const meta = hubRow.meta && typeof hubRow.meta === "object" ? hubRow.meta : {};
+  const row = await hydrateSharedSongPlaybackRow({
+    id,
+    title: hubRow.title || "Remix",
+    art_url: hubRow.cover_url || "",
+    song_url: hubRow.song_url || "",
+    user_id: String(meta.creatorUserId || "").trim(),
+    task_id: String(meta.taskId || "").trim(),
+    audio_id: String(meta.audioId || "").trim(),
+    meta,
+    creator_username: hubRow.creator_username || "",
+  });
+  if (!row?.song_url) return false;
+  location.hash = `#/player?hub=${encodeURIComponent(id)}`;
+  return playSharedCloudSong(row, { openPlayer: true });
+}
+
 /** Fetch a shared `user_songs` row for `/#/player?track=UUID` (guests allowed). */
 async function fetchSharedSongByCloudId(cloudId) {
   const id = String(cloudId || "").trim();
@@ -28410,17 +28521,19 @@ async function fetchSharedSongByCloudId(cloudId) {
   }
 
   try {
-    const r = await fetch(apiUrl(`/api/songs/shared?id=${encodeURIComponent(id)}`), { cache: "no-store" });
+    const r = await apiFetch(`/api/songs/shared?id=${encodeURIComponent(id)}`, { cache: "no-store" });
     if (r.ok) {
       const data = await r.json().catch(() => ({}));
-      if (data?.ok && data?.song?.song_url) {
+      if (data?.ok && data?.song) {
         const song = data.song;
-        // Server exposes only the remix fields, not the whole meta blob.
-        song.meta = {
-          lyricsInput: String(song.lyrics_input || "").trim(),
-          styleInput: String(song.style_input || "").trim(),
-        };
-        return song;
+        if (String(song.song_url || "").trim()) {
+          // Server exposes only the remix fields, not the whole meta blob.
+          song.meta = {
+            lyricsInput: String(song.lyrics_input || "").trim(),
+            styleInput: String(song.style_input || "").trim(),
+          };
+          return song;
+        }
       }
     }
   } catch {}
@@ -28503,23 +28616,11 @@ async function focusTrackFromShare(trackId) {
   if (els.playerTitle && (document.body.getAttribute("data-route") || "") === "player") {
     els.playerTitle.textContent = "Loading shared song…";
   }
-  const tryPlay = async () => {
-    const local = findLibraryTrackByCloudOrLocalId(id);
-    if (local?.url) {
-      await playLibraryListRowById(local.id, { openPlayer: true });
-      pendingShareFocusTrackId = "";
-      return true;
-    }
-    const row = await fetchSharedSongByCloudId(id);
-    if (!row?.song_url) return false;
-    const ok = await playSharedCloudSong(row, { openPlayer: true });
-    if (ok) {
-      pendingShareFocusTrackId = "";
-      return true;
-    }
-    return false;
-  };
-  if (await tryPlay()) return;
+  const tryPlay = async () => resolveAndPlayActivityTrack(id);
+  if (await tryPlay()) {
+    pendingShareFocusTrackId = "";
+    return;
+  }
   void ensureUserLibraryHydrated().then(() => tryPlay());
   let n = 0;
   _shareFocusPollTimer = setInterval(() => {
@@ -28535,6 +28636,46 @@ async function focusTrackFromShare(trackId) {
             "Could not load this song. Open it from your Library or try again in a moment.",
             { icon: "!", durationMs: 4600 },
           );
+        } else if (ok) {
+          pendingShareFocusTrackId = "";
+        }
+      }
+    });
+  }, 500);
+}
+
+/** Open a legacy hub remix (`/#/player?hub=UUID`). */
+let pendingShareFocusHubId = "";
+let _shareHubFocusPollTimer = 0;
+async function focusHubTrackFromShare(postId) {
+  const id = String(postId || "").trim();
+  if (!id || !isShareUuid(id)) return;
+  if (_shareHubFocusPollTimer) {
+    clearInterval(_shareHubFocusPollTimer);
+    _shareHubFocusPollTimer = 0;
+  }
+  pendingShareFocusHubId = id;
+  if (els.playerTitle && (document.body.getAttribute("data-route") || "") === "player") {
+    els.playerTitle.textContent = "Loading remix…";
+  }
+  const tryPlay = async () => resolveAndPlayHubPost(id);
+  if (await tryPlay()) {
+    pendingShareFocusHubId = "";
+    return;
+  }
+  let n = 0;
+  _shareHubFocusPollTimer = setInterval(() => {
+    n += 1;
+    void tryPlay().then((ok) => {
+      if (ok || n >= 12) {
+        clearInterval(_shareHubFocusPollTimer);
+        _shareHubFocusPollTimer = 0;
+        if (!ok && pendingShareFocusHubId === id) {
+          pendingShareFocusHubId = "";
+          if (els.playerTitle) els.playerTitle.textContent = "No track loaded";
+          showToast("Could not load this remix.", { icon: "!", durationMs: 4600 });
+        } else if (ok) {
+          pendingShareFocusHubId = "";
         }
       }
     });

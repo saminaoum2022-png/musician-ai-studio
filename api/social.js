@@ -670,18 +670,58 @@ async function createPublicSongNotifications({ actorUserId, songId, title }) {
   return created;
 }
 
-async function createRemixNotification({ actorUserId, originalPostId, remixPostId, remixTitle }) {
+async function createRemixNotification({
+  actorUserId,
+  originalPostId,
+  remixPostId,
+  remixTitle,
+  originalSongId,
+  remixSongId,
+}) {
   const originalId = String(originalPostId || "").trim();
-  if (!originalId) return false;
-  const r = await svcFetch(
-    `hub_posts?select=id,title,creator_username,meta&id=eq.${encodeURIComponent(originalId)}&limit=1`,
-  );
-  const original = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
-  const owner = cleanUserId(original?.meta?.creatorUserId);
+  const origSongId = cleanSongId(originalSongId);
+  const remSongId = cleanSongId(remixSongId);
+  if (!originalId && !origSongId) return false;
+
+  let owner = "";
+  let originalTitle = "your song";
+  let remixArtUrl = "";
+
+  if (origSongId) {
+    const songR = await svcFetch(
+      `user_songs?select=id,user_id,title,art_url&id=eq.${encodeURIComponent(origSongId)}&limit=1`,
+    );
+    const song = Array.isArray(songR.data) && songR.data[0] ? songR.data[0] : null;
+    owner = cleanUserId(song?.user_id);
+    originalTitle = String(song?.title || originalTitle).trim() || originalTitle;
+  }
+
+  if (!owner && originalId) {
+    const r = await svcFetch(
+      `hub_posts?select=id,title,creator_username,meta&id=eq.${encodeURIComponent(originalId)}&limit=1`,
+    );
+    const original = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
+    owner = cleanUserId(original?.meta?.creatorUserId);
+    originalTitle = String(original?.title || originalTitle).trim() || originalTitle;
+  }
+
   const actor = cleanUserId(actorUserId);
   if (!owner || !actor || owner === actor) return false;
+
+  if (remSongId) {
+    const remixR = await svcFetch(
+      `user_songs?select=art_url&id=eq.${encodeURIComponent(remSongId)}&limit=1`,
+    );
+    const remixRow = Array.isArray(remixR.data) && remixR.data[0] ? remixR.data[0] : null;
+    remixArtUrl = String(remixRow?.art_url || "").trim();
+  }
+
   const actorProfile = await profileByUserId(actor);
-  const entityId = String(remixPostId || `${originalId}:remix:${actor}`).trim().slice(0, 180);
+  const entityId = String(
+    remSongId || remixPostId || `${originalId || origSongId}:remix:${actor}`,
+  )
+    .trim()
+    .slice(0, 180);
   if (await notificationExists({ userId: owner, type: "remix", entityId })) return false;
   return insertNotification({
     userId: owner,
@@ -692,8 +732,12 @@ async function createRemixNotification({ actorUserId, originalPostId, remixPostI
       actor_username: actorProfile?.username || "",
       actor_avatar: actorProfile?.avatar || "",
       original_post_id: originalId,
-      original_title: original?.title || "your song",
+      original_song_id: origSongId,
+      original_title: originalTitle,
       remix_post_id: String(remixPostId || ""),
+      remix_song_id: remSongId,
+      song_id: remSongId || "",
+      song_art_url: remixArtUrl,
       remix_title: String(remixTitle || "a remix").trim().slice(0, 120),
     },
   });
@@ -1140,6 +1184,8 @@ async function handlePost(req, res, user) {
       originalPostId: body?.originalPostId,
       remixPostId: body?.remixPostId,
       remixTitle: body?.remixTitle,
+      originalSongId: body?.originalSongId,
+      remixSongId: body?.remixSongId,
     });
     return sendJson(res, 200, { ok: true, created: Boolean(created) });
   }

@@ -532,12 +532,6 @@ function buildCoverStyle({ baseStyle, dialect, dialectHint }) {
   const dialectHintClean = String(dialectHint || "").trim();
   if (dialectHintClean) parts.push(`dialect hint: ${dialectHintClean}`);
 
-  parts.push(
-    spoken
-      ? "spoken word delivery, clear narration, no melodic singing"
-      : "expressive melodic phrasing"
-  );
-
   let merged = parts.filter(Boolean).join(", ");
   if (merged.length > 980) merged = merged.slice(0, 977) + "...";
   return merged;

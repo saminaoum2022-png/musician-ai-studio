@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615coverFallback";
+const APP_BUILD = "20260615coverFallback2";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -28323,12 +28323,24 @@ function placeholderCoverDataUrl() {
 }
 
 /** Shown when a remote cover URL fails after brief retries (♪ tile). */
+const BROKEN_COVER_PLACEHOLDER_DATA_URL =
+  "data:image/svg+xml," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">'
+    + '<rect width="256" height="256" fill="#141820"/>'
+    + '<circle cx="128" cy="128" r="88" fill="rgba(124,92,255,0.14)"/>'
+    + '<path fill="rgba(167,139,250,0.92)" d="M168 72v78.5c-4.8-3.2-10.6-5-16.8-5-15.5 0-28 11.2-28 25s12.5 25 28 25 28-11.2 28-25V96.8l-40-12.2V72h40z"/>'
+    + '<ellipse cx="123.2" cy="195.5" rx="16.8" ry="14.5" fill="rgba(167,139,250,0.92)"/>'
+    + "</svg>",
+  );
+
 function brokenCoverPlaceholderUrl() {
-  return "./assets/cover-placeholder.svg";
+  return BROKEN_COVER_PLACEHOLDER_DATA_URL;
 }
 
 function isBrokenCoverPlaceholder(src) {
-  return /cover-placeholder\.svg/i.test(String(src || ""));
+  const s = String(src || "");
+  return s.startsWith("data:image/svg+xml") || /cover-placeholder\.svg/i.test(s);
 }
 
 const COVER_IMG_RETRY_DELAYS_MS = [2000, 5000];
@@ -28364,9 +28376,12 @@ function coverImageRetryUrl(original, attempt) {
 function applyBrokenCoverPlaceholder(img) {
   if (!img) return;
   img.dataset.coverFallback = "final";
+  img.dataset.coverSrc = "";
   img.classList.add("isCoverPlaceholder");
   img.removeAttribute("crossorigin");
   img.src = brokenCoverPlaceholderUrl();
+  // Don't re-enter error/retry once the inline SVG placeholder is set.
+  img.dataset.coverWired = "1";
 }
 
 function handleCoverImageError(img) {
@@ -28465,6 +28480,8 @@ function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, chall
   if (els.playerArt) {
     if (hasTrack) setCoverImageSrc(els.playerArt, artUrl);
     else setCoverImageSrc(els.playerArt, placeholderCoverDataUrl(), { allowEmpty: true });
+    els.playerArt.classList.toggle("isPlaceholder", !hasTrack);
+    els.playerArt.classList.toggle("isCoverPlaceholder", !hasTrack);
   }
   setPlayerChallengeAttribution(challenge || challengeMetaForTrack(currentPlayerTrackRef));
   const mashup = mashupOf || mashupAttributionForTrack(currentPlayerTrackRef);
@@ -28481,7 +28498,6 @@ function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, chall
     artWrap.classList.toggle("isEmpty", !hasTrack);
     applyCoverGlowRgb(artWrap, hasTrack ? artUrl : "");
   }
-  if (els.playerArt) els.playerArt.classList.toggle("isPlaceholder", !hasTrack);
   hubNowMeta = {
     title: title || "Now playing",
     art: artUrl || placeholderCoverDataUrl(),

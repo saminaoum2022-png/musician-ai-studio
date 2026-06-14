@@ -1,5 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Song cover">
   <rect width="256" height="256" fill="#141820"/>
   <circle cx="128" cy="128" r="88" fill="rgba(124,92,255,0.14)"/>
-  <text x="128" y="154" text-anchor="middle" font-size="108" fill="rgba(167,139,250,0.92)" font-family="system-ui,-apple-system,sans-serif">j</text>
+  <path fill="rgba(167,139,250,0.92)" d="M168 72v78.5c-4.8-3.2-10.6-5-16.8-5-15.5 0-28 11.2-28 25s12.5 25 28 25 28-11.2 28-25V96.8l-40-12.2V72h40z"/>
+  <ellipse cx="123.2" cy="195.5" rx="16.8" ry="14.5" fill="rgba(167,139,250,0.92)"/>
 </svg>

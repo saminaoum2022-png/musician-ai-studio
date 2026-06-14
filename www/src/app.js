@@ -19,10 +19,15 @@ import {
   shouldSkipIntroOrOnboardingRoute,
 } from "./onboarding.js";
 import { initTheme } from "./theme.js";
+import {
+  initWarmPlaybackSettings,
+  prepareWarmPlaybackElement,
+  resumeWarmPlaybackContext,
+} from "./warm-playback.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615privateBtnSoft";
+const APP_BUILD = "20260615warmPlayback";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -388,6 +393,7 @@ const els = {
   settingsEditProfileRow: document.getElementById("settingsEditProfileRow"),
   settingsHelpRow: document.getElementById("settingsHelpRow"),
   settingsReportRow: document.getElementById("settingsReportRow"),
+  settingsWarmPlayback: document.getElementById("settingsWarmPlayback"),
   notificationsCenter: document.getElementById("notificationsCenter"),
   notificationsCenterLead: document.getElementById("notificationsCenterLead"),
   notificationsCenterStatus: document.getElementById("notificationsCenterStatus"),
@@ -1373,6 +1379,9 @@ async function hubAudioPlayWithRetry(audio) {
   // a new one off — otherwise the browser cancels the new request.
   await awaitWithTimeout(_hubInflightPlay, 250);
   _hubInflightPlay = null;
+  try {
+    await resumeWarmPlaybackContext(audio);
+  } catch {}
 
   const tryOnce = async () => {
     try {
@@ -1676,6 +1685,7 @@ async function startHubPlayback(postId) {
     stopHubPlayback();
     return;
   }
+  prepareWarmPlaybackElement(a, targetSrc);
   resetAudioDurationHintForUrl(targetSrc);
   await primeAudioDurationHint(targetSrc);
   try {
@@ -28288,22 +28298,25 @@ function setPlayerSource(url, label) {
   if (typeof playUrl === "string" && /^https?:\/\//i.test(playUrl)) {
     lastPlayerHttpUrl = playUrl;
   }
+  prepareWarmPlaybackElement(a, playUrl);
   // Only same-origin or blob URLs need crossOrigin for WebAudio/spectrum; forcing
   // "anonymous" on arbitrary Suno CDN URLs breaks playback when ACAO is absent.
-  try {
-    const u = String(playUrl || "");
-    if (!u || u.startsWith("blob:")) {
-      a.crossOrigin = "anonymous";
-    } else {
-      const parsed = new URL(u, location.href);
-      if (parsed.origin === location.origin) {
+  if (!els.settingsWarmPlayback?.checked) {
+    try {
+      const u = String(playUrl || "");
+      if (!u || u.startsWith("blob:")) {
         a.crossOrigin = "anonymous";
       } else {
-        a.removeAttribute("crossOrigin");
+        const parsed = new URL(u, location.href);
+        if (parsed.origin === location.origin) {
+          a.crossOrigin = "anonymous";
+        } else {
+          a.removeAttribute("crossOrigin");
+        }
       }
+    } catch {
+      a.removeAttribute("crossOrigin");
     }
-  } catch {
-    a.removeAttribute("crossOrigin");
   }
   resetAudioDurationHintForUrl(playUrl);
   a.src = playUrl;
@@ -35557,6 +35570,23 @@ if (els.btnAuthLogout) {
 if (els.settingsBtnLogout) {
   els.settingsBtnLogout.addEventListener("click", () => logoutCurrentUser());
 }
+initWarmPlaybackSettings(els.settingsWarmPlayback, {
+  onChange(enabled) {
+    try {
+      const active = getMiniPlayerAudio() || playerEl || hubAudio;
+      if (enabled && active?.src) prepareWarmPlaybackElement(active, active.src);
+      if (active) void resumeWarmPlaybackContext(active);
+    } catch {}
+    try {
+      showToast(
+        enabled
+          ? "Warm playback on — softer highs on songs."
+          : "Warm playback off — full-range playback.",
+        { icon: "♪", durationMs: 3200 },
+      );
+    } catch {}
+  },
+});
 if (els.btnUserPublicFollow) {
   els.btnUserPublicFollow.addEventListener("click", () => void toggleCurrentUserPublicFollow());
 }

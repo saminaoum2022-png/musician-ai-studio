@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615coverPerf";
+const APP_BUILD = "20260615activityProfile";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -3087,6 +3087,9 @@ function applyRoute() {
     void ensureUserLibraryHydrated().then(() => renderMashupPage());
   }
   if (wanted === "user") {
+    wireUserPublicFeedRowsOnce();
+    wireTrackOptionsSheetOnce();
+    syncUserPublicRouteChrome(prevRoute);
     renderUserProfile._pendingUserId = pendingPublicUserId;
     renderUserProfile(pendingPublicUsername);
     renderUserProfile._pendingUserId = "";
@@ -3095,6 +3098,8 @@ function applyRoute() {
     // them to populate. refreshHubFromSupabase is idempotent and re-renders
     // automatically when rows arrive.
     void refreshHubFromSupabase();
+  } else if (prevRoute === "user") {
+    syncUserPublicRouteChrome("");
   }
   if (wanted === "generate" && generationReadyNotice) {
     generationReadyNotice = false;
@@ -16677,11 +16682,13 @@ async function openActivityNotificationTarget(n) {
 
   if (songLinked) {
     if (await resolveAndPlayActivityTrack(songId)) return;
+    _userPublicReturnHash = "#/activity";
     location.hash = href.startsWith("#") ? href : `#${href}`;
     void focusTrackFromShare(songId);
     return;
   }
 
+  if (href.includes("#/u/")) _userPublicReturnHash = "#/activity";
   location.hash = href.startsWith("#") ? href : `#${href}`;
 }
 
@@ -16703,10 +16710,12 @@ async function openActivityTargetFromHref(href) {
   }
   if (hubId && isShareUuid(hubId)) {
     if (await resolveAndPlayHubPost(hubId)) return;
+    _userPublicReturnHash = "#/activity";
     location.hash = raw.startsWith("#") ? raw : `#${raw}`;
     void focusHubTrackFromShare(hubId);
     return;
   }
+  if (raw.includes("/u/")) _userPublicReturnHash = "#/activity";
   location.hash = raw.startsWith("#") ? raw : `#${raw}`;
 }
 
@@ -20477,9 +20486,11 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   }
 }
 
-async function renderUserProfilePublicLibraryAsync(username, userId = "") {
+async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 0) {
+  const stillCurrent = () => !gen || gen === _userPublicProfileGen;
   const handle = String(username || "").replace(/^@/, "").trim();
   const preferredUserId = String(userId || "").trim();
+  try {
   syncUserPublicVerifiedBadge({ username: handle, user_id: preferredUserId });
   let prof = preferredUserId
     ? await fetchPublicProfileRowByUserId(preferredUserId)
@@ -20500,6 +20511,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
     }
   }
   if (!prof?.user_id) {
+    if (!stillCurrent()) return;
     if (els.userPublicName) els.userPublicName.textContent = handle ? `@${handle}` : "@?";
     if (els.userPublicAvatar) {
       els.userPublicAvatar.src = "./assets/nabadai-logo.png";
@@ -20532,6 +20544,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
     setUserPublicLoading(false);
     return;
   }
+  if (!stillCurrent()) return;
   const displayName = String(prof.username || handle || "user").trim();
   if (els.userPublicName) els.userPublicName.textContent = `@${displayName}`;
   if (els.userPublicAvatar) {
@@ -20568,6 +20581,10 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
     }
   }
   const songs = await supabaseFetchPublicLibraryForUserId(prof.user_id);
+  if (!stillCurrent()) return;
+  for (const t of songs) {
+    t.userId = String(t.userId || prof.user_id || "");
+  }
   if (!resolvedSocialStats) {
     const socialData = await fetchSocialStatsForProfile({ username: displayName, userId: prof.user_id });
     resolvedSocialStats = socialData?.stats || null;
@@ -20586,6 +20603,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
     }
   }
   if (!songs.length) {
+    if (!stillCurrent()) return;
     if (els.userPublicSongs) els.userPublicSongs.innerHTML = "";
     _userPublicFeedTracks = [];
     if (els.userPublicEmpty) {
@@ -20599,26 +20617,19 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
   }
   if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
   const profMap = await fetchProfilesByUserIdsMap([String(prof.user_id || "")]);
-  const playCountMap = songs.length
-    ? await fetchDiscoverSongPlayCounts(songs.map((t) => t.id))
-    : new Map();
-  for (const t of songs) {
-    t.playCount = playCountMap.get(String(t.id || "")) || 0;
-    t.userId = String(t.userId || prof.user_id || "");
-  }
-  await hydrateRemixOriginalsForTracks(songs);
-  await hydrateMashupSourcesForTracks(songs);
-  if (els.userPublicSongs) {
-    const slice = songs.slice(0, 60);
-    const byLine = `@${displayName}`;
-    const featured = songs.find(isFeaturedOnProfile);
-    els.userPublicSongs.innerHTML = slice
+  if (!stillCurrent()) return;
+  const slice = songs.slice(0, 60);
+  const byLine = `@${displayName}`;
+  const featured = songs.find(isFeaturedOnProfile);
+  const paintPublicSongs = (tracks) => {
+    if (!stillCurrent() || !els.userPublicSongs) return;
+    els.userPublicSongs.innerHTML = tracks
       .map((t, i) => followingActivityRowHtml(t, profMap, i, { xstyle: true }))
       .join("");
     if (featured) {
       els.userPublicSongs.innerHTML = `${profileFeaturedSongHtml(featured, "public")}${els.userPublicSongs.innerHTML}`;
     }
-    _userPublicFeedTracks = slice.map((t) => {
+    _userPublicFeedTracks = tracks.map((t) => {
       const artSafe = trackCoverArtForFeed(t);
       return {
         url: String(t.url || "").trim(),
@@ -20641,7 +20652,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
     els.userPublicSongs.querySelectorAll("[data-public-featured-play]").forEach((b) => {
       b.addEventListener("click", () => {
         const sid = b.getAttribute("data-public-featured-play");
-        const t = songs.find((x) => String(x.id) === String(sid));
+        const t = tracks.find((x) => String(x.id) === String(sid));
         if (!t?.url) return;
         void playLibraryUrlOnPlayer(t.url, t.title || "Song", t.artUrl || "", {
           discoverFeed: false,
@@ -20656,9 +20667,40 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
         });
       });
     });
-  }
-  syncUserPublicVerifiedBadge(prof);
+  };
+  paintPublicSongs(slice);
   setUserPublicLoading(false);
+  void fetchDiscoverSongPlayCounts(slice.map((t) => t.id)).then((playCountMap) => {
+    if (!stillCurrent()) return;
+    let changed = false;
+    for (const t of slice) {
+      const n = playCountMap.get(String(t.id || "")) || 0;
+      if ((t.playCount || 0) !== n) {
+        t.playCount = n;
+        changed = true;
+      }
+    }
+    if (changed) paintPublicSongs(slice);
+  });
+  void hydrateRemixOriginalsForTracks(slice).then(() => {
+    if (!stillCurrent()) return;
+    paintPublicSongs(slice);
+  });
+  void hydrateMashupSourcesForTracks(slice).then(() => {
+    if (!stillCurrent()) return;
+    paintPublicSongs(slice);
+  });
+  syncUserPublicVerifiedBadge(prof);
+  } catch (e) {
+    console.warn("[userPublic] profile load failed", e);
+    if (stillCurrent()) {
+      if (els.userPublicEmpty) {
+        els.userPublicEmpty.textContent = "Could not load this profile. Pull to refresh or try again.";
+        els.userPublicEmpty.style.display = "";
+      }
+      setUserPublicLoading(false);
+    }
+  }
 }
 
 async function supabaseInsertHub(post) {
@@ -24034,7 +24076,33 @@ function isHubPostVisibleOnPublicProfile(post) {
  * Hub feed as the source of truth (no separate "users" table yet) — this
  * keeps the route purely client-side and means a creator's bio / voice /
  * avatar reflects whatever was in their most recent post's meta. */
+let _userPublicProfileGen = 0;
+let _userPublicReturnHash = "";
+
+function routeHashForReturn(route) {
+  const r = String(route || "").trim();
+  if (!r || r === "user") return "";
+  if (r === "discover-playlist") return "#/discover";
+  return `#/${r}`;
+}
+
+/** Show the public-profile back affordance and remember where to return. */
+function syncUserPublicRouteChrome(prevRoute) {
+  const btn = els.btnUserPublicBack;
+  const onUser = (document.body.getAttribute("data-route") || "") === "user";
+  if (!btn) return;
+  if (!onUser) {
+    btn.hidden = true;
+    return;
+  }
+  const back = routeHashForReturn(prevRoute);
+  if (back) _userPublicReturnHash = back;
+  else if (!_userPublicReturnHash) _userPublicReturnHash = "#/discover";
+  btn.hidden = false;
+}
+
 function renderUserProfile(rawUsername) {
+  const gen = ++_userPublicProfileGen;
   const username = String(rawUsername || "").replace(/^@/, "").trim();
   _userPublicFeedTracks = [];
   currentUserPublicProfileId = "";
@@ -24047,7 +24115,11 @@ function renderUserProfile(rawUsername) {
   // This populates the chip + may autoplay once per device.
   void refreshUserPublicCallingCard(username);
   if (!HUB_FEATURE_ENABLED) {
-    void renderUserProfilePublicLibraryAsync(username, renderUserProfile._pendingUserId || "");
+    void renderUserProfilePublicLibraryAsync(
+      username,
+      renderUserProfile._pendingUserId || "",
+      gen,
+    );
     return;
   }
   const feed = loadHubFeed();
@@ -34461,12 +34533,16 @@ if (els.btnPlayerBack) {
 }
 if (els.btnUserPublicBack) {
   els.btnUserPublicBack.addEventListener("click", () => {
-    // If we have history (came from Hub), prefer back so the scroll
-    // position is preserved. Otherwise land in Hub fresh.
+    haptic("light");
+    const back = String(_userPublicReturnHash || "").trim();
+    if (back) {
+      location.hash = back;
+      return;
+    }
     if (history.length > 1) {
       history.back();
     } else {
-      location.hash = HUB_FEATURE_ENABLED ? "#/hub" : "#/generate";
+      location.hash = "#/discover";
     }
   });
 }

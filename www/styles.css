@@ -13920,8 +13920,19 @@ body[data-route="user"] section.card.wide[data-route="user"]{
 .userPublicVoice .profileAuraVoiceChipWave{
   display: none !important;
 }
-.userPublicBack{
-  display: none !important;
+.userPublicBack:not([hidden]){
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  display: inline-flex !important;
+  align-items: center;
+  min-height: 36px;
+  padding: 6px 10px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(232, 238, 247, 0.88);
 }
 .userPublicFollowRow{
   display: flex;

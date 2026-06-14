@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615warmDefault";
+const APP_BUILD = "20260615baritoneSlim";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -32146,38 +32146,20 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         personaModel: personaModelSel || undefined,
       };
       const vp = String(els.sunoVoiceProfile?.value || "").trim();
-      let vocalProfileClause = "";
-      // Voice profile / gender hints fight Suno personas — skip when one is active.
+      // Voice profile: send gender + timbre to Suno only — no extra style clauses.
+      // Long auto phrases (tessitura, resonance, avoid shouting…) fought user style
+      // and did not keep pitch lower; Voice timbre: Baritone on the API is enough.
       if (!personaIdSel && vp.includes("|")) {
         const [gender, timbre] = vp.split("|");
         payload.vocalGender = gender || undefined;
         payload.voiceTimbre = timbre || undefined;
-        const timbreLower = String(timbre || "").toLowerCase();
-        if (timbreLower.includes("baritone")) {
-          vocalProfileClause =
-            "male baritone lead, lower tessitura, warm chest resonance, controlled dynamics, avoid shouting/high belt";
-        } else if (timbreLower.includes("bass")) {
-          vocalProfileClause =
-            "male bass lead, deep low register, dark warm tone, no high-pitched delivery, avoid shouting";
-        } else if (timbreLower.includes("tenor")) {
-          vocalProfileClause =
-            "male tenor lead with smooth upper range, keep tone lyrical, avoid harsh or shouty attacks";
-        } else if (timbreLower.includes("alto") || timbreLower.includes("mezzo") || timbreLower.includes("soprano")) {
-          vocalProfileClause =
-            "female lead, smooth controlled phrasing, avoid harsh or shouty delivery";
-        }
       } else if (!personaIdSel && !vp) {
         // Singer pills on the Create page: gender only, no forced timbre.
         const singerGender = String(els.sunoSingerGender?.value || "").trim();
         if (singerGender === "m" || singerGender === "f") {
           payload.vocalGender = singerGender;
-          vocalProfileClause =
-            singerGender === "m"
-              ? "male lead vocal, natural masculine tone"
-              : "female lead vocal, natural feminine tone";
         }
       }
-      if (!hasReference && vocalProfileClause) payload.style = `${payload.style}, ${vocalProfileClause}`;
       payload.style = compactStyleForProvider(payload.style, 980);
       const remixMeta =
         pendingSearchRemixMeta && typeof pendingSearchRemixMeta === "object"

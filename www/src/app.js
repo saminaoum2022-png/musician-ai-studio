@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615privateFeedback";
+const APP_BUILD = "20260615feedbackFast";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -10101,6 +10101,8 @@ const SONG_FEEDBACK_TYPES = [
 const _songFeedbackCache = new Map();
 const _FEEDBACK_AURA_SLOTS = ["left", "center", "right"];
 const _FEEDBACK_AURA_REPLAY_MAX = 8;
+const _FEEDBACK_AURA_LIFETIME_MS = 980;
+const _FEEDBACK_AURA_REPLAY_GAP_MS = 260;
 let _playerFeedbackAuraSlot = 0;
 let _playerFeedbackReplayGen = 0;
 let _playerFeedbackReplayTimers = [];
@@ -10124,6 +10126,30 @@ function publicFeedbackContextForTrack(track) {
   return { songId, ownerUserId };
 }
 
+function playPrivateFeedbackSendSound() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const now = ctx.currentTime;
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(480, now);
+    osc.frequency.exponentialRampToValueAtTime(920, now + 0.055);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.11, now + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.13);
+    osc.onended = () => {
+      try { ctx.close(); } catch {}
+    };
+  } catch {}
+}
+
 function clearPlayerFeedbackReplayTimers() {
   for (const t of _playerFeedbackReplayTimers) {
     try { clearTimeout(t); } catch {}
@@ -10139,7 +10165,7 @@ function spawnPlayerFeedbackAura(label, slotIndex) {
   pill.className = `playerFeedbackAura playerFeedbackAura--${slot}`;
   pill.textContent = String(label);
   host.appendChild(pill);
-  const removeMs = 1700;
+  const removeMs = _FEEDBACK_AURA_LIFETIME_MS;
   const timer = window.setTimeout(() => {
     try { pill.remove(); } catch {}
   }, removeMs);
@@ -10170,7 +10196,7 @@ function scheduleFeedbackAuraReplay(counts, { isCreatorOwner = false } = {}) {
     const timer = window.setTimeout(() => {
       if (gen !== _playerFeedbackReplayGen) return;
       spawnPlayerFeedbackAura(label, idx);
-    }, idx * 420);
+    }, idx * _FEEDBACK_AURA_REPLAY_GAP_MS);
     _playerFeedbackReplayTimers.push(timer);
   });
 }
@@ -10188,30 +10214,46 @@ function renderPlayerFeedbackPopoverChips(songId) {
 }
 
 function closePlayerFeedbackPopover() {
-  if (els.playerFeedbackPopover) els.playerFeedbackPopover.hidden = true;
+  if (els.playerFeedbackPopover) {
+    els.playerFeedbackPopover.classList.remove("isVisible");
+    els.playerFeedbackPopover.hidden = true;
+  }
   if (els.btnPlayerFeedbackSend) els.btnPlayerFeedbackSend.setAttribute("aria-expanded", "false");
   _playerFeedbackPopoverSongId = "";
 }
 
+function openPlayerFeedbackPopover() {
+  const ctx = publicFeedbackContextForTrack(currentPlayerTrackRef);
+  if (!ctx?.songId) return;
+  _playerFeedbackPopoverSongId = ctx.songId;
+  renderPlayerFeedbackPopoverChips(ctx.songId);
+  if (els.playerFeedbackPopover) {
+    els.playerFeedbackPopover.hidden = false;
+    els.playerFeedbackPopover.classList.remove("isVisible");
+    window.requestAnimationFrame(() => {
+      els.playerFeedbackPopover?.classList.add("isVisible");
+    });
+  }
+  if (els.btnPlayerFeedbackSend) els.btnPlayerFeedbackSend.setAttribute("aria-expanded", "true");
+}
+
 function togglePlayerFeedbackPopover(forceOpen) {
-  const open = forceOpen === true
-    ? true
-    : forceOpen === false
-      ? false
-      : Boolean(els.playerFeedbackPopover?.hidden);
+  const isOpen = Boolean(els.playerFeedbackPopover && !els.playerFeedbackPopover.hidden && els.playerFeedbackPopover.classList.contains("isVisible"));
+  const open = forceOpen === true ? true : forceOpen === false ? false : !isOpen;
   if (!open) {
     closePlayerFeedbackPopover();
     return;
   }
   const ctx = publicFeedbackContextForTrack(currentPlayerTrackRef);
-  if (!ctx?.songId || els.playerFeedbackPopover?.hidden === false && _playerFeedbackPopoverSongId === ctx.songId) {
+  if (!ctx?.songId) {
     closePlayerFeedbackPopover();
     return;
   }
-  _playerFeedbackPopoverSongId = ctx.songId;
-  renderPlayerFeedbackPopoverChips(ctx.songId);
-  if (els.playerFeedbackPopover) els.playerFeedbackPopover.hidden = false;
-  if (els.btnPlayerFeedbackSend) els.btnPlayerFeedbackSend.setAttribute("aria-expanded", "true");
+  if (isOpen && _playerFeedbackPopoverSongId === ctx.songId) {
+    closePlayerFeedbackPopover();
+    return;
+  }
+  openPlayerFeedbackPopover();
 }
 
 async function hydrateSongFeedbackSummary(songId) {
@@ -10350,7 +10392,7 @@ function wirePlayerFeedbackUiOnce() {
   if (els.btnPlayerFeedbackSend) {
     els.btnPlayerFeedbackSend.addEventListener("click", (e) => {
       e.stopPropagation();
-      haptic("light");
+      haptic("impact");
       togglePlayerFeedbackPopover();
     });
   }
@@ -10362,7 +10404,12 @@ function wirePlayerFeedbackUiOnce() {
       e.stopPropagation();
       const songId = btn.getAttribute("data-song-feedback-song");
       const type = btn.getAttribute("data-song-feedback-type");
-      void submitSongFeedback(songId, type);
+      const label = feedbackLabelForType(type);
+      closePlayerFeedbackPopover();
+      haptic("success");
+      playPrivateFeedbackSendSound();
+      spawnPlayerFeedbackAura(label, _playerFeedbackAuraSlot++);
+      void submitSongFeedback(songId, type, { skipAura: true, skipClose: true });
     });
   }
   if (els.btnPlayerFeedbackInbox) {
@@ -10392,9 +10439,11 @@ function songDetailsFeedbackHintHtml(track) {
   return `<p class="hint songFeedbackDetailsHint">Private feedback lives on the player cover — tap the whisper icon on the artwork.</p>`;
 }
 
-async function submitSongFeedback(songId, feedbackType) {
+async function submitSongFeedback(songId, feedbackType, opts = {}) {
   const sid = String(songId || "").trim();
   const type = String(feedbackType || "").trim();
+  const skipAura = Boolean(opts.skipAura);
+  const skipClose = Boolean(opts.skipClose);
   if (!sid || !type) return;
   if (!authSession?.user?.id) {
     showToast("Sign in to send private feedback.", { icon: "!", durationMs: 3200 });
@@ -10421,9 +10470,13 @@ async function submitSongFeedback(songId, feedbackType) {
     } else if (data?.existing) {
       showToast("You already sent that feedback.");
     } else {
-      closePlayerFeedbackPopover();
-      spawnPlayerFeedbackAura(feedbackLabelForType(type), _playerFeedbackAuraSlot++);
-      showToast("Private feedback sent.");
+      if (!skipClose) closePlayerFeedbackPopover();
+      if (!skipAura) {
+        haptic("success");
+        playPrivateFeedbackSendSound();
+        spawnPlayerFeedbackAura(feedbackLabelForType(type), _playerFeedbackAuraSlot++);
+      }
+      showToast("Private feedback sent.", { durationMs: 1800 });
     }
     if (String(currentPlayerTrackRef?.songId || "") === sid) {
       renderPlayerFeedbackPopoverChips(sid);

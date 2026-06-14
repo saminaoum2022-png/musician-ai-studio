@@ -1,6 +1,9 @@
 /**
  * Optional gentle high-shelf roll-off for in-app song playback.
  * Settings → Preferences → Warm playback.
+ *
+ * MediaElementSource is one-shot and CORS-sensitive: crossOrigin must be
+ * set before src, and we must never wire a playing element mid-stream.
  */
 
 export const WARM_PLAYBACK_STORAGE_KEY = "mas:warmPlayback:v1";
@@ -47,25 +50,39 @@ export function urlAllowsWarmWebAudio(url) {
   return false;
 }
 
-export function applyWarmPlaybackCrossOrigin(audio, url) {
-  if (!audio || !isWarmPlaybackEnabled()) return;
-  if (!urlAllowsWarmWebAudio(url)) {
-    try {
-      audio.removeAttribute("crossOrigin");
-    } catch {}
-    return;
-  }
+/** Set crossOrigin before assigning audio.src (required for Web Audio). */
+export function applyWarmCrossOriginBeforeSrc(audio, url) {
+  if (!audio || !isWarmPlaybackEnabled()) return false;
+  if (!urlAllowsWarmWebAudio(url)) return false;
   try {
     audio.crossOrigin = "anonymous";
-  } catch {}
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-/** Wire Web Audio once per element (MediaElementSource is one-shot). */
-export function ensureWarmPlaybackRoute(audio) {
-  if (!audio || !isWarmPlaybackEnabled()) return null;
+export function isWarmRouted(audio) {
+  return Boolean(audio && wiredElements.has(audio));
+}
+
+export function dropWarmRouteRecord(audio) {
+  if (!audio) return;
+  const route = routes.get(audio);
+  if (route?.ctx) {
+    try {
+      route.ctx.close();
+    } catch {}
+  }
+  routes.delete(audio);
+  wiredElements.delete(audio);
+}
+
+function ensureWarmPlaybackRoute(audio) {
+  if (!audio) return null;
   const existing = routes.get(audio);
   if (existing) {
-    applyShelfGain(existing.shelf, true);
+    applyShelfGain(existing.shelf, isWarmPlaybackEnabled());
     return existing;
   }
   const Ctor = getAudioContextCtor();
@@ -77,7 +94,7 @@ export function ensureWarmPlaybackRoute(audio) {
     shelf.type = "highshelf";
     shelf.frequency.value = WARM_SHELF_HZ;
     shelf.Q.value = WARM_SHELF_Q;
-    applyShelfGain(shelf, true);
+    applyShelfGain(shelf, isWarmPlaybackEnabled());
     source.connect(shelf);
     shelf.connect(ctx.destination);
     const route = { ctx, shelf };
@@ -105,21 +122,16 @@ export function setWarmPlaybackEnabled(on) {
   syncWarmPlaybackRouteState();
 }
 
-export async function resumeWarmPlaybackContext(audio) {
-  if (!audio || !isWarmPlaybackEnabled()) return;
-  ensureWarmPlaybackRoute(audio);
-  const route = routes.get(audio);
-  if (!route?.ctx) return;
+/** Wire the shelf at play() time — after src is set with crossOrigin. */
+export async function wireWarmPlaybackAtPlay(audio, url) {
+  if (!audio || !isWarmPlaybackEnabled()) return false;
+  if (!urlAllowsWarmWebAudio(url)) return false;
+  const route = ensureWarmPlaybackRoute(audio);
+  if (!route?.ctx) return false;
   try {
     if (route.ctx.state === "suspended") await route.ctx.resume();
   } catch {}
-}
-
-/** Call before assigning `audio.src` when warm playback may be active. */
-export function prepareWarmPlaybackElement(audio, url) {
-  if (!audio || !isWarmPlaybackEnabled()) return;
-  applyWarmPlaybackCrossOrigin(audio, url);
-  ensureWarmPlaybackRoute(audio);
+  return true;
 }
 
 export function initWarmPlaybackSettings(checkbox, { onChange } = {}) {

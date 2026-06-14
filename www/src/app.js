@@ -20,14 +20,17 @@ import {
 } from "./onboarding.js";
 import { initTheme } from "./theme.js";
 import {
+  applyWarmCrossOriginBeforeSrc,
+  dropWarmRouteRecord,
   initWarmPlaybackSettings,
-  prepareWarmPlaybackElement,
-  resumeWarmPlaybackContext,
+  isWarmPlaybackEnabled,
+  isWarmRouted,
+  wireWarmPlaybackAtPlay,
 } from "./warm-playback.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615warmPlayback";
+const APP_BUILD = "20260615warmPlaybackFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1380,7 +1383,8 @@ async function hubAudioPlayWithRetry(audio) {
   await awaitWithTimeout(_hubInflightPlay, 250);
   _hubInflightPlay = null;
   try {
-    await resumeWarmPlaybackContext(audio);
+    const playSrc = String(audio.src || "").trim();
+    if (playSrc) await wireWarmPlaybackAtPlay(audio, playSrc);
   } catch {}
 
   const tryOnce = async () => {
@@ -1685,7 +1689,7 @@ async function startHubPlayback(postId) {
     stopHubPlayback();
     return;
   }
-  prepareWarmPlaybackElement(a, targetSrc);
+  applyWarmCrossOriginBeforeSrc(a, targetSrc);
   resetAudioDurationHintForUrl(targetSrc);
   await primeAudioDurationHint(targetSrc);
   try {
@@ -28162,6 +28166,57 @@ async function exportSessionMixWav() {
   setSessionStatus("Export complete. Download is ready.");
 }
 
+/** MediaElementSource is one-shot — replace the element after warm routing so
+ *  disabling warm playback restores normal speaker output. */
+function recreatePlayerElIfWarmRouted() {
+  if (!playerEl || !isWarmRouted(playerEl)) return;
+  const snap = {
+    src: String(playerEl.src || "").trim(),
+    time: Number(playerEl.currentTime) || 0,
+    paused: playerEl.paused,
+    label: playerLoadedLabel,
+  };
+  try {
+    playerEl.pause();
+  } catch {}
+  dropWarmRouteRecord(playerEl);
+  playerEl = null;
+  if (!snap.src) return;
+  setPlayerSource(snap.src, snap.label || "Song");
+  const fresh = ensurePlayer();
+  try {
+    fresh.currentTime = snap.time;
+  } catch {}
+  if (!snap.paused) void hubAudioPlayWithRetry(fresh);
+}
+
+function recreateHubAudioIfWarmRouted() {
+  if (!hubAudio || !isWarmRouted(hubAudio)) return;
+  const snap = {
+    src: String(hubAudio.src || "").trim(),
+    time: Number(hubAudio.currentTime) || 0,
+    paused: hubAudio.paused,
+    postId: hubAudioPostId,
+    post: hubAudioCurrentPost,
+    seq: hubPlaybackSeq,
+  };
+  try {
+    hubAudio.pause();
+  } catch {}
+  dropWarmRouteRecord(hubAudio);
+  hubAudio = null;
+  if (!snap.src || !snap.postId || !snap.post) return;
+  const fresh = ensureHubAudio();
+  applyWarmCrossOriginBeforeSrc(fresh, snap.src);
+  resetAudioDurationHintForUrl(snap.src);
+  fresh.src = snap.src;
+  try {
+    fresh.dataset.hubSeq = String(snap.seq);
+    fresh.currentTime = snap.time;
+  } catch {}
+  if (!snap.paused) void hubAudioPlayWithRetry(fresh);
+}
+
 function ensurePlayer() {
   if (playerEl) return playerEl;
   playerEl = new Audio();
@@ -28298,10 +28353,10 @@ function setPlayerSource(url, label) {
   if (typeof playUrl === "string" && /^https?:\/\//i.test(playUrl)) {
     lastPlayerHttpUrl = playUrl;
   }
-  prepareWarmPlaybackElement(a, playUrl);
+  applyWarmCrossOriginBeforeSrc(a, playUrl);
   // Only same-origin or blob URLs need crossOrigin for WebAudio/spectrum; forcing
   // "anonymous" on arbitrary Suno CDN URLs breaks playback when ACAO is absent.
-  if (!els.settingsWarmPlayback?.checked) {
+  if (!isWarmPlaybackEnabled()) {
     try {
       const u = String(playUrl || "");
       if (!u || u.startsWith("blob:")) {
@@ -35573,14 +35628,15 @@ if (els.settingsBtnLogout) {
 initWarmPlaybackSettings(els.settingsWarmPlayback, {
   onChange(enabled) {
     try {
-      const active = getMiniPlayerAudio() || playerEl || hubAudio;
-      if (enabled && active?.src) prepareWarmPlaybackElement(active, active.src);
-      if (active) void resumeWarmPlaybackContext(active);
+      if (!enabled) {
+        recreatePlayerElIfWarmRouted();
+        recreateHubAudioIfWarmRouted();
+      }
     } catch {}
     try {
       showToast(
         enabled
-          ? "Warm playback on — softer highs on songs."
+          ? "Warm playback on — softer highs on the next play."
           : "Warm playback off — full-range playback.",
         { icon: "♪", durationMs: 3200 },
       );

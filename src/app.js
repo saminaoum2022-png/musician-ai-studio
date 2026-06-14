@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615baritoneSlim";
+const APP_BUILD = "20260615humCoverVoice";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -32149,11 +32149,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       // Voice profile: send gender + timbre to Suno only — no extra style clauses.
       // Long auto phrases (tessitura, resonance, avoid shouting…) fought user style
       // and did not keep pitch lower; Voice timbre: Baritone on the API is enough.
-      if (!personaIdSel && vp.includes("|")) {
+      // Voice profile: skip on reference/hum — uploaded audio drives the voice.
+      if (!personaIdSel && !hasReference && vp.includes("|")) {
         const [gender, timbre] = vp.split("|");
         payload.vocalGender = gender || undefined;
         payload.voiceTimbre = timbre || undefined;
-      } else if (!personaIdSel && !vp) {
+      } else if (!personaIdSel && !hasReference && !vp) {
         // Singer pills on the Create page: gender only, no forced timbre.
         const singerGender = String(els.sunoSingerGender?.value || "").trim();
         if (singerGender === "m" || singerGender === "f") {
@@ -32273,8 +32274,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               fd.append("audioWeight", "0.95");
               fd.append("styleWeight", "0.25");
             }
-            if (payload?.vocalGender) fd.append("vocalGender", String(payload.vocalGender));
-            if (payload?.voiceTimbre) fd.append("voiceTimbre", String(payload.voiceTimbre));
+            if (payload?.vocalGender && !hasReference) fd.append("vocalGender", String(payload.vocalGender));
+            if (payload?.voiceTimbre && !hasReference) fd.append("voiceTimbre", String(payload.voiceTimbre));
             if (payload?.songKey) fd.append("songKey", String(payload.songKey));
             if (timing) fd.append("timing", String(timing));
             if (dialect) fd.append("dialect", String(dialect));

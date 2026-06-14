@@ -229,15 +229,11 @@ module.exports = async function handler(req, res) {
       const coverModes = new Set(["vocal_full", "vocal_cover", "song_remix", "song_cover", "vocal_instrumental"]);
       if (coverModes.has(referenceMode)) {
         const coverInstrumental = referenceMode === "vocal_instrumental";
-        // Enrich style with delivery hints that don't fight the melody:
-        // dialect, timbre, persona color. Skip rigid timing/key locks so Suno
-        // can match the natural feel of the uploaded melody.
+        // Enrich style with dialect only — uploaded audio drives melody and voice.
         const coverStyle = buildCoverStyle({
           baseStyle: style,
           dialect,
           dialectHint,
-          voiceTimbre,
-          vocalGender,
         });
         const coverNegative = mergeNegativeTags(negativeTags, [
           "out-of-tune",
@@ -258,7 +254,6 @@ module.exports = async function handler(req, res) {
           title: title || (coverInstrumental ? "Instrumental cover from reference" : "Cover from reference"),
           negativeTags: coverNegative,
           styleWeight: 0.5,
-          ...(!coverInstrumental && (vocalGender === "m" || vocalGender === "f") ? { vocalGender } : {}),
           ...(!coverInstrumental && personaId ? { personaId } : {}),
         };
         try {
@@ -521,11 +516,10 @@ function wantsSpokenDelivery(text) {
 }
 
 /**
- * For cover mode, fold delivery hints (dialect, timbre, vocal gender) into
- * the `style` field. We deliberately avoid rigid timing/key/groove locks so
- * Suno's melody analysis can drive the feel.
+ * Cover / hum style: user style + dialect only. Uploaded reference drives
+ * melody and vocal character — no auto baritone/tenor phrases here.
  */
-function buildCoverStyle({ baseStyle, dialect, dialectHint, voiceTimbre, vocalGender }) {
+function buildCoverStyle({ baseStyle, dialect, dialectHint }) {
   const parts = [];
   const base = String(baseStyle || "").trim();
   const spoken = wantsSpokenDelivery(base);
@@ -537,41 +531,6 @@ function buildCoverStyle({ baseStyle, dialect, dialectHint, voiceTimbre, vocalGe
 
   const dialectHintClean = String(dialectHint || "").trim();
   if (dialectHintClean) parts.push(`dialect hint: ${dialectHintClean}`);
-
-  const timbreClean = String(voiceTimbre || "").trim();
-  const timbreLower = timbreClean.toLowerCase();
-  const gender = String(vocalGender || "").trim().toLowerCase();
-  let timbreClause = "";
-  if (spoken) {
-    if (timbreLower.includes("baritone")) {
-      timbreClause = "male baritone narrator, warm clear speech, controlled dynamics";
-    } else if (timbreLower.includes("bass")) {
-      timbreClause = "male bass narrator, deep clear speech, no high belt";
-    } else if (timbreLower.includes("tenor")) {
-      timbreClause = "male tenor narrator, clear conversational speech";
-    } else if (timbreLower.includes("alto")) {
-      timbreClause = "female alto narrator, warm clear speech";
-    } else if (timbreLower.includes("mezzo")) {
-      timbreClause = "female mezzo narrator, balanced clear speech";
-    } else if (timbreLower.includes("soprano")) {
-      timbreClause = "female soprano narrator, bright clear speech";
-    }
-  } else if (timbreLower.includes("baritone")) {
-    timbreClause = "male baritone lead, warm chest resonance, controlled dynamics";
-  } else if (timbreLower.includes("bass")) {
-    timbreClause = "male bass lead, deep low register, dark warm tone";
-  } else if (timbreLower.includes("tenor")) {
-    timbreClause = "male tenor lead, smooth lyrical upper range";
-  } else if (timbreLower.includes("alto")) {
-    timbreClause = "female alto lead, smoky chest tone";
-  } else if (timbreLower.includes("mezzo")) {
-    timbreClause = "female mezzo-soprano lead, balanced warm tone";
-  } else if (timbreLower.includes("soprano")) {
-    timbreClause = "female soprano lead, bright clear upper range";
-  }
-  if (timbreClause) parts.push(timbreClause);
-  else if (gender === "m") parts.push(spoken ? "male narrator voice" : "male lead vocal");
-  else if (gender === "f") parts.push(spoken ? "female narrator voice" : "female lead vocal");
 
   parts.push(
     spoken

@@ -5618,6 +5618,18 @@ body.hubJumpingToTop #hubList .hubRow{
   opacity: 0.34;
   filter: saturate(0.85) brightness(0.95);
 }
+.coverImg.isCoverPlaceholder,
+.playerArt.isCoverPlaceholder.coverImg,
+.resultArt.isCoverPlaceholder,
+.libRowArt img.isCoverPlaceholder{
+  object-fit: contain;
+  padding: 18%;
+  background:
+    radial-gradient(120% 120% at 20% 10%, rgba(124,92,255,0.16), transparent 60%),
+    #141820;
+  opacity: 1;
+  filter: none;
+}
 /* Subtle breathing pulse on the cover when audio is playing — same idea
  * as the Hub focused-card cover. Kept very small so layout doesn't shift. */
 .playerArtWrap.isNowPlaying .playerArt{

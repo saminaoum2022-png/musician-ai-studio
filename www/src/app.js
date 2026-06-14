@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615refSingerFix";
+const APP_BUILD = "20260615coverFallback";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -1152,7 +1152,7 @@ function applyHubRowCoverTint(rowEl, src) {
 function applyCoverGlowRgb(el, src) {
   if (!el) return;
   const s = String(src || "").trim();
-  if (!s || s.startsWith("data:") || /nabadai-logo\.png/i.test(s)) {
+  if (!s || s.startsWith("data:") || /nabadai-logo\.png/i.test(s) || /cover-placeholder\.svg/i.test(s)) {
     try {
       el.style.removeProperty("--cover-glow-rgb");
     } catch {}
@@ -28321,11 +28321,149 @@ function placeholderCoverDataUrl() {
   return "./assets/nabadai-logo.png";
 }
 
+/** Shown when a remote cover URL fails after brief retries (♪ tile). */
+function brokenCoverPlaceholderUrl() {
+  return "./assets/cover-placeholder.svg";
+}
+
+function isBrokenCoverPlaceholder(src) {
+  return /cover-placeholder\.svg/i.test(String(src || ""));
+}
+
+const COVER_IMG_RETRY_DELAYS_MS = [2000, 5000];
+
+function shouldAutoWireCoverImage(img) {
+  if (!(img instanceof HTMLImageElement)) return false;
+  if (img.dataset.coverWired === "1") return false;
+  if (img.closest(".userPublicAvatarWrap, .followActAvatar, .commentAvatar, .personaAvatar")) return false;
+  const src = String(img.getAttribute("src") || img.dataset.coverSrc || "").trim();
+  if (!src || isBrokenCoverPlaceholder(src) || /nabadai-logo\.png/i.test(src)) return false;
+  if (img.matches(".playerArt, .resultArt, .coverImg")) return true;
+  if (img.closest(
+    ".libRowArt, .hubReelCover, .hubCover, .chartRowArt, .discoverySpotCardArt, "
+    + ".discoverChallengeSpotArt, .profileFeaturedSongArt, .resultArtWrap, .playerArtWrap, "
+    + ".mashupSlotArt, .searchPosterArt, .hubSearchTemplateArt"
+  )) return true;
+  return /^https?:\/\//i.test(src);
+}
+
+function coverImageRetryUrl(original, attempt) {
+  const base = String(original || "").trim();
+  if (!base) return "";
+  const bust = `_rc=${Date.now()}_${attempt}`;
+  try {
+    const u = new URL(base, location.href);
+    u.searchParams.set("_rc", `${Date.now()}_${attempt}`);
+    return u.href;
+  } catch {
+    return `${base}${base.includes("?") ? "&" : "?"}${bust}`;
+  }
+}
+
+function applyBrokenCoverPlaceholder(img) {
+  if (!img) return;
+  img.dataset.coverFallback = "final";
+  img.classList.add("isCoverPlaceholder");
+  img.removeAttribute("crossorigin");
+  img.src = brokenCoverPlaceholderUrl();
+}
+
+function handleCoverImageError(img) {
+  if (!img || img.dataset.coverFallback === "final") return;
+  const original = String(img.dataset.coverSrc || img.getAttribute("src") || "").trim();
+  if (!original || isBrokenCoverPlaceholder(original) || /nabadai-logo\.png/i.test(original)) {
+    applyBrokenCoverPlaceholder(img);
+    return;
+  }
+  const attempt = Number(img.dataset.coverRetry || "0");
+  if (attempt >= COVER_IMG_RETRY_DELAYS_MS.length) {
+    applyBrokenCoverPlaceholder(img);
+    return;
+  }
+  const delay = COVER_IMG_RETRY_DELAYS_MS[attempt];
+  img.dataset.coverRetry = String(attempt + 1);
+  window.setTimeout(() => {
+    if (!img.isConnected || img.dataset.coverFallback === "final") return;
+    const next = coverImageRetryUrl(original, attempt + 1);
+    if (!next) {
+      applyBrokenCoverPlaceholder(img);
+      return;
+    }
+    img.classList.remove("isCoverPlaceholder");
+    img.src = next;
+  }, delay);
+}
+
+function wireCoverImageEl(img) {
+  if (!shouldAutoWireCoverImage(img)) return;
+  const src = String(img.getAttribute("src") || "").trim();
+  if (!src) return;
+  img.dataset.coverWired = "1";
+  img.dataset.coverSrc = String(img.dataset.coverSrc || src).trim();
+  img.dataset.coverRetry = "0";
+  img.classList.add("coverImg");
+  img.addEventListener("error", () => handleCoverImageError(img));
+  if (img.complete && !img.naturalWidth) handleCoverImageError(img);
+}
+
+function scanCoverImagesIn(root) {
+  const scope = root && root.querySelectorAll ? root : document;
+  scope.querySelectorAll?.("img").forEach((img) => wireCoverImageEl(img));
+  if (root instanceof HTMLImageElement) wireCoverImageEl(root);
+}
+
+let _coverImageFallbackReady = false;
+function initCoverImageFallbackOnce() {
+  if (_coverImageFallbackReady) return;
+  _coverImageFallbackReady = true;
+  document.addEventListener(
+    "error",
+    (e) => {
+      const img = e.target;
+      if (shouldAutoWireCoverImage(img)) handleCoverImageError(img);
+    },
+    true,
+  );
+  try {
+    const obs = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        m.addedNodes.forEach((node) => {
+          if (node instanceof HTMLImageElement) wireCoverImageEl(node);
+          else if (node.querySelectorAll) scanCoverImagesIn(node);
+        });
+      }
+    });
+    obs.observe(document.body, { childList: true, subtree: true });
+  } catch {}
+  scanCoverImagesIn(document.body);
+}
+
+function setCoverImageSrc(img, url, opts = {}) {
+  if (!img) return;
+  const raw = String(url || "").trim();
+  const empty = opts.allowEmpty && !raw;
+  const src = empty
+    ? placeholderCoverDataUrl()
+    : raw || brokenCoverPlaceholderUrl();
+  img.dataset.coverSrc = raw || "";
+  img.dataset.coverRetry = "0";
+  img.dataset.coverFallback = "";
+  img.classList.toggle("isCoverPlaceholder", empty || isBrokenCoverPlaceholder(src) || /nabadai-logo\.png/i.test(src));
+  img.classList.add("coverImg");
+  if (/^https?:\/\//i.test(src)) img.crossOrigin = "anonymous";
+  else img.removeAttribute("crossorigin");
+  img.src = src;
+  wireCoverImageEl(img);
+}
+
 function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, challenge, mashupOf } = {}) {
   const hasTrack = Boolean(artUrl);
   if (els.playerTitle) els.playerTitle.textContent = title || "Now Playing";
   if (els.playerSubtitle) els.playerSubtitle.textContent = subtitle || "";
-  if (els.playerArt) els.playerArt.src = artUrl || placeholderCoverDataUrl();
+  if (els.playerArt) {
+    if (hasTrack) setCoverImageSrc(els.playerArt, artUrl);
+    else setCoverImageSrc(els.playerArt, placeholderCoverDataUrl(), { allowEmpty: true });
+  }
   setPlayerChallengeAttribution(challenge || challengeMetaForTrack(currentPlayerTrackRef));
   const mashup = mashupOf || mashupAttributionForTrack(currentPlayerTrackRef);
   setPlayerMashupAttribution(mashup);
@@ -29091,6 +29229,7 @@ function dismissPlayerConfirm(answer) {
 }
 if (typeof document !== "undefined") {
   document.addEventListener("DOMContentLoaded", () => {
+    try { initCoverImageFallbackOnce(); } catch {}
     if (els.playerConfirmOk) {
       els.playerConfirmOk.addEventListener("click", () => dismissPlayerConfirm(true));
     }
@@ -31275,8 +31414,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (rm) rm.textContent = metaLine;
     if (rm2) rm2.textContent = metaLine;
     if (els.resultArt) {
-      const fallbackCover = "/assets/nabadai-logo.png";
-      els.resultArt.src = lastSunoArtUrl || fallbackCover;
+      setCoverImageSrc(els.resultArt, lastSunoArtUrl || brokenCoverPlaceholderUrl());
       els.resultArt.alt = lastSunoTitle ? `Cover: ${lastSunoTitle}` : "Song cover";
       els.resultArt.style.display = "";
     }
@@ -31301,8 +31439,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
     if (els.resultTitle2) els.resultTitle2.textContent = lastSunoTitle2 || "Generated song B";
     if (els.resultArt2) {
-      const fallbackCover = "/assets/nabadai-logo.png";
-      els.resultArt2.src = lastSunoArtUrl2 || lastSunoArtUrl || fallbackCover;
+      setCoverImageSrc(els.resultArt2, lastSunoArtUrl2 || lastSunoArtUrl || brokenCoverPlaceholderUrl());
       els.resultArt2.alt = lastSunoTitle2 ? `Cover: ${lastSunoTitle2}` : "Song cover B";
       els.resultArt2.style.display = "";
     }
@@ -32136,28 +32273,23 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
       setStatus(`Submitting generation… (Mode: ${modeLabel} | Engine: ${engineLabel})`);
 
-      const styleExtras = hasReference
-        ? [
-            resolvedSingerGender ? singerVoiceStyleNote(resolvedSingerGender) : "",
-            dialect ? `Dialect: ${dialect}` : "",
-            dialectHint ? `Hint: ${dialectHint}` : "",
-            arabicAddressNote,
-          ]
-            .filter(Boolean)
-            .join(", ")
-        : [
-            resolvedSingerGender ? singerVoiceStyleNote(resolvedSingerGender) : "",
-            dialect ? `Dialect: ${dialect}` : "",
-            dialectHint ? `Hint: ${dialectHint}` : "",
-            arabicAddressNote,
-            timing ? timing : "",
-            groovePace ? (GROOVE_MAP[groovePace] || "") : "",
-            prosodyStrictness ? (PROSODY_MAP[prosodyStrictness] || "") : "",
-            beatStability ? (BEAT_STABILITY_MAP[beatStability] || "") : "",
-            hasReference ? REFERENCE_MELODY_LOCK : "",
-          ]
-            .filter(Boolean)
-            .join(", ");
+      const styleExtras = [
+        resolvedSingerGender ? singerVoiceStyleNote(resolvedSingerGender) : "",
+        dialect ? `Dialect: ${dialect}` : "",
+        dialectHint ? `Hint: ${dialectHint}` : "",
+        arabicAddressNote,
+        ...(hasReference
+          ? []
+          : [
+              timing ? timing : "",
+              groovePace ? (GROOVE_MAP[groovePace] || "") : "",
+              prosodyStrictness ? (PROSODY_MAP[prosodyStrictness] || "") : "",
+              beatStability ? (BEAT_STABILITY_MAP[beatStability] || "") : "",
+              hasReference ? REFERENCE_MELODY_LOCK : "",
+            ]),
+      ]
+        .filter(Boolean)
+        .join(", ");
 
       try { renderPersonaSelect(); } catch {}
       const personaHit = personaIdSel
@@ -32196,10 +32328,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const payload = {
         prompt: finalPrompt,
         style: hasReference
-          ? compactStyleForProvider(
-              `${userStyle}${userStyle && styleExtras ? " | " : ""}${styleExtras}${artworkStyle ? `${userStyle || styleExtras ? ", " : ""}cover art: ${artworkStyle}` : ""}`,
-              980
-            )
+          ? String(userStyle || "").trim()
           : `${userStyle}${userStyle ? " | " : ""}${timingClause}, ${styleExtras}${artworkStyle ? `, cover art: ${artworkStyle}` : ""}`,
         songKey: mapSolfegeToLetterKey((els.sunoSongKey?.value || "").trim()),
         title: (els.sunoTitle?.value || "").trim(),

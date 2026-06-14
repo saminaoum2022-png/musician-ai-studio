@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615tapToPlay";
+const APP_BUILD = "20260615coverPerf";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -28386,19 +28386,26 @@ function isBrokenCoverPlaceholder(src) {
 
 const COVER_IMG_RETRY_DELAYS_MS = [2000, 5000];
 
+function coverImageIsListThumb(img) {
+  return Boolean(img?.closest?.(
+    ".libRowArt, .discoveryRowArt, .discoverySpotCardArt, .followActMedia, "
+    + ".chartRowArt, .discoveryDiscoverGrid, .discoveryFollowingList, .userPublicSongs"
+  ));
+}
+
 function shouldAutoWireCoverImage(img) {
   if (!(img instanceof HTMLImageElement)) return false;
-  if (img.dataset.coverWired === "1") return false;
+  if (img.dataset.coverFallback === "final") return false;
   if (img.closest(".userPublicAvatarWrap, .followActAvatar, .commentAvatar, .personaAvatar")) return false;
-  const src = String(img.getAttribute("src") || img.dataset.coverSrc || "").trim();
-  if (!src || isBrokenCoverPlaceholder(src) || /nabadai-logo\.png/i.test(src)) return false;
-  if (img.matches(".playerArt, .resultArt, .coverImg")) return true;
+  if (img.matches(".playerArt, .resultArt, .coverImg, .followActMediaImg")) return true;
   if (img.closest(
     ".libRowArt, .hubReelCover, .hubCover, .chartRowArt, .discoverySpotCardArt, "
     + ".discoverChallengeSpotArt, .profileFeaturedSongArt, .resultArtWrap, .playerArtWrap, "
-    + ".mashupSlotArt, .searchPosterArt, .hubSearchTemplateArt"
+    + ".mashupSlotArt, .searchPosterArt, .hubSearchTemplateArt, .discoveryRowArt, .followActMedia"
   )) return true;
-  return /^https?:\/\//i.test(src);
+  const src = String(img.getAttribute("src") || img.dataset.coverSrc || "").trim();
+  if (!src || isBrokenCoverPlaceholder(src) || /nabadai-logo\.png/i.test(src)) return false;
+  return false;
 }
 
 function coverImageRetryUrl(original, attempt) {
@@ -28418,11 +28425,10 @@ function applyBrokenCoverPlaceholder(img) {
   if (!img) return;
   img.dataset.coverFallback = "final";
   img.dataset.coverSrc = "";
+  img.dataset.coverRetry = "";
   img.classList.add("isCoverPlaceholder");
   img.removeAttribute("crossorigin");
   img.src = brokenCoverPlaceholderUrl();
-  // Don't re-enter error/retry once the inline SVG placeholder is set.
-  img.dataset.coverWired = "1";
 }
 
 function handleCoverImageError(img) {
@@ -28432,8 +28438,10 @@ function handleCoverImageError(img) {
     applyBrokenCoverPlaceholder(img);
     return;
   }
+  if (!img.dataset.coverSrc) img.dataset.coverSrc = original;
   const attempt = Number(img.dataset.coverRetry || "0");
-  if (attempt >= COVER_IMG_RETRY_DELAYS_MS.length) {
+  const maxRetries = coverImageIsListThumb(img) ? 0 : COVER_IMG_RETRY_DELAYS_MS.length;
+  if (attempt >= maxRetries) {
     applyBrokenCoverPlaceholder(img);
     return;
   }
@@ -28451,48 +28459,23 @@ function handleCoverImageError(img) {
   }, delay);
 }
 
-function wireCoverImageEl(img) {
-  if (!shouldAutoWireCoverImage(img)) return;
-  const src = String(img.getAttribute("src") || "").trim();
-  if (!src) return;
-  img.dataset.coverWired = "1";
-  img.dataset.coverSrc = String(img.dataset.coverSrc || src).trim();
-  img.dataset.coverRetry = "0";
-  img.classList.add("coverImg");
-  img.addEventListener("error", () => handleCoverImageError(img));
-  if (img.complete && !img.naturalWidth) handleCoverImageError(img);
-}
-
-function scanCoverImagesIn(root) {
-  const scope = root && root.querySelectorAll ? root : document;
-  scope.querySelectorAll?.("img").forEach((img) => wireCoverImageEl(img));
-  if (root instanceof HTMLImageElement) wireCoverImageEl(root);
-}
-
 let _coverImageFallbackReady = false;
 function initCoverImageFallbackOnce() {
   if (_coverImageFallbackReady) return;
   _coverImageFallbackReady = true;
+  // One capture-phase listener — no per-image wiring, no MutationObserver.
+  // List re-renders (Discover/Friends/Library) were scanning the whole DOM
+  // on every node insert and scheduling retries for every broken thumb.
   document.addEventListener(
     "error",
     (e) => {
       const img = e.target;
-      if (shouldAutoWireCoverImage(img)) handleCoverImageError(img);
+      if (!(img instanceof HTMLImageElement)) return;
+      if (!shouldAutoWireCoverImage(img)) return;
+      handleCoverImageError(img);
     },
     true,
   );
-  try {
-    const obs = new MutationObserver((mutations) => {
-      for (const m of mutations) {
-        m.addedNodes.forEach((node) => {
-          if (node instanceof HTMLImageElement) wireCoverImageEl(node);
-          else if (node.querySelectorAll) scanCoverImagesIn(node);
-        });
-      }
-    });
-    obs.observe(document.body, { childList: true, subtree: true });
-  } catch {}
-  scanCoverImagesIn(document.body);
 }
 
 function setCoverImageSrc(img, url, opts = {}) {
@@ -28502,7 +28485,6 @@ function setCoverImageSrc(img, url, opts = {}) {
   const src = empty
     ? placeholderCoverDataUrl()
     : raw || brokenCoverPlaceholderUrl();
-  delete img.dataset.coverWired;
   img.dataset.coverSrc = raw || "";
   img.dataset.coverRetry = "0";
   img.dataset.coverFallback = "";
@@ -28511,7 +28493,6 @@ function setCoverImageSrc(img, url, opts = {}) {
   if (/^https?:\/\//i.test(src)) img.crossOrigin = "anonymous";
   else img.removeAttribute("crossorigin");
   img.src = src;
-  wireCoverImageEl(img);
 }
 
 function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, challenge, mashupOf } = {}) {

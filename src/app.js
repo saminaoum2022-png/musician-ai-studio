@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615noNegTags";
+const APP_BUILD = "20260615avoidBox";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -284,6 +284,7 @@ initLockScreenNowPlaying({
 const els = {
   sunoPrompt: document.getElementById("sunoPrompt"),
   sunoStyle: document.getElementById("sunoStyle"),
+  sunoAvoidTags: document.getElementById("sunoAvoidTags"),
   btnBoostStyle: document.getElementById("btnBoostStyle"),
   sunoArtworkStyle: document.getElementById("sunoArtworkStyle"),
   sunoMaqam: document.getElementById("sunoMaqam"),
@@ -3115,6 +3116,7 @@ function setGenerateFieldsLocked(locked) {
   const instrumentalOnly = String(els.vocalInstrumentalOnly?.value || "0") === "1";
   if (els.sunoPrompt) els.sunoPrompt.disabled = locked;
   if (els.sunoStyle) els.sunoStyle.disabled = locked;
+  if (els.sunoAvoidTags) els.sunoAvoidTags.disabled = locked;
   if (els.btnBoostStyle) els.btnBoostStyle.disabled = locked;
   if (els.sunoTitle) els.sunoTitle.disabled = locked;
   if (els.sunoReferenceMode) els.sunoReferenceMode.disabled = locked;
@@ -3236,6 +3238,7 @@ function resetCreateDraft() {
   } catch {}
   if (els.sunoPrompt) els.sunoPrompt.value = "";
   if (els.sunoStyle) els.sunoStyle.value = "";
+  if (els.sunoAvoidTags) els.sunoAvoidTags.value = "";
   if (els.sunoTitle) els.sunoTitle.value = "";
   pendingSearchRemixMeta = null;
   setCreateChallengeHint(null);
@@ -12000,6 +12003,15 @@ function extractTaskIdLoose(data) {
   const nested = deepFindTaskIdString(data);
   if (nested) return nested;
   return null;
+}
+function trimAvoidTagsForSuno(raw) {
+  const merged = String(raw || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(", ");
+  if (!merged) return "";
+  return merged.length > 240 ? `${merged.slice(0, 237)}...` : merged;
 }
 function compactStyleForProvider(input, maxLen = 980) {
   let s = String(input || "")
@@ -32046,6 +32058,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       applyMaqamToStyleInput();
       const userPrompt = (els.sunoPrompt?.value || "").trim();
       const userStyle = (els.sunoStyle?.value || "").trim();
+      const userAvoidTags = trimAvoidTagsForSuno(els.sunoAvoidTags?.value || "");
       const artworkStyle = (els.sunoArtworkStyle?.value || "").trim();
       const dialect = String(els.sunoDialect?.value || "").trim();
       const dialectHint = String(els.sunoDialectHint?.value || "").trim();
@@ -32161,6 +32174,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           payload.vocalGender = singerGender;
         }
       }
+      if (userAvoidTags) payload.negativeTags = userAvoidTags;
       payload.style = compactStyleForProvider(payload.style, 980);
       const remixMeta =
         pendingSearchRemixMeta && typeof pendingSearchRemixMeta === "object"
@@ -32174,6 +32188,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         lyricsInput: userPrompt,
         finalPrompt,
         styleInput: userStyle,
+        avoidTagsInput: userAvoidTags,
         artworkStyle,
         styleSent: payload.style,
         dialect,
@@ -32280,6 +32295,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             if (timing) fd.append("timing", String(timing));
             if (dialect) fd.append("dialect", String(dialect));
             if (lyricDialectHint) fd.append("dialectHint", String(lyricDialectHint));
+            if (userAvoidTags) fd.append("negativeTags", userAvoidTags);
             if (payload?.personaId) fd.append("personaId", String(payload.personaId));
             const stemsTok = getSupabaseAuthToken();
             const rr = await fetch(apiUrl("/api/suno/stems"), {

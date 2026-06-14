@@ -6894,6 +6894,19 @@ textarea{
   font-size: 13.5px;
   letter-spacing: 0.01em;
 }
+.inPanelLabelHint{
+  margin-left: 6px;
+  color: rgba(232,238,247,0.42);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.inputPanel--avoid input{
+  border-color: rgba(255,255,255,0.07);
+  background: rgba(8,12,20,0.35);
+}
+.inputPanel--avoid input::placeholder{
+  color: rgba(232,238,247,0.34);
+}
 .inputPanel--style input,
 .inputPanel--style select{
   min-height:44px;

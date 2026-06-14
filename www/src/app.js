@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615settingsFlat";
+const APP_BUILD = "20260615sharePlayFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2599,6 +2599,7 @@ function resolveEmptyHashRoute() {
   if (!shouldSkipIntroOrOnboardingRoute()) return "intro";
   ensureAuthSessionUserFromToken();
   if (isAppLoggedIn() || getSupabaseAuthToken()) return "challenges";
+  if (isGuestModeEnabled()) return "challenges";
   return "auth";
 }
 
@@ -2831,7 +2832,33 @@ function applyRoute() {
     if (wanted === "player" && sharedTrackId) {
       // Listen-only share links — do not bounce guests to sign-in.
     } else {
-      wanted = "auth";
+      const intended = String(location.hash || "").trim();
+      if (intended && intended !== "#/auth" && intended !== "#/settings") {
+        setPostAuthReturnHash(intended);
+      }
+      if (wanted === "profile") {
+        wanted = "settings";
+        try { history.replaceState(null, "", "#/settings"); } catch {}
+        try { showToast("Sign in to unlock your profile", { icon: "👤", durationMs: 2800 }); } catch {}
+      } else {
+        const tabLabels = {
+          generate: "Create",
+          friends: "Friends",
+          activity: "Activity",
+          mashup: "Mashup",
+          player: "Player",
+          vocal: "Vocal",
+          stems: "Stems",
+          advanced: "Advanced",
+          credits: "Credits",
+          sounds: "Sounds",
+        };
+        try {
+          showToast(`Sign in to open ${tabLabels[wanted] || "this tab"}`, { icon: "👤", durationMs: 2800 });
+        } catch {}
+        wanted = "auth";
+        try { history.replaceState(null, "", "#/auth"); } catch {}
+      }
     }
   }
   if (sharedTrackId && (wanted === "intro" || wanted === "onboarding")) {
@@ -4407,6 +4434,15 @@ function runSearchQuery(query) {
 
 function applyDiscoveryIdeaToCreate(idea) {
   if (!idea) return;
+  if (!authSession?.user?.id) {
+    stashPendingDiscoveryIdea(idea);
+    setPostAuthReturnHash("#/generate");
+    setPendingCreateAction("song");
+    try { showToast("Sign in to create from this idea", { icon: "♪", durationMs: 2600 }); } catch {}
+    try { location.hash = "#/auth"; } catch {}
+    scheduleApplyRoute();
+    return;
+  }
   const title = String(idea.title || "New Idea").trim();
   if (els.sunoTitle) els.sunoTitle.value = title;
   if (els.sunoStyle) els.sunoStyle.value = String(idea.style || "").trim();
@@ -4663,6 +4699,19 @@ function discoverWeeklyChartSkeletonHtml() {
         <div class="discoverSkeletonLine short"></div>
       </div>
     </div>`;
+}
+
+function clearDiscoverTopSectionsLoading() {
+  const chartWrap = document.getElementById("discoverWeeklyChart");
+  if (chartWrap) {
+    chartWrap.classList.remove("isLoading");
+    chartWrap.removeAttribute("aria-busy");
+  }
+  const campaignWrap = document.getElementById("discoverCampaignRail");
+  if (campaignWrap) {
+    campaignWrap.classList.remove("isLoading");
+    campaignWrap.removeAttribute("aria-busy");
+  }
 }
 
 function paintDiscoverTopSectionsLoading() {
@@ -5255,8 +5304,9 @@ function bindHomeDeskOnce(page) {
       }
       if (card === "echo") {
         if (!authSession?.user?.id) {
+          setPostAuthReturnHash("#/friends");
           try {
-            location.hash = "#/profile";
+            location.hash = "#/auth";
           } catch {}
           scheduleApplyRoute();
           setStatus("Sign in to record an Echo.");
@@ -7453,6 +7503,52 @@ function closeCreateChooserSheet({ immediate = false } = {}) {
 
 const CREATE_ENTRY_INTENT_KEY = "nabadai_create_entry_intent_v1";
 const PENDING_CREATE_ACTION_KEY = "nabadai_pending_create_action_v1";
+const GUEST_MODE_KEY = "nabadai_guest_mode_v1";
+const POST_AUTH_RETURN_HASH_KEY = "nabadai_post_auth_return_v1";
+const PENDING_DISCOVERY_IDEA_KEY = "nabadai_pending_discovery_idea_v1";
+
+function isGuestModeEnabled() {
+  try { return localStorage.getItem(GUEST_MODE_KEY) === "1"; } catch {}
+  return false;
+}
+
+function setGuestModeEnabled(on) {
+  try {
+    if (on) localStorage.setItem(GUEST_MODE_KEY, "1");
+    else localStorage.removeItem(GUEST_MODE_KEY);
+  } catch {}
+}
+
+function setPostAuthReturnHash(hash) {
+  try {
+    const h = String(hash || "").trim();
+    if (!h) sessionStorage.removeItem(POST_AUTH_RETURN_HASH_KEY);
+    else sessionStorage.setItem(POST_AUTH_RETURN_HASH_KEY, h);
+  } catch {}
+}
+
+function consumePostAuthReturnHash() {
+  try {
+    const h = String(sessionStorage.getItem(POST_AUTH_RETURN_HASH_KEY) || "").trim();
+    sessionStorage.removeItem(POST_AUTH_RETURN_HASH_KEY);
+    return h;
+  } catch {}
+  return "";
+}
+
+function stashPendingDiscoveryIdea(idea) {
+  try { sessionStorage.setItem(PENDING_DISCOVERY_IDEA_KEY, JSON.stringify(idea)); } catch {}
+}
+
+function consumePendingDiscoveryIdea() {
+  try {
+    const raw = sessionStorage.getItem(PENDING_DISCOVERY_IDEA_KEY);
+    sessionStorage.removeItem(PENDING_DISCOVERY_IDEA_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {}
+  return null;
+}
 
 function setCreateEntryIntent(intent) {
   try {
@@ -7482,6 +7578,9 @@ function getPendingCreateAction() {
 async function finishPostAuthNavigation() {
   const pending = getPendingCreateAction();
   setPendingCreateAction("");
+  const returnHash = consumePostAuthReturnHash();
+  const pendingIdea = consumePendingDiscoveryIdea();
+  setGuestModeEnabled(false);
   loadAuthSession();
   ensureAuthSessionUserFromToken();
   endLoginSettling();
@@ -7490,6 +7589,19 @@ async function finishPostAuthNavigation() {
       try { navigateFromCreateChooser(pending); } catch {}
     }, 80);
     void ensureAuthBoot({ force: true, fast: true });
+    return;
+  }
+  if (returnHash && returnHash.startsWith("#/")) {
+    try { location.hash = returnHash; } catch {}
+    syncRoutePanelVisibility(returnHash.slice(2).split(/[?#&]/)[0].trim() || "challenges");
+    try { applyRoute(); } catch { scheduleApplyRoute(); }
+    if (pendingIdea && returnHash.includes("generate")) {
+      window.setTimeout(() => {
+        try { applyDiscoveryIdeaToCreate(pendingIdea); } catch {}
+      }, 120);
+    }
+    void ensureAuthBoot({ force: true, fast: true });
+    void refreshAuthStateFromSupabase().catch(() => null);
     return;
   }
   const target = shouldSkipIntroOrOnboardingRoute() ? "challenges" : "intro";
@@ -7521,6 +7633,7 @@ function requireAuthForCreate(onAuthed, pendingAction = "") {
     return true;
   }
   setPendingCreateAction(pendingAction);
+  setPostAuthReturnHash(String(location.hash || "#/challenges").trim() || "#/challenges");
   closeCreateChooserSheet();
   try { showToast("Sign in to create", { icon: "👤", durationMs: 2400 }); } catch {}
   try { location.hash = "#/auth"; } catch {}
@@ -7735,7 +7848,8 @@ function bindFollowingComposeOnce() {
     if (!authSession?.user?.id) {
       closeFriendsComposeSheet();
       try { showToast("Sign in to post", { icon: "👤", durationMs: 2400 }); } catch {}
-      location.hash = "#/profile";
+      setPostAuthReturnHash("#/friends");
+      location.hash = "#/auth";
       return;
     }
     const text = String(input?.value || "").trim();
@@ -8856,7 +8970,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
           statusEl,
           "Sign in to see activity",
           "Follow musicians from Discover — their drops and remixes show up here.",
-          `<a class="solid discoveryEmptyCta" href="#/profile">Sign in</a>`,
+          `<a class="solid discoveryEmptyCta" href="#/auth">Sign in</a>`,
         );
         return;
       }
@@ -8869,7 +8983,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
         statusEl,
         "Sign in to see activity",
         "Follow musicians from Discover — their drops and remixes show up here.",
-        `<a class="solid discoveryEmptyCta" href="#/profile">Sign in</a>`,
+          `<a class="solid discoveryEmptyCta" href="#/auth">Sign in</a>`,
       );
       return;
     }
@@ -12117,6 +12231,7 @@ function profileStorageKey(forId) {
 
 /** Guest library/profile on this device must not merge into a signed-in account. */
 function clearGuestLocalData() {
+  setGuestModeEnabled(false);
   try {
     localStorage.removeItem(PROFILE_KEY_GUEST);
     localStorage.removeItem(profileLibraryKeyFor("guest"));
@@ -16662,6 +16777,7 @@ async function openActivityNotificationTarget(n) {
     }
     const username = String(meta.actor_username || "").replace(/^@/, "").trim();
     if (username) {
+      _userPublicReturnHash = "#/activity";
       location.hash = href.startsWith("#") ? href : `#${href}`;
       showToast("Could not load this remix — open it from the creator's profile.", {
         icon: "!",
@@ -20162,74 +20278,53 @@ async function refreshDiscoverFeed() {
   statusEl.textContent = "";
   statusEl.hidden = true;
 
-  const rows = await supabaseFetchDiscoveryPublicSongs(64);
-  if (gen !== _discoveryFeedGen) return;
-  const playable = rows.filter((t) => String(t.url || "").trim());
-  const profMap = await fetchProfilesByUserIdsMap(playable.map((t) => t.userId));
-  _discoveryLastProfMap = profMap;
-  if (gen !== _discoveryFeedGen) return;
-  listEl.classList.remove("isDiscoveryLoading");
-  bindCampaignUiOnce();
-  void refreshDiscoverCampaignRail();
-  void refreshDiscoverWeeklyChart();
+  try {
+    const rows = await supabaseFetchDiscoveryPublicSongs(64);
+    if (gen !== _discoveryFeedGen) return;
+    const playable = rows.filter((t) => String(t.url || "").trim());
+    const profMap = await fetchProfilesByUserIdsMap(playable.map((t) => t.userId));
+    _discoveryLastProfMap = profMap;
+    if (gen !== _discoveryFeedGen) return;
+    listEl.classList.remove("isDiscoveryLoading");
+    bindCampaignUiOnce();
+    void refreshDiscoverCampaignRail();
+    void refreshDiscoverWeeklyChart();
 
-  if (!playable.length) {
-    _discoveryFeedTracks = [];
-    listEl.hidden = true;
-    listEl.innerHTML = "";
-    if (spotlightWrap) spotlightWrap.hidden = true;
-    if (rail) rail.innerHTML = "";
-    statusEl.hidden = false;
-    const ill = discoveryEmptyIllustrationSvg();
-    if (rows.length) {
-      statusEl.innerHTML = `
+    if (!playable.length) {
+      _discoveryFeedTracks = [];
+      listEl.hidden = true;
+      listEl.innerHTML = "";
+      if (spotlightWrap) spotlightWrap.hidden = true;
+      if (rail) rail.innerHTML = "";
+      statusEl.hidden = false;
+      const ill = discoveryEmptyIllustrationSvg();
+      if (rows.length) {
+        statusEl.innerHTML = `
         <div class="discoveryEmptyWrap discoveryEmptyWrapMuted">
           <div class="discoveryEmptyArt">${ill}</div>
           <p class="discoveryEmptyTitle">Almost there</p>
           <p class="discoveryEmptyText">We see public rows, but none have a playable audio URL yet. Try again after they finish saving.</p>
         </div>`;
-    } else {
-      statusEl.innerHTML = `
+      } else {
+        statusEl.innerHTML = `
         <div class="discoveryEmptyWrap">
           <div class="discoveryEmptyArt">${ill}</div>
           <p class="discoveryEmptyTitle">The feed is quiet</p>
           <p class="discoveryEmptyText">When creators publish to <strong>Discover</strong>, their songs show up here. Nothing live right now.</p>
         </div>`;
-    }
-    try {
-      syncDiscoveryPlayingHighlights();
-    } catch {}
-    return;
-  }
-
-  statusEl.hidden = true;
-  statusEl.textContent = "";
-
-  _discoveryFeedTracks = playable.map((t) => discoveryTrackPlaybackMeta(t, profMap));
-
-  listEl.hidden = false;
-  listEl.innerHTML = `<div class="discoveryDiscoverGrid" role="list">${playable
-    .map((t, i) => discoveryFeedCardHtml(t, profMap, i))
-    .join("")}</div>`;
-  try {
-    wireDiscoverySpotCardImages(listEl);
-  } catch {}
-  try {
-    syncDiscoveryPlayingHighlights();
-  } catch {}
-  // Play counts are nice-to-have — don't block the grid on another API hop.
-  void fetchDiscoverSongPlayCounts(playable.map((t) => t.id)).then((playCountMap) => {
-    if (gen !== _discoveryFeedGen) return;
-    let changed = false;
-    for (const t of playable) {
-      const n = playCountMap.get(String(t.id || "")) || 0;
-      if ((t.playCount || 0) !== n) {
-        t.playCount = n;
-        changed = true;
       }
+      try {
+        syncDiscoveryPlayingHighlights();
+      } catch {}
+      return;
     }
-    if (!changed) return;
+
+    statusEl.hidden = true;
+    statusEl.textContent = "";
+
     _discoveryFeedTracks = playable.map((t) => discoveryTrackPlaybackMeta(t, profMap));
+
+    listEl.hidden = false;
     listEl.innerHTML = `<div class="discoveryDiscoverGrid" role="list">${playable
       .map((t, i) => discoveryFeedCardHtml(t, profMap, i))
       .join("")}</div>`;
@@ -20239,12 +20334,59 @@ async function refreshDiscoverFeed() {
     try {
       syncDiscoveryPlayingHighlights();
     } catch {}
-  });
-  if (_discoverSearchOpen) {
-    const input = document.getElementById("searchInput");
-    const q = input?.value || "";
-    renderSearchTracks(q);
-    updateSearchEmptyState(q);
+    // Play counts are nice-to-have — don't block the grid on another API hop.
+    void fetchDiscoverSongPlayCounts(playable.map((t) => t.id)).then((playCountMap) => {
+      if (gen !== _discoveryFeedGen) return;
+      let changed = false;
+      for (const t of playable) {
+        const n = playCountMap.get(String(t.id || "")) || 0;
+        if ((t.playCount || 0) !== n) {
+          t.playCount = n;
+          changed = true;
+        }
+      }
+      if (!changed) return;
+      _discoveryFeedTracks = playable.map((t) => discoveryTrackPlaybackMeta(t, profMap));
+      listEl.innerHTML = `<div class="discoveryDiscoverGrid" role="list">${playable
+        .map((t, i) => discoveryFeedCardHtml(t, profMap, i))
+        .join("")}</div>`;
+      try {
+        wireDiscoverySpotCardImages(listEl);
+      } catch {}
+      try {
+        syncDiscoveryPlayingHighlights();
+      } catch {}
+    });
+    if (_discoverSearchOpen) {
+      const input = document.getElementById("searchInput");
+      const q = input?.value || "";
+      renderSearchTracks(q);
+      updateSearchEmptyState(q);
+    }
+  } catch (err) {
+    if (gen !== _discoveryFeedGen) return;
+    listEl.classList.remove("isDiscoveryLoading");
+    clearDiscoverTopSectionsLoading();
+    listEl.hidden = true;
+    listEl.innerHTML = "";
+    statusEl.hidden = false;
+    const ill = discoveryEmptyIllustrationSvg();
+    statusEl.innerHTML = `
+      <div class="discoveryEmptyWrap discoveryEmptyWrapMuted">
+        <div class="discoveryEmptyArt">${ill}</div>
+        <p class="discoveryEmptyTitle">Couldn't load Discover</p>
+        <p class="discoveryEmptyText">Check your connection and try again.</p>
+        <button type="button" class="solid discoveryEmptyCta" id="discoverFeedRetryBtn">Try again</button>
+      </div>`;
+    const retry = document.getElementById("discoverFeedRetryBtn");
+    if (retry && !retry.dataset.boundDiscoverRetry) {
+      retry.dataset.boundDiscoverRetry = "1";
+      retry.addEventListener("click", () => {
+        try { haptic("light"); } catch {}
+        void refreshDiscoverFeed();
+      });
+    }
+    console.warn("[discover] feed refresh failed", err);
   }
 }
 
@@ -29495,23 +29637,35 @@ async function hydrateSharedSongPlaybackRow(row) {
   return { ...row, song_url: songUrl };
 }
 
-async function resolveAndPlayActivityTrack(trackId) {
+async function waitForAppReadyForSharePlayback() {
+  for (let i = 0; i < 50; i++) {
+    if (!document.body.classList.contains("booting") && _authBootDone) return;
+    await new Promise((r) => setTimeout(r, 80));
+  }
+}
+
+async function resolveAndPlayActivityTrack(trackId, opts = {}) {
   const id = String(trackId || "").trim();
   if (!id || !isShareUuid(id)) return false;
+  const fromShareLink = Boolean(opts.fromShareLink);
   try {
     await ensureNativeApiBaseResolved();
   } catch {}
   await ensureUserLibraryHydrated();
-  const local = findLibraryTrackByCloudOrLocalId(id);
-  if (local?.url) {
-    location.hash = "#/player";
-    await playLibraryListRowById(local.id, { openPlayer: true });
-    return true;
+  if (!fromShareLink) {
+    const local = findLibraryTrackByCloudOrLocalId(id);
+    if (local?.url) {
+      location.hash = "#/player";
+      await playLibraryListRowById(local.id, { openPlayer: true });
+      return true;
+    }
   }
   let row = await fetchSharedSongByCloudId(id);
   row = await hydrateSharedSongPlaybackRow(row);
   if (row?.song_url) {
-    location.hash = `#/player?track=${encodeURIComponent(id)}`;
+    if (!fromShareLink) {
+      location.hash = `#/player?track=${encodeURIComponent(id)}`;
+    }
     return await playSharedCloudSong(row, { openPlayer: true });
   }
   return false;
@@ -29647,7 +29801,7 @@ async function playSharedCloudSong(row, opts = {}) {
   };
   const openPlayer = opts.openPlayer !== false;
   if (openPlayer) {
-    await playOnPlayerPage(playSource, "Full song", meta);
+    await playOnPlayerPage(playSource, "Full song", meta, { shareListen: true });
   } else {
     setPlayerMeta(meta);
     await playInline(playSource, "Full song", miniSource);
@@ -29669,7 +29823,8 @@ async function focusTrackFromShare(trackId) {
   if (els.playerTitle && (document.body.getAttribute("data-route") || "") === "player") {
     els.playerTitle.textContent = "Loading shared song…";
   }
-  const tryPlay = async () => resolveAndPlayActivityTrack(id);
+  await waitForAppReadyForSharePlayback();
+  const tryPlay = async () => resolveAndPlayActivityTrack(id, { fromShareLink: true });
   if (await tryPlay()) {
     pendingShareFocusTrackId = "";
     return;
@@ -29803,7 +29958,7 @@ function updateListenRefButton() {
   els.btnResultListenRef.style.display = lastSunoReferenceUrl ? "" : "none";
 }
 
-async function playOnPlayerPage(url, label, meta = null) {
+async function playOnPlayerPage(url, label, meta = null, opts = {}) {
   if (!url) return;
   setPlayerSource(url, label);
   if (meta && (meta.title || meta.subtitle || meta.artUrl)) {
@@ -29815,9 +29970,32 @@ async function playOnPlayerPage(url, label, meta = null) {
       artUrl: lastSunoArtUrl,
     });
   }
-  location.hash = "#/player";
+  const shareListen =
+    Boolean(opts.shareListen) ||
+    Boolean(currentPlayerTrackRef?.fromSharedLink) ||
+    Boolean(parseSharedTrackIdFromLocation());
+  if (!shareListen) {
+    location.hash = "#/player";
+  }
   const a = ensurePlayer();
   const playUrl = normalizeAudioUrlForPlayback(url);
+  if (shareListen) {
+    // Share / deep links: start quickly — blocking on duration probes loses the
+    // tap gesture on iOS and falsely trips the "expired link" toast on cold boot.
+    void primeAudioDurationHint(playUrl);
+    try {
+      const ok = await hubAudioPlayWithRetry(a);
+      if (ok) {
+        if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = true;
+        if (els.btnPlayerPause) els.btnPlayerPause.disabled = false;
+      } else {
+        showToast("Tap ▶ to play", { icon: "♪", durationMs: 3200 });
+      }
+    } catch {
+      showToast("Tap ▶ to play", { icon: "♪", durationMs: 3200 });
+    }
+    return;
+  }
   await primeAudioDurationHint(playUrl);
   await waitForAudioCanPlay(a, 12000);
   try {
@@ -34527,7 +34705,7 @@ if (els.btnPlayerBack) {
     if (history.length > 1) {
       history.back();
     } else {
-      location.hash = "#/profile?seg=all";
+      location.hash = isAppLoggedIn() ? "#/profile?seg=all" : "#/discover";
     }
   });
 }
@@ -35725,13 +35903,14 @@ if (els.btnAuthGateGoogle) {
 }
 if (els.btnAuthGateGuest) {
   els.btnAuthGateGuest.addEventListener("click", () => {
+    setGuestModeEnabled(true);
     try {
       location.hash = "#/challenges";
       applyRoute();
     } catch {
       try { location.hash = "#/challenges"; } catch {}
     }
-    setStatus("Guest mode enabled. Login anytime from Profile.");
+    setStatus("Guest mode enabled. Login anytime from Settings.");
   });
 }
 setAuthEmailMode("signin");

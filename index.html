@@ -111,7 +111,10 @@
         var done = false;
         try { done = localStorage.getItem("nabadai_onboarding_v1_done") === "1"; } catch (e) {}
         var h = String(location.hash || "").replace(/^#\/?/, "").split(/[?#&]/)[0] || "";
+        if (/^u\//.test(h)) h = "user";
         if (h === "hub" || h === "home" || h === "start" || h === "sparks") h = "challenges";
+        var guestMode = false;
+        try { guestMode = localStorage.getItem("nabadai_guest_mode_v1") === "1"; } catch (e) {}
         if (!h) {
           if (!done) {
             h = "intro";
@@ -121,7 +124,7 @@
               var raw = localStorage.getItem("mas:supabase:session:v1");
               hasSession = !!(raw && raw.indexOf("access_token") !== -1);
             } catch (e) {}
-            h = hasSession ? "challenges" : "auth";
+            h = hasSession ? "challenges" : (guestMode ? "challenges" : "auth");
           }
         }
         var ok = /^(intro|onboarding|auth|generate|challenges|activity|discover|friends|profile|settings|player|sounds|user|vocal|stems|advanced|credits|mentor)$/.test(h);
@@ -133,7 +136,7 @@
               var rawFb = localStorage.getItem("mas:supabase:session:v1");
               hasSessionFallback = !!(rawFb && rawFb.indexOf("access_token") !== -1);
             } catch (e) {}
-            h = hasSessionFallback ? "challenges" : "auth";
+            h = hasSessionFallback ? "challenges" : (guestMode ? "challenges" : "auth");
           }
         }
         document.body.setAttribute("data-route", h);
@@ -3627,6 +3630,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260614noDebug"></script>
+    <script type="module" src="./src/app.js?v=20260615sharePlayFix"></script>
   </body>
 </html>

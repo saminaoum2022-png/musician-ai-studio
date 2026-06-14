@@ -68,7 +68,11 @@ export function shouldSkipIntroOrOnboardingRoute() {
 
 export function getPostOnboardingHash(getAuthSession) {
   const session = typeof getAuthSession === "function" ? getAuthSession() : null;
-  return session?.user?.id ? "#/challenges" : "#/auth";
+  if (session?.user?.id) return "#/challenges";
+  try {
+    if (localStorage.getItem("nabadai_guest_mode_v1") === "1") return "#/challenges";
+  } catch {}
+  return "#/auth";
 }
 
 export function getInitialBootHash(getAuthSession) {

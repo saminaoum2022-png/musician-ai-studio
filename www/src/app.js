@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615libraryGuard";
+const APP_BUILD = "20260615profileSafe";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -3040,21 +3040,15 @@ function applyRoute() {
       })();
       renderPersonaSelect();
       renderProfileCallingCardHint();
-      if (authSession?.user?.id && shouldShowProfileHeaderSkeleton()) {
+      if (
+        authSession?.user?.id &&
+        (shouldShowProfileHeaderSkeleton() || profileNeedsCloudRefresh())
+      ) {
         setProfileHeaderLoading(true);
         void (async () => {
           try {
-            const cloud = await supabaseLoadProfile();
-            if (cloud && authSession?.user?.id) {
-              const localFilled = localProfileFilledForCloudMerge();
-              const nextProfile = {
-                ...cloud,
-                ...localFilled,
-                id: String(authSession.user.id),
-                email: localFilled.email || cloud.email || authSession.user.email || "",
-              };
-              saveProfile(nextProfile);
-              renderProfilePreviewFromInputs();
+            const merged = await mergeActiveProfileFromCloud();
+            if (merged) {
               renderProfileSongs();
               void ensurePersonalizedUsernameSyncedToCloud();
             }
@@ -13009,6 +13003,50 @@ function localProfileFilledForCloudMerge() {
   );
 }
 
+function localProfileHasRichContent() {
+  const lf = localProfileFilledForCloudMerge();
+  const links = lf.links && typeof lf.links === "object" ? lf.links : {};
+  return Boolean(
+    lf.avatar ||
+      lf.bio ||
+      lf.voiceTimbre ||
+      lf.callingCardUrl ||
+      lf.gender ||
+      lf.genres ||
+      Object.values(links).some((v) => String(v || "").trim()),
+  );
+}
+
+function profileNeedsCloudRefresh() {
+  if (!authSession?.user?.id) return false;
+  const av = String(activeProfile?.avatar || "").trim();
+  const bio = String(activeProfile?.bio || "").trim();
+  const hasAvatar = av && !/nabadai-logo\.png(?:$|\?)/i.test(av);
+  return !hasAvatar || !bio;
+}
+
+async function mergeActiveProfileFromCloud() {
+  if (!authSession?.user?.id) return false;
+  const cloud = await supabaseLoadProfile();
+  if (!cloud) return false;
+  const localFilled = localProfileFilledForCloudMerge();
+  const nextProfile = {
+    ...cloud,
+    ...localFilled,
+    id: String(authSession.user.id),
+    email: localFilled.email || cloud.email || authSession.user.email || "",
+  };
+  saveProfile(nextProfile);
+  if (els.profilePreviewUsernameInput) {
+    els.profilePreviewUsernameInput.value = nextProfile.username ? `@${nextProfile.username}` : "@guest";
+  }
+  if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = nextProfile.voiceTimbre || "";
+  if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = nextProfile.bio || "";
+  if (els.profileIsPublic) els.profileIsPublic.checked = nextProfile.isPublic !== false;
+  renderProfilePreviewFromInputs();
+  return true;
+}
+
 /** Resize an uploaded avatar in-browser before we keep it. Older code
  *  stored the raw camera/library photo as a multi-MB base64 string,
  *  which then bloated the profile JSON in localStorage and made boot
@@ -15106,14 +15144,32 @@ async function supabaseUpsertProfile(profile) {
     } catch {}
   }
   if (!outgoingUsername) outgoingUsername = "guest";
+  // Never wipe a real cloud avatar/bio with empty local defaults — that
+  // happened when boot couldn't reach Supabase and scheduleProfileCloudSync
+  // pushed a blank shell over the stored row.
+  let outgoingAvatar = String(profile.avatar || "").trim();
+  let outgoingBio = String(profile.bio || "").trim();
+  if ((!outgoingAvatar || !outgoingBio) && authSession?.user?.id) {
+    try {
+      const existing = await supabaseLoadProfile();
+      if (existing) {
+        if (!outgoingAvatar && String(existing.avatar || "").trim()) {
+          outgoingAvatar = String(existing.avatar).trim();
+        }
+        if (!outgoingBio && String(existing.bio || "").trim()) {
+          outgoingBio = String(existing.bio).trim();
+        }
+      }
+    } catch {}
+  }
   const payload = {
     user_id: authSession?.user?.id,
     username: outgoingUsername,
     email: profile.email || "",
     gender: profile.gender || "",
     voice_timbre: profile.voiceTimbre || "",
-    bio: profile.bio || "",
-    avatar: profile.avatar || "",
+    bio: outgoingBio,
+    avatar: outgoingAvatar,
     genres: profile.genres || "",
     instagram: profile.links?.instagram || "",
     youtube: profile.links?.youtube || "",
@@ -36651,13 +36707,16 @@ void (async () => {
     // need to land on the server (new username, new avatar/bio that
     // were only in local). Fire-and-forget via the debounced sync so
     // boot stays snappy on slow networks.
-    const cloudIsStale = !cloud
-      || cloud.username !== nextProfile.username
+    const cloudIsStale = cloud && (
+      cloud.username !== nextProfile.username
       || cloud.avatar !== nextProfile.avatar
       || cloud.bio !== nextProfile.bio
       || cloud.voiceTimbre !== nextProfile.voiceTimbre
-      || cloud.isPublic !== nextProfile.isPublic;
-    if (cloudIsStale) scheduleProfileCloudSync({ delayMs: cloud ? 400 : 50 });
+      || cloud.isPublic !== nextProfile.isPublic
+    );
+    // Cloud fetch failed: never push an empty shell that would erase avatar/bio.
+    if (cloudIsStale) scheduleProfileCloudSync({ delayMs: 400 });
+    else if (!cloud && localProfileHasRichContent()) scheduleProfileCloudSync({ delayMs: 600 });
 
     if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = activeProfile.username ? `@${activeProfile.username}` : "@guest";
     if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = activeProfile.voiceTimbre || "";

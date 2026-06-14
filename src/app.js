@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615coverFallback2";
+const APP_BUILD = "20260615tapToPlay";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -945,6 +945,12 @@ function primeAudioElementInGesture(a) {
   } catch {}
 }
 
+/** Prime the global Library/Discover mini-player element inside a tap
+ *  gesture so iOS will accept play() after async work (Suno refresh, etc.). */
+function primeGlobalPlayerInGesture() {
+  primeAudioElementInGesture(ensurePlayer());
+}
+
 let _hubAudioUnlockArmed = false;
 function installHubAudioUnlockOnce() {
   if (_hubAudioUnlockArmed) return;
@@ -959,11 +965,10 @@ function installHubAudioUnlockOnce() {
     // play() was rejected silently.
     //
     // The calling card is the most affected because its play() is
-    // gated behind an async fetch. The Hub player is also primed
-    // (was always primed). The Library player is intentionally NOT
-    // primed here — it always plays from a direct user tap so the
-    // gesture is never stale.
+    // gated behind an async fetch. Hub + global mini-player are both
+    // primed so Discover/Library taps survive Suno refresh latency.
     primeAudioElementInGesture(ensureHubAudio());
+    primeAudioElementInGesture(ensurePlayer());
     try {
       const cardAudio = els.userPublicCallingCardAudio;
       if (cardAudio) primeAudioElementInGesture(cardAudio);
@@ -18448,22 +18453,44 @@ function openProfileHubPostSheet(sid) {
 async function playLibraryListRowById(id, opts) {
   let t = loadLibrary().find((x) => x.id === id);
   if (!t?.url) return;
+  primeGlobalPlayerInGesture();
   try {
     stopHubPlayback();
   } catch {}
   const rawForPlay = unwrapInnermostHttpAudioUrl(t.url);
-  let playSource = normalizeAudioUrlForPlayback(toAudioProxyUrl(rawForPlay) || rawForPlay);
+  const playSource = normalizeAudioUrlForPlayback(toAudioProxyUrl(rawForPlay) || rawForPlay);
   if (!isArchivedSongStorageUrl(t.url)) queueArchiveLibraryTrack(t);
-  const refreshed = await tryRefreshLibraryTrackAudioFromSuno(t);
-  if (refreshed?.url) {
-    const freshInner = String(refreshed.url).trim();
-    const newProx = normalizeAudioUrlForPlayback(toAudioProxyUrl(freshInner) || freshInner);
-    if (freshInner !== rawForPlay) {
-      const updated = patchLibraryRowWithRefreshedUrl(id, newProx, freshInner, t);
-      if (updated) t = updated;
-    }
-    playSource = newProx;
-  }
+  // Never block tap-to-play on Suno refresh — iOS rejects play() once the
+  // gesture goes stale. Refresh in the background and retry only if stuck.
+  void (async () => {
+    try {
+      const refreshed = await tryRefreshLibraryTrackAudioFromSuno(t);
+      if (!refreshed?.url) return;
+      const freshInner = String(refreshed.url).trim();
+      if (!freshInner || freshInner === rawForPlay) return;
+      const newProx = normalizeAudioUrlForPlayback(toAudioProxyUrl(freshInner) || freshInner);
+      patchLibraryRowWithRefreshedUrl(id, newProx, freshInner, t);
+      const stillThis =
+        libraryNowPlayingId === id || String(currentPlayerTrackRef?.id || "") === String(id);
+      if (!stillThis) return;
+      const a = ensurePlayer();
+      if (!a.paused && !a.error) return;
+      const updated = loadLibrary().find((x) => x.id === id) || { ...t, ...refreshed, url: freshInner };
+      currentPlayerTrackRef = updated;
+      const meta = {
+        title: updated.title || "Library song",
+        subtitle: "Library · Full song",
+        artUrl: (updated.meta && updated.meta.imageUrl) || updated.artUrl || placeholderCoverDataUrl(),
+        releaseCaption: releaseCaptionForTrack(updated),
+        remixOf: remixAttributionForTrack(updated),
+      };
+      if (opts?.openPlayer === true) {
+        await playOnPlayerPage(newProx, "Full song", meta);
+      } else {
+        await playInline(newProx, "Full song", { type: "library", id });
+      }
+    } catch {}
+  })();
   currentPlayerTrackRef = t;
   const meta = {
     title: t.title || "Library song",
@@ -19105,6 +19132,7 @@ function playDiscoverTarget(el, opts = {}) {
     showToast("This song has no playable audio yet.", { durationMs: 3800 });
     return;
   }
+  primeGlobalPlayerInGesture();
   haptic("light");
   if (!opts.skipToggle && toggleDiscoverFeedPlaybackIfSameUrl(t.raw)) return;
   void playLibraryUrlOnPlayer(t.raw, t.title, t.art, {
@@ -20325,6 +20353,7 @@ async function renamePrivateLibraryTrack(trackId) {
 async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   const raw = String(rawUrl || "").trim();
   if (!raw) return;
+  primeGlobalPlayerInGesture();
   const fromDiscover = Boolean(opts && opts.discoverFeed);
   const fromPlaylist = Boolean(opts && opts.discoverPlaylist);
   let openPlayer = true;
@@ -20343,17 +20372,12 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     stopHubPlayback();
   } catch {}
   let playableRaw = unwrapInnermostHttpAudioUrl(raw) || raw;
+  const initialPlayableRaw = playableRaw;
   const refreshCandidate = playSource?.taskId ? {
     taskId: playSource.taskId,
     audioId: playSource.audioId || "",
     url: playableRaw,
   } : null;
-  if (refreshCandidate && !fromDiscover && !fromPlaylist) {
-    const refreshed = await tryRefreshLibraryTrackAudioFromSuno(refreshCandidate);
-    if (refreshed?.url) {
-      playableRaw = String(refreshed.url).trim() || playableRaw;
-    }
-  }
   const prox = inlinePlaybackUrl(playableRaw);
   currentPlayerTrackRef = {
     id: `public_${String(title || "").slice(0, 24)}`,
@@ -20389,6 +20413,22 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   miniSource = publicSource;
   resetPublicPlayTracking(miniSource);
   libraryNowPlayingId = null;
+  if (refreshCandidate && !fromDiscover && !fromPlaylist) {
+    const bgSource = publicSource;
+    void (async () => {
+      try {
+        const refreshed = await tryRefreshLibraryTrackAudioFromSuno(refreshCandidate);
+        if (!refreshed?.url) return;
+        const fresh = String(refreshed.url).trim();
+        if (!fresh || fresh === initialPlayableRaw) return;
+        if (!audioUrlsEquivalent(String(currentPlayerTrackRef?.url || "").trim(), initialPlayableRaw)) return;
+        const a = ensurePlayer();
+        if (!a.paused && !a.error) return;
+        currentPlayerTrackRef = { ...currentPlayerTrackRef, url: fresh };
+        await playInline(inlinePlaybackUrl(fresh), title || "Song", bgSource);
+      } catch {}
+    })();
+  }
   try {
     refreshOwnSongsUi({ soft: fromDiscover || fromPlaylist });
   } catch {}
@@ -24275,6 +24315,7 @@ async function setHubPostProfileVisibility(postId, wantPublic) {
 async function playHubPostFromProfile(postId, opts) {
   const pid = String(postId || "").trim();
   if (!pid) return;
+  primeGlobalPlayerInGesture();
   const p = loadHubFeed().find((x) => String(x.id) === pid);
   if (!p?.url) return;
   closeTrackOptionsSheet();
@@ -29486,6 +29527,7 @@ async function fetchSharedSongByCloudId(cloudId) {
 async function playSharedCloudSong(row, opts = {}) {
   const url = String(row?.song_url || "").trim();
   if (!url) return false;
+  primeGlobalPlayerInGesture();
   const songId = String(row.id || "").trim();
   const ownerId = String(row.user_id || "").trim();
   let handle = String(row.creator_username || "").trim();
@@ -29731,20 +29773,27 @@ async function playInline(url, label, source) {
   setPlayerSource(url, label);
   const a = ensurePlayer();
   const playUrl = normalizeAudioUrlForPlayback(url);
-  const fastDiscover = isDiscoverStyleMiniSource();
-  if (fastDiscover) {
-    void primeAudioDurationHint(playUrl);
+  void primeAudioDurationHint(playUrl);
+  try {
+    syncDiscoveryPlayingHighlights();
+    renderHubNowPlaying();
+  } catch {}
+  // Kick play immediately while the tap gesture may still be valid on iOS.
+  void hubAudioPlayWithRetry(a).then((ok) => {
+    if (!ok) return;
+    if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = true;
+    if (els.btnPlayerPause) els.btnPlayerPause.disabled = false;
     try {
       syncDiscoveryPlayingHighlights();
       renderHubNowPlaying();
     } catch {}
-  } else {
-    await primeAudioDurationHint(playUrl);
-  }
-  await waitForAudioCanPlay(a, fastDiscover ? 5000 : 12000);
+  });
+  await waitForAudioCanPlay(a, 8000);
   try {
-    const ok = await hubAudioPlayWithRetry(a);
-    if (!ok) throw new Error("play_failed");
+    if (a.paused && !a.ended) {
+      const ok = await hubAudioPlayWithRetry(a);
+      if (!ok) throw new Error("play_failed");
+    }
     if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = true;
     if (els.btnPlayerPause) els.btnPlayerPause.disabled = false;
   } catch (e) {

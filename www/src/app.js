@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615activityProfile";
+const APP_BUILD = "20260615settingsFlat";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -20581,6 +20581,10 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
     }
   }
   const songs = await supabaseFetchPublicLibraryForUserId(prof.user_id);
+  if (!stillCurrent()) return;
+  for (const t of songs) {
+    t.userId = String(t.userId || prof.user_id || "");
+  }
   if (!resolvedSocialStats) {
     const socialData = await fetchSocialStatsForProfile({ username: displayName, userId: prof.user_id });
     resolvedSocialStats = socialData?.stats || null;

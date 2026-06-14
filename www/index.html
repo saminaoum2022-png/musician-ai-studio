@@ -1757,6 +1757,22 @@
         </div>
 
         <!-- Friends — compose bottom sheet (+ in header opens this) -->
+        <div id="playerFeedbackInboxSheet" class="playerFeedbackInboxSheet feedReplySheet" aria-hidden="true" hidden>
+          <div class="feedReplySheetBackdrop" data-player-feedback-inbox-dismiss="1"></div>
+          <div class="feedReplySheetCard" role="dialog" aria-modal="true" aria-labelledby="playerFeedbackInboxTitle">
+            <div class="feedReplySheetGrab" aria-hidden="true"></div>
+            <header class="feedReplySheetHead">
+              <button type="button" class="feedReplySheetClose" data-player-feedback-inbox-dismiss="1" aria-label="Close">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
+              </button>
+              <p class="feedReplySheetKicker">Creator only</p>
+              <h2 class="feedReplySheetTitle" id="playerFeedbackInboxTitle">Private feedback</h2>
+              <p class="feedReplySheetSub" id="playerFeedbackInboxSub">Who sent private feedback on this song.</p>
+            </header>
+            <div class="playerFeedbackInboxList" id="playerFeedbackInboxList" role="list" aria-live="polite"></div>
+          </div>
+        </div>
+
         <div id="feedReplySheet" class="feedReplySheet" aria-hidden="true" hidden>
           <div class="feedReplySheetBackdrop" data-feed-reply-dismiss="1"></div>
           <div class="feedReplySheetCard" role="dialog" aria-modal="true" aria-labelledby="feedReplyHeader">
@@ -1867,8 +1883,36 @@
             </button>
           </div>
           <div class="playerShell">
+            <div class="playerArtCol">
             <div class="playerArtWrap isEmpty">
-              <img id="playerArt" class="playerArt isPlaceholder" src="./assets/nabadai-logo.png" alt="cover" />
+              <div class="playerArtStage">
+                <img id="playerArt" class="playerArt isPlaceholder" src="./assets/nabadai-logo.png" alt="cover" />
+                <div id="playerFeedbackAuras" class="playerFeedbackAuras" aria-hidden="true"></div>
+                <button
+                  id="btnPlayerFeedbackSend"
+                  class="playerFeedbackSendBtn"
+                  type="button"
+                  hidden
+                  aria-label="Send creator private feedback"
+                  aria-expanded="false"
+                  aria-controls="playerFeedbackPopover"
+                >
+                  <svg class="playerFeedbackSendIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path fill="currentColor" d="M12 3c4.2 0 7.6 2.8 7.6 6.3 0 2.1-1.2 4-3.1 5.1L15 18H9l-.5-3.6C6.6 13.3 5.4 11.4 5.4 9.3 5.4 5.8 7.8 3 12 3Z" opacity="0.9"/>
+                    <path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M9.5 20.5h5"/>
+                  </svg>
+                </button>
+                <div id="playerFeedbackPopover" class="playerFeedbackPopover" hidden role="dialog" aria-label="Send creator private feedback">
+                  <p class="playerFeedbackPopoverTitle">Send creator private feedback</p>
+                  <p class="playerFeedbackPopoverHint">Private signal — only the creator sees who sent it.</p>
+                  <div id="playerFeedbackPopoverChips" class="playerFeedbackPopoverChips" role="group" aria-label="Private feedback options"></div>
+                </div>
+              </div>
+            </div>
+            <button id="btnPlayerFeedbackInbox" class="playerFeedbackInboxBtn" type="button" hidden>
+              <span class="playerFeedbackInboxBtnLabel">Private feedback</span>
+              <span id="playerFeedbackInboxCount" class="playerFeedbackInboxCount" hidden></span>
+            </button>
             </div>
             <div class="playerMeta">
               <div id="playerTitle" class="playerTitle">No track loaded</div>
@@ -2007,7 +2051,6 @@
                 <div class="playerReleaseNoteLabel">Release note</div>
                 <div id="playerReleaseNoteText" class="playerReleaseNoteText"></div>
               </div>
-              <div id="playerFeedbackPanel" class="playerFeedbackPanel" hidden></div>
               <input id="playerCoverUpload" type="file" accept="image/*" style="display:none" />
 
               <!-- Centered confirm modal (publish, clip publish, cover save). -->
@@ -2042,9 +2085,9 @@
         <section class="card wide" data-route="user">
           <div class="userPublic" id="userPublicCard">
             <div class="userPublicHead">
-              <div class="userPublicAvatarWrap" id="userPublicAvatarWrap">
-                <span class="userPublicAvatarRing" aria-hidden="true"></span>
-                <img id="userPublicAvatar" class="userPublicAvatar" alt="avatar" draggable="false" />
+              <div class="userPublicAvatarWrap profileAuraAvatarWrap profileAuraAvatarWrapNeon" id="userPublicAvatarWrap">
+                <span class="userPublicAvatarRing profileAuraRing profileAuraRingPulse" aria-hidden="true"></span>
+                <img id="userPublicAvatar" class="userPublicAvatar profileAuraAvatar" alt="avatar" draggable="false" />
               </div>
               <div class="userPublicMeta">
                 <div class="userPublicNameRow">
@@ -2084,19 +2127,20 @@
                     <span></span><span></span><span></span><span></span><span></span>
                   </span>
                 </button>
+                <div class="userPublicFollowRow" id="userPublicFollowRow" hidden>
+                  <button id="btnUserPublicFollow" class="userPublicFollowBtn" type="button" hidden>Follow</button>
+                  <span id="userPublicFollowsYou" class="userPublicFollowsYou" hidden>Follows you</span>
+                </div>
               </div>
-              <button id="btnUserPublicFollow" class="userPublicFollowBtn" type="button" hidden>Follow</button>
-              <span id="userPublicFollowsYou" class="userPublicFollowsYou" hidden>Follows you</span>
               <button id="btnUserPublicBack" class="ghost userPublicBack" type="button" aria-label="Back" hidden>← Back</button>
             </div>
-            <div class="userPublicBio" id="userPublicBio"></div>
+            <div class="userPublicBio profileHeroBio" id="userPublicBio"></div>
             <audio id="userPublicCallingCardAudio" preload="none" playsinline></audio>
-            <div class="userPublicStats" id="userPublicStats"></div>
-            <div class="userPublicSongsHead">
-              <span class="userPublicSongsTitle">Songs</span>
-              <span class="userPublicSongsCount" id="userPublicSongsCount"></span>
+            <div class="userPublicStats profileStatsPills" id="userPublicStats"></div>
+            <div class="userPublicSongsBlock profileSongsBlock">
+              <p id="userPublicSongsCount" class="libraryCount userPublicSongsCount" hidden aria-live="polite"></p>
+              <div id="userPublicSongs" class="userPublicSongs profileActivitiesList followActStack"></div>
             </div>
-            <div id="userPublicSongs" class="userPublicSongs"></div>
             <div id="userPublicEmpty" class="hint userPublicEmpty" style="display:none"></div>
           </div>
         </section>
@@ -3561,6 +3605,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260612discoverSkeleton"></script>
+    <script type="module" src="./src/app.js?v=20260614noDebug"></script>
   </body>
 </html>

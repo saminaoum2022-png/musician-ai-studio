@@ -5,6 +5,7 @@
   "bundledWebRuntime": false,
   "backgroundColor": "#05070d",
   "ios": {
-    "backgroundColor": "#05070d"
+    "backgroundColor": "#05070d",
+    "webContentsDebuggingEnabled": true
   }
 }

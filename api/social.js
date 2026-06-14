@@ -795,6 +795,45 @@ async function handleGet(req, res, user) {
     return sendJson(res, 200, { ok: true, ...summary });
   }
 
+  if (type === "song_feedback_inbox") {
+    const songId = cleanSongId(url.searchParams.get("songId"));
+    if (!songId) return sendJson(res, 400, { ok: false, error: "Missing songId" });
+    if (!user?.userId) return sendJson(res, 401, { ok: false, error: "Sign in required" });
+    const song = await resolvePublicSong(songId);
+    const owner = cleanUserId(song?.user_id);
+    if (!song || !owner) return sendJson(res, 404, { ok: false, error: "Song not found" });
+    if (owner !== user.userId) return sendJson(res, 403, { ok: false, error: "Owner only" });
+    const r = await svcFetch(
+      `social_song_feedback?select=feedback_type,listener_user_id,created_at&song_id=eq.${encodeURIComponent(songId)}&order=created_at.desc&limit=100`,
+    );
+    const rows = Array.isArray(r.data) ? r.data : [];
+    const listenerIds = [...new Set(rows.map((row) => cleanUserId(row.listener_user_id)).filter(Boolean))];
+    const profiles = new Map();
+    await Promise.all(
+      listenerIds.map(async (lid) => {
+        const prof = await profileByUserId(lid);
+        if (prof) profiles.set(lid, prof);
+      }),
+    );
+    const items = rows
+      .map((row) => {
+        const type = cleanFeedbackType(row.feedback_type);
+        const listenerUserId = cleanUserId(row.listener_user_id);
+        if (!type || !listenerUserId) return null;
+        const prof = profiles.get(listenerUserId);
+        return {
+          feedbackType: type,
+          feedbackLabel: feedbackLabel(type),
+          listenerUserId,
+          username: String(prof?.username || "").trim(),
+          avatar: String(prof?.avatar || "").trim(),
+          createdAt: row.created_at || null,
+        };
+      })
+      .filter(Boolean);
+    return sendJson(res, 200, { ok: true, items });
+  }
+
   if (type === "song_play_counts") {
     const raw = String(url.searchParams.get("songIds") || "");
     const ids = raw

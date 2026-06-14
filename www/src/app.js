@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260613profileSync2";
+const APP_BUILD = "20260615privateFeedback";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -504,7 +504,14 @@ const els = {
   btnPlayerLyrics: document.getElementById("btnPlayerLyrics"),
   playerReleaseNote: document.getElementById("playerReleaseNote"),
   playerReleaseNoteText: document.getElementById("playerReleaseNoteText"),
-  playerFeedbackPanel: document.getElementById("playerFeedbackPanel"),
+  playerFeedbackAuras: document.getElementById("playerFeedbackAuras"),
+  btnPlayerFeedbackSend: document.getElementById("btnPlayerFeedbackSend"),
+  playerFeedbackPopover: document.getElementById("playerFeedbackPopover"),
+  playerFeedbackPopoverChips: document.getElementById("playerFeedbackPopoverChips"),
+  btnPlayerFeedbackInbox: document.getElementById("btnPlayerFeedbackInbox"),
+  playerFeedbackInboxCount: document.getElementById("playerFeedbackInboxCount"),
+  playerFeedbackInboxList: document.getElementById("playerFeedbackInboxList"),
+  playerFeedbackInboxSheet: document.getElementById("playerFeedbackInboxSheet"),
   btnLoadFull: document.getElementById("btnLoadFull"),
   btnLoadVocals: document.getElementById("btnLoadVocals"),
   btnLoadInstrumental: document.getElementById("btnLoadInstrumental"),
@@ -731,6 +738,7 @@ const els = {
   userPublicSongs: document.getElementById("userPublicSongs"),
   userPublicEmpty: document.getElementById("userPublicEmpty"),
   btnUserPublicFollow: document.getElementById("btnUserPublicFollow"),
+  userPublicFollowRow: document.getElementById("userPublicFollowRow"),
   userPublicFollowsYou: document.getElementById("userPublicFollowsYou"),
   btnUserPublicBack: document.getElementById("btnUserPublicBack"),
   songDetailsModal: document.getElementById("songDetailsModal"),
@@ -8967,6 +8975,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
 }
 
 function bindDiscoveryDiscoverControls() {
+  wirePlayerFeedbackUiOnce();
   wireUserPublicFeedRowsOnce();
   if (_discoveryDiscoverBound) return;
   _discoveryDiscoverBound = true;
@@ -9118,6 +9127,17 @@ function wireUserPublicFeedRowsOnce() {
       openDiscoverTrackSheetFromEl(menuBtn);
       return;
     }
+    if (e.target.closest(".followActAvatar, .followActUserLink")) return;
+    const actBtn = e.target.closest("[data-friends-act]");
+    if (actBtn && host.contains(actBtn)) {
+      const kind = actBtn.getAttribute("data-friends-act");
+      if (kind === "plays") return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (kind === "like") void handleFeedLikeTap(actBtn);
+      else if (kind === "reply") void openFeedReplySheetFromButton(actBtn);
+      return;
+    }
     const inline = e.target.closest("[data-discovery-inline-play]");
     if (inline && host.contains(inline)) {
       const u = inline.getAttribute("data-user-lib-url");
@@ -9135,8 +9155,11 @@ function wireUserPublicFeedRowsOnce() {
       void playLibraryUrlOnPlayer(raw, title, art, { openPlayer: false, playSource: publicPlaySourceFromEl(inline) });
       return;
     }
-    const pl = e.target.closest("[data-user-lib-play]");
+    const pl = e.target.closest(
+      "[data-user-lib-play], .followActMedia, .followActQuoteCard, .followActRemixTile",
+    );
     if (!pl || !host.contains(pl)) return;
+    e.preventDefault();
     const u = pl.getAttribute("data-user-lib-url");
     const title = decodeDiscoverDataAttr(pl, "data-user-lib-title") || "Song";
     const art = decodeDiscoverDataAttr(pl, "data-user-lib-art") || "";
@@ -10076,6 +10099,22 @@ const SONG_FEEDBACK_TYPES = [
 ];
 
 const _songFeedbackCache = new Map();
+const _FEEDBACK_AURA_SLOTS = ["left", "center", "right"];
+const _FEEDBACK_AURA_REPLAY_MAX = 8;
+let _playerFeedbackAuraSlot = 0;
+let _playerFeedbackReplayGen = 0;
+let _playerFeedbackReplayTimers = [];
+let _playerFeedbackPopoverSongId = "";
+
+function feedbackLabelForType(type) {
+  const hit = SONG_FEEDBACK_TYPES.find((x) => x.id === type);
+  return hit?.label || "Feedback";
+}
+
+function totalFeedbackCount(counts) {
+  const c = counts && typeof counts === "object" ? counts : {};
+  return SONG_FEEDBACK_TYPES.reduce((n, item) => n + Number(c[item.id] || 0), 0);
+}
 
 function publicFeedbackContextForTrack(track) {
   const songId = String(track?.songId || track?.cloudSongId || track?.id || "").trim();
@@ -10085,58 +10124,272 @@ function publicFeedbackContextForTrack(track) {
   return { songId, ownerUserId };
 }
 
-function feedbackControlsHtml(track, placement = "details") {
-  const ctx = publicFeedbackContextForTrack(track);
-  if (!ctx?.songId) return "";
-  const cached = _songFeedbackCache.get(ctx.songId) || {};
-  const counts = cached.counts || {};
+function clearPlayerFeedbackReplayTimers() {
+  for (const t of _playerFeedbackReplayTimers) {
+    try { clearTimeout(t); } catch {}
+  }
+  _playerFeedbackReplayTimers = [];
+}
+
+function spawnPlayerFeedbackAura(label, slotIndex) {
+  const host = els.playerFeedbackAuras;
+  if (!host || !label) return;
+  const slot = _FEEDBACK_AURA_SLOTS[Number(slotIndex) % _FEEDBACK_AURA_SLOTS.length];
+  const pill = document.createElement("span");
+  pill.className = `playerFeedbackAura playerFeedbackAura--${slot}`;
+  pill.textContent = String(label);
+  host.appendChild(pill);
+  const removeMs = 1700;
+  const timer = window.setTimeout(() => {
+    try { pill.remove(); } catch {}
+  }, removeMs);
+  _playerFeedbackReplayTimers.push(timer);
+}
+
+function buildFeedbackAuraReplayQueue(counts, isCreatorOwner) {
+  const queue = [];
+  for (const item of SONG_FEEDBACK_TYPES) {
+    const n = Number(counts?.[item.id] || 0);
+    if (!n) continue;
+    if (isCreatorOwner && n > 1) {
+      queue.push(`${item.label} · ${formatStatCount(n)}`);
+    } else {
+      queue.push(item.label);
+    }
+  }
+  return queue.slice(0, _FEEDBACK_AURA_REPLAY_MAX);
+}
+
+function scheduleFeedbackAuraReplay(counts, { isCreatorOwner = false } = {}) {
+  clearPlayerFeedbackReplayTimers();
+  if (els.playerFeedbackAuras) els.playerFeedbackAuras.innerHTML = "";
+  const queue = buildFeedbackAuraReplayQueue(counts, isCreatorOwner);
+  if (!queue.length) return;
+  const gen = ++_playerFeedbackReplayGen;
+  queue.forEach((label, idx) => {
+    const timer = window.setTimeout(() => {
+      if (gen !== _playerFeedbackReplayGen) return;
+      spawnPlayerFeedbackAura(label, idx);
+    }, idx * 420);
+    _playerFeedbackReplayTimers.push(timer);
+  });
+}
+
+function renderPlayerFeedbackPopoverChips(songId) {
+  const host = els.playerFeedbackPopoverChips;
+  if (!host) return;
+  const sid = String(songId || "").trim();
+  const cached = _songFeedbackCache.get(sid) || {};
   const viewer = new Set(cached.viewer || []);
-  return `
-    <section class="songFeedbackPanel songFeedbackPanel--${escapeHtml(placement)}" data-song-feedback-panel="${escapeHtml(ctx.songId)}">
-      <div class="songFeedbackHead">
-        <span>Send creator feedback</span>
-        <small>Private signal, not a public comment</small>
-      </div>
-      <div class="songFeedbackChips" role="group" aria-label="Song feedback">
-        ${SONG_FEEDBACK_TYPES.map((item) => {
-          const active = viewer.has(item.id);
-          const count = Number(counts[item.id] || 0);
-          return `<button type="button" class="songFeedbackChip${active ? " isActive" : ""}" data-song-feedback-type="${escapeHtml(item.id)}" data-song-feedback-song="${escapeHtml(ctx.songId)}" aria-pressed="${active ? "true" : "false"}">
-            <span>${escapeHtml(item.label)}</span>
-            ${count ? `<strong>${formatStatCount(count)}</strong>` : ""}
-          </button>`;
-        }).join("")}
-      </div>
-    </section>
-  `;
+  host.innerHTML = SONG_FEEDBACK_TYPES.map((item) => {
+    const active = viewer.has(item.id);
+    return `<button type="button" class="playerFeedbackPopoverChip${active ? " isActive" : ""}" data-song-feedback-type="${escapeHtml(item.id)}" data-song-feedback-song="${escapeHtml(sid)}" aria-pressed="${active ? "true" : "false"}">${escapeHtml(item.label)}</button>`;
+  }).join("");
 }
 
-function songFeedbackPanelsFor(songId) {
-  const sid = String(songId || "").trim();
-  return Array.from(document.querySelectorAll("[data-song-feedback-panel]")).filter((panel) => (
-    String(panel.getAttribute("data-song-feedback-panel") || "") === sid
-  ));
+function closePlayerFeedbackPopover() {
+  if (els.playerFeedbackPopover) els.playerFeedbackPopover.hidden = true;
+  if (els.btnPlayerFeedbackSend) els.btnPlayerFeedbackSend.setAttribute("aria-expanded", "false");
+  _playerFeedbackPopoverSongId = "";
 }
 
-async function hydrateSongFeedbackPanels(songId) {
+function togglePlayerFeedbackPopover(forceOpen) {
+  const open = forceOpen === true
+    ? true
+    : forceOpen === false
+      ? false
+      : Boolean(els.playerFeedbackPopover?.hidden);
+  if (!open) {
+    closePlayerFeedbackPopover();
+    return;
+  }
+  const ctx = publicFeedbackContextForTrack(currentPlayerTrackRef);
+  if (!ctx?.songId || els.playerFeedbackPopover?.hidden === false && _playerFeedbackPopoverSongId === ctx.songId) {
+    closePlayerFeedbackPopover();
+    return;
+  }
+  _playerFeedbackPopoverSongId = ctx.songId;
+  renderPlayerFeedbackPopoverChips(ctx.songId);
+  if (els.playerFeedbackPopover) els.playerFeedbackPopover.hidden = false;
+  if (els.btnPlayerFeedbackSend) els.btnPlayerFeedbackSend.setAttribute("aria-expanded", "true");
+}
+
+async function hydrateSongFeedbackSummary(songId) {
   const sid = String(songId || "").trim();
-  if (!sid) return;
+  if (!sid) return null;
   try {
     const data = await socialApi(`/api/social?type=song_feedback&songId=${encodeURIComponent(sid)}`);
     _songFeedbackCache.set(sid, {
       counts: data?.counts || {},
       viewer: Array.isArray(data?.viewer) ? data.viewer : [],
     });
+    return _songFeedbackCache.get(sid);
   } catch {
+    return _songFeedbackCache.get(sid) || null;
+  }
+}
+
+function updatePlayerFeedbackInboxChrome(songId, counts) {
+  const ctx = publicFeedbackContextForTrack(currentPlayerTrackRef);
+  const sid = String(songId || ctx?.songId || "").trim();
+  const ownerId = String(ctx?.ownerUserId || currentPlayerTrackRef?.ownerUserId || "").trim();
+  const mine = String(authSession?.user?.id || "").trim();
+  const isOwner = Boolean(sid && ownerId && mine && ownerId === mine);
+  const total = totalFeedbackCount(counts);
+  if (els.btnPlayerFeedbackInbox) {
+    els.btnPlayerFeedbackInbox.hidden = !isOwner || total <= 0;
+  }
+  if (els.playerFeedbackInboxCount) {
+    if (isOwner && total > 0) {
+      els.playerFeedbackInboxCount.textContent = String(total);
+      els.playerFeedbackInboxCount.hidden = false;
+    } else {
+      els.playerFeedbackInboxCount.textContent = "";
+      els.playerFeedbackInboxCount.hidden = true;
+    }
+  }
+}
+
+async function setupPlayerCoverFeedback(track) {
+  closePlayerFeedbackPopover();
+  clearPlayerFeedbackReplayTimers();
+  if (els.playerFeedbackAuras) els.playerFeedbackAuras.innerHTML = "";
+  const ctx = publicFeedbackContextForTrack(track);
+  const mine = String(authSession?.user?.id || "").trim();
+  const canSend = Boolean(
+    ctx?.songId &&
+    ctx?.ownerUserId &&
+    mine &&
+    ctx.ownerUserId !== mine &&
+    !track?.fromSharedLink,
+  );
+  const isOwner = Boolean(ctx?.songId && ctx?.ownerUserId && mine && ctx.ownerUserId === mine);
+  if (els.btnPlayerFeedbackSend) els.btnPlayerFeedbackSend.hidden = !canSend;
+  if (!ctx?.songId || track?.fromSharedLink) {
+    updatePlayerFeedbackInboxChrome("", {});
     return;
   }
-  songFeedbackPanelsFor(sid).forEach((panel) => {
-    const placement = panel.classList.contains("songFeedbackPanel--player") ? "player" : "details";
-    const track = currentPlayerTrackRef && publicFeedbackContextForTrack(currentPlayerTrackRef)?.songId === sid
-      ? currentPlayerTrackRef
-      : { id: sid, songId: sid, ownerUserId: "public" };
-    panel.outerHTML = feedbackControlsHtml(track, placement);
+  const cached = await hydrateSongFeedbackSummary(ctx.songId);
+  const counts = cached?.counts || {};
+  updatePlayerFeedbackInboxChrome(ctx.songId, counts);
+  if (totalFeedbackCount(counts) > 0) {
+    scheduleFeedbackAuraReplay(counts, { isCreatorOwner: isOwner });
+  }
+  if (canSend) renderPlayerFeedbackPopoverChips(ctx.songId);
+}
+
+function playerFeedbackInboxRowHtml(item) {
+  const handle = String(item?.username || "").trim();
+  const safeHandle = handle ? `@${escapeHtml(handle)}` : "Listener";
+  const label = escapeHtml(String(item?.feedbackLabel || feedbackLabelForType(item?.feedbackType)).trim());
+  const avatarRaw = String(item?.avatar || "").trim();
+  const avatarSrc = avatarRaw ? normalizeProfileAvatarForImg(avatarRaw) : "";
+  const initials = (handle || "U").replace(/^@/, "").slice(0, 2).toUpperCase();
+  const href = handle ? `#/u/${encodeURIComponent(handle)}` : "#";
+  const ts = item?.createdAt ? new Date(item.createdAt).getTime() : 0;
+  const when = ts ? relativeTime(ts) : "";
+  return `
+    <article class="playerFeedbackInboxRow" role="listitem">
+      <a class="playerFeedbackInboxAvatar" href="${escapeHtml(href)}" data-route-link="user" aria-label="${safeHandle} profile">
+        ${avatarSrc
+          ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="36" height="36" decoding="async" loading="lazy" />`
+          : escapeHtml(initials)}
+      </a>
+      <div class="playerFeedbackInboxBody">
+        <div class="playerFeedbackInboxWho">${safeHandle}</div>
+        <div class="playerFeedbackInboxWhat">${label}</div>
+      </div>
+      ${when ? `<span class="playerFeedbackInboxWhen">${escapeHtml(when)}</span>` : ""}
+    </article>`;
+}
+
+function closePlayerFeedbackInbox() {
+  const sheet = els.playerFeedbackInboxSheet;
+  if (!sheet) return;
+  sheet.setAttribute("aria-hidden", "true");
+  window.setTimeout(() => {
+    sheet.hidden = true;
+  }, 220);
+}
+
+async function loadPlayerFeedbackInbox() {
+  const ctx = publicFeedbackContextForTrack(currentPlayerTrackRef);
+  const list = els.playerFeedbackInboxList;
+  if (!ctx?.songId || !list) return;
+  list.innerHTML = `<div class="playerFeedbackInboxEmpty">Loading private feedback…</div>`;
+  try {
+    const data = await socialApi(`/api/social?type=song_feedback_inbox&songId=${encodeURIComponent(ctx.songId)}`);
+    const items = Array.isArray(data?.items) ? data.items : [];
+    if (!items.length) {
+      list.innerHTML = `<div class="playerFeedbackInboxEmpty">No private feedback yet — listeners can send it from the player cover.</div>`;
+      return;
+    }
+    list.innerHTML = items.map((item) => playerFeedbackInboxRowHtml(item)).join("");
+  } catch (e) {
+    list.innerHTML = `<div class="playerFeedbackInboxEmpty">${escapeHtml(e?.message || "Could not load private feedback.")}</div>`;
+  }
+}
+
+function openPlayerFeedbackInbox() {
+  const sheet = els.playerFeedbackInboxSheet;
+  if (!sheet) return;
+  const title = String(currentPlayerTrackRef?.title || "this song").trim();
+  const sub = document.getElementById("playerFeedbackInboxSub");
+  if (sub) sub.textContent = title ? `On “${title}”` : "Who sent private feedback on this song.";
+  sheet.hidden = false;
+  window.requestAnimationFrame(() => {
+    sheet.setAttribute("aria-hidden", "false");
   });
+  void loadPlayerFeedbackInbox();
+}
+
+let _playerFeedbackUiBound = false;
+function wirePlayerFeedbackUiOnce() {
+  if (_playerFeedbackUiBound) return;
+  _playerFeedbackUiBound = true;
+  if (els.btnPlayerFeedbackSend) {
+    els.btnPlayerFeedbackSend.addEventListener("click", (e) => {
+      e.stopPropagation();
+      haptic("light");
+      togglePlayerFeedbackPopover();
+    });
+  }
+  if (els.playerFeedbackPopoverChips) {
+    els.playerFeedbackPopoverChips.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-song-feedback-type]");
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const songId = btn.getAttribute("data-song-feedback-song");
+      const type = btn.getAttribute("data-song-feedback-type");
+      void submitSongFeedback(songId, type);
+    });
+  }
+  if (els.btnPlayerFeedbackInbox) {
+    els.btnPlayerFeedbackInbox.addEventListener("click", () => {
+      haptic("light");
+      openPlayerFeedbackInbox();
+    });
+  }
+  document.addEventListener("click", (e) => {
+    if (els.playerFeedbackPopover?.hidden) return;
+    if (e.target.closest("#playerFeedbackPopover, #btnPlayerFeedbackSend")) return;
+    closePlayerFeedbackPopover();
+  });
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("[data-player-feedback-inbox-dismiss]")) closePlayerFeedbackInbox();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (els.playerFeedbackInboxSheet && !els.playerFeedbackInboxSheet.hidden) closePlayerFeedbackInbox();
+    if (els.playerFeedbackPopover && !els.playerFeedbackPopover.hidden) closePlayerFeedbackPopover();
+  });
+}
+
+function songDetailsFeedbackHintHtml(track) {
+  const ctx = publicFeedbackContextForTrack(track);
+  if (!ctx?.songId) return "";
+  return `<p class="hint songFeedbackDetailsHint">Private feedback lives on the player cover — tap the whisper icon on the artwork.</p>`;
 }
 
 async function submitSongFeedback(songId, feedbackType) {
@@ -10144,7 +10397,7 @@ async function submitSongFeedback(songId, feedbackType) {
   const type = String(feedbackType || "").trim();
   if (!sid || !type) return;
   if (!authSession?.user?.id) {
-    showToast("Sign in to send creator feedback.", { icon: "!", durationMs: 3200 });
+    showToast("Sign in to send private feedback.", { icon: "!", durationMs: 3200 });
     try { location.hash = "#/auth"; } catch {}
     return;
   }
@@ -10158,51 +10411,32 @@ async function submitSongFeedback(songId, feedbackType) {
       viewer: Array.isArray(data?.viewer) ? data.viewer : [],
     });
     if (data?.reason === "own_song") {
-      showToast("Feedback chips are for listeners on your public songs.");
+      showToast("Private feedback is for listeners on your public songs.");
     } else if (data?.reason === "song_not_public") {
-      showToast("Feedback works only on public profile songs.");
+      showToast("Private feedback works only on public profile songs.");
     } else if (data?.reason === "missing_input") {
       showToast("Could not identify this song for feedback.");
-    } else if (data?.reason === "feedback_foreign_key" || data?.reason === "feedback_type_mismatch") {
-      showToast("Run the updated feedback SQL; song_id must be uuid.");
-    } else if (data?.reason === "feedback_table_missing") {
-      showToast("Run the feedback SQL to create the feedback table.");
-    } else if (data?.reason === "feedback_schema_mismatch") {
-      showToast("Feedback table schema is outdated; rerun the latest SQL.");
-    } else if (data?.reason === "feedback_policy") {
-      showToast("Feedback table policy needs the latest SQL update.");
-    } else if (data?.reason === "insert_failed") {
-      showToast("Feedback storage is not ready yet. Check the Supabase feedback SQL.");
     } else if (data?.counted === false) {
-      showToast("Could not send feedback yet.");
+      showToast("Could not send private feedback yet.");
     } else if (data?.existing) {
       showToast("You already sent that feedback.");
     } else {
-      showToast("Feedback sent to the creator.");
+      closePlayerFeedbackPopover();
+      spawnPlayerFeedbackAura(feedbackLabelForType(type), _playerFeedbackAuraSlot++);
+      showToast("Private feedback sent.");
     }
-    songFeedbackPanelsFor(sid).forEach((panel) => {
-      const placement = panel.classList.contains("songFeedbackPanel--player") ? "player" : "details";
-      const track = currentPlayerTrackRef && publicFeedbackContextForTrack(currentPlayerTrackRef)?.songId === sid
-        ? currentPlayerTrackRef
-        : { id: sid, songId: sid, ownerUserId: "public" };
-      panel.outerHTML = feedbackControlsHtml(track, placement);
-    });
+    if (String(currentPlayerTrackRef?.songId || "") === sid) {
+      renderPlayerFeedbackPopoverChips(sid);
+      updatePlayerFeedbackInboxChrome(sid, data?.counts || _songFeedbackCache.get(sid)?.counts || {});
+    }
   } catch (e) {
-    showToast(e?.message || "Could not send feedback.");
+    showToast(e?.message || "Could not send private feedback.");
   }
 }
 
 function setPlayerFeedback(track) {
-  if (!els.playerFeedbackPanel) return;
-  const ctx = publicFeedbackContextForTrack(track);
-  if (!ctx?.songId || track?.fromSharedLink) {
-    els.playerFeedbackPanel.hidden = true;
-    els.playerFeedbackPanel.innerHTML = "";
-    return;
-  }
-  els.playerFeedbackPanel.hidden = false;
-  els.playerFeedbackPanel.innerHTML = feedbackControlsHtml(track, "player");
-  void hydrateSongFeedbackPanels(ctx.songId);
+  wirePlayerFeedbackUiOnce();
+  void setupPlayerCoverFeedback(track);
 }
 
 function setPlayerReleaseNote(caption) {
@@ -12248,12 +12482,23 @@ async function waitForNativeAuthHydration(maxMs = 2800) {
   if (!isCapacitorNativeAuth()) return;
   const deadline = Date.now() + maxMs;
   while (Date.now() < deadline) {
-    await restoreAuthSessionFromAllStores();
     loadAuthSession();
     ensureAuthSessionUserFromToken();
     if (authSession?.access_token) return;
-    await new Promise((r) => setTimeout(r, 60));
+    try {
+      const local =
+        localStorage.getItem(AUTH_SESSION_KEY) || localStorage.getItem(AUTH_SESSION_BACKUP_KEY) || "";
+      if (local.includes("access_token")) {
+        loadAuthSession();
+        ensureAuthSessionUserFromToken();
+        if (authSession?.access_token) return;
+      }
+    } catch {}
+    await new Promise((r) => setTimeout(r, 80));
   }
+  await restoreAuthSessionFromAllStores();
+  loadAuthSession();
+  ensureAuthSessionUserFromToken();
 }
 
 let _oauthBrowserOpen = false;
@@ -15660,8 +15905,11 @@ function setUserPublicLoading(on, username = "") {
       els.userPublicStats.innerHTML = userPublicStatsSkeletonHtml();
       els.userPublicStats.style.display = "";
     }
-    if (els.userPublicSongsCount) els.userPublicSongsCount.textContent = "";
-    if (els.userPublicSongs) els.userPublicSongs.innerHTML = userPublicSongsSkeletonHtml();
+    if (els.userPublicSongsCount) {
+      els.userPublicSongsCount.textContent = "";
+      els.userPublicSongsCount.hidden = true;
+    }
+    if (els.userPublicSongs) els.userPublicSongs.innerHTML = followingActivitySkeletonHtml();
     if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
   }
 }
@@ -15669,9 +15917,11 @@ function setUserPublicLoading(on, username = "") {
 function renderUserPublicFollowButton() {
   const btn = els.btnUserPublicFollow;
   const followsYou = els.userPublicFollowsYou;
+  const followRow = els.userPublicFollowRow;
   const targetId = String(currentUserPublicProfileId || "").trim();
   const mine = String(authSession?.user?.id || "").trim();
   const canShow = Boolean(targetId && mine && targetId !== mine);
+  if (followRow) followRow.hidden = !canShow;
   if (followsYou) {
     const showFollowsYou = canShow && Boolean(currentUserPublicSocialStats?.followsViewer);
     followsYou.hidden = !showFollowsYou;
@@ -15729,7 +15979,7 @@ async function toggleCurrentUserPublicFollow() {
       isFollowing: !wasFollowing,
     };
     renderUserPublicSocialStats({
-      songCount: Number(els.userPublicSongsCount?.textContent || 0),
+      songCount: parseInt(String(els.userPublicSongsCount?.textContent || "0"), 10) || 0,
       stats: currentUserPublicSocialStats,
     });
     renderUserPublicFollowButton();
@@ -15814,11 +16064,11 @@ function notificationMessage(n) {
   }
   if (n?.type === "song_feedback") {
     const title = String(n?.metadata?.song_title || "your song").trim();
-    const label = String(n?.metadata?.feedback_label || "sent feedback").trim();
+    const label = String(n?.metadata?.feedback_label || "sent private feedback").trim();
     return {
-      title: username ? `@${username} reacted to ${title}` : `Someone reacted to ${title}`,
-      body: label,
-      action: username ? "View listener" : "",
+      title: username ? `@${username} sent private feedback` : "Someone sent private feedback",
+      body: `${label} · ${title}`,
+      action: username ? "View song" : "",
     };
   }
   if (n?.type === "play_milestone") {
@@ -18774,6 +19024,7 @@ function syncDiscoveryPlayingHighlights() {
     document.getElementById("discoveryPaneDiscover"),
     document.getElementById("friendsPage"),
     document.getElementById("profileActivitiesList"),
+    document.getElementById("userPublicSongs"),
     document.getElementById("discoverPlaylistList"),
   ].filter(Boolean);
   if (!roots.length) return;
@@ -20085,7 +20336,10 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
       els.userPublicBio.style.display = "none";
     }
     if (els.userPublicStats) els.userPublicStats.style.display = "none";
-    if (els.userPublicSongsCount) els.userPublicSongsCount.textContent = "";
+    if (els.userPublicSongsCount) {
+      els.userPublicSongsCount.textContent = "";
+      els.userPublicSongsCount.hidden = true;
+    }
     if (els.userPublicSongs) els.userPublicSongs.innerHTML = "";
     const momentsWrap = document.getElementById("userPublicMomentsWrap");
     if (momentsWrap) momentsWrap.hidden = true;
@@ -20148,7 +20402,13 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
   renderUserPublicSocialStats({ songCount: songs.length, stats: currentUserPublicSocialStats });
   renderUserPublicFollowButton();
   if (els.userPublicSongsCount) {
-    els.userPublicSongsCount.textContent = songs.length ? String(songs.length) : "";
+    if (songs.length) {
+      els.userPublicSongsCount.textContent = `${songs.length} PUBLIC`;
+      els.userPublicSongsCount.hidden = false;
+    } else {
+      els.userPublicSongsCount.textContent = "";
+      els.userPublicSongsCount.hidden = true;
+    }
   }
   if (!songs.length) {
     if (els.userPublicSongs) els.userPublicSongs.innerHTML = "";
@@ -20163,31 +20423,22 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
     return;
   }
   if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
+  const profMap = await fetchProfilesByUserIdsMap([String(prof.user_id || "")]);
+  const playCountMap = songs.length
+    ? await fetchDiscoverSongPlayCounts(songs.map((t) => t.id))
+    : new Map();
+  for (const t of songs) {
+    t.playCount = playCountMap.get(String(t.id || "")) || 0;
+    t.userId = String(t.userId || prof.user_id || "");
+  }
+  await hydrateRemixOriginalsForTracks(songs);
+  await hydrateMashupSourcesForTracks(songs);
   if (els.userPublicSongs) {
     const slice = songs.slice(0, 60);
     const byLine = `@${displayName}`;
-    const pubCtx = { byLine, rawHandle: displayName, ownerUserId: String(prof.user_id || "") };
     const featured = songs.find(isFeaturedOnProfile);
     els.userPublicSongs.innerHTML = slice
-      .map((t, i) =>
-        userPublicDiscoveryRowHtml(
-          {
-            id: t.id,
-            userId: t.userId,
-            url: t.url,
-            title: t.title,
-            artUrl: t.artUrl,
-            ts: t.ts,
-            taskId: t.taskId,
-            audioId: t.audioId,
-            kind: t.kind,
-            meta: t.meta,
-            publicOnProfile: t.publicOnProfile,
-          },
-          i,
-          pubCtx,
-        ),
-      )
+      .map((t, i) => followingActivityRowHtml(t, profMap, i, { xstyle: true }))
       .join("");
     if (featured) {
       els.userPublicSongs.innerHTML = `${profileFeaturedSongHtml(featured, "public")}${els.userPublicSongs.innerHTML}`;
@@ -20208,8 +20459,10 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "") {
       };
     });
     try {
-      syncUserPublicFeedPlayingHighlights();
+      syncDiscoveryPlayingHighlights();
     } catch {}
+    applyFeedSocialStatsToDom(els.userPublicSongs);
+    void hydrateFeedSocialStatsForFeed(els.userPublicSongs);
     els.userPublicSongs.querySelectorAll("[data-public-featured-play]").forEach((b) => {
       b.addEventListener("click", () => {
         const sid = b.getAttribute("data-public-featured-play");
@@ -26926,7 +27179,7 @@ function openSongDetailsModal(track) {
     </section>
     ` : ""}
 
-    ${feedbackControlsHtml(track, "details")}
+    ${songDetailsFeedbackHintHtml(track)}
 
     <section class="songDetailsSection">
       <div class="songDetailsSectionHead">
@@ -26952,8 +27205,6 @@ function openSongDetailsModal(track) {
       }
     });
   }
-  const feedbackCtx = publicFeedbackContextForTrack(track);
-  if (feedbackCtx?.songId) void hydrateSongFeedbackPanels(feedbackCtx.songId);
   // Cloud-hydrated rows ship without lyrics — recover them in the
   // background and swap the placeholder once they arrive.
   if (!hasLyrics) {
@@ -34700,14 +34951,6 @@ if (els.notificationsCenter) {
   });
 }
 
-document.addEventListener("click", (e) => {
-  const btn = e.target?.closest?.("[data-song-feedback-type]");
-  if (!btn) return;
-  e.preventDefault();
-  const songId = btn.getAttribute("data-song-feedback-song");
-  const type = btn.getAttribute("data-song-feedback-type");
-  void submitSongFeedback(songId, type);
-});
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && els.notificationsCenter && !els.notificationsCenter.hidden) {
     closeNotificationsCenter();

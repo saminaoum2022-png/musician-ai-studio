@@ -1,8 +1,9 @@
 import Capacitor
 import Security
 import UIKit
+import WebKit
 
-/// Transparent WKWebView so @capacitor-community/camera-preview can render behind the HTML layer.
+/// Inject Keychain session before JS boots (Keychain survives force-quit).
 final class BridgeViewController: CAPBridgeViewController {
     private static let authService = "com.nabadai.music.auth.vault"
     private static let authAccount = "mas_supabase_session_v1"
@@ -10,52 +11,38 @@ final class BridgeViewController: CAPBridgeViewController {
 
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
-        applyTransparentWebView()
-        injectAuthSessionIntoWebViewIfNeeded()
+        registerAuthUserScriptIfNeeded()
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        applyTransparentWebView()
-        injectAuthSessionIntoWebViewIfNeeded()
+        registerAuthUserScriptIfNeeded()
     }
 
-    private func applyTransparentWebView() {
-        guard let webView = webView else { return }
-        webView.isOpaque = false
-        webView.backgroundColor = .clear
-        webView.scrollView.backgroundColor = .clear
-        if #available(iOS 15.0, *) {
-            webView.underPageBackgroundColor = .clear
+    private func registerAuthUserScriptIfNeeded() {
+        guard !didInjectAuthSession, let webView = webView else { return }
+        if let json = Self.loadAuthSessionJson(), !json.isEmpty {
+            let b64 = Data(json.utf8).base64EncodedString()
+            let source = """
+            (function(){
+              try {
+                var raw = atob('\(b64)');
+                if (!raw) return;
+                localStorage.setItem('mas:supabase:session:v1', raw);
+                localStorage.setItem('mas:supabase:session:backup:v1', raw);
+                window.dispatchEvent(new Event('nabad-auth-injected'));
+              } catch(e) {}
+            })();
+            """
+            webView.configuration.userContentController.addUserScript(
+                WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true)
+            )
         }
-    }
-
-    /// Restore Supabase session into WKWebView localStorage before JS boots (Keychain survives force-quit).
-    private func injectAuthSessionIntoWebViewIfNeeded() {
-        guard !didInjectAuthSession else { return }
-        guard let json = Self.loadAuthSessionJson(), !json.isEmpty else { return }
-        guard let webView = webView else { return }
-        let b64 = Data(json.utf8).base64EncodedString()
-        let script = """
-        (function(){
-          try {
-            var raw = atob('\(b64)');
-            if (!raw) return;
-            localStorage.setItem('mas:supabase:session:v1', raw);
-            localStorage.setItem('mas:supabase:session:backup:v1', raw);
-            window.dispatchEvent(new Event('nabad-auth-injected'));
-          } catch(e) {}
-        })();
-        """
-        webView.evaluateJavaScript(script) { [weak self] _, error in
-            if error == nil {
-                self?.didInjectAuthSession = true
-            }
-        }
+        didInjectAuthSession = true
     }
 
     private static func loadAuthSessionJson() -> String? {
-        var query: [String: Any] = [
+        let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: authService,
             kSecAttrAccount as String: authAccount,

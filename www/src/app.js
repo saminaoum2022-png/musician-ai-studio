@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615avoidBox";
+const APP_BUILD = "20260615singerStyleFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2402,16 +2402,48 @@ function challengePromptMagicSeed(seed, challenge) {
   ].filter(Boolean).join("\n");
 }
 
-function arabicAddressPronunciationNote(value) {
+function resolveSingerGenderForGeneration(opts = {}) {
+  const { hasReference = false, personaId = "" } = opts;
+  if (hasReference || personaId) return "";
+  const vp = String(els.sunoVoiceProfile?.value || "").trim();
+  if (vp.includes("|")) {
+    const g = vp.split("|")[0];
+    return g === "f" || g === "m" ? g : "";
+  }
+  const sg = String(els.sunoSingerGender?.value || "").trim();
+  return sg === "m" || sg === "f" ? sg : "";
+}
+
+function singerVoiceStyleNote(gender) {
+  const g = String(gender || "").trim().toLowerCase();
+  if (g === "m") return "male lead vocal";
+  if (g === "f") return "female lead vocal";
+  return "";
+}
+
+function arabicAddressPronunciationNote(value, singerGender = "") {
   const v = String(value || "").trim().toLowerCase();
+  const singer = String(singerGender || "").trim().toLowerCase();
   if (v === "male") {
-    return "Arabic address: sing to a man; keep masculine words clear: إنتَ، حبيبي، غالي، كنتَ.";
+    const singerClause =
+      singer === "f"
+        ? "Female lead vocalist; "
+        : singer === "m"
+        ? "Male lead vocalist; "
+        : "";
+    return `${singerClause}Arabic address: lyrics sung TO a man; keep masculine addressee words: إنتَ، حبيبي، غالي، كنتَ.`;
   }
   if (v === "female") {
-    return "Arabic address: sing to a woman; keep feminine words clear: إنتِ، حبيبتي، غالية، كنتِ.";
+    const singerClause =
+      singer === "m"
+        ? "Male lead vocalist; "
+        : singer === "f"
+        ? "Female lead vocalist; "
+        : "";
+    return `${singerClause}Arabic address: lyrics sung TO a woman (addressee only, not singer gender); keep feminine addressee words: إنتِ، حبيبتي، غالية، كنتِ.`;
   }
   if (v === "group") {
-    return "Arabic address: sing to a group; keep plural words clear: إنتو، حبايبي، غاليين، كنتو.";
+    return "Arabic address: lyrics sung TO a group; keep plural addressee words: إنتو، حبايبي، غاليين، كنتو.";
   }
   return "";
 }
@@ -30794,7 +30826,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const style = String(els.sunoStyle?.value || "").trim();
     const dialect = String(els.sunoDialect?.value || "").trim();
     const dialectHint = String(els.sunoDialectHint?.value || "").trim();
-    const addressNote = arabicAddressPronunciationNote(els.sunoArabicAddress?.value);
+    const addressNote = arabicAddressPronunciationNote(
+      els.sunoArabicAddress?.value,
+      resolveSingerGenderForGeneration({ hasReference: Boolean(getVocalReferenceFile()) })
+    );
     const lyricDialectHint = [dialectHint, addressNote].filter(Boolean).join(" ");
     try {
       if (els.btnLyricsMagic) {
@@ -32063,7 +32098,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const dialect = String(els.sunoDialect?.value || "").trim();
       const dialectHint = String(els.sunoDialectHint?.value || "").trim();
       const arabicAddress = String(els.sunoArabicAddress?.value || "").trim();
-      const arabicAddressNote = arabicAddressPronunciationNote(arabicAddress);
+      const personaIdSel = getActivePersonaId();
+      const resolvedSingerGender = resolveSingerGenderForGeneration({
+        hasReference,
+        personaId: personaIdSel,
+      });
+      const arabicAddressNote = arabicAddressPronunciationNote(arabicAddress, resolvedSingerGender);
       const lyricDialectHint = [dialectHint, arabicAddressNote].filter(Boolean).join(" ");
       const timing = String(els.sunoTiming?.value || "").trim();
       const timingClause = timing
@@ -32100,6 +32140,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const styleExtras = hasReference
         ? ""
         : [
+            resolvedSingerGender ? singerVoiceStyleNote(resolvedSingerGender) : "",
             dialect ? `Dialect: ${dialect}` : "",
             dialectHint ? `Hint: ${dialectHint}` : "",
             arabicAddressNote,
@@ -32113,7 +32154,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             .join(", ");
 
       try { renderPersonaSelect(); } catch {}
-      const personaIdSel = getActivePersonaId();
       const personaHit = personaIdSel
         ? loadPersonas().find((x) => String(x.personaId) === personaIdSel)
         : null;

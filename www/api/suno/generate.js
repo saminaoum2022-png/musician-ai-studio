@@ -139,6 +139,7 @@ module.exports = async function handler(req, res) {
         model: payload.model,
         personaId: payload.personaId || null,
         personaModel: payload.personaModel || null,
+        vocalGender: payload.vocalGender || null,
         customMode: payload.customMode,
         instrumental: payload.instrumental,
         promptLen: payload.prompt?.length || 0,

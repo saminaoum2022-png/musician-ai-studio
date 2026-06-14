@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615feedbackFast";
+const APP_BUILD = "20260615feedbackColors";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -10157,12 +10157,20 @@ function clearPlayerFeedbackReplayTimers() {
   _playerFeedbackReplayTimers = [];
 }
 
-function spawnPlayerFeedbackAura(label, slotIndex) {
+function feedbackTypeFromLabel(label) {
+  const raw = String(label || "").split(" · ")[0].trim();
+  const hit = SONG_FEEDBACK_TYPES.find((x) => x.label === raw);
+  return hit?.id || "";
+}
+
+function spawnPlayerFeedbackAura(label, slotIndex, feedbackType = "") {
   const host = els.playerFeedbackAuras;
   if (!host || !label) return;
   const slot = _FEEDBACK_AURA_SLOTS[Number(slotIndex) % _FEEDBACK_AURA_SLOTS.length];
+  const type = String(feedbackType || "").trim() || feedbackTypeFromLabel(label);
+  const typeClass = type ? ` playerFeedbackAura--type-${type}` : "";
   const pill = document.createElement("span");
-  pill.className = `playerFeedbackAura playerFeedbackAura--${slot}`;
+  pill.className = `playerFeedbackAura playerFeedbackAura--${slot}${typeClass}`;
   pill.textContent = String(label);
   host.appendChild(pill);
   const removeMs = _FEEDBACK_AURA_LIFETIME_MS;
@@ -10177,11 +10185,10 @@ function buildFeedbackAuraReplayQueue(counts, isCreatorOwner) {
   for (const item of SONG_FEEDBACK_TYPES) {
     const n = Number(counts?.[item.id] || 0);
     if (!n) continue;
-    if (isCreatorOwner && n > 1) {
-      queue.push(`${item.label} · ${formatStatCount(n)}`);
-    } else {
-      queue.push(item.label);
-    }
+    const label = isCreatorOwner && n > 1
+      ? `${item.label} · ${formatStatCount(n)}`
+      : item.label;
+    queue.push({ label, type: item.id });
   }
   return queue.slice(0, _FEEDBACK_AURA_REPLAY_MAX);
 }
@@ -10192,10 +10199,10 @@ function scheduleFeedbackAuraReplay(counts, { isCreatorOwner = false } = {}) {
   const queue = buildFeedbackAuraReplayQueue(counts, isCreatorOwner);
   if (!queue.length) return;
   const gen = ++_playerFeedbackReplayGen;
-  queue.forEach((label, idx) => {
+  queue.forEach((entry, idx) => {
     const timer = window.setTimeout(() => {
       if (gen !== _playerFeedbackReplayGen) return;
-      spawnPlayerFeedbackAura(label, idx);
+      spawnPlayerFeedbackAura(entry.label, idx, entry.type);
     }, idx * _FEEDBACK_AURA_REPLAY_GAP_MS);
     _playerFeedbackReplayTimers.push(timer);
   });
@@ -10408,7 +10415,7 @@ function wirePlayerFeedbackUiOnce() {
       closePlayerFeedbackPopover();
       haptic("success");
       playPrivateFeedbackSendSound();
-      spawnPlayerFeedbackAura(label, _playerFeedbackAuraSlot++);
+      spawnPlayerFeedbackAura(label, _playerFeedbackAuraSlot++, type);
       void submitSongFeedback(songId, type, { skipAura: true, skipClose: true });
     });
   }
@@ -10474,7 +10481,7 @@ async function submitSongFeedback(songId, feedbackType, opts = {}) {
       if (!skipAura) {
         haptic("success");
         playPrivateFeedbackSendSound();
-        spawnPlayerFeedbackAura(feedbackLabelForType(type), _playerFeedbackAuraSlot++);
+        spawnPlayerFeedbackAura(feedbackLabelForType(type), _playerFeedbackAuraSlot++, type);
       }
       showToast("Private feedback sent.", { durationMs: 1800 });
     }

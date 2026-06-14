@@ -25,9 +25,12 @@ function getAudioContextCtor() {
 
 export function isWarmPlaybackEnabled() {
   try {
-    return localStorage.getItem(WARM_PLAYBACK_STORAGE_KEY) === "1";
+    const stored = localStorage.getItem(WARM_PLAYBACK_STORAGE_KEY);
+    if (stored === "0") return false;
+    if (stored === "1") return true;
+    return true; // default on for new installs / first launch
   } catch {
-    return false;
+    return true;
   }
 }
 

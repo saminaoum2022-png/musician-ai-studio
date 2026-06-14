@@ -235,14 +235,7 @@ module.exports = async function handler(req, res) {
           dialect,
           dialectHint,
         });
-        const coverNegative = mergeNegativeTags(negativeTags, [
-          "out-of-tune",
-          "autotune artifact",
-          "robotic vocal",
-          "off-beat",
-          "muddy mix",
-          "harsh sibilance",
-        ]);
+        const coverNegative = trimNegativeTags(negativeTags);
         const coverPayload = {
           uploadUrl,
           customMode: true,
@@ -252,8 +245,8 @@ module.exports = async function handler(req, res) {
           prompt: coverInstrumental ? "" : (prompt || ""),
           style: coverStyle,
           title: title || (coverInstrumental ? "Instrumental cover from reference" : "Cover from reference"),
-          negativeTags: coverNegative,
           styleWeight: 0.5,
+          ...(coverNegative ? { negativeTags: coverNegative } : {}),
           ...(!coverInstrumental && personaId ? { personaId } : {}),
         };
         try {
@@ -388,21 +381,14 @@ module.exports = async function handler(req, res) {
       let cleanTags = cleanTagsList.join(", ");
       if (!cleanTags) cleanTags = "ambient, instrumental";
       if (cleanTags.length > 180) cleanTags = cleanTags.slice(0, 177) + "...";
-      const cleanNegative = (() => {
-        const userExtra = String(negativeTags || "")
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean);
-        const merged = userExtra.length ? userExtra.join(", ") : "heavy metal, aggressive drums";
-        return merged.length > 180 ? merged.slice(0, 177) + "..." : merged;
-      })();
+      const cleanNegative = trimNegativeTags(negativeTags);
       const addPayload = {
         uploadUrl,
         title: title || "Reference instrumental",
         tags: cleanTags,
-        negativeTags: cleanNegative,
         callBackUrl,
         model: instModel,
+        ...(cleanNegative ? { negativeTags: cleanNegative } : {}),
         ...(audioWeight !== null ? { audioWeight } : {}),
         ...(styleWeight !== null ? { styleWeight } : {}),
         ...(vocalGender === "m" || vocalGender === "f" ? { vocalGender } : {}),
@@ -412,8 +398,8 @@ module.exports = async function handler(req, res) {
           title: addPayload.title,
           tags: addPayload.tags,
           tagsLen: addPayload.tags.length,
-          negativeTags: addPayload.negativeTags,
-          negativeTagsLen: addPayload.negativeTags.length,
+          negativeTags: addPayload.negativeTags ?? null,
+          negativeTagsLen: addPayload.negativeTags?.length ?? 0,
           model: addPayload.model,
           audioWeight: addPayload.audioWeight ?? null,
           styleWeight: addPayload.styleWeight ?? null,
@@ -537,17 +523,14 @@ function buildCoverStyle({ baseStyle, dialect, dialectHint }) {
   return merged;
 }
 
-function mergeNegativeTags(userNegative, defaults) {
-  const set = new Set();
-  for (const arr of [defaults || [], String(userNegative || "").split(",")]) {
-    for (const raw of arr) {
-      const v = String(raw || "").trim().toLowerCase();
-      if (v) set.add(v);
-    }
-  }
-  let merged = [...set].join(", ");
-  if (merged.length > 240) merged = merged.slice(0, 237) + "...";
-  return merged;
+function trimNegativeTags(raw) {
+  const merged = String(raw || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(", ");
+  if (!merged) return "";
+  return merged.length > 240 ? merged.slice(0, 237) + "..." : merged;
 }
 
 /** Pick a filename extension ffmpeg can probe reliably. */

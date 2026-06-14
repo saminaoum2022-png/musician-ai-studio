@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615singerStyleFix";
+const APP_BUILD = "20260615refSingerFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -2403,8 +2403,8 @@ function challengePromptMagicSeed(seed, challenge) {
 }
 
 function resolveSingerGenderForGeneration(opts = {}) {
-  const { hasReference = false, personaId = "" } = opts;
-  if (hasReference || personaId) return "";
+  const { personaId = "" } = opts;
+  if (personaId) return "";
   const vp = String(els.sunoVoiceProfile?.value || "").trim();
   if (vp.includes("|")) {
     const g = vp.split("|")[0];
@@ -32100,7 +32100,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const arabicAddress = String(els.sunoArabicAddress?.value || "").trim();
       const personaIdSel = getActivePersonaId();
       const resolvedSingerGender = resolveSingerGenderForGeneration({
-        hasReference,
         personaId: personaIdSel,
       });
       const arabicAddressNote = arabicAddressPronunciationNote(arabicAddress, resolvedSingerGender);
@@ -32137,21 +32136,23 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
       setStatus(`Submitting generation… (Mode: ${modeLabel} | Engine: ${engineLabel})`);
 
-      const styleExtras = hasReference
-        ? ""
-        : [
-            resolvedSingerGender ? singerVoiceStyleNote(resolvedSingerGender) : "",
-            dialect ? `Dialect: ${dialect}` : "",
-            dialectHint ? `Hint: ${dialectHint}` : "",
-            arabicAddressNote,
-            timing ? timing : "",
-            groovePace ? (GROOVE_MAP[groovePace] || "") : "",
-            prosodyStrictness ? (PROSODY_MAP[prosodyStrictness] || "") : "",
-            beatStability ? (BEAT_STABILITY_MAP[beatStability] || "") : "",
-            hasReference ? REFERENCE_MELODY_LOCK : "",
-          ]
-            .filter(Boolean)
-            .join(", ");
+      const styleExtras = [
+        resolvedSingerGender ? singerVoiceStyleNote(resolvedSingerGender) : "",
+        dialect ? `Dialect: ${dialect}` : "",
+        dialectHint ? `Hint: ${dialectHint}` : "",
+        arabicAddressNote,
+        ...(hasReference
+          ? []
+          : [
+              timing ? timing : "",
+              groovePace ? (GROOVE_MAP[groovePace] || "") : "",
+              prosodyStrictness ? (PROSODY_MAP[prosodyStrictness] || "") : "",
+              beatStability ? (BEAT_STABILITY_MAP[beatStability] || "") : "",
+              hasReference ? REFERENCE_MELODY_LOCK : "",
+            ]),
+      ]
+        .filter(Boolean)
+        .join(", ");
 
       try { renderPersonaSelect(); } catch {}
       const personaHit = personaIdSel
@@ -32189,7 +32190,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
       const payload = {
         prompt: finalPrompt,
-        style: hasReference ? String(userStyle || "").trim() : `${userStyle}${userStyle ? " | " : ""}${timingClause}, ${styleExtras}${artworkStyle ? `, cover art: ${artworkStyle}` : ""}`,
+        style: hasReference
+          ? String(userStyle || "").trim()
+          : `${userStyle}${userStyle ? " | " : ""}${timingClause}, ${styleExtras}${artworkStyle ? `, cover art: ${artworkStyle}` : ""}`,
         songKey: mapSolfegeToLetterKey((els.sunoSongKey?.value || "").trim()),
         title: (els.sunoTitle?.value || "").trim(),
         customMode: true,
@@ -32199,16 +32202,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         personaModel: personaModelSel || undefined,
       };
       const vp = String(els.sunoVoiceProfile?.value || "").trim();
-      // Voice profile: send gender + timbre to Suno only — no extra style clauses.
-      // Long auto phrases (tessitura, resonance, avoid shouting…) fought user style
-      // and did not keep pitch lower; Voice timbre: Baritone on the API is enough.
-      // Voice profile: skip on reference/hum — uploaded audio drives the voice.
-      if (!personaIdSel && !hasReference && vp.includes("|")) {
+      // Voice profile / Singer: skip only when a persona owns the voice.
+      // Reference uploads still honor explicit Male/Female + Range picks.
+      if (!personaIdSel && vp.includes("|")) {
         const [gender, timbre] = vp.split("|");
         payload.vocalGender = gender || undefined;
         payload.voiceTimbre = timbre || undefined;
-      } else if (!personaIdSel && !hasReference && !vp) {
-        // Singer pills on the Create page: gender only, no forced timbre.
+      } else if (!personaIdSel && !vp) {
         const singerGender = String(els.sunoSingerGender?.value || "").trim();
         if (singerGender === "m" || singerGender === "f") {
           payload.vocalGender = singerGender;
@@ -32318,7 +32318,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             fd.append("fileName", uniqueUploadName);
             fd.append("fileType", sendFile?.type || "audio/webm");
             if (sendFp) fd.append("clientFingerprint", sendFp);
-            fd.append("style", String(userStyle || "").trim());
+            fd.append("style", String(payload.style || userStyle || "").trim());
             if (!referenceInstrumentalOnly && finalPrompt) fd.append("prompt", String(finalPrompt));
             fd.append(
               "title",
@@ -32329,8 +32329,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               fd.append("audioWeight", "0.95");
               fd.append("styleWeight", "0.25");
             }
-            if (payload?.vocalGender && !hasReference) fd.append("vocalGender", String(payload.vocalGender));
-            if (payload?.voiceTimbre && !hasReference) fd.append("voiceTimbre", String(payload.voiceTimbre));
+            if (payload?.vocalGender) fd.append("vocalGender", String(payload.vocalGender));
+            if (payload?.voiceTimbre) fd.append("voiceTimbre", String(payload.voiceTimbre));
             if (payload?.songKey) fd.append("songKey", String(payload.songKey));
             if (timing) fd.append("timing", String(timing));
             if (dialect) fd.append("dialect", String(dialect));

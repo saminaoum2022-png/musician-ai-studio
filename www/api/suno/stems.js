@@ -234,6 +234,8 @@ module.exports = async function handler(req, res) {
           baseStyle: style,
           dialect,
           dialectHint,
+          vocalGender,
+          voiceTimbre,
         });
         const coverNegative = trimNegativeTags(negativeTags);
         const coverPayload = {
@@ -247,6 +249,7 @@ module.exports = async function handler(req, res) {
           title: title || (coverInstrumental ? "Instrumental cover from reference" : "Cover from reference"),
           styleWeight: 0.5,
           ...(coverNegative ? { negativeTags: coverNegative } : {}),
+          ...(vocalGender === "m" || vocalGender === "f" ? { vocalGender } : {}),
           ...(!coverInstrumental && personaId ? { personaId } : {}),
         };
         try {
@@ -502,11 +505,17 @@ function wantsSpokenDelivery(text) {
 }
 
 /**
- * Cover / hum style: user style + dialect only. Uploaded reference drives
- * melody and vocal character — no auto baritone/tenor phrases here.
+ * Cover / hum style: user style + dialect + explicit singer picks.
+ * Uploaded reference drives melody; Singer / Range still steer voice gender.
  */
-function buildCoverStyle({ baseStyle, dialect, dialectHint }) {
+function buildCoverStyle({ baseStyle, dialect, dialectHint, vocalGender = "", voiceTimbre = "" }) {
   const parts = [];
+  const gender = String(vocalGender || "").trim().toLowerCase();
+  if (gender === "m") parts.push("male lead vocal");
+  if (gender === "f") parts.push("female lead vocal");
+  const timbre = String(voiceTimbre || "").trim();
+  if (timbre) parts.push(`Voice timbre: ${timbre}`);
+
   const base = String(baseStyle || "").trim();
   const spoken = wantsSpokenDelivery(base);
   if (base) parts.push(base);

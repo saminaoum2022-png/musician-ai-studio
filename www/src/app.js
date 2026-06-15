@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615lyricFix";
+const APP_BUILD = "20260615noLyricVid";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -18521,12 +18521,7 @@ function renderTrackSheetLibrary(track) {
   const personaEligible = !isInstrumental && !isSound && Boolean(track?.taskId) && Boolean(track?.audioId);
   const musicVideoEligible = !isSound && Boolean(track?.taskId) && Boolean(track?.audioId);
   const mvWatchable = musicVideoIsWatchable(musicVideoMetaFromTrack(track));
-  const lyricVideoRow = musicVideoEligible
-    ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_lyric_video">Create lyric video</button>`
-    : "";
-  const sunoVideoRow = mvWatchable
-    ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_suno_video">Watch Suno video</button>`
-    : "";
+  const musicVideoLabel = mvWatchable ? "Watch music video" : "Create music video";
   const profilePublic = Boolean(track.publicOnProfile);
   const pubTo = profilePublic ? "private" : "public";
   const pubLabel = profilePublic ? "Hide from public profile" : "Publish release";
@@ -18549,8 +18544,7 @@ function renderTrackSheetLibrary(track) {
   l.innerHTML = `
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_audio">Download audio</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_video">Download video</button>
-    ${lyricVideoRow}
-    ${sunoVideoRow}
+    ${musicVideoEligible ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_music_video">${musicVideoLabel}</button>` : ""}
     ${HUB_FEATURE_ENABLED ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_share_hub">Share to Hub</button>` : ""}
     ${personaEligible ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_persona">Save voice as persona</button>` : ""}
     ${renameRow}
@@ -19091,29 +19085,15 @@ function runTrackSheetAction(action, sourceEl) {
       })();
       return;
     }
-    if (action === "library_lyric_video") {
-      shut();
-      void (async () => {
-        try {
-          await createNabadLyricVideoForTrack(t, { onStatus: (m) => setStatus(m) });
-          setStatus("Lyric video ready.");
-        } catch (err) {
-          const m = err?.message || String(err);
-          setStatus(`Lyric video failed: ${m}`);
-          try { showToast(m, { icon: "!", durationMs: 4400 }); } catch {}
-        }
-      })();
-      return;
-    }
-    if (action === "library_suno_video") {
+    if (action === "library_music_video") {
       shut();
       void (async () => {
         try {
           await createSunoMusicVideoForTrack(t, { onStatus: (m) => setStatus(m) });
-          setStatus("Suno video ready.");
+          setStatus("Music video ready.");
         } catch (err) {
           const m = err?.message || String(err);
-          setStatus(`Suno video failed: ${m}`);
+          setStatus(`Music video failed: ${m}`);
           try { showToast(m, { icon: "!", durationMs: 4400 }); } catch {}
         }
       })();
@@ -26555,8 +26535,7 @@ async function createSunoMusicVideoForTrack(track, { onStatus } = {}) {
   }
 }
 
-/** Resolve direct http(s) audio + cover URLs for server-side video renders. */
-async function resolveLibraryTrackServerRenderUrls(track) {
+async function downloadLibraryVideoTrack(track, { onRendered } = {}) {
   const isHttpUrl = (u) => /^https?:\/\//i.test(String(u || "").trim());
   let t = track;
   if (!t?.url) throw new Error("Missing audio URL");
@@ -26591,83 +26570,6 @@ async function resolveLibraryTrackServerRenderUrls(track) {
   const trackTitle = String(t?.title || "song").trim() || "song";
   const artCandidates = [t?.meta && t.meta.imageUrl, t?.artUrl];
   const imageUrl = (artCandidates.find((s) => isHttpUrl(s)) || "").trim();
-  return { t, trackTitle, serverAudioUrl, imageUrl };
-}
-
-/**
- * NabadAi lyric video: portrait cover + large synced lyrics burned in on our
- * server. Opens the in-app viewer when done; save is a button in the viewer.
- */
-async function createNabadLyricVideoForTrack(track, { onStatus } = {}) {
-  const say = (m) => {
-    updateVideoRenderCard(m);
-    try { onStatus?.(m); } catch {}
-  };
-  const taskId = String(track?.taskId || track?.meta?.taskId || "").trim();
-  const audioId = String(track?.audioId || track?.meta?.audioId || "").trim();
-  if (!taskId || !audioId) {
-    throw new Error("Lyric videos are only available for songs generated in the app.");
-  }
-
-  const { t, trackTitle, serverAudioUrl, imageUrl } = await resolveLibraryTrackServerRenderUrls(track);
-  const coverUrl = videoCardCoverForTrack(t);
-  showVideoRenderCard(t);
-  try {
-    say("Creating your lyric video — syncing words to the beat…");
-    const token = getSupabaseAuthToken();
-    const rawHandle = String(activeProfile?.username || "").trim().replace(/^@+/, "");
-    const ctrl = new AbortController();
-    const renderTimer = setTimeout(() => ctrl.abort(), 90000);
-    let r;
-    try {
-      r = await fetch(apiUrl("/api/music/lyric-video"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          audioUrl: serverAudioUrl,
-          ...(imageUrl ? { imageUrl } : {}),
-          title: trackTitle,
-          taskId,
-          audioId,
-          ...(rawHandle ? { author: rawHandle.slice(0, 50) } : {}),
-        }),
-        signal: ctrl.signal,
-      });
-    } catch (e) {
-      if (e?.name === "AbortError") {
-        throw new Error("Lyric video render timed out — try again on Wi‑Fi.");
-      }
-      throw e;
-    } finally {
-      clearTimeout(renderTimer);
-    }
-    if (!r.ok) {
-      let detail = "";
-      try {
-        detail = (await r.json())?.error || "";
-      } catch {}
-      if (r.status === 504 || /timed out/i.test(detail)) {
-        throw new Error("Lyric video render timed out — try a shorter song or Wi‑Fi.");
-      }
-      throw new Error(detail || `HTTP ${r.status}`);
-    }
-    const blob = await r.blob();
-    if (!blob?.size || blob.size < 2048) throw new Error("Server returned an empty video file");
-    hideVideoRenderCard();
-    const blobUrl = URL.createObjectURL(blob);
-    openMusicVideoViewer(blobUrl, t.title, { coverUrl });
-  } catch (e) {
-    hideVideoRenderCard();
-    throw e;
-  }
-}
-
-async function downloadLibraryVideoTrack(track, { onRendered } = {}) {
-  const isHttpUrl = (u) => /^https?:\/\//i.test(String(u || "").trim());
-  const { t, trackTitle, serverAudioUrl, imageUrl } = await resolveLibraryTrackServerRenderUrls(track);
   const filename = `${trackTitle.replace(/[\\/:*?"<>|]/g, "").trim() || "song"}.mp4`;
   const safeExportName = sanitizeNativeExportFilename(filename, "song.mp4");
 

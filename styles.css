@@ -7373,6 +7373,14 @@ textarea{
 }
 .musicVideoSaveBtn:disabled{ opacity:0.6; }
 .musicVideoSaveBtn .ico{ stroke:currentColor; fill:none; stroke-width:2; }
+.videoSaveSheet{ text-align:center; }
+.videoSaveLead{
+  margin: 0 4px 18px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: rgba(210,220,236,0.82);
+}
+.videoSavePrimaryBtn{ width:100%; justify-content:center; margin-bottom: 4px; }
 .musicVideoHint{
   font-size:12px;
   color: rgba(226,233,245,0.55);

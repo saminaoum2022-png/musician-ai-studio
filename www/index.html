@@ -3146,6 +3146,29 @@
         </div>
       </div>
 
+      <div id="videoSaveModal" class="songDetailsModal" style="display:none" role="dialog" aria-modal="true" aria-label="Save video">
+        <div class="songDetailsBackdrop" id="videoSaveBackdrop"></div>
+        <div class="songDetailsSheet videoSaveSheet">
+          <div class="songDetailsGrab" aria-hidden="true"></div>
+          <div class="songDetailsHead">
+            <div>
+              <div class="songDetailsKicker">Video ready</div>
+              <h2 id="videoSaveTitle" class="songDetailsTitle">Your song</h2>
+            </div>
+            <button id="btnCloseVideoSave" class="songDetailsClose ghost" type="button">Close</button>
+          </div>
+          <p class="videoSaveLead">Tap <strong>Save Video</strong> to open the iOS menu — then choose Save Video (Photos) or Save to Files.</p>
+          <button id="btnOpenVideoSaveSheet" class="musicVideoSaveBtn videoSavePrimaryBtn" type="button">
+            <svg class="ico" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/>
+              <polyline points="16 6 12 2 8 6"/>
+              <line x1="12" y1="2" x2="12" y2="15"/>
+            </svg>
+            <span>Save Video</span>
+          </button>
+        </div>
+      </div>
+
       <div id="videoRenderCard" class="videoRenderCard" style="display:none" role="status" aria-live="polite">
         <span class="videoRenderGlow" aria-hidden="true"></span>
         <img id="videoRenderArt" class="videoRenderArt" src="./assets/nabadai-logo.png" alt="" />
@@ -3630,6 +3653,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260615videoShare"></script>
+    <script type="module" src="./src/app.js?v=20260615videoTap"></script>
   </body>
 </html>

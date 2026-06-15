@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615videoShare";
+const APP_BUILD = "20260615videoTap";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -500,6 +500,11 @@ const els = {
   videoRenderTitle: document.getElementById("videoRenderTitle"),
   videoRenderStatus: document.getElementById("videoRenderStatus"),
   btnVideoRenderHide: document.getElementById("btnVideoRenderHide"),
+  videoSaveModal: document.getElementById("videoSaveModal"),
+  videoSaveBackdrop: document.getElementById("videoSaveBackdrop"),
+  videoSaveTitle: document.getElementById("videoSaveTitle"),
+  btnCloseVideoSave: document.getElementById("btnCloseVideoSave"),
+  btnOpenVideoSaveSheet: document.getElementById("btnOpenVideoSaveSheet"),
   btnPlayerBack: document.getElementById("btnPlayerBack"),
   playerSeek: document.getElementById("playerSeek"),
   playerVol: document.getElementById("playerVol"),
@@ -14964,17 +14969,34 @@ function shareSheetCanceledError(err) {
   return m.includes("share canceled") || m.includes("cancelled") || m.includes("canceled");
 }
 
+function sanitizeNativeExportFilename(name, fallback = "song.mp4") {
+  return (
+    String(name || fallback)
+      .replace(/[^\w.\-]+/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_|_$/g, "")
+      .slice(0, 80) || fallback
+  );
+}
+
+function normalizeFilePathForIosShare(filePath) {
+  const raw = String(filePath || "").trim();
+  if (!/^file:\/\//i.test(raw)) return raw;
+  try {
+    return new URL(raw).href;
+  } catch {
+    return encodeURI(raw);
+  }
+}
+
 /** iOS WKWebView: write blob to Documents; returns a file:// path for Share. */
 async function writeBlobToNativeCache(blob, filename) {
   const fs = getCapFilesystemPlugin();
   if (!fs?.writeFile || !fs?.stat) {
     throw new Error("Save not available on this device — try again in a moment.");
   }
-  const name = String(filename || "song.mp4")
-    .replace(/[^\w.\- ]+/g, "_")
-    .replace(/\s+/g, " ")
-    .slice(0, 80);
-  const rel = `NabadAi/exports/${Date.now()}-${name || "song.mp4"}`;
+  const name = sanitizeNativeExportFilename(filename, "song.mp4");
+  const rel = `NabadAi/exports/${Date.now()}-${name}`;
   const data = await blobToBase64Payload(blob);
   await fs.writeFile({
     path: rel,
@@ -14992,20 +15014,70 @@ async function writeBlobToNativeCache(blob, filename) {
 
 /**
  * Standard iOS share sheet (UIActivityViewController) for a local file.
- * Never pass file:// URLs as `url` — that opens Safari/Quick Look instead of the sheet.
+ * Must be called from a fresh user tap after async work — iOS blocks deferred sheets.
  */
 async function presentNativeIosShareSheetForFile(filePath) {
   const Share = getCapacitorSharePlugin();
   if (!Share?.share) throw new Error("Share is not available on this device.");
-  const path = String(filePath || "").trim();
+  const path = normalizeFilePathForIosShare(filePath);
   if (!/^file:\/\//i.test(path)) throw new Error("Invalid local file for sharing.");
   try {
     await Share.share({ files: [path] });
   } catch (e) {
     if (shareSheetCanceledError(e)) return;
+    console.warn("[presentNativeIosShareSheetForFile]", e);
     throw e;
   }
 }
+
+let pendingNativeVideoSave = null;
+
+function closeVideoSaveModal() {
+  pendingNativeVideoSave = null;
+  if (els.videoSaveModal) els.videoSaveModal.style.display = "none";
+  try { document.body.style.overflow = ""; } catch {}
+}
+
+/** After render finishes, ask for a fresh tap so iOS allows the share sheet. */
+function openVideoSaveModal({ filePath, title }) {
+  const path = normalizeFilePathForIosShare(filePath);
+  if (!/^file:\/\//i.test(path)) throw new Error("Could not access the rendered video.");
+  pendingNativeVideoSave = { filePath: path, title: String(title || "song").trim() || "song" };
+  if (els.videoSaveTitle) els.videoSaveTitle.textContent = pendingNativeVideoSave.title;
+  if (els.videoSaveModal) els.videoSaveModal.style.display = "";
+  try { document.body.style.overflow = "hidden"; } catch {}
+  try { haptic("success"); } catch {}
+}
+
+async function triggerPendingNativeVideoSave() {
+  const ctx = pendingNativeVideoSave;
+  if (!ctx?.filePath) {
+    showToast("No video ready to save.", { icon: "!", durationMs: 2800 });
+    return;
+  }
+  try { haptic("light"); } catch {}
+  const btn = els.btnOpenVideoSaveSheet;
+  if (btn) btn.disabled = true;
+  try {
+    await presentNativeIosShareSheetForFile(ctx.filePath);
+    closeVideoSaveModal();
+  } catch (e) {
+    if (!shareSheetCanceledError(e)) {
+      showToast(`Could not open save menu: ${String(e?.message || e).slice(0, 72)}`, {
+        icon: "!",
+        durationMs: 5200,
+      });
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+els.btnCloseVideoSave?.addEventListener("click", closeVideoSaveModal);
+els.videoSaveBackdrop?.addEventListener("click", closeVideoSaveModal);
+els.btnOpenVideoSaveSheet?.addEventListener("click", () => {
+  void triggerPendingNativeVideoSave();
+});
 
 /** Web `File` MIME guess for Library / player blob delivery (not used on native path). */
 function guessFileMimeFromFilename(filename, isVideo) {
@@ -15048,7 +15120,11 @@ async function deliverDownloadBlobToDevice(blob, { filename, title, isVideo } = 
   if (isCapacitorNativeAuth()) {
     try {
       const { filePath } = await writeBlobToNativeCache(blob, safeName);
-      await presentNativeIosShareSheetForFile(filePath);
+      if (isVideo) {
+        openVideoSaveModal({ filePath, title: trackTitle });
+      } else {
+        await presentNativeIosShareSheetForFile(filePath);
+      }
     } catch (nativeErr) {
       if (shareSheetCanceledError(nativeErr)) {
         showToast("Cancelled.", { durationMs: 1600 });
@@ -26486,6 +26562,7 @@ async function downloadLibraryVideoTrack(track, { onRendered } = {}) {
   const artCandidates = [t?.meta && t.meta.imageUrl, t?.artUrl];
   const imageUrl = (artCandidates.find((s) => isHttpUrl(s)) || "").trim();
   const filename = `${trackTitle.replace(/[\\/:*?"<>|]/g, "").trim() || "song"}.mp4`;
+  const safeExportName = sanitizeNativeExportFilename(filename, "song.mp4");
 
   // Native iOS: let URLSession download the MP4 straight to disk — avoids
   // holding multi‑MB blobs in WKWebView memory and survives slow renders better.
@@ -26497,7 +26574,7 @@ async function downloadLibraryVideoTrack(track, { onRendered } = {}) {
     const params = new URLSearchParams({ audioUrl: audioForServer, title: trackTitle });
     if (imageUrl) params.set("imageUrl", imageUrl);
     const renderUrl = `${apiUrl("/api/render-video")}?${params.toString()}`;
-    const rel = `NabadAi/exports/${Date.now()}-${filename.replace(/[^\w.\- ]+/g, "_")}`;
+    const rel = `NabadAi/exports/${Date.now()}-${safeExportName}`;
     const downloadMs = 75000;
     const dl = await Promise.race([
       fs.downloadFile({
@@ -26535,10 +26612,11 @@ async function downloadLibraryVideoTrack(track, { onRendered } = {}) {
     if (!/^file:\/\//i.test(filePath)) {
       throw new Error("Could not access the rendered video on this device.");
     }
+    filePath = normalizeFilePathForIosShare(filePath);
     try {
       onRendered?.();
     } catch {}
-    await presentNativeIosShareSheetForFile(filePath);
+    openVideoSaveModal({ filePath, title: trackTitle });
     return;
   }
 

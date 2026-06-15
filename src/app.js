@@ -3687,8 +3687,8 @@ const DISCOVERY_IDEAS = [
     time: "5 min",
     mood: "Wedding",
     prompt: "Make the chorus everyone can clap to at a wedding entrance.",
-    style: "Levantine dabke pop, mijwiz/oud accents, big claps, wedding chorus, 126 bpm",
-    lyrics: "Write a chorus for a wedding entrance.\nUse simple Arabic/English celebration lines.\nMake it clap-ready and easy for a crowd.",
+    style: "Levantine dabke pop, mijwiz/oud accents, ktakufti 6/8 dabkeh rhythm, wedding chorus, 126 bpm",
+    lyrics: "Write a chorus for a wedding entrance.\nUse simple Arabic/English celebration lines.\nMake it clap-ready with a dabke-friendly hook.",
     tags: ["Wedding", "Dabke", "Crowd"],
     tone: "gold",
   },
@@ -3771,10 +3771,10 @@ const CHALLENGE_IDEAS = [
   {
     id: "dabke-drop",
     title: "Dabke Drop",
-    style: "Levantine dabke pop, mijwiz and oud accents, big claps, crowd chorus, wedding energy, 126 bpm",
-    lyrics: "[Verse]\nOpen the doors, let the family see\nHands in the air, everybody with me\nStep to the left, clap to the sound\nTonight we lift this whole room off the ground\n\n[Chorus]\nYalla yalla, clap your hands\nDabke rolling through the land\nOne more step and one more cheer\nThe wedding rhythm starts right here",
+    style: "Levantine dabke pop, mijwiz and oud accents, ktakufti 6/8 dabkeh rhythm, wedding energy, 126 bpm",
+    lyrics: "[Verse]\nOpen the doors, let the family see\nHands in the air, everybody with me\nStep to the left, clap to the sound\nTonight we lift this whole room off the ground\n\n[Chorus]\nYalla yalla, clap your hands\nDabke rolling through the land\nOne more step and one more beat\nThe wedding rhythm starts right here",
     prompt: "Build the chorus everyone can clap to.",
-    tags: ["Dabke", "Party", "Crowd"],
+    tags: ["Dabke", "Party", "Rhythm"],
   },
   {
     id: "sad-to-dance-challenge",
@@ -3852,7 +3852,7 @@ const CHALLENGE_OCCASIONS = [
     label: "Wedding entrance",
     title: "Wedding Entrance",
     angle: "a big entrance moment for a couple walking in",
-    lyricSeed: "Make the chorus grand, clap-ready, and family-friendly.\nUse the name as the crowd shout before the drop.",
+    lyricSeed: "Make the chorus grand, clap-ready, and family-friendly.\nUse the name as a short chant before the drop.",
     tags: ["Wedding", "Entrance"],
   },
   {
@@ -3906,7 +3906,7 @@ const CHALLENGE_GENRES = [
   {
     id: "lev-dabke",
     label: "Levantine dabke",
-    style: "Levantine dabke pop, mijwiz accents, big claps, driving percussion, crowd-response hook",
+    style: "Levantine dabke pop, mijwiz accents, ktakufti 6/8 dabkeh rhythm, driving percussion, festive vocal hook",
   },
   {
     id: "jazz",
@@ -3948,9 +3948,9 @@ const CHALLENGE_LANGUAGES = [
   {
     id: "levantine",
     label: "Levantine Arabic",
-    prompt: "Use Levantine Arabic or natural Arabizi.",
-    dialect: "",
-    dialectHint: "",
+    prompt: "Use Levantine Arabic (Lebanese/Syrian/Palestinian). Avoid Egyptian dialect.",
+    dialect: "Levantine Arabic",
+    dialectHint: "Levantine colloquial; not Egyptian.",
   },
   {
     id: "neutral-arabic",
@@ -4451,6 +4451,9 @@ function applyDiscoveryIdeaToCreate(idea) {
   if (els.sunoStyle) els.sunoStyle.value = String(idea.style || "").trim();
   if (Object.prototype.hasOwnProperty.call(idea, "dialect") && els.sunoDialect) els.sunoDialect.value = String(idea.dialect || "").trim();
   if (Object.prototype.hasOwnProperty.call(idea, "dialectHint") && els.sunoDialectHint) els.sunoDialectHint.value = String(idea.dialectHint || "").trim();
+  if (Object.prototype.hasOwnProperty.call(idea, "avoidTags") && els.sunoAvoidTags) {
+    els.sunoAvoidTags.value = trimAvoidTagsForSuno(String(idea.avoidTags || ""));
+  }
   if (els.sunoPrompt) {
     const body = String(idea.lyrics || idea.prompt || "").trim();
     els.sunoPrompt.value = body;
@@ -4746,6 +4749,9 @@ function paintDiscoverTopSectionsLoading() {
 
 // Challenge spotlight removed — World Cup anthems rail + main feed already surface
 // the same songs; a third rail duplicated entries on Discover.
+/** Suno negative tags for campaign/challenge templates — tames crowd SFX and shouting. */
+const TEMPLATE_GENERATION_AVOID_TAGS =
+  "crowd noise, audience cheering, screaming, shouty vocals, stadium ambience, zaghrouta, mahraganat";
 // ─── Live event campaigns ───────────────────────────────────────────────
 // One config drives a time-boxed campaign: Home hero banner, a join sheet
 // (team + vibe + language → prefilled Create), a Discover rail of entries,
@@ -4782,36 +4788,44 @@ const LIVE_CAMPAIGN = {
   ],
   vibes: [
     {
-      id: "chant",
-      label: "Stadium chant",
-      emoji: "📣",
-      style: "stadium anthem, crowd chants, big drums, claps, brass, epic energy",
-      en: `[Intro – crowd chanting]\n{team}! {team}! Olé olé olé!\n\n[Verse 1]\nLights on the stadium, hearts beating loud\nMillions of voices, one name in the crowd\nWe carried this dream through the years and the rain\nTonight we rise — say it again!\n\n[Chorus]\n{team}, {team} — raise the flag high\nOne heart, one roar, we touch the sky\nWin or lose, we sing as one\n{team} forever — we've already won!\n\n[Bridge – drums only]\nClap! Clap! Let them hear our sound\nThis is our moment, this is our ground`,
-      ar: `[مقدمة – هتاف الجمهور]\n{team}! {team}! أولي أولي أولي!\n\n[المقطع الأول]\nالأضواء عالملعب والقلب يدق\nملايين الأصوات وباسمك تنطق\nحملنا الحلم سنين وسنين\nالليلة نرفع الراية عالين\n\n[اللازمة]\nيا {team} ارفع العلم\nقلب واحد وصوت واحد للقمم\nفزنا أو خسرنا نغني سوا\n{team} للأبد ومعاك الهوى\n\n[الجسر – طبول فقط]\nصفقوا! خلي العالم يسمع الصدى\nهذي لحظتنا وهذا ملعبنا`,
+      id: "pop",
+      label: "Pop anthem",
+      emoji: "🎵",
+      style: "modern Arabic pop, FIFA-inspired anthem, glossy drums, warm lead vocal, catchy chorus, 104 bpm",
+      en: `[Intro – drums]\n{team}! {team}! Here we go!\n\n[Verse 1]\nLights on the pitch, hearts beating fast\nEvery road we walked has led to this at last\nWe carried the dream through rain and sun\nTonight we stand — our story's just begun\n\n[Chorus]\n{team}, {team} — raise the flag high\nOne heart, one song, we touch the sky\nWin or lose, we sing as one\n{team} forever — we've already won!`,
+      ar: `[مقدمة – طبول]\n{team}! {team}! يلا نبلّش!\n\n[المقطع الأول]\nالأضواء عالملعب والقلب عم يدقّ\nمن كل بلد اسمك عالشفة منمّق\nحملنا الحلم من زمان ومن بعد\nهلّق منوقف سوا ومنكمل الطريق\n\n[اللازمة]\nيا {team} ارفع راسك عالي\nقلب واحد وصوت بيطلع لسما\nفزنا أو خسرنا منغني سوا\n{team} دايمًا ومعك الهوا`,
     },
     {
-      id: "rap",
-      label: "Hype rap",
-      emoji: "🔥",
-      style: "arabic trap, hype rap, heavy 808s, stadium crowd shouts, energetic",
-      en: `[Intro]\nYeah… you know whose year this is\n{team}!\n\n[Verse 1]\nWe roll deep like thunder when the whistle blows\nGreen grass battlefield, everybody knows\nNumber on the back but the name's in the heart\n{team} on the rise — we been hungry from the start\n\n[Hook]\n{team} gang, put your scarves in the air\nChampions energy, see the fire in the stare\nThey can talk, they can doubt, we don't care\nTrophy's coming home — say it loud if you're there!`,
-      ar: `[مقدمة]\nإيه… السنة هذي لمين؟\n{team}!\n\n[المقطع الأول]\nندخل الملعب زي الرعد إذا صفّر الحكم\nأرض خضرا ومعركة والكل يعلم\nالرقم على الظهر بس الاسم في القلب\n{team} صاعد وجوعان من أول لعب\n\n[الهوك]\nيا جمهور {team} ارفعوا الشالات\nطاقة أبطال وعيون فيها ثبات\nخلهم يحكوا خلهم يشكوا ما نهتم\nالكاس جاي لعنا — قولها بصوت أعلى وأهم!`,
+      id: "hiphop",
+      label: "Hip hop",
+      emoji: "🎤",
+      style: "Arabic hip hop, clean trap groove, punchy 808s, confident rap vocal, 96 bpm",
+      en: `[Intro]\nYeah… you know whose year this is\n{team}!\n\n[Verse 1]\nWe step on the pitch when the whistle blows\nGreen grass, clear mind, everybody knows\nNumber on the shirt but the name's in the heart\n{team} on the rise — we been ready from the start\n\n[Hook]\n{team} crew, put your scarves in the air\nChampions energy, steady in the stare\nThey can talk, they can doubt, we don't care\nTrophy's coming home — ride it on the snare!`,
+      ar: `[مقدمة]\nاي… مين السنة هيدي؟\n{team}!\n\n[المقطع الأول]\nمنوقف عالملعب والكل عم يحضّر\nالرقم على القميص بس القلب هو المقدّر\n{team} صاعد وما في وقت ننام\nمن أوّل دقيقة والعين عالهدف سام\n\n[الهوك]\nيا جماهير {team} ارفعوا الشالات\nطاقة أبطال ونظرات ثابتة\nخلهم يحكوا ما منسمع كلام\nالكأس جاي لإلنا — قولها معنا عالإيقاع`,
+    },
+    {
+      id: "chant",
+      label: "Stadium pulse",
+      emoji: "📣",
+      style: "stadium-inspired pop anthem, big drums, brass stabs, handclaps, polished vocal, 110 bpm",
+      en: `[Intro – drums]\n{team}! {team}! Olé olé olé!\n\n[Verse 1]\nLights on the stadium, hearts beating loud\nMillions of voices, one name in the sound\nWe carried this dream through the years and the rain\nTonight we rise — say it again!\n\n[Chorus]\n{team}, {team} — raise the flag high\nOne heart, one voice, we touch the sky\nWin or lose, we sing as one\n{team} forever — we've already won!\n\n[Bridge – drums only]\nClap on the beat, let the rhythm lead\nThis is our moment, this is our creed`,
+      ar: `[مقدمة – طبول]\n{team}! {team}! أولي أولي أولي!\n\n[المقطع الأول]\nالأضواء عالملعب والقلب عم يدق\nملايين الصوت وباسمك بينطق\nحملنا الحلم سنين وسنين\nهلّق منرفع الراية عالعالي\n\n[اللازمة]\nيا {team} ارفع العلم\nقلب واحد وصوت واحد للقمة\nفزنا أو خسرنا منغني سوا\n{team} للأبد ومعك الهوا\n\n[الجسر – طبول]\nصفّقوا عالإيقاع وخلي اللحن يكمل\nهيدي لحظتنا وهيدا أسلوبنا الحقيقي`,
     },
     {
       id: "dabke",
-      label: "Dabke party",
+      label: "Dabke",
       emoji: "🪘",
-      style: "dabke, mijwiz, davul drums, fast 6/8, wedding celebration energy, zaghrouta",
-      en: `[Intro – mijwiz melody]\nHey! Hey! Everybody hold hands!\n\n[Verse 1]\nThe night is ours and the drums are calling\nFlags are flying and the stars are falling\nFrom every street to the stadium floor\nWe dance for {team} — hear the people roar!\n\n[Chorus]\nDabke for {team}, stomp the ground\nThe whole world's moving to our sound\nHands up high and voices strong\n{team} tonight, this is our song!`,
-      ar: `[مقدمة – لحن المجوز]\nهيه! هيه! كلنا إيد بإيد!\n\n[المقطع الأول]\nالليلة لينا والطبل عم بينادي\nالأعلام عالية والفرحة زيادة\nمن كل حارة لأرض الملعب\nنرقص لـ{team} والصوت يلهب\n\n[اللازمة]\nدبكة لـ{team} دقوا عالأرض\nكل العالم يرقص معنا فرض\nإيدين عالية وصوت قوي\n{team} الليلة والفرح حي!`,
+      style: "Levantine dabke, mijwiz, davul and tabla, ktakufti 6/8 dabkeh rhythm, festive vocal, 120 bpm",
+      en: `[Intro – mijwiz melody]\nHey! Hey! Everybody hold hands!\n\n[Verse 1]\nThe night is ours and the drums are calling\nFlags are flying and the stars are falling\nFrom every street to the stadium floor\nWe dance for {team} — feel the dabke pour!\n\n[Chorus]\nDabke for {team}, stomp the ground\nKtakufti rhythm, turn it around\nHands up high, keep the beat tight\n{team} tonight, this is our night!`,
+      ar: `[مقدمة – مجوز]\nهيه! هيه! كلنا إيد بإيد!\n\n[المقطع الأول]\nالليلة لإلنا والطبل عم بينادي\nالأعلام عالية والفرحة زيادة\nمن كل حارة لأرض الملعب\nمنرقص لـ{team} والإيقاع شباب\n\n[اللازمة]\nدبكة لـ{team} دقّوا عالأرض\nإيقاع كتافتي والدنيا عم تفرّش\nإيدين عالية وصوت مرتاح\n{team} الليلة والفرح صافي`,
     },
     {
       id: "heart",
       label: "Heartfelt",
       emoji: "💚",
-      style: "emotional anthem, warm strings, piano build, choir lift, cinematic",
+      style: "emotional anthem, warm strings, piano build, soft choir lift, cinematic",
       en: `[Verse 1]\nI remember the radio, my father's voice\nEvery match we believed — it was never a choice\nThrough the years and the heartbreak, the hope never died\nIt's more than a game, it's the tears in our eyes\n\n[Chorus]\n{team}, this one's for you\nFor every dream we carried through\nWherever we are, however far\nWe rise with you — you're who we are`,
-      ar: `[المقطع الأول]\nبتذكر الراديو وصوت أبويا\nكل مباراة نآمن وما في غيرها\nسنين ودموع والأمل ما مات\nأكتر من لعبة هي حكاية حياة\n\n[اللازمة]\nيا {team} هاي الأغنية إلك\nلكل حلم حملناه معك\nوين ما كنا ومهما بعدنا\nمنقوم معك — إنت إحنا`,
+      ar: `[المقطع الأول]\nبتذكر الراديو وصوت أبوي\nكل مباراة منآمن وما في غيرا\nسنين ودموع والأمل ما مات\nأكتر من لعبة هي حكاية حياة\n\n[اللازمة]\nيا {team} هيدي الأغنية إلك\nلكل حلم حملناه معك\nوين ما كنا ومهما بعُدنا\nمنقوم معك — إنت إحنا`,
     },
   ],
 };
@@ -4853,7 +4867,7 @@ function renderCampaignBanner() {
 
 // Sheet state
 let _campaignTeam = "";
-let _campaignVibe = "chant";
+let _campaignVibe = "pop";
 let _campaignLang = "ar";
 let _campaignSongsCache = { ts: 0, rows: [] };
 
@@ -5023,8 +5037,9 @@ function startCampaignCreate() {
     style: vibe.style,
     lyrics,
     prompt: lyrics,
-    dialect: "",
-    dialectHint: "",
+    dialect: _campaignLang === "ar" ? "Levantine Arabic" : "",
+    dialectHint: _campaignLang === "ar" ? "Levantine colloquial (Lebanese/Syrian/Palestinian). Avoid Egyptian dialect." : "",
+    avoidTags: TEMPLATE_GENERATION_AVOID_TAGS,
     challenge: {
       id: `${c.id}:${team.id}`,
       title: `${c.shortTitle} Anthem`,
@@ -5424,9 +5439,11 @@ function bindChallengesPageOnce() {
       : variant === "cinematic"
         ? "Make it cinematic, emotional, and chorus-led."
         : "Make it catchy, personal, and easy to sing.";
-    const languageHint = language?.id && language.id !== "auto"
-      ? language.prompt
-      : "Use the natural language for this style.";
+    const languageHint = language?.id === "levantine"
+      ? "Use Levantine Arabic (Lebanese/Syrian/Palestinian). Avoid Egyptian dialect."
+      : language?.id && language.id !== "auto"
+        ? language.prompt
+        : "Use the natural language for this style.";
     return [
       `Write lyrics for ${person}: ${occasion.angle}.`,
       take,
@@ -5456,8 +5473,9 @@ function bindChallengesPageOnce() {
       style: `${genre.style}, ${tempoHint}, personalized for ${person}. ${challengeBrief}`,
       prompt: lyricPrompt,
       lyrics: lyricPrompt,
-      dialect: "",
-      dialectHint: "",
+      dialect: language?.dialect || "",
+      dialectHint: language?.dialectHint || "",
+      avoidTags: TEMPLATE_GENERATION_AVOID_TAGS,
       tags: [...(occasion.tags || []), genre.label],
       challenge: {
         id: `occasion:${occasion.id}:${genre.id}`,
@@ -5467,8 +5485,8 @@ function bindChallengesPageOnce() {
         genre: genre.label,
         language: language?.label || "Auto",
         languageId: language?.id || "auto",
-        dialect: "",
-        dialectHint: "",
+        dialect: language?.dialect || "",
+        dialectHint: language?.dialectHint || "",
         personName: person,
         variant,
       },

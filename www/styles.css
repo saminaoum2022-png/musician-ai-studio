@@ -5991,7 +5991,8 @@ body.hubJumpingToTop #hubList .hubRow{
 .playerReleaseNote,
 .playerRemixAttribution,
 .playerMashupAttribution,
-.playerChallengeAttribution{
+.playerChallengeAttribution,
+.playerTemplateAttribution{
   width: min(100%, 420px);
   margin: 14px auto 0;
   padding: 12px 14px;
@@ -6006,15 +6007,37 @@ body.hubJumpingToTop #hubList .hubRow{
 .playerReleaseNote[hidden],
 .playerRemixAttribution[hidden],
 .playerMashupAttribution[hidden],
-.playerChallengeAttribution[hidden]{
+.playerChallengeAttribution[hidden],
+.playerTemplateAttribution[hidden]{
   display: none !important;
 }
 .playerRemixAttribution,
 .playerMashupAttribution,
-.playerChallengeAttribution{
+.playerChallengeAttribution,
+.playerTemplateAttribution{
   display: flex;
   align-items: center;
   gap: 10px;
+}
+.playerAttributionBtn{
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  -webkit-tap-highlight-color: transparent;
+}
+.playerAttributionBtn:not(:disabled):active{
+  transform: scale(0.985);
+}
+.playerAttributionBtn:disabled{
+  cursor: default;
+  opacity: 0.92;
+}
+.playerTemplateBadge{
+  border-color: rgba(56,189,248,0.34);
+  background:
+    linear-gradient(135deg, rgba(56,189,248,0.26), rgba(124,92,255,0.14)),
+    rgba(255,255,255,0.045);
 }
 .playerMashupAttribution{
   flex-wrap: wrap;
@@ -22848,8 +22871,21 @@ body.createChooserSheetOpen .footer{
 }
 .discoveryRowMeta + .remixAttributionLine,
 .discoveryRowMeta + .mashupAttributionLine,
-.discoveryRowMeta + .challengeAttributionLine{
+.discoveryRowMeta + .challengeAttributionLine,
+.discoveryRowMeta + .discoveryRowStyle{
   margin-top: -1px;
+}
+.discoveryRowStyle{
+  display: block;
+  margin-top: 2px;
+  max-width: 100%;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: rgba(182, 194, 216, 0.78);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .discoveryRowMeta + .releaseCaptionLine,
 .remixAttributionLine + .releaseCaptionLine,

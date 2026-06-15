@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615noLyricVid";
+const APP_BUILD = "20260616styleTpl";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -514,6 +514,8 @@ const els = {
   playerSubtitle: document.getElementById("playerSubtitle"),
   playerChallengeAttribution: document.getElementById("playerChallengeAttribution"),
   playerChallengeAttributionText: document.getElementById("playerChallengeAttributionText"),
+  playerTemplateAttribution: document.getElementById("playerTemplateAttribution"),
+  playerTemplateAttributionText: document.getElementById("playerTemplateAttributionText"),
   playerRemixAttribution: document.getElementById("playerRemixAttribution"),
   playerRemixAttributionText: document.getElementById("playerRemixAttributionText"),
   playerRemixRow: document.getElementById("playerRemixRow"),
@@ -10191,6 +10193,108 @@ function challengeAttributionText(challenge) {
   return `Joined ${title}${bits.length ? ` · ${bits.join(" / ")}` : ""}${forWho}`;
 }
 
+/** Human-readable style string for sharing / Discover (truncated). */
+function trackStyleDisplayText(track, { maxLen = 56 } = {}) {
+  const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  const raw = meta.styleInput || meta.styleSent || meta.style || meta.styleTags || "";
+  let style = "";
+  if (Array.isArray(raw) && raw.length) {
+    style = raw.map((s) => String(s || "").trim()).filter(Boolean).slice(0, 4).join(", ");
+  } else if (typeof raw === "string" && raw.trim()) {
+    const parts = raw
+      .split(/[,;|]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    style = (parts.length ? parts.slice(0, 4).join(", ") : raw.trim());
+  }
+  style = String(style || "").trim();
+  if (!style) return "";
+  if (style.length > maxLen) style = `${style.slice(0, maxLen - 1).trim()}…`;
+  return style;
+}
+
+function discoveryStyleLineHtml(track) {
+  const style = trackStyleDisplayText(track);
+  if (!style) return "";
+  return `<span class="discoveryRowStyle">${escapeHtml(style)}</span>`;
+}
+
+function templateMetaForTrack(track) {
+  const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  const searchTemplateId = String(meta.searchTemplateId || "").trim();
+  const searchTemplateTitle = String(meta.searchTemplateTitle || "").trim();
+  if (!searchTemplateId && !searchTemplateTitle) return null;
+  return {
+    searchTemplateId,
+    searchTemplateTitle: searchTemplateTitle || "Template",
+    styleInput: String(meta.styleInput || meta.styleSent || "").trim(),
+  };
+}
+
+function openChallengeFromTrackMeta(challenge) {
+  if (!challenge) return;
+  if (!authSession?.user?.id) {
+    try { showToast("Sign in to try this challenge.", { icon: "♪", durationMs: 2800 }); } catch {}
+    try { location.hash = "#/auth"; } catch {}
+    scheduleApplyRoute?.();
+    return;
+  }
+  if (String(challenge.campaign || "").trim()) {
+    try { location.hash = "#/challenges"; } catch {}
+    scheduleApplyRoute?.();
+    try { showToast("Browse live challenges on Create.", { icon: "🏆", durationMs: 3200 }); } catch {}
+    return;
+  }
+  const id = String(challenge.id || "").trim();
+  if (!id) {
+    try { showToast("This challenge can't be reopened.", { icon: "!", durationMs: 2800 }); } catch {}
+    return;
+  }
+  applyChallengeStartById(id, null);
+  try { showToast("Challenge loaded — make your version.", { icon: "♪", durationMs: 3200 }); } catch {}
+}
+
+function openTemplateFromTrackMeta(tplMeta) {
+  if (!tplMeta) return;
+  if (!authSession?.user?.id) {
+    try { showToast("Sign in to use this template.", { icon: "♪", durationMs: 2800 }); } catch {}
+    try { location.hash = "#/auth"; } catch {}
+    scheduleApplyRoute?.();
+    return;
+  }
+  const tplId = String(tplMeta.searchTemplateId || "").trim();
+  const title = String(tplMeta.searchTemplateTitle || "").trim();
+  if (tplId.startsWith("idea:")) {
+    const ideaId = tplId.slice(5);
+    const idea =
+      DISCOVERY_QUICK_IDEAS.find((x) => String(x.id) === ideaId) ||
+      CHALLENGE_IDEAS.find((x) => String(x.id) === ideaId);
+    if (idea) {
+      applyDiscoveryIdeaToCreate(idea);
+      try { showToast("Template loaded — make it yours.", { icon: "♪", durationMs: 3200 }); } catch {}
+      return;
+    }
+  }
+  const tpl = getSearchTemplates().find((t) => String(t.id) === tplId);
+  if (tpl) {
+    openSearchRemixSheet(tpl);
+    try { showToast("Template opened — personalize it.", { icon: "♪", durationMs: 3200 }); } catch {}
+    return;
+  }
+  if (title) {
+    applyDiscoveryIdeaToCreate({
+      id: tplId || `saved:${title}`,
+      title,
+      style: String(tplMeta.styleInput || "").trim(),
+      lyrics: "",
+      prompt: title,
+    });
+    try { showToast("Template loaded — make it yours.", { icon: "♪", durationMs: 3200 }); } catch {}
+    return;
+  }
+  try { showToast("Couldn't find this template.", { icon: "!", durationMs: 2800 }); } catch {}
+}
+
 function challengeSourceLineHtml(track) {
   const challenge = challengeMetaForTrack(track);
   if (!challenge) return "";
@@ -10704,10 +10808,54 @@ function setPlayerMashupAttribution(mashupOf) {
   }
 }
 
+let _playerChallengeCtx = null;
+let _playerTemplateCtx = null;
+let _playerAttributionWired = false;
+
+function wirePlayerAttributionActionsOnce() {
+  if (_playerAttributionWired) return;
+  _playerAttributionWired = true;
+  els.playerChallengeAttribution?.addEventListener("click", () => {
+    if (!_playerChallengeCtx) return;
+    haptic("light");
+    openChallengeFromTrackMeta(_playerChallengeCtx);
+  });
+  els.playerTemplateAttribution?.addEventListener("click", () => {
+    if (!_playerTemplateCtx) return;
+    haptic("light");
+    openTemplateFromTrackMeta(_playerTemplateCtx);
+  });
+}
+
 function setPlayerChallengeAttribution(challenge) {
-  const text = challengeAttributionText(challenge);
+  wirePlayerAttributionActionsOnce();
+  const c = challenge && (challenge.id || challenge.title || challenge.campaign) ? challenge : null;
+  _playerChallengeCtx = c;
+  const text = challengeAttributionText(c);
   if (els.playerChallengeAttributionText) els.playerChallengeAttributionText.textContent = text;
-  if (els.playerChallengeAttribution) els.playerChallengeAttribution.hidden = !text;
+  if (els.playerChallengeAttribution) {
+    els.playerChallengeAttribution.hidden = !text;
+    const canOpen = Boolean(c && (String(c.campaign || "").trim() || String(c.id || "").trim()));
+    els.playerChallengeAttribution.disabled = !canOpen;
+    const label = c?.title ? `Open challenge: ${c.title}` : "Open challenge";
+    els.playerChallengeAttribution.setAttribute("aria-label", text && canOpen ? label : "");
+  }
+}
+
+function setPlayerTemplateAttribution(track) {
+  wirePlayerAttributionActionsOnce();
+  const tpl = templateMetaForTrack(track);
+  _playerTemplateCtx = tpl;
+  const text = tpl ? String(tpl.searchTemplateTitle || "Template").trim() : "";
+  if (els.playerTemplateAttributionText) els.playerTemplateAttributionText.textContent = text;
+  if (els.playerTemplateAttribution) {
+    els.playerTemplateAttribution.hidden = !text;
+    els.playerTemplateAttribution.disabled = !tpl;
+    els.playerTemplateAttribution.setAttribute(
+      "aria-label",
+      text ? `Open template: ${text}` : "",
+    );
+  }
 }
 
 function publicPlaybackTrackBySource(source, rawUrl = "") {
@@ -18126,8 +18274,8 @@ function maybeRecordQualifiedPublicPlay() {
 async function supabaseFetchDiscoveryPublicSongs(limit) {
   const lim = Math.max(1, Math.min(80, Number(limit) || 48));
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
-  const colsWithPublished = "id,created_at,published_at,discover_score,discover_expires_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_tags:meta->tags,meta_deleted_at:meta->>deletedAt";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_tags:meta->tags,meta_deleted_at:meta->>deletedAt";
+  const colsWithPublished = "id,created_at,published_at,discover_score,discover_expires_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_tags:meta->tags,meta_deleted_at:meta->>deletedAt";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_tags:meta->tags,meta_deleted_at:meta->>deletedAt";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   try {
     let r = await fetch(
@@ -18175,6 +18323,8 @@ async function supabaseFetchDiscoveryPublicSongs(limit) {
               ...(s.meta_challenge ? { challenge: s.meta_challenge } : {}),
               ...(String(s.meta_style || "").trim() ? { styleInput: String(s.meta_style).trim() } : {}),
               ...(String(s.meta_style_sent || "").trim() ? { styleSent: String(s.meta_style_sent).trim() } : {}),
+              ...(String(s.meta_template_id || "").trim() ? { searchTemplateId: String(s.meta_template_id).trim() } : {}),
+              ...(String(s.meta_template_title || "").trim() ? { searchTemplateTitle: String(s.meta_template_title).trim() } : {}),
               ...(String(s.meta_dialect || "").trim() ? { dialect: String(s.meta_dialect).trim() } : {}),
               ...(String(s.meta_lyrics || "").trim() ? { lyricsInput: String(s.meta_lyrics).trim() } : {}),
               ...(Array.isArray(s.meta_tags) ? { tags: s.meta_tags } : {}),
@@ -20217,11 +20367,12 @@ function userPublicDiscoveryRowHtml(t, idx, pub) {
   const encHandle = rawHandle ? encodeURIComponent(rawHandle) : "";
   const extra = pub.extraMeta ? ` · ${escapeHtml(String(pub.extraMeta))}` : "";
   const metaInner = `${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}${extra}`;
+  const styleLine = discoveryStyleLineHtml(t);
   const challengeLine = challengeSourceLineHtml(t);
   const mashupLine = mashupSourceLineHtml(t);
   const remixLine = remixSourceLineHtml(t);
   const releaseLine = releaseCaptionLineHtml(t);
-  const richRowClass = challengeLine || mashupLine || remixLine || releaseLine ? " discoveryRow--rich" : "";
+  const richRowClass = styleLine || challengeLine || mashupLine || remixLine || releaseLine ? " discoveryRow--rich" : "";
   const sheetData = `data-dp-song-id="${encSongId}" data-dp-owner-id="${encOwnerId}" data-dp-task-id="${encTaskId}" data-dp-audio-id="${encAudioId}"`;
   const side = `<button type="button" class="discoveryRowSide" data-discovery-open-sheet="1" data-dp-hide-profile="1" data-dp-use-public-shuffle="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" ${sheetData} aria-label="Options for ${safeTitle}">⋯</button>`;
   return `
@@ -20237,6 +20388,7 @@ function userPublicDiscoveryRowHtml(t, idx, pub) {
           <span class="discoveryRowMid">
             <span class="discoveryRowTitle">${safeTitle}</span>
             <span class="discoveryRowMeta">${metaInner}</span>
+            ${styleLine}
             ${challengeLine}
             ${mashupLine}
             ${remixLine}
@@ -20282,6 +20434,7 @@ function discoveryTrackRowHtml(t, profMap, idx) {
   const playData = `data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" data-play-task-id="${encTaskId}" data-play-audio-id="${encAudioId}" data-play-release-caption="${encReleaseCaption}"`;
   const encHandle = handle ? encodeURIComponent(handle) : "";
   const sheetData = `data-dp-song-id="${encSongId}" data-dp-owner-id="${encOwnerId}" data-dp-task-id="${encTaskId}" data-dp-audio-id="${encAudioId}"`;
+  const styleLine = discoveryStyleLineHtml(t);
   const challengeLine = challengeSourceLineHtml(t);
   const mashupLine = mashupSourceLineHtml(t);
   const remixLine = remixSourceLineHtml(t);
@@ -20289,7 +20442,7 @@ function discoveryTrackRowHtml(t, profMap, idx) {
   const playLine = Number.isFinite(Number(t.playCount))
     ? `<span class="discoveryRowPlayCount">${discoveryPlayCountChipHtml(t)}</span>`
     : "";
-  const richRowClass = challengeLine || mashupLine || remixLine || releaseLine || playLine ? " discoveryRow--rich" : "";
+  const richRowClass = styleLine || challengeLine || mashupLine || remixLine || releaseLine || playLine ? " discoveryRow--rich" : "";
   const side = `<button type="button" class="discoveryRowSide" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" ${sheetData} aria-label="Options for ${safeTitle}">⋯</button>`;
   return `
       <div class="discoveryRow${richRowClass}" style="--i:${idx}">
@@ -20304,6 +20457,7 @@ function discoveryTrackRowHtml(t, profMap, idx) {
           <span class="discoveryRowMid">
             <span class="discoveryRowTitle">${safeTitle}</span>
             <span class="discoveryRowMeta">${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}</span>
+            ${styleLine}
             ${challengeLine}
             ${mashupLine}
             ${remixLine}
@@ -29034,6 +29188,7 @@ function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, chall
     els.playerArt.classList.toggle("isCoverPlaceholder", !hasTrack);
   }
   setPlayerChallengeAttribution(challenge || challengeMetaForTrack(currentPlayerTrackRef));
+  setPlayerTemplateAttribution(currentPlayerTrackRef);
   const mashup = mashupOf || mashupAttributionForTrack(currentPlayerTrackRef);
   setPlayerMashupAttribution(mashup);
   if (mashup) {

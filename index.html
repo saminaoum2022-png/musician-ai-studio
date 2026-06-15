@@ -2024,16 +2024,28 @@
                   <span>Lyrics</span>
                 </button>
               </div>
-              <div id="playerChallengeAttribution" class="playerChallengeAttribution" hidden>
-                <div class="playerChallengeBadge">
+              <button id="playerChallengeAttribution" class="playerChallengeAttribution playerAttributionBtn" type="button" hidden aria-label="Open challenge">
+                <span class="playerChallengeBadge">
                   <svg class="challengeIcon" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M7 4h10v3a5 5 0 0 1-10 0V4Z"/>
                     <path d="M5 5H3v2a4 4 0 0 0 4 4M19 5h2v2a4 4 0 0 1-4 4M12 12v5M9 20h6"/>
                   </svg>
-                  <span>Challenge entry</span>
-                </div>
-                <div id="playerChallengeAttributionText" class="playerChallengeAttributionText"></div>
-              </div>
+                  <span>Challenge</span>
+                </span>
+                <span id="playerChallengeAttributionText" class="playerChallengeAttributionText"></span>
+              </button>
+              <button id="playerTemplateAttribution" class="playerChallengeAttribution playerTemplateAttribution playerAttributionBtn" type="button" hidden aria-label="Open template">
+                <span class="playerChallengeBadge playerTemplateBadge">
+                  <svg class="challengeIcon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>
+                    <path d="M14 2v6h6"/>
+                    <path d="M8 13h8"/>
+                    <path d="M8 17h5"/>
+                  </svg>
+                  <span>Template</span>
+                </span>
+                <span id="playerTemplateAttributionText" class="playerChallengeAttributionText"></span>
+              </button>
               <div id="playerRemixAttribution" class="playerRemixAttribution" hidden>
                 <div class="playerRemixAttributionBadge">
                   <svg class="remixIcon" viewBox="0 0 24 24" aria-hidden="true">
@@ -3648,6 +3660,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260615noLyricVid"></script>
+    <script type="module" src="./src/app.js?v=20260616styleTpl"></script>
   </body>
 </html>

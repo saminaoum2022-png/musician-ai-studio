@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615videoTap";
+const APP_BUILD = "20260615mvView";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -489,10 +489,9 @@ const els = {
   playerLyricsList: document.getElementById("playerLyricsList"),
   btnClosePlayerLyrics: document.getElementById("btnClosePlayerLyrics"),
   musicVideoModal: document.getElementById("musicVideoModal"),
-  musicVideoBg: document.getElementById("musicVideoBg"),
   musicVideoCover: document.getElementById("musicVideoCover"),
+  musicVideoLoader: document.getElementById("musicVideoLoader"),
   musicVideoPlayer: document.getElementById("musicVideoPlayer"),
-  musicVideoTitle: document.getElementById("musicVideoTitle"),
   btnCloseMusicVideo: document.getElementById("btnCloseMusicVideo"),
   btnSaveMusicVideo: document.getElementById("btnSaveMusicVideo"),
   videoRenderCard: document.getElementById("videoRenderCard"),
@@ -26345,9 +26344,7 @@ els.btnVideoRenderHide?.addEventListener("click", () => {
   });
 });
 
-/* ── In-app viewer: full-screen, the song's cover holds the frame while the
-   MP4 buffers (no size jump), then the video fades in over it. Saving or
-   sharing is one button → the system share sheet. ── */
+/* ── In-app viewer: fullscreen portrait — cover + spinner until MP4 is ready. ── */
 let musicVideoViewerCtx = null;
 
 function closeMusicVideoViewer() {
@@ -26355,6 +26352,8 @@ function closeMusicVideoViewer() {
   try { els.musicVideoPlayer?.pause(); } catch {}
   try { if (els.musicVideoPlayer) els.musicVideoPlayer.removeAttribute("src"); } catch {}
   try { els.musicVideoPlayer?.load(); } catch {}
+  const frame = els.musicVideoPlayer?.closest(".musicVideoFrame");
+  frame?.classList.remove("isReady");
   if (els.musicVideoModal) els.musicVideoModal.style.display = "none";
   try { document.body.style.overflow = ""; } catch {}
 }
@@ -26363,37 +26362,28 @@ function openMusicVideoViewer(videoUrl, title, { coverUrl } = {}) {
   const url = String(videoUrl || "").trim();
   if (!url) return;
   if (!els.musicVideoModal || !els.musicVideoPlayer) {
-    // Viewer markup missing (stale shell) — fall back to the old save flow.
     void deliverMusicVideoUrl(url, title);
     return;
   }
   musicVideoViewerCtx = { videoUrl: url, title: String(title || "song") };
-  if (els.musicVideoTitle) els.musicVideoTitle.textContent = String(title || "Music video");
 
   const cover = String(coverUrl || "").trim();
-  if (els.musicVideoCover) els.musicVideoCover.src = cover || "./assets/nabadai-logo.png";
-  if (els.musicVideoBg) {
-    els.musicVideoBg.style.backgroundImage = cover ? `url("${cover.replace(/"/g, '\\"')}")` : "";
+  if (els.musicVideoCover) {
+    els.musicVideoCover.src = cover || "./assets/nabadai-logo.png";
+    els.musicVideoCover.style.display = cover ? "" : "none";
   }
 
   const frame = els.musicVideoPlayer.closest(".musicVideoFrame");
   frame?.classList.remove("isReady");
-  if (frame) frame.style.aspectRatio = "";
 
   const proxied = apiUrl(`/api/suno/audio?url=${encodeURIComponent(url)}`);
   els.musicVideoPlayer.onerror = () => {
-    // CDN refused direct playback (CORS/expiry) — retry through our proxy.
     if (els.musicVideoPlayer.src !== proxied) els.musicVideoPlayer.src = proxied;
-  };
-  els.musicVideoPlayer.onloadedmetadata = () => {
-    // Adopt the real aspect ratio while the cover still holds the frame.
-    const w = Number(els.musicVideoPlayer.videoWidth) || 0;
-    const h = Number(els.musicVideoPlayer.videoHeight) || 0;
-    if (frame && w > 0 && h > 0) frame.style.aspectRatio = `${w} / ${h}`;
   };
   els.musicVideoPlayer.oncanplay = () => {
     frame?.classList.add("isReady");
   };
+  els.musicVideoPlayer.removeAttribute("src");
   els.musicVideoPlayer.src = url;
   els.musicVideoModal.style.display = "";
   try { document.body.style.overflow = "hidden"; } catch {}
@@ -26405,16 +26395,33 @@ els.btnSaveMusicVideo?.addEventListener("click", async () => {
   const ctx = musicVideoViewerCtx;
   if (!ctx) return;
   const btn = els.btnSaveMusicVideo;
-  const label = btn.querySelector("span");
-  btn.disabled = true;
+  const label = btn?.querySelector("span");
+  if (btn) btn.disabled = true;
   const prevLabel = label ? label.textContent : "";
   if (label) label.textContent = "Preparing…";
   try {
-    await deliverMusicVideoUrl(ctx.videoUrl, ctx.title);
+    let blob = null;
+    try {
+      const r = await fetch(apiUrl(`/api/suno/audio?url=${encodeURIComponent(ctx.videoUrl)}`));
+      if (r.ok) blob = await r.blob();
+    } catch {}
+    if (!blob) {
+      const r2 = await fetch(ctx.videoUrl);
+      if (r2.ok) blob = await r2.blob();
+    }
+    if (!blob?.size) throw new Error("Couldn't download the video file");
+    const safeTitle = String(ctx.title || "song").replace(/[\\/:*?"<>|]/g, "").trim() || "song";
+    const filename = `${safeTitle}-music-video.mp4`;
+    if (isCapacitorNativeAuth()) {
+      const { filePath } = await writeBlobToNativeCache(blob, filename);
+      openVideoSaveModal({ filePath, title: ctx.title });
+    } else {
+      await deliverDownloadBlobToDevice(blob, { filename, title: ctx.title, isVideo: true });
+    }
   } catch (e) {
     showToast(e?.message || "Couldn't save the video", { icon: "!", durationMs: 4400 });
   } finally {
-    btn.disabled = false;
+    if (btn) btn.disabled = false;
     if (label) label.textContent = prevLabel;
   }
 });
@@ -26484,7 +26491,7 @@ async function createSunoMusicVideoForTrack(track, { onStatus } = {}) {
         body: JSON.stringify({
           taskId,
           audioId,
-          ...(rawHandle ? { author: `@${rawHandle}`.slice(0, 50) } : {}),
+          ...(rawHandle ? { author: rawHandle.slice(0, 50) } : {}),
         }),
       });
       const d = await r.json().catch(() => ({}));

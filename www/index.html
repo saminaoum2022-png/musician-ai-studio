@@ -3117,32 +3117,27 @@
       </div>
 
       <div id="musicVideoModal" class="musicVideoOverlay" style="display:none" role="dialog" aria-modal="true" aria-label="Music video">
-        <div id="musicVideoBg" class="musicVideoBg" aria-hidden="true"></div>
-        <div class="musicVideoTop">
-          <div class="musicVideoHeadText">
-            <div class="musicVideoKicker">Music video</div>
-            <div id="musicVideoTitle" class="musicVideoTitleTxt">Music video</div>
-          </div>
-          <button id="btnCloseMusicVideo" class="musicVideoClose" type="button" aria-label="Close video">
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
-          </button>
-        </div>
         <div class="musicVideoStage">
           <div class="musicVideoFrame">
             <img id="musicVideoCover" class="musicVideoCover" src="./assets/nabadai-logo.png" alt="" aria-hidden="true" />
+            <div id="musicVideoLoader" class="musicVideoLoader" aria-hidden="true">
+              <span class="musicVideoLoaderSpin"></span>
+            </div>
             <video id="musicVideoPlayer" class="musicVideoPlayer" controls playsinline preload="auto"></video>
           </div>
         </div>
-        <div class="musicVideoActions">
-          <button id="btnSaveMusicVideo" class="musicVideoSaveBtn" type="button">
-            <svg class="ico" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+        <div class="musicVideoChrome">
+          <button id="btnCloseMusicVideo" class="musicVideoClose" type="button" aria-label="Close video">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
+          </button>
+          <button id="btnSaveMusicVideo" class="musicVideoSaveFab" type="button" aria-label="Save video">
+            <svg class="ico" viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
               <path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/>
               <polyline points="16 6 12 2 8 6"/>
               <line x1="12" y1="2" x2="12" y2="15"/>
             </svg>
-            <span>Save / Share</span>
+            <span>Save</span>
           </button>
-          <div class="musicVideoHint">Your video stays on this song — reopen it anytime from the song's menu.</div>
         </div>
       </div>
 
@@ -3653,6 +3648,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260615videoTap"></script>
+    <script type="module" src="./src/app.js?v=20260615mvView"></script>
   </body>
 </html>

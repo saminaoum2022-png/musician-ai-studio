@@ -14,6 +14,10 @@
       "includeFiles": "node_modules/ffmpeg-static/**",
       "maxDuration": 60
     },
+    "api/music/lyric-video.js": {
+      "includeFiles": "node_modules/ffmpeg-static/**,api/_lib/fonts/**",
+      "maxDuration": 60
+    },
     "api/songs/archive.js": {
       "maxDuration": 60
     }

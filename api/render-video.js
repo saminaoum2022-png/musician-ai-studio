@@ -188,9 +188,8 @@ module.exports = async function handler(req, res) {
       cleanup.push(imagePath);
     }
 
-    // 1080x1080 square output. Pad with black if cover isn't square (most
-    // covers ARE square, but Suno occasionally returns 16:9 thumbnails).
-    // -preset ultrafast keeps us under Vercel's function timeout.
+    // 720x720 square output — faster encode so we stay inside Vercel's 60s limit.
+    // -preset ultrafast + -threads 0 keep headroom on longer songs.
     // -shortest stops video when audio ends.
     // -tune stillimage optimises for a single-frame source.
     const ffArgs = [
@@ -198,14 +197,16 @@ module.exports = async function handler(req, res) {
       "-hide_banner",
       "-loglevel",
       "error",
+      "-threads",
+      "0",
     ];
     if (imagePath) {
       ffArgs.push("-loop", "1", "-i", imagePath);
     } else {
-      // No image — generate a solid black 1080x1080 source.
+      // No image — generate a solid black 720x720 source.
       ffArgs.push(
         "-f", "lavfi",
-        "-i", "color=c=black:s=1080x1080:r=1",
+        "-i", "color=c=black:s=720x720:r=1",
       );
     }
     ffArgs.push(
@@ -217,9 +218,9 @@ module.exports = async function handler(req, res) {
       "-pix_fmt", "yuv420p",
       "-preset", "ultrafast",
       "-r", "1",
-      "-vf", "scale=1080:1080:force_original_aspect_ratio=decrease,pad=1080:1080:(ow-iw)/2:(oh-ih)/2:color=black",
+      "-vf", "scale=720:720:force_original_aspect_ratio=decrease,pad=720:720:(ow-iw)/2:(oh-ih)/2:color=black",
       "-c:a", "aac",
-      "-b:a", "192k",
+      "-b:a", "128k",
       "-movflags", "+faststart",
       "-shortest",
       outPath,

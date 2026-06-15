@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615videoDl";
+const APP_BUILD = "20260615videoDl2";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -14964,11 +14964,10 @@ function shareSheetCanceledError(err) {
   return m.includes("share canceled") || m.includes("cancelled") || m.includes("canceled");
 }
 
-/** iOS WKWebView: Web Share with File[] often fails; write to cache then native Share (file://). */
-async function shareVideoBlobThroughCapacitorNative(blob, { filename, title, shareText } = {}) {
+/** iOS WKWebView: write blob to cache; returns file:// URI for Share. */
+async function writeBlobToNativeCache(blob, filename) {
   const fs = getCapFilesystemPlugin();
-  const Share = getCapacitorSharePlugin();
-  if (!fs?.writeFile || !Share?.share) {
+  if (!fs?.writeFile || !fs?.getUri) {
     throw new Error("Save not available on this device — try again in a moment.");
   }
   const name = String(filename || "song.mp4")
@@ -14990,10 +14989,39 @@ async function shareVideoBlobThroughCapacitorNative(blob, { filename, title, sha
   if (!uri || !String(uri).trim().toLowerCase().startsWith("file")) {
     throw new Error("Could not build a local file to share");
   }
-  await Share.share({
+  return { uri: String(uri).trim(), rel };
+}
+
+/** Open the iOS share sheet without blocking the caller (spinner can stop). */
+function fireNativeShareForLocalFile(uri, { title, shareText, hintToast } = {}) {
+  const Share = getCapacitorSharePlugin();
+  if (!Share?.share) throw new Error("Share not available on this device.");
+  if (hintToast) showToast(hintToast, { durationMs: 5000 });
+  const payload = {
     title: String(title || "Nabadai").slice(0, 100),
-    text: String(shareText || "Save to Photos (Save Video) or Files").slice(0, 200),
+    text: String(shareText || "Save to Photos or Files").slice(0, 200),
     files: [uri],
+  };
+  void Share.share(payload).catch((err) => {
+    if (shareSheetCanceledError(err)) return;
+    void Share.share({ title: payload.title, url: uri }).catch((err2) => {
+      if (!shareSheetCanceledError(err2)) {
+        showToast(
+          `Could not open share: ${String(err2?.message || err?.message || err2 || err).slice(0, 72)}`,
+          { durationMs: 4800 },
+        );
+      }
+    });
+  });
+}
+
+/** iOS WKWebView: Web Share with File[] often fails; write to cache then native Share (file://). */
+async function shareVideoBlobThroughCapacitorNative(blob, { filename, title, shareText } = {}) {
+  const { uri } = await writeBlobToNativeCache(blob, filename);
+  fireNativeShareForLocalFile(uri, {
+    title,
+    shareText,
+    hintToast: "Choose “Save Video” for Photos or “Save to Files”.",
   });
 }
 
@@ -15042,7 +15070,6 @@ async function deliverDownloadBlobToDevice(blob, { filename, title, isVideo } = 
         title: trackTitle,
         shareText: nativeShareText,
       });
-      showToast(hintToast, { durationMs: 4800 });
     } catch (nativeErr) {
       if (shareSheetCanceledError(nativeErr)) {
         showToast("Cancelled.", { durationMs: 1600 });
@@ -15088,21 +15115,18 @@ async function deliverDownloadBlobToDevice(blob, { filename, title, isVideo } = 
       typeof navigator.canShare === "function" &&
       navigator.canShare({ files: [file] });
     if (canFileShare) {
-      try {
-        await navigator.share({
+      showToast(hintToast, { durationMs: 4800 });
+      void navigator
+        .share({
           files: [file],
           title: trackTitle,
           text: isVideo ? `“${trackTitle}” — save to Photos or Files` : `“${trackTitle}” — save this audio`,
-        });
-        showToast(hintToast, { durationMs: 4800 });
-      } catch (shareErr) {
-        if (shareSheetCanceledError(shareErr)) {
-          showToast("Cancelled.", { durationMs: 1600 });
-        } else {
+        })
+        .catch((shareErr) => {
+          if (shareSheetCanceledError(shareErr)) return;
           tryAnchorDownload();
           showToast("Saved — check your Downloads folder.", { durationMs: 2800 });
-        }
-      }
+        });
     } else {
       tryAnchorDownload();
       showToast(
@@ -26469,8 +26493,6 @@ async function downloadLibraryVideoTrack(track) {
     const n = normalizeAudioUrlForPlayback(String(url || "").trim());
     return isHttpUrl(n) ? n : "";
   };
-  // Server-side ffmpeg should fetch the raw Suno/archive URL directly — not our
-  // playback proxy (extra hop, and capacitor-relative URLs break on Vercel).
   let serverAudioUrl = "";
   if (refreshed?.url && isHttpUrl(refreshed.url)) {
     serverAudioUrl = String(refreshed.url).trim();
@@ -26484,13 +26506,63 @@ async function downloadLibraryVideoTrack(track) {
   const trackTitle = String(t?.title || "song").trim() || "song";
   const artCandidates = [t?.meta && t.meta.imageUrl, t?.artUrl];
   const imageUrl = (artCandidates.find((s) => isHttpUrl(s)) || "").trim();
+  const filename = `${trackTitle.replace(/[\\/:*?"<>|]/g, "").trim() || "song"}.mp4`;
 
-  const endpoint = apiUrl("/api/render-video");
+  // Native iOS: let URLSession download the MP4 straight to disk — avoids
+  // holding multi‑MB blobs in WKWebView memory and survives slow renders better.
+  const fs = getCapFilesystemPlugin();
+  if (isCapacitorNativeAuth() && fs?.downloadFile && fs?.stat && fs?.getUri) {
+    const audioForServer = isArchivedSongStorageUrl(serverAudioUrl)
+      ? serverAudioUrl
+      : apiUrl(`/api/suno/audio?url=${encodeURIComponent(serverAudioUrl)}`);
+    const params = new URLSearchParams({ audioUrl: audioForServer, title: trackTitle });
+    if (imageUrl) params.set("imageUrl", imageUrl);
+    const renderUrl = `${apiUrl("/api/render-video")}?${params.toString()}`;
+    const rel = `NabadAi/exports/${Date.now()}-${filename.replace(/[^\w.\- ]+/g, "_")}`;
+    const downloadMs = 75000;
+    await Promise.race([
+      fs.downloadFile({
+        path: rel,
+        directory: "CACHE",
+        url: renderUrl,
+        headers: getApiFetchHeaders(),
+        recursive: true,
+      }),
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Video render timed out — try Wi‑Fi or Download audio.")), downloadMs);
+      }),
+    ]);
+    const stat = await fs.stat({ path: rel, directory: "CACHE" });
+    const bytes = Number(stat?.size || stat?.data?.size || 0);
+    if (!bytes || bytes < 2048) {
+      let errMsg = "Video render failed on the server.";
+      try {
+        const rf = await fs.readFile({ path: rel, directory: "CACHE", encoding: "utf8" });
+        const parsed = JSON.parse(String(rf?.data || rf || ""));
+        if (parsed?.error) errMsg = String(parsed.error);
+      } catch {}
+      try {
+        await fs.deleteFile({ path: rel, directory: "CACHE" });
+      } catch {}
+      if (/timed out|504|gateway/i.test(errMsg)) {
+        errMsg = "Video render timed out — try Download audio, or a shorter song.";
+      }
+      throw new Error(errMsg);
+    }
+    const { uri } = await fs.getUri({ path: rel, directory: "CACHE" });
+    fireNativeShareForLocalFile(String(uri || "").trim(), {
+      title: trackTitle,
+      shareText: "Save to Photos (Save Video) or Files",
+      hintToast: "Video ready — choose Save Video or Save to Files.",
+    });
+    return;
+  }
+
   const ctrl = new AbortController();
-  const renderTimer = setTimeout(() => ctrl.abort(), 90000);
+  const renderTimer = setTimeout(() => ctrl.abort(), 75000);
   let r;
   try {
-    r = await fetch(endpoint, {
+    r = await apiFetch("/api/render-video", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -26513,11 +26585,13 @@ async function downloadLibraryVideoTrack(track) {
     try {
       detail = (await r.json())?.error || "";
     } catch {}
+    if (r.status === 504 || /timed out/i.test(detail)) {
+      throw new Error("Video render timed out — try Download audio instead.");
+    }
     throw new Error(detail || `HTTP ${r.status}`);
   }
   const blob = await r.blob();
-  if (!blob?.size) throw new Error("Server returned an empty video file");
-  const filename = `${trackTitle.replace(/[\\/:*?"<>|]/g, "").trim() || "song"}.mp4`;
+  if (!blob?.size || blob.size < 2048) throw new Error("Server returned an empty video file");
   await deliverDownloadBlobToDevice(blob, { filename, title: trackTitle, isVideo: true });
 }
 async function pollLibraryStemsUntilDone(taskId, kind, opts = {}) {

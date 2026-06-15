@@ -81,9 +81,13 @@ module.exports = async function handler(req, res) {
         // An MP4 already exists for this track on Suno's side. The client
         // normally avoids this via cached meta; surface a stable code so it
         // can explain instead of showing a raw upstream error.
+        const existingTaskId = String(
+          upstream.data?.data?.taskId || upstream.data?.data?.videoTaskId || ""
+        ).trim();
         return sendJson(res, 409, {
           error: "A music video already exists for this song.",
           code: 409,
+          ...(existingTaskId ? { taskId: existingTaskId } : {}),
         });
       }
       const msg =

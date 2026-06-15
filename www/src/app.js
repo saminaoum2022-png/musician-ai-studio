@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615profileSafe";
+const APP_BUILD = "20260615videoFix";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -18447,13 +18447,7 @@ function renderTrackSheetLibrary(track) {
   const remixEligible = !isSound && Boolean(track?.url && String(track.url).trim());
   const personaEligible = !isInstrumental && !isSound && Boolean(track?.taskId) && Boolean(track?.audioId);
   const musicVideoEligible = !isSound && Boolean(track?.taskId) && Boolean(track?.audioId);
-  const mvCached = track?.meta?.musicVideo;
-  const mvWatchable = Boolean(
-    mvCached &&
-      String(mvCached.videoUrl || "").trim() &&
-      mvCached.createdAt &&
-      Date.now() - Number(mvCached.createdAt) < MUSIC_VIDEO_FRESH_MS
-  );
+  const mvWatchable = musicVideoIsWatchable(musicVideoMetaFromTrack(track));
   const musicVideoLabel = mvWatchable ? "Watch music video" : "Create music video";
   const profilePublic = Boolean(track.publicOnProfile);
   const pubTo = profilePublic ? "private" : "public";
@@ -26168,6 +26162,28 @@ async function downloadLibraryAudioTrack(track) {
 
 // Suno retains generated MP4s for 15 days; treat cached URLs as fresh for 13.
 const MUSIC_VIDEO_FRESH_MS = 13 * 24 * 60 * 60 * 1000;
+const MUSIC_VIDEO_RETENTION_MS = 15 * 24 * 60 * 60 * 1000;
+
+function musicVideoMetaFromTrack(track) {
+  const mv = track?.meta?.musicVideo;
+  if (!mv || typeof mv !== "object") return null;
+  return {
+    taskId: String(mv.taskId || "").trim(),
+    videoUrl: String(mv.videoUrl || "").trim(),
+    createdAt: Number(mv.createdAt || 0),
+  };
+}
+
+function musicVideoIsWatchable(mv) {
+  return Boolean(String(mv?.videoUrl || "").trim());
+}
+
+function musicVideoWithinRetention(mv) {
+  if (!mv) return false;
+  const hasMeta = Boolean(mv.taskId || mv.videoUrl);
+  if (!mv.createdAt) return hasMeta;
+  return Date.now() - Number(mv.createdAt) < MUSIC_VIDEO_RETENTION_MS;
+}
 
 /** Persist the music-video task/url into the song's meta (local + cloud) so
  *  re-taps inside Suno's retention window never pay for a second render. */
@@ -26369,15 +26385,16 @@ async function createSunoMusicVideoForTrack(track, { onStatus } = {}) {
     throw new Error("Music videos are only available for songs generated in the app.");
   }
   const coverUrl = videoCardCoverForTrack(t);
-  const cached = t?.meta?.musicVideo && typeof t.meta.musicVideo === "object" ? t.meta.musicVideo : null;
-  const cachedFresh = cached?.createdAt && Date.now() - Number(cached.createdAt) < MUSIC_VIDEO_FRESH_MS;
-  if (cachedFresh && String(cached?.videoUrl || "").trim()) {
-    openMusicVideoViewer(String(cached.videoUrl).trim(), t.title, { coverUrl });
+  const cached = musicVideoMetaFromTrack(t);
+  const existingUrl = String(cached?.videoUrl || "").trim();
+  if (existingUrl) {
+    openMusicVideoViewer(existingUrl, t.title, { coverUrl });
     return;
   }
+  let videoTaskId =
+    cached?.taskId && musicVideoWithinRetention(cached) ? String(cached.taskId).trim() : "";
   showVideoRenderCard(t);
   try {
-    let videoTaskId = cachedFresh ? String(cached?.taskId || "").trim() : "";
     if (videoTaskId) {
       say("Resuming your music video…");
     } else {
@@ -26398,10 +26415,24 @@ async function createSunoMusicVideoForTrack(track, { onStatus } = {}) {
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) {
-        if (Number(d?.code) === 409 && String(cached?.taskId || "").trim()) {
-          // The provider already has an MP4 for this track; fall back to the
-          // last known task even if our freshness window said it was stale.
-          videoTaskId = String(cached.taskId).trim();
+        if (Number(d?.code) === 409) {
+          const recoverUrl = String(cached?.videoUrl || "").trim();
+          if (recoverUrl) {
+            hideVideoRenderCard();
+            openMusicVideoViewer(recoverUrl, t.title, { coverUrl });
+            return;
+          }
+          videoTaskId = String(d?.taskId || cached?.taskId || "").trim();
+          if (videoTaskId) {
+            say("Opening your existing music video…");
+            if (d?.taskId) {
+              saveMusicVideoMetaForTrack(t, { taskId: videoTaskId, createdAt: Date.now() });
+            }
+          } else {
+            throw new Error(
+              "A music video already exists for this song. In Library, tap ⋯ on the song, then Watch music video."
+            );
+          }
         } else {
           throw new Error(d?.error || "Could not start the music video");
         }
@@ -28879,6 +28910,17 @@ function playerSourceIsExternalListenOnly() {
   return false;
 }
 
+function resolvePlayerLibraryTrack() {
+  const lib = loadLibrary();
+  const currentId = String(currentPlayerTrackRef?.id || "").trim();
+  const canonical = libraryTrackCanonicalUrl(String(currentPlayerTrackRef?.url || playerEl?.src || ""));
+  return (
+    (currentId ? lib.find((x) => String(x.id) === currentId) : null) ||
+    lib.find((x) => libraryTrackCanonicalUrl(x?.url) === canonical) ||
+    currentPlayerTrackRef
+  );
+}
+
 function updatePlayerSecondaryChrome() {
   const ro = playerSourceIsExternalListenOnly();
   const row = document.querySelector(".playerSecondaryRow");
@@ -28891,6 +28933,13 @@ function updatePlayerSecondaryChrome() {
   // Download is owner-only: listening to someone else's song (Discover,
   // public profiles, shared links) hides the video download entirely.
   if (els.btnPlayerDownloadVideo) els.btnPlayerDownloadVideo.hidden = ro;
+  if (els.btnPlayerMusicVideo && !ro) {
+    const mvWatchable = musicVideoIsWatchable(musicVideoMetaFromTrack(resolvePlayerLibraryTrack()));
+    const label = mvWatchable ? "Watch music video" : "Create music video";
+    els.btnPlayerMusicVideo.setAttribute("aria-label", label);
+    const span = els.btnPlayerMusicVideo.querySelector("span");
+    if (span) span.textContent = mvWatchable ? "Watch" : "Video";
+  }
   // Remix CTA: any loaded track with audio is remixable — own songs and
   // listen-only ones alike (the handler routes each to the right flow).
   if (els.playerRemixRow) {
@@ -34979,48 +35028,8 @@ if (els.btnPlayerDownloadVideo) {
       return;
     }
     haptic("light");
-    // The server needs a real http(s) URL it can fetch from. blob:/data:
-    // URLs (which we sometimes use for in-app caching) are unfetchable from
-    // Node, so prefer the track ref's persisted URL and only fall back to
-    // playerEl.src when it's a plain remote URL.
-    const isHttpUrl = (s) => /^https?:\/\//i.test(String(s || "").trim());
-    const resolvePlaybackUrl = (s) => {
-      const t = String(s || "").trim();
-      if (!t) return "";
-      const n = normalizeAudioUrlForPlayback(t);
-      return isHttpUrl(n) ? n : "";
-    };
-    // Prefer the URL last handed to the audio element (normalized proxy on
-    // native) so Discover / public Library and Library-relative `/api/…`
-    // rows all resolve the same way as playback.
-    const candidates = [
-      lastPlayerHttpUrl,
-      currentPlayerTrackRef?.url,
-      currentPlayerTrackRef?.audioUrl,
-      currentPlayerTrackRef?.song_url,
-      lastSunoFullUrl,
-      lastSunoProxyUrl,
-      lastSunoFullUrl2,
-      lastSunoProxyUrl2,
-      playerEl?.src,
-    ];
-    const trackUrl = candidates.map(resolvePlaybackUrl).find(Boolean) || "";
-    const trackTitle = String(
-      currentPlayerTrackRef?.title
-        || els.playerTitle?.textContent
-        || lastSunoTitle
-        || "song"
-    ).trim();
-    const artCandidates = [
-      currentPlayerTrackRef?.artUrl,
-      currentPlayerTrackRef?.coverUrl,
-      currentPlayerTrackRef?.cover_url,
-      lastSunoArtUrl,
-      lastSunoArtUrl2,
-      els.playerArt?.src,
-    ];
-    const trackArt = (artCandidates.find((s) => isHttpUrl(s)) || "").trim();
-    if (!trackUrl) {
+    const track = resolvePlayerLibraryTrack();
+    if (!String(track?.url || "").trim()) {
       showToast("This song isn't downloadable. Re-open it from Library and try again.");
       return;
     }
@@ -35031,24 +35040,7 @@ if (els.btnPlayerDownloadVideo) {
     btn.setAttribute("aria-label", "Rendering video…");
     showToast("Rendering video — this takes a few seconds…", { durationMs: 4000 });
     try {
-      const endpoint = apiUrl("/api/render-video");
-      const r = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          audioUrl: trackUrl,
-          ...(trackArt && isHttpUrl(trackArt) ? { imageUrl: trackArt } : {}),
-          title: trackTitle,
-        }),
-      });
-      if (!r.ok) {
-        let detail = "";
-        try { detail = (await r.json())?.error || ""; } catch {}
-        throw new Error(detail || `HTTP ${r.status}`);
-      }
-      const blob = await r.blob();
-      const filename = `${trackTitle.replace(/[\\/:*?"<>|]/g, "").trim() || "song"}.mp4`;
-      await deliverDownloadBlobToDevice(blob, { filename, title: trackTitle, isVideo: true });
+      await downloadLibraryVideoTrack(track);
     } catch (e) {
       const msg = e?.message ? String(e.message).slice(0, 80) : "Render failed";
       showToast(`Couldn't render: ${msg}`, { durationMs: 3500 });
@@ -35068,15 +35060,7 @@ if (els.btnPlayerMusicVideo) {
     haptic("light");
     const btn = els.btnPlayerMusicVideo;
     if (btn.disabled) return;
-    // Resolve the full Library row so we get taskId/audioId/meta even when
-    // the player ref is a slim object.
-    const lib = loadLibrary();
-    const currentId = String(currentPlayerTrackRef?.id || "").trim();
-    const canonical = libraryTrackCanonicalUrl(String(currentPlayerTrackRef?.url || playerEl?.src || ""));
-    const track =
-      (currentId ? lib.find((x) => String(x.id) === currentId) : null) ||
-      lib.find((x) => libraryTrackCanonicalUrl(x?.url) === canonical) ||
-      currentPlayerTrackRef;
+    const track = resolvePlayerLibraryTrack();
     btn.disabled = true;
     btn.classList.add("busyPulse");
     try {

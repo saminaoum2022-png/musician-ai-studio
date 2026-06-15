@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260615videoFix";
+const APP_BUILD = "20260615videoDl";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -199,6 +199,9 @@ function isFounderBadgeEmail(raw) {
     }
     if (!cap.Plugins?.Filesystem) {
       cap.registerPlugin("Filesystem");
+    }
+    if (!cap.Plugins?.Share) {
+      cap.registerPlugin("Share");
     }
   } catch {
     /* Already registered elsewhere */
@@ -14962,35 +14965,27 @@ function shareSheetCanceledError(err) {
 }
 
 /** iOS WKWebView: Web Share with File[] often fails; write to cache then native Share (file://). */
-let _capVideoExportModPromise = null;
 async function shareVideoBlobThroughCapacitorNative(blob, { filename, title, shareText } = {}) {
-  if (!_capVideoExportModPromise) {
-    const core = "8.3.1";
-    const fsUrl = `https://esm.sh/@capacitor/filesystem@8.1.2?deps=@capacitor/core@${core}`;
-    const shUrl = `https://esm.sh/@capacitor/share@8.0.1?deps=@capacitor/core@${core}`;
-    _capVideoExportModPromise = Promise.all([
-      import(/* webpackIgnore: true */ fsUrl),
-      import(/* webpackIgnore: true */ shUrl),
-    ]);
+  const fs = getCapFilesystemPlugin();
+  const Share = getCapacitorSharePlugin();
+  if (!fs?.writeFile || !Share?.share) {
+    throw new Error("Save not available on this device — try again in a moment.");
   }
-  const [fsMod, shMod] = await _capVideoExportModPromise;
-  const { Filesystem, Directory } = fsMod;
-  const { Share } = shMod;
   const name = String(filename || "song.mp4")
     .replace(/[^\w.\- ]+/g, "_")
     .replace(/\s+/g, " ")
     .slice(0, 80);
   const rel = `NabadAi/exports/${Date.now()}-${name || "song.mp4"}`;
   const data = await blobToBase64Payload(blob);
-  await Filesystem.writeFile({
+  await fs.writeFile({
     path: rel,
     data,
-    directory: Directory.Cache,
+    directory: "CACHE",
     recursive: true,
   });
-  const { uri } = await Filesystem.getUri({
+  const { uri } = await fs.getUri({
     path: rel,
-    directory: Directory.Cache,
+    directory: "CACHE",
   });
   if (!uri || !String(uri).trim().toLowerCase().startsWith("file")) {
     throw new Error("Could not build a local file to share");
@@ -26474,23 +26469,45 @@ async function downloadLibraryVideoTrack(track) {
     const n = normalizeAudioUrlForPlayback(String(url || "").trim());
     return isHttpUrl(n) ? n : "";
   };
-  const audioUrl = resolvePlaybackUrl(trackUrl);
-  if (!audioUrl) throw new Error("This song isn't downloadable. Try opening it from Library again.");
+  // Server-side ffmpeg should fetch the raw Suno/archive URL directly — not our
+  // playback proxy (extra hop, and capacitor-relative URLs break on Vercel).
+  let serverAudioUrl = "";
+  if (refreshed?.url && isHttpUrl(refreshed.url)) {
+    serverAudioUrl = String(refreshed.url).trim();
+  } else if (isHttpUrl(rawForPlay)) {
+    serverAudioUrl = rawForPlay;
+  } else {
+    serverAudioUrl = resolvePlaybackUrl(trackUrl);
+  }
+  if (!serverAudioUrl) throw new Error("This song isn't downloadable. Try opening it from Library again.");
 
   const trackTitle = String(t?.title || "song").trim() || "song";
   const artCandidates = [t?.meta && t.meta.imageUrl, t?.artUrl];
   const imageUrl = (artCandidates.find((s) => isHttpUrl(s)) || "").trim();
 
   const endpoint = apiUrl("/api/render-video");
-  const r = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      audioUrl,
-      ...(imageUrl ? { imageUrl } : {}),
-      title: trackTitle,
-    }),
-  });
+  const ctrl = new AbortController();
+  const renderTimer = setTimeout(() => ctrl.abort(), 90000);
+  let r;
+  try {
+    r = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        audioUrl: serverAudioUrl,
+        ...(imageUrl ? { imageUrl } : {}),
+        title: trackTitle,
+      }),
+      signal: ctrl.signal,
+    });
+  } catch (e) {
+    if (e?.name === "AbortError") {
+      throw new Error("Video render timed out — try again on Wi‑Fi.");
+    }
+    throw e;
+  } finally {
+    clearTimeout(renderTimer);
+  }
   if (!r.ok) {
     let detail = "";
     try {
@@ -26499,6 +26516,7 @@ async function downloadLibraryVideoTrack(track) {
     throw new Error(detail || `HTTP ${r.status}`);
   }
   const blob = await r.blob();
+  if (!blob?.size) throw new Error("Server returned an empty video file");
   const filename = `${trackTitle.replace(/[\\/:*?"<>|]/g, "").trim() || "song"}.mp4`;
   await deliverDownloadBlobToDevice(blob, { filename, title: trackTitle, isVideo: true });
 }
@@ -35039,12 +35057,16 @@ if (els.btnPlayerDownloadVideo) {
     btn.innerHTML = `<span class="dlSpin" aria-hidden="true"></span>`;
     btn.setAttribute("aria-label", "Rendering video…");
     showToast("Rendering video — this takes a few seconds…", { durationMs: 4000 });
+    const slowHint = setTimeout(() => {
+      showToast("Still rendering your video…", { durationMs: 5000 });
+    }, 15000);
     try {
       await downloadLibraryVideoTrack(track);
     } catch (e) {
       const msg = e?.message ? String(e.message).slice(0, 80) : "Render failed";
       showToast(`Couldn't render: ${msg}`, { durationMs: 3500 });
     } finally {
+      clearTimeout(slowHint);
       btn.disabled = false;
       btn.innerHTML = originalHtml;
       btn.setAttribute("aria-label", "Download as video");

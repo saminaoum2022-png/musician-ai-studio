@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260616styleTpl";
+const APP_BUILD = "20260616pubMeta";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -10194,6 +10194,76 @@ function challengeAttributionText(challenge) {
 }
 
 /** Human-readable style string for sharing / Discover (truncated). */
+function trackAllowsRemix(track) {
+  const m = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  return m.allowRemix !== false;
+}
+
+function trackAllowsMashup(track) {
+  const m = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  return m.allowMashup !== false;
+}
+
+/** Meta fields safe to expose on public Discover rows (style, permissions, etc.). */
+function publicDiscoverMetaFromTrack(track) {
+  const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  const out = {};
+  const keys = [
+    "styleInput", "styleSent", "style", "styleTags", "challenge",
+    "searchTemplateId", "searchTemplateTitle", "allowRemix", "allowMashup",
+    "releaseCaption", "releasedAt", "releaseType", "mode", "dialect",
+  ];
+  for (const k of keys) {
+    if (meta[k] == null) continue;
+    if (typeof meta[k] === "boolean") {
+      out[k] = meta[k];
+      continue;
+    }
+    if (String(meta[k]).trim() !== "") out[k] = meta[k];
+  }
+  if (out.allowRemix == null) out.allowRemix = true;
+  if (out.allowMashup == null) out.allowMashup = true;
+  return Object.keys(out).length ? out : { allowRemix: true, allowMashup: true };
+}
+
+function findDiscoverFeedTrack({ songId, ownerUserId, url } = {}) {
+  const sid = String(songId || "").trim();
+  const uid = String(ownerUserId || "").trim();
+  const u = String(url || "").trim();
+  const pools = [_discoveryFeedTracks || [], _userPublicFeedTracks || [], _challengeEntryTracks || []];
+  for (const pool of pools) {
+    const hit = pool.find((t) => {
+      const tid = String(t?.id || t?.songId || "").trim();
+      const tou = String(t?.userId || t?.ownerUserId || "").trim();
+      const tu = String(t?.url || "").trim();
+      return (sid && tid === sid) || (sid && uid && tid === sid && tou === uid) || (u && tu === u);
+    });
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function enrichDiscoverSheetCtx(ctx) {
+  const hit = findDiscoverFeedTrack(ctx);
+  if (!hit) return ctx;
+  return {
+    ...ctx,
+    meta: hit.meta || ctx.meta || null,
+    ts: Number(hit.ts || hit.createdTs || ctx.ts || 0) || ctx.ts,
+    kind: hit.kind || ctx.kind,
+  };
+}
+
+function formatSongCreatedLabel(ts) {
+  const n = Number(ts || 0);
+  if (!n) return "";
+  try {
+    return new Date(n).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  } catch {
+    return "";
+  }
+}
+
 function trackStyleDisplayText(track, { maxLen = 56 } = {}) {
   const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
   const raw = meta.styleInput || meta.styleSent || meta.style || meta.styleTags || "";
@@ -15516,6 +15586,16 @@ function ensurePublishReleaseSheet() {
       </div>
       <label class="publishReleaseLabel" for="publishReleaseCaption">Release note <span>(optional)</span></label>
       <textarea id="publishReleaseCaption" class="publishReleaseCaption" rows="3" maxlength="160" placeholder="Say something about the mood, story, or moment..."></textarea>
+      <div class="publishReleasePermits" role="group" aria-label="Collaboration permissions">
+        <label class="publishReleasePermit">
+          <input id="publishAllowRemix" type="checkbox" checked />
+          <span>Allow others to remix this song</span>
+        </label>
+        <label class="publishReleasePermit">
+          <input id="publishAllowMashup" type="checkbox" checked />
+          <span>Allow others to use it in mashups</span>
+        </label>
+      </div>
       <div id="publishReleaseMeta" class="publishReleaseMeta"></div>
       <div class="publishReleaseActions">
         <button type="button" class="ghost publishReleaseBtn" data-publish-release-close="1">Cancel</button>
@@ -15533,8 +15613,10 @@ function ensurePublishReleaseSheet() {
       const id = String(sheet.dataset.trackId || "").trim();
       if (!id) return;
       const caption = String(sheet.querySelector("#publishReleaseCaption")?.value || "").trim();
+      const allowRemix = sheet.querySelector("#publishAllowRemix")?.checked !== false;
+      const allowMashup = sheet.querySelector("#publishAllowMashup")?.checked !== false;
       closePublishReleaseSheet();
-      void setLibraryTrackPublicOnProfile(id, true, { releaseCaption: caption });
+      void setLibraryTrackPublicOnProfile(id, true, { releaseCaption: caption, allowRemix, allowMashup });
     });
   }
   return sheet;
@@ -15583,6 +15665,10 @@ function openPublishReleaseSheet(trackId, opts = {}) {
     caption.value = String(track?.meta?.releaseCaption || "").trim();
     caption.focus?.();
   }
+  const remixToggle = sheet.querySelector("#publishAllowRemix");
+  const mashupToggle = sheet.querySelector("#publishAllowMashup");
+  if (remixToggle) remixToggle.checked = trackAllowsRemix(track);
+  if (mashupToggle) mashupToggle.checked = trackAllowsMashup(track);
   if (metaEl) {
     metaEl.innerHTML = `
       <span>Public profile</span>
@@ -18274,8 +18360,8 @@ function maybeRecordQualifiedPublicPlay() {
 async function supabaseFetchDiscoveryPublicSongs(limit) {
   const lim = Math.max(1, Math.min(80, Number(limit) || 48));
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
-  const colsWithPublished = "id,created_at,published_at,discover_score,discover_expires_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_tags:meta->tags,meta_deleted_at:meta->>deletedAt";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_tags:meta->tags,meta_deleted_at:meta->>deletedAt";
+  const colsWithPublished = "id,created_at,published_at,discover_score,discover_expires_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_deleted_at:meta->>deletedAt";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_deleted_at:meta->>deletedAt";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   try {
     let r = await fetch(
@@ -18328,6 +18414,8 @@ async function supabaseFetchDiscoveryPublicSongs(limit) {
               ...(String(s.meta_dialect || "").trim() ? { dialect: String(s.meta_dialect).trim() } : {}),
               ...(String(s.meta_lyrics || "").trim() ? { lyricsInput: String(s.meta_lyrics).trim() } : {}),
               ...(Array.isArray(s.meta_tags) ? { tags: s.meta_tags } : {}),
+              ...(s.meta_allow_remix === false ? { allowRemix: false } : {}),
+              ...(s.meta_allow_mashup === false ? { allowMashup: false } : {}),
             },
           },
           s,
@@ -18638,10 +18726,21 @@ function renderTrackSheetDiscover(ctx) {
   const l = document.getElementById("trackSheetListMount");
   const d = document.getElementById("trackSheetDangerMount");
   if (!q || !l || !d) return;
+  const trackRef = {
+    meta: ctx?.meta || {},
+    url: ctx?.url,
+    taskId: ctx?.taskId,
+    audioId: ctx?.audioId,
+    id: ctx?.songId,
+    songId: ctx?.songId,
+    kind: ctx?.kind,
+  };
+  const isSound = String(trackRef.kind || "") === "sound";
+  const allowRemix = !isSound && trackAllowsRemix(trackRef) && Boolean(ctx?.url);
+  const allowMashup = allowRemix && trackAllowsMashup(trackRef) && Boolean(mashupSongCloudId(trackRef));
   q.innerHTML = `
-    <button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-track-sheet-action="remix">Remix</button>
-    <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="mashup">Mashup</button>
-    <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="player">Player</button>
+    ${allowRemix ? `<button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-track-sheet-action="remix">Remix</button>` : ""}
+    ${allowMashup ? `<button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="mashup">Mashup</button>` : ""}
     <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="share">Share</button>
   `;
   const hideProfileRow = Boolean(ctx.hideDiscoverProfile) || !String(ctx.handle || "").trim();
@@ -18650,7 +18749,7 @@ function renderTrackSheetDiscover(ctx) {
     : "Play another from Discover";
   l.innerHTML = `
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="profile" id="discoverSheetRowProfile"${hideProfileRow ? " hidden" : ""}>View profile</button>
-    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="lyrics">View lyrics</button>
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="lyrics">About this song</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="copy">Copy link</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="shuffle">${escapeHtml(shuffleLabel)}</button>
   `;
@@ -18688,7 +18787,6 @@ function renderTrackSheetLibrary(track) {
   q.innerHTML = `
     ${quickRemix}
     ${quickMashup}
-    <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="library_player">Player</button>
     <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="library_share">Share</button>
   `;
   l.innerHTML = `
@@ -18795,7 +18893,7 @@ function openDiscoverTrackSheetFromEl(el) {
   if (!base) return;
   const hideDiscoverProfile = el.getAttribute("data-dp-hide-profile") === "1";
   const usePublicProfileShuffle = el.getAttribute("data-dp-use-public-shuffle") === "1";
-  const ctx = { ...base, hideDiscoverProfile, usePublicProfileShuffle };
+  const ctx = enrichDiscoverSheetCtx({ ...base, hideDiscoverProfile, usePublicProfileShuffle });
   _trackSheetCtx = { mode: "discover", ...ctx };
   renderTrackSheetDiscover(ctx);
   openTrackSheetShell({
@@ -19029,6 +19127,11 @@ function runTrackSheetAction(action, sourceEl) {
         } catch {}
         return;
       }
+      const trackRef = { meta: ctx.meta || {}, url: ctx.url, taskId: ctx.taskId, audioId: ctx.audioId };
+      if (!trackAllowsRemix(trackRef)) {
+        showToast("The creator disabled remixes for this song.", { icon: "!", durationMs: 3600 });
+        return;
+      }
       shut();
       void (async () => {
         const remixMeta = ctx.songId && ctx.ownerUserId
@@ -19059,6 +19162,11 @@ function runTrackSheetAction(action, sourceEl) {
         try { location.hash = "#/auth"; } catch {}
         return;
       }
+      const trackRef = { meta: ctx.meta || {}, id: ctx.songId, songId: ctx.songId, url: ctx.url, taskId: ctx.taskId, audioId: ctx.audioId };
+      if (!trackAllowsMashup(trackRef)) {
+        showToast("The creator disabled mashups for this song.", { icon: "!", durationMs: 3600 });
+        return;
+      }
       const ref = mashupRefFromDiscoverTrack(
         {
           id: ctx.songId,
@@ -19082,33 +19190,27 @@ function runTrackSheetAction(action, sourceEl) {
     if (action === "lyrics") {
       shut();
       void (async () => {
-        const lyrics = await resolveLyricsForTrackRef({
+        const trackRef = {
+          meta: ctx.meta || null,
+          ts: ctx.ts,
+          taskId: ctx.taskId || "",
+          audioId: ctx.audioId || "",
           id: ctx.songId || "",
           songId: ctx.songId || "",
           ownerUserId: ctx.ownerUserId || "",
-          taskId: ctx.taskId || "",
-          audioId: ctx.audioId || "",
-          meta: ctx.meta || null,
-        });
-        openLyricsViewer({
-          title: ctx.title || "Lyrics",
+        };
+        const lyrics = await resolveLyricsForTrackRef(trackRef);
+        openSongInfoSheet({
+          title: ctx.title || "Song",
           subtitle: ctx.by || (ctx.handle ? `@${ctx.handle}` : ""),
           lyrics,
+          style: trackStyleDisplayText(trackRef),
+          createdAt: formatSongCreatedLabel(ctx.ts),
+          challenge: challengeMetaForTrack(trackRef),
+          templateTitle: templateMetaForTrack(trackRef)?.searchTemplateTitle || "",
+          mode: "public",
         });
       })();
-      return;
-    }
-    if (action === "player") {
-      shut();
-      const fromPublicU = Boolean(ctx.usePublicProfileShuffle);
-      void playLibraryUrlOnPlayer(ctx.url, ctx.title, ctx.art, {
-        discoverFeed: !fromPublicU,
-        openPlayer: true,
-        discoverBy: fromPublicU ? "" : ctx.by,
-        playSource: ctx.songId && ctx.ownerUserId
-          ? { type: "public_song", songId: ctx.songId, ownerUserId: ctx.ownerUserId, taskId: ctx.taskId, audioId: ctx.audioId }
-          : null,
-      });
       return;
     }
     if (action === "share") {
@@ -20689,9 +20791,23 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     ? new Date().toISOString()
     : userSongPublishedAtValue(track);
   const releaseCaption = String(opts?.releaseCaption || "").trim();
-  const nextMeta = willBePublic && releaseCaption
-    ? { ...(track.meta || {}), releaseCaption, releasedAt: publishedAt, releaseType: "public_profile" }
-    : track.meta;
+  const allowRemix = opts?.allowRemix !== false;
+  const allowMashup = opts?.allowMashup !== false;
+  const pubMeta = {
+    ...publicDiscoverMetaFromTrack(track),
+    ...(track.meta || {}),
+    allowRemix,
+    allowMashup,
+    ...(willBePublic && releaseCaption ? { releaseCaption } : {}),
+    ...(willBePublic ? { releasedAt: publishedAt, releaseType: "public_profile" } : {}),
+  };
+  // Keep public Discover rows useful: always sync style + permissions on publish.
+  const styleInput = String(track?.meta?.styleInput || track?.meta?.styleSent || "").trim();
+  if (styleInput) {
+    pubMeta.styleInput = String(track.meta?.styleInput || styleInput).trim();
+    if (track?.meta?.styleSent) pubMeta.styleSent = String(track.meta.styleSent).trim();
+  }
+  const nextMeta = willBePublic ? pubMeta : track.meta;
   const next = {
     ...track,
     publicOnProfile: willBePublic,
@@ -20711,7 +20827,7 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
   const patch = await supabasePatchUserSong(track, {
     publicOnProfile: next.publicOnProfile,
     ...(willBePublic && publishedAt ? { publishedAt } : {}),
-    ...(willBePublic && releaseCaption ? { meta: nextMeta } : {}),
+    ...(willBePublic ? { meta: nextMeta } : {}),
   });
   if (patch && patch.ok === false && patch.reason && patch.reason !== "noop") {
     const det = String(patch.details || "").trim();
@@ -27903,55 +28019,81 @@ els.playerLyricsList?.addEventListener("click", (ev) => {
   } catch {}
 });
 
-function openLyricsViewer({ title, subtitle, lyrics } = {}) {
+function songDetailsFlatRow(label, value) {
+  const v = songDetailsValue(value);
+  if (!v || v === "—") return "";
+  return `<div class="songDetailsFlatRow"><span>${escapeHtml(label)}</span><strong>${escapeHtml(v)}</strong></div>`;
+}
+
+function showSongDetailsModal() {
+  if (!els.songDetailsModal) return;
+  els.songDetailsModal.style.display = "";
+  try { document.body.style.overflow = "hidden"; } catch {}
+}
+
+function wireSongDetailsCopyBtn(text) {
+  const copyBtn = els.songDetailsContent?.querySelector("[data-song-details-copy-lyrics]");
+  if (!copyBtn) return;
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(String(text || ""));
+      showToast("Lyrics copied.");
+    } catch {
+      showToast("Could not copy lyrics.");
+    }
+  });
+}
+
+function openSongInfoSheet({
+  title,
+  subtitle,
+  lyrics,
+  style,
+  createdAt,
+  challenge,
+  templateTitle,
+  mode = "public",
+} = {}) {
   if (!els.songDetailsModal || !els.songDetailsContent) return;
   const kicker = els.songDetailsModal.querySelector(".songDetailsKicker");
-  if (kicker) kicker.textContent = "Lyrics";
+  if (kicker) kicker.textContent = mode === "owner" ? "Library" : "Discover";
   const headTitle = document.getElementById("songDetailsTitle");
-  if (headTitle) headTitle.textContent = String(title || "Lyrics").trim() || "Lyrics";
+  if (headTitle) headTitle.textContent = String(title || "Song").trim() || "Song";
   const text = String(lyrics || "").trim();
   const hasLyrics = Boolean(text);
   els.songDetailsContent.innerHTML = `
-    ${subtitle ? `
-    <section class="songDetailsSection songDetailsSectionHero">
-      <div class="songDetailsMetaLine">${escapeHtml(subtitle)}</div>
-    </section>
-    ` : ""}
-    <section class="songDetailsSection">
+    <div class="songDetailsFlatList">
+      ${subtitle ? songDetailsFlatRow("Creator", subtitle) : ""}
+      ${createdAt ? songDetailsFlatRow("Created", createdAt) : ""}
+      ${style ? songDetailsFlatRow("Style", style) : ""}
+      ${templateTitle ? songDetailsFlatRow("Template", templateTitle) : ""}
+      ${challenge ? songDetailsFlatRow("Challenge", challengeAttributionText(challenge)) : ""}
+    </div>
+    <div class="songDetailsLyricsBlock">
       <div class="songDetailsSectionHead">
         <div class="songDetailsSectionTitle">Lyrics</div>
         ${hasLyrics ? `<button type="button" class="songDetailsCopyBtn" data-song-details-copy-lyrics="1">Copy</button>` : ""}
       </div>
-      <div class="songDetailsLyricsBox ${hasLyrics ? "" : "isEmpty"}">${hasLyrics ? escapeHtml(text) : "No lyrics were saved for this song. Instrumentals, sounds, and some older songs may not have lyrics metadata."}</div>
-    </section>
+      <div class="songDetailsLyricsBox ${hasLyrics ? "" : "isEmpty"}">${hasLyrics ? escapeHtml(text) : "No lyrics saved for this song yet."}</div>
+    </div>
   `;
-  const copyBtn = els.songDetailsContent.querySelector("[data-song-details-copy-lyrics]");
-  if (copyBtn) {
-    copyBtn.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(text);
-        showToast("Lyrics copied.");
-      } catch {
-        showToast("Could not copy lyrics.");
-      }
-    });
-  }
-  els.songDetailsModal.style.display = "";
-  try {
-    document.body.style.overflow = "hidden";
-  } catch {}
+  wireSongDetailsCopyBtn(text);
+  showSongDetailsModal();
+}
+
+function openLyricsViewer(opts = {}) {
+  openSongInfoSheet({ ...opts, mode: "lyrics" });
 }
 
 function openSongDetailsModal(track) {
   if (!els.songDetailsModal || !els.songDetailsContent) return;
-  // The lyrics viewer reuses this sheet and rewrites the header — restore it.
   const kicker = els.songDetailsModal.querySelector(".songDetailsKicker");
   if (kicker) kicker.textContent = "Library";
   const headTitle = document.getElementById("songDetailsTitle");
-  if (headTitle) headTitle.textContent = "Song details";
-  const meta = track?.meta || {};
   const title = String(track?.title || "Song details").trim() || "Song details";
-  const createdAt = track?.ts ? new Date(Number(track.ts)).toLocaleString() : "";
+  if (headTitle) headTitle.textContent = title;
+  const meta = track?.meta || {};
+  const createdAt = formatSongCreatedLabel(track?.ts) || "";
   const kindLabel = songDetailsKindLabel(track);
   const style = songDetailsFirstText(meta.styleInput, meta.styleSent, meta.style, meta.styleTags);
   const voice = songDetailsFirstText(meta.voiceProfile, meta.timbre, meta.dialect);
@@ -27960,95 +28102,49 @@ function openSongDetailsModal(track) {
   const hasLyrics = Boolean(lyrics);
   const releaseCaption = releaseCaptionForTrack(track);
   const challenge = challengeMetaForTrack(track);
+  const templateTitle = templateMetaForTrack(track)?.searchTemplateTitle || "";
   const remixOf = remixAttributionForTrack(track);
-  const remixCreator = remixOf?.creatorUsername ? `@${remixOf.creatorUsername}` : "";
   const remixSummary = remixOf
-    ? `${remixCreator || "Original creator"}${remixOf.title ? ` · ${remixOf.title}` : ""}`
+    ? `${remixOf.creatorUsername ? `@${remixOf.creatorUsername}` : "Original creator"}${remixOf.title ? ` · ${remixOf.title}` : ""}`
     : "";
   const technicalRows = [
-    songDetailsRow("Task ID", track?.taskId),
-    songDetailsRow("Audio ID", track?.audioId),
-    songDetailsRow("Library ID", track?.id),
-  ].join("");
+    songDetailsFlatRow("Task ID", track?.taskId),
+    songDetailsFlatRow("Audio ID", track?.audioId),
+    songDetailsFlatRow("Library ID", track?.id),
+  ].filter(Boolean).join("");
 
   els.songDetailsContent.innerHTML = `
-    <section class="songDetailsSection songDetailsSectionHero">
-      <div class="songDetailsSongTitle">${escapeHtml(title)}</div>
-      <div class="songDetailsMetaLine">${escapeHtml(kindLabel)}${createdAt ? ` · ${escapeHtml(createdAt)}` : ""}</div>
-    </section>
-
-    <section class="songDetailsSection">
-      <div class="songDetailsSectionTitle">Overview</div>
-      <div class="songDetailsInfoGrid">
-        ${songDetailsRow("Type", kindLabel)}
-        ${songDetailsRow("Visibility", track?.publicOnProfile ? "Public profile" : "Private library")}
-        ${songDetailsRow("Mode", mode)}
-      </div>
-    </section>
-
-    <section class="songDetailsSection">
-      <div class="songDetailsSectionTitle">Creation</div>
-      <div class="songDetailsInfoGrid">
-        ${songDetailsRow("Style", style)}
-        ${songDetailsRow("Voice", voice)}
-      </div>
-    </section>
-
-    ${remixOf ? `
-    <section class="songDetailsSection">
-      <div class="songDetailsSectionTitle">Remix source</div>
-      <div class="songDetailsRemixCard">
-        ${remixPillHtml()}
-        <div class="songDetailsRemixText">${escapeHtml(remixSummary)}</div>
-      </div>
-    </section>
-    ` : ""}
-
-    ${challenge ? `
-    <section class="songDetailsSection">
-      <div class="songDetailsSectionTitle">Challenge entry</div>
-      <div class="songDetailsChallengeCard">
-        ${challengePillHtml()}
-        <div class="songDetailsChallengeText">${escapeHtml(challengeAttributionText(challenge))}</div>
-      </div>
-    </section>
-    ` : ""}
-
-    ${releaseCaption ? `
-    <section class="songDetailsSection">
-      <div class="songDetailsSectionTitle">Release note</div>
-      <div class="songDetailsReleaseNote">${escapeHtml(releaseCaption)}</div>
-    </section>
-    ` : ""}
-
+    <div class="songDetailsFlatList">
+      ${songDetailsFlatRow("Type", kindLabel)}
+      ${createdAt ? songDetailsFlatRow("Created", createdAt) : ""}
+      ${songDetailsFlatRow("Visibility", track?.publicOnProfile ? "Public profile" : "Private library")}
+      ${mode ? songDetailsFlatRow("Mode", mode) : ""}
+      ${style ? songDetailsFlatRow("Style", style) : ""}
+      ${voice ? songDetailsFlatRow("Voice", voice) : ""}
+      ${track?.publicOnProfile ? songDetailsFlatRow("Remix allowed", trackAllowsRemix(track) ? "Yes" : "No") : ""}
+      ${track?.publicOnProfile ? songDetailsFlatRow("Mashup allowed", trackAllowsMashup(track) ? "Yes" : "No") : ""}
+      ${remixSummary ? songDetailsFlatRow("Remix source", remixSummary) : ""}
+      ${challenge ? songDetailsFlatRow("Challenge", challengeAttributionText(challenge)) : ""}
+      ${templateTitle ? songDetailsFlatRow("Template", templateTitle) : ""}
+      ${releaseCaption ? songDetailsFlatRow("Release note", releaseCaption) : ""}
+    </div>
     ${songDetailsFeedbackHintHtml(track)}
-
-    <section class="songDetailsSection">
+    <div class="songDetailsLyricsBlock">
       <div class="songDetailsSectionHead">
         <div class="songDetailsSectionTitle">Lyrics</div>
         ${hasLyrics ? `<button type="button" class="songDetailsCopyBtn" data-song-details-copy-lyrics="1">Copy</button>` : ""}
       </div>
       <div class="songDetailsLyricsBox ${hasLyrics ? "" : "isEmpty"}">${hasLyrics ? escapeHtml(lyrics) : "No lyrics were saved for this song. Instrumentals, sounds, and some older songs may not have lyrics metadata."}</div>
-    </section>
-
-    <section class="songDetailsSection">
-      <div class="songDetailsSectionTitle">Technical</div>
-      <div class="songDetailsInfoGrid">${technicalRows}</div>
-    </section>
+    </div>
+    ${technicalRows ? `
+    <details class="songDetailsTechFold">
+      <summary>Technical IDs</summary>
+      <div class="songDetailsFlatList songDetailsFlatList--tech">${technicalRows}</div>
+    </details>
+    ` : ""}
   `;
-  const copyBtn = els.songDetailsContent.querySelector("[data-song-details-copy-lyrics]");
-  if (copyBtn) {
-    copyBtn.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(lyrics);
-        showToast("Lyrics copied.");
-      } catch {
-        showToast("Could not copy lyrics.");
-      }
-    });
-  }
-  // Cloud-hydrated rows ship without lyrics — recover them in the
-  // background and swap the placeholder once they arrive.
+  wireSongDetailsCopyBtn(lyrics);
+  showSongDetailsModal();
   if (!hasLyrics) {
     const detailsToken = `${String(track?.id || "")}_${Date.now()}`;
     els.songDetailsContent.dataset.detailsToken = detailsToken;
@@ -28060,12 +28156,18 @@ function openSongDetailsModal(track) {
       if (!box) return;
       box.classList.remove("isEmpty");
       box.textContent = recovered;
+      const head = els.songDetailsContent.querySelector(".songDetailsSectionHead");
+      if (head && !head.querySelector("[data-song-details-copy-lyrics]")) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "songDetailsCopyBtn";
+        btn.dataset.songDetailsCopyLyrics = "1";
+        btn.textContent = "Copy";
+        head.appendChild(btn);
+        wireSongDetailsCopyBtn(recovered);
+      }
     })();
   }
-  els.songDetailsModal.style.display = "";
-  try {
-    document.body.style.overflow = "hidden";
-  } catch {}
 }
 
 function closeSongDetailsModal() {

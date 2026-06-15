@@ -5005,6 +5005,36 @@ body[data-route="settings"] main.grid > [data-route="settings"]{
   border-color: rgba(124,92,255,0.38);
   box-shadow: 0 0 0 3px rgba(124,92,255,0.14);
 }
+.publishReleasePermits{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 4px;
+  padding: 10px 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.03), rgba(255,255,255,0.008)),
+    rgba(5,7,13,0.38);
+}
+.publishReleasePermit{
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 750;
+  color: rgba(228,235,252,0.9);
+  line-height: 1.35;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.publishReleasePermit input{
+  margin-top: 2px;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  accent-color: #7c5cff;
+}
 .publishReleaseMeta{
   display: flex;
   flex-wrap: wrap;
@@ -14934,9 +14964,11 @@ body.trackSheetOpen .footer{
 .songDetailsBackdrop{
   position:absolute;
   inset:0;
-  background: rgba(2,6,14,0.68);
-  -webkit-backdrop-filter: blur(12px) saturate(120%);
-          backdrop-filter: blur(12px) saturate(120%);
+  background:
+    radial-gradient(90% 70% at 50% 100%, rgba(124,92,255,0.025), transparent 64%),
+    rgba(3, 5, 10, 0.70);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+          backdrop-filter: blur(10px) saturate(120%);
 }
 .songDetailsSheet{
   position:absolute;
@@ -14945,30 +14977,31 @@ body.trackSheetOpen .footer{
   bottom: calc(10px + env(safe-area-inset-bottom));
   max-height: min(82vh, 720px);
   overflow:hidden;
-  border:1px solid rgba(255,255,255,0.12);
-  border-radius: 28px;
+  isolation: isolate;
+  border-radius: 24px 24px 16px 16px;
+  border: 1px solid rgba(255,255,255,0.115);
   background:
-    radial-gradient(120% 90% at 12% 0%, rgba(124,92,255,0.18), transparent 58%),
-    radial-gradient(100% 85% at 100% 4%, rgba(35,213,171,0.11), transparent 62%),
-    linear-gradient(180deg, rgba(18,26,42,0.94), rgba(7,10,18,0.97));
-  padding: 10px 14px 14px;
-  box-shadow: 0 28px 80px rgba(0,0,0,0.58), inset 0 1px 0 rgba(255,255,255,0.08);
-  -webkit-backdrop-filter: blur(24px) saturate(150%);
-          backdrop-filter: blur(24px) saturate(150%);
+    radial-gradient(110% 72% at 8% 0%, rgba(124,92,255,0.045), transparent 58%),
+    linear-gradient(180deg, rgba(10,13,21,0.985), rgba(5,7,13,0.995));
+  padding: 10px 14px calc(18px + env(safe-area-inset-bottom));
+  box-shadow:
+    0 -16px 54px rgba(0, 0, 0, 0.46),
+    inset 0 1px 0 rgba(255,255,255,0.105),
+    inset 0 -1px 0 rgba(0,0,0,0.18);
 }
 .songDetailsGrab{
-  width: 42px;
-  height: 4px;
-  margin: 2px auto 12px;
+  width: 40px;
+  height: 5px;
+  margin: 4px auto 10px;
   border-radius: 999px;
-  background: rgba(232,238,247,0.26);
+  background: rgba(232,238,247,0.22);
 }
 .songDetailsHead{
   display:flex;
   align-items:flex-start;
   justify-content:space-between;
   gap:12px;
-  padding: 0 2px 12px;
+  padding: 0 40px 12px 2px;
 }
 .songDetailsKicker{
   margin-bottom: 4px;
@@ -14980,27 +15013,102 @@ body.trackSheetOpen .footer{
 }
 .songDetailsTitle{
   margin:0;
-  font-size: 22px;
-  line-height: 1.08;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1.2;
   letter-spacing:-0.03em;
+  color: #f6f8ff;
 }
 .songDetailsClose{
+  position: absolute;
+  top: 12px;
+  right: 12px;
   width: 34px;
   height: 34px;
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.06);
-  color: rgba(238,244,255,0.9);
-  font-size: 22px;
+  border: 1px solid rgba(255,255,255,0.11);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.065), rgba(255,255,255,0.018)),
+    rgba(5,7,13,0.78);
+  color: #e8eef7;
+  font-size: 20px;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
 }
 .songDetailsContent{
   max-height: calc(min(82vh, 720px) - 86px);
   overflow:auto;
   padding: 0 2px 4px;
-  display:grid;
-  gap: 12px;
+  display:flex;
+  flex-direction: column;
+  gap: 14px;
   -webkit-overflow-scrolling: touch;
+}
+.songDetailsFlatList{
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 6px;
+  border-radius: 20px;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.028), rgba(255,255,255,0.008)),
+    rgba(5,7,13,0.42);
+  border: 1px solid rgba(255,255,255,0.07);
+}
+.songDetailsFlatList--tech{
+  margin-top: 8px;
+  padding: 4px 6px;
+}
+.songDetailsFlatRow{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 8px;
+  font-size: 13px;
+  line-height: 1.35;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.songDetailsFlatRow:last-child{
+  border-bottom: none;
+}
+.songDetailsFlatRow span{
+  flex: 0 0 auto;
+  color: rgba(188,201,222,0.68);
+  font-weight: 750;
+}
+.songDetailsFlatRow strong{
+  min-width: 0;
+  text-align: right;
+  color: rgba(239,245,255,0.94);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.songDetailsLyricsBlock{
+  padding: 0 2px;
+}
+.songDetailsTechFold{
+  border: none;
+  padding: 0 2px 2px;
+}
+.songDetailsTechFold summary{
+  list-style: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(188,201,222,0.72);
+  padding: 4px 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.songDetailsTechFold summary::-webkit-details-marker{ display: none; }
+.songDetailsTechFold[open] summary{
+  color: rgba(220,228,250,0.88);
+  margin-bottom: 2px;
 }
 .songDetailsSection{
   border:1px solid rgba(255,255,255,0.09);
@@ -15099,15 +15207,15 @@ body.trackSheetOpen .footer{
   overflow-wrap:anywhere;
 }
 .songDetailsLyricsBox{
-  margin-top: 10px;
-  max-height: 230px;
+  margin-top: 8px;
+  max-height: 240px;
   overflow:auto;
   white-space: pre-wrap;
   -webkit-overflow-scrolling: touch;
-  border:1px solid rgba(255,255,255,0.09);
-  border-radius: 16px;
-  background: rgba(4,7,13,0.42);
-  padding: 12px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0 2px;
   color: rgba(235,241,252,0.92);
   font-size: 13px;
   line-height: 1.55;

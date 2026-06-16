@@ -25749,6 +25749,7 @@ body[data-route="challenges"] .app{
   overflow: visible;
 }
 .homeDeskPromoVisual--photo .homeDeskPhotoTileWrap,
+.homeDeskPromoVisual--mashup .homeDeskMashupTileWrap,
 .homeDeskPromoVisual--persona .homeDeskPersonaTileWrap,
 .homeDeskPromoVisual--song .homeDeskSongTileWrap{
   transform: scale(0.68);
@@ -27426,6 +27427,7 @@ body[data-route="mashup"] .app{
   background:
     radial-gradient(120% 100% at 0% 0%, rgba(251,191,36,0.14), transparent 58%),
     linear-gradient(135deg, rgba(24,18,8,0.94), rgba(14,12,20,0.82));
+  box-shadow: 0 16px 44px rgba(0,0,0,0.28);
 }
 .homeDeskMashupPromo .homeDeskPromoBtn--primary{
   border-color: rgba(251,191,36,0.34);
@@ -27433,52 +27435,56 @@ body[data-route="mashup"] .app{
 }
 .homeDeskMashupTileWrap{
   position: relative;
-  width: 80px;
-  height: 80px;
+  width: 108px;
+  height: 108px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .homeDeskMashupPulse{
   position: absolute;
-  inset: -8px;
-  border-radius: 999px;
-  background: radial-gradient(circle, rgba(251,191,36,0.18), transparent 70%);
-  animation: mashupPulse 2.4s ease-in-out infinite;
+  inset: -14px;
+  border-radius: 30px;
+  border: 2px solid rgba(251,191,36,0.42);
+  animation: homeDeskMashupPulse 2.4s ease-out infinite;
+  pointer-events: none;
 }
-@keyframes mashupPulse{
-  0%, 100% { opacity: 0.45; transform: scale(0.96); }
-  50% { opacity: 1; transform: scale(1.04); }
+@keyframes homeDeskMashupPulse{
+  0%{ transform: scale(0.92); opacity: 0.75; }
+  70%{ transform: scale(1.18); opacity: 0; }
+  100%{ transform: scale(1.18); opacity: 0; }
 }
 .homeDeskMashupTile{
   position: relative;
-  width: 80px;
-  height: 80px;
+  width: 108px;
+  height: 108px;
+  border-radius: 22px;
+  padding: 3px;
+  background: linear-gradient(135deg, #fbbf24, #f59e0b, #ec4899);
+  box-shadow: 0 20px 48px -20px rgba(251,191,36,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.homeDeskMashupDisc{
+.homeDeskMashupTile::before{
+  content:"";
   position: absolute;
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  border: 2px solid rgba(255,255,255,0.14);
-  box-shadow: 0 8px 18px rgba(0,0,0,0.28);
+  inset: 3px;
+  border-radius: 19px;
+  background: linear-gradient(160deg, #1c1408 0%, #0a0c14 100%);
 }
-.homeDeskMashupDisc--a{
-  left: 4px;
-  top: 18px;
-  background: linear-gradient(145deg, rgba(124,92,255,0.55), rgba(34,211,238,0.28));
+.homeDeskMashupIco{
+  position: relative;
+  z-index: 1;
+  width: 40px;
+  height: 40px;
+  color: rgba(253,230,138,0.94);
+  display: block;
 }
-.homeDeskMashupDisc--b{
-  right: 4px;
-  bottom: 10px;
-  background: linear-gradient(145deg, rgba(251,191,36,0.55), rgba(244,114,182,0.28));
-}
-.homeDeskCreateStack .homeDeskMashupDisc--a,
-.homeDeskPromo--compact .homeDeskMashupDisc--a{
-  left: 14px;
-  top: 19px;
-}
-.homeDeskCreateStack .homeDeskMashupDisc--b,
-.homeDeskPromo--compact .homeDeskMashupDisc--b{
-  right: 14px;
-  bottom: 19px;
+.homeDeskCreateStack .homeDeskMashupIco,
+.homeDeskPromo--compact .homeDeskMashupIco{
+  width: 50px;
+  height: 50px;
 }
 
 @media (max-width: 760px){

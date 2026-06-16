@@ -58,7 +58,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260618photoMoodUi" />
+    <link rel="stylesheet" href="./styles.css?v=20260618mashupTileUi" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1315,8 +1315,11 @@
                   <span class="homeDeskMashupTileWrap">
                     <span class="homeDeskMashupPulse" aria-hidden="true"></span>
                     <span class="homeDeskMashupTile">
-                      <span class="homeDeskMashupDisc homeDeskMashupDisc--a" aria-hidden="true"></span>
-                      <span class="homeDeskMashupDisc homeDeskMashupDisc--b" aria-hidden="true"></span>
+                      <svg class="homeDeskMashupIco" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false">
+                        <circle cx="8.5" cy="12" r="4.25"/>
+                        <circle cx="15.5" cy="12" r="4.25"/>
+                        <path d="M12 7.5v9"/>
+                      </svg>
                     </span>
                   </span>
                 </span>
@@ -3677,6 +3680,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260618photoMoodUi"></script>
+    <script type="module" src="./src/app.js?v=20260618mashupTileUi"></script>
   </body>
 </html>

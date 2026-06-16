@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618appTour5";
+const APP_BUILD = "20260618appTour6";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3479,6 +3479,10 @@ void loadAppTourModule()
       showToast,
       shouldOfferHomeTour: () => shouldSkipIntroOrOnboardingRoute(),
     });
+    const tourSub = document.getElementById("settingsHomeTourSub");
+    if (tourSub && m.HOME_TOUR_VERSION) {
+      tourSub.textContent = `Walk through Create, templates, Discover, and Profile again · Home tour v${m.HOME_TOUR_VERSION}`;
+    }
     const replayHomeTourBtn = document.getElementById("btnSettingsReplayHomeTour");
     if (replayHomeTourBtn && !replayHomeTourBtn.dataset.bound) {
       replayHomeTourBtn.dataset.bound = "1";

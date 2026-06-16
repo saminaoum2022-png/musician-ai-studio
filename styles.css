@@ -30706,6 +30706,9 @@ body.appTourOpen{
   justify-content: space-between;
   gap: 10px;
 }
+.appTourActions--solo{
+  justify-content: flex-end;
+}
 .appTourSkip{
   min-height: 42px;
   padding: 0 14px;

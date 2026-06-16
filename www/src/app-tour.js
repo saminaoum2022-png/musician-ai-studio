@@ -3,6 +3,7 @@
  */
 
 export const HOME_TOUR_STORAGE_KEY = "nabadai_home_tour_v1_done";
+export const HOME_TOUR_VERSION = "1.2";
 
 const HOME_TOUR_STEPS = [
   {
@@ -31,6 +32,7 @@ const HOME_TOUR_STEPS = [
     id: "discover",
     title: "Discover",
     body: "Listen to other creators. When you publish, your songs can show up here too.",
+    hint: "Friends — find people and share songs with them.",
     target: '[data-route-link="discover"]',
     pad: 8,
   },
@@ -286,7 +288,9 @@ function renderTourStep() {
   const body = document.getElementById("appTourBody");
   const hint = ensureTourHintEl();
   const next = document.getElementById("btnAppTourNext");
+  const skip = document.getElementById("btnAppTourSkip");
   const progress = document.getElementById("appTourProgress");
+  const isLast = _step >= HOME_TOUR_STEPS.length - 1;
   if (kicker) kicker.textContent = `Step ${_step + 1} of ${HOME_TOUR_STEPS.length}`;
   if (title) title.textContent = stepDef.title;
   if (body) body.textContent = stepDef.body;
@@ -295,7 +299,13 @@ function renderTourStep() {
     hint.textContent = hintText;
     hint.hidden = !hintText;
   }
-  if (next) next.textContent = _step >= HOME_TOUR_STEPS.length - 1 ? "Done" : "Next";
+  if (next) next.textContent = isLast ? "Done" : "Next";
+  if (skip) {
+    skip.hidden = !isLast;
+    skip.textContent = "Don't show again";
+  }
+  const actions = skip?.closest?.(".appTourActions");
+  if (actions) actions.classList.toggle("appTourActions--solo", !isLast);
   if (progress) {
     progress.innerHTML = HOME_TOUR_STEPS.map((s, i) =>
       `<span class="appTourDot${i === _step ? " isActive" : i < _step ? " isDone" : ""}"></span>`,

@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618discoverScoreFix";
+const APP_BUILD = "20260618profilePostsPerf";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -7622,6 +7622,55 @@ async function mergeCloudSongsIntoLocalLibrary() {
   return true;
 }
 
+function profileSelfProfMap(uid) {
+  const m = new Map();
+  const id = String(uid || "").trim();
+  if (!id) return m;
+  m.set(id, {
+    user_id: id,
+    username: String(activeProfile?.username || "").trim(),
+    avatar: String(activeProfile?.avatar || "").trim(),
+  });
+  return m;
+}
+
+/** Play counts, remix/mashup tiles, and social stats after the first paint. */
+async function enrichProfileActivitiesAfterPaint(libRows, feedItems, profMap, listEl) {
+  if (!listEl || !feedItems.length) return;
+  try {
+    const playCountMap = libRows.length
+      ? await fetchDiscoverSongPlayCounts(libRows.map((t) => t.id))
+      : new Map();
+    for (const t of libRows) {
+      t.playCount = playCountMap.get(String(t.id || "")) || 0;
+    }
+    await Promise.all([
+      hydrateRemixOriginalsForTracks(libRows),
+      hydrateMashupSourcesForTracks(libRows),
+    ]);
+    if (
+      String(document.body.getAttribute("data-route") || "") !== "profile" ||
+      _profileSongsSegment !== "activities"
+    ) {
+      return;
+    }
+    listEl.innerHTML = feedItems
+      .map((item, i) => followingActivityRowHtml(item.track, profMap, i, { xstyle: true }))
+      .join("");
+    _profileActSnapshot = { at: Date.now(), html: listEl.innerHTML };
+    persistProfileActSnapshot();
+    try {
+      syncDiscoveryPlayingHighlights();
+    } catch {}
+    applyFeedSocialStatsToDom(listEl);
+    void hydrateFeedSocialStatsForFeed(listEl);
+  } catch (e) {
+    try {
+      console.warn("[profile/activities enrich]", e);
+    } catch {}
+  }
+}
+
 async function renderProfileActivities(opts = {}) {
   const force = Boolean(opts.force);
   const listEl = document.getElementById("profileActivitiesList");
@@ -7663,6 +7712,7 @@ async function renderProfileActivities(opts = {}) {
   );
   if (snapStillValid && snapHasPosts) return;
   const uid = String(authSession.user.id);
+  try {
   const libRows = loadLibrary()
     .filter((t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile))
     .map((t) => ({ ...t, userId: String(t.userId || uid) }));
@@ -7671,15 +7721,7 @@ async function renderProfileActivities(opts = {}) {
     countEl.textContent = pubN ? `${pubN} PUBLIC` : "";
     countEl.hidden = !pubN;
   }
-  const profMap = await fetchProfilesByUserIdsMap([uid]);
-  const playCountMap = libRows.length
-    ? await fetchDiscoverSongPlayCounts(libRows.map((t) => t.id))
-    : new Map();
-  for (const t of libRows) {
-    t.playCount = playCountMap.get(String(t.id || "")) || 0;
-  }
-  await hydrateRemixOriginalsForTracks(libRows);
-  await hydrateMashupSourcesForTracks(libRows);
+  const profMap = profileSelfProfMap(uid);
   const feedItems = libRows
     .map((track) => ({
       kind: "music",
@@ -7708,7 +7750,28 @@ async function renderProfileActivities(opts = {}) {
     syncDiscoveryPlayingHighlights();
   } catch {}
   applyFeedSocialStatsToDom(listEl);
-  void hydrateFeedSocialStatsForFeed(listEl);
+  void enrichProfileActivitiesAfterPaint(libRows, feedItems, profMap, listEl);
+  } catch (e) {
+    try {
+      console.warn("[profile/activities]", e);
+    } catch {}
+    if (!listEl.querySelector(".followAct")) {
+      listEl.innerHTML = `
+        <div class="profileActEmpty">
+          <p class="profileActEmptyTitle">Could not load posts</p>
+          <p class="profileActEmptyText">Check your connection and try again.</p>
+          <button type="button" class="emptyStateCta" id="profileActivitiesRetry">Retry</button>
+        </div>`;
+      const retry = document.getElementById("profileActivitiesRetry");
+      if (retry && !retry.dataset.boundProfileActRetry) {
+        retry.dataset.boundProfileActRetry = "1";
+        retry.addEventListener("click", () => {
+          invalidateProfileActivitiesCache();
+          void renderProfileActivities({ force: true });
+        });
+      }
+    }
+  }
 }
 
 function normalizeStatusWaveformPeaks(raw) {

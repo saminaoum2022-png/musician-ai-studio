@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618routePerf1";
+const APP_BUILD = "20260618routePerf2";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2388,18 +2388,31 @@ function triggerTabRefresh(route) {
 function attachTabRefresh() {
   const tabs = document.querySelectorAll(".mobileTabbar a[data-route-link]");
   tabs.forEach((a) => {
+    if (a.dataset.tabNavBound) return;
+    a.dataset.tabNavBound = "1";
     a.addEventListener("click", (e) => {
-      const route = a.getAttribute("data-route-link") || "";
+      const route = tabBarRouteKey(a.getAttribute("data-route-link") || "");
       if (!TAB_REFRESH_ACTIONS[route]) return;
-      const current = document.body.getAttribute("data-route") || "";
-      if (route !== current) return;
-      // Already on this route → treat the tap as a refresh trigger.
-      // Stop the link navigation so the hashchange handler doesn't
-      // also fire (which would re-render the route from scratch and
-      // cause a double-flash on top of our scoped refresh).
-      e.preventDefault();
-      e.stopPropagation();
-      void triggerTabRefresh(route);
+      const current = tabBarRouteKey(document.body.getAttribute("data-route") || "");
+      const hashRoute = hashRouteKey();
+
+      if (route === current && route === hashRoute) {
+        e.preventDefault();
+        e.stopPropagation();
+        void triggerTabRefresh(route);
+        return;
+      }
+
+      if (route === hashRoute && route !== current) {
+        e.preventDefault();
+        e.stopPropagation();
+        syncRoutePanelVisibility(route);
+        scheduleApplyRoute();
+        return;
+      }
+
+      syncRoutePanelVisibility(route);
+      scheduleApplyRoute();
     });
   });
 }
@@ -2705,6 +2718,35 @@ function routeApplyFallback(err) {
 let _applyRouteRaf = 0;
 let _applyRouteInFlight = false;
 let _applyRouteQueued = false;
+let _applyRouteAfterLoginSettle = false;
+
+function tabBarRouteKey(route = "") {
+  const r = String(route || "").trim();
+  if (r === "generate" || r === "mashup" || r === "vocal") return "challenges";
+  if (r === "discover-playlist") return "discover";
+  return r;
+}
+
+function previewRouteFromHash(hash = "") {
+  const raw = String(hash || "").replace(/^#\/?/, "");
+  let route = raw.split(/[?#&]/)[0].trim();
+  if (/^u\//.test(route)) return "user";
+  if (route === "search" || /^discover\/playlist\//i.test(route)) return "discover";
+  const aliases = {
+    home: "challenges",
+    sparks: "challenges",
+    moment: "friends",
+    notifications: "activity",
+    library: "profile",
+    more: "settings",
+    start: "intro",
+  };
+  return aliases[route] || route;
+}
+
+function hashRouteKey() {
+  return tabBarRouteKey(previewRouteFromHash(location.hash || ""));
+}
 
 function safeApplyRoute() {
   scheduleApplyRoute();
@@ -2712,7 +2754,10 @@ function safeApplyRoute() {
 
 /** Coalesce hashchange + navigate so applyRoute does not run in a tight loop. */
 function scheduleApplyRoute() {
-  if (isLoginSettling()) return;
+  if (isLoginSettling()) {
+    _applyRouteAfterLoginSettle = true;
+    return;
+  }
   if (_applyRouteRaf) cancelAnimationFrame(_applyRouteRaf);
   _applyRouteRaf = requestAnimationFrame(() => {
     _applyRouteRaf = 0;
@@ -2730,7 +2775,14 @@ async function runApplyRouteOnce() {
   try {
     loadAuthSession();
     ensureAuthSessionUserFromToken();
-    if (!_authBootDone) await ensureAuthBoot();
+    if (!_authBootDone) {
+      const hasToken = Boolean(getSupabaseAuthToken() || authSession?.access_token);
+      if (hasToken) {
+        void ensureAuthBoot({ fast: true });
+      } else {
+        await ensureAuthBoot();
+      }
+    }
     applyRoute();
     try {
       const route = document.body.getAttribute("data-route") || "";
@@ -3146,7 +3198,7 @@ function applyRoute() {
     if (!shouldSkipRouteHeavy("activity")) {
       markRouteHeavy("activity");
       void enterActivityRoute({ reset: prevRoute !== "activity" });
-    } else if (_activityFeedState.items.length) {
+    } else if (!paintActivityFeedSnapshotIfFresh() && _activityFeedState.items.length) {
       renderActivityFeedFromState();
     }
   }
@@ -9480,10 +9532,12 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
       .slice(0, FRIENDS_FEED_LIBRARY_USERS)
       .map((creator) => String(creator?.userId || creator?.user_id || creator?.following_user_id || "").trim())
       .filter(Boolean);
-    const statusPosts = STATUS_POSTS_FEATURE_ENABLED
-      ? await fetchFollowingStatusPosts(40, following)
-      : [];
-    const tracksByUser = await supabaseFetchPublicLibraryForUserIds(libraryUserIds);
+    const [statusPosts, tracksByUser] = await Promise.all([
+      STATUS_POSTS_FEATURE_ENABLED
+        ? fetchFollowingStatusPosts(40, following)
+        : Promise.resolve([]),
+      supabaseFetchPublicLibraryForUserIds(libraryUserIds),
+    ]);
     const tracksNested = libraryUserIds.map((userId) =>
       (tracksByUser.get(userId) || []).map((row) => ({ ...row, userId })),
     );
@@ -9502,16 +9556,20 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
       ...playable.map((t) => t.userId),
       ...statusPosts.map((p) => String(p?.userId || "").trim()).filter(Boolean),
     ];
-    const profMap = await fetchProfilesByUserIdsMap(profIds);
-    if (gen !== _discoveryFollowingGen) return;
-
-    const playCountMap = await fetchDiscoverSongPlayCounts(playable.map((t) => t.id));
+    const [profMap, playCountMap] = await Promise.all([
+      fetchProfilesByUserIdsMap(profIds),
+      playable.length
+        ? fetchDiscoverSongPlayCounts(playable.map((t) => t.id))
+        : Promise.resolve(new Map()),
+    ]);
     if (gen !== _discoveryFollowingGen) return;
     for (const t of playable) {
       t.playCount = playCountMap.get(String(t.id || "")) || 0;
     }
-    await hydrateRemixOriginalsForTracks(playable);
-    await hydrateMashupSourcesForTracks(playable);
+    await Promise.all([
+      hydrateRemixOriginalsForTracks(playable),
+      hydrateMashupSourcesForTracks(playable),
+    ]);
     if (gen !== _discoveryFollowingGen) return;
 
     const feedItems = [
@@ -13166,7 +13224,7 @@ const AUTH_NATIVE_FS_PATH = "NabadAi/auth/session.json";
 const CAP_FS_DIRECTORY_DATA = "DATA";
 let _authBootPromise = null;
 let _authBootDone = false;
-const ROUTE_HEAVY_TTL_MS = 20000;
+const ROUTE_HEAVY_TTL_MS = 45000;
 const _routeHeavyAt = { profile: 0, discover: 0, friends: 0, activity: 0 };
 
 function getCapAuthVaultPlugin() {
@@ -13522,6 +13580,10 @@ function endLoginSettling() {
   if (overlay) {
     overlay.hidden = true;
     overlay.setAttribute("aria-hidden", "true");
+  }
+  if (_applyRouteAfterLoginSettle) {
+    _applyRouteAfterLoginSettle = false;
+    scheduleApplyRoute();
   }
 }
 
@@ -17224,6 +17286,43 @@ function renderNotificationRows(list) {
   }).join("");
 }
 
+const ACTIVITY_FEED_SNAPSHOT_MS = 120000;
+const ACTIVITY_FEED_SNAPSHOT_KEY = "nabad_activity_feed_snap_v1";
+let _activityFeedSnapshot = null;
+
+function hydrateActivityFeedSnapshotFromStorage() {
+  if (_activityFeedSnapshot) return;
+  try {
+    const raw = sessionStorage.getItem(ACTIVITY_FEED_SNAPSHOT_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (parsed?.at && Date.now() - parsed.at < ACTIVITY_FEED_SNAPSHOT_MS && parsed.html) {
+      _activityFeedSnapshot = parsed;
+    }
+  } catch {}
+}
+
+function persistActivityFeedSnapshot(html) {
+  if (!html) return;
+  _activityFeedSnapshot = { at: Date.now(), html };
+  try {
+    sessionStorage.setItem(ACTIVITY_FEED_SNAPSHOT_KEY, JSON.stringify(_activityFeedSnapshot));
+  } catch {}
+}
+
+function paintActivityFeedSnapshotIfFresh() {
+  hydrateActivityFeedSnapshotFromStorage();
+  const snap = _activityFeedSnapshot;
+  if (!snap?.html || Date.now() - snap.at >= ACTIVITY_FEED_SNAPSHOT_MS) return false;
+  if (!els.activityFeed) return false;
+  els.activityFeed.innerHTML = snap.html;
+  if (els.activityStatus) {
+    els.activityStatus.hidden = true;
+    els.activityStatus.textContent = "";
+  }
+  return true;
+}
+
 const ACTIVITY_PAGE_SIZE = 20;
 let _activityFeedState = {
   items: [],
@@ -17742,6 +17841,7 @@ function renderActivityFeedFromState() {
       <h3 class="activityDayLabel">${activityDayLabel(b)}</h3>
       ${collapseActivityRows(grouped[b]).map((n) => activityItemHtml(n)).join("")}
     </section>`).join("");
+  persistActivityFeedSnapshot(feed.innerHTML);
 }
 
 async function fetchActivityBatch() {
@@ -17764,9 +17864,11 @@ async function fetchActivityBatch() {
       if (batch.length < limit) _activityFeedState.hasMore = false;
     }
     renderActivityFeedFromState();
-    await enrichActivitySongArt(_activityFeedState.items);
-    await validateActivityNotificationsAvailability(_activityFeedState.items);
-    renderActivityFeedFromState();
+    void (async () => {
+      await enrichActivitySongArt(_activityFeedState.items);
+      await validateActivityNotificationsAvailability(_activityFeedState.items);
+      renderActivityFeedFromState();
+    })();
     const unread = _activityFeedState.items.filter((n) => !n?.read_at).length;
     if (els.activityLead) {
       els.activityLead.textContent = unread

@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618userPublicAvatarSilhouette";
+const APP_BUILD = "20260618friendsFeedPerf";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -7798,6 +7798,33 @@ async function fetchFollowingListForFeed() {
   return list;
 }
 
+/** Following user ids only — skips the profiles round-trip used by the full list. */
+async function fetchFollowingUserIdsViaSupabase() {
+  const uid = String(authSession?.user?.id || "").trim();
+  if (!uid) return null;
+  const r = await supabaseRestWithAuth(
+    `social_follows?follower_user_id=eq.${encodeURIComponent(uid)}&select=following_user_id&order=created_at.desc&limit=100`,
+  );
+  if (!r || !r.ok) return null;
+  const rows = await r.json().catch(() => []);
+  if (!Array.isArray(rows)) return [];
+  return rows.map((x) => String(x?.following_user_id || "").trim()).filter(Boolean);
+}
+
+async function fetchFollowingUserIdsForFeed() {
+  if (_followingListCache && Date.now() - _followingListCacheAt < FOLLOWING_LIST_CACHE_MS) {
+    return _followingListCache
+      .map((f) => String(f?.userId || f?.user_id || f?.following_user_id || "").trim())
+      .filter(Boolean);
+  }
+  const direct = await fetchFollowingUserIdsViaSupabase();
+  if (direct !== null) return direct;
+  const list = await fetchFollowingListForFeed();
+  return list
+    .map((f) => String(f?.userId || f?.user_id || f?.following_user_id || "").trim())
+    .filter(Boolean);
+}
+
 function invalidateFollowingListCache() {
   _followingListCache = null;
   _followingListCacheAt = 0;
@@ -9307,6 +9334,7 @@ function resetProfileStatsGuestUi() {
   }
 }
 const FRIENDS_FEED_LIBRARY_USERS = 12;
+const FRIENDS_FEED_LIBRARY_SONG_LIMIT = 24;
 
 function hydrateFriendsFeedSnapshotFromStorage() {
   if (_friendsFeedSnapshot) return;
@@ -9367,15 +9395,62 @@ function runFriendsRouteRefresh(token) {
   void refreshDiscoveryFollowingFeed();
 }
 
+function friendsFeedRowsHtml(mergedItems, profMap) {
+  return mergedItems
+    .map((item, i) => (item.kind === "status"
+      ? followingStatusRowHtml(item.post, profMap, i, { xstyle: true })
+      : followingActivityRowHtml(item.track, profMap, i, { xstyle: true })))
+    .join("");
+}
+
+/** Remix pairs, mashup tiles, play counts, and Who-to-follow load after the first paint. */
+async function enrichFriendsFeedAfterPaint({
+  playable,
+  mergedItems,
+  profMap,
+  listEl,
+  followedIds,
+  gen,
+}) {
+  try {
+    const playCountMap = playable.length
+      ? await fetchDiscoverSongPlayCounts(playable.map((t) => t.id))
+      : new Map();
+    if (gen !== _discoveryFollowingGen) return;
+    for (const t of playable) {
+      t.playCount = playCountMap.get(String(t.id || "")) || 0;
+    }
+    await Promise.all([
+      hydrateRemixOriginalsForTracks(playable),
+      hydrateMashupSourcesForTracks(playable),
+    ]);
+    if (gen !== _discoveryFollowingGen) return;
+    if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
+    listEl.innerHTML = friendsFeedRowsHtml(mergedItems, profMap);
+    _discoveryFeedTracks = playable.map((t) => discoveryTrackPlaybackMeta(t, profMap));
+    applyFeedSocialStatsToDom(listEl);
+    try {
+      syncDiscoveryPlayingHighlights();
+    } catch {}
+    void hydrateFeedSocialStatsForFeed(listEl);
+
+    const suggestList = await fetchFollowingEmptySuggestCreators(3, followedIds);
+    if (gen !== _discoveryFollowingGen) return;
+    const wtfHtml = whoToFollowSectionHtml(suggestList);
+    if (wtfHtml) listEl.insertAdjacentHTML("beforeend", wtfHtml);
+    _friendsFeedSnapshot = {
+      at: Date.now(),
+      html: listEl.innerHTML,
+      tracks: _discoveryFeedTracks,
+    };
+    persistFriendsFeedSnapshot();
+  } catch {}
+}
+
 function enterFriendsRoute() {
   const token = ++_friendsRouteEnterToken;
-  void (async () => {
-    if (token !== _friendsRouteEnterToken) return;
-    await ensureFriendsFeedPrerequisites();
-    if (token !== _friendsRouteEnterToken) return;
-    if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
-    runFriendsRouteRefresh(token);
-  })();
+  paintFriendsFeedSnapshotIfFresh();
+  runFriendsRouteRefresh(token);
   if (_friendsStatusComposePending) {
     if (_enterFriendsDebounce) clearTimeout(_enterFriendsDebounce);
     _enterFriendsDebounce = window.setTimeout(() => {
@@ -9530,9 +9605,9 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
   }
 
   try {
-    const following = await fetchFollowingListForFeed();
+    const followingIds = await fetchFollowingUserIdsForFeed();
     if (gen !== _discoveryFollowingGen) return;
-    if (!following.length) {
+    if (!followingIds.length) {
       if (STATUS_POSTS_FEATURE_ENABLED && _friendsOwnPostPin) {
         if (gen !== _discoveryFollowingGen) return;
         const profMap = await fetchProfilesByUserIdsMap([String(authSession.user.id)]);
@@ -9545,36 +9620,39 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
       listEl.classList.remove("isDiscoveryLoading");
       listEl.hidden = true;
       listEl.innerHTML = "";
-      const suggests = await fetchFollowingEmptySuggestCreators(3);
-      const faces = suggests.length
-        ? `<div class="followActEmptyFaces">${suggests
-            .map((c) => {
-              const href = `#/u/${encodeURIComponent(c.handle)}`;
-              const av = c.avatar
-                ? `<img src="${escapeHtml(c.avatar)}" alt="" width="44" height="44" decoding="async" />`
-                : `<span class="followActEmptyFaceFallback">${escapeHtml(c.handle.slice(0, 2).toUpperCase())}</span>`;
-              return `<a class="followActEmptyFace" href="${escapeHtml(href)}" data-route-link="user" title="@${escapeHtml(c.handle)}">${av}</a>`;
-            })
-            .join("")}</div>`
-        : "";
       renderDiscoveryFollowingEmpty(
         statusEl,
         "Follow musicians to see activity",
         "Pick a few creators on Discover — new songs, remixes, and challenges land here.",
-        `${faces}<a class="solid discoveryEmptyCta" href="#/discover" data-route-link="discover">Browse Discover</a>`,
+        `<a class="solid discoveryEmptyCta" href="#/discover" data-route-link="discover">Browse Discover</a>`,
       );
+      void (async () => {
+        const suggests = await fetchFollowingEmptySuggestCreators(3);
+        if (gen !== _discoveryFollowingGen) return;
+        if (!suggests.length) return;
+        const faces = `<div class="followActEmptyFaces">${suggests
+          .map((c) => {
+            const href = `#/u/${encodeURIComponent(c.handle)}`;
+            const av = c.avatar
+              ? `<img src="${escapeHtml(c.avatar)}" alt="" width="44" height="44" decoding="async" />`
+              : `<span class="followActEmptyFaceFallback">${escapeHtml(c.handle.slice(0, 2).toUpperCase())}</span>`;
+            return `<a class="followActEmptyFace" href="${escapeHtml(href)}" data-route-link="user" title="@${escapeHtml(c.handle)}">${av}</a>`;
+          })
+          .join("")}</div>`;
+        const wrap = statusEl.querySelector(".discoveryEmptyWrap");
+        if (!wrap) return;
+        const cta = wrap.querySelector(".discoveryEmptyCta");
+        if (cta) cta.insertAdjacentHTML("beforebegin", faces);
+      })();
       return;
     }
 
-    const libraryUserIds = following
-      .slice(0, FRIENDS_FEED_LIBRARY_USERS)
-      .map((creator) => String(creator?.userId || creator?.user_id || creator?.following_user_id || "").trim())
-      .filter(Boolean);
+    const libraryUserIds = followingIds.slice(0, FRIENDS_FEED_LIBRARY_USERS);
     const [statusPosts, tracksByUser] = await Promise.all([
       STATUS_POSTS_FEATURE_ENABLED
-        ? fetchFollowingStatusPosts(40, following)
+        ? fetchFollowingStatusPosts(40, await fetchFollowingListForFeed())
         : Promise.resolve([]),
-      supabaseFetchPublicLibraryForUserIds(libraryUserIds),
+      supabaseFetchPublicLibraryForUserIds(libraryUserIds, FRIENDS_FEED_LIBRARY_SONG_LIMIT),
     ]);
     const tracksNested = libraryUserIds.map((userId) =>
       (tracksByUser.get(userId) || []).map((row) => ({ ...row, userId })),
@@ -9594,20 +9672,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
       ...playable.map((t) => t.userId),
       ...statusPosts.map((p) => String(p?.userId || "").trim()).filter(Boolean),
     ];
-    const [profMap, playCountMap] = await Promise.all([
-      fetchProfilesByUserIdsMap(profIds),
-      playable.length
-        ? fetchDiscoverSongPlayCounts(playable.map((t) => t.id))
-        : Promise.resolve(new Map()),
-    ]);
-    if (gen !== _discoveryFollowingGen) return;
-    for (const t of playable) {
-      t.playCount = playCountMap.get(String(t.id || "")) || 0;
-    }
-    await Promise.all([
-      hydrateRemixOriginalsForTracks(playable),
-      hydrateMashupSourcesForTracks(playable),
-    ]);
+    const profMap = await fetchProfilesByUserIdsMap(profIds);
     if (gen !== _discoveryFollowingGen) return;
 
     const feedItems = [
@@ -9642,35 +9707,25 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
     statusEl.textContent = "";
     _discoveryFeedTracks = playable.map((t) => discoveryTrackPlaybackMeta(t, profMap));
     listEl.hidden = false;
-    const feedHtml = mergedItems
-      .map((item, i) => (item.kind === "status"
-        ? followingStatusRowHtml(item.post, profMap, i, { xstyle: true })
-        : followingActivityRowHtml(item.track, profMap, i, { xstyle: true })))
-      .join("");
-    // X-style end-of-list "Who to follow": surface 3 musicians the viewer
-    // doesn't already follow. Excludes self + everyone in their following
-    // list so we never recommend somebody they already follow.
-    const followedIds = following
-      .map((f) => String(f?.userId || f?.user_id || f?.following_user_id || "").trim())
-      .filter(Boolean);
-    const suggestList = await fetchFollowingEmptySuggestCreators(3, followedIds);
-    if (gen !== _discoveryFollowingGen) return;
-    const wtfHtml = whoToFollowSectionHtml(suggestList);
-    const fullHtml = `${feedHtml}${wtfHtml}`;
-    listEl.innerHTML = fullHtml;
+    listEl.innerHTML = friendsFeedRowsHtml(mergedItems, profMap);
     _friendsFeedSnapshot = {
       at: Date.now(),
-      html: fullHtml,
+      html: listEl.innerHTML,
       tracks: _discoveryFeedTracks,
     };
     persistFriendsFeedSnapshot();
-    // Apply any stats we already have from a previous fetch, then kick
-    // off a fresh batch fetch to update counts and the liked-state.
     applyFeedSocialStatsToDom(listEl);
-    void hydrateFeedSocialStatsForFeed(listEl);
     try {
       syncDiscoveryPlayingHighlights();
     } catch {}
+    void enrichFriendsFeedAfterPaint({
+      playable,
+      mergedItems,
+      profMap,
+      listEl,
+      followedIds: followingIds,
+      gen,
+    });
   } catch (e) {
     if (gen !== _discoveryFollowingGen) return;
     listEl.classList.remove("isDiscoveryLoading");
@@ -16828,17 +16883,21 @@ async function supabaseFetchPublicLibraryForUserId(userId) {
 }
 
 /** One request for many followed creators' public libraries (Friends feed). */
-async function supabaseFetchPublicLibraryForUserIds(userIds) {
+async function supabaseFetchPublicLibraryForUserIds(userIds, maxRows = null) {
   const ids = [...new Set((userIds || []).map((id) => String(id || "").trim()).filter(Boolean))];
   if (!ids.length) return new Map();
+  const rowLimit = Math.min(
+    120,
+    Math.max(12, Number(maxRows) || ids.length * 12),
+  );
   if (ids.length === 1) {
     return supabaseFetchPublicLibraryRowsForFilter(
       `user_id=eq.${encodeURIComponent(ids[0])}`,
-      12,
+      rowLimit,
     );
   }
   const inList = ids.map((id) => encodeURIComponent(id)).join(",");
-  return supabaseFetchPublicLibraryRowsForFilter(`user_id=in.(${inList})`, ids.length * 12);
+  return supabaseFetchPublicLibraryRowsForFilter(`user_id=in.(${inList})`, rowLimit);
 }
 
 function remixMetaFromSongMeta(meta) {

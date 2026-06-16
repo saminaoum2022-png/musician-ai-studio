@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618routePerf3";
+const APP_BUILD = "20260618routePerf4";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2385,6 +2385,30 @@ function triggerTabRefresh(route) {
   }, 900);
 }
 
+function flushTabRouteNavigation(route, targetHash) {
+  const prev = tabBarRouteKey(document.body.getAttribute("data-route") || "");
+  bumpApplyRouteGeneration();
+  if (prev !== route) invalidateInFlightRouteFeedWork(prev);
+  if (location.hash !== targetHash) {
+    _tabNavFromClick = true;
+    try {
+      location.hash = targetHash.startsWith("#") ? targetHash.slice(1) : targetHash;
+    } catch {
+      location.hash = targetHash;
+    }
+  }
+  syncRoutePanelVisibility(route);
+  if (_applyRouteRaf) {
+    cancelAnimationFrame(_applyRouteRaf);
+    _applyRouteRaf = 0;
+  }
+  if (_applyRouteInFlight) {
+    _applyRouteQueued = true;
+  } else {
+    void runApplyRouteOnce();
+  }
+}
+
 function attachTabRefresh() {
   const tabs = document.querySelectorAll(".mobileTabbar a[data-route-link]");
   tabs.forEach((a) => {
@@ -2405,19 +2429,9 @@ function attachTabRefresh() {
         return;
       }
 
-      // Own navigation: hash must update before applyRoute, or the router still
-      // reads the old tab and reverts the highlight (half-lit Friends icon).
       e.preventDefault();
       e.stopPropagation();
-      if (location.hash !== targetHash) {
-        try {
-          location.hash = targetHash.startsWith("#") ? targetHash.slice(1) : targetHash;
-        } catch {
-          location.hash = targetHash;
-        }
-      }
-      syncRoutePanelVisibility(route);
-      scheduleApplyRoute();
+      flushTabRouteNavigation(route, targetHash);
     });
   });
 }
@@ -2724,6 +2738,26 @@ let _applyRouteRaf = 0;
 let _applyRouteInFlight = false;
 let _applyRouteQueued = false;
 let _applyRouteAfterLoginSettle = false;
+let _applyRouteGen = 0;
+let _tabNavFromClick = false;
+
+function bumpApplyRouteGeneration() {
+  _applyRouteGen += 1;
+  return _applyRouteGen;
+}
+
+function routeApplyStale(passGen) {
+  return passGen !== _applyRouteGen;
+}
+
+function invalidateInFlightRouteFeedWork(leavingRoute) {
+  const left = tabBarRouteKey(String(leavingRoute || "").trim());
+  if (left === "friends" || left === "discover") {
+    _discoveryFollowingGen += 1;
+    _discoveryFeedGen += 1;
+  }
+  if (left === "friends") _friendsRouteEnterToken += 1;
+}
 
 function tabBarRouteKey(route = "") {
   const r = String(route || "").trim();
@@ -2776,6 +2810,7 @@ function scheduleApplyRoute() {
 
 async function runApplyRouteOnce() {
   if (_applyRouteInFlight) return;
+  const passGen = _applyRouteGen;
   _applyRouteInFlight = true;
   try {
     loadAuthSession();
@@ -2788,13 +2823,15 @@ async function runApplyRouteOnce() {
         await ensureAuthBoot();
       }
     }
-    applyRoute();
+    if (routeApplyStale(passGen)) return;
+    applyRoute({ passGen });
+    if (routeApplyStale(passGen)) return;
     try {
       const route = document.body.getAttribute("data-route") || "";
       if (!shouldHoldBootSplashForRoute(route)) dismissBootSplash();
     } catch {}
   } catch (e) {
-    routeApplyFallback(e);
+    if (!routeApplyStale(passGen)) routeApplyFallback(e);
   } finally {
     _applyRouteInFlight = false;
     if (_applyRouteQueued) {
@@ -2804,7 +2841,8 @@ async function runApplyRouteOnce() {
   }
 }
 
-function applyRoute() {
+function applyRoute({ passGen } = {}) {
+  const gate = passGen ?? _applyRouteGen;
   const hash = String(location.hash || "");
   const rawRoute = hash.startsWith("#/") ? hash.slice(2) : resolveEmptyHashRoute();
   let route = rawRoute.split(/[?#&]/)[0].trim();
@@ -2969,10 +3007,13 @@ function applyRoute() {
   if ((prevRoute === "discover" || prevRoute === "discover-playlist") && wanted !== "discover" && wanted !== "discover-playlist") {
     try { onLeaveSearchRoute(); } catch {}
   }
+  if (routeApplyStale(gate)) return;
+  if (prevRoute !== wanted) invalidateInFlightRouteFeedWork(prevRoute);
   syncRoutePanelVisibility(wanted);
   try {
     _appTourMod?.notifyAppRouteChanged?.(wanted);
   } catch {}
+  if (routeApplyStale(gate)) return;
   if (!shouldHoldBootSplashForRoute(wanted)) {
     try { dismissBootSplash(); } catch {}
   }
@@ -3159,6 +3200,7 @@ function applyRoute() {
     }
     renderProfileSongs({ deferCloud: profileHeavy });
   }
+  if (routeApplyStale(gate)) return;
   if (wanted === "credits" || wanted === "sounds") {
     void refreshMyCredits({ silent: true });
   }
@@ -3517,6 +3559,8 @@ function resetCreateDraft() {
 }
 
 window.addEventListener("hashchange", () => {
+  if (!_tabNavFromClick) bumpApplyRouteGeneration();
+  _tabNavFromClick = false;
   closeCreateChooserSheet({ immediate: true });
   scheduleApplyRoute();
 });

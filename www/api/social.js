@@ -340,10 +340,81 @@ async function resolveSocialTargetOwner(targetKind, targetId) {
   return null;
 }
 
+async function mapWithConcurrency(items, limit, fn) {
+  const out = new Array(items.length);
+  let i = 0;
+  async function worker() {
+    while (i < items.length) {
+      const idx = i++;
+      out[idx] = await fn(items[idx], idx);
+    }
+  }
+  const workers = Array.from({ length: Math.min(limit, items.length) }, () => worker());
+  await Promise.all(workers);
+  return out;
+}
+
+/** Fallback when social_target_stats RPC is not deployed yet. */
+async function fetchTargetStatsForKindFallback(kind, ids, viewerId) {
+  const likeBucket = {};
+  const replyBucket = {};
+  for (const id of ids) {
+    likeBucket[id] = { count: 0, liked: false };
+    replyBucket[id] = { count: 0 };
+  }
+  const viewer = cleanUserId(viewerId);
+  if (viewer && ids.length) {
+    const inList = ids.map((id) => encodeURIComponent(id)).join(",");
+    const likedRows = await svcFetch(
+      `social_likes?select=target_id&target_kind=eq.${encodeURIComponent(kind)}&target_id=in.(${inList})&user_id=eq.${encodeURIComponent(viewer)}&limit=${ids.length}`,
+    );
+    for (const row of Array.isArray(likedRows.data) ? likedRows.data : []) {
+      const id = String(row.target_id || "");
+      if (likeBucket[id]) likeBucket[id].liked = true;
+    }
+  }
+  await mapWithConcurrency(ids, 8, async (id) => {
+    likeBucket[id].count = await countLikesForTarget(kind, id);
+    replyBucket[id].count = await countRepliesForTarget(kind, id);
+  });
+  return { likes: likeBucket, replies: replyBucket };
+}
+
+async function fetchTargetStatsForKind(kind, ids, viewerId) {
+  const uuidIds = (ids || []).map(cleanTargetId).filter(Boolean).slice(0, 64);
+  if (!uuidIds.length) return { likes: {}, replies: {} };
+
+  const viewer = cleanUserId(viewerId) || null;
+  const rpc = await callRpc("social_target_stats", {
+    p_target_kind: kind,
+    p_target_ids: uuidIds,
+    p_viewer_id: viewer,
+  });
+  if (rpc.ok && Array.isArray(rpc.data)) {
+    const likes = {};
+    const replies = {};
+    for (const id of uuidIds) {
+      likes[id] = { count: 0, liked: false };
+      replies[id] = { count: 0 };
+    }
+    for (const row of rpc.data) {
+      const id = String(row?.target_id || "");
+      if (!likes[id]) continue;
+      likes[id] = {
+        count: Math.max(0, Number(row?.like_count) || 0),
+        liked: Boolean(row?.viewer_liked),
+      };
+      replies[id] = { count: Math.max(0, Number(row?.reply_count) || 0) };
+    }
+    return { likes, replies };
+  }
+
+  return fetchTargetStatsForKindFallback(kind, uuidIds, viewer);
+}
+
 /**
- * Batch-fetch like + reply stats for a set of feed items. Splits the ids
- * by kind, hits Supabase REST with one `in.(...)` query per kind, then
- * aggregates counts (and the viewer's own liked-state) in memory.
+ * Batch-fetch like + reply stats for a set of feed items. Uses aggregated
+ * RPC per kind (no limit=10000 row scans).
  */
 async function fetchFeedSocialStats({ songIds, statusIds, echoIds, viewerId }) {
   const stats = {
@@ -355,38 +426,13 @@ async function fetchFeedSocialStats({ songIds, statusIds, echoIds, viewerId }) {
     status: Array.isArray(statusIds) ? statusIds.map(cleanTargetId).filter(Boolean).slice(0, 64) : [],
     echo: Array.isArray(echoIds) ? echoIds.map(cleanTargetId).filter(Boolean).slice(0, 64) : [],
   };
-  const viewer = cleanUserId(viewerId);
 
   await Promise.all(
     Object.entries(idGroups).map(async ([kind, ids]) => {
       if (!ids.length) return;
-      const inList = ids.map((id) => encodeURIComponent(id)).join(",");
-
-      const [likeRows, replyRows] = await Promise.all([
-        svcFetch(
-          `social_likes?select=target_id,user_id&target_kind=eq.${encodeURIComponent(kind)}&target_id=in.(${inList})&limit=10000`,
-        ),
-        svcFetch(
-          `social_replies?select=target_id&target_kind=eq.${encodeURIComponent(kind)}&target_id=in.(${inList})&limit=10000`,
-        ),
-      ]);
-
-      const likeBucket = stats.likes[kind];
-      for (const id of ids) likeBucket[id] = { count: 0, liked: false };
-      for (const row of Array.isArray(likeRows.data) ? likeRows.data : []) {
-        const id = String(row.target_id || "");
-        if (!likeBucket[id]) continue;
-        likeBucket[id].count += 1;
-        if (viewer && cleanUserId(row.user_id) === viewer) likeBucket[id].liked = true;
-      }
-
-      const replyBucket = stats.replies[kind];
-      for (const id of ids) replyBucket[id] = { count: 0 };
-      for (const row of Array.isArray(replyRows.data) ? replyRows.data : []) {
-        const id = String(row.target_id || "");
-        if (!replyBucket[id]) continue;
-        replyBucket[id].count += 1;
-      }
+      const { likes, replies } = await fetchTargetStatsForKind(kind, ids, viewerId);
+      stats.likes[kind] = likes;
+      stats.replies[kind] = replies;
     }),
   );
 
@@ -924,33 +970,56 @@ async function handleGet(req, res, user) {
     const now = Date.now();
     const weekAgoIso = new Date(now - 7 * 86400000).toISOString();
     const twoWeeksAgoIso = new Date(now - 14 * 86400000).toISOString();
-    const [playsR, feedbackR] = await Promise.all([
-      svcFetch(
-        `social_song_plays?select=song_id,created_at&created_at=gte.${encodeURIComponent(twoWeeksAgoIso)}&limit=10000`,
-      ),
-      svcFetch(
-        `social_song_feedback?select=song_id,created_at&created_at=gte.${encodeURIComponent(twoWeeksAgoIso)}&limit=10000`,
-      ),
-    ]);
     const curScore = new Map();
     const curPlays = new Map();
     const prevScore = new Map();
     const bump = (map, sid, w) => map.set(sid, (map.get(sid) || 0) + w);
-    for (const row of Array.isArray(playsR.data) ? playsR.data : []) {
-      const sid = cleanSongId(row?.song_id);
-      if (!sid) continue;
-      if (String(row?.created_at || "") >= weekAgoIso) {
-        bump(curScore, sid, 1);
-        bump(curPlays, sid, 1);
-      } else {
-        bump(prevScore, sid, 1);
+
+    const weeklyRpc = await callRpc("social_weekly_engagement", {
+      p_two_weeks_ago: twoWeeksAgoIso,
+      p_week_ago: weekAgoIso,
+    });
+    if (weeklyRpc.ok && Array.isArray(weeklyRpc.data)) {
+      for (const row of weeklyRpc.data) {
+        const sid = cleanSongId(row?.song_id);
+        if (!sid) continue;
+        const curP = Math.max(0, Number(row?.cur_plays) || 0);
+        const prevP = Math.max(0, Number(row?.prev_plays) || 0);
+        const curF = Math.max(0, Number(row?.cur_feedback) || 0);
+        const prevF = Math.max(0, Number(row?.prev_feedback) || 0);
+        const curS = curP + curF * 2;
+        const prevS = prevP + prevF * 2;
+        if (curS > 0) curScore.set(sid, curS);
+        if (curP > 0) curPlays.set(sid, curP);
+        if (prevS > 0) prevScore.set(sid, prevS);
       }
-    }
-    for (const row of Array.isArray(feedbackR.data) ? feedbackR.data : []) {
-      const sid = cleanSongId(row?.song_id);
-      if (!sid) continue;
-      if (String(row?.created_at || "") >= weekAgoIso) bump(curScore, sid, 2);
-      else bump(prevScore, sid, 2);
+    } else {
+      // Fallback when RPC not deployed — capped row scan (not limit=10000).
+      const WEEKLY_CHART_ROW_CAP = 2000;
+      const [playsR, feedbackR] = await Promise.all([
+        svcFetch(
+          `social_song_plays?select=song_id,created_at&created_at=gte.${encodeURIComponent(twoWeeksAgoIso)}&order=created_at.desc&limit=${WEEKLY_CHART_ROW_CAP}`,
+        ),
+        svcFetch(
+          `social_song_feedback?select=song_id,created_at&created_at=gte.${encodeURIComponent(twoWeeksAgoIso)}&order=created_at.desc&limit=${WEEKLY_CHART_ROW_CAP}`,
+        ),
+      ]);
+      for (const row of Array.isArray(playsR.data) ? playsR.data : []) {
+        const sid = cleanSongId(row?.song_id);
+        if (!sid) continue;
+        if (String(row?.created_at || "") >= weekAgoIso) {
+          bump(curScore, sid, 1);
+          bump(curPlays, sid, 1);
+        } else {
+          bump(prevScore, sid, 1);
+        }
+      }
+      for (const row of Array.isArray(feedbackR.data) ? feedbackR.data : []) {
+        const sid = cleanSongId(row?.song_id);
+        if (!sid) continue;
+        if (String(row?.created_at || "") >= weekAgoIso) bump(curScore, sid, 2);
+        else bump(prevScore, sid, 2);
+      }
     }
     const rankEntries = (map) => [...map.entries()].sort((a, b) => b[1] - a[1]);
     const curRanked = rankEntries(curScore).slice(0, 20);

@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618profileLoadMoreFix";
+const APP_BUILD = "20260618socialP1Perf";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -8659,6 +8659,7 @@ function followActActionsRowHtml({ kind, targetId, targetUserId, plays } = {}) {
 const _feedSocialStats = new Map();
 let _feedSocialStatsGen = 0;
 let _feedSocialStatsLastFetchAt = 0;
+const FEED_SOCIAL_STATS_MIN_GAP_MS = 30000;
 
 function feedSocialStatsKey(targetKind, targetId) {
   return `${targetKind}:${targetId}`;
@@ -8707,8 +8708,17 @@ function applyFeedSocialStatsToDom(scope) {
  * API and write them into the local map + DOM. Only the freshest call
  * mutates state (gen guard).
  */
-async function hydrateFeedSocialStatsForFeed(listEl) {
+async function hydrateFeedSocialStatsForFeed(listEl, opts = {}) {
   if (!listEl) return;
+  const force = Boolean(opts.force);
+  if (
+    !force &&
+    _feedSocialStatsLastFetchAt &&
+    Date.now() - _feedSocialStatsLastFetchAt < FEED_SOCIAL_STATS_MIN_GAP_MS
+  ) {
+    applyFeedSocialStatsToDom(listEl);
+    return;
+  }
   const rows = listEl.querySelectorAll(".followActActions[data-friends-act-row]");
   const songIds = [];
   const statusIds = [];
@@ -9516,6 +9526,7 @@ function clearSignedInUiCaches() {
   _ownSocialStatsLastUserId = "";
   _ownSocialStatsFollowers = null;
   _ownSocialStatsPlays = null;
+  _ownSocialStatsLastFetchAt = 0;
   _ownSocialStatsInFlight = false;
 }
 
@@ -9600,7 +9611,6 @@ function paintFriendsFeedSnapshotIfFresh() {
     syncDiscoveryPlayingHighlights();
   } catch {}
   applyFeedSocialStatsToDom(listEl);
-  void hydrateFeedSocialStatsForFeed(listEl);
   return true;
 }
 
@@ -9734,10 +9744,10 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
       syncDiscoveryPlayingHighlights();
     } catch {}
     applyFeedSocialStatsToDom(listEl);
-    void hydrateFeedSocialStatsForFeed(listEl);
     if (!force && Date.now() - snap.at < FRIENDS_MIN_FETCH_GAP_MS) {
       return;
     }
+    void hydrateFeedSocialStatsForFeed(listEl);
   } else {
     listEl.classList.add("isDiscoveryLoading");
     listEl.hidden = false;
@@ -19186,6 +19196,8 @@ let _ownSocialStatsInFlight = false;
 let _ownSocialStatsLastUserId = "";
 let _ownSocialStatsFollowers = null;
 let _ownSocialStatsPlays = null;
+let _ownSocialStatsLastFetchAt = 0;
+const OWN_SOCIAL_STATS_MIN_GAP_MS = 30000;
 async function refreshOwnProfileSocialStats({ force = false } = {}) {
   const uid = String(authSession?.user?.id || activeProfile?.id || "").trim();
   if (!uid || uid === "guest") return;
@@ -19193,12 +19205,20 @@ async function refreshOwnProfileSocialStats({ force = false } = {}) {
     _ownSocialStatsLastUserId = uid;
     _ownSocialStatsFollowers = null;
     _ownSocialStatsPlays = null;
+    _ownSocialStatsLastFetchAt = 0;
   }
   if (_ownSocialStatsFollowers != null && els.profileStatPillLikesValue) {
     els.profileStatPillLikesValue.textContent = formatStatCount(_ownSocialStatsFollowers);
   }
   if (_ownSocialStatsPlays != null && els.profileStatPillPublicValue) {
     els.profileStatPillPublicValue.textContent = formatStatCount(_ownSocialStatsPlays);
+  }
+  if (
+    !force &&
+    _ownSocialStatsLastFetchAt &&
+    Date.now() - _ownSocialStatsLastFetchAt < OWN_SOCIAL_STATS_MIN_GAP_MS
+  ) {
+    return;
   }
   if (_ownSocialStatsInFlight && !force) return;
   _ownSocialStatsInFlight = true;
@@ -19208,6 +19228,7 @@ async function refreshOwnProfileSocialStats({ force = false } = {}) {
     const plays = Number(data?.stats?.plays || 0);
     _ownSocialStatsFollowers = followers;
     _ownSocialStatsPlays = plays;
+    _ownSocialStatsLastFetchAt = Date.now();
     if (els.profileStatPillLikesValue) {
       els.profileStatPillLikesValue.textContent = formatStatCount(followers);
     }

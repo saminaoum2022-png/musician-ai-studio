@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618appTourV2e";
+const APP_BUILD = "20260618routePerf1";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2703,6 +2703,8 @@ function routeApplyFallback(err) {
 }
 
 let _applyRouteRaf = 0;
+let _applyRouteInFlight = false;
+let _applyRouteQueued = false;
 
 function safeApplyRoute() {
   scheduleApplyRoute();
@@ -2714,21 +2716,35 @@ function scheduleApplyRoute() {
   if (_applyRouteRaf) cancelAnimationFrame(_applyRouteRaf);
   _applyRouteRaf = requestAnimationFrame(() => {
     _applyRouteRaf = 0;
-    void (async () => {
-      try {
-        loadAuthSession();
-        ensureAuthSessionUserFromToken();
-        if (!_authBootDone) await ensureAuthBoot();
-        applyRoute();
-        try {
-          const route = document.body.getAttribute("data-route") || "";
-          if (!shouldHoldBootSplashForRoute(route)) dismissBootSplash();
-        } catch {}
-      } catch (e) {
-        routeApplyFallback(e);
-      }
-    })();
+    if (_applyRouteInFlight) {
+      _applyRouteQueued = true;
+      return;
+    }
+    void runApplyRouteOnce();
   });
+}
+
+async function runApplyRouteOnce() {
+  if (_applyRouteInFlight) return;
+  _applyRouteInFlight = true;
+  try {
+    loadAuthSession();
+    ensureAuthSessionUserFromToken();
+    if (!_authBootDone) await ensureAuthBoot();
+    applyRoute();
+    try {
+      const route = document.body.getAttribute("data-route") || "";
+      if (!shouldHoldBootSplashForRoute(route)) dismissBootSplash();
+    } catch {}
+  } catch (e) {
+    routeApplyFallback(e);
+  } finally {
+    _applyRouteInFlight = false;
+    if (_applyRouteQueued) {
+      _applyRouteQueued = false;
+      scheduleApplyRoute();
+    }
+  }
 }
 
 function applyRoute() {
@@ -3025,7 +3041,8 @@ function applyRoute() {
     }
     bindProfileSongsSegmentOnce();
     syncProfileSongsSegmentUi();
-    renderProfileSongs();
+    const profileHeavy = !shouldSkipRouteHeavy("profile");
+    if (profileHeavy) markRouteHeavy("profile");
     if (/persona=1|voices=1/i.test(rawRouteQuery)) {
       setProfilePersonaExpanded(true);
       setProfilePersonaVoicesOpen(true);
@@ -3040,8 +3057,6 @@ function applyRoute() {
     }
     setProfileEditing(false);
     try { syncMobileTabbarProfileAvatar(); } catch {}
-    const profileHeavy = !shouldSkipRouteHeavy("profile");
-    if (profileHeavy) markRouteHeavy("profile");
     if (profileHeavy) {
       markLibraryTabDot(false);
       if (authSession?.user?.id) {
@@ -3074,7 +3089,7 @@ function applyRoute() {
           try {
             const merged = await mergeActiveProfileFromCloud();
             if (merged) {
-              renderProfileSongs();
+              renderProfileSongs({ deferCloud: true });
               void ensurePersonalizedUsernameSyncedToCloud();
             }
           } catch {}
@@ -3085,6 +3100,7 @@ function applyRoute() {
       try { setProfileHeaderLoading(false); } catch {}
       try { renderProfilePreviewFromInputs(); } catch {}
     }
+    renderProfileSongs({ deferCloud: profileHeavy });
   }
   if (wanted === "credits" || wanted === "sounds") {
     void refreshMyCredits({ silent: true });
@@ -3095,10 +3111,11 @@ function applyRoute() {
     wireFriendsComposeFabOnce();
     syncFollowingComposeUi();
     hydrateFriendsFeedSnapshotFromStorage();
-    try { onEnterFriendsRoute(); } catch {}
     if (!shouldSkipRouteHeavy("friends")) {
       markRouteHeavy("friends");
       enterFriendsRoute();
+    } else {
+      paintFriendsFeedSnapshotIfFresh();
     }
   }
   if (wanted === "discover") {
@@ -3126,7 +3143,12 @@ function applyRoute() {
   }
   if (wanted === "activity") {
     bindActivityPageOnce();
-    void enterActivityRoute({ reset: prevRoute !== "activity" });
+    if (!shouldSkipRouteHeavy("activity")) {
+      markRouteHeavy("activity");
+      void enterActivityRoute({ reset: prevRoute !== "activity" });
+    } else if (_activityFeedState.items.length) {
+      renderActivityFeedFromState();
+    }
   }
   if (wanted === "mashup") {
     bindMashupPageOnce();
@@ -3482,6 +3504,7 @@ void loadAppTourModule()
   .then((m) => {
     m.initAppTour({
       applyRoute,
+      scheduleApplyRoute,
       haptic,
       showToast,
       shouldOfferHomeTour: () => shouldSkipIntroOrOnboardingRoute(),
@@ -7536,7 +7559,7 @@ async function renderProfileActivities(opts = {}) {
     !snap.html.includes("followAct--skel");
   if (snapFresh && !hadFeed) listEl.innerHTML = snap.html;
   else if (!hadFeed && !snapFresh) listEl.innerHTML = followingActivitySkeletonHtml();
-  void mergeCloudSongsIntoLocalLibrary();
+  if (!opts.deferCloud) void mergeCloudSongsIntoLocalLibrary();
   const snapStillValid =
     Boolean(_profileActSnapshot) &&
     snapFresh &&
@@ -9215,6 +9238,36 @@ function persistFriendsFeedSnapshot() {
   } catch {}
 }
 
+function paintFriendsFeedSnapshotIfFresh() {
+  const listEl = document.getElementById("discoveryFollowingList");
+  const statusEl = document.getElementById("discoveryFollowingStatus");
+  if (!listEl || !statusEl) return false;
+  hydrateFriendsFeedSnapshotFromStorage();
+  const snap = _friendsFeedSnapshot;
+  const snapFresh =
+    snap &&
+    Date.now() - snap.at < FRIENDS_FEED_SNAPSHOT_MS &&
+    snap.html &&
+    !snap.html.includes("followAct--skel") &&
+    (!STATUS_POSTS_FEATURE_ENABLED || !snap.html.includes("followAct--status"));
+  if (!snapFresh) return false;
+  listEl.classList.remove("isDiscoveryLoading");
+  listEl.hidden = false;
+  listEl.innerHTML = snap.html;
+  statusEl.hidden = true;
+  statusEl.textContent = "";
+  if (Array.isArray(snap.tracks)) _discoveryFeedTracks = snap.tracks;
+  try {
+    syncDiscoveryPlayingHighlights();
+  } catch {}
+  applyFeedSocialStatsToDom(listEl);
+  void hydrateFeedSocialStatsForFeed(listEl);
+  return true;
+}
+
+let _friendsFeedRefreshInFlight = false;
+let _friendsFeedRefreshQueued = false;
+
 function runFriendsRouteRefresh(token) {
   if (token !== _friendsRouteEnterToken) return;
   if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
@@ -9223,10 +9276,6 @@ function runFriendsRouteRefresh(token) {
 
 function enterFriendsRoute() {
   const token = ++_friendsRouteEnterToken;
-  bindFriendsPageOnce();
-  wireFriendsComposeFabOnce();
-  syncFollowingComposeUi();
-  hydrateFriendsFeedSnapshotFromStorage();
   try {
     onEnterFriendsRoute();
   } catch {}
@@ -9269,6 +9318,12 @@ function wireFriendsComposeFabOnce() {
 }
 
 async function refreshDiscoveryFollowingFeed(opts = {}) {
+  if (_friendsFeedRefreshInFlight) {
+    if (opts.force) _friendsFeedRefreshQueued = true;
+    return;
+  }
+  _friendsFeedRefreshInFlight = true;
+  try {
   const force = Boolean(opts.force);
   const gen = ++_discoveryFollowingGen;
   hydrateFriendsFeedSnapshotFromStorage();
@@ -9348,7 +9403,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
       if (authSession?.user?.id) {
         _friendsFeedAuthRetry = 0;
         /* fall through — session hydrated after login */
-      } else if (_friendsFeedAuthRetry < 12) {
+      } else if (_friendsFeedAuthRetry < 4) {
         _friendsFeedAuthRetry += 1;
         window.setTimeout(() => {
           if (gen !== _discoveryFollowingGen) return;
@@ -9536,8 +9591,15 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
       retry.dataset.boundFriendsRetry = "1";
       retry.addEventListener("click", () => {
         try { haptic("light"); } catch {}
-        void refreshDiscoveryFollowingFeed();
+        void refreshDiscoveryFollowingFeed({ force: true });
       });
+    }
+  }
+  } finally {
+    _friendsFeedRefreshInFlight = false;
+    if (_friendsFeedRefreshQueued) {
+      _friendsFeedRefreshQueued = false;
+      void refreshDiscoveryFollowingFeed(opts);
     }
   }
 }
@@ -13105,7 +13167,7 @@ const CAP_FS_DIRECTORY_DATA = "DATA";
 let _authBootPromise = null;
 let _authBootDone = false;
 const ROUTE_HEAVY_TTL_MS = 20000;
-const _routeHeavyAt = { profile: 0, discover: 0, friends: 0 };
+const _routeHeavyAt = { profile: 0, discover: 0, friends: 0, activity: 0 };
 
 function getCapAuthVaultPlugin() {
   return window?.Capacitor?.Plugins?.AuthVault || null;
@@ -17702,10 +17764,9 @@ async function fetchActivityBatch() {
       if (batch.length < limit) _activityFeedState.hasMore = false;
     }
     renderActivityFeedFromState();
-    const enriched = await enrichActivitySongArt(_activityFeedState.items);
-    if (enriched) renderActivityFeedFromState();
-    const validated = await validateActivityNotificationsAvailability(_activityFeedState.items);
-    if (validated) renderActivityFeedFromState();
+    await enrichActivitySongArt(_activityFeedState.items);
+    await validateActivityNotificationsAvailability(_activityFeedState.items);
+    renderActivityFeedFromState();
     const unread = _activityFeedState.items.filter((n) => !n?.read_at).length;
     if (els.activityLead) {
       els.activityLead.textContent = unread
@@ -21036,10 +21097,14 @@ async function refreshDiscoverFeed() {
   const rail = document.getElementById("discoverySpotlightRail");
   if (!statusEl || !listEl) return;
   if (spotlightWrap) spotlightWrap.hidden = true;
-  paintDiscoverTopSectionsLoading();
-  listEl.classList.add("isDiscoveryLoading");
-  listEl.hidden = false;
-  listEl.innerHTML = `<div class="discoveryDiscoverGrid discoveryDiscoverGrid--loading">${Array.from({ length: 4 }, () => `
+  const hadWarmGrid =
+    _discoveryFeedTracks.length > 0 &&
+    listEl.querySelector(".discoveryDiscoverGrid:not(.discoveryDiscoverGrid--loading)");
+  if (!hadWarmGrid) {
+    paintDiscoverTopSectionsLoading();
+    listEl.classList.add("isDiscoveryLoading");
+    listEl.hidden = false;
+    listEl.innerHTML = `<div class="discoveryDiscoverGrid discoveryDiscoverGrid--loading">${Array.from({ length: 4 }, () => `
       <div class="discoverySkeletonSpotCard" aria-hidden="true">
         <div class="discoverySkeletonSpotFill"></div>
         <div class="discoverySkeletonSpotFooter">
@@ -21047,6 +21112,7 @@ async function refreshDiscoverFeed() {
           <div class="discoverySkeletonLine short"></div>
         </div>
       </div>`).join("")}</div>`;
+  }
   statusEl.textContent = "";
   statusEl.hidden = true;
 
@@ -21109,25 +21175,19 @@ async function refreshDiscoverFeed() {
     // Play counts are nice-to-have — don't block the grid on another API hop.
     void fetchDiscoverSongPlayCounts(playable.map((t) => t.id)).then((playCountMap) => {
       if (gen !== _discoveryFeedGen) return;
+      const cards = listEl.querySelectorAll(".discoveryFeedCardWrap");
       let changed = false;
-      for (const t of playable) {
+      for (let i = 0; i < playable.length; i += 1) {
+        const t = playable[i];
         const n = playCountMap.get(String(t.id || "")) || 0;
-        if ((t.playCount || 0) !== n) {
-          t.playCount = n;
-          changed = true;
-        }
+        if ((t.playCount || 0) === n) continue;
+        t.playCount = n;
+        changed = true;
+        const chip = cards[i]?.querySelector(".discoveryFeedCardPlays");
+        if (chip) chip.innerHTML = discoveryPlayCountChipHtml(t);
       }
       if (!changed) return;
-      _discoveryFeedTracks = playable.map((t) => discoveryTrackPlaybackMeta(t, profMap));
-      listEl.innerHTML = `<div class="discoveryDiscoverGrid" role="list">${playable
-        .map((t, i) => discoveryFeedCardHtml(t, profMap, i))
-        .join("")}</div>`;
-      try {
-        wireDiscoverySpotCardImages(listEl);
-      } catch {}
-      try {
-        syncDiscoveryPlayingHighlights();
-      } catch {}
+      _discoveryFeedTracks = playable.map((t) => discoveryTrackPlaybackMeta(t, _discoveryLastProfMap));
     });
     if (_discoverSearchOpen) {
       const input = document.getElementById("searchInput");
@@ -25541,7 +25601,8 @@ function bindProfileSongsSegmentOnce() {
   }
 }
 
-function renderProfileSongs() {
+function renderProfileSongs(opts = {}) {
+  const deferCloud = Boolean(opts.deferCloud);
   const route = document.body.getAttribute("data-route") || "";
   if (route !== "profile") {
     renderLibrary();
@@ -25551,18 +25612,13 @@ function renderProfileSongs() {
   const actList = document.getElementById("profileActivitiesList");
   const libEl = document.getElementById("libraryList");
   if (_profileSongsSegment === "activities") {
-    void renderProfileActivities({ force: !loadLibrary().length });
+    void renderProfileActivities({ force: !loadLibrary().length, deferCloud });
     return;
   }
   if (actList) actList.hidden = true;
   if (libEl) libEl.hidden = false;
   if (_profileSongsSegment === "all") {
     try { renderProfileOwnStats(); } catch {}
-    if (authSession?.user?.id) {
-      const hadLocal = loadLibrary().length > 0;
-      void mergeCloudSongsIntoLocalLibrary().then(() => renderLibrary());
-      if (!hadLocal) return;
-    }
     renderLibrary();
   }
 }
@@ -35506,17 +35562,11 @@ if (els.btnSoundGenerate) {
     }
   });
 }
-// Pull the latest Library state from Supabase whenever the user opens
-// the Library tab. Throttled inside the function so a rapid tab toggle
-// doesn't hammer the API. localStorage stays the immediate source of
-// truth for the first paint; this just merges new rows from other
-// devices once they arrive.
+// Profile library cloud merge runs from applyRoute — avoid a second fetch on hashchange.
 window.addEventListener("hashchange", () => {
   const route = document.body.getAttribute("data-route") || "";
   if (route !== "profile" || _profileSongsSegment !== "all") return;
-  // Paint from memory/localStorage first; cloud reconcile hits
-  // the network and merges — scheduling it for idle keeps the route swap
-  // feeling instant on slower phones.
+  if (shouldSkipRouteHeavy("profile")) return;
   const run = () => void reconcileLibraryFromCloud();
   if (typeof requestIdleCallback === "function") {
     requestIdleCallback(run, { timeout: 2500 });

@@ -516,12 +516,17 @@ function ensureStepRoute(stepDef) {
   const needNav = currentAppRoute() !== route;
   if (needNav) {
     _tourNavigating = true;
+    const target = routeHashFor(route);
+    const prevHash = String(location.hash || "");
     try {
-      location.hash = routeHashFor(route);
+      location.hash = target;
     } catch {}
-    try {
-      _deps?.applyRoute?.();
-    } catch {}
+    if (String(location.hash || "") === prevHash) {
+      try {
+        if (_deps?.scheduleApplyRoute) _deps.scheduleApplyRoute();
+        else _deps?.applyRoute?.();
+      } catch {}
+    }
   }
   getTour().prepare?.();
   return new Promise((resolve) => {
@@ -602,9 +607,6 @@ export function replayHomeTour() {
   try {
     location.hash = "#/challenges";
   } catch {}
-  try {
-    _deps?.applyRoute?.();
-  } catch {}
   window.requestAnimationFrame(() => {
     ensureHomePanelForTour();
     if (_open) renderTourStep();
@@ -626,9 +628,6 @@ export function replayPersonaTour() {
   }
   try {
     location.hash = "#/challenges";
-  } catch {}
-  try {
-    _deps?.applyRoute?.();
   } catch {}
   ensureHomePanelForTour();
   void ensureStepRoute(PERSONA_TOUR_STEPS[0]).then(() => renderTourStep());

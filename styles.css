@@ -13928,6 +13928,25 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   display: block;
   box-sizing: border-box;
 }
+.userPublicAvatar[data-empty="true"]{
+  visibility: hidden;
+  opacity: 0;
+}
+.userPublicAvatarFallback{
+  position: absolute;
+  inset: 2px;
+  z-index: 2;
+  border-radius: inherit;
+  display: none;
+  box-sizing: border-box;
+}
+.userPublicAvatar[data-empty="true"] + .userPublicAvatarFallback{
+  display: flex;
+}
+.userPublicAvatarWrap .userPublicAvatarFallback.activityAvatarSilhouette svg{
+  width: 44px;
+  height: 44px;
+}
 .userPublic[data-loading="true"] .userPublicAvatar{
   opacity: 0.42;
   filter: saturate(0.7);
@@ -13935,6 +13954,20 @@ body[data-route="user"] section.card.wide[data-route="user"]{
     linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.13) 50%, rgba(255,255,255,0.04) 100%),
     rgba(255,255,255,0.035);
   background-size: 200% 100%;
+  animation: profileSkelShimmer 1.25s ease-in-out infinite;
+}
+.userPublic[data-loading="true"] .userPublicAvatar[data-empty="true"]{
+  visibility: hidden;
+  opacity: 0;
+  animation: none;
+}
+.userPublic[data-loading="true"] .userPublicAvatarFallback{
+  display: flex;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.13) 50%, rgba(255,255,255,0.04) 100%),
+    linear-gradient(150deg, rgba(124,92,255,0.30), rgba(34,211,238,0.14)),
+    rgba(255,255,255,0.05);
+  background-size: 200% 100%, auto, auto;
   animation: profileSkelShimmer 1.25s ease-in-out infinite;
 }
 .userPublicMeta{
@@ -14188,6 +14221,7 @@ body[data-route="user"] section.card.wide[data-route="user"]{
 }
 @media (prefers-reduced-motion: reduce){
   .userPublic[data-loading="true"] .userPublicAvatar,
+  .userPublic[data-loading="true"] .userPublicAvatarFallback,
   .userPublicSkelBlock{
     animation: none !important;
   }

@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618mashupDiscsUi";
+const APP_BUILD = "20260618userPublicAvatarSilhouette";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -17049,16 +17049,42 @@ function userPublicSongsSkeletonHtml(count = 5) {
   `).join("");
 }
 
+function isRealUserAvatarUrl(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return false;
+  return !/nabadai-logo\.png/i.test(s);
+}
+
+/** Other-user profile avatar: real photo when available; person silhouette otherwise — never the app logo. */
+function applyUserPublicAvatar(url, displayName = "") {
+  const img = els.userPublicAvatar;
+  if (!img) return;
+  const normalized = normalizeProfileAvatarForImg(String(url || "").trim());
+  const handle = String(displayName || "").trim();
+  img.onerror = () => {
+    try {
+      img.removeAttribute("src");
+      img.dataset.empty = "true";
+    } catch {}
+  };
+  if (isRealUserAvatarUrl(normalized)) {
+    img.dataset.empty = "false";
+    img.src = normalized;
+    img.alt = handle ? `${handle} avatar` : "Profile avatar";
+  } else {
+    img.removeAttribute("src");
+    img.dataset.empty = "true";
+    img.alt = handle ? `${handle} profile` : "Profile";
+  }
+}
+
 function setUserPublicLoading(on, username = "") {
   const loading = Boolean(on);
   els.userPublicCard?.setAttribute?.("data-loading", loading ? "true" : "false");
   const handle = String(username || "").replace(/^@/, "").trim();
   if (loading) {
     if (els.userPublicName && handle) els.userPublicName.textContent = `@${handle}`;
-    if (els.userPublicAvatar) {
-      els.userPublicAvatar.src = "./assets/nabadai-logo.png";
-      els.userPublicAvatar.alt = handle ? `${handle} profile loading` : "Profile loading";
-    }
+    applyUserPublicAvatar("", handle);
     if (els.userPublicVoice) els.userPublicVoice.style.display = "none";
     if (els.userPublicBio) els.userPublicBio.style.display = "none";
     if (els.userPublicStats) {
@@ -21641,10 +21667,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
   if (!prof?.user_id) {
     if (!stillCurrent()) return;
     if (els.userPublicName) els.userPublicName.textContent = handle ? `@${handle}` : "@?";
-    if (els.userPublicAvatar) {
-      els.userPublicAvatar.src = "./assets/nabadai-logo.png";
-      els.userPublicAvatar.alt = "Profile";
-    }
+    applyUserPublicAvatar("", handle);
     if (els.userPublicVoice) els.userPublicVoice.style.display = "none";
     if (els.userPublicBio) {
       els.userPublicBio.textContent = "";
@@ -21675,18 +21698,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
   if (!stillCurrent()) return;
   const displayName = String(prof.username || handle || "user").trim();
   if (els.userPublicName) els.userPublicName.textContent = `@${displayName}`;
-  if (els.userPublicAvatar) {
-    const av = normalizeProfileAvatarForImg(String(prof.avatar || "").trim());
-    els.userPublicAvatar.onerror = () => {
-      try {
-        const logo = "./assets/nabadai-logo.png";
-        const cur = String(els.userPublicAvatar.src || "");
-        if (!cur.includes("nabadai-logo.png")) els.userPublicAvatar.src = logo;
-      } catch {}
-    };
-    els.userPublicAvatar.src = av || "./assets/nabadai-logo.png";
-    els.userPublicAvatar.alt = `${displayName} avatar`;
-  }
+  applyUserPublicAvatar(prof.avatar, displayName);
   if (els.userPublicVoice) {
     const chip = els.userPublicVoice;
     const labelEl = chip.querySelector(".profileAuraVoiceChipText");
@@ -25263,14 +25275,10 @@ function renderUserProfile(rawUsername) {
   const metaUserId = String(latestAny?.meta?.creatorUserId || latestAny?.meta?.creator_user_id || "").trim();
 
   if (els.userPublicName) els.userPublicName.textContent = `@${displayName}`;
-  if (els.userPublicAvatar) {
-    const av =
-      (latestPublic && (latestPublic.artUrl || latestPublic.creatorAvatar)) ||
-      latestAny?.creatorAvatar ||
-      "./assets/nabadai-logo.png";
-    els.userPublicAvatar.src = av;
-    els.userPublicAvatar.alt = `${displayName} avatar`;
-  }
+  applyUserPublicAvatar(
+    latestPublic?.creatorAvatar || latestAny?.creatorAvatar || "",
+    displayName
+  );
   if (els.userPublicVoice) {
     const chip = els.userPublicVoice;
     const labelEl = chip.querySelector(".profileAuraVoiceChipText");

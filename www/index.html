@@ -2109,7 +2109,8 @@
             <div class="userPublicHead">
               <div class="userPublicAvatarWrap profileAuraAvatarWrap profileAuraAvatarWrapNeon" id="userPublicAvatarWrap">
                 <span class="userPublicAvatarRing profileAuraRing profileAuraRingPulse" aria-hidden="true"></span>
-                <img id="userPublicAvatar" class="userPublicAvatar profileAuraAvatar" alt="avatar" draggable="false" />
+                <img id="userPublicAvatar" class="userPublicAvatar profileAuraAvatar" alt="avatar" draggable="false" data-empty="true" />
+                <span id="userPublicAvatarFallback" class="userPublicAvatarFallback activityAvatarSilhouette" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.4" r="3.7" fill="currentColor"/><path d="M4.4 19.6c.9-3.6 4-5.8 7.6-5.8s6.7 2.2 7.6 5.8c.1.5-.3.9-.8.9H5.2c-.5 0-.9-.4-.8-.9Z" fill="currentColor"/></svg></span>
               </div>
               <div class="userPublicMeta">
                 <div class="userPublicNameRow">
@@ -3677,6 +3678,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260618mashupDiscsUi"></script>
+    <script type="module" src="./src/app.js?v=20260618userPublicAvatarSilhouette"></script>
   </body>
 </html>

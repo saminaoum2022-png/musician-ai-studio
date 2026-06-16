@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618playCountPerf";
+const APP_BUILD = "20260618profileActNoFlash";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3159,8 +3159,8 @@ function applyRoute({ passGen } = {}) {
       markLibraryTabDot(false);
       if (authSession?.user?.id) {
         const run = () => {
-          void mergeCloudSongsIntoLocalLibrary().then(() => {
-            try { refreshOwnSongsUi({ soft: false }); } catch {}
+          void mergeCloudSongsIntoLocalLibrary().then((publicChanged) => {
+            if (publicChanged) try { refreshOwnSongsUi({ soft: false }); } catch {}
           });
         };
         if (typeof requestIdleCallback === "function") {
@@ -3187,7 +3187,9 @@ function applyRoute({ passGen } = {}) {
           try {
             const merged = await mergeActiveProfileFromCloud();
             if (merged) {
-              renderProfileSongs({ deferCloud: true });
+              if (_profileSongsSegment === "all") {
+                renderProfileSongs({ deferCloud: true });
+              }
               void ensurePersonalizedUsernameSyncedToCloud();
             }
           } catch {}
@@ -7561,6 +7563,57 @@ function profileActivityRowHtml(post, idx) {
     </article>`;
 }
 
+function profilePublicPostsSig(tracks) {
+  return (tracks || [])
+    .filter((t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile))
+    .map((t) => `${String(t.id || "")}:${libraryTrackPublicTs(t) || Number(t.ts || 0)}`)
+    .sort()
+    .join("|");
+}
+
+function profileActMediaSig(t, profMap) {
+  const mashupOf = mashupAttributionForTrack(t);
+  const a = t._mashupSourceA || mashupSourceFromMetaEntry(mashupOf?.a);
+  const b = t._mashupSourceB || mashupSourceFromMetaEntry(mashupOf?.b);
+  if (mashupOf && a && b) {
+    return `mashup:${String(a.songId || a.url || "")}:${String(b.songId || b.url || "")}`;
+  }
+  const remixOf = remixAttributionForTrack(t);
+  const orig =
+    remixOf && t._remixOriginal && String(t._remixOriginal.url || "").trim() ? t._remixOriginal : null;
+  if (orig) return `remixpair:${String(orig.songId || orig.url || "")}`;
+  return "quote";
+}
+
+/** Patch play counts on feed rows without rebuilding the whole list. */
+function applyFollowActPlayCountsToDom(listEl, tracks) {
+  if (!listEl || !tracks?.length) return { ok: true, needsRebuild: false };
+  let needsRebuild = false;
+  for (const t of tracks) {
+    const sid = String(t?.id || "").trim();
+    if (!sid) continue;
+    const n = Math.max(0, Number(t.playCount) || 0);
+    if (n <= 0) continue;
+    const article = listEl.querySelector(`[data-profile-act-song-id="${sid}"]`);
+    const actRow =
+      article?.querySelector(".followActActions[data-friends-act-row]") ||
+      listEl.querySelector(`.followActActions[data-friends-act-id="${sid}"]`);
+    if (!actRow) {
+      needsRebuild = true;
+      continue;
+    }
+    const playsBtn = actRow.querySelector('[data-friends-act="plays"]');
+    if (!playsBtn) {
+      needsRebuild = true;
+      continue;
+    }
+    const countEl = playsBtn.querySelector(".followActActCount");
+    if (countEl) countEl.textContent = formatStatCount(n);
+    playsBtn.setAttribute("aria-label", `${formatStatCount(n)} plays`);
+  }
+  return { ok: !needsRebuild, needsRebuild };
+}
+
 async function mergeCloudSongsIntoLocalLibrary() {
   if (!authSession?.user?.id) return false;
   syncActiveProfileIdFromSession();
@@ -7583,6 +7636,7 @@ async function mergeCloudSongsIntoLocalLibrary() {
 
   const sigOf = librarySyncSigOf;
   const local = loadLibrary();
+  const prevPublicSig = profilePublicPostsSig(local);
   const localBySig = new Map();
   for (const t of local) localBySig.set(sigOf(t), t);
 
@@ -7617,9 +7671,10 @@ async function mergeCloudSongsIntoLocalLibrary() {
   }
   if (!changed) return false;
   merged.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
+  const nextPublicSig = profilePublicPostsSig(merged);
   saveLibrary(merged);
-  invalidateProfileActivitiesCache();
-  return true;
+  if (prevPublicSig !== nextPublicSig) invalidateProfileActivitiesCache();
+  return prevPublicSig !== nextPublicSig;
 }
 
 function profileSelfProfMap(uid) {
@@ -7634,24 +7689,35 @@ function profileSelfProfMap(uid) {
   return m;
 }
 
-/** Play counts, remix/mashup tiles, and social stats after the first paint. */
-async function enrichProfileActivitiesAfterPaint(libRows, feedItems, profMap, listEl) {
+/** Play counts, remix/mashup tiles after first paint — patch DOM when possible to avoid flash. */
+async function enrichProfileActivitiesAfterPaint(libRows, feedItems, profMap, listEl, enrichGen) {
   if (!listEl || !feedItems.length) return;
+  if (enrichGen !== _profileActEnrichGen) return;
+  const mediaSigBefore = libRows.map((t) => profileActMediaSig(t, profMap)).join("|");
   try {
-    const playCountMap = libRows.length
-      ? await fetchDiscoverSongPlayCounts(libRows.map((t) => t.id))
-      : new Map();
-    for (const t of libRows) {
-      t.playCount = playCountMap.get(String(t.id || "")) || 0;
-    }
-    await Promise.all([
-      hydrateRemixOriginalsForTracks(libRows),
-      hydrateMashupSourcesForTracks(libRows),
+    const [playCountMap] = await Promise.all([
+      libRows.length ? fetchDiscoverSongPlayCounts(libRows.map((t) => t.id)) : Promise.resolve(new Map()),
+      Promise.all([hydrateRemixOriginalsForTracks(libRows), hydrateMashupSourcesForTracks(libRows)]),
     ]);
+    if (enrichGen !== _profileActEnrichGen) return;
     if (
       String(document.body.getAttribute("data-route") || "") !== "profile" ||
       _profileSongsSegment !== "activities"
     ) {
+      return;
+    }
+    for (const t of libRows) {
+      t.playCount = playCountMap.get(String(t.id || "")) || 0;
+    }
+    const mediaSigAfter = libRows.map((t) => profileActMediaSig(t, profMap)).join("|");
+    const structuralChange = mediaSigBefore !== mediaSigAfter;
+    const playPatch = applyFollowActPlayCountsToDom(listEl, libRows);
+    if (!structuralChange && !playPatch.needsRebuild) {
+      try {
+        syncDiscoveryPlayingHighlights();
+      } catch {}
+      applyFeedSocialStatsToDom(listEl);
+      void hydrateFeedSocialStatsForFeed(listEl);
       return;
     }
     listEl.innerHTML = feedItems
@@ -7750,7 +7816,8 @@ async function renderProfileActivities(opts = {}) {
     syncDiscoveryPlayingHighlights();
   } catch {}
   applyFeedSocialStatsToDom(listEl);
-  void enrichProfileActivitiesAfterPaint(libRows, feedItems, profMap, listEl);
+  const enrichGen = ++_profileActEnrichGen;
+  void enrichProfileActivitiesAfterPaint(libRows, feedItems, profMap, listEl, enrichGen);
   } catch (e) {
     try {
       console.warn("[profile/activities]", e);
@@ -8760,7 +8827,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
   }
   if (xstyle) {
     return `
-      <article class="followAct followAct--music followAct--xstyle" data-follow-act="${type}" style="--i:${idx}" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}>
+      <article class="followAct followAct--music followAct--xstyle" data-follow-act="${type}" data-profile-act-song-id="${escapeHtml(String(t.id || ""))}" style="--i:${idx}" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}>
         <a class="followActAvatar" href="${escapeHtml(profileHref)}" data-route-link="user" data-avatar-user-id="${escapeHtml(String(t.userId || ""))}" aria-label="${handle ? `@${escapeHtml(handle)} profile` : "Profile"}">
           <span class="followActAvatarRing" aria-hidden="true"></span>
           ${avatarSrc
@@ -9328,6 +9395,7 @@ const FRIENDS_MIN_FETCH_GAP_MS = 30000;
 const FRIENDS_FEED_SNAPSHOT_KEY = "nabad_friends_feed_snap_v3";
 
 let _profileActSnapshot = null;
+let _profileActEnrichGen = 0;
 const PROFILE_ACT_SNAPSHOT_MS = 120000;
 const PROFILE_ACT_MIN_FETCH_GAP_MS = 45000;
 const PROFILE_ACT_SNAPSHOT_KEY = "nabad_profile_act_snap_v2";

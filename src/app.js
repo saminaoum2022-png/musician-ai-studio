@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618routePerf2";
+const APP_BUILD = "20260618routePerf3";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2395,22 +2395,27 @@ function attachTabRefresh() {
       if (!TAB_REFRESH_ACTIONS[route]) return;
       const current = tabBarRouteKey(document.body.getAttribute("data-route") || "");
       const hashRoute = hashRouteKey();
+      const href = String(a.getAttribute("href") || `#/${route}`).trim();
+      const targetHash = href.startsWith("#") ? href : `#/${href.replace(/^#?\/?/, "")}`;
 
-      if (route === current && route === hashRoute) {
+      if (route === current && hashRoute === route && location.hash === targetHash) {
         e.preventDefault();
         e.stopPropagation();
         void triggerTabRefresh(route);
         return;
       }
 
-      if (route === hashRoute && route !== current) {
-        e.preventDefault();
-        e.stopPropagation();
-        syncRoutePanelVisibility(route);
-        scheduleApplyRoute();
-        return;
+      // Own navigation: hash must update before applyRoute, or the router still
+      // reads the old tab and reverts the highlight (half-lit Friends icon).
+      e.preventDefault();
+      e.stopPropagation();
+      if (location.hash !== targetHash) {
+        try {
+          location.hash = targetHash.startsWith("#") ? targetHash.slice(1) : targetHash;
+        } catch {
+          location.hash = targetHash;
+        }
       }
-
       syncRoutePanelVisibility(route);
       scheduleApplyRoute();
     });

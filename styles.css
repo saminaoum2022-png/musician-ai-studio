@@ -21169,6 +21169,9 @@ body[data-profile-songs-seg="activities"] #libraryRecoverBanner{
 .profileSongsBlock .libraryRecoverBanner{
   margin-bottom: 10px;
 }
+.profileActivitiesList .profileActLoadMoreRow{
+  padding: 8px 0 28px;
+}
 .profileActivitiesList{
   display: flex;
   flex-direction: column;

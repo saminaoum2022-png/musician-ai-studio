@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618profileActPaginate";
+const APP_BUILD = "20260618profileLoadMoreFix";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -7766,22 +7766,32 @@ async function renderProfileActivities(opts = {}) {
     Date.now() - snap.at < PROFILE_ACT_SNAPSHOT_MS &&
     snap.html &&
     !snap.html.includes("followAct--skel");
+  const uid = String(authSession.user.id);
+  const pubNPreview = loadLibrary().filter(
+    (t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile),
+  ).length;
+  const snapHtmlValid = profileActSnapshotValid(snap?.html, pubNPreview);
   if (!extend) {
-    if (snapFresh && !hadFeed) listEl.innerHTML = snap.html;
+    if (snapFresh && snapHtmlValid && !hadFeed) listEl.innerHTML = snap.html;
     else if (!hadFeed && !snapFresh) listEl.innerHTML = followingActivitySkeletonHtml();
   }
   if (!opts.deferCloud) void mergeCloudSongsIntoLocalLibrary();
   const snapStillValid =
     Boolean(_profileActSnapshot) &&
     snapFresh &&
+    snapHtmlValid &&
     !force &&
     !extend &&
     Date.now() - snap.at < PROFILE_ACT_MIN_FETCH_GAP_MS;
   const snapHasPosts = Boolean(
     snap?.html && (snap.html.includes("profileActRow") || snap.html.includes('class="followAct"')),
   );
-  if (snapStillValid && snapHasPosts) return;
-  const uid = String(authSession.user.id);
+  if (snapStillValid && snapHasPosts) {
+    _profileActivitiesShown = Math.max(PROFILE_ACTIVITIES_PAGE_SIZE, countFollowActsInHtml(snap.html));
+    wireProfileActivitiesLoadMoreOnce(listEl);
+    return;
+  }
+  if (!extend) resetProfileActivitiesPagination();
   try {
   const libRows = loadLibrary()
     .filter((t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile))
@@ -7829,7 +7839,6 @@ async function renderProfileActivities(opts = {}) {
   const enrichGen = ++_profileActEnrichGen;
   void enrichProfileActivitiesAfterPaint(visibleLibRows, visibleFeedItems, profMap, listEl, enrichGen);
   wireProfileActivitiesLoadMoreOnce(listEl);
-  observeProfileActivitiesLoadMore(listEl);
   } catch (e) {
     try {
       console.warn("[profile/activities]", e);
@@ -7851,28 +7860,6 @@ async function renderProfileActivities(opts = {}) {
       }
     }
   }
-}
-
-function observeProfileActivitiesLoadMore(listEl) {
-  if (!listEl || typeof IntersectionObserver !== "function") return;
-  const sentinel = listEl.querySelector("[data-profile-act-loadmore-sentinel]");
-  if (!sentinel) {
-    if (_profileActLoadMoreObs) _profileActLoadMoreObs.disconnect();
-    return;
-  }
-  if (!_profileActLoadMoreObs) {
-    _profileActLoadMoreObs = new IntersectionObserver(
-      (entries) => {
-        if (!entries.some((en) => en.isIntersecting)) return;
-        const root = document.getElementById("profileActivitiesList");
-        const loadBtn = root?.querySelector("#profileActivitiesLoadMore");
-        if (loadBtn) loadBtn.click();
-      },
-      { rootMargin: "120px 0px" },
-    );
-  }
-  _profileActLoadMoreObs.disconnect();
-  _profileActLoadMoreObs.observe(sentinel);
 }
 
 function wireProfileActivitiesLoadMoreOnce(listEl) {
@@ -9449,10 +9436,27 @@ let _profileActSnapshot = null;
 let _profileActEnrichGen = 0;
 const PROFILE_ACT_SNAPSHOT_MS = 120000;
 const PROFILE_ACT_MIN_FETCH_GAP_MS = 45000;
-const PROFILE_ACT_SNAPSHOT_KEY = "nabad_profile_act_snap_v2";
+const PROFILE_ACT_SNAPSHOT_KEY = "nabad_profile_act_snap_v3";
 const PROFILE_ACTIVITIES_PAGE_SIZE = 6;
 let _profileActivitiesShown = PROFILE_ACTIVITIES_PAGE_SIZE;
-let _profileActLoadMoreObs = null;
+
+function countFollowActsInHtml(html) {
+  return (String(html || "").match(/class="followAct/g) || []).length;
+}
+
+/** Reject legacy snapshots that dumped the full feed with no Load more row. */
+function profileActSnapshotValid(html, totalPublicPosts) {
+  if (!html || html.includes("followAct--skel")) return false;
+  if (html.includes("profileActEmpty")) return true;
+  const shown = countFollowActsInHtml(html);
+  const hasLoadMore = html.includes("profile-act-loadmore-sentinel");
+  if (totalPublicPosts <= PROFILE_ACTIVITIES_PAGE_SIZE) {
+    return shown === totalPublicPosts;
+  }
+  if (shown > PROFILE_ACTIVITIES_PAGE_SIZE && !hasLoadMore) return false;
+  if (shown >= totalPublicPosts) return !hasLoadMore;
+  return hasLoadMore && shown < totalPublicPosts;
+}
 
 function resetProfileActivitiesPagination() {
   _profileActivitiesShown = PROFILE_ACTIVITIES_PAGE_SIZE;
@@ -9471,6 +9475,7 @@ function profileActivitiesLoadMoreHtml(remaining) {
 function hydrateProfileActSnapshotFromStorage() {
   if (_profileActSnapshot) return;
   try {
+    sessionStorage.removeItem("nabad_profile_act_snap_v2");
     const raw = sessionStorage.getItem(PROFILE_ACT_SNAPSHOT_KEY);
     if (!raw) return;
     const parsed = JSON.parse(raw);

@@ -3812,7 +3812,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "arabic-trend-byte",
     title: "Arabic Trend Byte",
-    style: "modern Arabic pop, TikTok-ready hook, glossy 808s, mahraganat energy, 104 bpm",
+    style: "modern Arabic pop, TikTok-ready hook, glossy 808s, sticky hook energy, 104 bpm",
     lyrics: "[Verse]\nقليل كلام كتير إحساس\nالليلة الصوت بيعمل مزاج\nمن جملة وحدة طلع نغمة\nصارت أغنية على السريع\n\n[Chorus]\nيلا يلا اسمع المقطع\nصغير بس يضرب قوي\nمن الترند للقلب مباشرة\nهيدا هو الترند تبعي",
     prompt: "Turn a tiny Arabic phrase into a trend-sized hook under 20 seconds.",
     tags: ["Arabic", "Trend", "Short"],
@@ -4472,12 +4472,19 @@ function applyDiscoveryIdeaToCreate(idea) {
     return;
   }
   const title = String(idea.title || "New Idea").trim();
+  const useTemplateGuards = shouldApplyTemplateGuards(idea);
   if (els.sunoTitle) els.sunoTitle.value = title;
-  if (els.sunoStyle) els.sunoStyle.value = String(idea.style || "").trim();
+  if (els.sunoStyle) {
+    els.sunoStyle.value = useTemplateGuards
+      ? withTemplateStyleGuard(idea.style)
+      : String(idea.style || "").trim();
+  }
   if (Object.prototype.hasOwnProperty.call(idea, "dialect") && els.sunoDialect) els.sunoDialect.value = String(idea.dialect || "").trim();
   if (Object.prototype.hasOwnProperty.call(idea, "dialectHint") && els.sunoDialectHint) els.sunoDialectHint.value = String(idea.dialectHint || "").trim();
-  if (Object.prototype.hasOwnProperty.call(idea, "avoidTags") && els.sunoAvoidTags) {
-    els.sunoAvoidTags.value = trimAvoidTagsForSuno(String(idea.avoidTags || ""));
+  if (els.sunoAvoidTags && (useTemplateGuards || Object.prototype.hasOwnProperty.call(idea, "avoidTags"))) {
+    els.sunoAvoidTags.value = trimAvoidTagsForSuno(
+      String(idea.avoidTags || (useTemplateGuards ? TEMPLATE_GENERATION_AVOID_TAGS : "")),
+    );
   }
   if (els.sunoPrompt) {
     const body = String(idea.lyrics || idea.prompt || "").trim();
@@ -4776,7 +4783,25 @@ function paintDiscoverTopSectionsLoading() {
 // the same songs; a third rail duplicated entries on Discover.
 /** Suno negative tags for campaign/challenge templates — tames crowd SFX and shouting. */
 const TEMPLATE_GENERATION_AVOID_TAGS =
-  "crowd noise, audience cheering, screaming, shouty vocals, stadium ambience, zaghrouta, mahraganat";
+  "crowd noise, audience cheering, screaming, shouty vocals, stadium ambience, sports sfx, PA announcer, ultras chant, zaghrouta, mahraganat";
+
+/** Appended to template/campaign styles so Suno keeps vocals studio-polished. */
+const TEMPLATE_GENERATION_STYLE_SUFFIX =
+  "studio vocal, polished mix, no crowd sfx or stadium ambience";
+
+function withTemplateStyleGuard(style) {
+  const base = String(style || "").trim();
+  if (!base) return TEMPLATE_GENERATION_STYLE_SUFFIX;
+  if (base.toLowerCase().includes("no crowd sfx")) return base;
+  return `${base}, ${TEMPLATE_GENERATION_STYLE_SUFFIX}`;
+}
+
+function shouldApplyTemplateGuards(idea) {
+  if (!idea || idea.skipTemplateGuards) return false;
+  const id = String(idea.id || "");
+  if (id.startsWith("continue:")) return false;
+  return true;
+}
 
 /** Per-team FIFA taste: language default, dialect, and vibe-specific Suno styles. */
 const CAMPAIGN_TEAM_PROFILES = {
@@ -4788,7 +4813,7 @@ const CAMPAIGN_TEAM_PROFILES = {
     styles: {
       pop: "Moroccan chaabi pop, gnawa accents, modern Maghrebi pop, warm vocal, 100 bpm",
       hiphop: "Moroccan rap, Maghrebi trap groove, confident flow, 94 bpm",
-      chant: "Maghrebi stadium anthem, big drums, handclaps, festive energy, 108 bpm",
+      chant: "Maghrebi victory anthem, big drums, brass accents, polished vocal, 108 bpm",
       dabke: "Moroccan chaabi, gnawa rhythm, festive Maghrebi percussion, 105 bpm",
       heart: "Emotional Maghrebi ballad, oud and strings, cinematic, 88 bpm",
     },
@@ -4801,7 +4826,7 @@ const CAMPAIGN_TEAM_PROFILES = {
     styles: {
       pop: "Algerian raï pop, modern Maghrebi pop, catchy chorus, 102 bpm",
       hiphop: "Algerian rap, Maghrebi trap, confident flow, 94 bpm",
-      chant: "North African stadium anthem, drums and handclaps, 108 bpm",
+      chant: "North African victory anthem, drums and brass, polished vocal, 108 bpm",
       dabke: "Algerian raï groove, darbuka and synth, festive dance rhythm, 106 bpm",
       heart: "Emotional Maghrebi ballad, mandole and strings, 86 bpm",
     },
@@ -4814,7 +4839,7 @@ const CAMPAIGN_TEAM_PROFILES = {
     styles: {
       pop: "Tunisian pop, modern Maghrebi pop, warm vocal, 100 bpm",
       hiphop: "Tunisian rap, North African trap, 92 bpm",
-      chant: "Maghrebi stadium anthem, handclaps and drums, 108 bpm",
+      chant: "Maghrebi victory anthem, drums and brass, polished vocal, 108 bpm",
       dabke: "Tunisian mezoued pop, festive North African rhythm, 104 bpm",
       heart: "Emotional Tunisian ballad, oud and strings, 88 bpm",
     },
@@ -4827,7 +4852,7 @@ const CAMPAIGN_TEAM_PROFILES = {
     styles: {
       pop: "Khaleeji pop, modern Gulf pop, glossy production, warm vocal, 98 bpm",
       hiphop: "Khaleeji hip hop, Gulf trap groove, confident flow, 92 bpm",
-      chant: "Gulf stadium anthem, big drums, polished anthem vocal, 106 bpm",
+      chant: "Gulf victory anthem, big drums, polished anthem vocal, 106 bpm",
       dabke: "Khaleeji folk pop, ardah-style drums, Gulf celebration rhythm, 102 bpm",
       heart: "Emotional Khaleeji ballad, oud and strings, cinematic, 84 bpm",
     },
@@ -4840,7 +4865,7 @@ const CAMPAIGN_TEAM_PROFILES = {
     styles: {
       pop: "Khaleeji pop, modern Gulf pop, warm lead vocal, 98 bpm",
       hiphop: "Khaleeji hip hop, Gulf trap, confident rap, 92 bpm",
-      chant: "Gulf stadium anthem, drums and brass, 106 bpm",
+      chant: "Gulf victory anthem, drums and brass, polished vocal, 106 bpm",
       dabke: "Khaleeji folk pop, traditional Gulf rhythm, festive drums, 102 bpm",
       heart: "Emotional Khaleeji ballad, oud and piano, 84 bpm",
     },
@@ -4853,7 +4878,7 @@ const CAMPAIGN_TEAM_PROFILES = {
     styles: {
       pop: "Egyptian pop, modern Cairo pop, catchy chorus, warm vocal, 104 bpm",
       hiphop: "Egyptian hip hop, shaabi-trap groove, confident flow, 95 bpm",
-      chant: "Egyptian stadium pop anthem, big drums, handclaps, 110 bpm",
+      chant: "Egyptian victory pop anthem, big drums, polished vocal, 110 bpm",
       dabke: "Egyptian shaabi, mizmar and tabla, festive dance rhythm, 104 bpm",
       heart: "Emotional Egyptian ballad, piano and strings, cinematic, 82 bpm",
     },
@@ -4866,7 +4891,7 @@ const CAMPAIGN_TEAM_PROFILES = {
     styles: {
       pop: "Levantine Arabic pop, modern Jordan pop, warm vocal, 102 bpm",
       hiphop: "Levantine Arabic hip hop, clean trap groove, 94 bpm",
-      chant: "Levantine stadium anthem, big drums, handclaps, 108 bpm",
+      chant: "Levantine victory anthem, big drums, polished vocal, 108 bpm",
       dabke: "Levantine dabke, mijwiz, davul and tabla, ktakufti 6/8 dabkeh rhythm, 120 bpm",
       heart: "Emotional Levantine ballad, oud and strings, 84 bpm",
     },
@@ -4879,7 +4904,7 @@ const CAMPAIGN_TEAM_PROFILES = {
     styles: {
       pop: "Iraqi pop, modern Baghdad pop, oud and keyboard, emotional vocal, 100 bpm",
       hiphop: "Iraqi hip hop, Middle Eastern trap, confident flow, 94 bpm",
-      chant: "Iraqi stadium anthem, big drums, festive energy, 108 bpm",
+      chant: "Iraqi victory anthem, big drums, polished vocal, 108 bpm",
       dabke: "Iraqi chobi rhythm, festive Iraqi percussion, dance pop, 110 bpm",
       heart: "Emotional Iraqi ballad, oud and strings, cinematic, 86 bpm",
     },
@@ -4892,7 +4917,7 @@ const CAMPAIGN_TEAM_PROFILES = {
     styles: {
       pop: "Brazilian pop, samba-pop fusion, sunny groove, warm vocal, 104 bpm",
       hiphop: "Brazilian hip hop, funk carioca influence, punchy groove, 96 bpm",
-      chant: "Brazilian stadium anthem, samba drums and brass, 110 bpm",
+      chant: "Brazilian victory anthem, samba drums and brass, polished vocal, 110 bpm",
       dabke: "Samba funk groove, festive Brazilian percussion, dance energy, 112 bpm",
       heart: "Emotional Brazilian ballad, acoustic guitar and strings, 80 bpm",
     },
@@ -4905,7 +4930,7 @@ const CAMPAIGN_TEAM_PROFILES = {
     styles: {
       pop: "Argentine pop rock, Latin pop anthem, passionate vocal, 102 bpm",
       hiphop: "Latin hip hop, Argentine trap, confident flow, 94 bpm",
-      chant: "Latin stadium anthem, big drums and brass, 108 bpm",
+      chant: "Latin victory anthem, big drums and brass, polished vocal, 108 bpm",
       dabke: "Argentine cumbia pop, accordion and festive rhythm, 108 bpm",
       heart: "Emotional Argentine ballad, guitar and strings, cinematic, 84 bpm",
     },
@@ -4918,7 +4943,7 @@ const CAMPAIGN_TEAM_PROFILES = {
     styles: {
       pop: "Latin pop, modern Mexican pop anthem, catchy chorus, 104 bpm",
       hiphop: "Latin hip hop, Mexican trap groove, 96 bpm",
-      chant: "Latin stadium anthem, trumpets and drums, 110 bpm",
+      chant: "Latin victory anthem, trumpets and drums, polished vocal, 110 bpm",
       dabke: "Regional Mexican pop groove, festive Latin percussion, 108 bpm",
       heart: "Emotional Latin ballad, guitar and strings, 82 bpm",
     },
@@ -4931,7 +4956,7 @@ const CAMPAIGN_TEAM_PROFILES = {
     styles: {
       pop: "American pop anthem, glossy production, big chorus, 104 bpm",
       hiphop: "American hip hop, clean trap groove, confident flow, 96 bpm",
-      chant: "American stadium anthem, big drums and brass, 110 bpm",
+      chant: "American victory anthem, big drums and brass, polished vocal, 110 bpm",
       dabke: "American pop-rock groove, four-on-the-floor, festive energy, 112 bpm",
       heart: "Emotional American ballad, piano and strings, cinematic, 84 bpm",
     },
@@ -4944,7 +4969,7 @@ const CAMPAIGN_TEAM_PROFILES = {
     styles: {
       pop: "UK pop rock anthem, driving drums, catchy chorus, 102 bpm",
       hiphop: "UK hip hop, grime-influenced trap, confident flow, 94 bpm",
-      chant: "British stadium anthem, drums and handclaps, 108 bpm",
+      chant: "British victory anthem, drums and brass, polished vocal, 108 bpm",
       dabke: "Brit pop groove, indie-rock energy, upbeat rhythm, 110 bpm",
       heart: "Emotional UK ballad, piano and strings, 82 bpm",
     },
@@ -4957,7 +4982,7 @@ const CAMPAIGN_TEAM_PROFILES = {
     styles: {
       pop: "French pop, modern variété pop, elegant vocal, 100 bpm",
       hiphop: "French hip hop, Parisian trap groove, 92 bpm",
-      chant: "French stadium anthem, brass and drums, 106 bpm",
+      chant: "French victory anthem, brass and drums, polished vocal, 106 bpm",
       dabke: "French pop groove, disco-house accents, festive rhythm, 108 bpm",
       heart: "Emotional French ballad, piano and strings, cinematic, 80 bpm",
     },
@@ -4970,7 +4995,7 @@ const CAMPAIGN_TEAM_PROFILES = {
     styles: {
       pop: "German pop rock, modern Deutsch pop, anthemic chorus, 102 bpm",
       hiphop: "German hip hop, European trap, confident flow, 94 bpm",
-      chant: "German stadium anthem, big drums and brass, 108 bpm",
+      chant: "German victory anthem, big drums and brass, polished vocal, 108 bpm",
       dabke: "Deutsch pop groove, electronic pop pulse, festive energy, 110 bpm",
       heart: "Emotional German ballad, piano and strings, cinematic, 84 bpm",
     },
@@ -4983,7 +5008,7 @@ const CAMPAIGN_TEAM_PROFILES = {
     styles: {
       pop: "Spanish pop, modern Latin pop, passionate vocal, 104 bpm",
       hiphop: "Spanish hip hop, Latin trap groove, 94 bpm",
-      chant: "Spanish stadium anthem, drums and handclaps, 108 bpm",
+      chant: "Spanish victory anthem, drums and brass, polished vocal, 108 bpm",
       dabke: "Flamenco pop fusion, palmas and festive rhythm, 108 bpm",
       heart: "Emotional Spanish ballad, guitar and strings, 82 bpm",
     },
@@ -4996,7 +5021,7 @@ const CAMPAIGN_TEAM_PROFILES = {
     styles: {
       pop: "Portuguese pop, modern Lisbon pop, warm vocal, 100 bpm",
       hiphop: "Portuguese hip hop, Iberian trap, 92 bpm",
-      chant: "Portuguese stadium anthem, drums and brass, 106 bpm",
+      chant: "Portuguese victory anthem, drums and brass, polished vocal, 106 bpm",
       dabke: "Modern fado-pop groove, Portuguese guitar accents, 104 bpm",
       heart: "Emotional Portuguese ballad, guitar and strings, 78 bpm",
     },
@@ -5009,7 +5034,7 @@ const CAMPAIGN_TEAM_PROFILES = {
     styles: {
       pop: "Italian pop, modern cantautore pop, passionate vocal, 102 bpm",
       hiphop: "Italian hip hop, Mediterranean trap, confident flow, 94 bpm",
-      chant: "Italian stadium anthem, big drums and brass, 108 bpm",
+      chant: "Italian victory anthem, big drums and brass, polished vocal, 108 bpm",
       dabke: "Italo disco-pop groove, festive Mediterranean rhythm, 110 bpm",
       heart: "Emotional Italian ballad, piano and strings, cinematic, 84 bpm",
     },
@@ -5107,23 +5132,23 @@ const LIVE_CAMPAIGN = {
       label: "Hip hop",
       emoji: "🎤",
       style: "clean hip hop, trap groove, punchy 808s, confident vocal, 96 bpm",
-      en: `[Intro]\nYeah… you know whose year this is\n{team}!\n\n[Verse 1]\nWe step on the pitch when the whistle blows\nGreen grass, clear mind, everybody knows\nNumber on the shirt but the name's in the heart\n{team} on the rise — we been ready from the start\n\n[Hook]\n{team} crew, put your scarves in the air\nChampions energy, steady in the stare\nThey can talk, they can doubt, we don't care\nTrophy's coming home — ride it on the snare!`,
-      ar: `[مقدمة]\nاي… مين السنة هيدي؟\n{team}!\n\n[المقطع الأول]\nمنوقف عالملعب والكل عم يحضّر\nالرقم على القميص بس القلب هو المقدّر\n{team} صاعد وما في وقت ننام\nمن أوّل دقيقة والعين عالهدف سام\n\n[الهوك]\nيا جماهير {team} ارفعوا الشالات\nطاقة أبطال ونظرات ثابتة\nخلهم يحكوا ما منسمع كلام\nالكأس جاي لإلنا — قولها معنا عالإيقاع`,
+      en: `[Intro]\nYeah… you know whose year this is\n{team}!\n\n[Verse 1]\nWe step on the pitch when the whistle blows\nEvery step we take, everybody knows\nNumber on the shirt but the name's in the heart\n{team} on the rise — we been ready from the start\n\n[Hook]\n{team} crew, hold your colors high\nChampions energy, steady in the stare\nThey can talk, they can doubt, we don't care\nTrophy's coming home — ride it on the snare!`,
+      ar: `[مقدمة]\nاي… مين السنة هيدي؟\n{team}!\n\n[المقطع الأول]\nمنوقف عالملعب والكل عم يحضّر\nالرقم على القميص بس القلب هو المقدّر\n{team} صاعد وما في وقت ننام\nمن أوّل دقيقة والعين عالهدف سام\n\n[الهوك]\nيا {team} ارفعوا ألوانكم عالي\nطاقة أبطال ونظرات ثابتة\nخلهم يحكوا ما منسمع كلام\nالكأس جاي لإلنا — قولها معنا عالإيقاع`,
     },
     {
       id: "chant",
-      label: "Stadium pulse",
+      label: "Victory pulse",
       emoji: "📣",
-      style: "stadium-inspired pop anthem, big drums, brass stabs, handclaps, polished vocal, 110 bpm",
-      en: `[Intro – drums]\n{team}! {team}! Olé olé olé!\n\n[Verse 1]\nLights on the stadium, hearts beating loud\nMillions of voices, one name in the sound\nWe carried this dream through the years and the rain\nTonight we rise — say it again!\n\n[Chorus]\n{team}, {team} — raise the flag high\nOne heart, one voice, we touch the sky\nWin or lose, we sing as one\n{team} forever — we've already won!\n\n[Bridge – drums only]\nClap on the beat, let the rhythm lead\nThis is our moment, this is our creed`,
-      ar: `[مقدمة – طبول]\n{team}! {team}! أولي أولي أولي!\n\n[المقطع الأول]\nالأضواء عالملعب والقلب عم يدق\nملايين الصوت وباسمك بينطق\nحملنا الحلم سنين وسنين\nهلّق منرفع الراية عالعالي\n\n[اللازمة]\nيا {team} ارفع العلم\nقلب واحد وصوت واحد للقمة\nفزنا أو خسرنا منغني سوا\n{team} للأبد ومعك الهوا\n\n[الجسر – طبول]\nصفّقوا عالإيقاع وخلي اللحن يكمل\nهيدي لحظتنا وهيدا أسلوبنا الحقيقي`,
+      style: "matchday pop anthem, big drums, brass accents, rhythmic handclaps in mix, polished studio vocal, 110 bpm",
+      en: `[Intro – drums]\n{team}! {team}! Here we go!\n\n[Verse 1]\nLights come up, the night feels new\nEvery road we walked led straight to you\nWe carried this dream through the years and the rain\nTonight we rise — say it again!\n\n[Chorus]\n{team}, {team} — raise the flag high\nOne heart, one voice, we touch the sky\nWin or lose, we sing as one\n{team} forever — we've already won!\n\n[Bridge – drums only]\nFeel the beat, let the rhythm lead\nThis is our moment, this is our creed`,
+      ar: `[مقدمة – طبول]\n{team}! {team}! يلا!\n\n[المقطع الأول]\nالأضواء بتطلع والليلة جديدة\nكل طريق مشينا فيه بيوصل لعندك\nحملنا الحلم سنين وسنين\nهلّق منرفع الراية عالعالي\n\n[اللازمة]\nيا {team} ارفع العلم\nقلب واحد وصوت واحد للقمة\nفزنا أو خسرنا منغني سوا\n{team} للأبد ومعك الهوا\n\n[الجسر – طبول]\nحسّوا الإيقاع وخلي اللحن يكمل\nهيدي لحظتنا وهيدا أسلوبنا الحقيقي`,
     },
     {
       id: "dabke",
       label: "Local roots",
       emoji: "🪘",
       style: "regional folk pop, festive local rhythm, upbeat vocal, 115 bpm",
-      en: `[Intro – mijwiz melody]\nHey! Hey! Everybody hold hands!\n\n[Verse 1]\nThe night is ours and the drums are calling\nFlags are flying and the stars are falling\nFrom every street to the stadium floor\nWe dance for {team} — feel the dabke pour!\n\n[Chorus]\nDabke for {team}, stomp the ground\nKtakufti rhythm, turn it around\nHands up high, keep the beat tight\n{team} tonight, this is our night!`,
+      en: `[Intro – mijwiz melody]\nHey! Hey! Everybody hold hands!\n\n[Verse 1]\nThe night is ours and the drums are calling\nFlags are flying and the stars are falling\nFrom every street to the dance floor\nWe dance for {team} — feel the rhythm pour!\n\n[Chorus]\nDabke for {team}, stomp the ground\nKtakufti rhythm, turn it around\nHands up high, keep the beat tight\n{team} tonight, this is our night!`,
       ar: `[مقدمة – مجوز]\nهيه! هيه! كلنا إيد بإيد!\n\n[المقطع الأول]\nالليلة لإلنا والطبل عم بينادي\nالأعلام عالية والفرحة زيادة\nمن كل حارة لأرض الملعب\nمنرقص لـ{team} والإيقاع شباب\n\n[اللازمة]\nدبكة لـ{team} دقّوا عالأرض\nإيقاع كتافتي والدنيا عم تفرّش\nإيدين عالية وصوت مرتاح\n{team} الليلة والفرح صافي`,
     },
     {

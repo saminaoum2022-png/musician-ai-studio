@@ -67,10 +67,11 @@ const PERSONA_TOUR_STEPS = [
     id: "persona-create",
     title: "Use it when you create",
     body: "Before Generate, pick your persona here — or tap + to record a new voice.",
-    target: "#singerPersonaRow",
-    fallbackTarget: "[data-singer-persona-create]",
+    target: "#singerVoicePanel",
+    fallbackTarget: "#singerPersonaRow",
     pad: 8,
     route: "generate",
+    prepareStep: "personaGenerate",
   },
 ];
 
@@ -388,10 +389,19 @@ function ensureTourHintEl() {
   return hint;
 }
 
+function prepareTourStep(stepDef) {
+  const key = String(stepDef?.prepareStep || "").trim();
+  if (!key) return;
+  try {
+    _deps?.onTourStepPrepare?.(_activeTourId, _step, key);
+  } catch {}
+}
+
 function renderTourStep() {
   const steps = getActiveSteps();
   const stepDef = steps[_step];
   if (!stepDef) return;
+  prepareTourStep(stepDef);
   ensureHomeTourDom();
   const kicker = document.getElementById("appTourKicker");
   const title = document.getElementById("appTourTitle");
@@ -479,8 +489,10 @@ function ensureStepRoute(stepDef) {
   } catch {}
   getTour().prepare?.();
   return new Promise((resolve) => {
+    const stepDef = getActiveSteps()[_step];
+    prepareTourStep(stepDef);
     window.requestAnimationFrame(() => {
-      window.setTimeout(resolve, route === "generate" ? 180 : 80);
+      window.setTimeout(resolve, route === "generate" ? 260 : 80);
     });
   });
 }
@@ -593,7 +605,7 @@ function onTourResize() {
 }
 
 /**
- * @param {{ applyRoute: () => void, haptic?: (kind: string) => void, showToast?: Function, shouldOfferHomeTour?: () => boolean }} deps
+ * @param {{ applyRoute: () => void, haptic?: (kind: string) => void, showToast?: Function, shouldOfferHomeTour?: () => boolean, onTourStepPrepare?: (tourId: string, stepIndex: number, key: string) => void }} deps
  */
 export function initAppTour(deps) {
   if (_inited) return;

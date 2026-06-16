@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618appTourV2";
+const APP_BUILD = "20260618appTourV2a";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3482,6 +3482,11 @@ void loadAppTourModule()
       haptic,
       showToast,
       shouldOfferHomeTour: () => shouldSkipIntroOrOnboardingRoute(),
+      onTourStepPrepare(tourId, stepIndex, key) {
+        if (tourId !== "persona" || key !== "personaGenerate") return;
+        try { renderSingerPersonaRow(); } catch {}
+        try { syncSingerGenderPills(); } catch {}
+      },
     });
     const tourSub = document.getElementById("settingsHomeTourSub");
     if (tourSub && m.HOME_TOUR_VERSION) {

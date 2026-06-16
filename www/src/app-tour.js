@@ -14,7 +14,8 @@ const HOME_TOUR_STEPS = [
   {
     id: "create",
     title: "Create a song",
-    body: "Tap here to write lyrics, pick a style, or hum a melody. We handle the rest. Later, add Persona to sing in your own voice.",
+    body: "Tap here to write lyrics, pick a style, or hum a melody. We handle the rest.",
+    hint: "Persona — add your own voice to songs when you're ready.",
     target: '[data-home-card="song"]',
     pad: 10,
   },
@@ -115,6 +116,7 @@ function ensureHomeTourDom() {
       <p id="appTourKicker" class="appTourKicker">Step 1 of 5</p>
       <h3 id="appTourTitle" class="appTourTitle">Welcome</h3>
       <p id="appTourBody" class="appTourBody"></p>
+      <p id="appTourHint" class="appTourHint" hidden></p>
       <div class="appTourProgress" id="appTourProgress" aria-hidden="true"></div>
       <div class="appTourActions">
         <button type="button" class="ghost appTourSkip" id="btnAppTourSkip">Skip tour</button>
@@ -262,6 +264,19 @@ function positionTourUi(stepDef) {
   }
 }
 
+function ensureTourHintEl() {
+  let hint = document.getElementById("appTourHint");
+  if (hint) return hint;
+  const body = document.getElementById("appTourBody");
+  if (!body) return null;
+  hint = document.createElement("p");
+  hint.id = "appTourHint";
+  hint.className = "appTourHint";
+  hint.hidden = true;
+  body.insertAdjacentElement("afterend", hint);
+  return hint;
+}
+
 function renderTourStep() {
   const stepDef = HOME_TOUR_STEPS[_step];
   if (!stepDef) return;
@@ -269,11 +284,17 @@ function renderTourStep() {
   const kicker = document.getElementById("appTourKicker");
   const title = document.getElementById("appTourTitle");
   const body = document.getElementById("appTourBody");
+  const hint = ensureTourHintEl();
   const next = document.getElementById("btnAppTourNext");
   const progress = document.getElementById("appTourProgress");
   if (kicker) kicker.textContent = `Step ${_step + 1} of ${HOME_TOUR_STEPS.length}`;
   if (title) title.textContent = stepDef.title;
   if (body) body.textContent = stepDef.body;
+  if (hint) {
+    const hintText = String(stepDef.hint || "").trim();
+    hint.textContent = hintText;
+    hint.hidden = !hintText;
+  }
   if (next) next.textContent = _step >= HOME_TOUR_STEPS.length - 1 ? "Done" : "Next";
   if (progress) {
     progress.innerHTML = HOME_TOUR_STEPS.map((s, i) =>

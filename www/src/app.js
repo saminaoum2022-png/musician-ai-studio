@@ -18,11 +18,6 @@ import {
   parseOnboardingRoute,
   shouldSkipIntroOrOnboardingRoute,
 } from "./onboarding.js";
-import {
-  initAppTour,
-  replayHomeTour,
-  scheduleHomeTourIfNeeded,
-} from "./app-tour.js";
 import { initTheme } from "./theme.js";
 import {
   applyWarmCrossOriginBeforeSrc,
@@ -35,7 +30,16 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618fifaQa1";
+const APP_BUILD = "20260618appTour5";
+
+/** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
+let _appTourLoad = null;
+function loadAppTourModule() {
+  if (!_appTourLoad) {
+    _appTourLoad = import(`./app-tour.js?v=${APP_BUILD}`);
+  }
+  return _appTourLoad;
+}
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -3111,7 +3115,7 @@ function applyRoute() {
   if (wanted === "challenges") {
     bindChallengesPageOnce();
     renderHomeDesk();
-    scheduleHomeTourIfNeeded();
+    void loadAppTourModule().then((m) => m.scheduleHomeTourIfNeeded());
   }
   if (wanted === "activity") {
     bindActivityPageOnce();
@@ -3467,25 +3471,27 @@ try {
 } catch (e) {
   console.error("[onboarding] init failed", e);
 }
-try {
-  initAppTour({
-    applyRoute,
-    haptic,
-    showToast,
-    shouldOfferHomeTour: () => shouldSkipIntroOrOnboardingRoute(),
-  });
-  const replayHomeTourBtn = document.getElementById("btnSettingsReplayHomeTour");
-  if (replayHomeTourBtn && !replayHomeTourBtn.dataset.bound) {
-    replayHomeTourBtn.dataset.bound = "1";
-    replayHomeTourBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      haptic("light");
-      replayHomeTour();
+void loadAppTourModule()
+  .then((m) => {
+    m.initAppTour({
+      applyRoute,
+      haptic,
+      showToast,
+      shouldOfferHomeTour: () => shouldSkipIntroOrOnboardingRoute(),
     });
-  }
-} catch (e) {
-  console.error("[app-tour] init failed", e);
-}
+    const replayHomeTourBtn = document.getElementById("btnSettingsReplayHomeTour");
+    if (replayHomeTourBtn && !replayHomeTourBtn.dataset.bound) {
+      replayHomeTourBtn.dataset.bound = "1";
+      replayHomeTourBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        haptic("light");
+        void loadAppTourModule().then((mod) => mod.replayHomeTour());
+      });
+    }
+  })
+  .catch((e) => {
+    console.error("[app-tour] init failed", e);
+  });
 try {
   mountFixedOverlaysToBody();
   bindDiscoveryDiscoverControls();

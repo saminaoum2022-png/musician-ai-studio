@@ -30663,11 +30663,23 @@ body.appTourOpen{
   line-height: 1.15;
 }
 .appTourBody{
-  margin: 8px 0 14px;
+  margin: 8px 0 10px;
   font-size: 14px;
   line-height: 1.45;
   color: rgba(220, 228, 250, 0.78);
 }
+.appTourHint{
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(124, 92, 255, 0.32);
+  background: rgba(124, 92, 255, 0.12);
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(236, 230, 255, 0.94);
+  font-weight: 650;
+}
+.appTourHint[hidden]{ display: none !important; }
 .appTourProgress{
   display: flex;
   align-items: center;

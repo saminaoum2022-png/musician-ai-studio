@@ -30540,3 +30540,167 @@ html[data-theme="light"] .createOptionsPill{
   border-color: rgba(15, 23, 40, 0.1);
   color: var(--text);
 }
+
+/* App spotlight tour (home) */
+body.appTourOpen{
+  overflow: hidden !important;
+  touch-action: none;
+}
+.appTour{
+  position: fixed;
+  inset: 0;
+  z-index: 25000;
+  pointer-events: none;
+}
+.appTour[hidden]{ display: none !important; }
+.appTour.isOpen{ pointer-events: auto; }
+.appTourDim{
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 5, 10, 0.08);
+  opacity: 0;
+  transition: opacity 280ms ease;
+}
+.appTour.isOpen .appTourDim{ opacity: 1; }
+.appTourSpot{
+  position: fixed;
+  z-index: 1;
+  pointer-events: none;
+  border: 1.5px solid rgba(124, 92, 255, 0.55);
+  background: rgba(124, 92, 255, 0.06);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 0 9999px rgba(3, 5, 10, 0.84),
+    0 12px 40px rgba(124, 92, 255, 0.18);
+  transition:
+    top 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    left 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-radius 240ms ease;
+}
+.appTourCard{
+  position: fixed;
+  z-index: 2;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  max-width: 420px;
+  margin: 0 auto;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    radial-gradient(110% 72% at 8% 0%, rgba(124, 92, 255, 0.08), transparent 58%),
+    linear-gradient(180deg, rgba(10, 13, 21, 0.98), rgba(5, 7, 13, 0.99));
+  padding: 12px 14px 14px;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transform: translateY(18px);
+  opacity: 0;
+  transition:
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 260ms ease,
+    top 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    left 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.appTour.isOpen .appTourCard{
+  transform: translateY(0);
+  opacity: 1;
+}
+.appTourCard--center{
+  top: auto !important;
+  left: 12px !important;
+  right: 12px !important;
+  bottom: calc(12px + env(safe-area-inset-bottom)) !important;
+  transform: translateY(18px);
+}
+.appTour.isOpen .appTourCard--center{
+  transform: translateY(0);
+}
+.appTourGrab{
+  width: 40px;
+  height: 5px;
+  margin: 2px auto 12px;
+  border-radius: 999px;
+  background: rgba(232, 238, 247, 0.22);
+}
+.appTourKicker{
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(162, 178, 205, 0.78);
+}
+.appTourTitle{
+  margin: 0;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  color: #f6f8ff;
+  line-height: 1.15;
+}
+.appTourBody{
+  margin: 8px 0 14px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: rgba(220, 228, 250, 0.78);
+}
+.appTourProgress{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.appTourDot{
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  transition: background 180ms ease, transform 180ms ease;
+}
+.appTourDot.isActive{
+  background: rgba(124, 92, 255, 0.95);
+  transform: scale(1.15);
+}
+.appTourDot.isDone{
+  background: rgba(35, 213, 171, 0.75);
+}
+.appTourActions{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.appTourSkip{
+  min-height: 42px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-weight: 800;
+}
+.appTourNext{
+  min-height: 42px;
+  min-width: 108px;
+  padding: 0 18px;
+  border-radius: 999px;
+  font-weight: 850;
+  margin-left: auto;
+}
+@media (min-width: 721px){
+  .appTourCard{
+    left: 50%;
+    right: auto;
+    transform: translate(-50%, 18px);
+    width: min(420px, calc(100vw - 24px));
+  }
+  .appTour.isOpen .appTourCard{
+    transform: translate(-50%, 0);
+  }
+  .appTourCard--center{
+    transform: translate(-50%, 18px) !important;
+  }
+  .appTour.isOpen .appTourCard--center{
+    transform: translate(-50%, 0) !important;
+  }
+}

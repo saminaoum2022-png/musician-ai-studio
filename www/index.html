@@ -58,7 +58,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260617fifaTpl" />
+    <link rel="stylesheet" href="./styles.css?v=20260617appTour" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -2915,6 +2915,16 @@
                 </span>
                 <input type="checkbox" id="settingsWarmPlayback" />
               </label>
+              <button class="settingsRow settingsRowLink" type="button" id="btnSettingsReplayHomeTour">
+                <span class="settingsRowIco" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="2.5"/></svg>
+                </span>
+                <span class="settingsRowBody">
+                  <span class="settingsRowTitle">Replay home tour</span>
+                  <span class="settingsRowSub">Walk through Create, templates, Discover, and Profile again.</span>
+                </span>
+                <span class="settingsRowChev" aria-hidden="true">›</span>
+              </button>
               <button class="settingsRow settingsRowLink" type="button" id="btnSettingsReplayOnboarding">
                 <span class="settingsRowIco" aria-hidden="true">
                   <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.3-5.9"/><path d="M17 3v5h-5"/><path d="M20 12a8 8 0 0 1-13.3 5.9"/><path d="M7 21v-5H2"/></svg>
@@ -3016,8 +3026,8 @@
             <div class="campaignSheetSection">
               <p class="campaignSheetLabel">Language</p>
               <div id="campaignLangRow" class="campaignLangRow optChipRow">
-                <button type="button" class="optChip isActive" data-campaign-lang="ar" aria-pressed="true">عربي</button>
-                <button type="button" class="optChip" data-campaign-lang="en" aria-pressed="false">English</button>
+                <button type="button" class="optChip" data-campaign-lang="ar" aria-pressed="false">عربي</button>
+                <button type="button" class="optChip isActive" data-campaign-lang="en" aria-pressed="true">English</button>
               </div>
             </div>
           </div>
@@ -3660,6 +3670,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260617fifaTpl"></script>
+    <script type="module" src="./src/app.js?v=20260617appTour"></script>
   </body>
 </html>

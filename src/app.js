@@ -18,6 +18,11 @@ import {
   parseOnboardingRoute,
   shouldSkipIntroOrOnboardingRoute,
 } from "./onboarding.js";
+import {
+  initAppTour,
+  replayHomeTour,
+  scheduleHomeTourIfNeeded,
+} from "./app-tour.js";
 import { initTheme } from "./theme.js";
 import {
   applyWarmCrossOriginBeforeSrc,
@@ -30,7 +35,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260617fifaTeam";
+const APP_BUILD = "20260617appTour";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -3106,6 +3111,7 @@ function applyRoute() {
   if (wanted === "challenges") {
     bindChallengesPageOnce();
     renderHomeDesk();
+    scheduleHomeTourIfNeeded();
   }
   if (wanted === "activity") {
     bindActivityPageOnce();
@@ -3460,6 +3466,25 @@ try {
   });
 } catch (e) {
   console.error("[onboarding] init failed", e);
+}
+try {
+  initAppTour({
+    applyRoute,
+    haptic,
+    showToast,
+    shouldOfferHomeTour: () => shouldSkipIntroOrOnboardingRoute(),
+  });
+  const replayHomeTourBtn = document.getElementById("btnSettingsReplayHomeTour");
+  if (replayHomeTourBtn && !replayHomeTourBtn.dataset.bound) {
+    replayHomeTourBtn.dataset.bound = "1";
+    replayHomeTourBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      haptic("light");
+      replayHomeTour();
+    });
+  }
+} catch (e) {
+  console.error("[app-tour] init failed", e);
 }
 try {
   mountFixedOverlaysToBody();

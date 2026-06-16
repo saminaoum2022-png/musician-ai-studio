@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618appTourV2d";
+const APP_BUILD = "20260618appTourV2e";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3100,7 +3100,6 @@ function applyRoute() {
       markRouteHeavy("friends");
       enterFriendsRoute();
     }
-    void loadAppTourModule().then((m) => m.scheduleFriendsTourIfNeeded());
   }
   if (wanted === "discover") {
     bindDiscoveryDiscoverControls();
@@ -3504,10 +3503,6 @@ void loadAppTourModule()
     if (personaSub && m.MINI_TOUR_VERSION) {
       personaSub.textContent = `Save your voice and use it when you generate · Mini tour v${m.MINI_TOUR_VERSION}`;
     }
-    const friendsSub = document.getElementById("settingsFriendsTourSub");
-    if (friendsSub && m.MINI_TOUR_VERSION) {
-      friendsSub.textContent = `See your circle and share with followers · Mini tour v${m.MINI_TOUR_VERSION}`;
-    }
     const bindReplay = (id, fn) => {
       const btn = document.getElementById(id);
       if (btn && !btn.dataset.bound) {
@@ -3521,7 +3516,6 @@ void loadAppTourModule()
     };
     bindReplay("btnSettingsReplayHomeTour", "replayHomeTour");
     bindReplay("btnSettingsReplayPersonaTour", "replayPersonaTour");
-    bindReplay("btnSettingsReplayFriendsTour", "replayFriendsTour");
   })
   .catch((e) => {
     console.error("[app-tour] init failed", e);

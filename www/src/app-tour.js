@@ -1,5 +1,5 @@
 /**
- * Spotlight tours — home (5 steps) + v2 mini-tours (Persona, Friends).
+ * Spotlight tours — home (5 steps) + Persona mini-tour.
  */
 
 export const HOME_TOUR_STORAGE_KEY = "nabadai_home_tour_v1_done";
@@ -7,7 +7,6 @@ export const HOME_TOUR_VERSION = "1.2";
 export const MINI_TOUR_VERSION = "2.0";
 
 const PERSONA_TOUR_STORAGE_KEY = "nabadai_persona_tour_v1_done";
-const FRIENDS_TOUR_STORAGE_KEY = "nabadai_friends_tour_v1_done";
 
 const HOME_TOUR_STEPS = [
   {
@@ -39,7 +38,6 @@ const HOME_TOUR_STEPS = [
     id: "discover",
     title: "Discover",
     body: "Listen to other creators. When you publish, your songs can show up here too.",
-    hint: "Friends — find people and share songs with them.",
     target: '[data-route-link="discover"]',
     pad: 8,
     route: "challenges",
@@ -75,26 +73,6 @@ const PERSONA_TOUR_STEPS = [
   },
 ];
 
-const FRIENDS_TOUR_STEPS = [
-  {
-    id: "friends-feed",
-    title: "Your circle",
-    body: "Friends is where you see songs and voice moments from people you follow.",
-    target: "#friendsPage .discoveryStudioHead",
-    fallbackTarget: '[data-route-link="friends"]',
-    pad: 8,
-    route: "friends",
-  },
-  {
-    id: "friends-share",
-    title: "Share something",
-    body: "Tap + to post a song, caption, or shout-out to your followers.",
-    target: "#friendsComposeOpenBtn",
-    pad: 10,
-    route: "friends",
-  },
-];
-
 const TOURS = {
   home: {
     id: "home",
@@ -114,13 +92,6 @@ const TOURS = {
       ensureHomePanelForTour();
     },
   },
-  friends: {
-    id: "friends",
-    storageKey: FRIENDS_TOUR_STORAGE_KEY,
-    steps: FRIENDS_TOUR_STEPS,
-    doneToast: "Have fun sharing with your circle.",
-    prepare() {},
-  },
 };
 
 let _activeTourId = "home";
@@ -131,7 +102,6 @@ let _inited = false;
 let _resizeTimer = 0;
 let _tourOfferedThisSession = false;
 let _personaTourOfferedThisSession = false;
-let _friendsTourOfferedThisSession = false;
 let _positionTimer = 0;
 let _routeAlignAttempts = 0;
 let _tourNavigating = false;
@@ -625,20 +595,6 @@ export function schedulePersonaTourIfNeeded() {
   }, 400);
 }
 
-export function scheduleFriendsTourIfNeeded() {
-  if (_open || _friendsTourOfferedThisSession || isTourComplete("friends")) return;
-  if (!isTourComplete("home")) return;
-  if (typeof _deps?.shouldOfferHomeTour === "function" && !_deps.shouldOfferHomeTour()) return;
-  const route = String(document.body.getAttribute("data-route") || "");
-  if (route !== "friends") return;
-  _friendsTourOfferedThisSession = true;
-  window.setTimeout(() => {
-    if (_open || isTourComplete("friends")) return;
-    if (currentAppRoute() !== "friends") return;
-    openTour("friends", { force: false });
-  }, 520);
-}
-
 export function replayHomeTour() {
   resetTour("home");
   _activeTourId = "home";
@@ -676,21 +632,6 @@ export function replayPersonaTour() {
   } catch {}
   ensureHomePanelForTour();
   void ensureStepRoute(PERSONA_TOUR_STEPS[0]).then(() => renderTourStep());
-}
-
-export function replayFriendsTour() {
-  resetTour("friends");
-  _activeTourId = "friends";
-  showTourOverlay({ tourId: "friends", step: 0 });
-  try {
-    location.hash = "#/friends";
-  } catch {}
-  try {
-    _deps?.applyRoute?.();
-  } catch {}
-  window.requestAnimationFrame(() => {
-    if (_open) renderTourStep();
-  });
 }
 
 function repositionOpenTour() {

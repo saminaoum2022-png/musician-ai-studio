@@ -23,10 +23,45 @@ function readBearer(req) {
   return m ? m[1].trim() : "";
 }
 
+const VERIFY_USER_CACHE_TTL_MS = 60_000;
+const VERIFY_USER_CACHE_MAX = 200;
+/** token -> { user, expAt } — avoids /auth/v1/user on every Vercel social/credits hit */
+const verifyUserCache = new Map();
+
+function decodeJwtExpMs(token) {
+  try {
+    const parts = String(token || "").split(".");
+    if (parts.length < 2) return 0;
+    const json = Buffer.from(
+      parts[1].replace(/-/g, "+").replace(/_/g, "/"),
+      "base64",
+    ).toString("utf8");
+    const exp = Number(JSON.parse(json)?.exp || 0);
+    return exp > 0 ? exp * 1000 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function pruneVerifyUserCache(now = Date.now()) {
+  for (const [k, v] of verifyUserCache) {
+    if (v.expAt <= now) verifyUserCache.delete(k);
+  }
+  if (verifyUserCache.size <= VERIFY_USER_CACHE_MAX) return;
+  let drop = verifyUserCache.size - VERIFY_USER_CACHE_MAX;
+  for (const k of verifyUserCache.keys()) {
+    verifyUserCache.delete(k);
+    if (--drop <= 0) break;
+  }
+}
+
 async function verifyUser(req) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   const token = readBearer(req);
   if (!token || token.split(".").length < 3) return null;
+  const now = Date.now();
+  const cached = verifyUserCache.get(token);
+  if (cached && cached.expAt > now) return cached.user;
   try {
     const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
       headers: {
@@ -37,11 +72,21 @@ async function verifyUser(req) {
     if (!r.ok) return null;
     const data = await r.json().catch(() => null);
     if (!data?.id) return null;
-    return {
+    const user = {
       userId: String(data.id),
       email: String(data.email || "").toLowerCase(),
       raw: data,
     };
+    const jwtExp = decodeJwtExpMs(token);
+    const expAt = Math.min(
+      now + VERIFY_USER_CACHE_TTL_MS,
+      jwtExp > 0 ? jwtExp - 30_000 : now + VERIFY_USER_CACHE_TTL_MS,
+    );
+    if (expAt > now) {
+      verifyUserCache.set(token, { user, expAt });
+      pruneVerifyUserCache(now);
+    }
+    return user;
   } catch {
     return null;
   }

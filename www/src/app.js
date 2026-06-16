@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618profileSongsPerf";
+const APP_BUILD = "20260618authThrottle";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3165,7 +3165,6 @@ function applyRoute({ passGen } = {}) {
           setTimeout(run, 0);
         }
       }
-      void refreshAuthStateFromSupabase();
       void refreshMyCredits({ silent: true });
       void refreshMyHubPostsFast();
       void (async () => {
@@ -8294,7 +8293,6 @@ async function finishPostAuthNavigation() {
       }, 120);
     }
     void ensureAuthBoot({ force: true, fast: true });
-    void refreshAuthStateFromSupabase().catch(() => null);
     return;
   }
   const target = shouldSkipIntroOrOnboardingRoute() ? "challenges" : "intro";
@@ -8308,7 +8306,6 @@ async function finishPostAuthNavigation() {
     scheduleApplyRoute();
   }
   void ensureAuthBoot({ force: true, fast: true });
-  void refreshAuthStateFromSupabase().catch(() => null);
   void (async () => {
     try {
       const cloud = await supabaseLoadProfile();
@@ -15383,7 +15380,10 @@ async function refreshSupabaseSessionIfNeeded() {
   }
 }
 
-async function refreshAuthStateFromSupabase() {
+let _refreshAuthStateLastValidatedAt = 0;
+const REFRESH_AUTH_STATE_MIN_GAP_MS = 60_000;
+
+async function refreshAuthStateFromSupabase({ force = false } = {}) {
   await refreshSupabaseSessionIfNeeded();
   let token = getSupabaseAuthToken();
   if (!token && authSession?.refresh_token) {
@@ -15394,6 +15394,16 @@ async function refreshAuthStateFromSupabase() {
     renderAuthStatus();
     return authSession?.user || null;
   }
+  const now = Date.now();
+  if (
+    !force &&
+    authSession?.user?.id &&
+    _refreshAuthStateLastValidatedAt &&
+    now - _refreshAuthStateLastValidatedAt < REFRESH_AUTH_STATE_MIN_GAP_MS
+  ) {
+    renderAuthStatus();
+    return authSession.user;
+  }
   let remoteUser = await supabaseFetchUser(token);
   if (!remoteUser && authSession?.refresh_token) {
     const refreshed = await refreshSupabaseSessionIfNeeded();
@@ -15403,6 +15413,7 @@ async function refreshAuthStateFromSupabase() {
     }
   }
   if (remoteUser) {
+    _refreshAuthStateLastValidatedAt = Date.now();
     saveAuthSession({ ...(authSession || {}), access_token: token, user: remoteUser });
     void refreshMyCredits({ silent: true });
     return remoteUser;
@@ -37985,7 +37996,11 @@ void (async () => {
   await loadPublicConfig();
   const usedCodeFlow = await maybeHandleAuthCodeFromQuery();
   const usedTokenFlow = !usedCodeFlow && maybeHandleMagicLinkFromHash();
-  await refreshAuthStateFromSupabase();
+  if (usedCodeFlow || usedTokenFlow || !authSession?.user?.id) {
+    await refreshAuthStateFromSupabase({ force: true });
+  } else {
+    await refreshAuthStateFromSupabase();
+  }
   if (usedTokenFlow) {
     finishPostAuthNavigation();
   }

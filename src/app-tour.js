@@ -91,6 +91,10 @@ function visibleTourTarget(primary, fallback) {
 
 function ensureHomeTourDom() {
   let root = document.getElementById("appTour");
+  if (root && !root.querySelector(".appTourDimFill")) {
+    root.remove();
+    root = null;
+  }
   if (root) return root;
   root = document.createElement("div");
   root.id = "appTour";
@@ -98,7 +102,13 @@ function ensureHomeTourDom() {
   root.hidden = true;
   root.setAttribute("aria-hidden", "true");
   root.innerHTML = `
-    <div class="appTourDim" aria-hidden="true"></div>
+    <div class="appTourDim" aria-hidden="true">
+      <div class="appTourDimFill"></div>
+      <div class="appTourDimShard appTourDimTop"></div>
+      <div class="appTourDimShard appTourDimLeft"></div>
+      <div class="appTourDimShard appTourDimRight"></div>
+      <div class="appTourDimShard appTourDimBottom"></div>
+    </div>
     <div id="appTourSpot" class="appTourSpot" aria-hidden="true"></div>
     <div class="appTourCard" role="dialog" aria-modal="true" aria-labelledby="appTourTitle">
       <div class="appTourGrab" aria-hidden="true"></div>
@@ -144,6 +154,41 @@ function closeHomeTour(markDone) {
   if (markDone) markHomeTourComplete();
 }
 
+function positionDimCutout(top, left, width, height) {
+  const root = document.getElementById("appTour");
+  if (!root) return;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const topEl = root.querySelector(".appTourDimTop");
+  const leftEl = root.querySelector(".appTourDimLeft");
+  const rightEl = root.querySelector(".appTourDimRight");
+  const bottomEl = root.querySelector(".appTourDimBottom");
+  if (topEl) {
+    topEl.style.top = "0";
+    topEl.style.left = "0";
+    topEl.style.width = "100%";
+    topEl.style.height = `${Math.max(0, top)}px`;
+  }
+  if (bottomEl) {
+    bottomEl.style.top = `${top + height}px`;
+    bottomEl.style.left = "0";
+    bottomEl.style.width = "100%";
+    bottomEl.style.height = `${Math.max(0, vh - top - height)}px`;
+  }
+  if (leftEl) {
+    leftEl.style.top = `${top}px`;
+    leftEl.style.left = "0";
+    leftEl.style.width = `${Math.max(0, left)}px`;
+    leftEl.style.height = `${height}px`;
+  }
+  if (rightEl) {
+    rightEl.style.top = `${top}px`;
+    rightEl.style.left = `${left + width}px`;
+    rightEl.style.width = `${Math.max(0, vw - left - width)}px`;
+    rightEl.style.height = `${height}px`;
+  }
+}
+
 function positionTourUi(stepDef) {
   const root = ensureHomeTourDom();
   const spot = document.getElementById("appTourSpot");
@@ -169,6 +214,7 @@ function positionTourUi(stepDef) {
     const left = Math.max(8, r.left - pad);
     const width = Math.min(window.innerWidth - 16, r.width + pad * 2);
     const height = Math.min(window.innerHeight - 16, r.height + pad * 2);
+    positionDimCutout(top, left, width, height);
     spot.hidden = false;
     spot.style.top = `${top}px`;
     spot.style.left = `${left}px`;
@@ -258,6 +304,17 @@ function advanceHomeTour() {
   renderTourStep();
 }
 
+function showHomeTourOverlay({ step = 0 } = {}) {
+  _step = step;
+  _open = true;
+  const root = ensureHomeTourDom();
+  root.hidden = false;
+  root.setAttribute("aria-hidden", "false");
+  lockTourScroll();
+  renderTourStep();
+  root.classList.add("isOpen");
+}
+
 export function openHomeTour({ force = false } = {}) {
   if (!force && isHomeTourComplete()) return;
   if (_open) return;
@@ -265,14 +322,20 @@ export function openHomeTour({ force = false } = {}) {
   if (route !== "challenges") return;
 
   ensureHomePanelForTour();
-  _step = 0;
-  _open = true;
-  const root = ensureHomeTourDom();
-  root.hidden = false;
-  root.setAttribute("aria-hidden", "false");
-  lockTourScroll();
-  renderTourStep();
-  requestAnimationFrame(() => root.classList.add("isOpen"));
+  showHomeTourOverlay({ step: 0 });
+}
+
+function finishHomeTourNavigation() {
+  try {
+    location.hash = "#/challenges";
+  } catch {}
+  try {
+    _deps?.applyRoute?.();
+  } catch {}
+  window.requestAnimationFrame(() => {
+    ensureHomePanelForTour();
+    if (_open) renderTourStep();
+  });
 }
 
 function ensureHomePanelForTour() {
@@ -295,13 +358,8 @@ export function scheduleHomeTourIfNeeded() {
 
 export function replayHomeTour() {
   resetHomeTour();
-  try {
-    location.hash = "#/challenges";
-  } catch {}
-  try {
-    _deps?.applyRoute?.();
-  } catch {}
-  window.setTimeout(() => openHomeTour({ force: true }), 560);
+  showHomeTourOverlay({ step: 0 });
+  finishHomeTourNavigation();
 }
 
 function onTourResize() {

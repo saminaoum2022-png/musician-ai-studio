@@ -30557,27 +30557,41 @@ body.appTourOpen{
 .appTourDim{
   position: absolute;
   inset: 0;
+  pointer-events: none;
+}
+.appTourDimFill,
+.appTourDimShard{
+  position: fixed;
   background:
     radial-gradient(90% 70% at 50% 40%, rgba(124, 92, 255, 0.04), transparent 64%),
     rgba(3, 5, 10, 0.84);
   opacity: 0;
-  transition: opacity 280ms ease;
-  pointer-events: none;
+  transition:
+    opacity 280ms ease,
+    top 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    left 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.appTour.isOpen .appTourDim{ opacity: 1; }
-.appTour--spot .appTourDim{
-  opacity: 0;
+.appTourDimFill{
+  inset: 0;
 }
+.appTourDimShard{
+  display: none;
+}
+.appTour.isOpen .appTourDimFill{ opacity: 1; }
+.appTour--spot .appTourDimFill{ display: none; }
+.appTour--spot .appTourDimShard{ display: block; }
+.appTour.isOpen.appTour--spot .appTourDimShard{ opacity: 1; }
 .appTourSpot{
   position: fixed;
   z-index: 1;
   pointer-events: none;
-  border: 1.5px solid rgba(124, 92, 255, 0.55);
-  background: rgba(124, 92, 255, 0.06);
+  border: 2px solid rgba(124, 92, 255, 0.72);
+  background: transparent;
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.08),
-    0 0 0 9999px rgba(3, 5, 10, 0.84),
-    0 12px 40px rgba(124, 92, 255, 0.18);
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 0 24px rgba(124, 92, 255, 0.28);
   transition:
     top 320ms cubic-bezier(0.22, 1, 0.36, 1),
     left 320ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -30593,6 +30607,7 @@ body.appTourOpen{
   bottom: calc(12px + env(safe-area-inset-bottom));
   max-width: 420px;
   margin: 0 auto;
+  box-sizing: border-box;
   border-radius: 22px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background:

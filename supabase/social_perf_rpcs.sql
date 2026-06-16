@@ -70,7 +70,7 @@ set search_path = public
 as $$
   with plays as (
     select
-      p.song_id,
+      p.song_id::text as song_id,
       count(*) filter (where p.created_at >= p_week_ago)::bigint as cur_plays,
       count(*) filter (
         where p.created_at >= p_two_weeks_ago and p.created_at < p_week_ago
@@ -81,7 +81,7 @@ as $$
   ),
   feedback as (
     select
-      f.song_id,
+      f.song_id::text as song_id,
       count(*) filter (where f.created_at >= p_week_ago)::bigint as cur_feedback,
       count(*) filter (
         where f.created_at >= p_two_weeks_ago and f.created_at < p_week_ago

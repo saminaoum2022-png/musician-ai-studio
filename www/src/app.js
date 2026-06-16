@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618profilePostsPerf";
+const APP_BUILD = "20260618playCountPerf";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -17108,7 +17108,7 @@ async function fetchDiscoverSongPlayCounts(songIds) {
   if (!ids.length) return new Map();
   try {
     const qs = new URLSearchParams({ type: "song_play_counts", songIds: ids.join(",") });
-    const data = await socialApi(`/api/social?${qs.toString()}`);
+    const data = await socialApi(`/api/social?${qs.toString()}`, { timeoutMs: 8000 });
     const m = new Map();
     const counts = data?.counts;
     if (counts && typeof counts === "object") {

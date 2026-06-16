@@ -10,10 +10,12 @@ const {
   sendJson,
   setCors,
   readJsonBody,
+  callRpc,
 } = require("./_lib/credits-auth");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const SVC_FETCH_TIMEOUT_MS = 8000;
 
 function svcHeaders(extra) {
   return {
@@ -29,14 +31,55 @@ async function svcFetch(path, opts) {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     return { ok: false, status: 500, data: null, text: "Missing Supabase service role" };
   }
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    ...(opts || {}),
-    headers: svcHeaders(opts?.headers),
-  });
-  const text = await r.text().catch(() => "");
-  let data = null;
-  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
-  return { ok: r.ok, status: r.status, data, text };
+  const timeoutMs = Math.max(1000, Number(opts?.timeoutMs) || SVC_FETCH_TIMEOUT_MS);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      ...(opts || {}),
+      signal: controller.signal,
+      headers: svcHeaders(opts?.headers),
+    });
+    const text = await r.text().catch(() => "");
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+    return { ok: r.ok, status: r.status, data, text };
+  } catch (e) {
+    const aborted = e?.name === "AbortError";
+    return {
+      ok: false,
+      status: aborted ? 504 : 500,
+      data: null,
+      text: aborted ? "timeout" : e?.message || String(e),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** PostgREST exact count via HEAD + Prefer: count=exact (no row payload). */
+async function countExact(path, timeoutMs = SVC_FETCH_TIMEOUT_MS) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return 0;
+  const cleanPath = String(path || "").replace(/&limit=\d+/g, "");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${cleanPath}`, {
+      method: "HEAD",
+      headers: svcHeaders({ Prefer: "count=exact" }),
+      signal: controller.signal,
+    });
+    if (!r.ok) return 0;
+    const range = String(r.headers.get("content-range") || "");
+    const slash = range.lastIndexOf("/");
+    if (slash < 0) return 0;
+    const n = parseInt(range.slice(slash + 1), 10);
+    return Number.isFinite(n) ? Math.max(0, n) : 0;
+  } catch {
+    return 0;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function cleanUserId(v) {
@@ -169,14 +212,42 @@ async function resolveTarget({ userId, username }) {
 }
 
 async function countRows(path) {
-  const r = await svcFetch(path);
-  return Array.isArray(r.data) ? r.data.length : 0;
+  return countExact(path);
 }
 
 async function playCountForOwner(userId) {
   const uid = cleanUserId(userId);
   if (!uid) return 0;
-  return countRows(`social_song_plays?select=id&owner_user_id=eq.${encodeURIComponent(uid)}&limit=10000`);
+  return countExact(`social_song_plays?owner_user_id=eq.${encodeURIComponent(uid)}&select=id`);
+}
+
+async function playCountForSong(songId) {
+  const sid = cleanSongId(songId);
+  if (!sid) return 0;
+  return countExact(`social_song_plays?song_id=eq.${encodeURIComponent(sid)}&select=id`);
+}
+
+async function batchSongPlayCounts(songIds) {
+  const ids = [...new Set((songIds || []).map((x) => cleanSongId(x)).filter(Boolean))];
+  const counts = Object.fromEntries(ids.map((sid) => [sid, 0]));
+  if (!ids.length) return counts;
+
+  const rpc = await callRpc("social_song_play_counts", { p_song_ids: ids });
+  if (rpc.ok && Array.isArray(rpc.data)) {
+    for (const row of rpc.data) {
+      const sid = cleanSongId(row?.song_id);
+      if (!sid) continue;
+      counts[sid] = Math.max(0, Number(row?.play_count) || 0);
+    }
+    return counts;
+  }
+
+  await Promise.all(
+    ids.map(async (sid) => {
+      counts[sid] = await playCountForSong(sid);
+    }),
+  );
+  return counts;
 }
 
 async function socialStats(userId, viewerId) {
@@ -512,7 +583,7 @@ async function recordSongPlay({ songId, listenerUserId, listenedSeconds }) {
     }),
   });
   if (!ins.ok) return { counted: false, reason: "insert_failed", details: ins.text };
-  const playCount = await countRows(`social_song_plays?select=id&song_id=eq.${encodeURIComponent(sid)}&limit=10000`);
+  const playCount = await playCountForSong(sid);
   await createPlayMilestoneNotification({ song, ownerUserId: owner, playCount });
   return { counted: true, ownerUserId: owner, playCount };
 }
@@ -795,6 +866,45 @@ async function handleGet(req, res, user) {
     return sendJson(res, 200, { ok: true, ...summary });
   }
 
+  if (type === "song_feedback_inbox") {
+    const songId = cleanSongId(url.searchParams.get("songId"));
+    if (!songId) return sendJson(res, 400, { ok: false, error: "Missing songId" });
+    if (!user?.userId) return sendJson(res, 401, { ok: false, error: "Sign in required" });
+    const song = await resolvePublicSong(songId);
+    const owner = cleanUserId(song?.user_id);
+    if (!song || !owner) return sendJson(res, 404, { ok: false, error: "Song not found" });
+    if (owner !== user.userId) return sendJson(res, 403, { ok: false, error: "Owner only" });
+    const r = await svcFetch(
+      `social_song_feedback?select=feedback_type,listener_user_id,created_at&song_id=eq.${encodeURIComponent(songId)}&order=created_at.desc&limit=100`,
+    );
+    const rows = Array.isArray(r.data) ? r.data : [];
+    const listenerIds = [...new Set(rows.map((row) => cleanUserId(row.listener_user_id)).filter(Boolean))];
+    const profiles = new Map();
+    await Promise.all(
+      listenerIds.map(async (lid) => {
+        const prof = await profileByUserId(lid);
+        if (prof) profiles.set(lid, prof);
+      }),
+    );
+    const items = rows
+      .map((row) => {
+        const type = cleanFeedbackType(row.feedback_type);
+        const listenerUserId = cleanUserId(row.listener_user_id);
+        if (!type || !listenerUserId) return null;
+        const prof = profiles.get(listenerUserId);
+        return {
+          feedbackType: type,
+          feedbackLabel: feedbackLabel(type),
+          listenerUserId,
+          username: String(prof?.username || "").trim(),
+          avatar: String(prof?.avatar || "").trim(),
+          createdAt: row.created_at || null,
+        };
+      })
+      .filter(Boolean);
+    return sendJson(res, 200, { ok: true, items });
+  }
+
   if (type === "song_play_counts") {
     const raw = String(url.searchParams.get("songIds") || "");
     const ids = raw
@@ -802,14 +912,7 @@ async function handleGet(req, res, user) {
       .map((x) => cleanSongId(x))
       .filter(Boolean)
       .slice(0, 64);
-    const counts = {};
-    await Promise.all(
-      ids.map(async (sid) => {
-        counts[sid] = await countRows(
-          `social_song_plays?select=id&song_id=eq.${encodeURIComponent(sid)}&limit=10000`,
-        );
-      }),
-    );
+    const counts = await batchSongPlayCounts(ids);
     return sendJson(res, 200, { ok: true, counts });
   }
 

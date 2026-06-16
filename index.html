@@ -2421,6 +2421,11 @@
             </div>
             <div id="libraryList" class="libraryList profileHubSharedList"></div>
             <div id="profileActivitiesList" class="profileActivitiesList followActStack" hidden aria-live="polite"></div>
+            <div id="profileActivitiesLoadMoreWrap" class="profileReleasesLoadMoreRow profileActLoadMoreRow" hidden>
+              <button type="button" id="profileActivitiesLoadMore" class="profileReleasesLoadMore profileActLoadMore" aria-label="Load more posts">
+                Load more<span id="profileActivitiesLoadMoreCount" class="profileReleasesLoadMoreCount"></span>
+              </button>
+            </div>
           </div>
 
           <!-- Popular this week — top 3 only, horizontal carousel. -->
@@ -3678,6 +3683,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260618profileLoadMoreFix"></script>
+    <script type="module" src="./src/app.js?v=20260618profileLoadMorePinned"></script>
   </body>
 </html>

@@ -7725,6 +7725,10 @@ async function enrichProfileActivitiesAfterPaint(libRows, feedItems, profMap, li
       .join("");
     _profileActSnapshot = { at: Date.now(), html: listEl.innerHTML };
     persistProfileActSnapshot();
+    const totalPublic = loadLibrary().filter(
+      (t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile),
+    ).length;
+    syncProfileActivitiesLoadMoreUi(Math.max(0, totalPublic - _profileActivitiesShown));
     try {
       syncDiscoveryPlayingHighlights();
     } catch {}
@@ -7756,8 +7760,11 @@ async function renderProfileActivities(opts = {}) {
         <p class="profileActEmptyText">Your published songs and challenge entries land here.</p>
       </div>`;
     if (countEl) countEl.hidden = true;
+    syncProfileActivitiesLoadMoreUi(0);
     return;
   }
+  if (!extend && !force) resetProfileActivitiesPagination();
+  wireProfileActivitiesLoadMoreOnce();
   hydrateProfileActSnapshotFromStorage();
   const hadFeed = listEl.querySelector(".followAct");
   const snap = _profileActSnapshot;
@@ -7767,31 +7774,11 @@ async function renderProfileActivities(opts = {}) {
     snap.html &&
     !snap.html.includes("followAct--skel");
   const uid = String(authSession.user.id);
-  const pubNPreview = loadLibrary().filter(
-    (t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile),
-  ).length;
-  const snapHtmlValid = profileActSnapshotValid(snap?.html, pubNPreview);
   if (!extend) {
-    if (snapFresh && snapHtmlValid && !hadFeed) listEl.innerHTML = snap.html;
+    if (snapFresh && !hadFeed) listEl.innerHTML = snap.html;
     else if (!hadFeed && !snapFresh) listEl.innerHTML = followingActivitySkeletonHtml();
   }
   if (!opts.deferCloud) void mergeCloudSongsIntoLocalLibrary();
-  const snapStillValid =
-    Boolean(_profileActSnapshot) &&
-    snapFresh &&
-    snapHtmlValid &&
-    !force &&
-    !extend &&
-    Date.now() - snap.at < PROFILE_ACT_MIN_FETCH_GAP_MS;
-  const snapHasPosts = Boolean(
-    snap?.html && (snap.html.includes("profileActRow") || snap.html.includes('class="followAct"')),
-  );
-  if (snapStillValid && snapHasPosts) {
-    _profileActivitiesShown = Math.max(PROFILE_ACTIVITIES_PAGE_SIZE, countFollowActsInHtml(snap.html));
-    wireProfileActivitiesLoadMoreOnce(listEl);
-    return;
-  }
-  if (!extend) resetProfileActivitiesPagination();
   try {
   const libRows = loadLibrary()
     .filter((t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile))
@@ -7805,13 +7792,15 @@ async function renderProfileActivities(opts = {}) {
   const feedItems = libRows
     .map((track) => ({
       kind: "music",
-      ts: libraryTrackPublicTs(track) || Number(track.ts || 0),
+      ts: profileActivitiesFeedTs(track),
       track,
     }))
-    .filter((row) => row.ts > 0)
     .sort((a, b) => b.ts - a.ts);
   const totalPosts = feedItems.length;
-  _profileActivitiesShown = Math.min(totalPosts, Math.max(PROFILE_ACTIVITIES_PAGE_SIZE, _profileActivitiesShown));
+  _profileActivitiesShown = Math.min(
+    totalPosts,
+    Math.max(PROFILE_ACTIVITIES_PAGE_SIZE, _profileActivitiesShown),
+  );
   const visibleFeedItems = feedItems.slice(0, _profileActivitiesShown);
   const visibleLibRows = visibleFeedItems.map((item) => item.track);
   const remainingPosts = Math.max(0, totalPosts - visibleFeedItems.length);
@@ -7824,21 +7813,21 @@ async function renderProfileActivities(opts = {}) {
       </div>`;
     _profileActSnapshot = { at: Date.now(), html: listEl.innerHTML };
     persistProfileActSnapshot();
+    syncProfileActivitiesLoadMoreUi(0);
     return;
   }
-  listEl.innerHTML =
-    visibleFeedItems
-      .map((item, i) => followingActivityRowHtml(item.track, profMap, i, { xstyle: true }))
-      .join("") + profileActivitiesLoadMoreHtml(remainingPosts);
+  listEl.innerHTML = visibleFeedItems
+    .map((item, i) => followingActivityRowHtml(item.track, profMap, i, { xstyle: true }))
+    .join("");
   _profileActSnapshot = { at: Date.now(), html: listEl.innerHTML };
   persistProfileActSnapshot();
+  syncProfileActivitiesLoadMoreUi(remainingPosts);
   try {
     syncDiscoveryPlayingHighlights();
   } catch {}
   applyFeedSocialStatsToDom(listEl);
   const enrichGen = ++_profileActEnrichGen;
   void enrichProfileActivitiesAfterPaint(visibleLibRows, visibleFeedItems, profMap, listEl, enrichGen);
-  wireProfileActivitiesLoadMoreOnce(listEl);
   } catch (e) {
     try {
       console.warn("[profile/activities]", e);
@@ -7860,23 +7849,6 @@ async function renderProfileActivities(opts = {}) {
       }
     }
   }
-}
-
-function wireProfileActivitiesLoadMoreOnce(listEl) {
-  if (!listEl || listEl.dataset.profileActLoadMoreWired) return;
-  listEl.dataset.profileActLoadMoreWired = "1";
-  listEl.addEventListener("click", (e) => {
-    const btn = e.target.closest("#profileActivitiesLoadMore");
-    if (!btn || !listEl.contains(btn)) return;
-    e.preventDefault();
-    haptic("light");
-    const uid = String(authSession?.user?.id || "");
-    const total = loadLibrary().filter(
-      (t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile),
-    ).length;
-    _profileActivitiesShown = Math.min(total, _profileActivitiesShown + PROFILE_ACTIVITIES_PAGE_SIZE);
-    void renderProfileActivities({ extend: true, deferCloud: true });
-  });
 }
 
 function normalizeStatusWaveformPeaks(raw) {
@@ -9458,18 +9430,51 @@ function profileActSnapshotValid(html, totalPublicPosts) {
   return hasLoadMore && shown < totalPublicPosts;
 }
 
+function profileActivitiesFeedTs(track) {
+  const published = libraryTrackPublicTs(track);
+  if (published > 0) return published;
+  const created = Number(track?.createdTs || 0);
+  if (Number.isFinite(created) && created > 0) return created;
+  const ts = Number(track?.ts || 0);
+  return Number.isFinite(ts) && ts > 0 ? ts : 0;
+}
+
+function syncProfileActivitiesLoadMoreUi(remaining) {
+  const wrap = document.getElementById("profileActivitiesLoadMoreWrap");
+  const moreCount = document.getElementById("profileActivitiesLoadMoreCount");
+  if (!wrap) return;
+  const onActivities =
+    (document.body.getAttribute("data-route") || "") === "profile" &&
+    _profileSongsSegment === "activities";
+  if (!onActivities || remaining <= 0) {
+    wrap.hidden = true;
+    return;
+  }
+  wrap.hidden = false;
+  if (moreCount) moreCount.textContent = String(remaining);
+}
+
+function wireProfileActivitiesLoadMoreOnce() {
+  const btn = document.getElementById("profileActivitiesLoadMore");
+  if (!btn || btn.dataset.boundProfileActLoadMore) return;
+  btn.dataset.boundProfileActLoadMore = "1";
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    haptic("light");
+    const total = loadLibrary().filter(
+      (t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile),
+    ).length;
+    _profileActivitiesShown = Math.min(total, _profileActivitiesShown + PROFILE_ACTIVITIES_PAGE_SIZE);
+    void renderProfileActivities({ extend: true, deferCloud: true });
+  });
+}
+
 function resetProfileActivitiesPagination() {
   _profileActivitiesShown = PROFILE_ACTIVITIES_PAGE_SIZE;
 }
 
 function profileActivitiesLoadMoreHtml(remaining) {
-  if (remaining <= 0) return "";
-  return `
-    <div class="profileReleasesLoadMoreRow profileActLoadMoreRow" data-profile-act-loadmore-sentinel>
-      <button type="button" id="profileActivitiesLoadMore" class="profileReleasesLoadMore profileActLoadMore" aria-label="Load more posts">
-        Load more<span class="profileReleasesLoadMoreCount">${remaining}</span>
-      </button>
-    </div>`;
+  return "";
 }
 
 function hydrateProfileActSnapshotFromStorage() {
@@ -25961,6 +25966,8 @@ function syncProfileSongsSegmentUi() {
   if (actCount) actCount.hidden = !isActivities;
   if (activitiesList) activitiesList.hidden = !isActivities;
   if (libList) libList.hidden = isActivities;
+  const loadMoreWrap = document.getElementById("profileActivitiesLoadMoreWrap");
+  if (loadMoreWrap && !isActivities) loadMoreWrap.hidden = true;
   // Leaving the Songs segment cancels any in-progress multi-select.
   if (!isAll && _librarySelectMode) {
     _librarySelectMode = false;
@@ -25973,6 +25980,7 @@ function syncProfileSongsSegmentUi() {
 function bindProfileSongsSegmentOnce() {
   if (_profileSongsSegmentBound) return;
   _profileSongsSegmentBound = true;
+  wireProfileActivitiesLoadMoreOnce();
   document.querySelectorAll("[data-profile-songs-segment]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const seg = btn.getAttribute("data-profile-songs-segment");

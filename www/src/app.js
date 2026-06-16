@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618echoDrawerOnly";
+const APP_BUILD = "20260618photoMoodHome";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -5816,21 +5816,17 @@ function bindHomeDeskOnce(page) {
         void openVoiceWizard();
         return;
       }
-      if (card === "remix") {
+      if (card === "photo") {
         if (!authSession?.user?.id) {
-          setPostAuthReturnHash("#/profile?seg=all");
+          setPostAuthReturnHash("#/generate");
           try {
             location.hash = "#/auth";
           } catch {}
           scheduleApplyRoute();
-          setStatus("Sign in to remix your songs.");
+          setStatus("Sign in to use Photo Mood.");
           return;
         }
-        try {
-          location.hash = "#/profile?seg=all";
-        } catch {}
-        scheduleApplyRoute();
-        setStatus("Open any song and tap Remix in the player.");
+        openImageMoodSheet();
         return;
       }
       if (card === "mashup") {

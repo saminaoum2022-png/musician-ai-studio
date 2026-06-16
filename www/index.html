@@ -58,7 +58,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260618echoDrawerOnly" />
+    <link rel="stylesheet" href="./styles.css?v=20260618photoMoodHome" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1290,26 +1290,22 @@
                 <span class="homeDeskPromoChev" aria-hidden="true">→</span>
               </button>
 
-              <button type="button" class="homeDeskPromoCard homeDeskRemixPromo homeDeskPromo--compact" data-home-card="remix" aria-label="Remix — spin a new version of any song in your library">
-                <span class="homeDeskPromoVisual homeDeskPromoVisual--remix" aria-hidden="true">
-                  <span class="homeDeskRemixTileWrap">
-                    <span class="homeDeskRemixPulse" aria-hidden="true"></span>
-                    <span class="homeDeskRemixTile">
-                      <svg class="homeDeskRemixIco" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                        <path d="M7 7h3.4c1.6 0 3 .8 3.8 2.1l1.1 1.8"/>
-                        <path d="M7 17h3.4c1.6 0 3-.8 3.8-2.1l1.1-1.8"/>
-                        <path d="M17 6l3 3-3 3"/>
-                        <path d="M17 12l3 3-3 3"/>
-                        <path d="M4 7h3"/>
-                        <path d="M4 17h3"/>
+              <button type="button" class="homeDeskPromoCard homeDeskPhotoPromo homeDeskPromo--compact" data-home-card="photo" aria-label="Photo Mood — upload a photo and we read the vibe for your song">
+                <span class="homeDeskPromoVisual homeDeskPromoVisual--photo" aria-hidden="true">
+                  <span class="homeDeskPhotoTileWrap">
+                    <span class="homeDeskPhotoPulse" aria-hidden="true"></span>
+                    <span class="homeDeskPhotoTile">
+                      <svg class="homeDeskPhotoIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path fill="currentColor" d="M5 4.5A2.5 2.5 0 0 0 2.5 7v10A2.5 2.5 0 0 0 5 19.5h14a2.5 2.5 0 0 0 2.5-2.5V7A2.5 2.5 0 0 0 19 4.5H5Zm0 1.5h14c.55 0 1 .45 1 1v7.2l-3.33-3.32a1.8 1.8 0 0 0-2.54 0L10 15.01l-1.63-1.63a1.8 1.8 0 0 0-2.54 0L4 15.21V7c0-.55.45-1 1-1Zm12.5 2.2a1.7 1.7 0 1 0 0 3.4 1.7 1.7 0 0 0 0-3.4ZM7.1 14.44a.3.3 0 0 1 .43 0L10 16.9l5.19-5.18a.3.3 0 0 1 .42 0L20 16.1V17c0 .55-.45 1-1 1H5c-.55 0-1-.45-1-1v-.26l3.1-2.3Z"/>
                       </svg>
+                      <span class="homeDeskPhotoSpark" aria-hidden="true">✦</span>
                     </span>
                   </span>
                 </span>
                 <span class="homeDeskPromoCopy">
-                  <span class="homeDeskSectionKicker">New spin</span>
-                  <span class="homeDeskPromoTitle" id="homeDeskRemixPromoTitle">Remix</span>
-                  <span class="homeDeskPromoDesc">Open any song in your library and remix it — new energy, same DNA.</span>
+                  <span class="homeDeskSectionKicker">From a snapshot</span>
+                  <span class="homeDeskPromoTitle" id="homeDeskPhotoPromoTitle">Photo Mood</span>
+                  <span class="homeDeskPromoDesc">Upload a photo — we analyze the vibe and shape lyrics, style tags, and cover art.</span>
                 </span>
                 <span class="homeDeskPromoChev" aria-hidden="true">→</span>
               </button>
@@ -3681,6 +3677,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260618echoDrawerOnly"></script>
+    <script type="module" src="./src/app.js?v=20260618photoMoodHome"></script>
   </body>
 </html>

@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618profileSongsLoadMore";
+const APP_BUILD = "20260618profileSongsPerf";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2357,7 +2357,7 @@ const TAB_REFRESH_ACTIONS = {
     void Promise.resolve(refreshMyHubPostsFast({ force: true })).catch(() => {});
     void Promise.resolve(refreshNotificationsUnreadBadge({ force: true })).catch(() => {});
     renderProfileSongs();
-    void Promise.resolve(reconcileLibraryFromCloud({ force: true }))
+    void Promise.resolve(reconcileLibraryFromCloud())
       .catch((e) => console.warn("[tabRefresh/profile-songs]", e));
   },
 };
@@ -7610,8 +7610,12 @@ function applyFollowActPlayCountsToDom(listEl, tracks) {
   return { ok: !needsRebuild, needsRebuild };
 }
 
+let _mergeCloudInFlight = false;
 async function mergeCloudSongsIntoLocalLibrary() {
   if (!authSession?.user?.id) return false;
+  if (_mergeCloudInFlight) return false;
+  _mergeCloudInFlight = true;
+  try {
   syncActiveProfileIdFromSession();
   if (!_libraryHydrateCompleted || _libraryHydrateInFlight) {
     await ensureUserLibraryHydrated();
@@ -7671,6 +7675,9 @@ async function mergeCloudSongsIntoLocalLibrary() {
   saveLibrary(merged);
   if (prevPublicSig !== nextPublicSig) invalidateProfileActivitiesCache();
   return prevPublicSig !== nextPublicSig;
+  } finally {
+    _mergeCloudInFlight = false;
+  }
 }
 
 function profileSelfProfMap(uid) {
@@ -28123,6 +28130,7 @@ function bindLibrarySelectControls() {
 function bindLibraryDelegatedListeners() {
   if (_libraryListenersBound || !els.libraryList) return;
   _libraryListenersBound = true;
+  wireLibraryLoadMoreOnce();
   bindLibrarySelectControls();
   els.libraryList.addEventListener("click", async (e) => {
     const target = e.target;
@@ -28160,6 +28168,19 @@ function bindLibraryDelegatedListeners() {
       if (!id) return;
       await playLibraryListRowById(id);
     }
+  });
+}
+
+function wireLibraryLoadMoreOnce() {
+  if (!els.libraryList || els.libraryList.dataset.boundLibLoadMore) return;
+  els.libraryList.dataset.boundLibLoadMore = "1";
+  els.libraryList.addEventListener("click", (e) => {
+    const btn = e.target.closest("#libLoadMore");
+    if (!btn || !els.libraryList.contains(btn)) return;
+    e.preventDefault();
+    haptic("light");
+    libVisibleCount = Math.min(loadLibrary().length, libVisibleCount + LIB_PAGE_SIZE);
+    renderLibrary();
   });
 }
 
@@ -28286,11 +28307,8 @@ async function runLibraryDiagnostic() {
   }
 }
 
-// Library pagination — same pattern as Hub. Rendering 100 rows at once
-// builds ~1000 DOM nodes (each row has a hidden 7-button menu) and binds
-// ~900 listeners across the row/menu queries, which is what made the
-// Library feel slow even though Hub was snappy. We render 24 by default
-// and auto-extend via an IntersectionObserver on the "Load more" sentinel.
+// Library pagination — render 24 rows by default; user taps Load more for the rest.
+// (Auto IntersectionObserver paging fired on Profile open and amplified cloud sync.)
 const LIB_PAGE_SIZE = 24;
 let libVisibleCount = LIB_PAGE_SIZE;
 // Tracks total items count from the previous render so we know when to
@@ -28618,36 +28636,9 @@ function renderLibrary() {
       </div>
     ` : ""}
   `;
-  // Mirror Hub's auto-extension: clicking "Load more" reveals another
-  // page; an IntersectionObserver on the sentinel auto-clicks it as the
-  // user scrolls so the list feels endless without burning the initial
-  // paint budget.
-  const libLoadMoreBtn = document.getElementById("libLoadMore");
-  const libSentinel = els.libraryList.querySelector("[data-lib-loadmore-sentinel]");
-  if (libLoadMoreBtn) {
-    libLoadMoreBtn.addEventListener("click", () => {
-      libVisibleCount = Math.min(loadLibrary().length, libVisibleCount + LIB_PAGE_SIZE);
-      renderLibrary();
-    });
-  }
-  if (libSentinel && typeof IntersectionObserver === "function") {
-    const io = new IntersectionObserver((entries) => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        io.disconnect();
-        libLoadMoreBtn?.click();
-        break;
-      }
-    }, { rootMargin: "240px 0px" });
-    io.observe(libSentinel);
-  }
-  // All row interactions are dispatched via one delegated listener
-  // means each `renderLibrary()` is just `innerHTML` + the load-more
-  // setup above — no per-row `addEventListener` calls. Delegation is
-  // attached once at the top of this function via `bindLibraryDelegatedListeners`.
-  // Fire-and-forget thumb backfill once the list is in the DOM. Wraps in
-  // requestIdleCallback when available so it never competes with the
-  // initial paint or a play tap.
+  try {
+    syncDiscoveryPlayingHighlights();
+  } catch {}
   const _scheduleThumbBackfill = () => { void backfillLibraryThumbsLazy(); };
   if (typeof requestIdleCallback === "function") {
     requestIdleCallback(_scheduleThumbBackfill, { timeout: 1500 });

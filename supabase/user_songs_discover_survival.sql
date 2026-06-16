@@ -1,6 +1,7 @@
--- Discover survival: 7-day public window, score starts at -100, +1 per qualified play.
--- Also run discover_play_counts.sql (max 10 counted plays per signed-in listener per song).
--- Run in Supabase SQL Editor after user_songs exists.
+-- Discover survival (OPTIONAL — scoring is paused in the app today).
+-- Run in Supabase SQL Editor when you want score-based expiry on Discover.
+-- Until then, the app does not SELECT these columns (avoids Postgres errors
+-- when the migration has not been applied).
 
 alter table public.user_songs
   add column if not exists discover_score integer;

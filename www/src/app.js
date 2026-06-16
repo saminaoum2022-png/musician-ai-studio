@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618friendsFeedPerf";
+const APP_BUILD = "20260618discoverScoreFix";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -7737,6 +7737,11 @@ function mapStatusPostFromSupabaseRow(p, prof) {
 async function supabaseRestWithAuth(path, opts = {}) {
   const token = getSupabaseAuthToken();
   if (!token || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  const ctrl = new AbortController();
+  const timer = setTimeout(
+    () => ctrl.abort(),
+    Math.max(4000, Number(opts.timeoutMs) || supabaseRestTimeoutMs()),
+  );
   try {
     return await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
       method: opts.method || "GET",
@@ -7750,9 +7755,12 @@ async function supabaseRestWithAuth(path, opts = {}) {
       },
       body: opts.body,
       cache: "no-store",
+      signal: ctrl.signal,
     });
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -15629,6 +15637,8 @@ async function exchangeOAuthCodeForSession(code) {
     lastAuthDebug = "missing pkce verifier";
     return false;
   }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), authFetchTimeoutMs());
   try {
     const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=pkce`, {
       method: "POST",
@@ -15637,6 +15647,7 @@ async function exchangeOAuthCodeForSession(code) {
         apikey: SUPABASE_ANON_KEY,
       },
       body: JSON.stringify({ auth_code: code, code_verifier: verifier }),
+      signal: ctrl.signal,
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok || !d?.access_token) {
@@ -15659,8 +15670,12 @@ async function exchangeOAuthCodeForSession(code) {
     setStatus("Signed in.");
     return true;
   } catch (e) {
-    lastAuthDebug = `code flow error: ${e?.message || String(e)}`;
+    lastAuthDebug = e?.name === "AbortError"
+      ? "code exchange timed out"
+      : `code flow error: ${e?.message || String(e)}`;
     return false;
+  } finally {
+    clearTimeout(timer);
   }
 }
 async function exchangeAppleIdTokenForSession(idToken) {
@@ -15668,6 +15683,8 @@ async function exchangeAppleIdTokenForSession(idToken) {
   if (!token) return false;
   const nonce = localStorage.getItem(AUTH_APPLE_NONCE_KEY) || "";
   localStorage.removeItem(AUTH_APPLE_NONCE_KEY);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), authFetchTimeoutMs());
   try {
     const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=id_token`, {
       method: "POST",
@@ -15680,6 +15697,7 @@ async function exchangeAppleIdTokenForSession(idToken) {
         id_token: token,
         ...(nonce ? { nonce } : {}),
       }),
+      signal: ctrl.signal,
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok || !d?.access_token) {
@@ -15701,8 +15719,12 @@ async function exchangeAppleIdTokenForSession(idToken) {
     setStatus("Signed in with Apple.");
     return true;
   } catch (e) {
-    lastAuthDebug = `apple id_token error: ${e?.message || String(e)}`;
+    lastAuthDebug = e?.name === "AbortError"
+      ? "apple id_token timed out"
+      : `apple id_token error: ${e?.message || String(e)}`;
     return false;
+  } finally {
+    clearTimeout(timer);
   }
 }
 async function maybeHandleAuthCodeFromQuery() {
@@ -15749,6 +15771,9 @@ function isCapacitorNativeAuth() {
 }
 function authFetchTimeoutMs() {
   return isCapacitorNativeAuth() ? 20000 : 12000;
+}
+function supabaseRestTimeoutMs() {
+  return isCapacitorNativeAuth() ? 12000 : 10000;
 }
 function oauthProviderLabel(provider) {
   return provider === "apple" ? "Apple" : "Google";
@@ -16825,7 +16850,7 @@ async function supabaseFetchPublicLibraryRowsForFilter(filterQuery, perUserLimit
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !filterQuery) return new Map();
   const lim = Math.min(120, Math.max(12, Number(perUserLimit) || 80));
   const colsWithPublished =
-    "user_id,id,created_at,published_at,discover_score,discover_expires_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
+    "user_id,id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
   const colsLegacy =
     "user_id,id,created_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
@@ -19039,7 +19064,7 @@ function maybeRecordQualifiedPublicPlay() {
 async function supabaseFetchDiscoveryPublicSongs(limit) {
   const lim = Math.max(1, Math.min(80, Number(limit) || 48));
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
-  const colsWithPublished = "id,created_at,published_at,discover_score,discover_expires_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_deleted_at:meta->>deletedAt";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_deleted_at:meta->>deletedAt";
   const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_deleted_at:meta->>deletedAt";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   try {
@@ -19111,10 +19136,16 @@ async function fetchProfilesByUserIdsMap(userIds) {
   const ids = [...new Set((userIds || []).map((x) => String(x || "").trim()).filter(Boolean))];
   if (!ids.length || !SUPABASE_URL || !SUPABASE_ANON_KEY) return new Map();
   const inClause = ids.map((id) => encodeURIComponent(id)).join(",");
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), supabaseRestTimeoutMs());
   try {
     const r = await fetch(
       `${SUPABASE_URL}/rest/v1/profiles?user_id=in.(${inClause})&select=user_id,username,avatar`,
-      { headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" }, cache: "no-store" },
+      {
+        headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" },
+        cache: "no-store",
+        signal: ctrl.signal,
+      },
     );
     if (!r.ok) return new Map();
     const arr = await r.json().catch(() => []);
@@ -19126,6 +19157,8 @@ async function fetchProfilesByUserIdsMap(userIds) {
     return m;
   } catch {
     return new Map();
+  } finally {
+    clearTimeout(timer);
   }
 }
 

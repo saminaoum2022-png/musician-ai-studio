@@ -7828,7 +7828,8 @@ async function renderProfileActivities(opts = {}) {
   applyFeedSocialStatsToDom(listEl);
   const enrichGen = ++_profileActEnrichGen;
   void enrichProfileActivitiesAfterPaint(visibleLibRows, visibleFeedItems, profMap, listEl, enrichGen);
-  wireProfileActivitiesLoadMoreOnce(listEl, totalPosts);
+  wireProfileActivitiesLoadMoreOnce(listEl);
+  observeProfileActivitiesLoadMore(listEl);
   } catch (e) {
     try {
       console.warn("[profile/activities]", e);
@@ -7852,6 +7853,28 @@ async function renderProfileActivities(opts = {}) {
   }
 }
 
+function observeProfileActivitiesLoadMore(listEl) {
+  if (!listEl || typeof IntersectionObserver !== "function") return;
+  const sentinel = listEl.querySelector("[data-profile-act-loadmore-sentinel]");
+  if (!sentinel) {
+    if (_profileActLoadMoreObs) _profileActLoadMoreObs.disconnect();
+    return;
+  }
+  if (!_profileActLoadMoreObs) {
+    _profileActLoadMoreObs = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((en) => en.isIntersecting)) return;
+        const root = document.getElementById("profileActivitiesList");
+        const loadBtn = root?.querySelector("#profileActivitiesLoadMore");
+        if (loadBtn) loadBtn.click();
+      },
+      { rootMargin: "120px 0px" },
+    );
+  }
+  _profileActLoadMoreObs.disconnect();
+  _profileActLoadMoreObs.observe(sentinel);
+}
+
 function wireProfileActivitiesLoadMoreOnce(listEl) {
   if (!listEl || listEl.dataset.profileActLoadMoreWired) return;
   listEl.dataset.profileActLoadMoreWired = "1";
@@ -7867,19 +7890,6 @@ function wireProfileActivitiesLoadMoreOnce(listEl) {
     _profileActivitiesShown = Math.min(total, _profileActivitiesShown + PROFILE_ACTIVITIES_PAGE_SIZE);
     void renderProfileActivities({ extend: true, deferCloud: true });
   });
-  const sentinel = listEl.querySelector("[data-profile-act-loadmore-sentinel]");
-  if (sentinel && typeof IntersectionObserver === "function" && !listEl.dataset.profileActLoadMoreObs) {
-    listEl.dataset.profileActLoadMoreObs = "1";
-    const obs = new IntersectionObserver(
-      (entries) => {
-        if (!entries.some((en) => en.isIntersecting)) return;
-        const loadBtn = listEl.querySelector("#profileActivitiesLoadMore");
-        if (loadBtn) loadBtn.click();
-      },
-      { rootMargin: "120px 0px" },
-    );
-    obs.observe(sentinel);
-  }
 }
 
 function normalizeStatusWaveformPeaks(raw) {
@@ -9442,6 +9452,7 @@ const PROFILE_ACT_MIN_FETCH_GAP_MS = 45000;
 const PROFILE_ACT_SNAPSHOT_KEY = "nabad_profile_act_snap_v2";
 const PROFILE_ACTIVITIES_PAGE_SIZE = 6;
 let _profileActivitiesShown = PROFILE_ACTIVITIES_PAGE_SIZE;
+let _profileActLoadMoreObs = null;
 
 function resetProfileActivitiesPagination() {
   _profileActivitiesShown = PROFILE_ACTIVITIES_PAGE_SIZE;

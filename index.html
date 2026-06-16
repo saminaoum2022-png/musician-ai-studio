@@ -2436,7 +2436,7 @@
             <div id="profileTopWeekList" class="profileTopWeekScroll" role="list"></div>
           </section>
 
-          <!-- Auth controls kept in DOM for scripts; not shown on Profile (use Settings). -->
+          <!-- Auth utility nodes for scripts; sign out / delete live in Settings only. -->
           <div class="profileAccountBlock" hidden aria-hidden="true">
             <div id="authLoginControls" class="profileOwnAuthRow">
               <button id="btnAuthApple" class="ghost" type="button">Continue with Apple</button>
@@ -2445,10 +2445,6 @@
             <div id="authStatus" class="hint profileOwnAuthStatus" style="margin-top:4px">Not logged in.</div>
             <input id="profileAvatarFile" type="file" accept="image/*" style="display:none" />
             <input id="profileIsPublic" type="checkbox" checked style="display:none" />
-            <div id="authLoggedInRow" class="profileAccountActions profileOwnAccountActions" style="display:none">
-              <button id="btnAuthLogout" class="ghost profileActionBtn" type="button">Logout</button>
-              <button id="btnProfileDelete" class="ghost profileActionBtn profileActionBtnDanger" type="button">Delete account</button>
-            </div>
           </div>
 
           <div id="profileSavedMsg" class="hint" style="margin-top:8px; display:none"></div>
@@ -3683,6 +3679,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260618socialP1Perf"></script>
+    <script type="module" src="./src/app.js?v=20260618profileSettingsOnly"></script>
   </body>
 </html>

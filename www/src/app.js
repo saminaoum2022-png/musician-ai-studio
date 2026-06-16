@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618socialP1Perf";
+const APP_BUILD = "20260618profileSettingsOnly";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -708,8 +708,6 @@ const els = {
   profileSaveToast: document.getElementById("profileSaveToast"),
   userPublicCard: document.getElementById("userPublicCard"),
   authLoginControls: document.getElementById("authLoginControls"),
-  authLoggedInRow: document.getElementById("authLoggedInRow"),
-  authLoggedInEmail: document.getElementById("authLoggedInEmail"),
   authLoggedInEmailInline: document.getElementById("authLoggedInEmailInline"),
   btnAuthApple: document.getElementById("btnAuthApple"),
   btnAuthGateApple: document.getElementById("btnAuthGateApple"),
@@ -722,8 +720,6 @@ const els = {
   btnAuthEmailSubmit: document.getElementById("btnAuthEmailSubmit"),
   btnAuthToggleMode: document.getElementById("btnAuthToggleMode"),
   btnAuthGateGuest: document.getElementById("btnAuthGateGuest"),
-  btnAuthLogout: document.getElementById("btnAuthLogout"),
-  btnProfileDelete: document.getElementById("btnProfileDelete"),
   authStatus: document.getElementById("authStatus"),
   profilePreviewAvatar: document.getElementById("profilePreviewAvatar"),
   profilePreviewUsername: document.getElementById("profilePreviewUsername"),
@@ -15413,8 +15409,10 @@ function renderAuthStatus() {
   els.authStatus.textContent = msg;
   els.authStatus.style.display = msg ? "" : "none";
   if (els.authLoginControls) els.authLoginControls.style.display = email ? "none" : "";
-  if (els.authLoggedInRow) els.authLoggedInRow.style.display = email ? "flex" : "none";
-  if (els.authLoggedInEmail) els.authLoggedInEmail.textContent = email ? email : "Logged in.";
+  if (els.authLoggedInEmailInline) {
+    els.authLoggedInEmailInline.textContent = "";
+    els.authLoggedInEmailInline.style.display = "none";
+  }
   if (els.settingsAccountEmail) {
     els.settingsAccountEmail.textContent = email || (hasToken ? "Checking session..." : "Guest mode");
   }
@@ -25516,8 +25514,7 @@ function renderProfilePreviewFromInputs() {
       renderProfileLiquidPulse(items);
     } catch {}
   }
-  // Email never appears in the hero — it lives in the Account block
-  // below (next to Logout). Keep the inline node hidden + empty.
+  // Email never appears in the profile hero — account email lives in Settings.
   if (els.authLoggedInEmailInline) {
     els.authLoggedInEmailInline.textContent = "";
     els.authLoggedInEmailInline.style.display = "none";
@@ -37455,10 +37452,7 @@ wireLegalLinks();
 /** Permanently delete signed-in account (server + device). Guests only clear local data. */
 async function deleteAccountAndData(opts = {}) {
   const uid = String(authSession?.user?.id || "").trim();
-  const fromSettings = Boolean(opts.fromSettings);
-  const btn = fromSettings
-    ? document.getElementById("settingsBtnDeleteAccount")
-    : els.btnProfileDelete;
+  const btn = document.getElementById("settingsBtnDeleteAccount");
   const prevLabel = btn?.textContent || "";
 
   if (!uid) {
@@ -37546,9 +37540,6 @@ async function deleteAccountAndData(opts = {}) {
 if (els.settingsBtnSignIn) {
   els.settingsBtnSignIn.addEventListener("click", () => void runGoogleOAuthLogin());
 }
-if (els.btnAuthLogout) {
-  els.btnAuthLogout.addEventListener("click", () => logoutCurrentUser());
-}
 if (els.settingsBtnLogout) {
   els.settingsBtnLogout.addEventListener("click", () => logoutCurrentUser());
 }
@@ -37603,17 +37594,12 @@ wireSettingsSupportLinks();
 const settingsBtnDeleteAccount = document.getElementById("settingsBtnDeleteAccount");
 if (settingsBtnDeleteAccount) {
   settingsBtnDeleteAccount.addEventListener("click", () => {
-    void deleteAccountAndData({ fromSettings: true });
+    void deleteAccountAndData();
   });
 }
 if (els.btnLoadingDismiss) {
   els.btnLoadingDismiss.addEventListener("click", () => {
     dismissPendingBackendTask();
-  });
-}
-if (els.btnProfileDelete) {
-  els.btnProfileDelete.addEventListener("click", () => {
-    void deleteAccountAndData({ fromSettings: false });
   });
 }
 if (els.profileAvatarFile) {

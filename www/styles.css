@@ -27462,9 +27462,6 @@ body[data-route="mashup"] .app{
   padding: 3px;
   background: linear-gradient(135deg, #fbbf24, #f59e0b, #ec4899);
   box-shadow: 0 20px 48px -20px rgba(251,191,36,0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 .homeDeskMashupTile::before{
   content:"";
@@ -27473,18 +27470,24 @@ body[data-route="mashup"] .app{
   border-radius: 19px;
   background: linear-gradient(160deg, #1c1408 0%, #0a0c14 100%);
 }
-.homeDeskMashupIco{
-  position: relative;
+.homeDeskMashupDisc{
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.16);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.32);
   z-index: 1;
-  width: 40px;
-  height: 40px;
-  color: rgba(253,230,138,0.94);
-  display: block;
 }
-.homeDeskCreateStack .homeDeskMashupIco,
-.homeDeskPromo--compact .homeDeskMashupIco{
-  width: 50px;
-  height: 50px;
+.homeDeskMashupDisc--a{
+  left: 16px;
+  top: 26px;
+  background: linear-gradient(145deg, rgba(124,92,255,0.72), rgba(34,211,238,0.42));
+}
+.homeDeskMashupDisc--b{
+  right: 16px;
+  bottom: 22px;
+  background: linear-gradient(145deg, rgba(251,191,36,0.72), rgba(244,114,182,0.42));
 }
 
 @media (max-width: 760px){

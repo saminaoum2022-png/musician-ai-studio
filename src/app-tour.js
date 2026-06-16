@@ -214,7 +214,7 @@ function resetTour(tourId) {
   if (_activeTourId === tourId) _step = 0;
 }
 
-function getTour(tourId = _activeTourId) {
+function ensureHomeTourDom() {
   let root = document.getElementById("appTour");
   if (root && !root.querySelector(".appTourDimFill")) {
     root.remove();

@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618profileActNoFlash";
+const APP_BUILD = "20260618profileActPaginate";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -7739,6 +7739,7 @@ async function enrichProfileActivitiesAfterPaint(libRows, feedItems, profMap, li
 
 async function renderProfileActivities(opts = {}) {
   const force = Boolean(opts.force);
+  const extend = Boolean(opts.extend);
   const listEl = document.getElementById("profileActivitiesList");
   const libEl = document.getElementById("libraryList");
   const countEl = document.getElementById("profileActivitiesCount");
@@ -7765,13 +7766,16 @@ async function renderProfileActivities(opts = {}) {
     Date.now() - snap.at < PROFILE_ACT_SNAPSHOT_MS &&
     snap.html &&
     !snap.html.includes("followAct--skel");
-  if (snapFresh && !hadFeed) listEl.innerHTML = snap.html;
-  else if (!hadFeed && !snapFresh) listEl.innerHTML = followingActivitySkeletonHtml();
+  if (!extend) {
+    if (snapFresh && !hadFeed) listEl.innerHTML = snap.html;
+    else if (!hadFeed && !snapFresh) listEl.innerHTML = followingActivitySkeletonHtml();
+  }
   if (!opts.deferCloud) void mergeCloudSongsIntoLocalLibrary();
   const snapStillValid =
     Boolean(_profileActSnapshot) &&
     snapFresh &&
     !force &&
+    !extend &&
     Date.now() - snap.at < PROFILE_ACT_MIN_FETCH_GAP_MS;
   const snapHasPosts = Boolean(
     snap?.html && (snap.html.includes("profileActRow") || snap.html.includes('class="followAct"')),
@@ -7796,6 +7800,11 @@ async function renderProfileActivities(opts = {}) {
     }))
     .filter((row) => row.ts > 0)
     .sort((a, b) => b.ts - a.ts);
+  const totalPosts = feedItems.length;
+  _profileActivitiesShown = Math.min(totalPosts, Math.max(PROFILE_ACTIVITIES_PAGE_SIZE, _profileActivitiesShown));
+  const visibleFeedItems = feedItems.slice(0, _profileActivitiesShown);
+  const visibleLibRows = visibleFeedItems.map((item) => item.track);
+  const remainingPosts = Math.max(0, totalPosts - visibleFeedItems.length);
   if (!feedItems.length) {
     listEl.innerHTML = `
       <div class="profileActEmpty">
@@ -7807,9 +7816,10 @@ async function renderProfileActivities(opts = {}) {
     persistProfileActSnapshot();
     return;
   }
-  listEl.innerHTML = feedItems
-    .map((item, i) => followingActivityRowHtml(item.track, profMap, i, { xstyle: true }))
-    .join("");
+  listEl.innerHTML =
+    visibleFeedItems
+      .map((item, i) => followingActivityRowHtml(item.track, profMap, i, { xstyle: true }))
+      .join("") + profileActivitiesLoadMoreHtml(remainingPosts);
   _profileActSnapshot = { at: Date.now(), html: listEl.innerHTML };
   persistProfileActSnapshot();
   try {
@@ -7817,7 +7827,8 @@ async function renderProfileActivities(opts = {}) {
   } catch {}
   applyFeedSocialStatsToDom(listEl);
   const enrichGen = ++_profileActEnrichGen;
-  void enrichProfileActivitiesAfterPaint(libRows, feedItems, profMap, listEl, enrichGen);
+  void enrichProfileActivitiesAfterPaint(visibleLibRows, visibleFeedItems, profMap, listEl, enrichGen);
+  wireProfileActivitiesLoadMoreOnce(listEl, totalPosts);
   } catch (e) {
     try {
       console.warn("[profile/activities]", e);
@@ -7838,6 +7849,36 @@ async function renderProfileActivities(opts = {}) {
         });
       }
     }
+  }
+}
+
+function wireProfileActivitiesLoadMoreOnce(listEl) {
+  if (!listEl || listEl.dataset.profileActLoadMoreWired) return;
+  listEl.dataset.profileActLoadMoreWired = "1";
+  listEl.addEventListener("click", (e) => {
+    const btn = e.target.closest("#profileActivitiesLoadMore");
+    if (!btn || !listEl.contains(btn)) return;
+    e.preventDefault();
+    haptic("light");
+    const uid = String(authSession?.user?.id || "");
+    const total = loadLibrary().filter(
+      (t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile),
+    ).length;
+    _profileActivitiesShown = Math.min(total, _profileActivitiesShown + PROFILE_ACTIVITIES_PAGE_SIZE);
+    void renderProfileActivities({ extend: true, deferCloud: true });
+  });
+  const sentinel = listEl.querySelector("[data-profile-act-loadmore-sentinel]");
+  if (sentinel && typeof IntersectionObserver === "function" && !listEl.dataset.profileActLoadMoreObs) {
+    listEl.dataset.profileActLoadMoreObs = "1";
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((en) => en.isIntersecting)) return;
+        const loadBtn = listEl.querySelector("#profileActivitiesLoadMore");
+        if (loadBtn) loadBtn.click();
+      },
+      { rootMargin: "120px 0px" },
+    );
+    obs.observe(sentinel);
   }
 }
 
@@ -9399,6 +9440,22 @@ let _profileActEnrichGen = 0;
 const PROFILE_ACT_SNAPSHOT_MS = 120000;
 const PROFILE_ACT_MIN_FETCH_GAP_MS = 45000;
 const PROFILE_ACT_SNAPSHOT_KEY = "nabad_profile_act_snap_v2";
+const PROFILE_ACTIVITIES_PAGE_SIZE = 6;
+let _profileActivitiesShown = PROFILE_ACTIVITIES_PAGE_SIZE;
+
+function resetProfileActivitiesPagination() {
+  _profileActivitiesShown = PROFILE_ACTIVITIES_PAGE_SIZE;
+}
+
+function profileActivitiesLoadMoreHtml(remaining) {
+  if (remaining <= 0) return "";
+  return `
+    <div class="profileReleasesLoadMoreRow profileActLoadMoreRow" data-profile-act-loadmore-sentinel>
+      <button type="button" id="profileActivitiesLoadMore" class="profileReleasesLoadMore profileActLoadMore" aria-label="Load more posts">
+        Load more<span class="profileReleasesLoadMoreCount">${remaining}</span>
+      </button>
+    </div>`;
+}
 
 function hydrateProfileActSnapshotFromStorage() {
   if (_profileActSnapshot) return;
@@ -9421,6 +9478,7 @@ function persistProfileActSnapshot() {
 
 function invalidateProfileActivitiesCache() {
   _profileActSnapshot = null;
+  resetProfileActivitiesPagination();
   try {
     sessionStorage.removeItem(PROFILE_ACT_SNAPSHOT_KEY);
   } catch {}

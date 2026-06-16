@@ -58,7 +58,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260618routePerf4" />
+    <link rel="stylesheet" href="./styles.css?v=20260618echoDrawerOnly" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -90,8 +90,8 @@
             <span class="loginSettlingLabel">Create</span>
           </article>
           <article class="loginSettlingSlide" data-settle-slide="1">
-            <span class="loginSettlingIcon loginSettlingIcon--echo" aria-hidden="true"></span>
-            <span class="loginSettlingLabel">Echo</span>
+            <span class="loginSettlingIcon loginSettlingIcon--mashup" aria-hidden="true"></span>
+            <span class="loginSettlingLabel">Mashup</span>
           </article>
           <article class="loginSettlingSlide" data-settle-slide="2">
             <span class="loginSettlingIcon loginSettlingIcon--friends" aria-hidden="true"></span>
@@ -186,7 +186,7 @@
             <div class="introWelcomeBody">
               <span class="introWelcomeMark" aria-hidden="true"></span>
               <h1 class="introWelcomeTitle">Welcome to <span class="brandPrimary">NabadAi</span> <span class="brandSecondary introBrandSecondary">Music</span></h1>
-              <p class="introWelcomeLead">Music from a hum. Voice sparks for your circle. Share what you make.</p>
+              <p class="introWelcomeLead">Music from a hum. Blend tracks, remix your sound, share what you make.</p>
               <button id="btnIntroGetStarted" class="introGetStartedBtn" type="button">Get Started</button>
               <p class="introWelcomeLegal">By tapping Get Started you agree to our <a href="./terms.html" data-legal-link="terms">Terms</a> &middot; <a href="./privacy.html" data-legal-link="privacy">Privacy</a></p>
             </div>
@@ -217,23 +217,24 @@
                 <p class="onboardingLead">Turn a hum, photo, or a few words into a full song — studio-quality, yours to share.</p>
               </article>
               <article class="onboardingSlide" data-onboarding-slide="1" aria-hidden="true">
-                <div class="onboardingMock onboardingMock--echo" aria-hidden="true">
-                  <div class="onboardingEchoTileWrap">
-                    <span class="onboardingEchoPulse" aria-hidden="true"></span>
-                    <div class="onboardingEchoTile">
-                      <span class="onboardingEchoWave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+                <div class="onboardingMock onboardingMock--mashup" aria-hidden="true">
+                  <div class="homeDeskMashupTileWrap onboardingMashupTileWrap">
+                    <span class="homeDeskMashupPulse" aria-hidden="true"></span>
+                    <div class="homeDeskMashupTile">
+                      <span class="homeDeskMashupDisc homeDeskMashupDisc--a" aria-hidden="true"></span>
+                      <span class="homeDeskMashupDisc homeDeskMashupDisc--b" aria-hidden="true"></span>
                     </div>
                   </div>
                 </div>
-                <h2 class="onboardingTitle">Echo</h2>
-                <p class="onboardingLead">24-hour voice sparks — raw hooks, late-night ideas, and emotion for the people you follow.</p>
+                <h2 class="onboardingTitle">Mashup</h2>
+                <p class="onboardingLead">Blend two songs from your library — weave hooks, energy, and vibe into one fresh track.</p>
               </article>
               <article class="onboardingSlide" data-onboarding-slide="2" aria-hidden="true">
                 <div class="onboardingMock onboardingMock--friends" aria-hidden="true">
                   <div class="onboardingFriendRow">
                     <span class="onboardingFriendAv onboardingFriendAv--purple"></span>
                     <div class="onboardingFriendBody">
-                      <span class="onboardingFriendBadge onboardingFriendBadge--echo">Echo</span>
+                      <span class="onboardingFriendBadge onboardingFriendBadge--drop">New song</span>
                       <span class="onboardingFriendLine"></span>
                     </div>
                   </div>
@@ -1185,13 +1186,6 @@
               <p class="discoveryStudioTag appScreenLead">Updates, advice, drops, and remixes from people you follow.</p>
             </div>
           </header>
-          <div id="friendsEchoRail" class="friendsEchoRail" hidden>
-            <div class="friendsEchoRailHead">
-              <span class="friendsEchoRailTitle">Echoes</span>
-              <span class="friendsEchoRailHint">Voice ideas from your circle · 24h</span>
-            </div>
-            <div id="friendsEchoRailScroll" class="friendsEchoRailScroll" role="list" aria-label="Echoes from your circle"></div>
-          </div>
           <div id="discoveryFollowingStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
           <div id="discoveryFollowingList" class="followActStack" hidden></div>
         </section>
@@ -1296,19 +1290,26 @@
                 <span class="homeDeskPromoChev" aria-hidden="true">→</span>
               </button>
 
-              <button type="button" class="homeDeskPromoCard homeDeskEchoPromo homeDeskPromo--compact" data-home-card="echo" aria-label="Echo — drop a short voice clip for your circle">
-                <span class="homeDeskPromoVisual homeDeskPromoVisual--echo" aria-hidden="true">
-                  <span class="onboardingEchoTileWrap">
-                    <span class="onboardingEchoPulse" aria-hidden="true"></span>
-                    <span class="onboardingEchoTile">
-                      <span class="onboardingEchoWave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+              <button type="button" class="homeDeskPromoCard homeDeskRemixPromo homeDeskPromo--compact" data-home-card="remix" aria-label="Remix — spin a new version of any song in your library">
+                <span class="homeDeskPromoVisual homeDeskPromoVisual--remix" aria-hidden="true">
+                  <span class="homeDeskRemixTileWrap">
+                    <span class="homeDeskRemixPulse" aria-hidden="true"></span>
+                    <span class="homeDeskRemixTile">
+                      <svg class="homeDeskRemixIco" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <path d="M7 7h3.4c1.6 0 3 .8 3.8 2.1l1.1 1.8"/>
+                        <path d="M7 17h3.4c1.6 0 3-.8 3.8-2.1l1.1-1.8"/>
+                        <path d="M17 6l3 3-3 3"/>
+                        <path d="M17 12l3 3-3 3"/>
+                        <path d="M4 7h3"/>
+                        <path d="M4 17h3"/>
+                      </svg>
                     </span>
                   </span>
                 </span>
                 <span class="homeDeskPromoCopy">
-                  <span class="homeDeskSectionKicker">Voice moments</span>
-                  <span class="homeDeskPromoTitle" id="homeDeskEchoPromoTitle">Echo</span>
-                  <span class="homeDeskPromoDesc">Drop a short voice clip for your circle — it plays for 24 hours, then disappears.</span>
+                  <span class="homeDeskSectionKicker">New spin</span>
+                  <span class="homeDeskPromoTitle" id="homeDeskRemixPromoTitle">Remix</span>
+                  <span class="homeDeskPromoDesc">Open any song in your library and remix it — new energy, same DNA.</span>
                 </span>
                 <span class="homeDeskPromoChev" aria-hidden="true">→</span>
               </button>
@@ -3680,6 +3681,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260618routePerf4"></script>
+    <script type="module" src="./src/app.js?v=20260618echoDrawerOnly"></script>
   </body>
 </html>

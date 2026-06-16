@@ -2652,17 +2652,7 @@ export function openEchoFromCreateChooser() {
     } catch {}
     return;
   }
-  _pendingEchoCompose = true;
-  const onFriends = String(location.hash || "") === "#/friends";
-  if (!onFriends) {
-    try {
-      location.hash = "#/friends";
-    } catch {}
-  } else {
-    try {
-      onEnterFriendsRoute();
-    } catch {}
-  }
+  openEchoComposeSheet();
   window.requestAnimationFrame(() => {
     try {
       c().haptic("light");
@@ -2671,12 +2661,7 @@ export function openEchoFromCreateChooser() {
 }
 
 export function onEnterFriendsRoute() {
-  void refreshEchoRail({ useCache: true });
-  const sheet = document.getElementById("echoComposeSheet");
-  if (_pendingEchoCompose) {
-    _pendingEchoCompose = false;
-    if (!sheet?.classList.contains("isOpen")) openEchoComposeSheet();
-  }
+  // Echo rail retired from Friends — compose opens from Create drawer only.
 }
 
 function wireEchoOnce() {

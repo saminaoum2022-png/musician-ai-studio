@@ -9,7 +9,7 @@ import {
   initLockScreenNowPlaying,
   syncLockScreenNowPlaying,
 } from "./lockScreenNowPlaying.js";
-import { initEcho, onEnterFriendsRoute, openEchoFromCreateChooser } from "./echo.js";
+import { initEcho, openEchoFromCreateChooser } from "./echo.js";
 import {
   getInitialBootHash,
   getPostOnboardingHash,
@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618routePerf4";
+const APP_BUILD = "20260618echoDrawerOnly";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -5816,25 +5816,21 @@ function bindHomeDeskOnce(page) {
         void openVoiceWizard();
         return;
       }
-      if (card === "echo") {
+      if (card === "remix") {
         if (!authSession?.user?.id) {
-          setPostAuthReturnHash("#/friends");
+          setPostAuthReturnHash("#/profile?seg=all");
           try {
             location.hash = "#/auth";
           } catch {}
           scheduleApplyRoute();
-          setStatus("Sign in to record an Echo.");
+          setStatus("Sign in to remix your songs.");
           return;
         }
         try {
-          location.hash = "#/friends";
+          location.hash = "#/profile?seg=all";
         } catch {}
         scheduleApplyRoute();
-        setTimeout(() => {
-          try {
-            openEchoFromCreateChooser();
-          } catch {}
-        }, 120);
+        setStatus("Open any song and tap Remix in the player.");
         return;
       }
       if (card === "mashup") {
@@ -9377,9 +9373,6 @@ function runFriendsRouteRefresh(token) {
 
 function enterFriendsRoute() {
   const token = ++_friendsRouteEnterToken;
-  try {
-    onEnterFriendsRoute();
-  } catch {}
   void (async () => {
     if (token !== _friendsRouteEnterToken) return;
     await ensureFriendsFeedPrerequisites();
@@ -13533,7 +13526,7 @@ let _loginSettlingForceEndTimer = 0;
 let _loginSettlingCarouselStep = 0;
 const LOGIN_SETTLING_MAX_MS = isCapacitorNativeAuth() ? 45000 : 18000;
 const LOGIN_SETTLING_SLIDE_MS = 780;
-const LOGIN_SETTLING_LABELS = ["Create", "Echo", "Friends", "Persona"];
+const LOGIN_SETTLING_LABELS = ["Create", "Mashup", "Friends", "Persona"];
 
 function setLoginSettlingCarouselStep(step) {
   _loginSettlingCarouselStep = Math.max(0, Math.min(3, step));
@@ -17876,7 +17869,7 @@ function renderActivityFeedFromState() {
       <div class="activityEmpty">
         <div class="activityEmptyIcon" aria-hidden="true">♪</div>
         <strong>No activity yet</strong>
-        <span>When people follow you, like your songs, reply to Echoes, or you hit play milestones, it shows up here.</span>
+        <span>When people follow you, like your songs, reply to posts, or you hit play milestones, it shows up here.</span>
       </div>`;
     return;
   }

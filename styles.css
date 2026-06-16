@@ -26785,6 +26785,10 @@ button.activityRow--unavailable{
   justify-content: center;
   padding: 12px 0 4px;
 }
+.activityLoadMore:not(.isLoading){
+  padding: 0;
+  min-height: 12px;
+}
 .activityLoadMoreSpinner{
   width: 22px;
   height: 22px;

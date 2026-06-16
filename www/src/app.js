@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618profileSettingsOnly";
+const APP_BUILD = "20260618activityLoadFix";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -17690,6 +17690,8 @@ function paintActivityFeedSnapshotIfFresh() {
 }
 
 const ACTIVITY_PAGE_SIZE = 20;
+const ACTIVITY_MIN_FETCH_GAP_MS = 800;
+let _activityFeedLastFetchAt = 0;
 let _activityFeedState = {
   items: [],
   offset: 0,
@@ -18210,12 +18212,26 @@ function renderActivityFeedFromState() {
   persistActivityFeedSnapshot(feed.innerHTML);
 }
 
+/** Spinner only while a page fetch is in flight; sentinel stays for scroll paging. */
+function syncActivityLoadMoreUi() {
+  const wrap = els.activityLoadMore;
+  if (!wrap) return;
+  const spinner = wrap.querySelector(".activityLoadMoreSpinner");
+  const hasItems = _activityFeedState.items.length > 0;
+  const needsPager = hasItems && _activityFeedState.hasMore;
+  wrap.hidden = !needsPager;
+  wrap.setAttribute("aria-hidden", needsPager ? "false" : "true");
+  wrap.classList.toggle("isLoading", Boolean(_activityFeedState.loading));
+  if (spinner) {
+    spinner.hidden = !_activityFeedState.loading;
+  }
+}
+
 async function fetchActivityBatch() {
   if (_activityFeedState.loading || !_activityFeedState.hasMore) return;
   _activityFeedState.loading = true;
-  // Bottom spinner only when PAGING — the initial load already shows the
-  // skeleton in the feed, and two spinners stacked looked broken.
-  if (els.activityLoadMore) els.activityLoadMore.hidden = !_activityFeedState.items.length;
+  _activityFeedLastFetchAt = Date.now();
+  syncActivityLoadMoreUi();
   try {
     const limit = ACTIVITY_PAGE_SIZE;
     const offset = _activityFeedState.offset;
@@ -18224,10 +18240,19 @@ async function fetchActivityBatch() {
     if (!batch.length) {
       _activityFeedState.hasMore = false;
     } else {
-      _activityFeedState.items.push(...batch);
-      _activityFeedState.offset += batch.length;
-      batch.forEach((n) => cacheActivitySongArtFromNotification(n));
-      if (batch.length < limit) _activityFeedState.hasMore = false;
+      const seen = new Set(_activityFeedState.items.map((n) => String(n?.id || "")));
+      const fresh = batch.filter((n) => {
+        const id = String(n?.id || "");
+        return id && !seen.has(id);
+      });
+      if (!fresh.length) {
+        _activityFeedState.hasMore = false;
+      } else {
+        _activityFeedState.items.push(...fresh);
+        _activityFeedState.offset += batch.length;
+        fresh.forEach((n) => cacheActivitySongArtFromNotification(n));
+        if (batch.length < limit) _activityFeedState.hasMore = false;
+      }
     }
     renderActivityFeedFromState();
     void (async () => {
@@ -18253,7 +18278,7 @@ async function fetchActivityBatch() {
     }
   } finally {
     _activityFeedState.loading = false;
-    if (els.activityLoadMore) els.activityLoadMore.hidden = !_activityFeedState.hasMore;
+    syncActivityLoadMoreUi();
   }
 }
 
@@ -18309,7 +18334,10 @@ function bindActivityPageOnce() {
   });
   if (els.activityLoadMore && typeof IntersectionObserver !== "undefined") {
     _activityFeedState.observer = new IntersectionObserver((entries) => {
-      if (entries.some((e) => e.isIntersecting)) void fetchActivityBatch();
+      if (!entries.some((e) => e.isIntersecting)) return;
+      if (_activityFeedState.loading || !_activityFeedState.hasMore) return;
+      if (Date.now() - _activityFeedLastFetchAt < ACTIVITY_MIN_FETCH_GAP_MS) return;
+      void fetchActivityBatch();
     }, { root: null, rootMargin: "160px", threshold: 0 });
     _activityFeedState.observer.observe(els.activityLoadMore);
   }

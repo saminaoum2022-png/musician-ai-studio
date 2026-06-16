@@ -1,9 +1,13 @@
 /**
- * Premium home spotlight tour — dim overlay + highlighted target, Next / Skip.
+ * Spotlight tours — home (5 steps) + v2 mini-tours (Persona, Friends).
  */
 
 export const HOME_TOUR_STORAGE_KEY = "nabadai_home_tour_v1_done";
 export const HOME_TOUR_VERSION = "1.2";
+export const MINI_TOUR_VERSION = "2.0";
+
+const PERSONA_TOUR_STORAGE_KEY = "nabadai_persona_tour_v1_done";
+const FRIENDS_TOUR_STORAGE_KEY = "nabadai_friends_tour_v1_done";
 
 const HOME_TOUR_STEPS = [
   {
@@ -11,6 +15,7 @@ const HOME_TOUR_STEPS = [
     title: "Welcome to NabadAi",
     body: "Make full songs in your language — no studio needed. This quick tour shows where to start.",
     target: null,
+    route: "challenges",
   },
   {
     id: "create",
@@ -19,6 +24,7 @@ const HOME_TOUR_STEPS = [
     hint: "Persona — add your own voice to songs when you're ready.",
     target: '[data-home-card="song"]',
     pad: 10,
+    route: "challenges",
   },
   {
     id: "templates",
@@ -27,6 +33,7 @@ const HOME_TOUR_STEPS = [
     target: "#campaignBannerBtn",
     fallbackTarget: '[data-home-seg="templates"]',
     pad: 8,
+    route: "challenges",
   },
   {
     id: "discover",
@@ -35,6 +42,7 @@ const HOME_TOUR_STEPS = [
     hint: "Friends — find people and share songs with them.",
     target: '[data-route-link="discover"]',
     pad: 8,
+    route: "challenges",
   },
   {
     id: "profile",
@@ -42,38 +50,133 @@ const HOME_TOUR_STEPS = [
     body: "Profile holds every song you make — play, share, publish, or open song details.",
     target: '[data-route-link="profile"]',
     pad: 8,
+    route: "challenges",
   },
 ];
 
+const PERSONA_TOUR_STEPS = [
+  {
+    id: "persona-card",
+    title: "Meet Persona",
+    body: "Save your voice once — NabadAi can sing new songs sounding like you.",
+    target: '[data-home-card="persona"]',
+    pad: 10,
+    route: "challenges",
+  },
+  {
+    id: "persona-create",
+    title: "Use it when you create",
+    body: "Before Generate, pick your persona here — or tap + to record a new voice.",
+    target: "#singerPersonaRow",
+    fallbackTarget: "[data-singer-persona-create]",
+    pad: 8,
+    route: "generate",
+  },
+];
+
+const FRIENDS_TOUR_STEPS = [
+  {
+    id: "friends-feed",
+    title: "Your circle",
+    body: "Friends is where you see songs and voice moments from people you follow.",
+    target: "#friendsPage .discoveryStudioHead",
+    fallbackTarget: '[data-route-link="friends"]',
+    pad: 8,
+    route: "friends",
+  },
+  {
+    id: "friends-share",
+    title: "Share something",
+    body: "Tap + to post a song, caption, or shout-out to your followers.",
+    target: "#friendsComposeOpenBtn",
+    pad: 10,
+    route: "friends",
+  },
+];
+
+const TOURS = {
+  home: {
+    id: "home",
+    storageKey: HOME_TOUR_STORAGE_KEY,
+    steps: HOME_TOUR_STEPS,
+    doneToast: "You're ready to create.",
+    prepare() {
+      ensureHomePanelForTour();
+    },
+  },
+  persona: {
+    id: "persona",
+    storageKey: PERSONA_TOUR_STORAGE_KEY,
+    steps: PERSONA_TOUR_STEPS,
+    doneToast: "Persona is ready when you are.",
+    prepare() {
+      ensureHomePanelForTour();
+    },
+  },
+  friends: {
+    id: "friends",
+    storageKey: FRIENDS_TOUR_STORAGE_KEY,
+    steps: FRIENDS_TOUR_STEPS,
+    doneToast: "Have fun sharing with your circle.",
+    prepare() {},
+  },
+};
+
+let _activeTourId = "home";
 let _step = 0;
 let _open = false;
 let _deps = null;
 let _inited = false;
 let _resizeTimer = 0;
+let _tourOfferedThisSession = false;
+let _personaTourOfferedThisSession = false;
+let _friendsTourOfferedThisSession = false;
+
+function getTour(tourId = _activeTourId) {
+  return TOURS[String(tourId || "home")] || TOURS.home;
+}
+
+function getActiveSteps() {
+  return getTour().steps || HOME_TOUR_STEPS;
+}
 
 export function isHomeTourComplete() {
+  return isTourComplete("home");
+}
+
+export function isTourComplete(tourId) {
+  const tour = getTour(tourId);
+  if (!tour?.storageKey) return false;
   try {
-    return localStorage.getItem(HOME_TOUR_STORAGE_KEY) === "1";
+    return localStorage.getItem(tour.storageKey) === "1";
   } catch {
     return false;
   }
 }
 
 export function markHomeTourComplete() {
+  markTourComplete("home");
+}
+
+function markTourComplete(tourId) {
+  const tour = getTour(tourId);
+  if (!tour?.storageKey) return;
   try {
-    localStorage.setItem(HOME_TOUR_STORAGE_KEY, "1");
+    localStorage.setItem(tour.storageKey, "1");
   } catch {}
 }
 
 export function resetHomeTour() {
-  try {
-    localStorage.removeItem(HOME_TOUR_STORAGE_KEY);
-  } catch {}
-  _step = 0;
+  resetTour("home");
 }
 
-function qs(sel, root = document) {
-  return root.querySelector(sel);
+function resetTour(tourId) {
+  const tour = getTour(tourId);
+  if (!tour?.storageKey) return;
+  try {
+    localStorage.removeItem(tour.storageKey);
+  } catch {}
+  if (_activeTourId === tourId) _step = 0;
 }
 
 function visibleTourTarget(primary, fallback) {
@@ -121,7 +224,7 @@ function ensureHomeTourDom() {
       <p id="appTourHint" class="appTourHint" hidden></p>
       <div class="appTourProgress" id="appTourProgress" aria-hidden="true"></div>
       <div class="appTourActions">
-        <button type="button" class="ghost appTourSkip" id="btnAppTourSkip">Skip tour</button>
+        <button type="button" class="ghost appTourSkip" id="btnAppTourSkip">Don't show again</button>
         <button type="button" class="primary appTourNext" id="btnAppTourNext">Next</button>
       </div>
     </div>
@@ -144,7 +247,8 @@ function unlockTourScroll() {
   } catch {}
 }
 
-function closeHomeTour(markDone) {
+function closeTour(markDone) {
+  const closingId = _activeTourId;
   _open = false;
   const root = document.getElementById("appTour");
   if (root) {
@@ -155,7 +259,12 @@ function closeHomeTour(markDone) {
   const spot = document.getElementById("appTourSpot");
   if (spot) spot.hidden = true;
   unlockTourScroll();
-  if (markDone) markHomeTourComplete();
+  if (markDone) {
+    markTourComplete(closingId);
+    if (closingId === "home") {
+      window.setTimeout(() => schedulePersonaTourIfNeeded(), 2800);
+    }
+  }
 }
 
 function positionDimCutout(top, left, width, height) {
@@ -280,7 +389,8 @@ function ensureTourHintEl() {
 }
 
 function renderTourStep() {
-  const stepDef = HOME_TOUR_STEPS[_step];
+  const steps = getActiveSteps();
+  const stepDef = steps[_step];
   if (!stepDef) return;
   ensureHomeTourDom();
   const kicker = document.getElementById("appTourKicker");
@@ -290,8 +400,8 @@ function renderTourStep() {
   const next = document.getElementById("btnAppTourNext");
   const skip = document.getElementById("btnAppTourSkip");
   const progress = document.getElementById("appTourProgress");
-  const isLast = _step >= HOME_TOUR_STEPS.length - 1;
-  if (kicker) kicker.textContent = `Step ${_step + 1} of ${HOME_TOUR_STEPS.length}`;
+  const isLast = _step >= steps.length - 1;
+  if (kicker) kicker.textContent = `Step ${_step + 1} of ${steps.length}`;
   if (title) title.textContent = stepDef.title;
   if (body) body.textContent = stepDef.body;
   if (hint) {
@@ -307,9 +417,12 @@ function renderTourStep() {
   const actions = skip?.closest?.(".appTourActions");
   if (actions) actions.classList.toggle("appTourActions--solo", !isLast);
   if (progress) {
-    progress.innerHTML = HOME_TOUR_STEPS.map((s, i) =>
-      `<span class="appTourDot${i === _step ? " isActive" : i < _step ? " isDone" : ""}"></span>`,
-    ).join("");
+    progress.innerHTML = steps
+      .map(
+        (s, i) =>
+          `<span class="appTourDot${i === _step ? " isActive" : i < _step ? " isDone" : ""}"></span>`,
+      )
+      .join("");
   }
   window.requestAnimationFrame(() => {
     positionTourUi(stepDef);
@@ -317,14 +430,17 @@ function renderTourStep() {
   });
 }
 
-function advanceHomeTour() {
-  if (_step >= HOME_TOUR_STEPS.length - 1) {
-    closeHomeTour(true);
+function advanceTour() {
+  const tour = getTour();
+  const steps = tour.steps || [];
+  if (_step >= steps.length - 1) {
+    const toast = tour.doneToast || "You're ready to create.";
+    closeTour(true);
     try {
       _deps?.haptic?.("light");
     } catch {}
     try {
-      _deps?.showToast?.("You're ready to create.", { icon: "✓", durationMs: 2600 });
+      _deps?.showToast?.(toast, { icon: "✓", durationMs: 2600 });
     } catch {}
     return;
   }
@@ -332,10 +448,11 @@ function advanceHomeTour() {
   try {
     _deps?.haptic?.("light");
   } catch {}
-  renderTourStep();
+  void ensureStepRoute(getActiveSteps()[_step]).then(() => renderTourStep());
 }
 
-function showHomeTourOverlay({ step = 0 } = {}) {
+function showTourOverlay({ tourId = _activeTourId, step = 0 } = {}) {
+  _activeTourId = tourId;
   _step = step;
   _open = true;
   const root = ensureHomeTourDom();
@@ -346,17 +463,84 @@ function showHomeTourOverlay({ step = 0 } = {}) {
   root.classList.add("isOpen");
 }
 
-export function openHomeTour({ force = false } = {}) {
-  if (!force && isHomeTourComplete()) return;
-  if (_open) return;
-  const route = String(document.body.getAttribute("data-route") || "");
-  if (route !== "challenges") return;
-
-  ensureHomePanelForTour();
-  showHomeTourOverlay({ step: 0 });
+function routeHashFor(route) {
+  const r = String(route || "").trim();
+  return r ? `#/${r}` : "#/challenges";
 }
 
-function finishHomeTourNavigation() {
+function ensureStepRoute(stepDef) {
+  const route = String(stepDef?.route || "").trim();
+  if (!route) return Promise.resolve();
+  try {
+    location.hash = routeHashFor(route);
+  } catch {}
+  try {
+    _deps?.applyRoute?.();
+  } catch {}
+  getTour().prepare?.();
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.setTimeout(resolve, route === "generate" ? 180 : 80);
+    });
+  });
+}
+
+function ensureHomePanelForTour() {
+  const startBtn = document.querySelector('[data-home-seg="start"]');
+  if (startBtn && !startBtn.classList.contains("is-active")) {
+    startBtn.click?.();
+  }
+}
+
+function openTour(tourId, { force = false } = {}) {
+  const tour = getTour(tourId);
+  if (!tour) return;
+  if (!force && isTourComplete(tourId)) return;
+  if (_open) return;
+  _activeTourId = tourId;
+  _step = 0;
+  void ensureStepRoute(tour.steps[0]).then(() => showTourOverlay({ tourId, step: 0 }));
+}
+
+export function openHomeTour(opts) {
+  openTour("home", opts);
+}
+
+export function scheduleHomeTourIfNeeded() {
+  if (_tourOfferedThisSession || isTourComplete("home")) return;
+  if (typeof _deps?.shouldOfferHomeTour === "function" && !_deps.shouldOfferHomeTour()) return;
+  const route = String(document.body.getAttribute("data-route") || "");
+  if (route !== "challenges") return;
+  _tourOfferedThisSession = true;
+  window.requestAnimationFrame(() => {
+    window.setTimeout(() => openTour("home", { force: false }), 520);
+  });
+}
+
+export function schedulePersonaTourIfNeeded() {
+  if (_open || _personaTourOfferedThisSession || isTourComplete("persona")) return;
+  if (!isTourComplete("home")) return;
+  if (typeof _deps?.shouldOfferHomeTour === "function" && !_deps.shouldOfferHomeTour()) return;
+  const route = String(document.body.getAttribute("data-route") || "");
+  if (route !== "challenges") return;
+  _personaTourOfferedThisSession = true;
+  window.setTimeout(() => openTour("persona", { force: false }), 400);
+}
+
+export function scheduleFriendsTourIfNeeded() {
+  if (_open || _friendsTourOfferedThisSession || isTourComplete("friends")) return;
+  if (!isTourComplete("home")) return;
+  if (typeof _deps?.shouldOfferHomeTour === "function" && !_deps.shouldOfferHomeTour()) return;
+  const route = String(document.body.getAttribute("data-route") || "");
+  if (route !== "friends") return;
+  _friendsTourOfferedThisSession = true;
+  window.setTimeout(() => openTour("friends", { force: false }), 520);
+}
+
+export function replayHomeTour() {
+  resetTour("home");
+  _activeTourId = "home";
+  showTourOverlay({ tourId: "home", step: 0 });
   try {
     location.hash = "#/challenges";
   } catch {}
@@ -369,28 +553,35 @@ function finishHomeTourNavigation() {
   });
 }
 
-function ensureHomePanelForTour() {
-  const startBtn = document.querySelector('[data-home-seg="start"]');
-  if (startBtn && !startBtn.classList.contains("is-active")) {
-    startBtn.click?.();
-  }
-}
-
-let _tourOfferedThisSession = false;
-
-export function scheduleHomeTourIfNeeded() {
-  if (_tourOfferedThisSession || isHomeTourComplete()) return;
-  if (typeof _deps?.shouldOfferHomeTour === "function" && !_deps.shouldOfferHomeTour()) return;
-  _tourOfferedThisSession = true;
+export function replayPersonaTour() {
+  resetTour("persona");
+  _activeTourId = "persona";
+  showTourOverlay({ tourId: "persona", step: 0 });
+  try {
+    location.hash = "#/challenges";
+  } catch {}
+  try {
+    _deps?.applyRoute?.();
+  } catch {}
   window.requestAnimationFrame(() => {
-    window.setTimeout(() => openHomeTour({ force: false }), 520);
+    ensureHomePanelForTour();
+    if (_open) renderTourStep();
   });
 }
 
-export function replayHomeTour() {
-  resetHomeTour();
-  showHomeTourOverlay({ step: 0 });
-  finishHomeTourNavigation();
+export function replayFriendsTour() {
+  resetTour("friends");
+  _activeTourId = "friends";
+  showTourOverlay({ tourId: "friends", step: 0 });
+  try {
+    location.hash = "#/friends";
+  } catch {}
+  try {
+    _deps?.applyRoute?.();
+  } catch {}
+  window.requestAnimationFrame(() => {
+    if (_open) renderTourStep();
+  });
 }
 
 function onTourResize() {
@@ -416,11 +607,11 @@ export function initAppTour(deps) {
       try {
         _deps?.haptic?.("light");
       } catch {}
-      closeHomeTour(true);
+      closeTour(true);
     });
   }
   if (next) {
-    next.addEventListener("click", () => advanceHomeTour());
+    next.addEventListener("click", () => advanceTour());
   }
   window.addEventListener("resize", onTourResize, { passive: true });
   window.addEventListener("orientationchange", onTourResize, { passive: true });

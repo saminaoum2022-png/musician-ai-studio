@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618appTour6";
+const APP_BUILD = "20260618appTourV2";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3093,6 +3093,7 @@ function applyRoute() {
       markRouteHeavy("friends");
       enterFriendsRoute();
     }
+    void loadAppTourModule().then((m) => m.scheduleFriendsTourIfNeeded());
   }
   if (wanted === "discover") {
     bindDiscoveryDiscoverControls();
@@ -3115,7 +3116,10 @@ function applyRoute() {
   if (wanted === "challenges") {
     bindChallengesPageOnce();
     renderHomeDesk();
-    void loadAppTourModule().then((m) => m.scheduleHomeTourIfNeeded());
+    void loadAppTourModule().then((m) => {
+      m.scheduleHomeTourIfNeeded();
+      m.schedulePersonaTourIfNeeded();
+    });
   }
   if (wanted === "activity") {
     bindActivityPageOnce();
@@ -3483,15 +3487,28 @@ void loadAppTourModule()
     if (tourSub && m.HOME_TOUR_VERSION) {
       tourSub.textContent = `Walk through Create, templates, Discover, and Profile again · Home tour v${m.HOME_TOUR_VERSION}`;
     }
-    const replayHomeTourBtn = document.getElementById("btnSettingsReplayHomeTour");
-    if (replayHomeTourBtn && !replayHomeTourBtn.dataset.bound) {
-      replayHomeTourBtn.dataset.bound = "1";
-      replayHomeTourBtn.addEventListener("click", (e) => {
-        e.preventDefault();
-        haptic("light");
-        void loadAppTourModule().then((mod) => mod.replayHomeTour());
-      });
+    const personaSub = document.getElementById("settingsPersonaTourSub");
+    if (personaSub && m.MINI_TOUR_VERSION) {
+      personaSub.textContent = `Save your voice and use it when you generate · Mini tour v${m.MINI_TOUR_VERSION}`;
     }
+    const friendsSub = document.getElementById("settingsFriendsTourSub");
+    if (friendsSub && m.MINI_TOUR_VERSION) {
+      friendsSub.textContent = `See your circle and share with followers · Mini tour v${m.MINI_TOUR_VERSION}`;
+    }
+    const bindReplay = (id, fn) => {
+      const btn = document.getElementById(id);
+      if (btn && !btn.dataset.bound) {
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          haptic("light");
+          void loadAppTourModule().then((mod) => mod[fn]());
+        });
+      }
+    };
+    bindReplay("btnSettingsReplayHomeTour", "replayHomeTour");
+    bindReplay("btnSettingsReplayPersonaTour", "replayPersonaTour");
+    bindReplay("btnSettingsReplayFriendsTour", "replayFriendsTour");
   })
   .catch((e) => {
     console.error("[app-tour] init failed", e);

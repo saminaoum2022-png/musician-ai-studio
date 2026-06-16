@@ -4752,6 +4752,288 @@ function paintDiscoverTopSectionsLoading() {
 /** Suno negative tags for campaign/challenge templates — tames crowd SFX and shouting. */
 const TEMPLATE_GENERATION_AVOID_TAGS =
   "crowd noise, audience cheering, screaming, shouty vocals, stadium ambience, zaghrouta, mahraganat";
+
+/** Per-team FIFA taste: language default, dialect, and vibe-specific Suno styles. */
+const CAMPAIGN_TEAM_PROFILES = {
+  morocco: {
+    defaultLang: "ar",
+    dialect: "Maghrebi Arabic",
+    dialectHint: "Moroccan Arabic (Darija). Not Egyptian or Levantine.",
+    rootsLabel: "Chaabi",
+    styles: {
+      pop: "Moroccan chaabi pop, gnawa accents, modern Maghrebi pop, warm vocal, 100 bpm",
+      hiphop: "Moroccan rap, Maghrebi trap groove, confident flow, 94 bpm",
+      chant: "Maghrebi stadium anthem, big drums, handclaps, festive energy, 108 bpm",
+      dabke: "Moroccan chaabi, gnawa rhythm, festive Maghrebi percussion, 105 bpm",
+      heart: "Emotional Maghrebi ballad, oud and strings, cinematic, 88 bpm",
+    },
+  },
+  algeria: {
+    defaultLang: "ar",
+    dialect: "Maghrebi Arabic",
+    dialectHint: "Algerian Arabic (Darija). Raï-influenced but polished pop.",
+    rootsLabel: "Raï",
+    styles: {
+      pop: "Algerian raï pop, modern Maghrebi pop, catchy chorus, 102 bpm",
+      hiphop: "Algerian rap, Maghrebi trap, confident flow, 94 bpm",
+      chant: "North African stadium anthem, drums and handclaps, 108 bpm",
+      dabke: "Algerian raï groove, darbuka and synth, festive dance rhythm, 106 bpm",
+      heart: "Emotional Maghrebi ballad, mandole and strings, 86 bpm",
+    },
+  },
+  tunisia: {
+    defaultLang: "ar",
+    dialect: "Maghrebi Arabic",
+    dialectHint: "Tunisian Arabic. Light Maghrebi pop feel.",
+    rootsLabel: "Mezoued",
+    styles: {
+      pop: "Tunisian pop, modern Maghrebi pop, warm vocal, 100 bpm",
+      hiphop: "Tunisian rap, North African trap, 92 bpm",
+      chant: "Maghrebi stadium anthem, handclaps and drums, 108 bpm",
+      dabke: "Tunisian mezoued pop, festive North African rhythm, 104 bpm",
+      heart: "Emotional Tunisian ballad, oud and strings, 88 bpm",
+    },
+  },
+  saudi: {
+    defaultLang: "ar",
+    dialect: "Gulf Arabic",
+    dialectHint: "Khaleeji/Gulf Arabic. Not Egyptian or Levantine.",
+    rootsLabel: "Khaleeji",
+    styles: {
+      pop: "Khaleeji pop, modern Gulf pop, glossy production, warm vocal, 98 bpm",
+      hiphop: "Khaleeji hip hop, Gulf trap groove, confident flow, 92 bpm",
+      chant: "Gulf stadium anthem, big drums, polished anthem vocal, 106 bpm",
+      dabke: "Khaleeji folk pop, ardah-style drums, Gulf celebration rhythm, 102 bpm",
+      heart: "Emotional Khaleeji ballad, oud and strings, cinematic, 84 bpm",
+    },
+  },
+  qatar: {
+    defaultLang: "ar",
+    dialect: "Gulf Arabic",
+    dialectHint: "Khaleeji/Gulf Arabic. Not Egyptian or Levantine.",
+    rootsLabel: "Khaleeji",
+    styles: {
+      pop: "Khaleeji pop, modern Gulf pop, warm lead vocal, 98 bpm",
+      hiphop: "Khaleeji hip hop, Gulf trap, confident rap, 92 bpm",
+      chant: "Gulf stadium anthem, drums and brass, 106 bpm",
+      dabke: "Khaleeji folk pop, traditional Gulf rhythm, festive drums, 102 bpm",
+      heart: "Emotional Khaleeji ballad, oud and piano, 84 bpm",
+    },
+  },
+  egypt: {
+    defaultLang: "ar",
+    dialect: "Egyptian Arabic",
+    dialectHint: "Egyptian Arabic (Masri).",
+    rootsLabel: "Shaabi",
+    styles: {
+      pop: "Egyptian pop, modern Cairo pop, catchy chorus, warm vocal, 104 bpm",
+      hiphop: "Egyptian hip hop, shaabi-trap groove, confident flow, 95 bpm",
+      chant: "Egyptian stadium pop anthem, big drums, handclaps, 110 bpm",
+      dabke: "Egyptian shaabi, mizmar and tabla, festive dance rhythm, 104 bpm",
+      heart: "Emotional Egyptian ballad, piano and strings, cinematic, 82 bpm",
+    },
+  },
+  jordan: {
+    defaultLang: "ar",
+    dialect: "Levantine Arabic",
+    dialectHint: "Levantine Arabic (Jordanian). Not Egyptian.",
+    rootsLabel: "Dabke",
+    styles: {
+      pop: "Levantine Arabic pop, modern Jordan pop, warm vocal, 102 bpm",
+      hiphop: "Levantine Arabic hip hop, clean trap groove, 94 bpm",
+      chant: "Levantine stadium anthem, big drums, handclaps, 108 bpm",
+      dabke: "Levantine dabke, mijwiz, davul and tabla, ktakufti 6/8 dabkeh rhythm, 120 bpm",
+      heart: "Emotional Levantine ballad, oud and strings, 84 bpm",
+    },
+  },
+  iraq: {
+    defaultLang: "ar",
+    dialect: "Iraqi Arabic",
+    dialectHint: "Iraqi Arabic colloquial.",
+    rootsLabel: "Iraqi folk",
+    styles: {
+      pop: "Iraqi pop, modern Baghdad pop, oud and keyboard, emotional vocal, 100 bpm",
+      hiphop: "Iraqi hip hop, Middle Eastern trap, confident flow, 94 bpm",
+      chant: "Iraqi stadium anthem, big drums, festive energy, 108 bpm",
+      dabke: "Iraqi chobi rhythm, festive Iraqi percussion, dance pop, 110 bpm",
+      heart: "Emotional Iraqi ballad, oud and strings, cinematic, 86 bpm",
+    },
+  },
+  brazil: {
+    defaultLang: "en",
+    dialect: "",
+    dialectHint: "",
+    rootsLabel: "Samba funk",
+    styles: {
+      pop: "Brazilian pop, samba-pop fusion, sunny groove, warm vocal, 104 bpm",
+      hiphop: "Brazilian hip hop, funk carioca influence, punchy groove, 96 bpm",
+      chant: "Brazilian stadium anthem, samba drums and brass, 110 bpm",
+      dabke: "Samba funk groove, festive Brazilian percussion, dance energy, 112 bpm",
+      heart: "Emotional Brazilian ballad, acoustic guitar and strings, 80 bpm",
+    },
+  },
+  argentina: {
+    defaultLang: "en",
+    dialect: "",
+    dialectHint: "",
+    rootsLabel: "Cumbia pop",
+    styles: {
+      pop: "Argentine pop rock, Latin pop anthem, passionate vocal, 102 bpm",
+      hiphop: "Latin hip hop, Argentine trap, confident flow, 94 bpm",
+      chant: "Latin stadium anthem, big drums and brass, 108 bpm",
+      dabke: "Argentine cumbia pop, accordion and festive rhythm, 108 bpm",
+      heart: "Emotional Argentine ballad, guitar and strings, cinematic, 84 bpm",
+    },
+  },
+  mexico: {
+    defaultLang: "en",
+    dialect: "",
+    dialectHint: "",
+    rootsLabel: "Regional pop",
+    styles: {
+      pop: "Latin pop, modern Mexican pop anthem, catchy chorus, 104 bpm",
+      hiphop: "Latin hip hop, Mexican trap groove, 96 bpm",
+      chant: "Latin stadium anthem, trumpets and drums, 110 bpm",
+      dabke: "Regional Mexican pop groove, festive Latin percussion, 108 bpm",
+      heart: "Emotional Latin ballad, guitar and strings, 82 bpm",
+    },
+  },
+  usa: {
+    defaultLang: "en",
+    dialect: "",
+    dialectHint: "",
+    rootsLabel: "Arena groove",
+    styles: {
+      pop: "American pop anthem, glossy production, big chorus, 104 bpm",
+      hiphop: "American hip hop, clean trap groove, confident flow, 96 bpm",
+      chant: "American stadium anthem, big drums and brass, 110 bpm",
+      dabke: "American pop-rock groove, four-on-the-floor, festive energy, 112 bpm",
+      heart: "Emotional American ballad, piano and strings, cinematic, 84 bpm",
+    },
+  },
+  england: {
+    defaultLang: "en",
+    dialect: "",
+    dialectHint: "",
+    rootsLabel: "Brit pop",
+    styles: {
+      pop: "UK pop rock anthem, driving drums, catchy chorus, 102 bpm",
+      hiphop: "UK hip hop, grime-influenced trap, confident flow, 94 bpm",
+      chant: "British stadium anthem, drums and handclaps, 108 bpm",
+      dabke: "Brit pop groove, indie-rock energy, upbeat rhythm, 110 bpm",
+      heart: "Emotional UK ballad, piano and strings, 82 bpm",
+    },
+  },
+  france: {
+    defaultLang: "en",
+    dialect: "",
+    dialectHint: "",
+    rootsLabel: "Variété",
+    styles: {
+      pop: "French pop, modern variété pop, elegant vocal, 100 bpm",
+      hiphop: "French hip hop, Parisian trap groove, 92 bpm",
+      chant: "French stadium anthem, brass and drums, 106 bpm",
+      dabke: "French pop groove, disco-house accents, festive rhythm, 108 bpm",
+      heart: "Emotional French ballad, piano and strings, cinematic, 80 bpm",
+    },
+  },
+  germany: {
+    defaultLang: "en",
+    dialect: "",
+    dialectHint: "",
+    rootsLabel: "Deutsch pop",
+    styles: {
+      pop: "German pop rock, modern Deutsch pop, anthemic chorus, 102 bpm",
+      hiphop: "German hip hop, European trap, confident flow, 94 bpm",
+      chant: "German stadium anthem, big drums and brass, 108 bpm",
+      dabke: "Deutsch pop groove, electronic pop pulse, festive energy, 110 bpm",
+      heart: "Emotional German ballad, piano and strings, cinematic, 84 bpm",
+    },
+  },
+  spain: {
+    defaultLang: "en",
+    dialect: "",
+    dialectHint: "",
+    rootsLabel: "Flamenco pop",
+    styles: {
+      pop: "Spanish pop, modern Latin pop, passionate vocal, 104 bpm",
+      hiphop: "Spanish hip hop, Latin trap groove, 94 bpm",
+      chant: "Spanish stadium anthem, drums and handclaps, 108 bpm",
+      dabke: "Flamenco pop fusion, palmas and festive rhythm, 108 bpm",
+      heart: "Emotional Spanish ballad, guitar and strings, 82 bpm",
+    },
+  },
+  portugal: {
+    defaultLang: "en",
+    dialect: "",
+    dialectHint: "",
+    rootsLabel: "Fado pop",
+    styles: {
+      pop: "Portuguese pop, modern Lisbon pop, warm vocal, 100 bpm",
+      hiphop: "Portuguese hip hop, Iberian trap, 92 bpm",
+      chant: "Portuguese stadium anthem, drums and brass, 106 bpm",
+      dabke: "Modern fado-pop groove, Portuguese guitar accents, 104 bpm",
+      heart: "Emotional Portuguese ballad, guitar and strings, 78 bpm",
+    },
+  },
+  italy: {
+    defaultLang: "en",
+    dialect: "",
+    dialectHint: "",
+    rootsLabel: "Italo pop",
+    styles: {
+      pop: "Italian pop, modern cantautore pop, passionate vocal, 102 bpm",
+      hiphop: "Italian hip hop, Mediterranean trap, confident flow, 94 bpm",
+      chant: "Italian stadium anthem, big drums and brass, 108 bpm",
+      dabke: "Italo disco-pop groove, festive Mediterranean rhythm, 110 bpm",
+      heart: "Emotional Italian ballad, piano and strings, cinematic, 84 bpm",
+    },
+  },
+};
+
+function campaignTeamMusicProfile(teamId) {
+  return CAMPAIGN_TEAM_PROFILES[String(teamId || "").trim()] || null;
+}
+
+function campaignStyleForTeamVibe(teamId, vibeId) {
+  const profile = campaignTeamMusicProfile(teamId);
+  const vibe = LIVE_CAMPAIGN?.vibes?.find((v) => v.id === vibeId);
+  return profile?.styles?.[vibeId] || vibe?.style || "";
+}
+
+function campaignRootsLabelForTeam(teamId) {
+  return campaignTeamMusicProfile(teamId)?.rootsLabel || "Local roots";
+}
+
+function campaignLangConfigForTeam(teamId) {
+  const profile = campaignTeamMusicProfile(teamId);
+  return {
+    defaultLang: profile?.defaultLang || "en",
+    dialect: profile?.dialect || "",
+    dialectHint: profile?.dialectHint || "",
+  };
+}
+
+function updateCampaignVibeRowForTeam(teamId) {
+  const vibeRow = document.getElementById("campaignVibeRow");
+  const c = liveCampaignNow();
+  if (!vibeRow || !c) return;
+  const rootsLabel = campaignRootsLabelForTeam(teamId);
+  vibeRow.querySelectorAll("[data-campaign-vibe]").forEach((b) => {
+    const id = String(b.getAttribute("data-campaign-vibe") || "");
+    const vibe = c.vibes.find((v) => v.id === id);
+    if (!vibe) return;
+    const label = id === "dabke" ? rootsLabel : vibe.label;
+    b.textContent = `${vibe.emoji} ${label}`;
+  });
+}
+
+function applyCampaignTeamDefaults(teamId) {
+  const cfg = campaignLangConfigForTeam(teamId);
+  _campaignLang = cfg.defaultLang;
+  updateCampaignVibeRowForTeam(teamId);
+}
+
 // ─── Live event campaigns ───────────────────────────────────────────────
 // One config drives a time-boxed campaign: Home hero banner, a join sheet
 // (team + vibe + language → prefilled Create), a Discover rail of entries,
@@ -4791,7 +5073,7 @@ const LIVE_CAMPAIGN = {
       id: "pop",
       label: "Pop anthem",
       emoji: "🎵",
-      style: "modern Arabic pop, FIFA-inspired anthem, glossy drums, warm lead vocal, catchy chorus, 104 bpm",
+      style: "modern pop anthem, glossy drums, warm lead vocal, catchy chorus, 104 bpm",
       en: `[Intro – drums]\n{team}! {team}! Here we go!\n\n[Verse 1]\nLights on the pitch, hearts beating fast\nEvery road we walked has led to this at last\nWe carried the dream through rain and sun\nTonight we stand — our story's just begun\n\n[Chorus]\n{team}, {team} — raise the flag high\nOne heart, one song, we touch the sky\nWin or lose, we sing as one\n{team} forever — we've already won!`,
       ar: `[مقدمة – طبول]\n{team}! {team}! يلا نبلّش!\n\n[المقطع الأول]\nالأضواء عالملعب والقلب عم يدقّ\nمن كل بلد اسمك عالشفة منمّق\nحملنا الحلم من زمان ومن بعد\nهلّق منوقف سوا ومنكمل الطريق\n\n[اللازمة]\nيا {team} ارفع راسك عالي\nقلب واحد وصوت بيطلع لسما\nفزنا أو خسرنا منغني سوا\n{team} دايمًا ومعك الهوا`,
     },
@@ -4799,7 +5081,7 @@ const LIVE_CAMPAIGN = {
       id: "hiphop",
       label: "Hip hop",
       emoji: "🎤",
-      style: "Arabic hip hop, clean trap groove, punchy 808s, confident rap vocal, 96 bpm",
+      style: "clean hip hop, trap groove, punchy 808s, confident vocal, 96 bpm",
       en: `[Intro]\nYeah… you know whose year this is\n{team}!\n\n[Verse 1]\nWe step on the pitch when the whistle blows\nGreen grass, clear mind, everybody knows\nNumber on the shirt but the name's in the heart\n{team} on the rise — we been ready from the start\n\n[Hook]\n{team} crew, put your scarves in the air\nChampions energy, steady in the stare\nThey can talk, they can doubt, we don't care\nTrophy's coming home — ride it on the snare!`,
       ar: `[مقدمة]\nاي… مين السنة هيدي؟\n{team}!\n\n[المقطع الأول]\nمنوقف عالملعب والكل عم يحضّر\nالرقم على القميص بس القلب هو المقدّر\n{team} صاعد وما في وقت ننام\nمن أوّل دقيقة والعين عالهدف سام\n\n[الهوك]\nيا جماهير {team} ارفعوا الشالات\nطاقة أبطال ونظرات ثابتة\nخلهم يحكوا ما منسمع كلام\nالكأس جاي لإلنا — قولها معنا عالإيقاع`,
     },
@@ -4813,9 +5095,9 @@ const LIVE_CAMPAIGN = {
     },
     {
       id: "dabke",
-      label: "Dabke",
+      label: "Local roots",
       emoji: "🪘",
-      style: "Levantine dabke, mijwiz, davul and tabla, ktakufti 6/8 dabkeh rhythm, festive vocal, 120 bpm",
+      style: "regional folk pop, festive local rhythm, upbeat vocal, 115 bpm",
       en: `[Intro – mijwiz melody]\nHey! Hey! Everybody hold hands!\n\n[Verse 1]\nThe night is ours and the drums are calling\nFlags are flying and the stars are falling\nFrom every street to the stadium floor\nWe dance for {team} — feel the dabke pour!\n\n[Chorus]\nDabke for {team}, stomp the ground\nKtakufti rhythm, turn it around\nHands up high, keep the beat tight\n{team} tonight, this is our night!`,
       ar: `[مقدمة – مجوز]\nهيه! هيه! كلنا إيد بإيد!\n\n[المقطع الأول]\nالليلة لإلنا والطبل عم بينادي\nالأعلام عالية والفرحة زيادة\nمن كل حارة لأرض الملعب\nمنرقص لـ{team} والإيقاع شباب\n\n[اللازمة]\nدبكة لـ{team} دقّوا عالأرض\nإيقاع كتافتي والدنيا عم تفرّش\nإيدين عالية وصوت مرتاح\n{team} الليلة والفرح صافي`,
     },
@@ -4868,7 +5150,7 @@ function renderCampaignBanner() {
 // Sheet state
 let _campaignTeam = "";
 let _campaignVibe = "pop";
-let _campaignLang = "ar";
+let _campaignLang = "en";
 let _campaignSongsCache = { ts: 0, rows: [] };
 
 /** Public campaign entries (songs whose challenge meta carries this
@@ -5011,6 +5293,7 @@ function openCampaignSheet() {
       .join("");
   }
   syncCampaignSheetSelections();
+  if (_campaignTeam) updateCampaignVibeRowForTeam(_campaignTeam);
   sheet.style.display = "";
   try { document.body.style.overflow = "hidden"; } catch {}
   void fetchCampaignSongs(c.id).then((rows) => renderCampaignLeaderboard(rows));
@@ -5028,17 +5311,21 @@ function startCampaignCreate() {
   const team = c.teams.find((t) => t.id === _campaignTeam);
   const vibe = c.vibes.find((v) => v.id === _campaignVibe) || c.vibes[0];
   if (!team || !vibe) return;
-  const teamDisplay = _campaignLang === "ar" ? team.ar : team.name;
-  const lyrics = String(vibe[_campaignLang] || vibe.en || "").replaceAll("{team}", teamDisplay);
+  const langCfg = campaignLangConfigForTeam(team.id);
+  const lyricLang = _campaignLang === "ar" ? "ar" : "en";
+  const teamDisplay = lyricLang === "ar" ? team.ar : team.name;
+  const lyrics = String(vibe[lyricLang] || vibe.en || "").replaceAll("{team}", teamDisplay);
+  const style = campaignStyleForTeamVibe(team.id, vibe.id);
+  const useArabicDialect = lyricLang === "ar";
   closeCampaignSheet();
   applyDiscoveryIdeaToCreate({
     id: `campaign:${c.id}:${team.id}:${vibe.id}`,
     title: `${team.name} Anthem ${c.emoji}`,
-    style: vibe.style,
+    style,
     lyrics,
     prompt: lyrics,
-    dialect: _campaignLang === "ar" ? "Levantine Arabic" : "",
-    dialectHint: _campaignLang === "ar" ? "Levantine colloquial (Lebanese/Syrian/Palestinian). Avoid Egyptian dialect." : "",
+    dialect: useArabicDialect ? langCfg.dialect : "",
+    dialectHint: useArabicDialect ? langCfg.dialectHint : "",
     avoidTags: TEMPLATE_GENERATION_AVOID_TAGS,
     challenge: {
       id: `${c.id}:${team.id}`,
@@ -5049,7 +5336,7 @@ function startCampaignCreate() {
       teamName: team.name,
       teamFlag: team.flag,
       occasion: c.shortTitle,
-      genre: vibe.label,
+      genre: vibe.id === "dabke" ? campaignRootsLabelForTeam(team.id) : vibe.label,
       personName: "",
       variant: vibe.id,
     },
@@ -5079,6 +5366,7 @@ function bindCampaignUiOnce() {
       if (teamBtn) {
         haptic("light");
         _campaignTeam = String(teamBtn.getAttribute("data-campaign-team") || "");
+        applyCampaignTeamDefaults(_campaignTeam);
         syncCampaignSheetSelections();
         return;
       }

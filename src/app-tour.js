@@ -14,7 +14,7 @@ const HOME_TOUR_STEPS = [
   {
     id: "create",
     title: "Create a song",
-    body: "Tap here to write lyrics, pick a style, or hum a melody. We handle the rest.",
+    body: "Tap here to write lyrics, pick a style, or hum a melody. We handle the rest. Later, add Persona to sing in your own voice.",
     target: '[data-home-card="song"]',
     pad: 10,
   },

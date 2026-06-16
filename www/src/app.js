@@ -35,7 +35,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260617appTour3";
+const APP_BUILD = "20260618fifaQa1";
 
 /** When false: no `hub_posts` traffic (saves Supabase egress), no Hub tab,
  *  `#/hub` redirects to Create, publish/share to Hub is disabled. */
@@ -5365,7 +5365,7 @@ function startCampaignCreate() {
   const lyricLang = _campaignLang === "ar" ? "ar" : "en";
   const teamDisplay = lyricLang === "ar" ? team.ar : team.name;
   const lyrics = String(vibe[lyricLang] || vibe.en || "").replaceAll("{team}", teamDisplay);
-  const style = campaignStyleForTeamVibe(team.id, vibe.id);
+  const style = withTemplateStyleGuard(campaignStyleForTeamVibe(team.id, vibe.id));
   const useArabicDialect = lyricLang === "ar";
   closeCampaignSheet();
   applyDiscoveryIdeaToCreate({
@@ -5808,7 +5808,7 @@ function bindChallengesPageOnce() {
     return {
       id: `occasion:${occasion.id}:${genre.id}:${variant}`,
       title,
-      style: `${genre.style}, ${tempoHint}, personalized for ${person}. ${challengeBrief}`,
+      style: withTemplateStyleGuard(`${genre.style}, ${tempoHint}, personalized for ${person}. ${challengeBrief}`),
       prompt: lyricPrompt,
       lyrics: lyricPrompt,
       dialect: language?.dialect || "",
@@ -6114,8 +6114,11 @@ function applyRemixTemplateToCreate(tpl, name) {
   const lyrics = String(tpl.lyrics || "").replaceAll("[name]", cleanName);
   const titleWithName = `${tpl.title} — for ${cleanName}`;
   if (els.sunoPrompt) els.sunoPrompt.value = lyrics;
-  if (els.sunoStyle) els.sunoStyle.value = String(tpl.style || "");
+  if (els.sunoStyle) els.sunoStyle.value = withTemplateStyleGuard(String(tpl.style || ""));
   if (els.sunoTitle) els.sunoTitle.value = titleWithName;
+  if (els.sunoAvoidTags) {
+    els.sunoAvoidTags.value = trimAvoidTagsForSuno(TEMPLATE_GENERATION_AVOID_TAGS);
+  }
   pendingSearchRemixMeta = {
     searchTemplateId: String(tpl.id || "").trim(),
     searchTemplateTitle: String(tpl.title || "").trim(),

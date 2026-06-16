@@ -132,6 +132,40 @@ let _resizeTimer = 0;
 let _tourOfferedThisSession = false;
 let _personaTourOfferedThisSession = false;
 let _friendsTourOfferedThisSession = false;
+let _positionTimer = 0;
+
+function currentAppRoute() {
+  return String(document.body.getAttribute("data-route") || "").trim();
+}
+
+function isTourElementVisible(el, requiredRoute = "") {
+  if (!el || el.closest("[hidden]")) return false;
+  let node = el;
+  while (node && node !== document.body) {
+    const st = getComputedStyle(node);
+    if (st.display === "none" || st.visibility === "hidden" || Number(st.opacity) === 0) return false;
+    node = node.parentElement;
+  }
+  if (requiredRoute) {
+    const routeRoot = el.closest(`[data-route="${requiredRoute}"]`);
+    if (!routeRoot) return false;
+    if (getComputedStyle(routeRoot).display === "none") return false;
+  }
+  const r = el.getBoundingClientRect();
+  return r.width > 4 && r.height > 4;
+}
+
+function visibleTourTarget(primary, fallback, requiredRoute = "") {
+  const trySel = (sel) => {
+    if (!sel) return null;
+    const nodes = document.querySelectorAll(sel);
+    for (const el of nodes) {
+      if (isTourElementVisible(el, requiredRoute)) return el;
+    }
+    return null;
+  };
+  return trySel(primary) || trySel(fallback);
+}
 
 function getTour(tourId = _activeTourId) {
   return TOURS[String(tourId || "home")] || TOURS.home;
@@ -180,23 +214,7 @@ function resetTour(tourId) {
   if (_activeTourId === tourId) _step = 0;
 }
 
-function visibleTourTarget(primary, fallback) {
-  const trySel = (sel) => {
-    if (!sel) return null;
-    const nodes = document.querySelectorAll(sel);
-    for (const el of nodes) {
-      if (!el || el.closest("[hidden]")) continue;
-      const st = getComputedStyle(el);
-      if (st.display === "none" || st.visibility === "hidden" || Number(st.opacity) === 0) continue;
-      const r = el.getBoundingClientRect();
-      if (r.width > 4 && r.height > 4) return el;
-    }
-    return null;
-  };
-  return trySel(primary) || trySel(fallback);
-}
-
-function ensureHomeTourDom() {
+function getTour(tourId = _activeTourId) {
   let root = document.getElementById("appTour");
   if (root && !root.querySelector(".appTourDimFill")) {
     root.remove();
@@ -313,16 +331,13 @@ function positionTourUi(stepDef) {
   const margin = 12;
   const gap = 14;
   const target = stepDef?.target
-    ? visibleTourTarget(stepDef.target, stepDef.fallbackTarget)
+    ? visibleTourTarget(stepDef.target, stepDef.fallbackTarget, String(stepDef.route || "").trim())
     : null;
 
   root.classList.toggle("appTour--spot", Boolean(target));
   root.classList.toggle("appTour--welcome", !target);
 
   if (target) {
-    try {
-      target.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
-    } catch {}
     const r = target.getBoundingClientRect();
     const top = Math.max(8, r.top - pad);
     const left = Math.max(8, r.left - pad);
@@ -397,10 +412,39 @@ function prepareTourStep(stepDef) {
   } catch {}
 }
 
+function schedulePositionTourUi(stepDef) {
+  clearTimeout(_positionTimer);
+  const route = String(stepDef?.route || "").trim();
+  const delay = route === "generate" ? 360 : route ? 140 : 80;
+  _positionTimer = window.setTimeout(() => {
+    if (!_open) return;
+    const target = stepDef?.target
+      ? visibleTourTarget(stepDef.target, stepDef.fallbackTarget, route)
+      : null;
+    if (target) {
+      try {
+        target.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
+      } catch {
+        try {
+          target.scrollIntoView({ block: "center", inline: "nearest" });
+        } catch {}
+      }
+    }
+    window.requestAnimationFrame(() => {
+      if (_open) positionTourUi(stepDef);
+    });
+  }, delay);
+}
+
 function renderTourStep() {
   const steps = getActiveSteps();
   const stepDef = steps[_step];
   if (!stepDef) return;
+  const requiredRoute = String(stepDef.route || "").trim();
+  if (requiredRoute && currentAppRoute() !== requiredRoute) {
+    void ensureStepRoute(stepDef).then(() => renderTourStep());
+    return;
+  }
   prepareTourStep(stepDef);
   ensureHomeTourDom();
   const kicker = document.getElementById("appTourKicker");
@@ -434,10 +478,7 @@ function renderTourStep() {
       )
       .join("");
   }
-  window.requestAnimationFrame(() => {
-    positionTourUi(stepDef);
-    window.requestAnimationFrame(() => positionTourUi(stepDef));
-  });
+  schedulePositionTourUi(stepDef);
 }
 
 function advanceTour() {
@@ -492,7 +533,7 @@ function ensureStepRoute(stepDef) {
     const stepDef = getActiveSteps()[_step];
     prepareTourStep(stepDef);
     window.requestAnimationFrame(() => {
-      window.setTimeout(resolve, route === "generate" ? 260 : 80);
+      window.setTimeout(resolve, route === "generate" ? 320 : 120);
     });
   });
 }
@@ -568,17 +609,24 @@ export function replayHomeTour() {
 export function replayPersonaTour() {
   resetTour("persona");
   _activeTourId = "persona";
-  showTourOverlay({ tourId: "persona", step: 0 });
+  _step = 0;
+  _open = true;
+  lockTourScroll();
+  ensureHomeTourDom();
+  const root = document.getElementById("appTour");
+  if (root) {
+    root.hidden = false;
+    root.setAttribute("aria-hidden", "false");
+    root.classList.add("isOpen");
+  }
   try {
     location.hash = "#/challenges";
   } catch {}
   try {
     _deps?.applyRoute?.();
   } catch {}
-  window.requestAnimationFrame(() => {
-    ensureHomePanelForTour();
-    if (_open) renderTourStep();
-  });
+  ensureHomePanelForTour();
+  void ensureStepRoute(PERSONA_TOUR_STEPS[0]).then(() => renderTourStep());
 }
 
 export function replayFriendsTour() {

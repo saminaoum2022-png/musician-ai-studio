@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618activityLoadFix";
+const APP_BUILD = "20260618profileSongsLoadMore";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -7738,6 +7738,10 @@ async function enrichProfileActivitiesAfterPaint(libRows, feedItems, profMap, li
 }
 
 async function renderProfileActivities(opts = {}) {
+  const route = document.body.getAttribute("data-route") || "";
+  if (route === "profile" && _profileSongsSegment !== "activities") {
+    return;
+  }
   const force = Boolean(opts.force);
   const extend = Boolean(opts.extend);
   const listEl = document.getElementById("profileActivitiesList");
@@ -9454,9 +9458,11 @@ function syncProfileActivitiesLoadMoreUi(remaining) {
     _profileSongsSegment === "activities";
   if (!onActivities || remaining <= 0) {
     wrap.hidden = true;
+    wrap.setAttribute("aria-hidden", "true");
     return;
   }
   wrap.hidden = false;
+  wrap.setAttribute("aria-hidden", "false");
   if (moreCount) moreCount.textContent = String(remaining);
 }
 
@@ -9466,6 +9472,12 @@ function wireProfileActivitiesLoadMoreOnce() {
   btn.dataset.boundProfileActLoadMore = "1";
   btn.addEventListener("click", (e) => {
     e.preventDefault();
+    if (
+      (document.body.getAttribute("data-route") || "") !== "profile" ||
+      _profileSongsSegment !== "activities"
+    ) {
+      return;
+    }
     haptic("light");
     const total = loadLibrary().filter(
       (t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile),
@@ -26013,7 +26025,11 @@ function syncProfileSongsSegmentUi() {
   if (activitiesList) activitiesList.hidden = !isActivities;
   if (libList) libList.hidden = isActivities;
   const loadMoreWrap = document.getElementById("profileActivitiesLoadMoreWrap");
-  if (loadMoreWrap && !isActivities) loadMoreWrap.hidden = true;
+  if (loadMoreWrap) {
+    loadMoreWrap.hidden = !isActivities;
+    loadMoreWrap.setAttribute("aria-hidden", isActivities ? "false" : "true");
+  }
+  if (!isActivities) syncProfileActivitiesLoadMoreUi(0);
   // Leaving the Songs segment cancels any in-progress multi-select.
   if (!isAll && _librarySelectMode) {
     _librarySelectMode = false;
@@ -28598,7 +28614,7 @@ function renderLibrary() {
     </ul>
     ${hasMore ? `
       <div class="libLoadMoreWrap" data-lib-loadmore-sentinel>
-        <button type="button" class="libLoadMore" id="libLoadMore">Load more</button>
+        <button type="button" class="libLoadMore profileReleasesLoadMore" id="libLoadMore" aria-label="Load more songs">Load more<span class="profileReleasesLoadMoreCount">${totalCount - visibleItems.length}</span></button>
       </div>
     ` : ""}
   `;

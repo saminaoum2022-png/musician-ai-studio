@@ -21169,6 +21169,12 @@ body[data-profile-songs-seg="activities"] .profileSongsToolbarActions{
 body[data-profile-songs-seg="activities"] #libraryRecoverBanner{
   display: none !important;
 }
+body[data-profile-songs-seg="all"] #profileActivitiesLoadMoreWrap{
+  display: none !important;
+}
+#profileActivitiesLoadMoreWrap[hidden]{
+  display: none !important;
+}
 .profileSongsBlock .libraryRecoverBanner{
   margin-bottom: 10px;
 }

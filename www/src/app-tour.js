@@ -151,9 +151,14 @@ function positionTourUi(stepDef) {
   if (!spot || !card) return;
 
   const pad = Number(stepDef?.pad || 10);
+  const margin = 12;
+  const gap = 14;
   const target = stepDef?.target
     ? visibleTourTarget(stepDef.target, stepDef.fallbackTarget)
     : null;
+
+  root.classList.toggle("appTour--spot", Boolean(target));
+  root.classList.toggle("appTour--welcome", !target);
 
   if (target) {
     try {
@@ -171,20 +176,37 @@ function positionTourUi(stepDef) {
     spot.style.height = `${height}px`;
     spot.style.borderRadius = `${Math.min(22, Math.max(14, height * 0.18))}px`;
 
-    const cardRect = card.getBoundingClientRect();
-    const gap = 14;
-    let cardTop = top + height + gap;
-    if (cardTop + cardRect.height > window.innerHeight - 12) {
-      cardTop = Math.max(12, top - cardRect.height - gap);
-    }
-    card.style.top = `${cardTop}px`;
-    card.style.left = `${Math.max(12, Math.min(window.innerWidth - 12, left))}px`;
+    const cardWidth = Math.min(420, window.innerWidth - margin * 2);
+    card.style.width = `${cardWidth}px`;
+    card.style.maxWidth = `${cardWidth}px`;
     card.style.right = "auto";
     card.style.bottom = "auto";
     card.style.transform = "none";
     card.classList.remove("appTourCard--center");
+
+    const cardH = card.offsetHeight || 200;
+    const inBottomNav = Boolean(target.closest?.(".mobileTabbar"));
+    const targetMidX = left + width / 2;
+    let cardLeft = targetMidX - cardWidth / 2;
+    cardLeft = Math.max(margin, Math.min(cardLeft, window.innerWidth - cardWidth - margin));
+
+    let cardTop;
+    if (inBottomNav || top + height > window.innerHeight * 0.52) {
+      cardTop = top - cardH - gap;
+      if (cardTop < margin) cardTop = margin;
+    } else {
+      cardTop = top + height + gap;
+      if (cardTop + cardH > window.innerHeight - margin) {
+        cardTop = Math.max(margin, top - cardH - gap);
+      }
+    }
+
+    card.style.top = `${cardTop}px`;
+    card.style.left = `${cardLeft}px`;
   } else {
     spot.hidden = true;
+    card.style.width = "";
+    card.style.maxWidth = "";
     card.style.top = "";
     card.style.left = "";
     card.style.right = "";
@@ -212,7 +234,10 @@ function renderTourStep() {
       `<span class="appTourDot${i === _step ? " isActive" : i < _step ? " isDone" : ""}"></span>`,
     ).join("");
   }
-  window.requestAnimationFrame(() => positionTourUi(stepDef));
+  window.requestAnimationFrame(() => {
+    positionTourUi(stepDef);
+    window.requestAnimationFrame(() => positionTourUi(stepDef));
+  });
 }
 
 function advanceHomeTour() {

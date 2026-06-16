@@ -30557,11 +30557,17 @@ body.appTourOpen{
 .appTourDim{
   position: absolute;
   inset: 0;
-  background: rgba(3, 5, 10, 0.08);
+  background:
+    radial-gradient(90% 70% at 50% 40%, rgba(124, 92, 255, 0.04), transparent 64%),
+    rgba(3, 5, 10, 0.84);
   opacity: 0;
   transition: opacity 280ms ease;
+  pointer-events: none;
 }
 .appTour.isOpen .appTourDim{ opacity: 1; }
+.appTour--spot .appTourDim{
+  opacity: 0;
+}
 .appTourSpot{
   position: fixed;
   z-index: 1;

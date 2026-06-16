@@ -107,3 +107,43 @@ as $$
 $$;
 
 grant execute on function public.social_weekly_engagement(timestamptz, timestamptz) to service_role;
+
+-- Profile header stats: one round-trip instead of 3 HEAD counts + 2 follow lookups.
+create or replace function public.social_profile_stats(
+  p_user_id uuid,
+  p_viewer_id uuid default null
+)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'followers', (
+      select count(*)::int from public.social_follows f where f.following_user_id = p_user_id
+    ),
+    'following', (
+      select count(*)::int from public.social_follows f where f.follower_user_id = p_user_id
+    ),
+    'plays', (
+      select count(*)::int from public.social_song_plays p where p.owner_user_id = p_user_id
+    ),
+    'is_following', case
+      when p_viewer_id is null then false
+      else exists (
+        select 1 from public.social_follows f
+        where f.follower_user_id = p_viewer_id and f.following_user_id = p_user_id
+      )
+    end,
+    'follows_viewer', case
+      when p_viewer_id is null then false
+      else exists (
+        select 1 from public.social_follows f
+        where f.follower_user_id = p_user_id and f.following_user_id = p_viewer_id
+      )
+    end
+  );
+$$;
+
+grant execute on function public.social_profile_stats(uuid, uuid) to service_role;

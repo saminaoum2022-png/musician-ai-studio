@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618authThrottle";
+const APP_BUILD = "20260618connPerf";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3169,7 +3169,7 @@ function applyRoute({ passGen } = {}) {
       void refreshMyHubPostsFast();
       void (async () => {
         if (isNativeShell()) await ensureNativeApiBaseResolved();
-        await refreshOwnProfileSocialStats({ force: true });
+        await refreshOwnProfileSocialStats();
       })();
       renderPersonaSelect();
       renderProfileCallingCardHint();
@@ -7625,11 +7625,9 @@ async function mergeCloudSongsIntoLocalLibrary() {
   const cloudFiltered = partitionCloudLibraryRows(cloudRows, tombstones);
   const { keep: cloudSongs, extras: dupExtras } = dedupeCloudSongRows(cloudFiltered);
   if (dupExtras.length) {
-    void (async () => {
-      for (const extra of dupExtras) {
-        await supabaseDeleteUserSongRowById(extra?.cloudSongId || extra?.id);
-      }
-    })();
+    void supabaseDeleteUserSongRowsByIds(
+      dupExtras.map((extra) => extra?.cloudSongId || extra?.id),
+    );
   }
   if (!cloudSongs.length) return false;
 
@@ -9674,16 +9672,27 @@ async function enrichFriendsFeedAfterPaint({
     } catch {}
     void hydrateFeedSocialStatsForFeed(listEl);
 
-    const suggestList = await fetchFollowingEmptySuggestCreators(3, followedIds);
-    if (gen !== _discoveryFollowingGen) return;
-    const wtfHtml = whoToFollowSectionHtml(suggestList);
-    if (wtfHtml) listEl.insertAdjacentHTML("beforeend", wtfHtml);
-    _friendsFeedSnapshot = {
-      at: Date.now(),
-      html: listEl.innerHTML,
-      tracks: _discoveryFeedTracks,
+    const loadWhoToFollow = () => {
+      void (async () => {
+        const suggestList = await fetchFollowingEmptySuggestCreators(3, followedIds);
+        if (gen !== _discoveryFollowingGen) return;
+        const wtfHtml = whoToFollowSectionHtml(suggestList);
+        if (!wtfHtml) return;
+        if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
+        listEl.insertAdjacentHTML("beforeend", wtfHtml);
+        _friendsFeedSnapshot = {
+          at: Date.now(),
+          html: listEl.innerHTML,
+          tracks: _discoveryFeedTracks,
+        };
+        persistFriendsFeedSnapshot();
+      })();
     };
-    persistFriendsFeedSnapshot();
+    if (typeof requestIdleCallback === "function") {
+      requestIdleCallback(loadWhoToFollow, { timeout: 2500 });
+    } else {
+      window.setTimeout(loadWhoToFollow, 600);
+    }
   } catch {}
 }
 
@@ -16952,21 +16961,36 @@ async function supabaseDeleteUserSong(track) {
   );
 }
 
-/** Delete ONE cloud row by id — used by the duplicate-row cleanup so the
- *  kept copy of the same song is never touched. */
+/** Delete ONE cloud row by id — used when only a single row must go. */
 async function supabaseDeleteUserSongRowById(rowId) {
+  await supabaseDeleteUserSongRowsByIds([rowId]);
+}
+
+/** Batch delete duplicate cloud rows (chunked `id=in.(…)` — one pool slot per chunk). */
+async function supabaseDeleteUserSongRowsByIds(rowIds) {
   const token = getSupabaseAuthToken();
-  const rid = String(rowId || "").trim();
-  if (!token || !authSession?.user?.id || !isPostgresUuidString(rid)) return;
+  if (!token || !authSession?.user?.id) return;
+  const ids = [...new Set(
+    (rowIds || []).map((x) => String(x || "").trim()).filter(isPostgresUuidString),
+  )];
+  if (!ids.length) return;
   const uid = encodeURIComponent(authSession.user.id);
-  await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${uid}&id=eq.${encodeURIComponent(rid)}`, {
-    method: "DELETE",
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${token}`,
-      Prefer: "return=minimal",
-    },
-  }).catch(() => null);
+  const CHUNK = 32;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const chunk = ids.slice(i, i + CHUNK);
+    const inList = chunk.map((id) => encodeURIComponent(id)).join(",");
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${uid}&id=in.(${inList})`,
+      {
+        method: "DELETE",
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${token}`,
+          Prefer: "return=minimal",
+        },
+      },
+    ).catch(() => null);
+  }
 }
 
 /** Escape `LIKE`/`ILIKE` wildcards so `username=ilike…` is an exact handle match (underscore is special in SQL). */
@@ -27060,6 +27084,21 @@ let _libraryHydrateInFlight = false;
  */
 let _libraryHydrateCompleted = false;
 
+/** Cap parallel library uploads — faster than serial, gentler on Postgres pool than unbounded fan-out. */
+async function runTasksWithConcurrency(items, limit, fn) {
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) return;
+  const workers = Math.max(1, Math.min(limit, list.length));
+  let idx = 0;
+  async function worker() {
+    while (idx < list.length) {
+      const i = idx++;
+      await fn(list[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: workers }, () => worker()));
+}
+
 async function ensureUserLibraryHydrated(prefetchedCloud) {
   if (!authSession?.user?.id) {
     // No session → there's nothing to hydrate; mark complete so the
@@ -27101,12 +27140,9 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
   // re-insert them with a fresh created_at) and delete the extras.
   const { keep: cloudSongs, extras: cloudDupExtras } = dedupeCloudSongRows(cloudAlive);
   if (cloudDupExtras.length) {
-    void (async () => {
-      for (const extra of cloudDupExtras) {
-        // eslint-disable-next-line no-await-in-loop
-        await supabaseDeleteUserSongRowById(extra?.cloudSongId || extra?.id);
-      }
-    })();
+    void supabaseDeleteUserSongRowsByIds(
+      cloudDupExtras.map((extra) => extra?.cloudSongId || extra?.id),
+    );
   }
   const localForUser = loadLibraryFor(uid).filter(
     (row) => !isTrackTombstoned(row, tombstones) && !isTrackMarkedDeleted(row),
@@ -27145,11 +27181,9 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
   localCandidates.forEach(addMerged);
   const { keep: mergedDeduped, extras: mergedDupExtras } = dedupeCloudSongRows(merged);
   if (mergedDupExtras.length) {
-    void (async () => {
-      for (const extra of mergedDupExtras) {
-        await supabaseDeleteUserSongRowById(extra?.cloudSongId || extra?.id);
-      }
-    })();
+    void supabaseDeleteUserSongRowsByIds(
+      mergedDupExtras.map((extra) => extra?.cloudSongId || extra?.id),
+    );
   }
   mergedDeduped.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
 
@@ -27188,16 +27222,20 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
     let okCount = 0;
     let failCount = 0;
     let firstFail = "";
-    for (const t of localOnly) {
-      if (isTrackTombstoned(t)) continue;
-      // eslint-disable-next-line no-await-in-loop
-      const ins = await supabaseInsertUserSong(t);
-      if (ins?.ok) okCount += 1;
-      else {
-        failCount += 1;
-        if (!firstFail) firstFail = `${ins?.reason || "insert_failed"}${ins?.details ? `: ${ins.details}` : ""}`;
-      }
-    }
+    await runTasksWithConcurrency(
+      localOnly.filter((t) => !isTrackTombstoned(t)),
+      4,
+      async (t) => {
+        const ins = await supabaseInsertUserSong(t);
+        if (ins?.ok) okCount += 1;
+        else {
+          failCount += 1;
+          if (!firstFail) {
+            firstFail = `${ins?.reason || "insert_failed"}${ins?.details ? `: ${ins.details}` : ""}`;
+          }
+        }
+      },
+    );
     const tombsAfter = loadLibraryTombstoneKeySet();
     const cloudAfter = dedupeCloudSongRows(
       (await supabaseLoadUserSongs()).filter((row) => !isTrackTombstoned(row, tombsAfter)),
@@ -27255,12 +27293,9 @@ async function reconcileLibraryFromCloud({ force = false } = {}) {
     const cloudAlive = partitionCloudLibraryRows(cloudRaw, tombstones);
     const { keep: cloud, extras: dupExtras } = dedupeCloudSongRows(cloudAlive);
     if (dupExtras.length) {
-      void (async () => {
-        for (const extra of dupExtras) {
-          // eslint-disable-next-line no-await-in-loop
-          await supabaseDeleteUserSongRowById(extra?.cloudSongId || extra?.id);
-        }
-      })();
+      void supabaseDeleteUserSongRowsByIds(
+        dupExtras.map((extra) => extra?.cloudSongId || extra?.id),
+      );
     }
     const local = loadLibrary().filter(
       (row) => !isTrackTombstoned(row, tombstones) && !isTrackMarkedDeleted(row),

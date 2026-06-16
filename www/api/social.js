@@ -189,11 +189,21 @@ function cleanUsername(v) {
   return String(v || "").replace(/^@/, "").trim().slice(0, 64);
 }
 
+/** Per-request memo — weekly_chart / me / replies reuse the same profiles. */
+let profileCache = null;
+
+function resetProfileCache() {
+  profileCache = new Map();
+}
+
 async function profileByUserId(userId) {
   const uid = cleanUserId(userId);
   if (!uid) return null;
+  if (profileCache?.has(uid)) return profileCache.get(uid);
   const r = await svcFetch(`profiles?select=user_id,username,avatar&user_id=eq.${encodeURIComponent(uid)}&limit=1`);
-  return Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
+  const row = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
+  if (profileCache) profileCache.set(uid, row);
+  return row;
 }
 
 async function profileByUsername(username) {
@@ -253,18 +263,33 @@ async function batchSongPlayCounts(songIds) {
 async function socialStats(userId, viewerId) {
   const uid = cleanUserId(userId);
   if (!uid) return null;
+  const viewer = cleanUserId(viewerId) || null;
+  const rpc = await callRpc("social_profile_stats", {
+    p_user_id: uid,
+    p_viewer_id: viewer,
+  });
+  if (rpc.ok && rpc.data && typeof rpc.data === "object") {
+    const d = rpc.data;
+    return {
+      followers: Math.max(0, Number(d.followers) || 0),
+      following: Math.max(0, Number(d.following) || 0),
+      plays: Math.max(0, Number(d.plays) || 0),
+      isFollowing: Boolean(d.is_following),
+      followsViewer: Boolean(d.follows_viewer),
+    };
+  }
   const [followers, following, plays, isFollowingRows, followsViewerRows] = await Promise.all([
     countRows(`social_follows?select=follower_user_id&following_user_id=eq.${encodeURIComponent(uid)}&limit=10000`),
     countRows(`social_follows?select=following_user_id&follower_user_id=eq.${encodeURIComponent(uid)}&limit=10000`),
     playCountForOwner(uid),
-    viewerId
+    viewer
       ? svcFetch(
-          `social_follows?select=follower_user_id&follower_user_id=eq.${encodeURIComponent(viewerId)}&following_user_id=eq.${encodeURIComponent(uid)}&limit=1`,
+          `social_follows?select=follower_user_id&follower_user_id=eq.${encodeURIComponent(viewer)}&following_user_id=eq.${encodeURIComponent(uid)}&limit=1`,
         )
       : Promise.resolve({ data: [] }),
-    viewerId
+    viewer
       ? svcFetch(
-          `social_follows?select=follower_user_id&follower_user_id=eq.${encodeURIComponent(uid)}&following_user_id=eq.${encodeURIComponent(viewerId)}&limit=1`,
+          `social_follows?select=follower_user_id&follower_user_id=eq.${encodeURIComponent(uid)}&following_user_id=eq.${encodeURIComponent(viewer)}&limit=1`,
         )
       : Promise.resolve({ data: [] }),
   ]);
@@ -1066,7 +1091,8 @@ async function handleGet(req, res, user) {
     const monday = new Date(now);
     monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
     const weekKey = monday.toISOString().slice(0, 10);
-    await Promise.all(
+    // Chart JSON must return fast; rank notifications are best-effort after.
+    void Promise.all(
       chart.map(async (e) => {
         try {
           if (!e.userId) return;
@@ -1087,7 +1113,7 @@ async function handleGet(req, res, user) {
           });
         } catch {}
       }),
-    );
+    ).catch(() => {});
     return sendJson(res, 200, { ok: true, weekKey, chart });
   }
 
@@ -1638,6 +1664,7 @@ async function handlePost(req, res, user) {
 }
 
 module.exports = async function handler(req, res) {
+  resetProfileCache();
   setCors(res);
   if (req.method === "OPTIONS") return res.end();
   const user = await verifyUser(req);

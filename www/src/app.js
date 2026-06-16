@@ -30,13 +30,17 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618appTourV2c";
+const APP_BUILD = "20260618appTourV2d";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
+let _appTourMod = null;
 function loadAppTourModule() {
   if (!_appTourLoad) {
-    _appTourLoad = import(`./app-tour.js?v=${APP_BUILD}`);
+    _appTourLoad = import(`./app-tour.js?v=${APP_BUILD}`).then((m) => {
+      _appTourMod = m;
+      return m;
+    });
   }
   return _appTourLoad;
 }
@@ -2893,6 +2897,9 @@ function applyRoute() {
     try { onLeaveSearchRoute(); } catch {}
   }
   syncRoutePanelVisibility(wanted);
+  try {
+    _appTourMod?.notifyAppRouteChanged?.(wanted);
+  } catch {}
   if (!shouldHoldBootSplashForRoute(wanted)) {
     try { dismissBootSplash(); } catch {}
   }
@@ -3116,10 +3123,7 @@ function applyRoute() {
   if (wanted === "challenges") {
     bindChallengesPageOnce();
     renderHomeDesk();
-    void loadAppTourModule().then((m) => {
-      m.scheduleHomeTourIfNeeded();
-      m.schedulePersonaTourIfNeeded();
-    });
+    void loadAppTourModule().then((m) => m.scheduleHomeTourIfNeeded());
   }
   if (wanted === "activity") {
     bindActivityPageOnce();

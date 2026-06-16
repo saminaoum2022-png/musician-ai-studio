@@ -133,6 +133,8 @@ let _tourOfferedThisSession = false;
 let _personaTourOfferedThisSession = false;
 let _friendsTourOfferedThisSession = false;
 let _positionTimer = 0;
+let _routeAlignAttempts = 0;
+let _tourNavigating = false;
 
 function currentAppRoute() {
   return String(document.body.getAttribute("data-route") || "").trim();
@@ -269,6 +271,10 @@ function unlockTourScroll() {
 function closeTour(markDone) {
   const closingId = _activeTourId;
   _open = false;
+  _routeAlignAttempts = 0;
+  _tourNavigating = false;
+  clearTimeout(_positionTimer);
+  clearTimeout(_resizeTimer);
   const root = document.getElementById("appTour");
   if (root) {
     root.classList.remove("isOpen");
@@ -436,15 +442,30 @@ function schedulePositionTourUi(stepDef) {
   }, delay);
 }
 
-function renderTourStep() {
+function renderTourStep({ allowRouteAlign = true } = {}) {
+  if (!_open) return;
   const steps = getActiveSteps();
   const stepDef = steps[_step];
   if (!stepDef) return;
   const requiredRoute = String(stepDef.route || "").trim();
-  if (requiredRoute && currentAppRoute() !== requiredRoute) {
-    void ensureStepRoute(stepDef).then(() => renderTourStep());
+  if (allowRouteAlign && requiredRoute && currentAppRoute() !== requiredRoute) {
+    if (_routeAlignAttempts >= 3) {
+      closeTour(false);
+      return;
+    }
+    _routeAlignAttempts += 1;
+    void ensureStepRoute(stepDef).then(() => {
+      if (!_open) return;
+      if (currentAppRoute() === requiredRoute) {
+        _routeAlignAttempts = 0;
+        renderTourStep({ allowRouteAlign: false });
+      } else {
+        renderTourStep({ allowRouteAlign: true });
+      }
+    });
     return;
   }
+  _routeAlignAttempts = 0;
   prepareTourStep(stepDef);
   ensureHomeTourDom();
   const kicker = document.getElementById("appTourKicker");
@@ -522,20 +543,40 @@ function routeHashFor(route) {
 function ensureStepRoute(stepDef) {
   const route = String(stepDef?.route || "").trim();
   if (!route) return Promise.resolve();
-  try {
-    location.hash = routeHashFor(route);
-  } catch {}
-  try {
-    _deps?.applyRoute?.();
-  } catch {}
+  const needNav = currentAppRoute() !== route;
+  if (needNav) {
+    _tourNavigating = true;
+    try {
+      location.hash = routeHashFor(route);
+    } catch {}
+    try {
+      _deps?.applyRoute?.();
+    } catch {}
+  }
   getTour().prepare?.();
   return new Promise((resolve) => {
     const stepDef = getActiveSteps()[_step];
     prepareTourStep(stepDef);
     window.requestAnimationFrame(() => {
-      window.setTimeout(resolve, route === "generate" ? 320 : 120);
+      window.setTimeout(
+        () => {
+          _tourNavigating = false;
+          resolve();
+        },
+        needNav ? (route === "generate" ? 320 : 120) : 0,
+      );
     });
   });
+}
+
+/** Dismiss tour when the user navigates away manually (prevents route-fight loops). */
+export function notifyAppRouteChanged(route) {
+  if (!_open || _tourNavigating) return;
+  const stepDef = getActiveSteps()[_step];
+  const required = String(stepDef?.route || "").trim();
+  if (required && String(route || "").trim() !== required) {
+    closeTour(false);
+  }
 }
 
 function ensureHomePanelForTour() {
@@ -577,7 +618,11 @@ export function schedulePersonaTourIfNeeded() {
   const route = String(document.body.getAttribute("data-route") || "");
   if (route !== "challenges") return;
   _personaTourOfferedThisSession = true;
-  window.setTimeout(() => openTour("persona", { force: false }), 400);
+  window.setTimeout(() => {
+    if (_open || isTourComplete("persona")) return;
+    if (currentAppRoute() !== "challenges") return;
+    openTour("persona", { force: false });
+  }, 400);
 }
 
 export function scheduleFriendsTourIfNeeded() {
@@ -587,7 +632,11 @@ export function scheduleFriendsTourIfNeeded() {
   const route = String(document.body.getAttribute("data-route") || "");
   if (route !== "friends") return;
   _friendsTourOfferedThisSession = true;
-  window.setTimeout(() => openTour("friends", { force: false }), 520);
+  window.setTimeout(() => {
+    if (_open || isTourComplete("friends")) return;
+    if (currentAppRoute() !== "friends") return;
+    openTour("friends", { force: false });
+  }, 520);
 }
 
 export function replayHomeTour() {
@@ -644,12 +693,22 @@ export function replayFriendsTour() {
   });
 }
 
+function repositionOpenTour() {
+  if (!_open) return;
+  const stepDef = getActiveSteps()[_step];
+  if (!stepDef) return;
+  const requiredRoute = String(stepDef.route || "").trim();
+  if (requiredRoute && currentAppRoute() !== requiredRoute) {
+    closeTour(false);
+    return;
+  }
+  positionTourUi(stepDef);
+}
+
 function onTourResize() {
   if (!_open) return;
   clearTimeout(_resizeTimer);
-  _resizeTimer = window.setTimeout(() => {
-    renderTourStep();
-  }, 120);
+  _resizeTimer = window.setTimeout(repositionOpenTour, 120);
 }
 
 /**
@@ -659,6 +718,7 @@ export function initAppTour(deps) {
   if (_inited) return;
   _inited = true;
   _deps = deps || null;
+  if (!_open) unlockTourScroll();
   ensureHomeTourDom();
   const skip = document.getElementById("btnAppTourSkip");
   const next = document.getElementById("btnAppTourNext");

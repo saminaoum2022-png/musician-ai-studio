@@ -1352,8 +1352,17 @@ body.booting .bootSplash{
   background: transparent;
   opacity: 0;
 }
+.bootSplashVideo.isReady,
 .bootSplashVideo.isPlaying{
   opacity: 1;
+}
+.bootSplashMark--fallback .bootSplashVideo{
+  display: none;
+}
+.bootSplashMark.bootSplashMark--fallback{
+  background:
+    radial-gradient(78% 78% at 50% 50%, rgba(124,92,255,0.14), transparent 72%),
+    url("./assets/icons/splash-mark.png") center / contain no-repeat;
 }
 .bootSplashBrand{
   min-height: 1.2em;

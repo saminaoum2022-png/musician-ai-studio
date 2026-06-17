@@ -101,26 +101,52 @@ try {
 function initBootSplashVideo() {
   try {
     const video = document.getElementById("bootSplashVideo");
+    const bootSplash = document.getElementById("bootSplash");
+    const mark = video?.closest(".bootSplashMark--video");
     if (!video) return;
     video.muted = true;
     video.playsInline = true;
-    const reveal = () => {
-      video.classList.add("isPlaying");
-      try {
-        document.getElementById("bootSplash")?.classList.add("bootSplashVideoPlaying");
-      } catch {}
+    video.setAttribute("muted", "");
+    video.setAttribute("playsinline", "");
+    video.setAttribute("webkit-playsinline", "");
+    const revealVideo = () => {
+      video.classList.add("isReady");
     };
-    const play = () => {
+    let wordmarkSynced = false;
+    const startWordmarkSync = () => {
+      if (wordmarkSynced) return;
+      wordmarkSynced = true;
+      video.classList.add("isPlaying");
+      try { bootSplash?.classList.add("bootSplashVideoPlaying"); } catch {}
+    };
+    const fallbackStaticMark = () => {
+      try { mark?.classList.add("bootSplashMark--fallback"); } catch {}
+      revealVideo();
+      startWordmarkSync();
+    };
+    const tryPlay = () => {
       const pending = video.play();
       if (pending && typeof pending.catch === "function") {
-        pending.catch(() => {});
-      } else {
-        reveal();
+        pending.catch(() => {
+          revealVideo();
+        });
       }
     };
-    video.addEventListener("playing", reveal, { once: true });
-    if (video.readyState >= 2) play();
-    else video.addEventListener("canplay", play, { once: true });
+    video.addEventListener("loadeddata", revealVideo, { once: true });
+    video.addEventListener("playing", startWordmarkSync, { once: true });
+    video.addEventListener("error", fallbackStaticMark, { once: true });
+    if (video.readyState >= 2) {
+      revealVideo();
+      tryPlay();
+    } else {
+      video.addEventListener("canplay", () => {
+        revealVideo();
+        tryPlay();
+      }, { once: true });
+    }
+    setTimeout(() => {
+      if (!video.classList.contains("isReady")) fallbackStaticMark();
+    }, 1200);
     video.addEventListener("ended", () => {
       _bootSplashCanDismiss = true;
       tryDismissBootSplash();

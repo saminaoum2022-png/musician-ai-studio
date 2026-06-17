@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260619profilePlaysPatch";
+const APP_BUILD = "20260619noflash";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -7558,6 +7558,85 @@ function profilePublicPostsSig(tracks) {
     .join("|");
 }
 
+let _profilePostsListRenderCount = 0;
+let _profilePostsPatchCount = 0;
+let _friendsFeedListRenderCount = 0;
+let _friendsFeedPatchCount = 0;
+
+function followActDomItemKey(el) {
+  if (!el?.classList?.contains("followAct")) return "";
+  if (el.classList.contains("followAct--skel")) return "";
+  const sid = el.getAttribute("data-profile-act-song-id") || "";
+  if (sid) return `m:${sid}`;
+  const statusId = el.getAttribute("data-follow-status-id") || "";
+  if (statusId) return `s:${statusId}`;
+  return "";
+}
+
+function readFollowActListDomKey(listEl) {
+  if (!listEl) return "";
+  const keys = [];
+  listEl.querySelectorAll(".followAct").forEach((el) => {
+    const k = followActDomItemKey(el);
+    if (k) keys.push(k);
+  });
+  return keys.join("|");
+}
+
+function profileActivitiesFeedKey(feedItems) {
+  return (feedItems || [])
+    .map((item) => {
+      const sid = String(item?.track?.id || "").trim();
+      return sid ? `m:${sid}` : "";
+    })
+    .filter(Boolean)
+    .join("|");
+}
+
+function friendsFeedItemsKey(items) {
+  return (items || [])
+    .map((item) => {
+      if (item?.kind === "status") {
+        const id = String(item.post?.id || "").trim();
+        return id ? `s:${id}` : "";
+      }
+      const sid = String(item.track?.id || "").trim();
+      return sid ? `m:${sid}` : "";
+    })
+    .filter(Boolean)
+    .join("|");
+}
+
+function logProfilePostsListRender(n) {
+  _profilePostsListRenderCount += 1;
+  try {
+    console.info(`[profile/posts] list render #${_profilePostsListRenderCount}`, n);
+  } catch {}
+}
+
+function logProfilePostsPatch(kind, detail) {
+  _profilePostsPatchCount += 1;
+  try {
+    console.info(`[profile/posts] patch #${_profilePostsPatchCount} ${kind}`, detail);
+  } catch {}
+}
+
+function logFriendsFeedListRender(n) {
+  _friendsFeedListRenderCount += 1;
+  try {
+    console.info(`[friends/feed] list render #${_friendsFeedListRenderCount}`, n);
+  } catch {}
+}
+
+function logFriendsFeedPatch(kind, detail) {
+  _friendsFeedPatchCount += 1;
+  try {
+    console.info(`[friends/feed] patch #${_friendsFeedPatchCount} ${kind}`, detail);
+  } catch {}
+}
+
+const FOLLOW_ACT_MEDIA_SEL = ".followActQuoteCard, .followActRemixPair, .followActMashup";
+
 function profileActMediaSig(t, profMap) {
   const mashupOf = mashupAttributionForTrack(t);
   const a = t._mashupSourceA || mashupSourceFromMetaEntry(mashupOf?.a);
@@ -7573,7 +7652,7 @@ function profileActMediaSig(t, profMap) {
 }
 
 /** Patch play count text on existing feed rows — no list rebuild. */
-function updatePlayCountsOnly(listEl, countsBySongId) {
+function updatePlayCountsOnly(listEl, countsBySongId, patchLogFn) {
   if (!listEl) return 0;
   const entries =
     countsBySongId instanceof Map
@@ -7602,16 +7681,12 @@ function updatePlayCountsOnly(listEl, countsBySongId) {
       footStat.textContent = `${formatStatCount(n)} ${n === 1 ? "play" : "plays"}`;
     }
   }
-  if (patched > 0) {
-    try {
-      console.info("[profile/posts] play counts updated", patched);
-    } catch {}
-  }
+  if (patched > 0 && patchLogFn) patchLogFn("plays", patched);
   return patched;
 }
 
 /** Patch play counts on feed rows without rebuilding the whole list. */
-function applyFollowActPlayCountsToDom(listEl, tracks) {
+function applyFollowActPlayCountsToDom(listEl, tracks, patchLogFn) {
   if (!listEl || !tracks?.length) return { ok: true, needsRebuild: false };
   const counts = new Map();
   for (const t of tracks) {
@@ -7619,7 +7694,7 @@ function applyFollowActPlayCountsToDom(listEl, tracks) {
     if (!sid) continue;
     counts.set(sid, Math.max(0, Number(t.playCount) || 0));
   }
-  updatePlayCountsOnly(listEl, counts);
+  updatePlayCountsOnly(listEl, counts, patchLogFn);
   return { ok: true, needsRebuild: false };
 }
 
@@ -7703,29 +7778,54 @@ function profileSelfProfMap(uid) {
   return m;
 }
 
-/** Play counts, remix/mashup tiles after first paint — patch DOM when possible to avoid flash. */
-function patchProfileActivityMediaRows(listEl, feedItems, profMap) {
-  let patched = false;
-  feedItems.forEach((item, i) => {
+/** Swap quote card / remix pair / mashup block inside an existing row — not the whole article. */
+function patchFollowActRowMedia(article, track, profMap, idx) {
+  if (!article || !track) return false;
+  const wrap = document.createElement("div");
+  wrap.innerHTML = followingActivityRowHtml(track, profMap, idx, { xstyle: true });
+  const nextArticle = wrap.firstElementChild;
+  if (!nextArticle) return false;
+  const column = article.querySelector(".followActColumn");
+  const nextColumn = nextArticle.querySelector(".followActColumn");
+  if (!column || !nextColumn) return false;
+  const actRow = column.querySelector(".followActActions");
+  const nextActRow = nextColumn.querySelector(".followActActions");
+  if (!actRow || !nextActRow) return false;
+
+  const contentEl = column.querySelector(".followActContent");
+  const nextContent = nextColumn.querySelector(".followActContent");
+  if (nextContent) {
+    const clone = nextContent.cloneNode(true);
+    if (contentEl) contentEl.replaceWith(clone);
+    else actRow.before(clone);
+  } else if (contentEl) {
+    contentEl.remove();
+  }
+
+  column.querySelectorAll(FOLLOW_ACT_MEDIA_SEL).forEach((n) => n.remove());
+  nextColumn.querySelectorAll(FOLLOW_ACT_MEDIA_SEL).forEach((node) => {
+    actRow.before(node.cloneNode(true));
+  });
+  return true;
+}
+
+function patchFollowActMediaRows(listEl, items, profMap, logFn) {
+  let patched = 0;
+  items.forEach((item, i) => {
     if (item.kind !== "music") return;
     const sid = String(item.track?.id || "").trim();
     if (!sid) return;
     const article = listEl.querySelector(`[data-profile-act-song-id="${sid}"]`);
     if (!article) return;
-    const wrap = document.createElement("div");
-    wrap.innerHTML = followingActivityRowHtml(item.track, profMap, i, { xstyle: true });
-    const next = wrap.firstElementChild;
-    if (next) {
-      article.replaceWith(next);
-      patched = true;
-    }
+    if (patchFollowActRowMedia(article, item.track, profMap, i)) patched += 1;
   });
-  if (patched) {
-    try {
-      console.info("[profile/posts] media rows patched (remix/mashup)");
-    } catch {}
-  }
+  if (patched > 0 && logFn) logFn("media", patched);
   return patched;
+}
+
+/** Remix/mashup tiles after first paint — patch media blocks only. */
+function patchProfileActivityMediaRows(listEl, feedItems, profMap) {
+  return patchFollowActMediaRows(listEl, feedItems, profMap, logProfilePostsPatch);
 }
 
 async function enrichProfileActivitiesAfterPaint(libRows, feedItems, profMap, listEl, enrichGen) {
@@ -7747,7 +7847,7 @@ async function enrichProfileActivitiesAfterPaint(libRows, feedItems, profMap, li
       t.playCount = playCountMap.get(String(t.id || "")) || 0;
       t._playCountPending = false;
     }
-    updatePlayCountsOnly(listEl, playCountMap);
+    updatePlayCountsOnly(listEl, playCountMap, logProfilePostsPatch);
 
     await Promise.all([
       hydrateRemixOriginalsForTracks(libRows),
@@ -7808,21 +7908,16 @@ async function renderProfileActivities(opts = {}) {
     syncProfileActivitiesLoadMoreUi(0);
     return;
   }
+  const uid = String(authSession.user.id);
   if (!extend && !force) resetProfileActivitiesPagination();
   wireProfileActivitiesLoadMoreOnce();
   hydrateProfileActSnapshotFromStorage();
-  const hadFeed = listEl.querySelector(".followAct");
   const snap = _profileActSnapshot;
   const snapFresh =
     snap &&
     Date.now() - snap.at < PROFILE_ACT_SNAPSHOT_MS &&
     snap.html &&
     !snap.html.includes("followAct--skel");
-  const uid = String(authSession.user.id);
-  if (!extend) {
-    if (snapFresh && !hadFeed) listEl.innerHTML = snap.html;
-    else if (!hadFeed && !snapFresh) listEl.innerHTML = followingActivitySkeletonHtml();
-  }
   if (!opts.deferCloud) void mergeCloudSongsIntoLocalLibrary();
   try {
   const libRows = loadLibrary()
@@ -7849,6 +7944,10 @@ async function renderProfileActivities(opts = {}) {
   const visibleFeedItems = feedItems.slice(0, _profileActivitiesShown);
   const visibleLibRows = visibleFeedItems.map((item) => item.track);
   const remainingPosts = Math.max(0, totalPosts - visibleFeedItems.length);
+  const desiredKey = profileActivitiesFeedKey(visibleFeedItems);
+  const domKey = readFollowActListDomKey(listEl);
+  const hasSkeleton = Boolean(listEl.querySelector(".followAct--skel"));
+  const hasRealFeed = domKey.length > 0 && !hasSkeleton;
   if (!feedItems.length) {
     listEl.innerHTML = `
       <div class="profileActEmpty">
@@ -7861,14 +7960,28 @@ async function renderProfileActivities(opts = {}) {
     syncProfileActivitiesLoadMoreUi(0);
     return;
   }
-  listEl.innerHTML = visibleFeedItems
-    .map((item, i) => followingActivityRowHtml(item.track, profMap, i, { xstyle: true }))
-    .join("");
-  try {
-    console.info("[profile/posts] list render", visibleFeedItems.length);
-  } catch {}
-  _profileActSnapshot = { at: Date.now(), html: listEl.innerHTML };
-  persistProfileActSnapshot();
+  const skipListRebuild = desiredKey && domKey === desiredKey && !hasSkeleton;
+  if (!skipListRebuild) {
+    let listPainted = false;
+    if (!extend && !hasRealFeed && snapFresh) {
+      listEl.innerHTML = snap.html;
+      if (readFollowActListDomKey(listEl) === desiredKey) {
+        listPainted = true;
+      }
+    }
+    if (!listPainted) {
+      listEl.innerHTML = visibleFeedItems
+        .map((item, i) => followingActivityRowHtml(item.track, profMap, i, { xstyle: true }))
+        .join("");
+      logProfilePostsListRender(visibleFeedItems.length);
+    }
+    _profileActSnapshot = { at: Date.now(), html: listEl.innerHTML };
+    persistProfileActSnapshot();
+  } else {
+    try {
+      console.info("[profile/posts] list rebuild skipped (dom matches)", desiredKey.split("|").length);
+    } catch {}
+  }
   syncProfileActivitiesLoadMoreUi(remainingPosts);
   try {
     syncDiscoveryPlayingHighlights();
@@ -9707,22 +9820,7 @@ function friendsFeedPlayableMediaSig(tracks, profMap) {
 }
 
 function patchFriendsFeedMediaRows(listEl, mergedItems, profMap) {
-  let patched = false;
-  mergedItems.forEach((item, i) => {
-    if (item.kind !== "music") return;
-    const sid = String(item.track?.id || "").trim();
-    if (!sid) return;
-    const article = listEl.querySelector(`[data-profile-act-song-id="${sid}"]`);
-    if (!article) return;
-    const wrap = document.createElement("div");
-    wrap.innerHTML = followingActivityRowHtml(item.track, profMap, i, { xstyle: true });
-    const next = wrap.firstElementChild;
-    if (next) {
-      article.replaceWith(next);
-      patched = true;
-    }
-  });
-  return patched;
+  return patchFollowActMediaRows(listEl, mergedItems, profMap, logFriendsFeedPatch);
 }
 
 async function enrichFriendsFeedAfterPaint({
@@ -9749,8 +9847,8 @@ async function enrichFriendsFeedAfterPaint({
     if (gen !== _discoveryFollowingGen) return;
     if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
     const mediaSigAfter = friendsFeedPlayableMediaSig(playable, profMap);
-    const playPatch = applyFollowActPlayCountsToDom(listEl, playable);
-    if (mediaSigBefore !== mediaSigAfter || playPatch.needsRebuild) {
+    applyFollowActPlayCountsToDom(listEl, playable, logFriendsFeedPatch);
+    if (mediaSigBefore !== mediaSigAfter) {
       patchFriendsFeedMediaRows(listEl, mergedItems, profMap);
     }
     _discoveryFeedTracks = playable.map((t) => discoveryTrackPlaybackMeta(t, profMap));
@@ -10044,13 +10142,30 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
     statusEl.textContent = "";
     _discoveryFeedTracks = playable.map((t) => discoveryTrackPlaybackMeta(t, profMap));
     listEl.hidden = false;
-    listEl.innerHTML = friendsFeedRowsHtml(mergedItems, profMap);
-    _friendsFeedSnapshot = {
-      at: Date.now(),
-      html: listEl.innerHTML,
-      tracks: _discoveryFeedTracks,
-    };
-    persistFriendsFeedSnapshot();
+    const desiredKey = friendsFeedItemsKey(mergedItems);
+    const domKey = readFollowActListDomKey(listEl);
+    const hasSkeleton = Boolean(listEl.querySelector(".followAct--skel"));
+    const skipListRebuild = desiredKey && domKey === desiredKey && !hasSkeleton;
+    if (!skipListRebuild) {
+      listEl.innerHTML = friendsFeedRowsHtml(mergedItems, profMap);
+      logFriendsFeedListRender(mergedItems.length);
+      _friendsFeedSnapshot = {
+        at: Date.now(),
+        html: listEl.innerHTML,
+        tracks: _discoveryFeedTracks,
+      };
+      persistFriendsFeedSnapshot();
+    } else {
+      _friendsFeedSnapshot = {
+        at: Date.now(),
+        html: listEl.innerHTML,
+        tracks: _discoveryFeedTracks,
+      };
+      persistFriendsFeedSnapshot();
+      try {
+        console.info("[friends/feed] list rebuild skipped (dom matches)", desiredKey.split("|").length);
+      } catch {}
+    }
     applyFeedSocialStatsToDom(listEl);
     try {
       syncDiscoveryPlayingHighlights();

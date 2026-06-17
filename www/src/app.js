@@ -104,6 +104,7 @@ function initBootSplashVideo() {
     const bootSplash = document.getElementById("bootSplash");
     const mark = video?.closest(".bootSplashMark--video");
     if (!video) return;
+    const isNativeShell = location.protocol === "capacitor:";
     video.muted = true;
     video.playsInline = true;
     video.setAttribute("muted", "");
@@ -120,6 +121,7 @@ function initBootSplashVideo() {
       try { bootSplash?.classList.add("bootSplashVideoPlaying"); } catch {}
     };
     const fallbackStaticMark = () => {
+      if (!isNativeShell) return;
       try { mark?.classList.add("bootSplashMark--fallback"); } catch {}
       revealVideo();
       startWordmarkSync();
@@ -128,28 +130,37 @@ function initBootSplashVideo() {
       const pending = video.play();
       if (pending && typeof pending.catch === "function") {
         pending.catch(() => {
-          revealVideo();
+          if (isNativeShell) revealVideo();
         });
       }
     };
-    video.addEventListener("loadeddata", revealVideo, { once: true });
-    video.addEventListener("playing", startWordmarkSync, { once: true });
+    if (isNativeShell) {
+      video.addEventListener("loadeddata", revealVideo, { once: true });
+      video.addEventListener("playing", startWordmarkSync, { once: true });
+    } else {
+      video.addEventListener("playing", () => {
+        revealVideo();
+        startWordmarkSync();
+      }, { once: true });
+    }
     video.addEventListener("timeupdate", () => {
       if (video.currentTime >= BOOT_SPLASH_WORDMARK_AT_S) startWordmarkSync();
     });
     video.addEventListener("error", fallbackStaticMark, { once: true });
     if (video.readyState >= 2) {
-      revealVideo();
+      if (isNativeShell) revealVideo();
       tryPlay();
     } else {
       video.addEventListener("canplay", () => {
-        revealVideo();
+        if (isNativeShell) revealVideo();
         tryPlay();
       }, { once: true });
     }
-    setTimeout(() => {
-      if (!video.classList.contains("isReady")) fallbackStaticMark();
-    }, location.protocol === "capacitor:" ? 1200 : 4000);
+    if (isNativeShell) {
+      setTimeout(() => {
+        if (!video.classList.contains("isReady")) fallbackStaticMark();
+      }, 1200);
+    }
     video.addEventListener("ended", () => {
       _bootSplashCanDismiss = true;
       tryDismissBootSplash();

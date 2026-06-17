@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260619noWarmPlayback";
+const APP_BUILD = "20260619profilePlaysPatch";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -7572,33 +7572,55 @@ function profileActMediaSig(t, profMap) {
   return "quote";
 }
 
+/** Patch play count text on existing feed rows — no list rebuild. */
+function updatePlayCountsOnly(listEl, countsBySongId) {
+  if (!listEl) return 0;
+  const entries =
+    countsBySongId instanceof Map
+      ? [...countsBySongId.entries()]
+      : Object.entries(countsBySongId || {});
+  let patched = 0;
+  for (const [sidRaw, countRaw] of entries) {
+    const sid = String(sidRaw || "").trim();
+    if (!sid) continue;
+    const n = Math.max(0, Number(countRaw) || 0);
+    const article = listEl.querySelector(`[data-profile-act-song-id="${sid}"]`);
+    if (!article) continue;
+    const actRow =
+      article.querySelector(".followActActions[data-friends-act-row]") ||
+      listEl.querySelector(`.followActActions[data-friends-act-id="${sid}"]`);
+    const playsBtn = actRow?.querySelector('[data-friends-act="plays"]');
+    if (playsBtn) {
+      const countEl = playsBtn.querySelector(".followActActCount");
+      if (countEl) countEl.textContent = formatStatCount(n);
+      playsBtn.setAttribute("aria-label", `${formatStatCount(n)} plays`);
+      playsBtn.setAttribute("data-play-count-pending", "0");
+      patched += 1;
+    }
+    const footStat = article.querySelector(".followActFootStat[data-play-foot-stat]");
+    if (footStat) {
+      footStat.textContent = `${formatStatCount(n)} ${n === 1 ? "play" : "plays"}`;
+    }
+  }
+  if (patched > 0) {
+    try {
+      console.info("[profile/posts] play counts updated", patched);
+    } catch {}
+  }
+  return patched;
+}
+
 /** Patch play counts on feed rows without rebuilding the whole list. */
 function applyFollowActPlayCountsToDom(listEl, tracks) {
   if (!listEl || !tracks?.length) return { ok: true, needsRebuild: false };
-  let needsRebuild = false;
+  const counts = new Map();
   for (const t of tracks) {
     const sid = String(t?.id || "").trim();
     if (!sid) continue;
-    const n = Math.max(0, Number(t.playCount) || 0);
-    if (n <= 0) continue;
-    const article = listEl.querySelector(`[data-profile-act-song-id="${sid}"]`);
-    const actRow =
-      article?.querySelector(".followActActions[data-friends-act-row]") ||
-      listEl.querySelector(`.followActActions[data-friends-act-id="${sid}"]`);
-    if (!actRow) {
-      needsRebuild = true;
-      continue;
-    }
-    const playsBtn = actRow.querySelector('[data-friends-act="plays"]');
-    if (!playsBtn) {
-      needsRebuild = true;
-      continue;
-    }
-    const countEl = playsBtn.querySelector(".followActActCount");
-    if (countEl) countEl.textContent = formatStatCount(n);
-    playsBtn.setAttribute("aria-label", `${formatStatCount(n)} plays`);
+    counts.set(sid, Math.max(0, Number(t.playCount) || 0));
   }
-  return { ok: !needsRebuild, needsRebuild };
+  updatePlayCountsOnly(listEl, counts);
+  return { ok: true, needsRebuild: false };
 }
 
 let _mergeCloudInFlight = false;
@@ -7682,15 +7704,38 @@ function profileSelfProfMap(uid) {
 }
 
 /** Play counts, remix/mashup tiles after first paint — patch DOM when possible to avoid flash. */
+function patchProfileActivityMediaRows(listEl, feedItems, profMap) {
+  let patched = false;
+  feedItems.forEach((item, i) => {
+    if (item.kind !== "music") return;
+    const sid = String(item.track?.id || "").trim();
+    if (!sid) return;
+    const article = listEl.querySelector(`[data-profile-act-song-id="${sid}"]`);
+    if (!article) return;
+    const wrap = document.createElement("div");
+    wrap.innerHTML = followingActivityRowHtml(item.track, profMap, i, { xstyle: true });
+    const next = wrap.firstElementChild;
+    if (next) {
+      article.replaceWith(next);
+      patched = true;
+    }
+  });
+  if (patched) {
+    try {
+      console.info("[profile/posts] media rows patched (remix/mashup)");
+    } catch {}
+  }
+  return patched;
+}
+
 async function enrichProfileActivitiesAfterPaint(libRows, feedItems, profMap, listEl, enrichGen) {
   if (!listEl || !feedItems.length) return;
   if (enrichGen !== _profileActEnrichGen) return;
   const mediaSigBefore = libRows.map((t) => profileActMediaSig(t, profMap)).join("|");
   try {
-    const [playCountMap] = await Promise.all([
-      libRows.length ? fetchDiscoverSongPlayCounts(libRows.map((t) => t.id)) : Promise.resolve(new Map()),
-      Promise.all([hydrateRemixOriginalsForTracks(libRows), hydrateMashupSourcesForTracks(libRows)]),
-    ]);
+    const playCountMap = libRows.length
+      ? await fetchDiscoverSongPlayCounts(libRows.map((t) => t.id))
+      : new Map();
     if (enrichGen !== _profileActEnrichGen) return;
     if (
       String(document.body.getAttribute("data-route") || "") !== "profile" ||
@@ -7700,27 +7745,31 @@ async function enrichProfileActivitiesAfterPaint(libRows, feedItems, profMap, li
     }
     for (const t of libRows) {
       t.playCount = playCountMap.get(String(t.id || "")) || 0;
+      t._playCountPending = false;
     }
-    const mediaSigAfter = libRows.map((t) => profileActMediaSig(t, profMap)).join("|");
-    const structuralChange = mediaSigBefore !== mediaSigAfter;
-    const playPatch = applyFollowActPlayCountsToDom(listEl, libRows);
-    if (!structuralChange && !playPatch.needsRebuild) {
-      try {
-        syncDiscoveryPlayingHighlights();
-      } catch {}
-      applyFeedSocialStatsToDom(listEl);
-      void hydrateFeedSocialStatsForFeed(listEl);
+    updatePlayCountsOnly(listEl, playCountMap);
+
+    await Promise.all([
+      hydrateRemixOriginalsForTracks(libRows),
+      hydrateMashupSourcesForTracks(libRows),
+    ]);
+    if (enrichGen !== _profileActEnrichGen) return;
+    if (
+      String(document.body.getAttribute("data-route") || "") !== "profile" ||
+      _profileSongsSegment !== "activities"
+    ) {
       return;
     }
-    listEl.innerHTML = feedItems
-      .map((item, i) => followingActivityRowHtml(item.track, profMap, i, { xstyle: true }))
-      .join("");
-    _profileActSnapshot = { at: Date.now(), html: listEl.innerHTML };
-    persistProfileActSnapshot();
-    const totalPublic = loadLibrary().filter(
-      (t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile),
-    ).length;
-    syncProfileActivitiesLoadMoreUi(Math.max(0, totalPublic - _profileActivitiesShown));
+    const mediaSigAfter = libRows.map((t) => profileActMediaSig(t, profMap)).join("|");
+    if (mediaSigBefore !== mediaSigAfter) {
+      patchProfileActivityMediaRows(listEl, feedItems, profMap);
+      _profileActSnapshot = { at: Date.now(), html: listEl.innerHTML };
+      persistProfileActSnapshot();
+      const totalPublic = loadLibrary().filter(
+        (t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile),
+      ).length;
+      syncProfileActivitiesLoadMoreUi(Math.max(0, totalPublic - _profileActivitiesShown));
+    }
     try {
       syncDiscoveryPlayingHighlights();
     } catch {}
@@ -7815,6 +7864,9 @@ async function renderProfileActivities(opts = {}) {
   listEl.innerHTML = visibleFeedItems
     .map((item, i) => followingActivityRowHtml(item.track, profMap, i, { xstyle: true }))
     .join("");
+  try {
+    console.info("[profile/posts] list render", visibleFeedItems.length);
+  } catch {}
   _profileActSnapshot = { at: Date.now(), html: listEl.innerHTML };
   persistProfileActSnapshot();
   syncProfileActivitiesLoadMoreUi(remainingPosts);
@@ -8617,18 +8669,23 @@ function followingActivityPlayAttrs(t, profMap, byLine) {
  * `kind` here is "music" or "status" (UI kind). The DB target kind is
  * derived: music → "song", status → "status".
  */
-function followActActionsRowHtml({ kind, targetId, targetUserId, plays } = {}) {
+function followActActionsRowHtml({ kind, targetId, targetUserId, plays, playsPending = false } = {}) {
   const safeId = escapeHtml(String(targetId || ""));
   const safeUid = escapeHtml(String(targetUserId || ""));
   const safeKind = escapeHtml(String(kind || ""));
   const targetKind = kind === "music" ? "song" : kind === "status" ? "status" : (kind || "");
   const safeTargetKind = escapeHtml(targetKind);
-  const playsBlock = kind === "music" && Number.isFinite(Number(plays)) && Number(plays) > 0
-    ? `<span class="followActAct followActAct--stat" data-friends-act="plays" aria-label="${escapeHtml(formatStatCount(plays))} plays">
+  const pending = kind === "music" && (playsPending || plays == null);
+  const n = Math.max(0, Number(plays) || 0);
+  const playsLabel = pending ? "—" : formatStatCount(n);
+  const playsAria = pending ? "Plays loading" : `${formatStatCount(n)} plays`;
+  const playsBlock =
+    kind === "music"
+      ? `<span class="followActAct followActAct--stat" data-friends-act="plays" data-play-count-pending="${pending ? "1" : "0"}" aria-label="${escapeHtml(playsAria)}">
         <svg class="followActActIco" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16l14-8L5 4Z"/></svg>
-        <span class="followActActCount">${escapeHtml(formatStatCount(plays))}</span>
+        <span class="followActActCount">${escapeHtml(playsLabel)}</span>
       </span>`
-    : `<span class="followActAct followActAct--stat" aria-hidden="true"></span>`;
+      : `<span class="followActAct followActAct--stat" aria-hidden="true"></span>`;
   return `
     <div class="followActActions" data-friends-act-row="1" data-friends-act-kind="${safeKind}" data-friends-act-target-kind="${safeTargetKind}" data-friends-act-id="${safeId}" data-friends-act-uid="${safeUid}">
       <button type="button" class="followActAct" data-friends-act="reply" aria-label="Reply">
@@ -8786,7 +8843,8 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
     createdTsRaw && postedTs && postedTs - createdTsRaw > CREATED_CHIP_MIN_GAP_MS
       ? `<span class="followActMetaDot" aria-hidden="true">·</span><span class="followActWhen followActWhenCreated">created ${escapeHtml(relativeTime(createdTsRaw))}</span>`
       : "";
-  const plays = Number(t.playCount);
+  const playsPending = t.playCount == null && !Number.isFinite(Number(t.playCount));
+  const plays = playsPending ? null : Math.max(0, Number(t.playCount) || 0);
   const caption = releaseCaptionForTrack(t);
   const captionHtml = caption
     ? `<p class="followActCaption">${escapeHtml(caption)}</p>`
@@ -8874,13 +8932,20 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
               <span class="followActQuoteSub">${escapeHtml(subtitle)}</span>
             </span>
           </button>`}
-          ${followActActionsRowHtml({ kind: "music", targetId: t.id, targetUserId: t.userId, plays })}
+          ${followActActionsRowHtml({
+            kind: "music",
+            targetId: t.id,
+            targetUserId: t.userId,
+            plays,
+            playsPending,
+          })}
         </div>
       </article>`;
   }
-  const playFoot = Number.isFinite(plays) && plays > 0
-    ? `<div class="followActFoot"><span class="followActFootStat">${escapeHtml(formatStatCount(plays))} ${plays === 1 ? "play" : "plays"}</span></div>`
-    : "";
+  const playFootLabel = playsPending
+    ? "— plays"
+    : `${formatStatCount(plays)} ${plays === 1 ? "play" : "plays"}`;
+  const playFoot = `<div class="followActFoot"><span class="followActFootStat" data-play-foot-stat="1">${escapeHtml(playFootLabel)}</span></div>`;
   const who = handle
     ? `<strong class="followActUser">@${escapeHtml(handle)}</strong>`
     : `<strong class="followActUser">A musician</strong>`;

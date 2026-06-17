@@ -16,6 +16,13 @@
   --ai-a: rgba(124,92,255,0.24);
   --ai-b: rgba(35,213,171,0.18);
   --ai-c: #05070d;
+  --elev-1: 0 10px 30px rgba(0, 0, 0, 0.38), 0 2px 8px rgba(0, 0, 0, 0.24);
+  --elev-2: 0 20px 52px rgba(0, 0, 0, 0.44), 0 4px 14px rgba(0, 0, 0, 0.28);
+  --elev-glow-primary: 0 0 44px rgba(124, 92, 255, 0.24);
+  --elev-glow-teal: 0 0 40px rgba(35, 213, 171, 0.2);
+  --surface-raised: linear-gradient(168deg, rgba(20, 26, 40, 0.94), rgba(8, 11, 20, 0.88));
+  --surface-border: rgba(255, 255, 255, 0.115);
+  --surface-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.1);
   --space-1: 8px;
   --space-2: 12px;
   --space-3: 16px;
@@ -39,6 +46,13 @@ html[data-theme="light"]{
   --ai-a: rgba(124, 92, 255, 0.16);
   --ai-b: rgba(35, 213, 171, 0.14);
   --ai-c: #ecf0f7;
+  --elev-1: 0 10px 28px rgba(88, 104, 140, 0.14), 0 2px 8px rgba(124, 92, 255, 0.06);
+  --elev-2: 0 18px 44px rgba(88, 104, 140, 0.16), 0 4px 12px rgba(124, 92, 255, 0.08);
+  --elev-glow-primary: 0 0 36px rgba(124, 92, 255, 0.16);
+  --elev-glow-teal: 0 0 32px rgba(35, 213, 171, 0.14);
+  --surface-raised: linear-gradient(168deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 255, 0.94));
+  --surface-border: rgba(15, 23, 40, 0.12);
+  --surface-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.95);
 }
 
 html[data-theme="light"] body{
@@ -1260,9 +1274,10 @@ body{
   min-height: 100vh;
   /* Black-led canvas with restrained teal/purple depth. */
   background:
-    radial-gradient(120% 72% at 50% -30%, rgba(124,92,255,0.11) 0%, transparent 56%),
-    radial-gradient(92% 52% at 100% 2%, rgba(35,213,171,0.055) 0%, transparent 48%),
-    radial-gradient(70% 46% at 0% 18%, rgba(124,92,255,0.05) 0%, transparent 54%),
+    radial-gradient(120% 72% at 50% -30%, rgba(124,92,255,0.14) 0%, transparent 56%),
+    radial-gradient(92% 52% at 100% 2%, rgba(35,213,171,0.07) 0%, transparent 48%),
+    radial-gradient(70% 46% at 0% 18%, rgba(124,92,255,0.06) 0%, transparent 54%),
+    radial-gradient(55% 40% at 50% 100%, rgba(0, 0, 0, 0.35) 0%, transparent 70%),
     var(--bg);
   /* Hard clamp: no descendant can ever drag the whole page sideways.
      A single too-wide row (e.g. an over-wide banner on a 360px phone)
@@ -6363,16 +6378,17 @@ body.hubJumpingToTop #hubList .hubRow{
 }
 
 .card{
-  border:1px solid var(--border);
+  border:1px solid var(--surface-border);
   background:
-    radial-gradient(120% 100% at 8% 0%, rgba(124,92,255,0.07), transparent 58%),
-    radial-gradient(95% 85% at 100% 12%, rgba(35,213,171,0.035), transparent 62%),
-    linear-gradient(180deg, rgba(18,22,33,0.78), rgba(6,9,15,0.74));
+    radial-gradient(120% 100% at 8% 0%, rgba(124,92,255,0.1), transparent 58%),
+    radial-gradient(95% 85% at 100% 12%, rgba(35,213,171,0.05), transparent 62%),
+    var(--surface-raised);
   border-radius:16px;
   padding:16px;
   box-shadow:
-    0 18px 45px rgba(0,0,0,0.42),
-    inset 0 1px 0 rgba(255,255,255,0.045);
+    var(--elev-2),
+    var(--elev-glow-primary),
+    var(--surface-highlight);
 }
 .wide{ grid-column: 1 / -1; }
 
@@ -6647,9 +6663,15 @@ textarea{
   color: #fff;
 }
 .personaActiveBanner{
-  border-color: rgba(35, 213, 171, 0.45);
-  background: linear-gradient(135deg, rgba(35, 213, 171, 0.18), rgba(124, 92, 255, 0.10));
-  box-shadow: 0 8px 22px rgba(35, 213, 171, 0.16);
+  border-color: rgba(35, 213, 171, 0.52);
+  background:
+    radial-gradient(120% 100% at 0% 0%, rgba(35, 213, 171, 0.22), transparent 58%),
+    radial-gradient(90% 80% at 100% 100%, rgba(124, 92, 255, 0.14), transparent 55%),
+    linear-gradient(135deg, rgba(14, 22, 34, 0.94), rgba(8, 12, 22, 0.9));
+  box-shadow:
+    0 14px 36px rgba(35, 213, 171, 0.22),
+    0 0 40px rgba(124, 92, 255, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
   /* Defensive: even if a child fails to shrink (e.g. a long persona
      name + the Change pill on a 360px phone), the banner itself can
      never push the page wider than its container. */
@@ -7127,9 +7149,15 @@ textarea{
 }
 .singerPersonaChip:active{ transform: scale(0.96); }
 .singerPersonaChip.isActive{
-  border-color: rgba(167,139,250,0.65);
-  background: linear-gradient(150deg, rgba(124,92,255,0.24), rgba(124,92,255,0.1));
+  border-color: rgba(167,139,250,0.72);
+  background:
+    radial-gradient(120% 100% at 0% 0%, rgba(124,92,255,0.32), transparent 62%),
+    linear-gradient(150deg, rgba(124,92,255,0.28), rgba(35,213,171,0.12));
   color: #fff;
+  box-shadow:
+    0 8px 22px rgba(124,92,255,0.32),
+    0 0 24px rgba(124,92,255,0.18),
+    inset 0 1px 0 rgba(255,255,255,0.14);
 }
 .singerPersonaChip--create{
   border-style: dashed;
@@ -15852,15 +15880,17 @@ input::placeholder, textarea::placeholder{
     bottom: 0;
     z-index: 40;
     border: 0;
-    border-top: 1px solid rgba(255,255,255,0.075);
+    border-top: 1px solid rgba(255,255,255,0.09);
     border-radius: 0;
     padding: 6px 4px max(6px, env(safe-area-inset-bottom)) 4px;
     background:
-      radial-gradient(72% 140% at 50% 0%, rgba(124,92,255,0.06), transparent 62%),
-      rgba(3, 5, 10, 0.94);
-    box-shadow: 0 -14px 32px rgba(0,0,0,0.24);
-    -webkit-backdrop-filter: blur(20px) saturate(155%);
-    backdrop-filter: blur(20px) saturate(155%);
+      radial-gradient(72% 140% at 50% 0%, rgba(124,92,255,0.1), transparent 62%),
+      linear-gradient(180deg, rgba(6, 8, 14, 0.97), rgba(3, 5, 10, 0.94));
+    box-shadow:
+      0 -18px 40px rgba(0,0,0,0.32),
+      0 -1px 0 rgba(255,255,255,0.06);
+    -webkit-backdrop-filter: blur(22px) saturate(165%);
+    backdrop-filter: blur(22px) saturate(165%);
   }
   .mobileTabbar a{
     text-decoration:none;
@@ -16099,18 +16129,35 @@ input::placeholder, textarea::placeholder{
     color: rgba(223, 231, 251, 0.85);
   }
   .mobileTabbar a.active{
-    color: rgba(232, 238, 247, 0.92);
+    color: #f3f6ff;
     background: transparent;
   }
+  .mobileTabbar a.active:not(.tabCreate)::before{
+    content: "";
+    position: absolute;
+    inset: 3px 1px 5px;
+    border-radius: 14px;
+    background:
+      radial-gradient(130% 120% at 50% 0%, rgba(124,92,255,0.34), rgba(124,92,255,0.1) 58%, transparent 100%);
+    box-shadow:
+      0 0 28px rgba(124,92,255,0.38),
+      inset 0 1px 0 rgba(255,255,255,0.14),
+      inset 0 0 0 1px rgba(124,92,255,0.28);
+    z-index: -1;
+    pointer-events: none;
+  }
   .mobileTabbar a.active .tabIco{
-    stroke: rgba(232, 238, 247, 0.92);
-    stroke-width: 1.75;
+    stroke: #f3f6ff;
+    stroke-width: 2;
     opacity: 1;
-    transform: scale(1.04);
+    transform: scale(1.08);
+    filter: drop-shadow(0 0 8px rgba(124,92,255,0.45));
   }
   .mobileTabbar a.active .tabLabel{
     opacity: 1;
-    font-weight: 750;
+    font-weight: 800;
+    color: #f3f6ff;
+    text-shadow: 0 0 16px rgba(124,92,255,0.35);
   }
   .mobileTabbar a.active .tabIcoDiscover circle[fill="none"]{
     stroke: rgba(232, 238, 247, 0.92);
@@ -16620,11 +16667,19 @@ body[data-route="settings"] .app{
   display: flex;
   flex-direction: column;
   gap: 0;
+  margin-bottom: 14px;
+  padding: 4px 12px 8px;
+  border-radius: 18px;
+  border: 1px solid var(--surface-border);
+  background: var(--surface-raised);
+  box-shadow:
+    var(--elev-1),
+    var(--surface-highlight);
 }
 .settingsGroupTitle{
   margin: 0 0 4px;
-  padding: 14px 4px 4px;
-  color: rgba(223,231,251,0.38);
+  padding: 12px 4px 6px;
+  color: rgba(183, 168, 255, 0.78);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.1em;
@@ -17200,17 +17255,51 @@ body.notificationsCenterOpen{
   overflow: visible;
 }
 .profilePersonaSignature{
-  margin: 4px 2px 22px;
-  padding: 18px 18px 16px;
-  border-radius: 24px;
-  border: 1px solid rgba(124, 92, 255, 0.24);
+  position: relative;
+  isolation: isolate;
+  margin: 8px 0 26px;
+  padding: 20px 20px 18px;
+  border-radius: 26px;
+  border: 1px solid rgba(124, 92, 255, 0.38);
   background:
-    radial-gradient(120% 120% at 0% 0%, rgba(124, 92, 255, 0.16), transparent 58%),
-    radial-gradient(90% 80% at 100% 100%, rgba(35, 213, 171, 0.10), transparent 55%),
-    linear-gradient(165deg, rgba(22, 28, 44, 0.92), rgba(8, 11, 20, 0.88));
+    radial-gradient(130% 120% at 0% 0%, rgba(124, 92, 255, 0.22), transparent 58%),
+    radial-gradient(100% 90% at 100% 100%, rgba(35, 213, 171, 0.14), transparent 55%),
+    linear-gradient(165deg, rgba(24, 30, 48, 0.96), rgba(8, 11, 22, 0.92));
   box-shadow:
-    0 20px 48px rgba(0, 0, 0, 0.26),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    0 26px 60px rgba(0, 0, 0, 0.38),
+    0 0 56px rgba(124, 92, 255, 0.2),
+    0 0 32px rgba(35, 213, 171, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+.profilePersonaSignature::before{
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(124,92,255,0.65), rgba(35,213,171,0.45), rgba(183,168,255,0.55));
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+          mask-composite: exclude;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.85;
+}
+.profilePersonaSignature::after{
+  content: "";
+  position: absolute;
+  inset: 12px 18px auto;
+  height: 48px;
+  border-radius: 999px;
+  background: radial-gradient(80% 100% at 50% 50%, rgba(124,92,255,0.28), transparent 70%);
+  filter: blur(18px);
+  pointer-events: none;
+  z-index: -2;
 }
 .profilePersonaSignature[hidden]{ display: none !important; }
 .profilePersonaSignatureTop{
@@ -17227,12 +17316,27 @@ body.notificationsCenterOpen{
 }
 .profilePersonaSignatureMark{
   flex: 0 0 auto;
-  width: 52px;
-  height: 52px;
+  width: 56px;
+  height: 56px;
   padding: 2px;
-  border-radius: 16px;
+  border-radius: 18px;
   background: var(--nabad-squircle-gradient);
-  box-shadow: 0 12px 28px rgba(124, 92, 255, 0.28);
+  box-shadow:
+    0 14px 32px rgba(124, 92, 255, 0.38),
+    0 0 28px rgba(35, 213, 171, 0.22);
+  animation: personaSignatureMarkGlow 3.4s ease-in-out infinite;
+}
+@keyframes personaSignatureMarkGlow{
+  0%, 100%{
+    box-shadow:
+      0 14px 32px rgba(124, 92, 255, 0.34),
+      0 0 24px rgba(35, 213, 171, 0.18);
+  }
+  50%{
+    box-shadow:
+      0 18px 40px rgba(124, 92, 255, 0.48),
+      0 0 40px rgba(35, 213, 171, 0.32);
+  }
 }
 .profilePersonaSignatureMarkInner{
   width: 100%;
@@ -17258,15 +17362,17 @@ body.notificationsCenterOpen{
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(94, 234, 212, 0.88);
+  color: rgba(94, 234, 212, 0.95);
+  text-shadow: 0 0 18px rgba(35, 213, 171, 0.35);
 }
 .profilePersonaSignatureTitle{
   margin: 3px 0 0;
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 850;
   letter-spacing: -0.04em;
   line-height: 1.08;
-  color: #f3f6ff;
+  color: #f8faff;
+  text-shadow: 0 0 32px rgba(124, 92, 255, 0.28);
 }
 .profilePersonaSignatureStatus{
   margin: 5px 0 0;
@@ -17316,10 +17422,13 @@ body.notificationsCenterOpen{
   -webkit-tap-highlight-color: transparent;
 }
 .profilePersonaSigBtn--fill{
-  border-color: rgba(124, 92, 255, 0.38);
-  background: linear-gradient(135deg, rgba(124, 92, 255, 0.95), rgba(35, 213, 171, 0.72));
+  border-color: rgba(124, 92, 255, 0.48);
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.98), rgba(35, 213, 171, 0.78));
   color: #fff;
-  box-shadow: 0 10px 26px rgba(124, 92, 255, 0.28);
+  box-shadow:
+    0 12px 30px rgba(124, 92, 255, 0.36),
+    0 0 28px rgba(35, 213, 171, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 .profilePersonaSignaturePanel{
   margin-top: 14px;
@@ -25773,10 +25882,36 @@ body[data-route="challenges"] .app{
 }
 .homeDeskPersonaPromo{
   margin-top: 0;
-  border: 1px solid rgba(124,92,255,0.28);
+  position: relative;
+  isolation: isolate;
+  border: 1px solid rgba(124,92,255,0.42);
   background:
-    radial-gradient(120% 100% at 0% 0%, rgba(124,92,255,0.16), transparent 58%),
-    linear-gradient(135deg, rgba(14,12,28,0.94), rgba(10,16,32,0.82));
+    radial-gradient(130% 100% at 0% 0%, rgba(124,92,255,0.22), transparent 58%),
+    radial-gradient(90% 80% at 100% 100%, rgba(35,213,171,0.1), transparent 55%),
+    linear-gradient(135deg, rgba(16, 14, 32, 0.96), rgba(10, 16, 32, 0.88));
+  box-shadow:
+    0 22px 52px rgba(0,0,0,0.34),
+    0 0 48px rgba(124,92,255,0.18),
+    inset 0 1px 0 rgba(255,255,255,0.1);
+}
+.homeDeskPersonaPromo::before{
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(124,92,255,0.55), rgba(35,213,171,0.35));
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+          mask-composite: exclude;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.8;
 }
 .homeDeskSongPromo{
   margin-bottom: 0;
@@ -26447,10 +26582,13 @@ body[data-route="activity"] .app{
 }
 .activityTitle{
   margin: 0;
-  color: #f3f6ff;
+  color: #f8faff;
   font-size: clamp(28px, 7vw, 34px);
-  font-weight: 800;
+  font-weight: 850;
   letter-spacing: -0.04em;
+  text-shadow:
+    0 0 40px rgba(124, 92, 255, 0.28),
+    0 0 24px rgba(35, 213, 171, 0.12);
 }
 .activityLead{
   margin: 8px 0 0;
@@ -26471,66 +26609,91 @@ body[data-route="activity"] .app{
 .activityFeed{
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
 .activityDayGroup{
   display: flex;
   flex-direction: column;
   gap: 0;
+  padding-bottom: 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background:
+    radial-gradient(120% 100% at 0% 0%, rgba(124,92,255,0.08), transparent 58%),
+    linear-gradient(168deg, rgba(18, 24, 38, 0.92), rgba(8, 11, 20, 0.86));
+  box-shadow:
+    var(--elev-2),
+    inset 0 1px 0 rgba(255,255,255,0.07);
+  overflow: hidden;
 }
 .activityDayLabel{
-  margin: 0 0 4px;
-  padding: 8px 4px 4px;
-  color: rgba(223,231,251,0.38);
+  margin: 0;
+  padding: 12px 16px 8px;
+  color: rgba(183, 168, 255, 0.82);
   font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.1em;
+  font-weight: 900;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), transparent);
 }
 .activityRow{
   position: relative;
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  width: 100%;
-  padding: 12px 6px;
+  width: calc(100% - 16px);
+  margin: 0 8px;
+  padding: 14px 14px;
   border: 0;
-  border-radius: 12px;
-  background: transparent;
-  box-shadow: none;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.02);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
   color: inherit;
   text-align: left;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  transition: background 160ms ease;
+  transition:
+    background 160ms ease,
+    box-shadow 160ms ease,
+    transform 120ms ease;
 }
 .activityRow + .activityRow{
   border-top: 0;
-  margin-top: 0;
+  margin-top: 6px;
 }
 .activityDayGroup .activityRow + .activityRow{
-  border-top: 1px solid rgba(255,255,255,0.06);
+  border-top: 0;
+  margin-top: 6px;
 }
 button.activityRow{
   appearance: none;
   font: inherit;
 }
 .activityRow:active{
-  background: rgba(255,255,255,0.04);
+  background: rgba(255,255,255,0.06);
+  transform: scale(0.992);
 }
 .activityRow.isUnread{
-  background: rgba(94,234,212,0.07);
+  background:
+    linear-gradient(90deg, rgba(94,234,212,0.14), rgba(94,234,212,0.05));
+  box-shadow:
+    inset 3px 0 0 rgba(94,234,212,0.9),
+    0 8px 24px rgba(94,234,212,0.08),
+    inset 0 1px 0 rgba(255,255,255,0.06);
 }
 .activityRowUnreadDot{
   position: absolute;
-  left: 0;
-  top: 18px;
-  width: 5px;
-  height: 5px;
+  left: 2px;
+  top: 20px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: #5eead4;
-  box-shadow: 0 0 10px rgba(94,234,212,0.55);
+  box-shadow:
+    0 0 12px rgba(94,234,212,0.75),
+    0 0 20px rgba(94,234,212,0.35);
 }
 .activityRow--unavailable{
   opacity: 0.68;
@@ -26624,7 +26787,9 @@ button.activityRow--unavailable{
   align-items: center;
   justify-content: center;
   line-height: 1;
-  box-shadow: 0 6px 14px rgba(0,0,0,0.28);
+  box-shadow:
+    0 6px 16px rgba(0,0,0,0.32),
+    inset 0 1px 0 rgba(255,255,255,0.2);
 }
 .activityRowBadge--chart_rank{
   background: linear-gradient(135deg, #fbbf24, #f59e0b);
@@ -26671,10 +26836,12 @@ button.activityRow--unavailable{
 .activityRowTop strong{
   flex: 1 1 auto;
   min-width: 0;
-  color: #f3f6ff;
+  color: #f8faff;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 850;
   letter-spacing: -0.02em;
+  text-shadow: 0 0 20px rgba(124, 92, 255, 0.12);
+}
   line-height: 1.35;
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -30916,5 +31083,58 @@ body.appTourOpen{
   }
   .appTour.isOpen .appTourCard--center{
     transform: translate(-50%, 0) !important;
+  }
+}
+
+/* --- Premium polish: light-mode parity for elevated surfaces --- */
+html[data-theme="light"] .activityDayGroup{
+  border-color: rgba(15, 23, 40, 0.1);
+  background: var(--surface-raised);
+  box-shadow: var(--elev-1);
+}
+html[data-theme="light"] .activityDayLabel{
+  color: rgba(109, 77, 245, 0.72);
+  border-bottom-color: rgba(15, 23, 40, 0.08);
+  background: linear-gradient(180deg, rgba(124, 92, 255, 0.06), transparent);
+}
+html[data-theme="light"] .activityRow{
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+html[data-theme="light"] .activityRow.isUnread{
+  background: linear-gradient(90deg, rgba(35, 213, 171, 0.14), rgba(35, 213, 171, 0.05));
+  box-shadow:
+    inset 3px 0 0 rgba(18, 184, 134, 0.85),
+    0 6px 18px rgba(35, 213, 171, 0.1);
+}
+html[data-theme="light"] .mobileTabbar a.active:not(.tabCreate)::before{
+  background:
+    radial-gradient(130% 120% at 50% 0%, rgba(124, 92, 255, 0.2), rgba(124, 92, 255, 0.06) 58%, transparent 100%);
+  box-shadow:
+    0 0 20px rgba(124, 92, 255, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 0 0 1px rgba(124, 92, 255, 0.22);
+}
+html[data-theme="light"] .profilePersonaSignature{
+  border-color: rgba(124, 92, 255, 0.28);
+  box-shadow:
+    0 22px 48px rgba(88, 104, 140, 0.14),
+    0 0 40px rgba(124, 92, 255, 0.12);
+}
+html[data-theme="light"] .settingsGroup{
+  border-color: rgba(15, 23, 40, 0.1);
+  box-shadow: var(--elev-1);
+}
+
+@media (prefers-reduced-motion: reduce){
+  .profilePersonaSignatureMark{
+    animation: none;
+  }
+  .mobileTabbar a.active .tabIco{
+    transform: none;
+    filter: none;
+  }
+  .activityRow:active{
+    transform: none;
   }
 }

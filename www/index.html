@@ -58,7 +58,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260618mashupDiscsUi" />
+    <link rel="stylesheet" href="./styles.css?v=20260618splashVideo" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -74,12 +74,24 @@
   <body class="booting">
     <div id="bootSplash" class="bootSplash" aria-hidden="true">
       <div class="bootSplashInner">
-        <span class="bootSplashMark" aria-hidden="true"></span>
-        <h1 class="bootSplashWordmark introWordmark">
-          <span class="brandPrimary">NabadAi</span>
-          <span class="brandSecondary introBrandSecondary">Music</span>
-        </h1>
-        <span class="bootSplashDots introDots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <div class="bootSplashMark bootSplashMark--video" aria-hidden="true">
+          <video
+            id="bootSplashVideo"
+            class="bootSplashVideo"
+            src="./assets/icons/splash-logo.mp4?v=20260618"
+            autoplay
+            muted
+            playsinline
+            preload="auto"
+            aria-hidden="true"
+          ></video>
+        </div>
+        <div class="bootSplashBrand" id="bootSplashBrand" aria-hidden="true">
+          <h1 class="bootSplashWordmark introWordmark">
+            <span class="bootSplashBrandPrimary brandPrimary">NabadAi</span>
+            <span class="bootSplashBrandSecondary brandSecondary introBrandSecondary">Music</span>
+          </h1>
+        </div>
       </div>
     </div>
     <div id="loginSettlingOverlay" class="loginSettlingOverlay" hidden aria-hidden="true">
@@ -3669,6 +3681,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260618profileSongsPerf"></script>
+    <script type="module" src="./src/app.js?v=20260618splashVideo"></script>
   </body>
 </html>

@@ -54,9 +54,10 @@ try {
   console.warn("[theme] init failed", e);
 }
 
-/** Boot splash: logo + dots — keep visible at least this long even when session restores instantly. */
-const BOOT_SPLASH_MIN_MS = 2400;
-const BOOT_SPLASH_MAX_MS = 5500;
+/** Boot splash: animated logo video — wordmark splashes in ~4.05s; clip ~5.54s total. */
+const BOOT_SPLASH_WORDMARK_AT_S = 4.05;
+const BOOT_SPLASH_MIN_MS = 5600;
+const BOOT_SPLASH_MAX_MS = 7000;
 const _bootSplashStartedAt = Date.now();
 let _bootSplashCanDismiss = false;
 let _bootSplashMinTimer = 0;
@@ -96,6 +97,37 @@ try {
   window.addEventListener("unhandledrejection", forceBootSplashEnd);
   setTimeout(forceBootSplashEnd, BOOT_SPLASH_MAX_MS);
 } catch {}
+
+function initBootSplashVideo() {
+  try {
+    const video = document.getElementById("bootSplashVideo");
+    if (!video) return;
+    video.muted = true;
+    video.playsInline = true;
+    const reveal = () => {
+      video.classList.add("isPlaying");
+      try {
+        document.getElementById("bootSplash")?.classList.add("bootSplashVideoPlaying");
+      } catch {}
+    };
+    const play = () => {
+      const pending = video.play();
+      if (pending && typeof pending.catch === "function") {
+        pending.catch(() => {});
+      } else {
+        reveal();
+      }
+    };
+    video.addEventListener("playing", reveal, { once: true });
+    if (video.readyState >= 2) play();
+    else video.addEventListener("canplay", play, { once: true });
+    video.addEventListener("ended", () => {
+      _bootSplashCanDismiss = true;
+      tryDismissBootSplash();
+    }, { once: true });
+  } catch {}
+}
+initBootSplashVideo();
 
 /** UUID allowlist from `/api/public-config` (env `NABAD_CERTIFIED_USER_IDS`)
  *  — interim gate for the Profile "Verified Nabad Creator" badge until

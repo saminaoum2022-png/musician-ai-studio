@@ -1333,8 +1333,81 @@ body.booting .bootSplash{
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
   transform: translateY(-4vh);
+}
+.bootSplashMark.bootSplashMark--video{
+  position: relative;
+  flex-shrink: 0;
+  width: min(32vw, 133px);
+  aspect-ratio: 1;
+  overflow: visible;
+  background: transparent;
+}
+.bootSplashVideo{
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: transparent;
+  opacity: 0;
+}
+.bootSplashVideo.isPlaying{
+  opacity: 1;
+}
+.bootSplashBrand{
+  min-height: 1.2em;
+}
+.bootSplashBrandPrimary,
+.bootSplashBrandSecondary{
+  display: inline-block;
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(12px);
+  filter: none;
+}
+.bootSplashMark.bootSplashMark--video:has(.bootSplashVideo.isPlaying) ~ .bootSplashBrand .bootSplashBrandPrimary,
+.bootSplashVideoPlaying .bootSplashBrandPrimary{
+  animation: bootSplashWordIn 0.62s cubic-bezier(0.22, 1, 0.36, 1) 4.05s both;
+}
+.bootSplashMark.bootSplashMark--video:has(.bootSplashVideo.isPlaying) ~ .bootSplashBrand .bootSplashBrandSecondary,
+.bootSplashVideoPlaying .bootSplashBrandSecondary{
+  animation: bootSplashWordIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) 4.2s both;
+}
+@keyframes bootSplashWordIn{
+  0%{
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(12px);
+    filter: blur(0);
+  }
+  1%{
+    visibility: visible;
+    opacity: 0;
+    transform: translateY(12px);
+    filter: blur(7px);
+  }
+  68%{
+    opacity: 1;
+    transform: translateY(-2px);
+    filter: blur(0);
+  }
+  100%{
+    visibility: visible;
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+@media (prefers-reduced-motion: reduce){
+  .bootSplashBrandPrimary,
+  .bootSplashBrandSecondary{
+    visibility: visible;
+    opacity: 1;
+    transform: none;
+    filter: none;
+    animation: none;
+  }
 }
 .bootSplashMark{
   width: min(26vw, 108px);
@@ -1345,6 +1418,8 @@ body.booting .bootSplash{
 }
 .bootSplashWordmark{
   margin: 0;
+  position: relative;
+  z-index: 1;
   font-size: clamp(22px, 5.8vw, 32px);
 }
 body.booting .bootSplashDots{

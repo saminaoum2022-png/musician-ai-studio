@@ -1308,6 +1308,9 @@ body.pageTransitioning{ opacity: 0; }
 body.booting{
   background: #05070d;
 }
+html.is-web-shell body.booting::before{
+  display: none;
+}
 body.booting .app{ visibility: hidden; }
 body.booting::before{
   content: "";

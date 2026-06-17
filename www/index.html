@@ -2,19 +2,28 @@
 <html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
+    <style id="bootCritical">html,body{margin:0;background-color:#05070d;color-scheme:dark}</style>
     <script>
       (function () {
         try { localStorage.removeItem("nabadai_theme_v1"); } catch (e) {}
         var bg = "#05070d";
         var fg = "#eef4ff";
         var html = document.documentElement;
+        var isCapShell = location.protocol === "capacitor:";
         html.setAttribute("data-theme", "dark");
+        html.classList.add(isCapShell ? "is-native-shell" : "is-web-shell");
         html.style.background = bg;
         html.style.colorScheme = "dark";
         var style = document.createElement("style");
         style.id = "themeCritical";
-        style.textContent =
-          "html,body{background-color:" + bg + ";color:" + fg + ";margin:0}html{color-scheme:dark}";
+        var base = "html,body{background-color:" + bg + ";color:" + fg + ";margin:0}html{color-scheme:dark}";
+        var webBoot = isCapShell ? "" : (
+          "body.booting{background:" + bg + "}" +
+          "body.booting .app{visibility:hidden}" +
+          "body.booting .bootSplash{display:flex;position:fixed;inset:0;z-index:10000;align-items:center;justify-content:center;background:" + bg + "}" +
+          "html.is-web-shell body.booting::before{display:none!important}"
+        );
+        style.textContent = base + webBoot;
         document.head.appendChild(style);
       })();
     </script>
@@ -58,7 +67,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260618splashVideo" />
+    <link rel="stylesheet" href="./styles.css?v=20260618splashWebFlash" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -3681,6 +3690,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260618splashWebFix"></script>
+    <script type="module" src="./src/app.js?v=20260618splashWebFlash"></script>
   </body>
 </html>

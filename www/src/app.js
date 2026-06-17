@@ -54,11 +54,17 @@ try {
   console.warn("[theme] init failed", e);
 }
 
-/** Boot splash: animated logo video — wordmark splashes in ~3.55s; clip ~5.04s total (0.5s trimmed from start). */
+const IS_NATIVE_SHELL = typeof location !== "undefined" && location.protocol === "capacitor:";
+/** Boot splash: animated logo video — wordmark at ~3.55s into clip (~5.04s total). */
 const BOOT_SPLASH_WORDMARK_AT_S = 3.55;
 const BOOT_SPLASH_MIN_MS = 5100;
 const BOOT_SPLASH_MAX_MS = 6500;
+/** Web: timers anchor to first frame / play — not page load (MP4 comes over the network). */
+const BOOT_SPLASH_WEB_MIN_AFTER_PLAY_MS = 5200;
+const BOOT_SPLASH_WEB_PREPLAY_MAX_MS = 10000;
+const BOOT_SPLASH_WEB_MAX_MS = 14000;
 const _bootSplashStartedAt = Date.now();
+let _bootSplashVideoStartedAt = 0;
 let _bootSplashCanDismiss = false;
 let _bootSplashMinTimer = 0;
 
@@ -66,7 +72,28 @@ function tryDismissBootSplash() {
   if (!_bootSplashCanDismiss) return;
   try {
     if (!document.body.classList.contains("booting")) return;
-    const elapsed = Date.now() - _bootSplashStartedAt;
+    const now = Date.now();
+    if (!IS_NATIVE_SHELL) {
+      if (!_bootSplashVideoStartedAt) {
+        if (now - _bootSplashStartedAt >= BOOT_SPLASH_WEB_PREPLAY_MAX_MS) {
+          document.body.classList.remove("booting");
+        }
+        return;
+      }
+      const elapsed = now - _bootSplashVideoStartedAt;
+      if (elapsed < BOOT_SPLASH_WEB_MIN_AFTER_PLAY_MS) {
+        if (!_bootSplashMinTimer) {
+          _bootSplashMinTimer = window.setTimeout(() => {
+            _bootSplashMinTimer = 0;
+            tryDismissBootSplash();
+          }, BOOT_SPLASH_WEB_MIN_AFTER_PLAY_MS - elapsed);
+        }
+        return;
+      }
+      document.body.classList.remove("booting");
+      return;
+    }
+    const elapsed = now - _bootSplashStartedAt;
     if (elapsed < BOOT_SPLASH_MIN_MS) {
       if (!_bootSplashMinTimer) {
         _bootSplashMinTimer = window.setTimeout(() => {
@@ -95,7 +122,7 @@ try {
   };
   window.addEventListener("error", forceBootSplashEnd);
   window.addEventListener("unhandledrejection", forceBootSplashEnd);
-  setTimeout(forceBootSplashEnd, BOOT_SPLASH_MAX_MS);
+  setTimeout(forceBootSplashEnd, IS_NATIVE_SHELL ? BOOT_SPLASH_MAX_MS : BOOT_SPLASH_WEB_MAX_MS);
 } catch {}
 
 function initBootSplashVideo() {
@@ -104,7 +131,6 @@ function initBootSplashVideo() {
     const bootSplash = document.getElementById("bootSplash");
     const mark = video?.closest(".bootSplashMark--video");
     if (!video) return;
-    const isNativeShell = location.protocol === "capacitor:";
     video.muted = true;
     video.playsInline = true;
     video.setAttribute("muted", "");
@@ -120,8 +146,12 @@ function initBootSplashVideo() {
       video.classList.add("isPlaying");
       try { bootSplash?.classList.add("bootSplashVideoPlaying"); } catch {}
     };
+    const markVideoStarted = () => {
+      if (_bootSplashVideoStartedAt) return;
+      _bootSplashVideoStartedAt = Date.now();
+    };
     const fallbackStaticMark = () => {
-      if (!isNativeShell) return;
+      if (!IS_NATIVE_SHELL) return;
       try { mark?.classList.add("bootSplashMark--fallback"); } catch {}
       revealVideo();
       startWordmarkSync();
@@ -129,37 +159,28 @@ function initBootSplashVideo() {
     const tryPlay = () => {
       const pending = video.play();
       if (pending && typeof pending.catch === "function") {
-        pending.catch(() => {
-          if (isNativeShell) revealVideo();
-        });
+        pending.catch(() => {});
       }
     };
-    if (isNativeShell) {
-      video.addEventListener("loadeddata", revealVideo, { once: true });
-      video.addEventListener("playing", startWordmarkSync, { once: true });
-    } else {
-      video.addEventListener("playing", () => {
-        revealVideo();
-        startWordmarkSync();
-      }, { once: true });
-    }
+    const onFirstFrame = () => {
+      revealVideo();
+      tryPlay();
+    };
+    video.addEventListener("loadeddata", onFirstFrame, { once: true });
+    video.addEventListener("playing", markVideoStarted, { once: true });
     video.addEventListener("timeupdate", () => {
       if (video.currentTime >= BOOT_SPLASH_WORDMARK_AT_S) startWordmarkSync();
     });
     video.addEventListener("error", fallbackStaticMark, { once: true });
-    if (video.readyState >= 2) {
-      if (isNativeShell) revealVideo();
-      tryPlay();
-    } else {
-      video.addEventListener("canplay", () => {
-        if (isNativeShell) revealVideo();
-        tryPlay();
-      }, { once: true });
-    }
-    if (isNativeShell) {
+    if (video.readyState >= 2) onFirstFrame();
+    else video.addEventListener("canplay", tryPlay, { once: true });
+    if (IS_NATIVE_SHELL) {
       setTimeout(() => {
         if (!video.classList.contains("isReady")) fallbackStaticMark();
       }, 1200);
+    } else {
+      setTimeout(() => { if (video.paused) tryPlay(); }, 300);
+      setTimeout(() => { if (video.paused) tryPlay(); }, 1200);
     }
     video.addEventListener("ended", () => {
       _bootSplashCanDismiss = true;

@@ -1312,6 +1312,8 @@ html.is-web-shell body.booting::before{
   display: none;
 }
 body.booting .app{ visibility: hidden; }
+body.booting .mobileTabbar,
+body.booting .footer{ display: none !important; }
 body.booting::before{
   content: "";
   position: fixed;
@@ -1380,11 +1382,11 @@ body.booting .bootSplash{
 }
 .bootSplashMark.bootSplashMark--video:has(.bootSplashVideo.isPlaying) ~ .bootSplashBrand .bootSplashBrandPrimary,
 .bootSplashVideoPlaying .bootSplashBrandPrimary{
-  animation: bootSplashWordIn 0.62s cubic-bezier(0.22, 1, 0.36, 1) 4.05s both;
+  animation: bootSplashWordIn 0.62s cubic-bezier(0.22, 1, 0.36, 1) 3.55s both;
 }
 .bootSplashMark.bootSplashMark--video:has(.bootSplashVideo.isPlaying) ~ .bootSplashBrand .bootSplashBrandSecondary,
 .bootSplashVideoPlaying .bootSplashBrandSecondary{
-  animation: bootSplashWordIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) 4.2s both;
+  animation: bootSplashWordIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) 3.7s both;
 }
 @keyframes bootSplashWordIn{
   0%{

@@ -17,12 +17,12 @@
         var style = document.createElement("style");
         style.id = "themeCritical";
         var base = "html,body{background-color:" + bg + ";color:" + fg + ";margin:0}html{color-scheme:dark}";
-        var webBoot = isCapShell ? "" : (
+        var bootHide =
           "body.booting{background:" + bg + "}" +
           "body.booting .app{visibility:hidden}" +
-          "body.booting .bootSplash{display:flex;position:fixed;inset:0;z-index:10000;align-items:center;justify-content:center;background:" + bg + "}" +
-          "html.is-web-shell body.booting::before{display:none!important}"
-        );
+          "body.booting .mobileTabbar,body.booting .footer{display:none!important}" +
+          "body.booting .bootSplash{display:flex;position:fixed;inset:0;z-index:10000;align-items:center;justify-content:center;background:" + bg + "}";
+        var webBoot = bootHide + (isCapShell ? "" : "html.is-web-shell body.booting::before{display:none!important}");
         style.textContent = base + webBoot;
         document.head.appendChild(style);
       })();
@@ -87,7 +87,7 @@
           <video
             id="bootSplashVideo"
             class="bootSplashVideo"
-            src="./assets/icons/splash-logo.mp4?v=20260618"
+            src="./assets/icons/splash-logo.mp4?v=20260619trim"
             autoplay
             muted
             playsinline

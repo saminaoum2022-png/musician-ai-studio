@@ -54,10 +54,10 @@ try {
   console.warn("[theme] init failed", e);
 }
 
-/** Boot splash: animated logo video — wordmark splashes in ~4.05s; clip ~5.54s total. */
-const BOOT_SPLASH_WORDMARK_AT_S = 4.05;
-const BOOT_SPLASH_MIN_MS = 5600;
-const BOOT_SPLASH_MAX_MS = 7000;
+/** Boot splash: animated logo video — wordmark splashes in ~3.55s; clip ~5.04s total (0.5s trimmed from start). */
+const BOOT_SPLASH_WORDMARK_AT_S = 3.55;
+const BOOT_SPLASH_MIN_MS = 5100;
+const BOOT_SPLASH_MAX_MS = 6500;
 const _bootSplashStartedAt = Date.now();
 let _bootSplashCanDismiss = false;
 let _bootSplashMinTimer = 0;
@@ -134,6 +134,9 @@ function initBootSplashVideo() {
     };
     video.addEventListener("loadeddata", revealVideo, { once: true });
     video.addEventListener("playing", startWordmarkSync, { once: true });
+    video.addEventListener("timeupdate", () => {
+      if (video.currentTime >= BOOT_SPLASH_WORDMARK_AT_S) startWordmarkSync();
+    });
     video.addEventListener("error", fallbackStaticMark, { once: true });
     if (video.readyState >= 2) {
       revealVideo();

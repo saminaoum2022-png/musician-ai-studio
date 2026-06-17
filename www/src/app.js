@@ -19,18 +19,10 @@ import {
   shouldSkipIntroOrOnboardingRoute,
 } from "./onboarding.js";
 import { initTheme } from "./theme.js";
-import {
-  applyWarmCrossOriginBeforeSrc,
-  dropWarmRouteRecord,
-  initWarmPlaybackSettings,
-  isWarmPlaybackEnabled,
-  isWarmRouted,
-  wireWarmPlaybackAtPlay,
-} from "./warm-playback.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618renderPerf";
+const APP_BUILD = "20260619noWarmPlayback";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -413,7 +405,6 @@ const els = {
   settingsEditProfileRow: document.getElementById("settingsEditProfileRow"),
   settingsHelpRow: document.getElementById("settingsHelpRow"),
   settingsReportRow: document.getElementById("settingsReportRow"),
-  settingsWarmPlayback: document.getElementById("settingsWarmPlayback"),
   notificationsCenter: document.getElementById("notificationsCenter"),
   notificationsCenterLead: document.getElementById("notificationsCenterLead"),
   notificationsCenterStatus: document.getElementById("notificationsCenterStatus"),
@@ -1406,11 +1397,6 @@ async function hubAudioPlayWithRetry(audio) {
   // a new one off — otherwise the browser cancels the new request.
   await awaitWithTimeout(_hubInflightPlay, 250);
   _hubInflightPlay = null;
-  try {
-    const playSrc = String(audio.src || "").trim();
-    if (playSrc) await wireWarmPlaybackAtPlay(audio, playSrc);
-  } catch {}
-
   const tryOnce = async () => {
     try {
       const p = audio.play();
@@ -1713,7 +1699,6 @@ async function startHubPlayback(postId) {
     stopHubPlayback();
     return;
   }
-  applyWarmCrossOriginBeforeSrc(a, targetSrc);
   resetAudioDurationHintForUrl(targetSrc);
   await primeAudioDurationHint(targetSrc);
   try {
@@ -30178,57 +30163,6 @@ async function exportSessionMixWav() {
   setSessionStatus("Export complete. Download is ready.");
 }
 
-/** MediaElementSource is one-shot — replace the element after warm routing so
- *  disabling warm playback restores normal speaker output. */
-function recreatePlayerElIfWarmRouted() {
-  if (!playerEl || !isWarmRouted(playerEl)) return;
-  const snap = {
-    src: String(playerEl.src || "").trim(),
-    time: Number(playerEl.currentTime) || 0,
-    paused: playerEl.paused,
-    label: playerLoadedLabel,
-  };
-  try {
-    playerEl.pause();
-  } catch {}
-  dropWarmRouteRecord(playerEl);
-  playerEl = null;
-  if (!snap.src) return;
-  setPlayerSource(snap.src, snap.label || "Song");
-  const fresh = ensurePlayer();
-  try {
-    fresh.currentTime = snap.time;
-  } catch {}
-  if (!snap.paused) void hubAudioPlayWithRetry(fresh);
-}
-
-function recreateHubAudioIfWarmRouted() {
-  if (!hubAudio || !isWarmRouted(hubAudio)) return;
-  const snap = {
-    src: String(hubAudio.src || "").trim(),
-    time: Number(hubAudio.currentTime) || 0,
-    paused: hubAudio.paused,
-    postId: hubAudioPostId,
-    post: hubAudioCurrentPost,
-    seq: hubPlaybackSeq,
-  };
-  try {
-    hubAudio.pause();
-  } catch {}
-  dropWarmRouteRecord(hubAudio);
-  hubAudio = null;
-  if (!snap.src || !snap.postId || !snap.post) return;
-  const fresh = ensureHubAudio();
-  applyWarmCrossOriginBeforeSrc(fresh, snap.src);
-  resetAudioDurationHintForUrl(snap.src);
-  fresh.src = snap.src;
-  try {
-    fresh.dataset.hubSeq = String(snap.seq);
-    fresh.currentTime = snap.time;
-  } catch {}
-  if (!snap.paused) void hubAudioPlayWithRetry(fresh);
-}
-
 function ensurePlayer() {
   if (playerEl) return playerEl;
   playerEl = new Audio();
@@ -30520,25 +30454,20 @@ function setPlayerSource(url, label) {
   if (typeof playUrl === "string" && /^https?:\/\//i.test(playUrl)) {
     lastPlayerHttpUrl = playUrl;
   }
-  applyWarmCrossOriginBeforeSrc(a, playUrl);
-  // Only same-origin or blob URLs need crossOrigin for WebAudio/spectrum; forcing
-  // "anonymous" on arbitrary Suno CDN URLs breaks playback when ACAO is absent.
-  if (!isWarmPlaybackEnabled()) {
-    try {
-      const u = String(playUrl || "");
-      if (!u || u.startsWith("blob:")) {
+  try {
+    const u = String(playUrl || "");
+    if (!u || u.startsWith("blob:")) {
+      a.crossOrigin = "anonymous";
+    } else {
+      const parsed = new URL(u, location.href);
+      if (parsed.origin === location.origin) {
         a.crossOrigin = "anonymous";
       } else {
-        const parsed = new URL(u, location.href);
-        if (parsed.origin === location.origin) {
-          a.crossOrigin = "anonymous";
-        } else {
-          a.removeAttribute("crossOrigin");
-        }
+        a.removeAttribute("crossOrigin");
       }
-    } catch {
-      a.removeAttribute("crossOrigin");
     }
+  } catch {
+    a.removeAttribute("crossOrigin");
   }
   resetAudioDurationHintForUrl(playUrl);
   a.src = playUrl;
@@ -37765,24 +37694,6 @@ if (els.settingsBtnSignIn) {
 if (els.settingsBtnLogout) {
   els.settingsBtnLogout.addEventListener("click", () => logoutCurrentUser());
 }
-initWarmPlaybackSettings(els.settingsWarmPlayback, {
-  onChange(enabled) {
-    try {
-      if (!enabled) {
-        recreatePlayerElIfWarmRouted();
-        recreateHubAudioIfWarmRouted();
-      }
-    } catch {}
-    try {
-      showToast(
-        enabled
-          ? "Warm playback on — softer highs on the next play."
-          : "Warm playback off — full-range playback.",
-        { icon: "♪", durationMs: 3200 },
-      );
-    } catch {}
-  },
-});
 if (els.btnUserPublicFollow) {
   els.btnUserPublicFollow.addEventListener("click", () => void toggleCurrentUserPublicFollow());
 }

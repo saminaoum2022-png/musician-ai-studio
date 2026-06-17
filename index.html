@@ -22,7 +22,15 @@
           "body.booting .app{visibility:hidden}" +
           "body.booting .mobileTabbar,body.booting .footer{display:none!important}" +
           "body.booting .bootSplash{display:flex;position:fixed;inset:0;z-index:10000;align-items:center;justify-content:center;background:" + bg + "}";
-        var webBoot = bootHide + (isCapShell ? "" : "html.is-web-shell body.booting::before{display:none!important}");
+        var webBootExtra = isCapShell ? "" : (
+          "html.is-web-shell body.booting>*:not(#bootSplash):not(#loginSettlingOverlay){display:none!important}" +
+          ".bootSplashMark--video::before{content:'';position:absolute;inset:0;background:url(./assets/icons/splash-mark.png) center/contain no-repeat;opacity:1;pointer-events:none;z-index:1}" +
+          ".bootSplashMark--video:has(.bootSplashVideo.isReady)::before,.bootSplashMark--video:has(.bootSplashVideo.isPlaying)::before{opacity:0;transition:opacity .12s ease}" +
+          ".bootSplashVideo{opacity:0}" +
+          ".bootSplashVideo.isReady,.bootSplashVideo.isPlaying{opacity:1}" +
+          ".bootSplashBrandPrimary,.bootSplashBrandSecondary{visibility:hidden;opacity:0}"
+        );
+        var webBoot = bootHide + webBootExtra + (isCapShell ? "" : "html.is-web-shell body.booting::before{display:none!important}");
         style.textContent = base + webBoot;
         document.head.appendChild(style);
       })();
@@ -67,7 +75,8 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260618splashWebFlash" />
+    <link rel="preload" as="video" href="./assets/icons/splash-logo.mp4?v=20260619trim" type="video/mp4" />
+    <link rel="stylesheet" href="./styles.css?v=20260619webSplashFlash" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -3690,6 +3699,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260618splashWebFlash"></script>
+    <script type="module" src="./src/app.js?v=20260619webSplashFlash"></script>
   </body>
 </html>

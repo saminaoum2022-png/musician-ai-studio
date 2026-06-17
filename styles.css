@@ -1311,6 +1311,28 @@ body.booting{
 html.is-web-shell body.booting::before{
   display: none;
 }
+html.is-web-shell body.booting > *:not(#bootSplash):not(#loginSettlingOverlay){
+  display: none !important;
+}
+html.is-web-shell body.booting .bootSplash{
+  background: #05070d;
+}
+html.is-web-shell .bootSplashMark--video::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 1;
+  background:
+    radial-gradient(78% 78% at 50% 50%, rgba(124,92,255,0.14), transparent 72%),
+    url("./assets/icons/splash-mark.png") center / contain no-repeat;
+  transition: opacity 120ms ease;
+}
+html.is-web-shell .bootSplashMark--video:has(.bootSplashVideo.isReady)::before,
+html.is-web-shell .bootSplashMark--video:has(.bootSplashVideo.isPlaying)::before{
+  opacity: 0;
+}
 body.booting .app{ visibility: hidden; }
 body.booting .mobileTabbar,
 body.booting .footer{ display: none !important; }

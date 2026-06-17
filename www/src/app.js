@@ -149,7 +149,7 @@ function initBootSplashVideo() {
     }
     setTimeout(() => {
       if (!video.classList.contains("isReady")) fallbackStaticMark();
-    }, 1200);
+    }, location.protocol === "capacitor:" ? 1200 : 4000);
     video.addEventListener("ended", () => {
       _bootSplashCanDismiss = true;
       tryDismissBootSplash();

@@ -30,7 +30,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260618connPerf";
+const APP_BUILD = "20260618renderPerf";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2356,7 +2356,7 @@ const TAB_REFRESH_ACTIONS = {
     void Promise.resolve(refreshMyCredits({ silent: true })).catch(() => {});
     void Promise.resolve(refreshMyHubPostsFast({ force: true })).catch(() => {});
     void Promise.resolve(refreshNotificationsUnreadBadge({ force: true })).catch(() => {});
-    renderProfileSongs();
+    scheduleProfileSongsRender();
     void Promise.resolve(reconcileLibraryFromCloud())
       .catch((e) => console.warn("[tabRefresh/profile-songs]", e));
   },
@@ -2629,9 +2629,19 @@ async function refreshNotificationsUnreadBadge({ force = false } = {}) {
     updateNotificationsEntryBadges(0);
     return;
   }
+  const route = String(document.body.getAttribute("data-route") || "");
+  if (
+    !force &&
+    route === "activity" &&
+    _activityFeedState.items.length
+  ) {
+    const unread = _activityFeedState.items.filter((n) => !n?.read_at).length;
+    updateNotificationsEntryBadges(unread);
+    return;
+  }
   const now = Date.now();
   if (_notificationsUnreadFetchInFlight) return;
-  if (!force && now - _notificationsUnreadLastFetchedAt < 45000) return;
+  if (!force && now - _notificationsUnreadLastFetchedAt < 60000) return;
   _notificationsUnreadFetchInFlight = true;
   try {
     const data = await socialApi("/api/social?type=notifications");
@@ -3034,7 +3044,7 @@ function applyRoute({ passGen } = {}) {
     }
   } catch {}
   if (isLoggedIn) {
-    void refreshNotificationsUnreadBadge({ force: wanted === "friends" || wanted === "activity" || wanted === "settings" });
+    void refreshNotificationsUnreadBadge({ force: wanted === "friends" || wanted === "settings" });
   } else {
     updateNotificationsEntryBadges(0);
   }
@@ -3182,9 +3192,6 @@ function applyRoute({ passGen } = {}) {
           try {
             const merged = await mergeActiveProfileFromCloud();
             if (merged) {
-              if (_profileSongsSegment === "all") {
-                renderProfileSongs({ deferCloud: true });
-              }
               void ensurePersonalizedUsernameSyncedToCloud();
             }
           } catch {}
@@ -3195,7 +3202,7 @@ function applyRoute({ passGen } = {}) {
       try { setProfileHeaderLoading(false); } catch {}
       try { renderProfilePreviewFromInputs(); } catch {}
     }
-    renderProfileSongs({ deferCloud: profileHeavy });
+    scheduleProfileSongsRender({ deferCloud: profileHeavy });
   }
   if (routeApplyStale(gate)) return;
   if (wanted === "credits" || wanted === "sounds") {
@@ -9642,6 +9649,32 @@ function friendsFeedRowsHtml(mergedItems, profMap) {
 }
 
 /** Remix pairs, mashup tiles, play counts, and Who-to-follow load after the first paint. */
+function friendsFeedPlayableMediaSig(tracks, profMap) {
+  const pm = profMap || new Map();
+  return (tracks || [])
+    .map((t) => `${String(t?.id || "")}:${profileActMediaSig(t, pm)}`)
+    .join("|");
+}
+
+function patchFriendsFeedMediaRows(listEl, mergedItems, profMap) {
+  let patched = false;
+  mergedItems.forEach((item, i) => {
+    if (item.kind !== "music") return;
+    const sid = String(item.track?.id || "").trim();
+    if (!sid) return;
+    const article = listEl.querySelector(`[data-profile-act-song-id="${sid}"]`);
+    if (!article) return;
+    const wrap = document.createElement("div");
+    wrap.innerHTML = followingActivityRowHtml(item.track, profMap, i, { xstyle: true });
+    const next = wrap.firstElementChild;
+    if (next) {
+      article.replaceWith(next);
+      patched = true;
+    }
+  });
+  return patched;
+}
+
 async function enrichFriendsFeedAfterPaint({
   playable,
   mergedItems,
@@ -9651,6 +9684,7 @@ async function enrichFriendsFeedAfterPaint({
   gen,
 }) {
   try {
+    const mediaSigBefore = friendsFeedPlayableMediaSig(playable, profMap);
     const playCountMap = playable.length
       ? await fetchDiscoverSongPlayCounts(playable.map((t) => t.id))
       : new Map();
@@ -9664,7 +9698,11 @@ async function enrichFriendsFeedAfterPaint({
     ]);
     if (gen !== _discoveryFollowingGen) return;
     if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
-    listEl.innerHTML = friendsFeedRowsHtml(mergedItems, profMap);
+    const mediaSigAfter = friendsFeedPlayableMediaSig(playable, profMap);
+    const playPatch = applyFollowActPlayCountsToDom(listEl, playable);
+    if (mediaSigBefore !== mediaSigAfter || playPatch.needsRebuild) {
+      patchFriendsFeedMediaRows(listEl, mergedItems, profMap);
+    }
     _discoveryFeedTracks = playable.map((t) => discoveryTrackPlaybackMeta(t, profMap));
     applyFeedSocialStatsToDom(listEl);
     try {
@@ -14044,6 +14082,8 @@ function onAuthAccountSwitched(prevUserId, nextUserId) {
   _libraryReconcileLastAt = 0;
   invalidateLibraryMemCache();
   invalidateProfileActivitiesCache();
+  invalidateUserSongsLoadCache();
+  clearSocialFetchCaches();
   clearSignedInUiCaches();
   const user = authSession?.user;
   activeProfile = {
@@ -16436,6 +16476,39 @@ async function supabaseLoadProfile() {
  */
 let _lastUserSongsLoadStatus = "ok"; // "ok" | "auth" | "network" | "http"
 let _lastUserSongsLoadDetails = "";
+let _userSongsLoadPromise = null;
+let _userSongsLoadCache = null;
+let _userSongsLoadCacheAt = 0;
+const USER_SONGS_LOAD_CACHE_MS = 30_000;
+const _profileRowCache = new Map();
+const PROFILE_ROW_CACHE_MS = 60_000;
+const _songPlayCountCache = new Map();
+const SONG_PLAY_COUNT_CACHE_MS = 60_000;
+let _profileSongsRenderScheduled = false;
+let _pendingProfileSongsRenderOpts = null;
+
+function invalidateUserSongsLoadCache() {
+  _userSongsLoadCache = null;
+  _userSongsLoadCacheAt = 0;
+  _userSongsLoadPromise = null;
+}
+
+function clearSocialFetchCaches() {
+  _profileRowCache.clear();
+  _songPlayCountCache.clear();
+}
+
+function scheduleProfileSongsRender(opts = {}) {
+  _pendingProfileSongsRenderOpts = { ...(_pendingProfileSongsRenderOpts || {}), ...opts };
+  if (_profileSongsRenderScheduled) return;
+  _profileSongsRenderScheduled = true;
+  requestAnimationFrame(() => {
+    _profileSongsRenderScheduled = false;
+    const o = _pendingProfileSongsRenderOpts || {};
+    _pendingProfileSongsRenderOpts = null;
+    renderProfileSongs(o);
+  });
+}
 
 function userSongPublishedTs(row) {
   const raw = row?.published_at || row?.publishedAt || row?.created_at || "";
@@ -16572,7 +16645,34 @@ function openPublishReleaseSheet(trackId, opts = {}) {
   requestAnimationFrame(() => sheet.classList.add("isOpen"));
 }
 
-async function supabaseLoadUserSongs() {
+async function supabaseLoadUserSongs(opts = {}) {
+  const force = Boolean(opts.force);
+  const now = Date.now();
+  if (!force && _userSongsLoadCache && now - _userSongsLoadCacheAt < USER_SONGS_LOAD_CACHE_MS) {
+    return _userSongsLoadCache;
+  }
+  if (!force && _userSongsLoadPromise) {
+    return _userSongsLoadPromise;
+  }
+  const run = async () => {
+    const rows = await fetchUserSongsFromNetwork();
+    _userSongsLoadCache = rows;
+    _userSongsLoadCacheAt = Date.now();
+    return rows;
+  };
+  if (force) {
+    invalidateUserSongsLoadCache();
+    return run();
+  }
+  _userSongsLoadPromise = run();
+  try {
+    return await _userSongsLoadPromise;
+  } finally {
+    _userSongsLoadPromise = null;
+  }
+}
+
+async function fetchUserSongsFromNetwork() {
   const token = getSupabaseAuthToken();
   if (!token || !authSession?.user?.id) {
     _lastUserSongsLoadStatus = "auth";
@@ -16756,6 +16856,7 @@ async function supabaseInsertUserSong(track) {
     const looksDuplicate = r.status === 409 || /23505|duplicate key/i.test(txt);
     if (looksDuplicate) {
       recordUserSongInsertResult({ ok: true });
+      invalidateUserSongsLoadCache();
       return { ok: true, reason: "duplicate" };
     }
     const fail = { ok: false, reason: `http_${r.status}`, details: String(txt).slice(0, 180) };
@@ -16763,6 +16864,7 @@ async function supabaseInsertUserSong(track) {
     return fail;
   }
   recordUserSongInsertResult({ ok: true });
+  invalidateUserSongsLoadCache();
   return { ok: true };
 }
 /** True when `v` looks like a Postgres `uuid` text form (REST `id=eq.` filters). */
@@ -16902,6 +17004,7 @@ async function supabasePatchUserSong(track, patch) {
     }
     return { ok: false, reason: `http_${r.status}`, details: String(txt).slice(0, 280) };
   }
+  invalidateUserSongsLoadCache();
   return { ok: true };
 }
 
@@ -16991,6 +17094,7 @@ async function supabaseDeleteUserSongRowsByIds(rowIds) {
       },
     ).catch(() => null);
   }
+  invalidateUserSongsLoadCache();
 }
 
 /** Escape `LIKE`/`ILIKE` wildcards so `username=ilike…` is an exact handle match (underscore is special in SQL). */
@@ -17315,19 +17419,36 @@ async function fetchSocialStatsForProfile({ userId, username }) {
 async function fetchDiscoverSongPlayCounts(songIds) {
   const ids = [...new Set((songIds || []).map((x) => String(x || "").trim()).filter(Boolean))].slice(0, 64);
   if (!ids.length) return new Map();
+  const now = Date.now();
+  const out = new Map();
+  const missing = [];
+  for (const sid of ids) {
+    const cached = _songPlayCountCache.get(sid);
+    if (cached && now - cached.at < SONG_PLAY_COUNT_CACHE_MS) {
+      out.set(sid, cached.n);
+    } else {
+      missing.push(sid);
+    }
+  }
+  if (!missing.length) return out;
   try {
-    const qs = new URLSearchParams({ type: "song_play_counts", songIds: ids.join(",") });
+    const qs = new URLSearchParams({ type: "song_play_counts", songIds: missing.join(",") });
     const data = await socialApi(`/api/social?${qs.toString()}`, { timeoutMs: 8000 });
-    const m = new Map();
     const counts = data?.counts;
     if (counts && typeof counts === "object") {
       for (const [sid, n] of Object.entries(counts)) {
-        m.set(String(sid), Math.max(0, Number(n) || 0));
+        const key = String(sid);
+        const val = Math.max(0, Number(n) || 0);
+        out.set(key, val);
+        _songPlayCountCache.set(key, { n: val, at: now });
       }
     }
-    return m;
+    for (const sid of missing) {
+      if (!out.has(sid)) out.set(sid, 0);
+    }
+    return out;
   } catch {
-    return new Map();
+    return out;
   }
 }
 
@@ -18305,15 +18426,12 @@ async function fetchActivityBatch() {
         _activityFeedState.items.push(...fresh);
         _activityFeedState.offset += batch.length;
         fresh.forEach((n) => cacheActivitySongArtFromNotification(n));
+        await enrichActivitySongArt(fresh);
+        await validateActivityNotificationsAvailability(fresh);
         if (batch.length < limit) _activityFeedState.hasMore = false;
       }
     }
     renderActivityFeedFromState();
-    void (async () => {
-      await enrichActivitySongArt(_activityFeedState.items);
-      await validateActivityNotificationsAvailability(_activityFeedState.items);
-      renderActivityFeedFromState();
-    })();
     const unread = _activityFeedState.items.filter((n) => !n?.read_at).length;
     if (els.activityLead) {
       els.activityLead.textContent = unread
@@ -19446,7 +19564,19 @@ async function supabaseFetchDiscoveryPublicSongs(limit) {
 async function fetchProfilesByUserIdsMap(userIds) {
   const ids = [...new Set((userIds || []).map((x) => String(x || "").trim()).filter(Boolean))];
   if (!ids.length || !SUPABASE_URL || !SUPABASE_ANON_KEY) return new Map();
-  const inClause = ids.map((id) => encodeURIComponent(id)).join(",");
+  const now = Date.now();
+  const m = new Map();
+  const missing = [];
+  for (const uid of ids) {
+    const cached = _profileRowCache.get(uid);
+    if (cached && now - cached.at < PROFILE_ROW_CACHE_MS) {
+      m.set(uid, cached.row);
+    } else {
+      missing.push(uid);
+    }
+  }
+  if (!missing.length) return m;
+  const inClause = missing.map((id) => encodeURIComponent(id)).join(",");
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), supabaseRestTimeoutMs());
   try {
@@ -19458,16 +19588,17 @@ async function fetchProfilesByUserIdsMap(userIds) {
         signal: ctrl.signal,
       },
     );
-    if (!r.ok) return new Map();
+    if (!r.ok) return m;
     const arr = await r.json().catch(() => []);
-    const m = new Map();
     for (const row of Array.isArray(arr) ? arr : []) {
       const uid = String(row?.user_id || "").trim();
-      if (uid) m.set(uid, row);
+      if (!uid) continue;
+      m.set(uid, row);
+      _profileRowCache.set(uid, { row, at: now });
     }
     return m;
   } catch {
-    return new Map();
+    return m;
   } finally {
     clearTimeout(timer);
   }
@@ -27126,7 +27257,11 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
   }, 15000);
   // Repaint the Library tab immediately so the loading state can show
   // before the first network response lands.
-  try { refreshOwnSongsUi(); } catch {}
+  try {
+    refreshOwnSongsUi({
+      soft: String(document.body.getAttribute("data-route") || "") === "profile",
+    });
+  } catch {}
 
   // 1) Load cloud + local candidates and merge-dedupe.
   const cloudSongsRaw =
@@ -27237,8 +27372,14 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
       },
     );
     const tombsAfter = loadLibraryTombstoneKeySet();
+    const cloudAfterRaw = okCount > 0
+      ? await supabaseLoadUserSongs({ force: true })
+      : (_userSongsLoadCache || await supabaseLoadUserSongs());
     const cloudAfter = dedupeCloudSongRows(
-      (await supabaseLoadUserSongs()).filter((row) => !isTrackTombstoned(row, tombsAfter)),
+      partitionCloudLibraryRows(
+        Array.isArray(cloudAfterRaw) ? cloudAfterRaw : [],
+        tombsAfter,
+      ),
     ).keep;
     // Do not replace a full merged list with a shorter/partial cloud
     // snapshot (RLS hiccup, transient HTTP empty body, etc.) — union by

@@ -45,7 +45,19 @@ module.exports = async function handler(req, res) {
       return sendJson(res, 502, { error: "Voice transcription unavailable (missing GEMINI_API_KEY)." });
     }
 
-    const gem = await tryGeminiVoiceTranscript({ geminiKey, dataUrl });
+    const dialect = String(body?.dialect || "").trim().slice(0, 120);
+    const dialectHint = String(body?.dialectHint || "").trim().slice(0, 220);
+    const styleHint = String(body?.style || "").trim().slice(0, 700);
+    const languageHint = String(body?.languageHint || "").trim().slice(0, 120);
+
+    const gem = await tryGeminiVoiceTranscript({
+      geminiKey,
+      dataUrl,
+      dialect,
+      dialectHint,
+      styleHint,
+      languageHint,
+    });
     if (!gem?.ok) {
       return sendJson(res, 502, {
         error: gem?.error || "Could not transcribe voice clip — try again.",
@@ -67,21 +79,43 @@ module.exports = async function handler(req, res) {
   }
 };
 
-async function tryGeminiVoiceTranscript({ geminiKey, dataUrl }) {
+function inferLanguageHint({ languageHint, dialect, dialectHint, styleHint }) {
+  const parts = [languageHint, dialect, dialectHint, styleHint]
+    .map((s) => String(s || "").trim())
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  if (/arabic|عرب|levantine|egyptian|khaleeji|gulf|maghrebi|darija|masri|syrian|lebanese|iraqi|فصحى|عامية/.test(parts)) {
+    return "Arabic";
+  }
+  return "";
+}
+
+async function tryGeminiVoiceTranscript({ geminiKey, dataUrl, dialect, dialectHint, styleHint, languageHint }) {
   const discovered = await listGeminiGenerateModels(geminiKey);
   const preferred = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"];
   const models = [...preferred, ...discovered].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
   let lastError = discovered.length ? "unknown" : "no generateContent models discovered";
 
+  const lang = inferLanguageHint({ languageHint, dialect, dialectHint, styleHint });
+  const dialectLine = [dialect, dialectHint].filter(Boolean).join(" — ");
   const prompt = [
     "Listen to this short voice recording. The person may be singing, humming, or speaking lyrics.",
     "Transcribe what you hear as plain lyrics text — the actual words or syllables sung/spoken, one phrase per line.",
-    "Do NOT invent new lyrics or improve the text.",
+    "Write in the SAME language the person is using. Do NOT translate to English unless they clearly spoke English.",
+    lang === "Arabic"
+      ? "The speaker is likely using Arabic. Output Arabic script (عربي), not English romanization, unless they clearly sang in English."
+      : "",
+    dialectLine ? `Dialect/context: ${dialectLine}.` : "",
+    styleHint ? `Song style context (do not copy as lyrics): ${styleHint}.` : "",
+    "Do NOT invent new lyrics, improve the text, or substitute lyrics from famous songs.",
     "Do NOT add section tags like [Verse] or [Chorus].",
-    "If unclear, guess phonetically — imperfect is fine and expected.",
+    "If unclear, guess phonetically in the speaker's language — imperfect is fine and expected.",
     "If only humming with no words, write approximate syllables like \"la la la\" or \"mm-mm\".",
     "Output ONLY the transcribed text, no commentary or markdown.",
-  ].join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   for (const model of models) {
     const r = await fetch(

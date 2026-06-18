@@ -4044,6 +4044,8 @@ const CHALLENGE_IDEAS = [
     style: "Voice-note remix, intimate spoken intro, modern Arabic pop, warm bass, emotional chorus, 96 bpm",
     lyrics: "[Verse]\nI heard your voice in a little note\nOne small line I could not let go\nIt stayed with me, it found a beat\nNow it is dancing under my feet\n\n[Chorus]\nSay it again, say it again\nYour voice became the hook, my friend\nFrom one small line to a whole song now\nWe turned the feeling up somehow",
     prompt: "Record what you sing — we transcribe your clip (even imperfectly) and the AI re-sings it.",
+    dialect: "Levantine Arabic",
+    dialectHint: "Transcribe in Arabic if you sang in Arabic — do not translate to English.",
     tags: ["Voice", "Remix", "Personal"],
   },
   {
@@ -11792,7 +11794,7 @@ function audioFileToDataUrl(file) {
   });
 }
 
-async function transcribeVocalReferenceFromFile(file) {
+async function transcribeVocalReferenceFromFile(file, opts = {}) {
   if (!file || !file.size) return "";
   const token = getSupabaseAuthToken();
   if (!token) throw new Error("Sign in to transcribe your voice clip.");
@@ -11800,13 +11802,16 @@ async function transcribeVocalReferenceFromFile(file) {
   if (dataUrl.length > 3_500_000) {
     throw new Error("Voice clip too large — keep it under about a minute.");
   }
+  const dialect = String(opts.dialect ?? els.sunoDialect?.value ?? "").trim();
+  const dialectHint = String(opts.dialectHint ?? els.sunoDialectHint?.value ?? "").trim();
+  const style = String(opts.style ?? els.sunoStyle?.value ?? "").trim();
   const r = await fetch(apiUrl("/api/music/transcribe-voice"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ audio: dataUrl }),
+    body: JSON.stringify({ audio: dataUrl, dialect, dialectHint, style }),
   });
   const d = await r.json().catch(() => ({}));
   const transcript = String(d?.transcript || d?.lyrics || "").trim();
@@ -34682,6 +34687,20 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         detail:
           "Full song mode needs lyrics in the Lyrics box. "
           + "For a melody-only recording, tap Add Instrumental on the Hum tab (no lyrics needed)."
+          + (msg ? `\n\nDetails: ${msg}` : ""),
+      };
+    }
+    const genericSuno413 =
+      code === 413
+      && (m.includes("isn't quite right") || m.includes("check your inputs") || m.includes("uploaded audio"));
+    if (genericSuno413 || (code === 413 && looksCopyright)) {
+      return {
+        kind: "copyright",
+        headline: "Suno rejected this clip — try again or re-record",
+        detail:
+          "Suno flagged the audio or the transcribed lyrics (often a false positive on voice clips). "
+          + "Check the “We heard: …” text before Generate — if it’s wrong English, re-record. "
+          + "Tap Generate again, or sing a slightly different take."
           + (msg ? `\n\nDetails: ${msg}` : ""),
       };
     }

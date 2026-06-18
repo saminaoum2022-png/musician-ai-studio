@@ -30440,6 +30440,34 @@ section.mentorPage{
     radial-gradient(120% 90% at 0% 0%, rgba(250, 204, 21, 0.08), transparent 50%),
     linear-gradient(170deg, rgba(24, 18, 6, 0.55), rgba(10, 12, 18, 0.4));
 }
+.discoverWeeklyChart--prestige{
+  margin-bottom: 22px;
+  padding: 18px 16px 14px;
+  border-color: rgba(250, 204, 21, 0.28);
+  box-shadow:
+    0 18px 44px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(250, 204, 21, 0.14);
+  background:
+    radial-gradient(130% 100% at 0% 0%, rgba(250, 204, 21, 0.12), transparent 52%),
+    radial-gradient(80% 60% at 100% 0%, rgba(124, 92, 255, 0.08), transparent 55%),
+    linear-gradient(170deg, rgba(28, 22, 8, 0.62), rgba(8, 10, 16, 0.48));
+}
+.discoverWeeklyChart--prestige .chartHead{ margin-bottom: 14px; }
+.discoverWeeklyChart--prestige .chartTitle{ font-size: 17px; }
+.discoverWeeklyChart--prestige .chartSub{
+  font-size: 11px;
+  color: rgba(254, 240, 138, 0.55);
+}
+.discoverWeeklyChart--prestige .chartHero{
+  padding: 14px;
+  margin-bottom: 12px;
+  border-width: 1px;
+  box-shadow: 0 10px 28px rgba(250, 204, 21, 0.08);
+}
+.discoverWeeklyChart--prestige .chartHeroArt{
+  width: 92px;
+  height: 92px;
+}
 .discoverWeeklyChart[hidden]{ display: none !important; }
 .discoverWeeklyChart.isLoading,
 .discoverCampaignRail.isLoading{
@@ -30804,6 +30832,430 @@ section.mentorPage{
   color: #fde047;
   font-size: 9px;
 }
+
+/* ─── Discover V1 — community hub sections ───────────────────────────── */
+.discoveryMainContent.discoverHubV1{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 8px;
+}
+.discoverHubSection{
+  margin: 0 0 14px;
+}
+.discoverHubHead{
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 0 2px;
+}
+.discoverHubTitle{
+  margin: 0;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: #f3f6ff;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.discoverHubEmoji{ font-size: 17px; }
+.discoverHubSub{
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: rgba(223, 231, 251, 0.48);
+}
+.discoverHubRail{
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  padding: 2px 2px 10px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  max-width: 100%;
+}
+.discoverHubRail::-webkit-scrollbar{ display: none; }
+
+/* Live challenges */
+.discoverHubChallengeCard{
+  flex: 0 0 248px;
+  width: 248px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 180ms ease, transform 180ms ease;
+}
+.discoverHubChallengeCard:active{ transform: scale(0.985); }
+.discoverHubChallengeCover{
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 108px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.discoverHubChallengeEmoji{
+  font-size: 38px;
+  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.35));
+}
+.discoverHubChallengeLive{
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.22);
+  border: 1px solid rgba(248, 113, 113, 0.45);
+}
+.discoverHubChallengeBody{
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 12px 13px;
+  min-width: 0;
+}
+.discoverHubChallengeTitle{
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.2;
+}
+.discoverHubChallengeBlurb{
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: rgba(223, 231, 251, 0.52);
+}
+.discoverHubChallengeStats{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin-top: 4px;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: rgba(94, 234, 212, 0.82);
+}
+.discoverHubChallengeStats span{
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Trending templates */
+.discoverHubRail--templates{ gap: 10px; }
+.discoverHubTemplateCard{
+  flex: 0 0 156px;
+  width: 156px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+}
+.discoverHubTemplateCover{
+  position: relative;
+  height: 96px;
+  display: flex;
+  align-items: flex-end;
+  padding: 8px;
+}
+.discoverHubTemplateChip{
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.88);
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.discoverHubTemplateBody{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 10px 12px;
+  min-width: 0;
+}
+.discoverHubTemplateBody strong{
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.25;
+}
+.discoverHubTemplateBody p{
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: rgba(223, 231, 251, 0.5);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.discoverHubCreateBtn{
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 7px 12px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.95), rgba(35, 213, 171, 0.72));
+  color: #fff;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 800;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverHubCreateBtn:active{ opacity: 0.88; }
+
+/* Trending remixes */
+.discoverHubRemixList{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.discoverHubRemixRow{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverHubRemixRow--static{ cursor: default; }
+.discoverHubRemixRow:active:not(.discoverHubRemixRow--static){
+  background: rgba(255, 255, 255, 0.05);
+}
+.discoverHubRemixAv{
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  font-weight: 900;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.discoverHubRemixAv--gold{ background: linear-gradient(145deg, rgba(250, 204, 21, 0.35), rgba(245, 158, 11, 0.2)); }
+.discoverHubRemixAv--violet{ background: linear-gradient(145deg, rgba(124, 92, 255, 0.38), rgba(167, 139, 250, 0.18)); }
+.discoverHubRemixAv--cyan{ background: linear-gradient(145deg, rgba(35, 213, 171, 0.32), rgba(56, 189, 248, 0.18)); }
+.discoverHubRemixAv--rose{ background: linear-gradient(145deg, rgba(244, 114, 182, 0.32), rgba(124, 92, 255, 0.16)); }
+.discoverHubRemixCopy{
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.discoverHubRemixCopy strong{
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: rgba(236, 242, 255, 0.92);
+}
+.discoverHubRemixWho{ color: #fff; }
+.discoverHubRemixWhat{ color: rgba(167, 139, 250, 0.95); }
+.discoverHubRemixCopy small{
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(223, 231, 251, 0.45);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoverHubRemixArrow{
+  flex: none;
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.28);
+}
+
+/* Suggested creators */
+.discoverHubRail--creators{ gap: 10px; }
+.discoverHubCreatorCard{
+  flex: 0 0 210px;
+  width: 210px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+}
+.discoverHubCreatorMain{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  min-width: 0;
+}
+.discoverHubCreatorAv{
+  flex: none;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 17px;
+  font-weight: 900;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(145deg, rgba(124, 92, 255, 0.35), rgba(35, 213, 171, 0.18));
+}
+.discoverHubCreatorMeta{
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.discoverHubCreatorMeta strong{
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoverHubCreatorGenres{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.discoverHubGenreChip{
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: rgba(223, 231, 251, 0.72);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.discoverHubFollowBtn{
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(124, 92, 255, 0.45);
+  background: rgba(124, 92, 255, 0.14);
+  color: rgba(233, 213, 255, 0.95);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverHubFollowBtn.isFollowing{
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(223, 231, 251, 0.55);
+}
+
+/* New this week */
+.discoverHubRail--new{ gap: 10px; }
+.discoverHubNewCard{
+  flex: 0 0 188px;
+  width: 188px;
+  scroll-snap-align: start;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverHubNewCard:active{ background: rgba(255, 255, 255, 0.05); }
+.discoverHubNewEmoji{
+  flex: none;
+  font-size: 28px;
+  line-height: 1;
+}
+.discoverHubNewBody{
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.discoverHubNewKicker{
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(94, 234, 212, 0.82);
+}
+.discoverHubNewBody strong{
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.25;
+}
+.discoverHubNewBody small{
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: rgba(223, 231, 251, 0.48);
+}
+.discoverHubQuietNote{
+  margin: 8px 2px 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: rgba(223, 231, 251, 0.55);
+  text-align: center;
+}
+
 .createOptionsField{
   display: flex;
   flex-direction: column;

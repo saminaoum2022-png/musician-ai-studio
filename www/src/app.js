@@ -114,10 +114,7 @@ function dismissBootSplash() {
 try {
   const forceBootSplashEnd = () => {
     _bootSplashCanDismiss = true;
-    try {
-      if (_bootSplashMinTimer) clearTimeout(_bootSplashMinTimer);
-      document.body.classList.remove("booting");
-    } catch {}
+    finishBootSplash();
   };
   window.addEventListener("error", forceBootSplashEnd);
   window.addEventListener("unhandledrejection", forceBootSplashEnd);
@@ -182,8 +179,10 @@ function initBootSplashVideo() {
       setTimeout(() => { if (video.paused) tryPlay(); }, 1200);
     }
     video.addEventListener("ended", () => {
+      _bootSplashVideoEnded = true;
       _bootSplashCanDismiss = true;
-      tryDismissBootSplash();
+      if (_bootSplashMinTimer) clearTimeout(_bootSplashMinTimer);
+      _bootSplashMinTimer = window.setTimeout(finishBootSplash, BOOT_SPLASH_END_HOLD_MS);
     }, { once: true });
   } catch {}
 }
@@ -4984,11 +4983,6 @@ function clearDiscoverTopSectionsLoading() {
     chartWrap.classList.remove("isLoading");
     chartWrap.removeAttribute("aria-busy");
   }
-  const campaignWrap = document.getElementById("discoverCampaignRail");
-  if (campaignWrap) {
-    campaignWrap.classList.remove("isLoading");
-    campaignWrap.removeAttribute("aria-busy");
-  }
 }
 
 function paintDiscoverTopSectionsLoading() {
@@ -4999,23 +4993,7 @@ function paintDiscoverTopSectionsLoading() {
     chartWrap.setAttribute("aria-busy", "true");
     chartWrap.innerHTML = discoverWeeklyChartSkeletonHtml();
   }
-  const campaignWrap = document.getElementById("discoverCampaignRail");
-  const row = document.getElementById("discoverCampaignRailRow");
-  const countEl = document.getElementById("discoverCampaignCount");
-  const titleEl = document.getElementById("discoverCampaignTitle");
-  const c = liveCampaignNow();
-  if (campaignWrap && row && c) {
-    campaignWrap.hidden = false;
-    campaignWrap.classList.add("isLoading");
-    campaignWrap.setAttribute("aria-busy", "true");
-    if (titleEl) titleEl.textContent = `${c.emoji} ${c.title}`;
-    if (countEl) countEl.innerHTML = `<span class="discoverSkeletonLine short discoverCampaignSkeletonCount" aria-hidden="true"></span>`;
-    row.innerHTML = discoverCampaignRailSkeletonHtml();
-  } else if (campaignWrap) {
-    campaignWrap.hidden = true;
-    campaignWrap.classList.remove("isLoading");
-    campaignWrap.removeAttribute("aria-busy");
-  }
+  renderDiscoverHubV1([], {});
 }
 
 // Challenge spotlight removed — World Cup anthems rail + main feed already surface
@@ -5704,9 +5682,10 @@ async function fetchWeeklyChart() {
 
 function chartMovementHtml(entry) {
   const m = String(entry?.movement || "same");
+  const delta = Math.max(1, Number(entry?.delta) || 1);
   if (m === "new") return `<span class="chartMove chartMove--new">NEW</span>`;
-  if (m === "up") return `<span class="chartMove chartMove--up">▲${entry.delta > 1 ? entry.delta : ""}</span>`;
-  if (m === "down") return `<span class="chartMove chartMove--down">▼${entry.delta > 1 ? entry.delta : ""}</span>`;
+  if (m === "up") return `<span class="chartMove chartMove--up">+${delta}</span>`;
+  if (m === "down") return `<span class="chartMove chartMove--down">−${delta}</span>`;
   return `<span class="chartMove chartMove--same">●</span>`;
 }
 
@@ -5783,8 +5762,8 @@ async function refreshDiscoverWeeklyChart() {
     // behind a "View top 10" expander to keep Discover compact.
     wrap.innerHTML = `
       <div class="chartHead">
-        <h3 class="chartTitle"><span class="chartTitleBadge" aria-hidden="true">📈</span> Top songs this week</h3>
-        <span class="chartSub">Real plays &amp; reactions · resets weekly</span>
+        <h3 class="chartTitle"><span class="chartTitleBadge" aria-hidden="true">🏆</span> Top songs this week</h3>
+        <span class="chartSub">Weekly chart · real plays · rank movement</span>
       </div>
       ${heroHtml}
       ${rowsHtml ? `
@@ -5871,7 +5850,376 @@ async function refreshDiscoverCampaignRail() {
   }
 }
 
-function bindHomeDeskOnce(page) {
+// ─── Discover V1 — community hub (not a song library grid) ─────────────
+const DISCOVER_HUB_TEMPLATE_IDS = [
+  "bday-arabic",
+  "wed-firstdance",
+  "anniv-soul",
+  "mom-warm",
+  "gym-hype",
+  "heart-grat",
+  "bday-trap",
+];
+
+const DISCOVER_LIVE_CHALLENGES = [
+  {
+    id: "worldcup2026",
+    emoji: "🏆",
+    title: "World Cup Anthem",
+    blurb: "Pick your team. Drop your anthem.",
+    tone: "gold",
+    participants: 2847,
+    submissions: 412,
+    daysLeft: 32,
+    action: "campaign",
+  },
+  {
+    id: "birthday",
+    emoji: "🎂",
+    title: "Birthday Song Challenge",
+    blurb: "Make someone's day unforgettable.",
+    tone: "rose",
+    participants: 1264,
+    submissions: 189,
+    daysLeft: 6,
+    action: "challenge",
+    challengeId: "birthday-banger",
+  },
+  {
+    id: "love-song",
+    emoji: "💜",
+    title: "Love Song Challenge",
+    blurb: "Romantic hooks for couples & crushes.",
+    tone: "violet",
+    participants: 892,
+    submissions: 143,
+    daysLeft: 4,
+    action: "occasion",
+    occasionId: "anniversary",
+  },
+  {
+    id: "remix-battle",
+    emoji: "⚡",
+    title: "Remix Battle",
+    blurb: "Flip a public song. Win the crowd.",
+    tone: "cyan",
+    participants: 638,
+    submissions: 97,
+    daysLeft: 3,
+    action: "challenge",
+    challengeId: "voice-note-remix",
+  },
+  {
+    id: "anthem-battle",
+    emoji: "🌍",
+    title: "Country vs Country",
+    blurb: "Anthem energy. Team pride.",
+    tone: "mint",
+    participants: 1105,
+    submissions: 156,
+    daysLeft: 12,
+    action: "campaign",
+  },
+];
+
+const DISCOVER_SUGGESTED_CREATORS = [
+  { handle: "sara_beats", name: "Sara", genres: ["Arabic Pop", "Lebanese"], tone: "violet" },
+  { handle: "ahmed_dabke", name: "Ahmed", genres: ["Dabke", "Party"], tone: "gold" },
+  { handle: "maya_chill", name: "Maya", genres: ["Chill", "Romantic"], tone: "cyan" },
+  { handle: "karim_rap", name: "Karim", genres: ["Rap", "Egyptian"], tone: "rose" },
+  { handle: "layla_emotional", name: "Layla", genres: ["Emotional", "Arabic Pop"], tone: "mint" },
+];
+
+const DISCOVER_NEW_THIS_WEEK = [
+  { id: "graduation", emoji: "🎓", kicker: "New template", title: "Graduation Song", blurb: "Celebrate the milestone.", tone: "gold", action: "occasion", occasionId: "congrats" },
+  { id: "ramadan", emoji: "🌙", kicker: "Seasonal", title: "Ramadan Glow", blurb: "Warm spiritual vibes.", tone: "violet", action: "occasion", occasionId: "christmas" },
+  { id: "remix-week", emoji: "🎵", kicker: "New challenge", title: "Remix Week", blurb: "Flip any public song.", tone: "cyan", action: "challenge", challengeId: "voice-note-remix" },
+  { id: "wedding-pack", emoji: "💍", kicker: "Template pack", title: "Wedding Moments", blurb: "Entrance + first dance.", tone: "rose", action: "template", templateId: "wed-entrance" },
+];
+
+const DISCOVER_REMIX_FALLBACK = [
+  { remixer: "Ahmed", remixerHandle: "ahmed_dabke", originalTitle: "Sara's Birthday Song", originalBy: "Sara", tone: "gold" },
+  { remixer: "Maya", remixerHandle: "maya_chill", originalTitle: "Argentina Anthem", originalBy: "Leo", tone: "cyan" },
+  { remixer: "Karim", remixerHandle: "karim_rap", originalTitle: "Love Challenge entry", originalBy: "Nour", tone: "violet" },
+  { remixer: "Layla", remixerHandle: "layla_emotional", originalTitle: "Wedding Entrance", originalBy: "Rami", tone: "rose" },
+];
+
+function discoverHubStatLabel(n) {
+  const v = Math.max(0, Number(n) || 0);
+  return formatStatCount(v);
+}
+
+function discoverHubSectionHeadHtml(emoji, title, sub) {
+  return `
+    <header class="discoverHubHead">
+      <div class="discoverHubHeadText">
+        <h3 class="discoverHubTitle"><span class="discoverHubEmoji" aria-hidden="true">${emoji}</span> ${escapeHtml(title)}</h3>
+        ${sub ? `<p class="discoverHubSub">${escapeHtml(sub)}</p>` : ""}
+      </div>
+    </header>`;
+}
+
+function discoverHubTemplateById(id) {
+  return SEARCH_TEMPLATE_FALLBACK.find((t) => String(t.id) === String(id)) || null;
+}
+
+function discoverHubGradientStyle(tone) {
+  const map = {
+    gold: "linear-gradient(145deg, rgba(250,204,21,0.28), rgba(124,92,255,0.18))",
+    violet: "linear-gradient(145deg, rgba(124,92,255,0.32), rgba(35,213,171,0.14))",
+    cyan: "linear-gradient(145deg, rgba(35,213,171,0.28), rgba(56,189,248,0.16))",
+    rose: "linear-gradient(145deg, rgba(244,114,182,0.28), rgba(124,92,255,0.16))",
+    mint: "linear-gradient(145deg, rgba(35,213,171,0.22), rgba(167,139,250,0.18))",
+  };
+  return map[tone] || map.violet;
+}
+
+function renderDiscoverLiveChallengesSection() {
+  const mount = document.getElementById("discoverLiveChallengesMount");
+  if (!mount) return;
+  const cards = DISCOVER_LIVE_CHALLENGES.map((c) => `
+    <button type="button" class="discoverHubChallengeCard discoverHubChallengeCard--${escapeHtml(c.tone)}" data-discover-challenge="${escapeHtml(c.id)}" data-discover-challenge-action="${escapeHtml(c.action)}"${c.challengeId ? ` data-discover-challenge-ref="${escapeHtml(c.challengeId)}"` : ""}${c.occasionId ? ` data-discover-occasion-ref="${escapeHtml(c.occasionId)}"` : ""}>
+      <span class="discoverHubChallengeCover" style="background:${discoverHubGradientStyle(c.tone)}">
+        <span class="discoverHubChallengeEmoji" aria-hidden="true">${c.emoji}</span>
+        <span class="discoverHubChallengeLive">Live</span>
+      </span>
+      <span class="discoverHubChallengeBody">
+        <strong class="discoverHubChallengeTitle">${escapeHtml(c.title)}</strong>
+        <span class="discoverHubChallengeBlurb">${escapeHtml(c.blurb)}</span>
+        <span class="discoverHubChallengeStats">
+          <span>${discoverHubStatLabel(c.participants)} joined</span>
+          <span>${discoverHubStatLabel(c.submissions)} songs</span>
+          <span>${c.daysLeft}d left</span>
+        </span>
+      </span>
+    </button>`).join("");
+  mount.innerHTML = `
+    ${discoverHubSectionHeadHtml("🔥", "Live challenges", "Something is always happening — jump in.")}
+    <div class="discoverHubRail discoverHubRail--wide" role="list">${cards}</div>`;
+}
+
+function renderDiscoverTrendingTemplatesSection() {
+  const mount = document.getElementById("discoverTrendingTemplatesMount");
+  if (!mount) return;
+  const picks = DISCOVER_HUB_TEMPLATE_IDS.map((id) => discoverHubTemplateById(id)).filter(Boolean);
+  const cards = picks.map((tpl, i) => {
+    const tones = ["violet", "gold", "cyan", "rose", "mint", "amber", "violet"];
+    const tone = tones[i % tones.length];
+    return `
+      <article class="discoverHubTemplateCard discoverHubTemplateCard--${tone}">
+        <div class="discoverHubTemplateCover" style="background:${discoverHubGradientStyle(tone)}">
+          <span class="discoverHubTemplateChip">${escapeHtml(tpl.chip || "Template")}</span>
+        </div>
+        <div class="discoverHubTemplateBody">
+          <strong>${escapeHtml(tpl.title)}</strong>
+          <p>${escapeHtml(String(tpl.sub || "").slice(0, 72))}${String(tpl.sub || "").length > 72 ? "…" : ""}</p>
+          <button type="button" class="discoverHubCreateBtn" data-discover-template="${escapeHtml(tpl.id)}">Create</button>
+        </div>
+      </article>`;
+  }).join("");
+  mount.innerHTML = `
+    ${discoverHubSectionHeadHtml("✨", "Trending templates", "Ready-made creation experiences — tap Create.")}
+    <div class="discoverHubRail discoverHubRail--templates" role="list">${cards}</div>`;
+}
+
+function discoverRemixRowsFromTracks(tracks, profMap) {
+  const rows = [];
+  for (const t of tracks || []) {
+    const remixOf = remixAttributionForTrack(t);
+    if (!remixOf) continue;
+    const prof = resolveProfileForFeedCreator(t.userId, profMap);
+    const remixer = String(prof?.displayName || prof?.username || "Creator").trim();
+    const remixerHandle = String(prof?.username || "").trim();
+    rows.push({
+      remixer,
+      remixerHandle,
+      remixTitle: String(t.title || "Remix").trim(),
+      originalTitle: String(remixOf.title || "Original").trim(),
+      originalBy: String(remixOf.creatorUsername || "Creator").trim(),
+      art: trackCoverArtForFeed(t),
+      track: t,
+      tone: ["gold", "cyan", "violet", "rose"][rows.length % 4],
+    });
+    if (rows.length >= 6) break;
+  }
+  return rows;
+}
+
+function renderDiscoverTrendingRemixesSection(tracks, profMap) {
+  const mount = document.getElementById("discoverTrendingRemixesMount");
+  if (!mount) return;
+  let rows = discoverRemixRowsFromTracks(tracks, profMap);
+  if (!rows.length) {
+    rows = DISCOVER_REMIX_FALLBACK.map((r, i) => ({ ...r, tone: ["gold", "cyan", "violet", "rose"][i % 4] }));
+  }
+  const list = rows.map((r) => {
+    const playAttrs = r.track ? chartEntryPlayAttrs({
+      url: r.track.url,
+      title: r.track.title,
+      artUrl: r.art,
+      username: r.remixerHandle,
+      songId: r.track.id,
+      userId: r.track.userId,
+      taskId: r.track.taskId,
+      audioId: r.track.audioId,
+    }) : "";
+    const inner = `
+      <span class="discoverHubRemixAv discoverHubRemixAv--${escapeHtml(r.tone)}" aria-hidden="true">${escapeHtml(String(r.remixer || "?").slice(0, 1).toUpperCase())}</span>
+      <span class="discoverHubRemixCopy">
+        <strong><span class="discoverHubRemixWho">${escapeHtml(r.remixer)}</span> remixed <span class="discoverHubRemixWhat">${escapeHtml(r.originalBy)}'s ${escapeHtml(r.originalTitle)}</span></strong>
+        ${r.remixTitle ? `<small>${escapeHtml(r.remixTitle)}</small>` : ""}
+      </span>
+      <span class="discoverHubRemixArrow" aria-hidden="true">→</span>`;
+    if (r.track) {
+      return `<button type="button" class="discoverHubRemixRow" ${playAttrs}>${inner}</button>`;
+    }
+    return `<div class="discoverHubRemixRow discoverHubRemixRow--static">${inner}</div>`;
+  }).join("");
+  mount.innerHTML = `
+    ${discoverHubSectionHeadHtml("🎵", "Trending remixes", "Active remix culture — who's flipping what.")}
+    <div class="discoverHubRemixList" role="list">${list}</div>`;
+}
+
+function renderDiscoverSuggestedCreatorsSection() {
+  const mount = document.getElementById("discoverSuggestedCreatorsMount");
+  if (!mount) return;
+  const cards = DISCOVER_SUGGESTED_CREATORS.map((c) => `
+    <article class="discoverHubCreatorCard discoverHubCreatorCard--${escapeHtml(c.tone)}">
+      <button type="button" class="discoverHubCreatorMain" data-discover-creator="${encodeURIComponent(c.handle)}">
+        <span class="discoverHubCreatorAv" aria-hidden="true">${escapeHtml(String(c.name || c.handle).slice(0, 1).toUpperCase())}</span>
+        <span class="discoverHubCreatorMeta">
+          <strong>@${escapeHtml(c.handle)}</strong>
+          <span class="discoverHubCreatorGenres">${c.genres.map((g) => `<span class="discoverHubGenreChip">${escapeHtml(g)}</span>`).join("")}</span>
+        </span>
+      </button>
+      <button type="button" class="discoverHubFollowBtn" data-discover-follow="${encodeURIComponent(c.handle)}" aria-label="Follow @${escapeHtml(c.handle)}">Follow</button>
+    </article>`).join("");
+  mount.innerHTML = `
+    ${discoverHubSectionHeadHtml("👥", "Creators you may like", "Based on genres you love — more personalization coming.")}
+    <div class="discoverHubRail discoverHubRail--creators" role="list">${cards}</div>`;
+}
+
+function renderDiscoverNewThisWeekSection() {
+  const mount = document.getElementById("discoverNewThisWeekMount");
+  if (!mount) return;
+  const cards = DISCOVER_NEW_THIS_WEEK.map((item) => `
+    <button type="button" class="discoverHubNewCard discoverHubNewCard--${escapeHtml(item.tone)}" data-discover-new="${escapeHtml(item.id)}" data-discover-new-action="${escapeHtml(item.action)}"${item.challengeId ? ` data-discover-challenge-ref="${escapeHtml(item.challengeId)}"` : ""}${item.occasionId ? ` data-discover-occasion-ref="${escapeHtml(item.occasionId)}"` : ""}${item.templateId ? ` data-discover-template="${escapeHtml(item.templateId)}"` : ""}>
+      <span class="discoverHubNewEmoji" aria-hidden="true">${item.emoji}</span>
+      <span class="discoverHubNewBody">
+        <span class="discoverHubNewKicker">${escapeHtml(item.kicker)}</span>
+        <strong>${escapeHtml(item.title)}</strong>
+        <small>${escapeHtml(item.blurb)}</small>
+      </span>
+    </button>`).join("");
+  mount.innerHTML = `
+    ${discoverHubSectionHeadHtml("🚀", "New this week", "Fresh templates, challenges, and seasonal drops.")}
+    <div class="discoverHubRail discoverHubRail--new" role="list">${cards}</div>`;
+}
+
+function renderDiscoverHubV1(tracks, profMap) {
+  renderDiscoverLiveChallengesSection();
+  renderDiscoverTrendingTemplatesSection();
+  renderDiscoverTrendingRemixesSection(tracks, profMap);
+  renderDiscoverSuggestedCreatorsSection();
+  renderDiscoverNewThisWeekSection();
+}
+
+function applyDiscoverOccasionStart(occasionId) {
+  const occ = CHALLENGE_OCCASIONS.find((o) => String(o.id) === String(occasionId));
+  if (!occ) return;
+  haptic("light");
+  applyDiscoveryIdeaToCreate({
+    id: `occasion:${occ.id}`,
+    title: occ.title,
+    prompt: String(occ.lyricSeed || occ.angle || "").trim(),
+    lyrics: String(occ.lyricSeed || "").trim(),
+    style: "",
+    tags: occ.tags || [],
+    challenge: {
+      id: occ.id,
+      title: occ.title,
+      type: "occasion",
+      occasion: occ.label,
+      genre: "",
+      personName: "",
+      variant: "occasion",
+    },
+  });
+}
+
+function bindDiscoverHubV1Once() {
+  const root = document.getElementById("discoveryMainContent");
+  if (!root || root.dataset.boundDiscoverHubV1 === "1") return;
+  root.dataset.boundDiscoverHubV1 = "1";
+  root.addEventListener("click", (e) => {
+    const tplBtn = e.target?.closest?.("[data-discover-template]");
+    if (tplBtn && root.contains(tplBtn)) {
+      e.preventDefault();
+      const tpl = discoverHubTemplateById(tplBtn.getAttribute("data-discover-template"));
+      if (tpl) openSearchRemixSheet(tpl);
+      return;
+    }
+    const challengeBtn = e.target?.closest?.("[data-discover-challenge]");
+    if (challengeBtn && root.contains(challengeBtn)) {
+      e.preventDefault();
+      haptic("light");
+      const action = String(challengeBtn.getAttribute("data-discover-challenge-action") || "");
+      if (action === "campaign") {
+        openCampaignSheet();
+        return;
+      }
+      const ref = challengeBtn.getAttribute("data-discover-challenge-ref");
+      if (ref) applyChallengeStartById(ref, null);
+      else {
+        const occRef = challengeBtn.getAttribute("data-discover-occasion-ref");
+        if (occRef) applyDiscoverOccasionStart(occRef);
+      }
+      return;
+    }
+    const newBtn = e.target?.closest?.("[data-discover-new]");
+    if (newBtn && root.contains(newBtn)) {
+      e.preventDefault();
+      haptic("light");
+      const action = String(newBtn.getAttribute("data-discover-new-action") || "");
+      const tplId = newBtn.getAttribute("data-discover-template");
+      if (tplId) {
+        const tpl = discoverHubTemplateById(tplId);
+        if (tpl) openSearchRemixSheet(tpl);
+        return;
+      }
+      const chRef = newBtn.getAttribute("data-discover-challenge-ref");
+      if (chRef) {
+        applyChallengeStartById(chRef, null);
+        return;
+      }
+      const occRef = newBtn.getAttribute("data-discover-occasion-ref");
+      if (occRef) applyDiscoverOccasionStart(occRef);
+      return;
+    }
+    const creatorBtn = e.target?.closest?.("[data-discover-creator]");
+    if (creatorBtn && root.contains(creatorBtn)) {
+      e.preventDefault();
+      const handle = decodeURIComponent(creatorBtn.getAttribute("data-discover-creator") || "");
+      if (handle) location.hash = `#/u/${encodeURIComponent(handle)}`;
+      return;
+    }
+    const followBtn = e.target?.closest?.("[data-discover-follow]");
+    if (followBtn && root.contains(followBtn)) {
+      e.preventDefault();
+      haptic("light");
+      if (!getSupabaseAuthToken()) {
+        showToast("Sign in to follow creators.");
+        location.hash = "#/auth";
+        return;
+      }
+      followBtn.textContent = "Following";
+      followBtn.classList.add("isFollowing");
+      followBtn.disabled = true;
+      showToast("Following — full social graph coming soon.");
+    }
+  });
+}
+
   if (!page || page.dataset.boundHomeDesk === "1") return;
   page.dataset.boundHomeDesk = "1";
   wireHomeDeskSegOnce();
@@ -10302,6 +10650,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
 function bindDiscoveryDiscoverControls() {
   wirePlayerFeedbackUiOnce();
   wireUserPublicFeedRowsOnce();
+  bindDiscoverHubV1Once();
   if (_discoveryDiscoverBound) return;
   _discoveryDiscoverBound = true;
   const searchBtn = document.getElementById("discoverySearchBtn");
@@ -10319,10 +10668,10 @@ function bindDiscoveryDiscoverControls() {
     wireTrackOptionsSheetOnce();
     dPane.addEventListener("click", (e) => {
       const challengePlay = e.target.closest("[data-challenge-entry-play]");
+      const hubRoot = document.getElementById("discoveryMainContent");
       if (
         challengePlay &&
-        (document.getElementById("discoverCampaignRail")?.contains(challengePlay) ||
-          document.getElementById("discoverWeeklyChart")?.contains(challengePlay))
+        hubRoot?.contains(challengePlay)
       ) {
         const raw = decodeDiscoverDataAttr(challengePlay, "data-challenge-entry-play");
         const title = decodeDiscoverDataAttr(challengePlay, "data-challenge-entry-title") || "Song";
@@ -22050,28 +22399,15 @@ async function refreshDiscoverFeed() {
   void ensurePersonalizedUsernameSyncedToCloud();
   const statusEl = document.getElementById("discoveryFeedStatus");
   const listEl = document.getElementById("discoveryFeedList");
-  const spotlightWrap = document.getElementById("discoverySpotlightWrap");
-  const rail = document.getElementById("discoverySpotlightRail");
-  if (!statusEl || !listEl) return;
-  if (spotlightWrap) spotlightWrap.hidden = true;
-  const hadWarmGrid =
-    _discoveryFeedTracks.length > 0 &&
-    listEl.querySelector(".discoveryDiscoverGrid:not(.discoveryDiscoverGrid--loading)");
-  if (!hadWarmGrid) {
-    paintDiscoverTopSectionsLoading();
-    listEl.classList.add("isDiscoveryLoading");
-    listEl.hidden = false;
-    listEl.innerHTML = `<div class="discoveryDiscoverGrid discoveryDiscoverGrid--loading">${Array.from({ length: 4 }, () => `
-      <div class="discoverySkeletonSpotCard" aria-hidden="true">
-        <div class="discoverySkeletonSpotFill"></div>
-        <div class="discoverySkeletonSpotFooter">
-          <div class="discoverySkeletonLine"></div>
-          <div class="discoverySkeletonLine short"></div>
-        </div>
-      </div>`).join("")}</div>`;
-  }
+  if (!statusEl) return;
+  bindDiscoverHubV1Once();
+  paintDiscoverTopSectionsLoading();
   statusEl.textContent = "";
   statusEl.hidden = true;
+  if (listEl) {
+    listEl.hidden = true;
+    listEl.innerHTML = "";
+  }
 
   try {
     const rows = await supabaseFetchDiscoveryPublicSongs(64);
@@ -22080,72 +22416,22 @@ async function refreshDiscoverFeed() {
     const profMap = await fetchProfilesByUserIdsMap(playable.map((t) => t.userId));
     _discoveryLastProfMap = profMap;
     if (gen !== _discoveryFeedGen) return;
-    listEl.classList.remove("isDiscoveryLoading");
     bindCampaignUiOnce();
-    void refreshDiscoverCampaignRail();
     void refreshDiscoverWeeklyChart();
+    renderDiscoverHubV1(playable, profMap);
 
     if (!playable.length) {
       _discoveryFeedTracks = [];
-      listEl.hidden = true;
-      listEl.innerHTML = "";
-      if (spotlightWrap) spotlightWrap.hidden = true;
-      if (rail) rail.innerHTML = "";
-      statusEl.hidden = false;
-      const ill = discoveryEmptyIllustrationSvg();
       if (rows.length) {
-        statusEl.innerHTML = `
-        <div class="discoveryEmptyWrap discoveryEmptyWrapMuted">
-          <div class="discoveryEmptyArt">${ill}</div>
-          <p class="discoveryEmptyTitle">Almost there</p>
-          <p class="discoveryEmptyText">We see public rows, but none have a playable audio URL yet. Try again after they finish saving.</p>
-        </div>`;
-      } else {
-        statusEl.innerHTML = `
-        <div class="discoveryEmptyWrap">
-          <div class="discoveryEmptyArt">${ill}</div>
-          <p class="discoveryEmptyTitle">The feed is quiet</p>
-          <p class="discoveryEmptyText">When creators publish to <strong>Discover</strong>, their songs show up here. Nothing live right now.</p>
-        </div>`;
+        statusEl.hidden = false;
+        statusEl.innerHTML = `<p class="discoverHubQuietNote">Charts and challenges are live — public songs will appear in remixes as creators publish.</p>`;
       }
-      try {
-        syncDiscoveryPlayingHighlights();
-      } catch {}
+      try { syncDiscoveryPlayingHighlights(); } catch {}
       return;
     }
 
-    statusEl.hidden = true;
-    statusEl.textContent = "";
-
     _discoveryFeedTracks = playable.map((t) => discoveryTrackPlaybackMeta(t, profMap));
-
-    listEl.hidden = false;
-    listEl.innerHTML = `<div class="discoveryDiscoverGrid" role="list">${playable
-      .map((t, i) => discoveryFeedCardHtml(t, profMap, i))
-      .join("")}</div>`;
-    try {
-      wireDiscoverySpotCardImages(listEl);
-    } catch {}
-    try {
-      syncDiscoveryPlayingHighlights();
-    } catch {}
-    // Play counts are nice-to-have — don't block the grid on another API hop.
-    void fetchDiscoverSongPlayCounts(playable.map((t) => t.id)).then((playCountMap) => {
-      if (gen !== _discoveryFeedGen) return;
-      const cards = listEl.querySelectorAll(".discoveryFeedCardWrap");
-      let changed = false;
-      for (let i = 0; i < playable.length; i += 1) {
-        const t = playable[i];
-        const n = playCountMap.get(String(t.id || "")) || 0;
-        if ((t.playCount || 0) === n) continue;
-        t.playCount = n;
-        changed = true;
-        const chip = cards[i]?.querySelector(".discoveryFeedCardPlays");
-        if (chip) chip.innerHTML = discoveryPlayCountChipHtml(t);
-      }
-      if (!changed) return;
-      _discoveryFeedTracks = playable.map((t) => discoveryTrackPlaybackMeta(t, _discoveryLastProfMap));
-    });
+    try { syncDiscoveryPlayingHighlights(); } catch {}
     if (_discoverSearchOpen) {
       const input = document.getElementById("searchInput");
       const q = input?.value || "";
@@ -22154,15 +22440,11 @@ async function refreshDiscoverFeed() {
     }
   } catch (err) {
     if (gen !== _discoveryFeedGen) return;
-    listEl.classList.remove("isDiscoveryLoading");
     clearDiscoverTopSectionsLoading();
-    listEl.hidden = true;
-    listEl.innerHTML = "";
+    renderDiscoverHubV1([], {});
     statusEl.hidden = false;
-    const ill = discoveryEmptyIllustrationSvg();
     statusEl.innerHTML = `
       <div class="discoveryEmptyWrap discoveryEmptyWrapMuted">
-        <div class="discoveryEmptyArt">${ill}</div>
         <p class="discoveryEmptyTitle">Couldn't load Discover</p>
         <p class="discoveryEmptyText">Check your connection and try again.</p>
         <button type="button" class="solid discoveryEmptyCta" id="discoverFeedRetryBtn">Try again</button>

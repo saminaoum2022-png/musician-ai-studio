@@ -74,7 +74,7 @@
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
     <link rel="preload" as="video" href="./assets/icons/splash-logo.mp4?v=20260619trim" type="video/mp4" />
-    <link rel="stylesheet" href="./styles.css?v=20260619splashEndHold" />
+    <link rel="stylesheet" href="./styles.css?v=20260618discoverV1" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1043,7 +1043,7 @@
             <header class="discoveryStudioHead">
               <div class="discoveryStudioTitles">
                 <h2 class="discoveryStudioH2 appScreenTitle">Discover</h2>
-                <p class="discoveryStudioTag appScreenLead">Public songs from creators on NabadAi.</p>
+                <p class="discoveryStudioTag appScreenLead">Live challenges, remixes, and what's trending in the community.</p>
               </div>
               <button type="button" class="discoveryRefreshBtn" id="discoverySearchBtn" aria-label="Search Discover" aria-expanded="false" aria-controls="discoverySearchPanel">
                 <svg class="discoveryRefreshIco" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
@@ -1096,28 +1096,25 @@
               </div>
             </div>
 
-            <div id="discoveryMainContent" class="discoveryMainContent">
-            <section class="discoveryPlaylistsSection" id="discoveryPlaylistsSection" aria-label="Playlists" hidden>
-              <div class="discoveryPlaylistsHead">
-                <span class="discoveryPlaylistsTitle">Playlists</span>
-                <span class="discoveryPlaylistsHint">Mood &amp; vibe · plays in order</span>
-              </div>
-              <div id="discoveryPlaylistsRail" class="discoveryPlaylistsRail" role="list"></div>
+            <div id="discoveryMainContent" class="discoveryMainContent discoverHubV1">
+            <section id="discoverWeeklyChart" class="discoverWeeklyChart discoverWeeklyChart--prestige" hidden aria-label="Top songs this week"></section>
+            <section id="discoverLiveChallenges" class="discoverHubSection" aria-label="Live challenges">
+              <div id="discoverLiveChallengesMount"></div>
             </section>
-            <div id="discoverySpotlightWrap" class="discoverySpotlightWrap" hidden aria-hidden="true"></div>
-            <section id="discoverWeeklyChart" class="discoverWeeklyChart" hidden aria-label="Top songs this week"></section>
-            <section id="discoverCampaignRail" class="discoverChallengeSpotlight discoverCampaignRail" hidden aria-label="Live event songs">
-              <div class="discoverChallengeSpotlightHead">
-                <button type="button" class="discoverCampaignTitleBtn" id="discoverCampaignTitleBtn">
-                  <span class="discoverChallengeSpotlightTitle" id="discoverCampaignTitle">🏆 World Cup Anthems</span>
-                  <span class="discoverCampaignJoin">Join →</span>
-                </button>
-                <span id="discoverCampaignCount" class="discoverChallengeSpotlightCount"></span>
-              </div>
-              <div id="discoverCampaignRailRow" class="discoverChallengeSpotlightRail" role="list" aria-live="polite"></div>
+            <section id="discoverTrendingTemplates" class="discoverHubSection" aria-label="Trending templates">
+              <div id="discoverTrendingTemplatesMount"></div>
+            </section>
+            <section id="discoverTrendingRemixes" class="discoverHubSection" aria-label="Trending remixes">
+              <div id="discoverTrendingRemixesMount"></div>
+            </section>
+            <section id="discoverSuggestedCreators" class="discoverHubSection" aria-label="Creators you may like">
+              <div id="discoverSuggestedCreatorsMount"></div>
+            </section>
+            <section id="discoverNewThisWeek" class="discoverHubSection" aria-label="New this week">
+              <div id="discoverNewThisWeekMount"></div>
             </section>
             <div id="discoveryFeedStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
-            <div id="discoveryFeedList" class="discoveryFeedList discoveryDiscoverGrid" hidden></div>
+            <div id="discoveryFeedList" class="discoveryFeedList discoveryDiscoverGrid" hidden aria-hidden="true"></div>
             </div>
           </div>
         </section>
@@ -3697,6 +3694,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260619splashEndHold"></script>
+    <script type="module" src="./src/app.js?v=20260618discoverV1"></script>
   </body>
 </html>

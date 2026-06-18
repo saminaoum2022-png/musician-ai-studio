@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260619voiceClipNoLyrics";
+const APP_BUILD = "20260619activityIg";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -18910,8 +18910,8 @@ function notificationMessage(n) {
     const rank = Number(n?.metadata?.rank || 0);
     const title = String(n?.metadata?.song_title || "Your song").trim();
     return {
-      title,
-      body: rank ? `#${rank} on this week's chart` : "Weekly chart",
+      title: rank ? `${title} hit #${rank} on Top Songs this week` : `${title} charted on Top Songs this week`,
+      body: "",
       action: "",
     };
   }
@@ -18991,7 +18991,7 @@ function renderNotificationRows(list) {
 }
 
 const ACTIVITY_FEED_SNAPSHOT_MS = 120000;
-const ACTIVITY_FEED_SNAPSHOT_KEY = "nabad_activity_feed_snap_v1";
+const ACTIVITY_FEED_SNAPSHOT_KEY = "nabad_activity_feed_snap_v2";
 let _activityFeedSnapshot = null;
 
 function hydrateActivityFeedSnapshotFromStorage() {
@@ -19046,18 +19046,14 @@ function activityDayBucket(ts) {
   const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const startYesterday = new Date(startToday);
   startYesterday.setDate(startYesterday.getDate() - 1);
-  const startWeek = new Date(startToday);
-  startWeek.setDate(startWeek.getDate() - 6);
   if (d >= startToday) return "today";
   if (d >= startYesterday) return "yesterday";
-  if (d >= startWeek) return "week";
   return "earlier";
 }
 
 function activityDayLabel(bucket) {
   if (bucket === "today") return "Today";
   if (bucket === "yesterday") return "Yesterday";
-  if (bucket === "week") return "This week";
   return "Earlier";
 }
 
@@ -19100,10 +19096,10 @@ function activitySkeletonHtml(count = 4) {
   return Array.from({ length: count }, () => `
     <div class="activityRow activityRowSkel" aria-hidden="true">
       <span class="activityRowAvatar activitySkelBlock"></span>
-      <div class="activityRowBody">
+      <p class="activityRowText">
         <span class="activitySkelLine"></span>
         <span class="activitySkelLine short"></span>
-      </div>
+      </p>
       <span class="activityRowCover activitySkelBlock activitySkelCover" aria-hidden="true"></span>
     </div>`).join("");
 }
@@ -19309,6 +19305,9 @@ function collapseActivityRows(rows) {
     const actor = String(n?.actor_user_id || n?.metadata?.actor_username || "").trim();
     let key = "";
     if (t === "public_song" && actor) key = `pub|${actor}`;
+    else if (t === "chart_rank") {
+      key = `chart|${String(n?.metadata?.week_key || "").trim()}|${String(n?.metadata?.song_id || "").trim()}`;
+    }
     else if ((t === "song_feedback" || t === "social_like" || t === "social_reply") && actor) {
       key = `${t}|${actor}|${String(n?.metadata?.target_id || n?.metadata?.song_id || "").trim()}`;
     }
@@ -19328,6 +19327,7 @@ function collapseActivityRows(rows) {
         _groupCount: 1,
         _groupTitles: songTitle ? [songTitle] : [],
         _groupDetails: detail ? [detail] : [],
+        _groupBestRank: t === "chart_rank" ? Number(n?.metadata?.rank || 0) || 0 : 0,
       };
       byKey.set(key, g);
       out.push(g);
@@ -19335,6 +19335,13 @@ function collapseActivityRows(rows) {
       existing._groupCount += 1;
       if (songTitle && !existing._groupTitles.includes(songTitle)) existing._groupTitles.push(songTitle);
       if (detail) existing._groupDetails.push(detail);
+      if (t === "chart_rank") {
+        const rank = Number(n?.metadata?.rank || 0);
+        if (rank && (!existing._groupBestRank || rank < existing._groupBestRank)) {
+          existing._groupBestRank = rank;
+          existing.metadata = { ...(existing.metadata || {}), rank };
+        }
+      }
       if (!n?.read_at) existing.read_at = null;
     }
   }
@@ -19457,27 +19464,22 @@ async function openActivityTargetFromHref(href) {
   location.hash = raw.startsWith("#") ? raw : `#${raw}`;
 }
 
-function activityItemBodyHtml(n, msg) {
-  const body = String(msg?.body || "").trim();
-  if (!body) return "";
+function activityItemLineText(n, msg) {
   const t = String(n?.type || "").trim();
-  const cls =
-    t === "chart_rank" || t === "play_milestone"
-      ? "activityRowStat"
-      : t === "song_feedback" || t === "social_reply"
-        ? "activityRowPreview"
-        : "";
-  return cls
-    ? `<p class="${cls}">${escapeHtml(body)}</p>`
-    : `<p>${escapeHtml(body)}</p>`;
+  if (t === "chart_rank") {
+    const rank = Number(n?._groupBestRank || n?.metadata?.rank || 0);
+    const title = String(n?.metadata?.song_title || "Your song").trim();
+    return rank ? `${title} hit #${rank} on Top Songs this week` : `${title} charted on Top Songs this week`;
+  }
+  const title = String(msg?.title || "").trim();
+  const body = String(msg?.body || "").trim();
+  if (!body) return title;
+  return `${title} — ${body}`;
 }
 
 function activityItemHtml(n) {
   const msg = notificationMessage(n);
   const unavailable = activityNotificationIsUnavailable(n);
-  if (unavailable) {
-    msg.body = "This post is not available anymore.";
-  }
   // Grouped rows get digest copy instead of repeating the same line N times.
   const gc = Number(n?._groupCount || 0);
   if (gc > 1) {
@@ -19495,6 +19497,7 @@ function activityItemHtml(n) {
       msg.body = `${gc} likes on this.`;
     }
   }
+  const line = unavailable ? "This post is not available anymore." : activityItemLineText(n, msg);
   const unread = !n?.read_at;
   const time = relativeTime(new Date(n?.created_at || Date.now()).getTime());
   const href = unavailable ? "" : notificationActivityHref(n);
@@ -19505,21 +19508,16 @@ function activityItemHtml(n) {
   const dataHref = href
     ? ` data-activity-href="${escapeHtml(href)}"${notifId ? ` data-activity-id="${escapeHtml(notifId)}"` : ""}`
     : "";
-  const unreadDot = unread ? `<span class="activityRowUnreadDot" aria-hidden="true"></span>` : "";
   return `
     <${tag} class="activityRow activityRow--${escapeHtml(notifType)}${unread ? " isUnread" : ""}${unavailable ? " activityRow--unavailable" : ""}"${typeAttr}${dataHref}>
-      ${unreadDot}
       <div class="activityRowAvatarWrap">
         ${activityRowLeadVisualHtml(n, "activityRowAvatar")}
         ${activityTypeBadgeHtml(notifType)}
       </div>
-      <div class="activityRowBody">
-        <div class="activityRowTop">
-          <strong>${escapeHtml(msg.title)}</strong>
-          <span class="activityRowTime">${escapeHtml(time)}</span>
-        </div>
-        ${activityItemBodyHtml(n, msg)}
-      </div>
+      <p class="activityRowText">
+        <span class="activityRowCopy">${escapeHtml(line)}</span>
+        <span class="activityRowTime">${escapeHtml(time)}</span>
+      </p>
       ${activitySongCoverHtml(n)}
     </${tag}>`;
 }
@@ -19537,15 +19535,17 @@ function renderActivityFeedFromState() {
       </div>`;
     return;
   }
-  const buckets = ["today", "yesterday", "week", "earlier"];
-  const grouped = { today: [], yesterday: [], week: [], earlier: [] };
+  const buckets = ["today", "yesterday", "earlier"];
+  const grouped = { today: [], yesterday: [], earlier: [] };
   list.forEach((n) => {
     grouped[activityDayBucket(new Date(n?.created_at || 0).getTime())].push(n);
   });
   feed.innerHTML = buckets.filter((b) => grouped[b].length).map((b) => `
     <section class="activityDayGroup" aria-label="${activityDayLabel(b)}">
       <h3 class="activityDayLabel">${activityDayLabel(b)}</h3>
-      ${collapseActivityRows(grouped[b]).map((n) => activityItemHtml(n)).join("")}
+      <div class="activityDayRows">
+        ${collapseActivityRows(grouped[b]).map((n) => activityItemHtml(n)).join("")}
+      </div>
     </section>`).join("");
   persistActivityFeedSnapshot(feed.innerHTML);
 }

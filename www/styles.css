@@ -26665,38 +26665,21 @@ body[data-route="activity"] .app{
   padding-right: 0;
 }
 .activityHead{
-  margin: 0 0 18px;
-  padding: 6px 2px 0;
-}
-.activityKicker{
-  margin: 0 0 6px;
-  color: rgba(94,234,212,0.88);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  margin: 0 0 8px;
+  padding: 8px 4px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
 }
 .activityTitle{
   margin: 0;
   color: #f8faff;
-  font-size: clamp(28px, 7vw, 34px);
-  font-weight: 850;
-  letter-spacing: -0.04em;
-  text-shadow:
-    0 0 40px rgba(124, 92, 255, 0.28),
-    0 0 24px rgba(35, 213, 171, 0.12);
-}
-.activityLead{
-  margin: 8px 0 0;
-  color: rgba(223,231,251,0.58);
-  font-size: 14px;
-  line-height: 1.45;
-  max-width: 420px;
+  font-size: clamp(22px, 5.5vw, 28px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
 }
 .activityStatus{
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   padding: 10px 14px;
-  border-radius: 14px;
+  border-radius: 10px;
   border: 1px solid rgba(255,255,255,0.08);
   background: rgba(255,255,255,0.04);
   color: rgba(223,231,251,0.72);
@@ -26705,104 +26688,67 @@ body[data-route="activity"] .app{
 .activityFeed{
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 18px;
 }
 .activityDayGroup{
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding-bottom: 10px;
-  border-radius: 20px;
-  border: 1px solid rgba(255,255,255,0.1);
-  background:
-    radial-gradient(120% 100% at 0% 0%, rgba(124,92,255,0.08), transparent 58%),
-    linear-gradient(168deg, rgba(18, 24, 38, 0.92), rgba(8, 11, 20, 0.86));
-  box-shadow:
-    var(--elev-2),
-    inset 0 1px 0 rgba(255,255,255,0.07);
-  overflow: hidden;
 }
 .activityDayLabel{
   margin: 0;
-  padding: 12px 16px 8px;
-  color: rgba(183, 168, 255, 0.82);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  background: linear-gradient(180deg, rgba(255,255,255,0.04), transparent);
+  padding: 0 4px 8px;
+  color: rgba(223,231,251,0.72);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.activityDayRows{
+  display: flex;
+  flex-direction: column;
 }
 .activityRow{
   position: relative;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
-  width: calc(100% - 16px);
-  margin: 0 8px;
-  padding: 14px 14px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 4px;
   border: 0;
-  border-radius: 14px;
-  background: rgba(255,255,255,0.02);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   color: inherit;
   text-align: left;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  transition:
-    background 160ms ease,
-    box-shadow 160ms ease,
-    transform 120ms ease;
+  transition: background 140ms ease;
 }
-.activityRow + .activityRow{
-  border-top: 0;
-  margin-top: 6px;
-}
-.activityDayGroup .activityRow + .activityRow{
-  border-top: 0;
-  margin-top: 6px;
+.activityDayRows .activityRow:last-child{
+  border-bottom: 0;
 }
 button.activityRow{
   appearance: none;
   font: inherit;
 }
 .activityRow:active{
-  background: rgba(255,255,255,0.06);
-  transform: scale(0.992);
+  background: rgba(255,255,255,0.04);
 }
 .activityRow.isUnread{
-  background:
-    linear-gradient(90deg, rgba(94,234,212,0.14), rgba(94,234,212,0.05));
-  box-shadow:
-    inset 3px 0 0 rgba(94,234,212,0.9),
-    0 8px 24px rgba(94,234,212,0.08),
-    inset 0 1px 0 rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.03);
 }
-.activityRowUnreadDot{
-  position: absolute;
-  left: 2px;
-  top: 20px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #5eead4;
-  box-shadow:
-    0 0 12px rgba(94,234,212,0.75),
-    0 0 20px rgba(94,234,212,0.35);
+.activityRow.isUnread .activityRowCopy{
+  font-weight: 650;
 }
 .activityRow--unavailable{
-  opacity: 0.68;
+  opacity: 0.55;
   cursor: default;
 }
-.activityRow--unavailable .activityRowBody p,
-.activityRow--unavailable .activityRowTop strong{
+.activityRow--unavailable .activityRowCopy{
   color: rgba(223,231,251,0.46);
-}
-.activityRow--unavailable .activityRowTop strong{
-  font-style: normal;
-}
-.activityRow--unavailable .activityRowBody p{
   font-style: italic;
 }
 button.activityRow--unavailable{
@@ -26817,7 +26763,7 @@ button.activityRow--unavailable{
 .activityRowAvatar{
   width: 44px;
   height: 44px;
-  border-radius: var(--nabad-squircle-radius);
+  border-radius: 50%;
   object-fit: cover;
   background: rgba(255,255,255,0.08);
   display: block;
@@ -26916,29 +26862,22 @@ button.activityRow--unavailable{
   background: linear-gradient(135deg, rgba(124,92,255,0.95), rgba(34,211,238,0.82));
   color: #fff;
 }
-.activityRowBody{
-  min-width: 0;
+.activityRowText{
   flex: 1 1 auto;
-  display: grid;
-  gap: 3px;
-  padding-top: 1px;
-}
-.activityRowTop{
+  min-width: 0;
+  margin: 0;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
+  line-height: 1.35;
 }
-.activityRowTop strong{
+.activityRowCopy{
   flex: 1 1 auto;
   min-width: 0;
-  color: #f8faff;
+  color: rgba(232,238,247,0.88);
   font-size: 14px;
-  font-weight: 850;
-  letter-spacing: -0.02em;
-  text-shadow: 0 0 20px rgba(124, 92, 255, 0.12);
-}
-  line-height: 1.35;
+  font-weight: 450;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -26946,38 +26885,15 @@ button.activityRow--unavailable{
 }
 .activityRowTime{
   flex: 0 0 auto;
-  color: rgba(223,231,251,0.40);
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-  padding-left: 8px;
-  padding-top: 2px;
-}
-.activityRowBody p{
-  margin: 0;
-  color: rgba(223,231,251,0.56);
+  color: rgba(223,231,251,0.42);
   font-size: 12px;
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-}
-.activityRowStat{
-  color: rgba(94,234,212,0.88) !important;
-  font-size: 12px !important;
-  font-weight: 800 !important;
-  letter-spacing: 0.01em;
-  -webkit-line-clamp: 1 !important;
-}
-.activityRowPreview{
-  color: rgba(223,231,251,0.62) !important;
-  font-style: italic;
+  font-weight: 500;
+  white-space: nowrap;
+  padding-top: 1px;
 }
 .activityRow--chart_rank .activityRowAvatar,
 .activityRow--play_milestone .activityRowAvatar{
-  border-radius: 10px;
-  box-shadow: 0 8px 18px rgba(0,0,0,0.22);
+  border-radius: 8px;
 }
 .activityRowLeadPlaceholder{
   width: 44px;
@@ -26989,12 +26905,10 @@ button.activityRow--unavailable{
   flex: 0 0 auto;
   width: 44px;
   height: 44px;
-  margin-top: 1px;
-  border-radius: 50%;
+  border-radius: 8px;
   object-fit: cover;
-  border: 1px solid rgba(255,255,255,0.10);
+  border: 0;
   background: rgba(255,255,255,0.06);
-  box-shadow: 0 6px 16px rgba(0,0,0,0.22);
 }
 .activityRowCoverPlaceholder{
   display: flex;
@@ -27002,19 +26916,12 @@ button.activityRow--unavailable{
   justify-content: center;
   color: rgba(167,139,250,0.88);
   font-size: 15px;
-  background:
-    radial-gradient(circle at 30% 20%, rgba(34,211,238,0.14), transparent 58%),
-    rgba(124,92,255,0.16);
-}
-.activityRow.isUnread .activityRowCover{
-  box-shadow:
-    0 0 0 2px rgba(94,234,212,0.30),
-    0 6px 16px rgba(0,0,0,0.22);
+  background: rgba(124,92,255,0.14);
 }
 .activitySkelCover{
   width: 44px;
   height: 44px;
-  border-radius: 50%;
+  border-radius: 8px;
 }
 .activityEmpty{
   display: flex;
@@ -27023,9 +26930,6 @@ button.activityRow--unavailable{
   justify-content: center;
   gap: 8px;
   padding: 48px 24px;
-  border-radius: 24px;
-  border: 1px dashed rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.02);
   text-align: center;
 }
 .activityEmptyIcon{
@@ -31541,11 +31445,11 @@ section.mentorPage{
 .discoverHubTemplateBlocks{
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
 .discoverHubTemplateBlock{
-  padding: 12px 12px 10px;
-  border-radius: 18px;
+  padding: 10px 10px 8px;
+  border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.03);
 }
@@ -31567,12 +31471,12 @@ section.mentorPage{
   color: #fff;
 }
 .discoverHubTemplateCount{
-  font-size: 11px;
-  font-weight: 800;
-  color: rgba(94, 234, 212, 0.82);
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(223, 231, 251, 0.38);
 }
 .discoverHubTemplateBlockSub{
-  margin: 8px 0 10px;
+  margin: 6px 0 8px;
   font-size: 11.5px;
   font-weight: 600;
   line-height: 1.4;

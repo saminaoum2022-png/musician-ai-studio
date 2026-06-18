@@ -4099,7 +4099,6 @@ const CHALLENGE_SPARK_KICKERS = {
   "sad-to-dance-challenge": "Mood",
   "arabic-trend-byte": "Arabic",
   "roast-song": "Roast",
-  "three-word-hook": "Tiny",
   "wrong-genre-party": "Weird",
 };
 const CHALLENGE_SPARK_TONES = ["violet", "cyan", "rose", "gold", "mint", "amber"];

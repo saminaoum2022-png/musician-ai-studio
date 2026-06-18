@@ -2595,7 +2595,7 @@ function setCreateChallengeHint(challenge) {
   if (els.createChallengeHintSub) {
     const voiceClip = isVoiceClipChallengeId(c.id);
     els.createChallengeHintSub.textContent = voiceClip
-      ? "Record on Hum — we'll guess what you sang, then the AI re-sings it in a new arrangement."
+      ? "Record on Hum — we'll guess what you sang (often wrong). Edit on Lyrics before Generate."
       : `${details ? `${details}. ` : ""}Starter text below — edit it or tap ✦ for AI lyrics.`;
   }
   els.createChallengeHint.hidden = false;
@@ -11821,6 +11821,12 @@ async function transcribeVocalReferenceFromFile(file, opts = {}) {
 
 let voiceTranscribeBusy = false;
 
+function revealVoiceClipLyricsForReview() {
+  try {
+    applyCreateChallengeFocus({ tab: "lyrics", tabs: ["hum", "lyrics"] });
+  } catch {}
+}
+
 async function maybeTranscribeVoiceClipAfterAttach(file) {
   const challenge = challengePromptContext();
   if (!isVoiceClipChallengeId(challenge?.id) || !file) return;
@@ -11835,19 +11841,20 @@ async function maybeTranscribeVoiceClipAfterAttach(file) {
       els.sunoPrompt.value = sanitizeLyricsPrompt(transcript);
       try { autoResizeLyricsBox(); } catch {}
     }
+    revealVoiceClipLyricsForReview();
     if (els.createChallengeHintSub) {
-      const preview = transcript.length > 120 ? `${transcript.slice(0, 117)}…` : transcript;
+      const preview = transcript.length > 100 ? `${transcript.slice(0, 97)}…` : transcript;
       els.createChallengeHintSub.textContent = preview
-        ? `We heard: “${preview}” — tap Generate when ready.`
-        : "Record on Hum — we'll guess what you sang, then the AI re-sings it.";
+        ? `AI guess: “${preview}” — open Lyrics tab and fix it if wrong, then Generate.`
+        : "Record on Hum — we'll guess what you sang (often wrong). Edit on Lyrics before Generate.";
     }
     try {
-      showToast("Got it — we'll re-sing what we heard", { icon: "🎙", durationMs: 3200 });
+      showToast("Check Lyrics tab — fix the guess if it's wrong", { icon: "✎", durationMs: 5200 });
     } catch {}
   } catch {
     if (els.createChallengeHintSub) {
       els.createChallengeHintSub.textContent =
-        "Record on Hum — we'll guess what you sang, then the AI re-sings it.";
+        "Record on Hum — we'll guess what you sang (often wrong). Edit on Lyrics before Generate.";
     }
   } finally {
     voiceTranscribeBusy = false;
@@ -35423,8 +35430,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             engineLabel = "Nabad AI + voice transcript";
             const preview = transcript.length > 90 ? `${transcript.slice(0, 87)}…` : transcript;
             if (els.createChallengeHintSub && preview) {
-              els.createChallengeHintSub.textContent = `We heard: “${preview}”`;
+              els.createChallengeHintSub.textContent = `AI guess: “${preview}” — edit on Lyrics if wrong.`;
             }
+            revealVoiceClipLyricsForReview();
           }
         } catch (e) {
           try {

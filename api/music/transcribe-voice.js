@@ -99,23 +99,29 @@ async function tryGeminiVoiceTranscript({ geminiKey, dataUrl, dialect, dialectHi
 
   const lang = inferLanguageHint({ languageHint, dialect, dialectHint, styleHint });
   const dialectLine = [dialect, dialectHint].filter(Boolean).join(" — ");
+  // Do NOT pass styleHint into the model prompt — "emotional chorus" etc. makes
+  // Gemini invent breakup lyrics instead of transcribing the clip.
   const prompt = [
-    "Listen to this short voice recording. The person may be singing, humming, or speaking lyrics.",
-    "Transcribe what you hear as plain lyrics text — the actual words or syllables sung/spoken, one phrase per line.",
-    "Write in the SAME language the person is using. Do NOT translate to English unless they clearly spoke English.",
+    "You are a literal speech-to-text transcriber. You are NOT a songwriter.",
+    "Listen once and write ONLY the words or syllables actually spoken or sung.",
+    "Rules:",
+    "- Same language as the speaker. Arabic script (عربي) if they use Arabic.",
     lang === "Arabic"
-      ? "The speaker is likely using Arabic. Output Arabic script (عربي), not English romanization, unless they clearly sang in English."
+      ? "- Likely Arabic speech — use Arabic script, not English, unless they clearly sang English."
       : "",
-    dialectLine ? `Dialect/context: ${dialectLine}.` : "",
-    styleHint ? `Song style context (do not copy as lyrics): ${styleHint}.` : "",
-    "Do NOT invent new lyrics, improve the text, or substitute lyrics from famous songs.",
-    "Do NOT add section tags like [Verse] or [Chorus].",
-    "If unclear, guess phonetically in the speaker's language — imperfect is fine and expected.",
-    "If only humming with no words, write approximate syllables like \"la la la\" or \"mm-mm\".",
-    "Output ONLY the transcribed text, no commentary or markdown.",
+    dialectLine ? `- Dialect hint: ${dialectLine}.` : "",
+    "- One short line per phrase you hear. No [Verse] tags.",
+    "- If a syllable is unclear, write the closest sound — never replace it with a new sentence.",
+    "- NEVER add words that were not in the audio.",
+    "- NEVER complete the thought, dramatize, or write emotional lyrics.",
+    "- NEVER repeat a line unless you hear it repeated.",
+    "- NEVER use lyrics from famous songs.",
+    "- If mostly humming: syllables only (la la la, مم مم, etc.).",
+    "- Keep it short — only as many lines as fit what you hear in the clip.",
+    "Output plain transcribed text only. No commentary.",
   ]
     .filter(Boolean)
-    .join(" ");
+    .join("\n");
 
   for (const model of models) {
     const r = await fetch(
@@ -130,7 +136,7 @@ async function tryGeminiVoiceTranscript({ geminiKey, dataUrl, dialect, dialectHi
               parts: [{ text: prompt }, { inline_data: toInlineData(dataUrl) }],
             },
           ],
-          generationConfig: { temperature: 0.2 },
+          generationConfig: { temperature: 0 },
         }),
       },
     );
@@ -155,7 +161,24 @@ function sanitizeTranscript(raw) {
   if (!s) return "";
   s = s.replace(/^```(?:text|lyrics)?|```$/gim, "").trim();
   s = s.replace(/^\s*(transcript|lyrics)\s*:\s*/i, "").trim();
+  s = dedupeTranscriptLines(s);
   return s.slice(0, 3500);
+}
+
+function dedupeTranscriptLines(text) {
+  const lines = String(text || "")
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const seen = new Set();
+  const out = [];
+  for (const line of lines) {
+    const key = line.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(line);
+  }
+  return out.join("\n");
 }
 
 function toInlineData(dataUrl) {

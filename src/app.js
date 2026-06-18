@@ -2595,7 +2595,7 @@ function setCreateChallengeHint(challenge) {
   if (els.createChallengeHintSub) {
     const voiceClip = isVoiceClipChallengeId(c.id);
     els.createChallengeHintSub.textContent = voiceClip
-      ? "Record your hook on Hum, then Generate — your clip drives the song."
+      ? "Record on Hum — we'll guess what you sang, then the AI re-sings it in a new arrangement."
       : `${details ? `${details}. ` : ""}Starter text below — edit it or tap ✦ for AI lyrics.`;
   }
   els.createChallengeHint.hidden = false;
@@ -4043,7 +4043,7 @@ const CHALLENGE_IDEAS = [
     title: "Voice Note Flip",
     style: "Voice-note remix, intimate spoken intro, modern Arabic pop, warm bass, emotional chorus, 96 bpm",
     lyrics: "[Verse]\nI heard your voice in a little note\nOne small line I could not let go\nIt stayed with me, it found a beat\nNow it is dancing under my feet\n\n[Chorus]\nSay it again, say it again\nYour voice became the hook, my friend\nFrom one small line to a whole song now\nWe turned the feeling up somehow",
-    prompt: "Turn a tiny real-life voice note into a polished chorus.",
+    prompt: "Record what you sing — we transcribe your clip (even imperfectly) and the AI re-sings it.",
     tags: ["Voice", "Remix", "Personal"],
   },
   {
@@ -4781,7 +4781,7 @@ function applyDiscoveryIdeaToCreate(idea) {
   try {
     setStatus?.(
       voiceClipOnly
-        ? `Challenge: ${title}. Record on Hum, then Generate.`
+        ? `Challenge: ${title}. Record on Hum — we'll guess what you sang.`
         : challenge
           ? `Challenge: ${title}. Edit the starter or tap ✦ for lyrics.`
           : `Loaded idea: ${title}. Make it yours.`,
@@ -4789,7 +4789,7 @@ function applyDiscoveryIdeaToCreate(idea) {
   } catch {}
   try {
     showToast(
-      voiceClipOnly ? "Record your hook on Hum" : challenge ? "Challenge ready — make the starter yours" : "Idea loaded - make it yours",
+      voiceClipOnly ? "Record on Hum — we'll transcribe what you sang" : challenge ? "Challenge ready — make the starter yours" : "Idea loaded - make it yours",
       { icon: "♪", durationMs: 2600 },
     );
   } catch {}
@@ -11724,11 +11724,14 @@ function setVocalRefFile(file, label, origin) {
   refreshVocalReferenceUi();
   // Hum is ALWAYS "AI re-sings on new arrangement" (Suno upload-cover) now.
   // We never auto-switch to Add Instrumental — that path kept the user's
-  // raw hum in the final mix and confused the UX. If lyrics are empty at
-  // submit time, the Generate flow calls Gemini to draft them so Suno's
-  // upload-cover endpoint has non-empty lyrics to sing.
+  // raw hum in the final mix and confused the UX. Voice Note challenges
+  // transcribe the clip at attach + Generate time so Suno sings what the
+  // user actually sang, not unrelated AI-drafted lyrics.
   try { setCreateSongType("vocal"); } catch {
     if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
+  }
+  if (file && (origin === "record" || origin === "upload")) {
+    try { maybeTranscribeVoiceClipAfterAttach(file); } catch {}
   }
 }
 
@@ -11780,6 +11783,72 @@ function getVocalReferenceFile() {
  * remix-origin references must ignore the DOM entirely; picker uploads use
  * `files[0]` as ground truth.
  */
+function audioFileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result || ""));
+    fr.onerror = () => reject(new Error("Could not read audio file"));
+    fr.readAsDataURL(file);
+  });
+}
+
+async function transcribeVocalReferenceFromFile(file) {
+  if (!file || !file.size) return "";
+  const token = getSupabaseAuthToken();
+  if (!token) throw new Error("Sign in to transcribe your voice clip.");
+  const dataUrl = await audioFileToDataUrl(file);
+  if (dataUrl.length > 3_500_000) {
+    throw new Error("Voice clip too large — keep it under about a minute.");
+  }
+  const r = await fetch(apiUrl("/api/music/transcribe-voice"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ audio: dataUrl }),
+  });
+  const d = await r.json().catch(() => ({}));
+  const transcript = String(d?.transcript || d?.lyrics || "").trim();
+  if (!r.ok || !transcript) throw new Error(d?.error || "Could not transcribe voice clip.");
+  return transcript;
+}
+
+let voiceTranscribeBusy = false;
+
+async function maybeTranscribeVoiceClipAfterAttach(file) {
+  const challenge = challengePromptContext();
+  if (!isVoiceClipChallengeId(challenge?.id) || !file) return;
+  if (voiceTranscribeBusy) return;
+  voiceTranscribeBusy = true;
+  try {
+    if (els.createChallengeHintSub) {
+      els.createChallengeHintSub.textContent = "Listening to your clip…";
+    }
+    const transcript = await transcribeVocalReferenceFromFile(file);
+    if (transcript && els.sunoPrompt) {
+      els.sunoPrompt.value = sanitizeLyricsPrompt(transcript);
+      try { autoResizeLyricsBox(); } catch {}
+    }
+    if (els.createChallengeHintSub) {
+      const preview = transcript.length > 120 ? `${transcript.slice(0, 117)}…` : transcript;
+      els.createChallengeHintSub.textContent = preview
+        ? `We heard: “${preview}” — tap Generate when ready.`
+        : "Record on Hum — we'll guess what you sang, then the AI re-sings it.";
+    }
+    try {
+      showToast("Got it — we'll re-sing what we heard", { icon: "🎙", durationMs: 3200 });
+    } catch {}
+  } catch {
+    if (els.createChallengeHintSub) {
+      els.createChallengeHintSub.textContent =
+        "Record on Hum — we'll guess what you sang, then the AI re-sings it.";
+    }
+  } finally {
+    voiceTranscribeBusy = false;
+  }
+}
+
 function resolveVocalReferenceForSubmit() {
   try {
     const input = els.sunoVocalUpload;
@@ -35320,11 +35389,37 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       let finalPrompt = sanitizeLyricsPrompt(userPrompt);
       const imageOnlyInstrumental = Boolean(imageMoodAppliedForNextGen && !finalPrompt && !hasReference);
       const shouldGenerateInstrumental = Boolean(instrumentalSelected || imageOnlyInstrumental);
+      const voiceClipChallenge = isVoiceClipChallengeId(challengePromptContext()?.id);
+      // Voice Note Flip: transcribe the clip so Suno re-sings what the user
+      // actually sang — wrong guesses are fine. Suno upload-cover still
+      // needs non-empty lyrics text.
+      if (!finalPrompt && !shouldGenerateInstrumental && hasReference && voiceClipChallenge) {
+        try {
+          setStatus("Listening to your clip… (Engine: voice transcript)");
+          const transcript = await transcribeVocalReferenceFromFile(vocalRefFile);
+          if (transcript) {
+            finalPrompt = sanitizeLyricsPrompt(transcript);
+            if (els.sunoPrompt) els.sunoPrompt.value = finalPrompt;
+            engine = "voice_transcribed";
+            engineLabel = "Nabad AI + voice transcript";
+            const preview = transcript.length > 90 ? `${transcript.slice(0, 87)}…` : transcript;
+            if (els.createChallengeHintSub && preview) {
+              els.createChallengeHintSub.textContent = `We heard: “${preview}”`;
+            }
+          }
+        } catch (e) {
+          try {
+            showToast(e?.message || "Could not transcribe clip — try recording again.", {
+              icon: "⚠",
+              durationMs: 4800,
+            });
+          } catch {}
+        }
+      }
       // Auto-draft lyrics with Gemini when the user hasn't typed any.
-      // Hum-tab requires non-empty lyrics: Suno's upload-cover endpoint
-      // returns 531 ("extending lyrics empty") otherwise. Same path works
-      // for no-reference generations — Gemini drafts lyrics from style.
-      if (!finalPrompt && !shouldGenerateInstrumental) {
+      // Skip for Voice Note challenges — we want the user's sung words, not
+      // unrelated AI lyrics. Suno upload-cover still needs non-empty text.
+      if (!finalPrompt && !shouldGenerateInstrumental && !(voiceClipChallenge && hasReference)) {
         try {
           setStatus("Preparing prompt with Gemini… (Engine: Gemini assisted)");
           const rr = await fetch(apiUrl("/api/lyrics"), {
@@ -35339,6 +35434,14 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             engineLabel = "Nabad AI + Gemini lyrics draft";
           }
         } catch {}
+      }
+      if (!finalPrompt && !shouldGenerateInstrumental && voiceClipChallenge && hasReference) {
+        setLoading(false);
+        setGenerateBtn("Generate song", false, "generate");
+        setGenerateFieldsLocked(false);
+        window.alert("We couldn't hear words in your clip. Try singing or humming a little louder, then Generate again.");
+        setStatus("Voice Note needs a transcribed clip — record again or sing clearer.");
+        return;
       }
       setStatus(`Submitting generation… (Mode: ${modeLabel} | Engine: ${engineLabel})`);
 

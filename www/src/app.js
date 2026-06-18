@@ -6220,6 +6220,7 @@ function bindDiscoverHubV1Once() {
   });
 }
 
+function bindHomeDeskOnce(page) {
   if (!page || page.dataset.boundHomeDesk === "1") return;
   page.dataset.boundHomeDesk = "1";
   wireHomeDeskSegOnce();

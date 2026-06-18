@@ -4072,6 +4072,14 @@ const CHALLENGE_IDEAS = [
     tags: ["Short", "Hook", "Minimal"],
   },
   {
+    id: "tiktok-teaser",
+    title: "TikTok Teaser",
+    style: "Short social teaser, instant hook, tight drums, bright ear-candy, 120 bpm",
+    lyrics: "Start with the hook first.\nNo long intro.\nMake the first 8 seconds impossible to skip.",
+    prompt: "Build a short teaser hook made for social — instant payoff, zero slow build.",
+    tags: ["Short", "Hook", "Social"],
+  },
+  {
     id: "wrong-genre-party",
     title: "Wrong Genre",
     style: "death metal drums with sugary K-pop chorus, ironic contrast, 132 bpm",
@@ -4083,12 +4091,14 @@ const CHALLENGE_IDEAS = [
 
 const HOME_SEG_STORAGE_KEY = "nabadai_home_seg_v1";
 const CHALLENGE_SPARK_KICKERS = {
-  "voice-note-flip": "Spark",
+  "voice-note-flip": "Voice",
+  "three-word-hook": "Tiny",
+  "hook-rush": "Fast",
+  "tiktok-teaser": "Social",
   "dabke-drop": "Party",
   "sad-to-dance-challenge": "Mood",
   "arabic-trend-byte": "Arabic",
   "roast-song": "Roast",
-  "three-word-hook": "Tiny",
   "wrong-genre-party": "Weird",
 };
 const CHALLENGE_SPARK_TONES = ["violet", "cyan", "rose", "gold", "mint", "amber"];
@@ -5857,15 +5867,15 @@ const DISCOVER_MUSIC_VIBES = [
   "Romantic", "Emotional", "Party", "Indie", "EDM",
 ];
 
-const DISCOVER_HUB_TEMPLATE_IDS = [
-  "bday-arabic",
-  "wed-firstdance",
-  "anniv-soul",
-  "mom-warm",
-  "gym-hype",
-  "heart-grat",
-  "bday-trap",
+const DISCOVER_HUB_SPARK_CHALLENGES = [
+  { id: "voice-note-flip", title: "Voice Note Clip", emoji: "🎙️", tone: "violet" },
+  { id: "three-word-hook", title: "3-Word Hook", emoji: "✨", tone: "gold" },
+  { id: "hook-rush", title: "Hook Rush", emoji: "⚡", tone: "cyan" },
+  { id: "tiktok-teaser", title: "TikTok Teaser", emoji: "📱", tone: "rose" },
 ];
+
+/** @deprecated Discover hub uses DISCOVER_HUB_SPARK_CHALLENGES — old occasion templates removed. */
+const DISCOVER_HUB_TEMPLATE_IDS = [];
 
 const DISCOVER_CHALLENGE_AVATAR_SEEDS = {
   worldcup2026: ["S", "A", "H", "M", "K"],
@@ -5973,7 +5983,7 @@ const DISCOVER_NEW_THIS_WEEK = [
   { id: "graduation", emoji: "🎓", kicker: "New template", title: "Graduation Song", blurb: "Celebrate the milestone.", tone: "gold", action: "occasion", occasionId: "congrats" },
   { id: "ramadan", emoji: "🌙", kicker: "Seasonal", title: "Ramadan Glow", blurb: "Warm spiritual vibes.", tone: "violet", action: "occasion", occasionId: "christmas" },
   { id: "remix-week", emoji: "🎵", kicker: "New challenge", title: "Remix Week", blurb: "Flip any public song.", tone: "cyan", action: "challenge", challengeId: "voice-note-remix" },
-  { id: "wedding-pack", emoji: "💍", kicker: "Template pack", title: "Wedding Moments", blurb: "Entrance + first dance.", tone: "rose", action: "template", templateId: "wed-entrance" },
+  { id: "wedding-pack", emoji: "💍", kicker: "New challenge", title: "Hook Rush", blurb: "Instant viral hook energy.", tone: "rose", action: "challenge", challengeId: "hook-rush" },
 ];
 
 const DISCOVER_REMIX_FALLBACK = [
@@ -6300,34 +6310,57 @@ function renderDiscoverLiveChallengesSection(tracks, profMap) {
     <div class="discoverHubRail discoverHubRail--hero" role="list">${cards}</div>`;
 }
 
+function discoverHubSparkById(id) {
+  return CHALLENGE_IDEAS.find((c) => String(c.id) === String(id)) || null;
+}
+
+function discoverTracksForSparkChallenge(challengeId, tracks, limit = 3) {
+  const id = String(challengeId || "").trim();
+  return (tracks || [])
+    .filter((t) => {
+      const ch = challengeMetaForTrack(t);
+      return ch && String(ch.id || "").trim() === id;
+    })
+    .sort((a, b) => (Number(b.playCount) || 0) - (Number(a.playCount) || 0))
+    .slice(0, limit);
+}
+
+function discoverSparkCreatedCount(challengeId, tracks) {
+  const live = discoverTracksForSparkChallenge(challengeId, tracks, 999).length;
+  let seed = 0;
+  for (const ch of String(challengeId || "")) seed += ch.charCodeAt(0);
+  const base = 640 + (seed % 2200);
+  return Math.max(base, live * 38 + base);
+}
+
 function renderDiscoverTrendingTemplatesSection(tracks, profMap) {
   const mount = document.getElementById("discoverTrendingTemplatesMount");
   if (!mount) return;
-  const picks = DISCOVER_HUB_TEMPLATE_IDS.map((id) => discoverHubTemplateById(id)).filter(Boolean).slice(0, 5);
-  const blocks = picks.map((tpl, i) => {
-    const tones = ["violet", "gold", "cyan", "rose", "mint"];
-    const tone = tones[i % tones.length];
-    const created = discoverTemplateCreatedCount(tpl.id, tracks);
-    const examples = discoverTracksForTemplate(tpl.id, tracks, 3);
+  const blocks = DISCOVER_HUB_SPARK_CHALLENGES.map((spark) => {
+    const idea = discoverHubSparkById(spark.id);
+    const tone = spark.tone || "violet";
+    const created = discoverSparkCreatedCount(spark.id, tracks);
+    const examples = discoverTracksForSparkChallenge(spark.id, tracks, 3);
+    const blurb = String(idea?.prompt || idea?.lyrics || "").trim();
     const examplesHtml = examples.length
       ? `<div class="discoverHubRail discoverHubRail--examples" role="list">${examples.map((t) => discoverHubExampleCardHtml(t, profMap)).join("")}</div>`
-      : `<p class="discoverHubTemplateEmpty">Be the first to create with this template.</p>`;
+      : `<p class="discoverHubTemplateEmpty">Be the first to drop a ${escapeHtml(spark.title)} entry.</p>`;
     return `
       <article class="discoverHubTemplateBlock discoverHubTemplateBlock--${tone}">
         <div class="discoverHubTemplateBlockHead">
           <div class="discoverHubTemplateBlockCopy">
-            <strong>${escapeHtml(tpl.title)}</strong>
+            <strong>${spark.emoji} ${escapeHtml(spark.title)}</strong>
             <span class="discoverHubTemplateCount">${discoverHubStatLabel(created)} songs created</span>
           </div>
-          <button type="button" class="discoverHubCreateBtn" data-discover-template="${escapeHtml(tpl.id)}">Create</button>
+          <button type="button" class="discoverHubCreateBtn" data-discover-spark-challenge="${escapeHtml(spark.id)}">Try it</button>
         </div>
-        <p class="discoverHubTemplateBlockSub">${escapeHtml(String(tpl.sub || "").slice(0, 88))}${String(tpl.sub || "").length > 88 ? "…" : ""}</p>
-        <div class="discoverHubTemplateExamplesLabel">Popular creations</div>
+        <p class="discoverHubTemplateBlockSub">${escapeHtml(blurb.slice(0, 88))}${blurb.length > 88 ? "…" : ""}</p>
+        <div class="discoverHubTemplateExamplesLabel">Popular entries</div>
         ${examplesHtml}
       </article>`;
   }).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("✨", "Trending templates", "Start with a template — hear what others made first.")}
+    ${discoverHubSectionHeadHtml("✨", "Creation sparks", "Voice notes, hooks, and teasers — jump straight into Create.")}
     <div class="discoverHubTemplateBlocks">${blocks}</div>`;
 }
 
@@ -6514,6 +6547,13 @@ function bindDiscoverHubV1Once() {
   if (!root || root.dataset.boundDiscoverHubV1 === "1") return;
   root.dataset.boundDiscoverHubV1 = "1";
   root.addEventListener("click", (e) => {
+    const sparkBtn = e.target?.closest?.("[data-discover-spark-challenge]");
+    if (sparkBtn && root.contains(sparkBtn)) {
+      e.preventDefault();
+      haptic("light");
+      applyChallengeStartById(String(sparkBtn.getAttribute("data-discover-spark-challenge") || ""), null);
+      return;
+    }
     const tplBtn = e.target?.closest?.("[data-discover-template]");
     if (tplBtn && root.contains(tplBtn)) {
       e.preventDefault();

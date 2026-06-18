@@ -4124,7 +4124,8 @@ const CHALLENGE_SPARK_KICKERS = {
   "sad-to-dance-challenge": "Mood",
   "arabic-trend-byte": "Arabic",
   "roast-song": "Roast",
-  "wrong-genre-party": "Weird",
+  "last-photo-song": "Photo",
+  "roast-song": "Roast",
 };
 const CHALLENGE_SPARK_TONES = ["violet", "cyan", "rose", "gold", "mint", "amber"];
 
@@ -4965,7 +4966,11 @@ function renderHomeDeskContinue() {
 }
 
 function applyChallengeStartById(id, challengesMap) {
-  const challenge = challengesMap?.get?.(id) || CHALLENGE_IDEAS.find((row) => String(row.id) === id);
+  const key = String(id || "").trim();
+  const challenge =
+    challengesMap?.get?.(key)
+    || CHALLENGE_IDEAS.find((row) => String(row.id) === key)
+    || DISCOVERY_IDEAS.find((row) => String(row.id) === key);
   if (!challenge) return;
   haptic("light");
   const focus = challengeCreateFocusForId(challenge.id);
@@ -5942,17 +5947,19 @@ const DISCOVER_CHALLENGE_AVATAR_SEEDS = {
   worldcup2026: ["S", "A", "H", "M", "K"],
   birthday: ["N", "L", "R", "Y"],
   "love-song": ["M", "S", "A", "D"],
-  "remix-battle": ["K", "T", "J", "P"],
-  "anthem-battle": ["L", "E", "B", "R", "F"],
+  "sad-to-dance": ["D", "M", "S", "K"],
+  "last-photo-song": ["P", "H", "O", "T"],
+  "roast-song": ["R", "O", "A", "S"],
 };
 
-const DISCOVER_CHALLENGE_ART_VERSION = "20260618artv1";
+const DISCOVER_CHALLENGE_ART_VERSION = "20260619discoverWire";
 const DISCOVER_CHALLENGE_ART = {
   worldcup2026: "./assets/discover/challenges/worldcup-anthem.svg",
   birthday: "./assets/discover/challenges/birthday-song.svg",
   "love-song": "./assets/discover/challenges/love-song.svg",
-  "remix-battle": "./assets/discover/challenges/remix-battle.svg",
-  "anthem-battle": "./assets/discover/challenges/country-vs-country.svg",
+  "sad-to-dance": "./assets/discover/challenges/remix-battle.svg",
+  "last-photo-song": "./assets/discover/challenges/birthday-song.svg",
+  "roast-song": "./assets/discover/challenges/remix-battle.svg",
 };
 
 function discoverChallengeArtUrl(challengeId) {
@@ -5986,8 +5993,8 @@ const DISCOVER_LIVE_CHALLENGES = [
     daysLeft: 6,
     totalDays: 14,
     progressGoal: 220,
-    action: "challenge",
-    challengeId: "birthday-banger",
+    action: "occasion",
+    occasionId: "birthday",
   },
   {
     id: "love-song",
@@ -6004,31 +6011,32 @@ const DISCOVER_LIVE_CHALLENGES = [
     occasionId: "anniversary",
   },
   {
-    id: "remix-battle",
-    emoji: "⚡",
-    title: "Remix Battle",
-    blurb: "Flip a public song. Win the crowd.",
-    tone: "cyan",
+    id: "sad-to-dance",
+    emoji: "💃",
+    title: "Sad to Dance",
+    blurb: "Flip a sad idea into motion — keep the feeling.",
+    tone: "rose",
     participants: 638,
     submissions: 97,
-    daysLeft: 3,
-    totalDays: 7,
+    daysLeft: 5,
+    totalDays: 10,
     progressGoal: 120,
     action: "challenge",
-    challengeId: "voice-note-remix",
+    challengeId: "sad-to-dance-challenge",
   },
   {
-    id: "anthem-battle",
-    emoji: "🌍",
-    title: "Country vs Country",
-    blurb: "Anthem energy. Team pride.",
+    id: "last-photo-song",
+    emoji: "📸",
+    title: "Last Photo Song",
+    blurb: "Turn a photo from your roll into a personal hook.",
     tone: "mint",
-    participants: 1105,
-    submissions: 156,
-    daysLeft: 12,
-    totalDays: 21,
-    progressGoal: 240,
-    action: "campaign",
+    participants: 745,
+    submissions: 112,
+    daysLeft: 8,
+    totalDays: 14,
+    progressGoal: 160,
+    action: "challenge",
+    challengeId: "last-photo-song",
   },
 ];
 
@@ -6043,7 +6051,7 @@ const DISCOVER_SUGGESTED_CREATORS = [
 const DISCOVER_NEW_THIS_WEEK = [
   { id: "graduation", emoji: "🎓", kicker: "New template", title: "Graduation Song", blurb: "Celebrate the milestone.", tone: "gold", action: "occasion", occasionId: "congrats" },
   { id: "ramadan", emoji: "🌙", kicker: "Seasonal", title: "Ramadan Glow", blurb: "Warm spiritual vibes.", tone: "violet", action: "occasion", occasionId: "christmas" },
-  { id: "remix-week", emoji: "🎵", kicker: "New challenge", title: "Remix Week", blurb: "Flip any public song.", tone: "cyan", action: "challenge", challengeId: "voice-note-remix" },
+  { id: "roast-week", emoji: "😄", kicker: "Fun challenge", title: "Roast Song", blurb: "Playful roast for a friend — funny, never cruel.", tone: "gold", action: "challenge", challengeId: "roast-song" },
   { id: "wedding-pack", emoji: "💍", kicker: "New challenge", title: "Hook Rush", blurb: "Instant viral hook energy.", tone: "rose", action: "challenge", challengeId: "hook-rush" },
 ];
 
@@ -6159,10 +6167,11 @@ function discoverChallengeMatchesTrack(c, track) {
   if (c.occasionId && (chId === c.occasionId || String(ch.variant || "") === c.occasionId)) return true;
   if (c.id === "birthday" && (chId.includes("birthday") || chTitle.includes("birthday"))) return true;
   if (c.id === "love-song" && (chId.includes("anniv") || chId.includes("love") || chTitle.includes("love"))) return true;
-  if (c.id === "remix-battle" && (chId.includes("remix") || chTitle.includes("remix"))) return true;
+  if (c.id === "sad-to-dance" && (chId === "sad-to-dance-challenge" || chTitle.includes("sad") || chTitle.includes("dance"))) return true;
+  if (c.id === "last-photo-song" && (chId === "last-photo-song" || chTitle.includes("photo"))) return true;
+  if (c.challengeId === "roast-song" && (chId === "roast-song" || chTitle.includes("roast"))) return true;
   if (c.action === "campaign" && String(ch.campaign || "").trim()) {
     if (c.id === "worldcup2026") return true;
-    if (c.id === "anthem-battle") return chTitle.includes("anthem") || Boolean(ch.team || ch.teamName);
   }
   return false;
 }

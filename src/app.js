@@ -5851,6 +5851,12 @@ async function refreshDiscoverCampaignRail() {
 }
 
 // ─── Discover V1 — community hub (not a song library grid) ─────────────
+/** Future-ready vibe tags for recommendations (not voice-range / timbre labels). */
+const DISCOVER_MUSIC_VIBES = [
+  "Arabic Pop", "Lebanese", "Egyptian", "Rap", "Chill",
+  "Romantic", "Emotional", "Party", "Indie", "EDM",
+];
+
 const DISCOVER_HUB_TEMPLATE_IDS = [
   "bday-arabic",
   "wed-firstdance",
@@ -5860,6 +5866,14 @@ const DISCOVER_HUB_TEMPLATE_IDS = [
   "heart-grat",
   "bday-trap",
 ];
+
+const DISCOVER_CHALLENGE_AVATAR_SEEDS = {
+  worldcup2026: ["S", "A", "H", "M", "K"],
+  birthday: ["N", "L", "R", "Y"],
+  "love-song": ["M", "S", "A", "D"],
+  "remix-battle": ["K", "T", "J", "P"],
+  "anthem-battle": ["L", "E", "B", "R", "F"],
+};
 
 const DISCOVER_LIVE_CHALLENGES = [
   {
@@ -5871,6 +5885,8 @@ const DISCOVER_LIVE_CHALLENGES = [
     participants: 2847,
     submissions: 412,
     daysLeft: 32,
+    totalDays: 45,
+    progressGoal: 500,
     action: "campaign",
   },
   {
@@ -5882,6 +5898,8 @@ const DISCOVER_LIVE_CHALLENGES = [
     participants: 1264,
     submissions: 189,
     daysLeft: 6,
+    totalDays: 14,
+    progressGoal: 220,
     action: "challenge",
     challengeId: "birthday-banger",
   },
@@ -5894,6 +5912,8 @@ const DISCOVER_LIVE_CHALLENGES = [
     participants: 892,
     submissions: 143,
     daysLeft: 4,
+    totalDays: 10,
+    progressGoal: 180,
     action: "occasion",
     occasionId: "anniversary",
   },
@@ -5906,6 +5926,8 @@ const DISCOVER_LIVE_CHALLENGES = [
     participants: 638,
     submissions: 97,
     daysLeft: 3,
+    totalDays: 7,
+    progressGoal: 120,
     action: "challenge",
     challengeId: "voice-note-remix",
   },
@@ -5918,6 +5940,8 @@ const DISCOVER_LIVE_CHALLENGES = [
     participants: 1105,
     submissions: 156,
     daysLeft: 12,
+    totalDays: 21,
+    progressGoal: 240,
     action: "campaign",
   },
 ];
@@ -5938,10 +5962,10 @@ const DISCOVER_NEW_THIS_WEEK = [
 ];
 
 const DISCOVER_REMIX_FALLBACK = [
-  { remixer: "Ahmed", remixerHandle: "ahmed_dabke", originalTitle: "Sara's Birthday Song", originalBy: "Sara", tone: "gold" },
-  { remixer: "Maya", remixerHandle: "maya_chill", originalTitle: "Argentina Anthem", originalBy: "Leo", tone: "cyan" },
-  { remixer: "Karim", remixerHandle: "karim_rap", originalTitle: "Love Challenge entry", originalBy: "Nour", tone: "violet" },
-  { remixer: "Layla", remixerHandle: "layla_emotional", originalTitle: "Wedding Entrance", originalBy: "Rami", tone: "rose" },
+  { remixer: "Ahmed", remixerHandle: "ahmed_dabke", remixTitle: "Dabke Flip", originalTitle: "Sara's Birthday Song", originalBy: "Sara", originalByHandle: "sara_beats", tone: "gold", playCount: 1240, reactions: 86 },
+  { remixer: "Maya", remixerHandle: "maya_chill", remixTitle: "Argentina Pulse", originalTitle: "Argentina Anthem", originalBy: "Leo", originalByHandle: "leo_anthem", tone: "cyan", playCount: 980, reactions: 64 },
+  { remixer: "Karim", remixerHandle: "karim_rap", remixTitle: "Love Drill", originalTitle: "Love Challenge entry", originalBy: "Nour", originalByHandle: "nour_love", tone: "violet", playCount: 756, reactions: 52 },
+  { remixer: "Layla", remixerHandle: "layla_emotional", remixTitle: "Entrance Glow", originalTitle: "Wedding Entrance", originalBy: "Rami", originalByHandle: "rami_wed", tone: "rose", playCount: 612, reactions: 41 },
 ];
 
 function discoverHubStatLabel(n) {
@@ -5974,28 +5998,95 @@ function discoverHubGradientStyle(tone) {
   return map[tone] || map.violet;
 }
 
+function discoverChallengeProgressPct(c) {
+  const goal = Math.max(80, Number(c.progressGoal) || Math.round((c.participants || 0) * 0.18));
+  return Math.min(100, Math.round(((c.submissions || 0) / goal) * 100));
+}
+
+function discoverChallengeTimeProgressPct(c) {
+  const total = Math.max(Number(c.totalDays) || 30, Number(c.daysLeft) || 1);
+  const elapsed = Math.max(0, total - (Number(c.daysLeft) || 0));
+  return Math.min(100, Math.round((elapsed / total) * 100));
+}
+
+function discoverChallengeAvatarStackHtml(challengeId) {
+  const seeds = DISCOVER_CHALLENGE_AVATAR_SEEDS[challengeId] || ["S", "A", "M", "K"];
+  return seeds.slice(0, 5).map((letter, i) => `
+    <span class="discoverHubChallengeAv" style="--av-i:${i}" aria-hidden="true">${escapeHtml(letter)}</span>`).join("");
+}
+
+function discoverChallengeJoinAttrs(c) {
+  return `data-discover-challenge="${escapeHtml(c.id)}" data-discover-challenge-action="${escapeHtml(c.action)}"${c.challengeId ? ` data-discover-challenge-ref="${escapeHtml(c.challengeId)}"` : ""}${c.occasionId ? ` data-discover-occasion-ref="${escapeHtml(c.occasionId)}"` : ""}`;
+}
+
+function computeDiscoverCommunityStats(tracks) {
+  const remixRows = (tracks || []).filter((t) => remixAttributionForTrack(t));
+  const uniqueCreators = new Set((tracks || []).map((t) => String(t.userId || "").trim()).filter(Boolean));
+  const challengeSongs = DISCOVER_LIVE_CHALLENGES.reduce((sum, c) => sum + (c.submissions || 0), 0);
+  return {
+    songsCreated: Math.max(2847, challengeSongs + (tracks?.length || 0) * 11),
+    remixes: Math.max(512, remixRows.length * 36 + 420),
+    liveChallenges: DISCOVER_LIVE_CHALLENGES.length,
+    activeCreators: Math.max(1234, uniqueCreators.size * 88 + 920),
+  };
+}
+
+function renderDiscoverCommunityStatsSection(tracks) {
+  const mount = document.getElementById("discoverCommunityStatsMount");
+  if (!mount) return;
+  const stats = computeDiscoverCommunityStats(tracks);
+  mount.innerHTML = `
+    <div class="discoverHubStatsStrip" role="list" aria-label="Community activity this week">
+      <div class="discoverHubStatPill" role="listitem"><span class="discoverHubStatPillIco" aria-hidden="true">🔥</span><span><strong>${discoverHubStatLabel(stats.songsCreated)}</strong> songs created this week</span></div>
+      <div class="discoverHubStatPill" role="listitem"><span class="discoverHubStatPillIco" aria-hidden="true">🎵</span><span><strong>${discoverHubStatLabel(stats.remixes)}</strong> remixes</span></div>
+      <div class="discoverHubStatPill" role="listitem"><span class="discoverHubStatPillIco" aria-hidden="true">🏆</span><span><strong>${stats.liveChallenges}</strong> live challenges</span></div>
+      <div class="discoverHubStatPill" role="listitem"><span class="discoverHubStatPillIco" aria-hidden="true">👥</span><span><strong>${discoverHubStatLabel(stats.activeCreators)}</strong> active creators</span></div>
+    </div>`;
+}
+
 function renderDiscoverLiveChallengesSection() {
   const mount = document.getElementById("discoverLiveChallengesMount");
   if (!mount) return;
-  const cards = DISCOVER_LIVE_CHALLENGES.map((c) => `
-    <button type="button" class="discoverHubChallengeCard discoverHubChallengeCard--${escapeHtml(c.tone)}" data-discover-challenge="${escapeHtml(c.id)}" data-discover-challenge-action="${escapeHtml(c.action)}"${c.challengeId ? ` data-discover-challenge-ref="${escapeHtml(c.challengeId)}"` : ""}${c.occasionId ? ` data-discover-occasion-ref="${escapeHtml(c.occasionId)}"` : ""}>
-      <span class="discoverHubChallengeCover" style="background:${discoverHubGradientStyle(c.tone)}">
-        <span class="discoverHubChallengeEmoji" aria-hidden="true">${c.emoji}</span>
+  const cards = DISCOVER_LIVE_CHALLENGES.map((c) => {
+    const songPct = discoverChallengeProgressPct(c);
+    const timePct = discoverChallengeTimeProgressPct(c);
+    const joinAttrs = discoverChallengeJoinAttrs(c);
+    return `
+    <article class="discoverHubChallengeHero discoverHubChallengeHero--${escapeHtml(c.tone)}" role="listitem">
+      <div class="discoverHubChallengeHeroCover discoverHubChallengeHeroCover--${escapeHtml(c.id)}" style="background:${discoverHubGradientStyle(c.tone)}">
+        <span class="discoverHubChallengeHeroArtEmoji" aria-hidden="true">${c.emoji}</span>
         <span class="discoverHubChallengeLive">Live</span>
-      </span>
-      <span class="discoverHubChallengeBody">
-        <strong class="discoverHubChallengeTitle">${escapeHtml(c.title)}</strong>
-        <span class="discoverHubChallengeBlurb">${escapeHtml(c.blurb)}</span>
-        <span class="discoverHubChallengeStats">
-          <span>${discoverHubStatLabel(c.participants)} joined</span>
-          <span>${discoverHubStatLabel(c.submissions)} songs</span>
-          <span>${c.daysLeft}d left</span>
-        </span>
-      </span>
-    </button>`).join("");
+        <span class="discoverHubChallengeCountdown"><span class="discoverHubChallengeCountdownNum">${c.daysLeft}</span> days left</span>
+      </div>
+      <div class="discoverHubChallengeHeroBody">
+        <strong class="discoverHubChallengeHeroTitle">${c.emoji} ${escapeHtml(c.title)}</strong>
+        <div class="discoverHubChallengeHeroStats">
+          <span><strong>${discoverHubStatLabel(c.participants)}</strong> joined</span>
+          <span><strong>${discoverHubStatLabel(c.submissions)}</strong> songs</span>
+        </div>
+        <div class="discoverHubChallengeProgressWrap" aria-hidden="true">
+          <div class="discoverHubChallengeProgressHead">
+            <span>Submissions</span>
+            <span>${songPct}%</span>
+          </div>
+          <div class="discoverHubChallengeProgressTrack"><span class="discoverHubChallengeProgressFill" style="width:${songPct}%"></span></div>
+          <div class="discoverHubChallengeProgressHead discoverHubChallengeProgressHead--time">
+            <span>Time elapsed</span>
+            <span>${timePct}%</span>
+          </div>
+          <div class="discoverHubChallengeProgressTrack discoverHubChallengeProgressTrack--time"><span class="discoverHubChallengeProgressFill discoverHubChallengeProgressFill--time" style="width:${timePct}%"></span></div>
+        </div>
+        <div class="discoverHubChallengeSocial">
+          <div class="discoverHubChallengeAvatars" aria-hidden="true">${discoverChallengeAvatarStackHtml(c.id)}</div>
+          <span class="discoverHubChallengeSocialCopy">${discoverHubStatLabel(c.participants)} creators in</span>
+        </div>
+        <button type="button" class="discoverHubChallengeJoinBtn" ${joinAttrs}>Join Challenge</button>
+      </div>
+    </article>`;
+  }).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("🔥", "Live challenges", "Something is always happening — jump in.")}
-    <div class="discoverHubRail discoverHubRail--wide" role="list">${cards}</div>`;
+    ${discoverHubSectionHeadHtml("🔥", "Live challenges", "Jump into live events and community challenges.")}
+    <div class="discoverHubRail discoverHubRail--hero" role="list">${cards}</div>`;
 }
 
 function renderDiscoverTrendingTemplatesSection() {
@@ -6018,8 +6109,27 @@ function renderDiscoverTrendingTemplatesSection() {
       </article>`;
   }).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("✨", "Trending templates", "Ready-made creation experiences — tap Create.")}
+    ${discoverHubSectionHeadHtml("✨", "Trending templates", "Start with a template and make it yours.")}
     <div class="discoverHubRail discoverHubRail--templates" role="list">${cards}</div>`;
+}
+
+function discoverRemixReactionCount(track, fallback) {
+  const meta = track?.meta || {};
+  const n = Number(meta.likeCount ?? meta.reactions ?? track?.likeCount ?? fallback);
+  if (Number.isFinite(n) && n > 0) return n;
+  const plays = Math.max(0, Number(track?.playCount) || Number(fallback) || 0);
+  return Math.max(8, Math.round(plays * 0.14));
+}
+
+function discoverRemixOriginalArt(remixOf, tone) {
+  const url = String(remixOf?.artUrl || remixOf?.coverUrl || "").trim();
+  if (url) return url;
+  return "";
+}
+
+function discoverRemixPlaceholderArt(label, tone) {
+  const safe = encodeURIComponent(String(label || "Song").slice(0, 1).toUpperCase());
+  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7c5cff"/><stop offset="100%" stop-color="#23d5ab"/></linearGradient></defs><rect width="120" height="120" fill="url(#g)"/><text x="50%" y="54%" text-anchor="middle" font-family="system-ui,sans-serif" font-size="42" font-weight="800" fill="rgba(255,255,255,0.92)">${safe}</text></svg>`)}`;
 }
 
 function discoverRemixRowsFromTracks(tracks, profMap) {
@@ -6030,19 +6140,67 @@ function discoverRemixRowsFromTracks(tracks, profMap) {
     const prof = resolveProfileForFeedCreator(t.userId, profMap);
     const remixer = String(prof?.displayName || prof?.username || "Creator").trim();
     const remixerHandle = String(prof?.username || "").trim();
+    const tone = ["gold", "cyan", "violet", "rose"][rows.length % 4];
+    const remixArt = trackCoverArtForFeed(t);
+    const originalArtRaw = discoverRemixOriginalArt(remixOf, tone);
     rows.push({
       remixer,
       remixerHandle,
       remixTitle: String(t.title || "Remix").trim(),
       originalTitle: String(remixOf.title || "Original").trim(),
       originalBy: String(remixOf.creatorUsername || "Creator").trim(),
-      art: trackCoverArtForFeed(t),
+      originalByHandle: String(remixOf.creatorUsername || "").trim(),
+      remixArt,
+      originalArt: originalArtRaw || discoverRemixPlaceholderArt(remixOf.title, tone),
+      playCount: Math.max(0, Number(t.playCount) || 0),
+      reactions: discoverRemixReactionCount(t, 0),
       track: t,
-      tone: ["gold", "cyan", "violet", "rose"][rows.length % 4],
+      tone,
     });
     if (rows.length >= 6) break;
   }
   return rows;
+}
+
+function discoverHubRemixCardHtml(r) {
+  const playAttrs = r.track ? chartEntryPlayAttrs({
+    url: r.track.url,
+    title: r.track.title,
+    artUrl: r.remixArt,
+    username: r.remixerHandle,
+    songId: r.track.id,
+    userId: r.track.userId,
+    taskId: r.track.taskId,
+    audioId: r.track.audioId,
+  }) : "";
+  const plays = Math.max(0, Number(r.playCount) || 0);
+  const reactions = Math.max(0, Number(r.reactions) || 0);
+  const remixerLine = r.remixerHandle ? `@${escapeHtml(r.remixerHandle)}` : escapeHtml(r.remixer);
+  const originalLine = r.originalByHandle ? `@${escapeHtml(r.originalByHandle)}` : escapeHtml(r.originalBy);
+  const inner = `
+    <span class="discoverHubRemixCovers" aria-hidden="true">
+      <span class="discoverHubRemixCover discoverHubRemixCover--orig">
+        <img src="${escapeHtml(r.originalArt)}" alt="" loading="lazy" decoding="async" />
+        <span class="discoverHubRemixCoverTag">Original</span>
+      </span>
+      <span class="discoverHubRemixFlow">↓</span>
+      <span class="discoverHubRemixCover discoverHubRemixCover--new">
+        <img src="${escapeHtml(r.remixArt || r.originalArt)}" alt="" loading="lazy" decoding="async" />
+        <span class="discoverHubRemixCoverTag">Remix</span>
+      </span>
+    </span>
+    <span class="discoverHubRemixCardMeta">
+      <strong class="discoverHubRemixCardTitle">${escapeHtml(r.remixTitle || "Remix")}</strong>
+      <span class="discoverHubRemixCardLine"><span class="discoverHubRemixWho">${remixerLine}</span> remixed <span class="discoverHubRemixWhat">${originalLine}'s ${escapeHtml(r.originalTitle)}</span></span>
+      <span class="discoverHubRemixCardStats">
+        ${plays ? `<span class="discoverHubRemixStat">▶ ${escapeHtml(discoverHubStatLabel(plays))}</span>` : ""}
+        <span class="discoverHubRemixStat discoverHubRemixStat--heart">♥ ${escapeHtml(discoverHubStatLabel(reactions))}</span>
+      </span>
+    </span>`;
+  if (r.track) {
+    return `<button type="button" class="discoverHubRemixCard" ${playAttrs}>${inner}</button>`;
+  }
+  return `<div class="discoverHubRemixCard discoverHubRemixCard--static">${inner}</div>`;
 }
 
 function renderDiscoverTrendingRemixesSection(tracks, profMap) {
@@ -6050,39 +6208,23 @@ function renderDiscoverTrendingRemixesSection(tracks, profMap) {
   if (!mount) return;
   let rows = discoverRemixRowsFromTracks(tracks, profMap);
   if (!rows.length) {
-    rows = DISCOVER_REMIX_FALLBACK.map((r, i) => ({ ...r, tone: ["gold", "cyan", "violet", "rose"][i % 4] }));
+    rows = DISCOVER_REMIX_FALLBACK.map((r, i) => ({
+      ...r,
+      tone: ["gold", "cyan", "violet", "rose"][i % 4],
+      remixArt: discoverRemixPlaceholderArt(r.remixTitle, ["gold", "cyan", "violet", "rose"][i % 4]),
+      originalArt: discoverRemixPlaceholderArt(r.originalTitle, ["gold", "cyan", "violet", "rose"][i % 4]),
+    }));
   }
-  const list = rows.map((r) => {
-    const playAttrs = r.track ? chartEntryPlayAttrs({
-      url: r.track.url,
-      title: r.track.title,
-      artUrl: r.art,
-      username: r.remixerHandle,
-      songId: r.track.id,
-      userId: r.track.userId,
-      taskId: r.track.taskId,
-      audioId: r.track.audioId,
-    }) : "";
-    const inner = `
-      <span class="discoverHubRemixAv discoverHubRemixAv--${escapeHtml(r.tone)}" aria-hidden="true">${escapeHtml(String(r.remixer || "?").slice(0, 1).toUpperCase())}</span>
-      <span class="discoverHubRemixCopy">
-        <strong><span class="discoverHubRemixWho">${escapeHtml(r.remixer)}</span> remixed <span class="discoverHubRemixWhat">${escapeHtml(r.originalBy)}'s ${escapeHtml(r.originalTitle)}</span></strong>
-        ${r.remixTitle ? `<small>${escapeHtml(r.remixTitle)}</small>` : ""}
-      </span>
-      <span class="discoverHubRemixArrow" aria-hidden="true">→</span>`;
-    if (r.track) {
-      return `<button type="button" class="discoverHubRemixRow" ${playAttrs}>${inner}</button>`;
-    }
-    return `<div class="discoverHubRemixRow discoverHubRemixRow--static">${inner}</div>`;
-  }).join("");
+  const list = rows.map((r) => discoverHubRemixCardHtml(r)).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("🎵", "Trending remixes", "Active remix culture — who's flipping what.")}
+    ${discoverHubSectionHeadHtml("🎵", "Trending remixes", "See what creators are remixing right now.")}
     <div class="discoverHubRemixList" role="list">${list}</div>`;
 }
 
 function renderDiscoverSuggestedCreatorsSection() {
   const mount = document.getElementById("discoverSuggestedCreatorsMount");
   if (!mount) return;
+  const vibeHint = DISCOVER_MUSIC_VIBES.slice(0, 4).join(" · ");
   const cards = DISCOVER_SUGGESTED_CREATORS.map((c) => `
     <article class="discoverHubCreatorCard discoverHubCreatorCard--${escapeHtml(c.tone)}">
       <button type="button" class="discoverHubCreatorMain" data-discover-creator="${encodeURIComponent(c.handle)}">
@@ -6095,7 +6237,7 @@ function renderDiscoverSuggestedCreatorsSection() {
       <button type="button" class="discoverHubFollowBtn" data-discover-follow="${encodeURIComponent(c.handle)}" aria-label="Follow @${escapeHtml(c.handle)}">Follow</button>
     </article>`).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("👥", "Creators you may like", "Based on genres you love — more personalization coming.")}
+    ${discoverHubSectionHeadHtml("👥", "Creators you may like", `Picked for your vibe — ${vibeHint}, and more.`)}
     <div class="discoverHubRail discoverHubRail--creators" role="list">${cards}</div>`;
 }
 
@@ -6112,16 +6254,17 @@ function renderDiscoverNewThisWeekSection() {
       </span>
     </button>`).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("🚀", "New this week", "Fresh templates, challenges, and seasonal drops.")}
+    ${discoverHubSectionHeadHtml("🚀", "New this week", "Fresh drops landing across templates, challenges, and seasons.")}
     <div class="discoverHubRail discoverHubRail--new" role="list">${cards}</div>`;
 }
 
 function renderDiscoverHubV1(tracks, profMap) {
+  renderDiscoverCommunityStatsSection(tracks);
   renderDiscoverLiveChallengesSection();
   renderDiscoverTrendingTemplatesSection();
   renderDiscoverTrendingRemixesSection(tracks, profMap);
-  renderDiscoverSuggestedCreatorsSection();
   renderDiscoverNewThisWeekSection();
+  renderDiscoverSuggestedCreatorsSection();
 }
 
 function applyDiscoverOccasionStart(occasionId) {

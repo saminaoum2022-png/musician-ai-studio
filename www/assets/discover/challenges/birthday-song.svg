@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 584 284" fill="none" role="img" aria-label="Birthday Song Challenge">
+  <defs>
+    <linearGradient id="bd-bg" x1="0" y1="0" x2="584" y2="284" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#120818"/>
+      <stop offset="0.5" stop-color="#2a1020"/>
+      <stop offset="1" stop-color="#1a0f24"/>
+    </linearGradient>
+    <radialGradient id="bd-glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(292 150) rotate(90) scale(200 160)">
+      <stop stop-color="#f472b6" stop-opacity="0.35"/>
+      <stop offset="0.6" stop-color="#facc15" stop-opacity="0.15"/>
+      <stop offset="1" stop-color="#120818" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bd-cake" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#fde68a"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+  </defs>
+  <rect width="584" height="284" fill="url(#bd-bg)"/>
+  <rect width="584" height="284" fill="url(#bd-glow)"/>
+  <g opacity="0.7">
+    <circle cx="92" cy="56" r="18" fill="#f472b6" opacity="0.55"/>
+    <path d="M92 74v34" stroke="#f472b6" stroke-width="2" opacity="0.5"/>
+    <circle cx="492" cy="48" r="16" fill="#7c5cff" opacity="0.5"/>
+    <path d="M492 64v28" stroke="#7c5cff" stroke-width="2" opacity="0.45"/>
+    <circle cx="148" cy="92" r="10" fill="#23d5ab" opacity="0.45"/>
+    <circle cx="436" cy="88" r="12" fill="#facc15" opacity="0.5"/>
+  </g>
+  <g fill="#fff" opacity="0.55">
+    <rect x="64" y="42" width="4" height="8" rx="1" transform="rotate(20 66 46)"/>
+    <rect x="520" y="36" width="4" height="8" rx="1" transform="rotate(-15 522 40)"/>
+    <rect x="180" y="28" width="3" height="7" rx="1" transform="rotate(35 181 31)"/>
+    <rect x="400" y="32" width="3" height="7" rx="1" transform="rotate(-28 401 35)"/>
+  </g>
+  <g transform="translate(236 98)">
+    <rect x="20" y="72" width="72" height="44" rx="8" fill="url(#bd-cake)"/>
+    <rect x="28" y="60" width="56" height="18" rx="6" fill="#fbcfe8"/>
+    <rect x="36" y="48" width="40" height="16" rx="6" fill="#f9a8d4"/>
+    <rect x="52" y="28" width="8" height="24" rx="2" fill="#fde047"/>
+    <ellipse cx="56" cy="24" rx="10" ry="8" fill="#facc15" opacity="0.9"/>
+    <path d="M56 16c-2-6-8-8-8-8s-4 4-2 10" stroke="#f97316" stroke-width="2" fill="none" opacity="0.8"/>
+  </g>
+  <g stroke="#7c5cff" stroke-opacity="0.4" stroke-width="2" fill="none">
+    <path d="M48 170c24-18 48-18 72 0"/>
+    <path d="M464 168c24-18 48-18 72 0" stroke="#23d5ab" stroke-opacity="0.45"/>
+  </g>
+  <g fill="#f472b6" opacity="0.35">
+    <circle cx="120" cy="140" r="4"/><circle cx="460" cy="132" r="3"/><circle cx="200" cy="180" r="3"/>
+    <circle cx="380" cy="176" r="4"/><circle cx="292" cy="200" r="3"/>
+  </g>
+  <path d="M0 210 Q146 196 292 204 T584 212 V284 H0 Z" fill="#0a0610" opacity="0.5"/>
+</svg>

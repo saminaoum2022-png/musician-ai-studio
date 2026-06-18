@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 584 284" fill="none" role="img" aria-label="Country vs Country">
+  <defs>
+    <linearGradient id="cv-bg" x1="0" y1="0" x2="584" y2="284" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#05070d"/>
+      <stop offset="0.45" stop-color="#0c1a14"/>
+      <stop offset="1" stop-color="#0a1420"/>
+    </linearGradient>
+    <radialGradient id="cv-center" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(292 150) rotate(90) scale(160 130)">
+      <stop stop-color="#38bdf8" stop-opacity="0.25"/>
+      <stop offset="0.55" stop-color="#23d5ab" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#05070d" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="cv-beam" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#fff" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="584" height="284" fill="url(#cv-bg)"/>
+  <rect width="584" height="284" fill="url(#cv-center)"/>
+  <g opacity="0.45">
+    <ellipse cx="292" cy="12" rx="100" ry="120" fill="url(#cv-beam)"/>
+  </g>
+  <g transform="translate(108 88)">
+    <rect width="88" height="56" rx="6" fill="#ce1126"/>
+    <rect y="18" width="88" height="20" fill="#fff"/>
+    <rect y="38" width="88" height="18" fill="#009639"/>
+    <rect x="-12" y="68" width="112" height="8" rx="4" fill="#05070d" opacity="0.35"/>
+  </g>
+  <g transform="translate(388 88)">
+    <rect width="88" height="56" rx="6" fill="#002776"/>
+    <rect x="0" y="0" width="44" height="28" fill="#fff"/>
+    <rect x="44" y="28" width="44" height="28" fill="#fff"/>
+    <circle cx="22" cy="14" r="8" fill="#002776"/>
+    <circle cx="66" cy="42" r="8" fill="#002776"/>
+    <rect x="-12" y="68" width="112" height="8" rx="4" fill="#05070d" opacity="0.35"/>
+  </g>
+  <text x="292" y="132" text-anchor="middle" fill="#facc15" font-family="system-ui,sans-serif" font-size="28" font-weight="900" opacity="0.9">VS</text>
+  <g stroke="#23d5ab" stroke-opacity="0.4" stroke-width="2" fill="none">
+    <path d="M72 188c56-16 112-16 168 0"/>
+    <path d="M344 188c56-16 112-16 168 0" stroke="#7c5cff" stroke-opacity="0.4"/>
+  </g>
+  <path d="M0 210 Q146 198 292 204 T584 208 V284 H0 Z" fill="#05070d" opacity="0.55"/>
+  <g fill="#facc15" opacity="0.25">
+    <circle cx="146" cy="228" r="3"/><circle cx="438" cy="226" r="3"/>
+  </g>
+</svg>

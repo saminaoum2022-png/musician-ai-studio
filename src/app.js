@@ -5875,6 +5875,21 @@ const DISCOVER_CHALLENGE_AVATAR_SEEDS = {
   "anthem-battle": ["L", "E", "B", "R", "F"],
 };
 
+const DISCOVER_CHALLENGE_ART_VERSION = "20260618artv1";
+const DISCOVER_CHALLENGE_ART = {
+  worldcup2026: "./assets/discover/challenges/worldcup-anthem.svg",
+  birthday: "./assets/discover/challenges/birthday-song.svg",
+  "love-song": "./assets/discover/challenges/love-song.svg",
+  "remix-battle": "./assets/discover/challenges/remix-battle.svg",
+  "anthem-battle": "./assets/discover/challenges/country-vs-country.svg",
+};
+
+function discoverChallengeArtUrl(challengeId) {
+  const base = DISCOVER_CHALLENGE_ART[String(challengeId || "")];
+  if (!base) return "";
+  return `${base}?v=${DISCOVER_CHALLENGE_ART_VERSION}`;
+}
+
 const DISCOVER_LIVE_CHALLENGES = [
   {
     id: "worldcup2026",
@@ -6053,13 +6068,13 @@ function renderDiscoverLiveChallengesSection() {
     const joinAttrs = discoverChallengeJoinAttrs(c);
     return `
     <article class="discoverHubChallengeHero discoverHubChallengeHero--${escapeHtml(c.tone)}" role="listitem">
-      <div class="discoverHubChallengeHeroCover discoverHubChallengeHeroCover--${escapeHtml(c.id)}" style="background:${discoverHubGradientStyle(c.tone)}">
-        <span class="discoverHubChallengeHeroArtEmoji" aria-hidden="true">${c.emoji}</span>
+      <div class="discoverHubChallengeHeroCover discoverHubChallengeHeroCover--${escapeHtml(c.id)}">
+        <img class="discoverHubChallengeHeroArt" src="${escapeHtml(discoverChallengeArtUrl(c.id))}" alt="" loading="lazy" decoding="async" />
         <span class="discoverHubChallengeLive">Live</span>
         <span class="discoverHubChallengeCountdown"><span class="discoverHubChallengeCountdownNum">${c.daysLeft}</span> days left</span>
       </div>
       <div class="discoverHubChallengeHeroBody">
-        <strong class="discoverHubChallengeHeroTitle">${c.emoji} ${escapeHtml(c.title)}</strong>
+        <strong class="discoverHubChallengeHeroTitle">${escapeHtml(c.title)}</strong>
         <div class="discoverHubChallengeHeroStats">
           <span><strong>${discoverHubStatLabel(c.participants)}</strong> joined</span>
           <span><strong>${discoverHubStatLabel(c.submissions)}</strong> songs</span>

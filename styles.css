@@ -30899,9 +30899,25 @@ section.mentorPage{
   color: #fff;
 }
 .discoverJournalChallengeEntries{
-  display: flex;
-  gap: 6px;
   margin-top: 4px;
+}
+.discoverJournalChallengeFeatured{
+  display: flex;
+  margin-top: 2px;
+}
+.discoverJournalChallengeFeatured .discoverHubTopEntry{
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
+}
+.discoverJournalChallengeFeatured .discoverHubTopEntryCover{
+  aspect-ratio: 1;
+}
+.discoverJournalChallengeEntries .discoverHubChallengeViewAllBtn{
+  margin-top: 6px;
+}
+.discoverJournalChallengeEntries .discoverHubChallengeEntriesMore{
+  margin-top: 8px;
 }
 .discoverJournalChallengeEntry{
   flex: 1;

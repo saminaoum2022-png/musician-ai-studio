@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260619discoverJournal";
+const APP_BUILD = "20260619challengeOneCover";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -6345,23 +6345,26 @@ function discoverHubTopEntryCardHtml(t, profMap) {
     </button>`;
 }
 
-function discoverHubChallengeEntryThumbHtml(t, profMap) {
-  const title = String(t.title || "Untitled").trim();
-  const art = trackCoverArtForFeed(t);
-  const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
-  return `
-    <button type="button" class="discoverJournalChallengeEntry" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
-      <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
-    </button>`;
-}
-
 function discoverHubChallengeJournalCardHtml(c, tracks, profMap) {
   const joinAttrs = discoverChallengeJoinAttrs(c);
-  const entries = discoverTracksForChallenge(c, tracks, 4);
+  const allEntries = discoverTracksForChallenge(c, tracks, 12);
+  const top = allEntries[0] || null;
+  const rest = allEntries.slice(1);
   const artUrl = discoverChallengeArtUrl(c.id);
-  const entriesHtml = entries.length
-    ? `<div class="discoverJournalChallengeEntries" role="list">${entries.map((t) => discoverHubChallengeEntryThumbHtml(t, profMap)).join("")}</div>`
-    : `<p class="discoverHubQuietNote discoverHubQuietNote--inline">No entries yet — be the first.</p>`;
+  let entriesHtml = `<p class="discoverHubQuietNote discoverHubQuietNote--inline">No entries yet — be the first.</p>`;
+  if (top) {
+    const previewHtml = discoverHubTopEntryCardHtml(top, profMap);
+    const restHtml = rest.map((t) => discoverHubTopEntryCardHtml(t, profMap)).join("");
+    const viewAllBtn = rest.length
+      ? `<button type="button" class="discoverHubChallengeViewAllBtn" data-discover-challenge-view-all="${escapeHtml(c.id)}">View all</button>`
+      : "";
+    entriesHtml = `
+      <div class="discoverHubChallengeEntriesBlock discoverJournalChallengeEntries" data-challenge-entries="${escapeHtml(c.id)}">
+        <div class="discoverJournalChallengeFeatured" role="list">${previewHtml}</div>
+        ${rest.length ? `<div class="discoverHubRail discoverHubRail--topEntries discoverHubChallengeEntriesMore" hidden role="list">${restHtml}</div>` : ""}
+        ${viewAllBtn}
+      </div>`;
+  }
   return `
     <article class="discoverJournalChallengeCard discoverJournalChallengeCard--${escapeHtml(c.tone)}" aria-label="${escapeHtml(c.title)}">
       <div class="discoverJournalChallengeArt">
@@ -6675,7 +6678,7 @@ function bindDiscoverHubV1Once() {
       if (!block || !more) return;
       const expanded = block.classList.toggle("isExpanded");
       more.hidden = !expanded;
-      viewAllBtn.textContent = expanded ? "Show less" : "View all entries";
+      viewAllBtn.textContent = expanded ? "Show less" : "View all";
       return;
     }
     const sparkBtn = e.target?.closest?.("[data-discover-spark-challenge]");

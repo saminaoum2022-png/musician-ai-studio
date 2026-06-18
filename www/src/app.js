@@ -19,10 +19,17 @@ import {
   shouldSkipIntroOrOnboardingRoute,
 } from "./onboarding.js";
 import { initTheme } from "./theme.js";
+import {
+  initCreationFlow,
+  openCreationFlow,
+  renderCreationFlow,
+  flowDurationStyleClause,
+  resolveFlowDefinition,
+} from "./creation-flow.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260619premiumPolish";
+const APP_BUILD = "20260619creationFlows";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2801,6 +2808,7 @@ function syncRoutePanelVisibility(wanted) {
       || (route === "discover-playlist" && link === "discover")
       || (route === "generate" && link === "challenges")
       || (route === "mashup" && link === "challenges")
+      || (route === "flow" && link === "challenges")
       || (route === "vocal" && link === "challenges");
     a.classList.toggle("active", active);
   });
@@ -2949,6 +2957,11 @@ function applyRoute({ passGen } = {}) {
   // separately so the renderer can pick it up after the route swap.
   let pendingPublicUsername = "";
   let pendingPublicUserId = "";
+  let pendingFlowId = "";
+  if (/^flow\//.test(route)) {
+    pendingFlowId = decodeURIComponent(String(route.slice(5) || "").split(/[?#&]/)[0] || "").trim();
+    route = "flow";
+  }
   if (/^u\//.test(route)) {
     const rawPublicRoute = String(rawRoute.slice(2) || "");
     const [rawHandle, rawQuery = rawRouteQuery] = rawPublicRoute.split("?");
@@ -2960,7 +2973,7 @@ function applyRoute({ passGen } = {}) {
     }
   }
   const allowedRoutes = new Set([
-    "intro", "onboarding", "start", "auth", "generate",
+    "intro", "onboarding", "start", "auth", "generate", "flow",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
     "settings", "profile", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
   ]);
@@ -3203,6 +3216,13 @@ function applyRoute({ passGen } = {}) {
       if (trackId) void focusTrackFromShare(trackId);
       else if (hubId) void focusHubTrackFromShare(hubId);
     } catch {}
+  }
+  if (wanted === "flow") {
+    try {
+      renderCreationFlow(pendingFlowId);
+    } catch (e) {
+      console.warn("[flow] render failed", e);
+    }
   }
   if (wanted === "profile") {
     try {
@@ -4072,6 +4092,14 @@ const CHALLENGE_IDEAS = [
     tags: ["Short", "Hook", "Minimal"],
   },
   {
+    id: "last-photo-song",
+    title: "Last Photo Song",
+    style: "Photo-inspired pop, emotional snapshot, warm textures, intimate vocal, 98 bpm",
+    lyrics: "[Verse]\nThis moment in a frame\nA little light, a little name\n\n[Chorus]\nHold it close, let it sing\nOne small photo, everything",
+    prompt: "Turn the feeling in your photo into a short personal hook — any photo you choose.",
+    tags: ["Photo", "Personal", "Mood"],
+  },
+  {
     id: "tiktok-teaser",
     title: "TikTok Teaser",
     style: "Short social teaser, instant hook, tight drums, bright ear-candy, 120 bpm",
@@ -4920,23 +4948,109 @@ function renderHomeDeskContinue() {
 function applyChallengeStartById(id, challengesMap) {
   const challenge = challengesMap?.get?.(id) || CHALLENGE_IDEAS.find((row) => String(row.id) === id);
   if (!challenge) return;
-  haptic("light");
-  applyDiscoveryIdeaToCreate({
-    ...challenge,
-    id: `challenge:${challenge.id}`,
-    title: `${challenge.title} Challenge`,
-    prompt: String(challenge.prompt || challenge.lyrics || "").trim(),
-    lyrics: String(challenge.prompt || challenge.lyrics || "").trim(),
-    dialect: "",
-    dialectHint: "",
+  openCreationFlow(String(challenge.id));
+}
+
+/** Flow generation callbacks while user stays on `#/flow/*`. */
+let _flowGenerationCallbacks = null;
+
+function stashPendingFlowId(flowId) {
+  try { sessionStorage.setItem(PENDING_FLOW_ID_KEY, String(flowId || "").trim()); } catch {}
+}
+
+function consumePendingFlowId() {
+  try {
+    const id = String(sessionStorage.getItem(PENDING_FLOW_ID_KEY) || "").trim();
+    sessionStorage.removeItem(PENDING_FLOW_ID_KEY);
+    return id;
+  } catch {}
+  return "";
+}
+
+function registerFlowGenerationCallbacks(cbs) {
+  _flowGenerationCallbacks = cbs && typeof cbs === "object" ? cbs : null;
+}
+
+function hasActiveVocalReference() {
+  try {
+    const f = getVocalReferenceFile?.();
+    return Boolean(f && f.size);
+  } catch {}
+  return false;
+}
+
+async function openFlowVoiceRecorder(opts = {}) {
+  vocalRecorderContext = {
+    type: "flow",
+    title: String(opts?.title || "Record hook").trim(),
+    onReady: typeof opts?.onReady === "function" ? opts.onReady : null,
+  };
+  openVocalRecorderModal();
+  setVocalRecorderStatusAll("Tap ● to record your hook — keep it short.");
+}
+
+async function prepareAndGenerateFromFlow({ def, state, onSuccess, onFailure }) {
+  if (!def || !state) throw new Error("Missing flow state");
+  registerFlowGenerationCallbacks({ onSuccess, onFailure });
+  const person = String(state.personName || "").trim();
+  const moodTags = Array.isArray(state.imageMood?.tags) ? state.imageMood.tags.filter(Boolean).slice(0, 8) : [];
+  let style = String(def.style || "").trim();
+  style = `${style}, ${String(def.durationClause || flowDurationStyleClause(def.durationTier)).trim()}`;
+  if (moodTags.length) style = `${style}, ${moodTags.join(", ")}`;
+  if (person) style = `${style}, personalized for ${person}`;
+  if (els.sunoTitle) els.sunoTitle.value = `${String(def.title || "Challenge").trim()} clip`;
+  if (els.sunoStyle) els.sunoStyle.value = withTemplateStyleGuard(style);
+  if (els.sunoPrompt) {
+    els.sunoPrompt.value = String(state.lyrics || def.starterLyrics || "").trim();
+    try { autoResizeLyricsBox?.(); } catch {}
+  }
+  if (els.sunoAvoidTags) els.sunoAvoidTags.value = trimAvoidTagsForSuno(TEMPLATE_GENERATION_AVOID_TAGS);
+  if (els.sunoSingerGender) els.sunoSingerGender.value = state.singerGender === "m" || state.singerGender === "f" ? state.singerGender : "";
+  try { syncSingerGenderPills(); } catch {}
+  if (els.sunoArabicAddress) els.sunoArabicAddress.value = String(state.arabicAddress || "").trim();
+  try { syncArabicAddressPills(); } catch {}
+  if (els.sunoDialect) els.sunoDialect.value = String(state.dialect || "").trim();
+  if (els.sunoDialectHint) els.sunoDialectHint.value = "";
+  pendingSearchRemixMeta = {
+    searchTemplateId: `flow:${String(def.id || "").trim()}`,
+    searchTemplateTitle: String(def.title || "Challenge").trim(),
+    challengePromptPending: true,
+    creationFlowId: String(def.id || "").trim(),
+    creationFlowDurationTier: String(def.durationTier || "clip").trim(),
     challenge: {
-      id: challenge.id,
-      title: challenge.title,
+      id: String(def.id || "").trim(),
+      title: String(def.title || "Challenge").trim(),
       type: "daily",
       occasion: "",
       genre: "",
-      personName: "",
-      variant: "daily",
+      personName: person,
+      variant: "flow",
+    },
+  };
+  setCreateChallengeHint(null);
+  if (!els.btnSunoGenerate) throw new Error("Generate is unavailable");
+  els.btnSunoGenerate.click();
+}
+
+function openFlowResultInStudio(flowId, state) {
+  const def = resolveFlowDefinition(flowId, CHALLENGE_IDEAS);
+  if (!def) {
+    try { location.hash = "#/generate"; } catch {}
+    return;
+  }
+  applyDiscoveryIdeaToCreate({
+    ...def,
+    id: `flow:${def.id}`,
+    title: `${def.title} clip`,
+    prompt: String(state?.lyrics || def.starterPrompt || "").trim(),
+    lyrics: String(state?.lyrics || def.starterLyrics || "").trim(),
+    dialect: String(state?.dialect || "").trim(),
+    challenge: pendingSearchRemixMeta?.challenge || {
+      id: def.id,
+      title: def.title,
+      type: "daily",
+      personName: String(state?.personName || "").trim(),
+      variant: "flow",
     },
   });
 }
@@ -9244,6 +9358,7 @@ const PENDING_CREATE_ACTION_KEY = "nabadai_pending_create_action_v1";
 const GUEST_MODE_KEY = "nabadai_guest_mode_v1";
 const POST_AUTH_RETURN_HASH_KEY = "nabadai_post_auth_return_v1";
 const PENDING_DISCOVERY_IDEA_KEY = "nabadai_pending_discovery_idea_v1";
+const PENDING_FLOW_ID_KEY = "nabadai_pending_flow_id_v1";
 
 function isGuestModeEnabled() {
   try { return localStorage.getItem(GUEST_MODE_KEY) === "1"; } catch {}
@@ -9336,6 +9451,16 @@ async function finishPostAuthNavigation() {
     if (pendingIdea && returnHash.includes("generate")) {
       window.setTimeout(() => {
         try { applyDiscoveryIdeaToCreate(pendingIdea); } catch {}
+      }, 120);
+    }
+    const pendingFlow = consumePendingFlowId();
+    if (pendingFlow && returnHash.includes("/flow/")) {
+      window.setTimeout(() => {
+        try { renderCreationFlow(pendingFlow); } catch {}
+      }, 120);
+    } else if (pendingFlow) {
+      window.setTimeout(() => {
+        try { openCreationFlow(pendingFlow); } catch {}
       }, 120);
     }
     void ensureAuthBoot({ force: true, fast: true });
@@ -34220,6 +34345,24 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         if (onFile) onFile(file);
         return;
       }
+      if (vocalRecorderContext?.type === "flow") {
+        if (vocalRefBlob && !currentVocalRefFile) {
+          const nm = vocalReferenceFilenameForMime(vocalRefBlob.type);
+          const recordedFile = new File(
+            [vocalRefBlob],
+            nm,
+            { type: vocalRefBlob.type || "audio/webm" }
+          );
+          if (els.sunoVocalUpload) els.sunoVocalUpload.value = "";
+          setVocalRefFile(recordedFile, "Voice hook recorded.", "record");
+        }
+        if (!getVocalReferenceFile()) return;
+        const onReady = vocalRecorderContext.onReady;
+        vocalRecorderContext = null;
+        closeVocalRecorderModal();
+        if (onReady) onReady(getVocalReferenceFile());
+        return;
+      }
       // The recording is already promoted to currentVocalRefFile in
       // MediaRecorder.onstop. If a stale blob is still around, promote it now
       // as a safety net. Either way, just close the modal.
@@ -34725,6 +34868,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         durationMs: 14000,
       });
     } catch {}
+    if (_flowGenerationCallbacks?.onFailure) {
+      try { _flowGenerationCallbacks.onFailure(fullDetail || info.headline || "Generation failed"); } catch {}
+      _flowGenerationCallbacks = null;
+    }
   };
 
   const startGeneratePolling = () => {
@@ -34776,6 +34923,31 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             kind: "full",
             meta: genMeta,
           });
+          if (_flowGenerationCallbacks?.onSuccess) {
+            try {
+              _flowGenerationCallbacks.onSuccess({
+                trackId: String(variantAEntry?.id || "").trim(),
+                title: lastSunoTitle,
+                url: lastSunoProxyUrl || lastSunoFullUrl || "",
+              });
+            } catch {}
+            _flowGenerationCallbacks = null;
+            setGenerateBtn("Generate song", false, "generate");
+            savePendingBackendTask("");
+            try {
+              const rec = loadRecoverableGenerationTask();
+              if (rec?.taskId && String(sunoTaskId || "") === rec.taskId) {
+                clearRecoverableGenerationTask();
+              }
+            } catch {}
+            try { updateLibraryRecoverBanner(); } catch {}
+            clearVocalReferenceSelection();
+            setGenerateFieldsLocked(false);
+            setLoading(false);
+            showResultCard(false);
+            setStatus("Your clip is ready.");
+            return;
+          }
           if (lastSunoProxyUrl2 || lastSunoFullUrl2) {
             addToLibrary({
               title: lastSunoTitle2 || "Generated song B",
@@ -39264,6 +39436,36 @@ setProfileEditing(false);
 // a rebind.
 try { attachTabRefresh(); } catch (e) { console.warn("[tabRefresh] init", e); }
 try { initMentor(); } catch (e) { console.warn("[mentor] init", e); }
+try {
+  initCreationFlow({
+    escapeHtml,
+    haptic,
+    showToast,
+    apiUrl,
+    scheduleApplyRoute,
+    challengeIdeas: CHALLENGE_IDEAS,
+    isSignedIn: () => Boolean(authSession?.user?.id),
+    stashFlowPending: (flowId) => {
+      stashPendingFlowId(flowId);
+      try { setPostAuthReturnHash(`#/flow/${encodeURIComponent(String(flowId || "").trim())}`); } catch {}
+    },
+    prepareAndGenerateFromFlow,
+    openFlowVoiceRecorder,
+    hasVocalReference: hasActiveVocalReference,
+    fileToDataUrl: readFileAsDataUrl,
+    downscaleImageDataUrl,
+    openInStudio: openFlowResultInStudio,
+    openTrack: (trackId) => {
+      try { location.hash = `#/player?track=${encodeURIComponent(String(trackId || "").trim())}`; } catch {}
+    },
+    playUrl: (url, title) => {
+      try {
+        if (typeof playSharedTrackUrl === "function") playSharedTrackUrl(url, title);
+      } catch {}
+    },
+    pickSuggestedPhotoFile: async () => null,
+  });
+} catch (e) { console.warn("[flow] init", e); }
 
 // Hum → melody (MVP)
 if (els.btnHumStart && els.btnHumStop && els.btnHumClear) {

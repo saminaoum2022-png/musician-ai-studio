@@ -3095,6 +3095,7 @@ body[data-route="discover-playlist"] main.grid > [data-route="discover-playlist"
 body[data-route="friends"] main.grid > [data-route="friends"],
 body[data-route="activity"] main.grid > [data-route="activity"],
 body[data-route="mashup"] main.grid > [data-route="mashup"],
+body[data-route="flow"] main.grid > [data-route="flow"],
 body[data-route="moment"] main.grid > [data-route="moment"],
 body[data-route="challenges"] main.grid > [data-route="challenges"],
 body[data-route="mentor"] main.grid > [data-route="mentor"],
@@ -32351,4 +32352,238 @@ html[data-theme="light"] .settingsGroup{
   .activityRow:active{
     transform: none;
   }
+}
+
+/* ─── Guided creation flows (templates / challenges) ─────────────── */
+.flowPage.wide,
+section.flowPage{
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 16px 120px;
+}
+.flowHead{
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 0 18px;
+}
+.flowBack{
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.04);
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.flowHeadCopy{ min-width: 0; }
+.flowKicker,
+.flowHero .flowKicker{
+  margin: 0 0 4px;
+  font-size: 12px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  opacity: .62;
+}
+.flowTitle,
+.flowHero .flowTitle{
+  margin: 0;
+  font-size: clamp(22px, 5vw, 28px);
+  line-height: 1.15;
+}
+.flowLead{
+  margin: 10px 0 0;
+  opacity: .78;
+  line-height: 1.45;
+}
+.flowDurationBadge{
+  display: inline-flex;
+  margin-top: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: rgba(120, 180, 255, .12);
+  border: 1px solid rgba(120, 180, 255, .22);
+}
+.flowStepCard{
+  margin-top: 18px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.03);
+}
+.flowStepTitle{
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+.flowStepLead{
+  margin: 0 0 14px;
+  opacity: .75;
+  line-height: 1.45;
+}
+.flowStarterCard{
+  margin-bottom: 14px;
+}
+.flowStarterBadge{
+  display: inline-flex;
+  margin-bottom: 8px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  background: rgba(255, 200, 120, .12);
+  border: 1px solid rgba(255, 200, 120, .24);
+  color: rgba(255, 220, 170, .95);
+}
+.flowLyricsInput{
+  width: 100%;
+  min-height: 140px;
+  resize: vertical;
+  border-radius: 14px;
+  border: 1px dashed rgba(255,255,255,.18);
+  background: rgba(0,0,0,.22);
+  color: inherit;
+  padding: 12px 14px;
+  line-height: 1.45;
+  font: inherit;
+}
+.flowField{
+  display: block;
+  margin-bottom: 14px;
+}
+.flowFieldLabel{
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  opacity: .82;
+}
+.flowFieldLabel small{ opacity: .65; }
+.flowField input{
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(0,0,0,.22);
+  color: inherit;
+  padding: 11px 12px;
+  font: inherit;
+}
+.flowChipRow{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.flowChip{
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.04);
+  color: inherit;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.flowChip.isActive{
+  border-color: rgba(130, 190, 255, .55);
+  background: rgba(130, 190, 255, .16);
+}
+.flowGenerateBtn,
+.flowNextBtn,
+.flowRecordBtn{
+  width: 100%;
+  margin-top: 8px;
+}
+.flowBackBtn{
+  width: 100%;
+  margin-top: 8px;
+}
+.flowStepStatus{
+  margin: 10px 0 0;
+  font-size: 13px;
+  opacity: .72;
+}
+.flowPhotoPreviewWrap{
+  aspect-ratio: 4 / 5;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(0,0,0,.25);
+  display: grid;
+  place-items: center;
+}
+.flowPhotoPreview{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.flowPhotoEmpty{
+  opacity: .55;
+  font-size: 14px;
+}
+.flowPhotoActions{
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+.flowPhotoPick{
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.flowMoodReadout{
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255,255,255,.04);
+}
+.flowMoodConcept{ margin: 0 0 8px; line-height: 1.45; }
+.flowMoodTags{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.flowMoodTags span{
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.06);
+}
+.flowDoneCard{
+  margin-top: 20px;
+  padding: 22px;
+  border-radius: 18px;
+  border: 1px solid rgba(120, 255, 180, .18);
+  background: linear-gradient(180deg, rgba(80, 180, 120, .08), rgba(255,255,255,.02));
+}
+.flowDoneKicker{
+  margin: 0 0 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  opacity: .7;
+}
+.flowDoneTitle{
+  margin: 0;
+  font-size: 24px;
+}
+.flowDoneSub{
+  margin: 10px 0 16px;
+  opacity: .78;
+  line-height: 1.45;
+}
+.flowDoneActions{
+  display: grid;
+  gap: 10px;
+}
+.flowEmpty{
+  padding: 24px;
+  text-align: center;
+}
+body[data-route="flow"] .app{
+  background: radial-gradient(1200px 600px at 50% -10%, rgba(90, 120, 255, .12), transparent 60%);
 }

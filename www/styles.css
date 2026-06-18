@@ -30742,37 +30742,60 @@ section.mentorPage{
 .discoveryMainContent.discoverHubV1{
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   padding-bottom: 6px;
 }
 .discoverHubSection{
-  margin: 0 0 10px;
+  margin: 0 0 4px;
 }
-.discoverHubHead{
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 10px;
-  margin: 0 0 8px;
+
+/* Journal section headers */
+.discoverJournalSectionHead{
+  margin: 18px 0 12px;
   padding: 0 2px;
 }
-.discoverHubTitle{
-  margin: 0;
-  font-size: 16px;
-  font-weight: 900;
-  letter-spacing: -0.02em;
-  color: #f3f6ff;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
+.discoverJournalSectionRule{
+  height: 1px;
+  margin-bottom: 10px;
+  background: linear-gradient(90deg, rgba(124, 92, 255, 0.45), rgba(35, 213, 171, 0.18) 55%, transparent);
 }
-.discoverHubEmoji{ font-size: 17px; }
-.discoverHubSub{
+.discoverJournalSectionRow{
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.discoverJournalSectionIcon{
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin-top: 2px;
+  display: grid;
+  place-items: center;
+  color: rgba(94, 234, 212, 0.92);
+}
+.discoverJournalSectionIcon svg{
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+.discoverJournalSectionTitle{
+  margin: 0;
+  font-size: clamp(19px, 5vw, 22px);
+  font-weight: 850;
+  letter-spacing: -0.03em;
+  color: #f8faff;
+  line-height: 1.15;
+}
+.discoverJournalSectionSub{
   margin: 4px 0 0;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.35;
-  color: rgba(223, 231, 251, 0.48);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: rgba(223, 231, 251, 0.52);
+}
+.discoverHubQuietNote--inline{
+  margin: 8px 0 0;
+  font-size: 11px;
 }
 .discoverHubRail{
   display: flex;
@@ -30789,10 +30812,112 @@ section.mentorPage{
 .discoverHubRail::-webkit-scrollbar{ display: none; }
 
 .discoverHubSection--stats{
-  margin: 0 0 8px;
+  margin: 0 0 4px;
 }
 .discoverHubSection--challenges{
-  margin: 0 0 10px;
+  margin: 0 0 4px;
+}
+.discoverHubRail--challenges{
+  gap: 12px;
+  padding-bottom: 8px;
+}
+.discoverJournalChallengeCard{
+  flex: 0 0 min(82vw, 300px);
+  width: min(82vw, 300px);
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+}
+.discoverJournalChallengeArt{
+  height: 96px;
+  overflow: hidden;
+  background: #05070d;
+}
+.discoverJournalChallengeArt img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.discoverJournalChallengeBody{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 12px 14px;
+}
+.discoverJournalChallengeTitle{
+  margin: 0;
+  font-size: 15px;
+  font-weight: 850;
+  letter-spacing: -0.02em;
+  color: #fff;
+  line-height: 1.2;
+}
+.discoverJournalChallengeBlurb{
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: rgba(223, 231, 251, 0.55);
+}
+.discoverJournalChallengeMeta{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: rgba(223, 231, 251, 0.42);
+}
+.discoverJournalChallengeJoin{
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #facc15, #f59e0b);
+  color: #1c1408;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.discoverJournalChallengeCard--rose .discoverJournalChallengeJoin{
+  background: linear-gradient(135deg, #f472b6, #db2777);
+  color: #fff;
+}
+.discoverJournalChallengeCard--violet .discoverJournalChallengeJoin{
+  background: linear-gradient(135deg, #a78bfa, #7c3aed);
+  color: #fff;
+}
+.discoverJournalChallengeCard--mint .discoverJournalChallengeJoin,
+.discoverJournalChallengeCard--cyan .discoverJournalChallengeJoin{
+  background: linear-gradient(135deg, #34d399, #0891b2);
+  color: #fff;
+}
+.discoverJournalChallengeEntries{
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+.discoverJournalChallengeEntry{
+  flex: 1;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+}
+.discoverJournalChallengeEntry img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 .discoverHubSection--hero{
   margin: 0 0 20px;
@@ -31384,32 +31509,38 @@ section.mentorPage{
   display: block;
 }
 .discoverHubPickType{
-  position: absolute;
-  top: 7px;
-  left: 7px;
-  padding: 3px 7px;
-  border-radius: 999px;
+  display: inline-block;
   font-size: 9px;
-  font-weight: 900;
-  color: #fff;
-  background: rgba(0, 0, 0, 0.52);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(167, 139, 250, 0.88);
 }
 .discoverHubPickPlayIco{
   position: absolute;
-  right: 7px;
-  bottom: 7px;
-  width: 28px;
-  height: 28px;
+  right: 6px;
+  bottom: 6px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 10px;
   color: #1c1408;
   background: linear-gradient(135deg, #facc15, #f59e0b);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+.discoverHubPickStats{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(223, 231, 251, 0.46);
+}
+.discoverHubPickStats span + span::before{
+  content: "·";
+  margin-right: 6px;
+  opacity: 0.5;
 }
 .discoverHubPickMeta{
   display: flex;
@@ -31422,126 +31553,162 @@ section.mentorPage{
   font-size: 12.5px;
   font-weight: 800;
   color: #fff;
-  white-space: nowrap;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 .discoverHubPickBy{
   font-size: 10.5px;
   font-weight: 600;
   color: rgba(223, 231, 251, 0.48);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.discoverHubPickStats{
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  font-size: 10px;
-  font-weight: 800;
-  color: rgba(223, 231, 251, 0.45);
-}
-.discoverHubPickStatHeart{ color: rgba(244, 114, 182, 0.88); }
 
-/* Template blocks + real examples */
-.discoverHubTemplateBlocks{
+/* Creation sparks — journal cards */
+.discoverJournalSparkList{
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
-.discoverHubTemplateBlock{
-  padding: 10px 10px 8px;
+.discoverJournalSpark{
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 12px;
+  padding: 12px;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.03);
+  background:
+    linear-gradient(145deg, rgba(124, 92, 255, 0.06), rgba(255, 255, 255, 0.02));
 }
-.discoverHubTemplateBlockHead{
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
+.discoverJournalSparkArt{
+  display: block;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
-.discoverHubTemplateBlockCopy{
+.discoverJournalSparkArt svg{
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.discoverJournalSparkCopy{
   display: flex;
   flex-direction: column;
   gap: 4px;
   min-width: 0;
 }
-.discoverHubTemplateBlockCopy strong{
-  font-size: 14px;
-  font-weight: 900;
-  color: #fff;
+.discoverJournalSparkEyebrow{
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(94, 234, 212, 0.72);
 }
-.discoverHubTemplateCount{
+.discoverJournalSparkTitle{
+  font-size: 15px;
+  font-weight: 850;
+  color: #fff;
+  letter-spacing: -0.02em;
+}
+.discoverJournalSparkBlurb{
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: rgba(223, 231, 251, 0.52);
+}
+.discoverJournalSparkFoot{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+.discoverJournalSparkCount{
   font-size: 10px;
   font-weight: 700;
-  color: rgba(223, 231, 251, 0.38);
+  color: rgba(223, 231, 251, 0.4);
 }
-.discoverHubTemplateBlockSub{
-  margin: 6px 0 8px;
-  font-size: 11.5px;
-  font-weight: 600;
-  line-height: 1.4;
-  color: rgba(223, 231, 251, 0.48);
+.discoverJournalSparkBtn{
+  padding: 7px 14px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.95), rgba(35, 213, 171, 0.75));
+  color: #fff;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
 }
-.discoverHubTemplateExamplesLabel{
-  margin-bottom: 8px;
-  font-size: 10px;
-  font-weight: 900;
+.discoverJournalSparkExamples{
+  grid-column: 1 / -1;
+  margin-top: 2px;
+}
+.discoverJournalSparkExamplesLabel{
+  display: block;
+  margin-bottom: 6px;
+  font-size: 9px;
+  font-weight: 800;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: rgba(223, 231, 251, 0.42);
+  color: rgba(223, 231, 251, 0.38);
 }
 .discoverHubRail--examples{ gap: 8px; padding-bottom: 2px; }
 .discoverHubExampleCard{
-  flex: 0 0 108px;
-  width: 108px;
-  height: 108px;
+  flex: 0 0 88px;
+  width: 88px;
   scroll-snap-align: start;
-  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
-  overflow: hidden;
-  background: rgba(0, 0, 0, 0.2);
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
-.discoverHubExampleCard img{
+.discoverHubExampleCover{
+  position: relative;
+  width: 88px;
+  height: 88px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+}
+.discoverHubExampleCover img{
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
-.discoverHubExampleShade{
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, transparent 35%, rgba(0, 0, 0, 0.72) 100%);
-  pointer-events: none;
-}
-.discoverHubExampleTitle{
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 8px;
-  font-size: 10px;
-  font-weight: 800;
-  color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-align: start;
-}
 .discoverHubExamplePlay{
   position: absolute;
-  top: 7px;
-  right: 7px;
-  width: 24px;
-  height: 24px;
+  right: 5px;
+  bottom: 5px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 9px;
   color: #1c1408;
   background: linear-gradient(135deg, #facc15, #f59e0b);
+}
+.discoverHubExampleTitle{
+  font-size: 10px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.88);
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .discoverHubTemplateEmpty{
   margin: 0;
@@ -31621,116 +31788,91 @@ section.mentorPage{
 }
 .discoverHubCreateBtn:active{ opacity: 0.88; }
 
-/* Trending remixes — visual cards */
+/* Trending remixes — side-by-side covers */
 .discoverHubRemixList{
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16px;
 }
 .discoverHubRemixCard{
   display: flex;
-  align-items: center;
-  gap: 14px;
+  flex-direction: column;
+  gap: 10px;
   width: 100%;
-  padding: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 18px;
-  background:
-    linear-gradient(135deg, rgba(124, 92, 255, 0.08), rgba(255, 255, 255, 0.03));
+  padding: 0 0 14px;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background: transparent;
   color: inherit;
   font: inherit;
   text-align: start;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
+.discoverHubRemixList .discoverHubRemixCard:last-child{
+  border-bottom: 0;
+  padding-bottom: 0;
+}
 .discoverHubRemixCard--static{ cursor: default; }
-.discoverHubRemixCard:active:not(.discoverHubRemixCard--static){
-  background: rgba(255, 255, 255, 0.05);
+.discoverHubRemixCoversRow{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
-.discoverHubRemixCovers{
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  width: 72px;
-}
-.discoverHubRemixCover{
+.discoverHubRemixCoverCell{
+  margin: 0;
   position: relative;
-  width: 64px;
-  height: 64px;
+  aspect-ratio: 1;
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
 }
-.discoverHubRemixCover--new{
-  width: 72px;
-  height: 72px;
-  border-color: rgba(167, 139, 250, 0.45);
-  box-shadow: 0 8px 20px rgba(124, 92, 255, 0.22);
-}
-.discoverHubRemixCover img{
+.discoverHubRemixCoverCell img{
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
-.discoverHubRemixCoverTag{
+.discoverHubRemixCoverCell figcaption{
   position: absolute;
-  left: 4px;
-  bottom: 4px;
-  padding: 2px 5px;
+  left: 6px;
+  bottom: 6px;
+  padding: 2px 6px;
   border-radius: 6px;
   font-size: 8px;
-  font-weight: 900;
+  font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.92);
   background: rgba(0, 0, 0, 0.55);
 }
-.discoverHubRemixFlow{
-  font-size: 14px;
-  font-weight: 900;
-  color: rgba(167, 139, 250, 0.85);
-  line-height: 1;
+.discoverHubRemixCoverCell--remix{
+  border-color: rgba(167, 139, 250, 0.35);
 }
 .discoverHubRemixCardMeta{
-  flex: 1;
-  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
-.discoverHubRemixCardTitle{
-  font-size: 14px;
-  font-weight: 800;
-  color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.discoverHubRemixCardLine{
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.35;
-  color: rgba(223, 231, 251, 0.55);
-}
-.discoverHubRemixWho{ color: rgba(255, 255, 255, 0.92); font-weight: 800; }
-.discoverHubRemixWhat{ color: rgba(167, 139, 250, 0.95); }
 .discoverHubRemixCardStats{
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 2px;
-}
-.discoverHubRemixStat{
   font-size: 11px;
-  font-weight: 800;
-  color: rgba(223, 231, 251, 0.55);
+  font-weight: 700;
+  color: rgba(223, 231, 251, 0.48);
 }
-.discoverHubRemixStat--heart{ color: rgba(244, 114, 182, 0.9); }
+.discoverHubRemixCardStats span + span::before{
+  content: "·";
+  margin-right: 8px;
+  opacity: 0.45;
+}
+.discoverHubRemixCovers,
+.discoverHubRemixCover,
+.discoverHubRemixCoverTag,
+.discoverHubRemixFlow{ display: none; }
 
 /* Legacy remix row — hidden */
 .discoverHubRemixRow{ display: none; }
@@ -31834,12 +31976,11 @@ section.mentorPage{
   width: 188px;
   scroll-snap-align: start;
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  flex-direction: column;
   padding: 12px;
-  border-radius: 16px;
+  border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.02);
   color: inherit;
   font: inherit;
   text-align: start;
@@ -31847,11 +31988,7 @@ section.mentorPage{
   -webkit-tap-highlight-color: transparent;
 }
 .discoverHubNewCard:active{ background: rgba(255, 255, 255, 0.05); }
-.discoverHubNewEmoji{
-  flex: none;
-  font-size: 28px;
-  line-height: 1;
-}
+.discoverHubNewEmoji{ display: none; }
 .discoverHubNewBody{
   display: flex;
   flex-direction: column;

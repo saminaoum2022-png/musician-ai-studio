@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260619activityIg";
+const APP_BUILD = "20260619discoverJournal";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -6068,12 +6068,28 @@ function discoverHubStatLabel(n) {
   return formatStatCount(v);
 }
 
-function discoverHubSectionHeadHtml(emoji, title, sub) {
+function discoverHubSectionIconSvg(key) {
+  const icons = {
+    challenges: `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 4h10l1 4-6 3-6-3 1-4Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 11v9M8.5 20h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="7.5" r="1.2" fill="currentColor"/></svg>`,
+    picks: `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H10v16H6.5A2.5 2.5 0 0 1 4 17.5v-11Z" stroke="currentColor" stroke-width="1.6"/><path d="M10 4h7.5A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5H10V4Z" stroke="currentColor" stroke-width="1.6"/><path d="M13 9h4M13 12.5h4M13 16h2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`,
+    sparks: `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2.5 14.8 9l6.7.6-5.1 4.3 1.6 6.6L12 17.8 6 20.5l1.6-6.6L2.5 9.6 9.2 9 12 2.5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>`,
+    remixes: `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 7.5h8.5a3 3 0 0 1 0 6H12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M9.5 5 7 7.5 9.5 10M17 16.5H8.5a3 3 0 0 1 0-6H12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M14.5 14l2.5 2.5-2.5 2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    new: `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.6"/><path d="M12 7.5v5l3 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`,
+    creators: `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="9" cy="8.5" r="3" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 19c.8-3 3.4-5 5.5-5s4.7 2 5.5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="17.5" cy="9" r="2.5" stroke="currentColor" stroke-width="1.4"/><path d="M14.5 19c.5-2 1.8-3.5 3.5-3.5s3 1.5 3.5 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`,
+  };
+  return icons[String(key || "").trim()] || icons.sparks;
+}
+
+function discoverHubSectionHeadHtml(iconKey, title, sub) {
   return `
-    <header class="discoverHubHead">
-      <div class="discoverHubHeadText">
-        <h3 class="discoverHubTitle"><span class="discoverHubEmoji" aria-hidden="true">${emoji}</span> ${escapeHtml(title)}</h3>
-        ${sub ? `<p class="discoverHubSub">${escapeHtml(sub)}</p>` : ""}
+    <header class="discoverJournalSectionHead">
+      <div class="discoverJournalSectionRule" aria-hidden="true"></div>
+      <div class="discoverJournalSectionRow">
+        <span class="discoverJournalSectionIcon">${discoverHubSectionIconSvg(iconKey)}</span>
+        <div class="discoverJournalSectionText">
+          <h3 class="discoverJournalSectionTitle">${escapeHtml(title)}</h3>
+          ${sub ? `<p class="discoverJournalSectionSub">${escapeHtml(sub)}</p>` : ""}
+        </div>
       </div>
     </header>`;
 }
@@ -6140,23 +6156,23 @@ function renderDiscoverCommunityStatsSection(tracks) {
 }
 
 function discoverContentTypeForTrack(t) {
-  if (mashupAttributionForTrack(t)) return { key: "mashup", emoji: "🔥", label: "Mashup" };
-  if (remixAttributionForTrack(t)) return { key: "remix", emoji: "⚡", label: "Remix" };
+  if (mashupAttributionForTrack(t)) return { key: "mashup", label: "Mashup" };
+  if (remixAttributionForTrack(t)) return { key: "remix", label: "Remix" };
   const tpl = templateMetaForTrack(t);
   if (tpl) {
     const title = String(tpl.searchTemplateTitle || "").toLowerCase();
-    if (title.includes("birthday") || title.includes("bday")) return { key: "birthday", emoji: "🎂", label: "Birthday Song" };
-    if (title.includes("love") || title.includes("anniv") || title.includes("wedding")) return { key: "love", emoji: "❤️", label: "Love Song" };
-    return { key: "template", emoji: "✨", label: "Template" };
+    if (title.includes("birthday") || title.includes("bday")) return { key: "birthday", label: "Birthday" };
+    if (title.includes("love") || title.includes("anniv") || title.includes("wedding")) return { key: "love", label: "Love song" };
+    return { key: "template", label: "Template" };
   }
   const ch = challengeMetaForTrack(t);
   if (ch) {
     const title = String(ch.title || "").toLowerCase();
-    if (title.includes("love")) return { key: "love", emoji: "❤️", label: "Love Song" };
-    if (title.includes("birthday")) return { key: "birthday", emoji: "🎂", label: "Birthday Song" };
-    return { key: "challenge", emoji: "🏆", label: "Challenge" };
+    if (title.includes("love")) return { key: "love", label: "Love song" };
+    if (title.includes("birthday")) return { key: "birthday", label: "Birthday" };
+    return { key: "challenge", label: "Challenge" };
   }
-  return { key: "original", emoji: "🎵", label: "Original Song" };
+  return { key: "original", label: "Original" };
 }
 
 function discoverChallengeMatchesTrack(c, track) {
@@ -6253,7 +6269,20 @@ function discoverHubTrackPlayAttrs(t, profMap) {
 }
 
 function discoverHubReactionCount(t) {
-  return discoverRemixReactionCount(t, Math.max(8, Math.round((Number(t?.playCount) || 12) * 0.12)));
+  const meta = t?.meta || {};
+  const n = Number(meta.likeCount ?? meta.reactions ?? t?.likeCount);
+  if (Number.isFinite(n) && n >= 0) return n;
+  return null;
+}
+
+function discoverHubPickStatsHtml(t) {
+  const plays = Math.max(0, Number(t.playCount) || 0);
+  const likes = discoverHubReactionCount(t);
+  const bits = [];
+  if (plays > 0) bits.push(`${discoverHubStatLabel(plays)} plays`);
+  if (likes != null && likes > 0) bits.push(`${discoverHubStatLabel(likes)} likes`);
+  if (!bits.length) return `<span class="discoverHubPickStats">New</span>`;
+  return `<span class="discoverHubPickStats">${bits.map((b) => `<span>${escapeHtml(b)}</span>`).join("")}</span>`;
 }
 
 function discoverHubPickCardHtml(t, profMap) {
@@ -6263,23 +6292,18 @@ function discoverHubPickCardHtml(t, profMap) {
   const byLine = handle ? `@${handle}` : "Creator";
   const title = String(t.title || "Untitled").trim();
   const art = trackCoverArtForFeed(t);
-  const plays = Math.max(0, Number(t.playCount) || 0);
-  const reactions = discoverHubReactionCount(t);
   const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
   return `
     <button type="button" class="discoverHubPickCard discoverHubPickCard--${escapeHtml(type.key)}" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
       <span class="discoverHubPickCover">
         <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
-        <span class="discoverHubPickType">${type.emoji} ${escapeHtml(type.label)}</span>
-        <span class="discoverHubPickPlayIco" aria-hidden="true">▶</span>
+        <span class="discoverHubPickPlayIco" aria-hidden="true"><svg viewBox="0 0 24 24" width="11" height="11"><path d="M8 5v14l11-7L8 5Z" fill="currentColor"/></svg></span>
       </span>
       <span class="discoverHubPickMeta">
+        <span class="discoverHubPickType">${escapeHtml(type.label)}</span>
         <strong class="discoverHubPickTitle">${escapeHtml(title)}</strong>
         <span class="discoverHubPickBy">${escapeHtml(byLine)}</span>
-        <span class="discoverHubPickStats">
-          ${plays ? `<span>▶ ${escapeHtml(discoverHubStatLabel(plays))}</span>` : ""}
-          <span class="discoverHubPickStatHeart">♥ ${escapeHtml(discoverHubStatLabel(reactions))}</span>
-        </span>
+        ${discoverHubPickStatsHtml(t)}
       </span>
     </button>`;
 }
@@ -6321,50 +6345,39 @@ function discoverHubTopEntryCardHtml(t, profMap) {
     </button>`;
 }
 
-function discoverHubChallengeCardHtml(c) {
+function discoverHubChallengeEntryThumbHtml(t, profMap) {
+  const title = String(t.title || "Untitled").trim();
+  const art = trackCoverArtForFeed(t);
+  const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
+  return `
+    <button type="button" class="discoverJournalChallengeEntry" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
+      <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
+    </button>`;
+}
+
+function discoverHubChallengeJournalCardHtml(c, tracks, profMap) {
   const joinAttrs = discoverChallengeJoinAttrs(c);
+  const entries = discoverTracksForChallenge(c, tracks, 4);
+  const artUrl = discoverChallengeArtUrl(c.id);
+  const entriesHtml = entries.length
+    ? `<div class="discoverJournalChallengeEntries" role="list">${entries.map((t) => discoverHubChallengeEntryThumbHtml(t, profMap)).join("")}</div>`
+    : `<p class="discoverHubQuietNote discoverHubQuietNote--inline">No entries yet — be the first.</p>`;
   return `
-    <article class="discoverHubChallengeCompact discoverHubChallengeCompact--${escapeHtml(c.tone)}">
-      <img class="discoverHubChallengeCompactArt discoverHubChallengeCompactArt--${escapeHtml(c.id)}" src="${escapeHtml(discoverChallengeArtUrl(c.id))}" alt="" loading="lazy" decoding="async" />
-      <div class="discoverHubChallengeCompactBody">
-        <strong class="discoverHubChallengeCompactTitle">${escapeHtml(c.title)}</strong>
-        <span class="discoverHubChallengeCompactMeta">${c.daysLeft} days left · ${discoverHubStatLabel(c.submissions)} songs</span>
+    <article class="discoverJournalChallengeCard discoverJournalChallengeCard--${escapeHtml(c.tone)}" aria-label="${escapeHtml(c.title)}">
+      <div class="discoverJournalChallengeArt">
+        <img src="${escapeHtml(artUrl)}" alt="" loading="lazy" decoding="async" />
       </div>
-      <button type="button" class="discoverHubChallengeCompactJoin" ${joinAttrs}>Join</button>
+      <div class="discoverJournalChallengeBody">
+        <h4 class="discoverJournalChallengeTitle">${escapeHtml(c.title)}</h4>
+        <p class="discoverJournalChallengeBlurb">${escapeHtml(c.blurb)}</p>
+        <div class="discoverJournalChallengeMeta">
+          <span>${Number(c.daysLeft) || 0} days left</span>
+          <span>${discoverHubStatLabel(c.submissions)} songs</span>
+        </div>
+        <button type="button" class="discoverJournalChallengeJoin" ${joinAttrs}>Join</button>
+        ${entriesHtml}
+      </div>
     </article>`;
-}
-
-function discoverHubChallengeEntriesBlockHtml(c, tracks, profMap) {
-  const allEntries = discoverTracksForChallenge(c, tracks, 12);
-  const preview = allEntries.slice(0, 6);
-  const rest = allEntries.slice(6);
-  if (!preview.length) {
-    return `
-      <div class="discoverHubChallengeEntriesBlock discoverHubChallengeEntriesBlock--empty">
-        <div class="discoverHubChallengeEntriesHead">Top entries</div>
-        <p class="discoverHubTemplateEmpty discoverHubTemplateEmpty--tight">Be the first — tap Join and drop a clip.</p>
-      </div>`;
-  }
-  const previewHtml = preview.map((t) => discoverHubTopEntryCardHtml(t, profMap)).join("");
-  const restHtml = rest.map((t) => discoverHubTopEntryCardHtml(t, profMap)).join("");
-  const viewAllBtn = rest.length
-    ? `<button type="button" class="discoverHubChallengeViewAllBtn" data-discover-challenge-view-all="${escapeHtml(c.id)}">View all</button>`
-    : "";
-  return `
-    <div class="discoverHubChallengeEntriesBlock" data-challenge-entries="${escapeHtml(c.id)}">
-      <div class="discoverHubChallengeEntriesHead">Top entries</div>
-      <div class="discoverHubRail discoverHubRail--topEntries" role="list">${previewHtml}</div>
-      ${rest.length ? `<div class="discoverHubRail discoverHubRail--topEntries discoverHubChallengeEntriesMore" hidden role="list">${restHtml}</div>` : ""}
-      ${viewAllBtn}
-    </div>`;
-}
-
-function discoverHubChallengeUnitHtml(c, tracks, profMap) {
-  return `
-    <section class="discoverHubChallengeUnit discoverHubChallengeUnit--${escapeHtml(c.tone)}" aria-label="${escapeHtml(c.title)}">
-      ${discoverHubChallengeCardHtml(c)}
-      ${discoverHubChallengeEntriesBlockHtml(c, tracks, profMap)}
-    </section>`;
 }
 
 function discoverHubExampleCardHtml(t, profMap) {
@@ -6373,11 +6386,24 @@ function discoverHubExampleCardHtml(t, profMap) {
   const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
   return `
     <button type="button" class="discoverHubExampleCard" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
-      <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
-      <span class="discoverHubExampleShade" aria-hidden="true"></span>
-      <span class="discoverHubExampleTitle">${escapeHtml(title)}</span>
-      <span class="discoverHubExamplePlay" aria-hidden="true">▶</span>
+      <span class="discoverHubExampleCover">
+        <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
+        <span class="discoverHubExamplePlay" aria-hidden="true"><svg viewBox="0 0 24 24" width="10" height="10"><path d="M8 5v14l11-7L8 5Z" fill="currentColor"/></svg></span>
+      </span>
+      <strong class="discoverHubExampleTitle">${escapeHtml(title)}</strong>
     </button>`;
+}
+
+function discoverHubSparkArtHtml(sparkId, tone) {
+  const id = String(sparkId || "").trim();
+  const art = {
+    "voice-note-flip": `<svg viewBox="0 0 120 72" fill="none" aria-hidden="true"><defs><linearGradient id="vn-bg" x1="0" y1="0" x2="120" y2="72"><stop stop-color="#1a1030"/><stop offset="1" stop-color="#081018"/></linearGradient></defs><rect width="120" height="72" rx="12" fill="url(#vn-bg)"/><rect x="46" y="16" width="28" height="40" rx="14" stroke="#a78bfa" stroke-width="2"/><path d="M52 36h16M58 30v12" stroke="#23d5ab" stroke-width="2" stroke-linecap="round"/><path d="M24 40h8M32 34v12M88 38h8M80 32v12M36 44h4M84 42h4" stroke="#7c5cff" stroke-opacity="0.55" stroke-width="2" stroke-linecap="round"/></svg>`,
+    "three-word-hook": `<svg viewBox="0 0 120 72" fill="none" aria-hidden="true"><defs><linearGradient id="hw-bg" x1="0" y1="0" x2="120" y2="72"><stop stop-color="#1c1408"/><stop offset="1" stop-color="#081018"/></linearGradient></defs><rect width="120" height="72" rx="12" fill="url(#hw-bg)"/><text x="18" y="30" fill="#facc15" font-family="system-ui,sans-serif" font-size="14" font-weight="800">Say</text><text x="18" y="48" fill="#fff" font-family="system-ui,sans-serif" font-size="14" font-weight="800">Three</text><text x="18" y="66" fill="#23d5ab" font-family="system-ui,sans-serif" font-size="14" font-weight="800">Words</text><path d="M62 20l8 16-8 16-8-16 8-16Z" stroke="#facc15" stroke-width="1.8" fill="none"/></svg>`,
+    "hook-rush": `<svg viewBox="0 0 120 72" fill="none" aria-hidden="true"><defs><linearGradient id="hr-bg" x1="0" y1="0" x2="120" y2="72"><stop stop-color="#081820"/><stop offset="1" stop-color="#05070d"/></linearGradient></defs><rect width="120" height="72" rx="12" fill="url(#hr-bg)"/><path d="M62 12 72 34H52L62 12Z" fill="#2dd4bf"/><path d="M62 60 52 38h20L62 60Z" fill="#0891b2" opacity="0.85"/><path d="M28 36h12M80 36h12" stroke="#23d5ab" stroke-width="2" stroke-linecap="round"/></svg>`,
+    "tiktok-teaser": `<svg viewBox="0 0 120 72" fill="none" aria-hidden="true"><defs><linearGradient id="tt-bg" x1="0" y1="0" x2="120" y2="72"><stop stop-color="#1a0818"/><stop offset="1" stop-color="#081018"/></linearGradient></defs><rect width="120" height="72" rx="12" fill="url(#tt-bg)"/><rect x="42" y="10" width="36" height="52" rx="8" stroke="#f472b6" stroke-width="2"/><circle cx="60" cy="54" r="3" fill="#f472b6"/><path d="M48 22h24M48 30h18" stroke="#fff" stroke-opacity="0.35" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+  };
+  const svg = art[id] || art["hook-rush"];
+  return `<span class="discoverJournalSparkArt discoverJournalSparkArt--${escapeHtml(tone || "violet")}">${svg}</span>`;
 }
 
 function renderDiscoverCommunityPicksSection(tracks, profMap) {
@@ -6388,17 +6414,17 @@ function renderDiscoverCommunityPicksSection(tracks, profMap) {
     ? picks.map((t) => discoverHubPickCardHtml(t, profMap)).join("")
     : `<p class="discoverHubQuietNote">Community songs will show here as creators publish to Discover.</p>`;
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("🎵", "Community picks", "Real songs, remixes, mashups, and challenge entries from creators.")}
+    ${discoverHubSectionHeadHtml("picks", "Community picks", "Real songs, remixes, and challenge entries from creators.")}
     <div class="discoverHubRail discoverHubRail--picks" role="list">${cards}</div>`;
 }
 
 function renderDiscoverLiveChallengesSection(tracks, profMap) {
   const mount = document.getElementById("discoverLiveChallengesMount");
   if (!mount) return;
-  const units = DISCOVER_LIVE_CHALLENGES.map((c) => discoverHubChallengeUnitHtml(c, tracks, profMap)).join("");
+  const cards = DISCOVER_LIVE_CHALLENGES.map((c) => discoverHubChallengeJournalCardHtml(c, tracks, profMap)).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("🔥", "Live challenges", "Hear what creators made — then jump in.")}
-    <div class="discoverHubChallengeStack">${units}</div>`;
+    ${discoverHubSectionHeadHtml("challenges", "Live challenges", "Swipe through active prompts — hear entries, then join.")}
+    <div class="discoverHubRail discoverHubRail--challenges" role="list">${cards}</div>`;
 }
 
 function discoverHubSparkById(id) {
@@ -6435,24 +6461,25 @@ function renderDiscoverTrendingTemplatesSection(tracks, profMap) {
     const blurb = String(idea?.prompt || idea?.lyrics || "").trim();
     const examplesHtml = examples.length
       ? `<div class="discoverHubRail discoverHubRail--examples" role="list">${examples.map((t) => discoverHubExampleCardHtml(t, profMap)).join("")}</div>`
-      : `<p class="discoverHubTemplateEmpty">Be the first to drop a ${escapeHtml(spark.title)} entry.</p>`;
+      : `<p class="discoverHubTemplateEmpty">Be the first to try ${escapeHtml(spark.title)}.</p>`;
     return `
-      <article class="discoverHubTemplateBlock discoverHubTemplateBlock--${tone}">
-        <div class="discoverHubTemplateBlockHead">
-          <div class="discoverHubTemplateBlockCopy">
-            <strong>${spark.emoji} ${escapeHtml(spark.title)}</strong>
-            <span class="discoverHubTemplateCount">${discoverHubStatLabel(created)} songs created</span>
+      <article class="discoverJournalSpark discoverJournalSpark--${tone}">
+        ${discoverHubSparkArtHtml(spark.id, tone)}
+        <div class="discoverJournalSparkCopy">
+          <span class="discoverJournalSparkEyebrow">Creation spark</span>
+          <strong class="discoverJournalSparkTitle">${escapeHtml(spark.title)}</strong>
+          <p class="discoverJournalSparkBlurb">${escapeHtml(blurb.slice(0, 96))}${blurb.length > 96 ? "…" : ""}</p>
+          <div class="discoverJournalSparkFoot">
+            <span class="discoverJournalSparkCount">${discoverHubStatLabel(created)} created</span>
+            <button type="button" class="discoverJournalSparkBtn" data-discover-spark-challenge="${escapeHtml(spark.id)}">Start</button>
           </div>
-          <button type="button" class="discoverHubCreateBtn" data-discover-spark-challenge="${escapeHtml(spark.id)}">Try it</button>
         </div>
-        <p class="discoverHubTemplateBlockSub">${escapeHtml(blurb.slice(0, 88))}${blurb.length > 88 ? "…" : ""}</p>
-        <div class="discoverHubTemplateExamplesLabel">Top entries</div>
-        ${examplesHtml}
+        ${examples.length ? `<div class="discoverJournalSparkExamples"><span class="discoverJournalSparkExamplesLabel">Listen first</span>${examplesHtml}</div>` : examplesHtml}
       </article>`;
   }).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("✨", "Creation sparks", "Voice notes, hooks, and teasers — jump straight into Create.")}
-    <div class="discoverHubTemplateBlocks">${blocks}</div>`;
+    ${discoverHubSectionHeadHtml("sparks", "Creation sparks", "Templates that open Create — pick one and go.")}
+    <div class="discoverJournalSparkList">${blocks}</div>`;
 }
 
 function discoverRemixReactionCount(track, fallback) {
@@ -6516,29 +6543,31 @@ function discoverHubRemixCardHtml(r) {
     audioId: r.track.audioId,
   }) : "";
   const plays = Math.max(0, Number(r.playCount) || 0);
-  const reactions = Math.max(0, Number(r.reactions) || 0);
+  const likes = r.track ? discoverHubReactionCount(r.track) : null;
   const remixerLine = r.remixerHandle ? `@${escapeHtml(r.remixerHandle)}` : escapeHtml(r.remixer);
   const originalLine = r.originalByHandle ? `@${escapeHtml(r.originalByHandle)}` : escapeHtml(r.originalBy);
+  const statBits = [];
+  if (plays > 0) statBits.push(`${discoverHubStatLabel(plays)} plays`);
+  if (likes != null && likes > 0) statBits.push(`${discoverHubStatLabel(likes)} likes`);
+  const statsHtml = statBits.length
+    ? `<span class="discoverHubRemixCardStats">${statBits.map((b) => `<span>${escapeHtml(b)}</span>`).join("")}</span>`
+    : "";
   const inner = `
-    <span class="discoverHubRemixCovers" aria-hidden="true">
-      <span class="discoverHubRemixCover discoverHubRemixCover--orig">
+    <div class="discoverHubRemixCoversRow" aria-hidden="true">
+      <figure class="discoverHubRemixCoverCell">
         <img src="${escapeHtml(r.originalArt)}" alt="" loading="lazy" decoding="async" />
-        <span class="discoverHubRemixCoverTag">Original</span>
-      </span>
-      <span class="discoverHubRemixFlow">↓</span>
-      <span class="discoverHubRemixCover discoverHubRemixCover--new">
+        <figcaption>Original</figcaption>
+      </figure>
+      <figure class="discoverHubRemixCoverCell discoverHubRemixCoverCell--remix">
         <img src="${escapeHtml(r.remixArt || r.originalArt)}" alt="" loading="lazy" decoding="async" />
-        <span class="discoverHubRemixCoverTag">Remix</span>
-      </span>
-    </span>
-    <span class="discoverHubRemixCardMeta">
+        <figcaption>Remix</figcaption>
+      </figure>
+    </div>
+    <div class="discoverHubRemixCardMeta">
       <strong class="discoverHubRemixCardTitle">${escapeHtml(r.remixTitle || "Remix")}</strong>
       <span class="discoverHubRemixCardLine"><span class="discoverHubRemixWho">${remixerLine}</span> remixed <span class="discoverHubRemixWhat">${originalLine}'s ${escapeHtml(r.originalTitle)}</span></span>
-      <span class="discoverHubRemixCardStats">
-        ${plays ? `<span class="discoverHubRemixStat">▶ ${escapeHtml(discoverHubStatLabel(plays))}</span>` : ""}
-        <span class="discoverHubRemixStat discoverHubRemixStat--heart">♥ ${escapeHtml(discoverHubStatLabel(reactions))}</span>
-      </span>
-    </span>`;
+      ${statsHtml}
+    </div>`;
   if (r.track) {
     return `<button type="button" class="discoverHubRemixCard" ${playAttrs}>${inner}</button>`;
   }
@@ -6559,7 +6588,7 @@ function renderDiscoverTrendingRemixesSection(tracks, profMap) {
   }
   const list = rows.map((r) => discoverHubRemixCardHtml(r)).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("🎵", "Trending remixes", "See what creators are remixing right now.")}
+    ${discoverHubSectionHeadHtml("remixes", "Trending remixes", "Original and remix side by side — tap to listen.")}
     <div class="discoverHubRemixList" role="list">${list}</div>`;
 }
 
@@ -6579,7 +6608,7 @@ function renderDiscoverSuggestedCreatorsSection() {
       <button type="button" class="discoverHubFollowBtn" data-discover-follow="${encodeURIComponent(c.handle)}" aria-label="Follow @${escapeHtml(c.handle)}">Follow</button>
     </article>`).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("👥", "Creators you may like", `Picked for your vibe — ${vibeHint}, and more.`)}
+    ${discoverHubSectionHeadHtml("creators", "Creators you may like", `Picked for your vibe — ${vibeHint}, and more.`)}
     <div class="discoverHubRail discoverHubRail--creators" role="list">${cards}</div>`;
 }
 
@@ -6588,7 +6617,6 @@ function renderDiscoverNewThisWeekSection() {
   if (!mount) return;
   const cards = DISCOVER_NEW_THIS_WEEK.map((item) => `
     <button type="button" class="discoverHubNewCard discoverHubNewCard--${escapeHtml(item.tone)}" data-discover-new="${escapeHtml(item.id)}" data-discover-new-action="${escapeHtml(item.action)}"${item.challengeId ? ` data-discover-challenge-ref="${escapeHtml(item.challengeId)}"` : ""}${item.occasionId ? ` data-discover-occasion-ref="${escapeHtml(item.occasionId)}"` : ""}${item.templateId ? ` data-discover-template="${escapeHtml(item.templateId)}"` : ""}>
-      <span class="discoverHubNewEmoji" aria-hidden="true">${item.emoji}</span>
       <span class="discoverHubNewBody">
         <span class="discoverHubNewKicker">${escapeHtml(item.kicker)}</span>
         <strong>${escapeHtml(item.title)}</strong>
@@ -6596,7 +6624,7 @@ function renderDiscoverNewThisWeekSection() {
       </span>
     </button>`).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("🚀", "New this week", "Fresh drops landing across templates, challenges, and seasons.")}
+    ${discoverHubSectionHeadHtml("new", "New this week", "Fresh templates, challenges, and seasonal drops.")}
     <div class="discoverHubRail discoverHubRail--new" role="list">${cards}</div>`;
 }
 

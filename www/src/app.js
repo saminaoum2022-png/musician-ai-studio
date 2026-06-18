@@ -59,51 +59,50 @@ const IS_NATIVE_SHELL = typeof location !== "undefined" && location.protocol ===
 const BOOT_SPLASH_WORDMARK_AT_S = 3.55;
 const BOOT_SPLASH_MIN_MS = 5100;
 const BOOT_SPLASH_MAX_MS = 6500;
-/** Web: timers anchor to first frame / play — not page load (MP4 comes over the network). */
-const BOOT_SPLASH_WEB_MIN_AFTER_PLAY_MS = 5200;
+const BOOT_SPLASH_END_HOLD_MS = 350;
+/** Web: wait for the MP4 over the network; dismiss when the clip ends (not a fixed wall-clock min). */
 const BOOT_SPLASH_WEB_PREPLAY_MAX_MS = 10000;
-const BOOT_SPLASH_WEB_MAX_MS = 14000;
+const BOOT_SPLASH_WEB_MAX_MS = 11000;
 const _bootSplashStartedAt = Date.now();
 let _bootSplashVideoStartedAt = 0;
+let _bootSplashVideoEnded = false;
 let _bootSplashCanDismiss = false;
 let _bootSplashMinTimer = 0;
+
+function finishBootSplash() {
+  try {
+    if (_bootSplashMinTimer) clearTimeout(_bootSplashMinTimer);
+    _bootSplashMinTimer = 0;
+    document.body.classList.remove("booting");
+  } catch {}
+}
 
 function tryDismissBootSplash() {
   if (!_bootSplashCanDismiss) return;
   try {
     if (!document.body.classList.contains("booting")) return;
-    const now = Date.now();
     if (!IS_NATIVE_SHELL) {
       if (!_bootSplashVideoStartedAt) {
-        if (now - _bootSplashStartedAt >= BOOT_SPLASH_WEB_PREPLAY_MAX_MS) {
-          document.body.classList.remove("booting");
-        }
+        if (Date.now() - _bootSplashStartedAt >= BOOT_SPLASH_WEB_PREPLAY_MAX_MS) finishBootSplash();
         return;
       }
-      const elapsed = now - _bootSplashVideoStartedAt;
-      if (elapsed < BOOT_SPLASH_WEB_MIN_AFTER_PLAY_MS) {
+      if (!_bootSplashVideoEnded) return;
+      finishBootSplash();
+      return;
+    }
+    if (!_bootSplashVideoEnded) {
+      const elapsed = Date.now() - _bootSplashStartedAt;
+      if (elapsed < BOOT_SPLASH_MIN_MS) {
         if (!_bootSplashMinTimer) {
           _bootSplashMinTimer = window.setTimeout(() => {
             _bootSplashMinTimer = 0;
             tryDismissBootSplash();
-          }, BOOT_SPLASH_WEB_MIN_AFTER_PLAY_MS - elapsed);
+          }, BOOT_SPLASH_MIN_MS - elapsed);
         }
-        return;
-      }
-      document.body.classList.remove("booting");
-      return;
-    }
-    const elapsed = now - _bootSplashStartedAt;
-    if (elapsed < BOOT_SPLASH_MIN_MS) {
-      if (!_bootSplashMinTimer) {
-        _bootSplashMinTimer = window.setTimeout(() => {
-          _bootSplashMinTimer = 0;
-          tryDismissBootSplash();
-        }, BOOT_SPLASH_MIN_MS - elapsed);
       }
       return;
     }
-    document.body.classList.remove("booting");
+    finishBootSplash();
   } catch {}
 }
 

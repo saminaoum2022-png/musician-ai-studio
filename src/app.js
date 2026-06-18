@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260619createChallengeTabs";
+const APP_BUILD = "20260619voiceClipNoLyrics";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2593,7 +2593,10 @@ function setCreateChallengeHint(challenge) {
     .join(" · ");
   if (els.createChallengeHintTitle) els.createChallengeHintTitle.textContent = `Challenge: ${title}`;
   if (els.createChallengeHintSub) {
-    els.createChallengeHintSub.textContent = `${details ? `${details}. ` : ""}Starter text below — edit it or tap ✦ for AI lyrics.`;
+    const voiceClip = isVoiceClipChallengeId(c.id);
+    els.createChallengeHintSub.textContent = voiceClip
+      ? "Record your hook on Hum, then Generate — your clip drives the song."
+      : `${details ? `${details}. ` : ""}Starter text below — edit it or tap ✦ for AI lyrics.`;
   }
   els.createChallengeHint.hidden = false;
 }
@@ -4755,7 +4758,10 @@ function applyDiscoveryIdeaToCreate(idea) {
     );
   }
   if (els.sunoPrompt) {
-    const body = String(idea.lyrics || idea.prompt || "").trim();
+    const focus = idea.createFocus
+      || (idea.challenge?.id ? challengeCreateFocusForId(idea.challenge.id) : null);
+    const voiceClipOnly = isVoiceClipChallengeId(idea.challenge?.id) || focus?.tab === "hum";
+    const body = voiceClipOnly ? "" : String(idea.lyrics || idea.prompt || "").trim();
     els.sunoPrompt.value = body;
     try { autoResizeLyricsBox(); } catch {}
   }
@@ -4769,10 +4775,24 @@ function applyDiscoveryIdeaToCreate(idea) {
   setCreateChallengeHint(challenge);
   const focus = idea.createFocus
     || (idea.challenge?.id ? challengeCreateFocusForId(idea.challenge.id) : null);
+  const voiceClipOnly = isVoiceClipChallengeId(idea.challenge?.id) || focus?.tab === "hum";
   if (focus) applyCreateChallengeFocus(focus);
   else clearCreateChallengeFocus();
-  try { setStatus?.(challenge ? `Challenge: ${title}. Edit the starter or tap ✦ for lyrics.` : `Loaded idea: ${title}. Make it yours.`); } catch {}
-  try { showToast(challenge ? "Challenge ready — make the starter yours" : "Idea loaded - make it yours", { icon: "♪", durationMs: 2600 }); } catch {}
+  try {
+    setStatus?.(
+      voiceClipOnly
+        ? `Challenge: ${title}. Record on Hum, then Generate.`
+        : challenge
+          ? `Challenge: ${title}. Edit the starter or tap ✦ for lyrics.`
+          : `Loaded idea: ${title}. Make it yours.`,
+    );
+  } catch {}
+  try {
+    showToast(
+      voiceClipOnly ? "Record your hook on Hum" : challenge ? "Challenge ready — make the starter yours" : "Idea loaded - make it yours",
+      { icon: "♪", durationMs: 2600 },
+    );
+  } catch {}
   try { syncGenerateOrbVisibility?.(); } catch {}
   location.hash = "#/generate";
   scheduleApplyRoute();
@@ -4951,8 +4971,8 @@ function applyChallengeStartById(id, challengesMap) {
     ...challenge,
     id: `challenge:${challenge.id}`,
     title: `${challenge.title} Challenge`,
-    prompt: String(challenge.prompt || challenge.lyrics || "").trim(),
-    lyrics: String(challenge.lyrics || challenge.prompt || "").trim(),
+    prompt: String(challenge.prompt || "").trim(),
+    lyrics: isVoiceClipChallengeId(challenge.id) ? "" : String(challenge.lyrics || challenge.prompt || "").trim(),
     style: withTemplateStyleGuard(`${String(challenge.style || "").trim()}, ${challengeDurationStyleClause(challenge.id)}`),
     dialect: "",
     dialectHint: "",
@@ -9271,6 +9291,10 @@ const PENDING_DISCOVERY_IDEA_KEY = "nabadai_pending_discovery_idea_v1";
 
 const HUM_CHALLENGE_IDS = new Set(["voice-note-flip", "voice-note-remix"]);
 const PHOTO_CHALLENGE_IDS = new Set(["last-photo-song"]);
+
+function isVoiceClipChallengeId(challengeId) {
+  return HUM_CHALLENGE_IDS.has(String(challengeId || "").trim());
+}
 
 function challengeCreateFocusForId(challengeId) {
   const id = String(challengeId || "").trim();

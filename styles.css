@@ -30933,6 +30933,27 @@ section.mentorPage{
 .discoverHubStatPillIco{ font-size: 15px; }
 
 /* Live challenges — hero cards */
+.discoverHubChallengeStack{
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.discoverHubChallengeUnit{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.discoverHubChallengeUnitTitle{
+  margin: 0;
+  padding: 0 2px;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: #f3f6ff;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
 .discoverHubRail--hero{ gap: 14px; padding-bottom: 4px; }
 .discoverHubChallengeHero{
   flex: 0 0 292px;
@@ -30945,6 +30966,19 @@ section.mentorPage{
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(8, 10, 16, 0.55);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+.discoverHubChallengeHero--compact{
+  flex: none;
+  width: 100%;
+  scroll-snap-align: none;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+}
+.discoverHubChallengeHeroBody--compact{
+  gap: 10px;
+  padding: 12px 14px 14px;
+}
+.discoverHubChallengeHeroBody--compact .discoverHubChallengeJoinBtn{
+  margin-top: 2px;
 }
 .discoverHubChallengeHeroCover{
   position: relative;
@@ -31161,7 +31195,122 @@ section.mentorPage{
   display: none;
 }
 
-/* Challenge top entries */
+/* Challenge popular entries (outside card) */
+.discoverHubChallengeEntriesBlock{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 2px 4px;
+}
+.discoverHubChallengeEntriesHead{
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: rgba(94, 234, 212, 0.78);
+}
+.discoverHubRail--entries{
+  gap: 10px;
+  padding-bottom: 2px;
+}
+.discoverHubChallengeEntryCard{
+  flex: 0 0 220px;
+  width: 220px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverHubChallengeEntryCard:active{
+  background: rgba(255, 255, 255, 0.05);
+}
+.discoverHubChallengeEntryCover{
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  background: rgba(255, 255, 255, 0.05);
+}
+.discoverHubChallengeEntryCover img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.discoverHubChallengeEntryPlayIco{
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  color: #1c1408;
+  background: linear-gradient(135deg, #facc15, #f59e0b);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+.discoverHubChallengeEntryMeta{
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 10px 11px;
+  min-width: 0;
+}
+.discoverHubChallengeEntryTitle{
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoverHubChallengeEntryBy{
+  font-size: 10.5px;
+  font-weight: 600;
+  color: rgba(223, 231, 251, 0.48);
+}
+.discoverHubChallengeEntryStats{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 10px;
+  font-weight: 800;
+  color: rgba(223, 231, 251, 0.45);
+}
+.discoverHubChallengeEntryHeart{
+  color: rgba(244, 114, 182, 0.88);
+}
+.discoverHubChallengeViewAllBtn{
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(223, 231, 251, 0.72);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 800;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverHubChallengeViewAllBtn:active{
+  background: rgba(255, 255, 255, 0.07);
+}
+
+/* Legacy in-card entries */
 .discoverHubChallengeEntries{
   display: flex;
   flex-direction: column;

@@ -9300,7 +9300,7 @@ function isVoiceClipChallengeId(challengeId) {
 
 function challengeCreateFocusForId(challengeId) {
   const id = String(challengeId || "").trim();
-  if (HUM_CHALLENGE_IDS.has(id)) return { tab: "hum", tabs: ["hum"] };
+  if (HUM_CHALLENGE_IDS.has(id)) return { tab: "hum", tabs: ["hum", "lyrics"] };
   if (PHOTO_CHALLENGE_IDS.has(id)) return { tab: "photo", tabs: ["photo", "lyrics"] };
   return { tab: "lyrics", tabs: ["lyrics"] };
 }

@@ -140,7 +140,8 @@
         try { done = localStorage.getItem("nabadai_onboarding_v1_done") === "1"; } catch (e) {}
         var h = String(location.hash || "").replace(/^#\/?/, "").split(/[?#&]/)[0] || "";
         if (/^u\//.test(h)) h = "user";
-        if (h === "hub" || h === "home" || h === "start" || h === "sparks") h = "challenges";
+        if (h === "hub" || h === "home" || h === "start") h = "discover";
+        if (h === "sparks") h = "challenges";
         var guestMode = false;
         try { guestMode = localStorage.getItem("nabadai_guest_mode_v1") === "1"; } catch (e) {}
         if (!h) {
@@ -152,7 +153,7 @@
               var raw = localStorage.getItem("mas:supabase:session:v1");
               hasSession = !!(raw && raw.indexOf("access_token") !== -1);
             } catch (e) {}
-            h = hasSession ? "challenges" : (guestMode ? "challenges" : "auth");
+            h = hasSession ? "discover" : (guestMode ? "discover" : "auth");
           }
         }
         var ok = /^(intro|onboarding|auth|generate|challenges|activity|discover|friends|profile|settings|player|sounds|user|vocal|stems|advanced|credits|mentor)$/.test(h);
@@ -164,7 +165,7 @@
               var rawFb = localStorage.getItem("mas:supabase:session:v1");
               hasSessionFallback = !!(rawFb && rawFb.indexOf("access_token") !== -1);
             } catch (e) {}
-            h = hasSessionFallback ? "challenges" : (guestMode ? "challenges" : "auth");
+            h = hasSessionFallback ? "discover" : (guestMode ? "discover" : "auth");
           }
         }
         document.body.setAttribute("data-route", h);
@@ -178,10 +179,10 @@
         <div class="headerMain">
           <h1 id="brandTitle" class="brandTitle" title="Start new"><span class="brandPrimary">NabadAi</span><span id="brandSecondary" class="brandSecondary">Music</span></h1>
           <div class="journeyBar" aria-label="Primary navigation">
-            <a href="#/activity" class="journeyStep" data-route-link="activity">Activity</a>
             <a href="#/discover" class="journeyStep" data-route-link="discover">Discover</a>
-            <a href="#/challenges" class="journeyStep" data-route-link="challenges">Create</a>
             <a href="#/friends" class="journeyStep" data-route-link="friends">Friends</a>
+            <a href="#/challenges" class="journeyStep" data-route-link="challenges">Create</a>
+            <a href="#/activity" class="journeyStep" data-route-link="activity">Activity</a>
             <a href="#/profile" class="journeyStep" data-route-link="profile">Profile</a>
             <a href="#/sounds" class="journeyStep" data-route-link="sounds">Sounds</a>
           </div>
@@ -3390,16 +3391,6 @@
         </defs>
       </svg>
       <nav class="mobileTabbar" aria-label="Primary navigation">
-        <a href="#/activity" data-route-link="activity" class="activityTab" aria-label="Activity">
-          <svg class="tabIco tabIcoActivity" viewBox="0 0 24 24" aria-hidden="true">
-            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-            <circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="1.75"/>
-            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M22 11v6"/>
-            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M19 14h6"/>
-          </svg>
-          <span class="tabLabel">Activity</span>
-          <span id="activityTabDot" class="hubDot activityTabDot" style="display:none" aria-hidden="true"></span>
-        </a>
         <a href="#/discover" data-route-link="discover" aria-label="Discover">
           <svg class="tabIco tabIcoDiscover" viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.75"/>
@@ -3407,6 +3398,15 @@
             <circle cx="12" cy="12" r="1.35" fill="currentColor" stroke="none"/>
           </svg>
           <span class="tabLabel">Discover</span>
+        </a>
+        <a href="#/friends" data-route-link="friends" class="friendsTab" aria-label="Friends">
+          <svg class="tabIco tabIcoFriends" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="1.75"/>
+            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          <span class="tabLabel">Friends</span>
         </a>
         <a href="#/challenges" data-route-link="challenges" id="tabCreate" class="tabCreate challengesTab" aria-label="Create">
           <span class="tabIcoSpinner" aria-hidden="true"></span>
@@ -3420,14 +3420,15 @@
           </svg>
           <span class="tabLabel">Create</span>
         </a>
-        <a href="#/friends" data-route-link="friends" class="friendsTab" aria-label="Friends">
-          <svg class="tabIco tabIcoFriends" viewBox="0 0 24 24" aria-hidden="true">
+        <a href="#/activity" data-route-link="activity" class="activityTab" aria-label="Activity">
+          <svg class="tabIco tabIcoActivity" viewBox="0 0 24 24" aria-hidden="true">
             <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
             <circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="1.75"/>
-            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M22 11v6"/>
+            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M19 14h6"/>
           </svg>
-          <span class="tabLabel">Friends</span>
+          <span class="tabLabel">Activity</span>
+          <span id="activityTabDot" class="hubDot activityTabDot" style="display:none" aria-hidden="true"></span>
         </a>
         <a href="#/profile" data-route-link="profile" class="tabProfileLink" aria-label="Profile">
           <span class="tabProfileAvatarSlot" id="tabProfileAvatarSlot" hidden>
@@ -3700,6 +3701,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260619discoverWire"></script>
+    <script type="module" src="./src/app.js?v=20260619tabOrder"></script>
   </body>
 </html>

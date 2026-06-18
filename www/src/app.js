@@ -2737,8 +2737,8 @@ async function refreshNotificationsUnreadBadge({ force = false } = {}) {
 function resolveEmptyHashRoute() {
   if (!shouldSkipIntroOrOnboardingRoute()) return "intro";
   ensureAuthSessionUserFromToken();
-  if (isAppLoggedIn() || getSupabaseAuthToken()) return "challenges";
-  if (isGuestModeEnabled()) return "challenges";
+  if (isAppLoggedIn() || getSupabaseAuthToken()) return "discover";
+  if (isGuestModeEnabled()) return "discover";
   return "auth";
 }
 
@@ -2812,7 +2812,7 @@ function syncRoutePanelVisibility(wanted) {
 function routeApplyFallback(err) {
   console.error("[route] applyRoute failed", err);
   try { dismissBootSplash(); } catch {}
-  const fb = authSession?.user?.id ? "challenges" : (shouldSkipIntroOrOnboardingRoute() ? "auth" : "intro");
+  const fb = authSession?.user?.id ? "discover" : (shouldSkipIntroOrOnboardingRoute() ? "auth" : "intro");
   syncRoutePanelVisibility(fb);
   document.body.classList.remove("pageTransitioning", "booting");
   const main = document.querySelector("main.grid");
@@ -2857,13 +2857,14 @@ function previewRouteFromHash(hash = "") {
   if (/^u\//.test(route)) return "user";
   if (route === "search" || /^discover\/playlist\//i.test(route)) return "discover";
   const aliases = {
-    home: "challenges",
+    home: "discover",
+    hub: "discover",
+    start: "discover",
     sparks: "challenges",
     moment: "friends",
     notifications: "activity",
     library: "profile",
     more: "settings",
-    start: "intro",
   };
   return aliases[route] || route;
 }
@@ -2997,9 +2998,9 @@ function applyRoute({ passGen } = {}) {
     try { history.replaceState(null, "", "#/challenges"); } catch {}
     normalized = "challenges";
   }
-  if (normalized === "home") {
-    try { history.replaceState(null, "", "#/challenges"); } catch {}
-    normalized = "challenges";
+  if (normalized === "home" || normalized === "hub" || normalized === "start") {
+    try { history.replaceState(null, "", "#/discover"); } catch {}
+    normalized = "discover";
   }
   if (normalized === "notifications") {
     try { history.replaceState(null, "", "#/activity"); } catch {}
@@ -3016,9 +3017,9 @@ function applyRoute({ passGen } = {}) {
   if (isLoginSettling()) {
     if (hasAuthToken || isLoggedIn) {
       if (wanted === "auth" || wanted === "intro" || wanted === "onboarding") {
-        wanted = "challenges";
+        wanted = "discover";
         try {
-          history.replaceState(null, "", "#/challenges");
+          history.replaceState(null, "", "#/discover");
         } catch {}
       }
     } else if (wanted !== "auth") {
@@ -3030,19 +3031,19 @@ function applyRoute({ passGen } = {}) {
   }
   // Keychain session often loads after first paint — never keep a signed-in user on #/auth.
   if (wanted === "auth" && shouldSkipIntroOrOnboardingRoute() && (isLoggedIn || hasAuthToken)) {
-    wanted = "challenges";
+    wanted = "discover";
     try {
-      history.replaceState(null, "", "#/challenges");
+      history.replaceState(null, "", "#/discover");
     } catch {}
   }
   if (shouldSkipIntroOrOnboardingRoute() && (wanted === "intro" || wanted === "onboarding")) {
-    wanted = isLoggedIn ? "challenges" : "auth";
+    wanted = isLoggedIn ? "discover" : "auth";
     try {
       history.replaceState(null, "", `#/${wanted}`);
     } catch {}
   }
   if (!HUB_FEATURE_ENABLED && normalized === "hub") {
-    wanted = isLoggedIn ? "challenges" : (shouldSkipIntroOrOnboardingRoute() ? "auth" : "intro");
+    wanted = isLoggedIn ? "discover" : (shouldSkipIntroOrOnboardingRoute() ? "auth" : "intro");
     try {
       history.replaceState(null, "", `#/${wanted}`);
     } catch {}
@@ -9448,7 +9449,7 @@ async function finishPostAuthNavigation() {
     void ensureAuthBoot({ force: true, fast: true });
     return;
   }
-  const target = shouldSkipIntroOrOnboardingRoute() ? "challenges" : "intro";
+  const target = shouldSkipIntroOrOnboardingRoute() ? "discover" : "intro";
   try {
     location.hash = `#/${target}`;
   } catch {}

@@ -29,7 +29,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260619creationFlows";
+const APP_BUILD = "20260619discoverV2";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -6346,73 +6346,58 @@ function discoverHubEntryMiniHtml(t, profMap) {
     </button>`;
 }
 
-function discoverHubChallengeEntryCardHtml(t, profMap) {
+function discoverHubTopEntryCardHtml(t, profMap) {
   const prof = resolveProfileForFeedCreator(t.userId, profMap);
   const handle = String(prof?.username || "").trim();
   const byLine = handle ? `@${handle}` : "Creator";
   const title = String(t.title || "Untitled").trim();
   const art = trackCoverArtForFeed(t);
   const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
-  const plays = Math.max(0, Number(t.playCount) || 0);
-  const reactions = discoverHubReactionCount(t);
   return `
-    <button type="button" class="discoverHubChallengeEntryCard" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
-      <span class="discoverHubChallengeEntryCover">
+    <button type="button" class="discoverHubTopEntry" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
+      <span class="discoverHubTopEntryCover">
         <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
-        <span class="discoverHubChallengeEntryPlayIco" aria-hidden="true">▶</span>
+        <span class="discoverHubTopEntryPlay" aria-hidden="true">▶</span>
       </span>
-      <span class="discoverHubChallengeEntryMeta">
-        <strong class="discoverHubChallengeEntryTitle">${escapeHtml(title)}</strong>
-        <span class="discoverHubChallengeEntryBy">${escapeHtml(byLine)}</span>
-        <span class="discoverHubChallengeEntryStats">
-          ${plays ? `<span>▶ ${escapeHtml(discoverHubStatLabel(plays))}</span>` : ""}
-          <span class="discoverHubChallengeEntryHeart">♥ ${escapeHtml(discoverHubStatLabel(reactions))}</span>
-        </span>
-      </span>
+      <strong class="discoverHubTopEntryTitle">${escapeHtml(title)}</strong>
+      <span class="discoverHubTopEntryBy">${escapeHtml(byLine)}</span>
     </button>`;
 }
 
 function discoverHubChallengeCardHtml(c) {
   const joinAttrs = discoverChallengeJoinAttrs(c);
   return `
-    <article class="discoverHubChallengeHero discoverHubChallengeHero--${escapeHtml(c.tone)} discoverHubChallengeHero--compact">
-      <div class="discoverHubChallengeHeroCover discoverHubChallengeHeroCover--${escapeHtml(c.id)}">
-        <img class="discoverHubChallengeHeroArt" src="${escapeHtml(discoverChallengeArtUrl(c.id))}" alt="" loading="lazy" decoding="async" />
-        <span class="discoverHubChallengeLive">Live</span>
-        <span class="discoverHubChallengeCountdown"><span class="discoverHubChallengeCountdownNum">${c.daysLeft}</span> days left</span>
+    <article class="discoverHubChallengeCompact discoverHubChallengeCompact--${escapeHtml(c.tone)}">
+      <img class="discoverHubChallengeCompactArt discoverHubChallengeCompactArt--${escapeHtml(c.id)}" src="${escapeHtml(discoverChallengeArtUrl(c.id))}" alt="" loading="lazy" decoding="async" />
+      <div class="discoverHubChallengeCompactBody">
+        <strong class="discoverHubChallengeCompactTitle">${escapeHtml(c.title)}</strong>
+        <span class="discoverHubChallengeCompactMeta">${c.daysLeft} days left · ${discoverHubStatLabel(c.submissions)} songs</span>
       </div>
-      <div class="discoverHubChallengeHeroBody discoverHubChallengeHeroBody--compact">
-        <strong class="discoverHubChallengeHeroTitle">${escapeHtml(c.title)}</strong>
-        <div class="discoverHubChallengeHeroStats">
-          <span><strong>${discoverHubStatLabel(c.participants)}</strong> joined</span>
-          <span><strong>${discoverHubStatLabel(c.submissions)}</strong> songs</span>
-        </div>
-        <button type="button" class="discoverHubChallengeJoinBtn" ${joinAttrs}>Join Challenge</button>
-      </div>
+      <button type="button" class="discoverHubChallengeCompactJoin" ${joinAttrs}>Join</button>
     </article>`;
 }
 
 function discoverHubChallengeEntriesBlockHtml(c, tracks, profMap) {
   const allEntries = discoverTracksForChallenge(c, tracks, 12);
-  const preview = allEntries.slice(0, 3);
-  const rest = allEntries.slice(3);
+  const preview = allEntries.slice(0, 6);
+  const rest = allEntries.slice(6);
   if (!preview.length) {
     return `
       <div class="discoverHubChallengeEntriesBlock discoverHubChallengeEntriesBlock--empty">
-        <div class="discoverHubChallengeEntriesHead">Popular entries</div>
-        <p class="discoverHubTemplateEmpty">Be the first — your song could lead this challenge.</p>
+        <div class="discoverHubChallengeEntriesHead">Top entries</div>
+        <p class="discoverHubTemplateEmpty discoverHubTemplateEmpty--tight">Be the first — tap Join and drop a clip.</p>
       </div>`;
   }
-  const previewHtml = preview.map((t) => discoverHubChallengeEntryCardHtml(t, profMap)).join("");
-  const restHtml = rest.map((t) => discoverHubChallengeEntryCardHtml(t, profMap)).join("");
+  const previewHtml = preview.map((t) => discoverHubTopEntryCardHtml(t, profMap)).join("");
+  const restHtml = rest.map((t) => discoverHubTopEntryCardHtml(t, profMap)).join("");
   const viewAllBtn = rest.length
-    ? `<button type="button" class="discoverHubChallengeViewAllBtn" data-discover-challenge-view-all="${escapeHtml(c.id)}">View all entries</button>`
+    ? `<button type="button" class="discoverHubChallengeViewAllBtn" data-discover-challenge-view-all="${escapeHtml(c.id)}">View all</button>`
     : "";
   return `
     <div class="discoverHubChallengeEntriesBlock" data-challenge-entries="${escapeHtml(c.id)}">
-      <div class="discoverHubChallengeEntriesHead">Popular entries</div>
-      <div class="discoverHubRail discoverHubRail--entries" role="list">${previewHtml}</div>
-      ${rest.length ? `<div class="discoverHubRail discoverHubRail--entries discoverHubChallengeEntriesMore" hidden role="list">${restHtml}</div>` : ""}
+      <div class="discoverHubChallengeEntriesHead">Top entries</div>
+      <div class="discoverHubRail discoverHubRail--topEntries" role="list">${previewHtml}</div>
+      ${rest.length ? `<div class="discoverHubRail discoverHubRail--topEntries discoverHubChallengeEntriesMore" hidden role="list">${restHtml}</div>` : ""}
       ${viewAllBtn}
     </div>`;
 }
@@ -6420,7 +6405,6 @@ function discoverHubChallengeEntriesBlockHtml(c, tracks, profMap) {
 function discoverHubChallengeUnitHtml(c, tracks, profMap) {
   return `
     <section class="discoverHubChallengeUnit discoverHubChallengeUnit--${escapeHtml(c.tone)}" aria-label="${escapeHtml(c.title)}">
-      <h4 class="discoverHubChallengeUnitTitle"><span aria-hidden="true">${c.emoji}</span> ${escapeHtml(c.title)}</h4>
       ${discoverHubChallengeCardHtml(c)}
       ${discoverHubChallengeEntriesBlockHtml(c, tracks, profMap)}
     </section>`;
@@ -6456,7 +6440,7 @@ function renderDiscoverLiveChallengesSection(tracks, profMap) {
   if (!mount) return;
   const units = DISCOVER_LIVE_CHALLENGES.map((c) => discoverHubChallengeUnitHtml(c, tracks, profMap)).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("🔥", "Live challenges", "Jump into live events — hear what creators made, then join in.")}
+    ${discoverHubSectionHeadHtml("🔥", "Live challenges", "Hear what creators made — then jump in.")}
     <div class="discoverHubChallengeStack">${units}</div>`;
 }
 
@@ -6505,7 +6489,7 @@ function renderDiscoverTrendingTemplatesSection(tracks, profMap) {
           <button type="button" class="discoverHubCreateBtn" data-discover-spark-challenge="${escapeHtml(spark.id)}">Try it</button>
         </div>
         <p class="discoverHubTemplateBlockSub">${escapeHtml(blurb.slice(0, 88))}${blurb.length > 88 ? "…" : ""}</p>
-        <div class="discoverHubTemplateExamplesLabel">Popular entries</div>
+        <div class="discoverHubTemplateExamplesLabel">Top entries</div>
         ${examplesHtml}
       </article>`;
   }).join("");
@@ -39458,9 +39442,9 @@ try {
     openTrack: (trackId) => {
       try { location.hash = `#/player?track=${encodeURIComponent(String(trackId || "").trim())}`; } catch {}
     },
-    playUrl: (url, title) => {
+    playUrl: (url) => {
       try {
-        if (typeof playSharedTrackUrl === "function") playSharedTrackUrl(url, title);
+        if (url) window.open(url, "_blank", "noopener,noreferrer");
       } catch {}
     },
     pickSuggestedPhotoFile: async () => null,

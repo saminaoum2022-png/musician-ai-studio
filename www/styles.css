@@ -16215,6 +16215,10 @@ input::placeholder, textarea::placeholder{
   .mobileTabbar a.tabCreate.tabIsReady .tabIcoPlay,
   .mobileTabbar a.tabCreate.tabIsListen .tabIcoPlay{
     display: block;
+    position: absolute;
+    left: 50%;
+    top: calc(var(--tab-create-orbit-top) + var(--tab-create-orbit-size) / 2);
+    transform: translate(-50%, -50%);
   }
   .mobileTabbar a.tabCreate.tabIsListen::before{
     background: var(--brand-signature-gradient-diag);
@@ -16318,12 +16322,18 @@ input::placeholder, textarea::placeholder{
     z-index: -1;
     pointer-events: none;
   }
-  .mobileTabbar a.active .tabIco{
+  .mobileTabbar a.active:not(.tabCreate) .tabIco{
     stroke: #f8faff;
     stroke-width: 2;
     opacity: 1;
     transform: scale(1.04);
     filter: none;
+  }
+  .mobileTabbar a.tabCreate.active .tabIco,
+  .mobileTabbar a.tabCreate.tabIsReady .tabIco,
+  .mobileTabbar a.tabCreate.tabIsListen .tabIco,
+  .mobileTabbar a.tabCreate.tabIsGenerating .tabIcoSpinner{
+    transform: translate(-50%, -50%);
   }
   .mobileTabbar a.active .tabLabel{
     opacity: 1;
@@ -16348,6 +16358,10 @@ input::placeholder, textarea::placeholder{
   .mobileTabbar a.active .tabIcoFriends circle{
     stroke: rgba(232, 238, 247, 0.92);
     stroke-width: 1.85;
+  }
+  .mobileTabbar a.active .tabIcoActivity polyline{
+    stroke: rgba(232, 238, 247, 0.92);
+    stroke-width: 2;
   }
   .mobileTabbar a.friendsTab.active{
     color: rgba(232, 238, 247, 0.92);

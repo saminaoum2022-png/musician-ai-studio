@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260619tabGlow";
+const APP_BUILD = "20260619sparkCarousel";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -5935,10 +5935,13 @@ const DISCOVER_MUSIC_VIBES = [
 ];
 
 const DISCOVER_HUB_SPARK_CHALLENGES = [
-  { id: "voice-note-flip", title: "Voice Note Clip", emoji: "🎙️", tone: "violet" },
-  { id: "three-word-hook", title: "3-Word Hook", emoji: "✨", tone: "gold" },
-  { id: "hook-rush", title: "Hook Rush", emoji: "⚡", tone: "cyan" },
-  { id: "tiktok-teaser", title: "TikTok Teaser", emoji: "📱", tone: "rose" },
+  { id: "birthday", title: "Birthday Surprise", category: "Birthday", tone: "rose", action: "occasion", occasionId: "birthday", artKey: "birthday", matchKeywords: ["birthday", "bday"] },
+  { id: "voice-note-flip", title: "Voice Note Clip", category: "Voice Note", tone: "violet", action: "challenge", challengeId: "voice-note-flip", artKey: "voice-note-flip" },
+  { id: "hook-rush", title: "Hook Rush", category: "Hook", tone: "cyan", action: "challenge", challengeId: "hook-rush", artKey: "hook-rush" },
+  { id: "anniversary", title: "First Dance", category: "Wedding", tone: "gold", action: "occasion", occasionId: "anniversary", artKey: "love-song", matchKeywords: ["anniv", "love", "wedding", "dance"] },
+  { id: "three-word-hook", title: "3-Word Hook", category: "Hook", tone: "gold", action: "challenge", challengeId: "three-word-hook", artKey: "three-word-hook" },
+  { id: "tiktok-teaser", title: "TikTok Teaser", category: "Teaser", tone: "rose", action: "challenge", challengeId: "tiktok-teaser", artKey: "tiktok-teaser" },
+  { id: "sad-to-dance-challenge", title: "Remix This Beat", category: "Remix Prompt", tone: "violet", action: "challenge", challengeId: "sad-to-dance-challenge", artKey: "sad-to-dance" },
 ];
 
 /** @deprecated Discover hub uses DISCOVER_HUB_SPARK_CHALLENGES — old occasion templates removed. */
@@ -6445,44 +6448,97 @@ function discoverTracksForSparkChallenge(challengeId, tracks, limit = 3) {
     .slice(0, limit);
 }
 
-function discoverSparkCreatedCount(challengeId, tracks) {
-  const live = discoverTracksForSparkChallenge(challengeId, tracks, 999).length;
+function discoverSparkArtThumbHtml(spark) {
+  const artKey = String(spark?.artKey || spark?.id || "").trim();
+  const challengeArt = DISCOVER_CHALLENGE_ART[artKey];
+  if (challengeArt) {
+    return `<img class="discoverSparkThumbImg" src="${escapeHtml(discoverChallengeArtUrl(artKey))}" alt="" loading="lazy" decoding="async" />`;
+  }
+  return `<span class="discoverSparkThumbSvg">${discoverHubSparkArtHtml(artKey, spark?.tone || "violet")}</span>`;
+}
+
+function discoverTracksForSparkItem(spark, tracks, limit = 3) {
+  const challengeId = String(spark?.challengeId || spark?.id || "").trim();
+  const fromChallenge = discoverTracksForSparkChallenge(challengeId, tracks, limit);
+  if (fromChallenge.length) return fromChallenge;
+  if (spark?.action === "occasion") {
+    const occ = String(spark?.occasionId || "").trim().toLowerCase();
+    const kws = (spark?.matchKeywords || []).map((k) => String(k).toLowerCase());
+    return (tracks || [])
+      .filter((t) => {
+        const ch = challengeMetaForTrack(t);
+        if (!ch) return false;
+        const chId = String(ch.id || "").trim().toLowerCase();
+        const variant = String(ch.variant || "").trim().toLowerCase();
+        const title = String(ch.title || "").toLowerCase();
+        if (occ && (chId === occ || variant === occ)) return true;
+        return kws.some((k) => chId.includes(k) || title.includes(k));
+      })
+      .sort((a, b) => (Number(b.playCount) || 0) - (Number(a.playCount) || 0))
+      .slice(0, limit);
+  }
+  return [];
+}
+
+function discoverSparkCreatedCount(spark, tracks) {
+  const live = discoverTracksForSparkItem(spark, tracks, 999).length;
   let seed = 0;
-  for (const ch of String(challengeId || "")) seed += ch.charCodeAt(0);
-  const base = 640 + (seed % 2200);
-  return Math.max(base, live * 38 + base);
+  for (const ch of String(spark?.id || "")) seed += ch.charCodeAt(0);
+  const base = 900 + (seed % 3400);
+  return Math.max(base, live * 41 + base);
+}
+
+function discoverSparkExampleMiniHtml(t, profMap) {
+  const title = String(t.title || "Untitled").trim();
+  const art = trackCoverArtForFeed(t);
+  const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
+  return `
+    <button type="button" class="discoverSparkExample" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
+      <span class="discoverSparkExampleArt">
+        <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
+        <span class="discoverSparkExamplePlay" aria-hidden="true"><svg viewBox="0 0 24 24" width="10" height="10"><path d="M8 5v14l11-7L8 5Z" fill="currentColor"/></svg></span>
+      </span>
+      <span class="discoverSparkExampleTitle">${escapeHtml(title)}</span>
+    </button>`;
+}
+
+function discoverSparkCreateAttrs(spark) {
+  const action = String(spark?.action || "challenge").trim();
+  const ref = action === "occasion"
+    ? String(spark?.occasionId || spark?.id || "").trim()
+    : String(spark?.challengeId || spark?.id || "").trim();
+  return `data-discover-spark-create="1" data-discover-spark-action="${escapeHtml(action)}" data-discover-spark-ref="${escapeHtml(ref)}"`;
+}
+
+function discoverSparkCardHtml(spark, tracks, profMap) {
+  const tone = spark.tone || "violet";
+  const created = discoverSparkCreatedCount(spark, tracks);
+  const examples = discoverTracksForSparkItem(spark, tracks, 3);
+  const examplesHtml = examples.length
+    ? examples.map((t) => discoverSparkExampleMiniHtml(t, profMap)).join("")
+    : `<span class="discoverSparkExamplesEmpty">Be the first — tap Create</span>`;
+  return `
+    <article class="discoverSparkCard discoverSparkCard--${escapeHtml(tone)}" aria-label="${escapeHtml(spark.title)}">
+      <div class="discoverSparkExamples" role="list">${examplesHtml}</div>
+      <div class="discoverSparkRow">
+        <span class="discoverSparkThumb">${discoverSparkArtThumbHtml(spark)}</span>
+        <div class="discoverSparkInfo">
+          <strong class="discoverSparkTitle">${escapeHtml(spark.title)}</strong>
+          <span class="discoverSparkBadge">${escapeHtml(spark.category || "Template")}</span>
+          <span class="discoverSparkCount">${discoverHubStatLabel(created)} creations</span>
+        </div>
+        <button type="button" class="discoverSparkCreate" ${discoverSparkCreateAttrs(spark)}>Create</button>
+      </div>
+    </article>`;
 }
 
 function renderDiscoverTrendingTemplatesSection(tracks, profMap) {
   const mount = document.getElementById("discoverTrendingTemplatesMount");
   if (!mount) return;
-  const blocks = DISCOVER_HUB_SPARK_CHALLENGES.map((spark) => {
-    const idea = discoverHubSparkById(spark.id);
-    const tone = spark.tone || "violet";
-    const created = discoverSparkCreatedCount(spark.id, tracks);
-    const examples = discoverTracksForSparkChallenge(spark.id, tracks, 3);
-    const blurb = String(idea?.prompt || idea?.lyrics || "").trim();
-    const examplesHtml = examples.length
-      ? `<div class="discoverHubRail discoverHubRail--examples" role="list">${examples.map((t) => discoverHubExampleCardHtml(t, profMap)).join("")}</div>`
-      : `<p class="discoverHubTemplateEmpty">Be the first to try ${escapeHtml(spark.title)}.</p>`;
-    return `
-      <article class="discoverJournalSpark discoverJournalSpark--${tone}">
-        ${discoverHubSparkArtHtml(spark.id, tone)}
-        <div class="discoverJournalSparkCopy">
-          <span class="discoverJournalSparkEyebrow">Creation spark</span>
-          <strong class="discoverJournalSparkTitle">${escapeHtml(spark.title)}</strong>
-          <p class="discoverJournalSparkBlurb">${escapeHtml(blurb.slice(0, 96))}${blurb.length > 96 ? "…" : ""}</p>
-          <div class="discoverJournalSparkFoot">
-            <span class="discoverJournalSparkCount">${discoverHubStatLabel(created)} created</span>
-            <button type="button" class="discoverJournalSparkBtn" data-discover-spark-challenge="${escapeHtml(spark.id)}">Start</button>
-          </div>
-        </div>
-        ${examples.length ? `<div class="discoverJournalSparkExamples"><span class="discoverJournalSparkExamplesLabel">Listen first</span>${examplesHtml}</div>` : examplesHtml}
-      </article>`;
-  }).join("");
+  const cards = DISCOVER_HUB_SPARK_CHALLENGES.map((spark) => discoverSparkCardHtml(spark, tracks, profMap)).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("sparks", "Creation sparks", "Templates that open Create — pick one and go.")}
-    <div class="discoverJournalSparkList">${blocks}</div>`;
+    ${discoverHubSectionHeadHtml("sparks", "Templates & Sparks", "Jump into a trend and make it yours.")}
+    <div class="discoverHubRail discoverHubRail--sparks" role="list">${cards}</div>`;
 }
 
 function discoverRemixReactionCount(track, fallback) {
@@ -6679,6 +6735,17 @@ function bindDiscoverHubV1Once() {
       const expanded = block.classList.toggle("isExpanded");
       more.hidden = !expanded;
       viewAllBtn.textContent = expanded ? "Show less" : "View all";
+      return;
+    }
+    const sparkCreateBtn = e.target?.closest?.("[data-discover-spark-create]");
+    if (sparkCreateBtn && root.contains(sparkCreateBtn)) {
+      e.preventDefault();
+      haptic("light");
+      const action = String(sparkCreateBtn.getAttribute("data-discover-spark-action") || "challenge").trim();
+      const ref = String(sparkCreateBtn.getAttribute("data-discover-spark-ref") || "").trim();
+      if (!ref) return;
+      if (action === "occasion") applyDiscoverOccasionStart(ref);
+      else applyChallengeStartById(ref, null);
       return;
     }
     const sparkBtn = e.target?.closest?.("[data-discover-spark-challenge]");

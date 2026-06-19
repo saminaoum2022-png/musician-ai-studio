@@ -31610,94 +31610,211 @@ section.mentorPage{
   text-overflow: ellipsis;
 }
 
-/* Creation sparks — journal cards */
-.discoverJournalSparkList{
+/* Templates & Sparks — compact trend carousel */
+.discoverHubRail--sparks{
+  gap: 10px;
+  padding-bottom: 8px;
+}
+.discoverSparkCard{
+  flex: 0 0 236px;
+  width: 236px;
+  max-height: 248px;
+  scroll-snap-align: start;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-}
-.discoverJournalSpark{
-  display: grid;
-  grid-template-columns: 120px 1fr;
-  gap: 12px;
-  padding: 12px;
+  gap: 8px;
+  padding: 10px;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background:
-    linear-gradient(145deg, rgba(124, 92, 255, 0.06), rgba(255, 255, 255, 0.02));
+  background: rgba(255, 255, 255, 0.02);
+  box-sizing: border-box;
 }
-.discoverJournalSparkArt{
-  display: block;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+.discoverSparkExamples{
+  display: flex;
+  gap: 6px;
+  min-height: 78px;
+  max-height: 78px;
+  align-items: stretch;
 }
-.discoverJournalSparkArt svg{
-  width: 100%;
-  height: auto;
-  display: block;
-}
-.discoverJournalSparkCopy{
+.discoverSparkExample{
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
-.discoverJournalSparkEyebrow{
+.discoverSparkExampleArt{
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+}
+.discoverSparkExampleArt img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.discoverSparkExamplePlay{
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #1c1408;
+  background: linear-gradient(135deg, #facc15, #f59e0b);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+.discoverSparkExampleTitle{
   font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(94, 234, 212, 0.72);
+  font-weight: 750;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.82);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
-.discoverJournalSparkTitle{
-  font-size: 15px;
-  font-weight: 850;
-  color: #fff;
-  letter-spacing: -0.02em;
-}
-.discoverJournalSparkBlurb{
-  margin: 0;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.4;
-  color: rgba(223, 231, 251, 0.52);
-}
-.discoverJournalSparkFoot{
+.discoverSparkExamplesEmpty{
+  flex: 1;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 4px;
-}
-.discoverJournalSparkCount{
+  justify-content: center;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
   font-size: 10px;
-  font-weight: 700;
-  color: rgba(223, 231, 251, 0.4);
+  font-weight: 600;
+  color: rgba(223, 231, 251, 0.42);
+  text-align: center;
+  line-height: 1.35;
 }
-.discoverJournalSparkBtn{
-  padding: 7px 14px;
+.discoverSparkRow{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 0;
+}
+.discoverSparkThumb{
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 11px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #05070d;
+}
+.discoverSparkThumbImg{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.discoverSparkThumbSvg{
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.discoverSparkThumbSvg .discoverJournalSparkArt,
+.discoverSparkThumbSvg > span{
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+}
+.discoverSparkThumbSvg svg{
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.discoverSparkInfo{
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.discoverSparkTitle{
+  font-size: 12.5px;
+  font-weight: 850;
+  line-height: 1.15;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoverSparkBadge{
+  align-self: flex-start;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(167, 139, 250, 0.95);
+  background: rgba(124, 92, 255, 0.16);
+  border: 1px solid rgba(124, 92, 255, 0.22);
+}
+.discoverSparkCard--rose .discoverSparkBadge{
+  color: rgba(251, 113, 133, 0.95);
+  background: rgba(244, 114, 182, 0.14);
+  border-color: rgba(244, 114, 182, 0.22);
+}
+.discoverSparkCard--cyan .discoverSparkBadge,
+.discoverSparkCard--mint .discoverSparkBadge{
+  color: rgba(45, 212, 191, 0.95);
+  background: rgba(35, 213, 171, 0.12);
+  border-color: rgba(35, 213, 171, 0.22);
+}
+.discoverSparkCard--gold .discoverSparkBadge{
+  color: rgba(250, 204, 21, 0.95);
+  background: rgba(250, 204, 21, 0.1);
+  border-color: rgba(250, 204, 21, 0.22);
+}
+.discoverSparkCount{
+  font-size: 9.5px;
+  font-weight: 650;
+  color: rgba(223, 231, 251, 0.44);
+}
+.discoverSparkCreate{
+  flex: none;
+  padding: 8px 11px;
   border: none;
   border-radius: 999px;
-  background: linear-gradient(135deg, rgba(124, 92, 255, 0.95), rgba(35, 213, 171, 0.75));
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.95), rgba(35, 213, 171, 0.72));
   color: #fff;
   font: inherit;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 800;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
 }
+.discoverSparkCreate:active{
+  opacity: 0.88;
+}
+.discoverJournalSparkList,
+.discoverJournalSpark,
+.discoverJournalSparkCopy,
+.discoverJournalSparkBlurb,
+.discoverJournalSparkFoot,
 .discoverJournalSparkExamples{
-  grid-column: 1 / -1;
-  margin-top: 2px;
-}
-.discoverJournalSparkExamplesLabel{
-  display: block;
-  margin-bottom: 6px;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: rgba(223, 231, 251, 0.38);
+  display: none;
 }
 .discoverHubRail--examples{ gap: 8px; padding-bottom: 2px; }
 .discoverHubExampleCard{

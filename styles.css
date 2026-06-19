@@ -16130,122 +16130,70 @@ input::placeholder, textarea::placeholder{
     color: inherit;
     opacity: 0.92;
   }
-  /* Create tab — diamond mark (45° square), flat teal + violet split, no glow */
-  .mobileTabbar a.tabCreate{
-    justify-content: flex-end;
-    gap: 2px;
-    padding-top: 0;
-    color: rgba(223, 231, 251, 0.62);
-  }
-  .tabCreateOrbWrap{
-    position: relative;
-    width: 54px;
-    height: 50px;
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    flex: 0 0 auto;
-    margin-top: -14px;
-  }
-  .tabCreateOrb,
-  .tabCreateMark{
-    position: relative;
-    z-index: 1;
-    width: 48px;
-    height: 48px;
-    border-radius: var(--nabad-squircle-radius);
-    display: grid;
-    place-items: center;
-    flex: 0 0 auto;
-    overflow: hidden;
-    transform: rotate(45deg);
-    background: linear-gradient(135deg, #23d5ab 0%, #23d5ab 49.8%, #7c5cff 50.2%, #7c5cff 100%);
-    box-shadow: none;
-    transition: transform 180ms cubic-bezier(0.22, 0.61, 0.36, 1);
-  }
-  .tabCreateOrbPlus{
-    position: relative;
-    z-index: 1;
-    width: 26px;
-    height: 26px;
-    display: block;
-    pointer-events: none;
-    transform: rotate(-45deg);
-  }
-  .mobileTabbar a.tabCreate .tabIcoCreate{
-    display: none !important;
-  }
+  /* Create tab — subtle morph when on Create with inputs ready */
   .mobileTabbar a.tabCreate .tabIcoPlay,
   .mobileTabbar a.tabCreate .tabIcoSpinner{
     display: none;
-    position: absolute;
-    left: 50%;
-    bottom: 14px;
-    transform: translateX(-50%);
-  }
-  .mobileTabbar a.tabCreate .tabIcoPlay{
-    width: 24px;
-    height: 24px;
-    stroke: none;
-    fill: #fff;
-    z-index: 2;
-  }
-  .mobileTabbar a.tabCreate:active .tabCreateOrb{
-    transform: rotate(45deg) scale(0.94);
-  }
-  .mobileTabbar a.tabCreate.active{
-    color: #f8faff;
-  }
-  .mobileTabbar a.tabCreate.active .tabCreateOrb{
-    box-shadow: none;
   }
   .mobileTabbar a.tabCreate.tabIsReady,
   .mobileTabbar a.tabCreate.tabIsListen{
     color: #fff;
-    background: transparent;
-    box-shadow: none;
-    margin: 0;
-    animation: none;
+    background:
+      radial-gradient(100% 100% at 18% 0%, rgba(35,213,171,0.34), transparent 58%),
+      linear-gradient(180deg, rgba(124,92,255,0.50), rgba(35,213,171,0.24));
+    box-shadow:
+      0 10px 22px rgba(124,92,255,0.34),
+      inset 0 0 0 1px rgba(124,92,255,0.42);
+    animation: tabCreatePulse 2400ms ease-in-out infinite;
+    margin: 2px;
   }
-  .mobileTabbar a.tabCreate.tabIsReady .tabCreateOrbPlus,
-  .mobileTabbar a.tabCreate.tabIsListen .tabCreateOrbPlus{
-    opacity: 0;
+  .mobileTabbar a.tabCreate.tabIsReady .tabIcoCreate,
+  .mobileTabbar a.tabCreate.tabIsListen .tabIcoCreate{
+    display: none;
   }
   .mobileTabbar a.tabCreate.tabIsReady .tabIcoPlay,
   .mobileTabbar a.tabCreate.tabIsListen .tabIcoPlay{
     display: block;
   }
-  .mobileTabbar a.tabCreate.tabIsListen .tabCreateOrb{
-    background: linear-gradient(135deg, #2eecc0 0%, #2eecc0 49.8%, #8b6cff 50.2%, #8b6cff 100%);
+  .mobileTabbar a.tabCreate.tabIsListen{
+    background: linear-gradient(180deg, rgba(35,213,171,0.55), rgba(124,92,255,0.28));
+    box-shadow:
+      0 10px 22px rgba(35,213,171,0.34),
+      inset 0 0 0 1px rgba(35,213,171,0.46);
   }
   .mobileTabbar a.tabCreate.tabIsGenerating{
-    color: rgba(244, 247, 255, 0.96);
-    background: transparent;
-    box-shadow: none;
-    margin: 0;
+    color: rgba(244,247,255,0.96);
+    background: rgba(124,92,255,0.14);
+    box-shadow: inset 0 0 0 1px rgba(124,92,255,0.32);
+    margin: 2px;
   }
-  .mobileTabbar a.tabCreate.tabIsGenerating .tabCreateOrbPlus{
-    opacity: 0;
-  }
-  .mobileTabbar a.tabCreate.tabIsGenerating .tabCreateOrb{
-    opacity: 0;
+  .mobileTabbar a.tabCreate.tabIsGenerating .tabIcoCreate,
+  .mobileTabbar a.tabCreate.tabIsGenerating .tabIcoPlay{
+    display: none;
   }
   .mobileTabbar a.tabCreate.tabIsGenerating .tabIcoSpinner{
     display: inline-block;
-    width: 48px;
-    height: 48px;
-    border-radius: var(--nabad-squircle-radius);
-    transform: translateX(-50%) rotate(45deg);
-    border: 2.5px solid rgba(255, 255, 255, 0.2);
-    border-top-color: #fff;
-    border-right-color: rgba(35, 213, 171, 0.85);
-    background: linear-gradient(135deg, rgba(35, 213, 171, 0.35) 0%, rgba(35, 213, 171, 0.35) 49.8%, rgba(124, 92, 255, 0.35) 50.2%, rgba(124, 92, 255, 0.35) 100%);
-    box-shadow: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    border: 2px solid rgba(255,255,255,0.18);
+    border-top-color: rgba(124,92,255,0.95);
     animation: tabCreateSpin 900ms linear infinite;
-    z-index: 2;
+  }
+  @keyframes tabCreatePulse{
+    0%, 100%{
+      box-shadow:
+        0 8px 18px rgba(124,92,255,0.26),
+        inset 0 0 0 1px rgba(124,92,255,0.36);
+    }
+    50%{
+      box-shadow:
+        0 14px 30px rgba(124,92,255,0.44),
+        inset 0 0 0 1px rgba(124,92,255,0.52);
+    }
   }
   @keyframes tabCreateSpin{
-    to{ transform: translateX(-50%) rotate(405deg); }
+    to{ transform: rotate(360deg); }
   }
   .mobileTabbar a.tabCreate .tabTooltip{
     position: absolute;

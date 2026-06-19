@@ -5062,7 +5062,6 @@ function discoverWeeklyChartSkeletonHtml() {
 function discoverHubSectionHeadSkeletonHtml() {
   return `
     <header class="discoverJournalSectionHead discoverHubSkelHead" aria-hidden="true">
-      <div class="discoverJournalSectionRule"></div>
       <div class="discoverJournalSectionTitleRow">
         <div class="discoverHubSkelTitle"></div>
       </div>
@@ -5118,17 +5117,11 @@ function discoverHubPickCardSkeletonHtml() {
     </div>`;
 }
 
-function discoverHubRemixRowSkeletonHtml() {
+function discoverHubRemixTileSkeletonHtml() {
   return `
-    <div class="discoverHubRemixCard discoverHubSkelRemix" aria-hidden="true">
-      <div class="discoverHubSkelRemixCovers">
-        <span class="discoverHubSkelRemixArt"></span>
-        <span class="discoverHubSkelRemixArt"></span>
-      </div>
-      <div class="discoverHubSkelMeta">
-        <div class="discoverSkeletonLine"></div>
-        <div class="discoverSkeletonLine short"></div>
-      </div>
+    <div class="discoverHubRemixTile discoverHubSkelRemix" aria-hidden="true">
+      <span class="discoverHubSkelRemixHalf"></span>
+      <span class="discoverHubSkelRemixHalf"></span>
     </div>`;
 }
 
@@ -5163,7 +5156,7 @@ function paintDiscoverHubSectionsLoading() {
   );
   paintDiscoverHubMountSkeleton(
     "discoverTrendingRemixesMount",
-    `${discoverHubSectionHeadSkeletonHtml()}<div class="discoverHubRemixList">${Array.from({ length: 3 }, () => discoverHubRemixRowSkeletonHtml()).join("")}</div>`,
+    `${discoverHubSectionHeadSkeletonHtml()}<div class="discoverHubRemixGrid">${Array.from({ length: 6 }, () => discoverHubRemixTileSkeletonHtml()).join("")}</div>`,
   );
 }
 
@@ -6209,7 +6202,6 @@ function discoverHubSectionHeadHtml(title, actionHtml = "") {
     : "";
   return `
     <header class="discoverJournalSectionHead">
-      <div class="discoverJournalSectionRule" aria-hidden="true"></div>
       <div class="discoverJournalSectionTitleRow">
         <h3 class="discoverJournalSectionTitle">${escapeHtml(title)}</h3>
         ${action}
@@ -6773,36 +6765,20 @@ function discoverHubRemixCardHtml(r) {
     taskId: r.track.taskId,
     audioId: r.track.audioId,
   }) : "";
-  const plays = Math.max(0, Number(r.playCount) || 0);
-  const likes = r.track ? discoverHubReactionCount(r.track) : null;
-  const remixerLine = r.remixerHandle ? `@${escapeHtml(r.remixerHandle)}` : escapeHtml(r.remixer);
-  const originalLine = r.originalByHandle ? `@${escapeHtml(r.originalByHandle)}` : escapeHtml(r.originalBy);
-  const statBits = [];
-  if (plays > 0) statBits.push(`${discoverHubStatLabel(plays)} plays`);
-  if (likes != null && likes > 0) statBits.push(`${discoverHubStatLabel(likes)} likes`);
-  const statsHtml = statBits.length
-    ? `<span class="discoverHubRemixCardStats">${statBits.map((b) => `<span>${escapeHtml(b)}</span>`).join("")}</span>`
-    : "";
+  const remixerLine = r.remixerHandle ? `@${r.remixerHandle}` : String(r.remixer || "Creator");
+  const label = `${r.remixTitle || "Remix"} · ${remixerLine}`;
   const inner = `
-    <div class="discoverHubRemixCoversRow" aria-hidden="true">
-      <figure class="discoverHubRemixCoverCell">
-        <img src="${escapeHtml(r.originalArt)}" alt="" loading="lazy" decoding="async" />
-        <figcaption>Original</figcaption>
-      </figure>
-      <figure class="discoverHubRemixCoverCell discoverHubRemixCoverCell--remix">
-        <img src="${escapeHtml(r.remixArt || r.originalArt)}" alt="" loading="lazy" decoding="async" />
-        <figcaption>Remix</figcaption>
-      </figure>
-    </div>
-    <div class="discoverHubRemixCardMeta">
-      <strong class="discoverHubRemixCardTitle">${escapeHtml(r.remixTitle || "Remix")}</strong>
-      <span class="discoverHubRemixCardLine"><span class="discoverHubRemixWho">${remixerLine}</span> remixed <span class="discoverHubRemixWhat">${originalLine}'s ${escapeHtml(r.originalTitle)}</span></span>
-      ${statsHtml}
-    </div>`;
+    <span class="discoverHubRemixTileHalf discoverHubRemixTileHalf--orig">
+      <img src="${escapeHtml(r.originalArt)}" alt="" loading="lazy" decoding="async" />
+    </span>
+    <span class="discoverHubRemixTileHalf discoverHubRemixTileHalf--remix">
+      <img src="${escapeHtml(r.remixArt || r.originalArt)}" alt="" loading="lazy" decoding="async" />
+      <span class="discoverHubRemixTilePlay" aria-hidden="true"><svg viewBox="0 0 24 24" width="10" height="10"><path fill="currentColor" d="M8 5.5v13l11-6.5-11-6.5Z"/></svg></span>
+    </span>`;
   if (r.track) {
-    return `<button type="button" class="discoverHubRemixCard" ${playAttrs}>${inner}</button>`;
+    return `<button type="button" class="discoverHubRemixTile" ${playAttrs} aria-label="Play remix ${escapeHtml(label)}">${inner}</button>`;
   }
-  return `<div class="discoverHubRemixCard discoverHubRemixCard--static">${inner}</div>`;
+  return `<div class="discoverHubRemixTile discoverHubRemixTile--static" aria-label="${escapeHtml(label)}">${inner}</div>`;
 }
 
 function renderDiscoverTrendingRemixesSection(tracks, profMap) {
@@ -6817,10 +6793,10 @@ function renderDiscoverTrendingRemixesSection(tracks, profMap) {
       originalArt: discoverRemixPlaceholderArt(r.originalTitle, ["gold", "cyan", "violet", "rose"][i % 4]),
     }));
   }
-  const list = rows.map((r) => discoverHubRemixCardHtml(r)).join("");
+  const list = rows.slice(0, 9).map((r) => discoverHubRemixCardHtml(r)).join("");
   mount.innerHTML = `
     ${discoverHubSectionHeadHtml("Trending remixes")}
-    <div class="discoverHubRemixList" role="list">${list}</div>`;
+    <div class="discoverHubRemixGrid" role="list">${list}</div>`;
 }
 
 function renderDiscoverSuggestedCreatorsSection() {

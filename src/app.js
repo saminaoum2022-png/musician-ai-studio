@@ -5063,12 +5063,7 @@ function discoverHubSectionHeadSkeletonHtml() {
   return `
     <header class="discoverJournalSectionHead discoverHubSkelHead" aria-hidden="true">
       <div class="discoverJournalSectionRule"></div>
-      <div class="discoverJournalSectionRow">
-        <span class="discoverHubSkelIcon"></span>
-        <div class="discoverJournalSectionText">
-          <div class="discoverHubSkelTitle"></div>
-        </div>
-      </div>
+      <div class="discoverHubSkelTitle"></div>
     </header>`;
 }
 
@@ -6206,28 +6201,11 @@ function discoverHubStatLabel(n) {
   return formatStatCount(v);
 }
 
-function discoverHubSectionIconSvg(key) {
-  const icons = {
-    challenges: `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 4h10l1 4-6 3-6-3 1-4Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 11v9M8.5 20h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="7.5" r="1.2" fill="currentColor"/></svg>`,
-    picks: `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H10v16H6.5A2.5 2.5 0 0 1 4 17.5v-11Z" stroke="currentColor" stroke-width="1.6"/><path d="M10 4h7.5A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5H10V4Z" stroke="currentColor" stroke-width="1.6"/><path d="M13 9h4M13 12.5h4M13 16h2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`,
-    sparks: `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2.5 14.8 9l6.7.6-5.1 4.3 1.6 6.6L12 17.8 6 20.5l1.6-6.6L2.5 9.6 9.2 9 12 2.5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>`,
-    remixes: `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 7.5h8.5a3 3 0 0 1 0 6H12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M9.5 5 7 7.5 9.5 10M17 16.5H8.5a3 3 0 0 1 0-6H12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M14.5 14l2.5 2.5-2.5 2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-    new: `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.6"/><path d="M12 7.5v5l3 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`,
-    creators: `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="9" cy="8.5" r="3" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 19c.8-3 3.4-5 5.5-5s4.7 2 5.5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="17.5" cy="9" r="2.5" stroke="currentColor" stroke-width="1.4"/><path d="M14.5 19c.5-2 1.8-3.5 3.5-3.5s3 1.5 3.5 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`,
-  };
-  return icons[String(key || "").trim()] || icons.sparks;
-}
-
-function discoverHubSectionHeadHtml(iconKey, title) {
+function discoverHubSectionHeadHtml(title) {
   return `
     <header class="discoverJournalSectionHead">
       <div class="discoverJournalSectionRule" aria-hidden="true"></div>
-      <div class="discoverJournalSectionRow">
-        <span class="discoverJournalSectionIcon">${discoverHubSectionIconSvg(iconKey)}</span>
-        <div class="discoverJournalSectionText">
-          <h3 class="discoverJournalSectionTitle">${escapeHtml(title)}</h3>
-        </div>
-      </div>
+      <h3 class="discoverJournalSectionTitle">${escapeHtml(title)}</h3>
     </header>`;
 }
 
@@ -6601,7 +6579,7 @@ function renderDiscoverCommunityPicksSection(tracks, profMap) {
     ? picks.map((t) => discoverHubPickCardHtml(t, profMap)).join("")
     : `<p class="discoverHubQuietNote">Community songs will show here as creators publish to Discover.</p>`;
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("picks", "Community picks")}
+    ${discoverHubSectionHeadHtml("Community picks")}
     <div class="discoverHubRail discoverHubRail--picks" role="list">${cards}</div>`;
 }
 
@@ -6610,7 +6588,7 @@ function renderDiscoverLiveChallengesSection(tracks, profMap) {
   if (!mount) return;
   const cards = DISCOVER_LIVE_CHALLENGES.map((c) => discoverHubChallengeJournalCardHtml(c, tracks, profMap)).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("challenges", "Live challenges")}
+    ${discoverHubSectionHeadHtml("Live challenges")}
     <div class="discoverHubRail discoverHubRail--challenges" role="list">${cards}</div>`;
 }
 
@@ -6718,7 +6696,7 @@ function renderDiscoverTrendingTemplatesSection(tracks, profMap) {
   if (!mount) return;
   const cards = DISCOVER_HUB_SPARK_CHALLENGES.map((spark) => discoverSparkCardHtml(spark, tracks, profMap)).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("sparks", "Templates & Sparks")}
+    ${discoverHubSectionHeadHtml("Templates & Sparks")}
     <div class="discoverHubRail discoverHubRail--sparks" role="list">${cards}</div>`;
 }
 
@@ -6828,7 +6806,7 @@ function renderDiscoverTrendingRemixesSection(tracks, profMap) {
   }
   const list = rows.map((r) => discoverHubRemixCardHtml(r)).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("remixes", "Trending remixes")}
+    ${discoverHubSectionHeadHtml("Trending remixes")}
     <div class="discoverHubRemixList" role="list">${list}</div>`;
 }
 
@@ -6848,7 +6826,7 @@ function renderDiscoverSuggestedCreatorsSection() {
       <button type="button" class="discoverHubFollowBtn" data-discover-follow="${encodeURIComponent(c.handle)}" aria-label="Follow @${escapeHtml(c.handle)}">Follow</button>
     </article>`).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("creators", "Creators you may like")}
+    ${discoverHubSectionHeadHtml("Creators you may like")}
     <div class="discoverHubRail discoverHubRail--creators" role="list">${cards}</div>`;
 }
 
@@ -6864,7 +6842,7 @@ function renderDiscoverNewThisWeekSection() {
       </span>
     </button>`).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("new", "New this week")}
+    ${discoverHubSectionHeadHtml("New this week")}
     <div class="discoverHubRail discoverHubRail--new" role="list">${cards}</div>`;
 }
 

@@ -74,7 +74,7 @@
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
     <link rel="preload" as="video" href="./assets/icons/splash-logo.mp4?v=20260619trim" type="video/mp4" />
-    <link rel="stylesheet" href="./styles.css?v=20260619tabRevert" />
+    <link rel="stylesheet" href="./styles.css?v=20260619userPlaylist" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1912,6 +1912,23 @@
           </div>
         </div>
 
+        <div id="userPlaylistPickerSheet" class="feedReplySheet userPlaylistPickerSheet" aria-hidden="true" hidden>
+          <div class="feedReplySheetBackdrop" data-user-playlist-picker-dismiss="1"></div>
+          <div class="feedReplySheetCard" role="dialog" aria-modal="true" aria-labelledby="userPlaylistPickerTitle">
+            <div class="feedReplySheetGrab" aria-hidden="true"></div>
+            <header class="feedReplySheetHead">
+              <button type="button" class="feedReplySheetClose" data-user-playlist-picker-dismiss="1" aria-label="Close">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
+              </button>
+              <p class="feedReplySheetKicker">Save song</p>
+              <h2 class="feedReplySheetTitle" id="userPlaylistPickerTitle">Add to playlist</h2>
+              <p class="feedReplySheetSub" id="userPlaylistPickerSub">Pick a playlist or create a new one.</p>
+            </header>
+            <div id="userPlaylistPickerList" class="userPlaylistPickerList" role="list"></div>
+            <button type="button" id="btnUserPlaylistCreate" class="userPlaylistPickerCreateBtn">New playlist</button>
+          </div>
+        </div>
+
         <section class="card wide playerCard" data-route="player">
           <div class="playerHeader">
             <button id="btnPlayerBack" class="playerBack" type="button" aria-label="Back">
@@ -1974,6 +1991,13 @@
                     <path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/>
                     <polyline points="16 6 12 2 8 6"/>
                     <line x1="12" y1="2" x2="12" y2="15"/>
+                  </svg>
+                </button>
+                <button id="btnPlayerAddPlaylist" class="playerSideBtn" type="button" disabled aria-label="Add to playlist">
+                  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M9 6h12M9 12h12M9 18h8"/>
+                    <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M3 6v12"/>
+                    <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 5v6M1 8h6"/>
                   </svg>
                 </button>
                 <button id="btnPlayerToggle" class="playerToggleBtn" type="button" disabled aria-label="Play">
@@ -2416,9 +2440,11 @@
             <div class="profileTabBar" role="tablist" aria-label="Profile content">
               <button type="button" class="profileTab isActive" role="tab" aria-selected="true" data-profile-songs-segment="activities" id="profileSongsSegActivity">Posts</button>
               <button type="button" class="profileTab" role="tab" aria-selected="false" data-profile-songs-segment="all" id="profileSongsSegAll">Songs</button>
+              <button type="button" class="profileTab" role="tab" aria-selected="false" data-profile-songs-segment="playlist" id="profileSongsSegPlaylist">Playlist</button>
             </div>
             <div class="profileSongsToolbar libraryHeaderRow">
               <p id="libraryCount" class="libraryCount" hidden aria-live="polite"></p>
+              <p id="profilePlaylistCount" class="libraryCount" hidden aria-live="polite"></p>
               <p id="profileActivitiesCount" class="libraryCount" hidden aria-live="polite"></p>
               <div class="profileSongsToolbarActions">
                 <button
@@ -3699,6 +3725,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260619tabRevert"></script>
+    <script type="module" src="./src/app.js?v=20260619userPlaylist"></script>
   </body>
 </html>

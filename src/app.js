@@ -574,6 +574,7 @@ const els = {
   playerTimeCurrent: document.getElementById("playerTimeCurrent"),
   playerTimeTotal: document.getElementById("playerTimeTotal"),
   btnPlayerShare: document.getElementById("btnPlayerShare"),
+  btnPlayerAddPlaylist: document.getElementById("btnPlayerAddPlaylist"),
   btnPlayerDownloadVideo: document.getElementById("btnPlayerDownloadVideo"),
   btnPlayerMusicVideo: document.getElementById("btnPlayerMusicVideo"),
   playerLyricsOverlay: document.getElementById("playerLyricsOverlay"),
@@ -1916,6 +1917,7 @@ function renderHubNowPlaying() {
   const hideHubSource = miniSource?.type === "hub";
   const hideOnHubVisible = route === "hub";
   const hideOnLibrary = route === "profile" && _profileSongsSegment === "all" && miniSource?.type !== "library";
+  const hideOnPlaylist = route === "profile" && _profileSongsSegment === "playlist" && miniSource?.type !== "user_playlist";
   const hideOnPlayer = route === "player";
   const hideOnGenerate = route === "generate" && miniSource?.type === "generateResult";
 
@@ -1940,6 +1942,7 @@ function renderHubNowPlaying() {
     !hideHubSource &&
     !hideOnHubVisible &&
     !hideOnLibrary &&
+    !hideOnPlaylist &&
     !hideOnPlayer &&
     !hideOnGenerate;
   const miniShowsPause = audible || (discoverMiniLoading && hasMeta);
@@ -3219,18 +3222,23 @@ function applyRoute({ passGen } = {}) {
     try {
       const pq = new URLSearchParams(String(rawRouteQuery || ""));
       const segQ = pq.get("seg");
-      if (segQ === "all" || segQ === "activities" || segQ === "public") {
+      if (segQ === "all" || segQ === "activities" || segQ === "playlist" || segQ === "public") {
         _profileSongsSegment = segQ === "public" ? "activities" : segQ;
         sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, _profileSongsSegment);
       } else {
         const stored = sessionStorage.getItem(PROFILE_SONGS_SEGMENT_KEY);
         _profileSongsSegment =
-          stored === "public" ? "activities" : stored === "all" || stored === "activities" ? stored : "activities";
+          stored === "public"
+            ? "activities"
+            : stored === "all" || stored === "activities" || stored === "playlist"
+              ? stored
+              : "activities";
       }
     } catch {
       _profileSongsSegment = "activities";
     }
     bindProfileSongsSegmentOnce();
+    bindUserPlaylistPickerOnce();
     syncProfileSongsSegmentUi();
     const profileHeavy = !shouldSkipRouteHeavy("profile");
     if (profileHeavy) markRouteHeavy("profile");
@@ -3772,6 +3780,7 @@ try {
 } catch {}
 try {
   wireTrackOptionsSheetOnce();
+  bindUserPlaylistPickerOnce();
 } catch {}
 syncLibraryTabDotFromStorage();
 
@@ -21375,6 +21384,7 @@ function renderTrackSheetDiscover(ctx) {
     ? "Play another from this profile"
     : "Play another from Discover";
   l.innerHTML = `
+    ${TRACK_SHEET_ADD_PLAYLIST_ROW}
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="profile" id="discoverSheetRowProfile"${hideProfileRow ? " hidden" : ""}>View profile</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="lyrics">About this song</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="copy">Copy link</button>
@@ -21417,6 +21427,7 @@ function renderTrackSheetLibrary(track) {
     <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="library_share">Share</button>
   `;
   l.innerHTML = `
+    ${TRACK_SHEET_ADD_PLAYLIST_ROW}
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_audio">Download audio</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_video">Download video</button>
     ${musicVideoEligible ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_music_video">${musicVideoLabel}</button>` : ""}
@@ -21450,6 +21461,7 @@ function renderTrackSheetProfileLib(t) {
     <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="profile_lib_share">Share</button>
   `;
   l.innerHTML = `
+    ${TRACK_SHEET_ADD_PLAYLIST_ROW}
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="profile_lib_featured">${escapeHtml(featuredLabel)}</button>
   `;
   d.innerHTML = `
@@ -21471,6 +21483,7 @@ function renderTrackSheetProfileHub(p) {
     <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="profile_hub_share" data-track-sheet-share-url="${escapeHtml(shareUrl)}">Share</button>
   `;
   l.innerHTML = `
+    ${TRACK_SHEET_ADD_PLAYLIST_ROW}
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="profile_hub_vis" data-track-sheet-pub-to="${profilePublic ? "private" : "public"}">${profilePublic ? "Hide from public profile" : "Show on public profile"}</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="profile_hub_proof">Proof of creation</button>
   `;
@@ -21743,6 +21756,41 @@ function runTrackSheetAction(action, sourceEl) {
   const ctx = _trackSheetCtx;
   if (!ctx || !action) return;
   const shut = () => closeTrackOptionsSheet();
+
+  if (action === "add_playlist") {
+    shut();
+    const ref = trackRefFromTrackSheetCtx(ctx);
+    if (!ref?.url) {
+      showToast("This song has no playable audio yet.", { durationMs: 3400 });
+      return;
+    }
+    openUserPlaylistPicker(ref);
+    return;
+  }
+
+  if (ctx.mode === "user_playlist_item") {
+    const pl = getUserPlaylistById(ctx.playlistId);
+    const item = (pl?.items || []).find((x) => String(x.id) === String(ctx.playlistItemId));
+    if (action === "user_playlist_play") {
+      shut();
+      const idx = (pl?.items || []).findIndex((x) => String(x.id) === String(ctx.playlistItemId));
+      if (idx >= 0) void playUserPlaylistTrackAt(ctx.playlistId, idx, { openPlayer: true });
+      return;
+    }
+    if (action === "user_playlist_remove") {
+      shut();
+      if (removeTrackFromUserPlaylist(ctx.playlistId, ctx.playlistItemId)) {
+        haptic("light");
+        showToast("Removed from playlist", { icon: "✓" });
+        if ((document.body.getAttribute("data-route") || "") === "profile" && _profileSongsSegment === "playlist") {
+          renderUserPlaylist();
+        }
+      }
+      return;
+    }
+    if (!item) return;
+    return;
+  }
 
   if (ctx.mode === "discover") {
     if (action === "remix") {
@@ -22738,6 +22786,21 @@ let _discoverPlaylistScreenSlug = "";
 let _discoverPlaylistScreenBound = false;
 let _discoverPlaylistAdvancing = false;
 let _discoverPlaylistAdvanceToken = 0;
+/** User-curated profile playlists (local per account). */
+let _userPlaylistQueue = [];
+let _userPlaylistQueueId = "";
+let _userPlaylistAdvancing = false;
+let _userPlaylistAdvanceToken = 0;
+let _userPlaylistPickerTrackRef = null;
+let _userPlaylistPickerBound = false;
+let _userPlaylistListenersBound = false;
+let _userPlaylistVisibleCount = 40;
+const USER_PLAYLIST_PAGE_SIZE = 40;
+const USER_PLAYLISTS_STORAGE_PREFIX = "mas:userPlaylists:v1:";
+const DEFAULT_USER_PLAYLIST_ID = "default";
+const DEFAULT_USER_PLAYLIST_TITLE = "Playlist";
+const TRACK_SHEET_ADD_PLAYLIST_ROW =
+  `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="add_playlist">Add to playlist</button>`;
 let _playerPlaybackSeq = 0;
 /** Songs listed on `#/u/…` (Library public list or Hub-derived profile) for sheet shuffle. */
 let _userPublicFeedTracks = [];
@@ -22945,6 +23008,609 @@ async function playNextDiscoverPlaylistTrack(excludeUrl, opts = {}) {
   } finally {
     if (token === _discoverPlaylistAdvanceToken) _discoverPlaylistAdvancing = false;
   }
+}
+
+function getUserPlaylistsStorageKey() {
+  const uid = String(activeProfile?.id || authSession?.user?.id || "").trim();
+  return `${USER_PLAYLISTS_STORAGE_PREFIX}${uid || "guest"}`;
+}
+
+function loadUserPlaylistsStore() {
+  try {
+    const raw = localStorage.getItem(getUserPlaylistsStorageKey());
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (parsed && Array.isArray(parsed.playlists)) return parsed;
+  } catch {}
+  return { playlists: [] };
+}
+
+function saveUserPlaylistsStore(store) {
+  try {
+    localStorage.setItem(getUserPlaylistsStorageKey(), JSON.stringify(store));
+  } catch {}
+}
+
+function newUserPlaylistId() {
+  return `pl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function newUserPlaylistItemId() {
+  return `pli_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function ensureUserPlaylistsStore() {
+  const store = loadUserPlaylistsStore();
+  if (!store.playlists.length) {
+    store.playlists.push({
+      id: DEFAULT_USER_PLAYLIST_ID,
+      title: DEFAULT_USER_PLAYLIST_TITLE,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      items: [],
+    });
+    saveUserPlaylistsStore(store);
+  }
+  return store;
+}
+
+function listUserPlaylists() {
+  return ensureUserPlaylistsStore().playlists.slice();
+}
+
+function getUserPlaylistById(id) {
+  const pid = String(id || "").trim();
+  if (!pid) return null;
+  return listUserPlaylists().find((p) => String(p.id) === pid) || null;
+}
+
+function createUserPlaylist(title) {
+  const clean = String(title || "").trim() || "New playlist";
+  const store = ensureUserPlaylistsStore();
+  const pl = {
+    id: newUserPlaylistId(),
+    title: clean.slice(0, 64),
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    items: [],
+  };
+  store.playlists.unshift(pl);
+  saveUserPlaylistsStore(store);
+  return pl;
+}
+
+function userPlaylistTrackKey(trackRef) {
+  const url = libraryTrackCanonicalUrl(String(trackRef?.url || "").trim());
+  const kind = String(trackRef?.kind || "full").trim() || "full";
+  return `${url}|${kind}`;
+}
+
+function trackRefFromLibraryTrack(t) {
+  if (!t) return null;
+  const art = String(
+    (t.meta && (t.meta.imageThumb || t.meta.imageUrl)) || t.artUrl || "",
+  ).trim();
+  const handle = String(activeProfile?.username || "").trim();
+  return {
+    url: String(t.url || "").trim(),
+    title: String(t.title || "").trim() || "Song",
+    artUrl: art,
+    songId: String(trackCloudShareId(t) || t.id || "").trim(),
+    ownerUserId: String(authSession?.user?.id || activeProfile?.id || "").trim(),
+    taskId: String(t.taskId || t?.meta?.taskId || "").trim(),
+    audioId: String(t.audioId || t?.meta?.audioId || "").trim(),
+    byLine: handle ? `@${handle}` : "Your song",
+    kind: String(t.kind || "full").trim() || "full",
+    libraryId: String(t.id || "").trim(),
+    meta: t.meta || null,
+  };
+}
+
+function trackRefFromHubPost(p) {
+  if (!p) return null;
+  return {
+    url: String(p.url || "").trim(),
+    title: String(p.title || "").trim() || "Song",
+    artUrl: String(p.artUrl || "").trim(),
+    songId: String(p.songId || p.id || "").trim(),
+    ownerUserId: String(authSession?.user?.id || activeProfile?.id || "").trim(),
+    taskId: String(p.taskId || "").trim(),
+    audioId: String(p.audioId || "").trim(),
+    byLine: String(activeProfile?.username || "").trim() ? `@${activeProfile.username}` : "Your song",
+    kind: "full",
+  };
+}
+
+function trackRefFromTrackSheetCtx(ctx) {
+  if (!ctx) return null;
+  if (ctx.mode === "library" || ctx.mode === "profile_lib") {
+    const t = loadLibrary().find((x) => String(x.id) === String(ctx.libraryId));
+    return trackRefFromLibraryTrack(t);
+  }
+  if (ctx.mode === "profile_hub") {
+    const p = loadHubFeed().find((x) => String(x.id) === String(ctx.hubPostId));
+    return trackRefFromHubPost(p);
+  }
+  if (ctx.mode === "user_playlist_item") {
+    const pl = getUserPlaylistById(ctx.playlistId);
+    const item = (pl?.items || []).find((x) => String(x.id) === String(ctx.playlistItemId));
+    return item ? { ...item } : null;
+  }
+  if (ctx.mode === "discover") {
+    return {
+      url: String(ctx.url || "").trim(),
+      title: String(ctx.title || "").trim() || "Song",
+      artUrl: String(ctx.art || "").trim(),
+      songId: String(ctx.songId || "").trim(),
+      ownerUserId: String(ctx.ownerUserId || "").trim(),
+      taskId: String(ctx.taskId || "").trim(),
+      audioId: String(ctx.audioId || "").trim(),
+      byLine: String(ctx.by || "").trim() || (ctx.handle ? `@${ctx.handle}` : ""),
+      kind: String(ctx.kind || "full").trim() || "full",
+      meta: ctx.meta || null,
+    };
+  }
+  return null;
+}
+
+function trackRefFromCurrentPlayer() {
+  const t = currentPlayerTrackRef;
+  const url = String(t?.url || "").trim();
+  if (!url) return null;
+  const lib = resolvePlayerLibraryTrack();
+  if (lib?.url && String(lib.id || "") === String(t?.id || "")) {
+    return trackRefFromLibraryTrack(lib);
+  }
+  if (lib?.url && !String(t?.id || "").startsWith("public_")) {
+    return trackRefFromLibraryTrack(lib);
+  }
+  return {
+    url,
+    title: String(t?.title || "").trim() || "Song",
+    artUrl: String(t?.artUrl || "").trim(),
+    songId: String(t?.songId || "").trim(),
+    ownerUserId: String(t?.ownerUserId || "").trim(),
+    taskId: String(t?.taskId || "").trim(),
+    audioId: String(t?.audioId || "").trim(),
+    byLine: String(t?.byLine || "").trim(),
+    kind: String(t?.kind || "full").trim() || "full",
+    meta: t?.meta || null,
+  };
+}
+
+function isTrackInUserPlaylist(playlistId, trackRef) {
+  const pl = getUserPlaylistById(playlistId);
+  if (!pl?.items?.length || !trackRef?.url) return false;
+  const key = userPlaylistTrackKey(trackRef);
+  return pl.items.some((item) => userPlaylistTrackKey(item) === key);
+}
+
+function addTrackToUserPlaylist(playlistId, trackRef) {
+  const url = String(trackRef?.url || "").trim();
+  if (!url) return { ok: false, reason: "no_url" };
+  const store = ensureUserPlaylistsStore();
+  const idx = store.playlists.findIndex((p) => String(p.id) === String(playlistId));
+  if (idx < 0) return { ok: false, reason: "missing_playlist" };
+  const pl = store.playlists[idx];
+  const key = userPlaylistTrackKey(trackRef);
+  if ((pl.items || []).some((item) => userPlaylistTrackKey(item) === key)) {
+    return { ok: false, reason: "duplicate" };
+  }
+  const item = {
+    id: newUserPlaylistItemId(),
+    url,
+    title: String(trackRef?.title || "").trim() || "Song",
+    artUrl: String(trackRef?.artUrl || "").trim(),
+    songId: String(trackRef?.songId || "").trim(),
+    ownerUserId: String(trackRef?.ownerUserId || "").trim(),
+    taskId: String(trackRef?.taskId || "").trim(),
+    audioId: String(trackRef?.audioId || "").trim(),
+    byLine: String(trackRef?.byLine || "").trim(),
+    kind: String(trackRef?.kind || "full").trim() || "full",
+    libraryId: String(trackRef?.libraryId || "").trim(),
+    addedAt: Date.now(),
+  };
+  pl.items = Array.isArray(pl.items) ? pl.items : [];
+  pl.items.unshift(item);
+  pl.updatedAt = Date.now();
+  store.playlists[idx] = pl;
+  saveUserPlaylistsStore(store);
+  return { ok: true, item, playlist: pl };
+}
+
+function removeTrackFromUserPlaylist(playlistId, itemId) {
+  const store = ensureUserPlaylistsStore();
+  const idx = store.playlists.findIndex((p) => String(p.id) === String(playlistId));
+  if (idx < 0) return false;
+  const pl = store.playlists[idx];
+  const before = (pl.items || []).length;
+  pl.items = (pl.items || []).filter((item) => String(item.id) !== String(itemId));
+  if (pl.items.length === before) return false;
+  pl.updatedAt = Date.now();
+  store.playlists[idx] = pl;
+  saveUserPlaylistsStore(store);
+  return true;
+}
+
+function flattenUserPlaylistProfileRows() {
+  const rows = [];
+  for (const pl of listUserPlaylists()) {
+    for (const item of pl.items || []) {
+      if (!String(item.url || "").trim()) continue;
+      rows.push({ playlistId: pl.id, playlistTitle: pl.title, item });
+    }
+  }
+  rows.sort((a, b) => Number(b.item.addedAt || 0) - Number(a.item.addedAt || 0));
+  return rows;
+}
+
+function setUserPlaylistQueue(playlistId, items) {
+  _userPlaylistQueueId = String(playlistId || "").trim();
+  _userPlaylistQueue = (items || []).filter((t) => String(t.url || "").trim());
+}
+
+function getUserPlaylistPlaybackUiForItem(item) {
+  const u = String(item?.url || "").trim();
+  if (!u || miniSource?.type !== "user_playlist") return { active: false, audible: false };
+  const cur = String(currentPlayerTrackRef?.url || "").trim();
+  if (!cur || !audioUrlsEquivalent(cur, u)) return { active: false, audible: false };
+  const a = ensurePlayer();
+  if (!a) return { active: true, audible: false };
+  const dur = getPlayerDuration();
+  const ct = Number.isFinite(a.currentTime) ? a.currentTime : 0;
+  const audible = Boolean(!a.paused && !a.ended && (dur > 0 || ct > 0));
+  return { active: true, audible };
+}
+
+async function playUserPlaylistTrackAt(playlistId, index, opts = {}) {
+  const pl = getUserPlaylistById(playlistId);
+  const items = (pl?.items || []).filter((t) => String(t.url || "").trim());
+  if (!items.length) return;
+  setUserPlaylistQueue(playlistId, items);
+  const idx = Math.max(0, Math.min(items.length - 1, Number(index) || 0));
+  const item = items[idx];
+  if (!item?.url) return;
+  primeGlobalPlayerInGesture();
+  haptic("light");
+  await playLibraryUrlOnPlayer(item.url, item.title, item.artUrl, {
+    userPlaylist: true,
+    playlistId,
+    playlistIndex: idx,
+    openPlayer: opts.openPlayer === true,
+    discoverBy: item.byLine || pl.title || "Playlist",
+    playSource: item.songId && item.ownerUserId
+      ? { type: "public_song", songId: item.songId, ownerUserId: item.ownerUserId, taskId: item.taskId, audioId: item.audioId }
+      : null,
+  });
+}
+
+async function playNextUserPlaylistTrack(excludeUrl) {
+  if (_userPlaylistAdvancing) return;
+  if (!_userPlaylistQueue.length || !_userPlaylistQueueId) return;
+  if (miniSource?.type !== "user_playlist") return;
+  const curIdx = Number.isFinite(miniSource?.playlistIndex) ? Number(miniSource.playlistIndex) : -1;
+  let idx = curIdx;
+  if (idx < 0) {
+    const cur = String(excludeUrl || currentPlayerTrackRef?.url || miniSource?.url || "").trim();
+    idx = _userPlaylistQueue.findIndex((t) => audioUrlsEquivalent(String(t.url || "").trim(), cur));
+  }
+  const nextIdx = idx + 1;
+  if (nextIdx >= _userPlaylistQueue.length) return;
+  _userPlaylistAdvancing = true;
+  const token = ++_userPlaylistAdvanceToken;
+  try {
+    await playUserPlaylistTrackAt(_userPlaylistQueueId, nextIdx, { openPlayer: false });
+  } finally {
+    if (token === _userPlaylistAdvanceToken) _userPlaylistAdvancing = false;
+  }
+}
+
+function maybeAdvanceUserPlaylistFromProgress(audio) {
+  if (!audio || miniSource?.type !== "user_playlist") return;
+  if (_userPlaylistAdvancing || audio.paused || audio.ended) return;
+  const dur = getAudioDuration(audio);
+  if (!Number.isFinite(dur) || dur <= 0) return;
+  const cur = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+  if (cur < Math.max(0, dur - 0.35)) return;
+  void playNextUserPlaylistTrack(currentPlayerTrackRef?.url);
+}
+
+function syncUserPlaylistPlayingHighlights() {
+  const list = document.getElementById("libraryList");
+  if (!list || list.hidden) return;
+  if ((document.body.getAttribute("data-route") || "") !== "profile") return;
+  if (_profileSongsSegment !== "playlist") return;
+  list.querySelectorAll(".libRow").forEach((row) => {
+    row.classList.remove("libRowPlaying", "libRowActive");
+    const badge = row.querySelector(".libRowArtBadge");
+    if (badge) badge.textContent = "▶";
+  });
+  if (miniSource?.type !== "user_playlist") return;
+  const cur = String(currentPlayerTrackRef?.url || "").trim();
+  if (!cur) return;
+  list.querySelectorAll("[data-pl-row]").forEach((row) => {
+    const urlEnc = row.getAttribute("data-pl-url") || "";
+    let url = urlEnc;
+    try { url = decodeURIComponent(urlEnc); } catch {}
+    const { active, audible } = getUserPlaylistPlaybackUiForItem({ url });
+    if (!active) return;
+    row.classList.toggle("libRowPlaying", audible);
+    row.classList.toggle("libRowActive", active && !audible);
+    const badge = row.querySelector(".libRowArtBadge");
+    if (badge) badge.textContent = audible ? "❚❚" : "▶";
+  });
+}
+
+function renderUserPlaylistPickerList(trackRef) {
+  const listEl = document.getElementById("userPlaylistPickerList");
+  if (!listEl) return;
+  const playlists = listUserPlaylists();
+  listEl.innerHTML = playlists
+    .map((pl) => {
+      const count = (pl.items || []).length;
+      const inList = trackRef && isTrackInUserPlaylist(pl.id, trackRef);
+      return `
+        <button type="button" class="userPlaylistPickerRow" role="listitem" data-user-playlist-pick="${escapeHtml(pl.id)}">
+          <span class="userPlaylistPickerRowIco" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M8 6h13M8 12h13M8 18h9"/><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M4 6v12"/></svg>
+          </span>
+          <span class="userPlaylistPickerRowText">
+            <span class="userPlaylistPickerRowTitle">${escapeHtml(pl.title || "Playlist")}</span>
+            <span class="userPlaylistPickerRowSub">${count} song${count === 1 ? "" : "s"}</span>
+          </span>
+          ${inList ? `<span class="userPlaylistPickerRowCheck" aria-hidden="true">✓</span>` : ""}
+        </button>`;
+    })
+    .join("");
+}
+
+function openUserPlaylistPicker(trackRef) {
+  if (!trackRef?.url) {
+    showToast("This song has no playable audio yet.", { durationMs: 3400 });
+    return;
+  }
+  ensureUserPlaylistsStore();
+  _userPlaylistPickerTrackRef = trackRef;
+  const sheet = document.getElementById("userPlaylistPickerSheet");
+  const sub = document.getElementById("userPlaylistPickerSub");
+  if (sub) {
+    const title = String(trackRef.title || "Song").trim();
+    sub.textContent = title ? `Adding “${title}”` : "Pick a playlist or create a new one.";
+  }
+  renderUserPlaylistPickerList(trackRef);
+  if (!sheet) return;
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  requestAnimationFrame(() => sheet.classList.add("isOpen"));
+}
+
+function closeUserPlaylistPicker() {
+  const sheet = document.getElementById("userPlaylistPickerSheet");
+  _userPlaylistPickerTrackRef = null;
+  if (!sheet) return;
+  sheet.classList.remove("isOpen");
+  window.setTimeout(() => {
+    sheet.hidden = true;
+    sheet.setAttribute("aria-hidden", "true");
+    const listEl = document.getElementById("userPlaylistPickerList");
+    if (listEl) listEl.innerHTML = "";
+  }, 240);
+}
+
+function bindUserPlaylistPickerOnce() {
+  if (_userPlaylistPickerBound) return;
+  _userPlaylistPickerBound = true;
+  const sheet = document.getElementById("userPlaylistPickerSheet");
+  if (!sheet) return;
+  sheet.addEventListener("click", (e) => {
+    if (e.target.closest("[data-user-playlist-picker-dismiss]")) {
+      e.preventDefault();
+      closeUserPlaylistPicker();
+      return;
+    }
+    const pick = e.target.closest("[data-user-playlist-pick]");
+    if (pick && _userPlaylistPickerTrackRef) {
+      e.preventDefault();
+      const playlistId = pick.getAttribute("data-user-playlist-pick");
+      const result = addTrackToUserPlaylist(playlistId, _userPlaylistPickerTrackRef);
+      if (result.ok) {
+        haptic("light");
+        showToast(`Added to ${result.playlist?.title || "playlist"}`, { icon: "✓" });
+        closeUserPlaylistPicker();
+        if ((document.body.getAttribute("data-route") || "") === "profile" && _profileSongsSegment === "playlist") {
+          renderUserPlaylist();
+        }
+      } else if (result.reason === "duplicate") {
+        showToast("Already in this playlist", { durationMs: 2800 });
+      } else {
+        showToast("Could not add to playlist", { icon: "!" });
+      }
+    }
+  });
+  const createBtn = document.getElementById("btnUserPlaylistCreate");
+  if (createBtn) {
+    createBtn.addEventListener("click", () => {
+      if (!_userPlaylistPickerTrackRef) return;
+      const name = window.prompt("Playlist name", "New playlist");
+      if (name == null) return;
+      const pl = createUserPlaylist(name);
+      const result = addTrackToUserPlaylist(pl.id, _userPlaylistPickerTrackRef);
+      if (result.ok) {
+        haptic("light");
+        showToast(`Added to ${pl.title}`, { icon: "✓" });
+        closeUserPlaylistPicker();
+        if ((document.body.getAttribute("data-route") || "") === "profile" && _profileSongsSegment === "playlist") {
+          renderUserPlaylist();
+        }
+      }
+    });
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (!sheet.classList.contains("isOpen")) return;
+    closeUserPlaylistPicker();
+  });
+}
+
+function bindUserPlaylistDelegatedListeners() {
+  if (_userPlaylistListenersBound || !els.libraryList) return;
+  _userPlaylistListenersBound = true;
+  els.libraryList.addEventListener("click", async (e) => {
+    if ((document.body.getAttribute("data-route") || "") !== "profile") return;
+    if (_profileSongsSegment !== "playlist") return;
+    const target = e.target;
+    if (!(target instanceof Element)) return;
+    const menuBtn = target.closest("[data-pl-menu]");
+    if (menuBtn && els.libraryList.contains(menuBtn)) {
+      e.stopPropagation();
+      haptic("light");
+      const playlistId = menuBtn.getAttribute("data-pl-playlist-id");
+      const itemId = menuBtn.getAttribute("data-pl-menu");
+      if (playlistId && itemId) openUserPlaylistItemSheet(playlistId, itemId);
+      return;
+    }
+    const playBtn = target.closest("[data-pl-play]");
+    if (playBtn && els.libraryList.contains(playBtn)) {
+      if (target.closest("[data-pl-menu]")) return;
+      const playlistId = playBtn.getAttribute("data-pl-playlist-id");
+      const itemId = playBtn.getAttribute("data-pl-play");
+      const pl = getUserPlaylistById(playlistId);
+      const idx = (pl?.items || []).findIndex((x) => String(x.id) === String(itemId));
+      if (playlistId && idx >= 0) {
+        const item = pl.items[idx];
+        const url = String(item?.url || "").trim();
+        if (url && toggleUserPlaylistPlaybackIfSameUrl(url, playlistId, idx)) return;
+        await playUserPlaylistTrackAt(playlistId, idx);
+      }
+    }
+  });
+}
+
+function toggleUserPlaylistPlaybackIfSameUrl(rawUrl, playlistId, index) {
+  if (miniSource?.type !== "user_playlist") return false;
+  if (String(miniSource.playlistId || "") !== String(playlistId || "")) return false;
+  const cur = String(currentPlayerTrackRef?.url || "").trim();
+  const raw = String(rawUrl || "").trim();
+  if (!raw || !cur || !audioUrlsEquivalent(raw, cur)) return false;
+  const a = ensurePlayer();
+  const dur = getPlayerDuration();
+  const ct = Number.isFinite(a.currentTime) ? a.currentTime : 0;
+  const audible = Boolean(!a.paused && !a.ended && (dur > 0 || ct > 0));
+  if (audible) {
+    try { a.pause(); } catch {}
+  } else {
+    void hubAudioPlayWithRetry(a);
+  }
+  try { syncPlayerUI(); } catch {}
+  return true;
+}
+
+function openUserPlaylistItemSheet(playlistId, itemId) {
+  const pl = getUserPlaylistById(playlistId);
+  const item = (pl?.items || []).find((x) => String(x.id) === String(itemId));
+  if (!item) return;
+  _trackSheetCtx = { mode: "user_playlist_item", playlistId, playlistItemId: itemId };
+  renderTrackSheetUserPlaylistItem(pl, item);
+  const art = String(item.artUrl || "./assets/nabadai-logo.png").trim();
+  openTrackSheetShell({
+    title: String(item.title || "").trim() || "Song",
+    sub: pl?.title ? `${pl.title} · Playlist` : "Playlist",
+    artUrl: art,
+  });
+}
+
+function renderTrackSheetUserPlaylistItem(pl, item) {
+  const q = document.getElementById("trackSheetQuickMount");
+  const l = document.getElementById("trackSheetListMount");
+  const d = document.getElementById("trackSheetDangerMount");
+  if (!q || !l || !d) return;
+  q.innerHTML = `
+    <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="user_playlist_play">Play</button>
+    <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="add_playlist">Add to another playlist</button>
+  `;
+  l.innerHTML = "";
+  d.innerHTML = `
+    <button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--danger" data-track-sheet-action="user_playlist_remove">Remove from playlist</button>
+  `;
+}
+
+function renderUserPlaylist() {
+  if (!els.libraryList) return;
+  bindUserPlaylistDelegatedListeners();
+  const rows = flattenUserPlaylistProfileRows();
+  const countEl = document.getElementById("profilePlaylistCount");
+  if (countEl) {
+    if (!rows.length) {
+      countEl.textContent = "";
+      countEl.hidden = true;
+    } else {
+      countEl.textContent = String(rows.length);
+      countEl.hidden = false;
+    }
+  }
+  if (!rows.length) {
+    els.libraryList.innerHTML = `
+      <div class="emptyState">
+        <div class="emptyStateIcon" aria-hidden="true">♫</div>
+        <p class="emptyStateTitle">Your playlist is empty</p>
+        <p class="emptyStateHint">Tap <strong>Add to playlist</strong> on any song in the player or ⋯ menu — yours, Discover, or a friend's track.</p>
+        <button type="button" class="emptyStateCta" data-open-discover-playlist-help="1">Browse Discover</button>
+      </div>`;
+    const help = els.libraryList.querySelector("[data-open-discover-playlist-help]");
+    if (help && !help.dataset.bound) {
+      help.dataset.bound = "1";
+      help.addEventListener("click", () => { location.hash = "#/discover"; });
+    }
+    return;
+  }
+  const visible = rows.slice(0, _userPlaylistVisibleCount);
+  const hasMore = rows.length > visible.length;
+  els.libraryList.innerHTML = `
+    <ul class="libraryRows" role="list">
+      ${visible
+        .map(({ playlistId, playlistTitle, item }) => {
+          const art = String(item.artUrl || "./assets/nabadai-logo.png").trim();
+          const safeTitle = escapeHtml(String(item.title || "").trim() || "Song");
+          const { active: plActive, audible: plAudible } = getUserPlaylistPlaybackUiForItem(item);
+          const subBits = [];
+          if (item.byLine) subBits.push(`<span class="libRowDot">${escapeHtml(item.byLine)}</span>`);
+          if (playlistTitle && listUserPlaylists().length > 1) {
+            subBits.push(`<span class="libRowChip">${escapeHtml(playlistTitle)}</span>`);
+          }
+          const urlEnc = encodeURIComponent(String(item.url || ""));
+          return `
+          <li class="libRow ${plAudible ? "libRowPlaying" : ""}${plActive && !plAudible ? " libRowActive" : ""}" data-pl-row="${escapeHtml(item.id)}" data-pl-url="${escapeHtml(urlEnc)}" data-pl-playlist-id="${escapeHtml(playlistId)}">
+            <button class="libRowMain" type="button" data-pl-play="${escapeHtml(item.id)}" data-pl-playlist-id="${escapeHtml(playlistId)}" aria-label="${plAudible ? "Pause" : "Play"} ${safeTitle}">
+              <span class="libRowArt">
+                <img src="${escapeHtml(art)}" alt="" width="56" height="56" decoding="async" loading="lazy" />
+                <span class="libRowArtBadge" aria-hidden="true">${plAudible ? "❚❚" : "▶"}</span>
+              </span>
+              <span class="libRowInfo">
+                <span class="libRowTitle">${safeTitle}</span>
+                <span class="libRowSub">${subBits.join("")}</span>
+              </span>
+              <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
+            </button>
+            <div class="libRowActions">
+              <button class="libRowMore" type="button" data-pl-menu="${escapeHtml(item.id)}" data-pl-playlist-id="${escapeHtml(playlistId)}" aria-label="More options for ${safeTitle}">⋯</button>
+            </div>
+          </li>`;
+        })
+        .join("")}
+    </ul>
+    ${hasMore ? `
+      <div class="libLoadMoreWrap">
+        <button type="button" class="libLoadMore profileReleasesLoadMore" id="userPlaylistLoadMore" aria-label="Load more playlist songs">Load more<span class="profileReleasesLoadMoreCount">${rows.length - visible.length}</span></button>
+      </div>` : ""}
+  `;
+  const moreBtn = document.getElementById("userPlaylistLoadMore");
+  if (moreBtn && !moreBtn.dataset.bound) {
+    moreBtn.dataset.bound = "1";
+    moreBtn.addEventListener("click", () => {
+      _userPlaylistVisibleCount += USER_PLAYLIST_PAGE_SIZE;
+      renderUserPlaylist();
+    });
+  }
+  try { syncUserPlaylistPlayingHighlights(); } catch {}
 }
 
 function maybeAdvanceDiscoverPlaylistFromProgress(audio) {
@@ -23486,10 +24152,11 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   primeGlobalPlayerInGesture();
   const fromDiscover = Boolean(opts && opts.discoverFeed);
   const fromPlaylist = Boolean(opts && opts.discoverPlaylist);
+  const fromUserPlaylist = Boolean(opts && opts.userPlaylist);
   let openPlayer = true;
   if (opts?.openPlayer === false) openPlayer = false;
   else if (opts?.openPlayer === true) openPlayer = true;
-  const byLine = fromDiscover ? String(opts?.discoverBy || "").trim() : "";
+  const byLine = fromDiscover || fromUserPlaylist ? String(opts?.discoverBy || "").trim() : "";
   const playSource = opts?.playSource && opts.playSource.songId ? opts.playSource : null;
   const publicTrackMeta = playSource ? publicPlaybackTrackBySource(playSource, raw) : null;
   const releaseCaption =
@@ -23529,7 +24196,15 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     taskId: String(playSource?.taskId || publicTrackMeta?.taskId || "").trim(),
     audioId: String(playSource?.audioId || publicTrackMeta?.audioId || "").trim(),
   };
-  const publicSource = fromPlaylist
+  const publicSource = fromUserPlaylist
+    ? {
+      ...(playSource || {}),
+      type: "user_playlist",
+      url: playableRaw,
+      playlistId: String(opts?.playlistId || "").trim(),
+      playlistIndex: Number(opts?.playlistIndex) || 0,
+    }
+    : fromPlaylist
     ? {
       ...(playSource || {}),
       type: "discover_playlist",
@@ -23543,7 +24218,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   miniSource = publicSource;
   resetPublicPlayTracking(miniSource);
   libraryNowPlayingId = null;
-  if (refreshCandidate && !fromDiscover && !fromPlaylist) {
+  if (refreshCandidate && !fromDiscover && !fromPlaylist && !fromUserPlaylist) {
     const bgSource = publicSource;
     void (async () => {
       try {
@@ -23560,11 +24235,14 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     })();
   }
   try {
-    refreshOwnSongsUi({ soft: fromDiscover || fromPlaylist });
+    refreshOwnSongsUi({ soft: fromDiscover || fromPlaylist || fromUserPlaylist });
   } catch {}
+  const userPlTitle = fromUserPlaylist ? getUserPlaylistById(opts?.playlistId)?.title || "Playlist" : "";
   const meta = {
     title: title || "Song",
-    subtitle: fromPlaylist
+    subtitle: fromUserPlaylist
+      ? `${byLine || "Saved"} · ${userPlTitle}`
+      : fromPlaylist
       ? `${byLine || "Discover"} · ${getDiscoverPlaylistDef(opts?.playlistSlug)?.title || "Playlist"}`
       : fromDiscover
         ? byLine || "Discover feed"
@@ -27595,6 +28273,7 @@ function syncProfileSongsSegmentUi() {
   const activitiesList = document.getElementById("profileActivitiesList");
   const libList = document.getElementById("libraryList");
   const isAll = _profileSongsSegment === "all";
+  const isPlaylist = _profileSongsSegment === "playlist";
   const isActivities = _profileSongsSegment === "activities";
   const onProfile = (document.body.getAttribute("data-route") || "") === "profile";
   try {
@@ -27610,6 +28289,8 @@ function syncProfileSongsSegmentUi() {
   }
   if (recoverBanner && !isAll) recoverBanner.hidden = true;
   if (allCount) allCount.hidden = !isAll;
+  const playlistCount = document.getElementById("profilePlaylistCount");
+  if (playlistCount) playlistCount.hidden = !isPlaylist;
   if (actCount) actCount.hidden = !isActivities;
   if (activitiesList) activitiesList.hidden = !isActivities;
   if (libList) libList.hidden = isActivities;
@@ -27635,7 +28316,7 @@ function bindProfileSongsSegmentOnce() {
   document.querySelectorAll("[data-profile-songs-segment]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const seg = btn.getAttribute("data-profile-songs-segment");
-      if (seg !== "all" && seg !== "activities") return;
+      if (seg !== "all" && seg !== "activities" && seg !== "playlist") return;
       if (seg === _profileSongsSegment) return;
       _profileSongsSegment = seg;
       try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, seg); } catch {}
@@ -27673,7 +28354,7 @@ function bindProfileSongsSegmentOnce() {
     const segBtn = e.target?.closest?.("[data-profile-songs-switch]");
     if (!segBtn) return;
     const seg = segBtn.getAttribute("data-profile-songs-switch");
-    if (seg !== "all" && seg !== "activities") return;
+    if (seg !== "all" && seg !== "activities" && seg !== "playlist") return;
     _profileSongsSegment = seg;
     try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, seg); } catch {}
     syncProfileSongsSegmentUi();
@@ -27721,6 +28402,10 @@ function renderProfileSongs(opts = {}) {
   }
   if (actList) actList.hidden = true;
   if (libEl) libEl.hidden = false;
+  if (_profileSongsSegment === "playlist") {
+    renderUserPlaylist();
+    return;
+  }
   if (_profileSongsSegment === "all") {
     try { renderProfileOwnStats(); } catch {}
     renderLibrary();
@@ -31602,6 +32287,7 @@ function ensurePlayer() {
   playerEl.addEventListener("timeupdate", maybeRecordQualifiedPublicPlay);
   playerEl.addEventListener("timeupdate", () => {
     try { maybeAdvanceDiscoverPlaylistFromProgress(playerEl); } catch {}
+    try { maybeAdvanceUserPlaylistFromProgress(playerEl); } catch {}
   });
   playerEl.addEventListener("loadedmetadata", syncPlayerUI);
   // iOS Safari often reports `duration === Infinity` on Suno-proxied audio
@@ -31631,6 +32317,9 @@ function ensurePlayer() {
     } catch {}
     if (miniSource?.type === "discover_playlist" && _discoverPlaylistQueue.length) {
       void playNextDiscoverPlaylistTrack(currentPlayerTrackRef?.url);
+    }
+    if (miniSource?.type === "user_playlist" && _userPlaylistQueue.length) {
+      void playNextUserPlaylistTrack(currentPlayerTrackRef?.url);
     }
   });
   return playerEl;
@@ -31871,6 +32560,9 @@ function updatePlayerSecondaryChrome() {
   // listen-only ones alike (the handler routes each to the right flow).
   if (els.playerRemixRow) {
     els.playerRemixRow.hidden = !String(currentPlayerTrackRef?.url || "").trim();
+  }
+  if (els.btnPlayerAddPlaylist) {
+    els.btnPlayerAddPlaylist.disabled = !String(currentPlayerTrackRef?.url || "").trim();
   }
 }
 
@@ -33281,6 +33973,9 @@ function syncPlayerUI() {
   } catch {}
   try {
     syncProfileHubSharedRowsFromPlayer();
+  } catch {}
+  try {
+    syncUserPlaylistPlayingHighlights();
   } catch {}
   syncLockScreenNowPlaying();
 }
@@ -37837,6 +38532,17 @@ if (els.btnPlayerShare) {
     if (libRow) queueArchiveLibraryTrack(libRow);
   });
 }
+if (els.btnPlayerAddPlaylist) {
+  els.btnPlayerAddPlaylist.addEventListener("click", () => {
+    haptic("light");
+    const ref = trackRefFromCurrentPlayer();
+    if (!ref?.url) {
+      showToast("Open a song first, then add to playlist.");
+      return;
+    }
+    openUserPlaylistPicker(ref);
+  });
+}
 if (els.btnPlayerRemix) {
   els.btnPlayerRemix.addEventListener("click", async () => {
     haptic("light");
@@ -39684,7 +40390,7 @@ if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !=
 renderProfilePreviewFromInputs();
 try {
   const stored = sessionStorage.getItem(PROFILE_SONGS_SEGMENT_KEY);
-  if (stored === "all" || stored === "public" || stored === "activities") {
+  if (stored === "all" || stored === "public" || stored === "activities" || stored === "playlist") {
     _profileSongsSegment = stored === "public" ? "activities" : stored;
   }
 } catch {}

@@ -5051,12 +5051,142 @@ function discoverWeeklyChartSkeletonHtml() {
     </div>`;
 }
 
+function discoverHubSectionHeadSkeletonHtml() {
+  return `
+    <header class="discoverJournalSectionHead discoverHubSkelHead" aria-hidden="true">
+      <div class="discoverJournalSectionRule"></div>
+      <div class="discoverJournalSectionRow">
+        <span class="discoverHubSkelIcon"></span>
+        <div class="discoverJournalSectionText">
+          <div class="discoverHubSkelTitle"></div>
+          <div class="discoverHubSkelSub"></div>
+        </div>
+      </div>
+    </header>`;
+}
+
+function discoverHubSparkCardSkeletonHtml() {
+  return `
+    <article class="discoverSparkCard discoverHubSkelCard" aria-hidden="true">
+      <div class="discoverHubSkelSparkArt"></div>
+      <div class="discoverSparkRow">
+        <span class="discoverHubSkelThumb"></span>
+        <div class="discoverHubSkelMeta">
+          <div class="discoverSkeletonLine"></div>
+          <div class="discoverSkeletonLine short"></div>
+        </div>
+        <span class="discoverHubSkelBtn"></span>
+      </div>
+    </article>`;
+}
+
+function discoverHubChallengeCardSkeletonHtml() {
+  return `
+    <article class="discoverChallengeCard discoverHubSkelCard" aria-hidden="true">
+      <div class="chartHeroSkeleton discoverHubSkelChallengeHero">
+        <div class="chartHeroSkeletonArt"></div>
+        <div class="chartHeroSkeletonMeta">
+          <div class="discoverSkeletonLine short"></div>
+          <div class="discoverSkeletonLine"></div>
+          <div class="discoverSkeletonLine short"></div>
+        </div>
+      </div>
+      <div class="discoverChallengeRow discoverHubSkelChallengeFoot">
+        <span class="discoverHubSkelThumb"></span>
+        <div class="discoverHubSkelMeta">
+          <div class="discoverSkeletonLine"></div>
+          <div class="discoverSkeletonLine short"></div>
+        </div>
+        <span class="discoverHubSkelBtn"></span>
+      </div>
+    </article>`;
+}
+
+function discoverHubPickCardSkeletonHtml() {
+  return `
+    <div class="discoverHubPickCard discoverHubSkelCard" aria-hidden="true">
+      <div class="discoverHubSkelPickCover"></div>
+      <div class="discoverHubSkelMeta">
+        <div class="discoverSkeletonLine short"></div>
+        <div class="discoverSkeletonLine"></div>
+        <div class="discoverSkeletonLine short"></div>
+      </div>
+    </div>`;
+}
+
+function discoverHubRemixRowSkeletonHtml() {
+  return `
+    <div class="discoverHubRemixCard discoverHubSkelRemix" aria-hidden="true">
+      <div class="discoverHubSkelRemixCovers">
+        <span class="discoverHubSkelRemixArt"></span>
+        <span class="discoverHubSkelRemixArt"></span>
+      </div>
+      <div class="discoverHubSkelMeta">
+        <div class="discoverSkeletonLine"></div>
+        <div class="discoverSkeletonLine short"></div>
+      </div>
+    </div>`;
+}
+
+function discoverHubStatPillSkeletonHtml() {
+  return `<div class="discoverHubSkelStatPill" aria-hidden="true"><div class="discoverSkeletonLine"></div></div>`;
+}
+
+function paintDiscoverHubMountSkeleton(mountId, html) {
+  const el = document.getElementById(mountId);
+  if (!el) return;
+  el.innerHTML = html;
+  el.setAttribute("aria-busy", "true");
+  el.closest(".discoverHubSection")?.classList.add("isLoading");
+}
+
+function paintDiscoverHubSectionsLoading() {
+  paintDiscoverHubMountSkeleton(
+    "discoverCommunityStatsMount",
+    `<div class="discoverHubStatsStrip discoverHubSkelStats" aria-hidden="true">${Array.from({ length: 4 }, () => discoverHubStatPillSkeletonHtml()).join("")}</div>`,
+  );
+  paintDiscoverHubMountSkeleton(
+    "discoverLiveChallengesMount",
+    `${discoverHubSectionHeadSkeletonHtml()}<div class="discoverHubRail discoverHubRail--challenges">${Array.from({ length: 3 }, () => discoverHubChallengeCardSkeletonHtml()).join("")}</div>`,
+  );
+  paintDiscoverHubMountSkeleton(
+    "discoverCommunityPicksMount",
+    `${discoverHubSectionHeadSkeletonHtml()}<div class="discoverHubRail discoverHubRail--picks">${Array.from({ length: 4 }, () => discoverHubPickCardSkeletonHtml()).join("")}</div>`,
+  );
+  paintDiscoverHubMountSkeleton(
+    "discoverTrendingTemplatesMount",
+    `${discoverHubSectionHeadSkeletonHtml()}<div class="discoverHubRail discoverHubRail--sparks">${Array.from({ length: 3 }, () => discoverHubSparkCardSkeletonHtml()).join("")}</div>`,
+  );
+  paintDiscoverHubMountSkeleton(
+    "discoverTrendingRemixesMount",
+    `${discoverHubSectionHeadSkeletonHtml()}<div class="discoverHubRemixList">${Array.from({ length: 3 }, () => discoverHubRemixRowSkeletonHtml()).join("")}</div>`,
+  );
+}
+
+function clearDiscoverHubSectionsLoading() {
+  document.querySelectorAll(".discoverHubSection.isLoading").forEach((section) => {
+    section.classList.remove("isLoading");
+  });
+  [
+    "discoverCommunityStatsMount",
+    "discoverLiveChallengesMount",
+    "discoverCommunityPicksMount",
+    "discoverTrendingTemplatesMount",
+    "discoverTrendingRemixesMount",
+  ].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.removeAttribute("aria-busy");
+  });
+}
+
 function clearDiscoverTopSectionsLoading() {
   const chartWrap = document.getElementById("discoverWeeklyChart");
   if (chartWrap) {
     chartWrap.classList.remove("isLoading");
     chartWrap.removeAttribute("aria-busy");
   }
+  clearDiscoverHubSectionsLoading();
 }
 
 function paintDiscoverTopSectionsLoading() {
@@ -5067,7 +5197,7 @@ function paintDiscoverTopSectionsLoading() {
     chartWrap.setAttribute("aria-busy", "true");
     chartWrap.innerHTML = discoverWeeklyChartSkeletonHtml();
   }
-  renderDiscoverHubV1([], {});
+  paintDiscoverHubSectionsLoading();
 }
 
 // Challenge spotlight removed — World Cup anthems rail + main feed already surface
@@ -6363,15 +6493,15 @@ function discoverChallengeEntryHeroHtml(t, profMap) {
     ? `<span class="discoverCampaignFlag discoverChallengeHeroFlag">${escapeHtml(flag)}</span>`
     : `<span class="chartHeroCrown" aria-hidden="true">👑</span>`}
         <img class="chartHeroArt discoverChallengeHeroArt" src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
+        <span class="chartHeroPlayIco discoverChallengeHeroPlay" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M8 5.5v13l11-6.5-11-6.5Z"/></svg>
+        </span>
       </span>
       <span class="chartHeroMeta">
         <span class="chartHeroRankRow"><span class="chartHeroRank">#1</span></span>
         <strong class="chartHeroTitle">${escapeHtml(title)}</strong>
         ${handle ? `<small class="chartHeroBy">@${escapeHtml(handle)}</small>` : ""}
         ${plays ? `<span class="chartHeroPlays">🔥 ${escapeHtml(discoverHubStatLabel(plays))} plays</span>` : ""}
-      </span>
-      <span class="chartHeroPlayIco" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M8 5.5v13l11-6.5-11-6.5Z"/></svg>
       </span>
     </button>`;
 }
@@ -6738,6 +6868,7 @@ function renderDiscoverNewThisWeekSection() {
 }
 
 function renderDiscoverHubV1(tracks, profMap) {
+  clearDiscoverHubSectionsLoading();
   renderDiscoverCommunityStatsSection(tracks);
   renderDiscoverLiveChallengesSection(tracks, profMap);
   renderDiscoverCommunityPicksSection(tracks, profMap);

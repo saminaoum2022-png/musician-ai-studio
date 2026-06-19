@@ -16139,12 +16139,12 @@ input::placeholder, textarea::placeholder{
   }
   /* Create tab — Nabad trademark: diagonal teal/violet split circle (Voloco-style). */
   .mobileTabbar a.tabCreate{
-    --tab-create-orbit-top: 7px;
-    --tab-create-orbit-size: 42px;
+    --tab-create-orbit-top: 4px;
+    --tab-create-orbit-size: 44px;
     color: #fff;
-    justify-content: flex-end;
+    justify-content: center;
     padding-top: 0;
-    padding-bottom: 4px;
+    padding-bottom: 0;
   }
   .mobileTabbar a.tabCreate::before{
     content: "";
@@ -16167,12 +16167,12 @@ input::placeholder, textarea::placeholder{
     left: 50%;
     top: calc(var(--tab-create-orbit-top) + var(--tab-create-orbit-size) / 2);
     z-index: 1;
-    width: 22px;
-    height: 22px;
+    width: 26px;
+    height: 26px;
     margin: 0;
     transform: translate(-50%, -50%);
     stroke: #fff;
-    stroke-width: 2;
+    stroke-width: 2.35;
     opacity: 1;
   }
   .mobileTabbar a.tabCreate .tabIcoCreate circle,
@@ -16188,13 +16188,7 @@ input::placeholder, textarea::placeholder{
     transform: translate(-50%, -50%);
   }
   .mobileTabbar a.tabCreate .tabLabel{
-    position: relative;
-    z-index: 1;
-    color: rgba(223, 231, 251, 0.72);
-  }
-  .mobileTabbar a.tabCreate.active .tabLabel{
-    color: #fff;
-    text-shadow: none;
+    display: none;
   }
   /* Create tab — subtle morph when on Create with inputs ready */
   .mobileTabbar a.tabCreate .tabIcoPlay,
@@ -16241,8 +16235,8 @@ input::placeholder, textarea::placeholder{
   }
   .mobileTabbar a.tabCreate.tabIsGenerating .tabIcoSpinner{
     display: inline-block;
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
     border-radius: 999px;
     border: 2px solid rgba(255,255,255,0.18);
     border-top-color: rgba(124,92,255,0.95);

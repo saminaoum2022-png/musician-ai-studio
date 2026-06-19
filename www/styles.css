@@ -27841,17 +27841,10 @@ body[data-route="mashup"] .app{
     linear-gradient(135deg, rgba(35, 213, 171, 0.06), rgba(255, 255, 255, 0.02));
 }
 .challengesPage.homeDesk .homeDeskSectionKicker{
-  color: rgba(223, 231, 251, 0.42);
+  color: rgba(223, 231, 251, 0.72);
 }
-.challengesPage.homeDesk .homeDeskSongPromo .homeDeskSectionKicker{
-  color: rgba(35, 213, 171, 0.72);
-}
-.challengesPage.homeDesk .homeDeskPersonaPromo .homeDeskSectionKicker,
-.challengesPage.homeDesk .homeDeskMashupPromo .homeDeskSectionKicker{
-  color: rgba(124, 92, 255, 0.68);
-}
-.challengesPage.homeDesk .homeDeskPhotoPromo .homeDeskSectionKicker{
-  color: rgba(35, 213, 171, 0.62);
+.challengesPage.homeDesk .homeDeskPromoCopy .homeDeskPromoDesc{
+  color: rgba(223, 231, 251, 0.72);
 }
 .challengesPage.homeDesk .homeDeskPromoCard:active{
   transform: scale(0.985);
@@ -27870,15 +27863,8 @@ body[data-route="mashup"] .app{
   border-color: rgba(35, 213, 171, 0.24);
   background: rgba(35, 213, 171, 0.06);
 }
-.challengesPage.homeDesk .homeDeskSongPromo .homeDeskPromoTitle{
-  color: #2eebbc;
-}
-.challengesPage.homeDesk .homeDeskPersonaPromo .homeDeskPromoTitle,
-.challengesPage.homeDesk .homeDeskMashupPromo .homeDeskPromoTitle{
-  color: #a78bfa;
-}
-.challengesPage.homeDesk .homeDeskPhotoPromo .homeDeskPromoTitle{
-  color: #5eead4;
+.challengesPage.homeDesk .homeDeskPromoCopy .homeDeskPromoTitle{
+  color: #fff;
 }
 .challengesPage.homeDesk .homeDeskSongPulse,
 .challengesPage.homeDesk .homeDeskPersonaPulse,

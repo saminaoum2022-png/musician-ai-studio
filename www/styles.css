@@ -27834,6 +27834,40 @@ body[data-route="mashup"] .app{
 .challengesPage.homeDesk .homeDeskSongPromo .homeDeskSectionKicker{
   color: rgba(35, 213, 171, 0.72);
 }
+.challengesPage.homeDesk .homeDeskPersonaPromo .homeDeskSectionKicker,
+.challengesPage.homeDesk .homeDeskMashupPromo .homeDeskSectionKicker{
+  color: rgba(124, 92, 255, 0.68);
+}
+.challengesPage.homeDesk .homeDeskPhotoPromo .homeDeskSectionKicker{
+  color: rgba(35, 213, 171, 0.62);
+}
+.challengesPage.homeDesk .homeDeskPromoCard:active{
+  transform: scale(0.985);
+  background: rgba(255, 255, 255, 0.05);
+}
+.challengesPage.homeDesk .homeDeskSongPromo:active{
+  background: linear-gradient(135deg, rgba(35, 213, 171, 0.1), rgba(255, 255, 255, 0.04));
+  border-color: rgba(35, 213, 171, 0.32);
+}
+.challengesPage.homeDesk .homeDeskPersonaPromo:active,
+.challengesPage.homeDesk .homeDeskMashupPromo:active{
+  border-color: rgba(124, 92, 255, 0.28);
+  background: rgba(124, 92, 255, 0.06);
+}
+.challengesPage.homeDesk .homeDeskPhotoPromo:active{
+  border-color: rgba(35, 213, 171, 0.24);
+  background: rgba(35, 213, 171, 0.06);
+}
+.challengesPage.homeDesk .homeDeskSongPromo .homeDeskPromoTitle{
+  color: #2eebbc;
+}
+.challengesPage.homeDesk .homeDeskPersonaPromo .homeDeskPromoTitle,
+.challengesPage.homeDesk .homeDeskMashupPromo .homeDeskPromoTitle{
+  color: #a78bfa;
+}
+.challengesPage.homeDesk .homeDeskPhotoPromo .homeDeskPromoTitle{
+  color: #5eead4;
+}
 .challengesPage.homeDesk .homeDeskSongPulse,
 .challengesPage.homeDesk .homeDeskPersonaPulse,
 .challengesPage.homeDesk .homeDeskPhotoPulse,
@@ -27846,8 +27880,6 @@ body[data-route="mashup"] .app{
 .challengesPage.homeDesk .homeDeskPhotoTile,
 .challengesPage.homeDesk .homeDeskMashupTile{
   padding: 0;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: none;
 }
 .challengesPage.homeDesk .homeDeskSongTile::before,
@@ -27856,16 +27888,35 @@ body[data-route="mashup"] .app{
 .challengesPage.homeDesk .homeDeskMashupTile::before{
   display: none;
 }
+.challengesPage.homeDesk .homeDeskSongTile{
+  background: rgba(35, 213, 171, 0.1);
+  border-color: rgba(35, 213, 171, 0.28);
+}
+.challengesPage.homeDesk .homeDeskPersonaTile,
+.challengesPage.homeDesk .homeDeskMashupTile{
+  background: rgba(124, 92, 255, 0.1);
+  border-color: rgba(124, 92, 255, 0.28);
+}
+.challengesPage.homeDesk .homeDeskPhotoTile{
+  background: rgba(35, 213, 171, 0.08);
+  border-color: rgba(35, 213, 171, 0.22);
+}
 .challengesPage.homeDesk .homeDeskSongPenIco,
-.challengesPage.homeDesk .homeDeskPersonaMicIco,
 .challengesPage.homeDesk .homeDeskPhotoIco{
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--brand-teal);
   animation: none;
 }
-.challengesPage.homeDesk .homeDeskMashupDisc--a,
+.challengesPage.homeDesk .homeDeskPersonaMicIco{
+  color: var(--brand-violet);
+  animation: none;
+}
+.challengesPage.homeDesk .homeDeskMashupDisc--a{
+  background: rgba(124, 92, 255, 0.55);
+  border-color: rgba(167, 139, 250, 0.45);
+}
 .challengesPage.homeDesk .homeDeskMashupDisc--b{
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(35, 213, 171, 0.5);
+  border-color: rgba(94, 234, 212, 0.4);
 }
 .challengesPage.homeDesk .homeDeskSegBtn.is-active{
   background: rgba(255, 255, 255, 0.1);

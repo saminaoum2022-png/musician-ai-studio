@@ -16130,7 +16130,7 @@ input::placeholder, textarea::placeholder{
     color: inherit;
     opacity: 0.92;
   }
-  /* Create tab — Nabad squircle, flat teal + violet split, larger than other tabs */
+  /* Create tab — diamond mark (45° square), flat teal + violet split, no glow */
   .mobileTabbar a.tabCreate{
     justify-content: flex-end;
     gap: 2px;
@@ -16140,37 +16140,37 @@ input::placeholder, textarea::placeholder{
   .tabCreateOrbWrap{
     position: relative;
     width: 54px;
-    height: 46px;
+    height: 50px;
     display: flex;
     align-items: flex-end;
     justify-content: center;
     flex: 0 0 auto;
-    margin-top: -12px;
+    margin-top: -14px;
   }
   .tabCreateOrb,
   .tabCreateMark{
     position: relative;
     z-index: 1;
-    width: 52px;
-    height: 52px;
+    width: 48px;
+    height: 48px;
     border-radius: var(--nabad-squircle-radius);
     display: grid;
     place-items: center;
     flex: 0 0 auto;
     overflow: hidden;
+    transform: rotate(45deg);
     background: linear-gradient(135deg, #23d5ab 0%, #23d5ab 49.8%, #7c5cff 50.2%, #7c5cff 100%);
-    box-shadow:
-      0 8px 20px rgba(124, 92, 255, 0.32),
-      0 4px 12px rgba(35, 213, 171, 0.18);
-    transition: transform 180ms cubic-bezier(0.22, 0.61, 0.36, 1), box-shadow 220ms ease;
+    box-shadow: none;
+    transition: transform 180ms cubic-bezier(0.22, 0.61, 0.36, 1);
   }
   .tabCreateOrbPlus{
     position: relative;
     z-index: 1;
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     display: block;
     pointer-events: none;
+    transform: rotate(-45deg);
   }
   .mobileTabbar a.tabCreate .tabIcoCreate{
     display: none !important;
@@ -16180,26 +16180,24 @@ input::placeholder, textarea::placeholder{
     display: none;
     position: absolute;
     left: 50%;
-    bottom: 15px;
+    bottom: 14px;
     transform: translateX(-50%);
   }
   .mobileTabbar a.tabCreate .tabIcoPlay{
-    width: 26px;
-    height: 26px;
+    width: 24px;
+    height: 24px;
     stroke: none;
     fill: #fff;
     z-index: 2;
   }
   .mobileTabbar a.tabCreate:active .tabCreateOrb{
-    transform: scale(0.94);
+    transform: rotate(45deg) scale(0.94);
   }
   .mobileTabbar a.tabCreate.active{
     color: #f8faff;
   }
   .mobileTabbar a.tabCreate.active .tabCreateOrb{
-    box-shadow:
-      0 10px 24px rgba(124, 92, 255, 0.42),
-      0 6px 14px rgba(35, 213, 171, 0.24);
+    box-shadow: none;
   }
   .mobileTabbar a.tabCreate.tabIsReady,
   .mobileTabbar a.tabCreate.tabIsListen{
@@ -16217,12 +16215,8 @@ input::placeholder, textarea::placeholder{
   .mobileTabbar a.tabCreate.tabIsListen .tabIcoPlay{
     display: block;
   }
-  .mobileTabbar a.tabCreate.tabIsReady .tabCreateOrb{
-    animation: tabCreateMarkPulse 2400ms ease-in-out infinite;
-  }
   .mobileTabbar a.tabCreate.tabIsListen .tabCreateOrb{
     background: linear-gradient(135deg, #2eecc0 0%, #2eecc0 49.8%, #8b6cff 50.2%, #8b6cff 100%);
-    animation: tabCreateMarkPulse 1800ms ease-in-out infinite;
   }
   .mobileTabbar a.tabCreate.tabIsGenerating{
     color: rgba(244, 247, 255, 0.96);
@@ -16238,30 +16232,20 @@ input::placeholder, textarea::placeholder{
   }
   .mobileTabbar a.tabCreate.tabIsGenerating .tabIcoSpinner{
     display: inline-block;
-    width: 52px;
-    height: 52px;
+    width: 48px;
+    height: 48px;
     border-radius: var(--nabad-squircle-radius);
+    transform: translateX(-50%) rotate(45deg);
     border: 2.5px solid rgba(255, 255, 255, 0.2);
     border-top-color: #fff;
     border-right-color: rgba(35, 213, 171, 0.85);
     background: linear-gradient(135deg, rgba(35, 213, 171, 0.35) 0%, rgba(35, 213, 171, 0.35) 49.8%, rgba(124, 92, 255, 0.35) 50.2%, rgba(124, 92, 255, 0.35) 100%);
+    box-shadow: none;
     animation: tabCreateSpin 900ms linear infinite;
     z-index: 2;
   }
-  @keyframes tabCreateMarkPulse{
-    0%, 100%{
-      box-shadow:
-        0 8px 20px rgba(124, 92, 255, 0.32),
-        0 4px 12px rgba(35, 213, 171, 0.18);
-    }
-    50%{
-      box-shadow:
-        0 12px 28px rgba(124, 92, 255, 0.48),
-        0 6px 16px rgba(35, 213, 171, 0.28);
-    }
-  }
   @keyframes tabCreateSpin{
-    to{ transform: translateX(-50%) rotate(360deg); }
+    to{ transform: translateX(-50%) rotate(405deg); }
   }
   .mobileTabbar a.tabCreate .tabTooltip{
     position: absolute;

@@ -16137,7 +16137,7 @@ input::placeholder, textarea::placeholder{
   /* Create tab — Nabad trademark: diagonal teal/violet split circle (Voloco-style). */
   .mobileTabbar a.tabCreate{
     --tab-create-orbit-top: 4px;
-    --tab-create-orbit-size: 44px;
+    --tab-create-orbit-size: 46px;
     color: #fff;
     justify-content: center;
     padding-top: 0;
@@ -16164,12 +16164,12 @@ input::placeholder, textarea::placeholder{
     left: 50%;
     top: calc(var(--tab-create-orbit-top) + var(--tab-create-orbit-size) / 2);
     z-index: 1;
-    width: 26px;
-    height: 26px;
+    width: 30px;
+    height: 30px;
     margin: 0;
     transform: translate(-50%, -50%);
     stroke: #fff;
-    stroke-width: 2.35;
+    stroke-width: 2.85;
     opacity: 1;
   }
   .mobileTabbar a.tabCreate .tabIcoCreate circle,

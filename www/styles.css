@@ -29,6 +29,24 @@
   /* Story / album squircle — matches moment tiles (20px on 72px). */
   --nabad-squircle-radius: calc(100% * 20 / 72);
   --nabad-squircle-gradient: linear-gradient(135deg, #23d5ab 0%, #4ad6c8 25%, #7c5cff 70%, #b78bff 100%);
+  /* Premium brand kit — teal + violet, used sparingly (Voloco-style restraint).
+   * Signature gradient: Create tab + one hero CTA per flow only.
+   * Solid teal: primary actions. Violet: links / active / focus accents. */
+  --brand-teal: #23d5ab;
+  --brand-violet: #7c5cff;
+  --brand-teal-hover: #2eebbc;
+  --brand-violet-hover: #9178ff;
+  --brand-teal-muted: rgba(35, 213, 171, 0.14);
+  --brand-violet-muted: rgba(124, 92, 255, 0.14);
+  --brand-signature-gradient: linear-gradient(135deg, var(--brand-teal) 0%, var(--brand-teal) 48%, var(--brand-violet) 52%, var(--brand-violet) 100%);
+  --brand-signature-gradient-diag: linear-gradient(135deg, var(--brand-teal) 0%, var(--brand-teal) 50%, var(--brand-violet) 50%, var(--brand-violet) 100%);
+  --brand-cta-bg: var(--brand-teal);
+  --brand-cta-bg-hover: var(--brand-teal-hover);
+  --brand-cta-shadow: 0 10px 28px rgba(35, 213, 171, 0.26);
+  --brand-accent: var(--brand-violet);
+  --brand-accent-soft: rgba(124, 92, 255, 0.72);
+  --brand-surface-glass: rgba(255, 255, 255, 0.06);
+  --brand-border-glass: rgba(255, 255, 255, 0.12);
 }
 
 /* Light mode — soft canvas, white cards, purple/teal washes (not flat white). */
@@ -1285,13 +1303,8 @@ body{
   transition: opacity 260ms ease;
   position: relative;
   min-height: 100vh;
-  /* Black-led canvas with restrained teal/purple depth. */
-  background:
-    radial-gradient(120% 72% at 50% -30%, rgba(124,92,255,0.14) 0%, transparent 56%),
-    radial-gradient(92% 52% at 100% 2%, rgba(35,213,171,0.07) 0%, transparent 48%),
-    radial-gradient(70% 46% at 0% 18%, rgba(124,92,255,0.06) 0%, transparent 54%),
-    radial-gradient(55% 40% at 50% 100%, rgba(0, 0, 0, 0.35) 0%, transparent 70%),
-    var(--bg);
+  /* Near-black canvas — brand color lives in CTAs, not ambient wash. */
+  background: var(--bg);
   /* Hard clamp: no descendant can ever drag the whole page sideways.
      A single too-wide row (e.g. an over-wide banner on a 360px phone)
      would otherwise create horizontal scroll and shift everything left,
@@ -1299,6 +1312,13 @@ body{
      here — `hidden` would create a containing block for fixed children
      and break sticky/iOS bottom-bar offsets. */
   overflow-x: clip;
+}
+body[data-route="hub"],
+body[data-route="challenges"]{
+  background:
+    radial-gradient(120% 72% at 50% -30%, rgba(124,92,255,0.08) 0%, transparent 56%),
+    radial-gradient(92% 52% at 100% 2%, rgba(35,213,171,0.05) 0%, transparent 48%),
+    var(--bg);
 }
 /* Mentor: unify canvas so the in-page glow layer does not “fight” body radials */
 body[data-route="mentor"]{
@@ -5924,20 +5944,20 @@ body.hubJumpingToTop #hubList .hubRow{
   border-radius: 999px;
   background:
     linear-gradient(90deg,
-      rgba(124, 92, 255, 0.95) 0%,
-      rgba(35, 213, 171, 0.92) var(--playerSeekPct),
-      rgba(255, 255, 255, 0.10) var(--playerSeekPct),
-      rgba(255, 255, 255, 0.10) 100%);
+      rgba(255, 255, 255, 0.82) 0%,
+      rgba(255, 255, 255, 0.82) var(--playerSeekPct),
+      rgba(255, 255, 255, 0.12) var(--playerSeekPct),
+      rgba(255, 255, 255, 0.12) 100%);
 }
 #playerSeek::-moz-range-track{
   height: 6px;
   border-radius: 999px;
   background:
     linear-gradient(90deg,
-      rgba(124, 92, 255, 0.95) 0%,
-      rgba(35, 213, 171, 0.92) var(--playerSeekPct),
-      rgba(255, 255, 255, 0.10) var(--playerSeekPct),
-      rgba(255, 255, 255, 0.10) 100%);
+      rgba(255, 255, 255, 0.82) 0%,
+      rgba(255, 255, 255, 0.82) var(--playerSeekPct),
+      rgba(255, 255, 255, 0.12) var(--playerSeekPct),
+      rgba(255, 255, 255, 0.12) 100%);
 }
 #playerSeek::-webkit-slider-thumb{
   -webkit-appearance: none;
@@ -5946,9 +5966,9 @@ body.hubJumpingToTop #hubList .hubRow{
   height: 16px;
   border-radius: 999px;
   background: #fff;
-  border: 2px solid rgba(124, 92, 255, 0.55);
+  border: none;
   margin-top: -5px;
-  box-shadow: 0 2px 8px -1px rgba(124, 92, 255, 0.55);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
   cursor: pointer;
   transition: transform 140ms ease;
 }
@@ -5957,8 +5977,8 @@ body.hubJumpingToTop #hubList .hubRow{
   height: 16px;
   border-radius: 999px;
   background: #fff;
-  border: 2px solid rgba(124, 92, 255, 0.55);
-  box-shadow: 0 2px 8px -1px rgba(124, 92, 255, 0.55);
+  border: none;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
   cursor: pointer;
 }
 #playerSeek:active::-webkit-slider-thumb{ transform: scale(1.15); }
@@ -6007,20 +6027,19 @@ body.hubJumpingToTop #hubList .hubRow{
   width: 60px;
   height: 60px;
   border-radius: 999px;
-  border: 1px solid rgba(124, 92, 255, 0.55);
-  background: linear-gradient(135deg, rgba(124, 92, 255, 0.95), rgba(35, 213, 171, 0.92));
-  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.96);
+  color: #05070d;
   display:inline-flex;
   align-items:center;
   justify-content:center;
   cursor:pointer;
-  box-shadow:
-    0 14px 36px -10px rgba(124, 92, 255, 0.6),
-    0 0 0 6px rgba(124, 92, 255, 0.0);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.38);
   transition:
     transform 160ms ease,
     box-shadow 280ms ease,
-    opacity 200ms ease;
+    opacity 200ms ease,
+    background 200ms ease;
   -webkit-tap-highlight-color: transparent;
   padding: 0;
 }
@@ -6034,33 +6053,17 @@ body.hubJumpingToTop #hubList .hubRow{
 }
 .playerToggleBtn .playerToggleIcon .ico{ width: 22px; height: 22px; }
 .playerToggleBtn:hover{
-  box-shadow:
-    0 14px 40px -8px rgba(124, 92, 255, 0.7),
-    0 0 0 6px rgba(124, 92, 255, 0.10);
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.42);
 }
 .playerToggleBtn:active{ transform: scale(0.95); }
 .playerToggleBtn[disabled]{
   opacity: 0.45;
   cursor: not-allowed;
-  box-shadow: 0 6px 18px -10px rgba(124, 92, 255, 0.4);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
 }
 .playerToggleBtn.isPlaying{
-  animation: playerToggleHalo 1.8s ease-in-out infinite;
-}
-@keyframes playerToggleHalo{
-  0%, 100% {
-    box-shadow:
-      0 14px 36px -10px rgba(124, 92, 255, 0.6),
-      0 0 0 0 rgba(124, 92, 255, 0.20);
-  }
-  50% {
-    box-shadow:
-      0 14px 36px -10px rgba(124, 92, 255, 0.6),
-      0 0 0 8px rgba(124, 92, 255, 0.0);
-  }
-}
-@media (prefers-reduced-motion: reduce){
-  .playerToggleBtn.isPlaying{ animation: none; }
+  animation: none;
 }
 
 /* ---- Secondary mini row (Cover · Trim · Publish) -------------------- */
@@ -6930,9 +6933,9 @@ textarea{
   transform: scale(0.985);
 }
 .createTab.isActive{
-  background: linear-gradient(180deg, rgba(124,92,255,0.34), rgba(35,213,171,0.18));
-  color: rgba(244,247,255,0.98);
-  box-shadow: inset 0 0 0 1px rgba(124,92,255,0.36), 0 6px 18px rgba(124,92,255,0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 .createTabIcon{
   width:14px;
@@ -11834,11 +11837,16 @@ button,.ghost,a.ghost,a.primary{
 }
 button.primary,
 a.primary{
-  border-color: rgba(124,92,255,0.45);
-  background: linear-gradient(180deg, rgba(124,92,255,0.45), rgba(124,92,255,0.20));
+  border-color: rgba(35, 213, 171, 0.35);
+  background: var(--brand-cta-bg);
+  color: #051018;
+  box-shadow: var(--brand-cta-shadow);
 }
 button.primary:hover,
-a.primary:hover{ filter: brightness(1.06); }
+a.primary:hover{
+  background: var(--brand-cta-bg-hover);
+  filter: none;
+}
 .primary:active,
 button:active,
 a.ghost:active,
@@ -12050,17 +12058,14 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
 .profileAuraEditBtn--cancel:hover{ background: rgba(255,255,255,0.10); }
 .profileAuraEditBtn--save{
   border: 0;
-  background: linear-gradient(135deg, #7c5cff, #23d5ab);
-  color: #12151e;
-  box-shadow:
-    0 10px 26px rgba(124,92,255,0.35),
-    inset 0 0 0 1px rgba(255,255,255,0.18);
+  background: var(--brand-cta-bg);
+  color: #051018;
+  box-shadow: var(--brand-cta-shadow);
 }
 .profileAuraEditBtn--save:hover{
   transform: translateY(-1px);
-  box-shadow:
-    0 12px 30px rgba(124,92,255,0.45),
-    inset 0 0 0 1px rgba(255,255,255,0.22);
+  background: var(--brand-cta-bg-hover);
+  box-shadow: 0 12px 30px rgba(35, 213, 171, 0.32);
 }
 
 /* Identity stack — view-mode is centered (mockup), edit-mode falls
@@ -15969,7 +15974,7 @@ input::placeholder, textarea::placeholder{
     background: rgba(255,255,255,0.04);
   }
   button.primary{
-    box-shadow: 0 10px 26px rgba(124,92,255,0.22);
+    box-shadow: var(--brand-cta-shadow);
   }
   .generateActions{
     display:grid;
@@ -15996,7 +16001,6 @@ input::placeholder, textarea::placeholder{
     border-radius: 0;
     padding: 6px 4px max(6px, env(safe-area-inset-bottom)) 4px;
     background:
-      radial-gradient(72% 140% at 50% 0%, rgba(124,92,255,0.1), transparent 62%),
       linear-gradient(180deg, rgba(6, 8, 14, 0.97), rgba(3, 5, 10, 0.94));
     box-shadow:
       0 -18px 40px rgba(0,0,0,0.32),
@@ -16133,6 +16137,47 @@ input::placeholder, textarea::placeholder{
     color: inherit;
     opacity: 0.92;
   }
+  /* Create tab — Nabad trademark: diagonal teal/violet split circle (Voloco-style). */
+  .mobileTabbar a.tabCreate{
+    color: #fff;
+    justify-content: flex-end;
+    padding-bottom: 4px;
+  }
+  .mobileTabbar a.tabCreate::before{
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 4px;
+    width: 42px;
+    height: 42px;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: var(--brand-signature-gradient-diag);
+    box-shadow:
+      0 8px 22px rgba(0, 0, 0, 0.42),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+    z-index: 0;
+    pointer-events: none;
+  }
+  .mobileTabbar a.tabCreate .tabIco{
+    position: relative;
+    z-index: 1;
+    width: 22px;
+    height: 22px;
+    margin-top: 13px;
+    stroke: #fff;
+    stroke-width: 2;
+    opacity: 1;
+  }
+  .mobileTabbar a.tabCreate .tabLabel{
+    position: relative;
+    z-index: 1;
+    color: rgba(223, 231, 251, 0.72);
+  }
+  .mobileTabbar a.tabCreate.active .tabLabel{
+    color: #fff;
+    text-shadow: none;
+  }
   /* Create tab — subtle morph when on Create with inputs ready */
   .mobileTabbar a.tabCreate .tabIcoPlay,
   .mobileTabbar a.tabCreate .tabIcoSpinner{
@@ -16141,14 +16186,15 @@ input::placeholder, textarea::placeholder{
   .mobileTabbar a.tabCreate.tabIsReady,
   .mobileTabbar a.tabCreate.tabIsListen{
     color: #fff;
-    background:
-      radial-gradient(100% 100% at 18% 0%, rgba(35,213,171,0.34), transparent 58%),
-      linear-gradient(180deg, rgba(124,92,255,0.50), rgba(35,213,171,0.24));
-    box-shadow:
-      0 10px 22px rgba(124,92,255,0.34),
-      inset 0 0 0 1px rgba(124,92,255,0.42);
+    background: transparent;
+    box-shadow: none;
+    animation: none;
+    margin: 0;
+  }
+  .mobileTabbar a.tabCreate.tabIsReady::before,
+  .mobileTabbar a.tabCreate.tabIsListen::before{
+    background: var(--brand-signature-gradient);
     animation: tabCreatePulse 2400ms ease-in-out infinite;
-    margin: 2px;
   }
   .mobileTabbar a.tabCreate.tabIsReady .tabIcoCreate,
   .mobileTabbar a.tabCreate.tabIsListen .tabIcoCreate{
@@ -16158,17 +16204,18 @@ input::placeholder, textarea::placeholder{
   .mobileTabbar a.tabCreate.tabIsListen .tabIcoPlay{
     display: block;
   }
-  .mobileTabbar a.tabCreate.tabIsListen{
-    background: linear-gradient(180deg, rgba(35,213,171,0.55), rgba(124,92,255,0.28));
-    box-shadow:
-      0 10px 22px rgba(35,213,171,0.34),
-      inset 0 0 0 1px rgba(35,213,171,0.46);
+  .mobileTabbar a.tabCreate.tabIsListen::before{
+    background: var(--brand-signature-gradient-diag);
   }
   .mobileTabbar a.tabCreate.tabIsGenerating{
     color: rgba(244,247,255,0.96);
-    background: rgba(124,92,255,0.14);
-    box-shadow: inset 0 0 0 1px rgba(124,92,255,0.32);
-    margin: 2px;
+    background: transparent;
+    box-shadow: none;
+    margin: 0;
+  }
+  .mobileTabbar a.tabCreate.tabIsGenerating::before{
+    background: rgba(124, 92, 255, 0.22);
+    box-shadow: inset 0 0 0 1px rgba(124, 92, 255, 0.32);
   }
   .mobileTabbar a.tabCreate.tabIsGenerating .tabIcoCreate,
   .mobileTabbar a.tabCreate.tabIsGenerating .tabIcoPlay{
@@ -16186,13 +16233,13 @@ input::placeholder, textarea::placeholder{
   @keyframes tabCreatePulse{
     0%, 100%{
       box-shadow:
-        0 8px 18px rgba(124,92,255,0.26),
-        inset 0 0 0 1px rgba(124,92,255,0.36);
+        0 8px 18px rgba(0, 0, 0, 0.38),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.12);
     }
     50%{
       box-shadow:
-        0 14px 30px rgba(124,92,255,0.44),
-        inset 0 0 0 1px rgba(124,92,255,0.52);
+        0 12px 28px rgba(35, 213, 171, 0.28),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.2);
     }
   }
   @keyframes tabCreateSpin{
@@ -16253,11 +16300,9 @@ input::placeholder, textarea::placeholder{
     height: 42px;
     transform: translateX(-50%);
     border-radius: 50%;
-    background:
-      radial-gradient(circle at 32% 28%, rgba(124, 92, 255, 0.58), transparent 58%),
-      radial-gradient(circle at 72% 72%, rgba(35, 213, 171, 0.42), transparent 56%);
-    filter: blur(11px);
-    opacity: 0.9;
+    background: rgba(255, 255, 255, 0.07);
+    filter: none;
+    opacity: 1;
     z-index: -1;
     pointer-events: none;
   }
@@ -16265,19 +16310,14 @@ input::placeholder, textarea::placeholder{
     stroke: #f8faff;
     stroke-width: 2;
     opacity: 1;
-    transform: scale(1.06);
-    filter:
-      drop-shadow(0 0 3px rgba(124, 92, 255, 0.8))
-      drop-shadow(0 0 9px rgba(35, 213, 171, 0.5))
-      drop-shadow(0 0 16px rgba(124, 92, 255, 0.28));
+    transform: scale(1.04);
+    filter: none;
   }
   .mobileTabbar a.active .tabLabel{
     opacity: 1;
     font-weight: 750;
     color: #f8faff;
-    text-shadow:
-      0 0 10px rgba(124, 92, 255, 0.55),
-      0 0 18px rgba(35, 213, 171, 0.3);
+    text-shadow: none;
   }
   .mobileTabbar a.active .tabIcoDiscover circle[fill="none"]{
     stroke: rgba(232, 238, 247, 0.92);
@@ -16672,12 +16712,12 @@ input::placeholder, textarea::placeholder{
     min-height:44px;
     padding:10px 18px;
     border-radius:999px;
-    border:1px solid rgba(124,92,255,0.52);
-    background: linear-gradient(180deg, rgba(124,92,255,0.34), rgba(35,213,171,0.18));
-    color: var(--text);
+    border:1px solid rgba(255,255,255,0.14);
+    background: var(--brand-signature-gradient);
+    color: #fff;
     font-weight:900;
     letter-spacing:0.01em;
-    box-shadow: 0 12px 28px rgba(124,92,255,0.28), 0 0 22px rgba(124,92,255,0.26);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
     backdrop-filter: blur(6px);
   }
   .createSectionStack .inPanelLabel,
@@ -30789,7 +30829,10 @@ section.mentorPage{
 .chartHeroBy{
   font-size: 12px;
   font-weight: 600;
-  color: rgba(255,255,255,0.55);
+  color: rgba(35, 213, 171, 0.72);
+}
+.discoverWeeklyChart .chartHeroBy{
+  color: rgba(254, 240, 138, 0.75);
 }
 .chartHeroPlays{
   margin-top: 3px;
@@ -30979,7 +31022,10 @@ section.mentorPage{
 }
 .chartRowMeta small{
   font-size: 11.5px;
-  color: rgba(255,255,255,0.48);
+  color: rgba(35, 213, 171, 0.62);
+}
+.discoverWeeklyChart .chartRowMeta small{
+  color: rgba(254, 240, 138, 0.55);
 }
 .chartRowPlays{
   flex: none;
@@ -31266,8 +31312,8 @@ section.mentorPage{
   padding: 7px 11px;
   border: none;
   border-radius: 999px;
-  background: linear-gradient(135deg, #23d5ab 0%, #23d5ab 49.8%, #7c5cff 50.2%, #7c5cff 100%);
-  color: #fff;
+  background: var(--brand-cta-bg);
+  color: #051018;
   font: inherit;
   font-size: 10.5px;
   font-weight: 900;
@@ -31278,8 +31324,8 @@ section.mentorPage{
 .discoverChallengeCard--violet .discoverChallengeJoin,
 .discoverChallengeCard--mint .discoverChallengeJoin,
 .discoverChallengeCard--cyan .discoverChallengeJoin{
-  background: linear-gradient(135deg, #23d5ab 0%, #23d5ab 49.8%, #7c5cff 50.2%, #7c5cff 100%);
-  color: #fff;
+  background: var(--brand-cta-bg);
+  color: #051018;
 }
 .discoverJournalChallengeCard,
 .discoverJournalChallengeArt,
@@ -31408,8 +31454,8 @@ section.mentorPage{
   padding: 8px 12px;
   border: none;
   border-radius: 999px;
-  background: linear-gradient(135deg, #23d5ab 0%, #23d5ab 49.8%, #7c5cff 50.2%, #7c5cff 100%);
-  color: #fff;
+  background: var(--brand-cta-bg);
+  color: #051018;
   font: inherit;
   font-size: 11px;
   font-weight: 900;
@@ -31425,8 +31471,8 @@ section.mentorPage{
 .discoverHubChallengeCompact--violet .discoverHubChallengeCompactJoin,
 .discoverHubChallengeCompact--cyan .discoverHubChallengeCompactJoin,
 .discoverHubChallengeCompact--mint .discoverHubChallengeCompactJoin{
-  background: linear-gradient(135deg, #23d5ab 0%, #23d5ab 49.8%, #7c5cff 50.2%, #7c5cff 100%);
-  color: #fff;
+  background: var(--brand-cta-bg);
+  color: #051018;
 }
 
 /* Top entries carousel */
@@ -31696,11 +31742,11 @@ section.mentorPage{
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #23d5ab, #7c5cff);
+  background: var(--brand-teal);
   box-shadow: none;
 }
 .discoverHubChallengeProgressFill--time{
-  background: linear-gradient(90deg, rgba(124, 92, 255, 0.95), rgba(35, 213, 171, 0.85));
+  background: var(--brand-teal);
   box-shadow: none;
 }
 .discoverHubChallengeSocial{
@@ -31739,14 +31785,14 @@ section.mentorPage{
   padding: 11px 14px;
   border: none;
   border-radius: 14px;
-  background: linear-gradient(135deg, #23d5ab 0%, #23d5ab 49.8%, #7c5cff 50.2%, #7c5cff 100%);
-  color: #fff;
+  background: var(--brand-cta-bg);
+  color: #051018;
   font: inherit;
   font-size: 13px;
   font-weight: 900;
   letter-spacing: 0.01em;
   cursor: pointer;
-  box-shadow: 0 8px 22px rgba(124, 92, 255, 0.22);
+  box-shadow: var(--brand-cta-shadow);
   -webkit-tap-highlight-color: transparent;
 }
 .discoverHubChallengeJoinBtn:active{
@@ -31758,8 +31804,8 @@ section.mentorPage{
 .discoverHubChallengeHero--violet .discoverHubChallengeJoinBtn,
 .discoverHubChallengeHero--cyan .discoverHubChallengeJoinBtn,
 .discoverHubChallengeHero--mint .discoverHubChallengeJoinBtn{
-  background: linear-gradient(135deg, #23d5ab 0%, #23d5ab 49.8%, #7c5cff 50.2%, #7c5cff 100%);
-  color: #fff;
+  background: var(--brand-cta-bg);
+  color: #051018;
 }
 
 /* Legacy challenge card classes — kept for skeleton compatibility */

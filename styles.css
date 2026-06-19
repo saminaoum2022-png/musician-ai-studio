@@ -16139,17 +16139,20 @@ input::placeholder, textarea::placeholder{
   }
   /* Create tab — Nabad trademark: diagonal teal/violet split circle (Voloco-style). */
   .mobileTabbar a.tabCreate{
+    --tab-create-orbit-top: 7px;
+    --tab-create-orbit-size: 42px;
     color: #fff;
     justify-content: flex-end;
+    padding-top: 0;
     padding-bottom: 4px;
   }
   .mobileTabbar a.tabCreate::before{
     content: "";
     position: absolute;
     left: 50%;
-    top: 4px;
-    width: 42px;
-    height: 42px;
+    top: var(--tab-create-orbit-top);
+    width: var(--tab-create-orbit-size);
+    height: var(--tab-create-orbit-size);
     transform: translateX(-50%);
     border-radius: 50%;
     background: var(--brand-signature-gradient-diag);
@@ -16160,14 +16163,29 @@ input::placeholder, textarea::placeholder{
     pointer-events: none;
   }
   .mobileTabbar a.tabCreate .tabIco{
-    position: relative;
+    position: absolute;
+    left: 50%;
+    top: calc(var(--tab-create-orbit-top) + var(--tab-create-orbit-size) / 2);
     z-index: 1;
     width: 22px;
     height: 22px;
-    margin-top: 13px;
+    margin: 0;
+    transform: translate(-50%, -50%);
     stroke: #fff;
     stroke-width: 2;
     opacity: 1;
+  }
+  .mobileTabbar a.tabCreate .tabIcoCreate circle,
+  .mobileTabbar a.tabCreate .tabIcoPlay circle{
+    display: none;
+  }
+  .mobileTabbar a.tabCreate .tabIcoSpinner{
+    position: absolute;
+    left: 50%;
+    top: calc(var(--tab-create-orbit-top) + var(--tab-create-orbit-size) / 2);
+    z-index: 1;
+    margin: 0;
+    transform: translate(-50%, -50%);
   }
   .mobileTabbar a.tabCreate .tabLabel{
     position: relative;
@@ -16243,7 +16261,7 @@ input::placeholder, textarea::placeholder{
     }
   }
   @keyframes tabCreateSpin{
-    to{ transform: rotate(360deg); }
+    to{ transform: translate(-50%, -50%) rotate(360deg); }
   }
   .mobileTabbar a.tabCreate .tabTooltip{
     position: absolute;

@@ -1315,10 +1315,7 @@ body{
 }
 body[data-route="hub"],
 body[data-route="challenges"]{
-  background:
-    radial-gradient(120% 72% at 50% -30%, rgba(124,92,255,0.08) 0%, transparent 56%),
-    radial-gradient(92% 52% at 100% 2%, rgba(35,213,171,0.05) 0%, transparent 48%),
-    var(--bg);
+  background: var(--bg);
 }
 /* Mentor: unify canvas so the in-page glow layer does not “fight” body radials */
 body[data-route="mentor"]{
@@ -27814,6 +27811,68 @@ body[data-route="mashup"] .app{
   background: linear-gradient(145deg, rgba(251,191,36,0.72), rgba(244,114,182,0.42));
 }
 
+/* Create hub — premium brand restraint: glass rows, white icons, teal only on primary CTA + hero card. */
+.challengesPage.homeDesk .homeDeskSongPromo,
+.challengesPage.homeDesk .homeDeskPersonaPromo,
+.challengesPage.homeDesk .homeDeskPhotoPromo,
+.challengesPage.homeDesk .homeDeskMashupPromo{
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+  box-shadow: none;
+}
+.challengesPage.homeDesk .homeDeskPersonaPromo::before{
+  display: none;
+}
+.challengesPage.homeDesk .homeDeskSongPromo{
+  border-color: rgba(35, 213, 171, 0.22);
+  background:
+    linear-gradient(135deg, rgba(35, 213, 171, 0.06), rgba(255, 255, 255, 0.02));
+}
+.challengesPage.homeDesk .homeDeskSectionKicker{
+  color: rgba(223, 231, 251, 0.42);
+}
+.challengesPage.homeDesk .homeDeskSongPromo .homeDeskSectionKicker{
+  color: rgba(35, 213, 171, 0.72);
+}
+.challengesPage.homeDesk .homeDeskSongPulse,
+.challengesPage.homeDesk .homeDeskPersonaPulse,
+.challengesPage.homeDesk .homeDeskPhotoPulse,
+.challengesPage.homeDesk .homeDeskMashupPulse,
+.challengesPage.homeDesk .homeDeskPhotoSpark{
+  display: none;
+}
+.challengesPage.homeDesk .homeDeskSongTile,
+.challengesPage.homeDesk .homeDeskPersonaTile,
+.challengesPage.homeDesk .homeDeskPhotoTile,
+.challengesPage.homeDesk .homeDeskMashupTile{
+  padding: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+}
+.challengesPage.homeDesk .homeDeskSongTile::before,
+.challengesPage.homeDesk .homeDeskPersonaTile::before,
+.challengesPage.homeDesk .homeDeskPhotoTile::before,
+.challengesPage.homeDesk .homeDeskMashupTile::before{
+  display: none;
+}
+.challengesPage.homeDesk .homeDeskSongPenIco,
+.challengesPage.homeDesk .homeDeskPersonaMicIco,
+.challengesPage.homeDesk .homeDeskPhotoIco{
+  color: rgba(255, 255, 255, 0.88);
+  animation: none;
+}
+.challengesPage.homeDesk .homeDeskMashupDisc--a,
+.challengesPage.homeDesk .homeDeskMashupDisc--b{
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.challengesPage.homeDesk .homeDeskSegBtn.is-active{
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
 @media (max-width: 760px){
   .challengesPage{
     overflow-x: hidden;
@@ -30233,11 +30292,9 @@ section.mentorPage{
   width: 100%;
   padding: 16px 18px;
   border-radius: 20px;
-  border: 1px solid rgba(74, 222, 128, 0.28);
-  background:
-    radial-gradient(130% 160% at 100% 0%, rgba(250, 204, 21, 0.16), transparent 55%),
-    linear-gradient(135deg, rgba(6, 78, 59, 0.92), rgba(8, 24, 18, 0.96));
-  color: #eafff3;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
   text-align: start;
   cursor: pointer;
   overflow: hidden;
@@ -30245,15 +30302,7 @@ section.mentorPage{
 }
 .campaignBannerBtn:active{ transform: scale(0.99); }
 .campaignBannerGlow{
-  position: absolute;
-  inset: -40% -20%;
-  background: radial-gradient(50% 60% at 30% 20%, rgba(74, 222, 128, 0.22), transparent 70%);
-  animation: campaignGlowDrift 6s ease-in-out infinite alternate;
-  pointer-events: none;
-}
-@keyframes campaignGlowDrift{
-  from{ transform: translateX(-6%); }
-  to{ transform: translateX(10%); }
+  display: none;
 }
 .campaignBannerBody{
   position: relative;
@@ -30271,20 +30320,20 @@ section.mentorPage{
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(134, 239, 172, 0.92);
+  color: rgba(35, 213, 171, 0.78);
 }
 .campaignLiveDot{
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #4ade80;
-  box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.6);
+  background: var(--brand-teal);
+  box-shadow: 0 0 0 0 rgba(35, 213, 171, 0.45);
   animation: campaignLivePulse 1.6s ease-out infinite;
 }
 @keyframes campaignLivePulse{
-  0%{ box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.55); }
-  70%{ box-shadow: 0 0 0 7px rgba(74, 222, 128, 0); }
-  100%{ box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+  0%{ box-shadow: 0 0 0 0 rgba(35, 213, 171, 0.4); }
+  70%{ box-shadow: 0 0 0 7px rgba(35, 213, 171, 0); }
+  100%{ box-shadow: 0 0 0 0 rgba(35, 213, 171, 0); }
 }
 .campaignBannerTitle{
   font-size: 19px;
@@ -30296,23 +30345,25 @@ section.mentorPage{
   font-size: 12.5px;
   font-weight: 600;
   line-height: 1.35;
-  color: rgba(220, 252, 231, 0.72);
+  color: rgba(223, 231, 251, 0.52);
 }
 .campaignBannerCta{
   margin-top: 7px;
   align-self: flex-start;
   padding: 7px 14px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #facc15, #f59e0b);
-  color: #1c1408;
+  background: var(--brand-cta-bg);
+  color: #051018;
   font-size: 12.5px;
   font-weight: 900;
+  box-shadow: var(--brand-cta-shadow);
 }
 .campaignBannerEmoji{
   position: relative;
   font-size: 44px;
   line-height: 1;
-  filter: drop-shadow(0 6px 14px rgba(250, 204, 21, 0.35));
+  filter: none;
+  opacity: 0.92;
 }
 
 /* Campaign sheet */

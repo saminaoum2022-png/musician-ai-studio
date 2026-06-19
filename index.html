@@ -74,7 +74,7 @@
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
     <link rel="preload" as="video" href="./assets/icons/splash-logo.mp4?v=20260619trim" type="video/mp4" />
-    <link rel="stylesheet" href="./styles.css?v=20260619discoverSkel" />
+    <link rel="stylesheet" href="./styles.css?v=20260619tabCreateOrb" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -3407,14 +3407,20 @@
           <span class="tabLabel">Friends</span>
         </a>
         <a href="#/challenges" data-route-link="challenges" id="tabCreate" class="tabCreate challengesTab" aria-label="Create">
-          <span class="tabIcoSpinner" aria-hidden="true"></span>
-          <svg class="tabIco tabIcoCreate" viewBox="0 0 24 24" aria-hidden="true">
+          <span class="tabCreateOrbWrap">
+            <span class="tabCreateOrb" aria-hidden="true">
+              <svg class="tabCreateOrbPlus" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="none" stroke="#fff" stroke-width="2.75" stroke-linecap="round" d="M12 8v8M8 12h8"/>
+              </svg>
+            </span>
+            <span class="tabIcoSpinner" aria-hidden="true"></span>
+            <svg class="tabIco tabIcoPlay" viewBox="0 0 24 24" aria-hidden="true">
+              <polygon points="10 8 16 12 10 16 10 8" fill="#fff"/>
+            </svg>
+          </span>
+          <svg class="tabIco tabIcoCreate" viewBox="0 0 24 24" aria-hidden="true" hidden>
             <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.75"/>
             <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M12 8v8M8 12h8"/>
-          </svg>
-          <svg class="tabIco tabIcoPlay" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.75"/>
-            <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"/>
           </svg>
           <span class="tabLabel">Create</span>
         </a>
@@ -3699,6 +3705,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260619discoverSkel"></script>
+    <script type="module" src="./src/app.js?v=20260619tabCreateOrb"></script>
   </body>
 </html>

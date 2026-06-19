@@ -16130,70 +16130,138 @@ input::placeholder, textarea::placeholder{
     color: inherit;
     opacity: 0.92;
   }
-  /* Create tab — subtle morph when on Create with inputs ready */
+  /* Create tab — Voloco-style split orb (teal + violet), larger than other tabs */
+  .mobileTabbar a.tabCreate{
+    justify-content: flex-end;
+    gap: 2px;
+    padding-top: 0;
+    color: rgba(223, 231, 251, 0.62);
+  }
+  .tabCreateOrbWrap{
+    position: relative;
+    width: 54px;
+    height: 46px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    flex: 0 0 auto;
+    margin-top: -12px;
+  }
+  .tabCreateOrb{
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    background: linear-gradient(135deg, #23d5ab 0%, #23d5ab 49.8%, #7c5cff 50.2%, #7c5cff 100%);
+    box-shadow:
+      0 10px 24px rgba(124, 92, 255, 0.36),
+      0 6px 14px rgba(35, 213, 171, 0.22),
+      inset 0 1px 0 rgba(255, 255, 255, 0.16);
+    transition: transform 180ms cubic-bezier(0.22, 0.61, 0.36, 1), box-shadow 220ms ease;
+  }
+  .tabCreateOrbPlus{
+    width: 22px;
+    height: 22px;
+    display: block;
+    pointer-events: none;
+  }
+  .mobileTabbar a.tabCreate .tabIcoCreate{
+    display: none !important;
+  }
   .mobileTabbar a.tabCreate .tabIcoPlay,
   .mobileTabbar a.tabCreate .tabIcoSpinner{
     display: none;
+    position: absolute;
+    left: 50%;
+    bottom: 15px;
+    transform: translateX(-50%);
+  }
+  .mobileTabbar a.tabCreate .tabIcoPlay{
+    width: 22px;
+    height: 22px;
+    stroke: none;
+    fill: #fff;
+    z-index: 2;
+  }
+  .mobileTabbar a.tabCreate:active .tabCreateOrb{
+    transform: scale(0.94);
+  }
+  .mobileTabbar a.tabCreate.active{
+    color: #f8faff;
+  }
+  .mobileTabbar a.tabCreate.active .tabCreateOrb{
+    box-shadow:
+      0 12px 28px rgba(124, 92, 255, 0.48),
+      0 8px 18px rgba(35, 213, 171, 0.28),
+      0 0 0 3px rgba(124, 92, 255, 0.22),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
   }
   .mobileTabbar a.tabCreate.tabIsReady,
   .mobileTabbar a.tabCreate.tabIsListen{
     color: #fff;
-    background:
-      radial-gradient(100% 100% at 18% 0%, rgba(35,213,171,0.34), transparent 58%),
-      linear-gradient(180deg, rgba(124,92,255,0.50), rgba(35,213,171,0.24));
-    box-shadow:
-      0 10px 22px rgba(124,92,255,0.34),
-      inset 0 0 0 1px rgba(124,92,255,0.42);
-    animation: tabCreatePulse 2400ms ease-in-out infinite;
-    margin: 2px;
+    background: transparent;
+    box-shadow: none;
+    margin: 0;
+    animation: none;
   }
-  .mobileTabbar a.tabCreate.tabIsReady .tabIcoCreate,
-  .mobileTabbar a.tabCreate.tabIsListen .tabIcoCreate{
-    display: none;
+  .mobileTabbar a.tabCreate.tabIsReady .tabCreateOrbPlus,
+  .mobileTabbar a.tabCreate.tabIsListen .tabCreateOrbPlus{
+    opacity: 0;
   }
   .mobileTabbar a.tabCreate.tabIsReady .tabIcoPlay,
   .mobileTabbar a.tabCreate.tabIsListen .tabIcoPlay{
     display: block;
   }
-  .mobileTabbar a.tabCreate.tabIsListen{
-    background: linear-gradient(180deg, rgba(35,213,171,0.55), rgba(124,92,255,0.28));
-    box-shadow:
-      0 10px 22px rgba(35,213,171,0.34),
-      inset 0 0 0 1px rgba(35,213,171,0.46);
+  .mobileTabbar a.tabCreate.tabIsReady .tabCreateOrb{
+    animation: tabCreateOrbPulse 2400ms ease-in-out infinite;
+  }
+  .mobileTabbar a.tabCreate.tabIsListen .tabCreateOrb{
+    background: linear-gradient(135deg, #2eecc0 0%, #2eecc0 49.8%, #8b6cff 50.2%, #8b6cff 100%);
+    animation: tabCreateOrbPulse 1800ms ease-in-out infinite;
   }
   .mobileTabbar a.tabCreate.tabIsGenerating{
-    color: rgba(244,247,255,0.96);
-    background: rgba(124,92,255,0.14);
-    box-shadow: inset 0 0 0 1px rgba(124,92,255,0.32);
-    margin: 2px;
+    color: rgba(244, 247, 255, 0.96);
+    background: transparent;
+    box-shadow: none;
+    margin: 0;
   }
-  .mobileTabbar a.tabCreate.tabIsGenerating .tabIcoCreate,
-  .mobileTabbar a.tabCreate.tabIsGenerating .tabIcoPlay{
-    display: none;
+  .mobileTabbar a.tabCreate.tabIsGenerating .tabCreateOrbPlus{
+    opacity: 0;
+  }
+  .mobileTabbar a.tabCreate.tabIsGenerating .tabCreateOrb{
+    opacity: 0;
   }
   .mobileTabbar a.tabCreate.tabIsGenerating .tabIcoSpinner{
     display: inline-block;
-    width: 22px;
-    height: 22px;
+    width: 52px;
+    height: 52px;
     border-radius: 999px;
-    border: 2px solid rgba(255,255,255,0.18);
-    border-top-color: rgba(124,92,255,0.95);
+    border: 2.5px solid rgba(255, 255, 255, 0.22);
+    border-top-color: #fff;
+    border-right-color: rgba(35, 213, 171, 0.85);
+    background: linear-gradient(135deg, rgba(35, 213, 171, 0.35) 0%, rgba(35, 213, 171, 0.35) 49.8%, rgba(124, 92, 255, 0.35) 50.2%, rgba(124, 92, 255, 0.35) 100%);
     animation: tabCreateSpin 900ms linear infinite;
+    z-index: 2;
   }
-  @keyframes tabCreatePulse{
+  @keyframes tabCreateOrbPulse{
     0%, 100%{
       box-shadow:
-        0 8px 18px rgba(124,92,255,0.26),
-        inset 0 0 0 1px rgba(124,92,255,0.36);
+        0 10px 24px rgba(124, 92, 255, 0.34),
+        0 6px 14px rgba(35, 213, 171, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.16);
     }
     50%{
       box-shadow:
-        0 14px 30px rgba(124,92,255,0.44),
-        inset 0 0 0 1px rgba(124,92,255,0.52);
+        0 14px 32px rgba(124, 92, 255, 0.52),
+        0 8px 20px rgba(35, 213, 171, 0.32),
+        0 0 0 4px rgba(124, 92, 255, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
     }
   }
   @keyframes tabCreateSpin{
-    to{ transform: rotate(360deg); }
+    to{ transform: translateX(-50%) rotate(360deg); }
   }
   .mobileTabbar a.tabCreate .tabTooltip{
     position: absolute;

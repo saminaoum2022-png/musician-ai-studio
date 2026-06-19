@@ -2520,16 +2520,11 @@ function challengePromptContext() {
 }
 
 function challengePromptMagicSeed(seed, challenge) {
+  const title = String(challenge?.title || "Challenge").trim();
   return [
-    "Turn this Challenge brief into complete singable lyrics.",
-    "Write the lyric content yourself, then organize it into a clean song form.",
-    "Output ONLY lyrics with section tags. Do not sing or repeat the instruction text.",
-    "Do not explain the challenge. Do not include metadata, notes, or descriptions.",
-    "Use this structure when it fits: [Intro], [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Bridge], [Final Chorus], [Outro].",
-    "Use short singable lines, natural rhyme, and a short repeatable hook.",
+    `Challenge: ${title}`,
     "",
-    "Challenge brief:",
-    seed,
+    String(seed || "").trim(),
   ].filter(Boolean).join("\n");
 }
 
@@ -2596,7 +2591,7 @@ function setCreateChallengeHint(challenge) {
     const voiceClip = isVoiceClipChallengeId(c.id);
     els.createChallengeHintSub.textContent = voiceClip
       ? "Record on Hum. Optional: type what you sang on Lyrics — or leave empty and Generate."
-      : `${details ? `${details}. ` : ""}Starter text below — edit it or tap ✦ for AI lyrics.`;
+      : `${details ? `${details}. ` : ""}Instructions below — edit them, then tap ✦ for a short lyric draft (not a full song).`;
   }
   els.createChallengeHint.hidden = false;
 }
@@ -4062,7 +4057,8 @@ const CHALLENGE_IDEAS = [
     id: "sad-to-dance-challenge",
     title: "Sad to Dance",
     style: "Bittersweet dance pop, minor-key piano intro, warm bass, emotional vocal, uplifting drop, 118 bpm",
-    lyrics: "[Verse]\nI kept your name in a quiet place\nA little shadow I could not erase\nBut the night is calling me outside\nI can feel the tears turn into light\n\n[Chorus]\nI dance with the sadness, I move through the rain\nI turn every memory into a flame\nIf my heart is broken, let the rhythm play\nI will love what I lost in a brand new way",
+    lyricsMode: "instructions",
+    lyrics: "Challenge: flip a sad feeling into dance — keep the emotion.\n\nVerse: quiet and honest, like a text you never sent.\nPre-chorus: let the feeling lift.\nChorus: dance through the sadness — one repeatable hook line.\n\nMake it personal. Tap ✦ when ready for a short lyric draft (not a full song).",
     prompt: "Flip a sad idea into motion without losing the emotion.",
     tags: ["Mood flip", "Dance", "Heart"],
   },
@@ -4788,13 +4784,13 @@ function applyDiscoveryIdeaToCreate(idea) {
       voiceClipOnly
         ? `Challenge: ${title}. Record on Hum, then Generate.`
         : challenge
-          ? `Challenge: ${title}. Edit the starter or tap ✦ for lyrics.`
+          ? `Challenge: ${title}. Edit the instructions or tap ✦ for a short lyric draft.`
           : `Loaded idea: ${title}. Make it yours.`,
     );
   } catch {}
   try {
     showToast(
-      voiceClipOnly ? "Record on Hum — lyrics optional" : challenge ? "Challenge ready — make the starter yours" : "Idea loaded - make it yours",
+      voiceClipOnly ? "Record on Hum — lyrics optional" : challenge ? "Challenge ready — edit the instructions or tap ✦" : "Idea loaded - make it yours",
       { icon: "♪", durationMs: 2600 },
     );
   } catch {}
@@ -34157,7 +34153,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const lyricsBoxEl = els.sunoPrompt.closest(".lyricsBox");
     const seed = String(els.sunoPrompt.value || "").trim();
     const challenge = challengePromptContext();
-    const mode = challenge ? "full" : detectLyricsMode(seed);
+    const mode = challenge ? "challenge" : detectLyricsMode(seed);
     const requestSeed = challenge ? challengePromptMagicSeed(seed, challenge) : seed;
     const lyricsProvider = "";
     const style = String(els.sunoStyle?.value || "").trim();
@@ -34176,7 +34172,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
       if (els.sunoPrompt) els.sunoPrompt.disabled = true;
       if (els.sunoStyle) els.sunoStyle.disabled = true;
-      setStatus(challenge ? "AI is turning your Challenge brief into lyrics…" : mode === "continue" ? "AI is continuing your lyrics…" : mode === "arrange" ? "AI is arranging your lyrics for singing…" : "AI is writing structured lyrics…");
+      setStatus(challenge ? "AI is drafting short challenge lyrics…" : mode === "continue" ? "AI is continuing your lyrics…" : mode === "arrange" ? "AI is arranging your lyrics for singing…" : "AI is writing structured lyrics…");
       const r = await fetch(apiUrl("/api/lyrics"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },

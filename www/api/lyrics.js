@@ -1,6 +1,6 @@
 /**
  * POST /api/lyrics
- * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange", lyricsProvider?: "gemini" }
+ * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange"|"challenge", lyricsProvider?: "gemini" }
  *
  * Provider:
  * 1) Suno lyrics API, unless lyricsProvider is "gemini"
@@ -272,6 +272,25 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint }) {
       seed || "(none)",
     ].join("\n");
   }
+  if (mode === "challenge") {
+    return [
+      "You are writing a SHORT lyric draft for a music challenge — NOT a full commercial song.",
+      "Do NOT write a complete song. Do NOT include [Intro], [Verse 2], [Bridge], [Final Chorus], or [Outro].",
+      "Output lyrics only with at most 3 sections:",
+      "[Verse 1] — 4 lines max",
+      "[Pre-Chorus] — 2 lines max (optional; omit if not needed)",
+      "[Chorus] — 4 lines max, with one repeatable hook",
+      "Total output: 12 lines maximum. Keep lines short and singable.",
+      "Do not explain the challenge. Do not repeat the instruction text.",
+      "Do not include metadata, notes, or descriptions.",
+      `Variation token: ${nonce}`,
+      ...(dialectLines ? [dialectLines] : []),
+      style ? `Style/Tags: ${style}` : "Style/Tags: none",
+      "",
+      "Challenge brief to turn into lyrics:",
+      seed || "(none)",
+    ].join("\n");
+  }
   return [
     "Write complete singable lyrics for AI song generation.",
     "Output lyrics only.",
@@ -298,7 +317,9 @@ function buildSunoPrompt({ seed, style, mode, dialect, dialectHint }) {
     ? "Arrange user lyrics into a singable song with section tags."
     : mode === "continue"
       ? "Continue these lyrics in the same mood and language."
-      : "Write complete singable song lyrics with verse and chorus tags.";
+      : mode === "challenge"
+        ? "Write a short challenge lyric draft only: Verse 1, optional Pre-Chorus, Chorus. Max 12 lines. Not a full song."
+        : "Write complete singable song lyrics with verse and chorus tags.";
   const parts = [
     intent,
     dialect ? `Dialect: ${dialect}.` : "",
@@ -512,7 +533,9 @@ function pickVariantSeed(text) {
 }
 
 function detectModeFromSeed(seed, requestedMode) {
-  if (requestedMode === "arrange" || requestedMode === "continue" || requestedMode === "full") return requestedMode;
+  if (requestedMode === "arrange" || requestedMode === "continue" || requestedMode === "full" || requestedMode === "challenge") {
+    return requestedMode;
+  }
   const s = String(seed || "");
   const count = countSentences(s);
   const hasSections = /\[(verse|chorus|bridge|outro|intro|final chorus|pre-chorus|hook|refrain)/i.test(s);

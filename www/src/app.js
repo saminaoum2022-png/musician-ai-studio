@@ -5739,6 +5739,8 @@ function bindCampaignUiOnce() {
 // ─── Weekly chart (Top songs of the week) ───────────────────────────────
 let _weeklyChartCache = { ts: 0, chart: null };
 let _weeklyChartExpanded = false;
+/** Live challenge cards: expanded entry lists keyed by challenge id. */
+let _discoverChallengeExpanded = Object.create(null);
 
 async function fetchWeeklyChart() {
   if (_weeklyChartCache.chart && Date.now() - _weeklyChartCache.ts < 5 * 60_000) {
@@ -6345,24 +6347,78 @@ function discoverHubTopEntryCardHtml(t, profMap) {
     </button>`;
 }
 
+function discoverChallengeEntryHeroHtml(t, profMap) {
+  const prof = resolveProfileForFeedCreator(t.userId, profMap);
+  const handle = String(prof?.username || "").trim();
+  const title = String(t.title || "Untitled").trim();
+  const art = trackCoverArtForFeed(t);
+  const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
+  const plays = Math.max(0, Number(t.playCount) || 0);
+  const ch = challengeMetaForTrack(t);
+  const flag = String(ch?.teamFlag || "").trim();
+  return `
+    <button type="button" class="chartHero discoverChallengeHero" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
+      <span class="chartHeroArtWrap">
+        ${flag
+    ? `<span class="discoverCampaignFlag discoverChallengeHeroFlag">${escapeHtml(flag)}</span>`
+    : `<span class="chartHeroCrown" aria-hidden="true">👑</span>`}
+        <img class="chartHeroArt discoverChallengeHeroArt" src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
+      </span>
+      <span class="chartHeroMeta">
+        <span class="chartHeroRankRow"><span class="chartHeroRank">#1</span></span>
+        <strong class="chartHeroTitle">${escapeHtml(title)}</strong>
+        ${handle ? `<small class="chartHeroBy">@${escapeHtml(handle)}</small>` : ""}
+        ${plays ? `<span class="chartHeroPlays">🔥 ${escapeHtml(discoverHubStatLabel(plays))} plays</span>` : ""}
+      </span>
+      <span class="chartHeroPlayIco" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M8 5.5v13l11-6.5-11-6.5Z"/></svg>
+      </span>
+    </button>`;
+}
+
+function discoverChallengeEntryRowHtml(t, profMap, rank) {
+  const prof = resolveProfileForFeedCreator(t.userId, profMap);
+  const handle = String(prof?.username || "").trim();
+  const title = String(t.title || "Untitled").trim();
+  const art = trackCoverArtForFeed(t);
+  const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
+  const plays = Math.max(0, Number(t.playCount) || 0);
+  const rankCls = rank <= 3 ? ` chartRowRank--${rank}` : "";
+  return `
+    <button type="button" class="chartRow discoverChallengeEntryRow" ${playAttrs}>
+      <span class="chartRowRank${rankCls}">${rank}</span>
+      <span class="chartRowArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" /></span>
+      <span class="chartRowMeta">
+        <strong>${escapeHtml(title)}</strong>
+        ${handle ? `<small>@${escapeHtml(handle)}</small>` : ""}
+      </span>
+      ${plays ? `<span class="chartRowPlays">${escapeHtml(discoverHubStatLabel(plays))}</span>` : ""}
+    </button>`;
+}
+
 function discoverHubChallengeStripCardHtml(c, tracks, profMap) {
   const joinAttrs = discoverChallengeJoinAttrs(c);
-  const allEntries = discoverTracksForChallenge(c, tracks, 12);
+  const allEntries = discoverTracksForChallenge(c, tracks, 10);
   const top = allEntries[0] || null;
   const rest = allEntries.slice(1);
   const artUrl = discoverChallengeArtUrl(c.id);
-  const listenHtml = top
-    ? discoverSparkExampleMiniHtml(top, profMap)
-    : `<span class="discoverSparkExamplesEmpty">Be the first — tap Join</span>`;
-  const viewAllBtn = rest.length
-    ? `<button type="button" class="discoverHubChallengeViewAllBtn" data-discover-challenge-view-all="${escapeHtml(c.id)}">View all</button>`
+  const expanded = Boolean(_discoverChallengeExpanded[c.id]);
+  const collapseId = `discoverChallengeRows-${String(c.id || "x").replace(/[^a-z0-9_-]/gi, "")}`;
+  const heroHtml = top
+    ? discoverChallengeEntryHeroHtml(top, profMap)
+    : `<div class="discoverChallengeEmpty">Be the first — tap Join</div>`;
+  const rowsHtml = rest.map((t, i) => discoverChallengeEntryRowHtml(t, profMap, i + 2)).join("");
+  const toggleHtml = rest.length
+    ? `
+      <div class="chartRows discoverChallengeRows" id="${escapeHtml(collapseId)}" ${expanded ? "" : "hidden"}>${rowsHtml}</div>
+      <button type="button" class="chartToggleBtn discoverChallengeToggle${expanded ? " isOpen" : ""}" data-discover-challenge-entries-toggle="${escapeHtml(c.id)}" data-discover-challenge-entry-count="${allEntries.length}" aria-expanded="${expanded ? "true" : "false"}" aria-controls="${escapeHtml(collapseId)}">
+        <span>${expanded ? "Show less" : `View all ${allEntries.length}`}</span>
+        <svg class="chartToggleChev" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></svg>
+      </button>`
     : "";
-  const restHtml = rest.map((t) => discoverSparkExampleMiniHtml(t, profMap)).join("");
   return `
-    <article class="discoverChallengeCard discoverChallengeCard--${escapeHtml(c.tone)}" aria-label="${escapeHtml(c.title)}">
-      <div class="discoverChallengeListen" role="list">${listenHtml}</div>
-      ${rest.length ? `<div class="discoverHubRail discoverHubRail--topEntries discoverHubChallengeEntriesMore" hidden role="list">${restHtml}</div>` : ""}
-      ${viewAllBtn}
+    <article class="discoverChallengeCard discoverChallengeCard--${escapeHtml(c.tone)}${expanded ? " isExpanded" : ""}" aria-label="${escapeHtml(c.title)}">
+      <div class="discoverChallengeEntries">${heroHtml}${toggleHtml}</div>
       <div class="discoverChallengeRow">
         <span class="discoverChallengeThumb">
           <img src="${escapeHtml(artUrl)}" alt="" loading="lazy" decoding="async" />
@@ -6423,7 +6479,7 @@ function renderDiscoverLiveChallengesSection(tracks, profMap) {
   if (!mount) return;
   const cards = DISCOVER_LIVE_CHALLENGES.map((c) => discoverHubChallengeJournalCardHtml(c, tracks, profMap)).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("challenges", "Live challenges", "Hear a top entry, then join.")}
+    ${discoverHubSectionHeadHtml("challenges", "Live challenges", "Top entry on each card — expand to browse all submissions.")}
     <div class="discoverHubRail discoverHubRail--challenges" role="list">${cards}</div>`;
 }
 
@@ -6719,16 +6775,24 @@ function bindDiscoverHubV1Once() {
   if (!root || root.dataset.boundDiscoverHubV1 === "1") return;
   root.dataset.boundDiscoverHubV1 = "1";
   root.addEventListener("click", (e) => {
-    const viewAllBtn = e.target?.closest?.("[data-discover-challenge-view-all]");
-    if (viewAllBtn && root.contains(viewAllBtn)) {
+    const challengeToggle = e.target?.closest?.("[data-discover-challenge-entries-toggle]");
+    if (challengeToggle && root.contains(challengeToggle)) {
       e.preventDefault();
+      e.stopPropagation();
       haptic("light");
-      const card = viewAllBtn.closest(".discoverChallengeCard");
-      const more = card?.querySelector(".discoverHubChallengeEntriesMore");
-      if (!card || !more) return;
-      const expanded = card.classList.toggle("isExpanded");
-      more.hidden = !expanded;
-      viewAllBtn.textContent = expanded ? "Show less" : "View all";
+      const id = String(challengeToggle.getAttribute("data-discover-challenge-entries-toggle") || "").trim();
+      if (!id) return;
+      _discoverChallengeExpanded[id] = !_discoverChallengeExpanded[id];
+      const expanded = Boolean(_discoverChallengeExpanded[id]);
+      const card = challengeToggle.closest(".discoverChallengeCard");
+      const rows = card?.querySelector(".discoverChallengeRows");
+      if (card) card.classList.toggle("isExpanded", expanded);
+      if (rows) rows.hidden = !expanded;
+      challengeToggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+      challengeToggle.classList.toggle("isOpen", expanded);
+      const total = Number(challengeToggle.getAttribute("data-discover-challenge-entry-count") || 0);
+      const label = challengeToggle.querySelector("span");
+      if (label) label.textContent = expanded ? "Show less" : `View all ${total || "entries"}`;
       return;
     }
     const sparkCreateBtn = e.target?.closest?.("[data-discover-spark-create]");

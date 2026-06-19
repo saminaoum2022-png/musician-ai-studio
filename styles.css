@@ -30848,40 +30848,132 @@ section.mentorPage{
   padding-bottom: 8px;
 }
 .discoverChallengeCard{
-  flex: 0 0 236px;
-  width: 236px;
-  max-height: 220px;
+  flex: 0 0 268px;
+  width: 268px;
+  max-height: none;
   scroll-snap-align: start;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   padding: 10px;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.02);
   box-sizing: border-box;
 }
+.discoverChallengeEntries{
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+}
+.discoverChallengeEmpty{
+  display: grid;
+  place-items: center;
+  min-height: 96px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(223, 231, 251, 0.5);
+  text-align: center;
+}
+.discoverChallengeCard .discoverChallengeHero{
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 8px;
+  margin-bottom: 0;
+}
+.discoverChallengeCard .discoverChallengeHero .chartHeroArtWrap{
+  position: relative;
+  width: 100%;
+}
+.discoverChallengeCard .discoverChallengeHeroArt{
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+}
+.discoverChallengeCard .discoverChallengeHeroFlag{
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  font-size: 18px;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.45));
+}
+.discoverChallengeCard .discoverChallengeHero .chartHeroCrown{
+  top: -10px;
+  font-size: 16px;
+}
+.discoverChallengeCard .discoverChallengeHero .chartHeroMeta{
+  gap: 2px;
+}
+.discoverChallengeCard .discoverChallengeHero .chartHeroTitle{
+  font-size: 13px;
+}
+.discoverChallengeCard .discoverChallengeHero .chartHeroBy{
+  font-size: 10.5px;
+}
+.discoverChallengeCard .discoverChallengeHero .chartHeroPlays{
+  font-size: 10px;
+  margin-top: 0;
+}
+.discoverChallengeCard .discoverChallengeHero .chartHeroPlayIco,
+.discoverChallengeCard .discoverChallengeHeroPlay{
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 34px;
+  height: 34px;
+  z-index: 2;
+}
+.discoverChallengeCard .discoverChallengeHero .chartHeroArtWrap{
+  position: relative;
+}
+.discoverChallengeCard .discoverChallengeRows{
+  margin-top: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.discoverChallengeCard .discoverChallengeEntryRow{
+  padding: 8px 4px;
+  gap: 8px;
+}
+.discoverChallengeCard .discoverChallengeEntryRow .chartRowArt{
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+}
+.discoverChallengeCard .discoverChallengeEntryRow .chartRowMeta strong{
+  font-size: 11.5px;
+}
+.discoverChallengeCard .discoverChallengeEntryRow .chartRowMeta small{
+  font-size: 10px;
+}
+.discoverChallengeCard .discoverChallengeEntryRow .chartRowPlays{
+  font-size: 10px;
+}
+.discoverChallengeCard .discoverChallengeEntryRow .chartRowRank{
+  font-size: 11px;
+  min-width: 18px;
+}
+.discoverChallengeCard .discoverChallengeToggle{
+  margin-top: 2px;
+  padding: 8px 10px;
+  font-size: 11px;
+  border-radius: 10px;
+}
 .discoverChallengeCard.isExpanded{
   max-height: none;
 }
-.discoverChallengeListen{
-  min-height: 78px;
-}
-.discoverChallengeListen .discoverSparkExample{
-  width: 100%;
-}
-.discoverChallengeListen .discoverSparkExampleArt{
-  aspect-ratio: 16 / 9;
-}
+.discoverChallengeCard .discoverChallengeListen,
+.discoverChallengeCard .discoverHubChallengeEntriesMore,
 .discoverChallengeCard .discoverHubChallengeViewAllBtn{
-  align-self: flex-start;
-  margin: 0;
-  padding: 0;
-}
-.discoverChallengeCard .discoverHubChallengeEntriesMore{
-  gap: 6px;
-  padding: 0;
-  margin: 0;
+  display: none !important;
 }
 .discoverChallengeRow{
   display: flex;

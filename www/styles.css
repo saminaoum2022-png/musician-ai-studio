@@ -5972,6 +5972,8 @@ body.hubJumpingToTop #hubList .hubRow{
   margin-top: 14px;
   gap: 0;
 }
+#btnPlayerShare{ justify-self: start; }
+#btnPlayerDownloadVideo{ justify-self: end; }
 .playerSideBtn{
   width: 44px;
   height: 44px;
@@ -6079,6 +6081,7 @@ body.hubJumpingToTop #hubList .hubRow{
 .playerRemixRow{
   display:flex;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
 }

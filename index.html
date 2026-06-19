@@ -74,7 +74,7 @@
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
     <link rel="preload" as="video" href="./assets/icons/splash-logo.mp4?v=20260619trim" type="video/mp4" />
-    <link rel="stylesheet" href="./styles.css?v=20260619discoverGlass" />
+    <link rel="stylesheet" href="./styles.css?v=20260619playerPlaylist" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1993,13 +1993,6 @@
                     <line x1="12" y1="2" x2="12" y2="15"/>
                   </svg>
                 </button>
-                <button id="btnPlayerAddPlaylist" class="playerSideBtn" type="button" disabled aria-label="Add to playlist">
-                  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
-                    <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M9 6h12M9 12h12M9 18h8"/>
-                    <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M3 6v12"/>
-                    <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 5v6M1 8h6"/>
-                  </svg>
-                </button>
                 <button id="btnPlayerToggle" class="playerToggleBtn" type="button" disabled aria-label="Play">
                   <span class="playerToggleIcon" aria-hidden="true">
                     <svg class="ico" viewBox="0 0 24 24"><polygon points="6 3 21 12 6 21 6 3" fill="currentColor" stroke="none"/></svg>
@@ -2046,6 +2039,14 @@
                    else's) — listen-only mode hides the secondary row above,
                    so this row is the remix entry point there. -->
               <div id="playerRemixRow" class="playerRemixRow" hidden>
+                <button id="btnPlayerAddPlaylist" class="playerRemixBtn" type="button" disabled aria-label="Add to playlist">
+                  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M4 7h11M4 12h11M4 17h7"/>
+                    <circle cx="18" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="1.75"/>
+                    <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M18 5.5v3M16.5 7h3"/>
+                  </svg>
+                  <span>Playlist</span>
+                </button>
                 <button id="btnPlayerRemix" class="playerRemixBtn" type="button" aria-label="Remix this song">
                   <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M7 7h3.4c1.6 0 3 .8 3.8 2.1l1.1 1.8"/>
@@ -3725,6 +3726,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260619discoverGlass"></script>
+    <script type="module" src="./src/app.js?v=20260619playerPlaylist"></script>
   </body>
 </html>

@@ -30844,122 +30844,120 @@ section.mentorPage{
   margin: 0 0 4px;
 }
 .discoverHubRail--challenges{
-  gap: 12px;
+  gap: 10px;
   padding-bottom: 8px;
 }
-.discoverJournalChallengeCard{
-  flex: 0 0 min(82vw, 300px);
-  width: min(82vw, 300px);
+.discoverChallengeCard{
+  flex: 0 0 236px;
+  width: 236px;
+  max-height: 220px;
   scroll-snap-align: start;
   display: flex;
   flex-direction: column;
+  gap: 6px;
+  padding: 10px;
   border-radius: 16px;
-  overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.02);
+  box-sizing: border-box;
 }
-.discoverJournalChallengeArt{
-  height: 96px;
+.discoverChallengeCard.isExpanded{
+  max-height: none;
+}
+.discoverChallengeListen{
+  min-height: 78px;
+}
+.discoverChallengeListen .discoverSparkExample{
+  width: 100%;
+}
+.discoverChallengeListen .discoverSparkExampleArt{
+  aspect-ratio: 16 / 9;
+}
+.discoverChallengeCard .discoverHubChallengeViewAllBtn{
+  align-self: flex-start;
+  margin: 0;
+  padding: 0;
+}
+.discoverChallengeCard .discoverHubChallengeEntriesMore{
+  gap: 6px;
+  padding: 0;
+  margin: 0;
+}
+.discoverChallengeRow{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+}
+.discoverChallengeThumb{
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   background: #05070d;
 }
-.discoverJournalChallengeArt img{
+.discoverChallengeThumb img{
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
-.discoverJournalChallengeBody{
+.discoverChallengeInfo{
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 12px 12px 14px;
+  gap: 2px;
 }
-.discoverJournalChallengeTitle{
-  margin: 0;
-  font-size: 15px;
-  font-weight: 850;
-  letter-spacing: -0.02em;
-  color: #fff;
-  line-height: 1.2;
-}
-.discoverJournalChallengeBlurb{
-  margin: 0;
+.discoverChallengeTitle{
   font-size: 12px;
-  font-weight: 500;
-  line-height: 1.35;
-  color: rgba(223, 231, 251, 0.55);
+  font-weight: 850;
+  line-height: 1.15;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.discoverJournalChallengeMeta{
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  font-size: 10.5px;
-  font-weight: 700;
-  color: rgba(223, 231, 251, 0.42);
+.discoverChallengeMeta{
+  font-size: 9.5px;
+  font-weight: 650;
+  color: rgba(223, 231, 251, 0.44);
 }
-.discoverJournalChallengeJoin{
-  align-self: flex-start;
-  margin-top: 2px;
-  padding: 8px 14px;
+.discoverChallengeJoin{
+  flex: none;
+  padding: 7px 11px;
   border: none;
   border-radius: 999px;
   background: linear-gradient(135deg, #facc15, #f59e0b);
   color: #1c1408;
   font: inherit;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 900;
   cursor: pointer;
+  white-space: nowrap;
 }
-.discoverJournalChallengeCard--rose .discoverJournalChallengeJoin{
+.discoverChallengeCard--rose .discoverChallengeJoin{
   background: linear-gradient(135deg, #f472b6, #db2777);
   color: #fff;
 }
-.discoverJournalChallengeCard--violet .discoverJournalChallengeJoin{
+.discoverChallengeCard--violet .discoverChallengeJoin{
   background: linear-gradient(135deg, #a78bfa, #7c3aed);
   color: #fff;
 }
-.discoverJournalChallengeCard--mint .discoverJournalChallengeJoin,
-.discoverJournalChallengeCard--cyan .discoverJournalChallengeJoin{
+.discoverChallengeCard--mint .discoverChallengeJoin,
+.discoverChallengeCard--cyan .discoverChallengeJoin{
   background: linear-gradient(135deg, #34d399, #0891b2);
   color: #fff;
 }
-.discoverJournalChallengeEntries{
-  margin-top: 4px;
-}
+.discoverJournalChallengeCard,
+.discoverJournalChallengeArt,
+.discoverJournalChallengeBody,
+.discoverJournalChallengeBlurb,
+.discoverJournalChallengeJoin,
 .discoverJournalChallengeFeatured{
-  display: flex;
-  margin-top: 2px;
-}
-.discoverJournalChallengeFeatured .discoverHubTopEntry{
-  flex: 1 1 auto;
-  width: 100%;
-  max-width: 100%;
-}
-.discoverJournalChallengeFeatured .discoverHubTopEntryCover{
-  aspect-ratio: 1;
-}
-.discoverJournalChallengeEntries .discoverHubChallengeViewAllBtn{
-  margin-top: 6px;
-}
-.discoverJournalChallengeEntries .discoverHubChallengeEntriesMore{
-  margin-top: 8px;
-}
-.discoverJournalChallengeEntry{
-  flex: 1;
-  aspect-ratio: 1;
-  padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.04);
-  cursor: pointer;
-}
-.discoverJournalChallengeEntry img{
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
+  display: none;
 }
 .discoverHubSection--hero{
   margin: 0 0 20px;

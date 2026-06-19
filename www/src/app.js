@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260619sparkCarousel";
+const APP_BUILD = "20260619challengeStrip";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -6348,42 +6348,39 @@ function discoverHubTopEntryCardHtml(t, profMap) {
     </button>`;
 }
 
-function discoverHubChallengeJournalCardHtml(c, tracks, profMap) {
+function discoverHubChallengeStripCardHtml(c, tracks, profMap) {
   const joinAttrs = discoverChallengeJoinAttrs(c);
   const allEntries = discoverTracksForChallenge(c, tracks, 12);
   const top = allEntries[0] || null;
   const rest = allEntries.slice(1);
   const artUrl = discoverChallengeArtUrl(c.id);
-  let entriesHtml = `<p class="discoverHubQuietNote discoverHubQuietNote--inline">No entries yet — be the first.</p>`;
-  if (top) {
-    const previewHtml = discoverHubTopEntryCardHtml(top, profMap);
-    const restHtml = rest.map((t) => discoverHubTopEntryCardHtml(t, profMap)).join("");
-    const viewAllBtn = rest.length
-      ? `<button type="button" class="discoverHubChallengeViewAllBtn" data-discover-challenge-view-all="${escapeHtml(c.id)}">View all</button>`
-      : "";
-    entriesHtml = `
-      <div class="discoverHubChallengeEntriesBlock discoverJournalChallengeEntries" data-challenge-entries="${escapeHtml(c.id)}">
-        <div class="discoverJournalChallengeFeatured" role="list">${previewHtml}</div>
-        ${rest.length ? `<div class="discoverHubRail discoverHubRail--topEntries discoverHubChallengeEntriesMore" hidden role="list">${restHtml}</div>` : ""}
-        ${viewAllBtn}
-      </div>`;
-  }
+  const listenHtml = top
+    ? discoverSparkExampleMiniHtml(top, profMap)
+    : `<span class="discoverSparkExamplesEmpty">Be the first — tap Join</span>`;
+  const viewAllBtn = rest.length
+    ? `<button type="button" class="discoverHubChallengeViewAllBtn" data-discover-challenge-view-all="${escapeHtml(c.id)}">View all</button>`
+    : "";
+  const restHtml = rest.map((t) => discoverSparkExampleMiniHtml(t, profMap)).join("");
   return `
-    <article class="discoverJournalChallengeCard discoverJournalChallengeCard--${escapeHtml(c.tone)}" aria-label="${escapeHtml(c.title)}">
-      <div class="discoverJournalChallengeArt">
-        <img src="${escapeHtml(artUrl)}" alt="" loading="lazy" decoding="async" />
-      </div>
-      <div class="discoverJournalChallengeBody">
-        <h4 class="discoverJournalChallengeTitle">${escapeHtml(c.title)}</h4>
-        <p class="discoverJournalChallengeBlurb">${escapeHtml(c.blurb)}</p>
-        <div class="discoverJournalChallengeMeta">
-          <span>${Number(c.daysLeft) || 0} days left</span>
-          <span>${discoverHubStatLabel(c.submissions)} songs</span>
+    <article class="discoverChallengeCard discoverChallengeCard--${escapeHtml(c.tone)}" aria-label="${escapeHtml(c.title)}">
+      <div class="discoverChallengeListen" role="list">${listenHtml}</div>
+      ${rest.length ? `<div class="discoverHubRail discoverHubRail--topEntries discoverHubChallengeEntriesMore" hidden role="list">${restHtml}</div>` : ""}
+      ${viewAllBtn}
+      <div class="discoverChallengeRow">
+        <span class="discoverChallengeThumb">
+          <img src="${escapeHtml(artUrl)}" alt="" loading="lazy" decoding="async" />
+        </span>
+        <div class="discoverChallengeInfo">
+          <strong class="discoverChallengeTitle">${escapeHtml(c.title)}</strong>
+          <span class="discoverChallengeMeta">${Number(c.daysLeft) || 0}d left · ${discoverHubStatLabel(c.submissions)} songs</span>
         </div>
-        <button type="button" class="discoverJournalChallengeJoin" ${joinAttrs}>Join</button>
-        ${entriesHtml}
+        <button type="button" class="discoverChallengeJoin" ${joinAttrs}>Join</button>
       </div>
     </article>`;
+}
+
+function discoverHubChallengeJournalCardHtml(c, tracks, profMap) {
+  return discoverHubChallengeStripCardHtml(c, tracks, profMap);
 }
 
 function discoverHubExampleCardHtml(t, profMap) {
@@ -6429,7 +6426,7 @@ function renderDiscoverLiveChallengesSection(tracks, profMap) {
   if (!mount) return;
   const cards = DISCOVER_LIVE_CHALLENGES.map((c) => discoverHubChallengeJournalCardHtml(c, tracks, profMap)).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("challenges", "Live challenges", "Swipe through active prompts — hear entries, then join.")}
+    ${discoverHubSectionHeadHtml("challenges", "Live challenges", "Hear a top entry, then join.")}
     <div class="discoverHubRail discoverHubRail--challenges" role="list">${cards}</div>`;
 }
 
@@ -6729,10 +6726,10 @@ function bindDiscoverHubV1Once() {
     if (viewAllBtn && root.contains(viewAllBtn)) {
       e.preventDefault();
       haptic("light");
-      const block = viewAllBtn.closest(".discoverHubChallengeEntriesBlock");
-      const more = block?.querySelector(".discoverHubChallengeEntriesMore");
-      if (!block || !more) return;
-      const expanded = block.classList.toggle("isExpanded");
+      const card = viewAllBtn.closest(".discoverChallengeCard");
+      const more = card?.querySelector(".discoverHubChallengeEntriesMore");
+      if (!card || !more) return;
+      const expanded = card.classList.toggle("isExpanded");
       more.hidden = !expanded;
       viewAllBtn.textContent = expanded ? "Show less" : "View all";
       return;

@@ -2934,8 +2934,8 @@ function applyRoute({ passGen } = {}) {
   let pendingDiscoverPlaylistSlug = "";
   const playlistRouteMatch = route.match(/^discover\/playlist\/([a-z0-9_-]+)/i);
   if (playlistRouteMatch) {
-    pendingDiscoverPlaylistSlug = "";
-    route = "discover";
+    pendingDiscoverPlaylistSlug = decodeURIComponent(String(playlistRouteMatch[1] || "")).trim();
+    route = "discover-playlist";
   }
   if (route === "search") {
     try {
@@ -5063,7 +5063,9 @@ function discoverHubSectionHeadSkeletonHtml() {
   return `
     <header class="discoverJournalSectionHead discoverHubSkelHead" aria-hidden="true">
       <div class="discoverJournalSectionRule"></div>
-      <div class="discoverHubSkelTitle"></div>
+      <div class="discoverJournalSectionTitleRow">
+        <div class="discoverHubSkelTitle"></div>
+      </div>
     </header>`;
 }
 
@@ -5871,8 +5873,8 @@ function bindCampaignUiOnce() {
 // ─── Weekly chart (Top songs of the week) ───────────────────────────────
 let _weeklyChartCache = { ts: 0, chart: null };
 let _weeklyChartExpanded = false;
-/** Live challenge cards: expanded entry lists keyed by challenge id. */
-let _discoverChallengeExpanded = Object.create(null);
+/** Live challenge playlist rows (slug → tracks) from last Discover refresh. */
+let _discoveryChallengeBuckets = new Map();
 
 async function fetchWeeklyChart() {
   if (_weeklyChartCache.chart && Date.now() - _weeklyChartCache.ts < 5 * 60_000) {
@@ -6201,11 +6203,17 @@ function discoverHubStatLabel(n) {
   return formatStatCount(v);
 }
 
-function discoverHubSectionHeadHtml(title) {
+function discoverHubSectionHeadHtml(title, actionHtml = "") {
+  const action = actionHtml
+    ? `<div class="discoverJournalSectionAction">${actionHtml}</div>`
+    : "";
   return `
     <header class="discoverJournalSectionHead">
       <div class="discoverJournalSectionRule" aria-hidden="true"></div>
-      <h3 class="discoverJournalSectionTitle">${escapeHtml(title)}</h3>
+      <div class="discoverJournalSectionTitleRow">
+        <h3 class="discoverJournalSectionTitle">${escapeHtml(title)}</h3>
+        ${action}
+      </div>
     </header>`;
 }
 
@@ -6313,6 +6321,39 @@ function discoverTracksForChallenge(c, tracks, limit = 3) {
     .filter((t) => discoverChallengeMatchesTrack(c, t))
     .sort((a, b) => (Number(b.playCount) || 0) - (Number(a.playCount) || 0))
     .slice(0, limit);
+}
+
+function discoverChallengePlaylistSlug(challengeId) {
+  return `challenge-${String(challengeId || "").trim()}`;
+}
+
+function discoverLiveChallengeById(id) {
+  return DISCOVER_LIVE_CHALLENGES.find((c) => String(c.id) === String(id)) || null;
+}
+
+function discoverChallengeToneTheme(tone) {
+  const map = {
+    gold: ["250,204,21", "124,92,255"],
+    violet: ["124,92,255", "35,213,171"],
+    rose: ["244,114,182", "124,92,255"],
+    mint: ["35,213,171", "124,92,255"],
+    cyan: ["35,213,171", "56,189,248"],
+  };
+  return map[String(tone || "").trim()] || map.violet;
+}
+
+function rebuildDiscoveryChallengeBuckets(tracks) {
+  const buckets = new Map();
+  for (const c of DISCOVER_LIVE_CHALLENGES) {
+    buckets.set(String(c.id), discoverTracksForChallenge(c, tracks, 9999));
+  }
+  _discoveryChallengeBuckets = buckets;
+}
+
+function discoverLiveChallengeTrackCount() {
+  let n = 0;
+  for (const rows of _discoveryChallengeBuckets.values()) n += rows.length;
+  return n;
 }
 
 function discoverTracksForTemplate(tplId, tracks, limit = 3) {
@@ -6489,47 +6530,15 @@ function discoverChallengeEntryHeroHtml(t, profMap) {
     </button>`;
 }
 
-function discoverChallengeEntryRowHtml(t, profMap, rank) {
-  const prof = resolveProfileForFeedCreator(t.userId, profMap);
-  const handle = String(prof?.username || "").trim();
-  const title = String(t.title || "Untitled").trim();
-  const art = trackCoverArtForFeed(t);
-  const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
-  const plays = Math.max(0, Number(t.playCount) || 0);
-  const rankCls = rank <= 3 ? ` chartRowRank--${rank}` : "";
-  return `
-    <button type="button" class="chartRow discoverChallengeEntryRow" ${playAttrs}>
-      <span class="chartRowRank${rankCls}">${rank}</span>
-      <span class="chartRowArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" /></span>
-      <span class="chartRowMeta">
-        <strong>${escapeHtml(title)}</strong>
-        ${handle ? `<small>@${escapeHtml(handle)}</small>` : ""}
-      </span>
-      ${plays ? `<span class="chartRowPlays">${escapeHtml(discoverHubStatLabel(plays))}</span>` : ""}
-    </button>`;
-}
-
 function discoverHubChallengeStripCardHtml(c, tracks, profMap) {
   const joinAttrs = discoverChallengeJoinAttrs(c);
-  const allEntries = discoverTracksForChallenge(c, tracks, 10);
+  const allEntries = discoverTracksForChallenge(c, tracks, 9999);
   const top = allEntries[0] || null;
-  const rest = allEntries.slice(1);
-  const expanded = Boolean(_discoverChallengeExpanded[c.id]);
-  const collapseId = `discoverChallengeRows-${String(c.id || "x").replace(/[^a-z0-9_-]/gi, "")}`;
   const heroHtml = top
     ? discoverChallengeEntryHeroHtml(top, profMap)
     : `<div class="discoverChallengeEmpty">Be the first — tap Join</div>`;
-  const rowsHtml = rest.map((t, i) => discoverChallengeEntryRowHtml(t, profMap, i + 2)).join("");
-  const toggleHtml = rest.length
-    ? `
-      <div class="chartRows discoverChallengeRows" id="${escapeHtml(collapseId)}" ${expanded ? "" : "hidden"}>${rowsHtml}</div>
-      <button type="button" class="chartToggleBtn discoverChallengeToggle${expanded ? " isOpen" : ""}" data-discover-challenge-entries-toggle="${escapeHtml(c.id)}" data-discover-challenge-entry-count="${allEntries.length}" aria-expanded="${expanded ? "true" : "false"}" aria-controls="${escapeHtml(collapseId)}">
-        <span>${expanded ? "Show less" : `View all ${allEntries.length}`}</span>
-        <svg class="chartToggleChev" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></svg>
-      </button>`
-    : "";
   return `
-    <article class="discoverChallengeCard discoverChallengeCard--${escapeHtml(c.tone)}${expanded ? " isExpanded" : ""}" aria-label="${escapeHtml(c.title)}">
+    <article class="discoverChallengeCard discoverChallengeCard--${escapeHtml(c.tone)}" aria-label="${escapeHtml(c.title)}">
       <div class="discoverChallengeHead">
         <div class="discoverChallengeInfo">
           <strong class="discoverChallengeTitle">${escapeHtml(c.title)}</strong>
@@ -6537,7 +6546,7 @@ function discoverHubChallengeStripCardHtml(c, tracks, profMap) {
         </div>
         <button type="button" class="discoverChallengeJoin" ${joinAttrs}>Join</button>
       </div>
-      <div class="discoverChallengeEntries">${heroHtml}${toggleHtml}</div>
+      <div class="discoverChallengeEntries">${heroHtml}</div>
     </article>`;
 }
 
@@ -6586,9 +6595,13 @@ function renderDiscoverCommunityPicksSection(tracks, profMap) {
 function renderDiscoverLiveChallengesSection(tracks, profMap) {
   const mount = document.getElementById("discoverLiveChallengesMount");
   if (!mount) return;
+  rebuildDiscoveryChallengeBuckets(tracks);
   const cards = DISCOVER_LIVE_CHALLENGES.map((c) => discoverHubChallengeJournalCardHtml(c, tracks, profMap)).join("");
+  const viewAllBtn = discoverLiveChallengeTrackCount() >= 2
+    ? `<button type="button" class="discoverJournalSectionLink" data-discover-challenge-view-all="live-challenges">View all</button>`
+    : "";
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("Live challenges")}
+    ${discoverHubSectionHeadHtml("Live challenges", viewAllBtn)}
     <div class="discoverHubRail discoverHubRail--challenges" role="list">${cards}</div>`;
 }
 
@@ -6885,24 +6898,13 @@ function bindDiscoverHubV1Once() {
   if (!root || root.dataset.boundDiscoverHubV1 === "1") return;
   root.dataset.boundDiscoverHubV1 = "1";
   root.addEventListener("click", (e) => {
-    const challengeToggle = e.target?.closest?.("[data-discover-challenge-entries-toggle]");
-    if (challengeToggle && root.contains(challengeToggle)) {
+    const viewAllBtn = e.target?.closest?.("[data-discover-challenge-view-all]");
+    if (viewAllBtn && root.contains(viewAllBtn)) {
       e.preventDefault();
-      e.stopPropagation();
       haptic("light");
-      const id = String(challengeToggle.getAttribute("data-discover-challenge-entries-toggle") || "").trim();
-      if (!id) return;
-      _discoverChallengeExpanded[id] = !_discoverChallengeExpanded[id];
-      const expanded = Boolean(_discoverChallengeExpanded[id]);
-      const card = challengeToggle.closest(".discoverChallengeCard");
-      const rows = card?.querySelector(".discoverChallengeRows");
-      if (card) card.classList.toggle("isExpanded", expanded);
-      if (rows) rows.hidden = !expanded;
-      challengeToggle.setAttribute("aria-expanded", expanded ? "true" : "false");
-      challengeToggle.classList.toggle("isOpen", expanded);
-      const total = Number(challengeToggle.getAttribute("data-discover-challenge-entry-count") || 0);
-      const label = challengeToggle.querySelector("span");
-      if (label) label.textContent = expanded ? "Show less" : `View all ${total || "entries"}`;
+      const slug = String(viewAllBtn.getAttribute("data-discover-challenge-view-all") || "").trim();
+      if (!slug) return;
+      location.hash = `#/discover/playlist/${encodeURIComponent(slug)}`;
       return;
     }
     const sparkCreateBtn = e.target?.closest?.("[data-discover-spark-create]");
@@ -22708,7 +22710,60 @@ const DISCOVER_PLAYLISTS = [
 
 function getDiscoverPlaylistDef(slug) {
   const s = String(slug || "").trim().toLowerCase();
-  return DISCOVER_PLAYLISTS.find((pl) => pl.slug === s) || null;
+  const editorial = DISCOVER_PLAYLISTS.find((pl) => pl.slug === s);
+  if (editorial) return { ...editorial, kind: "editorial" };
+  if (s === "live-challenges") {
+    return {
+      slug: "live-challenges",
+      title: "Live challenges",
+      subtitle: "",
+      theme: ["124,92,255", "35,213,171"],
+      kind: "live-challenges",
+    };
+  }
+  if (s.startsWith("challenge-")) {
+    const id = s.slice("challenge-".length);
+    const c = discoverLiveChallengeById(id);
+    if (c) {
+      return {
+        slug: s,
+        title: c.title,
+        subtitle: String(c.blurb || "").trim(),
+        theme: discoverChallengeToneTheme(c.tone),
+        kind: "challenge",
+        challengeId: c.id,
+      };
+    }
+  }
+  return null;
+}
+
+function getDiscoverPlaylistTracks(slug) {
+  const pl = getDiscoverPlaylistDef(slug);
+  if (!pl) return [];
+  if (pl.kind === "live-challenges") {
+    const seen = new Set();
+    const out = [];
+    for (const c of DISCOVER_LIVE_CHALLENGES) {
+      for (const t of _discoveryChallengeBuckets.get(String(c.id)) || []) {
+        const sid = String(t.id || t.url || "");
+        if (!sid || seen.has(sid)) continue;
+        seen.add(sid);
+        out.push(t);
+      }
+    }
+    out.sort((a, b) => (Number(b.playCount) || 0) - (Number(a.playCount) || 0));
+    return out.filter((t) => String(t.url || "").trim());
+  }
+  if (pl.kind === "challenge") {
+    return (_discoveryChallengeBuckets.get(String(pl.challengeId)) || []).filter((t) => String(t.url || "").trim());
+  }
+  return (_discoveryPlaylistBuckets.get(pl.slug) || []).filter((t) => String(t.url || "").trim());
+}
+
+function discoverPlaylistUsesProfileRows(slug) {
+  const pl = getDiscoverPlaylistDef(slug);
+  return pl?.kind === "live-challenges" || pl?.kind === "challenge";
 }
 
 function discoverPlaylistSearchBlob(track) {
@@ -22878,17 +22933,27 @@ function renderDiscoverPlaylistScreen(slug) {
   const listEl = document.getElementById("discoverPlaylistList");
   const statusEl = document.getElementById("discoverPlaylistStatus");
   const kickerEl = document.getElementById("discoverPlaylistKicker");
-  if (kickerEl) kickerEl.textContent = "Playlist";
+  const useProfileRows = discoverPlaylistUsesProfileRows(pl.slug);
+  if (kickerEl) {
+    kickerEl.textContent = pl.kind === "live-challenges" || pl.kind === "challenge" ? "Live challenge" : "Playlist";
+  }
   if (titleEl) titleEl.textContent = pl.title;
-  if (leadEl) leadEl.textContent = pl.subtitle;
-  const tracks = (_discoveryPlaylistBuckets.get(pl.slug) || []).filter((t) => String(t.url || "").trim());
+  if (leadEl) {
+    const lead = String(pl.subtitle || "").trim();
+    leadEl.textContent = lead;
+    leadEl.hidden = !lead;
+  }
+  const tracks = getDiscoverPlaylistTracks(pl.slug);
   const profMap = _discoveryLastProfMap;
   if (countEl) {
     countEl.textContent = tracks.length
-      ? `${tracks.length} public ${tracks.length === 1 ? "song" : "songs"} · plays in order`
-      : "No songs matched this vibe yet.";
+      ? `${tracks.length} public ${tracks.length === 1 ? "song" : "songs"} · ranked by plays`
+      : "No songs for this challenge yet.";
   }
   if (!listEl) return;
+  listEl.className = useProfileRows
+    ? "discoverPlaylistList discoverPlaylistList--libRows"
+    : "discoveryFeedList discoveryCardStack discoverPlaylistList";
   if (!tracks.length) {
     listEl.innerHTML = "";
     listEl.hidden = true;
@@ -22897,7 +22962,7 @@ function renderDiscoverPlaylistScreen(slug) {
       statusEl.innerHTML = `
         <div class="discoveryEmptyWrap discoveryEmptyWrapMuted">
           <p class="discoveryEmptyTitle">Nothing here yet</p>
-          <p class="discoveryEmptyText">When public songs match <strong>${escapeHtml(pl.title)}</strong>, they appear here and stay in the main feed too.</p>
+          <p class="discoveryEmptyText">When creators publish entries for <strong>${escapeHtml(pl.title)}</strong>, they show up here.</p>
         </div>`;
     }
     return;
@@ -22907,9 +22972,9 @@ function renderDiscoverPlaylistScreen(slug) {
     statusEl.textContent = "";
   }
   listEl.hidden = false;
-  listEl.innerHTML = tracks
-    .map((t, i) => discoveryTrackRowHtml(t, profMap, i))
-    .join("");
+  listEl.innerHTML = useProfileRows
+    ? `<ul class="libraryRows" role="list">${tracks.map((t, i) => discoverPlaylistLibRowHtml(t, profMap, i)).join("")}</ul>`
+    : tracks.map((t, i) => discoveryTrackRowHtml(t, profMap, i)).join("");
   try {
     syncDiscoveryPlayingHighlights();
   } catch {}
@@ -22926,7 +22991,7 @@ function setDiscoverPlaylistQueue(slug, tracks) {
 async function playDiscoverPlaylistFromIndex(slug, index, opts = {}) {
   const pl = getDiscoverPlaylistDef(slug);
   if (!pl) return;
-  const tracks = (_discoveryPlaylistBuckets.get(pl.slug) || []).filter((t) => String(t.url || "").trim());
+  const tracks = getDiscoverPlaylistTracks(slug);
   if (!tracks.length) return;
   setDiscoverPlaylistQueue(pl.slug, tracks);
   const idx = Math.max(0, Math.min(tracks.length - 1, Number(index) || 0));
@@ -23648,7 +23713,7 @@ function bindDiscoverPlaylistScreenOnce() {
       const slug = _discoverPlaylistScreenSlug;
       if (!slug) return;
       const raw = decodeURIComponent(String(hit.getAttribute("data-user-lib-url") || ""));
-      const idx = (_discoveryPlaylistBuckets.get(slug) || []).findIndex(
+      const idx = getDiscoverPlaylistTracks(slug).findIndex(
         (t) => String(t.url || "").trim() === String(raw || "").trim(),
       );
       if (toggleDiscoverStylePlaybackIfSameUrl(raw)) return;
@@ -23778,6 +23843,54 @@ function wireDiscoverySpotCardImages(root) {
       img.addEventListener("error", mark, { once: true });
     }
   });
+}
+
+function discoverPlaylistLibRowHtml(t, profMap, idx) {
+  const artSafe = trackCoverArtForFeed(t);
+  const prof = resolveProfileForFeedCreator(t.userId, profMap);
+  const handle = String(prof?.username || "").trim();
+  const byLine = handle ? `@${handle}` : "Creator";
+  const rawTitle = String(t.title || "Untitled");
+  const safeTitle = escapeHtml(rawTitle);
+  const encUrl = encodeURIComponent(String(t.url || ""));
+  const encTitle = encodeURIComponent(rawTitle);
+  const encBy = encodeURIComponent(byLine);
+  const encArt = encodeURIComponent(artSafe);
+  const encSongId = encodeURIComponent(String(t.id || ""));
+  const encOwnerId = encodeURIComponent(String(t.userId || ""));
+  const encTaskId = encodeURIComponent(String(t.taskId || ""));
+  const encAudioId = encodeURIComponent(String(t.audioId || ""));
+  const encReleaseCaption = encodeURIComponent(releaseCaptionForTrack(t));
+  const playData = `data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" data-play-task-id="${encTaskId}" data-play-audio-id="${encAudioId}" data-play-release-caption="${encReleaseCaption}"`;
+  const encHandle = handle ? encodeURIComponent(handle) : "";
+  const sheetData = `data-dp-song-id="${encSongId}" data-dp-owner-id="${encOwnerId}" data-dp-task-id="${encTaskId}" data-dp-audio-id="${encAudioId}"`;
+  const subBits = [];
+  if (byLine) subBits.push(`<span class="libRowDot">${escapeHtml(byLine)}</span>`);
+  const plays = Math.max(0, Number(t.playCount) || 0);
+  if (plays) subBits.push(`<span class="libRowDot">${escapeHtml(discoverHubStatLabel(plays))} plays</span>`);
+  const challengeLine = challengeSourceLineHtml(t);
+  const mashupLine = mashupSourceLineHtml(t);
+  const remixLine = remixSourceLineHtml(t);
+  return `
+    <li class="libRow" data-discover-pl-row="${encSongId}" style="--i:${idx}">
+      <button type="button" class="libRowMain" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
+        <span class="libRowArt">
+          <img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" />
+          <span class="libRowArtBadge" aria-hidden="true">▶</span>
+        </span>
+        <span class="libRowInfo">
+          <span class="libRowTitle">${safeTitle}</span>
+          <span class="libRowSub">${subBits.join("")}</span>
+          ${challengeLine}
+          ${mashupLine}
+          ${remixLine}
+        </span>
+        <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
+      </button>
+      <div class="libRowActions">
+        <button type="button" class="libRowMore" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" ${sheetData} aria-label="Options for ${safeTitle}">⋯</button>
+      </div>
+    </li>`;
 }
 
 function discoveryTrackRowHtml(t, profMap, idx) {

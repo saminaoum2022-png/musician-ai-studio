@@ -20170,6 +20170,18 @@ body[data-route="discover-playlist"] > .app{
 .discoverPlaylistList{
   min-width: 0;
 }
+.discoverPlaylistList--libRows{
+  min-width: 0;
+  padding: 8px 0 0;
+}
+.discoverPlaylistList--libRows .libraryRows{
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.discoverPlaylistList--libRows .libRow{
+  margin-bottom: 0;
+}
 body[data-route="discover"] > .app{
   position: relative;
   z-index: 1;
@@ -31300,6 +31312,34 @@ section.mentorPage{
   letter-spacing: -0.03em;
   color: #f8faff;
   line-height: 1.15;
+}
+.discoverJournalSectionTitleRow{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.discoverJournalSectionTitleRow .discoverJournalSectionTitle{
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.discoverJournalSectionAction{
+  flex: none;
+}
+.discoverJournalSectionLink{
+  padding: 0;
+  border: none;
+  background: none;
+  color: rgba(94, 234, 212, 0.9);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverJournalSectionLink:active{
+  color: rgba(183, 168, 255, 0.95);
 }
 .discoverJournalSectionSub{
   display: none;

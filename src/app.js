@@ -3094,6 +3094,7 @@ function applyRoute({ passGen } = {}) {
   const prevRoute = document.body.getAttribute("data-route") || "";
   if (prevRoute !== wanted) {
     closeCreateChooserSheet({ immediate: true });
+    closeImageMoodSheet();
   }
   if ((prevRoute === "discover" || prevRoute === "discover-playlist") && wanted !== "discover" && wanted !== "discover-playlist") {
     try { onLeaveSearchRoute(); } catch {}
@@ -11662,6 +11663,28 @@ function openImageMoodSheet() {
   // native menu on top of a half-open sheet. The user taps "Choose photo".
 }
 
+function resetImageMoodSheetSession() {
+  imageMoodData = null;
+  imageMoodCoverDataUrl = "";
+  if (els.imageMoodUpload) {
+    try { els.imageMoodUpload.value = ""; } catch {}
+  }
+  syncImageMoodPreviewUi(false);
+  if (els.imageMoodOutput) {
+    els.imageMoodOutput.innerHTML = `<div class="imageMoodEmpty">Choose a photo, then tap Analyze.</div>`;
+  }
+  const card = els.imageMoodOutput?.closest?.(".imageMoodCard")
+    || els.imageMoodModal?.querySelector?.(".imageMoodCard");
+  if (card) card.classList.remove("analyzing");
+  if (els.btnApplyImageMood) els.btnApplyImageMood.disabled = true;
+  if (els.btnAnalyzeImageMood) els.btnAnalyzeImageMood.disabled = true;
+  if (!imageMoodAppliedForNextGen && els.imageMoodSummary) {
+    els.imageMoodSummary.textContent = "";
+    els.imageMoodSummary.hidden = true;
+  }
+  syncImageMoodSheetUi();
+}
+
 function closeImageMoodSheet() {
   const sheet = els.imageMoodModal || document.getElementById("imageMoodModal");
   if (!sheet) return;
@@ -11670,6 +11693,7 @@ function closeImageMoodSheet() {
   try {
     document.body.classList.remove("imageMoodSheetOpen");
   } catch {}
+  resetImageMoodSheetSession();
 }
 
 function syncImageMoodSheetUi() {

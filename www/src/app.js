@@ -5048,7 +5048,6 @@ function discoverWeeklyChartSkeletonHtml() {
   return `
     <div class="chartHead">
       <div class="discoverChartSkeletonTitle" aria-hidden="true"></div>
-      <div class="discoverChartSkeletonSub" aria-hidden="true"></div>
     </div>
     <div class="chartHeroSkeleton" aria-hidden="true">
       <div class="chartHeroSkeletonArt"></div>
@@ -5068,7 +5067,6 @@ function discoverHubSectionHeadSkeletonHtml() {
         <span class="discoverHubSkelIcon"></span>
         <div class="discoverJournalSectionText">
           <div class="discoverHubSkelTitle"></div>
-          <div class="discoverHubSkelSub"></div>
         </div>
       </div>
     </header>`;
@@ -5978,7 +5976,6 @@ async function refreshDiscoverWeeklyChart() {
     wrap.innerHTML = `
       <div class="chartHead">
         <h3 class="chartTitle"><span class="chartTitleBadge" aria-hidden="true">🏆</span> Top songs this week</h3>
-        <span class="chartSub">Weekly chart · real plays · rank movement</span>
       </div>
       ${heroHtml}
       ${rowsHtml ? `
@@ -6221,7 +6218,7 @@ function discoverHubSectionIconSvg(key) {
   return icons[String(key || "").trim()] || icons.sparks;
 }
 
-function discoverHubSectionHeadHtml(iconKey, title, sub) {
+function discoverHubSectionHeadHtml(iconKey, title) {
   return `
     <header class="discoverJournalSectionHead">
       <div class="discoverJournalSectionRule" aria-hidden="true"></div>
@@ -6229,7 +6226,6 @@ function discoverHubSectionHeadHtml(iconKey, title, sub) {
         <span class="discoverJournalSectionIcon">${discoverHubSectionIconSvg(iconKey)}</span>
         <div class="discoverJournalSectionText">
           <h3 class="discoverJournalSectionTitle">${escapeHtml(title)}</h3>
-          ${sub ? `<p class="discoverJournalSectionSub">${escapeHtml(sub)}</p>` : ""}
         </div>
       </div>
     </header>`;
@@ -6540,7 +6536,6 @@ function discoverHubChallengeStripCardHtml(c, tracks, profMap) {
   const allEntries = discoverTracksForChallenge(c, tracks, 10);
   const top = allEntries[0] || null;
   const rest = allEntries.slice(1);
-  const artUrl = discoverChallengeArtUrl(c.id);
   const expanded = Boolean(_discoverChallengeExpanded[c.id]);
   const collapseId = `discoverChallengeRows-${String(c.id || "x").replace(/[^a-z0-9_-]/gi, "")}`;
   const heroHtml = top
@@ -6557,17 +6552,14 @@ function discoverHubChallengeStripCardHtml(c, tracks, profMap) {
     : "";
   return `
     <article class="discoverChallengeCard discoverChallengeCard--${escapeHtml(c.tone)}${expanded ? " isExpanded" : ""}" aria-label="${escapeHtml(c.title)}">
-      <div class="discoverChallengeEntries">${heroHtml}${toggleHtml}</div>
-      <div class="discoverChallengeRow">
-        <span class="discoverChallengeThumb">
-          <img src="${escapeHtml(artUrl)}" alt="" loading="lazy" decoding="async" />
-        </span>
+      <div class="discoverChallengeHead">
         <div class="discoverChallengeInfo">
           <strong class="discoverChallengeTitle">${escapeHtml(c.title)}</strong>
           <span class="discoverChallengeMeta">${Number(c.daysLeft) || 0}d left · ${discoverHubStatLabel(c.submissions)} songs</span>
         </div>
         <button type="button" class="discoverChallengeJoin" ${joinAttrs}>Join</button>
       </div>
+      <div class="discoverChallengeEntries">${heroHtml}${toggleHtml}</div>
     </article>`;
 }
 
@@ -6609,7 +6601,7 @@ function renderDiscoverCommunityPicksSection(tracks, profMap) {
     ? picks.map((t) => discoverHubPickCardHtml(t, profMap)).join("")
     : `<p class="discoverHubQuietNote">Community songs will show here as creators publish to Discover.</p>`;
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("picks", "Community picks", "Real songs, remixes, and challenge entries from creators.")}
+    ${discoverHubSectionHeadHtml("picks", "Community picks")}
     <div class="discoverHubRail discoverHubRail--picks" role="list">${cards}</div>`;
 }
 
@@ -6618,7 +6610,7 @@ function renderDiscoverLiveChallengesSection(tracks, profMap) {
   if (!mount) return;
   const cards = DISCOVER_LIVE_CHALLENGES.map((c) => discoverHubChallengeJournalCardHtml(c, tracks, profMap)).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("challenges", "Live challenges", "Top entry on each card — expand to browse all submissions.")}
+    ${discoverHubSectionHeadHtml("challenges", "Live challenges")}
     <div class="discoverHubRail discoverHubRail--challenges" role="list">${cards}</div>`;
 }
 
@@ -6726,7 +6718,7 @@ function renderDiscoverTrendingTemplatesSection(tracks, profMap) {
   if (!mount) return;
   const cards = DISCOVER_HUB_SPARK_CHALLENGES.map((spark) => discoverSparkCardHtml(spark, tracks, profMap)).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("sparks", "Templates & Sparks", "Jump into a trend and make it yours.")}
+    ${discoverHubSectionHeadHtml("sparks", "Templates & Sparks")}
     <div class="discoverHubRail discoverHubRail--sparks" role="list">${cards}</div>`;
 }
 
@@ -6836,7 +6828,7 @@ function renderDiscoverTrendingRemixesSection(tracks, profMap) {
   }
   const list = rows.map((r) => discoverHubRemixCardHtml(r)).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("remixes", "Trending remixes", "Original and remix side by side — tap to listen.")}
+    ${discoverHubSectionHeadHtml("remixes", "Trending remixes")}
     <div class="discoverHubRemixList" role="list">${list}</div>`;
 }
 
@@ -6856,7 +6848,7 @@ function renderDiscoverSuggestedCreatorsSection() {
       <button type="button" class="discoverHubFollowBtn" data-discover-follow="${encodeURIComponent(c.handle)}" aria-label="Follow @${escapeHtml(c.handle)}">Follow</button>
     </article>`).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("creators", "Creators you may like", `Picked for your vibe — ${vibeHint}, and more.`)}
+    ${discoverHubSectionHeadHtml("creators", "Creators you may like")}
     <div class="discoverHubRail discoverHubRail--creators" role="list">${cards}</div>`;
 }
 
@@ -6872,7 +6864,7 @@ function renderDiscoverNewThisWeekSection() {
       </span>
     </button>`).join("");
   mount.innerHTML = `
-    ${discoverHubSectionHeadHtml("new", "New this week", "Fresh templates, challenges, and seasonal drops.")}
+    ${discoverHubSectionHeadHtml("new", "New this week")}
     <div class="discoverHubRail discoverHubRail--new" role="list">${cards}</div>`;
 }
 

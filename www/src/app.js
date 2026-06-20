@@ -33,7 +33,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260620profileMusicStyles";
+const APP_BUILD = "20260620profileNoVoiceCta";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -28743,22 +28743,10 @@ function shouldShowProfileHeaderSkeleton() {
 function renderProfileIdentityLine() {
   const el = els.profileIdentityLine;
   if (!el) return;
-  // Persona only; timbre is rendered separately under the username.
-  const personaLabel = (() => {
-    try {
-      const lbl = document.getElementById("profilePersonaLabel")?.textContent?.trim();
-      if (!lbl || lbl === "—") return "";
-      if (/no persona/i.test(lbl)) return "";
-      return lbl;
-    } catch { return ""; }
-  })();
-  if (!personaLabel) {
-    el.hidden = true;
-    el.innerHTML = "";
-    return;
-  }
-  el.hidden = false;
-  el.innerHTML = escapeHtml(personaLabel);
+  // Retired under @handle — music styles line replaced persona/voice CTAs here.
+  el.hidden = true;
+  el.textContent = "";
+  el.innerHTML = "";
 }
 
 /* =================================================================

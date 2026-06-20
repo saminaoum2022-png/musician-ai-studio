@@ -5161,40 +5161,24 @@ function paintDiscoverHubSectionsLoading() {
 }
 
 function clearDiscoverHubSectionsLoading() {
-  document.querySelectorAll(".discoverHubSection.isLoading").forEach((section) => {
-    section.classList.remove("isLoading");
-  });
-  [
-    "discoverCommunityStatsMount",
-    "discoverLiveChallengesMount",
-    "discoverCommunityPicksMount",
-    "discoverTrendingTemplatesMount",
-    "discoverTrendingRemixesMount",
-  ].forEach((id) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.removeAttribute("aria-busy");
-  });
+  const mount = document.getElementById("discoverFeedMount");
+  if (mount) {
+    mount.classList.remove("isLoading");
+    mount.removeAttribute("aria-busy");
+  }
 }
 
 function clearDiscoverTopSectionsLoading() {
-  const chartWrap = document.getElementById("discoverWeeklyChart");
-  if (chartWrap) {
-    chartWrap.classList.remove("isLoading");
-    chartWrap.removeAttribute("aria-busy");
-  }
   clearDiscoverHubSectionsLoading();
 }
 
 function paintDiscoverTopSectionsLoading() {
-  const chartWrap = document.getElementById("discoverWeeklyChart");
-  if (chartWrap) {
-    chartWrap.hidden = false;
-    chartWrap.classList.add("isLoading");
-    chartWrap.setAttribute("aria-busy", "true");
-    chartWrap.innerHTML = discoverWeeklyChartSkeletonHtml();
+  const mount = document.getElementById("discoverFeedMount");
+  if (mount) {
+    mount.classList.add("isLoading");
+    mount.setAttribute("aria-busy", "true");
+    mount.innerHTML = `<div class="discoverFeedSkeleton" aria-hidden="true"><span></span><span></span><span></span></div>`;
   }
-  paintDiscoverHubSectionsLoading();
 }
 
 // Challenge spotlight removed — World Cup anthems rail + main feed already surface
@@ -5965,7 +5949,7 @@ async function refreshDiscoverWeeklyChart() {
     // behind a "View top 10" expander to keep Discover compact.
     wrap.innerHTML = `
       <div class="chartHead">
-        <h3 class="chartTitle"><span class="chartTitleBadge" aria-hidden="true">🏆</span> Top songs this week</h3>
+        <h3 class="chartTitle"><span class="chartTitleBadge" aria-hidden="true">🔥</span> Top this week</h3>
       </div>
       ${heroHtml}
       ${rowsHtml ? `
@@ -6400,6 +6384,291 @@ function discoverCommunityPicksTracks(tracks) {
   }
   return out;
 }
+
+const DISCOVER_FEED_TABS = [
+  { id: "for-you", label: "For You" },
+  { id: "templates", label: "Templates" },
+  { id: "challenges", label: "Challenges" },
+  { id: "remixes", label: "Remixes" },
+  { id: "all", label: "All" },
+];
+const DISCOVER_FEED_TAB_KEY = "nabad_discover_feed_tab";
+let _discoverFeedTab = (() => {
+  try {
+    const saved = String(sessionStorage.getItem(DISCOVER_FEED_TAB_KEY) || "").trim();
+    if (DISCOVER_FEED_TABS.some((t) => t.id === saved)) return saved;
+  } catch {}
+  return "for-you";
+})();
+
+function discoverFeedSortByPlays(tracks) {
+  return [...(tracks || [])].sort((a, b) => (Number(b.playCount) || 0) - (Number(a.playCount) || 0));
+}
+
+function discoverOriginLineText(track) {
+  const mashup = mashupAttributionForTrack(track);
+  if (mashup) {
+    const a = String(mashup.a.title || "Track A").trim();
+    const b = String(mashup.b.title || "Track B").trim();
+    return `Mashup of ${a} + ${b}`;
+  }
+  const remix = remixAttributionForTrack(track);
+  if (remix) {
+    const title = String(remix.title || "Original song").trim();
+    return `Remix of ${title}`;
+  }
+  const tpl = templateMetaForTrack(track);
+  if (tpl) {
+    const name = String(tpl.searchTemplateTitle || "Template").trim();
+    return name.toLowerCase().includes("template") ? `Created with ${name}` : `Created with ${name} Template`;
+  }
+  const ch = challengeMetaForTrack(track);
+  if (ch) {
+    const title = String(ch.title || "Challenge").trim();
+    return title.toLowerCase().includes("challenge") ? `From ${title}` : `From ${title} Challenge`;
+  }
+  return "";
+}
+
+function discoverOriginLineHtml(track) {
+  const text = discoverOriginLineText(track);
+  return text ? `<span class="discoverFeedOrigin">${escapeHtml(text)}</span>` : "";
+}
+
+function discoverChallengeRankText(track, tracks) {
+  const ch = challengeMetaForTrack(track);
+  if (!ch) return discoverOriginLineText(track);
+  const live = DISCOVER_LIVE_CHALLENGES.find((c) => discoverChallengeMatchesTrack(c, track));
+  const title = String(live?.title || ch.title || "Challenge").trim();
+  const challengeTitle = title.toLowerCase().includes("challenge") ? title : `${title} Challenge`;
+  const entries = live
+    ? discoverTracksForChallenge(live, tracks, 9999)
+    : (tracks || []).filter((t) => {
+      const tc = challengeMetaForTrack(t);
+      return tc && String(tc.id || "") === String(ch.id || "");
+    }).sort((a, b) => (Number(b.playCount) || 0) - (Number(a.playCount) || 0));
+  const idx = entries.findIndex((e) => String(e.id || e.url || "") === String(track.id || track.url || ""));
+  if (idx >= 0) return `#${idx + 1} in ${challengeTitle}`;
+  return `From ${challengeTitle}`;
+}
+
+function discoverFeedFilterTracks(tab, tracks) {
+  const sorted = discoverFeedSortByPlays(tracks);
+  if (tab === "templates") return sorted.filter((t) => templateMetaForTrack(t));
+  if (tab === "challenges") return sorted.filter((t) => challengeMetaForTrack(t));
+  if (tab === "remixes") return sorted.filter((t) => remixAttributionForTrack(t) || mashupAttributionForTrack(t));
+  if (tab === "all") return sorted;
+  return discoverCommunityPicksTracks(tracks);
+}
+
+function discoverFeedSectionHeadHtml(title, actionHtml = "") {
+  const action = actionHtml
+    ? `<div class="discoverFeedSectionAction">${actionHtml}</div>`
+    : "";
+  return `
+    <header class="discoverFeedSectionHead">
+      <h3 class="discoverFeedSectionTitle">${escapeHtml(title)}</h3>
+      ${action}
+    </header>`;
+}
+
+function discoverFeedPlayBtnHtml() {
+  return `<span class="discoverFeedPlayBtn" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M8 5.5v13l11-6.5-11-6.5Z"/></svg></span>`;
+}
+
+function discoverFeedSongRowHtml(t, profMap, opts = {}) {
+  const prof = resolveProfileForFeedCreator(t.userId, profMap);
+  const handle = String(prof?.username || "").trim();
+  const byLine = handle ? `@${handle}` : "Creator";
+  const title = String(t.title || "Untitled").trim();
+  const art = trackCoverArtForFeed(t);
+  const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
+  const originHtml = opts.originHtml != null
+    ? opts.originHtml
+    : discoverOriginLineHtml(t);
+  const rank = Number(opts.rank) || 0;
+  const rankHtml = rank > 0 ? `<span class="discoverFeedSongRank">#${rank}</span>` : "";
+  const stats = discoverHubPickStatsHtml(t);
+  return `
+    <button type="button" class="discoverFeedSongRow" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
+      ${rankHtml}
+      <span class="discoverFeedSongArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" /></span>
+      <span class="discoverFeedSongBody">
+        <strong class="discoverFeedSongTitle">${escapeHtml(title)}</strong>
+        <span class="discoverFeedSongBy">by ${escapeHtml(byLine)}</span>
+        ${originHtml}
+        ${stats}
+      </span>
+      ${discoverFeedPlayBtnHtml()}
+    </button>`;
+}
+
+function discoverFeedTemplateCardHtml(t, profMap) {
+  const prof = resolveProfileForFeedCreator(t.userId, profMap);
+  const handle = String(prof?.username || "").trim();
+  const byLine = handle ? `@${handle}` : "Creator";
+  const title = String(t.title || "Untitled").trim();
+  const art = trackCoverArtForFeed(t);
+  const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
+  return `
+    <button type="button" class="discoverFeedTemplateCard" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
+      <span class="discoverFeedTemplateCover">
+        <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
+        <span class="discoverFeedTemplatePlay" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M8 5.5v13l11-6.5-11-6.5Z"/></svg></span>
+      </span>
+      <strong class="discoverFeedTemplateTitle">${escapeHtml(title)}</strong>
+      <span class="discoverFeedTemplateBy">by ${escapeHtml(byLine)}</span>
+      ${discoverOriginLineHtml(t)}
+    </button>`;
+}
+
+function discoverFeedChallengeBlockHtml(c, tracks, profMap, opts = {}) {
+  const entries = discoverTracksForChallenge(c, tracks, 8);
+  const top = entries[0] || null;
+  const joinAttrs = discoverChallengeJoinAttrs(c);
+  const sectionTitle = String(opts.sectionTitle || c.title || "Challenge").trim();
+  const viewAllSlug = String(opts.viewAllSlug || discoverChallengePlaylistSlug(c.id)).trim();
+  const viewAllBtn = viewAllSlug
+    ? `<button type="button" class="discoverFeedSectionLink" data-discover-challenge-view-all="${escapeHtml(viewAllSlug)}">View all</button>`
+    : "";
+  const heroHtml = top
+    ? (() => {
+      const prof = resolveProfileForFeedCreator(top.userId, profMap);
+      const handle = String(prof?.username || "").trim();
+      const title = String(top.title || "Untitled").trim();
+      const art = trackCoverArtForFeed(top);
+      const playAttrs = discoverHubTrackPlayAttrs(top, profMap);
+      const origin = discoverChallengeRankText(top, tracks);
+      return `
+        <div class="discoverFeedChallengeHero">
+          <button type="button" class="discoverFeedChallengeHeroMain" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
+            <span class="discoverFeedChallengeHeroArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" /></span>
+            <span class="discoverFeedChallengeHeroMeta">
+              <strong class="discoverFeedSongTitle">${escapeHtml(title)}</strong>
+              ${handle ? `<span class="discoverFeedSongBy">by @${escapeHtml(handle)}</span>` : ""}
+              <span class="discoverFeedOrigin">${escapeHtml(origin)}</span>
+            </span>
+            ${discoverFeedPlayBtnHtml()}
+          </button>
+          <button type="button" class="discoverFeedJoinBtn" ${joinAttrs}>Join challenge</button>
+        </div>`;
+    })()
+    : `
+        <div class="discoverFeedChallengeHero discoverFeedChallengeHero--empty">
+          <p class="discoverHubQuietNote">Be the first to drop a song in this challenge.</p>
+          <button type="button" class="discoverFeedJoinBtn" ${joinAttrs}>Join challenge</button>
+        </div>`;
+  const miniRow = entries.slice(1, 5).map((t) => {
+    const art = trackCoverArtForFeed(t);
+    const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
+    return `
+      <button type="button" class="discoverFeedChallengeMini" ${playAttrs} aria-label="Play ${escapeHtml(String(t.title || "Untitled"))}">
+        <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
+        <span class="discoverFeedChallengeMiniPlay" aria-hidden="true">▶</span>
+      </button>`;
+  }).join("");
+  return `
+    <section class="discoverFeedSection discoverFeedSection--challenge">
+      ${discoverFeedSectionHeadHtml(sectionTitle, viewAllBtn)}
+      ${heroHtml}
+      ${miniRow ? `<div class="discoverFeedChallengeRail">${miniRow}</div>` : ""}
+    </section>`;
+}
+
+function renderDiscoverFeedForYou(tracks, profMap) {
+  const remixTracks = discoverFeedSortByPlays(tracks).filter((t) => remixAttributionForTrack(t) || mashupAttributionForTrack(t)).slice(0, 6);
+  const templateTracks = discoverFeedSortByPlays(tracks).filter((t) => templateMetaForTrack(t)).slice(0, 3);
+  const topChallenge = DISCOVER_LIVE_CHALLENGES[0];
+  const challengeBlock = topChallenge
+    ? discoverFeedChallengeBlockHtml(topChallenge, tracks, profMap, {
+      sectionTitle: "From challenges",
+      viewAllSlug: "live-challenges",
+    })
+    : "";
+  const remixList = remixTracks.length
+    ? remixTracks.map((t) => discoverFeedSongRowHtml(t, profMap)).join("")
+    : `<p class="discoverHubQuietNote">Remixes and mashups will appear as creators publish.</p>`;
+  const templateGrid = templateTracks.length
+    ? templateTracks.map((t) => discoverFeedTemplateCardHtml(t, profMap)).join("")
+    : `<p class="discoverHubQuietNote">Songs made with templates will show here.</p>`;
+  return `
+    <section id="discoverWeeklyChart" class="discoverWeeklyChart discoverWeeklyChart--prestige" hidden aria-label="Top songs this week"></section>
+    ${challengeBlock}
+    <section class="discoverFeedSection">
+      ${discoverFeedSectionHeadHtml("Remixes you'll love")}
+      <div class="discoverFeedListStack">${remixList}</div>
+    </section>
+    <section class="discoverFeedSection">
+      ${discoverFeedSectionHeadHtml("Created with templates")}
+      <div class="discoverFeedTemplateGrid">${templateGrid}</div>
+    </section>`;
+}
+
+function renderDiscoverFeedTabPanel(tab, tracks, profMap) {
+  if (tab === "for-you") return renderDiscoverFeedForYou(tracks, profMap);
+  if (tab === "challenges") {
+    const blocks = DISCOVER_LIVE_CHALLENGES.map((c) => discoverFeedChallengeBlockHtml(c, tracks, profMap)).join("");
+    return blocks || `<p class="discoverHubQuietNote discoverFeedEmpty">Challenge songs will appear as creators join live events.</p>`;
+  }
+  const filtered = discoverFeedFilterTracks(tab, tracks);
+  if (!filtered.length) {
+    const msg = tab === "templates"
+      ? "Songs created with templates will show here — content first, tools second."
+      : tab === "remixes"
+        ? "Remixes and mashups from the community will land here."
+        : "Public songs will appear here as creators publish.";
+    return `<p class="discoverHubQuietNote discoverFeedEmpty">${escapeHtml(msg)}</p>`;
+  }
+  if (tab === "templates") {
+    return `<div class="discoverFeedTemplateGrid">${filtered.map((t) => discoverFeedTemplateCardHtml(t, profMap)).join("")}</div>`;
+  }
+  return `<div class="discoverFeedListStack">${filtered.map((t) => discoverFeedSongRowHtml(t, profMap)).join("")}</div>`;
+}
+
+function paintDiscoverFeedTabsActive(tab) {
+  const root = document.getElementById("discoverFeedTabs");
+  if (!root) return;
+  root.querySelectorAll("[data-discover-feed-tab]").forEach((btn) => {
+    const active = String(btn.getAttribute("data-discover-feed-tab") || "") === tab;
+    btn.classList.toggle("is-active", active);
+    btn.setAttribute("aria-selected", active ? "true" : "false");
+  });
+}
+
+function renderDiscoverFeed(tracks, profMap, tab = _discoverFeedTab) {
+  const mount = document.getElementById("discoverFeedMount");
+  if (!mount) return;
+  _discoverFeedTab = DISCOVER_FEED_TABS.some((t) => t.id === tab) ? tab : "for-you";
+  try { sessionStorage.setItem(DISCOVER_FEED_TAB_KEY, _discoverFeedTab); } catch {}
+  rebuildDiscoveryChallengeBuckets(tracks);
+  paintDiscoverFeedTabsActive(_discoverFeedTab);
+  mount.innerHTML = renderDiscoverFeedTabPanel(_discoverFeedTab, tracks, profMap);
+  mount.classList.remove("isLoading");
+  mount.removeAttribute("aria-busy");
+  if (_discoverFeedTab === "for-you") void refreshDiscoverWeeklyChart();
+  playDiscoverSectionEnter(mount);
+}
+
+function bindDiscoverFeedTabsOnce() {
+  const root = document.getElementById("discoverFeedTabs");
+  if (!root || root.dataset.boundDiscoverFeedTabs === "1") return;
+  root.dataset.boundDiscoverFeedTabs = "1";
+  root.addEventListener("click", (e) => {
+    const tabBtn = e.target?.closest?.("[data-discover-feed-tab]");
+    if (!tabBtn || !root.contains(tabBtn)) return;
+    e.preventDefault();
+    const tab = String(tabBtn.getAttribute("data-discover-feed-tab") || "").trim();
+    if (!tab || tab === _discoverFeedTab) return;
+    haptic("light");
+    renderDiscoverFeed(_discoveryFeedTracksRaw || [], _discoveryLastProfMap || new Map(), tab);
+    try {
+      const mount = document.getElementById("discoverFeedMount");
+      mount?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+    } catch {}
+  });
+}
+
+let _discoveryFeedTracksRaw = [];
 
 function discoverHubTrackPlayAttrs(t, profMap) {
   const prof = resolveProfileForFeedCreator(t.userId, profMap);
@@ -6836,14 +7105,7 @@ function renderDiscoverNewThisWeekSection() {
 }
 
 function renderDiscoverHubV1(tracks, profMap) {
-  clearDiscoverHubSectionsLoading();
-  renderDiscoverCommunityStatsSection(tracks);
-  renderDiscoverLiveChallengesSection(tracks, profMap);
-  renderDiscoverCommunityPicksSection(tracks, profMap);
-  renderDiscoverTrendingTemplatesSection(tracks, profMap);
-  renderDiscoverTrendingRemixesSection(tracks, profMap);
-  renderDiscoverNewThisWeekSection();
-  renderDiscoverSuggestedCreatorsSection();
+  renderDiscoverFeed(tracks, profMap);
 }
 
 function applyDiscoverOccasionStart(occasionId) {
@@ -6870,6 +7132,7 @@ function applyDiscoverOccasionStart(occasionId) {
 }
 
 function bindDiscoverHubV1Once() {
+  bindDiscoverFeedTabsOnce();
   const root = document.getElementById("discoveryMainContent");
   if (!root || root.dataset.boundDiscoverHubV1 === "1") return;
   root.dataset.boundDiscoverHubV1 = "1";
@@ -23993,6 +24256,7 @@ async function refreshDiscoverFeed() {
   const listEl = document.getElementById("discoveryFeedList");
   if (!statusEl) return;
   bindDiscoverHubV1Once();
+  bindDiscoverFeedTabsOnce();
   paintDiscoverTopSectionsLoading();
   statusEl.textContent = "";
   statusEl.hidden = true;
@@ -24020,7 +24284,8 @@ async function refreshDiscoverFeed() {
       } catch {}
     }
     if (gen !== _discoveryFeedGen) return;
-    renderDiscoverHubV1(playable, profMap);
+    _discoveryFeedTracksRaw = playable;
+    renderDiscoverFeed(playable, profMap);
 
     if (!playable.length) {
       _discoveryFeedTracks = [];
@@ -24043,7 +24308,7 @@ async function refreshDiscoverFeed() {
   } catch (err) {
     if (gen !== _discoveryFeedGen) return;
     clearDiscoverTopSectionsLoading();
-    renderDiscoverHubV1([], {});
+    renderDiscoverFeed([], new Map());
     statusEl.hidden = false;
     statusEl.innerHTML = `
       <div class="discoveryEmptyWrap discoveryEmptyWrapMuted">

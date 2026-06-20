@@ -74,7 +74,7 @@
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
     <link rel="preload" as="video" href="./assets/icons/splash-logo.mp4?v=20260619trim" type="video/mp4" />
-    <link rel="stylesheet" href="./styles.css?v=20260619discoverCompact" />
+    <link rel="stylesheet" href="./styles.css?v=20260619discoverContentFirst" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1096,29 +1096,17 @@
               </div>
             </div>
 
-            <div id="discoveryMainContent" class="discoveryMainContent discoverHubV1">
-            <section id="discoverWeeklyChart" class="discoverWeeklyChart discoverWeeklyChart--prestige" hidden aria-label="Top songs this week"></section>
-            <section id="discoverCommunityStats" class="discoverHubSection discoverHubSection--stats" aria-label="Community pulse">
-              <div id="discoverCommunityStatsMount"></div>
-            </section>
-            <section id="discoverLiveChallenges" class="discoverHubSection discoverHubSection--challenges" aria-label="Live challenges">
-              <div id="discoverLiveChallengesMount"></div>
-            </section>
-            <section id="discoverCommunityPicks" class="discoverHubSection discoverHubSection--picks" aria-label="Community picks">
-              <div id="discoverCommunityPicksMount"></div>
-            </section>
-            <section id="discoverTrendingTemplates" class="discoverHubSection" aria-label="Templates and sparks">
-              <div id="discoverTrendingTemplatesMount"></div>
-            </section>
-            <section id="discoverTrendingRemixes" class="discoverHubSection" aria-label="Trending remixes">
-              <div id="discoverTrendingRemixesMount"></div>
-            </section>
-            <section id="discoverNewThisWeek" class="discoverHubSection" aria-label="New this week">
-              <div id="discoverNewThisWeekMount"></div>
-            </section>
-            <section id="discoverSuggestedCreators" class="discoverHubSection" aria-label="Creators you may like">
-              <div id="discoverSuggestedCreatorsMount"></div>
-            </section>
+            <div id="discoveryMainContent" class="discoveryMainContent discoverFeedV2">
+            <nav id="discoverFeedTabs" class="discoverFeedTabs" aria-label="Discover categories">
+              <div class="discoverFeedTabsTrack" role="tablist">
+                <button type="button" class="discoverFeedTab is-active" role="tab" aria-selected="true" data-discover-feed-tab="for-you">For You</button>
+                <button type="button" class="discoverFeedTab" role="tab" aria-selected="false" data-discover-feed-tab="templates">Templates</button>
+                <button type="button" class="discoverFeedTab" role="tab" aria-selected="false" data-discover-feed-tab="challenges">Challenges</button>
+                <button type="button" class="discoverFeedTab" role="tab" aria-selected="false" data-discover-feed-tab="remixes">Remixes</button>
+                <button type="button" class="discoverFeedTab" role="tab" aria-selected="false" data-discover-feed-tab="all">All</button>
+              </div>
+            </nav>
+            <div id="discoverFeedMount" class="discoverFeedMount" aria-live="polite"></div>
             <div id="discoveryFeedStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
             <div id="discoveryFeedList" class="discoveryFeedList discoveryDiscoverGrid" hidden aria-hidden="true"></div>
             </div>
@@ -3721,6 +3709,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260619discoverCompact"></script>
+    <script type="module" src="./src/app.js?v=20260619discoverContentFirst"></script>
   </body>
 </html>

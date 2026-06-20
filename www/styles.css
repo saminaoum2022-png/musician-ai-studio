@@ -31208,6 +31208,418 @@ section.mentorPage{
   font-size: 9px;
 }
 
+/* ─── Discover V2 — content-first feed ─────────────────────────────────── */
+.discoveryMainContent.discoverFeedV2,
+.discoveryMainContent.discoverHubV1{
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-bottom: 4px;
+  min-width: 0;
+}
+.discoverFeedTabs{
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: 0 -2px 10px;
+  padding: 2px 0 8px;
+  background:
+    linear-gradient(180deg, rgba(5, 7, 13, 0.96) 0%, rgba(5, 7, 13, 0.88) 72%, rgba(5, 7, 13, 0) 100%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.discoverFeedTabsTrack{
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  padding: 2px 2px 4px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.discoverFeedTabsTrack::-webkit-scrollbar{ display: none; }
+.discoverFeedTab{
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(232, 238, 247, 0.68);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  border-radius: 999px;
+  padding: 9px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background 220ms ease,
+    border-color 220ms ease,
+    color 220ms ease,
+    box-shadow 220ms ease,
+    transform 220ms ease;
+}
+.discoverFeedTab.is-active{
+  color: #f8faff;
+  border-color: rgba(35, 213, 171, 0.35);
+  background: linear-gradient(135deg, rgba(35, 213, 171, 0.18) 0%, rgba(124, 92, 255, 0.22) 100%);
+  box-shadow:
+    0 0 0 1px rgba(124, 92, 255, 0.12) inset,
+    0 8px 24px rgba(35, 213, 171, 0.08);
+}
+.discoverFeedTab:active{
+  transform: scale(0.98);
+}
+.discoverFeedMount{
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+.discoverFeedMount.isLoading{
+  min-height: 180px;
+}
+.discoverFeedSkeleton{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 2px;
+}
+.discoverFeedSkeleton span{
+  display: block;
+  height: 72px;
+  border-radius: 16px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.08), rgba(255,255,255,0.04));
+  background-size: 200% 100%;
+  animation: discoverFeedShimmer 1.2s ease infinite;
+}
+.discoverFeedSkeleton span:nth-child(2){ height: 56px; opacity: 0.85; }
+.discoverFeedSkeleton span:nth-child(3){ height: 56px; opacity: 0.7; }
+@keyframes discoverFeedShimmer{
+  0%{ background-position: 200% 0; }
+  100%{ background-position: -200% 0; }
+}
+.discoverFeedSection{
+  margin: 0 0 18px;
+  min-width: 0;
+}
+.discoverFeedSectionHead{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 10px;
+  padding: 0 2px;
+}
+.discoverFeedSectionTitle{
+  margin: 0;
+  font-size: clamp(18px, 4.8vw, 21px);
+  font-weight: 850;
+  letter-spacing: -0.03em;
+  color: #f8faff;
+  line-height: 1.15;
+}
+.discoverFeedSectionLink{
+  padding: 0;
+  border: none;
+  background: none;
+  color: rgba(94, 234, 212, 0.9);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+}
+.discoverFeedSectionLink:active{
+  color: rgba(183, 168, 255, 0.95);
+}
+.discoverFeedListStack{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.discoverFeedSongRow{
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+.discoverFeedSongRow:active{
+  background: rgba(124, 92, 255, 0.1);
+  border-color: rgba(124, 92, 255, 0.22);
+}
+.discoverFeedSongRank{
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(94, 234, 212, 0.88);
+  min-width: 22px;
+}
+.discoverFeedSongArt{
+  width: 54px;
+  height: 54px;
+  border-radius: 12px;
+  overflow: hidden;
+  flex: none;
+  background: rgba(255, 255, 255, 0.04);
+}
+.discoverFeedSongArt img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.discoverFeedSongBody{
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.discoverFeedSongTitle{
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #f8faff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoverFeedSongBy{
+  font-size: 12px;
+  color: rgba(223, 231, 251, 0.48);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoverFeedOrigin{
+  font-size: 11px;
+  font-weight: 650;
+  color: rgba(94, 234, 212, 0.88);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoverFeedSongRow .discoverHubPickStats{
+  margin-top: 2px;
+  font-size: 10px;
+  color: rgba(223, 231, 251, 0.38);
+}
+.discoverFeedPlayBtn{
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: #f8faff;
+  background: linear-gradient(135deg, rgba(35, 213, 171, 0.22), rgba(124, 92, 255, 0.28));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+}
+.discoverFeedTemplateGrid{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+.discoverFeedTemplateCard{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverFeedTemplateCover{
+  position: relative;
+  aspect-ratio: 3 / 4;
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+}
+.discoverFeedTemplateCover img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.discoverFeedTemplatePlay{
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(8px);
+}
+.discoverFeedTemplateTitle{
+  font-size: 12px;
+  font-weight: 800;
+  color: #f8faff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoverFeedTemplateBy{
+  font-size: 10px;
+  color: rgba(223, 231, 251, 0.48);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoverFeedTemplateCard .discoverFeedOrigin{
+  font-size: 10px;
+}
+.discoverFeedChallengeHero{
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: stretch;
+  margin-bottom: 10px;
+}
+.discoverFeedChallengeHeroMain{
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverFeedChallengeHeroMain:active{
+  background: rgba(124, 92, 255, 0.1);
+}
+.discoverFeedChallengeHeroArt{
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+  overflow: hidden;
+  flex: none;
+}
+.discoverFeedChallengeHeroArt img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.discoverFeedChallengeHeroMeta{
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.discoverFeedChallengeHero--empty{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+}
+.discoverFeedJoinBtn{
+  align-self: center;
+  padding: 11px 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--brand-teal);
+  color: #04110e;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 10px 24px rgba(35, 213, 171, 0.18);
+}
+.discoverFeedJoinBtn:active{
+  transform: scale(0.98);
+  filter: brightness(0.95);
+}
+.discoverFeedChallengeRail{
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  padding: 2px 2px 6px;
+  scrollbar-width: none;
+}
+.discoverFeedChallengeRail::-webkit-scrollbar{ display: none; }
+.discoverFeedChallengeMini{
+  position: relative;
+  flex: 0 0 72px;
+  width: 72px;
+  height: 72px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.03);
+  scroll-snap-align: start;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverFeedChallengeMini img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.discoverFeedChallengeMiniPlay{
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.28);
+}
+.discoverFeedEmpty{
+  padding: 24px 8px;
+  text-align: center;
+}
+.discoverFeedV2 .discoverWeeklyChart{
+  margin: 0 0 16px;
+}
+.discoverFeedV2 .discoverWeeklyChart .chartTitleBadge{
+  filter: none;
+}
+
 /* ─── Discover V1 — community hub sections ───────────────────────────── */
 .discoveryMainContent.discoverHubV1{
   display: flex;

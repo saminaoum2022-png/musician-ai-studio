@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260620templateChips";
+const APP_BUILD = "20260620topWeek";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -5128,18 +5128,29 @@ function discoverCampaignRailSkeletonHtml() {
 }
 
 function discoverWeeklyChartSkeletonHtml() {
+  const miniSkel = Array.from({ length: 3 }, () => `
+    <div class="chartWeekMiniItem chartWeekMiniItem--skel" aria-hidden="true">
+      <span class="chartWeekMiniArt discoverSkeletonLine"></span>
+      <span class="chartWeekMiniMeta">
+        <span class="discoverSkeletonLine"></span>
+        <span class="discoverSkeletonLine short"></span>
+      </span>
+    </div>`).join("");
   return `
-    <div class="chartHead">
-      <div class="discoverChartSkeletonTitle" aria-hidden="true"></div>
+    <header class="discoverFeedSectionHead chartWeekHead" aria-hidden="true">
+      <div class="discoverChartSkeletonTitle"></div>
+      <div class="discoverSkeletonLine short" style="width:72px;height:12px;border-radius:6px"></div>
+    </header>
+    <div class="chartWeekFeatured chartWeekFeatured--skel" aria-hidden="true">
+      <span class="chartWeekFeaturedArt discoverSkeletonLine"></span>
+      <span class="chartWeekFeaturedBody">
+        <span class="discoverSkeletonLine short"></span>
+        <span class="discoverSkeletonLine"></span>
+        <span class="discoverSkeletonLine short"></span>
+      </span>
+      <span class="discoverFeedPlayBtn discoverSkeletonLine" style="width:36px;height:36px;border-radius:999px"></span>
     </div>
-    <div class="chartHeroSkeleton" aria-hidden="true">
-      <div class="chartHeroSkeletonArt"></div>
-      <div class="chartHeroSkeletonMeta">
-        <div class="discoverSkeletonLine short"></div>
-        <div class="discoverSkeletonLine"></div>
-        <div class="discoverSkeletonLine short"></div>
-      </div>
-    </div>`;
+    <div class="chartWeekMiniStrip">${miniSkel}</div>`;
 }
 
 function discoverHubSectionHeadSkeletonHtml() {
@@ -5979,6 +5990,68 @@ function playDiscoverSectionEnter(wrap) {
   }, 1600);
 }
 
+function chartWeekPlaysText(plays, compact = false) {
+  const n = Math.max(0, Number(plays) || 0);
+  if (!n) return "";
+  const count = formatStatCount(n);
+  if (compact) return `🔥 ${count}`;
+  return `🔥 ${count} play${n === 1 ? "" : "s"} this week`;
+}
+
+function chartWeekFeaturedHtml(hero) {
+  const heroArt = trackCoverArtForFeed({ artUrl: hero.artUrl, meta: {} });
+  const heroPlays = Number(hero.weeklyPlays || 0);
+  const title = String(hero.title || "Untitled").trim();
+  return `
+    <button type="button" class="chartWeekFeatured" ${chartEntryPlayAttrs(hero)} aria-label="Play ${escapeHtml(title)}">
+      <span class="chartWeekFeaturedArt">
+        <img src="${escapeHtml(heroArt)}" alt="" loading="lazy" decoding="async" />
+      </span>
+      <span class="chartWeekFeaturedBody">
+        <span class="chartWeekFeaturedRankRow" aria-label="Rank 1"><span class="chartWeekFeaturedRankGlyph" aria-hidden="true">👑</span><span class="chartWeekFeaturedRank">#1</span></span>
+        <strong class="chartWeekFeaturedTitle">${escapeHtml(title)}</strong>
+        ${hero.username ? `<span class="chartWeekFeaturedBy">@${escapeHtml(hero.username)}</span>` : ""}
+        ${heroPlays ? `<span class="chartWeekFeaturedPlays">${escapeHtml(chartWeekPlaysText(heroPlays))}</span>` : ""}
+      </span>
+      ${discoverFeedPlayBtnHtml()}
+    </button>`;
+}
+
+function chartWeekMiniItemHtml(e) {
+  const art = trackCoverArtForFeed({ artUrl: e.artUrl, meta: {} });
+  const plays = Number(e.weeklyPlays || 0);
+  const rank = Number(e.rank) || 0;
+  const title = String(e.title || "Untitled").trim();
+  return `
+    <button type="button" class="chartWeekMiniItem" role="listitem" ${chartEntryPlayAttrs(e)} aria-label="Play ${escapeHtml(title)}, rank ${rank}">
+      <span class="chartWeekMiniArt">
+        <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
+        <span class="chartWeekMiniRank">#${rank}</span>
+      </span>
+      <span class="chartWeekMiniMeta">
+        <strong class="chartWeekMiniTitle">${escapeHtml(title)}</strong>
+        ${plays ? `<span class="chartWeekMiniPlays">${escapeHtml(chartWeekPlaysText(plays, true))} this week</span>` : ""}
+      </span>
+    </button>`;
+}
+
+function chartWeekRestRowHtml(e) {
+  const art = trackCoverArtForFeed({ artUrl: e.artUrl, meta: {} });
+  const plays = Number(e.weeklyPlays || 0);
+  const rank = Number(e.rank) || 0;
+  const title = String(e.title || "Untitled").trim();
+  return `
+    <button type="button" class="chartWeekRestRow" ${chartEntryPlayAttrs(e)} aria-label="Play ${escapeHtml(title)}, rank ${rank}">
+      <span class="chartWeekRestRank">#${rank}</span>
+      <span class="chartWeekRestArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" /></span>
+      <span class="chartWeekRestMeta">
+        <strong>${escapeHtml(title)}</strong>
+        ${e.username ? `<small>@${escapeHtml(e.username)}</small>` : ""}
+      </span>
+      ${plays ? `<span class="chartWeekRestPlays">${escapeHtml(formatStatCount(plays))}</span>` : ""}
+    </button>`;
+}
+
 async function refreshDiscoverWeeklyChart() {
   const wrap = document.getElementById("discoverWeeklyChart");
   if (!wrap) return;
@@ -5992,55 +6065,28 @@ async function refreshDiscoverWeeklyChart() {
       wrap.innerHTML = "";
       return;
     }
-    const [hero, ...rest] = chart;
-    const heroArt = trackCoverArtForFeed({ artUrl: hero.artUrl, meta: {} });
-    const heroPlays = Number(hero.weeklyPlays || 0);
-    const heroHtml = `
-      <button type="button" class="chartHero" ${chartEntryPlayAttrs(hero)}>
-        <span class="chartHeroArtWrap">
-          <span class="chartHeroCrown" aria-hidden="true">👑</span>
-          <img class="chartHeroArt" src="${escapeHtml(heroArt)}" alt="" loading="lazy" decoding="async" />
-        </span>
-        <span class="chartHeroMeta">
-          <span class="chartHeroRankRow"><span class="chartHeroRank">#1</span>${chartMovementHtml(hero)}</span>
-          <strong class="chartHeroTitle">${escapeHtml(hero.title)}</strong>
-          ${hero.username ? `<small class="chartHeroBy">@${escapeHtml(hero.username)}</small>` : ""}
-          ${heroPlays ? `<span class="chartHeroPlays">🔥 ${escapeHtml(formatStatCount(heroPlays))} play${heroPlays === 1 ? "" : "s"} this week</span>` : ""}
-        </span>
-        <span class="chartHeroPlayIco" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M8 5.5v13l11-6.5-11-6.5Z"/></svg>
-        </span>
-      </button>`;
-    const rowsHtml = rest
-      .map((e) => {
-        const art = trackCoverArtForFeed({ artUrl: e.artUrl, meta: {} });
-        const plays = Number(e.weeklyPlays || 0);
-        return `
-        <button type="button" class="chartRow" ${chartEntryPlayAttrs(e)}>
-          <span class="chartRowRank chartRowRank--${e.rank}">${e.rank}</span>
-          ${chartMovementHtml(e)}
-          <span class="chartRowArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" /></span>
-          <span class="chartRowMeta">
-            <strong>${escapeHtml(e.title)}</strong>
-            ${e.username ? `<small>@${escapeHtml(e.username)}</small>` : ""}
-          </span>
-          ${plays ? `<span class="chartRowPlays">${escapeHtml(formatStatCount(plays))}</span>` : ""}
-        </button>`;
-      })
-      .join("");
-    // Only the #1 hero shows by default; the rest of the top 10 lives
-    // behind a "View top 10" expander to keep Discover compact.
+    const topNine = chart.slice(0, 9);
+    const [hero, ...rest] = topNine;
+    const miniEntries = rest.slice(0, 3);
+    const restEntries = rest.slice(3);
+    const topCount = topNine.length;
+    const showViewAll = restEntries.length > 0;
+    const viewAllLabel = _weeklyChartExpanded ? "Show less" : `View Top ${topCount}`;
+    const heroHtml = chartWeekFeaturedHtml(hero);
+    const miniHtml = miniEntries.length
+      ? `<div class="chartWeekMiniStrip" role="list" aria-label="Top songs ranks 2 through 4">${miniEntries.map((e) => chartWeekMiniItemHtml(e)).join("")}</div>`
+      : "";
+    const restHtml = restEntries.length
+      ? `<div class="chartWeekRest" id="chartRowsCollapse" ${_weeklyChartExpanded ? "" : "hidden"} role="list" aria-label="Top songs ranks 5 through ${topCount}">${restEntries.map((e) => chartWeekRestRowHtml(e)).join("")}</div>`
+      : "";
     wrap.innerHTML = `
-      <div class="chartHead">
-        <h3 class="chartTitle"><span class="chartTitleBadge" aria-hidden="true">🔥</span> Top this week</h3>
-      </div>
+      <header class="discoverFeedSectionHead chartWeekHead">
+        <h3 class="discoverFeedSectionTitle">🔥 Top This Week</h3>
+        ${showViewAll ? `<button type="button" class="discoverFeedSectionLink chartWeekViewAll" id="chartToggleBtn" aria-expanded="${_weeklyChartExpanded ? "true" : "false"}" aria-controls="chartRowsCollapse">${escapeHtml(viewAllLabel)}</button>` : ""}
+      </header>
       ${heroHtml}
-      ${rowsHtml ? `
-        <div class="chartRows" id="chartRowsCollapse" ${_weeklyChartExpanded ? "" : "hidden"}>${rowsHtml}</div>
-        <button type="button" class="chartToggleBtn" id="chartToggleBtn" aria-expanded="${_weeklyChartExpanded ? "true" : "false"}" aria-controls="chartRowsCollapse">
-          <span>${_weeklyChartExpanded ? "Show less" : `View top ${chart.length}`}</span>
-          <svg class="chartToggleChev" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></svg>
-        </button>` : ""}`;
+      ${miniHtml}
+      ${restHtml}`;
     const toggle = wrap.querySelector("#chartToggleBtn");
     if (toggle) {
       toggle.addEventListener("click", (e) => {
@@ -6050,11 +6096,8 @@ async function refreshDiscoverWeeklyChart() {
         const rows = wrap.querySelector("#chartRowsCollapse");
         if (rows) rows.hidden = !_weeklyChartExpanded;
         toggle.setAttribute("aria-expanded", _weeklyChartExpanded ? "true" : "false");
-        toggle.classList.toggle("isOpen", _weeklyChartExpanded);
-        const label = toggle.querySelector("span");
-        if (label) label.textContent = _weeklyChartExpanded ? "Show less" : `View top ${chart.length}`;
+        toggle.textContent = _weeklyChartExpanded ? "Show less" : `View Top ${topCount}`;
       });
-      toggle.classList.toggle("isOpen", _weeklyChartExpanded);
     }
     wrap.hidden = false;
     if (wasHidden) playDiscoverSectionEnter(wrap);
@@ -6939,7 +6982,7 @@ function renderDiscoverFeedForYou(tracks, profMap) {
     ? templateTracks.map((t) => discoverFeedTemplateCardHtml(t, profMap)).join("")
     : `<p class="discoverHubQuietNote">Songs made with templates will show here.</p>`;
   return `
-    <section id="discoverWeeklyChart" class="discoverWeeklyChart discoverWeeklyChart--prestige" hidden aria-label="Top songs this week"></section>
+    <section id="discoverWeeklyChart" class="discoverWeeklyChart discoverWeeklyChart--editorial" hidden aria-label="Top songs this week"></section>
     ${challengeBlock}
     <section class="discoverFeedSection">
       ${discoverFeedSectionHeadHtml("Remixes you'll love")}

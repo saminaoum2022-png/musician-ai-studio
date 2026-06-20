@@ -30650,6 +30650,279 @@ section.mentorPage{
 .discoverWeeklyChart::after{
   display: none;
 }
+.discoverWeeklyChart--editorial{
+  margin-bottom: 16px;
+  padding: 0;
+}
+.discoverWeeklyChart--editorial .chartWeekHead{
+  margin-bottom: 10px;
+}
+.discoverWeeklyChart--editorial .chartWeekFeatured{
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  margin: 0 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 160ms ease, border-color 160ms ease;
+  box-shadow: none;
+}
+.discoverWeeklyChart--editorial .chartWeekFeatured:active{
+  background: rgba(124, 92, 255, 0.08);
+  border-color: rgba(124, 92, 255, 0.16);
+}
+.discoverWeeklyChart--editorial .chartWeekFeaturedArt{
+  position: relative;
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+}
+.discoverWeeklyChart--editorial .chartWeekFeaturedArt img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.discoverWeeklyChart--editorial .chartWeekFeaturedBody{
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.discoverWeeklyChart--editorial .chartWeekFeaturedRankRow{
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: rgba(94, 234, 212, 0.88);
+}
+.discoverWeeklyChart--editorial .chartWeekFeaturedRankGlyph{
+  font-size: 12px;
+  line-height: 1;
+}
+.discoverWeeklyChart--editorial .chartWeekFeaturedRank{
+  font-size: 11px;
+  font-weight: 850;
+  color: rgba(94, 234, 212, 0.92);
+}
+.discoverWeeklyChart--editorial .chartWeekFeaturedTitle{
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #f8faff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoverWeeklyChart--editorial .chartWeekFeaturedBy{
+  font-size: 12px;
+  color: rgba(223, 231, 251, 0.48);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoverWeeklyChart--editorial .chartWeekFeaturedPlays{
+  margin-top: 1px;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(223, 231, 251, 0.52);
+}
+.discoverWeeklyChart--editorial .chartWeekFeatured .discoverFeedPlayBtn{
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+.discoverWeeklyChart--editorial .chartWeekMiniStrip{
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 0 2px 2px;
+  margin: 0 0 2px;
+}
+.discoverWeeklyChart--editorial .chartWeekMiniStrip::-webkit-scrollbar{
+  display: none;
+}
+.discoverWeeklyChart--editorial .chartWeekMiniItem{
+  flex: 0 0 min(42vw, 168px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+.discoverWeeklyChart--editorial .chartWeekMiniItem:active{
+  background: rgba(124, 92, 255, 0.08);
+  border-color: rgba(124, 92, 255, 0.14);
+}
+.discoverWeeklyChart--editorial .chartWeekMiniArt{
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.discoverWeeklyChart--editorial .chartWeekMiniArt img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.discoverWeeklyChart--editorial .chartWeekMiniRank{
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+  color: #f8faff;
+  background: rgba(8, 10, 18, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.discoverWeeklyChart--editorial .chartWeekMiniMeta{
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.discoverWeeklyChart--editorial .chartWeekMiniTitle{
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #f8faff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoverWeeklyChart--editorial .chartWeekMiniPlays{
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(223, 231, 251, 0.44);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoverWeeklyChart--editorial .chartWeekRest{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.discoverWeeklyChart--editorial .chartWeekRest[hidden]{
+  display: none !important;
+}
+.discoverWeeklyChart--editorial .chartWeekRestRow{
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverWeeklyChart--editorial .chartWeekRestRow:active{
+  background: rgba(255, 255, 255, 0.04);
+}
+.discoverWeeklyChart--editorial .chartWeekRestRank{
+  font-size: 11px;
+  font-weight: 850;
+  color: rgba(223, 231, 251, 0.56);
+  min-width: 22px;
+}
+.discoverWeeklyChart--editorial .chartWeekRestArt{
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  overflow: hidden;
+  flex: none;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.discoverWeeklyChart--editorial .chartWeekRestArt img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.discoverWeeklyChart--editorial .chartWeekRestMeta{
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.discoverWeeklyChart--editorial .chartWeekRestMeta strong{
+  font-size: 13px;
+  font-weight: 800;
+  color: #f8faff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoverWeeklyChart--editorial .chartWeekRestMeta small{
+  font-size: 11px;
+  color: rgba(223, 231, 251, 0.42);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoverWeeklyChart--editorial .chartWeekRestPlays{
+  font-size: 11px;
+  font-weight: 750;
+  color: rgba(223, 231, 251, 0.48);
+  white-space: nowrap;
+}
+.discoverWeeklyChart--editorial .chartWeekFeatured--skel,
+.discoverWeeklyChart--editorial .chartWeekMiniItem--skel{
+  pointer-events: none;
+}
+.discoverWeeklyChart--editorial .chartWeekFeatured--skel .chartWeekFeaturedArt{
+  width: 56px;
+  height: 56px;
+  border: none;
+}
+.discoverWeeklyChart--editorial .chartWeekMiniItem--skel .chartWeekMiniArt{
+  aspect-ratio: 1;
+  border: none;
+}
 .discoverWeeklyChart--prestige{
   margin-bottom: 8px;
   padding: 0;
@@ -33951,6 +34224,19 @@ html[data-theme="light"] .profilePersonaSignature{
   box-shadow:
     0 22px 48px rgba(88, 104, 140, 0.14),
     0 0 40px rgba(124, 92, 255, 0.12);
+}
+html[data-theme="light"] .discoverWeeklyChart--editorial .chartWeekFeatured{
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(15, 23, 42, 0.08);
+}
+html[data-theme="light"] .discoverWeeklyChart--editorial .chartWeekFeaturedBy,
+html[data-theme="light"] .discoverWeeklyChart--editorial .chartWeekFeaturedPlays,
+html[data-theme="light"] .discoverWeeklyChart--editorial .chartWeekMiniPlays{
+  color: rgba(15, 23, 42, 0.52);
+}
+html[data-theme="light"] .discoverWeeklyChart--editorial .chartWeekMiniItem{
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(15, 23, 42, 0.08);
 }
 html[data-theme="light"] .discoverWeeklyChart{
   border: none;

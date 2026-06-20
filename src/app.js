@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260620topWeekFinal";
+const APP_BUILD = "20260620topWeekFix";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -5154,18 +5154,13 @@ function discoverWeeklyChartSkeletonHtml() {
       <div class="discoverSkeletonLine short" style="width:72px;height:12px;border-radius:6px"></div>
     </header>
     <div class="chartWeekWinner chartWeekWinner--skel" aria-hidden="true">
-      <div class="chartWeekWinnerHead">
-        <span class="discoverSkeletonLine short" style="width:28px"></span>
-        <span class="discoverSkeletonLine short" style="width:22px"></span>
-      </div>
-      <div class="chartWeekWinnerCore">
-        <span class="chartWeekWinnerArt discoverSkeletonLine"></span>
-        <span class="chartWeekWinnerMeta">
-          <span class="discoverSkeletonLine"></span>
-          <span class="discoverSkeletonLine short"></span>
-          <span class="discoverSkeletonLine short"></span>
-        </span>
-      </div>
+      <span class="chartWeekWinnerArt discoverSkeletonLine"></span>
+      <span class="chartWeekWinnerBody">
+        <span class="discoverSkeletonLine short" style="width:52px"></span>
+        <span class="discoverSkeletonLine"></span>
+        <span class="discoverSkeletonLine short"></span>
+        <span class="discoverSkeletonLine short"></span>
+      </span>
     </div>
     <div class="chartWeekRunners">${runnerSkel}</div>
     <div class="chartWeekFullBtn discoverSkeletonLine" style="height:42px;border-radius:14px" aria-hidden="true"></div>`;
@@ -6032,21 +6027,19 @@ function chartWeekWinnerHtml(hero) {
   const title = String(hero.title || "Untitled").trim();
   return `
     <button type="button" class="chartWeekWinner" ${chartEntryPlayAttrs(hero)} aria-label="Play ${escapeHtml(title)}, number 1 this week">
-      <div class="chartWeekWinnerHead">
-        <span class="chartWeekWinnerRank">#1</span>
-        ${chartWeekTrendHtml(hero)}
-      </div>
-      <div class="chartWeekWinnerCore">
-        <span class="chartWeekWinnerArt">
-          <img src="${escapeHtml(heroArt)}" alt="" loading="lazy" decoding="async" />
+      <span class="chartWeekWinnerArt">
+        <img src="${escapeHtml(heroArt)}" alt="" loading="lazy" decoding="async" />
+      </span>
+      <span class="chartWeekWinnerBody">
+        <span class="chartWeekWinnerHead">
+          <span class="chartWeekWinnerRank">#1</span>
+          ${chartWeekTrendHtml(hero)}
         </span>
-        <span class="chartWeekWinnerMeta">
-          <strong class="chartWeekWinnerTitle">${escapeHtml(title)}</strong>
-          ${hero.username ? `<span class="chartWeekWinnerBy">@${escapeHtml(hero.username)}</span>` : ""}
-          ${heroPlays ? `<span class="chartWeekWinnerPlays">${escapeHtml(chartWeekPlaysText(heroPlays))}</span>` : ""}
-        </span>
-        ${discoverFeedPlayBtnHtml()}
-      </div>
+        <strong class="chartWeekWinnerTitle">${escapeHtml(title)}</strong>
+        ${hero.username ? `<span class="chartWeekWinnerBy">@${escapeHtml(hero.username)}</span>` : ""}
+        ${heroPlays ? `<span class="chartWeekWinnerPlays">${escapeHtml(chartWeekPlaysText(heroPlays))}</span>` : ""}
+      </span>
+      ${discoverFeedPlayBtnHtml()}
     </button>`;
 }
 
@@ -6096,19 +6089,38 @@ function chartWeekLeaderboardRowHtml(e) {
     </button>`;
 }
 
+function wireChartWeekOpenButtons(root) {
+  if (!root) return;
+  root.querySelectorAll("[data-chart-week-open-full]").forEach((btn) => {
+    if (btn.dataset.boundChartWeekOpen === "1") return;
+    btn.dataset.boundChartWeekOpen = "1";
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openDiscoverWeeklyChartPage();
+    });
+  });
+}
+
 function openDiscoverWeeklyChartPage() {
   haptic("light");
-  try { location.hash = "#/discover/top-week"; } catch {}
+  const target = "#/discover/top-week";
+  try {
+    if (location.hash === target) scheduleApplyRoute();
+    else location.hash = target;
+  } catch {
+    scheduleApplyRoute();
+  }
 }
 
 function bindDiscoverWeeklyChartSectionOnce() {
   if (_discoverWeeklyChartSectionBound) return;
-  const wrap = document.getElementById("discoverWeeklyChart");
-  if (!wrap) return;
+  const mount = document.getElementById("discoverFeedMount");
+  if (!mount) return;
   _discoverWeeklyChartSectionBound = true;
-  wrap.addEventListener("click", (e) => {
+  mount.addEventListener("click", (e) => {
     const open = e.target?.closest?.("[data-chart-week-open-full]");
-    if (!open || !wrap.contains(open)) return;
+    if (!open || !mount.contains(open)) return;
     e.preventDefault();
     e.stopPropagation();
     openDiscoverWeeklyChartPage();
@@ -6174,6 +6186,7 @@ async function refreshDiscoverWeeklyChart() {
       ${heroHtml}
       ${runnersHtml}
       ${showFullChart ? `<button type="button" class="chartWeekFullBtn" data-chart-week-open-full>View Full Top 10</button>` : ""}`;
+    wireChartWeekOpenButtons(wrap);
     wrap.hidden = false;
     if (wasHidden) playDiscoverSectionEnter(wrap);
   } catch {

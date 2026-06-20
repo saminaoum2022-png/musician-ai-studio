@@ -30658,11 +30658,12 @@ section.mentorPage{
   margin-bottom: 12px;
 }
 .discoverWeeklyChart--final .chartWeekWinner{
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: clamp(112px, 34vw, 136px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
   width: 100%;
-  padding: 16px 14px;
+  padding: 14px;
   margin: 0 0 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 18px;
@@ -30685,6 +30686,7 @@ section.mentorPage{
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  margin-bottom: 6px;
 }
 .discoverWeeklyChart--final .chartWeekWinnerRank,
 .discoverWeeklyChart--final .chartWeekRunnerRank,
@@ -30695,18 +30697,13 @@ section.mentorPage{
   color: rgba(248, 250, 255, 0.92);
   font-variant-numeric: tabular-nums;
 }
-.discoverWeeklyChart--final .chartWeekWinnerCore{
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 14px;
-}
 .discoverWeeklyChart--final .chartWeekWinnerArt{
-  width: 92px;
-  height: 92px;
-  border-radius: 14px;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 16px;
   overflow: hidden;
   flex: none;
+  align-self: center;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -30714,13 +30711,15 @@ section.mentorPage{
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
   display: block;
 }
-.discoverWeeklyChart--final .chartWeekWinnerMeta{
+.discoverWeeklyChart--final .chartWeekWinnerBody{
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
+  justify-content: center;
 }
 .discoverWeeklyChart--final .chartWeekWinnerTitle{
   font-size: 18px;
@@ -30747,6 +30746,7 @@ section.mentorPage{
 .discoverWeeklyChart--final .chartWeekWinner .discoverFeedPlayBtn{
   width: 40px;
   height: 40px;
+  align-self: center;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
 }
 .discoverWeeklyChart--final .chartWeekRunners{
@@ -30875,9 +30875,12 @@ section.mentorPage{
   pointer-events: none;
 }
 .discoverWeeklyChart--final .chartWeekWinner--skel .chartWeekWinnerArt{
-  width: 92px;
-  height: 92px;
+  width: 100%;
+  aspect-ratio: 1;
   border: none;
+}
+.discoverWeeklyChart--final .chartWeekWinner--skel{
+  grid-template-columns: clamp(112px, 34vw, 136px) minmax(0, 1fr) auto;
 }
 .discoverWeeklyChart--final .chartWeekRunner--skel .chartWeekRunnerArt{
   width: 44px;

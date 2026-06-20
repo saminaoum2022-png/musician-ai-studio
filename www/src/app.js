@@ -33,7 +33,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260620musicPrefsUI";
+const APP_BUILD = "20260620forYouChallenges";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -6408,12 +6408,46 @@ function discoverChallengePreferenceScore(challenge, prefs) {
 }
 
 function discoverLiveChallengesForUser(prefs) {
-  if (!prefs?.length) return DISCOVER_LIVE_CHALLENGES;
-  return [...DISCOVER_LIVE_CHALLENGES].sort((a, b) => {
+  const campaignOn = !!liveCampaignNow();
+  const pool = campaignOn
+    ? DISCOVER_LIVE_CHALLENGES
+    : DISCOVER_LIVE_CHALLENGES.filter((c) => c.action !== "campaign");
+  if (!prefs?.length) return pool;
+  return [...pool].sort((a, b) => {
     const diff = discoverChallengePreferenceScore(b, prefs) - discoverChallengePreferenceScore(a, prefs);
     if (diff) return diff;
     return (Number(b.submissions) || 0) - (Number(a.submissions) || 0);
   });
+}
+
+function discoverAllChallengeFeedTracks(tracks, prefs, limit = 8) {
+  const pool = discoverLiveChallengesForUser(prefs);
+  return (tracks || [])
+    .filter((t) => pool.some((c) => discoverChallengeMatchesTrack(c, t)))
+    .sort((a, b) => {
+      const diff = discoverTrackPreferenceScore(b, prefs) - discoverTrackPreferenceScore(a, prefs);
+      if (diff) return diff;
+      return (Number(b.playCount) || 0) - (Number(a.playCount) || 0);
+    })
+    .slice(0, limit);
+}
+
+/** Pick the live challenge block with real songs for For You — not an empty spotlight. */
+function discoverFeaturedChallengeForForYou(tracks, prefs) {
+  const ranked = discoverLiveChallengesForUser(prefs);
+  let featured = ranked[0] || DISCOVER_LIVE_CHALLENGES[0] || null;
+  let entries = [];
+  for (const c of ranked) {
+    const next = discoverTracksForChallenge(c, tracks, 8);
+    if (next.length > entries.length) {
+      featured = c;
+      entries = next;
+    }
+  }
+  if (!entries.length) {
+    entries = discoverAllChallengeFeedTracks(tracks, prefs, 8);
+  }
+  return { challenge: featured, entries };
 }
 
 function discoverSuggestedCreatorsForUser(prefs) {
@@ -7198,7 +7232,9 @@ function discoverFeedTemplateCardHtml(t, profMap) {
 }
 
 function discoverFeedChallengeBlockHtml(c, tracks, profMap, opts = {}) {
-  const entries = discoverTracksForChallenge(c, tracks, 8);
+  const entries = Array.isArray(opts.entries)
+    ? opts.entries.slice(0, 8)
+    : discoverTracksForChallenge(c, tracks, 8);
   const top = entries[0] || null;
   const joinAttrs = discoverChallengeJoinAttrs(c);
   const sectionTitle = String(opts.sectionTitle || c.title || "Challenge").trim();
@@ -7262,11 +7298,12 @@ function renderDiscoverFeedForYou(tracks, profMap) {
     prefs,
     3,
   );
-  const topChallenge = discoverLiveChallengesForUser(prefs)[0];
-  const challengeBlock = topChallenge
-    ? discoverFeedChallengeBlockHtml(topChallenge, tracks, profMap, {
+  const topChallengePack = discoverFeaturedChallengeForForYou(tracks, prefs);
+  const challengeBlock = topChallengePack.challenge
+    ? discoverFeedChallengeBlockHtml(topChallengePack.challenge, tracks, profMap, {
       sectionTitle: "From challenges",
       viewAllSlug: "live-challenges",
+      entries: topChallengePack.entries,
     })
     : "";
   const remixList = remixTracks.length

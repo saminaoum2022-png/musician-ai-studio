@@ -3100,6 +3100,202 @@ body.isAuth .footer{ display:none; }
 body.isAuth .generateOrb{ display:none !important; }
 body.isAuth .hubNowPlaying{ display:none !important; }
 
+/* ---- Post-signup music preferences --------------------------------- */
+
+.musicPrefsScreen{
+  padding: 0;
+  min-height: 0;
+  height: 100%;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.musicPrefsInner{
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: env(safe-area-inset-top, 0) 20px calc(20px + env(safe-area-inset-bottom, 0));
+  box-sizing: border-box;
+  gap: 18px;
+}
+.musicPrefsSkip{
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top, 0));
+  right: 16px;
+  z-index: 2;
+  border: none;
+  background: transparent;
+  color: rgba(223, 231, 251, 0.48);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 10px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.musicPrefsSkip:hover{ color: rgba(255,255,255,0.82); }
+.musicPrefsHeader{
+  padding-top: 44px;
+  text-align: center;
+}
+.musicPrefsTitle{
+  margin: 0 0 10px;
+  font-size: clamp(24px, 6vw, 30px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.12;
+  color: #f4f6ff;
+}
+.musicPrefsSubtitle{
+  margin: 0 auto;
+  max-width: 34ch;
+  font-size: 15px;
+  line-height: 1.45;
+  color: rgba(223, 231, 251, 0.62);
+}
+.musicPrefsGrid{
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  align-content: start;
+  padding: 4px 2px 8px;
+}
+@media (min-width: 520px){
+  .musicPrefsGrid{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.musicPrefsGenre{
+  position: relative;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  padding: 14px 12px;
+  min-height: 52px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: rgba(244,246,255,0.92);
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(255,255,255,0.06), transparent 55%),
+    rgba(255,255,255,0.03);
+  cursor: pointer;
+  transition: border-color 0.16s ease, transform 0.12s ease, box-shadow 0.16s ease, background 0.16s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.musicPrefsGenre:active{ transform: scale(0.98); }
+.musicPrefsGenre--violet.is-selected{
+  border-color: rgba(167,139,250,0.72);
+  box-shadow: 0 0 0 1px rgba(124,92,255,0.35), 0 10px 28px rgba(124,92,255,0.18);
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(167,139,250,0.28), transparent 58%),
+    rgba(124,92,255,0.14);
+}
+.musicPrefsGenre--gold.is-selected{
+  border-color: rgba(250,204,21,0.72);
+  box-shadow: 0 0 0 1px rgba(250,204,21,0.35), 0 10px 28px rgba(250,204,21,0.14);
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(250,204,21,0.24), transparent 58%),
+    rgba(250,204,21,0.08);
+}
+.musicPrefsGenre--rose.is-selected{
+  border-color: rgba(244,114,182,0.72);
+  box-shadow: 0 0 0 1px rgba(244,114,182,0.35), 0 10px 28px rgba(244,114,182,0.14);
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(244,114,182,0.24), transparent 58%),
+    rgba(244,114,182,0.08);
+}
+.musicPrefsGenre--mint.is-selected{
+  border-color: rgba(45,212,191,0.72);
+  box-shadow: 0 0 0 1px rgba(45,212,191,0.35), 0 10px 28px rgba(45,212,191,0.14);
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(45,212,191,0.24), transparent 58%),
+    rgba(45,212,191,0.08);
+}
+.musicPrefsGenre--cyan.is-selected{
+  border-color: rgba(56,189,248,0.72);
+  box-shadow: 0 0 0 1px rgba(56,189,248,0.35), 0 10px 28px rgba(56,189,248,0.14);
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(56,189,248,0.24), transparent 58%),
+    rgba(56,189,248,0.08);
+}
+.musicPrefsFooter{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+}
+.musicPrefsHint{
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(223, 231, 251, 0.52);
+}
+.musicPrefsPrimaryBtn{
+  width: 100%;
+  border: none;
+  border-radius: 14px;
+  padding: 15px 18px;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #05070d;
+  background: linear-gradient(135deg, #23d5ab, #7c5cff);
+  cursor: pointer;
+  transition: opacity 0.16s ease, transform 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.musicPrefsPrimaryBtn:disabled{
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+.musicPrefsPrimaryBtn:not(:disabled):active{ transform: scale(0.985); }
+
+body.isMusicPrefs{
+  overflow: hidden;
+  height: 100dvh;
+  height: 100svh;
+  background: #05070d;
+}
+body.isMusicPrefs .app{
+  margin: 0;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  max-width: none;
+  width: 100%;
+  min-height: 100dvh;
+  min-height: 100svh;
+  height: 100dvh;
+  height: 100svh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #05070d;
+}
+body.isMusicPrefs main.grid{
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  margin: 0;
+}
+body.isMusicPrefs .musicPrefsScreen{
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex !important;
+}
+body.isMusicPrefs .header{ display:none; }
+body.isMusicPrefs .mobileTabbar{ display:none !important; }
+body.isMusicPrefs .footer{ display:none; }
+body.isMusicPrefs .generateOrb{ display:none !important; }
+body.isMusicPrefs .hubNowPlaying{ display:none !important; }
+
 /* Route panels: hide every screen in main.grid unless it matches
  * body[data-route]. Backs up applyRoute() so intro + auth cannot stack
  * (e.g. after boot races or WKWebView dropping inline display). */
@@ -3113,6 +3309,9 @@ body[data-route="onboarding"] main.grid > [data-route="onboarding"]{
   display: flex !important;
 }
 body[data-route="auth"] main.grid > [data-route="auth"]{
+  display: flex !important;
+}
+body[data-route="music-preferences"] main.grid > [data-route="music-preferences"]{
   display: flex !important;
 }
 body[data-route="generate"] main.grid > [data-route="generate"],

@@ -18,11 +18,21 @@ import {
   parseOnboardingRoute,
   shouldSkipIntroOrOnboardingRoute,
 } from "./onboarding.js";
+import {
+  initMusicPreferences,
+  isMusicPreferencesComplete,
+  markMusicPreferencesComplete,
+  markMusicPreferencesPending,
+  onMusicPreferencesRouteActive,
+  parseMusicPreferencesFromProfile,
+  shouldShowMusicPreferencesScreen,
+  isMusicPreferencesPending,
+} from "./music-preferences.js";
 import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260620topWeekDropdown";
+const APP_BUILD = "20260620musicPrefs";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2812,10 +2822,11 @@ function syncRoutePanelVisibility(wanted) {
   document.body.classList.toggle("isIntro", route === "intro");
   document.body.classList.toggle("isOnboarding", route === "onboarding");
   document.body.classList.toggle("isAuth", route === "auth");
+  document.body.classList.toggle("isMusicPrefs", route === "music-preferences");
   document.querySelectorAll("[data-route]").forEach((el) => {
     const key = el.getAttribute("data-route");
     const show = key === route;
-    if (show && route === "onboarding") {
+    if (show && (route === "onboarding" || route === "music-preferences")) {
       el.style.display = "flex";
     } else {
       el.style.display = show ? "" : "none";
@@ -2998,7 +3009,7 @@ function applyRoute({ passGen } = {}) {
     }
   }
   const allowedRoutes = new Set([
-    "intro", "onboarding", "start", "auth", "generate",
+    "intro", "onboarding", "music-preferences", "start", "auth", "generate",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
     "settings", "profile", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
   ]);
@@ -3070,6 +3081,15 @@ function applyRoute({ passGen } = {}) {
     try {
       history.replaceState(null, "", `#/${wanted}`);
     } catch {}
+  }
+  if (wanted === "music-preferences") {
+    if (!isLoggedIn && !hasAuthToken) {
+      wanted = "auth";
+      try { history.replaceState(null, "", "#/auth"); } catch {}
+    } else if (!shouldShowMusicPreferencesScreen(authSession?.user?.id, activeProfile)) {
+      wanted = "discover";
+      try { history.replaceState(null, "", "#/discover"); } catch {}
+    }
   }
   if (!HUB_FEATURE_ENABLED && normalized === "hub") {
     wanted = isLoggedIn ? "discover" : (shouldSkipIntroOrOnboardingRoute() ? "auth" : "intro");
@@ -3151,6 +3171,9 @@ function applyRoute({ passGen } = {}) {
   }
   if (wanted === "onboarding") {
     try { onOnboardingRouteActive(route); } catch {}
+  }
+  if (wanted === "music-preferences") {
+    try { onMusicPreferencesRouteActive(); } catch {}
   }
 
   try {
@@ -3732,6 +3755,48 @@ try {
   });
 } catch (e) {
   console.error("[onboarding] init failed", e);
+}
+async function saveProfileMusicPreferencesGenres(genres) {
+  const uid = String(authSession?.user?.id || activeProfile?.id || "").trim();
+  if (!uid) return;
+  activeProfile = {
+    ...activeProfile,
+    id: uid,
+    genres: String(genres || "").trim(),
+  };
+  saveProfile(activeProfile);
+  try {
+    await supabaseUpsertProfile({
+      id: uid,
+      username: activeProfile.username || deriveUsernameFromAuth(authSession?.user) || "guest",
+      email: activeProfile.email || authSession?.user?.email || "",
+      voiceTimbre: activeProfile.voiceTimbre || "",
+      bio: activeProfile.bio || "",
+      avatar: activeProfile.avatar || "",
+      genres: activeProfile.genres,
+      links: activeProfile.links || {},
+      isPublic: activeProfile.isPublic !== false,
+    });
+  } catch (e) {
+    console.warn("[music-prefs] cloud save failed", e);
+  }
+}
+function openDiscoverForYouAfterMusicPrefs() {
+  _discoverFeedTab = "for-you";
+  try { sessionStorage.setItem(DISCOVER_FEED_TAB_KEY, "for-you"); } catch {}
+  try { location.hash = "#/discover"; } catch {}
+  syncRoutePanelVisibility("discover");
+}
+try {
+  initMusicPreferences({
+    getUserId: () => String(authSession?.user?.id || activeProfile?.id || "").trim(),
+    saveProfileGenres: saveProfileMusicPreferencesGenres,
+    openDiscoverForYou: openDiscoverForYouAfterMusicPrefs,
+    applyRoute,
+    haptic,
+  });
+} catch (e) {
+  console.error("[music-prefs] init failed", e);
 }
 void loadAppTourModule()
   .then((m) => {
@@ -6245,6 +6310,111 @@ const DISCOVER_MUSIC_VIBES = [
   "Romantic", "Emotional", "Party", "Indie", "EDM",
 ];
 
+const MUSIC_PREF_MATCH_ALIASES = {
+  "arabic pop": ["arabic", "levant", "lebanese", "pop arabic"],
+  khaleeji: ["khaleeji", "khaliji", "gulf"],
+  dabke: ["dabke", "party", "line dance"],
+  tarab: ["tarab", "classical arabic", "emotional", "romantic"],
+  edm: ["edm", "electronic", "dance", "house"],
+  afro: ["afro", "afrobeats", "amapiano"],
+  rap: ["rap", "hip hop", "hip-hop", "drill"],
+  rock: ["rock", "alt rock", "indie rock"],
+  "lo-fi": ["lo-fi", "lofi", "chill", "ambient"],
+  latin: ["latin", "reggaeton", "salsa", "bachata"],
+  country: ["country", "americana", "folk"],
+  bollywood: ["bollywood", "hindi", "filmi"],
+  pop: ["pop", "mainstream"],
+  "r&b": ["r&b", "rnb", "soul"],
+};
+
+function getUserMusicPreferenceLabels() {
+  return parseMusicPreferencesFromProfile(activeProfile);
+}
+
+function discoverPreferenceMatchScore(haystack, prefs) {
+  if (!prefs?.length) return 0;
+  const h = String(haystack || "").toLowerCase();
+  let score = 0;
+  for (const pref of prefs) {
+    const p = String(pref || "").trim().toLowerCase();
+    if (!p) continue;
+    if (h.includes(p)) score += 3;
+    for (const alias of MUSIC_PREF_MATCH_ALIASES[p] || []) {
+      if (h.includes(alias)) score += 2;
+    }
+  }
+  return score;
+}
+
+function discoverPreferenceHaystackForTrack(track) {
+  const style = String(track?.meta?.styleInput || track?.meta?.styleSent || "");
+  const title = String(track?.title || "");
+  const tags = Array.isArray(track?.meta?.tags) ? track.meta.tags.join(" ") : "";
+  const tpl = templateMetaForTrack(track);
+  const tplTitle = String(tpl?.searchTemplateTitle || "");
+  const ch = challengeMetaForTrack(track);
+  const chTitle = String(ch?.title || ch?.occasion || "");
+  return `${title} ${style} ${tags} ${tplTitle} ${chTitle}`;
+}
+
+function discoverTrackPreferenceScore(track, prefs) {
+  if (!prefs?.length) return 0;
+  return discoverPreferenceMatchScore(discoverPreferenceHaystackForTrack(track), prefs);
+}
+
+function discoverChallengePreferenceScore(challenge, prefs) {
+  if (!prefs?.length || !challenge) return 0;
+  const hay = `${challenge.title || ""} ${challenge.blurb || ""} ${challenge.occasionId || ""} ${challenge.challengeId || ""}`;
+  return discoverPreferenceMatchScore(hay, prefs);
+}
+
+function discoverLiveChallengesForUser(prefs) {
+  if (!prefs?.length) return DISCOVER_LIVE_CHALLENGES;
+  return [...DISCOVER_LIVE_CHALLENGES].sort((a, b) => {
+    const diff = discoverChallengePreferenceScore(b, prefs) - discoverChallengePreferenceScore(a, prefs);
+    if (diff) return diff;
+    return (Number(b.submissions) || 0) - (Number(a.submissions) || 0);
+  });
+}
+
+function discoverSuggestedCreatorsForUser(prefs) {
+  if (!prefs?.length) return DISCOVER_SUGGESTED_CREATORS;
+  const scoreCreator = (c) => (c.genres || []).reduce((sum, g) => {
+    const gl = String(g || "").toLowerCase();
+    return sum + prefs.reduce((inner, p) => {
+      const pl = String(p || "").toLowerCase();
+      if (!pl) return inner;
+      if (gl.includes(pl) || pl.includes(gl)) return inner + 2;
+      return inner;
+    }, 0);
+  }, 0);
+  return [...DISCOVER_SUGGESTED_CREATORS].sort((a, b) => scoreCreator(b) - scoreCreator(a));
+}
+
+function discoverTracksSortedByPreferences(tracks, prefs, limit = 6) {
+  return discoverFeedSortByPlays(tracks)
+    .sort((a, b) => {
+      const diff = discoverTrackPreferenceScore(b, prefs) - discoverTrackPreferenceScore(a, prefs);
+      if (diff) return diff;
+      return (Number(b.playCount) || 0) - (Number(a.playCount) || 0);
+    })
+    .slice(0, limit);
+}
+
+function discoverCommunityPicksTracksPersonalized(tracks, prefs) {
+  if (!prefs?.length) return discoverCommunityPicksTracks(tracks);
+  const base = discoverCommunityPicksTracks(tracks);
+  const seen = new Set(base.map((t) => String(t.id || t.url || "")));
+  const boosted = [...(tracks || [])]
+    .filter((t) => {
+      const sid = String(t.id || t.url || "");
+      return sid && !seen.has(sid) && discoverTrackPreferenceScore(t, prefs) > 0;
+    })
+    .sort((a, b) => discoverTrackPreferenceScore(b, prefs) - discoverTrackPreferenceScore(a, prefs)
+      || (Number(b.playCount) || 0) - (Number(a.playCount) || 0));
+  return [...boosted.slice(0, 4), ...base].slice(0, 14);
+}
+
 const DISCOVER_HUB_SPARK_CHALLENGES = [
   { id: "birthday", title: "Birthday Surprise", category: "Birthday", tone: "rose", action: "occasion", occasionId: "birthday", artKey: "birthday", matchKeywords: ["birthday", "bday"] },
   { id: "voice-note-flip", title: "Voice Note Clip", category: "Voice Note", tone: "violet", action: "challenge", challengeId: "voice-note-flip", artKey: "voice-note-flip" },
@@ -6698,7 +6868,7 @@ function discoverFeedFilterTracks(tab, tracks) {
   if (tab === "challenges") return sorted.filter((t) => trackIsChallengeContent(t));
   if (tab === "remixes") return sorted.filter((t) => remixAttributionForTrack(t) || mashupAttributionForTrack(t));
   if (tab === "all") return sorted;
-  return discoverCommunityPicksTracks(tracks);
+  return discoverCommunityPicksTracksPersonalized(tracks, getUserMusicPreferenceLabels());
 }
 
 const DISCOVER_TEMPLATES_SORT_KEY = "nabad_discover_templates_sort";
@@ -7042,9 +7212,18 @@ function discoverFeedChallengeBlockHtml(c, tracks, profMap, opts = {}) {
 }
 
 function renderDiscoverFeedForYou(tracks, profMap) {
-  const remixTracks = discoverFeedSortByPlays(tracks).filter((t) => remixAttributionForTrack(t) || mashupAttributionForTrack(t)).slice(0, 6);
-  const templateTracks = discoverFeedSortByPlays(tracks).filter((t) => trackIsTemplateContent(t)).slice(0, 3);
-  const topChallenge = DISCOVER_LIVE_CHALLENGES[0];
+  const prefs = getUserMusicPreferenceLabels();
+  const remixTracks = discoverTracksSortedByPreferences(
+    (tracks || []).filter((t) => remixAttributionForTrack(t) || mashupAttributionForTrack(t)),
+    prefs,
+    6,
+  );
+  const templateTracks = discoverTracksSortedByPreferences(
+    (tracks || []).filter((t) => trackIsTemplateContent(t)),
+    prefs,
+    3,
+  );
+  const topChallenge = discoverLiveChallengesForUser(prefs)[0];
   const challengeBlock = topChallenge
     ? discoverFeedChallengeBlockHtml(topChallenge, tracks, profMap, {
       sectionTitle: "From challenges",
@@ -7073,7 +7252,8 @@ function renderDiscoverFeedForYou(tracks, profMap) {
 function renderDiscoverFeedTabPanel(tab, tracks, profMap) {
   if (tab === "for-you") return renderDiscoverFeedForYou(tracks, profMap);
   if (tab === "challenges") {
-    const blocks = DISCOVER_LIVE_CHALLENGES.map((c) => discoverFeedChallengeBlockHtml(c, tracks, profMap)).join("");
+    const blocks = discoverLiveChallengesForUser(getUserMusicPreferenceLabels())
+      .map((c) => discoverFeedChallengeBlockHtml(c, tracks, profMap)).join("");
     return blocks || `<p class="discoverHubQuietNote discoverFeedEmpty">Sparks and live events will appear here as creators publish.</p>`;
   }
   if (tab === "templates") {
@@ -7535,8 +7715,9 @@ function renderDiscoverTrendingRemixesSection(tracks, profMap) {
 function renderDiscoverSuggestedCreatorsSection() {
   const mount = document.getElementById("discoverSuggestedCreatorsMount");
   if (!mount) return;
-  const vibeHint = DISCOVER_MUSIC_VIBES.slice(0, 4).join(" · ");
-  const cards = DISCOVER_SUGGESTED_CREATORS.map((c) => `
+  const prefs = getUserMusicPreferenceLabels();
+  const creators = discoverSuggestedCreatorsForUser(prefs);
+  const cards = creators.map((c) => `
     <article class="discoverHubCreatorCard discoverHubCreatorCard--${escapeHtml(c.tone)}">
       <button type="button" class="discoverHubCreatorMain" data-discover-creator="${encodeURIComponent(c.handle)}">
         <span class="discoverHubCreatorAv" aria-hidden="true">${escapeHtml(String(c.name || c.handle).slice(0, 1).toUpperCase())}</span>
@@ -10427,6 +10608,21 @@ async function finishPostAuthNavigation() {
   loadAuthSession();
   ensureAuthSessionUserFromToken();
   endLoginSettling();
+  if (
+    authSession?.user?.id
+    && !isMusicPreferencesComplete(authSession.user.id, activeProfile)
+    && !isMusicPreferencesPending()
+  ) {
+    try {
+      const cloud = await supabaseLoadProfile();
+      if (!cloud) markMusicPreferencesPending();
+      else if (parseMusicPreferencesFromProfile(cloud).length) {
+        markMusicPreferencesComplete(authSession.user.id);
+        activeProfile = { ...activeProfile, genres: cloud.genres || activeProfile.genres || "" };
+        saveProfile(activeProfile);
+      }
+    } catch {}
+  }
   if (pending === "song" || pending === "status" || pending === "echo") {
     window.setTimeout(() => {
       try { navigateFromCreateChooser(pending); } catch {}
@@ -10443,6 +10639,17 @@ async function finishPostAuthNavigation() {
         try { applyDiscoveryIdeaToCreate(pendingIdea); } catch {}
       }, 120);
     }
+    void ensureAuthBoot({ force: true, fast: true });
+    return;
+  }
+  if (
+    shouldShowMusicPreferencesScreen(authSession?.user?.id, activeProfile)
+    && !returnHash
+    && !pending
+  ) {
+    try { location.hash = "#/music-preferences"; } catch {}
+    syncRoutePanelVisibility("music-preferences");
+    try { applyRoute(); } catch { scheduleApplyRoute(); }
     void ensureAuthBoot({ force: true, fast: true });
     return;
   }
@@ -18104,6 +18311,7 @@ async function runEmailPasswordAuth() {
         const applied = await applySupabaseAuthTokenPayload(data);
         if (!applied) throw new Error("Could not save session");
         notifyLoginFeedback("Account created — welcome!");
+        markMusicPreferencesPending();
         await finishPostAuthNavigation();
         return;
       }
@@ -41217,6 +41425,9 @@ void (async () => {
         callingCardUpdatedAt: 0,
         soundCertified: false,
       };
+      if (!isMusicPreferencesComplete(authSession.user.id, nextProfile)) {
+        markMusicPreferencesPending();
+      }
     }
     // Migration safety net: only mint an anonymous handle when there
     // is genuinely nothing usable. We must NEVER overwrite an existing

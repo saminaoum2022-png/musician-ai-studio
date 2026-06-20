@@ -6430,6 +6430,21 @@ function discoverOriginLineText(track) {
   return "";
 }
 
+function discoverTemplateCardOriginText(track) {
+  const tpl = templateMetaForTrack(track);
+  if (!tpl) return discoverOriginLineText(track);
+  let name = String(tpl.searchTemplateTitle || "Template").trim();
+  name = name.replace(/\s+template$/i, "").trim();
+  if (!name.toLowerCase().includes("template")) name = `${name} Template`;
+  return `Created with ${name}`;
+}
+
+function discoverTemplateCardOriginHtml(track) {
+  const text = discoverTemplateCardOriginText(track);
+  if (!text) return "";
+  return `<span class="discoverFeedOrigin" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
+}
+
 function discoverOriginLineHtml(track) {
   const text = discoverOriginLineText(track);
   return text ? `<span class="discoverFeedOrigin">${escapeHtml(text)}</span>` : "";
@@ -6486,12 +6501,9 @@ function discoverFeedSongRowHtml(t, profMap, opts = {}) {
   const originHtml = opts.originHtml != null
     ? opts.originHtml
     : discoverOriginLineHtml(t);
-  const rank = Number(opts.rank) || 0;
-  const rankHtml = rank > 0 ? `<span class="discoverFeedSongRank">#${rank}</span>` : "";
   const stats = discoverHubPickStatsHtml(t);
   return `
     <button type="button" class="discoverFeedSongRow" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
-      ${rankHtml}
       <span class="discoverFeedSongArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" /></span>
       <span class="discoverFeedSongBody">
         <strong class="discoverFeedSongTitle">${escapeHtml(title)}</strong>
@@ -6516,9 +6528,11 @@ function discoverFeedTemplateCardHtml(t, profMap) {
         <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
         <span class="discoverFeedTemplatePlay" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M8 5.5v13l11-6.5-11-6.5Z"/></svg></span>
       </span>
-      <strong class="discoverFeedTemplateTitle">${escapeHtml(title)}</strong>
-      <span class="discoverFeedTemplateBy">by ${escapeHtml(byLine)}</span>
-      ${discoverOriginLineHtml(t)}
+      <span class="discoverFeedTemplateMeta">
+        <strong class="discoverFeedTemplateTitle">${escapeHtml(title)}</strong>
+        <span class="discoverFeedTemplateBy">by ${escapeHtml(byLine)}</span>
+        ${discoverTemplateCardOriginHtml(t)}
+      </span>
     </button>`;
 }
 
@@ -12779,6 +12793,38 @@ function challengeAttributionText(challenge) {
   return `Joined ${title}${bits.length ? ` · ${bits.join(" / ")}` : ""}${forWho}`;
 }
 
+function normalizeAttributionKey(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/\s+(template|challenge|entry)$/gi, "")
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
+}
+
+function playerAttributionsOverlap(challenge, tplMeta) {
+  if (!challenge || !tplMeta) return false;
+  const chId = normalizeAttributionKey(challenge.id);
+  const tplId = normalizeAttributionKey(tplMeta.searchTemplateId);
+  if (chId && tplId && (chId === tplId || chId.includes(tplId) || tplId.includes(chId))) return true;
+  const chTitle = normalizeAttributionKey(challenge.title);
+  const tplTitle = normalizeAttributionKey(tplMeta.searchTemplateTitle);
+  if (!chTitle || !tplTitle) return false;
+  return chTitle === tplTitle || chTitle.includes(tplTitle) || tplTitle.includes(chTitle);
+}
+
+function playerChallengeAttributionText(challenge) {
+  if (!challenge) return "";
+  if (String(challenge.campaign || "").trim()) {
+    const title = String(challenge.title || "Live event").trim();
+    const team = `${String(challenge.teamFlag || "").trim()} ${String(challenge.teamName || "").trim()}`.trim();
+    return team ? `Join ${title} · ${team}` : `Join ${title}`;
+  }
+  const title = String(challenge.title || "Challenge").trim();
+  const forWho = challenge.personName ? ` for ${challenge.personName}` : "";
+  if (title.toLowerCase().includes("challenge")) return `Join ${title}${forWho}`;
+  return `Join ${title} Challenge${forWho}`;
+}
+
 /** Human-readable style string for sharing / Discover (truncated). */
 function trackAllowsRemix(track) {
   const m = track?.meta && typeof track.meta === "object" ? track.meta : {};
@@ -13487,20 +13533,31 @@ function setPlayerChallengeAttribution(challenge) {
   wirePlayerAttributionActionsOnce();
   const c = challenge && (challenge.id || challenge.title || challenge.campaign) ? challenge : null;
   _playerChallengeCtx = c;
-  const text = challengeAttributionText(c);
+  const text = playerChallengeAttributionText(c);
   if (els.playerChallengeAttributionText) els.playerChallengeAttributionText.textContent = text;
   if (els.playerChallengeAttribution) {
     els.playerChallengeAttribution.hidden = !text;
     const canOpen = Boolean(c && (String(c.campaign || "").trim() || String(c.id || "").trim()));
     els.playerChallengeAttribution.disabled = !canOpen;
-    const label = c?.title ? `Open challenge: ${c.title}` : "Open challenge";
+    const label = c?.title ? `Join challenge: ${c.title}` : "Join challenge";
     els.playerChallengeAttribution.setAttribute("aria-label", text && canOpen ? label : "");
   }
 }
 
-function setPlayerTemplateAttribution(track) {
+function setPlayerTemplateAttribution(track, opts = {}) {
   wirePlayerAttributionActionsOnce();
+  const challenge = opts.challenge ?? challengeMetaForTrack(track);
   const tpl = templateMetaForTrack(track);
+  if (tpl && challenge && playerAttributionsOverlap(challenge, tpl)) {
+    _playerTemplateCtx = null;
+    if (els.playerTemplateAttributionText) els.playerTemplateAttributionText.textContent = "";
+    if (els.playerTemplateAttribution) {
+      els.playerTemplateAttribution.hidden = true;
+      els.playerTemplateAttribution.disabled = true;
+      els.playerTemplateAttribution.setAttribute("aria-label", "");
+    }
+    return;
+  }
   _playerTemplateCtx = tpl;
   const text = tpl ? String(tpl.searchTemplateTitle || "Template").trim() : "";
   if (els.playerTemplateAttributionText) els.playerTemplateAttributionText.textContent = text;
@@ -13509,7 +13566,7 @@ function setPlayerTemplateAttribution(track) {
     els.playerTemplateAttribution.disabled = !tpl;
     els.playerTemplateAttribution.setAttribute(
       "aria-label",
-      text ? `Open template: ${text}` : "",
+      text ? `Use template: ${text}` : "",
     );
   }
 }
@@ -32810,7 +32867,9 @@ function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, chall
     els.playerArt.classList.toggle("isCoverPlaceholder", !hasTrack);
   }
   setPlayerChallengeAttribution(challenge || challengeMetaForTrack(currentPlayerTrackRef));
-  setPlayerTemplateAttribution(currentPlayerTrackRef);
+  setPlayerTemplateAttribution(currentPlayerTrackRef, {
+    challenge: challenge || challengeMetaForTrack(currentPlayerTrackRef),
+  });
   const mashup = mashupOf || mashupAttributionForTrack(currentPlayerTrackRef);
   setPlayerMashupAttribution(mashup);
   if (mashup) {

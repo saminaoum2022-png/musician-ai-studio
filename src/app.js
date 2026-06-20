@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260620creationNaming";
+const APP_BUILD = "20260620templateChips";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -6586,12 +6586,13 @@ const DISCOVER_TEMPLATES_SORT_KEY = "nabad_discover_templates_sort";
 const DISCOVER_TEMPLATES_FILTER_KEY = "nabad_discover_templates_filter";
 const DISCOVER_TEMPLATE_FILTERS = [
   { id: "all", label: "All Templates", emoji: "✦" },
-  { id: "birthday", label: "Birthday", emoji: "🎂", tokens: ["birthday", "bday", "happy birthday"] },
-  { id: "voice-note", label: "Voice Note", emoji: "🎙", tokens: ["voice note", "voice-note", "voice note flip", "hum", "voice clip"] },
-  { id: "love", label: "Love Song", emoji: "💜", tokens: ["love", "anniversary", "wedding", "first dance", "romantic", "couple", "mama", "mama's"] },
-  { id: "photo", label: "Photo Song", emoji: "📸", tokens: ["photo", "last photo", "picture", "snapshot"] },
-  { id: "sana-helwa", label: "Sana Helwa", emoji: "🥁", tokens: ["sana helwa", "dabke", "سنة حلوة"] },
-  { id: "worldcup", label: "World Cup", emoji: "🏆", tokens: ["world cup", "worldcup", "anthem", "fifa"] },
+  { id: "birthday", label: "Birthday", emoji: "🎂", tokens: ["birthday", "bday", "happy birthday", "sana helwa", "dabke", "سنة حلوة", "عيد ميلاد"] },
+  { id: "wedding", label: "Wedding", emoji: "💍", tokens: ["wedding", "entrance", "first dance", "mariage", "zafaf", "زفاف", "walking in"] },
+  { id: "love", label: "Love", emoji: "💜", tokens: ["love", "anniversary", "romantic", "couple", "anniv", "all our years"] },
+  { id: "family", label: "Family", emoji: "👨‍👩‍👧", tokens: ["mom", "mama", "mother", "dad", "father", "papa", "family", "for mom", "for dad", "mom-day", "أمي", "أبي"] },
+  { id: "celebrations", label: "Celebrations", emoji: "🎓", tokens: ["graduation", "prom", "congrats", "congratulations", "new year", "new-year", "milestone", "celebration", "prom night"] },
+  { id: "holiday", label: "Holiday", emoji: "🌙", tokens: ["christmas", "ramadan", "holiday", "eid", "seasonal", "countdown", "glow"] },
+  { id: "worldcup", label: "World Cup", emoji: "🏆", tokens: ["world cup", "worldcup", "anthem", "fifa"], campaignOnly: true },
   { id: "more", label: "More", emoji: "···", tokens: null },
 ];
 let _discoverTemplatesSort = (() => {
@@ -6604,10 +6605,27 @@ let _discoverTemplatesSort = (() => {
 let _discoverTemplatesFilter = (() => {
   try {
     const saved = String(sessionStorage.getItem(DISCOVER_TEMPLATES_FILTER_KEY) || "").trim();
-    if (DISCOVER_TEMPLATE_FILTERS.some((f) => f.id === saved)) return saved;
+    if (DISCOVER_TEMPLATE_FILTERS.some((f) => f.id === saved)) {
+      if (saved === "worldcup" && !liveCampaignNow()) return "all";
+      return saved;
+    }
   } catch {}
   return "all";
 })();
+
+function discoverTemplateFiltersForUi() {
+  const campaignOn = !!liveCampaignNow();
+  return DISCOVER_TEMPLATE_FILTERS.filter((f) => !f.campaignOnly || campaignOn);
+}
+
+function ensureDiscoverTemplatesFilterValid() {
+  const visible = discoverTemplateFiltersForUi();
+  if (visible.some((f) => f.id === _discoverTemplatesFilter)) return;
+  _discoverTemplatesFilter = "all";
+  try {
+    sessionStorage.setItem(DISCOVER_TEMPLATES_FILTER_KEY, "all");
+  } catch {}
+}
 
 function discoverTemplateSearchHaystack(track) {
   const tpl = templateMetaForTrack(track);
@@ -6617,6 +6635,8 @@ function discoverTemplateSearchHaystack(track) {
     tpl?.searchTemplateId,
     ch?.title,
     ch?.id,
+    ch?.variant,
+    ch?.type,
     track?.title,
   ].map((x) => String(x || "").toLowerCase()).join(" ");
 }
@@ -6628,8 +6648,12 @@ function discoverTrackMatchesTemplateFilterTokens(track, tokens) {
 
 function discoverTrackMatchesTemplateFilter(track, filterId) {
   if (filterId === "all") return true;
+  if (filterId === "worldcup") {
+    const ch = challengeMetaForTrack(track);
+    return !!(ch && String(ch.campaign || "").trim());
+  }
   if (filterId === "more") {
-    const primary = DISCOVER_TEMPLATE_FILTERS.filter((f) => f.id !== "all" && f.id !== "more" && f.tokens);
+    const primary = discoverTemplateFiltersForUi().filter((f) => f.id !== "all" && f.id !== "more" && f.id !== "worldcup" && f.tokens);
     return !primary.some((f) => discoverTrackMatchesTemplateFilterTokens(track, f.tokens));
   }
   const filter = DISCOVER_TEMPLATE_FILTERS.find((f) => f.id === filterId);
@@ -6756,7 +6780,8 @@ function discoverTemplatesIntroHtml() {
 }
 
 function discoverTemplatesFilterChipsHtml() {
-  const chips = DISCOVER_TEMPLATE_FILTERS.map((f) => {
+  ensureDiscoverTemplatesFilterValid();
+  const chips = discoverTemplateFiltersForUi().map((f) => {
     const active = f.id === _discoverTemplatesFilter;
     return `
       <button type="button" class="discoverTemplatesChip${active ? " is-active" : ""}" data-discover-templates-filter="${escapeHtml(f.id)}" aria-pressed="${active ? "true" : "false"}">
@@ -6771,6 +6796,7 @@ function discoverTemplatesFilterChipsHtml() {
 }
 
 function renderDiscoverTemplatesTab(tracks, profMap) {
+  ensureDiscoverTemplatesFilterValid();
   const filtered = discoverTemplatesFilteredTracks(tracks);
   const grid = filtered.length
     ? `<div class="discoverTemplatesGrid" role="list">${filtered.map((t, i) => discoverTemplatesShowcaseCardHtml(t, profMap, i)).join("")}</div>`

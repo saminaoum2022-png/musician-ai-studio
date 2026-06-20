@@ -21,18 +21,19 @@ import {
 import {
   initMusicPreferences,
   isMusicPreferencesComplete,
+  isMusicPreferencesPending,
   markMusicPreferencesComplete,
   markMusicPreferencesPending,
   onMusicPreferencesRouteActive,
+  openMusicPreferencesEditor,
   parseMusicPreferencesFromProfile,
   shouldShowMusicPreferencesScreen,
-  isMusicPreferencesPending,
 } from "./music-preferences.js";
 import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260620musicPrefs";
+const APP_BUILD = "20260620musicPrefsSettings";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3082,14 +3083,9 @@ function applyRoute({ passGen } = {}) {
       history.replaceState(null, "", `#/${wanted}`);
     } catch {}
   }
-  if (wanted === "music-preferences") {
-    if (!isLoggedIn && !hasAuthToken) {
-      wanted = "auth";
-      try { history.replaceState(null, "", "#/auth"); } catch {}
-    } else if (!shouldShowMusicPreferencesScreen(authSession?.user?.id, activeProfile)) {
-      wanted = "discover";
-      try { history.replaceState(null, "", "#/discover"); } catch {}
-    }
+  if (wanted === "music-preferences" && !isLoggedIn && !hasAuthToken) {
+    wanted = "auth";
+    try { history.replaceState(null, "", "#/auth"); } catch {}
   }
   if (!HUB_FEATURE_ENABLED && normalized === "hub") {
     wanted = isLoggedIn ? "discover" : (shouldSkipIntroOrOnboardingRoute() ? "auth" : "intro");
@@ -3257,6 +3253,7 @@ function applyRoute({ passGen } = {}) {
   }
   if (wanted === "settings") {
     renderPersonaSelect();
+    try { refreshSettingsMusicPrefsRow(); } catch {}
   }
   if (wanted === "player") {
     try {
@@ -3765,6 +3762,7 @@ async function saveProfileMusicPreferencesGenres(genres) {
     genres: String(genres || "").trim(),
   };
   saveProfile(activeProfile);
+  try { refreshSettingsMusicPrefsRow(); } catch {}
   try {
     await supabaseUpsertProfile({
       id: uid,
@@ -3787,16 +3785,53 @@ function openDiscoverForYouAfterMusicPrefs() {
   try { location.hash = "#/discover"; } catch {}
   syncRoutePanelVisibility("discover");
 }
+function returnToSettingsAfterMusicPrefs() {
+  try { location.hash = "#/settings"; } catch {}
+  syncRoutePanelVisibility("settings");
+  try { refreshSettingsMusicPrefsRow(); } catch {}
+}
+function refreshSettingsMusicPrefsRow() {
+  const sub = document.getElementById("settingsMusicPrefsSub");
+  const btn = document.getElementById("btnSettingsMusicPrefs");
+  if (!sub || !btn) return;
+  const authed = Boolean(authSession?.user?.id || getSupabaseAuthToken());
+  btn.hidden = !authed;
+  const prefs = getUserMusicPreferenceLabels();
+  if (!prefs.length) {
+    sub.textContent = "Personalize your For You feed, challenges, and recommendations.";
+    return;
+  }
+  if (prefs.length <= 4) {
+    sub.textContent = prefs.join(", ");
+    return;
+  }
+  sub.textContent = `${prefs.slice(0, 4).join(", ")} +${prefs.length - 4} more`;
+}
 try {
   initMusicPreferences({
     getUserId: () => String(authSession?.user?.id || activeProfile?.id || "").trim(),
+    getExistingLabels: () => getUserMusicPreferenceLabels(),
     saveProfileGenres: saveProfileMusicPreferencesGenres,
     openDiscoverForYou: openDiscoverForYouAfterMusicPrefs,
+    returnFromMusicPrefs: returnToSettingsAfterMusicPrefs,
     applyRoute,
     haptic,
+    showToast,
   });
 } catch (e) {
   console.error("[music-prefs] init failed", e);
+}
+const btnSettingsMusicPrefs = document.getElementById("btnSettingsMusicPrefs");
+if (btnSettingsMusicPrefs) {
+  btnSettingsMusicPrefs.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (!authSession?.user?.id && !getSupabaseAuthToken()) {
+      try { location.hash = "#/auth"; } catch {}
+      try { showToast("Sign in to choose music styles", { icon: "👤", durationMs: 2600 }); } catch {}
+      return;
+    }
+    openMusicPreferencesEditor();
+  });
 }
 void loadAppTourModule()
   .then((m) => {
@@ -17995,6 +18030,7 @@ function renderAuthStatus() {
   if (els.settingsBtnLogout) els.settingsBtnLogout.hidden = !isAuthed;
   const settingsDelete = document.getElementById("settingsBtnDeleteAccount");
   if (settingsDelete) settingsDelete.hidden = !isAuthed;
+  try { refreshSettingsMusicPrefsRow(); } catch {}
   // Hide the Credits pill entirely when logged-out. A "0 credits" badge
   // on a guest profile is meaningless and was where the previous user's
   // balance kept leaking through (e.g. "326" after Logout). The pill

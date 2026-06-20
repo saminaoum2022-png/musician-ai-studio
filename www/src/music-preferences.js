@@ -4,6 +4,7 @@
 
 export const MUSIC_PREFS_DONE_KEY_PREFIX = "nabad_music_prefs_v1_done:";
 export const MUSIC_PREFS_PENDING_KEY = "nabad_music_prefs_pending_v1";
+export const MUSIC_PREFS_VOLUNTARY_KEY = "nabad_music_prefs_voluntary_v1";
 
 export const MUSIC_PREFERENCE_GENRES = [
   { id: "arabic-pop", label: "Arabic Pop", tone: "violet" },
@@ -91,6 +92,46 @@ export function shouldShowMusicPreferencesScreen(userId, profile) {
   return isMusicPreferencesPending();
 }
 
+export function isMusicPreferencesVoluntary() {
+  try {
+    return sessionStorage.getItem(MUSIC_PREFS_VOLUNTARY_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function clearMusicPreferencesVoluntary() {
+  try {
+    sessionStorage.removeItem(MUSIC_PREFS_VOLUNTARY_KEY);
+  } catch {}
+}
+
+/** Settings / Profile — open the genre picker anytime after signup. */
+export function openMusicPreferencesEditor() {
+  try {
+    sessionStorage.setItem(MUSIC_PREFS_VOLUNTARY_KEY, "1");
+  } catch {}
+  try {
+    location.hash = "#/music-preferences";
+  } catch {}
+  try {
+    _deps?.applyRoute?.();
+  } catch {}
+}
+
+function musicPrefIdForLabel(label) {
+  const needle = String(label || "").trim().toLowerCase();
+  if (!needle) return "";
+  const match = MUSIC_PREFERENCE_GENRES.find((g) => g.label.toLowerCase() === needle);
+  return match?.id || "";
+}
+
+function syncMusicPrefsChrome() {
+  const voluntary = isMusicPreferencesVoluntary();
+  const skipBtn = qs("#btnMusicPrefsSkip");
+  if (skipBtn) skipBtn.textContent = voluntary ? "Cancel" : "Skip";
+}
+
 function serializeMusicPreferences(labels) {
   return (labels || [])
     .map((s) => String(s || "").trim())
@@ -113,8 +154,9 @@ function paintMusicPrefsSelection() {
   const ready = count >= MUSIC_PREFS_MIN_SELECTION;
   if (continueBtn) {
     continueBtn.disabled = !ready;
+    const voluntary = isMusicPreferencesVoluntary();
     continueBtn.textContent = ready
-      ? `Continue (${count})`
+      ? (voluntary ? `Save (${count})` : `Continue (${count})`)
       : `Pick ${MUSIC_PREFS_MIN_SELECTION - count} more`;
   }
   if (hint) {
@@ -144,20 +186,35 @@ async function persistMusicPreferences({ skipped = false } = {}) {
 }
 
 async function finishMusicPreferences({ skipped = false } = {}) {
+  const voluntary = isMusicPreferencesVoluntary();
+  if (voluntary && skipped) {
+    clearMusicPreferencesVoluntary();
+    _selected.clear();
+    paintMusicPrefsSelection();
+    try { _deps?.returnFromMusicPrefs?.(); } catch {}
+    try { _deps?.applyRoute?.(); } catch {}
+    return;
+  }
   try {
     await persistMusicPreferences({ skipped });
+    if (!skipped) {
+      try {
+        _deps?.showToast?.("Music styles saved.", { icon: "♪", durationMs: 2600 });
+      } catch {}
+    }
   } catch (e) {
     console.warn("[music-prefs] save failed", e);
     markMusicPreferencesComplete(_deps?.getUserId?.());
   }
+  clearMusicPreferencesVoluntary();
   _selected.clear();
   paintMusicPrefsSelection();
-  try {
-    _deps?.openDiscoverForYou?.();
-  } catch {}
-  try {
-    _deps?.applyRoute?.();
-  } catch {}
+  if (voluntary) {
+    try { _deps?.returnFromMusicPrefs?.(); } catch {}
+  } else {
+    try { _deps?.openDiscoverForYou?.(); } catch {}
+  }
+  try { _deps?.applyRoute?.(); } catch {}
 }
 
 function bindMusicPrefsGridOnce() {
@@ -179,8 +236,11 @@ function bindMusicPrefsGridOnce() {
  *   getUserId: () => string,
  *   saveProfileGenres: (genres: string) => Promise<void>|void,
  *   openDiscoverForYou: () => void,
+ *   returnFromMusicPrefs?: () => void,
+ *   getExistingLabels?: () => string[],
  *   applyRoute: () => void,
  *   haptic?: (kind: string) => void,
+ *   showToast?: (msg: string, opts?: object) => void,
  * }} deps
  */
 export function initMusicPreferences(deps) {
@@ -209,6 +269,12 @@ export function initMusicPreferences(deps) {
 
 export function onMusicPreferencesRouteActive() {
   _selected.clear();
+  const existing = typeof _deps?.getExistingLabels === "function" ? _deps.getExistingLabels() : [];
+  for (const label of existing || []) {
+    const id = musicPrefIdForLabel(label);
+    if (id) _selected.add(id);
+  }
+  syncMusicPrefsChrome();
   paintMusicPrefsSelection();
   const panel = qs('[data-route="music-preferences"]');
   if (panel) panel.style.display = "flex";

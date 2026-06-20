@@ -33,7 +33,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260620musicPrefsSettings";
+const APP_BUILD = "20260620musicPrefsUI";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -6349,17 +6349,21 @@ const MUSIC_PREF_MATCH_ALIASES = {
   "arabic pop": ["arabic", "levant", "lebanese", "pop arabic"],
   khaleeji: ["khaleeji", "khaliji", "gulf"],
   dabke: ["dabke", "party", "line dance"],
-  tarab: ["tarab", "classical arabic", "emotional", "romantic"],
-  edm: ["edm", "electronic", "dance", "house"],
-  afro: ["afro", "afrobeats", "amapiano"],
+  edm: ["edm", "electronic", "dance"],
+  house: ["house", "four on the floor"],
+  "deep house": ["deep house", "deep-house"],
+  "tech house": ["tech house", "tech-house"],
+  "melodic house": ["melodic house", "melodic"],
   rap: ["rap", "hip hop", "hip-hop", "drill"],
-  rock: ["rock", "alt rock", "indie rock"],
+  pop: ["pop", "mainstream"],
+  "r&b": ["r&b", "rnb", "soul"],
+  tarab: ["tarab", "classical arabic", "emotional", "romantic"],
+  afro: ["afro", "afrobeats", "amapiano"],
   "lo-fi": ["lo-fi", "lofi", "chill", "ambient"],
+  rock: ["rock", "alt rock", "indie rock"],
   latin: ["latin", "reggaeton", "salsa", "bachata"],
   country: ["country", "americana", "folk"],
   bollywood: ["bollywood", "hindi", "filmi"],
-  pop: ["pop", "mainstream"],
-  "r&b": ["r&b", "rnb", "soul"],
 };
 
 function getUserMusicPreferenceLabels() {

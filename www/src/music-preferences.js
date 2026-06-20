@@ -7,20 +7,24 @@ export const MUSIC_PREFS_PENDING_KEY = "nabad_music_prefs_pending_v1";
 export const MUSIC_PREFS_VOLUNTARY_KEY = "nabad_music_prefs_voluntary_v1";
 
 export const MUSIC_PREFERENCE_GENRES = [
-  { id: "arabic-pop", label: "Arabic Pop", tone: "violet" },
-  { id: "khaleeji", label: "Khaleeji", tone: "gold" },
-  { id: "dabke", label: "Dabke", tone: "rose" },
-  { id: "tarab", label: "Tarab", tone: "mint" },
-  { id: "edm", label: "EDM", tone: "cyan" },
-  { id: "afro", label: "Afro", tone: "gold" },
-  { id: "rap", label: "Rap", tone: "rose" },
-  { id: "rock", label: "Rock", tone: "violet" },
-  { id: "lo-fi", label: "Lo-Fi", tone: "cyan" },
-  { id: "latin", label: "Latin", tone: "gold" },
-  { id: "country", label: "Country", tone: "mint" },
-  { id: "bollywood", label: "Bollywood", tone: "rose" },
-  { id: "pop", label: "Pop", tone: "violet" },
-  { id: "rnb", label: "R&B", tone: "cyan" },
+  { id: "arabic-pop", label: "Arabic Pop" },
+  { id: "khaleeji", label: "Khaleeji" },
+  { id: "dabke", label: "Dabke" },
+  { id: "edm", label: "EDM" },
+  { id: "house", label: "House" },
+  { id: "deep-house", label: "Deep House" },
+  { id: "rap", label: "Rap" },
+  { id: "pop", label: "Pop" },
+  { id: "rnb", label: "R&B" },
+  { id: "tarab", label: "Tarab" },
+  { id: "afro", label: "Afro" },
+  { id: "lo-fi", label: "Lo-Fi" },
+  { id: "rock", label: "Rock" },
+  { id: "latin", label: "Latin" },
+  { id: "tech-house", label: "Tech House" },
+  { id: "melodic-house", label: "Melodic House" },
+  { id: "country", label: "Country" },
+  { id: "bollywood", label: "Bollywood" },
 ];
 
 export const MUSIC_PREFS_MIN_SELECTION = 3;
@@ -28,6 +32,7 @@ export const MUSIC_PREFS_MIN_SELECTION = 3;
 let _deps = null;
 let _inited = false;
 let _selected = new Set();
+let _gridMounted = false;
 
 function qs(sel, root = document) {
   return root.querySelector(sel);
@@ -106,7 +111,7 @@ export function clearMusicPreferencesVoluntary() {
   } catch {}
 }
 
-/** Settings / Profile — open the genre picker anytime after signup. */
+/** Settings — reopen the genre picker anytime after signup. */
 export function openMusicPreferencesEditor() {
   try {
     sessionStorage.setItem(MUSIC_PREFS_VOLUNTARY_KEY, "1");
@@ -126,12 +131,6 @@ function musicPrefIdForLabel(label) {
   return match?.id || "";
 }
 
-function syncMusicPrefsChrome() {
-  const voluntary = isMusicPreferencesVoluntary();
-  const skipBtn = qs("#btnMusicPrefsSkip");
-  if (skipBtn) skipBtn.textContent = voluntary ? "Cancel" : "Skip";
-}
-
 function serializeMusicPreferences(labels) {
   return (labels || [])
     .map((s) => String(s || "").trim())
@@ -139,7 +138,45 @@ function serializeMusicPreferences(labels) {
     .join(",");
 }
 
+function escapeHtml(s) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function escapeAttr(s) {
+  return escapeHtml(s).replace(/'/g, "&#39;");
+}
+
+export function buildMusicPreferencesGenreGridHtml() {
+  return MUSIC_PREFERENCE_GENRES.map((g) => `
+    <button
+      type="button"
+      class="musicPrefsGenre"
+      data-music-pref="${escapeAttr(g.id)}"
+      aria-pressed="false"
+    >
+      <span class="musicPrefsGenreLabel">${escapeHtml(g.label)}</span>
+      <span class="musicPrefsGenreCheck" aria-hidden="true">
+        <svg viewBox="0 0 12 10" width="10" height="8" fill="none">
+          <path d="M1 5.2 4.2 8.4 11 1.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+    </button>`).join("");
+}
+
+function ensureMusicPrefsGridMounted() {
+  if (_gridMounted) return;
+  const mount = qs("#musicPrefsGrid");
+  if (!mount) return;
+  mount.innerHTML = buildMusicPreferencesGenreGridHtml();
+  _gridMounted = true;
+}
+
 function paintMusicPrefsSelection() {
+  ensureMusicPrefsGridMounted();
   const root = qs("[data-music-prefs-root]");
   if (!root) return;
   root.querySelectorAll("[data-music-pref]").forEach((btn) => {
@@ -148,22 +185,12 @@ function paintMusicPrefsSelection() {
     btn.classList.toggle("is-selected", on);
     btn.setAttribute("aria-pressed", on ? "true" : "false");
   });
+  const countEl = qs("#musicPrefsCount");
   const continueBtn = qs("#btnMusicPrefsContinue");
-  const hint = qs("#musicPrefsHint");
   const count = _selected.size;
   const ready = count >= MUSIC_PREFS_MIN_SELECTION;
-  if (continueBtn) {
-    continueBtn.disabled = !ready;
-    const voluntary = isMusicPreferencesVoluntary();
-    continueBtn.textContent = ready
-      ? (voluntary ? `Save (${count})` : `Continue (${count})`)
-      : `Pick ${MUSIC_PREFS_MIN_SELECTION - count} more`;
-  }
-  if (hint) {
-    hint.textContent = ready
-      ? `${count} styles selected — you're good to go.`
-      : `Select at least ${MUSIC_PREFS_MIN_SELECTION} styles (${count}/${MUSIC_PREFS_MIN_SELECTION}).`;
-  }
+  if (countEl) countEl.textContent = String(count);
+  if (continueBtn) continueBtn.disabled = !ready;
 }
 
 function toggleMusicPref(id) {
@@ -247,6 +274,7 @@ export function initMusicPreferences(deps) {
   if (_inited) return;
   _inited = true;
   _deps = deps || null;
+  ensureMusicPrefsGridMounted();
   bindMusicPrefsGridOnce();
 
   const skipBtn = qs("#btnMusicPrefsSkip");
@@ -268,39 +296,14 @@ export function initMusicPreferences(deps) {
 }
 
 export function onMusicPreferencesRouteActive() {
+  ensureMusicPrefsGridMounted();
   _selected.clear();
   const existing = typeof _deps?.getExistingLabels === "function" ? _deps.getExistingLabels() : [];
   for (const label of existing || []) {
     const id = musicPrefIdForLabel(label);
     if (id) _selected.add(id);
   }
-  syncMusicPrefsChrome();
   paintMusicPrefsSelection();
   const panel = qs('[data-route="music-preferences"]');
   if (panel) panel.style.display = "flex";
-  try {
-    qs("#btnMusicPrefsContinue")?.scrollIntoView?.({ block: "nearest" });
-  } catch {}
-}
-
-export function buildMusicPreferencesGenreGridHtml() {
-  return MUSIC_PREFERENCE_GENRES.map((g) => `
-    <button
-      type="button"
-      class="musicPrefsGenre musicPrefsGenre--${g.tone}"
-      data-music-pref="${escapeAttr(g.id)}"
-      aria-pressed="false"
-    >${escapeHtml(g.label)}</button>`).join("");
-}
-
-function escapeHtml(s) {
-  return String(s || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function escapeAttr(s) {
-  return escapeHtml(s).replace(/'/g, "&#39;");
 }

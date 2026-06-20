@@ -396,27 +396,14 @@
             <button type="button" id="btnMusicPrefsSkip" class="musicPrefsSkip">Skip</button>
             <header class="musicPrefsHeader">
               <h1 class="musicPrefsTitle">Choose your music styles</h1>
-              <p class="musicPrefsSubtitle">Help us personalize your For You feed, challenges and recommendations.</p>
+              <p class="musicPrefsSubtitle">Pick at least 3 genres to personalize your feed, challenges and recommendations.</p>
             </header>
-            <div class="musicPrefsGrid" role="group" aria-label="Music genres">
-              <button type="button" class="musicPrefsGenre musicPrefsGenre--violet" data-music-pref="arabic-pop" aria-pressed="false">Arabic Pop</button>
-              <button type="button" class="musicPrefsGenre musicPrefsGenre--gold" data-music-pref="khaleeji" aria-pressed="false">Khaleeji</button>
-              <button type="button" class="musicPrefsGenre musicPrefsGenre--rose" data-music-pref="dabke" aria-pressed="false">Dabke</button>
-              <button type="button" class="musicPrefsGenre musicPrefsGenre--mint" data-music-pref="tarab" aria-pressed="false">Tarab</button>
-              <button type="button" class="musicPrefsGenre musicPrefsGenre--cyan" data-music-pref="edm" aria-pressed="false">EDM</button>
-              <button type="button" class="musicPrefsGenre musicPrefsGenre--gold" data-music-pref="afro" aria-pressed="false">Afro</button>
-              <button type="button" class="musicPrefsGenre musicPrefsGenre--rose" data-music-pref="rap" aria-pressed="false">Rap</button>
-              <button type="button" class="musicPrefsGenre musicPrefsGenre--violet" data-music-pref="rock" aria-pressed="false">Rock</button>
-              <button type="button" class="musicPrefsGenre musicPrefsGenre--cyan" data-music-pref="lo-fi" aria-pressed="false">Lo-Fi</button>
-              <button type="button" class="musicPrefsGenre musicPrefsGenre--gold" data-music-pref="latin" aria-pressed="false">Latin</button>
-              <button type="button" class="musicPrefsGenre musicPrefsGenre--mint" data-music-pref="country" aria-pressed="false">Country</button>
-              <button type="button" class="musicPrefsGenre musicPrefsGenre--rose" data-music-pref="bollywood" aria-pressed="false">Bollywood</button>
-              <button type="button" class="musicPrefsGenre musicPrefsGenre--violet" data-music-pref="pop" aria-pressed="false">Pop</button>
-              <button type="button" class="musicPrefsGenre musicPrefsGenre--cyan" data-music-pref="rnb" aria-pressed="false">R&amp;B</button>
-            </div>
+            <div id="musicPrefsGrid" class="musicPrefsGrid" role="group" aria-label="Music genres"></div>
             <footer class="musicPrefsFooter">
-              <p id="musicPrefsHint" class="musicPrefsHint">Select at least 3 styles (0/3).</p>
-              <button type="button" id="btnMusicPrefsContinue" class="musicPrefsPrimaryBtn" disabled>Pick 3 more</button>
+              <p id="musicPrefsHint" class="musicPrefsHint"><span id="musicPrefsCount" class="musicPrefsCount">0</span> styles selected</p>
+              <button type="button" id="btnMusicPrefsContinue" class="musicPrefsContinueBtn" disabled>
+                Continue <span class="musicPrefsContinueChev" aria-hidden="true">›</span>
+              </button>
             </footer>
           </div>
         </section>

@@ -144,71 +144,47 @@ html[data-theme="light"] .introDots i{
   background: rgba(109, 77, 245, 0.35);
 }
 
-html[data-theme="light"] .settingsHeader h2,
-html[data-theme="light"] .settingsKicker,
-html[data-theme="light"] .settingsLead,
-html[data-theme="light"] .settingsGroupTitle,
+html[data-theme="light"] .settingsPageTitle,
+html[data-theme="light"] .settingsPageSub,
+html[data-theme="light"] .settingsSectionLabel,
 html[data-theme="light"] .settingsRow,
 html[data-theme="light"] .settingsRowTitle,
 html[data-theme="light"] .settingsRowSub,
-html[data-theme="light"] .settingsRowChev{
+html[data-theme="light"] .settingsRowChev,
+html[data-theme="light"] .settingsFoot{
   color: inherit;
 }
 
-html[data-theme="light"] .settingsKicker{ color: rgba(90, 107, 130, 0.88); }
-html[data-theme="light"] .settingsLead,
-html[data-theme="light"] .settingsRowSub{ color: var(--muted); }
-html[data-theme="light"] .settingsGroupTitle{ color: rgba(15, 23, 40, 0.55); }
+html[data-theme="light"] .settingsPageSub,
+html[data-theme="light"] .settingsRowSub,
+html[data-theme="light"] .settingsFoot{ color: var(--muted); }
+html[data-theme="light"] .settingsSectionLabel{ color: rgba(15, 23, 40, 0.55); }
+html[data-theme="light"] .settingsPageTitle,
 html[data-theme="light"] .settingsRowTitle{ color: var(--text); }
-html[data-theme="light"] .settingsRow{ color: var(--text); border-bottom-color: rgba(15, 23, 40, 0.07); }
+html[data-theme="light"] .settingsRow{ color: var(--text); }
 html[data-theme="light"] .settingsRowLink:hover{
-  background: rgba(124, 92, 255, 0.06);
+  background: rgba(15, 23, 40, 0.04);
   color: var(--text);
 }
 html[data-theme="light"] .settingsRowIco{
-  color: var(--primary);
-  background:
-    radial-gradient(100% 100% at 20% 10%, rgba(124, 92, 255, 0.18), transparent 62%),
-    rgba(124, 92, 255, 0.06);
-  border-color: rgba(124, 92, 255, 0.14);
-}
-html[data-theme="light"] .settingsList{
-  border: 0;
+  color: rgba(15, 23, 40, 0.42);
   background: transparent;
-  box-shadow: none;
+  border: 0;
 }
 html[data-theme="light"] .settingsList .settingsRow + .settingsRow{
   border-top-color: rgba(15, 23, 40, 0.07);
 }
 html[data-theme="light"] .settingsPage{
   background: transparent;
-  border: 0;
-  box-shadow: none;
 }
-html[data-theme="light"] .settingsHeader h2{
-  color: var(--text);
-  text-shadow: 0 0 36px rgba(124, 92, 255, 0.14);
+html[data-theme="light"] .settingsBack{
+  color: rgba(15, 23, 40, 0.62);
 }
-html[data-theme="light"] .settingsKicker{
-  color: rgba(18, 140, 118, 0.92);
+html[data-theme="light"] .settingsSwitch{
+  background: rgba(15, 23, 40, 0.12);
 }
-html[data-theme="light"] .settingsLead{
-  color: var(--muted);
-}
-html[data-theme="light"] .settingsGroupTitle{
-  color: rgba(15, 23, 40, 0.52);
-}
-html[data-theme="light"] .settingsStatusPill{
-  border-color: rgba(18, 184, 150, 0.32);
-  background: rgba(18, 184, 150, 0.12);
-  color: rgba(12, 120, 98, 0.95);
-}
-html[data-theme="light"] .settingsRowLink:hover{
-  background: rgba(124, 92, 255, 0.06);
-}
-html[data-theme="light"] .settingsRowSub strong{
-  color: var(--primary);
-  font-weight: 800;
+html[data-theme="light"] .settingsSwitch:checked{
+  background: rgba(35, 213, 171, 0.82);
 }
 html[data-theme="light"] .profilePersonaSignature{
   border-color: rgba(124, 92, 255, 0.22);
@@ -17059,7 +17035,7 @@ input::placeholder, textarea::placeholder{
   stroke-linejoin: round;
 }
 
-/* Settings — flat Activity-style list (section labels + hairline separators). */
+/* Settings — minimal list (Apple / Linear style). */
 .settingsPage{
   position: relative;
   width: 100%;
@@ -17070,128 +17046,41 @@ input::placeholder, textarea::placeholder{
   display: flex;
   flex-direction: column;
   gap: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
+  background: #05070d;
 }
 body[data-route="settings"] .app{
   padding-left: 0;
   padding-right: 0;
 }
-.settingsHeader{
-  margin: 0 0 18px;
+body[data-route="settings"] main.grid{
+  background: #05070d;
+}
+.settingsPageHead{
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0 0 22px;
   padding: 6px 2px 0;
 }
-.settingsTitle,
-.settingsHeader h2{
-  margin: 0;
-  color: #f3f6ff;
-  font-size: clamp(28px, 7vw, 34px);
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  line-height: 1;
-}
-.settingsKicker{
-  margin: 0 0 6px;
-  color: rgba(94,234,212,0.88);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-.settingsLead{
-  margin: 8px 0 0;
-  max-width: 420px;
-  color: rgba(223,231,251,0.58);
-  font-size: 14px;
-  line-height: 1.45;
-}
-.settingsFeed{
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.settingsGroup{
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  margin-bottom: 14px;
-  padding: 4px 12px 8px;
-  border-radius: 18px;
-  border: 1px solid var(--surface-border);
-  background: var(--surface-raised);
-  box-shadow:
-    var(--elev-1),
-    var(--surface-highlight);
-}
-.settingsGroupTitle{
-  margin: 0 0 4px;
-  padding: 12px 4px 6px;
-  color: rgba(183, 168, 255, 0.78);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-.settingsFeed > .settingsGroup:first-child .settingsGroupTitle{
-  padding-top: 6px;
-}
-.settingsList{
-  display: flex;
-  flex-direction: column;
-  overflow: visible;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-.settingsRow{
-  width: 100%;
-  min-height: 58px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 4px;
-  border: 0;
-  border-radius: 12px;
-  background: transparent;
-  color: rgba(238,244,255,0.92);
-  font: inherit;
-  text-align: left;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  transition: background 160ms ease, color 160ms ease;
-}
-.settingsList .settingsRow + .settingsRow{
-  border-top: 1px solid rgba(255,255,255,0.06);
-}
-.settingsRowLink{
-  text-decoration: none;
-  cursor: pointer;
-  appearance: none;
-}
-.settingsRowLink:hover{
-  background: rgba(255,255,255,0.03);
-  color: #fff;
-}
-.settingsRowLink:active{
-  background: rgba(255,255,255,0.04);
-}
-.settingsRowIco{
-  width: 38px;
-  height: 38px;
-  flex: 0 0 auto;
+.settingsBack{
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 13px;
-  color: rgba(238,244,255,0.88);
-  background:
-    radial-gradient(100% 100% at 20% 10%, rgba(124,92,255,0.20), transparent 62%),
-    rgba(255,255,255,0.055);
-  border: 1px solid rgba(255,255,255,0.08);
+  width: 32px;
+  height: 32px;
+  margin: 0 0 2px -4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(223, 231, 251, 0.62);
+  text-decoration: none;
+  transition: color 160ms ease, background 160ms ease;
 }
-.settingsRowIco svg{
+.settingsBack:hover{
+  color: rgba(247, 250, 255, 0.92);
+  background: rgba(255, 255, 255, 0.04);
+}
+.settingsBack svg{
   width: 20px;
   height: 20px;
   fill: none;
@@ -17200,54 +17089,187 @@ body[data-route="settings"] .app{
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+.settingsPageTitle{
+  margin: 0;
+  color: #f3f6ff;
+  font-size: clamp(28px, 7vw, 32px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+.settingsPageSub{
+  margin: 6px 0 0;
+  max-width: 420px;
+  color: rgba(223, 231, 251, 0.52);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.settingsFeed{
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.settingsSection{
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: 24px;
+}
+.settingsSectionLabel{
+  margin: 0 0 6px;
+  padding: 0 4px;
+  color: rgba(223, 231, 251, 0.42);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.settingsList{
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+.settingsRow{
+  width: 100%;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(238, 244, 255, 0.92);
+  font: inherit;
+  text-align: left;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 160ms ease;
+}
+.settingsList .settingsRow + .settingsRow{
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.settingsRowLink{
+  text-decoration: none;
+  cursor: pointer;
+  appearance: none;
+}
+.settingsRowLink:hover{
+  background: rgba(255, 255, 255, 0.03);
+}
+.settingsRowLink:active{
+  background: rgba(255, 255, 255, 0.045);
+}
+.settingsRowStatic{
+  cursor: default;
+}
+.settingsRowToggle{
+  cursor: default;
+}
+.settingsRowIco{
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(223, 231, 251, 0.44);
+  background: transparent;
+  border: 0;
+}
+.settingsRowIco svg{
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 .settingsRowBody{
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
 .settingsRowTitle{
-  color: rgba(247,250,255,0.95);
-  font-size: 14px;
-  font-weight: 820;
+  color: rgba(247, 250, 255, 0.94);
+  font-size: 15px;
+  font-weight: 560;
   letter-spacing: -0.01em;
 }
 .settingsRowSub{
-  color: rgba(223,231,251,0.56);
+  color: rgba(223, 231, 251, 0.46);
   font-size: 12.5px;
   line-height: 1.35;
 }
 .settingsRowChev{
   flex: 0 0 auto;
-  color: rgba(223,231,251,0.38);
-  font-size: 24px;
+  color: rgba(223, 231, 251, 0.28);
+  font-size: 20px;
   line-height: 1;
+  font-weight: 300;
 }
-.settingsStatusPill{
+.settingsSwitch{
   flex: 0 0 auto;
-  padding: 6px 10px;
+  appearance: none;
+  width: 44px;
+  height: 26px;
+  margin: 0;
+  border: 0;
   border-radius: 999px;
-  border: 1px solid rgba(35,213,171,0.30);
-  background: rgba(35,213,171,0.10);
-  color: rgba(215,255,244,0.92);
-  font-size: 12px;
-  font-weight: 850;
+  background: rgba(255, 255, 255, 0.14);
+  cursor: pointer;
+  position: relative;
+  transition: background 180ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.settingsSwitch::after{
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+  transition: transform 180ms ease;
+}
+.settingsSwitch:checked{
+  background: rgba(35, 213, 171, 0.82);
+}
+.settingsSwitch:checked::after{
+  transform: translateX(18px);
 }
 .settingsRowDanger .settingsRowTitle{
-  color: rgba(255,154,174,0.94);
+  color: rgba(255, 130, 145, 0.88);
 }
 .settingsRowDanger .settingsRowIco{
-  color: rgba(255,154,174,0.92);
-  background: rgba(255,77,109,0.10);
+  color: rgba(255, 130, 145, 0.72);
 }
-.settingsAppInfoRow{
-  min-height: 54px;
+.settingsSectionDanger{
+  margin-top: 8px;
+  padding-top: 8px;
+}
+.settingsFoot{
+  margin: 4px 4px 0;
+  color: rgba(223, 231, 251, 0.32);
+  font-size: 12px;
+  line-height: 1.4;
 }
 body[data-logged-in="true"] #settingsBtnSignIn{
   display: none;
 }
-body[data-logged-in="false"] #settingsBtnLogout{
+body[data-logged-in="false"] #settingsBtnLogout,
+body[data-logged-in="false"] #settingsBtnDeleteAccount,
+body[data-logged-in="false"] #settingsPrivacyRow,
+body[data-logged-in="false"] #btnSettingsNotifications,
+body[data-logged-in="false"] #btnSettingsMusicPrefs{
+  display: none;
+}
+body[data-logged-in="false"] .settingsSectionDanger{
   display: none;
 }
 

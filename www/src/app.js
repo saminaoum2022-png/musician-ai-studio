@@ -33,7 +33,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260620profileNoVoiceCta";
+const APP_BUILD = "20260620settingsRedesign";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3799,7 +3799,7 @@ function refreshSettingsMusicPrefsRow() {
   btn.hidden = !authed;
   const prefs = getUserMusicPreferenceLabels();
   if (!prefs.length) {
-    sub.textContent = "Personalize your For You feed, challenges, and recommendations.";
+    sub.textContent = "Personalize your For You feed";
     return;
   }
   if (prefs.length <= 4) {
@@ -3808,6 +3808,36 @@ function refreshSettingsMusicPrefsRow() {
   }
   sub.textContent = `${prefs.slice(0, 4).join(", ")} +${prefs.length - 4} more`;
 }
+function syncSettingsPrivacyToggle(isAuthed = Boolean(authSession?.user?.id || getSupabaseAuthToken())) {
+  const row = document.getElementById("settingsPrivacyRow");
+  const toggle = document.getElementById("settingsProfilePublicToggle");
+  if (row) row.hidden = !isAuthed;
+  if (!toggle) return;
+  toggle.checked = els.profileIsPublic ? els.profileIsPublic.checked : activeProfile.isPublic !== false;
+}
+function wireSettingsPrivacyToggle() {
+  const toggle = document.getElementById("settingsProfilePublicToggle");
+  if (!toggle || toggle.dataset.bound) return;
+  toggle.dataset.bound = "1";
+  toggle.addEventListener("change", async () => {
+    const isPublic = Boolean(toggle.checked);
+    if (els.profileIsPublic) els.profileIsPublic.checked = isPublic;
+    activeProfile.isPublic = isPublic;
+    saveProfile(activeProfile);
+    try {
+      if (authSession?.user?.id) {
+        await supabaseUpsertProfile({
+          ...activeProfile,
+          isPublic,
+        });
+      }
+    } catch (e) {
+      console.warn("[settings/privacy]", e);
+      try { showToast("Could not update privacy setting", { icon: "!", durationMs: 2600 }); } catch {}
+    }
+  });
+}
+wireSettingsPrivacyToggle();
 try {
   initMusicPreferences({
     getUserId: () => String(authSession?.user?.id || activeProfile?.id || "").trim(),
@@ -3832,6 +3862,12 @@ if (btnSettingsMusicPrefs) {
       return;
     }
     openMusicPreferencesEditor();
+  });
+}
+const btnSettingsNotifications = document.getElementById("btnSettingsNotifications");
+if (btnSettingsNotifications) {
+  btnSettingsNotifications.addEventListener("click", () => {
+    void refreshNotificationsCenter();
   });
 }
 bindProfileMusicStylesBtnOnce();
@@ -16732,6 +16768,7 @@ async function mergeActiveProfileFromCloud() {
   if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = nextProfile.voiceTimbre || "";
   if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = nextProfile.bio || "";
   if (els.profileIsPublic) els.profileIsPublic.checked = nextProfile.isPublic !== false;
+  try { syncSettingsPrivacyToggle(); } catch {}
   renderProfilePreviewFromInputs();
   return true;
 }
@@ -18064,6 +18101,7 @@ function renderAuthStatus() {
   if (els.settingsBtnLogout) els.settingsBtnLogout.hidden = !isAuthed;
   const settingsDelete = document.getElementById("settingsBtnDeleteAccount");
   if (settingsDelete) settingsDelete.hidden = !isAuthed;
+  try { syncSettingsPrivacyToggle(isAuthed); } catch {}
   try { refreshSettingsMusicPrefsRow(); } catch {}
   try { renderProfileMusicStylesInline(); } catch {}
   // Hide the Credits pill entirely when logged-out. A "0 credits" badge
@@ -41603,6 +41641,7 @@ if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = act
 if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = activeProfile.voiceTimbre || "";
 if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = activeProfile.bio || "";
 if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !== false;
+try { syncSettingsPrivacyToggle(); } catch {}
 renderProfilePreviewFromInputs();
 try {
   const stored = sessionStorage.getItem(PROFILE_SONGS_SEGMENT_KEY);

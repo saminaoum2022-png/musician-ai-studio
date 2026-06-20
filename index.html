@@ -2857,221 +2857,212 @@
         </details>
 
         <section class="settingsPage wide" data-route="settings">
-          <header class="settingsHeader">
-            <p class="settingsKicker">App settings</p>
-            <h2 class="settingsTitle">Settings</h2>
-            <p class="settingsLead">Account, creator tools, appearance, and support for NabadAi Music.</p>
+          <header class="settingsPageHead">
+            <a href="#/profile" class="settingsBack" aria-label="Back to Profile">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+            </a>
+            <div class="settingsPageHeadText">
+              <h1 class="settingsPageTitle">Settings</h1>
+              <p class="settingsPageSub">Manage your account, creator tools and preferences.</p>
+            </div>
           </header>
 
+          <span id="settingsAccountEmail" class="srOnly" aria-hidden="true">Guest mode</span>
+
           <div class="settingsFeed">
-          <section class="settingsGroup" aria-labelledby="settingsAccountTitle">
-            <h3 id="settingsAccountTitle" class="settingsGroupTitle">Account</h3>
-            <div class="settingsList">
-              <div class="settingsRow">
-                <span class="settingsRowIco" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
-                </span>
-                <span class="settingsRowBody">
-                  <span class="settingsRowTitle">Signed in as</span>
-                  <span id="settingsAccountEmail" class="settingsRowSub">Guest mode</span>
-                </span>
+            <section class="settingsSection" aria-labelledby="settingsAccountTitle">
+              <h2 id="settingsAccountTitle" class="settingsSectionLabel">Account</h2>
+              <div class="settingsList">
+                <a id="settingsEditProfileRow" class="settingsRow settingsRowLink" href="#/profile">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M6 4h12v16"/><path d="M8 9h8M8 13h5"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Edit profile</span>
+                    <span class="settingsRowSub">Name, bio, avatar, and public songs</span>
+                  </span>
+                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                </a>
+                <button class="settingsRow settingsRowLink" type="button" id="btnSettingsMusicPrefs" hidden>
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Music styles</span>
+                    <span class="settingsRowSub" id="settingsMusicPrefsSub">Personalize your For You feed</span>
+                  </span>
+                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                </button>
+                <button id="btnSettingsNotifications" class="settingsRow settingsRowLink" type="button">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Notifications</span>
+                    <span class="settingsRowSub">Activity and updates</span>
+                  </span>
+                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                </button>
+                <label id="settingsPrivacyRow" class="settingsRow settingsRowToggle" hidden>
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M12 3a5 5 0 0 0-5 5v2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-2V8a5 5 0 0 0-5-5Z"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Privacy</span>
+                    <span class="settingsRowSub">Public profile visible to others</span>
+                  </span>
+                  <input type="checkbox" id="settingsProfilePublicToggle" class="settingsSwitch" checked aria-label="Public profile" />
+                </label>
+                <button id="settingsBtnSignIn" class="settingsRow settingsRowLink" type="button">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5M15 12H3"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Sign in</span>
+                    <span class="settingsRowSub">Save your profile and credits</span>
+                  </span>
+                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                </button>
               </div>
-              <a id="settingsEditProfileRow" class="settingsRow settingsRowLink" href="#/profile">
-                <span class="settingsRowIco" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M4 20V4h16v16H4Z"/><path d="M8 9h8M8 13h5"/></svg>
-                </span>
-                <span class="settingsRowBody">
-                  <span class="settingsRowTitle">Edit public profile</span>
-                  <span class="settingsRowSub">Edit your name, bio, avatar, and public songs.</span>
-                </span>
-                <span class="settingsRowChev" aria-hidden="true">›</span>
-              </a>
-              <button id="settingsBtnSignIn" class="settingsRow settingsRowLink" type="button">
-                <span class="settingsRowIco" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5M15 12H3"/></svg>
-                </span>
-                <span class="settingsRowBody">
-                  <span class="settingsRowTitle">Sign in</span>
-                  <span class="settingsRowSub">Use Google to save and manage your profile.</span>
-                </span>
-                <span class="settingsRowChev" aria-hidden="true">›</span>
-              </button>
-              <button id="settingsBtnLogout" class="settingsRow settingsRowLink settingsRowDanger" type="button" hidden>
-                <span class="settingsRowIco" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
-                </span>
-                <span class="settingsRowBody">
-                  <span class="settingsRowTitle">Sign out</span>
-                  <span class="settingsRowSub">Remove this account session from the device.</span>
-                </span>
-              </button>
-              <button id="settingsBtnDeleteAccount" class="settingsRow settingsRowLink settingsRowDanger" type="button" hidden>
-                <span class="settingsRowIco" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
-                </span>
-                <span class="settingsRowBody">
-                  <span class="settingsRowTitle">Delete account</span>
-                  <span class="settingsRowSub">Permanently remove your account and server data. Cannot be undone.</span>
-                </span>
-              </button>
-            </div>
-          </section>
+            </section>
 
-          <section class="settingsGroup" aria-labelledby="settingsSubscriptionTitle">
-            <h3 id="settingsSubscriptionTitle" class="settingsGroupTitle">Credits &amp; plan</h3>
-            <div class="settingsList">
-              <div class="settingsRow">
-                <span class="settingsRowIco" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/></svg>
-                </span>
-                <span class="settingsRowBody">
-                  <span class="settingsRowTitle">Credits</span>
-                  <span class="settingsRowSub">Song generation uses credits. Subscriptions coming soon.</span>
-                </span>
+            <section class="settingsSection" aria-labelledby="settingsCreditsTitle">
+              <h2 id="settingsCreditsTitle" class="settingsSectionLabel">Credits &amp; plan</h2>
+              <div class="settingsList">
+                <a class="settingsRow settingsRowLink" href="#/credits">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Manage credits</span>
+                    <span class="settingsRowSub">Balance and activity</span>
+                  </span>
+                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                </a>
+                <a class="settingsRow settingsRowLink" href="#/credits">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M21 2l-2 2"/><path d="M3 2l2 2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><rect x="3" y="11" width="18" height="11" rx="2"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Redeem code</span>
+                    <span class="settingsRowSub">Enter a promo code</span>
+                  </span>
+                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                </a>
+                <div class="settingsRow settingsRowStatic">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h6"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Subscription</span>
+                    <span class="settingsRowSub">Coming soon</span>
+                  </span>
+                </div>
               </div>
-              <a class="settingsRow settingsRowLink" href="#/credits">
-                <span class="settingsRowIco" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/></svg>
-                </span>
-                <span class="settingsRowBody">
-                  <span class="settingsRowTitle">Manage credits</span>
-                  <span class="settingsRowSub">View balance, activity, and redeem promo codes.</span>
-                </span>
-                <span class="settingsRowChev" aria-hidden="true">›</span>
-              </a>
-            </div>
-          </section>
+            </section>
 
-          <section class="settingsGroup" aria-labelledby="settingsCreatorTitle">
-            <h3 id="settingsCreatorTitle" class="settingsGroupTitle">Creator tools</h3>
-            <div class="settingsList">
-              <a href="#/sounds" class="settingsRow settingsRowLink" data-route-link="sounds">
-                <span class="settingsRowIco" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M3 12c2 0 2-4 4-4s2 8 4 8 2-12 4-12 2 8 4 8 2-4 2-4"/></svg>
-                </span>
-                <span class="settingsRowBody">
-                  <span class="settingsRowTitle">Sounds</span>
-                  <span class="settingsRowSub">Loops and ambience for new generations.</span>
-                </span>
-                <span class="settingsRowChev" aria-hidden="true">›</span>
-              </a>
-              <a href="#/mentor" class="settingsRow settingsRowLink" data-route-link="mentor">
-                <span class="settingsRowIco" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M2.5 12h1.8M19.7 12H22"/><path d="M6 12c0-3.2 1.6-3.2 3.2 0s3.2 3.2 4.8 0 3.2-3.2 4.8 0"/></svg>
-                </span>
-                <span class="settingsRowBody">
-                  <span class="settingsRowTitle">Voice Lab</span>
-                  <span class="settingsRowSub">On-device voice scan and range labels.</span>
-                </span>
-                <span class="settingsRowChev" aria-hidden="true">›</span>
-              </a>
-            </div>
-          </section>
-
-          <section class="settingsGroup" aria-labelledby="settingsPrefsTitle">
-            <h3 id="settingsPrefsTitle" class="settingsGroupTitle">Preferences</h3>
-            <div class="settingsList">
-              <button class="settingsRow settingsRowLink" type="button" id="btnSettingsMusicPrefs" hidden>
-                <span class="settingsRowIco" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-                </span>
-                <span class="settingsRowBody">
-                  <span class="settingsRowTitle">Music styles</span>
-                  <span class="settingsRowSub" id="settingsMusicPrefsSub">Personalize your For You feed, challenges, and recommendations.</span>
-                </span>
-                <span class="settingsRowChev" aria-hidden="true">›</span>
-              </button>
-              <button class="settingsRow settingsRowLink" type="button" id="btnSettingsReplayHomeTour">
-                <span class="settingsRowIco" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="2.5"/></svg>
-                </span>
-                <span class="settingsRowBody">
-                  <span class="settingsRowTitle">Replay home tour</span>
-                  <span class="settingsRowSub" id="settingsHomeTourSub">Walk through Create, templates, Discover, and Profile again.</span>
-                </span>
-                <span class="settingsRowChev" aria-hidden="true">›</span>
-              </button>
-              <button class="settingsRow settingsRowLink" type="button" id="btnSettingsReplayPersonaTour">
-                <span class="settingsRowIco" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v3"/></svg>
-                </span>
-                <span class="settingsRowBody">
-                  <span class="settingsRowTitle">Replay Persona tour</span>
-                  <span class="settingsRowSub" id="settingsPersonaTourSub">Save your voice and use it when you generate · Mini tour v2.0</span>
-                </span>
-                <span class="settingsRowChev" aria-hidden="true">›</span>
-              </button>
-              <button class="settingsRow settingsRowLink" type="button" id="btnSettingsReplayOnboarding">
-                <span class="settingsRowIco" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.3-5.9"/><path d="M17 3v5h-5"/><path d="M20 12a8 8 0 0 1-13.3 5.9"/><path d="M7 21v-5H2"/></svg>
-                </span>
-                <span class="settingsRowBody">
-                  <span class="settingsRowTitle">Show introduction again</span>
-                  <span class="settingsRowSub">Replay the welcome screen and feature tour.</span>
-                </span>
-                <span class="settingsRowChev" aria-hidden="true">›</span>
-              </button>
-            </div>
-          </section>
-
-          <section class="settingsGroup" aria-labelledby="settingsSupportTitle">
-            <h3 id="settingsSupportTitle" class="settingsGroupTitle">Support</h3>
-            <div class="settingsList">
-              <a id="settingsHelpRow" class="settingsRow settingsRowLink" href="mailto:help@nabadai.com?subject=NabadAi%20Music%20%E2%80%94%20Help">
-                <span class="settingsRowIco" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M12 18h.01"/><path d="M9.1 9a3 3 0 1 1 5.8 1c-.6 1.2-1.9 1.7-2.5 2.7-.3.5-.4.9-.4 1.3"/><circle cx="12" cy="12" r="10"/></svg>
-                </span>
-                <span class="settingsRowBody">
-                  <span class="settingsRowTitle">Help &amp; support</span>
-                  <span class="settingsRowSub">Email <strong>help@nabadai.com</strong> — account, billing, or how to use the app.</span>
-                </span>
-                <span class="settingsRowChev" aria-hidden="true">›</span>
-              </a>
-              <a id="settingsReportRow" class="settingsRow settingsRowLink" href="mailto:support@nabadai.com?subject=NabadAi%20Music%20%E2%80%94%20Problem%20report">
-                <span class="settingsRowIco" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
-                </span>
-                <span class="settingsRowBody">
-                  <span class="settingsRowTitle">Report a problem</span>
-                  <span class="settingsRowSub">Email <strong>support@nabadai.com</strong> — describe the bug and what you expected.</span>
-                </span>
-                <span class="settingsRowChev" aria-hidden="true">›</span>
-              </a>
-            </div>
-          </section>
-
-          <section class="settingsGroup" aria-labelledby="settingsLegalTitle">
-            <h3 id="settingsLegalTitle" class="settingsGroupTitle">Legal & app info</h3>
-            <div class="settingsList">
-              <button class="settingsRow settingsRowLink" type="button" data-legal-link="terms">
-                <span class="settingsRowIco" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M6 4h12v16H6z"/><path d="M8 8h8M8 12h6"/></svg>
-                </span>
-                <span class="settingsRowBody">
-                  <span class="settingsRowTitle">Terms of Service</span>
-                  <span class="settingsRowSub">Rules for using NabadAi Music.</span>
-                </span>
-                <span class="settingsRowChev" aria-hidden="true">›</span>
-              </button>
-              <button class="settingsRow settingsRowLink" type="button" data-legal-link="privacy">
-                <span class="settingsRowIco" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M12 3a5 5 0 0 0-5 5v2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-2V8a5 5 0 0 0-5-5Z"/></svg>
-                </span>
-                <span class="settingsRowBody">
-                  <span class="settingsRowTitle">Privacy Policy</span>
-                  <span class="settingsRowSub">How we collect and use your data.</span>
-                </span>
-                <span class="settingsRowChev" aria-hidden="true">›</span>
-              </button>
-              <div class="settingsRow settingsAppInfoRow">
-                <span class="settingsRowBody">
-                  <span class="settingsRowTitle">App version</span>
-                  <span id="envBadge" class="settingsRowSub">Build detecting...</span>
-                </span>
+            <section class="settingsSection" aria-labelledby="settingsCreatorTitle">
+              <h2 id="settingsCreatorTitle" class="settingsSectionLabel">Creator tools</h2>
+              <div class="settingsList">
+                <a href="#/sounds" class="settingsRow settingsRowLink" data-route-link="sounds">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M3 12c2 0 2-4 4-4s2 8 4 8 2-12 4-12 2 8 4 8 2-4 2-4"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Sounds</span>
+                    <span class="settingsRowSub">Loops and ambience</span>
+                  </span>
+                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                </a>
+                <a href="#/mentor" class="settingsRow settingsRowLink" data-route-link="mentor">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M2.5 12h1.8M19.7 12H22"/><path d="M6 12c0-3.2 1.6-3.2 3.2 0s3.2 3.2 4.8 0 3.2-3.2 4.8 0"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Voice Lab</span>
+                    <span class="settingsRowSub">Voice scan and range labels</span>
+                  </span>
+                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                </a>
+                <a href="#/profile?seg=all" class="settingsRow settingsRowLink">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Generated songs</span>
+                    <span class="settingsRowSub">Your library of creations</span>
+                  </span>
+                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                </a>
               </div>
-            </div>
-          </section>
+            </section>
+
+            <section class="settingsSection" aria-labelledby="settingsSupportTitle">
+              <h2 id="settingsSupportTitle" class="settingsSectionLabel">Support</h2>
+              <div class="settingsList">
+                <a id="settingsHelpRow" class="settingsRow settingsRowLink" href="mailto:help@nabadai.com?subject=NabadAi%20Music%20%E2%80%94%20Help">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 1 1 5.8 1c-.6 1.2-1.9 1.7-2.5 2.7-.3.5-.4.9-.4 1.3"/><path d="M12 17h.01"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Help center</span>
+                    <span class="settingsRowSub">Guides and account help</span>
+                  </span>
+                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                </a>
+                <button class="settingsRow settingsRowLink" type="button" data-legal-link="terms">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M6 4h12v16H6z"/><path d="M8 8h8M8 12h6"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Terms &amp; Privacy</span>
+                    <span class="settingsRowSub">Terms of Service and Privacy Policy</span>
+                  </span>
+                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                </button>
+                <a id="settingsReportRow" class="settingsRow settingsRowLink" href="mailto:support@nabadai.com?subject=NabadAi%20Music%20%E2%80%94%20Problem%20report">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2Z"/><path d="m22 6-10 7L2 6"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Contact support</span>
+                    <span class="settingsRowSub">Report a problem or get help</span>
+                  </span>
+                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                </a>
+              </div>
+            </section>
+
+            <section class="settingsSection settingsSectionDanger" aria-labelledby="settingsDangerTitle">
+              <h2 id="settingsDangerTitle" class="settingsSectionLabel">Danger zone</h2>
+              <div class="settingsList">
+                <button id="settingsBtnLogout" class="settingsRow settingsRowLink settingsRowDanger" type="button" hidden>
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Sign out</span>
+                  </span>
+                </button>
+                <button id="settingsBtnDeleteAccount" class="settingsRow settingsRowLink settingsRowDanger" type="button" hidden>
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Delete account</span>
+                  </span>
+                </button>
+              </div>
+            </section>
+
+            <p class="settingsFoot"><span id="envBadge">Build detecting...</span></p>
           </div>
+
+          <button type="button" id="btnSettingsReplayHomeTour" hidden aria-hidden="true"></button>
+          <button type="button" id="btnSettingsReplayPersonaTour" hidden aria-hidden="true"></button>
+          <button type="button" id="btnSettingsReplayOnboarding" hidden aria-hidden="true"></button>
+          <span id="settingsHomeTourSub" hidden aria-hidden="true"></span>
+          <span id="settingsPersonaTourSub" hidden aria-hidden="true"></span>
         </section>
       </main>
       </div>

@@ -6476,6 +6476,200 @@ function discoverFeedFilterTracks(tab, tracks) {
   return discoverCommunityPicksTracks(tracks);
 }
 
+const DISCOVER_TEMPLATES_SORT_KEY = "nabad_discover_templates_sort";
+const DISCOVER_TEMPLATES_FILTER_KEY = "nabad_discover_templates_filter";
+const DISCOVER_TEMPLATE_FILTERS = [
+  { id: "all", label: "All Templates", emoji: "✦" },
+  { id: "birthday", label: "Birthday", emoji: "🎂", tokens: ["birthday", "bday", "happy birthday"] },
+  { id: "voice-note", label: "Voice Note", emoji: "🎙", tokens: ["voice note", "voice-note", "voice note flip", "hum", "voice clip"] },
+  { id: "love", label: "Love Song", emoji: "💜", tokens: ["love", "anniversary", "wedding", "first dance", "romantic", "couple", "mama", "mama's"] },
+  { id: "photo", label: "Photo Song", emoji: "📸", tokens: ["photo", "last photo", "picture", "snapshot"] },
+  { id: "sana-helwa", label: "Sana Helwa", emoji: "🥁", tokens: ["sana helwa", "dabke", "سنة حلوة"] },
+  { id: "worldcup", label: "World Cup", emoji: "🏆", tokens: ["world cup", "worldcup", "anthem", "fifa"] },
+  { id: "more", label: "More", emoji: "···", tokens: null },
+];
+let _discoverTemplatesSort = (() => {
+  try {
+    const saved = String(sessionStorage.getItem(DISCOVER_TEMPLATES_SORT_KEY) || "").trim();
+    if (["popular", "newest", "trending"].includes(saved)) return saved;
+  } catch {}
+  return "popular";
+})();
+let _discoverTemplatesFilter = (() => {
+  try {
+    const saved = String(sessionStorage.getItem(DISCOVER_TEMPLATES_FILTER_KEY) || "").trim();
+    if (DISCOVER_TEMPLATE_FILTERS.some((f) => f.id === saved)) return saved;
+  } catch {}
+  return "all";
+})();
+
+function discoverTemplateSearchHaystack(track) {
+  const tpl = templateMetaForTrack(track);
+  const ch = challengeMetaForTrack(track);
+  return [
+    tpl?.searchTemplateTitle,
+    tpl?.searchTemplateId,
+    ch?.title,
+    ch?.id,
+    track?.title,
+  ].map((x) => String(x || "").toLowerCase()).join(" ");
+}
+
+function discoverTrackMatchesTemplateFilterTokens(track, tokens) {
+  const hay = discoverTemplateSearchHaystack(track);
+  return (tokens || []).some((tok) => hay.includes(String(tok || "").toLowerCase()));
+}
+
+function discoverTrackMatchesTemplateFilter(track, filterId) {
+  if (filterId === "all") return true;
+  if (filterId === "more") {
+    const primary = DISCOVER_TEMPLATE_FILTERS.filter((f) => f.id !== "all" && f.id !== "more" && f.tokens);
+    return !primary.some((f) => discoverTrackMatchesTemplateFilterTokens(track, f.tokens));
+  }
+  const filter = DISCOVER_TEMPLATE_FILTERS.find((f) => f.id === filterId);
+  if (!filter?.tokens) return true;
+  return discoverTrackMatchesTemplateFilterTokens(track, filter.tokens);
+}
+
+function discoverTemplatesBaseTracks(tracks) {
+  return discoverFeedSortByPlays(tracks).filter((t) => templateMetaForTrack(t));
+}
+
+function discoverTemplatesSortTracks(tracks, sort = _discoverTemplatesSort) {
+  const rows = [...(tracks || [])];
+  if (sort === "newest") {
+    return rows.sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
+  }
+  if (sort === "trending") {
+    const now = Date.now();
+    return rows.sort((a, b) => {
+      const ageA = Math.max(1, now - Number(a.ts || now));
+      const ageB = Math.max(1, now - Number(b.ts || now));
+      const playsA = Number(a.playCount) || 0;
+      const playsB = Number(b.playCount) || 0;
+      const scoreA = playsA * 1.4 + (86400000 / ageA) * 120;
+      const scoreB = playsB * 1.4 + (86400000 / ageB) * 120;
+      return scoreB - scoreA;
+    });
+  }
+  return rows.sort((a, b) => (Number(b.playCount) || 0) - (Number(a.playCount) || 0));
+}
+
+function discoverTemplatesFilteredTracks(tracks, filterId = _discoverTemplatesFilter, sort = _discoverTemplatesSort) {
+  const base = discoverTemplatesBaseTracks(tracks).filter((t) => discoverTrackMatchesTemplateFilter(t, filterId));
+  return discoverTemplatesSortTracks(base, sort);
+}
+
+function discoverTrackDurationSec(track) {
+  const m = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  const candidates = [
+    m.durationSec,
+    m.duration_sec,
+    m.audioDuration,
+    m.audioDurationSec,
+    m.lengthSec,
+    track?.durationSec,
+    track?.duration,
+  ];
+  for (const c of candidates) {
+    const n = normalizeAudioDurationSec(c);
+    if (n > 0) return n;
+  }
+  return 0;
+}
+
+function discoverCreatorVerifiedBadgeHtml(prof) {
+  if (!isPublicProfileVerifiedForDisplay(prof)) return "";
+  return `<span class="discoverTemplatesVerified" aria-label="Verified creator"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 1.5 14.6 4l3.5-.4.7 3.5 3 1.9-1.6 3.2 1.6 3.2-3 1.9-.7 3.5L14.6 20 12 22.5 9.4 20l-3.5.4-.7-3.5-3-1.9 1.6-3.2L2.2 8.6l3-1.9.7-3.5L9.4 4 12 1.5Z"/><path fill="#0a0c12" d="m10.6 14.6-2.3-2.3 1.3-1.3 1 1 3.4-3.4 1.3 1.3-4.7 4.7Z"/></svg></span>`;
+}
+
+function discoverTemplatesMetricsHtml(t) {
+  const plays = Math.max(0, Number(t.playCount) || 0);
+  const likes = discoverHubReactionCount(t);
+  const durSec = discoverTrackDurationSec(t);
+  const bits = [];
+  if (plays > 0) bits.push(`${formatStatCount(plays)} Plays`);
+  if (likes != null && likes > 0) bits.push(`${formatStatCount(likes)} Likes`);
+  if (durSec > 0) bits.push(formatTime(durSec));
+  if (!bits.length) return `<span class="discoverTemplatesMetrics discoverTemplatesMetrics--new">New</span>`;
+  return `<span class="discoverTemplatesMetrics">${bits.map((b) => `<span>${escapeHtml(b)}</span>`).join("")}</span>`;
+}
+
+function discoverTemplatesShowcaseCardHtml(t, profMap, idx = 0) {
+  const prof = resolveProfileForFeedCreator(t.userId, profMap);
+  const handle = String(prof?.username || "").trim();
+  const byLine = handle ? `@${handle}` : "Creator";
+  const title = String(t.title || "Untitled").trim();
+  const art = trackCoverArtForFeed(t);
+  const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
+  const origin = discoverTemplateCardOriginText(t);
+  const tallClass = idx % 3 === 0 ? " discoverTemplatesCard--tall" : idx % 3 === 2 ? " discoverTemplatesCard--wide" : "";
+  return `
+    <button type="button" class="discoverTemplatesCard${tallClass}" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
+      <span class="discoverTemplatesCover">
+        <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
+        <span class="discoverTemplatesCoverShade" aria-hidden="true"></span>
+        <span class="discoverTemplatesPlay" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M8 5.5v13l11-6.5-11-6.5Z"/></svg></span>
+      </span>
+      <span class="discoverTemplatesBody">
+        <strong class="discoverTemplatesTitle">${escapeHtml(title)}</strong>
+        <span class="discoverTemplatesCreator">
+          <span class="discoverTemplatesBy">${escapeHtml(byLine)}</span>
+          ${discoverCreatorVerifiedBadgeHtml(prof)}
+        </span>
+        ${origin ? `<span class="discoverTemplatesOrigin" title="${escapeHtml(origin)}">${escapeHtml(origin)}</span>` : ""}
+        ${discoverTemplatesMetricsHtml(t)}
+      </span>
+    </button>`;
+}
+
+function discoverTemplatesIntroHtml() {
+  const sort = _discoverTemplatesSort;
+  return `
+    <header class="discoverTemplatesIntro">
+      <div class="discoverTemplatesIntroCopy">
+        <h3 class="discoverTemplatesIntroTitle">Songs created with templates</h3>
+        <p class="discoverTemplatesIntroSub">Explore what the community is creating with Nabad templates.</p>
+      </div>
+      <label class="discoverTemplatesSort">
+        <span class="discoverTemplatesSortLabel">Sort</span>
+        <select data-discover-templates-sort aria-label="Sort template songs">
+          <option value="popular"${sort === "popular" ? " selected" : ""}>Popular</option>
+          <option value="newest"${sort === "newest" ? " selected" : ""}>Newest</option>
+          <option value="trending"${sort === "trending" ? " selected" : ""}>Trending</option>
+        </select>
+      </label>
+    </header>`;
+}
+
+function discoverTemplatesFilterChipsHtml() {
+  const chips = DISCOVER_TEMPLATE_FILTERS.map((f) => {
+    const active = f.id === _discoverTemplatesFilter;
+    return `
+      <button type="button" class="discoverTemplatesChip${active ? " is-active" : ""}" data-discover-templates-filter="${escapeHtml(f.id)}" aria-pressed="${active ? "true" : "false"}">
+        <span class="discoverTemplatesChipIcon" aria-hidden="true">${escapeHtml(f.emoji)}</span>
+        <span class="discoverTemplatesChipLabel">${escapeHtml(f.label)}</span>
+      </button>`;
+  }).join("");
+  return `
+    <div class="discoverTemplatesFilters" aria-label="Template categories">
+      <div class="discoverTemplatesFiltersTrack">${chips}</div>
+    </div>`;
+}
+
+function renderDiscoverTemplatesTab(tracks, profMap) {
+  const filtered = discoverTemplatesFilteredTracks(tracks);
+  const grid = filtered.length
+    ? `<div class="discoverTemplatesGrid" role="list">${filtered.map((t, i) => discoverTemplatesShowcaseCardHtml(t, profMap, i)).join("")}</div>`
+    : `<p class="discoverHubQuietNote discoverFeedEmpty">No songs match this template filter yet — try another chip or publish from Create.</p>`;
+  return `
+    <section class="discoverTemplatesTab" aria-label="Songs created with templates">
+      ${discoverTemplatesIntroHtml()}
+      ${discoverTemplatesFilterChipsHtml()}
+      ${grid}
+    </section>`;
+}
+
 function discoverFeedSectionHeadHtml(title, actionHtml = "") {
   const action = actionHtml
     ? `<div class="discoverFeedSectionAction">${actionHtml}</div>`
@@ -6624,17 +6818,15 @@ function renderDiscoverFeedTabPanel(tab, tracks, profMap) {
     const blocks = DISCOVER_LIVE_CHALLENGES.map((c) => discoverFeedChallengeBlockHtml(c, tracks, profMap)).join("");
     return blocks || `<p class="discoverHubQuietNote discoverFeedEmpty">Challenge songs will appear as creators join live events.</p>`;
   }
+  if (tab === "templates") {
+    return renderDiscoverTemplatesTab(tracks, profMap);
+  }
   const filtered = discoverFeedFilterTracks(tab, tracks);
   if (!filtered.length) {
-    const msg = tab === "templates"
-      ? "Songs created with templates will show here — content first, tools second."
-      : tab === "remixes"
-        ? "Remixes and mashups from the community will land here."
-        : "Public songs will appear here as creators publish.";
+    const msg = tab === "remixes"
+      ? "Remixes and mashups from the community will land here."
+      : "Public songs will appear here as creators publish.";
     return `<p class="discoverHubQuietNote discoverFeedEmpty">${escapeHtml(msg)}</p>`;
-  }
-  if (tab === "templates") {
-    return `<div class="discoverFeedTemplateGrid">${filtered.map((t) => discoverFeedTemplateCardHtml(t, profMap)).join("")}</div>`;
   }
   return `<div class="discoverFeedListStack">${filtered.map((t) => discoverFeedSongRowHtml(t, profMap)).join("")}</div>`;
 }
@@ -7150,7 +7342,32 @@ function bindDiscoverHubV1Once() {
   const root = document.getElementById("discoveryMainContent");
   if (!root || root.dataset.boundDiscoverHubV1 === "1") return;
   root.dataset.boundDiscoverHubV1 = "1";
+  root.addEventListener("change", (e) => {
+    const sortSel = e.target?.closest?.("[data-discover-templates-sort]");
+    if (!sortSel || !root.contains(sortSel)) return;
+    const next = String(sortSel.value || "").trim();
+    if (!["popular", "newest", "trending"].includes(next) || next === _discoverTemplatesSort) return;
+    haptic("light");
+    _discoverTemplatesSort = next;
+    try { sessionStorage.setItem(DISCOVER_TEMPLATES_SORT_KEY, next); } catch {}
+    if (_discoverFeedTab === "templates") {
+      renderDiscoverFeed(_discoveryFeedTracksRaw || [], _discoveryLastProfMap || new Map(), "templates");
+    }
+  });
   root.addEventListener("click", (e) => {
+    const filterChip = e.target?.closest?.("[data-discover-templates-filter]");
+    if (filterChip && root.contains(filterChip)) {
+      e.preventDefault();
+      const next = String(filterChip.getAttribute("data-discover-templates-filter") || "").trim();
+      if (!next || next === _discoverTemplatesFilter) return;
+      haptic("light");
+      _discoverTemplatesFilter = next;
+      try { sessionStorage.setItem(DISCOVER_TEMPLATES_FILTER_KEY, next); } catch {}
+      if (_discoverFeedTab === "templates") {
+        renderDiscoverFeed(_discoveryFeedTracksRaw || [], _discoveryLastProfMap || new Map(), "templates");
+      }
+      return;
+    }
     const viewAllBtn = e.target?.closest?.("[data-discover-challenge-view-all]");
     if (viewAllBtn && root.contains(viewAllBtn)) {
       e.preventDefault();

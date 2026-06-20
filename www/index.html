@@ -2305,6 +2305,21 @@
               </div>
               <p id="profileIdentityLine" class="profileIdentityLine" hidden aria-live="polite"></p>
 
+              <div class="profileStatsRow" id="profileStatsPills" aria-live="polite" hidden>
+                <div class="profileStatCol" data-stat="songs">
+                  <strong class="profileStatValue" id="profileStatPillSongsValue">0</strong>
+                  <span class="profileStatLabel">Songs</span>
+                </div>
+                <div class="profileStatCol" data-stat="plays" id="profileStatPillPublicWrap">
+                  <strong class="profileStatValue" id="profileStatPillPublicValue">0</strong>
+                  <span class="profileStatLabel">Plays</span>
+                </div>
+                <div class="profileStatCol" data-stat="followers" title="Followers arrive with social profiles.">
+                  <strong class="profileStatValue" id="profileStatPillLikesValue">0</strong>
+                  <span class="profileStatLabel">Followers</span>
+                </div>
+              </div>
+
               <!-- Voice timbre chip retired — music styles show above instead. -->
               <div class="profileAuraVoiceChipSlot srOnly" id="profileAuraVoiceChipSlot" hidden aria-hidden="true">
                 <select id="profilePreviewTimbreInput" class="profileAuraVoiceChip" disabled aria-label="Voice range">
@@ -2358,21 +2373,6 @@
               <p id="profilePersonaInlineChip" class="profilePersonaInlineChip profileLegacyChip" style="display:none" aria-live="polite"></p>
               <p id="profilePreviewGenres" class="profileGenreWash profileLegacyChip" style="display:none" aria-label="Genres"></p>
 
-              <!-- Stats bar: creator-focused public profile counters. Plays/followers wire to backend later. -->
-              <div class="profileStatsPills" id="profileStatsPills" aria-live="polite" hidden>
-                <div class="profileStatPill profileStatPill--songs" data-stat="songs">
-                  <strong class="profileStatPillValue" id="profileStatPillSongsValue">0</strong>
-                  <span class="profileStatPillLabel">Songs</span>
-                </div>
-                <div class="profileStatPill profileStatPill--plays" id="profileStatPillPublicWrap" data-stat="plays">
-                  <strong class="profileStatPillValue" id="profileStatPillPublicValue">0</strong>
-                  <span class="profileStatPillLabel">Plays</span>
-                </div>
-                <div class="profileStatPill profileStatPill--followers" data-stat="followers" title="Followers arrive with social profiles.">
-                  <strong class="profileStatPillValue" id="profileStatPillLikesValue">0</strong>
-                  <span class="profileStatPillLabel">Followers</span>
-                </div>
-              </div>
               <!-- Legacy "—" line kept off-screen for the few callers that
                    still read it (accessibility / sr-only fallback). The
                    visible stats now live in the pills above. -->

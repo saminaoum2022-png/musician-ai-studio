@@ -33,7 +33,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260620discoverPlayCalm";
+const APP_BUILD = "20260620profileStatsRow";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -28553,7 +28553,6 @@ function renderProfileOwnStats() {
   }
 
   if (els.profileStatsPills) {
-    els.profileStatsPills.classList.toggle("profileStatsPills--hubOn", HUB_FEATURE_ENABLED);
     els.profileStatsPills.hidden = false;
   }
   if (els.profileStatPillSongsValue) {

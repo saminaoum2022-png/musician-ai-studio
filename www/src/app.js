@@ -33,7 +33,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260620forYouChallenges";
+const APP_BUILD = "20260620profileMusicStyles";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -829,8 +829,8 @@ const els = {
   profileAuraNameRow: document.getElementById("profileAuraNameRow"),
   profileNabadCertBadge: document.getElementById("profileNabadCertBadge"),
   profileNabadCertCheck: document.getElementById("profileNabadCertCheck"),
-  profileVoiceTimbreInline: document.getElementById("profileVoiceTimbreInline"),
-  profileVoiceTimbreInlineLabel: document.getElementById("profileVoiceTimbreInlineLabel"),
+  profileMusicStylesInline: document.getElementById("profileMusicStylesInline"),
+  profileMusicStylesBtn: document.getElementById("profileMusicStylesBtn"),
   profileIdentityLine: document.getElementById("profileIdentityLine"),
   profileHeroBio: document.getElementById("profileHeroBio"),
   // Spotify-x-Nabad redesign nodes
@@ -3763,6 +3763,7 @@ async function saveProfileMusicPreferencesGenres(genres) {
   };
   saveProfile(activeProfile);
   try { refreshSettingsMusicPrefsRow(); } catch {}
+  try { renderProfileMusicStylesInline(); } catch {}
   try {
     await supabaseUpsertProfile({
       id: uid,
@@ -3833,6 +3834,7 @@ if (btnSettingsMusicPrefs) {
     openMusicPreferencesEditor();
   });
 }
+bindProfileMusicStylesBtnOnce();
 void loadAppTourModule()
   .then((m) => {
     m.initAppTour({
@@ -15626,19 +15628,10 @@ function renderProfileAuraVoiceChip() {
   const select = els.profilePreviewTimbreInput;
   const btn = els.profilePreviewVoiceChipBtn;
   if (!slot || !select || !btn) return;
-  const editing = Boolean(profileEditing);
-  // The playable voice-note chip is retired. In edit mode we still
-  // show the timbre <select> so users can pick their voice range
-  // (it surfaces next to the @handle in view mode). In view mode
-  // the whole slot collapses — timbre is read from #profileVoiceTimbreInline.
   btn.style.display = "none";
-  if (editing) {
-    select.style.display = "";
-    slot.style.display = "";
-  } else {
-    select.style.display = "none";
-    slot.style.display = "none";
-  }
+  select.style.display = "none";
+  slot.style.display = "none";
+  slot.hidden = true;
 }
 
 /** Toggle play/pause for the OWN-profile calling card preview. Wires
@@ -18072,6 +18065,7 @@ function renderAuthStatus() {
   const settingsDelete = document.getElementById("settingsBtnDeleteAccount");
   if (settingsDelete) settingsDelete.hidden = !isAuthed;
   try { refreshSettingsMusicPrefsRow(); } catch {}
+  try { renderProfileMusicStylesInline(); } catch {}
   // Hide the Credits pill entirely when logged-out. A "0 credits" badge
   // on a guest profile is meaningless and was where the previous user's
   // balance kept leaking through (e.g. "326" after Logout). The pill
@@ -28308,7 +28302,7 @@ function setProfileEditing(on) {
     try { renderProfileIdentityLine(); } catch {}
   }
   try { renderProfileNabadCertBadge(); } catch {}
-  try { renderProfileVoiceTimbreInline(); } catch {}
+  try { renderProfileMusicStylesInline(); } catch {}
 }
 
 /** Show the soft "pick a username" banner when the current user is
@@ -28744,8 +28738,7 @@ function shouldShowProfileHeaderSkeleton() {
 }
 
 /* =================================================================
- *  Single identity line — persona when set. Voice timbre shows under
- *  the @handle in #profileVoiceTimbreInline.
+ *  Single identity line — persona when set. Music styles under @handle.
  * ================================================================= */
 function renderProfileIdentityLine() {
   const el = els.profileIdentityLine;
@@ -28952,35 +28945,57 @@ function renderProfileNabadCertBadge() {
 }
 
 
-/** Pretty label for `profiles.voice_timbre` slug (e.g. mezzo_soprano → Mezzo Soprano). */
-function formatVoiceTimbreLabel(raw) {
-  const slug = String(raw || "").trim().toLowerCase();
-  if (!slug) return "";
-  return slug.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-/** View-mode timbre next to the @handle (hidden while editing or unset). */
-function renderProfileVoiceTimbreInline() {
-  const wrap = els.profileVoiceTimbreInline;
-  const labelEl = els.profileVoiceTimbreInlineLabel;
-  if (!wrap || !labelEl) return;
+/* =================================================================
+ *  Music styles under @handle — dot-separated editorial line.
+ * ================================================================= */
+function renderProfileMusicStylesInline(profile = activeProfile) {
+  const wrap = els.profileMusicStylesInline;
+  const btn = els.profileMusicStylesBtn;
+  if (!wrap || !btn) return;
   const signedIn = Boolean(authSession?.user?.id);
+  const isOwn = signedIn && String(profile?.id || "") === String(authSession?.user?.id || "");
   if (!signedIn || profileEditing) {
     wrap.hidden = true;
-    labelEl.textContent = "";
+    btn.textContent = "";
     wrap.setAttribute("aria-hidden", "true");
     return;
   }
-  const pretty = formatVoiceTimbreLabel(activeProfile?.voiceTimbre);
-  if (!pretty) {
-    wrap.hidden = true;
-    labelEl.textContent = "";
-    wrap.setAttribute("aria-hidden", "true");
+  const prefs = parseMusicPreferencesFromProfile(profile);
+  if (!prefs.length) {
+    if (!isOwn) {
+      wrap.hidden = true;
+      btn.textContent = "";
+      wrap.setAttribute("aria-hidden", "true");
+      return;
+    }
+    wrap.hidden = false;
+    btn.textContent = "Add music styles";
+    btn.classList.add("profileMusicStylesLine--empty");
+    btn.setAttribute("aria-label", "Add music styles");
+    wrap.setAttribute("aria-hidden", "false");
     return;
   }
+  btn.classList.remove("profileMusicStylesLine--empty");
+  const line = prefs.length <= 5
+    ? prefs.join(" · ")
+    : `${prefs.slice(0, 4).join(" · ")} · +${prefs.length - 4}`;
+  btn.textContent = line;
+  btn.setAttribute("aria-label", isOwn ? `Music styles: ${line}. Tap to edit.` : `Music styles: ${line}`);
   wrap.hidden = false;
-  labelEl.textContent = pretty;
   wrap.setAttribute("aria-hidden", "false");
+}
+
+function bindProfileMusicStylesBtnOnce() {
+  const btn = els.profileMusicStylesBtn;
+  if (!btn || btn.dataset.boundMusicStyles === "1") return;
+  btn.dataset.boundMusicStyles = "1";
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (!authSession?.user?.id) return;
+    if (String(activeProfile?.id || "") !== String(authSession.user.id)) return;
+    try { haptic("light"); } catch {}
+    openMusicPreferencesEditor();
+  });
 }
 
 function renderProfilePreviewFromInputs() {
@@ -29032,7 +29047,7 @@ function renderProfilePreviewFromInputs() {
     els.authLoggedInEmailInline.style.display = "none";
   }
   renderProfileNabadCertBadge();
-  try { renderProfileVoiceTimbreInline(); } catch {}
+  try { renderProfileMusicStylesInline(); } catch {}
   try { syncMobileTabbarProfileAvatar(); } catch {}
 }
 
@@ -29650,7 +29665,7 @@ function renderProfileLibraryPublicOnLinkSection() {
   renderProfileOwnStats();
   renderProfileLiquidPulse(rows);
   renderProfileIdentityLine();
-  try { renderProfileVoiceTimbreInline(); } catch {}
+  try { renderProfileMusicStylesInline(); } catch {}
   renderProfileHeroBio();
   renderProfileHero(rows);
   renderProfileActionRow(rows);
@@ -29803,7 +29818,7 @@ function renderProfileHubShared() {
   // painted before the scrollable music sections.
   renderProfileLiquidPulse(items);
   renderProfileIdentityLine();
-  try { renderProfileVoiceTimbreInline(); } catch {}
+  try { renderProfileMusicStylesInline(); } catch {}
   renderProfileHeroBio();
   renderProfileHero(items);
   renderProfileActionRow(items);

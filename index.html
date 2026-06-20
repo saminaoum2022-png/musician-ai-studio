@@ -2300,18 +2300,13 @@
                 </span>
                 <span id="profilePreviewGenderIcon" class="profilePreviewGenderIcon profileAuraGender" hidden aria-hidden="true"></span>
               </div>
-              <div id="profileVoiceTimbreInline" class="profileVoiceTimbreInline" hidden aria-hidden="true">
-                <span id="profileVoiceTimbreInlineLabel" class="profileVoiceTimbreInlineLabel"></span>
+              <div id="profileMusicStylesInline" class="profileMusicStylesInline" hidden aria-hidden="true">
+                <button type="button" id="profileMusicStylesBtn" class="profileMusicStylesLine" aria-label="Music styles"></button>
               </div>
               <p id="profileIdentityLine" class="profileIdentityLine" hidden aria-live="polite"></p>
 
-              <!-- The voice chip is now context-aware. In edit mode it
-                   shows the timbre dropdown. In view mode it morphs into
-                   either "▶ Voice · X" (when a calling card exists,
-                   plays it) or "+ Add voice note" (own profile, no card,
-                   opens recorder). renderProfileAuraVoiceChip() owns
-                   the toggling. -->
-              <div class="profileAuraVoiceChipSlot" id="profileAuraVoiceChipSlot">
+              <!-- Voice timbre chip retired — music styles show above instead. -->
+              <div class="profileAuraVoiceChipSlot srOnly" id="profileAuraVoiceChipSlot" hidden aria-hidden="true">
                 <select id="profilePreviewTimbreInput" class="profileAuraVoiceChip" disabled aria-label="Voice range">
                   <option value="" selected>Voice · not set</option>
                   <option value="bass">Voice · Bass</option>

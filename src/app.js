@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260620topWeekFix";
+const APP_BUILD = "20260620topWeekDropdown";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2825,7 +2825,6 @@ function syncRoutePanelVisibility(wanted) {
     const link = a.getAttribute("data-route-link");
     const active = link === route
       || (route === "discover-playlist" && link === "discover")
-      || (route === "discover-weekly-chart" && link === "discover")
       || (route === "generate" && link === "challenges")
       || (route === "mashup" && link === "challenges")
       || (route === "vocal" && link === "challenges");
@@ -2871,7 +2870,7 @@ function invalidateInFlightRouteFeedWork(leavingRoute) {
 function tabBarRouteKey(route = "") {
   const r = String(route || "").trim();
   if (r === "generate" || r === "mashup" || r === "vocal") return "challenges";
-  if (r === "discover-playlist" || r === "discover-weekly-chart") return "discover";
+  if (r === "discover-playlist") return "discover";
   return r;
 }
 
@@ -2879,7 +2878,7 @@ function previewRouteFromHash(hash = "") {
   const raw = String(hash || "").replace(/^#\/?/, "");
   let route = raw.split(/[?#&]/)[0].trim();
   if (/^u\//.test(route)) return "user";
-  if (route === "search" || /^discover\/playlist\//i.test(route) || route === "discover/top-week") return "discover";
+  if (route === "search" || /^discover\/playlist\//i.test(route)) return "discover";
   const aliases = {
     home: "discover",
     hub: "discover",
@@ -2964,7 +2963,10 @@ function applyRoute({ passGen } = {}) {
     route = "discover-playlist";
   }
   if (route === "discover/top-week" || route === "discover/weekly-chart") {
-    route = "discover-weekly-chart";
+    _weeklyChartExpanded = true;
+    try { sessionStorage.setItem(CHART_WEEK_EXPANDED_KEY, "1"); } catch {}
+    route = "discover";
+    try { history.replaceState(null, "", "#/discover"); } catch {}
   }
   if (route === "search") {
     try {
@@ -2998,7 +3000,7 @@ function applyRoute({ passGen } = {}) {
   const allowedRoutes = new Set([
     "intro", "onboarding", "start", "auth", "generate",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
-    "settings", "profile", "player", "discover", "discover-playlist", "discover-weekly-chart", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
+    "settings", "profile", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
   ]);
   const onboardingParsed = parseOnboardingRoute(route);
   let normalized = pendingPublicUsername ? "user" : (route === "start" ? "intro" : route);
@@ -3123,7 +3125,7 @@ function applyRoute({ passGen } = {}) {
     closeCreateChooserSheet({ immediate: true });
     closeImageMoodSheet();
   }
-  if ((prevRoute === "discover" || prevRoute === "discover-playlist" || prevRoute === "discover-weekly-chart") && wanted !== "discover" && wanted !== "discover-playlist" && wanted !== "discover-weekly-chart") {
+  if ((prevRoute === "discover" || prevRoute === "discover-playlist") && wanted !== "discover" && wanted !== "discover-playlist") {
     try { onLeaveSearchRoute(); } catch {}
   }
   if (routeApplyStale(gate)) return;
@@ -3136,7 +3138,7 @@ function applyRoute({ passGen } = {}) {
   if (!shouldHoldBootSplashForRoute(wanted)) {
     try { dismissBootSplash(); } catch {}
   }
-  if (wanted !== "discover" && wanted !== "discover-playlist" && wanted !== "discover-weekly-chart" && wanted !== "friends") {
+  if (wanted !== "discover" && wanted !== "discover-playlist" && wanted !== "friends") {
     try { document.body.removeAttribute("data-discovery-segment"); } catch {}
   }
   if (prevRoute === "generate" && wanted !== "generate") {
@@ -3348,7 +3350,6 @@ function applyRoute({ passGen } = {}) {
   if (wanted === "discover") {
     bindDiscoveryDiscoverControls();
     bindDiscoverPlaylistScreenOnce();
-    bindDiscoverWeeklyChartPageOnce();
     bindDiscoverWeeklyChartSectionOnce();
     if (!shouldSkipRouteHeavy("discover") || !_discoveryFeedTracks.length) {
       markRouteHeavy("discover");
@@ -3364,11 +3365,6 @@ function applyRoute({ passGen } = {}) {
     } else {
       openPlaylist();
     }
-  }
-  if (wanted === "discover-weekly-chart") {
-    bindDiscoveryDiscoverControls();
-    bindDiscoverWeeklyChartPageOnce();
-    void renderDiscoverWeeklyChartPage();
   }
   if (wanted === "challenges") {
     bindChallengesPageOnce();
@@ -5957,7 +5953,11 @@ function bindCampaignUiOnce() {
 // ─── Weekly chart (Top songs of the week) ───────────────────────────────
 let _weeklyChartCache = { ts: 0, chart: null };
 let _discoverWeeklyChartSectionBound = false;
-let _discoverWeeklyChartPageBound = false;
+const CHART_WEEK_EXPANDED_KEY = "nabad_chart_week_expanded";
+let _weeklyChartExpanded = (() => {
+  try { return sessionStorage.getItem(CHART_WEEK_EXPANDED_KEY) === "1"; } catch {}
+  return false;
+})();
 /** Live challenge playlist rows (slug → tracks) from last Discover refresh. */
 let _discoveryChallengeBuckets = new Map();
 
@@ -6089,28 +6089,38 @@ function chartWeekLeaderboardRowHtml(e) {
     </button>`;
 }
 
-function wireChartWeekOpenButtons(root) {
-  if (!root) return;
-  root.querySelectorAll("[data-chart-week-open-full]").forEach((btn) => {
-    if (btn.dataset.boundChartWeekOpen === "1") return;
-    btn.dataset.boundChartWeekOpen = "1";
-    btn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      openDiscoverWeeklyChartPage();
-    });
+function setChartWeekExpanded(next) {
+  _weeklyChartExpanded = !!next;
+  try { sessionStorage.setItem(CHART_WEEK_EXPANDED_KEY, _weeklyChartExpanded ? "1" : "0"); } catch {}
+}
+
+function updateChartWeekExpandedUi(wrap) {
+  if (!wrap) wrap = document.getElementById("discoverWeeklyChart");
+  if (!wrap) return;
+  const expanded = _weeklyChartExpanded;
+  const rest = wrap.querySelector("#chartWeekRest");
+  if (rest) rest.hidden = !expanded;
+  wrap.querySelectorAll("[data-chart-week-toggle]").forEach((btn) => {
+    btn.textContent = expanded ? "Show less" : (btn.classList.contains("chartWeekFullBtn") ? "View Full Top 10" : "View Top 10");
+    btn.setAttribute("aria-expanded", expanded ? "true" : "false");
   });
 }
 
-function openDiscoverWeeklyChartPage() {
+function toggleChartWeekExpanded(wrap) {
   haptic("light");
-  const target = "#/discover/top-week";
-  try {
-    if (location.hash === target) scheduleApplyRoute();
-    else location.hash = target;
-  } catch {
-    scheduleApplyRoute();
-  }
+  setChartWeekExpanded(!_weeklyChartExpanded);
+  updateChartWeekExpandedUi(wrap);
+}
+
+function wireChartWeekToggleButtons(wrap) {
+  if (!wrap) return;
+  wrap.querySelectorAll("[data-chart-week-toggle]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleChartWeekExpanded(wrap);
+    });
+  });
 }
 
 function bindDiscoverWeeklyChartSectionOnce() {
@@ -6119,42 +6129,12 @@ function bindDiscoverWeeklyChartSectionOnce() {
   if (!mount) return;
   _discoverWeeklyChartSectionBound = true;
   mount.addEventListener("click", (e) => {
-    const open = e.target?.closest?.("[data-chart-week-open-full]");
-    if (!open || !mount.contains(open)) return;
+    const toggle = e.target?.closest?.("[data-chart-week-toggle]");
+    if (!toggle || !mount.contains(toggle)) return;
     e.preventDefault();
     e.stopPropagation();
-    openDiscoverWeeklyChartPage();
+    toggleChartWeekExpanded(document.getElementById("discoverWeeklyChart"));
   });
-}
-
-function bindDiscoverWeeklyChartPageOnce() {
-  if (_discoverWeeklyChartPageBound) return;
-  _discoverWeeklyChartPageBound = true;
-  const back = document.getElementById("discoverWeeklyChartBack");
-  if (back && !back.dataset.bound) {
-    back.dataset.bound = "1";
-    back.addEventListener("click", () => {
-      haptic("light");
-      try { location.hash = "#/discover"; } catch {}
-    });
-  }
-}
-
-async function renderDiscoverWeeklyChartPage() {
-  const listEl = document.getElementById("discoverWeeklyChartPageList");
-  if (!listEl) return;
-  listEl.innerHTML = `<p class="discoverHubQuietNote">Loading chart…</p>`;
-  try {
-    const chart = await fetchWeeklyChart();
-    const topTen = chart.slice(0, 10);
-    if (!topTen.length) {
-      listEl.innerHTML = `<p class="discoverHubQuietNote discoverFeedEmpty">No songs on the chart this week yet.</p>`;
-      return;
-    }
-    listEl.innerHTML = topTen.map((e) => chartWeekLeaderboardRowHtml(e)).join("");
-  } catch {
-    listEl.innerHTML = `<p class="discoverHubQuietNote discoverFeedEmpty">Could not load the chart. Try again later.</p>`;
-  }
 }
 
 async function refreshDiscoverWeeklyChart() {
@@ -6173,20 +6153,28 @@ async function refreshDiscoverWeeklyChart() {
     const topTen = chart.slice(0, 10);
     const [hero, ...rest] = topTen;
     const runnerEntries = rest.slice(0, 3);
-    const showFullChart = topTen.length > 1;
+    const restEntries = rest.slice(3);
+    const showFullChart = restEntries.length > 0;
+    const expanded = _weeklyChartExpanded;
     const heroHtml = chartWeekWinnerHtml(hero);
     const runnersHtml = runnerEntries.length
       ? `<div class="chartWeekRunners" role="list" aria-label="Top songs ranks 2 through 4">${runnerEntries.map((e) => chartWeekRunnerHtml(e)).join("")}</div>`
       : "";
+    const restHtml = restEntries.length
+      ? `<div class="chartWeekRest" id="chartWeekRest" role="list" aria-label="Top songs ranks 5 through 10" ${expanded ? "" : "hidden"}>${restEntries.map((e) => chartWeekRunnerHtml(e)).join("")}</div>`
+      : "";
+    const toggleLabel = expanded ? "Show less" : "View Top 10";
+    const fullLabel = expanded ? "Show less" : "View Full Top 10";
     wrap.innerHTML = `
       <header class="discoverFeedSectionHead chartWeekHead">
         <h3 class="discoverFeedSectionTitle">Top This Week</h3>
-        ${showFullChart ? `<button type="button" class="discoverFeedSectionLink" data-chart-week-open-full>View Top 10</button>` : ""}
+        ${showFullChart ? `<button type="button" class="discoverFeedSectionLink" data-chart-week-toggle aria-expanded="${expanded ? "true" : "false"}">${escapeHtml(toggleLabel)}</button>` : ""}
       </header>
       ${heroHtml}
       ${runnersHtml}
-      ${showFullChart ? `<button type="button" class="chartWeekFullBtn" data-chart-week-open-full>View Full Top 10</button>` : ""}`;
-    wireChartWeekOpenButtons(wrap);
+      ${restHtml}
+      ${showFullChart ? `<button type="button" class="chartWeekFullBtn" data-chart-week-toggle aria-expanded="${expanded ? "true" : "false"}">${escapeHtml(fullLabel)}</button>` : ""}`;
+    wireChartWeekToggleButtons(wrap);
     wrap.hidden = false;
     if (wasHidden) playDiscoverSectionEnter(wrap);
   } catch {
@@ -28781,7 +28769,7 @@ let _userPublicReturnHash = "";
 function routeHashForReturn(route) {
   const r = String(route || "").trim();
   if (!r || r === "user") return "";
-  if (r === "discover-playlist" || r === "discover-weekly-chart") return "#/discover";
+  if (r === "discover-playlist") return "#/discover";
   return `#/${r}`;
 }
 
@@ -29346,7 +29334,7 @@ function renderProfileSongs(opts = {}) {
 
 function refreshOwnSongsUi(opts = {}) {
   const route = document.body.getAttribute("data-route") || "";
-  if (opts.soft && (route === "profile" || route === "friends" || route === "discover" || route === "discover-playlist" || route === "discover-weekly-chart")) {
+  if (opts.soft && (route === "profile" || route === "friends" || route === "discover" || route === "discover-playlist")) {
     try {
       syncDiscoveryPlayingHighlights();
     } catch {}

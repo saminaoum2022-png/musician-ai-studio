@@ -30755,6 +30755,17 @@ section.mentorPage{
   gap: 6px;
   margin-bottom: 10px;
 }
+.discoverWeeklyChart--final .chartWeekRest{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.discoverWeeklyChart--final .chartWeekRest[hidden]{
+  display: none !important;
+}
 .discoverWeeklyChart--final .chartWeekRunner,
 .discoverWeeklyChart--final .chartWeekLeaderRow{
   display: grid;

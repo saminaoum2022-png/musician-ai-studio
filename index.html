@@ -74,7 +74,7 @@
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
     <link rel="preload" as="video" href="./assets/icons/splash-logo.mp4?v=20260619trim" type="video/mp4" />
-    <link rel="stylesheet" href="./styles.css?v=20260620topWeek" />
+    <link rel="stylesheet" href="./styles.css?v=20260620topWeekFinal" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1222,6 +1222,17 @@
           </div>
           <div id="discoverPlaylistStatus" class="discoveryFeedStatus" role="status" aria-live="polite" hidden></div>
           <div id="discoverPlaylistList" class="discoveryFeedList discoveryCardStack discoverPlaylistList"></div>
+        </section>
+
+        <section class="discoverWeeklyChartPage wide" data-route="discover-weekly-chart">
+          <header class="discoverWeeklyChartPageTop">
+            <button type="button" class="discoverPlaylistBack" id="discoverWeeklyChartBack" aria-label="Back to Discover">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M15 6 9 12l6 6"/></svg>
+            </button>
+            <h1 class="discoverWeeklyChartPageTitle">Top This Week</h1>
+          </header>
+          <p class="discoverWeeklyChartPageSub">Ranked by plays and reactions in the last 7 days.</p>
+          <div id="discoverWeeklyChartPageList" class="discoverWeeklyChartPageList" role="list"></div>
         </section>
 
         <section class="challengesPage wide homeDesk" data-route="challenges" id="homeDeskPage">
@@ -3709,6 +3720,6 @@
     </div>
 
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260620topWeek"></script>
+    <script type="module" src="./src/app.js?v=20260620topWeekFinal"></script>
   </body>
 </html>

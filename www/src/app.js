@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260620topWeek";
+const APP_BUILD = "20260620topWeekFinal";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2825,6 +2825,7 @@ function syncRoutePanelVisibility(wanted) {
     const link = a.getAttribute("data-route-link");
     const active = link === route
       || (route === "discover-playlist" && link === "discover")
+      || (route === "discover-weekly-chart" && link === "discover")
       || (route === "generate" && link === "challenges")
       || (route === "mashup" && link === "challenges")
       || (route === "vocal" && link === "challenges");
@@ -2870,7 +2871,7 @@ function invalidateInFlightRouteFeedWork(leavingRoute) {
 function tabBarRouteKey(route = "") {
   const r = String(route || "").trim();
   if (r === "generate" || r === "mashup" || r === "vocal") return "challenges";
-  if (r === "discover-playlist") return "discover";
+  if (r === "discover-playlist" || r === "discover-weekly-chart") return "discover";
   return r;
 }
 
@@ -2878,7 +2879,7 @@ function previewRouteFromHash(hash = "") {
   const raw = String(hash || "").replace(/^#\/?/, "");
   let route = raw.split(/[?#&]/)[0].trim();
   if (/^u\//.test(route)) return "user";
-  if (route === "search" || /^discover\/playlist\//i.test(route)) return "discover";
+  if (route === "search" || /^discover\/playlist\//i.test(route) || route === "discover/top-week") return "discover";
   const aliases = {
     home: "discover",
     hub: "discover",
@@ -2962,6 +2963,9 @@ function applyRoute({ passGen } = {}) {
     pendingDiscoverPlaylistSlug = decodeURIComponent(String(playlistRouteMatch[1] || "")).trim();
     route = "discover-playlist";
   }
+  if (route === "discover/top-week" || route === "discover/weekly-chart") {
+    route = "discover-weekly-chart";
+  }
   if (route === "search") {
     try {
       const h = String(location.hash || "");
@@ -2994,7 +2998,7 @@ function applyRoute({ passGen } = {}) {
   const allowedRoutes = new Set([
     "intro", "onboarding", "start", "auth", "generate",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
-    "settings", "profile", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
+    "settings", "profile", "player", "discover", "discover-playlist", "discover-weekly-chart", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
   ]);
   const onboardingParsed = parseOnboardingRoute(route);
   let normalized = pendingPublicUsername ? "user" : (route === "start" ? "intro" : route);
@@ -3119,7 +3123,7 @@ function applyRoute({ passGen } = {}) {
     closeCreateChooserSheet({ immediate: true });
     closeImageMoodSheet();
   }
-  if ((prevRoute === "discover" || prevRoute === "discover-playlist") && wanted !== "discover" && wanted !== "discover-playlist") {
+  if ((prevRoute === "discover" || prevRoute === "discover-playlist" || prevRoute === "discover-weekly-chart") && wanted !== "discover" && wanted !== "discover-playlist" && wanted !== "discover-weekly-chart") {
     try { onLeaveSearchRoute(); } catch {}
   }
   if (routeApplyStale(gate)) return;
@@ -3132,7 +3136,7 @@ function applyRoute({ passGen } = {}) {
   if (!shouldHoldBootSplashForRoute(wanted)) {
     try { dismissBootSplash(); } catch {}
   }
-  if (wanted !== "discover" && wanted !== "discover-playlist" && wanted !== "friends") {
+  if (wanted !== "discover" && wanted !== "discover-playlist" && wanted !== "discover-weekly-chart" && wanted !== "friends") {
     try { document.body.removeAttribute("data-discovery-segment"); } catch {}
   }
   if (prevRoute === "generate" && wanted !== "generate") {
@@ -3344,6 +3348,8 @@ function applyRoute({ passGen } = {}) {
   if (wanted === "discover") {
     bindDiscoveryDiscoverControls();
     bindDiscoverPlaylistScreenOnce();
+    bindDiscoverWeeklyChartPageOnce();
+    bindDiscoverWeeklyChartSectionOnce();
     if (!shouldSkipRouteHeavy("discover") || !_discoveryFeedTracks.length) {
       markRouteHeavy("discover");
       void refreshDiscoverFeed();
@@ -3358,6 +3364,11 @@ function applyRoute({ passGen } = {}) {
     } else {
       openPlaylist();
     }
+  }
+  if (wanted === "discover-weekly-chart") {
+    bindDiscoveryDiscoverControls();
+    bindDiscoverWeeklyChartPageOnce();
+    void renderDiscoverWeeklyChartPage();
   }
   if (wanted === "challenges") {
     bindChallengesPageOnce();
@@ -5128,10 +5139,11 @@ function discoverCampaignRailSkeletonHtml() {
 }
 
 function discoverWeeklyChartSkeletonHtml() {
-  const miniSkel = Array.from({ length: 3 }, () => `
-    <div class="chartWeekMiniItem chartWeekMiniItem--skel" aria-hidden="true">
-      <span class="chartWeekMiniArt discoverSkeletonLine"></span>
-      <span class="chartWeekMiniMeta">
+  const runnerSkel = Array.from({ length: 3 }, () => `
+    <div class="chartWeekRunner chartWeekRunner--skel" aria-hidden="true">
+      <span class="discoverSkeletonLine short" style="width:34px"></span>
+      <span class="chartWeekRunnerArt discoverSkeletonLine"></span>
+      <span class="chartWeekRunnerMeta">
         <span class="discoverSkeletonLine"></span>
         <span class="discoverSkeletonLine short"></span>
       </span>
@@ -5141,16 +5153,22 @@ function discoverWeeklyChartSkeletonHtml() {
       <div class="discoverChartSkeletonTitle"></div>
       <div class="discoverSkeletonLine short" style="width:72px;height:12px;border-radius:6px"></div>
     </header>
-    <div class="chartWeekFeatured chartWeekFeatured--skel" aria-hidden="true">
-      <span class="chartWeekFeaturedArt discoverSkeletonLine"></span>
-      <span class="chartWeekFeaturedBody">
-        <span class="discoverSkeletonLine short"></span>
-        <span class="discoverSkeletonLine"></span>
-        <span class="discoverSkeletonLine short"></span>
-      </span>
-      <span class="discoverFeedPlayBtn discoverSkeletonLine" style="width:36px;height:36px;border-radius:999px"></span>
+    <div class="chartWeekWinner chartWeekWinner--skel" aria-hidden="true">
+      <div class="chartWeekWinnerHead">
+        <span class="discoverSkeletonLine short" style="width:28px"></span>
+        <span class="discoverSkeletonLine short" style="width:22px"></span>
+      </div>
+      <div class="chartWeekWinnerCore">
+        <span class="chartWeekWinnerArt discoverSkeletonLine"></span>
+        <span class="chartWeekWinnerMeta">
+          <span class="discoverSkeletonLine"></span>
+          <span class="discoverSkeletonLine short"></span>
+          <span class="discoverSkeletonLine short"></span>
+        </span>
+      </div>
     </div>
-    <div class="chartWeekMiniStrip">${miniSkel}</div>`;
+    <div class="chartWeekRunners">${runnerSkel}</div>
+    <div class="chartWeekFullBtn discoverSkeletonLine" style="height:42px;border-radius:14px" aria-hidden="true"></div>`;
 }
 
 function discoverHubSectionHeadSkeletonHtml() {
@@ -5943,7 +5961,8 @@ function bindCampaignUiOnce() {
 
 // ─── Weekly chart (Top songs of the week) ───────────────────────────────
 let _weeklyChartCache = { ts: 0, chart: null };
-let _weeklyChartExpanded = false;
+let _discoverWeeklyChartSectionBound = false;
+let _discoverWeeklyChartPageBound = false;
 /** Live challenge playlist rows (slug → tracks) from last Discover refresh. */
 let _discoveryChallengeBuckets = new Map();
 
@@ -5990,66 +6009,140 @@ function playDiscoverSectionEnter(wrap) {
   }, 1600);
 }
 
+function chartWeekTrendHtml(entry) {
+  const m = String(entry?.movement || "same");
+  const delta = Math.max(0, Number(entry?.delta) || 0);
+  if (m === "new") return `<span class="chartWeekTrend chartWeekTrend--new">NEW</span>`;
+  if (m === "up") return `<span class="chartWeekTrend chartWeekTrend--up">+${delta || 1}</span>`;
+  if (m === "down") return `<span class="chartWeekTrend chartWeekTrend--down">−${delta || 1}</span>`;
+  return `<span class="chartWeekTrend chartWeekTrend--same">0</span>`;
+}
+
 function chartWeekPlaysText(plays, compact = false) {
   const n = Math.max(0, Number(plays) || 0);
   if (!n) return "";
   const count = formatStatCount(n);
-  if (compact) return `🔥 ${count}`;
-  return `🔥 ${count} play${n === 1 ? "" : "s"} this week`;
+  if (compact) return `${count} play${n === 1 ? "" : "s"}`;
+  return `${count} play${n === 1 ? "" : "s"} this week`;
 }
 
-function chartWeekFeaturedHtml(hero) {
+function chartWeekWinnerHtml(hero) {
   const heroArt = trackCoverArtForFeed({ artUrl: hero.artUrl, meta: {} });
   const heroPlays = Number(hero.weeklyPlays || 0);
   const title = String(hero.title || "Untitled").trim();
   return `
-    <button type="button" class="chartWeekFeatured" ${chartEntryPlayAttrs(hero)} aria-label="Play ${escapeHtml(title)}">
-      <span class="chartWeekFeaturedArt">
-        <img src="${escapeHtml(heroArt)}" alt="" loading="lazy" decoding="async" />
-      </span>
-      <span class="chartWeekFeaturedBody">
-        <span class="chartWeekFeaturedRankRow" aria-label="Rank 1"><span class="chartWeekFeaturedRankGlyph" aria-hidden="true">👑</span><span class="chartWeekFeaturedRank">#1</span></span>
-        <strong class="chartWeekFeaturedTitle">${escapeHtml(title)}</strong>
-        ${hero.username ? `<span class="chartWeekFeaturedBy">@${escapeHtml(hero.username)}</span>` : ""}
-        ${heroPlays ? `<span class="chartWeekFeaturedPlays">${escapeHtml(chartWeekPlaysText(heroPlays))}</span>` : ""}
-      </span>
-      ${discoverFeedPlayBtnHtml()}
+    <button type="button" class="chartWeekWinner" ${chartEntryPlayAttrs(hero)} aria-label="Play ${escapeHtml(title)}, number 1 this week">
+      <div class="chartWeekWinnerHead">
+        <span class="chartWeekWinnerRank">#1</span>
+        ${chartWeekTrendHtml(hero)}
+      </div>
+      <div class="chartWeekWinnerCore">
+        <span class="chartWeekWinnerArt">
+          <img src="${escapeHtml(heroArt)}" alt="" loading="lazy" decoding="async" />
+        </span>
+        <span class="chartWeekWinnerMeta">
+          <strong class="chartWeekWinnerTitle">${escapeHtml(title)}</strong>
+          ${hero.username ? `<span class="chartWeekWinnerBy">@${escapeHtml(hero.username)}</span>` : ""}
+          ${heroPlays ? `<span class="chartWeekWinnerPlays">${escapeHtml(chartWeekPlaysText(heroPlays))}</span>` : ""}
+        </span>
+        ${discoverFeedPlayBtnHtml()}
+      </div>
     </button>`;
 }
 
-function chartWeekMiniItemHtml(e) {
+function chartWeekRunnerHtml(e) {
   const art = trackCoverArtForFeed({ artUrl: e.artUrl, meta: {} });
   const plays = Number(e.weeklyPlays || 0);
   const rank = Number(e.rank) || 0;
   const title = String(e.title || "Untitled").trim();
   return `
-    <button type="button" class="chartWeekMiniItem" role="listitem" ${chartEntryPlayAttrs(e)} aria-label="Play ${escapeHtml(title)}, rank ${rank}">
-      <span class="chartWeekMiniArt">
+    <button type="button" class="chartWeekRunner" role="listitem" ${chartEntryPlayAttrs(e)} aria-label="Play ${escapeHtml(title)}, rank ${rank}">
+      <span class="chartWeekRunnerLead">
+        <span class="chartWeekRunnerRank">#${rank}</span>
+        ${chartWeekTrendHtml(e)}
+      </span>
+      <span class="chartWeekRunnerArt">
         <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
-        <span class="chartWeekMiniRank">#${rank}</span>
       </span>
-      <span class="chartWeekMiniMeta">
-        <strong class="chartWeekMiniTitle">${escapeHtml(title)}</strong>
-        ${plays ? `<span class="chartWeekMiniPlays">${escapeHtml(chartWeekPlaysText(plays, true))} this week</span>` : ""}
+      <span class="chartWeekRunnerMeta">
+        <strong class="chartWeekRunnerTitle">${escapeHtml(title)}</strong>
+        ${plays ? `<span class="chartWeekRunnerPlays">${escapeHtml(chartWeekPlaysText(plays, true))}</span>` : ""}
       </span>
+      <span class="chartWeekRunnerPlay discoverFeedPlayBtn" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M8 5.5v13l11-6.5-11-6.5Z"/></svg></span>
     </button>`;
 }
 
-function chartWeekRestRowHtml(e) {
+function chartWeekLeaderboardRowHtml(e) {
   const art = trackCoverArtForFeed({ artUrl: e.artUrl, meta: {} });
   const plays = Number(e.weeklyPlays || 0);
   const rank = Number(e.rank) || 0;
   const title = String(e.title || "Untitled").trim();
+  const featured = rank === 1;
   return `
-    <button type="button" class="chartWeekRestRow" ${chartEntryPlayAttrs(e)} aria-label="Play ${escapeHtml(title)}, rank ${rank}">
-      <span class="chartWeekRestRank">#${rank}</span>
-      <span class="chartWeekRestArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" /></span>
-      <span class="chartWeekRestMeta">
-        <strong>${escapeHtml(title)}</strong>
-        ${e.username ? `<small>@${escapeHtml(e.username)}</small>` : ""}
+    <button type="button" class="chartWeekLeaderRow${featured ? " chartWeekLeaderRow--featured" : ""}" role="listitem" ${chartEntryPlayAttrs(e)} aria-label="Play ${escapeHtml(title)}, rank ${rank}">
+      <span class="chartWeekLeaderLead">
+        <span class="chartWeekLeaderRank">#${rank}</span>
+        ${chartWeekTrendHtml(e)}
       </span>
-      ${plays ? `<span class="chartWeekRestPlays">${escapeHtml(formatStatCount(plays))}</span>` : ""}
+      <span class="chartWeekLeaderArt">
+        <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
+      </span>
+      <span class="chartWeekLeaderMeta">
+        <strong class="chartWeekLeaderTitle">${escapeHtml(title)}</strong>
+        ${e.username ? `<span class="chartWeekLeaderBy">@${escapeHtml(e.username)}</span>` : ""}
+        ${plays ? `<span class="chartWeekLeaderPlays">${escapeHtml(featured ? chartWeekPlaysText(plays) : chartWeekPlaysText(plays, true))}</span>` : ""}
+      </span>
+      <span class="chartWeekLeaderPlay discoverFeedPlayBtn" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M8 5.5v13l11-6.5-11-6.5Z"/></svg></span>
     </button>`;
+}
+
+function openDiscoverWeeklyChartPage() {
+  haptic("light");
+  try { location.hash = "#/discover/top-week"; } catch {}
+}
+
+function bindDiscoverWeeklyChartSectionOnce() {
+  if (_discoverWeeklyChartSectionBound) return;
+  const wrap = document.getElementById("discoverWeeklyChart");
+  if (!wrap) return;
+  _discoverWeeklyChartSectionBound = true;
+  wrap.addEventListener("click", (e) => {
+    const open = e.target?.closest?.("[data-chart-week-open-full]");
+    if (!open || !wrap.contains(open)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openDiscoverWeeklyChartPage();
+  });
+}
+
+function bindDiscoverWeeklyChartPageOnce() {
+  if (_discoverWeeklyChartPageBound) return;
+  _discoverWeeklyChartPageBound = true;
+  const back = document.getElementById("discoverWeeklyChartBack");
+  if (back && !back.dataset.bound) {
+    back.dataset.bound = "1";
+    back.addEventListener("click", () => {
+      haptic("light");
+      try { location.hash = "#/discover"; } catch {}
+    });
+  }
+}
+
+async function renderDiscoverWeeklyChartPage() {
+  const listEl = document.getElementById("discoverWeeklyChartPageList");
+  if (!listEl) return;
+  listEl.innerHTML = `<p class="discoverHubQuietNote">Loading chart…</p>`;
+  try {
+    const chart = await fetchWeeklyChart();
+    const topTen = chart.slice(0, 10);
+    if (!topTen.length) {
+      listEl.innerHTML = `<p class="discoverHubQuietNote discoverFeedEmpty">No songs on the chart this week yet.</p>`;
+      return;
+    }
+    listEl.innerHTML = topTen.map((e) => chartWeekLeaderboardRowHtml(e)).join("");
+  } catch {
+    listEl.innerHTML = `<p class="discoverHubQuietNote discoverFeedEmpty">Could not load the chart. Try again later.</p>`;
+  }
 }
 
 async function refreshDiscoverWeeklyChart() {
@@ -6065,40 +6158,22 @@ async function refreshDiscoverWeeklyChart() {
       wrap.innerHTML = "";
       return;
     }
-    const topNine = chart.slice(0, 9);
-    const [hero, ...rest] = topNine;
-    const miniEntries = rest.slice(0, 3);
-    const restEntries = rest.slice(3);
-    const topCount = topNine.length;
-    const showViewAll = restEntries.length > 0;
-    const viewAllLabel = _weeklyChartExpanded ? "Show less" : `View Top ${topCount}`;
-    const heroHtml = chartWeekFeaturedHtml(hero);
-    const miniHtml = miniEntries.length
-      ? `<div class="chartWeekMiniStrip" role="list" aria-label="Top songs ranks 2 through 4">${miniEntries.map((e) => chartWeekMiniItemHtml(e)).join("")}</div>`
-      : "";
-    const restHtml = restEntries.length
-      ? `<div class="chartWeekRest" id="chartRowsCollapse" ${_weeklyChartExpanded ? "" : "hidden"} role="list" aria-label="Top songs ranks 5 through ${topCount}">${restEntries.map((e) => chartWeekRestRowHtml(e)).join("")}</div>`
+    const topTen = chart.slice(0, 10);
+    const [hero, ...rest] = topTen;
+    const runnerEntries = rest.slice(0, 3);
+    const showFullChart = topTen.length > 1;
+    const heroHtml = chartWeekWinnerHtml(hero);
+    const runnersHtml = runnerEntries.length
+      ? `<div class="chartWeekRunners" role="list" aria-label="Top songs ranks 2 through 4">${runnerEntries.map((e) => chartWeekRunnerHtml(e)).join("")}</div>`
       : "";
     wrap.innerHTML = `
       <header class="discoverFeedSectionHead chartWeekHead">
-        <h3 class="discoverFeedSectionTitle">🔥 Top This Week</h3>
-        ${showViewAll ? `<button type="button" class="discoverFeedSectionLink chartWeekViewAll" id="chartToggleBtn" aria-expanded="${_weeklyChartExpanded ? "true" : "false"}" aria-controls="chartRowsCollapse">${escapeHtml(viewAllLabel)}</button>` : ""}
+        <h3 class="discoverFeedSectionTitle">Top This Week</h3>
+        ${showFullChart ? `<button type="button" class="discoverFeedSectionLink" data-chart-week-open-full>View Top 10</button>` : ""}
       </header>
       ${heroHtml}
-      ${miniHtml}
-      ${restHtml}`;
-    const toggle = wrap.querySelector("#chartToggleBtn");
-    if (toggle) {
-      toggle.addEventListener("click", (e) => {
-        e.stopPropagation();
-        haptic("light");
-        _weeklyChartExpanded = !_weeklyChartExpanded;
-        const rows = wrap.querySelector("#chartRowsCollapse");
-        if (rows) rows.hidden = !_weeklyChartExpanded;
-        toggle.setAttribute("aria-expanded", _weeklyChartExpanded ? "true" : "false");
-        toggle.textContent = _weeklyChartExpanded ? "Show less" : `View Top ${topCount}`;
-      });
-    }
+      ${runnersHtml}
+      ${showFullChart ? `<button type="button" class="chartWeekFullBtn" data-chart-week-open-full>View Full Top 10</button>` : ""}`;
     wrap.hidden = false;
     if (wasHidden) playDiscoverSectionEnter(wrap);
   } catch {
@@ -6982,7 +7057,7 @@ function renderDiscoverFeedForYou(tracks, profMap) {
     ? templateTracks.map((t) => discoverFeedTemplateCardHtml(t, profMap)).join("")
     : `<p class="discoverHubQuietNote">Songs made with templates will show here.</p>`;
   return `
-    <section id="discoverWeeklyChart" class="discoverWeeklyChart discoverWeeklyChart--editorial" hidden aria-label="Top songs this week"></section>
+    <section id="discoverWeeklyChart" class="discoverWeeklyChart discoverWeeklyChart--final" hidden aria-label="Top songs this week"></section>
     ${challengeBlock}
     <section class="discoverFeedSection">
       ${discoverFeedSectionHeadHtml("Remixes you'll love")}
@@ -28693,7 +28768,7 @@ let _userPublicReturnHash = "";
 function routeHashForReturn(route) {
   const r = String(route || "").trim();
   if (!r || r === "user") return "";
-  if (r === "discover-playlist") return "#/discover";
+  if (r === "discover-playlist" || r === "discover-weekly-chart") return "#/discover";
   return `#/${r}`;
 }
 
@@ -29258,7 +29333,7 @@ function renderProfileSongs(opts = {}) {
 
 function refreshOwnSongsUi(opts = {}) {
   const route = document.body.getAttribute("data-route") || "";
-  if (opts.soft && (route === "profile" || route === "friends" || route === "discover" || route === "discover-playlist")) {
+  if (opts.soft && (route === "profile" || route === "friends" || route === "discover" || route === "discover-playlist" || route === "discover-weekly-chart")) {
     try {
       syncDiscoveryPlayingHighlights();
     } catch {}

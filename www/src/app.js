@@ -33,7 +33,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260620settingsRedesign";
+const APP_BUILD = "20260620profileFeatured";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -831,6 +831,7 @@ const els = {
   profileNabadCertCheck: document.getElementById("profileNabadCertCheck"),
   profileMusicStylesInline: document.getElementById("profileMusicStylesInline"),
   profileMusicStylesBtn: document.getElementById("profileMusicStylesBtn"),
+  profileFeaturedCreation: document.getElementById("profileFeaturedCreation"),
   profileIdentityLine: document.getElementById("profileIdentityLine"),
   profileHeroBio: document.getElementById("profileHeroBio"),
   // Spotify-x-Nabad redesign nodes
@@ -13861,26 +13862,141 @@ function isFeaturedOnProfile(track) {
   return track?.meta?.featuredOnProfile === true || String(track?.meta?.featuredOnProfile || "").toLowerCase() === "true";
 }
 
-function profileFeaturedSongHtml(track, mode = "own") {
+function profileFeaturedTrackPlays(track) {
+  return Math.max(
+    0,
+    Number(track?.playCount) || Number(track?.meta?.playCount) || Number(track?.meta?.plays) || 0,
+  );
+}
+
+function profileFeaturedCreationChallengeLine(track) {
+  const ch = challengeMetaForTrack(track);
+  if (ch) return discoverChallengeRankText(track, []);
+  return releaseCaptionForTrack(track) || "";
+}
+
+function resolveProfileFeaturedTrack() {
+  if (HUB_FEATURE_ENABLED) {
+    const hub = getProfileOwnerHubItems();
+    if (hub.length) {
+      const pinned = hub.find(isFeaturedOnProfile);
+      if (pinned) return { track: pinned, source: "hub" };
+      const best = [...hub].sort(
+        (a, b) =>
+          Number(b.likes || 0) - Number(a.likes || 0)
+          || Number(b.ts || 0) - Number(a.ts || 0),
+      )[0];
+      return best ? { track: best, source: "hub" } : null;
+    }
+  }
+  const lib = loadLibrary().filter((t) => String(t?.url || "").trim());
+  if (!lib.length) return null;
+  const pub = lib.filter((t) => Boolean(t.publicOnProfile));
+  const pool = pub.length ? pub : lib;
+  const pinned = pool.find(isFeaturedOnProfile);
+  if (pinned) return { track: pinned, source: "library" };
+  const ranked = [...pool].sort((a, b) => {
+    const pa = profileFeaturedTrackPlays(a);
+    const pb = profileFeaturedTrackPlays(b);
+    if (pb !== pa) return pb - pa;
+    const ca = challengeMetaForTrack(a) ? 1 : 0;
+    const cb = challengeMetaForTrack(b) ? 1 : 0;
+    if (cb !== ca) return cb - ca;
+    return libraryTrackPublicTs(b) - libraryTrackPublicTs(a);
+  });
+  return ranked[0] ? { track: ranked[0], source: "library" } : null;
+}
+
+function profileFeaturedCreationHtml(track, mode = "own") {
   if (!track) return "";
   const title = escapeHtml(String(track.title || "Untitled"));
-  const art = escapeHtml(String((track.meta && (track.meta.imageThumb || track.meta.imageUrl)) || track.artUrl || "./assets/nabadai-logo.png"));
+  const art = escapeHtml(String(
+    (track.meta && (track.meta.imageThumb || track.meta.imageUrl)) || track.artUrl || "./assets/nabadai-logo.png",
+  ));
   const sid = escapeHtml(String(track.id || track.songId || ""));
   const playAttr = mode === "own" ? "data-profile-featured-play" : "data-public-featured-play";
-  const sub = mode === "own" ? "Your pinned release" : "Pinned by creator";
+  const challengeLine = profileFeaturedCreationChallengeLine(track);
+  const plays = profileFeaturedTrackPlays(track);
+  const metaBits = [];
+  if (challengeLine) {
+    metaBits.push(`<span class="profileFeaturedCreationMeta profileFeaturedCreationMeta--accent">${escapeHtml(challengeLine)}</span>`);
+  }
+  if (plays > 0) {
+    metaBits.push(`<span class="profileFeaturedCreationMeta">${escapeHtml(`${formatStatCount(plays)} plays`)}</span>`);
+  }
+  const metaHtml = metaBits.length
+    ? `<span class="profileFeaturedCreationMetaRow">${metaBits.join("")}</span>`
+    : "";
   return `
-    <section class="profileFeaturedSong" data-featured-song="${sid}">
-      <button type="button" class="profileFeaturedSongMain" ${playAttr}="${sid}" aria-label="Play featured song ${title}">
-        <span class="profileFeaturedSongArt"><img src="${art}" alt="" /></span>
-        <span class="profileFeaturedSongText">
-          <span class="profileFeaturedSongKicker">Featured song</span>
-          <strong>${title}</strong>
-          <small>${escapeHtml(sub)}</small>
+    <section class="profileFeaturedCreation" data-featured-song="${sid}">
+      <p class="profileFeaturedCreationKicker">Featured creation</p>
+      <button type="button" class="profileFeaturedCreationMain" ${playAttr}="${sid}" aria-label="Play ${title}">
+        <span class="profileFeaturedCreationArt"><img src="${art}" alt="" loading="lazy" decoding="async" /></span>
+        <span class="profileFeaturedCreationBody">
+          <strong class="profileFeaturedCreationTitle">${title}</strong>
+          ${metaHtml}
         </span>
-        <span class="profileFeaturedSongPlay" aria-hidden="true">▶</span>
+        ${discoverFeedPlayBtnHtml()}
       </button>
     </section>
   `;
+}
+
+/** @deprecated Use profileFeaturedCreationHtml in the hero slot. */
+function profileFeaturedSongHtml(track, mode = "own") {
+  return profileFeaturedCreationHtml(track, mode);
+}
+
+function bindProfileFeaturedCreationPlayHandlers(root, mode = "own", tracks = []) {
+  if (!root) return;
+  const attr = mode === "own" ? "data-profile-featured-play" : "data-public-featured-play";
+  root.querySelectorAll(`[${attr}]`).forEach((b) => {
+    b.addEventListener("click", () => {
+      const sid = b.getAttribute(attr);
+      if (!sid) return;
+      if (mode === "own") {
+        const hubHit = HUB_FEATURE_ENABLED && getProfileOwnerHubItems().some((p) => String(p.id) === String(sid));
+        if (hubHit) {
+          void playHubPostFromProfile(sid);
+          return;
+        }
+        void playLibraryListRowById(sid, { openPlayer: true });
+        return;
+      }
+      const t = tracks.find((x) => String(x.id) === String(sid));
+      if (!t?.url) return;
+      void playLibraryUrlOnPlayer(t.url, t.title || "Song", t.artUrl || "", {
+        discoverFeed: false,
+        openPlayer: true,
+        playSource: {
+          songId: String(t.id || ""),
+          ownerUserId: String(t.userId || t.ownerUserId || ""),
+          taskId: String(t.taskId || ""),
+          audioId: String(t.audioId || ""),
+        },
+      });
+    });
+  });
+}
+
+function renderProfileFeaturedCreation() {
+  const slot = els.profileFeaturedCreation;
+  if (!slot) return;
+  const route = document.body.getAttribute("data-route") || "";
+  if (route !== "profile" || profileEditing) {
+    slot.hidden = true;
+    slot.innerHTML = "";
+    return;
+  }
+  const resolved = resolveProfileFeaturedTrack();
+  if (!resolved?.track) {
+    slot.hidden = true;
+    slot.innerHTML = "";
+    return;
+  }
+  slot.hidden = false;
+  slot.innerHTML = profileFeaturedCreationHtml(resolved.track, "own");
+  bindProfileFeaturedCreationPlayHandlers(slot, "own");
 }
 
 async function setLibraryTrackFeaturedOnProfile(id, featured) {
@@ -13904,6 +14020,7 @@ async function setLibraryTrackFeaturedOnProfile(id, featured) {
   saveLibrary(nextLib);
   renderProfileHubShared();
   showToast(featured ? "Pinned as your featured song." : "Featured song removed.");
+  try { renderProfileFeaturedCreation(); } catch {}
   const changed = nextLib.filter((t) => t.publicOnProfile && (String(t.id) === trackId || previousFeaturedIds.has(String(t.id))));
   for (const t of changed) {
     await supabasePatchUserSong(t, { meta: t.meta || {} }).catch(() => null);
@@ -16062,17 +16179,14 @@ function personaTypeLabel(type) {
 
 function updateProfilePersonaRow() {
   if (!els.profilePersonaRow || !els.profilePersonaLabel) return;
-  if (!authSession?.user?.id) {
-    els.profilePersonaRow.hidden = true;
-    return;
-  }
+  if (els.profilePersonaRow) els.profilePersonaRow.hidden = true;
   const id = getActivePersonaId();
   const list = loadPersonas();
   const hit = list.find((x) => String(x.personaId) === id);
   const primary = hit || (list.length === 1 ? list[0] : null);
   const titleEl = els.profilePersonaSignatureTitle;
   const n = list.length;
-  els.profilePersonaRow.hidden = false;
+  if (els.profilePersonaRow) els.profilePersonaRow.hidden = true;
   if (primary && titleEl) {
     titleEl.textContent = String(primary.label || "").trim() || "My voice";
     if (id && hit) {
@@ -28341,6 +28455,7 @@ function setProfileEditing(on) {
   }
   try { renderProfileNabadCertBadge(); } catch {}
   try { renderProfileMusicStylesInline(); } catch {}
+  try { renderProfileFeaturedCreation(); } catch {}
 }
 
 /** Show the soft "pick a username" banner when the current user is
@@ -28983,6 +29098,7 @@ function renderProfileMusicStylesInline(profile = activeProfile) {
   if (!signedIn || profileEditing) {
     wrap.hidden = true;
     btn.textContent = "";
+    btn.innerHTML = "";
     wrap.setAttribute("aria-hidden", "true");
     return;
   }
@@ -28991,21 +29107,24 @@ function renderProfileMusicStylesInline(profile = activeProfile) {
     if (!isOwn) {
       wrap.hidden = true;
       btn.textContent = "";
+      btn.innerHTML = "";
       wrap.setAttribute("aria-hidden", "true");
       return;
     }
     wrap.hidden = false;
     btn.textContent = "Add music styles";
+    btn.innerHTML = "";
     btn.classList.add("profileMusicStylesLine--empty");
     btn.setAttribute("aria-label", "Add music styles");
     wrap.setAttribute("aria-hidden", "false");
     return;
   }
   btn.classList.remove("profileMusicStylesLine--empty");
+  const shown = prefs.length > 5 ? prefs.slice(0, 5) : prefs;
+  btn.innerHTML = shown.map((label) => `<span class="profileMusicStylePill">${escapeHtml(label)}</span>`).join("");
   const line = prefs.length <= 5
     ? prefs.join(" · ")
     : `${prefs.slice(0, 4).join(" · ")} · +${prefs.length - 4}`;
-  btn.textContent = line;
   btn.setAttribute("aria-label", isOwn ? `Music styles: ${line}. Tap to edit.` : `Music styles: ${line}`);
   wrap.hidden = false;
   wrap.setAttribute("aria-hidden", "false");
@@ -29696,6 +29815,7 @@ function renderProfileLibraryPublicOnLinkSection() {
   renderProfileHero(rows);
   renderProfileActionRow(rows);
   renderProfileTopWeek(rows);
+  try { renderProfileFeaturedCreation(); } catch {}
   try {
     applyProfileAuraVisualTint();
   } catch {}
@@ -29740,9 +29860,7 @@ function renderProfileLibraryPublicOnLinkSection() {
       ? `<div class="profileReleasesLoadMoreRow"><button type="button" id="profileReleasesLoadMore" class="profileReleasesLoadMore" aria-label="Load more">Load more<span class="profileReleasesLoadMoreCount">${remaining}</span></button></div>`
       : "";
   const esc = escapeHtml;
-  const featured = allLib.find(isFeaturedOnProfile);
   els.profileHubSharedList.innerHTML = `
-    ${profileFeaturedSongHtml(featured, "own")}
     <ul class="libraryRows" role="list">
       ${rows
         .map((t) => {
@@ -29794,12 +29912,6 @@ function renderProfileLibraryPublicOnLinkSection() {
       { once: true },
     );
   }
-  els.profileHubSharedList.querySelectorAll("[data-profile-featured-play]").forEach((b) => {
-    b.addEventListener("click", () => {
-      const id = b.getAttribute("data-profile-featured-play");
-      if (id) void playLibraryListRowById(id, { openPlayer: true });
-    });
-  });
   els.profileHubSharedList.querySelectorAll("[data-profile-lib-play]").forEach((b) => {
     b.addEventListener("click", () => {
       const id = b.getAttribute("data-profile-lib-play");
@@ -29849,6 +29961,7 @@ function renderProfileHubShared() {
   renderProfileHero(items);
   renderProfileActionRow(items);
   renderProfileTopWeek(items);
+  try { renderProfileFeaturedCreation(); } catch {}
   // After the hero paints, sample the latest cover art so the header
   // tint matches the music. This is the "page IS the music" thread —
   // the pulse stroke + live dot + share button all inherit this color.

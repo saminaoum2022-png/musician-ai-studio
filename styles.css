@@ -13404,7 +13404,7 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
 .profileFeaturedCreationMeta--accent{
   color: rgba(94, 234, 212, 0.78);
 }
-.profileFeaturedCreationMain .discoverFeedPlayBtn{
+.profileFeaturedCreationMain .discoverFeedPlayBtn--hero{
   pointer-events: none;
 }
 
@@ -16997,6 +16997,14 @@ input::placeholder, textarea::placeholder{
     width: 42px;
     height: 42px;
     position: relative;
+    background:
+      linear-gradient(135deg, rgba(35, 213, 171, 0.2), rgba(124, 92, 255, 0.26)),
+      linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.035)),
+      rgba(10, 12, 18, 0.78);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.13),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.14),
+      0 6px 16px rgba(0, 0, 0, 0.22);
   }
   .hubNowPPIco{
     position: absolute;
@@ -31118,7 +31126,7 @@ section.mentorPage{
   font-weight: 700;
   color: rgba(223, 231, 251, 0.56);
 }
-.discoverWeeklyChart--final .chartWeekWinner .discoverFeedPlayBtn{
+.discoverWeeklyChart--final .chartWeekWinner .discoverFeedPlayBtn--hero{
   width: 40px;
   height: 40px;
   align-self: center;
@@ -31208,9 +31216,8 @@ section.mentorPage{
 }
 .discoverWeeklyChart--final .chartWeekRunnerPlay,
 .discoverWeeklyChart--final .chartWeekLeaderPlay{
-  width: 32px;
-  height: 32px;
-  box-shadow: none;
+  width: 28px;
+  height: 28px;
 }
 .discoverWeeklyChart--final .chartWeekFullBtn{
   display: flex;
@@ -31381,8 +31388,8 @@ section.mentorPage{
   color: rgba(223, 231, 251, 0.44);
 }
 .discoverWeeklyChartPageList .chartWeekLeaderPlay{
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
 }
 .chartWeekTrend{
   min-width: 22px;
@@ -31776,15 +31783,22 @@ section.mentorPage{
   flex: none;
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  color: rgba(248, 250, 255, 0.78);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+  opacity: 0.55;
+  transition: opacity 160ms ease, background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+.chartHero:active .chartHeroPlayIco,
+.discoverChallengeHero:active .chartHeroPlayIco{
+  opacity: 0.92;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(248, 250, 255, 0.92);
 }
 .chartRows{
   display: flex;
@@ -32187,7 +32201,7 @@ section.mentorPage{
   font-size: 10px;
   color: rgba(223, 231, 251, 0.38);
 }
-.discoverFeedPlayBtn{
+.discoverFeedPlayBtn--hero{
   width: 36px;
   height: 36px;
   border-radius: 999px;
@@ -32198,6 +32212,31 @@ section.mentorPage{
   background: linear-gradient(135deg, rgba(35, 213, 171, 0.22), rgba(124, 92, 255, 0.28));
   border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+  opacity: 1;
+}
+.discoverListPlayBtn{
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: rgba(248, 250, 255, 0.76);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+  opacity: 0.52;
+  transition: opacity 160ms ease, background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+.discoverFeedSongRow:active .discoverListPlayBtn,
+.discoverFeedChallengeHeroMain:active .discoverListPlayBtn,
+.chartWeekRunner:active .discoverListPlayBtn,
+.chartWeekLeaderRow:active .discoverListPlayBtn,
+.discoverWeeklyChartPageList .chartWeekLeaderRow:active .discoverListPlayBtn{
+  opacity: 0.92;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(248, 250, 255, 0.92);
 }
 .discoverFeedTemplateGrid{
   display: grid;
@@ -32249,15 +32288,19 @@ section.mentorPage{
   left: 50%;
   bottom: 10px;
   transform: translateX(-50%);
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   border-radius: 999px;
   display: grid;
   place-items: center;
-  color: #fff;
-  background: rgba(0, 0, 0, 0.42);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(8px);
+  color: rgba(248, 250, 255, 0.76);
+  background: rgba(0, 0, 0, 0.38);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  opacity: 0.58;
+  box-shadow: none;
+}
+.discoverFeedTemplateCard:active .discoverFeedTemplatePlay{
+  opacity: 0.9;
 }
 .discoverFeedTemplateTitle{
   display: block;
@@ -32592,17 +32635,19 @@ section.mentorPage{
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 46px;
-  height: 46px;
+  width: 32px;
+  height: 32px;
   border-radius: 999px;
   display: grid;
   place-items: center;
-  color: #fff;
-  background: rgba(0, 0, 0, 0.38);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  color: rgba(248, 250, 255, 0.78);
+  background: rgba(0, 0, 0, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  opacity: 0.55;
+  box-shadow: none;
+}
+.discoverTemplatesCard:active .discoverTemplatesPlay{
+  opacity: 0.88;
 }
 .discoverTemplatesBody{
   display: flex;
@@ -32876,8 +32921,8 @@ section.mentorPage{
   position: absolute;
   right: 8px;
   bottom: 8px;
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   z-index: 2;
 }
 .discoverChallengeCard .discoverChallengeHero .chartHeroArtWrap{
@@ -33180,18 +33225,20 @@ section.mentorPage{
   position: absolute;
   right: 4px;
   bottom: 4px;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   display: grid;
   place-items: center;
   font-size: 8px;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  color: rgba(248, 250, 255, 0.76);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  opacity: 0.55;
+  box-shadow: none;
+}
+.discoverHubTopEntry:active .discoverHubTopEntryPlay{
+  opacity: 0.9;
 }
 .discoverHubTopEntryTitle{
   font-size: 11px;
@@ -33534,8 +33581,19 @@ section.mentorPage{
 }
 .discoverHubEntryMiniPlay{
   flex: none;
-  font-size: 11px;
-  color: rgba(94, 234, 212, 0.85);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  color: rgba(248, 250, 255, 0.72);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  opacity: 0.5;
+}
+.discoverHubEntryMini:active .discoverHubEntryMiniPlay{
+  opacity: 0.88;
 }
 
 /* Community picks */
@@ -33587,17 +33645,19 @@ section.mentorPage{
   position: absolute;
   right: 6px;
   bottom: 6px;
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  color: rgba(248, 250, 255, 0.76);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  opacity: 0.52;
+  box-shadow: none;
+}
+.discoverHubPickCard:active .discoverHubPickPlayIco{
+  opacity: 0.88;
 }
 .discoverHubPickStats{
   display: flex;

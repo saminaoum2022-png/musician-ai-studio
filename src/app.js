@@ -33,7 +33,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260620profileFeatured";
+const APP_BUILD = "20260620discoverPlayCalm";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -6178,7 +6178,7 @@ function chartWeekWinnerHtml(hero) {
         ${hero.username ? `<span class="chartWeekWinnerBy">@${escapeHtml(hero.username)}</span>` : ""}
         ${heroPlays ? `<span class="chartWeekWinnerPlays">${escapeHtml(chartWeekPlaysText(heroPlays))}</span>` : ""}
       </span>
-      ${discoverFeedPlayBtnHtml()}
+      ${discoverFeedPlayBtnHtml({ hero: true })}
     </button>`;
 }
 
@@ -6200,7 +6200,7 @@ function chartWeekRunnerHtml(e) {
         <strong class="chartWeekRunnerTitle">${escapeHtml(title)}</strong>
         ${plays ? `<span class="chartWeekRunnerPlays">${escapeHtml(chartWeekPlaysText(plays, true))}</span>` : ""}
       </span>
-      <span class="chartWeekRunnerPlay discoverFeedPlayBtn" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M8 5.5v13l11-6.5-11-6.5Z"/></svg></span>
+      ${discoverListPlayBtnHtml("chartWeekRunnerPlay")}
     </button>`;
 }
 
@@ -6224,7 +6224,7 @@ function chartWeekLeaderboardRowHtml(e) {
         ${e.username ? `<span class="chartWeekLeaderBy">@${escapeHtml(e.username)}</span>` : ""}
         ${plays ? `<span class="chartWeekLeaderPlays">${escapeHtml(featured ? chartWeekPlaysText(plays) : chartWeekPlaysText(plays, true))}</span>` : ""}
       </span>
-      <span class="chartWeekLeaderPlay discoverFeedPlayBtn" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M8 5.5v13l11-6.5-11-6.5Z"/></svg></span>
+      ${discoverListPlayBtnHtml("chartWeekLeaderPlay")}
     </button>`;
 }
 
@@ -7221,8 +7221,21 @@ function discoverFeedSectionHeadHtml(title, actionHtml = "") {
     </header>`;
 }
 
-function discoverFeedPlayBtnHtml() {
-  return `<span class="discoverFeedPlayBtn" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M8 5.5v13l11-6.5-11-6.5Z"/></svg></span>`;
+function discoverPlayBtnSvg(size = 16) {
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><path fill="currentColor" d="M8 5.5v13l11-6.5-11-6.5Z"/></svg>`;
+}
+
+function discoverListPlayBtnHtml(extraClass = "") {
+  const cls = extraClass ? `discoverListPlayBtn ${extraClass}` : "discoverListPlayBtn";
+  return `<span class="${cls}" aria-hidden="true">${discoverPlayBtnSvg(14)}</span>`;
+}
+
+/** Gradient hero play — Top This Week #1 and Featured Creation only. */
+function discoverFeedPlayBtnHtml(opts = {}) {
+  if (opts.hero) {
+    return `<span class="discoverFeedPlayBtn discoverFeedPlayBtn--hero" aria-hidden="true">${discoverPlayBtnSvg(16)}</span>`;
+  }
+  return discoverListPlayBtnHtml();
 }
 
 function discoverFeedSongRowHtml(t, profMap, opts = {}) {
@@ -7245,7 +7258,7 @@ function discoverFeedSongRowHtml(t, profMap, opts = {}) {
         ${originHtml}
         ${stats}
       </span>
-      ${discoverFeedPlayBtnHtml()}
+      ${discoverListPlayBtnHtml()}
     </button>`;
 }
 
@@ -7298,7 +7311,7 @@ function discoverFeedChallengeBlockHtml(c, tracks, profMap, opts = {}) {
               ${handle ? `<span class="discoverFeedSongBy">by @${escapeHtml(handle)}</span>` : ""}
               <span class="discoverFeedOrigin">${escapeHtml(origin)}</span>
             </span>
-            ${discoverFeedPlayBtnHtml()}
+            ${discoverListPlayBtnHtml()}
           </button>
           <button type="button" class="discoverFeedJoinBtn" ${joinAttrs}>Join challenge</button>
         </div>`;
@@ -13936,7 +13949,7 @@ function profileFeaturedCreationHtml(track, mode = "own") {
           <strong class="profileFeaturedCreationTitle">${title}</strong>
           ${metaHtml}
         </span>
-        ${discoverFeedPlayBtnHtml()}
+        ${discoverFeedPlayBtnHtml({ hero: true })}
       </button>
     </section>
   `;

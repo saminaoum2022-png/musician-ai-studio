@@ -6712,6 +6712,15 @@ textarea{
   font-size: 11.5px;
   line-height: 1.3;
 }
+.createChallengeHint--template{
+  border-color: rgba(94,234,212,0.22);
+}
+.createChallengeHint--spark{
+  border-color: rgba(124,92,255,0.24);
+}
+.createChallengeHint--live{
+  border-color: rgba(250,204,21,0.22);
+}
 .remixSourceBannerCover{
   flex: 0 0 auto;
   width: 36px;

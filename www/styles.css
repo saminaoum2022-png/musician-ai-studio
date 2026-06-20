@@ -6712,6 +6712,15 @@ textarea{
   font-size: 11.5px;
   line-height: 1.3;
 }
+.createChallengeHint--template{
+  border-color: rgba(94,234,212,0.22);
+}
+.createChallengeHint--spark{
+  border-color: rgba(124,92,255,0.24);
+}
+.createChallengeHint--live{
+  border-color: rgba(250,204,21,0.22);
+}
 .remixSourceBannerCover{
   flex: 0 0 auto;
   width: 36px;
@@ -31643,6 +31652,272 @@ section.mentorPage{
 }
 .discoverFeedV2 .discoverWeeklyChart .chartTitleBadge{
   filter: none;
+}
+
+/* ─── Discover Templates tab — song showcase ─────────────────────────── */
+.discoverTemplatesTab{
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.discoverTemplatesIntro{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 2px 2px 0;
+}
+.discoverTemplatesIntroCopy{
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.discoverTemplatesIntroTitle{
+  margin: 0;
+  font-size: clamp(20px, 5.2vw, 24px);
+  font-weight: 850;
+  letter-spacing: -0.03em;
+  color: #f8faff;
+  line-height: 1.12;
+}
+.discoverTemplatesIntroSub{
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(223, 231, 251, 0.52);
+}
+.discoverTemplatesSort{
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.discoverTemplatesSortLabel{
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(223, 231, 251, 0.38);
+}
+.discoverTemplatesSort select{
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background:
+    rgba(255, 255, 255, 0.04)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23dfe7fb' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+    no-repeat right 12px center;
+  color: #f8faff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  padding: 9px 32px 9px 14px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverTemplatesSort select:active{
+  border-color: rgba(94, 234, 212, 0.28);
+  background-color: rgba(124, 92, 255, 0.08);
+}
+.discoverTemplatesFilters{
+  margin: 0 -2px;
+}
+.discoverTemplatesFiltersTrack{
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  padding: 2px 2px 8px;
+  scrollbar-width: none;
+}
+.discoverTemplatesFiltersTrack::-webkit-scrollbar{ display: none; }
+.discoverTemplatesChip{
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  min-width: 72px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: rgba(223, 231, 251, 0.62);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverTemplatesChipIcon{
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  line-height: 1;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  transition:
+    border-color 200ms ease,
+    background 200ms ease,
+    box-shadow 200ms ease,
+    transform 200ms ease;
+}
+.discoverTemplatesChipLabel{
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.discoverTemplatesChip.is-active{
+  color: #f8faff;
+}
+.discoverTemplatesChip.is-active .discoverTemplatesChipIcon{
+  border-color: rgba(35, 213, 171, 0.34);
+  background: linear-gradient(135deg, rgba(35, 213, 171, 0.16), rgba(124, 92, 255, 0.18));
+  box-shadow:
+    0 0 0 1px rgba(124, 92, 255, 0.1) inset,
+    0 10px 28px rgba(35, 213, 171, 0.1);
+}
+.discoverTemplatesChip:active .discoverTemplatesChipIcon{
+  transform: scale(0.96);
+}
+.discoverTemplatesGrid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+  width: 100%;
+}
+.discoverTemplatesCard{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverTemplatesCover{
+  position: relative;
+  aspect-ratio: 4 / 5;
+  border-radius: 18px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.discoverTemplatesCard--tall .discoverTemplatesCover{
+  aspect-ratio: 3 / 4.2;
+}
+.discoverTemplatesCard--wide .discoverTemplatesCover{
+  aspect-ratio: 1 / 1;
+}
+.discoverTemplatesCover img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.discoverTemplatesCoverShade{
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0) 42%, rgba(0,0,0,0.42) 100%);
+  pointer-events: none;
+}
+.discoverTemplatesPlay{
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.38);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+.discoverTemplatesBody{
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  width: 100%;
+  padding: 0 2px;
+}
+.discoverTemplatesTitle{
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #f8faff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoverTemplatesCreator{
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+.discoverTemplatesBy{
+  min-width: 0;
+  font-size: 11px;
+  color: rgba(223, 231, 251, 0.48);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoverTemplatesVerified{
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  color: #4ea4ff;
+}
+.discoverTemplatesVerified svg{
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.discoverTemplatesOrigin{
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 650;
+  color: rgba(94, 234, 212, 0.88);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoverTemplatesMetrics{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin-top: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: rgba(223, 231, 251, 0.42);
+}
+.discoverTemplatesMetrics--new{
+  color: rgba(94, 234, 212, 0.72);
 }
 
 /* ─── Discover V1 — community hub sections ───────────────────────────── */

@@ -22,7 +22,7 @@ import { initTheme } from "./theme.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260619challengeStrip";
+const APP_BUILD = "20260620creationNaming";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2523,9 +2523,11 @@ function challengePromptContext() {
 }
 
 function challengePromptMagicSeed(seed, challenge) {
-  const title = String(challenge?.title || "Challenge").trim();
+  const kind = creationSourceKind(challenge);
+  const label = creationSourceLabel(kind);
+  const title = String(challenge?.title || label).trim();
   return [
-    `Challenge: ${title}`,
+    `${label}: ${title}`,
     "",
     String(seed || "").trim(),
   ].filter(Boolean).join("\n");
@@ -2577,24 +2579,47 @@ function arabicAddressPronunciationNote(value, singerGender = "") {
   return "";
 }
 
+function setCreateTemplateLoadedHint(title) {
+  if (!els.createChallengeHint) return;
+  const t = String(title || "Template").trim();
+  els.createChallengeHint.classList.remove("createChallengeHint--template", "createChallengeHint--spark", "createChallengeHint--live");
+  els.createChallengeHint.classList.add("createChallengeHint--template");
+  if (els.createChallengeHintTitle) els.createChallengeHintTitle.textContent = `Template: ${t}`;
+  if (els.createChallengeHintSub) {
+    els.createChallengeHintSub.textContent = "Personalize the lyrics and style, then tap Generate.";
+  }
+  els.createChallengeHint.hidden = false;
+}
+
 function setCreateChallengeHint(challenge) {
   const c = challenge && typeof challenge === "object" ? challenge : null;
   if (!els.createChallengeHint) return;
   if (!c) {
     els.createChallengeHint.hidden = true;
+    els.createChallengeHint.classList.remove("createChallengeHint--template", "createChallengeHint--spark", "createChallengeHint--live");
     return;
   }
-  const title = String(c.title || "Challenge").trim();
+  const kind = creationSourceKind(c);
+  els.createChallengeHint.classList.remove("createChallengeHint--template", "createChallengeHint--spark", "createChallengeHint--live");
+  if (kind) els.createChallengeHint.classList.add(`createChallengeHint--${kind}`);
   const details = [c.occasion, c.genre, c.language && c.language !== "Auto" ? c.language : ""]
     .map((v) => String(v || "").trim())
     .filter(Boolean)
     .join(" · ");
-  if (els.createChallengeHintTitle) els.createChallengeHintTitle.textContent = `Challenge: ${title}`;
+  if (els.createChallengeHintTitle) els.createChallengeHintTitle.textContent = creationSourceHintTitle(c);
   if (els.createChallengeHintSub) {
     const voiceClip = isVoiceClipChallengeId(c.id);
-    els.createChallengeHintSub.textContent = voiceClip
-      ? "Record on Hum. Optional: type what you sang on Lyrics — or leave empty and Generate."
-      : `${details ? `${details}. ` : ""}Instructions below — edit them, then tap ✦ for a short lyric draft (not a full song).`;
+    if (kind === "template") {
+      els.createChallengeHintSub.textContent = details
+        ? `${details}. Edit below, then tap Generate.`
+        : "Pick the details, edit the lyrics, then tap Generate.";
+    } else if (kind === "live") {
+      els.createChallengeHintSub.textContent = "Drop your anthem — edit the lyrics, then tap Generate.";
+    } else if (voiceClip) {
+      els.createChallengeHintSub.textContent = "Record on Hum. Optional: type what you sang on Lyrics — or leave empty and Generate.";
+    } else {
+      els.createChallengeHintSub.textContent = `${details ? `${details}. ` : ""}Instructions below — edit them, then tap ✦ for a short lyric draft (not a full song).`;
+    }
   }
   els.createChallengeHint.hidden = false;
 }
@@ -4121,6 +4146,51 @@ const CHALLENGE_IDEAS = [
   },
 ];
 
+/** Classify how a song was started — templates (occasions), sparks (fun prompts), or live events. */
+function creationSourceKind(challenge) {
+  if (!challenge || typeof challenge !== "object") return null;
+  if (String(challenge.campaign || "").trim()) return "live";
+  const type = String(challenge.type || "").trim().toLowerCase();
+  if (type === "campaign") return "live";
+  const variant = String(challenge.variant || "").trim().toLowerCase();
+  if (variant === "occasion" || type === "occasion") return "template";
+  const id = String(challenge.id || "").trim();
+  if (id.startsWith("occasion:")) return "template";
+  return "spark";
+}
+
+function creationSourceLabel(kind) {
+  if (kind === "template") return "Template";
+  if (kind === "live") return "Live event";
+  if (kind === "spark") return "Spark";
+  return "Challenge";
+}
+
+function creationSourceHintTitle(challenge) {
+  if (!challenge) return "";
+  const kind = creationSourceKind(challenge);
+  const label = creationSourceLabel(kind);
+  const title = String(challenge.title || label).trim();
+  return `${label}: ${title}`;
+}
+
+function trackCreationSourceKind(track) {
+  const ch = challengeMetaForTrack(track);
+  if (ch) return creationSourceKind(ch);
+  if (templateMetaForTrack(track)) return "template";
+  return null;
+}
+
+function trackIsTemplateContent(track) {
+  if (templateMetaForTrack(track)) return true;
+  return trackCreationSourceKind(track) === "template";
+}
+
+function trackIsChallengeContent(track) {
+  const kind = trackCreationSourceKind(track);
+  return kind === "spark" || kind === "live";
+}
+
 const HOME_SEG_STORAGE_KEY = "nabadai_home_seg_v1";
 const CHALLENGE_SPARK_KICKERS = {
   "voice-note-flip": "Voice",
@@ -4782,6 +4852,7 @@ function applyDiscoveryIdeaToCreate(idea) {
     ...(idea.challenge ? { challenge: idea.challenge } : {}),
   };
   const challenge = challengePromptContext();
+  const sourceKind = challenge ? creationSourceKind(challenge) : null;
   setCreateChallengeHint(challenge);
   const focus = idea.createFocus
     || (idea.challenge?.id ? challengeCreateFocusForId(idea.challenge.id) : null);
@@ -4791,15 +4862,27 @@ function applyDiscoveryIdeaToCreate(idea) {
   try {
     setStatus?.(
       voiceClipOnly
-        ? `Challenge: ${title}. Record on Hum, then Generate.`
-        : challenge
-          ? `Challenge: ${title}. Edit the instructions or tap ✦ for a short lyric draft.`
-          : `Loaded idea: ${title}. Make it yours.`,
+        ? `Spark: ${title}. Record on Hum, then Generate.`
+        : sourceKind === "template"
+          ? `Template: ${title}. Edit below, then Generate.`
+          : sourceKind === "live"
+            ? `Live event: ${title}. Drop your anthem.`
+            : sourceKind === "spark"
+              ? `Spark: ${title}. Edit the instructions or tap ✦.`
+              : `Loaded idea: ${title}. Make it yours.`,
     );
   } catch {}
   try {
     showToast(
-      voiceClipOnly ? "Record on Hum — lyrics optional" : challenge ? "Challenge ready — edit the instructions or tap ✦" : "Idea loaded - make it yours",
+      voiceClipOnly
+        ? "Record on Hum — lyrics optional"
+        : sourceKind === "template"
+          ? "Template ready — make it yours"
+          : sourceKind === "live"
+            ? "Live event loaded — drop your anthem"
+            : sourceKind === "spark"
+              ? "Spark ready — make your version"
+              : "Idea loaded — make it yours",
       { icon: "♪", durationMs: 2600 },
     );
   } catch {}
@@ -4984,7 +5067,7 @@ function applyChallengeStartById(id, challengesMap) {
   const idea = {
     ...challenge,
     id: `challenge:${challenge.id}`,
-    title: `${challenge.title} Challenge`,
+    title: String(challenge.title || "Spark").trim(),
     prompt: String(challenge.prompt || "").trim(),
     lyrics: isVoiceClipChallengeId(challenge.id) ? "" : String(challenge.lyrics || challenge.prompt || "").trim(),
     style: withTemplateStyleGuard(`${String(challenge.style || "").trim()}, ${challengeDurationStyleClause(challenge.id)}`),
@@ -4995,18 +5078,18 @@ function applyChallengeStartById(id, challengesMap) {
     challenge: {
       id: challenge.id,
       title: challenge.title,
-      type: "daily",
+      type: "spark",
       occasion: "",
       genre: "",
       personName: "",
-      variant: "daily",
+      variant: "spark",
     },
   };
   if (!authSession?.user?.id) {
     stashPendingDiscoveryIdea(idea);
     setPostAuthReturnHash("#/generate");
     setPendingCreateAction("song");
-    try { showToast("Sign in to join this challenge", { icon: "♪", durationMs: 2600 }); } catch {}
+    try { showToast("Sign in to try this spark", { icon: "♪", durationMs: 2600 }); } catch {}
     try { location.hash = "#/auth"; } catch {}
     scheduleApplyRoute();
     return;
@@ -6266,6 +6349,15 @@ function discoverContentTypeForTrack(t) {
   }
   const ch = challengeMetaForTrack(t);
   if (ch) {
+    const kind = creationSourceKind(ch);
+    if (kind === "template") {
+      const title = String(ch.title || "").toLowerCase();
+      if (title.includes("birthday") || title.includes("bday")) return { key: "birthday", label: "Birthday" };
+      if (title.includes("love") || title.includes("anniv") || title.includes("wedding")) return { key: "love", label: "Love song" };
+      return { key: "template", label: "Template" };
+    }
+    if (kind === "live") return { key: "challenge", label: "Live event" };
+    if (kind === "spark") return { key: "remix", label: "Spark" };
     const title = String(ch.title || "").toLowerCase();
     if (title.includes("love")) return { key: "love", label: "Love song" };
     if (title.includes("birthday")) return { key: "birthday", label: "Birthday" };
@@ -6424,6 +6516,20 @@ function discoverOriginLineText(track) {
   }
   const ch = challengeMetaForTrack(track);
   if (ch) {
+    const kind = creationSourceKind(ch);
+    if (kind === "live") {
+      const title = String(ch.title || "Live event").trim();
+      return title.toLowerCase().includes("challenge") ? `From ${title}` : `From ${title} Challenge`;
+    }
+    if (kind === "template") {
+      let name = String(ch.title || ch.occasion || "Template").trim().replace(/\s+challenge$/i, "").trim();
+      if (!name.toLowerCase().includes("template")) name = `${name} Template`;
+      return `Created with ${name}`;
+    }
+    if (kind === "spark") {
+      const title = String(ch.title || "Spark").trim();
+      return title.toLowerCase().includes("spark") ? `From ${title}` : `From ${title} Spark`;
+    }
     const title = String(ch.title || "Challenge").trim();
     return title.toLowerCase().includes("challenge") ? `From ${title}` : `From ${title} Challenge`;
   }
@@ -6469,8 +6575,8 @@ function discoverChallengeRankText(track, tracks) {
 
 function discoverFeedFilterTracks(tab, tracks) {
   const sorted = discoverFeedSortByPlays(tracks);
-  if (tab === "templates") return sorted.filter((t) => templateMetaForTrack(t));
-  if (tab === "challenges") return sorted.filter((t) => challengeMetaForTrack(t));
+  if (tab === "templates") return discoverTemplatesBaseTracks(tracks, "all");
+  if (tab === "challenges") return sorted.filter((t) => trackIsChallengeContent(t));
   if (tab === "remixes") return sorted.filter((t) => remixAttributionForTrack(t) || mashupAttributionForTrack(t));
   if (tab === "all") return sorted;
   return discoverCommunityPicksTracks(tracks);
@@ -6531,8 +6637,15 @@ function discoverTrackMatchesTemplateFilter(track, filterId) {
   return discoverTrackMatchesTemplateFilterTokens(track, filter.tokens);
 }
 
-function discoverTemplatesBaseTracks(tracks) {
-  return discoverFeedSortByPlays(tracks).filter((t) => templateMetaForTrack(t));
+function discoverTemplatesBaseTracks(tracks, filterId = _discoverTemplatesFilter) {
+  const sorted = discoverFeedSortByPlays(tracks);
+  if (filterId === "worldcup") {
+    return sorted.filter((t) => {
+      const ch = challengeMetaForTrack(t);
+      return ch && String(ch.campaign || "").trim();
+    });
+  }
+  return sorted.filter((t) => trackIsTemplateContent(t));
 }
 
 function discoverTemplatesSortTracks(tracks, sort = _discoverTemplatesSort) {
@@ -6556,7 +6669,7 @@ function discoverTemplatesSortTracks(tracks, sort = _discoverTemplatesSort) {
 }
 
 function discoverTemplatesFilteredTracks(tracks, filterId = _discoverTemplatesFilter, sort = _discoverTemplatesSort) {
-  const base = discoverTemplatesBaseTracks(tracks).filter((t) => discoverTrackMatchesTemplateFilter(t, filterId));
+  const base = discoverTemplatesBaseTracks(tracks, filterId).filter((t) => discoverTrackMatchesTemplateFilter(t, filterId));
   return discoverTemplatesSortTracks(base, sort);
 }
 
@@ -6785,7 +6898,7 @@ function discoverFeedChallengeBlockHtml(c, tracks, profMap, opts = {}) {
 
 function renderDiscoverFeedForYou(tracks, profMap) {
   const remixTracks = discoverFeedSortByPlays(tracks).filter((t) => remixAttributionForTrack(t) || mashupAttributionForTrack(t)).slice(0, 6);
-  const templateTracks = discoverFeedSortByPlays(tracks).filter((t) => templateMetaForTrack(t)).slice(0, 3);
+  const templateTracks = discoverFeedSortByPlays(tracks).filter((t) => trackIsTemplateContent(t)).slice(0, 3);
   const topChallenge = DISCOVER_LIVE_CHALLENGES[0];
   const challengeBlock = topChallenge
     ? discoverFeedChallengeBlockHtml(topChallenge, tracks, profMap, {
@@ -6816,7 +6929,7 @@ function renderDiscoverFeedTabPanel(tab, tracks, profMap) {
   if (tab === "for-you") return renderDiscoverFeedForYou(tracks, profMap);
   if (tab === "challenges") {
     const blocks = DISCOVER_LIVE_CHALLENGES.map((c) => discoverFeedChallengeBlockHtml(c, tracks, profMap)).join("");
-    return blocks || `<p class="discoverHubQuietNote discoverFeedEmpty">Challenge songs will appear as creators join live events.</p>`;
+    return blocks || `<p class="discoverHubQuietNote discoverFeedEmpty">Sparks and live events will appear here as creators publish.</p>`;
   }
   if (tab === "templates") {
     return renderDiscoverTemplatesTab(tracks, profMap);
@@ -7948,7 +8061,8 @@ function applyRemixTemplateToCreate(tpl, name) {
     searchTemplateTitle: String(tpl.title || "").trim(),
     searchRemixPersonalizedFor: cleanName,
   };
-  try { setStatus?.(`Loaded ${tpl.title} — tap Generate when ready.`); } catch {}
+  setCreateTemplateLoadedHint(tpl.title);
+  try { setStatus?.(`Template: ${tpl.title} — tap Generate when ready.`); } catch {}
 }
 
 function openDiscoverSearch() {
@@ -12998,12 +13112,21 @@ function challengePillHtml(label = "Challenge") {
 
 function challengeAttributionText(challenge) {
   if (!challenge) return "";
+  const kind = creationSourceKind(challenge);
   const title = String(challenge.title || "Challenge").trim();
-  // Live-event entries (World Cup etc.): show the event + team instead of
-  // the generic "Joined …" copy.
-  if (String(challenge.campaign || "").trim()) {
+  if (kind === "live") {
     const team = `${String(challenge.teamFlag || "").trim()} ${String(challenge.teamName || "").trim()}`.trim();
     return `${title}${team ? ` · ${team}` : ""}`;
+  }
+  if (kind === "template") {
+    let name = title.replace(/\s+challenge$/i, "").trim() || String(challenge.occasion || "Template").trim();
+    if (!name.toLowerCase().includes("template")) name = `${name} Template`;
+    const forWho = challenge.personName ? ` · For ${challenge.personName}` : "";
+    return `Created with ${name}${forWho}`;
+  }
+  if (kind === "spark") {
+    const sparkTitle = title.toLowerCase().includes("spark") ? title : `${title} Spark`;
+    return `Spark · ${sparkTitle}`;
   }
   const bits = [challenge.occasion, challenge.genre, challenge.language && challenge.language !== "Auto" ? challenge.language : ""].map((x) => String(x || "").trim()).filter(Boolean);
   const forWho = challenge.personName ? ` · For ${challenge.personName}` : "";
@@ -13031,10 +13154,15 @@ function playerAttributionsOverlap(challenge, tplMeta) {
 
 function playerChallengeAttributionText(challenge) {
   if (!challenge) return "";
-  if (String(challenge.campaign || "").trim()) {
+  const kind = creationSourceKind(challenge);
+  if (kind === "live") {
     const title = String(challenge.title || "Live event").trim();
     const team = `${String(challenge.teamFlag || "").trim()} ${String(challenge.teamName || "").trim()}`.trim();
     return team ? `Join ${title} · ${team}` : `Join ${title}`;
+  }
+  if (kind === "spark") {
+    const title = String(challenge.title || "Spark").trim();
+    return title.toLowerCase().includes("spark") ? `Join ${title}` : `Join ${title} Spark`;
   }
   const title = String(challenge.title || "Challenge").trim();
   const forWho = challenge.personName ? ` for ${challenge.personName}` : "";
@@ -13152,8 +13280,21 @@ function templateMetaForTrack(track) {
 
 function openChallengeFromTrackMeta(challenge) {
   if (!challenge) return;
+  const kind = creationSourceKind(challenge);
+  if (kind === "template") {
+    openTemplateFromTrackMeta({
+      searchTemplateId: String(challenge.id || "").trim() || `occasion:${challenge.occasion || "occasion"}`,
+      searchTemplateTitle: String(challenge.title || challenge.occasion || "Template").trim(),
+    });
+    return;
+  }
   if (!authSession?.user?.id) {
-    try { showToast("Sign in to try this challenge.", { icon: "♪", durationMs: 2800 }); } catch {}
+    try {
+      showToast(
+        kind === "live" ? "Sign in to join this live event." : "Sign in to try this spark.",
+        { icon: "♪", durationMs: 2800 },
+      );
+    } catch {}
     try { location.hash = "#/auth"; } catch {}
     scheduleApplyRoute?.();
     return;
@@ -13161,16 +13302,21 @@ function openChallengeFromTrackMeta(challenge) {
   if (String(challenge.campaign || "").trim()) {
     try { location.hash = "#/challenges"; } catch {}
     scheduleApplyRoute?.();
-    try { showToast("Browse live challenges on Create.", { icon: "🏆", durationMs: 3200 }); } catch {}
+    try { showToast("Browse live events on Create.", { icon: "🏆", durationMs: 3200 }); } catch {}
     return;
   }
   const id = String(challenge.id || "").trim();
   if (!id) {
-    try { showToast("This challenge can't be reopened.", { icon: "!", durationMs: 2800 }); } catch {}
+    try { showToast("This spark can't be reopened.", { icon: "!", durationMs: 2800 }); } catch {}
     return;
   }
   applyChallengeStartById(id, null);
-  try { showToast("Challenge loaded — make your version.", { icon: "♪", durationMs: 3200 }); } catch {}
+  try {
+    showToast(
+      kind === "live" ? "Live event loaded — drop your anthem." : "Spark loaded — make your version.",
+      { icon: "♪", durationMs: 3200 },
+    );
+  } catch {}
 }
 
 function openTemplateFromTrackMeta(tplMeta) {
@@ -13182,12 +13328,23 @@ function openTemplateFromTrackMeta(tplMeta) {
     return;
   }
   const tplId = String(tplMeta.searchTemplateId || "").trim();
-  const title = String(tplMeta.searchTemplateTitle || "").trim();
+  const title = String(tplMeta.searchTemplateTitle || "Template").trim();
+  const occasionRef = tplId.replace(/^idea:/, "");
+  if (occasionRef.startsWith("occasion:")) {
+    const occId = String(occasionRef.split(":")[1] || "").trim();
+    if (occId && CHALLENGE_OCCASIONS.some((o) => String(o.id) === occId)) {
+      applyDiscoverOccasionStart(occId);
+      try { showToast("Template loaded — make it yours.", { icon: "♪", durationMs: 3200 }); } catch {}
+      return;
+    }
+  }
   if (tplId.startsWith("idea:")) {
     const ideaId = tplId.slice(5);
-    const idea =
-      DISCOVERY_QUICK_IDEAS.find((x) => String(x.id) === ideaId) ||
-      CHALLENGE_IDEAS.find((x) => String(x.id) === ideaId);
+    if (CHALLENGE_IDEAS.some((x) => String(x.id) === ideaId)) {
+      applyChallengeStartById(ideaId, null);
+      return;
+    }
+    const idea = DISCOVERY_QUICK_IDEAS.find((x) => String(x.id) === ideaId);
     if (idea) {
       applyDiscoveryIdeaToCreate(idea);
       try { showToast("Template loaded — make it yours.", { icon: "♪", durationMs: 3200 }); } catch {}
@@ -13749,6 +13906,17 @@ function wirePlayerAttributionActionsOnce() {
 function setPlayerChallengeAttribution(challenge) {
   wirePlayerAttributionActionsOnce();
   const c = challenge && (challenge.id || challenge.title || challenge.campaign) ? challenge : null;
+  const kind = creationSourceKind(c);
+  if (kind === "template") {
+    _playerChallengeCtx = null;
+    if (els.playerChallengeAttributionText) els.playerChallengeAttributionText.textContent = "";
+    if (els.playerChallengeAttribution) {
+      els.playerChallengeAttribution.hidden = true;
+      els.playerChallengeAttribution.disabled = true;
+      els.playerChallengeAttribution.setAttribute("aria-label", "");
+    }
+    return;
+  }
   _playerChallengeCtx = c;
   const text = playerChallengeAttributionText(c);
   if (els.playerChallengeAttributionText) els.playerChallengeAttributionText.textContent = text;
@@ -13756,7 +13924,8 @@ function setPlayerChallengeAttribution(challenge) {
     els.playerChallengeAttribution.hidden = !text;
     const canOpen = Boolean(c && (String(c.campaign || "").trim() || String(c.id || "").trim()));
     els.playerChallengeAttribution.disabled = !canOpen;
-    const label = c?.title ? `Join challenge: ${c.title}` : "Join challenge";
+    const joinLabel = kind === "live" ? "Join live event" : "Join spark";
+    const label = c?.title ? `${joinLabel}: ${c.title}` : joinLabel;
     els.playerChallengeAttribution.setAttribute("aria-label", text && canOpen ? label : "");
   }
 }
@@ -13764,8 +13933,16 @@ function setPlayerChallengeAttribution(challenge) {
 function setPlayerTemplateAttribution(track, opts = {}) {
   wirePlayerAttributionActionsOnce();
   const challenge = opts.challenge ?? challengeMetaForTrack(track);
-  const tpl = templateMetaForTrack(track);
-  if (tpl && challenge && playerAttributionsOverlap(challenge, tpl)) {
+  let tpl = templateMetaForTrack(track);
+  const chKind = creationSourceKind(challenge);
+  if (!tpl && challenge && chKind === "template") {
+    tpl = {
+      searchTemplateId: String(challenge.id || "").trim() || `occasion:${String(challenge.occasion || "occasion").trim()}`,
+      searchTemplateTitle: String(challenge.title || challenge.occasion || "Template").trim(),
+      styleInput: String(track?.meta?.styleInput || track?.meta?.styleSent || "").trim(),
+    };
+  }
+  if (tpl && challenge && chKind !== "template" && playerAttributionsOverlap(challenge, tpl)) {
     _playerTemplateCtx = null;
     if (els.playerTemplateAttributionText) els.playerTemplateAttributionText.textContent = "";
     if (els.playerTemplateAttribution) {

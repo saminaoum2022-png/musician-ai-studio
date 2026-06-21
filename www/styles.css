@@ -15926,6 +15926,9 @@ body.trackSheetOpen .footer{
   body[data-route="player"] .hubNowPlaying{
     display: none !important;
   }
+  .playerCard{
+    padding-block-start: 48px;
+  }
   body[data-route="player"] .app{
     /* Full-height shell so the player can vertically center inside the viewport
        and the bottom black band feels balanced (not pinned at the top). */

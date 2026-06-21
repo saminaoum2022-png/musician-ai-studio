@@ -7447,6 +7447,92 @@ function discoverFeedTemplateCardHtml(t, profMap) {
     </div>`;
 }
 
+function discoverFeaturedChallengeHeroArt(c, topEntry) {
+  const challengeArt = discoverChallengeArtUrl(c?.id);
+  if (challengeArt) return challengeArt;
+  if (topEntry) return trackCoverArtForFeed(topEntry);
+  return "./assets/nabadai-logo.png";
+}
+
+function discoverFeaturedChallengeSubtitle(c, topEntry, tracks) {
+  if (topEntry) return discoverChallengeRankText(topEntry, tracks);
+  const blurb = String(c?.blurb || "").trim();
+  if (blurb) return blurb;
+  const n = Number(c?.submissions) || 0;
+  if (n > 0) return `${discoverHubStatLabel(n)} songs submitted`;
+  return "Be the first to join";
+}
+
+function discoverFeaturedChallengeKicker(c) {
+  if (String(c?.action || "") === "campaign") return "Live event";
+  return "Featured challenge";
+}
+
+function discoverFeedChallengeCreationsRailHtml(entries, profMap) {
+  return (entries || []).map((t) => {
+    const art = trackCoverArtForFeed(t);
+    const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
+    const title = String(t.title || "Untitled").trim();
+    return `
+      <button type="button" class="discoverFeedChallengeMini" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
+        <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
+        <span class="discoverFeedChallengeMiniPlay" aria-hidden="true">▶</span>
+      </button>`;
+  }).join("");
+}
+
+/** For You — immersive featured challenge hero + top creations carousel. */
+function discoverFeedFeaturedChallengeBlockHtml(c, tracks, profMap, opts = {}) {
+  const entries = Array.isArray(opts.entries)
+    ? opts.entries.slice(0, 8)
+    : discoverTracksForChallenge(c, tracks, 8);
+  const top = entries[0] || null;
+  const joinAttrs = discoverChallengeJoinAttrs(c);
+  const sectionTitle = String(opts.sectionTitle || "From challenges").trim();
+  const viewAllSlug = String(opts.viewAllSlug || discoverChallengePlaylistSlug(c.id)).trim();
+  const viewAllBtn = viewAllSlug
+    ? `<button type="button" class="discoverFeedSectionLink" data-discover-challenge-view-all="${escapeHtml(viewAllSlug)}">View all</button>`
+    : "";
+  const challengeTitle = String(c.title || "Challenge").trim();
+  const subtitle = discoverFeaturedChallengeSubtitle(c, top, tracks);
+  const heroArt = discoverFeaturedChallengeHeroArt(c, top);
+  const [toneA, toneB] = discoverChallengeToneTheme(c.tone);
+  const kicker = discoverFeaturedChallengeKicker(c);
+  const heroHtml = `
+    <button
+      type="button"
+      class="discoverFeaturedChallengeHero discoverFeaturedChallengeHero--${escapeHtml(String(c.tone || "violet").trim())}"
+      ${joinAttrs}
+      style="--feat-ch-a:${toneA};--feat-ch-b:${toneB}"
+      aria-label="Join ${escapeHtml(challengeTitle)}"
+    >
+      <span class="discoverFeaturedChallengeHeroBg" aria-hidden="true">
+        <img src="${escapeHtml(heroArt)}" alt="" loading="lazy" decoding="async" />
+      </span>
+      <span class="discoverFeaturedChallengeHeroScrim" aria-hidden="true"></span>
+      <span class="discoverFeaturedChallengeHeroGlow" aria-hidden="true"></span>
+      <span class="discoverFeaturedChallengeHeroBody">
+        <span class="discoverFeaturedChallengeHeroKicker">${escapeHtml(kicker)}</span>
+        <span class="discoverFeaturedChallengeHeroTitle">${escapeHtml(challengeTitle)}</span>
+        <span class="discoverFeaturedChallengeHeroSub">${escapeHtml(subtitle)}</span>
+        <span class="discoverFeaturedChallengeHeroCta">Join Challenge</span>
+      </span>
+    </button>`;
+  const creationsRail = entries.length
+    ? `
+      <div class="discoverFeaturedChallengeCreationsHead">
+        <h4 class="discoverFeaturedChallengeCreationsTitle">Top creations from this challenge</h4>
+      </div>
+      <div class="discoverFeedChallengeRail discoverFeedChallengeRail--featured">${discoverFeedChallengeCreationsRailHtml(entries, profMap)}</div>`
+    : "";
+  return `
+    <section class="discoverFeedSection discoverFeedSection--featuredChallenge">
+      ${discoverFeedSectionHeadHtml(sectionTitle, viewAllBtn)}
+      ${heroHtml}
+      ${creationsRail}
+    </section>`;
+}
+
 function discoverFeedChallengeBlockHtml(c, tracks, profMap, opts = {}) {
   const entries = Array.isArray(opts.entries)
     ? opts.entries.slice(0, 8)
@@ -7522,7 +7608,7 @@ function renderDiscoverFeedForYou(tracks, profMap) {
   );
   const topChallengePack = discoverFeaturedChallengeForForYou(tracks, prefs);
   const challengeBlock = topChallengePack.challenge
-    ? discoverFeedChallengeBlockHtml(topChallengePack.challenge, tracks, profMap, {
+    ? discoverFeedFeaturedChallengeBlockHtml(topChallengePack.challenge, tracks, profMap, {
       sectionTitle: "From challenges",
       viewAllSlug: "live-challenges",
       entries: topChallengePack.entries,

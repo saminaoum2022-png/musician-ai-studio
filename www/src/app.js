@@ -22851,11 +22851,8 @@ function isTrackSheetOtherUserSong(ctx) {
   return ownerId !== uid;
 }
 
-function publicTrackSheetRowHtml(action, label, desc, extraAttrs = "") {
-  const descHtml = desc
-    ? `<span class="discoverTrackSheetRowDesc">${escapeHtml(desc)}</span>`
-    : "";
-  return `<button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--described" data-track-sheet-action="${escapeHtml(action)}"${extraAttrs}><span class="discoverTrackSheetRowLabel">${escapeHtml(label)}</span>${descHtml}</button>`;
+function publicTrackSheetRowHtml(action, label, extraAttrs = "") {
+  return `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="${escapeHtml(action)}"${extraAttrs}><span class="discoverTrackSheetRowLabel">${escapeHtml(label)}</span></button>`;
 }
 
 async function refreshPublicTrackSheetFollowRow(ctx) {
@@ -22996,14 +22993,14 @@ function renderTrackSheetPublic(ctx) {
   `;
   const hideProfileRow = Boolean(ctx.hideDiscoverProfile) || !String(ctx.handle || "").trim();
   l.innerHTML = `
-    ${publicTrackSheetRowHtml("follow_creator", "Follow Creator", "Follow the creator directly from the song menu.", ' id="publicSheetRowFollow"')}
-    ${hideProfileRow ? "" : publicTrackSheetRowHtml("profile", "View Profile", "Open the creator’s profile page.")}
-    ${publicTrackSheetRowHtml("add_playlist", "Add to Playlist", "Save song to a playlist.")}
-    ${publicTrackSheetRowHtml("song_details", "Song Details", "Open Song Details / Credits page.")}
-    ${publicTrackSheetRowHtml("view_lyrics", "View Lyrics", "Open lyrics in a dedicated viewer.")}
-    ${publicTrackSheetRowHtml("copy", "Copy Link", "Copy song URL.")}
+    ${publicTrackSheetRowHtml("follow_creator", "Follow Creator", ' id="publicSheetRowFollow"')}
+    ${hideProfileRow ? "" : publicTrackSheetRowHtml("profile", "View Profile")}
+    ${publicTrackSheetRowHtml("add_playlist", "Add to Playlist")}
+    ${publicTrackSheetRowHtml("song_details", "Song Details")}
+    ${publicTrackSheetRowHtml("view_lyrics", "View Lyrics")}
+    ${publicTrackSheetRowHtml("copy", "Copy Link")}
   `;
-  d.innerHTML = `<button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--described discoverTrackSheetRow--danger" data-track-sheet-action="report"><span class="discoverTrackSheetRowLabel">Report Content</span><span class="discoverTrackSheetRowDesc">Report inappropriate or copyrighted content.</span></button>`;
+  d.innerHTML = `<button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--danger" data-track-sheet-action="report"><span class="discoverTrackSheetRowLabel">Report Content</span></button>`;
 }
 
 function renderTrackSheetDiscover(ctx) {

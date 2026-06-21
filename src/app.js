@@ -11431,10 +11431,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
             <span class="followActMetaDot" aria-hidden="true">·</span>
             ${followingActivityBadgeHtml("music", type)}
           </div>
-          ${showHeadLine || caption ? `<div class="followActContent">
-            ${showHeadLine ? `<p class="followActHead">${verbHtml}</p>` : ""}
-            ${captionHtml}
-          </div>` : ""}
+          ${caption ? `<div class="followActContent">${captionHtml}</div>` : ""}
           ${mashupBlockHtml || remixPairHtml || quoteCardHtml}
           <div class="followActActionsBar">
             ${followActActionsRowHtml({
@@ -11492,10 +11489,6 @@ function followingActivitySkeletonHtml() {
       <div class="followActColumn">
         <div class="followActMeta">
           <span class="followActSkel followActSkelMetaLine"></span>
-        </div>
-        <div class="followActContent">
-          <span class="followActSkel followActSkelHeadLine"></span>
-          <span class="followActSkel followActSkelHeadLine short"></span>
         </div>
         <div class="followActQuoteRow">
           <div class="followActQuoteCard followActQuoteCard--skel">

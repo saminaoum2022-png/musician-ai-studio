@@ -29654,15 +29654,19 @@ section.mentorPage{
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr);
   column-gap: 10px;
-  row-gap: 6px;
+  row-gap: 0;
   align-items: flex-start;
-  padding: 12px 14px;
+  padding: 0 14px 16px;
   border: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   background: transparent;
   border-radius: 0;
   box-shadow: none;
   overflow: visible;
+}
+.followActStack .followAct.followAct--xstyle:first-child,
+.followAct.followAct--xstyle.followActStack:first-child{
+  padding-top: 10px;
 }
 .followActStack .followAct.followAct--xstyle:hover,
 .followAct--xstyle:hover{
@@ -29674,9 +29678,9 @@ section.mentorPage{
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr);
   column-gap: 10px;
-  row-gap: 6px;
+  row-gap: 0;
   align-items: flex-start;
-  padding: 12px 14px;
+  padding: 0 14px 16px;
   padding-left: 14px;
   padding-right: 14px;
   border: 0;
@@ -29685,6 +29689,10 @@ section.mentorPage{
   border-radius: 0;
   box-shadow: none;
   overflow: visible;
+}
+.friendsPage .followActStack .followAct.followAct--xstyle:first-child,
+.profileActivitiesList.followActStack .followAct.followAct--xstyle:first-child{
+  padding-top: 10px;
 }
 /* And undo the `.followAct--music/--status` left/right padding override
  * that the friends scope applies, which would otherwise pull the row
@@ -29707,6 +29715,18 @@ section.mentorPage{
 .followAct--xstyle .followActContent{
   grid-column: 2;
   grid-row: 2;
+  margin-top: 4px;
+  padding-left: 0;
+}
+.followAct--xstyle .followActMeta + .followActQuoteRow,
+.followAct--xstyle .followActMeta + .followActRemixPair,
+.followAct--xstyle .followActMeta + .followActMashup{
+  margin-top: 6px;
+}
+.followAct--xstyle .followActContent + .followActQuoteRow,
+.followAct--xstyle .followActContent + .followActRemixPair,
+.followAct--xstyle .followActContent + .followActMashup{
+  margin-top: 4px;
 }
 .followAct--xstyle .followActQuoteRow,
 .followAct--xstyle .followActRemixPair,
@@ -29715,12 +29735,16 @@ section.mentorPage{
   grid-column: 1 / -1;
   width: 100%;
   min-width: 0;
-  margin-top: 8px;
   margin-left: 0;
 }
 .followAct--xstyle .followActActionsBar,
 .followAct--xstyle .followActColumn > .followActActions{
   grid-column: 2;
+  margin-top: 8px;
+}
+.followAct--xstyle .followActActionsBar > .followActActions,
+.followAct--xstyle .followActColumn > .followActActions{
+  margin-top: 0;
 }
 
 /* Feed media grid — single song, remix, mashup share one full-width column */
@@ -29807,12 +29831,6 @@ section.mentorPage{
 .followAct--xstyle .followActQuotePlay.followActSkel{
   border-radius: 50%;
 }
-.followAct--xstyle .followActRemixPair{
-  margin-top: 8px;
-}
-.followAct--xstyle .followActMashup{
-  margin-top: 8px;
-}
 .followAct--xstyle .followActMashup .followActQuoteCard{
   padding-right: 10px;
 }
@@ -29889,25 +29907,14 @@ section.mentorPage{
   letter-spacing: 0.04em;
 }
 
-/* Content body — kill the legacy 50px indent, we're already in the column */
-.followAct--xstyle .followActContent{
-  padding-left: 0;
-  margin: 0;
-}
-.followAct--xstyle .followActHead{
-  font-size: 14.5px;
-  font-weight: 500;
-  line-height: 1.4;
-  color: rgba(244, 247, 255, 0.94);
-  margin: 0;
-}
+/* Caption-only content under meta row */
 .followAct--xstyle .followActContent:empty{
   display: none;
 }
 .followAct--xstyle .followActCaption{
   margin: 0;
   font-size: 14px;
-  line-height: 1.45;
+  line-height: 1.4;
   color: rgba(232, 238, 247, 0.78);
 }
 .followAct--xstyle .followActStatusText{

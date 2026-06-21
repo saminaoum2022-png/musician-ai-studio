@@ -1949,6 +1949,8 @@ function renderHubNowPlaying() {
   }
 
   syncHubNowPlayPauseUi(Boolean(miniShowsPause));
+  const hubCoverWrap = document.querySelector(".hubNowCoverWrap");
+  if (hubCoverWrap) hubCoverWrap.classList.toggle("isPlaying", audible);
   syncLockScreenNowPlaying();
 }
 
@@ -7161,6 +7163,23 @@ function discoverPlayBtnSvg(size = 16) {
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><path fill="currentColor" d="M8 5.5v13l11-6.5-11-6.5Z"/></svg>`;
 }
 
+function discoverPauseBtnSvg(size = 16) {
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><path fill="currentColor" d="M6 5h4v14H6V5Zm8 0h4v14h-4V5Z"/></svg>`;
+}
+
+/** Centered play/pause overlay — toggled via `.libRowPlaying` / `.discoveryRowPlaying`. */
+function coverArtPlaybackOverlayHtml(opts = {}) {
+  const hero = Boolean(opts.hero);
+  const size = hero ? 16 : 12;
+  const cls = `coverArtPlayOverlay discoverCoverPlay${hero ? " discoverCoverPlay--hero" : ""}`;
+  return `<span class="${cls}" aria-hidden="true"><span class="coverArtPlayIco coverArtPlayIco--play">${discoverPlayBtnSvg(size)}</span><span class="coverArtPlayIco coverArtPlayIco--pause">${discoverPauseBtnSvg(size)}</span></span>`;
+}
+
+/** Mini equalizer for card covers (feed cards, mini player cover). List rows use `.libRowEq`. */
+function coverArtEqualizerHtml() {
+  return `<span class="coverArtEq" aria-hidden="true"><span></span><span></span><span></span></span>`;
+}
+
 function discoverListPlayBtnHtml(extraClass = "") {
   const cls = extraClass ? `discoverListPlayBtn ${extraClass}` : "discoverListPlayBtn";
   return `<span class="${cls}" aria-hidden="true">${discoverPlayBtnSvg(14)}</span>`;
@@ -7174,11 +7193,9 @@ function discoverFeedPlayBtnHtml(opts = {}) {
   return discoverListPlayBtnHtml();
 }
 
-/** Faded play glyph centered on cover art (inside card, not a separate column). */
+/** Faded play/pause glyph centered on cover art. */
 function discoverCoverPlayOverlayHtml(opts = {}) {
-  const hero = Boolean(opts.hero);
-  const size = hero ? 16 : 12;
-  return `<span class="discoverCoverPlay${hero ? " discoverCoverPlay--hero" : ""}" aria-hidden="true">${discoverPlayBtnSvg(size)}</span>`;
+  return coverArtPlaybackOverlayHtml(opts);
 }
 
 /** ⋯ menu control for Discover / Friends / chart rows — opens the track sheet. */
@@ -7284,6 +7301,7 @@ function discoverFeedSongRowHtml(t, profMap, opts = {}) {
           ${titleHtml}
           ${secondaryHtml}
         </span>
+        <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
       </button>
       ${menu}
     </div>`;
@@ -11393,13 +11411,12 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
             <button type="button" class="followActQuoteCard" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
               <span class="followActQuoteArt">
                 <img class="followActQuoteImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
+                ${coverArtPlaybackOverlayHtml()}
+                ${coverArtEqualizerHtml()}
               </span>
               <span class="followActQuoteBody">
                 ${titleWithNabadBadgeHtml(t, safeTitle, "followActQuoteTitle")}
                 <span class="followActQuoteSub">${escapeHtml(subtitle)}</span>
-              </span>
-              <span class="followActQuotePlay" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M5 4v16l14-8L5 4Z" fill="currentColor"/></svg>
               </span>
             </button>
             ${songMenuBtn}
@@ -11497,7 +11514,6 @@ function followingActivitySkeletonHtml() {
               <span class="followActSkel followActSkelQuoteTitle"></span>
               <span class="followActSkel followActSkelQuoteSub"></span>
             </span>
-            <span class="followActQuotePlay followActSkel" aria-hidden="true"></span>
           </div>
         </div>
         <div class="followActActions">
@@ -13531,14 +13547,13 @@ function followActMashupBlockHtml(t, profMap, main) {
         <button type="button" class="followActQuoteCard followActQuoteCard--mashup" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play mashup ${safeTitle}">
           <span class="followActQuoteArt">
             <img class="followActQuoteImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
+            ${coverArtPlaybackOverlayHtml()}
+            ${coverArtEqualizerHtml()}
           </span>
           <span class="followActQuoteBody">
             <span class="followActQuoteChip followActQuoteChip--mashup">${mashupPillHtml()}</span>
             <span class="followActQuoteTitle">${safeTitle}</span>
             <span class="followActQuoteSub">${escapeHtml(subtitle)}</span>
-          </span>
-          <span class="followActQuotePlay" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M5 4v16l14-8L5 4Z" fill="currentColor"/></svg>
           </span>
         </button>
       </div>`;
@@ -23958,12 +23973,6 @@ function syncDiscoveryPlayingHighlights() {
     try {
       host.style.removeProperty("--cover-glow-rgb");
     } catch {}
-    const badge = host.querySelector(
-      ".discoveryRowArtBadge, .discoverySpotCardArtBadge, .followActCoverPlay, .followActMediaPlay, .discoverCoverPlay",
-    );
-    if (badge && badge.classList.contains("discoverCoverPlay")) {
-      /* SVG overlay — leave as-is */
-    } else if (badge) badge.textContent = "▶";
     if (host.classList.contains("followAct")) {
       const title = decodeDiscoverDataAttr(host, "data-user-lib-title") || "Song";
       const playing = host.classList.contains("discoveryRowPlaying");
@@ -24010,10 +24019,6 @@ function syncDiscoveryPlayingHighlights() {
     if (!active) return;
     host.classList.toggle("discoveryRowPlaying", audible);
     host.classList.toggle("discoveryRowActive", active && !audible);
-    const badge = host.querySelector(
-      ".discoveryRowArtBadge, .discoverySpotCardArtBadge, .followActCoverPlay, .followActMediaPlay",
-    );
-    if (badge) badge.textContent = audible ? "❚❚" : "▶";
     if (host.classList.contains("followAct")) {
       const title = decodeDiscoverDataAttr(urlEl, "data-user-lib-title") || "Song";
       host.querySelectorAll("[data-user-lib-play]").forEach((btn) => {
@@ -25000,8 +25005,6 @@ function syncUserPlaylistPlayingHighlights() {
   if (_profileSongsSegment !== "playlist") return;
   list.querySelectorAll(".libRow").forEach((row) => {
     row.classList.remove("libRowPlaying", "libRowActive");
-    const badge = row.querySelector(".libRowArtBadge");
-    if (badge) badge.textContent = "▶";
   });
   if (miniSource?.type !== "user_playlist") return;
   const cur = String(currentPlayerTrackRef?.url || "").trim();
@@ -25014,8 +25017,6 @@ function syncUserPlaylistPlayingHighlights() {
     if (!active) return;
     row.classList.toggle("libRowPlaying", audible);
     row.classList.toggle("libRowActive", active && !audible);
-    const badge = row.querySelector(".libRowArtBadge");
-    if (badge) badge.textContent = audible ? "❚❚" : "▶";
   });
 }
 
@@ -25261,7 +25262,7 @@ function renderUserPlaylist() {
             <button class="libRowMain" type="button" data-pl-play="${escapeHtml(item.id)}" data-pl-playlist-id="${escapeHtml(playlistId)}" aria-label="${plAudible ? "Pause" : "Play"} ${safeTitle}">
               <span class="libRowArt">
                 <img src="${escapeHtml(art)}" alt="" width="56" height="56" decoding="async" loading="lazy" />
-                <span class="libRowArtBadge" aria-hidden="true">${plAudible ? "❚❚" : "▶"}</span>
+                ${coverArtPlaybackOverlayHtml()}
               </span>
               <span class="libRowInfo">
                 ${titleWithNabadBadgeHtml(t, safeTitle, "libRowTitle")}
@@ -25499,7 +25500,7 @@ function discoverPlaylistLibRowHtml(t, profMap, idx) {
       <button type="button" class="libRowMain" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
         <span class="libRowArt">
           <img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" />
-          <span class="libRowArtBadge" aria-hidden="true">▶</span>
+          ${coverArtPlaybackOverlayHtml()}
         </span>
         <span class="libRowInfo">
           ${titleWithNabadBadgeHtml(t, safeTitle, "libRowTitle")}
@@ -26918,8 +26919,8 @@ function renderHub() {
         <button class="hubCoverWrap hubReelCoverBtn" type="button" data-hub-cover="${p.id}" data-hub-play="${p.id}" aria-label="Play ${safeTitle}">
           <img class="hubCover hubReelCover" ${imgSrcAttr} alt="cover" decoding="async" />
           <span class="hubReelCoverGlow" aria-hidden="true"></span>
-          <span class="hubEq" aria-hidden="true"><i></i><i></i><i></i></span>
-          <span class="hubReelCoverGlyph" aria-hidden="true">▶</span>
+          <span class="hubEq coverArtEq" aria-hidden="true"><i></i><i></i><i></i></span>
+          ${coverArtPlaybackOverlayHtml({ hero: true })}
           <span class="hubPlayProgress hubReelProgress"><span id="hubProg_${p.id}" style="width:0%"></span></span>
         </button>
       </div>
@@ -30213,7 +30214,7 @@ function renderProfileLibraryPublicOnLinkSection() {
             <button class="libRowMain" type="button" data-profile-lib-play="${tid}" aria-label="Play ${safeTitle}">
               <span class="libRowArt">
                 <img src="${esc(art)}" alt="" />
-                <span class="libRowArtBadge" aria-hidden="true">▶</span>
+                ${coverArtPlaybackOverlayHtml()}
               </span>
               <span class="libRowInfo">
                 ${titleWithNabadBadgeHtml(t, safeTitle, "libRowTitle")}
@@ -30384,7 +30385,7 @@ function renderProfileHubShared() {
             <button class="libRowMain" type="button" data-profile-hub-play="${sid}" aria-label="Play ${safeTitle}">
               <span class="libRowArt">
                 <img src="${escapeHtml(art)}" alt="" />
-                <span class="libRowArtBadge" aria-hidden="true">▶</span>
+                ${coverArtPlaybackOverlayHtml()}
               </span>
               <span class="libRowInfo">
                 ${titleWithNabadBadgeHtml(t, safeTitle, "libRowTitle")}
@@ -32389,8 +32390,6 @@ function applyLibRowNowPlayingChrome(row, active, audible) {
       row.style.removeProperty("--cover-glow-rgb");
     } catch {}
   }
-  const badge = row.querySelector(".libRowArtBadge");
-  if (badge) badge.textContent = audible ? "❚❚" : "▶";
   const mainBtn =
     row.querySelector("[data-lib-play]") ||
     row.querySelector("[data-profile-lib-play]") ||
@@ -32596,7 +32595,7 @@ function renderLibrary() {
               ${_librarySelectMode ? `<span class="libRowCheck" aria-hidden="true"></span>` : ""}
               <span class="libRowArt">
                 <img src="${escapeHtml(art)}" alt="" width="56" height="56" decoding="async" ${loadingAttr} />
-                <span class="libRowArtBadge" aria-hidden="true">${libAudible ? "❚❚" : "▶"}</span>
+                ${coverArtPlaybackOverlayHtml()}
               </span>
               <span class="libRowInfo">
                 ${titleWithNabadBadgeHtml(t, safeTitle, "libRowTitle")}

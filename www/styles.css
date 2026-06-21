@@ -29776,14 +29776,14 @@ section.mentorPage{
 .followAct--xstyle .followActQuoteCard,
 .followAct--xstyle .followActQuoteCard--skel{
   display: grid;
-  grid-template-columns: var(--feed-song-art-size) minmax(0, 1fr) auto;
+  grid-template-columns: var(--feed-song-art-size) minmax(0, 1fr);
   gap: 12px;
   align-items: center;
   width: 100%;
   min-width: 0;
   min-height: var(--feed-song-card-min-h);
   margin: 0;
-  padding: 8px 44px 8px 10px;
+  padding: 8px 36px 8px 10px;
   border: 1px solid rgba(255,255,255,0.10);
   border-radius: 16px;
   background:
@@ -29826,22 +29826,6 @@ section.mentorPage{
   min-width: 0;
   padding-right: 4px;
 }
-.followAct--xstyle .followActQuotePlay{
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: rgba(8,10,18,0.72);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-  color: rgba(248,250,255,0.96);
-  flex-shrink: 0;
-}
-.followAct--xstyle .followActQuotePlay.followActSkel{
-  border-radius: 50%;
-}
 .followAct--xstyle .followActMashup .followActQuoteCard{
   padding-right: 10px;
 }
@@ -29849,11 +29833,6 @@ section.mentorPage{
 .followAct.discoveryRowActive.followAct--xstyle .followActQuoteCard{
   border-color: rgba(var(--cover-glow-rgb, 124, 92, 255), 0.42);
   box-shadow: 0 0 0 1px rgba(var(--cover-glow-rgb, 124, 92, 255), 0.18), 0 8px 28px rgba(0,0,0,0.18);
-}
-.followAct.discoveryRowPlaying.followAct--xstyle .followActQuotePlay,
-.followAct.discoveryRowActive.followAct--xstyle .followActQuotePlay{
-  background: rgba(124,92,255,0.88);
-  color: #fff;
 }
 .followAct--xstyle .followActMeta{
   grid-column: auto;
@@ -32654,12 +32633,74 @@ section.mentorPage{
   place-items: center;
   color: rgba(248,250,255,0.82);
   background: rgba(0,0,0,0.24);
-  opacity: 0.52;
+  opacity: 0.48;
   pointer-events: none;
   transition: opacity 160ms ease, background 160ms ease;
 }
+.coverArtPlayIco{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+.coverArtPlayIco--play{
+  display: flex;
+}
+.coverArtPlayIco--pause{
+  display: none;
+}
+.libRowPlaying .coverArtPlayIco--play,
+.discoveryRowPlaying .coverArtPlayIco--play,
+.followAct.discoveryRowPlaying .coverArtPlayIco--play,
+.discoverFeedSongRow.discoveryRowPlaying .coverArtPlayIco--play,
+.hubNowCoverWrap.isPlaying .coverArtPlayIco--play,
+.hubCoverWrap.isPlaying .coverArtPlayIco--play{
+  display: none;
+}
+.libRowPlaying .coverArtPlayIco--pause,
+.discoveryRowPlaying .coverArtPlayIco--pause,
+.followAct.discoveryRowPlaying .coverArtPlayIco--pause,
+.discoverFeedSongRow.discoveryRowPlaying .coverArtPlayIco--pause,
+.hubNowCoverWrap.isPlaying .coverArtPlayIco--pause,
+.hubCoverWrap.isPlaying .coverArtPlayIco--pause{
+  display: flex;
+}
+.coverArtEq{
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 2;
+  display: none;
+  align-items: flex-end;
+  gap: 3px;
+  height: 16px;
+  padding: 4px 6px;
+  border-radius: 7px;
+  background: rgba(6,10,18,0.72);
+  border: 1px solid rgba(255,255,255,0.14);
+  pointer-events: none;
+}
+.coverArtEq span,
+.coverArtEq i{
+  display: block;
+  width: 3px;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(var(--cover-glow-rgb, 124, 92, 255), 0.85), rgba(var(--cover-glow-rgb, 124, 92, 255), 0.35));
+  transform-origin: bottom;
+  animation: libRowEqBar 1.05s ease-in-out infinite;
+}
+.coverArtEq span:nth-child(2),
+.coverArtEq i:nth-child(2){ animation-delay: 0.18s; }
+.coverArtEq span:nth-child(3),
+.coverArtEq i:nth-child(3){ animation-delay: 0.36s; }
+.followAct.discoveryRowPlaying .coverArtEq,
+.hubNowCoverWrap.isPlaying .coverArtEq,
+.hubCoverWrap.isPlaying .coverArtEq{
+  display: inline-flex;
+}
 .discoverCoverPlay--hero{
-  opacity: 0.58;
+  opacity: 0.52;
   background: rgba(0,0,0,0.28);
 }
 .discoverFeedSongRowPlay:active .discoverCoverPlay,
@@ -32678,6 +32719,9 @@ section.mentorPage{
 }
 .discoverFeedSongRow.discoveryRowPlaying .discoverFeedSongArt{
   box-shadow: none;
+}
+.discoverFeedSongRow.discoveryRowPlaying .libRowEq{
+  display: inline-flex;
 }
 .discoverFeedSongRow.discoveryRowActive{
   background: rgba(var(--cover-glow-rgb), 0.05);
@@ -32738,7 +32782,7 @@ section.mentorPage{
 }
 .discoverFeedSongRowPlay{
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   width: 100%;

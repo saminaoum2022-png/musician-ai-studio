@@ -2,11 +2,11 @@
 <html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
-    <style id="bootCritical">html,body{margin:0;background-color:#000;color-scheme:dark}</style>
+    <style id="bootCritical">html,body{margin:0;background-color:#05070d;color-scheme:dark}</style>
     <script>
       (function () {
         try { localStorage.removeItem("nabadai_theme_v1"); } catch (e) {}
-        var bg = "#000000";
+        var bg = "#05070d";
         var fg = "#eef4ff";
         var html = document.documentElement;
         var isCapShell = location.protocol === "capacitor:";
@@ -70,7 +70,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260621splashNfix" />
+    <link rel="stylesheet" href="./styles.css?v=20260621staticSplash" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -86,7 +86,11 @@
   <body class="booting">
     <div id="bootSplash" class="bootSplash" aria-hidden="true">
       <div class="bootSplashInner">
-        <div id="bootSplashAnim" class="bootSplashAnim" aria-hidden="true"></div>
+        <span class="bootSplashMark" aria-hidden="true"></span>
+        <h1 class="bootSplashWordmark introWordmark">
+          <span class="brandPrimary">NabadAi</span>
+          <span class="brandSecondary introBrandSecondary">Music</span>
+        </h1>
       </div>
     </div>
     <div id="loginSettlingOverlay" class="loginSettlingOverlay" hidden aria-hidden="true">
@@ -193,8 +197,13 @@
               <span class="introWelcomeTile introWelcomeTile--d"></span>
             </div>
             <div class="introWelcomeBody">
-              <span class="introWelcomeMark" aria-hidden="true"></span>
-              <h1 class="introWelcomeTitle">Welcome to <span class="brandPrimary">NabadAi</span> <span class="brandSecondary introBrandSecondary">Music</span></h1>
+              <div class="authBrand introWelcomeBrand" aria-label="NabadAi Music">
+                <span class="bootSplashMark" aria-hidden="true"></span>
+                <h1 class="introWordmark">
+                  <span class="brandPrimary">NabadAi</span>
+                  <span class="brandSecondary introBrandSecondary">Music</span>
+                </h1>
+              </div>
               <p class="introWelcomeLead">Music from a hum. Blend tracks, remix your sound, share what you make.</p>
               <button id="btnIntroGetStarted" class="introGetStartedBtn" type="button">Get Started</button>
               <p class="introWelcomeLegal">By tapping Get Started you agree to our <a href="./terms.html" data-legal-link="terms">Terms</a> &middot; <a href="./privacy.html" data-legal-link="privacy">Privacy</a></p>
@@ -3723,8 +3732,7 @@
       </div>
     </div>
 
-    <script src="./src/boot-splash.js?v=20260621splashNfix"></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260621splashNfix"></script>
+    <script type="module" src="./src/app.js?v=20260621staticSplash"></script>
   </body>
 </html>

@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260621splashNfix";
+const APP_BUILD = "20260621staticSplash";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -75,15 +75,10 @@ try {
 }
 
 const IS_NATIVE_SHELL = typeof location !== "undefined" && location.protocol === "capacitor:";
-/** Boot splash: native vector draw animation (see src/boot-splash.js). */
-const BOOT_SPLASH_ANIM_MS =
-  (typeof window !== "undefined" && window.BOOT_SPLASH_ANIM_MS) || 3500;
-const BOOT_SPLASH_MIN_MS = BOOT_SPLASH_ANIM_MS;
-const BOOT_SPLASH_MAX_MS =
-  ((typeof window !== "undefined" && window.BOOT_SPLASH_ANIM_MS) || 1970) + 600;
-const BOOT_SPLASH_END_HOLD_MS = 0;
+/** Boot splash: static logo + wordmark (see #bootSplash in index.html). */
+const BOOT_SPLASH_MIN_MS = 1400;
+const BOOT_SPLASH_MAX_MS = 2800;
 const _bootSplashStartedAt = Date.now();
-let _bootSplashAnimStartedAt = 0;
 let _bootSplashAnimEnded = false;
 let _bootSplashCanDismiss = false;
 let _bootSplashMinTimer = 0;
@@ -119,27 +114,11 @@ try {
   setTimeout(forceBootSplashEnd, BOOT_SPLASH_MAX_MS);
 } catch {}
 
-function startBootSplash() {
-  try {
-    const run = typeof window !== "undefined" ? window.initBootSplashAnimation : null;
-    if (typeof run !== "function") {
-      _bootSplashAnimStartedAt = Date.now();
-      _bootSplashAnimEnded = true;
-      _bootSplashCanDismiss = true;
-      return;
-    }
-    _bootSplashAnimStartedAt = Date.now();
-    run(() => {
-      _bootSplashAnimEnded = true;
-      _bootSplashCanDismiss = true;
-      tryDismissBootSplash();
-    });
-  } catch {
-    _bootSplashAnimEnded = true;
-    _bootSplashCanDismiss = true;
-  }
-}
-startBootSplash();
+_bootSplashMinTimer = window.setTimeout(() => {
+  _bootSplashAnimEnded = true;
+  _bootSplashCanDismiss = true;
+  tryDismissBootSplash();
+}, BOOT_SPLASH_MIN_MS);
 
 /** UUID allowlist from `/api/public-config` (env `NABAD_CERTIFIED_USER_IDS`)
  *  — interim gate for the Profile "Verified Nabad Creator" badge until

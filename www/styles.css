@@ -1330,7 +1330,7 @@ html.is-web-shell body.booting > *:not(#bootSplash):not(#loginSettlingOverlay){
   display: none !important;
 }
 html.is-web-shell body.booting .bootSplash{
-  background: #000000;
+  background: #05070d;
 }
 body.booting .app{ visibility: hidden; }
 body.booting .mobileTabbar,
@@ -1340,7 +1340,7 @@ body.booting::before{
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: #000000;
+  background: #05070d;
   pointer-events: none;
 }
 .bootSplash{
@@ -1350,7 +1350,7 @@ body.booting::before{
   z-index: 10000;
   align-items: center;
   justify-content: center;
-  background: #000000;
+  background: #05070d;
   pointer-events: none;
 }
 body.booting .bootSplash{
@@ -1361,42 +1361,20 @@ body.booting .bootSplash{
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  height: 100%;
+  gap: 14px;
 }
-.bootSplashAnim{
-  width: 23.5vw;
-  max-width: 96px;
-  min-width: 72px;
-  aspect-ratio: 1;
-  flex-shrink: 0;
-}
-.bootSplashSvg{
+.bootSplashMark,
+.introWelcomeMark{
   display: block;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-.bootSplashDot{
-  transition: none;
-}
-@media (prefers-reduced-motion: reduce){
-  .bootSplashDot{
-    display: none;
-  }
-}
-.bootSplashMark{
   width: min(26vw, 108px);
   aspect-ratio: 1;
-  background:
-    radial-gradient(78% 78% at 50% 50%, rgba(124,92,255,0.14), transparent 72%),
-    url("./assets/icons/splash-mark.png") center / contain no-repeat;
+  flex-shrink: 0;
+  background: url("./assets/icons/splash-mark.png") center / contain no-repeat;
 }
 .bootSplashWordmark{
   margin: 0;
   position: relative;
   z-index: 1;
-  font-size: clamp(22px, 5.8vw, 32px);
 }
 body.booting .bootSplashDots{
   margin-top: 4px;
@@ -1867,25 +1845,8 @@ body.isIntro .footer{ display:none; }
   text-align: center;
   gap: 10px;
 }
-.introWelcomeMark{
-  width: min(22vw, 88px);
-  aspect-ratio: 1;
-  background:
-    radial-gradient(75% 75% at 50% 50%, rgba(124,92,255,0.12), transparent 70%),
-    url("./assets/icons/splash-mark.png") center / contain no-repeat;
-}
-.introWelcomeTitle{
-  margin: 4px 0 0;
-  font-size: clamp(26px, 7vw, 32px);
-  font-weight: 900;
-  letter-spacing: -0.04em;
-  line-height: 1.12;
-  color: #f0f4ff;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: baseline;
-  gap: 6px;
+.introWelcomeBrand{
+  margin: 0 0 6px;
 }
 .introWelcomeLead{
   margin: 0;

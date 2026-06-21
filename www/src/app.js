@@ -41,7 +41,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260620nabadVerifyInfo";
+const APP_BUILD = "20260621nabadBadgeLayout";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -11385,7 +11385,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
               </span>
             </span>
             <span class="followActQuoteBody">
-              <span class="followActQuoteTitle">${safeTitle}${nabadVerificationBadgeForTrack(t, { size: "sm" })}</span>
+              ${titleWithNabadBadgeHtml(t, safeTitle, "followActQuoteTitle")}
               <span class="followActQuoteSub">${escapeHtml(subtitle)}</span>
             </span>
           </button>`}
@@ -13959,7 +13959,7 @@ function profileFeaturedCreationHtml(track, mode = "own") {
       <button type="button" class="profileFeaturedCreationMain" ${playAttr}="${sid}" aria-label="Play ${title}">
         <span class="profileFeaturedCreationArt"><img src="${art}" alt="" loading="lazy" decoding="async" /></span>
         <span class="profileFeaturedCreationBody">
-          <strong class="profileFeaturedCreationTitle rowTitleWithBadge"><span class="profileFeaturedCreationTitleText">${title}</span>${nabadVerificationBadgeForTrack(track)}</strong>
+          ${titleWithNabadBadgeHtml(track, title, "profileFeaturedCreationTitleText", "strong")}
           ${metaHtml}
         </span>
         ${discoverFeedPlayBtnHtml({ hero: true })}
@@ -16080,10 +16080,14 @@ let lastGenerationMeta = null;
 let _lyricsGeneratedInNabad = false;
 let _nabadVerifyBackfillDone = false;
 
-function titleWithNabadBadgeHtml(track, safeTitle, titleClass = "libRowTitle") {
+function titleWithNabadBadgeHtml(track, safeTitle, titleClass = "libRowTitle", titleTag = "span") {
   const badge = nabadVerificationBadgeForTrack(track);
-  if (!badge) return `<span class="${titleClass}">${safeTitle}</span>`;
-  return `<span class="rowTitleWithBadge"><span class="${titleClass}">${safeTitle}</span>${badge}</span>`;
+  const titleEl =
+    titleTag === "strong"
+      ? `<strong class="${titleClass}">${safeTitle}</strong>`
+      : `<span class="${titleClass}">${safeTitle}</span>`;
+  if (!badge) return titleEl;
+  return `<span class="rowTitleWithBadge">${titleEl}${badge}</span>`;
 }
 
 function syncPlayerNabadBadge(track) {

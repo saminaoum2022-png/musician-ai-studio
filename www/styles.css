@@ -13377,7 +13377,8 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
   flex-direction: column;
   gap: 4px;
 }
-.profileFeaturedCreationTitle{
+.profileFeaturedCreationTitle,
+.profileFeaturedCreationTitleText{
   color: rgba(247, 250, 255, 0.94);
   font-size: 15px;
   font-weight: 650;
@@ -13385,6 +13386,13 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.profileFeaturedCreationBody .rowTitleWithBadge,
+.followActQuoteBody .rowTitleWithBadge,
+.libRowInfo .rowTitleWithBadge,
+.discoveryRowMid .rowTitleWithBadge{
+  width: 100%;
+  max-width: 100%;
 }
 .profileFeaturedCreationMetaRow{
   display: flex;
@@ -19354,8 +19362,7 @@ html[data-theme="light"] .profileStatLabel{
 /* --- Nabad song verification “N” badge (per-track quality mark). --- */
 .rowTitleWithBadge,
 .playerTitleRow,
-.hubNowTitleRow,
-.profileFeaturedCreationTitle.rowTitleWithBadge{
+.hubNowTitleRow{
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -19365,6 +19372,7 @@ html[data-theme="light"] .profileStatLabel{
 .rowTitleWithBadge .libRowTitle,
 .rowTitleWithBadge .discoveryRowTitle,
 .rowTitleWithBadge .discoveryFeedCardTitle,
+.rowTitleWithBadge .followActQuoteTitle,
 .playerTitleRow .playerTitle,
 .hubNowTitleRow .hubNowTitle,
 .profileFeaturedCreationTitleText{
@@ -19389,6 +19397,7 @@ html[data-theme="light"] .profileStatLabel{
   line-height: 1;
   -webkit-tap-highlight-color: transparent;
   transition: transform 120ms ease, opacity 120ms ease;
+  user-select: none;
 }
 .nabadVerifyBadge--sm{
   width: 16px;
@@ -30119,9 +30128,6 @@ section.mentorPage{
   font-weight: 700;
   color: rgba(248, 250, 255, 0.98);
   letter-spacing: -0.01em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .followActQuoteSub{
   font-size: 12.5px;

@@ -123,7 +123,7 @@ export function nabadVerificationMessage(state) {
   return NABAD_VERIFY_MESSAGES[state] || "";
 }
 
-/** Small inline “N” pill — place next to titles, never on artwork. */
+/** Small inline “N” pill — `<span role="button">` so it can live inside row/card `<button>`s without breaking layout. */
 export function nabadVerificationBadgeHtml(state, opts = {}) {
   if (!VALID.has(state)) return "";
   const msg = nabadVerificationMessage(state);
@@ -134,7 +134,7 @@ export function nabadVerificationBadgeHtml(state, opts = {}) {
         ? "nabadVerifyBadge--coCreated"
         : "nabadVerifyBadge--createdWith";
   const size = opts.size === "sm" ? " nabadVerifyBadge--sm" : "";
-  return `<button type="button" class="nabadVerifyBadge ${cls}${size}" data-nabad-verify="${state}" aria-label="${msg}" title="${msg}"><span class="nabadVerifyBadgeN" aria-hidden="true">N</span></button>`;
+  return `<span role="button" tabindex="0" class="nabadVerifyBadge ${cls}${size}" data-nabad-verify="${state}" aria-label="${msg}" title="${msg}"><span class="nabadVerifyBadgeN" aria-hidden="true">N</span></span>`;
 }
 
 export function nabadVerificationBadgeForTrack(track, opts = {}) {
@@ -218,6 +218,20 @@ export function initNabadVerificationUi() {
     true,
   );
   document.addEventListener(
+    "keydown",
+    (e) => {
+      const btn = e.target.closest("[data-nabad-verify]");
+      if (btn && (e.key === "Enter" || e.key === " ")) {
+        e.preventDefault();
+        e.stopPropagation();
+        btn.click();
+        return;
+      }
+      if (e.key === "Escape") hideNabadVerifyPopover();
+    },
+    true,
+  );
+  document.addEventListener(
     "click",
     (e) => {
       if (e.target.closest("[data-nabad-verify]") || e.target.closest("#nabadVerifyPopover")) return;
@@ -225,7 +239,4 @@ export function initNabadVerificationUi() {
     },
     true,
   );
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") hideNabadVerifyPopover();
-  });
 }

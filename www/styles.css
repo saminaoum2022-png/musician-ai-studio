@@ -5613,8 +5613,35 @@ body.hubJumpingToTop #hubList .hubRow{
 .playerHeader{
   display:flex;
   align-items:center;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 4px;
 }
+.playerMenuBtn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: transparent;
+  color: rgba(223, 231, 251, 0.62);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: border-color 200ms ease, background 200ms ease, color 200ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.playerMenuBtn:hover{
+  color: rgba(248,250,255,0.92);
+  border-color: rgba(255,255,255,0.20);
+  background: rgba(255,255,255,0.05);
+}
+.playerMenuBtn:active{ transform: scale(0.97); }
 .playerBack{
   display:inline-flex;
   align-items:center;
@@ -16020,16 +16047,18 @@ body.trackSheetOpen .footer{
   body[data-route="player"] .playerHeader{
     position: fixed;
     top: 0;
-    inset-inline-start: 0;
+    inset-inline: 0;
     z-index: 200;
     margin: 0;
     padding-block-start: calc(env(safe-area-inset-top, 0px) + 10px);
     padding-inline-start: calc(14px + env(safe-area-inset-left, 0px));
+    padding-inline-end: calc(14px + env(safe-area-inset-right, 0px));
     max-width: 100%;
     box-sizing: border-box;
     pointer-events: none;
   }
-  body[data-route="player"] .playerHeader .playerBack{
+  body[data-route="player"] .playerHeader .playerBack,
+  body[data-route="player"] .playerHeader .playerMenuBtn{
     pointer-events: auto;
   }
   body[data-route="player"] .playerSecondaryRow{
@@ -31269,24 +31298,36 @@ section.mentorPage{
 }
 .discoverWeeklyChart--final .chartWeekWinner{
   display: grid;
-  grid-template-columns: clamp(112px, 34vw, 136px) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 14px;
+  gap: 0;
   width: 100%;
-  padding: 14px;
+  padding: 10px 6px 10px 14px;
   margin: 0 0 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.035);
   color: inherit;
+  transition: background 160ms ease, border-color 160ms ease;
+  box-shadow: none;
+}
+.discoverWeeklyChart--final .chartWeekWinnerTap{
+  display: grid;
+  grid-template-columns: clamp(112px, 34vw, 136px) minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: background 160ms ease, border-color 160ms ease;
-  box-shadow: none;
 }
-.discoverWeeklyChart--final .chartWeekWinner:active{
+.discoverWeeklyChart--final .chartWeekWinner:has(.chartWeekWinnerTap:active){
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(255, 255, 255, 0.12);
 }
@@ -31308,6 +31349,7 @@ section.mentorPage{
   font-variant-numeric: tabular-nums;
 }
 .discoverWeeklyChart--final .chartWeekWinnerArt{
+  position: relative;
   width: 100%;
   aspect-ratio: 1;
   border-radius: 16px;
@@ -31354,10 +31396,7 @@ section.mentorPage{
   color: rgba(223, 231, 251, 0.56);
 }
 .discoverWeeklyChart--final .chartWeekWinner .discoverFeedPlayBtn--hero{
-  width: 40px;
-  height: 40px;
-  align-self: center;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  display: none;
 }
 .discoverWeeklyChart--final .chartWeekRunners{
   display: flex;
@@ -31376,7 +31415,38 @@ section.mentorPage{
 .discoverWeeklyChart--final .chartWeekRest[hidden]{
   display: none !important;
 }
-.discoverWeeklyChart--final .chartWeekRunner,
+.discoverWeeklyChart--final .chartWeekRunner{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+  padding: 4px 4px 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  color: inherit;
+  transition: background 160ms ease;
+}
+.discoverWeeklyChart--final .chartWeekRunnerTap{
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverWeeklyChart--final .chartWeekRunner:has(.chartWeekRunnerTap:active){
+  background: rgba(255, 255, 255, 0.04);
+}
 .discoverWeeklyChart--final .chartWeekLeaderRow{
   display: grid;
   grid-template-columns: auto auto 1fr auto;
@@ -31394,12 +31464,12 @@ section.mentorPage{
   -webkit-tap-highlight-color: transparent;
   transition: background 160ms ease;
 }
-.discoverWeeklyChart--final .chartWeekRunner:active,
 .discoverWeeklyChart--final .chartWeekLeaderRow:active{
   background: rgba(255, 255, 255, 0.04);
 }
 .discoverWeeklyChart--final .chartWeekRunnerArt,
 .discoverWeeklyChart--final .chartWeekLeaderArt{
+  position: relative;
   width: 44px;
   height: 44px;
   border-radius: 10px;
@@ -32350,53 +32420,37 @@ section.mentorPage{
   gap: 8px;
   min-width: 0;
 }
-.discoverFeedSongRowWrap{
-  display: flex;
-  align-items: stretch;
-  width: 100%;
-  min-width: 0;
-  gap: 0;
-}
-.discoverFeedSongRowWrap > .discoverFeedSongRow{
-  flex: 1;
-  min-width: 0;
-}
-.discoverFeedSongMenuBtn,
-.discoverHubPickMenuBtn,
-.chartWeekMenuBtn,
-.followActMenuBtn{
+.discoverCardMenuBtn,
+.discoveryRowSide{
   flex: 0 0 auto;
   align-self: center;
   width: auto;
-  min-width: 36px;
-  min-height: 40px;
+  min-width: 28px;
+  min-height: 36px;
   margin: 0;
-  padding: 8px 6px 8px 2px;
+  padding: 6px 8px;
   border: 0;
-  border-radius: 0;
+  border-radius: 8px;
   background: transparent;
-  color: rgba(232,238,247,0.52);
-  font-size: 22px;
-  font-weight: 800;
+  color: rgba(232,238,247,0.38);
+  font-size: 17px;
+  font-weight: 700;
   line-height: 1;
+  letter-spacing: 0.08em;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: color 0.18s ease, opacity 0.18s ease;
+  transition: color 0.18s ease, opacity 0.18s ease, background 0.18s ease;
 }
-.discoverFeedSongMenuBtn:active,
-.discoverHubPickMenuBtn:active,
-.chartWeekMenuBtn:active,
-.followActMenuBtn:active{
-  opacity: 0.78;
-  color: rgba(232,238,247,0.92);
+.discoverCardMenuBtn:active,
+.discoveryRowSide:active{
+  opacity: 0.9;
+  color: rgba(232,238,247,0.82);
+  background: rgba(255,255,255,0.04);
 }
-.discoverFeedSongMenuBtn:focus-visible,
-.discoverHubPickMenuBtn:focus-visible,
-.chartWeekMenuBtn:focus-visible,
-.followActMenuBtn:focus-visible{
+.discoverCardMenuBtn:focus-visible,
+.discoveryRowSide:focus-visible{
   outline: 2px solid rgba(124,92,255,0.55);
   outline-offset: 2px;
-  border-radius: 6px;
 }
 .discoverFeedTemplateCardWrap{
   position: relative;
@@ -32404,51 +32458,17 @@ section.mentorPage{
 }
 .discoverFeedTemplateMenuOuter{
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 8px;
+  right: 8px;
   z-index: 3;
   pointer-events: auto;
 }
 .discoverFeedTemplateMenuBtn{
-  color: rgba(232,238,247,0.88);
-  text-shadow: 0 1px 8px rgba(0,0,0,0.55);
-  padding: 6px 4px;
-  min-height: 36px;
-}
-.discoverHubPickCardWrap{
-  display: flex;
-  align-items: stretch;
-  width: 100%;
-  min-width: 0;
-  gap: 0;
-}
-.discoverHubPickCardWrap > .discoverHubPickCard{
-  flex: 1;
-  min-width: 0;
-}
-.chartWeekWinnerWrap,
-.chartWeekRunnerWrap{
-  display: flex;
-  align-items: stretch;
-  width: 100%;
-  min-width: 0;
-  gap: 0;
-}
-.chartWeekWinnerWrap > .chartWeekWinner,
-.chartWeekRunnerWrap > .chartWeekRunner{
-  flex: 1;
-  min-width: 0;
-}
-.discoverFeedChallengeHeroMainWrap{
-  display: flex;
-  align-items: stretch;
-  width: 100%;
-  min-width: 0;
-  gap: 0;
-}
-.discoverFeedChallengeHeroMainWrap > .discoverFeedChallengeHeroMain{
-  flex: 1;
-  min-width: 0;
+  color: rgba(232,238,247,0.82);
+  text-shadow: 0 1px 10px rgba(0,0,0,0.65);
+  padding: 4px 2px;
+  min-height: 32px;
+  min-width: 28px;
 }
 .followActMenuBtn{
   margin-left: auto;
@@ -32466,25 +32486,65 @@ section.mentorPage{
   flex: 1;
   min-width: 0;
 }
+.discoverCoverPlay{
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(248,250,255,0.82);
+  background: rgba(0,0,0,0.24);
+  opacity: 0.52;
+  pointer-events: none;
+  transition: opacity 160ms ease, background 160ms ease;
+}
+.discoverCoverPlay--hero{
+  opacity: 0.58;
+  background: rgba(0,0,0,0.28);
+}
+.discoverFeedSongRowPlay:active .discoverCoverPlay,
+.chartWeekWinnerTap:active .discoverCoverPlay,
+.chartWeekRunnerTap:active .discoverCoverPlay,
+.discoverFeedChallengeHeroPlay:active .discoverCoverPlay,
+.discoverHubPickCardPlay:active .discoverCoverPlay,
+.discoverFeedTemplateCard:active .discoverCoverPlay{
+  opacity: 0.92;
+  background: rgba(0,0,0,0.34);
+}
 .discoverFeedSongRow{
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
+  gap: 0;
   width: 100%;
-  padding: 10px 12px;
+  padding: 4px 4px 4px 0;
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.03);
   color: inherit;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+.discoverFeedSongRowPlay{
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px 6px 10px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
   text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: background 160ms ease, border-color 160ms ease;
 }
-.discoverFeedSongRow:active{
+.discoverFeedSongRow:has(.discoverFeedSongRowPlay:active){
   background: rgba(124, 92, 255, 0.1);
   border-color: rgba(124, 92, 255, 0.22);
+}
+.discoverFeedSongRowPlay:active{
+  background: transparent;
 }
 .discoverFeedSongRank{
   font-size: 12px;
@@ -32493,6 +32553,7 @@ section.mentorPage{
   min-width: 22px;
 }
 .discoverFeedSongArt{
+  position: relative;
   width: 54px;
   height: 54px;
   border-radius: 12px;
@@ -32681,23 +32742,35 @@ section.mentorPage{
 }
 .discoverFeedChallengeHeroMain{
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 0;
+  padding: 4px 4px 4px 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.03);
+  min-width: 0;
+}
+.discoverFeedChallengeHeroPlay{
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px 6px 10px;
+  border: 0;
+  background: transparent;
   color: inherit;
   text-align: left;
   cursor: pointer;
-  min-width: 0;
   -webkit-tap-highlight-color: transparent;
 }
-.discoverFeedChallengeHeroMain:active{
+.discoverFeedChallengeHeroMain:has(.discoverFeedChallengeHeroPlay:active){
   background: rgba(124, 92, 255, 0.1);
 }
 .discoverFeedChallengeHeroArt{
+  position: relative;
   width: 72px;
   height: 72px;
   border-radius: 14px;
@@ -33945,20 +34018,41 @@ section.mentorPage{
 }
 .discoverHubRail--picks{ gap: 8px; padding-bottom: 6px; }
 .discoverHubPickCard{
+  position: relative;
   flex: 0 0 148px;
   width: 148px;
   scroll-snap-align: start;
   display: flex;
   flex-direction: column;
+  gap: 0;
+  padding: 0 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  overflow: hidden;
+}
+.discoverHubPickCardPlay{
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  padding: 0;
-  border: none;
+  width: 100%;
+  padding: 8px 8px 0;
+  border: 0;
   background: transparent;
   color: inherit;
   font: inherit;
   text-align: start;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+.discoverHubPickCard > .discoverCardMenuBtn{
+  position: absolute;
+  top: 2px;
+  right: 0;
+  z-index: 2;
 }
 .discoverHubPickCover{
   position: relative;
@@ -33985,22 +34079,7 @@ section.mentorPage{
   color: rgba(167, 139, 250, 0.88);
 }
 .discoverHubPickPlayIco{
-  position: absolute;
-  right: 6px;
-  bottom: 6px;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: rgba(248, 250, 255, 0.76);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  opacity: 0.52;
-  box-shadow: none;
-}
-.discoverHubPickCard:active .discoverHubPickPlayIco{
-  opacity: 0.88;
+  display: none;
 }
 .discoverHubPickStats{
   display: flex;

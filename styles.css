@@ -23557,8 +23557,6 @@ body.createChooserSheetOpen .footer{
 .followActQuoteCard--skel{
   pointer-events: none;
   cursor: default;
-  border-color: rgba(255, 255, 255, 0.07);
-  background: rgba(255, 255, 255, 0.025);
 }
 .followActQuoteCard--skel .followActQuoteArt{
   background: transparent;
@@ -29651,7 +29649,8 @@ section.mentorPage{
 .followAct.followAct--xstyle.followActStack,
 .followActStack .followAct.followAct--xstyle,
 .followAct--xstyle{
-  --feed-song-art-size: 67px;
+  --feed-song-art-size: 78px;
+  --feed-song-card-min-h: 88px;
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr);
   column-gap: 10px;
@@ -29716,19 +29715,116 @@ section.mentorPage{
   grid-column: 1 / -1;
   width: 100%;
   min-width: 0;
-  margin-top: 4px;
+  margin-top: 8px;
   margin-left: 0;
 }
 .followAct--xstyle .followActActionsBar,
 .followAct--xstyle .followActColumn > .followActActions{
   grid-column: 2;
 }
-.followAct--xstyle .followActQuoteCard{
-  gap: 8px;
-  padding: 2px 2px 2px 0;
+
+/* Feed media grid — single song, remix, mashup share one full-width column */
+.followAct--xstyle .followActQuoteRow{
+  position: relative;
+  display: block;
+}
+.followAct--xstyle .followActQuoteRow::before{
+  display: none;
+}
+.followAct--xstyle .followActQuoteMenuBtn{
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  margin: 0;
+}
+.followAct--xstyle .followActQuoteCard,
+.followAct--xstyle .followActQuoteCard--skel{
+  display: grid;
+  grid-template-columns: var(--feed-song-art-size) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--feed-song-card-min-h);
+  margin: 0;
+  padding: 8px 44px 8px 10px;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 16px;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.03);
+  box-shadow: 0 6px 22px rgba(0,0,0,0.16);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+.followAct--xstyle .followActQuoteCard--skel{
+  pointer-events: none;
+  cursor: default;
+}
+.followAct--xstyle .followActQuoteCard:active{
+  transform: scale(0.985);
+  border-color: rgba(124,92,255,0.34);
+  background:
+    linear-gradient(145deg, rgba(124,92,255,0.08), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.04);
+}
+.followAct--xstyle .followActQuoteCard--mashup{
+  border-color: rgba(244,114,182,0.28);
+  background:
+    linear-gradient(145deg, rgba(236,72,153,0.10), rgba(124,92,255,0.06)),
+    rgba(255,255,255,0.03);
+}
+.followAct--xstyle .followActQuoteArt{
+  width: var(--feed-song-art-size);
+  height: var(--feed-song-art-size);
+  border-radius: 12px;
 }
 .followAct--xstyle .followActQuoteBody{
-  gap: 1px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  padding-right: 4px;
+}
+.followAct--xstyle .followActQuotePlay{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(8,10,18,0.72);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  color: rgba(248,250,255,0.96);
+  flex-shrink: 0;
+}
+.followAct--xstyle .followActQuotePlay.followActSkel{
+  border-radius: 50%;
+}
+.followAct--xstyle .followActRemixPair{
+  margin-top: 8px;
+}
+.followAct--xstyle .followActMashup{
+  margin-top: 8px;
+}
+.followAct--xstyle .followActMashup .followActQuoteCard{
+  padding-right: 10px;
+}
+.followAct.discoveryRowPlaying.followAct--xstyle .followActQuoteCard,
+.followAct.discoveryRowActive.followAct--xstyle .followActQuoteCard{
+  border-color: rgba(var(--cover-glow-rgb, 124, 92, 255), 0.42);
+  box-shadow: 0 0 0 1px rgba(var(--cover-glow-rgb, 124, 92, 255), 0.18), 0 8px 28px rgba(0,0,0,0.18);
+}
+.followAct.discoveryRowPlaying.followAct--xstyle .followActQuotePlay,
+.followAct.discoveryRowActive.followAct--xstyle .followActQuotePlay{
+  background: rgba(124,92,255,0.88);
+  color: #fff;
 }
 .followAct--xstyle .followActMeta{
   grid-column: 2;

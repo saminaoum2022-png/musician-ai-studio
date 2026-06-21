@@ -11382,11 +11382,13 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
             <button type="button" class="followActQuoteCard" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
               <span class="followActQuoteArt">
                 <img class="followActQuoteImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
-                ${discoverCoverPlayOverlayHtml()}
               </span>
               <span class="followActQuoteBody">
                 ${titleWithNabadBadgeHtml(t, safeTitle, "followActQuoteTitle")}
                 <span class="followActQuoteSub">${escapeHtml(subtitle)}</span>
+              </span>
+              <span class="followActQuotePlay" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M5 4v16l14-8L5 4Z" fill="currentColor"/></svg>
               </span>
             </button>
             ${songMenuBtn}
@@ -11483,12 +11485,15 @@ function followingActivitySkeletonHtml() {
           <span class="followActSkel followActSkelHeadLine"></span>
           <span class="followActSkel followActSkelHeadLine short"></span>
         </div>
-        <div class="followActQuoteCard followActQuoteCard--skel">
-          <span class="followActQuoteArt followActSkel"></span>
-          <span class="followActQuoteBody">
-            <span class="followActSkel followActSkelQuoteTitle"></span>
-            <span class="followActSkel followActSkelQuoteSub"></span>
-          </span>
+        <div class="followActQuoteRow">
+          <div class="followActQuoteCard followActQuoteCard--skel">
+            <span class="followActQuoteArt followActSkel"></span>
+            <span class="followActQuoteBody">
+              <span class="followActSkel followActSkelQuoteTitle"></span>
+              <span class="followActSkel followActSkelQuoteSub"></span>
+            </span>
+            <span class="followActQuotePlay followActSkel" aria-hidden="true"></span>
+          </div>
         </div>
         <div class="followActActions">
           <span class="followActAct followActAct--skel followActSkel"></span>
@@ -13522,14 +13527,14 @@ function followActMashupBlockHtml(t, profMap, main) {
         <button type="button" class="followActQuoteCard followActQuoteCard--mashup" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play mashup ${safeTitle}">
           <span class="followActQuoteArt">
             <img class="followActQuoteImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
-            <span class="followActQuotePlay" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M5 4v16l14-8L5 4Z" fill="currentColor"/></svg>
-            </span>
           </span>
           <span class="followActQuoteBody">
             <span class="followActQuoteChip followActQuoteChip--mashup">${mashupPillHtml()}</span>
             <span class="followActQuoteTitle">${safeTitle}</span>
             <span class="followActQuoteSub">${escapeHtml(subtitle)}</span>
+          </span>
+          <span class="followActQuotePlay" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M5 4v16l14-8L5 4Z" fill="currentColor"/></svg>
           </span>
         </button>
       </div>`;

@@ -23199,9 +23199,12 @@ function openDiscoverTrackSheetFromEl(el) {
 }
 
 function openPlayerTrackOptionsSheet() {
-  const lib = resolvePlayerLibraryTrack();
-  if (lib?.id) {
-    openLibraryTrackOptionsFromMenuButton(lib.id);
+  const libRow = resolvePlayerLibraryTrack();
+  const libraryId = libRow?.id
+    ? String(loadLibrary().find((x) => String(x.id) === String(libRow.id))?.id || "").trim()
+    : "";
+  if (libraryId) {
+    openLibraryTrackOptionsFromMenuButton(libraryId);
     return;
   }
   const t = currentPlayerTrackRef;

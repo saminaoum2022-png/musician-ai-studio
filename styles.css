@@ -15926,6 +15926,9 @@ body.trackSheetOpen .footer{
   body[data-route="player"] .hubNowPlaying{
     display: none !important;
   }
+  .playerCard{
+    padding-block-start: 48px;
+  }
   body[data-route="player"] .app{
     /* Full-height shell so the player can vertically center inside the viewport
        and the bottom black band feels balanced (not pinned at the top). */
@@ -15950,11 +15953,9 @@ body.trackSheetOpen .footer{
     display: flex;
     flex-direction: column;
   }
-  body[data-route="player"] .playerShell{
-    flex: 0 1 auto;
-    align-content: start;
-  }
-  body[data-route="player"] .playerHeader{
+  /* Fixed header as soon as the player card paints — do not wait on body[data-route]
+     (hash → applyRoute can lag one frame and the ⋯ button visibly jumps). */
+  .playerCard .playerHeader{
     position: fixed;
     top: 0;
     inset-inline: 0;
@@ -15967,9 +15968,13 @@ body.trackSheetOpen .footer{
     box-sizing: border-box;
     pointer-events: none;
   }
-  body[data-route="player"] .playerHeader .playerBack,
-  body[data-route="player"] .playerHeader .playerMenuBtn{
+  .playerCard .playerHeader .playerBack,
+  .playerCard .playerHeader .playerMenuBtn{
     pointer-events: auto;
+  }
+  body[data-route="player"] .playerShell{
+    flex: 0 1 auto;
+    align-content: start;
   }
   body[data-route="player"] .playerSecondaryRow{
     margin-bottom: 0;
@@ -24659,7 +24664,7 @@ html[data-theme="light"] .discoverySearchBarWrap .searchBar{
   --track-sheet-bottom-gap: max(8px, env(safe-area-inset-bottom, 0px));
   position: fixed;
   inset: 0;
-  z-index: 120;
+  z-index: 220;
   display: flex;
   align-items: flex-end;
   justify-content: center;

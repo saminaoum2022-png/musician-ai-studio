@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260621nabadCoCreated";
+const APP_BUILD = "20260621publicSongMenu";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -22651,6 +22651,97 @@ function discoverSharePageUrl(ctx) {
   return `${pathBase}#/discover`;
 }
 
+/** Public song link (`/s/:id`) when we know the cloud song id. */
+function discoverSongShareUrl(ctx) {
+  const songId = String(ctx?.songId || "").trim();
+  if (songId && isShareUuid(songId)) return buildPublicShareUrl(songId);
+  return discoverSharePageUrl(ctx);
+}
+
+function isTrackSheetOtherUserSong(ctx) {
+  const ownerId = String(ctx?.ownerUserId || "").trim();
+  if (!ownerId) return false;
+  const uid = String(authSession?.user?.id || "").trim();
+  if (!uid) return true;
+  return ownerId !== uid;
+}
+
+function publicTrackSheetRowHtml(action, label, desc, extraAttrs = "") {
+  const descHtml = desc
+    ? `<span class="discoverTrackSheetRowDesc">${escapeHtml(desc)}</span>`
+    : "";
+  return `<button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--described" data-track-sheet-action="${escapeHtml(action)}"${extraAttrs}><span class="discoverTrackSheetRowLabel">${escapeHtml(label)}</span>${descHtml}</button>`;
+}
+
+async function refreshPublicTrackSheetFollowRow(ctx) {
+  const btn = document.getElementById("publicSheetRowFollow");
+  if (!btn || ctx?.mode !== "public") return;
+  const ownerId = String(ctx.ownerUserId || "").trim();
+  if (!ownerId) {
+    btn.hidden = true;
+    return;
+  }
+  btn.hidden = false;
+  const labelEl = btn.querySelector(".discoverTrackSheetRowLabel");
+  if (!authSession?.user?.id) {
+    if (labelEl) labelEl.textContent = "Follow Creator";
+    btn.dataset.following = "0";
+    return;
+  }
+  try {
+    const ids = await fetchFollowingUserIdsForFeed();
+    const following = ids.includes(ownerId);
+    if (labelEl) labelEl.textContent = following ? "Following" : "Follow Creator";
+    btn.dataset.following = following ? "1" : "0";
+  } catch {
+    if (labelEl) labelEl.textContent = "Follow Creator";
+    btn.dataset.following = "0";
+  }
+}
+
+async function handlePublicTrackSheetFollow(ctx) {
+  const targetUserId = String(ctx?.ownerUserId || "").trim();
+  const handle = String(ctx?.handle || "").trim();
+  if (!targetUserId) return;
+  if (!authSession?.user?.id || !getSupabaseAuthToken()) {
+    showToast("Sign in to follow creators.");
+    try {
+      location.hash = "#/auth";
+    } catch {}
+    return;
+  }
+  const btn = document.getElementById("publicSheetRowFollow");
+  const wasFollowing = btn?.dataset.following === "1";
+  if (wasFollowing) {
+    const who = handle ? `@${handle}` : "this creator";
+    let ok = true;
+    try {
+      ok = window.confirm(`Unfollow ${who}?`);
+    } catch {
+      ok = true;
+    }
+    if (!ok) return;
+  }
+  if (btn) btn.disabled = true;
+  try {
+    await socialApi("/api/social", {
+      method: "POST",
+      body: JSON.stringify({
+        action: wasFollowing ? "unfollow" : "follow",
+        targetUserId,
+      }),
+    });
+    _followingListCache = null;
+    _followingListCacheAt = 0;
+    showToast(wasFollowing ? "Unfollowed creator." : handle ? `Following @${handle}.` : "Following creator.");
+    if (_trackSheetCtx?.mode === "public") void refreshPublicTrackSheetFollowRow(_trackSheetCtx);
+  } catch (e) {
+    showToast(e?.message || "Could not update follow.");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 /** Read `data-dp-*` from a Discover ⋯ control into sheet + action context. */
 function readDiscoverSheetPayload(el) {
   if (!el?.getAttribute) return null;
@@ -22694,6 +22785,40 @@ function formatLibrarySheetSubtitle(t) {
   if (t.kind === "sound") bits.push("Sound");
   bits.push(t.publicOnProfile ? "Public" : "Private");
   return bits.join(" · ") || "Library";
+}
+
+function renderTrackSheetPublic(ctx) {
+  const q = document.getElementById("trackSheetQuickMount");
+  const l = document.getElementById("trackSheetListMount");
+  const d = document.getElementById("trackSheetDangerMount");
+  if (!q || !l || !d) return;
+  const trackRef = {
+    meta: ctx?.meta || {},
+    url: ctx?.url,
+    taskId: ctx?.taskId,
+    audioId: ctx?.audioId,
+    id: ctx?.songId,
+    songId: ctx?.songId,
+    kind: ctx?.kind,
+  };
+  const isSound = String(trackRef.kind || "") === "sound";
+  const allowRemix = !isSound && trackAllowsRemix(trackRef) && Boolean(ctx?.url);
+  const allowMashup = allowRemix && trackAllowsMashup(trackRef) && Boolean(mashupSongCloudId(trackRef));
+  q.innerHTML = `
+    ${allowRemix ? `<button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-track-sheet-action="remix">Remix</button>` : ""}
+    ${allowMashup ? `<button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="mashup">Mashup</button>` : ""}
+    <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="share">Share</button>
+  `;
+  const hideProfileRow = Boolean(ctx.hideDiscoverProfile) || !String(ctx.handle || "").trim();
+  l.innerHTML = `
+    ${publicTrackSheetRowHtml("follow_creator", "Follow Creator", "Follow the creator directly from the song menu.", ' id="publicSheetRowFollow"')}
+    ${hideProfileRow ? "" : publicTrackSheetRowHtml("profile", "View Profile", "Open the creator’s profile page.")}
+    ${publicTrackSheetRowHtml("add_playlist", "Add to Playlist", "Save song to a playlist.")}
+    ${publicTrackSheetRowHtml("song_details", "Song Details", "Open Song Details / Credits page.")}
+    ${publicTrackSheetRowHtml("view_lyrics", "View Lyrics", "Open lyrics in a dedicated viewer.")}
+    ${publicTrackSheetRowHtml("copy", "Copy Link", "Copy song URL.")}
+  `;
+  d.innerHTML = `<button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--described discoverTrackSheetRow--danger" data-track-sheet-action="report"><span class="discoverTrackSheetRowLabel">Report Content</span><span class="discoverTrackSheetRowDesc">Report inappropriate or copyrighted content.</span></button>`;
 }
 
 function renderTrackSheetDiscover(ctx) {
@@ -22873,8 +22998,14 @@ function openDiscoverTrackSheetFromEl(el) {
   const hideDiscoverProfile = el.getAttribute("data-dp-hide-profile") === "1";
   const usePublicProfileShuffle = el.getAttribute("data-dp-use-public-shuffle") === "1";
   const ctx = enrichDiscoverSheetCtx({ ...base, hideDiscoverProfile, usePublicProfileShuffle });
-  _trackSheetCtx = { mode: "discover", ...ctx };
-  renderTrackSheetDiscover(ctx);
+  const isPublic = isTrackSheetOtherUserSong(ctx);
+  _trackSheetCtx = { mode: isPublic ? "public" : "discover", ...ctx };
+  if (isPublic) {
+    renderTrackSheetPublic(ctx);
+    void refreshPublicTrackSheetFollowRow(_trackSheetCtx);
+  } else {
+    renderTrackSheetDiscover(ctx);
+  }
   openTrackSheetShell({
     title: base.title || "Song",
     sub: base.by || "Discover",
@@ -23131,7 +23262,49 @@ function runTrackSheetAction(action, sourceEl) {
     return;
   }
 
-  if (ctx.mode === "discover") {
+  if (ctx.mode === "discover" || ctx.mode === "public") {
+    if (action === "follow_creator" && ctx.mode === "public") {
+      void handlePublicTrackSheetFollow(ctx);
+      return;
+    }
+    if (action === "song_details" && ctx.mode === "public") {
+      shut();
+      void (async () => {
+        const trackRef = {
+          meta: ctx.meta || null,
+          ts: ctx.ts,
+          taskId: ctx.taskId || "",
+          audioId: ctx.audioId || "",
+          id: ctx.songId || "",
+          songId: ctx.songId || "",
+          ownerUserId: ctx.ownerUserId || "",
+          kind: ctx.kind || "full",
+        };
+        openPublicSongCreditsSheet(trackRef, ctx);
+      })();
+      return;
+    }
+    if (action === "view_lyrics" && ctx.mode === "public") {
+      shut();
+      void (async () => {
+        const trackRef = {
+          meta: ctx.meta || null,
+          ts: ctx.ts,
+          taskId: ctx.taskId || "",
+          audioId: ctx.audioId || "",
+          id: ctx.songId || "",
+          songId: ctx.songId || "",
+          ownerUserId: ctx.ownerUserId || "",
+        };
+        const lyrics = await resolveLyricsForTrackRef(trackRef);
+        openPublicLyricsViewer({
+          title: ctx.title || "Song",
+          subtitle: ctx.by || (ctx.handle ? `@${ctx.handle}` : ""),
+          lyrics,
+        });
+      })();
+      return;
+    }
     if (action === "remix") {
       if (!authSession?.user?.id) {
         showToast("Sign in to remix songs from Discover.", { icon: "!", durationMs: 3800 });
@@ -23202,6 +23375,7 @@ function runTrackSheetAction(action, sourceEl) {
       return;
     }
     if (action === "lyrics") {
+      if (ctx.mode !== "discover") return;
       shut();
       void (async () => {
         const trackRef = {
@@ -23230,11 +23404,12 @@ function runTrackSheetAction(action, sourceEl) {
     }
     if (action === "share") {
       shut();
+      const shareUrl = ctx.mode === "public" ? discoverSongShareUrl(ctx) : discoverSharePageUrl(ctx);
       window.setTimeout(() => {
         void shareHubLink({
           title: ctx.title ? `${ctx.title} — NabadAi` : "NabadAi Music",
           text: ctx.by ? `${ctx.title} · ${ctx.by}` : ctx.title || "Discover on NabadAi",
-          url: discoverSharePageUrl(ctx),
+          url: shareUrl,
         });
       }, 220);
       return;
@@ -23249,7 +23424,7 @@ function runTrackSheetAction(action, sourceEl) {
     }
     if (action === "copy") {
       shut();
-      const url = discoverSharePageUrl(ctx);
+      const url = ctx.mode === "public" ? discoverSongShareUrl(ctx) : discoverSharePageUrl(ctx);
       if (navigator.clipboard?.writeText) {
         navigator.clipboard
           .writeText(url)
@@ -23261,6 +23436,7 @@ function runTrackSheetAction(action, sourceEl) {
       return;
     }
     if (action === "shuffle") {
+      if (ctx.mode !== "discover") return;
       shut();
       if (ctx.usePublicProfileShuffle) {
         void playRandomUserPublicFeedTrack(ctx.url);
@@ -24538,7 +24714,7 @@ function trackRefFromTrackSheetCtx(ctx) {
     const item = (pl?.items || []).find((x) => String(x.id) === String(ctx.playlistItemId));
     return item ? { ...item } : null;
   }
-  if (ctx.mode === "discover") {
+  if (ctx.mode === "discover" || ctx.mode === "public") {
     return {
       url: String(ctx.url || "").trim(),
       title: String(ctx.title || "").trim() || "Song",
@@ -32735,6 +32911,87 @@ function songDetailsNabadVerifyRow(track) {
   const state = resolveNabadVerification(track);
   if (!state) return "";
   return songDetailsFlatRow("Nabad", nabadVerificationFlatLabel(state));
+}
+
+function songDetailsVerificationRow(track) {
+  const state = resolveNabadVerification(track);
+  if (!state) return "";
+  return songDetailsFlatRow("Verification", nabadVerificationFlatLabel(state));
+}
+
+function trackAsProofPost(track) {
+  const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  return {
+    meta,
+    kind: track?.kind || meta.mode || "full",
+    proof: meta.proof || { model: meta.model || meta.engine || "" },
+  };
+}
+
+function buildPublicSongCreationDetails(track, ctx) {
+  const bits = [];
+  const createdAt = formatSongCreatedLabel(ctx?.ts || track?.ts);
+  if (createdAt) bits.push(createdAt);
+  const meta = track?.meta || {};
+  const mode = songDetailsFirstText(meta.mode, track?.kind);
+  if (mode) bits.push(mode);
+  const challenge = challengeMetaForTrack(track);
+  if (challenge) bits.push(challengeAttributionText(challenge));
+  const templateTitle = templateMetaForTrack(track)?.searchTemplateTitle || "";
+  if (templateTitle) bits.push(templateTitle);
+  const remixOf = remixAttributionForTrack(track);
+  if (remixOf) {
+    const who = remixOf.creatorUsername ? `@${remixOf.creatorUsername}` : "Original creator";
+    bits.push(`Remix of ${who}${remixOf.title ? ` · ${remixOf.title}` : ""}`);
+  }
+  return bits.join(" · ");
+}
+
+function openPublicSongCreditsSheet(track, ctx = {}) {
+  if (!els.songDetailsModal || !els.songDetailsContent) return;
+  const kicker = els.songDetailsModal.querySelector(".songDetailsKicker");
+  if (kicker) kicker.textContent = "Song details";
+  const headTitle = document.getElementById("songDetailsTitle");
+  const title = String(ctx?.title || track?.title || "Song details").trim() || "Song details";
+  if (headTitle) headTitle.textContent = title;
+  const postLike = trackAsProofPost(track);
+  const comp = buildProofComposition(postLike);
+  const compositionParts = [comp.inspiration, comp.style].filter(Boolean);
+  const composition = compositionParts.join(" · ");
+  const creationDetails = buildPublicSongCreationDetails(track, ctx);
+  els.songDetailsContent.innerHTML = `
+    <div class="songDetailsFlatList">
+      ${songDetailsVerificationRow(track)}
+      ${comp.lyrics ? songDetailsFlatRow("Lyrics source", comp.lyrics) : ""}
+      ${composition ? songDetailsFlatRow("Composition", composition) : ""}
+      ${comp.persona ? songDetailsFlatRow("Voice reference", comp.persona) : ""}
+      ${songDetailsFlatRow("Reference model", buildProofEngineLabel(postLike))}
+      ${creationDetails ? songDetailsFlatRow("Creation details", creationDetails) : ""}
+    </div>
+  `;
+  showSongDetailsModal();
+}
+
+function openPublicLyricsViewer({ title, subtitle, lyrics } = {}) {
+  if (!els.songDetailsModal || !els.songDetailsContent) return;
+  const kicker = els.songDetailsModal.querySelector(".songDetailsKicker");
+  if (kicker) kicker.textContent = "Lyrics";
+  const headTitle = document.getElementById("songDetailsTitle");
+  if (headTitle) headTitle.textContent = String(title || "Song").trim() || "Song";
+  const text = String(lyrics || "").trim();
+  const hasLyrics = Boolean(text);
+  els.songDetailsContent.innerHTML = `
+    ${subtitle ? `<p class="songDetailsLyricsSub">${escapeHtml(subtitle)}</p>` : ""}
+    <div class="songDetailsLyricsBlock">
+      <div class="songDetailsSectionHead">
+        <div class="songDetailsSectionTitle">Lyrics</div>
+        ${hasLyrics ? `<button type="button" class="songDetailsCopyBtn" data-song-details-copy-lyrics="1">Copy</button>` : ""}
+      </div>
+      <div class="songDetailsLyricsBox ${hasLyrics ? "" : "isEmpty"}">${hasLyrics ? escapeHtml(text) : "No lyrics saved for this song yet."}</div>
+    </div>
+  `;
+  wireSongDetailsCopyBtn(text);
+  showSongDetailsModal();
 }
 
 function showSongDetailsModal() {

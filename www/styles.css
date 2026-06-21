@@ -24970,6 +24970,38 @@ html[data-theme="light"] .discoverySearchBarWrap .searchBar{
 .discoverTrackSheetRow--danger:active{
   background: rgba(255,80,80,0.1);
 }
+.discoverTrackSheetRow--described{
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 58px;
+  padding-top: 11px;
+  padding-bottom: 11px;
+}
+.discoverTrackSheetRowLabel{
+  display: block;
+}
+.discoverTrackSheetRowDesc{
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: rgba(232,238,247,0.46);
+  max-width: 92%;
+}
+.discoverTrackSheetRow--danger .discoverTrackSheetRowDesc{
+  color: rgba(255,178,178,0.72);
+}
+.songDetailsLyricsSub{
+  margin: 0 0 14px;
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.35;
+  color: rgba(232,238,247,0.58);
+  text-align: center;
+}
 
 @media (max-width: 720px){
   body.trackSheetOpen .mobileTabbar{ display: none !important; }

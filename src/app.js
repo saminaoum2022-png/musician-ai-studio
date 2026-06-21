@@ -9680,7 +9680,7 @@ function followingStatusRowHtml(post, profMap, idx, opts = {}) {
             ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
             : `<span class="followActAvatarFallback">${escapeHtml(initials)}</span>`}
         </a>
-        <div class="followActColumn">
+        <div class="followActHeadStack">
           <div class="followActMeta">
             ${metaInner}
             <span class="followActMetaDot" aria-hidden="true">·</span>
@@ -9690,8 +9690,8 @@ function followingStatusRowHtml(post, profMap, idx, opts = {}) {
           <div class="followActContent followActBody--static">
             ${contentHtml}
           </div>
-          ${followActActionsRowHtml({ kind: "status", targetId: postId, targetUserId: userId })}
         </div>
+          ${followActActionsRowHtml({ kind: "status", targetId: postId, targetUserId: userId })}
       </article>`;
   }
   return `
@@ -10084,27 +10084,26 @@ function patchFollowActRowMedia(article, track, profMap, idx) {
   wrap.innerHTML = followingActivityRowHtml(track, profMap, idx, { xstyle: true });
   const nextArticle = wrap.firstElementChild;
   if (!nextArticle) return false;
-  const column = article.querySelector(".followActColumn");
-  const nextColumn = nextArticle.querySelector(".followActColumn");
-  if (!column || !nextColumn) return false;
-  const actRow = column.querySelector(".followActActions");
-  const nextActRow = nextColumn.querySelector(".followActActions");
+  const headStack = article.querySelector(".followActHeadStack");
+  const nextHeadStack = nextArticle.querySelector(".followActHeadStack");
+  if (!headStack || !nextHeadStack) return false;
+  const actRow = article.querySelector(".followActActionsBar") || article.querySelector(".followActActions");
+  const nextActRow = nextArticle.querySelector(".followActActionsBar") || nextArticle.querySelector(".followActActions");
   if (!actRow || !nextActRow) return false;
-  const mediaInsertBefore = column.querySelector(".followActActionsBar") || actRow;
 
-  const contentEl = column.querySelector(".followActContent");
-  const nextContent = nextColumn.querySelector(".followActContent");
+  const contentEl = headStack.querySelector(".followActContent");
+  const nextContent = nextHeadStack.querySelector(".followActContent");
   if (nextContent) {
     const clone = nextContent.cloneNode(true);
     if (contentEl) contentEl.replaceWith(clone);
-    else mediaInsertBefore.before(clone);
+    else headStack.appendChild(clone);
   } else if (contentEl) {
     contentEl.remove();
   }
 
-  column.querySelectorAll(FOLLOW_ACT_MEDIA_SEL).forEach((n) => n.remove());
-  nextColumn.querySelectorAll(FOLLOW_ACT_MEDIA_SEL).forEach((node) => {
-    mediaInsertBefore.before(node.cloneNode(true));
+  article.querySelectorAll(FOLLOW_ACT_MEDIA_SEL).forEach((n) => n.remove());
+  nextArticle.querySelectorAll(FOLLOW_ACT_MEDIA_SEL).forEach((node) => {
+    actRow.before(node.cloneNode(true));
   });
   return true;
 }
@@ -11422,7 +11421,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
             ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
             : `<span class="followActAvatarFallback">${escapeHtml(initials)}</span>`}
         </a>
-        <div class="followActColumn">
+        <div class="followActHeadStack">
           <div class="followActMeta">
             <a class="followActUserLink" href="${escapeHtml(profileHref)}" data-route-link="user">${handle ? `<strong class="followActUser">@${escapeHtml(handle)}</strong>` : `<strong class="followActUser">A musician</strong>`}</a>
             <span class="followActMetaDot" aria-hidden="true">·</span>
@@ -11432,6 +11431,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
             ${followingActivityBadgeHtml("music", type)}
           </div>
           ${caption ? `<div class="followActContent">${captionHtml}</div>` : ""}
+        </div>
           ${mashupBlockHtml || remixPairHtml || quoteCardHtml}
           <div class="followActActionsBar">
             ${followActActionsRowHtml({
@@ -11442,7 +11442,6 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
               playsPending,
             })}
           </div>
-        </div>
       </article>`;
   }
   const playFootLabel = playsPending
@@ -11486,10 +11485,11 @@ function followingActivitySkeletonHtml() {
   const musicRow = (i) => `
     <article class="followAct followAct--xstyle followAct--music followAct--skel" style="--i:${i}" aria-hidden="true">
       <span class="followActAvatar followActSkel followActSkelAvatar"></span>
-      <div class="followActColumn">
+      <div class="followActHeadStack">
         <div class="followActMeta">
           <span class="followActSkel followActSkelMetaLine"></span>
         </div>
+      </div>
         <div class="followActQuoteRow">
           <div class="followActQuoteCard followActQuoteCard--skel">
             <span class="followActQuoteArt followActSkel"></span>
@@ -11505,12 +11505,11 @@ function followingActivitySkeletonHtml() {
           <span class="followActAct followActAct--skel followActSkel"></span>
           <span class="followActAct followActAct--skel followActSkel"></span>
         </div>
-      </div>
     </article>`;
   const statusRow = (i) => `
     <article class="followAct followAct--xstyle followAct--status followAct--skel" style="--i:${i}" aria-hidden="true">
       <span class="followActAvatar followActSkel followActSkelAvatar"></span>
-      <div class="followActColumn">
+      <div class="followActHeadStack">
         <div class="followActMeta">
           <span class="followActSkel followActSkelMetaLine"></span>
         </div>
@@ -11519,11 +11518,11 @@ function followingActivitySkeletonHtml() {
           <span class="followActSkel followActSkelTextLine"></span>
           <span class="followActSkel followActSkelTextLine short"></span>
         </div>
-        <div class="followActActions">
-          <span class="followActAct followActAct--skel followActSkel"></span>
-          <span class="followActAct followActAct--skel followActSkel"></span>
-          <span class="followActAct followActAct--skel followActSkel"></span>
-        </div>
+      </div>
+      <div class="followActActions">
+        <span class="followActAct followActAct--skel followActSkel"></span>
+        <span class="followActAct followActAct--skel followActSkel"></span>
+        <span class="followActAct followActAct--skel followActSkel"></span>
       </div>
     </article>`;
   return [musicRow(0), statusRow(1), musicRow(2), statusRow(3)].join("");

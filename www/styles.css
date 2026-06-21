@@ -23518,8 +23518,8 @@ body.createChooserSheetOpen .footer{
   border: 0;
   background: transparent;
 }
-.followAct--xstyle.followAct--skel .followActColumn{
-  gap: 8px;
+.followAct--xstyle.followAct--skel .followActHeadStack{
+  gap: 4px;
 }
 .followActSkelMetaLine{
   display: block;
@@ -29712,20 +29712,31 @@ section.mentorPage{
 .followAct--xstyle .followActColumn{
   display: contents;
 }
-.followAct--xstyle .followActContent{
+.followAct--xstyle .followActHeadStack{
   grid-column: 2;
-  grid-row: 2;
-  margin-top: 4px;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.followAct--xstyle .followActHeadStack .followActMeta{
+  margin: 0;
+}
+.followAct--xstyle .followActHeadStack .followActContent{
+  grid-column: auto;
+  grid-row: auto;
+  margin-top: 0;
   padding-left: 0;
 }
-.followAct--xstyle .followActMeta + .followActQuoteRow,
-.followAct--xstyle .followActMeta + .followActRemixPair,
-.followAct--xstyle .followActMeta + .followActMashup{
+.followAct--xstyle .followActHeadStack:not(:has(.followActCaption)) + .followActQuoteRow,
+.followAct--xstyle .followActHeadStack:not(:has(.followActCaption)) + .followActRemixPair,
+.followAct--xstyle .followActHeadStack:not(:has(.followActCaption)) + .followActMashup{
   margin-top: 6px;
 }
-.followAct--xstyle .followActContent + .followActQuoteRow,
-.followAct--xstyle .followActContent + .followActRemixPair,
-.followAct--xstyle .followActContent + .followActMashup{
+.followAct--xstyle .followActHeadStack:has(.followActCaption) + .followActQuoteRow,
+.followAct--xstyle .followActHeadStack:has(.followActCaption) + .followActRemixPair,
+.followAct--xstyle .followActHeadStack:has(.followActCaption) + .followActMashup{
   margin-top: 4px;
 }
 .followAct--xstyle .followActQuoteRow,
@@ -29738,12 +29749,12 @@ section.mentorPage{
   margin-left: 0;
 }
 .followAct--xstyle .followActActionsBar,
-.followAct--xstyle .followActColumn > .followActActions{
+.followAct--xstyle > .followActActions{
   grid-column: 2;
   margin-top: 8px;
 }
 .followAct--xstyle .followActActionsBar > .followActActions,
-.followAct--xstyle .followActColumn > .followActActions{
+.followAct--xstyle > .followActActions{
   margin-top: 0;
 }
 
@@ -29845,8 +29856,8 @@ section.mentorPage{
   color: #fff;
 }
 .followAct--xstyle .followActMeta{
-  grid-column: 2;
-  grid-row: 1;
+  grid-column: auto;
+  grid-row: auto;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -29913,8 +29924,9 @@ section.mentorPage{
 }
 .followAct--xstyle .followActCaption{
   margin: 0;
+  padding: 0;
   font-size: 14px;
-  line-height: 1.4;
+  line-height: 1.35;
   color: rgba(232, 238, 247, 0.78);
 }
 .followAct--xstyle .followActStatusText{

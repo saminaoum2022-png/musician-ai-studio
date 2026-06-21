@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260621vectorSplash";
+const APP_BUILD = "20260621splashDraw";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -79,7 +79,8 @@ const IS_NATIVE_SHELL = typeof location !== "undefined" && location.protocol ===
 const BOOT_SPLASH_ANIM_MS =
   (typeof window !== "undefined" && window.BOOT_SPLASH_ANIM_MS) || 3500;
 const BOOT_SPLASH_MIN_MS = BOOT_SPLASH_ANIM_MS;
-const BOOT_SPLASH_MAX_MS = BOOT_SPLASH_ANIM_MS + 1200;
+const BOOT_SPLASH_MAX_MS =
+  ((typeof window !== "undefined" && window.BOOT_SPLASH_ANIM_MS) || 1970) + 600;
 const BOOT_SPLASH_END_HOLD_MS = 0;
 const _bootSplashStartedAt = Date.now();
 let _bootSplashAnimStartedAt = 0;
@@ -96,21 +97,9 @@ function finishBootSplash() {
 }
 
 function tryDismissBootSplash() {
-  if (!_bootSplashCanDismiss) return;
+  if (!_bootSplashCanDismiss || !_bootSplashAnimEnded) return;
   try {
     if (!document.body.classList.contains("booting")) return;
-    if (!_bootSplashAnimEnded) {
-      const elapsed = Date.now() - _bootSplashStartedAt;
-      if (elapsed < BOOT_SPLASH_MIN_MS) {
-        if (!_bootSplashMinTimer) {
-          _bootSplashMinTimer = window.setTimeout(() => {
-            _bootSplashMinTimer = 0;
-            tryDismissBootSplash();
-          }, BOOT_SPLASH_MIN_MS - elapsed);
-        }
-        return;
-      }
-    }
     finishBootSplash();
   } catch {}
 }

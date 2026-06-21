@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260621cardMenuInside";
+const APP_BUILD = "20260621feedRowsInside";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -7299,29 +7299,70 @@ function discoverSheetMenuBtnHtml(source, profMap, opts = {}) {
   return `<button type="button" class="${escapeHtml(cls)}" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" data-dp-song-id="${encSongId}" data-dp-owner-id="${encOwnerId}" data-dp-task-id="${encTaskId}" data-dp-audio-id="${encAudioId}"${extra} aria-label="Song options for ${safeTitle}">⋯</button>`;
 }
 
+function discoverUserLibPlayAttrs(t, profMap, opts = {}) {
+  const prof = profMap ? resolveProfileForFeedCreator(t.userId, profMap) : null;
+  const handle = String(opts.handle || t.username || prof?.username || "").trim();
+  const byLine = opts.byLine != null
+    ? String(opts.byLine)
+    : (handle ? `@${handle}` : "Creator");
+  const rawTitle = String(t.title || "Untitled");
+  const artSafe = trackCoverArtForFeed(t);
+  const encUrl = encodeURIComponent(String(t.url || ""));
+  const encTitle = encodeURIComponent(rawTitle);
+  const encBy = encodeURIComponent(byLine);
+  const encArt = encodeURIComponent(artSafe);
+  const encSongId = encodeURIComponent(String(t.id || t.songId || ""));
+  const encOwnerId = encodeURIComponent(String(t.userId || t.ownerUserId || ""));
+  const encTaskId = encodeURIComponent(String(t.taskId || ""));
+  const encAudioId = encodeURIComponent(String(t.audioId || ""));
+  const encReleaseCaption = encodeURIComponent(releaseCaptionForTrack(t));
+  return `data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" data-play-task-id="${encTaskId}" data-play-audio-id="${encAudioId}" data-play-release-caption="${encReleaseCaption}"`;
+}
+
 function discoverFeedSongRowHtml(t, profMap, opts = {}) {
-  const prof = resolveProfileForFeedCreator(t.userId, profMap);
-  const handle = String(prof?.username || "").trim();
-  const byLine = handle ? `@${handle}` : "Creator";
+  const prof = profMap ? resolveProfileForFeedCreator(t.userId, profMap) : null;
+  const handle = String(opts.handle || t.username || prof?.username || "").trim();
+  const byLine = opts.byLine != null
+    ? String(opts.byLine)
+    : (handle ? `@${handle}` : "Creator");
   const title = String(t.title || "Untitled").trim();
   const art = trackCoverArtForFeed(t);
-  const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
+  const playAttrs = opts.playAttrs != null
+    ? opts.playAttrs
+    : (opts.playMode === "userLib"
+      ? discoverUserLibPlayAttrs(t, profMap, { byLine, handle })
+      : discoverHubTrackPlayAttrs(t, profMap));
+  const titleHtml = opts.nabadBadge === false
+    ? `<strong class="discoverFeedSongTitle">${escapeHtml(title)}</strong>`
+    : titleWithNabadBadgeHtml(t, escapeHtml(title), "discoverFeedSongTitle");
+  const byHtml = opts.hideByLine
+    ? ""
+    : `<span class="discoverFeedSongBy">${opts.byPrefix || "by "}${escapeHtml(byLine)}</span>`;
   const originHtml = opts.originHtml != null
     ? opts.originHtml
-    : discoverOriginLineHtml(t);
-  const stats = discoverHubPickStatsHtml(t);
-  const menu = discoverSheetMenuBtnHtml(t, profMap);
+    : (opts.hideOrigin ? "" : discoverOriginLineHtml(t));
+  const extraHtml = opts.extraHtml || "";
+  const stats = opts.hideStats ? "" : discoverHubPickStatsHtml(t);
+  const menuSource = {
+    ...t,
+    userId: t.userId || t.ownerUserId,
+    username: handle || t.username,
+  };
+  const menu = discoverSheetMenuBtnHtml(menuSource, profMap, opts.menuOpts || {});
+  const rowClass = ["discoverFeedSongRow", opts.rowClass].filter(Boolean).join(" ");
+  const styleAttr = Number.isFinite(Number(opts.styleIdx)) ? ` style="--i:${Number(opts.styleIdx)}"` : "";
   return `
-    <div class="discoverFeedSongRow">
+    <div class="${escapeHtml(rowClass)}"${styleAttr}>
       <button type="button" class="discoverFeedSongRowPlay" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
         <span class="discoverFeedSongArt">
           <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
           ${discoverCoverPlayOverlayHtml()}
         </span>
         <span class="discoverFeedSongBody">
-          <strong class="discoverFeedSongTitle">${escapeHtml(title)}</strong>
-          <span class="discoverFeedSongBy">by ${escapeHtml(byLine)}</span>
+          ${titleHtml}
+          ${byHtml}
           ${originHtml}
+          ${extraHtml}
           ${stats}
         </span>
       </button>
@@ -11422,6 +11463,29 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
       </div>`;
     showHeadLine = false;
   }
+  const songMenuBtn = discoverSheetMenuBtnHtml(t, profMap, { className: "discoverCardMenuBtn followActQuoteMenuBtn" });
+  const quoteCardHtml = `
+          <div class="followActQuoteRow">
+            <button type="button" class="followActQuoteCard" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
+              <span class="followActQuoteArt">
+                <img class="followActQuoteImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
+                ${discoverCoverPlayOverlayHtml()}
+              </span>
+              <span class="followActQuoteBody">
+                ${titleWithNabadBadgeHtml(t, safeTitle, "followActQuoteTitle")}
+                <span class="followActQuoteSub">${escapeHtml(subtitle)}</span>
+              </span>
+            </button>
+            ${songMenuBtn}
+          </div>`;
+  const mediaBlockHtml = `
+          <div class="followActMediaWrap">
+            <button type="button" class="followActMedia" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
+              <img class="followActMediaImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
+              ${discoverCoverPlayOverlayHtml({ hero: true })}
+            </button>
+            ${songMenuBtn ? `<span class="followActMediaMenuOuter">${songMenuBtn}</span>` : ""}
+          </div>`;
   if (xstyle) {
     return `
       <article class="followAct followAct--music followAct--xstyle" data-follow-act="${type}" data-profile-act-song-id="${escapeHtml(String(t.id || ""))}" style="--i:${idx}" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}>
@@ -11444,19 +11508,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
             ${showHeadLine ? `<p class="followActHead">${verbHtml}</p>` : ""}
             ${captionHtml}
           </div>` : ""}
-          ${mashupBlockHtml || remixPairHtml || `
-          <button type="button" class="followActQuoteCard" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
-            <span class="followActQuoteArt">
-              <img class="followActQuoteImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
-              <span class="followActQuotePlay" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M5 4v16l14-8L5 4Z" fill="currentColor"/></svg>
-              </span>
-            </span>
-            <span class="followActQuoteBody">
-              ${titleWithNabadBadgeHtml(t, safeTitle, "followActQuoteTitle")}
-              <span class="followActQuoteSub">${escapeHtml(subtitle)}</span>
-            </span>
-          </button>`}
+          ${mashupBlockHtml || remixPairHtml || quoteCardHtml}
           <div class="followActActionsBar">
             ${followActActionsRowHtml({
               kind: "music",
@@ -11465,7 +11517,6 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
               plays,
               playsPending,
             })}
-            ${discoverSheetMenuBtnHtml(t, profMap, { className: "discoverCardMenuBtn followActMenuBtn" })}
           </div>
         </div>
       </article>`;
@@ -11499,11 +11550,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
         ${showHeadLine ? `<p class="followActHead">${followingActivityBodyHtml(type, rawTitle, remixOf, challenge, mashupOf)}</p>` : ""}
         ${captionHtml}
       </div>` : ""}
-      ${mashupBlockHtml || remixPairHtml || `
-      <button type="button" class="followActMedia" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
-        <img class="followActMediaImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
-        <span class="followActMediaPlay" aria-hidden="true">▶</span>
-      </button>`}
+      ${mashupBlockHtml || remixPairHtml || mediaBlockHtml}
       ${playFoot}
     </article>`;
 }
@@ -22692,6 +22739,12 @@ function decodeDiscoveryUserLibUrl(el) {
   }
 }
 
+function decodeDiscoveryPlayUrl(el) {
+  const userLib = decodeDiscoveryUserLibUrl(el);
+  if (userLib) return userLib;
+  return decodeDiscoverDataAttr(el, "data-challenge-entry-play");
+}
+
 function decodeDiscoverDataAttr(el, attrName) {
   const raw = el?.getAttribute?.(attrName);
   if (raw == null || raw === "") return "";
@@ -23984,9 +24037,11 @@ function syncDiscoveryPlayingHighlights() {
       host.style.removeProperty("--cover-glow-rgb");
     } catch {}
     const badge = host.querySelector(
-      ".discoveryRowArtBadge, .discoverySpotCardArtBadge, .followActCoverPlay, .followActMediaPlay",
+      ".discoveryRowArtBadge, .discoverySpotCardArtBadge, .followActCoverPlay, .followActMediaPlay, .discoverCoverPlay",
     );
-    if (badge) badge.textContent = "▶";
+    if (badge && badge.classList.contains("discoverCoverPlay")) {
+      /* SVG overlay — leave as-is */
+    } else if (badge) badge.textContent = "▶";
     if (host.classList.contains("followAct")) {
       const title = decodeDiscoverDataAttr(host, "data-user-lib-title") || "Song";
       const playing = host.classList.contains("discoveryRowPlaying");
@@ -24005,6 +24060,14 @@ function syncDiscoveryPlayingHighlights() {
     } else if (host.classList.contains("discoverySpotCard")) {
       const name = String(host.getAttribute("data-user-lib-title") || "").trim() || "Song";
       host.setAttribute("aria-label", `Play ${name}`);
+    } else if (host.classList.contains("discoverFeedSongRow")) {
+      const playBtn = host.querySelector(".discoverFeedSongRowPlay");
+      if (playBtn) {
+        const name = decodeDiscoverDataAttr(playBtn, "data-user-lib-title")
+          || decodeDiscoverDataAttr(playBtn, "data-challenge-entry-title")
+          || "Song";
+        playBtn.setAttribute("aria-label", `Play ${name}`);
+      }
     }
   };
 
@@ -24012,6 +24075,7 @@ function syncDiscoveryPlayingHighlights() {
     root.querySelectorAll(".discoveryRow").forEach(resetDiscoveryHost);
     root.querySelectorAll(".discoverySpotCard").forEach(resetDiscoveryHost);
     root.querySelectorAll(".followAct").forEach(resetDiscoveryHost);
+    root.querySelectorAll(".discoverFeedSongRow").forEach(resetDiscoveryHost);
   }
 
   const curRef = String(currentPlayerTrackRef?.url || "").trim();
@@ -24019,7 +24083,7 @@ function syncDiscoveryPlayingHighlights() {
 
   const paintHost = (host, urlEl) => {
     if (!urlEl) return;
-    const trackUrl = decodeDiscoveryUserLibUrl(urlEl);
+    const trackUrl = decodeDiscoveryPlayUrl(urlEl);
     const { active, audible } = getDiscoveryPlaybackUiForUrl(trackUrl);
     if (!active) return;
     host.classList.toggle("discoveryRowPlaying", audible);
@@ -24044,11 +24108,19 @@ function syncDiscoveryPlayingHighlights() {
     } else if (host.classList.contains("discoverySpotCard")) {
       const name = String(host.getAttribute("data-user-lib-title") || "").trim() || "Song";
       host.setAttribute("aria-label", audible ? `Pause ${name}` : `Play ${name}`);
+    } else if (host.classList.contains("discoverFeedSongRow")) {
+      const playBtn = host.querySelector(".discoverFeedSongRowPlay");
+      if (playBtn) {
+        const name = decodeDiscoverDataAttr(playBtn, "data-user-lib-title")
+          || decodeDiscoverDataAttr(playBtn, "data-challenge-entry-title")
+          || "Song";
+        playBtn.setAttribute("aria-label", audible ? `Pause ${name}` : `Play ${name}`);
+      }
     }
     const artHint =
       String(decodeDiscoverDataAttr(host, "data-user-lib-art") || "").trim() ||
       String(decodeDiscoverDataAttr(urlEl, "data-user-lib-art") || "").trim() ||
-      String(host.querySelector?.(".followActMediaImg, .followActCover img, .discoverySpotCardArt img, .discoveryRowArt img")?.getAttribute?.("src") || "").trim();
+      String(host.querySelector?.(".followActMediaImg, .followActCover img, .discoverySpotCardArt img, .discoveryRowArt img, .discoverFeedSongArt img")?.getAttribute?.("src") || "").trim();
     if (active) applyCoverGlowRgb(host, artHint);
   };
 
@@ -24064,6 +24136,10 @@ function syncDiscoveryPlayingHighlights() {
     root.querySelectorAll(".discoverySpotCard").forEach((card) => {
       paintHost(card, card);
     });
+    root.querySelectorAll(".discoverFeedSongRow").forEach((row) => {
+      const playBtn = row.querySelector(".discoverFeedSongRowPlay");
+      paintHost(row, playBtn);
+    });
   }
 }
 
@@ -24076,41 +24152,31 @@ function syncUserPublicFeedPlayingHighlights() {
     try {
       host.style.removeProperty("--cover-glow-rgb");
     } catch {}
-    const badge = host.querySelector(".discoveryRowArtBadge");
-    if (badge) badge.textContent = "▶";
-    const artBtn = host.querySelector("[data-discovery-inline-play]");
-    if (artBtn) {
-      const name = String(artBtn.getAttribute("data-user-lib-title") || "").trim() || "Song";
-      let dec = name;
-      try {
-        dec = decodeURIComponent(name);
-      } catch {}
-      artBtn.setAttribute("aria-label", `Play ${dec}`);
+    const playBtn = host.querySelector(".discoverFeedSongRowPlay, [data-discovery-inline-play]");
+    if (playBtn) {
+      const name = decodeDiscoverDataAttr(playBtn, "data-user-lib-title") || "Song";
+      playBtn.setAttribute("aria-label", `Play ${name}`);
     }
   };
 
-  root.querySelectorAll(".discoveryRow").forEach(resetDiscoveryHost);
+  root.querySelectorAll(".discoverFeedSongRow, .discoveryRow").forEach(resetDiscoveryHost);
 
   const curRef = String(currentPlayerTrackRef?.url || "").trim();
   if (miniSource?.type !== "public_profile_lib" || !curRef) return;
 
-  root.querySelectorAll(".discoveryRow").forEach((row) => {
-    const artBtn = row.querySelector("[data-discovery-inline-play]");
-    if (!artBtn) return;
-    const trackUrl = decodeDiscoveryUserLibUrl(artBtn);
+  root.querySelectorAll(".discoverFeedSongRow, .discoveryRow").forEach((row) => {
+    const playBtn = row.querySelector(".discoverFeedSongRowPlay, [data-discovery-inline-play]");
+    if (!playBtn) return;
+    const trackUrl = decodeDiscoveryUserLibUrl(playBtn);
     const { active, audible } = getPublicProfileLibPlaybackUiForUrl(trackUrl);
     if (!active) return;
     row.classList.toggle("discoveryRowPlaying", audible);
     row.classList.toggle("discoveryRowActive", active && !audible);
-    const badge = row.querySelector(".discoveryRowArtBadge");
-    if (badge) badge.textContent = audible ? "❚❚" : "▶";
-    if (artBtn) {
-      const name = decodeDiscoverDataAttr(artBtn, "data-user-lib-title") || "Song";
-      artBtn.setAttribute("aria-label", audible ? `Pause ${name}` : `Play ${name}`);
-    }
+    const name = decodeDiscoverDataAttr(playBtn, "data-user-lib-title") || "Song";
+    playBtn.setAttribute("aria-label", audible ? `Pause ${name}` : `Play ${name}`);
     const artHint =
-      String(decodeDiscoverDataAttr(artBtn, "data-user-lib-art") || "").trim() ||
-      String(row.querySelector?.(".discoveryRowArt img")?.getAttribute?.("src") || "").trim();
+      String(decodeDiscoverDataAttr(playBtn, "data-user-lib-art") || "").trim() ||
+      String(row.querySelector?.(".discoverFeedSongArt img, .discoveryRowArt img")?.getAttribute?.("src") || "").trim();
     if (active) applyCoverGlowRgb(row, artHint);
   });
 }
@@ -24630,7 +24696,7 @@ function renderDiscoverPlaylistScreen(slug) {
   listEl.hidden = false;
   listEl.innerHTML = useProfileRows
     ? `<ul class="libraryRows" role="list">${tracks.map((t, i) => discoverPlaylistLibRowHtml(t, profMap, i)).join("")}</ul>`
-    : tracks.map((t, i) => discoveryTrackRowHtml(t, profMap, i)).join("");
+    : `<div class="discoverFeedListStack">${tracks.map((t, i) => discoveryTrackRowHtml(t, profMap, i)).join("")}</div>`;
   try {
     syncDiscoveryPlayingHighlights();
   } catch {}
@@ -25435,55 +25501,34 @@ async function playRandomUserPublicFeedTrack(excludeUrl) {
 
 /** Discover-style row for `#/u/…` public song lists (⋯ opens Discover sheet; no View profile). */
 function userPublicDiscoveryRowHtml(t, idx, pub) {
-  const artSafe = trackCoverArtForFeed(t);
-  const rawTitle = String(t.title || "Untitled");
-  const safeTitle = escapeHtml(rawTitle);
-  const encUrl = encodeURIComponent(String(t.url || ""));
-  const encTitle = encodeURIComponent(rawTitle);
   const byLine = String(pub.byLine || "Creator");
-  const encBy = encodeURIComponent(byLine);
-  const encArt = encodeURIComponent(artSafe);
-  const encSongId = encodeURIComponent(String(t.id || ""));
-  const encOwnerId = encodeURIComponent(String(pub.ownerUserId || t.userId || ""));
-  const encTaskId = encodeURIComponent(String(t.taskId || ""));
-  const encAudioId = encodeURIComponent(String(t.audioId || ""));
-  const encReleaseCaption = encodeURIComponent(releaseCaptionForTrack(t));
-  const playData = `data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" data-play-task-id="${encTaskId}" data-play-audio-id="${encAudioId}" data-play-release-caption="${encReleaseCaption}"`;
-  const rawHandle = String(pub.rawHandle || "").trim().replace(/^@/, "");
-  const encHandle = rawHandle ? encodeURIComponent(rawHandle) : "";
   const extra = pub.extraMeta ? ` · ${escapeHtml(String(pub.extraMeta))}` : "";
-  const metaInner = `${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}${extra}`;
-  const styleLine = discoveryStyleLineHtml(t);
-  const challengeLine = challengeSourceLineHtml(t);
-  const mashupLine = mashupSourceLineHtml(t);
-  const remixLine = remixSourceLineHtml(t);
-  const releaseLine = releaseCaptionLineHtml(t);
-  const richRowClass = styleLine || challengeLine || mashupLine || remixLine || releaseLine ? " discoveryRow--rich" : "";
-  const sheetData = `data-dp-song-id="${encSongId}" data-dp-owner-id="${encOwnerId}" data-dp-task-id="${encTaskId}" data-dp-audio-id="${encAudioId}"`;
-  const side = `<button type="button" class="discoveryRowSide" data-discovery-open-sheet="1" data-dp-hide-profile="1" data-dp-use-public-shuffle="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" ${sheetData} aria-label="Options for ${safeTitle}">⋯</button>`;
-  return `
-      <div class="discoveryRow userPublicFeedRow${richRowClass}" style="--i:${idx}">
-        <button type="button" class="discoveryRowArtBtn" data-discovery-inline-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
-          <span class="discoveryRowArt">
-            <img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" />
-            <span class="discoveryRowArtGlow" aria-hidden="true"></span>
-            <span class="discoveryRowArtBadge" aria-hidden="true">▶</span>
-          </span>
-        </button>
-        <button type="button" class="discoveryRowMain" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
-          <span class="discoveryRowMid">
-            ${titleWithNabadBadgeHtml(t, safeTitle, "discoveryRowTitle")}
-            <span class="discoveryRowMeta">${metaInner}</span>
-            ${styleLine}
-            ${challengeLine}
-            ${mashupLine}
-            ${remixLine}
-            ${releaseLine}
-          </span>
-          <span class="discoveryRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
-        </button>
-        ${side}
-      </div>`;
+  const metaLine = `${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}${extra}`;
+  const extraHtml = [
+    `<span class="discoverFeedSongBy">${metaLine}</span>`,
+    discoveryStyleLineHtml(t),
+    challengeSourceLineHtml(t),
+    mashupSourceLineHtml(t),
+    remixSourceLineHtml(t),
+    releaseCaptionLineHtml(t),
+  ].filter(Boolean).join("");
+  const track = { ...t, userId: pub.ownerUserId || t.userId };
+  return discoverFeedSongRowHtml(track, null, {
+    styleIdx: idx,
+    byLine,
+    hideByLine: true,
+    hideOrigin: true,
+    hideStats: true,
+    playMode: "userLib",
+    extraHtml,
+    rowClass: "userPublicFeedRow",
+    menuOpts: {
+      hideProfile: true,
+      publicShuffle: true,
+      handle: pub.rawHandle,
+      byLine,
+    },
+  });
 }
 
 /** Spotlight carousel covers: mark loaded so CSS can fade in flush fill (no letterbox flash). */
@@ -25550,24 +25595,9 @@ function discoverPlaylistLibRowHtml(t, profMap, idx) {
 }
 
 function discoveryTrackRowHtml(t, profMap, idx) {
-  const artSafe = trackCoverArtForFeed(t);
   const prof = resolveProfileForFeedCreator(t.userId, profMap);
   const handle = String(prof?.username || "").trim();
   const byLine = handle ? `@${handle}` : "Creator";
-  const rawTitle = String(t.title || "Untitled");
-  const safeTitle = escapeHtml(rawTitle);
-  const encUrl = encodeURIComponent(String(t.url || ""));
-  const encTitle = encodeURIComponent(rawTitle);
-  const encBy = encodeURIComponent(byLine);
-  const encArt = encodeURIComponent(artSafe);
-  const encSongId = encodeURIComponent(String(t.id || ""));
-  const encOwnerId = encodeURIComponent(String(t.userId || ""));
-  const encTaskId = encodeURIComponent(String(t.taskId || ""));
-  const encAudioId = encodeURIComponent(String(t.audioId || ""));
-  const encReleaseCaption = encodeURIComponent(releaseCaptionForTrack(t));
-  const playData = `data-play-song-id="${encSongId}" data-play-owner-id="${encOwnerId}" data-play-task-id="${encTaskId}" data-play-audio-id="${encAudioId}" data-play-release-caption="${encReleaseCaption}"`;
-  const encHandle = handle ? encodeURIComponent(handle) : "";
-  const sheetData = `data-dp-song-id="${encSongId}" data-dp-owner-id="${encOwnerId}" data-dp-task-id="${encTaskId}" data-dp-audio-id="${encAudioId}"`;
   const styleLine = discoveryStyleLineHtml(t);
   const challengeLine = challengeSourceLineHtml(t);
   const mashupLine = mashupSourceLineHtml(t);
@@ -25576,32 +25606,24 @@ function discoveryTrackRowHtml(t, profMap, idx) {
   const playLine = Number.isFinite(Number(t.playCount))
     ? `<span class="discoveryRowPlayCount">${discoveryPlayCountChipHtml(t)}</span>`
     : "";
-  const richRowClass = styleLine || challengeLine || mashupLine || remixLine || releaseLine || playLine ? " discoveryRow--rich" : "";
-  const side = `<button type="button" class="discoveryRowSide" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" ${sheetData} aria-label="Options for ${safeTitle}">⋯</button>`;
-  return `
-      <div class="discoveryRow${richRowClass}" style="--i:${idx}">
-        <button type="button" class="discoveryRowArtBtn" data-discovery-inline-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
-          <span class="discoveryRowArt">
-            <img src="${escapeHtml(artSafe)}" alt="" loading="lazy" decoding="async" />
-            <span class="discoveryRowArtGlow" aria-hidden="true"></span>
-            <span class="discoveryRowArtBadge" aria-hidden="true">▶</span>
-          </span>
-        </button>
-        <button type="button" class="discoveryRowMain" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
-          <span class="discoveryRowMid">
-            ${titleWithNabadBadgeHtml(t, safeTitle, "discoveryRowTitle")}
-            <span class="discoveryRowMeta">${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}</span>
-            ${styleLine}
-            ${challengeLine}
-            ${mashupLine}
-            ${remixLine}
-            ${releaseLine}
-            ${playLine}
-          </span>
-          <span class="discoveryRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
-        </button>
-        ${side}
-      </div>`;
+  const extraHtml = [
+    `<span class="discoverFeedSongBy">${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}</span>`,
+    styleLine,
+    challengeLine,
+    mashupLine,
+    remixLine,
+    releaseLine,
+    playLine,
+  ].filter(Boolean).join("");
+  return discoverFeedSongRowHtml(t, profMap, {
+    styleIdx: idx,
+    hideByLine: true,
+    hideOrigin: true,
+    hideStats: true,
+    playMode: "userLib",
+    extraHtml,
+    menuOpts: { handle },
+  });
 }
 
 /** Discover grid tile — cover-first; badges + one caption line max. */
@@ -29722,7 +29744,7 @@ function renderUserProfile(rawUsername) {
     const slice = publicMatches.slice(0, 60).filter((p) => String(p?.url || "").trim());
     const byLine = `@${displayName}`;
     const pubBase = { byLine, rawHandle: displayName, ownerUserId: currentUserPublicProfileId };
-    els.userPublicSongs.innerHTML = slice
+    els.userPublicSongs.innerHTML = `<div class="discoverFeedListStack">${slice
       .map((p, i) =>
         userPublicDiscoveryRowHtml(
           {
@@ -29745,7 +29767,7 @@ function renderUserProfile(rawUsername) {
           },
         ),
       )
-      .join("");
+      .join("")}</div>`;
     _userPublicFeedTracks = slice.map((p) => {
       const artSafe = trackCoverArtForFeed(p) !== "./assets/nabadai-logo.png"
         ? trackCoverArtForFeed(p)

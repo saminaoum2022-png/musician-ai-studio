@@ -14765,7 +14765,7 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   gap:10px;
   min-width: 0;
 }
-.userPublicSongs .discoveryRow{
+.userPublicSongs .discoverFeedSongRow{
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -14776,27 +14776,14 @@ body[data-route="user"] section.card.wide[data-route="user"]{
     linear-gradient(145deg, rgba(26, 31, 44, 0.86), rgba(13, 16, 25, 0.84));
   box-shadow: 0 8px 22px rgba(0,0,0,0.20);
 }
-.userPublicSongs .discoveryRowArtBtn{
-  min-width: 64px;
-  max-width: 72px;
-}
-.userPublicSongs .discoveryRowMain{
-  min-width: 0;
-  padding: 11px 8px 11px 11px;
-}
-.userPublicSongs .discoveryRowMid{
-  min-width: 0;
-}
-.userPublicSongs .discoveryRowTitle,
-.userPublicSongs .discoveryRowMeta{
+.userPublicSongs .discoverFeedSongBody,
+.userPublicSongs .discoverFeedSongTitle,
+.userPublicSongs .discoverFeedSongBy{
   max-width: 100%;
   overflow-wrap: anywhere;
 }
-.userPublicSongs .discoveryRowSide{
-  flex: 0 0 34px;
-  min-width: 34px;
-  color: rgba(232,238,247,0.68);
-  background: transparent;
+.userPublicSongs .discoverFeedListStack{
+  gap: 10px;
 }
 @media (max-width:720px){
   body[data-route="user"] section.card.wide[data-route="user"]{
@@ -30117,28 +30104,51 @@ section.mentorPage{
   left: 10px;
 }
 
+.followActQuoteRow{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+  margin: 4px 0 0;
+  padding: 4px 4px 4px 0;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  transition: background 160ms ease, border-color 160ms ease;
+}
+.followActQuoteRow:has(.followActQuoteCard:active){
+  background: rgba(124, 92, 255, 0.1);
+  border-color: rgba(124, 92, 255, 0.22);
+}
+.followActQuoteMenuBtn{
+  align-self: center;
+  flex: 0 0 auto;
+}
 .followActQuoteCard{
   display: grid;
   grid-template-columns: 56px 1fr;
   gap: 12px;
   align-items: center;
   width: 100%;
-  margin: 4px 0 0;
-  padding: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
+  min-width: 0;
+  margin: 0;
+  padding: 6px 8px 6px 10px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: background 160ms ease, border-color 160ms ease;
 }
 .followActQuoteCard:hover,
 .followActQuoteCard:focus-visible{
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.16);
+  background: transparent;
+}
+.followActQuoteCard:active{
+  background: transparent;
 }
 .followActQuoteArt{
   position: relative;
@@ -30156,27 +30166,48 @@ section.mentorPage{
   object-fit: cover;
   display: block;
 }
-.followActQuotePlay{
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.32);
-  color: #fff;
-  opacity: 0;
-  transition: opacity 160ms ease;
+.followActQuoteCard .discoverCoverPlay{
+  opacity: 0.48;
 }
-.followActQuoteCard:hover .followActQuotePlay,
-.followAct.discoveryRowPlaying .followActQuotePlay,
-.followAct.discoveryRowActive .followActQuotePlay{
-  opacity: 1;
+.followActQuoteCard:active .discoverCoverPlay,
+.followAct.discoveryRowPlaying .followActQuoteCard .discoverCoverPlay,
+.followAct.discoveryRowActive .followActQuoteCard .discoverCoverPlay{
+  opacity: 0.92;
 }
 .followAct.discoveryRowPlaying .followActQuoteArt{
   box-shadow: 0 0 0 2px rgba(var(--cover-glow-rgb), 0.55);
 }
-.followAct.discoveryRowPlaying .followActQuotePlay{
-  background: rgba(var(--cover-glow-rgb), 0.65);
+.followActMediaWrap{
+  position: relative;
+  width: calc(100% - 50px);
+  margin-left: 50px;
+  margin-top: 4px;
+}
+.followActMediaWrap .followActMedia{
+  width: 100%;
+  margin-left: 0;
+  margin-top: 0;
+}
+.followActMediaMenuOuter{
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  pointer-events: auto;
+}
+.followActMediaMenuOuter .followActQuoteMenuBtn{
+  color: rgba(232,238,247,0.82);
+  text-shadow: 0 1px 10px rgba(0,0,0,0.65);
+  padding: 4px 2px;
+  min-height: 32px;
+  min-width: 28px;
+}
+.followActMedia .discoverCoverPlay{
+  opacity: 0.42;
+}
+.followActMedia:active .discoverCoverPlay,
+.followAct.discoveryRowPlaying .followActMedia .discoverCoverPlay{
+  opacity: 0.88;
 }
 .followActQuoteBody{
   display: flex;
@@ -32506,9 +32537,36 @@ section.mentorPage{
 .chartWeekRunnerTap:active .discoverCoverPlay,
 .discoverFeedChallengeHeroPlay:active .discoverCoverPlay,
 .discoverHubPickCardPlay:active .discoverCoverPlay,
-.discoverFeedTemplateCard:active .discoverCoverPlay{
+.discoverFeedTemplateCard:active .discoverCoverPlay,
+.followActQuoteCard:active .discoverCoverPlay,
+.followActMedia:active .discoverCoverPlay{
   opacity: 0.92;
   background: rgba(0,0,0,0.34);
+}
+.discoverFeedSongRow.discoveryRowPlaying{
+  border-color: rgba(var(--cover-glow-rgb), 0.42);
+  background: rgba(var(--cover-glow-rgb), 0.08);
+}
+.discoverFeedSongRow.discoveryRowPlaying .discoverFeedSongArt{
+  box-shadow: 0 0 0 2px rgba(var(--cover-glow-rgb), 0.55);
+}
+.discoverFeedSongRow.discoveryRowActive{
+  border-color: rgba(var(--cover-glow-rgb), 0.28);
+}
+.discoverFeedSongRow .discoveryRowPlayCount{
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: rgba(223, 231, 251, 0.42);
+}
+.discoverFeedSongRow .discoveryStyleLine,
+.discoverFeedSongRow .challengeSourceLine,
+.discoverFeedSongRow .mashupSourceLine,
+.discoverFeedSongRow .remixSourceLine,
+.discoverFeedSongRow .releaseCaptionLine{
+  display: block;
+  max-width: 100%;
+  min-width: 0;
 }
 .discoverFeedSongRow{
   display: grid;

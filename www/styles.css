@@ -32350,6 +32350,122 @@ section.mentorPage{
   gap: 8px;
   min-width: 0;
 }
+.discoverFeedSongRowWrap{
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+  gap: 0;
+}
+.discoverFeedSongRowWrap > .discoverFeedSongRow{
+  flex: 1;
+  min-width: 0;
+}
+.discoverFeedSongMenuBtn,
+.discoverHubPickMenuBtn,
+.chartWeekMenuBtn,
+.followActMenuBtn{
+  flex: 0 0 auto;
+  align-self: center;
+  width: auto;
+  min-width: 36px;
+  min-height: 40px;
+  margin: 0;
+  padding: 8px 6px 8px 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(232,238,247,0.52);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.18s ease, opacity 0.18s ease;
+}
+.discoverFeedSongMenuBtn:active,
+.discoverHubPickMenuBtn:active,
+.chartWeekMenuBtn:active,
+.followActMenuBtn:active{
+  opacity: 0.78;
+  color: rgba(232,238,247,0.92);
+}
+.discoverFeedSongMenuBtn:focus-visible,
+.discoverHubPickMenuBtn:focus-visible,
+.chartWeekMenuBtn:focus-visible,
+.followActMenuBtn:focus-visible{
+  outline: 2px solid rgba(124,92,255,0.55);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.discoverFeedTemplateCardWrap{
+  position: relative;
+  min-width: 0;
+}
+.discoverFeedTemplateMenuOuter{
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 3;
+  pointer-events: auto;
+}
+.discoverFeedTemplateMenuBtn{
+  color: rgba(232,238,247,0.88);
+  text-shadow: 0 1px 8px rgba(0,0,0,0.55);
+  padding: 6px 4px;
+  min-height: 36px;
+}
+.discoverHubPickCardWrap{
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+  gap: 0;
+}
+.discoverHubPickCardWrap > .discoverHubPickCard{
+  flex: 1;
+  min-width: 0;
+}
+.chartWeekWinnerWrap,
+.chartWeekRunnerWrap{
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+  gap: 0;
+}
+.chartWeekWinnerWrap > .chartWeekWinner,
+.chartWeekRunnerWrap > .chartWeekRunner{
+  flex: 1;
+  min-width: 0;
+}
+.discoverFeedChallengeHeroMainWrap{
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+  gap: 0;
+}
+.discoverFeedChallengeHeroMainWrap > .discoverFeedChallengeHeroMain{
+  flex: 1;
+  min-width: 0;
+}
+.followActMenuBtn{
+  margin-left: auto;
+  align-self: center;
+  flex: 0 0 auto;
+}
+.followActActionsBar{
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+}
+.followActActionsBar > .followActActions{
+  flex: 1;
+  min-width: 0;
+}
 .discoverFeedSongRow{
   display: grid;
   grid-template-columns: auto 1fr auto;

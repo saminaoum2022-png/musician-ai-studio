@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260621publicSongMenu";
+const APP_BUILD = "20260621discoverMenuDots";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -6179,22 +6179,26 @@ function chartWeekWinnerHtml(hero) {
   const heroArt = trackCoverArtForFeed({ artUrl: hero.artUrl, meta: {} });
   const heroPlays = Number(hero.weeklyPlays || 0);
   const title = String(hero.title || "Untitled").trim();
+  const menu = discoverSheetMenuBtnHtml(hero, null, { className: "discoverFeedSongMenuBtn chartWeekMenuBtn" });
   return `
-    <button type="button" class="chartWeekWinner" ${chartEntryPlayAttrs(hero)} aria-label="Play ${escapeHtml(title)}, number 1 this week">
-      <span class="chartWeekWinnerArt">
-        <img src="${escapeHtml(heroArt)}" alt="" loading="lazy" decoding="async" />
-      </span>
-      <span class="chartWeekWinnerBody">
-        <span class="chartWeekWinnerHead">
-          <span class="chartWeekWinnerRank">#1</span>
-          ${chartWeekTrendHtml(hero)}
+    <div class="chartWeekWinnerWrap">
+      <button type="button" class="chartWeekWinner" ${chartEntryPlayAttrs(hero)} aria-label="Play ${escapeHtml(title)}, number 1 this week">
+        <span class="chartWeekWinnerArt">
+          <img src="${escapeHtml(heroArt)}" alt="" loading="lazy" decoding="async" />
         </span>
-        <strong class="chartWeekWinnerTitle">${escapeHtml(title)}</strong>
-        ${hero.username ? `<span class="chartWeekWinnerBy">@${escapeHtml(hero.username)}</span>` : ""}
-        ${heroPlays ? `<span class="chartWeekWinnerPlays">${escapeHtml(chartWeekPlaysText(heroPlays))}</span>` : ""}
-      </span>
-      ${discoverFeedPlayBtnHtml({ hero: true })}
-    </button>`;
+        <span class="chartWeekWinnerBody">
+          <span class="chartWeekWinnerHead">
+            <span class="chartWeekWinnerRank">#1</span>
+            ${chartWeekTrendHtml(hero)}
+          </span>
+          <strong class="chartWeekWinnerTitle">${escapeHtml(title)}</strong>
+          ${hero.username ? `<span class="chartWeekWinnerBy">@${escapeHtml(hero.username)}</span>` : ""}
+          ${heroPlays ? `<span class="chartWeekWinnerPlays">${escapeHtml(chartWeekPlaysText(heroPlays))}</span>` : ""}
+        </span>
+        ${discoverFeedPlayBtnHtml({ hero: true })}
+      </button>
+      ${menu}
+    </div>`;
 }
 
 function chartWeekRunnerHtml(e) {
@@ -6202,21 +6206,25 @@ function chartWeekRunnerHtml(e) {
   const plays = Number(e.weeklyPlays || 0);
   const rank = Number(e.rank) || 0;
   const title = String(e.title || "Untitled").trim();
+  const menu = discoverSheetMenuBtnHtml(e, null, { className: "discoverFeedSongMenuBtn chartWeekMenuBtn" });
   return `
-    <button type="button" class="chartWeekRunner" role="listitem" ${chartEntryPlayAttrs(e)} aria-label="Play ${escapeHtml(title)}, rank ${rank}">
-      <span class="chartWeekRunnerLead">
-        <span class="chartWeekRunnerRank">#${rank}</span>
-        ${chartWeekTrendHtml(e)}
-      </span>
-      <span class="chartWeekRunnerArt">
-        <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
-      </span>
-      <span class="chartWeekRunnerMeta">
-        <strong class="chartWeekRunnerTitle">${escapeHtml(title)}</strong>
-        ${plays ? `<span class="chartWeekRunnerPlays">${escapeHtml(chartWeekPlaysText(plays, true))}</span>` : ""}
-      </span>
-      ${discoverListPlayBtnHtml("chartWeekRunnerPlay")}
-    </button>`;
+    <div class="chartWeekRunnerWrap">
+      <button type="button" class="chartWeekRunner" role="listitem" ${chartEntryPlayAttrs(e)} aria-label="Play ${escapeHtml(title)}, rank ${rank}">
+        <span class="chartWeekRunnerLead">
+          <span class="chartWeekRunnerRank">#${rank}</span>
+          ${chartWeekTrendHtml(e)}
+        </span>
+        <span class="chartWeekRunnerArt">
+          <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
+        </span>
+        <span class="chartWeekRunnerMeta">
+          <strong class="chartWeekRunnerTitle">${escapeHtml(title)}</strong>
+          ${plays ? `<span class="chartWeekRunnerPlays">${escapeHtml(chartWeekPlaysText(plays, true))}</span>` : ""}
+        </span>
+        ${discoverListPlayBtnHtml("chartWeekRunnerPlay")}
+      </button>
+      ${menu}
+    </div>`;
 }
 
 function chartWeekLeaderboardRowHtml(e) {
@@ -7253,6 +7261,36 @@ function discoverFeedPlayBtnHtml(opts = {}) {
   return discoverListPlayBtnHtml();
 }
 
+/** ⋯ menu control for Discover / Friends / chart rows — opens the track sheet. */
+function discoverSheetMenuBtnHtml(source, profMap, opts = {}) {
+  const userId = String(source?.userId || source?.ownerUserId || "").trim();
+  const url = String(source?.url || "").trim();
+  if (!url) return "";
+  const prof = profMap && userId ? resolveProfileForFeedCreator(userId, profMap) : null;
+  const handle = String(opts.handle || source?.username || prof?.username || "")
+    .trim()
+    .replace(/^@/, "");
+  const byLine = handle ? `@${handle}` : String(opts.byLine || source?.byLine || "Creator");
+  const rawTitle = String(source?.title || "Untitled");
+  const safeTitle = escapeHtml(rawTitle);
+  const art = trackCoverArtForFeed(source);
+  const encUrl = encodeURIComponent(url);
+  const encTitle = encodeURIComponent(rawTitle);
+  const encBy = encodeURIComponent(byLine);
+  const encArt = encodeURIComponent(art);
+  const encHandle = handle ? encodeURIComponent(handle) : "";
+  const encSongId = encodeURIComponent(String(source?.songId || source?.id || ""));
+  const encOwnerId = encodeURIComponent(userId);
+  const encTaskId = encodeURIComponent(String(source?.taskId || ""));
+  const encAudioId = encodeURIComponent(String(source?.audioId || ""));
+  const cls = String(opts.className || "discoverFeedSongMenuBtn").trim() || "discoverFeedSongMenuBtn";
+  const extra = [
+    opts.hideProfile ? ' data-dp-hide-profile="1"' : "",
+    opts.publicShuffle ? ' data-dp-use-public-shuffle="1"' : "",
+  ].join("");
+  return `<button type="button" class="${escapeHtml(cls)}" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" data-dp-song-id="${encSongId}" data-dp-owner-id="${encOwnerId}" data-dp-task-id="${encTaskId}" data-dp-audio-id="${encAudioId}"${extra} aria-label="Song options for ${safeTitle}">⋯</button>`;
+}
+
 function discoverFeedSongRowHtml(t, profMap, opts = {}) {
   const prof = resolveProfileForFeedCreator(t.userId, profMap);
   const handle = String(prof?.username || "").trim();
@@ -7264,17 +7302,22 @@ function discoverFeedSongRowHtml(t, profMap, opts = {}) {
     ? opts.originHtml
     : discoverOriginLineHtml(t);
   const stats = discoverHubPickStatsHtml(t);
+  const menu = discoverSheetMenuBtnHtml(t, profMap);
   return `
-    <button type="button" class="discoverFeedSongRow" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
-      <span class="discoverFeedSongArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" /></span>
-      <span class="discoverFeedSongBody">
-        <strong class="discoverFeedSongTitle">${escapeHtml(title)}</strong>
-        <span class="discoverFeedSongBy">by ${escapeHtml(byLine)}</span>
-        ${originHtml}
-        ${stats}
-      </span>
-      ${discoverListPlayBtnHtml()}
-    </button>`;
+    <div class="discoverFeedSongRowWrap">
+      <button type="button" class="discoverFeedSongRow" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
+        <span class="discoverFeedSongArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" /></span>
+        <span class="discoverFeedSongBody">
+          <strong class="discoverFeedSongTitle">${escapeHtml(title)}</strong>
+          <span class="discoverFeedSongBy">by ${escapeHtml(byLine)}</span>
+          ${originHtml}
+          ${stats}
+        </span>
+        ${discoverListPlayBtnHtml()}
+      </button>
+      ${menu}
+    </div>`;
+}
 }
 
 function discoverFeedTemplateCardHtml(t, profMap) {
@@ -7284,18 +7327,23 @@ function discoverFeedTemplateCardHtml(t, profMap) {
   const title = String(t.title || "Untitled").trim();
   const art = trackCoverArtForFeed(t);
   const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
+  const menu = discoverSheetMenuBtnHtml(t, profMap, { className: "discoverFeedSongMenuBtn discoverFeedTemplateMenuBtn" });
   return `
-    <button type="button" class="discoverFeedTemplateCard" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
-      <span class="discoverFeedTemplateCover">
-        <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
-        <span class="discoverFeedTemplatePlay" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M8 5.5v13l11-6.5-11-6.5Z"/></svg></span>
-      </span>
-      <span class="discoverFeedTemplateMeta">
-        <strong class="discoverFeedTemplateTitle">${escapeHtml(title)}</strong>
-        <span class="discoverFeedTemplateBy">by ${escapeHtml(byLine)}</span>
-        ${discoverTemplateCardOriginHtml(t)}
-      </span>
-    </button>`;
+    <div class="discoverFeedTemplateCardWrap">
+      <button type="button" class="discoverFeedTemplateCard" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
+        <span class="discoverFeedTemplateCover">
+          <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
+          <span class="discoverFeedTemplatePlay" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M8 5.5v13l11-6.5-11-6.5Z"/></svg></span>
+        </span>
+        <span class="discoverFeedTemplateMeta">
+          <strong class="discoverFeedTemplateTitle">${escapeHtml(title)}</strong>
+          <span class="discoverFeedTemplateBy">by ${escapeHtml(byLine)}</span>
+          ${discoverTemplateCardOriginHtml(t)}
+        </span>
+      </button>
+      ${menu ? `<span class="discoverFeedTemplateMenuOuter">${menu}</span>` : ""}
+    </div>`;
+}
 }
 
 function discoverFeedChallengeBlockHtml(c, tracks, profMap, opts = {}) {
@@ -7317,17 +7365,21 @@ function discoverFeedChallengeBlockHtml(c, tracks, profMap, opts = {}) {
       const art = trackCoverArtForFeed(top);
       const playAttrs = discoverHubTrackPlayAttrs(top, profMap);
       const origin = discoverChallengeRankText(top, tracks);
+      const menu = discoverSheetMenuBtnHtml(top, profMap, { className: "discoverFeedSongMenuBtn discoverFeedChallengeMenuBtn" });
       return `
         <div class="discoverFeedChallengeHero">
-          <button type="button" class="discoverFeedChallengeHeroMain" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
-            <span class="discoverFeedChallengeHeroArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" /></span>
-            <span class="discoverFeedChallengeHeroMeta">
-              <strong class="discoverFeedSongTitle">${escapeHtml(title)}</strong>
-              ${handle ? `<span class="discoverFeedSongBy">by @${escapeHtml(handle)}</span>` : ""}
-              <span class="discoverFeedOrigin">${escapeHtml(origin)}</span>
-            </span>
-            ${discoverListPlayBtnHtml()}
-          </button>
+          <div class="discoverFeedChallengeHeroMainWrap">
+            <button type="button" class="discoverFeedChallengeHeroMain" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
+              <span class="discoverFeedChallengeHeroArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" /></span>
+              <span class="discoverFeedChallengeHeroMeta">
+                <strong class="discoverFeedSongTitle">${escapeHtml(title)}</strong>
+                ${handle ? `<span class="discoverFeedSongBy">by @${escapeHtml(handle)}</span>` : ""}
+                <span class="discoverFeedOrigin">${escapeHtml(origin)}</span>
+              </span>
+              ${discoverListPlayBtnHtml()}
+            </button>
+            ${menu}
+          </div>
           <button type="button" class="discoverFeedJoinBtn" ${joinAttrs}>Join challenge</button>
         </div>`;
     })()
@@ -7497,19 +7549,23 @@ function discoverHubPickCardHtml(t, profMap) {
   const title = String(t.title || "Untitled").trim();
   const art = trackCoverArtForFeed(t);
   const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
+  const menu = discoverSheetMenuBtnHtml(t, profMap, { className: "discoverFeedSongMenuBtn discoverHubPickMenuBtn" });
   return `
-    <button type="button" class="discoverHubPickCard discoverHubPickCard--${escapeHtml(type.key)}" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
-      <span class="discoverHubPickCover">
-        <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
-        <span class="discoverHubPickPlayIco" aria-hidden="true"><svg viewBox="0 0 24 24" width="11" height="11"><path d="M8 5v14l11-7L8 5Z" fill="currentColor"/></svg></span>
-      </span>
-      <span class="discoverHubPickMeta">
-        <span class="discoverHubPickType">${escapeHtml(type.label)}</span>
-        <strong class="discoverHubPickTitle">${escapeHtml(title)}</strong>
-        <span class="discoverHubPickBy">${escapeHtml(byLine)}</span>
-        ${discoverHubPickStatsHtml(t)}
-      </span>
-    </button>`;
+    <div class="discoverHubPickCardWrap">
+      <button type="button" class="discoverHubPickCard discoverHubPickCard--${escapeHtml(type.key)}" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
+        <span class="discoverHubPickCover">
+          <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
+          <span class="discoverHubPickPlayIco" aria-hidden="true"><svg viewBox="0 0 24 24" width="11" height="11"><path d="M8 5v14l11-7L8 5Z" fill="currentColor"/></svg></span>
+        </span>
+        <span class="discoverHubPickMeta">
+          <span class="discoverHubPickType">${escapeHtml(type.label)}</span>
+          <strong class="discoverHubPickTitle">${escapeHtml(title)}</strong>
+          <span class="discoverHubPickBy">${escapeHtml(byLine)}</span>
+          ${discoverHubPickStatsHtml(t)}
+        </span>
+      </button>
+      ${menu}
+    </div>`;
 }
 
 function discoverHubEntryMiniHtml(t, profMap) {
@@ -11391,13 +11447,16 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
               <span class="followActQuoteSub">${escapeHtml(subtitle)}</span>
             </span>
           </button>`}
-          ${followActActionsRowHtml({
-            kind: "music",
-            targetId: t.id,
-            targetUserId: t.userId,
-            plays,
-            playsPending,
-          })}
+          <div class="followActActionsBar">
+            ${followActActionsRowHtml({
+              kind: "music",
+              targetId: t.id,
+              targetUserId: t.userId,
+              plays,
+              playsPending,
+            })}
+            ${discoverSheetMenuBtnHtml(t, profMap, { className: "discoverFeedSongMenuBtn followActMenuBtn" })}
+          </div>
         </div>
       </article>`;
   }

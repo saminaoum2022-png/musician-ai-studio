@@ -12076,7 +12076,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
 .profileSection{
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
   animation: sectionFadeIn 260ms ease;
   /* Contain children — keeps the cover shelf, heartbeat, and any long
      song titles from forcing horizontal scroll on the whole page. */
@@ -12096,15 +12096,20 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   --aura-tint-soft: rgba(124, 92, 255, 0.18);
   --aura-tint-solid: rgb(168, 152, 255);
   --aura-bpm: 88;
+  --profile-header-pad-top: 46px;
+  --profile-header-gap: 10px;
+  --profile-avatar-size: 96px;
+  --profile-stats-max-w: 360px;
+  --profile-stat-col-pad-x: 4px;
   position: relative;
   isolation: isolate;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--profile-header-gap);
   /* Top chrome is position:fixed; reserve one safe-area pass + row height
      so the avatar clears the credits pill + edit/settings (no second
      safe-area — `.app` top padding is zeroed on this route in mobile). */
-  padding: calc(env(safe-area-inset-top, 0px) + 54px) 8px 6px;
+  padding: calc(env(safe-area-inset-top, 0px) + var(--profile-header-pad-top)) 8px 4px;
   margin-bottom: 0;
   max-width: 100%;
 }
@@ -12247,7 +12252,7 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 6px;
+  gap: 5px;
   padding: 0 4px;
 }
 .profileAura.profileAuraEditing .profileAuraIdentity{
@@ -12256,10 +12261,10 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
 }
 .profileAuraAvatarWrap{
   position: relative;
-  width: 104px;
-  height: 104px;
+  width: var(--profile-avatar-size, 96px);
+  height: var(--profile-avatar-size, 96px);
   border-radius: var(--nabad-squircle-radius);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 /* Ring retired. The pulse fingerprint + cover-tinted live dot now
    carry all the "alive" feeling; a static white hairline around the
@@ -12320,7 +12325,7 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
   justify-content: center;
   gap: 6px;
   flex-wrap: wrap;
-  margin-top: 2px;
+  margin-top: 0;
   align-self: center;
   width: 100%;
   max-width: 100%;
@@ -12811,7 +12816,7 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
   align-items: center;
   justify-content: flex-start;
   gap: 6px;
-  margin-bottom: 10px;
+  margin-bottom: 7px;
 }
 
 /* --- Profile header skeleton: shimmer over avatar + username while
@@ -12889,7 +12894,7 @@ body[data-route="profile"]:has(#profileAuraNameRow[data-loading="true"]) #profil
 
 /* Persona line — below @handle row (not inline after verified badge). */
 .profileAuraIdentity > .profileIdentityLine{
-  margin: 4px auto 0;
+  margin: 3px auto 0;
   font-size: 13px;
   font-weight: 400;
   letter-spacing: 0.01em;
@@ -12927,7 +12932,7 @@ body[data-route="profile"]:has(#profileAuraNameRow[data-loading="true"]) #profil
 /* Music styles — dot-separated line under @handle (view mode). */
 .profileMusicStylesInline{
   display: block;
-  margin: 6px auto 0;
+  margin: 4px auto 0;
   max-width: min(100%, 340px);
   text-align: center;
 }
@@ -12982,7 +12987,7 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
    keeps left alignment. --- */
 .profileHeroBio{
   position: relative;
-  margin: 4px auto 0;
+  margin: 2px auto 0;
   padding: 0;
   max-width: 460px;
   text-align: center;
@@ -12991,7 +12996,7 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
 .profileAura.profileAuraEditing .profileHeroBio{
   text-align: left;
   align-self: flex-start;
-  margin: 6px 0 4px;
+  margin: 4px 0 3px;
 }
 .profileHeroBioQuote{ display: none; }
 .profileHeroBioText{
@@ -13012,7 +13017,7 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 8px 0 6px;
+  margin: 6px 0 4px;
   padding: 0;
 }
 .profileShareBtn{
@@ -13267,7 +13272,7 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
 }
 .profileTopWeekLikes svg{ width: 11px; height: 11px; color: #ff688f; }
 .profileFeaturedCreationWrap{
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   max-width: 100%;
 }
 .profileFeaturedCreationWrap[hidden]{
@@ -13278,7 +13283,7 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
   max-width: 100%;
 }
 .profileFeaturedCreationKicker{
-  margin: 0 0 8px;
+  margin: 0 0 6px;
   padding: 0 2px;
   color: rgba(223, 231, 251, 0.42);
   font-size: 11px;
@@ -13289,10 +13294,10 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
 .profileFeaturedCreationMain{
   width: 100%;
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr) auto;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
+  gap: 10px;
+  padding: 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.03);
@@ -13311,8 +13316,8 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
   background: rgba(255, 255, 255, 0.055);
 }
 .profileFeaturedCreationArt{
-  width: 64px;
-  height: 64px;
+  width: 58px;
+  height: 58px;
   border-radius: 12px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.04);
@@ -14294,12 +14299,12 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   isolation: isolate;
   display:flex;
   flex-direction:column;
-  gap:14px;
+  gap:11px;
   width: min(100%, 680px);
   margin: 0 auto;
   min-width: 0;
   overflow-x: clip;
-  padding: calc(env(safe-area-inset-top, 0px) + 18px) 8px 6px;
+  padding: calc(env(safe-area-inset-top, 0px) + 14px) 8px 4px;
 }
 .userPublic::before{
   display: none;
@@ -14309,16 +14314,16 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   flex-direction: column;
   align-items:center;
   justify-content: flex-start;
-  gap:10px;
+  gap:8px;
   position:relative;
-  padding: 0 2px 2px;
+  padding: 0 2px 0;
   min-width: 0;
   text-align: center;
 }
 .userPublicAvatarWrap{
   position: relative;
-  width: 112px;
-  height: 112px;
+  width: 100px;
+  height: 100px;
   flex: 0 0 auto;
   border-radius: var(--nabad-squircle-radius);
   box-shadow:
@@ -14565,7 +14570,7 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   min-width: 0;
   width: 100%;
   max-width: 460px;
-  margin: 4px auto 0;
+  margin: 2px auto 0;
   padding: 0;
   font-size:13.5px;
   line-height:1.5;
@@ -14708,18 +14713,18 @@ body[data-route="user"] section.card.wide[data-route="user"]{
     padding-top: 0;
   }
   .userPublic{
-    gap: 14px;
+    gap: 11px;
   }
   .userPublicHead{
-    gap: 10px;
+    gap: 8px;
     padding-top: 0;
   }
   .userPublicMeta{
     flex: 0 1 auto;
   }
   .userPublicAvatarWrap{
-    width: 104px;
-    height: 104px;
+    width: 92px;
+    height: 92px;
   }
   .userPublicName{
     font-size: clamp(27px, 7.8vw, 34px);
@@ -19149,9 +19154,9 @@ body.notificationsCenterOpen{
   position: relative;
   z-index: 1;
   overflow: visible;
-  margin: 6px auto 4px;
-  width: 112px;
-  height: 112px;
+  margin: 4px auto 2px;
+  width: var(--profile-avatar-size, 96px);
+  height: var(--profile-avatar-size, 96px);
   border-radius: var(--nabad-squircle-radius);
   box-shadow: 0 0 38px -14px rgba(124,92,255,0.22);
 }
@@ -19254,8 +19259,8 @@ body.notificationsCenterOpen{
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
-  width: min(100%, 420px);
-  margin: 14px auto 6px;
+  width: min(100%, var(--profile-stats-max-w, 360px));
+  margin: 10px auto 4px;
   padding: 0;
   border: 0;
   background: none;
@@ -19268,8 +19273,8 @@ body.notificationsCenterOpen{
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 0 6px;
+  gap: 4px;
+  padding: 0 var(--profile-stat-col-pad-x, 4px);
   text-align: center;
   line-height: 1.1;
 }
@@ -19429,8 +19434,8 @@ html[data-theme="light"] .nabadVerifyPopoverText{
 
 @media (max-width: 390px){
   .profileStatsRow{
-    width: min(100%, 360px);
-    margin-top: 12px;
+    width: min(100%, 340px);
+    margin-top: 9px;
   }
   .profileStatValue{
     font-size: clamp(20px, 5.4vw, 24px);
@@ -19446,8 +19451,8 @@ html[data-theme="light"] .nabadVerifyPopoverText{
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
-  width: min(100%, 560px);
-  margin: 10px auto 4px;
+  width: min(100%, 480px);
+  margin: 7px auto 3px;
   padding: 0;
   overflow: hidden;
   border: 1px solid rgba(255,255,255,0.105);
@@ -19467,13 +19472,13 @@ html[data-theme="light"] .nabadVerifyPopoverText{
 .profileStatPill{
   position: relative;
   min-width: 0;
-  min-height: 54px;
+  min-height: 48px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 8px 8px 9px;
+  gap: 3px;
+  padding: 6px 5px 7px;
   border: 0;
   background: transparent;
   line-height: 1;
@@ -19519,11 +19524,12 @@ html[data-theme="light"] .nabadVerifyPopoverText{
 @media (max-width: 390px){
   .profileStatsPills{
     border-radius: 16px;
+    width: min(100%, 340px);
   }
   .profileStatPill{
-    min-height: 50px;
-    gap: 4px;
-    padding: 7px 5px 8px;
+    min-height: 44px;
+    gap: 3px;
+    padding: 6px 4px 7px;
   }
   .profileStatPillValue{
     font-size: clamp(16px, 4.8vw, 21px);
@@ -21852,13 +21858,13 @@ button.discoverySpotCard{
 
 /* Profile — Songs | All songs | Activity (X-style underline tabs) */
 .profileSongsBlock{
-  margin-top: 8px;
+  margin-top: 5px;
 }
 .profileTabBar{
   display: flex;
   align-items: stretch;
   gap: 0;
-  margin: 0 0 10px;
+  margin: 0 0 7px;
   padding: 0 2px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   overflow-x: auto;
@@ -21878,7 +21884,7 @@ button.discoverySpotCard{
   font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  padding: 12px 14px 11px;
+  padding: 10px 12px 9px;
   cursor: pointer;
   position: relative;
   -webkit-tap-highlight-color: transparent;

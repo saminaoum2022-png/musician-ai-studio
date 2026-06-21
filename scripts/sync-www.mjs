@@ -30,6 +30,14 @@ for (const [from, to] of copies) {
 execSync("rsync -a src/ www/src/", { cwd: root, stdio: "inherit" });
 console.log("sync-www: src/ → www/src/");
 
+const splashAssets = path.join(root, "assets", "splash");
+const wwwSplashAssets = path.join(root, "www", "assets", "splash");
+if (fs.existsSync(splashAssets)) {
+  fs.mkdirSync(path.join(root, "www", "assets"), { recursive: true });
+  execSync(`rsync -a assets/splash/ www/assets/splash/`, { cwd: root, stdio: "inherit" });
+  console.log("sync-www: assets/splash/ → www/assets/splash/");
+}
+
 const discoverAssets = path.join(root, "assets", "discover");
 const wwwDiscoverAssets = path.join(root, "www", "assets", "discover");
 if (fs.existsSync(discoverAssets)) {

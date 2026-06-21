@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260621typeHierarchy";
+const APP_BUILD = "20260621vectorSplash";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -75,17 +75,15 @@ try {
 }
 
 const IS_NATIVE_SHELL = typeof location !== "undefined" && location.protocol === "capacitor:";
-/** Boot splash: animated logo video — wordmark at ~3.55s into clip (~5.04s total). */
-const BOOT_SPLASH_WORDMARK_AT_S = 3.55;
-const BOOT_SPLASH_MIN_MS = 5100;
-const BOOT_SPLASH_MAX_MS = 6500;
-const BOOT_SPLASH_END_HOLD_MS = 350;
-/** Web: wait for the MP4 over the network; dismiss when the clip ends (not a fixed wall-clock min). */
-const BOOT_SPLASH_WEB_PREPLAY_MAX_MS = 10000;
-const BOOT_SPLASH_WEB_MAX_MS = 11000;
+/** Boot splash: native vector draw animation (see src/boot-splash.js). */
+const BOOT_SPLASH_ANIM_MS =
+  (typeof window !== "undefined" && window.BOOT_SPLASH_ANIM_MS) || 3500;
+const BOOT_SPLASH_MIN_MS = BOOT_SPLASH_ANIM_MS;
+const BOOT_SPLASH_MAX_MS = BOOT_SPLASH_ANIM_MS + 1200;
+const BOOT_SPLASH_END_HOLD_MS = 0;
 const _bootSplashStartedAt = Date.now();
-let _bootSplashVideoStartedAt = 0;
-let _bootSplashVideoEnded = false;
+let _bootSplashAnimStartedAt = 0;
+let _bootSplashAnimEnded = false;
 let _bootSplashCanDismiss = false;
 let _bootSplashMinTimer = 0;
 
@@ -101,16 +99,7 @@ function tryDismissBootSplash() {
   if (!_bootSplashCanDismiss) return;
   try {
     if (!document.body.classList.contains("booting")) return;
-    if (!IS_NATIVE_SHELL) {
-      if (!_bootSplashVideoStartedAt) {
-        if (Date.now() - _bootSplashStartedAt >= BOOT_SPLASH_WEB_PREPLAY_MAX_MS) finishBootSplash();
-        return;
-      }
-      if (!_bootSplashVideoEnded) return;
-      finishBootSplash();
-      return;
-    }
-    if (!_bootSplashVideoEnded) {
+    if (!_bootSplashAnimEnded) {
       const elapsed = Date.now() - _bootSplashStartedAt;
       if (elapsed < BOOT_SPLASH_MIN_MS) {
         if (!_bootSplashMinTimer) {
@@ -119,8 +108,8 @@ function tryDismissBootSplash() {
             tryDismissBootSplash();
           }, BOOT_SPLASH_MIN_MS - elapsed);
         }
+        return;
       }
-      return;
     }
     finishBootSplash();
   } catch {}
@@ -138,75 +127,30 @@ try {
   };
   window.addEventListener("error", forceBootSplashEnd);
   window.addEventListener("unhandledrejection", forceBootSplashEnd);
-  setTimeout(forceBootSplashEnd, IS_NATIVE_SHELL ? BOOT_SPLASH_MAX_MS : BOOT_SPLASH_WEB_MAX_MS);
+  setTimeout(forceBootSplashEnd, BOOT_SPLASH_MAX_MS);
 } catch {}
 
-function initBootSplashVideo() {
+function startBootSplash() {
   try {
-    const video = document.getElementById("bootSplashVideo");
-    const bootSplash = document.getElementById("bootSplash");
-    const mark = video?.closest(".bootSplashMark--video");
-    if (!video) return;
-    video.muted = true;
-    video.playsInline = true;
-    video.setAttribute("muted", "");
-    video.setAttribute("playsinline", "");
-    video.setAttribute("webkit-playsinline", "");
-    const revealVideo = () => {
-      video.classList.add("isReady");
-    };
-    let wordmarkSynced = false;
-    const startWordmarkSync = () => {
-      if (wordmarkSynced) return;
-      wordmarkSynced = true;
-      video.classList.add("isPlaying");
-      try { bootSplash?.classList.add("bootSplashVideoPlaying"); } catch {}
-    };
-    const markVideoStarted = () => {
-      if (_bootSplashVideoStartedAt) return;
-      _bootSplashVideoStartedAt = Date.now();
-    };
-    const fallbackStaticMark = () => {
-      if (!IS_NATIVE_SHELL) return;
-      try { mark?.classList.add("bootSplashMark--fallback"); } catch {}
-      revealVideo();
-      startWordmarkSync();
-    };
-    const tryPlay = () => {
-      const pending = video.play();
-      if (pending && typeof pending.catch === "function") {
-        pending.catch(() => {});
-      }
-    };
-    const onFirstFrame = () => {
-      revealVideo();
-      tryPlay();
-    };
-    video.addEventListener("loadeddata", onFirstFrame, { once: true });
-    video.addEventListener("playing", markVideoStarted, { once: true });
-    video.addEventListener("timeupdate", () => {
-      if (video.currentTime >= BOOT_SPLASH_WORDMARK_AT_S) startWordmarkSync();
-    });
-    video.addEventListener("error", fallbackStaticMark, { once: true });
-    if (video.readyState >= 2) onFirstFrame();
-    else video.addEventListener("canplay", tryPlay, { once: true });
-    if (IS_NATIVE_SHELL) {
-      setTimeout(() => {
-        if (!video.classList.contains("isReady")) fallbackStaticMark();
-      }, 1200);
-    } else {
-      setTimeout(() => { if (video.paused) tryPlay(); }, 300);
-      setTimeout(() => { if (video.paused) tryPlay(); }, 1200);
-    }
-    video.addEventListener("ended", () => {
-      _bootSplashVideoEnded = true;
+    const run = typeof window !== "undefined" ? window.initBootSplashAnimation : null;
+    if (typeof run !== "function") {
+      _bootSplashAnimStartedAt = Date.now();
+      _bootSplashAnimEnded = true;
       _bootSplashCanDismiss = true;
-      if (_bootSplashMinTimer) clearTimeout(_bootSplashMinTimer);
-      _bootSplashMinTimer = window.setTimeout(finishBootSplash, BOOT_SPLASH_END_HOLD_MS);
-    }, { once: true });
-  } catch {}
+      return;
+    }
+    _bootSplashAnimStartedAt = Date.now();
+    run(() => {
+      _bootSplashAnimEnded = true;
+      _bootSplashCanDismiss = true;
+      tryDismissBootSplash();
+    });
+  } catch {
+    _bootSplashAnimEnded = true;
+    _bootSplashCanDismiss = true;
+  }
 }
-initBootSplashVideo();
+startBootSplash();
 
 /** UUID allowlist from `/api/public-config` (env `NABAD_CERTIFIED_USER_IDS`)
  *  — interim gate for the Profile "Verified Nabad Creator" badge until

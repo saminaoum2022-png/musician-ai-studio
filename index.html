@@ -2,11 +2,11 @@
 <html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
-    <style id="bootCritical">html,body{margin:0;background-color:#05070d;color-scheme:dark}</style>
+    <style id="bootCritical">html,body{margin:0;background-color:#000;color-scheme:dark}</style>
     <script>
       (function () {
         try { localStorage.removeItem("nabadai_theme_v1"); } catch (e) {}
-        var bg = "#05070d";
+        var bg = "#000000";
         var fg = "#eef4ff";
         var html = document.documentElement;
         var isCapShell = location.protocol === "capacitor:";
@@ -23,10 +23,7 @@
           "body.booting .mobileTabbar,body.booting .footer{display:none!important}" +
           "body.booting .bootSplash{display:flex;position:fixed;inset:0;z-index:10000;align-items:center;justify-content:center;background:" + bg + "}";
         var webBootExtra = isCapShell ? "" : (
-          "html.is-web-shell body.booting>*:not(#bootSplash):not(#loginSettlingOverlay){display:none!important}" +
-          ".bootSplashVideo{opacity:0}" +
-          ".bootSplashVideo.isReady,.bootSplashVideo.isPlaying{opacity:1}" +
-          ".bootSplashBrandPrimary,.bootSplashBrandSecondary{visibility:hidden;opacity:0}"
+          "html.is-web-shell body.booting>*:not(#bootSplash):not(#loginSettlingOverlay){display:none!important}"
         );
         var webBoot = bootHide + webBootExtra + (isCapShell ? "" : "html.is-web-shell body.booting::before{display:none!important}");
         style.textContent = base + webBoot;
@@ -73,8 +70,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="preload" as="video" href="./assets/icons/splash-logo.mp4?v=20260619trim" type="video/mp4" />
-    <link rel="stylesheet" href="./styles.css?v=20260620topWeekDropdown" />
+    <link rel="stylesheet" href="./styles.css?v=20260621vectorSplash" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -90,24 +86,7 @@
   <body class="booting">
     <div id="bootSplash" class="bootSplash" aria-hidden="true">
       <div class="bootSplashInner">
-        <div class="bootSplashMark bootSplashMark--video" aria-hidden="true">
-          <video
-            id="bootSplashVideo"
-            class="bootSplashVideo"
-            src="./assets/icons/splash-logo.mp4?v=20260619trim"
-            autoplay
-            muted
-            playsinline
-            preload="auto"
-            aria-hidden="true"
-          ></video>
-        </div>
-        <div class="bootSplashBrand" id="bootSplashBrand" aria-hidden="true">
-          <h1 class="bootSplashWordmark introWordmark">
-            <span class="bootSplashBrandPrimary brandPrimary">NabadAi</span>
-            <span class="bootSplashBrandSecondary brandSecondary introBrandSecondary">Music</span>
-          </h1>
-        </div>
+        <div id="bootSplashAnim" class="bootSplashAnim" aria-hidden="true"></div>
       </div>
     </div>
     <div id="loginSettlingOverlay" class="loginSettlingOverlay" hidden aria-hidden="true">
@@ -3744,7 +3723,8 @@
       </div>
     </div>
 
+    <script src="./src/boot-splash.js?v=20260621vectorSplash"></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260620topWeekDropdown"></script>
+    <script type="module" src="./src/app.js?v=20260621vectorSplash"></script>
   </body>
 </html>

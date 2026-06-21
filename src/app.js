@@ -7247,14 +7247,24 @@ function discoverFeedSongRowHtml(t, profMap, opts = {}) {
   const titleHtml = opts.nabadBadge === false
     ? `<strong class="discoverFeedSongTitle">${escapeHtml(title)}</strong>`
     : titleWithNabadBadgeHtml(t, escapeHtml(title), "discoverFeedSongTitle");
-  const byHtml = opts.hideByLine
-    ? ""
-    : `<span class="discoverFeedSongBy">${opts.byPrefix || "by "}${escapeHtml(byLine)}</span>`;
-  const originHtml = opts.originHtml != null
-    ? opts.originHtml
-    : (opts.hideOrigin ? "" : discoverOriginLineHtml(t));
-  const extraHtml = opts.extraHtml || "";
-  const stats = opts.hideStats ? "" : discoverHubPickStatsHtml(t);
+  let secondaryHtml = "";
+  if (opts.compactMeta) {
+    const plays = Math.max(0, Number(t.playCount) || 0);
+    const playText = plays > 0
+      ? `${discoverHubStatLabel(plays)} ${plays === 1 ? "play" : "plays"}`
+      : "New";
+    secondaryHtml = `<span class="discoverFeedSongMeta"><span class="discoverFeedSongBy">${escapeHtml(byLine)}</span><span class="discoverFeedSongMetaDot" aria-hidden="true">·</span><span class="discoverFeedSongPlays">${escapeHtml(playText)}</span></span>`;
+  } else {
+    const byHtml = opts.hideByLine
+      ? ""
+      : `<span class="discoverFeedSongBy">${opts.byPrefix || "by "}${escapeHtml(byLine)}</span>`;
+    const originHtml = opts.originHtml != null
+      ? opts.originHtml
+      : (opts.hideOrigin ? "" : discoverOriginLineHtml(t));
+    const extraHtml = opts.extraHtml || "";
+    const stats = opts.hideStats ? "" : discoverHubPickStatsHtml(t);
+    secondaryHtml = `${byHtml}${originHtml}${extraHtml}${stats}`;
+  }
   const menuSource = {
     ...t,
     userId: t.userId || t.ownerUserId,
@@ -7272,10 +7282,7 @@ function discoverFeedSongRowHtml(t, profMap, opts = {}) {
         </span>
         <span class="discoverFeedSongBody">
           ${titleHtml}
-          ${byHtml}
-          ${originHtml}
-          ${extraHtml}
-          ${stats}
+          ${secondaryHtml}
         </span>
       </button>
       ${menu}
@@ -7388,8 +7395,9 @@ function renderDiscoverFeedForYou(tracks, profMap) {
       entries: topChallengePack.entries,
     })
     : "";
+  const remixRowOpts = { rowClass: "discoverFeedSongRow--remix", compactMeta: true };
   const remixList = remixTracks.length
-    ? remixTracks.map((t) => discoverFeedSongRowHtml(t, profMap)).join("")
+    ? remixTracks.map((t) => discoverFeedSongRowHtml(t, profMap, remixRowOpts)).join("")
     : `<p class="discoverHubQuietNote">Remixes and mashups will appear as creators publish.</p>`;
   const templateGrid = templateTracks.length
     ? templateTracks.map((t) => discoverFeedTemplateCardHtml(t, profMap)).join("")
@@ -7399,7 +7407,7 @@ function renderDiscoverFeedForYou(tracks, profMap) {
     ${challengeBlock}
     <section class="discoverFeedSection">
       ${discoverFeedSectionHeadHtml("Remixes you'll love")}
-      <div class="discoverFeedListStack">${remixList}</div>
+      <div class="discoverFeedListStack discoverFeedListStack--remix">${remixList}</div>
     </section>
     <section class="discoverFeedSection">
       ${discoverFeedSectionHeadHtml("Created with templates")}
@@ -7423,6 +7431,10 @@ function renderDiscoverFeedTabPanel(tab, tracks, profMap) {
       ? "Remixes and mashups from the community will land here."
       : "Public songs will appear here as creators publish.";
     return `<p class="discoverHubQuietNote discoverFeedEmpty">${escapeHtml(msg)}</p>`;
+  }
+  if (tab === "remixes") {
+    const remixRowOpts = { rowClass: "discoverFeedSongRow--remix", compactMeta: true };
+    return `<div class="discoverFeedListStack discoverFeedListStack--remix">${filtered.map((t) => discoverFeedSongRowHtml(t, profMap, remixRowOpts)).join("")}</div>`;
   }
   return `<div class="discoverFeedListStack">${filtered.map((t) => discoverFeedSongRowHtml(t, profMap)).join("")}</div>`;
 }

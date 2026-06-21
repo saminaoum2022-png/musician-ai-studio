@@ -30,10 +30,17 @@ import {
   shouldShowMusicPreferencesScreen,
 } from "./music-preferences.js";
 import { initTheme } from "./theme.js";
+import {
+  initNabadVerificationUi,
+  nabadVerificationBadgeForTrack,
+  nabadVerificationBadgeHtml,
+  resolveNabadVerification,
+  stampNabadVerificationMeta,
+} from "./nabad-verification.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260620profileStatsRow";
+const APP_BUILD = "20260620nabadVerify";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -618,6 +625,7 @@ const els = {
   playerSource: document.getElementById("playerSource"),
   playerArt: document.getElementById("playerArt"),
   playerTitle: document.getElementById("playerTitle"),
+  playerNabadBadge: document.getElementById("playerNabadBadge"),
   playerSubtitle: document.getElementById("playerSubtitle"),
   playerChallengeAttribution: document.getElementById("playerChallengeAttribution"),
   playerChallengeAttributionText: document.getElementById("playerChallengeAttributionText"),
@@ -771,6 +779,7 @@ const els = {
   hubNowPlaying: document.getElementById("hubNowPlaying"),
   hubNowArt: document.getElementById("hubNowArt"),
   hubNowTitle: document.getElementById("hubNowTitle"),
+  hubNowNabadBadge: document.getElementById("hubNowNabadBadge"),
   hubNowSubtitle: document.getElementById("hubNowSubtitle"),
   hubNowProgBar: document.getElementById("hubNowProgBar"),
   hubNowPlayPause: document.getElementById("hubNowPlayPause"),
@@ -2009,6 +2018,9 @@ function renderHubNowPlaying() {
     syncHubNowAuraFromCoverUrl(artSrc);
   }
   if (els.hubNowTitle) els.hubNowTitle.textContent = hubNowMeta.title || "Now playing";
+  try {
+    syncHubNowNabadBadge(resolvePlayerLibraryTrack() || currentPlayerTrackRef);
+  } catch {}
   if (els.hubNowSubtitle) {
     const sub = String(hubNowMeta.subtitle || "").trim();
     els.hubNowSubtitle.textContent = sub;
@@ -11372,7 +11384,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
               </span>
             </span>
             <span class="followActQuoteBody">
-              <span class="followActQuoteTitle">${safeTitle}</span>
+              <span class="followActQuoteTitle">${safeTitle}${nabadVerificationBadgeForTrack(t, { size: "sm" })}</span>
               <span class="followActQuoteSub">${escapeHtml(subtitle)}</span>
             </span>
           </button>`}
@@ -13946,7 +13958,7 @@ function profileFeaturedCreationHtml(track, mode = "own") {
       <button type="button" class="profileFeaturedCreationMain" ${playAttr}="${sid}" aria-label="Play ${title}">
         <span class="profileFeaturedCreationArt"><img src="${art}" alt="" loading="lazy" decoding="async" /></span>
         <span class="profileFeaturedCreationBody">
-          <strong class="profileFeaturedCreationTitle">${title}</strong>
+          <strong class="profileFeaturedCreationTitle rowTitleWithBadge"><span class="profileFeaturedCreationTitleText">${title}</span>${nabadVerificationBadgeForTrack(track)}</strong>
           ${metaHtml}
         </span>
         ${discoverFeedPlayBtnHtml({ hero: true })}
@@ -16063,6 +16075,59 @@ let lastSunoAudioId2 = "";
 let lastSunoReferenceUrl = "";
 let libraryNowPlayingId = null;
 let lastGenerationMeta = null;
+/** Set when AI lyrics magic completes; stamped into generation meta. */
+let _lyricsGeneratedInNabad = false;
+let _nabadVerifyBackfillDone = false;
+
+function titleWithNabadBadgeHtml(track, safeTitle, titleClass = "libRowTitle") {
+  const badge = nabadVerificationBadgeForTrack(track);
+  if (!badge) return `<span class="${titleClass}">${safeTitle}</span>`;
+  return `<span class="rowTitleWithBadge"><span class="${titleClass}">${safeTitle}</span>${badge}</span>`;
+}
+
+function syncPlayerNabadBadge(track) {
+  const slot = els.playerNabadBadge;
+  if (!slot) return;
+  const state = resolveNabadVerification(track);
+  if (!state) {
+    slot.hidden = true;
+    slot.innerHTML = "";
+    return;
+  }
+  slot.hidden = false;
+  slot.innerHTML = nabadVerificationBadgeHtml(state);
+}
+
+function syncHubNowNabadBadge(track) {
+  const slot = els.hubNowNabadBadge;
+  if (!slot) return;
+  const state = resolveNabadVerification(track);
+  if (!state) {
+    slot.hidden = true;
+    slot.innerHTML = "";
+    return;
+  }
+  slot.hidden = false;
+  slot.innerHTML = nabadVerificationBadgeHtml(state, { size: "sm" });
+}
+
+function backfillNabadVerificationInLibrary() {
+  if (_nabadVerifyBackfillDone) return;
+  _nabadVerifyBackfillDone = true;
+  try {
+    const items = loadLibrary();
+    let changed = false;
+    const next = items.map((t) => {
+      if (t?.meta?.nabadVerification) return t;
+      const meta = stampNabadVerificationMeta(t.meta, t);
+      if (!meta.nabadVerification || meta.nabadVerification === t.meta?.nabadVerification) return t;
+      changed = true;
+      return { ...t, meta };
+    });
+    if (changed) saveLibrary(next);
+  } catch {}
+}
+
 const PROFILE_KEY = "mas:profile:v1";
 const PROFILE_KEY_GUEST = "mas:profile:v1:guest";
 
@@ -19421,8 +19486,8 @@ async function fetchUserSongsFromNetwork() {
   // happens to be a legacy `data:` URL*, same trick we use on `hub_posts`
   // for cover_url / creator_avatar. The cheap `art_url is null` branch
   // covers freshly inserted rows where we deliberately wrote null.
-  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_deleted_at:meta->>deletedAt";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_deleted_at:meta->>deletedAt";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_nabad_verification:meta->>nabadVerification,meta_deleted_at:meta->>deletedAt";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_nabad_verification:meta->>nabadVerification,meta_deleted_at:meta->>deletedAt";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
@@ -19492,6 +19557,7 @@ async function fetchUserSongsFromNetwork() {
         ...(String(s.meta_release_caption || "").trim() ? { releaseCaption: String(s.meta_release_caption).trim() } : {}),
         ...(s.meta_challenge ? { challenge: s.meta_challenge } : {}),
         ...(String(s.meta_featured_on_profile || "").toLowerCase() === "true" ? { featuredOnProfile: true } : {}),
+        ...(String(s.meta_nabad_verification || "").trim() ? { nabadVerification: String(s.meta_nabad_verification).trim() } : {}),
       },
       publishedAt: selectedPublishedAt ? userSongPublishedAtValue(s) : "",
       publicOnProfile: Boolean(
@@ -22226,8 +22292,8 @@ function maybeRecordQualifiedPublicPlay() {
 async function supabaseFetchDiscoveryPublicSongs(limit) {
   const lim = Math.max(1, Math.min(80, Number(limit) || 48));
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
-  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_deleted_at:meta->>deletedAt";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_deleted_at:meta->>deletedAt";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_final_prompt:meta->>finalPrompt,meta_nabad_verification:meta->>nabadVerification,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_deleted_at:meta->>deletedAt";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_final_prompt:meta->>finalPrompt,meta_nabad_verification:meta->>nabadVerification,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_deleted_at:meta->>deletedAt";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   try {
     let r = await fetch(
@@ -22279,6 +22345,8 @@ async function supabaseFetchDiscoveryPublicSongs(limit) {
               ...(String(s.meta_template_title || "").trim() ? { searchTemplateTitle: String(s.meta_template_title).trim() } : {}),
               ...(String(s.meta_dialect || "").trim() ? { dialect: String(s.meta_dialect).trim() } : {}),
               ...(String(s.meta_lyrics || "").trim() ? { lyricsInput: String(s.meta_lyrics).trim() } : {}),
+              ...(String(s.meta_final_prompt || "").trim() ? { finalPrompt: String(s.meta_final_prompt).trim() } : {}),
+              ...(String(s.meta_nabad_verification || "").trim() ? { nabadVerification: String(s.meta_nabad_verification).trim() } : {}),
               ...(Array.isArray(s.meta_tags) ? { tags: s.meta_tags } : {}),
               ...(s.meta_allow_remix === false ? { allowRemix: false } : {}),
               ...(s.meta_allow_mashup === false ? { allowMashup: false } : {}),
@@ -24899,7 +24967,7 @@ function renderUserPlaylist() {
                 <span class="libRowArtBadge" aria-hidden="true">${plAudible ? "❚❚" : "▶"}</span>
               </span>
               <span class="libRowInfo">
-                <span class="libRowTitle">${safeTitle}</span>
+                ${titleWithNabadBadgeHtml(t, safeTitle, "libRowTitle")}
                 <span class="libRowSub">${subBits.join("")}</span>
               </span>
               <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
@@ -25095,7 +25163,7 @@ function userPublicDiscoveryRowHtml(t, idx, pub) {
         </button>
         <button type="button" class="discoveryRowMain" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
           <span class="discoveryRowMid">
-            <span class="discoveryRowTitle">${safeTitle}</span>
+            ${titleWithNabadBadgeHtml(t, safeTitle, "discoveryRowTitle")}
             <span class="discoveryRowMeta">${metaInner}</span>
             ${styleLine}
             ${challengeLine}
@@ -25158,7 +25226,7 @@ function discoverPlaylistLibRowHtml(t, profMap, idx) {
           <span class="libRowArtBadge" aria-hidden="true">▶</span>
         </span>
         <span class="libRowInfo">
-          <span class="libRowTitle">${safeTitle}</span>
+          ${titleWithNabadBadgeHtml(t, safeTitle, "libRowTitle")}
           <span class="libRowSub">${subBits.join("")}</span>
           ${challengeLine}
           ${mashupLine}
@@ -25212,7 +25280,7 @@ function discoveryTrackRowHtml(t, profMap, idx) {
         </button>
         <button type="button" class="discoveryRowMain" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
           <span class="discoveryRowMid">
-            <span class="discoveryRowTitle">${safeTitle}</span>
+            ${titleWithNabadBadgeHtml(t, safeTitle, "discoveryRowTitle")}
             <span class="discoveryRowMeta">${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}</span>
             ${styleLine}
             ${challengeLine}
@@ -25273,7 +25341,7 @@ function discoveryFeedCardHtml(t, profMap, idx) {
         </span>
         <span class="discoveryFeedCardBottom">
           <span class="discoveryFeedCardPlays">${discoveryPlayCountChipHtml(t)}</span>
-          <span class="discoveryFeedCardTitle">${safeTitle}</span>
+          ${titleWithNabadBadgeHtml(t, safeTitle, "discoveryFeedCardTitle")}
           <span class="discoveryFeedCardBy">${escapeHtml(byLine)}</span>
           ${captionHtml}
         </span>
@@ -29895,7 +29963,7 @@ function renderProfileLibraryPublicOnLinkSection() {
                 <span class="libRowArtBadge" aria-hidden="true">▶</span>
               </span>
               <span class="libRowInfo">
-                <span class="libRowTitle">${safeTitle}</span>
+                ${titleWithNabadBadgeHtml(t, safeTitle, "libRowTitle")}
                 <span class="libRowSub">${subBits.join("")}</span>
                 ${mashupLine}
                 ${remixLine}
@@ -30066,7 +30134,7 @@ function renderProfileHubShared() {
                 <span class="libRowArtBadge" aria-hidden="true">▶</span>
               </span>
               <span class="libRowInfo">
-                <span class="libRowTitle">${safeTitle}</span>
+                ${titleWithNabadBadgeHtml(t, safeTitle, "libRowTitle")}
                 <span class="libRowSub">${subBits.join("")}</span>
               </span>
               <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
@@ -30804,6 +30872,7 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
   _libraryHydrateCompleted = true;
   clearTimeout(safetyTimer);
   saveLibrary(mergedDeduped);
+  backfillNabadVerificationInLibrary();
   refreshOwnSongsUi();
 
   if (!mergedDeduped.length) return;
@@ -31004,6 +31073,7 @@ function addToLibrary(track) {
   // An explicit add (generation, recovery by task id) is the user asking
   // for this song again — lift any deletion tombstone for it.
   clearLibraryTombstonesForTrack(track);
+  const stampedMeta = stampNabadVerificationMeta(track.meta, track);
   const newTrack = {
     id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     ts: Date.now(),
@@ -31013,7 +31083,7 @@ function addToLibrary(track) {
     taskId: track.taskId || "",
     audioId: track.audioId || "",
     kind: track.kind || "full",
-    meta: track.meta || null,
+    meta: stampedMeta || null,
     publicOnProfile: false,
   };
   items.unshift(newTrack);
@@ -32109,6 +32179,7 @@ function syncProfileHubSharedRowsFromPlayer() {
 
 function renderLibrary() {
   if (!els.libraryList) return;
+  backfillNabadVerificationInLibrary();
   if ((document.body.getAttribute("data-route") || "") === "profile" && _profileSongsSegment !== "all") return;
   try {
     updateLibraryRecoverBanner();
@@ -32275,7 +32346,7 @@ function renderLibrary() {
                 <span class="libRowArtBadge" aria-hidden="true">${libAudible ? "❚❚" : "▶"}</span>
               </span>
               <span class="libRowInfo">
-                <span class="libRowTitle">${safeTitle}</span>
+                ${titleWithNabadBadgeHtml(t, safeTitle, "libRowTitle")}
                 <span class="libRowSub">${subBits.join("")}</span>
               </span>
               <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
@@ -33879,6 +33950,9 @@ function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, chall
     art: artUrl || placeholderCoverDataUrl(),
     subtitle: subtitle || "",
   };
+  try {
+    syncPlayerNabadBadge(resolvePlayerLibraryTrack() || currentPlayerTrackRef);
+  } catch {}
   renderHubNowPlaying();
   syncLockScreenNowPlaying({ force: true });
 }
@@ -34639,6 +34713,7 @@ function dismissPlayerConfirm(answer) {
 }
 if (typeof document !== "undefined") {
   document.addEventListener("DOMContentLoaded", () => {
+    try { initNabadVerificationUi(); } catch {}
     try { initCoverImageFallbackOnce(); } catch {}
     if (els.playerConfirmOk) {
       els.playerConfirmOk.addEventListener("click", () => dismissPlayerConfirm(true));
@@ -36456,6 +36531,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         if (els.createChallengeHintSub) els.createChallengeHintSub.textContent = "Lyrics drafted. Review them, edit if needed, then Generate.";
       }
       if (lyricsBoxEl) lyricsBoxEl.classList.add("wandGenerated");
+      _lyricsGeneratedInNabad = true;
       const provider = String(data?.provider || "").trim();
       const debugSuno = String(data?.debug?.suno || "").trim();
       const debugGemini = String(data?.debug?.gemini || "").trim();
@@ -37285,6 +37361,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             });
           }
           pendingGeneratedCoverDataUrl = "";
+          _lyricsGeneratedInNabad = false;
           els.btnSunoStems.disabled = !(sunoAudioId);
           if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = !(sunoAudioId);
           setStatus("Song is ready. Press Play full.");
@@ -37738,6 +37815,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             finalPrompt = sanitizeLyricsPrompt(dd.lyrics);
             engine = "gemini_drafted";
             engineLabel = "Nabad AI + Gemini lyrics draft";
+            _lyricsGeneratedInNabad = true;
           }
         } catch {}
       }
@@ -37858,6 +37936,14 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         imageOnlyInstrumental,
         instrumentalSelected,
         referenceInstrumentalOnly,
+        hasReference: Boolean(hasReference),
+        lyricsGeneratedInNabad: _lyricsGeneratedInNabad,
+        lyricsEditedByUser: Boolean(
+          userPrompt &&
+            finalPrompt &&
+            String(userPrompt).replace(/\s+/g, " ").trim().toLowerCase() !==
+              String(finalPrompt).replace(/\s+/g, " ").trim().toLowerCase(),
+        ),
         remixOfHubPostId: currentRemixSource?.id || null,
         ...(currentRemixSource ? { remixOf: remixAttributionFromSource(currentRemixSource) } : {}),
         ...remixMeta,

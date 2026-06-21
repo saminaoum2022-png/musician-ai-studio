@@ -32,6 +32,7 @@ import {
 import { initTheme } from "./theme.js";
 import {
   initNabadVerificationUi,
+  lyricsEditedAfterNabadDraft,
   nabadVerificationBadgeForTrack,
   nabadVerificationBadgeHtml,
   nabadVerificationFlatLabel,
@@ -41,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260621nabadBadgeLayout";
+const APP_BUILD = "20260621nabadCoCreated";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3612,6 +3613,7 @@ function resetCreateDraft() {
     clearVocalReferenceSelection({ preserveRemixBanner: false });
   } catch {}
   if (els.sunoPrompt) els.sunoPrompt.value = "";
+  resetNabadLyricsDraftState();
   if (els.sunoStyle) els.sunoStyle.value = "";
   if (els.sunoAvoidTags) els.sunoAvoidTags.value = "";
   if (els.sunoTitle) els.sunoTitle.value = "";
@@ -16076,8 +16078,21 @@ let lastSunoAudioId2 = "";
 let lastSunoReferenceUrl = "";
 let libraryNowPlayingId = null;
 let lastGenerationMeta = null;
-/** Set when AI lyrics magic completes; stamped into generation meta. */
+/** AI lyrics snapshot (✦ magic or auto-draft) — compared at Generate for Creator + Nabad. */
+let _nabadAiLyricsDraft = "";
 let _lyricsGeneratedInNabad = false;
+
+function resetNabadLyricsDraftState() {
+  _lyricsGeneratedInNabad = false;
+  _nabadAiLyricsDraft = "";
+}
+
+function snapshotNabadAiLyricsDraft(text) {
+  const draft = String(text || "").trim();
+  if (!draft) return;
+  _nabadAiLyricsDraft = draft;
+  _lyricsGeneratedInNabad = true;
+}
 let _nabadVerifyBackfillDone = false;
 
 function titleWithNabadBadgeHtml(track, safeTitle, titleClass = "libRowTitle", titleTag = "span") {
@@ -36546,7 +36561,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         if (els.createChallengeHintSub) els.createChallengeHintSub.textContent = "Lyrics drafted. Review them, edit if needed, then Generate.";
       }
       if (lyricsBoxEl) lyricsBoxEl.classList.add("wandGenerated");
-      _lyricsGeneratedInNabad = true;
+      snapshotNabadAiLyricsDraft(els.sunoPrompt?.value || "");
       const provider = String(data?.provider || "").trim();
       const debugSuno = String(data?.debug?.suno || "").trim();
       const debugGemini = String(data?.debug?.gemini || "").trim();
@@ -37376,7 +37391,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             });
           }
           pendingGeneratedCoverDataUrl = "";
-          _lyricsGeneratedInNabad = false;
+          resetNabadLyricsDraftState();
           els.btnSunoStems.disabled = !(sunoAudioId);
           if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = !(sunoAudioId);
           setStatus("Song is ready. Press Play full.");
@@ -37830,7 +37845,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             finalPrompt = sanitizeLyricsPrompt(dd.lyrics);
             engine = "gemini_drafted";
             engineLabel = "Nabad AI + Gemini lyrics draft";
-            _lyricsGeneratedInNabad = true;
+            snapshotNabadAiLyricsDraft(finalPrompt);
           }
         } catch {}
       }
@@ -37926,6 +37941,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           : {};
       pendingSearchRemixMeta = null;
       setCreateChallengeHint(null);
+      const aiLyricsDraft = String(_nabadAiLyricsDraft || "").trim();
+      const lyricsEditedByUser = lyricsEditedAfterNabadDraft(userPrompt, aiLyricsDraft);
       lastGenerationMeta = {
         engine,
         mode: modeLabel,
@@ -37953,12 +37970,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         referenceInstrumentalOnly,
         hasReference: Boolean(hasReference),
         lyricsGeneratedInNabad: _lyricsGeneratedInNabad,
-        lyricsEditedByUser: Boolean(
-          userPrompt &&
-            finalPrompt &&
-            String(userPrompt).replace(/\s+/g, " ").trim().toLowerCase() !==
-              String(finalPrompt).replace(/\s+/g, " ").trim().toLowerCase(),
-        ),
+        generatedLyrics: aiLyricsDraft || undefined,
+        nabadAiLyricsDraft: aiLyricsDraft || undefined,
+        lyricsEditedByUser,
         remixOfHubPostId: currentRemixSource?.id || null,
         ...(currentRemixSource ? { remixOf: remixAttributionFromSource(currentRemixSource) } : {}),
         ...remixMeta,

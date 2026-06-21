@@ -24,6 +24,18 @@ export function nabadVerificationFlatLabel(state) {
   return NABAD_VERIFY_LABELS[state] || "";
 }
 
+export function lyricsEditedAfterNabadDraft(userText, aiDraft) {
+  const user = normalizeLyricsCompare(userText);
+  const draft = normalizeLyricsCompare(aiDraft);
+  if (!draft) return false;
+  if (!user) return false;
+  return user !== draft;
+}
+
+function aiLyricsDraftFromMeta(meta) {
+  return String(meta?.generatedLyrics || meta?.nabadAiLyricsDraft || "").trim();
+}
+
 function normalizeLyricsCompare(text) {
   return String(text || "")
     .replace(/\s+/g, " ")
@@ -52,7 +64,7 @@ export function inferNabadVerification(track) {
 
   const mode = String(meta.mode || "").toLowerCase();
   const kind = String(track.kind || "full").toLowerCase();
-  const lyricsInput = String(meta.lyricsInput || "").trim();
+  const userLyrics = String(meta.lyricsInput || "").trim();
   const finalPrompt = String(meta.finalPrompt || meta.prompt || "").trim();
 
   const externalContent = Boolean(
@@ -74,11 +86,17 @@ export function inferNabadVerification(track) {
 
   if (externalContent) return NABAD_VERIFICATION.CREATED_WITH;
 
+  const aiDraft = aiLyricsDraftFromMeta(meta);
   const lyricsEdited = Boolean(
     meta.lyricsEditedByUser ||
-      (lyricsInput &&
+      (meta.lyricsGeneratedInNabad &&
+        aiDraft &&
+        userLyrics &&
+        normalizeLyricsCompare(userLyrics) !== normalizeLyricsCompare(aiDraft)) ||
+      (userLyrics &&
         finalPrompt &&
-        normalizeLyricsCompare(lyricsInput) !== normalizeLyricsCompare(finalPrompt)),
+        !aiDraft &&
+        normalizeLyricsCompare(userLyrics) !== normalizeLyricsCompare(finalPrompt)),
   );
   if (lyricsEdited) return NABAD_VERIFICATION.CO_CREATED;
 
@@ -98,7 +116,11 @@ export function inferNabadVerification(track) {
     return NABAD_VERIFICATION.VERIFIED;
   }
 
-  if (lyricsInput || finalPrompt || meta.styleInput || meta.styleSent) {
+  if (aiDraft && userLyrics && normalizeLyricsCompare(userLyrics) === normalizeLyricsCompare(aiDraft)) {
+    return NABAD_VERIFICATION.VERIFIED;
+  }
+
+  if (userLyrics || finalPrompt || meta.styleInput || meta.styleSent) {
     return NABAD_VERIFICATION.VERIFIED;
   }
 

@@ -6567,7 +6567,7 @@ const DISCOVER_CHALLENGE_AVATAR_SEEDS = {
   "roast-song": ["R", "O", "A", "S"],
 };
 
-const DISCOVER_CHALLENGE_ART_VERSION = "20260619discoverWire";
+const DISCOVER_CHALLENGE_ART_VERSION = "20260621worldcupHero";
 const DISCOVER_CHALLENGE_ART = {
   worldcup2026: "./assets/discover/challenges/worldcup-anthem.svg",
   "voice-note-flip": "./assets/discover/challenges/remix-battle.svg",
@@ -6583,6 +6583,17 @@ const DISCOVER_CHALLENGE_ART = {
 
 function discoverChallengeArtUrl(challengeId) {
   const base = DISCOVER_CHALLENGE_ART[String(challengeId || "")];
+  if (!base) return "";
+  return `${base}?v=${DISCOVER_CHALLENGE_ART_VERSION}`;
+}
+
+/** Full-bleed photo art for For You featured challenge hero cards only. */
+const DISCOVER_FEATURED_HERO_ART = {
+  worldcup2026: "./assets/discover/challenges/worldcup-hero.png",
+};
+
+function discoverFeaturedHeroArtUrl(challengeId) {
+  const base = DISCOVER_FEATURED_HERO_ART[String(challengeId || "")];
   if (!base) return "";
   return `${base}?v=${DISCOVER_CHALLENGE_ART_VERSION}`;
 }
@@ -7448,6 +7459,8 @@ function discoverFeedTemplateCardHtml(t, profMap) {
 }
 
 function discoverFeaturedChallengeHeroArt(c, topEntry) {
+  const featuredPhoto = discoverFeaturedHeroArtUrl(c?.id);
+  if (featuredPhoto) return featuredPhoto;
   const challengeArt = discoverChallengeArtUrl(c?.id);
   if (challengeArt) return challengeArt;
   if (topEntry) return trackCoverArtForFeed(topEntry);

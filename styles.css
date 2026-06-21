@@ -29776,7 +29776,7 @@ section.mentorPage{
 .followAct--xstyle .followActQuoteCard,
 .followAct--xstyle .followActQuoteCard--skel{
   display: grid;
-  grid-template-columns: var(--feed-song-art-size) minmax(0, 1fr);
+  grid-template-columns: var(--feed-song-art-size) minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
   width: 100%;
@@ -29817,6 +29817,12 @@ section.mentorPage{
   width: var(--feed-song-art-size);
   height: var(--feed-song-art-size);
   border-radius: 12px;
+}
+.followAct--xstyle .followActQuoteArt .coverArtPlayOverlay--feedCard{
+  opacity: 0.52;
+}
+.followAct.discoveryRowPlaying.followAct--xstyle .followActQuoteCard .libRowEq{
+  display: inline-flex;
 }
 .followAct--xstyle .followActQuoteBody{
   display: flex;
@@ -32653,7 +32659,6 @@ section.mentorPage{
 .discoveryRowPlaying .coverArtPlayIco--play,
 .followAct.discoveryRowPlaying .coverArtPlayIco--play,
 .discoverFeedSongRow.discoveryRowPlaying .coverArtPlayIco--play,
-.hubNowCoverWrap.isPlaying .coverArtPlayIco--play,
 .hubCoverWrap.isPlaying .coverArtPlayIco--play{
   display: none;
 }
@@ -32661,7 +32666,6 @@ section.mentorPage{
 .discoveryRowPlaying .coverArtPlayIco--pause,
 .followAct.discoveryRowPlaying .coverArtPlayIco--pause,
 .discoverFeedSongRow.discoveryRowPlaying .coverArtPlayIco--pause,
-.hubNowCoverWrap.isPlaying .coverArtPlayIco--pause,
 .hubCoverWrap.isPlaying .coverArtPlayIco--pause{
   display: flex;
 }
@@ -32694,8 +32698,6 @@ section.mentorPage{
 .coverArtEq i:nth-child(2){ animation-delay: 0.18s; }
 .coverArtEq span:nth-child(3),
 .coverArtEq i:nth-child(3){ animation-delay: 0.36s; }
-.followAct.discoveryRowPlaying .coverArtEq,
-.hubNowCoverWrap.isPlaying .coverArtEq,
 .hubCoverWrap.isPlaying .coverArtEq{
   display: inline-flex;
 }

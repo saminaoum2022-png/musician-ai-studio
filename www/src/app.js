@@ -1949,8 +1949,6 @@ function renderHubNowPlaying() {
   }
 
   syncHubNowPlayPauseUi(Boolean(miniShowsPause));
-  const hubCoverWrap = document.querySelector(".hubNowCoverWrap");
-  if (hubCoverWrap) hubCoverWrap.classList.toggle("isPlaying", audible);
   syncLockScreenNowPlaying();
 }
 
@@ -7170,8 +7168,9 @@ function discoverPauseBtnSvg(size = 16) {
 /** Centered play/pause overlay — toggled via `.libRowPlaying` / `.discoveryRowPlaying`. */
 function coverArtPlaybackOverlayHtml(opts = {}) {
   const hero = Boolean(opts.hero);
-  const size = hero ? 16 : 12;
-  const cls = `coverArtPlayOverlay discoverCoverPlay${hero ? " discoverCoverPlay--hero" : ""}`;
+  const feedCard = Boolean(opts.feedCard);
+  const size = hero ? 16 : (feedCard ? 14 : 12);
+  const cls = `coverArtPlayOverlay discoverCoverPlay${hero ? " discoverCoverPlay--hero" : ""}${feedCard ? " coverArtPlayOverlay--feedCard" : ""}`;
   return `<span class="${cls}" aria-hidden="true"><span class="coverArtPlayIco coverArtPlayIco--play">${discoverPlayBtnSvg(size)}</span><span class="coverArtPlayIco coverArtPlayIco--pause">${discoverPauseBtnSvg(size)}</span></span>`;
 }
 
@@ -11411,13 +11410,13 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
             <button type="button" class="followActQuoteCard" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
               <span class="followActQuoteArt">
                 <img class="followActQuoteImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
-                ${coverArtPlaybackOverlayHtml()}
-                ${coverArtEqualizerHtml()}
+                ${coverArtPlaybackOverlayHtml({ feedCard: true })}
               </span>
               <span class="followActQuoteBody">
                 ${titleWithNabadBadgeHtml(t, safeTitle, "followActQuoteTitle")}
                 <span class="followActQuoteSub">${escapeHtml(subtitle)}</span>
               </span>
+              <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
             </button>
             ${songMenuBtn}
           </div>`;
@@ -13547,14 +13546,14 @@ function followActMashupBlockHtml(t, profMap, main) {
         <button type="button" class="followActQuoteCard followActQuoteCard--mashup" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play mashup ${safeTitle}">
           <span class="followActQuoteArt">
             <img class="followActQuoteImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
-            ${coverArtPlaybackOverlayHtml()}
-            ${coverArtEqualizerHtml()}
+            ${coverArtPlaybackOverlayHtml({ feedCard: true })}
           </span>
           <span class="followActQuoteBody">
             <span class="followActQuoteChip followActQuoteChip--mashup">${mashupPillHtml()}</span>
             <span class="followActQuoteTitle">${safeTitle}</span>
             <span class="followActQuoteSub">${escapeHtml(subtitle)}</span>
           </span>
+          <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
         </button>
       </div>`;
   }

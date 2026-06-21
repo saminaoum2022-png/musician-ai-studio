@@ -14,6 +14,16 @@ export const NABAD_VERIFY_MESSAGES = {
   [NABAD_VERIFICATION.CREATED_WITH]: "Created using Nabad AI",
 };
 
+export const NABAD_VERIFY_LABELS = {
+  [NABAD_VERIFICATION.VERIFIED]: "Verified by Nabad",
+  [NABAD_VERIFICATION.CO_CREATED]: "Creator + Nabad",
+  [NABAD_VERIFICATION.CREATED_WITH]: "Created with Nabad",
+};
+
+export function nabadVerificationFlatLabel(state) {
+  return NABAD_VERIFY_LABELS[state] || "";
+}
+
 function normalizeLyricsCompare(text) {
   return String(text || "")
     .replace(/\s+/g, " ")

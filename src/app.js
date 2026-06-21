@@ -34,13 +34,14 @@ import {
   initNabadVerificationUi,
   nabadVerificationBadgeForTrack,
   nabadVerificationBadgeHtml,
+  nabadVerificationFlatLabel,
   resolveNabadVerification,
   stampNabadVerificationMeta,
 } from "./nabad-verification.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260620nabadVerify";
+const APP_BUILD = "20260620nabadVerifyInfo";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -23202,6 +23203,7 @@ function runTrackSheetAction(action, sourceEl) {
           createdAt: formatSongCreatedLabel(ctx.ts),
           challenge: challengeMetaForTrack(trackRef),
           templateTitle: templateMetaForTrack(trackRef)?.searchTemplateTitle || "",
+          track: trackRef,
           mode: "public",
         });
       })();
@@ -32710,6 +32712,12 @@ function songDetailsFlatRow(label, value) {
   return `<div class="songDetailsFlatRow"><span>${escapeHtml(label)}</span><strong>${escapeHtml(v)}</strong></div>`;
 }
 
+function songDetailsNabadVerifyRow(track) {
+  const state = resolveNabadVerification(track);
+  if (!state) return "";
+  return songDetailsFlatRow("Nabad", nabadVerificationFlatLabel(state));
+}
+
 function showSongDetailsModal() {
   if (!els.songDetailsModal) return;
   els.songDetailsModal.style.display = "";
@@ -32737,6 +32745,7 @@ function openSongInfoSheet({
   createdAt,
   challenge,
   templateTitle,
+  track,
   mode = "public",
 } = {}) {
   if (!els.songDetailsModal || !els.songDetailsContent) return;
@@ -32750,6 +32759,7 @@ function openSongInfoSheet({
     <div class="songDetailsFlatList">
       ${subtitle ? songDetailsFlatRow("Creator", subtitle) : ""}
       ${createdAt ? songDetailsFlatRow("Created", createdAt) : ""}
+      ${track ? songDetailsNabadVerifyRow(track) : ""}
       ${style ? songDetailsFlatRow("Style", style) : ""}
       ${templateTitle ? songDetailsFlatRow("Template", templateTitle) : ""}
       ${challenge ? songDetailsFlatRow("Challenge", challengeAttributionText(challenge)) : ""}
@@ -32802,6 +32812,7 @@ function openSongDetailsModal(track) {
     <div class="songDetailsFlatList">
       ${songDetailsFlatRow("Type", kindLabel)}
       ${createdAt ? songDetailsFlatRow("Created", createdAt) : ""}
+      ${songDetailsNabadVerifyRow(track)}
       ${songDetailsFlatRow("Visibility", track?.publicOnProfile ? "Public profile" : "Private library")}
       ${mode ? songDetailsFlatRow("Mode", mode) : ""}
       ${style ? songDetailsFlatRow("Style", style) : ""}

@@ -29651,7 +29651,7 @@ section.mentorPage{
 .followAct.followAct--xstyle.followActStack,
 .followActStack .followAct.followAct--xstyle,
 .followAct--xstyle{
-  --feed-song-art-size: 61px;
+  --feed-song-art-size: 67px;
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr);
   column-gap: 10px;
@@ -29722,6 +29722,13 @@ section.mentorPage{
 .followAct--xstyle .followActActionsBar,
 .followAct--xstyle .followActColumn > .followActActions{
   grid-column: 2;
+}
+.followAct--xstyle .followActQuoteCard{
+  gap: 8px;
+  padding: 2px 2px 2px 0;
+}
+.followAct--xstyle .followActQuoteBody{
+  gap: 1px;
 }
 .followAct--xstyle .followActMeta{
   grid-column: 2;

@@ -29651,12 +29651,13 @@ section.mentorPage{
 .followAct--xstyle{
   --feed-song-art-size: 78px;
   --feed-song-card-min-h: 88px;
+  --feed-post-divider-gap: 12px;
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr);
   column-gap: 10px;
   row-gap: 0;
   align-items: flex-start;
-  padding: 0 14px 16px;
+  padding: 0 14px var(--feed-post-divider-gap);
   border: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   background: transparent;
@@ -29667,6 +29668,9 @@ section.mentorPage{
 .followActStack .followAct.followAct--xstyle:first-child,
 .followAct.followAct--xstyle.followActStack:first-child{
   padding-top: 10px;
+}
+.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle{
+  padding-top: var(--feed-post-divider-gap, 12px);
 }
 .followActStack .followAct.followAct--xstyle:hover,
 .followAct--xstyle:hover{
@@ -29680,7 +29684,7 @@ section.mentorPage{
   column-gap: 10px;
   row-gap: 0;
   align-items: flex-start;
-  padding: 0 14px 16px;
+  padding: 0 14px var(--feed-post-divider-gap, 12px);
   padding-left: 14px;
   padding-right: 14px;
   border: 0;
@@ -29689,6 +29693,10 @@ section.mentorPage{
   border-radius: 0;
   box-shadow: none;
   overflow: visible;
+}
+.friendsPage .followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
+.profileActivitiesList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle{
+  padding-top: var(--feed-post-divider-gap, 12px);
 }
 .friendsPage .followActStack .followAct.followAct--xstyle:first-child,
 .profileActivitiesList.followActStack .followAct.followAct--xstyle:first-child{
@@ -29750,12 +29758,50 @@ section.mentorPage{
 }
 .followAct--xstyle .followActActionsBar,
 .followAct--xstyle > .followActActions{
-  grid-column: 2;
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
   margin-top: 8px;
 }
 .followAct--xstyle .followActActionsBar > .followActActions,
 .followAct--xstyle > .followActActions{
   margin-top: 0;
+}
+.followAct--xstyle .followActActions{
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  justify-items: stretch;
+  gap: 0;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+.followAct--xstyle .followActActions [data-friends-act="reply"]{
+  justify-self: start;
+  grid-column: 1;
+  padding-left: 0;
+}
+.followAct--xstyle .followActActions [data-friends-act="like"]{
+  justify-self: center;
+  grid-column: 2;
+}
+.followAct--xstyle .followActActions [data-friends-act="plays"],
+.followAct--xstyle .followActActions .followActAct--stat{
+  justify-self: end;
+  grid-column: 3;
+  padding-right: 0;
+}
+.followAct--xstyle .followActActions .followActAct{
+  align-items: center;
+  min-height: 28px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+.followAct--xstyle .followActActions .followActAct--stat:empty{
+  min-height: 0;
+  padding: 0;
 }
 
 /* Feed media grid — single song, remix, mashup share one full-width column */

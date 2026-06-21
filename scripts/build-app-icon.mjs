@@ -22,6 +22,50 @@ const MASTER = path.join(ROOT, "assets", "icons", "app-icon-master.png");
 
 const ZOOM = 1.0;
 const OUT_SIZE = 1024;
+/** Matches --bg / splash / Capacitor shell (`capacitor.config.json`). */
+const APP_BG = { r: 5, g: 7, b: 13 }; // #05070d
+
+function isLogoPixel(r, g, b) {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const sat = max - min;
+  if (max < 45) return false;
+  if (sat >= 18 && max >= 55) return true;
+  if (g > 90 && b > 90 && r < 120) return true;
+  if (b > 120 && r > 60 && g < 180) return true;
+  return false;
+}
+
+/** Flatten baked squircle borders / off-brand dark fills to the app canvas color. */
+async function normalizeMasterBg(buf) {
+  const { data, info } = await sharp(buf)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const out = Buffer.alloc(data.length);
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    if (isLogoPixel(r, g, b)) {
+      out[i] = r;
+      out[i + 1] = g;
+      out[i + 2] = b;
+      out[i + 3] = 255;
+    } else {
+      out[i] = APP_BG.r;
+      out[i + 1] = APP_BG.g;
+      out[i + 2] = APP_BG.b;
+      out[i + 3] = 255;
+    }
+  }
+  return sharp(out, {
+    raw: { width: info.width, height: info.height, channels: 4 },
+  })
+    .resize(OUT_SIZE, OUT_SIZE, { fit: "cover", position: "centre" })
+    .png({ compressionLevel: 9, force: true })
+    .toBuffer();
+}
 
 const ICON_DIR = path.join(
   ROOT,
@@ -49,10 +93,7 @@ async function zoomSquareTo1024(buf) {
 async function main() {
   await fs.mkdir(ICON_DIR, { recursive: true });
   const raw = await fs.readFile(MASTER);
-  const master1024 = await sharp(raw)
-    .resize(OUT_SIZE, OUT_SIZE, { fit: "cover", position: "centre" })
-    .png()
-    .toBuffer();
+  const master1024 = await normalizeMasterBg(raw);
 
   const icon1024 = await zoomSquareTo1024(master1024);
 

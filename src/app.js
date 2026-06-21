@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260621friendsFeedPatch";
+const APP_BUILD = "20260621contentFirst";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -16213,7 +16213,7 @@ function snapshotNabadAiLyricsDraft(text) {
 let _nabadVerifyBackfillDone = false;
 
 function titleWithNabadBadgeHtml(track, safeTitle, titleClass = "libRowTitle", titleTag = "span") {
-  const badge = nabadVerificationBadgeForTrack(track);
+  const badge = nabadVerificationBadgeForTrack(track, { size: "sm" });
   const titleEl =
     titleTag === "strong"
       ? `<strong class="${titleClass}">${safeTitle}</strong>`

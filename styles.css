@@ -3614,11 +3614,11 @@ body[data-route="settings"] main.grid > [data-route="settings"]{
   flex: 0 0 auto;
   width: 56px;
   height: 56px;
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: hidden;
-  background: rgba(0,0,0,0.35);
-  border: 1px solid rgba(255,255,255,0.10);
-  box-shadow: 0 8px 20px rgba(0,0,0,0.28);
+  background: rgba(255,255,255,0.04);
+  border: 0;
+  box-shadow: none;
 }
 .libRowArt img{
   width: 100%;
@@ -3631,13 +3631,13 @@ body[data-route="settings"] main.grid > [data-route="settings"]{
   position: absolute;
   inset: 0;
   margin: auto;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border-radius: 999px;
-  background: rgba(8,11,18,0.65);
-  border: 1px solid rgba(255,255,255,0.30);
+  background: rgba(8,11,18,0.72);
+  border: 0;
   color: #fff;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   line-height: 1;
   display: flex;
@@ -3645,8 +3645,6 @@ body[data-route="settings"] main.grid > [data-route="settings"]{
   justify-content: center;
   opacity: 0;
   transition: opacity 160ms ease, background-color 160ms ease;
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
 }
 .libRow:hover .libRowArtBadge,
 .libRowMain:focus-visible .libRowArtBadge{
@@ -3901,15 +3899,15 @@ body[data-route="settings"] main.grid > [data-route="settings"]{
   z-index: 90;
 }
 .libRowActive{
-  background: rgba(var(--cover-glow-rgb), 0.06);
-  box-shadow: inset 0 0 0 1px rgba(var(--cover-glow-rgb), 0.12);
+  background: rgba(var(--cover-glow-rgb), 0.05);
+  box-shadow: none;
 }
 .libRowActive .libRowTitle{
   color: rgba(248,250,255,0.94);
 }
 .libRowPlaying{
-  background: linear-gradient(180deg, rgba(var(--cover-glow-rgb), 0.09), rgba(var(--cover-glow-rgb), 0.03));
-  box-shadow: inset 0 0 0 1px rgba(var(--cover-glow-rgb), 0.16);
+  background: rgba(var(--cover-glow-rgb), 0.07);
+  box-shadow: none;
 }
 .libRowPlaying .libRowArt img{
   filter: saturate(1.06) brightness(1.02);
@@ -13417,7 +13415,8 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
 .profileFeaturedCreationBody .rowTitleWithBadge,
 .followActQuoteBody .rowTitleWithBadge,
 .libRowInfo .rowTitleWithBadge,
-.discoveryRowMid .rowTitleWithBadge{
+.discoveryRowMid .rowTitleWithBadge,
+.discoverFeedSongBody .rowTitleWithBadge{
   width: 100%;
   max-width: 100%;
 }
@@ -14326,29 +14325,27 @@ body[data-route="profile"]:has(#profileAura.profileAuraEditing) #profileAuraHead
 .libRowChip.libRowChipProfileVis{
   font-size: 0;
   font-weight: 700;
-  padding: 5px 7px;
+  padding: 4px 6px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 0;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   line-height: 0;
+  background: transparent;
 }
 .libRowVisIco{
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   display: block;
+  opacity: 0.72;
 }
 .libRowChipProfileVis--public{
-  color: rgba(186, 206, 255, 0.95);
-  border-color: rgba(124, 92, 255, 0.38);
-  background: rgba(124, 92, 255, 0.14);
+  color: rgba(186, 206, 255, 0.88);
 }
 .libRowChipProfileVis--private{
-  color: rgba(168, 180, 199, 0.92);
-  border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(12, 14, 20, 0.5);
+  color: rgba(168, 180, 199, 0.72);
 }
 
 /* -------- Public creator profile (#/u/USERNAME) -------- */
@@ -14769,12 +14766,6 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  border-radius:16px;
-  border-color: rgba(255,255,255,0.095);
-  background:
-    linear-gradient(145deg, rgba(255,255,255,0.045), rgba(255,255,255,0.014)),
-    linear-gradient(145deg, rgba(26, 31, 44, 0.86), rgba(13, 16, 25, 0.84));
-  box-shadow: 0 8px 22px rgba(0,0,0,0.20);
 }
 .userPublicSongs .discoverFeedSongBody,
 .userPublicSongs .discoverFeedSongTitle,
@@ -14783,7 +14774,7 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   overflow-wrap: anywhere;
 }
 .userPublicSongs .discoverFeedListStack{
-  gap: 10px;
+  gap: 0;
 }
 @media (max-width:720px){
   body[data-route="user"] section.card.wide[data-route="user"]{
@@ -19381,13 +19372,14 @@ html[data-theme="light"] .profileStatLabel{
 .hubNowTitleRow{
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
   max-width: 100%;
 }
 .rowTitleWithBadge .libRowTitle,
 .rowTitleWithBadge .discoveryRowTitle,
 .rowTitleWithBadge .discoveryFeedCardTitle,
+.rowTitleWithBadge .discoverFeedSongTitle,
 .rowTitleWithBadge .followActQuoteTitle,
 .playerTitleRow .playerTitle,
 .hubNowTitleRow .hubNowTitle,
@@ -19402,8 +19394,8 @@ html[data-theme="light"] .profileStatLabel{
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   margin: 0;
   padding: 0;
   border: 0;
@@ -19416,22 +19408,22 @@ html[data-theme="light"] .profileStatLabel{
   user-select: none;
 }
 .nabadVerifyBadge--sm{
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
 }
 .nabadVerifyBadgeN{
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1;
 }
 .nabadVerifyBadge--sm .nabadVerifyBadgeN{
-  font-size: 9px;
+  font-size: 8px;
 }
 .nabadVerifyBadge--verified{
   background: linear-gradient(135deg, #7c5cff 0%, #23d5ab 100%);
   color: #fff;
-  box-shadow: 0 0 0 1px rgba(124, 92, 255, 0.22);
+  box-shadow: none;
 }
 .nabadVerifyBadge--coCreated{
   position: relative;
@@ -30105,21 +30097,30 @@ section.mentorPage{
 }
 
 .followActQuoteRow{
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 0;
   width: 100%;
-  margin: 4px 0 0;
-  padding: 4px 4px 4px 0;
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
-  transition: background 160ms ease, border-color 160ms ease;
+  margin: 8px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.followActQuoteRow::before{
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -4px;
+  height: 1px;
+  background: rgba(255,255,255,0.06);
+  pointer-events: none;
 }
 .followActQuoteRow:has(.followActQuoteCard:active){
-  background: rgba(124, 92, 255, 0.1);
-  border-color: rgba(124, 92, 255, 0.22);
+  background: rgba(255,255,255,0.03);
 }
 .followActQuoteMenuBtn{
   align-self: center;
@@ -30133,9 +30134,9 @@ section.mentorPage{
   width: 100%;
   min-width: 0;
   margin: 0;
-  padding: 6px 8px 6px 10px;
+  padding: 8px 4px 8px 0;
   border: 0;
-  border-radius: 12px;
+  border-radius: 0;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -30157,7 +30158,7 @@ section.mentorPage{
   height: 56px;
   border-radius: 8px;
   overflow: hidden;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(255,255,255,0.04);
   flex-shrink: 0;
 }
 .followActQuoteImg{
@@ -32410,7 +32411,7 @@ section.mentorPage{
   100%{ background-position: -200% 0; }
 }
 .discoverFeedSection{
-  margin: 0 0 18px;
+  margin: 0 0 28px;
   min-width: 0;
 }
 .discoverFeedSectionHead{
@@ -32448,7 +32449,7 @@ section.mentorPage{
 .discoverFeedListStack{
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
   min-width: 0;
 }
 .discoverCardMenuBtn,
@@ -32456,27 +32457,26 @@ section.mentorPage{
   flex: 0 0 auto;
   align-self: center;
   width: auto;
-  min-width: 28px;
-  min-height: 36px;
+  min-width: 36px;
+  min-height: 40px;
   margin: 0;
-  padding: 6px 8px;
+  padding: 8px 6px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 0;
   background: transparent;
   color: rgba(232,238,247,0.38);
-  font-size: 17px;
+  font-size: 20px;
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.08em;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: color 0.18s ease, opacity 0.18s ease, background 0.18s ease;
+  transition: color 0.18s ease, opacity 0.18s ease;
 }
 .discoverCardMenuBtn:active,
 .discoveryRowSide:active{
   opacity: 0.9;
   color: rgba(232,238,247,0.82);
-  background: rgba(255,255,255,0.04);
 }
 .discoverCardMenuBtn:focus-visible,
 .discoveryRowSide:focus-visible{
@@ -32544,14 +32544,13 @@ section.mentorPage{
   background: rgba(0,0,0,0.34);
 }
 .discoverFeedSongRow.discoveryRowPlaying{
-  border-color: rgba(var(--cover-glow-rgb), 0.42);
-  background: rgba(var(--cover-glow-rgb), 0.08);
+  background: rgba(var(--cover-glow-rgb), 0.07);
 }
 .discoverFeedSongRow.discoveryRowPlaying .discoverFeedSongArt{
-  box-shadow: 0 0 0 2px rgba(var(--cover-glow-rgb), 0.55);
+  box-shadow: none;
 }
 .discoverFeedSongRow.discoveryRowActive{
-  border-color: rgba(var(--cover-glow-rgb), 0.28);
+  background: rgba(var(--cover-glow-rgb), 0.05);
 }
 .discoverFeedSongRow .discoveryRowPlayCount{
   display: block;
@@ -32569,17 +32568,33 @@ section.mentorPage{
   min-width: 0;
 }
 .discoverFeedSongRow{
+  --cover-glow-rgb: 98, 106, 125;
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 0;
   width: 100%;
-  padding: 4px 4px 4px 0;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.03);
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: inherit;
-  transition: background 160ms ease, border-color 160ms ease;
+  transition: background-color 160ms ease;
+}
+.discoverFeedSongRow + .discoverFeedSongRow::before{
+  content: "";
+  position: absolute;
+  left: 70px;
+  right: 6px;
+  top: 0;
+  height: 1px;
+  background: rgba(255,255,255,0.06);
+  pointer-events: none;
+}
+.discoverFeedSongRow:has(.discoverFeedSongRowPlay:active){
+  background: rgba(255,255,255,0.03);
 }
 .discoverFeedSongRowPlay{
   display: grid;
@@ -32588,18 +32603,14 @@ section.mentorPage{
   gap: 12px;
   width: 100%;
   min-width: 0;
-  padding: 6px 8px 6px 10px;
+  padding: 10px 8px 10px 6px;
   border: 0;
-  border-radius: 12px;
+  border-radius: 0;
   background: transparent;
   color: inherit;
   text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-}
-.discoverFeedSongRow:has(.discoverFeedSongRowPlay:active){
-  background: rgba(124, 92, 255, 0.1);
-  border-color: rgba(124, 92, 255, 0.22);
 }
 .discoverFeedSongRowPlay:active{
   background: transparent;
@@ -32612,12 +32623,14 @@ section.mentorPage{
 }
 .discoverFeedSongArt{
   position: relative;
-  width: 54px;
-  height: 54px;
-  border-radius: 12px;
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
   overflow: hidden;
   flex: none;
   background: rgba(255, 255, 255, 0.04);
+  border: 0;
+  box-shadow: none;
 }
 .discoverFeedSongArt img{
   width: 100%;
@@ -32633,9 +32646,9 @@ section.mentorPage{
 }
 .discoverFeedSongTitle{
   font-size: 15px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: #f8faff;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: rgba(244,247,255,0.96);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -32735,9 +32748,11 @@ section.mentorPage{
 .discoverFeedTemplateCover{
   position: relative;
   aspect-ratio: 3 / 4;
-  border-radius: 14px;
+  border-radius: 8px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.04);
+  border: 0;
+  box-shadow: none;
 }
 .discoverFeedTemplateCover img{
   width: 100%;
@@ -34077,27 +34092,27 @@ section.mentorPage{
 .discoverHubRail--picks{ gap: 8px; padding-bottom: 6px; }
 .discoverHubPickCard{
   position: relative;
-  flex: 0 0 148px;
-  width: 148px;
+  flex: 0 0 132px;
+  width: 132px;
   scroll-snap-align: start;
   display: flex;
   flex-direction: column;
-  gap: 0;
-  padding: 0 0 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: inherit;
   font: inherit;
   text-align: start;
-  overflow: hidden;
+  overflow: visible;
 }
 .discoverHubPickCardPlay{
   display: flex;
   flex-direction: column;
   gap: 8px;
   width: 100%;
-  padding: 8px 8px 0;
+  padding: 0;
   border: 0;
   background: transparent;
   color: inherit;
@@ -34108,19 +34123,23 @@ section.mentorPage{
 }
 .discoverHubPickCard > .discoverCardMenuBtn{
   position: absolute;
-  top: 2px;
-  right: 0;
+  top: 4px;
+  right: 2px;
   z-index: 2;
+  min-width: 32px;
+  min-height: 32px;
+  color: rgba(232,238,247,0.88);
+  text-shadow: 0 1px 8px rgba(0,0,0,0.55);
 }
 .discoverHubPickCover{
   position: relative;
   width: 100%;
   aspect-ratio: 1;
-  border-radius: 14px;
+  border-radius: 8px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 0;
   background: rgba(255, 255, 255, 0.04);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+  box-shadow: none;
 }
 .discoverHubPickCover img{
   width: 100%;

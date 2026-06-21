@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260621feedRowsInside";
+const APP_BUILD = "20260621friendsFeedPatch";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -10010,7 +10010,7 @@ function logFriendsFeedPatch(kind, detail) {
   } catch {}
 }
 
-const FOLLOW_ACT_MEDIA_SEL = ".followActQuoteCard, .followActRemixPair, .followActMashup";
+const FOLLOW_ACT_MEDIA_SEL = ".followActQuoteRow, .followActRemixPair, .followActMashup, .followActMediaWrap";
 
 function profileActMediaSig(t, profMap) {
   const mashupOf = mashupAttributionForTrack(t);
@@ -10166,20 +10166,21 @@ function patchFollowActRowMedia(article, track, profMap, idx) {
   const actRow = column.querySelector(".followActActions");
   const nextActRow = nextColumn.querySelector(".followActActions");
   if (!actRow || !nextActRow) return false;
+  const mediaInsertBefore = column.querySelector(".followActActionsBar") || actRow;
 
   const contentEl = column.querySelector(".followActContent");
   const nextContent = nextColumn.querySelector(".followActContent");
   if (nextContent) {
     const clone = nextContent.cloneNode(true);
     if (contentEl) contentEl.replaceWith(clone);
-    else actRow.before(clone);
+    else mediaInsertBefore.before(clone);
   } else if (contentEl) {
     contentEl.remove();
   }
 
   column.querySelectorAll(FOLLOW_ACT_MEDIA_SEL).forEach((n) => n.remove());
   nextColumn.querySelectorAll(FOLLOW_ACT_MEDIA_SEL).forEach((node) => {
-    actRow.before(node.cloneNode(true));
+    mediaInsertBefore.before(node.cloneNode(true));
   });
   return true;
 }

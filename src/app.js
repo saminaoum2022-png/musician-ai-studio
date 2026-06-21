@@ -2429,17 +2429,38 @@ function attachTabRefresh() {
     if (a.dataset.tabNavBound) return;
     a.dataset.tabNavBound = "1";
     a.addEventListener("click", (e) => {
-      const route = tabBarRouteKey(a.getAttribute("data-route-link") || "");
-      if (!TAB_REFRESH_ACTIONS[route]) return;
+      const linkRoute = tabBarRouteKey(a.getAttribute("data-route-link") || "");
+      if (!TAB_REFRESH_ACTIONS[linkRoute]) return;
       const current = tabBarRouteKey(document.body.getAttribute("data-route") || "");
       const hashRoute = hashRouteKey();
-      const href = String(a.getAttribute("href") || `#/${route}`).trim();
-      const targetHash = href.startsWith("#") ? href : `#/${href.replace(/^#?\/?/, "")}`;
+      const href = String(a.getAttribute("href") || `#/${linkRoute}`).trim();
+      let targetHash = href.startsWith("#") ? href : `#/${href.replace(/^#?\/?/, "")}`;
+      let route = linkRoute;
 
-      if (route === current && hashRoute === route && location.hash === targetHash) {
+      // Resume in-progress generation or an unfinished draft on the song form.
+      if (linkRoute === "challenges") {
+        const createNav = resolveCreateTabNavigation();
+        if (createNav.route === "generate") {
+          route = "generate";
+          targetHash = createNav.hash;
+        }
+      }
+
+      const onGenerateForm =
+        document.body.getAttribute("data-route") === "generate" &&
+        /^#\/generate\b/i.test(String(location.hash || ""));
+
+      if (route === "generate" && onGenerateForm) {
         e.preventDefault();
         e.stopPropagation();
-        void triggerTabRefresh(route);
+        restoreCreatePageOnRouteEnter();
+        return;
+      }
+
+      if (route === current && hashRoute === linkRoute && location.hash === targetHash) {
+        e.preventDefault();
+        e.stopPropagation();
+        void triggerTabRefresh(linkRoute);
         return;
       }
 
@@ -3065,6 +3086,16 @@ function applyRoute({ passGen } = {}) {
     } catch {}
   }
   const prevRoute = document.body.getAttribute("data-route") || "";
+  if (wanted === "challenges" && hasActiveCreateSession()) {
+    wanted = "generate";
+    try {
+      if (!/^#\/generate\b/i.test(String(location.hash || ""))) {
+        history.replaceState(null, "", "#/generate");
+      }
+    } catch {
+      try { location.hash = "#/generate"; } catch {}
+    }
+  }
   if (prevRoute !== wanted) {
     closeCreateChooserSheet({ immediate: true });
     closeImageMoodSheet();
@@ -3356,6 +3387,7 @@ function applyRoute({ passGen } = {}) {
   }
   if (wanted === "generate") {
     try { renderPersonaSelect(); } catch {}
+    try { restoreCreatePageOnRouteEnter(); } catch {}
   }
   syncGenerateOrbVisibility();
   renderGenerateReadyDot();
@@ -12886,6 +12918,8 @@ let sunoAudioId = null;
 let sunoStemsTaskId = null;
 let sunoMultiStemsTaskId = null;
 let generatePollTimer = null;
+let _startGeneratePolling = null;
+let _showResultCardHoisted = null;
 let stemsPollTimer = null;
 let multiStemsPollTimer = null;
 let multiStemsInFlight = false;
@@ -35982,6 +36016,87 @@ function clearRecoverableGenerationTask() {
   } catch {}
 }
 
+/** True when Create should reopen the song form (not the home desk). Cleared only via New. */
+function createSessionHasDraftContent() {
+  let vocalRef = false;
+  try {
+    vocalRef = Boolean(getVocalReferenceFile?.()?.size || currentVocalRefFile?.size);
+  } catch {}
+  return Boolean(
+    String(els.sunoPrompt?.value || "").trim() ||
+    String(els.sunoStyle?.value || "").trim() ||
+    String(els.sunoAvoidTags?.value || "").trim() ||
+    String(els.sunoTitle?.value || "").trim() ||
+    imageMoodAppliedForNextGen ||
+    vocalRef
+  );
+}
+
+function createSessionHasResultVisible() {
+  return (els.resultCard?.style.display || "none") !== "none";
+}
+
+function createSessionIsGenerating() {
+  if (generatePollTimer) return true;
+  const tid = String(sunoTaskId || loadPendingBackendTask() || "").trim();
+  if (!tid) return false;
+  if (document.body.classList.contains("generateLocked")) return true;
+  const mode = String(els.btnSunoGenerate?.dataset?.mode || "");
+  if (els.btnSunoGenerate?.disabled && (mode === "generate" || mode === "resume")) return true;
+  if (document.body.classList.contains("isBusy") && busyCount > 0) return true;
+  return false;
+}
+
+function hasActiveCreateSession() {
+  return createSessionIsGenerating() || createSessionHasDraftContent() || createSessionHasResultVisible();
+}
+
+function resolveCreateTabNavigation() {
+  if (hasActiveCreateSession()) {
+    return { route: "generate", hash: "#/generate" };
+  }
+  return { route: "challenges", hash: "#/challenges" };
+}
+
+/** Re-sync loading lock, poll loop, and result cards after returning to #/generate. */
+function restoreCreatePageOnRouteEnter() {
+  if (!hasActiveCreateSession()) return;
+
+  const generating = createSessionIsGenerating();
+  const hasResult = createSessionHasResultVisible();
+
+  if (generating) {
+    try { setGenerateFieldsLocked(true); } catch {}
+    const tid = String(sunoTaskId || loadPendingBackendTask() || "").trim();
+    if (tid) {
+      sunoTaskId = tid;
+      try { savePendingBackendTask(tid); } catch {}
+    }
+    if (busyCount <= 0) {
+      try {
+        setLoading(true, {
+          title: "Processing in backend...",
+          sub: "This can take 30–120 seconds.",
+          dismissible: true,
+        });
+      } catch {}
+    }
+    if (tid && !generatePollTimer && typeof _startGeneratePolling === "function") {
+      try { _startGeneratePolling(); } catch {}
+    }
+  } else {
+    try { setGenerateFieldsLocked(false); } catch {}
+  }
+
+  if (hasResult && !generating && typeof _showResultCardHoisted === "function") {
+    try { _showResultCardHoisted(true); } catch {}
+  }
+
+  try { syncGenerateOrbVisibility(); } catch {}
+  try { syncCreateTabMorph(); } catch {}
+  try { updateBrandPulse(); } catch {}
+}
+
 /** Shared parser for GET /api/suno/status bodies (same shape generate polling uses). */
 function parseSunoGenerationRecordInfo(data) {
   const status = String(data?.data?.status || data?.status || "").toUpperCase();
@@ -37759,6 +37874,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
     }, 4500);
   };
+  _startGeneratePolling = startGeneratePolling;
+  _showResultCardHoisted = showResultCard;
 
   const stopStemsPolling = () => {
     if (stemsPollTimer) clearInterval(stemsPollTimer);

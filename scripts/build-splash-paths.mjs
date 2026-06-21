@@ -1,5 +1,5 @@
 // Extract purple / teal stroke centerlines from the production app icon.
-// Regenerates assets/splash/logo-paths.json (used by src/boot-splash.js).
+// Each segment is a straight line between measured cap centers — no row sampling.
 //
 //   node scripts/build-splash-paths.mjs
 
@@ -18,13 +18,6 @@ function kind(r, g, b, a = 255) {
   if (g > r + 20 && g > 100) return "teal";
   if (b > 100 && r > 60) return "purple";
   return null;
-}
-
-function lerp(a, b, t) {
-  return [
-    Math.round((a[0] + (b[0] - a[0]) * t) * 10) / 10,
-    Math.round((a[1] + (b[1] - a[1]) * t) * 10) / 10,
-  ];
 }
 
 function toPath(pts) {
@@ -69,42 +62,29 @@ async function main() {
     return kind(data[i], data[i + 1], data[i + 2], data[i + 3]);
   };
 
-  const collect = (col, pred) => {
+  const capCenter = (col, region, edge) => {
     const pts = [];
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
-        if (px(x, y) === col && pred(x, y)) pts.push([x, y]);
+        if (px(x, y) !== col) continue;
+        if (region === "left" && x > minX + W * 0.38) continue;
+        if (region === "right" && x < minX + W * 0.62) continue;
+        pts.push([x, y]);
       }
     }
-    return pts;
-  };
-
-  const cap = (pts, edge) => {
     if (!pts.length) return [500, 500];
-    if (edge === "top") {
-      const y0 = Math.min(...pts.map((p) => p[1]));
-      const row = pts.filter((p) => p[1] <= y0 + 3);
-      return n(
-        row.reduce((s, p) => s + p[0], 0) / row.length,
-        row.reduce((s, p) => s + p[1], 0) / row.length,
-      );
-    }
-    const y0 = Math.max(...pts.map((p) => p[1]));
-    const row = pts.filter((p) => p[1] >= y0 - 3);
+    const y0 =
+      edge === "top"
+        ? Math.min(...pts.map((p) => p[1]))
+        : Math.max(...pts.map((p) => p[1]));
+    const row = pts.filter((p) =>
+      edge === "top" ? p[1] <= y0 + 4 : p[1] >= y0 - 4,
+    );
     return n(
       row.reduce((s, p) => s + p[0], 0) / row.length,
       row.reduce((s, p) => s + p[1], 0) / row.length,
     );
   };
-
-  const leftPurple = collect("purple", (x) => x < minX + W * 0.38);
-  const tealPts = collect("teal", () => true);
-  const rightPurple = collect("purple", (x) => x > minX + W * 0.55);
-
-  const leftBot = cap(leftPurple, "bottom");
-  const leftTop = cap(leftPurple, "top");
-  const rightTop = cap(tealPts, "top");
-  const rightBot = cap(rightPurple, "bottom");
 
   let splitY = minY + Math.round(H * 0.45);
   for (let y = minY; y <= maxY; y++) {
@@ -122,18 +102,21 @@ async function main() {
   const splitXs = [];
   for (let x = minX; x <= maxX; x++) {
     const k = px(x, splitY);
-    if (k === "teal" || k === "purple") splitXs.push(x);
+    if ((k === "teal" || k === "purple") && x > minX + W * 0.55) splitXs.push(x);
   }
-  const splitPt = n(
+  const split = n(
     splitXs.reduce((s, x) => s + x, 0) / Math.max(1, splitXs.length),
     splitY,
   );
 
-  const left = [leftBot, lerp(leftBot, leftTop, 0.33), lerp(leftBot, leftTop, 0.66), leftTop];
-  const diag = [leftTop, lerp(leftTop, splitPt, 0.33), lerp(leftTop, splitPt, 0.66), splitPt];
-  const rb = [splitPt, lerp(splitPt, rightBot, 0.33), lerp(splitPt, rightBot, 0.66), rightBot];
-  const teal = [rightTop, lerp(rightTop, splitPt, 0.33), lerp(rightTop, splitPt, 0.66), splitPt];
-  const purple = [...left, ...diag.slice(1), ...rb.slice(1)];
+  const leftBot = capCenter("purple", "left", "bottom");
+  const leftTop = capCenter("purple", "left", "top");
+  const rightTop = capCenter("teal", "right", "top");
+  const rightBot = capCenter("purple", "right", "bottom");
+
+  // N geometry: left stem → diagonal → right stem (purple); right top → split (teal)
+  const purple = [leftBot, leftTop, split, rightBot];
+  const teal = [rightTop, split];
 
   const strokeSamples = [];
   for (let y = Math.round(minY + H * 0.45); y <= Math.round(minY + H * 0.55); y++) {
@@ -144,11 +127,23 @@ async function main() {
     if (xs.length) strokeSamples.push(Math.max(...xs) - Math.min(...xs) + 1);
   }
   const strokeWidth =
-    Math.round(((strokeSamples.reduce((a, b) => a + b, 0) / Math.max(1, strokeSamples.length)) / W) * 1000 * 10) / 10;
+    Math.round(
+      ((strokeSamples.reduce((a, b) => a + b, 0) /
+        Math.max(1, strokeSamples.length)) /
+        W) *
+        1000 *
+        10,
+    ) / 10;
+
+  const center = [
+    Math.round(((leftBot[0] + rightBot[0]) / 2) * 10) / 10,
+    Math.round(((leftTop[1] + leftBot[1]) / 2) * 10) / 10,
+  ];
 
   const payload = {
     viewBox: [0, 0, 1000, 1000],
     strokeWidth,
+    center,
     colors: { purple: "#7C5CFF", teal: "#23D5AB" },
     purplePath: toPath(purple),
     tealPath: toPath(teal),
@@ -164,6 +159,7 @@ async function main() {
   const logoBlock = `  const LOGO = {
     viewBox: [0, 0, 1000, 1000],
     strokeWidth: ${strokeWidth},
+    center: [${center[0]}, ${center[1]}],
     purplePath: "${payload.purplePath}",
     tealPath: "${payload.tealPath}",
   };`;

@@ -1,6 +1,5 @@
 /**
- * Premium minimalist boot splash — two dots trace-draw the production N logo.
- * Paths from assets/icons/app-icon-master.png (see scripts/build-splash-paths.mjs).
+ * Premium minimalist boot splash — one dot splits into purple + teal, then trace-draws the N.
  */
 (function bootSplashModule(global) {
   const PURPLE = "#7C5CFF";
@@ -9,25 +8,23 @@
   const LOGO = {
     viewBox: [0, 0, 1000, 1000],
     strokeWidth: 327.2,
-    purplePath:
-      "M 123.5 994.9 L 133.4 667.7 L 143.3 340.4 L 153.5 3.3 L 259 109.9 L 364.6 216.4 L 473.3 326.2 L 609.1 545.2 L 744.8 764.2 L 884.7 989.8",
-    tealPath: "M 856.7 3.4 L 730.2 109.9 L 603.7 216.4 L 473.3 326.2",
+    center: [504, 499.1],
+    purplePath: "M 123.4 993.8 L 153.8 4.4 L 855.8 326.2 L 884.6 988.7",
+    tealPath: "M 856.4 4.5 L 855.8 326.2",
   };
 
-  /** ~1.9s total — fast, elegant, confident. */
   const TIMING = {
     dotIn: 60,
     pulse: 300,
-    split: 90,
-    draw: 920,
+    split: 140,
+    draw: 900,
     merge: 100,
     hold: 500,
   };
 
   const TOTAL_MS = Object.values(TIMING).reduce((a, b) => a + b, 0);
-
-  const DOT_R = LOGO.strokeWidth * 0.062;
-  const CENTER = { x: 500, y: 500 };
+  const DOT_R = LOGO.strokeWidth * 0.058;
+  const CENTER = { x: LOGO.center[0], y: LOGO.center[1] };
 
   function easeOutCubic(t) {
     return 1 - (1 - t) ** 3;
@@ -68,10 +65,10 @@
     teal.setAttribute("stroke-linecap", "round");
     teal.setAttribute("stroke-linejoin", "round");
 
-    const centerDot = document.createElementNS(ns, "circle");
-    centerDot.setAttribute("class", "bootSplashDot bootSplashDot--seed");
-    centerDot.setAttribute("r", String(DOT_R));
-    centerDot.setAttribute("fill", PURPLE);
+    const seedDot = document.createElementNS(ns, "circle");
+    seedDot.setAttribute("class", "bootSplashDot bootSplashDot--seed");
+    seedDot.setAttribute("r", String(DOT_R));
+    seedDot.setAttribute("fill", PURPLE);
 
     const purpleDot = document.createElementNS(ns, "circle");
     purpleDot.setAttribute("class", "bootSplashDot bootSplashDot--purple");
@@ -85,16 +82,17 @@
     tealDot.setAttribute("fill", TEAL);
     tealDot.setAttribute("opacity", "0");
 
-    svg.append(purple, teal, centerDot, purpleDot, tealDot);
+    svg.append(purple, teal, seedDot, purpleDot, tealDot);
     root.appendChild(svg);
 
-    return { svg, purple, teal, centerDot, purpleDot, tealDot };
+    return { svg, purple, teal, seedDot, purpleDot, tealDot };
   }
 
   function prepStroke(pathEl) {
     const len = pathEl.getTotalLength();
     pathEl.style.strokeDasharray = String(len);
     pathEl.style.strokeDashoffset = String(len);
+    pathEl.style.visibility = "hidden";
     return len;
   }
 
@@ -103,7 +101,10 @@
     dot.setAttribute("cy", String(y));
     dot.setAttribute("opacity", String(opacity));
     if (scale != null && scale !== 1) {
-      dot.setAttribute("transform", `translate(${x} ${y}) scale(${scale}) translate(${-x} ${-y})`);
+      dot.setAttribute(
+        "transform",
+        `translate(${x} ${y}) scale(${scale}) translate(${-x} ${-y})`,
+      );
     } else {
       dot.removeAttribute("transform");
     }
@@ -119,9 +120,11 @@
     const reducedMotion = global.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
     if (reducedMotion) {
       const els = createSvg(mount);
+      els.purple.style.visibility = "visible";
+      els.teal.style.visibility = "visible";
       els.purple.style.strokeDashoffset = "0";
       els.teal.style.strokeDashoffset = "0";
-      setDot(els.centerDot, 0, 0, 0);
+      setDot(els.seedDot, 0, 0, 0);
       setDot(els.purpleDot, 0, 0, 0);
       setDot(els.tealDot, 0, 0, 0);
       global.setTimeout(onComplete, 400);
@@ -131,9 +134,6 @@
     const els = createSvg(mount);
     const purpleLen = prepStroke(els.purple);
     const tealLen = prepStroke(els.teal);
-
-    const pStart = els.purple.getPointAtLength(0);
-    const tStart = els.teal.getPointAtLength(0);
 
     let raf = 0;
     let startedAt = 0;
@@ -158,9 +158,11 @@
       const t = now - startedAt;
 
       if (t >= t6) {
+        els.purple.style.visibility = "visible";
+        els.teal.style.visibility = "visible";
         els.purple.style.strokeDashoffset = "0";
         els.teal.style.strokeDashoffset = "0";
-        setDot(els.centerDot, 0, 0, 0);
+        setDot(els.seedDot, 0, 0, 0);
         setDot(els.purpleDot, 0, 0, 0);
         setDot(els.tealDot, 0, 0, 0);
         finish();
@@ -168,42 +170,45 @@
       }
 
       if (t < t1) {
-        // Single small purple seed dot at center
         const p = easeOutCubic(clamp(t / TIMING.dotIn, 0, 1));
-        setDot(els.centerDot, CENTER.x, CENTER.y, p);
-        setDot(els.purpleDot, pStart.x, pStart.y, 0);
-        setDot(els.tealDot, tStart.x, tStart.y, 0);
-        els.purple.style.strokeDashoffset = String(purpleLen);
-        els.teal.style.strokeDashoffset = String(tealLen);
+        setDot(els.seedDot, CENTER.x, CENTER.y, p);
+        setDot(els.purpleDot, CENTER.x, CENTER.y, 0);
+        setDot(els.tealDot, CENTER.x, CENTER.y, 0);
+        els.purple.style.visibility = "hidden";
+        els.teal.style.visibility = "hidden";
       } else if (t < t2) {
-        // Two subtle pulses on the seed dot
         const local = t - t1;
         const half = TIMING.pulse / 2;
         const pulseT = (local % half) / half;
         const pulseIdx = Math.floor(local / half);
         const amp = pulseIdx === 0 ? 0.05 : 0.035;
         const scale = 1 + amp * Math.sin(pulseT * Math.PI);
-        setDot(els.centerDot, CENTER.x, CENTER.y, 1, scale);
+        setDot(els.seedDot, CENTER.x, CENTER.y, 1, scale);
+        setDot(els.purpleDot, CENTER.x, CENTER.y, 0);
+        setDot(els.tealDot, CENTER.x, CENTER.y, 0);
       } else if (t < t3) {
-        // Crossfade: seed splits into purple + teal at path origins (no travel)
+        // One dot → two colored dots, both at center (not at path corners)
         const p = easeInOutCubic(clamp((t - t2) / TIMING.split, 0, 1));
-        setDot(els.centerDot, CENTER.x, CENTER.y, 1 - p);
-        setDot(els.purpleDot, pStart.x, pStart.y, p);
-        setDot(els.tealDot, tStart.x, tStart.y, p);
-        els.purple.style.strokeDashoffset = String(purpleLen);
-        els.teal.style.strokeDashoffset = String(tealLen);
+        const splitGap = 5 * p;
+        setDot(els.seedDot, CENTER.x, CENTER.y, 1 - p);
+        setDot(els.purpleDot, CENTER.x - splitGap, CENTER.y, p);
+        setDot(els.tealDot, CENTER.x + splitGap, CENTER.y, p);
+        els.purple.style.visibility = "hidden";
+        els.teal.style.visibility = "hidden";
       } else if (t < t4) {
-        // Simultaneous path trace — dots are the drawing heads
         const p = easeOutQuart(clamp((t - t3) / TIMING.draw, 0, 1));
+        els.purple.style.visibility = "visible";
+        els.teal.style.visibility = "visible";
         els.purple.style.strokeDashoffset = String(purpleLen * (1 - p));
         els.teal.style.strokeDashoffset = String(tealLen * (1 - p));
-        const pp = els.purple.getPointAtLength(purpleLen * p);
-        const tp = els.teal.getPointAtLength(tealLen * p);
-        setDot(els.centerDot, CENTER.x, CENTER.y, 0);
-        setDot(els.purpleDot, pp.x, pp.y, 1);
-        setDot(els.tealDot, tp.x, tp.y, 1);
+
+        const pHead = els.purple.getPointAtLength(purpleLen * p);
+        const tHead = els.teal.getPointAtLength(tealLen * p);
+
+        setDot(els.seedDot, CENTER.x, CENTER.y, 0);
+        setDot(els.purpleDot, pHead.x, pHead.y, 1);
+        setDot(els.tealDot, tHead.x, tHead.y, 1);
       } else if (t < t5) {
-        // Dots shrink into stroke caps — merge into the finished logo
         const p = easeInOutCubic(clamp((t - t4) / TIMING.merge, 0, 1));
         els.purple.style.strokeDashoffset = "0";
         els.teal.style.strokeDashoffset = "0";
@@ -213,10 +218,9 @@
         setDot(els.purpleDot, pEnd.x, pEnd.y, shrink, shrink);
         setDot(els.tealDot, tEnd.x, tEnd.y, shrink, shrink);
       } else {
-        // Hold completed logo
         els.purple.style.strokeDashoffset = "0";
         els.teal.style.strokeDashoffset = "0";
-        setDot(els.centerDot, 0, 0, 0);
+        setDot(els.seedDot, 0, 0, 0);
         setDot(els.purpleDot, 0, 0, 0);
         setDot(els.tealDot, 0, 0, 0);
       }

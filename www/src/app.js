@@ -2475,6 +2475,42 @@ var authSession = null;
 var generationReadyNotice = false;
 /** Search → Make it mine; merged into `lastGenerationMeta` on Generate (declared early for `applyRoute`). */
 let pendingSearchRemixMeta = null;
+const CREATE_CHALLENGE_CONTEXT_KEY = "nabad_create_challenge_ctx_v1";
+
+function persistCreateChallengeContext(meta) {
+  if (!meta || typeof meta !== "object") return;
+  try {
+    sessionStorage.setItem(CREATE_CHALLENGE_CONTEXT_KEY, JSON.stringify(meta));
+  } catch {}
+}
+
+function loadCreateChallengeContext() {
+  try {
+    const raw = sessionStorage.getItem(CREATE_CHALLENGE_CONTEXT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearCreateChallengeContext() {
+  try { sessionStorage.removeItem(CREATE_CHALLENGE_CONTEXT_KEY); } catch {}
+}
+
+function restoreCreateChallengeContext() {
+  if (pendingSearchRemixMeta?.challenge) return pendingSearchRemixMeta;
+  const saved = loadCreateChallengeContext();
+  if (!saved?.challenge) return null;
+  pendingSearchRemixMeta = {
+    ...(pendingSearchRemixMeta && typeof pendingSearchRemixMeta === "object" ? pendingSearchRemixMeta : {}),
+    ...saved,
+    challengePromptPending: true,
+  };
+  setCreateChallengeHint(saved.challenge);
+  return pendingSearchRemixMeta;
+}
 
 function challengePromptContext() {
   return pendingSearchRemixMeta?.challengePromptPending && pendingSearchRemixMeta?.challenge && typeof pendingSearchRemixMeta.challenge === "object"
@@ -3116,8 +3152,9 @@ function applyRoute({ passGen } = {}) {
   if (wanted !== "discover" && wanted !== "discover-playlist" && wanted !== "friends") {
     try { document.body.removeAttribute("data-discovery-segment"); } catch {}
   }
-  if (prevRoute === "generate" && wanted !== "generate") {
+  if (prevRoute === "generate" && wanted !== "generate" && !hasActiveCreateSession()) {
     pendingSearchRemixMeta = null;
+    clearCreateChallengeContext();
     setCreateChallengeHint(null);
     clearCreateChallengeFocus();
   }
@@ -3563,6 +3600,7 @@ function resetCreateDraft() {
   if (els.sunoAvoidTags) els.sunoAvoidTags.value = "";
   if (els.sunoTitle) els.sunoTitle.value = "";
   pendingSearchRemixMeta = null;
+  clearCreateChallengeContext();
   setCreateChallengeHint(null);
   clearCreateChallengeFocus();
   if (els.sunoArtworkStyle) els.sunoArtworkStyle.value = "";
@@ -4957,6 +4995,8 @@ function applyDiscoveryIdeaToCreate(idea) {
     challengePromptPending: Boolean(idea.challenge),
     ...(idea.challenge ? { challenge: idea.challenge } : {}),
   };
+  if (idea.challenge) persistCreateChallengeContext(pendingSearchRemixMeta);
+  else clearCreateChallengeContext();
   const challenge = challengePromptContext();
   const sourceKind = challenge ? creationSourceKind(challenge) : null;
   setCreateChallengeHint(challenge);
@@ -6427,6 +6467,14 @@ function discoverLiveChallengesForUser(prefs) {
   });
 }
 
+/** Sparks + live campaigns only — excludes occasion templates (birthday, love, etc.). */
+function discoverFeedChallengesForUser(prefs) {
+  return discoverLiveChallengesForUser(prefs).filter((c) => {
+    const action = String(c.action || "").trim();
+    return action === "challenge" || action === "campaign";
+  });
+}
+
 function discoverAllChallengeFeedTracks(tracks, prefs, limit = 8) {
   const pool = discoverLiveChallengesForUser(prefs);
   return (tracks || [])
@@ -6510,8 +6558,10 @@ const DISCOVER_HUB_TEMPLATE_IDS = [];
 
 const DISCOVER_CHALLENGE_AVATAR_SEEDS = {
   worldcup2026: ["S", "A", "H", "M", "K"],
-  birthday: ["N", "L", "R", "Y"],
-  "love-song": ["M", "S", "A", "D"],
+  "voice-note-flip": ["V", "O", "I", "C"],
+  "dabke-drop": ["D", "A", "B", "K"],
+  "three-word-hook": ["3", "W", "H", "K"],
+  "wrong-genre-party": ["W", "G", "F", "N"],
   "sad-to-dance": ["D", "M", "S", "K"],
   "last-photo-song": ["P", "H", "O", "T"],
   "roast-song": ["R", "O", "A", "S"],
@@ -6520,11 +6570,15 @@ const DISCOVER_CHALLENGE_AVATAR_SEEDS = {
 const DISCOVER_CHALLENGE_ART_VERSION = "20260619discoverWire";
 const DISCOVER_CHALLENGE_ART = {
   worldcup2026: "./assets/discover/challenges/worldcup-anthem.svg",
-  birthday: "./assets/discover/challenges/birthday-song.svg",
-  "love-song": "./assets/discover/challenges/love-song.svg",
+  "voice-note-flip": "./assets/discover/challenges/remix-battle.svg",
+  "dabke-drop": "./assets/discover/challenges/remix-battle.svg",
+  "three-word-hook": "./assets/discover/challenges/remix-battle.svg",
+  "wrong-genre-party": "./assets/discover/challenges/remix-battle.svg",
   "sad-to-dance": "./assets/discover/challenges/remix-battle.svg",
   "last-photo-song": "./assets/discover/challenges/birthday-song.svg",
   "roast-song": "./assets/discover/challenges/remix-battle.svg",
+  birthday: "./assets/discover/challenges/birthday-song.svg",
+  "love-song": "./assets/discover/challenges/love-song.svg",
 };
 
 function discoverChallengeArtUrl(challengeId) {
@@ -6548,32 +6602,60 @@ const DISCOVER_LIVE_CHALLENGES = [
     action: "campaign",
   },
   {
-    id: "birthday",
-    emoji: "🎂",
-    title: "Birthday Song Challenge",
-    blurb: "Make someone's day unforgettable.",
-    tone: "rose",
-    participants: 1264,
-    submissions: 189,
-    daysLeft: 6,
+    id: "voice-note-flip",
+    emoji: "🎙",
+    title: "Voice Note Flip",
+    blurb: "Record your hook on Hum — your clip drives the remix.",
+    tone: "violet",
+    participants: 824,
+    submissions: 118,
+    daysLeft: 9,
     totalDays: 14,
-    progressGoal: 220,
-    action: "occasion",
-    occasionId: "birthday",
+    progressGoal: 160,
+    action: "challenge",
+    challengeId: "voice-note-flip",
   },
   {
-    id: "love-song",
-    emoji: "💜",
-    title: "Love Song Challenge",
-    blurb: "Romantic hooks for couples & crushes.",
-    tone: "violet",
-    participants: 892,
-    submissions: 143,
-    daysLeft: 4,
+    id: "dabke-drop",
+    emoji: "💃",
+    title: "Dabke Drop",
+    blurb: "Build the chorus everyone can clap to.",
+    tone: "gold",
+    participants: 712,
+    submissions: 104,
+    daysLeft: 7,
+    totalDays: 14,
+    progressGoal: 140,
+    action: "challenge",
+    challengeId: "dabke-drop",
+  },
+  {
+    id: "three-word-hook",
+    emoji: "✦",
+    title: "3-Word Hook",
+    blurb: "Only three words in the chorus — make them impossible to forget.",
+    tone: "cyan",
+    participants: 658,
+    submissions: 91,
+    daysLeft: 6,
     totalDays: 10,
-    progressGoal: 180,
-    action: "occasion",
-    occasionId: "anniversary",
+    progressGoal: 120,
+    action: "challenge",
+    challengeId: "three-word-hook",
+  },
+  {
+    id: "wrong-genre-party",
+    emoji: "🎭",
+    title: "Wrong Genre",
+    blurb: "Pick two genres that should not match — make the chorus win anyway.",
+    tone: "rose",
+    participants: 541,
+    submissions: 76,
+    daysLeft: 8,
+    totalDays: 14,
+    progressGoal: 110,
+    action: "challenge",
+    challengeId: "wrong-genre-party",
   },
   {
     id: "sad-to-dance",
@@ -6742,8 +6824,10 @@ function discoverChallengeMatchesTrack(c, track) {
   const chTitle = String(ch.title || "").toLowerCase();
   if (c.challengeId && (chId === c.challengeId || chId.includes(c.challengeId))) return true;
   if (c.occasionId && (chId === c.occasionId || String(ch.variant || "") === c.occasionId)) return true;
-  if (c.id === "birthday" && (chId.includes("birthday") || chTitle.includes("birthday"))) return true;
-  if (c.id === "love-song" && (chId.includes("anniv") || chId.includes("love") || chTitle.includes("love"))) return true;
+  if (c.id === "voice-note-flip" && (chId === "voice-note-flip" || chTitle.includes("voice"))) return true;
+  if (c.id === "dabke-drop" && (chId === "dabke-drop" || chTitle.includes("dabke"))) return true;
+  if (c.id === "three-word-hook" && (chId === "three-word-hook" || chTitle.includes("3-word") || chTitle.includes("three word"))) return true;
+  if (c.id === "wrong-genre-party" && (chId === "wrong-genre-party" || chTitle.includes("wrong genre"))) return true;
   if (c.id === "sad-to-dance" && (chId === "sad-to-dance-challenge" || chTitle.includes("sad") || chTitle.includes("dance"))) return true;
   if (c.id === "last-photo-song" && (chId === "last-photo-song" || chTitle.includes("photo"))) return true;
   if (c.challengeId === "roast-song" && (chId === "roast-song" || chTitle.includes("roast"))) return true;
@@ -7467,7 +7551,7 @@ function renderDiscoverFeedForYou(tracks, profMap) {
 function renderDiscoverFeedTabPanel(tab, tracks, profMap) {
   if (tab === "for-you") return renderDiscoverFeedForYou(tracks, profMap);
   if (tab === "challenges") {
-    const blocks = discoverLiveChallengesForUser(getUserMusicPreferenceLabels())
+    const blocks = discoverFeedChallengesForUser(getUserMusicPreferenceLabels())
       .map((c) => discoverFeedChallengeBlockHtml(c, tracks, profMap)).join("");
     return blocks || `<p class="discoverHubQuietNote discoverFeedEmpty">Sparks and live events will appear here as creators publish.</p>`;
   }
@@ -7724,7 +7808,8 @@ function renderDiscoverLiveChallengesSection(tracks, profMap) {
   const mount = document.getElementById("discoverLiveChallengesMount");
   if (!mount) return;
   rebuildDiscoveryChallengeBuckets(tracks);
-  const cards = DISCOVER_LIVE_CHALLENGES.map((c) => discoverHubChallengeJournalCardHtml(c, tracks, profMap)).join("");
+  const sparks = discoverFeedChallengesForUser(getUserMusicPreferenceLabels());
+  const cards = sparks.map((c) => discoverHubChallengeJournalCardHtml(c, tracks, profMap)).join("");
   const viewAllBtn = discoverLiveChallengeTrackCount() >= 2
     ? `<button type="button" class="discoverJournalSectionLink" data-discover-challenge-view-all="live-challenges">View all</button>`
     : "";
@@ -7976,21 +8061,23 @@ function renderDiscoverHubV1(tracks, profMap) {
   renderDiscoverFeed(tracks, profMap);
 }
 
-function applyDiscoverOccasionStart(occasionId) {
+function applyDiscoverOccasionStart(occasionId, liveChallenge) {
   const occ = CHALLENGE_OCCASIONS.find((o) => String(o.id) === String(occasionId));
   if (!occ) return;
   haptic("light");
+  const live = liveChallenge && typeof liveChallenge === "object" ? liveChallenge : null;
   applyDiscoveryIdeaToCreate({
-    id: `occasion:${occ.id}`,
-    title: occ.title,
+    id: live?.id ? `live:${live.id}` : `occasion:${occ.id}`,
+    title: live?.title || occ.title,
     prompt: String(occ.lyricSeed || occ.angle || "").trim(),
     lyrics: String(occ.lyricSeed || "").trim(),
     style: "",
     tags: occ.tags || [],
     challenge: {
       id: occ.id,
-      title: occ.title,
+      title: live?.title || occ.title,
       type: "occasion",
+      liveChallengeId: String(live?.id || "").trim(),
       occasion: occ.label,
       genre: "",
       personName: "",
@@ -8077,7 +8164,10 @@ function bindDiscoverHubV1Once() {
       if (ref) applyChallengeStartById(ref, null);
       else {
         const occRef = challengeBtn.getAttribute("data-discover-occasion-ref");
-        if (occRef) applyDiscoverOccasionStart(occRef);
+        if (occRef) {
+          const cardId = String(challengeBtn.getAttribute("data-discover-challenge") || "").trim();
+          applyDiscoverOccasionStart(occRef, cardId ? discoverLiveChallengeById(cardId) : null);
+        }
       }
       return;
     }
@@ -8098,7 +8188,10 @@ function bindDiscoverHubV1Once() {
         return;
       }
       const occRef = newBtn.getAttribute("data-discover-occasion-ref");
-      if (occRef) applyDiscoverOccasionStart(occRef);
+      if (occRef) {
+        const cardId = String(newBtn.getAttribute("data-discover-new") || "").trim();
+        applyDiscoverOccasionStart(occRef, cardId ? discoverLiveChallengeById(cardId) : null);
+      }
       return;
     }
     const creatorBtn = e.target?.closest?.("[data-discover-creator]");
@@ -36092,6 +36185,7 @@ function restoreCreatePageOnRouteEnter() {
     try { _showResultCardHoisted(true); } catch {}
   }
 
+  try { restoreCreateChallengeContext(); } catch {}
   try { syncGenerateOrbVisibility(); } catch {}
   try { syncCreateTabMorph(); } catch {}
   try { updateBrandPulse(); } catch {}
@@ -38363,11 +38457,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
       if (userAvoidTags) payload.negativeTags = userAvoidTags;
       payload.style = compactStyleForProvider(payload.style, 980);
+      restoreCreateChallengeContext();
       const remixMeta =
         pendingSearchRemixMeta && typeof pendingSearchRemixMeta === "object"
           ? { ...pendingSearchRemixMeta }
-          : {};
+          : loadCreateChallengeContext() || {};
       pendingSearchRemixMeta = null;
+      clearCreateChallengeContext();
       setCreateChallengeHint(null);
       const aiLyricsDraft = String(_nabadAiLyricsDraft || "").trim();
       const lyricsEditedByUser = lyricsEditedAfterNabadDraft(userPrompt, aiLyricsDraft);

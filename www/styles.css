@@ -29651,9 +29651,11 @@ section.mentorPage{
 .followAct.followAct--xstyle.followActStack,
 .followActStack .followAct.followAct--xstyle,
 .followAct--xstyle{
+  --feed-song-art-size: 61px;
   display: grid;
-  grid-template-columns: 40px 1fr;
-  gap: 10px;
+  grid-template-columns: 40px minmax(0, 1fr);
+  column-gap: 10px;
+  row-gap: 6px;
   align-items: flex-start;
   padding: 12px 14px;
   border: 0;
@@ -29671,8 +29673,9 @@ section.mentorPage{
 .friendsPage .followActStack .followAct.followAct--xstyle,
 .profileActivitiesList.followActStack .followAct.followAct--xstyle{
   display: grid;
-  grid-template-columns: 40px 1fr;
-  gap: 10px;
+  grid-template-columns: 40px minmax(0, 1fr);
+  column-gap: 10px;
+  row-gap: 6px;
   align-items: flex-start;
   padding: 12px 14px;
   padding-left: 14px;
@@ -29693,19 +29696,36 @@ section.mentorPage{
   padding-right: 14px;
 }
 .followAct--xstyle > .followActAvatar{
+  grid-column: 1;
+  grid-row: 1;
   width: 40px;
   height: 40px;
   margin: 0;
 }
 .followAct--xstyle .followActColumn{
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
+  display: contents;
 }
-
-/* Meta row — @handle · 2h · [badge] ........... [menu] */
+.followAct--xstyle .followActContent{
+  grid-column: 2;
+  grid-row: 2;
+}
+.followAct--xstyle .followActQuoteRow,
+.followAct--xstyle .followActRemixPair,
+.followAct--xstyle .followActMashup,
+.followAct--xstyle .followActQuoteCard--skel{
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  margin-top: 4px;
+  margin-left: 0;
+}
+.followAct--xstyle .followActActionsBar,
+.followAct--xstyle .followActColumn > .followActActions{
+  grid-column: 2;
+}
 .followAct--xstyle .followActMeta{
+  grid-column: 2;
+  grid-row: 1;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -30055,13 +30075,13 @@ section.mentorPage{
 }
 .followActQuoteCard{
   display: grid;
-  grid-template-columns: 56px 1fr;
-  gap: 12px;
+  grid-template-columns: var(--feed-song-art-size, 61px) minmax(0, 1fr);
+  gap: 10px;
   align-items: center;
   width: 100%;
   min-width: 0;
   margin: 0;
-  padding: 8px 4px 8px 0;
+  padding: 5px 8px 5px 0;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -30081,8 +30101,8 @@ section.mentorPage{
 .followActQuoteArt{
   position: relative;
   display: block;
-  width: 56px;
-  height: 56px;
+  width: var(--feed-song-art-size, 61px);
+  height: var(--feed-song-art-size, 61px);
   border-radius: 8px;
   overflow: hidden;
   background: rgba(255,255,255,0.04);
@@ -32505,6 +32525,7 @@ section.mentorPage{
   font-weight: 500;
 }
 .discoverFeedSongRow{
+  --feed-song-art-size: 61px;
   --cover-glow-rgb: 98, 106, 125;
   position: relative;
   display: grid;
@@ -32523,7 +32544,7 @@ section.mentorPage{
 .discoverFeedSongRow + .discoverFeedSongRow::before{
   content: "";
   position: absolute;
-  left: 70px;
+  left: calc(var(--feed-song-art-size) + 14px);
   right: 6px;
   top: 0;
   height: 1px;
@@ -32535,12 +32556,12 @@ section.mentorPage{
 }
 .discoverFeedSongRowPlay{
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
   min-width: 0;
-  padding: 10px 8px 10px 6px;
+  padding: 7px 8px 7px 0;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -32560,8 +32581,8 @@ section.mentorPage{
 }
 .discoverFeedSongArt{
   position: relative;
-  width: 56px;
-  height: 56px;
+  width: var(--feed-song-art-size, 61px);
+  height: var(--feed-song-art-size, 61px);
   border-radius: 8px;
   overflow: hidden;
   flex: none;

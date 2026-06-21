@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260621discoverMenuDots";
+const APP_BUILD = "20260621fixSyntaxBraces";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -7318,7 +7318,6 @@ function discoverFeedSongRowHtml(t, profMap, opts = {}) {
       ${menu}
     </div>`;
 }
-}
 
 function discoverFeedTemplateCardHtml(t, profMap) {
   const prof = resolveProfileForFeedCreator(t.userId, profMap);
@@ -7343,7 +7342,6 @@ function discoverFeedTemplateCardHtml(t, profMap) {
       </button>
       ${menu ? `<span class="discoverFeedTemplateMenuOuter">${menu}</span>` : ""}
     </div>`;
-}
 }
 
 function discoverFeedChallengeBlockHtml(c, tracks, profMap, opts = {}) {

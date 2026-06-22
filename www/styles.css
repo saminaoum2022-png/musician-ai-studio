@@ -27318,16 +27318,60 @@ body[data-route="activity"] .app{
   padding-right: 0;
 }
 .activityHead{
-  margin: 0 0 8px;
-  padding: 8px 4px 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  margin: 0 0 14px;
+  padding: 8px 4px 0;
+  border-bottom: 0;
 }
 .activityTitle{
-  margin: 0;
+  margin: 0 0 14px;
   color: #f8faff;
   font-size: clamp(22px, 5.5vw, 28px);
   font-weight: 800;
   letter-spacing: -0.03em;
+}
+.activityFilterTabs{
+  margin: 0 0 4px;
+  min-width: 0;
+}
+.activityFilterTabsTrack{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.activityFilterTab{
+  appearance: none;
+  border: 0;
+  border-radius: 10px;
+  padding: 9px 10px;
+  background: transparent;
+  color: rgba(223,231,251,0.58);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background 220ms ease,
+    color 220ms ease,
+    box-shadow 220ms ease,
+    transform 160ms ease;
+}
+.activityFilterTab.is-active{
+  color: #f8faff;
+  background: linear-gradient(135deg, rgba(35, 213, 171, 0.16) 0%, rgba(124, 92, 255, 0.22) 100%);
+  box-shadow:
+    0 0 0 1px rgba(124, 92, 255, 0.14) inset,
+    0 8px 20px rgba(35, 213, 171, 0.08);
+}
+.activityFilterTab:active{
+  transform: scale(0.98);
 }
 .activityStatus{
   margin: 0 0 8px;
@@ -27341,7 +27385,7 @@ body[data-route="activity"] .app{
 .activityFeed{
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 22px;
 }
 .activityDayGroup{
   display: flex;
@@ -27350,26 +27394,28 @@ body[data-route="activity"] .app{
 }
 .activityDayLabel{
   margin: 0;
-  padding: 0 4px 8px;
-  color: rgba(223,231,251,0.72);
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  padding: 0 4px 10px;
+  color: rgba(223,231,251,0.62);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 .activityDayRows{
   display: flex;
   flex-direction: column;
+  gap: 0;
 }
 .activityRow{
   position: relative;
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: flex-start;
+  gap: 14px;
   width: 100%;
   margin: 0;
-  padding: 10px 4px;
+  padding: 14px 4px;
   border: 0;
-  border-bottom: 1px solid rgba(255,255,255,0.07);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
   border-radius: 0;
   background: transparent;
   box-shadow: none;
@@ -27382,47 +27428,154 @@ body[data-route="activity"] .app{
 }
 .activityDayRows .activityRow:last-child{
   border-bottom: 0;
+  padding-bottom: 6px;
 }
 button.activityRow{
   appearance: none;
   font: inherit;
 }
 .activityRow:active{
-  background: rgba(255,255,255,0.04);
+  background: rgba(255,255,255,0.035);
 }
 .activityRow.isUnread{
-  background: rgba(255,255,255,0.03);
+  background: rgba(124,92,255,0.04);
 }
-.activityRow.isUnread .activityRowCopy{
-  font-weight: 650;
+.activityRow.isUnread .activityRowTitle{
+  color: #fff;
 }
 .activityRow--unavailable{
   opacity: 0.55;
   cursor: default;
 }
-.activityRow--unavailable .activityRowCopy{
+.activityRow--unavailable .activityRowTitle,
+.activityRow--unavailable .activityRowDesc{
   color: rgba(223,231,251,0.46);
+}
+.activityRow--unavailable .activityRowTitle{
   font-style: italic;
 }
 button.activityRow--unavailable{
   pointer-events: none;
 }
-.activityRowAvatarWrap{
+.activityRowArtWrap{
   position: relative;
   flex: 0 0 auto;
-  width: 44px;
-  height: 44px;
+  width: 56px;
+  height: 56px;
 }
-.activityRowAvatar{
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
+.activityRowArt{
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
   object-fit: cover;
-  background: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.06);
+  display: block;
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.18);
+}
+.activityRowArt--avatar{
+  border-radius: 10px;
+}
+.activityRowArt--placeholder{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(167,139,250,0.88);
+  font-size: 18px;
+  background:
+    linear-gradient(150deg, rgba(124,92,255,0.24), rgba(34,211,238,0.12)),
+    rgba(255,255,255,0.04);
+}
+.activityRowArt.activityAvatarSilhouette{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    linear-gradient(150deg, rgba(124,92,255,0.30), rgba(34,211,238,0.14)),
+    rgba(255,255,255,0.05);
+  color: rgba(232,238,247,0.62);
+  border: 1px solid rgba(255,255,255,0.10);
+}
+.activityRowArt.activityAvatarSilhouette svg{
+  width: 24px;
+  height: 24px;
   display: block;
 }
-/* Person silhouette for actors without a profile photo (activity rows +
-   notifications center) — replaces the old app-logo placeholder. */
+.activityRowBody{
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 1px;
+}
+.activityRowMetaTop{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.activityRowCategory{
+  flex: 1 1 auto;
+  min-width: 0;
+  color: rgba(94, 234, 212, 0.78);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.activityRow--chart_rank .activityRowCategory{
+  color: rgba(251, 191, 36, 0.88);
+}
+.activityRow--play_milestone .activityRowCategory{
+  color: rgba(94, 234, 212, 0.82);
+}
+.activityRow--social_like .activityRowCategory{
+  color: rgba(244, 114, 182, 0.86);
+}
+.activityRow--follow .activityRowCategory{
+  color: rgba(52, 211, 153, 0.86);
+}
+.activityRow--remix .activityRowCategory{
+  color: rgba(167, 139, 250, 0.9);
+}
+.activityRowTitle{
+  margin: 0;
+  color: rgba(248, 250, 255, 0.96);
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.28;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.activityRowDesc{
+  margin: 0;
+  color: rgba(223,231,251,0.56);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.activityRowTime{
+  flex: 0 0 auto;
+  color: rgba(223,231,251,0.34);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+/* Legacy aliases kept for notifications center + skeleton paths */
+.activityRowAvatarWrap{ position: relative; flex: 0 0 auto; width: 56px; height: 56px; }
+.activityRowAvatar{ width: 56px; height: 56px; border-radius: 10px; object-fit: cover; background: rgba(255,255,255,0.08); display: block; }
 .activityAvatarSilhouette{
   display: flex;
   align-items: center;
@@ -27438,7 +27591,6 @@ button.activityRow--unavailable{
   height: 24px;
   display: block;
 }
-/* Loading skeleton for the first Activity fetch. */
 .activityRowSkel{
   pointer-events: none;
   box-shadow: none;
@@ -27452,14 +27604,23 @@ button.activityRow--unavailable{
   display: block;
   height: 11px;
   width: 72%;
-  margin: 5px 0;
+  margin: 0;
   border-radius: 6px;
   background: rgba(255,255,255,0.07);
   animation: activitySkelPulse 1.3s ease-in-out infinite;
 }
+.activitySkelLine--cat{
+  width: 34%;
+  height: 8px;
+  margin-bottom: 2px;
+}
 .activitySkelLine.short{
-  width: 46%;
+  width: 52%;
   animation-delay: 120ms;
+}
+.activityRowSkel .activityRowArt{
+  border: 0;
+  box-shadow: none;
 }
 @keyframes activitySkelPulse{
   0%, 100% { opacity: 0.5; }
@@ -27467,47 +27628,52 @@ button.activityRow--unavailable{
 }
 .activityRowBadge{
   position: absolute;
-  right: -3px;
-  bottom: -3px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 4px;
+  right: -4px;
+  bottom: -4px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
   border-radius: 999px;
   border: 2px solid rgba(8,10,18,0.95);
-  background: rgba(10,14,24,0.92);
+  background: rgba(10,14,24,0.94);
   color: rgba(238,244,255,0.94);
-  font-size: 10px;
-  font-weight: 900;
   display: flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
   box-shadow:
-    0 6px 16px rgba(0,0,0,0.32),
-    inset 0 1px 0 rgba(255,255,255,0.2);
+    0 0 0 1px rgba(255,255,255,0.08),
+    0 8px 18px rgba(0,0,0,0.34),
+    0 0 14px rgba(124,92,255,0.18);
+}
+.activityRowBadge svg{
+  display: block;
 }
 .activityRowBadge--chart_rank{
-  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  background: linear-gradient(135deg, rgba(251,191,36,0.95), rgba(245,158,11,0.92));
   color: #1a1200;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.12),
+    0 8px 18px rgba(251,191,36,0.22);
 }
 .activityRowBadge--play_milestone{
-  background: linear-gradient(135deg, #22d3ee, #14b8a6);
+  background: linear-gradient(135deg, rgba(34,211,238,0.95), rgba(20,184,166,0.92));
   color: #042f2e;
 }
 .activityRowBadge--remix{
-  background: linear-gradient(135deg, #7c5cff, #6366f1);
+  background: linear-gradient(135deg, rgba(124,92,255,0.96), rgba(99,102,241,0.92));
   color: #fff;
 }
 .activityRowBadge--social_like{
-  background: linear-gradient(135deg, #ec4899, #f472b6);
+  background: linear-gradient(135deg, rgba(236,72,153,0.96), rgba(244,114,182,0.92));
   color: #fff;
 }
 .activityRowBadge--social_reply{
-  background: linear-gradient(135deg, #60a5fa, #3b82f6);
+  background: linear-gradient(135deg, rgba(96,165,250,0.96), rgba(59,130,246,0.92));
   color: #fff;
 }
 .activityRowBadge--follow{
-  background: linear-gradient(135deg, #34d399, #10b981);
+  background: linear-gradient(135deg, rgba(52,211,153,0.96), rgba(16,185,129,0.92));
   color: #042f2e;
 }
 .activityRowBadge--song_feedback,
@@ -27515,96 +27681,44 @@ button.activityRow--unavailable{
   background: linear-gradient(135deg, rgba(124,92,255,0.95), rgba(34,211,238,0.82));
   color: #fff;
 }
-.activityRowText{
-  flex: 1 1 auto;
-  min-width: 0;
-  margin: 0;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  line-height: 1.35;
-}
-.activityRowCopy{
-  flex: 1 1 auto;
-  min-width: 0;
-  color: rgba(232,238,247,0.88);
-  font-size: 14px;
-  font-weight: 450;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-}
-.activityRowTime{
-  flex: 0 0 auto;
-  color: rgba(223,231,251,0.42);
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-  padding-top: 1px;
-}
-.activityRow--chart_rank .activityRowAvatar,
-.activityRow--play_milestone .activityRowAvatar{
-  border-radius: 8px;
-}
-.activityRowLeadPlaceholder{
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  font-size: 18px;
-}
-.activityRowCover{
-  flex: 0 0 auto;
-  width: 44px;
-  height: 44px;
-  border-radius: 8px;
-  object-fit: cover;
-  border: 0;
-  background: rgba(255,255,255,0.06);
-}
-.activityRowCoverPlaceholder{
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(167,139,250,0.88);
-  font-size: 15px;
-  background: rgba(124,92,255,0.14);
-}
-.activitySkelCover{
-  width: 44px;
-  height: 44px;
-  border-radius: 8px;
-}
+.activityRowText{ display: none; }
+.activityRowCopy{ display: none; }
+.activityRowCover{ display: none; }
 .activityEmpty{
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 48px 24px;
+  gap: 10px;
+  padding: 56px 24px 48px;
   text-align: center;
 }
 .activityEmptyIcon{
-  width: 52px;
-  height: 52px;
+  width: 56px;
+  height: 56px;
   border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(124,92,255,0.14);
+  background: linear-gradient(145deg, rgba(124,92,255,0.18), rgba(35,213,171,0.12));
+  border: 1px solid rgba(255,255,255,0.08);
   color: rgba(167,139,250,0.95);
-  font-size: 22px;
+  box-shadow: 0 12px 32px rgba(124,92,255,0.12);
+}
+.activityEmptyIcon svg{
+  display: block;
 }
 .activityEmpty strong{
   color: #f3f6ff;
-  font-size: 16px;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 .activityEmpty span{
-  max-width: 280px;
-  color: rgba(223,231,251,0.55);
+  max-width: 300px;
+  color: rgba(223,231,251,0.52);
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 .activityLoadMore{
   display: flex;

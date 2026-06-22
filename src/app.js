@@ -21031,10 +21031,32 @@ function notificationIconForType(type) {
   return "•";
 }
 
+function activityTypeBadgeSvg(type) {
+  const t = String(type || "").trim();
+  if (t === "chart_rank") {
+    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M12 2.5 14.8 8l6.2.9-4.5 4.4 1.1 6.1L12 16.8 6.4 19.4l1.1-6.1L3 8.9 9.2 8 12 2.5Z"/></svg>`;
+  }
+  if (t === "social_like") {
+    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M12 21s-7.2-4.35-9.6-8.55C.6 9.15 2.1 5.7 5.4 5.1c1.8-.3 3.45.45 4.35 1.95.9-1.5 2.55-2.25 4.35-1.95 3.3.6 4.8 4.05 3 7.35C19.2 16.65 12 21 12 21Z"/></svg>`;
+  }
+  if (t === "remix") {
+    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3" fill="currentColor"/><circle cx="18" cy="16" r="3" fill="currentColor"/></svg>`;
+  }
+  if (t === "follow") {
+    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><circle cx="12" cy="8" r="3.5" fill="currentColor"/><path fill="currentColor" d="M4 20c.8-3.8 3.6-6 8-6s7.2 2.2 8 6H4Z"/></svg>`;
+  }
+  if (t === "play_milestone") {
+    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M20 12v5H4v-5H2v7h20v-7h-2Zm-6 .5-7-4v8l7-4ZM4 9h16V4H4v5Z"/></svg>`;
+  }
+  if (t === "social_reply") {
+    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5.4-4-10.9-11-11Z"/></svg>`;
+  }
+  return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M20 12v5H4v-5H2v7h20v-7h-2Zm-6 .5-7-4v8l7-4ZM4 9h16V4H4v5Z"/></svg>`;
+}
+
 function activityTypeBadgeHtml(type) {
   const t = String(type || "").trim() || "default";
-  const icon = notificationIconForType(t);
-  return `<span class="activityRowBadge activityRowBadge--${escapeHtml(t)}" aria-hidden="true">${escapeHtml(icon)}</span>`;
+  return `<span class="activityRowBadge activityRowBadge--${escapeHtml(t)}" aria-hidden="true">${activityTypeBadgeSvg(t)}</span>`;
 }
 
 function notificationTargetLabel(metadata) {
@@ -21172,7 +21194,15 @@ function renderNotificationRows(list) {
 }
 
 const ACTIVITY_FEED_SNAPSHOT_MS = 120000;
-const ACTIVITY_FEED_SNAPSHOT_KEY = "nabad_activity_feed_snap_v2";
+const ACTIVITY_FEED_SNAPSHOT_KEY = "nabad_activity_feed_snap_v3";
+const ACTIVITY_FILTER_TAB_KEY = "nabad_activity_filter_tab_v1";
+let _activityFilterTab = (() => {
+  try {
+    const saved = String(sessionStorage.getItem(ACTIVITY_FILTER_TAB_KEY) || "").trim();
+    if (["all", "social", "achievements"].includes(saved)) return saved;
+  } catch {}
+  return "all";
+})();
 let _activityFeedSnapshot = null;
 
 function hydrateActivityFeedSnapshotFromStorage() {
@@ -21201,6 +21231,7 @@ function paintActivityFeedSnapshotIfFresh() {
   if (!snap?.html || Date.now() - snap.at >= ACTIVITY_FEED_SNAPSHOT_MS) return false;
   if (!els.activityFeed) return false;
   els.activityFeed.innerHTML = snap.html;
+  paintActivityFilterTabsActive();
   if (els.activityStatus) {
     els.activityStatus.hidden = true;
     els.activityStatus.textContent = "";
@@ -21225,17 +21256,32 @@ function activityDayBucket(ts) {
   if (Number.isNaN(d.getTime())) return "earlier";
   const now = new Date();
   const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startYesterday = new Date(startToday);
-  startYesterday.setDate(startYesterday.getDate() - 1);
   if (d >= startToday) return "today";
-  if (d >= startYesterday) return "yesterday";
   return "earlier";
 }
 
 function activityDayLabel(bucket) {
-  if (bucket === "today") return "Today";
-  if (bucket === "yesterday") return "Yesterday";
-  return "Earlier";
+  return bucket === "today" ? "Today" : "Earlier";
+}
+
+function activityNotificationMatchesFilter(n, tab = _activityFilterTab) {
+  if (tab === "all") return true;
+  const t = String(n?.type || "").trim();
+  if (tab === "achievements") return t === "chart_rank" || t === "play_milestone";
+  if (tab === "social") {
+    return ["follow", "remix", "social_like", "social_reply", "public_song", "song_feedback"].includes(t);
+  }
+  return true;
+}
+
+function paintActivityFilterTabsActive(tab = _activityFilterTab) {
+  const root = document.getElementById("activityFilterTabs");
+  if (!root) return;
+  root.querySelectorAll("[data-activity-filter]").forEach((btn) => {
+    const active = String(btn.getAttribute("data-activity-filter") || "") === tab;
+    btn.classList.toggle("is-active", active);
+    btn.setAttribute("aria-selected", active ? "true" : "false");
+  });
 }
 
 /** Avatar for an activity/notification row. Real photo when the actor has
@@ -21276,12 +21322,14 @@ function activityRowLeadVisualHtml(n, cls) {
 function activitySkeletonHtml(count = 4) {
   return Array.from({ length: count }, () => `
     <div class="activityRow activityRowSkel" aria-hidden="true">
-      <span class="activityRowAvatar activitySkelBlock"></span>
-      <p class="activityRowText">
+      <span class="activityRowArtWrap activitySkelBlock">
+        <span class="activityRowArt activitySkelBlock"></span>
+      </span>
+      <div class="activityRowBody">
+        <span class="activitySkelLine activitySkelLine--cat"></span>
         <span class="activitySkelLine"></span>
         <span class="activitySkelLine short"></span>
-      </p>
-      <span class="activityRowCover activitySkelBlock activitySkelCover" aria-hidden="true"></span>
+      </div>
     </div>`).join("");
 }
 
@@ -21645,23 +21693,128 @@ async function openActivityTargetFromHref(href) {
   location.hash = raw.startsWith("#") ? raw : `#${raw}`;
 }
 
-function activityItemLineText(n, msg) {
+function activityRowArtworkHtml(n) {
   const t = String(n?.type || "").trim();
-  if (t === "chart_rank") {
-    const rank = Number(n?._groupBestRank || n?.metadata?.rank || 0);
-    const title = String(n?.metadata?.song_title || "Your song").trim();
-    return rank ? `${title} hit #${rank} on Top Songs this week` : `${title} charted on Top Songs this week`;
+  const preferSong = activityRowUsesSongLeadVisual(n) || activityNotificationHasSongCover(n);
+  const songUrl = activitySongCoverUrl(n);
+  if (preferSong && songUrl) {
+    return `<img class="activityRowArt" src="${escapeHtml(songUrl)}" alt="" loading="lazy" decoding="async" />`;
   }
-  const title = String(msg?.title || "").trim();
-  const body = String(msg?.body || "").trim();
-  if (!body) return title;
-  return `${title} — ${body}`;
+  if (t === "follow" || t === "social_like" || t === "social_reply" || t === "public_song" || t === "remix") {
+    const actorArt = String(n?.metadata?.actor_avatar || "").trim();
+    if (isRealUserAvatarUrl(actorArt)) {
+      return `<img class="activityRowArt activityRowArt--avatar" src="${escapeHtml(normalizeProfileAvatarForImg(actorArt))}" alt="" loading="lazy" decoding="async" />`;
+    }
+    return activityActorAvatarHtml(n, "activityRowArt activityRowArt--avatar");
+  }
+  if (songUrl) {
+    return `<img class="activityRowArt" src="${escapeHtml(songUrl)}" alt="" loading="lazy" decoding="async" />`;
+  }
+  if (activityRowUsesSongLeadVisual(n)) {
+    return `<span class="activityRowArt activityRowArt--placeholder" aria-hidden="true">♪</span>`;
+  }
+  return activityActorAvatarHtml(n, "activityRowArt activityRowArt--avatar");
+}
+
+function activityItemDisplayParts(n, msg) {
+  const t = String(n?.type || "").trim();
+  const meta = n?.metadata || {};
+  const username = String(meta.actor_username || "").replace(/^@/, "").trim();
+  const gc = Number(n?._groupCount || 0);
+
+  if (t === "chart_rank") {
+    const rank = Number(n?._groupBestRank || meta.rank || 0);
+    const title = String(meta.song_title || "Your song").trim();
+    return {
+      category: "Top Songs",
+      title,
+      description: rank ? `Reached #${rank} on Top Songs this week` : "Charted on Top Songs this week",
+    };
+  }
+  if (t === "play_milestone") {
+    const count = Number(meta.play_count || 0);
+    const title = String(meta.song_title || "Your song").trim();
+    return {
+      category: "Milestone",
+      title,
+      description: count ? `${formatStatCount(count)} plays and counting` : "Your song is picking up steam",
+    };
+  }
+  if (t === "social_like") {
+    const songTitle = String(meta.target_title || meta.song_title || "").trim();
+    if (gc > 1) {
+      return {
+        category: "New Like",
+        title: `${gc} new likes`,
+        description: songTitle || "On one of your songs",
+      };
+    }
+    return {
+      category: "New Like",
+      title: username ? `${username} liked your song` : "Someone liked your song",
+      description: songTitle || "Open to see what they enjoyed",
+    };
+  }
+  if (t === "social_reply") {
+    const preview = String(meta.reply_preview || msg.body || "").trim();
+    return {
+      category: "New Reply",
+      title: username ? `${username} replied` : "New reply",
+      description: preview ? `"${preview.slice(0, 100)}${preview.length > 100 ? "…" : ""}"` : (msg.body || "Open the thread"),
+    };
+  }
+  if (t === "follow") {
+    return {
+      category: "New Follower",
+      title: username ? `${username} started following you` : "Someone started following you",
+      description: "They can see your public songs in their feed",
+    };
+  }
+  if (t === "remix") {
+    const remix = String(meta.remix_title || "a new remix").trim();
+    const original = String(meta.original_title || "your song").trim();
+    return {
+      category: "Remix Created",
+      title: username ? `${username} created a remix` : "Someone created a remix",
+      description: remix && remix !== original ? remix : `Based on ${original}`,
+    };
+  }
+  if (t === "public_song") {
+    if (gc > 1) {
+      const titles = (n._groupTitles || []).slice(0, 2).join(" · ");
+      const more = (n._groupTitles || []).length > 2 ? ` +${n._groupTitles.length - 2} more` : "";
+      return {
+        category: "New Song",
+        title: username ? `${username} published ${gc} songs` : `${gc} new songs`,
+        description: titles ? `${titles}${more}` : "From someone you follow",
+      };
+    }
+    const songTitle = String(meta.song_title || "a new song").trim();
+    return {
+      category: "New Song",
+      title: username ? `${username} published a song` : "A creator published a song",
+      description: songTitle,
+    };
+  }
+  if (t === "song_feedback") {
+    const songTitle = String(meta.song_title || "your song").trim();
+    const label = String(meta.feedback_label || "Private feedback").trim();
+    return {
+      category: "Feedback",
+      title: username ? `${username} sent feedback` : "New feedback",
+      description: `${label} · ${songTitle}`,
+    };
+  }
+  return {
+    category: "Activity",
+    title: String(msg?.title || "Update").trim(),
+    description: String(msg?.body || "").trim(),
+  };
 }
 
 function activityItemHtml(n) {
   const msg = notificationMessage(n);
   const unavailable = activityNotificationIsUnavailable(n);
-  // Grouped rows get digest copy instead of repeating the same line N times.
   const gc = Number(n?._groupCount || 0);
   if (gc > 1) {
     const username = String(n?.metadata?.actor_username || "").replace(/^@/, "").trim();
@@ -21678,7 +21831,9 @@ function activityItemHtml(n) {
       msg.body = `${gc} likes on this.`;
     }
   }
-  const line = unavailable ? "This post is not available anymore." : activityItemLineText(n, msg);
+  const parts = unavailable
+    ? { category: "Unavailable", title: "This post is not available anymore", description: "It may have been removed or made private." }
+    : activityItemDisplayParts(n, msg);
   const unread = !n?.read_at;
   const time = relativeTime(new Date(n?.created_at || Date.now()).getTime());
   const href = unavailable ? "" : notificationActivityHref(n);
@@ -21689,35 +21844,65 @@ function activityItemHtml(n) {
   const dataHref = href
     ? ` data-activity-href="${escapeHtml(href)}"${notifId ? ` data-activity-id="${escapeHtml(notifId)}"` : ""}`
     : "";
+  const descHtml = parts.description
+    ? `<p class="activityRowDesc">${escapeHtml(parts.description)}</p>`
+    : "";
   return `
     <${tag} class="activityRow activityRow--${escapeHtml(notifType)}${unread ? " isUnread" : ""}${unavailable ? " activityRow--unavailable" : ""}"${typeAttr}${dataHref}>
-      <div class="activityRowAvatarWrap">
-        ${activityRowLeadVisualHtml(n, "activityRowAvatar")}
+      <div class="activityRowArtWrap">
+        ${activityRowArtworkHtml(n)}
         ${activityTypeBadgeHtml(notifType)}
       </div>
-      <p class="activityRowText">
-        <span class="activityRowCopy">${escapeHtml(line)}</span>
-        <span class="activityRowTime">${escapeHtml(time)}</span>
-      </p>
-      ${activitySongCoverHtml(n)}
+      <div class="activityRowBody">
+        <div class="activityRowMetaTop">
+          <span class="activityRowCategory">${escapeHtml(parts.category)}</span>
+          <span class="activityRowTime">${escapeHtml(time)}</span>
+        </div>
+        <strong class="activityRowTitle">${escapeHtml(parts.title)}</strong>
+        ${descHtml}
+      </div>
     </${tag}>`;
+}
+
+function activityEmptyHtml(filter = _activityFilterTab) {
+  if (filter === "social") {
+    return `
+      <div class="activityEmpty">
+        <div class="activityEmptyIcon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M12 21s-7.2-4.35-9.6-8.55C.6 9.15 2.1 5.7 5.4 5.1c1.8-.3 3.45.45 4.35 1.95.9-1.5 2.55-2.25 4.35-1.95 3.3.6 4.8 4.05 3 7.35C19.2 16.65 12 21 12 21Z"/></svg></div>
+        <strong>No social activity yet</strong>
+        <span>Likes, followers, remixes, and replies will show up here.</span>
+      </div>`;
+  }
+  if (filter === "achievements") {
+    return `
+      <div class="activityEmpty">
+        <div class="activityEmptyIcon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M12 2.5 14.8 8l6.2.9-4.5 4.4 1.1 6.1L12 16.8 6.4 19.4l1.1-6.1L3 8.9 9.2 8 12 2.5Z"/></svg></div>
+        <strong>No achievements yet</strong>
+        <span>Chart rankings and play milestones will appear here.</span>
+      </div>`;
+  }
+  return `
+    <div class="activityEmpty">
+      <div class="activityEmptyIcon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+      <strong>No activity yet</strong>
+      <span>Your likes, rankings, followers and remix activity will appear here.</span>
+    </div>`;
 }
 
 function renderActivityFeedFromState() {
   const feed = els.activityFeed;
   if (!feed) return;
-  const list = _activityFeedState.items;
+  paintActivityFilterTabsActive();
+  const list = _activityFeedState.items.filter((n) => activityNotificationMatchesFilter(n));
   if (!list.length) {
-    feed.innerHTML = `
-      <div class="activityEmpty">
-        <div class="activityEmptyIcon" aria-hidden="true">♪</div>
-        <strong>No activity yet</strong>
-        <span>When people follow you, like your songs, reply to posts, or you hit play milestones, it shows up here.</span>
-      </div>`;
+    feed.innerHTML = _activityFeedState.items.length
+      ? activityEmptyHtml(_activityFilterTab)
+      : activityEmptyHtml("all");
+    if (!_activityFeedState.items.length) persistActivityFeedSnapshot(feed.innerHTML);
     return;
   }
-  const buckets = ["today", "yesterday", "earlier"];
-  const grouped = { today: [], yesterday: [], earlier: [] };
+  const buckets = ["today", "earlier"];
+  const grouped = { today: [], earlier: [] };
   list.forEach((n) => {
     grouped[activityDayBucket(new Date(n?.created_at || 0).getTime())].push(n);
   });
@@ -21837,6 +22022,21 @@ async function enterActivityRoute({ reset = false } = {}) {
 function bindActivityPageOnce() {
   if (_activityFeedState.bound) return;
   _activityFeedState.bound = true;
+  const filterRoot = document.getElementById("activityFilterTabs");
+  if (filterRoot && filterRoot.dataset.boundActivityFilters !== "1") {
+    filterRoot.dataset.boundActivityFilters = "1";
+    filterRoot.addEventListener("click", (ev) => {
+      const tabBtn = ev.target?.closest?.("[data-activity-filter]");
+      if (!tabBtn || !filterRoot.contains(tabBtn)) return;
+      ev.preventDefault();
+      const tab = String(tabBtn.getAttribute("data-activity-filter") || "").trim();
+      if (!tab || tab === _activityFilterTab) return;
+      haptic("light");
+      _activityFilterTab = tab;
+      try { sessionStorage.setItem(ACTIVITY_FILTER_TAB_KEY, tab); } catch {}
+      renderActivityFeedFromState();
+    });
+  }
   els.activityFeed?.addEventListener("click", (ev) => {
     const row = ev.target.closest("[data-activity-href]");
     if (!row) return;

@@ -1122,6 +1122,13 @@
         <section class="activityPage wide" data-route="activity" id="activityPage">
           <header class="activityHead">
             <h2 class="activityTitle" id="activityTitle">Activity</h2>
+            <nav id="activityFilterTabs" class="activityFilterTabs" aria-label="Activity filters">
+              <div class="activityFilterTabsTrack" role="tablist">
+                <button type="button" class="activityFilterTab is-active" role="tab" aria-selected="true" data-activity-filter="all">All</button>
+                <button type="button" class="activityFilterTab" role="tab" aria-selected="false" data-activity-filter="social">Social</button>
+                <button type="button" class="activityFilterTab" role="tab" aria-selected="false" data-activity-filter="achievements">Achievements</button>
+              </div>
+            </nav>
           </header>
           <div id="activityStatus" class="activityStatus" role="status" aria-live="polite" hidden></div>
           <div id="activityFeed" class="activityFeed" aria-label="Activity feed"></div>

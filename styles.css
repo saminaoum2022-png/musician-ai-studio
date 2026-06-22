@@ -27782,11 +27782,9 @@ body[data-route="messages-thread"]{
   background: var(--bg);
   overscroll-behavior: none;
 }
-html.is-web-shell body[data-route="messages-thread"].messagesThreadKeyboardOpen{
-  /* top/height set inline from visualViewport — keep width pinned while shell shrinks. */
-  width: 100%;
-  left: 0;
-  right: 0;
+html.is-web-shell body[data-route="messages-thread"]{
+  height: 100dvh;
+  height: 100svh;
 }
 html:has(body[data-route="messages-thread"]){
   overflow: hidden;
@@ -27823,6 +27821,14 @@ body[data-route="messages-thread"] main.grid{
       env(safe-area-inset-top, 0px)
       0
       0;
+  }
+  html.is-web-shell body[data-route="messages-thread"] > .app{
+    padding:
+      env(safe-area-inset-top, 0px)
+      0
+      0 !important;
+    height: 100%;
+    min-height: 0;
   }
 }
 body[data-route="messages"] .app,
@@ -28243,6 +28249,9 @@ body[data-route="messages"]{
   padding: 4px 2px 2px;
   -webkit-overflow-scrolling: touch;
 }
+html.is-web-shell body[data-route="messages-thread"] .messagesThreadMount{
+  padding-bottom: calc(var(--messages-composer-h, 68px) + 6px);
+}
 .messagesThreadLoading,
 .messagesThreadEmpty{
   padding: 48px 16px 32px;
@@ -28499,6 +28508,17 @@ body[data-route="messages-thread"] .messagesComposer{
   width: 100%;
   margin: 0;
   box-sizing: border-box;
+}
+html.is-web-shell body[data-route="messages-thread"] .messagesComposer{
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
 }
 body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesComposer{
   padding-bottom: 8px;

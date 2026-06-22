@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260623dmWebKbFix";
+const APP_BUILD = "20260623dmWebComposerFix";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -20841,9 +20841,7 @@ let _messagesThreadKeyboardOpen = false;
 function clearMessagesThreadComposerInset() {
   document.body.classList.remove("messagesThreadKeyboardOpen");
   _messagesThreadKeyboardOpen = false;
-  document.body.style.removeProperty("top");
-  document.body.style.removeProperty("height");
-  document.body.style.removeProperty("bottom");
+  document.querySelector(".messagesComposer")?.style.removeProperty("bottom");
 }
 
 function measureMessagesKeyboardInset() {
@@ -20852,8 +20850,6 @@ function measureMessagesKeyboardInset() {
   const layoutH = document.documentElement.clientHeight;
   const visibleBottom = vv.offsetTop + vv.height;
   const layoutGap = Math.max(0, Math.round(layoutH - visibleBottom));
-  // With interactive-widget=resizes-content the layout viewport shrinks with the
-  // keyboard, so layoutGap can read ~0 even while the keyboard is open.
   const windowGap = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
   return Math.max(layoutGap, windowGap);
 }
@@ -20871,28 +20867,26 @@ function isMessagesThreadKeyboardOpen() {
   return window.matchMedia("(max-width: 720px)").matches;
 }
 
-function syncMessagesThreadWebViewportShell(keyboardOpen) {
+function updateMessagesComposerReserve() {
+  const composer = document.querySelector(".messagesComposer");
+  if (!composer) return;
+  const h = Math.ceil(composer.getBoundingClientRect().height);
+  if (h > 0) {
+    document.documentElement.style.setProperty("--messages-composer-h", `${h}px`);
+  }
+}
+
+function syncMessagesThreadWebComposerPosition(keyboardOpen) {
   if (isNativeShell()) return;
-  const vv = window.visualViewport;
-  if (!vv || !keyboardOpen) {
-    document.body.style.removeProperty("top");
-    document.body.style.removeProperty("height");
-    document.body.style.removeProperty("bottom");
+  const composer = document.querySelector(".messagesComposer");
+  if (!composer) return;
+  if (!keyboardOpen) {
+    composer.style.removeProperty("bottom");
     return;
   }
-  const shellTop = Math.max(0, Math.round(vv.offsetTop));
-  const shellH = Math.round(vv.height);
-  const layoutH = document.documentElement.clientHeight;
-  const needsShellSync = shellTop > 0 || layoutH > shellH + shellTop + 8;
-  if (needsShellSync) {
-    document.body.style.top = `${shellTop}px`;
-    document.body.style.height = `${shellH}px`;
-    document.body.style.bottom = "auto";
-  } else {
-    document.body.style.removeProperty("top");
-    document.body.style.removeProperty("height");
-    document.body.style.bottom = "0";
-  }
+  const inset = measureMessagesKeyboardInset();
+  if (inset > 6) composer.style.bottom = `${inset}px`;
+  else composer.style.removeProperty("bottom");
 }
 
 function syncMessagesThreadComposerInset() {
@@ -20905,7 +20899,8 @@ function syncMessagesThreadComposerInset() {
     _messagesThreadKeyboardOpen = keyboardOpen;
     document.body.classList.toggle("messagesThreadKeyboardOpen", keyboardOpen);
   }
-  syncMessagesThreadWebViewportShell(keyboardOpen);
+  syncMessagesThreadWebComposerPosition(keyboardOpen);
+  updateMessagesComposerReserve();
   if (keyboardOpen) {
     scheduleMessagesThreadScrollToBottom({ force: true });
   }
@@ -20932,6 +20927,7 @@ function wireMessagesThreadComposerResizeOnce() {
   if (!composer || typeof ResizeObserver !== "function") return;
   const ro = new ResizeObserver(() => {
     if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
+    updateMessagesComposerReserve();
     scrollMessagesMountToBottom({ force: _messagesThreadNeedsInitialScroll });
   });
   ro.observe(composer);
@@ -22616,6 +22612,7 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   syncMessagesThreadComposerReady();
   wireMessagesThreadKeyboardOnce();
   syncMessagesThreadComposerInset();
+  updateMessagesComposerReserve();
   scheduleMessagesThreadScrollToBottom({ force: true });
   beginMessagesThreadEnterTransition();
   if (_chatHeaderUser?.userId) void loadMessagesThreadPartnerMeta(_chatHeaderUser.userId);

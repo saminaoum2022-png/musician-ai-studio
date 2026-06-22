@@ -1,4 +1,4 @@
-// Dynamic share landing page for Hub posts and library tracks (`user_songs`).
+// Dynamic share landing page for library tracks (`user_songs`).
 // Returns HTML with Open Graph + Twitter Card meta so WhatsApp/iMessage/etc.
 // unfurl cover art, title, and creator — not a raw .mp3 URL.
 //
@@ -55,30 +55,6 @@ async function supaGet(path, { signal } = {}) {
   }
 }
 
-async function fetchHubPost(id, signal) {
-  const cols = [
-    "id",
-    "title",
-    "cover_url",
-    "song_url",
-    "creator_username",
-    "creator_avatar",
-  ].join(",");
-  const row = await supaGet(
-    `hub_posts?select=${encodeURIComponent(cols)}&id=eq.${encodeURIComponent(id)}&limit=1`,
-    { signal },
-  );
-  if (!row) return null;
-  return {
-    kind: "hub",
-    title: row.title || "",
-    cover_url: row.cover_url || "",
-    song_url: row.song_url || "",
-    creator_username: row.creator_username || "",
-    creator_avatar: row.creator_avatar || "",
-  };
-}
-
 async function fetchLibraryTrack(id, signal) {
   const cols = ["id", "title", "art_url", "song_url", "user_id"].join(",");
   const row = await supaGet(
@@ -112,8 +88,6 @@ async function fetchShareRecord(id) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 4500);
   try {
-    const hub = await fetchHubPost(id, ctrl.signal);
-    if (hub) return hub;
     return await fetchLibraryTrack(id, ctrl.signal);
   } catch {
     return null;
@@ -124,9 +98,6 @@ async function fetchShareRecord(id) {
 
 function shareRedirectFor(record, id) {
   if (!id) return "/#/generate";
-  if (record?.kind === "hub") {
-    return `/#/hub?post=${encodeURIComponent(id)}`;
-  }
   return `/#/player?track=${encodeURIComponent(id)}`;
 }
 

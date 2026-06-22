@@ -623,6 +623,32 @@ async function insertNotification({ userId, type, actorUserId, entityId, metadat
   return Boolean(ins.ok);
 }
 
+const CHART_NOTIFY_MAX_RANK = 5;
+const _chartNotifyInflight = new Map();
+
+async function maybeNotifyChartRank({ userId, entityId, metadata }) {
+  const rank = Number(metadata?.rank || 0);
+  if (!rank || rank > CHART_NOTIFY_MAX_RANK) return;
+  const lockKey = String(entityId || "").trim();
+  if (!lockKey) return;
+  if (_chartNotifyInflight.has(lockKey)) return _chartNotifyInflight.get(lockKey);
+  const job = (async () => {
+    try {
+      if (await notificationExists({ userId, type: "chart_rank", entityId: lockKey })) return;
+      await insertNotification({
+        userId,
+        type: "chart_rank",
+        entityId: lockKey,
+        metadata,
+      });
+    } finally {
+      _chartNotifyInflight.delete(lockKey);
+    }
+  })();
+  _chartNotifyInflight.set(lockKey, job);
+  return job;
+}
+
 async function followersForUser(userId) {
   const uid = cleanUserId(userId);
   if (!uid) return [];
@@ -836,15 +862,13 @@ async function createRemixNotification({
     const song = Array.isArray(songR.data) && songR.data[0] ? songR.data[0] : null;
     owner = cleanUserId(song?.user_id);
     originalTitle = String(song?.title || originalTitle).trim() || originalTitle;
-  }
-
-  if (!owner && originalId) {
-    const r = await svcFetch(
-      `hub_posts?select=id,title,creator_username,meta&id=eq.${encodeURIComponent(originalId)}&limit=1`,
+  } else if (originalId) {
+    const songR = await svcFetch(
+      `user_songs?select=id,user_id,title,art_url&id=eq.${encodeURIComponent(originalId)}&limit=1`,
     );
-    const original = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
-    owner = cleanUserId(original?.meta?.creatorUserId);
-    originalTitle = String(original?.title || originalTitle).trim() || originalTitle;
+    const song = Array.isArray(songR.data) && songR.data[0] ? songR.data[0] : null;
+    owner = cleanUserId(song?.user_id);
+    originalTitle = String(song?.title || originalTitle).trim() || originalTitle;
   }
 
   const actor = cleanUserId(actorUserId);
@@ -1092,16 +1116,14 @@ async function handleGet(req, res, user) {
     monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
     const weekKey = monday.toISOString().slice(0, 10);
     // Chart JSON must return fast; rank notifications are best-effort after.
+    // Only notify top 5 — lower ranks (6–10) spam Activity when Discover reloads the chart.
     void Promise.all(
-      chart.map(async (e) => {
-        try {
-          if (!e.userId) return;
-          const entityId = `chart:${weekKey}:${e.songId}`;
-          if (await notificationExists({ userId: e.userId, type: "chart_rank", entityId })) return;
-          await insertNotification({
+      chart
+        .filter((e) => e.rank <= CHART_NOTIFY_MAX_RANK)
+        .map((e) =>
+          maybeNotifyChartRank({
             userId: e.userId,
-            type: "chart_rank",
-            entityId,
+            entityId: `chart:${weekKey}:${e.songId}`,
             metadata: {
               song_id: e.songId,
               song_title: e.title,
@@ -1110,9 +1132,8 @@ async function handleGet(req, res, user) {
               weekly_plays: e.weeklyPlays,
               week_key: weekKey,
             },
-          });
-        } catch {}
-      }),
+          }),
+        ),
     ).catch(() => {});
     return sendJson(res, 200, { ok: true, weekKey, chart });
   }

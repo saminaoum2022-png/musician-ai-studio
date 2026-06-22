@@ -862,15 +862,13 @@ async function createRemixNotification({
     const song = Array.isArray(songR.data) && songR.data[0] ? songR.data[0] : null;
     owner = cleanUserId(song?.user_id);
     originalTitle = String(song?.title || originalTitle).trim() || originalTitle;
-  }
-
-  if (!owner && originalId) {
-    const r = await svcFetch(
-      `hub_posts?select=id,title,creator_username,meta&id=eq.${encodeURIComponent(originalId)}&limit=1`,
+  } else if (originalId) {
+    const songR = await svcFetch(
+      `user_songs?select=id,user_id,title,art_url&id=eq.${encodeURIComponent(originalId)}&limit=1`,
     );
-    const original = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
-    owner = cleanUserId(original?.meta?.creatorUserId);
-    originalTitle = String(original?.title || originalTitle).trim() || originalTitle;
+    const song = Array.isArray(songR.data) && songR.data[0] ? songR.data[0] : null;
+    owner = cleanUserId(song?.user_id);
+    originalTitle = String(song?.title || originalTitle).trim() || originalTitle;
   }
 
   const actor = cleanUserId(actorUserId);

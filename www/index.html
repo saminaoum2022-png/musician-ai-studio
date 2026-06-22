@@ -1214,9 +1214,48 @@
             <div class="discoveryStudioTitles">
               <h2 class="discoveryStudioH2 appScreenTitle">Friends</h2>
             </div>
+            <button type="button" class="discoveryRefreshBtn friendsMessagesBtn" id="friendsMessagesBtn" aria-label="Messages" hidden>
+              <svg class="discoveryRefreshIco" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                <path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z"/>
+              </svg>
+              <span class="friendsMessagesBadge" id="friendsMessagesBadge" hidden aria-hidden="true"></span>
+            </button>
           </header>
           <div id="discoveryFollowingStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
           <div id="discoveryFollowingList" class="followActStack" hidden></div>
+        </section>
+
+        <section class="messagesPage wide" data-route="messages" id="messagesPage">
+          <header class="messagesHead">
+            <button type="button" class="messagesBackBtn" id="messagesBackBtn" aria-label="Back to Friends">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M15 6 9 12l6 6"/></svg>
+            </button>
+            <div class="messagesHeadCopy">
+              <h2 class="messagesTitle appScreenTitle">Messages</h2>
+              <p class="messagesLead">Chat with creators you follow.</p>
+            </div>
+          </header>
+          <div id="messagesStatus" class="messagesStatus" role="status" aria-live="polite" hidden></div>
+          <div id="messagesInboxMount" class="messagesInboxMount" aria-label="Message threads"></div>
+        </section>
+
+        <section class="messagesThreadPage wide" data-route="messages-thread" id="messagesThreadPage">
+          <header class="messagesThreadHead">
+            <button type="button" class="messagesBackBtn" id="messagesThreadBackBtn" aria-label="Back to Messages">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M15 6 9 12l6 6"/></svg>
+            </button>
+            <div class="messagesThreadHeadMeta">
+              <span class="messagesThreadAvatar" id="messagesThreadAvatar" aria-hidden="true"></span>
+              <strong class="messagesThreadHandle" id="messagesThreadHandle">@creator</strong>
+            </div>
+          </header>
+          <div id="messagesThreadMount" class="messagesThreadMount" aria-live="polite"></div>
+          <footer class="messagesComposer">
+            <textarea id="messagesComposerInput" class="messagesComposerInput" rows="1" maxlength="500" placeholder="Write a message…" aria-label="Message"></textarea>
+            <button type="button" class="messagesComposerSend" id="messagesComposerSend" aria-label="Send message">
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3.4 20.6 22 12 3.4 3.4l2.8 7.2L17 12l-10.8 1.4-2.8 7.2Z"/></svg>
+            </button>
+          </footer>
         </section>
 
         <section class="discoverPlaylistPage wide" data-route="discover-playlist">

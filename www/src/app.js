@@ -64,6 +64,9 @@ const HUB_FEATURE_ENABLED = false;
 /** Retired — text/voice status posts (UPDATE, SONG REQUEST, etc.) are no longer shown or created. */
 const STATUS_POSTS_FEATURE_ENABLED = false;
 
+/** Direct messages — inbox from Friends header; mutual follow = chat, else request (v1 text). */
+const MESSAGES_FEATURE_ENABLED = true;
+
 (() => {
   const f = document.getElementById("footerBuild");
   if (f) f.textContent = `Build ${APP_BUILD}`;
@@ -2825,7 +2828,9 @@ function syncRoutePanelVisibility(wanted) {
       || (route === "generate" && link === "challenges")
       || (route === "mashup" && link === "challenges")
       || (route === "vocal" && link === "challenges");
-    a.classList.toggle("active", active);
+    a.classList.toggle("active", active
+      || (route === "messages" && link === "friends")
+      || (route === "messages-thread" && link === "friends"));
   });
 }
 
@@ -2868,6 +2873,7 @@ function tabBarRouteKey(route = "") {
   const r = String(route || "").trim();
   if (r === "generate" || r === "mashup" || r === "vocal") return "challenges";
   if (r === "discover-playlist") return "discover";
+  if (r === "messages" || r === "messages-thread") return "friends";
   return r;
 }
 
@@ -2954,6 +2960,7 @@ function applyRoute({ passGen } = {}) {
   let route = rawRoute.split(/[?#&]/)[0].trim();
   const rawRouteQuery = String(rawRoute.split("?")[1] || "").split("#")[0];
   let pendingDiscoverPlaylistSlug = "";
+  let pendingMessagesThreadId = "";
   const playlistRouteMatch = route.match(/^discover\/playlist\/([a-z0-9_-]+)/i);
   if (playlistRouteMatch) {
     pendingDiscoverPlaylistSlug = decodeURIComponent(String(playlistRouteMatch[1] || "")).trim();
@@ -2994,9 +3001,17 @@ function applyRoute({ passGen } = {}) {
       pendingPublicUserId = "";
     }
   }
+  if (route === "messages-thread") {
+    try {
+      pendingMessagesThreadId = String(new URLSearchParams(rawRouteQuery).get("thread") || "").trim();
+    } catch {
+      pendingMessagesThreadId = "";
+    }
+  }
   const allowedRoutes = new Set([
     "intro", "onboarding", "music-preferences", "start", "auth", "generate",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
+    ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : []),
     "settings", "profile", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
   ]);
   const onboardingParsed = parseOnboardingRoute(route);
@@ -3078,10 +3093,16 @@ function applyRoute({ passGen } = {}) {
       history.replaceState(null, "", `#/${wanted}`);
     } catch {}
   }
+  if (!MESSAGES_FEATURE_ENABLED && (normalized === "messages" || normalized === "messages-thread")) {
+    wanted = isLoggedIn ? "friends" : (shouldSkipIntroOrOnboardingRoute() ? "auth" : "intro");
+    try {
+      history.replaceState(null, "", `#/${wanted}`);
+    } catch {}
+  }
   // Public profile is intentionally readable without auth so share-link
   // visitors don't hit a wall before discovering the rest of the product.
   const sharedTrackId = parseSharedTrackIdFromLocation();
-  const protectedRoutes = new Set(["generate", "profile", "friends", "activity", "mashup", "player", "vocal", "stems", "advanced", "credits", "sounds"]);
+  const protectedRoutes = new Set(["generate", "profile", "friends", "activity", "mashup", "player", "vocal", "stems", "advanced", "credits", "sounds", ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : [])]);
   if (!isLoggedIn && protectedRoutes.has(wanted)) {
     if (wanted === "player" && sharedTrackId) {
       // Listen-only share links — do not bounce guests to sign-in.
@@ -3122,6 +3143,9 @@ function applyRoute({ passGen } = {}) {
     } catch {}
   }
   const prevRoute = document.body.getAttribute("data-route") || "";
+  if (prevRoute === "messages-thread" && wanted !== "messages-thread") {
+    stopMessagesThreadPoll();
+  }
   if (wanted === "challenges" && hasActiveCreateSession()) {
     wanted = "generate";
     try {
@@ -3176,8 +3200,12 @@ function applyRoute({ passGen } = {}) {
   } catch {}
   if (isLoggedIn) {
     void refreshNotificationsUnreadBadge({ force: wanted === "friends" || wanted === "settings" });
+    if (MESSAGES_FEATURE_ENABLED) {
+      void refreshMessagesUnreadBadge({ force: wanted === "friends" || wanted === "messages" || wanted === "messages-thread" });
+    }
   } else {
     updateNotificationsEntryBadges(0);
+    if (MESSAGES_FEATURE_ENABLED) updateMessagesUnreadBadge(0);
   }
   const main = document.querySelector("main.grid");
   if (main && prevRoute !== wanted) {
@@ -3356,12 +3384,21 @@ function applyRoute({ passGen } = {}) {
     wireFriendsComposeFabOnce();
     syncFollowingComposeUi();
     hydrateFriendsFeedSnapshotFromStorage();
+    if (MESSAGES_FEATURE_ENABLED) syncFriendsMessagesBtn();
     if (!shouldSkipRouteHeavy("friends")) {
       markRouteHeavy("friends");
       enterFriendsRoute();
     } else {
       paintFriendsFeedSnapshotIfFresh();
     }
+  }
+  if (MESSAGES_FEATURE_ENABLED && wanted === "messages") {
+    bindMessagesPageOnce();
+    void enterMessagesRoute();
+  }
+  if (MESSAGES_FEATURE_ENABLED && wanted === "messages-thread") {
+    bindMessagesPageOnce();
+    void enterMessagesThreadRoute(pendingMessagesThreadId);
   }
   if (wanted === "discover") {
     bindDiscoveryDiscoverControls();
@@ -13137,6 +13174,7 @@ function bindDiscoveryDiscoverControls() {
 }
 
 function bindFriendsPageOnce() {
+  if (MESSAGES_FEATURE_ENABLED) bindMessagesPageOnce();
   wireUserPublicFeedRowsOnce();
   bindFollowingComposeOnce();
   wireFriendsComposeSheetOnce();
@@ -20746,6 +20784,482 @@ async function socialApi(path, opts = {}) {
     throw e;
   } finally {
     window.clearTimeout(timer);
+  }
+}
+
+let _messagesPageBound = false;
+let _messagesThreadPollTimer = 0;
+let _messagesUnreadCount = 0;
+let _messagesUnreadLastFetchedAt = 0;
+let _messagesUnreadFetchInFlight = false;
+let _messagesInboxState = { threads: [], requests: [] };
+let _messagesThreadState = { threadId: "", partner: null, messages: [] };
+let _messagesInboxLoading = false;
+let _messagesThreadLoading = false;
+let _messagesSendInFlight = false;
+
+async function messagesApi(path, opts = {}) {
+  const timeoutMs = Math.max(4000, Number(opts?.timeoutMs) || 12000);
+  const { timeoutMs: _drop, ...fetchOpts } = opts;
+  const run = async (signal) => {
+    const token = getSupabaseAuthToken();
+    const headers = {
+      Accept: "application/json",
+      ...(fetchOpts?.headers || {}),
+    };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (fetchOpts?.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+    const r = await apiFetch(path, {
+      ...fetchOpts,
+      headers,
+      cache: "no-store",
+      signal,
+    });
+    const data = await r.json().catch(() => null);
+    if (!r.ok) {
+      const err = new Error(data?.error || `Messages request failed (${r.status})`);
+      err.status = r.status;
+      throw err;
+    }
+    return data;
+  };
+  const ctrl = new AbortController();
+  const timer = window.setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await run(ctrl.signal);
+  } catch (e) {
+    if (e?.name === "AbortError") {
+      throw new Error("Request timed out — check your connection and try again.");
+    }
+    if (isNativeShell() && !_resolvedApiBase) {
+      const fixed = await ensureNativeApiBaseResolved();
+      if (fixed) {
+        const retry = new AbortController();
+        const retryTimer = window.setTimeout(() => retry.abort(), timeoutMs);
+        try {
+          return await run(retry.signal);
+        } finally {
+          window.clearTimeout(retryTimer);
+        }
+      }
+    }
+    throw e;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+function messagesAvatarHtml(avatarUrl, username, cls = "messagesRowAvatar") {
+  const raw = String(avatarUrl || "").trim();
+  const handle = String(username || "").trim();
+  if (isRealUserAvatarUrl(raw)) {
+    return `<img class="${cls}" src="${escapeHtml(normalizeProfileAvatarForImg(raw))}" alt="" loading="lazy" decoding="async" />`;
+  }
+  const letter = handle.replace(/^@/, "").slice(0, 1).toUpperCase() || "?";
+  return `<span class="${cls} messagesAvatarFallback" aria-hidden="true">${escapeHtml(letter)}</span>`;
+}
+
+function syncFriendsMessagesBtn() {
+  const btn = document.getElementById("friendsMessagesBtn");
+  if (!btn) return;
+  btn.hidden = !(MESSAGES_FEATURE_ENABLED && Boolean(authSession?.user?.id));
+}
+
+function updateMessagesUnreadBadge(count) {
+  _messagesUnreadCount = Math.max(0, Number(count || 0));
+  const badge = document.getElementById("friendsMessagesBadge");
+  const btn = document.getElementById("friendsMessagesBtn");
+  const n = _messagesUnreadCount;
+  if (badge) {
+    if (n > 0) {
+      badge.hidden = false;
+      badge.textContent = n > 99 ? "99+" : String(n);
+    } else {
+      badge.hidden = true;
+      badge.textContent = "";
+    }
+  }
+  if (btn) {
+    btn.classList.toggle("hasNotice", n > 0);
+    const label = n > 0 ? `Messages, ${n} unread` : "Messages";
+    btn.setAttribute("aria-label", label);
+  }
+}
+
+async function refreshMessagesUnreadBadge({ force = false } = {}) {
+  if (!MESSAGES_FEATURE_ENABLED) {
+    updateMessagesUnreadBadge(0);
+    return;
+  }
+  syncFriendsMessagesBtn();
+  if (!authSession?.user?.id) {
+    updateMessagesUnreadBadge(0);
+    return;
+  }
+  const now = Date.now();
+  if (_messagesUnreadFetchInFlight) return;
+  if (!force && now - _messagesUnreadLastFetchedAt < 45000) return;
+  _messagesUnreadFetchInFlight = true;
+  try {
+    const data = await messagesApi("/api/messages?type=unread_count");
+    updateMessagesUnreadBadge(data?.count || 0);
+    _messagesUnreadLastFetchedAt = now;
+  } catch (e) {
+    console.warn("[messages/badge]", e);
+  } finally {
+    _messagesUnreadFetchInFlight = false;
+  }
+}
+
+function messagesInboxSkeletonHtml() {
+  return Array.from({ length: 5 }, () => `
+    <div class="messagesRow messagesRowSkel" aria-hidden="true">
+      <span class="messagesRowAvatar messagesRowSkelAv"></span>
+      <span class="messagesRowBody">
+        <span class="messagesRowSkelLine messagesRowSkelLine--title"></span>
+        <span class="messagesRowSkelLine messagesRowSkelLine--sub"></span>
+      </span>
+    </div>`).join("");
+}
+
+function messagesInboxThreadRowHtml(t) {
+  const handle = String(t?.partnerUsername || "").trim();
+  const threadId = String(t?.threadId || "").trim();
+  const preview = String(t?.lastMessage || "").trim() || "No messages yet";
+  const when = t?.lastMessageAt ? relativeTime(new Date(t.lastMessageAt).getTime()) : "";
+  const unread = Boolean(t?.unread);
+  return `
+    <button type="button" class="messagesRow${unread ? " is-unread" : ""}" data-messages-thread="${escapeHtml(threadId)}">
+      ${messagesAvatarHtml(t?.partnerAvatar, handle)}
+      <span class="messagesRowBody">
+        <span class="messagesRowTop">
+          <strong class="messagesRowHandle">@${escapeHtml(handle || "creator")}</strong>
+          ${when ? `<span class="messagesRowWhen">${escapeHtml(when)}</span>` : ""}
+        </span>
+        <span class="messagesRowPreview">${escapeHtml(preview)}</span>
+      </span>
+      ${unread ? `<span class="messagesRowDot" aria-hidden="true"></span>` : ""}
+    </button>`;
+}
+
+function messagesInboxRequestRowHtml(req) {
+  const handle = String(req?.fromUsername || "").trim();
+  const requestId = String(req?.requestId || "").trim();
+  const preview = String(req?.body || "").trim();
+  const when = req?.createdAt ? relativeTime(new Date(req.createdAt).getTime()) : "";
+  return `
+    <article class="messagesRequestRow" data-messages-request="${escapeHtml(requestId)}">
+      ${messagesAvatarHtml(req?.fromAvatar, handle)}
+      <div class="messagesRequestBody">
+        <div class="messagesRequestTop">
+          <strong class="messagesRowHandle">@${escapeHtml(handle || "creator")}</strong>
+          ${when ? `<span class="messagesRowWhen">${escapeHtml(when)}</span>` : ""}
+        </div>
+        <p class="messagesRequestLabel">Message request</p>
+        <p class="messagesRequestPreview">${escapeHtml(preview)}</p>
+        <div class="messagesRequestActions">
+          <button type="button" class="messagesRequestBtn messagesRequestBtn--accept" data-messages-request-accept="${escapeHtml(requestId)}">Accept</button>
+          <button type="button" class="messagesRequestBtn messagesRequestBtn--decline" data-messages-request-decline="${escapeHtml(requestId)}">Decline</button>
+        </div>
+      </div>
+    </article>`;
+}
+
+function renderMessagesInbox() {
+  const mount = document.getElementById("messagesInboxMount");
+  const statusEl = document.getElementById("messagesStatus");
+  if (!mount) return;
+  if (_messagesInboxLoading) {
+    mount.innerHTML = `<div class="messagesInboxList">${messagesInboxSkeletonHtml()}</div>`;
+    if (statusEl) statusEl.hidden = true;
+    return;
+  }
+  const threads = Array.isArray(_messagesInboxState.threads) ? _messagesInboxState.threads : [];
+  const requests = Array.isArray(_messagesInboxState.requests) ? _messagesInboxState.requests : [];
+  if (!threads.length && !requests.length) {
+    mount.innerHTML = `
+      <div class="messagesEmpty">
+        <p class="messagesEmptyTitle">No messages yet</p>
+        <p class="messagesEmptyLead">When you and another creator follow each other, you can chat here.</p>
+      </div>`;
+    if (statusEl) statusEl.hidden = true;
+    return;
+  }
+  const requestsHtml = requests.length
+    ? `<section class="messagesInboxSection">
+        <h3 class="messagesInboxSectionLabel">Requests</h3>
+        <div class="messagesRequestList">${requests.map(messagesInboxRequestRowHtml).join("")}</div>
+      </section>`
+    : "";
+  const threadsHtml = threads.length
+    ? `<section class="messagesInboxSection">
+        ${requests.length ? `<h3 class="messagesInboxSectionLabel">Chats</h3>` : ""}
+        <div class="messagesInboxList">${threads.map(messagesInboxThreadRowHtml).join("")}</div>
+      </section>`
+    : "";
+  mount.innerHTML = requestsHtml + threadsHtml;
+  if (statusEl) statusEl.hidden = true;
+}
+
+function messagesBubbleHtml(msg, viewerId) {
+  const mine = String(msg?.sender_id || "") === String(viewerId || "");
+  const body = String(msg?.body || "").trim();
+  const when = msg?.created_at ? relativeTime(new Date(msg.created_at).getTime()) : "";
+  return `
+    <div class="messagesBubbleWrap${mine ? " is-mine" : ""}">
+      <div class="messagesBubble">
+        <p class="messagesBubbleText">${escapeHtml(body)}</p>
+        ${when ? `<span class="messagesBubbleTime">${escapeHtml(when)}</span>` : ""}
+      </div>
+    </div>`;
+}
+
+function renderMessagesThread() {
+  const mount = document.getElementById("messagesThreadMount");
+  const handleEl = document.getElementById("messagesThreadHandle");
+  const avatarEl = document.getElementById("messagesThreadAvatar");
+  const viewerId = authSession?.user?.id || "";
+  const partner = _messagesThreadState.partner || {};
+  const handle = String(partner.partnerUsername || "").trim();
+  if (handleEl) handleEl.textContent = handle ? `@${handle}` : "@creator";
+  if (avatarEl) {
+    avatarEl.innerHTML = messagesAvatarHtml(partner.partnerAvatar, handle, "messagesThreadAvatarImg");
+  }
+  if (!mount) return;
+  if (_messagesThreadLoading) {
+    mount.innerHTML = `<div class="messagesThreadLoading">Loading conversation…</div>`;
+    return;
+  }
+  const msgs = Array.isArray(_messagesThreadState.messages) ? _messagesThreadState.messages : [];
+  if (!msgs.length) {
+    mount.innerHTML = `<div class="messagesThreadEmpty">Say hi — your conversation starts here.</div>`;
+    return;
+  }
+  mount.innerHTML = `<div class="messagesBubbleStack">${msgs.map((m) => messagesBubbleHtml(m, viewerId)).join("")}</div>`;
+  requestAnimationFrame(() => {
+    try { mount.scrollTop = mount.scrollHeight; } catch {}
+  });
+}
+
+async function loadMessagesInbox() {
+  _messagesInboxLoading = true;
+  renderMessagesInbox();
+  try {
+    const data = await messagesApi("/api/messages?type=inbox");
+    _messagesInboxState = {
+      threads: Array.isArray(data?.threads) ? data.threads : [],
+      requests: Array.isArray(data?.requests) ? data.requests : [],
+    };
+  } catch (e) {
+    const statusEl = document.getElementById("messagesStatus");
+    if (statusEl) {
+      statusEl.hidden = false;
+      statusEl.textContent = String(e?.message || "Could not load messages.");
+    }
+    _messagesInboxState = { threads: [], requests: [] };
+  } finally {
+    _messagesInboxLoading = false;
+    renderMessagesInbox();
+    void refreshMessagesUnreadBadge({ force: true });
+  }
+}
+
+async function loadMessagesThread(threadId, { silent = false } = {}) {
+  const tid = String(threadId || "").trim();
+  if (!tid) return false;
+  if (!silent) {
+    _messagesThreadLoading = true;
+    renderMessagesThread();
+  }
+  try {
+    const data = await messagesApi(`/api/messages?type=thread&threadId=${encodeURIComponent(tid)}`);
+    _messagesThreadState = {
+      threadId: tid,
+      partner: data?.thread || null,
+      messages: Array.isArray(data?.messages) ? data.messages : [],
+    };
+    if (!silent) {
+      await messagesApi("/api/messages", {
+        method: "POST",
+        body: JSON.stringify({ action: "mark_read", threadId: tid }),
+      }).catch(() => {});
+    }
+    return true;
+  } catch (e) {
+    if (!silent) {
+      const mount = document.getElementById("messagesThreadMount");
+      if (mount) {
+        mount.innerHTML = `<div class="messagesThreadEmpty">${escapeHtml(String(e?.message || "Could not load conversation."))}</div>`;
+      }
+    }
+    return false;
+  } finally {
+    if (!silent) {
+      _messagesThreadLoading = false;
+      renderMessagesThread();
+      void refreshMessagesUnreadBadge({ force: true });
+    }
+  }
+}
+
+function stopMessagesThreadPoll() {
+  if (_messagesThreadPollTimer) {
+    window.clearInterval(_messagesThreadPollTimer);
+    _messagesThreadPollTimer = 0;
+  }
+}
+
+function startMessagesThreadPoll(threadId) {
+  stopMessagesThreadPoll();
+  const tid = String(threadId || "").trim();
+  if (!tid) return;
+  _messagesThreadPollTimer = window.setInterval(() => {
+    if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
+      stopMessagesThreadPoll();
+      return;
+    }
+    if (_messagesThreadState.threadId !== tid) return;
+    void loadMessagesThread(tid, { silent: true }).then((ok) => {
+      if (ok) renderMessagesThread();
+    });
+  }, 8000);
+}
+
+async function enterMessagesRoute() {
+  syncFriendsMessagesBtn();
+  await loadMessagesInbox();
+}
+
+async function enterMessagesThreadRoute(threadId) {
+  const tid = String(threadId || "").trim();
+  if (!tid) {
+    try { location.hash = "#/messages"; } catch {}
+    return;
+  }
+  _messagesThreadState = { threadId: tid, partner: null, messages: [] };
+  const input = document.getElementById("messagesComposerInput");
+  if (input) input.value = "";
+  await loadMessagesThread(tid);
+  startMessagesThreadPoll(tid);
+}
+
+async function sendCurrentThreadMessage() {
+  if (_messagesSendInFlight) return;
+  const input = document.getElementById("messagesComposerInput");
+  const text = String(input?.value || "").trim();
+  const threadId = String(_messagesThreadState.threadId || "").trim();
+  if (!text || !threadId) return;
+  _messagesSendInFlight = true;
+  const sendBtn = document.getElementById("messagesComposerSend");
+  if (sendBtn) sendBtn.disabled = true;
+  try {
+    const data = await messagesApi("/api/messages", {
+      method: "POST",
+      body: JSON.stringify({ action: "send_message", threadId, body: text }),
+    });
+    if (input) input.value = "";
+    const msg = data?.message;
+    if (msg) {
+      _messagesThreadState.messages = [...(_messagesThreadState.messages || []), msg];
+      renderMessagesThread();
+    } else {
+      await loadMessagesThread(threadId, { silent: true });
+      renderMessagesThread();
+    }
+    void refreshMessagesUnreadBadge({ force: true });
+  } catch (e) {
+    try { showToast(String(e?.message || "Could not send message"), { icon: "💬", durationMs: 2800 }); } catch {}
+  } finally {
+    _messagesSendInFlight = false;
+    if (sendBtn) sendBtn.disabled = false;
+  }
+}
+
+async function respondMessageRequest(requestId, decision) {
+  const rid = String(requestId || "").trim();
+  if (!rid || !["accept", "decline"].includes(decision)) return;
+  try {
+    const data = await messagesApi("/api/messages", {
+      method: "POST",
+      body: JSON.stringify({ action: "respond_request", requestId: rid, decision }),
+    });
+    if (decision === "accept" && data?.threadId) {
+      try { location.hash = `#/messages-thread?thread=${encodeURIComponent(data.threadId)}`; } catch {}
+    } else {
+      _messagesInboxState.requests = (_messagesInboxState.requests || []).filter((r) => String(r.requestId) !== rid);
+      renderMessagesInbox();
+    }
+    void refreshMessagesUnreadBadge({ force: true });
+  } catch (e) {
+    try { showToast(String(e?.message || "Could not update request"), { icon: "💬", durationMs: 2800 }); } catch {}
+  }
+}
+
+function bindMessagesPageOnce() {
+  syncFriendsMessagesBtn();
+  if (_messagesPageBound) return;
+  _messagesPageBound = true;
+
+  document.addEventListener("click", (e) => {
+    const friendsBtn = e.target.closest("#friendsMessagesBtn");
+    if (friendsBtn) {
+      e.preventDefault();
+      try { haptic("light"); } catch {}
+      try { location.hash = "#/messages"; } catch {}
+      return;
+    }
+    const backInbox = e.target.closest("#messagesBackBtn");
+    if (backInbox) {
+      e.preventDefault();
+      try { haptic("light"); } catch {}
+      try { location.hash = "#/friends"; } catch {}
+      return;
+    }
+    const backThread = e.target.closest("#messagesThreadBackBtn");
+    if (backThread) {
+      e.preventDefault();
+      try { haptic("light"); } catch {}
+      try { location.hash = "#/messages"; } catch {}
+      return;
+    }
+    const threadRow = e.target.closest("[data-messages-thread]");
+    if (threadRow && !e.target.closest("[data-messages-request-accept],[data-messages-request-decline]")) {
+      e.preventDefault();
+      const tid = threadRow.getAttribute("data-messages-thread");
+      if (tid) {
+        try { haptic("light"); } catch {}
+        try { location.hash = `#/messages-thread?thread=${encodeURIComponent(tid)}`; } catch {}
+      }
+      return;
+    }
+    const acceptBtn = e.target.closest("[data-messages-request-accept]");
+    if (acceptBtn) {
+      e.preventDefault();
+      void respondMessageRequest(acceptBtn.getAttribute("data-messages-request-accept"), "accept");
+      return;
+    }
+    const declineBtn = e.target.closest("[data-messages-request-decline]");
+    if (declineBtn) {
+      e.preventDefault();
+      void respondMessageRequest(declineBtn.getAttribute("data-messages-request-decline"), "decline");
+      return;
+    }
+    const sendBtn = e.target.closest("#messagesComposerSend");
+    if (sendBtn) {
+      e.preventDefault();
+      void sendCurrentThreadMessage();
+    }
+  });
+
+  const composer = document.getElementById("messagesComposerInput");
+  if (composer && !composer.dataset.boundMessagesComposer) {
+    composer.dataset.boundMessagesComposer = "1";
+    composer.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        void sendCurrentThreadMessage();
+      }
+    });
   }
 }
 

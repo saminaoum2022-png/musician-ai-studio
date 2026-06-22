@@ -27782,6 +27782,12 @@ body[data-route="messages-thread"]{
   background: var(--bg);
   overscroll-behavior: none;
 }
+html.is-web-shell body[data-route="messages-thread"].messagesThreadKeyboardOpen{
+  /* top/height set inline from visualViewport — keep width pinned while shell shrinks. */
+  width: 100%;
+  left: 0;
+  right: 0;
+}
 html:has(body[data-route="messages-thread"]){
   overflow: hidden;
   height: 100%;

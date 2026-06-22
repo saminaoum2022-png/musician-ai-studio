@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260623dmLayoutFix";
+const APP_BUILD = "20260623dmWebKbFix";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -20841,12 +20841,58 @@ let _messagesThreadKeyboardOpen = false;
 function clearMessagesThreadComposerInset() {
   document.body.classList.remove("messagesThreadKeyboardOpen");
   _messagesThreadKeyboardOpen = false;
+  document.body.style.removeProperty("top");
+  document.body.style.removeProperty("height");
+  document.body.style.removeProperty("bottom");
 }
 
 function measureMessagesKeyboardInset() {
   const vv = window.visualViewport;
   if (!vv) return 0;
-  return Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+  const layoutH = document.documentElement.clientHeight;
+  const visibleBottom = vv.offsetTop + vv.height;
+  const layoutGap = Math.max(0, Math.round(layoutH - visibleBottom));
+  // With interactive-widget=resizes-content the layout viewport shrinks with the
+  // keyboard, so layoutGap can read ~0 even while the keyboard is open.
+  const windowGap = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+  return Math.max(layoutGap, windowGap);
+}
+
+function isMessagesComposerFocused() {
+  const input = document.getElementById("messagesComposerInput");
+  return Boolean(input && document.activeElement === input);
+}
+
+function isMessagesThreadKeyboardOpen() {
+  const inset = measureMessagesKeyboardInset();
+  if (inset > 6) return true;
+  if (isNativeShell()) return false;
+  if (!isMessagesComposerFocused()) return false;
+  return window.matchMedia("(max-width: 720px)").matches;
+}
+
+function syncMessagesThreadWebViewportShell(keyboardOpen) {
+  if (isNativeShell()) return;
+  const vv = window.visualViewport;
+  if (!vv || !keyboardOpen) {
+    document.body.style.removeProperty("top");
+    document.body.style.removeProperty("height");
+    document.body.style.removeProperty("bottom");
+    return;
+  }
+  const shellTop = Math.max(0, Math.round(vv.offsetTop));
+  const shellH = Math.round(vv.height);
+  const layoutH = document.documentElement.clientHeight;
+  const needsShellSync = shellTop > 0 || layoutH > shellH + shellTop + 8;
+  if (needsShellSync) {
+    document.body.style.top = `${shellTop}px`;
+    document.body.style.height = `${shellH}px`;
+    document.body.style.bottom = "auto";
+  } else {
+    document.body.style.removeProperty("top");
+    document.body.style.removeProperty("height");
+    document.body.style.bottom = "0";
+  }
 }
 
 function syncMessagesThreadComposerInset() {
@@ -20854,12 +20900,12 @@ function syncMessagesThreadComposerInset() {
     clearMessagesThreadComposerInset();
     return;
   }
-  const keyboardInset = measureMessagesKeyboardInset();
-  const keyboardOpen = keyboardInset > 6;
+  const keyboardOpen = isMessagesThreadKeyboardOpen();
   if (keyboardOpen !== _messagesThreadKeyboardOpen) {
     _messagesThreadKeyboardOpen = keyboardOpen;
     document.body.classList.toggle("messagesThreadKeyboardOpen", keyboardOpen);
   }
+  syncMessagesThreadWebViewportShell(keyboardOpen);
   if (keyboardOpen) {
     scheduleMessagesThreadScrollToBottom({ force: true });
   }

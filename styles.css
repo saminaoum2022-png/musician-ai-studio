@@ -27254,49 +27254,13 @@ body[data-route="activity"] .app{
   font-weight: 800;
   letter-spacing: -0.03em;
 }
-.activityFilterTabs{
-  margin: 0 0 4px;
-  min-width: 0;
-}
-.activityFilterTabsTrack{
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
-  padding: 4px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.04);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
-}
-.activityFilterTab{
-  appearance: none;
-  border: 0;
-  border-radius: 10px;
-  padding: 9px 10px;
-  background: transparent;
-  color: rgba(223,231,251,0.58);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  cursor: pointer;
-  white-space: nowrap;
-  -webkit-tap-highlight-color: transparent;
-  transition:
-    background 220ms ease,
-    color 220ms ease,
-    box-shadow 220ms ease,
-    transform 160ms ease;
-}
-.activityFilterTab.is-active{
-  color: #f8faff;
-  background: linear-gradient(135deg, rgba(35, 213, 171, 0.16) 0%, rgba(124, 92, 255, 0.22) 100%);
-  box-shadow:
-    0 0 0 1px rgba(124, 92, 255, 0.14) inset,
-    0 8px 20px rgba(35, 213, 171, 0.08);
-}
-.activityFilterTab:active{
-  transform: scale(0.98);
+.activityPage .discoverFeedTabs{
+  position: static;
+  margin: 0 0 10px;
+  padding: 0 0 4px;
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 .activityStatus{
   margin: 0 0 8px;
@@ -36877,16 +36841,6 @@ body.appTourOpen{
 }
 
 /* --- Premium polish: light-mode parity for elevated surfaces --- */
-html[data-theme="light"] .activityFilterTabsTrack{
-  background: rgba(255, 255, 255, 0.72);
-  border-color: rgba(15, 23, 40, 0.08);
-}
-html[data-theme="light"] .activityFilterTab{
-  color: rgba(15, 23, 40, 0.52);
-}
-html[data-theme="light"] .activityFilterTab.is-active{
-  color: #0f1728;
-}
 html[data-theme="light"] .activityDayLabel{
   color: rgba(109, 77, 245, 0.72);
 }

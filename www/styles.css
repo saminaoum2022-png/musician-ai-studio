@@ -15891,9 +15891,6 @@ body.trackSheetOpen .footer{
   body[data-route="messages-thread"] .hubNowPlaying{
     display: none !important;
   }
-  body[data-route="messages-thread"] > .app{
-    padding-bottom: 0;
-  }
   body[data-route="player"] .header{
     display: none !important;
   }
@@ -27775,10 +27772,12 @@ body.messagesThreadLeaving .messagesThreadPage{
   }
 }
 body[data-route="messages-thread"]{
-  position: fixed;
-  inset: 0;
-  width: 100%;
   overflow: hidden;
+  height: 100dvh;
+  height: 100svh;
+  min-height: -webkit-fill-available;
+  display: flex;
+  flex-direction: column;
   background: var(--bg);
   overscroll-behavior: none;
 }
@@ -27789,12 +27788,18 @@ html:has(body[data-route="messages-thread"]){
 body[data-route="messages-thread"] > .app{
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1 1 auto;
   min-height: 0;
   max-height: 100%;
   overflow: hidden;
-  padding-bottom: 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   box-sizing: border-box;
+}
+body.messagesThreadKeyboardOpen[data-route="messages-thread"] > .app{
+  padding-bottom: 0;
+}
+body[data-route="messages-thread"] .footer{
+  display: none !important;
 }
 body[data-route="messages-thread"] main.grid{
   flex: 1 1 auto;
@@ -27810,7 +27815,10 @@ body[data-route="messages-thread"] main.grid{
     padding:
       env(safe-area-inset-top, 0px)
       0
-      0;
+      env(safe-area-inset-bottom, 0px);
+  }
+  body.messagesThreadKeyboardOpen[data-route="messages-thread"] > .app{
+    padding-bottom: 0;
   }
 }
 body[data-route="messages"] .app,
@@ -28475,7 +28483,6 @@ body[data-route="messages"]{
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid rgba(255,255,255,0.08);
   background: var(--bg);
 }
@@ -28487,9 +28494,6 @@ body[data-route="messages-thread"] .messagesComposer{
   width: 100%;
   margin: 0 auto;
   box-sizing: border-box;
-}
-body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesComposer{
-  padding-bottom: 8px;
 }
 .messagesComposerShare{
   flex: 0 0 auto;

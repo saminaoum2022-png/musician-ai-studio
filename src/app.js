@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260622dmKeyboard";
+const APP_BUILD = "20260622dmComposerFix";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -20841,56 +20841,28 @@ let _messagesThreadKeyboardOpen = false;
 function clearMessagesThreadComposerInset() {
   document.body.classList.remove("messagesThreadKeyboardOpen");
   _messagesThreadKeyboardOpen = false;
-  document.body.style.removeProperty("top");
-  document.body.style.removeProperty("height");
-  document.body.style.removeProperty("bottom");
-  const page = document.getElementById("messagesThreadPage");
-  if (page) page.style.removeProperty("height");
-}
-
-function measureMessagesSafeAreaBottom() {
-  try {
-    const v = getComputedStyle(document.documentElement).getPropertyValue("--msg-safe-bottom").trim();
-    const n = parseFloat(v);
-    if (Number.isFinite(n)) return Math.max(0, Math.round(n));
-  } catch {}
-  return 0;
 }
 
 function measureMessagesKeyboardInset() {
   const vv = window.visualViewport;
   if (!vv) return 0;
-  const layoutH = document.documentElement.clientHeight;
-  const visibleBottom = vv.offsetTop + vv.height;
-  return Math.max(0, Math.round(layoutH - visibleBottom));
+  return Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
 }
 
-function logMessagesThreadViewportDebug(phase = "") {
-  const vv = window.visualViewport;
-  const composer = document.querySelector(".messagesComposer");
-  const rect = composer?.getBoundingClientRect();
+function syncMessagesThreadComposerInset() {
+  if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
+    clearMessagesThreadComposerInset();
+    return;
+  }
   const keyboardInset = measureMessagesKeyboardInset();
-  const payload = {
-    phase,
-    visualViewportHeight: vv ? Math.round(vv.height) : null,
-    visualViewportOffsetTop: vv ? Math.round(vv.offsetTop) : null,
-    windowInnerHeight: window.innerHeight,
-    documentClientHeight: document.documentElement.clientHeight,
-    keyboardInset,
-    safeAreaInsetBottom: measureMessagesSafeAreaBottom(),
-    composerHeight: rect ? Math.round(rect.height) : null,
-    composerBottom: rect ? Math.round(rect.bottom) : null,
-    layoutViewportBottom: document.documentElement.clientHeight,
-  };
-  console.debug("[messages/kb]", payload);
-  return payload;
-}
-
-function syncMessagesComposerInputHeight(input = document.getElementById("messagesComposerInput")) {
-  if (!input) return;
-  input.style.height = "auto";
-  const next = Math.min(120, Math.max(44, input.scrollHeight));
-  input.style.height = `${next}px`;
+  const keyboardOpen = keyboardInset > 6;
+  if (keyboardOpen !== _messagesThreadKeyboardOpen) {
+    _messagesThreadKeyboardOpen = keyboardOpen;
+    document.body.classList.toggle("messagesThreadKeyboardOpen", keyboardOpen);
+  }
+  if (keyboardOpen) {
+    scheduleMessagesThreadScrollToBottom({ force: true });
+  }
 }
 
 function scheduleMessagesThreadScrollToBottom({ force = true } = {}) {
@@ -20900,55 +20872,11 @@ function scheduleMessagesThreadScrollToBottom({ force = true } = {}) {
   window.setTimeout(() => scrollMessagesMountToBottom({ force }), 180);
 }
 
-function syncMessagesThreadComposerInset() {
-  if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
-    clearMessagesThreadComposerInset();
-    return;
-  }
-  const vv = window.visualViewport;
-  const keyboardInset = measureMessagesKeyboardInset();
-  const keyboardOpen = keyboardInset > 6;
-  if (keyboardOpen !== _messagesThreadKeyboardOpen) {
-    _messagesThreadKeyboardOpen = keyboardOpen;
-    document.body.classList.toggle("messagesThreadKeyboardOpen", keyboardOpen);
-    logMessagesThreadViewportDebug(keyboardOpen ? "keyboard-open" : "keyboard-close");
-  }
-
-  if (vv && keyboardOpen) {
-    const shellTop = Math.max(0, Math.round(vv.offsetTop));
-    const shellH = Math.round(vv.height);
-    const layoutH = document.documentElement.clientHeight;
-    const layoutTallerThanVisible = layoutH > shellH + shellTop + 8;
-    if (layoutTallerThanVisible) {
-      document.body.style.top = `${shellTop}px`;
-      document.body.style.height = `${shellH}px`;
-      document.body.style.bottom = "auto";
-    } else {
-      document.body.style.removeProperty("top");
-      document.body.style.removeProperty("height");
-      document.body.style.bottom = "0";
-    }
-  } else {
-    document.body.style.removeProperty("top");
-    document.body.style.removeProperty("height");
-    document.body.style.bottom = "";
-  }
-
-  if (keyboardOpen) {
-    scheduleMessagesThreadScrollToBottom({ force: true });
-  }
-}
-
-function initMessagesThreadSafeAreaProbeOnce() {
-  if (document.documentElement.dataset.messagesSafeAreaProbed) return;
-  document.documentElement.dataset.messagesSafeAreaProbed = "1";
-  const probe = document.createElement("div");
-  probe.setAttribute("aria-hidden", "true");
-  probe.style.cssText = "position:fixed;bottom:0;left:0;width:0;height:0;padding-bottom:env(safe-area-inset-bottom,0px);visibility:hidden;pointer-events:none;";
-  document.body.appendChild(probe);
-  const px = probe.offsetHeight;
-  probe.remove();
-  document.documentElement.style.setProperty("--msg-safe-bottom", `${px}px`);
+function syncMessagesComposerInputHeight(input = document.getElementById("messagesComposerInput")) {
+  if (!input) return;
+  input.style.height = "auto";
+  const next = Math.min(120, Math.max(44, input.scrollHeight));
+  input.style.height = `${next}px`;
 }
 
 function wireMessagesThreadComposerResizeOnce() {
@@ -20966,7 +20894,6 @@ function wireMessagesThreadComposerResizeOnce() {
 function wireMessagesThreadKeyboardOnce() {
   if (document.documentElement.dataset.messagesThreadKbWired) return;
   document.documentElement.dataset.messagesThreadKbWired = "1";
-  initMessagesThreadSafeAreaProbeOnce();
   wireMessagesThreadComposerResizeOnce();
   const onViewportChange = () => syncMessagesThreadComposerInset();
   window.visualViewport?.addEventListener("resize", onViewportChange);
@@ -22642,9 +22569,7 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   renderMessagesMount({ scrollToBottom: true, forceScroll: true });
   syncMessagesThreadComposerReady();
   wireMessagesThreadKeyboardOnce();
-  initMessagesThreadSafeAreaProbeOnce();
   syncMessagesThreadComposerInset();
-  logMessagesThreadViewportDebug("thread-enter");
   scheduleMessagesThreadScrollToBottom({ force: true });
   beginMessagesThreadEnterTransition();
   if (_chatHeaderUser?.userId) void loadMessagesThreadPartnerMeta(_chatHeaderUser.userId);
@@ -22883,7 +22808,6 @@ function bindMessagesPageOnce() {
     composer.addEventListener("focus", () => {
       syncMessagesComposerInputHeight(composer);
       syncMessagesThreadComposerInset();
-      logMessagesThreadViewportDebug("composer-focus");
       scheduleMessagesThreadScrollToBottom({ force: true });
     });
     composer.addEventListener("blur", () => {

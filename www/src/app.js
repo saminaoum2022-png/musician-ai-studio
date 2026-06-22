@@ -6549,8 +6549,15 @@ function discoverTracksSortedByPreferences(tracks, prefs, limit = 6) {
     .slice(0, limit);
 }
 
+function discoverCommunityPickEligibleTrack(t) {
+  if (remixAttributionForTrack(t) || mashupAttributionForTrack(t)) return false;
+  if (trackIsTemplateContent(t)) return false;
+  const { key } = discoverContentTypeForTrack(t);
+  return key !== "remix" && key !== "mashup" && key !== "template" && key !== "birthday" && key !== "love";
+}
+
 function discoverCommunityPicksTracksPersonalized(tracks, prefs) {
-  const eligible = (tracks || []).filter((t) => !remixAttributionForTrack(t) && !mashupAttributionForTrack(t));
+  const eligible = (tracks || []).filter((t) => discoverCommunityPickEligibleTrack(t));
   if (!prefs?.length) return discoverCommunityPicksTracks(eligible);
   const base = discoverCommunityPicksTracks(eligible);
   const seen = new Set(base.map((t) => String(t.id || t.url || "")));
@@ -6926,17 +6933,17 @@ function discoverTemplateCreatedCount(tplId, tracks) {
 }
 
 function discoverCommunityPicksTracks(tracks) {
-  const pools = { challenge: [], template: [], birthday: [], love: [], original: [] };
+  const pools = { challenge: [], original: [] };
   for (const t of tracks || []) {
-    if (remixAttributionForTrack(t) || mashupAttributionForTrack(t)) continue;
+    if (!discoverCommunityPickEligibleTrack(t)) continue;
     const { key } = discoverContentTypeForTrack(t);
-    if (key === "remix" || key === "mashup") continue;
-    (pools[key] || pools.original).push(t);
+    if (key === "challenge") pools.challenge.push(t);
+    else pools.original.push(t);
   }
   for (const k of Object.keys(pools)) {
     pools[k].sort((a, b) => (Number(b.playCount) || 0) - (Number(a.playCount) || 0));
   }
-  const order = ["original", "challenge", "birthday", "love", "template"];
+  const order = ["original", "challenge"];
   const out = [];
   const seen = new Set();
   let pass = 0;
@@ -6954,7 +6961,7 @@ function discoverCommunityPicksTracks(tracks) {
   }
   if (out.length < 6) {
     for (const t of tracks || []) {
-      if (remixAttributionForTrack(t) || mashupAttributionForTrack(t)) continue;
+      if (!discoverCommunityPickEligibleTrack(t)) continue;
       const sid = String(t.id || t.url || "");
       if (seen.has(sid)) continue;
       seen.add(sid);
@@ -7631,18 +7638,146 @@ function discoverFeedChallengeBlockHtml(c, tracks, profMap, opts = {}) {
     </section>`;
 }
 
-function discoverFeedTemplateCarouselRowsHtml(tracks, profMap, emptyNote = "") {
+function discoverSuggestedCreatorsFromTracks(tracks, profMap, limit = 12) {
+  const mine = String(authSession?.user?.id || "").trim();
+  const byUser = new Map();
+  for (const t of tracks || []) {
+    const uid = String(t.userId || "").trim();
+    if (!uid || uid === mine) continue;
+    const row = byUser.get(uid) || { userId: uid, plays: 0, songs: 0 };
+    row.plays += Math.max(0, Number(t.playCount) || 0);
+    row.songs += 1;
+    byUser.set(uid, row);
+  }
+  return [...byUser.values()]
+    .sort((a, b) => b.plays - a.plays || b.songs - a.songs)
+    .slice(0, limit)
+    .map((row) => {
+      const prof = resolveProfileForFeedCreator(row.userId, profMap);
+      const handle = String(prof?.username || "").trim();
+      if (!handle || isPlaceholderUsername(handle)) return null;
+      return {
+        userId: row.userId,
+        handle,
+        avatar: String(prof?.avatar || "").trim(),
+        songs: row.songs,
+      };
+    })
+    .filter(Boolean);
+}
+
+function discoverFeedCreatorAvatarHtml(prof, handle) {
+  const raw = String(prof?.avatar || "").trim();
+  if (isRealUserAvatarUrl(raw)) {
+    return `<img class="discoverFeedFollowAv" src="${escapeHtml(normalizeProfileAvatarForImg(raw))}" alt="" loading="lazy" decoding="async" />`;
+  }
+  const letter = String(handle || "C").replace(/^@/, "").slice(0, 1).toUpperCase() || "C";
+  return `<span class="discoverFeedFollowAv discoverFeedFollowAvFallback" aria-hidden="true">${escapeHtml(letter)}</span>`;
+}
+
+function discoverFeedFollowCardHtml(creator) {
+  const handle = String(creator.handle || "").trim();
+  const userId = String(creator.userId || "").trim();
+  const prof = { avatar: creator.avatar };
+  return `
+    <article class="discoverFeedFollowCard">
+      <button type="button" class="discoverFeedFollowAvBtn" data-discover-creator="${encodeURIComponent(handle)}" aria-label="View @${escapeHtml(handle)} profile">
+        ${discoverFeedCreatorAvatarHtml(prof, handle)}
+      </button>
+      <strong class="discoverFeedFollowHandle">@${escapeHtml(handle)}</strong>
+      <button
+        type="button"
+        class="discoverFeedFollowCta"
+        data-discover-follow-user-id="${escapeHtml(userId)}"
+        data-discover-follow-handle="${escapeHtml(handle)}"
+        aria-label="Follow @${escapeHtml(handle)}"
+      >Follow</button>
+    </article>`;
+}
+
+function discoverFeedSuggestedFollowBlockHtml(tracks, profMap) {
+  const creators = discoverSuggestedCreatorsFromTracks(tracks, profMap, 12);
+  if (!creators.length) return "";
+  const cards = creators.map((c) => discoverFeedFollowCardHtml(c)).join("");
+  return `
+    <section class="discoverFeedSection discoverFeedSection--suggestedFollow">
+      ${discoverFeedSectionHeadHtml("Creators to follow")}
+      <div class="discoverFeedCarouselRow">
+        <div class="discoverFeedCarouselRail discoverFeedCarouselRail--follow">${cards}</div>
+      </div>
+    </section>`;
+}
+
+async function paintDiscoverFeedFollowCards() {
+  const mount = document.getElementById("discoverFeedMount");
+  if (!mount) return;
+  const buttons = mount.querySelectorAll("[data-discover-follow-user-id]");
+  if (!buttons.length) return;
+  let following = new Set();
+  try {
+    following = new Set(await fetchFollowingUserIdsForFeed());
+  } catch {}
+  buttons.forEach((btn) => {
+    const uid = String(btn.getAttribute("data-discover-follow-user-id") || "").trim();
+    const isFollowing = following.has(uid);
+    btn.textContent = isFollowing ? "Following" : "Follow";
+    btn.classList.toggle("isFollowing", isFollowing);
+    btn.dataset.following = isFollowing ? "1" : "0";
+  });
+}
+
+async function handleDiscoverFeedFollowClick(btn, targetUserId) {
+  if (!authSession?.user?.id || !getSupabaseAuthToken()) {
+    showToast("Sign in to follow creators.");
+    location.hash = "#/auth";
+    return;
+  }
+  const wasFollowing = btn.dataset.following === "1" || btn.classList.contains("isFollowing");
+  const handle = String(btn.getAttribute("data-discover-follow-handle") || "").trim();
+  if (wasFollowing) {
+    const who = handle ? `@${handle}` : "this creator";
+    let ok = true;
+    try { ok = window.confirm(`Unfollow ${who}?`); } catch { ok = true; }
+    if (!ok) return;
+  }
+  btn.disabled = true;
+  try {
+    await socialApi("/api/social", {
+      method: "POST",
+      body: JSON.stringify({
+        action: wasFollowing ? "unfollow" : "follow",
+        targetUserId,
+      }),
+    });
+    _followingListCache = null;
+    _followingListCacheAt = 0;
+    const nowFollowing = !wasFollowing;
+    btn.textContent = nowFollowing ? "Following" : "Follow";
+    btn.classList.toggle("isFollowing", nowFollowing);
+    btn.dataset.following = nowFollowing ? "1" : "0";
+    showToast(nowFollowing ? (handle ? `Following @${handle}.` : "Following creator.") : "Unfollowed creator.");
+  } catch (e) {
+    showToast(e?.message || "Could not update follow.");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function discoverFeedTemplateCarouselRowsHtml(tracks, profMap, emptyNote = "", rows = 2) {
   const picks = tracks || [];
   if (!picks.length) {
     return emptyNote
       ? `<p class="discoverHubQuietNote">${escapeHtml(emptyNote)}</p>`
       : "";
   }
-  const mid = Math.ceil(picks.length / 2);
   const rowHtml = (items) => {
     const cards = items.map((t) => discoverFeedTemplateCardHtml(t, profMap)).join("");
     return `<div class="discoverFeedCarouselRow"><div class="discoverFeedCarouselRail">${cards}</div></div>`;
   };
+  if (rows <= 1) {
+    return `<div class="discoverFeedCommunityCarousel discoverFeedCommunityCarousel--single">${rowHtml(picks)}</div>`;
+  }
+  const mid = Math.ceil(picks.length / 2);
   return `
     <div class="discoverFeedCommunityCarousel">
       ${rowHtml(picks.slice(0, mid))}
@@ -7694,7 +7829,9 @@ function renderDiscoverFeedForYou(tracks, profMap) {
     templateTracks,
     profMap,
     "Songs made with templates will show here.",
+    1,
   );
+  const suggestedFollowBlock = discoverFeedSuggestedFollowBlockHtml(tracks, profMap);
   return `
     <section id="discoverWeeklyChart" class="discoverWeeklyChart discoverWeeklyChart--final isLoading" aria-busy="true" aria-label="Top songs this week">${discoverWeeklyChartSkeletonHtml()}</section>
     ${communityBlock}
@@ -7706,7 +7843,8 @@ function renderDiscoverFeedForYou(tracks, profMap) {
     <section class="discoverFeedSection">
       ${discoverFeedSectionHeadHtml("Created with templates", templateSeeAll)}
       ${templateCarousel}
-    </section>`;
+    </section>
+    ${suggestedFollowBlock}`;
 }
 
 function renderDiscoverFeedTabPanel(tab, tracks, profMap) {
@@ -7753,7 +7891,10 @@ function renderDiscoverFeed(tracks, profMap, tab = _discoverFeedTab) {
   mount.innerHTML = renderDiscoverFeedTabPanel(_discoverFeedTab, tracks, profMap);
   mount.classList.remove("isLoading");
   mount.removeAttribute("aria-busy");
-  if (_discoverFeedTab === "for-you") void refreshDiscoverWeeklyChart();
+  if (_discoverFeedTab === "for-you") {
+    void refreshDiscoverWeeklyChart();
+    void paintDiscoverFeedFollowCards();
+  }
   playDiscoverSectionEnter(mount);
 }
 
@@ -8378,10 +8519,15 @@ function bindDiscoverHubV1Once() {
       if (handle) location.hash = `#/u/${encodeURIComponent(handle)}`;
       return;
     }
-    const followBtn = e.target?.closest?.("[data-discover-follow]");
+    const followBtn = e.target?.closest?.("[data-discover-follow-user-id], [data-discover-follow]");
     if (followBtn && root.contains(followBtn)) {
       e.preventDefault();
       haptic("light");
+      const userId = String(followBtn.getAttribute("data-discover-follow-user-id") || "").trim();
+      if (userId) {
+        void handleDiscoverFeedFollowClick(followBtn, userId);
+        return;
+      }
       if (!getSupabaseAuthToken()) {
         showToast("Sign in to follow creators.");
         location.hash = "#/auth";

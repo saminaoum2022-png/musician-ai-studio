@@ -33086,6 +33086,93 @@ section.mentorPage{
   width: clamp(102px, 28vw, 124px);
   scroll-snap-align: start;
 }
+.discoverFeedCommunityCarousel--single{
+  gap: 0;
+}
+.discoverFeedCarouselRail--follow{
+  gap: 12px;
+  padding-bottom: 6px;
+}
+.discoverFeedFollowCard{
+  flex: 0 0 108px;
+  width: 108px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0 2px 4px;
+  text-align: center;
+}
+.discoverFeedFollowAvBtn{
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverFeedFollowAvBtn:active{
+  opacity: 0.92;
+}
+.discoverFeedFollowAv{
+  width: 96px;
+  height: 96px;
+  border-radius: 8px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+.discoverFeedFollowAv img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.discoverFeedFollowAvFallback{
+  width: 100%;
+  height: 100%;
+  font-size: 28px;
+  font-weight: 900;
+  color: rgba(248, 250, 255, 0.92);
+  background: linear-gradient(145deg, rgba(124, 92, 255, 0.35), rgba(35, 213, 171, 0.2));
+}
+.discoverFeedFollowHandle{
+  display: block;
+  width: 100%;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #f8faff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoverFeedFollowCta{
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(35, 213, 171, 0.42);
+  background: rgba(35, 213, 171, 0.12);
+  color: rgba(94, 234, 212, 0.95);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 120ms ease;
+}
+.discoverFeedFollowCta:active{
+  transform: scale(0.98);
+}
+.discoverFeedFollowCta.isFollowing{
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(223, 231, 251, 0.55);
+}
 .discoverFeedChallengeHero{
   display: grid;
   grid-template-columns: 1fr auto;

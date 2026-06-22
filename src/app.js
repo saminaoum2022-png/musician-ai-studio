@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260623dmWebComposerFix";
+const APP_BUILD = "20260623dmAutofocus";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -20837,6 +20837,24 @@ function syncMessagesThreadComposerReady() {
 }
 
 let _messagesThreadKeyboardOpen = false;
+let _messagesComposerAutofocusToken = 0;
+
+function scheduleMessagesComposerAutofocus({ bootToken = null, delayMs = 0 } = {}) {
+  const token = ++_messagesComposerAutofocusToken;
+  const run = () => {
+    if (token !== _messagesComposerAutofocusToken) return;
+    if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
+    if (bootToken != null && bootToken !== _messagesThreadBootToken) return;
+    const input = document.getElementById("messagesComposerInput");
+    if (!input || input.disabled) return;
+    try { input.focus({ preventScroll: true }); } catch { try { input.focus(); } catch {} }
+    syncMessagesComposerInputHeight(input);
+    syncMessagesThreadComposerInset();
+    scheduleMessagesThreadScrollToBottom({ force: true });
+  };
+  if (delayMs > 0) window.setTimeout(run, delayMs);
+  else window.requestAnimationFrame(() => window.requestAnimationFrame(run));
+}
 
 function clearMessagesThreadComposerInset() {
   document.body.classList.remove("messagesThreadKeyboardOpen");
@@ -21428,6 +21446,7 @@ async function retryFailedThreadMessage(clientMessageId) {
 }
 
 function resetMessagesThreadRouteState() {
+  _messagesComposerAutofocusToken += 1;
   saveActiveThreadToCache();
   _messagesThreadNeedsInitialScroll = false;
   _chatHeaderUser = null;
@@ -22557,6 +22576,9 @@ async function bootstrapMessagesThread({ bootToken, threadId, targetUserId }) {
   if (bootToken === _messagesThreadBootToken) {
     scheduleMessagesThreadScrollToBottom({ force: true });
     _messagesThreadNeedsInitialScroll = false;
+    if (!String(threadId || "").trim()) {
+      scheduleMessagesComposerAutofocus({ bootToken, delayMs: 120 });
+    }
   }
 }
 
@@ -22615,6 +22637,7 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   updateMessagesComposerReserve();
   scheduleMessagesThreadScrollToBottom({ force: true });
   beginMessagesThreadEnterTransition();
+  if (tid) scheduleMessagesComposerAutofocus({ bootToken, delayMs: 360 });
   if (_chatHeaderUser?.userId) void loadMessagesThreadPartnerMeta(_chatHeaderUser.userId);
   void bootstrapMessagesThread({ bootToken, threadId: tid, targetUserId: uid });
 }

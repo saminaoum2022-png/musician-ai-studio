@@ -6550,17 +6550,18 @@ function discoverTracksSortedByPreferences(tracks, prefs, limit = 6) {
 }
 
 function discoverCommunityPicksTracksPersonalized(tracks, prefs) {
-  if (!prefs?.length) return discoverCommunityPicksTracks(tracks);
-  const base = discoverCommunityPicksTracks(tracks);
+  const eligible = (tracks || []).filter((t) => !remixAttributionForTrack(t) && !mashupAttributionForTrack(t));
+  if (!prefs?.length) return discoverCommunityPicksTracks(eligible);
+  const base = discoverCommunityPicksTracks(eligible);
   const seen = new Set(base.map((t) => String(t.id || t.url || "")));
-  const boosted = [...(tracks || [])]
+  const boosted = [...eligible]
     .filter((t) => {
       const sid = String(t.id || t.url || "");
       return sid && !seen.has(sid) && discoverTrackPreferenceScore(t, prefs) > 0;
     })
     .sort((a, b) => discoverTrackPreferenceScore(b, prefs) - discoverTrackPreferenceScore(a, prefs)
       || (Number(b.playCount) || 0) - (Number(a.playCount) || 0));
-  return [...boosted.slice(0, 4), ...base].slice(0, 14);
+  return [...boosted.slice(0, 4), ...base].slice(0, 12);
 }
 
 const DISCOVER_HUB_SPARK_CHALLENGES = [
@@ -6925,19 +6926,21 @@ function discoverTemplateCreatedCount(tplId, tracks) {
 }
 
 function discoverCommunityPicksTracks(tracks) {
-  const pools = { mashup: [], remix: [], challenge: [], template: [], birthday: [], love: [], original: [] };
+  const pools = { challenge: [], template: [], birthday: [], love: [], original: [] };
   for (const t of tracks || []) {
+    if (remixAttributionForTrack(t) || mashupAttributionForTrack(t)) continue;
     const { key } = discoverContentTypeForTrack(t);
+    if (key === "remix" || key === "mashup") continue;
     (pools[key] || pools.original).push(t);
   }
   for (const k of Object.keys(pools)) {
     pools[k].sort((a, b) => (Number(b.playCount) || 0) - (Number(a.playCount) || 0));
   }
-  const order = ["original", "remix", "mashup", "challenge", "birthday", "love", "template"];
+  const order = ["original", "challenge", "birthday", "love", "template"];
   const out = [];
   const seen = new Set();
   let pass = 0;
-  while (out.length < 14 && pass < 24) {
+  while (out.length < 12 && pass < 24) {
     for (const k of order) {
       const next = pools[k]?.shift();
       if (!next) continue;
@@ -6945,17 +6948,18 @@ function discoverCommunityPicksTracks(tracks) {
       if (seen.has(sid)) continue;
       seen.add(sid);
       out.push(next);
-      if (out.length >= 14) break;
+      if (out.length >= 12) break;
     }
     pass += 1;
   }
-  if (out.length < 8) {
+  if (out.length < 6) {
     for (const t of tracks || []) {
+      if (remixAttributionForTrack(t) || mashupAttributionForTrack(t)) continue;
       const sid = String(t.id || t.url || "");
       if (seen.has(sid)) continue;
       seen.add(sid);
       out.push(t);
-      if (out.length >= 14) break;
+      if (out.length >= 12) break;
     }
   }
   return out;
@@ -7627,21 +7631,34 @@ function discoverFeedChallengeBlockHtml(c, tracks, profMap, opts = {}) {
     </section>`;
 }
 
+function discoverFeedTemplateCarouselRowsHtml(tracks, profMap, emptyNote = "") {
+  const picks = tracks || [];
+  if (!picks.length) {
+    return emptyNote
+      ? `<p class="discoverHubQuietNote">${escapeHtml(emptyNote)}</p>`
+      : "";
+  }
+  const mid = Math.ceil(picks.length / 2);
+  const rowHtml = (items) => {
+    const cards = items.map((t) => discoverFeedTemplateCardHtml(t, profMap)).join("");
+    return `<div class="discoverFeedCarouselRow"><div class="discoverFeedCarouselRail">${cards}</div></div>`;
+  };
+  return `
+    <div class="discoverFeedCommunityCarousel">
+      ${rowHtml(picks.slice(0, mid))}
+      ${picks.length > 1 ? rowHtml(picks.slice(mid)) : ""}
+    </div>`;
+}
+
 function discoverFeedCommunityPicksBlockHtml(tracks, profMap, prefs) {
   const picks = discoverCommunityPicksTracksPersonalized(tracks, prefs);
   const seeAllBtn = picks.length
     ? `<button type="button" class="discoverFeedSectionLink" data-discover-feed-tab-jump="all">See all</button>`
     : "";
-  const list = picks.length
-    ? picks.map((t, idx) => discoverFeedSongRowHtml(t, profMap, {
-      compactMeta: true,
-      styleIdx: idx,
-    })).join("")
-    : `<p class="discoverHubQuietNote">Community songs will show here as creators publish to Discover.</p>`;
   return `
     <section class="discoverFeedSection discoverFeedSection--communityPicks">
       ${discoverFeedSectionHeadHtml("Community picks", seeAllBtn)}
-      <div class="discoverFeedListStack discoverFeedListStack--community">${list}</div>
+      ${discoverFeedTemplateCarouselRowsHtml(picks, profMap, "Community songs will show here as creators publish to Discover.")}
     </section>`;
 }
 
@@ -7656,7 +7673,7 @@ function renderDiscoverFeedForYou(tracks, profMap) {
   const templateTracks = discoverTracksSortedByPreferences(
     (tracks || []).filter((t) => trackIsTemplateContent(t)),
     prefs,
-    3,
+    12,
   );
   const topChallengePack = discoverFeaturedChallengeForForYou(tracks, prefs);
   const challengeBlock = topChallengePack.challenge
@@ -7670,9 +7687,14 @@ function renderDiscoverFeedForYou(tracks, profMap) {
   const remixList = remixTracks.length
     ? remixTracks.map((t) => discoverFeedSongRowHtml(t, profMap, remixRowOpts)).join("")
     : `<p class="discoverHubQuietNote">Remixes and mashups will appear as creators publish.</p>`;
-  const templateGrid = templateTracks.length
-    ? templateTracks.map((t) => discoverFeedTemplateCardHtml(t, profMap)).join("")
-    : `<p class="discoverHubQuietNote">Songs made with templates will show here.</p>`;
+  const templateSeeAll = templateTracks.length
+    ? `<button type="button" class="discoverFeedSectionLink" data-discover-feed-tab-jump="templates">See all</button>`
+    : "";
+  const templateCarousel = discoverFeedTemplateCarouselRowsHtml(
+    templateTracks,
+    profMap,
+    "Songs made with templates will show here.",
+  );
   return `
     <section id="discoverWeeklyChart" class="discoverWeeklyChart discoverWeeklyChart--final isLoading" aria-busy="true" aria-label="Top songs this week">${discoverWeeklyChartSkeletonHtml()}</section>
     ${communityBlock}
@@ -7682,8 +7704,8 @@ function renderDiscoverFeedForYou(tracks, profMap) {
       <div class="discoverFeedListStack discoverFeedListStack--remix">${remixList}</div>
     </section>
     <section class="discoverFeedSection">
-      ${discoverFeedSectionHeadHtml("Created with templates")}
-      <div class="discoverFeedTemplateGrid">${templateGrid}</div>
+      ${discoverFeedSectionHeadHtml("Created with templates", templateSeeAll)}
+      ${templateCarousel}
     </section>`;
 }
 

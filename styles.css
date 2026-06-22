@@ -33061,6 +33061,31 @@ section.mentorPage{
   min-width: 0;
   font-size: 10px;
 }
+.discoverFeedCommunityCarousel{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.discoverFeedCarouselRow{
+  min-width: 0;
+}
+.discoverFeedCarouselRail{
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  padding: 2px 2px 4px;
+  scrollbar-width: none;
+}
+.discoverFeedCarouselRail::-webkit-scrollbar{ display: none; }
+.discoverFeedCarouselRail .discoverFeedTemplateCardWrap{
+  flex: 0 0 clamp(102px, 28vw, 124px);
+  width: clamp(102px, 28vw, 124px);
+  scroll-snap-align: start;
+}
 .discoverFeedChallengeHero{
   display: grid;
   grid-template-columns: 1fr auto;

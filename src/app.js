@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260622hideTabInDm";
+const APP_BUILD = "20260622instantDm";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2962,6 +2962,7 @@ function applyRoute({ passGen } = {}) {
   const rawRouteQuery = String(rawRoute.split("?")[1] || "").split("#")[0];
   let pendingDiscoverPlaylistSlug = "";
   let pendingMessagesThreadId = "";
+  let pendingMessagesThreadUserId = "";
   const playlistRouteMatch = route.match(/^discover\/playlist\/([a-z0-9_-]+)/i);
   if (playlistRouteMatch) {
     pendingDiscoverPlaylistSlug = decodeURIComponent(String(playlistRouteMatch[1] || "")).trim();
@@ -3004,9 +3005,12 @@ function applyRoute({ passGen } = {}) {
   }
   if (route === "messages-thread") {
     try {
-      pendingMessagesThreadId = String(new URLSearchParams(rawRouteQuery).get("thread") || "").trim();
+      const threadQs = new URLSearchParams(rawRouteQuery);
+      pendingMessagesThreadId = String(threadQs.get("thread") || "").trim();
+      pendingMessagesThreadUserId = String(threadQs.get("user") || "").trim();
     } catch {
       pendingMessagesThreadId = "";
+      pendingMessagesThreadUserId = "";
     }
   }
   const allowedRoutes = new Set([
@@ -3145,8 +3149,10 @@ function applyRoute({ passGen } = {}) {
   }
   const prevRoute = document.body.getAttribute("data-route") || "";
   if (prevRoute === "messages-thread" && wanted !== "messages-thread") {
-    stopMessagesThreadPoll();
+    stopMessagesThreadRealtime();
+    resetMessagesThreadRouteState();
     syncMessagesThreadComposerInset();
+    document.body.classList.remove("messagesThreadEntering", "messagesThreadLeaving");
   }
   if (wanted === "challenges" && hasActiveCreateSession()) {
     wanted = "generate";
@@ -3400,7 +3406,7 @@ function applyRoute({ passGen } = {}) {
   }
   if (MESSAGES_FEATURE_ENABLED && wanted === "messages-thread") {
     bindMessagesPageOnce();
-    void enterMessagesThreadRoute(pendingMessagesThreadId);
+    enterMessagesThreadRoute(pendingMessagesThreadId, pendingMessagesThreadUserId);
   }
   if (wanted === "discover") {
     bindDiscoveryDiscoverControls();
@@ -20790,17 +20796,35 @@ async function socialApi(path, opts = {}) {
 }
 
 let _messagesPageBound = false;
-let _messagesThreadPollTimer = 0;
+let _messagesRealtimePollTimer = 0;
 let _messagesUnreadCount = 0;
 let _messagesUnreadLastFetchedAt = 0;
 let _messagesUnreadFetchInFlight = false;
 let _messagesInboxState = { threads: [], requests: [], sentRequests: [] };
-let _messagesThreadState = { threadId: "", partner: null, messages: [] };
+let _chatHeaderUser = null;
+let _chatHeaderUserKey = "";
+let _chatHeaderPartnerStats = {};
+let _conversationId = "";
+let _messagesList = [];
+let _messagesLoading = false;
+let _messagesThreadBootToken = 0;
+let _messagesLastFetchedAt = "";
 let _messagesInboxLoading = false;
 let _messagesInboxFilter = "all";
-let _messagesThreadLoading = false;
 let _messagesSendInFlight = false;
 let _messagesRequestTargetUserId = "";
+let _messagesThreadLeaving = false;
+const MESSAGES_NAV_PREF_KEY = "mas:messagesNavPrefetch:v1";
+
+function syncMessagesThreadComposerReady() {
+  const input = document.getElementById("messagesComposerInput");
+  const sendBtn = document.getElementById("messagesComposerSend");
+  const shareBtn = document.getElementById("messagesComposerShare");
+  const ready = Boolean(String(_conversationId || "").trim());
+  if (input) input.disabled = !ready;
+  if (sendBtn) sendBtn.disabled = !ready || _messagesSendInFlight;
+  if (shareBtn) shareBtn.disabled = !ready;
+}
 
 function syncMessagesThreadComposerInset() {
   if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
@@ -20824,6 +20848,275 @@ function wireMessagesThreadKeyboardOnce() {
   const onViewportChange = () => syncMessagesThreadComposerInset();
   vv.addEventListener("resize", onViewportChange);
   vv.addEventListener("scroll", onViewportChange);
+}
+
+function normalizeChatHeaderUser(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const userId = String(raw.userId || raw.user_id || raw.partnerUserId || "").trim();
+  const username = String(raw.username || raw.partnerUsername || "").replace(/^@/, "").trim();
+  const displayName = String(raw.displayName || raw.display_name || username || "").replace(/^@/, "").trim();
+  const avatarUrl = String(raw.avatarUrl || raw.avatar_url || raw.avatar || raw.partnerAvatar || "").trim();
+  if (!userId && !username) return null;
+  return {
+    userId,
+    username: username || displayName || "user",
+    displayName: displayName || username || "User",
+    avatarUrl,
+  };
+}
+
+function chatHeaderUserFromPublicProfile() {
+  const userId = String(currentUserPublicProfileId || "").trim();
+  const username = String(els.userPublicName?.textContent || "").replace(/^@/, "").trim();
+  let avatarUrl = "";
+  const img = els.userPublicAvatar;
+  if (img && img.dataset.empty !== "true") {
+    avatarUrl = String(img.currentSrc || img.src || "").trim();
+  }
+  return normalizeChatHeaderUser({ userId, username, displayName: username, avatarUrl });
+}
+
+function chatHeaderUserFromInboxThread(t) {
+  return normalizeChatHeaderUser({
+    userId: t?.partnerUserId,
+    username: t?.partnerUsername,
+    displayName: t?.partnerUsername,
+    avatarUrl: t?.partnerAvatar,
+  });
+}
+
+function chatHeaderUserFromInboxRequest(req) {
+  return normalizeChatHeaderUser({
+    userId: req?.fromUserId,
+    username: req?.fromUsername,
+    displayName: req?.fromUsername,
+    avatarUrl: req?.fromAvatar,
+  });
+}
+
+function chatHeaderUserFromApiThread(thread) {
+  return normalizeChatHeaderUser({
+    userId: thread?.partnerUserId,
+    username: thread?.partnerUsername,
+    displayName: thread?.partnerUsername,
+    avatarUrl: thread?.partnerAvatar,
+  });
+}
+
+function stashMessagesNavPrefetch(pref) {
+  try { sessionStorage.setItem(MESSAGES_NAV_PREF_KEY, JSON.stringify(pref || {})); } catch {}
+}
+
+function readMessagesNavPrefetch() {
+  try {
+    const raw = sessionStorage.getItem(MESSAGES_NAV_PREF_KEY);
+    if (raw) sessionStorage.removeItem(MESSAGES_NAV_PREF_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function findInboxThreadById(threadId) {
+  const tid = String(threadId || "").trim();
+  if (!tid) return null;
+  return (_messagesInboxState.threads || []).find((t) => String(t?.threadId || "") === tid) || null;
+}
+
+function navigateToMessagesThread({ threadId, headerUser, targetUserId } = {}) {
+  stashMessagesNavPrefetch({
+    threadId: String(threadId || "").trim(),
+    headerUser: normalizeChatHeaderUser(headerUser),
+    targetUserId: String(targetUserId || headerUser?.userId || "").trim(),
+  });
+  const params = new URLSearchParams();
+  const tid = String(threadId || "").trim();
+  const uid = String(targetUserId || headerUser?.userId || "").trim();
+  if (tid) params.set("thread", tid);
+  else if (uid) params.set("user", uid);
+  const qs = params.toString();
+  try { location.hash = qs ? `#/messages-thread?${qs}` : "#/messages-thread"; } catch {}
+}
+
+function setChatHeaderUser(user, { force = false } = {}) {
+  const next = normalizeChatHeaderUser(user);
+  if (!next) return;
+  const key = `${next.userId}|${next.username}|${next.avatarUrl}|${next.displayName}`;
+  if (!force && _chatHeaderUserKey === key) return;
+  _chatHeaderUser = next;
+  _chatHeaderUserKey = key;
+  renderChatHeader();
+}
+
+function renderChatHeaderSkeleton() {
+  const displayEl = document.getElementById("messagesThreadDisplayName");
+  const handleEl = document.getElementById("messagesThreadHandleSub");
+  const avatarEl = document.getElementById("messagesThreadAvatar");
+  if (displayEl) {
+    displayEl.textContent = "";
+    displayEl.classList.add("messagesThreadHeadSkel");
+  }
+  if (handleEl) {
+    handleEl.textContent = "";
+    handleEl.classList.add("messagesThreadHeadSkel");
+  }
+  if (avatarEl) {
+    avatarEl.dataset.chatAvKey = "skel";
+    avatarEl.innerHTML = `<span class="messagesThreadAvatarSkel" aria-hidden="true"></span>`;
+  }
+}
+
+function renderChatHeader() {
+  const u = _chatHeaderUser;
+  if (!u) {
+    renderChatHeaderSkeleton();
+    return;
+  }
+  const displayEl = document.getElementById("messagesThreadDisplayName");
+  const handleEl = document.getElementById("messagesThreadHandleSub");
+  const relationEl = document.getElementById("messagesThreadRelation");
+  const avatarEl = document.getElementById("messagesThreadAvatar");
+  if (displayEl) {
+    displayEl.textContent = u.displayName.replace(/^@/, "");
+    displayEl.classList.remove("messagesThreadHeadSkel");
+  }
+  if (handleEl) {
+    handleEl.textContent = `@${u.username.replace(/^@/, "")}`;
+    handleEl.classList.remove("messagesThreadHeadSkel");
+  }
+  const avKey = `${u.avatarUrl}|${u.username}`;
+  if (avatarEl && avatarEl.dataset.chatAvKey !== avKey) {
+    avatarEl.dataset.chatAvKey = avKey;
+    avatarEl.innerHTML = messagesAvatarHtml(u.avatarUrl, u.username, "messagesThreadAvatarImg");
+  }
+  updateChatHeaderRelationOnly();
+}
+
+function updateChatHeaderRelationOnly() {
+  const relationEl = document.getElementById("messagesThreadRelation");
+  const relation = dmRelationshipLabel(_chatHeaderPartnerStats);
+  if (relationEl) {
+    relationEl.textContent = relation;
+    relationEl.hidden = !relation;
+  }
+}
+
+function messagesThreadSkeletonHtml() {
+  return Array.from({ length: 6 }, (_, i) => `
+    <div class="messagesBubbleWrap messagesBubbleWrap--skel${i % 2 ? " is-mine" : ""}" style="--skelDelay:${(i * 0.06).toFixed(2)}s" aria-hidden="true">
+      <div class="messagesBubble messagesBubble--skel"></div>
+    </div>`).join("");
+}
+
+function shouldAutoScrollMessagesMount() {
+  const mount = document.getElementById("messagesThreadMount");
+  if (!mount) return true;
+  const dist = mount.scrollHeight - mount.scrollTop - mount.clientHeight;
+  return dist < 120;
+}
+
+function renderMessagesMount({ scrollToBottom = true } = {}) {
+  const mount = document.getElementById("messagesThreadMount");
+  const viewerId = authSession?.user?.id || "";
+  if (!mount) return;
+  if (_messagesLoading) {
+    mount.innerHTML = `<div class="messagesBubbleStack messagesBubbleStack--loading" aria-busy="true" aria-label="Loading messages">${messagesThreadSkeletonHtml()}</div>`;
+    return;
+  }
+  const msgs = Array.isArray(_messagesList) ? _messagesList : [];
+  if (!msgs.length) {
+    mount.innerHTML = `
+      <div class="messagesThreadEmpty">
+        <p class="messagesThreadEmptyTitle">Start a conversation 🎵</p>
+        <p class="messagesThreadEmptyLead">Share songs, remixes and ideas.</p>
+      </div>`;
+    return;
+  }
+  mount.innerHTML = `<div class="messagesBubbleStack">${msgs.map((m) => messagesBubbleHtml(m, viewerId)).join("")}</div>`;
+  if (scrollToBottom && shouldAutoScrollMessagesMount()) {
+    requestAnimationFrame(() => {
+      try { mount.scrollTop = mount.scrollHeight; } catch {}
+      try { syncDiscoveryPlayingHighlights(); } catch {}
+    });
+  }
+}
+
+function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
+  const rows = Array.isArray(incoming) ? incoming : [];
+  if (!rows.length) return false;
+  const byId = new Map((Array.isArray(_messagesList) ? _messagesList : []).map((m) => [String(m.id), m]));
+  let changed = false;
+  for (const m of rows) {
+    const id = String(m?.id || "");
+    if (!id) continue;
+    const prev = byId.get(id);
+    if (!prev || prev.body !== m.body || prev.created_at !== m.created_at) {
+      byId.set(id, m);
+      changed = true;
+    }
+  }
+  if (!changed) return false;
+  _messagesList = [...byId.values()].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  );
+  _messagesLastFetchedAt = _messagesList.length
+    ? String(_messagesList[_messagesList.length - 1].created_at || "")
+    : _messagesLastFetchedAt;
+  renderMessagesMount({ scrollToBottom: scrollToBottom && shouldAutoScrollMessagesMount() });
+  return true;
+}
+
+function appendThreadMessages(newMsgs) {
+  mergeThreadMessages(newMsgs, { scrollToBottom: true });
+}
+
+function resetMessagesThreadRouteState() {
+  _chatHeaderUser = null;
+  _chatHeaderUserKey = "";
+  _chatHeaderPartnerStats = {};
+  _conversationId = "";
+  _messagesList = [];
+  _messagesLoading = false;
+  _messagesLastFetchedAt = "";
+}
+
+function beginMessagesThreadEnterTransition() {
+  if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
+    return;
+  }
+  document.body.classList.remove("messagesThreadLeaving");
+  document.body.classList.add("messagesThreadEntering");
+  window.setTimeout(() => document.body.classList.remove("messagesThreadEntering"), 320);
+}
+
+function leaveMessagesThreadRoute(callback) {
+  const run = typeof callback === "function" ? callback : () => {};
+  if (_messagesThreadLeaving) return;
+  const reduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  if (reduced) {
+    run();
+    return;
+  }
+  _messagesThreadLeaving = true;
+  document.body.classList.remove("messagesThreadEntering");
+  document.body.classList.add("messagesThreadLeaving");
+  window.setTimeout(() => {
+    _messagesThreadLeaving = false;
+    document.body.classList.remove("messagesThreadLeaving");
+    run();
+  }, 260);
+}
+
+async function markThreadReadQuiet(threadId) {
+  const tid = String(threadId || _conversationId || "").trim();
+  if (!tid) return;
+  try {
+    await messagesApi("/api/messages", {
+      method: "POST",
+      body: JSON.stringify({ action: "mark_read", threadId: tid }),
+    });
+    void refreshMessagesUnreadBadge({ force: true });
+  } catch {}
 }
 
 function closeMessagesRequestSheet() {
@@ -20891,31 +21184,9 @@ async function openUserPublicMessage() {
     return;
   }
   if (targetUserId === String(authSession.user.id)) return;
-  const stats = currentUserPublicSocialStats || {};
-  const mutualOnProfile = Boolean(stats.isFollowing) && Boolean(stats.followsViewer);
   try { haptic("light"); } catch {}
-  try {
-    const data = await messagesApi("/api/messages", {
-      method: "POST",
-      body: JSON.stringify({ action: "open_thread", targetUserId }),
-    });
-    if (data?.needsRequest) {
-      if (mutualOnProfile) {
-        try { showToast("Could not open chat right now. Try again in a moment.", { icon: "💬", durationMs: 2800 }); } catch {}
-        return;
-      }
-      openMessagesRequestSheet(targetUserId);
-      return;
-    }
-    const threadId = String(data?.threadId || "").trim();
-    if (threadId) {
-      location.hash = `#/messages-thread?thread=${encodeURIComponent(threadId)}`;
-      return;
-    }
-    try { location.hash = "#/messages"; } catch {}
-  } catch (e) {
-    try { showToast(String(e?.message || "Could not open messages"), { icon: "💬", durationMs: 2800 }); } catch {}
-  }
+  const headerUser = chatHeaderUserFromPublicProfile();
+  navigateToMessagesThread({ headerUser, targetUserId });
 }
 
 async function messagesApi(path, opts = {}) {
@@ -21203,7 +21474,15 @@ async function sendShareRefToFriend(friend, shareRef) {
     const nextThread = String(data?.threadId || threadId || "").trim();
     if (nextThread) {
       window.setTimeout(() => {
-        try { location.hash = `#/messages-thread?thread=${encodeURIComponent(nextThread)}`; } catch {}
+        navigateToMessagesThread({
+          threadId: nextThread,
+          headerUser: normalizeChatHeaderUser({
+            userId: friend?.userId,
+            username: friend?.username,
+            displayName: friend?.username,
+            avatarUrl: friend?.avatar,
+          }),
+        });
       }, 280);
     }
     void refreshMessagesUnreadBadge({ force: true });
@@ -21372,34 +21651,19 @@ function messagesDmSongCardHtml(song, { mine = false } = {}) {
 }
 
 function renderMessagesThreadHead() {
-  const partner = _messagesThreadState.partner || {};
-  const stats = _messagesThreadState.partnerStats || {};
-  const handle = String(partner.partnerUsername || "").trim();
-  const displayEl = document.getElementById("messagesThreadDisplayName");
-  const handleEl = document.getElementById("messagesThreadHandleSub");
-  const relationEl = document.getElementById("messagesThreadRelation");
-  const avatarEl = document.getElementById("messagesThreadAvatar");
-  const displayName = handle ? handle.replace(/^@/, "") : "Creator";
-  if (displayEl) displayEl.textContent = displayName;
-  if (handleEl) handleEl.textContent = handle ? `@${handle.replace(/^@/, "")}` : "@creator";
-  if (avatarEl) avatarEl.innerHTML = messagesAvatarHtml(partner.partnerAvatar, handle, "messagesThreadAvatarImg");
-  const relation = dmRelationshipLabel(stats);
-  if (relationEl) {
-    relationEl.textContent = relation;
-    relationEl.hidden = !relation;
-  }
+  renderChatHeader();
 }
 
 async function loadMessagesThreadPartnerMeta(partnerUserId) {
-  const uid = String(partnerUserId || "").trim();
+  const uid = String(partnerUserId || _chatHeaderUser?.userId || "").trim();
   if (!uid) return;
   try {
     const data = await fetchSocialStatsForProfile({ userId: uid });
-    _messagesThreadState.partnerStats = data?.stats || {};
+    _chatHeaderPartnerStats = data?.stats || {};
   } catch {
-    _messagesThreadState.partnerStats = {};
+    _chatHeaderPartnerStats = {};
   }
-  renderMessagesThreadHead();
+  updateChatHeaderRelationOnly();
 }
 
 function closeMessagesShareSheet() {
@@ -21443,7 +21707,7 @@ async function openMessagesShareSheet() {
 let _messagesShareCandidates = [];
 
 async function sendDmSongShare(track) {
-  const threadId = String(_messagesThreadState.threadId || "").trim();
+  const threadId = String(_conversationId || "").trim();
   if (!threadId || !track) return;
   const body = dmSongPayloadFromTrack(track);
   if (body.length > 500) {
@@ -21458,11 +21722,10 @@ async function sendDmSongShare(track) {
     closeMessagesShareSheet();
     const msg = data?.message;
     if (msg) {
-      _messagesThreadState.messages = [...(_messagesThreadState.messages || []), msg];
+      appendThreadMessages([msg]);
     } else {
-      await loadMessagesThread(threadId, { silent: true });
+      await pollNewThreadMessages(threadId);
     }
-    renderMessagesThread();
     try { syncDiscoveryPlayingHighlights(); } catch {}
     void refreshMessagesUnreadBadge({ force: true });
   } catch (e) {
@@ -21734,28 +21997,226 @@ function messagesBubbleHtml(msg, viewerId) {
 }
 
 function renderMessagesThread() {
-  renderMessagesThreadHead();
-  const mount = document.getElementById("messagesThreadMount");
-  const viewerId = authSession?.user?.id || "";
-  if (!mount) return;
-  if (_messagesThreadLoading) {
-    mount.innerHTML = `<div class="messagesThreadLoading">Loading conversation…</div>`;
+  renderMessagesMount();
+}
+
+async function loadMessagesForConversation(threadId, { bootToken = 0, silent = false } = {}) {
+  const tid = String(threadId || _conversationId || "").trim();
+  if (!tid) return false;
+  if (!silent) {
+    _messagesLoading = true;
+    renderMessagesMount();
+  }
+  try {
+    const data = await messagesApi(`/api/messages?type=thread&threadId=${encodeURIComponent(tid)}`);
+    if (bootToken && bootToken !== _messagesThreadBootToken) return false;
+    const partner = data?.thread || null;
+    if (partner && !_chatHeaderUser?.userId) {
+      setChatHeaderUser(chatHeaderUserFromApiThread(partner));
+    } else if (partner && _chatHeaderUser && !isRealUserAvatarUrl(_chatHeaderUser.avatarUrl) && partner.partnerAvatar) {
+      setChatHeaderUser({
+        ..._chatHeaderUser,
+        avatarUrl: partner.partnerAvatar,
+        username: _chatHeaderUser.username || partner.partnerUsername,
+      });
+    }
+    _conversationId = tid;
+    _messagesList = Array.isArray(data?.messages) ? data.messages : [];
+    _messagesLastFetchedAt = _messagesList.length
+      ? String(_messagesList[_messagesList.length - 1].created_at || "")
+      : "";
+    void loadMessagesThreadPartnerMeta(partner?.partnerUserId || _chatHeaderUser?.userId);
+    if (!silent) {
+      await markThreadReadQuiet(tid);
+    }
+    return true;
+  } catch (e) {
+    if (!silent) {
+      const mount = document.getElementById("messagesThreadMount");
+      if (mount) {
+        mount.innerHTML = `<div class="messagesThreadEmpty">${escapeHtml(String(e?.message || "Could not load conversation."))}</div>`;
+      }
+    }
+    return false;
+  } finally {
+    if (bootToken && bootToken !== _messagesThreadBootToken) return false;
+    if (!silent) _messagesLoading = false;
+    renderMessagesMount({ scrollToBottom: !silent });
+  }
+}
+
+async function loadMessagesThread(threadId, { silent = false } = {}) {
+  return loadMessagesForConversation(threadId, { silent });
+}
+
+async function pollNewThreadMessages(threadId) {
+  const tid = String(threadId || _conversationId || "").trim();
+  if (!tid) return;
+  if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
+  if (_conversationId !== tid) return;
+
+  const since = String(_messagesLastFetchedAt || "").trim();
+  let path = `dm_messages?select=id,sender_id,body,created_at&thread_id=eq.${encodeURIComponent(tid)}&order=created_at.asc&limit=40`;
+  if (since) path += `&created_at=gt.${encodeURIComponent(since)}`;
+
+  const r = await supabaseRestWithAuth(path);
+  if (!r?.ok) {
+    await loadMessagesForConversation(tid, { silent: true });
     return;
   }
-  const msgs = Array.isArray(_messagesThreadState.messages) ? _messagesThreadState.messages : [];
-  if (!msgs.length) {
-    mount.innerHTML = `
-      <div class="messagesThreadEmpty">
-        <p class="messagesThreadEmptyTitle">Start a conversation 🎵</p>
-        <p class="messagesThreadEmptyLead">Share songs, remixes and ideas.</p>
-      </div>`;
+  const rows = await r.json().catch(() => []);
+  if (!Array.isArray(rows) || !rows.length) return;
+  if (mergeThreadMessages(rows)) {
+    void markThreadReadQuiet(tid);
+  }
+}
+
+function stopMessagesThreadRealtime() {
+  if (_messagesRealtimePollTimer) {
+    window.clearInterval(_messagesRealtimePollTimer);
+    _messagesRealtimePollTimer = 0;
+  }
+}
+
+function stopMessagesThreadPoll() {
+  stopMessagesThreadRealtime();
+}
+
+function startMessagesThreadRealtime(threadId) {
+  stopMessagesThreadRealtime();
+  const tid = String(threadId || _conversationId || "").trim();
+  if (!tid) return;
+  _messagesRealtimePollTimer = window.setInterval(() => {
+    if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
+      stopMessagesThreadRealtime();
+      return;
+    }
+    if (_conversationId !== tid) return;
+    void pollNewThreadMessages(tid);
+  }, 3500);
+}
+
+function startMessagesThreadPoll(threadId) {
+  startMessagesThreadRealtime(threadId);
+}
+
+async function resolveConversationThread(targetUserId, { bootToken = 0 } = {}) {
+  const uid = String(targetUserId || "").trim();
+  if (!uid) return "";
+  const stats = String(uid) === String(currentUserPublicProfileId || "")
+    ? (currentUserPublicSocialStats || {})
+    : (_chatHeaderPartnerStats || {});
+  const mutualOnProfile = Boolean(stats.isFollowing) && Boolean(stats.followsViewer);
+  try {
+    const data = await messagesApi("/api/messages", {
+      method: "POST",
+      body: JSON.stringify({ action: "open_thread", targetUserId: uid }),
+    });
+    if (bootToken && bootToken !== _messagesThreadBootToken) return "";
+    if (data?.needsRequest) {
+      leaveMessagesThreadRoute(() => {
+        try { location.hash = "#/messages"; } catch {}
+        if (mutualOnProfile) {
+          try { showToast("Could not open chat right now. Try again in a moment.", { icon: "💬", durationMs: 2800 }); } catch {}
+        } else {
+          openMessagesRequestSheet(uid);
+        }
+      });
+      return "";
+    }
+    return String(data?.threadId || "").trim();
+  } catch (e) {
+    if (bootToken && bootToken !== _messagesThreadBootToken) return "";
+    const mount = document.getElementById("messagesThreadMount");
+    if (mount) {
+      mount.innerHTML = `<div class="messagesThreadEmpty">${escapeHtml(String(e?.message || "Could not open conversation."))}</div>`;
+    }
+    _messagesLoading = false;
+    return "";
+  }
+}
+
+async function bootstrapMessagesThread({ bootToken, threadId, targetUserId }) {
+  let tid = String(threadId || _conversationId || "").trim();
+  if (!tid) {
+    tid = await resolveConversationThread(targetUserId, { bootToken });
+    if (!tid || bootToken !== _messagesThreadBootToken) return;
+    _conversationId = tid;
+    try {
+      history.replaceState(null, "", `#/messages-thread?thread=${encodeURIComponent(tid)}`);
+    } catch {}
+  }
+  startMessagesThreadRealtime(tid);
+  await loadMessagesForConversation(tid, { bootToken });
+  syncMessagesThreadComposerReady();
+}
+
+function enterMessagesThreadRoute(threadId, targetUserId = "") {
+  const pref = readMessagesNavPrefetch();
+  const bootToken = ++_messagesThreadBootToken;
+  const tid = String(threadId || pref?.threadId || "").trim();
+  const uid = String(targetUserId || pref?.targetUserId || pref?.headerUser?.userId || "").trim();
+
+  if (!tid && !uid && !pref?.headerUser) {
+    try { location.hash = "#/messages"; } catch {}
     return;
   }
-  mount.innerHTML = `<div class="messagesBubbleStack">${msgs.map((m) => messagesBubbleHtml(m, viewerId)).join("")}</div>`;
-  requestAnimationFrame(() => {
-    try { mount.scrollTop = mount.scrollHeight; } catch {}
-    try { syncDiscoveryPlayingHighlights(); } catch {}
-  });
+
+  _conversationId = tid;
+  _messagesList = [];
+  _messagesLastFetchedAt = "";
+  _messagesLoading = true;
+  _chatHeaderPartnerStats = {};
+
+  const headerFromPref = normalizeChatHeaderUser(pref?.headerUser);
+  if (headerFromPref) {
+    setChatHeaderUser(headerFromPref, { force: true });
+  } else if (tid) {
+    const cachedThread = findInboxThreadById(tid);
+    if (cachedThread) setChatHeaderUser(chatHeaderUserFromInboxThread(cachedThread), { force: true });
+  }
+
+  const input = document.getElementById("messagesComposerInput");
+  if (input) input.value = "";
+  renderChatHeader();
+  renderMessagesMount();
+  syncMessagesThreadComposerReady();
+  wireMessagesThreadKeyboardOnce();
+  syncMessagesThreadComposerInset();
+  beginMessagesThreadEnterTransition();
+  if (_chatHeaderUser?.userId) void loadMessagesThreadPartnerMeta(_chatHeaderUser.userId);
+  void bootstrapMessagesThread({ bootToken, threadId: tid, targetUserId: uid });
+}
+
+async function sendCurrentThreadMessage() {
+  if (_messagesSendInFlight) return;
+  const input = document.getElementById("messagesComposerInput");
+  const text = String(input?.value || "").trim();
+  const threadId = String(_conversationId || "").trim();
+  if (!text || !threadId) return;
+  _messagesSendInFlight = true;
+  const sendBtn = document.getElementById("messagesComposerSend");
+  if (sendBtn) sendBtn.disabled = true;
+  try {
+    const data = await messagesApi("/api/messages", {
+      method: "POST",
+      body: JSON.stringify({ action: "send_message", threadId, body: text }),
+    });
+    if (input) input.value = "";
+    const msg = data?.message;
+    if (msg) {
+      appendThreadMessages([msg]);
+    } else {
+      await pollNewThreadMessages(threadId);
+    }
+    void refreshMessagesUnreadBadge({ force: true });
+  } catch (e) {
+    try { showToast(String(e?.message || "Could not send message"), { icon: "💬", durationMs: 2800 }); } catch {}
+  } finally {
+    _messagesSendInFlight = false;
+    if (sendBtn) sendBtn.disabled = false;
+    syncMessagesThreadComposerReady();
+  }
 }
 
 async function loadMessagesInbox() {
@@ -21782,119 +22243,9 @@ async function loadMessagesInbox() {
   }
 }
 
-async function loadMessagesThread(threadId, { silent = false } = {}) {
-  const tid = String(threadId || "").trim();
-  if (!tid) return false;
-  if (!silent) {
-    _messagesThreadLoading = true;
-    renderMessagesThread();
-  }
-  try {
-    const data = await messagesApi(`/api/messages?type=thread&threadId=${encodeURIComponent(tid)}`);
-    _messagesThreadState = {
-      threadId: tid,
-      partner: data?.thread || null,
-      partnerStats: _messagesThreadState.partnerStats || {},
-      messages: Array.isArray(data?.messages) ? data.messages : [],
-    };
-    void loadMessagesThreadPartnerMeta(data?.thread?.partnerUserId);
-    if (!silent) {
-      await messagesApi("/api/messages", {
-        method: "POST",
-        body: JSON.stringify({ action: "mark_read", threadId: tid }),
-      }).catch(() => {});
-    }
-    return true;
-  } catch (e) {
-    if (!silent) {
-      const mount = document.getElementById("messagesThreadMount");
-      if (mount) {
-        mount.innerHTML = `<div class="messagesThreadEmpty">${escapeHtml(String(e?.message || "Could not load conversation."))}</div>`;
-      }
-    }
-    return false;
-  } finally {
-    if (!silent) {
-      _messagesThreadLoading = false;
-      renderMessagesThread();
-      void refreshMessagesUnreadBadge({ force: true });
-    }
-  }
-}
-
-function stopMessagesThreadPoll() {
-  if (_messagesThreadPollTimer) {
-    window.clearInterval(_messagesThreadPollTimer);
-    _messagesThreadPollTimer = 0;
-  }
-}
-
-function startMessagesThreadPoll(threadId) {
-  stopMessagesThreadPoll();
-  const tid = String(threadId || "").trim();
-  if (!tid) return;
-  _messagesThreadPollTimer = window.setInterval(() => {
-    if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
-      stopMessagesThreadPoll();
-      return;
-    }
-    if (_messagesThreadState.threadId !== tid) return;
-    void loadMessagesThread(tid, { silent: true }).then((ok) => {
-      if (ok) renderMessagesThread();
-    });
-  }, 8000);
-}
-
 async function enterMessagesRoute() {
   syncFriendsMessagesBtn();
   await loadMessagesInbox();
-}
-
-async function enterMessagesThreadRoute(threadId) {
-  const tid = String(threadId || "").trim();
-  if (!tid) {
-    try { location.hash = "#/messages"; } catch {}
-    return;
-  }
-  _messagesThreadState = { threadId: tid, partner: null, partnerStats: {}, messages: [] };
-  const input = document.getElementById("messagesComposerInput");
-  if (input) input.value = "";
-  wireMessagesThreadKeyboardOnce();
-  syncMessagesThreadComposerInset();
-  await loadMessagesThread(tid);
-  startMessagesThreadPoll(tid);
-}
-
-async function sendCurrentThreadMessage() {
-  if (_messagesSendInFlight) return;
-  const input = document.getElementById("messagesComposerInput");
-  const text = String(input?.value || "").trim();
-  const threadId = String(_messagesThreadState.threadId || "").trim();
-  if (!text || !threadId) return;
-  _messagesSendInFlight = true;
-  const sendBtn = document.getElementById("messagesComposerSend");
-  if (sendBtn) sendBtn.disabled = true;
-  try {
-    const data = await messagesApi("/api/messages", {
-      method: "POST",
-      body: JSON.stringify({ action: "send_message", threadId, body: text }),
-    });
-    if (input) input.value = "";
-    const msg = data?.message;
-    if (msg) {
-      _messagesThreadState.messages = [...(_messagesThreadState.messages || []), msg];
-      renderMessagesThread();
-    } else {
-      await loadMessagesThread(threadId, { silent: true });
-      renderMessagesThread();
-    }
-    void refreshMessagesUnreadBadge({ force: true });
-  } catch (e) {
-    try { showToast(String(e?.message || "Could not send message"), { icon: "💬", durationMs: 2800 }); } catch {}
-  } finally {
-    _messagesSendInFlight = false;
-    if (sendBtn) sendBtn.disabled = false;
-  }
 }
 
 async function respondMessageRequest(requestId, decision) {
@@ -21906,7 +22257,11 @@ async function respondMessageRequest(requestId, decision) {
       body: JSON.stringify({ action: "respond_request", requestId: rid, decision }),
     });
     if (decision === "accept" && data?.threadId) {
-      try { location.hash = `#/messages-thread?thread=${encodeURIComponent(data.threadId)}`; } catch {}
+      const req = (_messagesInboxState.requests || []).find((r) => String(r.requestId) === rid);
+      navigateToMessagesThread({
+        threadId: data.threadId,
+        headerUser: req ? chatHeaderUserFromInboxRequest(req) : null,
+      });
     } else {
       _messagesInboxState.requests = (_messagesInboxState.requests || []).filter((r) => String(r.requestId) !== rid);
       renderMessagesInbox();
@@ -21942,7 +22297,9 @@ function bindMessagesPageOnce() {
     if (backThread) {
       e.preventDefault();
       try { haptic("light"); } catch {}
-      try { location.hash = "#/messages"; } catch {}
+      leaveMessagesThreadRoute(() => {
+        try { location.hash = "#/messages"; } catch {}
+      });
       return;
     }
     const threadRow = e.target.closest("[data-messages-thread]");
@@ -21951,7 +22308,11 @@ function bindMessagesPageOnce() {
       const tid = threadRow.getAttribute("data-messages-thread");
       if (tid) {
         try { haptic("light"); } catch {}
-        try { location.hash = `#/messages-thread?thread=${encodeURIComponent(tid)}`; } catch {}
+        const cachedThread = findInboxThreadById(tid);
+        navigateToMessagesThread({
+          threadId: tid,
+          headerUser: cachedThread ? chatHeaderUserFromInboxThread(cachedThread) : null,
+        });
       }
       return;
     }

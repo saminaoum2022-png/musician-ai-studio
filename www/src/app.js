@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260623dmAutofocus";
+const APP_BUILD = "20260623routeCache";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3148,8 +3148,8 @@ function applyRoute({ passGen } = {}) {
     } catch {}
   }
   const prevRoute = document.body.getAttribute("data-route") || "";
-  if (prevRoute === "messages" && wanted !== "messages") {
-    captureMessagesInboxScroll();
+  if (prevRoute && prevRoute !== wanted) {
+    captureRouteScroll(prevRoute);
   }
   if (prevRoute === "messages-thread" && wanted !== "messages-thread") {
     stopMessagesThreadRealtime();
@@ -3382,6 +3382,7 @@ function applyRoute({ passGen } = {}) {
     } else {
       try { setProfileHeaderLoading(false); } catch {}
       try { renderProfilePreviewFromInputs(); } catch {}
+      restoreRouteScroll("profile");
     }
     scheduleProfileSongsRender({ deferCloud: profileHeavy });
   }
@@ -3401,6 +3402,8 @@ function applyRoute({ passGen } = {}) {
       enterFriendsRoute();
     } else {
       paintFriendsFeedSnapshotIfFresh();
+      restoreRouteScroll("friends");
+      markRouteHeavy("friends");
     }
   }
   if (MESSAGES_FEATURE_ENABLED && wanted === "messages") {
@@ -3415,7 +3418,10 @@ function applyRoute({ passGen } = {}) {
     bindDiscoveryDiscoverControls();
     bindDiscoverPlaylistScreenOnce();
     bindDiscoverWeeklyChartSectionOnce();
-    if (!shouldSkipRouteHeavy("discover") || !_discoveryFeedTracks.length) {
+    if (shouldSkipRouteHeavy("discover") && _discoveryFeedTracks.length) {
+      restoreRouteScroll("discover");
+      markRouteHeavy("discover");
+    } else {
       markRouteHeavy("discover");
       void refreshDiscoverFeed();
     }
@@ -3437,11 +3443,17 @@ function applyRoute({ passGen } = {}) {
   }
   if (wanted === "activity") {
     bindActivityPageOnce();
-    if (!shouldSkipRouteHeavy("activity")) {
+    const hasActivityCache = _activityFeedState.items.length > 0 || paintActivityFeedSnapshotIfFresh();
+    if (shouldSkipRouteHeavy("activity") && hasActivityCache) {
+      if (!paintActivityFeedSnapshotIfFresh() && _activityFeedState.items.length) {
+        renderActivityFeedFromState();
+      }
+      restoreRouteScroll("activity");
       markRouteHeavy("activity");
-      void enterActivityRoute({ reset: prevRoute !== "activity" });
-    } else if (!paintActivityFeedSnapshotIfFresh() && _activityFeedState.items.length) {
-      renderActivityFeedFromState();
+      void enterActivityRoute({ reset: false, background: true });
+    } else {
+      markRouteHeavy("activity");
+      void enterActivityRoute({ reset: !hasActivityCache });
     }
   }
   if (wanted === "mashup") {
@@ -3450,17 +3462,11 @@ function applyRoute({ passGen } = {}) {
     void ensureUserLibraryHydrated().then(() => renderMashupPage());
   }
   if (wanted === "user") {
-    wireUserPublicFeedRowsOnce();
-    wireTrackOptionsSheetOnce();
-    syncUserPublicRouteChrome(prevRoute);
-    renderUserProfile._pendingUserId = pendingPublicUserId;
-    renderUserProfile(pendingPublicUsername);
-    renderUserProfile._pendingUserId = "";
-    // Hub posts arrive via Supabase sync; on a cold visit (someone landing
-    // straight on `#/u/USERNAME` from a share) we may need to wait for
-    // them to populate. refreshHubFromSupabase is idempotent and re-renders
-    // automatically when rows arrive.
-    void refreshHubFromSupabase();
+    enterUserPublicRoute({
+      username: pendingPublicUsername,
+      userId: pendingPublicUserId,
+      prevRoute,
+    });
   } else if (prevRoute === "user") {
     syncUserPublicRouteChrome("");
   }
@@ -16859,7 +16865,10 @@ const CAP_FS_DIRECTORY_DATA = "DATA";
 let _authBootPromise = null;
 let _authBootDone = false;
 const ROUTE_HEAVY_TTL_MS = 45000;
-const _routeHeavyAt = { profile: 0, discover: 0, friends: 0, activity: 0 };
+const _routeHeavyAt = { profile: 0, discover: 0, friends: 0, activity: 0, user: 0, messages: 0 };
+const _routeScrollY = {};
+const ROUTE_SCROLL_CAPTURE = new Set(["discover", "friends", "activity", "profile", "user"]);
+let _lastRenderedPublicUsername = "";
 
 function getCapAuthVaultPlugin() {
   return window?.Capacitor?.Plugins?.AuthVault || null;
@@ -17083,6 +17092,68 @@ function shouldSkipRouteHeavy(route) {
 
 function markRouteHeavy(route) {
   _routeHeavyAt[route] = Date.now();
+}
+
+function captureRouteScroll(route) {
+  const r = String(route || "").trim();
+  if (!r) return;
+  if (r === "messages") {
+    captureMessagesInboxScroll();
+    return;
+  }
+  const key = r === "discover-playlist" ? "discover" : r;
+  if (!ROUTE_SCROLL_CAPTURE.has(key)) return;
+  _routeScrollY[key] = Math.max(0, Number(window.scrollY || document.documentElement.scrollTop || 0));
+}
+
+function restoreRouteScroll(route) {
+  const r = String(route || "").trim();
+  if (r === "messages") {
+    restoreMessagesInboxScroll();
+    return;
+  }
+  const key = r === "discover-playlist" ? "discover" : r;
+  const y = Number(_routeScrollY[key] || 0);
+  if (!Number.isFinite(y) || y <= 0) return;
+  requestAnimationFrame(() => {
+    try { window.scrollTo(0, y); } catch {}
+  });
+}
+
+function normalizePublicUsername(raw) {
+  return String(raw || "").replace(/^@/, "").trim().toLowerCase();
+}
+
+function canSkipUserPublicHeavyRender(username) {
+  const u = normalizePublicUsername(username);
+  if (!u || u !== _lastRenderedPublicUsername) return false;
+  if (els.userPublicCard?.getAttribute?.("data-loading") === "true") return false;
+  return shouldSkipRouteHeavy("user");
+}
+
+function enterUserPublicRoute({ username, userId, prevRoute }) {
+  wireUserPublicFeedRowsOnce();
+  wireTrackOptionsSheetOnce();
+  syncUserPublicRouteChrome(prevRoute);
+  if (canSkipUserPublicHeavyRender(username)) {
+    restoreRouteScroll("user");
+    markRouteHeavy("user");
+    const uid = String(currentUserPublicProfileId || userId || "").trim();
+    const displayName = String(username || "").replace(/^@/, "").trim();
+    if (uid || displayName) {
+      void refreshUserPublicSocial({
+        username: displayName,
+        userId: uid,
+        songCount: _userPublicFeedTracks.length,
+      });
+    }
+    return;
+  }
+  renderUserProfile._pendingUserId = userId;
+  renderUserProfile(username);
+  renderUserProfile._pendingUserId = "";
+  markRouteHeavy("user");
+  void refreshHubFromSupabase();
 }
 
 /** On native, Keychain inject can land after the first empty ensureAuthBoot — retry briefly. */
@@ -20837,6 +20908,24 @@ function syncMessagesThreadComposerReady() {
 }
 
 let _messagesThreadKeyboardOpen = false;
+let _messagesComposerAutofocusToken = 0;
+
+function scheduleMessagesComposerAutofocus({ bootToken = null, delayMs = 0 } = {}) {
+  const token = ++_messagesComposerAutofocusToken;
+  const run = () => {
+    if (token !== _messagesComposerAutofocusToken) return;
+    if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
+    if (bootToken != null && bootToken !== _messagesThreadBootToken) return;
+    const input = document.getElementById("messagesComposerInput");
+    if (!input || input.disabled) return;
+    try { input.focus({ preventScroll: true }); } catch { try { input.focus(); } catch {} }
+    syncMessagesComposerInputHeight(input);
+    syncMessagesThreadComposerInset();
+    scheduleMessagesThreadScrollToBottom({ force: true });
+  };
+  if (delayMs > 0) window.setTimeout(run, delayMs);
+  else window.requestAnimationFrame(() => window.requestAnimationFrame(run));
+}
 
 function clearMessagesThreadComposerInset() {
   document.body.classList.remove("messagesThreadKeyboardOpen");
@@ -21428,6 +21517,7 @@ async function retryFailedThreadMessage(clientMessageId) {
 }
 
 function resetMessagesThreadRouteState() {
+  _messagesComposerAutofocusToken += 1;
   saveActiveThreadToCache();
   _messagesThreadNeedsInitialScroll = false;
   _chatHeaderUser = null;
@@ -21451,6 +21541,10 @@ function beginMessagesThreadEnterTransition() {
 
 function leaveMessagesThreadRoute(callback) {
   const run = typeof callback === "function" ? callback : () => {};
+  if (messagesInboxHasCachedData()) {
+    run();
+    return;
+  }
   if (_messagesThreadLeaving) return;
   const reduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
   if (reduced) {
@@ -22557,6 +22651,9 @@ async function bootstrapMessagesThread({ bootToken, threadId, targetUserId }) {
   if (bootToken === _messagesThreadBootToken) {
     scheduleMessagesThreadScrollToBottom({ force: true });
     _messagesThreadNeedsInitialScroll = false;
+    if (!String(threadId || "").trim()) {
+      scheduleMessagesComposerAutofocus({ bootToken, delayMs: 120 });
+    }
   }
 }
 
@@ -22615,6 +22712,7 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   updateMessagesComposerReserve();
   scheduleMessagesThreadScrollToBottom({ force: true });
   beginMessagesThreadEnterTransition();
+  if (tid) scheduleMessagesComposerAutofocus({ bootToken, delayMs: 360 });
   if (_chatHeaderUser?.userId) void loadMessagesThreadPartnerMeta(_chatHeaderUser.userId);
   void bootstrapMessagesThread({ bootToken, threadId: tid, targetUserId: uid });
 }
@@ -22713,9 +22811,11 @@ function enterMessagesRoute({ fromThread = false } = {}) {
   if (hasCache) {
     renderMessagesInbox();
     restoreMessagesInboxScroll();
-    if (fromThread || !shouldSkipRouteHeavy("messages")) {
+    const skipRefresh = fromThread && shouldSkipRouteHeavy("messages");
+    if (!skipRefresh && (fromThread || !shouldSkipRouteHeavy("messages"))) {
       void loadMessagesInbox({ silent: true });
     }
+    markRouteHeavy("messages");
     return;
   }
   markRouteHeavy("messages");
@@ -24144,7 +24244,7 @@ async function fetchActivityBatch() {
   }
 }
 
-async function enterActivityRoute({ reset = false } = {}) {
+async function enterActivityRoute({ reset = false, background = false } = {}) {
   if (!authSession?.user?.id) {
     location.hash = "#/auth";
     return;
@@ -24156,6 +24256,10 @@ async function enterActivityRoute({ reset = false } = {}) {
     _activityFeedState.loading = false;
     _activityUnavailableKeys.clear();
     if (els.activityFeed) {
+      els.activityFeed.innerHTML = activitySkeletonHtml();
+    }
+  } else if (!background && !_activityFeedState.items.length && els.activityFeed) {
+    if (!paintActivityFeedSnapshotIfFresh()) {
       els.activityFeed.innerHTML = activitySkeletonHtml();
     }
   }
@@ -30143,7 +30247,14 @@ async function refreshHubFromSupabase({ force = false } = {}) {
     if (document.body.getAttribute("data-route") === "user") {
       const h = String(location.hash || "");
       const m = h.match(/^#\/u\/([^?#]+)/);
-      if (m) renderUserProfile(decodeURIComponent(m[1]));
+      if (m) {
+        const uname = decodeURIComponent(m[1]);
+        if (canSkipUserPublicHeavyRender(uname)) {
+          renderUserProfile(uname, { soft: true });
+        } else {
+          renderUserProfile(uname);
+        }
+      }
     }
   } catch (e) {
     hubLastSyncOk = false;
@@ -32393,15 +32504,19 @@ function syncUserPublicRouteChrome(prevRoute) {
   btn.hidden = false;
 }
 
-function renderUserProfile(rawUsername) {
+function renderUserProfile(rawUsername, { soft = false } = {}) {
   const gen = ++_userPublicProfileGen;
   const username = String(rawUsername || "").replace(/^@/, "").trim();
-  _userPublicFeedTracks = [];
-  currentUserPublicProfileId = "";
-  currentUserPublicSocialStats = { followers: 0, following: 0, isFollowing: false, followsViewer: false };
-  renderUserPublicFollowButton();
-  if (!els.userPublicName) return;
-  setUserPublicLoading(true, username);
+  if (!soft) {
+    _userPublicFeedTracks = [];
+    currentUserPublicProfileId = "";
+    currentUserPublicSocialStats = { followers: 0, following: 0, isFollowing: false, followsViewer: false };
+    renderUserPublicFollowButton();
+    if (!els.userPublicName) return;
+    setUserPublicLoading(true, username);
+  } else if (!els.userPublicName) {
+    return;
+  }
   syncUserPublicVerifiedBadge({ username });
   // Resolve the creator's calling card out of band — don't block render.
   // This populates the chip + may autoplay once per device.
@@ -32485,6 +32600,7 @@ function renderUserProfile(rawUsername) {
       } catch {}
     });
     setUserPublicLoading(false);
+    _lastRenderedPublicUsername = normalizePublicUsername(username);
     return;
   }
   if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
@@ -32546,6 +32662,7 @@ function renderUserProfile(rawUsername) {
     } catch {}
   });
   setUserPublicLoading(false);
+  _lastRenderedPublicUsername = normalizePublicUsername(username);
 }
 
 /** Take a song off Hub. Routes through the server-side

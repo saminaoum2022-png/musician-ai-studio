@@ -261,7 +261,7 @@ async function handleGet(req, res, user) {
     const threads = await Promise.all(threadRows.map((t) => enrichThreadRow(t, user.userId)));
 
     const pendingR = await svcFetch(
-      `dm_message_requests?select=id,from_user_id,body,created_at&to_user_id=eq.${encodeURIComponent(user.userId)}&status=eq.pending&order=created_at.desc&limit=30`,
+      `dm_message_requests?select=id,from_user_id,body,created_at&to_user_id=eq.${encodeURIComponent(user.userId)}&status=eq.pending&order=created_at.desc&limit=50`,
     );
     const pendingRaw = Array.isArray(pendingR.data) ? pendingR.data : [];
     const requests = await Promise.all(
@@ -278,7 +278,25 @@ async function handleGet(req, res, user) {
       }),
     );
 
-    return sendJson(res, 200, { ok: true, threads, requests });
+    const sentR = await svcFetch(
+      `dm_message_requests?select=id,to_user_id,body,created_at&from_user_id=eq.${encodeURIComponent(user.userId)}&status=eq.pending&order=created_at.desc&limit=50`,
+    );
+    const sentRaw = Array.isArray(sentR.data) ? sentR.data : [];
+    const sentRequests = await Promise.all(
+      sentRaw.map(async (req) => {
+        const prof = await profileByUserId(req.to_user_id);
+        return {
+          requestId: req.id,
+          toUserId: req.to_user_id,
+          toUsername: prof?.username || "",
+          toAvatar: prof?.avatar || "",
+          body: req.body,
+          createdAt: req.created_at,
+        };
+      }),
+    );
+
+    return sendJson(res, 200, { ok: true, threads, requests, sentRequests });
   }
 
   return sendJson(res, 400, { ok: false, error: "Unknown messages query" });

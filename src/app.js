@@ -20793,9 +20793,10 @@ let _messagesThreadPollTimer = 0;
 let _messagesUnreadCount = 0;
 let _messagesUnreadLastFetchedAt = 0;
 let _messagesUnreadFetchInFlight = false;
-let _messagesInboxState = { threads: [], requests: [] };
+let _messagesInboxState = { threads: [], requests: [], sentRequests: [] };
 let _messagesThreadState = { threadId: "", partner: null, messages: [] };
 let _messagesInboxLoading = false;
+let _messagesInboxFilter = "all";
 let _messagesThreadLoading = false;
 let _messagesSendInFlight = false;
 let _messagesRequestTargetUserId = "";
@@ -20846,6 +20847,7 @@ async function submitMessagesRequestSheet() {
     });
     closeMessagesRequestSheet();
     try { showToast("Message request sent.", { icon: "💬", durationMs: 2600 }); } catch {}
+    _messagesInboxFilter = "all";
     try { location.hash = "#/messages"; } catch {}
   } catch (e) {
     try { showToast(String(e?.message || "Could not send request"), { icon: "💬", durationMs: 2800 }); } catch {}
@@ -21058,7 +21060,58 @@ function messagesInboxRequestRowHtml(req) {
     </article>`;
 }
 
+function messagesInboxSentRequestRowHtml(req) {
+  const handle = String(req?.toUsername || "").trim();
+  const preview = String(req?.body || "").trim();
+  const when = req?.createdAt ? relativeTime(new Date(req.createdAt).getTime()) : "";
+  return `
+    <article class="messagesSentRequestRow">
+      ${messagesAvatarHtml(req?.toAvatar, handle)}
+      <div class="messagesSentRequestBody">
+        <div class="messagesRequestTop">
+          <strong class="messagesRowHandle">@${escapeHtml(handle || "creator")}</strong>
+          ${when ? `<span class="messagesRowWhen">${escapeHtml(when)}</span>` : ""}
+        </div>
+        <p class="messagesRequestLabel messagesRequestLabel--sent">Waiting for reply</p>
+        <p class="messagesRequestPreview">${escapeHtml(preview)}</p>
+      </div>
+    </article>`;
+}
+
+function syncMessagesInboxFilterUi() {
+  const filter = String(_messagesInboxFilter || "all");
+  document.querySelectorAll("[data-messages-filter]").forEach((btn) => {
+    const active = btn.getAttribute("data-messages-filter") === filter;
+    btn.classList.toggle("is-active", active);
+    btn.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  const requests = Array.isArray(_messagesInboxState.requests) ? _messagesInboxState.requests : [];
+  const badge = document.getElementById("messagesRequestsTabBadge");
+  if (badge) {
+    if (requests.length > 0) {
+      badge.hidden = false;
+      badge.textContent = requests.length > 99 ? "99+" : String(requests.length);
+    } else {
+      badge.hidden = true;
+      badge.textContent = "";
+    }
+  }
+  const lead = document.getElementById("messagesLead");
+  if (lead) {
+    if (filter === "requests") {
+      lead.textContent = requests.length
+        ? `${requests.length} ${requests.length === 1 ? "creator wants" : "creators want"} to message you.`
+        : "No pending message requests.";
+    } else if (filter === "chats") {
+      lead.textContent = "Your active conversations.";
+    } else {
+      lead.textContent = "Chats, requests, and messages waiting for a reply.";
+    }
+  }
+}
+
 function renderMessagesInbox() {
+  syncMessagesInboxFilterUi();
   const mount = document.getElementById("messagesInboxMount");
   const statusEl = document.getElementById("messagesStatus");
   if (!mount) return;
@@ -21067,30 +21120,67 @@ function renderMessagesInbox() {
     if (statusEl) statusEl.hidden = true;
     return;
   }
+  const filter = String(_messagesInboxFilter || "all");
   const threads = Array.isArray(_messagesInboxState.threads) ? _messagesInboxState.threads : [];
   const requests = Array.isArray(_messagesInboxState.requests) ? _messagesInboxState.requests : [];
-  if (!threads.length && !requests.length) {
+  const sentRequests = Array.isArray(_messagesInboxState.sentRequests) ? _messagesInboxState.sentRequests : [];
+  const showRequests = filter === "all" || filter === "requests";
+  const showChats = filter === "all" || filter === "chats";
+  const showSent = filter === "all";
+  const visibleRequests = showRequests ? requests : [];
+  const visibleThreads = showChats ? threads : [];
+  const visibleSent = showSent ? sentRequests : [];
+
+  if (!visibleRequests.length && !visibleThreads.length && !visibleSent.length) {
+    let emptyTitle = "No messages yet";
+    let emptyLead = "When you and another creator follow each other, you can chat here.";
+    if (filter === "requests") {
+      emptyTitle = "No requests";
+      emptyLead = "When someone messages you without mutual follow, their request shows up here.";
+    } else if (filter === "chats") {
+      emptyTitle = "No chats yet";
+      emptyLead = "Start a conversation from a creator profile.";
+    }
     mount.innerHTML = `
       <div class="messagesEmpty">
-        <p class="messagesEmptyTitle">No messages yet</p>
-        <p class="messagesEmptyLead">When you and another creator follow each other, you can chat here.</p>
+        <p class="messagesEmptyTitle">${escapeHtml(emptyTitle)}</p>
+        <p class="messagesEmptyLead">${escapeHtml(emptyLead)}</p>
       </div>`;
     if (statusEl) statusEl.hidden = true;
     return;
   }
-  const requestsHtml = requests.length
-    ? `<section class="messagesInboxSection">
-        <h3 class="messagesInboxSectionLabel">Requests</h3>
-        <div class="messagesRequestList">${requests.map(messagesInboxRequestRowHtml).join("")}</div>
+
+  const requestsHtml = visibleRequests.length
+    ? `<section class="messagesInboxSection messagesInboxSection--requests">
+        <div class="messagesInboxSectionHead">
+          <h3 class="messagesInboxSectionLabel">Requests</h3>
+          <span class="messagesInboxSectionCount">${visibleRequests.length}</span>
+        </div>
+        <div class="messagesRequestList">${visibleRequests.map(messagesInboxRequestRowHtml).join("")}</div>
       </section>`
     : "";
-  const threadsHtml = threads.length
-    ? `<section class="messagesInboxSection">
-        ${requests.length ? `<h3 class="messagesInboxSectionLabel">Chats</h3>` : ""}
-        <div class="messagesInboxList">${threads.map(messagesInboxThreadRowHtml).join("")}</div>
+
+  const sentHtml = visibleSent.length
+    ? `<section class="messagesInboxSection messagesInboxSection--sent">
+        <div class="messagesInboxSectionHead">
+          <h3 class="messagesInboxSectionLabel">Waiting for reply</h3>
+          <span class="messagesInboxSectionCount">${visibleSent.length}</span>
+        </div>
+        <div class="messagesSentRequestList">${visibleSent.map(messagesInboxSentRequestRowHtml).join("")}</div>
       </section>`
     : "";
-  mount.innerHTML = requestsHtml + threadsHtml;
+
+  const threadsHtml = visibleThreads.length
+    ? `<section class="messagesInboxSection messagesInboxSection--chats">
+        <div class="messagesInboxSectionHead">
+          <h3 class="messagesInboxSectionLabel">${visibleRequests.length || visibleSent.length ? "Chats" : "Messages"}</h3>
+          ${visibleThreads.length ? `<span class="messagesInboxSectionCount">${visibleThreads.length}</span>` : ""}
+        </div>
+        <div class="messagesInboxList">${visibleThreads.map(messagesInboxThreadRowHtml).join("")}</div>
+      </section>`
+    : "";
+
+  mount.innerHTML = requestsHtml + sentHtml + threadsHtml;
   if (statusEl) statusEl.hidden = true;
 }
 
@@ -21142,6 +21232,7 @@ async function loadMessagesInbox() {
     _messagesInboxState = {
       threads: Array.isArray(data?.threads) ? data.threads : [],
       requests: Array.isArray(data?.requests) ? data.requests : [],
+      sentRequests: Array.isArray(data?.sentRequests) ? data.sentRequests : [],
     };
   } catch (e) {
     const statusEl = document.getElementById("messagesStatus");
@@ -21149,7 +21240,7 @@ async function loadMessagesInbox() {
       statusEl.hidden = false;
       statusEl.textContent = String(e?.message || "Could not load messages.");
     }
-    _messagesInboxState = { threads: [], requests: [] };
+    _messagesInboxState = { threads: [], requests: [], sentRequests: [] };
   } finally {
     _messagesInboxLoading = false;
     renderMessagesInbox();
@@ -21365,6 +21456,19 @@ function bindMessagesPageOnce() {
         e.preventDefault();
         void submitMessagesRequestSheet();
       }
+    });
+  }
+
+  if (!document.documentElement.dataset.messagesFilterTabsWired) {
+    document.documentElement.dataset.messagesFilterTabsWired = "1";
+    document.getElementById("messagesFilterTabs")?.addEventListener("click", (e) => {
+      const tab = e.target.closest("[data-messages-filter]");
+      if (!tab) return;
+      const next = String(tab.getAttribute("data-messages-filter") || "all");
+      if (!["all", "requests", "chats"].includes(next)) return;
+      _messagesInboxFilter = next;
+      try { haptic("light"); } catch {}
+      renderMessagesInbox();
     });
   }
 }

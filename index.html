@@ -1232,9 +1232,18 @@
             </button>
             <div class="messagesHeadCopy">
               <h2 class="messagesTitle appScreenTitle">Messages</h2>
-              <p class="messagesLead">Chat with creators you follow.</p>
+              <p class="messagesLead" id="messagesLead">Chat with creators you follow.</p>
             </div>
           </header>
+          <div class="messagesFilterTabs" id="messagesFilterTabs" role="tablist" aria-label="Message filters">
+            <div class="messagesFilterTabsTrack">
+              <button type="button" class="messagesFilterTab is-active" data-messages-filter="all" role="tab" aria-selected="true">All</button>
+              <button type="button" class="messagesFilterTab" data-messages-filter="requests" role="tab" aria-selected="false">
+                Requests<span class="messagesFilterTabBadge" id="messagesRequestsTabBadge" hidden></span>
+              </button>
+              <button type="button" class="messagesFilterTab" data-messages-filter="chats" role="tab" aria-selected="false">Chats</button>
+            </div>
+          </div>
           <div id="messagesStatus" class="messagesStatus" role="status" aria-live="polite" hidden></div>
           <div id="messagesInboxMount" class="messagesInboxMount" aria-label="Message threads"></div>
         </section>

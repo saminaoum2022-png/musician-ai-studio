@@ -414,9 +414,8 @@
         <section class="wide soundsPage soundsPageNeon" data-route="sounds">
           <div class="soundsNeonDecor" aria-hidden="true"></div>
           <header class="soundsHeroHeader creditsHeader">
-            <a href="#/challenges" class="creditsBack soundsHeroBack" aria-label="Back to Home">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
-              <span>Home</span>
+            <a href="#/challenges" class="nabadBackBtn creditsBack soundsHeroBack" aria-label="Back to Home">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
             </a>
             <div class="soundsHeroTitleBlock">
               <h2 class="soundsHeroTitle creditsTitle">Sounds</h2>
@@ -1000,8 +999,8 @@
             <div class="imageMoodSheetBackdrop" data-image-mood-dismiss="1"></div>
             <div class="imageMoodCard modalCard" role="dialog" aria-modal="true" aria-labelledby="imageMoodSheetTitle">
               <header class="imageMoodHead">
-                <button type="button" id="btnCloseImageMood" class="imageMoodBack" aria-label="Close">
-                  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></svg>
+                <button type="button" id="btnCloseImageMood" class="nabadBackBtn imageMoodBack" aria-label="Close">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
                 </button>
                 <div class="imageMoodHeadTitles">
                   <p class="imageMoodKicker">Photo mood</p>
@@ -1139,8 +1138,8 @@
 
         <section class="mashupPage wide" data-route="mashup" id="mashupPage">
           <header class="mashupHead">
-            <button type="button" class="mashupBack" id="btnMashupBack" aria-label="Back to Create">
-              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><polyline points="15 18 9 12 15 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <button type="button" class="nabadBackBtn mashupBack" id="btnMashupBack" aria-label="Back to Create">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
             </button>
             <div class="mashupHeadCopy">
               <p class="mashupKicker">Blend two tracks</p>
@@ -1227,31 +1226,31 @@
 
         <section class="messagesPage wide" data-route="messages" id="messagesPage">
           <header class="messagesHead">
-            <button type="button" class="messagesBackBtn" id="messagesBackBtn" aria-label="Back to Friends">
-              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M15 6 9 12l6 6"/></svg>
+            <button type="button" class="nabadBackBtn messagesBackBtn" id="messagesBackBtn" aria-label="Back to Friends">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
             </button>
             <div class="messagesHeadCopy">
               <h2 class="messagesTitle appScreenTitle">Messages</h2>
               <p class="messagesLead" id="messagesLead">Chat with creators you follow.</p>
             </div>
           </header>
-          <div class="messagesFilterTabs" id="messagesFilterTabs" role="tablist" aria-label="Message filters">
-            <div class="messagesFilterTabsTrack">
-              <button type="button" class="messagesFilterTab is-active" data-messages-filter="all" role="tab" aria-selected="true">All</button>
-              <button type="button" class="messagesFilterTab" data-messages-filter="requests" role="tab" aria-selected="false">
+          <nav class="discoverFeedTabs" id="messagesFilterTabs" aria-label="Message filters">
+            <div class="discoverFeedTabsTrack" role="tablist">
+              <button type="button" class="discoverFeedTab is-active" data-messages-filter="all" role="tab" aria-selected="true">All</button>
+              <button type="button" class="discoverFeedTab" data-messages-filter="requests" role="tab" aria-selected="false">
                 Requests<span class="messagesFilterTabBadge" id="messagesRequestsTabBadge" hidden></span>
               </button>
-              <button type="button" class="messagesFilterTab" data-messages-filter="chats" role="tab" aria-selected="false">Chats</button>
+              <button type="button" class="discoverFeedTab" data-messages-filter="chats" role="tab" aria-selected="false">Chats</button>
             </div>
-          </div>
+          </nav>
           <div id="messagesStatus" class="messagesStatus" role="status" aria-live="polite" hidden></div>
           <div id="messagesInboxMount" class="messagesInboxMount" aria-label="Message threads"></div>
         </section>
 
         <section class="messagesThreadPage wide" data-route="messages-thread" id="messagesThreadPage">
           <header class="messagesThreadHead">
-            <button type="button" class="messagesBackBtn" id="messagesThreadBackBtn" aria-label="Back to Messages">
-              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M15 6 9 12l6 6"/></svg>
+            <button type="button" class="nabadBackBtn messagesBackBtn" id="messagesThreadBackBtn" aria-label="Back to Messages">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
             </button>
             <div class="messagesThreadHeadMeta">
               <span class="messagesThreadAvatar" id="messagesThreadAvatar" aria-hidden="true"></span>
@@ -1277,8 +1276,8 @@
         <section class="discoverPlaylistPage wide" data-route="discover-playlist">
           <div class="discoverPlaylistAmbient" aria-hidden="true"></div>
           <header class="discoverPlaylistTop">
-            <button type="button" class="discoverPlaylistBack" id="discoverPlaylistBack" aria-label="Back to Discover">
-              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M15 6 9 12l6 6"/></svg>
+            <button type="button" class="nabadBackBtn discoverPlaylistBack" id="discoverPlaylistBack" aria-label="Back to Discover">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
             </button>
             <button type="button" class="discoverPlaylistPlayAll primary" id="discoverPlaylistPlayAll">Play all</button>
           </header>
@@ -1294,8 +1293,8 @@
 
         <section class="discoverWeeklyChartPage wide" data-route="discover-weekly-chart">
           <header class="discoverWeeklyChartPageTop">
-            <button type="button" class="discoverPlaylistBack" id="discoverWeeklyChartBack" aria-label="Back to Discover">
-              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M15 6 9 12l6 6"/></svg>
+            <button type="button" class="nabadBackBtn discoverPlaylistBack" id="discoverWeeklyChartBack" aria-label="Back to Discover">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
             </button>
             <h1 class="discoverWeeklyChartPageTitle">Top This Week</h1>
           </header>
@@ -1599,11 +1598,8 @@
 
           <div id="mentorResults" class="mentorResults" hidden>
             <div class="mentorResultsBar">
-              <button type="button" id="mentorBtnBackToLab" class="mentorBackBtn" aria-label="Back to Lab">
-                <svg class="mentorBackChev" viewBox="0 0 24 24" aria-hidden="true" fill="none">
-                  <path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-                Back to Lab
+              <button type="button" id="mentorBtnBackToLab" class="nabadBackBtn mentorBackBtn" aria-label="Back to Lab">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
               </button>
             </div>
             <p class="mentorPullQuote" id="mentorPullQuote">This pass</p>
@@ -1996,9 +1992,8 @@
 
         <section class="card wide playerCard" data-route="player">
           <div class="playerHeader">
-            <button id="btnPlayerBack" class="playerBack" type="button" aria-label="Back">
-              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
-              <span>Back</span>
+            <button id="btnPlayerBack" class="nabadBackBtn playerBack" type="button" aria-label="Back">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
             </button>
             <button id="btnPlayerMenu" class="playerMenuBtn" type="button" aria-label="Song options">⋯</button>
           </div>
@@ -2280,7 +2275,9 @@
                   <button id="btnUserPublicFollow" class="userPublicFollowBtn" type="button" hidden>Follow</button>
                 </div>
               </div>
-              <button id="btnUserPublicBack" class="ghost userPublicBack" type="button" aria-label="Back" hidden>← Back</button>
+              <button id="btnUserPublicBack" class="nabadBackBtn userPublicBack" type="button" aria-label="Back" hidden>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
+              </button>
             </div>
             <div class="userPublicBio profileHeroBio" id="userPublicBio"></div>
             <audio id="userPublicCallingCardAudio" preload="none" playsinline></audio>
@@ -2553,9 +2550,8 @@
 
         <section class="wide creditsPage" data-route="credits">
           <header class="creditsHeader">
-            <a href="#/profile" class="creditsBack" aria-label="Back to Profile">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
-              <span>Profile</span>
+            <a href="#/profile" class="nabadBackBtn creditsBack" aria-label="Back to Profile">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
             </a>
             <h2 class="creditsTitle">Credits</h2>
           </header>
@@ -2891,8 +2887,8 @@
 
         <section class="settingsPage wide" data-route="settings">
           <header class="settingsPageHead">
-            <a href="#/profile" class="settingsBack" aria-label="Back to Profile">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+            <a href="#/profile" class="nabadBackBtn settingsBack" aria-label="Back to Profile">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
             </a>
             <div class="settingsPageHeadText">
               <h1 class="settingsPageTitle">Settings</h1>

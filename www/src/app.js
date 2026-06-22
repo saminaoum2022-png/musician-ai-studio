@@ -7627,8 +7627,27 @@ function discoverFeedChallengeBlockHtml(c, tracks, profMap, opts = {}) {
     </section>`;
 }
 
+function discoverFeedCommunityPicksBlockHtml(tracks, profMap, prefs) {
+  const picks = discoverCommunityPicksTracksPersonalized(tracks, prefs);
+  const seeAllBtn = picks.length
+    ? `<button type="button" class="discoverFeedSectionLink" data-discover-feed-tab-jump="all">See all</button>`
+    : "";
+  const list = picks.length
+    ? picks.map((t, idx) => discoverFeedSongRowHtml(t, profMap, {
+      compactMeta: true,
+      styleIdx: idx,
+    })).join("")
+    : `<p class="discoverHubQuietNote">Community songs will show here as creators publish to Discover.</p>`;
+  return `
+    <section class="discoverFeedSection discoverFeedSection--communityPicks">
+      ${discoverFeedSectionHeadHtml("Community picks", seeAllBtn)}
+      <div class="discoverFeedListStack discoverFeedListStack--community">${list}</div>
+    </section>`;
+}
+
 function renderDiscoverFeedForYou(tracks, profMap) {
   const prefs = getUserMusicPreferenceLabels();
+  const communityBlock = discoverFeedCommunityPicksBlockHtml(tracks, profMap, prefs);
   const remixTracks = discoverTracksSortedByPreferences(
     (tracks || []).filter((t) => remixAttributionForTrack(t) || mashupAttributionForTrack(t)),
     prefs,
@@ -7656,6 +7675,7 @@ function renderDiscoverFeedForYou(tracks, profMap) {
     : `<p class="discoverHubQuietNote">Songs made with templates will show here.</p>`;
   return `
     <section id="discoverWeeklyChart" class="discoverWeeklyChart discoverWeeklyChart--final isLoading" aria-busy="true" aria-label="Top songs this week">${discoverWeeklyChartSkeletonHtml()}</section>
+    ${communityBlock}
     ${challengeBlock}
     <section class="discoverFeedSection">
       ${discoverFeedSectionHeadHtml("Remixes you'll love")}
@@ -7732,6 +7752,22 @@ function bindDiscoverFeedTabsOnce() {
       mount?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
     } catch {}
   });
+  const feedMount = document.getElementById("discoverFeedMount");
+  if (feedMount && feedMount.dataset.boundDiscoverFeedJump !== "1") {
+    feedMount.dataset.boundDiscoverFeedJump = "1";
+    feedMount.addEventListener("click", (e) => {
+      const jumpBtn = e.target?.closest?.("[data-discover-feed-tab-jump]");
+      if (!jumpBtn) return;
+      e.preventDefault();
+      const tab = String(jumpBtn.getAttribute("data-discover-feed-tab-jump") || "").trim();
+      if (!tab || tab === _discoverFeedTab) return;
+      haptic("light");
+      renderDiscoverFeed(_discoveryFeedTracksRaw || [], _discoveryLastProfMap || new Map(), tab);
+      try {
+        root.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+      } catch {}
+    });
+  }
 }
 
 let _discoveryFeedTracksRaw = [];
@@ -10319,7 +10355,10 @@ async function mergeCloudSongsIntoLocalLibrary() {
   merged.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
   const nextPublicSig = profilePublicPostsSig(merged);
   saveLibrary(merged);
-  if (prevPublicSig !== nextPublicSig) invalidateProfileActivitiesCache();
+  if (prevPublicSig !== nextPublicSig) {
+    invalidateProfileActivitiesCache();
+    invalidateOwnerPublicPostsCache();
+  }
   return prevPublicSig !== nextPublicSig;
   } finally {
     _mergeCloudInFlight = false;
@@ -20406,7 +20445,14 @@ async function refreshOwnerPublicPostsCache(opts = {}) {
       ...t,
       userId: String(uid),
     }));
+    const prevLen = _ownerPublicPostsCache?.songs?.length;
     _ownerPublicPostsCache = { at: Date.now(), songs };
+    if (prevLen != null && prevLen !== songs.length) {
+      _profileActSnapshot = null;
+      try {
+        sessionStorage.removeItem(PROFILE_ACT_SNAPSHOT_KEY);
+      } catch {}
+    }
     return songs;
   } catch {
     return _ownerPublicPostsCache?.songs || [];

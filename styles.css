@@ -52,6 +52,113 @@
   --brand-accent-soft: rgba(124, 92, 255, 0.72);
   --brand-surface-glass: rgba(255, 255, 255, 0.06);
   --brand-border-glass: rgba(255, 255, 255, 0.12);
+  /* Nabad Glass Control System — utility/navigation controls only. */
+  --nabad-glass-blur: 12px;
+  --nabad-glass-saturate: 165%;
+  --nabad-glass-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.04));
+  --nabad-glass-bg-hover: linear-gradient(145deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06));
+  --nabad-glass-border: rgba(255, 255, 255, 0.13);
+  --nabad-glass-border-hover: rgba(255, 255, 255, 0.20);
+  --nabad-glass-color: rgba(248, 250, 255, 0.94);
+  --nabad-glass-color-hover: #fff;
+  --nabad-glass-shadow: 0 8px 24px rgba(0, 0, 0, 0.26);
+  --nabad-glass-shadow-hover: 0 10px 28px rgba(0, 0, 0, 0.30);
+  --nabad-glass-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  --nabad-glass-inset-bottom: inset 0 -1px 0 rgba(0, 0, 0, 0.06);
+  --nabad-glass-radius-sm: 12px;
+  --nabad-glass-radius-round: 999px;
+  --nabad-glass-size-md: 40px;
+  --nabad-glass-size-round: 38px;
+  --nabad-glass-active-scale: 0.96;
+  --nabad-glass-transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 120ms ease, box-shadow 160ms ease;
+}
+
+/* ========== Nabad Glass Control System ==========
+ * Dark premium glass for utility/navigation controls only.
+ * Reference: Profile Credits pill + Settings gear.
+ * Do NOT apply to feed cards, song cards, posts, tabs, or content shells.
+ * Optional hook for future controls: .nabadGlassCtrl (+ --square | --round | --pill). */
+.nabadGlassCtrl,
+.nabadBackBtn,
+.discoveryRefreshBtn,
+.discoverySearchClose,
+.profileAuraIconBtn,
+.profileCreditsPill--toolbar,
+.createChooserClose{
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  box-sizing: border-box;
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  color: var(--nabad-glass-color);
+  box-shadow:
+    var(--nabad-glass-shadow),
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+  cursor: pointer;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: var(--nabad-glass-transition);
+}
+.nabadGlassCtrl:hover,
+.nabadBackBtn:hover,
+.discoveryRefreshBtn:hover,
+.discoverySearchClose:hover,
+.profileAuraIconBtn:hover,
+.profileCreditsPill--toolbar:hover,
+.createChooserClose:hover{
+  background: var(--nabad-glass-bg-hover);
+  border-color: var(--nabad-glass-border-hover);
+  color: var(--nabad-glass-color-hover);
+  box-shadow:
+    var(--nabad-glass-shadow-hover),
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+}
+.nabadGlassCtrl:active,
+.nabadBackBtn:active,
+.discoveryRefreshBtn:active,
+.discoverySearchClose:active,
+.profileAuraIconBtn:active,
+.profileCreditsPill--toolbar:active,
+.createChooserClose:active{
+  transform: scale(var(--nabad-glass-active-scale));
+}
+.nabadGlassCtrl--square,
+.nabadBackBtn,
+.discoveryRefreshBtn,
+.discoverySearchClose{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--nabad-glass-size-md);
+  height: var(--nabad-glass-size-md);
+  padding: 0;
+  border-radius: var(--nabad-glass-radius-sm);
+  flex: 0 0 auto;
+}
+.nabadGlassCtrl--round,
+.profileAuraIconBtn,
+.createChooserClose{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--nabad-glass-radius-round);
+}
+.nabadGlassCtrl--round,
+.profileAuraIconBtn{
+  width: var(--nabad-glass-size-round);
+  height: var(--nabad-glass-size-round);
+  padding: 0;
+}
+.nabadGlassCtrl--pill,
+.profileCreditsPill--toolbar{
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--nabad-glass-radius-round);
 }
 
 /* Light mode — soft canvas, white cards, purple/teal washes (not flat white). */
@@ -80,6 +187,16 @@ html[data-theme="light"]{
   --song-row-creator-color: rgba(71, 88, 110, 0.72);
   --song-row-desc-color: rgba(71, 88, 110, 0.58);
   --song-row-plays-color: rgba(71, 88, 110, 0.42);
+  --nabad-glass-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.88));
+  --nabad-glass-bg-hover: rgba(255, 255, 255, 0.98);
+  --nabad-glass-border: rgba(15, 23, 40, 0.10);
+  --nabad-glass-border-hover: rgba(124, 92, 255, 0.22);
+  --nabad-glass-color: var(--text);
+  --nabad-glass-color-hover: var(--text);
+  --nabad-glass-shadow: 0 8px 22px rgba(88, 104, 140, 0.10);
+  --nabad-glass-shadow-hover: 0 10px 26px rgba(88, 104, 140, 0.12);
+  --nabad-glass-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  --nabad-glass-inset-bottom: inset 0 -1px 0 rgba(15, 23, 40, 0.04);
 }
 
 html[data-theme="light"] body{
@@ -612,12 +729,6 @@ html[data-theme="light"] .profileAuraStatLabel{
   color: var(--muted);
 }
 
-html[data-theme="light"] .discoveryRefreshBtn{
-  background: rgba(255, 255, 255, 0.9);
-  border-color: rgba(15, 23, 40, 0.10);
-  color: var(--text);
-}
-
 html[data-theme="light"] .profilePersonaAvatarBadge{
   border-color: rgba(255, 255, 255, 0.96);
   box-shadow:
@@ -682,14 +793,12 @@ html[data-theme="light"] .btnNewSong:hover{
   color: var(--text);
 }
 
-html[data-theme="light"] .nabadBackBtn,
 html[data-theme="light"] .playerSideBtn{
   color: rgba(15, 23, 40, 0.62);
   border-color: rgba(15, 23, 40, 0.10);
   background: rgba(15, 23, 40, 0.03);
 }
 
-html[data-theme="light"] .nabadBackBtn:hover,
 html[data-theme="light"] .playerSideBtn:hover{
   color: var(--text);
   background: rgba(124, 92, 255, 0.08);
@@ -756,7 +865,6 @@ html[data-theme="light"] .imageMoodFooter{
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 255, 0.98));
 }
 
-html[data-theme="light"] .imageMoodBack,
 html[data-theme="light"] .imageMoodClose{
   border-color: rgba(15, 23, 40, 0.10);
   background: rgba(255, 255, 255, 0.9);
@@ -788,13 +896,6 @@ html[data-theme="light"] .createChooserBackdrop{
 html[data-theme="light"] .createChooserTitle{
   color: var(--text);
   text-shadow: none;
-}
-
-html[data-theme="light"] .createChooserClose{
-  border-color: rgba(15, 23, 40, 0.10);
-  background: rgba(255, 255, 255, 0.92);
-  color: var(--text);
-  box-shadow: 0 10px 28px rgba(88, 104, 140, 0.12);
 }
 
 html[data-theme="light"] .createChooserPill{
@@ -929,16 +1030,10 @@ html[data-theme="light"] .authLegal{
   color: var(--muted);
 }
 
-html[data-theme="light"] .profileAuraIconBtn,
-html[data-theme="light"] .profileCreditsPill{
+html[data-theme="light"] .profileCreditsPill:not(.profileCreditsPill--toolbar){
   border-color: rgba(15, 23, 40, 0.10);
   background: rgba(255, 255, 255, 0.88);
   color: var(--text);
-}
-
-html[data-theme="light"] .profileAuraIconBtn:hover{
-  background: rgba(255, 255, 255, 0.98);
-  border-color: rgba(124, 92, 255, 0.22);
 }
 
 html[data-theme="light"] .discoverySpotlightTitle,
@@ -989,19 +1084,8 @@ html[data-theme="light"] .friendsPage .discoveryStudioAmbient{
 html[data-theme="light"] .friendsEchoRailTitle{
   color: rgba(88, 64, 200, 0.95);
 }
-html[data-theme="light"] .discoveryRefreshBtn,
-html[data-theme="light"] .friendsNotifBtn.discoveryRefreshBtn{
-  border-color: rgba(15, 23, 40, 0.10);
-  background: rgba(255, 255, 255, 0.94);
-  color: var(--text);
-  box-shadow: 0 8px 22px rgba(88, 104, 140, 0.10);
-}
-html[data-theme="light"] .discoveryRefreshBtn:hover,
-html[data-theme="light"] .friendsNotifBtn.discoveryRefreshBtn:hover{
-  border-color: rgba(124, 92, 255, 0.28);
-  background: #fff;
-}
-html[data-theme="light"] .discoveryRefreshBtn.hasNotice::after{
+html[data-theme="light"] .discoveryRefreshBtn.hasNotice::after,
+html[data-theme="light"] .profileAuraIconBtn.hasNotice::after{
   box-shadow:
     0 0 0 2px rgba(255, 255, 255, 0.98),
     0 0 12px rgba(230, 61, 92, 0.55);
@@ -12127,39 +12211,6 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
   flex: 0 0 auto;
   margin-left: auto;
 }
-.profileAuraIconBtn{
-  -webkit-appearance: none;
-  appearance: none;
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  padding: 0;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
-  -webkit-backdrop-filter: blur(26px) saturate(185%);
-          backdrop-filter: blur(26px) saturate(185%);
-  color: #fff;
-  cursor: pointer;
-  text-decoration: none;
-  box-shadow:
-    0 8px 26px rgba(0, 0, 0, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.08);
-  transition: background 160ms ease, border-color 160ms ease, transform 120ms ease, box-shadow 160ms ease;
-}
-.profileAuraIconBtn:hover{
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.20), rgba(255, 255, 255, 0.08));
-  border-color: rgba(255, 255, 255, 0.22);
-  box-shadow:
-    0 10px 30px rgba(0, 0, 0, 0.32),
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.08);
-}
-.profileAuraIconBtn:active{ transform: scale(0.96); }
 .profileAuraIconBtn.hasNotice::after{
   content: "";
   position: absolute;
@@ -13970,44 +14021,28 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
   gap: 6px;
   padding: 4px 10px 4px 8px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
-  color: rgba(248, 250, 255, 0.92);
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.01em;
   text-decoration: none;
   -webkit-tap-highlight-color: transparent;
   cursor: pointer;
+}
+.profileCreditsPill:not(.profileCreditsPill--toolbar){
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
+  color: rgba(248, 250, 255, 0.92);
   transition: background 140ms ease, border-color 140ms ease, transform 120ms ease;
 }
-/* Credits pill in the floating top chrome row (left). Liquid-glass
-   capsule matching the icon-button height. */
+/* Credits pill in the floating top chrome row (left). Glass system capsule. */
 .profileCreditsPill--toolbar{
   position: static;
   margin: 0;
   flex: 0 0 auto;
   align-self: center;
-  min-height: 38px;
+  min-height: var(--nabad-glass-size-round);
   padding: 6px 12px 6px 9px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
-  -webkit-backdrop-filter: blur(26px) saturate(185%);
-          backdrop-filter: blur(26px) saturate(185%);
-  color: #fff;
-  box-shadow:
-    0 8px 26px rgba(0, 0, 0, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.08);
-}
-.profileCreditsPill--toolbar:hover{
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.20), rgba(255, 255, 255, 0.08));
-  border-color: rgba(255, 255, 255, 0.22);
-  box-shadow:
-    0 10px 30px rgba(0, 0, 0, 0.32),
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.08);
+  gap: 6px;
 }
 .profileCreditsPill--toolbar .profileCreditsPillIco{ opacity: 0.95; }
 .profileCreditsPill--toolbar .profileCreditsPillValue{ color: #fff; }
@@ -14015,11 +14050,11 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
 body[data-route="profile"]:has(#profileAura.profileAuraEditing) #profileAuraHeaderChromeRoot .profileCreditsPill--toolbar{
   display: none;
 }
-.profileCreditsPill:hover{
+.profileCreditsPill:not(.profileCreditsPill--toolbar):hover{
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.025));
   border-color: rgba(255, 255, 255, 0.22);
 }
-.profileCreditsPill:active{ transform: scale(0.98); }
+.profileCreditsPill:not(.profileCreditsPill--toolbar):active{ transform: scale(0.98); }
 .profileCreditsPillIco{
   width: 13px;
   height: 13px;
@@ -21221,29 +21256,6 @@ body[data-route="friends"] .friendsPage .discoveryStudioHead{
   margin: 6px 0 0;
   max-width: 22em;
 }
-.discoveryRefreshBtn{
-  flex: 0 0 auto;
-  width: 46px;
-  height: 46px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.06);
-  color: rgba(232,238,247,0.88);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: transform 160ms ease, background 180ms ease, border-color 180ms ease, box-shadow 220ms ease;
-}
-.discoveryRefreshBtn:hover{
-  border-color: rgba(124,92,255,0.45);
-  background: rgba(124,92,255,0.14);
-  box-shadow: 0 0 0 1px rgba(124,92,255,0.2);
-}
-.discoveryRefreshBtn:active{
-  transform: scale(0.94);
-}
 .discoveryRefreshBtn.hasNotice::after{
   content: "";
   position: absolute;
@@ -22284,22 +22296,15 @@ body.createChooserSheetOpen .footer{
   top: -6px;
   right: 0;
   z-index: 8;
-  width: 40px;
-  height: 40px;
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(8, 10, 18, 0.55);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  color: rgba(232,238,247,0.92);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 10px 28px rgba(0,0,0,0.35);
-  -webkit-tap-highlight-color: transparent;
+  width: var(--nabad-glass-size-md);
+  height: var(--nabad-glass-size-md);
+  padding: 0;
 }
-.createChooserClose:active{ transform: scale(0.94); }
+.createChooserClose svg{
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
 .createChooserKicker{
   margin: 0 0 6px;
   font-size: 10px;
@@ -24254,21 +24259,11 @@ body.createChooserSheetOpen .footer{
   padding: 2px 0 8px;
   background: linear-gradient(180deg, rgba(11,13,18,0.98) 72%, rgba(11,13,18,0));
 }
-.discoverySearchClose{
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.04);
-  color: rgba(232,238,247,0.92);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
+.discoverySearchClose svg{
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
-.discoverySearchClose:active{ transform: scale(0.96); }
 .discoverySearchBarWrap .searchBar{
   flex: 1 1 0;
   min-width: 0;
@@ -24363,17 +24358,16 @@ html[data-theme="light"] .searchDiscoverHintChip{
   color: rgba(15,23,40,0.82);
 }
 .discoveryRefreshBtn.isActive{
-  border-color: rgba(124,92,255,0.45);
-  background: rgba(124,92,255,0.14);
-  color: #c4b5fd;
+  background: var(--nabad-glass-bg-hover);
+  border-color: var(--nabad-glass-border-hover);
+  color: var(--nabad-glass-color-hover);
+  box-shadow:
+    var(--nabad-glass-shadow-hover),
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
 }
 html[data-theme="light"] .discoverySearchBarWrap{
   background: linear-gradient(180deg, rgba(236,240,247,0.98) 72%, rgba(236,240,247,0));
-}
-html[data-theme="light"] .discoverySearchClose{
-  background: rgba(15,23,40,0.04);
-  border-color: rgba(15,23,40,0.08);
-  color: rgba(15,23,40,0.85);
 }
 html[data-theme="light"] .discoverySearchBarWrap .searchBar{
   background: rgba(15,23,40,0.04);
@@ -24918,7 +24912,7 @@ html[data-theme="light"] .discoverySearchBarWrap .searchBar{
     overflow: hidden;
   }
   .discoverySegment{ font-size: 13px; padding: 9px 10px; border-radius: 12px; }
-  .discoveryRefreshBtn{ width: 42px; height: 42px; border-radius: 12px; }
+  .discoveryRefreshBtn{ width: var(--nabad-glass-size-md); height: var(--nabad-glass-size-md); border-radius: var(--nabad-glass-radius-sm); }
   .discoveryRowArtBtn{ min-width: 60px; max-width: 76px; }
   .discoveryRow--rich .discoveryRowArtBtn{ min-width: 82px; max-width: 104px; }
   .discoveryRowArtBadge{ width: 26px; height: 26px; font-size: 12px; }
@@ -27669,36 +27663,7 @@ button.activityRow--unavailable{
   animation: spin 0.8s linear infinite;
 }
 
-/* --- Shared Nabad back control (icon-only, ~40px tap target) --- */
-.nabadBackBtn{
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 12px;
-  background: rgba(255,255,255,0.03);
-  color: rgba(232,238,247,0.72);
-  text-decoration: none;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition:
-    background 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease,
-    transform 160ms ease;
-}
-.nabadBackBtn:hover{
-  color: rgba(248,250,255,0.92);
-  border-color: rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.05);
-}
-.nabadBackBtn:active{
-  transform: scale(0.97);
-}
+/* --- Shared Nabad back control (icon-only tap target; glass system) --- */
 .nabadBackBtn svg{
   width: 18px;
   height: 18px;
@@ -27708,16 +27673,6 @@ button.activityRow--unavailable{
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
-}
-html[data-theme="light"] .nabadBackBtn{
-  color: rgba(15, 23, 40, 0.62);
-  border-color: rgba(15, 23, 40, 0.10);
-  background: rgba(15, 23, 40, 0.03);
-}
-html[data-theme="light"] .nabadBackBtn:hover{
-  color: rgba(15, 23, 40, 0.88);
-  border-color: rgba(15, 23, 40, 0.14);
-  background: rgba(15, 23, 40, 0.05);
 }
 .userPublicBack.nabadBackBtn:not([hidden]){
   position: absolute;

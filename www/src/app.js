@@ -3146,6 +3146,7 @@ function applyRoute({ passGen } = {}) {
   const prevRoute = document.body.getAttribute("data-route") || "";
   if (prevRoute === "messages-thread" && wanted !== "messages-thread") {
     stopMessagesThreadPoll();
+    syncMessagesThreadComposerInset();
   }
   if (wanted === "challenges" && hasActiveCreateSession()) {
     wanted = "generate";
@@ -20801,6 +20802,30 @@ let _messagesThreadLoading = false;
 let _messagesSendInFlight = false;
 let _messagesRequestTargetUserId = "";
 
+function syncMessagesThreadComposerInset() {
+  if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
+    try { document.body.style.removeProperty("--messages-composer-bottom"); } catch {}
+    return;
+  }
+  const vv = window.visualViewport;
+  let bottom = "var(--tabbar-h, 0px)";
+  if (vv) {
+    const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+    if (inset > 0) bottom = `${inset}px`;
+  }
+  document.body.style.setProperty("--messages-composer-bottom", bottom);
+}
+
+function wireMessagesThreadKeyboardOnce() {
+  if (document.documentElement.dataset.messagesThreadKbWired) return;
+  document.documentElement.dataset.messagesThreadKbWired = "1";
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const onViewportChange = () => syncMessagesThreadComposerInset();
+  vv.addEventListener("resize", onViewportChange);
+  vv.addEventListener("scroll", onViewportChange);
+}
+
 function closeMessagesRequestSheet() {
   const sheet = document.getElementById("messagesRequestSheet");
   if (!sheet) return;
@@ -21549,6 +21574,8 @@ async function enterMessagesThreadRoute(threadId) {
   _messagesThreadState = { threadId: tid, partner: null, partnerStats: {}, messages: [] };
   const input = document.getElementById("messagesComposerInput");
   if (input) input.value = "";
+  wireMessagesThreadKeyboardOnce();
+  syncMessagesThreadComposerInset();
   await loadMessagesThread(tid);
   startMessagesThreadPoll(tid);
 }
@@ -21688,6 +21715,12 @@ function bindMessagesPageOnce() {
   const composer = document.getElementById("messagesComposerInput");
   if (composer && !composer.dataset.boundMessagesComposer) {
     composer.dataset.boundMessagesComposer = "1";
+    composer.addEventListener("focus", () => {
+      window.setTimeout(() => syncMessagesThreadComposerInset(), 60);
+    });
+    composer.addEventListener("blur", () => {
+      window.setTimeout(() => syncMessagesThreadComposerInset(), 60);
+    });
     composer.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();

@@ -3240,6 +3240,12 @@ body[data-route="auth"] main.grid > [data-route="auth"]{
 body[data-route="music-preferences"] main.grid > [data-route="music-preferences"]{
   display: flex !important;
 }
+body[data-route="messages-thread"] main.grid > [data-route="messages-thread"]{
+  display: flex !important;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
 body[data-route="generate"] main.grid > [data-route="generate"],
 body[data-route="hub"] main.grid > [data-route="hub"],
 body[data-route="home"] main.grid > [data-route="home"],
@@ -3249,7 +3255,6 @@ body[data-route="discover"] main.grid > [data-route="discover"],
 body[data-route="discover-playlist"] main.grid > [data-route="discover-playlist"],
 body[data-route="friends"] main.grid > [data-route="friends"],
 body[data-route="messages"] main.grid > [data-route="messages"],
-body[data-route="messages-thread"] main.grid > [data-route="messages-thread"],
 body[data-route="activity"] main.grid > [data-route="activity"],
 body[data-route="mashup"] main.grid > [data-route="mashup"],
 body[data-route="flow"] main.grid > [data-route="flow"],
@@ -27778,8 +27783,16 @@ section.messagesThreadPage{
 .messagesThreadPage{
   display: flex;
   flex-direction: column;
-  min-height: calc(100dvh - 120px);
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
   padding: 8px max(18px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)) 0;
+}
+body[data-route="messages-thread"] main.grid{
+  flex: 1 1 auto;
+  min-height: calc(100dvh - env(safe-area-inset-top, 0px) - 12px - var(--tabbar-h, 0px));
+  display: flex;
+  flex-direction: column;
 }
 body[data-route="messages"] .app,
 body[data-route="messages-thread"] .app{
@@ -28243,7 +28256,7 @@ body[data-route="messages-thread"] .messagesThreadPage{
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: 10px 6px 12px;
+  padding: 10px 6px calc(78px + env(safe-area-inset-bottom, 0px));
   -webkit-overflow-scrolling: touch;
 }
 .messagesThreadLoading,
@@ -28404,10 +28417,21 @@ body[data-route="messages-thread"] .messagesThreadPage{
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  padding: 10px max(14px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px));
+  padding: 10px max(14px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)) 10px;
   border-top: 1px solid rgba(124,92,255,0.14);
   background: rgba(5, 7, 13, 0.94);
   backdrop-filter: blur(12px);
+}
+body[data-route="messages-thread"] .messagesComposer{
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: var(--messages-composer-bottom, var(--tabbar-h, 0px));
+  z-index: 42;
+  max-width: 640px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  transition: bottom 180ms ease;
 }
 .messagesComposerShare{
   flex: 0 0 auto;

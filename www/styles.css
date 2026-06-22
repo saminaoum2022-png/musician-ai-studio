@@ -27775,6 +27775,7 @@ section.messagesThreadPage{
 }
 .messagesPage{
   padding: 8px max(18px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)) 88px;
+  background: var(--bg);
 }
 .messagesThreadPage{
   display: flex;
@@ -27784,6 +27785,7 @@ section.messagesThreadPage{
   height: 100%;
   padding: 8px max(18px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)) 0;
   box-sizing: border-box;
+  background: var(--bg);
   will-change: height, transform;
 }
 @keyframes messagesThreadSlideIn{
@@ -27817,21 +27819,9 @@ body[data-route="messages-thread"] .app{
   padding-left: 0;
   padding-right: 0;
 }
-body[data-route="messages"]::before,
-body[data-route="messages-thread"]::before{
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background:
-    radial-gradient(90% 60% at 100% 0%, rgba(124,92,255,0.14), transparent 58%),
-    radial-gradient(70% 50% at 0% 100%, rgba(124,92,255,0.08), transparent 55%);
-}
-body[data-route="messages"] .messagesPage,
-body[data-route="messages-thread"] .messagesThreadPage{
-  position: relative;
-  z-index: 1;
+body[data-route="messages"],
+body[data-route="messages-thread"]{
+  background: var(--bg);
 }
 .friendsMessagesBtn{
   position: relative;
@@ -27880,7 +27870,7 @@ body[data-route="messages-thread"] .messagesThreadPage{
 .messagesThreadHead{
   align-items: center;
   padding-bottom: 10px;
-  border-bottom: 1px solid rgba(124,92,255,0.12);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
 }
 .messagesBackBtn{
   flex: 0 0 auto;
@@ -28277,7 +28267,7 @@ body[data-route="messages-thread"] .messagesThreadPage{
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: 10px 6px 8px;
+  padding: 8px 6px 4px;
   -webkit-overflow-scrolling: touch;
 }
 .messagesThreadLoading,
@@ -28522,11 +28512,10 @@ body[data-route="messages-thread"] .messagesThreadPage{
   flex: 0 0 auto;
   display: flex;
   align-items: flex-end;
-  gap: 8px;
-  padding: 10px max(14px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)) 10px;
-  border-top: 1px solid rgba(124,92,255,0.14);
-  background: rgba(5, 7, 13, 0.94);
-  backdrop-filter: blur(12px);
+  gap: 6px;
+  padding: 6px max(12px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)) 6px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  background: var(--bg);
 }
 body[data-route="messages-thread"] .messagesComposer{
   position: relative;
@@ -28536,11 +28525,10 @@ body[data-route="messages-thread"] .messagesComposer{
   width: 100%;
   margin: 0 auto;
   box-sizing: border-box;
-  padding-bottom: var(--messages-composer-pad-bottom, max(10px, env(safe-area-inset-bottom, 0px)));
-  transition: padding-bottom 180ms ease;
+  padding-bottom: max(6px, env(safe-area-inset-bottom, 0px));
 }
 body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesComposer{
-  padding-bottom: 0;
+  padding-bottom: 6px;
 }
 .messagesComposerShare{
   flex: 0 0 auto;

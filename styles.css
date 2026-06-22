@@ -691,7 +691,6 @@ html[data-theme="light"] .playerSideBtn{
 
 html[data-theme="light"] .nabadBackBtn:hover,
 html[data-theme="light"] .playerSideBtn:hover{
-html[data-theme="light"] .playerSideBtn:hover{
   color: var(--text);
   background: rgba(124, 92, 255, 0.08);
 }

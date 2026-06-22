@@ -3420,7 +3420,9 @@ function applyRoute({ passGen } = {}) {
     generationReadyNotice = false;
     renderGenerateReadyDot();
     setLoading(false);
-    showResultCard(true);
+    try {
+      if (typeof _showResultCardHoisted === "function") _showResultCardHoisted(true);
+    } catch {}
   }
   if (wanted === "generate") {
     try { renderPersonaSelect(); } catch {}
@@ -13330,7 +13332,9 @@ function markGenerationReadyNotice() {
   lastGenerationReadyAt = Date.now();
   renderGenerateReadyDot();
   setLoading(false);
-  showResultCard(true);
+  try {
+    if (typeof _showResultCardHoisted === "function") _showResultCardHoisted(true);
+  } catch {}
 }
 
 // Single source of truth for the active vocal reference. Updated whenever the
@@ -38041,10 +38045,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           try {
             updateLibraryRecoverBanner();
           } catch {}
+          // Unlock before markGenerationReadyNotice — that helper used to throw
+          // on a stale showResultCard reference, which left generateLocked on.
+          setGenerateFieldsLocked(false);
+          setProgress(0);
           markGenerationReadyNotice();
           // Avoid stale vocal reference leaking into the next generation.
           clearVocalReferenceSelection();
-          setGenerateFieldsLocked(false);
           return;
         }
         if (state.status === "FAILED") {

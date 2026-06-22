@@ -659,12 +659,12 @@ const els = {
   btnCloseAdvancedSheet: document.getElementById("btnCloseAdvancedSheet"),
   advancedSheet: document.getElementById("advancedSheet"),
   libraryList: document.getElementById("libraryList"),
-  libraryRecoverBanner: document.getElementById("libraryRecoverBanner"),
-  libraryRecoverHint: document.getElementById("libraryRecoverHint"),
-  btnLibraryRecover: document.getElementById("btnLibraryRecover"),
-  btnLibraryRecoverById: document.getElementById("btnLibraryRecoverById"),
-  btnLibraryRecoverDismiss: document.getElementById("btnLibraryRecoverDismiss"),
-  btnLibraryRecoverLink: document.getElementById("btnLibraryRecoverLink"),
+  libraryRecoverBanner: null,
+  libraryRecoverHint: null,
+  btnLibraryRecover: null,
+  btnLibraryRecoverById: null,
+  btnLibraryRecoverDismiss: null,
+  btnLibraryRecoverLink: null,
   btnLibraryDiagnostic: document.getElementById("btnLibraryDiagnostic"),
   libraryDiagnosticOutput: document.getElementById("libraryDiagnosticOutput"),
   libraryStorageBanner: document.getElementById("libraryStorageBanner"),
@@ -755,7 +755,7 @@ const els = {
   profileNabadCertCheck: document.getElementById("profileNabadCertCheck"),
   profileMusicStylesInline: document.getElementById("profileMusicStylesInline"),
   profileMusicStylesBtn: document.getElementById("profileMusicStylesBtn"),
-  profileFeaturedCreation: document.getElementById("profileFeaturedCreation"),
+  profileFeaturedCreation: null,
   profileIdentityLine: document.getElementById("profileIdentityLine"),
   profileHeroBio: document.getElementById("profileHeroBio"),
   // Spotify-x-Nabad redesign nodes
@@ -10452,12 +10452,9 @@ async function renderProfileActivities(opts = {}) {
   const listEl = document.getElementById("profileActivitiesList");
   const libEl = document.getElementById("libraryList");
   const countEl = document.getElementById("profileActivitiesCount");
-  const recoverBanner = document.getElementById("libraryRecoverBanner");
   if (!listEl) return;
   if (libEl) libEl.hidden = true;
   listEl.hidden = false;
-  if (recoverBanner) recoverBanner.hidden = true;
-  if (els.btnLibraryRecoverLink) els.btnLibraryRecoverLink.hidden = true;
   if (!authSession?.user?.id) {
     listEl.innerHTML = `
       <div class="profileActEmpty">
@@ -14190,155 +14187,25 @@ function isFeaturedOnProfile(track) {
   return track?.meta?.featuredOnProfile === true || String(track?.meta?.featuredOnProfile || "").toLowerCase() === "true";
 }
 
-function profileFeaturedTrackPlays(track) {
-  return Math.max(
-    0,
-    Number(track?.playCount) || Number(track?.meta?.playCount) || Number(track?.meta?.plays) || 0,
-  );
-}
-
-function profileFeaturedCreationChallengeLine(track) {
-  const ch = challengeMetaForTrack(track);
-  if (ch) return discoverChallengeRankText(track, []);
-  return releaseCaptionForTrack(track) || "";
-}
-
-function resolveProfileFeaturedTrack() {
-  if (HUB_FEATURE_ENABLED) {
-    const hub = getProfileOwnerHubItems();
-    if (hub.length) {
-      const pinned = hub.find(isFeaturedOnProfile);
-      if (pinned) return { track: pinned, source: "hub" };
-      const best = [...hub].sort(
-        (a, b) =>
-          Number(b.likes || 0) - Number(a.likes || 0)
-          || Number(b.ts || 0) - Number(a.ts || 0),
-      )[0];
-      return best ? { track: best, source: "hub" } : null;
-    }
-  }
-  const lib = loadLibrary().filter((t) => String(t?.url || "").trim());
-  if (!lib.length) return null;
-  const pub = lib.filter((t) => Boolean(t.publicOnProfile));
-  const pool = pub.length ? pub : lib;
-  const pinned = pool.find(isFeaturedOnProfile);
-  if (pinned) return { track: pinned, source: "library" };
-  const ranked = [...pool].sort((a, b) => {
-    const pa = profileFeaturedTrackPlays(a);
-    const pb = profileFeaturedTrackPlays(b);
+function sortLibraryForDisplay(items) {
+  return [...(items || [])].sort((a, b) => {
+    const pa = isFeaturedOnProfile(a) ? 1 : 0;
+    const pb = isFeaturedOnProfile(b) ? 1 : 0;
     if (pb !== pa) return pb - pa;
-    const ca = challengeMetaForTrack(a) ? 1 : 0;
-    const cb = challengeMetaForTrack(b) ? 1 : 0;
-    if (cb !== ca) return cb - ca;
-    return libraryTrackPublicTs(b) - libraryTrackPublicTs(a);
-  });
-  return ranked[0] ? { track: ranked[0], source: "library" } : null;
-}
-
-function profileFeaturedCreationHtml(track, mode = "own") {
-  if (!track) return "";
-  const title = escapeHtml(String(track.title || "Untitled"));
-  const art = escapeHtml(String(
-    (track.meta && (track.meta.imageThumb || track.meta.imageUrl)) || track.artUrl || "./assets/nabadai-logo.png",
-  ));
-  const sid = escapeHtml(String(track.id || track.songId || ""));
-  const playAttr = mode === "own" ? "data-profile-featured-play" : "data-public-featured-play";
-  const challengeLine = profileFeaturedCreationChallengeLine(track);
-  const plays = profileFeaturedTrackPlays(track);
-  const metaBits = [];
-  if (challengeLine) {
-    metaBits.push(`<span class="profileFeaturedCreationMeta profileFeaturedCreationMeta--accent">${escapeHtml(challengeLine)}</span>`);
-  }
-  if (plays > 0) {
-    metaBits.push(`<span class="profileFeaturedCreationMeta">${escapeHtml(`${formatStatCount(plays)} plays`)}</span>`);
-  }
-  const metaHtml = metaBits.length
-    ? `<span class="profileFeaturedCreationMetaRow">${metaBits.join("")}</span>`
-    : "";
-  return `
-    <section class="profileFeaturedCreation" data-featured-song="${sid}">
-      <p class="profileFeaturedCreationKicker">Featured creation</p>
-      <button type="button" class="profileFeaturedCreationMain" ${playAttr}="${sid}" aria-label="Play ${title}">
-        <span class="profileFeaturedCreationArt"><img src="${art}" alt="" loading="lazy" decoding="async" /></span>
-        <span class="profileFeaturedCreationBody">
-          ${titleWithNabadBadgeHtml(track, title, "profileFeaturedCreationTitleText", "strong")}
-          ${metaHtml}
-        </span>
-        ${discoverFeedPlayBtnHtml({ hero: true })}
-      </button>
-    </section>
-  `;
-}
-
-/** @deprecated Use profileFeaturedCreationHtml in the hero slot. */
-function profileFeaturedSongHtml(track, mode = "own") {
-  return profileFeaturedCreationHtml(track, mode);
-}
-
-function bindProfileFeaturedCreationPlayHandlers(root, mode = "own", tracks = []) {
-  if (!root) return;
-  const attr = mode === "own" ? "data-profile-featured-play" : "data-public-featured-play";
-  root.querySelectorAll(`[${attr}]`).forEach((b) => {
-    b.addEventListener("click", () => {
-      const sid = b.getAttribute(attr);
-      if (!sid) return;
-      if (mode === "own") {
-        const hubHit = HUB_FEATURE_ENABLED && getProfileOwnerHubItems().some((p) => String(p.id) === String(sid));
-        if (hubHit) {
-          void playHubPostFromProfile(sid);
-          return;
-        }
-        void playLibraryListRowById(sid, { openPlayer: true });
-        return;
-      }
-      const t = tracks.find((x) => String(x.id) === String(sid));
-      if (!t?.url) return;
-      void playLibraryUrlOnPlayer(t.url, t.title || "Song", t.artUrl || "", {
-        discoverFeed: false,
-        openPlayer: true,
-        playSource: {
-          songId: String(t.id || ""),
-          ownerUserId: String(t.userId || t.ownerUserId || ""),
-          taskId: String(t.taskId || ""),
-          audioId: String(t.audioId || ""),
-        },
-      });
-    });
+    return Number(b?.ts || 0) - Number(a?.ts || 0);
   });
 }
 
-function renderProfileFeaturedCreation() {
-  const slot = els.profileFeaturedCreation;
-  if (!slot) return;
-  const route = document.body.getAttribute("data-route") || "";
-  if (route !== "profile" || profileEditing) {
-    slot.hidden = true;
-    slot.innerHTML = "";
-    return;
-  }
-  const resolved = resolveProfileFeaturedTrack();
-  if (!resolved?.track) {
-    slot.hidden = true;
-    slot.innerHTML = "";
-    return;
-  }
-  slot.hidden = false;
-  slot.innerHTML = profileFeaturedCreationHtml(resolved.track, "own");
-  bindProfileFeaturedCreationPlayHandlers(slot, "own");
-}
+function renderProfileFeaturedCreation() {}
 
 async function setLibraryTrackFeaturedOnProfile(id, featured) {
   const trackId = String(id || "").trim();
   if (!trackId) return;
   const lib = loadLibrary();
   const target = lib.find((t) => String(t.id) === trackId);
-  if (!target?.publicOnProfile) {
-    showToast("Publish the song first, then pin it.");
-    return;
-  }
+  if (!target) return;
   const previousFeaturedIds = new Set(lib.filter(isFeaturedOnProfile).map((t) => String(t.id)));
   const nextLib = lib.map((t) => {
-    if (!t.publicOnProfile) return t;
     const shouldFeature = featured && String(t.id) === trackId;
     const meta = { ...(t.meta || {}) };
     if (shouldFeature) meta.featuredOnProfile = true;
@@ -14347,9 +14214,9 @@ async function setLibraryTrackFeaturedOnProfile(id, featured) {
   });
   saveLibrary(nextLib);
   renderProfileHubShared();
-  showToast(featured ? "Pinned as your featured song." : "Featured song removed.");
-  try { renderProfileFeaturedCreation(); } catch {}
-  const changed = nextLib.filter((t) => t.publicOnProfile && (String(t.id) === trackId || previousFeaturedIds.has(String(t.id))));
+  showToast(featured ? "Pinned to top." : "Unpinned.");
+  try { renderLibrary(); } catch {}
+  const changed = nextLib.filter((t) => String(t.id) === trackId || previousFeaturedIds.has(String(t.id)));
   for (const t of changed) {
     await supabasePatchUserSong(t, { meta: t.meta || {} }).catch(() => null);
   }
@@ -23276,7 +23143,7 @@ function renderTrackSheetProfileLib(t) {
   const kind = String(t?.kind || "full");
   const isSound = kind === "sound";
   const remixEligible = !isSound && Boolean(t?.url && String(t.url).trim());
-  const featuredLabel = isFeaturedOnProfile(t) ? "Remove featured song" : "Pin as featured song";
+  const featuredLabel = isFeaturedOnProfile(t) ? "Unpin song" : "Pin song";
   const quickRemix = remixEligible
     ? `<button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-track-sheet-action="profile_lib_remix">Remix</button>`
     : "";
@@ -26365,17 +26232,13 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
   if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
   const profMap = await fetchProfilesByUserIdsMap([String(prof.user_id || "")]);
   if (!stillCurrent()) return;
-  const slice = songs.slice(0, 60);
+  const slice = sortLibraryForDisplay(songs).slice(0, 60);
   const byLine = `@${displayName}`;
-  const featured = songs.find(isFeaturedOnProfile);
   const paintPublicSongs = (tracks) => {
     if (!stillCurrent() || !els.userPublicSongs) return;
     els.userPublicSongs.innerHTML = tracks
       .map((t, i) => followingActivityRowHtml(t, profMap, i, { xstyle: true }))
       .join("");
-    if (featured) {
-      els.userPublicSongs.innerHTML = `${profileFeaturedSongHtml(featured, "public")}${els.userPublicSongs.innerHTML}`;
-    }
     _userPublicFeedTracks = tracks.map((t) => {
       const artSafe = trackCoverArtForFeed(t);
       return {
@@ -26396,24 +26259,6 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
     } catch {}
     applyFeedSocialStatsToDom(els.userPublicSongs);
     void hydrateFeedSocialStatsForFeed(els.userPublicSongs);
-    els.userPublicSongs.querySelectorAll("[data-public-featured-play]").forEach((b) => {
-      b.addEventListener("click", () => {
-        const sid = b.getAttribute("data-public-featured-play");
-        const t = tracks.find((x) => String(x.id) === String(sid));
-        if (!t?.url) return;
-        void playLibraryUrlOnPlayer(t.url, t.title || "Song", t.artUrl || "", {
-          discoverFeed: false,
-          openPlayer: true,
-          playSource: {
-            songId: String(t.id || ""),
-            ownerUserId: String(prof.user_id || ""),
-            taskId: String(t.taskId || ""),
-            audioId: String(t.audioId || ""),
-            releaseCaption: releaseCaptionForTrack(t),
-          },
-        });
-      });
-    });
   };
   paintPublicSongs(slice);
   setUserPublicLoading(false);
@@ -30259,7 +30104,6 @@ function queueReleaseCaptionCloudHeal(track) {
 }
 
 function syncProfileSongsSegmentUi() {
-  const recoverBanner = document.getElementById("libraryRecoverBanner");
   const allCount = document.getElementById("libraryCount");
   const actCount = document.getElementById("profileActivitiesCount");
   const activitiesList = document.getElementById("profileActivitiesList");
@@ -30276,10 +30120,6 @@ function syncProfileSongsSegmentUi() {
     btn.classList.toggle("isActive", on);
     btn.setAttribute("aria-selected", on ? "true" : "false");
   });
-  if (els.btnLibraryRecoverLink) {
-    els.btnLibraryRecoverLink.hidden = !(onProfile && isAll);
-  }
-  if (recoverBanner && !isAll) recoverBanner.hidden = true;
   if (allCount) allCount.hidden = !isAll;
   const playlistCount = document.getElementById("profilePlaylistCount");
   if (playlistCount) playlistCount.hidden = !isPlaylist;
@@ -30298,7 +30138,6 @@ function syncProfileSongsSegmentUi() {
     _librarySelectedIds.clear();
   }
   try { updateLibrarySelectToolbar(); } catch {}
-  try { updateLibraryRecoverBanner(); } catch {}
 }
 
 function bindProfileSongsSegmentOnce() {
@@ -32726,14 +32565,8 @@ function renderLibrary() {
   if (!els.libraryList) return;
   backfillNabadVerificationInLibrary();
   if ((document.body.getAttribute("data-route") || "") === "profile" && _profileSongsSegment !== "all") return;
-  try {
-    updateLibraryRecoverBanner();
-  } catch {}
-  // Bind delegated clicks once the list container exists — including empty /
-  // loading states — otherwise the first time the user sees rows, none of the
-  // ⋯ actions (bottom sheet) fire.
   bindLibraryDelegatedListeners();
-  const items = loadLibrary();
+  const items = sortLibraryForDisplay(loadLibrary());
   syncLibraryStorageBanner();
   const totalCount = items.length;
   // Reset the window if the underlying list shrunk OR is the same size
@@ -32874,6 +32707,7 @@ function renderLibrary() {
         const safeTitle = escapeHtml(displayTitle);
         const subBits = [];
         if (dateLabel) subBits.push(`<span class="libRowDot">${escapeHtml(dateLabel)}</span>`);
+        if (isFeaturedOnProfile(t)) subBits.push(`<span class="libRowChip">Pinned</span>`);
         if (isInstrumental) subBits.push(`<span class="libRowChip">Instrumental</span>`);
         if (isSound) subBits.push(`<span class="libRowChip">Sound</span>`);
         const profilePublic = Boolean(t.publicOnProfile);
@@ -33505,79 +33339,6 @@ if (els.btnCloseSongDetails) {
 }
 if (els.btnLibraryDiagnostic) {
   els.btnLibraryDiagnostic.addEventListener("click", () => void runLibraryDiagnostic());
-}
-if (els.btnLibraryRecover) {
-  els.btnLibraryRecover.addEventListener("click", async () => {
-    const rec = loadRecoverableGenerationTask();
-    const tid = rec?.taskId || "";
-    if (!tid) {
-      showToast("No saved task on this device. Use “Enter task ID…”.", { icon: "!", durationMs: 3600 });
-      return;
-    }
-    try {
-      els.btnLibraryRecover.disabled = true;
-      await recoverSongFromTaskId(tid);
-    } catch (e) {
-      showToast(e?.message || String(e), { icon: "!", durationMs: 6000 });
-    } finally {
-      els.btnLibraryRecover.disabled = false;
-    }
-  });
-}
-if (els.btnLibraryRecoverById) {
-  els.btnLibraryRecoverById.addEventListener("click", async () => {
-    const raw = window.prompt(
-      "Paste the task ID (from your generation log, or the long id from the app debug output):",
-      loadRecoverableGenerationTask()?.taskId || ""
-    );
-    const tid = String(raw || "").trim();
-    if (!tid) return;
-    try {
-      els.btnLibraryRecoverById.disabled = true;
-      saveRecoverableGenerationTask(tid, "manual");
-      updateLibraryRecoverBanner();
-      await recoverSongFromTaskId(tid);
-    } catch (e) {
-      showToast(e?.message || String(e), { icon: "!", durationMs: 6000 });
-    } finally {
-      els.btnLibraryRecoverById.disabled = false;
-    }
-  });
-}
-if (els.btnLibraryRecoverDismiss) {
-  els.btnLibraryRecoverDismiss.addEventListener("click", () => {
-    clearRecoverableGenerationTask();
-    updateLibraryRecoverBanner();
-    showToast("Tip: you can still recover later with “Enter task ID…” if you keep the task id.", {
-      icon: "♪",
-      durationMs: 4000,
-    });
-  });
-}
-// Always-visible header link → reuses the same prompt-by-id path as
-// the banner. Available even when no task was captured locally (e.g.
-// dismissed before this feature shipped, or recovering on a fresh
-// install / different device).
-if (els.btnLibraryRecoverLink) {
-  els.btnLibraryRecoverLink.addEventListener("click", async () => {
-    const seed = loadRecoverableGenerationTask()?.taskId || "";
-    const raw = window.prompt(
-      "Paste the task ID (from your generation log or server logs):",
-      seed
-    );
-    const tid = String(raw || "").trim();
-    if (!tid) return;
-    try {
-      els.btnLibraryRecoverLink.disabled = true;
-      saveRecoverableGenerationTask(tid, "manual");
-      updateLibraryRecoverBanner();
-      await recoverSongFromTaskId(tid);
-    } catch (e) {
-      showToast(e?.message || String(e), { icon: "!", durationMs: 6000 });
-    } finally {
-      els.btnLibraryRecoverLink.disabled = false;
-    }
-  });
 }
 async function handleLibraryFreeSpaceClick() {
   const r = freeUpLocalStorage();
@@ -35855,7 +35616,7 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
   } catch (e) {
     setStatus(`In-app playback failed (${e?.name || "error"}). Tap Open Direct.`);
     try {
-      showToast("Playback failed — link may be expired. Try Open Direct or Recover.", {
+      showToast("Playback failed — link may be expired. Try Open Direct.", {
         icon: "♪",
         durationMs: 4200,
       });
@@ -36208,7 +35969,7 @@ function dismissPendingBackendTask({ silent = false, skipRecoverSave = false } =
     try { setStatus("Cleared. You can start a new generation."); } catch {}
     try {
       showToast(
-        "Spinner cleared. Open Library → Recover my song if that generation already finished.",
+        "Spinner cleared. You can start a new generation.",
         { icon: "✓", durationMs: 4500 }
       );
     } catch {}
@@ -36602,37 +36363,13 @@ async function recoverSongFromTaskId(taskId, { silent = false } = {}) {
 }
 
 function updateLibraryRecoverBanner() {
-  const wrap = els.libraryRecoverBanner;
-  if (!wrap) return;
-  const route = document.body.getAttribute("data-route") || "";
-  if (route === "profile" && _profileSongsSegment !== "all") {
-    wrap.hidden = true;
-    if (els.btnLibraryRecoverLink) els.btnLibraryRecoverLink.hidden = true;
-    return;
-  }
-  if (els.btnLibraryRecoverLink && route === "profile" && _profileSongsSegment === "all") {
-    els.btnLibraryRecoverLink.hidden = false;
-  }
-  const rec = loadRecoverableGenerationTask();
-  const hint = els.libraryRecoverHint;
-  if (!rec?.taskId) {
-    wrap.hidden = true;
-    return;
-  }
-  const lib = loadLibrary();
-  const already = lib.some((x) => String(x.taskId || "").trim() === rec.taskId);
-  if (already) {
-    clearRecoverableGenerationTask();
-    wrap.hidden = true;
-    return;
-  }
-  wrap.hidden = false;
-  if (hint) {
-    const th = rec.titleHint;
-    hint.textContent = th
-      ? `Saved task · ${th.length > 52 ? `${th.slice(0, 52)}…` : th}`
-      : `Task ID ends with …${rec.taskId.slice(-8)}`;
-  }
+  try {
+    const rec = loadRecoverableGenerationTask();
+    if (!rec?.taskId) return;
+    const lib = loadLibrary();
+    const already = lib.some((x) => String(x.taskId || "").trim() === rec.taskId);
+    if (already) clearRecoverableGenerationTask();
+  } catch {}
 }
 
 function printArrangement(a) {

@@ -2439,7 +2439,6 @@
           </section>
 
           <!-- Songs — Public (Discover / link) vs All (full library) -->
-          <div id="profileFeaturedCreation" class="profileFeaturedCreationWrap" hidden aria-live="polite"></div>
           <div class="profileSongsBlock">
             <div class="profileTabBar" role="tablist" aria-label="Profile content">
               <button type="button" class="profileTab isActive" role="tab" aria-selected="true" data-profile-songs-segment="activities" id="profileSongsSegActivity">Posts</button>
@@ -2451,31 +2450,9 @@
               <p id="profilePlaylistCount" class="libraryCount" hidden aria-live="polite"></p>
               <p id="profileActivitiesCount" class="libraryCount" hidden aria-live="polite"></p>
               <div class="profileSongsToolbarActions">
-                <button
-                  type="button"
-                  id="btnLibraryRecoverLink"
-                  class="libraryRecoverLink"
-                  title="Recover a song from a task ID"
-                  hidden
-                >Lost a song? Recover</button>
                 <div class="librarySelectControls">
                   <button type="button" id="btnLibraryDeleteSelected" class="librarySelectDeleteBtn" hidden disabled>Delete</button>
                   <button type="button" id="btnLibrarySelectMode" class="librarySelectToggleBtn" hidden>Select</button>
-                </div>
-              </div>
-            </div>
-            <div id="libraryRecoverBanner" class="libraryRecoverBanner" hidden role="region" aria-label="Recover song">
-              <div class="libraryRecoverBannerInner">
-                <div class="libraryRecoverBannerBody">
-                  <div class="libraryRecoverBannerTitle">Song finished but didn’t show up?</div>
-                  <p id="libraryRecoverHint" class="libraryRecoverBannerHint">
-                    If a generation finished while the app was stuck, pull it into All songs here.
-                  </p>
-                </div>
-                <div class="libraryRecoverBannerActions">
-                  <button type="button" id="btnLibraryRecover" class="primary libraryRecoverPrimary">Recover my song</button>
-                  <button type="button" id="btnLibraryRecoverById" class="ghost libraryRecoverSecondary">Enter task ID…</button>
-                  <button type="button" id="btnLibraryRecoverDismiss" class="ghost libraryRecoverDismiss">Dismiss</button>
                 </div>
               </div>
             </div>

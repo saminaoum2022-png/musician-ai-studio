@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260623routeCache";
+const APP_BUILD = "20260623friendsTabDot";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -441,6 +441,8 @@ const els = {
   activityStatus: document.getElementById("activityStatus"),
   activityLoadMore: document.getElementById("activityLoadMore"),
   activityTabLink: document.querySelector('.mobileTabbar [data-route-link="activity"]'),
+  friendsTabLink: document.querySelector('.mobileTabbar [data-route-link="friends"]'),
+  friendsTabDot: document.getElementById("friendsTabDot"),
   mashupPage: document.getElementById("mashupPage"),
   mashupLead: document.getElementById("mashupLead"),
   mashupSlotA: document.getElementById("mashupSlotA"),
@@ -22212,6 +22214,7 @@ function updateMessagesUnreadBadge(count) {
   const badge = document.getElementById("friendsMessagesBadge");
   const btn = document.getElementById("friendsMessagesBtn");
   const n = _messagesUnreadCount;
+  const hasUnread = n > 0;
   if (badge) {
     if (n > 0) {
       badge.hidden = false;
@@ -22222,10 +22225,20 @@ function updateMessagesUnreadBadge(count) {
     }
   }
   if (btn) {
-    btn.classList.toggle("hasNotice", n > 0);
-    const label = n > 0 ? `Messages, ${n} unread` : "Messages";
+    btn.classList.toggle("hasNotice", hasUnread);
+    const label = hasUnread ? `Messages, ${n} unread` : "Messages";
     btn.setAttribute("aria-label", label);
   }
+  try {
+    els.friendsTabLink?.classList?.toggle?.("hasNotice", hasUnread);
+    const friendsLabel = hasUnread
+      ? `Friends, ${n} unread ${n === 1 ? "message" : "messages"}`
+      : "Friends";
+    els.friendsTabLink?.setAttribute?.("aria-label", friendsLabel);
+    if (els.friendsTabDot) {
+      els.friendsTabDot.style.display = hasUnread ? "" : "none";
+    }
+  } catch {}
 }
 
 async function refreshMessagesUnreadBadge({ force = false } = {}) {

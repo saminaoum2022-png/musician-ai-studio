@@ -16686,7 +16686,7 @@ input::placeholder, textarea::placeholder{
     background: transparent;
   }
   /* The teal hasNotice dot doubled up with the red tab dots
-     (#activityTabDot / #libraryTabDot) — the red dot is the only
+     (#activityTabDot / #friendsTabDot / #libraryTabDot) — the red dot is the only
      notification indicator on the tab bar. */
   .mobileTabbar a.hasNotice::after{
     content: none;

@@ -5284,9 +5284,9 @@ function discoverWeeklyChartSkeletonHtml() {
       </span>
     </div>`).join("");
   return `
-    <header class="discoverFeedSectionHead chartWeekHead" aria-hidden="true">
-      <div class="discoverChartSkeletonTitle"></div>
-      <div class="discoverSkeletonLine short" style="width:72px;height:12px;border-radius:6px"></div>
+    <header class="discoverFeedSectionHead chartWeekHead">
+      <h3 class="discoverFeedSectionTitle">Top This Week</h3>
+      <div class="discoverSkeletonLine short chartWeekSkelLink" aria-hidden="true"></div>
     </header>
     <div class="chartWeekWinner chartWeekWinner--skel" aria-hidden="true">
       <span class="chartWeekWinnerArt discoverSkeletonLine"></span>
@@ -6284,12 +6284,29 @@ function bindDiscoverWeeklyChartSectionOnce() {
   });
 }
 
+function paintDiscoverWeeklyChartLoading(wrap) {
+  const el = wrap || document.getElementById("discoverWeeklyChart");
+  if (!el) return;
+  el.hidden = false;
+  el.classList.add("isLoading");
+  el.setAttribute("aria-busy", "true");
+  el.innerHTML = discoverWeeklyChartSkeletonHtml();
+}
+
 async function refreshDiscoverWeeklyChart() {
   const wrap = document.getElementById("discoverWeeklyChart");
   if (!wrap) return;
+  const hadContent = Boolean(wrap.querySelector(".chartWeekWinner:not(.chartWeekWinner--skel)"));
   const wasHidden = wrap.hidden;
+  const wasLoading = wrap.classList.contains("isLoading");
+  const cached = _weeklyChartCache.chart && Date.now() - _weeklyChartCache.ts < 5 * 60_000
+    ? _weeklyChartCache.chart
+    : null;
+  if (!cached?.length && !wrap.classList.contains("isLoading")) {
+    paintDiscoverWeeklyChartLoading(wrap);
+  }
   try {
-    const chart = await fetchWeeklyChart();
+    const chart = cached || await fetchWeeklyChart();
     wrap.classList.remove("isLoading");
     wrap.removeAttribute("aria-busy");
     if (!chart.length) {
@@ -6323,7 +6340,8 @@ async function refreshDiscoverWeeklyChart() {
       ${showFullChart ? `<button type="button" class="chartWeekFullBtn" data-chart-week-toggle aria-expanded="${expanded ? "true" : "false"}">${escapeHtml(fullLabel)}</button>` : ""}`;
     wireChartWeekToggleButtons(wrap);
     wrap.hidden = false;
-    if (wasHidden) playDiscoverSectionEnter(wrap);
+    const shouldAnimate = !hadContent && (wasHidden || wasLoading);
+    if (shouldAnimate) playDiscoverSectionEnter(wrap);
   } catch {
     wrap.classList.remove("isLoading");
     wrap.removeAttribute("aria-busy");
@@ -7635,7 +7653,7 @@ function renderDiscoverFeedForYou(tracks, profMap) {
     ? templateTracks.map((t) => discoverFeedTemplateCardHtml(t, profMap)).join("")
     : `<p class="discoverHubQuietNote">Songs made with templates will show here.</p>`;
   return `
-    <section id="discoverWeeklyChart" class="discoverWeeklyChart discoverWeeklyChart--final" hidden aria-label="Top songs this week"></section>
+    <section id="discoverWeeklyChart" class="discoverWeeklyChart discoverWeeklyChart--final isLoading" aria-busy="true" aria-label="Top songs this week">${discoverWeeklyChartSkeletonHtml()}</section>
     ${challengeBlock}
     <section class="discoverFeedSection">
       ${discoverFeedSectionHeadHtml("Remixes you'll love")}
@@ -25860,7 +25878,6 @@ async function refreshDiscoverFeed() {
     _discoveryLastProfMap = profMap;
     if (gen !== _discoveryFeedGen) return;
     bindCampaignUiOnce();
-    void refreshDiscoverWeeklyChart();
     if (playable.length) {
       try {
         const playCountMap = await fetchDiscoverSongPlayCounts(playable.map((t) => t.id));

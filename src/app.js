@@ -23113,6 +23113,7 @@ function renderTrackSheetLibrary(track) {
   const quickMashup = mashupEligible
     ? `<button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="library_mashup">Mashup</button>`
     : "";
+  const pinLabel = isFeaturedOnProfile(track) ? "Unpin song" : "Pin song";
   q.innerHTML = `
     ${quickRemix}
     ${quickMashup}
@@ -23120,6 +23121,7 @@ function renderTrackSheetLibrary(track) {
   `;
   l.innerHTML = `
     ${TRACK_SHEET_ADD_PLAYLIST_ROW}
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_pin">${escapeHtml(pinLabel)}</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_audio">Download audio</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_video">Download video</button>
     ${musicVideoEligible ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_music_video">${musicVideoLabel}</button>` : ""}
@@ -23850,6 +23852,11 @@ function runTrackSheetAction(action, sourceEl) {
       } else if (to === "private") {
         void setLibraryTrackPublicOnProfile(t.id, false);
       }
+      return;
+    }
+    if (action === "library_pin") {
+      shut();
+      void setLibraryTrackFeaturedOnProfile(t.id, !isFeaturedOnProfile(t));
       return;
     }
     if (action === "library_rename") {

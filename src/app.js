@@ -18077,6 +18077,55 @@ function getSupabaseAuthToken() {
   return authSession?.access_token || "";
 }
 
+function isSupabaseJwtExpiredError(raw) {
+  const s = String(raw || "").toLowerCase();
+  return (
+    s.includes("jwt expired") ||
+    s.includes("pgrst303") ||
+    s.includes("invalid jwt") ||
+    (s.includes("401") && s.includes("jwt"))
+  );
+}
+
+/** User-facing copy when cloud sync fails after a local save succeeded. */
+function cloudSyncFailureMessage(details, { action = "sync" } = {}) {
+  const det = String(details || "");
+  if (/public_on_profile|42703|column/i.test(det)) {
+    return "Database missing public_on_profile. In Supabase SQL Editor run: supabase/user_songs_public_on_profile.sql";
+  }
+  if (action === "publish") {
+    return "Saved on this device. Couldn't reach Discover — try publishing again.";
+  }
+  if (action === "rename") {
+    return "Renamed on this device. Couldn't sync to the cloud — try again.";
+  }
+  return "Saved on this device. Cloud sync will catch up when you're online.";
+}
+
+/** Supabase REST fetch with proactive refresh + one silent JWT retry. */
+async function supabaseAuthedFetch(url, init = {}) {
+  await refreshSupabaseSessionIfNeeded();
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const token = getSupabaseAuthToken();
+    if (!token) return { ok: false, status: 0, text: "", reason: "no_auth" };
+    const headers = {
+      ...(init.headers || {}),
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+    };
+    const r = await fetch(url, { ...init, headers }).catch(() => null);
+    if (!r) return { ok: false, status: 0, text: "", reason: "network" };
+    const txt = await r.text().catch(() => "");
+    if (r.ok) return { ok: true, status: r.status, text: txt, reason: "" };
+    const jwtDead = r.status === 401 || isSupabaseJwtExpiredError(txt);
+    if (attempt === 0 && jwtDead && authSession?.refresh_token) {
+      if (await refreshSupabaseSessionIfNeeded({ force: true })) continue;
+    }
+    return { ok: false, status: r.status, text: txt, reason: `http_${r.status}` };
+  }
+  return { ok: false, status: 0, text: "", reason: "network" };
+}
+
 /* -----------------------------------------------------------------
  *  Per-user credits (friends-beta promo system)
  *
@@ -18502,12 +18551,12 @@ async function supabaseFetchUser(token) {
   lastAuthDebug = "";
   return await r.json().catch(() => null);
 }
-async function refreshSupabaseSessionIfNeeded() {
+async function refreshSupabaseSessionIfNeeded({ force = false } = {}) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return false;
   if (!authSession?.refresh_token) return Boolean(getSupabaseAuthToken());
   const expAt = authSessionExpiresAtMs();
   const skewMs = 5 * 60 * 1000;
-  if (expAt && expAt > Date.now() + skewMs) return true;
+  if (!force && expAt && expAt > Date.now() + skewMs) return true;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 8000);
   try {
@@ -19924,8 +19973,7 @@ function recordUserSongInsertResult(ins) {
 }
 
 async function supabaseInsertUserSong(track) {
-  const token = getSupabaseAuthToken();
-  if (!token || !authSession?.user?.id) {
+  if (!authSession?.user?.id) {
     return { ok: false, reason: "no_auth" };
   }
   // Never re-create a song the user deleted. (Explicit re-adds clear the
@@ -19951,35 +19999,33 @@ async function supabaseInsertUserSong(track) {
       ? { published_at: userSongPublishedAtValue(track) || new Date().toISOString() }
       : {}),
   };
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/user_songs`, {
+  const res = await supabaseAuthedFetch(`${SUPABASE_URL}/rest/v1/user_songs`, {
     method: "POST",
     headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
       Prefer: "return=minimal",
     },
     body: JSON.stringify(payload),
-  }).catch(() => null);
-  if (!r) {
-    const fail = { ok: false, reason: "network" };
+  });
+  if (res.reason === "network" || res.reason === "no_auth") {
+    const fail = { ok: false, reason: res.reason || "network" };
     recordUserSongInsertResult(fail);
     return fail;
   }
-  if (!r.ok) {
-    const txt = await r.text().catch(() => "");
+  if (!res.ok) {
+    const txt = res.text;
     // HTTP 409 / Postgres unique_violation (SQLSTATE 23505) means the
     // row already exists in the cloud — that's a success from the
     // app's perspective (the song is safely synced), not a failure.
     // Don't surface it as an error and don't poison the empty-state
     // "Last cloud save error" line.
-    const looksDuplicate = r.status === 409 || /23505|duplicate key/i.test(txt);
+    const looksDuplicate = res.status === 409 || /23505|duplicate key/i.test(txt);
     if (looksDuplicate) {
       recordUserSongInsertResult({ ok: true });
       invalidateUserSongsLoadCache();
       return { ok: true, reason: "duplicate" };
     }
-    const fail = { ok: false, reason: `http_${r.status}`, details: String(txt).slice(0, 180) };
+    const fail = { ok: false, reason: `http_${res.status}`, details: String(txt).slice(0, 180) };
     recordUserSongInsertResult(fail);
     return fail;
   }
@@ -19998,8 +20044,7 @@ function isPostgresUuidString(v) {
  *  localStorage being authoritative until the next reconcile.
  */
 async function supabasePatchUserSong(track, patch) {
-  const token = getSupabaseAuthToken();
-  if (!token || !authSession?.user?.id) return { ok: false, reason: "no_auth" };
+  if (!authSession?.user?.id) return { ok: false, reason: "no_auth" };
   const uid = encodeURIComponent(authSession.user.id);
   const songUrl = String(track?.url || "").trim();
   const url = encodeURIComponent(songUrl);
@@ -20040,12 +20085,11 @@ async function supabasePatchUserSong(track, patch) {
     // this way on purpose — deleting them locally must delete them in
     // the cloud too.
     try {
-      const r0 = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?${filter}&select=meta&limit=1`, {
-        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` },
+      const r0 = await supabaseAuthedFetch(`${SUPABASE_URL}/rest/v1/user_songs?${filter}&select=meta&limit=1`, {
         cache: "no-store",
       });
       if (r0.ok) {
-        const rows = await r0.json().catch(() => []);
+        const rows = JSON.parse(r0.text || "[]");
         const cur = Array.isArray(rows) ? rows[0]?.meta : null;
         if (cur && typeof cur === "object") {
           const HEAVY_META_KEYS = [
@@ -20080,20 +20124,21 @@ async function supabasePatchUserSong(track, patch) {
     body.discover_expires_at = patch.discoverExpiresAt.trim();
   }
   if (Object.keys(body).length === 0) return { ok: false, reason: "noop" };
-  const sendPatch = (payload) => fetch(`${SUPABASE_URL}/rest/v1/user_songs?${filter}`, {
-    method: "PATCH",
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      Prefer: "return=minimal",
-    },
-    body: JSON.stringify(payload),
-  }).catch(() => null);
-  let r = await sendPatch(body);
-  if (!r) return { ok: false, reason: "network" };
-  if (!r.ok) {
-    const txt = await r.text().catch(() => "");
+  const sendPatch = (payload) =>
+    supabaseAuthedFetch(`${SUPABASE_URL}/rest/v1/user_songs?${filter}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify(payload),
+    });
+  let res = await sendPatch(body);
+  if (res.reason === "network" || res.reason === "no_auth") {
+    return { ok: false, reason: res.reason || "network" };
+  }
+  if (!res.ok) {
+    const txt = res.text;
     const hasDiscoverCols =
       Object.prototype.hasOwnProperty.call(body, "discover_score") ||
       Object.prototype.hasOwnProperty.call(body, "discover_expires_at");
@@ -20102,27 +20147,29 @@ async function supabasePatchUserSong(track, patch) {
       delete retryBody.discover_score;
       delete retryBody.discover_expires_at;
       if (Object.keys(retryBody).length > 0) {
-        r = await sendPatch(retryBody);
-        if (r?.ok) {
+        res = await sendPatch(retryBody);
+        if (res.ok) {
           return { ok: true, reason: "discover_columns_pending", details: String(txt).slice(0, 280) };
         }
-        if (!r) return { ok: false, reason: "network" };
-        const retryTxt = await r.text().catch(() => "");
-        return { ok: false, reason: `http_${r.status}`, details: String(retryTxt || txt).slice(0, 280) };
+        if (res.reason === "network" || res.reason === "no_auth") {
+          return { ok: false, reason: res.reason || "network" };
+        }
+        return { ok: false, reason: `http_${res.status}`, details: String(res.text || txt).slice(0, 280) };
       }
     }
     if (Object.prototype.hasOwnProperty.call(body, "published_at") && /published_at|42703|column/i.test(txt)) {
       const retryBody = { ...body };
       delete retryBody.published_at;
       if (Object.keys(retryBody).length > 0) {
-        r = await sendPatch(retryBody);
-        if (r?.ok) return { ok: true, reason: "published_at_missing" };
-        if (!r) return { ok: false, reason: "network" };
-        const retryTxt = await r.text().catch(() => "");
-        return { ok: false, reason: `http_${r.status}`, details: String(retryTxt || txt).slice(0, 280) };
+        res = await sendPatch(retryBody);
+        if (res.ok) return { ok: true, reason: "published_at_missing" };
+        if (res.reason === "network" || res.reason === "no_auth") {
+          return { ok: false, reason: res.reason || "network" };
+        }
+        return { ok: false, reason: `http_${res.status}`, details: String(res.text || txt).slice(0, 280) };
       }
     }
-    return { ok: false, reason: `http_${r.status}`, details: String(txt).slice(0, 280) };
+    return { ok: false, reason: `http_${res.status}`, details: String(txt).slice(0, 280) };
   }
   invalidateUserSongsLoadCache();
   return { ok: true };
@@ -25992,6 +26039,7 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     showToast("This track has no audio URL yet — try again after it finishes saving.");
     return { ok: false };
   }
+  await refreshSupabaseSessionIfNeeded();
   const patch = await supabasePatchUserSong(track, {
     publicOnProfile: next.publicOnProfile,
     ...(willBePublic && publishedAt ? { publishedAt } : {}),
@@ -25999,16 +26047,7 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
   });
   if (patch && patch.ok === false && patch.reason && patch.reason !== "noop") {
     const det = String(patch.details || "").trim();
-    let msg = "Saved on this device — cloud update failed.";
-    if (/public_on_profile|42703|column/i.test(det)) {
-      msg =
-        "Database missing public_on_profile. In Supabase SQL Editor run: supabase/user_songs_public_on_profile.sql";
-    } else if (det) {
-      msg = `${msg} ${det.slice(0, 140)}`;
-    } else {
-      msg = `${msg} Check connection.`;
-    }
-    showToast(msg, { durationMs: 6200 });
+    showToast(cloudSyncFailureMessage(det, { action: "publish" }), { durationMs: 5200 });
     return { ok: false };
   }
   showToast(
@@ -26069,10 +26108,7 @@ async function renamePrivateLibraryTrack(trackId) {
   try { refreshOwnSongsUi(); } catch {}
   const patch = await supabasePatchUserSong(track, { title: nextTitle });
   if (patch && patch.ok === false && patch.reason && patch.reason !== "noop") {
-    const msg = patch.details
-      ? `Renamed on this device — cloud update failed. ${String(patch.details).slice(0, 140)}`
-      : "Renamed on this device — cloud update failed.";
-    showToast(msg, { durationMs: 5200 });
+    showToast(cloudSyncFailureMessage(patch.details, { action: "rename" }), { durationMs: 5200 });
     return { ok: false };
   }
   showToast("Song renamed.");

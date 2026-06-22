@@ -20992,21 +20992,306 @@ function dmShareEligibleTracks() {
     .sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
 }
 
-function dmSongPayloadFromTrack(track) {
-  const title = String(track?.title || "Song").trim() || "Song";
-  const url = String(track?.url || "").trim();
-  const art = mashupCoverForTrack(track);
-  const by = String(activeProfile?.username || authSession?.user?.user_metadata?.username || "you").replace(/^@/, "").trim();
-  const kind = String(track?.shareKind || "song").trim();
-  const songId = String(track?.cloudSongId || track?.id || "").trim();
+function dmSongPayloadFromShareRef(ref) {
+  const title = String(ref?.title || "Song").trim() || "Song";
+  const url = String(ref?.url || "").trim();
+  let art = String(ref?.artUrl || ref?.art || "").trim();
+  if (!art && ref) {
+    try { art = mashupCoverForTrack(ref) || ""; } catch {}
+  }
+  if (!art) art = "./assets/nabadai-logo.png";
+  let by = String(ref?.byLine || ref?.by || "").replace(/^@/, "").trim();
+  if (!by) {
+    by = String(activeProfile?.username || authSession?.user?.user_metadata?.username || "").replace(/^@/, "").trim();
+  }
+  const kind = String(ref?.shareKind || dmShareKindFromTrack(ref) || ref?.kind || "song").trim().toLowerCase();
+  const songId = String(ref?.songId || ref?.cloudSongId || ref?.id || "").trim();
   return JSON.stringify({
     [DM_SONG_MARKER]: "song",
     id: songId,
     t: title.slice(0, 120),
     u: url,
     a: art,
-    b: by,
-    k: kind,
+    b: by.slice(0, 80),
+    k: kind === "mashup" || kind === "remix" ? kind : "song",
+  });
+}
+
+function dmSongPayloadFromTrack(track) {
+  const shareKind = dmShareKindFromTrack(track);
+  return dmSongPayloadFromShareRef({ ...track, shareKind });
+}
+
+function shareRefFromTrackSheetCtx(ctx) {
+  if (!ctx) return null;
+  const url = String(ctx.url || "").trim();
+  if (!url) return null;
+  const handle = String(ctx.handle || "").trim();
+  const byLine = String(ctx.by || "").trim() || (handle ? `@${handle}` : "");
+  return {
+    url,
+    title: String(ctx.title || "Song").trim() || "Song",
+    artUrl: String(ctx.art || "").trim(),
+    songId: String(ctx.songId || "").trim(),
+    ownerUserId: String(ctx.ownerUserId || "").trim(),
+    byLine,
+    meta: ctx.meta || null,
+    shareKind: dmShareKindFromTrack({ meta: ctx.meta, kind: ctx.kind }),
+  };
+}
+
+let _pendingInAppShareRef = null;
+let _sendToFriendCandidates = [];
+
+function renderInAppSharePreview(ref, mountEl) {
+  if (!mountEl || !ref) return;
+  const title = escapeHtml(String(ref.title || "Song").trim() || "Song");
+  const subRaw = String(ref.byLine || ref.by || "").trim();
+  const sub = escapeHtml(subRaw || dmShareKindLabel(ref.shareKind || "song"));
+  let art = String(ref.artUrl || ref.art || "").trim();
+  if (!art) {
+    try { art = mashupCoverForTrack(ref) || "./assets/nabadai-logo.png"; } catch {
+      art = "./assets/nabadai-logo.png";
+    }
+  }
+  mountEl.hidden = false;
+  mountEl.removeAttribute("aria-hidden");
+  mountEl.innerHTML = `
+    <img class="sendToFriendPreviewArt" src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
+    <span class="sendToFriendPreviewBody">
+      <strong>${title}</strong>
+      <span>${sub}</span>
+    </span>`;
+}
+
+function closeShareChooserSheet() {
+  const sheet = document.getElementById("shareChooserSheet");
+  if (!sheet) return;
+  sheet.hidden = true;
+  sheet.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("shareChooserOpen");
+}
+
+function closeSendToFriendSheet() {
+  const sheet = document.getElementById("sendToFriendSheet");
+  if (!sheet) return;
+  sheet.hidden = true;
+  sheet.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("sendToFriendOpen");
+}
+
+async function fetchMutualFriendsForShare() {
+  const uid = String(authSession?.user?.id || "").trim();
+  if (!uid) return [];
+  const [inbox, following] = await Promise.all([
+    messagesApi("/api/messages?type=inbox").catch(() => ({ threads: [] })),
+    fetchFollowingListForFeed(),
+  ]);
+  const byId = new Map();
+  const threadOrder = [];
+  for (const t of inbox?.threads || []) {
+    const id = String(t.partnerUserId || "").trim();
+    if (!id || id === uid) continue;
+    byId.set(id, {
+      userId: id,
+      username: t.partnerUsername || "",
+      avatar: t.partnerAvatar || "",
+      threadId: String(t.threadId || "").trim(),
+    });
+    threadOrder.push(id);
+  }
+  const followingIds = following
+    .map((f) => String(f.userId || "").trim())
+    .filter((id) => id && id !== uid && !byId.has(id));
+  if (followingIds.length) {
+    const inFilter = followingIds.slice(0, 80).join(",");
+    const r = await supabaseRestWithAuth(
+      `social_follows?following_user_id=eq.${encodeURIComponent(uid)}&follower_user_id=in.(${inFilter})&select=follower_user_id`,
+    );
+    if (r?.ok) {
+      const rows = await r.json().catch(() => []);
+      const mutualIds = new Set(
+        (Array.isArray(rows) ? rows : []).map((x) => String(x?.follower_user_id || "").trim()).filter(Boolean),
+      );
+      for (const f of following) {
+        const id = String(f.userId || "").trim();
+        if (!mutualIds.has(id) || byId.has(id)) continue;
+        byId.set(id, {
+          userId: id,
+          username: f.username || "",
+          avatar: f.avatar || "",
+          threadId: "",
+        });
+      }
+    }
+  }
+  const threadRank = new Map(threadOrder.map((id, idx) => [id, idx]));
+  return [...byId.values()].sort((a, b) => {
+    const ar = threadRank.has(a.userId) ? threadRank.get(a.userId) : 9999;
+    const br = threadRank.has(b.userId) ? threadRank.get(b.userId) : 9999;
+    if (ar !== br) return ar - br;
+    return String(a.username || "").localeCompare(String(b.username || ""));
+  });
+}
+
+async function openSendToFriendSheet(ref) {
+  if (!MESSAGES_FEATURE_ENABLED) return;
+  if (!authSession?.user?.id || !getSupabaseAuthToken()) {
+    showToast("Sign in to message friends.");
+    try { location.hash = "#/auth"; } catch {}
+    return;
+  }
+  const shareRef = ref || _pendingInAppShareRef;
+  if (!shareRef?.url) {
+    showToast("Open a song first, then share.");
+    return;
+  }
+  _pendingInAppShareRef = shareRef;
+  closeShareChooserSheet();
+  const sheet = document.getElementById("sendToFriendSheet");
+  const list = document.getElementById("sendToFriendList");
+  const preview = document.getElementById("sendToFriendPreview");
+  if (!sheet || !list) return;
+  renderInAppSharePreview(shareRef, preview);
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  document.body.classList.add("sendToFriendOpen");
+  list.innerHTML = `<div class="messagesShareEmpty">Loading friends…</div>`;
+  const friends = await fetchMutualFriendsForShare();
+  _sendToFriendCandidates = friends;
+  if (!friends.length) {
+    list.innerHTML = `<div class="messagesShareEmpty">Follow each other with someone first — then you can send songs here.</div>`;
+    return;
+  }
+  list.innerHTML = friends.map((f, idx) => {
+    const handle = escapeHtml(String(f.username || "creator").replace(/^@/, "") || "creator");
+    const avatarHtml = messagesAvatarHtml(f.avatar, f.username, "messagesShareRowArt");
+    return `
+      <button type="button" class="messagesShareRow" data-send-friend-idx="${idx}" role="option">
+        ${avatarHtml}
+        <span class="messagesShareRowBody">
+          <strong>@${handle}</strong>
+          <span>Send song</span>
+        </span>
+      </button>`;
+  }).join("");
+}
+
+async function sendShareRefToFriend(friend, shareRef) {
+  const ref = shareRef || _pendingInAppShareRef;
+  const targetUserId = String(friend?.userId || "").trim();
+  const threadId = String(friend?.threadId || "").trim();
+  if (!ref?.url || !targetUserId) return;
+  const body = dmSongPayloadFromShareRef(ref);
+  if (body.length > 500) {
+    try { showToast("Song is too large to share in one message.", { icon: "🎵", durationMs: 2800 }); } catch {}
+    return;
+  }
+  try {
+    const payload = threadId
+      ? { action: "send_message", threadId, body }
+      : { action: "send_message", targetUserId, body };
+    const data = await messagesApi("/api/messages", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    closeSendToFriendSheet();
+    _pendingInAppShareRef = null;
+    const handle = String(friend?.username || "friend").replace(/^@/, "");
+    try { showToast(`Sent to @${handle}`, { icon: "💬", durationMs: 2600 }); } catch {}
+    try { haptic("light"); } catch {}
+    const nextThread = String(data?.threadId || threadId || "").trim();
+    if (nextThread) {
+      window.setTimeout(() => {
+        try { location.hash = `#/messages-thread?thread=${encodeURIComponent(nextThread)}`; } catch {}
+      }, 280);
+    }
+    void refreshMessagesUnreadBadge({ force: true });
+  } catch (e) {
+    try { showToast(String(e?.message || "Could not send song"), { icon: "🎵", durationMs: 2800 }); } catch {}
+  }
+}
+
+async function shareTrackLinkExternally(ref) {
+  const trackUrl = String(ref?.url || currentPlayerTrackRef?.url || playerEl?.src || "").trim();
+  const trackTitle = String(ref?.title || currentPlayerTrackRef?.title || els.playerTitle?.textContent || "Listen on Nabadai").trim();
+  if (!trackUrl) {
+    showToast("Open a song first, then share.");
+    return false;
+  }
+  closeShareChooserSheet();
+  const shareRef = ref || { url: trackUrl, title: trackTitle, byLine: String(ref?.byLine || currentPlayerTrackRef?.byLine || "").trim() };
+  const hubMatch = loadHubFeed().find((p) => {
+    const sameUrl = trackUrl && String(p?.url || "").trim() === trackUrl;
+    const sameTitle = trackTitle && String(p?.title || "").trim().toLowerCase() === trackTitle.toLowerCase();
+    return sameUrl || sameTitle;
+  });
+  if (hubMatch?.id && isShareUuid(hubMatch.id)) {
+    await shareHubPost(hubMatch);
+    return true;
+  }
+  const publicSongId = String(shareRef.songId || currentPlayerTrackRef?.songId || "").trim();
+  if (publicSongId && isShareUuid(publicSongId)) {
+    const url = buildPublicShareUrl(publicSongId);
+    const by = String(shareRef.byLine || "").trim();
+    const text = by ? `"${trackTitle}" · ${by} on Nabadai` : `Listen to "${trackTitle}" on Nabadai`;
+    await shareHubLink({ title: `${trackTitle} — Nabadai`, text, url });
+    return true;
+  }
+  if (await sharePublicTrackLink(shareRef, { title: trackTitle, byLine: shareRef.byLine })) return true;
+  const libRow = loadLibrary().find((t) => {
+    const u = String(t?.url || "").trim();
+    return u && (u === trackUrl || audioUrlsEquivalent(u, trackUrl));
+  });
+  if (libRow && (await sharePublicTrackLink(libRow, { title: trackTitle }))) return true;
+  showToast("Saving link preview… try Share again in a few seconds.", { icon: "…", durationMs: 3600 });
+  if (libRow) queueArchiveLibraryTrack(libRow);
+  return false;
+}
+
+async function openShareChooserForTrack(ref) {
+  const shareRef = ref || trackRefFromCurrentPlayer();
+  if (!shareRef?.url) {
+    showToast("Open a song first, then share.");
+    return;
+  }
+  _pendingInAppShareRef = shareRef;
+  if (!MESSAGES_FEATURE_ENABLED || !authSession?.user?.id) {
+    await shareTrackLinkExternally(shareRef);
+    return;
+  }
+  const sheet = document.getElementById("shareChooserSheet");
+  const preview = document.getElementById("shareChooserPreview");
+  if (!sheet) {
+    await shareTrackLinkExternally(shareRef);
+    return;
+  }
+  renderInAppSharePreview(shareRef, preview);
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  document.body.classList.add("shareChooserOpen");
+  try { haptic("light"); } catch {}
+}
+
+function wireInAppShareSheetsOnce() {
+  if (document.documentElement.dataset.inAppShareWired) return;
+  document.documentElement.dataset.inAppShareWired = "1";
+  document.getElementById("shareChooserSheetClose")?.addEventListener("click", closeShareChooserSheet);
+  document.getElementById("shareChooserSheetBackdrop")?.addEventListener("click", closeShareChooserSheet);
+  document.getElementById("sendToFriendSheetClose")?.addEventListener("click", closeSendToFriendSheet);
+  document.getElementById("sendToFriendSheetBackdrop")?.addEventListener("click", closeSendToFriendSheet);
+  document.getElementById("shareChooserSendFriend")?.addEventListener("click", () => {
+    void openSendToFriendSheet(_pendingInAppShareRef);
+  });
+  document.getElementById("shareChooserShareLink")?.addEventListener("click", () => {
+    void shareTrackLinkExternally(_pendingInAppShareRef);
+  });
+  document.getElementById("sendToFriendList")?.addEventListener("click", (e) => {
+    const row = e.target.closest("[data-send-friend-idx]");
+    if (!row) return;
+    const idx = Number(row.getAttribute("data-send-friend-idx"));
+    const friend = _sendToFriendCandidates[idx];
+    if (friend) void sendShareRefToFriend(friend, _pendingInAppShareRef);
   });
 }
 
@@ -21634,6 +21919,7 @@ async function respondMessageRequest(requestId, decision) {
 
 function bindMessagesPageOnce() {
   syncFriendsMessagesBtn();
+  wireInAppShareSheetsOnce();
   if (_messagesPageBound) return;
   _messagesPageBound = true;
 
@@ -25205,13 +25491,9 @@ function runTrackSheetAction(action, sourceEl) {
     }
     if (action === "share") {
       shut();
-      const shareUrl = ctx.mode === "public" ? discoverSongShareUrl(ctx) : discoverSharePageUrl(ctx);
+      const ref = shareRefFromTrackSheetCtx(ctx);
       window.setTimeout(() => {
-        void shareHubLink({
-          title: ctx.title ? `${ctx.title} — NabadAi` : "NabadAi Music",
-          text: ctx.by ? `${ctx.title} · ${ctx.by}` : ctx.title || "Discover on NabadAi",
-          url: shareUrl,
-        });
+        void openShareChooserForTrack(ref);
       }, 220);
       return;
     }
@@ -41990,31 +42272,15 @@ if (els.btnUserPublicBack) {
   });
 }
 if (els.btnPlayerShare) {
+  wireInAppShareSheetsOnce();
   els.btnPlayerShare.addEventListener("click", async () => {
     haptic("light");
-    const trackUrl = String(currentPlayerTrackRef?.url || playerEl?.src || "").trim();
-    const trackTitle = String(currentPlayerTrackRef?.title || els.playerTitle?.textContent || "Listen on Nabadai").trim();
-    if (!trackUrl) {
+    const ref = trackRefFromCurrentPlayer();
+    if (!ref?.url) {
       showToast("Open a song first, then share.");
       return;
     }
-    const hubMatch = loadHubFeed().find((p) => {
-      const sameUrl = trackUrl && String(p?.url || "").trim() === trackUrl;
-      const sameTitle = trackTitle && String(p?.title || "").trim().toLowerCase() === trackTitle.toLowerCase();
-      return sameUrl || sameTitle;
-    });
-    if (hubMatch?.id && isShareUuid(hubMatch.id)) {
-      await shareHubPost(hubMatch);
-      return;
-    }
-    if (await sharePublicTrackLink(currentPlayerTrackRef, { title: trackTitle })) return;
-    const libRow = loadLibrary().find((t) => {
-      const u = String(t?.url || "").trim();
-      return u && (u === trackUrl || audioUrlsEquivalent(u, trackUrl));
-    });
-    if (libRow && (await sharePublicTrackLink(libRow, { title: trackTitle }))) return;
-    showToast("Saving link preview… try Share again in a few seconds.", { icon: "…", durationMs: 3600 });
-    if (libRow) queueArchiveLibraryTrack(libRow);
+    await openShareChooserForTrack(ref);
   });
 }
 if (els.btnPlayerAddPlaylist) {

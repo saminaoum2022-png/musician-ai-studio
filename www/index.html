@@ -3622,6 +3622,35 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+    <div id="shareChooserSheet" class="shareChooserSheet messagesShareSheet" hidden aria-hidden="true">
+      <div class="shareChooserSheetBackdrop" id="shareChooserSheetBackdrop"></div>
+      <section class="shareChooserSheetCard messagesShareSheetCard" role="dialog" aria-modal="true" aria-labelledby="shareChooserSheetTitle">
+        <header class="messagesShareSheetHead">
+          <h2 id="shareChooserSheetTitle" class="messagesShareSheetTitle">Share song</h2>
+          <button type="button" class="messagesShareSheetClose" id="shareChooserSheetClose" aria-label="Close">×</button>
+        </header>
+        <div id="shareChooserPreview" class="sendToFriendPreview" hidden aria-hidden="true"></div>
+        <p class="messagesShareSheetLead">Send inside Nabad or share a link anywhere.</p>
+        <div class="shareChooserActions">
+          <button type="button" class="shareChooserPrimary" id="shareChooserSendFriend">Send to a friend</button>
+          <button type="button" class="shareChooserSecondary" id="shareChooserShareLink">Share link</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="sendToFriendSheet" class="sendToFriendSheet messagesShareSheet" hidden aria-hidden="true">
+      <div class="sendToFriendSheetBackdrop" id="sendToFriendSheetBackdrop"></div>
+      <section class="sendToFriendSheetCard messagesShareSheetCard" role="dialog" aria-modal="true" aria-labelledby="sendToFriendSheetTitle">
+        <header class="messagesShareSheetHead">
+          <h2 id="sendToFriendSheetTitle" class="messagesShareSheetTitle">Send to a friend</h2>
+          <button type="button" class="messagesShareSheetClose" id="sendToFriendSheetClose" aria-label="Close">×</button>
+        </header>
+        <div id="sendToFriendPreview" class="sendToFriendPreview" aria-hidden="true"></div>
+        <p class="messagesShareSheetLead">Pick someone you follow who follows you back.</p>
+        <div id="sendToFriendList" class="messagesShareList" role="listbox" aria-label="Friends"></div>
+      </section>
+    </div>
+
     <div id="messagesShareSheet" class="messagesShareSheet" hidden aria-hidden="true">
       <div class="messagesShareSheetBackdrop" id="messagesShareSheetBackdrop"></div>
       <section class="messagesShareSheetCard" role="dialog" aria-modal="true" aria-labelledby="messagesShareSheetTitle">

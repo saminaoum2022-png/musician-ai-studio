@@ -20864,6 +20864,8 @@ async function openUserPublicMessage() {
     return;
   }
   if (targetUserId === String(authSession.user.id)) return;
+  const stats = currentUserPublicSocialStats || {};
+  const mutualOnProfile = Boolean(stats.isFollowing) && Boolean(stats.followsViewer);
   try { haptic("light"); } catch {}
   try {
     const data = await messagesApi("/api/messages", {
@@ -20871,6 +20873,10 @@ async function openUserPublicMessage() {
       body: JSON.stringify({ action: "open_thread", targetUserId }),
     });
     if (data?.needsRequest) {
+      if (mutualOnProfile) {
+        try { showToast("Could not open chat right now. Try again in a moment.", { icon: "💬", durationMs: 2800 }); } catch {}
+        return;
+      }
       openMessagesRequestSheet(targetUserId);
       return;
     }

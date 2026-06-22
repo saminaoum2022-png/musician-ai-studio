@@ -8,6 +8,7 @@ const {
   sendJson,
   setCors,
   readJsonBody,
+  callRpc,
 } = require("./_lib/credits-auth");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
@@ -36,6 +37,7 @@ async function svcFetch(path, opts) {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
       ...(opts || {}),
       signal: controller.signal,
+      headers: svcHeaders(opts?.headers),
     });
     const text = await r.text().catch(() => "");
     let data = null;
@@ -97,6 +99,13 @@ async function isMutualFollow(userA, userB) {
   const a = cleanUserId(userA);
   const b = cleanUserId(userB);
   if (!a || !b) return false;
+  const rpc = await callRpc("social_profile_stats", {
+    p_user_id: b,
+    p_viewer_id: a,
+  });
+  if (rpc.ok && rpc.data && typeof rpc.data === "object") {
+    return Boolean(rpc.data.is_following) && Boolean(rpc.data.follows_viewer);
+  }
   const [f1, f2] = await Promise.all([
     svcFetch(
       `social_follows?select=follower_user_id&follower_user_id=eq.${encodeURIComponent(a)}&following_user_id=eq.${encodeURIComponent(b)}&limit=1`,
@@ -106,6 +115,7 @@ async function isMutualFollow(userA, userB) {
     ),
   ]);
   return (
+    f1.ok && f2.ok &&
     Array.isArray(f1.data) && f1.data.length > 0 &&
     Array.isArray(f2.data) && f2.data.length > 0
   );

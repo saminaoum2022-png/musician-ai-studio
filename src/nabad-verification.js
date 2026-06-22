@@ -92,6 +92,17 @@ function userCreativeEffort(meta) {
   return false;
 }
 
+const LEGACY_CREATOR_MARKS = new Set([
+  NABAD_VERIFICATION.CREATOR,
+  "verified",
+  "co-created",
+  "created-with",
+]);
+
+function isStoredCreatorMark(value) {
+  return LEGACY_CREATOR_MARKS.has(String(value || "").trim());
+}
+
 /** Show the plain N pill only for original creative work with a melody reference. */
 export function inferNabadVerification(track) {
   if (!track || typeof track !== "object") return null;
@@ -106,11 +117,17 @@ export function inferNabadVerification(track) {
 }
 
 export function resolveNabadVerification(track) {
+  const stored = String(track?.meta?.nabadVerification || "").trim();
+  if (isStoredCreatorMark(stored)) return NABAD_VERIFICATION.CREATOR;
   return inferNabadVerification(track);
 }
 
 export function stampNabadVerificationMeta(meta, trackCtx = {}) {
   const base = { ...(meta || {}) };
+  const stored = String(base.nabadVerification || "").trim();
+  if (isStoredCreatorMark(stored)) {
+    return stored === NABAD_VERIFICATION.CREATOR ? base : { ...base, nabadVerification: NABAD_VERIFICATION.CREATOR };
+  }
   const inferred = inferNabadVerification({ ...trackCtx, meta: base });
   if (!inferred) {
     if (!base.nabadVerification) return base;

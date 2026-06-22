@@ -16393,7 +16393,27 @@ function snapshotNabadAiLyricsDraft(text) {
   _nabadAiLyricsDraft = draft;
   _lyricsGeneratedInNabad = true;
 }
-let _nabadVerifyBackfillDone = false;
+function backfillNabadVerificationInLibrary() {
+  try {
+    const items = loadLibrary();
+    let changed = false;
+    const cloudHeal = [];
+    const next = items.map((t) => {
+      const meta = stampNabadVerificationMeta(t.meta, t);
+      const prev = t.meta?.nabadVerification || "";
+      const nextMark = meta.nabadVerification || "";
+      if (prev === nextMark && meta.nabadVerification === t.meta?.nabadVerification) return t;
+      changed = true;
+      const updated = { ...t, meta };
+      if (nextMark === "creator" && authSession?.user?.id && String(prev) !== "creator") cloudHeal.push(updated);
+      return updated;
+    });
+    if (changed) saveLibrary(next);
+    for (const track of cloudHeal) {
+      void supabasePatchUserSong(track, { meta: track.meta || {} }).catch(() => null);
+    }
+  } catch {}
+}
 
 function titleWithNabadBadgeHtml(track, safeTitle, titleClass = "libRowTitle", titleTag = "span") {
   const badge = nabadVerificationBadgeForTrack(track, { size: "sm" });
@@ -16429,24 +16449,6 @@ function syncHubNowNabadBadge(track) {
   }
   slot.hidden = false;
   slot.innerHTML = nabadVerificationBadgeHtml(state, { size: "sm" });
-}
-
-function backfillNabadVerificationInLibrary() {
-  if (_nabadVerifyBackfillDone) return;
-  _nabadVerifyBackfillDone = true;
-  try {
-    const items = loadLibrary();
-    let changed = false;
-    const next = items.map((t) => {
-      const meta = stampNabadVerificationMeta(t.meta, t);
-      const prev = t.meta?.nabadVerification || "";
-      const nextMark = meta.nabadVerification || "";
-      if (prev === nextMark && meta.nabadVerification === t.meta?.nabadVerification) return t;
-      changed = true;
-      return { ...t, meta };
-    });
-    if (changed) saveLibrary(next);
-  } catch {}
 }
 
 const PROFILE_KEY = "mas:profile:v1";
@@ -19856,8 +19858,8 @@ async function fetchUserSongsFromNetwork() {
   // happens to be a legacy `data:` URL*, same trick we use on `hub_posts`
   // for cover_url / creator_avatar. The cheap `art_url is null` branch
   // covers freshly inserted rows where we deliberately wrote null.
-  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_nabad_verification:meta->>nabadVerification,meta_deleted_at:meta->>deletedAt";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_nabad_verification:meta->>nabadVerification,meta_deleted_at:meta->>deletedAt";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_nabad_verification:meta->>nabadVerification,meta_has_reference:meta->hasReference,meta_vocal_ref:meta->>vocalRefOrigin,meta_mode:meta->>mode,meta_persona_id:meta->>personaId,meta_lyrics_edited:meta->lyricsEditedByUser,meta_lyrics_generated:meta->lyricsGeneratedInNabad,meta_lyrics:meta->>lyricsInput,meta_search_template:meta->>searchTemplateId,meta_deleted_at:meta->>deletedAt";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_nabad_verification:meta->>nabadVerification,meta_has_reference:meta->hasReference,meta_vocal_ref:meta->>vocalRefOrigin,meta_mode:meta->>mode,meta_persona_id:meta->>personaId,meta_lyrics_edited:meta->lyricsEditedByUser,meta_lyrics_generated:meta->lyricsGeneratedInNabad,meta_lyrics:meta->>lyricsInput,meta_search_template:meta->>searchTemplateId,meta_deleted_at:meta->>deletedAt";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
@@ -19928,6 +19930,14 @@ async function fetchUserSongsFromNetwork() {
         ...(s.meta_challenge ? { challenge: s.meta_challenge } : {}),
         ...(String(s.meta_featured_on_profile || "").toLowerCase() === "true" ? { featuredOnProfile: true } : {}),
         ...(String(s.meta_nabad_verification || "").trim() ? { nabadVerification: String(s.meta_nabad_verification).trim() } : {}),
+        ...(s.meta_has_reference === true || s.meta_has_reference === "true" ? { hasReference: true } : {}),
+        ...(String(s.meta_vocal_ref || "").trim() ? { vocalRefOrigin: String(s.meta_vocal_ref).trim() } : {}),
+        ...(String(s.meta_mode || "").trim() ? { mode: String(s.meta_mode).trim() } : {}),
+        ...(String(s.meta_persona_id || "").trim() ? { personaId: String(s.meta_persona_id).trim() } : {}),
+        ...(s.meta_lyrics_edited === true || s.meta_lyrics_edited === "true" ? { lyricsEditedByUser: true } : {}),
+        ...(s.meta_lyrics_generated === true || s.meta_lyrics_generated === "true" ? { lyricsGeneratedInNabad: true } : {}),
+        ...(String(s.meta_lyrics || "").trim() ? { lyricsInput: String(s.meta_lyrics).trim() } : {}),
+        ...(String(s.meta_search_template || "").trim() ? { searchTemplateId: String(s.meta_search_template).trim() } : {}),
       },
       publishedAt: selectedPublishedAt ? userSongPublishedAtValue(s) : "",
       publicOnProfile: Boolean(

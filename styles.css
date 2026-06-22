@@ -15931,6 +15931,15 @@ body.trackSheetOpen .footer{
   body[data-route="player"] .mobileTabbar{
     display: none !important;
   }
+  body[data-route="messages-thread"] .mobileTabbar{
+    display: none !important;
+  }
+  body[data-route="messages-thread"] .hubNowPlaying{
+    display: none !important;
+  }
+  body[data-route="messages-thread"] > .app{
+    padding-bottom: 0;
+  }
   body[data-route="player"] .header{
     display: none !important;
   }
@@ -15999,6 +16008,9 @@ body.trackSheetOpen .footer{
   }
   body[data-route="player"] .footer{
     bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  body[data-route="messages-thread"] .footer{
+    display: none !important;
   }
   .playerShell{
     gap: 14px;
@@ -27774,7 +27786,7 @@ section.messagesThreadPage{
 }
 body[data-route="messages-thread"] main.grid{
   flex: 1 1 auto;
-  min-height: calc(100dvh - env(safe-area-inset-top, 0px) - 12px - var(--tabbar-h, 0px));
+  min-height: calc(100dvh - env(safe-area-inset-top, 0px) - 12px);
   display: flex;
   flex-direction: column;
 }
@@ -28410,11 +28422,12 @@ body[data-route="messages-thread"] .messagesComposer{
   position: fixed;
   left: 0;
   right: 0;
-  bottom: var(--messages-composer-bottom, var(--tabbar-h, 0px));
+  bottom: 0;
   z-index: 42;
   max-width: 640px;
   margin: 0 auto;
   box-sizing: border-box;
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
   transition: bottom 180ms ease;
 }
 .messagesComposerShare{

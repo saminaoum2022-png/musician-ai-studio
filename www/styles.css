@@ -28073,7 +28073,7 @@ body[data-route="messages-thread"] .messagesThreadPage{
   flex: 0 0 auto;
   width: 48px;
   height: 48px;
-  border-radius: 999px;
+  border-radius: var(--nabad-squircle-radius);
   object-fit: cover;
   background: rgba(124,92,255,0.18);
   border: 1px solid rgba(255,255,255,0.08);
@@ -28206,7 +28206,7 @@ body[data-route="messages-thread"] .messagesThreadPage{
 .messagesRowSkelAv{
   width: 48px;
   height: 48px;
-  border-radius: 999px;
+  border-radius: var(--nabad-squircle-radius);
 }
 .messagesRowSkelLine{
   display: block;
@@ -28258,11 +28258,14 @@ body[data-route="messages-thread"] .messagesThreadPage{
   flex: 0 0 auto;
   width: 44px;
   height: 44px;
+  border-radius: var(--nabad-squircle-radius);
+  overflow: hidden;
 }
 .messagesThreadAvatar .messagesThreadAvatarImg,
 .messagesThreadAvatar .messagesAvatarFallback{
   width: 44px;
   height: 44px;
+  border-radius: var(--nabad-squircle-radius);
   border: 1px solid rgba(124,92,255,0.22);
 }
 .messagesThreadHandle{
@@ -28295,7 +28298,7 @@ body[data-route="messages-thread"] .messagesThreadPage{
   display: block;
   width: 40px;
   height: 40px;
-  border-radius: 999px;
+  border-radius: var(--nabad-squircle-radius);
   background: linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.14), rgba(255,255,255,0.06));
   background-size: 200% 100%;
   animation: messagesThreadSkelPulse 1.15s ease-in-out infinite;

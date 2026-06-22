@@ -20944,6 +20944,224 @@ async function messagesApi(path, opts = {}) {
   }
 }
 
+let _messagesInboxFilter = "all";
+
+const DM_SONG_MARKER = "nabad_dm";
+
+function dmShareKindFromTrack(t) {
+  const meta = t?.meta || {};
+  if (meta.mashupOf || String(t?.kind || "").toLowerCase() === "mashup") return "mashup";
+  if (meta.remixOf || String(t?.kind || "").toLowerCase() === "remix") return "remix";
+  return "song";
+}
+
+function dmShareEligibleTracks() {
+  return loadLibrary()
+    .filter((t) => String(t?.url || "").trim())
+    .map((t) => {
+      const ref = mashupRefFromLibraryTrack(t);
+      if (!ref) return null;
+      ref.shareKind = dmShareKindFromTrack(t);
+      ref.ts = Number(t?.ts || 0);
+      return ref;
+    })
+    .filter(Boolean)
+    .sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
+}
+
+function dmSongPayloadFromTrack(track) {
+  const title = String(track?.title || "Song").trim() || "Song";
+  const url = String(track?.url || "").trim();
+  const art = mashupCoverForTrack(track);
+  const by = String(activeProfile?.username || authSession?.user?.user_metadata?.username || "you").replace(/^@/, "").trim();
+  const kind = String(track?.shareKind || "song").trim();
+  const songId = String(track?.cloudSongId || track?.id || "").trim();
+  return JSON.stringify({
+    [DM_SONG_MARKER]: "song",
+    id: songId,
+    t: title.slice(0, 120),
+    u: url,
+    a: art,
+    b: by,
+    k: kind,
+  });
+}
+
+function parseDmMessageBody(raw) {
+  const body = String(raw || "").trim();
+  if (!body) return { type: "text", text: "" };
+  if (body.startsWith("{")) {
+    try {
+      const data = JSON.parse(body);
+      if (data?.[DM_SONG_MARKER] === "song" || data?.nabad_dm === "song") {
+        return {
+          type: "song",
+          songId: String(data.id || "").trim(),
+          title: String(data.t || data.title || "Song").trim() || "Song",
+          url: String(data.u || data.url || "").trim(),
+          art: String(data.a || data.art || "").trim(),
+          by: String(data.b || data.by || "").trim(),
+          kind: String(data.k || data.kind || "song").trim(),
+        };
+      }
+    } catch {}
+  }
+  return { type: "text", text: body };
+}
+
+function formatDmInboxPreview(raw) {
+  const parsed = parseDmMessageBody(raw);
+  if (parsed.type === "song") {
+    const kindLabel = parsed.kind === "mashup" ? "Mashup" : parsed.kind === "remix" ? "Remix" : "Song";
+    return `${kindLabel} · ${parsed.title}`;
+  }
+  return String(raw || "").trim();
+}
+
+function dmRelationshipLabel(stats) {
+  if (!stats) return "";
+  const following = Boolean(stats.isFollowing);
+  const followsYou = Boolean(stats.followsViewer);
+  if (following && followsYou) return "Following each other";
+  if (followsYou) return "Follows you";
+  if (following) return "Following";
+  return "";
+}
+
+function dmShareKindLabel(kind) {
+  const k = String(kind || "song").toLowerCase();
+  if (k === "mashup") return "Mashup";
+  if (k === "remix") return "Remix";
+  return "Song";
+}
+
+function messagesDmSongCardHtml(song, { mine = false } = {}) {
+  const title = escapeHtml(song.title || "Song");
+  const by = escapeHtml(song.by ? `@${String(song.by).replace(/^@/, "")}` : "@creator");
+  const art = escapeHtml(song.art || "./assets/nabadai-logo.png");
+  const encUrl = encodeURIComponent(song.url || "");
+  const encTitle = encodeURIComponent(song.title || "Song");
+  const encArt = encodeURIComponent(song.art || "");
+  const encBy = encodeURIComponent(song.by ? `@${String(song.by).replace(/^@/, "")}` : "");
+  const encSongId = encodeURIComponent(song.songId || "");
+  const kindLabel = escapeHtml(dmShareKindLabel(song.kind));
+  if (!song.url) {
+    return `<div class="messagesDmSongCard messagesDmSongCard--static${mine ? " is-mine" : ""}"><span class="messagesDmSongKind">${kindLabel}</span><strong class="messagesDmSongTitle">${title}</strong><span class="messagesDmSongBy">${by}</span></div>`;
+  }
+  return `
+    <button type="button" class="messagesDmSongCard discoveryRow${mine ? " is-mine" : ""}" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" data-play-song-id="${encSongId}" aria-label="Play ${title}">
+      <span class="messagesDmSongArt">
+        <img src="${art}" alt="" loading="lazy" decoding="async" />
+        ${coverArtPlaybackOverlayHtml({ feedCard: true })}
+      </span>
+      <span class="messagesDmSongBody">
+        <span class="messagesDmSongKind">${kindLabel}</span>
+        <strong class="messagesDmSongTitle">${title}</strong>
+        <span class="messagesDmSongBy">${by}</span>
+      </span>
+      <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
+    </button>`;
+}
+
+function renderMessagesThreadHead() {
+  const partner = _messagesThreadState.partner || {};
+  const stats = _messagesThreadState.partnerStats || {};
+  const handle = String(partner.partnerUsername || "").trim();
+  const displayEl = document.getElementById("messagesThreadDisplayName");
+  const handleEl = document.getElementById("messagesThreadHandleSub");
+  const relationEl = document.getElementById("messagesThreadRelation");
+  const avatarEl = document.getElementById("messagesThreadAvatar");
+  const displayName = handle ? handle.replace(/^@/, "") : "Creator";
+  if (displayEl) displayEl.textContent = displayName;
+  if (handleEl) handleEl.textContent = handle ? `@${handle.replace(/^@/, "")}` : "@creator";
+  if (avatarEl) avatarEl.innerHTML = messagesAvatarHtml(partner.partnerAvatar, handle, "messagesThreadAvatarImg");
+  const relation = dmRelationshipLabel(stats);
+  if (relationEl) {
+    relationEl.textContent = relation;
+    relationEl.hidden = !relation;
+  }
+}
+
+async function loadMessagesThreadPartnerMeta(partnerUserId) {
+  const uid = String(partnerUserId || "").trim();
+  if (!uid) return;
+  try {
+    const data = await fetchSocialStatsForProfile({ userId: uid });
+    _messagesThreadState.partnerStats = data?.stats || {};
+  } catch {
+    _messagesThreadState.partnerStats = {};
+  }
+  renderMessagesThreadHead();
+}
+
+function closeMessagesShareSheet() {
+  const sheet = document.getElementById("messagesShareSheet");
+  if (!sheet) return;
+  sheet.hidden = true;
+  sheet.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("messagesShareSheetOpen");
+}
+
+async function openMessagesShareSheet() {
+  const sheet = document.getElementById("messagesShareSheet");
+  const list = document.getElementById("messagesShareList");
+  if (!sheet || !list) return;
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  document.body.classList.add("messagesShareSheetOpen");
+  list.innerHTML = `<div class="messagesShareEmpty">Loading your Library…</div>`;
+  await ensureUserLibraryHydrated();
+  const tracks = dmShareEligibleTracks();
+  if (!tracks.length) {
+    list.innerHTML = `<div class="messagesShareEmpty">No songs in your Library yet. Create one first, then share it here.</div>`;
+    return;
+  }
+  list.innerHTML = tracks.map((t, idx) => {
+    const title = escapeHtml(String(t.title || "Song").trim() || "Song");
+    const sub = escapeHtml(`${dmShareKindLabel(t.shareKind)} · ${mashupSlotSourceLabel(t)}`);
+    const art = escapeHtml(mashupCoverForTrack(t));
+    return `
+      <button type="button" class="messagesShareRow" data-messages-share-idx="${idx}" role="option">
+        <img class="messagesShareRowArt" src="${art}" alt="" loading="lazy" decoding="async" />
+        <span class="messagesShareRowBody">
+          <strong>${title}</strong>
+          <span>${sub}</span>
+        </span>
+      </button>`;
+  }).join("");
+  _messagesShareCandidates = tracks;
+}
+
+let _messagesShareCandidates = [];
+
+async function sendDmSongShare(track) {
+  const threadId = String(_messagesThreadState.threadId || "").trim();
+  if (!threadId || !track) return;
+  const body = dmSongPayloadFromTrack(track);
+  if (body.length > 500) {
+    try { showToast("Song is too large to share in one message.", { icon: "🎵", durationMs: 2800 }); } catch {}
+    return;
+  }
+  try {
+    const data = await messagesApi("/api/messages", {
+      method: "POST",
+      body: JSON.stringify({ action: "send_message", threadId, body }),
+    });
+    closeMessagesShareSheet();
+    const msg = data?.message;
+    if (msg) {
+      _messagesThreadState.messages = [...(_messagesThreadState.messages || []), msg];
+    } else {
+      await loadMessagesThread(threadId, { silent: true });
+    }
+    renderMessagesThread();
+    try { syncDiscoveryPlayingHighlights(); } catch {}
+    void refreshMessagesUnreadBadge({ force: true });
+  } catch (e) {
+    try { showToast(String(e?.message || "Could not share song"), { icon: "🎵", durationMs: 2800 }); } catch {}
+  }
+}
+
 function messagesAvatarHtml(avatarUrl, username, cls = "messagesRowAvatar") {
   const raw = String(avatarUrl || "").trim();
   const handle = String(username || "").trim();
@@ -21020,7 +21238,7 @@ function messagesInboxSkeletonHtml() {
 function messagesInboxThreadRowHtml(t) {
   const handle = String(t?.partnerUsername || "").trim();
   const threadId = String(t?.threadId || "").trim();
-  const preview = String(t?.lastMessage || "").trim() || "No messages yet";
+  const preview = formatDmInboxPreview(t?.lastMessage || "");
   const when = t?.lastMessageAt ? relativeTime(new Date(t.lastMessageAt).getTime()) : "";
   const unread = Boolean(t?.unread);
   return `
@@ -21028,12 +21246,12 @@ function messagesInboxThreadRowHtml(t) {
       ${messagesAvatarHtml(t?.partnerAvatar, handle)}
       <span class="messagesRowBody">
         <span class="messagesRowTop">
-          <strong class="messagesRowHandle">@${escapeHtml(handle || "creator")}</strong>
+          <strong class="messagesRowHandle">${escapeHtml(handle ? `@${handle.replace(/^@/, "")}` : "creator")}</strong>
           ${when ? `<span class="messagesRowWhen">${escapeHtml(when)}</span>` : ""}
         </span>
-        <span class="messagesRowPreview">${escapeHtml(preview)}</span>
+        <span class="messagesRowPreview">${escapeHtml(preview || "No messages yet")}</span>
       </span>
-      ${unread ? `<span class="messagesRowDot" aria-hidden="true"></span>` : ""}
+      ${unread ? `<span class="messagesRowUnread" aria-label="Unread">1</span>` : ""}
     </button>`;
 }
 
@@ -21186,8 +21404,18 @@ function renderMessagesInbox() {
 
 function messagesBubbleHtml(msg, viewerId) {
   const mine = String(msg?.sender_id || "") === String(viewerId || "");
-  const body = String(msg?.body || "").trim();
+  const parsed = parseDmMessageBody(msg?.body);
   const when = msg?.created_at ? relativeTime(new Date(msg.created_at).getTime()) : "";
+  if (parsed.type === "song") {
+    return `
+      <div class="messagesBubbleWrap messagesBubbleWrap--song${mine ? " is-mine" : ""}">
+        <div class="messagesBubble messagesBubble--song">
+          ${messagesDmSongCardHtml(parsed, { mine })}
+          ${when ? `<span class="messagesBubbleTime">${escapeHtml(when)}</span>` : ""}
+        </div>
+      </div>`;
+  }
+  const body = String(parsed.text || "").trim();
   return `
     <div class="messagesBubbleWrap${mine ? " is-mine" : ""}">
       <div class="messagesBubble">
@@ -21198,16 +21426,9 @@ function messagesBubbleHtml(msg, viewerId) {
 }
 
 function renderMessagesThread() {
+  renderMessagesThreadHead();
   const mount = document.getElementById("messagesThreadMount");
-  const handleEl = document.getElementById("messagesThreadHandle");
-  const avatarEl = document.getElementById("messagesThreadAvatar");
   const viewerId = authSession?.user?.id || "";
-  const partner = _messagesThreadState.partner || {};
-  const handle = String(partner.partnerUsername || "").trim();
-  if (handleEl) handleEl.textContent = handle ? `@${handle}` : "@creator";
-  if (avatarEl) {
-    avatarEl.innerHTML = messagesAvatarHtml(partner.partnerAvatar, handle, "messagesThreadAvatarImg");
-  }
   if (!mount) return;
   if (_messagesThreadLoading) {
     mount.innerHTML = `<div class="messagesThreadLoading">Loading conversation…</div>`;
@@ -21215,12 +21436,17 @@ function renderMessagesThread() {
   }
   const msgs = Array.isArray(_messagesThreadState.messages) ? _messagesThreadState.messages : [];
   if (!msgs.length) {
-    mount.innerHTML = `<div class="messagesThreadEmpty">Say hi — your conversation starts here.</div>`;
+    mount.innerHTML = `
+      <div class="messagesThreadEmpty">
+        <p class="messagesThreadEmptyTitle">Start a conversation 🎵</p>
+        <p class="messagesThreadEmptyLead">Share songs, remixes and ideas.</p>
+      </div>`;
     return;
   }
   mount.innerHTML = `<div class="messagesBubbleStack">${msgs.map((m) => messagesBubbleHtml(m, viewerId)).join("")}</div>`;
   requestAnimationFrame(() => {
     try { mount.scrollTop = mount.scrollHeight; } catch {}
+    try { syncDiscoveryPlayingHighlights(); } catch {}
   });
 }
 
@@ -21260,8 +21486,10 @@ async function loadMessagesThread(threadId, { silent = false } = {}) {
     _messagesThreadState = {
       threadId: tid,
       partner: data?.thread || null,
+      partnerStats: _messagesThreadState.partnerStats || {},
       messages: Array.isArray(data?.messages) ? data.messages : [],
     };
+    void loadMessagesThreadPartnerMeta(data?.thread?.partnerUserId);
     if (!silent) {
       await messagesApi("/api/messages", {
         method: "POST",
@@ -21320,7 +21548,7 @@ async function enterMessagesThreadRoute(threadId) {
     try { location.hash = "#/messages"; } catch {}
     return;
   }
-  _messagesThreadState = { threadId: tid, partner: null, messages: [] };
+  _messagesThreadState = { threadId: tid, partner: null, partnerStats: {}, messages: [] };
   const input = document.getElementById("messagesComposerInput");
   if (input) input.value = "";
   await loadMessagesThread(tid);
@@ -21432,6 +21660,30 @@ function bindMessagesPageOnce() {
     if (sendBtn) {
       e.preventDefault();
       void sendCurrentThreadMessage();
+      return;
+    }
+    const shareBtn = e.target.closest("#messagesComposerShare");
+    if (shareBtn) {
+      e.preventDefault();
+      try { haptic("light"); } catch {}
+      void openMessagesShareSheet();
+      return;
+    }
+    const sharePick = e.target.closest("[data-messages-share-idx]");
+    if (sharePick) {
+      e.preventDefault();
+      const idx = Number(sharePick.getAttribute("data-messages-share-idx"));
+      const track = _messagesShareCandidates[idx];
+      if (track) void sendDmSongShare(track);
+      return;
+    }
+    const threadMount = document.getElementById("messagesThreadMount");
+    if (threadMount) {
+      const pl = e.target.closest("[data-user-lib-play]");
+      if (pl && threadMount.contains(pl)) {
+        e.preventDefault();
+        playDiscoverTarget(pl);
+      }
     }
   });
 
@@ -21470,6 +21722,12 @@ function bindMessagesPageOnce() {
       try { haptic("light"); } catch {}
       renderMessagesInbox();
     });
+  }
+
+  if (!document.documentElement.dataset.messagesShareSheetWired) {
+    document.documentElement.dataset.messagesShareSheetWired = "1";
+    document.getElementById("messagesShareSheetClose")?.addEventListener("click", closeMessagesShareSheet);
+    document.getElementById("messagesShareSheetBackdrop")?.addEventListener("click", closeMessagesShareSheet);
   }
 }
 
@@ -25370,6 +25628,7 @@ function syncDiscoveryPlayingHighlights() {
     document.getElementById("profileActivitiesList"),
     document.getElementById("userPublicSongs"),
     document.getElementById("discoverPlaylistList"),
+    document.getElementById("messagesThreadMount"),
   ].filter(Boolean);
   if (!roots.length) return;
 
@@ -25404,6 +25663,10 @@ function syncDiscoveryPlayingHighlights() {
           || "Song";
         playBtn.setAttribute("aria-label", `Play ${name}`);
       }
+    } else if (host.classList.contains("messagesDmSongCard")) {
+      const name = decodeDiscoverDataAttr(host, "data-user-lib-title") || "Song";
+      const playing = host.classList.contains("discoveryRowPlaying");
+      host.setAttribute("aria-label", playing ? `Pause ${name}` : `Play ${name}`);
     }
   };
 
@@ -25412,6 +25675,7 @@ function syncDiscoveryPlayingHighlights() {
     root.querySelectorAll(".discoverySpotCard").forEach(resetDiscoveryHost);
     root.querySelectorAll(".followAct").forEach(resetDiscoveryHost);
     root.querySelectorAll(".discoverFeedSongRow").forEach(resetDiscoveryHost);
+    root.querySelectorAll(".messagesDmSongCard").forEach(resetDiscoveryHost);
   }
 
   const curRef = String(currentPlayerTrackRef?.url || "").trim();
@@ -25448,11 +25712,14 @@ function syncDiscoveryPlayingHighlights() {
           || "Song";
         playBtn.setAttribute("aria-label", audible ? `Pause ${name}` : `Play ${name}`);
       }
+    } else if (host.classList.contains("messagesDmSongCard")) {
+      const name = decodeDiscoverDataAttr(urlEl, "data-user-lib-title") || "Song";
+      host.setAttribute("aria-label", audible ? `Pause ${name}` : `Play ${name}`);
     }
     const artHint =
       String(decodeDiscoverDataAttr(host, "data-user-lib-art") || "").trim() ||
       String(decodeDiscoverDataAttr(urlEl, "data-user-lib-art") || "").trim() ||
-      String(host.querySelector?.(".followActMediaImg, .followActCover img, .discoverySpotCardArt img, .discoveryRowArt img, .discoverFeedSongArt img")?.getAttribute?.("src") || "").trim();
+      String(host.querySelector?.(".followActMediaImg, .followActCover img, .discoverySpotCardArt img, .discoveryRowArt img, .discoverFeedSongArt img, .messagesDmSongArt img")?.getAttribute?.("src") || "").trim();
     if (active) applyCoverGlowRgb(host, artHint);
   };
 
@@ -25462,6 +25729,10 @@ function syncDiscoveryPlayingHighlights() {
     });
     root.querySelectorAll(".discoveryRow").forEach((row) => {
       if (row.classList.contains("followAct")) return;
+      if (row.classList.contains("messagesDmSongCard")) {
+        paintHost(row, row);
+        return;
+      }
       const artBtn = row.querySelector("[data-discovery-inline-play]");
       paintHost(row, artBtn);
     });

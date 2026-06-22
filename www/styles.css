@@ -27775,16 +27775,23 @@ body.messagesThreadLeaving .messagesThreadPage{
   }
 }
 body[data-route="messages-thread"]{
+  position: fixed;
+  inset: 0;
+  width: 100%;
   overflow: hidden;
-  height: 100dvh;
-  height: 100svh;
   background: var(--bg);
+  overscroll-behavior: none;
+}
+html:has(body[data-route="messages-thread"]){
+  overflow: hidden;
+  height: 100%;
 }
 body[data-route="messages-thread"] > .app{
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  max-height: 100%;
   overflow: hidden;
   padding-bottom: 0;
   box-sizing: border-box;
@@ -28465,10 +28472,10 @@ body[data-route="messages"]{
 .messagesComposer{
   flex: 0 0 auto;
   display: flex;
-  align-items: flex-end;
-  gap: 4px;
-  padding: 4px 6px;
-  padding-bottom: max(4px, env(safe-area-inset-bottom, 0px));
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid rgba(255,255,255,0.08);
   background: var(--bg);
 }
@@ -28482,13 +28489,13 @@ body[data-route="messages-thread"] .messagesComposer{
   box-sizing: border-box;
 }
 body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesComposer{
-  padding-bottom: 4px;
+  padding-bottom: 8px;
 }
 .messagesComposerShare{
   flex: 0 0 auto;
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
   border: 1px solid rgba(124,92,255,0.28);
   background: rgba(124,92,255,0.12);
   color: rgba(215,198,255,0.96);
@@ -28500,27 +28507,28 @@ body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesComposer{
 }
 .messagesComposerInput{
   flex: 1 1 auto;
-  min-height: 36px;
+  min-height: 44px;
   max-height: 120px;
   resize: none;
-  border-radius: 12px;
+  border-radius: 14px;
   border: 1px solid rgba(124,92,255,0.18);
   background: rgba(255,255,255,0.05);
   color: #f8faff;
   font: inherit;
   font-size: 15px;
-  line-height: 1.35;
-  padding: 8px 10px;
+  line-height: 1.25;
+  padding: 12px 14px;
+  box-sizing: border-box;
 }
 .messagesComposerInput::placeholder{
   color: rgba(223,231,251,0.38);
 }
 .messagesComposerSend{
   flex: 0 0 auto;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border: 0;
-  border-radius: 12px;
+  border-radius: 13px;
   background: linear-gradient(135deg, #7c5cff 0%, #9b6dff 52%, #b78bff 100%);
   color: #fff;
   display: inline-flex;

@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260622optimisticDm";
+const APP_BUILD = "20260622dmKeyboard";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3151,7 +3151,7 @@ function applyRoute({ passGen } = {}) {
   if (prevRoute === "messages-thread" && wanted !== "messages-thread") {
     stopMessagesThreadRealtime();
     resetMessagesThreadRouteState();
-    syncMessagesThreadComposerInset();
+    clearMessagesThreadComposerInset();
     document.body.classList.remove("messagesThreadEntering", "messagesThreadLeaving");
   }
   if (wanted === "challenges" && hasActiveCreateSession()) {
@@ -20825,28 +20825,55 @@ function syncMessagesThreadComposerReady() {
   if (shareBtn) shareBtn.disabled = !ready;
 }
 
+function clearMessagesThreadComposerInset() {
+  document.body.classList.remove("messagesThreadKeyboardOpen");
+  try {
+    document.body.style.removeProperty("--messages-composer-bottom");
+    document.body.style.removeProperty("--messages-composer-pad-bottom");
+    document.body.style.removeProperty("--messages-thread-mount-pad-bottom");
+  } catch {}
+}
+
 function syncMessagesThreadComposerInset() {
   if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
-    try { document.body.style.removeProperty("--messages-composer-bottom"); } catch {}
+    clearMessagesThreadComposerInset();
     return;
   }
   const vv = window.visualViewport;
-  let bottom = "var(--tabbar-h, 0px)";
+  let keyboardInset = 0;
   if (vv) {
-    const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
-    if (inset > 0) bottom = `${inset}px`;
+    keyboardInset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
   }
-  document.body.style.setProperty("--messages-composer-bottom", bottom);
+  const composerBlock = 68;
+  if (keyboardInset > 0) {
+    document.body.classList.add("messagesThreadKeyboardOpen");
+    document.body.style.setProperty("--messages-composer-bottom", `${keyboardInset}px`);
+    document.body.style.setProperty("--messages-composer-pad-bottom", "10px");
+    document.body.style.setProperty(
+      "--messages-thread-mount-pad-bottom",
+      `${composerBlock + keyboardInset}px`,
+    );
+  } else {
+    document.body.classList.remove("messagesThreadKeyboardOpen");
+    document.body.style.setProperty("--messages-composer-bottom", "0px");
+    document.body.style.setProperty(
+      "--messages-composer-pad-bottom",
+      "max(10px, env(safe-area-inset-bottom, 0px))",
+    );
+    document.body.style.setProperty(
+      "--messages-thread-mount-pad-bottom",
+      `calc(${composerBlock}px + max(10px, env(safe-area-inset-bottom, 0px)))`,
+    );
+  }
 }
 
 function wireMessagesThreadKeyboardOnce() {
   if (document.documentElement.dataset.messagesThreadKbWired) return;
   document.documentElement.dataset.messagesThreadKbWired = "1";
-  const vv = window.visualViewport;
-  if (!vv) return;
   const onViewportChange = () => syncMessagesThreadComposerInset();
-  vv.addEventListener("resize", onViewportChange);
-  vv.addEventListener("scroll", onViewportChange);
+  window.visualViewport?.addEventListener("resize", onViewportChange);
+  window.visualViewport?.addEventListener("scroll", onViewportChange);
+  window.addEventListener("resize", onViewportChange);
 }
 
 function normalizeChatHeaderUser(raw) {
@@ -22545,10 +22572,13 @@ function bindMessagesPageOnce() {
   if (composer && !composer.dataset.boundMessagesComposer) {
     composer.dataset.boundMessagesComposer = "1";
     composer.addEventListener("focus", () => {
-      window.setTimeout(() => syncMessagesThreadComposerInset(), 60);
+      syncMessagesThreadComposerInset();
+      window.setTimeout(syncMessagesThreadComposerInset, 60);
+      window.setTimeout(syncMessagesThreadComposerInset, 280);
     });
     composer.addEventListener("blur", () => {
-      window.setTimeout(() => syncMessagesThreadComposerInset(), 60);
+      window.setTimeout(syncMessagesThreadComposerInset, 60);
+      window.setTimeout(syncMessagesThreadComposerInset, 280);
     });
     composer.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {

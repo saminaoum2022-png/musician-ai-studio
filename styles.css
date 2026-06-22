@@ -28393,11 +28393,46 @@ body[data-route="messages-thread"] .messagesThreadPage{
   color: #fff;
 }
 .messagesBubbleTime{
-  display: block;
-  margin-top: 4px;
+  display: inline;
   color: rgba(223,231,251,0.42);
   font-size: 11px;
-  text-align: right;
+}
+.messagesBubbleMeta{
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+.messagesBubbleWrap.is-pending .messagesBubble{
+  opacity: 0.84;
+}
+.messagesBubbleWrap.is-failed .messagesBubble{
+  opacity: 0.78;
+  border-color: rgba(255,120,120,0.34);
+}
+.messagesBubbleStatus{
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+}
+.messagesBubbleStatus--sending{
+  font-size: 10px;
+  color: rgba(223,231,251,0.44);
+  letter-spacing: 0.01em;
+}
+.messagesBubbleStatus--delivered{
+  font-size: 11px;
+  color: rgba(223,231,251,0.56);
+  line-height: 1;
+}
+.messagesBubbleStatus--failed{
+  font-size: 10px;
+  color: #ffb4b4;
+  text-decoration: underline;
+  cursor: pointer;
 }
 .messagesBubbleWrap.is-mine .messagesBubbleTime{
   color: rgba(255,255,255,0.72);

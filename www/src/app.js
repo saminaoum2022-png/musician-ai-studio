@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260622instantDm";
+const APP_BUILD = "20260622optimisticDm";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -20811,7 +20811,6 @@ let _messagesThreadBootToken = 0;
 let _messagesLastFetchedAt = "";
 let _messagesInboxLoading = false;
 let _messagesInboxFilter = "all";
-let _messagesSendInFlight = false;
 let _messagesRequestTargetUserId = "";
 let _messagesThreadLeaving = false;
 const MESSAGES_NAV_PREF_KEY = "mas:messagesNavPrefetch:v1";
@@ -20822,7 +20821,7 @@ function syncMessagesThreadComposerReady() {
   const shareBtn = document.getElementById("messagesComposerShare");
   const ready = Boolean(String(_conversationId || "").trim());
   if (input) input.disabled = !ready;
-  if (sendBtn) sendBtn.disabled = !ready || _messagesSendInFlight;
+  if (sendBtn) sendBtn.disabled = !ready;
   if (shareBtn) shareBtn.disabled = !ready;
 }
 
@@ -21044,30 +21043,180 @@ function renderMessagesMount({ scrollToBottom = true } = {}) {
 function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
   const rows = Array.isArray(incoming) ? incoming : [];
   if (!rows.length) return false;
-  const byId = new Map((Array.isArray(_messagesList) ? _messagesList : []).map((m) => [String(m.id), m]));
+  let list = [...(Array.isArray(_messagesList) ? _messagesList : [])];
   let changed = false;
   for (const m of rows) {
-    const id = String(m?.id || "");
-    if (!id) continue;
-    const prev = byId.get(id);
-    if (!prev || prev.body !== m.body || prev.created_at !== m.created_at) {
-      byId.set(id, m);
+    const serverId = String(m?.id || "");
+    if (!serverId || isPendingThreadMessageId(serverId)) continue;
+
+    const optIdx = findOptimisticMessageIndex({ clientMessageId: m.client_message_id, serverMsg: m });
+    if (optIdx >= 0) {
+      list[optIdx] = {
+        ...m,
+        client_message_id: list[optIdx].client_message_id || m.client_message_id || "",
+        sendStatus: "delivered",
+      };
+      changed = true;
+      continue;
+    }
+
+    const existingIdx = list.findIndex((x) => String(x.id) === serverId);
+    if (existingIdx >= 0) {
+      const prev = list[existingIdx];
+      if (prev.body !== m.body || prev.created_at !== m.created_at) {
+        list[existingIdx] = { ...prev, ...m, sendStatus: prev.sendStatus || "delivered" };
+        changed = true;
+      }
+    } else {
+      list.push({ ...m, sendStatus: m.sendStatus || "delivered" });
       changed = true;
     }
   }
   if (!changed) return false;
-  _messagesList = [...byId.values()].sort(
+  _messagesList = list.sort(
     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
   );
-  _messagesLastFetchedAt = _messagesList.length
-    ? String(_messagesList[_messagesList.length - 1].created_at || "")
-    : _messagesLastFetchedAt;
+  syncMessagesLastFetchedAtFromList();
   renderMessagesMount({ scrollToBottom: scrollToBottom && shouldAutoScrollMessagesMount() });
   return true;
 }
 
 function appendThreadMessages(newMsgs) {
   mergeThreadMessages(newMsgs, { scrollToBottom: true });
+}
+
+function newClientMessageId() {
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+  } catch {}
+  return `cm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function isPendingThreadMessageId(id) {
+  return String(id || "").startsWith("pending:");
+}
+
+function findOptimisticMessageIndex({ clientMessageId, serverMsg } = {}) {
+  const cid = String(clientMessageId || serverMsg?.client_message_id || "").trim();
+  if (cid) {
+    const idx = (Array.isArray(_messagesList) ? _messagesList : []).findIndex(
+      (m) => String(m?.client_message_id || "") === cid,
+    );
+    if (idx >= 0) return idx;
+  }
+  if (!serverMsg) return -1;
+  const viewerId = String(authSession?.user?.id || "");
+  if (String(serverMsg.sender_id || "") !== viewerId) return -1;
+  const body = String(serverMsg.body || "");
+  return (Array.isArray(_messagesList) ? _messagesList : []).findIndex(
+    (m) => isPendingThreadMessageId(m?.id)
+      && String(m.sender_id || "") === viewerId
+      && String(m.body || "") === body
+      && (m.sendStatus === "sending" || m.sendStatus === "failed"),
+  );
+}
+
+function syncMessagesLastFetchedAtFromList() {
+  const confirmed = (Array.isArray(_messagesList) ? _messagesList : []).filter(
+    (m) => m?.id && !isPendingThreadMessageId(m.id),
+  );
+  if (confirmed.length) {
+    _messagesLastFetchedAt = String(confirmed[confirmed.length - 1].created_at || "");
+  }
+}
+
+function addOptimisticThreadMessage(msg) {
+  _messagesList = [...(Array.isArray(_messagesList) ? _messagesList : []), msg];
+  renderMessagesMount({ scrollToBottom: true });
+}
+
+function confirmOptimisticThreadMessage(clientMessageId, serverMsg) {
+  const cid = String(clientMessageId || "").trim();
+  const idx = findOptimisticMessageIndex({ clientMessageId: cid, serverMsg });
+  const next = {
+    ...serverMsg,
+    client_message_id: cid || String(serverMsg?.client_message_id || ""),
+    sendStatus: "delivered",
+  };
+  if (idx >= 0) {
+    const list = [..._messagesList];
+    list[idx] = next;
+    _messagesList = list.sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    );
+  } else {
+    mergeThreadMessages([next], { scrollToBottom: false });
+    return;
+  }
+  syncMessagesLastFetchedAtFromList();
+  renderMessagesMount({ scrollToBottom: false });
+}
+
+function markOptimisticThreadMessageFailed(clientMessageId, err) {
+  const cid = String(clientMessageId || "").trim();
+  const idx = findOptimisticMessageIndex({ clientMessageId: cid });
+  if (idx < 0) return;
+  const list = [..._messagesList];
+  list[idx] = {
+    ...list[idx],
+    sendStatus: "failed",
+    sendError: String(err?.message || "Send failed"),
+  };
+  _messagesList = list;
+  renderMessagesMount({ scrollToBottom: false });
+  try { showToast(String(err?.message || "Could not send message"), { icon: "💬", durationMs: 2800 }); } catch {}
+}
+
+function updateOptimisticMessageStatus(clientMessageId, status) {
+  const cid = String(clientMessageId || "").trim();
+  const idx = findOptimisticMessageIndex({ clientMessageId: cid });
+  if (idx < 0) return;
+  const list = [..._messagesList];
+  list[idx] = { ...list[idx], sendStatus: status };
+  _messagesList = list;
+  renderMessagesMount({ scrollToBottom: false });
+}
+
+async function sendThreadMessageInBackground({ clientMessageId, threadId, body }) {
+  const cid = String(clientMessageId || "").trim();
+  const tid = String(threadId || _conversationId || "").trim();
+  const text = String(body || "").trim();
+  if (!cid || !tid || !text) return;
+  try {
+    const data = await messagesApi("/api/messages", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "send_message",
+        threadId: tid,
+        body: text,
+        clientMessageId: cid,
+      }),
+    });
+    const msg = data?.message;
+    if (msg) {
+      confirmOptimisticThreadMessage(cid, { ...msg, client_message_id: cid });
+    } else {
+      updateOptimisticMessageStatus(cid, "delivered");
+    }
+    void refreshMessagesUnreadBadge({ force: true });
+  } catch (e) {
+    markOptimisticThreadMessageFailed(cid, e);
+  }
+}
+
+async function retryFailedThreadMessage(clientMessageId) {
+  const cid = String(clientMessageId || "").trim();
+  const msg = (Array.isArray(_messagesList) ? _messagesList : []).find(
+    (m) => String(m?.client_message_id || "") === cid && m.sendStatus === "failed",
+  );
+  if (!msg) return;
+  const threadId = String(_conversationId || "").trim();
+  const body = String(msg.body || "").trim();
+  if (!threadId || !body) return;
+  updateOptimisticMessageStatus(cid, "sending");
+  await sendThreadMessageInBackground({ clientMessageId: cid, threadId, body });
 }
 
 function resetMessagesThreadRouteState() {
@@ -21973,25 +22122,48 @@ function renderMessagesInbox() {
   if (statusEl) statusEl.hidden = true;
 }
 
+function messagesBubbleStatusHtml(msg) {
+  const status = String(msg?.sendStatus || "").trim();
+  if (status === "sending") {
+    return `<span class="messagesBubbleStatus messagesBubbleStatus--sending" aria-label="Sending">Sending</span>`;
+  }
+  if (status === "failed") {
+    const cid = escapeHtml(String(msg?.client_message_id || ""));
+    return `<button type="button" class="messagesBubbleStatus messagesBubbleStatus--failed" data-retry-client-msg="${cid}">Not sent · Retry</button>`;
+  }
+  if (status === "delivered") {
+    return `<span class="messagesBubbleStatus messagesBubbleStatus--delivered" aria-label="Delivered">✓</span>`;
+  }
+  return "";
+}
+
 function messagesBubbleHtml(msg, viewerId) {
   const mine = String(msg?.sender_id || "") === String(viewerId || "");
   const parsed = parseDmMessageBody(msg?.body);
   const when = msg?.created_at ? relativeTime(new Date(msg.created_at).getTime()) : "";
+  const pendingCls = mine && msg?.sendStatus === "sending" ? " is-pending" : "";
+  const failedCls = mine && msg?.sendStatus === "failed" ? " is-failed" : "";
   if (parsed.type === "song") {
     return `
-      <div class="messagesBubbleWrap messagesBubbleWrap--song${mine ? " is-mine" : ""}">
+      <div class="messagesBubbleWrap messagesBubbleWrap--song${mine ? " is-mine" : ""}${pendingCls}${failedCls}" data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
         <div class="messagesBubble messagesBubble--song">
           ${messagesDmSongCardHtml(parsed, { mine })}
-          ${when ? `<span class="messagesBubbleTime">${escapeHtml(when)}</span>` : ""}
+          <span class="messagesBubbleMeta">
+            ${when ? `<span class="messagesBubbleTime">${escapeHtml(when)}</span>` : ""}
+            ${mine ? messagesBubbleStatusHtml(msg) : ""}
+          </span>
         </div>
       </div>`;
   }
   const body = String(parsed.text || "").trim();
   return `
-    <div class="messagesBubbleWrap${mine ? " is-mine" : ""}">
+    <div class="messagesBubbleWrap${mine ? " is-mine" : ""}${pendingCls}${failedCls}" data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
       <div class="messagesBubble">
         <p class="messagesBubbleText">${escapeHtml(body)}</p>
-        ${when ? `<span class="messagesBubbleTime">${escapeHtml(when)}</span>` : ""}
+        <span class="messagesBubbleMeta">
+          ${when ? `<span class="messagesBubbleTime">${escapeHtml(when)}</span>` : ""}
+          ${mine ? messagesBubbleStatusHtml(msg) : ""}
+        </span>
       </div>
     </div>`;
 }
@@ -22021,10 +22193,12 @@ async function loadMessagesForConversation(threadId, { bootToken = 0, silent = f
       });
     }
     _conversationId = tid;
-    _messagesList = Array.isArray(data?.messages) ? data.messages : [];
-    _messagesLastFetchedAt = _messagesList.length
-      ? String(_messagesList[_messagesList.length - 1].created_at || "")
-      : "";
+    if (silent) {
+      mergeThreadMessages(Array.isArray(data?.messages) ? data.messages : [], { scrollToBottom: false });
+    } else {
+      _messagesList = Array.isArray(data?.messages) ? data.messages : [];
+      syncMessagesLastFetchedAtFromList();
+    }
     void loadMessagesThreadPartnerMeta(partner?.partnerUserId || _chatHeaderUser?.userId);
     if (!silent) {
       await markThreadReadQuiet(tid);
@@ -22188,34 +22362,37 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   void bootstrapMessagesThread({ bootToken, threadId: tid, targetUserId: uid });
 }
 
-async function sendCurrentThreadMessage() {
-  if (_messagesSendInFlight) return;
+function sendCurrentThreadMessage() {
   const input = document.getElementById("messagesComposerInput");
   const text = String(input?.value || "").trim();
   const threadId = String(_conversationId || "").trim();
   if (!text || !threadId) return;
-  _messagesSendInFlight = true;
+
+  const clientMessageId = newClientMessageId();
+  const viewerId = String(authSession?.user?.id || "");
+  const optimistic = {
+    id: `pending:${clientMessageId}`,
+    client_message_id: clientMessageId,
+    sender_id: viewerId,
+    body: text,
+    created_at: new Date().toISOString(),
+    sendStatus: "sending",
+  };
+
+  input.value = "";
+  addOptimisticThreadMessage(optimistic);
+  try { input.focus({ preventScroll: true }); } catch { try { input.focus(); } catch {} }
+
   const sendBtn = document.getElementById("messagesComposerSend");
-  if (sendBtn) sendBtn.disabled = true;
-  try {
-    const data = await messagesApi("/api/messages", {
-      method: "POST",
-      body: JSON.stringify({ action: "send_message", threadId, body: text }),
-    });
-    if (input) input.value = "";
-    const msg = data?.message;
-    if (msg) {
-      appendThreadMessages([msg]);
-    } else {
-      await pollNewThreadMessages(threadId);
-    }
-    void refreshMessagesUnreadBadge({ force: true });
-  } catch (e) {
-    try { showToast(String(e?.message || "Could not send message"), { icon: "💬", durationMs: 2800 }); } catch {}
-  } finally {
-    _messagesSendInFlight = false;
-    if (sendBtn) sendBtn.disabled = false;
+  if (sendBtn) {
+    sendBtn.disabled = true;
+    window.setTimeout(() => {
+      sendBtn.disabled = false;
+      syncMessagesThreadComposerReady();
+    }, 220);
   }
+
+  void sendThreadMessageInBackground({ clientMessageId, threadId, body: text });
 }
 
 async function loadMessagesInbox() {
@@ -22330,7 +22507,13 @@ function bindMessagesPageOnce() {
     const sendBtn = e.target.closest("#messagesComposerSend");
     if (sendBtn) {
       e.preventDefault();
-      void sendCurrentThreadMessage();
+      sendCurrentThreadMessage();
+      return;
+    }
+    const retryBtn = e.target.closest("[data-retry-client-msg]");
+    if (retryBtn) {
+      e.preventDefault();
+      void retryFailedThreadMessage(retryBtn.getAttribute("data-retry-client-msg"));
       return;
     }
     const shareBtn = e.target.closest("#messagesComposerShare");
@@ -22370,7 +22553,7 @@ function bindMessagesPageOnce() {
     composer.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        void sendCurrentThreadMessage();
+        sendCurrentThreadMessage();
       }
     });
   }

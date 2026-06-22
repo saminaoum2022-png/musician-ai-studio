@@ -302,16 +302,17 @@ async function handleGet(req, res, user) {
   return sendJson(res, 400, { ok: false, error: "Unknown messages query" });
 }
 
-async function insertMessage({ threadId, senderId, body }) {
+async function insertMessage({ threadId, senderId, body, clientMessageId = "" }) {
   const now = new Date().toISOString();
+  const row = {
+    thread_id: threadId,
+    sender_id: senderId,
+    body,
+  };
   const ins = await svcFetch("dm_messages", {
     method: "POST",
     headers: { Prefer: "return=representation" },
-    body: JSON.stringify({
-      thread_id: threadId,
-      sender_id: senderId,
-      body,
-    }),
+    body: JSON.stringify(row),
   });
   if (!ins.ok) return { ok: false, error: ins.text || "Send failed" };
   await svcFetch(`dm_threads?id=eq.${encodeURIComponent(threadId)}`, {
@@ -328,7 +329,10 @@ async function insertMessage({ threadId, senderId, body }) {
       last_read_at: now,
     }),
   });
-  return { ok: true, message: Array.isArray(ins.data) && ins.data[0] ? ins.data[0] : null };
+  const message = Array.isArray(ins.data) && ins.data[0] ? ins.data[0] : null;
+  const clientId = String(clientMessageId || "").trim();
+  if (message && clientId) message.client_message_id = clientId;
+  return { ok: true, message };
 }
 
 async function handlePost(req, res, user) {
@@ -490,6 +494,7 @@ async function handlePost(req, res, user) {
       threadId: thread.id,
       senderId: user.userId,
       body: text,
+      clientMessageId: String(body?.clientMessageId || body?.client_message_id || "").trim(),
     });
     if (!sent.ok) return sendJson(res, 500, { ok: false, error: sent.error || "Send failed" });
     return sendJson(res, 200, { ok: true, threadId: thread.id, message: sent.message });

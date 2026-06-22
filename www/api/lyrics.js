@@ -229,6 +229,28 @@ async function listGeminiGenerateModels(geminiKey) {
   }
 }
 
+const POP_RHYME_METER_LINES = [
+  "Rhythm & rhyme (required):",
+  "- Within each section, keep lines a similar length with a clear singable rhythm.",
+  "- Use end-rhyme (qafiya): paired lines should share the same or near ending sound where natural.",
+  "- Chorus: strong rhyme (AABB or a repeating hook line AAAA).",
+  "- Verse: ABAB or ABCB; pre-chorus may use AA leading into the chorus; bridge may be looser.",
+  "- Do not sacrifice dialect, meaning, or natural speech for forced rhyme. Near-rhyme is fine, especially in colloquial Arabic.",
+  "- Do not print rhyme scheme labels — output lyrics with section tags only.",
+];
+
+const POP_RHYME_METER_LINES_LIGHT = [
+  "Rhythm & rhyme:",
+  "- Preserve the user's words; lightly adjust line breaks or endings so paired lines rhyme or near-rhyme where possible.",
+  "- Keep lines a similar length within each section for singable rhythm.",
+];
+
+const POP_RHYME_METER_LINES_CONTINUE = [
+  "Rhythm & rhyme:",
+  "- Match the rhyme pattern and line length of the existing lyrics.",
+  "- New lines should rhyme with the established scheme in each section.",
+];
+
 function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint }) {
   const dialectLines = [
     dialect ? `Target dialect/accent: ${dialect}` : "",
@@ -251,6 +273,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint }) {
       "[Final Chorus]",
       "[Outro]",
       "In [Outro], include a clear musical ending phrase.",
+      ...POP_RHYME_METER_LINES_LIGHT,
       `Variation token: ${nonce}`,
       ...(dialectLines ? [dialectLines] : []),
       style ? `Style/Tags: ${style}` : "Style/Tags: none",
@@ -264,6 +287,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint }) {
       "Continue the user's lyrics in the same mood, theme, and language.",
       "Do not rewrite existing lines.",
       "Output lyrics only.",
+      ...POP_RHYME_METER_LINES_CONTINUE,
       ...(dialectLines ? [dialectLines] : []),
       style ? `Style/Tags: ${style}` : "Style/Tags: none",
       "",
@@ -281,6 +305,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint }) {
       "[Pre-Chorus] — 2 lines max (optional; omit if not needed)",
       "[Chorus] — 4 lines max, with one repeatable hook",
       "Total output: 12 lines maximum. Keep lines short and singable.",
+      ...POP_RHYME_METER_LINES,
       "Do not explain the challenge. Do not repeat the instruction text.",
       "Do not include metadata, notes, or descriptions.",
       `Variation token: ${nonce}`,
@@ -305,6 +330,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint }) {
     "[Final Chorus]",
     "[Outro]",
     "Make the [Outro] contain a clear ending phrase so the song can finish naturally.",
+    ...POP_RHYME_METER_LINES,
     `Variation token: ${nonce}`,
     ...(dialectLines ? [dialectLines] : []),
     style ? `Style/Tags: ${style}` : "Style/Tags: none",

@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260622dmKeyboard";
+const APP_BUILD = "20260622dmInboxCache";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3148,6 +3148,9 @@ function applyRoute({ passGen } = {}) {
     } catch {}
   }
   const prevRoute = document.body.getAttribute("data-route") || "";
+  if (prevRoute === "messages" && wanted !== "messages") {
+    captureMessagesInboxScroll();
+  }
   if (prevRoute === "messages-thread" && wanted !== "messages-thread") {
     stopMessagesThreadRealtime();
     resetMessagesThreadRouteState();
@@ -3402,7 +3405,7 @@ function applyRoute({ passGen } = {}) {
   }
   if (MESSAGES_FEATURE_ENABLED && wanted === "messages") {
     bindMessagesPageOnce();
-    void enterMessagesRoute();
+    enterMessagesRoute({ fromThread: prevRoute === "messages-thread" });
   }
   if (MESSAGES_FEATURE_ENABLED && wanted === "messages-thread") {
     bindMessagesPageOnce();
@@ -20810,6 +20813,10 @@ let _messagesLoading = false;
 let _messagesThreadBootToken = 0;
 let _messagesLastFetchedAt = "";
 let _messagesInboxLoading = false;
+let _messagesInboxRefreshing = false;
+let _messagesInboxHasLoadedOnce = false;
+let _messagesInboxFetchInFlight = null;
+let _messagesInboxScrollY = 0;
 let _messagesInboxFilter = "all";
 let _messagesRequestTargetUserId = "";
 let _messagesThreadLeaving = false;
@@ -20941,6 +20948,31 @@ function readMessagesNavPrefetch() {
   } catch {
     return null;
   }
+}
+
+function messagesInboxHasCachedData() {
+  if (_messagesInboxHasLoadedOnce) return true;
+  const s = _messagesInboxState || {};
+  return (
+    (Array.isArray(s.threads) && s.threads.length > 0)
+    || (Array.isArray(s.requests) && s.requests.length > 0)
+    || (Array.isArray(s.sentRequests) && s.sentRequests.length > 0)
+  );
+}
+
+function captureMessagesInboxScroll() {
+  _messagesInboxScrollY = Math.max(
+    0,
+    Number(window.scrollY || document.documentElement.scrollTop || 0),
+  );
+}
+
+function restoreMessagesInboxScroll() {
+  const y = Math.max(0, Number(_messagesInboxScrollY) || 0);
+  if (y <= 0) return;
+  requestAnimationFrame(() => {
+    try { window.scrollTo(0, y); } catch {}
+  });
 }
 
 function findInboxThreadById(threadId) {
@@ -22080,7 +22112,7 @@ function renderMessagesInbox() {
   const mount = document.getElementById("messagesInboxMount");
   const statusEl = document.getElementById("messagesStatus");
   if (!mount) return;
-  if (_messagesInboxLoading) {
+  if (_messagesInboxLoading && !messagesInboxHasCachedData()) {
     mount.innerHTML = `<div class="messagesInboxList">${messagesInboxSkeletonHtml()}</div>`;
     if (statusEl) statusEl.hidden = true;
     return;
@@ -22422,33 +22454,74 @@ function sendCurrentThreadMessage() {
   void sendThreadMessageInBackground({ clientMessageId, threadId, body: text });
 }
 
-async function loadMessagesInbox() {
-  _messagesInboxLoading = true;
-  renderMessagesInbox();
-  try {
-    const data = await messagesApi("/api/messages?type=inbox");
-    _messagesInboxState = {
-      threads: Array.isArray(data?.threads) ? data.threads : [],
-      requests: Array.isArray(data?.requests) ? data.requests : [],
-      sentRequests: Array.isArray(data?.sentRequests) ? data.sentRequests : [],
-    };
-  } catch (e) {
-    const statusEl = document.getElementById("messagesStatus");
-    if (statusEl) {
-      statusEl.hidden = false;
-      statusEl.textContent = String(e?.message || "Could not load messages.");
-    }
-    _messagesInboxState = { threads: [], requests: [], sentRequests: [] };
-  } finally {
-    _messagesInboxLoading = false;
+async function loadMessagesInbox({ silent = false } = {}) {
+  const hasCache = messagesInboxHasCachedData();
+  if (_messagesInboxFetchInFlight) {
+    try { return await _messagesInboxFetchInFlight; } catch { return false; }
+  }
+
+  if (!silent && !hasCache) {
+    _messagesInboxLoading = true;
     renderMessagesInbox();
-    void refreshMessagesUnreadBadge({ force: true });
+  } else if (hasCache) {
+    _messagesInboxRefreshing = true;
+  }
+
+  const run = (async () => {
+    try {
+      const data = await messagesApi("/api/messages?type=inbox");
+      _messagesInboxState = {
+        threads: Array.isArray(data?.threads) ? data.threads : [],
+        requests: Array.isArray(data?.requests) ? data.requests : [],
+        sentRequests: Array.isArray(data?.sentRequests) ? data.sentRequests : [],
+      };
+      _messagesInboxHasLoadedOnce = true;
+      markRouteHeavy("messages");
+      return true;
+    } catch (e) {
+      if (!hasCache) {
+        const statusEl = document.getElementById("messagesStatus");
+        if (statusEl) {
+          statusEl.hidden = false;
+          statusEl.textContent = String(e?.message || "Could not load messages.");
+        }
+        if (!_messagesInboxHasLoadedOnce) {
+          _messagesInboxState = { threads: [], requests: [], sentRequests: [] };
+        }
+      } else {
+        console.warn("[messages/inbox]", e);
+      }
+      return false;
+    } finally {
+      _messagesInboxLoading = false;
+      _messagesInboxRefreshing = false;
+      renderMessagesInbox();
+      if (silent && hasCache) restoreMessagesInboxScroll();
+      void refreshMessagesUnreadBadge({ force: true });
+    }
+  })();
+
+  _messagesInboxFetchInFlight = run;
+  try {
+    return await run;
+  } finally {
+    if (_messagesInboxFetchInFlight === run) _messagesInboxFetchInFlight = null;
   }
 }
 
-async function enterMessagesRoute() {
+function enterMessagesRoute({ fromThread = false } = {}) {
   syncFriendsMessagesBtn();
-  await loadMessagesInbox();
+  const hasCache = messagesInboxHasCachedData();
+  if (hasCache) {
+    renderMessagesInbox();
+    restoreMessagesInboxScroll();
+    if (fromThread || !shouldSkipRouteHeavy("messages")) {
+      void loadMessagesInbox({ silent: true });
+    }
+    return;
+  }
+  markRouteHeavy("messages");
+  void loadMessagesInbox({ silent: false });
 }
 
 async function respondMessageRequest(requestId, decision) {

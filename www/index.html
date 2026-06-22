@@ -2259,6 +2259,7 @@
                   </span>
                 </button>
                 <div class="userPublicFollowRow" id="userPublicFollowRow" hidden>
+                  <button id="btnUserPublicMessage" class="userPublicMessageBtn" type="button" hidden>Message</button>
                   <button id="btnUserPublicFollow" class="userPublicFollowBtn" type="button" hidden>Follow</button>
                   <span id="userPublicFollowsYou" class="userPublicFollowsYou" hidden>Follows you</span>
                 </div>
@@ -3604,6 +3605,19 @@
       </section>
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <div id="messagesRequestSheet" class="messagesRequestSheet" hidden aria-hidden="true">
+      <div class="messagesRequestSheetBackdrop" id="messagesRequestSheetBackdrop"></div>
+      <section class="messagesRequestSheetCard" role="dialog" aria-modal="true" aria-labelledby="messagesRequestSheetTitle">
+        <header class="messagesRequestSheetHead">
+          <h2 id="messagesRequestSheetTitle" class="messagesRequestSheetTitle">Message request</h2>
+          <button type="button" class="messagesRequestSheetClose" id="messagesRequestSheetClose" aria-label="Close">×</button>
+        </header>
+        <p class="messagesRequestSheetLead">They'll need to accept before you can chat.</p>
+        <textarea id="messagesRequestInput" class="messagesRequestInput" rows="3" maxlength="500" placeholder="Say hello…" aria-label="Request message"></textarea>
+        <button type="button" class="messagesRequestSend" id="messagesRequestSend">Send request</button>
+      </section>
+    </div>
 
     <div id="echoViewerSheet" class="echoViewerSheet" aria-hidden="true" hidden>
       <div class="echoViewerBackdrop" id="echoViewerBackdrop"></div>

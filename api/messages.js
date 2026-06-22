@@ -413,6 +413,21 @@ async function handlePost(req, res, user) {
     });
   }
 
+  if (action === "open_thread") {
+    if (!targetUserId) return sendJson(res, 400, { ok: false, error: "Missing targetUserId" });
+    if (targetUserId === user.userId) return sendJson(res, 400, { ok: false, error: "Invalid target" });
+    if (await isBlockedEitherWay(user.userId, targetUserId)) {
+      return sendJson(res, 403, { ok: false, error: "Cannot message this user" });
+    }
+    const mutual = await isMutualFollow(user.userId, targetUserId);
+    if (!mutual) {
+      return sendJson(res, 200, { ok: true, needsRequest: true, targetUserId });
+    }
+    const thread = await getOrCreateThread(user.userId, targetUserId);
+    if (!thread) return sendJson(res, 500, { ok: false, error: "Could not open thread" });
+    return sendJson(res, 200, { ok: true, threadId: thread.id });
+  }
+
   if (action === "send_message") {
     const text = cleanBody(body?.body);
     const threadId = String(body?.threadId || "").trim();

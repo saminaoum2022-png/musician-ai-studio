@@ -788,6 +788,7 @@ const els = {
   userPublicSongs: document.getElementById("userPublicSongs"),
   userPublicEmpty: document.getElementById("userPublicEmpty"),
   btnUserPublicFollow: document.getElementById("btnUserPublicFollow"),
+  btnUserPublicMessage: document.getElementById("btnUserPublicMessage"),
   userPublicFollowRow: document.getElementById("userPublicFollowRow"),
   userPublicFollowsYou: document.getElementById("userPublicFollowsYou"),
   btnUserPublicBack: document.getElementById("btnUserPublicBack"),
@@ -20797,6 +20798,92 @@ let _messagesThreadState = { threadId: "", partner: null, messages: [] };
 let _messagesInboxLoading = false;
 let _messagesThreadLoading = false;
 let _messagesSendInFlight = false;
+let _messagesRequestTargetUserId = "";
+
+function closeMessagesRequestSheet() {
+  const sheet = document.getElementById("messagesRequestSheet");
+  if (!sheet) return;
+  sheet.hidden = true;
+  sheet.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("messagesRequestSheetOpen");
+  _messagesRequestTargetUserId = "";
+  const input = document.getElementById("messagesRequestInput");
+  if (input) input.value = "";
+}
+
+function openMessagesRequestSheet(targetUserId) {
+  const uid = String(targetUserId || "").trim();
+  if (!uid) return;
+  _messagesRequestTargetUserId = uid;
+  const sheet = document.getElementById("messagesRequestSheet");
+  const input = document.getElementById("messagesRequestInput");
+  if (!sheet) return;
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  document.body.classList.add("messagesRequestSheetOpen");
+  if (input) {
+    input.value = "";
+    window.setTimeout(() => {
+      try { input.focus(); } catch {}
+    }, 60);
+  }
+}
+
+async function submitMessagesRequestSheet() {
+  const targetUserId = String(_messagesRequestTargetUserId || "").trim();
+  const input = document.getElementById("messagesRequestInput");
+  const text = String(input?.value || "").trim();
+  if (!targetUserId || !text) {
+    try { showToast("Write a message first.", { icon: "💬", durationMs: 2200 }); } catch {}
+    return;
+  }
+  const sendBtn = document.getElementById("messagesRequestSend");
+  if (sendBtn) sendBtn.disabled = true;
+  try {
+    await messagesApi("/api/messages", {
+      method: "POST",
+      body: JSON.stringify({ action: "send_request", targetUserId, body: text }),
+    });
+    closeMessagesRequestSheet();
+    try { showToast("Message request sent.", { icon: "💬", durationMs: 2600 }); } catch {}
+    try { location.hash = "#/messages"; } catch {}
+  } catch (e) {
+    try { showToast(String(e?.message || "Could not send request"), { icon: "💬", durationMs: 2800 }); } catch {}
+  } finally {
+    if (sendBtn) sendBtn.disabled = false;
+  }
+}
+
+async function openUserPublicMessage() {
+  if (!MESSAGES_FEATURE_ENABLED) return;
+  const targetUserId = String(currentUserPublicProfileId || "").trim();
+  if (!targetUserId) return;
+  if (!authSession?.user?.id || !getSupabaseAuthToken()) {
+    showToast("Sign in to message creators.");
+    location.hash = "#/auth";
+    return;
+  }
+  if (targetUserId === String(authSession.user.id)) return;
+  try { haptic("light"); } catch {}
+  try {
+    const data = await messagesApi("/api/messages", {
+      method: "POST",
+      body: JSON.stringify({ action: "open_thread", targetUserId }),
+    });
+    if (data?.needsRequest) {
+      openMessagesRequestSheet(targetUserId);
+      return;
+    }
+    const threadId = String(data?.threadId || "").trim();
+    if (threadId) {
+      location.hash = `#/messages-thread?thread=${encodeURIComponent(threadId)}`;
+      return;
+    }
+    try { location.hash = "#/messages"; } catch {}
+  } catch (e) {
+    try { showToast(String(e?.message || "Could not open messages"), { icon: "💬", durationMs: 2800 }); } catch {}
+  }
+}
 
 async function messagesApi(path, opts = {}) {
   const timeoutMs = Math.max(4000, Number(opts?.timeoutMs) || 12000);
@@ -21261,6 +21348,19 @@ function bindMessagesPageOnce() {
       }
     });
   }
+
+  if (!document.documentElement.dataset.messagesRequestSheetWired) {
+    document.documentElement.dataset.messagesRequestSheetWired = "1";
+    document.getElementById("messagesRequestSheetClose")?.addEventListener("click", closeMessagesRequestSheet);
+    document.getElementById("messagesRequestSheetBackdrop")?.addEventListener("click", closeMessagesRequestSheet);
+    document.getElementById("messagesRequestSend")?.addEventListener("click", () => void submitMessagesRequestSheet());
+    document.getElementById("messagesRequestInput")?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        void submitMessagesRequestSheet();
+      }
+    });
+  }
 }
 
 async function fetchSocialStatsForProfile({ userId, username }) {
@@ -21437,12 +21537,14 @@ function setUserPublicLoading(on, username = "") {
 
 function renderUserPublicFollowButton() {
   const btn = els.btnUserPublicFollow;
+  const msgBtn = els.btnUserPublicMessage;
   const followsYou = els.userPublicFollowsYou;
   const followRow = els.userPublicFollowRow;
   const targetId = String(currentUserPublicProfileId || "").trim();
   const mine = String(authSession?.user?.id || "").trim();
   const canShow = Boolean(targetId && mine && targetId !== mine);
   if (followRow) followRow.hidden = !canShow;
+  if (msgBtn) msgBtn.hidden = !(canShow && MESSAGES_FEATURE_ENABLED);
   if (followsYou) {
     const showFollowsYou = canShow && Boolean(currentUserPublicSocialStats?.followsViewer);
     followsYou.hidden = !showFollowsYou;
@@ -42811,6 +42913,9 @@ if (els.settingsBtnLogout) {
 }
 if (els.btnUserPublicFollow) {
   els.btnUserPublicFollow.addEventListener("click", () => void toggleCurrentUserPublicFollow());
+}
+if (els.btnUserPublicMessage) {
+  els.btnUserPublicMessage.addEventListener("click", () => void openUserPublicMessage());
 }
 function nabadaiSupportMailtoHref(kind) {
   const report = kind === "report";

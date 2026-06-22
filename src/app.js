@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260622dmPolish";
+const APP_BUILD = "20260622dmLayout";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -20823,6 +20823,7 @@ let _messagesInboxScrollY = 0;
 let _messagesInboxFilter = "all";
 let _messagesRequestTargetUserId = "";
 let _messagesThreadLeaving = false;
+let _messagesThreadNeedsInitialScroll = false;
 const MESSAGES_NAV_PREF_KEY = "mas:messagesNavPrefetch:v1";
 
 function syncMessagesThreadComposerReady() {
@@ -20837,11 +20838,6 @@ function syncMessagesThreadComposerReady() {
 
 function clearMessagesThreadComposerInset() {
   document.body.classList.remove("messagesThreadKeyboardOpen");
-  const page = document.getElementById("messagesThreadPage");
-  if (page) {
-    page.style.removeProperty("height");
-    page.style.removeProperty("transform");
-  }
 }
 
 function measureMessagesKeyboardInset() {
@@ -20852,36 +20848,48 @@ function measureMessagesKeyboardInset() {
   return Math.max(0, Math.round(layoutH - visibleBottom));
 }
 
+function syncMessagesComposerInputHeight(input = document.getElementById("messagesComposerInput")) {
+  if (!input) return;
+  input.style.height = "auto";
+  const next = Math.min(120, Math.max(36, input.scrollHeight));
+  input.style.height = `${next}px`;
+}
+
+function scheduleMessagesThreadScrollToBottom({ force = true } = {}) {
+  scrollMessagesMountToBottom({ force });
+  window.setTimeout(() => scrollMessagesMountToBottom({ force }), 0);
+  window.setTimeout(() => scrollMessagesMountToBottom({ force }), 50);
+  window.setTimeout(() => scrollMessagesMountToBottom({ force }), 180);
+}
+
 function syncMessagesThreadComposerInset() {
   if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
     clearMessagesThreadComposerInset();
     return;
   }
-  const vv = window.visualViewport;
-  const page = document.getElementById("messagesThreadPage");
-  if (!vv || !page) return;
-
   const keyboardInset = measureMessagesKeyboardInset();
-  const vvHeight = Math.max(1, Math.round(vv.height));
-  const vvTop = Math.max(0, Math.round(vv.offsetTop));
-
-  if (keyboardInset > 0) {
-    page.style.height = `${vvHeight}px`;
-    page.style.transform = vvTop > 0 ? `translateY(${vvTop}px)` : "";
-  } else {
-    page.style.removeProperty("height");
-    page.style.removeProperty("transform");
-  }
-
   document.body.classList.toggle("messagesThreadKeyboardOpen", keyboardInset > 0);
   if (keyboardInset > 0) {
-    scrollMessagesMountToBottom({ force: true });
+    scheduleMessagesThreadScrollToBottom({ force: true });
   }
+}
+
+function wireMessagesThreadComposerResizeOnce() {
+  if (document.documentElement.dataset.messagesThreadComposerResizeWired) return;
+  document.documentElement.dataset.messagesThreadComposerResizeWired = "1";
+  const composer = document.querySelector(".messagesComposer");
+  if (!composer || typeof ResizeObserver !== "function") return;
+  const ro = new ResizeObserver(() => {
+    if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
+    scrollMessagesMountToBottom({ force: _messagesThreadNeedsInitialScroll });
+  });
+  ro.observe(composer);
 }
 
 function wireMessagesThreadKeyboardOnce() {
   if (document.documentElement.dataset.messagesThreadKbWired) return;
   document.documentElement.dataset.messagesThreadKbWired = "1";
+  wireMessagesThreadComposerResizeOnce();
   const onViewportChange = () => syncMessagesThreadComposerInset();
   window.visualViewport?.addEventListener("resize", onViewportChange);
   window.visualViewport?.addEventListener("scroll", onViewportChange);
@@ -21162,8 +21170,12 @@ function scrollMessagesMountToBottom({ force = false } = {}) {
   };
   requestAnimationFrame(() => {
     run();
-    requestAnimationFrame(run);
+    requestAnimationFrame(() => {
+      run();
+      requestAnimationFrame(run);
+    });
   });
+  window.setTimeout(run, 60);
 }
 
 function renderMessagesMount({ scrollToBottom = true, forceScroll = false } = {}) {
@@ -21185,7 +21197,7 @@ function renderMessagesMount({ scrollToBottom = true, forceScroll = false } = {}
   }
   mount.innerHTML = `<div class="messagesBubbleStack">${msgs.map((m) => messagesBubbleHtml(m, viewerId)).join("")}</div>`;
   if (scrollToBottom) {
-    scrollMessagesMountToBottom({ force: forceScroll });
+    scrollMessagesMountToBottom({ force: forceScroll || _messagesThreadNeedsInitialScroll });
   }
 }
 
@@ -21226,7 +21238,7 @@ function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
   );
   syncMessagesLastFetchedAtFromList();
-  renderMessagesMount({ scrollToBottom, forceScroll: false });
+  renderMessagesMount({ scrollToBottom, forceScroll: scrollToBottom && (_messagesThreadNeedsInitialScroll || shouldAutoScrollMessagesMount()) });
   return true;
 }
 
@@ -21370,6 +21382,7 @@ async function retryFailedThreadMessage(clientMessageId) {
 
 function resetMessagesThreadRouteState() {
   saveActiveThreadToCache();
+  _messagesThreadNeedsInitialScroll = false;
   _chatHeaderUser = null;
   _chatHeaderUserKey = "";
   _chatHeaderPartnerStats = {};
@@ -22380,7 +22393,11 @@ async function loadMessagesForConversation(threadId, { bootToken = 0, silent = f
     if (bootToken && bootToken !== _messagesThreadBootToken) return false;
     _messagesLoading = false;
     _messagesRefreshing = false;
-    renderMessagesMount({ scrollToBottom: !silent, forceScroll: !silent });
+    if (!silent) {
+      renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+    } else if (_messagesThreadNeedsInitialScroll) {
+      scheduleMessagesThreadScrollToBottom({ force: true });
+    }
   }
 }
 
@@ -22490,6 +22507,10 @@ async function bootstrapMessagesThread({ bootToken, threadId, targetUserId }) {
   const silent = messagesThreadHasCachedMessages(tid) || (Array.isArray(_messagesList) && _messagesList.length > 0);
   await loadMessagesForConversation(tid, { bootToken, silent });
   syncMessagesThreadComposerReady();
+  if (bootToken === _messagesThreadBootToken) {
+    scheduleMessagesThreadScrollToBottom({ force: true });
+    _messagesThreadNeedsInitialScroll = false;
+  }
 }
 
 function enterMessagesThreadRoute(threadId, targetUserId = "") {
@@ -22503,6 +22524,7 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
     return;
   }
 
+  _messagesThreadNeedsInitialScroll = true;
   _conversationId = tid;
   const threadCache = tid ? getThreadMessagesCache(tid) : null;
   if (threadCache?.loadedOnce) {
@@ -22543,6 +22565,7 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   syncMessagesThreadComposerReady();
   wireMessagesThreadKeyboardOnce();
   syncMessagesThreadComposerInset();
+  scheduleMessagesThreadScrollToBottom({ force: true });
   beginMessagesThreadEnterTransition();
   if (_chatHeaderUser?.userId) void loadMessagesThreadPartnerMeta(_chatHeaderUser.userId);
   void bootstrapMessagesThread({ bootToken, threadId: tid, targetUserId: uid });
@@ -22773,14 +22796,13 @@ function bindMessagesPageOnce() {
   const composer = document.getElementById("messagesComposerInput");
   if (composer && !composer.dataset.boundMessagesComposer) {
     composer.dataset.boundMessagesComposer = "1";
+    composer.addEventListener("input", () => {
+      syncMessagesComposerInputHeight(composer);
+      scrollMessagesMountToBottom({ force: true });
+    });
     composer.addEventListener("focus", () => {
       syncMessagesThreadComposerInset();
-      scrollMessagesMountToBottom({ force: true });
-      window.setTimeout(() => {
-        syncMessagesThreadComposerInset();
-        scrollMessagesMountToBottom({ force: true });
-      }, 60);
-      window.setTimeout(syncMessagesThreadComposerInset, 280);
+      scheduleMessagesThreadScrollToBottom({ force: true });
     });
     composer.addEventListener("blur", () => {
       window.setTimeout(syncMessagesThreadComposerInset, 60);

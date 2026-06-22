@@ -1,23 +1,18 @@
-/** Nabad song verification — lightweight “N” quality mark on tracks. */
+/** Nabad song verification — single “creator” mark for real creative effort. */
 
 export const NABAD_VERIFICATION = {
-  VERIFIED: "verified",
-  CO_CREATED: "co_created",
-  CREATED_WITH: "created_with",
+  CREATOR: "creator",
 };
 
 const VALID = new Set(Object.values(NABAD_VERIFICATION));
 
 export const NABAD_VERIFY_MESSAGES = {
-  [NABAD_VERIFICATION.VERIFIED]: "Created and verified within Nabad AI",
-  [NABAD_VERIFICATION.CO_CREATED]: "Co-created by the creator and Nabad AI",
-  [NABAD_VERIFICATION.CREATED_WITH]: "Created using Nabad AI",
+  [NABAD_VERIFICATION.CREATOR]:
+    "Your melody reference and creative input — not a remix, mashup, or persona reuse.",
 };
 
 export const NABAD_VERIFY_LABELS = {
-  [NABAD_VERIFICATION.VERIFIED]: "Verified by Nabad",
-  [NABAD_VERIFICATION.CO_CREATED]: "Creator + Nabad",
-  [NABAD_VERIFICATION.CREATED_WITH]: "Created with Nabad",
+  [NABAD_VERIFICATION.CREATOR]: "Creator mark",
 };
 
 export function nabadVerificationFlatLabel(state) {
@@ -55,89 +50,74 @@ function isNabadGeneratedTrack(track) {
   return false;
 }
 
-/** Infer verification tier from track metadata (retroactive + new). */
-export function inferNabadVerification(track) {
-  if (!track || typeof track !== "object") return null;
-  const meta = track.meta || {};
-  if (VALID.has(meta.nabadVerification)) return meta.nabadVerification;
-  if (!isNabadGeneratedTrack(track)) return null;
-
-  const mode = String(meta.mode || "").toLowerCase();
-  const kind = String(track.kind || "full").toLowerCase();
-  const userLyrics = String(meta.lyricsInput || "").trim();
-  const finalPrompt = String(meta.finalPrompt || meta.prompt || "").trim();
-
-  const externalContent = Boolean(
-    meta.externalLyrics ||
-      meta.importedLyrics ||
-      meta.lyricsSource === "external" ||
-      meta.lyricsSource === "import" ||
-      meta.searchTemplateId ||
-      meta.remixOfHubPostId ||
+function usesReusedMetadata(meta) {
+  return Boolean(
+    meta.personaId ||
       meta.remixOf ||
+      meta.remixOfHubPostId ||
       meta.mashupOf ||
-      meta.referenceMode ||
-      meta.hasReference ||
-      meta.referenceInstrumentalOnly ||
-      meta.vocalRefOrigin ||
-      mode === "upload" ||
-      mode === "import",
+      meta.searchTemplateId ||
+      meta.vocalRefOrigin === "remix" ||
+      String(meta.mode || "").toLowerCase().includes("remix") ||
+      String(meta.mode || "").toLowerCase().includes("hub remix"),
   );
+}
 
-  if (externalContent) return NABAD_VERIFICATION.CREATED_WITH;
+function hasOwnMelodyReference(meta) {
+  if (meta.hasReference || meta.referenceMode) return true;
+  const origin = String(meta.vocalRefOrigin || "").trim();
+  if (origin === "record" || origin === "upload") return true;
+  const mode = String(meta.mode || "").toLowerCase();
+  if (mode.includes("reference") || mode.includes("melody")) return true;
+  return false;
+}
+
+/** User did more than tap Generate on an empty AI-filled form. */
+function userCreativeEffort(meta) {
+  if (meta.lyricsEditedByUser) return true;
+
+  const userLyrics = String(meta.lyricsInput || "").trim();
+  if (userLyrics && !meta.lyricsGeneratedInNabad) return true;
+
+  const origin = String(meta.vocalRefOrigin || "").trim();
+  if (origin === "record") return true;
+
+  if (origin === "upload" && userLyrics) return true;
 
   const aiDraft = aiLyricsDraftFromMeta(meta);
-  const lyricsEdited = Boolean(
-    meta.lyricsEditedByUser ||
-      (meta.lyricsGeneratedInNabad &&
-        aiDraft &&
-        userLyrics &&
-        normalizeLyricsCompare(userLyrics) !== normalizeLyricsCompare(aiDraft)) ||
-      (userLyrics &&
-        finalPrompt &&
-        !aiDraft &&
-        normalizeLyricsCompare(userLyrics) !== normalizeLyricsCompare(finalPrompt)),
-  );
-  if (lyricsEdited) return NABAD_VERIFICATION.CO_CREATED;
-
-  if (
-    kind === "instrumental" ||
-    kind === "sound" ||
-    mode.includes("instrumental") ||
-    mode === "sound" ||
-    mode === "hum" ||
-    mode === "photo" ||
-    mode === "challenge"
-  ) {
-    return NABAD_VERIFICATION.VERIFIED;
+  if (userLyrics && aiDraft && normalizeLyricsCompare(userLyrics) !== normalizeLyricsCompare(aiDraft)) {
+    return true;
   }
 
-  if (meta.lyricsGeneratedInNabad && !lyricsEdited) {
-    return NABAD_VERIFICATION.VERIFIED;
-  }
+  return false;
+}
 
-  if (aiDraft && userLyrics && normalizeLyricsCompare(userLyrics) === normalizeLyricsCompare(aiDraft)) {
-    return NABAD_VERIFICATION.VERIFIED;
-  }
+/** Show the plain N pill only for original creative work with a melody reference. */
+export function inferNabadVerification(track) {
+  if (!track || typeof track !== "object") return null;
+  if (!isNabadGeneratedTrack(track)) return null;
 
-  if (userLyrics || finalPrompt || meta.styleInput || meta.styleSent) {
-    return NABAD_VERIFICATION.VERIFIED;
-  }
+  const meta = track.meta || {};
+  if (usesReusedMetadata(meta)) return null;
+  if (!hasOwnMelodyReference(meta)) return null;
+  if (!userCreativeEffort(meta)) return null;
 
-  return NABAD_VERIFICATION.CREATED_WITH;
+  return NABAD_VERIFICATION.CREATOR;
 }
 
 export function resolveNabadVerification(track) {
-  const stored = track?.meta?.nabadVerification;
-  if (VALID.has(stored)) return stored;
   return inferNabadVerification(track);
 }
 
 export function stampNabadVerificationMeta(meta, trackCtx = {}) {
   const base = { ...(meta || {}) };
-  if (VALID.has(base.nabadVerification)) return base;
   const inferred = inferNabadVerification({ ...trackCtx, meta: base });
-  if (!inferred) return base;
+  if (!inferred) {
+    if (!base.nabadVerification) return base;
+    const next = { ...base };
+    delete next.nabadVerification;
+    return next;
+  }
   return { ...base, nabadVerification: inferred };
 }
 
@@ -145,18 +125,12 @@ export function nabadVerificationMessage(state) {
   return NABAD_VERIFY_MESSAGES[state] || "";
 }
 
-/** Small inline “N” pill — `<span role="button">` so it can live inside row/card `<button>`s without breaking layout. */
+/** Small inline “N” pill — plain style only. */
 export function nabadVerificationBadgeHtml(state, opts = {}) {
   if (!VALID.has(state)) return "";
   const msg = nabadVerificationMessage(state);
-  const cls =
-    state === NABAD_VERIFICATION.VERIFIED
-      ? "nabadVerifyBadge--verified"
-      : state === NABAD_VERIFICATION.CO_CREATED
-        ? "nabadVerifyBadge--coCreated"
-        : "nabadVerifyBadge--createdWith";
   const size = opts.size === "sm" ? " nabadVerifyBadge--sm" : "";
-  return `<span role="button" tabindex="0" class="nabadVerifyBadge ${cls}${size}" data-nabad-verify="${state}" aria-label="${msg}" title="${msg}"><span class="nabadVerifyBadgeN" aria-hidden="true">N</span></span>`;
+  return `<span role="button" tabindex="0" class="nabadVerifyBadge${size}" data-nabad-verify="${state}" aria-label="${msg}" title="${msg}"><span class="nabadVerifyBadgeN" aria-hidden="true">N</span></span>`;
 }
 
 export function nabadVerificationBadgeForTrack(track, opts = {}) {

@@ -16438,9 +16438,10 @@ function backfillNabadVerificationInLibrary() {
     const items = loadLibrary();
     let changed = false;
     const next = items.map((t) => {
-      if (t?.meta?.nabadVerification) return t;
       const meta = stampNabadVerificationMeta(t.meta, t);
-      if (!meta.nabadVerification || meta.nabadVerification === t.meta?.nabadVerification) return t;
+      const prev = t.meta?.nabadVerification || "";
+      const nextMark = meta.nabadVerification || "";
+      if (prev === nextMark && meta.nabadVerification === t.meta?.nabadVerification) return t;
       changed = true;
       return { ...t, meta };
     });
@@ -38616,6 +38617,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         instrumentalSelected,
         referenceInstrumentalOnly,
         hasReference: Boolean(hasReference),
+        vocalRefOrigin: vocalRefOrigin || undefined,
+        personaId: personaIdSel || undefined,
         lyricsGeneratedInNabad: _lyricsGeneratedInNabad,
         generatedLyrics: aiLyricsDraft || undefined,
         nabadAiLyricsDraft: aiLyricsDraft || undefined,

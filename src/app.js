@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260622dmSquircleAv";
+const APP_BUILD = "20260622dmKeyboardFix2";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -20834,11 +20834,22 @@ function syncMessagesThreadComposerReady() {
 
 function clearMessagesThreadComposerInset() {
   document.body.classList.remove("messagesThreadKeyboardOpen");
+  const page = document.getElementById("messagesThreadPage");
+  if (page) {
+    page.style.removeProperty("height");
+    page.style.removeProperty("transform");
+  }
   try {
-    document.body.style.removeProperty("--messages-composer-bottom");
     document.body.style.removeProperty("--messages-composer-pad-bottom");
-    document.body.style.removeProperty("--messages-thread-mount-pad-bottom");
   } catch {}
+}
+
+function measureMessagesKeyboardInset() {
+  const vv = window.visualViewport;
+  if (!vv) return 0;
+  const layoutH = document.documentElement.clientHeight;
+  const visibleBottom = vv.offsetTop + vv.height;
+  return Math.max(0, Math.round(layoutH - visibleBottom));
 }
 
 function syncMessagesThreadComposerInset() {
@@ -20847,31 +20858,26 @@ function syncMessagesThreadComposerInset() {
     return;
   }
   const vv = window.visualViewport;
-  let keyboardInset = 0;
-  if (vv) {
-    keyboardInset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
-  }
-  const composerBlock = 68;
+  const page = document.getElementById("messagesThreadPage");
+  if (!vv || !page) return;
+
+  const keyboardInset = measureMessagesKeyboardInset();
+  const vvHeight = Math.max(1, Math.round(vv.height));
+  const vvTop = Math.max(0, Math.round(vv.offsetTop));
+
   if (keyboardInset > 0) {
-    document.body.classList.add("messagesThreadKeyboardOpen");
-    document.body.style.setProperty("--messages-composer-bottom", `${keyboardInset}px`);
-    document.body.style.setProperty("--messages-composer-pad-bottom", "10px");
-    document.body.style.setProperty(
-      "--messages-thread-mount-pad-bottom",
-      `${composerBlock + keyboardInset}px`,
-    );
+    page.style.height = `${vvHeight}px`;
+    page.style.transform = vvTop > 0 ? `translateY(${vvTop}px)` : "";
   } else {
-    document.body.classList.remove("messagesThreadKeyboardOpen");
-    document.body.style.setProperty("--messages-composer-bottom", "0px");
-    document.body.style.setProperty(
-      "--messages-composer-pad-bottom",
-      "max(10px, env(safe-area-inset-bottom, 0px))",
-    );
-    document.body.style.setProperty(
-      "--messages-thread-mount-pad-bottom",
-      `calc(${composerBlock}px + max(10px, env(safe-area-inset-bottom, 0px)))`,
-    );
+    page.style.removeProperty("height");
+    page.style.removeProperty("transform");
   }
+
+  document.body.classList.toggle("messagesThreadKeyboardOpen", keyboardInset > 0);
+  document.body.style.setProperty(
+    "--messages-composer-pad-bottom",
+    keyboardInset > 0 ? "0px" : "max(10px, env(safe-area-inset-bottom, 0px))",
+  );
 }
 
 function wireMessagesThreadKeyboardOnce() {

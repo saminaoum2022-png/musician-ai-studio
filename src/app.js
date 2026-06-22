@@ -20944,8 +20944,6 @@ async function messagesApi(path, opts = {}) {
   }
 }
 
-let _messagesInboxFilter = "all";
-
 const DM_SONG_MARKER = "nabad_dm";
 
 function dmShareKindFromTrack(t) {

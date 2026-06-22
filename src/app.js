@@ -21934,19 +21934,29 @@ function setUserPublicLoading(on, username = "") {
   }
 }
 
+function userPublicRelationLabel(stats) {
+  if (!stats) return "";
+  const following = Boolean(stats.isFollowing);
+  const followsYou = Boolean(stats.followsViewer);
+  if (following && followsYou) return "Following each other";
+  if (followsYou) return "Follows you";
+  return "";
+}
+
 function renderUserPublicFollowButton() {
   const btn = els.btnUserPublicFollow;
   const msgBtn = els.btnUserPublicMessage;
-  const followsYou = els.userPublicFollowsYou;
+  const relationEl = els.userPublicFollowsYou;
   const followRow = els.userPublicFollowRow;
   const targetId = String(currentUserPublicProfileId || "").trim();
   const mine = String(authSession?.user?.id || "").trim();
   const canShow = Boolean(targetId && mine && targetId !== mine);
   if (followRow) followRow.hidden = !canShow;
   if (msgBtn) msgBtn.hidden = !(canShow && MESSAGES_FEATURE_ENABLED);
-  if (followsYou) {
-    const showFollowsYou = canShow && Boolean(currentUserPublicSocialStats?.followsViewer);
-    followsYou.hidden = !showFollowsYou;
+  if (relationEl) {
+    const label = canShow ? userPublicRelationLabel(currentUserPublicSocialStats) : "";
+    relationEl.textContent = label;
+    relationEl.hidden = !label;
   }
   if (!btn) return;
   btn.hidden = !canShow;

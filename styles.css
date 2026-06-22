@@ -14507,10 +14507,24 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   justify-content: center;
   gap: 8px;
   width: 100%;
-  margin: 6px auto 2px;
+  margin: 4px auto 2px;
   padding: 0 4px;
 }
 .userPublicFollowRow[hidden]{
+  display: none !important;
+}
+.userPublicRelationStatus{
+  margin: 8px 0 0;
+  padding: 0 8px;
+  width: 100%;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  color: rgba(183, 176, 210, 0.62);
+}
+.userPublicRelationStatus[hidden]{
   display: none !important;
 }
 .userPublicFollowBtn{
@@ -14520,31 +14534,26 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   margin-top: 0;
   padding: 0 20px;
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.16);
-  background:
-    radial-gradient(100% 120% at 20% 0%, rgba(124,92,255,0.22), transparent 58%),
-    linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.045));
-  color: rgba(247,250,255,0.96);
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  color: rgba(232,238,247,0.88);
   font-size: 13px;
-  font-weight: 850;
+  font-weight: 750;
   cursor: pointer;
-  -webkit-backdrop-filter: blur(22px) saturate(155%);
-          backdrop-filter: blur(22px) saturate(155%);
-  box-shadow:
-    0 10px 28px rgba(0,0,0,0.20),
-    inset 0 1px 0 rgba(255,255,255,0.10);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+          backdrop-filter: blur(14px) saturate(140%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
   -webkit-tap-highlight-color: transparent;
-  transition: transform 140ms ease, border-color 180ms ease, background 180ms ease;
+  transition: transform 140ms ease, border-color 180ms ease, background 180ms ease, color 180ms ease;
 }
 .userPublicFollowBtn[data-following="true"]{
-  color: rgba(232,238,247,0.82);
-  border-color: rgba(124,92,255,0.28);
-  background:
-    radial-gradient(100% 120% at 20% 0%, rgba(124,92,255,0.12), transparent 58%),
-    linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
-  box-shadow:
-    0 8px 22px rgba(0,0,0,0.16),
-    inset 0 1px 0 rgba(255,255,255,0.08);
+  color: rgba(223,231,251,0.68);
+  border-color: rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.userPublicFollowBtn[data-following="false"]{
+  border-color: rgba(255,255,255,0.16);
 }
 .userPublicFollowBtn:active{
   transform: scale(0.98);
@@ -14555,43 +14564,18 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   height: 36px;
   padding: 0 20px;
   border-radius: 999px;
-  border: 1px solid rgba(35,213,171,0.34);
-  background:
-    radial-gradient(100% 120% at 20% 0%, rgba(35,213,171,0.18), transparent 58%),
-    linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04));
-  color: rgba(215,255,244,0.96);
+  border: 1px solid rgba(124,92,255,0.32);
+  background: rgba(124,92,255,0.16);
+  color: rgba(236, 228, 255, 0.96);
   font-size: 13px;
-  font-weight: 850;
+  font-weight: 750;
   cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(124,92,255,0.14);
   -webkit-tap-highlight-color: transparent;
   transition: transform 140ms ease, border-color 180ms ease, background 180ms ease;
 }
 .userPublicMessageBtn:active{
   transform: scale(0.98);
-}
-.userPublicFollowsYou{
-  flex: 0 0 auto;
-  min-height: 36px;
-  height: 36px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(35,213,171,0.30);
-  background:
-    radial-gradient(90% 120% at 20% 0%, rgba(35,213,171,0.18), transparent 62%),
-    linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.025));
-  color: rgba(215,255,244,0.92);
-  font-size: 12px;
-  font-weight: 850;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-  box-shadow:
-    0 8px 22px rgba(0,0,0,0.14),
-    inset 0 1px 0 rgba(255,255,255,0.08);
-}
-.userPublicFollowsYou[hidden]{
-  display: none;
 }
 .userPublicBio{
   min-width: 0;

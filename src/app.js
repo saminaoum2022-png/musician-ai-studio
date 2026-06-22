@@ -10319,7 +10319,10 @@ async function mergeCloudSongsIntoLocalLibrary() {
   merged.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
   const nextPublicSig = profilePublicPostsSig(merged);
   saveLibrary(merged);
-  if (prevPublicSig !== nextPublicSig) invalidateProfileActivitiesCache();
+  if (prevPublicSig !== nextPublicSig) {
+    invalidateProfileActivitiesCache();
+    invalidateOwnerPublicPostsCache();
+  }
   return prevPublicSig !== nextPublicSig;
   } finally {
     _mergeCloudInFlight = false;
@@ -10475,11 +10478,23 @@ async function renderProfileActivities(opts = {}) {
     Date.now() - snap.at < PROFILE_ACT_SNAPSHOT_MS &&
     snap.html &&
     !snap.html.includes("followAct--skel");
-  if (!opts.deferCloud) void mergeCloudSongsIntoLocalLibrary();
+  if (!opts.deferCloud) {
+    await mergeCloudSongsIntoLocalLibrary();
+    await refreshOwnerPublicPostsCache({ force: opts.force });
+  } else if (!getOwnerPublicPostsSongs()) {
+    void refreshOwnerPublicPostsCache().then(() => {
+      if ((document.body.getAttribute("data-route") || "") === "profile" && _profileSongsSegment === "activities") {
+        void renderProfileActivities({ deferCloud: true });
+      }
+    });
+  }
   try {
-  const libRows = loadLibrary()
-    .filter((t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile))
-    .map((t) => ({ ...t, userId: String(t.userId || uid) }));
+  let libRows = (getOwnerPublicPostsSongs() || []).filter((t) => String(t?.url || "").trim());
+  if (!libRows.length) {
+    libRows = loadLibrary()
+      .filter((t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile))
+      .map((t) => ({ ...t, userId: String(t.userId || uid) }));
+  }
   const pubN = libRows.length;
   if (countEl) {
     countEl.textContent = pubN ? `${pubN} PUBLIC` : "";
@@ -12233,6 +12248,10 @@ const PROFILE_ACT_MIN_FETCH_GAP_MS = 45000;
 const PROFILE_ACT_SNAPSHOT_KEY = "nabad_profile_act_snap_v3";
 const PROFILE_ACTIVITIES_PAGE_SIZE = 6;
 let _profileActivitiesShown = PROFILE_ACTIVITIES_PAGE_SIZE;
+/** Max public posts fetched for profile stats, Posts tab, and public profile link. */
+const PROFILE_PUBLIC_POSTS_LIMIT = 120;
+const OWNER_PUBLIC_POSTS_CACHE_MS = 45000;
+let _ownerPublicPostsCache = null;
 
 function countFollowActsInHtml(html) {
   return (String(html || "").match(/class="followAct/g) || []).length;
@@ -12291,9 +12310,7 @@ function wireProfileActivitiesLoadMoreOnce() {
       return;
     }
     haptic("light");
-    const total = loadLibrary().filter(
-      (t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile),
-    ).length;
+    const total = getOwnerPublicPostCount();
     _profileActivitiesShown = Math.min(total, _profileActivitiesShown + PROFILE_ACTIVITIES_PAGE_SIZE);
     void renderProfileActivities({ extend: true, deferCloud: true });
   });
@@ -12337,6 +12354,7 @@ function invalidateProfileActivitiesCache() {
 
 function clearSignedInUiCaches() {
   invalidateProfileActivitiesCache();
+  invalidateOwnerPublicPostsCache();
   _friendsFeedSnapshot = null;
   try {
     sessionStorage.removeItem(FRIENDS_FEED_SNAPSHOT_KEY);
@@ -20322,9 +20340,87 @@ async function supabaseFetchPublicLibraryForUserId(userId) {
   if (!uid) return [];
   const batch = await supabaseFetchPublicLibraryRowsForFilter(
     `user_id=eq.${encodeURIComponent(uid)}`,
-    80,
+    PROFILE_PUBLIC_POSTS_LIMIT,
   );
   return batch.get(uid) || [];
+}
+
+function invalidateOwnerPublicPostsCache() {
+  _ownerPublicPostsCache = null;
+}
+
+function enrichOwnerPublicPostsFromLibrary(cloudSongs) {
+  const local = loadLibrary();
+  const bySig = new Map();
+  const byCloudId = new Map();
+  for (const t of local) {
+    bySig.set(librarySyncSigOf(t), t);
+    const cid = String(t.cloudSongId || "").trim();
+    if (cid) byCloudId.set(cid, t);
+  }
+  return (cloudSongs || []).map((c) => {
+    let localCopy = byCloudId.get(String(c.id || "")) || bySig.get(librarySyncSigOf(c));
+    if (!localCopy) {
+      const taskId = String(c.taskId || "").trim();
+      const audioId = String(c.audioId || "").trim();
+      if (taskId && audioId) {
+        localCopy = local.find(
+          (t) => String(t.taskId || "").trim() === taskId && String(t.audioId || "").trim() === audioId,
+        );
+      }
+    }
+    if (localCopy) return mergeLibraryCloudWithLocal(c, localCopy);
+    return { ...c, publicOnProfile: true };
+  });
+}
+
+function getOwnerPublicPostsSongs() {
+  return _ownerPublicPostsCache?.songs || null;
+}
+
+function getOwnerPublicPostCount() {
+  const cached = _ownerPublicPostsCache?.songs;
+  if (Array.isArray(cached)) return cached.length;
+  return loadLibrary().filter((t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile)).length;
+}
+
+/** Cloud is source of truth for public posts — same list visitors see on #/u/you. */
+async function refreshOwnerPublicPostsCache(opts = {}) {
+  const uid = authSession?.user?.id;
+  if (!uid) {
+    _ownerPublicPostsCache = { at: Date.now(), songs: [] };
+    return [];
+  }
+  const force = Boolean(opts.force);
+  if (
+    !force &&
+    _ownerPublicPostsCache &&
+    Date.now() - _ownerPublicPostsCache.at < OWNER_PUBLIC_POSTS_CACHE_MS
+  ) {
+    return _ownerPublicPostsCache.songs;
+  }
+  try {
+    const batch = await supabaseFetchPublicLibraryRowsForFilter(
+      `user_id=eq.${encodeURIComponent(String(uid))}`,
+      PROFILE_PUBLIC_POSTS_LIMIT,
+    );
+    const raw = batch.get(String(uid)) || [];
+    const songs = enrichOwnerPublicPostsFromLibrary(raw).map((t) => ({
+      ...t,
+      userId: String(uid),
+    }));
+    const prevLen = _ownerPublicPostsCache?.songs?.length;
+    _ownerPublicPostsCache = { at: Date.now(), songs };
+    if (prevLen != null && prevLen !== songs.length) {
+      _profileActSnapshot = null;
+      try {
+        sessionStorage.removeItem(PROFILE_ACT_SNAPSHOT_KEY);
+      } catch {}
+    }
+    return songs;
+  } catch {
+    return _ownerPublicPostsCache?.songs || [];
+  }
 }
 
 /** One request for many followed creators' public libraries (Friends feed). */
@@ -25939,6 +26035,8 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
       ? "On Discover — listeners can find and play it."
       : "Removed from Discover. Still in All songs.",
   );
+  invalidateOwnerPublicPostsCache();
+  void refreshOwnerPublicPostsCache({ force: true });
   if (next.publicOnProfile) {
     if (!track.publicOnProfile) {
       notifyPublicSongPublished(next);
@@ -26239,7 +26337,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
   if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
   const profMap = await fetchProfilesByUserIdsMap([String(prof.user_id || "")]);
   if (!stillCurrent()) return;
-  const slice = sortLibraryForDisplay(songs).slice(0, 60);
+  const slice = sortLibraryForDisplay(songs);
   const byLine = `@${displayName}`;
   const paintPublicSongs = (tracks) => {
     if (!stillCurrent() || !els.userPublicSongs) return;
@@ -28968,11 +29066,20 @@ function renderProfileOwnStats() {
   const lib = loadLibrary();
   const pubLib = lib.filter((t) => Boolean(t.publicOnProfile));
   const pubLibCount = pubLib.length;
+  const publicPostCount = getOwnerPublicPostCount();
   const totalLikes = HUB_FEATURE_ENABLED ? hubItems.reduce((sum, p) => sum + Number(p.likes || 0), 0) : 0;
-  // Hub off: second pill = Public (eye icon in HTML); third = Likes (0 until discovery feed).
-  const songCountForPills = HUB_FEATURE_ENABLED ? hubItems.length : lib.length;
+  // Hub off: stats Songs pill = public posts (same as Posts tab + public profile link).
+  const songCountForPills = HUB_FEATURE_ENABLED ? hubItems.length : publicPostCount;
   const hubLikesOnly = HUB_FEATURE_ENABLED ? totalLikes : 0;
-  const songCountForOwnHeader = HUB_FEATURE_ENABLED ? hubItems.length : lib.length;
+  const songCountForOwnHeader = HUB_FEATURE_ENABLED ? hubItems.length : publicPostCount;
+  if (authSession?.user?.id && !HUB_FEATURE_ENABLED) {
+    const prevCount = publicPostCount;
+    void refreshOwnerPublicPostsCache().then((songs) => {
+      if (Array.isArray(songs) && songs.length !== prevCount) {
+        try { renderProfileOwnStats(); } catch {}
+      }
+    });
+  }
 
   if (els.profileOwnSongCount) {
     if (HUB_FEATURE_ENABLED) {
@@ -29041,8 +29148,8 @@ function renderProfileOwnStats() {
       if (totalLikes > 0) bits.push(`<strong>${totalLikes}</strong> like${totalLikes === 1 ? "" : "s"}`);
       lineEl.innerHTML =
         bits.length > 0 ? bits.join('<span class="profileAuraStatsSepDot" aria-hidden="true"> · </span>') : "No releases yet";
-    } else if (pubLibCount) {
-      lineEl.innerHTML = `<strong>${pubLibCount}</strong> public on your profile link`;
+    } else if (publicPostCount) {
+      lineEl.innerHTML = `<strong>${publicPostCount}</strong> public on your profile link`;
     } else if (lib.length) {
       lineEl.textContent = "No Library songs marked public yet — use ⋯ on each row in Library.";
     } else {
@@ -30235,7 +30342,7 @@ function renderProfileSongs(opts = {}) {
   const actList = document.getElementById("profileActivitiesList");
   const libEl = document.getElementById("libraryList");
   if (_profileSongsSegment === "activities") {
-    void renderProfileActivities({ force: !loadLibrary().length, deferCloud });
+    void renderProfileActivities({ force: !getOwnerPublicPostsSongs()?.length });
     return;
   }
   if (actList) actList.hidden = true;

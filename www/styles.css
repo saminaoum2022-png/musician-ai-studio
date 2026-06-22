@@ -6744,7 +6744,7 @@ h2{ margin:0 0 12px; font-size:16px; letter-spacing:-0.01em; }
 .appScreenHeader{
   position: relative;
   z-index: 1;
-  padding: 8px 4px 4px;
+  padding: 4px 2px 14px;
   min-width: 0;
   max-width: 100%;
   margin: 0 0 14px;
@@ -6760,6 +6760,13 @@ h2{ margin:0 0 12px; font-size:16px; letter-spacing:-0.01em; }
   letter-spacing: -0.04em;
   color: var(--text);
   text-shadow: 0 0 40px rgba(124, 92, 255, 0.25);
+}
+/* Hub tab screens — title row matches Discover (size + left edge). */
+.discoveryStudioHead .appScreenTitle,
+.messagesHeadCopy .appScreenTitle,
+.settingsPageHeadText .appScreenTitle,
+.appScreenHeader .appScreenTitle{
+  margin: 0;
 }
 /* In-profile panels (e.g. “Your Library on the web”). */
 .appScreenTitle.appScreenTitle--panel{
@@ -17130,18 +17137,10 @@ body[data-route="settings"] main.grid{
   flex-direction: column;
   gap: 14px;
   margin: 0 0 22px;
-  padding: 6px 2px 0;
+  padding: 4px 2px 0;
 }
 .settingsBack{
   margin: 0 0 2px -4px;
-}
-.settingsPageTitle{
-  margin: 0;
-  color: #f3f6ff;
-  font-size: clamp(28px, 7vw, 32px);
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1.05;
 }
 .settingsPageSub{
   margin: 6px 0 0;
@@ -21222,13 +21221,11 @@ body[data-route="discover"] > .app{
 .discoveryFeedStatus,
 .discoveryCardStack,
 .discoveryStudioFooter,
-.friendsPage .followActStack{
+.friendsPage .followActStack,
+.activityPage .discoverFeedTabs,
+.activityPage .activityFeed{
   position: relative;
   z-index: 1;
-}
-body[data-route="friends"] .friendsPage .discoveryStudioHead{
-  padding-right: 14px;
-  padding-left: 6px;
 }
 .discoveryStudioHead{
   display: flex;
@@ -27235,24 +27232,8 @@ section.activityPage{
   width: 100%;
   max-width: 640px;
   margin: 0 auto;
-  padding: 8px max(18px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)) 88px;
+  padding: 0 0 88px;
   box-sizing: border-box;
-}
-body[data-route="activity"] .app{
-  padding-left: 0;
-  padding-right: 0;
-}
-.activityHead{
-  margin: 0 0 14px;
-  padding: 8px 4px 0;
-  border-bottom: 0;
-}
-.activityTitle{
-  margin: 0 0 14px;
-  color: #f8faff;
-  font-size: clamp(22px, 5.5vw, 28px);
-  font-weight: 800;
-  letter-spacing: -0.03em;
 }
 .activityPage .discoverFeedTabs{
   position: static;
@@ -27658,7 +27639,7 @@ section.messagesThreadPage{
   box-sizing: border-box;
 }
 .messagesPage{
-  padding: 8px max(18px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)) 88px;
+  padding: 0 0 88px;
   background: var(--bg);
 }
 .messagesThreadPage{
@@ -27750,11 +27731,6 @@ body[data-route="messages-thread"] main.grid{
     min-height: 0;
   }
 }
-body[data-route="messages"] .app,
-body[data-route="messages-thread"] .app{
-  padding-left: 0;
-  padding-right: 0;
-}
 body[data-route="messages"]{
   background: var(--bg);
 }
@@ -27799,7 +27775,7 @@ body[data-route="messages"]{
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 4px 4px 8px;
+  padding: 4px 2px 8px;
   min-width: 0;
 }
 .messagesThreadHead{
@@ -27818,13 +27794,6 @@ body[data-route="messages"]{
 .messagesHeadCopy{
   flex: 1 1 auto;
   min-width: 0;
-}
-.messagesTitle{
-  margin: 0;
-  color: #f8faff;
-  font-size: clamp(20px, 5vw, 26px);
-  font-weight: 800;
-  letter-spacing: -0.03em;
 }
 .messagesLead{
   margin: 4px 0 0;

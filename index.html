@@ -70,7 +70,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260623activityPills" />
+    <link rel="stylesheet" href="./styles.css?v=20260623screenTitles" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1119,16 +1119,18 @@
         </section>
 
         <section class="activityPage wide" data-route="activity" id="activityPage">
-          <header class="activityHead">
-            <h2 class="activityTitle" id="activityTitle">Activity</h2>
-            <nav id="activityFilterTabs" class="discoverFeedTabs" aria-label="Activity filters">
+          <header class="discoveryStudioHead">
+            <div class="discoveryStudioTitles">
+              <h2 class="discoveryStudioH2 appScreenTitle" id="activityTitle">Activity</h2>
+            </div>
+          </header>
+          <nav id="activityFilterTabs" class="discoverFeedTabs" aria-label="Activity filters">
               <div class="discoverFeedTabsTrack" role="tablist">
                 <button type="button" class="discoverFeedTab is-active" role="tab" aria-selected="true" data-activity-filter="all">All</button>
                 <button type="button" class="discoverFeedTab" role="tab" aria-selected="false" data-activity-filter="social">Social</button>
                 <button type="button" class="discoverFeedTab" role="tab" aria-selected="false" data-activity-filter="achievements">Achievements</button>
               </div>
-            </nav>
-          </header>
+          </nav>
           <div id="activityStatus" class="activityStatus" role="status" aria-live="polite" hidden></div>
           <div id="activityFeed" class="activityFeed" aria-label="Activity feed"></div>
           <div id="activityLoadMore" class="activityLoadMore" hidden aria-hidden="true">
@@ -1230,7 +1232,7 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
             </button>
             <div class="messagesHeadCopy">
-              <h2 class="messagesTitle appScreenTitle">Messages</h2>
+              <h2 class="discoveryStudioH2 appScreenTitle">Messages</h2>
               <p class="messagesLead" id="messagesLead">Chat with creators you follow.</p>
             </div>
           </header>
@@ -2891,7 +2893,7 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
             </a>
             <div class="settingsPageHeadText">
-              <h1 class="settingsPageTitle">Settings</h1>
+              <h1 class="discoveryStudioH2 appScreenTitle">Settings</h1>
               <p class="settingsPageSub">Manage your account, creator tools and preferences.</p>
             </div>
           </header>

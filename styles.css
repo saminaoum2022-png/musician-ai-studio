@@ -28108,8 +28108,8 @@ body[data-route="messages"]{
   overscroll-behavior: contain;
   padding: 4px 2px 8px;
   -webkit-overflow-scrolling: touch;
-  scroll-padding-bottom: calc(var(--messages-composer-h, calc(60px + env(safe-area-inset-bottom, 0px))) + 8px);
-  padding-bottom: calc(var(--messages-composer-h, calc(60px + env(safe-area-inset-bottom, 0px))) + 8px);
+  scroll-padding-bottom: 8px;
+  padding-bottom: 8px;
 }
 .messagesThreadScrollAnchor{
   width: 100%;
@@ -28374,17 +28374,6 @@ body[data-route="messages-thread"] .messagesComposer{
   width: 100%;
   margin: 0;
   box-sizing: border-box;
-}
-html.is-web-shell body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesComposer{
-  position: relative;
-  left: auto;
-  right: auto;
-  bottom: auto;
-  width: 100%;
-  max-width: none;
-  margin: 0;
-  padding-left: max(12px, env(safe-area-inset-left, 0px));
-  padding-right: max(12px, env(safe-area-inset-right, 0px));
 }
 .messagesComposerShare{
   flex: 0 0 auto;

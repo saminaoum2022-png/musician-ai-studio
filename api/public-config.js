@@ -27,6 +27,7 @@ module.exports = async function handler(req, res) {
     JSON.stringify({
       supabaseUrl: process.env.SUPABASE_URL || "",
       supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "",
+      onesignalAppId: process.env.ONESIGNAL_APP_ID || "",
       // Optional UUID allowlist (env NABAD_CERTIFIED_USER_IDS) until
       // profiles.sound_certified is wired in Supabase.
       nabadCertifiedUserIds,

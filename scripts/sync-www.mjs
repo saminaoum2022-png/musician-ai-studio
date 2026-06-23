@@ -27,6 +27,15 @@ for (const [from, to] of copies) {
   console.log(`sync-www: ${from} → www/${to}`);
 }
 
+for (const worker of ["OneSignalSDKWorker.js", "OneSignalSDKUpdaterWorker.js"]) {
+  const src = path.join(root, worker);
+  const dest = path.join(root, "www", worker);
+  if (fs.existsSync(src)) {
+    fs.copyFileSync(src, dest);
+    console.log(`sync-www: ${worker} → www/${worker}`);
+  }
+}
+
 execSync("rsync -a src/ www/src/", { cwd: root, stdio: "inherit" });
 console.log("sync-www: src/ → www/src/");
 

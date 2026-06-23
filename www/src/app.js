@@ -39,10 +39,16 @@ import {
   resolveNabadVerification,
   stampNabadVerificationMeta,
 } from "./nabad-verification.js";
+import {
+  configurePushFromPublicConfig,
+  initPushNotifications,
+  logoutPushAuth,
+  syncPushAuth,
+} from "./push-notifications.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260623authPolish";
+const APP_BUILD = "20260623oneSignalPush";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -129,6 +135,7 @@ _bootSplashMinTimer = window.setTimeout(() => {
  *  — interim gate for the Profile "Verified Nabad Creator" badge until
  *  `profiles.sound_certified` is live in Supabase. */
 let _nabadCertifiedUserIds = new Set();
+let _onesignalAppId = "";
 
 /** Verified badges are gated by `profiles.sound_certified` or the optional UUID allowlist only. */
 const INTERIM_ALWAYS_SHOW_PUBLIC_PROFILE_VERIFIED = false;
@@ -1995,10 +2002,16 @@ let _resolvedApiBase = API_BASE;
 function setResolvedApiBase(base) {
   if (!isNativeShell()) {
     _resolvedApiBase = "";
+    try {
+      globalThis.__nabadApiBase = "";
+    } catch {}
     return;
   }
   const b = String(base || "").trim().replace(/\/$/, "");
   _resolvedApiBase = b;
+  try {
+    globalThis.__nabadApiBase = b;
+  } catch {}
 }
 /** Web always hits same-origin `/api/*`. Native uses resolved Vercel host (env.client.js). */
 function apiUrl(p) {
@@ -2043,6 +2056,8 @@ function applyPublicConfigPayload(d) {
   rawUrl = rawUrl.replace(/\/auth\/v1$/i, "");
   SUPABASE_URL = rawUrl;
   SUPABASE_ANON_KEY = String(d?.supabaseAnonKey || "");
+  configurePushFromPublicConfig(String(d?.onesignalAppId || "").trim());
+  _onesignalAppId = String(d?.onesignalAppId || "").trim();
   const ids = Array.isArray(d?.nabadCertifiedUserIds) ? d.nabadCertifiedUserIds : [];
   _nabadCertifiedUserIds = new Set(
     ids.map((x) => String(x || "").trim()).filter(Boolean),
@@ -2157,6 +2172,7 @@ function cachePublicConfigPayload(apiBase = "") {
       JSON.stringify({
         supabaseUrl: SUPABASE_URL,
         supabaseAnonKey: SUPABASE_ANON_KEY,
+        onesignalAppId: _onesignalAppId,
         nabadCertifiedUserIds: [..._nabadCertifiedUserIds],
         apiBase: String(apiBase || _resolvedApiBase || API_BASE || "").trim(),
       }),
@@ -2241,6 +2257,13 @@ async function loadPublicConfig() {
 
   if (ok && isNativeShell()) {
     await ensureNativeApiBaseResolved();
+  }
+  if (_onesignalAppId) {
+    try {
+      await initPushNotifications();
+    } catch (e) {
+      console.warn("[push] init after config failed", e);
+    }
   }
   return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 }
@@ -18288,6 +18311,11 @@ function saveAuthSession(sess, { persist = true } = {}) {
     if ((document.body.getAttribute("data-route") || "") === "profile") renderProfileSongs();
     else refreshOwnSongsUi();
   } catch {}
+  if (nextUserId) {
+    void syncPushAuth(nextUserId);
+  } else if (prevUserId || !sess) {
+    void logoutPushAuth();
+  }
   try {
     if (
       (document.body.getAttribute("data-route") || "") === "friends" &&
@@ -44963,6 +44991,17 @@ function clampNum(n, min, max) {
 }
 
 // Initial credits fetch (best effort)
+try {
+  globalThis.__nabadGetAuthToken = () => getSupabaseAuthToken();
+  globalThis.__nabadApplyRoute = () => {
+    try {
+      scheduleApplyRoute();
+    } catch {
+      safeApplyRoute();
+    }
+  };
+  globalThis.__nabadApiBase = _resolvedApiBase || "";
+} catch {}
 applyClientEnvBootstrap();
 loadPublicConfigFromCache();
 void refreshSunoCredits();

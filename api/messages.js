@@ -10,6 +10,7 @@ const {
   readJsonBody,
   callRpc,
 } = require("./_lib/credits-auth");
+const { queuePrivacySafePush } = require("./_lib/onesignal-push");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -497,6 +498,14 @@ async function handlePost(req, res, user) {
       clientMessageId: String(body?.clientMessageId || body?.client_message_id || "").trim(),
     });
     if (!sent.ok) return sendJson(res, 500, { ok: false, error: sent.error || "Send failed" });
+    const recipientId = threadPartnerId(thread, user.userId);
+    if (recipientId) {
+      queuePrivacySafePush({
+        userId: recipientId,
+        type: "dm_message",
+        entityId: thread.id,
+      });
+    }
     return sendJson(res, 200, { ok: true, threadId: thread.id, message: sent.message });
   }
 

@@ -1,8 +1,8 @@
 /**
  * Lightweight social API: follows + internal notifications.
  *
- * No push notifications and no cron. Follow actions write the notification row
- * immediately, then the app reads it when the user opens Settings/inbox.
+ * In-app rows live in social_notifications. Generic push alerts (no message
+ * content) are queued via OneSignal when configured.
  */
 
 const {
@@ -12,6 +12,7 @@ const {
   readJsonBody,
   callRpc,
 } = require("./_lib/credits-auth");
+const { queuePrivacySafePush } = require("./_lib/onesignal-push");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -620,7 +621,13 @@ async function insertNotification({ userId, type, actorUserId, entityId, metadat
     headers: { Prefer: "return=minimal" },
     body: JSON.stringify(body),
   });
-  return Boolean(ins.ok);
+  if (!ins.ok) return false;
+  queuePrivacySafePush({
+    userId: uid,
+    type: t,
+    entityId: body.entity_id,
+  });
+  return true;
 }
 
 const CHART_NOTIFY_MAX_RANK = 5;

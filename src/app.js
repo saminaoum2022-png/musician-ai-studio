@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260623bootSplashFix";
+const APP_BUILD = "20260623splashLogoOnly";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -78,7 +78,7 @@ try {
 }
 
 const IS_NATIVE_SHELL = typeof location !== "undefined" && location.protocol === "capacitor:";
-/** Boot splash: static logo + wordmark (see #bootSplash in index.html). */
+/** Boot splash: static N mark only (see #bootSplash in index.html). */
 const BOOT_SPLASH_MIN_MS = 1400;
 const BOOT_SPLASH_MAX_MS = 2800;
 const _bootSplashStartedAt = Date.now();
@@ -2762,7 +2762,7 @@ async function refreshNotificationsUnreadBadge({ force = false } = {}) {
 }
 
 function resolveEmptyHashRoute() {
-  if (!shouldSkipIntroOrOnboardingRoute()) return "intro";
+  if (!shouldSkipIntroOrOnboardingRoute()) return "auth";
   ensureAuthSessionUserFromToken();
   if (isAppLoggedIn() || getSupabaseAuthToken()) return "discover";
   if (isGuestModeEnabled()) return "discover";
@@ -2842,7 +2842,7 @@ function syncRoutePanelVisibility(wanted) {
 function routeApplyFallback(err) {
   console.error("[route] applyRoute failed", err);
   try { dismissBootSplash(); } catch {}
-  const fb = authSession?.user?.id ? "discover" : (shouldSkipIntroOrOnboardingRoute() ? "auth" : "intro");
+  const fb = authSession?.user?.id ? "discover" : "auth";
   syncRoutePanelVisibility(fb);
   document.body.classList.remove("pageTransitioning", "booting");
   const main = document.querySelector("main.grid");
@@ -3024,7 +3024,7 @@ function applyRoute({ passGen } = {}) {
     "settings", "profile", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
   ]);
   const onboardingParsed = parseOnboardingRoute(route);
-  let normalized = pendingPublicUsername ? "user" : (route === "start" ? "intro" : route);
+  let normalized = pendingPublicUsername ? "user" : (route === "start" ? "auth" : route);
   if (onboardingParsed) normalized = "onboarding";
   if (normalized === "discover") {
     try {
@@ -3086,7 +3086,13 @@ function applyRoute({ passGen } = {}) {
       history.replaceState(null, "", "#/discover");
     } catch {}
   }
-  if (shouldSkipIntroOrOnboardingRoute() && (wanted === "intro" || wanted === "onboarding")) {
+  if (wanted === "intro") {
+    wanted = isLoggedIn ? "discover" : "auth";
+    try {
+      history.replaceState(null, "", `#/${wanted}`);
+    } catch {}
+  }
+  if (shouldSkipIntroOrOnboardingRoute() && wanted === "onboarding") {
     wanted = isLoggedIn ? "discover" : "auth";
     try {
       history.replaceState(null, "", `#/${wanted}`);
@@ -3097,13 +3103,13 @@ function applyRoute({ passGen } = {}) {
     try { history.replaceState(null, "", "#/auth"); } catch {}
   }
   if (!HUB_FEATURE_ENABLED && normalized === "hub") {
-    wanted = isLoggedIn ? "discover" : (shouldSkipIntroOrOnboardingRoute() ? "auth" : "intro");
+    wanted = isLoggedIn ? "discover" : "auth";
     try {
       history.replaceState(null, "", `#/${wanted}`);
     } catch {}
   }
   if (!MESSAGES_FEATURE_ENABLED && (normalized === "messages" || normalized === "messages-thread")) {
-    wanted = isLoggedIn ? "friends" : (shouldSkipIntroOrOnboardingRoute() ? "auth" : "intro");
+    wanted = isLoggedIn ? "friends" : "auth";
     try {
       history.replaceState(null, "", `#/${wanted}`);
     } catch {}
@@ -3785,7 +3791,7 @@ function scheduleInitialHash() {
         try {
           location.hash = getInitialBootHash(() => authSession);
         } catch {
-          location.hash = "#/intro";
+          location.hash = "#/auth";
         }
       } else if (isAppLoggedIn() && String(location.hash || "").replace(/^#\/?/, "").split(/[?#&]/)[0] === "auth") {
         try {
@@ -3796,7 +3802,7 @@ function scheduleInitialHash() {
     } catch (e) {
       console.warn("[boot] initial hash failed", e);
       if (!location.hash) {
-        try { location.hash = "#/intro"; } catch {}
+        try { location.hash = "#/auth"; } catch {}
       }
       scheduleApplyRoute();
     }
@@ -11361,7 +11367,7 @@ async function finishPostAuthNavigation() {
     void ensureAuthBoot({ force: true, fast: true });
     return;
   }
-  const target = shouldSkipIntroOrOnboardingRoute() ? "discover" : "intro";
+  const target = shouldSkipIntroOrOnboardingRoute() ? "discover" : "auth";
   try {
     location.hash = `#/${target}`;
   } catch {}
@@ -45102,7 +45108,7 @@ void (async () => {
     if (!isAppLoggedIn() && !getSupabaseAuthToken()) {
       resetProfileUiToGuest();
       setProfileHeaderLoading(false);
-      if ((location.hash || "") === "#/intro" && shouldSkipIntroOrOnboardingRoute()) {
+      if ((location.hash || "") === "#/intro") {
         try { location.hash = getPostOnboardingHash(() => authSession); } catch {}
       }
       try { scheduleApplyRoute(); } catch {}

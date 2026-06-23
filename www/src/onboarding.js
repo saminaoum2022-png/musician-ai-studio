@@ -76,7 +76,7 @@ export function getPostOnboardingHash(getAuthSession) {
 }
 
 export function getInitialBootHash(getAuthSession) {
-  if (!isOnboardingComplete()) return "#/intro";
+  if (!isOnboardingComplete()) return "#/auth";
   return getPostOnboardingHash(getAuthSession);
 }
 

@@ -84,7 +84,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260623bootSplashFix" />
+    <link rel="stylesheet" href="./styles.css?v=20260623splashLogoOnly" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -101,10 +101,6 @@
     <div id="bootSplash" class="bootSplash" aria-hidden="true">
       <div class="bootSplashInner">
         <span class="bootSplashMark" aria-hidden="true"></span>
-        <h1 class="bootSplashWordmark introWordmark">
-          <span class="brandPrimary">NabadAi</span>
-          <span class="brandSecondary introBrandSecondary">Music</span>
-        </h1>
       </div>
     </div>
     <div id="loginSettlingOverlay" class="loginSettlingOverlay" hidden aria-hidden="true">
@@ -3810,7 +3806,7 @@
         try { guestMode = localStorage.getItem("nabadai_guest_mode_v1") === "1"; } catch (e) {}
         if (!h) {
           if (!done) {
-            h = "intro";
+            h = "auth";
           } else {
             var hasSession = false;
             try {
@@ -3822,7 +3818,7 @@
         }
         var ok = /^(intro|onboarding|music-preferences|auth|generate|challenges|activity|discover|friends|profile|settings|player|sounds|user|vocal|stems|advanced|credits|mentor)$/.test(h);
         if (!ok) {
-          if (!done) h = "intro";
+          if (!done) h = "auth";
           else {
             var hasSessionFallback = false;
             try {
@@ -3840,6 +3836,6 @@
       })();
     </script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260623bootSplashFix"></script>
+    <script type="module" src="./src/app.js?v=20260623splashLogoOnly"></script>
   </body>
 </html>

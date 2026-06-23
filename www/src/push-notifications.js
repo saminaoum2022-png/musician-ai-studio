@@ -8,6 +8,34 @@ let _appId = "";
 let _initPromise = null;
 let _linkedUserId = "";
 
+const PENDING_PUSH_ROUTE_KEY = "nabad_pending_push_route:v1";
+
+export function stashPendingPushRoute(route) {
+  const clean = String(route || "").trim().replace(/^\/+/, "");
+  if (!clean) return;
+  try {
+    sessionStorage.setItem(PENDING_PUSH_ROUTE_KEY, clean);
+  } catch {}
+}
+
+export function consumePendingPushRoute() {
+  try {
+    const route = String(sessionStorage.getItem(PENDING_PUSH_ROUTE_KEY) || "").trim();
+    sessionStorage.removeItem(PENDING_PUSH_ROUTE_KEY);
+    return route.replace(/^\/+/, "");
+  } catch {
+    return "";
+  }
+}
+
+export function peekPendingPushRoute() {
+  try {
+    return String(sessionStorage.getItem(PENDING_PUSH_ROUTE_KEY) || "").trim().replace(/^\/+/, "");
+  } catch {
+    return "";
+  }
+}
+
 export function configurePushFromPublicConfig(appId) {
   _appId = String(appId || "").trim();
 }
@@ -132,11 +160,14 @@ export async function initPushNotifications() {
           const data = event?.notification?.additionalData || event?.notification?.data || {};
           const route = String(data?.nabad_route || "").trim();
           if (!route) return;
-          const hash = `#/${route}`;
+          stashPendingPushRoute(route);
+          const hash = `#/${route.replace(/^\/+/, "")}`;
           if (location.hash !== hash) location.hash = hash;
           try {
+            globalThis.__nabadNavigateFromPush?.(route);
+          } catch {
             globalThis.__nabadApplyRoute?.();
-          } catch {}
+          }
         } catch {}
       });
       return true;

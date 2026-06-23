@@ -14,6 +14,7 @@ import {
   getInitialBootHash,
   getPostOnboardingHash,
   initOnboarding,
+  markOnboardingComplete,
   onOnboardingRouteActive,
   parseOnboardingRoute,
   shouldSkipIntroOrOnboardingRoute,
@@ -50,11 +51,13 @@ import {
   maybePromptPushAfterLogin,
   refreshPushRegistration,
   syncPushAuth,
+  consumePendingPushRoute,
+  stashPendingPushRoute,
 } from "./push-notifications.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260624pushExternalFirst";
+const APP_BUILD = "20260624authPushRoute";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2794,9 +2797,9 @@ async function refreshNotificationsUnreadBadge({ force = false } = {}) {
 }
 
 function resolveEmptyHashRoute() {
-  if (!shouldSkipIntroOrOnboardingRoute()) return "auth";
   ensureAuthSessionUserFromToken();
   if (isAppLoggedIn() || getSupabaseAuthToken()) return "discover";
+  if (!shouldSkipIntroOrOnboardingRoute()) return "auth";
   if (isGuestModeEnabled()) return "discover";
   return "auth";
 }
@@ -3111,8 +3114,8 @@ function applyRoute({ passGen } = {}) {
       } catch {}
     }
   }
-  // Keychain session often loads after first paint — never keep a signed-in user on #/auth.
-  if (wanted === "auth" && shouldSkipIntroOrOnboardingRoute() && (isLoggedIn || hasAuthToken)) {
+  // Keychain/session often loads after first paint — never keep a signed-in user on #/auth.
+  if (wanted === "auth" && (isLoggedIn || hasAuthToken)) {
     wanted = "discover";
     try {
       history.replaceState(null, "", "#/discover");
@@ -11430,10 +11433,14 @@ async function finishPostAuthNavigation() {
   const pending = getPendingCreateAction();
   setPendingCreateAction("");
   const returnHash = consumePostAuthReturnHash();
+  const pendingPushRoute = consumePendingPushRoute();
   const pendingIdea = consumePendingDiscoveryIdea();
   setGuestModeEnabled(false);
   loadAuthSession();
   ensureAuthSessionUserFromToken();
+  if (authSession?.user?.id) {
+    try { markOnboardingComplete(); } catch {}
+  }
   endLoginSettling();
   if (
     authSession?.user?.id
@@ -11469,6 +11476,16 @@ async function finishPostAuthNavigation() {
     void ensureAuthBoot({ force: true, fast: true });
     return;
   }
+  if (pendingPushRoute) {
+    const pushTarget = String(pendingPushRoute || "").trim().replace(/^\/+/, "");
+    if (pushTarget) {
+      try { location.hash = `#/${pushTarget}`; } catch {}
+      syncRoutePanelVisibility(pushTarget.split(/[?#&]/)[0].trim() || "activity");
+      try { applyRoute(); } catch { scheduleApplyRoute(); }
+      void ensureAuthBoot({ force: true, fast: true });
+      return;
+    }
+  }
   if (
     shouldShowMusicPreferencesScreen(authSession?.user?.id, activeProfile)
     && !returnHash
@@ -11480,7 +11497,7 @@ async function finishPostAuthNavigation() {
     void ensureAuthBoot({ force: true, fast: true });
     return;
   }
-  const target = shouldSkipIntroOrOnboardingRoute() ? "discover" : "auth";
+  const target = authSession?.user?.id ? "discover" : "auth";
   try {
     location.hash = `#/${target}`;
   } catch {}
@@ -11500,6 +11517,36 @@ async function finishPostAuthNavigation() {
       console.warn("[personas] post-login hydrate failed", e);
     }
   })();
+}
+
+function hasOAuthCodeInUrl() {
+  try {
+    return Boolean(new URLSearchParams(window.location.search || "").get("code"));
+  } catch {
+    return false;
+  }
+}
+
+async function navigateFromPushRoute(route) {
+  const clean = String(route || "").trim().replace(/^\/+/, "");
+  if (!clean) return;
+  stashPendingPushRoute(clean);
+  try {
+    await ensureAuthBoot({ fast: Boolean(getSupabaseAuthToken() || authSession?.access_token) });
+    loadAuthSession();
+    ensureAuthSessionUserFromToken();
+    if (!isAppLoggedIn() && !getSupabaseAuthToken()) {
+      setPostAuthReturnHash(`#/${clean}`);
+      try { location.hash = "#/auth"; } catch {}
+      scheduleApplyRoute();
+      return;
+    }
+    try { location.hash = `#/${clean}`; } catch {}
+    scheduleApplyRoute();
+  } catch (e) {
+    console.warn("[push] navigate failed", e);
+    scheduleApplyRoute();
+  }
 }
 
 function requireAuthForCreate(onAuthed, pendingAction = "") {
@@ -19554,18 +19601,23 @@ async function maybeHandleAuthCodeFromQuery() {
     const sp = new URLSearchParams(window.location.search || "");
     const code = sp.get("code");
     if (!code) return false;
+    beginLoginSettling("Finishing sign in…");
     const ok = await exchangeOAuthCodeForSession(code);
-    if (!ok) return false;
+    if (!ok) {
+      endLoginSettling();
+      return false;
+    }
     try {
       window.history.replaceState(
         {},
         document.title,
-        `${window.location.pathname || "/"}#/challenges`,
+        `${window.location.pathname || "/"}#/discover`,
       );
     } catch {}
-    finishPostAuthNavigation();
+    await finishPostAuthNavigation();
     return true;
   } catch (e) {
+    endLoginSettling();
     lastAuthDebug = `code flow error: ${e?.message || String(e)}`;
     return false;
   }
@@ -45085,6 +45137,9 @@ try {
       safeApplyRoute();
     }
   };
+  globalThis.__nabadNavigateFromPush = (route) => {
+    void navigateFromPushRoute(route);
+  };
   globalThis.__nabadShowToast = (msg, opts) => showToast(msg, opts);
   globalThis.__nabadApiBase = _resolvedApiBase || "";
 } catch {}
@@ -45096,7 +45151,12 @@ loadProfile();
 loadAuthSession();
 syncActiveProfileIdFromSession();
 renderAuthStatus();
-safeApplyRoute();
+const _bootOAuthCodePending = hasOAuthCodeInUrl();
+if (_bootOAuthCodePending) {
+  try { beginLoginSettling("Finishing sign in…"); } catch {}
+} else {
+  safeApplyRoute();
+}
 // `ensureAuthBoot()` (Preferences / native restore) runs before each route apply.
 // Light the profile header shimmer NOW if we already know a sign-in
 // is on its way and the handle is still the boot placeholder ("guest").
@@ -45141,7 +45201,12 @@ void (async () => {
     await refreshAuthStateFromSupabase();
   }
   if (usedTokenFlow) {
-    finishPostAuthNavigation();
+    await finishPostAuthNavigation();
+  }
+
+  const pendingPushAfterBoot = consumePendingPushRoute();
+  if (pendingPushAfterBoot && (isAppLoggedIn() || getSupabaseAuthToken())) {
+    try { location.hash = `#/${pendingPushAfterBoot}`; } catch {}
   }
 
   // Always hydrate from cloud when a valid session exists (not only callback flows).

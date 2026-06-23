@@ -20,6 +20,33 @@ function getOneSignal() {
   return globalThis.OneSignal;
 }
 
+export function isPushAvailable() {
+  return pushConfigured() && typeof Notification !== "undefined";
+}
+
+export function getPushPermissionState() {
+  if (!isPushAvailable()) return "unsupported";
+  return Notification.permission;
+}
+
+export function isIosStandalonePwa() {
+  try {
+    if (navigator.standalone === true) return true;
+    return window.matchMedia("(display-mode: standalone)").matches;
+  } catch {
+    return false;
+  }
+}
+
+export function isPushOptedIn() {
+  try {
+    const OneSignal = getOneSignal();
+    return Boolean(OneSignal?.User?.PushSubscription?.optedIn);
+  } catch {
+    return getPushPermissionState() === "granted";
+  }
+}
+
 function waitForOneSignalReady() {
   return new Promise((resolve) => {
     if (getOneSignal()?.User) {
@@ -119,7 +146,9 @@ export async function syncPushAuth(userId) {
       const next = String(ev?.current?.id || OneSignal.User?.PushSubscription?.id || "").trim();
       if (next && _linkedUserId === uid) await registerSubscriptionWithBackend(next);
     });
-    if (OneSignal.Notifications?.permission === false) {
+    // iOS home-screen PWAs block permission prompts unless triggered by a user tap.
+    const nativePerm = getPushPermissionState();
+    if (nativePerm === "default" && !isIosStandalonePwa()) {
       try {
         await OneSignal.Notifications.requestPermission();
       } catch {}
@@ -127,6 +156,58 @@ export async function syncPushAuth(userId) {
   } catch (e) {
     console.warn("[push] sync auth failed", e);
   }
+}
+
+/** Must be called from a user tap (Settings button, etc.). */
+export async function enablePushNotifications(userId) {
+  const uid = String(userId || _linkedUserId || "").trim();
+  if (!uid || !pushConfigured()) {
+    return { ok: false, reason: "not_configured" };
+  }
+  await initPushNotifications();
+  const OneSignal = getOneSignal();
+  if (!OneSignal?.Notifications) {
+    return { ok: false, reason: "sdk_missing" };
+  }
+  if (_linkedUserId !== uid) {
+    await syncPushAuth(uid);
+  }
+  const nativePerm = getPushPermissionState();
+  if (nativePerm === "granted" || isPushOptedIn()) {
+    const subId = OneSignal.User?.PushSubscription?.id;
+    if (subId) await registerSubscriptionWithBackend(String(subId));
+    return { ok: true, state: "granted" };
+  }
+  if (nativePerm === "denied") {
+    return { ok: false, state: "denied" };
+  }
+  try {
+    await OneSignal.Notifications.requestPermission();
+  } catch (e) {
+    console.warn("[push] permission request failed", e);
+    return { ok: false, state: getPushPermissionState(), reason: "request_failed" };
+  }
+  const after = getPushPermissionState();
+  const subId = OneSignal.User?.PushSubscription?.id;
+  if (subId && after === "granted") {
+    await registerSubscriptionWithBackend(String(subId));
+  }
+  return { ok: after === "granted", state: after };
+}
+
+export async function maybePromptPushAfterLogin(userId) {
+  if (!pushConfigured() || !userId) return;
+  if (getPushPermissionState() !== "default") return;
+  try {
+    if (localStorage.getItem("nabad_push_prompt_v1") === "1") return;
+    localStorage.setItem("nabad_push_prompt_v1", "1");
+  } catch {}
+  const msg = isIosStandalonePwa()
+    ? "Tap Settings → Notifications to enable alerts."
+    : "Enable notifications in Settings to get alerts.";
+  try {
+    globalThis.__nabadShowToast?.(msg, { icon: "🔔", durationMs: 5200 });
+  } catch {}
 }
 
 export async function logoutPushAuth({ skipBackend = false } = {}) {

@@ -41,14 +41,18 @@ import {
 } from "./nabad-verification.js";
 import {
   configurePushFromPublicConfig,
+  enablePushNotifications,
+  getPushPermissionState,
   initPushNotifications,
+  isPushOptedIn,
   logoutPushAuth,
+  maybePromptPushAfterLogin,
   syncPushAuth,
 } from "./push-notifications.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260623oneSignalPush";
+const APP_BUILD = "20260623pushPromptFix";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3960,7 +3964,21 @@ if (btnSettingsMusicPrefs) {
 const btnSettingsNotifications = document.getElementById("btnSettingsNotifications");
 if (btnSettingsNotifications) {
   btnSettingsNotifications.addEventListener("click", () => {
-    void refreshNotificationsCenter();
+    void (async () => {
+      const uid = String(authSession?.user?.id || "").trim();
+      if (_onesignalAppId && uid && getPushPermissionState() !== "granted" && !isPushOptedIn()) {
+        const result = await enablePushNotifications(uid);
+        if (result.state === "denied") {
+          showToast("Notifications are blocked. Open iPhone Settings → Nabad → Notifications to allow.", {
+            icon: "🔔",
+            durationMs: 6200,
+          });
+        } else if (result.ok) {
+          showToast("Notifications enabled.", { icon: "🔔", durationMs: 2800 });
+        }
+      }
+      await refreshNotificationsCenter();
+    })();
   });
 }
 bindProfileMusicStylesBtnOnce();
@@ -18313,6 +18331,7 @@ function saveAuthSession(sess, { persist = true } = {}) {
   } catch {}
   if (nextUserId) {
     void syncPushAuth(nextUserId);
+    void maybePromptPushAfterLogin(nextUserId);
   } else if (prevUserId || !sess) {
     void logoutPushAuth();
   }
@@ -45000,6 +45019,7 @@ try {
       safeApplyRoute();
     }
   };
+  globalThis.__nabadShowToast = (msg, opts) => showToast(msg, opts);
   globalThis.__nabadApiBase = _resolvedApiBase || "";
 } catch {}
 applyClientEnvBootstrap();

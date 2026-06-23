@@ -28106,15 +28106,19 @@ body[data-route="messages"]{
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 4px 2px 2px;
+  padding: 4px 2px 8px;
   -webkit-overflow-scrolling: touch;
-  scroll-padding-bottom: calc(var(--messages-composer-h, 68px) + var(--messages-keyboard-inset, 0px) + 12px);
 }
-body[data-route="messages-thread"] .messagesThreadMount{
-  padding-bottom: calc(var(--messages-composer-h, 68px) + var(--messages-keyboard-inset, 0px) + 12px);
+html.is-web-shell body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadMount{
+  scroll-padding-bottom: calc(var(--messages-composer-h, calc(60px + env(safe-area-inset-bottom, 0px))) + var(--messages-keyboard-inset, 0px) + 12px);
+  padding-bottom: calc(var(--messages-composer-h, calc(60px + env(safe-area-inset-bottom, 0px))) + var(--messages-keyboard-inset, 0px) + 12px);
 }
-html.is-web-shell body[data-route="messages-thread"] .messagesThreadMount{
-  padding-bottom: calc(var(--messages-composer-h, 68px) + var(--messages-keyboard-inset, 0px) + 12px);
+.messagesThreadScrollAnchor{
+  width: 100%;
+  height: 1px;
+  flex-shrink: 0;
+  pointer-events: none;
+  visibility: hidden;
 }
 .messagesThreadLoading,
 .messagesThreadEmpty{
@@ -28373,11 +28377,11 @@ body[data-route="messages-thread"] .messagesComposer{
   margin: 0;
   box-sizing: border-box;
 }
-html.is-web-shell body[data-route="messages-thread"] .messagesComposer{
+html.is-web-shell body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesComposer{
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: var(--messages-keyboard-inset, 0px);
   width: 100%;
   max-width: none;
   margin: 0;

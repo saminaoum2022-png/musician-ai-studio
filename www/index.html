@@ -28,8 +28,11 @@
         var fg = "#eef4ff";
         var html = document.documentElement;
         var isCapShell = location.protocol === "capacitor:";
+        var isStandalone = window.navigator.standalone === true
+          || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
         html.setAttribute("data-theme", "dark");
         html.classList.add(isCapShell ? "is-native-shell" : "is-web-shell");
+        if (isStandalone) html.classList.add("is-standalone-pwa");
         html.style.background = bg;
         html.style.colorScheme = "dark";
         var style = document.createElement("style");
@@ -84,7 +87,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260624chatKeyboardSmooth" />
+    <link rel="stylesheet" href="./styles.css?v=20260624chatPwaFlex" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -3841,6 +3844,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260624chatKeyboardSmooth"></script>
+    <script type="module" src="./src/app.js?v=20260624chatPwaFlex"></script>
   </body>
 </html>

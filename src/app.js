@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260623splashLogoOnly";
+const APP_BUILD = "20260623authRedesign";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -743,6 +743,7 @@ const els = {
   authPasswordInput: document.getElementById("authPasswordInput"),
   authEmailMsg: document.getElementById("authEmailMsg"),
   btnAuthEmailSubmit: document.getElementById("btnAuthEmailSubmit"),
+  btnAuthEmailReveal: document.getElementById("btnAuthEmailReveal"),
   btnAuthToggleMode: document.getElementById("btnAuthToggleMode"),
   btnAuthGateGuest: document.getElementById("btnAuthGateGuest"),
   authStatus: document.getElementById("authStatus"),
@@ -3187,6 +3188,11 @@ function applyRoute({ passGen } = {}) {
   if (routeApplyStale(gate)) return;
   if (prevRoute !== wanted) invalidateInFlightRouteFeedWork(prevRoute);
   syncRoutePanelVisibility(wanted);
+  if (wanted === "auth" && prevRoute !== "auth") {
+    try { resetAuthEmailPanel(); } catch {}
+  } else if (prevRoute === "auth" && wanted !== "auth") {
+    try { resetAuthEmailPanel(); } catch {}
+  }
   try {
     _appTourMod?.notifyAppRouteChanged?.(wanted);
   } catch {}
@@ -19164,6 +19170,24 @@ function setAuthEmailSubmitting(on) {
   if (els.btnAuthGateGoogle) els.btnAuthGateGoogle.disabled = busy;
   if (els.btnAuthGateApple) els.btnAuthGateApple.disabled = busy;
   if (els.btnAuthToggleMode) els.btnAuthToggleMode.disabled = busy;
+  if (els.btnAuthEmailReveal) els.btnAuthEmailReveal.disabled = busy;
+}
+
+function setAuthEmailPanelOpen(open) {
+  const show = Boolean(open);
+  if (els.authEmailForm) els.authEmailForm.hidden = !show;
+  if (els.btnAuthEmailReveal) {
+    els.btnAuthEmailReveal.hidden = show;
+    els.btnAuthEmailReveal.setAttribute("aria-expanded", show ? "true" : "false");
+  }
+  if (show) {
+    try { els.authEmailInput?.focus?.(); } catch {}
+  }
+}
+
+function resetAuthEmailPanel() {
+  setAuthEmailPanelOpen(false);
+  setAuthEmailMessage("");
 }
 
 async function runEmailPasswordAuth() {
@@ -44085,7 +44109,10 @@ function setAuthSocialGateLabel(btn, provider, busy) {
   btn.disabled = Boolean(busy);
   btn.classList.toggle("is-busy", Boolean(busy));
   btn.setAttribute("aria-busy", busy ? "true" : "false");
-  btn.setAttribute("aria-label", busy ? `Opening ${label}…` : `Continue with ${label}`);
+  const action = busy ? `Opening ${label}…` : `Continue with ${label}`;
+  btn.setAttribute("aria-label", action);
+  const labelEl = btn.querySelector(".authBtnLabel");
+  if (labelEl) labelEl.textContent = action;
 }
 
 function resetAuthGateButtons() {
@@ -44385,6 +44412,11 @@ if (els.btnAuthGateGuest) {
   });
 }
 setAuthEmailMode("signin");
+if (els.btnAuthEmailReveal) {
+  els.btnAuthEmailReveal.addEventListener("click", () => {
+    setAuthEmailPanelOpen(true);
+  });
+}
 if (els.btnAuthToggleMode) {
   els.btnAuthToggleMode.addEventListener("click", () => {
     setAuthEmailMode(_authEmailMode === "signup" ? "signin" : "signup");

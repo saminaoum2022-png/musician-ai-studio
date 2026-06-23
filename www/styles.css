@@ -977,7 +977,7 @@ html[data-theme="light"] .authScreen{
   background: var(--bg) !important;
 }
 
-html[data-theme="light"] .authHero{
+html[data-theme="light"] .authTaglineWord--connect{
   color: var(--text);
 }
 
@@ -999,28 +999,28 @@ html[data-theme="light"] .authDivider::before,
 html[data-theme="light"] .authDivider::after{
   background: rgba(15, 23, 40, 0.10);
 }
-html[data-theme="light"] .authSocialIconBtn{
-  border-color: rgba(15, 23, 40, 0.12);
-  background: rgba(255,255,255,0.72);
+html[data-theme="light"] .authSecondaryBtn{
+  border-color: rgba(15, 23, 40, 0.14);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text);
 }
-html[data-theme="light"] .authSocialIconBtn--apple{
-  color: #fff;
-  background: #000;
+html[data-theme="light"] .authSecondaryBtn:hover{
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(15, 23, 40, 0.20);
 }
-html[data-theme="light"] .authSocialIconBtn--apple:hover{
-  background: #111;
+html[data-theme="light"] .authOutlineBtn{
+  border-color: rgba(15, 23, 40, 0.16);
+  color: rgba(15, 23, 40, 0.72);
 }
-html[data-theme="light"] .authSocialIconBtn--google{
-  background: #fff;
+html[data-theme="light"] .authOutlineBtn:hover{
+  border-color: rgba(15, 23, 40, 0.24);
+  color: var(--text);
+  background: rgba(15, 23, 40, 0.04);
 }
-html[data-theme="light"] .authSocialSep{
-  background: linear-gradient(
-    180deg,
-    transparent,
-    rgba(15, 23, 40, 0.16) 18%,
-    rgba(15, 23, 40, 0.16) 82%,
-    transparent
-  );
+html[data-theme="light"] .authEmailBtn{
+  border-color: rgba(124, 92, 255, 0.45);
+  color: var(--brand-violet);
+  background: transparent;
 }
 html[data-theme="light"] .authEmailToggle{
   color: rgba(15, 23, 40, 0.55);
@@ -2546,42 +2546,55 @@ body.isOnboarding .generateOrb{ display:none !important; }
   width: 100%;
   max-width: 380px;
   margin: 0 auto;
-  padding: max(18px, env(safe-area-inset-top)) 20px max(18px, env(safe-area-inset-bottom));
+  padding: max(28px, env(safe-area-inset-top)) 24px max(22px, env(safe-area-inset-bottom));
   display:flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 14px;
+  gap: 0;
   overflow: visible;
   box-sizing: border-box;
 }
-/* Same logo + wordmark as #bootSplash (bootSplashMark + introWordmark). */
 .authBrand{
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
   justify-content: center;
   width: 100%;
-  max-width: 100%;
-  margin: 0 0 4px;
+  margin: 0 0 28px;
 }
-.authBrand .introWordmark{
-  margin: 0;
+.authLogoMark{
+  display: block;
+  width: min(23.4vw, 97px);
+  aspect-ratio: 1;
+  flex-shrink: 0;
+  background: url("./assets/icons/splash-mark.png") center / contain no-repeat;
 }
-.authHero{
-  margin: 8px 0 0;
-  font-size: clamp(24px, 7vw, 28px);
-  line-height: 1.18;
+.authTagline{
+  margin: 0 0 12px;
+  max-width: 340px;
+  font-size: clamp(28px, 8.2vw, 34px);
+  line-height: 1.12;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
+}
+.authTaglineWord{
+  display: inline;
+  white-space: nowrap;
+}
+.authTaglineWord--create{
+  color: var(--brand-violet);
+}
+.authTaglineWord--share{
+  color: var(--brand-teal);
+}
+.authTaglineWord--connect{
   color: #f0f4ff;
-  max-width: 320px;
 }
 .authSub{
-  margin: 0;
-  color: rgba(223, 231, 251, 0.62);
-  font-size: 14px;
+  margin: 0 0 28px;
+  color: rgba(223, 231, 251, 0.58);
+  font-size: 15px;
   line-height: 1.45;
   max-width: 300px;
 }
@@ -2590,148 +2603,100 @@ body.isOnboarding .generateOrb{ display:none !important; }
   flex-direction: column;
   gap: 10px;
   width: 100%;
-  margin-top: 6px;
 }
-.authSocialRow{
-  display: flex;
+.authPrimaryBtn,
+.authSecondaryBtn,
+.authOutlineBtn{
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0;
-  width: min(100%, 200px);
-  margin: 2px auto 0;
-}
-.authSocialIconBtn{
-  flex: 1 1 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 56px;
-  max-width: 88px;
+  gap: 10px;
+  width: 100%;
   height: 52px;
-  padding: 0;
-  margin: 0;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.04);
+  padding: 0 18px;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
   cursor: pointer;
-  transition:
-    transform 120ms ease,
-    background 180ms ease,
-    border-color 180ms ease,
-    box-shadow 220ms ease,
-    opacity 200ms ease;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 120ms ease, opacity 160ms ease;
   -webkit-tap-highlight-color: transparent;
 }
-.authSocialIconBtn--apple{
-  border-radius: 14px 0 0 14px;
-  border-right: none;
+.authPrimaryBtn{
+  border: 1px solid var(--brand-violet);
+  background: var(--brand-violet);
   color: #fff;
-  background: #000;
-  border-color: rgba(255,255,255,0.22);
 }
-.authSocialIconBtn--apple:hover{
-  background: #111;
-  border-color: rgba(255,255,255,0.32);
+.authPrimaryBtn:hover{
+  background: #6b4de6;
+  border-color: #6b4de6;
 }
-.authSocialIconBtn--google{
-  border-radius: 0 14px 14px 0;
-  border-left: none;
-  background: rgba(255,255,255,0.97);
+.authPrimaryBtn:active,
+.authSecondaryBtn:active,
+.authOutlineBtn:active{
+  transform: scale(0.985);
 }
-.authSocialIconBtn--google:hover{
-  background: #fff;
-  border-color: rgba(255,255,255,0.55);
-  box-shadow: 0 8px 28px -12px rgba(255,255,255,0.35);
-}
-.authSocialIconBtn:active{ transform: scale(0.96); }
-.authSocialIconBtn[disabled]{
+.authPrimaryBtn[disabled],
+.authSecondaryBtn[disabled],
+.authOutlineBtn[disabled]{
   opacity: 0.55;
   cursor: wait;
   transform: none;
 }
-.authSocialIconBtn.is-busy{
-  opacity: 0.7;
+.authPrimaryBtn.is-busy,
+.authSecondaryBtn.is-busy{
+  opacity: 0.72;
   cursor: wait;
 }
-.authSocialSep{
-  flex: 0 0 1px;
-  align-self: center;
-  width: 1px;
-  height: 26px;
-  background: linear-gradient(
-    180deg,
-    transparent,
-    rgba(255,255,255,0.22) 18%,
-    rgba(255,255,255,0.22) 82%,
-    transparent
-  );
+.authSecondaryBtn{
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: #f0f4ff;
 }
-.authSocialIconSvg{
-  width: 22px;
-  height: 22px;
+.authSecondaryBtn:hover{
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+.authOutlineBtn{
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: transparent;
+  color: rgba(240, 244, 255, 0.82);
+}
+.authOutlineBtn:hover{
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.04);
+}
+.authOutlineBtn[hidden],
+.authGuestBtn[hidden]{
+  display: none !important;
+}
+.authBtnIcon{
+  width: 20px;
+  height: 20px;
   flex: 0 0 auto;
   display: block;
 }
-.authSocialIconSvg--apple{
-  width: 20px;
-  height: 24px;
+.authBtnIcon--apple{
+  width: 18px;
+  height: 22px;
 }
-.authGhostBtn{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  width: 100%;
-  height: 44px;
-  padding: 0 16px;
-  border-radius: 12px;
-  border: none;
-  background: transparent;
-  color: rgba(223, 231, 251, 0.62);
-  font-size: 13.5px;
-  font-weight: 600;
-  letter-spacing: 0.15px;
-  cursor: pointer;
-  transition: color 180ms ease, background 180ms ease, transform 120ms ease;
-  -webkit-tap-highlight-color: transparent;
+.authBtnLabel{
+  line-height: 1;
 }
-.authGhostBtn:hover{
-  color: #fff;
-  background: rgba(255,255,255,0.04);
-}
-.authGhostBtn:active{ transform: scale(0.98); }
-.authDivider{
-  display:flex;
-  align-items:center;
-  gap: 12px;
-  width: 100%;
-  margin: 2px 0;
-  color: rgba(223, 231, 251, 0.38);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-.authDividerSocial{
-  margin: 8px 0 4px;
-  letter-spacing: 0.06em;
-  text-transform: none;
-  font-size: 11.5px;
-}
-.authDividerSocial span{
-  white-space: nowrap;
-}
-.authDivider::before,
-.authDivider::after{
-  content:"";
-  flex:1;
-  height: 1px;
-  background: rgba(255,255,255,0.10);
+.authGuestBtn{
+  display: none;
 }
 .authEmailForm{
   display:flex;
   flex-direction: column;
   gap: 10px;
   width: 100%;
-  margin: 0;
+  margin: 4px 0 0;
+  padding-top: 6px;
+}
+.authEmailForm[hidden]{
+  display: none !important;
 }
 .authField{
   display:flex;
@@ -2762,8 +2727,8 @@ body.isOnboarding .generateOrb{ display:none !important; }
   color: rgba(223, 231, 251, 0.34);
 }
 .authFieldInput:focus{
-  border-color: rgba(124,92,255,0.55);
-  box-shadow: 0 0 0 3px rgba(124,92,255,0.18);
+  border-color: rgba(124, 92, 255, 0.55);
+  box-shadow: none;
 }
 .authEmailMsg{
   margin: 0;
@@ -2784,16 +2749,19 @@ body.isOnboarding .generateOrb{ display:none !important; }
   margin-top: 2px;
   padding: 0 16px;
   border-radius: 12px;
-  border: 1px solid rgba(124,92,255,0.55);
-  background: linear-gradient(135deg, rgba(124,92,255,0.95), rgba(35,213,171,0.88));
-  color: #fff;
+  border: 1px solid rgba(124, 92, 255, 0.45);
+  background: transparent;
+  color: #f0f4ff;
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 650;
   cursor: pointer;
-  transition: transform 120ms ease, opacity 180ms ease;
+  transition: transform 120ms ease, opacity 160ms ease, border-color 160ms ease, background 160ms ease;
 }
-.authEmailBtn:hover{ opacity: 0.96; }
-.authEmailBtn:active{ transform: scale(0.98); }
+.authEmailBtn:hover{
+  border-color: rgba(124, 92, 255, 0.65);
+  background: rgba(124, 92, 255, 0.08);
+}
+.authEmailBtn:active{ transform: scale(0.985); }
 .authEmailBtn[disabled]{
   opacity: 0.55;
   cursor: wait;
@@ -2810,9 +2778,9 @@ body.isOnboarding .generateOrb{ display:none !important; }
 }
 .authEmailToggle:hover{ color: #fff; }
 .authLegal{
-  margin: 6px 0 0;
+  margin: 22px 0 0;
   font-size: 11.5px;
-  letter-spacing: 0.15px;
+  letter-spacing: 0.01em;
   color: rgba(223, 231, 251, 0.38);
   line-height: 1.5;
 }

@@ -52,7 +52,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260623settingsPushOnly";
+const APP_BUILD = "20260623pushConfigRefresh";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2024,7 +2024,7 @@ function apiUrl(p) {
   const base = _resolvedApiBase || API_BASE;
   return base ? `${base.replace(/\/$/, "")}${path}` : path;
 }
-const PUBLIC_CONFIG_CACHE_KEY = "mas:public-config:v2";
+const PUBLIC_CONFIG_CACHE_KEY = "mas:public-config:v3";
 let lastPublicConfigStatus = 0;
 let lastPublicConfigError = "";
 
@@ -2242,7 +2242,9 @@ async function loadPublicConfig() {
   let ok = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
   if (!ok) ok = loadPublicConfigFromCache();
 
-  if (!ok) {
+  // Cached/env bootstrap may predate OneSignal — refetch so push can initialize.
+  const needsOnesignalRefresh = ok && !_onesignalAppId;
+  if (!ok || needsOnesignalRefresh) {
     lastPublicConfigStatus = 0;
     lastPublicConfigError = "";
     const bases = isNativeShell() ? nativeApiBaseCandidates() : [""];
@@ -3333,6 +3335,11 @@ function applyRoute({ passGen } = {}) {
     renderPersonaSelect();
     try { refreshSettingsMusicPrefsRow(); } catch {}
     try { syncSettingsPushRow(); } catch {}
+    if (!_onesignalAppId) {
+      void loadPublicConfig().then(() => {
+        try { syncSettingsPushRow(); } catch {}
+      });
+    }
   }
   if (wanted === "player") {
     try {
@@ -3984,8 +3991,15 @@ if (btnSettingsNotifications) {
     void (async () => {
       const uid = String(authSession?.user?.id || "").trim();
       if (!_onesignalAppId) {
-        showToast("Open the Activity tab to see updates.", { icon: "🔔", durationMs: 3200 });
-        return;
+        await loadPublicConfig();
+        syncSettingsPushRow();
+        if (!_onesignalAppId) {
+          showToast("Could not load push settings. Check your connection and try again.", {
+            icon: "🔔",
+            durationMs: 3600,
+          });
+          return;
+        }
       }
       if (!uid) {
         showToast("Sign in to enable push alerts.", { icon: "👤", durationMs: 2800 });

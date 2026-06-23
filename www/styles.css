@@ -977,7 +977,11 @@ html[data-theme="light"] .authScreen{
   background: var(--bg) !important;
 }
 
-html[data-theme="light"] .authTaglineWord--connect{
+html[data-theme="light"] .authTagline{
+  color: var(--text);
+}
+
+html[data-theme="light"] .authTaglineDot--connect{
   color: var(--text);
 }
 
@@ -2561,7 +2565,7 @@ body.isOnboarding .generateOrb{ display:none !important; }
   align-items: center;
   justify-content: center;
   width: 100%;
-  margin: 0 0 28px;
+  margin: 0 0 42px;
 }
 .authLogoMark{
   display: block;
@@ -2571,30 +2575,31 @@ body.isOnboarding .generateOrb{ display:none !important; }
   background: url("./assets/icons/splash-mark.png") center / contain no-repeat;
 }
 .authTagline{
-  margin: 0 0 12px;
+  margin: 0 0 10px;
   max-width: 340px;
-  font-size: clamp(28px, 8.2vw, 34px);
-  line-height: 1.12;
-  font-weight: 800;
-  letter-spacing: -0.03em;
+  font-size: clamp(23px, 6.8vw, 28px);
+  line-height: 1.14;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: #f0f4ff;
 }
 .authTaglineWord{
   display: inline;
   white-space: nowrap;
 }
-.authTaglineWord--create{
+.authTaglineDot--create{
   color: var(--brand-violet);
 }
-.authTaglineWord--share{
+.authTaglineDot--share{
   color: var(--brand-teal);
 }
-.authTaglineWord--connect{
+.authTaglineDot--connect{
   color: #f0f4ff;
 }
 .authSub{
   margin: 0 0 28px;
-  color: rgba(223, 231, 251, 0.58);
-  font-size: 15px;
+  color: rgba(223, 231, 251, 0.48);
+  font-size: 13.5px;
   line-height: 1.45;
   max-width: 300px;
 }

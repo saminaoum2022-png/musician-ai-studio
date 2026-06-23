@@ -203,8 +203,8 @@ export async function maybePromptPushAfterLogin(userId) {
     localStorage.setItem("nabad_push_prompt_v1", "1");
   } catch {}
   const msg = isIosStandalonePwa()
-    ? "Tap Settings → Notifications to enable alerts."
-    : "Enable notifications in Settings to get alerts.";
+    ? "Tap Settings → Push alerts to enable."
+    : "Enable push alerts in Settings.";
   try {
     globalThis.__nabadShowToast?.(msg, { icon: "🔔", durationMs: 5200 });
   } catch {}

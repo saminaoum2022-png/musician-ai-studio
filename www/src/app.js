@@ -52,7 +52,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260623pushPromptFix";
+const APP_BUILD = "20260623settingsPushOnly";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3332,6 +3332,7 @@ function applyRoute({ passGen } = {}) {
   if (wanted === "settings") {
     renderPersonaSelect();
     try { refreshSettingsMusicPrefsRow(); } catch {}
+    try { syncSettingsPushRow(); } catch {}
   }
   if (wanted === "player") {
     try {
@@ -3961,7 +3962,22 @@ if (btnSettingsMusicPrefs) {
     openMusicPreferencesEditor();
   });
 }
-const btnSettingsNotifications = document.getElementById("btnSettingsNotifications");
+function syncSettingsPushRow() {
+  const sub = document.getElementById("settingsPushSub");
+  if (!sub) return;
+  if (!_onesignalAppId) {
+    sub.textContent = "Push alerts unavailable on this build";
+    return;
+  }
+  const perm = getPushPermissionState();
+  if (perm === "granted" || isPushOptedIn()) {
+    sub.textContent = "On — messages and activity alerts";
+  } else if (perm === "denied") {
+    sub.textContent = "Blocked — allow in iPhone Settings";
+  } else {
+    sub.textContent = "Off — tap to enable push alerts";
+  }
+}
 if (btnSettingsNotifications) {
   btnSettingsNotifications.addEventListener("click", () => {
     void (async () => {

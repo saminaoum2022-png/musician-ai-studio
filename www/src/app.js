@@ -21214,8 +21214,10 @@ function syncMessagesThreadViewportLayout() {
     mountH = Math.max(120, mountH);
     mountEl.style.height = `${mountH}px`;
     mountEl.style.maxHeight = `${mountH}px`;
-    mountEl.style.paddingBottom = `${composerH + 12}px`;
-    mountEl.style.scrollPaddingBottom = `${composerH + 12}px`;
+    // mount height already subtracts composer height; keep only a small
+    // reading gutter so the last bubble sits close to the composer.
+    mountEl.style.paddingBottom = "12px";
+    mountEl.style.scrollPaddingBottom = "12px";
   } else {
     clearMessagesThreadViewportLayout();
   }

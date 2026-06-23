@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260624chatStableInit";
+const APP_BUILD = "20260624chatSimpleFlow";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -21108,7 +21108,6 @@ function syncMessagesThreadComposerReady() {
 let _messagesThreadKeyboardOpen = false;
 let _messagesComposerAutofocusToken = 0;
 let _messagesComposerReserveH = 0;
-let _messagesThreadViewportBase = 0;
 
 function scheduleMessagesComposerAutofocus({ bootToken = null, delayMs = 0 } = {}) {
   const token = ++_messagesComposerAutofocusToken;
@@ -21136,24 +21135,11 @@ function clearMessagesThreadComposerInset() {
   } catch {}
 }
 
-function measureMessagesViewportBottom() {
-  const vv = window.visualViewport;
-  if (!vv) return Math.max(0, Math.round(window.innerHeight || 0));
-  return Math.max(0, Math.round(vv.height + vv.offsetTop));
-}
-
 function measureMessagesKeyboardInset() {
-  const currentBottom = measureMessagesViewportBottom();
-  if (_messagesThreadViewportBase <= 0) {
-    _messagesThreadViewportBase = currentBottom;
-    return 0;
-  }
-  // Re-baseline whenever viewport is fully open (orientation/UI chrome changes).
-  if (currentBottom >= _messagesThreadViewportBase - 1) {
-    _messagesThreadViewportBase = currentBottom;
-    return 0;
-  }
-  return Math.max(0, _messagesThreadViewportBase - currentBottom);
+  const vv = window.visualViewport;
+  if (!vv) return 0;
+  const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+  return inset > 6 ? inset : 0;
 }
 
 function isMessagesComposerFocused() {
@@ -21184,19 +21170,15 @@ function syncMessagesThreadComposerInset() {
     clearMessagesThreadComposerInset();
     return;
   }
-  const inset = measureMessagesKeyboardInset();
-  const keyboardOpen = inset > 6;
-  const wasOpen = _messagesThreadKeyboardOpen;
-  if (keyboardOpen !== wasOpen) {
-    _messagesThreadKeyboardOpen = keyboardOpen;
-    document.body.classList.toggle("messagesThreadKeyboardOpen", keyboardOpen);
-  }
+  const keyboardOpen = isMessagesComposerFocused() && measureMessagesKeyboardInset() > 0;
+  _messagesThreadKeyboardOpen = keyboardOpen;
+  document.body.classList.toggle("messagesThreadKeyboardOpen", keyboardOpen);
   try {
-    document.documentElement.style.setProperty("--messages-keyboard-inset", `${Math.max(0, inset)}px`);
+    document.documentElement.style.setProperty("--messages-keyboard-inset", "0px");
   } catch {}
   syncMessagesThreadWebComposerPosition();
   updateMessagesComposerReserve();
-  if (_messagesThreadNeedsInitialScroll || _messagesThreadKeyboardOpen) {
+  if (_messagesThreadNeedsInitialScroll || shouldAutoScrollMessagesMount()) {
     scheduleMessagesThreadScrollToBottom({ force: true });
   }
 }
@@ -22910,7 +22892,6 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   }
 
   _messagesThreadNeedsInitialScroll = true;
-  _messagesThreadViewportBase = measureMessagesViewportBottom();
   _conversationId = tid;
   const threadCache = tid ? getThreadMessagesCache(tid) : null;
   if (threadCache?.loadedOnce) {

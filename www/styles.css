@@ -28108,10 +28108,8 @@ body[data-route="messages"]{
   overscroll-behavior: contain;
   padding: 4px 2px 8px;
   -webkit-overflow-scrolling: touch;
-}
-html.is-web-shell body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadMount{
-  scroll-padding-bottom: calc(var(--messages-composer-h, calc(60px + env(safe-area-inset-bottom, 0px))) + var(--messages-keyboard-inset, 0px) + 12px);
-  padding-bottom: calc(var(--messages-composer-h, calc(60px + env(safe-area-inset-bottom, 0px))) + var(--messages-keyboard-inset, 0px) + 12px);
+  scroll-padding-bottom: calc(var(--messages-composer-h, calc(60px + env(safe-area-inset-bottom, 0px))) + 8px);
+  padding-bottom: calc(var(--messages-composer-h, calc(60px + env(safe-area-inset-bottom, 0px))) + 8px);
 }
 .messagesThreadScrollAnchor{
   width: 100%;
@@ -28378,19 +28376,15 @@ body[data-route="messages-thread"] .messagesComposer{
   box-sizing: border-box;
 }
 html.is-web-shell body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesComposer{
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: var(--messages-keyboard-inset, 0px);
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
   width: 100%;
   max-width: none;
   margin: 0;
   padding-left: max(12px, env(safe-area-inset-left, 0px));
   padding-right: max(12px, env(safe-area-inset-right, 0px));
-  transition: none;
-}
-html.is-web-shell body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesComposer{
-  padding-bottom: 8px;
 }
 .messagesComposerShare{
   flex: 0 0 auto;

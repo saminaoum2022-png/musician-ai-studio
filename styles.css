@@ -28382,6 +28382,9 @@ body[data-route="messages-thread"] .messagesComposer{
 html.is-web-shell body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesComposer{
   padding-bottom: calc(8px + var(--messages-keyboard-inset, 0px));
 }
+html.is-web-shell body.messagesThreadViewportSized[data-route="messages-thread"] .messagesThreadPage{
+  overflow: hidden;
+}
 .messagesComposerShare{
   flex: 0 0 auto;
   width: 44px;

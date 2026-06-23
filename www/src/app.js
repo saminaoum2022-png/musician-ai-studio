@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260624chatIosInputAssist";
+const APP_BUILD = "20260624chatPortraitViewportFix";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -21108,6 +21108,7 @@ function syncMessagesThreadComposerReady() {
 let _messagesThreadKeyboardOpen = false;
 let _messagesComposerAutofocusToken = 0;
 let _messagesComposerReserveH = 0;
+let _messagesViewportDebugSig = "";
 
 function scheduleMessagesComposerAutofocus({ bootToken = null, delayMs = 0 } = {}) {
   const token = ++_messagesComposerAutofocusToken;
@@ -21157,6 +21158,99 @@ function isMessagesThreadKeyboardOpen() {
   return measureMessagesKeyboardInset() > 6;
 }
 
+function readSafeAreaInsetBottomPx() {
+  try {
+    const probe = document.createElement("div");
+    probe.style.position = "absolute";
+    probe.style.visibility = "hidden";
+    probe.style.pointerEvents = "none";
+    probe.style.height = "0";
+    probe.style.paddingBottom = "env(safe-area-inset-bottom)";
+    document.body.appendChild(probe);
+    const px = Math.max(0, Math.round(parseFloat(getComputedStyle(probe).paddingBottom) || 0));
+    probe.remove();
+    return px;
+  } catch {
+    return 0;
+  }
+}
+
+function clearMessagesThreadViewportLayout() {
+  document.body.classList.remove("messagesThreadViewportSized");
+  document.getElementById("messagesThreadPage")?.style.removeProperty("height");
+  document.getElementById("messagesThreadPage")?.style.removeProperty("max-height");
+  document.getElementById("messagesThreadMount")?.style.removeProperty("height");
+  document.getElementById("messagesThreadMount")?.style.removeProperty("max-height");
+  document.getElementById("messagesThreadMount")?.style.removeProperty("padding-bottom");
+  document.getElementById("messagesThreadMount")?.style.removeProperty("scroll-padding-bottom");
+}
+
+function syncMessagesThreadViewportLayout() {
+  if (String(document.body.getAttribute("data-route") || "") !== "messages-thread" || !isIosWebShell()) {
+    clearMessagesThreadViewportLayout();
+    return;
+  }
+  const vv = window.visualViewport;
+  const inputFocused = isMessagesComposerFocused();
+  const keyboardInset = measureMessagesKeyboardInset();
+  const keyboardOpen = inputFocused && keyboardInset > 0;
+  const portrait = window.matchMedia?.("(orientation: portrait)")?.matches
+    ?? (window.innerHeight >= window.innerWidth);
+  const headerH = Math.max(0, Math.round(document.querySelector(".messagesThreadHead")?.getBoundingClientRect().height || 0));
+  const composerH = Math.max(0, Math.round(document.querySelector(".messagesComposer")?.getBoundingClientRect().height || 0));
+  const mountEl = document.getElementById("messagesThreadMount");
+  const safeAreaBottom = readSafeAreaInsetBottomPx();
+  const vvHeight = Math.max(0, Math.round(vv?.height || window.innerHeight || 0));
+  const vvTop = Math.max(0, Math.round(vv?.offsetTop || 0));
+  let mountH = Math.max(0, Math.round(vvHeight - headerH - composerH));
+
+  if (portrait && keyboardOpen && mountEl) {
+    document.body.classList.add("messagesThreadViewportSized");
+    const page = document.getElementById("messagesThreadPage");
+    if (page) {
+      page.style.height = `${vvHeight}px`;
+      page.style.maxHeight = `${vvHeight}px`;
+    }
+    mountH = Math.max(120, mountH);
+    mountEl.style.height = `${mountH}px`;
+    mountEl.style.maxHeight = `${mountH}px`;
+    mountEl.style.paddingBottom = `${composerH + 12}px`;
+    mountEl.style.scrollPaddingBottom = `${composerH + 12}px`;
+  } else {
+    clearMessagesThreadViewportLayout();
+  }
+
+  const sig = [
+    portrait ? "portrait" : "landscape",
+    keyboardOpen ? "kb-open" : "kb-closed",
+    window.innerHeight,
+    vvHeight,
+    vvTop,
+    safeAreaBottom,
+    composerH,
+    headerH,
+    mountH,
+    mountEl?.clientHeight || 0,
+  ].join("|");
+  if (sig !== _messagesViewportDebugSig) {
+    _messagesViewportDebugSig = sig;
+    try {
+      console.info("[dm-vv]", {
+        orientation: portrait ? "portrait" : "landscape",
+        keyboardOpen,
+        innerHeight: window.innerHeight,
+        visualViewportHeight: vvHeight,
+        visualViewportOffsetTop: vvTop,
+        safeAreaInsetBottom: safeAreaBottom,
+        composerHeight: composerH,
+        headerHeight: headerH,
+        messagesContainerHeight: mountH,
+        messagesContainerClientHeight: mountEl?.clientHeight || 0,
+      });
+    } catch {}
+  }
+}
+
 function updateMessagesComposerReserve() {
   const composer = document.querySelector(".messagesComposer");
   if (!composer) return;
@@ -21186,6 +21280,7 @@ function syncMessagesThreadComposerInset() {
   } catch {}
   syncMessagesThreadWebComposerPosition();
   updateMessagesComposerReserve();
+  syncMessagesThreadViewportLayout();
   if (_messagesThreadNeedsInitialScroll) {
     scheduleMessagesThreadScrollToBottom({ force: true });
   }
@@ -21212,6 +21307,7 @@ function wireMessagesThreadComposerResizeOnce() {
     if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
     const prevReserve = _messagesComposerReserveH;
     updateMessagesComposerReserve();
+    syncMessagesThreadViewportLayout();
     if (
       Math.abs(_messagesComposerReserveH - prevReserve) > 1
       && (shouldAutoScrollMessagesMount() || _messagesThreadNeedsInitialScroll || _messagesThreadKeyboardOpen)
@@ -22941,6 +23037,7 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   renderMessagesMount({ scrollToBottom: true, forceScroll: true });
   syncMessagesThreadComposerReady();
   syncMessagesThreadComposerInset();
+  syncMessagesThreadViewportLayout();
   scheduleMessagesThreadScrollToBottom({ force: true });
   beginMessagesThreadEnterTransition();
   if (tid) void markThreadReadQuiet(tid);

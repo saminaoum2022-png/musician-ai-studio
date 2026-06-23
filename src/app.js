@@ -42,7 +42,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260623friendsTabDot";
+const APP_BUILD = "20260623bootSplashFix";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -91,6 +91,8 @@ function finishBootSplash() {
     if (_bootSplashMinTimer) clearTimeout(_bootSplashMinTimer);
     _bootSplashMinTimer = 0;
     document.body.classList.remove("booting");
+    const splash = document.getElementById("bootSplash");
+    if (splash) splash.style.display = "";
   } catch {}
 }
 

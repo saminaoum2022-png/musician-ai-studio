@@ -2,7 +2,25 @@
 <html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
-    <style id="bootCritical">html,body{margin:0;background-color:#05070d;color-scheme:dark}</style>
+    <style id="bootCritical">
+      html,body{margin:0;background-color:#05070d;color-scheme:dark}
+      html{background-color:#05070d}
+      body.booting{overflow:hidden;background:#05070d}
+      body.booting>*:not(#bootSplash):not(#loginSettlingOverlay){display:none!important}
+      body.booting #bootSplash{
+        display:flex!important;
+        position:fixed;
+        inset:0;
+        z-index:10000;
+        align-items:center;
+        justify-content:center;
+        background:#05070d;
+      }
+      body.booting main.grid>[data-route],
+      body.booting .header,
+      body.booting .mobileTabbar,
+      body.booting .footer{display:none!important}
+    </style>
     <script>
       (function () {
         try { localStorage.removeItem("nabadai_theme_v1"); } catch (e) {}
@@ -18,15 +36,11 @@
         style.id = "themeCritical";
         var base = "html,body{background-color:" + bg + ";color:" + fg + ";margin:0}html{color-scheme:dark}";
         var bootHide =
-          "body.booting{background:" + bg + "}" +
-          "body.booting .app{visibility:hidden}" +
-          "body.booting .mobileTabbar,body.booting .footer{display:none!important}" +
-          "body.booting .bootSplash{display:flex;position:fixed;inset:0;z-index:10000;align-items:center;justify-content:center;background:" + bg + "}";
-        var webBootExtra = isCapShell ? "" : (
-          "html.is-web-shell body.booting>*:not(#bootSplash):not(#loginSettlingOverlay){display:none!important}"
-        );
-        var webBoot = bootHide + webBootExtra + (isCapShell ? "" : "html.is-web-shell body.booting::before{display:none!important}");
-        style.textContent = base + webBoot;
+          "body.booting{background:" + bg + ";overflow:hidden}" +
+          "body.booting>*:not(#bootSplash):not(#loginSettlingOverlay){display:none!important}" +
+          "body.booting #bootSplash{display:flex!important;position:fixed;inset:0;z-index:10000;align-items:center;justify-content:center;background:" + bg + "}" +
+          "body.booting .app,body.booting main.grid>[data-route],body.booting .header,body.booting .mobileTabbar,body.booting .footer{display:none!important}";
+        style.textContent = base + bootHide;
         document.head.appendChild(style);
       })();
     </script>
@@ -70,7 +84,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260623screenTitles" />
+    <link rel="stylesheet" href="./styles.css?v=20260623bootSplashFix" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -117,47 +131,6 @@
         <span class="loginSettlingDots introDots" aria-hidden="true"><i></i><i></i><i></i></span>
       </div>
     </div>
-    <script>
-      (function () {
-        var done = false;
-        try { done = localStorage.getItem("nabadai_onboarding_v1_done") === "1"; } catch (e) {}
-        var h = String(location.hash || "").replace(/^#\/?/, "").split(/[?#&]/)[0] || "";
-        if (/^u\//.test(h)) h = "user";
-        if (h === "hub" || h === "home" || h === "start") h = "discover";
-        if (h === "sparks") h = "challenges";
-        var guestMode = false;
-        try { guestMode = localStorage.getItem("nabadai_guest_mode_v1") === "1"; } catch (e) {}
-        if (!h) {
-          if (!done) {
-            h = "intro";
-          } else {
-            var hasSession = false;
-            try {
-              var raw = localStorage.getItem("mas:supabase:session:v1");
-              hasSession = !!(raw && raw.indexOf("access_token") !== -1);
-            } catch (e) {}
-            h = hasSession ? "discover" : (guestMode ? "discover" : "auth");
-          }
-        }
-        var ok = /^(intro|onboarding|music-preferences|auth|generate|challenges|activity|discover|friends|profile|settings|player|sounds|user|vocal|stems|advanced|credits|mentor)$/.test(h);
-        if (!ok) {
-          if (!done) h = "intro";
-          else {
-            var hasSessionFallback = false;
-            try {
-              var rawFb = localStorage.getItem("mas:supabase:session:v1");
-              hasSessionFallback = !!(rawFb && rawFb.indexOf("access_token") !== -1);
-            } catch (e) {}
-            h = hasSessionFallback ? "discover" : (guestMode ? "discover" : "auth");
-          }
-        }
-        document.body.setAttribute("data-route", h);
-        document.body.classList.toggle("isIntro", h === "intro");
-        document.body.classList.toggle("isOnboarding", h === "onboarding");
-        document.body.classList.toggle("isAuth", h === "auth");
-        document.body.classList.toggle("isMusicPrefs", h === "music-preferences");
-      })();
-    </script>
     <div class="app">
       <header class="header">
         <div class="headerMain">
@@ -3825,7 +3798,48 @@
       </div>
     </div>
 
+    <script>
+      (function () {
+        var done = false;
+        try { done = localStorage.getItem("nabadai_onboarding_v1_done") === "1"; } catch (e) {}
+        var h = String(location.hash || "").replace(/^#\/?/, "").split(/[?#&]/)[0] || "";
+        if (/^u\//.test(h)) h = "user";
+        if (h === "hub" || h === "home" || h === "start") h = "discover";
+        if (h === "sparks") h = "challenges";
+        var guestMode = false;
+        try { guestMode = localStorage.getItem("nabadai_guest_mode_v1") === "1"; } catch (e) {}
+        if (!h) {
+          if (!done) {
+            h = "intro";
+          } else {
+            var hasSession = false;
+            try {
+              var raw = localStorage.getItem("mas:supabase:session:v1");
+              hasSession = !!(raw && raw.indexOf("access_token") !== -1);
+            } catch (e) {}
+            h = hasSession ? "discover" : (guestMode ? "discover" : "auth");
+          }
+        }
+        var ok = /^(intro|onboarding|music-preferences|auth|generate|challenges|activity|discover|friends|profile|settings|player|sounds|user|vocal|stems|advanced|credits|mentor)$/.test(h);
+        if (!ok) {
+          if (!done) h = "intro";
+          else {
+            var hasSessionFallback = false;
+            try {
+              var rawFb = localStorage.getItem("mas:supabase:session:v1");
+              hasSessionFallback = !!(rawFb && rawFb.indexOf("access_token") !== -1);
+            } catch (e) {}
+            h = hasSessionFallback ? "discover" : (guestMode ? "discover" : "auth");
+          }
+        }
+        document.body.setAttribute("data-route", h);
+        document.body.classList.toggle("isIntro", h === "intro");
+        document.body.classList.toggle("isOnboarding", h === "onboarding");
+        document.body.classList.toggle("isAuth", h === "auth");
+        document.body.classList.toggle("isMusicPrefs", h === "music-preferences");
+      })();
+    </script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260623friendsTabDot"></script>
+    <script type="module" src="./src/app.js?v=20260623bootSplashFix"></script>
   </body>
 </html>

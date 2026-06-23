@@ -1404,26 +1404,26 @@ html{ overflow-x: clip; }
 body.pageTransitioning{ opacity: 0; }
 body.booting{
   background: #05070d;
+  overflow: hidden;
 }
-html.is-web-shell body.booting::before{
-  display: none;
-}
-html.is-web-shell body.booting > *:not(#bootSplash):not(#loginSettlingOverlay){
+body.booting > *:not(#bootSplash):not(#loginSettlingOverlay){
   display: none !important;
 }
-html.is-web-shell body.booting .bootSplash{
-  background: #05070d;
+body.booting #bootSplash{
+  display: flex !important;
 }
-body.booting .app{ visibility: hidden; }
-body.booting .mobileTabbar,
-body.booting .footer{ display: none !important; }
 body.booting::before{
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  background: #05070d;
-  pointer-events: none;
+  display: none;
+}
+body.booting .app,
+body.booting main.grid > [data-route],
+body.booting .header,
+body.booting .mobileTabbar,
+body.booting .footer,
+body.booting .profileAuraHeaderChrome,
+body.booting .friendsComposeFabRoot,
+body.booting .hubNowPlaying{
+  display: none !important;
 }
 .bootSplash{
   display: none;

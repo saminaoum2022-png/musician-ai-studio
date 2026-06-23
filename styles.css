@@ -28387,10 +28387,10 @@ html.is-web-shell body.messagesThreadKeyboardOpen[data-route="messages-thread"] 
   margin: 0;
   padding-left: max(12px, env(safe-area-inset-left, 0px));
   padding-right: max(12px, env(safe-area-inset-right, 0px));
-  transition: bottom 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: none;
 }
-body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesComposer{
-  padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+html.is-web-shell body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesComposer{
+  padding-bottom: 8px;
 }
 .messagesComposerShare{
   flex: 0 0 auto;

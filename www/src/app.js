@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260624chatPwaFlex";
+const APP_BUILD = "20260624chatStableInit";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -21108,6 +21108,7 @@ function syncMessagesThreadComposerReady() {
 let _messagesThreadKeyboardOpen = false;
 let _messagesComposerAutofocusToken = 0;
 let _messagesComposerReserveH = 0;
+let _messagesThreadViewportBase = 0;
 
 function scheduleMessagesComposerAutofocus({ bootToken = null, delayMs = 0 } = {}) {
   const token = ++_messagesComposerAutofocusToken;
@@ -21135,14 +21136,24 @@ function clearMessagesThreadComposerInset() {
   } catch {}
 }
 
-function measureMessagesKeyboardInset() {
+function measureMessagesViewportBottom() {
   const vv = window.visualViewport;
-  if (!vv) return 0;
-  const layoutH = document.documentElement.clientHeight;
-  const visibleBottom = vv.offsetTop + vv.height;
-  const layoutGap = Math.max(0, Math.round(layoutH - visibleBottom));
-  const windowGap = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
-  return Math.max(layoutGap, windowGap);
+  if (!vv) return Math.max(0, Math.round(window.innerHeight || 0));
+  return Math.max(0, Math.round(vv.height + vv.offsetTop));
+}
+
+function measureMessagesKeyboardInset() {
+  const currentBottom = measureMessagesViewportBottom();
+  if (_messagesThreadViewportBase <= 0) {
+    _messagesThreadViewportBase = currentBottom;
+    return 0;
+  }
+  // Re-baseline whenever viewport is fully open (orientation/UI chrome changes).
+  if (currentBottom >= _messagesThreadViewportBase - 1) {
+    _messagesThreadViewportBase = currentBottom;
+    return 0;
+  }
+  return Math.max(0, _messagesThreadViewportBase - currentBottom);
 }
 
 function isMessagesComposerFocused() {
@@ -21159,16 +21170,8 @@ function updateMessagesComposerReserve() {
   if (!composer) return;
   const h = Math.ceil(composer.getBoundingClientRect().height);
   if (h <= 0) return;
-  const prev = _messagesComposerReserveH;
   _messagesComposerReserveH = h;
   document.documentElement.style.setProperty("--messages-composer-h", `${h}px`);
-  if (
-    Math.abs(h - prev) > 2
-    && String(document.body.getAttribute("data-route") || "") === "messages-thread"
-    && (shouldAutoScrollMessagesMount() || _messagesThreadNeedsInitialScroll || _messagesThreadKeyboardOpen)
-  ) {
-    scheduleMessagesThreadScrollToBottom({ force: true });
-  }
 }
 
 function syncMessagesThreadWebComposerPosition() {
@@ -21193,16 +21196,14 @@ function syncMessagesThreadComposerInset() {
   } catch {}
   syncMessagesThreadWebComposerPosition();
   updateMessagesComposerReserve();
-  scheduleMessagesThreadScrollToBottom({ force: true });
+  if (_messagesThreadNeedsInitialScroll || _messagesThreadKeyboardOpen) {
+    scheduleMessagesThreadScrollToBottom({ force: true });
+  }
 }
 
 function scheduleMessagesThreadScrollToBottom({ force = true } = {}) {
   scrollMessagesMountToBottom({ force });
   window.requestAnimationFrame(() => scrollMessagesMountToBottom({ force }));
-  window.setTimeout(() => scrollMessagesMountToBottom({ force }), 0);
-  window.setTimeout(() => scrollMessagesMountToBottom({ force }), 50);
-  window.setTimeout(() => scrollMessagesMountToBottom({ force }), 180);
-  window.setTimeout(() => scrollMessagesMountToBottom({ force }), 360);
 }
 
 function syncMessagesComposerInputHeight(input = document.getElementById("messagesComposerInput")) {
@@ -21219,8 +21220,12 @@ function wireMessagesThreadComposerResizeOnce() {
   if (!composer || typeof ResizeObserver !== "function") return;
   const ro = new ResizeObserver(() => {
     if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
+    const prevReserve = _messagesComposerReserveH;
     updateMessagesComposerReserve();
-    if (shouldAutoScrollMessagesMount() || _messagesThreadNeedsInitialScroll || _messagesThreadKeyboardOpen) {
+    if (
+      Math.abs(_messagesComposerReserveH - prevReserve) > 1
+      && (shouldAutoScrollMessagesMount() || _messagesThreadNeedsInitialScroll || _messagesThreadKeyboardOpen)
+    ) {
       scheduleMessagesThreadScrollToBottom({ force: true });
     }
   });
@@ -21235,24 +21240,6 @@ function wireMessagesThreadKeyboardOnce() {
   window.visualViewport?.addEventListener("resize", onViewportChange);
   window.visualViewport?.addEventListener("scroll", onViewportChange);
   window.addEventListener("resize", onViewportChange);
-  const input = document.getElementById("messagesComposerInput");
-  if (input) {
-    input.addEventListener("focus", () => {
-      window.setTimeout(() => syncMessagesThreadComposerInset(), 40);
-      window.setTimeout(() => syncMessagesThreadComposerInset(), 280);
-    });
-    input.addEventListener("blur", () => {
-      window.setTimeout(() => {
-        syncMessagesThreadComposerInset();
-        scheduleMessagesThreadScrollToBottom({ force: true });
-      }, 120);
-    });
-    input.addEventListener("input", () => {
-      syncMessagesComposerInputHeight(input);
-      updateMessagesComposerReserve();
-      scrollMessagesMountToBottom({ force: true });
-    });
-  }
 }
 
 function normalizePartnerStats(raw) {
@@ -21542,27 +21529,12 @@ function scrollMessagesMountToBottom({ force = false } = {}) {
   const mount = document.getElementById("messagesThreadMount");
   if (!mount) return;
   if (!force && !shouldAutoScrollMessagesMount()) return;
-  const run = () => {
-    try {
-      const anchor = mount.querySelector(".messagesThreadScrollAnchor");
-      if (anchor) {
-        anchor.scrollIntoView({ block: "end", inline: "nearest" });
-      } else {
-        mount.scrollTop = mount.scrollHeight;
-      }
-    } catch {}
-    try { syncDiscoveryPlayingHighlights(); } catch {}
-  };
-  requestAnimationFrame(() => {
-    run();
-    requestAnimationFrame(() => {
-      run();
-      requestAnimationFrame(run);
-    });
-  });
-  window.setTimeout(run, 60);
-  window.setTimeout(run, 200);
-  window.setTimeout(run, 450);
+  try {
+    const anchor = mount.querySelector(".messagesThreadScrollAnchor");
+    if (anchor) anchor.scrollIntoView({ block: "end", inline: "nearest" });
+    else mount.scrollTop = mount.scrollHeight;
+  } catch {}
+  try { syncDiscoveryPlayingHighlights(); } catch {}
 }
 
 function renderMessagesMount({ scrollToBottom = true, forceScroll = false } = {}) {
@@ -22938,6 +22910,7 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   }
 
   _messagesThreadNeedsInitialScroll = true;
+  _messagesThreadViewportBase = measureMessagesViewportBottom();
   _conversationId = tid;
   const threadCache = tid ? getThreadMessagesCache(tid) : null;
   if (threadCache?.loadedOnce) {
@@ -22980,18 +22953,6 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   syncMessagesThreadComposerReady();
   syncMessagesThreadComposerInset();
   scheduleMessagesThreadScrollToBottom({ force: true });
-  window.requestAnimationFrame(() => {
-    updateMessagesComposerReserve();
-    scheduleMessagesThreadScrollToBottom({ force: true });
-  });
-  window.setTimeout(() => {
-    updateMessagesComposerReserve();
-    scheduleMessagesThreadScrollToBottom({ force: true });
-  }, 120);
-  window.setTimeout(() => {
-    updateMessagesComposerReserve();
-    scheduleMessagesThreadScrollToBottom({ force: true });
-  }, 480);
   beginMessagesThreadEnterTransition();
   if (tid) void markThreadReadQuiet(tid);
   if (_chatHeaderUser?.userId) void loadMessagesThreadPartnerMeta(_chatHeaderUser.userId);
@@ -23230,6 +23191,7 @@ function bindMessagesPageOnce() {
     composer.dataset.boundMessagesComposer = "1";
     composer.addEventListener("input", () => {
       syncMessagesComposerInputHeight(composer);
+      updateMessagesComposerReserve();
       scrollMessagesMountToBottom({ force: true });
     });
     composer.addEventListener("focus", () => {
@@ -23238,8 +23200,8 @@ function bindMessagesPageOnce() {
       scheduleMessagesThreadScrollToBottom({ force: true });
     });
     composer.addEventListener("blur", () => {
-      window.setTimeout(syncMessagesThreadComposerInset, 60);
-      window.setTimeout(syncMessagesThreadComposerInset, 280);
+      syncMessagesThreadComposerInset();
+      scheduleMessagesThreadScrollToBottom({ force: true });
     });
     composer.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {

@@ -196,7 +196,7 @@ function bindPushSubscriptionListener(uid) {
 }
 
 export async function syncPushAuth(userId) {
-  const uid = String(userId || "").trim();
+  const uid = String(userId || "").trim().toLowerCase();
   if (!uid || !pushConfigured() || isNativeAppShell()) return;
   await initPushNotifications();
   try {
@@ -227,7 +227,7 @@ export async function syncPushAuth(userId) {
 
 /** Must be called from a user tap (Settings button, etc.). */
 export async function enablePushNotifications(userId) {
-  const uid = String(userId || _linkedUserId || "").trim();
+  const uid = String(userId || _linkedUserId || "").trim().toLowerCase();
   if (!uid || !pushConfigured()) {
     return { ok: false, reason: "not_configured" };
   }

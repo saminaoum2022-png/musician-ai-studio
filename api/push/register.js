@@ -55,16 +55,19 @@ function cleanPlatform(v) {
 
 async function upsertSubscription(userId, subscriptionId, platform) {
   const now = new Date().toISOString();
-  const ins = await svcFetch("user_push_subscriptions", {
-    method: "POST",
-    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-    body: JSON.stringify({
-      user_id: userId,
-      onesignal_subscription_id: subscriptionId,
-      platform,
-      updated_at: now,
-    }),
-  });
+  const ins = await svcFetch(
+    "user_push_subscriptions?on_conflict=user_id,onesignal_subscription_id",
+    {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify({
+        user_id: userId,
+        onesignal_subscription_id: subscriptionId,
+        platform,
+        updated_at: now,
+      }),
+    },
+  );
   return ins.ok;
 }
 

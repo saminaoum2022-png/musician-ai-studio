@@ -440,6 +440,10 @@ async function handlePost(req, res, user) {
       if (dup) return sendJson(res, 409, { ok: false, error: "Request already pending" });
       return sendJson(res, 500, { ok: false, error: "Request failed", details: ins.text });
     }
+    queuePrivacySafePush({
+      userId: targetUserId,
+      type: "dm_message",
+    });
     return sendJson(res, 200, {
       ok: true,
       request: Array.isArray(ins.data) && ins.data[0] ? ins.data[0] : null,

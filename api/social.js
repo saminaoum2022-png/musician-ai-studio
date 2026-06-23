@@ -1123,13 +1123,14 @@ async function handleGet(req, res, user) {
     monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
     const weekKey = monday.toISOString().slice(0, 10);
     // Chart JSON must return fast; rank notifications are best-effort after.
-    // Notify only when rank changed and send at most one chart notification
-    // per user per week (best-ranked changed song) to avoid push spam for
-    // creators who hold multiple slots.
+    // Notify only for rank improvements ("new" / "up") and send at most one
+    // chart notification per user per week (best-ranked improved song) to
+    // avoid push spam for creators who hold multiple slots.
     const changedByUser = new Map();
     for (const e of chart) {
       if (e.rank > CHART_NOTIFY_MAX_RANK) continue;
-      if (!e.userId || e.movement === "same") continue;
+      if (!e.userId) continue;
+      if (e.movement !== "new" && e.movement !== "up") continue;
       const prev = changedByUser.get(e.userId);
       if (!prev || e.rank < prev.rank) changedByUser.set(e.userId, e);
     }

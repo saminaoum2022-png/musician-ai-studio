@@ -630,7 +630,7 @@ async function insertNotification({ userId, type, actorUserId, entityId, metadat
   return true;
 }
 
-const CHART_NOTIFY_MAX_RANK = 5;
+const CHART_NOTIFY_MAX_RANK = 10;
 const _chartNotifyInflight = new Map();
 
 async function maybeNotifyChartRank({ userId, entityId, metadata }) {
@@ -1123,19 +1123,29 @@ async function handleGet(req, res, user) {
     monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
     const weekKey = monday.toISOString().slice(0, 10);
     // Chart JSON must return fast; rank notifications are best-effort after.
-    // Only notify top 5 — lower ranks (6–10) spam Activity when Discover reloads the chart.
+    // Notify only when rank changed and send at most one chart notification
+    // per user per week (best-ranked changed song) to avoid push spam for
+    // creators who hold multiple slots.
+    const changedByUser = new Map();
+    for (const e of chart) {
+      if (e.rank > CHART_NOTIFY_MAX_RANK) continue;
+      if (!e.userId || e.movement === "same") continue;
+      const prev = changedByUser.get(e.userId);
+      if (!prev || e.rank < prev.rank) changedByUser.set(e.userId, e);
+    }
     void Promise.all(
-      chart
-        .filter((e) => e.rank <= CHART_NOTIFY_MAX_RANK)
+      [...changedByUser.values()]
         .map((e) =>
           maybeNotifyChartRank({
             userId: e.userId,
-            entityId: `chart:${weekKey}:${e.songId}`,
+            entityId: `chart:${weekKey}:${e.userId}`,
             metadata: {
               song_id: e.songId,
               song_title: e.title,
               song_art_url: e.artUrl,
               rank: e.rank,
+              movement: e.movement,
+              delta: e.delta,
               weekly_plays: e.weeklyPlays,
               week_key: weekKey,
             },

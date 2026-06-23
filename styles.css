@@ -28111,6 +28111,10 @@ body[data-route="messages"]{
   scroll-padding-bottom: 8px;
   padding-bottom: 8px;
 }
+html.is-web-shell body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadMount{
+  scroll-padding-bottom: calc(8px + var(--messages-keyboard-inset, 0px));
+  padding-bottom: calc(8px + var(--messages-keyboard-inset, 0px));
+}
 .messagesThreadScrollAnchor{
   width: 100%;
   height: 1px;
@@ -28374,6 +28378,9 @@ body[data-route="messages-thread"] .messagesComposer{
   width: 100%;
   margin: 0;
   box-sizing: border-box;
+}
+html.is-web-shell body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesComposer{
+  padding-bottom: calc(8px + var(--messages-keyboard-inset, 0px));
 }
 .messagesComposerShare{
   flex: 0 0 auto;

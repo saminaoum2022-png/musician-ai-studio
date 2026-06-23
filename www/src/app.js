@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260624chatFlowModel1";
+const APP_BUILD = "20260624chatIosInputAssist";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -21136,12 +21136,21 @@ function clearMessagesThreadComposerInset() {
 }
 
 function measureMessagesKeyboardInset() {
-  return 0;
+  const vv = window.visualViewport;
+  if (!vv) return 0;
+  const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+  return inset > 6 ? inset : 0;
 }
 
 function isMessagesComposerFocused() {
   const input = document.getElementById("messagesComposerInput");
   return Boolean(input && document.activeElement === input);
+}
+
+function isIosWebShell() {
+  if (isNativeShell()) return false;
+  const ua = String(navigator?.userAgent || "");
+  return /iPhone|iPad|iPod/i.test(ua);
 }
 
 function isMessagesThreadKeyboardOpen() {
@@ -21167,10 +21176,13 @@ function syncMessagesThreadComposerInset() {
     clearMessagesThreadComposerInset();
     return;
   }
-  _messagesThreadKeyboardOpen = false;
-  document.body.classList.remove("messagesThreadKeyboardOpen");
+  const focused = isMessagesComposerFocused();
+  const inset = focused && isIosWebShell() ? measureMessagesKeyboardInset() : 0;
+  const keyboardOpen = inset > 0;
+  _messagesThreadKeyboardOpen = keyboardOpen;
+  document.body.classList.toggle("messagesThreadKeyboardOpen", keyboardOpen);
   try {
-    document.documentElement.style.setProperty("--messages-keyboard-inset", "0px");
+    document.documentElement.style.setProperty("--messages-keyboard-inset", `${inset}px`);
   } catch {}
   syncMessagesThreadWebComposerPosition();
   updateMessagesComposerReserve();
@@ -21214,6 +21226,10 @@ function wireMessagesThreadKeyboardOnce() {
   if (document.documentElement.dataset.messagesThreadKbWired) return;
   document.documentElement.dataset.messagesThreadKbWired = "1";
   wireMessagesThreadComposerResizeOnce();
+  const onViewportChange = () => syncMessagesThreadComposerInset();
+  window.visualViewport?.addEventListener("resize", onViewportChange);
+  window.visualViewport?.addEventListener("scroll", onViewportChange);
+  window.addEventListener("resize", onViewportChange);
 }
 
 function normalizePartnerStats(raw) {
@@ -23168,9 +23184,11 @@ function bindMessagesPageOnce() {
     });
     composer.addEventListener("focus", () => {
       syncMessagesComposerInputHeight(composer);
+      syncMessagesThreadComposerInset();
       scheduleMessagesThreadScrollToBottom({ force: true });
     });
     composer.addEventListener("blur", () => {
+      syncMessagesThreadComposerInset();
       scheduleMessagesThreadScrollToBottom({ force: true });
     });
     composer.addEventListener("keydown", (e) => {

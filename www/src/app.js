@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260624dmUnreadRed";
+const APP_BUILD = "20260624chatKeyboardSmooth";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -21129,6 +21129,9 @@ function clearMessagesThreadComposerInset() {
   document.body.classList.remove("messagesThreadKeyboardOpen");
   _messagesThreadKeyboardOpen = false;
   document.querySelector(".messagesComposer")?.style.removeProperty("bottom");
+  try {
+    document.documentElement.style.setProperty("--messages-keyboard-inset", "0px");
+  } catch {}
 }
 
 function measureMessagesKeyboardInset() {
@@ -21147,11 +21150,7 @@ function isMessagesComposerFocused() {
 }
 
 function isMessagesThreadKeyboardOpen() {
-  const inset = measureMessagesKeyboardInset();
-  if (inset > 6) return true;
-  if (isNativeShell()) return false;
-  if (!isMessagesComposerFocused()) return false;
-  return window.matchMedia("(max-width: 720px)").matches;
+  return measureMessagesKeyboardInset() > 6;
 }
 
 function updateMessagesComposerReserve() {
@@ -21181,23 +21180,28 @@ function syncMessagesThreadComposerInset() {
     clearMessagesThreadComposerInset();
     return;
   }
-  const keyboardOpen = isMessagesThreadKeyboardOpen();
-  if (keyboardOpen !== _messagesThreadKeyboardOpen) {
+  const inset = measureMessagesKeyboardInset();
+  const keyboardOpen = inset > 6;
+  const wasOpen = _messagesThreadKeyboardOpen;
+  if (keyboardOpen !== wasOpen) {
     _messagesThreadKeyboardOpen = keyboardOpen;
     document.body.classList.toggle("messagesThreadKeyboardOpen", keyboardOpen);
   }
+  try {
+    document.documentElement.style.setProperty("--messages-keyboard-inset", `${Math.max(0, inset)}px`);
+  } catch {}
   syncMessagesThreadWebComposerPosition(keyboardOpen);
   updateMessagesComposerReserve();
-  if (keyboardOpen) {
-    scheduleMessagesThreadScrollToBottom({ force: true });
-  }
+  scheduleMessagesThreadScrollToBottom({ force: true });
 }
 
 function scheduleMessagesThreadScrollToBottom({ force = true } = {}) {
   scrollMessagesMountToBottom({ force });
+  window.requestAnimationFrame(() => scrollMessagesMountToBottom({ force }));
   window.setTimeout(() => scrollMessagesMountToBottom({ force }), 0);
   window.setTimeout(() => scrollMessagesMountToBottom({ force }), 50);
   window.setTimeout(() => scrollMessagesMountToBottom({ force }), 180);
+  window.setTimeout(() => scrollMessagesMountToBottom({ force }), 360);
 }
 
 function syncMessagesComposerInputHeight(input = document.getElementById("messagesComposerInput")) {
@@ -21228,6 +21232,24 @@ function wireMessagesThreadKeyboardOnce() {
   window.visualViewport?.addEventListener("resize", onViewportChange);
   window.visualViewport?.addEventListener("scroll", onViewportChange);
   window.addEventListener("resize", onViewportChange);
+  const input = document.getElementById("messagesComposerInput");
+  if (input) {
+    input.addEventListener("focus", () => {
+      window.setTimeout(() => syncMessagesThreadComposerInset(), 40);
+      window.setTimeout(() => syncMessagesThreadComposerInset(), 280);
+    });
+    input.addEventListener("blur", () => {
+      window.setTimeout(() => {
+        syncMessagesThreadComposerInset();
+        scheduleMessagesThreadScrollToBottom({ force: true });
+      }, 120);
+    });
+    input.addEventListener("input", () => {
+      syncMessagesComposerInputHeight(input);
+      updateMessagesComposerReserve();
+      scrollMessagesMountToBottom({ force: true });
+    });
+  }
 }
 
 function normalizePartnerStats(raw) {
@@ -21644,6 +21666,8 @@ function syncMessagesLastFetchedAtFromList() {
 function addOptimisticThreadMessage(msg) {
   _messagesList = [...(Array.isArray(_messagesList) ? _messagesList : []), msg];
   renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+  updateMessagesComposerReserve();
+  scheduleMessagesThreadScrollToBottom({ force: true });
 }
 
 function confirmOptimisticThreadMessage(clientMessageId, serverMsg) {
@@ -21665,7 +21689,8 @@ function confirmOptimisticThreadMessage(clientMessageId, serverMsg) {
     return;
   }
   syncMessagesLastFetchedAtFromList();
-  renderMessagesMount({ scrollToBottom: false });
+  renderMessagesMount({ scrollToBottom: true, forceScroll: shouldAutoScrollMessagesMount() });
+  scheduleMessagesThreadScrollToBottom({ force: shouldAutoScrollMessagesMount() });
 }
 
 function markOptimisticThreadMessageFailed(clientMessageId, err) {
@@ -22931,16 +22956,15 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
 
   const input = document.getElementById("messagesComposerInput");
   if (input) input.value = "";
+  wireMessagesThreadKeyboardOnce();
+  updateMessagesComposerReserve();
   renderChatHeader();
   renderMessagesMount({ scrollToBottom: true, forceScroll: true });
   syncMessagesThreadComposerReady();
-  wireMessagesThreadKeyboardOnce();
   syncMessagesThreadComposerInset();
-  updateMessagesComposerReserve();
   scheduleMessagesThreadScrollToBottom({ force: true });
   beginMessagesThreadEnterTransition();
   if (tid) void markThreadReadQuiet(tid);
-  if (tid) scheduleMessagesComposerAutofocus({ bootToken, delayMs: 360 });
   if (_chatHeaderUser?.userId) void loadMessagesThreadPartnerMeta(_chatHeaderUser.userId);
   void bootstrapMessagesThread({ bootToken, threadId: tid, targetUserId: uid });
 }
@@ -22963,8 +22987,11 @@ function sendCurrentThreadMessage() {
   };
 
   input.value = "";
+  syncMessagesComposerInputHeight(input);
   addOptimisticThreadMessage(optimistic);
+  updateMessagesComposerReserve();
   try { input.focus({ preventScroll: true }); } catch { try { input.focus(); } catch {} }
+  syncMessagesThreadComposerInset();
 
   const sendBtn = document.getElementById("messagesComposerSend");
   if (sendBtn) {

@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260624authPushRoute";
+const APP_BUILD = "20260624dmUnreadRed";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -21401,6 +21401,25 @@ function findInboxThreadById(threadId) {
   return (_messagesInboxState.threads || []).find((t) => String(t?.threadId || "") === tid) || null;
 }
 
+function markInboxThreadReadLocally(threadId) {
+  const tid = String(threadId || "").trim();
+  if (!tid) return false;
+  let changed = false;
+  _messagesInboxState.threads = (_messagesInboxState.threads || []).map((t) => {
+    if (String(t?.threadId || "") !== tid) return t;
+    if (!t?.unread) return t;
+    changed = true;
+    return { ...t, unread: false };
+  });
+  if (changed) {
+    const route = String(document.body.getAttribute("data-route") || "");
+    if (route === "messages" || route === "friends") {
+      renderMessagesInbox();
+    }
+  }
+  return changed;
+}
+
 function navigateToMessagesThread({ threadId, headerUser, targetUserId, partnerStats } = {}) {
   stashMessagesNavPrefetch({
     threadId: String(threadId || "").trim(),
@@ -21762,6 +21781,7 @@ function leaveMessagesThreadRoute(callback) {
 async function markThreadReadQuiet(threadId) {
   const tid = String(threadId || _conversationId || "").trim();
   if (!tid) return;
+  markInboxThreadReadLocally(tid);
   try {
     await messagesApi("/api/messages", {
       method: "POST",
@@ -22727,9 +22747,7 @@ async function loadMessagesForConversation(threadId, { bootToken = 0, silent = f
       lastFetchedAt: _messagesLastFetchedAt,
       loadedOnce: true,
     });
-    if (!silent) {
-      await markThreadReadQuiet(tid);
-    }
+    await markThreadReadQuiet(tid);
     return true;
   } catch (e) {
     if (!silent && !(Array.isArray(_messagesList) && _messagesList.length)) {
@@ -22921,6 +22939,7 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   updateMessagesComposerReserve();
   scheduleMessagesThreadScrollToBottom({ force: true });
   beginMessagesThreadEnterTransition();
+  if (tid) void markThreadReadQuiet(tid);
   if (tid) scheduleMessagesComposerAutofocus({ bootToken, delayMs: 360 });
   if (_chatHeaderUser?.userId) void loadMessagesThreadPartnerMeta(_chatHeaderUser.userId);
   void bootstrapMessagesThread({ bootToken, threadId: tid, targetUserId: uid });
@@ -23020,8 +23039,7 @@ function enterMessagesRoute({ fromThread = false } = {}) {
   if (hasCache) {
     renderMessagesInbox();
     restoreMessagesInboxScroll();
-    const skipRefresh = fromThread && shouldSkipRouteHeavy("messages");
-    if (!skipRefresh && (fromThread || !shouldSkipRouteHeavy("messages"))) {
+    if (fromThread || !shouldSkipRouteHeavy("messages")) {
       void loadMessagesInbox({ silent: true });
     }
     markRouteHeavy("messages");
@@ -23091,6 +23109,7 @@ function bindMessagesPageOnce() {
       const tid = threadRow.getAttribute("data-messages-thread");
       if (tid) {
         try { haptic("light"); } catch {}
+        markInboxThreadReadLocally(tid);
         const cachedThread = findInboxThreadById(tid);
         const partnerUserId = String(cachedThread?.partnerUserId || "").trim();
         navigateToMessagesThread({

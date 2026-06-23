@@ -27720,7 +27720,7 @@ body[data-route="messages"]{
   height: 18px;
   padding: 0 5px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #7c5cff, #b78bff);
+  background: var(--danger);
   color: #fff;
   font-size: 10px;
   font-weight: 800;
@@ -27737,10 +27737,10 @@ body[data-route="messages"]{
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #7c5cff, #b78bff);
+  background: var(--danger);
   box-shadow:
     0 0 0 2px rgba(5, 7, 13, 0.94),
-    0 0 12px rgba(124, 92, 255, 0.55);
+    0 0 12px rgba(255, 77, 109, 0.45);
 }
 .messagesHead,
 .messagesThreadHead{
@@ -27782,7 +27782,7 @@ body[data-route="messages"]{
   padding: 0 5px;
   margin-left: 4px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #7c5cff, #b78bff);
+  background: var(--danger);
   color: #fff;
   font-size: 10px;
   font-weight: 800;
@@ -27952,13 +27952,13 @@ body[data-route="messages"]{
   height: 20px;
   padding: 0 6px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #7c5cff, #b78bff);
+  background: var(--danger);
   color: #fff;
   font-size: 11px;
   font-weight: 800;
   line-height: 20px;
   text-align: center;
-  box-shadow: 0 4px 14px rgba(124,92,255,0.35);
+  box-shadow: 0 4px 14px rgba(255, 77, 109, 0.35);
 }
 .messagesRequestRow{
   display: flex;

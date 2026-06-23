@@ -48,6 +48,7 @@ import {
   isPushOptedIn,
   logoutPushAuth,
   maybePromptPushAfterLogin,
+  refreshPushRegistration,
   syncPushAuth,
 } from "./push-notifications.js";
 

@@ -4,7 +4,7 @@
  * - Never send message bodies, usernames, emails, or song titles to OneSignal.
  * - Only generic copy (e.g. "New message", "New follower").
  * - Deep-link hints use opaque route/category keys only.
- * - Target by stored subscription IDs first; fall back to external_id (Supabase UUID).
+ * - Target by external_id first (all linked devices); fall back to subscription IDs.
  */
 
 const ONESIGNAL_APP_ID = String(process.env.ONESIGNAL_APP_ID || "").trim();
@@ -68,43 +68,60 @@ async function fetchSubscriptionIdsFromDb(userId) {
   }
 }
 
+function isActivePushSubscription(sub) {
+  const id = String(sub?.id || "").trim();
+  if (!id) return false;
+  const type = String(sub?.type || sub?.channel || "").toLowerCase();
+  if (type.includes("email") || type.includes("sms")) return false;
+  const status = String(sub?.status || sub?.subscription_status || "").toLowerCase();
+  if (status.includes("unsubscribed") || status.includes("never")) return false;
+  const token = String(sub?.token || sub?.push_token || "").trim();
+  if (token) return true;
+  if (sub?.enabled === true) return true;
+  if (sub?.enabled === false || sub?.disabled === true) return false;
+  // No explicit opt-out — include (Safari VAPID / iOS PWA subs vary by API shape).
+  return !type || type.includes("web") || type.includes("push") || type.includes("safari") || type.includes("chrome");
+}
+
 function extractPushSubscriptionIds(userPayload) {
   const subs = Array.isArray(userPayload?.subscriptions) ? userPayload.subscriptions : [];
   const ids = [];
   for (const sub of subs) {
-    const id = String(sub?.id || "").trim();
-    if (!id) continue;
-    const type = String(sub?.type || sub?.channel || "").toLowerCase();
-    const enabled = sub?.enabled !== false && sub?.disabled !== true;
-    const isPush =
-      !type ||
-      type.includes("web") ||
-      type.includes("push") ||
-      type.includes("safari") ||
-      type.includes("chrome");
-    if (enabled && isPush) ids.push(id);
+    if (!isActivePushSubscription(sub)) continue;
+    ids.push(String(sub.id).trim());
   }
   return ids;
 }
 
-async function fetchSubscriptionIdsFromOneSignal(userId) {
-  try {
-    const url = `https://api.onesignal.com/apps/${encodeURIComponent(ONESIGNAL_APP_ID)}/users/by/external_id/${encodeURIComponent(userId)}`;
-    const r = await fetch(url, { headers: onesignalHeaders() });
-    if (!r.ok) return [];
-    const json = await r.json().catch(() => ({}));
-    return extractPushSubscriptionIds(json);
-  } catch {
-    return [];
-  }
+async function fetchOneSignalUserByExternalId(externalId) {
+  const url = `https://api.onesignal.com/apps/${encodeURIComponent(ONESIGNAL_APP_ID)}/users/by/external_id/${encodeURIComponent(externalId)}`;
+  const r = await fetch(url, { headers: onesignalHeaders() });
+  if (!r.ok) return null;
+  return r.json().catch(() => null);
 }
 
-async function resolvePushSubscriptionIds(userId) {
-  const dbIds = await fetchSubscriptionIdsFromDb(userId);
-  if (dbIds.length) return { ids: dbIds, source: "db" };
-  const osIds = await fetchSubscriptionIdsFromOneSignal(userId);
-  if (osIds.length) return { ids: osIds, source: "onesignal" };
-  return { ids: [], source: "none" };
+async function fetchSubscriptionIdsFromOneSignal(userId) {
+  const ids = new Set();
+  const seen = new Set();
+  // Try lowercase (current) then original casing for subs linked before normalization.
+  for (const candidate of [userId, String(userId || "").trim()]) {
+    const key = String(candidate || "").trim();
+    if (!key || seen.has(key.toLowerCase())) continue;
+    seen.add(key.toLowerCase());
+    try {
+      const json = await fetchOneSignalUserByExternalId(key);
+      for (const id of extractPushSubscriptionIds(json || {})) ids.add(id);
+    } catch {}
+  }
+  return [...ids];
+}
+
+async function resolveAllPushSubscriptionIds(userId) {
+  const [dbIds, osIds] = await Promise.all([
+    fetchSubscriptionIdsFromDb(userId),
+    fetchSubscriptionIdsFromOneSignal(userId),
+  ]);
+  return [...new Set([...osIds, ...dbIds])];
 }
 
 function buildNotificationPayload({ uid, tpl, data, subscriptionIds }) {
@@ -157,26 +174,17 @@ async function sendPrivacySafePush({ userId, type, entityId = null }) {
   const eid = entityId ? String(entityId).trim().slice(0, 180) : "";
   if (eid) data.nabad_entity_id = eid;
 
-  const resolved = await resolvePushSubscriptionIds(uid);
-  let payload = buildNotificationPayload({
-    uid,
-    tpl,
-    data,
-    subscriptionIds: resolved.ids,
-  });
+  // external_id reaches every linked device (browser + iPhone PWA). Prefer this.
+  let payload = buildNotificationPayload({ uid, tpl, data, subscriptionIds: [] });
   let result = await postOneSignalNotification(payload);
+  let source = "external_id";
 
-  // HTTP 200 with empty id means zero recipients — retry alternate targeting.
   if (result.ok && !result.json?.id) {
-    if (resolved.ids.length > 0) {
-      payload = buildNotificationPayload({ uid, tpl, data, subscriptionIds: [] });
+    const subIds = await resolveAllPushSubscriptionIds(uid);
+    if (subIds.length) {
+      payload = buildNotificationPayload({ uid, tpl, data, subscriptionIds: subIds });
       result = await postOneSignalNotification(payload);
-    } else {
-      const osIds = await fetchSubscriptionIdsFromOneSignal(uid);
-      if (osIds.length) {
-        payload = buildNotificationPayload({ uid, tpl, data, subscriptionIds: osIds });
-        result = await postOneSignalNotification(payload);
-      }
+      source = "subscription_ids";
     }
   }
 
@@ -191,11 +199,11 @@ async function sendPrivacySafePush({ userId, type, entityId = null }) {
     return {
       ok: false,
       reason: "no_recipients",
-      source: resolved.source,
+      source,
       errors: result.json?.errors || null,
     };
   }
-  return { ok: true, id: result.json.id, source: resolved.source };
+  return { ok: true, id: result.json.id, source };
 }
 
 function queuePrivacySafePush(opts) {

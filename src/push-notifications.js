@@ -225,6 +225,28 @@ export async function syncPushAuth(userId) {
   }
 }
 
+export async function refreshPushRegistration(userId) {
+  const uid = String(userId || "").trim().toLowerCase();
+  if (!uid || !pushConfigured() || isNativeAppShell()) return { ok: false };
+  await initPushNotifications();
+  try {
+    const OneSignal = getOneSignal();
+    if (!OneSignal?.login) return { ok: false };
+    await OneSignal.login(uid);
+    _linkedUserId = uid;
+    bindPushSubscriptionListener(uid);
+    if (getPushPermissionState() === "granted") {
+      await ensurePushOptedIn();
+    }
+    const subId = await waitForPushSubscriptionId(5000);
+    if (subId) await registerSubscriptionWithBackend(subId);
+    return { ok: Boolean(subId), subscriptionId: subId || "" };
+  } catch (e) {
+    console.warn("[push] refresh registration failed", e);
+    return { ok: false };
+  }
+}
+
 /** Must be called from a user tap (Settings button, etc.). */
 export async function enablePushNotifications(userId) {
   const uid = String(userId || _linkedUserId || "").trim().toLowerCase();

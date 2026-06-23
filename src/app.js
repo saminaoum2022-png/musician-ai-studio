@@ -48,12 +48,13 @@ import {
   isPushOptedIn,
   logoutPushAuth,
   maybePromptPushAfterLogin,
+  refreshPushRegistration,
   syncPushAuth,
 } from "./push-notifications.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260624pushDelivery";
+const APP_BUILD = "20260624pushExternalFirst";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -4013,6 +4014,7 @@ if (btnSettingsNotifications) {
         return;
       }
       if (getPushPermissionState() === "granted" && isPushOptedIn()) {
+        await refreshPushRegistration(uid);
         showToast("Push alerts are on.", { icon: "🔔", durationMs: 2600 });
         syncSettingsPushRow();
         return;

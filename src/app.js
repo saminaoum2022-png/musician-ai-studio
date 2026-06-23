@@ -44,6 +44,7 @@ import {
   enablePushNotifications,
   getPushPermissionState,
   initPushNotifications,
+  isNativeAppShell,
   isPushOptedIn,
   logoutPushAuth,
   maybePromptPushAfterLogin,
@@ -52,7 +53,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260623pushConfigRefresh";
+const APP_BUILD = "20260624pushOptIn";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3972,13 +3973,19 @@ if (btnSettingsMusicPrefs) {
 function syncSettingsPushRow() {
   const sub = document.getElementById("settingsPushSub");
   if (!sub) return;
+  if (isNativeAppShell()) {
+    sub.textContent = "Use Safari home-screen app for push alerts";
+    return;
+  }
   if (!_onesignalAppId) {
     sub.textContent = "Push alerts unavailable on this build";
     return;
   }
   const perm = getPushPermissionState();
-  if (perm === "granted" || isPushOptedIn()) {
+  if (perm === "granted" && isPushOptedIn()) {
     sub.textContent = "On — messages and activity alerts";
+  } else if (perm === "granted") {
+    sub.textContent = "Tap to finish enabling push alerts";
   } else if (perm === "denied") {
     sub.textContent = "Blocked — allow in iPhone Settings";
   } else {
@@ -4005,7 +4012,7 @@ if (btnSettingsNotifications) {
         showToast("Sign in to enable push alerts.", { icon: "👤", durationMs: 2800 });
         return;
       }
-      if (getPushPermissionState() === "granted" || isPushOptedIn()) {
+      if (getPushPermissionState() === "granted" && isPushOptedIn()) {
         showToast("Push alerts are on.", { icon: "🔔", durationMs: 2600 });
         syncSettingsPushRow();
         return;
@@ -4019,6 +4026,21 @@ if (btnSettingsNotifications) {
         });
       } else if (result.ok) {
         showToast("Push alerts enabled.", { icon: "🔔", durationMs: 2800 });
+      } else if (result.reason === "native_app") {
+        showToast("Push works from the Safari home-screen app. The dev install can't register yet.", {
+          icon: "🔔",
+          durationMs: 6800,
+        });
+      } else if (result.reason === "unsupported") {
+        showToast("Add nabadai.com to your home screen in Safari, then enable push here.", {
+          icon: "🔔",
+          durationMs: 6800,
+        });
+      } else if (result.reason === "subscription_failed") {
+        showToast("Couldn't register for push. Remove the home-screen icon, re-add from Safari, and try again.", {
+          icon: "🔔",
+          durationMs: 7200,
+        });
       }
     })();
   });

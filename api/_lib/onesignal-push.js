@@ -2,8 +2,8 @@
  * Privacy-first OneSignal push delivery for Nabad.
  *
  * - Never send DM message bodies/content to OneSignal.
- * - DM copy stays private (sender name + "Sent you a message").
- * - Social copy can be actor + action (follow/like/remix/comment/challenge).
+ * - DM copy stays private ("New message from <sender>").
+ * - Social copy is concise actor + action.
  * - Deep-link hints use opaque route/category keys only.
  * - Target by external_id first (all linked devices); fall back to subscription IDs.
  */
@@ -45,20 +45,19 @@ function composePushCopy({ type, actorDisplayName }) {
   const actor = cleanDisplayName(actorDisplayName);
   if (type === "dm_message") {
     return {
-      title: actor || "Someone",
-      body: "Sent you a message",
+      body: `New message from ${actor || "someone"}`,
     };
   }
   if (actor) {
-    if (type === "follow") return { title: "Nabad", body: `${actor} followed you` };
-    if (type === "social_like" || type === "song_feedback") return { title: "Nabad", body: `${actor} liked your song` };
-    if (type === "social_reply") return { title: "Nabad", body: `${actor} commented on your song` };
-    if (type === "remix") return { title: "Nabad", body: `${actor} remixed your song` };
-    if (type === "challenge_update") return { title: "Nabad", body: `${actor} joined your challenge` };
+    if (type === "follow") return { body: `${actor} followed you` };
+    if (type === "social_like" || type === "song_feedback") return { body: `${actor} liked your song` };
+    if (type === "social_reply") return { body: `${actor} commented on your song` };
+    if (type === "remix") return { body: `${actor} remixed your song` };
+    if (type === "challenge_update") return { body: `${actor} joined your challenge` };
   }
-  if (type === "chart_rank") return { title: "Nabad", body: "Top 10 update" };
-  if (type === "dm_message") return { title: "Nabad", body: "Sent you a message" };
-  return { title: "Nabad", body: "New activity" };
+  if (type === "chart_rank") return { body: "Top 10 update" };
+  if (type === "dm_message") return { body: "New message from someone" };
+  return { body: "New activity" };
 }
 
 function templateForType(type) {
@@ -157,7 +156,6 @@ async function resolveAllPushSubscriptionIds(userId) {
 function buildNotificationPayload({ uid, tpl, data, subscriptionIds, copy }) {
   const base = {
     app_id: ONESIGNAL_APP_ID,
-    headings: { en: copy.title },
     contents: { en: copy.body },
     data,
   };

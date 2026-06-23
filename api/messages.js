@@ -440,9 +440,11 @@ async function handlePost(req, res, user) {
       if (dup) return sendJson(res, 409, { ok: false, error: "Request already pending" });
       return sendJson(res, 500, { ok: false, error: "Request failed", details: ins.text });
     }
+    const senderProfile = await profileByUserId(user.userId);
     queuePrivacySafePush({
       userId: targetUserId,
       type: "dm_message",
+      actorDisplayName: senderProfile?.username || "Someone",
     });
     return sendJson(res, 200, {
       ok: true,
@@ -504,10 +506,12 @@ async function handlePost(req, res, user) {
     if (!sent.ok) return sendJson(res, 500, { ok: false, error: sent.error || "Send failed" });
     const recipientId = threadPartnerId(thread, user.userId);
     if (recipientId) {
+      const senderProfile = await profileByUserId(user.userId);
       queuePrivacySafePush({
         userId: recipientId,
         type: "dm_message",
         entityId: thread.id,
+        actorDisplayName: senderProfile?.username || "Someone",
       });
     }
     return sendJson(res, 200, { ok: true, threadId: thread.id, message: sent.message });

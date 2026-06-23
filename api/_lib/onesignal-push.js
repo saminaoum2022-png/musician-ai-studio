@@ -1,8 +1,9 @@
 /**
  * Privacy-first OneSignal push delivery for Nabad.
  *
- * - Never send message bodies, usernames, emails, or song titles to OneSignal.
- * - Only generic copy (e.g. "New message", "New follower").
+ * - Never send DM message bodies/content to OneSignal.
+ * - DM copy stays private (sender name + "Sent you a message").
+ * - Social copy can be actor + action (follow/like/remix/comment/challenge).
  * - Deep-link hints use opaque route/category keys only.
  * - Target by external_id first (all linked devices); fall back to subscription IDs.
  */
@@ -12,14 +13,18 @@ const ONESIGNAL_REST_API_KEY = String(process.env.ONESIGNAL_REST_API_KEY || "").
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
-/** @type {Record<string, { title: string, body: string, route: string } | null>} */
+/** @type {Record<string, { route: string } | null>} */
 const PUSH_TEMPLATES = {
-  follow: { title: "Nabad", body: "New follower", route: "activity" },
-  social_like: { title: "Nabad", body: "New like", route: "activity" },
-  social_reply: { title: "Nabad", body: "New activity", route: "activity" },
-  chart_rank: { title: "Nabad", body: "Top 10 update", route: "activity" },
-  dm_message: { title: "Nabad", body: "New message", route: "friends" },
-  challenge_update: { title: "Nabad", body: "Challenge update", route: "challenges" },
+  follow: { route: "activity" },
+  social_like: { route: "activity" },
+  social_reply: { route: "activity" },
+  chart_rank: { route: "activity" },
+  dm_message: { route: "friends" },
+  challenge_update: { route: "challenges" },
+  remix: { route: "activity" },
+  song_feedback: { route: "activity" },
+  play_milestone: { route: "activity" },
+  public_song: { route: "activity" },
 };
 
 function pushEnabled() {
@@ -29,6 +34,31 @@ function pushEnabled() {
 function cleanUserId(v) {
   const s = String(v || "").trim().toLowerCase();
   return /^[0-9a-f-]{36}$/.test(s) ? s : "";
+}
+
+function cleanDisplayName(v) {
+  const s = String(v || "").replace(/^@/, "").trim();
+  return s.slice(0, 40);
+}
+
+function composePushCopy({ type, actorDisplayName }) {
+  const actor = cleanDisplayName(actorDisplayName);
+  if (type === "dm_message") {
+    return {
+      title: actor || "Someone",
+      body: "Sent you a message",
+    };
+  }
+  if (actor) {
+    if (type === "follow") return { title: "Nabad", body: `${actor} followed you` };
+    if (type === "social_like" || type === "song_feedback") return { title: "Nabad", body: `${actor} liked your song` };
+    if (type === "social_reply") return { title: "Nabad", body: `${actor} commented on your song` };
+    if (type === "remix") return { title: "Nabad", body: `${actor} remixed your song` };
+    if (type === "challenge_update") return { title: "Nabad", body: `${actor} joined your challenge` };
+  }
+  if (type === "chart_rank") return { title: "Nabad", body: "Top 10 update" };
+  if (type === "dm_message") return { title: "Nabad", body: "Sent you a message" };
+  return { title: "Nabad", body: "New activity" };
 }
 
 function templateForType(type) {
@@ -124,11 +154,11 @@ async function resolveAllPushSubscriptionIds(userId) {
   return [...new Set([...osIds, ...dbIds])];
 }
 
-function buildNotificationPayload({ uid, tpl, data, subscriptionIds }) {
+function buildNotificationPayload({ uid, tpl, data, subscriptionIds, copy }) {
   const base = {
     app_id: ONESIGNAL_APP_ID,
-    headings: { en: tpl.title },
-    contents: { en: tpl.body },
+    headings: { en: copy.title },
+    contents: { en: copy.body },
     data,
   };
   if (subscriptionIds?.length) {
@@ -159,13 +189,14 @@ async function postOneSignalNotification(payload) {
 
 /**
  * Send a generic push alert. Fire-and-forget from API handlers.
- * @param {{ userId: string, type: string, entityId?: string|null }} opts
+ * @param {{ userId: string, type: string, entityId?: string|null, actorDisplayName?: string }} opts
  */
-async function sendPrivacySafePush({ userId, type, entityId = null }) {
+async function sendPrivacySafePush({ userId, type, entityId = null, actorDisplayName = "" }) {
   if (!pushEnabled()) return { ok: false, skipped: true, reason: "push_not_configured" };
   const uid = cleanUserId(userId);
   const tpl = templateForType(type);
   if (!uid || !tpl) return { ok: false, skipped: true, reason: "unsupported_type" };
+  const copy = composePushCopy({ type: String(type || "").trim(), actorDisplayName });
 
   const data = {
     nabad_route: tpl.route,
@@ -175,14 +206,14 @@ async function sendPrivacySafePush({ userId, type, entityId = null }) {
   if (eid) data.nabad_entity_id = eid;
 
   // external_id reaches every linked device (browser + iPhone PWA). Prefer this.
-  let payload = buildNotificationPayload({ uid, tpl, data, subscriptionIds: [] });
+  let payload = buildNotificationPayload({ uid, tpl, data, subscriptionIds: [], copy });
   let result = await postOneSignalNotification(payload);
   let source = "external_id";
 
   if (result.ok && !result.json?.id) {
     const subIds = await resolveAllPushSubscriptionIds(uid);
     if (subIds.length) {
-      payload = buildNotificationPayload({ uid, tpl, data, subscriptionIds: subIds });
+      payload = buildNotificationPayload({ uid, tpl, data, subscriptionIds: subIds, copy });
       result = await postOneSignalNotification(payload);
       source = "subscription_ids";
     }

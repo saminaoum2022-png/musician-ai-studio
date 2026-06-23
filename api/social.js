@@ -622,10 +622,13 @@ async function insertNotification({ userId, type, actorUserId, entityId, metadat
     body: JSON.stringify(body),
   });
   if (!ins.ok) return false;
+  const actorDisplayName = String(body?.metadata?.actor_username || "").replace(/^@/, "").trim()
+    || (actor ? String((await profileByUserId(actor))?.username || "").replace(/^@/, "").trim() : "");
   queuePrivacySafePush({
     userId: uid,
     type: t,
     entityId: body.entity_id,
+    actorDisplayName,
   });
   return true;
 }

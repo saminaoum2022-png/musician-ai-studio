@@ -21334,9 +21334,10 @@ function syncMessagesThreadComposerInset() {
   }
   const focused = isMessagesComposerFocused();
   if (!focused) rememberMessagesViewportBaseBottom({ force: true });
-  const applyInset = focused || isMessagesKeyboardLikelyOpenByViewport();
-  const inset = applyInset && isIosKeyboardInsetHost() ? measureMessagesKeyboardInset() : 0;
-  const keyboardOpen = inset > 0;
+  const measuredInset = isIosKeyboardInsetHost() ? measureMessagesKeyboardInset() : 0;
+  const likelyOpen = focused || isMessagesKeyboardLikelyOpenByViewport() || measuredInset > 6;
+  const inset = likelyOpen ? Math.max(measuredInset, IOS_DM_ACCESSORY_MIN_INSET_PX) : 0;
+  const keyboardOpen = likelyOpen;
   if (!keyboardOpen) rememberMessagesViewportBaseBottom();
   _messagesThreadKeyboardOpen = keyboardOpen;
   document.body.classList.toggle("messagesThreadKeyboardOpen", keyboardOpen);

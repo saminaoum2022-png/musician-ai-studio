@@ -15899,14 +15899,8 @@ body.trackSheetOpen .footer{
   body[data-route="player"] .mobileTabbar{
     display: none !important;
   }
-  body[data-route="messages-thread"] .mobileTabbar{
-    display: none !important;
-  }
   body[data-route="messages-thread"] .hubNowPlaying{
     display: none !important;
-  }
-  body[data-route="messages-thread"] > .app{
-    padding-bottom: 0;
   }
   body[data-route="player"] .header{
     display: none !important;
@@ -15976,9 +15970,6 @@ body.trackSheetOpen .footer{
   }
   body[data-route="player"] .footer{
     bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-  }
-  body[data-route="messages-thread"] .footer{
-    display: none !important;
   }
   .playerShell{
     gap: 14px;
@@ -27647,60 +27638,18 @@ body.messagesThreadLeaving .messagesThreadPage{
   }
 }
 body[data-route="messages-thread"]{
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  overflow: hidden;
   background: var(--bg);
-  overscroll-behavior: none;
-}
-html.is-web-shell body[data-route="messages-thread"]{
-  height: 100dvh;
-  height: 100svh;
-}
-html:has(body[data-route="messages-thread"]){
-  overflow: hidden;
-  height: 100%;
 }
 body[data-route="messages-thread"] > .app{
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  max-width: none;
-  margin: 0;
-  height: 100%;
-  min-height: 0;
-  max-height: 100%;
-  overflow: hidden;
-  padding-bottom: 0;
-  box-sizing: border-box;
-}
-body[data-route="messages-thread"] .footer{
-  display: none !important;
+  padding-bottom: calc(118px + env(safe-area-inset-bottom, 0px));
 }
 body[data-route="messages-thread"] main.grid{
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
   margin: 0;
   gap: 0;
 }
 @media (max-width: 720px){
   body[data-route="messages-thread"] > .app{
-    padding:
-      env(safe-area-inset-top, 0px)
-      0
-      0;
-  }
-  html.is-web-shell body[data-route="messages-thread"] > .app{
-    padding:
-      env(safe-area-inset-top, 0px)
-      0
-      0 !important;
-    height: 100%;
-    min-height: 0;
+    padding-bottom: calc(118px + env(safe-area-inset-bottom, 0px));
   }
 }
 body[data-route="messages"]{

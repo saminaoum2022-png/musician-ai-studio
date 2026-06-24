@@ -157,6 +157,10 @@ function buildNotificationPayload({ uid, tpl, data, subscriptionIds, copy }) {
   const base = {
     app_id: ONESIGNAL_APP_ID,
     contents: { en: copy.body },
+    // Override OneSignal dashboard default titles (e.g. "from NabadAi") so iOS
+    // shows only the installed app name plus a single message line.
+    headings: { en: "\u200B" },
+    subtitle: { en: "\u200B" },
     data,
   };
   if (subscriptionIds?.length) {

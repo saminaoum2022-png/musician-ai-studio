@@ -154,12 +154,14 @@ async function resolveAllPushSubscriptionIds(userId) {
 }
 
 function buildNotificationPayload({ uid, tpl, data, subscriptionIds, copy }) {
-  // iOS home-screen web push always inserts a system "from <manifest name>" row
-  // between title and body — it cannot be removed. Keep the payload to a single
-  // body line so we do not add a blank/extra title row on top of that.
+  // OneSignal Web Push requires `headings`; when omitted it defaults to the dashboard
+  // Site Name (often "Nabadai Music App"). Put the alert text in headings so that
+  // stale default never shows. Keep `contents` as a minimal placeholder — iOS PWA
+  // still inserts a system "from <manifest name>" row between title and body.
   const base = {
     app_id: ONESIGNAL_APP_ID,
-    contents: { en: copy.body },
+    headings: { en: copy.body },
+    contents: { en: " " },
     data,
   };
   if (subscriptionIds?.length) {

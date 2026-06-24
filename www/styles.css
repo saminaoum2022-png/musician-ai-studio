@@ -27641,7 +27641,7 @@ body[data-route="messages-thread"]{
   background: var(--bg);
 }
 body[data-route="messages-thread"] > .app{
-  padding-bottom: calc(118px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px)));
 }
 body[data-route="messages-thread"] main.grid{
   margin: 0;
@@ -27649,7 +27649,7 @@ body[data-route="messages-thread"] main.grid{
 }
 @media (max-width: 720px){
   body[data-route="messages-thread"] > .app{
-    padding-bottom: calc(118px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px)));
   }
 }
 body[data-route="messages"]{
@@ -28057,12 +28057,12 @@ body[data-route="messages"]{
   overscroll-behavior: contain;
   padding: 4px 2px 8px;
   -webkit-overflow-scrolling: touch;
-  scroll-padding-bottom: 8px;
-  padding-bottom: 8px;
+  scroll-padding-bottom: calc(var(--messages-composer-h, 72px) + var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px))) + 8px);
+  padding-bottom: calc(var(--messages-composer-h, 72px) + var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px))) + 8px);
 }
 html.is-web-shell body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadMount{
-  scroll-padding-bottom: calc(8px + var(--messages-keyboard-inset, 0px));
-  padding-bottom: calc(8px + var(--messages-keyboard-inset, 0px));
+  scroll-padding-bottom: calc(var(--messages-composer-h, 72px) + var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px))) + var(--messages-keyboard-inset, 0px) + 8px);
+  padding-bottom: calc(var(--messages-composer-h, 72px) + var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px))) + var(--messages-keyboard-inset, 0px) + 8px);
 }
 .messagesThreadScrollAnchor{
   width: 100%;
@@ -28320,16 +28320,23 @@ html.is-web-shell body.messagesThreadKeyboardOpen[data-route="messages-thread"] 
   background: var(--bg);
 }
 body[data-route="messages-thread"] .messagesComposer{
-  position: relative;
+  position: fixed;
   flex: 0 0 auto;
   z-index: 6;
-  max-width: none;
-  width: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 640px;
+  width: calc(100% - 24px);
   margin: 0;
   box-sizing: border-box;
+  bottom: var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px)));
+  padding-bottom: 8px;
 }
 html.is-web-shell body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesComposer{
-  padding-bottom: var(--messages-keyboard-inset, 0px);
+  bottom: calc(var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px))) + var(--messages-keyboard-inset, 0px));
+}
+body[data-route="messages-thread"] .footer{
+  display: none !important;
 }
 html.is-web-shell body.messagesThreadViewportSized[data-route="messages-thread"] .messagesThreadPage{
   overflow: hidden;

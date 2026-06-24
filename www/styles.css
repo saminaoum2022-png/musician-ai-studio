@@ -27641,7 +27641,7 @@ body[data-route="messages-thread"]{
   background: var(--bg);
 }
 body[data-route="messages-thread"] > .app{
-  padding-bottom: var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px)));
+  padding-bottom: 0;
 }
 body[data-route="messages-thread"] main.grid{
   margin: 0;
@@ -27649,7 +27649,7 @@ body[data-route="messages-thread"] main.grid{
 }
 @media (max-width: 720px){
   body[data-route="messages-thread"] > .app{
-    padding-bottom: var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px)));
+    padding-bottom: 0;
   }
 }
 body[data-route="messages"]{
@@ -28057,8 +28057,8 @@ body[data-route="messages"]{
   overscroll-behavior: contain;
   padding: 4px 8px 8px;
   -webkit-overflow-scrolling: touch;
-  scroll-padding-bottom: calc(var(--messages-composer-h, 72px) + var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px))) + 8px);
-  padding-bottom: calc(var(--messages-composer-h, 72px) + var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px))) + 8px);
+  scroll-padding-bottom: calc(var(--messages-composer-h, 72px) + 8px);
+  padding-bottom: calc(var(--messages-composer-h, 72px) + 8px);
 }
 html.is-web-shell body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadMount{
   scroll-padding-bottom: calc(var(--messages-composer-h, 72px) + var(--messages-keyboard-inset, 0px) + 8px);
@@ -28346,15 +28346,14 @@ body[data-route="messages-thread"] .messagesComposer{
   width: calc(100% - 24px);
   margin: 0;
   box-sizing: border-box;
-  bottom: var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px)));
+  bottom: 0;
   padding-bottom: 8px;
+}
+body[data-route="messages-thread"] .mobileTabbar{
+  display: none !important;
 }
 html.is-web-shell body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesComposer{
   bottom: var(--messages-keyboard-inset, 0px);
-}
-html.is-web-shell body.messagesThreadKeyboardOpen[data-route="messages-thread"] .mobileTabbar{
-  opacity: 0;
-  pointer-events: none;
 }
 body[data-route="messages-thread"] .footer{
   display: none !important;

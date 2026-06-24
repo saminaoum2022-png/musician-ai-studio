@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260624webBootFlashFix";
+const APP_BUILD = "20260624feedHeroArt";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -12102,16 +12102,18 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
   const songMenuBtn = discoverSheetMenuBtnHtml(t, profMap, { className: "discoverCardMenuBtn followActQuoteMenuBtn" });
   const quoteCardHtml = `
           <div class="followActQuoteRow">
-            <button type="button" class="followActQuoteCard" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
-              <span class="followActQuoteArt">
+            <button type="button" class="followActQuoteCard followActQuoteCard--hero" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
+              <span class="followActQuoteArt followActQuoteArt--hero">
                 <img class="followActQuoteImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
-                ${coverArtPlaybackOverlayHtml({ feedCard: true })}
+                ${coverArtPlaybackOverlayHtml({ hero: true })}
+                <span class="followActQuoteOverlay">
+                  <span class="followActQuoteOverlayInner">
+                    ${titleWithNabadBadgeHtml(t, safeTitle, "followActQuoteTitle")}
+                    <span class="followActQuoteSub">${escapeHtml(subtitle)}</span>
+                  </span>
+                </span>
+                <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
               </span>
-              <span class="followActQuoteBody">
-                ${titleWithNabadBadgeHtml(t, safeTitle, "followActQuoteTitle")}
-                <span class="followActQuoteSub">${escapeHtml(subtitle)}</span>
-              </span>
-              <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
             </button>
             ${songMenuBtn}
           </div>`;
@@ -12202,12 +12204,8 @@ function followingActivitySkeletonHtml() {
         </div>
       </div>
         <div class="followActQuoteRow">
-          <div class="followActQuoteCard followActQuoteCard--skel">
-            <span class="followActQuoteArt followActSkel"></span>
-            <span class="followActQuoteBody">
-              <span class="followActSkel followActSkelQuoteTitle"></span>
-              <span class="followActSkel followActSkelQuoteSub"></span>
-            </span>
+          <div class="followActQuoteCard followActQuoteCard--hero followActQuoteCard--skel">
+            <span class="followActQuoteArt followActQuoteArt--hero followActSkel"></span>
           </div>
         </div>
         <div class="followActActions">

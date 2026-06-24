@@ -30867,8 +30867,8 @@ section.mentorPage{
   z-index: 2;
   margin: 0;
 }
-.followAct--xstyle .followActQuoteCard,
-.followAct--xstyle .followActQuoteCard--skel{
+.followAct--xstyle .followActQuoteCard:not(.followActQuoteCard--hero),
+.followAct--xstyle .followActQuoteCard--skel:not(.followActQuoteCard--hero){
   display: grid;
   grid-template-columns: var(--feed-song-art-size) minmax(0, 1fr) auto;
   gap: 12px;
@@ -30890,11 +30890,11 @@ section.mentorPage{
   -webkit-tap-highlight-color: transparent;
   transition: transform 120ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
-.followAct--xstyle .followActQuoteCard--skel{
+.followAct--xstyle .followActQuoteCard--skel:not(.followActQuoteCard--hero){
   pointer-events: none;
   cursor: default;
 }
-.followAct--xstyle .followActQuoteCard:active{
+.followAct--xstyle .followActQuoteCard:not(.followActQuoteCard--hero):active{
   transform: scale(0.985);
   border-color: rgba(124,92,255,0.34);
   background:
@@ -30907,16 +30907,128 @@ section.mentorPage{
     linear-gradient(145deg, rgba(236,72,153,0.10), rgba(124,92,255,0.06)),
     rgba(255,255,255,0.03);
 }
-.followAct--xstyle .followActQuoteArt{
+/* Hero song card — single-song Friends / Profile Posts only (not mashup/remix). */
+.followAct--xstyle .followActQuoteCard--hero,
+.followAct--xstyle .followActQuoteCard--hero.followActQuoteCard--skel{
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms ease;
+}
+.followAct--xstyle .followActQuoteCard--hero.followActQuoteCard--skel{
+  pointer-events: none;
+  cursor: default;
+}
+.followAct--xstyle .followActQuoteCard--hero:active{
+  transform: scale(0.985);
+  border: 0;
+  background: transparent;
+}
+.followAct--xstyle .followActQuoteArt--hero{
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-height: min(72vw, 360px);
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.04);
+}
+.followAct--xstyle .followActQuoteArt--hero::after{
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 52%;
+  background: linear-gradient(to top, rgba(4, 6, 12, 0.94) 0%, rgba(4, 6, 12, 0.42) 42%, transparent 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+.followAct--xstyle .followActQuoteArt--hero .followActQuoteImg{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.followAct--xstyle .followActQuoteArt--hero .discoverCoverPlay--hero{
+  z-index: 3;
+}
+.followAct--xstyle .followActQuoteOverlay{
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  padding: 14px 14px 12px;
+  text-align: left;
+  pointer-events: none;
+}
+.followAct--xstyle .followActQuoteOverlayInner{
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.followAct--xstyle .followActQuoteCard--hero .followActQuoteTitle{
+  font-size: 17px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.followAct--xstyle .followActQuoteCard--hero .followActQuoteSub{
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(232, 238, 247, 0.72);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.followAct--xstyle .followActQuoteArt--hero .libRowEq{
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 4;
+  display: none;
+  align-items: flex-end;
+  gap: 3px;
+  height: 16px;
+  margin: 0;
+  padding: 4px 6px;
+  border-radius: 7px;
+  background: rgba(6, 10, 18, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.followAct--xstyle .followActQuoteArt:not(.followActQuoteArt--hero){
   width: var(--feed-song-art-size);
   height: var(--feed-song-art-size);
   border-radius: 12px;
 }
-.followAct--xstyle .followActQuoteArt .coverArtPlayOverlay--feedCard{
+.followAct--xstyle .followActQuoteArt:not(.followActQuoteArt--hero) .coverArtPlayOverlay--feedCard{
   opacity: 0.52;
 }
-.followAct.discoveryRowPlaying.followAct--xstyle .followActQuoteCard .libRowEq{
+.followAct.discoveryRowPlaying.followAct--xstyle .followActQuoteCard:not(.followActQuoteCard--hero) .libRowEq{
   display: inline-flex;
+}
+.followAct.discoveryRowPlaying.followAct--xstyle .followActQuoteCard--hero .libRowEq,
+.followAct.discoveryRowActive.followAct--xstyle .followActQuoteCard--hero .libRowEq{
+  display: inline-flex;
+}
+.followAct.discoveryRowPlaying.followAct--xstyle .followActQuoteCard--hero .followActQuoteArt--hero,
+.followAct.discoveryRowActive.followAct--xstyle .followActQuoteCard--hero .followActQuoteArt--hero{
+  box-shadow: 0 0 0 2px rgba(var(--cover-glow-rgb, 124, 92, 255), 0.55);
 }
 .followAct--xstyle .followActQuoteBody{
   display: flex;
@@ -30929,8 +31041,8 @@ section.mentorPage{
 .followAct--xstyle .followActMashup .followActQuoteCard{
   padding-right: 10px;
 }
-.followAct.discoveryRowPlaying.followAct--xstyle .followActQuoteCard,
-.followAct.discoveryRowActive.followAct--xstyle .followActQuoteCard{
+.followAct.discoveryRowPlaying.followAct--xstyle .followActQuoteCard:not(.followActQuoteCard--hero),
+.followAct.discoveryRowActive.followAct--xstyle .followActQuoteCard:not(.followActQuoteCard--hero){
   border-color: rgba(var(--cover-glow-rgb, 124, 92, 255), 0.42);
   box-shadow: 0 0 0 1px rgba(var(--cover-glow-rgb, 124, 92, 255), 0.18), 0 8px 28px rgba(0,0,0,0.18);
 }

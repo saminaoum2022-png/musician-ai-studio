@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260624chatPortraitViewportFix";
+const APP_BUILD = "20260624chatDmKeyboardDock";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -21186,11 +21186,7 @@ function measureMessagesKeyboardInset() {
   const orientationKey = readMessagesOrientationKey();
   const focused = isMessagesComposerFocused();
   const portraitIosFocused = focused && isIosKeyboardInsetHost() && orientationKey === "portrait";
-  if (rawInset > 6) {
-    // In PWA/in-flow layout, visualViewport already accounts for keyboard height.
-    // Only reserve the accessory row lift to avoid floating the composer too high.
-    return portraitIosFocused ? IOS_DM_ACCESSORY_MIN_INSET_PX : rawInset;
-  }
+  if (rawInset > 6) return rawInset;
 
   // iOS Safari/PWA can collapse innerHeight together with visualViewport when the
   // keyboard opens, causing raw inset to read ~0 while the accessory bar still
@@ -21202,10 +21198,8 @@ function measureMessagesKeyboardInset() {
   );
   const currentBottom = Math.max(0, Math.round(vvHeight + vvTop));
   const collapsedBy = Math.max(0, baselineBottom - currentBottom);
-  if (collapsedBy > 40) return IOS_DM_ACCESSORY_MIN_INSET_PX;
-  // Final guard: while focused in portrait iOS, keep a minimum lift so the
-  // composer cannot sit under the accessory controls during viewport jitter.
-  return IOS_DM_ACCESSORY_MIN_INSET_PX;
+  if (collapsedBy > 40) return collapsedBy;
+  return portraitIosFocused ? IOS_DM_ACCESSORY_MIN_INSET_PX : 0;
 }
 
 function isMessagesComposerFocused() {
@@ -21336,7 +21330,9 @@ function syncMessagesThreadComposerInset() {
   if (!focused) rememberMessagesViewportBaseBottom({ force: true });
   const measuredInset = isIosKeyboardInsetHost() ? measureMessagesKeyboardInset() : 0;
   const likelyOpen = focused || isMessagesKeyboardLikelyOpenByViewport() || measuredInset > 6;
-  const inset = likelyOpen ? Math.max(measuredInset, IOS_DM_ACCESSORY_MIN_INSET_PX) : 0;
+  const inset = likelyOpen
+    ? (measuredInset > 0 ? measuredInset : IOS_DM_ACCESSORY_MIN_INSET_PX)
+    : 0;
   const keyboardOpen = likelyOpen;
   if (!keyboardOpen) rememberMessagesViewportBaseBottom();
   _messagesThreadKeyboardOpen = keyboardOpen;

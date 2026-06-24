@@ -30804,6 +30804,7 @@ section.mentorPage{
   padding-left: 0;
 }
 .followAct--xstyle > .followActContent,
+.followAct--xstyle > .followActRemixFlow,
 .followAct--xstyle > .followActQuoteRow,
 .followAct--xstyle > .followActRemixPair,
 .followAct--xstyle > .followActMashup,
@@ -30817,23 +30818,25 @@ section.mentorPage{
   margin-top: 8px;
   padding-left: 0;
 }
-.followAct--xstyle > .followActQuoteRow:has(.followActQuoteCard--hero),
+.followAct--xstyle > .followActQuoteRow:has(.feedHeroPlayer),
+.followAct--xstyle > .followActRemixFlow,
 .followAct--xstyle > .followActRemixPair,
 .followAct--xstyle > .followActMashup{
   margin-top: var(--feed-hero-art-gap, 12px);
 }
-.followAct--xstyle > .followActContent + .followActQuoteRow:has(.followActQuoteCard--hero),
+.followAct--xstyle > .followActContent + .followActQuoteRow:has(.feedHeroPlayer),
+.followAct--xstyle > .followActContent + .followActRemixFlow,
 .followAct--xstyle > .followActContent + .followActRemixPair,
 .followAct--xstyle > .followActContent + .followActMashup{
   margin-top: 8px;
 }
-.followAct--xstyle .followActQuoteRow:not(:has(.followActQuoteCard--hero)),
+.followAct--xstyle .followActQuoteRow:not(:has(.feedHeroPlayer)),
 .followAct--xstyle .followActQuoteCard--skel:not(.followActQuoteCard--hero){
   width: 100%;
   min-width: 0;
   margin-left: 0;
 }
-.followAct--xstyle .followActQuoteRow:has(.followActQuoteCard--hero){
+.followAct--xstyle .followActQuoteRow:has(.feedHeroPlayer){
   width: 100%;
   min-width: 0;
   margin-left: 0;
@@ -30844,9 +30847,11 @@ section.mentorPage{
   min-width: 0;
   margin-top: 12px;
 }
-.followAct--xstyle:has(.followActQuoteCard--hero) .followActActionsBar,
-.followAct--xstyle:has(.followActQuoteCard--hero) > .followActActions{
-  margin-top: 14px;
+.followAct--xstyle:has(.feedHeroPlayer) .followActActionsBar,
+.followAct--xstyle:has(.feedHeroPlayer) > .followActActions,
+.followAct--xstyle:has(.followActRemixFlow) .followActActionsBar,
+.followAct--xstyle:has(.followActRemixFlow) > .followActActions{
+  margin-top: 16px;
 }
 .followAct--xstyle .followActActionsBar > .followActActions,
 .followAct--xstyle > .followActActions{
@@ -30972,17 +30977,190 @@ section.mentorPage{
   border: 0;
   background: transparent;
 }
-.followAct--xstyle .followActQuoteArt--hero{
+.followAct--xstyle .feedHeroPlayerStage.followActQuoteArt--hero{
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1.12;
+  min-height: 300px;
+  border-radius: 18px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.04);
+}
+.feedHeroPlayerStage.followActQuoteArt--hero::after{
+  display: none;
+}
+.feedHeroPlayerBlurBg{
+  position: absolute;
+  inset: -6%;
+  width: 112%;
+  height: 112%;
+  object-fit: cover;
+  object-position: center;
+  filter: blur(20px);
+  transform: scale(1.04);
+  opacity: 0.5;
+  z-index: 0;
+  pointer-events: none;
+}
+.feedHeroPlayerArtFrame{
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  transform: translate(-50%, -50%);
+  width: min(68%, 240px);
+  aspect-ratio: 1 / 1;
+  z-index: 1;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.34);
+}
+.feedHeroPlayerArt{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+.feedHeroPlayerCenterPlay{
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  width: 56px;
+  height: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    linear-gradient(135deg, rgba(35, 213, 171, 0.2), rgba(124, 92, 255, 0.26)),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.035)),
+    rgba(10, 12, 18, 0.78);
+  color: #fff;
+  pointer-events: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.13),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.14),
+    0 6px 16px rgba(0, 0, 0, 0.22);
+}
+.feedHeroPlayerCenterPlay .coverArtPlayIco{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.feedHeroPlayerCenterPlay .coverArtPlayIco--pause{
+  display: none;
+}
+.followAct.discoveryRowPlaying .feedHeroPlayerCenterPlay .coverArtPlayIco--play,
+.followAct.discoveryRowActive .feedHeroPlayerCenterPlay .coverArtPlayIco--play{
+  display: none;
+}
+.followAct.discoveryRowPlaying .feedHeroPlayerCenterPlay .coverArtPlayIco--pause,
+.followAct.discoveryRowActive .feedHeroPlayerCenterPlay .coverArtPlayIco--pause{
+  display: flex;
+}
+.feedHeroPlayerChrome{
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 14px 12px;
+  background: linear-gradient(to top, rgba(4, 6, 12, 0.96) 0%, rgba(4, 6, 12, 0.72) 48%, transparent 100%);
+  pointer-events: none;
+}
+.feedHeroPlayerInfo{
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+}
+.feedHeroPlayerProgress{
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.feedHeroPlayerTime{
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: rgba(232, 238, 247, 0.62);
+  line-height: 1;
+}
+.feedHeroPlayerProgTrack{
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.11);
+  overflow: hidden;
+}
+.feedHeroPlayerProgFill{
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(var(--cover-glow-rgb, 124, 92, 255), 0.72), rgba(var(--cover-glow-rgb, 124, 92, 255), 0.24));
+}
+.feedHeroPlayerControls{
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  align-items: center;
+  justify-items: center;
+  gap: 4px;
+  padding-top: 2px;
+}
+.feedHeroPlayerCtrl{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: rgba(232, 238, 247, 0.72);
+}
+.feedHeroPlayerCtrl--main{
+  width: 36px;
+  height: 36px;
+  color: #fff;
+}
+.feedHeroPlayerStage .libRowEq{
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 5;
+  display: none;
+  align-items: flex-end;
+  gap: 3px;
+  height: 16px;
+  margin: 0;
+  padding: 4px 6px;
+  border-radius: 7px;
+  background: rgba(6, 10, 18, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.followAct.discoveryRowPlaying.followAct--xstyle .feedHeroPlayer .libRowEq,
+.followAct.discoveryRowActive.followAct--xstyle .feedHeroPlayer .libRowEq{
+  display: inline-flex;
+}
+.followAct.discoveryRowPlaying.followAct--xstyle .feedHeroPlayerStage,
+.followAct.discoveryRowActive.followAct--xstyle .feedHeroPlayerStage{
+  box-shadow: 0 0 0 2px rgba(var(--cover-glow-rgb, 124, 92, 255), 0.55);
+}
+.followAct--xstyle .followActQuoteArt--hero:not(.feedHeroPlayerStage){
   position: relative;
   display: block;
   width: 100%;
   aspect-ratio: 1 / 1;
-  min-height: min(88vw, 420px);
   border-radius: 14px;
   overflow: hidden;
   background: rgba(255,255,255,0.04);
 }
-.followAct--xstyle .followActQuoteArt--hero::after{
+.followAct--xstyle .followActQuoteArt--hero:not(.feedHeroPlayerStage)::after{
   content: "";
   position: absolute;
   left: 0;
@@ -30993,31 +31171,12 @@ section.mentorPage{
   pointer-events: none;
   z-index: 1;
 }
-.followAct--xstyle .followActQuoteArt--hero .followActQuoteImg{
+.followAct--xstyle .followActQuoteArt--hero:not(.feedHeroPlayerStage) .followActQuoteImg{
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: center;
   display: block;
-}
-.followAct--xstyle .followActQuoteArt--hero .discoverCoverPlay--hero{
-  z-index: 3;
-}
-.followAct--xstyle .followActQuoteOverlay{
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 2;
-  padding: 14px 14px 12px;
-  text-align: left;
-  pointer-events: none;
-}
-.followAct--xstyle .followActQuoteOverlayInner{
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
 }
 .followAct--xstyle .followActQuoteCard--hero .followActQuoteTitle{
   font-size: 17px;
@@ -31034,21 +31193,6 @@ section.mentorPage{
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.followAct--xstyle .followActQuoteArt--hero .libRowEq{
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 4;
-  display: none;
-  align-items: flex-end;
-  gap: 3px;
-  height: 16px;
-  margin: 0;
-  padding: 4px 6px;
-  border-radius: 7px;
-  background: rgba(6, 10, 18, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-}
 .followAct--xstyle .followActQuoteArt:not(.followActQuoteArt--hero){
   width: var(--feed-song-art-size);
   height: var(--feed-song-art-size);
@@ -31059,14 +31203,6 @@ section.mentorPage{
 }
 .followAct.discoveryRowPlaying.followAct--xstyle .followActQuoteCard:not(.followActQuoteCard--hero) .libRowEq{
   display: inline-flex;
-}
-.followAct.discoveryRowPlaying.followAct--xstyle .followActQuoteCard--hero .libRowEq,
-.followAct.discoveryRowActive.followAct--xstyle .followActQuoteCard--hero .libRowEq{
-  display: inline-flex;
-}
-.followAct.discoveryRowPlaying.followAct--xstyle .followActQuoteCard--hero .followActQuoteArt--hero,
-.followAct.discoveryRowActive.followAct--xstyle .followActQuoteCard--hero .followActQuoteArt--hero{
-  box-shadow: 0 0 0 2px rgba(var(--cover-glow-rgb, 124, 92, 255), 0.55);
 }
 .followAct--xstyle .followActQuoteBody{
   display: flex;
@@ -31165,6 +31301,107 @@ section.mentorPage{
   margin: 0;
   white-space: pre-wrap;
   word-wrap: break-word;
+}
+
+/* Remix flow: compact original reference → hero remix player (Friends / Profile Posts). */
+.followActRemixFlow{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+.followActRemixFlowOrig{
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.03);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.followActRemixFlowOrig:active{
+  transform: scale(0.985);
+}
+.followActRemixFlowOrigArt{
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.04);
+}
+.followActRemixFlowOrigArt img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.followActRemixFlowOrigBody{
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.followActRemixFlowOrigChip{
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(232,238,247,0.62);
+}
+.followActRemixFlowOrigTitle{
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(248,250,255,0.96);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.followActRemixFlowOrigBy{
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(232,238,247,0.62);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.followActRemixFlowOrigPlay{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(8,10,18,0.66);
+  color: #fff;
+}
+.followActRemixFlowBridge{
+  display: grid;
+  grid-template-columns: 1fr auto auto 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+}
+.followActRemixFlowBridgeLine{
+  height: 1px;
+  background: rgba(255,255,255,0.10);
+}
+.followActRemixFlowBridgeLabel{
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(232,238,247,0.72);
+}
+.followActRemixFlow .followActQuoteRow--remixHero{
+  margin-top: 0;
 }
 
 /* Quoted-track card — bordered mini-card with art + title + sub + play */

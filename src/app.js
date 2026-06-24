@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260624feedHeroLayout";
+const APP_BUILD = "20260624feedMusicPlayer";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -12020,6 +12020,143 @@ async function hydrateFeedSocialStatsForFeed(listEl, opts = {}) {
   }
 }
 
+function feedHeroPlayerTimeLabels(durSec) {
+  const totalSec = durSec > 0 ? durSec : 200;
+  const curSec = Math.max(0, Math.min(Math.floor(totalSec * 0.38), totalSec - 1));
+  return { cur: formatTime(curSec), total: formatTime(totalSec) };
+}
+
+function feedHeroPlayerTransportSvg(kind, size = 18) {
+  const common = `viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"`;
+  if (kind === "shuffle") {
+    return `<svg ${common}><path fill="currentColor" d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>`;
+  }
+  if (kind === "prev") {
+    return `<svg ${common}><path fill="currentColor" d="M6 6h2v12H6V6Zm4 6 9-6v12l-9-6Z"/></svg>`;
+  }
+  if (kind === "next") {
+    return `<svg ${common}><path fill="currentColor" d="M16 6h2v12h-2V6ZM4 12l9 6V6L4 12Z"/></svg>`;
+  }
+  if (kind === "repeat") {
+    return `<svg ${common}><path fill="currentColor" d="M17 1l4 4-4 4V6H9a4 4 0 0 0-4 4v1H3v-1a6 6 0 0 1 6-6h8V1ZM7 23l-4-4 4-4v3h8a4 4 0 0 0 4-4v-1h2v1a6 6 0 0 1-6 6H7v3Z"/></svg>`;
+  }
+  return "";
+}
+
+function feedHeroPlayerControlsHtml() {
+  return `<div class="feedHeroPlayerControls" aria-hidden="true">
+    <span class="feedHeroPlayerCtrl">${feedHeroPlayerTransportSvg("shuffle", 17)}</span>
+    <span class="feedHeroPlayerCtrl">${feedHeroPlayerTransportSvg("prev", 18)}</span>
+    <span class="feedHeroPlayerCtrl feedHeroPlayerCtrl--main">${discoverPlayBtnSvg(20)}</span>
+    <span class="feedHeroPlayerCtrl">${feedHeroPlayerTransportSvg("next", 18)}</span>
+    <span class="feedHeroPlayerCtrl">${feedHeroPlayerTransportSvg("repeat", 17)}</span>
+  </div>`;
+}
+
+function feedHeroPlayerCardHtml(opts) {
+  const {
+    track,
+    artSafe,
+    encUrl,
+    encTitle,
+    encArt,
+    encBy,
+    playData,
+    safeTitle,
+    subtitle,
+    titleHtml,
+    menuBtnHtml = "",
+    ariaLabel,
+    rowExtraClass = "",
+  } = opts;
+  const durSec = discoverTrackDurationSec(track);
+  const { cur, total } = feedHeroPlayerTimeLabels(durSec);
+  const pct = 38;
+  const label = ariaLabel || `Play ${String(track?.title || "song")}`;
+  const rowCls = ["followActQuoteRow", rowExtraClass].filter(Boolean).join(" ");
+  return `
+          <div class="${rowCls}">
+            <button type="button" class="followActQuoteCard followActQuoteCard--hero feedHeroPlayer" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="${escapeHtml(label)}">
+              <span class="feedHeroPlayerStage followActQuoteArt followActQuoteArt--hero">
+                <img class="feedHeroPlayerBlurBg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" aria-hidden="true" />
+                <span class="feedHeroPlayerArtFrame">
+                  <img class="followActQuoteImg feedHeroPlayerArt" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
+                </span>
+                <span class="feedHeroPlayerCenterPlay" aria-hidden="true">
+                  <span class="coverArtPlayIco coverArtPlayIco--play">${discoverPlayBtnSvg(22)}</span>
+                  <span class="coverArtPlayIco coverArtPlayIco--pause">${discoverPauseBtnSvg(22)}</span>
+                </span>
+                <span class="feedHeroPlayerChrome">
+                  <span class="feedHeroPlayerInfo followActQuoteOverlayInner">
+                    ${titleHtml || `<span class="followActQuoteTitle">${safeTitle}</span>`}
+                    <span class="followActQuoteSub">${escapeHtml(subtitle)}</span>
+                  </span>
+                  <span class="feedHeroPlayerProgress">
+                    <span class="feedHeroPlayerTime">${escapeHtml(cur)}</span>
+                    <span class="feedHeroPlayerProgTrack"><span class="feedHeroPlayerProgFill" style="width:${pct}%"></span></span>
+                    <span class="feedHeroPlayerTime">${escapeHtml(total)}</span>
+                  </span>
+                  ${feedHeroPlayerControlsHtml()}
+                </span>
+                <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
+              </span>
+            </button>
+            ${menuBtnHtml}
+          </div>`;
+}
+
+function feedRemixFlowPlayerHtml(t, profMap, orig, main) {
+  const origBy = orig.username ? `@${orig.username}` : "Original";
+  const o = followingActivityPlayAttrs(orig, profMap, origBy);
+  const {
+    encUrl,
+    encTitle,
+    encArt,
+    encBy,
+    playData,
+    artSafe,
+    safeTitle,
+    subtitle,
+  } = main;
+  const songMenuBtn = discoverSheetMenuBtnHtml(t, profMap, { className: "discoverCardMenuBtn followActQuoteMenuBtn" });
+  const remixHero = feedHeroPlayerCardHtml({
+    track: t,
+    artSafe,
+    encUrl,
+    encTitle,
+    encArt,
+    encBy,
+    playData,
+    safeTitle,
+    subtitle,
+    titleHtml: `<span class="followActQuoteTitle">${safeTitle}</span>`,
+    menuBtnHtml: songMenuBtn,
+    ariaLabel: `Play remix ${String(t?.title || "song")}`,
+    rowExtraClass: "followActQuoteRow--remixHero",
+  });
+  return `
+      <div class="followActRemixFlow" role="group" aria-label="Original to remix">
+        <button type="button" class="followActRemixFlowOrig" data-user-lib-play="1" data-user-lib-url="${o.encUrl}" data-user-lib-title="${o.encTitle}" data-user-lib-art="${o.encArt}" data-discovery-by="${encodeURIComponent(origBy)}" ${o.playData} aria-label="Play original ${escapeHtml(orig.title)}">
+          <span class="followActRemixFlowOrigArt">
+            <img src="${escapeHtml(o.artSafe)}" alt="" decoding="async" loading="lazy" />
+          </span>
+          <span class="followActRemixFlowOrigBody">
+            <span class="followActRemixFlowOrigChip">Original</span>
+            <span class="followActRemixFlowOrigTitle">${escapeHtml(orig.title)}</span>
+            <span class="followActRemixFlowOrigBy">${escapeHtml(origBy)}</span>
+          </span>
+          <span class="followActRemixFlowOrigPlay" aria-hidden="true">${discoverPlayBtnSvg(14)}</span>
+        </button>
+        <div class="followActRemixFlowBridge" aria-hidden="true">
+          <span class="followActRemixFlowBridgeLine"></span>
+          ${remixIconSvgHtml()}
+          <span class="followActRemixFlowBridgeLabel">Remix</span>
+          <span class="followActRemixFlowBridgeLine"></span>
+        </div>
+        ${remixHero}
+      </div>`;
+}
+
 function followingActivityRowHtml(t, profMap, idx, opts = {}) {
   const xstyle = Boolean(opts && opts.xstyle);
   const type = followingActivityTypeForTrack(t);
@@ -12073,9 +12210,21 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
   let remixPairHtml = "";
   let showHeadLine = !mashupBlockHtml;
   if (orig) {
-    const origBy = orig.username ? `@${orig.username}` : "Original";
-    const o = followingActivityPlayAttrs(orig, profMap, origBy);
-    remixPairHtml = `
+    if (xstyle) {
+      remixPairHtml = feedRemixFlowPlayerHtml(t, profMap, orig, {
+        encUrl,
+        encTitle,
+        encArt,
+        encBy,
+        playData,
+        artSafe,
+        safeTitle,
+        subtitle,
+      });
+    } else {
+      const origBy = orig.username ? `@${orig.username}` : "Original";
+      const o = followingActivityPlayAttrs(orig, profMap, origBy);
+      remixPairHtml = `
       <div class="followActRemixPair" role="group" aria-label="Original and remix">
         <button type="button" class="followActRemixTile" data-user-lib-play="1" data-user-lib-url="${o.encUrl}" data-user-lib-title="${o.encTitle}" data-user-lib-art="${o.encArt}" data-discovery-by="${encodeURIComponent(origBy)}" ${o.playData} aria-label="Play original ${escapeHtml(orig.title)}">
           <img class="followActRemixTileImg" src="${escapeHtml(o.artSafe)}" alt="" decoding="async" loading="lazy" />
@@ -12100,26 +12249,24 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
           </span>
         </button>
       </div>`;
+    }
     showHeadLine = false;
   }
   const songMenuBtn = discoverSheetMenuBtnHtml(t, profMap, { className: "discoverCardMenuBtn followActQuoteMenuBtn" });
-  const quoteCardHtml = `
-          <div class="followActQuoteRow">
-            <button type="button" class="followActQuoteCard followActQuoteCard--hero" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
-              <span class="followActQuoteArt followActQuoteArt--hero">
-                <img class="followActQuoteImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
-                ${coverArtPlaybackOverlayHtml({ hero: true })}
-                <span class="followActQuoteOverlay">
-                  <span class="followActQuoteOverlayInner">
-                    ${titleWithNabadBadgeHtml(t, safeTitle, "followActQuoteTitle")}
-                    <span class="followActQuoteSub">${escapeHtml(subtitle)}</span>
-                  </span>
-                </span>
-                <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
-              </span>
-            </button>
-            ${songMenuBtn}
-          </div>`;
+  const quoteCardHtml = feedHeroPlayerCardHtml({
+    track: t,
+    artSafe,
+    encUrl,
+    encTitle,
+    encArt,
+    encBy,
+    playData,
+    safeTitle,
+    subtitle,
+    titleHtml: titleWithNabadBadgeHtml(t, safeTitle, "followActQuoteTitle"),
+    menuBtnHtml: songMenuBtn,
+    ariaLabel: `Play ${rawTitle}`,
+  });
   const mediaBlockHtml = `
           <div class="followActMediaWrap">
             <button type="button" class="followActMedia" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
@@ -12211,8 +12358,8 @@ function followingActivitySkeletonHtml() {
         </div>
       </div>
       <div class="followActQuoteRow">
-        <div class="followActQuoteCard followActQuoteCard--hero followActQuoteCard--skel">
-          <span class="followActQuoteArt followActQuoteArt--hero followActSkel"></span>
+        <div class="followActQuoteCard followActQuoteCard--hero feedHeroPlayer followActQuoteCard--skel">
+          <span class="feedHeroPlayerStage followActQuoteArt followActQuoteArt--hero followActSkel"></span>
         </div>
       </div>
       <div class="followActActions">

@@ -21187,7 +21187,9 @@ function measureMessagesKeyboardInset() {
   const focused = isMessagesComposerFocused();
   const portraitIosFocused = focused && isIosKeyboardInsetHost() && orientationKey === "portrait";
   if (rawInset > 6) {
-    return portraitIosFocused ? Math.max(rawInset, IOS_DM_ACCESSORY_MIN_INSET_PX) : rawInset;
+    // In PWA/in-flow layout, visualViewport already accounts for keyboard height.
+    // Only reserve the accessory row lift to avoid floating the composer too high.
+    return portraitIosFocused ? IOS_DM_ACCESSORY_MIN_INSET_PX : rawInset;
   }
 
   // iOS Safari/PWA can collapse innerHeight together with visualViewport when the

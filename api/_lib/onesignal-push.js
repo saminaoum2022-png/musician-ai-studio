@@ -153,13 +153,12 @@ async function resolveAllPushSubscriptionIds(userId) {
   return [...new Set([...osIds, ...dbIds])];
 }
 
+const PUSH_APP_TITLE = "NabadAi";
+
 function buildNotificationPayload({ uid, tpl, data, subscriptionIds, copy }) {
-  // OneSignal Web Push requires `headings`; when omitted it defaults to the dashboard
-  // Site Name (often "Nabadai Music App"). Send the alert in both fields — a blank
-  // or whitespace-only `contents` value causes iOS web push delivery to fail.
   const base = {
     app_id: ONESIGNAL_APP_ID,
-    headings: { en: copy.body },
+    headings: { en: PUSH_APP_TITLE },
     contents: { en: copy.body },
     data,
   };

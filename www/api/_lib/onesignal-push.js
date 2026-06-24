@@ -154,13 +154,12 @@ async function resolveAllPushSubscriptionIds(userId) {
 }
 
 function buildNotificationPayload({ uid, tpl, data, subscriptionIds, copy }) {
+  // iOS home-screen web push always inserts a system "from <manifest name>" row
+  // between title and body — it cannot be removed. Keep the payload to a single
+  // body line so we do not add a blank/extra title row on top of that.
   const base = {
     app_id: ONESIGNAL_APP_ID,
     contents: { en: copy.body },
-    // Override OneSignal dashboard default titles (e.g. "from NabadAi") so iOS
-    // shows only the installed app name plus a single message line.
-    headings: { en: "\u200B" },
-    subtitle: { en: "\u200B" },
     data,
   };
   if (subscriptionIds?.length) {

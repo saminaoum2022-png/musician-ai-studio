@@ -21109,6 +21109,34 @@ let _messagesThreadKeyboardOpen = false;
 let _messagesComposerAutofocusToken = 0;
 let _messagesComposerReserveH = 0;
 let _messagesViewportDebugSig = "";
+const _messagesViewportBaseBottomByOrientation = {
+  portrait: 0,
+  landscape: 0,
+};
+
+function readMessagesOrientationKey() {
+  const portrait = window.matchMedia?.("(orientation: portrait)")?.matches
+    ?? (window.innerHeight >= window.innerWidth);
+  return portrait ? "portrait" : "landscape";
+}
+
+function measureMessagesVisibleViewportBottom() {
+  const vv = window.visualViewport;
+  const vvHeight = Math.max(0, Math.round(vv?.height || window.innerHeight || 0));
+  const vvTop = Math.max(0, Math.round(vv?.offsetTop || 0));
+  return Math.max(0, vvHeight + vvTop);
+}
+
+function rememberMessagesViewportBaseBottom({ force = false } = {}) {
+  const key = readMessagesOrientationKey();
+  const current = measureMessagesVisibleViewportBottom();
+  if (current <= 0) return;
+  const prev = Math.max(0, Math.round(_messagesViewportBaseBottomByOrientation[key] || 0));
+  // Grow baseline naturally, and allow force-refresh after route/orientation changes.
+  if (force || prev <= 0 || current > prev) {
+    _messagesViewportBaseBottomByOrientation[key] = current;
+  }
+}
 
 function scheduleMessagesComposerAutofocus({ bootToken = null, delayMs = 0 } = {}) {
   const token = ++_messagesComposerAutofocusToken;
@@ -21139,8 +21167,28 @@ function clearMessagesThreadComposerInset() {
 function measureMessagesKeyboardInset() {
   const vv = window.visualViewport;
   if (!vv) return 0;
-  const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
-  return inset > 6 ? inset : 0;
+  const vvHeight = Math.max(0, Math.round(vv.height || 0));
+  const vvTop = Math.max(0, Math.round(vv.offsetTop || 0));
+  const rawInset = Math.max(0, Math.round(window.innerHeight - vvHeight - vvTop));
+  if (rawInset > 6) return rawInset;
+
+  // iOS Safari/PWA can collapse innerHeight together with visualViewport when the
+  // keyboard opens, causing raw inset to read ~0 while the accessory bar still
+  // overlaps the composer. Detect that case using an orientation baseline.
+  const focused = isMessagesComposerFocused();
+  const orientationKey = readMessagesOrientationKey();
+  if (!focused || !isIosWebShell() || orientationKey !== "portrait") return 0;
+  const baselineBottom = Math.max(
+    0,
+    Math.round(_messagesViewportBaseBottomByOrientation[orientationKey] || 0),
+  );
+  const currentBottom = Math.max(0, Math.round(vvHeight + vvTop));
+  const collapsedBy = Math.max(0, baselineBottom - currentBottom);
+  if (collapsedBy > 120) {
+    // iOS input accessory row is typically ~44px.
+    return 44;
+  }
+  return 0;
 }
 
 function isMessagesComposerFocused() {
@@ -21273,8 +21321,10 @@ function syncMessagesThreadComposerInset() {
     return;
   }
   const focused = isMessagesComposerFocused();
+  if (!focused) rememberMessagesViewportBaseBottom({ force: true });
   const inset = focused && isIosWebShell() ? measureMessagesKeyboardInset() : 0;
   const keyboardOpen = inset > 0;
+  if (!keyboardOpen) rememberMessagesViewportBaseBottom();
   _messagesThreadKeyboardOpen = keyboardOpen;
   document.body.classList.toggle("messagesThreadKeyboardOpen", keyboardOpen);
   try {
@@ -23033,6 +23083,7 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
 
   const input = document.getElementById("messagesComposerInput");
   if (input) input.value = "";
+  rememberMessagesViewportBaseBottom({ force: true });
   wireMessagesThreadKeyboardOnce();
   updateMessagesComposerReserve();
   renderChatHeader();

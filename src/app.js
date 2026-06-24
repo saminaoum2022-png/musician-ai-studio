@@ -21109,6 +21109,7 @@ let _messagesThreadKeyboardOpen = false;
 let _messagesComposerAutofocusToken = 0;
 let _messagesComposerReserveH = 0;
 let _messagesViewportDebugSig = "";
+const IOS_DM_ACCESSORY_MIN_INSET_PX = 48;
 const _messagesViewportBaseBottomByOrientation = {
   portrait: 0,
   landscape: 0,
@@ -21136,6 +21137,18 @@ function rememberMessagesViewportBaseBottom({ force = false } = {}) {
   if (force || prev <= 0 || current > prev) {
     _messagesViewportBaseBottomByOrientation[key] = current;
   }
+}
+
+function isMessagesKeyboardLikelyOpenByViewport() {
+  if (!isIosWebShell()) return false;
+  if (readMessagesOrientationKey() !== "portrait") return false;
+  const baselineBottom = Math.max(
+    0,
+    Math.round(_messagesViewportBaseBottomByOrientation.portrait || 0),
+  );
+  if (baselineBottom <= 0) return false;
+  const currentBottom = Math.max(0, Math.round(measureMessagesVisibleViewportBottom()));
+  return baselineBottom - currentBottom > 40;
 }
 
 function scheduleMessagesComposerAutofocus({ bootToken = null, delayMs = 0 } = {}) {
@@ -21170,25 +21183,27 @@ function measureMessagesKeyboardInset() {
   const vvHeight = Math.max(0, Math.round(vv.height || 0));
   const vvTop = Math.max(0, Math.round(vv.offsetTop || 0));
   const rawInset = Math.max(0, Math.round(window.innerHeight - vvHeight - vvTop));
-  if (rawInset > 6) return rawInset;
+  const orientationKey = readMessagesOrientationKey();
+  const focused = isMessagesComposerFocused();
+  const portraitIosFocused = focused && isIosKeyboardInsetHost() && orientationKey === "portrait";
+  if (rawInset > 6) {
+    return portraitIosFocused ? Math.max(rawInset, IOS_DM_ACCESSORY_MIN_INSET_PX) : rawInset;
+  }
 
   // iOS Safari/PWA can collapse innerHeight together with visualViewport when the
   // keyboard opens, causing raw inset to read ~0 while the accessory bar still
   // overlaps the composer. Detect that case using an orientation baseline.
-  const focused = isMessagesComposerFocused();
-  const orientationKey = readMessagesOrientationKey();
-  if (!focused || !isIosWebShell() || orientationKey !== "portrait") return 0;
+  if (!portraitIosFocused) return 0;
   const baselineBottom = Math.max(
     0,
     Math.round(_messagesViewportBaseBottomByOrientation[orientationKey] || 0),
   );
   const currentBottom = Math.max(0, Math.round(vvHeight + vvTop));
   const collapsedBy = Math.max(0, baselineBottom - currentBottom);
-  if (collapsedBy > 120) {
-    // iOS input accessory row is typically ~44px.
-    return 44;
-  }
-  return 0;
+  if (collapsedBy > 40) return IOS_DM_ACCESSORY_MIN_INSET_PX;
+  // Final guard: while focused in portrait iOS, keep a minimum lift so the
+  // composer cannot sit under the accessory controls during viewport jitter.
+  return IOS_DM_ACCESSORY_MIN_INSET_PX;
 }
 
 function isMessagesComposerFocused() {
@@ -21200,6 +21215,15 @@ function isIosWebShell() {
   if (isNativeShell()) return false;
   const ua = String(navigator?.userAgent || "");
   return /iPhone|iPad|iPod/i.test(ua);
+}
+
+function isIosPlatform() {
+  const ua = String(navigator?.userAgent || "");
+  return /iPhone|iPad|iPod/i.test(ua);
+}
+
+function isIosKeyboardInsetHost() {
+  return isIosPlatform();
 }
 
 function isMessagesThreadKeyboardOpen() {
@@ -21234,14 +21258,14 @@ function clearMessagesThreadViewportLayout() {
 }
 
 function syncMessagesThreadViewportLayout() {
-  if (String(document.body.getAttribute("data-route") || "") !== "messages-thread" || !isIosWebShell()) {
+  if (String(document.body.getAttribute("data-route") || "") !== "messages-thread" || !isIosKeyboardInsetHost()) {
     clearMessagesThreadViewportLayout();
     return;
   }
   const vv = window.visualViewport;
   const inputFocused = isMessagesComposerFocused();
   const keyboardInset = measureMessagesKeyboardInset();
-  const keyboardOpen = inputFocused && keyboardInset > 0;
+  const keyboardOpen = keyboardInset > 0;
   const portrait = window.matchMedia?.("(orientation: portrait)")?.matches
     ?? (window.innerHeight >= window.innerWidth);
   const headerH = Math.max(0, Math.round(document.querySelector(".messagesThreadHead")?.getBoundingClientRect().height || 0));
@@ -21322,7 +21346,8 @@ function syncMessagesThreadComposerInset() {
   }
   const focused = isMessagesComposerFocused();
   if (!focused) rememberMessagesViewportBaseBottom({ force: true });
-  const inset = focused && isIosWebShell() ? measureMessagesKeyboardInset() : 0;
+  const applyInset = focused || isMessagesKeyboardLikelyOpenByViewport();
+  const inset = applyInset && isIosKeyboardInsetHost() ? measureMessagesKeyboardInset() : 0;
   const keyboardOpen = inset > 0;
   if (!keyboardOpen) rememberMessagesViewportBaseBottom();
   _messagesThreadKeyboardOpen = keyboardOpen;

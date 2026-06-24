@@ -21225,7 +21225,7 @@ function isIosPlatform() {
 }
 
 function isIosKeyboardInsetHost() {
-  return isIosPlatform();
+  return isIosWebShell();
 }
 
 function isMessagesThreadKeyboardOpen() {
@@ -21278,23 +21278,9 @@ function syncMessagesThreadViewportLayout() {
   const vvTop = Math.max(0, Math.round(vv?.offsetTop || 0));
   let mountH = Math.max(0, Math.round(vvHeight - headerH - composerH));
 
-  if (portrait && keyboardOpen && mountEl) {
-    document.body.classList.add("messagesThreadViewportSized");
-    const page = document.getElementById("messagesThreadPage");
-    if (page) {
-      page.style.height = `${vvHeight}px`;
-      page.style.maxHeight = `${vvHeight}px`;
-    }
-    mountH = Math.max(120, mountH);
-    mountEl.style.height = `${mountH}px`;
-    mountEl.style.maxHeight = `${mountH}px`;
-    // mount height already subtracts composer height; keep only a small
-    // reading gutter so the last bubble sits close to the composer.
-    mountEl.style.paddingBottom = "12px";
-    mountEl.style.scrollPaddingBottom = "12px";
-  } else {
-    clearMessagesThreadViewportLayout();
-  }
+  // Keep layout purely in-flow in PWA and avoid JS-forced page/mount heights.
+  // The keyboard overlap fix is handled by --messages-keyboard-inset on composer.
+  clearMessagesThreadViewportLayout();
 
   const sig = [
     portrait ? "portrait" : "landscape",

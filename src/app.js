@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260624chatDmFixedHead";
+const APP_BUILD = "20260624webBootFlashFix";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -105,9 +105,21 @@ function finishBootSplash() {
   try {
     if (_bootSplashMinTimer) clearTimeout(_bootSplashMinTimer);
     _bootSplashMinTimer = 0;
-    document.body.classList.remove("booting");
     const splash = document.getElementById("bootSplash");
-    if (splash) splash.style.display = "";
+    const revealApp = () => {
+      document.body.classList.remove("booting");
+      if (!splash) return;
+      splash.style.display = "";
+      splash.style.opacity = "";
+      splash.style.transition = "";
+    };
+    if (!IS_NATIVE_SHELL && splash) {
+      splash.style.transition = "opacity 220ms ease";
+      splash.style.opacity = "0";
+      window.setTimeout(revealApp, 230);
+      return;
+    }
+    revealApp();
   } catch {}
 }
 

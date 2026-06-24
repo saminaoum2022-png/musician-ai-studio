@@ -20,6 +20,13 @@
       body.booting .header,
       body.booting .mobileTabbar,
       body.booting .footer{display:none!important}
+      .bootSplashMark{
+        display:block;
+        width:min(26vw,108px);
+        aspect-ratio:1;
+        flex-shrink:0;
+        background:url("./assets/icons/splash-mark.png") center/contain no-repeat;
+      }
     </style>
     <script>
       (function () {
@@ -59,6 +66,7 @@
 
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./assets/icons/apple-touch-icon.png" />
+    <link rel="preload" href="./assets/icons/splash-mark.png" as="image" />
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/icons/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="./assets/icons/favicon-16.png" />
     <!--
@@ -87,7 +95,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260624chatDmFixedHead" />
+    <link rel="stylesheet" href="./styles.css?v=20260624webBootFlashFix" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -3844,6 +3852,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260624chatDmFixedHead"></script>
+    <script type="module" src="./src/app.js?v=20260624webBootFlashFix"></script>
   </body>
 </html>

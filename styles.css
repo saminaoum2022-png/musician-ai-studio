@@ -1438,6 +1438,8 @@ body.booting .hubNowPlaying{
   justify-content: center;
   background: #05070d;
   pointer-events: none;
+  opacity: 1;
+  transition: opacity 220ms ease;
 }
 body.booting .bootSplash{
   display: flex;
@@ -1879,6 +1881,20 @@ body.isIntro .footer{ display:none; }
   min-height: 0;
   overflow: visible;
   pointer-events: none;
+}
+html.is-web-shell body.isIntro .introWelcomeDecor{
+  opacity: 0;
+  animation: introWelcomeDecorIn 0.42s ease 0.1s forwards;
+}
+@keyframes introWelcomeDecorIn{
+  from{ opacity: 0; }
+  to{ opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce){
+  html.is-web-shell body.isIntro .introWelcomeDecor{
+    animation: none;
+    opacity: 1;
+  }
 }
 .introWelcomeTile{
   position: absolute;

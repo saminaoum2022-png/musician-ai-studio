@@ -30795,11 +30795,18 @@ section.mentorPage{
 .followAct--xstyle .followActHeadStack:has(.followActCaption) + .followActMashup{
   margin-top: 4px;
 }
-.followAct--xstyle .followActQuoteRow,
+.followAct--xstyle .followActQuoteRow:not(:has(.followActQuoteCard--hero)),
 .followAct--xstyle .followActRemixPair,
 .followAct--xstyle .followActMashup,
-.followAct--xstyle .followActQuoteCard--skel{
+.followAct--xstyle .followActQuoteCard--skel:not(.followActQuoteCard--hero){
   grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  margin-left: 0;
+}
+/* Hero single-song art: square in the text column, aligned after avatar. */
+.followAct--xstyle .followActQuoteRow:has(.followActQuoteCard--hero){
+  grid-column: 2;
   width: 100%;
   min-width: 0;
   margin-left: 0;
@@ -30940,7 +30947,6 @@ section.mentorPage{
   display: block;
   width: 100%;
   aspect-ratio: 1 / 1;
-  max-height: min(72vw, 360px);
   border-radius: 14px;
   overflow: hidden;
   background: rgba(255,255,255,0.04);

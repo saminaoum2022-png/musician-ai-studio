@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260624chatDmKeyboardDock";
+const APP_BUILD = "20260624chatDmFixedHead";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -21316,6 +21316,16 @@ function updateMessagesComposerReserve() {
   document.documentElement.style.setProperty("--messages-composer-h", `${h}px`);
 }
 
+function updateMessagesThreadHeadReserve() {
+  const head = document.querySelector(".messagesThreadHead");
+  if (!head) return;
+  const h = Math.ceil(head.getBoundingClientRect().height);
+  if (h <= 0) return;
+  try {
+    document.documentElement.style.setProperty("--messages-thread-head-h", `${h}px`);
+  } catch {}
+}
+
 function syncMessagesThreadWebComposerPosition() {
   if (isNativeShell()) return;
   document.querySelector(".messagesComposer")?.style.removeProperty("bottom");
@@ -21369,6 +21379,7 @@ function wireMessagesThreadComposerResizeOnce() {
     if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
     const prevReserve = _messagesComposerReserveH;
     updateMessagesComposerReserve();
+    updateMessagesThreadHeadReserve();
     syncMessagesThreadViewportLayout();
     if (
       Math.abs(_messagesComposerReserveH - prevReserve) > 1
@@ -21378,6 +21389,8 @@ function wireMessagesThreadComposerResizeOnce() {
     }
   });
   ro.observe(composer);
+  const head = document.querySelector(".messagesThreadHead");
+  if (head) ro.observe(head);
 }
 
 function wireMessagesThreadKeyboardOnce() {
@@ -21622,6 +21635,7 @@ function renderChatHeaderSkeleton() {
     avatarEl.dataset.chatAvKey = "skel";
     avatarEl.innerHTML = `<span class="messagesThreadAvatarSkel" aria-hidden="true"></span>`;
   }
+  updateMessagesThreadHeadReserve();
 }
 
 function renderChatHeader() {
@@ -21648,6 +21662,7 @@ function renderChatHeader() {
     avatarEl.innerHTML = messagesAvatarHtml(u.avatarUrl, u.username, "messagesThreadAvatarImg");
   }
   updateChatHeaderRelationOnly();
+  updateMessagesThreadHeadReserve();
 }
 
 function updateChatHeaderRelationOnly() {
@@ -21657,6 +21672,7 @@ function updateChatHeaderRelationOnly() {
     relationEl.textContent = relation;
     relationEl.hidden = !relation;
   }
+  updateMessagesThreadHeadReserve();
 }
 
 function messagesThreadSkeletonHtml() {
@@ -23096,6 +23112,7 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   rememberMessagesViewportBaseBottom({ force: true });
   wireMessagesThreadKeyboardOnce();
   updateMessagesComposerReserve();
+  updateMessagesThreadHeadReserve();
   renderChatHeader();
   renderMessagesMount({ scrollToBottom: true, forceScroll: true });
   syncMessagesThreadComposerReady();

@@ -27610,8 +27610,6 @@ section.messagesThreadPage{
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
-  max-height: 100%;
-  height: 100%;
   overflow: hidden;
   padding: 0 max(12px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px));
   box-sizing: border-box;
@@ -27639,17 +27637,35 @@ body.messagesThreadLeaving .messagesThreadPage{
 }
 body[data-route="messages-thread"]{
   background: var(--bg);
+  overflow: hidden;
+  height: 100dvh;
+  height: 100svh;
 }
 body[data-route="messages-thread"] > .app{
   padding-bottom: 0;
+  padding-top: 0;
+  padding-left: 0;
+  padding-right: 0;
+  height: 100%;
+  min-height: 0;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 body[data-route="messages-thread"] main.grid{
   margin: 0;
   gap: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 @media (max-width: 720px){
   body[data-route="messages-thread"] > .app{
-    padding-bottom: 0;
+    padding: 0 !important;
   }
 }
 body[data-route="messages"]{
@@ -27701,11 +27717,18 @@ body[data-route="messages"]{
 }
 .messagesThreadHead{
   flex: 0 0 auto;
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 5;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  width: min(100%, 640px);
+  box-sizing: border-box;
   align-items: center;
-  padding: 6px 4px 8px;
+  padding-top: calc(6px + env(safe-area-inset-top, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
+  padding-bottom: 8px;
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
   border-bottom: 1px solid rgba(255,255,255,0.08);
   background: var(--bg);
 }
@@ -28056,6 +28079,7 @@ body[data-route="messages"]{
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 4px 8px 8px;
+  padding-top: calc(var(--messages-thread-head-h, 64px) + 4px);
   -webkit-overflow-scrolling: touch;
   scroll-padding-bottom: calc(var(--messages-composer-h, 72px) + 8px);
   padding-bottom: calc(var(--messages-composer-h, 72px) + 8px);

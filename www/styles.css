@@ -23282,6 +23282,9 @@ body.createChooserSheetOpen .footer{
 .friendsPage .followAct--status .followActContent{
   padding-left: 48px;
 }
+.friendsPage .followAct--status.followAct--xstyle > .followActContent{
+  padding-left: 0;
+}
 .followActStatusText{
   margin: 4px 0 0;
   font-size: 14px;
@@ -23300,6 +23303,9 @@ body.createChooserSheetOpen .footer{
 }
 .followAct--status .followActContent{
   padding-left: 50px;
+}
+.followAct--status.followAct--xstyle > .followActContent{
+  padding-left: 0;
 }
 .followActBody--static{
   cursor: default;
@@ -23412,7 +23418,15 @@ body.createChooserSheetOpen .footer{
   border: 0;
   background: transparent;
 }
+.followAct--xstyle.followAct--skel .followActTop{
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+}
 .followAct--xstyle.followAct--skel .followActHeadStack{
+  flex: 1 1 0;
+  min-width: 0;
   gap: 4px;
 }
 .followActSkelMetaLine{
@@ -30699,12 +30713,12 @@ section.mentorPage{
 .followAct--xstyle{
   --feed-song-art-size: 78px;
   --feed-song-card-min-h: 88px;
-  --feed-post-divider-gap: 20px;
-  display: grid;
-  grid-template-columns: 40px minmax(0, 1fr);
-  column-gap: 10px;
-  row-gap: 0;
-  align-items: flex-start;
+  --feed-post-divider-gap: 28px;
+  --feed-hero-art-gap: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
   padding: 0 14px var(--feed-post-divider-gap);
   border: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
@@ -30712,6 +30726,8 @@ section.mentorPage{
   border-radius: 0;
   box-shadow: none;
   overflow: visible;
+  box-sizing: border-box;
+  min-width: 0;
 }
 .followActStack .followAct.followAct--xstyle:first-child,
 .followAct.followAct--xstyle.followActStack:first-child{
@@ -30727,12 +30743,11 @@ section.mentorPage{
 /* Explicit overrides for the two scopes that previously beat us. */
 .friendsPage .followActStack .followAct.followAct--xstyle,
 .profileActivitiesList.followActStack .followAct.followAct--xstyle{
-  display: grid;
-  grid-template-columns: 40px minmax(0, 1fr);
-  column-gap: 10px;
-  row-gap: 0;
-  align-items: flex-start;
-  padding: 0 14px var(--feed-post-divider-gap, 12px);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 0 14px var(--feed-post-divider-gap, 28px);
   padding-left: 14px;
   padding-right: 14px;
   border: 0;
@@ -30758,9 +30773,15 @@ section.mentorPage{
   padding-left: 14px;
   padding-right: 14px;
 }
-.followAct--xstyle > .followActAvatar{
-  grid-column: 1;
-  grid-row: 1;
+.followAct--xstyle .followActTop{
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+}
+.followAct--xstyle .followActTop > .followActAvatar{
+  flex: 0 0 40px;
   width: 40px;
   height: 40px;
   margin: 0;
@@ -30768,59 +30789,64 @@ section.mentorPage{
 .followAct--xstyle .followActColumn{
   display: contents;
 }
-.followAct--xstyle .followActHeadStack{
-  grid-column: 2;
-  grid-row: 1;
+.followAct--xstyle .followActTop .followActHeadStack{
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  min-width: 0;
 }
 .followAct--xstyle .followActHeadStack .followActMeta{
   margin: 0;
 }
 .followAct--xstyle .followActHeadStack .followActContent{
-  grid-column: auto;
-  grid-row: auto;
   margin-top: 0;
   padding-left: 0;
 }
-.followAct--xstyle .followActHeadStack:not(:has(.followActCaption)) + .followActQuoteRow:has(.followActQuoteCard--hero),
-.followAct--xstyle .followActHeadStack:not(:has(.followActCaption)) + .followActRemixPair,
-.followAct--xstyle .followActHeadStack:not(:has(.followActCaption)) + .followActMashup{
-  margin-top: 10px;
+.followAct--xstyle > .followActContent,
+.followAct--xstyle > .followActQuoteRow,
+.followAct--xstyle > .followActRemixPair,
+.followAct--xstyle > .followActMashup,
+.followAct--xstyle > .followActMediaWrap{
+  width: 100%;
+  min-width: 0;
+  margin-left: 0;
+  margin-right: 0;
 }
-.followAct--xstyle .followActHeadStack:has(.followActCaption) + .followActQuoteRow:has(.followActQuoteCard--hero),
-.followAct--xstyle .followActHeadStack:has(.followActCaption) + .followActRemixPair,
-.followAct--xstyle .followActHeadStack:has(.followActCaption) + .followActMashup{
+.followAct--xstyle > .followActContent{
+  margin-top: 8px;
+  padding-left: 0;
+}
+.followAct--xstyle > .followActQuoteRow:has(.followActQuoteCard--hero),
+.followAct--xstyle > .followActRemixPair,
+.followAct--xstyle > .followActMashup{
+  margin-top: var(--feed-hero-art-gap, 12px);
+}
+.followAct--xstyle > .followActContent + .followActQuoteRow:has(.followActQuoteCard--hero),
+.followAct--xstyle > .followActContent + .followActRemixPair,
+.followAct--xstyle > .followActContent + .followActMashup{
   margin-top: 8px;
 }
 .followAct--xstyle .followActQuoteRow:not(:has(.followActQuoteCard--hero)),
-.followAct--xstyle .followActRemixPair,
-.followAct--xstyle .followActMashup,
 .followAct--xstyle .followActQuoteCard--skel:not(.followActQuoteCard--hero){
-  grid-column: 1 / -1;
   width: 100%;
   min-width: 0;
   margin-left: 0;
 }
-/* Hero single-song: full content width below header row (Friends + Profile Posts). */
 .followAct--xstyle .followActQuoteRow:has(.followActQuoteCard--hero){
-  grid-column: 1 / -1;
   width: 100%;
   min-width: 0;
   margin-left: 0;
 }
 .followAct--xstyle .followActActionsBar,
 .followAct--xstyle > .followActActions{
-  grid-column: 1 / -1;
   width: 100%;
   min-width: 0;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 .followAct--xstyle:has(.followActQuoteCard--hero) .followActActionsBar,
 .followAct--xstyle:has(.followActQuoteCard--hero) > .followActActions{
-  margin-top: 12px;
+  margin-top: 14px;
 }
 .followAct--xstyle .followActActionsBar > .followActActions,
 .followAct--xstyle > .followActActions{
@@ -30951,6 +30977,7 @@ section.mentorPage{
   display: block;
   width: 100%;
   aspect-ratio: 1 / 1;
+  min-height: min(88vw, 420px);
   border-radius: 14px;
   overflow: hidden;
   background: rgba(255,255,255,0.04);

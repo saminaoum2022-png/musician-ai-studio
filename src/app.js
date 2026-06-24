@@ -10330,24 +10330,26 @@ function followingStatusRowHtml(post, profMap, idx, opts = {}) {
       : `<a class="followActUserLink" href="${escapeHtml(profileHref)}" data-route-link="user">${who}</a><span class="followActMetaDot" aria-hidden="true">·</span><span class="followActWhen">${escapeHtml(when)}</span>`;
     return `
       <article class="followAct followAct--status followAct--xstyle${ownCls}" data-follow-act="status" data-follow-status-type="${escapeHtml(postType)}" data-follow-status-id="${escapeHtml(postId)}" style="--i:${idx}">
-        <a class="followActAvatar" href="${escapeHtml(profileHref)}" data-route-link="user" data-avatar-user-id="${escapeHtml(userId)}" aria-label="${isOwn ? "Your profile" : handle ? `@${escapeHtml(handle)} profile` : "Profile"}">
-          <span class="followActAvatarRing" aria-hidden="true"></span>
-          ${avatarSrc
-            ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
-            : `<span class="followActAvatarFallback">${escapeHtml(initials)}</span>`}
-        </a>
-        <div class="followActHeadStack">
-          <div class="followActMeta">
-            ${metaInner}
-            <span class="followActMetaDot" aria-hidden="true">·</span>
-            ${followingActivityBadgeHtml("status", postType, { post })}
-            ${menuBtn}
-          </div>
-          <div class="followActContent followActBody--static">
-            ${contentHtml}
+        <div class="followActTop">
+          <a class="followActAvatar" href="${escapeHtml(profileHref)}" data-route-link="user" data-avatar-user-id="${escapeHtml(userId)}" aria-label="${isOwn ? "Your profile" : handle ? `@${escapeHtml(handle)} profile` : "Profile"}">
+            <span class="followActAvatarRing" aria-hidden="true"></span>
+            ${avatarSrc
+              ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
+              : `<span class="followActAvatarFallback">${escapeHtml(initials)}</span>`}
+          </a>
+          <div class="followActHeadStack">
+            <div class="followActMeta">
+              ${metaInner}
+              <span class="followActMetaDot" aria-hidden="true">·</span>
+              ${followingActivityBadgeHtml("status", postType, { post })}
+              ${menuBtn}
+            </div>
           </div>
         </div>
-          ${followActActionsRowHtml({ kind: "status", targetId: postId, targetUserId: userId })}
+        <div class="followActContent followActBody--static">
+          ${contentHtml}
+        </div>
+        ${followActActionsRowHtml({ kind: "status", targetId: postId, targetUserId: userId })}
       </article>`;
   }
   return `
@@ -10750,12 +10752,13 @@ function patchFollowActRowMedia(article, track, profMap, idx) {
   const nextActRow = nextArticle.querySelector(".followActActionsBar") || nextArticle.querySelector(".followActActions");
   if (!actRow || !nextActRow) return false;
 
-  const contentEl = headStack.querySelector(".followActContent");
-  const nextContent = nextHeadStack.querySelector(".followActContent");
+  const contentEl = article.querySelector(":scope > .followActContent") || headStack.querySelector(".followActContent");
+  const nextContent = nextArticle.querySelector(":scope > .followActContent") || nextHeadStack.querySelector(".followActContent");
+  const contentAnchor = article.querySelector(".followActTop") || headStack;
   if (nextContent) {
     const clone = nextContent.cloneNode(true);
     if (contentEl) contentEl.replaceWith(clone);
-    else headStack.appendChild(clone);
+    else contentAnchor.after(clone);
   } else if (contentEl) {
     contentEl.remove();
   }
@@ -12128,33 +12131,35 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
   if (xstyle) {
     return `
       <article class="followAct followAct--music followAct--xstyle" data-follow-act="${type}" data-profile-act-song-id="${escapeHtml(String(t.id || ""))}" style="--i:${idx}" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}>
-        <a class="followActAvatar" href="${escapeHtml(profileHref)}" data-route-link="user" data-avatar-user-id="${escapeHtml(String(t.userId || ""))}" aria-label="${handle ? `@${escapeHtml(handle)} profile` : "Profile"}">
-          <span class="followActAvatarRing" aria-hidden="true"></span>
-          ${avatarSrc
-            ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
-            : `<span class="followActAvatarFallback">${escapeHtml(initials)}</span>`}
-        </a>
-        <div class="followActHeadStack">
-          <div class="followActMeta">
-            <a class="followActUserLink" href="${escapeHtml(profileHref)}" data-route-link="user">${handle ? `<strong class="followActUser">@${escapeHtml(handle)}</strong>` : `<strong class="followActUser">A musician</strong>`}</a>
-            <span class="followActMetaDot" aria-hidden="true">·</span>
-            <span class="followActWhen">${escapeHtml(when)}</span>
-            ${createdChipHtml}
-            <span class="followActMetaDot" aria-hidden="true">·</span>
-            ${followingActivityBadgeHtml("music", type)}
+        <div class="followActTop">
+          <a class="followActAvatar" href="${escapeHtml(profileHref)}" data-route-link="user" data-avatar-user-id="${escapeHtml(String(t.userId || ""))}" aria-label="${handle ? `@${escapeHtml(handle)} profile` : "Profile"}">
+            <span class="followActAvatarRing" aria-hidden="true"></span>
+            ${avatarSrc
+              ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
+              : `<span class="followActAvatarFallback">${escapeHtml(initials)}</span>`}
+          </a>
+          <div class="followActHeadStack">
+            <div class="followActMeta">
+              <a class="followActUserLink" href="${escapeHtml(profileHref)}" data-route-link="user">${handle ? `<strong class="followActUser">@${escapeHtml(handle)}</strong>` : `<strong class="followActUser">A musician</strong>`}</a>
+              <span class="followActMetaDot" aria-hidden="true">·</span>
+              <span class="followActWhen">${escapeHtml(when)}</span>
+              ${createdChipHtml}
+              <span class="followActMetaDot" aria-hidden="true">·</span>
+              ${followingActivityBadgeHtml("music", type)}
+            </div>
           </div>
-          ${caption ? `<div class="followActContent">${captionHtml}</div>` : ""}
         </div>
-          ${mashupBlockHtml || remixPairHtml || quoteCardHtml}
-          <div class="followActActionsBar">
-            ${followActActionsRowHtml({
-              kind: "music",
-              targetId: t.id,
-              targetUserId: t.userId,
-              plays,
-              playsPending,
-            })}
-          </div>
+        ${caption ? `<div class="followActContent">${captionHtml}</div>` : ""}
+        ${mashupBlockHtml || remixPairHtml || quoteCardHtml}
+        <div class="followActActionsBar">
+          ${followActActionsRowHtml({
+            kind: "music",
+            targetId: t.id,
+            targetUserId: t.userId,
+            plays,
+            playsPending,
+          })}
+        </div>
       </article>`;
   }
   const playFootLabel = playsPending
@@ -12197,35 +12202,39 @@ function followingActivitySkeletonHtml() {
   // meta + body + actions stacked in the right column, divider between rows.
   const musicRow = (i) => `
     <article class="followAct followAct--xstyle followAct--music followAct--skel" style="--i:${i}" aria-hidden="true">
-      <span class="followActAvatar followActSkel followActSkelAvatar"></span>
-      <div class="followActHeadStack">
-        <div class="followActMeta">
-          <span class="followActSkel followActSkelMetaLine"></span>
-        </div>
-      </div>
-        <div class="followActQuoteRow">
-          <div class="followActQuoteCard followActQuoteCard--hero followActQuoteCard--skel">
-            <span class="followActQuoteArt followActQuoteArt--hero followActSkel"></span>
+      <div class="followActTop">
+        <span class="followActAvatar followActSkel followActSkelAvatar"></span>
+        <div class="followActHeadStack">
+          <div class="followActMeta">
+            <span class="followActSkel followActSkelMetaLine"></span>
           </div>
         </div>
-        <div class="followActActions">
-          <span class="followActAct followActAct--skel followActSkel"></span>
-          <span class="followActAct followActAct--skel followActSkel"></span>
-          <span class="followActAct followActAct--skel followActSkel"></span>
+      </div>
+      <div class="followActQuoteRow">
+        <div class="followActQuoteCard followActQuoteCard--hero followActQuoteCard--skel">
+          <span class="followActQuoteArt followActQuoteArt--hero followActSkel"></span>
         </div>
+      </div>
+      <div class="followActActions">
+        <span class="followActAct followActAct--skel followActSkel"></span>
+        <span class="followActAct followActAct--skel followActSkel"></span>
+        <span class="followActAct followActAct--skel followActSkel"></span>
+      </div>
     </article>`;
   const statusRow = (i) => `
     <article class="followAct followAct--xstyle followAct--status followAct--skel" style="--i:${i}" aria-hidden="true">
-      <span class="followActAvatar followActSkel followActSkelAvatar"></span>
-      <div class="followActHeadStack">
-        <div class="followActMeta">
-          <span class="followActSkel followActSkelMetaLine"></span>
+      <div class="followActTop">
+        <span class="followActAvatar followActSkel followActSkelAvatar"></span>
+        <div class="followActHeadStack">
+          <div class="followActMeta">
+            <span class="followActSkel followActSkelMetaLine"></span>
+          </div>
         </div>
-        <div class="followActContent">
-          <span class="followActSkel followActSkelTextLine"></span>
-          <span class="followActSkel followActSkelTextLine"></span>
-          <span class="followActSkel followActSkelTextLine short"></span>
-        </div>
+      </div>
+      <div class="followActContent">
+        <span class="followActSkel followActSkelTextLine"></span>
+        <span class="followActSkel followActSkelTextLine"></span>
+        <span class="followActSkel followActSkelTextLine short"></span>
       </div>
       <div class="followActActions">
         <span class="followActAct followActAct--skel followActSkel"></span>

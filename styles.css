@@ -28147,7 +28147,7 @@ html.is-web-shell body.messagesThreadKeyboardOpen[data-route="messages-thread"] 
 .messagesBubbleWrap{
   display: flex;
   justify-content: flex-start;
-  padding: 0 10px;
+  padding: 0 8px;
 }
 .messagesBubbleWrap.is-mine,
 .messagesBubbleWrap--song.is-mine{
@@ -28247,6 +28247,23 @@ html.is-web-shell body.messagesThreadKeyboardOpen[data-route="messages-thread"] 
   text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+@media (max-width: 720px) and (orientation: portrait){
+  .messagesThreadMount{
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+  .messagesBubbleWrap{
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .messagesBubble{
+    max-width: 76%;
+  }
+  .messagesDmSongCard{
+    width: 82%;
+    max-width: none;
+  }
 }
 .messagesBubbleWrap.is-mine .messagesDmSongCard{
   border-color: rgba(255,255,255,0.14);

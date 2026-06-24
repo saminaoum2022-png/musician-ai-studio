@@ -28055,7 +28055,7 @@ body[data-route="messages"]{
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 4px 2px 8px;
+  padding: 4px 8px 8px;
   -webkit-overflow-scrolling: touch;
   scroll-padding-bottom: calc(var(--messages-composer-h, 72px) + var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px))) + 8px);
   padding-bottom: calc(var(--messages-composer-h, 72px) + var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px))) + 8px);
@@ -28147,7 +28147,7 @@ html.is-web-shell body.messagesThreadKeyboardOpen[data-route="messages-thread"] 
 .messagesBubbleWrap{
   display: flex;
   justify-content: flex-start;
-  padding: 0 4px;
+  padding: 0 10px;
 }
 .messagesBubbleWrap.is-mine,
 .messagesBubbleWrap--song.is-mine{

@@ -21316,7 +21316,6 @@ let _messagesThreadKeyboardOpen = false;
 let _messagesComposerAutofocusToken = 0;
 let _messagesComposerReserveH = 0;
 let _messagesViewportDebugSig = "";
-const IOS_DM_ACCESSORY_MIN_INSET_PX = 48;
 const _messagesViewportBaseBottomByOrientation = {
   portrait: 0,
   landscape: 0,
@@ -21344,18 +21343,6 @@ function rememberMessagesViewportBaseBottom({ force = false } = {}) {
   if (force || prev <= 0 || current > prev) {
     _messagesViewportBaseBottomByOrientation[key] = current;
   }
-}
-
-function isMessagesKeyboardLikelyOpenByViewport() {
-  if (!isIosWebShell()) return false;
-  if (readMessagesOrientationKey() !== "portrait") return false;
-  const baselineBottom = Math.max(
-    0,
-    Math.round(_messagesViewportBaseBottomByOrientation.portrait || 0),
-  );
-  if (baselineBottom <= 0) return false;
-  const currentBottom = Math.max(0, Math.round(measureMessagesVisibleViewportBottom()));
-  return baselineBottom - currentBottom > 40;
 }
 
 function scheduleMessagesComposerAutofocus({ bootToken = null, delayMs = 0 } = {}) {
@@ -21396,8 +21383,9 @@ function measureMessagesKeyboardInset() {
   if (rawInset > 6) return rawInset;
 
   // iOS Safari/PWA can collapse innerHeight together with visualViewport when the
-  // keyboard opens, causing raw inset to read ~0 while the accessory bar still
-  // overlaps the composer. Detect that case using an orientation baseline.
+  // keyboard opens, causing raw inset to read ~0 while the keyboard still overlaps
+  // the composer. Recover the real overlap from an orientation baseline instead of
+  // forcing a fixed floor (a fixed floor leaves dead space above the keyboard).
   if (!portraitIosFocused) return 0;
   const baselineBottom = Math.max(
     0,
@@ -21405,8 +21393,7 @@ function measureMessagesKeyboardInset() {
   );
   const currentBottom = Math.max(0, Math.round(vvHeight + vvTop));
   const collapsedBy = Math.max(0, baselineBottom - currentBottom);
-  if (collapsedBy > 40) return collapsedBy;
-  return portraitIosFocused ? IOS_DM_ACCESSORY_MIN_INSET_PX : 0;
+  return collapsedBy > 40 ? collapsedBy : 0;
 }
 
 function isMessagesComposerFocused() {
@@ -21545,12 +21532,13 @@ function syncMessagesThreadComposerInset() {
   }
   const focused = isMessagesComposerFocused();
   if (!focused) rememberMessagesViewportBaseBottom({ force: true });
+  // Drive the composer purely off the real visual-viewport keyboard overlap.
+  // A measured inset of 0 means the bar belongs at the safe-area bottom — no
+  // artificial floor, which is what previously left dead space above the keyboard.
   const measuredInset = isIosKeyboardInsetHost() ? measureMessagesKeyboardInset() : 0;
-  const likelyOpen = focused || isMessagesKeyboardLikelyOpenByViewport() || measuredInset > 6;
-  const inset = likelyOpen
-    ? (measuredInset > 0 ? measuredInset : IOS_DM_ACCESSORY_MIN_INSET_PX)
-    : 0;
-  const keyboardOpen = likelyOpen;
+  const inset = measuredInset > 6 ? measuredInset : 0;
+  const keyboardOpen = inset > 0;
+  const wasOpen = _messagesThreadKeyboardOpen;
   if (!keyboardOpen) rememberMessagesViewportBaseBottom();
   _messagesThreadKeyboardOpen = keyboardOpen;
   document.body.classList.toggle("messagesThreadKeyboardOpen", keyboardOpen);
@@ -21560,7 +21548,9 @@ function syncMessagesThreadComposerInset() {
   syncMessagesThreadWebComposerPosition();
   updateMessagesComposerReserve();
   syncMessagesThreadViewportLayout();
-  if (_messagesThreadNeedsInitialScroll) {
+  // Keep the latest message pinned above the input when the keyboard opens.
+  const justOpened = keyboardOpen && !wasOpen;
+  if (_messagesThreadNeedsInitialScroll || (justOpened && shouldAutoScrollMessagesMount())) {
     scheduleMessagesThreadScrollToBottom({ force: true });
   }
 }
@@ -21600,11 +21590,21 @@ function wireMessagesThreadComposerResizeOnce() {
   if (head) ro.observe(head);
 }
 
+let _messagesViewportSyncRaf = 0;
 function wireMessagesThreadKeyboardOnce() {
   if (document.documentElement.dataset.messagesThreadKbWired) return;
   document.documentElement.dataset.messagesThreadKbWired = "1";
   wireMessagesThreadComposerResizeOnce();
-  const onViewportChange = () => syncMessagesThreadComposerInset();
+  // visualViewport emits a burst of resize/scroll events during the keyboard
+  // animation. Coalesce them into one update per frame so the composer tracks
+  // smoothly instead of thrashing up and down.
+  const onViewportChange = () => {
+    if (_messagesViewportSyncRaf) return;
+    _messagesViewportSyncRaf = window.requestAnimationFrame(() => {
+      _messagesViewportSyncRaf = 0;
+      syncMessagesThreadComposerInset();
+    });
+  };
   window.visualViewport?.addEventListener("resize", onViewportChange);
   window.visualViewport?.addEventListener("scroll", onViewportChange);
   window.addEventListener("resize", onViewportChange);

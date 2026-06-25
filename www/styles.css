@@ -28407,13 +28407,14 @@ body[data-route="messages-thread"] .messagesComposer{
   margin: 0;
   box-sizing: border-box;
   bottom: 0;
-  padding-bottom: 8px;
+  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
 }
 body[data-route="messages-thread"] .mobileTabbar{
   display: none !important;
 }
 html.is-web-shell body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesComposer{
   bottom: var(--messages-keyboard-inset, 0px);
+  padding-bottom: 8px;
 }
 body[data-route="messages-thread"] .footer{
   display: none !important;

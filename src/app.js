@@ -769,6 +769,8 @@ const els = {
   authEmailForm: document.getElementById("authEmailForm"),
   authEmailInput: document.getElementById("authEmailInput"),
   authPasswordInput: document.getElementById("authPasswordInput"),
+  authPasswordConfirmInput: document.getElementById("authPasswordConfirmInput"),
+  authConfirmField: document.getElementById("authConfirmField"),
   authEmailMsg: document.getElementById("authEmailMsg"),
   btnAuthEmailSubmit: document.getElementById("btnAuthEmailSubmit"),
   btnAuthEmailReveal: document.getElementById("btnAuthEmailReveal"),
@@ -19350,6 +19352,14 @@ function setAuthEmailMode(mode) {
     els.authPasswordInput.placeholder =
       _authEmailMode === "signup" ? "At least 8 characters" : "Your password";
   }
+  const showConfirm = _authEmailMode === "signup";
+  if (els.authConfirmField) {
+    els.authConfirmField.hidden = !showConfirm;
+  }
+  if (els.authPasswordConfirmInput) {
+    els.authPasswordConfirmInput.disabled = !showConfirm;
+    if (!showConfirm) els.authPasswordConfirmInput.value = "";
+  }
 }
 
 function setAuthEmailMessage(text, { ok = false } = {}) {
@@ -19562,6 +19572,14 @@ async function runEmailPasswordAuth() {
     setAuthEmailMessage("Password must be at least 8 characters.");
     try { els.authPasswordInput?.focus?.(); } catch {}
     return;
+  }
+  if (_authEmailMode === "signup") {
+    const confirmPassword = String(els.authPasswordConfirmInput?.value || "");
+    if (confirmPassword !== password) {
+      setAuthEmailMessage("Passwords do not match.");
+      try { els.authPasswordConfirmInput?.focus?.(); } catch {}
+      return;
+    }
   }
 
   setAuthEmailSubmitting(true);
@@ -27626,27 +27644,32 @@ function syncDiscoveryPlayingHighlights() {
 }
 
 function syncFriendsFeedProgressBars() {
-  const root = document.getElementById("friendsPage");
-  if (!root) return;
+  const roots = [
+    document.getElementById("friendsPage"),
+    document.getElementById("profileActivitiesList"),
+  ].filter(Boolean);
+  if (!roots.length) return;
   const curRef = String(currentPlayerTrackRef?.url || "").trim();
   const discoverSource = isDiscoverStyleMiniSource();
   const a = playerEl;
   const dur = a ? getPlayerDuration() : 0;
   const cur = a && Number.isFinite(a.currentTime) ? a.currentTime : 0;
   const audible = Boolean(a && !a.paused && !a.ended && (dur > 0 || cur > 0));
-  root.querySelectorAll(".followActRealtimeProgress").forEach((wrap) => {
-    const input = wrap.querySelector(".followActRealtimeSeek");
-    if (!input) return;
-    const trackUrl = decodeDiscoveryPlayUrl(wrap);
-    const active = Boolean(discoverSource && curRef && trackUrl && audioUrlsEquivalent(curRef, trackUrl));
-    wrap.classList.toggle("isActive", active);
-    wrap.classList.toggle("isPlaying", active && audible);
-    input.disabled = !active || !(dur > 0);
-    const max = Number(input.max || 1000) || 1000;
-    const value = active && dur > 0 ? Math.max(0, Math.min(max, Math.round((cur / dur) * max))) : 0;
-    input.value = String(value);
-    input.style.setProperty("--feedSeekPct", active && dur > 0 ? `${(value / max) * 100}%` : "0%");
-  });
+  for (const root of roots) {
+    root.querySelectorAll(".followActRealtimeProgress").forEach((wrap) => {
+      const input = wrap.querySelector(".followActRealtimeSeek");
+      if (!input) return;
+      const trackUrl = decodeDiscoveryPlayUrl(wrap);
+      const active = Boolean(discoverSource && curRef && trackUrl && audioUrlsEquivalent(curRef, trackUrl));
+      wrap.classList.toggle("isActive", active);
+      wrap.classList.toggle("isPlaying", active && audible);
+      input.disabled = !active || !(dur > 0);
+      const max = Number(input.max || 1000) || 1000;
+      const value = active && dur > 0 ? Math.max(0, Math.min(max, Math.round((cur / dur) * max))) : 0;
+      input.value = String(value);
+      input.style.setProperty("--feedSeekPct", active && dur > 0 ? `${(value / max) * 100}%` : "0%");
+    });
+  }
 }
 
 function seekFriendsFeedProgress(input) {
@@ -33642,6 +33665,16 @@ function bindProfileSongsSegmentOnce() {
     actList.dataset.boundProfileActMenu = "1";
     actList.addEventListener("click", onProfileStatusMenuClick);
     wireTrackOptionsSheetOnce();
+    actList.addEventListener("input", (e) => {
+      const seek = e.target.closest(".followActRealtimeSeek");
+      if (!seek || !actList.contains(seek)) return;
+      seekFriendsFeedProgress(seek);
+    });
+    actList.addEventListener("change", (e) => {
+      const seek = e.target.closest(".followActRealtimeSeek");
+      if (!seek || !actList.contains(seek)) return;
+      seekFriendsFeedProgress(seek);
+    });
     actList.addEventListener("click", (e) => {
       if (e.target.closest(".followActMenuWrap, [data-follow-status-menu], [data-follow-status-delete]")) return;
       if (e.target.closest(".followActAvatar, .followActUserLink")) return;

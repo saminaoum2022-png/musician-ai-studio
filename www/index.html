@@ -283,8 +283,9 @@
 
         <section class="card wide authScreen" data-route="auth">
           <div class="authInner">
-            <div class="authBrand" aria-label="Nabad">
+            <div class="authBrand" aria-label="NabadAi">
               <span class="authLogoMark" aria-hidden="true"></span>
+              <span class="authBrandName brandPrimary">NabadAi</span>
             </div>
             <h1 class="authTagline" aria-label="Create. Share. Connect.">
               <span class="authTaglineWord">Create<span class="authTaglineDot authTaglineDot--create" aria-hidden="true">.</span></span><span class="authTaglineWord"> Share<span class="authTaglineDot authTaglineDot--share" aria-hidden="true">.</span></span><span class="authTaglineWord"> Connect<span class="authTaglineDot authTaglineDot--connect" aria-hidden="true">.</span></span>
@@ -346,6 +347,18 @@
                     minlength="8"
                     placeholder="At least 8 characters"
                     required
+                  />
+                </label>
+                <label class="authField authConfirmField" id="authConfirmField" hidden>
+                  <span class="authFieldLabel">Confirm password</span>
+                  <input
+                    id="authPasswordConfirmInput"
+                    class="authFieldInput"
+                    type="password"
+                    name="confirmPassword"
+                    autocomplete="new-password"
+                    minlength="8"
+                    placeholder="Re-enter password"
                   />
                 </label>
                 <p id="authEmailMsg" class="authEmailMsg" hidden role="status"></p>

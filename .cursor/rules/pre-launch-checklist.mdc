@@ -1,0 +1,43 @@
+---
+description: Pre-launch checklist and deferred song-storage decisions. Surface this when the user asks what to do before launch, launch readiness, or go-live.
+alwaysApply: false
+---
+
+# Pre-launch reminders (Nabad)
+
+## Song lifecycle — deferred (do NOT block launch)
+
+Samy chose **not** to decide today between:
+- TikTok-style (private = phone only; cloud only on publish)
+- Current model (library syncs to Supabase; background archive to `song_archive` on save/play)
+
+**Current behavior (good enough to ship):**
+- Private songs: local library + cloud `user_songs` row; audio copied to `song_archive` when archive succeeds
+- Published: `public_on_profile` + same permanent audio URL
+- Suno CDN links ~15 days — only breaks playback if archive never ran; list row can remain
+- No Nabad-imposed 15-day delete on private songs
+
+**Revisit before/at scale when:** storage cost hurts, users report lost/broken drafts, or pricing tiers need "backup all songs" vs "publish to keep".
+
+**Simple product line:** *Publish = Nabad keeps it forever. Private = on your device; we try to save a copy early.*
+
+---
+
+## Song/storage items worth doing before launch (recommended)
+
+1. **Archive reliability** — ensure `/api/songs/archive` runs after generation; surface clear UI if play fails (expired Suno link, archive failed), not silent broken Play
+2. **Publish = permanent** — on publish, archive must succeed (or retry) before showing public; never rely on Suno URL for published posts
+3. **Profile counts aligned** — stats Songs pill, Posts tab, and public `#/u/` profile must use same cloud public count (owner = visitor)
+4. **Broken-link UX** — grey chip or toast: "This draft expired — publish next time to keep it on Nabad"
+5. **Optional backfill** — one pass to archive old library rows still on Suno-only URLs
+
+---
+
+## Explicitly out of scope for v1 launch (unless asked)
+
+- Auto-delete private songs after 15 days
+- Discover survival / score expiry (paused in app)
+- Paid "backup entire library" tier
+- Storage cleanup on delete (orphaned `song_archive` files)
+
+When user asks "what do we have to do before launch?", lead with the **recommended** list above and note **deferred** lifecycle decision.

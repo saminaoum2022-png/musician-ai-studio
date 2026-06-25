@@ -472,7 +472,7 @@ const els = {
   activityLoadMore: document.getElementById("activityLoadMore"),
   activityTabLink: document.querySelector('.mobileTabbar [data-route-link="activity"]'),
   friendsTabLink: document.querySelector('.mobileTabbar [data-route-link="friends"]'),
-  friendsTabDot: document.getElementById("friendsTabDot"),
+  friendsTabBadge: document.getElementById("friendsTabBadge"),
   mashupPage: document.getElementById("mashupPage"),
   mashupLead: document.getElementById("mashupLead"),
   mashupSlotA: document.getElementById("mashupSlotA"),
@@ -23061,8 +23061,14 @@ function updateMessagesUnreadBadge(count) {
       ? `Friends, ${n} unread ${n === 1 ? "message" : "messages"}`
       : "Friends";
     els.friendsTabLink?.setAttribute?.("aria-label", friendsLabel);
-    if (els.friendsTabDot) {
-      els.friendsTabDot.style.display = hasUnread ? "" : "none";
+    if (els.friendsTabBadge) {
+      if (hasUnread) {
+        els.friendsTabBadge.hidden = false;
+        els.friendsTabBadge.textContent = n > 9 ? "9+" : String(n);
+      } else {
+        els.friendsTabBadge.hidden = true;
+        els.friendsTabBadge.textContent = "";
+      }
     }
   } catch {}
 }

@@ -5109,6 +5109,21 @@ body[data-route="settings"] main.grid > [data-route="settings"]{
 .libraryTab{
   position: relative;
 }
+.friendsTab{
+  position: relative;
+}
+/* Friends tab DM badge — reuses the .friendsMessagesBadge look (red, ring,
+   white count) but pinned to the top-right corner of the tab icon. */
+.friendsTabBadge{
+  top: -1px;
+  right: auto;
+  left: calc(50% + 3px);
+  z-index: 2;
+  pointer-events: none;
+}
+.friendsTabBadge[hidden]{
+  display: none;
+}
 .libraryTabDot,
 .profileTabDot{
   position: absolute;

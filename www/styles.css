@@ -31747,6 +31747,30 @@ section.mentorPage{
   min-height: 32px;
   min-width: 28px;
 }
+/* 3-dots moved off the cover and onto the username/header line (right side). */
+.followActTopMenu{
+  flex: 0 0 auto;
+  margin-left: auto;
+  align-self: flex-start;
+  display: flex;
+}
+.followAct--xstyle .followActTopMenu .followActQuoteMenuBtn,
+.followActTopMenu .discoverCardMenuBtn{
+  position: static;
+  top: auto;
+  right: auto;
+  margin: 0;
+  padding: 0 2px;
+  min-width: 32px;
+  min-height: 28px;
+  font-size: 20px;
+  line-height: 1;
+  color: rgba(232,238,247,0.6);
+  text-shadow: none;
+}
+.followActTopMenu .discoverCardMenuBtn:active{
+  color: rgba(232,238,247,0.92);
+}
 .followActMedia .discoverCoverPlay{
   opacity: 0.42;
 }
@@ -37512,9 +37536,9 @@ body[data-route="friends"] .friendsPage .discoveryStudioHead{
   align-items: center;
 }
 body[data-route="friends"] .friendsPage .appScreenTitle{
-  font-size: clamp(37px, 10.4vw, 51px);
-  line-height: .92;
-  letter-spacing: -.065em;
+  font-size: clamp(28px, 6vw, 36px);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
 }
 body[data-route="friends"] .friendsPage .followActStack{
   gap: 0;

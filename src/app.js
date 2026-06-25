@@ -12287,9 +12287,9 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
               </span>
             </button>
             ${followActRealtimeProgressHtml(encUrl, safeTitle)}
-            ${songMenuBtn ? `<span class="followActMediaMenuOuter">${songMenuBtn}</span>` : ""}
           </div>`;
   const mediaBlockWithProgressHtml = mediaBlockHtml;
+  const topMenuHtml = songMenuBtn ? `<div class="followActTopMenu">${songMenuBtn}</div>` : "";
   if (xstyle) {
     return `
       <article class="followAct followAct--music followAct--xstyle" data-follow-act="${type}" data-profile-act-song-id="${escapeHtml(String(t.id || ""))}" style="--i:${idx}" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}>
@@ -12310,6 +12310,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
               ${followingActivityBadgeHtml("music", type)}
             </div>
           </div>
+          ${topMenuHtml}
         </div>
         ${caption ? `<div class="followActContent">${captionHtml}</div>` : ""}
         ${mashupBlockHtml || remixPairHtml || mediaBlockWithProgressHtml}
@@ -12348,6 +12349,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
           </div>
           ${followingActivityBadgeHtml("music", type)}
         </div>
+        ${topMenuHtml}
       </div>
       ${showHeadLine || caption ? `<div class="followActContent">
         ${showHeadLine ? `<p class="followActHead">${followingActivityBodyHtml(type, rawTitle, remixOf, challenge, mashupOf)}</p>` : ""}
@@ -13572,6 +13574,14 @@ function bindFriendsPageOnce() {
       seekFriendsFeedProgress(seek);
     });
     friendsPage.addEventListener("click", (e) => {
+      const sheetBtn = e.target.closest("[data-discovery-open-sheet]");
+      if (sheetBtn && friendsPage.contains(sheetBtn)) {
+        e.preventDefault();
+        e.stopPropagation();
+        haptic("light");
+        openDiscoverTrackSheetFromEl(sheetBtn);
+        return;
+      }
       const menuBtn = e.target.closest("[data-follow-status-menu]");
       if (menuBtn && friendsPage.contains(menuBtn)) {
         e.preventDefault();
@@ -33737,6 +33747,14 @@ function bindProfileSongsSegmentOnce() {
       seekFriendsFeedProgress(seek);
     });
     actList.addEventListener("click", (e) => {
+      const sheetBtn = e.target.closest("[data-discovery-open-sheet]");
+      if (sheetBtn && actList.contains(sheetBtn)) {
+        e.preventDefault();
+        e.stopPropagation();
+        haptic("light");
+        openDiscoverTrackSheetFromEl(sheetBtn);
+        return;
+      }
       if (e.target.closest(".followActMenuWrap, [data-follow-status-menu], [data-follow-status-delete]")) return;
       if (e.target.closest(".followActAvatar, .followActUserLink")) return;
       const actBtn = e.target.closest("[data-friends-act]");

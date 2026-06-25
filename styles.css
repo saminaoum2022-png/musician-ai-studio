@@ -37619,9 +37619,63 @@ body[data-route="friends"] .followAct--xstyle.discoveryRowPlaying .followActMedi
 body[data-route="friends"] .followAct--xstyle.discoveryRowActive .followActMedia{
   box-shadow: none;
 }
+/* Soft bottom scrim so the play button + seek line read on any artwork */
+body[data-route="friends"] .followAct--xstyle .followActMediaScrim{
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 46%;
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(180deg, rgba(6,9,15,0) 0%, rgba(6,9,15,.22) 42%, rgba(6,9,15,.62) 100%);
+  opacity: .9;
+  transition: opacity 200ms ease;
+}
+/* Premium frosted play / pause control, centered on the cover */
+body[data-route="friends"] .followAct--xstyle .followActMediaPlayBtn{
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(14,18,26,.42);
+  border: 1px solid rgba(255,255,255,.22);
+  box-shadow: 0 10px 30px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.18);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+  pointer-events: none;
+  transition: transform 200ms cubic-bezier(.2,.7,.2,1), background 200ms ease, opacity 200ms ease;
+}
+body[data-route="friends"] .followAct--xstyle .followActMediaPlayBtn .coverArtPlayIco--play{
+  margin-left: 3px;
+}
+body[data-route="friends"] .followAct--xstyle .followActMedia:active .followActMediaPlayBtn{
+  transform: translate(-50%, -50%) scale(.92);
+  background: rgba(14,18,26,.56);
+}
+/* While this track is playing, ease the button back so the artwork breathes */
+body[data-route="friends"] .followAct--xstyle.discoveryRowPlaying .followActMediaPlayBtn{
+  width: 56px;
+  height: 56px;
+  opacity: .9;
+  background: rgba(14,18,26,.34);
+}
 body[data-route="friends"] .followActRealtimeProgress{
-  width: 100%;
-  margin: 8px 0 0;
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 12px;
+  z-index: 3;
+  width: auto;
+  margin: 0;
   padding: 0;
 }
 body[data-route="friends"] .followActRealtimeSeek{

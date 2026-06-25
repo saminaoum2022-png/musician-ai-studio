@@ -12278,10 +12278,16 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
           <div class="followActMediaWrap">
             <button type="button" class="followActMedia" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
               <img class="followActMediaImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
+              <span class="followActMediaScrim" aria-hidden="true"></span>
+              <span class="followActMediaPlayBtn" aria-hidden="true">
+                <span class="coverArtPlayIco coverArtPlayIco--play">${discoverPlayBtnSvg(28)}</span>
+                <span class="coverArtPlayIco coverArtPlayIco--pause">${discoverPauseBtnSvg(28)}</span>
+              </span>
             </button>
+            ${followActRealtimeProgressHtml(encUrl, safeTitle)}
             ${songMenuBtn ? `<span class="followActMediaMenuOuter">${songMenuBtn}</span>` : ""}
           </div>`;
-  const mediaBlockWithProgressHtml = `${mediaBlockHtml}${followActRealtimeProgressHtml(encUrl, safeTitle)}`;
+  const mediaBlockWithProgressHtml = mediaBlockHtml;
   if (xstyle) {
     return `
       <article class="followAct followAct--music followAct--xstyle" data-follow-act="${type}" data-profile-act-song-id="${escapeHtml(String(t.id || ""))}" style="--i:${idx}" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}>

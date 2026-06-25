@@ -30867,29 +30867,22 @@ section.mentorPage{
   margin-top: 0;
 }
 .followAct--xstyle .followActActions{
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
   align-items: center;
-  justify-items: stretch;
-  gap: 0;
+  justify-content: flex-start;
+  gap: 2px;
   width: 100%;
   max-width: none;
   margin: 0;
   padding: 0;
 }
 .followAct--xstyle .followActActions [data-friends-act="reply"]{
-  justify-self: start;
-  grid-column: 1;
   padding-left: 0;
 }
-.followAct--xstyle .followActActions [data-friends-act="like"]{
-  justify-self: center;
-  grid-column: 2;
-}
-.followAct--xstyle .followActActions [data-friends-act="plays"],
-.followAct--xstyle .followActActions .followActAct--stat{
-  justify-self: end;
-  grid-column: 3;
+/* Repost lives in the right corner (Instagram-style), everything else
+   packs in from the left. */
+.followAct--xstyle .followActActions [data-friends-act="repost"]{
+  margin-left: auto;
   padding-right: 0;
 }
 .followAct--xstyle .followActActions .followActAct{
@@ -31941,7 +31934,8 @@ section.mentorPage{
   stroke-linejoin: round;
   display: block;
 }
-.followActAct[data-friends-act="plays"] .followActActIco{
+.followActAct[data-friends-act="plays"] .followActActIco,
+.followActAct--analytics .followActActIco{
   fill: currentColor;
   stroke: none;
 }
@@ -37939,14 +37933,15 @@ body[data-route="friends"] .feedHeroPlayerCtrl{
 }
 body[data-route="friends"] .followAct--xstyle .followActActions{
   margin-top: 16px;
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  display: flex;
   align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
 }
 body[data-route="friends"] .followAct--xstyle .followActActions .followActAct{
   justify-content: center;
   min-height: 34px;
-  padding: 4px 8px;
+  padding: 4px 9px;
   border: 0;
   background: transparent;
   color: rgba(232,238,247,.46);

@@ -37784,6 +37784,30 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   opacity: .9;
   background: rgba(14,18,26,.34);
 }
+/* Song title is hidden by default; only the Friends/Profile cover shows it. */
+.followActMediaTitle{
+  display: none;
+}
+:is(#friendsPage, #profileActivitiesList) .followAct--xstyle .followActMediaTitle{
+  display: block;
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 34px;
+  z-index: 2;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  color: #fff;
+  text-align: left;
+  text-shadow: 0 1px 14px rgba(0,0,0,0.65);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
 :is(#friendsPage, #profileActivitiesList) .followActRealtimeProgress{
   position: absolute;
   left: 14px;

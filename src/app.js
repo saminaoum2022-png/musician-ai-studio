@@ -12294,6 +12294,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
                 <span class="coverArtPlayIco coverArtPlayIco--play">${discoverPlayBtnSvg(28)}</span>
                 <span class="coverArtPlayIco coverArtPlayIco--pause">${discoverPauseBtnSvg(28)}</span>
               </span>
+              <span class="followActMediaTitle" aria-hidden="true">${safeTitle}</span>
             </button>
             ${followActRealtimeProgressHtml(encUrl, safeTitle)}
           </div>`;

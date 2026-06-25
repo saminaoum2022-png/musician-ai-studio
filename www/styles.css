@@ -28120,9 +28120,11 @@ body[data-route="messages"]{
   scroll-padding-bottom: calc(var(--messages-composer-h, 72px) + 8px);
   padding-bottom: calc(var(--messages-composer-h, 72px) + 8px);
 }
-html.is-web-shell body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadMount{
-  scroll-padding-bottom: calc(var(--messages-composer-h, 72px) + var(--messages-keyboard-inset, 0px) + 8px);
-  padding-bottom: calc(var(--messages-composer-h, 72px) + var(--messages-keyboard-inset, 0px) + 8px);
+body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadPage{
+  /* Shrink the scrollable area so it ends above the keyboard. The mount is the
+     only in-flow child, so this raises its bottom edge to the keyboard top and
+     bubbles can no longer scroll behind the keyboard. */
+  padding-bottom: var(--messages-keyboard-inset, 0px);
 }
 .messagesThreadScrollAnchor{
   width: 100%;
@@ -28412,7 +28414,7 @@ body[data-route="messages-thread"] .messagesComposer{
 body[data-route="messages-thread"] .mobileTabbar{
   display: none !important;
 }
-html.is-web-shell body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesComposer{
+body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesComposer{
   bottom: var(--messages-keyboard-inset, 0px);
   padding-bottom: 8px;
 }

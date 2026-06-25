@@ -7,5 +7,10 @@
   "ios": {
     "backgroundColor": "#05070d",
     "webContentsDebuggingEnabled": true
+  },
+  "plugins": {
+    "Keyboard": {
+      "resize": "none"
+    }
   }
 }

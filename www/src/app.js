@@ -21369,6 +21369,55 @@ function clearMessagesThreadComposerInset() {
   try {
     document.documentElement.style.setProperty("--messages-keyboard-inset", "0px");
   } catch {}
+  // Hand WKWebView's default keyboard scrolling back to the rest of the app.
+  setMessagesNativeKeyboardScroll(false);
+}
+
+/** Capacitor Keyboard plugin, only when running in the native iOS shell. */
+function getNativeKeyboardPlugin() {
+  if (!(isNativeShell() && isIosPlatform())) return null;
+  return window.Capacitor?.Plugins?.Keyboard || null;
+}
+
+/** Disable WKWebView's auto-scroll-to-input only inside the thread; it is what
+ *  used to float the whole conversation up and flash when the keyboard opened. */
+function setMessagesNativeKeyboardScroll(disabled) {
+  const Keyboard = getNativeKeyboardPlugin();
+  if (!Keyboard?.setScroll) return;
+  try { Keyboard.setScroll({ isDisabled: Boolean(disabled) }); } catch {}
+}
+
+/** Apply the native keyboard height to the thread layout (composer + scroll area). */
+function applyMessagesNativeKeyboardInset(rawInset) {
+  const inset = Math.max(0, Math.round(Number(rawInset) || 0));
+  const open = inset > 0;
+  _messagesThreadKeyboardOpen = open;
+  document.body.classList.toggle("messagesThreadKeyboardOpen", open);
+  try {
+    document.documentElement.style.setProperty("--messages-keyboard-inset", `${inset}px`);
+  } catch {}
+  updateMessagesComposerReserve();
+  if (open || _messagesThreadNeedsInitialScroll) {
+    scheduleMessagesThreadScrollToBottom({ force: true });
+  }
+}
+
+function wireMessagesNativeKeyboardOnce() {
+  if (document.documentElement.dataset.messagesNativeKbWired) return;
+  const Keyboard = getNativeKeyboardPlugin();
+  if (!Keyboard?.addListener) return;
+  document.documentElement.dataset.messagesNativeKbWired = "1";
+  const inThread = () => String(document.body.getAttribute("data-route") || "") === "messages-thread";
+  // keyboardWillShow fires before the animation with the real height, so the
+  // composer rises in sync with the keyboard — no reveal-scroll, no flash.
+  Keyboard.addListener("keyboardWillShow", (info) => {
+    if (!inThread()) return;
+    applyMessagesNativeKeyboardInset(info?.keyboardHeight);
+  });
+  Keyboard.addListener("keyboardWillHide", () => {
+    if (!inThread()) return;
+    applyMessagesNativeKeyboardInset(0);
+  });
 }
 
 function measureMessagesKeyboardInset() {
@@ -21528,6 +21577,16 @@ function syncMessagesThreadWebComposerPosition() {
 function syncMessagesThreadComposerInset() {
   if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
     clearMessagesThreadComposerInset();
+    return;
+  }
+  // In the native iOS shell the keyboard inset is driven by the Capacitor
+  // Keyboard plugin events; don't let visualViewport readings fight it here.
+  if (getNativeKeyboardPlugin()) {
+    updateMessagesComposerReserve();
+    syncMessagesThreadViewportLayout();
+    if (_messagesThreadNeedsInitialScroll) {
+      scheduleMessagesThreadScrollToBottom({ force: true });
+    }
     return;
   }
   const focused = isMessagesComposerFocused();
@@ -23318,6 +23377,8 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   if (input) input.value = "";
   rememberMessagesViewportBaseBottom({ force: true });
   wireMessagesThreadKeyboardOnce();
+  wireMessagesNativeKeyboardOnce();
+  setMessagesNativeKeyboardScroll(true);
   updateMessagesComposerReserve();
   updateMessagesThreadHeadReserve();
   renderChatHeader();

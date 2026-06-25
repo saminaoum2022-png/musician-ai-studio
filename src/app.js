@@ -12105,6 +12105,13 @@ function feedHeroPlayerCardHtml(opts) {
           </div>`;
 }
 
+function followActRealtimeProgressHtml(encUrl, safeTitle) {
+  return `
+          <div class="followActRealtimeProgress" data-user-lib-url="${encUrl}">
+            <input class="followActRealtimeSeek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek ${safeTitle}" />
+          </div>`;
+}
+
 function feedRemixFlowPlayerHtml(t, profMap, orig, main) {
   const origBy = orig.username ? `@${orig.username}` : "Original";
   const o = followingActivityPlayAttrs(orig, profMap, origBy);
@@ -12271,10 +12278,10 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
           <div class="followActMediaWrap">
             <button type="button" class="followActMedia" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
               <img class="followActMediaImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
-              ${discoverCoverPlayOverlayHtml({ hero: true })}
             </button>
             ${songMenuBtn ? `<span class="followActMediaMenuOuter">${songMenuBtn}</span>` : ""}
           </div>`;
+  const mediaBlockWithProgressHtml = `${mediaBlockHtml}${followActRealtimeProgressHtml(encUrl, safeTitle)}`;
   if (xstyle) {
     return `
       <article class="followAct followAct--music followAct--xstyle" data-follow-act="${type}" data-profile-act-song-id="${escapeHtml(String(t.id || ""))}" style="--i:${idx}" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}>
@@ -12297,7 +12304,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
           </div>
         </div>
         ${caption ? `<div class="followActContent">${captionHtml}</div>` : ""}
-        ${mashupBlockHtml || remixPairHtml || quoteCardHtml}
+        ${mashupBlockHtml || remixPairHtml || mediaBlockWithProgressHtml}
         <div class="followActActionsBar">
           ${followActActionsRowHtml({
             kind: "music",
@@ -12338,7 +12345,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
         ${showHeadLine ? `<p class="followActHead">${followingActivityBodyHtml(type, rawTitle, remixOf, challenge, mashupOf)}</p>` : ""}
         ${captionHtml}
       </div>` : ""}
-      ${mashupBlockHtml || remixPairHtml || mediaBlockHtml}
+      ${mashupBlockHtml || remixPairHtml || mediaBlockWithProgressHtml}
       ${playFoot}
     </article>`;
 }
@@ -13546,6 +13553,16 @@ function bindFriendsPageOnce() {
   if (friendsPage && !friendsPage.dataset.boundFriendsPage) {
     friendsPage.dataset.boundFriendsPage = "1";
     wireTrackOptionsSheetOnce();
+    friendsPage.addEventListener("input", (e) => {
+      const seek = e.target.closest(".followActRealtimeSeek");
+      if (!seek || !friendsPage.contains(seek)) return;
+      seekFriendsFeedProgress(seek);
+    });
+    friendsPage.addEventListener("change", (e) => {
+      const seek = e.target.closest(".followActRealtimeSeek");
+      if (!seek || !friendsPage.contains(seek)) return;
+      seekFriendsFeedProgress(seek);
+    });
     friendsPage.addEventListener("click", (e) => {
       const menuBtn = e.target.closest("[data-follow-status-menu]");
       if (menuBtn && friendsPage.contains(menuBtn)) {
@@ -27531,6 +27548,7 @@ function syncDiscoveryPlayingHighlights() {
     root.querySelectorAll(".discoverFeedSongRow").forEach(resetDiscoveryHost);
     root.querySelectorAll(".messagesDmSongCard").forEach(resetDiscoveryHost);
   }
+  syncFriendsFeedProgressBars();
 
   const curRef = String(currentPlayerTrackRef?.url || "").trim();
   if (!isDiscoverStyleMiniSource() || !curRef) return;
@@ -27598,6 +27616,46 @@ function syncDiscoveryPlayingHighlights() {
       paintHost(row, playBtn);
     });
   }
+  syncFriendsFeedProgressBars();
+}
+
+function syncFriendsFeedProgressBars() {
+  const root = document.getElementById("friendsPage");
+  if (!root) return;
+  const curRef = String(currentPlayerTrackRef?.url || "").trim();
+  const discoverSource = isDiscoverStyleMiniSource();
+  const a = playerEl;
+  const dur = a ? getPlayerDuration() : 0;
+  const cur = a && Number.isFinite(a.currentTime) ? a.currentTime : 0;
+  const audible = Boolean(a && !a.paused && !a.ended && (dur > 0 || cur > 0));
+  root.querySelectorAll(".followActRealtimeProgress").forEach((wrap) => {
+    const input = wrap.querySelector(".followActRealtimeSeek");
+    if (!input) return;
+    const trackUrl = decodeDiscoveryPlayUrl(wrap);
+    const active = Boolean(discoverSource && curRef && trackUrl && audioUrlsEquivalent(curRef, trackUrl));
+    wrap.classList.toggle("isActive", active);
+    wrap.classList.toggle("isPlaying", active && audible);
+    input.disabled = !active || !(dur > 0);
+    const max = Number(input.max || 1000) || 1000;
+    const value = active && dur > 0 ? Math.max(0, Math.min(max, Math.round((cur / dur) * max))) : 0;
+    input.value = String(value);
+    input.style.setProperty("--feedSeekPct", active && dur > 0 ? `${(value / max) * 100}%` : "0%");
+  });
+}
+
+function seekFriendsFeedProgress(input) {
+  const wrap = input?.closest?.(".followActRealtimeProgress");
+  if (!wrap) return;
+  const trackUrl = decodeDiscoveryPlayUrl(wrap);
+  const curRef = String(currentPlayerTrackRef?.url || "").trim();
+  if (!trackUrl || !curRef || !audioUrlsEquivalent(curRef, trackUrl)) return;
+  const a = ensurePlayer();
+  const dur = getPlayerDuration();
+  if (!(dur > 0)) return;
+  const max = Number(input.max || 1000) || 1000;
+  const next = Math.max(0, Math.min(dur, (Number(input.value || 0) / max) * dur));
+  a.currentTime = next;
+  syncPlayerUI();
 }
 
 function syncUserPublicFeedPlayingHighlights() {

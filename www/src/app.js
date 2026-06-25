@@ -11893,6 +11893,14 @@ function followActActionsRowHtml({ kind, targetId, targetUserId, plays, playsPen
         <span class="followActActCount">${escapeHtml(playsLabel)}</span>
       </span>`
       : `<span class="followActAct followActAct--stat" aria-hidden="true"></span>`;
+  const myId = String(authSession?.user?.id || "").trim();
+  const isOwner = !!myId && String(targetUserId || "") === myId;
+  const analyticsBlock =
+    kind === "music" && isOwner
+      ? `<button type="button" class="followActAct followActAct--analytics" data-friends-act="analytics" aria-label="Song analytics">
+        <svg class="followActActIco" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h3v7H4zM10.5 8h3v12h-3zM17 4h3v16h-3z"/></svg>
+      </button>`
+      : "";
   return `
     <div class="followActActions" data-friends-act-row="1" data-friends-act-kind="${safeKind}" data-friends-act-target-kind="${safeTargetKind}" data-friends-act-id="${safeId}" data-friends-act-uid="${safeUid}">
       <button type="button" class="followActAct" data-friends-act="reply" aria-label="Reply">
@@ -11903,6 +11911,7 @@ function followActActionsRowHtml({ kind, targetId, targetUserId, plays, playsPen
         <svg class="followActActIco" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-4.5-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9Z"/></svg>
         <span class="followActActCount" data-friends-act-count="like"></span>
       </button>
+      ${analyticsBlock}
       ${playsBlock}
     </div>`;
 }
@@ -12665,6 +12674,151 @@ function feedReplyRowHtml(reply) {
         ${deleteBtn}
       </div>
     </article>`;
+}
+
+/* ---------------------------------------------------------------------
+ * Song analytics — owner-only "who played your song & how many times".
+ * Data already exists in discover_play_counts; surfaced via
+ * /api/music/song-listeners (provider-neutral path).
+ * ------------------------------------------------------------------- */
+
+let _songAnalyticsCtx = null;
+
+function openSongAnalyticsSheet(btn) {
+  const row = btn.closest(".followActActions");
+  const article = btn.closest(".followAct");
+  if (!row) return;
+  const songId = row.getAttribute("data-friends-act-id") || "";
+  if (!songId) return;
+  if (!authSession?.user?.id || !getSupabaseAuthToken()) {
+    showToast("Sign in to see analytics.");
+    location.hash = "#/auth";
+    return;
+  }
+  const title =
+    decodeDiscoverDataAttr(article, "data-user-lib-title") ||
+    String(article?.querySelector(".followActUser")?.textContent || "").trim() ||
+    "Your song";
+
+  const sheet = document.getElementById("songAnalyticsSheet");
+  if (!sheet) return;
+  bindSongAnalyticsSheetOnce();
+  _songAnalyticsCtx = { songId };
+
+  const titleEl = document.getElementById("songAnalyticsTitle");
+  const subEl = document.getElementById("songAnalyticsSub");
+  const statsEl = document.getElementById("songAnalyticsStats");
+  const list = document.getElementById("songAnalyticsList");
+  if (titleEl) titleEl.textContent = title.slice(0, 80);
+  if (subEl) subEl.textContent = "Loading your listeners…";
+  if (statsEl) statsEl.innerHTML = "";
+  if (list)
+    list.innerHTML = `<div class="songAnalyticsEmpty" aria-hidden="true">Loading…</div>`;
+
+  sheet.hidden = false;
+  window.requestAnimationFrame(() => {
+    sheet.setAttribute("aria-hidden", "false");
+  });
+  void loadSongAnalytics(songId);
+}
+
+function closeSongAnalyticsSheet() {
+  const sheet = document.getElementById("songAnalyticsSheet");
+  if (!sheet) return;
+  sheet.setAttribute("aria-hidden", "true");
+  window.setTimeout(() => {
+    sheet.hidden = true;
+    _songAnalyticsCtx = null;
+  }, 220);
+}
+
+let _songAnalyticsSheetBound = false;
+function bindSongAnalyticsSheetOnce() {
+  if (_songAnalyticsSheetBound) return;
+  const sheet = document.getElementById("songAnalyticsSheet");
+  if (!sheet) return;
+  _songAnalyticsSheetBound = true;
+  sheet.addEventListener("click", (e) => {
+    if (e.target.closest("[data-song-analytics-dismiss]")) {
+      e.preventDefault();
+      closeSongAnalyticsSheet();
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (sheet.getAttribute("aria-hidden") === "false") closeSongAnalyticsSheet();
+  });
+}
+
+async function loadSongAnalytics(songId) {
+  const list = document.getElementById("songAnalyticsList");
+  const subEl = document.getElementById("songAnalyticsSub");
+  const statsEl = document.getElementById("songAnalyticsStats");
+  if (!list) return;
+  try {
+    const tok = getSupabaseAuthToken();
+    const r = await fetch(
+      apiUrl(`/api/music/song-listeners?songId=${encodeURIComponent(songId)}`),
+      {
+        headers: { ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
+        cache: "no-store",
+      },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!_songAnalyticsCtx || _songAnalyticsCtx.songId !== songId) return;
+    if (!r.ok || !d?.ok) {
+      throw new Error(d?.error || "Could not load analytics.");
+    }
+    const total = Number(d.totalPlays) || 0;
+    const unique = Number(d.uniqueListeners) || 0;
+    if (subEl) {
+      subEl.textContent = unique
+        ? "Only you can see who played this song."
+        : "No plays yet — share it to get heard.";
+    }
+    if (statsEl) {
+      statsEl.innerHTML = `
+        <div class="songAnalyticsStat">
+          <span class="songAnalyticsStatNum">${escapeHtml(formatStatCount(total))}</span>
+          <span class="songAnalyticsStatLabel">${total === 1 ? "play" : "plays"}</span>
+        </div>
+        <div class="songAnalyticsStat">
+          <span class="songAnalyticsStatNum">${escapeHtml(formatStatCount(unique))}</span>
+          <span class="songAnalyticsStatLabel">${unique === 1 ? "listener" : "listeners"}</span>
+        </div>`;
+    }
+    const listeners = Array.isArray(d.listeners) ? d.listeners : [];
+    if (!listeners.length) {
+      list.innerHTML = `<div class="songAnalyticsEmpty">When people play your song, they'll show up here.</div>`;
+      return;
+    }
+    list.innerHTML = listeners.map((l) => songAnalyticsRowHtml(l)).join("");
+  } catch (e) {
+    if (!_songAnalyticsCtx || _songAnalyticsCtx.songId !== songId) return;
+    if (subEl) subEl.textContent = "";
+    list.innerHTML = `<div class="songAnalyticsEmpty songAnalyticsEmpty--err">${escapeHtml(e?.message || "Could not load analytics.")}</div>`;
+  }
+}
+
+function songAnalyticsRowHtml(listener) {
+  const handle = String(listener?.username || "").trim();
+  const safeHandle = escapeHtml(handle);
+  const initials = (handle || "U").replace(/^@/, "").slice(0, 2).toUpperCase();
+  const avatarRaw = String(listener?.avatar || "").trim();
+  const avatarSrc = avatarRaw ? normalizeProfileAvatarForImg(avatarRaw) : "";
+  const href = handle ? `#/u/${encodeURIComponent(handle)}` : "#";
+  const plays = Math.max(0, Number(listener?.plays) || 0);
+  const playsLabel = `${plays} ${plays === 1 ? "play" : "plays"}`;
+  return `
+    <div class="songAnalyticsRow" role="listitem">
+      <a class="songAnalyticsAvatar" href="${escapeHtml(href)}" data-route-link="user" aria-label="${handle ? `@${safeHandle} profile` : "Listener"}">
+        ${avatarSrc
+          ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
+          : `<span class="songAnalyticsAvatarFallback">${escapeHtml(initials)}</span>`}
+      </a>
+      <a class="songAnalyticsName" href="${escapeHtml(href)}" data-route-link="user">${handle ? `@${safeHandle}` : "A listener"}</a>
+      <span class="songAnalyticsPlays">${escapeHtml(playsLabel)}</span>
+    </div>`;
 }
 
 function updateFeedReplyFormState() {
@@ -13620,6 +13774,7 @@ function bindFriendsPageOnce() {
         e.stopPropagation();
         if (kind === "like") void handleFeedLikeTap(actBtn);
         else if (kind === "reply") void openFeedReplySheetFromButton(actBtn);
+        else if (kind === "analytics") void openSongAnalyticsSheet(actBtn);
         return;
       }
       if (e.target.closest(".followActAvatar")) return;
@@ -13657,6 +13812,7 @@ function wireUserPublicFeedRowsOnce() {
       e.stopPropagation();
       if (kind === "like") void handleFeedLikeTap(actBtn);
       else if (kind === "reply") void openFeedReplySheetFromButton(actBtn);
+      else if (kind === "analytics") void openSongAnalyticsSheet(actBtn);
       return;
     }
     const inline = e.target.closest("[data-discovery-inline-play]");
@@ -33765,6 +33921,7 @@ function bindProfileSongsSegmentOnce() {
         e.stopPropagation();
         if (kind === "like") void handleFeedLikeTap(actBtn);
         else if (kind === "reply") void openFeedReplySheetFromButton(actBtn);
+        else if (kind === "analytics") void openSongAnalyticsSheet(actBtn);
         return;
       }
       const pl = e.target.closest("[data-user-lib-play], .followActMedia, .followActQuoteCard");

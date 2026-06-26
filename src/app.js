@@ -2962,6 +2962,15 @@ function navDirectionFor(wanted) {
     return "none";
   }
   if (prev === w) return "none";
+  // The full-screen player is a "presented" screen (Apple Music / Spotify /
+  // Instagram now-playing): it rises up from the bottom whenever we open it
+  // from any other screen, regardless of forward/back classification.
+  if (w === "player") {
+    const pIdx = _navStack.lastIndexOf(w);
+    if (pIdx >= 0 && pIdx < _navStack.length - 1) _navStack = _navStack.slice(0, pIdx + 1);
+    else _navStack.push(w);
+    return "present";
+  }
   const idx = _navStack.lastIndexOf(w);
   if (idx >= 0 && idx < _navStack.length - 1) {
     _navStack = _navStack.slice(0, idx + 1);
@@ -2988,7 +2997,9 @@ function animateRouteEnter(wanted, direction) {
       ? "routeEnter--push"
       : direction === "back"
         ? "routeEnter--pop"
-        : "routeEnter--fade";
+        : direction === "present"
+          ? "routeEnter--present"
+          : "routeEnter--fade";
   let panels;
   try {
     panels = document.querySelectorAll(`main.grid > [data-route="${wanted}"]`);
@@ -2997,14 +3008,14 @@ function animateRouteEnter(wanted, direction) {
   }
   panels.forEach((el) => {
     if (!el || el.style.display === "none") return;
-    el.classList.remove("routeEnter", "routeEnter--push", "routeEnter--pop", "routeEnter--fade");
+    el.classList.remove("routeEnter", "routeEnter--push", "routeEnter--pop", "routeEnter--fade", "routeEnter--present");
     void el.offsetWidth;
     el.classList.add("routeEnter", cls);
     let cleared = false;
     const done = () => {
       if (cleared) return;
       cleared = true;
-      el.classList.remove("routeEnter", "routeEnter--push", "routeEnter--pop", "routeEnter--fade");
+      el.classList.remove("routeEnter", "routeEnter--push", "routeEnter--pop", "routeEnter--fade", "routeEnter--present");
       el.removeEventListener("animationend", done);
     };
     el.addEventListener("animationend", done);

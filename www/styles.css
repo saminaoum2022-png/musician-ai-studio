@@ -5112,17 +5112,45 @@ body[data-route="settings"] main.grid > [data-route="settings"]{
 .friendsTab{
   position: relative;
 }
-/* Friends tab DM badge — reuses the .friendsMessagesBadge look (red, ring,
-   white count) but pinned to the top-right corner of the tab icon. */
-.friendsTabBadge{
-  top: -1px;
-  right: auto;
-  left: calc(50% + 3px);
+/* Friends tab DM badge — a small red chat bubble pinned to the top-right corner
+   of the tab icon. Single unread conversation shows three dots; 2+ shows the
+   conversation count (9+ when 10 or more). The asymmetric bottom-left corner
+   reads as a speech-bubble tail. */
+.friendsTabDmBadge{
+  position: absolute;
+  top: -3px;
+  left: calc(50% + 4px);
   z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 17px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 8px 8px 8px 2px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  box-shadow: 0 0 0 2px rgba(5, 7, 13, 0.94);
   pointer-events: none;
 }
-.friendsTabBadge[hidden]{
+.friendsTabDmBadge[hidden]{
   display: none;
+}
+.friendsTabDmBadge .dmDots{
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.friendsTabDmBadge .dmDot{
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #fff;
 }
 .libraryTabDot,
 .profileTabDot{

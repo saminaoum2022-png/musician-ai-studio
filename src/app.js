@@ -23206,17 +23206,28 @@ function updateMessagesUnreadBadge(count) {
   }
   try {
     els.friendsTabLink?.classList?.toggle?.("hasNotice", hasUnread);
+    // `n` is the number of unread DM conversations (one per thread), not the
+    // total unread messages — the API counts threads, not message rows.
     const friendsLabel = hasUnread
-      ? `Friends, ${n} unread ${n === 1 ? "message" : "messages"}`
+      ? `Friends, ${n} unread ${n === 1 ? "conversation" : "conversations"}`
       : "Friends";
     els.friendsTabLink?.setAttribute?.("aria-label", friendsLabel);
     if (els.friendsTabBadge) {
-      if (hasUnread) {
-        els.friendsTabBadge.hidden = false;
-        els.friendsTabBadge.textContent = n > 9 ? "9+" : String(n);
-      } else {
+      if (!hasUnread) {
         els.friendsTabBadge.hidden = true;
+        els.friendsTabBadge.classList.remove("friendsTabDmBadge--dots");
         els.friendsTabBadge.textContent = "";
+      } else if (n === 1) {
+        // Exactly one unread conversation: chat bubble with three dots, no number.
+        els.friendsTabBadge.hidden = false;
+        els.friendsTabBadge.classList.add("friendsTabDmBadge--dots");
+        els.friendsTabBadge.innerHTML =
+          '<span class="dmDots"><span class="dmDot"></span><span class="dmDot"></span><span class="dmDot"></span></span>';
+      } else {
+        // Two or more unread conversations: chat bubble with the count (9+ for 10+).
+        els.friendsTabBadge.hidden = false;
+        els.friendsTabBadge.classList.remove("friendsTabDmBadge--dots");
+        els.friendsTabBadge.textContent = n > 9 ? "9+" : String(n);
       }
     }
   } catch {}

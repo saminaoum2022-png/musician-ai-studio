@@ -21684,48 +21684,6 @@ function wireMessagesNativeKeyboardOnce() {
   });
 }
 
-// TEMP DEBUG: on-screen readout of the iOS web keyboard geometry so we can dial
-// the composer flush to the accessory bar to the exact pixel. Remove once the
-// web keyboard gap is finalized.
-function updateMessagesKeyboardDebugReadout(appliedInset) {
-  if (!isIosWebShell()) return;
-  let el = document.getElementById("kbDebugReadout");
-  const inThread = String(document.body.getAttribute("data-route") || "") === "messages-thread";
-  const focused = isMessagesComposerFocused();
-  if (!inThread || !focused) {
-    if (el) el.remove();
-    return;
-  }
-  if (!el) {
-    el = document.createElement("div");
-    el.id = "kbDebugReadout";
-    el.style.cssText =
-      "position:fixed;left:8px;right:8px;z-index:99999;" +
-      "background:rgba(0,0,0,0.9);color:#7CFC00;font:700 13px/1.4 ui-monospace,monospace;" +
-      "padding:8px 10px;border-radius:8px;pointer-events:none;white-space:pre;text-align:center;";
-    document.body.appendChild(el);
-  }
-  // Sit the readout just above the composer so it tracks the keyboard and stays
-  // visible (a top-pinned element gets scrolled away when iOS opens the keyboard).
-  const composerEl = document.querySelector(".messagesComposer");
-  const rect = composerEl?.getBoundingClientRect();
-  const composerH = Math.round(rect?.height || 72);
-  el.style.bottom = `${Math.round(appliedInset) + composerH + 10}px`;
-  const vv = window.visualViewport;
-  const vvH = Math.round(vv?.height || 0);
-  const vvTop = Math.round(vv?.offsetTop || 0);
-  const clientH = Math.round(document.documentElement?.clientHeight || 0);
-  const rectB = Math.round(rect?.bottom || 0);
-  const gap = vvH - rectB; // keyboard top is at visualViewport.height
-  const lines = [
-    `innerH=${Math.round(window.innerHeight)} clientH=${clientH}`,
-    `vvH=${vvH} vvTop=${vvTop}`,
-    `inset=${Math.round(appliedInset)} rectBottom=${rectB}`,
-    `GAP=${gap}`,
-  ];
-  el.textContent = lines.join("\n");
-}
-
 function measureMessagesKeyboardInset() {
   const vv = window.visualViewport;
   if (!vv) return 0;
@@ -21934,7 +21892,6 @@ function syncMessagesThreadComposerInset() {
   if (iosWeb && keyboardOpen) {
     window.requestAnimationFrame(() => snapMessagesComposerToKeyboardTop());
   }
-  updateMessagesKeyboardDebugReadout(inset);
   syncMessagesThreadWebComposerPosition();
   updateMessagesComposerReserve();
   syncMessagesThreadViewportLayout();
@@ -21961,16 +21918,12 @@ function snapMessagesComposerToKeyboardTop() {
   const applied =
     parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--messages-keyboard-inset")) || 0;
   const gap = vvH - rectBottom; // >0 composer too high, <0 behind keyboard
-  if (Math.abs(gap) <= 0.5) {
-    updateMessagesKeyboardDebugReadout(applied);
-    return;
-  }
+  if (Math.abs(gap) <= 0.5) return;
   const next = Math.max(0, Math.round(applied - gap));
   if (Math.abs(next - applied) < 0.5) return;
   try {
     document.documentElement.style.setProperty("--messages-keyboard-inset", `${next}px`);
   } catch {}
-  updateMessagesKeyboardDebugReadout(next);
 }
 
 function scheduleMessagesThreadScrollToBottom({ force = true } = {}) {

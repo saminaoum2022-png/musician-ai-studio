@@ -405,6 +405,9 @@ const els = {
   fineTuneDetails: document.getElementById("fineTuneDetails"),
   btnGenerateOrb: document.getElementById("btnGenerateOrb"),
   btnLyricsMagic: document.getElementById("btnLyricsMagic"),
+  lyricsFieldPanel: document.getElementById("lyricsFieldPanel"),
+  lyricsModeWrite: document.getElementById("lyricsModeWrite"),
+  lyricsModeGenerate: document.getElementById("lyricsModeGenerate"),
   imageMoodSummary: document.getElementById("imageMoodSummary"),
   imageMoodModal: document.getElementById("imageMoodModal"),
   btnCloseImageMood: document.getElementById("btnCloseImageMood"),
@@ -3659,6 +3662,52 @@ function updateBrandPulse() {
 // stuck on after a successful generation, which in turn made the Lyrics/Hum/Photo
 // tabs and every other button under `[data-route="generate"]` un-tappable until
 // the app was force-closed.
+/* Lyrics input mode — "write" (manual) or "generate" (describe → AI).
+   Pure UI state: it only swaps the textarea placeholder/intent and
+   reveals the Generate trigger. No generation logic changes. */
+let lyricsInputMode = "write";
+
+function syncLyricsPlaceholder() {
+  if (!els.sunoPrompt) return;
+  const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+  if (instrumental) {
+    els.sunoPrompt.placeholder =
+      "Instrumental mode: lyrics will be ignored. Hum a melody or describe the mood in Style / Tags.";
+    return;
+  }
+  els.sunoPrompt.placeholder =
+    lyricsInputMode === "generate"
+      ? "Describe the song you want to create…\n\ne.g. A romantic Arabic pop song about missing someone."
+      : "Write your lyrics…";
+}
+
+function setLyricsInputMode(mode, opts = {}) {
+  const next = mode === "generate" ? "generate" : "write";
+  lyricsInputMode = next;
+  if (els.lyricsFieldPanel) els.lyricsFieldPanel.setAttribute("data-lyrics-mode", next);
+  if (els.lyricsModeWrite) {
+    const on = next === "write";
+    els.lyricsModeWrite.classList.toggle("isActive", on);
+    els.lyricsModeWrite.setAttribute("aria-selected", on ? "true" : "false");
+  }
+  if (els.lyricsModeGenerate) {
+    const on = next === "generate";
+    els.lyricsModeGenerate.classList.toggle("isActive", on);
+    els.lyricsModeGenerate.setAttribute("aria-selected", on ? "true" : "false");
+  }
+  syncLyricsPlaceholder();
+  // Brief cross-fade of the textarea so the intent change feels smooth.
+  if (!opts.silent && els.lyricsFieldPanel && els.sunoPrompt) {
+    els.lyricsFieldPanel.classList.add("lyricsModeSwitching");
+    window.setTimeout(() => {
+      els.lyricsFieldPanel?.classList.remove("lyricsModeSwitching");
+    }, 220);
+    if (next === "generate") {
+      try { els.sunoPrompt.focus({ preventScroll: true }); } catch {}
+    }
+  }
+}
+
 function setCreateSongType(type) {
   const instrumental = type === "instrumental";
   if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = instrumental ? "1" : "0";
@@ -3670,11 +3719,12 @@ function setCreateSongType(type) {
     els.vocalModeInstrumental.classList.toggle("active", instrumental);
     els.vocalModeInstrumental.setAttribute("aria-pressed", instrumental ? "true" : "false");
   }
-  if (els.sunoPrompt) {
-    els.sunoPrompt.placeholder = instrumental
-      ? "Instrumental mode: lyrics will be ignored. Hum a melody or describe the mood in Style / Tags."
-      : "Write your lyrics here...";
-  }
+  // Instrumental songs ignore lyrics, so the Write/Generate selector is
+  // irrelevant there — disable it and fall back to the write placeholder.
+  if (els.lyricsModeWrite) els.lyricsModeWrite.disabled = instrumental;
+  if (els.lyricsModeGenerate) els.lyricsModeGenerate.disabled = instrumental;
+  if (els.lyricsFieldPanel) els.lyricsFieldPanel.classList.toggle("lyricsModeLocked", instrumental);
+  syncLyricsPlaceholder();
   if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = instrumental;
 }
 
@@ -41494,7 +41544,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     try {
       if (els.btnLyricsMagic) {
         els.btnLyricsMagic.disabled = true;
-        els.btnLyricsMagic.textContent = "…";
+        const icoEl = els.btnLyricsMagic.querySelector(".lyricsMagicIco");
+        if (icoEl) icoEl.textContent = "…";
+        else els.btnLyricsMagic.textContent = "…";
       }
       if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
       if (els.sunoPrompt) els.sunoPrompt.disabled = true;
@@ -41535,7 +41587,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (lyricsBoxEl) lyricsBoxEl.classList.remove("generating");
       if (els.btnLyricsMagic) {
         els.btnLyricsMagic.disabled = false;
-        els.btnLyricsMagic.textContent = "✦";
+        const icoEl = els.btnLyricsMagic.querySelector(".lyricsMagicIco");
+        if (icoEl) icoEl.textContent = "✦";
+        else els.btnLyricsMagic.textContent = "✦";
       }
     }
   };
@@ -41696,6 +41750,18 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (!t) return;
       if (t === els.btnLyricsMagic || t.closest?.("#lyricsMagicMenu")) return;
       closeMagicMenu();
+    });
+  }
+  if (els.lyricsModeWrite) {
+    els.lyricsModeWrite.addEventListener("click", () => {
+      if (els.lyricsModeWrite.disabled) return;
+      setLyricsInputMode("write");
+    });
+  }
+  if (els.lyricsModeGenerate) {
+    els.lyricsModeGenerate.addEventListener("click", () => {
+      if (els.lyricsModeGenerate.disabled) return;
+      setLyricsInputMode("generate");
     });
   }
   if (els.btnCloseImageMood) {

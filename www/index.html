@@ -95,7 +95,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260626tagsquiet" />
+    <link rel="stylesheet" href="./styles.css?v=20260626lyricsmode" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -707,13 +707,17 @@
               </div>
 
               <div class="createPane createPane--lyrics" data-mode="lyrics">
-                <label class="field grow inputPanel">
+                <label class="field grow inputPanel" id="lyricsFieldPanel" data-lyrics-mode="write">
                   <div class="label inPanelLabel lyricsPanelHead">
                     <span>Lyrics</span>
                     <span class="vocalModePill lyricsModePill" role="group" aria-label="Song type">
                       <button id="vocalModeFull" class="ghost active" type="button" aria-pressed="true">Vocal</button>
                       <button id="vocalModeInstrumental" class="ghost" type="button" aria-pressed="false">Instrumental</button>
                     </span>
+                  </div>
+                  <div class="lyricsModeTabs" role="tablist" aria-label="How to start your lyrics">
+                    <button id="lyricsModeWrite" class="lyricsModeTab isActive" type="button" role="tab" aria-selected="true">Write</button>
+                    <button id="lyricsModeGenerate" class="lyricsModeTab" type="button" role="tab" aria-selected="false"><span class="lyricsModeTabIco" aria-hidden="true">✦</span>Generate</button>
                   </div>
                   <label class="ghost lyricsAttachBtn srOnly" title="Attach vocal reference">
                     Insert vocal
@@ -722,10 +726,10 @@
                   <button id="btnVocalRefRec" class="ghost srOnly" type="button">Record voice</button>
                   <div class="lyricsBox">
                     <div class="lyricsBoxMain">
-                      <textarea id="sunoPrompt" rows="4" placeholder="Write your lyrics here..."></textarea>
+                      <textarea id="sunoPrompt" rows="4" placeholder="Write your lyrics…"></textarea>
                     </div>
                     <div class="lyricsAssistBar" role="toolbar" aria-label="Lyrics assist">
-                      <button id="btnLyricsMagic" class="lyricsMagicBtn" type="button" title="AI lyrics assist">✦</button>
+                      <button id="btnLyricsMagic" class="lyricsMagicBtn" type="button" title="Generate lyrics with AI" aria-label="Generate lyrics with AI"><span class="lyricsMagicIco" aria-hidden="true">✦</span><span class="lyricsMagicLabel">Generate</span></button>
                     </div>
                   </div>
                   <div class="row imageMoodRow">
@@ -3939,6 +3943,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260626tagsquiet"></script>
+    <script type="module" src="./src/app.js?v=20260626lyricsmode"></script>
   </body>
 </html>

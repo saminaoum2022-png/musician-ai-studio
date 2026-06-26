@@ -351,6 +351,8 @@ const els = {
   sunoAvoidTags: document.getElementById("sunoAvoidTags"),
   btnBoostStyle: document.getElementById("btnBoostStyle"),
   styleSuggestRow: document.getElementById("styleSuggestRow"),
+  styleSelectedRow: document.getElementById("styleSelectedRow"),
+  btnClearStyle: document.getElementById("btnClearStyle"),
   sunoArtworkStyle: document.getElementById("sunoArtworkStyle"),
   sunoMaqam: document.getElementById("sunoMaqam"),
   sunoTitle: document.getElementById("sunoTitle"),
@@ -3861,8 +3863,7 @@ function resetCreateDraft() {
   if (els.sunoAvoidTags) els.sunoAvoidTags.value = "";
   if (els.sunoTitle) els.sunoTitle.value = "";
   try {
-    _styleView = "";
-    renderStyleSuggestions();
+    syncStyleUi();
   } catch {}
   pendingSearchRemixMeta = null;
   clearCreateChallengeContext();
@@ -43775,7 +43776,7 @@ function styleTagsListFromInput() {
 }
 function writeStyleTagsToInput(list) {
   if (els.sunoStyle) els.sunoStyle.value = list.join(", ");
-  if (typeof renderStyleSuggestions === "function") renderStyleSuggestions();
+  if (typeof syncStyleUi === "function") syncStyleUi();
 }
 function removeStyleTags(tags) {
   const drop = new Set((tags || []).map((t) => String(t).toLowerCase()));
@@ -43792,35 +43793,15 @@ function addStyleTags(tags) {
 
 /* =================================================================
  *  Smart Style Assistant (UI only)
- *  Neutral suggestion pills under the Style field. Tapping a pill
- *  fills the existing Style field; selecting one progressively
- *  unlocks related suggestions. "Auto" derives a starter style from
- *  the lyrics with a lightweight client-side heuristic (no backend,
- *  no API, no prompt-construction changes). "More" opens a library
- *  bottom sheet. The Style field stays the single source of truth.
+ *  Neutral suggestion pills under the Style field that the user picks
+ *  freely — tapping a pill just toggles that tag in the Style field,
+ *  nothing auto-runs. A swipeable strip shows the selected tags (each
+ *  removable) plus a Clear action. "Auto" derives a starter style from
+ *  the lyrics with a lightweight client-side heuristic (no backend, no
+ *  API, no prompt-construction changes). "More" opens a library bottom
+ *  sheet. The Style field stays the single source of truth.
  * ================================================================= */
 const STYLE_BASE_SUGGESTIONS = ["Pop", "Romantic", "Sad", "Arabic Pop", "Piano", "Darbuka", "Cinematic"];
-const STYLE_RELATED = {
-  "pop": ["Catchy", "Upbeat", "Synth", "Modern", "Radio"],
-  "arabic pop": ["Darbuka", "Oud", "Maqam", "Modern", "Female Vocal", "Arabic Lyrics", "6/8"],
-  "edm": ["Synth", "Festival", "128 BPM", "Build Up", "Drop", "Electronic", "Energetic"],
-  "romantic": ["Piano", "Strings", "Emotional", "Soft Vocal", "Slow"],
-  "cinematic": ["Orchestra", "Epic", "Choir", "Ambient"],
-  "sad": ["Emotional", "Piano", "Slow", "Minor Key", "Strings"],
-  "happy": ["Upbeat", "Major Key", "Claps", "Bright"],
-  "piano": ["Soft", "Emotional", "Ballad", "Minimal"],
-  "darbuka": ["Dabke", "Mijwiz", "Oud", "Energetic", "6/8"],
-  "oud": ["Maqam", "Tarab", "Arabic", "Acoustic"],
-  "hip hop": ["Trap", "808", "Boom Bap", "Rap", "Hard"],
-  "rock": ["Electric Guitar", "Drums", "Anthemic", "Distortion"],
-  "jazz": ["Saxophone", "Swing", "Smooth", "Double Bass"],
-  "r&b": ["Soul", "Smooth", "Groove", "Falsetto"],
-  "afrobeat": ["Percussion", "Groove", "Dance", "Log Drum"],
-  "reggaeton": ["Dembow", "Latin", "Dance", "Bass"],
-  "lo-fi": ["Chill", "Vinyl", "Mellow", "Jazzy"],
-  "energetic": ["Fast", "Drums", "Festival", "Drop"],
-  "emotional": ["Strings", "Piano", "Slow", "Soft Vocal"],
-};
 const STYLE_LIBRARY = [
   { label: "Genres", tags: ["Pop", "Arabic Pop", "EDM", "Hip Hop", "Rock", "R&B", "Jazz", "Reggaeton", "Afrobeat", "Trap", "House", "Folk", "Classical", "Lo-fi"] },
   { label: "Moods", tags: ["Romantic", "Sad", "Happy", "Energetic", "Chill", "Dark", "Epic", "Nostalgic", "Dreamy", "Emotional", "Uplifting"] },
@@ -43829,35 +43810,51 @@ const STYLE_LIBRARY = [
   { label: "Tempo & meter", tags: ["Slow", "Mid Tempo", "Fast", "90 BPM", "120 BPM", "128 BPM", "4/4", "6/8", "3/4"] },
 ];
 
-// Drill-down state: "" = base suggestions; otherwise a genre key whose
-// related chips replace the row (kept tidy with a back arrow). The pills
-// are ALWAYS a curated set — we never echo or split the Style field, so a
-// boosted long-form description can live in the field without polluting
-// the suggestions.
-let _styleView = "";
-
 function styleTagsSelectedSet() {
   return new Set(styleTagsListFromInput().map((t) => t.toLowerCase()));
 }
 
+// Suggestion pills are a fixed curated set the user picks freely (no auto
+// drill / no auto-anything on tap). They never echo or split the Style
+// field, so a boosted long-form description can live in the field without
+// polluting the suggestions.
 function renderStyleSuggestions() {
   const row = els.styleSuggestRow;
   if (!row) return;
   const selected = styleTagsSelectedSet();
-  const inGenre = Boolean(_styleView && STYLE_RELATED[_styleView]);
   let html =
     `<button type="button" class="styleSuggestPill styleSuggestPill--auto" data-style-auto="1" aria-label="Let AI suggest a style"><span class="styleSuggestPillIco" aria-hidden="true">\u2728</span>Auto</button>`;
-  if (inGenre) {
-    html += `<button type="button" class="styleSuggestPill styleSuggestPill--back" data-style-back="1" aria-label="Back to suggestions"><span class="styleSuggestPillIco" aria-hidden="true">\u2039</span></button>`;
-  }
-  const chips = inGenre ? STYLE_RELATED[_styleView] : STYLE_BASE_SUGGESTIONS;
-  for (const tag of chips) {
+  for (const tag of STYLE_BASE_SUGGESTIONS) {
     const on = selected.has(tag.toLowerCase());
     html += `<button type="button" class="styleSuggestPill${on ? " isActive" : ""}" data-style-tag="${escapeHtml(tag)}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(tag)}</button>`;
   }
   html += `<button type="button" class="styleSuggestPill styleSuggestPill--more" data-style-more="1"><span class="styleSuggestPillIco" aria-hidden="true">+</span>More</button>`;
   row.innerHTML = html;
-  row.scrollLeft = 0;
+}
+
+// Horizontal, swipeable strip of the currently selected/typed tags, each
+// removable with ×. Mirrors the Style field (the source of truth).
+function renderStyleSelectedChips() {
+  const tags = styleTagsListFromInput();
+  if (els.btnClearStyle) els.btnClearStyle.hidden = tags.length === 0;
+  const row = els.styleSelectedRow;
+  if (!row) return;
+  if (!tags.length) {
+    row.hidden = true;
+    row.innerHTML = "";
+    return;
+  }
+  row.hidden = false;
+  row.innerHTML = tags
+    .map((tag) =>
+      `<span class="styleSelectedChip"><span class="styleSelectedChipText">${escapeHtml(tag)}</span><button type="button" class="styleSelectedChipX" data-style-remove="${escapeHtml(tag)}" aria-label="Remove ${escapeHtml(tag)}">\u00d7</button></span>`
+    )
+    .join("");
+}
+
+function syncStyleUi() {
+  renderStyleSuggestions();
+  renderStyleSelectedChips();
 }
 
 function autoSuggestStyles() {
@@ -43883,9 +43880,8 @@ function autoSuggestStyles() {
     if (!seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); final.push(t); }
   }
   const picked = final.slice(0, 6);
-  _styleView = "";
   addStyleTags(picked);
-  renderStyleSuggestions();
+  syncStyleUi();
   try { syncGenerateOrbVisibility(); } catch {}
   showToast(
     raw.trim() ? "Auto styles suggested from your lyrics" : "Suggested a starter style — add lyrics for smarter picks",
@@ -43928,21 +43924,38 @@ function closeStyleLibrary() {
     row.addEventListener("click", (e) => {
       const btn = e.target?.closest?.("button");
       if (!btn || !row.contains(btn)) return;
+      e.preventDefault();
       haptic("light");
       if (btn.hasAttribute("data-style-auto")) { autoSuggestStyles(); return; }
       if (btn.hasAttribute("data-style-more")) { openStyleLibrary(); return; }
-      if (btn.hasAttribute("data-style-back")) { _styleView = ""; renderStyleSuggestions(); return; }
       const tag = btn.getAttribute("data-style-tag");
       if (!tag) return;
-      const key = tag.toLowerCase();
-      if (styleTagsSelectedSet().has(key)) {
+      if (styleTagsSelectedSet().has(tag.toLowerCase())) {
         removeStyleTags([tag]);
       } else {
         addStyleTags([tag]);
-        // Drill into this genre's related chips (replaces the row, stays tidy).
-        if (STYLE_RELATED[key]) _styleView = key;
       }
-      renderStyleSuggestions();
+      syncStyleUi();
+      try { syncGenerateOrbVisibility(); } catch {}
+    });
+  }
+  const selRow = els.styleSelectedRow;
+  if (selRow && !selRow.dataset.boundStyleSel) {
+    selRow.dataset.boundStyleSel = "1";
+    selRow.addEventListener("click", (e) => {
+      const btn = e.target?.closest?.("[data-style-remove]");
+      if (!btn) return;
+      e.preventDefault();
+      haptic("light");
+      removeStyleTags([btn.getAttribute("data-style-remove")]);
+      try { syncGenerateOrbVisibility(); } catch {}
+    });
+  }
+  if (els.btnClearStyle && !els.btnClearStyle.dataset.boundClear) {
+    els.btnClearStyle.dataset.boundClear = "1";
+    els.btnClearStyle.addEventListener("click", () => {
+      haptic("light");
+      writeStyleTagsToInput([]);
       try { syncGenerateOrbVisibility(); } catch {}
     });
   }
@@ -43960,14 +43973,14 @@ function closeStyleLibrary() {
         addStyleTags([tag]);
       }
       renderStyleLibrary();
-      renderStyleSuggestions();
+      syncStyleUi();
       try { syncGenerateOrbVisibility(); } catch {}
     });
   }
   document.getElementById("styleLibraryBackdrop")?.addEventListener("click", closeStyleLibrary);
   document.getElementById("btnCloseStyleLibrary")?.addEventListener("click", closeStyleLibrary);
-  els.sunoStyle?.addEventListener("input", renderStyleSuggestions);
-  renderStyleSuggestions();
+  els.sunoStyle?.addEventListener("input", syncStyleUi);
+  syncStyleUi();
 })();
 function syncMoodPresetPills() {
   document.querySelectorAll("#moodPresetRow [data-mood]").forEach((b) => {

@@ -95,7 +95,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260626smartstyle2" />
+    <link rel="stylesheet" href="./styles.css?v=20260626stylefree" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -740,11 +740,15 @@
             <label class="field grow inputPanel inputPanel--style">
               <div class="label inPanelLabel stylePanelHead">
                 <span>Style / Tags</span>
-                <button id="btnBoostStyle" class="lyricsMagicBtn styleBoostBtn" type="button" title="Boost style with AI" aria-label="Boost style with AI">✦</button>
+                <div class="stylePanelHeadActions">
+                  <button id="btnClearStyle" class="styleClearBtn" type="button" hidden aria-label="Clear all style tags">Clear</button>
+                  <button id="btnBoostStyle" class="lyricsMagicBtn styleBoostBtn" type="button" title="Boost style with AI" aria-label="Boost style with AI">✦</button>
+                </div>
               </div>
               <input id="sunoStyle" type="text" placeholder="Tap a suggestion below — or type your own" />
-              <div id="styleSuggestRow" class="styleSuggestRow" role="group" aria-label="Style suggestions"></div>
             </label>
+            <div id="styleSelectedRow" class="styleSelectedRow" hidden aria-label="Selected style tags"></div>
+            <div id="styleSuggestRow" class="styleSuggestRow" role="group" aria-label="Style suggestions"></div>
             <label class="field grow inputPanel inputPanel--style">
               <div class="label inPanelLabel">Song title</div>
               <input id="sunoTitle" type="text" placeholder="My new song" />
@@ -3963,6 +3967,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260626smartstyle2"></script>
+    <script type="module" src="./src/app.js?v=20260626stylefree"></script>
   </body>
 </html>

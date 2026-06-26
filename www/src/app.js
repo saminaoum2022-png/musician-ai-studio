@@ -366,6 +366,9 @@ const els = {
   sunoEngine: document.getElementById("sunoEngine"),
   sunoDialect: document.getElementById("sunoDialect"),
   sunoDialectHint: document.getElementById("sunoDialectHint"),
+  lyricsLangRow: document.getElementById("lyricsLangRow"),
+  lyricsDialectGroup: document.getElementById("lyricsDialectGroup"),
+  lyricsDialectRow: document.getElementById("lyricsDialectRow"),
   sunoArabicAddress: document.getElementById("sunoArabicAddress"),
   sunoSingerGender: document.getElementById("sunoSingerGender"),
   singerPersonaRow: document.getElementById("singerPersonaRow"),
@@ -3711,6 +3714,112 @@ function setLyricsInputMode(mode, opts = {}) {
   }
 }
 
+/* Lyrics language / dialect (Generate mode only).
+   These guide how the AI WRITES the lyrics, not the music style. We map the
+   selection into the existing hidden #sunoDialect field (a free-text accent/
+   language hint the /api/lyrics prompt already honors) so no backend changes
+   are needed and style stays fully independent (e.g. English + Dabke). */
+let lyricsLanguage = "auto";
+let lyricsDialect = "auto";
+const LYRICS_LANGUAGE_VALUE = {
+  english: "English",
+  french: "French",
+  spanish: "Spanish",
+  turkish: "Turkish",
+  italian: "Italian",
+  german: "German",
+};
+const LYRICS_ARABIC_DIALECT_VALUE = {
+  auto: "Arabic",
+  lebanese: "Levantine Arabic",
+  egyptian: "Egyptian Arabic",
+  iraqi: "Iraqi Arabic",
+  gulf: "Gulf Arabic",
+  moroccan: "Maghrebi Arabic",
+  syrian: "Syrian Arabic",
+  palestinian: "Palestinian Arabic",
+  tunisian: "Tunisian Arabic",
+  sudanese: "Sudanese Arabic",
+  msa: "Modern Standard Arabic",
+};
+
+function applyLyricsLanguageToDialect() {
+  let val = "";
+  if (lyricsLanguage === "arabic") {
+    val = LYRICS_ARABIC_DIALECT_VALUE[lyricsDialect] || "Arabic";
+  } else if (lyricsLanguage !== "auto") {
+    val = LYRICS_LANGUAGE_VALUE[lyricsLanguage] || "";
+  }
+  if (els.sunoDialect) els.sunoDialect.value = val;
+}
+
+function syncLyricsLangPills() {
+  if (els.lyricsLangRow) {
+    els.lyricsLangRow.querySelectorAll("[data-lyrics-lang]").forEach((b) => {
+      const on = b.getAttribute("data-lyrics-lang") === lyricsLanguage;
+      b.classList.toggle("isActive", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
+  if (els.lyricsDialectRow) {
+    els.lyricsDialectRow.querySelectorAll("[data-lyrics-dialect]").forEach((b) => {
+      const on = b.getAttribute("data-lyrics-dialect") === lyricsDialect;
+      b.classList.toggle("isActive", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
+  if (els.lyricsDialectGroup) els.lyricsDialectGroup.hidden = lyricsLanguage !== "arabic";
+}
+
+function setLyricsLanguage(lang) {
+  lyricsLanguage = lang || "auto";
+  if (lyricsLanguage !== "arabic") lyricsDialect = "auto";
+  syncLyricsLangPills();
+  applyLyricsLanguageToDialect();
+}
+
+function setLyricsDialect(dialect) {
+  lyricsDialect = dialect || "auto";
+  syncLyricsLangPills();
+  applyLyricsLanguageToDialect();
+}
+
+(function bindLyricsLanguagePills() {
+  const langRow = els.lyricsLangRow;
+  if (langRow && !langRow.dataset.boundLang) {
+    langRow.dataset.boundLang = "1";
+    langRow.addEventListener("click", (e) => {
+      const btn = e.target?.closest?.("button");
+      if (!btn || !langRow.contains(btn)) return;
+      haptic("light");
+      if (btn.hasAttribute("data-lyrics-lang-more")) {
+        const open = langRow.classList.toggle("showMore");
+        btn.textContent = open ? "Less" : "More";
+        return;
+      }
+      const lang = btn.getAttribute("data-lyrics-lang");
+      if (lang) setLyricsLanguage(lang);
+    });
+  }
+  const dialectRow = els.lyricsDialectRow;
+  if (dialectRow && !dialectRow.dataset.boundDialect) {
+    dialectRow.dataset.boundDialect = "1";
+    dialectRow.addEventListener("click", (e) => {
+      const btn = e.target?.closest?.("button");
+      if (!btn || !dialectRow.contains(btn)) return;
+      haptic("light");
+      if (btn.hasAttribute("data-lyrics-dialect-more")) {
+        const open = dialectRow.classList.toggle("showMore");
+        btn.textContent = open ? "Less" : "More";
+        return;
+      }
+      const d = btn.getAttribute("data-lyrics-dialect");
+      if (d) setLyricsDialect(d);
+    });
+  }
+  syncLyricsLangPills();
+})();
+
 function setCreateSongType(type) {
   const instrumental = type === "instrumental";
   if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = instrumental ? "1" : "0";
@@ -3831,6 +3940,11 @@ function resetAdvancedOptionsToDefaults() {
   try { syncSingerGenderPills(); } catch {}
   if (els.sunoDialect) els.sunoDialect.value = "";
   if (els.sunoDialectHint) els.sunoDialectHint.value = "";
+  lyricsLanguage = "auto";
+  lyricsDialect = "auto";
+  try { syncLyricsLangPills(); } catch {}
+  if (els.lyricsLangRow) els.lyricsLangRow.classList.remove("showMore");
+  if (els.lyricsDialectRow) els.lyricsDialectRow.classList.remove("showMore");
   if (els.sunoArabicAddress) els.sunoArabicAddress.value = "";
   try { syncArabicAddressPills(); } catch {}
   if (els.sunoPersonaId) els.sunoPersonaId.value = "";
@@ -43753,7 +43867,6 @@ bindOptionChipRow("grooveChipRow", els.sunoGroovePace);
 bindOptionChipRow("prosodyChipRow", els.sunoProsody);
 bindOptionChipRow("beatChipRow", els.sunoBeatStability);
 bindOptionChipRow("voiceRangeChipRow", els.sunoVoiceProfile);
-bindOptionChipRow("dialectChipRow", els.sunoDialect);
 
 // Mood presets: set the Feel knobs AND seed matching style tags. Tags are
 // append-only into Style/Tags (never overwrite what the user typed) and
@@ -43801,13 +43914,14 @@ function addStyleTags(tags) {
  *  API, no prompt-construction changes). "More" opens a library bottom
  *  sheet. The Style field stays the single source of truth.
  * ================================================================= */
-const STYLE_BASE_SUGGESTIONS = ["Pop", "Romantic", "Sad", "Arabic Pop", "Piano", "Darbuka", "Cinematic"];
+const STYLE_BASE_SUGGESTIONS = ["Pop", "Romantic", "Sad", "Arabic Pop"];
 const STYLE_LIBRARY = [
-  { label: "Genres", tags: ["Pop", "Arabic Pop", "EDM", "Hip Hop", "Rock", "R&B", "Jazz", "Reggaeton", "Afrobeat", "Trap", "House", "Folk", "Classical", "Lo-fi"] },
+  { label: "Genres", tags: ["R&B", "Jazz", "Reggaeton", "Afrobeat", "Trap", "House", "Folk", "Classical", "Lo-fi"] },
   { label: "Moods", tags: ["Romantic", "Sad", "Happy", "Energetic", "Chill", "Dark", "Epic", "Nostalgic", "Dreamy", "Emotional", "Uplifting"] },
   { label: "Instruments", tags: ["Piano", "Strings", "Oud", "Darbuka", "Guitar", "Synth", "Violin", "Saxophone", "Orchestra", "808", "Drums"] },
-  { label: "Vocals", tags: ["Female Vocal", "Male Vocal", "Soft Vocal", "Powerful Vocal", "Choir", "Rap", "Falsetto", "Duet"] },
-  { label: "Tempo & meter", tags: ["Slow", "Mid Tempo", "Fast", "90 BPM", "120 BPM", "128 BPM", "4/4", "6/8", "3/4"] },
+  // Singer gender lives on the main screen, so no Male/Female Vocal here.
+  { label: "Vocal Style", tags: ["Soft Vocal", "Powerful Vocal", "Choir", "Rap", "Falsetto", "Duet", "Whisper", "Emotional Vocal"] },
+  { label: "Tempo & Meter", tags: ["Slow", "Mid Tempo", "Fast", "90 BPM", "120 BPM", "128 BPM", "4/4", "6/8", "3/4"] },
 ];
 
 function styleTagsSelectedSet() {
@@ -43822,8 +43936,11 @@ function renderStyleSuggestions() {
   const row = els.styleSuggestRow;
   if (!row) return;
   const selected = styleTagsSelectedSet();
+  // Auto is the default: it reads as "selected" whenever no manual tags exist,
+  // and turns off the moment the user adds a pill or types their own.
+  const autoOn = selected.size === 0;
   let html =
-    `<button type="button" class="styleSuggestPill styleSuggestPill--auto" data-style-auto="1" aria-label="Let AI suggest a style"><span class="styleSuggestPillIco" aria-hidden="true">\u2728</span>Auto</button>`;
+    `<button type="button" class="styleSuggestPill styleSuggestPill--auto${autoOn ? " isActive" : ""}" data-style-auto="1" aria-pressed="${autoOn ? "true" : "false"}" aria-label="Let AI suggest a style"><span class="styleSuggestPillIco" aria-hidden="true">\u2728</span>Auto</button>`;
   for (const tag of STYLE_BASE_SUGGESTIONS) {
     const on = selected.has(tag.toLowerCase());
     html += `<button type="button" class="styleSuggestPill${on ? " isActive" : ""}" data-style-tag="${escapeHtml(tag)}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(tag)}</button>`;

@@ -95,7 +95,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260626stylefree" />
+    <link rel="stylesheet" href="./styles.css?v=20260627createux" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -719,6 +719,39 @@
                     <input id="sunoVocalUpload" type="file" accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.webm" />
                   </label>
                   <button id="btnVocalRefRec" class="ghost srOnly" type="button">Record voice</button>
+                  <div class="lyricsLangBlock">
+                    <div class="lyricsLangGroup">
+                      <span class="lyricsLangLabel">Lyrics language</span>
+                      <div id="lyricsLangRow" class="optChipRow lyricsLangRow" role="group" aria-label="Lyrics language">
+                        <button type="button" class="optChip isActive" data-lyrics-lang="auto" aria-pressed="true">Auto</button>
+                        <button type="button" class="optChip" data-lyrics-lang="english" aria-pressed="false">English</button>
+                        <button type="button" class="optChip" data-lyrics-lang="arabic" aria-pressed="false">Arabic</button>
+                        <button type="button" class="optChip" data-lyrics-lang="french" aria-pressed="false">French</button>
+                        <button type="button" class="optChip optChip--extra" data-lyrics-lang="spanish" aria-pressed="false">Spanish</button>
+                        <button type="button" class="optChip optChip--extra" data-lyrics-lang="turkish" aria-pressed="false">Turkish</button>
+                        <button type="button" class="optChip optChip--extra" data-lyrics-lang="italian" aria-pressed="false">Italian</button>
+                        <button type="button" class="optChip optChip--extra" data-lyrics-lang="german" aria-pressed="false">German</button>
+                        <button type="button" class="optChip optChip--more" data-lyrics-lang-more="1">More</button>
+                      </div>
+                    </div>
+                    <div id="lyricsDialectGroup" class="lyricsLangGroup lyricsDialectGroup" hidden>
+                      <span class="lyricsLangLabel">Arabic dialect</span>
+                      <div id="lyricsDialectRow" class="optChipRow lyricsDialectRow" role="group" aria-label="Arabic dialect">
+                        <button type="button" class="optChip isActive" data-lyrics-dialect="auto" aria-pressed="true">Auto</button>
+                        <button type="button" class="optChip" data-lyrics-dialect="lebanese" aria-pressed="false">Lebanese</button>
+                        <button type="button" class="optChip" data-lyrics-dialect="egyptian" aria-pressed="false">Egyptian</button>
+                        <button type="button" class="optChip" data-lyrics-dialect="iraqi" aria-pressed="false">Iraqi</button>
+                        <button type="button" class="optChip" data-lyrics-dialect="gulf" aria-pressed="false">Gulf</button>
+                        <button type="button" class="optChip" data-lyrics-dialect="moroccan" aria-pressed="false">Moroccan</button>
+                        <button type="button" class="optChip optChip--extra" data-lyrics-dialect="syrian" aria-pressed="false">Syrian</button>
+                        <button type="button" class="optChip optChip--extra" data-lyrics-dialect="palestinian" aria-pressed="false">Palestinian</button>
+                        <button type="button" class="optChip optChip--extra" data-lyrics-dialect="tunisian" aria-pressed="false">Tunisian</button>
+                        <button type="button" class="optChip optChip--extra" data-lyrics-dialect="sudanese" aria-pressed="false">Sudanese</button>
+                        <button type="button" class="optChip optChip--extra" data-lyrics-dialect="msa" aria-pressed="false">MSA</button>
+                        <button type="button" class="optChip optChip--more" data-lyrics-dialect-more="1">More</button>
+                      </div>
+                    </div>
+                  </div>
                   <div class="lyricsBox">
                     <div class="lyricsBoxMain">
                       <textarea id="sunoPrompt" rows="4" placeholder="Write your lyrics…"></textarea>
@@ -758,16 +791,19 @@
               <!-- Hidden input is the form state; pills are the visible control.
                    A saved voice persona (chips below) overrides the gender. -->
               <input type="hidden" id="sunoSingerGender" value="" />
-              <div id="singerGenderPills" class="addressPills addressPills--three" role="group" aria-label="Singer voice">
+              <div id="singerGenderPills" class="addressPills addressPills--three addressPills--singer" role="group" aria-label="Singer voice">
                 <button type="button" class="addressPill isActive" data-singer-value="" aria-pressed="true">
+                  <span class="singerPillIco" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l1.5 4 4 1.5-4 1.5L12 14.5l-1.5-4-4-1.5 4-1.5z"/><path d="M18.5 14.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></svg></span>
                   <span class="addressPillMain">Auto</span>
                   <span class="addressPillSub">let AI pick</span>
                 </button>
                 <button type="button" class="addressPill" data-singer-value="m" aria-pressed="false">
+                  <span class="singerPillIco" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5.8 19.5c0-3.4 2.8-5.7 6.2-5.7s6.2 2.3 6.2 5.7"/></svg></span>
                   <span class="addressPillMain">Male</span>
                   <span class="addressPillSub">مغني</span>
                 </button>
                 <button type="button" class="addressPill" data-singer-value="f" aria-pressed="false">
+                  <span class="singerPillIco" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7.5" r="3"/><path d="M12 10.5l-3.6 7.2c-.2.4.1.8.5.8h6.2c.4 0 .7-.4.5-.8z"/></svg></span>
                   <span class="addressPillMain">Female</span>
                   <span class="addressPillSub">مغنية</span>
                 </button>
@@ -956,31 +992,10 @@
                     <button type="button" class="optChip" data-opt-value="m|Bass" aria-pressed="false">Bass</button>
                   </div>
                 </div>
-                <div class="optChipGroup">
-                  <span class="optChipLabel">Dialect</span>
-                  <select id="sunoDialect" hidden aria-hidden="true" tabindex="-1">
-                    <option value="" selected>Auto</option>
-                    <option value="Levantine Arabic">Levantine</option>
-                    <option value="Egyptian Arabic">Egyptian</option>
-                    <option value="Gulf Arabic">Gulf</option>
-                    <option value="Iraqi Arabic">Iraqi</option>
-                    <option value="Maghrebi Arabic">Maghrebi</option>
-                    <option value="Modern Standard Arabic">MSA</option>
-                  </select>
-                  <div id="dialectChipRow" class="optChipRow" role="group" aria-label="Dialect">
-                    <button type="button" class="optChip isActive" data-opt-value="" aria-pressed="true">Auto</button>
-                    <button type="button" class="optChip" data-opt-value="Levantine Arabic" aria-pressed="false">Levantine</button>
-                    <button type="button" class="optChip" data-opt-value="Egyptian Arabic" aria-pressed="false">Egyptian</button>
-                    <button type="button" class="optChip" data-opt-value="Gulf Arabic" aria-pressed="false">Gulf</button>
-                    <button type="button" class="optChip" data-opt-value="Iraqi Arabic" aria-pressed="false">Iraqi</button>
-                    <button type="button" class="optChip" data-opt-value="Maghrebi Arabic" aria-pressed="false">Maghrebi</button>
-                    <button type="button" class="optChip" data-opt-value="Modern Standard Arabic" aria-pressed="false">MSA</button>
-                  </div>
-                </div>
-                <label class="field createOptionsField createOptionsField--wide">
-                  <span class="createOptionsFieldLabel">Hint</span>
-                  <input id="sunoDialectHint" type="text" placeholder="Optional dialect line…" />
-                </label>
+                <!-- Lyrics language & dialect now live in Lyrics → Generate.
+                     This hidden input stays as the form-state contract that the
+                     generation flow and templates read/write. -->
+                <input type="hidden" id="sunoDialect" value="" />
                 <!-- Persona moved to the main Create page (Singer card). The
                      hidden select stays as the persona state the app reads. -->
                 <select id="sunoPersonaId" hidden aria-hidden="true" tabindex="-1">
@@ -3967,6 +3982,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260626stylefree"></script>
+    <script type="module" src="./src/app.js?v=20260627createux"></script>
   </body>
 </html>

@@ -8504,6 +8504,73 @@ textarea{
   display:inline;
 }
 
+/* Lyrics language / dialect — only in Generate mode, above the textarea. */
+.lyricsLangBlock{
+  display:flex;
+  flex-direction:column;
+  gap:11px;
+  margin:2px 0 12px;
+}
+#lyricsFieldPanel[data-lyrics-mode="write"] .lyricsLangBlock{ display:none; }
+.lyricsLangGroup{
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+}
+.lyricsLangLabel{
+  font-size:11.5px;
+  font-weight:700;
+  letter-spacing:0.03em;
+  text-transform:uppercase;
+  color:rgba(232,238,247,0.5);
+}
+.lyricsLangRow,
+.lyricsDialectRow{
+  display:flex;
+  flex-wrap:nowrap;
+  gap:7px;
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+  padding-bottom:2px;
+}
+.lyricsLangRow::-webkit-scrollbar,
+.lyricsDialectRow::-webkit-scrollbar{ display:none; }
+.lyricsLangRow .optChip,
+.lyricsDialectRow .optChip{
+  flex:0 0 auto;
+  white-space:nowrap;
+}
+.lyricsDialectGroup[hidden]{ display:none; }
+/* "More" reveals the extra options inline. */
+.lyricsLangRow .optChip--extra,
+.lyricsDialectRow .optChip--extra{ display:none; }
+.lyricsLangRow.showMore .optChip--extra,
+.lyricsDialectRow.showMore .optChip--extra{ display:inline-flex; }
+.optChip--more{
+  color:rgba(232,238,247,0.6);
+  border-style:dashed;
+}
+
+/* Singer pills — minimal line icons (Auto/Male/Female). */
+.addressPills--singer .addressPill{
+  flex-direction:column;
+  align-items:center;
+  text-align:center;
+  gap:3px;
+  padding-top:11px;
+}
+.singerPillIco{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  color:rgba(232,238,247,0.55);
+  transition:color 160ms ease;
+}
+.addressPills--singer .addressPill.isActive .singerPillIco{
+  color:#fff;
+}
+
 /* Smooth cross-fade of the textarea when toggling modes. */
 .lyricsBoxMain textarea{
   transition:opacity 220ms ease, box-shadow 240ms ease, border-color 200ms ease;

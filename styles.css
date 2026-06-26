@@ -28430,8 +28430,8 @@ body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadPag
   }
 }
 .messagesBubbleWrap.is-mine .messagesDmSongCard{
-  border-color: rgba(255,255,255,0.14);
-  background: rgba(8, 10, 18, 0.32);
+  border-color: rgba(167,139,250,0.30);
+  background: linear-gradient(135deg, rgba(124,92,255,0.20), rgba(124,92,255,0.07));
 }
 .messagesDmSongCard--static{
   cursor: default;
@@ -28486,8 +28486,11 @@ body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadPag
 .messagesDmSongCard:not(.discoveryRowPlaying) .coverArtPlayIco--pause{
   opacity: 0;
 }
+/* The shared equalizer base is display:none, so opacity alone never reveals it.
+   Show the bars on the chat card while the song is playing/active. */
 .messagesDmSongCard.discoveryRowPlaying .libRowEq,
 .messagesDmSongCard.discoveryRowActive .libRowEq{
+  display: inline-flex;
   opacity: 1;
 }
 .messagesComposer{

@@ -28330,6 +28330,11 @@ body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadPag
   background: transparent;
   border: 0;
   box-shadow: none;
+  /* Size the song bubble like a text bubble so the wrap's flex alignment seats
+     it flush to the edge (right for mine, left for theirs) — same level as
+     every other message. The card fills this width. */
+  width: min(82%, 300px);
+  max-width: min(82%, 300px);
 }
 .messagesBubbleWrap.is-mine .messagesBubble--song{
   background: transparent;
@@ -28397,7 +28402,7 @@ body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadPag
   grid-template-columns: 52px minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
-  width: min(100%, 280px);
+  width: 100%;
   padding: 8px 10px 8px 8px;
   border-radius: 14px;
   border: 1px solid rgba(255,255,255,0.10);
@@ -28420,7 +28425,7 @@ body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadPag
     max-width: 76%;
   }
   .messagesDmSongCard{
-    width: 82%;
+    width: 100%;
     max-width: none;
   }
 }

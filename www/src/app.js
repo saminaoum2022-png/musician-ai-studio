@@ -21716,11 +21716,10 @@ function updateMessagesKeyboardDebugReadout(appliedInset) {
   const vvTop = Math.round(vv?.offsetTop || 0);
   const clientH = Math.round(document.documentElement?.clientHeight || 0);
   const rectB = Math.round(rect?.bottom || 0);
-  const kbTop = vvTop + vvH;
-  const gap = kbTop - rectB;
+  const gap = vvH - rectB; // keyboard top is at visualViewport.height
   const lines = [
     `innerH=${Math.round(window.innerHeight)} clientH=${clientH}`,
-    `vvH=${vvH} vvTop=${vvTop} kbTop=${kbTop}`,
+    `vvH=${vvH} vvTop=${vvTop}`,
     `inset=${Math.round(appliedInset)} rectBottom=${rectB}`,
     `GAP=${gap}`,
   ];
@@ -21898,12 +21897,33 @@ function syncMessagesThreadComposerInset() {
   }
   const focused = isMessagesComposerFocused();
   if (!focused) rememberMessagesViewportBaseBottom({ force: true });
-  // Drive the composer purely off the real visual-viewport keyboard overlap.
-  // A measured inset of 0 means the bar belongs at the safe-area bottom — no
-  // artificial floor, which is what previously left dead space above the keyboard.
-  const measuredInset = isIosKeyboardInsetHost() ? measureMessagesKeyboardInset() : 0;
-  const inset = measuredInset > 6 ? measuredInset : 0;
-  const keyboardOpen = inset > 0;
+  const iosWeb = isIosKeyboardInsetHost();
+  let inset;
+  let keyboardOpen;
+  if (iosWeb) {
+    // iOS web/PWA lies about keyboard geometry through several different modes
+    // (sometimes innerHeight shrinks, sometimes the page just scrolls with a
+    // visualViewport offset). Trying to derive a pixel inset from those numbers
+    // produced a phantom gap. Instead: treat the keyboard as open whenever the
+    // composer is focused, seed the inset from the last applied value, and let
+    // the rAF correction below measure the composer's real on-screen bottom and
+    // snap it flush to the keyboard top (visualViewport.height). No magic
+    // numbers, self-correcting on any device.
+    keyboardOpen = focused;
+    if (keyboardOpen) {
+      const prev = parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue("--messages-keyboard-inset"),
+      );
+      inset = Number.isFinite(prev) ? prev : 0;
+    } else {
+      inset = 0;
+    }
+  } else {
+    // Drive the composer purely off the real visual-viewport keyboard overlap.
+    const measuredInset = measureMessagesKeyboardInset();
+    inset = measuredInset > 6 ? measuredInset : 0;
+    keyboardOpen = inset > 0;
+  }
   const wasOpen = _messagesThreadKeyboardOpen;
   if (!keyboardOpen) rememberMessagesViewportBaseBottom();
   _messagesThreadKeyboardOpen = keyboardOpen;
@@ -21911,6 +21931,9 @@ function syncMessagesThreadComposerInset() {
   try {
     document.documentElement.style.setProperty("--messages-keyboard-inset", `${inset}px`);
   } catch {}
+  if (iosWeb && keyboardOpen) {
+    window.requestAnimationFrame(() => snapMessagesComposerToKeyboardTop());
+  }
   updateMessagesKeyboardDebugReadout(inset);
   syncMessagesThreadWebComposerPosition();
   updateMessagesComposerReserve();
@@ -21920,6 +21943,34 @@ function syncMessagesThreadComposerInset() {
   if (_messagesThreadNeedsInitialScroll || (justOpened && shouldAutoScrollMessagesMount())) {
     scheduleMessagesThreadScrollToBottom({ force: true });
   }
+}
+
+// iOS web only: nudge the fixed composer so its bottom edge sits exactly on the
+// keyboard top (visualViewport.height). One step is exact because the composer's
+// measured bottom already reflects the currently applied inset:
+//   newInset = appliedInset - (vvH - rectBottom)
+function snapMessagesComposerToKeyboardTop() {
+  if (!isIosKeyboardInsetHost()) return;
+  if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
+  if (!isMessagesComposerFocused()) return;
+  const vv = window.visualViewport;
+  const composer = document.querySelector(".messagesComposer");
+  if (!vv || !composer) return;
+  const vvH = vv.height || 0;
+  const rectBottom = composer.getBoundingClientRect().bottom;
+  const applied =
+    parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--messages-keyboard-inset")) || 0;
+  const gap = vvH - rectBottom; // >0 composer too high, <0 behind keyboard
+  if (Math.abs(gap) <= 0.5) {
+    updateMessagesKeyboardDebugReadout(applied);
+    return;
+  }
+  const next = Math.max(0, Math.round(applied - gap));
+  if (Math.abs(next - applied) < 0.5) return;
+  try {
+    document.documentElement.style.setProperty("--messages-keyboard-inset", `${next}px`);
+  } catch {}
+  updateMessagesKeyboardDebugReadout(next);
 }
 
 function scheduleMessagesThreadScrollToBottom({ force = true } = {}) {

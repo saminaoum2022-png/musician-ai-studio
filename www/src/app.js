@@ -21684,6 +21684,36 @@ function wireMessagesNativeKeyboardOnce() {
   });
 }
 
+// TEMP DEBUG: on-screen readout of the iOS web keyboard geometry so we can dial
+// the composer flush to the accessory bar to the exact pixel. Remove once the
+// web keyboard gap is finalized.
+function updateMessagesKeyboardDebugReadout(appliedInset) {
+  if (!isIosWebShell()) return;
+  let el = document.getElementById("kbDebugReadout");
+  const inThread = String(document.body.getAttribute("data-route") || "") === "messages-thread";
+  const focused = isMessagesComposerFocused();
+  if (!inThread || !focused) {
+    if (el) el.remove();
+    return;
+  }
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "kbDebugReadout";
+    el.style.cssText =
+      "position:fixed;top:calc(env(safe-area-inset-top,0px) + 6px);left:8px;right:8px;z-index:99999;" +
+      "background:rgba(0,0,0,0.82);color:#7CFC00;font:600 11px/1.35 ui-monospace,monospace;" +
+      "padding:6px 8px;border-radius:8px;pointer-events:none;white-space:pre;text-align:left;";
+    document.body.appendChild(el);
+  }
+  const vv = window.visualViewport;
+  const lines = [
+    `innerH=${Math.round(window.innerHeight)}`,
+    `vvH=${Math.round(vv?.height || 0)} vvTop=${Math.round(vv?.offsetTop || 0)}`,
+    `appliedInset=${Math.round(appliedInset)}`,
+  ];
+  el.textContent = lines.join("  ");
+}
+
 function measureMessagesKeyboardInset() {
   const vv = window.visualViewport;
   if (!vv) return 0;
@@ -21868,6 +21898,7 @@ function syncMessagesThreadComposerInset() {
   try {
     document.documentElement.style.setProperty("--messages-keyboard-inset", `${inset}px`);
   } catch {}
+  updateMessagesKeyboardDebugReadout(inset);
   syncMessagesThreadWebComposerPosition();
   updateMessagesComposerReserve();
   syncMessagesThreadViewportLayout();

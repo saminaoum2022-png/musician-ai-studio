@@ -37608,6 +37608,30 @@ async function resolveLyricsForTrackRef(t) {
   return "";
 }
 
+/** Fetch the FULL generation meta for a public track. Feed list rows ship a
+ *  trimmed meta (hub_posts list deliberately drops styleInput/lyricsInput to
+ *  cut egress; user_songs slim selects do the same), so the About sheet has
+ *  to hydrate the heavy keys on demand — same lookup order as the lyrics
+ *  resolver. Returns the raw meta object or null. */
+async function resolveFullMetaForTrackRef(t) {
+  if (!t) return null;
+  const cloudId = trackCloudShareId(t);
+  if (cloudId) {
+    try {
+      const meta = await supabaseFetchSongMetaById(cloudId);
+      if (meta && typeof meta === "object") return meta;
+    } catch {}
+  }
+  const rawId = String(t?.id || "").trim();
+  if (rawId && isShareUuid(rawId)) {
+    try {
+      const full = await hubFetchPostMetaFull(rawId);
+      if (full && typeof full === "object") return full;
+    } catch {}
+  }
+  return null;
+}
+
 /** Lightweight lyrics-only view reusing the song details sheet shell. */
 /* ─── Synced (karaoke) lyrics ──────────────────────────────────────────────
    Word-level timing from /api/music/timestamped-lyrics, grouped into lines
@@ -37925,10 +37949,21 @@ function renderAboutThisSong({ track, title, subtitle, lyrics, owner = false } =
 
 function openPublicSongCreditsSheet(track, ctx = {}) {
   void (async () => {
-    const lyrics = await resolveLyricsForTrackRef(track);
+    // Feed list rows (Friends/hub feed especially) carry a trimmed meta with
+    // no styleInput/lyricsInput, so Style + Lyrics source would be blank.
+    // Hydrate the full meta on demand so this sheet matches Discover exactly.
+    let hydrated = track;
+    const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+    const hasStyle = Boolean(String(meta.styleInput || meta.styleSent || meta.style || "").trim() || meta.styleTags);
+    const hasLyricsMeta = Boolean(String(meta.lyricsInput || meta.finalPrompt || "").trim());
+    if (!hasStyle || !hasLyricsMeta) {
+      const full = await resolveFullMetaForTrackRef(track);
+      if (full) hydrated = { ...track, meta: { ...meta, ...full } };
+    }
+    const lyrics = await resolveLyricsForTrackRef(hydrated);
     renderAboutThisSong({
-      track,
-      title: ctx?.title || track?.title || "Song",
+      track: hydrated,
+      title: ctx?.title || hydrated?.title || "Song",
       subtitle: ctx?.by || (ctx?.handle ? `@${ctx.handle}` : ""),
       lyrics,
       owner: false,

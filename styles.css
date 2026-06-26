@@ -31091,6 +31091,89 @@ section.mentorPage{
   margin-left: auto;
   padding-right: 0;
 }
+.followActAct--repost.isReposted{
+  color: #2fd27a;
+}
+.followActAct--repost.isReposted .followActActIco{
+  fill: currentColor;
+}
+
+/* "@user reposted" banner injected above an original card in the feed. */
+.followActRepostBanner{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  color: rgba(223,231,251,0.6);
+}
+.followActRepostBannerIco{
+  width: 14px;
+  height: 14px;
+  fill: rgba(223,231,251,0.6);
+  flex: 0 0 auto;
+}
+.followActRepostByLink{
+  color: rgba(223,231,251,0.78);
+  text-decoration: none;
+}
+.followActRepostByLink strong{
+  color: #f2f5ff;
+  font-weight: 700;
+}
+.followActRepostNote{
+  margin: 0 0 10px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #eef2fb;
+}
+
+/* Repost compose sheet preview row (dark theme, matches reply sheet). */
+.repostComposePreview{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 4px 4px;
+}
+.repostComposeArt{
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex: 0 0 auto;
+  background: rgba(255,255,255,0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.repostComposeArt img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.repostComposeArtFallback{
+  color: rgba(223,231,251,0.5);
+  font-size: 20px;
+}
+.repostComposeMeta{
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.repostComposeTitle{
+  font-size: 15px;
+  font-weight: 700;
+  color: #f6f8ff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.repostComposeSub{
+  font-size: 12.5px;
+  color: rgba(223,231,251,0.52);
+}
 .followAct--xstyle .followActActions .followActAct{
   align-items: center;
   min-height: 28px;

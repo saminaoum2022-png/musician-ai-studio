@@ -10605,6 +10605,8 @@ let _friendsFeedPatchCount = 0;
 function followActDomItemKey(el) {
   if (!el?.classList?.contains("followAct")) return "";
   if (el.classList.contains("followAct--skel")) return "";
+  const repostId = el.getAttribute("data-repost-id") || "";
+  if (repostId) return `r:${repostId}`;
   const sid = el.getAttribute("data-profile-act-song-id") || "";
   if (sid) return `m:${sid}`;
   const statusId = el.getAttribute("data-follow-status-id") || "";
@@ -10625,6 +10627,10 @@ function readFollowActListDomKey(listEl) {
 function profileActivitiesFeedKey(feedItems) {
   return (feedItems || [])
     .map((item) => {
+      if (item?.kind === "repost") {
+        const id = String(item?.repost?.id || "").trim();
+        return id ? `r:${id}` : "";
+      }
       const sid = String(item?.track?.id || "").trim();
       return sid ? `m:${sid}` : "";
     })
@@ -10638,6 +10644,10 @@ function friendsFeedItemsKey(items) {
       if (item?.kind === "status") {
         const id = String(item.post?.id || "").trim();
         return id ? `s:${id}` : "";
+      }
+      if (item?.kind === "repost") {
+        const id = String(item.repost?.id || "").trim();
+        return id ? `r:${id}` : "";
       }
       const sid = String(item.track?.id || "").trim();
       return sid ? `m:${sid}` : "";
@@ -10981,13 +10991,33 @@ async function renderProfileActivities(opts = {}) {
     countEl.hidden = !pubN;
   }
   const profMap = profileSelfProfMap(uid);
-  const feedItems = libRows
-    .map((track) => ({
-      kind: "music",
-      ts: profileActivitiesFeedTs(track),
-      track,
-    }))
-    .sort((a, b) => b.ts - a.ts);
+  const musicItems = libRows.map((track) => ({
+    kind: "music",
+    ts: profileActivitiesFeedTs(track),
+    track,
+  }));
+  // Songs you've reposted appear in your own activities alongside your songs.
+  let repostItems = [];
+  let effectiveProfMap = profMap;
+  try {
+    const myReposts = await fetchUserRepostsForProfile(uid, 40);
+    if (myReposts.length) {
+      const repIds = [...new Set(myReposts.map((r) => r.targetId))];
+      const repSongs = await fetchPublicSongsByIds(repIds);
+      repostItems = myReposts
+        .map((rp) => {
+          const track = repSongs.get(rp.targetId);
+          if (!track || !String(track.url || "").trim()) return null;
+          return { kind: "repost", ts: rp.ts, repost: rp, track };
+        })
+        .filter(Boolean);
+      if (repostItems.length) {
+        const authorIds = [...new Set(repostItems.map((it) => String(it.track.userId || "")).filter(Boolean))];
+        effectiveProfMap = await fetchProfilesByUserIdsMap([uid, ...authorIds]);
+      }
+    }
+  } catch {}
+  const feedItems = [...musicItems, ...repostItems].sort((a, b) => b.ts - a.ts);
   const totalPosts = feedItems.length;
   _profileActivitiesShown = Math.min(
     totalPosts,
@@ -11023,7 +11053,9 @@ async function renderProfileActivities(opts = {}) {
     }
     if (!listPainted) {
       listEl.innerHTML = visibleFeedItems
-        .map((item, i) => followingActivityRowHtml(item.track, profMap, i, { xstyle: true }))
+        .map((item, i) => (item.kind === "repost"
+          ? followingRepostRowHtml(item, effectiveProfMap, i)
+          : followingActivityRowHtml(item.track, effectiveProfMap, i, { xstyle: true })))
         .join("");
       logProfilePostsListRender(visibleFeedItems.length);
     }
@@ -11040,7 +11072,7 @@ async function renderProfileActivities(opts = {}) {
   } catch {}
   applyFeedSocialStatsToDom(listEl);
   const enrichGen = ++_profileActEnrichGen;
-  void enrichProfileActivitiesAfterPaint(visibleLibRows, visibleFeedItems, profMap, listEl, enrichGen);
+  void enrichProfileActivitiesAfterPaint(visibleLibRows, visibleFeedItems, effectiveProfMap, listEl, enrichGen);
   } catch (e) {
     try {
       console.warn("[profile/activities]", e);
@@ -11981,6 +12013,14 @@ function followActActionsRowHtml({ kind, targetId, targetUserId, plays, playsPen
         <svg class="followActActIco" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h3v7H4zM10.5 8h3v12h-3zM17 4h3v16h-3z"/></svg>
       </button>`
       : "";
+  // Repost is only meaningful on someone else's song — never your own.
+  const repostBlock =
+    kind === "music" && !isOwner
+      ? `<button type="button" class="followActAct followActAct--repost" data-friends-act="repost" aria-label="Repost" aria-pressed="false">
+        ${repostIconSvgHtml("followActActIco")}
+        <span class="followActActCount" data-friends-act-count="repost"></span>
+      </button>`
+      : "";
   return `
     <div class="followActActions" data-friends-act-row="1" data-friends-act-kind="${safeKind}" data-friends-act-target-kind="${safeTargetKind}" data-friends-act-id="${safeId}" data-friends-act-uid="${safeUid}">
       <button type="button" class="followActAct" data-friends-act="reply" aria-label="Reply">
@@ -11993,6 +12033,7 @@ function followActActionsRowHtml({ kind, targetId, targetUserId, plays, playsPen
       </button>
       ${analyticsBlock}
       ${playsBlock}
+      ${repostBlock}
     </div>`;
 }
 
@@ -12012,16 +12053,18 @@ function feedSocialStatsKey(targetKind, targetId) {
   return `${targetKind}:${targetId}`;
 }
 
+const FEED_SOCIAL_STAT_DEFAULT = { likeCount: 0, liked: false, replyCount: 0, repostCount: 0, reposted: false };
+
 function getFeedSocialStat(targetKind, targetId) {
   return (
     _feedSocialStats.get(feedSocialStatsKey(targetKind, targetId)) ||
-    { likeCount: 0, liked: false, replyCount: 0 }
+    { ...FEED_SOCIAL_STAT_DEFAULT }
   );
 }
 
 function setFeedSocialStat(targetKind, targetId, partial) {
   const key = feedSocialStatsKey(targetKind, targetId);
-  const prev = _feedSocialStats.get(key) || { likeCount: 0, liked: false, replyCount: 0 };
+  const prev = _feedSocialStats.get(key) || { ...FEED_SOCIAL_STAT_DEFAULT };
   _feedSocialStats.set(key, { ...prev, ...partial });
   return _feedSocialStats.get(key);
 }
@@ -12041,12 +12084,19 @@ function applyFeedSocialStatsToDom(scope) {
     const likeBtn = row.querySelector('[data-friends-act="like"]');
     const likeCount = row.querySelector('[data-friends-act-count="like"]');
     const replyCount = row.querySelector('[data-friends-act-count="reply"]');
+    const repostBtn = row.querySelector('[data-friends-act="repost"]');
+    const repostCount = row.querySelector('[data-friends-act-count="repost"]');
     if (likeBtn) {
       likeBtn.classList.toggle("isLiked", Boolean(stat.liked));
       likeBtn.setAttribute("aria-pressed", stat.liked ? "true" : "false");
     }
     if (likeCount) likeCount.textContent = stat.likeCount > 0 ? formatStatCount(stat.likeCount) : "";
     if (replyCount) replyCount.textContent = stat.replyCount > 0 ? formatStatCount(stat.replyCount) : "";
+    if (repostBtn) {
+      repostBtn.classList.toggle("isReposted", Boolean(stat.reposted));
+      repostBtn.setAttribute("aria-pressed", stat.reposted ? "true" : "false");
+    }
+    if (repostCount) repostCount.textContent = stat.repostCount > 0 ? formatStatCount(stat.repostCount) : "";
   });
 }
 
@@ -12100,6 +12150,16 @@ async function hydrateFeedSocialStatsForFeed(listEl, opts = {}) {
         for (const [id, info] of Object.entries(bucket || {})) {
           setFeedSocialStat(kind, id, {
             replyCount: Number(info?.count) || 0,
+          });
+        }
+      }
+    }
+    if (data?.reposts) {
+      for (const [kind, bucket] of Object.entries(data.reposts)) {
+        for (const [id, info] of Object.entries(bucket || {})) {
+          setFeedSocialStat(kind, id, {
+            repostCount: Number(info?.count) || 0,
+            reposted: Boolean(info?.reposted),
           });
         }
       }
@@ -12617,6 +12677,175 @@ async function handleFeedLikeTap(btn) {
     showToast(e?.message || "Could not update like.");
   } finally {
     delete btn.dataset.likeBusy;
+  }
+}
+
+/* ---------------------------------------------------------------------
+ * Repost (reshare a song into your followers' feed, with optional note)
+ * ------------------------------------------------------------------- */
+
+let _repostComposeContext = null;
+let _repostComposeBound = false;
+
+async function postRepostToggle(targetKind, targetId, { reposted, body = "" } = {}) {
+  return socialApi("/api/social", {
+    method: "POST",
+    body: JSON.stringify({
+      action: reposted ? "repost" : "unrepost",
+      targetKind,
+      targetId,
+      ...(reposted && body ? { body } : {}),
+    }),
+  });
+}
+
+function applyRepostStatOptimistic(targetKind, targetId, reposted) {
+  const prev = getFeedSocialStat(targetKind, targetId);
+  const nextCount = Math.max(0, prev.repostCount + (reposted ? 1 : -1));
+  setFeedSocialStat(targetKind, targetId, { reposted, repostCount: nextCount });
+  applyFeedSocialStatsToDom(document);
+}
+
+async function handleFeedRepostTap(btn) {
+  const row = btn.closest(".followActActions");
+  if (!row) return;
+  const targetKind = row.getAttribute("data-friends-act-target-kind") || "";
+  const targetId = row.getAttribute("data-friends-act-id") || "";
+  if (!targetKind || !targetId) return;
+  if (!authSession?.user?.id || !getSupabaseAuthToken()) {
+    showToast("Sign in to repost.");
+    location.hash = "#/auth";
+    return;
+  }
+  const stat = getFeedSocialStat(targetKind, targetId);
+  // Tapping an active repost undoes it immediately (no sheet).
+  if (stat.reposted) {
+    if (btn.dataset.repostBusy === "1") return;
+    btn.dataset.repostBusy = "1";
+    try { haptic("light"); } catch {}
+    applyRepostStatOptimistic(targetKind, targetId, false);
+    try {
+      const data = await postRepostToggle(targetKind, targetId, { reposted: false });
+      if (data?.ok && typeof data.count === "number") {
+        setFeedSocialStat(targetKind, targetId, { reposted: false, repostCount: Number(data.count) || 0 });
+        applyFeedSocialStatsToDom(document);
+      }
+      if (String(document.body.getAttribute("data-route") || "") === "friends") {
+        void refreshDiscoveryFollowingFeed({ force: true });
+      }
+    } catch (e) {
+      applyRepostStatOptimistic(targetKind, targetId, true);
+      showToast(e?.message || "Could not remove repost.");
+    } finally {
+      delete btn.dataset.repostBusy;
+    }
+    return;
+  }
+  // Otherwise open the compose sheet to optionally add a note.
+  const article = btn.closest(".followAct");
+  const title = String(article?.getAttribute("data-user-lib-title") || "").trim()
+    ? decodeURIComponent(article.getAttribute("data-user-lib-title"))
+    : String(article?.querySelector(".followActMediaTitle")?.textContent || "").trim();
+  const art = String(article?.getAttribute("data-user-lib-art") || "").trim()
+    ? decodeURIComponent(article.getAttribute("data-user-lib-art"))
+    : String(article?.querySelector(".followActMediaImg")?.getAttribute("src") || "").trim();
+  const handle = String(article?.querySelector(".followActUser")?.textContent || "").replace(/^@/, "").trim();
+  openRepostComposeSheet({ targetKind, targetId, title, art, handle });
+}
+
+function bindRepostComposeSheetOnce() {
+  if (_repostComposeBound) return;
+  const sheet = document.getElementById("repostComposeSheet");
+  if (!sheet) return;
+  _repostComposeBound = true;
+  sheet.addEventListener("click", (e) => {
+    if (e.target.closest("[data-repost-dismiss]")) {
+      e.preventDefault();
+      closeRepostComposeSheet();
+    }
+  });
+  const form = document.getElementById("repostComposeForm");
+  if (form) {
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      void submitRepost();
+    });
+  }
+  const input = document.getElementById("repostComposeInput");
+  if (input) {
+    input.addEventListener("input", () => {
+      const count = document.getElementById("repostComposeCount");
+      if (count) count.textContent = `${input.value.length} / 320`;
+    });
+  }
+}
+
+function openRepostComposeSheet({ targetKind, targetId, title, art, handle }) {
+  const sheet = document.getElementById("repostComposeSheet");
+  if (!sheet) return;
+  bindRepostComposeSheetOnce();
+  _repostComposeContext = { targetKind, targetId };
+  const artEl = document.getElementById("repostComposeArt");
+  const titleEl = document.getElementById("repostComposeTitle");
+  const subEl = document.getElementById("repostComposeSub");
+  if (artEl) {
+    artEl.innerHTML = art
+      ? `<img src="${escapeHtml(art)}" alt="" decoding="async" />`
+      : `<span class="repostComposeArtFallback" aria-hidden="true">♪</span>`;
+  }
+  if (titleEl) titleEl.textContent = title || "This song";
+  if (subEl) subEl.textContent = handle ? `@${handle}` : "";
+  const input = document.getElementById("repostComposeInput");
+  if (input) input.value = "";
+  const count = document.getElementById("repostComposeCount");
+  if (count) count.textContent = "0 / 320";
+  sheet.hidden = false;
+  window.requestAnimationFrame(() => {
+    sheet.setAttribute("aria-hidden", "false");
+  });
+}
+
+function closeRepostComposeSheet() {
+  const sheet = document.getElementById("repostComposeSheet");
+  if (!sheet) return;
+  sheet.setAttribute("aria-hidden", "true");
+  window.setTimeout(() => {
+    sheet.hidden = true;
+    _repostComposeContext = null;
+  }, 220);
+}
+
+async function submitRepost() {
+  const ctx = _repostComposeContext;
+  if (!ctx) return;
+  const { targetKind, targetId } = ctx;
+  const input = document.getElementById("repostComposeInput");
+  const submitBtn = document.getElementById("repostComposeSubmit");
+  const note = String(input?.value || "").trim().slice(0, 320);
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.setAttribute("aria-busy", "true");
+  }
+  try { haptic("light"); } catch {}
+  try {
+    const data = await postRepostToggle(targetKind, targetId, { reposted: true, body: note });
+    setFeedSocialStat(targetKind, targetId, {
+      reposted: true,
+      repostCount: typeof data?.count === "number" ? Number(data.count) || 0 : getFeedSocialStat(targetKind, targetId).repostCount + 1,
+    });
+    applyFeedSocialStatsToDom(document);
+    closeRepostComposeSheet();
+    showToast("Reposted to your followers.");
+    if (String(document.body.getAttribute("data-route") || "") === "friends") {
+      void refreshDiscoveryFollowingFeed({ force: true });
+    }
+  } catch (e) {
+    showToast(e?.message || "Could not repost.");
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.removeAttribute("aria-busy");
+    }
   }
 }
 
@@ -13308,10 +13537,43 @@ function runFriendsRouteRefresh(token) {
 
 function friendsFeedRowsHtml(mergedItems, profMap) {
   return mergedItems
-    .map((item, i) => (item.kind === "status"
-      ? followingStatusRowHtml(item.post, profMap, i, { xstyle: true })
-      : followingActivityRowHtml(item.track, profMap, i, { xstyle: true })))
+    .map((item, i) => {
+      if (item.kind === "status") return followingStatusRowHtml(item.post, profMap, i, { xstyle: true });
+      if (item.kind === "repost") return followingRepostRowHtml(item, profMap, i);
+      return followingActivityRowHtml(item.track, profMap, i, { xstyle: true });
+    })
     .join("");
+}
+
+/** A repost: the original song card with a small "@user reposted" banner
+ *  (and optional note) injected on top. Reusing followingActivityRowHtml keeps
+ *  playback, seek, and the original author's header consistent — the actions
+ *  row inside still targets the original song. */
+function followingRepostRowHtml(item, profMap, idx) {
+  const rp = item.repost || {};
+  const base = followingActivityRowHtml(item.track, profMap, idx, { xstyle: true });
+  const reposterId = String(rp.userId || "");
+  const prof = resolveProfileForFeedCreator(reposterId, profMap);
+  const handle = String(prof?.username || "").trim();
+  const who = handle ? `@${escapeHtml(handle)}` : "Someone";
+  const href = handle ? `#/u/${encodeURIComponent(handle)}` : "#";
+  const when = relativeTime(Number(rp.ts || item.ts || 0));
+  const note = String(rp.body || "").trim();
+  const noteHtml = note ? `<p class="followActRepostNote">${escapeHtml(note)}</p>` : "";
+  const banner = `
+        <div class="followActRepostBanner">
+          <span class="followActRepostIco" aria-hidden="true">${repostIconSvgHtml("followActRepostBannerIco")}</span>
+          <a class="followActRepostByLink" href="${escapeHtml(href)}" data-route-link="user"><strong>${who}</strong> reposted</a>
+          <span class="followActMetaDot" aria-hidden="true">·</span>
+          <span class="followActWhen">${escapeHtml(when)}</span>
+        </div>
+        ${noteHtml}`;
+  return base
+    .replace(
+      'class="followAct followAct--music followAct--xstyle"',
+      `class="followAct followAct--music followAct--xstyle followAct--repost" data-repost-id="${escapeHtml(String(rp.id || ""))}" data-repost-by="${escapeHtml(reposterId)}"`,
+    )
+    .replace('<div class="followActTop">', `${banner}<div class="followActTop">`);
 }
 
 /** Remix pairs, mashup tiles, play counts, and Who-to-follow load after the first paint. */
@@ -13586,11 +13848,12 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
     }
 
     const libraryUserIds = followingIds.slice(0, FRIENDS_FEED_LIBRARY_USERS);
-    const [statusPosts, tracksByUser] = await Promise.all([
+    const [statusPosts, tracksByUser, repostRows] = await Promise.all([
       STATUS_POSTS_FEATURE_ENABLED
         ? fetchFollowingStatusPosts(40, await fetchFollowingListForFeed())
         : Promise.resolve([]),
       supabaseFetchPublicLibraryForUserIds(libraryUserIds, FRIENDS_FEED_LIBRARY_SONG_LIMIT),
+      fetchFollowingRepostsForFeed(libraryUserIds, 40),
     ]);
     const tracksNested = libraryUserIds.map((userId) =>
       (tracksByUser.get(userId) || []).map((row) => ({ ...row, userId })),
@@ -13606,12 +13869,39 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
       })
       .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0))
       .slice(0, 60);
+
+    // Reposts: hydrate the original songs, then build repost feed items.
+    const repostTargetIds = [...new Set(repostRows.map((r) => r.targetId))];
+    const repostSongs = repostTargetIds.length ? await fetchPublicSongsByIds(repostTargetIds) : new Map();
+    if (gen !== _discoveryFollowingGen) return;
+    const repostItems = repostRows
+      .map((rp) => {
+        const track = repostSongs.get(rp.targetId);
+        if (!track || !String(track.url || "").trim()) return null;
+        return { kind: "repost", ts: rp.ts, repost: rp, track };
+      })
+      .filter(Boolean);
+
     const profIds = [
       ...playable.map((t) => t.userId),
       ...statusPosts.map((p) => String(p?.userId || "").trim()).filter(Boolean),
+      ...repostItems.map((it) => String(it.repost.userId || "")).filter(Boolean),
+      ...repostItems.map((it) => String(it.track.userId || "")).filter(Boolean),
     ];
     const profMap = await fetchProfilesByUserIdsMap(profIds);
     if (gen !== _discoveryFollowingGen) return;
+
+    // Repost originals join the enrich set so they get play counts, social
+    // stats, and join the playback queue — without being patched as music rows.
+    const enrichTracks = [...playable];
+    const seenEnrich = new Set(playable.map((t) => String(t.id || "")));
+    for (const it of repostItems) {
+      const id = String(it.track.id || "");
+      if (id && !seenEnrich.has(id)) {
+        seenEnrich.add(id);
+        enrichTracks.push(it.track);
+      }
+    }
 
     const feedItems = [
       ...statusPosts.map((post) => ({
@@ -13624,6 +13914,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
         ts: Number(track.ts || 0),
         track,
       })),
+      ...repostItems,
     ]
       .filter((row) => row.ts > 0 || row.kind === "status")
       .sort((a, b) => b.ts - a.ts);
@@ -13643,7 +13934,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
 
     statusEl.hidden = true;
     statusEl.textContent = "";
-    _discoveryFeedTracks = playable.map((t) => discoveryTrackPlaybackMeta(t, profMap));
+    _discoveryFeedTracks = enrichTracks.map((t) => discoveryTrackPlaybackMeta(t, profMap));
     listEl.hidden = false;
     const desiredKey = friendsFeedItemsKey(mergedItems);
     const domKey = readFollowActListDomKey(listEl);
@@ -13674,7 +13965,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
       syncDiscoveryPlayingHighlights();
     } catch {}
     void enrichFriendsFeedAfterPaint({
-      playable,
+      playable: enrichTracks,
       mergedItems,
       profMap,
       listEl,
@@ -13855,6 +14146,7 @@ function bindFriendsPageOnce() {
         e.stopPropagation();
         if (kind === "like") void handleFeedLikeTap(actBtn);
         else if (kind === "reply") void openFeedReplySheetFromButton(actBtn);
+        else if (kind === "repost") void handleFeedRepostTap(actBtn);
         else if (kind === "analytics") void openSongAnalyticsSheet(actBtn);
         return;
       }
@@ -13893,6 +14185,7 @@ function wireUserPublicFeedRowsOnce() {
       e.stopPropagation();
       if (kind === "like") void handleFeedLikeTap(actBtn);
       else if (kind === "reply") void openFeedReplySheetFromButton(actBtn);
+      else if (kind === "repost") void handleFeedRepostTap(actBtn);
       else if (kind === "analytics") void openSongAnalyticsSheet(actBtn);
       return;
     }
@@ -14748,6 +15041,10 @@ function remixIconSvgHtml() {
 
 function remixPillHtml(label = "Remix") {
   return `<span class="remixAttributionPill">${remixIconSvgHtml()}<span>${escapeHtml(label)}</span></span>`;
+}
+
+function repostIconSvgHtml(klass = "followActActIco") {
+  return `<svg class="${escapeHtml(klass)}" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 1l4 4-4 4V6H9a4 4 0 0 0-4 4v1H3v-1a6 6 0 0 1 6-6h8V1ZM7 23l-4-4 4-4v3h8a4 4 0 0 0 4-4v-1h2v1a6 6 0 0 1-6 6H7v3Z"/></svg>`;
 }
 
 function remixAttributionText(remixOf) {
@@ -21233,6 +21530,110 @@ function mapPublicLibrarySongRows(arr, selectedPublishedAt) {
     .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
 }
 
+/** Fetch a set of public songs by id (for repost originals), keyed by song
+ *  id. Returns playable track objects with userId attached. Safe if the
+ *  table/columns are missing — resolves to an empty map. */
+async function fetchPublicSongsByIds(ids) {
+  const out = new Map();
+  const uuids = [...new Set((ids || []).map((x) => String(x || "").trim()).filter(Boolean))].slice(0, 60);
+  if (!uuids.length || !SUPABASE_URL || !SUPABASE_ANON_KEY) return out;
+  const cols =
+    "user_id,id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
+  const colsLegacy = cols.replace(",published_at", "");
+  const inList = uuids.map((id) => `"${id}"`).join(",");
+  const token = getSupabaseAuthToken();
+  const headers = { apikey: SUPABASE_ANON_KEY, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  const guard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
+  try {
+    let selectedPublishedAt = true;
+    let r = await fetch(
+      `${SUPABASE_URL}/rest/v1/user_songs?id=in.(${inList})&public_on_profile=eq.true&select=${cols}${guard}`,
+      { headers, cache: "no-store" },
+    );
+    if (!r.ok) {
+      const txt = await r.clone().text().catch(() => "");
+      if (/published_at|42703|column/i.test(txt)) {
+        selectedPublishedAt = false;
+        r = await fetch(
+          `${SUPABASE_URL}/rest/v1/user_songs?id=in.(${inList})&public_on_profile=eq.true&select=${colsLegacy}${guard}`,
+          { headers, cache: "no-store" },
+        );
+      }
+    }
+    if (!r.ok) return out;
+    const rows = await r.json().catch(() => []);
+    const deduped = dedupePublicSongRowsRaw(Array.isArray(rows) ? rows : []);
+    for (const s of deduped) {
+      const mapped = mapPublicLibrarySongRows([s], selectedPublishedAt)[0];
+      if (!mapped) continue;
+      mapped.userId = String(s.user_id || "");
+      out.set(String(s.id || ""), mapped);
+    }
+  } catch {}
+  return out;
+}
+
+/** Reposts by the users you follow (newest first). Safe if the table is
+ *  missing (returns []) so reposts degrade gracefully before the migration. */
+async function fetchFollowingRepostsForFeed(followingIds, limit = 40) {
+  const ids = (followingIds || [])
+    .map((x) => String(x || "").trim())
+    .filter(Boolean)
+    .slice(0, FRIENDS_FEED_LIBRARY_USERS);
+  if (!ids.length || !SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
+  const inList = ids.map((id) => `"${id}"`).join(",");
+  const token = getSupabaseAuthToken();
+  const headers = { apikey: SUPABASE_ANON_KEY, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  const lim = Math.min(60, Math.max(1, Number(limit) || 40));
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/social_reposts?user_id=in.(${inList})&target_kind=eq.song&select=id,user_id,target_id,body,created_at&order=created_at.desc&limit=${lim}`,
+      { headers, cache: "no-store" },
+    );
+    if (!r.ok) return [];
+    const rows = await r.json().catch(() => []);
+    return (Array.isArray(rows) ? rows : [])
+      .map((row) => ({
+        id: String(row.id || ""),
+        userId: String(row.user_id || ""),
+        targetId: String(row.target_id || ""),
+        body: String(row.body || ""),
+        ts: new Date(row.created_at || 0).getTime() || 0,
+      }))
+      .filter((x) => x.id && x.targetId);
+  } catch {
+    return [];
+  }
+}
+
+/** Reposts created by a single user (for their profile activities). */
+async function fetchUserRepostsForProfile(userId, limit = 40) {
+  const uid = String(userId || "").trim();
+  if (!uid || !SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
+  const token = getSupabaseAuthToken();
+  const headers = { apikey: SUPABASE_ANON_KEY, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  const lim = Math.min(60, Math.max(1, Number(limit) || 40));
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/social_reposts?user_id=eq.${encodeURIComponent(uid)}&target_kind=eq.song&select=id,user_id,target_id,body,created_at&order=created_at.desc&limit=${lim}`,
+      { headers, cache: "no-store" },
+    );
+    if (!r.ok) return [];
+    const rows = await r.json().catch(() => []);
+    return (Array.isArray(rows) ? rows : [])
+      .map((row) => ({
+        id: String(row.id || ""),
+        userId: String(row.user_id || ""),
+        targetId: String(row.target_id || ""),
+        body: String(row.body || ""),
+        ts: new Date(row.created_at || 0).getTime() || 0,
+      }))
+      .filter((x) => x.id && x.targetId);
+  } catch {
+    return [];
+  }
+}
+
 /** Drop duplicate public rows of the same song (same audio_id + kind per
  *  user). Legacy URL-drift duplicates can linger in the cloud until the
  *  owner's app cleans them up — viewers should never see them twice.
@@ -24481,6 +24882,7 @@ function notificationIconForType(type) {
   if (t === "song_feedback") return "♪";
   if (t === "social_like") return "♥";
   if (t === "social_reply") return "↩";
+  if (t === "social_repost") return "↻";
   if (t === "play_milestone") return "▶";
   if (t === "chart_rank") return "★";
   if (t === "public_song") return "P";
@@ -24506,6 +24908,9 @@ function activityTypeBadgeSvg(type) {
   }
   if (t === "social_reply") {
     return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5.4-4-10.9-11-11Z"/></svg>`;
+  }
+  if (t === "social_repost") {
+    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M17 1l4 4-4 4V6H9a4 4 0 0 0-4 4v1H3v-1a6 6 0 0 1 6-6h8V1ZM7 23l-4-4 4-4v3h8a4 4 0 0 0 4-4v-1h2v1a6 6 0 0 1-6 6H7v3Z"/></svg>`;
   }
   return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M20 12v5H4v-5H2v7h20v-7h-2Zm-6 .5-7-4v8l7-4ZM4 9h16V4H4v5Z"/></svg>`;
 }
@@ -24596,6 +25001,14 @@ function notificationMessage(n) {
     return {
       title: username ? `@${username} replied to ${target}` : `Someone replied to ${target}`,
       body: preview ? `"${preview.slice(0, 140)}${preview.length > 140 ? "…" : ""}"` : "Open the thread to read the reply.",
+      action: username ? "View profile" : "",
+    };
+  }
+  if (n?.type === "social_repost") {
+    const target = notificationTargetLabel(n?.metadata);
+    return {
+      title: username ? `@${username} reposted ${target}` : `Someone reposted ${target}`,
+      body: "It went out to their followers' Friends feed.",
       action: username ? "View profile" : "",
     };
   }
@@ -24725,7 +25138,7 @@ function activityNotificationMatchesFilter(n, tab = _activityFilterTab) {
   const t = String(n?.type || "").trim();
   if (tab === "achievements") return t === "chart_rank" || t === "play_milestone";
   if (tab === "social") {
-    return ["follow", "remix", "social_like", "social_reply", "public_song", "song_feedback"].includes(t);
+    return ["follow", "remix", "social_like", "social_reply", "social_repost", "public_song", "song_feedback"].includes(t);
   }
   return true;
 }
@@ -24822,7 +25235,7 @@ async function validateActivityNotificationsAvailability(notifications) {
         t === "play_milestone" ||
         t === "song_feedback" ||
         t === "remix" ||
-        ((t === "social_like" || t === "social_reply") && String(meta.target_kind || "") === "song"));
+        ((t === "social_like" || t === "social_reply" || t === "social_repost") && String(meta.target_kind || "") === "song"));
     if (songLinked) songIds.add(sid);
     if (t === "remix") {
       const remixPostId = String(meta.remix_post_id || "").trim();
@@ -24894,7 +25307,7 @@ function activitySongIdForNotification(n) {
   if (t === "remix") {
     return String(meta.remix_song_id || meta.remix_post_id || "").trim();
   }
-  if ((t === "social_like" || t === "social_reply") && String(meta.target_kind || "") === "song") {
+  if ((t === "social_like" || t === "social_reply" || t === "social_repost") && String(meta.target_kind || "") === "song") {
     return String(meta.target_id || "").trim();
   }
   return "";
@@ -24903,7 +25316,7 @@ function activitySongIdForNotification(n) {
 function activityNotificationHasSongCover(n) {
   const t = String(n?.type || "").trim();
   if (t === "follow") return false;
-  if (t === "social_like" || t === "social_reply") {
+  if (t === "social_like" || t === "social_reply" || t === "social_repost") {
     return String(n?.metadata?.target_kind || "") === "song";
   }
   return ["play_milestone", "chart_rank", "song_feedback", "public_song", "remix"].includes(t);
@@ -24993,7 +25406,7 @@ function collapseActivityRows(rows) {
     else if (t === "chart_rank") {
       key = `chart|${String(n?.metadata?.week_key || "").trim()}|${String(n?.metadata?.song_id || "").trim()}`;
     }
-    else if ((t === "song_feedback" || t === "social_like" || t === "social_reply") && actor) {
+    else if ((t === "song_feedback" || t === "social_like" || t === "social_reply" || t === "social_repost") && actor) {
       key = `${t}|${actor}|${String(n?.metadata?.target_id || n?.metadata?.song_id || "").trim()}`;
     }
     if (!key) {
@@ -25055,10 +25468,10 @@ function notificationActivityHref(n) {
       return `#/player?hub=${encodeURIComponent(remixPostId)}`;
     }
   }
-  if ((t === "social_like" || t === "social_reply") && targetKind === "song" && targetId) {
+  if ((t === "social_like" || t === "social_reply" || t === "social_repost") && targetKind === "song" && targetId) {
     return `#/player?track=${encodeURIComponent(targetId)}`;
   }
-  if ((t === "social_like" || t === "social_reply") && (targetKind === "echo" || targetKind === "status")) {
+  if ((t === "social_like" || t === "social_reply" || t === "social_repost") && (targetKind === "echo" || targetKind === "status")) {
     return "#/friends";
   }
   if ((t === "follow" || t === "public_song") && username) {
@@ -25108,7 +25521,7 @@ async function openActivityNotificationTarget(n) {
     (t === "chart_rank" ||
       t === "play_milestone" ||
       t === "song_feedback" ||
-      ((t === "social_like" || t === "social_reply") && String(meta.target_kind || "") === "song"));
+      ((t === "social_like" || t === "social_reply" || t === "social_repost") && String(meta.target_kind || "") === "song"));
 
   if (songLinked) {
     if (await resolveAndPlayActivityTrack(songId)) return;
@@ -25156,7 +25569,7 @@ function activityRowArtworkHtml(n) {
   if (preferSong && songUrl) {
     return `<img class="activityRowArt" src="${escapeHtml(songUrl)}" alt="" loading="lazy" decoding="async" />`;
   }
-  if (t === "follow" || t === "social_like" || t === "social_reply" || t === "public_song" || t === "remix") {
+  if (t === "follow" || t === "social_like" || t === "social_reply" || t === "social_repost" || t === "public_song" || t === "remix") {
     const actorArt = String(n?.metadata?.actor_avatar || "").trim();
     if (isRealUserAvatarUrl(actorArt)) {
       return `<img class="activityRowArt activityRowArt--avatar" src="${escapeHtml(normalizeProfileAvatarForImg(actorArt))}" alt="" loading="lazy" decoding="async" />`;
@@ -25217,6 +25630,21 @@ function activityItemDisplayParts(n, msg) {
       category: "New Reply",
       title: username ? `${username} replied` : "New reply",
       description: preview ? `"${preview.slice(0, 100)}${preview.length > 100 ? "…" : ""}"` : (msg.body || "Open the thread"),
+    };
+  }
+  if (t === "social_repost") {
+    const songTitle = String(meta.target_title || meta.song_title || "").trim();
+    if (gc > 1) {
+      return {
+        category: "Repost",
+        title: `${gc} new reposts`,
+        description: songTitle || "On one of your songs",
+      };
+    }
+    return {
+      category: "Repost",
+      title: username ? `${username} reposted your song` : "Someone reposted your song",
+      description: songTitle || "It reached their followers",
     };
   }
   if (t === "follow") {
@@ -25285,6 +25713,8 @@ function activityItemHtml(n) {
       if (details.length) msg.body = details.join(" · ");
     } else if (t === "social_like") {
       msg.body = `${gc} likes on this.`;
+    } else if (t === "social_repost") {
+      msg.body = `${gc} reposts of this.`;
     }
   }
   const parts = unavailable
@@ -34269,6 +34699,7 @@ function bindProfileSongsSegmentOnce() {
         e.stopPropagation();
         if (kind === "like") void handleFeedLikeTap(actBtn);
         else if (kind === "reply") void openFeedReplySheetFromButton(actBtn);
+        else if (kind === "repost") void handleFeedRepostTap(actBtn);
         else if (kind === "analytics") void openSongAnalyticsSheet(actBtn);
         return;
       }

@@ -453,14 +453,20 @@ async function fetchFeedSocialStats({ songIds, statusIds, echoIds, viewerId }) {
     echo: Array.isArray(echoIds) ? echoIds.map(cleanTargetId).filter(Boolean).slice(0, 64) : [],
   };
 
-  await Promise.all(
-    Object.entries(idGroups).map(async ([kind, ids]) => {
+  stats.reposts = { song: {} };
+
+  await Promise.all([
+    ...Object.entries(idGroups).map(async ([kind, ids]) => {
       if (!ids.length) return;
       const { likes, replies } = await fetchTargetStatsForKind(kind, ids, viewerId);
       stats.likes[kind] = likes;
       stats.replies[kind] = replies;
     }),
-  );
+    (async () => {
+      if (!idGroups.song.length) return;
+      stats.reposts.song = await fetchRepostStatsForSongs(idGroups.song, viewerId);
+    })(),
+  ]);
 
   return stats;
 }
@@ -502,6 +508,39 @@ async function countRepliesForTarget(targetKind, targetId) {
   return countRows(
     `social_replies?select=id&target_kind=eq.${encodeURIComponent(kind)}&target_id=eq.${encodeURIComponent(tid)}&limit=10000`,
   );
+}
+
+async function countRepostsForTarget(targetKind, targetId) {
+  const kind = cleanTargetKind(targetKind);
+  const tid = cleanTargetId(targetId);
+  if (!kind || !tid) return 0;
+  return countRows(
+    `social_reposts?select=id&target_kind=eq.${encodeURIComponent(kind)}&target_id=eq.${encodeURIComponent(tid)}&limit=10000`,
+  );
+}
+
+/**
+ * Batch repost stats (count + viewer state) for a set of song ids. One query
+ * grabs every repost row for the targets; we group client-side. Feed pages
+ * are small so this stays cheap.
+ */
+async function fetchRepostStatsForSongs(ids, viewerId) {
+  const uuidIds = (ids || []).map(cleanTargetId).filter(Boolean).slice(0, 64);
+  const bucket = {};
+  for (const id of uuidIds) bucket[id] = { count: 0, reposted: false };
+  if (!uuidIds.length) return bucket;
+  const viewer = cleanUserId(viewerId) || "";
+  const inList = uuidIds.map((id) => `"${id}"`).join(",");
+  const rows = await svcFetch(
+    `social_reposts?select=target_id,user_id&target_kind=eq.song&target_id=in.(${inList})&limit=10000`,
+  );
+  for (const row of Array.isArray(rows.data) ? rows.data : []) {
+    const id = String(row?.target_id || "");
+    if (!bucket[id]) continue;
+    bucket[id].count += 1;
+    if (viewer && String(row?.user_id || "") === viewer) bucket[id].reposted = true;
+  }
+  return bucket;
 }
 
 async function createSocialLikeNotification({ target, actorUserId }) {
@@ -554,7 +593,37 @@ async function createSocialReplyNotification({ target, actorUserId, replyId, bod
   });
 }
 
+async function createSocialRepostNotification({ target, actorUserId }) {
+  if (!target?.ownerUserId) return false;
+  const owner = cleanUserId(target.ownerUserId);
+  const actor = cleanUserId(actorUserId);
+  if (!owner || !actor || owner === actor) return false;
+  const entityId = `${target.kind}:${target.id}:repost:${actor}`;
+  if (await notificationExists({ userId: owner, type: "social_repost", entityId })) return false;
+  const actorProfile = await profileByUserId(actor);
+  return insertNotification({
+    userId: owner,
+    type: "social_repost",
+    actorUserId: actor,
+    entityId,
+    metadata: {
+      actor_username: actorProfile?.username || "",
+      actor_avatar: actorProfile?.avatar || "",
+      target_kind: target.kind,
+      target_id: target.id,
+      target_title: target.title || "",
+      ...(target.kind === "song" && target.artUrl ? { song_art_url: target.artUrl } : {}),
+    },
+  });
+}
+
 const FEEDBACK_TYPES = new Set(["hook", "lyrics", "replay", "remix"]);
+
+const REPOST_BODY_MAX = 320;
+
+function cleanRepostBody(v) {
+  return String(v || "").replace(/\s+\n/g, "\n").trim().slice(0, REPOST_BODY_MAX);
+}
 
 function cleanFeedbackType(v) {
   const t = String(v || "").trim().toLowerCase();
@@ -1643,6 +1712,46 @@ async function handlePost(req, res, user) {
     );
     const count = await countLikesForTarget(targetKind, targetId);
     return sendJson(res, 200, { ok: true, liked: false, count });
+  }
+
+  if (action === "repost" || action === "unrepost") {
+    const targetKind = cleanTargetKind(body?.targetKind);
+    const targetId = cleanTargetId(body?.targetId);
+    if (!targetKind || !targetId) {
+      return sendJson(res, 400, { ok: false, error: "Missing targetKind / targetId" });
+    }
+    const target = await resolveSocialTargetOwner(targetKind, targetId);
+    if (!target) return sendJson(res, 404, { ok: false, error: "Target not found" });
+    if (cleanUserId(target.ownerUserId) === user.userId) {
+      return sendJson(res, 400, { ok: false, error: "You cannot repost your own post" });
+    }
+
+    if (action === "repost") {
+      const note = cleanRepostBody(body?.body);
+      const ins = await svcFetch("social_reposts", {
+        method: "POST",
+        headers: { Prefer: "return=minimal,resolution=merge-duplicates" },
+        body: JSON.stringify({
+          target_kind: targetKind,
+          target_id: targetId,
+          target_user_id: cleanUserId(target.ownerUserId) || null,
+          user_id: user.userId,
+          body: note || null,
+        }),
+      });
+      if (!ins.ok && ins.status !== 409) {
+        return sendJson(res, 500, { ok: false, error: "Repost failed", details: ins.text });
+      }
+      const count = await countRepostsForTarget(targetKind, targetId);
+      void createSocialRepostNotification({ target, actorUserId: user.userId });
+      return sendJson(res, 200, { ok: true, reposted: true, count });
+    }
+    await svcFetch(
+      `social_reposts?target_kind=eq.${encodeURIComponent(targetKind)}&target_id=eq.${encodeURIComponent(targetId)}&user_id=eq.${encodeURIComponent(user.userId)}`,
+      { method: "DELETE", headers: { Prefer: "return=minimal" } },
+    );
+    const count = await countRepostsForTarget(targetKind, targetId);
+    return sendJson(res, 200, { ok: true, reposted: false, count });
   }
 
   if (action === "reply") {

@@ -10285,6 +10285,10 @@ function followingMusicTypeLabel(type) {
 
 function followingActivityBadgeHtml(kind, type, opts = {}) {
   const safeType = escapeHtml(String(type || "").trim());
+  // "New drop" (plain release) is on nearly every post, so it adds noise
+  // without signal — suppress it. We only tag the meaningful variants
+  // (Remix / Mashup / Challenge), and those render in one quiet neutral.
+  if (kind === "music" && safeType === "release") return "";
   const label = kind === "music"
     ? followingMusicTypeLabel(type)
     : followingStatusTypeLabel(type, opts.post);
@@ -12461,8 +12465,10 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
               <span class="followActMetaDot" aria-hidden="true">·</span>
               <span class="followActWhen">${escapeHtml(when)}</span>
               ${createdChipHtml}
-              <span class="followActMetaDot" aria-hidden="true">·</span>
-              ${followingActivityBadgeHtml("music", type)}
+              ${(() => {
+                const badge = followingActivityBadgeHtml("music", type);
+                return badge ? `<span class="followActMetaDot" aria-hidden="true">·</span>${badge}` : "";
+              })()}
             </div>
           </div>
           ${topMenuHtml}

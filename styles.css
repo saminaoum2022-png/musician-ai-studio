@@ -23184,20 +23184,14 @@ body.createChooserSheetOpen .footer{
   background: rgba(124,92,255,0.14);
   border: 1px solid rgba(124,92,255,0.22);
 }
-.followActBadge--remix .followActBadgeIco{
-  color: rgba(94,234,212,0.95);
-  background: rgba(35,213,171,0.1);
-  border: 1px solid rgba(94,234,212,0.22);
-}
-.followActBadge--mashup .followActBadgeIco{
-  color: rgba(244,114,182,0.95);
-  background: rgba(236,72,153,0.1);
-  border: 1px solid rgba(244,114,182,0.22);
-}
+/* Type tags (Remix / Mashup / Challenge) are quiet & monochrome — colour
+   is reserved for CTAs and active states, not for labelling post kinds. */
+.followActBadge--remix .followActBadgeIco,
+.followActBadge--mashup .followActBadgeIco,
 .followActBadge--challenge .followActBadgeIco{
-  color: rgba(251,191,36,0.95);
-  background: rgba(245,158,11,0.1);
-  border: 1px solid rgba(251,191,36,0.22);
+  color: rgba(232,238,247,0.66);
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.10);
 }
 .followActBadge--update .followActBadgeIco{
   color: rgba(167,139,250,0.95);
@@ -23233,14 +23227,10 @@ body.createChooserSheetOpen .footer{
 .followActBadge--release .followActBadgeLabel{
   color: rgba(167,139,250,0.98);
 }
-.followActBadge--remix .followActBadgeLabel{
-  color: rgba(94,234,212,0.98);
-}
-.followActBadge--mashup .followActBadgeLabel{
-  color: rgba(244,114,182,0.98);
-}
+.followActBadge--remix .followActBadgeLabel,
+.followActBadge--mashup .followActBadgeLabel,
 .followActBadge--challenge .followActBadgeLabel{
-  color: rgba(251,191,36,0.98);
+  color: rgba(232,238,247,0.62);
 }
 .followActBadge--update .followActBadgeLabel{
   color: rgba(167,139,250,0.95);
@@ -38115,10 +38105,10 @@ body[data-route="friends"] .followAct--xstyle .followActWhen{
 }
 body[data-route="friends"] .followAct--xstyle .followActMeta .followActBadgeLabel{
   font-size: 12px;
-  font-weight: 900;
-  letter-spacing: .1em;
+  font-weight: 800;
+  letter-spacing: .08em;
   text-transform: uppercase;
-  color: rgb(45, 222, 183);
+  color: rgba(232,238,247,0.6);
 }
 body[data-route="friends"] .followAct--xstyle > .followActContent{
   margin-top: 14px;

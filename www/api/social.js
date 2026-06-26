@@ -622,15 +622,18 @@ async function insertNotification({ userId, type, actorUserId, entityId, metadat
     body: JSON.stringify(body),
   });
   if (!ins.ok) return false;
+  const actorDisplayName = String(body?.metadata?.actor_username || "").replace(/^@/, "").trim()
+    || (actor ? String((await profileByUserId(actor))?.username || "").replace(/^@/, "").trim() : "");
   queuePrivacySafePush({
     userId: uid,
     type: t,
     entityId: body.entity_id,
+    actorDisplayName,
   });
   return true;
 }
 
-const CHART_NOTIFY_MAX_RANK = 5;
+const CHART_NOTIFY_MAX_RANK = 10;
 const _chartNotifyInflight = new Map();
 
 async function maybeNotifyChartRank({ userId, entityId, metadata }) {
@@ -667,6 +670,10 @@ async function followersForUser(userId) {
     : [];
 }
 
+// Up to this many counted plays per listener per song per day. Rewards repeat
+// listens (motivates creators) without letting one person spam unlimited plays.
+const DAILY_PLAY_CAP_PER_LISTENER = 5;
+
 async function recordSongPlay({ songId, listenerUserId, listenedSeconds }) {
   const sid = cleanSongId(songId);
   const listener = cleanUserId(listenerUserId);
@@ -676,6 +683,22 @@ async function recordSongPlay({ songId, listenerUserId, listenedSeconds }) {
   if (!song || !owner) return { counted: false, reason: "song_not_public" };
   if (owner === listener) return { counted: false, reason: "own_play" };
   const seconds = Math.max(0, Math.min(24 * 60 * 60, Math.round(Number(listenedSeconds) || 0)));
+  // Enforce the per-listener daily cap in the API (the DB no longer has a
+  // one-row-per-day unique constraint once the migration is applied).
+  const playDay = new Date().toISOString().slice(0, 10);
+  const todayCount = await countExact(
+    `social_song_plays?song_id=eq.${encodeURIComponent(sid)}` +
+      `&listener_user_id=eq.${encodeURIComponent(listener)}` +
+      `&play_day=eq.${playDay}&select=id`,
+  );
+  if (todayCount >= DAILY_PLAY_CAP_PER_LISTENER) {
+    return {
+      counted: false,
+      reason: "daily_cap",
+      ownerUserId: owner,
+      playCount: await playCountForSong(sid),
+    };
+  }
   const ins = await svcFetch("social_song_plays", {
     method: "POST",
     headers: { Prefer: "resolution=ignore-duplicates,return=minimal" },
@@ -683,6 +706,7 @@ async function recordSongPlay({ songId, listenerUserId, listenedSeconds }) {
       song_id: sid,
       owner_user_id: owner,
       listener_user_id: listener,
+      play_day: playDay,
       listened_seconds: seconds,
     }),
   });
@@ -1123,19 +1147,30 @@ async function handleGet(req, res, user) {
     monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
     const weekKey = monday.toISOString().slice(0, 10);
     // Chart JSON must return fast; rank notifications are best-effort after.
-    // Only notify top 5 — lower ranks (6–10) spam Activity when Discover reloads the chart.
+    // Notify only for rank improvements ("new" / "up") and send at most one
+    // chart notification per user per week (best-ranked improved song) to
+    // avoid push spam for creators who hold multiple slots.
+    const changedByUser = new Map();
+    for (const e of chart) {
+      if (e.rank > CHART_NOTIFY_MAX_RANK) continue;
+      if (!e.userId) continue;
+      if (e.movement !== "new" && e.movement !== "up") continue;
+      const prev = changedByUser.get(e.userId);
+      if (!prev || e.rank < prev.rank) changedByUser.set(e.userId, e);
+    }
     void Promise.all(
-      chart
-        .filter((e) => e.rank <= CHART_NOTIFY_MAX_RANK)
+      [...changedByUser.values()]
         .map((e) =>
           maybeNotifyChartRank({
             userId: e.userId,
-            entityId: `chart:${weekKey}:${e.songId}`,
+            entityId: `chart:${weekKey}:${e.userId}`,
             metadata: {
               song_id: e.songId,
               song_title: e.title,
               song_art_url: e.artUrl,
               rank: e.rank,
+              movement: e.movement,
+              delta: e.delta,
               weekly_plays: e.weeklyPlays,
               week_key: weekKey,
             },

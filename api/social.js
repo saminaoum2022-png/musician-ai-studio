@@ -670,6 +670,10 @@ async function followersForUser(userId) {
     : [];
 }
 
+// Up to this many counted plays per listener per song per day. Rewards repeat
+// listens (motivates creators) without letting one person spam unlimited plays.
+const DAILY_PLAY_CAP_PER_LISTENER = 5;
+
 async function recordSongPlay({ songId, listenerUserId, listenedSeconds }) {
   const sid = cleanSongId(songId);
   const listener = cleanUserId(listenerUserId);
@@ -679,6 +683,22 @@ async function recordSongPlay({ songId, listenerUserId, listenedSeconds }) {
   if (!song || !owner) return { counted: false, reason: "song_not_public" };
   if (owner === listener) return { counted: false, reason: "own_play" };
   const seconds = Math.max(0, Math.min(24 * 60 * 60, Math.round(Number(listenedSeconds) || 0)));
+  // Enforce the per-listener daily cap in the API (the DB no longer has a
+  // one-row-per-day unique constraint once the migration is applied).
+  const playDay = new Date().toISOString().slice(0, 10);
+  const todayCount = await countExact(
+    `social_song_plays?song_id=eq.${encodeURIComponent(sid)}` +
+      `&listener_user_id=eq.${encodeURIComponent(listener)}` +
+      `&play_day=eq.${playDay}&select=id`,
+  );
+  if (todayCount >= DAILY_PLAY_CAP_PER_LISTENER) {
+    return {
+      counted: false,
+      reason: "daily_cap",
+      ownerUserId: owner,
+      playCount: await playCountForSong(sid),
+    };
+  }
   const ins = await svcFetch("social_song_plays", {
     method: "POST",
     headers: { Prefer: "resolution=ignore-duplicates,return=minimal" },
@@ -686,6 +706,7 @@ async function recordSongPlay({ songId, listenerUserId, listenedSeconds }) {
       song_id: sid,
       owner_user_id: owner,
       listener_user_id: listener,
+      play_day: playDay,
       listened_seconds: seconds,
     }),
   });

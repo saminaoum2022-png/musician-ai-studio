@@ -775,6 +775,11 @@ const els = {
   btnAuthEmailSubmit: document.getElementById("btnAuthEmailSubmit"),
   btnAuthEmailReveal: document.getElementById("btnAuthEmailReveal"),
   btnAuthToggleMode: document.getElementById("btnAuthToggleMode"),
+  btnAuthSignupPrimary: document.getElementById("btnAuthSignupPrimary"),
+  btnAuthLoginReveal: document.getElementById("btnAuthLoginReveal"),
+  btnAuthEmailBack: document.getElementById("btnAuthEmailBack"),
+  authGateChoices: document.getElementById("authGateChoices"),
+  authEmailHeading: document.getElementById("authEmailHeading"),
   btnAuthGateGuest: document.getElementById("btnAuthGateGuest"),
   authStatus: document.getElementById("authStatus"),
   profilePreviewAvatar: document.getElementById("profilePreviewAvatar"),
@@ -19904,12 +19909,15 @@ let _authEmailSubmitInFlight = false;
 function setAuthEmailMode(mode) {
   _authEmailMode = mode === "signup" ? "signup" : "signin";
   if (els.btnAuthEmailSubmit) {
-    els.btnAuthEmailSubmit.textContent = _authEmailMode === "signup" ? "Create account" : "Sign in";
+    els.btnAuthEmailSubmit.textContent = _authEmailMode === "signup" ? "Create account" : "Log in";
+  }
+  if (els.authEmailHeading) {
+    els.authEmailHeading.textContent = _authEmailMode === "signup" ? "Create your account" : "Welcome back";
   }
   if (els.btnAuthToggleMode) {
     els.btnAuthToggleMode.textContent =
       _authEmailMode === "signup"
-        ? "Already have an account? Sign in"
+        ? "Already have an account? Log in"
         : "New here? Create account";
   }
   if (els.authPasswordInput) {
@@ -20096,15 +20104,20 @@ function setAuthEmailSubmitting(on) {
   if (els.btnAuthGateApple) els.btnAuthGateApple.disabled = busy;
   if (els.btnAuthToggleMode) els.btnAuthToggleMode.disabled = busy;
   if (els.btnAuthEmailReveal) els.btnAuthEmailReveal.disabled = busy;
+  if (els.btnAuthSignupPrimary) els.btnAuthSignupPrimary.disabled = busy;
+  if (els.btnAuthLoginReveal) els.btnAuthLoginReveal.disabled = busy;
+  if (els.btnAuthEmailBack) els.btnAuthEmailBack.disabled = busy;
 }
 
 function setAuthEmailPanelOpen(open) {
   const show = Boolean(open);
   if (els.authEmailForm) els.authEmailForm.hidden = !show;
+  if (els.authGateChoices) els.authGateChoices.hidden = show;
   if (els.btnAuthEmailReveal) {
     els.btnAuthEmailReveal.hidden = show;
     els.btnAuthEmailReveal.setAttribute("aria-expanded", show ? "true" : "false");
   }
+  if (els.btnAuthSignupPrimary) els.btnAuthSignupPrimary.setAttribute("aria-expanded", show ? "true" : "false");
   if (show) {
     try { els.authEmailInput?.focus?.(); } catch {}
   }
@@ -46078,12 +46091,46 @@ if (els.btnAuthGateGuest) {
     setStatus("Guest mode enabled. Login anytime from Settings.");
   });
 }
-setAuthEmailMode("signin");
+setAuthEmailMode("signup");
+setAuthEmailPanelOpen(false);
 if (els.btnAuthEmailReveal) {
   els.btnAuthEmailReveal.addEventListener("click", () => {
     setAuthEmailPanelOpen(true);
   });
 }
+if (els.btnAuthSignupPrimary) {
+  els.btnAuthSignupPrimary.addEventListener("click", () => {
+    setAuthEmailMode("signup");
+    setAuthEmailMessage("");
+    setAuthEmailPanelOpen(true);
+  });
+}
+if (els.btnAuthLoginReveal) {
+  els.btnAuthLoginReveal.addEventListener("click", () => {
+    setAuthEmailMode("signin");
+    setAuthEmailMessage("");
+    setAuthEmailPanelOpen(true);
+  });
+}
+if (els.btnAuthEmailBack) {
+  els.btnAuthEmailBack.addEventListener("click", () => {
+    setAuthEmailPanelOpen(false);
+    setAuthEmailMessage("");
+  });
+}
+// Password show/hide toggles (delegated; works for both password fields).
+document.addEventListener("click", (e) => {
+  const toggle = e.target.closest?.(".authPassToggle[data-pass-toggle]");
+  if (!toggle) return;
+  e.preventDefault();
+  const input = document.getElementById(toggle.getAttribute("data-pass-toggle"));
+  if (!input) return;
+  const reveal = input.type === "password";
+  input.type = reveal ? "text" : "password";
+  toggle.classList.toggle("is-on", reveal);
+  toggle.setAttribute("aria-pressed", reveal ? "true" : "false");
+  toggle.setAttribute("aria-label", reveal ? "Hide password" : "Show password");
+});
 if (els.btnAuthToggleMode) {
   els.btnAuthToggleMode.addEventListener("click", () => {
     setAuthEmailMode(_authEmailMode === "signup" ? "signin" : "signup");

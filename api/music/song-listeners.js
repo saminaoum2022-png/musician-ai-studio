@@ -3,22 +3,21 @@
  *
  * GET /api/music/song-listeners?songId=...
  * Requires sign-in. Returns who played the caller's song and how many times,
- * sourced from the existing discover_play_counts table. Provider-neutral path
- * (data is not Suno-specific).
+ * sourced from social_song_plays — the same canonical play log the feed's
+ * play counts come from. Provider-neutral path (data is not Suno-specific).
  *
  * Response: {
  *   ok: true,
- *   songId, title,
- *   totalPlays, uniqueListeners, listenerCap,
- *   listeners: [{ userId, username, avatar, plays }]  // ranked, plays desc
+ *   songId,
+ *   totalPlays, uniqueListeners,
+ *   listeners: [{ userId, username, avatar, plays, updatedAt }]  // ranked, plays desc
  * }
  */
 
 const { applyCors } = require("../_lib/cors");
 const { verifyUser, sendJson, selectFromTable } = require("../_lib/credits-auth");
 
-const LISTENER_PLAY_CAP = 10;
-const MAX_LISTENERS = 500;
+const MAX_PLAY_ROWS = 5000;
 
 module.exports = async function handler(req, res) {
   if (applyCors(req, res)) return;
@@ -44,22 +43,36 @@ module.exports = async function handler(req, res) {
       return sendJson(res, 403, { error: "Not your song" });
     }
 
+    // Canonical play log (one row per qualified listen). This is the same
+    // source the feed's play counts use, so totals match what the owner sees.
     const playsRes = await selectFromTable(
-      `discover_play_counts?song_id=eq.${encodeURIComponent(songId)}` +
-        `&select=listener_id,play_count,updated_at` +
-        `&order=play_count.desc&limit=${MAX_LISTENERS}`,
+      `social_song_plays?song_id=eq.${encodeURIComponent(songId)}` +
+        `&select=listener_user_id,created_at` +
+        `&order=created_at.desc&limit=${MAX_PLAY_ROWS}`,
     );
     const rows = Array.isArray(playsRes.data) ? playsRes.data : [];
 
+    // Aggregate by listener: plays = number of logged listens, updatedAt = most recent.
     let totalPlays = 0;
-    const byListener = [];
+    const agg = new Map();
     for (const r of rows) {
-      const lid = String(r?.listener_id || "").trim();
+      const lid = String(r?.listener_user_id || "").trim();
       if (!lid) continue;
-      const plays = Math.max(0, Number(r?.play_count) || 0);
-      totalPlays += plays;
-      byListener.push({ userId: lid, plays, updatedAt: r?.updated_at || null });
+      totalPlays += 1;
+      const when = r?.created_at || null;
+      const cur = agg.get(lid);
+      if (cur) {
+        cur.plays += 1;
+        if (when && (!cur.updatedAt || when > cur.updatedAt)) cur.updatedAt = when;
+      } else {
+        agg.set(lid, { userId: lid, plays: 1, updatedAt: when });
+      }
     }
+
+    const byListener = [...agg.values()].sort((a, b) => {
+      if (b.plays !== a.plays) return b.plays - a.plays;
+      return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+    });
 
     // Resolve listener identities (username + avatar).
     let profMap = new Map();
@@ -90,7 +103,6 @@ module.exports = async function handler(req, res) {
       songId,
       totalPlays,
       uniqueListeners: listeners.length,
-      listenerCap: LISTENER_PLAY_CAP,
       listeners,
     });
   } catch (e) {

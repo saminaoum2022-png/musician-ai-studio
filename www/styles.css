@@ -6728,6 +6728,47 @@ body.hubJumpingToTop #hubList .hubRow{
   from{ transform: translateY(8px); }
   to{ transform: translateY(0); }
 }
+
+/* ── Native-like page transitions ───────────────────────────────────────────
+   Forward (push) slides in from the right, back (pop) from the left, lateral
+   bottom-tab switches fade. Applied to the individual [data-route] panel by
+   animateRouteEnter() in app.js. ~190-230ms with an iOS-style decel curve.
+   Higher specificity than .card.wide[data-route] so it wins over sectionFadeIn
+   during a real navigation, but leaves that fallback intact otherwise. */
+main.grid > [data-route].routeEnter{
+  will-change: transform, opacity;
+}
+main.grid > [data-route].routeEnter--push{
+  animation: navPushIn 230ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+main.grid > [data-route].routeEnter--pop{
+  animation: navPopIn 230ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+main.grid > [data-route].routeEnter--fade{
+  animation: navFadeIn 190ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+@keyframes navPushIn{
+  from{ transform: translate3d(7%, 0, 0); opacity: 0; }
+  to{ transform: translate3d(0, 0, 0); opacity: 1; }
+}
+@keyframes navPopIn{
+  from{ transform: translate3d(-7%, 0, 0); opacity: 0; }
+  to{ transform: translate3d(0, 0, 0); opacity: 1; }
+}
+@keyframes navFadeIn{
+  from{ opacity: 0; }
+  to{ opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce){
+  main.grid > [data-route].routeEnter,
+  main.grid > [data-route].routeEnter--push,
+  main.grid > [data-route].routeEnter--pop,
+  main.grid > [data-route].routeEnter--fade{
+    animation: none !important;
+    will-change: auto;
+  }
+}
+
 @media (max-width: 940px){
   .grid{ grid-template-columns:1fr; }
 }

@@ -2931,6 +2931,87 @@ function tabBarRouteKey(route = "") {
   return r;
 }
 
+// ── Native-like page transitions ─────────────────────────────────────────────
+// Forward navigation slides the new screen in from the right, back slides it in
+// from the left, and lateral bottom-tab switches use a soft fade. We animate the
+// individual [data-route] panel — never main.grid, because transforming
+// main.grid breaks iOS touch handling on fixed overlays (mini-player, tab bar).
+const NAV_TAB_ROOTS = new Set(["discover", "friends", "challenges", "activity", "profile"]);
+// Screens that run their own bespoke transition or appear at boot/auth and
+// should not get the generic slide/fade.
+const NAV_ANIM_SKIP = new Set(["messages-thread", "auth", "intro", "onboarding", "music-preferences"]);
+let _navStack = [];
+
+function navPrefersReducedMotion() {
+  try {
+    return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  } catch {
+    return false;
+  }
+}
+
+// Pick the transition direction and maintain a small route stack so "back" is
+// detected structurally (returning to a route still on the stack) instead of
+// relying on body[data-route], which the tab fast-path pre-sets before
+// applyRoute runs. Returns "forward" | "back" | "tab" | "none".
+function navDirectionFor(wanted) {
+  const w = String(wanted || "").trim();
+  const prev = _navStack.length ? _navStack[_navStack.length - 1] : "";
+  if (!prev) {
+    _navStack = [w];
+    return "none";
+  }
+  if (prev === w) return "none";
+  const idx = _navStack.lastIndexOf(w);
+  if (idx >= 0 && idx < _navStack.length - 1) {
+    _navStack = _navStack.slice(0, idx + 1);
+    return "back";
+  }
+  if (NAV_TAB_ROOTS.has(w)) {
+    _navStack = [w];
+    return "tab";
+  }
+  _navStack.push(w);
+  if (_navStack.length > 24) _navStack = _navStack.slice(-24);
+  return "forward";
+}
+
+// Apply the enter animation to the freshly-shown panel. Must run synchronously
+// right after syncRoutePanelVisibility so the class is present on first paint
+// (no flash of the default state).
+function animateRouteEnter(wanted, direction) {
+  if (!direction || direction === "none") return;
+  if (NAV_ANIM_SKIP.has(wanted)) return;
+  if (navPrefersReducedMotion()) return;
+  const cls =
+    direction === "forward"
+      ? "routeEnter--push"
+      : direction === "back"
+        ? "routeEnter--pop"
+        : "routeEnter--fade";
+  let panels;
+  try {
+    panels = document.querySelectorAll(`main.grid > [data-route="${wanted}"]`);
+  } catch {
+    return;
+  }
+  panels.forEach((el) => {
+    if (!el || el.style.display === "none") return;
+    el.classList.remove("routeEnter", "routeEnter--push", "routeEnter--pop", "routeEnter--fade");
+    void el.offsetWidth;
+    el.classList.add("routeEnter", cls);
+    let cleared = false;
+    const done = () => {
+      if (cleared) return;
+      cleared = true;
+      el.classList.remove("routeEnter", "routeEnter--push", "routeEnter--pop", "routeEnter--fade");
+      el.removeEventListener("animationend", done);
+    };
+    el.addEventListener("animationend", done);
+    window.setTimeout(done, 420);
+  });
+}
+
 function previewRouteFromHash(hash = "") {
   const raw = String(hash || "").replace(/^#\/?/, "");
   let route = raw.split(/[?#&]/)[0].trim();
@@ -3235,7 +3316,9 @@ function applyRoute({ passGen } = {}) {
   }
   if (routeApplyStale(gate)) return;
   if (prevRoute !== wanted) invalidateInFlightRouteFeedWork(prevRoute);
+  const navDir = navDirectionFor(wanted);
   syncRoutePanelVisibility(wanted);
+  animateRouteEnter(wanted, navDir);
   if (wanted === "auth" && prevRoute !== "auth") {
     try { resetAuthEmailPanel(); } catch {}
   } else if (prevRoute === "auth" && wanted !== "auth") {
@@ -3282,23 +3365,9 @@ function applyRoute({ passGen } = {}) {
     updateNotificationsEntryBadges(0);
     if (MESSAGES_FEATURE_ENABLED) updateMessagesUnreadBadge(0);
   }
-  const main = document.querySelector("main.grid");
-  if (main && prevRoute !== wanted) {
-    main.classList.remove("routeSwap");
-    requestAnimationFrame(() => {
-      main.classList.remove("routeSwap");
-      void main.offsetWidth;
-      const reduceMotion =
-        typeof window !== "undefined" &&
-        window.matchMedia &&
-        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      const isMobile = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(max-width: 720px)").matches;
-      if (!reduceMotion && !isMobile) {
-        main.classList.add("routeSwap");
-        window.setTimeout(() => main.classList.remove("routeSwap"), 180);
-      }
-    });
-  }
+  // Page enter transitions are handled by animateRouteEnter() above (per-panel
+  // slide/fade). The old main.grid routeSwap is intentionally retired so we
+  // don't double-animate and so we never transform main.grid (iOS touch bug).
   // Hub audio is bound to the Hub view only. Any route swap away from
   // Hub fully stops Hub playback so nothing keeps streaming silently
   // and no mini-player surfaces a Hub post outside the feed. Library/

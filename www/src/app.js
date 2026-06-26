@@ -11570,7 +11570,7 @@ async function finishPostAuthNavigation() {
   if (authSession?.user?.id) {
     try { markOnboardingComplete(); } catch {}
   }
-  endLoginSettling();
+  endLoginSettling({ minimum: true });
   if (
     authSession?.user?.id
     && !isMusicPreferencesComplete(authSession.user.id, activeProfile)
@@ -18093,6 +18093,10 @@ let _loginSettlingForceEndTimer = 0;
 let _loginSettlingCarouselStep = 0;
 const LOGIN_SETTLING_MAX_MS = isCapacitorNativeAuth() ? 45000 : 18000;
 const LOGIN_SETTLING_SLIDE_MS = 780;
+// Guarantee the feature carousel makes a full pass on a successful sign-in,
+// even when auth resolves instantly (4 slides × 780ms ≈ 3.1s). Tunable.
+const LOGIN_SETTLING_MIN_MS = 3200;
+let _loginSettlingEndTimer = 0;
 const LOGIN_SETTLING_LABELS = ["Create", "Mashup", "Friends", "Persona"];
 
 function setLoginSettlingCarouselStep(step) {
@@ -18174,7 +18178,25 @@ function beginLoginSettling(message = "Signing you in…") {
   }, LOGIN_SETTLING_MAX_MS);
 }
 
-function endLoginSettling() {
+function endLoginSettling(opts = {}) {
+  // On a successful sign-in (minimum: true) keep the carousel up long enough
+  // to make one full pass, so users actually see Create/Mashup/Friends/Persona
+  // instead of an instant jump to Discover. Error/timeout paths end instantly.
+  if (opts && opts.minimum && _loginSettling) {
+    const remaining = LOGIN_SETTLING_MIN_MS - (Date.now() - _loginSettlingStartedAt);
+    if (remaining > 0) {
+      if (_loginSettlingEndTimer) return;
+      _loginSettlingEndTimer = window.setTimeout(() => {
+        _loginSettlingEndTimer = 0;
+        endLoginSettling();
+      }, remaining);
+      return;
+    }
+  }
+  if (_loginSettlingEndTimer) {
+    clearTimeout(_loginSettlingEndTimer);
+    _loginSettlingEndTimer = 0;
+  }
   _loginSettling = false;
   if (_loginSettlingForceEndTimer) {
     clearTimeout(_loginSettlingForceEndTimer);

@@ -21618,6 +21618,7 @@ function clearMessagesThreadComposerInset() {
   } catch {}
   // Hand WKWebView's default keyboard scrolling back to the rest of the app.
   setMessagesNativeKeyboardScroll(false);
+  setMessagesNativeAccessoryBar(true);
 }
 
 /** Capacitor Keyboard plugin, only when running in the native iOS shell. */
@@ -21632,6 +21633,15 @@ function setMessagesNativeKeyboardScroll(disabled) {
   const Keyboard = getNativeKeyboardPlugin();
   if (!Keyboard?.setScroll) return;
   try { Keyboard.setScroll({ isDisabled: Boolean(disabled) }); } catch {}
+}
+
+/** Hide/show the iOS web input-accessory bar (the `^ v ✓` row). Native chat apps
+ *  don't show it, and it inflates the keyboard region, contributing to the dead
+ *  gap above the composer. */
+function setMessagesNativeAccessoryBar(visible) {
+  const Keyboard = getNativeKeyboardPlugin();
+  if (!Keyboard?.setAccessoryBarVisible) return;
+  try { Keyboard.setAccessoryBarVisible({ isVisible: Boolean(visible) }); } catch {}
 }
 
 /** Apply the native keyboard height to the thread layout (composer + scroll area). */
@@ -21658,6 +21668,13 @@ function wireMessagesNativeKeyboardOnce() {
   // keyboardWillShow fires before the animation with the real height, so the
   // composer rises in sync with the keyboard — no reveal-scroll, no flash.
   Keyboard.addListener("keyboardWillShow", (info) => {
+    if (!inThread()) return;
+    applyMessagesNativeKeyboardInset(info?.keyboardHeight);
+  });
+  // keyboardWillShow can over-report the height (it includes a predictive strip
+  // that then collapses), which left a dead gap above the composer. keyboardDidShow
+  // carries the settled height, so re-apply it to seat the composer flush.
+  Keyboard.addListener("keyboardDidShow", (info) => {
     if (!inThread()) return;
     applyMessagesNativeKeyboardInset(info?.keyboardHeight);
   });
@@ -23636,6 +23653,7 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   wireMessagesThreadKeyboardOnce();
   wireMessagesNativeKeyboardOnce();
   setMessagesNativeKeyboardScroll(true);
+  setMessagesNativeAccessoryBar(false);
   updateMessagesComposerReserve();
   updateMessagesThreadHeadReserve();
   renderChatHeader();

@@ -21707,14 +21707,22 @@ function updateMessagesKeyboardDebugReadout(appliedInset) {
   }
   // Sit the readout just above the composer so it tracks the keyboard and stays
   // visible (a top-pinned element gets scrolled away when iOS opens the keyboard).
-  const composerH = Math.round(
-    document.querySelector(".messagesComposer")?.getBoundingClientRect().height || 72,
-  );
-  el.style.bottom = `${Math.round(appliedInset) + composerH + 6}px`;
+  const composerEl = document.querySelector(".messagesComposer");
+  const rect = composerEl?.getBoundingClientRect();
+  const composerH = Math.round(rect?.height || 72);
+  el.style.bottom = `${Math.round(appliedInset) + composerH + 10}px`;
   const vv = window.visualViewport;
+  const vvH = Math.round(vv?.height || 0);
+  const vvTop = Math.round(vv?.offsetTop || 0);
+  const clientH = Math.round(document.documentElement?.clientHeight || 0);
+  const rectB = Math.round(rect?.bottom || 0);
+  const kbTop = vvTop + vvH;
+  const gap = kbTop - rectB;
   const lines = [
-    `innerH=${Math.round(window.innerHeight)} vvH=${Math.round(vv?.height || 0)} vvTop=${Math.round(vv?.offsetTop || 0)}`,
-    `inset=${Math.round(appliedInset)} composerH=${composerH}`,
+    `innerH=${Math.round(window.innerHeight)} clientH=${clientH}`,
+    `vvH=${vvH} vvTop=${vvTop} kbTop=${kbTop}`,
+    `inset=${Math.round(appliedInset)} rectBottom=${rectB}`,
+    `GAP=${gap}`,
   ];
   el.textContent = lines.join("\n");
 }

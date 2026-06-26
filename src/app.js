@@ -350,6 +350,7 @@ const els = {
   sunoStyle: document.getElementById("sunoStyle"),
   sunoAvoidTags: document.getElementById("sunoAvoidTags"),
   btnBoostStyle: document.getElementById("btnBoostStyle"),
+  styleSuggestRow: document.getElementById("styleSuggestRow"),
   sunoArtworkStyle: document.getElementById("sunoArtworkStyle"),
   sunoMaqam: document.getElementById("sunoMaqam"),
   sunoTitle: document.getElementById("sunoTitle"),
@@ -3859,6 +3860,10 @@ function resetCreateDraft() {
   if (els.sunoStyle) els.sunoStyle.value = "";
   if (els.sunoAvoidTags) els.sunoAvoidTags.value = "";
   if (els.sunoTitle) els.sunoTitle.value = "";
+  try {
+    _styleSuggestVisible = STYLE_BASE_SUGGESTIONS.slice();
+    renderStyleSuggestions();
+  } catch {}
   pendingSearchRemixMeta = null;
   clearCreateChallengeContext();
   setCreateChallengeHint(null);
@@ -43770,6 +43775,7 @@ function styleTagsListFromInput() {
 }
 function writeStyleTagsToInput(list) {
   if (els.sunoStyle) els.sunoStyle.value = list.join(", ");
+  if (typeof renderStyleSuggestions === "function") renderStyleSuggestions();
 }
 function removeStyleTags(tags) {
   const drop = new Set((tags || []).map((t) => String(t).toLowerCase()));
@@ -43783,6 +43789,192 @@ function addStyleTags(tags) {
   }
   writeStyleTagsToInput(cur.slice(0, 14));
 }
+
+/* =================================================================
+ *  Smart Style Assistant (UI only)
+ *  Neutral suggestion pills under the Style field. Tapping a pill
+ *  fills the existing Style field; selecting one progressively
+ *  unlocks related suggestions. "Auto" derives a starter style from
+ *  the lyrics with a lightweight client-side heuristic (no backend,
+ *  no API, no prompt-construction changes). "More" opens a library
+ *  bottom sheet. The Style field stays the single source of truth.
+ * ================================================================= */
+const STYLE_BASE_SUGGESTIONS = ["Pop", "Romantic", "Sad", "Arabic Pop", "Piano", "Darbuka", "Cinematic"];
+const STYLE_RELATED = {
+  "pop": ["Catchy", "Upbeat", "Synth", "Modern", "Radio"],
+  "arabic pop": ["Darbuka", "Oud", "Maqam", "Modern", "Female Vocal", "Arabic Lyrics", "6/8"],
+  "edm": ["Synth", "Festival", "128 BPM", "Build Up", "Drop", "Electronic", "Energetic"],
+  "romantic": ["Piano", "Strings", "Emotional", "Soft Vocal", "Slow"],
+  "cinematic": ["Orchestra", "Epic", "Choir", "Ambient"],
+  "sad": ["Emotional", "Piano", "Slow", "Minor Key", "Strings"],
+  "happy": ["Upbeat", "Major Key", "Claps", "Bright"],
+  "piano": ["Soft", "Emotional", "Ballad", "Minimal"],
+  "darbuka": ["Dabke", "Mijwiz", "Oud", "Energetic", "6/8"],
+  "oud": ["Maqam", "Tarab", "Arabic", "Acoustic"],
+  "hip hop": ["Trap", "808", "Boom Bap", "Rap", "Hard"],
+  "rock": ["Electric Guitar", "Drums", "Anthemic", "Distortion"],
+  "jazz": ["Saxophone", "Swing", "Smooth", "Double Bass"],
+  "r&b": ["Soul", "Smooth", "Groove", "Falsetto"],
+  "afrobeat": ["Percussion", "Groove", "Dance", "Log Drum"],
+  "reggaeton": ["Dembow", "Latin", "Dance", "Bass"],
+  "lo-fi": ["Chill", "Vinyl", "Mellow", "Jazzy"],
+  "energetic": ["Fast", "Drums", "Festival", "Drop"],
+  "emotional": ["Strings", "Piano", "Slow", "Soft Vocal"],
+};
+const STYLE_LIBRARY = [
+  { label: "Genres", tags: ["Pop", "Arabic Pop", "EDM", "Hip Hop", "Rock", "R&B", "Jazz", "Reggaeton", "Afrobeat", "Trap", "House", "Folk", "Classical", "Lo-fi"] },
+  { label: "Moods", tags: ["Romantic", "Sad", "Happy", "Energetic", "Chill", "Dark", "Epic", "Nostalgic", "Dreamy", "Emotional", "Uplifting"] },
+  { label: "Instruments", tags: ["Piano", "Strings", "Oud", "Darbuka", "Guitar", "Synth", "Violin", "Saxophone", "Orchestra", "808", "Drums"] },
+  { label: "Vocals", tags: ["Female Vocal", "Male Vocal", "Soft Vocal", "Powerful Vocal", "Choir", "Rap", "Falsetto", "Duet"] },
+  { label: "Tempo & meter", tags: ["Slow", "Mid Tempo", "Fast", "90 BPM", "120 BPM", "128 BPM", "4/4", "6/8", "3/4"] },
+];
+
+let _styleSuggestVisible = STYLE_BASE_SUGGESTIONS.slice();
+
+function styleTagsSelectedSet() {
+  return new Set(styleTagsListFromInput().map((t) => t.toLowerCase()));
+}
+
+function unlockStyleRelated(tag) {
+  const rel = STYLE_RELATED[String(tag || "").toLowerCase()];
+  if (!rel) return;
+  const have = new Set(_styleSuggestVisible.map((t) => t.toLowerCase()));
+  for (const r of rel) {
+    if (!have.has(r.toLowerCase())) {
+      _styleSuggestVisible.push(r);
+      have.add(r.toLowerCase());
+    }
+  }
+  if (_styleSuggestVisible.length > 28) _styleSuggestVisible = _styleSuggestVisible.slice(-28);
+}
+
+function renderStyleSuggestions() {
+  const row = els.styleSuggestRow;
+  if (!row) return;
+  const selectedList = styleTagsListFromInput();
+  const selected = new Set(selectedList.map((t) => t.toLowerCase()));
+  // Surface any manually-typed tags + unlock their related suggestions.
+  for (const t of selectedList) {
+    if (!_styleSuggestVisible.some((v) => v.toLowerCase() === t.toLowerCase())) _styleSuggestVisible.push(t);
+    unlockStyleRelated(t);
+  }
+  let html =
+    `<button type="button" class="styleSuggestPill styleSuggestPill--auto" data-style-auto="1" aria-label="Let AI suggest a style"><span class="styleSuggestPillIco" aria-hidden="true">\u2728</span>Auto</button>`;
+  for (const tag of _styleSuggestVisible) {
+    const on = selected.has(tag.toLowerCase());
+    html += `<button type="button" class="styleSuggestPill${on ? " isActive" : ""}" data-style-tag="${escapeHtml(tag)}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(tag)}</button>`;
+  }
+  html += `<button type="button" class="styleSuggestPill styleSuggestPill--more" data-style-more="1"><span class="styleSuggestPillIco" aria-hidden="true">+</span>More</button>`;
+  row.innerHTML = html;
+}
+
+function autoSuggestStyles() {
+  const raw = String(els.sunoPrompt?.value || "");
+  const text = raw.toLowerCase();
+  const hasArabic = /[\u0600-\u06FF]/.test(raw);
+  const tags = [];
+  if (hasArabic) tags.push("Arabic Pop", "Arabic Lyrics");
+  else tags.push("Pop");
+  if (/(sad|cry|tears|alone|lonely|miss|broke|hurt|\u062d\u0632\u064a\u0646|\u062f\u0645\u0639\u0629|\u0648\u062d\u064a\u062f|\u0627\u0634\u062a\u0642\u062a|\u0641\u0631\u0627\u0642|\u0628\u0643\u0627\u0621)/.test(text)) {
+    tags.push("Emotional", "Piano", "Slow");
+  } else if (/(love|heart|habibi|kiss|romance|\u062d\u0628|\u062d\u0628\u064a\u0628\u064a|\u0642\u0644\u0628|\u063a\u0631\u0627\u0645|\u0639\u0634\u0642)/.test(text)) {
+    tags.push("Romantic", "Strings", "Soft Vocal");
+  } else if (/(party|dance|club|night|celebrate|\u0631\u0642\u0635|\u0633\u0647\u0631\u0629|\u062d\u0641\u0644\u0629|\u0639\u0631\u0633|\u062f\u0628\u0643\u0629)/.test(text)) {
+    tags.push("Energetic", "Darbuka", "Dabke");
+  } else {
+    tags.push("Emotional", "Piano");
+  }
+  tags.push(hasArabic ? "6/8" : "4/4");
+  const final = [];
+  const seen = new Set();
+  for (const t of tags) {
+    if (!seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); final.push(t); }
+  }
+  const picked = final.slice(0, 6);
+  addStyleTags(picked);
+  picked.forEach(unlockStyleRelated);
+  renderStyleSuggestions();
+  try { syncGenerateOrbVisibility(); } catch {}
+  showToast(
+    raw.trim() ? "Auto styles suggested from your lyrics" : "Suggested a starter style — add lyrics for smarter picks",
+    { icon: "\u2728", durationMs: 2600 }
+  );
+}
+
+function renderStyleLibrary() {
+  const scroll = document.getElementById("styleLibraryScroll");
+  if (!scroll) return;
+  const selected = styleTagsSelectedSet();
+  scroll.innerHTML = STYLE_LIBRARY.map((sec) => `
+    <div class="styleLibrarySection">
+      <p class="styleLibrarySectionLabel">${escapeHtml(sec.label)}</p>
+      <div class="styleLibraryChips">
+        ${sec.tags.map((tag) => {
+          const on = selected.has(tag.toLowerCase());
+          return `<button type="button" class="styleSuggestPill${on ? " isActive" : ""}" data-style-lib-tag="${escapeHtml(tag)}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(tag)}</button>`;
+        }).join("")}
+      </div>
+    </div>`).join("");
+}
+
+function openStyleLibrary() {
+  const sheet = document.getElementById("styleLibrarySheet");
+  if (!sheet) return;
+  renderStyleLibrary();
+  sheet.style.display = "flex";
+}
+
+function closeStyleLibrary() {
+  const sheet = document.getElementById("styleLibrarySheet");
+  if (sheet) sheet.style.display = "none";
+}
+
+(function bindSmartStyleAssistant() {
+  const row = els.styleSuggestRow;
+  if (row && !row.dataset.boundStyleSuggest) {
+    row.dataset.boundStyleSuggest = "1";
+    row.addEventListener("click", (e) => {
+      const btn = e.target?.closest?.("button");
+      if (!btn || !row.contains(btn)) return;
+      haptic("light");
+      if (btn.hasAttribute("data-style-auto")) { autoSuggestStyles(); return; }
+      if (btn.hasAttribute("data-style-more")) { openStyleLibrary(); return; }
+      const tag = btn.getAttribute("data-style-tag");
+      if (!tag) return;
+      if (styleTagsSelectedSet().has(tag.toLowerCase())) {
+        removeStyleTags([tag]);
+      } else {
+        addStyleTags([tag]);
+        unlockStyleRelated(tag);
+      }
+      renderStyleSuggestions();
+      try { syncGenerateOrbVisibility(); } catch {}
+    });
+  }
+  const scroll = document.getElementById("styleLibraryScroll");
+  if (scroll && !scroll.dataset.boundStyleLib) {
+    scroll.dataset.boundStyleLib = "1";
+    scroll.addEventListener("click", (e) => {
+      const btn = e.target?.closest?.("[data-style-lib-tag]");
+      if (!btn) return;
+      haptic("light");
+      const tag = btn.getAttribute("data-style-lib-tag");
+      if (styleTagsSelectedSet().has(tag.toLowerCase())) {
+        removeStyleTags([tag]);
+      } else {
+        addStyleTags([tag]);
+        unlockStyleRelated(tag);
+      }
+      renderStyleLibrary();
+      renderStyleSuggestions();
+      try { syncGenerateOrbVisibility(); } catch {}
+    });
+  }
+  document.getElementById("styleLibraryBackdrop")?.addEventListener("click", closeStyleLibrary);
+  document.getElementById("btnCloseStyleLibrary")?.addEventListener("click", closeStyleLibrary);
+  els.sunoStyle?.addEventListener("input", renderStyleSuggestions);
+  renderStyleSuggestions();
+})();
 function syncMoodPresetPills() {
   document.querySelectorAll("#moodPresetRow [data-mood]").forEach((b) => {
     b.classList.toggle("isActive", String(b.getAttribute("data-mood") || "") === _activeMoodPreset);

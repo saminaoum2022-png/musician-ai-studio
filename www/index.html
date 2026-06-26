@@ -95,7 +95,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260626lyricshead" />
+    <link rel="stylesheet" href="./styles.css?v=20260626smartstyle" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -742,14 +742,8 @@
                 <span>Style / Tags</span>
                 <button id="btnBoostStyle" class="lyricsMagicBtn styleBoostBtn" type="button" title="Boost style with AI" aria-label="Boost style with AI">✦</button>
               </div>
-              <input id="sunoStyle" type="text" placeholder="Hijaz, darbuka, 6/8" />
-            </label>
-            <label class="field grow inputPanel inputPanel--style inputPanel--avoid">
-              <div class="label inPanelLabel">
-                <span>Avoid</span>
-                <span class="inPanelLabelHint">optional · negative tags</span>
-              </div>
-              <input id="sunoAvoidTags" type="text" placeholder="harsh sibilance, shouty vocals, heavy metal" autocomplete="off" />
+              <input id="sunoStyle" type="text" placeholder="Tap a suggestion below — or type your own" />
+              <div id="styleSuggestRow" class="styleSuggestRow" role="group" aria-label="Style suggestions"></div>
             </label>
             <label class="field grow inputPanel inputPanel--style">
               <div class="label inPanelLabel">Song title</div>
@@ -988,6 +982,16 @@
                 <select id="sunoPersonaId" hidden aria-hidden="true" tabindex="-1">
                   <option value="">Default voice</option>
                 </select>
+              </div>
+            </details>
+
+            <details class="createOptionsGroup">
+              <summary class="createOptionsGroupHead">Avoid</summary>
+              <div class="createOptionsStack">
+                <label class="field createOptionsField createOptionsField--wide">
+                  <span class="createOptionsFieldLabel">Negative tags <span class="createOptionsFieldHint">optional</span></span>
+                  <input id="sunoAvoidTags" type="text" placeholder="harsh sibilance, shouty vocals, heavy metal" autocomplete="off" />
+                </label>
               </div>
             </details>
           </div>
@@ -3204,6 +3208,20 @@
           </footer>
         </div>
       </div>
+      <div id="styleLibrarySheet" class="styleLibrarySheet" style="display:none" role="dialog" aria-modal="true" aria-labelledby="styleLibraryTitle">
+        <div class="styleLibraryBackdrop" id="styleLibraryBackdrop"></div>
+        <div class="styleLibraryCard">
+          <header class="styleLibraryHead">
+            <div class="styleLibraryHeadText">
+              <p class="styleLibraryKicker">Style library</p>
+              <h3 id="styleLibraryTitle">Browse styles</h3>
+              <p class="styleLibrarySub">Tap to add — they fill your Style field.</p>
+            </div>
+            <button type="button" class="styleLibraryClose" id="btnCloseStyleLibrary" aria-label="Close">×</button>
+          </header>
+          <div class="styleLibraryScroll" id="styleLibraryScroll"></div>
+        </div>
+      </div>
       <div id="songDetailsModal" class="songDetailsModal" style="display:none">
         <div class="songDetailsBackdrop" id="songDetailsBackdrop"></div>
         <div class="songDetailsSheet" role="dialog" aria-modal="true" aria-labelledby="songDetailsTitle">
@@ -3945,6 +3963,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260626lyricshead"></script>
+    <script type="module" src="./src/app.js?v=20260626smartstyle"></script>
   </body>
 </html>

@@ -22727,6 +22727,30 @@ function dmSongPayloadFromTrack(track) {
   return dmSongPayloadFromShareRef({ ...track, shareKind });
 }
 
+// A DM song message embeds the audio URL directly in the message body. Raw Suno
+// CDN links are temporary and expire, so a recipient who opens the message later
+// can't play the song (the proxy gets a dead upstream). Resolve to the permanent
+// Supabase `song_archive` URL before sending: prefer an already-archived copy,
+// otherwise archive the user's own Library track on demand. Falls back to the
+// original URL if archiving isn't possible (e.g. someone else's public track),
+// so sharing never gets blocked.
+async function resolveShareableAudioUrl(ref) {
+  const current = String(ref?.url || "").trim();
+  if (!current || isArchivedSongStorageUrl(current)) return current;
+  const localId = String(ref?.id || "").trim();
+  if (localId) {
+    try {
+      const row = loadLibrary().find((r) => String(r?.id || "") === localId);
+      if (row && isArchivedSongStorageUrl(row.url)) return String(row.url).trim();
+    } catch {}
+    try {
+      const permanent = await archiveLibraryTrackToCloud(ref);
+      if (permanent && isArchivedSongStorageUrl(permanent)) return permanent;
+    } catch {}
+  }
+  return current;
+}
+
 function shareRefFromTrackSheetCtx(ctx) {
   if (!ctx) return null;
   const url = String(ctx.url || "").trim();
@@ -22887,7 +22911,9 @@ async function sendShareRefToFriend(friend, shareRef) {
   const targetUserId = String(friend?.userId || "").trim();
   const threadId = String(friend?.threadId || "").trim();
   if (!ref?.url || !targetUserId) return;
-  const body = dmSongPayloadFromShareRef(ref);
+  const shareUrl = await resolveShareableAudioUrl(ref);
+  const shareRefForSend = shareUrl && shareUrl !== ref.url ? { ...ref, url: shareUrl } : ref;
+  const body = dmSongPayloadFromShareRef(shareRefForSend);
   if (body.length > 500) {
     try { showToast("Song is too large to share in one message.", { icon: "🎵", durationMs: 2800 }); } catch {}
     return;
@@ -23141,6 +23167,11 @@ function showMessagesShareConfirm(track) {
   if (list) list.hidden = true;
   confirm.hidden = false;
   confirm.setAttribute("aria-hidden", "false");
+  // Pre-warm archiving so the permanent URL is usually ready by the time the
+  // user taps Send (avoids sharing an expiring Suno CDN link).
+  try {
+    if (!isArchivedSongStorageUrl(track.url)) queueArchiveLibraryTrack(track);
+  } catch {}
 }
 
 function hideMessagesShareConfirm() {
@@ -23193,7 +23224,9 @@ let _messagesShareCandidates = [];
 async function sendDmSongShare(track) {
   const threadId = String(_conversationId || "").trim();
   if (!threadId || !track) return;
-  const body = dmSongPayloadFromTrack(track);
+  const shareUrl = await resolveShareableAudioUrl(track);
+  const shareTrack = shareUrl && shareUrl !== track.url ? { ...track, url: shareUrl } : track;
+  const body = dmSongPayloadFromTrack(shareTrack);
   if (body.length > 500) {
     try { showToast("Song is too large to share in one message.", { icon: "🎵", durationMs: 2800 }); } catch {}
     return;

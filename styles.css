@@ -12457,30 +12457,38 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
   -webkit-appearance: none;
   appearance: none;
   border-radius: 999px;
-  padding: 8px 14px;
-  min-height: 36px;
-  font-size: 13px;
+  padding: 9px 18px;
+  min-height: 38px;
+  font-size: 13.5px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, transform 120ms ease, box-shadow 160ms ease;
   cursor: pointer;
   transition: transform 120ms ease, box-shadow 160ms ease, background 160ms ease;
 }
+.profileAuraEditBtn:active{ transform: scale(0.97); }
 .profileAuraEditBtn--cancel{
-  border: 1px solid rgba(255,255,255,0.16);
-  background: rgba(255,255,255,0.06);
-  color: rgba(232,238,247,0.9);
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  color: rgba(232,238,247,0.92);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
 }
-.profileAuraEditBtn--cancel:hover{ background: rgba(255,255,255,0.10); }
+.profileAuraEditBtn--cancel:hover{
+  background: var(--nabad-glass-bg-hover);
+  border-color: var(--nabad-glass-border-hover);
+}
 .profileAuraEditBtn--save{
-  border: 0;
-  background: var(--brand-cta-bg);
-  color: #051018;
-  box-shadow: var(--brand-cta-shadow);
+  border: 1px solid var(--brand-violet);
+  background: var(--brand-violet);
+  color: #fff;
+  box-shadow: 0 8px 22px rgba(124, 92, 255, 0.30);
 }
 .profileAuraEditBtn--save:hover{
   transform: translateY(-1px);
-  background: var(--brand-cta-bg-hover);
-  box-shadow: 0 12px 30px rgba(35, 213, 171, 0.32);
+  background: #6b4de6;
+  border-color: #6b4de6;
 }
 
 /* Identity stack — view-mode is centered (mockup), edit-mode falls
@@ -12575,6 +12583,13 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
 .profileAura.profileAuraEditing .profileAuraNameRow{
   justify-content: flex-start;
   align-self: flex-start;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+/* Verified check + gender stay pinned beside the field, never wrap. */
+.profileAura.profileAuraEditing .profileNabadCertCheck,
+.profileAura.profileAuraEditing .profileAuraGender{
+  flex: 0 0 auto;
 }
 
 /* Live indicator dot retired — the cover-tinted pulse fingerprint
@@ -12620,10 +12635,22 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
 }
 .profileAura.profileAuraEditing .profileAuraNameInput{
   field-sizing: fixed;
-  width: 100%;
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
   max-width: 100%;
-  font-size: 22px;
+  font-size: 19px;
   font-weight: 700;
+  padding: 9px 13px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+.profileAura.profileAuraEditing .profileAuraNameInput:focus{
+  outline: none;
+  border-color: rgba(124, 92, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.16);
 }
 .profileAuraGender{
   transform: translateY(2px);

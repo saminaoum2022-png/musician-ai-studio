@@ -21700,18 +21700,23 @@ function updateMessagesKeyboardDebugReadout(appliedInset) {
     el = document.createElement("div");
     el.id = "kbDebugReadout";
     el.style.cssText =
-      "position:fixed;top:calc(env(safe-area-inset-top,0px) + 6px);left:8px;right:8px;z-index:99999;" +
-      "background:rgba(0,0,0,0.82);color:#7CFC00;font:600 11px/1.35 ui-monospace,monospace;" +
-      "padding:6px 8px;border-radius:8px;pointer-events:none;white-space:pre;text-align:left;";
+      "position:fixed;left:8px;right:8px;z-index:99999;" +
+      "background:rgba(0,0,0,0.9);color:#7CFC00;font:700 13px/1.4 ui-monospace,monospace;" +
+      "padding:8px 10px;border-radius:8px;pointer-events:none;white-space:pre;text-align:center;";
     document.body.appendChild(el);
   }
+  // Sit the readout just above the composer so it tracks the keyboard and stays
+  // visible (a top-pinned element gets scrolled away when iOS opens the keyboard).
+  const composerH = Math.round(
+    document.querySelector(".messagesComposer")?.getBoundingClientRect().height || 72,
+  );
+  el.style.bottom = `${Math.round(appliedInset) + composerH + 6}px`;
   const vv = window.visualViewport;
   const lines = [
-    `innerH=${Math.round(window.innerHeight)}`,
-    `vvH=${Math.round(vv?.height || 0)} vvTop=${Math.round(vv?.offsetTop || 0)}`,
-    `appliedInset=${Math.round(appliedInset)}`,
+    `innerH=${Math.round(window.innerHeight)} vvH=${Math.round(vv?.height || 0)} vvTop=${Math.round(vv?.offsetTop || 0)}`,
+    `inset=${Math.round(appliedInset)} composerH=${composerH}`,
   ];
-  el.textContent = lines.join("  ");
+  el.textContent = lines.join("\n");
 }
 
 function measureMessagesKeyboardInset() {

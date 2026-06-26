@@ -3667,8 +3667,9 @@
           <h2 id="messagesShareSheetTitle" class="messagesShareSheetTitle">Share a song</h2>
           <button type="button" class="messagesShareSheetClose" id="messagesShareSheetClose" aria-label="Close">×</button>
         </header>
-        <p class="messagesShareSheetLead">Pick a song, remix, or mashup from your Library.</p>
+        <p id="messagesShareLead" class="messagesShareSheetLead">Pick a song, remix, or mashup from your Library.</p>
         <div id="messagesShareList" class="messagesShareList" role="listbox" aria-label="Your songs"></div>
+        <div id="messagesShareConfirm" class="messagesShareConfirm" hidden aria-hidden="true"></div>
       </section>
     </div>
 
@@ -3883,6 +3884,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260626dmbubblebadge"></script>
+    <script type="module" src="./src/app.js?v=20260626dmshareconfirm"></script>
   </body>
 </html>

@@ -23107,6 +23107,54 @@ function closeMessagesShareSheet() {
   sheet.hidden = true;
   sheet.setAttribute("aria-hidden", "true");
   document.body.classList.remove("messagesShareSheetOpen");
+  hideMessagesShareConfirm();
+}
+
+const MESSAGES_SHARE_LEAD_DEFAULT = "Pick a song, remix, or mashup from your Library.";
+let _messagesShareConfirmTrack = null;
+
+// Step 2 of the share flow: after the user taps a song, show a simple confirm
+// card (cover + title) so they can double-check the exact song before it's sent.
+function showMessagesShareConfirm(track) {
+  const list = document.getElementById("messagesShareList");
+  const confirm = document.getElementById("messagesShareConfirm");
+  const lead = document.getElementById("messagesShareLead");
+  if (!confirm || !track) return;
+  _messagesShareConfirmTrack = track;
+  const title = escapeHtml(String(track.title || "Song").trim() || "Song");
+  const sub = escapeHtml(`${dmShareKindLabel(track.shareKind)} · ${mashupSlotSourceLabel(track)}`);
+  const art = escapeHtml(mashupCoverForTrack(track));
+  const handle = String(_chatHeaderUser?.username || "").replace(/^@/, "").trim();
+  if (lead) lead.textContent = handle ? `Send this song to @${handle}?` : "Send this song?";
+  confirm.innerHTML = `
+    <div class="messagesShareConfirmCard">
+      <img class="messagesShareConfirmArt" src="${art}" alt="" decoding="async" />
+      <div class="messagesShareConfirmInfo">
+        <strong class="messagesShareConfirmTitle">${title}</strong>
+        <span class="messagesShareConfirmSub">${sub}</span>
+      </div>
+    </div>
+    <div class="messagesShareConfirmActions">
+      <button type="button" class="messagesShareConfirmBack" data-share-confirm-back>Choose another</button>
+      <button type="button" class="messagesShareConfirmSend" data-share-confirm-send>Send</button>
+    </div>`;
+  if (list) list.hidden = true;
+  confirm.hidden = false;
+  confirm.setAttribute("aria-hidden", "false");
+}
+
+function hideMessagesShareConfirm() {
+  const list = document.getElementById("messagesShareList");
+  const confirm = document.getElementById("messagesShareConfirm");
+  const lead = document.getElementById("messagesShareLead");
+  _messagesShareConfirmTrack = null;
+  if (confirm) {
+    confirm.hidden = true;
+    confirm.setAttribute("aria-hidden", "true");
+    confirm.innerHTML = "";
+  }
+  if (list) list.hidden = false;
+  if (lead) lead.textContent = MESSAGES_SHARE_LEAD_DEFAULT;
 }
 
 async function openMessagesShareSheet() {
@@ -23116,6 +23164,7 @@ async function openMessagesShareSheet() {
   sheet.hidden = false;
   sheet.setAttribute("aria-hidden", "false");
   document.body.classList.add("messagesShareSheetOpen");
+  hideMessagesShareConfirm();
   list.innerHTML = `<div class="messagesShareEmpty">Loading your Library…</div>`;
   await ensureUserLibraryHydrated();
   const tracks = dmShareEligibleTracks();
@@ -23165,6 +23214,11 @@ async function sendDmSongShare(track) {
     void refreshMessagesUnreadBadge({ force: true });
   } catch (e) {
     try { showToast(String(e?.message || "Could not share song"), { icon: "🎵", durationMs: 2800 }); } catch {}
+    const sendBtn = document.querySelector("[data-share-confirm-send]");
+    if (sendBtn) {
+      sendBtn.removeAttribute("aria-busy");
+      sendBtn.textContent = "Send";
+    }
   }
 }
 
@@ -23940,7 +23994,27 @@ function bindMessagesPageOnce() {
       e.preventDefault();
       const idx = Number(sharePick.getAttribute("data-messages-share-idx"));
       const track = _messagesShareCandidates[idx];
-      if (track) void sendDmSongShare(track);
+      if (track) showMessagesShareConfirm(track);
+      return;
+    }
+    const shareBack = e.target.closest("[data-share-confirm-back]");
+    if (shareBack) {
+      e.preventDefault();
+      try { haptic("light"); } catch {}
+      hideMessagesShareConfirm();
+      return;
+    }
+    const shareSend = e.target.closest("[data-share-confirm-send]");
+    if (shareSend) {
+      e.preventDefault();
+      if (shareSend.getAttribute("aria-busy") === "true") return;
+      try { haptic("light"); } catch {}
+      const track = _messagesShareConfirmTrack;
+      if (track) {
+        shareSend.setAttribute("aria-busy", "true");
+        shareSend.textContent = "Sending…";
+        void sendDmSongShare(track);
+      }
       return;
     }
     const threadMount = document.getElementById("messagesThreadMount");

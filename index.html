@@ -95,7 +95,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260626lyricsmode" />
+    <link rel="stylesheet" href="./styles.css?v=20260626lyricshead" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -709,15 +709,10 @@
               <div class="createPane createPane--lyrics" data-mode="lyrics">
                 <label class="field grow inputPanel" id="lyricsFieldPanel" data-lyrics-mode="write">
                   <div class="label inPanelLabel lyricsPanelHead">
-                    <span>Lyrics</span>
-                    <span class="vocalModePill lyricsModePill" role="group" aria-label="Song type">
-                      <button id="vocalModeFull" class="ghost active" type="button" aria-pressed="true">Vocal</button>
-                      <button id="vocalModeInstrumental" class="ghost" type="button" aria-pressed="false">Instrumental</button>
-                    </span>
-                  </div>
-                  <div class="lyricsModeTabs" role="tablist" aria-label="How to start your lyrics">
-                    <button id="lyricsModeWrite" class="lyricsModeTab isActive" type="button" role="tab" aria-selected="true">Write</button>
-                    <button id="lyricsModeGenerate" class="lyricsModeTab" type="button" role="tab" aria-selected="false"><span class="lyricsModeTabIco" aria-hidden="true">✦</span>Generate</button>
+                    <div class="lyricsModeTabs" role="tablist" aria-label="How to start your lyrics">
+                      <button id="lyricsModeWrite" class="lyricsModeTab isActive" type="button" role="tab" aria-selected="true">Write</button>
+                      <button id="lyricsModeGenerate" class="lyricsModeTab" type="button" role="tab" aria-selected="false"><span class="lyricsModeTabIco" aria-hidden="true">✦</span>Generate</button>
+                    </div>
                   </div>
                   <label class="ghost lyricsAttachBtn srOnly" title="Attach vocal reference">
                     Insert vocal
@@ -932,9 +927,16 @@
               </div>
             </details>
 
-            <details class="createOptionsGroup">
+            <details class="createOptionsGroup" open>
               <summary class="createOptionsGroupHead">Voice</summary>
               <div class="createOptionsStack">
+                <div class="optChipGroup">
+                  <span class="optChipLabel">Type</span>
+                  <span class="vocalModePill optTypePill" role="group" aria-label="Song type">
+                    <button id="vocalModeFull" class="ghost active" type="button" aria-pressed="true">Vocal</button>
+                    <button id="vocalModeInstrumental" class="ghost" type="button" aria-pressed="false">Instrumental</button>
+                  </span>
+                </div>
                 <div class="optChipGroup">
                   <span class="optChipLabel">Range</span>
                   <select id="sunoVoiceProfile" hidden aria-hidden="true" tabindex="-1">
@@ -3943,6 +3945,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260626lyricsmode"></script>
+    <script type="module" src="./src/app.js?v=20260626lyricshead"></script>
   </body>
 </html>

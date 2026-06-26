@@ -8235,7 +8235,7 @@ textarea{
   align-items:center;
   gap:2px;
   align-self:flex-start;
-  margin:2px 0 10px;
+  margin:0;
   padding:3px;
   border-radius:999px;
   background:rgba(255,255,255,0.04);
@@ -8270,6 +8270,11 @@ textarea{
 .lyricsModeTabIco{
   font-size:12px;
   line-height:1;
+}
+
+/* Vocal / Instrumental moved into Advanced → Voice as a "Type" toggle. */
+.optTypePill{
+  align-self:flex-start;
 }
 
 /* Generate trigger (the ✦ button) — icon only in Write mode (hidden),

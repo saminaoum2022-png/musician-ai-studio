@@ -95,7 +95,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260627createux" />
+    <link rel="stylesheet" href="./styles.css?v=20260627advtrim" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -840,9 +840,13 @@
                 </div>
               </div>
               <label class="field grow inputPanel inputPanel--style">
-                <div class="label inPanelLabel">Artwork style</div>
+                <div class="label inPanelLabel stylePanelHead">
+                  <span>Artwork style</span>
+                  <button id="btnArtworkSuggest" class="lyricsMagicBtn styleBoostBtn" type="button" title="Suggest artwork from your song" aria-label="Suggest artwork from your song">✦</button>
+                </div>
                 <input id="sunoArtworkStyle" type="text" placeholder="Neon desert, cinematic portrait…" />
               </label>
+              <div id="artworkSuggestRow" class="styleSuggestRow artworkSuggestRow" role="group" aria-label="Artwork suggestions"></div>
           </section>
 
           <section class="createFlowStep createFlowStep--generate" aria-label="Generate">
@@ -856,111 +860,7 @@
               <button id="btnCloseAdvancedSheet" type="button" class="createOptionsClose" aria-label="Close options">×</button>
             </summary>
             <div class="stepCard compactOptions createOptionsPanel">
-          <div class="createOptionsPresets">
-            <p class="createOptionsKicker">Mood</p>
-            <div id="moodPresetRow" class="row optionsPresetRow createOptionsPillRow">
-              <button class="createOptionsPill" type="button" data-mood="romantic">Romantic</button>
-              <button class="createOptionsPill" type="button" data-mood="sad">Sad</button>
-              <button class="createOptionsPill" type="button" data-mood="party">Party</button>
-              <button class="createOptionsPill" type="button" data-mood="chill">Chill</button>
-              <button class="createOptionsPill" type="button" data-mood="tarab">Tarab</button>
-              <button class="createOptionsPill" type="button" data-mood="dabke">Dabke</button>
-            </div>
-          </div>
-
           <div class="createOptionsFine" id="fineTuneDetails">
-            <details class="createOptionsGroup" open>
-              <summary class="createOptionsGroupHead">Feel</summary>
-              <div class="createOptionsStack">
-                <div class="optChipGroup">
-                  <span class="optChipLabel">Groove</span>
-                  <select id="sunoGroovePace" hidden aria-hidden="true" tabindex="-1">
-                    <option value="" selected>Auto</option>
-                    <option value="balanced">Balanced</option>
-                    <option value="slow">Slow</option>
-                    <option value="energetic">Energetic</option>
-                  </select>
-                  <div id="grooveChipRow" class="optChipRow" role="group" aria-label="Groove">
-                    <button type="button" class="optChip isActive" data-opt-value="" aria-pressed="true">Auto</button>
-                    <button type="button" class="optChip" data-opt-value="slow" aria-pressed="false">Slow</button>
-                    <button type="button" class="optChip" data-opt-value="balanced" aria-pressed="false">Balanced</button>
-                    <button type="button" class="optChip" data-opt-value="energetic" aria-pressed="false">Energetic</button>
-                  </div>
-                </div>
-                <div class="optChipGroup">
-                  <span class="optChipLabel">Flow</span>
-                  <select id="sunoProsody" hidden aria-hidden="true" tabindex="-1">
-                    <option value="" selected>Auto</option>
-                    <option value="tight">Tight</option>
-                    <option value="natural">Natural</option>
-                    <option value="ultra">Ultra</option>
-                  </select>
-                  <div id="prosodyChipRow" class="optChipRow" role="group" aria-label="Flow">
-                    <button type="button" class="optChip isActive" data-opt-value="" aria-pressed="true">Auto</button>
-                    <button type="button" class="optChip" data-opt-value="natural" aria-pressed="false">Natural</button>
-                    <button type="button" class="optChip" data-opt-value="tight" aria-pressed="false">Tight</button>
-                    <button type="button" class="optChip" data-opt-value="ultra" aria-pressed="false">Ultra</button>
-                  </div>
-                </div>
-                <div class="optChipGroup">
-                  <span class="optChipLabel">Beat</span>
-                  <select id="sunoBeatStability" hidden aria-hidden="true" tabindex="-1">
-                    <option value="" selected>Auto</option>
-                    <option value="stable">Stable</option>
-                    <option value="flexible">Flexible</option>
-                    <option value="locked">Locked</option>
-                  </select>
-                  <div id="beatChipRow" class="optChipRow" role="group" aria-label="Beat">
-                    <button type="button" class="optChip isActive" data-opt-value="" aria-pressed="true">Auto</button>
-                    <button type="button" class="optChip" data-opt-value="flexible" aria-pressed="false">Flexible</button>
-                    <button type="button" class="optChip" data-opt-value="stable" aria-pressed="false">Stable</button>
-                    <button type="button" class="optChip" data-opt-value="locked" aria-pressed="false">Locked</button>
-                  </div>
-                </div>
-              </div>
-            </details>
-
-            <details class="createOptionsGroup">
-              <summary class="createOptionsGroupHead">Tempo &amp; key</summary>
-              <div class="createOptionsGrid advancedGrid compactGrid">
-              <label class="field createOptionsField createOptionsField--wide">
-                <span class="createOptionsFieldLabel">Timing</span>
-                <input id="sunoTiming" type="text" placeholder="BPM, time signature…" />
-              </label>
-              <label class="field createOptionsField">
-                <span class="createOptionsFieldLabel">Key</span>
-                <select id="sunoSongKey">
-                <option value="" selected>Auto</option>
-                <option value="Do Major">Do Major</option>
-                <option value="Do Minor">Do Minor</option>
-                <option value="Do# Major">Do# Major</option>
-                <option value="Do# Minor">Do# Minor</option>
-                <option value="Re Major">Re Major</option>
-                <option value="Re Minor">Re Minor</option>
-                <option value="Re# Major">Re# Major</option>
-                <option value="Re# Minor">Re# Minor</option>
-                <option value="Mi Major">Mi Major</option>
-                <option value="Mi Minor">Mi Minor</option>
-                <option value="Fa Major">Fa Major</option>
-                <option value="Fa Minor">Fa Minor</option>
-                <option value="Fa# Major">Fa# Major</option>
-                <option value="Fa# Minor">Fa# Minor</option>
-                <option value="Sol Major">Sol Major</option>
-                <option value="Sol Minor">Sol Minor</option>
-                <option value="Sol# Major">Sol# Major</option>
-                <option value="Sol# Minor">Sol# Minor</option>
-                <option value="La Major">La Major</option>
-                <option value="La Minor">La Minor</option>
-                <option value="La# Major">La# Major</option>
-                <option value="La# Minor">La# Minor</option>
-                <option value="Si Major">Si Major</option>
-                <option value="Si Minor">Si Minor</option>
-                </select>
-              </label>
-              <div id="sunoKeyHint" class="hint advancedHint createOptionsHint" hidden></div>
-              </div>
-            </details>
-
             <details class="createOptionsGroup" open>
               <summary class="createOptionsGroupHead">Voice</summary>
               <div class="createOptionsStack">
@@ -970,6 +870,19 @@
                     <button id="vocalModeFull" class="ghost active" type="button" aria-pressed="true">Vocal</button>
                     <button id="vocalModeInstrumental" class="ghost" type="button" aria-pressed="false">Instrumental</button>
                   </span>
+                </div>
+                <div class="optChipGroup">
+                  <span class="optChipLabel">Vocal style</span>
+                  <div id="vocalStyleRow" class="optChipRow vocalStyleRow" role="group" aria-label="Vocal style">
+                    <button type="button" class="optChip" data-vocal-style="Soft Vocal" aria-pressed="false">Soft</button>
+                    <button type="button" class="optChip" data-vocal-style="Powerful Vocal" aria-pressed="false">Powerful</button>
+                    <button type="button" class="optChip" data-vocal-style="Choir" aria-pressed="false">Choir</button>
+                    <button type="button" class="optChip" data-vocal-style="Rap" aria-pressed="false">Rap</button>
+                    <button type="button" class="optChip" data-vocal-style="Falsetto" aria-pressed="false">Falsetto</button>
+                    <button type="button" class="optChip" data-vocal-style="Duet" aria-pressed="false">Duet</button>
+                    <button type="button" class="optChip" data-vocal-style="Whisper" aria-pressed="false">Whisper</button>
+                    <button type="button" class="optChip" data-vocal-style="Emotional Vocal" aria-pressed="false">Emotional</button>
+                  </div>
                 </div>
                 <div class="optChipGroup">
                   <span class="optChipLabel">Range</span>
@@ -3982,6 +3895,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260627createux"></script>
+    <script type="module" src="./src/app.js?v=20260627advtrim"></script>
   </body>
 </html>

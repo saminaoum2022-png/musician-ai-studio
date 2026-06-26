@@ -353,6 +353,9 @@ const els = {
   styleSuggestRow: document.getElementById("styleSuggestRow"),
   styleSelectedRow: document.getElementById("styleSelectedRow"),
   btnClearStyle: document.getElementById("btnClearStyle"),
+  vocalStyleRow: document.getElementById("vocalStyleRow"),
+  btnArtworkSuggest: document.getElementById("btnArtworkSuggest"),
+  artworkSuggestRow: document.getElementById("artworkSuggestRow"),
   sunoArtworkStyle: document.getElementById("sunoArtworkStyle"),
   sunoMaqam: document.getElementById("sunoMaqam"),
   sunoTitle: document.getElementById("sunoTitle"),
@@ -43919,8 +43922,7 @@ const STYLE_LIBRARY = [
   { label: "Genres", tags: ["R&B", "Jazz", "Reggaeton", "Afrobeat", "Trap", "House", "Folk", "Classical", "Lo-fi"] },
   { label: "Moods", tags: ["Romantic", "Sad", "Happy", "Energetic", "Chill", "Dark", "Epic", "Nostalgic", "Dreamy", "Emotional", "Uplifting"] },
   { label: "Instruments", tags: ["Piano", "Strings", "Oud", "Darbuka", "Guitar", "Synth", "Violin", "Saxophone", "Orchestra", "808", "Drums"] },
-  // Singer gender lives on the main screen, so no Male/Female Vocal here.
-  { label: "Vocal Style", tags: ["Soft Vocal", "Powerful Vocal", "Choir", "Rap", "Falsetto", "Duet", "Whisper", "Emotional Vocal"] },
+  // Vocal Style now lives in Advanced → Voice; singer gender is on the main screen.
   { label: "Tempo & Meter", tags: ["Slow", "Mid Tempo", "Fast", "90 BPM", "120 BPM", "128 BPM", "4/4", "6/8", "3/4"] },
 ];
 
@@ -43969,9 +43971,23 @@ function renderStyleSelectedChips() {
     .join("");
 }
 
+// Vocal-style chips (Advanced → Voice) toggle the same tags into the Style
+// field, so they stay in sync with everything else the Style field drives.
+function renderVocalStyleRow() {
+  const row = els.vocalStyleRow;
+  if (!row) return;
+  const selected = styleTagsSelectedSet();
+  row.querySelectorAll("[data-vocal-style]").forEach((b) => {
+    const on = selected.has(String(b.getAttribute("data-vocal-style") || "").toLowerCase());
+    b.classList.toggle("isActive", on);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+}
+
 function syncStyleUi() {
   renderStyleSuggestions();
   renderStyleSelectedChips();
+  renderVocalStyleRow();
 }
 
 function autoSuggestStyles() {
@@ -44094,10 +44110,105 @@ function closeStyleLibrary() {
       try { syncGenerateOrbVisibility(); } catch {}
     });
   }
+  const vocalRow = els.vocalStyleRow;
+  if (vocalRow && !vocalRow.dataset.boundVocalStyle) {
+    vocalRow.dataset.boundVocalStyle = "1";
+    vocalRow.addEventListener("click", (e) => {
+      const btn = e.target?.closest?.("[data-vocal-style]");
+      if (!btn || !vocalRow.contains(btn)) return;
+      haptic("light");
+      const tag = btn.getAttribute("data-vocal-style");
+      if (styleTagsSelectedSet().has(tag.toLowerCase())) removeStyleTags([tag]);
+      else addStyleTags([tag]);
+      syncStyleUi();
+      try { syncGenerateOrbVisibility(); } catch {}
+    });
+  }
   document.getElementById("styleLibraryBackdrop")?.addEventListener("click", closeStyleLibrary);
   document.getElementById("btnCloseStyleLibrary")?.addEventListener("click", closeStyleLibrary);
   els.sunoStyle?.addEventListener("input", syncStyleUi);
   syncStyleUi();
+})();
+
+/* =================================================================
+ *  Artwork style assistant (UI only)
+ *  Neutral suggestion pills + a ✦ that drafts an artwork description
+ *  from the chosen Style and the lyrics mood. Client-side only — it
+ *  just fills the existing Artwork field, no backend/API calls.
+ * ================================================================= */
+const ARTWORK_BASE_SUGGESTIONS = [
+  "Cinematic portrait", "Neon", "Vintage film", "Minimal", "Surreal", "Studio light", "Black & white", "Dreamy",
+];
+
+function artworkTagsListFromInput() {
+  return String(els.sunoArtworkStyle?.value || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+function writeArtworkTags(list) {
+  if (els.sunoArtworkStyle) els.sunoArtworkStyle.value = list.join(", ");
+  renderArtworkSuggestions();
+}
+function renderArtworkSuggestions() {
+  const row = els.artworkSuggestRow;
+  if (!row) return;
+  const selected = new Set(artworkTagsListFromInput().map((t) => t.toLowerCase()));
+  row.innerHTML = ARTWORK_BASE_SUGGESTIONS.map((tag) => {
+    const on = selected.has(tag.toLowerCase());
+    return `<button type="button" class="styleSuggestPill${on ? " isActive" : ""}" data-artwork-tag="${escapeHtml(tag)}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(tag)}</button>`;
+  }).join("");
+}
+function suggestArtworkText() {
+  const style = String(els.sunoStyle?.value || "");
+  const raw = String(els.sunoPrompt?.value || "");
+  const lyrics = raw.toLowerCase();
+  const hasArabic = /[\u0600-\u06FF]/.test(raw) || /arabic|oud|darbuka|maqam|dabke/i.test(style);
+  const parts = [];
+  parts.push(hasArabic ? "Cinematic desert portrait" : "Cinematic portrait");
+  if (/(sad|cry|tears|alone|lonely|miss|hurt|\u062d\u0632\u064a\u0646|\u062f\u0645\u0639\u0629|\u0641\u0631\u0627\u0642)/.test(lyrics)) {
+    parts.push("melancholic mood", "moody low light");
+  } else if (/(love|heart|habibi|romance|\u062d\u0628|\u062d\u0628\u064a\u0628\u064a|\u0642\u0644\u0628|\u063a\u0631\u0627\u0645)/.test(lyrics)) {
+    parts.push("romantic mood", "warm golden light");
+  } else if (/(party|dance|club|night|\u0631\u0642\u0635|\u0633\u0647\u0631\u0629|\u062d\u0641\u0644\u0629)/.test(lyrics)) {
+    parts.push("vibrant energy", "neon lights");
+  } else {
+    parts.push("cinematic mood");
+  }
+  if (/piano|strings|orchestra|cinematic|classical/i.test(style)) parts.push("film grain", "shallow depth of field");
+  if (/edm|house|electronic|synth|trap|techno/i.test(style)) parts.push("futuristic", "glowing accents");
+  return [...new Set(parts)].slice(0, 5).join(", ");
+}
+(function bindArtworkAssistant() {
+  const row = els.artworkSuggestRow;
+  if (row && !row.dataset.boundArtwork) {
+    row.dataset.boundArtwork = "1";
+    row.addEventListener("click", (e) => {
+      const btn = e.target?.closest?.("[data-artwork-tag]");
+      if (!btn || !row.contains(btn)) return;
+      e.preventDefault();
+      haptic("light");
+      const tag = btn.getAttribute("data-artwork-tag");
+      const cur = artworkTagsListFromInput();
+      const have = new Set(cur.map((t) => t.toLowerCase()));
+      if (have.has(tag.toLowerCase())) {
+        writeArtworkTags(cur.filter((t) => t.toLowerCase() !== tag.toLowerCase()));
+      } else {
+        writeArtworkTags([...cur, tag]);
+      }
+    });
+  }
+  if (els.btnArtworkSuggest && !els.btnArtworkSuggest.dataset.boundArtworkGen) {
+    els.btnArtworkSuggest.dataset.boundArtworkGen = "1";
+    els.btnArtworkSuggest.addEventListener("click", () => {
+      haptic("light");
+      if (els.sunoArtworkStyle) els.sunoArtworkStyle.value = suggestArtworkText();
+      renderArtworkSuggestions();
+      showToast("Artwork idea drafted from your song", { icon: "\u2726", durationMs: 2400 });
+    });
+  }
+  els.sunoArtworkStyle?.addEventListener("input", renderArtworkSuggestions);
+  renderArtworkSuggestions();
 })();
 function syncMoodPresetPills() {
   document.querySelectorAll("#moodPresetRow [data-mood]").forEach((b) => {

@@ -8552,6 +8552,9 @@ textarea{
   border-style:dashed;
 }
 
+/* Artwork suggestion pills reuse the Style pill row styling. */
+.artworkSuggestRow{ margin-top:9px; }
+
 /* Singer pills — minimal line icons (Auto/Male/Female). */
 .addressPills--singer .addressPill{
   flex-direction:column;

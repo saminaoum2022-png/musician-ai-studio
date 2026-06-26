@@ -27337,14 +27337,12 @@ function runTrackSheetAction(action, sourceEl) {
     if (action === "report") {
       shut();
       const note = window.prompt("What should we know? (optional)", "");
-      showToast("Thanks — we review reports as soon as we can.", { icon: "✓", durationMs: 3400 });
-      if (note && String(note).trim()) {
-        console.info("[discover/report]", {
-          title: ctx.title,
-          by: ctx.by,
-          handle: ctx.handle,
-          note: String(note).trim(),
-        });
+      if (note === null) return;
+      try {
+        window.location.href = nabadaiReportContentMailtoHref(ctx, note);
+        showToast("Opening your email to send this report…", { icon: "✉", durationMs: 3200 });
+      } catch {
+        showToast("Could not open email. Reach us at support@nabadai.com", { icon: "!", durationMs: 4200 });
       }
       return;
     }
@@ -45508,6 +45506,27 @@ function nabadaiSupportMailtoHref(kind) {
     .filter(Boolean)
     .join("\n");
   return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+// Content reports (3-dots → Report) go to support@ — same inbox as the
+// settings "Report a problem" row — with the reported song's details prefilled.
+function nabadaiReportContentMailtoHref(ctx, note) {
+  const email = "support@nabadai.com";
+  const subject = "NabadAi Music — content report";
+  const build = String(document.getElementById("footerBuild")?.textContent || "").trim();
+  const account =
+    String(authSession?.user?.email || activeProfile?.email || "").trim() || "guest";
+  const handle = String(ctx?.handle || "").trim();
+  const creator = handle ? `@${handle}` : String(ctx?.by || "").trim();
+  const cleanNote = note && String(note).trim() ? String(note).trim() : "(none provided)";
+  const lines = ["I'd like to report this content:", ""];
+  if (ctx?.title) lines.push(`Song: ${ctx.title}`);
+  if (creator) lines.push(`Creator: ${creator}`);
+  if (ctx?.songId) lines.push(`Song ID: ${ctx.songId}`);
+  if (ctx?.url) lines.push(`Audio: ${ctx.url}`);
+  lines.push("", "Reason / details:", cleanNote, "", "---", "App: NabadAi Music");
+  if (build) lines.push(`Build: ${build}`);
+  lines.push(`Reported by: ${account}`);
+  return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join("\n"))}`;
 }
 function wireSettingsSupportLinks() {
   const pairs = [

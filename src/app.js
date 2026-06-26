@@ -22207,9 +22207,13 @@ function scrollMessagesMountToBottom({ force = false } = {}) {
   if (!mount) return;
   if (!force && !shouldAutoScrollMessagesMount()) return;
   try {
-    const anchor = mount.querySelector(".messagesThreadScrollAnchor");
-    if (anchor) anchor.scrollIntoView({ block: "end", inline: "nearest" });
-    else mount.scrollTop = mount.scrollHeight;
+    // The mount itself is the scroll container (overflow-y:auto), so pin to the
+    // bottom by setting scrollTop directly. We deliberately avoid
+    // anchor.scrollIntoView(): it can also scroll ancestors/the window and it
+    // miscomputes while the thread page is mid slide-in transform — that was the
+    // cause of the "bubbles appear high, then jump down / settle" glitch when
+    // opening a conversation.
+    mount.scrollTop = mount.scrollHeight;
   } catch {}
   try { syncDiscoveryPlayingHighlights(); } catch {}
 }

@@ -1,4 +1,5 @@
 import Capacitor
+import ObjectiveC
 import Security
 import UIKit
 import WebKit
@@ -8,15 +9,48 @@ final class BridgeViewController: CAPBridgeViewController {
     private static let authService = "com.nabadai.music.auth.vault"
     private static let authAccount = "mas_supabase_session_v1"
     private var didInjectAuthSession = false
+    private var didStripInputAccessory = false
 
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
         registerAuthUserScriptIfNeeded()
+        removeInputAccessoryView()
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         registerAuthUserScriptIfNeeded()
+        removeInputAccessoryView()
+    }
+
+    /// Strip the WKWebView input accessory view (the `^ v ✓` bar iOS shows above
+    /// the keyboard for web inputs). Native chat apps don't show it, and it also
+    /// inflates the keyboard region, leaving a dead gap above the message
+    /// composer. We do this by reclassing the internal content view to a subclass
+    /// whose `inputAccessoryView` returns nil — the standard WKWebView technique.
+    private func removeInputAccessoryView() {
+        guard !didStripInputAccessory, let webView = webView else { return }
+        guard let contentView = webView.scrollView.subviews.first(where: {
+            String(describing: type(of: $0)).hasPrefix("WKContent")
+        }) else { return }
+
+        let newClassName = "NabadAi_NoInputAccessoryWKContentView"
+        if let existingClass = NSClassFromString(newClassName) {
+            object_setClass(contentView, existingClass)
+            didStripInputAccessory = true
+            return
+        }
+
+        let baseClass: AnyClass = type(of: contentView)
+        guard let newClass = objc_allocateClassPair(baseClass, newClassName, 0) else { return }
+        let selector = #selector(getter: UIResponder.inputAccessoryView)
+        guard let method = class_getInstanceMethod(UIResponder.self, selector) else { return }
+        let block: @convention(block) (AnyObject) -> UIView? = { _ in nil }
+        let imp = imp_implementationWithBlock(block)
+        class_addMethod(newClass, selector, imp, method_getTypeEncoding(method))
+        objc_registerClassPair(newClass)
+        object_setClass(contentView, newClass)
+        didStripInputAccessory = true
     }
 
     private func registerAuthUserScriptIfNeeded() {

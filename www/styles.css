@@ -8283,13 +8283,21 @@ textarea{
    existing Style field, no backend involvement. */
 .styleSuggestRow{
   display:flex;
-  flex-wrap:wrap;
+  flex-wrap:nowrap;
   gap:8px;
   margin-top:11px;
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+  scroll-snap-type:x proximity;
+  padding-bottom:2px;
 }
+.styleSuggestRow::-webkit-scrollbar{ display:none; }
 .styleSuggestPill{
   -webkit-appearance:none;
   appearance:none;
+  flex:0 0 auto;
+  white-space:nowrap;
   display:inline-flex;
   align-items:center;
   gap:6px;
@@ -8318,6 +8326,14 @@ textarea{
 .styleSuggestPill--more{
   color:rgba(232,238,247,0.66);
   border-style:dashed;
+}
+.styleSuggestPill--back{
+  padding:7px 11px;
+  color:rgba(232,238,247,0.8);
+}
+.styleSuggestPill--back .styleSuggestPillIco{
+  font-size:15px;
+  font-weight:700;
 }
 
 /* ── Style library "More" bottom sheet ── */

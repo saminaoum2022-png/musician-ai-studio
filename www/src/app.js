@@ -3861,7 +3861,7 @@ function resetCreateDraft() {
   if (els.sunoAvoidTags) els.sunoAvoidTags.value = "";
   if (els.sunoTitle) els.sunoTitle.value = "";
   try {
-    _styleSuggestVisible = STYLE_BASE_SUGGESTIONS.slice();
+    _styleView = "";
     renderStyleSuggestions();
   } catch {}
   pendingSearchRemixMeta = null;
@@ -43829,43 +43829,35 @@ const STYLE_LIBRARY = [
   { label: "Tempo & meter", tags: ["Slow", "Mid Tempo", "Fast", "90 BPM", "120 BPM", "128 BPM", "4/4", "6/8", "3/4"] },
 ];
 
-let _styleSuggestVisible = STYLE_BASE_SUGGESTIONS.slice();
+// Drill-down state: "" = base suggestions; otherwise a genre key whose
+// related chips replace the row (kept tidy with a back arrow). The pills
+// are ALWAYS a curated set — we never echo or split the Style field, so a
+// boosted long-form description can live in the field without polluting
+// the suggestions.
+let _styleView = "";
 
 function styleTagsSelectedSet() {
   return new Set(styleTagsListFromInput().map((t) => t.toLowerCase()));
 }
 
-function unlockStyleRelated(tag) {
-  const rel = STYLE_RELATED[String(tag || "").toLowerCase()];
-  if (!rel) return;
-  const have = new Set(_styleSuggestVisible.map((t) => t.toLowerCase()));
-  for (const r of rel) {
-    if (!have.has(r.toLowerCase())) {
-      _styleSuggestVisible.push(r);
-      have.add(r.toLowerCase());
-    }
-  }
-  if (_styleSuggestVisible.length > 28) _styleSuggestVisible = _styleSuggestVisible.slice(-28);
-}
-
 function renderStyleSuggestions() {
   const row = els.styleSuggestRow;
   if (!row) return;
-  const selectedList = styleTagsListFromInput();
-  const selected = new Set(selectedList.map((t) => t.toLowerCase()));
-  // Surface any manually-typed tags + unlock their related suggestions.
-  for (const t of selectedList) {
-    if (!_styleSuggestVisible.some((v) => v.toLowerCase() === t.toLowerCase())) _styleSuggestVisible.push(t);
-    unlockStyleRelated(t);
-  }
+  const selected = styleTagsSelectedSet();
+  const inGenre = Boolean(_styleView && STYLE_RELATED[_styleView]);
   let html =
     `<button type="button" class="styleSuggestPill styleSuggestPill--auto" data-style-auto="1" aria-label="Let AI suggest a style"><span class="styleSuggestPillIco" aria-hidden="true">\u2728</span>Auto</button>`;
-  for (const tag of _styleSuggestVisible) {
+  if (inGenre) {
+    html += `<button type="button" class="styleSuggestPill styleSuggestPill--back" data-style-back="1" aria-label="Back to suggestions"><span class="styleSuggestPillIco" aria-hidden="true">\u2039</span></button>`;
+  }
+  const chips = inGenre ? STYLE_RELATED[_styleView] : STYLE_BASE_SUGGESTIONS;
+  for (const tag of chips) {
     const on = selected.has(tag.toLowerCase());
     html += `<button type="button" class="styleSuggestPill${on ? " isActive" : ""}" data-style-tag="${escapeHtml(tag)}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(tag)}</button>`;
   }
   html += `<button type="button" class="styleSuggestPill styleSuggestPill--more" data-style-more="1"><span class="styleSuggestPillIco" aria-hidden="true">+</span>More</button>`;
   row.innerHTML = html;
+  row.scrollLeft = 0;
 }
 
 function autoSuggestStyles() {
@@ -43891,8 +43883,8 @@ function autoSuggestStyles() {
     if (!seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); final.push(t); }
   }
   const picked = final.slice(0, 6);
+  _styleView = "";
   addStyleTags(picked);
-  picked.forEach(unlockStyleRelated);
   renderStyleSuggestions();
   try { syncGenerateOrbVisibility(); } catch {}
   showToast(
@@ -43939,13 +43931,16 @@ function closeStyleLibrary() {
       haptic("light");
       if (btn.hasAttribute("data-style-auto")) { autoSuggestStyles(); return; }
       if (btn.hasAttribute("data-style-more")) { openStyleLibrary(); return; }
+      if (btn.hasAttribute("data-style-back")) { _styleView = ""; renderStyleSuggestions(); return; }
       const tag = btn.getAttribute("data-style-tag");
       if (!tag) return;
-      if (styleTagsSelectedSet().has(tag.toLowerCase())) {
+      const key = tag.toLowerCase();
+      if (styleTagsSelectedSet().has(key)) {
         removeStyleTags([tag]);
       } else {
         addStyleTags([tag]);
-        unlockStyleRelated(tag);
+        // Drill into this genre's related chips (replaces the row, stays tidy).
+        if (STYLE_RELATED[key]) _styleView = key;
       }
       renderStyleSuggestions();
       try { syncGenerateOrbVisibility(); } catch {}
@@ -43963,7 +43958,6 @@ function closeStyleLibrary() {
         removeStyleTags([tag]);
       } else {
         addStyleTags([tag]);
-        unlockStyleRelated(tag);
       }
       renderStyleLibrary();
       renderStyleSuggestions();

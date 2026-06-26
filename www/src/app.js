@@ -22807,6 +22807,54 @@ function closeSendToFriendSheet() {
   sheet.hidden = true;
   sheet.setAttribute("aria-hidden", "true");
   document.body.classList.remove("sendToFriendOpen");
+  hideSendToFriendConfirm();
+}
+
+const SEND_TO_FRIEND_LEAD_DEFAULT = "Pick someone you follow who follows you back.";
+let _sendToFriendConfirmFriend = null;
+
+// Confirm step for the Discover → "Send to a friend" flow: after picking a
+// friend, show who will receive the song before it's sent. The song itself is
+// already previewed at the top of the sheet.
+function showSendToFriendConfirm(friend) {
+  const list = document.getElementById("sendToFriendList");
+  const confirm = document.getElementById("sendToFriendConfirm");
+  const lead = document.getElementById("sendToFriendLead");
+  if (!confirm || !friend) return;
+  _sendToFriendConfirmFriend = friend;
+  const handle = String(friend.username || "creator").replace(/^@/, "").trim() || "creator";
+  const songTitle = String(_pendingInAppShareRef?.title || "this song").trim() || "this song";
+  const avatarHtml = messagesAvatarHtml(friend.avatar, friend.username, "messagesShareConfirmAvatar");
+  if (lead) lead.textContent = `Send "${songTitle}" to @${handle}?`;
+  confirm.innerHTML = `
+    <div class="messagesShareConfirmCard">
+      ${avatarHtml}
+      <div class="messagesShareConfirmInfo">
+        <strong class="messagesShareConfirmTitle">@${escapeHtml(handle)}</strong>
+        <span class="messagesShareConfirmSub">Will receive this song</span>
+      </div>
+    </div>
+    <div class="messagesShareConfirmActions">
+      <button type="button" class="messagesShareConfirmBack" data-sf-confirm-back>Choose another</button>
+      <button type="button" class="messagesShareConfirmSend" data-sf-confirm-send>Send</button>
+    </div>`;
+  if (list) list.hidden = true;
+  confirm.hidden = false;
+  confirm.setAttribute("aria-hidden", "false");
+}
+
+function hideSendToFriendConfirm() {
+  const list = document.getElementById("sendToFriendList");
+  const confirm = document.getElementById("sendToFriendConfirm");
+  const lead = document.getElementById("sendToFriendLead");
+  _sendToFriendConfirmFriend = null;
+  if (confirm) {
+    confirm.hidden = true;
+    confirm.setAttribute("aria-hidden", "true");
+    confirm.innerHTML = "";
+  }
+  if (list) list.hidden = false;
+  if (lead) lead.textContent = SEND_TO_FRIEND_LEAD_DEFAULT;
 }
 
 async function fetchMutualFriendsForShare() {
@@ -22882,6 +22930,7 @@ async function openSendToFriendSheet(ref) {
   const preview = document.getElementById("sendToFriendPreview");
   if (!sheet || !list) return;
   renderInAppSharePreview(shareRef, preview);
+  hideSendToFriendConfirm();
   sheet.hidden = false;
   sheet.setAttribute("aria-hidden", "false");
   document.body.classList.add("sendToFriendOpen");
@@ -22948,6 +22997,11 @@ async function sendShareRefToFriend(friend, shareRef) {
     void refreshMessagesUnreadBadge({ force: true });
   } catch (e) {
     try { showToast(String(e?.message || "Could not send song"), { icon: "🎵", durationMs: 2800 }); } catch {}
+    const sendBtn = document.querySelector("[data-sf-confirm-send]");
+    if (sendBtn) {
+      sendBtn.removeAttribute("aria-busy");
+      sendBtn.textContent = "Send";
+    }
   }
 }
 
@@ -23030,7 +23084,28 @@ function wireInAppShareSheetsOnce() {
     if (!row) return;
     const idx = Number(row.getAttribute("data-send-friend-idx"));
     const friend = _sendToFriendCandidates[idx];
-    if (friend) void sendShareRefToFriend(friend, _pendingInAppShareRef);
+    if (friend) showSendToFriendConfirm(friend);
+  });
+  document.getElementById("sendToFriendConfirm")?.addEventListener("click", (e) => {
+    const back = e.target.closest("[data-sf-confirm-back]");
+    if (back) {
+      e.preventDefault();
+      try { haptic("light"); } catch {}
+      hideSendToFriendConfirm();
+      return;
+    }
+    const send = e.target.closest("[data-sf-confirm-send]");
+    if (send) {
+      e.preventDefault();
+      if (send.getAttribute("aria-busy") === "true") return;
+      try { haptic("light"); } catch {}
+      const friend = _sendToFriendConfirmFriend;
+      if (friend) {
+        send.setAttribute("aria-busy", "true");
+        send.textContent = "Sending…";
+        void sendShareRefToFriend(friend, _pendingInAppShareRef);
+      }
+    }
   });
 }
 

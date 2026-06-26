@@ -28718,6 +28718,20 @@ html.is-web-shell body.messagesThreadViewportSized[data-route="messages-thread"]
   flex: 0 0 auto;
   box-shadow: 0 6px 18px rgba(0,0,0,0.35);
 }
+.messagesShareConfirmAvatar{
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(124,92,255,0.18);
+  color: #f1ecff;
+  font-size: 20px;
+  font-weight: 800;
+}
 .messagesShareConfirmInfo{
   min-width: 0;
   display: flex;

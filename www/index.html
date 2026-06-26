@@ -95,7 +95,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260626dmsongalign" />
+    <link rel="stylesheet" href="./styles.css?v=20260626sharefriendconfirm" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -3655,8 +3655,9 @@
           <button type="button" class="messagesShareSheetClose" id="sendToFriendSheetClose" aria-label="Close">×</button>
         </header>
         <div id="sendToFriendPreview" class="sendToFriendPreview" aria-hidden="true"></div>
-        <p class="messagesShareSheetLead">Pick someone you follow who follows you back.</p>
+        <p id="sendToFriendLead" class="messagesShareSheetLead">Pick someone you follow who follows you back.</p>
         <div id="sendToFriendList" class="messagesShareList" role="listbox" aria-label="Friends"></div>
+        <div id="sendToFriendConfirm" class="messagesShareConfirm" hidden aria-hidden="true"></div>
       </section>
     </div>
 
@@ -3884,6 +3885,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260626dmsharearchive"></script>
+    <script type="module" src="./src/app.js?v=20260626sharefriendconfirm"></script>
   </body>
 </html>

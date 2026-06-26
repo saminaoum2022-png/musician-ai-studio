@@ -37709,7 +37709,7 @@ body[data-route="friends"] .followAct--xstyle .followActStatusText{
 body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHeroPlayer){
   margin-top: 18px;
 }
-:is(#friendsPage, #profileActivitiesList) .followAct--xstyle > .followActMediaWrap{
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct--xstyle > .followActMediaWrap{
   margin-top: 18px;
   width: 100%;
   margin-left: 0;
@@ -37719,10 +37719,10 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   border: 0;
   box-shadow: none;
 }
-:is(#friendsPage, #profileActivitiesList) .followAct--xstyle > .followActContent + .followActMediaWrap{
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct--xstyle > .followActContent + .followActMediaWrap{
   margin-top: 14px;
 }
-:is(#friendsPage, #profileActivitiesList) .followAct--xstyle .followActMediaWrap .followActMedia{
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct--xstyle .followActMediaWrap .followActMedia{
   width: 100%;
   margin: 0;
   aspect-ratio: 1 / 1;
@@ -37733,25 +37733,25 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   box-shadow: none;
   overflow: hidden;
 }
-:is(#friendsPage, #profileActivitiesList) .followAct--xstyle .followActMediaImg{
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct--xstyle .followActMediaImg{
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-:is(#friendsPage, #profileActivitiesList) .followAct--xstyle .followActMedia .discoverCoverPlay,
-:is(#friendsPage, #profileActivitiesList) .followAct--xstyle .followActMediaPlay,
-:is(#friendsPage, #profileActivitiesList) .followAct--xstyle .feedHeroPlayerBlurBg,
-:is(#friendsPage, #profileActivitiesList) .followAct--xstyle .feedHeroPlayerCenterPlay,
-:is(#friendsPage, #profileActivitiesList) .followAct--xstyle .feedHeroPlayerChrome,
-:is(#friendsPage, #profileActivitiesList) .followAct--xstyle .feedHeroPlayerControls{
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct--xstyle .followActMedia .discoverCoverPlay,
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct--xstyle .followActMediaPlay,
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct--xstyle .feedHeroPlayerBlurBg,
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct--xstyle .feedHeroPlayerCenterPlay,
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct--xstyle .feedHeroPlayerChrome,
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct--xstyle .feedHeroPlayerControls{
   display: none !important;
 }
-:is(#friendsPage, #profileActivitiesList) .followAct--xstyle.discoveryRowPlaying .followActMedia,
-:is(#friendsPage, #profileActivitiesList) .followAct--xstyle.discoveryRowActive .followActMedia{
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct--xstyle.discoveryRowPlaying .followActMedia,
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct--xstyle.discoveryRowActive .followActMedia{
   box-shadow: none;
 }
 /* Soft bottom scrim so the play button + seek line read on any artwork */
-:is(#friendsPage, #profileActivitiesList) .followAct--xstyle .followActMediaScrim{
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct--xstyle .followActMediaScrim{
   position: absolute;
   left: 0;
   right: 0;
@@ -37764,7 +37764,7 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   transition: opacity 200ms ease;
 }
 /* Premium frosted play / pause control, centered on the cover */
-:is(#friendsPage, #profileActivitiesList) .followAct--xstyle .followActMediaPlayBtn{
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct--xstyle .followActMediaPlayBtn{
   position: absolute;
   top: 50%;
   left: 50%;
@@ -37785,15 +37785,15 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   pointer-events: none;
   transition: transform 200ms cubic-bezier(.2,.7,.2,1), background 200ms ease, opacity 200ms ease;
 }
-:is(#friendsPage, #profileActivitiesList) .followAct--xstyle .followActMediaPlayBtn .coverArtPlayIco--play{
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct--xstyle .followActMediaPlayBtn .coverArtPlayIco--play{
   margin-left: 3px;
 }
-:is(#friendsPage, #profileActivitiesList) .followAct--xstyle .followActMedia:active .followActMediaPlayBtn{
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct--xstyle .followActMedia:active .followActMediaPlayBtn{
   transform: translate(-50%, -50%) scale(.92);
   background: rgba(14,18,26,.56);
 }
 /* While this track is playing, ease the button back so the artwork breathes */
-:is(#friendsPage, #profileActivitiesList) .followAct--xstyle.discoveryRowPlaying .followActMediaPlayBtn{
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct--xstyle.discoveryRowPlaying .followActMediaPlayBtn{
   width: 56px;
   height: 56px;
   opacity: .9;
@@ -37803,7 +37803,7 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
 .followActMediaTitle{
   display: none;
 }
-:is(#friendsPage, #profileActivitiesList) .followAct--xstyle .followActMediaTitle{
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct--xstyle .followActMediaTitle{
   display: block;
   position: absolute;
   left: 16px;
@@ -37823,7 +37823,7 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   text-overflow: ellipsis;
   pointer-events: none;
 }
-:is(#friendsPage, #profileActivitiesList) .followActRealtimeProgress{
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followActRealtimeProgress{
   position: absolute;
   left: 14px;
   right: 14px;
@@ -37833,7 +37833,7 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   margin: 0;
   padding: 0;
 }
-:is(#friendsPage, #profileActivitiesList) .followActRealtimeSeek{
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followActRealtimeSeek{
   --feedSeekPct: 0%;
   -webkit-appearance: none;
   appearance: none;
@@ -37846,23 +37846,23 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   display: block;
   cursor: pointer;
 }
-:is(#friendsPage, #profileActivitiesList) .followActRealtimeSeek:disabled{
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followActRealtimeSeek:disabled{
   cursor: default;
 }
-:is(#friendsPage, #profileActivitiesList) .followActRealtimeSeek::-webkit-slider-runnable-track{
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followActRealtimeSeek::-webkit-slider-runnable-track{
   height: 3px;
   border-radius: 999px;
   background:
     linear-gradient(90deg, rgba(124,92,255,.95), rgba(45,222,183,.78)) 0 / var(--feedSeekPct) 100% no-repeat,
     rgba(232,238,247,.16);
 }
-:is(#friendsPage, #profileActivitiesList) .followActRealtimeSeek::-webkit-slider-thumb{
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followActRealtimeSeek::-webkit-slider-thumb{
   -webkit-appearance: none;
   appearance: none;
   width: 0;
   height: 0;
 }
-:is(#friendsPage, #profileActivitiesList) .followActRealtimeProgress.isActive .followActRealtimeSeek::-webkit-slider-thumb{
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followActRealtimeProgress.isActive .followActRealtimeSeek::-webkit-slider-thumb{
   width: 10px;
   height: 10px;
   margin-top: -3.5px;
@@ -37870,22 +37870,22 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   background: rgba(246,249,255,.96);
   box-shadow: 0 0 0 3px rgba(124,92,255,.18), 0 4px 10px rgba(0,0,0,.32);
 }
-:is(#friendsPage, #profileActivitiesList) .followActRealtimeSeek::-moz-range-track{
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followActRealtimeSeek::-moz-range-track{
   height: 3px;
   border-radius: 999px;
   background: rgba(232,238,247,.16);
 }
-:is(#friendsPage, #profileActivitiesList) .followActRealtimeSeek::-moz-range-progress{
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followActRealtimeSeek::-moz-range-progress{
   height: 3px;
   border-radius: 999px;
   background: linear-gradient(90deg, rgba(124,92,255,.95), rgba(45,222,183,.78));
 }
-:is(#friendsPage, #profileActivitiesList) .followActRealtimeSeek::-moz-range-thumb{
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followActRealtimeSeek::-moz-range-thumb{
   width: 0;
   height: 0;
   border: 0;
 }
-:is(#friendsPage, #profileActivitiesList) .followActRealtimeProgress.isActive .followActRealtimeSeek::-moz-range-thumb{
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followActRealtimeProgress.isActive .followActRealtimeSeek::-moz-range-thumb{
   width: 10px;
   height: 10px;
   border-radius: 999px;

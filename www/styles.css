@@ -31949,6 +31949,12 @@ section.mentorPage{
   stroke-linejoin: round;
   display: block;
 }
+/* Slightly larger interaction icons in the premium feed cards (Friends, own
+   Profile, public profiles). Scoped so Discover and other rows stay at 16px. */
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followActActIco{
+  width: 18px;
+  height: 18px;
+}
 .followActAct[data-friends-act="plays"] .followActActIco,
 .followActAct--analytics .followActActIco{
   fill: currentColor;

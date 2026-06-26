@@ -37977,7 +37977,8 @@ body[data-route="friends"] .feedHeroPlayerCtrl{
   color: rgba(240,244,255,.7);
 }
 body[data-route="friends"] .followAct--xstyle .followActActions{
-  margin-top: 16px;
+  /* Spacing above the action row comes from .followActActionsBar (12px),
+     same as Profile. No extra top margin here, or Friends double-spaces. */
   display: flex;
   align-items: center;
   justify-content: flex-start;

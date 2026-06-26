@@ -31091,7 +31091,19 @@ function buildProofComposition(post) {
   const mode = String(meta.mode || post?.kind || "").toLowerCase();
   const lyricsInput = String(meta.lyricsInput || "").trim();
   const finalPrompt = String(meta.finalPrompt || "").trim();
-  const personaName = String(meta.personaLabel || meta.personaName || "").trim();
+  // Persona is saved on the song as `personaId`; resolve its name from the
+  // local persona library (works for the owner's own songs). Older songs may
+  // carry a denormalised label instead.
+  let personaName = String(meta.personaLabel || meta.personaName || "").trim();
+  if (!personaName) {
+    const pid = String(meta.personaId || "").trim();
+    if (pid) {
+      try {
+        const hit = loadPersonas().find((x) => String(x.personaId) === pid);
+        if (hit) personaName = String(hit.label || "").trim();
+      } catch {}
+    }
+  }
 
   let lyrics = "";
   if (mode.includes("instrumental") || mode === "sound") {
@@ -37818,14 +37830,28 @@ function renderAboutThisSong({ track, title, subtitle, lyrics, owner = false } =
   const postLike = track ? trackAsProofPost(track) : { meta, kind: meta.mode || "full", proof: {} };
   const comp = buildProofComposition(postLike);
   const mode = String(meta.mode || track?.kind || "").toLowerCase();
-  const usedHum = mode === "hum" || Boolean(meta.humMelody);
-  const usedPhoto = mode === "photo" || Boolean(meta.imageUrl) || Boolean(meta.photoMode);
-  const isInstrumental = mode.includes("instrumental") || mode === "sound";
+  const kind = String(track?.kind || "").toLowerCase();
+  const isInstrumental = kind === "instrumental" || kind === "sound" || mode.includes("instrumental");
 
+  // Music composition reflects how the track was actually built, read from
+  // the signals we really persist: hasReference + vocalRefOrigin for a user
+  // voice/melody reference, photo signals for image-inspired, else NabadAI.
+  const usedReference = Boolean(meta.hasReference);
+  const refOrigin = String(meta.vocalRefOrigin || "").toLowerCase();
+  const usedPhoto = Boolean(meta.photoMode || meta.imageUrl || meta.imageOnlyInstrumental) || mode.includes("photo") || mode.includes("image");
   let composition;
-  if (usedHum) composition = "From your hummed melody";
-  else if (usedPhoto) composition = "Composed by NabadAI · inspired by your photo";
-  else composition = "Composed by NabadAI";
+  if (usedReference) {
+    if (refOrigin === "upload") composition = "Built on your uploaded audio";
+    else if (refOrigin === "remix") composition = "Remixed from another song";
+    else composition = "From your voice reference"; // recorded / hummed melody
+  } else if (usedPhoto) {
+    composition = "Composed by NabadAI · inspired by your photo";
+  } else {
+    composition = "Composed by NabadAI";
+  }
+
+  const singerGender = String(meta.singerGender || "").toLowerCase();
+  const singerLabel = singerGender === "m" ? "Male" : singerGender === "f" ? "Female" : "";
 
   const createdAt = formatSongCreatedLabel(track?.ts) || "";
   let style = comp.style;
@@ -37872,6 +37898,7 @@ function renderAboutThisSong({ track, title, subtitle, lyrics, owner = false } =
       ${comp.lyrics ? songDetailsFlatRow("Lyrics source", comp.lyrics) : ""}
       ${composition ? songDetailsFlatRow("Music composition", composition) : ""}
       ${comp.persona ? songDetailsFlatRow("Persona", comp.persona) : ""}
+      ${!comp.persona && singerLabel ? songDetailsFlatRow("Singer", singerLabel) : ""}
       ${style ? songDetailsFlatRow("Style", style) : ""}
       ${challenge ? songDetailsFlatRow("Challenge", challengeAttributionText(challenge)) : ""}
       ${templateTitle ? songDetailsFlatRow("Template", templateTitle) : ""}

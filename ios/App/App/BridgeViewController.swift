@@ -15,12 +15,39 @@ final class BridgeViewController: CAPBridgeViewController {
         super.capacitorDidLoad()
         registerAuthUserScriptIfNeeded()
         removeInputAccessoryView()
+        lockWebViewZoom()
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         registerAuthUserScriptIfNeeded()
         removeInputAccessoryView()
+        lockWebViewZoom()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        // On a cold launch the WKWebView can settle at a zoomScale below 1
+        // (laying the page out at a wider-than-screen logical width, so the whole
+        // UI looks "zoomed out" until a later reflow). Re-pin the scroll zoom to
+        // 1 after every layout pass so the page is always at device scale.
+        if let sv = webView?.scrollView, abs(sv.zoomScale - 1) > 0.001 {
+            sv.setZoomScale(1, animated: false)
+        }
+    }
+
+    /// Disable WKWebView pinch/auto zoom entirely and pin the scroll zoom to 1 so
+    /// the page never renders shrunk-to-fit.
+    private func lockWebViewZoom() {
+        guard let webView = webView else { return }
+        let sv = webView.scrollView
+        sv.minimumZoomScale = 1
+        sv.maximumZoomScale = 1
+        sv.bouncesZoom = false
+        sv.pinchGestureRecognizer?.isEnabled = false
+        if abs(sv.zoomScale - 1) > 0.001 {
+            sv.setZoomScale(1, animated: false)
+        }
     }
 
     /// Strip the WKWebView input accessory view (the `^ v ✓` bar iOS shows above

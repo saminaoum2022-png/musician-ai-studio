@@ -28206,16 +28206,40 @@ button.activityRow--unavailable{
   animation: spin 0.8s linear infinite;
 }
 
-/* --- Shared Nabad back control (icon-only tap target; glass system) --- */
+/* --- Shared Nabad back control --- */
+/* Icon-only: drop the glass container (border / fill / blur / shadow) and keep
+   just the chevron, while preserving the full-size tap target. Placed after the
+   shared glass rules so it wins by source order without !important. */
+.nabadBackBtn{
+  border: 0;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+          backdrop-filter: none;
+  box-shadow: none;
+}
+.nabadBackBtn:hover{
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
 .nabadBackBtn svg{
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   flex-shrink: 0;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+/* Player mode: bare icon over (often bright) cover art needs a touch of depth —
+   a subtle dark halo keeps the chevron readable without a visible container. */
+body[data-route="player"] .nabadBackBtn{
+  color: #fff;
+}
+body[data-route="player"] .nabadBackBtn svg{
+  filter: drop-shadow(0 1px 5px rgba(0, 0, 0, 0.6));
+  stroke-width: 2.2;
 }
 .userPublicBack.nabadBackBtn:not([hidden]){
   position: absolute;
@@ -28311,6 +28335,32 @@ body[data-route="messages"]{
   flex: 0 0 auto;
   align-self: flex-start;
   margin-top: 2px;
+}
+/* Icon-only DM entry: drop the glass container, keep the bubble (kept the full
+   tap target). Higher specificity (.friendsMessagesBtn.discoveryRefreshBtn)
+   beats the shared glass rule. */
+.friendsMessagesBtn.discoveryRefreshBtn{
+  border: 0;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+          backdrop-filter: none;
+  box-shadow: none;
+  color: rgba(244, 247, 255, 0.95);
+}
+.friendsMessagesBtn.discoveryRefreshBtn:hover{
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+.friendsMessagesBtn.discoveryRefreshBtn:active{
+  transform: scale(0.9);
+}
+.friendsMessagesBtn .discoveryRefreshIco{
+  width: 25px;
+  height: 25px;
+  stroke-width: 1.9;
+  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.35));
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .friendsMessagesBadge{
   position: absolute;

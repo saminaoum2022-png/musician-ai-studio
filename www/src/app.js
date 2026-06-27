@@ -12703,6 +12703,11 @@ function followingActivitySkeletonHtml() {
   // Mix two music rows (with quoted track card) and two status rows (text only),
   // matching the X-style layout the real feed renders. Avatar on the left,
   // meta + body + actions stacked in the right column, divider between rows.
+  // Mirror the REAL music row's DOM exactly so the loading state lines up with
+  // the rendered post (no size snap): top row → caption line → full-width
+  // square cover (followActMediaWrap > followActMedia) → actions bar. The cover
+  // inherits the same friends-feed sizing (aspect 1/1, radius, margins) as the
+  // real card, and a scoped CSS rule keeps the shimmer on it.
   const musicRow = (i) => `
     <article class="followAct followAct--xstyle followAct--music followAct--skel" style="--i:${i}" aria-hidden="true">
       <div class="followActTop">
@@ -12713,15 +12718,18 @@ function followingActivitySkeletonHtml() {
           </div>
         </div>
       </div>
-      <div class="followActQuoteRow">
-        <div class="followActQuoteCard followActQuoteCard--hero feedHeroPlayer followActQuoteCard--skel">
-          <span class="feedHeroPlayerStage followActQuoteArt followActQuoteArt--hero followActSkel"></span>
-        </div>
+      <div class="followActContent">
+        <span class="followActSkel followActSkelTextLine short"></span>
       </div>
-      <div class="followActActions">
-        <span class="followActAct followActAct--skel followActSkel"></span>
-        <span class="followActAct followActAct--skel followActSkel"></span>
-        <span class="followActAct followActAct--skel followActSkel"></span>
+      <div class="followActMediaWrap">
+        <div class="followActMedia followActSkel"></div>
+      </div>
+      <div class="followActActionsBar">
+        <div class="followActActions">
+          <span class="followActAct followActAct--skel followActSkel"></span>
+          <span class="followActAct followActAct--skel followActSkel"></span>
+          <span class="followActAct followActAct--skel followActSkel"></span>
+        </div>
       </div>
     </article>`;
   const statusRow = (i) => `

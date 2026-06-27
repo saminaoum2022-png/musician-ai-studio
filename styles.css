@@ -38401,11 +38401,14 @@ body[data-route="friends"] .friendsPage{
   margin-inline: auto;
   padding-inline: 0;
 }
-body[data-route="friends"] .friendsPage .discoveryStudioHead{
+/* Scoped to the section (not the body route attr) so the header layout is
+   correct on the very first paint — otherwise the DM icon rendered with the
+   base header alignment/padding and visibly jumped once data-route landed. */
+.friendsPage .discoveryStudioHead{
   padding: 0 22px 16px;
   align-items: center;
 }
-body[data-route="friends"] .friendsPage .appScreenTitle{
+.friendsPage .appScreenTitle{
   font-size: clamp(28px, 6vw, 36px);
   line-height: 1.05;
   letter-spacing: -0.04em;
@@ -38509,6 +38512,17 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+/* Skeleton cover reuses the real .followActMedia box (square aspect, radius,
+   margins) so the loading state matches the rendered post; re-apply the
+   shimmer here because the friends-feed cover sets a static background that
+   would otherwise win over .followActSkel. */
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct--xstyle .followActMediaWrap .followActMedia.followActSkel{
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.04) 100%);
+  background-size: 200% 100%;
+  animation: discoveryShimmer 1.15s ease-in-out infinite;
+  cursor: default;
+  pointer-events: none;
 }
 :is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct--xstyle .followActMedia .discoverCoverPlay,
 :is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct--xstyle .followActMediaPlay,
@@ -38767,7 +38781,7 @@ body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[da
 }
 
 @media (max-width: 430px){
-  body[data-route="friends"] .friendsPage .discoveryStudioHead{
+  .friendsPage .discoveryStudioHead{
     padding-inline: 18px;
   }
   body[data-route="friends"] .friendsPage .followActStack .followAct.followAct--xstyle{

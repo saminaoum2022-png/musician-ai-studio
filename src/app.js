@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260624feedMusicPlayer";
+const APP_BUILD = "20260627coldzoom-dbg";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -84,7 +84,24 @@ const MESSAGES_FEATURE_ENABLED = true;
 
 (() => {
   const f = document.getElementById("footerBuild");
-  if (f) f.textContent = `Build ${APP_BUILD}`;
+  if (!f) return;
+  // TEMP DIAGNOSTIC: surface live viewport metrics so we can see exactly what
+  // the WebView reports during the cold-launch "zoomed out" state.
+  const render = () => {
+    const vv = window.visualViewport;
+    const iw = window.innerWidth;
+    const cw = document.documentElement.clientWidth;
+    const sc = vv ? Math.round(vv.scale * 1000) / 1000 : "?";
+    const vw = vv ? Math.round(vv.width) : "?";
+    f.textContent = `Build ${APP_BUILD} · iw${iw} cw${cw} vv${vw} sc${sc} dpr${window.devicePixelRatio}`;
+  };
+  render();
+  window.addEventListener("resize", render);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", render);
+    window.visualViewport.addEventListener("scroll", render);
+  }
+  setInterval(render, 500);
 })();
 try {
   initTheme();

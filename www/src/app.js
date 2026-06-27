@@ -12721,9 +12721,7 @@ function followingActivitySkeletonHtml() {
       <div class="followActContent">
         <span class="followActSkel followActSkelTextLine short"></span>
       </div>
-      <div class="followActMediaWrap">
-        <div class="followActMedia followActSkel"></div>
-      </div>
+      <div class="followActSkelHero followActSkel"></div>
       <div class="followActActionsBar">
         <div class="followActActions">
           <span class="followActAct followActAct--skel followActSkel"></span>

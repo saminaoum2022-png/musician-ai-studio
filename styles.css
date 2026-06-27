@@ -38413,11 +38413,11 @@ body[data-route="friends"] .friendsPage{
   line-height: 1.05;
   letter-spacing: -0.04em;
 }
-body[data-route="friends"] .friendsPage .followActStack{
+.friendsPage .followActStack{
   gap: 0;
   padding: 0 0 calc(var(--bottomNavClearance, 110px) + 22px);
 }
-body[data-route="friends"] .friendsPage .followActStack .followAct.followAct--xstyle{
+.friendsPage .followActStack .followAct.followAct--xstyle{
   margin: 0;
   padding: 0 20px 30px;
   border: 0;
@@ -38426,7 +38426,7 @@ body[data-route="friends"] .friendsPage .followActStack .followAct.followAct--xs
   box-shadow: none;
   border-bottom: 1px solid rgba(232, 238, 247, .075);
 }
-body[data-route="friends"] .friendsPage .followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle{
+.friendsPage .followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle{
   padding-top: 30px;
 }
 body[data-route="friends"] .followAct--xstyle .followActTop{
@@ -38513,29 +38513,17 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   height: 100%;
   object-fit: cover;
 }
-/* Skeleton cover: self-contained sizing so it matches the real post's
-   full-width square in EVERY state. We deliberately do NOT depend on the
-   #friendsPage-scoped cover rules — during the page-enter transition those
-   weren't applying yet, so the cover briefly fell back to the base
-   .followActMedia box (offset 50px, 16/9, capped height) and snapped to a
-   square once loaded. Scoping to .followAct--skel keeps it correct throughout
-   and also re-applies the shimmer (the base cover background would win over
-   .followActSkel otherwise). */
-.followAct--xstyle.followAct--skel > .followActMediaWrap{
-  width: 100% !important;
-  margin: 14px 0 0 !important;
-}
-.followAct--xstyle.followAct--skel .followActMediaWrap .followActMedia{
-  width: 100% !important;
-  margin: 0 !important;
-  aspect-ratio: 1 / 1 !important;
-  max-height: none !important;
-  min-height: 0 !important;
-  border-radius: 28px !important;
-  background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.04) 100%) !important;
-  background-size: 200% 100% !important;
-  animation: discoveryShimmer 1.15s ease-in-out infinite !important;
-  cursor: default;
+/* Skeleton cover: a dedicated element that inherits NOTHING from the
+   .followActMedia / .followActMediaWrap base rules (those used a 50px offset,
+   16/9 ratio and a 220px height cap, which is what made the loading cover look
+   small and shifted). Full-width square matching the real post's cover, with
+   the shimmer baked in. .followActSkelHero has no competing rules anywhere. */
+.followAct--xstyle.followAct--skel .followActSkelHero{
+  display: block;
+  width: 100%;
+  margin: 14px 0 0;
+  aspect-ratio: 1 / 1;
+  border-radius: 28px;
   pointer-events: none;
 }
 :is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct--xstyle .followActMedia .discoverCoverPlay,
@@ -38798,7 +38786,7 @@ body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[da
   .friendsPage .discoveryStudioHead{
     padding-inline: 18px;
   }
-  body[data-route="friends"] .friendsPage .followActStack .followAct.followAct--xstyle{
+  .friendsPage .followActStack .followAct.followAct--xstyle{
     padding-inline: 18px;
   }
   body[data-route="friends"] .followAct--xstyle .feedHeroPlayerStage.followActQuoteArt--hero{

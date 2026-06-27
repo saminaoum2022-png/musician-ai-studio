@@ -12729,7 +12729,11 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   display: flex;
   flex-direction: column;
   gap: 14px;
-  animation: sectionFadeIn 260ms ease;
+  /* No section-level entrance animation: the route-enter transition
+     (animateRouteEnter) already animates this panel. A separate
+     `animation: sectionFadeIn` (translateY 8px→0) re-fires when the
+     routeEnter class is removed, making the whole panel nudge 8px and
+     snap back — the "misplace then settle" glitch. */
   /* Contain children — keeps the cover shelf, heartbeat, and any long
      song titles from forcing horizontal scroll on the whole page. */
   max-width: 100%;

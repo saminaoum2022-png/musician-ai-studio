@@ -99,12 +99,14 @@ const MESSAGES_FEATURE_ENABLED = true;
     const grid = document.querySelector("main.grid");
     const gtc = grid ? getComputedStyle(grid).gridTemplateColumns : "-";
     const panel = document.querySelector('main.grid > [data-route]:not([style*="display: none"])');
-    const panelTf = panel ? getComputedStyle(panel).transform : "-";
+    const cs = panel ? getComputedStyle(panel) : null;
+    const ji = grid ? getComputedStyle(grid).justifyItems : "-";
     f.textContent =
       `B${APP_BUILD} iw${iw} sc${sc} | app${w(".app")} grid${w("main.grid")} ` +
       `panel${panel ? Math.round(panel.getBoundingClientRect().width) : "-"} ` +
       `fp${w(".friendsPage")} list${w("#discoveryFollowingList")} | ` +
-      `gtc[${gtc}] tf[${panelTf}]`;
+      `gtc[${gtc}] ji[${ji}] js[${cs ? cs.justifySelf : "-"}] disp[${cs ? cs.display : "-"}] ` +
+      `body[${document.body.className || "-"}]`;
   };
   try {
     f.style.whiteSpace = "normal";

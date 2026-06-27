@@ -6859,6 +6859,16 @@ body.hubJumpingToTop #hubList .hubRow{
   grid-template-columns: 1fr 1fr;
   gap:14px;
 }
+/* Route panels must always fill their grid column. Without this they size to
+   content (justify-self resolves to non-stretch somewhere up the cascade), which
+   is invisible while real posts are wide but collapses the whole page to a
+   narrow centered column whenever the content is narrow — e.g. the cold-launch
+   loading skeleton, which made the page look "zoomed out" until data arrived. */
+main.grid > [data-route]{
+  justify-self: stretch;
+  width: 100%;
+  min-width: 0;
+}
 .grid.routeSwap{
   animation: routeSwapIn 280ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }

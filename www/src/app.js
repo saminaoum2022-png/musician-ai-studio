@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260628g";
+const APP_BUILD = "20260628h-dbg";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -48105,3 +48105,109 @@ setStatus(
 function clampInt(n, min, max) {
   return Math.max(min, Math.min(max, Math.round(n)));
 }
+
+// ─── TEMP DEBUG: startup flash timeline overlay ──────────────────────────────
+// Records, frame-by-frame from before the boot splash lifts, exactly what is on
+// screen: booting flag, data-route, which [data-route] panels are visible (a
+// flash is usually >1 panel visible for a frame, or the wrong route showing for
+// a frame before syncRoutePanelVisibility collapses it), header/footer/splash
+// visibility, viewport width + scale (catches the zoom/reflow). Only logs a row
+// when the state STRING changes, so the list is the exact sequence of screens.
+// Set DEBUG = false (or delete this block) to remove.
+(function startupFlashDebugOverlay() {
+  if (typeof document === "undefined") return;
+  const DEBUG = true;
+  if (!DEBUG) return;
+
+  const style = document.createElement("style");
+  style.id = "sfdbgStyle";
+  style.textContent = `
+    .sfdbgPanel{position:fixed;top:0;left:0;right:0;z-index:2147483647;margin:0;padding:6px 8px;
+      font:10px/1.3 ui-monospace,Menlo,Consolas,monospace;white-space:pre;pointer-events:none;
+      background:rgba(0,0,0,.86);color:#7CFFB2;max-height:70vh;overflow:hidden;
+      box-shadow:0 2px 12px rgba(0,0,0,.6);letter-spacing:.1px}
+    .sfdbgPanel .warn{color:#FF6B6B}`;
+  (document.head || document.documentElement).appendChild(style);
+
+  const panel = document.createElement("div");
+  panel.className = "sfdbgPanel";
+  function mount() {
+    if (document.body && !panel.isConnected) document.body.appendChild(panel);
+  }
+
+  const t0 = performance.now();
+  const log = [];
+  let lastState = "";
+  let frames = 0;
+
+  function visiblePanels() {
+    const out = [];
+    document.querySelectorAll('main.grid > [data-route]').forEach((el) => {
+      const cs = getComputedStyle(el);
+      if (cs.display !== "none" && cs.visibility !== "hidden") {
+        const r = el.getBoundingClientRect();
+        if (r.height > 4) out.push(el.getAttribute("data-route") || "?");
+      }
+    });
+    return out;
+  }
+  function vis(sel) {
+    const el = typeof sel === "string" ? document.querySelector(sel) : sel;
+    if (!el) return 0;
+    const cs = getComputedStyle(el);
+    if (cs.display === "none" || cs.visibility === "hidden") return 0;
+    return (parseFloat(cs.opacity) || 0) > 0.01 ? 1 : 0;
+  }
+
+  function snapshot() {
+    const booting = document.body && document.body.classList.contains("booting") ? 1 : 0;
+    const route = (document.body && document.body.getAttribute("data-route")) || "-";
+    const panels = visiblePanels();
+    const splash = vis("#bootSplash");
+    const settle = vis("#loginSettlingOverlay");
+    const hdr = vis(".header");
+    const ftr = vis(".footer");
+    const tab = vis(".mobileTabbar");
+    const vw = Math.round(window.innerWidth);
+    const scale = window.visualViewport ? +window.visualViewport.scale.toFixed(3) : "?";
+    const multi = panels.length > 1;
+    const state =
+      `boot=${booting} route=${route} splash=${splash} settle=${settle} ` +
+      `panels(${panels.length})=[${panels.join(",")}] hdr=${hdr} ftr=${ftr} tab=${tab} vw=${vw} scale=${scale}`;
+    if (state !== lastState) {
+      lastState = state;
+      log.push({ t: Math.round(performance.now() - t0), state, warn: multi });
+      render();
+    }
+  }
+
+  function render() {
+    mount();
+    const rows = log.slice(-44).map((r) =>
+      `+${String(r.t).padStart(5, " ")}ms ${r.warn ? "⚠ " : "  "}${r.state}`);
+    panel.innerHTML =
+      `<span>STARTUP FLASH TIMELINE (transitions only) frames=${frames}</span>\n` +
+      rows.map((line) => (line.includes("⚠") ? `<span class="warn">${line}</span>` : line)).join("\n");
+  }
+
+  let rafId = 0;
+  function tick() {
+    frames += 1;
+    try { snapshot(); } catch {}
+    if (performance.now() - t0 < 9000) rafId = requestAnimationFrame(tick);
+    else { rafId = 0; render(); }
+  }
+
+  function start() {
+    mount();
+    snapshot();
+    if (!rafId) rafId = requestAnimationFrame(tick);
+    // Also catch instant body attribute/class flips between frames.
+    try {
+      new MutationObserver(() => { try { snapshot(); } catch {} })
+        .observe(document.body, { attributes: true, attributeFilter: ["class", "data-route"] });
+    } catch {}
+  }
+  if (document.body) start();
+  else document.addEventListener("DOMContentLoaded", start, { once: true });
+})();

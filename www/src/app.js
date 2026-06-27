@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260627desktop2";
+const APP_BUILD = "20260628a";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3037,14 +3037,21 @@ function animateRouteEnter(wanted, direction) {
   if (!direction || direction === "none") return;
   if (NAV_ANIM_SKIP.has(wanted)) return;
   if (navPrefersReducedMotion()) return;
+  // The full-screen player header (back + ⋯) is position:fixed and the card is
+  // vertically centered on mobile, so a transform-based slide can't land the
+  // fixed header at the viewport top without a visible snap, and the rising
+  // shell leaves a blank gap (reads as a flash). A plain opacity fade has no
+  // transform — the fixed header stays anchored and there is no gap.
   const cls =
-    direction === "forward"
-      ? "routeEnter--push"
-      : direction === "back"
-        ? "routeEnter--pop"
-        : direction === "present"
-          ? "routeEnter--present"
-          : "routeEnter--fade";
+    wanted === "player"
+      ? "routeEnter--fade"
+      : direction === "forward"
+        ? "routeEnter--push"
+        : direction === "back"
+          ? "routeEnter--pop"
+          : direction === "present"
+            ? "routeEnter--present"
+            : "routeEnter--fade";
   let panels;
   try {
     panels = document.querySelectorAll(`main.grid > [data-route="${wanted}"]`);

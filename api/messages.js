@@ -122,6 +122,53 @@ async function isMutualFollow(userA, userB) {
   );
 }
 
+async function presencePrefsForUser(userId) {
+  const uid = cleanUserId(userId);
+  if (!uid) return { enabled: false, hideTitles: false };
+  const r = await svcFetch(
+    `profiles?user_id=eq.${encodeURIComponent(uid)}&select=presence_enabled,presence_hide_titles&limit=1`,
+  );
+  const row = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
+  // Default ON when the column is absent/null (feature is opt-out).
+  return {
+    enabled: row ? row.presence_enabled !== false : true,
+    hideTitles: row ? row.presence_hide_titles === true : false,
+  };
+}
+
+/** Read a partner's live presence, gated by mutual follow + their privacy. */
+async function presenceForViewer(viewerId, partnerId) {
+  const viewer = cleanUserId(viewerId);
+  const partner = cleanUserId(partnerId);
+  if (!viewer || !partner || viewer === partner) return { status: "idle" };
+  const mutual = await isMutualFollow(viewer, partner);
+  if (!mutual) return { status: "idle" };
+  const prefs = await presencePrefsForUser(partner);
+  if (!prefs.enabled) return { status: "idle" };
+  const r = await svcFetch(
+    `user_presence?user_id=eq.${encodeURIComponent(partner)}&select=status,song_id,song_title,song_cover,song_url,song_owner_id,expires_at&limit=1`,
+  );
+  const row = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
+  if (!row) return { status: "idle" };
+  const status = String(row.status || "idle");
+  if (status === "idle") return { status: "idle" };
+  if (row.expires_at && new Date(row.expires_at) < new Date()) return { status: "idle" };
+  const out = { status };
+  if (status === "now_playing") {
+    out.isYourSong = cleanUserId(row.song_owner_id) === viewer;
+    out.songId = String(row.song_id || "");
+    out.songOwnerId = cleanUserId(row.song_owner_id);
+    if (!prefs.hideTitles) {
+      out.songTitle = String(row.song_title || "");
+      out.songCover = String(row.song_cover || "");
+      out.songUrl = String(row.song_url || "");
+    } else {
+      out.hideTitle = true;
+    }
+  }
+  return out;
+}
+
 async function getThreadForUsers(userA, userB) {
   const pair = orderedPair(userA, userB);
   if (!pair) return null;
@@ -226,6 +273,13 @@ async function handleGet(req, res, user) {
   if (type === "unread_count") {
     const count = await unreadCountForUser(user.userId);
     return sendJson(res, 200, { ok: true, count });
+  }
+
+  if (type === "presence") {
+    const partnerId = cleanUserId(url.searchParams.get("userId"));
+    if (!partnerId) return sendJson(res, 400, { ok: false, error: "Missing userId" });
+    const presence = await presenceForViewer(user.userId, partnerId);
+    return sendJson(res, 200, { ok: true, presence });
   }
 
   if (type === "thread") {
@@ -341,6 +395,45 @@ async function handlePost(req, res, user) {
   const body = await readJsonBody(req);
   const action = String(body?.action || "").trim();
   const targetUserId = cleanUserId(body?.targetUserId);
+
+  if (action === "set_presence") {
+    const allowed = new Set(["idle", "now_playing", "creating", "recording"]);
+    const status = allowed.has(String(body?.status)) ? String(body.status) : "idle";
+    const ttl = Math.min(900, Math.max(5, Number(body?.ttlSeconds) || 60));
+    const nowIso = new Date().toISOString();
+    const row = {
+      user_id: user.userId,
+      status,
+      song_id: status === "now_playing" ? String(body?.songId || "").slice(0, 200) || null : null,
+      song_title: status === "now_playing" ? String(body?.songTitle || "").slice(0, 200) || null : null,
+      song_cover: status === "now_playing" ? String(body?.songCover || "").slice(0, 600) || null : null,
+      song_url: status === "now_playing" ? String(body?.songUrl || "").slice(0, 900) || null : null,
+      song_owner_id: status === "now_playing" ? (cleanUserId(body?.songOwnerId) || null) : null,
+      updated_at: nowIso,
+      expires_at: status === "idle" ? nowIso : new Date(Date.now() + ttl * 1000).toISOString(),
+    };
+    const r = await svcFetch("user_presence", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify(row),
+    });
+    if (!r.ok) return sendJson(res, 500, { ok: false, error: "Presence update failed" });
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (action === "set_presence_prefs") {
+    const patch = {};
+    if (typeof body?.presenceEnabled === "boolean") patch.presence_enabled = body.presenceEnabled;
+    if (typeof body?.hideTitles === "boolean") patch.presence_hide_titles = body.hideTitles;
+    if (!Object.keys(patch).length) return sendJson(res, 200, { ok: true });
+    const r = await svcFetch(`profiles?user_id=eq.${encodeURIComponent(user.userId)}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify(patch),
+    });
+    if (!r.ok) return sendJson(res, 500, { ok: false, error: "Presence prefs update failed" });
+    return sendJson(res, 200, { ok: true });
+  }
 
   if (action === "mark_read") {
     const threadId = String(body?.threadId || "").trim();

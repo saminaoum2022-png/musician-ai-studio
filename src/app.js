@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260627backbtn";
+const APP_BUILD = "20260627presence";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -4222,6 +4222,7 @@ function syncSettingsPrivacyToggle(isAuthed = Boolean(authSession?.user?.id || g
   const row = document.getElementById("settingsPrivacyRow");
   const toggle = document.getElementById("settingsProfilePublicToggle");
   if (row) row.hidden = !isAuthed;
+  try { syncSettingsPresenceToggles(isAuthed); } catch {}
   if (!toggle) return;
   toggle.checked = els.profileIsPublic ? els.profileIsPublic.checked : activeProfile.isPublic !== false;
 }
@@ -4248,6 +4249,52 @@ function wireSettingsPrivacyToggle() {
   });
 }
 wireSettingsPrivacyToggle();
+function syncSettingsPresenceToggles(isAuthed = Boolean(authSession?.user?.id || getSupabaseAuthToken())) {
+  const section = document.getElementById("settingsPresenceSection");
+  if (section) section.hidden = !isAuthed;
+  const enabledT = document.getElementById("settingsPresenceEnabledToggle");
+  const hideT = document.getElementById("settingsPresenceHideTitlesToggle");
+  if (enabledT) enabledT.checked = presenceEnabledLocal();
+  if (hideT) hideT.checked = presenceHideTitlesLocal();
+}
+function wireSettingsPresenceToggles() {
+  const enabledT = document.getElementById("settingsPresenceEnabledToggle");
+  const hideT = document.getElementById("settingsPresenceHideTitlesToggle");
+  if (enabledT && !enabledT.dataset.bound) {
+    enabledT.dataset.bound = "1";
+    enabledT.addEventListener("change", async () => {
+      const on = Boolean(enabledT.checked);
+      setPresenceEnabledLocal(on);
+      if (!on) {
+        // Turning off should clear any live status immediately.
+        _myPresenceLastKey = "";
+        try { await sendMyPresence({ status: "idle" }); } catch {}
+      } else {
+        presenceTick();
+      }
+      try {
+        await messagesApi("/api/messages", { method: "POST", timeoutMs: 8000, body: JSON.stringify({ action: "set_presence_prefs", presenceEnabled: on }) });
+      } catch {}
+    });
+  }
+  if (hideT && !hideT.dataset.bound) {
+    hideT.dataset.bound = "1";
+    hideT.addEventListener("change", async () => {
+      const on = Boolean(hideT.checked);
+      setPresenceHideTitlesLocal(on);
+      try {
+        await messagesApi("/api/messages", { method: "POST", timeoutMs: 8000, body: JSON.stringify({ action: "set_presence_prefs", hideTitles: on }) });
+      } catch {}
+    });
+  }
+}
+wireSettingsPresenceToggles();
+startPresenceWatcher();
+// Tap the Now Playing presence line to open the mini panel.
+document.addEventListener("click", (e) => {
+  const el = e.target?.closest?.("#messagesThreadRelation.messagesThreadRelation--np");
+  if (el) { try { openNowPlayingPresencePanel(); } catch {} }
+});
 try {
   initMusicPreferences({
     getUserId: () => String(authSession?.user?.id || activeProfile?.id || "").trim(),
@@ -22885,7 +22932,10 @@ function renderChatHeader() {
     displayEl.classList.remove("messagesThreadHeadSkel");
   }
   if (handleEl) {
-    handleEl.textContent = `@${u.username.replace(/^@/, "")}`;
+    // Now Playing Presence: header shows the display name only — the @username
+    // is intentionally hidden so the dynamic presence line reads cleanly.
+    handleEl.textContent = "";
+    handleEl.hidden = true;
     handleEl.classList.remove("messagesThreadHeadSkel");
   }
   const avKey = `${u.avatarUrl}|${u.username}`;
@@ -22898,12 +22948,9 @@ function renderChatHeader() {
 }
 
 function updateChatHeaderRelationOnly() {
-  const relationEl = document.getElementById("messagesThreadRelation");
-  const relation = dmRelationshipLabel(_chatHeaderPartnerStats);
-  if (relationEl) {
-    relationEl.textContent = relation;
-    relationEl.hidden = !relation;
-  }
+  // Presence (Now Playing / Creating / Recording) wins over the relation label;
+  // this renderer falls back to "Following each other" etc. when idle.
+  renderChatHeaderPresence();
   updateMessagesThreadHeadReserve();
 }
 
@@ -23804,6 +23851,274 @@ function dmRelationshipLabel(stats) {
   return "";
 }
 
+/* ============================================================================
+ * Now Playing Presence — a Nabad-native activity line in the DM header.
+ * Tracks activity that happens INSIDE Nabad only (playback, song creation,
+ * vocal recording). Never reads Spotify / Apple Music / device media.
+ * Reads are mutual-follow + privacy gated server-side; writes are throttled
+ * and piggyback the existing 3.5s thread poll for reads (no realtime infra).
+ * ==========================================================================*/
+
+// Custom Nabad status glyphs (line icons, no emoji). Tinted via currentColor.
+const NABAD_PRESENCE_ICONS = {
+  now_playing:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="13" width="4.2" height="6.4" rx="1.6"/><rect x="16.8" y="13" width="4.2" height="6.4" rx="1.6"/></svg>',
+  your_song:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-6.8-4.2-6.8-9.1A3.4 3.4 0 0 1 12 7.2a3.4 3.4 0 0 1 6.8 3.7C18.8 15.8 12 20 12 20Z"/></svg>',
+  creating:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.2l1.7 4.9 4.9 1.7-4.9 1.7L12 17.4l-1.7-4.9-4.9-1.7 4.9-1.7z"/><path d="M18.5 4.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></svg>',
+  recording:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg>',
+};
+
+const PRESENCE_NOWPLAYING_LINGER_MS = 45000;
+const PRESENCE_TICK_MS = 3000;
+const PRESENCE_RESEND_MS = 25000;
+
+let _chatPartnerPresence = { status: "idle" };
+let _chatPresenceSig = "";
+let _myPresenceLastKey = "";
+let _myPresenceLastSentAt = 0;
+let _myPresenceLastPlayingAt = 0;
+let _presenceWatcherTimer = 0;
+let _partnerPresenceInFlight = false;
+
+function presenceLocalKey(base) {
+  const uid = String(authSession?.user?.id || activeProfile?.id || "").trim();
+  return uid ? `mas:presence:${base}:${uid}` : `mas:presence:${base}`;
+}
+function presenceEnabledLocal() {
+  try { return localStorage.getItem(presenceLocalKey("enabled")) !== "0"; } catch { return true; }
+}
+function presenceHideTitlesLocal() {
+  try { return localStorage.getItem(presenceLocalKey("hideTitles")) === "1"; } catch { return false; }
+}
+function setPresenceEnabledLocal(on) {
+  try { localStorage.setItem(presenceLocalKey("enabled"), on ? "1" : "0"); } catch {}
+}
+function setPresenceHideTitlesLocal(on) {
+  try { localStorage.setItem(presenceLocalKey("hideTitles"), on ? "1" : "0"); } catch {}
+}
+
+/** True when any in-app Nabad recording flow is live. */
+function appIsRecordingNow() {
+  try { if (humSession) return true; } catch {}
+  try { if (vocalRefRecorder && vocalRefRecorder.state === "recording") return true; } catch {}
+  try { if (callingCardRecState === "recording") return true; } catch {}
+  try { if (statusVoiceRecState === "recording") return true; } catch {}
+  return false;
+}
+
+function myPlayerIsPlaying() {
+  try { return Boolean(playerEl && !playerEl.paused && !playerEl.ended && playerEl.currentTime >= 0 && playerEl.readyState > 0 && playerEl.duration !== 0); } catch { return false; }
+}
+
+/** Resolve the current user's top-priority presence (recording > creating > now_playing > idle). */
+function computeMyPresenceStatus() {
+  if (!presenceEnabledLocal()) return { status: "idle" };
+  if (appIsRecordingNow()) return { status: "recording" };
+  try { if (createSessionIsGenerating()) return { status: "creating" }; } catch {}
+  const playing = myPlayerIsPlaying();
+  if (playing) _myPresenceLastPlayingAt = Date.now();
+  const lingering = Date.now() - _myPresenceLastPlayingAt < PRESENCE_NOWPLAYING_LINGER_MS;
+  if (playing || lingering) {
+    const t = currentPlayerTrackRef;
+    if (t && (t.url || t.songId)) {
+      return {
+        status: "now_playing",
+        songId: String(t.songId || ""),
+        songTitle: String(t.title || ""),
+        songCover: String(t.artUrl || ""),
+        songUrl: String(t.url || ""),
+        songOwnerId: String(t.ownerUserId || ""),
+      };
+    }
+  }
+  return { status: "idle" };
+}
+
+async function sendMyPresence(p) {
+  if (!getSupabaseAuthToken()) return;
+  const status = String(p?.status || "idle");
+  const key = status === "now_playing" ? `np|${p.songId}|${p.songOwnerId}` : status;
+  const now = Date.now();
+  // Skip duplicate writes; resend periodically only while active to extend TTL.
+  if (key === _myPresenceLastKey) {
+    if (status === "idle") return;
+    if (now - _myPresenceLastSentAt < PRESENCE_RESEND_MS) return;
+  }
+  _myPresenceLastKey = key;
+  _myPresenceLastSentAt = now;
+  try {
+    await messagesApi("/api/messages", {
+      method: "POST",
+      timeoutMs: 8000,
+      body: JSON.stringify({
+        action: "set_presence",
+        status,
+        songId: p?.songId || "",
+        songTitle: p?.songTitle || "",
+        songCover: p?.songCover || "",
+        songUrl: p?.songUrl || "",
+        songOwnerId: p?.songOwnerId || "",
+        ttlSeconds: status === "now_playing" ? 70 : 120,
+      }),
+    });
+  } catch {
+    // Let the next tick retry; reset key so a transient failure isn't sticky.
+    _myPresenceLastKey = "";
+  }
+}
+
+function presenceTick() {
+  try { void sendMyPresence(computeMyPresenceStatus()); } catch {}
+}
+
+function startPresenceWatcher() {
+  if (_presenceWatcherTimer) return;
+  _presenceWatcherTimer = window.setInterval(presenceTick, PRESENCE_TICK_MS);
+}
+
+/** Build the header presence line, or null to fall back to the relation label. */
+function presenceLineFromState(p) {
+  const s = p && p.status ? String(p.status) : "idle";
+  if (s === "recording") return { status: s, iconKey: "recording", text: "Recording vocals\u2026", tappable: false };
+  if (s === "creating") return { status: s, iconKey: "creating", text: "Creating a song\u2026", tappable: false };
+  if (s === "now_playing") {
+    if (p.isYourSong) return { status: s, iconKey: "your_song", text: "Now Playing \u2022 Your Song", tappable: true };
+    if (p.hideTitle || !p.songTitle) return { status: s, iconKey: "now_playing", text: "Now Playing", tappable: false };
+    return { status: s, iconKey: "now_playing", text: `Now Playing \u2022 ${p.songTitle}`, tappable: true };
+  }
+  return null;
+}
+
+function renderChatHeaderPresence() {
+  const relationEl = document.getElementById("messagesThreadRelation");
+  if (!relationEl) return;
+  const line = presenceLineFromState(_chatPartnerPresence);
+  let nextSig;
+  let nextHtml;
+  let isPresence = false;
+  let tappable = false;
+  let statusAttr = "";
+  if (line) {
+    isPresence = true;
+    tappable = Boolean(line.tappable);
+    statusAttr = line.status;
+    nextSig = `p|${line.status}|${line.text}`;
+    nextHtml = `<span class="dmPresenceIco" aria-hidden="true">${NABAD_PRESENCE_ICONS[line.iconKey] || ""}</span><span class="dmPresenceTxt">${escapeHtml(line.text)}</span>`;
+  } else {
+    const relation = dmRelationshipLabel(_chatHeaderPartnerStats);
+    nextSig = `r|${relation}`;
+    nextHtml = relation ? `<span class="dmPresenceTxt">${escapeHtml(relation)}</span>` : "";
+  }
+  relationEl.classList.toggle("messagesThreadRelation--presence", isPresence);
+  relationEl.classList.toggle("messagesThreadRelation--np", tappable);
+  if (statusAttr) relationEl.dataset.presenceStatus = statusAttr;
+  else delete relationEl.dataset.presenceStatus;
+  if (tappable) {
+    relationEl.setAttribute("role", "button");
+    relationEl.setAttribute("tabindex", "0");
+  } else {
+    relationEl.removeAttribute("role");
+    relationEl.removeAttribute("tabindex");
+  }
+  if (nextSig === _chatPresenceSig) {
+    relationEl.hidden = !nextHtml;
+    return;
+  }
+  _chatPresenceSig = nextSig;
+  const apply = () => {
+    relationEl.innerHTML = nextHtml;
+    relationEl.hidden = !nextHtml;
+    relationEl.classList.remove("dmPresenceFadeOut");
+  };
+  // Soft fade between states.
+  if (relationEl.innerHTML && !relationEl.hidden) {
+    relationEl.classList.add("dmPresenceFadeOut");
+    window.setTimeout(apply, 160);
+  } else {
+    apply();
+  }
+}
+
+async function refreshPartnerPresence() {
+  const uid = String(_chatHeaderUser?.userId || "").trim();
+  if (!uid) return;
+  if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
+  if (!getSupabaseAuthToken()) return;
+  if (_partnerPresenceInFlight) return;
+  _partnerPresenceInFlight = true;
+  try {
+    const data = await messagesApi(`/api/messages?type=presence&userId=${encodeURIComponent(uid)}`, { timeoutMs: 8000 });
+    if (String(_chatHeaderUser?.userId || "") !== uid) return;
+    _chatPartnerPresence = (data && data.presence) ? data.presence : { status: "idle" };
+    renderChatHeaderPresence();
+  } catch {
+    // keep last known presence; relation label stays as fallback
+  } finally {
+    _partnerPresenceInFlight = false;
+  }
+}
+
+function openNowPlayingPresencePanel() {
+  const p = _chatPartnerPresence;
+  if (!p || p.status !== "now_playing") return;
+  const partnerName = String(_chatHeaderUser?.displayName || "").replace(/^@/, "") || "Nabad";
+  const title = p.isYourSong ? (p.songTitle || "Your Song") : (p.songTitle || "Now Playing");
+  const cover = String(p.songCover || "");
+  const url = String(p.songUrl || "");
+  const songId = String(p.songId || "");
+  const ownerId = String(p.songOwnerId || "");
+
+  const existing = document.getElementById("npPresenceSheet");
+  if (existing) existing.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "npPresenceSheet";
+  overlay.className = "npPresenceOverlay";
+  const coverHtml = cover
+    ? `<img class="npPresenceArt" src="${escapeHtml(cover)}" alt="" loading="lazy" decoding="async"/>`
+    : `<span class="npPresenceArt npPresenceArt--ph" aria-hidden="true">${NABAD_PRESENCE_ICONS.now_playing}</span>`;
+  overlay.innerHTML = `
+    <div class="npPresenceSheet" role="dialog" aria-modal="true" aria-label="Now playing">
+      <div class="npPresenceGrab" aria-hidden="true"></div>
+      <div class="npPresenceTop">
+        ${coverHtml}
+        <div class="npPresenceMeta">
+          <span class="npPresenceKicker">${p.isYourSong ? "Playing your song" : "Now playing"}</span>
+          <strong class="npPresenceTitle">${escapeHtml(title)}</strong>
+          <span class="npPresenceArtist">${escapeHtml(partnerName)}</span>
+        </div>
+      </div>
+      <div class="npPresenceActions">
+        <button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-np-act="preview"${url ? "" : " disabled"}>Play preview</button>
+        <button type="button" class="npPresenceBtn npPresenceBtn--primary" data-np-act="open"${url ? "" : " disabled"}>Open full song</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("is-open"));
+
+  const close = () => {
+    overlay.classList.remove("is-open");
+    window.setTimeout(() => overlay.remove(), 220);
+  };
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) { close(); return; }
+    const btn = e.target.closest("[data-np-act]");
+    if (!btn) return;
+    const act = btn.dataset.npAct;
+    if (act === "preview" && url) {
+      try { playLibraryUrlOnPlayer(url, title, cover, { songId, ownerUserId: ownerId }); } catch {}
+    } else if (act === "open" && url) {
+      try { playLibraryUrlOnPlayer(url, title, cover, { songId, ownerUserId: ownerId }); } catch {}
+      close();
+      try { location.hash = "#/player"; } catch {}
+      return;
+    }
+  });
+}
+
 function dmShareKindLabel(kind) {
   const k = String(kind || "song").toLowerCase();
   if (k === "mashup") return "Mashup";
@@ -24411,6 +24726,7 @@ function startMessagesThreadRealtime(threadId) {
     }
     if (_conversationId !== tid) return;
     void pollNewThreadMessages(tid);
+    void refreshPartnerPresence();
   }, 3500);
 }
 
@@ -24546,7 +24862,12 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   scheduleMessagesThreadScrollToBottom({ force: true });
   beginMessagesThreadEnterTransition();
   if (tid) void markThreadReadQuiet(tid);
-  if (_chatHeaderUser?.userId) void loadMessagesThreadPartnerMeta(_chatHeaderUser.userId);
+  _chatPartnerPresence = { status: "idle" };
+  _chatPresenceSig = "";
+  if (_chatHeaderUser?.userId) {
+    void loadMessagesThreadPartnerMeta(_chatHeaderUser.userId);
+    void refreshPartnerPresence();
+  }
   void bootstrapMessagesThread({ bootToken, threadId: tid, targetUserId: uid });
 }
 
@@ -38926,10 +39247,12 @@ function ensurePlayer() {
   playerEl.addEventListener("play", () => {
     syncPlayerUI();
     syncLockScreenNowPlaying({ force: true });
+    try { presenceTick(); } catch {}
   });
   playerEl.addEventListener("pause", () => {
     syncPlayerUI();
     syncLockScreenNowPlaying({ force: true });
+    try { presenceTick(); } catch {}
   });
   playerEl.addEventListener("play", () => { try { setProfileAuraAudioState(true); } catch {} });
   playerEl.addEventListener("pause", () => { try { setProfileAuraAudioState(isAnyAppAudioPlaying()); } catch {} });

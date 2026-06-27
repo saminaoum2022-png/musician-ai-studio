@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260628h-dbg";
+const APP_BUILD = "20260628i-dbg";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -48121,10 +48121,14 @@ function clampInt(n, min, max) {
 
   const style = document.createElement("style");
   style.id = "sfdbgStyle";
+  // display:block !important + mounting on <html> (not <body>) defeats the boot
+  // CSS that hides every body child while .booting is active, so the timeline is
+  // visible ON the splash too. pre-wrap so the right-side fields don't clip.
   style.textContent = `
     .sfdbgPanel{position:fixed;top:0;left:0;right:0;z-index:2147483647;margin:0;padding:6px 8px;
-      font:10px/1.3 ui-monospace,Menlo,Consolas,monospace;white-space:pre;pointer-events:none;
-      background:rgba(0,0,0,.86);color:#7CFFB2;max-height:70vh;overflow:hidden;
+      font:10px/1.3 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word;
+      pointer-events:none;display:block!important;
+      background:rgba(0,0,0,.9);color:#7CFFB2;max-height:80vh;overflow:hidden;
       box-shadow:0 2px 12px rgba(0,0,0,.6);letter-spacing:.1px}
     .sfdbgPanel .warn{color:#FF6B6B}`;
   (document.head || document.documentElement).appendChild(style);
@@ -48132,7 +48136,8 @@ function clampInt(n, min, max) {
   const panel = document.createElement("div");
   panel.className = "sfdbgPanel";
   function mount() {
-    if (document.body && !panel.isConnected) document.body.appendChild(panel);
+    // Mount on <html>, not <body>: body children are display:none while booting.
+    if (!panel.isConnected) document.documentElement.appendChild(panel);
   }
 
   const t0 = performance.now();

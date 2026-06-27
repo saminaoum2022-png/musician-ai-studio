@@ -128,10 +128,12 @@
     <link rel="apple-touch-icon" href="./assets/icons/apple-touch-icon.png" />
     <!-- iOS PWA launch screens. iOS ignores the manifest background_color for the
          home-screen launch and paints WHITE until the web splash renders unless an
-         apple-touch-startup-image matches the device. These are solid #05070d with
-         the N mark centered (matches the in-app boot splash), so the installed PWA
-         launches dark with no white flash. Regenerate with
-         scripts/gen-ios-startup-images.py. -->
+         apple-touch-startup-image matches the device. These are SOLID #05070d with
+         NO logo on purpose: the web boot splash (#bootSplash) already shows the N
+         mark, and iOS crossfades the launch image out over the web view — a logo in
+         both would ghost as a faint "double logo" during handoff. Solid launch →
+         web splash fades the single logo in: no white flash, no double logo.
+         Regenerate with scripts/gen-ios-startup-images.py. -->
     <link rel="apple-touch-startup-image" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="./assets/splash/ios/startup-320x568@2x.png" />
     <link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="./assets/splash/ios/startup-375x667@2x.png" />
     <link rel="apple-touch-startup-image" media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./assets/splash/ios/startup-414x736@3x.png" />
@@ -174,7 +176,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260628m-dbg" />
+    <link rel="stylesheet" href="./styles.css?v=20260628n-dbg" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -4030,6 +4032,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260628m-dbg"></script>
+    <script type="module" src="./src/app.js?v=20260628n-dbg"></script>
   </body>
 </html>

@@ -4,8 +4,13 @@
 iOS ignores the web manifest `background_color` for the home-screen (PWA)
 launch screen — it only uses `apple-touch-startup-image`. Without one it paints
 WHITE until the web splash renders, which is the startup flash users see in the
-installed PWA. These images are solid dark (#05070d) with the N mark centered,
-matching the in-app boot splash, so the launch is dark end-to-end.
+installed PWA.
+
+These images are SOLID dark (#05070d) with NO logo. The logo is intentionally
+left out: the in-app web boot splash (#bootSplash) already shows the N mark, and
+iOS crossfades the launch image out over the web view, so a logo in BOTH would
+appear as a faint "double logo" ghost during the handoff. Solid launch image →
+web splash fades the single logo in once: no white flash, no double logo.
 
 Re-run after changing the logo or device list:
     python3 scripts/gen-ios-startup-images.py
@@ -40,20 +45,14 @@ DEVICES = [
 
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
-    logo_src = Image.open(LOGO).convert("RGBA")
 
     for css_w, css_h, dpr in DEVICES:
         px_w, px_h = css_w * dpr, css_h * dpr
-        canvas = Image.new("RGBA", (px_w, px_h), BG)
-
-        # Match in-app splash: width:min(26vw,108px), centered.
-        logo_css = min(0.26 * css_w, 108)
-        logo_px = int(round(logo_css * dpr))
-        logo = logo_src.resize((logo_px, logo_px), Image.LANCZOS)
-        canvas.alpha_composite(logo, ((px_w - logo_px) // 2, (px_h - logo_px) // 2))
+        # Solid dark, no logo (see module docstring — avoids the handoff double-logo).
+        canvas = Image.new("RGB", (px_w, px_h), BG[:3])
 
         name = f"startup-{css_w}x{css_h}@{dpr}x.png"
-        canvas.convert("RGB").save(os.path.join(OUT_DIR, name), "PNG", optimize=True)
+        canvas.save(os.path.join(OUT_DIR, name), "PNG", optimize=True)
         print("wrote", name, f"({px_w}x{px_h})")
 
 

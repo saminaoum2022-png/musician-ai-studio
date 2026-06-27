@@ -95,7 +95,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260627presence" />
+    <link rel="stylesheet" href="./styles.css?v=20260627desktop" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -143,12 +143,12 @@
         <div class="headerMain">
           <h1 id="brandTitle" class="brandTitle" title="Start new"><span class="brandPrimary">NabadAi</span><span id="brandSecondary" class="brandSecondary">Music</span></h1>
           <div class="journeyBar" aria-label="Primary navigation">
-            <a href="#/discover" class="journeyStep" data-route-link="discover">Discover</a>
-            <a href="#/friends" class="journeyStep" data-route-link="friends">Friends</a>
-            <a href="#/challenges" class="journeyStep" data-route-link="challenges">Create</a>
-            <a href="#/activity" class="journeyStep" data-route-link="activity">Activity</a>
-            <a href="#/profile" class="journeyStep" data-route-link="profile">Profile</a>
-            <a href="#/sounds" class="journeyStep" data-route-link="sounds">Sounds</a>
+            <a href="#/discover" class="journeyStep" data-route-link="discover"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.75"/><path d="M12 4v3.5l2.75 2.75" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="12" cy="12" r="1.35" fill="currentColor" stroke="none"/></svg></span><span class="journeyLabel">Discover</span></a>
+            <a href="#/friends" class="journeyStep" data-route-link="friends"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span class="journeyLabel">Friends</span></a>
+            <a href="#/challenges" class="journeyStep" data-route-link="challenges"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M7 12h10" stroke-width="2.4" stroke-linecap="round"/></svg></span><span class="journeyLabel">Create</span></a>
+            <a href="#/activity" class="journeyStep" data-route-link="activity"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span><span class="journeyLabel">Activity</span></a>
+            <a href="#/profile" class="journeyStep" data-route-link="profile"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span class="journeyLabel">Profile</span></a>
+            <a href="#/sounds" class="journeyStep" data-route-link="sounds"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 9v6M10 5v14M14 8v8M18 11v2"/></svg></span><span class="journeyLabel">Sounds</span></a>
           </div>
         </div>
         <div class="headerRight"></div>
@@ -3137,6 +3137,27 @@
           <span id="settingsPersonaTourSub" hidden aria-hidden="true"></span>
         </section>
       </main>
+
+      <aside class="deskRail" id="deskRail" aria-label="Activity" hidden>
+        <section class="deskRailCard deskRailNpCard" aria-labelledby="deskRailNpLabel">
+          <h2 class="deskRailLabel" id="deskRailNpLabel">Now playing</h2>
+          <div class="deskRailNp isEmpty" id="deskRailNowPlaying">
+            <div class="deskRailNpEmpty">Nothing playing yet</div>
+          </div>
+        </section>
+        <section class="deskRailCard" aria-labelledby="deskRailTrendLabel">
+          <div class="deskRailHead">
+            <h2 class="deskRailLabel" id="deskRailTrendLabel">Trending this week</h2>
+            <a href="#/discover" class="deskRailMore">See all</a>
+          </div>
+          <div class="deskRailTrending" id="deskRailTrending" hidden></div>
+        </section>
+        <section class="deskRailCard deskRailCtaCard" aria-labelledby="deskRailCtaLabel">
+          <h2 class="deskRailLabel" id="deskRailCtaLabel">Find your people</h2>
+          <p class="deskRailCtaSub">Follow creators to fill your feed and start chatting.</p>
+          <a href="#/friends" class="deskRailCtaBtn">Find creators</a>
+        </section>
+      </aside>
       </div>
 
       <footer class="footer"><span id="footerBuild" class="hint" style="opacity:.5;font-size:11px"></span></footer>
@@ -3930,6 +3951,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260627presence"></script>
+    <script type="module" src="./src/app.js?v=20260627desktop"></script>
   </body>
 </html>

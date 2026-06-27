@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260627presence";
+const APP_BUILD = "20260627desktop";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -6876,6 +6876,97 @@ async function refreshDiscoverWeeklyChart() {
     wrap.innerHTML = "";
   }
 }
+
+/* ===== Desktop right rail (≥1200px) — Now Playing + Trending this week =====
+ * Desktop-only enhancement; fully gated behind a media query so mobile/iOS
+ * never render or fetch for it. Reuses existing player state + weekly chart. */
+let _deskRailBound = false;
+function deskRailActive() {
+  try { return window.matchMedia("(min-width: 1200px)").matches; } catch { return false; }
+}
+function renderDeskRailNowPlaying() {
+  const card = document.getElementById("deskRailNowPlaying");
+  if (!card) return;
+  const t = currentPlayerTrackRef;
+  const hasTrack = Boolean(t && (t.title || t.url));
+  if (!hasTrack) {
+    card.classList.add("isEmpty");
+    card.innerHTML = `<div class="deskRailNpEmpty">Nothing playing yet</div>`;
+    return;
+  }
+  const playing = Boolean(playerEl && !playerEl.paused && !playerEl.ended);
+  card.classList.remove("isEmpty");
+  const art = t.artUrl
+    ? `<img src="${escapeHtml(t.artUrl)}" alt="" loading="lazy" decoding="async"/>`
+    : `<span class="deskRailNpArtPh" aria-hidden="true"></span>`;
+  const by = t.byLine ? `<span class="deskRailNpBy">${escapeHtml(String(t.byLine))}</span>` : "";
+  card.innerHTML = `
+    <button type="button" class="deskRailNpOpen" data-desk-rail-open aria-label="Open player">
+      <span class="deskRailNpArt">${art}</span>
+      <span class="deskRailNpMeta">
+        <strong class="deskRailNpTitle">${escapeHtml(String(t.title || "Now playing"))}</strong>
+        ${by}
+      </span>
+    </button>
+    <button type="button" class="deskRailNpBtn" data-desk-rail-toggle aria-label="${playing ? "Pause" : "Play"}">
+      ${playing
+        ? '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="5" width="3.6" height="14" rx="1.2"/><rect x="13.4" y="5" width="3.6" height="14" rx="1.2"/></svg>'
+        : '<svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="8 5 19 12 8 19"/></svg>'}
+    </button>`;
+}
+async function renderDeskRailTrending() {
+  const wrap = document.getElementById("deskRailTrending");
+  if (!wrap || !deskRailActive()) return;
+  try {
+    const chart = await fetchWeeklyChart();
+    const top = (Array.isArray(chart) ? chart : []).slice(0, 5);
+    if (!top.length) { wrap.hidden = true; return; }
+    wrap.hidden = false;
+    wrap.innerHTML = top.map((e, i) => {
+      const art = trackCoverArtForFeed({ artUrl: e.artUrl, meta: {} });
+      const title = String(e.title || "Untitled").trim();
+      return `<button type="button" class="deskRailTrendRow" ${chartEntryPlayAttrs(e)} aria-label="Play ${escapeHtml(title)}">
+        <span class="deskRailTrendRank">${i + 1}</span>
+        <span class="deskRailTrendArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async"/></span>
+        <span class="deskRailTrendMeta"><strong>${escapeHtml(title)}</strong>${e.username ? `<span>@${escapeHtml(e.username)}</span>` : ""}</span>
+      </button>`;
+    }).join("");
+  } catch {
+    wrap.hidden = true;
+  }
+}
+function initDeskRail() {
+  const rail = document.getElementById("deskRail");
+  if (!rail) return;
+  if (!deskRailActive()) { rail.hidden = true; return; }
+  rail.hidden = false;
+  renderDeskRailNowPlaying();
+  void renderDeskRailTrending();
+  if (_deskRailBound) return;
+  _deskRailBound = true;
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("[data-desk-rail-toggle]")) {
+      try {
+        if (playerEl && !playerEl.paused) playerEl.pause();
+        else playerEl?.play?.();
+      } catch {}
+      return;
+    }
+    if (e.target.closest("[data-desk-rail-open]")) {
+      try { location.hash = "#/player"; } catch {}
+    }
+  });
+  let _railResizeT = 0;
+  window.addEventListener("resize", () => {
+    window.clearTimeout(_railResizeT);
+    _railResizeT = window.setTimeout(() => {
+      const on = deskRailActive();
+      rail.hidden = !on;
+      if (on) { renderDeskRailNowPlaying(); void renderDeskRailTrending(); }
+    }, 200);
+  });
+}
+window.addEventListener("load", () => { try { initDeskRail(); } catch {} });
 
 async function refreshDiscoverCampaignRail() {
   const wrap = document.getElementById("discoverCampaignRail");
@@ -40936,6 +41027,7 @@ function syncPlayerUI() {
     syncUserPlaylistPlayingHighlights();
   } catch {}
   syncLockScreenNowPlaying();
+  try { renderDeskRailNowPlaying(); } catch {}
 }
 
 function getParams() {

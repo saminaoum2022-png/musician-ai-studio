@@ -39014,3 +39014,321 @@ body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[da
     padding-inline: 18px;
   }
 }
+
+/* ============================================================================
+ * DESKTOP LAYOUT — left sidebar nav + centered content + right rail.
+ * Gated to >=1024px (shell) and >=1200px (rail). Phones/iOS (<=720px) and the
+ * 721-1023px tablet range keep the existing top-nav layout untouched.
+ * ==========================================================================*/
+
+/* Nav icons only render in the >=1024px sidebar; hidden as top pills. */
+.journeyIco{ display: none; }
+
+/* Shared desktop polish (>=721) — safe for the tablet range too. */
+@media (min-width: 721px){
+  .journeyStep{ cursor: pointer; }
+  /* Build stamp tucked bottom-left so it stops colliding with content
+     (e.g. "View Full Top 10"). */
+  .footer{
+    left: 18px;
+    right: auto;
+    text-align: left;
+    bottom: 12px;
+  }
+}
+
+@media (min-width: 1024px){
+  /* --- Shell grid: sidebar | content --- */
+  .app{
+    max-width: 1200px;
+    display: grid;
+    grid-template-columns: var(--nb-sidebar, 248px) minmax(0, 1fr);
+    column-gap: 34px;
+    align-items: start;
+    padding: 20px 26px 44px;
+  }
+
+  /* Header becomes the sticky left rail. */
+  header.header{
+    grid-column: 1;
+    grid-row: 1 / -1;
+    position: sticky;
+    top: 20px;
+    align-self: start;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    height: calc(100vh - 64px);
+    padding: 6px 18px 6px 6px;
+    margin: 0;
+    border-bottom: 0;
+    border-right: 1px solid rgba(255,255,255,0.07);
+  }
+  .headerMain{
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 18px;
+    width: 100%;
+  }
+  .brandTitle{
+    padding: 6px 12px;
+    font-size: 24px;
+  }
+  .headerRight{ display: none; }
+
+  /* Vertical sidebar nav. */
+  .journeyBar{
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 4px;
+    width: 100%;
+  }
+  .journeyStep{
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 14px;
+    flex: 0 0 auto;
+    padding: 11px 14px;
+    border-radius: 13px;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: rgba(226,231,247,0.74);
+    transition: background 140ms ease, color 140ms ease;
+  }
+  .journeyStep:hover{
+    background: rgba(255,255,255,0.055);
+    color: #f6f8ff;
+  }
+  .journeyStep.active{
+    background: rgba(124,92,255,0.16);
+    color: #fff;
+  }
+  .journeyIco{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+  }
+  .journeyIco svg{ width: 22px; height: 22px; display: block; }
+
+  /* Content column. */
+  #globalLoading{ grid-column: 2; }
+  main.grid{ grid-column: 2; min-width: 0; }
+
+  /* Comfortable reading width for single-column pages, centered in the wide
+     content column. Discover stays full-width to host the card grid. */
+  .friendsPage,
+  .profileSection,
+  .activityPage,
+  .settingsPage{
+    max-width: 720px;
+    margin-inline: auto;
+  }
+  .friendsPage .discoveryStudioHead{ justify-content: flex-start; }
+
+  /* --- Discover as a multi-column grid --- */
+  .discoverFeedListStack,
+  .chartWeekRunners,
+  .chartWeekRest{
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .footer{ left: 22px; }
+}
+
+/* --- Right rail (>=1200px) --- */
+.deskRail{ display: none; }
+@media (min-width: 1200px){
+  .app{
+    max-width: 1380px;
+    grid-template-columns: var(--nb-sidebar, 248px) minmax(0, 1fr) var(--nb-rail, 320px);
+  }
+  aside.deskRail{
+    grid-column: 3;
+    grid-row: 1 / -1;
+    position: sticky;
+    top: 20px;
+    align-self: start;
+    max-height: calc(100vh - 64px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  aside.deskRail::-webkit-scrollbar{ display: none; }
+
+  .deskRailCard{
+    background: rgba(255,255,255,0.035);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 18px;
+    padding: 16px;
+  }
+  .deskRailHead{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .deskRailLabel{
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: rgba(223,231,251,0.6);
+    margin: 0 0 12px;
+  }
+  .deskRailHead .deskRailLabel{ margin: 0; }
+  .deskRailMore{
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(167,139,250,0.92);
+  }
+  .deskRailMore:hover{ color: #c9b8ff; }
+
+  /* Now playing */
+  .deskRailNp{ display: flex; align-items: center; gap: 12px; }
+  .deskRailNpEmpty{
+    font-size: 13px;
+    color: rgba(223,231,251,0.4);
+    padding: 6px 2px;
+  }
+  .deskRailNpOpen{
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1 1 auto;
+    min-width: 0;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    text-align: left;
+  }
+  .deskRailNpArt{
+    flex: 0 0 auto;
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.06);
+  }
+  .deskRailNpArt img{ width: 100%; height: 100%; object-fit: cover; display: block; }
+  .deskRailNpArtPh{ display: block; width: 100%; height: 100%; }
+  .deskRailNpMeta{ min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .deskRailNpTitle{
+    font-size: 14px;
+    font-weight: 700;
+    color: #f4f7ff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .deskRailNpBy{
+    font-size: 12px;
+    color: rgba(223,231,251,0.55);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .deskRailNpBtn{
+    flex: 0 0 auto;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    border: 0;
+    background: linear-gradient(135deg,#7c5cff,#9a6bff);
+    color: #fff;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 140ms ease;
+  }
+  .deskRailNpBtn:active{ transform: scale(0.92); }
+  .deskRailNpBtn svg{ width: 18px; height: 18px; fill: currentColor; }
+
+  /* Trending */
+  .deskRailTrending{ display: flex; flex-direction: column; gap: 4px; }
+  .deskRailTrendRow{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 7px 6px;
+    border-radius: 12px;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    text-align: left;
+    transition: background 140ms ease;
+  }
+  .deskRailTrendRow:hover{ background: rgba(255,255,255,0.05); }
+  .deskRailTrendRank{
+    flex: 0 0 auto;
+    width: 18px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 800;
+    color: rgba(167,139,250,0.9);
+  }
+  .deskRailTrendArt{
+    flex: 0 0 auto;
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.06);
+  }
+  .deskRailTrendArt img{ width: 100%; height: 100%; object-fit: cover; display: block; }
+  .deskRailTrendMeta{ min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .deskRailTrendMeta strong{
+    font-size: 13px;
+    font-weight: 700;
+    color: #eef2ff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .deskRailTrendMeta span{
+    font-size: 11px;
+    color: rgba(223,231,251,0.5);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* CTA card */
+  .deskRailCtaSub{
+    font-size: 13px;
+    line-height: 1.45;
+    color: rgba(223,231,251,0.62);
+    margin: 0 0 14px;
+  }
+  .deskRailCtaBtn{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 11px 14px;
+    border-radius: 13px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #f4f7ff;
+    font-size: 14px;
+    font-weight: 700;
+    transition: background 140ms ease;
+  }
+  .deskRailCtaBtn:hover{ background: rgba(255,255,255,0.13); }
+}

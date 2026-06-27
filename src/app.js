@@ -87,14 +87,33 @@ const MESSAGES_FEATURE_ENABLED = true;
   if (!f) return;
   // TEMP DIAGNOSTIC: surface live viewport metrics so we can see exactly what
   // the WebView reports during the cold-launch "zoomed out" state.
+  const w = (sel) => {
+    const el = document.querySelector(sel);
+    if (!el) return "-";
+    return Math.round(el.getBoundingClientRect().width);
+  };
   const render = () => {
     const vv = window.visualViewport;
     const iw = window.innerWidth;
-    const cw = document.documentElement.clientWidth;
     const sc = vv ? Math.round(vv.scale * 1000) / 1000 : "?";
-    const vw = vv ? Math.round(vv.width) : "?";
-    f.textContent = `Build ${APP_BUILD} · iw${iw} cw${cw} vv${vw} sc${sc} dpr${window.devicePixelRatio}`;
+    const grid = document.querySelector("main.grid");
+    const gtc = grid ? getComputedStyle(grid).gridTemplateColumns : "-";
+    const panel = document.querySelector('main.grid > [data-route]:not([style*="display: none"])');
+    const panelTf = panel ? getComputedStyle(panel).transform : "-";
+    f.textContent =
+      `B${APP_BUILD} iw${iw} sc${sc} | app${w(".app")} grid${w("main.grid")} ` +
+      `panel${panel ? Math.round(panel.getBoundingClientRect().width) : "-"} ` +
+      `fp${w(".friendsPage")} list${w("#discoveryFollowingList")} | ` +
+      `gtc[${gtc}] tf[${panelTf}]`;
   };
+  try {
+    f.style.whiteSpace = "normal";
+    f.style.lineHeight = "1.35";
+    f.style.fontSize = "10px";
+    f.style.opacity = "0.9";
+    f.style.padding = "6px 12px";
+    f.style.wordBreak = "break-word";
+  } catch {}
   render();
   window.addEventListener("resize", render);
   if (window.visualViewport) {

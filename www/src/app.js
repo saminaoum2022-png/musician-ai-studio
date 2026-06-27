@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260628n-dbg";
+const APP_BUILD = "20260628o-dbg";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -132,22 +132,27 @@ function finishBootSplash() {
     if (_bootSplashMinTimer) clearTimeout(_bootSplashMinTimer);
     _bootSplashMinTimer = 0;
     const splash = document.getElementById("bootSplash");
-    const revealApp = () => {
-      document.body.classList.remove("booting");
-      // Force a correct device-width layout the instant the app is shown.
-      reassertViewportScale();
-      if (!splash) return;
+    // Reveal instantly — NO opacity crossfade. The boot splash logo is screen-
+    // centered, but the route it reveals (intro/auth) has its own logo at a
+    // different height (~34vh). A 220ms fade left the half-transparent centered
+    // splash logo sitting over the route's logo for those frames — the "faded
+    // second logo" ghost users saw on web. Native always revealed instantly and
+    // was smooth, so we hide the splash in the SAME frame the app appears: the
+    // two logos never coexist at partial opacity.
+    if (splash) {
+      splash.style.transition = "none";
+      splash.style.opacity = "0";
+      splash.style.display = "none";
+    }
+    document.body.classList.remove("booting");
+    // Force a correct device-width layout the instant the app is shown.
+    reassertViewportScale();
+    if (splash) {
+      // Clear inline overrides so CSS (.bootSplash{display:none}) governs it next time.
       splash.style.display = "";
       splash.style.opacity = "";
       splash.style.transition = "";
-    };
-    if (!IS_NATIVE_SHELL && splash) {
-      splash.style.transition = "opacity 220ms ease";
-      splash.style.opacity = "0";
-      window.setTimeout(revealApp, 230);
-      return;
     }
-    revealApp();
   } catch {}
 }
 

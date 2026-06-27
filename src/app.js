@@ -12651,7 +12651,12 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
         <div class="followActActionsBar">
           ${followActActionsRowHtml({
             kind: "music",
-            targetId: t.id,
+            // Owner's own posts merge cloud rows with the local Library, so
+            // `t.id` can be a legacy local id (e.g. 1782472371680_xxxx) that
+            // does NOT exist in user_songs. Social/analytics must use the
+            // cloud song id. Other users' feed rows have no cloudSongId, so
+            // their `t.id` (already the cloud UUID) is used.
+            targetId: t.cloudSongId || t.id,
             targetUserId: t.userId,
             plays,
             playsPending,

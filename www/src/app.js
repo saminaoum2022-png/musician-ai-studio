@@ -101,6 +101,32 @@ let _bootSplashAnimEnded = false;
 let _bootSplashCanDismiss = false;
 let _bootSplashMinTimer = 0;
 
+// iOS WKWebView cold-launch quirk: the first layout can happen at a wider
+// default logical width (before the real frame size / safe-area insets resolve),
+// so the mobile @media rules don't match and the whole page gets scaled down to
+// fit — the app looks "zoomed out" until something forces a reflow (which used to
+// only happen when the first feed content swapped in). Re-asserting the viewport
+// meta forces WKWebView to recompute the layout at device-width / scale 1 right
+// away, so the page is correctly sized from the first paint after the splash.
+function reassertViewportScale() {
+  try {
+    const vp = document.querySelector('meta[name="viewport"]');
+    if (!vp) return;
+    const content = vp.getAttribute("content") || "";
+    // Force a real change to the meta string so WKWebView re-evaluates the
+    // viewport (a no-op identical value can be deduped and skipped). The temp
+    // value still pins device-width / scale 1, then we restore the canonical
+    // content on the next frame.
+    vp.setAttribute("content", "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover");
+    requestAnimationFrame(() => {
+      try {
+        vp.setAttribute("content", content);
+        window.dispatchEvent(new Event("resize"));
+      } catch {}
+    });
+  } catch {}
+}
+
 function finishBootSplash() {
   try {
     if (_bootSplashMinTimer) clearTimeout(_bootSplashMinTimer);
@@ -108,6 +134,8 @@ function finishBootSplash() {
     const splash = document.getElementById("bootSplash");
     const revealApp = () => {
       document.body.classList.remove("booting");
+      // Force a correct device-width layout the instant the app is shown.
+      reassertViewportScale();
       if (!splash) return;
       splash.style.display = "";
       splash.style.opacity = "";

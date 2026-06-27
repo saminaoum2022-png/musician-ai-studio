@@ -54,6 +54,47 @@
         document.head.appendChild(style);
       })();
     </script>
+    <!-- TEMP DEBUG: earliest-possible boot tracer (runs before app.js / first paint).
+         Records readyState, whether styles.css has applied, and html/body bg over
+         the first 2.5s into window.__bootTrace; the on-screen overlay renders it.
+         Remove this block + the overlay in app.js when done. -->
+    <script>
+      (function () {
+        try {
+          window.__bootT0 = performance.now();
+          window.__bootTrace = [];
+          var last = "";
+          function cssLoaded() {
+            try {
+              var links = document.querySelectorAll('link[rel="stylesheet"]');
+              for (var i = 0; i < links.length; i++) {
+                var h = links[i].href || "";
+                if (h.indexOf("styles.css") !== -1) return links[i].sheet ? 1 : 0;
+              }
+            } catch (e) {}
+            return -1;
+          }
+          function snap() {
+            var htmlBg = "", bodyBg = "";
+            try { htmlBg = getComputedStyle(document.documentElement).backgroundColor; } catch (e) {}
+            try { if (document.body) bodyBg = getComputedStyle(document.body).backgroundColor; } catch (e) {}
+            var s = "rs=" + document.readyState + " css=" + cssLoaded() +
+              " htmlBg=" + htmlBg + " bodyBg=" + bodyBg +
+              " vw=" + Math.round(window.innerWidth) + " dpr=" + (window.devicePixelRatio || 1);
+            if (s !== last) {
+              last = s;
+              window.__bootTrace.push({ t: Math.round(performance.now() - window.__bootT0), s: s });
+            }
+          }
+          snap();
+          (function loop() {
+            snap();
+            if (performance.now() - window.__bootT0 < 2500) requestAnimationFrame(loop);
+          })();
+          document.addEventListener("readystatechange", snap);
+        } catch (e) {}
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <title>NabadAi</title>
     <meta name="theme-color" content="#05070d" />
@@ -95,7 +136,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260628i-dbg" />
+    <link rel="stylesheet" href="./styles.css?v=20260628j-dbg" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -3951,6 +3992,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260628i-dbg"></script>
+    <script type="module" src="./src/app.js?v=20260628j-dbg"></script>
   </body>
 </html>

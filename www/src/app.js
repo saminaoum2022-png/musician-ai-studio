@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260628i-dbg";
+const APP_BUILD = "20260628j-dbg";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -48140,7 +48140,8 @@ function clampInt(n, min, max) {
     if (!panel.isConnected) document.documentElement.appendChild(panel);
   }
 
-  const t0 = performance.now();
+  // Align with the inline head tracer's clock so early + late rows share a timeline.
+  const t0 = (typeof window !== "undefined" && window.__bootT0 != null) ? window.__bootT0 : performance.now();
   const log = [];
   let lastState = "";
   let frames = 0;
@@ -48188,10 +48189,15 @@ function clampInt(n, min, max) {
 
   function render() {
     mount();
-    const rows = log.slice(-44).map((r) =>
+    const early = (typeof window !== "undefined" && Array.isArray(window.__bootTrace))
+      ? window.__bootTrace.map((r) => `E+${String(r.t).padStart(5, " ")}ms ${r.s}`)
+      : [];
+    const rows = log.slice(-30).map((r) =>
       `+${String(r.t).padStart(5, " ")}ms ${r.warn ? "⚠ " : "  "}${r.state}`);
+    const earlyHtml = early.length ? early.join("\n") + "\n———\n" : "";
     panel.innerHTML =
       `<span>STARTUP FLASH TIMELINE (transitions only) frames=${frames}</span>\n` +
+      earlyHtml +
       rows.map((line) => (line.includes("⚠") ? `<span class="warn">${line}</span>` : line)).join("\n");
   }
 

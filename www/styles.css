@@ -38513,14 +38513,28 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   height: 100%;
   object-fit: cover;
 }
-/* Skeleton cover reuses the real .followActMedia box (square aspect, radius,
-   margins) so the loading state matches the rendered post; re-apply the
-   shimmer here because the friends-feed cover sets a static background that
-   would otherwise win over .followActSkel. */
-:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct--xstyle .followActMediaWrap .followActMedia.followActSkel{
-  background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.04) 100%);
-  background-size: 200% 100%;
-  animation: discoveryShimmer 1.15s ease-in-out infinite;
+/* Skeleton cover: self-contained sizing so it matches the real post's
+   full-width square in EVERY state. We deliberately do NOT depend on the
+   #friendsPage-scoped cover rules — during the page-enter transition those
+   weren't applying yet, so the cover briefly fell back to the base
+   .followActMedia box (offset 50px, 16/9, capped height) and snapped to a
+   square once loaded. Scoping to .followAct--skel keeps it correct throughout
+   and also re-applies the shimmer (the base cover background would win over
+   .followActSkel otherwise). */
+.followAct--xstyle.followAct--skel > .followActMediaWrap{
+  width: 100% !important;
+  margin: 14px 0 0 !important;
+}
+.followAct--xstyle.followAct--skel .followActMediaWrap .followActMedia{
+  width: 100% !important;
+  margin: 0 !important;
+  aspect-ratio: 1 / 1 !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  border-radius: 28px !important;
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.04) 100%) !important;
+  background-size: 200% 100% !important;
+  animation: discoveryShimmer 1.15s ease-in-out infinite !important;
   cursor: default;
   pointer-events: none;
 }

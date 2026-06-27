@@ -2,6 +2,10 @@
 <html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
+    <!-- color-scheme first: makes the browser's pre-paint canvas dark instead of
+         the default white, killing the white flash before the dark splash paints
+         while the render-blocking styles.css is still loading (web only). -->
+    <meta name="color-scheme" content="dark" />
     <!-- Viewport MUST be the first thing after charset: if it is parsed after the
          inline boot <style>/scripts, the browser does its first layout/paint at the
          default 980px width and then snaps to device width — a visible zoom flash on
@@ -97,6 +101,17 @@
             if (performance.now() - window.__bootT0 < 2500) requestAnimationFrame(loop);
           })();
           document.addEventListener("readystatechange", snap);
+          // Real paint timing: when did the browser put the first pixel on screen?
+          try {
+            new PerformanceObserver(function (list) {
+              list.getEntries().forEach(function (e) {
+                window.__bootTrace.push({ t: Math.round(e.startTime), s: "PAINT " + e.name });
+              });
+            }).observe({ type: "paint", buffered: true });
+          } catch (e) {}
+          document.addEventListener("visibilitychange", function () {
+            window.__bootTrace.push({ t: Math.round(performance.now() - window.__bootT0), s: "visibility=" + document.visibilityState });
+          });
         } catch (e) {}
       })();
     </script>
@@ -140,7 +155,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260628k-dbg" />
+    <link rel="stylesheet" href="./styles.css?v=20260628l-dbg" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -3996,6 +4011,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260628k-dbg"></script>
+    <script type="module" src="./src/app.js?v=20260628l-dbg"></script>
   </body>
 </html>

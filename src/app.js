@@ -24432,6 +24432,13 @@ async function bootstrapMessagesThread({ bootToken, threadId, targetUserId }) {
   }
   startMessagesThreadRealtime(tid);
   const silent = messagesThreadHasCachedMessages(tid) || (Array.isArray(_messagesList) && _messagesList.length > 0);
+  // When we render from cache, the newest bubbles (received since last visit)
+  // only appear after the heavier `/api/messages?type=thread` serverless call
+  // returns — a few seconds of staring at stale messages. Fire the lightweight
+  // Supabase delta query (only rows newer than our last fetch) in parallel so
+  // the freshest messages land fast. mergeThreadMessages dedupes, so the full
+  // fetch below reconciles harmlessly.
+  if (silent) void pollNewThreadMessages(tid);
   await loadMessagesForConversation(tid, { bootToken, silent });
   syncMessagesThreadComposerReady();
   if (bootToken === _messagesThreadBootToken) {
@@ -24752,6 +24759,24 @@ function bindMessagesPageOnce() {
         e.preventDefault();
         playDiscoverTarget(pl);
       }
+    }
+  });
+
+  // iOS single-tap Send: tapping the Send button used to steal focus from the
+  // input → the input blurred → the keyboard collapsed → the composer
+  // repositioned mid-tap → the button moved out from under the finger → the
+  // click never landed (only the keyboard closed). The second tap worked
+  // because the keyboard was already closed and the button was stable.
+  // Preventing the default focus transfer on press keeps the input focused
+  // (keyboard stays open, composer stays put) so the click fires reliably on
+  // the first tap. `mousedown` is the synthesized event WKWebView fires for a
+  // tap; calling preventDefault here blocks the focus change WITHOUT cancelling
+  // the click — so we don't have to reimplement the tap. This does NOT touch
+  // the visualViewport / keyboard-gap logic (that is driven by focus state,
+  // which we intentionally preserve here).
+  document.addEventListener("mousedown", (e) => {
+    if (e.target.closest("#messagesComposerSend")) {
+      e.preventDefault();
     }
   });
 

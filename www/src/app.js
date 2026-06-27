@@ -4289,7 +4289,6 @@ function wireSettingsPresenceToggles() {
   }
 }
 wireSettingsPresenceToggles();
-startPresenceWatcher();
 // Tap the Now Playing presence line to open the mini panel.
 document.addEventListener("click", (e) => {
   const el = e.target?.closest?.("#messagesThreadRelation.messagesThreadRelation--np");
@@ -23978,6 +23977,9 @@ function startPresenceWatcher() {
   if (_presenceWatcherTimer) return;
   _presenceWatcherTimer = window.setInterval(presenceTick, PRESENCE_TICK_MS);
 }
+// Start once the presence module's state is initialized (calling this earlier
+// in boot would hit the temporal dead zone on the consts above).
+try { startPresenceWatcher(); } catch {}
 
 /** Build the header presence line, or null to fall back to the relation label. */
 function presenceLineFromState(p) {

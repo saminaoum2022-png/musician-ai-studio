@@ -39134,9 +39134,11 @@ body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[da
   .friendsPage .discoveryStudioHead{ justify-content: flex-start; }
 
   /* --- Discover as a multi-column grid --- */
+  /* `:not([hidden])` so the "View Full Top 10" collapse still works — an
+     author display:grid would otherwise override the UA [hidden] rule. */
   .discoverFeedListStack,
   .chartWeekRunners,
-  .chartWeekRest{
+  .chartWeekRest:not([hidden]){
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
@@ -39331,4 +39333,66 @@ body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[da
     transition: background 140ms ease;
   }
   .deskRailCtaBtn:hover{ background: rgba(255,255,255,0.13); }
+}
+
+/* --- Desktop DM thread: keep the shell instead of the mobile takeover --- */
+@media (min-width: 1024px){
+  /* The thread normally locks the body to the viewport and turns .app into a
+     flex column (full-screen phone chat). On desktop, keep the grid so the
+     sidebar (and rail at >=1200) stay visible and the chat lives in-column. */
+  body[data-route="messages-thread"]{
+    overflow: visible;
+    height: auto;
+  }
+  body[data-route="messages-thread"] > .app{
+    display: grid;
+    height: auto;
+    min-height: 100vh;
+    max-width: 1200px;
+    padding: 20px 26px 44px;
+    overflow: visible;
+  }
+  body[data-route="messages-thread"] main.grid{
+    display: grid;
+    overflow: visible;
+    margin: 0;
+    flex: none;
+  }
+  /* Thread becomes a self-contained card centred in the content column. */
+  body[data-route="messages-thread"] .messagesThreadPage.wide,
+  body[data-route="messages-thread"] section.messagesThreadPage{
+    position: relative;
+    grid-column: 1 / -1;
+    max-width: 720px;
+    margin-inline: auto;
+    height: calc(100vh - 96px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 20px;
+    overflow: hidden;
+  }
+  /* Header + composer anchor to the card, not the viewport. */
+  body[data-route="messages-thread"] .messagesThreadHead{
+    position: absolute;
+    left: 0;
+    right: 0;
+    width: 100%;
+    transform: none;
+    border-radius: 20px 20px 0 0;
+    padding-left: 16px;
+    padding-right: 16px;
+    padding-top: 12px;
+  }
+  body[data-route="messages-thread"] .messagesComposer{
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: none;
+    transform: none;
+    border-radius: 0 0 20px 20px;
+  }
+}
+@media (min-width: 1200px){
+  body[data-route="messages-thread"] > .app{ max-width: 1380px; }
 }

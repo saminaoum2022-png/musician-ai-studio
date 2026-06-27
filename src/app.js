@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260627desktop";
+const APP_BUILD = "20260627desktop2";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -6945,6 +6945,20 @@ function initDeskRail() {
   if (_deskRailBound) return;
   _deskRailBound = true;
   document.addEventListener("click", (e) => {
+    const trendRow = e.target.closest(".deskRailTrendRow");
+    if (trendRow) {
+      // Rail lives outside #discoveryMainContent, so the Discover play handler
+      // never sees it — play directly via the same path it uses.
+      const raw = decodeDiscoverDataAttr(trendRow, "data-challenge-entry-play");
+      if (!raw) return;
+      const title = decodeDiscoverDataAttr(trendRow, "data-challenge-entry-title") || "Song";
+      const art = decodeDiscoverDataAttr(trendRow, "data-challenge-entry-art") || "";
+      const by = decodeDiscoverDataAttr(trendRow, "data-challenge-entry-by") || "";
+      e.preventDefault();
+      try { haptic("light"); } catch {}
+      void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by, playSource: publicPlaySourceFromEl(trendRow) });
+      return;
+    }
     if (e.target.closest("[data-desk-rail-toggle]")) {
       try {
         if (playerEl && !playerEl.paused) playerEl.pause();

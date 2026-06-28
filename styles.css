@@ -25010,6 +25010,19 @@ body.createChooserSheetOpen .footer{
   height: 20px;
   flex-shrink: 0;
 }
+/* Back chevron lives in the Discover header next to the title (same flow as
+   Messages: [back] Title). It only appears while search is open, and the
+   search/magnifier button hides so the header reads as a standard back row. */
+.discoveryStudioHead .discoverySearchClose{
+  display: none;
+  margin-top: 2px;
+}
+.discoveryPaneStudio.isSearchOpen .discoveryStudioHead .discoverySearchClose{
+  display: inline-flex;
+}
+.discoveryPaneStudio.isSearchOpen #discoverySearchBtn{
+  display: none;
+}
 .discoverySearchBarWrap .searchBar{
   flex: 1 1 0;
   min-width: 0;

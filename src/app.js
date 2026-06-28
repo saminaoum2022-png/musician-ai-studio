@@ -23097,7 +23097,22 @@ function renderMessagesMount({ scrollToBottom = true, forceScroll = false } = {}
     return;
   }
   const stickToBottom = scrollToBottom && (forceScroll || _messagesThreadNeedsInitialScroll || shouldAutoScrollMessagesMount());
-  mount.innerHTML = `<div class="messagesBubbleStack">${msgs.map((m) => messagesBubbleHtml(m, viewerId)).join("")}</div><div class="messagesThreadScrollAnchor" aria-hidden="true"></div>`;
+  // Show a timestamp only at the end of a cluster (sender change or a gap),
+  // instead of stamping every bubble — quieter, more like a native chat.
+  const MSG_GROUP_GAP_MS = 5 * 60 * 1000;
+  mount.innerHTML = `<div class="messagesBubbleStack">${msgs
+    .map((m, i) => {
+      const next = msgs[i + 1];
+      let showTime = true;
+      if (next) {
+        const sameSender = String(next.sender_id || "") === String(m.sender_id || "");
+        const t1 = m?.created_at ? new Date(m.created_at).getTime() : 0;
+        const t2 = next?.created_at ? new Date(next.created_at).getTime() : 0;
+        showTime = !sameSender || Math.abs(t2 - t1) > MSG_GROUP_GAP_MS;
+      }
+      return messagesBubbleHtml(m, viewerId, { showTime });
+    })
+    .join("")}</div><div class="messagesThreadScrollAnchor" aria-hidden="true"></div>`;
   if (stickToBottom) {
     scrollMessagesMountToBottom({ force: true });
   }
@@ -24678,21 +24693,25 @@ function messagesBubbleStatusHtml(msg) {
   return "";
 }
 
-function messagesBubbleHtml(msg, viewerId) {
+function messagesBubbleHtml(msg, viewerId, opts) {
   const mine = String(msg?.sender_id || "") === String(viewerId || "");
   const parsed = parseDmMessageBody(msg?.body);
-  const when = msg?.created_at ? relativeTime(new Date(msg.created_at).getTime()) : "";
+  const showTime = !opts || opts.showTime !== false;
+  const when = showTime && msg?.created_at ? relativeTime(new Date(msg.created_at).getTime()) : "";
   const pendingCls = mine && msg?.sendStatus === "sending" ? " is-pending" : "";
   const failedCls = mine && msg?.sendStatus === "failed" ? " is-failed" : "";
+  const statusHtml = mine ? messagesBubbleStatusHtml(msg) : "";
+  const timeHtml = when ? `<span class="messagesBubbleTime">${escapeHtml(when)}</span>` : "";
+  const metaHtml =
+    timeHtml || statusHtml
+      ? `<span class="messagesBubbleMeta">${timeHtml}${statusHtml}</span>`
+      : "";
   if (parsed.type === "song") {
     return `
       <div class="messagesBubbleWrap messagesBubbleWrap--song${mine ? " is-mine" : ""}${pendingCls}${failedCls}" data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
         <div class="messagesBubble messagesBubble--song">
           ${messagesDmSongCardHtml(parsed, { mine })}
-          <span class="messagesBubbleMeta">
-            ${when ? `<span class="messagesBubbleTime">${escapeHtml(when)}</span>` : ""}
-            ${mine ? messagesBubbleStatusHtml(msg) : ""}
-          </span>
+          ${metaHtml}
         </div>
       </div>`;
   }
@@ -24701,10 +24720,7 @@ function messagesBubbleHtml(msg, viewerId) {
     <div class="messagesBubbleWrap${mine ? " is-mine" : ""}${pendingCls}${failedCls}" data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
       <div class="messagesBubble">
         <p class="messagesBubbleText">${escapeHtml(body)}</p>
-        <span class="messagesBubbleMeta">
-          ${when ? `<span class="messagesBubbleTime">${escapeHtml(when)}</span>` : ""}
-          ${mine ? messagesBubbleStatusHtml(msg) : ""}
-        </span>
+        ${metaHtml}
       </div>
     </div>`;
 }

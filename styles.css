@@ -16267,6 +16267,26 @@ body.trackSheetOpen .footer{
   margin-top: 8px;
   padding: 4px 6px;
 }
+.songDetailsCopyRow{
+  width: 100%;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 8px;
+  transition: background-color 140ms ease;
+}
+.songDetailsCopyRow:hover,
+.songDetailsCopyRow:active{
+  background: rgba(255,255,255,0.06);
+}
+.songDetailsCopyRow strong{
+  word-break: break-all;
+}
 .songDetailsFlatRow{
   display: flex;
   align-items: flex-start;

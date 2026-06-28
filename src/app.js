@@ -38553,6 +38553,14 @@ function songDetailsFlatRow(label, value) {
   return `<div class="songDetailsFlatRow"><span>${escapeHtml(label)}</span><strong>${escapeHtml(v)}</strong></div>`;
 }
 
+/** Like songDetailsFlatRow but tap-to-copy — used for technical IDs so they
+ *  can be grabbed for support/debugging without selecting tiny text. */
+function songDetailsCopyRow(label, value) {
+  const v = songDetailsValue(value);
+  if (!v || v === "—") return "";
+  return `<button type="button" class="songDetailsFlatRow songDetailsCopyRow" data-song-details-copy-id="${escapeHtml(v)}" aria-label="Copy ${escapeHtml(label)}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(v)}</strong></button>`;
+}
+
 function songDetailsNabadVerifyRow(track) {
   const state = resolveNabadVerification(track);
   if (!state) return "";
@@ -38639,9 +38647,9 @@ function renderAboutThisSong({ track, title, subtitle, lyrics, owner = false } =
 
   const technicalRows = owner
     ? [
-        songDetailsFlatRow("Task ID", track?.taskId),
-        songDetailsFlatRow("Audio ID", track?.audioId),
-        songDetailsFlatRow("Library ID", track?.id),
+        songDetailsCopyRow("Task ID", track?.taskId),
+        songDetailsCopyRow("Audio ID", track?.audioId),
+        songDetailsCopyRow("Library ID", track?.id),
       ].filter(Boolean).join("")
     : "";
 
@@ -38717,15 +38725,29 @@ function showSongDetailsModal() {
 }
 
 function wireSongDetailsCopyBtn(text) {
-  const copyBtn = els.songDetailsContent?.querySelector("[data-song-details-copy-lyrics]");
-  if (!copyBtn) return;
-  copyBtn.addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(String(text || ""));
-      showToast("Lyrics copied.");
-    } catch {
-      showToast("Could not copy lyrics.");
-    }
+  const root = els.songDetailsContent;
+  if (!root) return;
+  const copyBtn = root.querySelector("[data-song-details-copy-lyrics]");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(String(text || ""));
+        showToast("Lyrics copied.");
+      } catch {
+        showToast("Could not copy lyrics.");
+      }
+    });
+  }
+  root.querySelectorAll("[data-song-details-copy-id]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const val = btn.getAttribute("data-song-details-copy-id") || "";
+      try {
+        await navigator.clipboard.writeText(val);
+        showToast("Copied to clipboard.");
+      } catch {
+        showToast("Could not copy.");
+      }
+    });
   });
 }
 

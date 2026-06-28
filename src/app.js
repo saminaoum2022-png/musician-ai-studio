@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260628-143045";
+const APP_BUILD = "20260628-150734";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -25382,17 +25382,17 @@ function renderUserPublicSocialStats({ songCount, stats }) {
   const plays = Number(stats?.plays || 0);
   if (els.userPublicStats) {
     els.userPublicStats.innerHTML = `
-      <div class="profileStatPill profileStatPill--songs" data-stat="songs">
-        <strong class="profileStatPillValue">${formatStatCount(songCount || 0)}</strong>
-        <span class="profileStatPillLabel">Songs</span>
+      <div class="profileStatCol" data-stat="songs">
+        <strong class="profileStatValue">${formatStatCount(songCount || 0)}</strong>
+        <span class="profileStatLabel">Songs</span>
       </div>
-      <div class="profileStatPill profileStatPill--plays" data-stat="plays">
-        <strong class="profileStatPillValue">${formatStatCount(plays)}</strong>
-        <span class="profileStatPillLabel">Plays</span>
+      <div class="profileStatCol" data-stat="plays">
+        <strong class="profileStatValue">${formatStatCount(plays)}</strong>
+        <span class="profileStatLabel">Plays</span>
       </div>
-      <div class="profileStatPill profileStatPill--followers" data-stat="followers">
-        <strong class="profileStatPillValue">${formatStatCount(followers)}</strong>
-        <span class="profileStatPillLabel">Followers</span>
+      <div class="profileStatCol" data-stat="followers">
+        <strong class="profileStatValue">${formatStatCount(followers)}</strong>
+        <span class="profileStatLabel">Followers</span>
       </div>
     `;
     els.userPublicStats.style.display = "";
@@ -25401,7 +25401,7 @@ function renderUserPublicSocialStats({ songCount, stats }) {
 
 function userPublicStatsSkeletonHtml() {
   return [0, 1, 2].map((idx) => `
-    <div class="profileStatPill userPublicStatSkeleton" aria-hidden="true">
+    <div class="profileStatCol userPublicStatSkeleton" aria-hidden="true">
       <span class="userPublicSkelBlock userPublicStatValueSkel" style="--userPublicSkelDelay:${idx * 80}ms"></span>
       <span class="userPublicSkelBlock userPublicStatLabelSkel" style="--userPublicSkelDelay:${idx * 80 + 50}ms"></span>
     </div>

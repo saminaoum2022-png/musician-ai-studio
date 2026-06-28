@@ -17746,13 +17746,19 @@ body[data-route="settings"] main.grid{
 }
 .settingsPageHead{
   display: flex;
-  flex-direction: column;
-  gap: 14px;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
   margin: 0 0 22px;
   padding: 4px 2px 0;
 }
 .settingsBack{
-  margin: 0 0 2px -4px;
+  flex: 0 0 auto;
+  margin: 2px 0 0 -4px;
+}
+.settingsPageHeadText{
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .settingsPageSub{
   margin: 6px 0 0;

@@ -3952,7 +3952,9 @@ function syncArabicAddressVisibility() {
  *  them when a saved voice persona is active (the persona owns the voice). */
 function syncSingerGenderPills() {
   const v = String(els.sunoSingerGender?.value || "").trim();
-  document.querySelectorAll("#singerGenderPills .addressPill").forEach((b) => {
+  // Only the real gender pills carry data-singer-value — the Persona pill is
+  // managed separately by renderSingerPersonaPill(), so never touch it here.
+  document.querySelectorAll("#singerGenderPills .addressPill[data-singer-value]").forEach((b) => {
     const on = String(b.getAttribute("data-singer-value") || "") === v;
     b.classList.toggle("isActive", on);
     b.setAttribute("aria-pressed", on ? "true" : "false");
@@ -3963,41 +3965,77 @@ function syncSingerGenderPills() {
   if (wrap) wrap.classList.toggle("isOverridden", overridden);
 }
 
-/** Saved-voice chips under the Singer pills on Create: pick one of your
- *  personas (or Default), or jump to the voices panel to create one. */
+/** The Persona slot now lives inline as the third Singer pill (Male | Female |
+ *  Persona). With no persona it's a "＋" create button; with personas it shows
+ *  the active persona's name (or "Persona") and opens a chooser drawer. */
+function renderSingerPersonaPill() {
+  const pill = document.getElementById("singerPersonaPill");
+  if (!pill) return;
+  const main = pill.querySelector(".addressPillMain");
+  const sub = pill.querySelector(".addressPillSub");
+  const setCreate = () => {
+    pill.dataset.personaAction = "create";
+    pill.classList.remove("isActive");
+    pill.setAttribute("aria-pressed", "false");
+    if (main) main.textContent = "Persona";
+    if (sub) sub.textContent = "＋";
+  };
+  if (!authSession?.user?.id) { setCreate(); return; }
+  let list = [];
+  try { list = loadPersonas(); } catch {}
+  if (!list.length) { setCreate(); return; }
+  let active = "";
+  try { active = getActivePersonaId(); } catch {}
+  pill.dataset.personaAction = "menu";
+  const activeP = list.find((p) => String(p.personaId || "") === active);
+  if (activeP) {
+    pill.classList.add("isActive");
+    pill.setAttribute("aria-pressed", "true");
+    if (main) main.textContent = String(activeP.label || "Persona").trim().slice(0, 14) || "Persona";
+    if (sub) sub.textContent = "voice on";
+  } else {
+    pill.classList.remove("isActive");
+    pill.setAttribute("aria-pressed", "false");
+    if (main) main.textContent = "Persona";
+    if (sub) sub.textContent = "choose";
+  }
+}
+
+let _singerPersonaDrawerOpen = false;
+
+/** Persona chooser drawer under the Singer pills — only rendered/shown when the
+ *  user has at least one persona and taps the Persona pill. With none, the pill
+ *  itself is the create entry point, so the drawer stays empty/hidden. */
 function renderSingerPersonaRow() {
+  renderSingerPersonaPill();
   const row = els.singerPersonaRow || document.getElementById("singerPersonaRow");
   if (!row) return;
-  if (!authSession?.user?.id) {
+  let list = [];
+  let active = "";
+  if (authSession?.user?.id) {
+    try { list = loadPersonas(); } catch {}
+    try { active = getActivePersonaId(); } catch {}
+  }
+  if (!list.length) {
+    _singerPersonaDrawerOpen = false;
     row.hidden = true;
     row.innerHTML = "";
     syncSingerGenderPills();
     return;
   }
-  let list = [];
-  try { list = loadPersonas(); } catch {}
-  let active = "";
-  try { active = getActivePersonaId(); } catch {}
-  if (!list.length) {
-    row.innerHTML = `
-      <span class="singerPersonaNote">Persona</span>
-      <button type="button" class="singerPersonaChip singerPersonaChip--create" data-singer-persona-create="1">＋ Create your persona</button>
-    `;
-  } else {
-    // No "Default" chip: tapping the active persona again deselects it
-    // and the song falls back to the default voice.
-    const chips = [
-      ...list.map((p) => {
-        const id = escapeHtml(String(p.personaId || ""));
-        const lab = escapeHtml(String(p.label || "Persona").trim().slice(0, 24) || "Persona");
-        const on = String(p.personaId || "") === active;
-        return `<button type="button" class="singerPersonaChip ${on ? "isActive" : ""}" data-singer-persona-id="${id}" aria-pressed="${on ? "true" : "false"}">${lab}</button>`;
-      }),
-      `<button type="button" class="singerPersonaChip singerPersonaChip--create" data-singer-persona-create="1" aria-label="Create a new persona">＋</button>`,
-    ];
-    row.innerHTML = `<span class="singerPersonaNote">Persona</span>${chips.join("")}`;
-  }
-  row.hidden = false;
+  // No "Default" chip: tapping the active persona again deselects it and the
+  // song falls back to the default voice.
+  const chips = [
+    ...list.map((p) => {
+      const id = escapeHtml(String(p.personaId || ""));
+      const lab = escapeHtml(String(p.label || "Persona").trim().slice(0, 24) || "Persona");
+      const on = String(p.personaId || "") === active;
+      return `<button type="button" class="singerPersonaChip ${on ? "isActive" : ""}" data-singer-persona-id="${id}" aria-pressed="${on ? "true" : "false"}">${lab}</button>`;
+    }),
+    `<button type="button" class="singerPersonaChip singerPersonaChip--create" data-singer-persona-create="1" aria-label="Create a new persona">＋</button>`,
+  ];
+  row.innerHTML = `<span class="singerPersonaNote">Persona</span>${chips.join("")}`;
+  row.hidden = !_singerPersonaDrawerOpen;
   syncSingerGenderPills();
 }
 
@@ -43426,11 +43464,26 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
       syncSingerGenderPills();
     }
+    // Persona pill (third Singer slot): create when none, else toggle the drawer.
+    const personaPill = document.getElementById("singerPersonaPill");
+    if (personaPill) {
+      personaPill.addEventListener("click", () => {
+        haptic("light");
+        if (String(personaPill.dataset.personaAction || "create") === "create") {
+          _singerPersonaDrawerOpen = false;
+          openProfilePersonaPanel();
+          return;
+        }
+        _singerPersonaDrawerOpen = !_singerPersonaDrawerOpen;
+        renderSingerPersonaRow();
+      });
+    }
     if (els.singerPersonaRow) {
       els.singerPersonaRow.addEventListener("click", (e) => {
         const create = e.target?.closest?.("[data-singer-persona-create]");
         if (create) {
           haptic("light");
+          _singerPersonaDrawerOpen = false;
           openProfilePersonaPanel();
           return;
         }
@@ -43447,6 +43500,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         } else {
           selectPersonaForCreate(id);
         }
+        // Collapse the drawer after a pick — the pill reflects the result.
+        _singerPersonaDrawerOpen = false;
         renderSingerPersonaRow();
       });
       renderSingerPersonaRow();
@@ -44900,18 +44955,61 @@ function syncCreateTabMorph() {
 function syncCreateTabMorphNow() {
   const tab = document.getElementById("tabCreate");
   if (!tab) return;
-  // The "+" tab no longer morphs into a play/generate icon and there is no
-  // "ready" pulse or tooltip — Generate now lives in an explicit in-form
-  // button. The only state that restyles the tab is generating, which keeps
-  // the purple spinner the user likes.
   const tooltip = document.getElementById("tabCreateTooltip");
-  if (tooltip) tooltip.hidden = true;
   const route = document.body.getAttribute("data-route");
   const onCreate = route === "generate";
-  const generating = Boolean(els.btnSunoGenerate?.disabled);
 
-  tab.classList.remove("tabIsReady", "tabIsListen");
-  tab.classList.toggle("tabIsGenerating", Boolean(onCreate && generating));
+  const hasInput = Boolean(
+    String(els.sunoPrompt?.value || "").trim() ||
+    String(els.sunoStyle?.value || "").trim() ||
+    imageMoodAppliedForNextGen
+  );
+  const generating = Boolean(els.btnSunoGenerate?.disabled);
+  const hasResult = (els.resultCard?.style.display || "none") !== "none";
+
+  // Reset listen-flash bookkeeping when the user starts a fresh run.
+  if (generating) _tabListenFlashedForRun = false;
+
+  // Detect rising edge: result just became visible while on Create.
+  const justFinished = onCreate && hasResult && !_tabLastHasResult && !_tabListenFlashedForRun;
+  _tabLastHasResult = hasResult;
+
+  if (justFinished) {
+    _tabListenFlashedForRun = true;
+    tab.classList.remove("tabIsReady", "tabIsGenerating");
+    tab.classList.add("tabIsListen");
+    if (_tabListenTimer) clearTimeout(_tabListenTimer);
+    _tabListenTimer = setTimeout(() => {
+      tab.classList.remove("tabIsListen");
+      _tabListenTimer = null;
+      try { syncCreateTabMorph(); } catch {}
+    }, 2400);
+    return;
+  }
+
+  // While the listen flash timer is running, leave it alone.
+  if (_tabListenTimer) return;
+
+  // Off the Create page → no morph at all.
+  if (!onCreate) {
+    tab.classList.remove("tabIsReady", "tabIsGenerating", "tabIsListen");
+    if (tooltip) tooltip.hidden = true;
+    return;
+  }
+
+  if (generating) {
+    tab.classList.add("tabIsGenerating");
+    tab.classList.remove("tabIsReady", "tabIsListen");
+    if (tooltip) tooltip.hidden = true;
+    return;
+  }
+
+  const ready = hasInput && !hasResult;
+  tab.classList.toggle("tabIsReady", ready);
+  tab.classList.remove("tabIsGenerating");
+  // Show the bobbing "Tap to generate" wand pill whenever the song is ready to
+  // generate; hide it once generating / done / not ready.
+  if (tooltip) tooltip.hidden = !ready;
 }
 
 function syncGenerateOrbVisibility() {
@@ -44926,12 +45024,6 @@ function syncGenerateOrbVisibility() {
   if (els.btnGenerateOrb) {
     const visible = route === "generate" && hasInput && !generating && !hasResult;
     els.btnGenerateOrb.style.display = visible ? "inline-flex" : "none";
-  }
-  // The in-form "Generate song" CTA stays visible but reads as "dead" (greyed,
-  // no gradient) until there's something to generate, then it lights up. We
-  // don't touch it mid-run (the generate flow owns its label/disabled then).
-  if (els.btnSunoGenerate && !generating) {
-    els.btnSunoGenerate.classList.toggle("isDead", !hasInput);
   }
   try { syncArabicAddressVisibility(); } catch {}
   syncCreateTabMorph();
@@ -45077,9 +45169,25 @@ syncCreateTabMorph();
       closeCreateChooserSheet({ immediate: true });
       return;
     }
-    // The "+" tab is purely navigational now. Generating happens via the
-    // explicit in-form "Generate song" button, so tapping "+" never silently
-    // kicks off a run (which users found confusing).
+    const route = document.body.getAttribute("data-route") || "";
+    if (route !== "generate") return;
+    const hasInput = Boolean(
+      String(els.sunoPrompt?.value || "").trim() ||
+      String(els.sunoStyle?.value || "").trim() ||
+      imageMoodAppliedForNextGen
+    );
+    const generating = Boolean(els.btnSunoGenerate?.disabled);
+    const hasResult = (els.resultCard?.style.display || "none") !== "none";
+    // On the song form, the Create tab morphs into Generate — don't send users
+    // back to the home desk (#/challenges) when they meant to start a run.
+    if (generating || (hasInput && !hasResult)) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (!generating && els.btnSunoGenerate) {
+        haptic("impact");
+        els.btnSunoGenerate.click();
+      }
+    }
   }, true);
 })();
 

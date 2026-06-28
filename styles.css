@@ -7366,11 +7366,15 @@ textarea{
 }
 .card.wide[data-route="generate"]{
   max-width: 100%;
-  overflow-x: hidden;
+  /* `clip` (not `hidden`): `overflow-x: hidden` forces overflow-y to compute to
+     `auto`, which turns this card into a nested scroll container that fights the
+     page scroll — the cause of the "stuck scrolling back to top" jank on web.
+     `clip` clamps horizontal overflow without creating a scroller. */
+  overflow-x: clip;
 }
 .createPageHeader{
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 .createHeadRow{
   display: flex;
@@ -7693,11 +7697,11 @@ textarea{
   direction: rtl;
 }
 .addressPill.isActive{
-  border-color: rgba(167,139,250,0.65);
-  background:
-    linear-gradient(150deg, rgba(124,92,255,0.22), rgba(124,92,255,0.08));
+  /* Unified active-purple pill (shared with .styleSuggestPill + .optChip). */
+  border-color: rgba(167,139,250,0.55);
+  background: linear-gradient(150deg, rgba(124,92,255,0.20), rgba(124,92,255,0.09));
   color: #fff;
-  box-shadow: 0 0 0 1px rgba(167,139,250,0.25) inset;
+  box-shadow: none;
 }
 .addressPill.isActive .addressPillSub{
   color: rgba(232,226,255,0.78);
@@ -7705,10 +7709,18 @@ textarea{
 .addressPills--three{
   grid-template-columns: repeat(3, 1fr);
 }
-/* When a saved voice persona is active it controls the singer entirely. */
-.addressPills.isOverridden{
+/* When a saved voice persona is active it controls the singer entirely, so the
+   Male/Female pills dim out — but the Persona pill itself stays live (it shows
+   the active persona and lets you change/turn it off). */
+.addressPills.isOverridden .addressPill[data-singer-value]{
   opacity: 0.4;
   pointer-events: none;
+}
+.singerPersonaPill .addressPillSub{
+  direction: ltr;
+}
+.singerPersonaPill[data-persona-action="create"]{
+  border-style: dashed;
 }
 /* Saved-voice (persona) chips under the Singer pills. */
 .singerPersonaRow{
@@ -8349,8 +8361,9 @@ textarea{
 }
 .styleSuggestPill:active{ transform:scale(0.95); }
 .styleSuggestPill.isActive{
-  background:rgba(124,92,255,0.18);
-  border-color:rgba(124,92,255,0.55);
+  /* Unified active-purple pill (shared with .optChip + .addressPill). */
+  border-color: rgba(167,139,250,0.55);
+  background: linear-gradient(150deg, rgba(124,92,255,0.20), rgba(124,92,255,0.09));
   color:#fff;
 }
 .styleSuggestPillIco{
@@ -8635,11 +8648,14 @@ textarea{
   font-size: 10.5px;
   font-weight: 500;
 }
+/* The minimal base rules above are ID-scoped, so they out-specify the shared
+   `.addressPill.isActive`. Re-assert the unified active-purple here (also
+   ID-scoped) so the highlighted Singer/Arabic pill matches every other pill on
+   the page. The "minimal" treatment is the smaller size + no icons, not colour. */
 #singerGenderPills .addressPill.isActive,
 #arabicAddressPills .addressPill.isActive{
-  border-color: rgba(167,139,250,0.42);
-  background: rgba(124,92,255,0.11);
-  box-shadow: none;
+  border-color: rgba(167,139,250,0.55);
+  background: linear-gradient(150deg, rgba(124,92,255,0.20), rgba(124,92,255,0.09));
   color: #fff;
 }
 #singerGenderPills .singerPillIco{
@@ -16014,19 +16030,6 @@ button.resultMoreLink{
   0%,100%{ transform: scale(0.98); opacity:0.65; }
   50%{ transform: scale(1.03); opacity:1; }
 }
-/* "Dead" Generate CTA — shown but inert-looking until the form has something
-   to generate (no lyrics / content). Beats hiding it: the button teaches users
-   where Generate lives, then lights up with the brand gradient when ready.
-   ID+class specificity overrides `.primary` / `.aiGenerate`. */
-#btnSunoGenerate.isDead{
-  background: rgba(255,255,255,0.06);
-  color: rgba(232,238,247,0.42);
-  box-shadow: none;
-  cursor: default;
-}
-#btnSunoGenerate.isDead::before{
-  display: none;
-}
 @keyframes resultReveal{
   from{ opacity:0; transform: translateY(10px) scale(0.99); }
   to{ opacity:1; transform: translateY(0) scale(1); }
@@ -17172,10 +17175,7 @@ input::placeholder, textarea::placeholder{
   .mobileTabbar a.tabCreate .tabLabel{
     display: none;
   }
-  /* Create tab keeps the "+" at all times — no play-icon morph and no
-   * "ready" pulse. Generate now has an explicit in-form button, so the tab
-   * stays a plain "+". The only state that restyles the tab is generating,
-   * which shows the purple spinner (handled below). */
+  /* Create tab — subtle morph when on Create with inputs ready */
   .mobileTabbar a.tabCreate .tabIcoPlay,
   .mobileTabbar a.tabCreate .tabIcoSpinner{
     display: none;
@@ -17188,13 +17188,35 @@ input::placeholder, textarea::placeholder{
     animation: none;
     margin: 0;
   }
+  /* Ready-to-generate = brand TEAL (paired with the purple "generating" state
+     below, so the Create tab cycles through both Nabad brand colours). */
+  .mobileTabbar a.tabCreate.tabIsReady::before,
+  .mobileTabbar a.tabCreate.tabIsListen::before{
+    background: linear-gradient(135deg, #23d5ab, #1fb6c9);
+    animation: tabCreatePulse 2400ms ease-in-out infinite;
+  }
   .mobileTabbar a.tabCreate.tabIsReady .tabIcoCreate,
   .mobileTabbar a.tabCreate.tabIsListen .tabIcoCreate{
-    display: block;
+    display: none;
   }
   .mobileTabbar a.tabCreate.tabIsReady .tabIcoPlay,
   .mobileTabbar a.tabCreate.tabIsListen .tabIcoPlay{
-    display: none;
+    display: block;
+    position: absolute;
+    left: 50%;
+    top: calc(var(--tab-create-orbit-top) + var(--tab-create-orbit-size) / 2);
+    transform: translate(-50%, -50%);
+  }
+  .mobileTabbar a.tabCreate.tabIsListen::before{
+    background: linear-gradient(135deg, #23d5ab, #2ad1d1);
+  }
+  /* Magic-wand icon: thin stroked stick + filled sparkle. Keep .tabIco from
+     forcing a stroke onto the filled star (it would blob it out). */
+  .mobileTabbar a.tabCreate .tabIcoWandStick{
+    stroke-width: 2;
+  }
+  .mobileTabbar a.tabCreate .tabIcoWandStar{
+    stroke: none;
   }
   .mobileTabbar a.tabCreate.tabIsGenerating{
     color: rgba(244,247,255,0.96);
@@ -17237,20 +17259,30 @@ input::placeholder, textarea::placeholder{
   .mobileTabbar a.tabCreate .tabTooltip{
     position: absolute;
     left: 50%;
-    bottom: calc(100% + 8px);
+    bottom: calc(100% + 10px);
     transform: translateX(-50%);
-    padding: 6px 10px;
-    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 11px;
+    border-radius: 999px;
     font-size: 11.5px;
-    font-weight: 700;
+    font-weight: 750;
     color: #fff;
     background: linear-gradient(180deg, rgba(18,24,38,0.96), rgba(10,14,22,0.96));
-    border: 1px solid rgba(124,92,255,0.42);
+    border: 1px solid rgba(35,213,171,0.5);
     box-shadow: 0 10px 22px rgba(0,0,0,0.40);
     white-space: nowrap;
     pointer-events: none;
     z-index: 50;
-    animation: tabTooltipIn 240ms ease-out;
+    /* Pop in once, then bob gently up/down to draw the eye to the wand. */
+    animation: tabTooltipIn 240ms ease-out, tabTipBob 1700ms ease-in-out 260ms infinite;
+  }
+  .mobileTabbar a.tabCreate .tabTipWand{
+    width: 14px;
+    height: 14px;
+    flex: 0 0 auto;
+    color: #34e2bf;
   }
   .mobileTabbar a.tabCreate .tabTooltip[hidden]{
     display: none !important;
@@ -17264,14 +17296,18 @@ input::placeholder, textarea::placeholder{
     width: 8px;
     height: 8px;
     background: linear-gradient(135deg, transparent 50%, rgba(10,14,22,0.96) 50%);
-    border-right: 1px solid rgba(124,92,255,0.42);
-    border-bottom: 1px solid rgba(124,92,255,0.42);
+    border-right: 1px solid rgba(35,213,171,0.5);
+    border-bottom: 1px solid rgba(35,213,171,0.5);
     transform-origin: center;
     transform: translateX(-50%) translateY(-4px) rotate(45deg);
   }
   @keyframes tabTooltipIn{
     from{ opacity: 0; transform: translate(-50%, 4px); }
     to{ opacity: 1; transform: translate(-50%, 0); }
+  }
+  @keyframes tabTipBob{
+    0%, 100%{ transform: translate(-50%, 0); }
+    50%{ transform: translate(-50%, -5px); }
   }
   .mobileTabbar a:hover{
     color: rgba(223, 231, 251, 0.85);
@@ -17691,34 +17727,11 @@ input::placeholder, textarea::placeholder{
   display:none;
 }
 @media (max-width: 720px){
-  /* The explicit in-form "Generate song" button is the primary CTA on mobile.
-   * (The bottom-tab "+" no longer morphs into a play/generate icon — users
-   * were not noticing it.) The inner "Options" ghost is dropped here because
-   * the mobile "Advanced options" button already covers it. */
+  /* On mobile, the Create tab in the bottom bar morphs into Generate / Composing
+   * / Listen once inputs are ready, so the in-form Generate+Options dock is
+   * hidden here. It stays visible on desktop (where the bottom tabbar is hidden). */
   .card.wide[data-route="generate"] .generateDock{
-    display: block;
-    margin-top: 12px;
-    /* No card chrome around the button — just the button itself. */
-    border: 0;
-    background: transparent;
-    border-radius: 0;
-    padding: 0;
-  }
-  .card.wide[data-route="generate"] .generateDock .generateRow{
-    justify-content: center;
-  }
-  .card.wide[data-route="generate"] .generateDock .generateRow > .ghost{
-    display: none;
-  }
-  .card.wide[data-route="generate"] .generateDock #btnSunoGenerate{
-    width: auto;
-    flex: 0 0 auto;
-    min-width: 200px;
-    min-height: 50px;
-    padding-left: 30px;
-    padding-right: 30px;
-    font-size: 16px;
-    font-weight: 800;
+    display: none !important;
   }
   #btnGenerateOrb{
     display: none !important;
@@ -33767,8 +33780,9 @@ section.mentorPage{
 }
 .optChip:active{ transform: scale(0.96); }
 .optChip.isActive{
-  border-color: rgba(167,139,250,0.65);
-  background: linear-gradient(150deg, rgba(124,92,255,0.24), rgba(124,92,255,0.1));
+  /* Unified active-purple pill (shared with .styleSuggestPill + .addressPill). */
+  border-color: rgba(167,139,250,0.55);
+  background: linear-gradient(150deg, rgba(124,92,255,0.20), rgba(124,92,255,0.09));
   color: #fff;
 }
 

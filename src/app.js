@@ -36162,8 +36162,11 @@ function libraryTombstoneKeysForTrack(t) {
   if (urlKey) out.push(`url:${urlKey}|${kind}`);
   const stable = libraryTrackStableKey(t);
   if (stable && stable !== "|${kind}") out.push(`stk:${stable}`);
-  const tid = String(t?.taskId || "").trim();
-  if (tid) out.push(`tid:${tid}|${kind}`);
+  // NOTE: deliberately NOT keying by task_id. Songs generated in the same
+  // session (Suno returns 2 audio tracks per task) share one task_id but have
+  // distinct audio_id/url. A task_id key made deleting one sibling tombstone
+  // the other — silently deleting/un-publishing the song the user kept.
+  // audio_id / url / stable / cloud-id already identify each song uniquely.
   const cid = String(t?.cloudSongId || "").trim() || (isShareUuid(t?.id) ? String(t.id).trim() : "");
   if (cid) out.push(`cid:${cid}`);
   return out;

@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260628-152055";
+const APP_BUILD = "20260628-155450";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -29233,7 +29233,10 @@ function syncDiscoveryPlayingHighlights() {
     document.getElementById("discoveryPaneDiscover"),
     document.getElementById("friendsPage"),
     document.getElementById("profileActivitiesList"),
-    document.getElementById("userPublicSongs"),
+    // NOTE: #userPublicSongs is intentionally NOT here — it only ever plays the
+    // `public_profile_lib` source, owned by syncUserPublicFeedPlayingHighlights.
+    // Resetting it here (then early-returning for non-discover sources) wiped the
+    // cover play↔pause icon on the public profile.
     document.getElementById("discoverPlaylistList"),
     document.getElementById("messagesThreadMount"),
   ].filter(Boolean);
@@ -29403,27 +29406,34 @@ function syncUserPublicFeedPlayingHighlights() {
   const root = document.getElementById("userPublicSongs");
   if (!root) return;
 
+  // Public-profile song rows render as `.followAct--xstyle` (cover button is
+  // `[data-user-lib-play]`), but discover-style rows use `.discoverFeedSongRow`
+  // / `.discoveryRow`. Match all of them so the cover play↔pause icon toggles.
+  const ROW_SELECTOR = ".discoverFeedSongRow, .discoveryRow, .followAct";
+  const PLAY_BTN_SELECTOR =
+    ".discoverFeedSongRowPlay, [data-discovery-inline-play], [data-user-lib-play]";
+
   const resetDiscoveryHost = (host) => {
     host.classList.remove("discoveryRowPlaying", "discoveryRowActive");
     try {
       host.style.removeProperty("--cover-glow-rgb");
     } catch {}
-    const playBtn = host.querySelector(".discoverFeedSongRowPlay, [data-discovery-inline-play]");
+    const playBtn = host.querySelector(PLAY_BTN_SELECTOR);
     if (playBtn) {
       const name = decodeDiscoverDataAttr(playBtn, "data-user-lib-title") || "Song";
       playBtn.setAttribute("aria-label", `Play ${name}`);
     }
   };
 
-  root.querySelectorAll(".discoverFeedSongRow, .discoveryRow").forEach(resetDiscoveryHost);
+  root.querySelectorAll(ROW_SELECTOR).forEach(resetDiscoveryHost);
 
   const curRef = String(currentPlayerTrackRef?.url || "").trim();
   if (miniSource?.type !== "public_profile_lib" || !curRef) return;
 
-  root.querySelectorAll(".discoverFeedSongRow, .discoveryRow").forEach((row) => {
-    const playBtn = row.querySelector(".discoverFeedSongRowPlay, [data-discovery-inline-play]");
+  root.querySelectorAll(ROW_SELECTOR).forEach((row) => {
+    const playBtn = row.querySelector(PLAY_BTN_SELECTOR);
     if (!playBtn) return;
-    const trackUrl = decodeDiscoveryUserLibUrl(playBtn);
+    const trackUrl = decodeDiscoveryUserLibUrl(playBtn) || decodeDiscoveryUserLibUrl(row);
     const { active, audible } = getPublicProfileLibPlaybackUiForUrl(trackUrl);
     if (!active) return;
     row.classList.toggle("discoveryRowPlaying", audible);
@@ -29432,7 +29442,7 @@ function syncUserPublicFeedPlayingHighlights() {
     playBtn.setAttribute("aria-label", audible ? `Pause ${name}` : `Play ${name}`);
     const artHint =
       String(decodeDiscoverDataAttr(playBtn, "data-user-lib-art") || "").trim() ||
-      String(row.querySelector?.(".discoverFeedSongArt img, .discoveryRowArt img")?.getAttribute?.("src") || "").trim();
+      String(row.querySelector?.(".discoverFeedSongArt img, .discoveryRowArt img, .followActMediaImg")?.getAttribute?.("src") || "").trim();
     if (active) applyCoverGlowRgb(row, artHint);
   });
 }
@@ -31358,6 +31368,27 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
   for (const t of songs) {
     t.userId = String(t.userId || prof.user_id || "");
   }
+  // The creator's reposts are public (social_reposts RLS = public read), so a
+  // visitor's profile view matches what the creator sees on their own profile.
+  let repostItems = [];
+  try {
+    const reposts = await fetchUserRepostsForProfile(prof.user_id, 40);
+    if (reposts.length && stillCurrent()) {
+      const ownSongIds = new Set(songs.map((t) => String(t.id || "")));
+      const repIds = [...new Set(reposts.map((r) => r.targetId))];
+      const repSongs = await fetchPublicSongsByIds(repIds);
+      repostItems = reposts
+        .map((rp) => {
+          const track = repSongs.get(rp.targetId);
+          if (!track || !String(track.url || "").trim()) return null;
+          // Don't double-show a song the creator both owns publicly and reposted.
+          if (ownSongIds.has(String(track.id || ""))) return null;
+          return { kind: "repost", ts: rp.ts, repost: { ...rp, userId: prof.user_id }, track };
+        })
+        .filter(Boolean);
+    }
+  } catch {}
+  if (!stillCurrent()) return;
   if (!resolvedSocialStats) {
     const socialData = await fetchSocialStatsForProfile({ username: displayName, userId: prof.user_id });
     resolvedSocialStats = socialData?.stats || null;
@@ -31375,7 +31406,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
       els.userPublicSongsCount.hidden = true;
     }
   }
-  if (!songs.length) {
+  if (!songs.length && !repostItems.length) {
     if (!stillCurrent()) return;
     if (els.userPublicSongs) els.userPublicSongs.innerHTML = "";
     _userPublicFeedTracks = [];
@@ -31389,57 +31420,78 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
     return;
   }
   if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
-  const profMap = await fetchProfilesByUserIdsMap([String(prof.user_id || "")]);
+  const profMap = await fetchProfilesByUserIdsMap([
+    String(prof.user_id || ""),
+    ...repostItems.map((it) => String(it.track.userId || "")).filter(Boolean),
+  ]);
   if (!stillCurrent()) return;
-  const slice = sortLibraryForDisplay(songs);
+  // Pinned (featured) songs stay at the top; everything else — the creator's
+  // remaining songs and their reposts — is interleaved newest-first, matching
+  // the time-ordered activity feed on the user's own profile.
+  const sortedSongs = sortLibraryForDisplay(songs);
+  const pinnedItems = [];
+  const restSongItems = [];
+  for (const t of sortedSongs) {
+    const item = { kind: "music", ts: profileActivitiesFeedTs(t), track: t };
+    (isFeaturedOnProfile(t) ? pinnedItems : restSongItems).push(item);
+  }
+  const timelineItems = [...restSongItems, ...repostItems].sort((a, b) => b.ts - a.ts);
+  const feedItems = [...pinnedItems, ...timelineItems];
+  const allTracks = feedItems.map((it) => it.track);
   const byLine = `@${displayName}`;
-  const paintPublicSongs = (tracks) => {
+  const paintPublicFeed = (items) => {
     if (!stillCurrent() || !els.userPublicSongs) return;
-    els.userPublicSongs.innerHTML = tracks
-      .map((t, i) => followingActivityRowHtml(t, profMap, i, { xstyle: true }))
+    els.userPublicSongs.innerHTML = items
+      .map((item, i) =>
+        item.kind === "repost"
+          ? followingRepostRowHtml(item, profMap, i)
+          : followingActivityRowHtml(item.track, profMap, i, { xstyle: true }))
       .join("");
-    _userPublicFeedTracks = tracks.map((t) => {
-      const artSafe = trackCoverArtForFeed(t);
-      return {
-        url: String(t.url || "").trim(),
-        title: String(t.title || "Untitled"),
-        artUrl: artSafe,
-        byLine,
-        songId: String(t.id || ""),
-        ownerUserId: currentUserPublicProfileId,
-        taskId: String(t.taskId || ""),
-        audioId: String(t.audioId || ""),
-        meta: t.meta || {},
-        releaseCaption: releaseCaptionForTrack(t),
-      };
-    });
+    _userPublicFeedTracks = items
+      .map((item) => {
+        const t = item.track;
+        const artSafe = trackCoverArtForFeed(t);
+        return {
+          url: String(t.url || "").trim(),
+          title: String(t.title || "Untitled"),
+          artUrl: artSafe,
+          byLine,
+          songId: String(t.id || ""),
+          ownerUserId: String(t.userId || currentUserPublicProfileId),
+          taskId: String(t.taskId || ""),
+          audioId: String(t.audioId || ""),
+          meta: t.meta || {},
+          releaseCaption: releaseCaptionForTrack(t),
+        };
+      })
+      .filter((x) => x.url);
     try {
-      syncDiscoveryPlayingHighlights();
+      syncUserPublicFeedPlayingHighlights();
     } catch {}
     applyFeedSocialStatsToDom(els.userPublicSongs);
     void hydrateFeedSocialStatsForFeed(els.userPublicSongs);
   };
-  paintPublicSongs(slice);
+  paintPublicFeed(feedItems);
   setUserPublicLoading(false);
-  void fetchDiscoverSongPlayCounts(slice.map((t) => t.id)).then((playCountMap) => {
+  void fetchDiscoverSongPlayCounts(allTracks.map((t) => t.id)).then((playCountMap) => {
     if (!stillCurrent()) return;
     let changed = false;
-    for (const t of slice) {
+    for (const t of allTracks) {
       const n = playCountMap.get(String(t.id || "")) || 0;
       if ((t.playCount || 0) !== n) {
         t.playCount = n;
         changed = true;
       }
     }
-    if (changed) paintPublicSongs(slice);
+    if (changed) paintPublicFeed(feedItems);
   });
-  void hydrateRemixOriginalsForTracks(slice).then(() => {
+  void hydrateRemixOriginalsForTracks(allTracks).then(() => {
     if (!stillCurrent()) return;
-    paintPublicSongs(slice);
+    paintPublicFeed(feedItems);
   });
-  void hydrateMashupSourcesForTracks(slice).then(() => {
+  void hydrateMashupSourcesForTracks(allTracks).then(() => {
     if (!stillCurrent()) return;
-    paintPublicSongs(slice);
+    paintPublicFeed(feedItems);
   });
   syncUserPublicVerifiedBadge(prof);
   } catch (e) {

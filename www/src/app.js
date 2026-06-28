@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260628-212343";
+const APP_BUILD = "20260628-214949";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -6693,7 +6693,29 @@ function bindCampaignUiOnce() {
 }
 
 // ─── Weekly chart (Top songs of the week) ───────────────────────────────
-let _weeklyChartCache = { ts: 0, chart: null };
+const WEEKLY_CHART_CACHE_KEY = "mas:weeklyChart:v1";
+function loadPersistedWeeklyChart() {
+  try {
+    const raw = localStorage.getItem(WEEKLY_CHART_CACHE_KEY);
+    if (!raw) return { ts: 0, chart: null };
+    const obj = JSON.parse(raw);
+    if (obj && Array.isArray(obj.chart)) {
+      return { ts: Number(obj.ts) || 0, chart: obj.chart };
+    }
+  } catch {}
+  return { ts: 0, chart: null };
+}
+function persistWeeklyChart(cache) {
+  try {
+    localStorage.setItem(
+      WEEKLY_CHART_CACHE_KEY,
+      JSON.stringify({ ts: cache?.ts || 0, chart: cache?.chart || [] }),
+    );
+  } catch {}
+}
+// Hydrate from localStorage so a cold start can paint the Top 10 instantly
+// (stale-while-revalidate) instead of re-showing a skeleton every time.
+let _weeklyChartCache = loadPersistedWeeklyChart();
 let _discoverWeeklyChartSectionBound = false;
 const CHART_WEEK_EXPANDED_KEY = "nabad_chart_week_expanded";
 let _weeklyChartExpanded = (() => {
@@ -6711,6 +6733,7 @@ async function fetchWeeklyChart() {
     const data = await socialApi("/api/social?type=weekly_chart");
     const chart = Array.isArray(data?.chart) ? data.chart : [];
     _weeklyChartCache = { ts: Date.now(), chart };
+    persistWeeklyChart(_weeklyChartCache);
     return chart;
   } catch {
     return _weeklyChartCache.chart || [];
@@ -6896,43 +6919,24 @@ function paintDiscoverWeeklyChartLoading(wrap) {
   el.innerHTML = discoverWeeklyChartSkeletonHtml();
 }
 
-async function refreshDiscoverWeeklyChart() {
-  const wrap = document.getElementById("discoverWeeklyChart");
-  if (!wrap) return;
-  const hadContent = Boolean(wrap.querySelector(".chartWeekWinner:not(.chartWeekWinner--skel)"));
-  const wasHidden = wrap.hidden;
-  const wasLoading = wrap.classList.contains("isLoading");
-  const cached = _weeklyChartCache.chart && Date.now() - _weeklyChartCache.ts < 5 * 60_000
-    ? _weeklyChartCache.chart
-    : null;
-  if (!cached?.length && !wrap.classList.contains("isLoading")) {
-    paintDiscoverWeeklyChartLoading(wrap);
-  }
-  try {
-    const chart = cached || await fetchWeeklyChart();
-    wrap.classList.remove("isLoading");
-    wrap.removeAttribute("aria-busy");
-    if (!chart.length) {
-      wrap.hidden = true;
-      wrap.innerHTML = "";
-      return;
-    }
-    const topTen = chart.slice(0, 10);
-    const [hero, ...rest] = topTen;
-    const runnerEntries = rest.slice(0, 3);
-    const restEntries = rest.slice(3);
-    const showFullChart = restEntries.length > 0;
-    const expanded = _weeklyChartExpanded;
-    const heroHtml = chartWeekWinnerHtml(hero);
-    const runnersHtml = runnerEntries.length
-      ? `<div class="chartWeekRunners" role="list" aria-label="Top songs ranks 2 through 4">${runnerEntries.map((e) => chartWeekRunnerHtml(e)).join("")}</div>`
-      : "";
-    const restHtml = restEntries.length
-      ? `<div class="chartWeekRest" id="chartWeekRest" role="list" aria-label="Top songs ranks 5 through 10" ${expanded ? "" : "hidden"}>${restEntries.map((e) => chartWeekRunnerHtml(e)).join("")}</div>`
-      : "";
-    const toggleLabel = expanded ? "Show less" : "View Top 10";
-    const fullLabel = expanded ? "Show less" : "View Full Top 10";
-    wrap.innerHTML = `
+/** Inner HTML for the rendered (non-skeleton) Top This Week chart. */
+function weeklyChartContentHtml(chart) {
+  const topTen = chart.slice(0, 10);
+  const [hero, ...rest] = topTen;
+  const runnerEntries = rest.slice(0, 3);
+  const restEntries = rest.slice(3);
+  const showFullChart = restEntries.length > 0;
+  const expanded = _weeklyChartExpanded;
+  const heroHtml = chartWeekWinnerHtml(hero);
+  const runnersHtml = runnerEntries.length
+    ? `<div class="chartWeekRunners" role="list" aria-label="Top songs ranks 2 through 4">${runnerEntries.map((e) => chartWeekRunnerHtml(e)).join("")}</div>`
+    : "";
+  const restHtml = restEntries.length
+    ? `<div class="chartWeekRest" id="chartWeekRest" role="list" aria-label="Top songs ranks 5 through 10" ${expanded ? "" : "hidden"}>${restEntries.map((e) => chartWeekRunnerHtml(e)).join("")}</div>`
+    : "";
+  const toggleLabel = expanded ? "Show less" : "View Top 10";
+  const fullLabel = expanded ? "Show less" : "View Full Top 10";
+  return `
       <header class="discoverFeedSectionHead chartWeekHead">
         <h3 class="discoverFeedSectionTitle">Top This Week</h3>
         ${showFullChart ? `<button type="button" class="discoverFeedSectionLink" data-chart-week-toggle aria-expanded="${expanded ? "true" : "false"}">${escapeHtml(toggleLabel)}</button>` : ""}
@@ -6941,15 +6945,53 @@ async function refreshDiscoverWeeklyChart() {
       ${runnersHtml}
       ${restHtml}
       ${showFullChart ? `<button type="button" class="chartWeekFullBtn" data-chart-week-toggle aria-expanded="${expanded ? "true" : "false"}">${escapeHtml(fullLabel)}</button>` : ""}`;
-    wireChartWeekToggleButtons(wrap);
-    wrap.hidden = false;
-    const shouldAnimate = !hadContent && (wasHidden || wasLoading);
-    if (shouldAnimate) playDiscoverSectionEnter(wrap);
-  } catch {
-    wrap.classList.remove("isLoading");
-    wrap.removeAttribute("aria-busy");
+}
+
+/** Paint chart content (or hide when empty) into the section wrap. */
+function paintDiscoverWeeklyChartContent(wrap, chart, { animate = false } = {}) {
+  if (!wrap) return;
+  const hadContent = Boolean(wrap.querySelector(".chartWeekWinner:not(.chartWeekWinner--skel)"));
+  const wasHidden = wrap.hidden;
+  const wasLoading = wrap.classList.contains("isLoading");
+  wrap.classList.remove("isLoading");
+  wrap.removeAttribute("aria-busy");
+  if (!chart || !chart.length) {
     wrap.hidden = true;
     wrap.innerHTML = "";
+    return;
+  }
+  wrap.innerHTML = weeklyChartContentHtml(chart);
+  wireChartWeekToggleButtons(wrap);
+  wrap.hidden = false;
+  if (animate && !hadContent && (wasHidden || wasLoading)) playDiscoverSectionEnter(wrap);
+}
+
+async function refreshDiscoverWeeklyChart() {
+  const wrap = document.getElementById("discoverWeeklyChart");
+  if (!wrap) return;
+  // Render instantly from any cached chart — even a stale one — so the Top 10
+  // appears in the same paint as the rest of Discover with no skeleton flash
+  // on cold start. Then revalidate in the background and swap only if stale.
+  const cachedChart = _weeklyChartCache.chart && _weeklyChartCache.chart.length
+    ? _weeklyChartCache.chart
+    : null;
+  const fresh = cachedChart && Date.now() - _weeklyChartCache.ts < 5 * 60_000;
+  if (cachedChart) paintDiscoverWeeklyChartContent(wrap, cachedChart, { animate: false });
+  if (fresh) return;
+  // Nothing cached to show yet (first-ever load) → keep the skeleton visible.
+  if (!cachedChart && !wrap.classList.contains("isLoading")) {
+    paintDiscoverWeeklyChartLoading(wrap);
+  }
+  try {
+    const chart = await fetchWeeklyChart();
+    paintDiscoverWeeklyChartContent(wrap, chart, { animate: !cachedChart });
+  } catch {
+    if (!cachedChart) {
+      wrap.classList.remove("isLoading");
+      wrap.removeAttribute("aria-busy");
+      wrap.hidden = true;
+      wrap.innerHTML = "";
+    }
   }
 }
 

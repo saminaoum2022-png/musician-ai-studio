@@ -1281,20 +1281,26 @@ async function handleGet(req, res, user) {
 
   if (type === "weekly_chart") {
     // Top songs of the week, engagement-ranked with ▲ ▼ NEW movement.
-    // Pure read for display — chart-rank notifications are decoupled from
-    // page views and fired by the scheduled cron below instead.
     const { chart, weekKey } = await computeWeeklyChart();
+    // Immediate, best-effort "you charted" pings on view (deduped to new
+    // peaks). The daily cron is a traffic-independent backstop so creators
+    // still get notified even when caching keeps clients from hitting this.
+    void fireChartRankNotifications(chart, weekKey).catch(() => {});
     return sendJson(res, 200, { ok: true, weekKey, chart });
   }
 
   if (type === "chart_notify_cron") {
     // Scheduled trigger (Vercel Cron). Recomputes the weekly chart and pushes
-    // "you charted" notifications independent of user traffic. Protected by
-    // CRON_SECRET — Vercel Cron sends it as `Authorization: Bearer <secret>`.
+    // "you charted" notifications independent of user traffic. If CRON_SECRET
+    // is set, Vercel Cron sends it as `Authorization: Bearer <secret>` and we
+    // enforce it; otherwise the endpoint stays open (notifications are deduped
+    // to new peaks, so it can't spam) so it works with zero Vercel setup.
     const secret = String(process.env.CRON_SECRET || "");
-    const auth = String(req.headers.authorization || req.headers.Authorization || "");
-    if (!secret || auth !== `Bearer ${secret}`) {
-      return sendJson(res, 401, { ok: false, error: "unauthorized" });
+    if (secret) {
+      const auth = String(req.headers.authorization || req.headers.Authorization || "");
+      if (auth !== `Bearer ${secret}`) {
+        return sendJson(res, 401, { ok: false, error: "unauthorized" });
+      }
     }
     const { chart, weekKey } = await computeWeeklyChart();
     const notified = await fireChartRankNotifications(chart, weekKey);

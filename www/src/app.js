@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260628-142231";
+const APP_BUILD = "20260628-143045";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -34880,16 +34880,24 @@ function routeHashForReturn(route) {
 /** Show the public-profile back affordance and remember where to return. */
 function syncUserPublicRouteChrome(prevRoute) {
   const btn = els.btnUserPublicBack;
+  const moreBtn = document.getElementById("btnUserPublicMore");
   const onUser = (document.body.getAttribute("data-route") || "") === "user";
   if (!btn) return;
   if (!onUser) {
     btn.hidden = true;
+    if (moreBtn) moreBtn.hidden = true;
     return;
   }
   const back = routeHashForReturn(prevRoute);
   if (back) _userPublicReturnHash = back;
   else if (!_userPublicReturnHash) _userPublicReturnHash = "#/discover";
   btn.hidden = false;
+  // Only offer block/report when viewing someone else's profile while signed in.
+  if (moreBtn) {
+    const viewerId = String(authSession?.user?.id || "").trim();
+    const targetId = String(currentUserPublicProfileId || "").trim();
+    moreBtn.hidden = !(viewerId && (!targetId || targetId !== viewerId));
+  }
 }
 
 function renderUserProfile(rawUsername, { soft = false } = {}) {
@@ -47431,6 +47439,148 @@ wireLegalLinks();
       try {
         showToast("Couldn't unblock. Try again.");
       } catch {}
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (isOpen && e.key === "Escape") close();
+  });
+})();
+
+// Public-profile "..." menu → Block / Report the creator you're viewing.
+(function wireUserActions() {
+  const moreBtn = document.getElementById("btnUserPublicMore");
+  const sheet = document.getElementById("userActionSheet");
+  const scrim = document.getElementById("userActionSheetScrim");
+  const titleEl = document.getElementById("userActionSheetTitle");
+  if (!moreBtn || !sheet) return;
+  let hideTimer = 0;
+  let isOpen = false;
+
+  const currentHandle = () =>
+    String(els.userPublicName?.textContent || "").replace(/^@/, "").trim();
+
+  const open = () => {
+    if (hideTimer) {
+      clearTimeout(hideTimer);
+      hideTimer = 0;
+    }
+    const handle = currentHandle();
+    if (titleEl) titleEl.textContent = handle ? `@${handle}` : "This user";
+    isOpen = true;
+    sheet.hidden = false;
+    sheet.setAttribute("aria-hidden", "false");
+    window.requestAnimationFrame(() => {
+      if (isOpen) sheet.classList.add("isOpen");
+    });
+  };
+  const close = () => {
+    isOpen = false;
+    sheet.classList.remove("isOpen");
+    sheet.setAttribute("aria-hidden", "true");
+    if (hideTimer) clearTimeout(hideTimer);
+    hideTimer = window.setTimeout(() => {
+      hideTimer = 0;
+      if (!isOpen) sheet.hidden = true;
+    }, 260);
+  };
+
+  const reportUser = () => {
+    const handle = currentHandle();
+    const targetId = String(currentUserPublicProfileId || "").trim();
+    const email = "support@nabadai.com";
+    const subject = "NabadAi Music — user report";
+    const build = String(document.getElementById("footerBuild")?.textContent || "").trim();
+    const account =
+      String(authSession?.user?.email || activeProfile?.email || "").trim() || "guest";
+    const lines = ["I'd like to report this user:", ""];
+    if (handle) lines.push(`User: @${handle}`);
+    if (targetId) lines.push(`User ID: ${targetId}`);
+    lines.push("", "Reason / details:", "(describe the issue)", "", "---", "App: NabadAi Music");
+    if (build) lines.push(`Build: ${build}`);
+    lines.push(`Reported by: ${account}`);
+    const href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join("\n"))}`;
+    try {
+      window.location.href = href;
+    } catch {}
+  };
+
+  const blockUser = async () => {
+    const handle = currentHandle();
+    const targetId = String(currentUserPublicProfileId || "").trim();
+    const viewerId = String(authSession?.user?.id || "").trim();
+    if (!viewerId) {
+      try {
+        showToast("Sign in to block users.");
+      } catch {}
+      return;
+    }
+    if (!targetId) {
+      try {
+        showToast("Couldn't identify this user.");
+      } catch {}
+      return;
+    }
+    if (targetId === viewerId) {
+      try {
+        showToast("You can't block yourself.");
+      } catch {}
+      return;
+    }
+    const label = handle ? `@${handle}` : "this user";
+    if (!window.confirm(`Block ${label}? They won't be able to message you, and you won't see each other in chat.`)) {
+      return;
+    }
+    try {
+      await messagesApi("/api/messages", {
+        method: "POST",
+        timeoutMs: 8000,
+        body: JSON.stringify({ action: "block", targetUserId: targetId }),
+      });
+      try {
+        haptic("light");
+      } catch {}
+      try {
+        showToast(`Blocked ${label}.`);
+      } catch {}
+      try {
+        location.hash = _userPublicReturnHash || "#/discover";
+      } catch {}
+    } catch (err) {
+      try {
+        showToast("Couldn't block. Try again.");
+      } catch {}
+    }
+  };
+
+  moreBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    try {
+      haptic("light");
+    } catch {}
+    open();
+  });
+  if (scrim) {
+    scrim.addEventListener("click", (e) => {
+      e.preventDefault();
+      close();
+    });
+  }
+  sheet.addEventListener("click", (e) => {
+    const btn = e.target?.closest?.("[data-user-action]");
+    if (!btn) return;
+    const action = btn.getAttribute("data-user-action");
+    if (action === "cancel") {
+      close();
+      return;
+    }
+    if (action === "report") {
+      close();
+      reportUser();
+      return;
+    }
+    if (action === "block") {
+      close();
+      void blockUser();
     }
   });
   document.addEventListener("keydown", (e) => {

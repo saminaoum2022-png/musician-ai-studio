@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260628-155450";
+const APP_BUILD = "20260628-205802";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -30673,7 +30673,7 @@ function renderUserPlaylist() {
                 ${coverArtPlaybackOverlayHtml()}
               </span>
               <span class="libRowInfo">
-                ${titleWithNabadBadgeHtml(t, safeTitle, "libRowTitle")}
+                ${titleWithNabadBadgeHtml(item, safeTitle, "libRowTitle")}
                 <span class="libRowSub">${subBits.join("")}</span>
               </span>
               <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>

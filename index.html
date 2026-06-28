@@ -3727,6 +3727,28 @@
           </div>
         </div>
       </div>
+      <button id="coachFab" class="coachFab" type="button" aria-label="Ask Nabad Coach">
+        <span class="coachFabIco" aria-hidden="true">
+          <svg viewBox="0 0 100 100" aria-hidden="true">
+            <defs>
+              <linearGradient id="coachOrbFabG" x1="26" y1="24" x2="74" y2="80" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stop-color="#36e7c0"/>
+                <stop offset=".42" stop-color="#3f73f0"/>
+                <stop offset="1" stop-color="#6a23da"/>
+              </linearGradient>
+              <radialGradient id="coachOrbFabHi" cx=".36" cy=".30" r=".75">
+                <stop offset="0" stop-color="#ffffff" stop-opacity=".55"/>
+                <stop offset=".45" stop-color="#ffffff" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+            <circle cx="50" cy="50" r="45" fill="none" stroke="#16264f" stroke-width="2.3"/>
+            <path d="M50 12 A38 38 0 0 1 88 50" fill="none" stroke="#2dd4bf" stroke-width="2.3" stroke-linecap="round"/>
+            <path d="M50 88 A38 38 0 0 1 12 50" fill="none" stroke="#2dd4bf" stroke-width="2.3" stroke-linecap="round"/>
+            <circle cx="50" cy="50" r="27.5" fill="url(#coachOrbFabG)"/>
+            <circle cx="50" cy="50" r="27.5" fill="url(#coachOrbFabHi)"/>
+          </svg>
+        </span>
+      </button>
       <button id="btnGenerateOrb" class="generateOrb" type="button">Generate</button>
       <div id="likeBurst" class="likeBurst" style="display:none">❤</div>
     </div>

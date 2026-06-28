@@ -23132,6 +23132,10 @@ function renderChatHeader() {
     renderChatHeaderSkeleton();
     return;
   }
+  if (u.userId === COACH_SENDER_ID) {
+    renderCoachChatHeader();
+    return;
+  }
   const displayEl = document.getElementById("messagesThreadDisplayName");
   const handleEl = document.getElementById("messagesThreadHandleSub");
   const relationEl = document.getElementById("messagesThreadRelation");
@@ -24740,6 +24744,10 @@ function renderMessagesInbox() {
   const visibleRequests = showRequests ? requests : [];
   const visibleThreads = showChats ? threads : [];
   const visibleSent = showSent ? sentRequests : [];
+  // Nabad Coach is a pinned, always-present helper at the top of the inbox.
+  const coachHtml = showChats
+    ? `<section class="messagesInboxSection messagesInboxSection--coach"><div class="messagesInboxList">${coachInboxRowHtml()}</div></section>`
+    : "";
 
   if (!visibleRequests.length && !visibleThreads.length && !visibleSent.length) {
     let emptyTitle = "No messages yet";
@@ -24751,7 +24759,7 @@ function renderMessagesInbox() {
       emptyTitle = "No chats yet";
       emptyLead = "Start a conversation from a creator profile.";
     }
-    mount.innerHTML = `
+    mount.innerHTML = `${coachHtml}
       <div class="messagesEmpty">
         <p class="messagesEmptyTitle">${escapeHtml(emptyTitle)}</p>
         <p class="messagesEmptyLead">${escapeHtml(emptyLead)}</p>
@@ -24790,7 +24798,7 @@ function renderMessagesInbox() {
       </section>`
     : "";
 
-  mount.innerHTML = requestsHtml + sentHtml + threadsHtml;
+  mount.innerHTML = coachHtml + requestsHtml + sentHtml + threadsHtml;
   if (statusEl) statusEl.hidden = true;
 }
 
@@ -24810,6 +24818,14 @@ function messagesBubbleStatusHtml(msg) {
 }
 
 function messagesBubbleHtml(msg, viewerId, opts) {
+  if (msg?.coachTyping) {
+    return `
+    <div class="messagesBubbleWrap">
+      <div class="messagesBubble messagesBubble--coachTyping" aria-label="Nabad Coach is typing">
+        <span class="coachTypingDots"><span></span><span></span><span></span></span>
+      </div>
+    </div>`;
+  }
   const mine = String(msg?.sender_id || "") === String(viewerId || "");
   const parsed = parseDmMessageBody(msg?.body);
   const showTime = !opts || opts.showTime !== false;
@@ -25039,6 +25055,11 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
     return;
   }
 
+  if (isCoachThreadId(tid)) {
+    enterCoachThread(bootToken);
+    return;
+  }
+
   _messagesThreadNeedsInitialScroll = true;
   _conversationId = tid;
   const threadCache = tid ? getThreadMessagesCache(tid) : null;
@@ -25099,9 +25120,214 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   void bootstrapMessagesThread({ bootToken, threadId: tid, targetUserId: uid });
 }
 
+// ---------------------------------------------------------------------------
+// Nabad Coach — an in-app AI guide that lives inside Messages.
+// It reuses the existing thread page (keyboard/scroll/bubbles) in a special
+// "coach mode": no DM tables, no follow/presence/poll. History is local-only.
+// Privacy: /api/coach never receives user PII or any other user's data, so it
+// cannot reveal account info — it never has it.
+// ---------------------------------------------------------------------------
+const COACH_THREAD_ID = "nabad-coach";
+const COACH_SENDER_ID = "nabad-coach";
+const COACH_CHAT_MAX = 60;
+const COACH_TYPING_ID = "coach:typing";
+// Nabad Coach mark — a glassy gradient orb inside a dual ring (teal orbit arcs
+// over a navy ring), designed to complement the "n" logo. Rendered as SVG so it
+// stays crisp, transparent (no white box), and recolorable at any size.
+const COACH_ORB_SVG = `<svg viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="coachOrbG" x1="26" y1="24" x2="74" y2="80" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#36e7c0"/><stop offset=".42" stop-color="#3f73f0"/><stop offset="1" stop-color="#6a23da"/></linearGradient><radialGradient id="coachOrbHi" cx=".36" cy=".30" r=".75"><stop offset="0" stop-color="#ffffff" stop-opacity=".55"/><stop offset=".45" stop-color="#ffffff" stop-opacity="0"/></radialGradient></defs><circle cx="50" cy="50" r="45" fill="none" stroke="#16264f" stroke-width="2.3"/><path d="M50 12 A38 38 0 0 1 88 50" fill="none" stroke="#2dd4bf" stroke-width="2.3" stroke-linecap="round"/><path d="M50 88 A38 38 0 0 1 12 50" fill="none" stroke="#2dd4bf" stroke-width="2.3" stroke-linecap="round"/><circle cx="50" cy="50" r="27.5" fill="url(#coachOrbG)"/><circle cx="50" cy="50" r="27.5" fill="url(#coachOrbHi)"/></svg>`;
+let _coachReplyInFlight = false;
+
+function isCoachThreadId(tid) {
+  return String(tid || "").trim() === COACH_THREAD_ID;
+}
+function coachChatStorageKey() {
+  const uid = String(authSession?.user?.id || "anon");
+  return `mas:coachChat:v1:${uid}`;
+}
+function loadCoachChat() {
+  try {
+    const raw = localStorage.getItem(coachChatStorageKey());
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr.filter((m) => m && !m.coachTyping) : [];
+  } catch {
+    return [];
+  }
+}
+function saveCoachChat(list) {
+  try {
+    const trimmed = (Array.isArray(list) ? list : [])
+      .filter((m) => m && !m.coachTyping)
+      .slice(-COACH_CHAT_MAX);
+    localStorage.setItem(coachChatStorageKey(), JSON.stringify(trimmed));
+  } catch {}
+}
+function coachWelcomeMessage() {
+  return {
+    id: "coach:welcome",
+    sender_id: COACH_SENDER_ID,
+    body: "Hey! I'm your Nabad Coach 🎵 Ask me anything about using the app — making a song, publishing, Discover, challenges, credits, and more.\n\nI can't see your account or anyone's private info, so please don't share passwords.",
+    created_at: new Date().toISOString(),
+    sendStatus: "delivered",
+  };
+}
+function coachHeaderUser() {
+  return { userId: COACH_SENDER_ID, username: "Nabad Coach", displayName: "Nabad Coach", avatarUrl: "" };
+}
+function coachAvatarHtml(cls = "messagesRowAvatar") {
+  return `<span class="${cls} coachAvatar" aria-hidden="true">${COACH_ORB_SVG}</span>`;
+}
+function coachHistoryForApi(messages) {
+  return (Array.isArray(messages) ? messages : [])
+    .filter((m) => m && !m.coachTyping && m.id !== "coach:welcome" && String(m.body || "").trim())
+    .slice(-12)
+    .map((m) => ({
+      role: String(m.sender_id) === COACH_SENDER_ID ? "assistant" : "user",
+      text: String(m.body || ""),
+    }));
+}
+
+function renderCoachChatHeader() {
+  const displayEl = document.getElementById("messagesThreadDisplayName");
+  const handleEl = document.getElementById("messagesThreadHandleSub");
+  const relationEl = document.getElementById("messagesThreadRelation");
+  const avatarEl = document.getElementById("messagesThreadAvatar");
+  if (displayEl) {
+    displayEl.textContent = "Nabad Coach";
+    displayEl.classList.remove("messagesThreadHeadSkel");
+  }
+  if (handleEl) {
+    handleEl.textContent = "AI guide · here to help";
+    handleEl.hidden = false;
+    handleEl.classList.remove("messagesThreadHeadSkel");
+  }
+  if (relationEl) {
+    relationEl.hidden = true;
+    relationEl.textContent = "";
+  }
+  if (avatarEl && avatarEl.dataset.chatAvKey !== "coach") {
+    avatarEl.dataset.chatAvKey = "coach";
+    avatarEl.innerHTML = coachAvatarHtml("messagesThreadAvatarImg");
+  }
+  updateMessagesThreadHeadReserve();
+}
+
+function enterCoachThread(bootToken) {
+  _messagesThreadNeedsInitialScroll = true;
+  _conversationId = COACH_THREAD_ID;
+  let chat = loadCoachChat();
+  if (!chat.length) {
+    chat = [coachWelcomeMessage()];
+    saveCoachChat(chat);
+  }
+  _messagesList = chat.map((m) => ({ ...m }));
+  _messagesLastFetchedAt = "";
+  _messagesLoading = false;
+  _messagesRefreshing = false;
+  setChatHeaderUser(coachHeaderUser(), { force: true });
+  _chatHeaderPartnerStats = {};
+  _chatPartnerPresence = { status: "idle" };
+  _chatPresenceSig = "";
+  const input = document.getElementById("messagesComposerInput");
+  if (input) input.value = "";
+  rememberMessagesViewportBaseBottom({ force: true });
+  wireMessagesThreadKeyboardOnce();
+  wireMessagesNativeKeyboardOnce();
+  setMessagesNativeKeyboardScroll(true);
+  setMessagesNativeAccessoryBar(false);
+  updateMessagesComposerReserve();
+  updateMessagesThreadHeadReserve();
+  renderChatHeader();
+  renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+  syncMessagesThreadComposerReady();
+  syncMessagesThreadComposerInset();
+  syncMessagesThreadViewportLayout();
+  scheduleMessagesThreadScrollToBottom({ force: true });
+  beginMessagesThreadEnterTransition();
+  scheduleMessagesComposerAutofocus({ bootToken, delayMs: 120 });
+}
+
+async function sendCoachMessage(text, input) {
+  if (_coachReplyInFlight) return;
+  const prior = Array.isArray(_messagesList) ? _messagesList.filter((m) => !m.coachTyping) : [];
+  const history = coachHistoryForApi(prior);
+  const now = Date.now();
+  const userMsg = {
+    id: `coach:u:${now}:${Math.random().toString(36).slice(2, 6)}`,
+    sender_id: String(authSession?.user?.id || "me"),
+    body: text,
+    created_at: new Date().toISOString(),
+    sendStatus: "delivered",
+  };
+  if (input) {
+    input.value = "";
+    syncMessagesComposerInputHeight(input);
+  }
+  _messagesList = [...prior, userMsg];
+  saveCoachChat(_messagesList);
+  renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+  updateMessagesComposerReserve();
+  try { input?.focus({ preventScroll: true }); } catch {}
+
+  _coachReplyInFlight = true;
+  _messagesList = [
+    ..._messagesList,
+    { id: COACH_TYPING_ID, sender_id: COACH_SENDER_ID, body: "", created_at: new Date().toISOString(), coachTyping: true },
+  ];
+  renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+
+  let replyText = "";
+  let errorText = "";
+  try {
+    const data = await messagesApi("/api/coach", {
+      method: "POST",
+      timeoutMs: 22000,
+      body: JSON.stringify({ message: text, history }),
+    });
+    replyText = String(data?.reply || "").trim();
+  } catch (e) {
+    errorText = e?.status === 429
+      ? String(e?.message || "You've reached the Coach limit for now. Please try again later.")
+      : "I'm having trouble right now. Please try again in a moment.";
+  } finally {
+    _coachReplyInFlight = false;
+    const base = (Array.isArray(_messagesList) ? _messagesList : []).filter((m) => m.id !== COACH_TYPING_ID);
+    const botMsg = {
+      id: `coach:a:${Date.now()}`,
+      sender_id: COACH_SENDER_ID,
+      body: replyText || errorText || "Sorry, I couldn't answer that. Please try again.",
+      created_at: new Date().toISOString(),
+      sendStatus: "delivered",
+    };
+    _messagesList = [...base, botMsg];
+    saveCoachChat(_messagesList);
+    renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+    updateMessagesComposerReserve();
+  }
+}
+
+function coachInboxRowHtml() {
+  const chat = loadCoachChat();
+  const last = [...chat].reverse().find((m) => String(m.body || "").trim() && m.id !== "coach:welcome");
+  const preview = last ? formatDmInboxPreview(last.body) : "Ask me anything about using Nabad";
+  return `
+    <button type="button" class="messagesRow messagesRow--coach" data-messages-thread="${COACH_THREAD_ID}">
+      ${coachAvatarHtml("messagesRowAvatar")}
+      <span class="messagesRowBody">
+        <span class="messagesRowTop">
+          <strong class="messagesRowHandle">Nabad Coach <span class="coachBadge">AI</span></strong>
+        </span>
+        <span class="messagesRowPreview">${escapeHtml(preview)}</span>
+      </span>
+    </button>`;
+}
+
 function sendCurrentThreadMessage() {
   const input = document.getElementById("messagesComposerInput");
   const text = String(input?.value || "").trim();
+  if (isCoachThreadId(_conversationId)) {
+    if (text) void sendCoachMessage(text, input);
+    return;
+  }
   const threadId = String(_conversationId || "").trim();
   if (!text || !threadId) return;
 
@@ -45269,6 +45495,16 @@ if (els.btnGenerateOrb && els.btnSunoGenerate) {
     els.btnSunoGenerate.click();
   });
 }
+
+// Global shortcut to the Nabad Coach (AI guide that lives in Messages).
+function openNabadCoach() {
+  try { haptic("light"); } catch {}
+  navigateToMessagesThread({ threadId: COACH_THREAD_ID });
+}
+(() => {
+  const fab = document.getElementById("coachFab");
+  if (fab) fab.addEventListener("click", () => openNabadCoach());
+})();
 
 // Subtle morph of the bottom Create tab into a Generate / Listen button when
 // the user is on the Create page and inputs are ready. The tab's underlying

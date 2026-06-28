@@ -11271,6 +11271,7 @@ async function mergeCloudSongsIntoLocalLibrary() {
           phase: "reconcile:cloudPrivate",
           localPublic: true,
           cloudPublic: false,
+          cloudId: String(c.cloudSongId || c.id || "").slice(0, 8),
         });
       }
       if (
@@ -31287,6 +31288,35 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     showToast(cloudSyncFailureMessage(det, { action: "publish" }), { durationMs: 5200 });
     return { ok: false };
   }
+  // Diagnostic: re-read the cloud rows for this song to confirm what actually
+  // landed. Tells us if the publish hit the row (publicRows>0), if there are
+  // duplicate rows (rows>1), or if the patch silently matched nothing.
+  if (willBePublic) {
+    void (async () => {
+      try {
+        const uid = encodeURIComponent(authSession.user.id);
+        const aid = String(track.audioId || "").trim();
+        const filter = aid
+          ? `user_id=eq.${uid}&audio_id=eq.${encodeURIComponent(aid)}`
+          : `user_id=eq.${uid}&id=eq.${encodeURIComponent(track.id)}`;
+        const vr = await supabaseAuthedFetch(
+          `${SUPABASE_URL}/rest/v1/user_songs?${filter}&select=id,public_on_profile,kind`,
+          { cache: "no-store" },
+        );
+        if (vr.ok) {
+          const rows = JSON.parse(vr.text || "[]");
+          const isPub = (r) =>
+            r?.public_on_profile === true || r?.public_on_profile === "t" || r?.public_on_profile === "true";
+          recordPublishAudit(track.id, {
+            phase: "verify",
+            rows: Array.isArray(rows) ? rows.length : 0,
+            publicRows: Array.isArray(rows) ? rows.filter(isPub).length : 0,
+            ids: Array.isArray(rows) ? rows.map((r) => String(r.id || "").slice(0, 8)).join(",") : "",
+          });
+        }
+      } catch {}
+    })();
+  }
   showToast(
     next.publicOnProfile
       ? "On Discover — listeners can find and play it."
@@ -38656,7 +38686,8 @@ function songDetailsPublishLogHtml(track) {
     let label = String(e.phase || "");
     if (e.phase === "toggle") label = e.to ? "You published" : "You unpublished";
     else if (e.phase === "toggle:cloud") label = `Cloud ${e.to ? "publish" : "unpublish"}${e.ok === false ? " · FAILED" : ""}`;
-    else if (e.phase === "reconcile:cloudPrivate") label = "Sync saw cloud = private";
+    else if (e.phase === "verify") label = `Cloud now: ${Number(e.publicRows) || 0}/${Number(e.rows) || 0} public${e.ids ? ` [${e.ids}]` : ""}`;
+    else if (e.phase === "reconcile:cloudPrivate") label = `Sync saw cloud = private${e.cloudId ? ` [${e.cloudId}]` : ""}`;
     return `<div class="songDetailsFlatRow"><span>${escapeHtml(stamp)} · ${escapeHtml(String(e.device || ""))}</span><strong>${escapeHtml(label)}</strong></div>`;
   }).join("");
   return `<div class="songDetailsSectionTitle songDetailsPublishLogTitle">Publish log</div><div class="songDetailsFlatList songDetailsFlatList--tech">${rows}</div>`;

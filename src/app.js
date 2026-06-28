@@ -16712,7 +16712,7 @@ async function openVoiceWizardRecorder(step, onFile, opts = {}) {
   };
   openVocalRecorderModal();
   if (!autoStart) {
-    setVocalRecorderStatusAll("Tap ● to record. Sing clearly for 6–30 seconds.");
+    setVocalRecorderStatusAll("Tap ● to record. Sing clearly for 15–30 seconds.");
     return;
   }
   try {
@@ -33316,7 +33316,7 @@ function renderVoiceWizardSampleStatus() {
   const f = voiceWizardState.sampleFile;
   el.textContent = f
     ? `Sample ready (${Math.max(1, Math.round(f.size / 1024))} KB)`
-    : "Tap Record to capture 6–30 seconds of singing";
+    : "Tap Record to capture 15–30 seconds of singing";
 }
 
 function voiceWizardLangSkillHtml() {

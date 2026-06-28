@@ -18832,10 +18832,9 @@ body.notificationsCenterOpen{
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background:
-    radial-gradient(130% 55% at 50% -8%, rgba(124,92,255,0.30), transparent 62%),
-    radial-gradient(90% 40% at 85% 110%, rgba(35,213,171,0.12), transparent 65%),
-    linear-gradient(180deg, #0b0e1a, #07090f);
+  /* Flat app background (not the purple/teal wash) so the page reads on-brand;
+     the hero mic, stepper, record orb, and step card keep their own accents. */
+  background: var(--bg);
 }
 .voiceWizardHero{
   position: relative;
@@ -19067,6 +19066,11 @@ body.notificationsCenterOpen{
   background: rgba(8,10,18,0.55);
   border-color: rgba(167,139,250,0.4);
 }
+/* `button.vwPrimary` / `a.vwPrimary` carry (0,1,1) specificity so they win over
+   `button.primary` (which was forcing the solid brand-teal). Match the Challenges
+   primary CTA gradient (purple → cyan) so the wizard CTA is on-brand. */
+button.vwPrimary,
+a.vwPrimary,
 .vwPrimary{
   width: 100%;
   min-height: 52px;
@@ -19076,8 +19080,8 @@ body.notificationsCenterOpen{
   font-weight: 800;
   letter-spacing: 0.01em;
   color: #fff;
-  background: linear-gradient(135deg, #7c5cff, #5b8cff 55%, #23d5ab);
-  box-shadow: 0 14px 36px rgba(124,92,255,0.35);
+  background: linear-gradient(135deg, #7c5cff, #22d3ee);
+  box-shadow: 0 16px 36px rgba(124,92,255,0.28);
 }
 .vwPrimary:disabled{
   opacity: 0.5;

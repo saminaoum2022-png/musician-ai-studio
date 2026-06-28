@@ -16287,6 +16287,9 @@ body.trackSheetOpen .footer{
 .songDetailsCopyRow strong{
   word-break: break-all;
 }
+.songDetailsPublishLogTitle{
+  margin-top: 12px;
+}
 .songDetailsFlatRow{
   display: flex;
   align-items: flex-start;

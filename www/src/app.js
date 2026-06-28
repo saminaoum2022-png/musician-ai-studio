@@ -11264,6 +11264,15 @@ async function mergeCloudSongsIntoLocalLibrary() {
     const localCopy = localBySig.get(sig);
     if (localCopy) {
       const next = mergeLibraryCloudWithLocal(c, localCopy);
+      // Smoking gun: the cloud row says private but we still think it's public.
+      // Something un-published it elsewhere (other device / stale build / server).
+      if (Boolean(localCopy.publicOnProfile) === true && Boolean(c.publicOnProfile) === false) {
+        recordPublishAudit(localCopy.id || c.id, {
+          phase: "reconcile:cloudPrivate",
+          localPublic: true,
+          cloudPublic: false,
+        });
+      }
       if (
         Boolean(next.publicOnProfile) !== Boolean(localCopy.publicOnProfile) ||
         String(next.url || "") !== String(localCopy.url || "") ||
@@ -31139,6 +31148,72 @@ async function refreshDiscoverFeed() {
   }
 }
 
+// ─── Publish audit (diagnostic) ─────────────────────────────────────────
+// Records every publish/unpublish transition — user toggles, the cloud write
+// that follows, and any reconcile that sees the cloud row private while the
+// local copy is public (the signal that something un-published it). Stored
+// per-install in localStorage and surfaced read-only in the About → Technical
+// IDs fold so it can be read on-device. Dump on desktop via window.__publishAudit().
+const PUBLISH_AUDIT_KEY = "mas:publishAudit:v1";
+const PUBLISH_AUDIT_MAX = 80;
+function publishAuditDeviceTag() {
+  let id = "?";
+  try {
+    id = localStorage.getItem("mas:deviceId:v1") || "";
+    if (!id) {
+      id = Math.random().toString(36).slice(2, 8);
+      localStorage.setItem("mas:deviceId:v1", id);
+    }
+  } catch {}
+  let plat = "web";
+  try {
+    if (window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform()) {
+      plat = "ios";
+    }
+  } catch {}
+  return `${plat}:${id}`;
+}
+function recordPublishAudit(songId, event) {
+  const sid = String(songId || "").trim();
+  if (!sid) return;
+  try {
+    const raw = localStorage.getItem(PUBLISH_AUDIT_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    // Collapse repeated identical observations (same song+phase+to within 60s)
+    // so a frequently-running reconcile can't flood the ring buffer.
+    const last = arr[arr.length - 1];
+    if (
+      last &&
+      String(last.songId) === sid &&
+      last.phase === event.phase &&
+      Boolean(last.to) === Boolean(event.to) &&
+      Boolean(last.cloudPublic) === Boolean(event.cloudPublic) &&
+      Date.now() - Number(last.ts || 0) < 60000
+    ) {
+      return;
+    }
+    arr.push({ ts: Date.now(), songId: sid, device: publishAuditDeviceTag(), ...event });
+    while (arr.length > PUBLISH_AUDIT_MAX) arr.shift();
+    localStorage.setItem(PUBLISH_AUDIT_KEY, JSON.stringify(arr));
+  } catch {}
+}
+function loadPublishAuditForSong(songId) {
+  const sid = String(songId || "").trim();
+  if (!sid) return [];
+  try {
+    const raw = localStorage.getItem(PUBLISH_AUDIT_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return arr.filter((e) => String(e.songId) === sid).sort((a, b) => Number(b.ts) - Number(a.ts));
+  } catch {
+    return [];
+  }
+}
+try {
+  window.__publishAudit = () => {
+    try { return JSON.parse(localStorage.getItem(PUBLISH_AUDIT_KEY) || "[]"); } catch { return []; }
+  };
+} catch {}
+
 async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
   const id = String(trackId || "").trim();
   if (!authSession?.user?.id) {
@@ -31157,6 +31232,7 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
   }
   const wasPublic = Boolean(track.publicOnProfile);
   const willBePublic = Boolean(wantPublic);
+  recordPublishAudit(track.id, { phase: "toggle", from: wasPublic, to: willBePublic });
   const publishedAt = willBePublic && !wasPublic
     ? new Date().toISOString()
     : userSongPublishedAtValue(track);
@@ -31199,6 +31275,12 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     publicOnProfile: next.publicOnProfile,
     ...(willBePublic && publishedAt ? { publishedAt } : {}),
     ...(willBePublic ? { meta: nextMeta } : {}),
+  });
+  recordPublishAudit(track.id, {
+    phase: "toggle:cloud",
+    to: willBePublic,
+    ok: !(patch && patch.ok === false && patch.reason && patch.reason !== "noop"),
+    reason: patch && patch.ok === false ? String(patch.reason || "") : "",
   });
   if (patch && patch.ok === false && patch.reason && patch.reason !== "noop") {
     const det = String(patch.details || "").trim();
@@ -38561,6 +38643,25 @@ function songDetailsCopyRow(label, value) {
   return `<button type="button" class="songDetailsFlatRow songDetailsCopyRow" data-song-details-copy-id="${escapeHtml(v)}" aria-label="Copy ${escapeHtml(label)}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(v)}</strong></button>`;
 }
 
+/** Owner-only diagnostic: recent publish/unpublish transitions for this song. */
+function songDetailsPublishLogHtml(track) {
+  const entries = loadPublishAuditForSong(track?.id);
+  if (!entries.length) return "";
+  const rows = entries.slice(0, 14).map((e) => {
+    const when = new Date(Number(e.ts) || 0);
+    let stamp = "";
+    try {
+      stamp = `${when.toLocaleDateString()} ${when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+    } catch { stamp = String(e.ts || ""); }
+    let label = String(e.phase || "");
+    if (e.phase === "toggle") label = e.to ? "You published" : "You unpublished";
+    else if (e.phase === "toggle:cloud") label = `Cloud ${e.to ? "publish" : "unpublish"}${e.ok === false ? " · FAILED" : ""}`;
+    else if (e.phase === "reconcile:cloudPrivate") label = "Sync saw cloud = private";
+    return `<div class="songDetailsFlatRow"><span>${escapeHtml(stamp)} · ${escapeHtml(String(e.device || ""))}</span><strong>${escapeHtml(label)}</strong></div>`;
+  }).join("");
+  return `<div class="songDetailsSectionTitle songDetailsPublishLogTitle">Publish log</div><div class="songDetailsFlatList songDetailsFlatList--tech">${rows}</div>`;
+}
+
 function songDetailsNabadVerifyRow(track) {
   const state = resolveNabadVerification(track);
   if (!state) return "";
@@ -38683,6 +38784,7 @@ function renderAboutThisSong({ track, title, subtitle, lyrics, owner = false } =
     <details class="songDetailsTechFold">
       <summary>Technical IDs</summary>
       <div class="songDetailsFlatList songDetailsFlatList--tech">${technicalRows}</div>
+      ${owner && track ? songDetailsPublishLogHtml(track) : ""}
     </details>` : ""}
   `;
   wireSongDetailsCopyBtn(text);

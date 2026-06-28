@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260628-140420";
+const APP_BUILD = "20260628-141250";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -47310,6 +47310,138 @@ wireLegalLinks();
     if (isOpen && e.key === "Escape") close();
   });
 })();
+
+/** Blocked-accounts manager overlay (Settings → Safety). */
+(function wireBlockedAccounts() {
+  const overlay = document.getElementById("blockedOverlay");
+  const openBtn = document.getElementById("btnSettingsBlocked");
+  const closeBtn = document.getElementById("btnBlockedClose");
+  const list = document.getElementById("blockedList");
+  if (!overlay || !list) return;
+  let hideTimer = 0;
+  let isOpen = false;
+
+  const setHtml = (html) => {
+    list.innerHTML = html;
+  };
+  const renderRows = (rows) => {
+    if (!rows.length) {
+      setHtml('<div class="blockedEmpty">You haven\'t blocked anyone.</div>');
+      return;
+    }
+    setHtml(
+      rows
+        .map((b) => {
+          const uid = escapeHtml(String(b.userId || ""));
+          const name = b.username ? `@${escapeHtml(String(b.username))}` : "NabadAi user";
+          const av = b.avatar
+            ? `<img class="blockedAv" src="${escapeHtml(String(b.avatar))}" alt="" />`
+            : '<span class="blockedAv"></span>';
+          return `<div class="blockedRow" data-blocked-row="${uid}">${av}<span class="blockedBody"><span class="blockedName">${name}</span><span class="blockedSub">Blocked</span></span><button type="button" class="blockedUnblockBtn" data-unblock="${uid}">Unblock</button></div>`;
+        })
+        .join(""),
+    );
+  };
+  const load = async () => {
+    setHtml('<div class="blockedLoading">Loading…</div>');
+    try {
+      const data = await messagesApi("/api/messages?type=blocks", { timeoutMs: 8000 });
+      renderRows(Array.isArray(data?.blocked) ? data.blocked : []);
+    } catch (e) {
+      if (e?.status === 401) {
+        setHtml('<div class="blockedEmpty">Sign in to manage blocked accounts.</div>');
+      } else {
+        setHtml('<div class="blockedEmpty">Couldn\'t load blocked accounts. Try again.</div>');
+      }
+    }
+  };
+
+  const open = () => {
+    if (hideTimer) {
+      clearTimeout(hideTimer);
+      hideTimer = 0;
+    }
+    isOpen = true;
+    overlay.hidden = false;
+    overlay.setAttribute("aria-hidden", "false");
+    document.body.classList.add("faqOverlayOpen");
+    overlay.querySelector(".faqOverlayBody")?.scrollTo?.(0, 0);
+    window.requestAnimationFrame(() => {
+      if (isOpen) overlay.classList.add("isOpen");
+    });
+    void load();
+  };
+  const close = () => {
+    isOpen = false;
+    overlay.classList.remove("isOpen");
+    overlay.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("faqOverlayOpen");
+    if (hideTimer) clearTimeout(hideTimer);
+    hideTimer = window.setTimeout(() => {
+      hideTimer = 0;
+      if (!isOpen) overlay.hidden = true;
+    }, 280);
+  };
+
+  if (openBtn) {
+    openBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      try {
+        haptic("light");
+      } catch {}
+      open();
+    });
+  }
+  if (closeBtn) {
+    closeBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      try {
+        haptic("light");
+      } catch {}
+      close();
+    });
+  }
+  list.addEventListener("click", async (e) => {
+    const btn = e.target?.closest?.("[data-unblock]");
+    if (!btn) return;
+    const uid = btn.getAttribute("data-unblock");
+    if (!uid) return;
+    btn.disabled = true;
+    btn.textContent = "…";
+    try {
+      await messagesApi("/api/messages", {
+        method: "POST",
+        timeoutMs: 8000,
+        body: JSON.stringify({ action: "unblock", targetUserId: uid }),
+      });
+      try {
+        haptic("light");
+      } catch {}
+      const row = list.querySelector(`[data-blocked-row="${uid}"]`);
+      if (row) row.remove();
+      if (!list.querySelector("[data-blocked-row]")) {
+        setHtml('<div class="blockedEmpty">You haven\'t blocked anyone.</div>');
+      }
+      try {
+        showToast("Unblocked.");
+      } catch {}
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = "Unblock";
+      try {
+        showToast("Couldn't unblock. Try again.");
+      } catch {}
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (isOpen && e.key === "Escape") close();
+  });
+})();
+
+try {
+  const _vsub = document.getElementById("settingsVersionSub");
+  if (_vsub) _vsub.textContent = `Version 1.0.0 · build ${APP_BUILD}`;
+} catch {}
 
 /** Permanently delete signed-in account (server + device). Guests only clear local data. */
 async function deleteAccountAndData(opts = {}) {

@@ -275,6 +275,25 @@ async function handleGet(req, res, user) {
     return sendJson(res, 200, { ok: true, count });
   }
 
+  if (type === "blocks") {
+    const r = await svcFetch(
+      `dm_blocks?select=blocked_id,created_at&blocker_id=eq.${encodeURIComponent(user.userId)}&order=created_at.desc&limit=200`,
+    );
+    const rows = Array.isArray(r.data) ? r.data : [];
+    const blocked = await Promise.all(
+      rows.map(async (row) => {
+        const prof = await profileByUserId(row.blocked_id);
+        return {
+          userId: String(row.blocked_id || ""),
+          username: prof?.username || "",
+          avatar: prof?.avatar || "",
+          blockedAt: row.created_at || "",
+        };
+      }),
+    );
+    return sendJson(res, 200, { ok: true, blocked });
+  }
+
   if (type === "presence") {
     const partnerId = cleanUserId(url.searchParams.get("userId"));
     if (!partnerId) return sendJson(res, 400, { ok: false, error: "Missing userId" });
@@ -459,6 +478,15 @@ async function handlePost(req, res, user) {
       headers: { Prefer: "return=minimal" },
       body: JSON.stringify({ blocker_id: user.userId, blocked_id: targetUserId }),
     });
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (action === "unblock") {
+    if (!targetUserId) return sendJson(res, 400, { ok: false, error: "Missing targetUserId" });
+    await svcFetch(
+      `dm_blocks?blocker_id=eq.${encodeURIComponent(user.userId)}&blocked_id=eq.${encodeURIComponent(targetUserId)}`,
+      { method: "DELETE", headers: { Prefer: "return=minimal" } },
+    );
     return sendJson(res, 200, { ok: true });
   }
 

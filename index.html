@@ -124,7 +124,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260628-140420" />
+    <link rel="stylesheet" href="./styles.css?v=20260628-141250" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -198,6 +198,20 @@
             <summary>I found a bug or have a question.</summary>
             <p>We'd love to hear from you. Email <a href="mailto:help@nabadai.com?subject=NabadAi%20Music%20%E2%80%94%20Help">help@nabadai.com</a> for help, or <a href="mailto:support@nabadai.com?subject=NabadAi%20Music%20%E2%80%94%20Bug%20report">support@nabadai.com</a> to report a bug.</p>
           </details>
+        </div>
+      </div>
+    </div>
+    <div id="blockedOverlay" class="faqOverlay blockedOverlay" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="blockedOverlayTitle">
+      <div class="faqOverlayInner">
+        <header class="faqOverlayTop">
+          <h2 id="blockedOverlayTitle" class="faqOverlayTitle">Blocked accounts</h2>
+          <button type="button" id="btnBlockedClose" class="faqOverlayClose" aria-label="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+        </header>
+        <div class="faqOverlayBody">
+          <p class="faqIntro">People you block can't message you or start a chat with you.</p>
+          <div id="blockedList" class="blockedList" aria-live="polite"></div>
         </div>
       </div>
     </div>
@@ -3122,6 +3136,32 @@
               </div>
             </section>
 
+            <section class="settingsSection" aria-labelledby="settingsSafetyTitle">
+              <h2 id="settingsSafetyTitle" class="settingsSectionLabel">Safety</h2>
+              <div class="settingsList">
+                <button id="btnSettingsBlocked" class="settingsRow settingsRowLink" type="button">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8" stroke-linecap="round"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Blocked accounts</span>
+                    <span class="settingsRowSub">Manage people you've blocked</span>
+                  </span>
+                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                </button>
+                <a id="settingsReportAbuseRow" class="settingsRow settingsRowLink" href="mailto:support@nabadai.com?subject=NabadAi%20Music%20%E2%80%94%20Report%20abuse%20or%20content">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 3 2 21h20L12 3Z" stroke-linejoin="round"/><path d="M12 10v5" stroke-linecap="round"/><circle cx="12" cy="17.6" r="0.6" fill="currentColor" stroke="none"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Report content or a user</span>
+                    <span class="settingsRowSub">Flag something that breaks the rules</span>
+                  </span>
+                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                </a>
+              </div>
+            </section>
+
             <section class="settingsSection" aria-labelledby="settingsSupportTitle">
               <h2 id="settingsSupportTitle" class="settingsSectionLabel">Support</h2>
               <div class="settingsList">
@@ -3165,6 +3205,21 @@
                   </span>
                   <span class="settingsRowChev" aria-hidden="true">›</span>
                 </a>
+              </div>
+            </section>
+
+            <section class="settingsSection" aria-labelledby="settingsAboutTitle">
+              <h2 id="settingsAboutTitle" class="settingsSectionLabel">About</h2>
+              <div class="settingsList">
+                <div class="settingsRow settingsRowStatic">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="9"/><path d="M12 11v5" stroke-linecap="round"/><circle cx="12" cy="7.8" r="0.7" fill="currentColor" stroke="none"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">NabadAi Music</span>
+                    <span class="settingsRowSub" id="settingsVersionSub">Version 1.0.0</span>
+                  </span>
+                </div>
               </div>
             </section>
 
@@ -4010,6 +4065,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260628-140420"></script>
+    <script type="module" src="./src/app.js?v=20260628-141250"></script>
   </body>
 </html>

@@ -39796,3 +39796,68 @@ body.faqOverlayOpen{ overflow: hidden; }
   .faqItem[open] > p{ animation: none; }
   .faqItem > summary::after{ transition: none; }
 }
+
+/* Blocked-accounts manager (reuses the .faqOverlay shell). */
+.blockedList{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.blockedRow{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 14px;
+}
+.blockedAv{
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  object-fit: cover;
+  background: linear-gradient(145deg, rgba(124, 92, 255, 0.5), rgba(35, 213, 171, 0.4));
+}
+.blockedBody{
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.blockedName{
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #eef3ff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.blockedSub{
+  display: block;
+  font-size: 12px;
+  color: rgba(223, 231, 251, 0.5);
+}
+.blockedUnblockBtn{
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: #eef3ff;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms cubic-bezier(0.32, 0.72, 0, 1), background 160ms ease, opacity 160ms ease;
+}
+.blockedUnblockBtn:active{ transform: scale(0.96); background: rgba(255, 255, 255, 0.09); }
+.blockedUnblockBtn:disabled{ opacity: 0.5; cursor: default; }
+.blockedEmpty,
+.blockedLoading{
+  padding: 22px 4px;
+  text-align: center;
+  font-size: 14px;
+  color: rgba(223, 231, 251, 0.55);
+}

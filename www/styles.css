@@ -39542,3 +39542,104 @@ body.isAuth:not(.booting) .authGateChoices:not([hidden]){
     scroll-margin-top: 96px;
   }
 }
+
+/* Post-login loader: branded slogan splash (matches the sign-in screen) instead
+   of cycling per-feature labels. Calm, centered, on-brand. */
+.loginSettlingMark{
+  width: min(22vw, 84px);
+  margin-bottom: 4px;
+}
+.loginSettlingTagline{
+  margin: 0;
+  text-align: center;
+  max-width: 320px;
+}
+
+/* P1: Build marker — was a centered pill floating over feed content. Demote to
+   a tiny, faint, corner-pinned QA marker so it never overlaps content. Keeps the
+   existing bottom-offset logic (lifts above tab bar / now-playing). */
+@media (max-width: 720px){
+  .footer{
+    left: max(12px, env(safe-area-inset-left, 0px));
+    right: auto;
+    text-align: left;
+    padding: 0;
+  }
+  .footer #footerBuild{
+    padding: 0;
+    background: none;
+    border: 0;
+    font-size: 9px;
+    letter-spacing: 0.02em;
+    opacity: 0.28;
+  }
+}
+
+/* P1: Unify segmented controls. Home (Create/Sparks/Templates) used a filled
+   "iOS segmented" track with a white active fill; Profile (Posts/Songs/Playlist)
+   used an underline tab bar. Both now adopt the same gradient-pill language as
+   Discover / Activity / Messages (.discoverFeedTab) for one consistent control. */
+
+/* Home — drop the track chrome + white active fill; use individual pills. */
+.homeDeskSeg{
+  gap: 8px;
+  margin: 12px 0 10px;
+  padding: 2px 0 4px;
+  border: 0;
+  background: none;
+  border-radius: 0;
+  flex-wrap: wrap;
+}
+.homeDeskSegBtn{
+  flex: 0 0 auto;
+  min-height: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(232, 238, 247, 0.68);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  border-radius: 999px;
+  padding: 9px 14px;
+  justify-content: center;
+}
+.challengesPage.homeDesk .homeDeskSegBtn.is-active,
+.homeDeskSegBtn.is-active{
+  color: #f8faff;
+  background: linear-gradient(135deg, rgba(35, 213, 171, 0.18) 0%, rgba(124, 92, 255, 0.22) 100%);
+  border-color: rgba(35, 213, 171, 0.35);
+  box-shadow:
+    0 0 0 1px rgba(124, 92, 255, 0.12) inset,
+    0 8px 24px rgba(35, 213, 171, 0.08);
+}
+.homeDeskSegBtn:active{ transform: scale(0.98); }
+
+/* Profile — replace underline tab bar with the same pills. */
+.profileTabBar{
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 2px 2px 4px;
+  border-bottom: 0;
+  align-items: center;
+}
+.profileTab{
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(232, 238, 247, 0.68);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  border-radius: 999px;
+  padding: 9px 14px;
+}
+.profileTab.isActive{
+  color: #f8faff;
+  font-weight: 700;
+  background: linear-gradient(135deg, rgba(35, 213, 171, 0.18) 0%, rgba(124, 92, 255, 0.22) 100%);
+  border-color: rgba(35, 213, 171, 0.35);
+  box-shadow:
+    0 0 0 1px rgba(124, 92, 255, 0.12) inset,
+    0 8px 24px rgba(35, 213, 171, 0.08);
+}
+.profileTab.isActive::after{ display: none; }
+.profileTab:active{ transform: scale(0.98); }

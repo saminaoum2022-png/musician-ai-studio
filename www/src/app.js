@@ -18478,45 +18478,22 @@ let _loginSettlingCarouselTimer = 0;
 let _loginSettlingForceEndTimer = 0;
 let _loginSettlingCarouselStep = 0;
 const LOGIN_SETTLING_MAX_MS = isCapacitorNativeAuth() ? 45000 : 18000;
-const LOGIN_SETTLING_SLIDE_MS = 780;
-// Guarantee the feature carousel makes a full pass on a successful sign-in,
-// even when auth resolves instantly (4 slides × 780ms ≈ 3.1s). Tunable.
+// Keep the branded loader on screen long enough to read the slogan even when
+// auth resolves instantly, so it doesn't flash and vanish. Tunable.
 const LOGIN_SETTLING_MIN_MS = 3200;
 let _loginSettlingEndTimer = 0;
-const LOGIN_SETTLING_LABELS = ["Create", "Remix", "Connect", "Identity"];
 
 function setLoginSettlingCarouselStep(step) {
-  _loginSettlingCarouselStep = Math.max(0, Math.min(3, step));
-  const root = document.getElementById("loginSettlingCarousel");
-  if (root) {
-    root.querySelectorAll("[data-settle-slide]").forEach((el) => {
-      const idx = Number(el.getAttribute("data-settle-slide"));
-      el.classList.toggle("is-active", idx === _loginSettlingCarouselStep);
-    });
-  }
-  const msg = document.getElementById("loginSettlingMsg");
-  if (msg) {
-    // Calm, stable line while the feature highlights cycle above it — avoids the
-    // awkward "Loading Mashup…/Persona…" phrasing the per-feature label produced.
-    msg.textContent = "Setting up your studio…";
-  }
+  _loginSettlingCarouselStep = Math.max(0, step | 0);
 }
 
+// The post-login loader now shows the NabadAi brand slogan ("Create. Share.
+// Connect.") statically — matching the sign-in screen — instead of cycling
+// per-feature labels. Kept as a no-op spinner so the existing begin/stop call
+// sites stay valid without spinning a pointless interval.
 function startLoginSettlingCarousel() {
   stopLoginSettlingCarousel();
   setLoginSettlingCarouselStep(0);
-  const reduceMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (reduceMotion) {
-    const msg = document.getElementById("loginSettlingMsg");
-    if (msg) msg.textContent = "Signing you in…";
-    return;
-  }
-  _loginSettlingCarouselTimer = window.setInterval(() => {
-    setLoginSettlingCarouselStep((_loginSettlingCarouselStep + 1) % LOGIN_SETTLING_LABELS.length);
-  }, LOGIN_SETTLING_SLIDE_MS);
 }
 
 function stopLoginSettlingCarousel() {
@@ -18547,8 +18524,6 @@ function beginLoginSettling(message = "Signing you in…") {
     overlay.hidden = false;
     overlay.setAttribute("aria-hidden", "false");
   }
-  const msg = document.getElementById("loginSettlingMsg");
-  if (msg) msg.textContent = String(message || "Signing you in…");
   startLoginSettlingCarousel();
   if (_loginSettlingForceEndTimer) clearTimeout(_loginSettlingForceEndTimer);
   _loginSettlingForceEndTimer = window.setTimeout(() => {

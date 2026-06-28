@@ -24690,9 +24690,15 @@ body.createChooserSheetOpen .footer{
 .searchBarInput::placeholder{
   color: transparent;
 }
+/* The pill shows focus via its own :focus-within border; suppress the global
+   purple input focus ring so no frame appears inside the container. */
+.searchBarInput:focus{
+  box-shadow: none;
+  border-color: transparent;
+}
 .searchBarHint{
   position: absolute;
-  left: 50px;
+  left: 14px;
   top: 50%;
   transform: translateY(-50%);
   color: rgba(232,238,247,0.42);

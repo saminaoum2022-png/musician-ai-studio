@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260628-205802";
+const APP_BUILD = "20260628-212343";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -36020,9 +36020,20 @@ function isTrackMarkedDeleted(t) {
 
 async function ensureCloudDeleteForTrack(track, { retries = 3 } = {}) {
   if (!authSession?.user?.id || !track) return;
+  // Soft-delete ONLY (set meta.deletedAt). The row stays as a DURABLE,
+  // cross-device tombstone. A hard DELETE would erase the only signal
+  // other devices have that the song was deleted — a second device that
+  // still holds a stale local copy (no local tombstone) would then see a
+  // "missing" cloud row and re-upload it, resurrecting the song. With the
+  // marker kept, every device prunes + locally tombstones any soft-deleted
+  // song it encounters (see partitionCloudLibraryRows / cloud dead-sig
+  // pruning), so deletes stay deleted everywhere.
   for (let attempt = 0; attempt < retries; attempt++) {
-    await supabaseSoftDeleteUserSong(track);
-    await supabaseDeleteUserSong(track);
+    const res = await supabaseSoftDeleteUserSong(track);
+    if (res && res.ok) {
+      invalidateUserSongsLoadCache();
+      return;
+    }
     if (attempt < retries - 1) {
       await new Promise((r) => setTimeout(r, 350 * (attempt + 1)));
     }
@@ -36038,14 +36049,59 @@ function scheduleCloudDeleteForResurrectedRows(rows) {
   })();
 }
 
+/** Signatures (sync sig + stable key) of every cloud row that is
+ *  soft-deleted (meta.deletedAt) or tombstoned on this device. A song is
+ *  "dead" if ANY of its (possibly duplicate) rows carries the marker, so a
+ *  stale duplicate row can never keep a deleted song alive. */
+function cloudDeletedSignatureSet(rows, tombstones) {
+  const tombs = tombstones || loadLibraryTombstoneKeySet();
+  const dead = new Set();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (!isTrackMarkedDeleted(row) && !isTrackTombstoned(row, tombs)) continue;
+    const sig = librarySyncSigOf(row);
+    const stable = libraryTrackStableKey(row);
+    if (sig) dead.add(sig);
+    if (stable) dead.add(stable);
+  }
+  return dead;
+}
+
+/** Remove local rows the cloud says are deleted (soft-deleted/tombstoned
+ *  on any device), write a LOCAL tombstone for each so this device never
+ *  re-uploads them, and return the survivors. This is what makes a delete
+ *  on one device stick on every other device. */
+function pruneLocallyDeletedAgainstCloud(localRows, deadSigs) {
+  const list = Array.isArray(localRows) ? localRows : [];
+  if (!deadSigs || !deadSigs.size) return list;
+  const survivors = [];
+  const purged = [];
+  for (const row of list) {
+    if (deadSigs.has(librarySyncSigOf(row)) || deadSigs.has(libraryTrackStableKey(row))) {
+      purged.push(row);
+    } else {
+      survivors.push(row);
+    }
+  }
+  for (const row of purged) addLibraryTombstoneForTrack(row);
+  return survivors;
+}
+
 /** Drop tombstoned / soft-deleted cloud rows; re-delete zombies in the background. */
 function partitionCloudLibraryRows(rows, tombstones) {
   const tombs = tombstones || loadLibraryTombstoneKeySet();
+  const deadSigs = cloudDeletedSignatureSet(rows, tombs);
   const alive = [];
   const resurrected = [];
   for (const row of Array.isArray(rows) ? rows : []) {
     if (isTrackMarkedDeleted(row)) continue;
     if (isTrackTombstoned(row, tombs)) {
+      resurrected.push(row);
+      continue;
+    }
+    // A surviving duplicate of an already-deleted song (one of its other
+    // rows carries the marker) must die too, otherwise it would re-seed
+    // the song on the next merge.
+    if (deadSigs.has(librarySyncSigOf(row)) || deadSigs.has(libraryTrackStableKey(row))) {
       resurrected.push(row);
       continue;
     }
@@ -36535,6 +36591,13 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
   const cloudSongsRaw =
     prefetchedCloud !== undefined ? prefetchedCloud : await supabaseLoadUserSongs();
   const tombstones = loadLibraryTombstoneKeySet();
+  // Songs the cloud says are deleted (soft-deleted on this or another
+  // device). Used to prune local copies so a stale local row can't
+  // re-upload a song that was deleted elsewhere.
+  const cloudDeadSigs = cloudDeletedSignatureSet(
+    Array.isArray(cloudSongsRaw) ? cloudSongsRaw : [],
+    tombstones,
+  );
   const cloudAlive = partitionCloudLibraryRows(
     Array.isArray(cloudSongsRaw) ? cloudSongsRaw : [],
     tombstones,
@@ -36547,8 +36610,11 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
       cloudDupExtras.map((extra) => extra?.cloudSongId || extra?.id),
     );
   }
-  const localForUser = loadLibraryFor(uid).filter(
-    (row) => !isTrackTombstoned(row, tombstones) && !isTrackMarkedDeleted(row),
+  const localForUser = pruneLocallyDeletedAgainstCloud(
+    loadLibraryFor(uid).filter(
+      (row) => !isTrackTombstoned(row, tombstones) && !isTrackMarkedDeleted(row),
+    ),
+    cloudDeadSigs,
   );
   // Never merge guest or other users' library keys — that leaked a prior
   // account's songs into a new sign-up on the same device.
@@ -36700,6 +36766,7 @@ async function reconcileLibraryFromCloud({ force = false } = {}) {
     const cloudRaw = await supabaseLoadUserSongs();
     if (!Array.isArray(cloudRaw)) return;
     const tombstones = loadLibraryTombstoneKeySet();
+    const cloudDeadSigs = cloudDeletedSignatureSet(cloudRaw, tombstones);
     const cloudAlive = partitionCloudLibraryRows(cloudRaw, tombstones);
     const { keep: cloud, extras: dupExtras } = dedupeCloudSongRows(cloudAlive);
     if (dupExtras.length) {
@@ -36707,8 +36774,13 @@ async function reconcileLibraryFromCloud({ force = false } = {}) {
         dupExtras.map((extra) => extra?.cloudSongId || extra?.id),
       );
     }
-    const local = loadLibrary().filter(
-      (row) => !isTrackTombstoned(row, tombstones) && !isTrackMarkedDeleted(row),
+    // Prune local rows the cloud marked deleted (and tombstone them) so a
+    // stale local copy never re-uploads a song deleted on another device.
+    const local = pruneLocallyDeletedAgainstCloud(
+      loadLibrary().filter(
+        (row) => !isTrackTombstoned(row, tombstones) && !isTrackMarkedDeleted(row),
+      ),
+      cloudDeadSigs,
     );
 
     // Identity pins a logical track (audio id, falling back to canonical

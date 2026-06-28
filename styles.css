@@ -39414,3 +39414,131 @@ body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[da
 @media (min-width: 1200px){
   body[data-route="messages-thread"] > .app{ max-width: 1380px; }
 }
+
+/* ====================================================================== */
+/* PREMIUM UX POLISH PASS — isolated, additive layer (ux-polish branch).   */
+/* Goal: stability + consistency, no redesign / no new colors.            */
+/* Each section is self-contained so it can be reviewed or reverted        */
+/* independently. All motion is gated behind prefers-reduced-motion.       */
+/* ====================================================================== */
+
+/* --- 1. Entry experience: gentle, consistent screen fade-in ----------- */
+/* Auth / intro / onboarding panels currently appear with a hard cut      */
+/* (they are excluded from the route slide system). A single soft fade on  */
+/* their inner content removes the "flash / snap" without moving layout.   */
+@keyframes uxEntryFadeIn{
+  from{ opacity: 0; transform: translate3d(0, 6px, 0); }
+  to{ opacity: 1; transform: translate3d(0, 0, 0); }
+}
+body.isAuth:not(.booting) .authInner,
+body.isIntro:not(.booting) .introInner,
+body.isMusicPrefs:not(.booting) .musicPrefsInner{
+  animation: uxEntryFadeIn 320ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+/* --- 2. Auth: smooth sign-in / sign-up reveal (no hard snap) ----------- */
+/* The email form and the gate choices toggle via [hidden]. Animate the    */
+/* incoming panel so switching between "choices" and "email form" reads as  */
+/* a soft cross-fade instead of an instant jump.                           */
+@keyframes uxAuthPanelIn{
+  from{ opacity: 0; transform: translate3d(0, 8px, 0); }
+  to{ opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.authEmailForm:not([hidden]){
+  animation: uxAuthPanelIn 260ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+body.isAuth:not(.booting) .authGateChoices:not([hidden]){
+  animation: uxAuthPanelIn 240ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+/* --- 3. Auth: confirm-password field appears without a layout jump ----- */
+/* In sign-up mode the confirm field is revealed (hidden=false). Fade +     */
+/* slide it in so the form grows smoothly rather than popping a new row.    */
+@keyframes uxFieldReveal{
+  from{ opacity: 0; transform: translate3d(0, -4px, 0); }
+  to{ opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.authConfirmField:not([hidden]){
+  animation: uxFieldReveal 240ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce){
+  body.isAuth .authInner,
+  body.isIntro .introInner,
+  body.isMusicPrefs .musicPrefsInner,
+  .authEmailForm:not([hidden]),
+  body.isAuth .authGateChoices:not([hidden]),
+  .authConfirmField:not([hidden]){
+    animation: none !important;
+  }
+}
+
+/* --- 4. Micro-interactions: subtle, uniform tap feedback --------------- */
+/* Scoped to known buttons/links only (never layout containers) so it is    */
+/* impossible to break flex/grid positioning. Pure transform — premium,     */
+/* not flashy. Disabled when the device cannot hover (i.e. touch) is fine    */
+/* because :active fires on touch too.                                       */
+.introGetStartedBtn,
+.onboardingPrimaryBtn,
+.onboardingSkip,
+.musicPrefsContinueBtn,
+.musicPrefsSkip{
+  transition: transform 120ms cubic-bezier(0.32, 0.72, 0, 1),
+    background 160ms ease, border-color 160ms ease, opacity 160ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.introGetStartedBtn:active,
+.onboardingPrimaryBtn:active,
+.musicPrefsContinueBtn:active{
+  transform: scale(0.97);
+}
+.onboardingSkip:active,
+.musicPrefsSkip:active{
+  transform: scale(0.95);
+  opacity: 0.8;
+}
+.onboardingDot{
+  transition: transform 160ms cubic-bezier(0.32, 0.72, 0, 1), background 200ms ease;
+}
+.onboardingDot:active{ transform: scale(0.85); }
+/* Bottom tab bar: a gentle press so taps feel acknowledged instantly. */
+@media (max-width: 720px){
+  .mobileTabbar a:active{ transform: scale(0.92); }
+  .mobileTabbar a:active .tabIco{ opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce){
+  .introGetStartedBtn:active,
+  .onboardingPrimaryBtn:active,
+  .musicPrefsContinueBtn:active,
+  .onboardingSkip:active,
+  .musicPrefsSkip:active,
+  .onboardingDot:active,
+  .mobileTabbar a:active{ transform: none; }
+}
+
+/* --- 5. Auth form keyboard accommodation (CSS-only, safe) -------------- */
+/* The auth card is vertically centered. When an input is focused (keyboard */
+/* up on mobile) the lower submit button can sit under the keyboard. While   */
+/* focus is inside the form, tighten the top brand spacing and let the inner */
+/* scroll so the whole form — including the submit — stays reachable. No JS, */
+/* no keyboard-plugin dependency, so it degrades gracefully everywhere.      */
+@media (max-width: 720px){
+  .authScreen{
+    align-items: flex-start;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .authInner{
+    margin-top: auto;
+    margin-bottom: auto;
+  }
+  body.isAuth:has(.authEmailForm:not([hidden])) .authBrand{
+    margin-bottom: 22px;
+    transition: margin-bottom 220ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .authFieldInput,
+  .authEmailBtn{
+    scroll-margin-bottom: 96px;
+    scroll-margin-top: 96px;
+  }
+}

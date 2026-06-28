@@ -76,7 +76,13 @@ export function getPostOnboardingHash(getAuthSession) {
 }
 
 export function getInitialBootHash(getAuthSession) {
-  if (!isOnboardingComplete()) return "#/auth";
+  if (!isOnboardingComplete()) {
+    const session = typeof getAuthSession === "function" ? getAuthSession() : null;
+    // First-run, logged-out users see the onboarding slides before auth.
+    // Returning/logged-in users are unaffected; onboarding marks itself done
+    // on finish/skip so it only ever shows once.
+    if (!session?.user?.id) return "#/onboarding";
+  }
   return getPostOnboardingHash(getAuthSession);
 }
 

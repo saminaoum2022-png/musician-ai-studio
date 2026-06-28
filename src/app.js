@@ -18483,7 +18483,7 @@ const LOGIN_SETTLING_SLIDE_MS = 780;
 // even when auth resolves instantly (4 slides × 780ms ≈ 3.1s). Tunable.
 const LOGIN_SETTLING_MIN_MS = 3200;
 let _loginSettlingEndTimer = 0;
-const LOGIN_SETTLING_LABELS = ["Create", "Mashup", "Friends", "Persona"];
+const LOGIN_SETTLING_LABELS = ["Create", "Remix", "Connect", "Identity"];
 
 function setLoginSettlingCarouselStep(step) {
   _loginSettlingCarouselStep = Math.max(0, Math.min(3, step));
@@ -18496,7 +18496,9 @@ function setLoginSettlingCarouselStep(step) {
   }
   const msg = document.getElementById("loginSettlingMsg");
   if (msg) {
-    msg.textContent = `Loading ${LOGIN_SETTLING_LABELS[_loginSettlingCarouselStep]}…`;
+    // Calm, stable line while the feature highlights cycle above it — avoids the
+    // awkward "Loading Mashup…/Persona…" phrasing the per-feature label produced.
+    msg.textContent = "Setting up your studio…";
   }
 }
 

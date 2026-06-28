@@ -31288,33 +31288,70 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     showToast(cloudSyncFailureMessage(det, { action: "publish" }), { durationMs: 5200 });
     return { ok: false };
   }
-  // Diagnostic: re-read the cloud rows for this song to confirm what actually
-  // landed. Tells us if the publish hit the row (publicRows>0), if there are
-  // duplicate rows (rows>1), or if the patch silently matched nothing.
+  // Verify + self-heal: a publish PATCH can report success yet not actually
+  // flip the cloud row (e.g. it ran before the row existed, or matched nothing).
+  // Re-read the cloud, and if no public row landed, re-issue the write so a
+  // publish can never silently fail.
   if (willBePublic) {
     void (async () => {
-      try {
-        const uid = encodeURIComponent(authSession.user.id);
-        const aid = String(track.audioId || "").trim();
-        const filter = aid
-          ? `user_id=eq.${uid}&audio_id=eq.${encodeURIComponent(aid)}`
-          : `user_id=eq.${uid}&id=eq.${encodeURIComponent(track.id)}`;
-        const vr = await supabaseAuthedFetch(
-          `${SUPABASE_URL}/rest/v1/user_songs?${filter}&select=id,public_on_profile,kind`,
-          { cache: "no-store" },
-        );
-        if (vr.ok) {
+      const uid = encodeURIComponent(authSession.user.id);
+      const aid = String(track.audioId || "").trim();
+      const filter = aid
+        ? `user_id=eq.${uid}&audio_id=eq.${encodeURIComponent(aid)}`
+        : `user_id=eq.${uid}&id=eq.${encodeURIComponent(track.id)}`;
+      const readCloud = async () => {
+        try {
+          const vr = await supabaseAuthedFetch(
+            `${SUPABASE_URL}/rest/v1/user_songs?${filter}&select=id,public_on_profile,kind`,
+            { cache: "no-store" },
+          );
+          if (!vr.ok) return null;
           const rows = JSON.parse(vr.text || "[]");
+          if (!Array.isArray(rows)) return { rows: 0, publicRows: 0, ids: "" };
           const isPub = (r) =>
             r?.public_on_profile === true || r?.public_on_profile === "t" || r?.public_on_profile === "true";
+          return {
+            rows: rows.length,
+            publicRows: rows.filter(isPub).length,
+            ids: rows.map((r) => String(r.id || "").slice(0, 8)).join(","),
+          };
+        } catch {
+          return null;
+        }
+      };
+      const v = await readCloud();
+      if (v) recordPublishAudit(track.id, { phase: "verify", rows: v.rows, publicRows: v.publicRows, ids: v.ids });
+      if (v && v.publicRows === 0) {
+        const action = v.rows === 0 ? "insert" : "repatch";
+        try {
+          if (v.rows === 0) {
+            // No cloud row yet — create it already-public.
+            await supabaseInsertUserSong(next);
+          } else {
+            // Row exists but stayed private — re-issue the publish patch.
+            await supabasePatchUserSong(track, {
+              publicOnProfile: true,
+              ...(publishedAt ? { publishedAt } : {}),
+              ...(nextMeta ? { meta: nextMeta } : {}),
+            });
+          }
+        } catch {}
+        invalidateUserSongsLoadCache();
+        const v2 = await readCloud();
+        if (v2) {
           recordPublishAudit(track.id, {
-            phase: "verify",
-            rows: Array.isArray(rows) ? rows.length : 0,
-            publicRows: Array.isArray(rows) ? rows.filter(isPub).length : 0,
-            ids: Array.isArray(rows) ? rows.map((r) => String(r.id || "").slice(0, 8)).join(",") : "",
+            phase: "heal",
+            action,
+            rows: v2.rows,
+            publicRows: v2.publicRows,
+            ids: v2.ids,
           });
         }
-      } catch {}
+        if (v2 && v2.publicRows > 0) {
+          invalidateOwnerPublicPostsCache();
+          void refreshOwnerPublicPostsCache({ force: true });
+        }
+      }
     })();
   }
   showToast(
@@ -38687,6 +38724,7 @@ function songDetailsPublishLogHtml(track) {
     if (e.phase === "toggle") label = e.to ? "You published" : "You unpublished";
     else if (e.phase === "toggle:cloud") label = `Cloud ${e.to ? "publish" : "unpublish"}${e.ok === false ? " · FAILED" : ""}`;
     else if (e.phase === "verify") label = `Cloud now: ${Number(e.publicRows) || 0}/${Number(e.rows) || 0} public${e.ids ? ` [${e.ids}]` : ""}`;
+    else if (e.phase === "heal") label = `Auto-heal (${e.action || "?"}): ${Number(e.publicRows) || 0}/${Number(e.rows) || 0} public`;
     else if (e.phase === "reconcile:cloudPrivate") label = `Sync saw cloud = private${e.cloudId ? ` [${e.cloudId}]` : ""}`;
     return `<div class="songDetailsFlatRow"><span>${escapeHtml(stamp)} · ${escapeHtml(String(e.device || ""))}</span><strong>${escapeHtml(label)}</strong></div>`;
   }).join("");

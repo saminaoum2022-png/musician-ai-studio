@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260628-124846";
+const APP_BUILD = "20260628-133411";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -4429,11 +4429,7 @@ void loadAppTourModule()
     });
     const tourSub = document.getElementById("settingsHomeTourSub");
     if (tourSub && m.HOME_TOUR_VERSION) {
-      tourSub.textContent = `Walk through Create, templates, Discover, and Profile again · Home tour v${m.HOME_TOUR_VERSION}`;
-    }
-    const personaSub = document.getElementById("settingsPersonaTourSub");
-    if (personaSub && m.MINI_TOUR_VERSION) {
-      personaSub.textContent = `Save your voice and use it when you generate · Mini tour v${m.MINI_TOUR_VERSION}`;
+      tourSub.textContent = `A quick tour of creating, Persona, and sharing · Guide v${m.HOME_TOUR_VERSION}`;
     }
     const bindReplay = (id, fn) => {
       const btn = document.getElementById(id);
@@ -4447,7 +4443,6 @@ void loadAppTourModule()
       }
     };
     bindReplay("btnSettingsReplayHomeTour", "replayHomeTour");
-    bindReplay("btnSettingsReplayPersonaTour", "replayPersonaTour");
   })
   .catch((e) => {
     console.error("[app-tour] init failed", e);
@@ -47254,6 +47249,67 @@ function wireLegalLinks() {
   });
 }
 wireLegalLinks();
+
+/** In-app Help & FAQ overlay (Settings → Support). */
+(function wireHelpFaq() {
+  const overlay = document.getElementById("faqOverlay");
+  const openBtn = document.getElementById("btnSettingsHelpFaq");
+  const closeBtn = document.getElementById("btnFaqClose");
+  if (!overlay) return;
+  let hideTimer = 0;
+  let isOpen = false;
+
+  const open = () => {
+    if (hideTimer) {
+      clearTimeout(hideTimer);
+      hideTimer = 0;
+    }
+    isOpen = true;
+    overlay.hidden = false;
+    overlay.setAttribute("aria-hidden", "false");
+    document.body.classList.add("faqOverlayOpen");
+    overlay.querySelector(".faqOverlayBody")?.scrollTo?.(0, 0);
+    window.requestAnimationFrame(() => {
+      if (isOpen) overlay.classList.add("isOpen");
+    });
+  };
+  const close = () => {
+    isOpen = false;
+    overlay.classList.remove("isOpen");
+    overlay.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("faqOverlayOpen");
+    if (hideTimer) clearTimeout(hideTimer);
+    hideTimer = window.setTimeout(() => {
+      hideTimer = 0;
+      if (!isOpen) {
+        overlay.hidden = true;
+        overlay.querySelectorAll(".faqItem[open]").forEach((d) => d.removeAttribute("open"));
+      }
+    }, 280);
+  };
+
+  if (openBtn) {
+    openBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      try {
+        haptic("light");
+      } catch {}
+      open();
+    });
+  }
+  if (closeBtn) {
+    closeBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      try {
+        haptic("light");
+      } catch {}
+      close();
+    });
+  }
+  document.addEventListener("keydown", (e) => {
+    if (isOpen && e.key === "Escape") close();
+  });
+})();
 
 /** Permanently delete signed-in account (server + device). Guests only clear local data. */
 async function deleteAccountAndData(opts = {}) {

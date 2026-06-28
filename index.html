@@ -124,7 +124,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260628-124846" />
+    <link rel="stylesheet" href="./styles.css?v=20260628-133411" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -150,6 +150,55 @@
           <span class="authTaglineWord">Create<span class="authTaglineDot authTaglineDot--create" aria-hidden="true">.</span></span><span class="authTaglineWord"> Share<span class="authTaglineDot authTaglineDot--share" aria-hidden="true">.</span></span><span class="authTaglineWord"> Connect<span class="authTaglineDot authTaglineDot--connect" aria-hidden="true">.</span></span>
         </h1>
         <span class="loginSettlingDots introDots" aria-hidden="true"><i></i><i></i><i></i></span>
+      </div>
+    </div>
+    <div id="faqOverlay" class="faqOverlay" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="faqOverlayTitle">
+      <div class="faqOverlayInner">
+        <header class="faqOverlayTop">
+          <h2 id="faqOverlayTitle" class="faqOverlayTitle">Help &amp; FAQ</h2>
+          <button type="button" id="btnFaqClose" class="faqOverlayClose" aria-label="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+        </header>
+        <div class="faqOverlayBody">
+          <p class="faqIntro">Quick answers to the most common questions. Still stuck? <a href="mailto:help@nabadai.com?subject=NabadAi%20Music%20%E2%80%94%20Help">Email us</a> and we'll help.</p>
+          <details class="faqItem">
+            <summary>How do I create a song?</summary>
+            <p>Tap the <strong>+ Create</strong> button, then choose how you want to start — write <strong>Lyrics</strong>, <strong>Hum</strong> a melody, or use a <strong>Photo</strong>. Add a style or mood, then generate. Your finished song shows up in your Profile.</p>
+          </details>
+          <details class="faqItem">
+            <summary>What is Persona?</summary>
+            <p>Persona saves your voice so new songs can sing in <em>your</em> voice. Set it up once, then pick your Persona when you generate a song. You can manage it any time from Create.</p>
+          </details>
+          <details class="faqItem">
+            <summary>How long does a song take to generate?</summary>
+            <p>Usually a minute or two. You don't have to wait on the screen — you can keep browsing and we'll show the song in your Profile and Activity as soon as it's ready.</p>
+          </details>
+          <details class="faqItem">
+            <summary>How do I publish or share a song?</summary>
+            <p>Open a song from your Profile, then tap <strong>Share</strong> or <strong>Publish</strong>. Published songs can appear in Discover so other creators can hear them.</p>
+          </details>
+          <details class="faqItem">
+            <summary>Can I remix or mashup tracks?</summary>
+            <p>Yes — blend two tracks into something new, or remix to reshape a song's hook, energy, and mood. Look for the Remix and Mashup options on the player and Create screens.</p>
+          </details>
+          <details class="faqItem">
+            <summary>What are credits?</summary>
+            <p>Some actions, like generating songs, use credits. You can see your balance and plan under <strong>Settings → Credits &amp; Plan</strong>. Promo codes can add credits too.</p>
+          </details>
+          <details class="faqItem">
+            <summary>Who can see my profile and activity?</summary>
+            <p>You're in control. Under <strong>Settings → Music Presence</strong> you can turn off <em>Show my activity</em>, change <em>Visibility</em>, and hide song titles. Privacy controls live in the same place.</p>
+          </details>
+          <details class="faqItem">
+            <summary>How do I delete my account?</summary>
+            <p>Go to <strong>Settings</strong> and tap <strong>Delete account</strong> at the bottom. Deletion is permanent and removes your songs and profile data.</p>
+          </details>
+          <details class="faqItem">
+            <summary>I found a bug or have a question.</summary>
+            <p>We'd love to hear from you. Email <a href="mailto:help@nabadai.com?subject=NabadAi%20Music%20%E2%80%94%20Help">help@nabadai.com</a> for help, or <a href="mailto:support@nabadai.com?subject=NabadAi%20Music%20%E2%80%94%20Bug%20report">support@nabadai.com</a> to report a bug.</p>
+          </details>
+        </div>
       </div>
     </div>
     <div class="app">
@@ -3096,6 +3145,16 @@
                   </span>
                   <span class="settingsRowChev" aria-hidden="true">›</span>
                 </a>
+                <button id="btnSettingsHelpFaq" class="settingsRow settingsRowLink" type="button">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.2-2.5 3.9" stroke-linecap="round"/><circle cx="12" cy="17.4" r="0.6" fill="currentColor" stroke="none"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Help &amp; FAQ</span>
+                    <span class="settingsRowSub">Answers to common questions</span>
+                  </span>
+                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                </button>
                 <button class="settingsRow settingsRowLink" type="button" data-legal-link="terms">
                   <span class="settingsRowIco" aria-hidden="true">
                     <svg viewBox="0 0 24 24"><path d="M6 4h12v16H6z"/><path d="M8 8h8M8 12h6"/></svg>
@@ -3144,11 +3203,7 @@
             <p class="settingsFoot"><span id="envBadge">Build detecting...</span></p>
           </div>
 
-          <button type="button" id="btnSettingsReplayHomeTour" hidden aria-hidden="true"></button>
-          <button type="button" id="btnSettingsReplayPersonaTour" hidden aria-hidden="true"></button>
           <button type="button" id="btnSettingsReplayOnboarding" hidden aria-hidden="true"></button>
-          <span id="settingsHomeTourSub" hidden aria-hidden="true"></span>
-          <span id="settingsPersonaTourSub" hidden aria-hidden="true"></span>
         </section>
       </main>
 
@@ -3965,6 +4020,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260628-124846"></script>
+    <script type="module" src="./src/app.js?v=20260628-133411"></script>
   </body>
 </html>

@@ -728,6 +728,174 @@ async function maybeNotifyChartRank({ userId, entityId, metadata }) {
   return job;
 }
 
+function isoWeekKey(nowMs) {
+  const monday = new Date(nowMs);
+  monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
+  return monday.toISOString().slice(0, 10);
+}
+
+/** Compute the Top-10 weekly chart (engagement-ranked over the last 7 days,
+ *  with ▲ ▼ NEW movement vs the prior week). Pure read — no notifications.
+ *  Shared by the GET endpoint (display) and the cron (notifications). */
+async function computeWeeklyChart() {
+  const now = Date.now();
+  const weekKey = isoWeekKey(now);
+  const weekAgoIso = new Date(now - 7 * 86400000).toISOString();
+  const twoWeeksAgoIso = new Date(now - 14 * 86400000).toISOString();
+  const curScore = new Map();
+  const curPlays = new Map();
+  const prevScore = new Map();
+  const bump = (map, sid, w) => map.set(sid, (map.get(sid) || 0) + w);
+
+  const weeklyRpc = await callRpc("social_weekly_engagement", {
+    p_two_weeks_ago: twoWeeksAgoIso,
+    p_week_ago: weekAgoIso,
+  });
+  if (weeklyRpc.ok && Array.isArray(weeklyRpc.data)) {
+    for (const row of weeklyRpc.data) {
+      const sid = cleanSongId(row?.song_id);
+      if (!sid) continue;
+      const curP = Math.max(0, Number(row?.cur_plays) || 0);
+      const prevP = Math.max(0, Number(row?.prev_plays) || 0);
+      const curF = Math.max(0, Number(row?.cur_feedback) || 0);
+      const prevF = Math.max(0, Number(row?.prev_feedback) || 0);
+      const curS = curP + curF * 2;
+      const prevS = prevP + prevF * 2;
+      if (curS > 0) curScore.set(sid, curS);
+      if (curP > 0) curPlays.set(sid, curP);
+      if (prevS > 0) prevScore.set(sid, prevS);
+    }
+  } else {
+    // Fallback when RPC not deployed — capped row scan (not limit=10000).
+    const WEEKLY_CHART_ROW_CAP = 2000;
+    const [playsR, feedbackR] = await Promise.all([
+      svcFetch(
+        `social_song_plays?select=song_id,created_at&created_at=gte.${encodeURIComponent(twoWeeksAgoIso)}&order=created_at.desc&limit=${WEEKLY_CHART_ROW_CAP}`,
+      ),
+      svcFetch(
+        `social_song_feedback?select=song_id,created_at&created_at=gte.${encodeURIComponent(twoWeeksAgoIso)}&order=created_at.desc&limit=${WEEKLY_CHART_ROW_CAP}`,
+      ),
+    ]);
+    for (const row of Array.isArray(playsR.data) ? playsR.data : []) {
+      const sid = cleanSongId(row?.song_id);
+      if (!sid) continue;
+      if (String(row?.created_at || "") >= weekAgoIso) {
+        bump(curScore, sid, 1);
+        bump(curPlays, sid, 1);
+      } else {
+        bump(prevScore, sid, 1);
+      }
+    }
+    for (const row of Array.isArray(feedbackR.data) ? feedbackR.data : []) {
+      const sid = cleanSongId(row?.song_id);
+      if (!sid) continue;
+      if (String(row?.created_at || "") >= weekAgoIso) bump(curScore, sid, 2);
+      else bump(prevScore, sid, 2);
+    }
+  }
+  const rankEntries = (map) => [...map.entries()].sort((a, b) => b[1] - a[1]);
+  const curRanked = rankEntries(curScore).slice(0, 20);
+  const prevRankMap = new Map(rankEntries(prevScore).map(([sid], i) => [sid, i + 1]));
+  if (!curRanked.length) return { chart: [], weekKey };
+
+  const candidateIds = curRanked.map(([sid]) => sid);
+  const songsR = await svcFetch(
+    `user_songs?select=id,title,song_url,art_url,user_id,task_id,audio_id&id=in.(${candidateIds.map(encodeURIComponent).join(",")})&public_on_profile=eq.true&limit=20`,
+  );
+  const songById = new Map(
+    (Array.isArray(songsR.data) ? songsR.data : []).map((s) => [String(s.id), s]),
+  );
+  const chart = [];
+  for (const [sid, score] of curRanked) {
+    if (chart.length >= 10) break;
+    const song = songById.get(sid);
+    if (!song || !String(song.song_url || "").trim()) continue;
+    const rank = chart.length + 1;
+    const prevRank = prevRankMap.get(sid) || 0;
+    const delta = prevRank ? prevRank - rank : 0;
+    chart.push({
+      songId: sid,
+      rank,
+      prevRank,
+      movement: !prevRank ? "new" : delta > 0 ? "up" : delta < 0 ? "down" : "same",
+      delta: Math.abs(delta),
+      score,
+      weeklyPlays: curPlays.get(sid) || 0,
+      title: String(song.title || "Song").trim(),
+      artUrl: String(song.art_url || "").trim(),
+      url: String(song.song_url || "").trim(),
+      taskId: String(song.task_id || ""),
+      audioId: String(song.audio_id || ""),
+      userId: cleanUserId(song.user_id),
+    });
+  }
+  const profiles = await Promise.all(chart.map((e) => profileByUserId(e.userId)));
+  chart.forEach((e, i) => {
+    e.username = profiles[i]?.username || "";
+    e.avatar = profiles[i]?.avatar || "";
+  });
+  return { chart, weekKey };
+}
+
+/** Best (lowest) Top-10 rank we've already pushed to this user this week,
+ *  read from prior chart_rank notifications. Matches both the legacy
+ *  `chart:<week>:<uid>` key and the new `chart:<week>:<uid>:peak<rank>` keys. */
+async function bestChartRankNotifiedThisWeek(userId, weekKey) {
+  const uid = cleanUserId(userId);
+  if (!uid) return 0;
+  const prefix = `chart:${weekKey}:${uid}`;
+  const r = await svcFetch(
+    `social_notifications?select=metadata&user_id=eq.${encodeURIComponent(uid)}&type=eq.chart_rank&entity_id=like.${encodeURIComponent(`${prefix}%`)}&limit=50`,
+  );
+  let best = 0;
+  for (const row of Array.isArray(r.data) ? r.data : []) {
+    const rk = Number(row?.metadata?.rank || 0);
+    if (rk > 0 && (best === 0 || rk < best)) best = rk;
+  }
+  return best;
+}
+
+/** Fire chart-rank notifications for a computed chart. Notifies a creator
+ *  when they ENTER the Top 10 or climb to a NEW PEAK (strictly better than
+ *  any rank we've already pushed this week) — never on drops, never on a
+ *  rank we've already celebrated. At most the single best improved song per
+ *  creator per run. Returns how many notifications were sent. */
+async function fireChartRankNotifications(chart, weekKey) {
+  const changedByUser = new Map();
+  for (const e of Array.isArray(chart) ? chart : []) {
+    if (e.rank > CHART_NOTIFY_MAX_RANK) continue;
+    if (!e.userId) continue;
+    if (e.movement !== "new" && e.movement !== "up") continue;
+    const prev = changedByUser.get(e.userId);
+    if (!prev || e.rank < prev.rank) changedByUser.set(e.userId, e);
+  }
+  let notified = 0;
+  await Promise.all(
+    [...changedByUser.values()].map(async (e) => {
+      const best = await bestChartRankNotifiedThisWeek(e.userId, weekKey);
+      // Only ping for a brand-new entry (nothing pushed yet this week) or a
+      // strictly better peak than we've already pushed.
+      if (best && e.rank >= best) return;
+      await maybeNotifyChartRank({
+        userId: e.userId,
+        entityId: `chart:${weekKey}:${e.userId}:peak${e.rank}`,
+        metadata: {
+          song_id: e.songId,
+          song_title: e.title,
+          song_art_url: e.artUrl,
+          rank: e.rank,
+          movement: e.movement,
+          delta: e.delta,
+          weekly_plays: e.weeklyPlays,
+          week_key: weekKey,
+        },
+      });
+      notified += 1;
+    }),
+  ).catch(() => {});
+  return notified;
+}
+
 async function followersForUser(userId) {
   const uid = cleanUserId(userId);
   if (!uid) return [];
@@ -1112,141 +1280,25 @@ async function handleGet(req, res, user) {
   }
 
   if (type === "weekly_chart") {
-    // Top songs of the week: rank public songs by real engagement in the
-    // last 7 days (plays + reactions, reactions weighted x2). The previous
-    // 7-day window provides movement arrows (▲ ▼ NEW). Best-effort
-    // "your song charted" notifications are deduped per ISO week.
-    const now = Date.now();
-    const weekAgoIso = new Date(now - 7 * 86400000).toISOString();
-    const twoWeeksAgoIso = new Date(now - 14 * 86400000).toISOString();
-    const curScore = new Map();
-    const curPlays = new Map();
-    const prevScore = new Map();
-    const bump = (map, sid, w) => map.set(sid, (map.get(sid) || 0) + w);
-
-    const weeklyRpc = await callRpc("social_weekly_engagement", {
-      p_two_weeks_ago: twoWeeksAgoIso,
-      p_week_ago: weekAgoIso,
-    });
-    if (weeklyRpc.ok && Array.isArray(weeklyRpc.data)) {
-      for (const row of weeklyRpc.data) {
-        const sid = cleanSongId(row?.song_id);
-        if (!sid) continue;
-        const curP = Math.max(0, Number(row?.cur_plays) || 0);
-        const prevP = Math.max(0, Number(row?.prev_plays) || 0);
-        const curF = Math.max(0, Number(row?.cur_feedback) || 0);
-        const prevF = Math.max(0, Number(row?.prev_feedback) || 0);
-        const curS = curP + curF * 2;
-        const prevS = prevP + prevF * 2;
-        if (curS > 0) curScore.set(sid, curS);
-        if (curP > 0) curPlays.set(sid, curP);
-        if (prevS > 0) prevScore.set(sid, prevS);
-      }
-    } else {
-      // Fallback when RPC not deployed — capped row scan (not limit=10000).
-      const WEEKLY_CHART_ROW_CAP = 2000;
-      const [playsR, feedbackR] = await Promise.all([
-        svcFetch(
-          `social_song_plays?select=song_id,created_at&created_at=gte.${encodeURIComponent(twoWeeksAgoIso)}&order=created_at.desc&limit=${WEEKLY_CHART_ROW_CAP}`,
-        ),
-        svcFetch(
-          `social_song_feedback?select=song_id,created_at&created_at=gte.${encodeURIComponent(twoWeeksAgoIso)}&order=created_at.desc&limit=${WEEKLY_CHART_ROW_CAP}`,
-        ),
-      ]);
-      for (const row of Array.isArray(playsR.data) ? playsR.data : []) {
-        const sid = cleanSongId(row?.song_id);
-        if (!sid) continue;
-        if (String(row?.created_at || "") >= weekAgoIso) {
-          bump(curScore, sid, 1);
-          bump(curPlays, sid, 1);
-        } else {
-          bump(prevScore, sid, 1);
-        }
-      }
-      for (const row of Array.isArray(feedbackR.data) ? feedbackR.data : []) {
-        const sid = cleanSongId(row?.song_id);
-        if (!sid) continue;
-        if (String(row?.created_at || "") >= weekAgoIso) bump(curScore, sid, 2);
-        else bump(prevScore, sid, 2);
-      }
-    }
-    const rankEntries = (map) => [...map.entries()].sort((a, b) => b[1] - a[1]);
-    const curRanked = rankEntries(curScore).slice(0, 20);
-    const prevRankMap = new Map(rankEntries(prevScore).map(([sid], i) => [sid, i + 1]));
-    if (!curRanked.length) return sendJson(res, 200, { ok: true, chart: [] });
-
-    const candidateIds = curRanked.map(([sid]) => sid);
-    const songsR = await svcFetch(
-      `user_songs?select=id,title,song_url,art_url,user_id,task_id,audio_id&id=in.(${candidateIds.map(encodeURIComponent).join(",")})&public_on_profile=eq.true&limit=20`,
-    );
-    const songById = new Map(
-      (Array.isArray(songsR.data) ? songsR.data : []).map((s) => [String(s.id), s]),
-    );
-    const chart = [];
-    for (const [sid, score] of curRanked) {
-      if (chart.length >= 10) break;
-      const song = songById.get(sid);
-      if (!song || !String(song.song_url || "").trim()) continue;
-      const rank = chart.length + 1;
-      const prevRank = prevRankMap.get(sid) || 0;
-      const delta = prevRank ? prevRank - rank : 0;
-      chart.push({
-        songId: sid,
-        rank,
-        prevRank,
-        movement: !prevRank ? "new" : delta > 0 ? "up" : delta < 0 ? "down" : "same",
-        delta: Math.abs(delta),
-        score,
-        weeklyPlays: curPlays.get(sid) || 0,
-        title: String(song.title || "Song").trim(),
-        artUrl: String(song.art_url || "").trim(),
-        url: String(song.song_url || "").trim(),
-        taskId: String(song.task_id || ""),
-        audioId: String(song.audio_id || ""),
-        userId: cleanUserId(song.user_id),
-      });
-    }
-    const profiles = await Promise.all(chart.map((e) => profileByUserId(e.userId)));
-    chart.forEach((e, i) => {
-      e.username = profiles[i]?.username || "";
-      e.avatar = profiles[i]?.avatar || "";
-    });
-
-    const monday = new Date(now);
-    monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
-    const weekKey = monday.toISOString().slice(0, 10);
-    // Chart JSON must return fast; rank notifications are best-effort after.
-    // Notify only for rank improvements ("new" / "up") and send at most one
-    // chart notification per user per week (best-ranked improved song) to
-    // avoid push spam for creators who hold multiple slots.
-    const changedByUser = new Map();
-    for (const e of chart) {
-      if (e.rank > CHART_NOTIFY_MAX_RANK) continue;
-      if (!e.userId) continue;
-      if (e.movement !== "new" && e.movement !== "up") continue;
-      const prev = changedByUser.get(e.userId);
-      if (!prev || e.rank < prev.rank) changedByUser.set(e.userId, e);
-    }
-    void Promise.all(
-      [...changedByUser.values()]
-        .map((e) =>
-          maybeNotifyChartRank({
-            userId: e.userId,
-            entityId: `chart:${weekKey}:${e.userId}`,
-            metadata: {
-              song_id: e.songId,
-              song_title: e.title,
-              song_art_url: e.artUrl,
-              rank: e.rank,
-              movement: e.movement,
-              delta: e.delta,
-              weekly_plays: e.weeklyPlays,
-              week_key: weekKey,
-            },
-          }),
-        ),
-    ).catch(() => {});
+    // Top songs of the week, engagement-ranked with ▲ ▼ NEW movement.
+    // Pure read for display — chart-rank notifications are decoupled from
+    // page views and fired by the scheduled cron below instead.
+    const { chart, weekKey } = await computeWeeklyChart();
     return sendJson(res, 200, { ok: true, weekKey, chart });
+  }
+
+  if (type === "chart_notify_cron") {
+    // Scheduled trigger (Vercel Cron). Recomputes the weekly chart and pushes
+    // "you charted" notifications independent of user traffic. Protected by
+    // CRON_SECRET — Vercel Cron sends it as `Authorization: Bearer <secret>`.
+    const secret = String(process.env.CRON_SECRET || "");
+    const auth = String(req.headers.authorization || req.headers.Authorization || "");
+    if (!secret || auth !== `Bearer ${secret}`) {
+      return sendJson(res, 401, { ok: false, error: "unauthorized" });
+    }
+    const { chart, weekKey } = await computeWeeklyChart();
+    const notified = await fireChartRankNotifications(chart, weekKey);
+    return sendJson(res, 200, { ok: true, weekKey, charted: chart.length, notified });
   }
 
   if (type === "my_status" || type === "following_status") {

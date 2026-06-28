@@ -18,6 +18,9 @@
       "maxDuration": 60
     }
   },
+  "crons": [
+    { "path": "/api/social?type=chart_notify_cron", "schedule": "0 17 * * *" }
+  ],
   "rewrites": [
     { "source": "/s/:id", "destination": "/api/share?id=:id" }
   ],

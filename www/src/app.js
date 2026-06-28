@@ -31254,6 +31254,13 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     pubMeta.styleInput = String(track.meta?.styleInput || styleInput).trim();
     if (track?.meta?.styleSent) pubMeta.styleSent = String(track.meta.styleSent).trim();
   }
+  // Publishing is explicit "keep this" intent. Clear any stale soft-delete
+  // marker so the re-published row isn't read as deleted, and drop this
+  // device's delete tombstone so reconcile won't re-delete (un-publish) it.
+  if (willBePublic) {
+    delete pubMeta.deletedAt;
+    try { clearLibraryTombstonesForTrack(track); } catch {}
+  }
   const nextMeta = willBePublic ? pubMeta : track.meta;
   const next = {
     ...track,
@@ -36244,10 +36251,20 @@ function scheduleCloudDeleteForResurrectedRows(rows) {
  *  soft-deleted (meta.deletedAt) or tombstoned on this device. A song is
  *  "dead" if ANY of its (possibly duplicate) rows carries the marker, so a
  *  stale duplicate row can never keep a deleted song alive. */
+/** A cloud row the user has (re)published — public and NOT soft-deleted — is
+ *  live intent that supersedes any stale local delete tombstone. Without this,
+ *  a device that once deleted a song keeps re-deleting (un-publishing) it every
+ *  time it's republished, because the tombstone never expires. */
+function cloudRowIsExplicitlyLive(row) {
+  return Boolean(row?.publicOnProfile) && !isTrackMarkedDeleted(row);
+}
+
 function cloudDeletedSignatureSet(rows, tombstones) {
   const tombs = tombstones || loadLibraryTombstoneKeySet();
   const dead = new Set();
   for (const row of Array.isArray(rows) ? rows : []) {
+    // Never mark a re-published (public, not-deleted) song's signature dead.
+    if (cloudRowIsExplicitlyLive(row)) continue;
     if (!isTrackMarkedDeleted(row) && !isTrackTombstoned(row, tombs)) continue;
     const sig = librarySyncSigOf(row);
     const stable = libraryTrackStableKey(row);
@@ -36285,6 +36302,15 @@ function partitionCloudLibraryRows(rows, tombstones) {
   const resurrected = [];
   for (const row of Array.isArray(rows) ? rows : []) {
     if (isTrackMarkedDeleted(row)) continue;
+    // Re-published song: explicit "keep it" intent beats a stale local
+    // tombstone. Clear the tombstone so this device stops un-publishing it.
+    if (cloudRowIsExplicitlyLive(row)) {
+      if (isTrackTombstoned(row, tombs)) {
+        try { clearLibraryTombstonesForTrack(row); } catch {}
+      }
+      alive.push(row);
+      continue;
+    }
     if (isTrackTombstoned(row, tombs)) {
       resurrected.push(row);
       continue;

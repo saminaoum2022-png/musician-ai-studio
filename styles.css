@@ -5775,6 +5775,16 @@ body.hubJumpingToTop #hubList .hubRow{
   padding: 0;
 }
 
+/* Public profile (other users) is chrome-less like the signed-in user's own
+   profile and like modern social/music apps — no card box framing it. */
+.card.wide[data-route="user"]{
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
+}
+
 .playerCard{
   padding: 16px 16px 18px;
 }

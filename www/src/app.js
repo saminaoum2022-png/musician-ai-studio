@@ -3819,12 +3819,14 @@ function setLyricsLanguage(lang) {
   if (lyricsLanguage !== "arabic") lyricsDialect = "auto";
   syncLyricsLangPills();
   applyLyricsLanguageToDialect();
+  try { syncArabicAddressVisibility(); } catch {}
 }
 
 function setLyricsDialect(dialect) {
   lyricsDialect = dialect || "auto";
   syncLyricsLangPills();
   applyLyricsLanguageToDialect();
+  try { syncArabicAddressVisibility(); } catch {}
 }
 
 (function bindLyricsLanguagePills() {
@@ -3915,6 +3917,35 @@ function syncArabicAddressPills() {
     b.classList.toggle("isActive", on);
     b.setAttribute("aria-pressed", on ? "true" : "false");
   });
+}
+
+/** True when text contains Arabic-script characters. */
+function textHasArabicScript(t) {
+  return /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(String(t || ""));
+}
+
+/** The "Arabic address" control only makes sense for Arabic lyrics, so it stays
+ *  hidden until the user picks Arabic as the lyrics language OR types/generates
+ *  Arabic text in the lyrics, style, or title. Keeps the form minimal otherwise. */
+function shouldShowArabicAddress() {
+  if (typeof lyricsLanguage !== "undefined" && lyricsLanguage === "arabic") return true;
+  if (textHasArabicScript(els.sunoPrompt?.value)) return true;
+  if (textHasArabicScript(els.sunoStyle?.value)) return true;
+  if (textHasArabicScript(els.sunoTitle?.value)) return true;
+  return false;
+}
+
+function syncArabicAddressVisibility() {
+  const panel = document.getElementById("arabicAddressPanel");
+  if (!panel) return;
+  const show = shouldShowArabicAddress();
+  panel.hidden = !show;
+  // When hidden, snap the choice back to Auto so a stale gendered address can
+  // never leak into non-Arabic lyrics.
+  if (!show && els.sunoArabicAddress && els.sunoArabicAddress.value) {
+    els.sunoArabicAddress.value = "";
+    try { syncArabicAddressPills(); } catch {}
+  }
 }
 
 /** Mirror the hidden #sunoSingerGender input onto the Singer pills, and dim
@@ -44869,10 +44900,22 @@ function syncCreateTabMorph() {
 function syncCreateTabMorphNow() {
   const tab = document.getElementById("tabCreate");
   if (!tab) return;
+  // The "+" tab no longer morphs into a play/generate icon and there is no
+  // "ready" pulse or tooltip — Generate now lives in an explicit in-form
+  // button. The only state that restyles the tab is generating, which keeps
+  // the purple spinner the user likes.
   const tooltip = document.getElementById("tabCreateTooltip");
+  if (tooltip) tooltip.hidden = true;
   const route = document.body.getAttribute("data-route");
   const onCreate = route === "generate";
+  const generating = Boolean(els.btnSunoGenerate?.disabled);
 
+  tab.classList.remove("tabIsReady", "tabIsListen");
+  tab.classList.toggle("tabIsGenerating", Boolean(onCreate && generating));
+}
+
+function syncGenerateOrbVisibility() {
+  const route = document.body.getAttribute("data-route");
   const hasInput = Boolean(
     String(els.sunoPrompt?.value || "").trim() ||
     String(els.sunoStyle?.value || "").trim() ||
@@ -44880,77 +44923,17 @@ function syncCreateTabMorphNow() {
   );
   const generating = Boolean(els.btnSunoGenerate?.disabled);
   const hasResult = (els.resultCard?.style.display || "none") !== "none";
-
-  // Reset listen-flash bookkeeping when the user starts a fresh run.
-  if (generating) _tabListenFlashedForRun = false;
-
-  // Detect rising edge: result just became visible while on Create.
-  const justFinished = onCreate && hasResult && !_tabLastHasResult && !_tabListenFlashedForRun;
-  _tabLastHasResult = hasResult;
-
-  if (justFinished) {
-    _tabListenFlashedForRun = true;
-    tab.classList.remove("tabIsReady", "tabIsGenerating");
-    tab.classList.add("tabIsListen");
-    if (_tabListenTimer) clearTimeout(_tabListenTimer);
-    _tabListenTimer = setTimeout(() => {
-      tab.classList.remove("tabIsListen");
-      _tabListenTimer = null;
-      try { syncCreateTabMorph(); } catch {}
-    }, 2400);
-    return;
-  }
-
-  // While the listen flash timer is running, leave it alone.
-  if (_tabListenTimer) return;
-
-  // Off the Create page → no morph at all.
-  if (!onCreate) {
-    tab.classList.remove("tabIsReady", "tabIsGenerating", "tabIsListen");
-    if (tooltip) tooltip.hidden = true;
-    return;
-  }
-
-  if (generating) {
-    tab.classList.add("tabIsGenerating");
-    tab.classList.remove("tabIsReady", "tabIsListen");
-    if (tooltip) tooltip.hidden = true;
-    return;
-  }
-
-  const ready = hasInput && !hasResult;
-  const wasReady = tab.classList.contains("tabIsReady");
-  tab.classList.toggle("tabIsReady", ready);
-  tab.classList.remove("tabIsGenerating");
-
-  if (ready && !wasReady) {
-    try {
-      if (tooltip && !localStorage.getItem(TAB_TIP_KEY)) {
-        tooltip.hidden = false;
-        if (_tabTipTimer) clearTimeout(_tabTipTimer);
-        _tabTipTimer = setTimeout(() => {
-          tooltip.hidden = true;
-          try { localStorage.setItem(TAB_TIP_KEY, "1"); } catch {}
-        }, 2400);
-      }
-    } catch {}
-  }
-  if (!ready && tooltip) tooltip.hidden = true;
-}
-
-function syncGenerateOrbVisibility() {
   if (els.btnGenerateOrb) {
-    const route = document.body.getAttribute("data-route");
-    const hasInput = Boolean(
-      String(els.sunoPrompt?.value || "").trim() ||
-      String(els.sunoStyle?.value || "").trim() ||
-      imageMoodAppliedForNextGen
-    );
-    const generating = Boolean(els.btnSunoGenerate?.disabled);
-    const hasResult = (els.resultCard?.style.display || "none") !== "none";
     const visible = route === "generate" && hasInput && !generating && !hasResult;
     els.btnGenerateOrb.style.display = visible ? "inline-flex" : "none";
   }
+  // The in-form "Generate song" CTA stays visible but reads as "dead" (greyed,
+  // no gradient) until there's something to generate, then it lights up. We
+  // don't touch it mid-run (the generate flow owns its label/disabled then).
+  if (els.btnSunoGenerate && !generating) {
+    els.btnSunoGenerate.classList.toggle("isDead", !hasInput);
+  }
+  try { syncArabicAddressVisibility(); } catch {}
   syncCreateTabMorph();
 }
 
@@ -45094,25 +45077,9 @@ syncCreateTabMorph();
       closeCreateChooserSheet({ immediate: true });
       return;
     }
-    const route = document.body.getAttribute("data-route") || "";
-    if (route !== "generate") return;
-    const hasInput = Boolean(
-      String(els.sunoPrompt?.value || "").trim() ||
-      String(els.sunoStyle?.value || "").trim() ||
-      imageMoodAppliedForNextGen
-    );
-    const generating = Boolean(els.btnSunoGenerate?.disabled);
-    const hasResult = (els.resultCard?.style.display || "none") !== "none";
-    // On the song form, the Create tab morphs into Generate — don't send users
-    // back to the home desk (#/challenges) when they meant to start a run.
-    if (generating || (hasInput && !hasResult)) {
-      ev.preventDefault();
-      ev.stopPropagation();
-      if (!generating && els.btnSunoGenerate) {
-        haptic("impact");
-        els.btnSunoGenerate.click();
-      }
-    }
+    // The "+" tab is purely navigational now. Generating happens via the
+    // explicit in-form "Generate song" button, so tapping "+" never silently
+    // kicks off a run (which users found confusing).
   }, true);
 })();
 

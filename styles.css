@@ -8608,6 +8608,50 @@ textarea{
   color:#fff;
 }
 
+/* Singer + Arabic address are secondary controls — they were catching the eye
+   too much. Make them quieter: smaller pills, a subtle active tint instead of
+   the bright purple card, and drop the singer icons (the noisiest part). */
+#singerGenderPills.addressPills,
+#arabicAddressPills.addressPills{
+  gap: 6px;
+  margin-top: 8px;
+}
+#singerGenderPills .addressPill,
+#arabicAddressPills .addressPill{
+  min-height: 38px;
+  padding: 6px 8px;
+  border-radius: 11px;
+  border-color: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.028);
+  color: rgba(232,238,247,0.74);
+}
+#singerGenderPills .addressPillMain,
+#arabicAddressPills .addressPillMain{
+  font-size: 12.5px;
+  font-weight: 600;
+}
+#singerGenderPills .addressPillSub,
+#arabicAddressPills .addressPillSub{
+  font-size: 10.5px;
+  font-weight: 500;
+}
+#singerGenderPills .addressPill.isActive,
+#arabicAddressPills .addressPill.isActive{
+  border-color: rgba(167,139,250,0.42);
+  background: rgba(124,92,255,0.11);
+  box-shadow: none;
+  color: #fff;
+}
+#singerGenderPills .singerPillIco{
+  display: none;
+}
+
+/* Arabic address only shows for Arabic lyrics — keep it fully out of layout
+   when hidden (some .inputPanel rules would otherwise force it visible). */
+#arabicAddressPanel[hidden]{
+  display: none !important;
+}
+
 /* Smooth cross-fade of the textarea when toggling modes. */
 .lyricsBoxMain textarea{
   transition:opacity 220ms ease, box-shadow 240ms ease, border-color 200ms ease;
@@ -15970,6 +16014,19 @@ button.resultMoreLink{
   0%,100%{ transform: scale(0.98); opacity:0.65; }
   50%{ transform: scale(1.03); opacity:1; }
 }
+/* "Dead" Generate CTA — shown but inert-looking until the form has something
+   to generate (no lyrics / content). Beats hiding it: the button teaches users
+   where Generate lives, then lights up with the brand gradient when ready.
+   ID+class specificity overrides `.primary` / `.aiGenerate`. */
+#btnSunoGenerate.isDead{
+  background: rgba(255,255,255,0.06);
+  color: rgba(232,238,247,0.42);
+  box-shadow: none;
+  cursor: default;
+}
+#btnSunoGenerate.isDead::before{
+  display: none;
+}
 @keyframes resultReveal{
   from{ opacity:0; transform: translateY(10px) scale(0.99); }
   to{ opacity:1; transform: translateY(0) scale(1); }
@@ -17115,7 +17172,10 @@ input::placeholder, textarea::placeholder{
   .mobileTabbar a.tabCreate .tabLabel{
     display: none;
   }
-  /* Create tab — subtle morph when on Create with inputs ready */
+  /* Create tab keeps the "+" at all times — no play-icon morph and no
+   * "ready" pulse. Generate now has an explicit in-form button, so the tab
+   * stays a plain "+". The only state that restyles the tab is generating,
+   * which shows the purple spinner (handled below). */
   .mobileTabbar a.tabCreate .tabIcoPlay,
   .mobileTabbar a.tabCreate .tabIcoSpinner{
     display: none;
@@ -17128,25 +17188,13 @@ input::placeholder, textarea::placeholder{
     animation: none;
     margin: 0;
   }
-  .mobileTabbar a.tabCreate.tabIsReady::before,
-  .mobileTabbar a.tabCreate.tabIsListen::before{
-    background: var(--brand-signature-gradient);
-    animation: tabCreatePulse 2400ms ease-in-out infinite;
-  }
   .mobileTabbar a.tabCreate.tabIsReady .tabIcoCreate,
   .mobileTabbar a.tabCreate.tabIsListen .tabIcoCreate{
-    display: none;
+    display: block;
   }
   .mobileTabbar a.tabCreate.tabIsReady .tabIcoPlay,
   .mobileTabbar a.tabCreate.tabIsListen .tabIcoPlay{
-    display: block;
-    position: absolute;
-    left: 50%;
-    top: calc(var(--tab-create-orbit-top) + var(--tab-create-orbit-size) / 2);
-    transform: translate(-50%, -50%);
-  }
-  .mobileTabbar a.tabCreate.tabIsListen::before{
-    background: var(--brand-signature-gradient-diag);
+    display: none;
   }
   .mobileTabbar a.tabCreate.tabIsGenerating{
     color: rgba(244,247,255,0.96);
@@ -17643,11 +17691,34 @@ input::placeholder, textarea::placeholder{
   display:none;
 }
 @media (max-width: 720px){
-  /* On mobile, the Create tab in the bottom bar morphs into Generate / Composing / Listen
-   * once inputs are ready, so the in-form Generate+Options dock is redundant here.
-   * It stays visible on desktop (where the bottom tabbar is hidden). */
+  /* The explicit in-form "Generate song" button is the primary CTA on mobile.
+   * (The bottom-tab "+" no longer morphs into a play/generate icon — users
+   * were not noticing it.) The inner "Options" ghost is dropped here because
+   * the mobile "Advanced options" button already covers it. */
   .card.wide[data-route="generate"] .generateDock{
-    display: none !important;
+    display: block;
+    margin-top: 12px;
+    /* No card chrome around the button — just the button itself. */
+    border: 0;
+    background: transparent;
+    border-radius: 0;
+    padding: 0;
+  }
+  .card.wide[data-route="generate"] .generateDock .generateRow{
+    justify-content: center;
+  }
+  .card.wide[data-route="generate"] .generateDock .generateRow > .ghost{
+    display: none;
+  }
+  .card.wide[data-route="generate"] .generateDock #btnSunoGenerate{
+    width: auto;
+    flex: 0 0 auto;
+    min-width: 200px;
+    min-height: 50px;
+    padding-left: 30px;
+    padding-right: 30px;
+    font-size: 16px;
+    font-weight: 800;
   }
   #btnGenerateOrb{
     display: none !important;

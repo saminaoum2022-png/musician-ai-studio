@@ -34065,6 +34065,42 @@ section.mentorPage{
   color: #fff;
 }
 
+/* ── Neutral Create surface ───────────────────────────────────────────
+   On the Create page we keep things calm: every in-form control reads the
+   same quiet grey — selected = a light-grey pill, unselected = neutral —
+   matching the Write/Generate tabs. Brand colour is reserved for the two
+   things we actually want users to reach for: the centre "+" tab (which
+   morphs into Generate) and the NabadAi Coach orb. Scoped to the route so
+   every other page keeps its purple/teal accents. */
+body[data-route="generate"] .optChip.isActive,
+body[data-route="generate"] .styleSuggestPill.isActive,
+body[data-route="generate"] .addressPill.isActive{
+  border-color: rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.10);
+  color: #fff;
+  box-shadow: none;
+}
+body[data-route="generate"] .addressPill.isActive .addressPillSub{
+  color: rgba(232,238,247,0.7);
+}
+/* The ✦ helper buttons (lyrics "Generate", style "Boost") go neutral too. */
+body[data-route="generate"] .lyricsMagicBtn{
+  border-color: rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.08);
+  box-shadow: none;
+  color: rgba(238,242,250,0.92);
+}
+/* The in-form Generate button is no longer the colour anchor (the centre "+"
+   tab is), so it reads neutral as well — desktop dock + the in-form orb. */
+body[data-route="generate"] .generateOrb,
+body[data-route="generate"] #btnGenerateOrb,
+body[data-route="generate"] .aiGenerate{
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.34);
+}
+
 /* ─── Live event campaign (World Cup → Christmas → …) ─────────────────── */
 .campaignBanner{ margin: 4px 0 14px; }
 .campaignBanner[hidden]{ display: none !important; }

@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260629-164959";
+const APP_BUILD = "20260629-172629";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -45600,8 +45600,14 @@ function showCoachContextHint(text, key) {
 // Arabic typed without harakat (تشكيل) → suggest adding them for a sharper
 // accent. Harakat range: \u064B-\u0652 (tanwin/fatha/kasra/damma/sukoon/shadda)
 // plus superscript alef \u0670. Pure local heuristic.
+// IMPORTANT: this fires on BLUR (not while typing), because the orb + pill live
+// at the bottom of the screen and would be hidden behind the keyboard mid-type.
+// We also bail if a text field is still focused (e.g. the user just hopped from
+// Style to Lyrics) so the keyboard-down case is the only one that shows.
 function evaluateCreateArabicHint() {
   if (document.body.getAttribute("data-route") !== "generate") return;
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === "TEXTAREA" || ae.tagName === "INPUT")) return;
   const text = `${els.sunoStyle?.value || ""}\n${els.sunoPrompt?.value || ""}`;
   if (!textHasArabicScript(text)) return;
   if (/[\u064B-\u0652\u0670]/.test(text)) return; // already has harakat
@@ -45611,18 +45617,20 @@ function evaluateCreateArabicHint() {
 }
 function scheduleCreateArabicHint() {
   if (_coachHintInputTimer) clearTimeout(_coachHintInputTimer);
+  // Give the keyboard time to animate down after blur before we check.
   _coachHintInputTimer = setTimeout(() => {
     try { evaluateCreateArabicHint(); } catch {}
-  }, 1400);
+  }, 480);
 }
 
 (() => {
   const fab = document.getElementById("coachFab");
   if (fab) fab.addEventListener("click", () => openNabadCoach());
   try { scheduleCoachFabNudge(); } catch {}
-  // Watch the Create fields locally for the Arabic-harakat tip.
-  els.sunoStyle?.addEventListener("input", scheduleCreateArabicHint);
-  els.sunoPrompt?.addEventListener("input", scheduleCreateArabicHint);
+  // Watch the Create fields locally for the Arabic-harakat tip. Fire on blur so
+  // the orb pill isn't trapped behind the on-screen keyboard.
+  els.sunoStyle?.addEventListener("blur", scheduleCreateArabicHint);
+  els.sunoPrompt?.addEventListener("blur", scheduleCreateArabicHint);
 })();
 
 // Subtle morph of the bottom Create tab into a Generate / Listen button when

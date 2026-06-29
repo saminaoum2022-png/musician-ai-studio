@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260629-173713";
+const APP_BUILD = "20260629-174451";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -45539,7 +45539,13 @@ const COACH_NUDGE_COOLDOWN_MS = 420000;  // re-offer the idle nudge after ~7 min
 
 function coachFabIsVisible() {
   const fab = document.getElementById("coachFab");
-  return Boolean(fab && fab.offsetParent !== null);
+  if (!fab) return false;
+  // NOTE: .coachFab is position:fixed, and `offsetParent` is null for fixed
+  // elements in WebKit/Chrome — so the old offsetParent check reported the orb
+  // as hidden EVERYWHERE and no pill (idle nudge or contextual hint) ever
+  // showed. Measure the rendered box instead: it's 0×0 only when display:none.
+  const r = fab.getBoundingClientRect();
+  return r.width > 0 && r.height > 0;
 }
 function setCoachPillText(text) {
   const pill = document.querySelector("#coachFab .coachFabPill");
@@ -45599,10 +45605,13 @@ function showCoachContextHint(text, key) {
 // at the bottom of the screen and would be hidden behind the keyboard mid-type.
 // We also bail if a text field is still focused (e.g. the user just hopped from
 // Style to Lyrics) so the keyboard-down case is the only one that shows.
-function evaluateCreateArabicHint() {
+function evaluateCreateArabicHint({ ignoreFocus = false } = {}) {
   if (document.body.getAttribute("data-route") !== "generate") return;
   const ae = document.activeElement;
-  if (ae && (ae.tagName === "TEXTAREA" || ae.tagName === "INPUT")) return;
+  // Skip when another text field is still focused (e.g. hopping Style→Lyrics) so
+  // we don't pop the pill mid-edit. The keyboard-close path passes ignoreFocus
+  // because we already know the keyboard (and any focus) is going away.
+  if (!ignoreFocus && ae && (ae.tagName === "TEXTAREA" || ae.tagName === "INPUT")) return;
   const text = `${els.sunoStyle?.value || ""}\n${els.sunoPrompt?.value || ""}`;
   if (!textHasArabicScript(text)) return;
   if (/[\u064B-\u0652\u0670]/.test(text)) return; // already has harakat
@@ -45626,6 +45635,23 @@ function scheduleCreateArabicHint() {
   // the orb pill isn't trapped behind the on-screen keyboard.
   els.sunoStyle?.addEventListener("blur", scheduleCreateArabicHint);
   els.sunoPrompt?.addEventListener("blur", scheduleCreateArabicHint);
+
+  // The most reliable signal that the orb is actually visible is the on-screen
+  // keyboard closing — that's exactly when the bottom-anchored pill stops being
+  // hidden. visualViewport fires in both the native WKWebView and mobile web,
+  // so re-check the Arabic hint on the open→closed transition.
+  const vv = window.visualViewport;
+  if (vv) {
+    let kbWasOpen = false;
+    vv.addEventListener("resize", () => {
+      const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      const open = inset > 90;
+      if (kbWasOpen && !open) {
+        setTimeout(() => { try { evaluateCreateArabicHint({ ignoreFocus: true }); } catch {} }, 160);
+      }
+      kbWasOpen = open;
+    });
+  }
 })();
 
 // Subtle morph of the bottom Create tab into a Generate / Listen button when

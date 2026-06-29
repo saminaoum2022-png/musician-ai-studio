@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260628-214949";
+const APP_BUILD = "20260629-155217";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -31521,6 +31521,25 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     showToast(cloudSyncFailureMessage(det, { action: "publish" }), { durationMs: 5200 });
     return { ok: false };
   }
+  // Local-first: under the local-first model private songs are NOT pre-uploaded
+  // at generation, so on first publish the cloud row usually does NOT exist yet
+  // and the PATCH above matched nothing. Ensure a PUBLIC row now: this insert is
+  // idempotent (a duplicate row returns ok via the 409 handler), so it creates
+  // the row when missing and is a harmless no-op when the PATCH already flipped
+  // an existing row public. Awaited so publishing reliably lands in the cloud
+  // before we report success — publishing is the only path that writes songs up.
+  if (willBePublic) {
+    const ensured = await supabaseInsertUserSong(next);
+    if (ensured && ensured.ok === false && ensured.reason !== "duplicate") {
+      recordPublishAudit(track.id, {
+        phase: "ensure-insert",
+        ok: false,
+        reason: String(ensured.reason || ""),
+      });
+    } else if (ensured && ensured.ok) {
+      invalidateUserSongsLoadCache();
+    }
+  }
   // Verify + self-heal: a publish PATCH can report success yet not actually
   // flip the cloud row (e.g. it ran before the row existed, or matched nothing).
   // Re-read the cloud, and if no public row landed, re-issue the write so a
@@ -37067,8 +37086,6 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
   const localCandidates = localForUser;
 
   const sigOf = librarySyncSigOf;
-  const cloudSigs = new Set(cloudSongs.map(sigOf));
-  const cloudStableKeys = new Set(cloudSongs.map(libraryTrackStableKey));
   const localBySig = new Map();
   for (const t of localCandidates) localBySig.set(sigOf(t), t);
 
@@ -37121,84 +37138,24 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
   // locally) so they stop reverting to the placeholder logo.
   void backfillPendingCoverUploads(mergedDeduped);
 
-  // Background: only upload local-only rows (the ones not already in
-  // the cloud snapshot we just fetched). The previous version pushed
-  // every merged row, including cloud-resident ones, which wasted
-  // dozens of round-trips on every PWA cold start.
-  const localOnly = mergedDeduped.filter((row) => {
-    if (cloudSigs.has(sigOf(row))) return false;
-    if (cloudStableKeys.has(libraryTrackStableKey(row))) return false;
-    return true;
-  });
-  if (!localOnly.length) {
-    _libraryReconcileLastAt = Date.now();
-    return;
-  }
-  void (async () => {
-    let okCount = 0;
-    let failCount = 0;
-    let firstFail = "";
-    await runTasksWithConcurrency(
-      localOnly.filter((t) => !isTrackTombstoned(t)),
-      4,
-      async (t) => {
-        const ins = await supabaseInsertUserSong(t);
-        if (ins?.ok) okCount += 1;
-        else {
-          failCount += 1;
-          if (!firstFail) {
-            firstFail = `${ins?.reason || "insert_failed"}${ins?.details ? `: ${ins.details}` : ""}`;
-          }
-        }
-      },
-    );
-    const tombsAfter = loadLibraryTombstoneKeySet();
-    const cloudAfterRaw = okCount > 0
-      ? await supabaseLoadUserSongs({ force: true })
-      : (_userSongsLoadCache || await supabaseLoadUserSongs());
-    const cloudAfter = dedupeCloudSongRows(
-      partitionCloudLibraryRows(
-        Array.isArray(cloudAfterRaw) ? cloudAfterRaw : [],
-        tombsAfter,
-      ),
-    ).keep;
-    // Do not replace a full merged list with a shorter/partial cloud
-    // snapshot (RLS hiccup, transient HTTP empty body, etc.) — union by
-    // signature so local-only rows stay until the server confirms them.
-    const mergedFinal = [];
-    const seenFinal = new Set();
-    const addFinal = (row) => {
-      const s = sigOf(row);
-      if (seenFinal.has(s)) return;
-      seenFinal.add(s);
-      mergedFinal.push(row);
-    };
-    // `merged` first: those copies carry custom data: covers and full
-    // local meta that the slim cloud snapshot lacks. cloudAfter then only
-    // contributes rows that are genuinely new (e.g. from another device).
-    mergedDeduped.forEach(addFinal);
-    if (Array.isArray(cloudAfter)) cloudAfter.forEach(addFinal);
-    mergedFinal.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
-    saveLibraryFor(uid, mergedFinal);
-    saveLibrary(mergedFinal);
-    refreshOwnSongsUi();
-    if (failCount > 0) {
-      setStatus(`Library sync partial: ${okCount} uploaded, ${failCount} failed (${firstFail.slice(0, 90)})`);
-    } else if (okCount > 0) {
-      setStatus(`Library sync complete: ${okCount} new songs uploaded.`);
-    }
-    _libraryReconcileLastAt = Date.now();
-  })();
+  // Local-first: private songs are NEVER auto-uploaded to the cloud. A song
+  // reaches the cloud only when the user explicitly publishes it. Removing
+  // the old "local row missing from cloud → re-upload it" loop permanently
+  // kills the resurrection bug: a stale local copy of a song that was deleted
+  // on another device can no longer push that song back into the cloud (and
+  // from there onto every device). Local-only songs simply stay local and
+  // visible on this device; nothing here writes them to the server.
+  _libraryReconcileLastAt = Date.now();
 }
 // ─── Lightweight cloud → local reconcile for ongoing sync ─────────────
-// `ensureUserLibraryHydrated` (above) is the heavy migration path that
-// runs once at boot: it uploads every local-only track. Once that's
-// done we don't want to re-run it every time the user taps Library —
-// it's slow and serial. `reconcileLibraryFromCloud` is the cheap
-// alternative: pull the latest cloud rows, merge with local (preserving
-// any local custom-cover data: URLs that v1 doesn't ship to the cloud),
-// re-render. Throttled so we don't hammer Supabase if the user
-// rapid-toggles tabs.
+// `ensureUserLibraryHydrated` (above) is the boot merge path: it pulls the
+// cloud snapshot, merges it with the local library, and prunes anything the
+// cloud marks deleted. Under the local-first model it does NOT upload local
+// songs (publishing is the only thing that writes to the cloud).
+// `reconcileLibraryFromCloud` is the cheap ongoing version: pull the latest
+// cloud rows, merge with local (preserving any local custom-cover data: URLs
+// the cloud doesn't carry), re-render. Throttled so we don't hammer Supabase
+// if the user rapid-toggles tabs.
 let _libraryReconcileInFlight = false;
 let _libraryReconcileLastAt = 0;
 const LIBRARY_RECONCILE_MIN_INTERVAL_MS = 30_000;
@@ -37275,7 +37232,9 @@ async function reconcileLibraryFromCloud({ force = false } = {}) {
       seen.add(sig);
       seenStable.add(stable);
       merged.push(t);
-      if (t.url && !isTrackTombstoned(t)) void supabaseInsertUserSong(t);
+      // Local-first: keep the local-only song visible but NEVER upload it to
+      // the cloud. Cloud rows are created only when the user publishes. This
+      // is the second half of the resurrection fix (see ensureUserLibraryHydrated).
     }
 
     merged.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
@@ -37336,11 +37295,16 @@ function addToLibrary(track) {
   saveLibrary(items);
   refreshOwnSongsUi();
   void (async () => {
-    const ins = await supabaseInsertUserSong(newTrack);
-    if (!ins?.ok) {
-      setStatus(`Could not save copy to the cloud (${ins.reason}). Song is still saved on this device. ${_lastUserSongInsertFailure || ""}`.slice(0, 280));
-      try { refreshOwnSongsUi(); } catch {}
-    }
+    // Local-first: a newly generated song lives only on THIS device. It is
+    // NOT inserted into the cloud here — a song reaches the cloud only when
+    // the user explicitly publishes it (setLibraryTrackPublicOnProfile,
+    // which self-heals by inserting the row if it doesn't exist yet).
+    // This permanently removes the resurrection vector: there is no longer a
+    // cloud copy of a private song for a stale device to "re-sync", and the
+    // old "missing from cloud → re-upload" loop is gone. We still persist the
+    // cover and archive the audio so a private draft keeps playing and
+    // publishing later is instant (both are no-ops on the cloud row until
+    // one exists, since PATCH matches nothing).
     await persistTrackCoverIfNeeded(newTrack);
     queueArchiveLibraryTrack(newTrack);
   })();

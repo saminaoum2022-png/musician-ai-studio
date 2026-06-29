@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260629-172629";
+const APP_BUILD = "20260629-173713";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -45199,19 +45199,14 @@ function renderStyleSuggestions() {
 function renderStyleSelectedChips() {
   const tags = styleTagsListFromInput();
   if (els.btnClearStyle) els.btnClearStyle.hidden = tags.length === 0;
+  // The selected tags already live in the Style input box (the source of
+  // truth), so the separate removable chip strip below it was redundant. Keep
+  // it permanently hidden — tap a suggestion again to remove a tag, edit the
+  // box directly, or use Clear.
   const row = els.styleSelectedRow;
   if (!row) return;
-  if (!tags.length) {
-    row.hidden = true;
-    row.innerHTML = "";
-    return;
-  }
-  row.hidden = false;
-  row.innerHTML = tags
-    .map((tag) =>
-      `<span class="styleSelectedChip"><span class="styleSelectedChipText">${escapeHtml(tag)}</span><button type="button" class="styleSelectedChipX" data-style-remove="${escapeHtml(tag)}" aria-label="Remove ${escapeHtml(tag)}">\u00d7</button></span>`
-    )
-    .join("");
+  row.hidden = true;
+  row.innerHTML = "";
 }
 
 // Vocal-style chips (Advanced → Voice) toggle the same tags into the Style

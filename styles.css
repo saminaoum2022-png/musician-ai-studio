@@ -8649,13 +8649,13 @@ textarea{
   font-weight: 500;
 }
 /* The minimal base rules above are ID-scoped, so they out-specify the shared
-   `.addressPill.isActive`. Re-assert the unified active-purple here (also
-   ID-scoped) so the highlighted Singer/Arabic pill matches every other pill on
-   the page. The "minimal" treatment is the smaller size + no icons, not colour. */
+   `.addressPill.isActive`. Re-assert the neutral active pill here (also
+   ID-scoped) so the highlighted Singer/Arabic pill matches every other selected
+   pill on the calm Create surface — light grey, not purple. */
 #singerGenderPills .addressPill.isActive,
 #arabicAddressPills .addressPill.isActive{
-  border-color: rgba(167,139,250,0.55);
-  background: linear-gradient(150deg, rgba(124,92,255,0.20), rgba(124,92,255,0.09));
+  border-color: rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.10);
   color: #fff;
 }
 #singerGenderPills .singerPillIco{

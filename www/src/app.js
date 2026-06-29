@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260629-155217";
+const APP_BUILD = "20260629-164959";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -24817,11 +24817,66 @@ function messagesBubbleStatusHtml(msg) {
   return "";
 }
 
+// Lightweight, SAFE markdown for NabadAi Coach replies only. The model returns
+// **bold**, numbered lists, etc.; plain escapeHtml printed the raw asterisks and
+// ran lists together. We HTML-escape first, then re-introduce a tiny allow-list
+// of inline (**bold**, *italic*, `code`) + block (paragraphs, ordered/unordered
+// lists) formatting so the reply reads structured inside the chat bubble.
+function renderCoachInlineMd(escaped) {
+  let s = String(escaped || "");
+  s = s.replace(/\*\*([^*\n]+?)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/__([^_\n]+?)__/g, "<strong>$1</strong>");
+  s = s.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g, "$1<em>$2</em>");
+  s = s.replace(/`([^`\n]+?)`/g, "<code>$1</code>");
+  return s;
+}
+function renderCoachMarkdown(text) {
+  const raw = String(text || "").replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  if (!raw) return "";
+  const out = [];
+  let para = [];
+  let items = [];
+  let listTag = "";
+  const flushPara = () => {
+    if (para.length) { out.push(`<p class="coachMd-p">${para.join("<br>")}</p>`); para = []; }
+  };
+  const flushList = () => {
+    if (items.length) { out.push(`<${listTag} class="coachMd-list">${items.join("")}</${listTag}>`); items = []; listTag = ""; }
+  };
+  for (const rawLine of raw.split("\n")) {
+    const line = rawLine.trim();
+    if (!line) { flushPara(); flushList(); continue; }
+    const ol = /^(\d+)[.)]\s+(.+)$/.exec(line);
+    // Bullet markers "-", "•" or "* " at line start (a single "*" followed by a
+    // space — distinct from "**bold**", which has no space after the asterisk).
+    const ul = /^[-•*]\s+(.+)$/.exec(line);
+    if (ol) {
+      flushPara();
+      if (listTag && listTag !== "ol") flushList();
+      listTag = "ol";
+      items.push(`<li>${renderCoachInlineMd(escapeHtml(ol[2]))}</li>`);
+      continue;
+    }
+    if (ul) {
+      flushPara();
+      if (listTag && listTag !== "ul") flushList();
+      listTag = "ul";
+      items.push(`<li>${renderCoachInlineMd(escapeHtml(ul[1]))}</li>`);
+      continue;
+    }
+    flushList();
+    para.push(renderCoachInlineMd(escapeHtml(line)));
+  }
+  flushPara();
+  flushList();
+  return out.join("");
+}
+
 function messagesBubbleHtml(msg, viewerId, opts) {
   if (msg?.coachTyping) {
     return `
     <div class="messagesBubbleWrap">
-      <div class="messagesBubble messagesBubble--coachTyping" aria-label="Nabad Coach is typing">
+      <div class="messagesBubble messagesBubble--coachTyping" aria-label="NabadAi Coach is typing">
         <span class="coachTypingDots"><span></span><span></span><span></span></span>
       </div>
     </div>`;
@@ -24848,10 +24903,14 @@ function messagesBubbleHtml(msg, viewerId, opts) {
       </div>`;
   }
   const body = String(parsed.text || "").trim();
+  const isCoachMsg = !mine && String(msg?.sender_id || "") === COACH_SENDER_ID;
+  const textHtml = isCoachMsg
+    ? `<div class="messagesBubbleText messagesBubbleText--coachMd">${renderCoachMarkdown(body)}</div>`
+    : `<p class="messagesBubbleText">${escapeHtml(body)}</p>`;
   return `
     <div class="messagesBubbleWrap${mine ? " is-mine" : ""}${pendingCls}${failedCls}" data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
       <div class="messagesBubble">
-        <p class="messagesBubbleText">${escapeHtml(body)}</p>
+        ${textHtml}
         ${metaHtml}
       </div>
     </div>`;
@@ -25134,7 +25193,7 @@ const COACH_TYPING_ID = "coach:typing";
 // Nabad Coach mark — a glassy gradient orb inside a dual ring (teal orbit arcs
 // over a navy ring), designed to complement the "n" logo. Rendered as SVG so it
 // stays crisp, transparent (no white box), and recolorable at any size.
-const COACH_ORB_SVG = `<svg viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="coachOrbG" x1="26" y1="24" x2="74" y2="80" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#36e7c0"/><stop offset=".42" stop-color="#3f73f0"/><stop offset="1" stop-color="#6a23da"/></linearGradient><radialGradient id="coachOrbHi" cx=".36" cy=".30" r=".75"><stop offset="0" stop-color="#ffffff" stop-opacity=".55"/><stop offset=".45" stop-color="#ffffff" stop-opacity="0"/></radialGradient></defs><circle cx="50" cy="50" r="45" fill="none" stroke="#16264f" stroke-width="2.3"/><path d="M50 12 A38 38 0 0 1 88 50" fill="none" stroke="#2dd4bf" stroke-width="2.3" stroke-linecap="round"/><path d="M50 88 A38 38 0 0 1 12 50" fill="none" stroke="#2dd4bf" stroke-width="2.3" stroke-linecap="round"/><circle cx="50" cy="50" r="27.5" fill="url(#coachOrbG)"/><circle cx="50" cy="50" r="27.5" fill="url(#coachOrbHi)"/></svg>`;
+const COACH_ORB_SVG = `<svg viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="coachOrbG" x1="26" y1="24" x2="74" y2="80" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#36e7c0"/><stop offset=".42" stop-color="#3f73f0"/><stop offset="1" stop-color="#6a23da"/></linearGradient><radialGradient id="coachOrbHi" cx=".36" cy=".30" r=".75"><stop offset="0" stop-color="#ffffff" stop-opacity=".55"/><stop offset=".45" stop-color="#ffffff" stop-opacity="0"/></radialGradient></defs><circle cx="50" cy="50" r="45" fill="none" stroke="#16264f" stroke-width="2.3"/><path class="coachOrbArc" d="M50 12 A38 38 0 0 1 88 50" fill="none" stroke="#2dd4bf" stroke-width="2.3" stroke-linecap="round"/><path class="coachOrbArc coachOrbArc--b" d="M50 88 A38 38 0 0 1 12 50" fill="none" stroke="#2dd4bf" stroke-width="2.3" stroke-linecap="round"/><circle cx="50" cy="50" r="27.5" fill="url(#coachOrbG)"/><circle cx="50" cy="50" r="27.5" fill="url(#coachOrbHi)"/></svg>`;
 let _coachReplyInFlight = false;
 
 function isCoachThreadId(tid) {
@@ -25165,13 +25224,13 @@ function coachWelcomeMessage() {
   return {
     id: "coach:welcome",
     sender_id: COACH_SENDER_ID,
-    body: "Hey! I'm your Nabad Coach 🎵 Ask me anything about using the app — making a song, publishing, Discover, challenges, credits, and more.\n\nI can't see your account or anyone's private info, so please don't share passwords.",
+    body: "Hey! I'm **NabadAi Coach** 🎵 your guide to making music here.\n\nAsk me anything — writing a song, picking a style, publishing, Discover, challenges, credits, and more.\n\nI can't see your account or anyone's private info, so please don't share passwords. 🎧",
     created_at: new Date().toISOString(),
     sendStatus: "delivered",
   };
 }
 function coachHeaderUser() {
-  return { userId: COACH_SENDER_ID, username: "Nabad Coach", displayName: "Nabad Coach", avatarUrl: "" };
+  return { userId: COACH_SENDER_ID, username: "NabadAi Coach", displayName: "NabadAi Coach", avatarUrl: "" };
 }
 function coachAvatarHtml(cls = "messagesRowAvatar") {
   return `<span class="${cls} coachAvatar" aria-hidden="true">${COACH_ORB_SVG}</span>`;
@@ -25192,11 +25251,11 @@ function renderCoachChatHeader() {
   const relationEl = document.getElementById("messagesThreadRelation");
   const avatarEl = document.getElementById("messagesThreadAvatar");
   if (displayEl) {
-    displayEl.textContent = "Nabad Coach";
+    displayEl.textContent = "NabadAi Coach";
     displayEl.classList.remove("messagesThreadHeadSkel");
   }
   if (handleEl) {
-    handleEl.textContent = "AI guide · here to help";
+    handleEl.textContent = "Your music-making guide 🎵";
     handleEl.hidden = false;
     handleEl.classList.remove("messagesThreadHeadSkel");
   }
@@ -25314,7 +25373,7 @@ function coachInboxRowHtml() {
       ${coachAvatarHtml("messagesRowAvatar")}
       <span class="messagesRowBody">
         <span class="messagesRowTop">
-          <strong class="messagesRowHandle">Nabad Coach <span class="coachBadge">AI</span></strong>
+          <strong class="messagesRowHandle">NabadAi Coach <span class="coachBadge">AI</span></strong>
         </span>
         <span class="messagesRowPreview">${escapeHtml(preview)}</span>
       </span>
@@ -45460,14 +45519,110 @@ if (els.btnGenerateOrb && els.btnSunoGenerate) {
   });
 }
 
-// Global shortcut to the Nabad Coach (AI guide that lives in Messages).
+// Global shortcut to the NabadAi Coach (AI guide that lives in Messages).
 function openNabadCoach() {
   try { haptic("light"); } catch {}
+  dismissCoachFabNudge();
   navigateToMessagesThread({ threadId: COACH_THREAD_ID });
 }
+
+// Coach orb pill: two jobs, same little bubble next to the orb.
+//  1) Idle nudge — after a few minutes on a tab where the orb shows, it pops a
+//     "Need help?" reminder, then re-offers on a long cooldown.
+//  2) Contextual micro-hints — short, page-aware tips computed ENTIRELY
+//     ON-DEVICE (no network, no AI). PRIVACY: nothing about what the user typed
+//     is ever sent anywhere; we only read a local field value to decide whether
+//     to show a canned tip, and that value never leaves the device.
+// Never shown while the Coach thread is open.
+let _coachNudgeArmTimer = null;
+let _coachNudgeHideTimer = null;
+const COACH_PILL_DEFAULT = "Need help? 🎵";
+const COACH_NUDGE_DELAY_MS = 150000;     // first idle offer after ~2.5 min
+const COACH_NUDGE_VISIBLE_MS = 6500;     // how long the idle pill stays
+const COACH_HINT_VISIBLE_MS = 9000;      // contextual tips linger a bit longer
+const COACH_NUDGE_COOLDOWN_MS = 420000;  // re-offer the idle nudge after ~7 min
+
+function coachFabIsVisible() {
+  const fab = document.getElementById("coachFab");
+  return Boolean(fab && fab.offsetParent !== null);
+}
+function setCoachPillText(text) {
+  const pill = document.querySelector("#coachFab .coachFabPill");
+  if (pill) pill.textContent = String(text || COACH_PILL_DEFAULT);
+}
+function dismissCoachFabNudge() {
+  const fab = document.getElementById("coachFab");
+  if (fab) fab.classList.remove("coachFab--nudge");
+  if (_coachNudgeHideTimer) { clearTimeout(_coachNudgeHideTimer); _coachNudgeHideTimer = null; }
+}
+function showCoachFabPill(text, { visibleMs = COACH_NUDGE_VISIBLE_MS, contextual = false } = {}) {
+  if (!coachFabIsVisible() || isCoachThreadId(_conversationId)) return;
+  const fab = document.getElementById("coachFab");
+  if (!fab) return;
+  setCoachPillText(text);
+  fab.classList.toggle("coachFab--hint", Boolean(contextual));
+  fab.classList.add("coachFab--nudge");
+  if (_coachNudgeHideTimer) clearTimeout(_coachNudgeHideTimer);
+  _coachNudgeHideTimer = setTimeout(() => {
+    fab.classList.remove("coachFab--nudge", "coachFab--hint");
+    setCoachPillText(COACH_PILL_DEFAULT);
+  }, visibleMs);
+}
+function showCoachFabNudge() {
+  showCoachFabPill(COACH_PILL_DEFAULT, { visibleMs: COACH_NUDGE_VISIBLE_MS });
+}
+function scheduleCoachFabNudge(delay = COACH_NUDGE_DELAY_MS) {
+  if (_coachNudgeArmTimer) clearTimeout(_coachNudgeArmTimer);
+  _coachNudgeArmTimer = setTimeout(function tick() {
+    showCoachFabNudge();
+    _coachNudgeArmTimer = setTimeout(tick, COACH_NUDGE_COOLDOWN_MS);
+  }, delay);
+}
+
+// ── Contextual micro-hints (on-device only) ──────────────────────────────
+// A tip fires at most once per cooldown so it never nags. The detector reads
+// the Create fields locally to decide; the contents are never transmitted.
+let _coachHintLastAt = 0;
+let _coachHintInputTimer = null;
+const COACH_HINT_COOLDOWN_MS = 240000; // ≥4 min between contextual tips
+const COACH_HINT_SEEN = new Set();     // tip keys shown this session
+
+function showCoachContextHint(text, key) {
+  const now = Date.now();
+  if (now - _coachHintLastAt < COACH_HINT_COOLDOWN_MS) return;
+  if (key && COACH_HINT_SEEN.has(key)) return;
+  if (!coachFabIsVisible() || isCoachThreadId(_conversationId)) return;
+  _coachHintLastAt = now;
+  if (key) COACH_HINT_SEEN.add(key);
+  showCoachFabPill(text, { visibleMs: COACH_HINT_VISIBLE_MS, contextual: true });
+}
+
+// Arabic typed without harakat (تشكيل) → suggest adding them for a sharper
+// accent. Harakat range: \u064B-\u0652 (tanwin/fatha/kasra/damma/sukoon/shadda)
+// plus superscript alef \u0670. Pure local heuristic.
+function evaluateCreateArabicHint() {
+  if (document.body.getAttribute("data-route") !== "generate") return;
+  const text = `${els.sunoStyle?.value || ""}\n${els.sunoPrompt?.value || ""}`;
+  if (!textHasArabicScript(text)) return;
+  if (/[\u064B-\u0652\u0670]/.test(text)) return; // already has harakat
+  const arabicLetters = (text.match(/[\u0621-\u064A]/g) || []).length;
+  if (arabicLetters < 6) return; // ignore a stray character
+  showCoachContextHint("أضِف التشكيل (الحركات) للحصول على لهجة أوضح 🎵", "ar-harakat");
+}
+function scheduleCreateArabicHint() {
+  if (_coachHintInputTimer) clearTimeout(_coachHintInputTimer);
+  _coachHintInputTimer = setTimeout(() => {
+    try { evaluateCreateArabicHint(); } catch {}
+  }, 1400);
+}
+
 (() => {
   const fab = document.getElementById("coachFab");
   if (fab) fab.addEventListener("click", () => openNabadCoach());
+  try { scheduleCoachFabNudge(); } catch {}
+  // Watch the Create fields locally for the Arabic-harakat tip.
+  els.sunoStyle?.addEventListener("input", scheduleCreateArabicHint);
+  els.sunoPrompt?.addEventListener("input", scheduleCreateArabicHint);
 })();
 
 // Subtle morph of the bottom Create tab into a Generate / Listen button when

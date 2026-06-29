@@ -124,7 +124,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260629-155217" />
+    <link rel="stylesheet" href="./styles.css?v=20260629-164959" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -3727,7 +3727,8 @@
           </div>
         </div>
       </div>
-      <button id="coachFab" class="coachFab" type="button" aria-label="Ask Nabad Coach">
+      <button id="coachFab" class="coachFab" type="button" aria-label="Ask NabadAi Coach">
+        <span class="coachFabPill" aria-hidden="true">Need help? 🎵</span>
         <span class="coachFabIco" aria-hidden="true">
           <svg viewBox="0 0 100 100" aria-hidden="true">
             <defs>
@@ -3742,8 +3743,8 @@
               </radialGradient>
             </defs>
             <circle cx="50" cy="50" r="45" fill="none" stroke="#16264f" stroke-width="2.3"/>
-            <path d="M50 12 A38 38 0 0 1 88 50" fill="none" stroke="#2dd4bf" stroke-width="2.3" stroke-linecap="round"/>
-            <path d="M50 88 A38 38 0 0 1 12 50" fill="none" stroke="#2dd4bf" stroke-width="2.3" stroke-linecap="round"/>
+            <path class="coachOrbArc" d="M50 12 A38 38 0 0 1 88 50" fill="none" stroke="#2dd4bf" stroke-width="2.3" stroke-linecap="round"/>
+            <path class="coachOrbArc coachOrbArc--b" d="M50 88 A38 38 0 0 1 12 50" fill="none" stroke="#2dd4bf" stroke-width="2.3" stroke-linecap="round"/>
             <circle cx="50" cy="50" r="27.5" fill="url(#coachOrbFabG)"/>
             <circle cx="50" cy="50" r="27.5" fill="url(#coachOrbFabHi)"/>
           </svg>
@@ -4080,6 +4081,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260629-155217"></script>
+    <script type="module" src="./src/app.js?v=20260629-164959"></script>
   </body>
 </html>

@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260630-124748";
+const APP_BUILD = "20260630-130949";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -45588,42 +45588,94 @@ let _coachHintInputTimer = null;
 const COACH_HINT_COOLDOWN_MS = 240000; // ≥4 min between contextual tips
 const COACH_HINT_SEEN = new Set();     // tip keys shown this session
 
+// Returns true if a tip was actually shown, false otherwise. Callers use the
+// boolean to stop a priority chain at the first tip that fires.
 function showCoachContextHint(text, key) {
   const now = Date.now();
-  if (now - _coachHintLastAt < COACH_HINT_COOLDOWN_MS) return;
-  if (key && COACH_HINT_SEEN.has(key)) return;
-  if (!coachFabIsVisible() || isCoachThreadId(_conversationId)) return;
+  if (now - _coachHintLastAt < COACH_HINT_COOLDOWN_MS) return false;
+  if (key && COACH_HINT_SEEN.has(key)) return false;
+  if (!coachFabIsVisible() || isCoachThreadId(_conversationId)) return false;
   _coachHintLastAt = now;
   if (key) COACH_HINT_SEEN.add(key);
   showCoachFabPill(text, { visibleMs: COACH_HINT_VISIBLE_MS, contextual: true });
+  return true;
 }
 
-// Arabic typed without harakat (تشكيل) → suggest adding them for a sharper
-// accent. Harakat range: \u064B-\u0652 (tanwin/fatha/kasra/damma/sukoon/shadda)
-// plus superscript alef \u0670. Pure local heuristic.
-// IMPORTANT: this fires on BLUR (not while typing), because the orb + pill live
-// at the bottom of the screen and would be hidden behind the keyboard mid-type.
-// We also bail if a text field is still focused (e.g. the user just hopped from
-// Style to Lyrics) so the keyboard-down case is the only one that shows.
-function evaluateCreateArabicHint({ ignoreFocus = false } = {}) {
+// Contextual Create-screen tips, checked in PRIORITY ORDER — the first one that
+// qualifies (and isn't on cooldown / already seen) shows, the rest are skipped.
+// Everything here is a pure local heuristic reading the Create fields; nothing
+// the user typed is ever transmitted.
+// IMPORTANT: this fires on BLUR / keyboard-close (not while typing), because the
+// orb + pill live at the bottom of the screen and would be hidden behind the
+// keyboard mid-type. We also bail if a text field is still focused (e.g. the
+// user just hopped from Style to Lyrics) so the keyboard-down case is the only
+// one that shows.
+function evaluateCreateHints({ ignoreFocus = false } = {}) {
   if (document.body.getAttribute("data-route") !== "generate") return;
   const ae = document.activeElement;
-  // Skip when another text field is still focused (e.g. hopping Style→Lyrics) so
-  // we don't pop the pill mid-edit. The keyboard-close path passes ignoreFocus
-  // because we already know the keyboard (and any focus) is going away.
   if (!ignoreFocus && ae && (ae.tagName === "TEXTAREA" || ae.tagName === "INPUT")) return;
-  const text = `${els.sunoStyle?.value || ""}\n${els.sunoPrompt?.value || ""}`;
-  if (!textHasArabicScript(text)) return;
-  if (/[\u064B-\u0652\u0670]/.test(text)) return; // already has harakat
-  const arabicLetters = (text.match(/[\u0621-\u064A]/g) || []).length;
-  if (arabicLetters < 6) return; // ignore a stray character
-  showCoachContextHint("أضِف التشكيل (الحركات) للهجة أوضح 🎵", "ar-harakat");
+
+  const style = String(els.sunoStyle?.value || "");
+  const lyrics = String(els.sunoPrompt?.value || "");
+  const combined = `${style}\n${lyrics}`;
+  const hasArabic = textHasArabicScript(combined);
+  const arabicLetters = (combined.match(/[\u0621-\u064A]/g) || []).length;
+  const pick = (ar, en) => (hasArabic ? ar : en);
+
+  // 1) Arabic without harakat → accent tip. Harakat range \u064B-\u0652 (tanwin/
+  //    fatha/kasra/damma/sukoon/shadda) + superscript alef \u0670.
+  if (hasArabic && arabicLetters >= 6 && !/[\u064B-\u0652\u0670]/.test(combined)) {
+    if (showCoachContextHint("أضِف التشكيل (الحركات) للهجة أوضح 🎵", "ar-harakat")) return;
+  }
+
+  // 2) Arabic lyrics but Dialect still on Auto → suggest a dialect for an
+  //    authentic accent. Only when the dialect picker is actually available.
+  const dialectPickerOpen = !!els.lyricsDialectGroup && !els.lyricsDialectGroup.hidden;
+  if (hasArabic && arabicLetters >= 6 && dialectPickerOpen && lyricsDialect === "auto") {
+    if (showCoachContextHint("اختر لهجة (لبناني، مصري، خليجي…) لنطق أوضح 🎤", "ar-dialect")) return;
+  }
+
+  // 3) Style tags: empty (with lyrics written) → Boost; only one tag → add more.
+  const tags = style.split(",").map((s) => s.trim()).filter(Boolean);
+  if (lyrics.trim() && tags.length === 0) {
+    if (showCoachContextHint(
+      pick("اكتب وسم ستايل أو اضغط ✦ لتوليد الوسوم ✨", "Add a style tag, or tap ✦ to generate them ✨"),
+      "style-empty",
+    )) return;
+  } else if (tags.length === 1) {
+    if (showCoachContextHint(
+      pick("أضِف وسمين أو ٣ للستايل لصوت أوضح ✨", "Add 2–3 style tags for a sharper sound ✨"),
+      "style-tags",
+    )) return;
+  }
+
+  // 4) A saved Persona exists but isn't selected → sing it in your own voice.
+  try {
+    if (loadPersonas().length > 0 && !getActivePersonaId()) {
+      if (showCoachContextHint(
+        pick("لديك بصمة صوتية — اخترها لتغنّي بصوتك 🎤", "Pick your Persona to sing it in your own voice 🎤"),
+        "persona-pick",
+      )) return;
+    }
+  } catch {}
+
+  // 5) One long block of lyrics with no section markers → structure tip.
+  const body = lyrics.trim();
+  if (body.length > 250 && !/\[(verse|chorus|bridge|intro|outro|hook|pre-chorus|كوبليه|لازمة|مقطع)\b/i.test(body)) {
+    const lineBreaks = (body.match(/\n/g) || []).length;
+    if (lineBreaks < 4) {
+      if (showCoachContextHint(
+        pick("قسّم الكلمات إلى مقاطع (كوبليه/لازمة) لنتيجة أقوى 🎵", "Split lyrics into verse / chorus for a stronger song 🎵"),
+        "lyrics-structure",
+      )) return;
+    }
+  }
 }
-function scheduleCreateArabicHint() {
+function scheduleCreateHints() {
   if (_coachHintInputTimer) clearTimeout(_coachHintInputTimer);
   // Give the keyboard time to animate down after blur before we check.
   _coachHintInputTimer = setTimeout(() => {
-    try { evaluateCreateArabicHint(); } catch {}
+    try { evaluateCreateHints(); } catch {}
   }, 480);
 }
 
@@ -45631,15 +45683,15 @@ function scheduleCreateArabicHint() {
   const fab = document.getElementById("coachFab");
   if (fab) fab.addEventListener("click", () => openNabadCoach());
   try { scheduleCoachFabNudge(); } catch {}
-  // Watch the Create fields locally for the Arabic-harakat tip. Fire on blur so
+  // Watch the Create fields locally for the contextual tips. Fire on blur so
   // the orb pill isn't trapped behind the on-screen keyboard.
-  els.sunoStyle?.addEventListener("blur", scheduleCreateArabicHint);
-  els.sunoPrompt?.addEventListener("blur", scheduleCreateArabicHint);
+  els.sunoStyle?.addEventListener("blur", scheduleCreateHints);
+  els.sunoPrompt?.addEventListener("blur", scheduleCreateHints);
 
   // The most reliable signal that the orb is actually visible is the on-screen
   // keyboard closing — that's exactly when the bottom-anchored pill stops being
   // hidden. visualViewport fires in both the native WKWebView and mobile web,
-  // so re-check the Arabic hint on the open→closed transition.
+  // so re-check the contextual tips on the open→closed transition.
   const vv = window.visualViewport;
   if (vv) {
     let kbWasOpen = false;
@@ -45647,7 +45699,7 @@ function scheduleCreateArabicHint() {
       const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
       const open = inset > 90;
       if (kbWasOpen && !open) {
-        setTimeout(() => { try { evaluateCreateArabicHint({ ignoreFocus: true }); } catch {} }, 160);
+        setTimeout(() => { try { evaluateCreateHints({ ignoreFocus: true }); } catch {} }, 160);
       }
       kbWasOpen = open;
     });

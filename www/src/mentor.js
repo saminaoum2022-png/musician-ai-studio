@@ -202,57 +202,182 @@ function guessVoiceArchetype(p5, p50, p95, ref) {
 
 
 /**
- * 12-TET scale-degree sets (semitones from tonic). Real Arabic intonation uses
- * quarter tones — this is a keyboard-style guess for learning prompts only.
+ * 12-TET scale-degree sets (semitones from tonic) plus the characteristic lower
+ * "jins" degrees that actually distinguish each maqam. Real Arabic intonation
+ * uses quarter tones — this is a keyboard-style estimate for practice prompts,
+ * not a full maqam analysis. `mult` lets us de-bias modes that over-match a
+ * plain pitch-class overlap (notably Sikah, which used to win on any neutral
+ * third / quarter-tone-ish note even without real Sikah tonic behavior).
  */
 const MAQAM_CATALOG = [
-  { id: "kurd", name: "Kurd", degrees: [0, 1, 3, 5, 7, 8, 10] },
-  { id: "hijaz", name: "Hijaz", degrees: [0, 1, 4, 5, 7, 8, 11] },
-  { id: "nahawand", name: "Nahawand", degrees: [0, 2, 3, 5, 7, 8, 10] },
-  { id: "rast", name: "Rast", degrees: [0, 2, 4, 5, 7, 9, 10] },
-  { id: "bayati", name: "Bayati", degrees: [0, 3, 5, 6, 7, 9, 10] },
-  { id: "sikah", name: "Sikah (approx.)", degrees: [0, 4, 5, 7, 9, 10, 11] },
-  { id: "ajam", name: "‘Ajam", degrees: [0, 2, 4, 5, 7, 9, 11] },
-  { id: "saba", name: "Saba", degrees: [0, 3, 5, 6, 7, 10, 11] },
+  { id: "ajam", name: "‘Ajam", degrees: [0, 2, 4, 5, 7, 9, 11], jins: [0, 2, 4], mult: 1.0 },
+  { id: "rast", name: "Rast", degrees: [0, 2, 4, 5, 7, 9, 10], jins: [0, 2, 4, 5], mult: 1.0 },
+  { id: "nahawand", name: "Nahawand", degrees: [0, 2, 3, 5, 7, 8, 10], jins: [0, 2, 3, 7], mult: 1.0 },
+  { id: "bayati", name: "Bayati", degrees: [0, 2, 3, 5, 7, 8, 10], jins: [0, 2, 3, 5], mult: 1.0 },
+  { id: "kurd", name: "Kurd", degrees: [0, 1, 3, 5, 7, 8, 10], jins: [0, 1, 3], mult: 1.0 },
+  { id: "hijaz", name: "Hijaz", degrees: [0, 1, 4, 5, 7, 8, 10], jins: [0, 1, 4], mult: 1.05 },
+  { id: "saba", name: "Saba", degrees: [0, 2, 3, 4, 7, 8, 10], jins: [0, 2, 3, 4], mult: 1.0 },
+  // Sikah: narrower template + a base de-bias. It only ranks high when its
+  // tonic is clearly the most-sung note AND its characteristic jins is present.
+  { id: "sikah", name: "Sikah", degrees: [0, 2, 4, 5, 7, 9, 11], jins: [0, 2, 4], mult: 0.78 },
 ];
 
-function pitchClassHistogram(voiced) {
-  const h = new Array(12).fill(0);
-  for (const m of voiced) {
-    const pc = ((Math.round(m) % 12) + 12) % 12;
-    h[pc] += 1;
-  }
-  const s = h.reduce((a, b) => a + b, 0) || 1;
-  return h.map((x) => x / s);
+const PC_LETTERS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+function pcOf(m) {
+  return ((Math.round(m) % 12) + 12) % 12;
+}
+function pcLetter(pc) {
+  return PC_LETTERS[((pc % 12) + 12) % 12];
+}
+function clamp01(x) {
+  return x < 0 ? 0 : x > 1 ? 1 : x;
+}
+function medianOf(arr) {
+  if (!arr.length) return NaN;
+  const s = [...arr].sort((a, b) => a - b);
+  const mid = s.length >> 1;
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
-function scoreMaqamGuess(hist) {
-  const all = [];
-  for (const m of MAQAM_CATALOG) {
-    for (let tonicPc = 0; tonicPc < 12; tonicPc++) {
-      const on = new Set(m.degrees.map((d) => (tonicPc + d) % 12));
-      let onScale = 0;
-      let offScale = 0;
-      for (let j = 0; j < 12; j++) {
-        if (on.has(j)) onScale += hist[j];
-        else offScale += hist[j];
-      }
-      const score = onScale - 0.33 * offScale;
-      all.push({ score, id: m.id, name: m.name, tonicPc, degrees: [...m.degrees] });
-    }
+/**
+ * Group the raw per-frame pitch track into SUSTAINED notes. A stable note is a
+ * run of consecutive voiced frames that stays within a small cents window;
+ * runs shorter than ~90ms are dropped. This is what lets us ignore breath
+ * (unvoiced gaps), quick ornaments / grace notes, and short unstable jumps —
+ * we analyze only the parts the singer actually held.
+ */
+function extractStableNotes(f0s, sampleRate, hop) {
+  const frameMs = (hop / sampleRate) * 1000;
+  const minFrames = Math.max(4, Math.round(90 / frameMs)); // ≈90ms held
+  const tolCents = 55; // same-note band (< a semitone)
+  const notes = [];
+  let run = [];
+  const flush = () => {
+    if (run.length >= minFrames) notes.push({ midi: medianOf(run), frames: run.length });
+    run = [];
+  };
+  for (const m of f0s) {
+    if (!Number.isFinite(m)) { flush(); continue; }
+    if (!run.length) { run.push(m); continue; }
+    const ref = run.length > 6 ? medianOf(run) : run[run.length - 1];
+    if (Math.abs(m - ref) * 100 <= tolCents) run.push(m);
+    else { flush(); run.push(m); }
   }
-  all.sort((a, b) => b.score - a.score);
-  const best = all[0];
-  const second = all.find((x) => x.id !== best.id) || { name: "", score: 0 };
-  const ambiguous = second.score > 0 && best.score > 0 && second.score / best.score > 0.92;
+  flush();
+  return notes;
+}
+
+/**
+ * Ranking-based maqam scoring. Builds a duration-weighted pitch-class profile
+ * from the stable notes, detects likely tonics, normalizes every note into an
+ * interval relative to each candidate tonic, then scores ALL maqamat and
+ * returns the top matches with confidence percentages (no single forced guess).
+ */
+function rankMaqams(stableNotes) {
+  const fallback = {
+    isUncertain: true,
+    state: "uncertain",
+    kindLabel: "Uncertain",
+    primaryMaqam: "—",
+    primaryId: "",
+    confidence: 0,
+    alternatives: [],
+    top3: [],
+    detectedTonicPc: 0,
+    detectedTonicName: "—",
+    analysisNotes:
+      "Not enough sustained, stable notes to read a maqam — try a slower 10–15s phrase on open vowels (ah / ee).",
+    degrees: [0, 2, 4, 5, 7, 9, 11],
+    tonicPc: 0,
+    stableCount: stableNotes.length,
+  };
+  if (stableNotes.length < 3) return fallback;
+
+  // Duration-weighted pitch-class profile (held longer = weighs more).
+  const hist = new Array(12).fill(0);
+  for (const n of stableNotes) hist[pcOf(n.midi)] += n.frames;
+  const total = hist.reduce((a, b) => a + b, 0) || 1;
+  const histN = hist.map((x) => x / total);
+  const maxH = Math.max(...histN) || 1;
+
+  // Tonic detection: most-sung note, nudged by the phrase's final note and its
+  // lowest sustained note (both common resting points for the tonic).
+  const lastPc = pcOf(stableNotes[stableNotes.length - 1].midi);
+  const lowPc = pcOf(stableNotes.reduce((lo, n) => (n.midi < lo.midi ? n : lo), stableNotes[0]).midi);
+  const tonicScore = (pc) => histN[pc] + (pc === lastPc ? 0.18 : 0) + (pc === lowPc ? 0.1 : 0);
+  const tonicCands = Array.from({ length: 12 }, (_, pc) => pc)
+    .filter((pc) => histN[pc] > 0)
+    .sort((a, b) => tonicScore(b) - tonicScore(a))
+    .slice(0, 3);
+
+  const scoreFor = (tonic) =>
+    MAQAM_CATALOG.map((m) => {
+      const deg = new Set(m.degrees);
+      let on = 0;
+      for (let pc = 0; pc < 12; pc++) {
+        const rel = (pc - tonic + 12) % 12;
+        if (deg.has(rel)) on += histN[pc];
+      }
+      const base = clamp01(1.6 * on - 0.6); // ~0.8+ on-scale energy → strong
+      const jinsCov = m.jins.filter((d) => histN[(tonic + d) % 12] > 0.03).length / m.jins.length;
+      // How much the tonic dominates vs a flat 12-note spread (flat singing /
+      // noise → ~0, so it lands in "Uncertain" instead of a confident guess).
+      const tonicStr = clamp01((histN[tonic] * 12 - 1) / 3);
+      let fit = clamp01(0.45 * base + 0.2 * jinsCov + 0.35 * tonicStr);
+      let mult = m.mult;
+      // Sikah only counts when its tonic genuinely dominates and its jins is fully present.
+      if (m.id === "sikah" && !(tonicStr >= 0.6 && jinsCov >= 0.999)) mult *= 0.55;
+      return { id: m.id, maqam: m.name, conf: Math.round(100 * clamp01(fit * mult)), tonic, degrees: [...m.degrees] };
+    }).sort((a, b) => b.conf - a.conf);
+
+  let best = null;
+  for (const tonic of tonicCands) {
+    const scored = scoreFor(tonic);
+    if (!best || scored[0].conf > best.scored[0].conf) best = { tonic, scored };
+  }
+
+  const ranked = best.scored;
+  const top = ranked[0];
+  const second = ranked[1] || { conf: 0, maqam: "" };
+  const third = ranked[2] || { conf: 0, maqam: "" };
+  const gap = top.conf - second.conf;
+  const isUncertain = top.conf < 45;
+  let state;
+  let kindLabel;
+  if (isUncertain) { state = "uncertain"; kindLabel = "Uncertain"; }
+  else if (gap < 6) { state = "possible"; kindLabel = "Possible Maqam"; }
+  else if (top.conf >= 70 && gap >= 10) { state = "confident"; kindLabel = "Maqam"; }
+  else { state = "likely"; kindLabel = "Likely Maqam"; }
+
+  const tonicName = pcLetter(best.tonic);
+  const alternatives = [second, third]
+    .filter((x) => x && x.maqam)
+    .map((x) => ({ maqam: x.maqam, id: x.id, confidence: x.conf }));
+
+  let analysisNotes;
+  if (isUncertain) {
+    analysisNotes = `The phrase didn’t settle on one maqam — closest reads are ${top.maqam}, ${second.maqam || "—"} and ${third.maqam || "—"}. A slower, more resolved 10–15s line helps.`;
+  } else if (state === "possible") {
+    analysisNotes = `${top.maqam} and ${second.maqam} scored very close on this phrase — treat it as a possibility, not a final call.`;
+  } else {
+    analysisNotes = `Stable notes and interval movement around tonic ${tonicName} suggest ${top.maqam} more strongly than ${second.maqam || "the alternatives"}.`;
+  }
+
   return {
-    id: best.id,
-    name: best.name,
-    tonicPc: best.tonicPc,
-    degrees: best.degrees,
-    score: best.score,
-    secondName: second.name || "",
-    ambiguous,
+    isUncertain,
+    state,
+    kindLabel,
+    primaryMaqam: top.maqam,
+    primaryId: top.id,
+    confidence: top.conf,
+    alternatives,
+    top3: ranked.slice(0, 3).map((x) => ({ maqam: x.maqam, id: x.id, confidence: x.conf })),
+    detectedTonicPc: best.tonic,
+    detectedTonicName: tonicName,
+    analysisNotes,
+    degrees: top.degrees,
+    tonicPc: best.tonic,
+    stableCount: stableNotes.length,
   };
 }
 
@@ -499,22 +624,24 @@ function analyzeBuffer(full, sampleRate) {
 
   const voiceRef = getMentorVoiceRef();
   const voice = guessVoiceArchetype(p5, p50, p95, voiceRef);
-  const hist = pitchClassHistogram(voiced);
-  const maqam = scoreMaqamGuess(hist);
-  const tonicName = pitchClassSolfege(maqam.tonicPc);
-  const rootMidi = alignRootMidi(p50, maqam.tonicPc);
-  const tune = intonationVsMaqam(voiced, rootMidi, maqam.degrees);
+  // Maqam: analyze only the sustained, held notes (stable-note extraction drops
+  // breath, ornaments, and short unstable jumps), then rank all candidates.
+  const stableNotes = extractStableNotes(f0s, sampleRate, hop);
+  const maqamRanking = rankMaqams(stableNotes);
+  const rootMidi = alignRootMidi(p50, maqamRanking.tonicPc);
+  const tune = intonationVsMaqam(voiced, rootMidi, maqamRanking.degrees);
   const genreLine = recommendGenres({
-    maqamId: maqam.id,
+    maqamId: maqamRanking.primaryId,
     voiceTitle: voice.title,
     p95,
     brightMean,
     voiceRef,
   });
 
-  let maqamBody = `Heuristic fit: ${maqam.name} on tonic ${tonicName} using a 12-note keyboard map — quarter tones & full ajnas are not modeled.`;
-  if (maqam.secondName) maqamBody += ` Second guess: ${maqam.secondName}.`;
-  if (maqam.ambiguous) maqamBody += " Several maqamat scored similarly — clearer phrases help disambiguate.";
+  const maqamTitle = maqamRanking.isUncertain
+    ? "Uncertain"
+    : `${maqamRanking.primaryMaqam} · ${maqamRanking.confidence}%`;
+  const maqamMeta = `Tonic ~${maqamRanking.detectedTonicName} · ranked from ${maqamRanking.stableCount} sustained notes (12-TET estimate)`;
 
   return {
     ok: true,
@@ -542,12 +669,13 @@ function analyzeBuffer(full, sampleRate) {
     voiceTitle: voice.title,
     voiceBody: voice.body,
     voiceMeta: voice.meta,
-    maqamTitle: `${maqam.name} on ${tonicName}`,
-    maqamBody,
-    maqamMeta: "Pitch-class histogram vs maqam templates (educational only)",
-    maqamId: maqam.id,
-    maqamTonicPc: maqam.tonicPc,
-    maqamDegrees: [...maqam.degrees],
+    maqamTitle,
+    maqamBody: maqamRanking.analysisNotes,
+    maqamMeta,
+    maqamRanking,
+    maqamId: maqamRanking.primaryId,
+    maqamTonicPc: maqamRanking.tonicPc,
+    maqamDegrees: [...maqamRanking.degrees],
     genreTitle: "Genres that may fit",
     genreBody: genreLine,
     tuneTitle: tune.title,
@@ -605,6 +733,47 @@ function renderMaqamDiagram(tonicPc, degrees) {
   el.innerHTML = html;
 }
 
+function escMaqam(s) {
+  return String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
+  );
+}
+
+/** Render the ranked maqam result card (primary + alternatives with bars). */
+function renderMaqamRanking(r) {
+  const el = document.getElementById("mentorMaqamRanking");
+  if (!el) return;
+  if (!r || !r.primaryMaqam || r.primaryMaqam === "—") {
+    el.innerHTML =
+      '<div class="mmqPrimary mmqUncertain"><div class="mmqPrimaryHead"><span class="mmqKind">Uncertain</span><span class="mmqName mmqNameMuted">No clear maqam</span></div></div>';
+    return;
+  }
+  const conf = Math.max(0, Math.min(100, Number(r.confidence) || 0));
+  const uncertain = !!r.isUncertain;
+  const nameCls = uncertain ? "mmqName mmqNameMuted" : "mmqName";
+  const alts = Array.isArray(r.alternatives) ? r.alternatives : [];
+  const altRows = alts
+    .map(
+      (a) => `<div class="mmqAltRow">
+        <span class="mmqAltName">${escMaqam(a.maqam)}</span>
+        <span class="mmqAltBar"><i style="width:${Math.max(4, Math.min(100, Number(a.confidence) || 0))}%"></i></span>
+        <span class="mmqAltConf">${Math.max(0, Math.min(100, Number(a.confidence) || 0))}%</span>
+      </div>`,
+    )
+    .join("");
+  el.innerHTML = `<div class="mmqPrimary${uncertain ? " mmqUncertain" : ""}" data-state="${escMaqam(r.state)}">
+      <div class="mmqPrimaryHead">
+        <span class="mmqKind">${escMaqam(r.kindLabel)}</span>
+        <span class="${nameCls}">${escMaqam(r.primaryMaqam)}</span>
+      </div>
+      <div class="mmqConfRow">
+        <span class="mmqConfPct">${conf}%</span>
+        <span class="mmqConfBar"><i style="width:${Math.max(4, conf)}%"></i></span>
+      </div>
+    </div>
+    ${alts.length ? `<div class="mmqAlts"><span class="mmqAltsTitle">Other possibilities</span>${altRows}</div>` : ""}`;
+}
+
 function showResults(on) {
   const wrap = document.getElementById("mentorResults");
   const main = document.getElementById("mentorLabMain");
@@ -641,6 +810,8 @@ export function resetMentorSession() {
   setText("mentorCardMaqamTitle", "Maqam guess");
   setText("mentorCardMaqamBody", "");
   setText("mentorCardMaqamMeta", "");
+  const maqamRankEl = document.getElementById("mentorMaqamRanking");
+  if (maqamRankEl) maqamRankEl.innerHTML = "";
   setText("mentorCardGenreTitle", "Genres that may fit");
   setText("mentorCardGenreBody", "");
   setText("mentorCardTuneTitle", "Intonation");
@@ -808,6 +979,7 @@ async function finalizeMentorRecording(chunks, mimeTypeHint, recordSession) {
       setText("mentorCardMaqamTitle", res.maqamTitle);
       setText("mentorCardMaqamBody", res.maqamBody);
       setText("mentorCardMaqamMeta", res.maqamMeta);
+      renderMaqamRanking(res.maqamRanking);
       renderMaqamDiagram(res.maqamTonicPc, res.maqamDegrees);
       const hero = document.querySelector("[data-mentor-hero]");
       if (hero) hero.style.setProperty("--mentor-mood-hue", String(hueFromMaqamId(res.maqamId)));

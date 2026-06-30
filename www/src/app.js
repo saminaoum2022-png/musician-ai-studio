@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260630-173442";
+const APP_BUILD = "20260630-225432";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -26001,6 +26001,7 @@ function notificationIconForType(type) {
   if (t === "play_milestone") return "▶";
   if (t === "chart_rank") return "★";
   if (t === "public_song") return "P";
+  if (t === "song_live") return "♪";
   return "•";
 }
 
@@ -26026,6 +26027,9 @@ function activityTypeBadgeSvg(type) {
   }
   if (t === "social_repost") {
     return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M17 1l4 4-4 4V6H9a4 4 0 0 0-4 4v1H3v-1a6 6 0 0 1 6-6h8V1ZM7 23l-4-4 4-4v3h8a4 4 0 0 0 4-4v-1h2v1a6 6 0 0 1-6 6H7v3Z"/></svg>`;
+  }
+  if (t === "song_live") {
+    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z"/></svg>`;
   }
   return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M20 12v5H4v-5H2v7h20v-7h-2Zm-6 .5-7-4v8l7-4ZM4 9h16V4H4v5Z"/></svg>`;
 }
@@ -26100,6 +26104,14 @@ function notificationMessage(n) {
       title: username ? `@${username} published a song` : "A creator published a song",
       body: title,
       action: username ? "View profile" : "",
+    };
+  }
+  if (n?.type === "song_live") {
+    const title = String(n?.metadata?.song_title || "Your song").trim();
+    return {
+      title: `“${title}” is live on Discover`,
+      body: "Saved permanently and published — listeners can find and play it.",
+      action: "",
     };
   }
   if (n?.type === "social_like") {
@@ -26251,7 +26263,7 @@ function activityDayLabel(bucket) {
 function activityNotificationMatchesFilter(n, tab = _activityFilterTab) {
   if (tab === "all") return true;
   const t = String(n?.type || "").trim();
-  if (tab === "achievements") return t === "chart_rank" || t === "play_milestone";
+  if (tab === "achievements") return t === "chart_rank" || t === "play_milestone" || t === "song_live";
   if (tab === "social") {
     return ["follow", "remix", "social_like", "social_reply", "social_repost", "public_song", "song_feedback"].includes(t);
   }
@@ -26282,7 +26294,7 @@ function activityActorAvatarHtml(n, cls) {
 /** Milestone rows are about your songs — lead with cover art, not a blank silhouette. */
 function activityRowUsesSongLeadVisual(n) {
   const t = String(n?.type || "").trim();
-  return t === "chart_rank" || t === "play_milestone";
+  return t === "chart_rank" || t === "play_milestone" || t === "song_live";
 }
 
 function activityNotificationShowRightCover(n) {
@@ -26572,6 +26584,7 @@ function notificationActivityHref(n) {
 
   if (t === "play_milestone" && songId) return `#/player?track=${encodeURIComponent(songId)}`;
   if (t === "chart_rank" && songId) return `#/player?track=${encodeURIComponent(songId)}`;
+  if (t === "song_live" && songId) return `#/player?track=${encodeURIComponent(songId)}`;
   if (t === "song_feedback" && songId) return `#/player?track=${encodeURIComponent(songId)}`;
   if (t === "remix") {
     const remixSongId = String(meta.remix_song_id || meta.song_id || "").trim();
@@ -26722,6 +26735,14 @@ function activityItemDisplayParts(n, msg) {
       category: "Milestone",
       title,
       description: count ? `${formatStatCount(count)} plays and counting` : "Your song is picking up steam",
+    };
+  }
+  if (t === "song_live") {
+    const title = String(meta.song_title || "Your song").trim();
+    return {
+      category: "Published",
+      title: `${title} is live`,
+      description: "Saved permanently and published — listeners can find and play it on Discover.",
     };
   }
   if (t === "social_like") {
@@ -31503,6 +31524,28 @@ try {
   };
 } catch {}
 
+/** Re-kick any publishes that were interrupted (app closed / crashed) while a
+ *  song was still in the optimistic "Publishing…" state. Runs once after the
+ *  library hydrates on launch. Guards against double-runs within a session. */
+const _resumedPublishIds = new Set();
+function resumePendingPublishes() {
+  if (!authSession?.user?.id) return;
+  const items = loadLibrary();
+  for (const t of items) {
+    if (!t || !t.publishPending || t.publicOnProfile) continue;
+    const id = String(t.id || "").trim();
+    if (!id || _resumedPublishIds.has(id)) continue;
+    _resumedPublishIds.add(id);
+    const o = t.publishOpts || {};
+    void setLibraryTrackPublicOnProfile(id, true, {
+      _background: true,
+      releaseCaption: o.releaseCaption || "",
+      allowRemix: o.allowRemix !== false,
+      allowMashup: o.allowMashup !== false,
+    });
+  }
+}
+
 async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
   const id = String(trackId || "").trim();
   if (!authSession?.user?.id) {
@@ -31513,11 +31556,84 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
   let idx = items.findIndex((x) => String(x.id) === id);
   if (idx < 0) return { ok: false };
   let track = items[idx];
+
+  // Optimistic publishing. A brand-new song must have its audio copied into our
+  // own permanent storage before going public (can take several seconds), so
+  // instead of blocking the user we flip it into an owner-only "Publishing…"
+  // state right now and finish in the background, notifying when it's actually
+  // live. Songs already archived skip this and publish straight through. The
+  // `_background` re-entry runs the real (blocking) work without re-queuing.
+  if (wantPublic && !opts._background) {
+    if (track.publishPending) return { ok: true, pending: true }; // already cooking
+    const needsArchive = String(track.url || "").trim() && !isArchivedSongStorageUrl(track.url);
+    if (needsArchive) {
+      setTrackPublishState(id, {
+        publishPending: true,
+        publishPhase: "archiving",
+        publishOpts: {
+          releaseCaption: String(opts?.releaseCaption || "").trim(),
+          allowRemix: opts?.allowRemix !== false,
+          allowMashup: opts?.allowMashup !== false,
+        },
+      });
+      try { refreshOwnSongsUi(); } catch {}
+      showToast(
+        `Publishing “${String(track.title || "your song").trim()}” — we'll let you know when it's live.`,
+        { durationMs: 3200 },
+      );
+      void setLibraryTrackPublicOnProfile(id, true, { ...opts, _background: true });
+      return { ok: true, pending: true };
+    }
+  }
+
   if (wantPublic) {
     await persistTrackCoverIfNeeded(track);
     items = loadLibrary();
     idx = items.findIndex((x) => String(x.id) === id);
     if (idx >= 0) track = items[idx];
+
+    // Publishing MUST be permanent. Copy the audio into our own storage before
+    // the song goes public — otherwise the public row points at an upstream URL
+    // that expires (~15 days) and then breaks for every listener, with no heal
+    // path on Discover. (Mirrors the stricter shareToHub behavior.) Retry a few
+    // times for flaky networks; if it still can't be made permanent, block the
+    // publish and tell the user rather than shipping a song that will die.
+    if (String(track.url || "").trim() && !isArchivedSongStorageUrl(track.url)) {
+      if (!opts._background) showToast("Saving your song permanently…", { durationMs: 2200 });
+      let permanent = null;
+      for (let attempt = 0; attempt < 3 && !permanent; attempt++) {
+        try {
+          permanent = await archiveLibraryTrackToCloud(track);
+        } catch {
+          permanent = null;
+        }
+        if (!permanent && attempt < 2) {
+          await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
+        }
+      }
+      items = loadLibrary();
+      idx = items.findIndex((x) => String(x.id) === id);
+      if (idx >= 0) track = items[idx];
+      if (!permanent && !isArchivedSongStorageUrl(track.url)) {
+        // Couldn't make it permanent — drop the optimistic state, leave it
+        // private, and tell the user to retry rather than ship a song that dies.
+        setTrackPublishState(id, { publishPending: false, publishPhase: "", publishOpts: null });
+        try { refreshOwnSongsUi(); } catch {}
+        showToast(
+          "Couldn’t publish — your song isn’t saved permanently yet. Check your connection and tap Publish to retry.",
+          { durationMs: 5600 },
+        );
+        return { ok: false };
+      }
+      // Archived OK — flip the shimmer label to the "going live" phase.
+      if (track.publishPending) {
+        setTrackPublishState(id, { publishPhase: "going_live" });
+        try { refreshOwnSongsUi(); } catch {}
+        items = loadLibrary();
+        idx = items.findIndex((x) => String(x.id) === id);
+        if (idx >= 0) track = items[idx];
+      }
+    }
   }
   const wasPublic = Boolean(track.publicOnProfile);
   const willBePublic = Boolean(wantPublic);
@@ -31563,6 +31679,10 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     refreshOwnSongsUi();
   } catch {}
   if (!String(track.url || "").trim()) {
+    if (track.publishPending) {
+      setTrackPublishState(id, { publishPending: false, publishPhase: "", publishOpts: null });
+      try { refreshOwnSongsUi(); } catch {}
+    }
     showToast("This track has no audio URL yet — try again after it finishes saving.");
     return { ok: false };
   }
@@ -31579,6 +31699,10 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     reason: patch && patch.ok === false ? String(patch.reason || "") : "",
   });
   if (patch && patch.ok === false && patch.reason && patch.reason !== "noop") {
+    if (track.publishPending) {
+      setTrackPublishState(id, { publishPending: false, publishPhase: "", publishOpts: null });
+      try { refreshOwnSongsUi(); } catch {}
+    }
     const det = String(patch.details || "").trim();
     showToast(cloudSyncFailureMessage(det, { action: "publish" }), { durationMs: 5200 });
     return { ok: false };
@@ -31668,10 +31792,16 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
       }
     })();
   }
+  const wasPendingPublish = Boolean(track.publishPending);
+  if (wasPendingPublish) {
+    setTrackPublishState(id, { publishPending: false, publishPhase: "", publishOpts: null });
+    try { refreshOwnSongsUi(); } catch {}
+  }
   showToast(
     next.publicOnProfile
-      ? "On Discover — listeners can find and play it."
+      ? `🎵 “${String(next.title || "Your song").trim()}” is live on Discover.`
       : "Removed from Discover. Still in All songs.",
+    next.publicOnProfile ? { durationMs: 3600 } : undefined,
   );
   invalidateOwnerPublicPostsCache();
   void refreshOwnerPublicPostsCache({ force: true });
@@ -31807,7 +31937,12 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   miniSource = publicSource;
   resetPublicPlayTracking(miniSource);
   libraryNowPlayingId = null;
-  if (refreshCandidate && !fromDiscover && !fromPlaylist && !fromUserPlaylist) {
+  // Heal expired upstream links for EVERY surface that has a taskId — including
+  // Discover, playlists and other users' songs. Without this, a published song
+  // whose link expired breaks silently for listeners with no recovery. The inner
+  // guard only swaps the URL when playback is actually paused/errored, so this
+  // never interrupts a song that is already playing fine.
+  if (refreshCandidate) {
     const bgSource = publicSource;
     void (async () => {
       try {
@@ -37056,6 +37191,18 @@ function saveLibrary(items) {
     setStatus("Couldn't save library to this device storage. Cloud still has your songs.");
   }
 }
+/** Update transient local-only fields on a library row WITHOUT bumping `ts`
+ *  (so the card doesn't reorder) and WITHOUT a cloud sync. Used for the
+ *  optimistic "Publishing…" state. Caller decides when to refreshOwnSongsUi(). */
+function setTrackPublishState(id, fields) {
+  if (!id) return;
+  const items = loadLibrary();
+  const idx = items.findIndex((x) => String(x.id) === String(id));
+  if (idx < 0) return;
+  items[idx] = { ...items[idx], ...fields };
+  saveLibrary(items);
+}
+
 function patchLibraryTrack(id, patch) {
   if (!id) return;
   const items = loadLibrary();
@@ -37258,6 +37405,7 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
   saveLibrary(mergedDeduped);
   backfillNabadVerificationInLibrary();
   refreshOwnSongsUi();
+  try { resumePendingPublishes(); } catch {}
 
   if (!mergedDeduped.length) return;
 
@@ -38058,6 +38206,15 @@ function libRowProfileVisChipHtml(isPublic) {
   return `<span class="libRowChip libRowChipProfileVis libRowChipProfileVis--${cls}" role="img" title="${safeLabel}" aria-label="${safeLabel}">${pub ? globe : lock}</span>`;
 }
 
+/** Owner-only "Publishing…" chip shown while a song is being saved permanently
+ *  and pushed live in the background. Indeterminate shimmer + a phase label
+ *  (honest — the permanent-copy step has no real byte progress to report). */
+function libRowPublishingChipHtml(phase) {
+  const label = String(phase) === "going_live" ? "Going live…" : "Saving audio…";
+  const safe = escapeHtml(label);
+  return `<span class="libRowChip libRowChipPublishing" role="status" title="${safe}" aria-label="${safe}"><span class="libRowPublishingDot" aria-hidden="true"></span>${safe}</span>`;
+}
+
 function formatLibraryDate(ts) {
   const d = new Date(Number(ts) || 0);
   if (Number.isNaN(d.getTime())) return "";
@@ -38683,7 +38840,7 @@ function renderLibrary() {
             </button>
             ${_librarySelectMode ? "" : `
             <div class="libRowActions">
-              ${libRowProfileVisChipHtml(profilePublic)}
+              ${t.publishPending ? libRowPublishingChipHtml(t.publishPhase) : libRowProfileVisChipHtml(profilePublic)}
               <button class="libRowMore" type="button" data-lib-menu="${t.id}" aria-label="More options for ${safeTitle}">⋯</button>
             </div>`}
           </li>
@@ -41657,6 +41814,13 @@ async function playInline(url, label, source) {
     if (els.btnPlayerPause) els.btnPlayerPause.disabled = false;
   } catch (e) {
     setStatus(`In-app playback failed (${e?.name || "error"}). Tap Open Direct.`);
+    // Don't fail silently on inline taps — the usual cause is an expired link.
+    try {
+      showToast("Playback failed — link may be expired. Try Open Direct.", {
+        icon: "♪",
+        durationMs: 4200,
+      });
+    } catch {}
   }
   try {
     syncDiscoveryPlayingHighlights();
@@ -42203,7 +42367,21 @@ function queueArchiveLibraryTrack(track) {
   const id = String(track?.id || "");
   if (!id || isArchivedSongStorageUrl(track?.url)) return;
   if (_songArchiveInflight.has(id)) return;
-  const job = archiveLibraryTrackToCloud(track)
+  // Retry a few times with backoff. A single swallowed failure used to leave a
+  // song permanently un-archived (its link then dies in ~15 days). Re-read the
+  // latest row each attempt so we stop early if another path already archived it.
+  const job = (async () => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const latest = loadLibrary().find((x) => String(x.id) === id) || track;
+      if (isArchivedSongStorageUrl(latest?.url)) return latest.url;
+      try {
+        const permanent = await archiveLibraryTrackToCloud(latest);
+        if (permanent) return permanent;
+      } catch {}
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+    }
+    return null;
+  })()
     .catch(() => null)
     .finally(() => {
       _songArchiveInflight.delete(id);

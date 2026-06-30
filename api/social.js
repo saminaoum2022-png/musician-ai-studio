@@ -1563,6 +1563,29 @@ async function handlePost(req, res, user) {
       songId: song.id,
       title: song.title || body?.title,
     });
+    // Self-notification: a durable Activity-feed entry telling the creator their
+    // song finished publishing and is live. No push (they're right here) and no
+    // actor — it's a system event about their own song. Deduped by song id.
+    try {
+      const sid = cleanSongId(song.id);
+      if (sid && !(await notificationExists({ userId: user.userId, type: "song_live", entityId: sid }))) {
+        await svcFetch("social_notifications", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            user_id: user.userId,
+            type: "song_live",
+            actor_user_id: null,
+            entity_id: sid,
+            metadata: {
+              song_id: sid,
+              song_title: String(song.title || body?.title || "Your song").trim().slice(0, 120),
+              song_art_url: String(song?.art_url || "").trim(),
+            },
+          }),
+        });
+      }
+    } catch {}
     return sendJson(res, 200, { ok: true, created });
   }
 

@@ -5,21 +5,23 @@ alwaysApply: false
 
 # Pre-launch reminders (Nabad)
 
-## Song lifecycle — deferred (do NOT block launch)
+## Song lifecycle — DECIDED: local-first (TikTok-style)
 
-Samy chose **not** to decide today between:
-- TikTok-style (private = phone only; cloud only on publish)
-- Current model (library syncs to Supabase; background archive to `song_archive` on save/play)
+Samy confirmed (Jun 30 2026) the final model is **local-first**. Private songs
+live only on the device they were made on; the cloud is reached **only when the
+user publishes**. (Shipped in commit `821b135` "Go local-first for songs to stop
+deleted songs resurrecting".) Not deferred anymore — treat this as the policy.
 
-**Current behavior (good enough to ship):**
-- Private songs: local library + cloud `user_songs` row; audio copied to `song_archive` when archive succeeds
-- Published: `public_on_profile` + same permanent audio URL
-- Suno CDN links ~15 days — only breaks playback if archive never ran; list row can remain
-- No Nabad-imposed 15-day delete on private songs
+**Behavior:**
+- Private songs: local library only — **NOT** inserted into `user_songs`. The audio is still archived to `song_archive` + cover saved, so the draft keeps playing locally even after the Suno CDN link expires and publishing later is instant. Because there is no cloud row, private songs do **not** sync to other devices, a reinstall/new phone won't have them, and deleting is permanent (this is what fixed the "deleted songs resurrecting" bug).
+- Published songs: publish is the **only** path that writes to the cloud (`user_songs`, `public_on_profile`) — kept permanently, sync to any signed-in device, and show on the public profile + Discover.
+- No Nabad-imposed delete on private songs.
 
-**Revisit before/at scale when:** storage cost hurts, users report lost/broken drafts, or pricing tiers need "backup all songs" vs "publish to keep".
+**Product line:** *Publish = Nabad keeps it forever and on every device. Private = only on this device; publish to keep it safe.*
 
-**Simple product line:** *Publish = Nabad keeps it forever. Private = on your device; we try to save a copy early.*
+**Coach alignment:** `api/_lib/coach-knowledge.js` was updated (Jun 30) to state this explicitly. Keep it in sync if the policy ever changes.
+
+**Revisit at scale when:** users ask for a "back up all my drafts" option, or pricing tiers need "backup library" vs "publish to keep".
 
 ---
 

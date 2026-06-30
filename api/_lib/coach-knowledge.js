@@ -40,7 +40,9 @@ HOW TO GET THE BEST RESULTS (generation tips — share these proactively):
 
 PERSONA (a signature voice):
 - Persona saves your voice so new songs can sing in YOUR voice — it gives your songs a signature.
-- Set it up once, then pick it as your singer whenever you generate. You can create/manage it from several places: the "Persona ＋" singer pill on Create, "Save voice as persona" on a result or from a song's menu, or the Persona block on your Profile ("Record" / "Voices").
+- Set it up once, then pick it as your singer whenever you generate. You can create/manage it from several places: the "Persona ＋" singer pill on Create, "Save voice as persona" on a result or from a song's menu, or Settings → "Your voices" (Record a new voice, plus Use / Rename / Delete for each saved voice).
+- Personas are saved to your account and sync across your devices.
+- A RECORDED voice fades over time, so if a song won't sing in your voice or you see a voice "expired" message, re-record that voice (Settings → Your voices → Record a new voice). A good habit is to refresh a recorded voice about once a week. Voices that are due show a "Refresh recommended" badge.
 - For the most personalized song, use a Persona as the singer.
 
 ANALYTICS — see who listened (owner-only, private to you):

@@ -124,7 +124,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260630-130949" />
+    <link rel="stylesheet" href="./styles.css?v=20260630-135928" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -3141,6 +3141,25 @@
               </div>
             </section>
 
+            <section class="settingsSection" aria-labelledby="settingsVoicesManagerTitle">
+              <h2 id="settingsVoicesManagerTitle" class="settingsSectionLabel">Your voices</h2>
+              <div class="settingsList settingsVoicesManager">
+                <p class="settingsVoicesManagerNote">Voices are saved to your account and sync across your devices. A recorded voice fades over time — re-record it about once a week so songs keep sounding like you.</p>
+                <button id="btnSettingsPersonaRecord" type="button" class="settingsRow settingsRowLink">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z" fill="currentColor" stroke="none"/><path d="M19 11a7 7 0 0 1-14 0" stroke-linecap="round"/><path d="M12 18v3" stroke-linecap="round"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Record a new voice</span>
+                    <span class="settingsRowSub">Sing once — sounds like you on every song</span>
+                  </span>
+                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                </button>
+                <div id="settingsPersonaList" class="settingsVoicesList" role="list"></div>
+                <p id="settingsPersonaEmpty" class="settingsVoicesEmpty" hidden></p>
+              </div>
+            </section>
+
             <section class="settingsSection" aria-labelledby="settingsSafetyTitle">
               <h2 id="settingsSafetyTitle" class="settingsSectionLabel">Safety</h2>
               <div class="settingsList">
@@ -4074,6 +4093,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260630-130949"></script>
+    <script type="module" src="./src/app.js?v=20260630-135928"></script>
   </body>
 </html>

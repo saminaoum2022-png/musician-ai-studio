@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260630-130949";
+const APP_BUILD = "20260630-135928";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -414,6 +414,9 @@ const els = {
   settingsVoicesList: document.getElementById("settingsVoicesList"),
   settingsVoicesEmpty: document.getElementById("settingsVoicesEmpty"),
   btnSettingsVoiceWizard: document.getElementById("btnSettingsVoiceWizard"),
+  settingsPersonaList: document.getElementById("settingsPersonaList"),
+  settingsPersonaEmpty: document.getElementById("settingsPersonaEmpty"),
+  btnSettingsPersonaRecord: document.getElementById("btnSettingsPersonaRecord"),
   sunoProMode: document.getElementById("sunoProMode"),
   vocalInstrumentalOnly: document.getElementById("vocalInstrumentalOnly"),
   vocalModeFull: document.getElementById("vocalModeFull"),
@@ -16781,7 +16784,7 @@ function openVocalRecorderModal() {
     const isVerify = vocalRecorderContext?.step === "verify";
     setVocalRecorderStatusAll(
       isVerify
-        ? "Read the phrase above, then tap ● to record"
+        ? "Sing the phrase above, then tap ● to record"
         : "Starting microphone…"
     );
   }
@@ -33533,6 +33536,71 @@ function renderPersonaSelect() {
   els.sunoPersonaId.innerHTML = opts;
   if (current) els.sunoPersonaId.value = current;
   updateProfilePersonaRow();
+  try { renderSettingsPersonaManager(); } catch {}
+}
+
+// A recorded (voice_persona) voice fades on Suno over time. We don't hard-fail
+// on the clock — the live check-voice call is the real gate — but past this age
+// we surface a "refresh recommended" badge and lean toward re-recording.
+const PERSONA_REFRESH_DAYS = 7;
+function personaAgeDays(p) {
+  const ts = Number(p?.ts || 0);
+  if (!ts) return null;
+  return (Date.now() - ts) / 86400000;
+}
+function personaNeedsRefresh(p) {
+  if (!p || p.type !== "suno_voice") return false;
+  const d = personaAgeDays(p);
+  return typeof d === "number" && d >= PERSONA_REFRESH_DAYS;
+}
+
+// Settings → "Your voices": a visible manager (the old Profile persona block is
+// permanently hidden). Reuses the same data ops as the legacy hub.
+function renderSettingsPersonaManager() {
+  const listEl = els.settingsPersonaList;
+  const emptyEl = els.settingsPersonaEmpty;
+  if (!listEl) return;
+  const list = loadPersonas();
+  const activeId =
+    String(els.sunoPersonaId?.value || "").trim() || loadPersonaSelection().trim();
+  if (emptyEl) {
+    emptyEl.hidden = list.length > 0;
+    if (!list.length) {
+      emptyEl.textContent = authSession?.user?.id
+        ? "No voices saved yet. Tap “Record a new voice” to create your signature."
+        : "Sign in to save and manage your voices across devices.";
+    }
+  }
+  if (!list.length) {
+    listEl.innerHTML = "";
+    return;
+  }
+  listEl.innerHTML = list
+    .map((p) => {
+      const id = escapeHtml(String(p.personaId || ""));
+      const label = escapeHtml(String(p.label || "Voice"));
+      const meta = escapeHtml(personaTypeLabel(p.type));
+      const active = String(p.personaId) === activeId;
+      const stale = personaNeedsRefresh(p);
+      const badge = stale ? `<span class="voiceExpiryBadge">Refresh recommended</span>` : "";
+      const ageTxt = p.type === "suno_voice" && p.ts ? `saved ${escapeHtml(relativeTime(Number(p.ts)))}` : "";
+      const metaParts = [meta, ageTxt, active ? "Selected on Create" : ""].filter(Boolean).join(" · ");
+      const primaryAction = stale
+        ? `<button type="button" class="ghost" data-voice-refresh="${id}">Re-record</button>`
+        : `<button type="button" class="ghost" data-voice-use="${id}">Use</button>`;
+      return `<div class="settingsVoicesRow${active ? " isActive" : ""}${stale ? " isStale" : ""}" role="listitem" data-persona-id="${id}">
+        <div class="settingsVoicesRowMain">
+          <div class="settingsVoicesRowTitle"><span class="settingsVoicesRowName">${label}</span>${badge}</div>
+          <div class="settingsVoicesRowMeta">${metaParts}</div>
+        </div>
+        <div class="settingsVoicesRowActions">
+          ${primaryAction}
+          <button type="button" class="ghost" data-voice-rename="${id}">Rename</button>
+          <button type="button" class="ghost" data-voice-delete="${id}">Delete</button>
+        </div>
+      </div>`;
+    })
+    .join("");
 }
 
 function removePersona(personaId) {
@@ -34055,7 +34123,7 @@ function renderVoiceWizardVerifyStep(phrase, token) {
       <div class="voiceWizardPhrase vwPhrase" id="voiceWizardPhrase">${escapeHtml(phrase)}</div>
       <div class="recorderCenter voiceWizardRecPrompt">
         <button type="button" class="recButton" id="voiceWizardRecordVerify" aria-label="Record verification">●</button>
-        <div id="voiceWizardVerifyStatus" class="hint">Tap ● to record the phrase</div>
+        <div id="voiceWizardVerifyStatus" class="hint">Tap ● to sing the phrase</div>
       </div>
       <button type="button" class="vwGhostLink" id="voiceWizardPickVerify">Upload verification file instead</button>
       <input type="file" id="voiceWizardVerifyFile" hidden accept="audio/*,video/*,.mp4,.m4a,.mov" />
@@ -34070,7 +34138,7 @@ function renderVoiceWizardVerifyStep(phrase, token) {
     if (statusEl) {
       statusEl.textContent = f
         ? `Verification ready (${Math.max(1, Math.round(f.size / 1024))} KB)`
-        : "Tap ● to record the phrase";
+        : "Tap ● to sing the phrase";
     }
     if (submitBtn) submitBtn.disabled = !f;
   };
@@ -34153,7 +34221,7 @@ function renderVoiceWizardStep1Sample() {
   renderVoiceWizardStep(`
     <div class="vwCard vwStudioCard">
       <div class="vwCardTitle">Step 1 · Record your voice</div>
-      <p class="vwCardSub">15–30 seconds of clear solo singing — one voice, no background music, no echo. Any language (Arabic works great).</p>
+      <p class="vwCardSub">15–30 seconds of clear singing a cappella — just your voice, no backing track and no echo. Any language (Arabic works great).</p>
       <div class="vwTipRow" aria-hidden="true">
         <span class="vwTip">Quiet room</span>
         <span class="vwTip">Close to the mic</span>
@@ -43312,6 +43380,48 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       void openVoiceWizard();
     });
   }
+  if (els.settingsPersonaList) {
+    els.settingsPersonaList.addEventListener("click", (e) => {
+      const useBtn = e.target.closest("[data-voice-use]");
+      const refBtn = e.target.closest("[data-voice-refresh]");
+      const renBtn = e.target.closest("[data-voice-rename]");
+      const delBtn = e.target.closest("[data-voice-delete]");
+      const id = String(
+        useBtn?.getAttribute("data-voice-use") ||
+          refBtn?.getAttribute("data-voice-refresh") ||
+          renBtn?.getAttribute("data-voice-rename") ||
+          delBtn?.getAttribute("data-voice-delete") ||
+          ""
+      ).trim();
+      if (!id) return;
+      if (useBtn) {
+        selectPersonaForCreate(id);
+        return;
+      }
+      if (refBtn) {
+        // Expired/old voice → send them straight into a fresh recording.
+        void openVoiceWizard();
+        return;
+      }
+      if (renBtn) {
+        const hit = loadPersonas().find((x) => String(x.personaId) === id);
+        const next = window.prompt("Rename this voice", hit?.label || "My voice");
+        if (next != null && String(next).trim()) renamePersona(id, String(next).trim());
+        return;
+      }
+      if (delBtn) {
+        const hit = loadPersonas().find((x) => String(x.personaId) === id);
+        const ok = window.confirm(`Delete “${hit?.label || "this voice"}”?`);
+        if (ok) removePersona(id);
+      }
+    });
+  }
+  if (els.btnSettingsPersonaRecord) {
+    els.btnSettingsPersonaRecord.addEventListener("click", (e) => {
+      e.preventDefault();
+      void openVoiceWizard();
+    });
+  }
   if (els.linkManageVoices) {
     els.linkManageVoices.addEventListener("click", (e) => {
       e.preventDefault();
@@ -44281,14 +44391,28 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       // "false" blocks; if the check itself fails we don't get in the way.
       if (personaIdSel && personaModelSel === "voice_persona" && personaHit?.voiceTaskId) {
         const voiceReady = await checkSunoVoiceAvailability(personaHit.voiceTaskId);
-        if (voiceReady === false) {
+        const stale = personaNeedsRefresh(personaHit);
+        // Fresh voice: only an explicit "false" blocks (it's still processing).
+        // Stale voice (≥1 week): block unless Suno positively confirms it's still
+        // available — so an expired voice stops HERE with a clear message instead
+        // of wasting a wait on a generation Suno will reject as "expired vocal".
+        const blocked = voiceReady === false || (stale && voiceReady !== true);
+        if (blocked) {
           setLoading(false);
           setGenerateBtn("Generate song", false, "generate");
-          showToast(
-            "Your voice is still processing — try again in a minute, or tap your persona chip to switch it off.",
-            { icon: "!", durationMs: 5600 }
-          );
-          setStatus("Generation paused: your recorded voice isn't ready yet.");
+          if (stale) {
+            showToast(
+              "This voice has expired. Re-record it in Settings → Your voices to keep singing in your voice, or tap your persona chip to switch it off.",
+              { icon: "!", durationMs: 6800 }
+            );
+            setStatus("Generation paused: this recorded voice has expired — re-record it to refresh.");
+          } else {
+            showToast(
+              "Your voice is still processing — try again in a minute, or tap your persona chip to switch it off.",
+              { icon: "!", durationMs: 5600 }
+            );
+            setStatus("Generation paused: your recorded voice isn't ready yet.");
+          }
           return;
         }
       }
